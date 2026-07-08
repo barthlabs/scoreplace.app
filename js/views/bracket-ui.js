@@ -6469,16 +6469,27 @@ window._openLiveScoring = function(tId, matchId, opts) {
         return '<button class="live-vol-sm ls-down-btn" onclick="window._liveScoreMinus(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.09);color:var(--text-muted);font-size:calc(clamp(1.1rem,4vw,1.6rem) * var(--live-btn-scale,1));font-weight:700;border-radius:calc(10px * var(--live-btn-scale,1));display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;border:1px solid rgba(255,255,255,0.08);" ontouchstart="this.style.background=\'rgba(255,255,255,0.18)\'" ontouchend="this.style.background=\'rgba(255,255,255,0.09)\'">▼</button>';
       };
 
+      // v4.5.32: GAMES centralizado (o Desfazer saiu daqui pro rodapé, alinhado
+      // ao smartwatch — um único botão abaixo de tudo).
       var portGamesRow = showGamesBox
-        ? '<div style="flex:0 0 auto;display:flex;align-items:center;width:100%;padding:clamp(4px,1vh,8px) clamp(8px,2vw,16px);">' +
-            '<div style="flex:1;"></div>' + gamesCenter +
-            '<div style="flex:1;display:flex;align-items:center;padding-left:10px;">' +
-              '<button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:38px;height:38px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;">' +
-                '<svg viewBox="0 0 24 24" width="28" height="28" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>' +
-              '</button>' +
-            '</div>' +
-          '</div>'
+        ? '<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:100%;padding:clamp(4px,1vh,8px) clamp(8px,2vw,16px);">' + gamesCenter + '</div>'
         : '';
+
+      // v4.5.32: metade tocável por time (alinhado ao Apple Watch RemoteView).
+      // Cor SEGUE O TIME (1=azul, 2=vermelho), fundo com leve tinta do time,
+      // número colorido — SEM placa branca. A metade INTEIRA é o botão +1
+      // (tocar no placar soma o ponto daquele lado). Preenche todo o espaço →
+      // zero vazio. Quando a partida acaba, vira div (não soma mais).
+      var _scoreHalf = function(team) {
+        var clr = team === 1 ? '#60A5FA' : '#F87171';
+        var tint = team === 1 ? 'rgba(96,165,250,0.16)' : 'rgba(248,113,113,0.15)';
+        var display = team === 1 ? p1Display : p2Display;
+        var tag = state.isFinished ? 'div' : 'button';
+        var act = state.isFinished ? '' : 'onclick="window._liveScorePoint(' + team + ')" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'"';
+        return '<' + tag + ' class="ls-score-half" ' + act + ' style="flex:1;min-width:0;height:100%;border:none;cursor:' + (state.isFinished ? 'default' : 'pointer') + ';background:' + tint + ';border-radius:16px;display:flex;align-items:center;justify-content:center;padding:0;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform 0.08s;">' +
+          '<span class="ls-plate-num" style="font-size:calc(clamp(3rem,32vw,10rem) * var(--live-plate-scale,1));font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
+        '</' + tag + '>';
+      };
 
       // Captura finishBtn dentro do layout e evita o append duplo abaixo
       var portFinishRow = finishBtn;
@@ -6508,27 +6519,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
               _buildNameStack(rightTeam) +
             '</div>' +
           '</div>' +
-          // Placares — v4.5.31: flex:0 0 auto → a linha ABRAÇA a placa (que abraça
-          // o número). NÃO reserva bloco vertical (era flex:2.8*scale → deixava o
-          // vazio escuro em volta do número). Os botões abaixo preenchem a sobra.
-          // O slider "Placar" cresce a fonte do número → a placa cresce e empurra
-          // os botões (redistribuição). min-width:0 impede a placa de estourar.
-          '<div style="flex:0 0 auto;display:flex;align-items:center;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
-            '<div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;">' + _buildPlate(leftTeam) + '</div>' +
-            '<div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;">' + _buildPlate(rightTeam) + '</div>' +
+          // Placar — v4.5.32: metades tocáveis por time (Apple Watch style).
+          // flex:1 → preenchem TODO o espaço restante (zero vazio); a metade é o
+          // botão +1. Cor segue o time; sem placa branca; sem ▲/▼ por lado.
+          '<div style="flex:1;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
+            _scoreHalf(leftTeam) + _scoreHalf(rightTeam) +
           '</div>' +
-          // Botões ↑ — flex escala com --live-btn-scale
-          (!state.isFinished ? '<div style="flex:calc(3 * var(--live-btn-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
-            '<div style="flex:1;display:flex;">' + _portUpBtn(leftTeam) + '</div>' +
-            '<div style="flex:1;display:flex;">' + _portUpBtn(rightTeam) + '</div>' +
-          '</div>' : '') +
-          // Botões ↓ — flex escala com --live-btn-scale + safe-area
-          (!state.isFinished ? '<div style="flex:calc(1.5 * var(--live-btn-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px) calc(2px + env(safe-area-inset-bottom,0px));">' +
-            '<div style="flex:1;display:flex;">' + _portDownBtn(leftTeam) + '</div>' +
-            '<div style="flex:1;display:flex;">' + _portDownBtn(rightTeam) + '</div>' +
-          '</div>' : '') +
           // Dica de troca de lado (só com fixSides ativo)
           swapHint +
+          // Desfazer — ÚNICO botão, full-width, abaixo de tudo (safe-area).
+          (!state.isFinished ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:none;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;padding:13px 0 calc(13px + env(safe-area-inset-bottom,0px));font-size:0.95rem;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
+            '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>Desfazer</button>' : '') +
           // Botão Encerrar Partida (apenas partidas casuais sem sets)
           portFinishRow +
         '</div>';
