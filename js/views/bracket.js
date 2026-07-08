@@ -4754,51 +4754,40 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         : [];
       if (computed.length < 2 || computed.length > 20) return; // skip if too few or too many players
 
-      var names = computed.map(function(s) { return s.name; });
-      // Build result map: h2h[playerA][playerB] = { wins, draws, losses, results[] }
-      var h2h = {};
-      names.forEach(function(n) { h2h[n] = {}; names.forEach(function(m) { h2h[n][m] = { w: 0, d: 0, l: 0 }; }); });
-
-      rounds.forEach(function(rd) {
-        (rd.matches || []).forEach(function(m) {
-          if (!m.winner || !m.p1 || !m.p2) return;
-          if (m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return;
-          // Only count players in this category's standings
-          if (!h2h[m.p1] || !h2h[m.p1][m.p2]) return;
-          var isDraw = m.winner === 'draw' || m.draw;
-          if (isDraw) {
-            h2h[m.p1][m.p2].d++;
-            h2h[m.p2][m.p1].d++;
-          } else if (m.winner === m.p1) {
-            h2h[m.p1][m.p2].w++;
-            h2h[m.p2][m.p1].l++;
-          } else if (m.winner === m.p2) {
-            h2h[m.p2][m.p1].w++;
-            h2h[m.p1][m.p2].l++;
-          }
-        });
-      });
+      // v4.5.26: matriz H2H resolvida POR UID (bracket-logic._buildHeadToHead) — o nome do slot
+      // pode estar clobberado (Vivian→"Vivi Hirata"), mas o uid do slot é o certo, então os
+      // jogos casam com a linha certa e nunca vazam pro homônimo. Espelha _computeStandings.
+      var h2hData = (typeof window._buildHeadToHead === 'function')
+        ? window._buildHeadToHead(t, computed, rounds)
+        : { keys: [], keyName: {}, matrix: {} };
+      var keys = h2hData.keys;
+      var matrix = h2hData.matrix;
+      var _nameOf = function(k) { return h2hData.keyName[k]; };
+      if (keys.length < 2) return;
 
       // Build table
       var displayLabel = catLabel && window._displayCategoryName ? window._displayCategoryName(catLabel) : catLabel;
       var title = displayLabel ? _t('bracket.h2hTitle', {cat: displayLabel}) : _t('bracket.h2hTitleSimple');
 
       var thCells = '<th style="padding:6px 4px;font-size:0.6rem;color:var(--text-muted);text-align:center;min-width:28px;"></th>';
-      names.forEach(function(n, i) {
+      keys.forEach(function(k, i) {
+        var n = _nameOf(k);
         var shortName = n.length > 8 ? n.substring(0, 7) + '…' : n;
         thCells += '<th style="padding:6px 4px;font-size:0.6rem;color:var(--text-muted);text-align:center;min-width:28px;writing-mode:vertical-lr;transform:rotate(180deg);height:60px;" title="' + (window._safeHtml ? window._safeHtml(n) : n) + '">' + (window._safeHtml ? window._safeHtml(shortName) : shortName) + '</th>';
       });
 
       var rows = '';
-      names.forEach(function(rowName, ri) {
+      keys.forEach(function(rowKey, ri) {
+        var rowName = _nameOf(rowKey);
         var shortRow = rowName.length > 12 ? rowName.substring(0, 11) + '…' : rowName;
         rows += '<tr>';
         rows += '<td style="padding:6px 8px;font-size:0.75rem;font-weight:600;color:var(--text-bright);white-space:nowrap;border-right:1px solid var(--border-color);" title="' + (window._safeHtml ? window._safeHtml(rowName) : rowName) + '">' + (window._safeHtml ? window._safeHtml(shortRow) : shortRow) + '</td>';
-        names.forEach(function(colName, ci) {
+        keys.forEach(function(colKey, ci) {
+          var colName = _nameOf(colKey);
           if (ri === ci) {
             rows += '<td style="padding:4px;text-align:center;background:rgba(255,255,255,0.03);font-size:0.7rem;color:var(--text-muted);">—</td>';
           } else {
-            var rec = h2h[rowName][colName];
+            var rec = matrix[rowKey][colKey];
             var total = rec.w + rec.d + rec.l;
             if (total === 0) {
               rows += '<td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--text-muted);opacity:0.3;">·</td>';

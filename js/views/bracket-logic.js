@@ -2993,6 +2993,74 @@ function _buildNameToUid(t) {
 }
 window._buildNameToUid = _buildNameToUid;
 
+// v4.5.26: matriz de Confrontos Diretos (H2H) POR UID — espelha a identidade-por-uid de
+// _computeStandings (_idKey). O render (bracket.js) só formata o que sai daqui.
+// Bug anterior (chave por NOME): se o displayName de alguém é clobberado no meio do torneio
+// (Vivian→"Vivi Hirata", uid correto no slot p1Uid/p2Uid), os jogos dela não casavam com a
+// linha dela (por nome) e vazavam pro homônimo. Aqui a chave da linha vem do próprio
+// standings (s.key, já resolvido por _computeStandings) e a de cada lado do jogo é resolvida
+// pela MESMA regra do _idKey: slot uid explícito → nome→uid dos jogos → nome→uid do elenco →
+// nome puro (legado). O win/loss de cada jogo segue por nome DENTRO do jogo
+// (m.winner === m.p1) — consistente mesmo com nome trocado (winner/p1/p2 clobberados igual).
+// Retorna { keys:[chave...], keyName:{chave→nome de exibição}, matrix:{a:{b:{w,d,l}}} } na
+// ordem das linhas de `computedRows` (a classificação).
+function _buildHeadToHead(t, computedRows, rounds) {
+  var _n2u = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
+  // nome→uid derivado dos PRÓPRIOS jogos (mesma fonte que _computeStandings usa no _idKey),
+  // pra o lado do jogo e a linha resolverem a MESMA chave mesmo sem s.key/slot uid.
+  var _matchN2u = {};
+  (rounds || []).forEach(function (r) {
+    ((r && r.matches) || []).forEach(function (m) {
+      if (!m) return;
+      if (m.p1 && m.p1Uid && !_matchN2u[m.p1]) _matchN2u[m.p1] = m.p1Uid;
+      if (m.p2 && m.p2Uid && !_matchN2u[m.p2]) _matchN2u[m.p2] = m.p2Uid;
+    });
+  });
+  function _keyFor(name, slotUid) {
+    if (name == null) return name;
+    var u = slotUid || _matchN2u[name] || _n2u[name] || null;
+    return u ? ('uid:' + u) : String(name);
+  }
+  var keys = [];
+  var keyName = {};
+  var seen = {};
+  (computedRows || []).forEach(function (s) {
+    if (!s) return;
+    // s.key já é a chave canônica do _computeStandings; fallback pra resolução local.
+    var k = (s.key != null) ? s.key : _keyFor(s.name, s.uid ? s.uid : null);
+    if (seen[k]) return; // dois rows na mesma chave não deveriam ocorrer; dedup por segurança
+    seen[k] = 1;
+    keys.push(k);
+    keyName[k] = s.name;
+  });
+  var matrix = {};
+  keys.forEach(function (a) { matrix[a] = {}; keys.forEach(function (b) { matrix[a][b] = { w: 0, d: 0, l: 0 }; }); });
+  (rounds || []).forEach(function (rd) {
+    ((rd && rd.matches) || []).forEach(function (m) {
+      if (!m || !m.winner || !m.p1 || !m.p2) return;
+      if (m.isBye || m.isSitOut) return;
+      if (m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return;
+      var k1 = _keyFor(m.p1, m.p1Uid);
+      var k2 = _keyFor(m.p2, m.p2Uid);
+      // só conta o jogo se ambos os lados são linhas DESTA classificação
+      if (!matrix[k1] || !matrix[k1][k2]) return;
+      var isDraw = m.winner === 'draw' || m.draw;
+      if (isDraw) {
+        matrix[k1][k2].d++;
+        matrix[k2][k1].d++;
+      } else if (m.winner === m.p1) {
+        matrix[k1][k2].w++;
+        matrix[k2][k1].l++;
+      } else if (m.winner === m.p2) {
+        matrix[k2][k1].w++;
+        matrix[k1][k2].l++;
+      }
+    });
+  });
+  return { keys: keys, keyName: keyName, matrix: matrix };
+}
+window._buildHeadToHead = _buildHeadToHead;
+
 // v2.7.3: ÚNICA fonte da partida de FOLGA (sit-out). Antes construída à mão em 3
 // lugares (round-robin, Rei/Rainha, Suíço) — drift de label/reason/pontos.
 // opts: { player, roundNum, roundIndex, category, ts, idPrefix, idIndex, reason, points }

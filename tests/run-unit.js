@@ -21,6 +21,7 @@ const SUITES = [
   'tests/pa-uid-identity.test.js',
   'tests/standings-uid-identity.test.js',
   'tests/h2h-uid-identity.test.js',
+  'tests/h2h-matrix-uid.test.js',
   'tests/standings-tiebreakers.test.js',
   'tests/seed-pairing.test.js',
   'tests/grandfinal-lines.test.js',

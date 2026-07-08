@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.26-beta — "Confrontos Diretos" também nunca mais troca dois jogadores <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⚔️ A matriz "Confrontos Diretos" agora fala por identidade:</b> na tela de classificação, a tabela cruzada de quem venceu quem (⚔️ Confrontos Diretos) passou a identificar cada pessoa pela sua conta, e não mais pelo nome escrito no jogo. Antes — mesmo com a classificação já corrigida na v4.5.0 — se alguém trocava o nome no meio do torneio, os confrontos dessa pessoa apareciam na linha de um homônimo. Agora cada célula da matriz mostra o retrospecto certo da pessoa certa.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.25-beta — dupla tardia entra na chave inferior quando o mata-mata já andou (Dupla Eliminatória) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🤝 Formou 2 duplas na lista de espera com a 2ª rodada já em andamento → entram na chave inferior:</b> em <b>Dupla Eliminatória</b>, se a 2ª rodada da chave superior já começou (mas a da chave inferior ainda não), o novo confronto formado na lista de espera entra na <b>1ª rodada da chave inferior</b> — o vencedor segue na disputa e o derrotado é eliminado. Complementa o comportamento da v4.5.24: enquanto a 2ª rodada de cima ainda não começou, o confronto entra na chave superior; se a chave inferior já andou, viram suplentes. Todos os resultados já lançados são <b>preservados</b>.</li>' +
