@@ -6334,46 +6334,73 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
     // v2.2.16-beta: ajusta o tamanho do número e dos botões para preencher o
     // box disponível em modo portrait. Chamado após render e ao mover o slider.
+    // v4.5.28-beta: núcleo separado + DUPLO requestAnimationFrame. Um RAF único
+    // (iOS Safari) media ANTES do flex/fotos assentarem → o número saía menor em
+    // alguns renders (15-0 pequeno vs 30-15 grande). O 2º frame garante layout
+    // final → tamanho SEMPRE consistente (o máximo que a placa comporta).
+    var _doFitLivePlateText = function(ov) {
+      var boxes = ov.querySelectorAll('.ls-plate-box');
+      if (!boxes.length) return;
+      // O slider "Placar" (--live-plate-scale) deve CRESCER o número. A linha da
+      // placa já escala com plateScale (flex:2.8*scale), então medimos a base
+      // NEUTRA de escala (dividindo a altura por plateScale) e reaplicamos a
+      // escala no fim — assim o número cresce de verdade, não só a linha.
+      var plateScale = parseFloat(getComputedStyle(ov).getPropertyValue('--live-plate-scale')) || 1;
+      if (!(plateScale > 0)) plateScale = 1;
+      // Usa sempre 2 chars como referência — pior caso do sistema de pontuação
+      // (15, 30, 40, AD). Garante que todos os boxes tenham o mesmo fontSize
+      // independente do valor atual ("0" não fica maior que "40").
+      // Fonte weight-900 tabular: cada char ≈ 0.66× fontSize em largura.
+      var REF_CHARS = 2;
+      var minBase = Infinity;
+      var minBurstCap = Infinity;
+      boxes.forEach(function(box) {
+        var pad = parseFloat(getComputedStyle(box).paddingTop) || 6;
+        // Altura disponível = do PAI (wrapper com a altura da linha), NÃO do
+        // próprio box (height:auto abraça o número → mediria circular).
+        var availH = ((box.parentElement && box.parentElement.clientHeight) || box.offsetHeight) - pad * 2;
+        var bw = box.offsetWidth - pad * 2;
+        if (availH < 10 || bw < 10) return;
+        // base neutra de escala: altura da linha ÷ plateScale + limite de largura.
+        var base = Math.min((availH / plateScale) * 0.92, (bw * 0.9) / (REF_CHARS * 0.66));
+        if (base < minBase) minBase = base;
+        // teto duro: o número NUNCA pode estourar a largura interna da placa
+        // branca (mesmo com o slider no máximo) — preenche até a borda e para.
+        var burstCap = bw / (REF_CHARS * 0.64);
+        if (burstCap < minBurstCap) minBurstCap = burstCap;
+      });
+      if (minBase === Infinity || minBase < 12) return;
+      var fs = Math.floor(Math.min(minBase * plateScale, minBurstCap));
+      boxes.forEach(function(box) {
+        var span = box.querySelector('.ls-plate-num');
+        if (span) span.style.fontSize = fs + 'px';
+      });
+      ov.querySelectorAll('.ls-up-btn').forEach(function(btn) {
+        var h = btn.offsetHeight;
+        if (h > 10) btn.style.fontSize = Math.floor(h * 0.55) + 'px';
+      });
+      ov.querySelectorAll('.ls-down-btn').forEach(function(btn) {
+        var h = btn.offsetHeight;
+        if (h > 10) btn.style.fontSize = Math.floor(h * 0.52) + 'px';
+      });
+    };
     var _fitLivePlateText = function() {
       var ov = document.getElementById('live-scoring-overlay');
       if (!ov) return;
       requestAnimationFrame(function() {
-        var boxes = ov.querySelectorAll('.ls-plate-box');
-        if (!boxes.length) return;
-        // Usa sempre 2 chars como referência — pior caso do sistema de pontuação
-        // (15, 30, 40, AD). Garante que todos os boxes tenham o mesmo fontSize
-        // independente do valor atual ("0" não fica maior que "40").
-        // Fonte weight-900 tabular: cada char ≈ 0.65× fontSize em largura.
-        var REF_CHARS = 2;
-        var minFs = Infinity;
-        boxes.forEach(function(box) {
-          var pad = parseFloat(getComputedStyle(box).paddingTop) || 6;
-          // v4.0.11: altura disponível = do PAI (wrapper com a altura da linha),
-          // NÃO do próprio box — o box agora tem height:auto (abraça o número), e
-          // medir a altura dele criaria circularidade (encolhia o número). A
-          // largura é a real restrição (2 chars na metade da tela); usamos ~0.9
-          // dela pro maior valor (AD/40) caber sempre no MESMO tamanho.
-          var availH = ((box.parentElement && box.parentElement.clientHeight) || box.offsetHeight) - pad * 2;
-          var bw = box.offsetWidth - pad * 2;
-          if (availH < 10 || bw < 10) return;
-          var fs = Math.min(availH * 0.92, (bw * 0.9) / (REF_CHARS * 0.66));
-          if (fs < minFs) minFs = fs;
-        });
-        if (minFs === Infinity || minFs < 16) return;
-        var fs = Math.floor(minFs);
-        boxes.forEach(function(box) {
-          var span = box.querySelector('.ls-plate-num');
-          if (span) span.style.fontSize = fs + 'px';
-        });
-        ov.querySelectorAll('.ls-up-btn').forEach(function(btn) {
-          var h = btn.offsetHeight;
-          if (h > 10) btn.style.fontSize = Math.floor(h * 0.55) + 'px';
-        });
-        ov.querySelectorAll('.ls-down-btn').forEach(function(btn) {
-          var h = btn.offsetHeight;
-          if (h > 10) btn.style.fontSize = Math.floor(h * 0.52) + 'px';
+        requestAnimationFrame(function() {
+          var el = document.getElementById('live-scoring-overlay');
+          if (el) _doFitLivePlateText(el);
         });
       });
+      // Re-fit tardio: as fotos/avatares dos jogadores carregam async e mudam a
+      // altura da linha de nomes → a linha da placa reflowa depois do 2º frame.
+      // Um ajuste extra a ~220ms garante o tamanho certo mesmo nesse caso (é
+      // idempotente: se já estiver correto, reescreve o mesmo px, sem "pulo").
+      setTimeout(function() {
+        var el = document.getElementById('live-scoring-overlay');
+        if (el) _doFitLivePlateText(el);
+      }, 220);
     };
     window._fitLivePlateText = _fitLivePlateText;
 
