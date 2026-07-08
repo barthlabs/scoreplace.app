@@ -212,22 +212,24 @@ function renderBracket(container, tournamentId, isInline) {
   }
 
   // INCREMENT 2: duplas formadas na lista de espera (Dupla Eliminatória) entram na chave, por
-  // progressão do torneio — Tier 1 (R2 upper não começou) → R1 do upper. Ver _integrateLateDuplas.
+  // progressão do torneio — Tier 1 (R2 upper não começou) → R1 do upper; Tier 2 (R2 upper já
+  // começou) → R1 da chave inferior; Tier 3 (R2 lower já começou) → suplentes individuais.
+  // Ver _integrateLateDuplas / project_dupla_elim_repechage.
   if (isOrg && typeof window._integrateLateDuplas === 'function') {
     try {
       var _nLJ = window._integrateLateDuplas(t);
       if (_nLJ > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
         window.FirestoreDB.saveTournament(t);
-        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nLJ + ' dupla(s) na chave', 'Entraram na R1 da chave superior (vencedor sobe, derrotado cai pro lower).', 'success');
+        var _ljTier = window._lastIntegrateTier || 1;
+        var _ljMsg = (_ljTier === 2)
+          ? 'Entraram na R1 da chave inferior (vencedor segue no lower, derrotado eliminado).'
+          : 'Entraram na R1 da chave superior (vencedor sobe, derrotado cai pro lower).';
+        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nLJ + ' dupla(s) na chave', _ljMsg, 'success');
       } else if (_nLJ === -3 && typeof window._dissolveLateDuplas === 'function') {
         // Tier 3: R2 do lower já começou → duplas viram suplentes individuais.
         var _nd = window._dissolveLateDuplas(t);
         if (_nd > 0 && window.FirestoreDB) { window.FirestoreDB.saveTournament(t);
           if (typeof showNotification !== 'undefined') showNotification('👤 Suplentes individuais', 'O torneio já avançou na chave inferior — as duplas em espera viraram suplentes individuais.', 'info'); }
-      } else if (_nLJ === -2) {
-        if (!window._ljLockNotif) window._ljLockNotif = {};
-        if (!window._ljLockNotif[t.id]) { window._ljLockNotif[t.id] = 1;
-          if (typeof showNotification !== 'undefined') showNotification('⏳ Duplas na lista de espera', 'A R2 do upper já começou — as duplas novas entrarão na chave inferior (em construção). Por ora ficam na lista de espera.', 'info'); }
       }
     } catch (e) {}
   }

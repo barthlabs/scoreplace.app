@@ -51,6 +51,7 @@ const SUITES = [
   'tests/swiss-to-elim-transition.test.js',
   'tests/phase0-swiss-elim.test.js',
   'tests/dupla-repechage-full.test.js',
+  'tests/late-dupla-tier2.test.js',
   'tests/phase-repechage-lines.test.js',
   'tests/reset-tournament.test.js',
   'tests/dupla-elim-render.test.js',
