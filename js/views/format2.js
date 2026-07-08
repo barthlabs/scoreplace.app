@@ -41,6 +41,8 @@
       grupos: 1,
       parceria: 'sorteio_rodada', // Sorteio + "por rodada" ON por padrão (dono)
       formacaoDupla: 'sorteio',
+      manualPairingOpen: false,   // duplas "já formadas": os PARTICIPANTES podem formar duplas?
+                                  // false (padrão) = só o organizador forma. → t.manualPairing.
       rodadas: { modo: 'fixo', turnos: 'ida', n: 5, drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, _intervalAuto: true },
       classifAtiva: true,        // false = SEM classificatória → eliminação direta do enrollment
       classificados: 2,          // X que classificam (por grupo OU total, conforme classifScope)
@@ -83,6 +85,7 @@
       if (!umGrupo && out.parceria !== 'fixa') out.parceria = 'fixa';
     }
     if (out.formacaoDupla !== 'manual' && out.formacaoDupla !== 'sorteio') out.formacaoDupla = 'sorteio';
+    out.manualPairingOpen = !!out.manualPairingOpen;
 
     // Pontuação individual quando singles OU parceria rotativa.
     out._scoreBy = (!isDupla || out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada')
@@ -218,6 +221,9 @@
       top.drawMode = 'sorteio';
       top.teamSize = teamSize;
       top.enrollmentMode = formadas0 ? 'teams' : 'individual';
+      // Duplas já formadas: se o org habilitou, os PARTICIPANTES podem formar suas duplas
+      // (arrastar/soltar); senão só o organizador. Sorteadas → irrelevante (organizer_only).
+      top.manualPairing = (formadas0 && cfg.manualPairingOpen) ? 'open' : 'organizer_only';
       var d0 = _LINE_DESTS[e0.linhas] || ['main'];
       p0 = Object.assign(_phaseBase(re), {
         name: 'Eliminatória',

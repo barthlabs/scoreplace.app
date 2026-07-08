@@ -354,7 +354,18 @@
         if (isDupla) {
           eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Duplas na eliminatória</div>' +
             _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '🤝 Já formadas') +
-            _pill(cfg.formacaoDupla !== 'manual', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas') + '<div style="height:12px;"></div>';
+            _pill(cfg.formacaoDupla !== 'manual', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas') + '<div style="height:10px;"></div>';
+          if (cfg.formacaoDupla === 'manual') {
+            // Já formadas: quem forma as duplas? Toggle ON = participantes podem (arrastar/soltar);
+            // OFF (padrão) = só o organizador. → t.manualPairing ('open' | 'organizer_only').
+            eb += _toggleRight('Participantes podem formar suas duplas', !!cfg.manualPairingOpen, 'window._f2ElimManualPairing(this.checked)') +
+              '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (cfg.manualPairingOpen
+                ? 'Os participantes podem formar suas próprias duplas (arrastar e soltar). O organizador também pode.'
+                : 'Apenas o organizador forma as duplas.') + '</div><div style="height:12px;"></div>';
+          } else {
+            // Sorteadas: as duplas da R1 saem no sorteio, seguindo livre/equilibrado entre gêneros.
+            eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:-2px;">As duplas da 1ª rodada são <b>sorteadas</b> no momento do sorteio, seguindo a opção <b>livre</b> ou <b>equilibrado entre gêneros</b>.</div><div style="height:12px;"></div>';
+          }
         }
       } else {
         // COM classificatória: escopo (2+ grupos) + Nº de classificados + resumo.
@@ -502,6 +513,7 @@
   };
   window._f2Parceria = function (v) { S.cfg.parceria = v; _norm(); _rerender(); };
   window._f2Form = function (v) { S.cfg.formacaoDupla = v; _norm(); _rerender(); };
+  window._f2ElimManualPairing = function (checked) { S.cfg.manualPairingOpen = !!checked; _norm(); _rerender(); };
   // v4.4.19: "Formação das equipes" — 1 controle: Montadas (fixa+manual) / Sorteio
   // (fixa+sorteio) / Rei/Rainha (rotativo, só 1 grupo).
   window._f2TeamForm = function (v) {
