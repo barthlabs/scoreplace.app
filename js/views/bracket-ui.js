@@ -4271,6 +4271,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       state.currentGameP2 = 0;
     }
     _render();
+    _watchNotify(); // v4.5.43: sincroniza o relógio após a decisão (some o prompt)
   };
 
   // Check if match is won (called from _finishSet, so include the just-finished set)
@@ -7613,7 +7614,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Duplas → o relógio pode oferecer o toggle "Re-sortear duplas".
       isDoubles: !!isDoubles,
       isFinished: !!state.isFinished,
-      winner: state.winner || null
+      winner: state.winner || null,
+      // v4.5.43: empate esperando decisão (prorrogar vs tie-break). O relógio
+      // mostra o prompt e devolve a intenção 'resolveTie'. Recorre a cada empate.
+      tieRulePending: !!state.tieRulePending,
+      tiedAt: (state.tieRulePending && cs) ? cs.gamesP1 : null
     };
   };
   // Empurra o estado atual pro relógio (no-op se a ponte não estiver ativa/web).

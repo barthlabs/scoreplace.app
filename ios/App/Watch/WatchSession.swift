@@ -30,6 +30,9 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
     func sendReplay(shuffle: Bool) {
         sendIntent(["v": 1, "type": "replay", "shuffle": shuffle, "id": UUID().uuidString])
     }
+    func sendResolveTie(_ rule: String) {   // "extend" (prorrogar) | "tiebreak"
+        sendIntent(["v": 1, "type": "resolveTie", "rule": rule, "id": UUID().uuidString])
+    }
     func hello() {
         sendIntent(["v": 1, "type": "hello"])
     }

@@ -84,6 +84,16 @@
           window._liveScoreRestart(true, !!intent.shuffle);
         }
         break;
+      case 'resolveTie':
+        // v4.5.43: empate 5-5/6-6/7-7… — o relógio escolheu prorrogar
+        // (intent.rule='extend') ou tie-break ('tiebreak'). Dirige a MESMA
+        // função do celular; a recorrência acontece no motor (prorrogar mantém
+        // 'ask' → pergunta de novo no próximo empate).
+        if ((intent.rule === 'extend' || intent.rule === 'tiebreak')
+            && typeof window._liveResolveTie === 'function') {
+          window._liveResolveTie(intent.rule);
+        }
+        break;
       case 'hello':
         push(currentState(), true); // sempre responde, mesmo se igual
         return;
