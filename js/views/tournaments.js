@@ -3318,7 +3318,7 @@ function renderTournaments(container, tournamentId = null) {
                     let _vipBtn2 = '', _delBtn2 = '', _splitBtn2 = '';
                     if (isOrg && !drawDone) {
                         _vipBtn2 = `<button type="button" class="btn btn-micro" title="${isVip ? _t('tourn.removeVip') : _t('tourn.markVip')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background: ${isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.4),rgba(251,191,36,0.28))' : 'rgba(234,179,8,0.1)'}; color: ${isVip ? '#fbbf24' : '#d4a72a'}; border: 1px ${isVip ? 'solid rgba(251,191,36,0.65)' : 'dashed rgba(234,179,8,0.4)'};" onclick="event.stopPropagation(); window._toggleVip('${t.id}', '${safeP}');">💎 VIP</button>`;
-                        _delBtn2 = `<button type="button" class="btn btn-micro" title="Remover" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background:rgba(239,68,68,0.1);color:#ef4444;border:1px dashed rgba(239,68,68,0.5);" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">🗑️</button>`;
+                        _delBtn2 = `<button type="button" class="cancel-x-btn" title="Remover" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">✕</button>`;
                         if (pName.includes('/')) {
                             _splitBtn2 = `<button type="button" class="btn btn-micro" title="Desfazer Equipe" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background:rgba(14,165,233,0.1);color:#38bdf8;border:1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', '${safeP}');">✂️</button>`;
                         }
@@ -3550,13 +3550,16 @@ function renderTournaments(container, tournamentId = null) {
                 : (_canPairDrag
                     ? '<div style="font-size:0.65rem;color:rgba(255,255,255,0.45);margin-top:3px;">Arraste para formar dupla</div>'
                     : '<div style="font-size:0.65rem;color:rgba(255,255,255,0.4);margin-top:3px;">Sem dupla</div>');
+              // v4.5.59: DUPLA FORMADA → o X (símbolo canônico) DESFAZ a dupla; sem botão
+              // excluir enquanto em dupla. Ver [[project_inscrito_card_canonical]].
               var desfazerBtn = (!draggable && isOrg)
-                ? '<button type="button" class="btn btn-danger btn-micro" onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" title="Desfazer dupla" style="min-height:0;height:28px;line-height:1;padding:0 12px;font-size:0.72rem;font-weight:800;white-space:nowrap;flex-shrink:0;margin-left:6px;">↩️ Desfazer</button>'
+                ? '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" title="Desfazer dupla" style="--cx-size:24px;">✕</button>'
                 : '';
-              // v2.8.97: botão REMOVER inscrito (organizador) — solo E dupla. Antes o card
-              // do modo duplas não tinha o 🗑️ que o card individual normal tem.
-              var _delBtnDupla = (isOrg && !drawDone)
-                ? '<button type="button" class="btn btn-micro" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" style="min-height:0;height:28px;line-height:1;padding:0 11px;font-size:0.72rem;font-weight:800;flex-shrink:0;background:rgba(239,68,68,0.12);color:#f87171;border:1px dashed rgba(239,68,68,0.5);border-radius:8px;">🗑️</button>'
+              // v4.5.59: REMOVER inscrito só nos cards SOLO (draggable) — inclusive cada
+              // membro após a dupla ser desfeita. Em dupla FORMADA não aparece (só o
+              // desfazer acima). Mesmo símbolo X, contextos mutuamente exclusivos.
+              var _delBtnDupla = (isOrg && !drawDone && draggable)
+                ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" style="--cx-size:24px;">✕</button>'
                 : '';
               // v2.7.87: DUPLA FORMADA em 2 colunas — cada pessoa com as categorias DELA
               // logo abaixo do nome; 1ª à esquerda, 2ª à direita (mesma linha quando couber).

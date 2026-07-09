@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.58-beta';
+window.SCOREPLACE_VERSION = '4.5.59-beta';
 
 // v4.5.58: helper CANÔNICO do símbolo de cancelar/remover — círculo vermelho,
 // borda branca, X branco (classe .cancel-x-btn em components.css). Use em TODO

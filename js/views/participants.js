@@ -1821,7 +1821,7 @@ function renderParticipants(container, tournamentId) {
       // v2.7.54: botão de REMOVER inscrito (só organizador) — poder de tirar qualquer
       // jogador do card, inclusive os da lista de espera. A remoção (tournaments.js)
       // tira de participants E dos storages da espera, casando nome cru/formatado.
-      const _delBtnC = isOrg ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window.removeParticipantFunction('${tId}','${safeName}')" title="Remover inscrito" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;border-radius:7px;flex-shrink:0;background:rgba(239,68,68,0.1);color:#ef4444;border:1px dashed rgba(239,68,68,0.5);">🗑️</button>` : '';
+      const _delBtnC = isOrg ? `<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window.removeParticipantFunction('${tId}','${safeName}')" title="Remover inscrito" style="--cx-size:22px;">✕</button>` : '';
 
       const _safeName = (ind.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
       const _pSeed = encodeURIComponent(ind.name);
@@ -2089,7 +2089,7 @@ function renderParticipants(container, tournamentId) {
         dragProps = `draggable="true" ondragstart="window.handleDragStart(event, ${idx}, '${t.id}')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ${idx})"`;
         if (!drawDone) {
           _vipBtn = `<button class="btn btn-micro" title="${isVip ? _t('tourn.removeVip') : _t('tourn.markVip')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ${isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)'}; color: ${isVip ? '#fbbf24' : '#a3842a'}; border: 1px ${isVip ? 'solid' : 'dashed'} ${isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)'};" onclick="event.stopPropagation(); window._toggleVip('${t.id}', '${safeP}');">💎 VIP</button>`;
-          _delBtn = `<button class="btn btn-micro" title="${_t('btn.remove')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(239,68,68,0.1); color: #ef4444; border: 1px dashed rgba(239,68,68,0.5);" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">🗑️</button>`;
+          _delBtn = `<button type="button" class="cancel-x-btn" title="${_t('btn.remove')}" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">✕</button>`;
           if (window._entryTeamMembers(p)) { // v3.0.x: botão dividir só pra dupla (estrutura), não por '/'
             _splitBtn = `<button class="btn btn-micro" title="${_t('participants.splitTeam')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', '${safeP}');">✂️</button>`;
           }
