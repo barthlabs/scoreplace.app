@@ -6524,11 +6524,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Mostra SETS sempre que a partida usa sets (igual ao smartwatch).
       var _showSets = useSets;
       var _setsLine = _showSets
-        ? '<div style="display:flex;align-items:center;gap:7px;margin-bottom:3px;">' +
-            '<span style="font-size:0.6rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
-            '<span style="font-size:1.25rem;font-weight:800;color:' + (leftTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
-            '<span style="font-size:0.95rem;color:rgba(255,255,255,0.25);">–</span>' +
-            '<span style="font-size:1.25rem;font-weight:800;color:' + (rightTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>' +
+        ? '<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:6px;">' +
+            '<span style="font-size:0.62rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
+            '<div style="display:flex;align-items:center;gap:10px;margin-top:1px;">' +
+              '<span style="font-size:1.4rem;font-weight:800;color:' + (leftTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
+              '<span style="font-size:1rem;color:rgba(255,255,255,0.25);">–</span>' +
+              '<span style="font-size:1.4rem;font-weight:800;color:' + (rightTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>' +
+            '</div>' +
           '</div>'
         : '';
       var portGamesRow = showGamesBox
