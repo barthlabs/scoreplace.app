@@ -663,10 +663,14 @@
     // quando o torneio não tem participantes carregados.
     function _vpush(uid, dn, photo) {
       // v2.1.68: displayName + photoURL reais pra AMIGOS aparecerem com nome/foto.
+      // v4.5.72: identidade-por-uid — o nome exibido resolve do perfil vivo por uid;
+      // o nome gravado no inscrito só sobra como fallback pra não deixar em branco
+      // (e é a identidade legítima do guest sem conta, que não tem uid).
+      var _live = (uid && typeof window._nameForUid === 'function') ? window._nameForUid(uid) : '';
       out.push({
         _virtual: true,
         uid: uid || null,
-        displayName: dn || '',
+        displayName: _live || dn || '',
         photoURL: photo || '',
         startsAt: start.getTime(),
         endsAt: endMs,

@@ -10736,14 +10736,17 @@ window._openCasualMatch = function(restoreOpts) {
   // Returns the cardsHtml string (grid content only, no wrapper).
   window._buildCasualMatchCardsHtml = function(matches, cu) {
     function _pname(p, mDoc, isFirstT1) {
-      // v2.2.38-beta: o nome de cada jogador é o NOME REAL do slot. Só o slot do
-      // PRÓPRIO usuário (match por uid) usa o displayName atual dele.
-      // REMOVIDO o heurístico "isFirstT1 && createdBy===cu → displayName" — ele
-      // assumia que o 1º jogador do time 1 era o criador, mas com duplas
-      // SORTEADAS o 1º do time 1 quase nunca é o criador. Resultado: o nome
-      // de outra pessoa (ex: Nelson) era trocado pelo do criador (ex: Rodrigo)
-      // → "Rodrigo Barth / Rodrigo Barth" nas Últimas Partidas.
-      if (p.uid && cu.uid && p.uid === cu.uid && cu.displayName) return cu.displayName;
+      // v4.5.72: identidade-por-uid — o nome de cada jogador resolve do perfil vivo
+      // (users/{uid}); o nome gravado no doc da partida só sobra como fallback pra
+      // não ficar em branco (e é a identidade legítima do guest sem conta).
+      // v2.2.38-beta: REMOVIDO o heurístico "isFirstT1 && createdBy===cu → displayName"
+      // — assumia que o 1º do time 1 era o criador, mas com duplas SORTEADAS quase
+      // nunca é → trocava o nome de outra pessoa pelo do criador.
+      if (p.uid) {
+        var _live = (typeof window._nameForUid === 'function') ? window._nameForUid(p.uid) : '';
+        if (_live) return _live;
+        if (cu && p.uid === cu.uid && cu.displayName) return cu.displayName;
+      }
       return p.displayName || p.name || null;
     }
     function _teamBlock(st, players, score, win) {

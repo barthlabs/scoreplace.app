@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.71-beta';
+window.SCOREPLACE_VERSION = '4.5.72-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -5320,10 +5320,10 @@ window.AppStore = {
             window._markBootReady(3500, 'dash-poller');
           };
           // Auto-scroll: tratado pelo renderDashboard com 600ms após render.
-          // Auto-fix stale names after tournaments are loaded (no currentUser check needed)
-          if (typeof window._autoFixStaleNames === 'function') {
-            window._autoFixStaleNames().catch(function(e) { window._warn('Auto-fix stale names error:', e); });
-          }
+          // v4.5.72: _autoFixStaleNames removido — sob identidade-por-uid o render
+          // resolve o nome vivo do perfil (users/{uid}) e nunca lê o nome gravado
+          // no inscrito, então reescrever nomes velhos virou trabalho morto (~105
+          // reads/carga).
           // Auto-close tournaments whose registration deadline has passed
           window._autoCloseExpiredEnrollments();
           // Recupera adminEmails/memberEmails apagados pelo bug v1.6.66

@@ -2738,19 +2738,11 @@ function renderTournaments(container, tournamentId = null) {
         // notificada, dispara a notificação (fundamental) pra todos os inscritos.
         if (typeof window._opMaybeNotifyExisting === 'function') window._opMaybeNotifyExisting(visible[0]);
 
-        // Fix orphaned match names
-        if (typeof window._fixOrphanedMatchNames === 'function') {
-            var _orphanFixes = window._fixOrphanedMatchNames(visible[0]);
-            if (_orphanFixes > 0) {
-                setTimeout(function() { if (typeof window._softRefreshView === 'function') window._softRefreshView(); }, 600);
-                return;
-            }
-        }
-
-        // Auto-fix stale names (async Firestore check)
-        if (typeof window._autoFixStaleNames === 'function') {
-            window._autoFixStaleNames(visible[0].id).catch(function(e) { window._warn('Auto-fix stale names error:', e); });
-        }
+        // v4.5.72: _fixOrphanedMatchNames e _autoFixStaleNames removidos — sob
+        // identidade-por-uid o render resolve o nome vivo do perfil por uid e
+        // nunca lê nome gravado no match/inscrito, então esses remendos de
+        // reconciliação de nome (heurística por iniciais/homônimo + reads de
+        // perfil) viraram código morto.
 
         // Deduplicação de participantes
         if (typeof window._deduplicateParticipants === 'function') {
