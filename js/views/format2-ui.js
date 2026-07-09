@@ -252,6 +252,11 @@
     var rotativo = isDupla && (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada');
     var scoreInd = cfg._scoreBy === 'individual';
     var classif = '';
+    // v4.5.49: o AGENDAMENTO (Rodadas: repetição + nº de rodadas) e as DATAS/Inscrições da fase
+    // (#f2-classif-extra) vão num acumulador SEPARADO — ficam SEMPRE editáveis, mesmo com a fase
+    // classificatória já sorteada (o organizador ajusta a temporada: repetição, nº de rodadas e
+    // término da fase durante a fase). Só a ESTRUTURA (formato/grupos/formação) é travada.
+    var classifSchedule = '';
 
     // v4.4.51: editando torneio cuja fase classificatória JÁ FOI SORTEADA → trava a config
     // DELA (cinza, sem cliques). A eliminatória segue editável até avançar de fase. Em criação
@@ -332,7 +337,7 @@
       rInner = _toggleRight('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') +
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Dentro de cada grupo, todos contra todos' + (cfg.rodadas.turnos === 'ida_volta' ? ' — ida e volta' : '') + '.</div>';
     }
-    classif += _sec('Rodadas', rInner);
+    classifSchedule += _sec('Rodadas', rInner);
 
     var e = cfg.eliminatoria;
     // Toggle da eliminatória (habilitado, MENOS quando a fase já avançou → travado). Desligar →
@@ -461,20 +466,22 @@
     }
 
     // Slot (Datas + Inscrições) dentro da CLASSIFICATÓRIA quando ela está ativa.
-    if (cfg.classifAtiva) classif += '<div id="f2-classif-extra" style="margin-top:4px;"></div>';
+    if (cfg.classifAtiva) classifSchedule += '<div id="f2-classif-extra" style="margin-top:4px;"></div>';
 
     // Toggle da classificatória (sempre habilitado, MENOS quando já sorteada → travado).
     // Desligar → eliminação direta.
     var classifToggle = '<label class="toggle-switch" style="cursor:' + (_classifLocked ? 'not-allowed' : 'pointer') + ';' + (_classifLocked ? 'opacity:0.5;' : '') + '">' +
       '<input type="checkbox"' + (cfg.classifAtiva ? ' checked' : '') + (_classifLocked ? ' disabled' : '') + ' onchange="window._f2ClassifAtiva(this.checked)">' +
       '<span class="toggle-slider"></span></label>';
-    var classifInner = cfg.classifAtiva ? classif : '';
-    // v4.4.51: fase classificatória já sorteada → conteúdo cinza e sem interação (a config
-    // dela não muda mais). O #f2-classif-extra (Datas/Inscrições) fica dentro do wrapper, então
-    // também trava — coerente com "as opções da fase classificatória ficam cinzas".
+    var classifInner = cfg.classifAtiva ? (classif + classifSchedule) : '';
+    // v4.4.51/v4.5.49: fase classificatória já sorteada → só a ESTRUTURA (formato/grupos/formação)
+    // fica cinza e sem interação. O AGENDAMENTO (repetição, nº de rodadas) e as DATAS/Inscrições
+    // (#f2-classif-extra, dentro de classifSchedule) ficam FORA do wrapper → SEMPRE editáveis, pra
+    // o organizador ajustar a temporada durante a fase (reduzir/estender rodadas, mudar o término).
     if (_classifLocked) {
-      classifInner = '<div style="font-size:0.76rem;color:#c7d2fe;background:rgba(129,140,248,0.12);border:1px solid rgba(129,140,248,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">🔒 <b>Fase classificatória já sorteada</b> — a configuração não pode mais ser alterada. Você ainda pode ajustar a <b>fase eliminatória</b> antes de avançar de fase.</div>' +
-        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + classif + '</div>';
+      classifInner = '<div style="font-size:0.76rem;color:#c7d2fe;background:rgba(129,140,248,0.12);border:1px solid rgba(129,140,248,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">🔒 <b>Estrutura travada</b> — formato, grupos e formação não mudam mais (fase já sorteada). Você ainda pode ajustar o <b>agendamento</b> (repetição, nº de rodadas, término da fase) e a <b>fase eliminatória</b>.</div>' +
+        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + classif + '</div>' +
+        classifSchedule;
     }
 
     // v4.4.52: cadeado 🔒 ENTRE o título e o toggle quando a fase está travada.
@@ -537,15 +544,18 @@
   };
   window._f2Modo = function (v) { S.cfg.rodadas.modo = v; _norm(); _rerender(); };
   window._f2Turnos = function (v) { S.cfg.rodadas.turnos = v; _norm(); _rerender(); };
-  // VIA DE MÃO DUPLA (v4.4.29): editar RODADAS recalcula o REPETIR pela janela da fase; apagar
-  // rodadas NÃO mexe no repetir (e mantém o campo vazio até o user digitar).
+  // CANON (v4.5.24, regra-mãe): editar o Nº de RODADAS → MOVE a DATA FINAL (mantém V). Fim =
+  // 1º + N×repetição (última rodada tem 1 intervalo pra ser jogada → todos os N sorteios disparam).
+  // Só cai no legado (deriva o intervalo pela janela) quando não dá pra derivar o fim (sem V/1º sorteio).
   window._f2Rn = function (v) {
     if (!S) return;
     var n = parseInt(v, 10);
     if (!(n >= 1)) { return; } // vazio → mantém tudo (repetir intacto), sem re-render
     S.cfg.rodadas.n = n;
     if (n <= 1) S.cfg.rodadas.drawIntervalDays = null;             // 1 rodada não repete
-    else { var d = _windowDays(); if (d) S.cfg.rodadas.drawIntervalDays = Math.max(1, Math.round(d / n)); }
+    // v4.5.47: com repetição definida, o Nº de rodadas define o TÉRMINO da fase (1º + N×intervalo).
+    // Só quando não dá pra derivar o fim (sem repetição/1º sorteio) cai no legado: intervalo pela janela.
+    else if (!_syncEndFromSchedule()) { var d = _windowDays(); if (d) S.cfg.rodadas.drawIntervalDays = Math.max(1, Math.round(d / n)); }
     _norm(); _f2SchedRefresh(); // v4.4.71: atualiza no lugar (sem destruir o input em edição)
   };
   // Agendamento dos sorteios (modo "nº de rodadas"). Toggle "Sortear manualmente" (checked =
@@ -557,7 +567,7 @@
   function _mirrorPhaseStart() {
     var sd = document.getElementById('tourn-start-date'); if (sd && S.cfg.rodadas.drawFirstDate) sd.value = S.cfg.rodadas.drawFirstDate;
     var st = document.getElementById('tourn-start-time'); if (st && S.cfg.rodadas.drawFirstTime) st.value = S.cfg.rodadas.drawFirstTime;
-    ['_recalcDuration', '_checkWeather', '_updateLigaRoundsTag'].forEach(function (fn) { if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} } });
+    ['_recalcDuration', '_checkWeather'].forEach(function (fn) { if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} } });
   }
   // v4.4.62: recalcula o Nº de RODADAS pela janela (fim − 1º sorteio, COM horário) mantendo o
   // intervalo. Chamado ao mudar data/hora do 1º sorteio, do início ou do fim da fase.
@@ -567,6 +577,33 @@
     if (!(iv >= 1)) return; // sem repetição → nº de rodadas não deriva da janela
     var d = _windowDays();
     if (d) S.cfg.rodadas.n = Math.max(1, Math.round(d / iv));
+  }
+  // v4.5.47 (pedido do dono): 1º sorteio + repetição + Nº de rodadas → o TÉRMINO da fase DERIVA
+  // pra MANTER o Nº de rodadas escolhido. Último sorteio = 1º + (N−1)×intervalo; o fim fica UM
+  // intervalo além (o "tempo médio de uma rodada" = dias de repetição), dando à última rodada a
+  // janela pra ser jogada → fim = 1º + N×intervalo, na MESMA hora do 1º sorteio. Cai ESTRITAMENTE
+  // depois do último sorteio, então os N sorteios disparam e a contagem estrita (_phasePlannedRounds)
+  // relê exatamente N. Escreve nos campos de término da fase (#tourn-end-date/#tourn-end-time).
+  // Retorna true se conseguiu derivar o fim (precisa de 1º sorteio + intervalo + rodadas).
+  function _syncEndFromSchedule() {
+    if (!S || !S.cfg || !S.cfg.rodadas) return false;
+    var r = S.cfg.rodadas;
+    var n = parseInt(r.n, 10);
+    var iv = parseInt(r.drawIntervalDays, 10);
+    if (!(n >= 1) || !(iv >= 1)) return false;
+    var _v = function (id) { var el = document.getElementById(id); return el ? (el.value || '') : ''; };
+    var firstDate = r.drawFirstDate || _v('tourn-start-date') || '';
+    var firstTime = (r.drawFirstDate ? (r.drawFirstTime || '19:00') : (_v('tourn-start-time') || '19:00'));
+    if (!firstDate) return false;
+    var first = new Date(firstDate + 'T' + firstTime);
+    if (isNaN(first.getTime())) return false;
+    var end = new Date(first.getTime() + n * iv * 86400000);
+    var endDEl = document.getElementById('tourn-end-date');
+    if (!endDEl) return false;
+    endDEl.value = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
+    var endTEl = document.getElementById('tourn-end-time'); if (endTEl) endTEl.value = firstTime;
+    ['_recalcDuration', '_checkWeather'].forEach(function (fn) { if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} } });
+    return true;
   }
   // Exposto pros campos legados de Início/Término da fase (#tourn-start/end-date/time).
   window._f2RecalcRoundsFromWindow = function () { if (!S || !S.cfg || S.cfg.rodadas.modo !== 'fixo') return; _recalcN(); _norm(); _f2SchedRefresh(); };
@@ -609,12 +646,14 @@
     // (nextDrawAt nem era computado). Só na transição vazia→setada (não briga com
     // edições de data já preenchida nem com o manual reativado depois).
     if (nowSet && !was) S.cfg.rodadas.drawManual = false;
+    // CANON (v4.5.24): mexeu em qualquer coisa que NÃO seja o Nº de rodadas → recalcula as RODADAS
+    // pela janela (mantém V e F). Só editar o campo "Nº de rodadas" move a data final (_f2Rn).
     _mirrorPhaseStart(); _recalcN(); _norm();
     if (was !== nowSet) _rerender(); else _f2SchedRefresh();
   };
   window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _mirrorPhaseStart(); _recalcN(); _norm(); _f2SchedRefresh(); };
-  // VIA DE MÃO DUPLA (v4.4.29): editar REPETIR recalcula as RODADAS pela janela; apagar o repetir
-  // o deixa VAZIO (sem repetição) e NÃO mexe nas rodadas — nunca volta sozinho.
+  // CANON (v4.5.24): editar REPETIR (mantendo F) → recalcula as RODADAS pela janela; apagar o
+  // repetir o deixa VAZIO (sem repetição) e NÃO mexe nas rodadas — nunca volta sozinho.
   window._f2SchedInterval = function (v) {
     if (!S) return;
     var iv = parseInt(v, 10);

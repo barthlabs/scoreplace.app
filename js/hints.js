@@ -133,8 +133,6 @@
     // ── Create Tournament: Liga-specific ──
     { id: 'ct-liga-season', selector: '#liga-season-months', text: 'Duração da temporada da Liga. Ao final, a classificação é congelada e o campeão é coroado.', context: 'create-tournament', priority: 5, position: 'bottom' },
     { id: 'ct-liga-open-enrollment', selector: '#liga-open-enrollment', text: 'Inscrições sempre abertas: novos jogadores podem entrar a qualquer momento durante a temporada.', context: 'create-tournament', priority: 4, position: 'bottom' },
-    { id: 'ct-liga-manual-draw', selector: '#liga-manual-draw', text: 'Sorteio manual: você decide quando gerar cada rodada. Desative para agendar sorteios automáticos.', context: 'create-tournament', priority: 5, position: 'bottom' },
-    { id: 'ct-liga-draw-schedule', selector: '#liga-first-draw-date', text: 'Agende sorteios automáticos: defina a data/hora do primeiro e o intervalo entre eles.', context: 'create-tournament', priority: 5, position: 'bottom' },
     { id: 'ct-liga-nps', selector: '.liga-nps-btn', text: 'Pontuação de novos jogadores: Zero (começa do zero), Mínimo, Média dos demais, ou decisão do organizador.', context: 'create-tournament', priority: 3, position: 'bottom' },
     { id: 'ct-liga-inactivity', selector: '.liga-inact-btn', text: 'Regra de inatividade: Manter (nada muda), Decair (perde pontos), Remover (excluído da Liga).', context: 'create-tournament', priority: 3, position: 'bottom' },
     { id: 'ct-liga-round-format', selector: '[onclick*="ligaRoundFormat"]', text: 'Formato da rodada: Padrão (1 vs 1) ou Rei/Rainha (grupos de 4 com parceiros rotativos).', context: 'create-tournament', priority: 5, position: 'bottom' },

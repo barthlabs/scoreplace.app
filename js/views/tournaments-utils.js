@@ -729,7 +729,10 @@ window._ligaTournamentProgress = function(t) {
     var intervalDays = parseInt(t.drawIntervalDays) || 7; if (intervalDays < 1) intervalDays = 1;
     var intervalMs = intervalDays * 86400000;
     if (!isNaN(firstDraw) && endMs && endMs > firstDraw) {
-      roundsPlanned = Math.floor((endMs - firstDraw) / intervalMs) + 1;
+      // v4.x: contagem ESTRITA (mesma regra de _phasePlannedRounds) — um sorteio agendado
+      // EXATAMENTE no fim não dispara, logo não conta como rodada. Sem isto, o organizador
+      // via "3 rodadas" quando só 2 aconteciam.
+      roundsPlanned = Math.floor((endMs - firstDraw - 1) / intervalMs) + 1;
     }
   }
   if (roundsPlanned < t.rounds.length) roundsPlanned = t.rounds.length;
@@ -1638,7 +1641,16 @@ window._phasePlannedRounds = function (t, phaseIdx) {
         var _es = String(endDate).indexOf('T') > -1 ? endDate : (endDate + 'T23:59:59');
         var fd = new Date(_fs).getTime();
         var ed = new Date(_es).getTime();
-        if (!isNaN(fd) && !isNaN(ed) && ed > fd) planned = Math.floor((ed - fd) / (interval * 86400000)) + 1;
+        if (!isNaN(fd) && !isNaN(ed) && ed > fd) {
+            // v4.x: contagem ESTRITA. Um sorteio agendado EXATAMENTE no fim da fase NÃO
+            // dispara — o poller pula qualquer slot com horário >= fim (bracket-logic
+            // _checkLigaAutoDraws: guardas now>fim e scheduled>fim). Então esse último
+            // slot não pode virar rodada e não deve entrar na contagem, senão o organizador
+            // é enganado ("marca 3 rodadas" mas só 2 acontecem). floor((diff-1)/step)+1 =
+            // nº de sorteios fd+k*step ESTRITAMENTE antes de ed. Só difere de
+            // floor(diff/step)+1 quando o último slot coincide com o fim — exatamente o caso.
+            planned = Math.floor((ed - fd - 1) / (interval * 86400000)) + 1;
+        }
     }
     // Piso pelas rodadas realmente sorteadas.
     var drawn = 0;

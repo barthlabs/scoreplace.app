@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.51-beta — o card de dupla volta a ser o certo, com "Sem dupla" em cima <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👫 Torneio de duplas mostra de novo o card canônico:</b> em torneios de duplas (inclusive Casais/Pontos Corridos criados antes), a lista de inscritos voltou a separar <b>“Sem dupla” em cima</b> e <b>“Duplas formadas” embaixo</b>, com o card de dupla padronizado (arrastar um sobre o outro para formar, ↩️ Desfazer para separar). Alguns desses torneios estavam caindo no card errado do modo individual — agora a detecção de “é torneio de duplas” olha as próprias duplas já formadas, e não só a configuração gravada.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.27-beta — quem forma as duplas na eliminatória <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🤝 Duplas “já formadas”: você escolhe quem forma:</b> ao criar/editar um torneio de duplas com eliminatória direta e a opção <b>“Já formadas”</b>, agora há um interruptor <b>“Participantes podem formar suas duplas”</b>. Ligado, os próprios jogadores montam suas duplas (arrastar e soltar) — e o organizador também pode. Desligado (padrão), <b>só o organizador</b> forma as duplas.</li>' +

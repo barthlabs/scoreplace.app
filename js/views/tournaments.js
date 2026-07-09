@@ -3459,7 +3459,21 @@ function renderTournaments(container, tournamentId = null) {
             </div>`;
 
             // ── Torneios de duplas: layout em duas seções ─────────────────────────
-            const _isDoublesTournament = window._isTeamEnrollMode(t.enrollmentMode) && parseInt(t.teamSize || 2) === 2;
+            // v4.5.51: detecção ROBUSTA de torneio de duplas. O enrollmentMode sozinho NÃO
+            // basta — torneios de Casais legados / Liga de dupla fixa gravam 'individual' e
+            // ficavam de fora do gate, caindo no card ERRADO do grid normal (cardsStr:
+            // "Equipe Formada" + toggle) em vez do card CANÔNICO de dupla (_duplaCard) com a
+            // seção "Sem dupla" no topo. Detecta pela VERDADE ESTRUTURAL: teamSize 2 E
+            // (enroll de time OU existe QUALQUER entrada com p1Name && p2Name). Assim o card
+            // canônico volta sempre, sem depender do enrollmentMode gravado. Individual puro
+            // (sem entradas de dupla estruturais) segue no grid normal. Ver
+            // [[project_two_participant_card_renderers]] e [[project_dupla_entry_structural_not_slash]].
+            const _isDoublesTournament = parseInt(t.teamSize || 2) === 2 && (
+              window._isTeamEnrollMode(t.enrollmentMode) ||
+              (Array.isArray(t.participants) && t.participants.some(function (_pp) {
+                return _pp && typeof _pp === 'object' && _pp.p1Name && _pp.p2Name;
+              }))
+            );
             const _allParts = Array.isArray(t.participants) ? t.participants : [];
             // v2.7.90: dupla = entrada com p1Name E p2Name (verdade ESTRUTURAL) OU nome
             // "A / B" (legado). NÃO depender só de "/" no displayName: duplas formadas
