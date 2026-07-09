@@ -6515,8 +6515,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // v4.5.34: bloco superior estilo smartwatch — SETS (quando best-of >1) +
       // GAMES grande, cor por time, na ordem dos lados. flex:2 → ganha espaço
       // (o Desfazer saiu daqui pro rodapé). Sem a caixa/borda antiga.
+      // SETS COMPLETOS apenas (includeAll=FALSE). Com true, o set EM ANDAMENTO
+      // era contado como ganho por quem estivesse à frente nos games (ex.: 4–3
+      // → "SETS 1–0"), ignorando a config de games/set. false conta só sets já
+      // fechados (6 games etc.), respeitando a configuração.
       var _setsLeftN = 0, _setsRightN = 0;
-      try { _setsLeftN = _setsWon(leftTeam, true); _setsRightN = _setsWon(rightTeam, true); } catch (e) {}
+      try { _setsLeftN = _setsWon(leftTeam, false); _setsRightN = _setsWon(rightTeam, false); } catch (e) {}
       // Mostra SETS sempre que a partida usa sets (igual ao smartwatch).
       var _showSets = useSets;
       var _setsLine = _showSets
