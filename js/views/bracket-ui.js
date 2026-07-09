@@ -6423,158 +6423,98 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // sacador automaticamente, então arrastar não faz sentido).
     var swapHint = (!state.isFinished && _liveScorePrefs.fixSides) ? '<div style="text-align:center;font-size:0.55rem;color:var(--text-muted);opacity:0.5;margin-top:4px;">← arraste para trocar lado →</div>' : '';
 
-    if (isLandscape) {
-      // ── LANDSCAPE: [Names+Btns Left] [Plate Left] [Games] [Plate Right] [Names+Btns Right] ──
-      // Landscape-specific builders with smaller sizes to fit phone screen
-      var _lsPlate = function(player) {
-        var clr = player === 1 ? 'rgba(59,130,246,0.25)' : 'rgba(239,68,68,0.25)';
-        var display = player === 1 ? p1Display : p2Display;
-        var plateBg = _isDeuce ? '#f97316' : '#fff';
-        var plateClr = _isDeuce ? '#fff' : '#111';
-        // v4.0.5: classes ls-plate-box/ls-plate-num pra o _fitLivePlateText tratar
-        // o NÚMERO em paisagem também — reserva 2 chars (15/30/40/AD), sem truncar.
-        return '<div class="ls-plate-box" style="width:100%;background:' + plateBg + ';border-radius:calc(14px * var(--live-plate-scale,1));padding:calc(clamp(10px,4vh,28px) * var(--live-plate-scale,1)) calc(4px * var(--live-plate-scale,1));box-shadow:0 4px 24px rgba(0,0,0,0.5),0 0 0 3px ' + clr + ';display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
-          '<span class="ls-plate-num" style="font-size:calc(clamp(3.5rem,14vw,7rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + display + '</span>' +
-        '</div>';
-      };
-      var _lsUpBtn = function(player) {
-        var clr = player === 1 ? '#3b82f6' : '#ef4444';
-        return '<button class="live-vol" onclick="window._liveScorePoint(' + player + ')" style="width:100%;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:calc(clamp(2.4rem,6vw,3.2rem) * var(--live-btn-scale,1));font-weight:900;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;min-height:calc(clamp(72px,16vh,110px) * var(--live-btn-scale,1));box-shadow:0 3px 10px rgba(0,0,0,0.3);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.96)\'" ontouchend="this.style.transform=\'\'">▲</button>';
-      };
-      var _lsDownBtn = function(player) {
-        return '<button class="live-vol-sm" onclick="window._liveScoreMinus(' + player + ')" style="width:100%;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.08);color:var(--text-muted);font-size:0.95rem;font-weight:700;border-radius:0 0 12px 12px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;min-height:clamp(40px,6vh,56px);border-top:1px solid rgba(255,255,255,0.06);" ontouchstart="this.style.background=\'rgba(255,255,255,0.15)\'" ontouchend="this.style.background=\'\'">▼</button>';
-      };
-      var _lsBtns = function(player) {
-        if (state.isFinished) return '';
-        return '<div style="width:100%;display:flex;flex-direction:column;">' + _lsUpBtn(player) + _lsDownBtn(player) + '</div>';
-      };
-      // Landscape games box — smaller, colors follow court sides
-      var lsGamesCenter = '';
-      if (showGamesBox) {
-        lsGamesCenter =
-          '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:clamp(4px,1vh,8px) clamp(6px,1.5vw,14px);">' +
-            '<span style="font-size:0.45rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
-            '<div style="display:flex;align-items:center;gap:clamp(4px,1vw,8px);">' +
-              '<span style="font-size:calc(clamp(1.1rem,3.5vw,1.8rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-              '<span style="font-size:calc(clamp(0.7rem,1.5vw,1rem) * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
-              '<span style="font-size:calc(clamp(1.1rem,3.5vw,1.8rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
-            '</div>' +
-          '</div>';
-      }
+    // ─────────────────────────────────────────────────────────────────────
+    // v4.5.39: MODELO ÚNICO (Apple Watch) — os MESMOS construtores em RETRATO
+    // e PAISAGEM. Só o ARRANJO muda (retrato empilha; paisagem põe nomes nas
+    // laterais e as metades grandes no meio). Antes a paisagem usava layout
+    // velho (placas brancas + ▲/▼) → inconsistente. Agora tudo consistente.
+    // SETS COMPLETOS apenas (false) → respeita a config de games/set.
+    var _setsLeftN = 0, _setsRightN = 0;
+    try { _setsLeftN = _setsWon(leftTeam, false); _setsRightN = _setsWon(rightTeam, false); } catch (e) {}
+    var _showSets = useSets;
+    var _setsLine = _showSets
+      ? '<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:4px;">' +
+          '<span style="font-size:0.6rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
+          '<div style="display:flex;align-items:center;gap:9px;margin-top:1px;">' +
+            '<span style="font-size:1.3rem;font-weight:800;color:' + (leftTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
+            '<span style="font-size:0.95rem;color:rgba(255,255,255,0.25);">–</span>' +
+            '<span style="font-size:1.3rem;font-weight:800;color:' + (rightTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>' +
+          '</div>' +
+        '</div>'
+      : '';
+    // GAMES menor em paisagem (altura curta → usa vh); retrato usa vw.
+    var _gBig  = isLandscape ? 'clamp(2rem,7vh,3.4rem)' : 'clamp(3.15rem,14.4vw,5.85rem)';
+    var _gDash = isLandscape ? 'clamp(1.2rem,4vh,2rem)' : 'clamp(1.8rem,5.4vw,2.7rem)';
+    var _topBlock = showGamesBox
+      ? '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:clamp(6px,1.4vh,14px) 0 clamp(3px,0.8vh,7px);">' +
+          _setsLine +
+          '<span style="font-size:0.66rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
+          '<div style="display:flex;align-items:center;gap:clamp(12px,3.6vw,22px);margin-top:1px;">' +
+            '<span style="font-size:calc(' + _gBig + ' * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
+            '<span style="font-size:calc(' + _gDash + ' * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
+            '<span style="font-size:calc(' + _gBig + ' * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
+          '</div>' +
+        '</div>'
+      : '';
+    // Metade tocável por time (cor do time, tinta de fundo, número colorido).
+    // A metade INTEIRA é o botão +1. Sem placa branca, sem ▲/▼.
+    var _scoreHalf = function(team) {
+      var clr = team === 1 ? '#60A5FA' : '#F87171';
+      var tint = team === 1 ? 'rgba(96,165,250,0.16)' : 'rgba(248,113,113,0.15)';
+      var display = team === 1 ? p1Display : p2Display;
+      var tag = state.isFinished ? 'div' : 'button';
+      var act = state.isFinished ? '' : 'onclick="window._liveScorePoint(' + team + ')" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'"';
+      return '<' + tag + ' class="ls-score-half" ' + act + ' style="flex:1;min-width:0;height:100%;border:none;cursor:' + (state.isFinished ? 'default' : 'pointer') + ';background:' + tint + ';border-radius:16px;display:flex;align-items:center;justify-content:center;padding:0;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform 0.08s;">' +
+        '<span class="ls-plate-num" style="font-size:clamp(2.5rem,16vw,7rem);font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;transform:scaleY(1.35);transform-origin:center;">' + display + '</span>' +
+      '</' + tag + '>';
+    };
+    // Desfazer — ÚNICO botão, full-width, abaixo de tudo (safe-area).
+    var _undoBar = (!state.isFinished)
+      ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:none;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;padding:13px 0 calc(13px + env(safe-area-inset-bottom,0px));font-size:0.95rem;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
+        '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>Desfazer</button>'
+      : '';
+    var _gameLabelRow = gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '';
+    var _portFinishRow = finishBtn; finishBtn = '';
 
+    if (isLandscape) {
+      // ── PAISAGEM (v4.5.39): mesmo modelo do retrato — SETS/GAMES no topo,
+      // NOMES nas laterais + METADES coloridas grandes no meio, 1 Desfazer no
+      // rodapé. Nomes fora do centro pra as metades ficarem grandes na largura.
       container.innerHTML =
-        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;width:100%;gap:0;padding:0;">' +
-          // Sets row
-          setsRow +
-          // Games box — ABOVE the plates to keep score numbers bigger
-          // v1.3.67-beta: undo button beside games box (outside), not inside it
-          // v1.3.68-beta: SVG undo icon in white, games box centered via symmetric flex spacers
-          (showGamesBox ? '<div style="flex-shrink:0;margin-bottom:clamp(2px,0.6vh,6px);display:flex;align-items:center;width:100%;"><div style="flex:1;"></div>' + lsGamesCenter + '<div style="flex:1;display:flex;align-items:center;padding-left:8px;"><button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:30px;height:30px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;"><svg viewBox="0 0 24 24" width="22" height="22" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg></button></div></div>' : '') +
-          // Special label (TIE-BREAK, winner)
-          (gameLabel ? '<div style="text-align:center;font-size:clamp(0.6rem,1.5vw,0.75rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;margin-bottom:clamp(2px,0.5vh,6px);">' + gameLabel + '</div>' : '') +
-          // Main row — 4 columns: [Names+Btns Left] [Plate Left] [Plate Right] [Names+Btns Right]
-          '<div style="display:flex;align-items:center;width:100%;gap:clamp(6px,1vw,10px);justify-content:center;padding:0 6px;">' +
-            // Left column: names + buttons stacked
-            '<div style="flex:0 1 auto;min-width:0;max-width:24vw;display:flex;flex-direction:column;align-items:stretch;gap:3px;">' +
+        '<div style="display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;gap:0;">' +
+          _gameLabelRow +
+          _topBlock +
+          '<div style="flex:1;min-height:0;display:flex;align-items:stretch;width:100%;gap:6px;padding:2px clamp(6px,1.5vw,12px);">' +
+            '<div class="court-side" data-court-side="left" style="flex:0 0 auto;max-width:24vw;min-width:0;display:flex;flex-direction:column;justify-content:center;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
               _buildNameStack(leftTeam) +
-              _lsBtns(leftTeam) +
             '</div>' +
-            // Left plate
-            '<div style="flex:1;display:flex;align-items:center;justify-content:center;max-width:32vw;">' +
-              _lsPlate(leftTeam) +
-            '</div>' +
-            // Right plate
-            '<div style="flex:1;display:flex;align-items:center;justify-content:center;max-width:32vw;">' +
-              _lsPlate(rightTeam) +
-            '</div>' +
-            // Right column: names + buttons stacked
-            '<div style="flex:0 1 auto;min-width:0;max-width:24vw;display:flex;flex-direction:column;align-items:stretch;gap:3px;">' +
+            _scoreHalf(leftTeam) + _scoreHalf(rightTeam) +
+            '<div class="court-side" data-court-side="right" style="flex:0 0 auto;max-width:24vw;min-width:0;display:flex;flex-direction:column;justify-content:center;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
               _buildNameStack(rightTeam) +
-              _lsBtns(rightTeam) +
             '</div>' +
           '</div>' +
+          swapHint +
+          _undoBar +
+          _portFinishRow +
         '</div>';
-      // v4.0.5: ajusta o número do placar em PAISAGEM (reserva 2 chars, sem
-      // truncar) — antes só o retrato chamava o fit.
       _fitLivePlateText();
+      setTimeout(function() { _setupCourtSwapDrag(); }, 30);
     } else {
       // ── PORTRAIT: 5 linhas proporcionais preenchendo a tela inteira ──
       // Ordem: Games+Desfazer → Times → Placares → Botões ↑ → Botões ↓
       container.style.overflow = 'hidden';
       container.style.padding = '0';
 
-      // Portrait-specific up/down button builders — sem min-height fixo, preenchem o row
-      var _portUpBtn = function(player) {
-        var clr = player === 1 ? '#3b82f6' : '#ef4444';
-        return '<button class="live-vol ls-up-btn" onclick="window._liveScorePoint(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:calc(clamp(2.4rem,8vw,4rem) * var(--live-btn-scale,1));font-weight:900;border-radius:calc(14px * var(--live-btn-scale,1));display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;box-shadow:0 4px 14px rgba(0,0,0,0.4);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'">▲</button>';
-      };
-      var _portDownBtn = function(player) {
-        return '<button class="live-vol-sm ls-down-btn" onclick="window._liveScoreMinus(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.09);color:var(--text-muted);font-size:calc(clamp(1.1rem,4vw,1.6rem) * var(--live-btn-scale,1));font-weight:700;border-radius:calc(10px * var(--live-btn-scale,1));display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;border:1px solid rgba(255,255,255,0.08);" ontouchstart="this.style.background=\'rgba(255,255,255,0.18)\'" ontouchend="this.style.background=\'rgba(255,255,255,0.09)\'">▼</button>';
-      };
-
-      // v4.5.34: bloco superior estilo smartwatch — SETS (quando best-of >1) +
-      // GAMES grande, cor por time, na ordem dos lados. flex:2 → ganha espaço
-      // (o Desfazer saiu daqui pro rodapé). Sem a caixa/borda antiga.
-      // SETS COMPLETOS apenas (includeAll=FALSE). Com true, o set EM ANDAMENTO
-      // era contado como ganho por quem estivesse à frente nos games (ex.: 4–3
-      // → "SETS 1–0"), ignorando a config de games/set. false conta só sets já
-      // fechados (6 games etc.), respeitando a configuração.
-      var _setsLeftN = 0, _setsRightN = 0;
-      try { _setsLeftN = _setsWon(leftTeam, false); _setsRightN = _setsWon(rightTeam, false); } catch (e) {}
-      // Mostra SETS sempre que a partida usa sets (igual ao smartwatch).
-      var _showSets = useSets;
-      var _setsLine = _showSets
-        ? '<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:6px;">' +
-            '<span style="font-size:0.62rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
-            '<div style="display:flex;align-items:center;gap:10px;margin-top:1px;">' +
-              '<span style="font-size:1.4rem;font-weight:800;color:' + (leftTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
-              '<span style="font-size:1rem;color:rgba(255,255,255,0.25);">–</span>' +
-              '<span style="font-size:1.4rem;font-weight:800;color:' + (rightTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>' +
-            '</div>' +
-          '</div>'
-        : '';
-      var portGamesRow = showGamesBox
-        ? '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:clamp(8px,1.8vh,16px) 0 clamp(4px,1vh,8px);">' +
-            _setsLine +
-            '<span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
-            '<div style="display:flex;align-items:center;gap:clamp(12px,3.6vw,22px);margin-top:2px;">' +
-              '<span style="font-size:calc(clamp(3.15rem,14.4vw,5.85rem) * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-              '<span style="font-size:calc(clamp(1.8rem,5.4vw,2.7rem) * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
-              '<span style="font-size:calc(clamp(3.15rem,14.4vw,5.85rem) * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
-            '</div>' +
-          '</div>'
-        : '';
-
-      // v4.5.32: metade tocável por time (alinhado ao Apple Watch RemoteView).
-      // Cor SEGUE O TIME (1=azul, 2=vermelho), fundo com leve tinta do time,
-      // número colorido — SEM placa branca. A metade INTEIRA é o botão +1
-      // (tocar no placar soma o ponto daquele lado). Preenche todo o espaço →
-      // zero vazio. Quando a partida acaba, vira div (não soma mais).
-      var _scoreHalf = function(team) {
-        var clr = team === 1 ? '#60A5FA' : '#F87171';
-        var tint = team === 1 ? 'rgba(96,165,250,0.16)' : 'rgba(248,113,113,0.15)';
-        var display = team === 1 ? p1Display : p2Display;
-        var tag = state.isFinished ? 'div' : 'button';
-        var act = state.isFinished ? '' : 'onclick="window._liveScorePoint(' + team + ')" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'"';
-        // Fallback CSS conservador (nunca estoura 2 dígitos); _fitLivePlateText
-        // mede a fonte real e ajusta o tamanho pra caber ~90% da largura da metade.
-        return '<' + tag + ' class="ls-score-half" ' + act + ' style="flex:1;min-width:0;height:100%;border:none;cursor:' + (state.isFinished ? 'default' : 'pointer') + ';background:' + tint + ';border-radius:16px;display:flex;align-items:center;justify-content:center;padding:0;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform 0.08s;">' +
-          '<span class="ls-plate-num" style="font-size:clamp(2.5rem,16vw,7rem);font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;transform:scaleY(1.35);transform-origin:center;">' + display + '</span>' +
-        '</' + tag + '>';
-      };
-
-      // Captura finishBtn dentro do layout e evita o append duplo abaixo
-      var portFinishRow = finishBtn;
-      finishBtn = '';
-
+      // v4.5.39: construtores agora são COMPARTILHADOS (definidos antes do split
+      // isLandscape) — _topBlock, _scoreHalf, _undoBar, _gameLabelRow, _portFinishRow.
       container.innerHTML =
         '<div style="display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;gap:0;">' +
           // Sets row (compacto, topo)
           setsRow +
           // Rótulo especial (TIE-BREAK, vencedor)
-          (gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '') +
-          // Games + Desfazer
-          portGamesRow +
+          _gameLabelRow +
+          // SETS + GAMES (topo)
+          _topBlock +
           // Times (fotos/ícones + nomes) — v4.0.9: a linha tem a ALTURA DO
           // CONTEÚDO (flex:0 0 auto) e NÃO encolhe (flex-shrink:0). Antes era
           // flex:2 (proporcional): quando o GAMES box ficava grande, a linha era
@@ -6583,7 +6523,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           // nem com GAMES grande, Nomes 185% ou tela curta) e os placares/botões
           // (flex, encolhem) absorvem o resto — aumentar Nomes/Foto cresce este
           // box e reduz os outros proporcionalmente.
-          '<div style="flex:1.5;min-height:0;display:flex;align-items:center;width:100%;gap:4px;padding:4px clamp(4px,1.5vw,10px) 2px;">' +
+          '<div style="flex:0 0 auto;flex-shrink:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:4px clamp(4px,1.5vw,10px) 2px;">' +
             '<div class="court-side" data-court-side="left" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:stretch;justify-content:center;background:transparent;border:none;padding:0;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
               _buildNameStack(leftTeam) +
             '</div>' +
@@ -6599,11 +6539,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '</div>' +
           // Dica de troca de lado (só com fixSides ativo)
           swapHint +
-          // Desfazer — ÚNICO botão, full-width, abaixo de tudo (safe-area).
-          (!state.isFinished ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:none;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;padding:13px 0 calc(13px + env(safe-area-inset-bottom,0px));font-size:0.95rem;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
-            '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>Desfazer</button>' : '') +
+          // Desfazer — ÚNICO botão, full-width, abaixo de tudo (compartilhado)
+          _undoBar +
           // Botão Encerrar Partida (apenas partidas casuais sem sets)
-          portFinishRow +
+          _portFinishRow +
         '</div>';
 
       // v2.2.16-beta: fit text to fill plate boxes and buttons
