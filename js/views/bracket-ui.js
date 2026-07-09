@@ -6534,7 +6534,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '</div>'
         : '';
       var portGamesRow = showGamesBox
-        ? '<div style="flex:2;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:clamp(4px,1vh,8px) 0;">' +
+        ? '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:clamp(8px,1.8vh,16px) 0 clamp(4px,1vh,8px);">' +
             _setsLine +
             '<span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
             '<div style="display:flex;align-items:center;gap:clamp(12px,3.6vw,22px);margin-top:2px;">' +
