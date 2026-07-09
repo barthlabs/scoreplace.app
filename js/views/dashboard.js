@@ -3716,32 +3716,68 @@ function _hydrateFriendsPresenceWidget() {
     // de preferidos) — Google placeId é mais estável e tem dados completos
     // no `loadVenue`.
     var venuesByPid = {};
+    var _bucketKeys = []; // ordem de criação dos buckets (canon names)
     var _canonName = function(name) {
       return String(name || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     };
     var _isSyntheticPid = function(pid) {
       return typeof pid === 'string' && pid.indexOf('pref_') === 0;
     };
+    // v4.5.45: o canon puro deixava "Clube Paineiras do Morumby" e "Clube
+    // Paineiras do Morumby, São Paulo" como DOIS cards (mesmo local físico, um
+    // com sufixo de cidade). Agora dois nomes casam quando um é PREFIXO do outro
+    // na fronteira de vírgula/espaço (Nome ⊂ "Nome, Cidade") OU quando as
+    // coordenadas estão a menos de ~200m. Guard de 6 chars evita mesclar nomes
+    // curtos por engano ("Clube A" vs "Clube AB").
+    var _nameMatch = function(a, b) {
+      if (!a || !b) return false;
+      if (a === b) return true;
+      var shorter = a.length <= b.length ? a : b;
+      var longer  = a.length <= b.length ? b : a;
+      if (shorter.length < 6) return false;
+      if (longer.indexOf(shorter) !== 0) return false;
+      var nextChar = longer.charAt(shorter.length);
+      return nextChar === ',' || nextChar === ' ' || nextChar === '';
+    };
+    var _closeCoords = function(a, b) {
+      if (a.venueLat == null || a.venueLon == null || b.venueLat == null || b.venueLon == null) return false;
+      if (typeof window._haversineKm !== 'function') return false;
+      return window._haversineKm(a.venueLat, a.venueLon, b.venueLat, b.venueLon) < 0.2; // ~200m
+    };
     list.forEach(function(p) {
       var canon = _canonName(p.venueName) || p.placeId || '';
       if (!canon) return;
-      if (!venuesByPid[canon]) {
+      // procura bucket existente por nome (exato/prefixo) OU coordenadas ~200m
+      var matchKey = null;
+      for (var bi = 0; bi < _bucketKeys.length; bi++) {
+        var k = _bucketKeys[bi];
+        if (_nameMatch(canon, k) || _closeCoords(venuesByPid[k], p)) { matchKey = k; break; }
+      }
+      if (matchKey == null) {
         venuesByPid[canon] = {
           placeId: p.placeId,
           venueName: p.venueName || 'Local',
           venueLat: p.venueLat,
           venueLon: p.venueLon
         };
+        _bucketKeys.push(canon);
       } else {
-        // Já tem bucket. Se este doc tem placeId Google (não-synthetic) e
-        // o bucket atual tem synthetic, troca pra usar o real.
-        var existing = venuesByPid[canon];
+        var existing = venuesByPid[matchKey];
+        // placeId: prefere o Google (não-synthetic) — dados completos no loadVenue
         if (_isSyntheticPid(existing.placeId) && !_isSyntheticPid(p.placeId) && p.placeId) {
           existing.placeId = p.placeId;
         }
+        // nome de exibição: prefere o MAIS CURTO (sem sufixo de cidade)
+        if (p.venueName && _canonName(p.venueName).length < _canonName(existing.venueName).length) {
+          existing.venueName = p.venueName;
+        }
+        // completa coords se faltavam (pra futuros matches por proximidade)
+        if (existing.venueLat == null && p.venueLat != null) {
+          existing.venueLat = p.venueLat; existing.venueLon = p.venueLon;
+        }
       }
     });
-    var venueList = Object.keys(venuesByPid).map(function(k) { return venuesByPid[k]; });
+    var venueList = _bucketKeys.map(function(k) { return venuesByPid[k]; });
 
     var _safe = window._safeHtml || function(s) { return String(s || ''); };
     var sanitizePid = function(pid) { return 'dash_' + String(pid || '').replace(/[^a-zA-Z0-9]/g, '_'); };
@@ -3751,7 +3787,7 @@ function _hydrateFriendsPresenceWidget() {
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">' +
           '<span style="width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;"></span>' +
           '<span style="font-weight:700;color:var(--text-bright);font-size:0.95rem;">Movimento nos seus locais</span>' +
-          '<a href="#place" style="margin-left:auto;font-size:0.78rem;color:var(--primary-color);text-decoration:none;font-weight:600;">Ver tudo →</a>' +
+          '<a href="#place" class="btn btn-sm btn-success hover-lift" style="margin-left:auto;text-decoration:none;">Ver tudo →</a>' +
         '</div>';
 
     // v0.16.78: banner prominente listando os planos/checkins do PRÓPRIO user
