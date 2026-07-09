@@ -2881,8 +2881,8 @@ window._tvBuildNextMatches = function(t) {
     html += '<div style="flex:1;text-align:center;">';
     // v4.5.68: nome vivo por uid do slot (Modo TV).
     var _rsl = (typeof window._resolveSideLive === 'function') ? window._resolveSideLive : function(_t, s) { return s; };
-    var _tvN1 = _rsl(t, m.p1 || 'TBD', m.p1Uid || m.team1Uids);
-    var _tvN2 = _rsl(t, m.p2 || 'TBD', m.p2Uid || m.team2Uids);
+    var _tvN1 = _rsl(t, m.p1 || 'TBD', (window._slotUids ? window._slotUids(m, 'p1') : (m.p1Uid || m.team1Uids)));
+    var _tvN2 = _rsl(t, m.p2 || 'TBD', (window._slotUids ? window._slotUids(m, 'p2') : (m.p2Uid || m.team2Uids)));
     html += '<div style="font-size:1rem;font-weight:700;color:white;">' + presenceP1 + ' ' + window._safeHtml(_tvN1) + '</div>';
     html += '</div>';
     html += '<div style="font-size:0.9rem;font-weight:800;color:rgba(255,255,255,0.25);margin:0 12px;">VS</div>';

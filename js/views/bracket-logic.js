@@ -3128,6 +3128,8 @@ function _buildSitOut(opts) {
     isSitOut: true, sitOutPoints: opts.points, sitOutReason: reason,
     label: 'R' + opts.roundNum + ' • Folga' + (isInactive ? ' (inativo)' : '') + catLabel
   };
+  // v4.5.71: identidade por uid no slot real (p1). FOLGA é sentinela (sem uid).
+  if (opts.playerUid) { o.p1Uid = opts.playerUid; o.team1Uids = [opts.playerUid]; }
   if (category) o.category = category;
   return o;
 }
@@ -3146,6 +3148,8 @@ function _buildBye(opts) {
     p1: opts.player, p2: 'BYE', winner: opts.player, isBye: true,
     label: 'R' + opts.roundNum + ' • BYE' + catLabel
   };
+  // v4.5.71: identidade por uid no slot real (p1 = vencedor do BYE). BYE é sentinela.
+  if (opts.playerUid) { o.p1Uid = opts.playerUid; o.team1Uids = [opts.playerUid]; o.winnerUid = opts.playerUid; o.winnerUids = [opts.playerUid]; }
   if (category) o.category = category;
   return o;
 }
@@ -3460,7 +3464,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     allSitOuts.forEach(function(name, si) {
       var isInactive = inactiveSitOuts.indexOf(name) !== -1;
       var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);
-      var soObj = _buildSitOut({ player: name, roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'sitout-rr-r', idIndex: si, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });
+      var soObj = _buildSitOut({ player: name, playerUid: (_n2uMap[name] || null), roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'sitout-rr-r', idIndex: si, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });
       sitOutMatches.push(soObj);
     });
   }
@@ -3482,12 +3486,12 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
           if (category) rObj.category = category;
           remainderMatches.push(rObj);
         } else {
-          var byeObj = _buildBye({ player: remPlayers[ri], roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'bye-rr-r' });
+          var byeObj = _buildBye({ player: remPlayers[ri], playerUid: (_n2uMap[remPlayers[ri]] || null), roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'bye-rr-r' });
           remainderMatches.push(byeObj);
         }
       }
     } else if (remRemainder === 1) {
-      var byeObj2 = _buildBye({ player: players[players.length - 1], roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'bye-rr-r' });
+      var byeObj2 = _buildBye({ player: players[players.length - 1], playerUid: (_n2uMap[players[players.length - 1]] || null), roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'bye-rr-r' });
       remainderMatches.push(byeObj2);
     }
   }
@@ -3627,7 +3631,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
     allSitOuts.forEach(function(name, idx) {
       var isInactive = inactiveSitOutsSwiss.indexOf(name) !== -1;
       var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);
-      var soObj = _buildSitOut({ player: name, roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'sitout-r', idIndex: idx, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });
+      var soObj = _buildSitOut({ player: name, playerUid: _uidForName(name), roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'sitout-r', idIndex: idx, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });
       newMatches.push(soObj);
     });
 
@@ -3696,7 +3700,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
 
   // Remainder: BYE for non-Liga
   players.filter(p => !matched.has(p)).forEach(p => {
-    var byeObj = _buildBye({ player: p, roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'bye-r' });
+    var byeObj = _buildBye({ player: p, playerUid: _uidForName(p), roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'bye-r' });
     newMatches.push(byeObj);
   });
 

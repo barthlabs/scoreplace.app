@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.70-beta';
+window.SCOREPLACE_VERSION = '4.5.71-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -2755,39 +2755,53 @@ window._getStandbyPool = function (t) {
 window._resolveSideLive = function (t, sideStr, uidHint) {
   if (!t || typeof sideStr !== 'string') return sideStr || '';
   var s = sideStr.trim();
-  if (!s || s === 'TBD' || s === 'BYE' || s === 'FOLGA' || s === 'A definir') return sideStr;
-  // v4.5.66: uid-first — resolve o nome VIVO pelo(s) uid(s) do slot (m.p1Uid / team1Uids),
-  // imune a nome gravado corrompido E a drift de nome pós-sorteio (o matching por nome
-  // abaixo falha quando o nome mudou depois do sorteio). Só usa o nome vivo quando o
-  // perfil está no cache; senão cai no matching por nome (comportamento antigo — zero
-  // regressão). Ver [[project_uid_audit_sweep]].
+  // sentinelas — nunca resolvem por identidade
+  if (!s || s === 'TBD' || s === 'BYE' || s === 'FOLGA' || s === 'W.O.' ||
+      s === 'A definir' || s === 'BYE (Avança Direto)') return sideStr;
+  // v4.5.71: STRICT UID. A identidade de um slot é o uid — nunca a string de nome.
+  // Resolve o nome VIVO por uid (cache de perfil OU lookup no pool POR UID). O
+  // antigo matching POR NOME foi REMOVIDO: era homônimo-inseguro (dois "Maira"
+  // casavam no primeiro) e mascarava writers sem uid. Quem tem uid SEMPRE resolve
+  // por uid; sem uid = guest (sem conta), e aí a string gravada É a identidade
+  // legítima dele (nunca fica velha — guest não renomeia perfil). Se um slot com
+  // uid não resolver (uid órfão / perfil não pré-carregado), retorna a string só
+  // como rede — isso sinaliza writer/preload a corrigir, não é o caminho normal.
+  // Ver [[project_match_slot_uid_identity]] / [[project_uid_audit_sweep]].
   function _liveByUid(u) {
     if (!u || typeof u !== 'string') return '';
-    return (typeof window._nameForUid === 'function' && window._nameForUid(u)) ||
-           (window._profileNameByUid && window._profileNameByUid[u]) || '';
+    var n = (typeof window._nameForUid === 'function' && window._nameForUid(u)) ||
+            (window._profileNameByUid && window._profileNameByUid[u]) || '';
+    if (n) return n;
+    // lookup no pool POR UID (síncrono; não depende do cache assíncrono de perfil).
+    var pools = [t.participants, t.standbyParticipants, t.waitlist];
+    for (var pi = 0; pi < pools.length; pi++) {
+      var arr = pools[pi]; if (!Array.isArray(arr)) continue;
+      for (var i = 0; i < arr.length; i++) {
+        var p = arr[i]; if (!p || typeof p !== 'object') continue;
+        if (p.uid === u) return (typeof window._pName === 'function') ? window._pName(p) : (p.displayName || p.name || '');
+        if (p.p1Uid === u) return (typeof window._nameForUid === 'function' && window._nameForUid(u)) || p.p1Name || '';
+        if (p.p2Uid === u) return (typeof window._nameForUid === 'function' && window._nameForUid(u)) || p.p2Name || '';
+      }
+    }
+    return '';
   }
   if (uidHint) {
     if (Array.isArray(uidHint)) {
-      var _live = uidHint.map(_liveByUid);
-      if (_live.length && _live.every(function (x) { return !!x; })) return _live.join(' / ');
+      var _uids = uidHint.filter(Boolean);
+      if (_uids.length) {
+        var _live = _uids.map(_liveByUid);
+        if (_live.every(function (x) { return !!x; })) return _live.join(' / ');
+        // dupla com 1 membro guest (sem uid): completa com a parte gravada do slot.
+        var _parts = s.split(' / ');
+        return _uids.map(function (u, i) { return _liveByUid(u) || _parts[i] || ''; }).join(' / ');
+      }
     } else {
       var _one = _liveByUid(uidHint);
       if (_one) return _one;
     }
   }
-  var pools = [t.participants, t.standbyParticipants, t.waitlist];
-  for (var pi = 0; pi < pools.length; pi++) {
-    var arr = pools[pi];
-    if (!Array.isArray(arr)) continue;
-    for (var i = 0; i < arr.length; i++) {
-      var p = arr[i];
-      if (!p || typeof p !== 'object') continue;
-      if (String(p.displayName || '').trim() === s) return window._pName(p);
-      if (String(p.name || '').trim() === s) return window._pName(p);
-      if (p.p1Name && p.p2Name && (String(p.p1Name).trim() + ' / ' + String(p.p2Name).trim()) === s) return window._pName(p);
-    }
-  }
-  return sideStr; // informal / não achado → mantém a string como está
+  // SEM uid → guest (a string É a identidade) OU rede pra uid órfão. NUNCA casa por nome.
+  return sideStr;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

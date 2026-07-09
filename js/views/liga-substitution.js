@@ -136,6 +136,9 @@ function _addWoMarker(t, round, roundIndex, name, category) {
     p1: name, p2: 'W.O.', isSitOut: true, sitOutReason: 'wo', sitOutPoints: 0,
     label: 'R' + (roundIndex + 1) + ' • W.O.'
   };
+  // v4.5.71: identidade por uid no slot real (p1). W.O. é sentinela (sem uid).
+  var _woUid = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(t) || {})[name] : null;
+  if (_woUid) { o.p1Uid = _woUid; o.team1Uids = [_woUid]; }
   if (category) o.category = category;
   round.matches.push(o);
 }
@@ -150,6 +153,9 @@ function _addFolgaMarker(t, round, roundIndex, name, category) {
     p1: name, p2: 'FOLGA', isSitOut: true, sitOutReason: 'remainder', sitOutPoints: pts,
     label: 'R' + (roundIndex + 1) + ' • Folga'
   };
+  // v4.5.71: identidade por uid no slot real (p1). FOLGA é sentinela (sem uid).
+  var _foUid = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(t) || {})[name] : null;
+  if (_foUid) { o.p1Uid = _foUid; o.team1Uids = [_foUid]; }
   if (category) o.category = category;
   round.matches.push(o);
 }
@@ -648,6 +654,8 @@ window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest) 
       bracket: 'monarch', isMonarch: true, monarchGroup: gIdx, groupIdx: gIdx, groupName: gName,
       phaseIndex: pIdx, round: (playing[0] && playing[0].round) || 1,
       isSitOut: true, sitOutReason: 'wo', sitOutPoints: 0, p1: absentName, p2: 'W.O.',
+      // v4.5.71: identidade por uid no slot real (p1 = ausente). W.O. é sentinela.
+      p1Uid: ((typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(ft) || {})[absentName] : null) || null,
       woReplacedBy: fillName, woIsGuest: !!isGuest, label: 'W.O.',
       category: (playing[0] && playing[0].category) || undefined
     });

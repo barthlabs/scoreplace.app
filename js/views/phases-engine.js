@@ -904,7 +904,9 @@
     var dupla = !!(cfg && (cfg.formatCode === 'elim_dupla' || /dupla/i.test(String(cfg.format || ''))));
     if (pool.length === 1) {
       // 1 inscrito → campeão por BYE (preserva o legado da Fase 0).
-      return { matches: [{ id: idPrefix + '-bye', round: 1, bracket: 'main', p1: pool[0].displayName, p2: 'BYE (Avança Direto)', winner: pool[0].displayName, isBye: true }] };
+      // v4.5.71: identidade por uid no slot real (p1 = campeão).
+      var _byeUids = (typeof window._participantUids === 'function') ? window._participantUids(pool[0]) : [];
+      return { matches: [{ id: idPrefix + '-bye', round: 1, bracket: 'main', p1: pool[0].displayName, p2: 'BYE (Avança Direto)', winner: pool[0].displayName, isBye: true, team1Obj: pool[0], p1Uid: (_byeUids.length === 1 ? _byeUids[0] : null), team1Uids: _byeUids, winnerUid: (_byeUids.length === 1 ? _byeUids[0] : null), winnerUids: _byeUids }] };
     }
     if (dupla) {
       // Dupla Eliminatória: gera a R1 do upper (com repescagem quando resolution='playin'

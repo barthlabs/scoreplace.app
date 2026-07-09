@@ -756,7 +756,8 @@ window._createExtraGamesFromWaitlist = function(t) {
   var created = 0;
   var _rm = function(used, arr){ return Array.isArray(arr) ? arr.filter(function(p){ return used.indexOf(_name(p)) === -1; }) : arr; };
   while (pool.length >= _minPool) {
-    var n1, n2, used;
+    var n1, n2, used, _lateU1 = [], _lateU2 = [];
+    var _pu = function(x){ return (typeof window._participantUids === 'function') ? window._participantUids(x) : []; };
     if (_isTeams) {
       var four = pool.splice(0, 4);
       var formed = window._formDoublesTeams(four, 2, t.teamOrigins);
@@ -764,6 +765,7 @@ window._createExtraGamesFromWaitlist = function(t) {
       if (teams.length < 2) break;
       var t1 = teams[0], t2 = teams[1];
       n1 = t1.displayName || t1.name; n2 = t2.displayName || t2.name;
+      _lateU1 = _pu(t1); _lateU2 = _pu(t2);
       // tardios viram INSCRITOS (duplas) — para aparecer na lista, marcar presença/W.O.
       [t1, t2].forEach(function(tm){
         var nm = tm.displayName || tm.name;
@@ -777,6 +779,7 @@ window._createExtraGamesFromWaitlist = function(t) {
       var two = pool.splice(0, 2);
       var s1 = two[0], s2 = two[1];
       n1 = _name(s1); n2 = _name(s2);
+      _lateU1 = _pu(s1); _lateU2 = _pu(s2);
       [s1, s2].forEach(function(sp){
         var nm = _name(sp);
         var exists = t.participants.some(function(p){ var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); return n === nm; });
@@ -790,6 +793,9 @@ window._createExtraGamesFromWaitlist = function(t) {
     t.matches.push({
       id: 'xr1-' + t.id + '-' + ts + '-' + created,
       round: 1, p1: n1, p2: n2, winner: null, isExtra: true,
+      // v4.5.71: identidade por uid nos slots (jogo tardio).
+      p1Uid: (_lateU1.length === 1 ? _lateU1[0] : null), team1Uids: _lateU1,
+      p2Uid: (_lateU2.length === 1 ? _lateU2[0] : null), team2Uids: _lateU2,
       // v4.1.36: carimbar fase+chave — o renderer canônico (_renderPhaseBracket →
       // colsFor) filtra por m.bracket==='main' E o numerador global por phaseIndex.
       // Sem isso, jogos tardios ficam invisíveis (sem card, sem "Jogo N").
