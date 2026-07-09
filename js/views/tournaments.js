@@ -2960,6 +2960,10 @@ function renderTournaments(container, tournamentId = null) {
                 });
             }).catch(function() {});
         }
+        // v4.5.61: hidrata NOMES por uid — resolve do perfil vivo (users/{uid}) e
+        // preenche [data-uid-name]. Identidade = uid; nome gravado no inscrito nunca
+        // é a fonte da verdade (fim do "Maira/Maira"). Ver [[project_uid_audit_sweep]].
+        if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(container); } catch (_e) {} }
         // v2.3.52: carrega perfis (gênero/nível/idade) e aplica nos badges de
         // meta dos cards de inscritos. Mesmos helpers compartilhados usados na
         // página #participants (store.js).
@@ -3521,9 +3525,14 @@ function renderTournaments(container, tournamentId = null) {
               var _crown  = _isOrgP ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
               // Membros da dupla (para cards formados) — v2.7.90: p1Name/p2Name primeiro
               // (verdade estrutural), só caindo pro split "A / B" quando faltam os campos.
-              var members = (typeof p === 'object' && p && p.p1Name && p.p2Name)
-                ? [String(p.p1Name).trim(), String(p.p2Name).trim()].filter(Boolean)
-                : (nm.includes('/') ? nm.split('/').map(function(s){return s.trim();}).filter(Boolean) : null);
+              // v4.5.61: membros da dupla = uid (IDENTIDADE) + guest (nome só p/ quem NÃO
+              // tem conta). O nome exibido resolve do perfil vivo (users/{uid}) — p1Name/
+              // p2Name gravados NÃO são lidos quando há uid (fim do "Maira/Maira").
+              // Ver [[project_uid_audit_sweep]] / [[project_uid_primary_identity]].
+              var _pairMembers = (typeof p === 'object' && p && p.p1Name && p.p2Name)
+                ? [{ uid: (p.p1Uid || ''), guest: String(p.p1Name).trim() }, { uid: (p.p2Uid || ''), guest: String(p.p2Name).trim() }]
+                : (nm.includes('/') ? nm.split('/').map(function(s){ return { uid: '', guest: s.trim() }; }).filter(function(x){ return x.guest; }) : null);
+              var members = _pairMembers ? _pairMembers.map(function(m){ return window._displayName(m.uid, m.guest); }) : null;
               var nameHtml;
               if (members) {
                 nameHtml = members.map(function(n) {
@@ -3532,7 +3541,11 @@ function renderTournaments(container, tournamentId = null) {
                   return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;margin-bottom:2px;"><img src="'+window._safeHtml(mp)+'" onerror="this.onerror=null;this.src=\''+ms+'\'" data-player-name="'+window._safeHtml(n)+'" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:'+(window._INSCRITO_NAME_FONT_PX||17)+'px;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+window._safeHtml(n)+'</span></div>';
                 }).join('');
               } else {
-                nameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="'+window._safeHtml(_photo)+'" onerror="this.onerror=null;this.src=\''+_fb+'\'" data-player-name="'+window._safeHtml(nm)+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:'+(window._INSCRITO_NAME_FONT_PX||17)+'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">'+window._safeHtml(nm)+'</span>'+_crown+'</div>';
+                // v4.5.61: SOLO — nome exibido resolve do perfil vivo por uid; nm gravado
+                // só é usado quando não há uid (guest sem conta).
+                var _soloDisp = window._displayName(uid, nm);
+                var _soloUidAttr = uid ? (' data-uid-name="'+window._safeHtml(uid)+'"') : '';
+                nameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="'+window._safeHtml(_photo)+'" onerror="this.onerror=null;this.src=\''+_fb+'\'" data-player-name="'+window._safeHtml(nm)+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span'+_soloUidAttr+' style="font-weight:700;font-size:'+(window._INSCRITO_NAME_FONT_PX||17)+'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">'+window._safeHtml(_soloDisp)+'</span>'+_crown+'</div>';
               }
               // Estilo igual ao card normal
               var bgStyle = draggable
@@ -3570,23 +3583,30 @@ function renderTournaments(container, tournamentId = null) {
               var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p2Uid) || '', displayName: (p && p.p2Name) || members[1], name: (p && p.p2Name) || members[1] }) : '';
               var _body;
               if (members) {
-                var _memBlock = function(n, right) {
-                  var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-                  var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
-                  var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+                // v4.5.61: recebe o ÍNDICE do membro; nome resolve por uid (perfil vivo).
+                // O nome gravado (guest) só entra pra quem não tem conta. data-uid-name
+                // deixa a hidratação pós-render preencher/atualizar o nome vivo.
+                var _memBlock = function(idxM, right) {
+                  var _mm = _pairMembers[idxM] || { uid: '', guest: '' };
+                  var _disp = window._displayName(_mm.uid, _mm.guest);
+                  var _metaName = _disp || _mm.guest; // meta (Fem/idade/skill) precisa de um nome p/ resolver
+                  var _seed = _metaName || '?';
+                  var _pk = (_metaName || '').toLowerCase();
+                  var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(_seed) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+                  var _mp = (window._playerPhotoCache && window._playerPhotoCache[_pk] && window._playerPhotoCache[_pk].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_pk] : _ms;
+                  var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(_metaName) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
                   // v2.8.68/v4.4.105: nome maior (17px) que NÃO trunca — quebra em até 2 linhas
                   // (altura 44px); só ENCOLHE via auto-fit JS _fitTwoLineNames em casos extremos.
-                  // class sp-fit-name + data-fit-h/max alimentam o medidor; avatar acompanha
-                  // (align-items:center). title = nome completo no hover.
                   var _nmFs = (window._INSCRITO_NAME_FONT_PX || 17);
-                  var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="44" data-fit-max="' + _nmFs + '" style="font-weight:700;font-size:' + _nmFs + 'px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
+                  var _uidAttr = _mm.uid ? (' data-uid-name="' + window._safeHtml(_mm.uid) + '"') : '';
+                  var _nmSpan = '<span class="sp-fit-name"' + _uidAttr + ' title="' + window._safeHtml(_disp) + '" data-fit-h="44" data-fit-max="' + _nmFs + '" style="font-weight:700;font-size:' + _nmFs + 'px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(_disp) + '</span>';
                   var _av = right
                     ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
                     : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
-                  var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ displayName: n, name: n }, n, false, t, isOrg) : '';
+                  var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ uid: _mm.uid, displayName: _metaName, name: _metaName }, _metaName, false, t, isOrg) : '';
                   return '<div style="min-width:0;display:flex;flex-direction:column;gap:4px;flex:1 1 42%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
                 };
-                _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memBlock(members[0], false) + (members[1] ? _memBlock(members[1], true) : '') + '</div>';
+                _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memBlock(0, false) + (_pairMembers[1] ? _memBlock(1, true) : '') + '</div>';
               } else {
                 _body = nameHtml + ((typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, nm, false, t, isOrg) : '');
               }

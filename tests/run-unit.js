@@ -19,6 +19,7 @@ const SUITES = [
   'tests/phase-promote-line.test.js',
   'tests/advanced-points-dedup.test.js',
   'tests/pa-uid-identity.test.js',
+  'tests/uid-name-display.test.js',
   'tests/standings-uid-identity.test.js',
   'tests/h2h-uid-identity.test.js',
   'tests/h2h-matrix-uid.test.js',

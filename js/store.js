@@ -1,4 +1,64 @@
-window.SCOREPLACE_VERSION = '4.5.60-beta';
+window.SCOREPLACE_VERSION = '4.5.61-beta';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
+// ─────────────────────────────────────────────────────────────────────────────
+// Regra do dono (repetida, agora CANÔNICA): dado de torneio/inscrito guarda
+// APENAS uid. O nome/e-mail/telefone exibido é SEMPRE resolvido do perfil vivo
+// aqui — NUNCA de um campo gravado no inscrito (que apodrece → "Maira/Maira").
+// Única exceção física: participante SEM conta (guest) não tem uid nem perfil;
+// só nesse caso o nome vem de um campo (guestName). Onde HÁ uid, o nome gravado
+// NÃO é lido nem como fallback.
+//   _preloadUserProfiles(uids)  — carrega em lote os perfis por uid (cache).
+//   _nameForUid/_emailForUid/_phoneForUid(uid) — leem o cache (síncrono).
+//   _displayName(uid, guestName) — uid → nome vivo (vazio até hidratar); sem uid → guest.
+//   _hydrateUidNames(root) — pós-render, preenche [data-uid-name] com o nome vivo.
+window._userProfileCache = window._userProfileCache || {};
+window._userProfilePending = window._userProfilePending || {};
+window._preloadUserProfiles = function (uids) {
+  var db = window.FirestoreDB && window.FirestoreDB.db;
+  var list = [];
+  (uids || []).forEach(function (u) {
+    if (u && typeof u === 'string' && u.indexOf(' ') === -1 &&
+        !window._userProfileCache[u] && !window._userProfilePending[u]) list.push(u);
+  });
+  if (!db || !list.length) return Promise.resolve();
+  list.forEach(function (u) { window._userProfilePending[u] = 1; });
+  return Promise.all(list.map(function (uid) {
+    return db.collection('users').doc(uid).get().then(function (s) {
+      var d = (s && s.exists) ? (s.data() || {}) : {};
+      window._userProfileCache[uid] = {
+        displayName: d.displayName || d.name || '',
+        email: d.email || '',
+        phone: d.phone || '',
+        photoURL: d.photoURL || ''
+      };
+    }).catch(function () {}).then(function () { delete window._userProfilePending[uid]; });
+  }));
+};
+window._nameForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.displayName) || ''; };
+window._emailForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.email) || ''; };
+window._phoneForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.phone) || ''; };
+// uid presente → SÓ o nome vivo (nunca o gravado); vazio até hidratar. Sem uid → guest.
+window._displayName = function (uid, guestName) {
+  if (uid) return window._nameForUid(uid);
+  return guestName || '';
+};
+window._hydrateUidNames = function (root) {
+  root = root || (typeof document !== 'undefined' ? document : null);
+  if (!root || !root.querySelectorAll) return Promise.resolve();
+  var els = root.querySelectorAll('[data-uid-name]');
+  if (!els.length) return Promise.resolve();
+  var uids = [];
+  els.forEach(function (e) { var u = e.getAttribute('data-uid-name'); if (u) uids.push(u); });
+  return window._preloadUserProfiles(uids).then(function () {
+    els.forEach(function (e) {
+      var u = e.getAttribute('data-uid-name');
+      var nm = window._nameForUid(u);
+      if (nm) e.textContent = nm;
+    });
+  });
+};
 
 // v4.5.58: helper CANÔNICO do símbolo de cancelar/remover — círculo vermelho,
 // borda branca, X branco (classe .cancel-x-btn em components.css). Use em TODO
