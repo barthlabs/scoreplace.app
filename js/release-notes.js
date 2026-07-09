@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.84-beta — o app acha o jogador pela conta mesmo sem o nome gravado <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🛡️ Robustez interna (sem mudança visível):</b> ao resolver quem é cada jogador de um jogo (classificação, W.O., substituição), o app agora reconhece a pessoa pela <b>conta dela</b> (nome do perfil ao vivo), mesmo que o nome não esteja gravado na inscrição. É mais um passo de preparação para o app usar a <b>conta</b> como identidade única em toda parte — hoje o comportamento é idêntico ao anterior, e jogadores convidados sem conta seguem pelo nome, como sempre.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.83-beta — sorteio resolve o nome do jogador pela conta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🛡️ Robustez interna (sem mudança visível):</b> ao sortear e ao desfazer duplas, o app passa a resolver o <b>nome de cada jogador pela conta dele</b> (perfil ao vivo), não só pelo nome gravado na inscrição. É mais um passo para o app usar a <b>conta</b> como identidade única em toda parte. Hoje o comportamento é idêntico ao anterior — jogadores convidados sem conta seguem pelo nome, como sempre.</li>' +

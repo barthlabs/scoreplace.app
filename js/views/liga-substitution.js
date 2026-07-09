@@ -90,6 +90,14 @@ function _groupCategory(group) {
 // convidáveis.
 function _nameUidMap(t) {
   var map = {};
+  // v4.5.84 (ITEM 3 · Fase 3): nome VIVO por uid (perfil) — aditivo, resolve entrada só-uid
+  // (sem p1Name/p2Name gravado, pós-Fase-4). Nunca sobrescreve a chave de nome gravado.
+  var _live = (typeof window._nameForUid === 'function') ? window._nameForUid : null;
+  function _putLive(uid) {
+    if (!_live || !uid) return;
+    var ln = String(_live(uid) || '').trim();
+    if (ln && !map[ln]) map[ln] = uid;
+  }
   (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {})).forEach(function (p) {
     if (!p || typeof p !== 'object') return;
     var nm = p.displayName || p.name || '';
@@ -97,6 +105,8 @@ function _nameUidMap(t) {
     if (p.p1Name && p.p1Uid) map[p.p1Name] = p.p1Uid;
     if (p.p2Name && p.p2Uid) map[p.p2Name] = p.p2Uid;
     (p.participants || []).forEach(function (sp) { if (sp && (sp.displayName || sp.name) && sp.uid) map[sp.displayName || sp.name] = sp.uid; });
+    _putLive(p.p1Uid); _putLive(p.p2Uid); _putLive(p.uid);
+    (p.participants || []).forEach(function (sp) { if (sp) _putLive(sp.uid); });
   });
   return map;
 }

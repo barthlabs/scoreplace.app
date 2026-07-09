@@ -3082,6 +3082,15 @@ window._buildMonarchGroup = _buildMonarchGroup;
 // (Vivian × Vivi Hirata) nunca mais se cruzam no PA/render/sync.
 function _buildNameToUid(t) {
   var map = {};
+  // v4.5.84 (ITEM 3 · Fase 3): resolver de nome VIVO por uid (perfil), quando disponível
+  // (cliente). No autoDraw (sem store.js) window._nameForUid é undefined → cai só nas chaves de
+  // nome GRAVADO (comportamento de hoje; o preload servidor é a Fase 4).
+  var _live = (typeof window !== 'undefined' && typeof window._nameForUid === 'function') ? window._nameForUid : null;
+  function _putLive(uid) {
+    if (!_live || !uid) return;
+    var ln = String(_live(uid) || '').trim();
+    if (ln && !map[ln]) map[ln] = uid; // aditivo: nunca sobrescreve a chave de nome gravado
+  }
   var parr = Array.isArray(t && t.participants) ? t.participants : Object.values((t && t.participants) || {});
   parr.forEach(function (p) {
     if (!p || typeof p !== 'object') return;
@@ -3092,6 +3101,9 @@ function _buildNameToUid(t) {
     });
     var nm = String((p.displayName || p.name) || '').trim();
     if (nm && p.uid && !map[nm]) map[nm] = p.uid;
+    // v4.5.84: chave de nome VIVO por uid (resolve entrada só-uid, sem p1Name/p2Name — pós-Fase-4).
+    _putLive(p.p1Uid); _putLive(p.p2Uid); _putLive(p.uid);
+    if (Array.isArray(p.participants)) p.participants.forEach(function (s) { if (s) _putLive(s.uid); });
   });
   return map;
 }

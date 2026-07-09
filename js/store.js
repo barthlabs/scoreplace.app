@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.83-beta';
+window.SCOREPLACE_VERSION = '4.5.84-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -1913,6 +1913,28 @@ window._memberUidByName = function(t, name) {
         for (var s = 0; s < p.participants.length; s++) {
           var sub = p.participants[s];
           if (sub && (sub.displayName || sub.name || '').trim().toLowerCase() === target && sub.uid) return sub.uid;
+        }
+      }
+    }
+  }
+  // v4.5.84 (ITEM 3 · Fase 3): 2ª passada por nome VIVO (perfil) — só quando o nome GRAVADO não
+  // casou (a passada acima ganha → zero regressão). Resolve a pessoa quando a entrada não tem
+  // p1Name/p2Name/displayName gravado (pós-Fase-4). Vazio no autoDraw (sem _nameForUid).
+  var _live = (typeof window._nameForUid === 'function') ? window._nameForUid : null;
+  if (_live) {
+    for (var pi2 = 0; pi2 < pools.length; pi2++) {
+      var arr2 = pools[pi2];
+      for (var j = 0; j < arr2.length; j++) {
+        var q = arr2[j];
+        if (!q || typeof q !== 'object') continue;
+        if (q.uid && String(_live(q.uid) || '').trim().toLowerCase() === target) return q.uid;
+        if (q.p1Uid && String(_live(q.p1Uid) || '').trim().toLowerCase() === target) return q.p1Uid;
+        if (q.p2Uid && String(_live(q.p2Uid) || '').trim().toLowerCase() === target) return q.p2Uid;
+        if (Array.isArray(q.participants)) {
+          for (var s2 = 0; s2 < q.participants.length; s2++) {
+            var sub2 = q.participants[s2];
+            if (sub2 && sub2.uid && String(_live(sub2.uid) || '').trim().toLowerCase() === target) return sub2.uid;
+          }
         }
       }
     }
