@@ -28,7 +28,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
   var _isDoublesTournament = parseInt(t.teamSize || 2) === 2 && (
     window._isTeamEnrollMode(t.enrollmentMode) ||
     (Array.isArray(t.participants) && t.participants.some(function (_pp) {
-      return _pp && typeof _pp === 'object' && _pp.p1Name && _pp.p2Name;
+      return _pp && typeof _pp === 'object' && (_pp.p1Uid || _pp.p1Name) && (_pp.p2Uid || _pp.p2Name);
     }))
   );
   if (!(_isDoublesTournament && !drawDone)) return { isDoubles: false, html: '' };
@@ -36,7 +36,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
   var _allParts = Array.isArray(t.participants) ? t.participants : [];
   function _isPairEntry(p) {
     if (typeof p !== 'object' || !p) return false;
-    if (p.p1Name && p.p2Name) return true;
+    if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) return true;
     var n = p.displayName || p.name || '';
     return n.indexOf('/') !== -1;
   }

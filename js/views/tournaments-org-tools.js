@@ -282,7 +282,7 @@
     // 2) PARTICIPANTS — entrada solo OU slot de dupla (p1/p2) OU sub-participants[].
     (Array.isArray(t.participants) ? t.participants : []).forEach(function (p) {
       if (!p || typeof p !== 'object') return;
-      if (!p.p1Name && !p.p2Name && (p.displayName || p.name || '').trim().toLowerCase() === phLc) {
+      if (!(p.p1Uid || p.p1Name) && !(p.p2Uid || p.p2Name) && (p.displayName || p.name || '').trim().toLowerCase() === phLc) {
         p.name = realName; p.displayName = realName; p.uid = realPlayer.uid || p.uid;
         p.email = realPlayer.email || null; p.photoURL = realPlayer.photoURL || null; delete p.isPlaceholder; matched = true;
       }

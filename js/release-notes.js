@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.82-beta — duplas reconhecidas pela conta dos dois jogadores <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🛡️ Robustez interna (sem mudança visível):</b> em mais pontos do app, uma <b>dupla</b> passa a ser reconhecida pela <b>conta dos dois jogadores</b>, não só pelo nome gravado. É um passo de preparação para o app usar a <b>conta</b> como identidade única em toda parte — hoje o comportamento é idêntico ao anterior, sem nada diferente na tela.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.81-beta — chamada de duplas conta PESSOAS (dupla = 2) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>👥 Presença conta por pessoa:</b> na chamada de torneios de duplas, a barra de presença (Todos / Presentes / Aguardando / W.O.) e a contagem de inscritos passaram a contar <b>cada jogador</b> — uma dupla vale <b>2 pessoas</b>, não 1. Antes, duplas formadas por convite entravam como 1 e o total ficava menor do que o número real de jogadores.</li>' +

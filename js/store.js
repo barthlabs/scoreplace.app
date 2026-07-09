@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.81-beta';
+window.SCOREPLACE_VERSION = '4.5.82-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -6969,7 +6969,7 @@ window._getCompetitors = function(t) {
     var isTeam = false;
     if (p && typeof p === 'object') {
       if (Array.isArray(p.participants) && p.participants.length > 1) isTeam = true;
-      if (p.p1Name && p.p2Name) isTeam = true;
+      if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) isTeam = true; // uid-first: dupla = 2 slots ocupados (uid OU nome)
     }
     if (name.indexOf(' / ') !== -1) isTeam = true;
     if (isTeam) return true;

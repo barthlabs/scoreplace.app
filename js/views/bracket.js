@@ -740,7 +740,7 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     ? window._getWaitlist(t)
     : (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : []);
   var _nm = function (p) { return (window._pName ? window._pName(p, '?') : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '?')); };
-  var _isPair = function (p) { return p && typeof p === 'object' && p.p1Name && p.p2Name; };
+  var _isPair = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
   var _solos = _merged.filter(function (p) { return !_isPair(p) && _nm(p).indexOf('/') === -1 && !(p && Array.isArray(p.participants) && p.participants.length); });
   var _duplas = _merged.filter(_isPair);
   if (!_solos.length && !_duplas.length) return '';
@@ -823,7 +823,7 @@ window._formLateJoinDupla = function (tId, src, tgt) {
       var arr = stores[s]; if (!Array.isArray(arr)) continue;
       for (var i = 0; i < arr.length; i++) {
         var p = arr[i];
-        if (p && p.p1Name && p.p2Name) continue;
+        if (p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) continue;
         if (_keyOf(p) === key) { arr.splice(i, 1); return p; }
       }
     }
@@ -956,7 +956,7 @@ window._splitLateDupla = function (tId, duplaName) {
   var t = window.AppStore && window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
   if (!t || !Array.isArray(t.standbyParticipants)) return;
   var arr = t.standbyParticipants;
-  var idx = arr.findIndex(function (p) { return (window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || '') === duplaName && p && p.p1Name && p.p2Name; });
+  var idx = arr.findIndex(function (p) { return (window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || '') === duplaName && p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); });
   if (idx === -1) return;
   var e = arr[idx];
   var s1 = e.p1Uid ? { displayName: e.p1Name, name: e.p1Name, uid: e.p1Uid, _lateJoin: true } : e.p1Name;
@@ -1078,7 +1078,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;">
         <span style="font-size:1.3rem;">📋</span>
         <h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Lista de Espera</h3>
-        <span style="font-size:0.75rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;">${(function () { var n = 0; sorted.forEach(function (p) { var nm = getName(p); if (p && typeof p === 'object' && p.p1Name && p.p2Name) n += 2; else if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) n += p.participants.length; else if (nm.indexOf('/') !== -1) n += nm.split('/').filter(function (x) { return x.trim(); }).length; else n += 1; }); return n; })()}
+        <span style="font-size:0.75rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;">${(function () { var n = 0; sorted.forEach(function (p) { var nm = getName(p); if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) n += 2; else if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) n += p.participants.length; else if (nm.indexOf('/') !== -1) n += nm.split('/').filter(function (x) { return x.trim(); }).length; else n += 1; }); return n; })()}
       </div>
       <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem;">${_policy === 'locked' ? '🔒 Ordem do sorteio travada — entra o próximo presente na ordem.' : '🏃 Quem fizer check-in primeiro é o próximo a entrar.'}</div>
       <div style="display:flex;flex-direction:column;gap:6px;">
