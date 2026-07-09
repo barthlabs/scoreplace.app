@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.66-beta';
+window.SCOREPLACE_VERSION = '4.5.67-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -36,7 +36,15 @@ window._preloadUserProfiles = function (uids) {
     }).catch(function () {}).then(function () { delete window._userProfilePending[uid]; });
   }));
 };
-window._nameForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.displayName) || ''; };
+window._nameForUid = function (uid) {
+  if (!uid) return '';
+  var p = window._userProfileCache[uid];
+  if (p && p.displayName) return p.displayName;
+  // v4.5.67: também lê o cache do bracket (_profileNameByUid, populado por
+  // _preloadPlayerPhotos) — UMA leitura unificada, os dois caches valem.
+  if (window._profileNameByUid && window._profileNameByUid[uid]) return window._profileNameByUid[uid];
+  return '';
+};
 window._emailForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.email) || ''; };
 window._phoneForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.phone) || ''; };
 // v4.5.63: SEM fallback pra nome gravado. Quem tem uid → SÓ o nome vivo do perfil

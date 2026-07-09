@@ -1696,7 +1696,7 @@ function renderDashboard(container) {
         return null;
       }
       // Um jogador (linha): avatar + nome
-      function _playerRow(name) {
+      function _playerRow(name, uid) {
         var isMe = _isMe(name);
         var photo = _photoForPlayer(name);
         // Usa _profileAvatarUrl (dicebear initials como fallback) — mesmo pipeline do bracket
@@ -1704,11 +1704,15 @@ function renderDashboard(container) {
           ? window._profileAvatarUrl(name, photo, 28)
           : (photo || ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(name) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28'));
         var avatarEl = '<img src="' + avatarSrc + '" data-player-name="' + _sf(name) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src=\'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(name) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28\'">';
-        var nameEl = '<span style="font-size:0.8rem;font-weight:' + (isMe ? '700' : '500') + ';color:' + (isMe ? '#f1f5f9' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(name) + (isMe ? ' <span style="font-size:0.65em;color:#818cf8;font-weight:800;">(você)</span>' : '') + '</span>';
+        // v4.5.67: nome resolve VIVO por uid. data-uid-name fica no span INTERNO só do
+        // nome (não no externo, senão a hidratação — textContent — apagaria o "(você)").
+        var _disp = (uid && typeof window._displayName === 'function') ? window._displayName(uid, name) : name;
+        var _uidAttr = uid ? (' data-uid-name="' + _sf(uid) + '"') : '';
+        var nameEl = '<span style="font-size:0.8rem;font-weight:' + (isMe ? '700' : '500') + ';color:' + (isMe ? '#f1f5f9' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span' + _uidAttr + '>' + _sf(_disp) + '</span>' + (isMe ? ' <span style="font-size:0.65em;color:#818cf8;font-weight:800;">(você)</span>' : '') + '</span>';
         return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl + nameEl + '</div>';
       }
       // Time: jogadores EMPILHADOS verticalmente (um em cima do outro)
-      function _teamHtml(teamStr) {
+      function _teamHtml(teamStr, uids) {
         // v3.1.26: lado "a definir" (TBD/vazio) — placeholder discreto, sem avatar.
         if (!teamStr || teamStr === 'TBD') {
           return '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;color:#64748b;font-style:italic;font-size:0.82rem;">' +
@@ -1717,9 +1721,12 @@ function renderDashboard(container) {
         }
         var parts = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
         return '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">' +
-          parts.map(_playerRow).join('') +
+          parts.map(function(n, i) { return _playerRow(n, uids && uids[i]); }).join('') +
         '</div>';
       }
+      // uid do slot (dupla → team1Uids/team2Uids; 1v1 → p1Uid/p2Uid) p/ resolver nome vivo.
+      var _p1Uids = (Array.isArray(item.m.team1Uids) && item.m.team1Uids.length) ? item.m.team1Uids : (item.m.p1Uid ? [item.m.p1Uid] : null);
+      var _p2Uids = (Array.isArray(item.m.team2Uids) && item.m.team2Uids.length) ? item.m.team2Uids : (item.m.p2Uid ? [item.m.p2Uid] : null);
 
       var rowStyle = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);margin-bottom:4px;';
       var scoreInputStyle = 'width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;-moz-appearance:textfield;';
@@ -1784,9 +1791,9 @@ function renderDashboard(container) {
               goToBtn +
             '</div>' +
           '</div>' +
-          '<div style="' + rowStyle + '">' + _teamHtml(p1) + '<div id="score-p1-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p1ScoreHtml + '</div></div>' +
+          '<div style="' + rowStyle + '">' + _teamHtml(p1, _p1Uids) + '<div id="score-p1-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p1ScoreHtml + '</div></div>' +
           '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
-          '<div style="' + rowStyle + '">' + _teamHtml(p2) + '<div id="score-p2-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p2ScoreHtml + '</div></div>' +
+          '<div style="' + rowStyle + '">' + _teamHtml(p2, _p2Uids) + '<div id="score-p2-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p2ScoreHtml + '</div></div>' +
         '</div>' +
       '</div>';
     }
@@ -2970,6 +2977,10 @@ function renderDashboard(container) {
   // carrega as fotos reais (por uid) dos torneios em que o usuário participa
   // e troca os avatares iniciais pelas fotos de perfil. Mesmo padrão de
   // participants.js (swap por data-player-name).
+  // v4.5.67: hidrata NOMES por uid (data-uid-name) — resolve do perfil vivo. Roda
+  // PÓS-render (chained no preload de fotos). _preloadPlayerPhotos já popula
+  // _profileNameByUid, que _nameForUid lê → nome vivo nos cards de Meus Resultados.
+  function _dashHydrateNames() { if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(container); } catch (e) {} } }
   if (typeof _preloadPlayerPhotos === 'function' && typeof participacoes !== 'undefined' && Array.isArray(participacoes)) {
     var _phTournaments = participacoes.slice(0, 20);
     Promise.all(_phTournaments.map(function(t) {
@@ -2985,8 +2996,8 @@ function renderDashboard(container) {
           img.src = real;
         }
       });
-    }).catch(function() {});
-  }
+    }).catch(function() {}).then(_dashHydrateNames);
+  } else { setTimeout(_dashHydrateNames, 0); }
 
   // Auto-scroll para resultados pendentes de aprovação.
   // 600ms = após todos os _jumpTop do router (último em 350ms) e após a
