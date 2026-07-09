@@ -2879,11 +2879,15 @@ window._tvBuildNextMatches = function(t) {
     html += '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 16px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
     html += '<div style="flex:1;text-align:center;">';
-    html += '<div style="font-size:1rem;font-weight:700;color:white;">' + presenceP1 + ' ' + window._safeHtml(m.p1 || 'TBD') + '</div>';
+    // v4.5.68: nome vivo por uid do slot (Modo TV).
+    var _rsl = (typeof window._resolveSideLive === 'function') ? window._resolveSideLive : function(_t, s) { return s; };
+    var _tvN1 = _rsl(t, m.p1 || 'TBD', m.p1Uid || m.team1Uids);
+    var _tvN2 = _rsl(t, m.p2 || 'TBD', m.p2Uid || m.team2Uids);
+    html += '<div style="font-size:1rem;font-weight:700;color:white;">' + presenceP1 + ' ' + window._safeHtml(_tvN1) + '</div>';
     html += '</div>';
     html += '<div style="font-size:0.9rem;font-weight:800;color:rgba(255,255,255,0.25);margin:0 12px;">VS</div>';
     html += '<div style="flex:1;text-align:center;">';
-    html += '<div style="font-size:1rem;font-weight:700;color:white;">' + window._safeHtml(m.p2 || 'TBD') + ' ' + presenceP2 + '</div>';
+    html += '<div style="font-size:1rem;font-weight:700;color:white;">' + window._safeHtml(_tvN2) + ' ' + presenceP2 + '</div>';
     html += '</div>';
     html += '</div>';
     html += courtInfo + roundInfo;

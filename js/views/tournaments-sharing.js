@@ -1026,7 +1026,11 @@ function _resolveCompetitorRows(t) {
   var parts = Array.isArray(t.participants) ? t.participants : [];
   return parts.map(function(p) {
     if (typeof p === 'string') return { name: p, category: '', gender: '', skill: '', email: '' };
-    var name = p.displayName || p.name || (p.email ? p.email.split('@')[0] : '');
+    var _rawName = p.displayName || p.name || (p.email ? p.email.split('@')[0] : '');
+    // v4.5.68: nome vivo por uid (CSV é snapshot → _resolveSideLive cai no nome
+    // gravado quando o perfil não está no cache, nunca em branco).
+    var _uidHint = (p.p1Uid && p.p2Uid) ? [p.p1Uid, p.p2Uid] : (p.uid || '');
+    var name = (typeof window._resolveSideLive === 'function') ? window._resolveSideLive(t, _rawName, _uidHint) : _rawName;
     var cats = Array.isArray(p.categories) ? p.categories.join(', ') : (p.category || '');
     return {
       name: name,
@@ -1096,13 +1100,17 @@ function _resolveMatchRows(t) {
     var m = item.m;
     if (!m.p1 && !m.p2) return;
     matchNum++;
+    // v4.5.68: nome vivo por uid do slot (m.p1Uid/team1Uids); fallback nome gravado.
+    var _rsl = (typeof window._resolveSideLive === 'function') ? window._resolveSideLive : function(_t, s) { return s; };
+    var _u1 = m.p1Uid || m.team1Uids, _u2 = m.p2Uid || m.team2Uids;
+    var _wUid = (m.winner && m.winner === m.p1) ? _u1 : ((m.winner && m.winner === m.p2) ? _u2 : null);
     rows.push({
       n: matchNum,
-      p1: m.p1 || 'TBD',
-      p2: m.p2 || 'TBD',
+      p1: _rsl(t, m.p1 || 'TBD', _u1),
+      p2: _rsl(t, m.p2 || 'TBD', _u2),
       score1: (m.scoreP1 != null) ? m.scoreP1 : '',
       score2: (m.scoreP2 != null) ? m.scoreP2 : '',
-      winner: m.winner || '',
+      winner: m.winner ? _rsl(t, m.winner, _wUid) : '',
       label: item.label,
     });
   });
@@ -1123,7 +1131,9 @@ function _resolveStandingsRows(t) {
     out.push({
       cat: cat === 'default' ? '' : cat,
       rows: computed.map(function(s, i) {
-        return { pos: i + 1, name: s.name, points: s.points, wins: s.wins, draws: s.draws || 0, losses: s.losses, pointsDiff: s.pointsDiff, played: s.played };
+        // v4.5.68: nome vivo por uid da linha de classificação (s.uid); fallback nome.
+        var _sName = (typeof window._resolveSideLive === 'function') ? window._resolveSideLive(t, s.name, s.uid) : s.name;
+        return { pos: i + 1, name: _sName, points: s.points, wins: s.wins, draws: s.draws || 0, losses: s.losses, pointsDiff: s.pointsDiff, played: s.played };
       }),
     });
   });
