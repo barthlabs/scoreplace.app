@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.43-beta';
+window.SCOREPLACE_VERSION = '4.5.44-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -1092,14 +1092,36 @@ window._checkTopbarWrap = function() {
     return;
   }
 
-  // Helper: force reflow then check if content exceeds topbar bounds
+  // Helper: force reflow then check if content exceeds topbar bounds.
+  // v4.5.44: o menu é `justify-content:flex-end`, então quando o conteúdo
+  // transborda o ÚLTIMO filho (perfil/login) fica GRUDADO na borda direita e o
+  // aperto vaza pra ESQUERDA — checar só o último filho nunca detectava isso
+  // (bug: labels "Início/Notificações" cortados, sem hamburger). Agora 3 sinais,
+  // qualquer um dispara o próximo passo de encolhimento:
+  //   (1) conteúdo mais à direita passa da borda da topbar;
+  //   (2) o grupo de nav encostou no logo (sem folga → não cabe);
+  //   (3) um label VISÍVEL está sendo cortado pelo próprio max-width (ex.: com
+  //       --ui-scale alto "Notificações" precisa de +120px e clipa).
   function doesntFit() {
     void topbar.offsetHeight;
     var lastChild = menu.lastElementChild;
     if (!lastChild) return false;
     var topbarRight = topbar.getBoundingClientRect().right;
-    var contentRight = lastChild.getBoundingClientRect().right;
-    return contentRight > topbarRight + 2;
+    if (lastChild.getBoundingClientRect().right > topbarRight + 2) return true;
+    // (2) aperto na esquerda: nav pressionado contra o logo (gutter mín. 12px)
+    var logoEl = topbar.querySelector('.page-title');
+    var firstChild = menu.firstElementChild;
+    if (logoEl && firstChild &&
+        firstChild.getBoundingClientRect().left < logoEl.getBoundingClientRect().right + 12) {
+      return true;
+    }
+    // (3) label visível cortado — clientWidth>4 exclui os já ocultos (max-width:0)
+    var labels = menu.querySelectorAll('.topbar-nav-group .nav-label');
+    for (var li = 0; li < labels.length; li++) {
+      var lb = labels[li];
+      if (lb.clientWidth > 4 && lb.scrollWidth > lb.clientWidth + 1) return true;
+    }
+    return false;
   }
 
   // Reset all states

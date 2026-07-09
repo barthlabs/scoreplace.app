@@ -749,6 +749,13 @@ window._updateTopbarForUser = function(user) {
         _loadingIndicator +
       '</div>';
     if (typeof window._ensureTopbarLogoff === 'function') window._ensureTopbarLogoff(btnLogin);
+    // v4.5.44: o perfil logado (avatar + nome + Sair) é mais largo que o botão
+    // "Login" — re-avalia o encolhimento da topbar AGORA. Sem isto, quando o
+    // login resolve async depois do check de load (comum em PWA já logado a
+    // largura fixa), a topbar ficava sem hamburger com labels cortados.
+    if (typeof window._checkTopbarWrap === 'function') {
+      requestAnimationFrame(function() { window._checkTopbarWrap(); });
+    }
   } catch (e) {
     window._warn('[scoreplace-auth] _updateTopbarForUser error:', e);
   }
