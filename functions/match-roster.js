@@ -59,8 +59,26 @@ function participantUids(p) {
   return uids;
 }
 
+// Espelha window._slotUids (bracket-logic.js) — IDENTIDADE ESTRUTURAL do slot:
+// team*Uids (dupla) → p*Uid (1v1) → team*Obj (objeto). O slot carrega SEMPRE o(s)
+// uid(s); o nome (m.p1) é só cache de display. Não é vendored — cópia manual, tem
+// que mudar em lockstep com o app.
+function slotUids(m, side) {
+  if (!m) return [];
+  const arr = side === "p1" ? m.team1Uids : m.team2Uids;
+  if (Array.isArray(arr) && arr.length) return arr.filter(Boolean);
+  const single = side === "p1" ? m.p1Uid : m.p2Uid;
+  if (single) return [single];
+  const obj = side === "p1" ? m.team1Obj : m.team2Obj;
+  if (obj) { const u = participantUids(obj); if (u && u.length) return u; }
+  return [];
+}
+
 // Espelha AppStore._matchPlayerUids (store.js) — resolve p1/p2 (solo ou dupla
-// "A / B") pros uids dos dois lados. TBD/BYE ignorados.
+// "A / B") pros uids dos dois lados. TBD/BYE ignorados. uid-FIRST (identidade
+// estrutural do slot), NOME fallback só quando o slot não carrega uid (guest/
+// informal ou rodada LEGADA sorteada antes do trabalho de uid) — assim homônimo
+// resolve certo e nome divergente não bloqueia, sem parar jogos antigos.
 function matchRoster(t, m) {
   if (!t || !m) return [];
   const parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
@@ -68,10 +86,14 @@ function matchRoster(t, m) {
   ["p1", "p2"].forEach((side) => {
     const entry = m[side];
     if (!entry || entry === "TBD" || entry === "BYE") return;
-    // 1) casa a ENTRADA inteira (solo ou dupla registrada como "A / B")
+    // 1) IDENTIDADE ESTRUTURAL do slot (uid) — team*Uids → p*Uid → team*Obj.
+    const su = slotUids(m, side);
+    if (su.length) { su.forEach((u) => { if (u) seen[u] = 1; }); return; }
+    // 2) fallback POR NOME — só quando o slot NÃO tem uid (guest/legado).
+    // 2a) casa a ENTRADA inteira (solo ou dupla registrada como "A / B")
     const p = parts.find((pp) => typeof pp === "object" && (pp.displayName || pp.name || "") === entry);
     if (p) { participantUids(p).forEach((u) => { if (u) seen[u] = 1; }); return; }
-    // 2) fallback: dupla cujo slot mostra "A / B" mas cada membro é solo
+    // 2b) dupla cujo slot mostra "A / B" mas cada membro é solo
     const members = entry.indexOf("/") !== -1 ? entry.split("/").map((n) => n.trim()) : [entry];
     members.forEach((nm) => {
       const mp = parts.find((pp) => typeof pp === "object" && (pp.displayName || pp.name || "") === nm);
@@ -160,6 +182,6 @@ function buildMirrorDoc(t, m, tid, nowIso) {
 }
 
 module.exports = {
-  collectMatches, participantUids, matchRoster, rosterKey, computeRosterChanges,
+  collectMatches, participantUids, slotUids, matchRoster, rosterKey, computeRosterChanges,
   RESULT_FIELDS, buildSeedDoc, subdocSignature, buildMirrorDoc,
 };

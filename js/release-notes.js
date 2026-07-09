@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.74-beta — quem pode lançar o placar é reconhecido pela conta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔐 Permissão de lançar o placar por identidade (não pelo nome):</b> nos jogos em que os próprios participantes lançam o resultado, o app passou a reconhecer quem está autorizado <b>pela conta da pessoa</b>, e não mais pelo nome escrito no jogo. Antes, dois jogadores de mesmo nome podiam liberar a pessoa errada, e quem tivesse trocado o nome podia acabar bloqueado. Agora cada jogador certo lança o placar do seu jogo — inclusive nas duplas, sem um membro interferir no outro. Jogos antigos e jogadores convidados (sem conta) seguem funcionando pelo nome, como antes.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.67-beta — nome sempre certo em todas as telas <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🆔 Nome de cada pessoa resolvido pela conta (não pelo texto do jogo), em todo o app:</b> na lista de inscritos, no <b>chaveamento</b> e no painel de <b>Meus Resultados</b>, o nome agora vem sempre do perfil vivo da pessoa (pela conta), e não mais do nome escrito na hora do sorteio. Acaba com nome aparecendo <b>em branco</b>, com a confusão de homônimos (o antigo "Maira/Maira") e com nome desatualizado depois que alguém troca o nome — e o nome de um membro da dupla nunca preenche o do outro.</li>' +

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.72-beta';
+window.SCOREPLACE_VERSION = '4.5.74-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -5145,14 +5145,27 @@ window.AppStore = {
     if (!t || !m) return [];
     var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
     var _uidsOf = (typeof window._participantUids === 'function') ? window._participantUids : function (p) { return (p && p.uid) ? [p.uid] : []; };
+    // Identidade CANÔNICA do slot por uid (v4.5.74) — o slot carrega o(s) uid(s)
+    // via _setSlot; o nome (m.p1) é só cache de display. Ler o uid direto resolve
+    // homônimo certo (nome igual, uids distintos) e sobrevive a nome divergente
+    // (o reconcile de nome foi removido em v4.5.73). É uid-first, NOME fallback:
+    // slot sem uid (guest/informal ou rodada LEGADA sorteada antes do trabalho de
+    // uid) cai no match por nome pra não parar de autorizar jogos antigos.
+    var _slot = (typeof window._slotUids === 'function') ? window._slotUids : null;
     var seen = {};
     ['p1', 'p2'].forEach(function (side) {
       var entry = m[side];
       if (!entry || entry === 'TBD' || entry === 'BYE') return;
-      // 1) casa a ENTRADA inteira (solo ou dupla registrada como "A / B")
+      // 1) IDENTIDADE ESTRUTURAL do slot (uid) — team*Uids → p*Uid → team*Obj.
+      if (_slot) {
+        var su = _slot(m, side);
+        if (su && su.length) { su.forEach(function (u) { if (u) seen[u] = 1; }); return; }
+      }
+      // 2) fallback POR NOME — só quando o slot NÃO tem uid (guest/legado).
+      // 2a) casa a ENTRADA inteira (solo ou dupla registrada como "A / B")
       var p = parts.find(function (pp) { return typeof pp === 'object' && (pp.displayName || pp.name || '') === entry; });
       if (p) { _uidsOf(p).forEach(function (u) { if (u) seen[u] = 1; }); return; }
-      // 2) fallback: dupla cujo slot mostra "A / B" mas cada membro é participante solo
+      // 2b) dupla cujo slot mostra "A / B" mas cada membro é participante solo
       var members = entry.indexOf('/') !== -1 ? entry.split('/').map(function (n) { return n.trim(); }) : [entry];
       members.forEach(function (nm) {
         var mp = parts.find(function (pp) { return typeof pp === 'object' && (pp.displayName || pp.name || '') === nm; });
