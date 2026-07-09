@@ -6371,14 +6371,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var baseFs = 0.96 * minW * 100 / w2;
       var capFs  = 0.99 * minW * 100 / w2;
       var fs = Math.min(baseFs * ps, capFs);
-      // o número é esticado na vertical por transform:scaleY(1.35) → a altura
-      // VISUAL é fs*1.35; garante que não passe da altura da metade.
-      if (minH !== Infinity && fs * 1.35 > minH * 0.96) fs = minH * 0.96 / 1.35;
+      // v4.5.41: scaleY SÓ no retrato (metade estreita e alta → estica pra
+      // preencher). Em PAISAGEM a metade é larga e baixa → scaleY=1 deixa o
+      // número MUITO maior (limitado só pela altura real, não por altura*1.35).
+      var SY = (window.innerWidth > window.innerHeight) ? 1 : 1.35;
+      // a altura VISUAL é fs*SY; garante que não passe da altura da metade.
+      if (minH !== Infinity && fs * SY > minH * 0.96) fs = minH * 0.96 / SY;
       fs = Math.floor(fs);
       if (fs < 12) return;
       halves.forEach(function(h) {
         var n = h.querySelector('.ls-plate-num');
-        if (n) n.style.fontSize = fs + 'px';
+        if (n) { n.style.fontSize = fs + 'px'; n.style.transform = 'scaleY(' + SY + ')'; }
       });
     };
     var _fitLivePlateText = function() {
@@ -6481,24 +6484,68 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var _portFinishRow = finishBtn; finishBtn = '';
 
     if (isLandscape) {
-      // ── PAISAGEM (v4.5.40): 3 COLUNAS. Coluna do time = NOME em cima + PLACAR
-      // colorido grande embaixo (nomes saem das laterais → placar mais largo).
-      // Coluna do meio = SETS/GAMES. Time da DIREITA espelhado (nome à esquerda,
-      // foto à direita, alinhado à direita). 1 Desfazer no rodapé.
-      var _lsTeamCol = function(team, mirror) {
-        return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;padding:2px;">' +
-            '<div class="court-side" data-court-side="' + (mirror ? 'right' : 'left') + '" style="flex:0 0 auto;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
-              _buildNameStack(team, mirror) +
+      // ── PAISAGEM (v4.5.41): SETS/GAMES compactos NO TOPO (liberam o centro);
+      // cada time = NOME em UMA LINHA ("P1 / P2", avatar por jogador) em cima +
+      // PLACAR colorido GRANDE embaixo. Sem scaleY (o fit deixa o número encher a
+      // altura da metade larga → muito maior que no 3-colunas). Time DIREITO
+      // espelhado (nome à esquerda, foto à DIREITA, alinhado à direita).
+      var _lsTopBar = showGamesBox
+        ? '<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:clamp(16px,4vw,40px);padding:clamp(4px,1vh,8px) 0;">' +
+            (_showSets ? '<div style="display:flex;align-items:center;gap:6px;">' +
+              '<span style="font-size:0.62rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
+              '<span style="font-size:1.3rem;font-weight:800;color:' + (leftTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;">' + _setsLeftN + '</span>' +
+              '<span style="font-size:0.9rem;color:rgba(255,255,255,0.25);">–</span>' +
+              '<span style="font-size:1.3rem;font-weight:800;color:' + (rightTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;">' + _setsRightN + '</span>' +
+            '</div>' : '') +
+            '<div style="display:flex;align-items:center;gap:6px;">' +
+              '<span style="font-size:0.62rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Games</span>' +
+              '<span style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
+              '<span style="font-size:calc(1.1rem * var(--live-score-scale,1));color:rgba(255,255,255,0.25);">–</span>' +
+              '<span style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
             '</div>' +
-            '<div style="flex:1;min-height:0;display:flex;">' + _scoreHalf(team) + '</div>' +
+          '</div>'
+        : '';
+      // Nome em UMA linha: [🎾?] [av]Nome1 / [av]Nome2 (mirror = nome[av], à direita).
+      var _lsNameLine = function(team, mirror) {
+        var players = team === 1 ? p1Players : p2Players;
+        var nameClr = team === 1 ? '#DBEAFE' : '#FECACA';
+        var bgClr = team === 1 ? 'rgba(59,130,246,0.12)' : 'rgba(239,68,68,0.12)';
+        var bdrClr = team === 1 ? 'rgba(59,130,246,0.30)' : 'rgba(239,68,68,0.30)';
+        var _ballShown = false, ballHtml = '', chunks = [];
+        for (var ni = 0; ni < players.length; ni++) {
+          var pn = players[ni], isServing = false;
+          if (serverInfo && !state.isFinished && serverInfo.team === team) {
+            if (serverInfo.pIdx != null) isServing = (serverInfo.pIdx === ni);
+            else if (serverInfo.name === pn && !_ballShown) isServing = true;
+            if (isServing) _ballShown = true;
+          }
+          var fullName = window._safeHtml(pn);
+          var avatar = '<span class="live-av-wrap">' + _liveAvatarHtml(pn, 24) + '</span>';
+          var nameSpan = '<span onclick="window._liveEditName(' + team + ',' + ni + ')" style="cursor:pointer;font-size:calc(clamp(0.85rem,2.4vw,1.15rem) * var(--live-name-scale,1));font-weight:' + (isServing ? '800' : '700') + ';color:' + (isServing ? '#fbbf24' : nameClr) + ';white-space:nowrap;">' + fullName + '</span>';
+          if (isServing) {
+            var dragAttr = _canDragServe ? ' draggable="true" data-serve-ball="true"' : '';
+            var dragStyle = _canDragServe ? 'cursor:grab;' : 'cursor:default;';
+            var ballGlow = _canDragServe ? 'filter:drop-shadow(0 0 4px rgba(255,200,0,0.6));' : 'filter:drop-shadow(0 0 2px rgba(255,200,0,0.3));opacity:0.85;';
+            ballHtml = '<span' + dragAttr + ' data-serve-drop="' + team + '-' + ni + '" style="font-size:0.9rem;line-height:1;flex-shrink:0;' + dragStyle + ballGlow + '">' + _sportBall + '</span>';
+          }
+          chunks.push('<span data-serve-drop="' + team + '-' + ni + '" style="display:inline-flex;align-items:center;gap:5px;min-width:0;">' + (mirror ? nameSpan + avatar : avatar + nameSpan) + '</span>');
+        }
+        var body = chunks.join('<span style="color:rgba(255,255,255,0.25);font-weight:700;flex-shrink:0;">/</span>');
+        var inner = mirror ? body + ballHtml : ballHtml + body;
+        return '<div class="court-side" data-court-side="' + (mirror ? 'right' : 'left') + '" style="flex:0 0 auto;max-width:100%;display:flex;align-items:center;gap:6px;justify-content:' + (mirror ? 'flex-end' : 'flex-start') + ';padding:6px 10px;background:' + bgClr + ';border:1px solid ' + bdrClr + ';border-radius:12px;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' + inner + '</div>';
+      };
+      var _lsTeamCol = function(team, mirror) {
+        return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;padding:2px;' + (mirror ? 'align-items:flex-end;' : 'align-items:flex-start;') + '">' +
+            _lsNameLine(team, mirror) +
+            '<div style="flex:1;min-height:0;width:100%;display:flex;">' + _scoreHalf(team) + '</div>' +
           '</div>';
       };
       container.innerHTML =
         '<div style="display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;gap:0;">' +
           _gameLabelRow +
-          '<div style="flex:1;min-height:0;display:flex;align-items:stretch;width:100%;gap:6px;padding:4px clamp(6px,1.5vw,12px) 2px;">' +
+          _lsTopBar +
+          '<div style="flex:1;min-height:0;display:flex;align-items:stretch;width:100%;gap:8px;padding:2px clamp(6px,1.5vw,12px) 4px;">' +
             _lsTeamCol(leftTeam, false) +
-            '<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding:0 clamp(4px,1vw,10px);">' + _topBlock + '</div>' +
             _lsTeamCol(rightTeam, true) +
           '</div>' +
           swapHint +
