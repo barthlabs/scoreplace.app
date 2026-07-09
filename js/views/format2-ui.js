@@ -357,19 +357,41 @@
             _pill(isDupla, 'window._f2Disputa(\'dupla\')', '👥 Duplas') + '<div style="height:12px;"></div>';
         }
         if (isDupla) {
-          eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Duplas na eliminatória</div>' +
-            _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '🤝 Já formadas') +
-            _pill(cfg.formacaoDupla !== 'manual', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas') + '<div style="height:10px;"></div>';
-          if (cfg.formacaoDupla === 'manual') {
-            // Já formadas: quem forma as duplas? Toggle ON = participantes podem (arrastar/soltar);
-            // OFF (padrão) = só o organizador. → t.manualPairing ('open' | 'organizer_only').
-            eb += _toggleRight('Participantes podem formar suas duplas', !!cfg.manualPairingOpen, 'window._f2ElimManualPairing(this.checked)') +
-              '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (cfg.manualPairingOpen
-                ? 'Os participantes podem formar suas próprias duplas (arrastar e soltar). O organizador também pode.'
-                : 'Apenas o organizador forma as duplas.') + '</div><div style="height:12px;"></div>';
+          // v4.5.51: nova alternativa — ABRIR COM REI/RAINHA. Quando ON, as duplas NÃO são "já
+          // formadas" nem "sorteadas": elas emergem de uma rodada Rei/Rainha (grupos de 4). Some
+          // o par Já formadas/Sorteadas e aparecem o CORTE por grupo + a ESTRATÉGIA do pareamento.
+          var _openRR = !!cfg.eliminatoria.openReiRainha;
+          eb += _toggleRight('Abrir com rodada Rei/Rainha', _openRR, 'window._f2ElimOpenRR(this.checked)') +
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">' + (_openRR
+              ? 'A eliminatória começa por <b>uma rodada Rei/Rainha</b>: grupos de 4 sorteados, e as <b>duplas se formam dentro de cada grupo</b> pelo resultado.'
+              : 'Ative para a eliminatória <b>começar por uma rodada Rei/Rainha</b> (grupos de 4 que formam as duplas).') + '</div>';
+          if (_openRR) {
+            var _cut = cfg.eliminatoria.reiRainhaCut === 2 ? 2 : 4;
+            eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Quantos de cada grupo de 4 avançam</div>' +
+              _pill(_cut === 4, 'window._f2ElimRRCut(4)', '4 · todos (2 duplas)') +
+              _pill(_cut === 2, 'window._f2ElimRRCut(2)', '2 · os melhores (1 dupla)') + '<div style="height:12px;"></div>';
+            var _fxRR = (cfg.eliminatoria.formacao === 'equilibrio') ? 'equilibrio' : 'performance';
+            eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Como formar as duplas no grupo</div>' +
+              _pill(_fxRR === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') +
+              _pill(_fxRR === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') +
+              '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">' + (_fxRR === 'performance'
+                ? 'Performance: os melhores do grupo jogam juntos (1º+2º, depois 3º+4º).'
+                : 'Equilíbrio: forte com fraco (1º+4º, 2º+3º) — duplas mais parelhas.') + '</div>';
           } else {
-            // Sorteadas: as duplas da R1 saem no sorteio, seguindo livre/equilibrado entre gêneros.
-            eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:-2px;">As duplas da 1ª rodada são <b>sorteadas</b> no momento do sorteio, seguindo a opção <b>livre</b> ou <b>equilibrado entre gêneros</b>.</div><div style="height:12px;"></div>';
+            eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Duplas na eliminatória</div>' +
+              _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '🤝 Já formadas') +
+              _pill(cfg.formacaoDupla !== 'manual', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas') + '<div style="height:10px;"></div>';
+            if (cfg.formacaoDupla === 'manual') {
+              // Já formadas: quem forma as duplas? Toggle ON = participantes podem (arrastar/soltar);
+              // OFF (padrão) = só o organizador. → t.manualPairing ('open' | 'organizer_only').
+              eb += _toggleRight('Participantes podem formar suas duplas', !!cfg.manualPairingOpen, 'window._f2ElimManualPairing(this.checked)') +
+                '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (cfg.manualPairingOpen
+                  ? 'Os participantes podem formar suas próprias duplas (arrastar e soltar). O organizador também pode.'
+                  : 'Apenas o organizador forma as duplas.') + '</div><div style="height:12px;"></div>';
+            } else {
+              // Sorteadas: as duplas da R1 saem no sorteio, seguindo livre/equilibrado entre gêneros.
+              eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:-2px;">As duplas da 1ª rodada são <b>sorteadas</b> no momento do sorteio, seguindo a opção <b>livre</b> ou <b>equilibrado entre gêneros</b>.</div><div style="height:12px;"></div>';
+            }
           }
         }
       } else {
@@ -434,10 +456,10 @@
           : 'Eliminação simples — uma derrota e está fora. Ative para <b>Dupla Eliminatória</b>: só sai com 2 derrotas (quem perde na chave de cima cai na de baixo).') + '</div>';
       // Linhas (chaves paralelas): só na eliminatória SIMPLES — a dupla-elim é chave única.
       if (!e.dupla) {
-        eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Linhas (chaves paralelas — nomes livres)</div>';
+        eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Chaves paralelas (nomes livres)</div>';
         eb += [1, 2, 4].map(function (n) { return _pill(e.linhas === n, 'window._f2Linhas(' + n + ')', String(n)); }).join('');
         for (var i = 0; i < e.linhas; i++) {
-          eb += '<div style="margin-top:6px;"><input type="text" value="' + _safe(e.nomes[i] || '') + '" placeholder="Nome da linha ' + (i + 1) + ' (opcional)" oninput="window._f2LineName(' + i + ',this.value)" style="width:100%;max-width:300px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;"></div>';
+          eb += '<div style="margin-top:6px;"><input type="text" value="' + _safe(e.nomes[i] || '') + '" placeholder="Nome da chave ' + (i + 1) + ' (opcional)" oninput="window._f2LineName(' + i + ',this.value)" style="width:100%;max-width:300px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;"></div>';
         }
         // v4.4.73: Grande Final — só na SIMPLES com 2/4 linhas (na dupla-elim é sempre,
         // não tem toggle). ON = campeões das linhas se cruzam numa grande final (após a
@@ -445,8 +467,8 @@
         if (e.linhas > 1) {
           eb += '<div style="margin-top:14px;">' + _toggleRight('Grande Final', e.grandFinal !== false, 'window._f2GrandFinal(this.checked)') + '</div>' +
             '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' + (e.grandFinal !== false
-              ? 'Os campeões das linhas se cruzam numa <b>grande final</b> (com grandes semifinais), renderizada logo após a 1ª linha. Desative para deixar as linhas <b>independentes</b> — cada uma com seu próprio campeão.'
-              : 'Linhas <b>independentes</b> — cada linha tem seu próprio campeão, sem grande final unindo-as. Ative para cruzá-las numa grande final.') + '</div>';
+              ? 'Os campeões das chaves se cruzam numa <b>grande final</b> (com grandes semifinais), renderizada logo após a 1ª chave. Desative para deixar as chaves <b>independentes</b> — cada uma com seu próprio campeão.'
+              : 'Chaves <b>independentes</b> — cada chave tem seu próprio campeão, sem grande final unindo-as. Ative para cruzá-las numa grande final.') + '</div>';
         }
       }
       // v4.4.42: "Inscrições durante a fase" só existe na FASE INICIAL do torneio (onde há
@@ -693,6 +715,9 @@
   // v4.4.58: Dupla Eliminatória (repescagem). ON força 1 linha (chave única) no normalize.
   window._f2ElimDupla = function (checked) { S.cfg.eliminatoria.dupla = !!checked; _norm(); _rerender(); };
   window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
+  // v4.5.51: abrir a eliminatória com rodada Rei/Rainha (grupos de 4 formam as duplas).
+  window._f2ElimOpenRR = function (checked) { if (!S) return; S.cfg.eliminatoria.openReiRainha = !!checked; _norm(); _rerender(); };
+  window._f2ElimRRCut = function (n) { if (!S) return; S.cfg.eliminatoria.reiRainhaCut = (parseInt(n, 10) === 2) ? 2 : 4; _norm(); _rerender(); };
   // v4.4.x: estratégia ÚNICA da eliminatória (performance/equilíbrio/sorteio) — dirige formação
   // das duplas E semeadura dos confrontos (compilador deriva bracketSeeding).
   window._f2Formacao = function (v) { S.cfg.eliminatoria.formacao = v; _norm(); _rerender(); };

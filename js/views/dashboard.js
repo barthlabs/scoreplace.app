@@ -3835,7 +3835,7 @@ function _hydrateFriendsPresenceWidget() {
               '<div style="font-weight:700;color:var(--text-bright);font-size:0.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 Você está em <span style="color:#10b981;">' + pVenue + '</span>' + (pSports ? ' <span style="font-weight:500;color:var(--text-muted);">· ' + _safe(pSports) + '</span>' : '') + '</div>' +
               '<div style="font-size:0.7rem;color:var(--text-muted);">expira em <b data-countdown-target="' + endsAt + '">…</b></div>' +
             '</div>' +
-            '<button onclick="window._dashCancelPresence(\'' + docId + '\')" style="background:transparent;color:#ef4444;border:none;padding:0;margin:0;font-weight:900;font-size:1.05rem;line-height:1;cursor:pointer;flex-shrink:0;" title="Sair do local">✕</button>' +
+            '<button type="button" class="cancel-x-btn" onclick="window._dashCancelPresence(\'' + docId + '\')" style="--cx-size:24px;" title="Sair do local">✕</button>' +
           '</div>';
       });
       ownPlans.slice(0, 3).forEach(function(p) {
@@ -3855,7 +3855,7 @@ function _hydrateFriendsPresenceWidget() {
               (p._tournName ? '<div style="font-size:0.7rem;color:#fbbf24;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🏆 ' + _safe(p._tournName) + '</div>' : '') +
               '<div style="font-size:0.7rem;color:var(--text-muted);">' + _safe(dayLabel) + ' às <b>' + _safe(hhmm) + '</b></div>' +
             '</div>' +
-            '<button onclick="window._dashCancelPresence(\'' + docId + '\')" style="background:transparent;color:#ef4444;border:none;padding:0;margin:0;font-weight:900;font-size:1.05rem;line-height:1;cursor:pointer;flex-shrink:0;" title="Cancelar plano">✕</button>' +
+            '<button type="button" class="cancel-x-btn" onclick="window._dashCancelPresence(\'' + docId + '\')" style="--cx-size:24px;" title="Cancelar plano">✕</button>' +
           '</div>';
       });
       html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">' + myRows + '</div>';

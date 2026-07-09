@@ -1024,7 +1024,7 @@
         if (klass === 'me' && p._id) {
           var docIdSafe = String(p._id).replace(/"/g, '&quot;');
           var pidSafe = String(pidForLeave).replace(/"/g, '&quot;');
-          leaveBtn = '<button onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + docIdSafe + '","' + pidSafe + '","checkin")\' style="background:transparent;color:#ef4444;border:none;padding:0;margin:0;font-weight:900;font-size:1.15rem;line-height:1;cursor:pointer;flex-shrink:0;" title="Sair do local">✕</button>';
+          leaveBtn = '<button type="button" class="cancel-x-btn" onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + docIdSafe + '","' + pidSafe + '","checkin")\' style="--cx-size:24px;" title="Sair do local">✕</button>';
         }
         var nowSports = Array.isArray(p.sports) ? p.sports : [];
         var icons = _sportsIcons(nowSports);
@@ -1155,7 +1155,7 @@
       if (klass === 'me' && p._id) {
         var upDocIdSafe = String(p._id).replace(/"/g, '&quot;');
         var upPidSafe = String(pidForCancel).replace(/"/g, '&quot;');
-        cancelBtn = '<button onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + upDocIdSafe + '","' + upPidSafe + '","planned")\' style="background:transparent;color:#ef4444;border:none;padding:0;margin:0;font-weight:900;font-size:1rem;line-height:1;cursor:pointer;flex-shrink:0;" title="Cancelar plano de ir">✕</button>';
+        cancelBtn = '<button type="button" class="cancel-x-btn" onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + upDocIdSafe + '","' + upPidSafe + '","planned")\' style="--cx-size:20px;" title="Cancelar plano de ir">✕</button>';
       }
       var chipSports = Array.isArray(p.sports) ? p.sports : [];
       var iconStr = _sportsIcons(chipSports);
@@ -3150,7 +3150,7 @@
           return '<div style="display:flex;align-items:center;gap:8px;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:10px;padding:6px 10px;box-sizing:border-box;">' +
               '<span style="flex:1;min-width:0;font-size:0.8rem;color:var(--text-bright);font-weight:600;">🗓️ ' + timeLbl + '</span>' +
               '<button class="btn btn-sm" onclick=\'window._venuesEditPlanPreferred("' + safePid + '","' + pid + '")\' style="background:#6366f1;color:#fff;border:none;font-weight:700;padding:4px 10px;font-size:0.72rem;" title="Editar esta ida">✏️</button>' +
-              '<button class="btn btn-sm" onclick=\'window._venuesCancelMyPresenceHere("' + pid + '","' + safePid + '","planned")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:4px 10px;font-size:0.72rem;" title="Cancelar esta ida">✕</button>' +
+              '<button type="button" class="cancel-x-btn" onclick=\'window._venuesCancelMyPresenceHere("' + pid + '","' + safePid + '","planned")\' style="--cx-size:24px;" title="Cancelar esta ida">✕</button>' +
             '</div>';
         }).join('') +
       '</div>';

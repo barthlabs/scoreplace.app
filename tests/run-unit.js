@@ -35,6 +35,8 @@ const SUITES = [
   'tests/result-approval-gate.test.js',
   'tests/draw-schedule.test.js',
   'tests/elim-seed.test.js',
+  'tests/elim-reirainha-opening.test.js',
+  'tests/chave-label-default.test.js',
   'tests/phase0-elim.test.js',
   'tests/phase0-monarch.test.js',
   'tests/phase0-monarch-duplas.test.js',

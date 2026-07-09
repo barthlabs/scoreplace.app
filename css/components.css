@@ -520,6 +520,41 @@ button[style*="linear-gradient"]:not(.btn):active {
   box-shadow: 0 4px 14px rgba(0,0,0,0.2);
 }
 
+/* --- Símbolo CANÔNICO de cancelar/remover (v4.5.58) ---
+   Círculo vermelho, borda branca, X branco no centro. Símbolo UNIVERSAL pra
+   qualquer cancelamento/remoção de ícone: sair do local, cancelar plano de ida,
+   remover co-organizador, etc. Tamanho via --cx-size (default 24px).
+   NUNCA reintroduzir ✕ solto colorido — usar sempre esta classe ou window._cancelXBtn. */
+.cancel-x-btn {
+  --cx-size: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* !important vence o min-height:44px de touch-target no responsive.css (@media)
+     — sem isso o círculo vira elipse (largura 24px, altura 44px). */
+  width: var(--cx-size) !important;
+  height: var(--cx-size) !important;
+  min-width: var(--cx-size) !important;
+  min-height: var(--cx-size) !important;
+  max-height: var(--cx-size) !important;
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+  background: #dc2626;
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: calc(var(--cx-size) * 0.5);
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.30);
+  transition: transform 0.12s ease, background 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.cancel-x-btn:hover { background: #b91c1c; transform: scale(1.08); }
+.cancel-x-btn:active { transform: scale(0.92); }
+
 /* --- Variantes Transparentes (SOMENTE Add Bot e Apagar) --- */
 .btn-danger-ghost {
   background: var(--btn-danger-ghost-bg, rgba(239,68,68,0.15));

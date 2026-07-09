@@ -1,4 +1,16 @@
-window.SCOREPLACE_VERSION = '4.5.51-beta';
+window.SCOREPLACE_VERSION = '4.5.58-beta';
+
+// v4.5.58: helper CANÔNICO do símbolo de cancelar/remover — círculo vermelho,
+// borda branca, X branco (classe .cancel-x-btn em components.css). Use em TODO
+// cancelamento/remoção de ícone. onclickJs = conteúdo do onclick já escapado
+// (usar aspas simples dentro). opts.size = ex '20px' (default 24px via CSS).
+window._cancelXBtn = window._cancelXBtn || function(onclickJs, title, opts) {
+  opts = opts || {};
+  var t = String(title || 'Cancelar').replace(/"/g, '&quot;');
+  var sizeStyle = opts.size ? (' style="--cx-size:' + opts.size + ';"') : '';
+  return '<button type="button" class="cancel-x-btn" title="' + t + '" aria-label="' + t +
+    '" onclick="' + (onclickJs || '') + '"' + sizeStyle + '>✕</button>';
+};
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -6550,8 +6562,8 @@ window._INSCRITO_NAME_FONT_PX = 17;
 // SEMPRE renderizado por estas linhas, em qualquer view, de acordo com a configuração:
 //   • 1 linha, OU N linhas COM grande final (linha cruza tudo) → 1 PÓDIO geral + 1
 //     "Classificação geral" colapsada embaixo.
-//   • 2/4 linhas SEPARADAS (sem grande final) → para CADA linha, na ordem de tier
-//     (Ouro, Prata, …): o PÓDIO da linha + a classificação DAQUELA linha colapsada logo
+//   • 2/4 chaves SEPARADAS (sem grande final) → para CADA chave, na ordem das chaves
+//     (Chave 1, Chave 2, … OU o nome que o organizador deu): o PÓDIO da chave + a classificação DAQUELA chave colapsada logo
 //     embaixo. 2 linhas = 2 pódios+2 classif; 4 linhas = 4 pódios+4 classif.
 //   • Liga/Suíço (sem chave) → 1 pódio (top 3 da tabela) + classificação da tabela.
 // Modo de classificação: 'personalizada' (1º,2º,3º…) — default. ('blocos' = próxima leva.)
@@ -6708,10 +6720,14 @@ window._renderPodiumsAndClassif = function (t) {
   if (tierKeys.length >= 2 && !hasGF) {
     var tierColors = { gold: '#fbbf24', silver: '#cbd5e1', main: '#10b981', line3: '#cd7f32', line4: '#3b82f6' };
     var palette = ['#fbbf24', '#cbd5e1', '#10b981', '#cd7f32', '#3b82f6', '#ec4899'];
-    var defLbl = { gold: '🥇 Série Ouro', silver: '🥈 Série Prata', line3: 'Série 3', line4: 'Série 4' };
+    // Nome da chave = o que o ORGANIZADOR deu (m.tierLabel). Sem nome → "Chave N" (posicional,
+    // arbitrário). NUNCA "Ouro/Prata" hardcodado: é só um exemplo, não regra — quem nomeia é o
+    // organizador (project_playoff_formats · feedback_dont_canonize_examples). As CORES por chave
+    // (tierColors) são só distinção visual, não nome — casam com a cor da chave no bracket. Este
+    // bloco só roda com 2+ chaves; com 1 chave cai no pódio unificado (sem rótulo de chave).
     var out = tierKeys.map(function (bk, i) {
       var lm = fpMatches.filter(function (m) { return (m.bracket || 'main') === bk; });
-      var title = (lm[0] && lm[0].tierLabel) ? lm[0].tierLabel : (defLbl[bk] || ('Linha ' + (i + 1)));
+      var title = (lm[0] && lm[0].tierLabel) ? String(lm[0].tierLabel).trim() : ('Chave ' + (i + 1));
       var color = tierColors[bk] || palette[i % palette.length];
       var pod = window._linePodiumHtml(t, lm, title, color);
       if (!pod) return '';

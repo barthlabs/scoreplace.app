@@ -144,6 +144,14 @@
     // 'sorteio' só faz sentido FORMANDO duplas (senão não há o que sortear — os confrontos
     // seguem a classificação). Fora disso cai em 'performance' (beneficia os melhores).
     if (e.formacao === 'sorteio' && !(isDupla && e.origem === 'formar')) e.formacao = 'performance';
+    // v4.5.51: ABERTURA POR REI/RAINHA (nova alternativa da eliminatória). ON = a eliminatória
+    // começa por UMA rodada Rei/Rainha (grupos de 4 sorteados) e as duplas se formam DENTRO de
+    // cada grupo — a estratégia (performance 1º+2º/3º+4º · equilíbrio 1º+4º/2º+3º) dirige o
+    // pareamento intra-grupo. Só faz sentido em DUPLAS. Corte por grupo de 4: 4 (todos → 2 duplas)
+    // ou 2 (só os 2 melhores → 1 dupla). Neste increment (v4.5.51) só vale na eliminação DIRETA
+    // (out.classifAtiva === false) — com classificatória é fase empilhada (3 fases), próximo passo.
+    e.openReiRainha = (e.openReiRainha === true) && isDupla && (out.classifAtiva === false);
+    e.reiRainhaCut = (parseInt(e.reiRainhaCut, 10) === 2) ? 2 : 4;
     e.qualifyAll = !!e.qualifyAll;
     if (['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) === -1) e.lateEnrollment = 'closed';
     e.terceiro = true; // 3º lugar SEMPRE existe (project_third_place_always) — não é opcional.
@@ -215,6 +223,49 @@
     // bracket por sorteio; duplas já formadas (enrollment=teams) ou sorteadas (individual).
     if (!cfg.classifAtiva) {
       var e0 = cfg.eliminatoria;
+
+      // v4.5.51: ELIMINATÓRIA QUE ABRE COM REI/RAINHA (eliminação direta). p0 = 1 rodada
+      // Rei/Rainha (grupos de 4 sorteados do enrollment) → p1 = eliminatória que lê POR GRUPO
+      // (scope 'per_group'), corta os X melhores de cada grupo de 4 (rankTo=reiRainhaCut) e forma
+      // as duplas pela estratégia (performance 1º+2º/3º+4º · equilíbrio 1º+4º/2º+3º · sorteio).
+      // Mesmo motor da classificatória Rei/Rainha → elim, só que POR GRUPO (não flatOverall) e 1 rodada.
+      if (isDupla && e0.openReiRainha) {
+        var cutRR = e0.reiRainhaCut;             // 2 (top-2 → 1 dupla) | 4 (todos → 2 duplas)
+        top.format = 'Liga'; top.drawMode = 'rei_rainha'; top.teamSize = teamSize;
+        top.enrollmentMode = 'individual';
+        top.ligaRoundFormat = 'rei_rainha'; top.ligaDrawMode = 'standard';
+        top.gruposCount = 1; top.gruposClassified = cutRR; top.drawManual = false;
+        var pRR = Object.assign(_phaseBase(re), {
+          name: 'Rei/Rainha', formatCode: 'liga', format: 'Liga',
+          drawMode: 'rei_rainha', reiRainha: true, rounds: 1, groupsBy: 'sorteio',
+          source: { type: 'enrollment' },
+          fixedPairs: false, gruposCount: 1, gruposClassified: cutRR,
+          pairingStrategy: 'top', grandFinal: true, lateEnrollment: 'closed', drawManual: false
+        });
+        var dRR = _LINE_DESTS[e0.linhas] || ['main'];
+        // per_group: cada linha puxa até `cutRR` de CADA grupo de 4 (rankTo = corte).
+        var mapRR = dRR.map(function (dst, di) { return { dest: dst, rankFrom: 1, rankTo: cutRR, label: (e0.nomes && e0.nomes[di]) || '' }; });
+        var pairRR = ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among' }[e0.formacao] || 'top');
+        var seedRR = ({ performance: 'seed', equilibrio: 'balanced', sorteio: 'seed' }[e0.formacao] || 'seed');
+        var elimDuplaRR = !!e0.dupla;
+        var pElimRR = Object.assign(_phaseBase(re), {
+          name: 'Eliminatória',
+          formatCode: elimDuplaRR ? 'elim_dupla' : 'elim_simples',
+          format: elimDuplaRR ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
+          reiRainha: false, drawMode: 'sorteio', rounds: 1,
+          gruposCount: 1, gruposClassified: cutRR,
+          source: {
+            type: 'previous_phase', fromPhaseOffset: 1,
+            byGroupRank: true, scope: 'per_group',
+            qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: cutRR, mapping: mapRR
+          },
+          fixedPairs: true, pairingStrategy: pairRR, bracketSeeding: seedRR,
+          mapping: mapRR, grandFinal: elimDuplaRR || (e0.linhas > 1 && e0.grandFinal !== false),
+          thirdPlace: e0.terceiro, lateEnrollment: e0.lateEnrollment || 'closed', drawManual: false
+        });
+        return { topLevel: top, phases: [pRR, pElimRR], cfg: cfg };
+      }
+
       var formadas0 = isDupla && cfg.formacaoDupla === 'manual';
       var elimDupla0 = !!e0.dupla; // v4.4.58: Dupla Eliminatória (repescagem)
       top.format = elimDupla0 ? 'Dupla Eliminatória' : 'Eliminatórias Simples';

@@ -753,22 +753,23 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
       + '</div>';
   };
 
-  // Cards SEM DUPLA (âmbar). Arrastar via GRIP ⠿ (pointer-drag mouse+touch, igual ao
-  // arrastar-real-sobre-vaga) — NÃO usa HTML5 DnD nativo (trava no touch). Só o grip inicia
-  // o arraste; o resto do card rola normal e o toggle de presença continua clicável.
+  // Cards SEM DUPLA (âmbar). Arraste do CARD INTEIRO (pointer-drag mouse+touch, igual ao
+  // arrastar-real-sobre-vaga / lobby casual) — NÃO usa HTML5 DnD nativo (trava no touch).
+  // Desktop: mousedown em qualquer ponto do card inicia. Celular: segure (long-press) e
+  // arraste — assim a lista continua rolando com o toque normal. O toggle de presença
+  // (label/input) e botões nunca iniciam o arraste (ver _ljIsInteractive). Sem ícone de
+  // alça — o card inteiro é a alça. Os dados do arraste (tId/name) vão no PRÓPRIO card.
   var solosHtml = _solos.map(function (p) {
     var nm = _nm(p);
     var uid = (typeof p === 'object' ? (p.uid || '') : '');
     var keyAttr = _safeHtml(uid || nm);
     var badge = (window._enrollNumberBadge && window._enrollNumber && window._buildEnrollOrderMap)
       ? window._enrollNumberBadge(window._enrollNumber(window._buildEnrollOrderMap(t), p)) : '';
-    var grip = _canPair
-      ? '<span data-lj-grip="' + keyAttr + '" data-lj-tid="' + _safeHtml(t.id) + '" data-lj-name="' + _safeHtml(nm) + '" title="Arraste para formar dupla" style="cursor:grab;touch-action:none;font-size:1.2rem;color:#f59e0b;flex-shrink:0;user-select:none;-webkit-user-select:none;padding:0 4px;line-height:1;align-self:center;">⠿</span>'
-      : '';
-    return '<div data-lj-card="1" data-lj-key="' + keyAttr + '" style="background:linear-gradient(135deg,rgba(180,120,20,0.32),rgba(245,158,11,0.26));border:1px solid rgba(245,158,11,0.5);border-radius:12px;padding:12px;position:relative;overflow:hidden;">'
+    var pairAttr = _canPair ? ' data-lj-tid="' + _safeHtml(t.id) + '" data-lj-name="' + _safeHtml(nm) + '"' : '';
+    return '<div data-lj-card="1" data-lj-key="' + keyAttr + '"' + pairAttr + ' style="' + (_canPair ? 'cursor:grab;-webkit-user-select:none;user-select:none;' : '') + 'background:linear-gradient(135deg,rgba(180,120,20,0.32),rgba(245,158,11,0.26));border:1px solid rgba(245,158,11,0.5);border-radius:12px;padding:12px;position:relative;overflow:hidden;">'
       + badge
-      + '<div style="position:relative;z-index:1;display:flex;align-items:stretch;gap:8px;">' + grip + '<div style="flex:1;min-width:0;">' + _memberBlock(nm, p)
-      + '<div style="font-size:0.62rem;color:rgba(255,255,255,0.5);margin-top:5px;">' + (_canPair ? 'Arraste o ⠿ sobre outro card para formar dupla' : 'Sem dupla') + '</div></div></div>'
+      + '<div style="position:relative;z-index:1;min-width:0;">' + _memberBlock(nm, p)
+      + '<div style="font-size:0.62rem;color:rgba(255,255,255,0.5);margin-top:5px;">' + (_canPair ? 'Segure e arraste sobre outro card para formar dupla' : 'Sem dupla') + '</div></div>'
       + '</div>';
   }).join('');
 
@@ -790,7 +791,7 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
 
   return '<div id="late-join-pairing-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.25);border-radius:16px;padding:1.5rem;">'
     + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;"><span style="font-size:1.3rem;">🤝</span><h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Formar novas duplas</h3><span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">inscrições abertas · R1</span></div>'
-    + '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:1rem;">Arraste o ⠿ de um card sobre outro para formar uma dupla. Enquanto a 2ª rodada do upper não começou, cada dupla nova entra na <b>R1 da chave superior</b> (vencedor sobe, derrotado cai pro lower).</div>'
+    + '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:1rem;">Arraste um card sobre outro para formar uma dupla (no celular, segure e arraste). Enquanto a 2ª rodada do upper não começou, cada dupla nova entra na <b>R1 da chave superior</b> (vencedor sobe, derrotado cai pro lower).</div>'
     + (solosHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#f59e0b;margin-bottom:6px;">Sem dupla</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:1.1rem;">' + solosHtml + '</div>' : '')
     + (duplasHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#2dd4bf;margin-bottom:6px;">Duplas formadas</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;">' + duplasHtml + '</div>' : '')
     + _readyMsg
@@ -834,45 +835,93 @@ window._formLateJoinDupla = function (tId, src, tgt) {
 };
 
 // Pointer-drag (mouse + touch) da seção de pareamento tardio — mesmo mecanismo do
-// arrastar-real-sobre-vaga (_wirePlaceholderDnD): clone flutuante + elementFromPoint.
-// Só o grip ⠿ (data-lj-grip) inicia; o alvo é qualquer card com data-lj-key.
+// arrastar-real-sobre-vaga (_wirePlaceholderDnD) e do lobby casual (_setupDragDrop):
+// clone flutuante + elementFromPoint. Arraste-se pelo CARD INTEIRO (data-lj-card com
+// data-lj-name = pareável); o alvo é qualquer card com data-lj-key. Wiring DELEGADO no
+// document (uma vez só) → cards novos de qualquer re-render funcionam sem re-wire.
+//   Desktop: mousedown no card inicia na hora.
+//   Celular: long-press (~220ms) inicia — antes disso o toque rola a lista normalmente;
+//            se o dedo mover além do limite antes do timer, é scroll e cancela.
+// O toggle de presença (label/input) e botões NUNCA iniciam o arraste.
 (function () {
-  var _ljDrag = null;
+  var _ljDrag = null;      // arraste ativo {key,tId,clone,hi,card}
+  var _ljPending = null;   // long-press pendente {card,x,y,timer}
+  // Mesma cadência do drag de mesclar (data-merge-container): long-press 500ms + move-cancel.
+  var LJ_LONGPRESS_MS = 500, LJ_MOVE_CANCEL = 10, LJ_EDGE = 90;
   function _ljPoint(e) { return (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e; }
+  function _ljCardFrom(el) { return (el && el.closest) ? el.closest('[data-lj-card][data-lj-name]') : null; }
+  function _ljIsInteractive(el, card) {
+    for (var n = el; n && n !== card; n = n.parentElement) {
+      var tg = n.tagName;
+      if (tg === 'INPUT' || tg === 'BUTTON' || tg === 'LABEL' || tg === 'TEXTAREA' || tg === 'SELECT' || tg === 'A') return true;
+    }
+    return false;
+  }
   function _ljKeyAtPoint(x, y) {
     var el = document.elementFromPoint(x, y);
-    for (var i = 0; el && i < 6; i++) {
+    for (var i = 0; el && i < 8; i++) {
       if (el.closest) { var c = el.closest('[data-lj-key]'); if (c) return { key: c.getAttribute('data-lj-key'), card: c }; }
       el = el.parentElement;
     }
     return null;
   }
-  function _ljStart(e, grip) {
-    var key = grip.getAttribute('data-lj-grip'); if (key == null) return;
-    var pt = _ljPoint(e);
-    var nm = grip.getAttribute('data-lj-name') || key;
+  function _ljClearPending() { if (_ljPending && _ljPending.timer) clearTimeout(_ljPending.timer); _ljPending = null; }
+  function _ljBegin(card, pt) {
+    var key = card.getAttribute('data-lj-key');
+    var nm = card.getAttribute('data-lj-name') || key;
     var clone = document.createElement('div');
     clone.textContent = '👤 ' + nm;
     clone.style.cssText = 'position:fixed;z-index:100060;pointer-events:none;background:#f59e0b;color:#111;font-weight:800;font-size:0.8rem;padding:6px 12px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);transform:translate(-50%,-160%);left:' + pt.clientX + 'px;top:' + pt.clientY + 'px;';
     document.body.appendChild(clone);
-    _ljDrag = { key: key, tId: grip.getAttribute('data-lj-tid'), clone: clone, hi: null };
+    _ljDrag = { key: key, tId: card.getAttribute('data-lj-tid'), clone: clone, hi: null, card: card };
+    card.style.opacity = '0.55';
     document.body.style.userSelect = 'none';
+    if (window._haptic) { try { window._haptic('medium'); } catch (e) {} }
+  }
+  function _ljMouseDown(e) {
+    if (e.button != null && e.button !== 0) return;
+    var card = _ljCardFrom(e.target); if (!card) return;
+    if (_ljIsInteractive(e.target, card)) return;
+    _ljBegin(card, _ljPoint(e));
     if (e.cancelable) e.preventDefault();
   }
+  function _ljTouchStart(e) {
+    var card = _ljCardFrom(e.target); if (!card) return;
+    if (_ljIsInteractive(e.target, card)) return;
+    var pt = _ljPoint(e);
+    _ljClearPending();
+    _ljPending = { card: card, x: pt.clientX, y: pt.clientY, timer: null };
+    _ljPending.timer = setTimeout(function () {
+      var p = _ljPending; _ljPending = null;
+      if (p) _ljBegin(p.card, { clientX: p.x, clientY: p.y });
+    }, LJ_LONGPRESS_MS);
+    // sem preventDefault aqui: se o usuário rolar, cancelamos no touchmove
+  }
   function _ljMove(e) {
+    if (_ljPending) {
+      var p0 = _ljPoint(e);
+      if (Math.abs(p0.clientX - _ljPending.x) > LJ_MOVE_CANCEL || Math.abs(p0.clientY - _ljPending.y) > LJ_MOVE_CANCEL) _ljClearPending();
+      return;
+    }
     if (!_ljDrag) return;
     var pt = _ljPoint(e);
     if (_ljDrag.clone) { _ljDrag.clone.style.left = pt.clientX + 'px'; _ljDrag.clone.style.top = pt.clientY + 'px'; }
-    if (_ljDrag.hi) { _ljDrag.hi.style.outline = ''; _ljDrag.hi = null; }
+    // Auto-scroll quando o dedo chega perto das bordas — permite arrastar em listas altas.
+    var _vh = window.innerHeight, _vc = document.getElementById('view-container');
+    if (pt.clientY < LJ_EDGE) { var _s1 = Math.round(10 * (1 - pt.clientY / LJ_EDGE)); window.scrollBy({ top: -_s1, behavior: 'instant' }); if (_vc) _vc.scrollTop -= _s1; }
+    else if (pt.clientY > _vh - LJ_EDGE) { var _s2 = Math.round(10 * ((pt.clientY - (_vh - LJ_EDGE)) / LJ_EDGE)); window.scrollBy({ top: _s2, behavior: 'instant' }); if (_vc) _vc.scrollTop += _s2; }
+    if (_ljDrag.hi) { _ljDrag.hi.style.outline = ''; _ljDrag.hi.style.outlineOffset = ''; _ljDrag.hi = null; }
     var hit = _ljKeyAtPoint(pt.clientX, pt.clientY);
     if (hit && hit.key !== _ljDrag.key) { hit.card.style.outline = '3px solid #f59e0b'; hit.card.style.outlineOffset = '2px'; _ljDrag.hi = hit.card; }
-    if (e.cancelable) e.preventDefault();
+    if (e.cancelable) e.preventDefault();   // só bloqueia o scroll DURANTE o arraste
   }
   function _ljEnd(e) {
+    if (_ljPending) _ljClearPending();
     if (!_ljDrag) return;
     var d = _ljDrag; _ljDrag = null;
     if (d.clone) d.clone.remove();
-    if (d.hi) d.hi.style.outline = '';
+    if (d.hi) { d.hi.style.outline = ''; d.hi.style.outlineOffset = ''; }
+    if (d.card) d.card.style.opacity = '';
     document.body.style.userSelect = '';
     var pt = _ljPoint(e);
     var hit = _ljKeyAtPoint(pt.clientX, pt.clientY);
@@ -880,21 +929,15 @@ window._formLateJoinDupla = function (tId, src, tgt) {
     if (typeof window._formLateJoinDupla === 'function') window._formLateJoinDupla(d.tId, d.key, hit.key);
   }
   window._wireLateJoinPairDnD = function () {
-    var grips = document.querySelectorAll('[data-lj-grip]');
-    for (var i = 0; i < grips.length; i++) {
-      var g = grips[i]; if (g._ljWired) continue; g._ljWired = true;
-      (function (gg) {
-        gg.addEventListener('mousedown', function (e) { _ljStart(e, gg); });
-        gg.addEventListener('touchstart', function (e) { _ljStart(e, gg); }, { passive: false });
-      })(g);
-    }
-    if (!window._ljDndGlobalWired) {
-      window._ljDndGlobalWired = true;
-      document.addEventListener('mousemove', _ljMove);
-      document.addEventListener('mouseup', _ljEnd);
-      document.addEventListener('touchmove', _ljMove, { passive: false });
-      document.addEventListener('touchend', _ljEnd);
-    }
+    if (window._ljDndGlobalWired) return;
+    window._ljDndGlobalWired = true;
+    document.addEventListener('mousedown', _ljMouseDown);
+    document.addEventListener('mousemove', _ljMove);
+    document.addEventListener('mouseup', _ljEnd);
+    document.addEventListener('touchstart', _ljTouchStart, { passive: true });
+    document.addEventListener('touchmove', _ljMove, { passive: false });
+    document.addEventListener('touchend', _ljEnd);
+    document.addEventListener('touchcancel', _ljEnd);
   };
 })();
 
@@ -2127,8 +2170,10 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     var showHiddenBtn = hiddenCount > 0
       ? '<button class="btn btn-micro btn-outline" onclick="window._tierRevealOne(\'' + _tIdEsc + '\',\'' + _bkEsc + '\')" title="Mostrar a rodada oculta mais recente (1 por clique)" style="position:sticky;top:112px;align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">👁 Mostrar ocultas (' + hiddenCount + ')</button>'
       : '';
+    // Título da chave suprimido quando vazio (chave única → sem rótulo, igual categoria única).
+    var _titleH4 = title ? '<h4 style="color:' + color + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + color + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' : '';
     return '<div style="margin-bottom:2rem;">' +
-      '<h4 style="color:' + color + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + color + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' +
+      _titleH4 +
       (showClassif === false ? '' : _tierClassifHtml(bracketKey, color)) +
       '<div style="display:flex;align-items:flex-start;gap:10px;">' +
         showHiddenBtn +
@@ -2157,9 +2202,11 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   // Ouro/Prata. line3/line4 (e quaisquer outras) também viram chaves, com o nome
   // que o organizador deu (m.tierLabel). Antes só gold/silver/main eram exibidos.
   var _tierColors = { gold: '#fbbf24', silver: '#cbd5e1', main: '#10b981', line3: '#cd7f32', line4: '#3b82f6' };
-  // v3.0.x: fallback GENÉRICO (sem Ouro/Prata hardcoded) — só usado quando a linha não tem
-  // nome (m.tierLabel). O nome real vem do que o organizador digitou (ex.: "Linha 1").
-  var _tierDefault = { gold: 'Chave 1', silver: 'Chave 2', main: (_t('bracket.knockout') || 'Eliminatória'), line3: 'Chave 3', line4: 'Chave 4' };
+  // Default GENÉRICO — só usado quando a chave NÃO tem nome (m.tierLabel do organizador).
+  // 'main' (eliminatória de chave única) → "Eliminatória"; as demais caem no default POSICIONAL
+  // "Chave N" (ver _tierHtmlAt). NUNCA Ouro/Prata (exemplo ≠ regra). Com 1 chave só o rótulo é
+  // suprimido (ver _tierKeys.length abaixo) — o inscrito não vê "Chave 1", igual categoria única.
+  var _tierDefault = { main: (_t('bracket.knockout') || 'Eliminatória') };
   var _tierOrder = ['gold', 'silver', 'main', 'line3', 'line4'];
   var _present = {};
   pm.forEach(function (m) { var bk = m.bracket || 'main'; if (bk !== 'grandfinal' && bk !== 'thirdplace') _present[bk] = 1; });
@@ -2174,7 +2221,11 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   var _hasGF = _gfEnabled && pm.some(function (m) { return (m.bracket || '') === 'grandfinal'; });
   function _tierHtmlAt(bk, idx, showClassif) {
     var color = _tierColors[bk] || _palette[idx % _palette.length];
-    return renderTier(bk, tierTitle(bk, _tierDefault[bk] || ('Chave ' + (idx + 1))), color, showClassif);
+    // 1 chave só → sem rótulo (o inscrito não vê "Chave 1"/"Eliminatória", igual categoria única).
+    // tierTitle usa o nome custom do organizador (m.tierLabel) quando existe — nome custom sempre
+    // aparece, mesmo com 1 chave. Sem nome: "Chave N" com 2+ chaves, nada com 1.
+    var _fallback = (_tierKeys.length <= 1) ? '' : (_tierDefault[bk] || ('Chave ' + (idx + 1)));
+    return renderTier(bk, tierTitle(bk, _fallback), color, showClassif);
   }
 
   var phaseTitle = window._safeHtml(phaseCfg.name || ('Fase ' + (curPhase + 1)));

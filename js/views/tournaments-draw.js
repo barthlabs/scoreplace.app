@@ -2043,7 +2043,11 @@ window._rebuildLowerBracket = function (t, opts) {
     function lowerRound(games) { lround++; const arr = []; for (let i = 0; i < games; i++) arr.push(M('lower', lround)); return arr; }
     function slotsOf(arr) { const s = []; arr.forEach(m => { s.push({ m, s: 'p1' }); s.push({ m, s: 'p2' }); }); return s; }
     function fillOdd(sl, srcRound) {
-        if (mode === 'bye') { if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; }
+        // Repescagem no ímpar sai da rodada inferior ANTERIOR (srcRound). Se essa rodada
+        // NÃO existe (ex.: pré-rodada vazia quando toLower=0 na dupla ímpar), não há de onde
+        // repescar → BYE (o par avança). Sem isso, a vaga repFill fica órfã (slot morto).
+        const hasSrc = t.matches.some(m => m && m.bracket === 'lower' && m.round === srcRound && (cat == null || m.category === cat));
+        if (mode === 'bye' || !hasSrc) { if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; }
         else { (sl.m.repFill = sl.m.repFill || []).push({ slot: sl.s, srcBracket: 'lower', srcRound: srcRound, rank: 0, cat, tagRep: true }); }
     }
 
@@ -2060,7 +2064,15 @@ window._rebuildLowerBracket = function (t, opts) {
         const s = slotsOf(merge); let si = 0;
         prevLower.forEach(pm => { const sl = s[si++]; pm.nextMatchId = sl.m.id; pm.nextSlot = sl.s; });
         upLosers.forEach(um => { const sl = s[si++]; um.loserMatchId = sl.m.id; um.loserSlot = sl.s; });
-        directNames.forEach(d => { const sl = s[si++]; if (sl.s === 'p1') { sl.m.p1 = d.name; if (d.obj) sl.m.team1Obj = d.obj; } else { sl.m.p2 = d.name; if (d.obj) sl.m.team2Obj = d.obj; } });
+        directNames.forEach(d => {
+            const sl = s[si++];
+            if (d.loserFeed) {
+                // wiring DINÂMICO: o perdedor do jogo-fonte (repGame da dupla ímpar) cai NESTE slot
+                // quando o jogo é decidido (via _advanceWinner/loserMatchId). Não há nome no build.
+                d.loserFeed.loserMatchId = sl.m.id; d.loserFeed.loserSlot = sl.s;
+            } else if (sl.s === 'p1') { sl.m.p1 = d.name; if (d.obj) sl.m.team1Obj = d.obj; }
+            else { sl.m.p2 = d.name; if (d.obj) sl.m.team2Obj = d.obj; }
+        });
         if (repNeed) fillOdd(s[si++], lround - 1);
         prevLower = merge; alive = merge.length;
     }
@@ -2163,19 +2175,32 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
         W = Math.round(Math.log(T) / Math.log(2));
         const rep = t.matches.filter(m => m && m.isPhaseRepR1 && m.round === 0 && (cat == null || m.category === cat) && (_pi == null || (m.phaseIndex || 0) === _pi))
             .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        // A DUPLA ÍMPAR joga o repGame na R1 sup (não vai direto pro lower). Espelha o
+        // genTierBracket: g vencedores + directSpots melhores derrotados (direto pra R2) +
+        // o VENCEDOR do repGame preenchem a chave de T; o PERDEDOR do repGame cai no lower.
+        const repGame = rep.filter(m => m.isPhaseRepGame)[0] || null;
+        const normalRep = rep.filter(m => !m.isPhaseRepGame);            // g jogos "cheios"
+        const directSpots = repGame ? (promote - 1) : promote;          // melhores derrotados que sobem DIRETO
+        const entrants = [];                                             // semente 0..T-1 da chave de T
+        for (let ei = 0; ei < normalRep.length; ei++) entrants.push({ fromR1: normalRep[ei] });
+        for (let di = 0; di < directSpots; di++) entrants.push({ repDirect: di });   // di-ésimo melhor derrotado
+        if (repGame) entrants.push({ fromRepGame: repGame });           // vencedor do jogo da ímpar
         upper[1] = [];
         for (let i = 0; i < T / 2; i++) upper[1].push(M('upper', 1));
-        for (let e = 0; e < T; e++) {
-            const gm = upper[1][Math.floor(e / 2)], slot = (e % 2 === 0) ? 'p1' : 'p2';
-            if (e < g) { if (rep[e]) { rep[e].nextMatchId = gm.id; rep[e].nextSlot = slot; } }
-            else { (gm.repFill = gm.repFill || []).push({ slot, srcBracket: 'upper', srcRound: 0, rank: (e - g), cat, tagRep: true }); } // sobe pra chave superior → TAG REP
-        }
+        const _wireEnt = function (ent, slot, gm) {
+            if (!ent) return;
+            if (ent.fromR1) { ent.fromR1.nextMatchId = gm.id; ent.fromR1.nextSlot = slot; }
+            else if (ent.fromRepGame) { ent.fromRepGame.nextMatchId = gm.id; ent.fromRepGame.nextSlot = slot; }
+            else if (ent.repDirect != null) { (gm.repFill = gm.repFill || []).push({ slot, srcBracket: 'upper', srcRound: 0, rank: ent.repDirect, cat, tagRep: true }); } // sobe pra chave superior → TAG REP
+        };
+        for (let e = 0; e < T; e++) { _wireEnt(entrants[e], (e % 2 === 0) ? 'p1' : 'p2', upper[1][Math.floor(e / 2)]); }
         for (let r = 2; r <= W; r++) {
             upper[r] = [];
             const pc = upper[r - 1].length / 2;
             for (let j = 0; j < pc; j++) upper[r].push(M('upper', r));
             upper[r - 1].forEach((pm, idx) => { const nm = upper[r][Math.floor(idx / 2)]; pm.nextMatchId = nm.id; pm.nextSlot = (idx % 2 === 0) ? 'p1' : 'p2'; });
         }
+        // Pré-rodada inferior: os `toLower` piores derrotados (rank promote..). toLower é sempre par.
         preGames = toLower / 2;
         feedPre = function (pre) {
             pre.forEach((m, i) => { m.repFill = [
@@ -2184,7 +2209,10 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
             ]; });
         };
         mergeUppers = []; for (let r = 1; r <= W; r++) mergeUppers.push(upper[r]);
-        satout = (meta.hasSat && meta.satName) ? { name: meta.satName, obj: meta.satObj } : null;
+        // A ímpar NÃO entra direto no lower — joga o repGame. O PERDEDOR do repGame entra no 1º
+        // merge inferior, EXATAMENTE onde o satout estático entrava (mesma contagem de vagas),
+        // só que via wiring dinâmico (loserFeed → loserMatchId), pois quem cai só se sabe ao jogar.
+        satout = repGame ? { loserFeed: repGame } : null;
     }
 
     // ---- CHAVE INFERIOR + GRANDE FINAL (motor ÚNICO — extraído p/ _rebuildLowerBracket) ----
