@@ -527,6 +527,7 @@ button[style*="linear-gradient"]:not(.btn):active {
    NUNCA reintroduzir ✕ solto colorido — usar sempre esta classe ou window._cancelXBtn. */
 .cancel-x-btn {
   --cx-size: 24px;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -542,9 +543,10 @@ button[style*="linear-gradient"]:not(.btn):active {
   border-radius: 50%;
   background: #dc2626;
   border: 2px solid #fff;
-  color: #fff;
-  font-size: calc(var(--cx-size) * 0.5);
-  font-weight: 900;
+  /* v4.5.60: o ✕ (glifo) é escondido — o X é DESENHADO por 2 barras (::before/::after)
+     pra ter peso consistente e cheio, independente de fonte. */
+  font-size: 0;
+  color: transparent;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;
@@ -552,8 +554,26 @@ button[style*="linear-gradient"]:not(.btn):active {
   transition: transform 0.12s ease, background 0.12s ease;
   -webkit-tap-highlight-color: transparent;
 }
+/* X desenhado — barras brancas grossas (peso aumentado, v4.5.60). */
+.cancel-x-btn::before,
+.cancel-x-btn::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--cx-size) * 0.5);
+  height: calc(var(--cx-size) * 0.19);
+  background: #fff;
+  border-radius: 2px;
+}
+.cancel-x-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
+.cancel-x-btn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
 .cancel-x-btn:hover { background: #b91c1c; transform: scale(1.08); }
 .cancel-x-btn:active { transform: scale(0.92); }
+/* Nos cards de inscrito o X fica SEMPRE na linha inferior à direita (canto inf. dir.).
+   Isso é garantido IN-FLOW pelos renderers (participants.js + tournaments.js) — NÃO
+   usar position:absolute aqui: no card de check-in o X divide a linha de baixo com os
+   botões W.O./Presente-Ausente e um X absoluto (z-index) os cobriria. */
 
 /* --- Variantes Transparentes (SOMENTE Add Bot e Apagar) --- */
 .btn-danger-ghost {

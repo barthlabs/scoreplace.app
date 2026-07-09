@@ -3624,26 +3624,17 @@ function renderTournaments(container, tournamentId = null) {
                 ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
                 _enrollBadge + _wmL + _wmR +
                 (function(){
-                  // CANÔNICO (v4.5.14): a AÇÃO (↩️ Desfazer + 🗑️) NÃO ocupa linha própria — economiza
-                  // 1 linha de altura (o nº de inscrição segue 60% da altura do card, que agora é menor).
-                  //  • DUPLA formada → ação à DIREITA na MESMA linha do status "✅ Dupla formada" (esq).
-                  //  • Individual/solo → ação (🗑️) à DIREITA na MESMA linha do NOME (esq), alinhada ao topo.
-                  // 🗑️ sempre por último. Ver [[project_inscrito_card_canonical]].
+                  // CANÔNICO (v4.5.60): o X (símbolo cancelar) fica SEMPRE no CANTO INFERIOR
+                  // DIREITO do card — tanto na DUPLA formada (desfaz) quanto no SOLO (excluir).
+                  // Ação na MESMA linha do status/label de baixo (esq), X à direita.
+                  // Ver [[project_inscrito_card_canonical]].
                   var _actions = (desfazerBtn || _delBtnDupla)
                     ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' + desfazerBtn + _delBtnDupla + '</div>'
                     : '';
-                  var _inner;
-                  if (members) {
-                    var _labelRow = _actions
-                      ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' + (labelHtml || '<span></span>') + _actions + '</div>'
-                      : labelHtml;
-                    _inner = _body + _labelRow;
-                  } else {
-                    var _nameRow = _actions
-                      ? '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div style="min-width:0;flex:1;">' + _body + '</div>' + _actions + '</div>'
-                      : _body;
-                    _inner = _nameRow + labelHtml;
-                  }
+                  var _labelRow = _actions
+                    ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' + (labelHtml || '<span></span>') + _actions + '</div>'
+                    : labelHtml;
+                  var _inner = _body + _labelRow;
                   return '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' + _inner + '</div>';
                 })() +
                 '</div>';
