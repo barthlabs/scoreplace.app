@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.78-beta — folga e pareamento da Liga seguem a pessoa mesmo se ela trocar o nome <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⚖️ Justiça da folga e do anti-repetição por identidade:</b> na Liga/Pontos Corridos, o rodízio de <b>quem folga</b> e o <b>anti-repetição de parcerias</b> passaram a contar por <b>pessoa (conta)</b>, não pelo nome escrito. Antes, se alguém trocava o nome no meio da temporada, o app “esquecia” quantas vezes ela já tinha folgado (podia folgar de novo injustamente) e as parcerias já feitas. Agora o histórico segue a pessoa. Contadores antigos são preservados automaticamente.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.77-beta — chamada de duplas igual à tela do torneio, com presença por jogador <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>👥 Chamada de duplas no card certo:</b> na lista de inscritos (chamada), antes do sorteio, os torneios de duplas passam a mostrar o <b>mesmo card canônico</b> da tela do torneio — <b>“Sem dupla” em cima</b> e <b>“Duplas formadas” embaixo</b> —, no lugar do card antigo com os solos misturados no meio.</li>' +

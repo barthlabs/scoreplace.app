@@ -64,6 +64,7 @@ const SUITES = [
   'tests/liga-render.test.js',
   'tests/swiss-render.test.js',
   'tests/match-roster-uid.test.js',
+  'tests/fairness-uid-identity.test.js',
   'js/views/phases-engine.test.js',
   'js/views/phase-generators.test.js',
   'js/views/team-formation.test.js',

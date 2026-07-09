@@ -2777,11 +2777,25 @@ function _getInactiveLigaPlayers(t) {
   return names;
 }
 
+// v4.5.78 (uid-audit Parte 14): chave de identidade por uid pros contadores de
+// fairness do motor de sorteio (sitOutHistory/opponentHistory). Resolve o NOME do
+// jogador → uid via _buildNameToUid; sem uid (guest sem conta OU rodada legada)
+// usa o próprio nome. Fecha o "reset ao renomear no meio da Liga": o contador
+// segue o UID, não a string de nome (que muda quando a pessoa troca o nome).
+// NOTA: os arrays de trabalho do embaralhamento ainda são NOMES → homônimo dentro
+// do shuffle segue limitado (identidade-por-uid nos arrays é leva à parte).
+function _fairnessKey(n2u, name) {
+  if (name == null) return name;
+  var u = n2u && n2u[String(name).trim()];
+  return u ? ('uid:' + u) : String(name);
+}
+
 // Helper: choose which players sit out this round based on fairness (least sit-outs first)
 function _chooseSitOutPlayers(t, players, numToSitOut, category) {
   if (numToSitOut <= 0) return { playing: players, sitOut: [] };
   // Build sit-out count per player from history
   var history = t.sitOutHistory || {};
+  var _n2u = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
   // v0.16.58: Firestore não aceita field names que começam E terminam com
   // `__` (reserva pra internos como `__name__`). Antes usávamos `__all__`
   // como chave default, o que causava `[invalid-argument]` no save:
@@ -2795,7 +2809,12 @@ function _chooseSitOutPlayers(t, players, numToSitOut, category) {
   var catHistory = history[catKey] || {};
   // Sort players by sit-out count ascending, then by standing position (worse players sit out first)
   var indexed = players.map(function(name, idx) {
-    return { name: name, sitOuts: catHistory[name] || 0, rank: idx };
+    var k = _fairnessKey(_n2u, name);
+    // uid-first; cai no contador legado chaveado por nome (docs antigos) quando a
+    // chave de uid ainda não existe — sem perder o histórico já acumulado.
+    var so = catHistory[k];
+    if (so === undefined && k !== name) so = catHistory[name];
+    return { name: name, sitOuts: so || 0, rank: idx };
   });
   // Players with fewest sit-outs go first (play); ties broken by rank (worse rank sits out)
   indexed.sort(function(a, b) {
@@ -2829,23 +2848,55 @@ function _recordSitOut(t, sitOutPlayers, category, reason) {
   // afeta resultado de partida).
   var catKey = category || '_default_';
   if (!t.sitOutHistory[catKey]) t.sitOutHistory[catKey] = {};
+  var cat = t.sitOutHistory[catKey];
+  var _n2u = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
   sitOutPlayers.forEach(function(name) {
-    t.sitOutHistory[catKey][name] = (t.sitOutHistory[catKey][name] || 0) + 1;
+    var k = _fairnessKey(_n2u, name);
+    // migração lossless: se há contador legado por nome e a chave de uid ainda
+    // não existe, herda o valor e apaga a chave de nome (o contador segue o uid).
+    if (k !== name && cat[k] === undefined && cat[name] !== undefined) { cat[k] = cat[name]; delete cat[name]; }
+    cat[k] = (cat[k] || 0) + 1;
   });
 }
 
+// v4.5.78: fábrica de keyOf(name)→uid pros shuffles (usa o mesmo _fairnessKey).
+function _fairnessKeyOf(n2u) {
+  return function (name) { return _fairnessKey(n2u, name); };
+}
+
+// v4.5.78: migração lossless do opponentHistory de UMA categoria de chaves-de-par
+// por NOME ("a|||b") pra chaves por UID ("uid:X|||uid:Y"). Idempotente ('uid:X' não
+// está em n2u → _fairnessKey devolve a própria string). Roda no início do gerador
+// de rodada (antes do scorer LER o histórico) pra o anti-repeat enxergar o passado
+// mesmo após rename. Soma contadores quando dois nomes colapsam no mesmo uid.
+function _migrateOppHistToUid(t, catKey, n2u) {
+  var cat = t.opponentHistory && t.opponentHistory[catKey];
+  if (!cat || typeof cat !== 'object') return;
+  var out = {};
+  Object.keys(cat).forEach(function (pk) {
+    var parts = String(pk).split('|||');
+    if (parts.length !== 2) { out[pk] = (out[pk] || 0) + cat[pk]; return; }
+    var a = _fairnessKey(n2u, parts[0]), b = _fairnessKey(n2u, parts[1]);
+    var nk = a < b ? a + '|||' + b : b + '|||' + a;
+    out[nk] = (out[nk] || 0) + cat[pk];
+  });
+  t.opponentHistory[catKey] = out;
+}
+
 // Helper: record which players were grouped together this round (for anti-repeat pairing)
+// v4.5.78: chave do par por UID (via _fairnessKey), não por nome — imune a rename.
 function _recordOpponentHistory(t, groups, category) {
   if (!groups || groups.length === 0) return;
   if (!t.opponentHistory) t.opponentHistory = {};
   var catKey = (category || '_default_').replace(/\s+/g, '_');
   if (!t.opponentHistory[catKey]) t.opponentHistory[catKey] = {};
   var h = t.opponentHistory[catKey];
+  var n2u = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
   groups.forEach(function(grp) {
     var members = Array.isArray(grp) ? grp : (grp.players || []);
     for (var i = 0; i < members.length; i++) {
       for (var j = i + 1; j < members.length; j++) {
-        var a = members[i], b = members[j];
+        var a = _fairnessKey(n2u, members[i]), b = _fairnessKey(n2u, members[j]);
         var key = a < b ? a + '|||' + b : b + '|||' + a;
         h[key] = (h[key] || 0) + 1;
       }
@@ -2855,13 +2906,17 @@ function _recordOpponentHistory(t, groups, category) {
 
 // Helper: score a player ordering by repeat-opponent count (lower = better)
 // groupSize = number of players per group (4 for doubles)
-function _scoreShuffle(playerOrder, opponentHistory, groupSize) {
+// keyOf (v4.5.78): resolve o NOME do jogador → chave de identidade (uid). Assim a
+// chave do par (a|||b) do opponentHistory é por uid, não por nome — imune a rename.
+// Default = identidade (comportamento legado, usado por callers sem histórico uid).
+function _scoreShuffle(playerOrder, opponentHistory, groupSize, keyOf) {
+  keyOf = keyOf || function (x) { return x; };
   var score = 0;
   for (var i = 0; i < playerOrder.length; i += groupSize) {
     var grp = playerOrder.slice(i, i + groupSize);
     for (var gi = 0; gi < grp.length; gi++) {
       for (var gj = gi + 1; gj < grp.length; gj++) {
-        var a = grp[gi], b = grp[gj];
+        var a = keyOf(grp[gi]), b = keyOf(grp[gj]);
         var key = a < b ? a + '|||' + b : b + '|||' + a;
         var c = opponentHistory[key] || 0;
         score += c * c; // squared: strongly penalise high-repeat pairs
@@ -2872,18 +2927,18 @@ function _scoreShuffle(playerOrder, opponentHistory, groupSize) {
 }
 
 // Helper: try N random shuffles and return the one with fewest repeat opponents
-function _bestShuffle(players, opponentHistory, groupSize, attempts) {
+function _bestShuffle(players, opponentHistory, groupSize, attempts, keyOf) {
   attempts = attempts || 150;
   groupSize = groupSize || 4;
   var best = players.slice();
-  var bestScore = _scoreShuffle(best, opponentHistory, groupSize);
+  var bestScore = _scoreShuffle(best, opponentHistory, groupSize, keyOf);
   for (var a = 0; a < attempts; a++) {
     var candidate = players.slice();
     for (var i = candidate.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
       var tmp = candidate[i]; candidate[i] = candidate[j]; candidate[j] = tmp;
     }
-    var s = _scoreShuffle(candidate, opponentHistory, groupSize);
+    var s = _scoreShuffle(candidate, opponentHistory, groupSize, keyOf);
     if (s < bestScore) { bestScore = s; best = candidate; }
   }
   return best;
@@ -2909,12 +2964,12 @@ function _plainShuffle(arr) {
 // Sem cluster válido (config ausente, ou cluster ≥ total), cai no _bestShuffle global
 // — comportamento legado intocado. clusterSize é arredondado pra baixo a múltiplo de
 // groupSize pra que as fronteiras de cluster batam com as fronteiras de grupo.
-function _clusteredBestShuffle(players, opponentHistory, groupSize, clusterSize, attempts, rankIndex) {
+function _clusteredBestShuffle(players, opponentHistory, groupSize, clusterSize, attempts, rankIndex, keyOf) {
   groupSize = groupSize || 4;
   var n = players.length;
   var eff = Math.floor((parseInt(clusterSize, 10) || 0) / groupSize) * groupSize;
   if (!eff || eff < groupSize || eff >= n) {
-    return _bestShuffle(players, opponentHistory, groupSize, attempts);
+    return _bestShuffle(players, opponentHistory, groupSize, attempts, keyOf);
   }
   var ordered = players.slice().sort(function(a, b) {
     var ra = (rankIndex && rankIndex[a] != null) ? rankIndex[a] : 1e9;
@@ -2923,7 +2978,7 @@ function _clusteredBestShuffle(players, opponentHistory, groupSize, clusterSize,
   });
   var out = [];
   for (var i = 0; i < ordered.length; i += eff) {
-    out = out.concat(_bestShuffle(ordered.slice(i, i + eff), opponentHistory, groupSize, attempts));
+    out = out.concat(_bestShuffle(ordered.slice(i, i + eff), opponentHistory, groupSize, attempts, keyOf));
   }
   return out;
 }
@@ -3431,12 +3486,15 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   // formação (quando ainda não há histórico de adversários).
   var _rrGroupsBy = (t.reiRainhaGroupsBy || 'ranking');
   if (isLiga) {
-    var rrOpHist = (t.opponentHistory && t.opponentHistory[(category || '_default_').replace(/\s+/g, '_')]) || {};
+    var _rrCatKey = (category || '_default_').replace(/\s+/g, '_');
+    var _rrN2u = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
+    _migrateOppHistToUid(t, _rrCatKey, _rrN2u); // v4.5.78: legado nome→uid antes de ler
+    var rrOpHist = (t.opponentHistory && t.opponentHistory[_rrCatKey]) || {};
     var _hasHist = rrOpHist && Object.keys(rrOpHist).length > 0;
     if (!_hasHist && _rrGroupsBy === 'sorteio') {
       playingPlayers = _plainShuffle(playingPlayers); // 1ª rodada por sorteio
     } else {
-      playingPlayers = _bestShuffle(playingPlayers, rrOpHist, 4, 200);
+      playingPlayers = _bestShuffle(playingPlayers, rrOpHist, 4, 200, _fairnessKeyOf(_rrN2u));
     }
   } else if (_rrGroupsBy === 'sorteio') {
     playingPlayers = _plainShuffle(playingPlayers);
@@ -3573,8 +3631,11 @@ function _generateNextRoundForPlayers(t, category, _rn) {
   // ─── Liga: form doubles and match them (dupla vs dupla), anti-repeat ─────
   if (_isLigaFmtHere) {
     // First shuffle to determine sit-outs (using opponent history for fairness)
-    var ligaOpHist = (t.opponentHistory && t.opponentHistory[(category || '_default_').replace(/\s+/g, '_')]) || {};
-    var shuffled = _bestShuffle(players.slice(), ligaOpHist, 4, 200);
+    var _ligaCatKey = (category || '_default_').replace(/\s+/g, '_');
+    _migrateOppHistToUid(t, _ligaCatKey, _n2uGen); // v4.5.78: legado nome→uid antes de ler
+    var _ligaKeyOf = _fairnessKeyOf(_n2uGen);
+    var ligaOpHist = (t.opponentHistory && t.opponentHistory[_ligaCatKey]) || {};
+    var shuffled = _bestShuffle(players.slice(), ligaOpHist, 4, 200, _ligaKeyOf);
 
     // Handle sit-outs: need multiple of 4 for doubles matches
     var remainder = shuffled.length % 4;
@@ -3595,8 +3656,8 @@ function _generateNextRoundForPlayers(t, category, _rn) {
     standings.forEach(function(s, _ri) { _ligaRankIndex[s.name] = _ri; });
     var _ligaBalanced = (t.equilibrado !== false) && t.clusterSize;
     playingPlayers = _ligaBalanced
-      ? _clusteredBestShuffle(playingPlayers, ligaOpHist, 4, t.clusterSize, 200, _ligaRankIndex)
-      : _bestShuffle(playingPlayers, ligaOpHist, 4, 200);
+      ? _clusteredBestShuffle(playingPlayers, ligaOpHist, 4, t.clusterSize, 200, _ligaRankIndex, _ligaKeyOf)
+      : _bestShuffle(playingPlayers, ligaOpHist, 4, 200, _ligaKeyOf);
 
     // Form doubles: take consecutive pairs of 4 → team1 = [0,1] vs team2 = [2,3]
     var newMatches = [];
