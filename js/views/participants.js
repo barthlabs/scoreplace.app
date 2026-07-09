@@ -1243,6 +1243,23 @@ function renderParticipants(container, tournamentId) {
     return;
   }
 
+  // v4.5.64: PERFIS DOS PARTICIPANTES = PRÉ-REQUISITO DO RENDER. Nome resolve vivo por
+  // uid (users/{uid}); sem fallback pra nome gravado. Garante os perfis e re-renderiza
+  // (soft) quando chegam. Cache persiste → revisita quente. Guard evita loop.
+  (function _ensureProfilesP() {
+    if (typeof window._preloadUserProfiles !== 'function') return;
+    var _need = [];
+    var _push = function(u){ if (u && typeof u === 'string' && u.indexOf(' ') === -1 && !window._userProfileCache[u]) _need.push(u); };
+    var _pl = (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
+    _pl.forEach(function(p){ if (typeof window._participantUids === 'function') { (window._participantUids(p) || []).forEach(_push); } else if (p && typeof p === 'object') { _push(p.uid); _push(p.p1Uid); _push(p.p2Uid); } });
+    if (Array.isArray(t.memberUids)) t.memberUids.forEach(_push);
+    if (!_need.length) return;
+    var _k = '_tprofP_' + (t.id || '');
+    if (window[_k]) return;
+    window[_k] = true;
+    window._preloadUserProfiles(_need).then(function(){ window[_k] = false; if ((window.location.hash || '').indexOf('participants') !== -1 && typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} } }).catch(function(){ window[_k] = false; });
+  })();
+  function _hydrateNamesP() { if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(container); } catch (e) {} } }
   // Pre-load player photos from Firestore (async update after render)
   if (typeof _preloadPlayerPhotos === 'function') {
     _preloadPlayerPhotos(t).then(function() {
@@ -1256,8 +1273,8 @@ function renderParticipants(container, tournamentId) {
           img.src = real;
         }
       });
-    }).catch(function() {});
-  }
+    }).catch(function() {}).then(_hydrateNamesP);
+  } else { setTimeout(_hydrateNamesP, 0); }
 
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
   const parts = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
@@ -1491,7 +1508,15 @@ function renderParticipants(container, tournamentId) {
         const matchDecided = !!memberToMatchDecided[n];
         const opponent = memberToOpponent[n] || null;
         const currentTeam = memberToTeam[n] || (isTeam ? pName : null);
-        const _obj = { name: n, teamName: currentTeam, teamIdx: idx, matchNum, matchDecided, opponent };
+        // v4.5.64: uid ESTRUTURAL do slot (não lookup por nome — imune a nome gravado
+        // corrompido). Nome exibido resolve do perfil vivo por esse uid.
+        let _slotUid = '';
+        if (p && typeof p === 'object') {
+          if (p.p1Name && n === String(p.p1Name).trim()) _slotUid = p.p1Uid || '';
+          else if (p.p2Name && n === String(p.p2Name).trim()) _slotUid = p.p2Uid || '';
+          else _slotUid = p.uid || '';
+        }
+        const _obj = { name: n, uid: _slotUid, teamName: currentTeam, teamIdx: idx, matchNum, matchDecided, opponent };
         allIndividuals.push(_obj);
         _indivByName[n.toLowerCase()] = _obj;
       });
@@ -1505,7 +1530,13 @@ function renderParticipants(container, tournamentId) {
       names.forEach(n => {
         const ex = _indivByName[n.toLowerCase()];
         if (ex) { ex.isStandby = true; return; }
-        const _obj = { name: n, teamName: pName.includes('/') ? pName : null, teamIdx: -1, matchNum: null, matchDecided: false, opponent: null, isStandby: true };
+        let _slotUidSb = '';
+        if (p && typeof p === 'object') {
+          if (p.p1Name && n === String(p.p1Name).trim()) _slotUidSb = p.p1Uid || '';
+          else if (p.p2Name && n === String(p.p2Name).trim()) _slotUidSb = p.p2Uid || '';
+          else _slotUidSb = p.uid || '';
+        }
+        const _obj = { name: n, uid: _slotUidSb, teamName: pName.includes('/') ? pName : null, teamIdx: -1, matchNum: null, matchDecided: false, opponent: null, isStandby: true };
         allIndividuals.push(_obj);
         _indivByName[n.toLowerCase()] = _obj;
       });
@@ -1853,7 +1884,11 @@ function renderParticipants(container, tournamentId) {
       // não quando isWO (match-level). Parceiro presente não deve ter riscado.
       // v2.7.39: NOME COMPLETO — nunca trunca (quebra linha se preciso). Jogo N saiu
       // da linha do nome e foi pra coluna da direita (não disputa espaço com o nome).
-      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span style="font-weight:600;font-size:0.92rem;color:${nameColor};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${_orgStarC}${isStandby ? presenceDot : ''}</div>`;
+      // v4.5.64: nome resolve VIVO por uid (perfil users/{uid}); nome gravado só p/ guest sem uid.
+      const _niUid = ind.uid || '';
+      const _niUidAttr = _niUid ? ` data-uid-name="${window._safeHtml(_niUid)}"` : '';
+      const _niDisp = _niUid ? window._safeHtml(window._displayName(_niUid, ind.name)) : _safeName;
+      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span${_niUidAttr} style="font-weight:600;font-size:0.92rem;color:${nameColor};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_niDisp}</span>${_orgStarC}${isStandby ? presenceDot : ''}</div>`;
       const _jogoTop = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${_jogoColor};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;">${matchLabel}</span>` : '';
       // Faixa do jogo FULL-WIDTH abaixo do header (libera largura pros nomes dos times).
       let _matchStrip = '';
@@ -2015,10 +2050,18 @@ function renderParticipants(container, tournamentId) {
           const _mErr = `onerror="this.onerror=null;this.src='${_mInitials}'"`;
           const _nmH = window._safeHtml(_nm);
           const _mPart = _nameToParticipant && _nameToParticipant[_nm];
-          const _mUid  = (_mPart && typeof _mPart === 'object') ? (_mPart.uid || '') : '';
+          // v4.5.64: uid ESTRUTURAL do slot (p1Uid/p2Uid) — não o .uid do capitão.
+          let _mUid = '';
+          if (_mPart && typeof _mPart === 'object') {
+            if (_mPart.p1Name && _nm === String(_mPart.p1Name).trim()) _mUid = _mPart.p1Uid || '';
+            else if (_mPart.p2Name && _nm === String(_mPart.p2Name).trim()) _mUid = _mPart.p2Uid || '';
+            else _mUid = _mPart.uid || '';
+          }
           const _mUidJs = _mUid ? (',{uid:\'' + _mUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
+          const _mDisp = _mUid ? window._safeHtml(window._displayName(_mUid, _nm)) : _nmH;
+          const _mUidAttr = _mUid ? ` data-uid-name="${window._safeHtml(_mUid)}"` : '';
           const _editAttr = isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${t.id}','${_nmSafe}')" title="Clique para editar" style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text;"` : `style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_nmSafe}'${_mUidJs});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_nmSafe}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${_nmH}"`;
-          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;"><img src="${_mPhoto}" ${_mErr} data-player-name="${_nmH}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span ${_editAttr}>${_nmH}</span></div>`;
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;"><img src="${_mPhoto}" ${_mErr} data-player-name="${_nmH}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span${_mUidAttr} ${_editAttr}>${_mDisp}</span></div>`;
         }).join('') + (_orgStar ? `<div style="margin-top:2px;">${_orgStar}</div>` : '');
       } else {
         const _pSafe = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -2031,8 +2074,10 @@ function renderParticipants(container, tournamentId) {
         const _pPart = _nameToParticipant && _nameToParticipant[pName];
         const _pUid  = (_pPart && typeof _pPart === 'object') ? (_pPart.uid || '') : '';
         const _pUidJs = _pUid ? (',{uid:\'' + _pUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
+        const _pDisp = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : _pNameH;
+        const _pUidAttr = _pUid ? ` data-uid-name="${window._safeHtml(_pUid)}"` : '';
         const _editAttrN = isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${t.id}','${_pSafe}')" title="Clique para editar" style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:text;"` : `style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_pSafe}'${_pUidJs});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_pSafe}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${_pNameH}"`;
-        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="${_pPhotoN}" ${_pErrN} data-player-name="${_pNameH}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span ${_editAttrN}>${_pNameH}</span>${_orgStar}</div>`;
+        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="${_pPhotoN}" ${_pErrN} data-player-name="${_pNameH}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span${_pUidAttr} ${_editAttrN}>${_pDisp}</span>${_orgStar}</div>`;
       }
 
       const safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");

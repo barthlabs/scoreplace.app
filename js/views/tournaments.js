@@ -3265,7 +3265,17 @@ function renderTournaments(container, tournamentId = null) {
                             const _mCrown = _mIsOrg ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
                             const _mPend = (typeof window._pendingCoHostFor === 'function' && window._pendingCoHostFor(t, n)) ? window._pendingCoHostBadgeHtml() : '';
                             const _mNSafe = n.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                            return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_mNSafe}',{tournamentId:'${t.id}'})" title="Ver perfil de ${window._safeHtml(n)}"><img src="${_mPhoto}" onerror="this.onerror=null;this.src='${_mFallback}'" data-player-name="${window._safeHtml(n)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${window._safeHtml(n)}</span>${_mCrown}${_mPend}</div>`;
+                            // v4.5.64: uid ESTRUTURAL do slot → nome vivo por uid (perfil).
+                            let _mSlotUid = '';
+                            if (p && typeof p === 'object') {
+                              if (p.p1Name && n === String(p.p1Name).trim()) _mSlotUid = p.p1Uid || '';
+                              else if (p.p2Name && n === String(p.p2Name).trim()) _mSlotUid = p.p2Uid || '';
+                              else _mSlotUid = p.uid || '';
+                            }
+                            const _mProfArg = _mSlotUid ? (",{uid:'" + _mSlotUid + "',tournamentId:'" + t.id + "'}") : (",{tournamentId:'" + t.id + "'}");
+                            const _mDisp = _mSlotUid ? window._safeHtml(window._displayName(_mSlotUid, n)) : window._safeHtml(n);
+                            const _mUidAttr = _mSlotUid ? (' data-uid-name="' + window._safeHtml(_mSlotUid) + '"') : '';
+                            return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_mNSafe}'${_mProfArg})" title="Ver perfil de ${window._safeHtml(n)}"><img src="${_mPhoto}" onerror="this.onerror=null;this.src='${_mFallback}'" data-player-name="${window._safeHtml(n)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span${_mUidAttr} style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_mDisp}</span>${_mCrown}${_mPend}</div>`;
                         }).join('');
                     } else {
                         const _pSeed = encodeURIComponent(pName);
@@ -3291,7 +3301,9 @@ function renderTournaments(container, tournamentId = null) {
                         var _pPendBadge = (typeof window._pendingCoHostFor === 'function' && window._pendingCoHostFor(t, pName, _pUid, _pEmail)) ? window._pendingCoHostBadgeHtml() : '';
                         const _pNSafe = pName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
                         const _pUidOpts = _pUid ? (',uid:\''+_pUid+'\'') : '';
-                        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_pNSafe}',{tournamentId:'${t.id}'${_pUidOpts}})" title="Ver perfil de ${window._safeHtml(pName)}"><img src="${_pPhoto}" onerror="this.onerror=null;this.src='${_pFallback}'" data-player-name="${window._safeHtml(pName)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">${window._safeHtml(pName)}</span>${_crownInline}${_vipInline}${_pPendBadge}</div>`;
+                        const _pDispA = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : window._safeHtml(pName);
+                        const _pUidAttrA = _pUid ? (' data-uid-name="' + window._safeHtml(_pUid) + '"') : '';
+                        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_pNSafe}',{tournamentId:'${t.id}'${_pUidOpts}})" title="Ver perfil de ${window._safeHtml(pName)}"><img src="${_pPhoto}" onerror="this.onerror=null;this.src='${_pFallback}'" data-player-name="${window._safeHtml(pName)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span${_pUidAttrA} style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">${_pDispA}</span>${_crownInline}${_vipInline}${_pPendBadge}</div>`;
                     }
 
                     const vipBadge = isVip ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;margin-left:4px;">💎 VIP</span>' : '';
