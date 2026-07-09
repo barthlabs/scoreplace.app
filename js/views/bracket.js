@@ -959,8 +959,11 @@ window._splitLateDupla = function (tId, duplaName) {
   var idx = arr.findIndex(function (p) { return (window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || '') === duplaName && p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); });
   if (idx === -1) return;
   var e = arr[idx];
-  var s1 = e.p1Uid ? { displayName: e.p1Name, name: e.p1Name, uid: e.p1Uid, _lateJoin: true } : e.p1Name;
-  var s2 = e.p2Uid ? { displayName: e.p2Name, name: e.p2Name, uid: e.p2Uid, _lateJoin: true } : e.p2Name;
+  // FASE 2: nome do membro pelo uid (perfil ao vivo); nome gravado só p/ guest sem conta
+  var _dn1 = e.p1Uid ? (window._displayNameForUid ? window._displayNameForUid(e.p1Uid, e.p1Name) : (e.p1Name || e.p1Uid || '')) : null;
+  var _dn2 = e.p2Uid ? (window._displayNameForUid ? window._displayNameForUid(e.p2Uid, e.p2Name) : (e.p2Name || e.p2Uid || '')) : null;
+  var s1 = e.p1Uid ? { displayName: _dn1, name: _dn1, uid: e.p1Uid, _lateJoin: true } : e.p1Name;
+  var s2 = e.p2Uid ? { displayName: _dn2, name: _dn2, uid: e.p2Uid, _lateJoin: true } : e.p2Name;
   arr.splice(idx, 1, s1, s2);
   t.updatedAt = new Date().toISOString();
   window.FirestoreDB.saveTournament(t).then(function () {

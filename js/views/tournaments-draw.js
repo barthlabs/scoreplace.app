@@ -66,13 +66,16 @@ window._clearTournamentDraw = function (t) {
     var _out = [];
     _arr.forEach(function (p) {
       var nm = (p && typeof p === 'object') ? (p.displayName || p.name || '') : String(p || '');
-      var isTeam = (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) || (p && typeof p === 'object' && p.p1Name && p.p2Name) || (nm.indexOf(' / ') !== -1);
+      var isTeam = (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) || (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) || (nm.indexOf(' / ') !== -1);
       if (nm && _origins[nm] === 'sorteada' && isTeam) {
         if (Array.isArray(p.participants) && p.participants.length) {
           p.participants.forEach(function (s) { _out.push(s); });
-        } else if (p.p1Name && p.p2Name) {
-          _out.push({ name: p.p1Name, displayName: p.p1Name, uid: p.p1Uid, email: p.p1Email, photoURL: p.p1Photo });
-          _out.push({ name: p.p2Name, displayName: p.p2Name, uid: p.p2Uid, email: p.p2Email, photoURL: p.p2Photo });
+        } else if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+          // FASE 2: nome do membro resolve pelo uid (perfil ao vivo); nome gravado só fallback (guest/cache frio)
+          var _dnA = window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '');
+          var _dnB = window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '');
+          _out.push({ name: _dnA, displayName: _dnA, uid: p.p1Uid, email: p.p1Email, photoURL: p.p1Photo });
+          _out.push({ name: _dnB, displayName: _dnB, uid: p.p2Uid, email: p.p2Email, photoURL: p.p2Photo });
         } else {
           nm.split('/').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (x) { _out.push({ name: x, displayName: x }); });
         }
@@ -455,8 +458,8 @@ window._buildPhase0Pool = function (t, isMon, ts) {
       if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
         p.participants.forEach(function (s) { var nm = (s && (s.displayName || s.name)) || String(s || ''); pool.push((s && typeof s === 'object') ? Object.assign({ displayName: nm }, s) : { displayName: nm }); });
       } else if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
-        pool.push({ displayName: p.p1Name || p.p1Uid || '', uid: p.p1Uid || null, name: p.p1Name || null, gender: p.p1Gender || p.gender });
-        pool.push({ displayName: p.p2Name || p.p2Uid || '', uid: p.p2Uid || null, name: p.p2Name || null, gender: p.p2Gender || p.gender });
+        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '')), uid: p.p1Uid || null, name: p.p1Name || null, gender: p.p1Gender || p.gender });
+        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '')), uid: p.p2Uid || null, name: p.p2Name || null, gender: p.p2Gender || p.gender });
       } else {
         var nm = _pName(p); pool.push((typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm });
       }
@@ -498,7 +501,7 @@ window._integrateLateDuplas = function (t) {
   if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio ainda não feito
   if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-cat: fora do escopo
 
-  var _isPair = function (p) { return p && typeof p === 'object' && p.p1Name && p.p2Name; };
+  var _isPair = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
   var _nm = function (p) { return window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || ''; };
   var formed = [];
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
@@ -695,15 +698,18 @@ window._integrateLateDuplas = function (t) {
 // Retorna nº de duplas desfeitas.
 window._dissolveLateDuplas = function (t) {
   if (!t) return 0;
-  var _isPair = function (p) { return p && typeof p === 'object' && p.p1Name && p.p2Name; };
+  var _isPair = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
   var undone = 0;
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
     if (!Array.isArray(t[k])) return;
     var out = [];
     t[k].forEach(function (p) {
       if (_isPair(p) && p._lateJoin) {
-        out.push(p.p1Uid ? { displayName: p.p1Name, name: p.p1Name, uid: p.p1Uid, _lateJoin: true } : p.p1Name);
-        out.push(p.p2Uid ? { displayName: p.p2Name, name: p.p2Name, uid: p.p2Uid, _lateJoin: true } : p.p2Name);
+        // FASE 2: nome do membro pelo uid quando há conta; nome gravado só p/ guest
+        var _dn1 = p.p1Uid ? (window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '')) : null;
+        var _dn2 = p.p2Uid ? (window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '')) : null;
+        out.push(p.p1Uid ? { displayName: _dn1, name: _dn1, uid: p.p1Uid, _lateJoin: true } : p.p1Name);
+        out.push(p.p2Uid ? { displayName: _dn2, name: _dn2, uid: p.p2Uid, _lateJoin: true } : p.p2Name);
         undone++;
       } else { out.push(p); }
     });
@@ -1323,7 +1329,7 @@ window.generateDrawFunction = function (tId) {
     if (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t) &&
         !(typeof window._isMonarchFormat === 'function' && window._isMonarchFormat(t))) {
         var _hasFormedPair = (Array.isArray(t.participants) ? t.participants : []).some(function (p) {
-            return p && typeof p === 'object' && p.p1Name && p.p2Name;
+            return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name);
         });
         if (_hasFormedPair) {
             if (typeof showAlertDialog === 'function') showAlertDialog(

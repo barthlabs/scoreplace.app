@@ -640,7 +640,7 @@ function _computeStandings(t, category) {
     const name = (typeof window._entryDisplayName === 'function')
       ? window._entryDisplayName(p)
       : ((typeof p === 'string') ? p
-        : (p.p1Name && p.p2Name) ? (p.p1Name + ' / ' + p.p2Name)
+        : ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) ? ((p.p1Name || p.p1Uid || '') + ' / ' + (p.p2Name || p.p2Uid || ''))
         : (Array.isArray(p.participants) && p.participants.length > 1)
           ? p.participants.map(function (x) { return (typeof x === 'string') ? x : (x.displayName || x.name || ''); }).filter(Boolean).join(' / ')
           : (p.displayName || p.name || ''));
@@ -655,7 +655,7 @@ function _computeStandings(t, category) {
     }
     // v4.4.122: uid do participante = identidade (só individual; dupla pré-formada "p1 / p2" e
     // participante-string não têm uid único → name-key). O SEED define o s.name canônico.
-    var _pUid = (p && typeof p === 'object' && !(p.p1Name && p.p2Name) && !(Array.isArray(p.participants) && p.participants.length > 1)) ? (p.uid || null) : null;
+    var _pUid = (p && typeof p === 'object' && !((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) && !(Array.isArray(p.participants) && p.participants.length > 1)) ? (p.uid || null) : null;
     var _pk = _idKey(name, _pUid);
     if (name && !scoreMap[_pk]) scoreMap[_pk] = { key: _pk, uid: (_pUid || _uidOfKey(_pk)), name: name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, category: category || '', setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0 };
   });
@@ -3409,11 +3409,11 @@ function _monarchIndividuals(t, names) {
     if (Array.isArray(p.participants) && p.participants.length > 1) {
       mem = p.participants.map(function (x) { return (typeof x === 'string') ? x : (x && (x.displayName || x.name)) || ''; }).filter(Boolean);
     } else if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
-      mem = [p.p1Name || p.p1Uid || '', p.p2Name || p.p2Uid || ''].filter(Boolean);
+      mem = [(window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '')), (window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || ''))].filter(Boolean);
     }
     if (!mem || mem.length < 2) return;
     var label = (typeof window._entryDisplayName === 'function') ? window._entryDisplayName(p)
-      : ((p.p1Name && p.p2Name) ? (p.p1Name + ' / ' + p.p2Name) : (p.displayName || p.name || mem.join(' / ')));
+      : (((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) ? ((p.p1Name || p.p1Uid || '') + ' / ' + (p.p2Name || p.p2Uid || '')) : (p.displayName || p.name || mem.join(' / ')));
     if (label) byLabel[label] = mem;
   });
   var seen = {}, out = [];

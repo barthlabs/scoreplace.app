@@ -1158,8 +1158,9 @@ function renderTournaments(container, tournamentId = null) {
         // (ex.: "Kelly Barth") batia em parts.length<2 e o Desfazer não fazia nada.
         var nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
         var parts = nm.split(' / ');
-        var p1Name = (entry.p1Name || parts[0] || '').trim();
-        var p2Name = (entry.p2Name || parts[1] || '').trim();
+        // FASE 2: nome do membro pelo uid (perfil ao vivo); nome gravado / split de displayName só fallback
+        var p1Name = ((entry.p1Uid && window._displayNameForUid) ? window._displayNameForUid(entry.p1Uid, entry.p1Name || parts[0]) : (entry.p1Name || parts[0] || '')).trim();
+        var p2Name = ((entry.p2Uid && window._displayNameForUid) ? window._displayNameForUid(entry.p2Uid, entry.p2Name || parts[1]) : (entry.p2Name || parts[1] || '')).trim();
         if (!p1Name || !p2Name) return;
         var p1Uid  = entry.p1Uid || '';
         var p2Uid  = entry.p2Uid || '';

@@ -43,19 +43,22 @@
   // Detecta 3 formas: participants[], campos p{N}Name/fixedPair, ou nome "X / Y"
   // (convenção canônica de dupla no app — Fase de Grupos de duplas).
   function _isTeamEntry(s) {
-    return !!(s && ((Array.isArray(s.participants) && s.participants.length > 1) || s.p2Name || s.fixedPair || (typeof s.name === 'string' && /\s\/\s/.test(s.name))));
+    return !!(s && ((Array.isArray(s.participants) && s.participants.length > 1) || s.p2Name || s.p2Uid || s.fixedPair || (typeof s.name === 'string' && /\s\/\s/.test(s.name))));
   }
   // Normaliza uma colocação-que-é-time num teamObj canônico, preservando membros
   // (uids/emails/fotos quando existem). Usado no carry-forward ('keep') — a dupla
   // SEGUE junta. Quando só há o nome "X / Y", divide pelos nomes (sem uid).
   function _asTeam(s) {
     if (Array.isArray(s.participants) && s.participants.length > 1) return mkTeam(s.participants);
-    if (s.p2Name || s.fixedPair) {
+    if (s.p2Name || s.p2Uid || s.fixedPair) {
       var members = [];
       for (var k = 1; k <= 4; k++) {
-        var nm = s['p' + k + 'Name']; if (!nm) break;
+        var _uk = s['p' + k + 'Uid'], _nk = s['p' + k + 'Name'];
+        if (!_nk && !_uk) break;
+        // FASE 2: nome do membro pelo uid (perfil ao vivo); nome gravado só fallback (guest/cache frio)
+        var nm = (_uk && typeof window !== 'undefined' && window._displayNameForUid) ? window._displayNameForUid(_uk, _nk) : (_nk || _uk || '');
         var mem = { name: nm };
-        if (s['p' + k + 'Uid']) mem.uid = s['p' + k + 'Uid'];
+        if (_uk) mem.uid = _uk;
         if (s['p' + k + 'Email']) mem.email = s['p' + k + 'Email'];
         if (s['p' + k + 'Photo']) mem.photoURL = s['p' + k + 'Photo'];
         members.push(mem);
