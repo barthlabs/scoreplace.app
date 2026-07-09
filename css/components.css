@@ -575,6 +575,11 @@ button[style*="linear-gradient"]:not(.btn):active {
    usar position:absolute aqui: no card de check-in o X divide a linha de baixo com os
    botões W.O./Presente-Ausente e um X absoluto (z-index) os cobriria. */
 
+/* v4.5.63: nome que resolve por uid mas ainda não carregou o perfil = span VAZIO com
+   data-uid-name → mostra "…" (carregando), NUNCA branco quebrado nem nome gravado.
+   Some assim que a hidratação/re-render preenche o nome vivo. */
+[data-uid-name]:empty::after { content: "…"; opacity: 0.4; font-weight: 400; letter-spacing: 1px; }
+
 /* --- Variantes Transparentes (SOMENTE Add Bot e Apagar) --- */
 .btn-danger-ghost {
   background: var(--btn-danger-ghost-bg, rgba(239,68,68,0.15));

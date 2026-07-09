@@ -2944,6 +2944,31 @@ function renderTournaments(container, tournamentId = null) {
         const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
         const parts = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
 
+        // v4.5.63: PERFIS DOS PARTICIPANTES = PRÉ-REQUISITO DO RENDER. Junta os uids de
+        // TODOS os inscritos (incl. p1Uid/p2Uid de dupla) e garante os perfis no cache.
+        // Se algum ainda não carregou, dispara o load e re-renderiza quando chega (soft) —
+        // o nome resolve VIVO por uid no render, sem fallback pra nome gravado. Cache
+        // persiste → revisita já está quente (sem "…" nem re-render). Guard evita loop.
+        (function _ensureParticipantProfiles() {
+            if (typeof window._preloadUserProfiles !== 'function') return;
+            var _uidsNeeded = [];
+            var _pushUid = function(u) { if (u && typeof u === 'string' && u.indexOf(' ') === -1 && !window._userProfileCache[u]) _uidsNeeded.push(u); };
+            (parts || []).forEach(function(p) {
+                if (typeof window._participantUids === 'function') { (window._participantUids(p) || []).forEach(_pushUid); }
+                else if (p && typeof p === 'object') { _pushUid(p.uid); _pushUid(p.p1Uid); _pushUid(p.p2Uid); }
+            });
+            if (Array.isArray(t.memberUids)) t.memberUids.forEach(_pushUid);
+            if (!_uidsNeeded.length) return; // tudo quente → render resolve síncrono
+            var _key = '_tprof_' + tournamentId;
+            if (window[_key]) return; // já em voo pra este torneio → não re-disparar
+            window[_key] = true;
+            window._preloadUserProfiles(_uidsNeeded).then(function() {
+                window[_key] = false;
+                var _h = window.location.hash || '';
+                if (_h.indexOf('#tournaments') === 0 && typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} }
+            }).catch(function() { window[_key] = false; });
+        })();
+
         // v4.5.62: hidrata NOMES por uid — resolve do perfil vivo (users/{uid}) e
         // preenche [data-uid-name]. TEM QUE rodar PÓS-innerHTML (os cards só existem no
         // DOM depois que renderTournaments termina de montar o html) — por isso vai

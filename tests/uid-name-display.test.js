@@ -57,14 +57,13 @@ eq(W._displayName(MAIRA, 'Maira'), 'Maira', 'membro 1 = Maira (uid dela)');
 eq(W._displayName(PAULO, 'Maira'), 'Paulo Oriente', 'membro 2 resolve PAULO pelo uid — ignora o p2Name gravado "Maira"');
 ok(W._displayName(PAULO, 'Maira') !== 'Maira', 'REGRESSÃO MORTA: nome gravado corrompido nunca vaza quando há uid');
 
-// v4.5.62 (fallback pragmático anti-branco): uid ainda NÃO resolvido (perfil não
-// carregado / uid faltante no dado não-migrado) → usa o guest pra NÃO ficar em branco.
-// Evidência: uid-puro (vazio) deixou nomes EM BRANCO em staging quando o perfil não
-// resolve. A hidratação sobrescreve com o vivo assim que o perfil carrega (abaixo).
-eq(W._displayName('uNaoCarregado', 'Maira'), 'Maira', 'uid sem perfil ainda → guest (fallback anti-branco, temporário)');
-// ...ao carregar o perfil (exatamente o que _hydrateUidNames faz), o VIVO vence o guest:
+// v4.5.63 (SEM fallback — perfis são pré-requisito do render): uid com perfil ainda
+// NÃO carregado → VAZIO (a UI mostra "…" de loading e re-renderiza quando o perfil
+// chega). NUNCA o nome gravado. Precisar de fallback = arquitetura errada.
+eq(W._displayName('uNaoCarregado', 'Maira'), '', 'uid sem perfil carregado → vazio (loading), JAMAIS o nome gravado');
+// ...quando o perfil carrega (o pré-requisito do render), resolve o nome vivo:
 W._userProfileCache['uNaoCarregado'] = { displayName: 'Nome Vivo', email: '', phone: '', photoURL: '' };
-eq(W._displayName('uNaoCarregado', 'Maira'), 'Nome Vivo', 'após carregar o perfil, o nome VIVO vence o guest — corrompido nunca persiste onde resolve');
+eq(W._displayName('uNaoCarregado', 'Maira'), 'Nome Vivo', 'perfil carregado → nome vivo do uid');
 
 // Guest (participante SEM conta, sem uid) — única exceção física: não há perfil
 // de onde resolver, então o nome do guest é usado.
