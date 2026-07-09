@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.80-beta — substituto do Rei/Rainha pontua como ele mesmo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👑 W.O. no Rei/Rainha carrega a conta do substituto:</b> quando alguém leva W.O. num grupo de Rei/Rainha e uma <b>folga entra no lugar</b>, agora o lugar dela no jogo passa a ser <b>da conta dela</b> — os pontos e a exibição do nome vão para o substituto, não para quem faltou. Antes, o jogo trocava só o nome visível mas mantinha a identidade de quem saiu, podendo creditar os pontos do substituto na pessoa errada e mostrar o nome trocado. Reverter o W.O. também devolve tudo certo. O <b>Jogador X</b> (sem conta) continua sem pontuar, como antes.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.79-beta — W.O. atinge o jogo da pessoa certa, pela conta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🚫 W.O. reconhece a pessoa pela conta (não pelo nome):</b> ao marcar alguém como ausente (W.O.), o app agora encontra o jogo certo pela <b>conta da pessoa</b>. Antes, dois jogadores de mesmo nome podiam <b>ambos</b> levar W.O. de uma vez, e quem tivesse trocado o nome depois do sorteio podia ter o W.O. <b>não aplicado</b>. Agora o W.O. cai exatamente no jogo de quem faltou. Jogadores convidados (sem conta) seguem funcionando pelo nome, como antes.</li>' +

@@ -641,9 +641,27 @@ window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest) 
   _commitLiga(tId, function (ft) {
     var playing = _monPlaying(ft, gName, pIdx);
     if (!playing.length) return;
+    // v4.5.x (Parte 14 — identidade por uid no slot): além do NOME, troca o UID do
+    // slot (ausente → substituto). Folga real = uid dela; Jogador X = null (ghost, não
+    // pontua). Sem isto o slot mantinha o uid do AUSENTE enquanto o nome virava o do
+    // substituto → a classificação por uid (_monKey) creditava os jogos do substituto
+    // na linha do ausente. Casa o slot do ausente por uid quando ambos têm uid (nome só
+    // fallback p/ slot/ausente sem uid — guest/legado). Espelha _rewriteSlot (v4.4.117).
+    var _n2u = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(ft) || {}) : {};
+    var absentUid = _n2u[absentName] || null;
+    var fillUid = isGuest ? null : (_n2u[fillName] || null);
+    var _rwSide = function (m, nk, uk) {
+      var names = m[nk]; if (!Array.isArray(names)) return;
+      var uids = Array.isArray(m[uk]) ? m[uk].slice() : names.map(function () { return null; });
+      names.forEach(function (n, i) {
+        var hit = (absentUid && uids[i]) ? (uids[i] === absentUid) : (n === absentName);
+        if (hit) { names[i] = fillName; uids[i] = fillUid; }
+      });
+      m[uk] = uids;
+    };
     playing.forEach(function (m) {
-      if (Array.isArray(m.team1)) m.team1 = m.team1.map(function (n) { return n === absentName ? fillName : n; });
-      if (Array.isArray(m.team2)) m.team2 = m.team2.map(function (n) { return n === absentName ? fillName : n; });
+      _rwSide(m, 'team1', 'team1Uids');
+      _rwSide(m, 'team2', 'team2Uids');
       if (m.team1 && m.team2) { m.p1 = m.team1.join(' / '); m.p2 = m.team2.join(' / '); }
     });
     // remove marcador W.O. anterior deste grupo (idempotente)
@@ -680,9 +698,23 @@ window._monWoRevert = function (tId, pIdx, gName) {
   }
   var absentName = wm.p1, fillName = wm.woReplacedBy, isGuest = wm.woIsGuest;
   _commitLiga(tId, function (ft) {
+    // v4.5.x (Parte 14): reverte NOME e UID do slot (substituto → ausente). Casa o slot
+    // do substituto por uid quando ambos têm uid (Jogador X = null → cai no nome).
+    var _n2u = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(ft) || {}) : {};
+    var absentUid = _n2u[absentName] || null;
+    var fillUid = isGuest ? null : (_n2u[fillName] || null);
+    var _rwSide = function (m, nk, uk) {
+      var names = m[nk]; if (!Array.isArray(names)) return;
+      var uids = Array.isArray(m[uk]) ? m[uk].slice() : names.map(function () { return null; });
+      names.forEach(function (n, i) {
+        var hit = (fillUid && uids[i]) ? (uids[i] === fillUid) : (n === fillName);
+        if (hit) { names[i] = absentName; uids[i] = absentUid; }
+      });
+      m[uk] = uids;
+    };
     _monPlaying(ft, gName, pIdx).forEach(function (m) {
-      if (Array.isArray(m.team1)) m.team1 = m.team1.map(function (n) { return n === fillName ? absentName : n; });
-      if (Array.isArray(m.team2)) m.team2 = m.team2.map(function (n) { return n === fillName ? absentName : n; });
+      _rwSide(m, 'team1', 'team1Uids');
+      _rwSide(m, 'team2', 'team2Uids');
       if (m.team1 && m.team2) { m.p1 = m.team1.join(' / '); m.p2 = m.team2.join(' / '); }
     });
     ft.matches = (ft.matches || []).filter(function (m) { return !(m.bracket === 'monarch' && m.groupName === gName && ((m.phaseIndex || 0) === pIdx) && m.isSitOut && m.sitOutReason === 'wo'); });
