@@ -6360,12 +6360,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
         if (h.clientHeight > 10 && h.clientHeight < minH) minH = h.clientHeight;
       });
       if (minW === Infinity) return;
-      // "40" ocupa 90% da largura no padrão (ps=1); teto = 99% (nunca clipa).
-      var baseFs = 0.90 * minW * 100 / w2;
+      // "40" ocupa 96% da largura no padrão (ps=1) — o máximo que cabe em 2
+      // dígitos lado a lado sem clipar; teto = 99% (nunca estoura). Em retrato a
+      // LARGURA é o limite físico (não dá pra fazer o número muito mais alto sem
+      // 2 dígitos passarem da metade da tela).
+      var baseFs = 0.96 * minW * 100 / w2;
       var capFs  = 0.99 * minW * 100 / w2;
       var fs = Math.min(baseFs * ps, capFs);
-      // não deixa passar da altura da metade (line-height 1 → altura ≈ fs).
-      if (minH !== Infinity && fs > minH * 0.94) fs = minH * 0.94;
+      // o número é esticado na vertical por transform:scaleY(1.35) → a altura
+      // VISUAL é fs*1.35; garante que não passe da altura da metade.
+      if (minH !== Infinity && fs * 1.35 > minH * 0.96) fs = minH * 0.96 / 1.35;
       fs = Math.floor(fs);
       if (fs < 12) return;
       halves.forEach(function(h) {
@@ -6376,6 +6380,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var _fitLivePlateText = function() {
       var ov = document.getElementById('live-scoring-overlay');
       if (!ov) return;
+      // v4.5.34: SÍNCRONO primeiro — mede o DOM recém-inserido (a leitura de
+      // clientWidth força o reflow), então o número já sai no tamanho certo sem
+      // depender do rAF (que às vezes não aplicava → número no fallback do CSS,
+      // clipando em telas estreitas). rAF + timeout reforçam pós-fontes/fotos.
+      _doFitLivePlateText(ov);
       requestAnimationFrame(function() {
         requestAnimationFrame(function() {
           var el = document.getElementById('live-scoring-overlay');
@@ -6388,6 +6397,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
       }, 180);
     };
     window._fitLivePlateText = _fitLivePlateText;
+    // v4.5.34: re-ajusta ao mudar a largura (rotação/resize) — antes o número
+    // ficava com o tamanho medido na largura anterior e CLIPAVA quando estreitava.
+    // Hook global único; _fitLivePlateText sai cedo se o overlay não existe.
+    if (!window._liveScoreResizeHooked) {
+      window._liveScoreResizeHooked = true;
+      var _lsRefit = function() { if (window._fitLivePlateText) window._fitLivePlateText(); };
+      window.addEventListener('resize', _lsRefit);
+      window.addEventListener('orientationchange', _lsRefit);
+    }
 
     // Buttons column builder
     var _buildBtns = function(player) {
@@ -6494,10 +6512,31 @@ window._openLiveScoring = function(tId, matchId, opts) {
         return '<button class="live-vol-sm ls-down-btn" onclick="window._liveScoreMinus(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.09);color:var(--text-muted);font-size:calc(clamp(1.1rem,4vw,1.6rem) * var(--live-btn-scale,1));font-weight:700;border-radius:calc(10px * var(--live-btn-scale,1));display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;border:1px solid rgba(255,255,255,0.08);" ontouchstart="this.style.background=\'rgba(255,255,255,0.18)\'" ontouchend="this.style.background=\'rgba(255,255,255,0.09)\'">▼</button>';
       };
 
-      // v4.5.32: GAMES centralizado (o Desfazer saiu daqui pro rodapé, alinhado
-      // ao smartwatch — um único botão abaixo de tudo).
+      // v4.5.34: bloco superior estilo smartwatch — SETS (quando best-of >1) +
+      // GAMES grande, cor por time, na ordem dos lados. flex:2 → ganha espaço
+      // (o Desfazer saiu daqui pro rodapé). Sem a caixa/borda antiga.
+      var _setsLeftN = 0, _setsRightN = 0;
+      try { _setsLeftN = _setsWon(leftTeam, true); _setsRightN = _setsWon(rightTeam, true); } catch (e) {}
+      // Mostra SETS sempre que a partida usa sets (igual ao smartwatch).
+      var _showSets = useSets;
+      var _setsLine = _showSets
+        ? '<div style="display:flex;align-items:center;gap:7px;margin-bottom:3px;">' +
+            '<span style="font-size:0.6rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
+            '<span style="font-size:1.25rem;font-weight:800;color:' + (leftTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
+            '<span style="font-size:0.95rem;color:rgba(255,255,255,0.25);">–</span>' +
+            '<span style="font-size:1.25rem;font-weight:800;color:' + (rightTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>' +
+          '</div>'
+        : '';
       var portGamesRow = showGamesBox
-        ? '<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:100%;padding:clamp(4px,1vh,8px) clamp(8px,2vw,16px);">' + gamesCenter + '</div>'
+        ? '<div style="flex:2;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:clamp(4px,1vh,8px) 0;">' +
+            _setsLine +
+            '<span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
+            '<div style="display:flex;align-items:center;gap:clamp(14px,4vw,24px);margin-top:2px;">' +
+              '<span style="font-size:calc(clamp(3.5rem,16vw,6.5rem) * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
+              '<span style="font-size:calc(clamp(2rem,6vw,3rem) * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
+              '<span style="font-size:calc(clamp(3.5rem,16vw,6.5rem) * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
+            '</div>' +
+          '</div>'
         : '';
 
       // v4.5.32: metade tocável por time (alinhado ao Apple Watch RemoteView).
@@ -6514,7 +6553,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         // Fallback CSS conservador (nunca estoura 2 dígitos); _fitLivePlateText
         // mede a fonte real e ajusta o tamanho pra caber ~90% da largura da metade.
         return '<' + tag + ' class="ls-score-half" ' + act + ' style="flex:1;min-width:0;height:100%;border:none;cursor:' + (state.isFinished ? 'default' : 'pointer') + ';background:' + tint + ';border-radius:16px;display:flex;align-items:center;justify-content:center;padding:0;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform 0.08s;">' +
-          '<span class="ls-plate-num" style="font-size:clamp(2.5rem,16vw,7rem);font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + display + '</span>' +
+          '<span class="ls-plate-num" style="font-size:clamp(2.5rem,16vw,7rem);font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;transform:scaleY(1.35);transform-origin:center;">' + display + '</span>' +
         '</' + tag + '>';
       };
 
@@ -6538,7 +6577,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           // nem com GAMES grande, Nomes 185% ou tela curta) e os placares/botões
           // (flex, encolhem) absorvem o resto — aumentar Nomes/Foto cresce este
           // box e reduz os outros proporcionalmente.
-          '<div style="flex:0 0 auto;flex-shrink:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:4px clamp(4px,1.5vw,10px) 2px;">' +
+          '<div style="flex:1.5;min-height:0;display:flex;align-items:center;width:100%;gap:4px;padding:4px clamp(4px,1.5vw,10px) 2px;">' +
             '<div class="court-side" data-court-side="left" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:stretch;justify-content:center;background:transparent;border:none;padding:0;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
               _buildNameStack(leftTeam) +
             '</div>' +
@@ -6546,10 +6585,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
               _buildNameStack(rightTeam) +
             '</div>' +
           '</div>' +
-          // Placar — v4.5.32: metades tocáveis por time (Apple Watch style).
-          // flex:1 → preenchem TODO o espaço restante (zero vazio); a metade é o
-          // botão +1. Cor segue o time; sem placa branca; sem ▲/▼ por lado.
-          '<div style="flex:1;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
+          // Placar — v4.5.34: metades tocáveis por time (Apple Watch style).
+          // flex:4 (divide o espaço com GAMES flex:2 e nomes flex:1.5 → a tinta
+          // não desperdiça, sobra vai pros outros infos). A metade é o botão +1.
+          '<div style="flex:4;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
             _scoreHalf(leftTeam) + _scoreHalf(rightTeam) +
           '</div>' +
           // Dica de troca de lado (só com fixSides ativo)
