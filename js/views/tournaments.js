@@ -2944,6 +2944,15 @@ function renderTournaments(container, tournamentId = null) {
         const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
         const parts = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
 
+        // v4.5.62: hidrata NOMES por uid — resolve do perfil vivo (users/{uid}) e
+        // preenche [data-uid-name]. TEM QUE rodar PÓS-innerHTML (os cards só existem no
+        // DOM depois que renderTournaments termina de montar o html) — por isso vai
+        // dentro do .then() das fotos (microtask, pós-render), NÃO síncrono no meio da
+        // função (aí o querySelectorAll não achava nada → nomes em branco). Fim do
+        // "Maira/Maira". Ver [[project_uid_audit_sweep]].
+        function _hydrateNamesNow() {
+            if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(container); } catch (_e) {} }
+        }
         // Pre-load player photos for avatar display (async, updates DOM after load)
         if (typeof _preloadPlayerPhotos === 'function') {
             _preloadPlayerPhotos(t).then(function() {
@@ -2958,12 +2967,11 @@ function renderTournaments(container, tournamentId = null) {
                         img.src = real;
                     }
                 });
-            }).catch(function() {});
+            }).catch(function() {}).then(_hydrateNamesNow);
+        } else {
+            // sem preload de fotos → ainda hidrata, mas defer pra rodar pós-innerHTML
+            setTimeout(_hydrateNamesNow, 0);
         }
-        // v4.5.61: hidrata NOMES por uid — resolve do perfil vivo (users/{uid}) e
-        // preenche [data-uid-name]. Identidade = uid; nome gravado no inscrito nunca
-        // é a fonte da verdade (fim do "Maira/Maira"). Ver [[project_uid_audit_sweep]].
-        if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(container); } catch (_e) {} }
         // v2.3.52: carrega perfis (gênero/nível/idade) e aplica nos badges de
         // meta dos cards de inscritos. Mesmos helpers compartilhados usados na
         // página #participants (store.js).

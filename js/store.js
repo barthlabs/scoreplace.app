@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.61-beta';
+window.SCOREPLACE_VERSION = '4.5.62-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -39,9 +39,14 @@ window._preloadUserProfiles = function (uids) {
 window._nameForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.displayName) || ''; };
 window._emailForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.email) || ''; };
 window._phoneForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.phone) || ''; };
-// uid presente → SÓ o nome vivo (nunca o gravado); vazio até hidratar. Sem uid → guest.
+// v4.5.62: nome vivo do uid VENCE sempre; se o uid não resolve (perfil ausente/uid
+// faltante — dado ainda não migrado) usa o guest pra NÃO ficar em branco. A hidratação
+// pós-render sobrescreve com o vivo assim que o perfil carrega → onde o uid resolve, o
+// nome gravado corrompido NUNCA persiste (fim do "Maira/Maira"). O guest só sobrevive
+// quando não há de onde resolver. Quando o dado estiver 100% migrado (todo inscrito com
+// uid + perfil), o guest vira inalcançável pra quem tem conta.
 window._displayName = function (uid, guestName) {
-  if (uid) return window._nameForUid(uid);
+  if (uid) { var live = window._nameForUid(uid); if (live) return live; }
   return guestName || '';
 };
 window._hydrateUidNames = function (root) {
