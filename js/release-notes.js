@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.81-beta — chamada de duplas conta PESSOAS (dupla = 2) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👥 Presença conta por pessoa:</b> na chamada de torneios de duplas, a barra de presença (Todos / Presentes / Aguardando / W.O.) e a contagem de inscritos passaram a contar <b>cada jogador</b> — uma dupla vale <b>2 pessoas</b>, não 1. Antes, duplas formadas por convite entravam como 1 e o total ficava menor do que o número real de jogadores.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.80-beta — substituto do Rei/Rainha pontua como ele mesmo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>👑 W.O. no Rei/Rainha carrega a conta do substituto:</b> quando alguém leva W.O. num grupo de Rei/Rainha e uma <b>folga entra no lugar</b>, agora o lugar dela no jogo passa a ser <b>da conta dela</b> — os pontos e a exibição do nome vão para o substituto, não para quem faltou. Antes, o jogo trocava só o nome visível mas mantinha a identidade de quem saiu, podendo creditar os pontos do substituto na pessoa errada e mostrar o nome trocado. Reverter o W.O. também devolve tudo certo. O <b>Jogador X</b> (sem conta) continua sem pontuar, como antes.</li>' +

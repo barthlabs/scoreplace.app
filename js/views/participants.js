@@ -1292,15 +1292,18 @@ function renderParticipants(container, tournamentId) {
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
   const parts = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
 
+  // v4.5.78: expande uma entrada em NOMES DE PESSOAS — dupla ESTRUTURAL (p1Name/
+  // p2Name) = 2, "A / B" legado = 2, solo = 1. NÃO usa só _pName(p): em dupla formada
+  // por convite o _pName devolve só o p1 → contava dupla como 1. Ver
+  // [[project_count_people_not_entries]].
+  const _expandMemberNames = (p) => {
+    if (p && typeof p === 'object' && p.p1Name && p.p2Name) return [String(p.p1Name).trim(), String(p.p2Name).trim()].filter(Boolean);
+    const n = window._pName(p);
+    if (n && n.indexOf('/') !== -1) return n.split('/').map(s => s.trim()).filter(Boolean);
+    return n ? [n] : [];
+  };
   let individualCount = 0;
-  parts.forEach(p => {
-    const pStr = window._pName(p);
-    if (pStr.includes('/')) {
-      individualCount += pStr.split('/').filter(n => n.trim().length > 0).length;
-    } else {
-      individualCount++;
-    }
-  });
+  parts.forEach(p => { individualCount += _expandMemberNames(p).length; });
 
   // Ordenar: Times primeiro, depois individuais
   parts.sort((a, b) => {
@@ -1404,9 +1407,7 @@ function renderParticipants(container, tournamentId) {
   const _countedNames = {};
   const countIndividuals = (arr) => {
     arr.forEach(p => {
-      const pName = window._pName(p);
-      const names = pName && pName.includes('/') ? pName.split('/').map(n => n.trim()).filter(Boolean) : (pName ? [pName] : []);
-      names.forEach(nm => {
+      _expandMemberNames(p).forEach(nm => {
         const k = nm.toLowerCase();
         if (_countedNames[k]) return;
         _countedNames[k] = 1;
@@ -1418,15 +1419,20 @@ function renderParticipants(container, tournamentId) {
   countIndividuals(parts);
   if (drawDone) countIndividuals(standbyParts);
 
-  // ── Contagem da CHAMADA (por entry: time/individual) — pré e pós sorteio ──
+  // ── Contagem da CHAMADA por PESSOA (dupla = 2), dedup — a presença é por jogador
+  //    (toggle por membro), então a barra conta gente, não entradas. v4.5.78.
   let rcTotal = 0, rcPresent = 0, rcAbsent = 0;
   if (canRollCall || postDrawPresence) {
+    const _seenRc = {};
     parts.forEach(p => {
-      const en = window._pName(p);
-      if (!en) return;
-      rcTotal++;
-      if (_entryPresent(en)) rcPresent++;
-      else if (_entryAbsent(en)) rcAbsent++;
+      _expandMemberNames(p).forEach(nm => {
+        const k = nm.toLowerCase().trim();
+        if (!k || _seenRc[k]) return;
+        _seenRc[k] = 1;
+        rcTotal++;
+        if (_entryPresent(nm)) rcPresent++;
+        else if (_entryAbsent(nm)) rcAbsent++;
+      });
     });
   }
   const rcPending = rcTotal - rcPresent - rcAbsent;
@@ -2351,9 +2357,9 @@ function renderParticipants(container, tournamentId) {
     + '</div>';
   }
   const checkInControls = canCheckIn ? _rollCallBar(totalIndividuals, checkedCount, absentConfirmedCount, pendingCount) : '';
-  // v3.0.x: pré-sorteio (roll-call) conta por ENTRADA (rcTotal — a unidade que entra no
-  // sorteio); pós-sorteio (postDrawPresence, grade por indivíduo) conta por PESSOA
-  // (totalIndividuals=103), consistente com os cards e com INSCRITOS.
+  // v4.5.78: roll-call SEMPRE conta por PESSOA (dupla = 2) — pré-sorteio (rcTotal) e
+  // pós-sorteio (totalIndividuals). A presença é por jogador (toggle por membro), então
+  // a barra reflete gente, não entradas. Ver [[project_count_people_not_entries]].
   const rollCallControls = canRollCall
     ? _rollCallBar(rcTotal, rcPresent, rcAbsent, rcPending)
     : (postDrawPresence ? _rollCallBar(totalIndividuals, checkedCount, absentConfirmedCount, totalIndividuals - checkedCount - absentConfirmedCount) : '');
