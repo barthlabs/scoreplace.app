@@ -2483,22 +2483,70 @@
     return window._haversineKm(a.lat, a.lng, b.lat, b.lng);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // CACHE DE SESSÃO PRO GOOGLE PLACES — controle de custo (v2.4.x, jul/2026)
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONTEXTO CRÍTICO (incidente de billing): cada _loadGoogleNearby dispara N
+  // buscas PARALELAS de Place.searchByText (Text Search, SKU "Pro" — os campos
+  // location + formattedAddress mantêm o tier caro; NÃO dá pra baixar pra
+  // Essentials sem perder o filtro de distância). E refresh() roda VÁRIAS vezes
+  // por entrada na tela: (1) inicial em render(), (2) quando o GPS resolve via
+  // _tryAutoGeolocate, (3) o retry de profile-loaded, (4) o safety-net de 5s.
+  // Resultado antes deste cache: ~4 refreshes × 14 termos = ~56 chamadas Places
+  // por ABERTURA da tela. Medido em prod: 45.663 chamadas em 9 dias (jun/jul
+  // 2026) → estourou o budget de R$100. Ver memória `project_places_api_cost`.
+  //
+  // O cache colapsa refreshes com a MESMA geografia (centro arredondado a ~110m
+  // + raio + modalidades) numa única leva de chamadas, com TTL de 10min. Sobra
+  // apenas 1 leva por entrada de tela; re-navegações e os retries reusam o
+  // cache. Persistido também em sessionStorage pra sobreviver ao reload do
+  // auto-update do PWA dentro da mesma aba.
+  var _googleNearbyCache = {};                 // key -> { at: ms, results: [] }
+  var _GOOGLE_CACHE_TTL_MS = 10 * 60 * 1000;   // 10 minutos
+  function _googleCacheKey(center, radiusKm, sports) {
+    var lat = Math.round(Number(center.lat) * 1000) / 1000; // grid ~110m
+    var lng = Math.round(Number(center.lng) * 1000) / 1000;
+    var arr = Array.isArray(sports) ? sports.slice() : (sports ? [sports] : []);
+    arr.sort();
+    return lat + ',' + lng + '|' + radiusKm + '|' + arr.join(',');
+  }
+  function _googleCacheGet(key) {
+    var now = Date.now();
+    var hit = _googleNearbyCache[key];
+    if (hit && (now - hit.at) < _GOOGLE_CACHE_TTL_MS) return hit.results;
+    try {
+      var raw = sessionStorage.getItem('sp_gplaces_' + key);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && (now - parsed.at) < _GOOGLE_CACHE_TTL_MS) {
+          _googleNearbyCache[key] = parsed; // promove pro cache em memória
+          return parsed.results;
+        }
+      }
+    } catch (_e) {}
+    return null;
+  }
+  function _googleCacheSet(key, results) {
+    var entry = { at: Date.now(), results: results };
+    _googleNearbyCache[key] = entry;
+    try { sessionStorage.setItem('sp_gplaces_' + key, JSON.stringify(entry)); } catch (_e) {}
+  }
+
   // Places nearby: lightweight discovery of external venues (not yet claimed
-  // em scoreplace). Free tier allows ~17k queries/month — debounced + gated
-  // em um centro real pra não queimar cota.
+  // em scoreplace). Gated em um centro real + cache de sessão (acima) pra não
+  // queimar cota.
   //
-  // Estratégia atual (v0.16.2+): **queries paralelas por termo** em vez de
-  // uma única query conjuntiva. Histórico: um único `searchByText` com
-  // "quadra esportiva clube arena tênis padel beach tennis pickleball" mais
-  // o label de localização aparentemente fazia o Google interpretar como
-  // match conjuntivo — venues cujo nome não contém "arena" ou "quadra"
-  // (ex: "Play Tennis Morumbi", "AB Academia de Tênis") eram deprioritizados
-  // ou dropados do ranking, mesmo estando mais próximos que resultados que
-  // apareciam. A cada termo rodamos uma busca focada e mergimos por placeId.
+  // Estratégia (v0.16.2+): **queries paralelas por termo** em vez de uma única
+  // query conjuntiva. Um único `searchByText` com "quadra esportiva clube arena
+  // tênis padel beach tennis pickleball" fazia o Google interpretar como match
+  // conjuntivo — venues cujo nome não contém "arena"/"quadra" (ex: "Play Tennis
+  // Morumbi", "AB Academia de Tênis") eram deprioritizados ou dropados. A cada
+  // termo rodamos uma busca focada e mergimos por placeId.
   //
-  // Custo: 9 termos = 9 API calls por refresh. Refresh é debounced + só roda
-  // quando o user muda filtros ou ganha GPS — tipicamente 5-30 refreshs por
-  // sessão → 45-270 calls/sessão. Bem dentro do free tier.
+  // CUSTO (v2.4.x): reduzido de 14 → 5 termos no modo sem-filtro e de 5 → 3 no
+  // modo com modalidade, + cache de sessão. Antes: ~56 chamadas/entrada de tela;
+  // agora: ~5 na 1ª entrada e ~0 nas repetições dentro do TTL. Se mexer aqui,
+  // NÃO reintroduza termos redundantes sem checar o impacto de billing.
   //
   // locationBias em vez de locationRestriction: vies SEM trava, então lugares
   // relevantes fora do raio também aparecem. O haversine client-side filtra
@@ -2506,10 +2554,15 @@
   // em áreas com poucos venues no raio estrito.
   //
   // NOTA: `state.location` (label textual do GPS/endereço) NÃO é mais anexado
-  // ao textQuery — locationBias já resolve a geografia, e textos como
-  // "Minha localização atual" poluíam o matching.
+  // ao textQuery — locationBias já resolve a geografia.
   async function _loadGoogleNearby(center, radiusKm, sports) {
     if (!center || !window.google || !window.google.maps || !window.google.maps.importLibrary) return [];
+
+    // Cache-first: colapsa os múltiplos refresh() por entrada de tela numa só
+    // leva de chamadas Places. Chave por geografia arredondada + raio + sports.
+    var _cacheKey = _googleCacheKey(center, radiusKm, sports);
+    var _cached = _googleCacheGet(_cacheKey);
+    if (_cached) return _cached;
     try {
       var placesLib = await google.maps.importLibrary('places');
       if (!placesLib || !placesLib.Place || typeof placesLib.Place.searchByText !== 'function') return [];
@@ -2519,29 +2572,29 @@
       // modalidades + tipos de estabelecimento + redes conhecidas. Cada
       // termo retorna ~10 candidatos distintos; o merge por placeId remove
       // overlap e dá coverage muito maior que uma única query.
+      // v2.4.x: enxugado de 14 → 5 termos por controle de custo (cada termo é
+      // 1 chamada Text Search "Pro"). Estes 5 dão a maior cobertura por real:
+      // 2 genéricos de estabelecimento (arena/clube pegam venues multi-esporte
+      // sem a modalidade no nome) + as 3 modalidades mais comuns na base. Os
+      // termos removidos (quadra de X, escola/academia de tênis, vôlei/futevôlei/
+      // tênis de mesa/pickleball) eram largamente redundantes com estes via o
+      // merge por placeId. NÃO reexpandir sem medir billing — ver
+      // memória `project_places_api_cost`.
       var baseTerms = [
-        'beach tennis',
-        'padel',
-        'tênis',
-        'pickleball',
-        'vôlei de praia',
-        'futevôlei',
-        'tênis de mesa',
-        'academia de tênis',
-        'escola de tênis',
         'arena esportiva',
         'clube esportivo',
-        'quadra de tênis',
-        'quadra de padel',
-        'quadra de beach tennis'
+        'beach tennis',
+        'padel',
+        'tênis'
       ];
       // Compat: aceita string (caminho legacy) OU array (multi-select da v0.16.3).
       var sportsArr = Array.isArray(sports) ? sports : (sports ? [sports] : []);
-      // Se há modalidades selecionadas, usamos elas como termos primários +
+      // Se há modalidades selecionadas, usamos elas como termos primários + 2
       // genéricos multi-esporte (pega venues que oferecem a modalidade mas não
-      // têm o nome dela, tipo "Clube X" que tem quadra de padel).
+      // têm o nome dela, tipo "Clube X" que tem quadra de padel). Reduzido de
+      // 4 → 2 genéricos por custo.
       var terms = sportsArr.length > 0
-        ? sportsArr.concat(['arena esportiva', 'clube esportivo', 'academia de tênis', 'escola de tênis'])
+        ? sportsArr.concat(['arena esportiva', 'clube esportivo'])
         : baseTerms;
 
       // v1.0.15-beta: locationBias → locationRestriction strict.
@@ -2561,7 +2614,7 @@
       var promises = terms.map(function(term) {
         return placesLib.Place.searchByText({
           textQuery: term,
-          fields: ['displayName', 'formattedAddress', 'location', 'id', 'types'],
+          fields: ['displayName', 'formattedAddress', 'location', 'id'],
           locationBias: {
             center: biasCenter,
             radius: biasRadiusM
@@ -2596,8 +2649,7 @@
           name: p.displayName || '',
           address: p.formattedAddress || '',
           lat: loc ? loc.lat() : null,
-          lng: loc ? loc.lng() : null,
-          types: p.types || []
+          lng: loc ? loc.lng() : null
         };
       });
       // Defense-in-depth client-side: mesmo com locationRestriction, dropa
@@ -2613,6 +2665,7 @@
       if (droppedFar > 0) {
         window._warn('[Places] dropped ' + droppedFar + ' results outside ' + maxKm + 'km radius');
       }
+      _googleCacheSet(_cacheKey, filtered); // memoiza pra colapsar refreshes repetidos
       return filtered;
     } catch (e) {
       window._warn('Places nearby err:', e && e.message);
