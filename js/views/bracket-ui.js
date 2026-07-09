@@ -6537,10 +6537,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
         ? '<div style="flex:2;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:clamp(4px,1vh,8px) 0;">' +
             _setsLine +
             '<span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
-            '<div style="display:flex;align-items:center;gap:clamp(14px,4vw,24px);margin-top:2px;">' +
-              '<span style="font-size:calc(clamp(3.5rem,16vw,6.5rem) * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-              '<span style="font-size:calc(clamp(2rem,6vw,3rem) * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
-              '<span style="font-size:calc(clamp(3.5rem,16vw,6.5rem) * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
+            '<div style="display:flex;align-items:center;gap:clamp(12px,3.6vw,22px);margin-top:2px;">' +
+              '<span style="font-size:calc(clamp(3.15rem,14.4vw,5.85rem) * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
+              '<span style="font-size:calc(clamp(1.8rem,5.4vw,2.7rem) * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
+              '<span style="font-size:calc(clamp(3.15rem,14.4vw,5.85rem) * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
             '</div>' +
           '</div>'
         : '';
