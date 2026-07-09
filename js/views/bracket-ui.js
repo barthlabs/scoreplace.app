@@ -6190,7 +6190,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Build stacked player names in team box (bracket-style)
     // Serve ball inside team box, left of the serving player's row, draggable to change server
     var _canDragServe = !state.isFinished && !state.serveSkipped && isDoubles && state.totalGamesPlayed < 2;
-    var _buildNameStack = function(team) {
+    var _buildNameStack = function(team, mirror) {
+      // mirror=true (usado no time DIREITO em paisagem): nome à esquerda, foto/
+      // ícone à DIREITA, texto alinhado à direita (espelha o lado esquerdo).
+      var _mirrorCard = mirror ? 'flex-direction:row-reverse;' : '';
+      var _mirrorText = mirror ? 'text-align:right;' : '';
       var players = team === 1 ? p1Players : p2Players;
       var clr = team === 1 ? '#3b82f6' : '#ef4444';
       var bgClr = team === 1 ? 'rgba(59,130,246,0.12)' : 'rgba(239,68,68,0.12)';
@@ -6242,10 +6246,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var ballCardAttr = (isServing && _canDragServe) ? ' data-serve-ball-card="true"' : '';
 
         // Individual player box
-        cards += '<div' + dropAttr + ballCardAttr + ' onclick="window._liveEditName(' + team + ',' + ni + ')" style="cursor:pointer;display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);transition:transform 0.15s,background 0.15s;min-width:0;">' +
+        cards += '<div' + dropAttr + ballCardAttr + ' onclick="window._liveEditName(' + team + ',' + ni + ')" style="cursor:pointer;display:flex;' + _mirrorCard + 'align-items:center;gap:5px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);transition:transform 0.15s,background 0.15s;min-width:0;">' +
           servBall +
           avatar +
-          '<span style="flex:1;min-width:0;font-size:calc(clamp(0.72rem,2.2vw,0.88rem) * var(--live-name-scale,1));font-weight:' + (isServing ? '800' : '600') + ';color:' + (isServing ? '#fbbf24' : 'rgba(255,255,255,0.92)') + ';white-space:normal;overflow-wrap:break-word;word-break:normal;hyphens:none;line-height:1.15;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">' + fullName + '</span>' +
+          '<span style="flex:1;min-width:0;' + _mirrorText + 'font-size:calc(clamp(0.72rem,2.2vw,0.88rem) * var(--live-name-scale,1));font-weight:' + (isServing ? '800' : '600') + ';color:' + (isServing ? '#fbbf24' : 'rgba(255,255,255,0.92)') + ';white-space:normal;overflow-wrap:break-word;word-break:normal;hyphens:none;line-height:1.15;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">' + fullName + '</span>' +
         '</div>';
       }
       // Team box wrapping all players
@@ -6477,21 +6481,25 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var _portFinishRow = finishBtn; finishBtn = '';
 
     if (isLandscape) {
-      // ── PAISAGEM (v4.5.39): mesmo modelo do retrato — SETS/GAMES no topo,
-      // NOMES nas laterais + METADES coloridas grandes no meio, 1 Desfazer no
-      // rodapé. Nomes fora do centro pra as metades ficarem grandes na largura.
+      // ── PAISAGEM (v4.5.40): 3 COLUNAS. Coluna do time = NOME em cima + PLACAR
+      // colorido grande embaixo (nomes saem das laterais → placar mais largo).
+      // Coluna do meio = SETS/GAMES. Time da DIREITA espelhado (nome à esquerda,
+      // foto à direita, alinhado à direita). 1 Desfazer no rodapé.
+      var _lsTeamCol = function(team, mirror) {
+        return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;padding:2px;">' +
+            '<div class="court-side" data-court-side="' + (mirror ? 'right' : 'left') + '" style="flex:0 0 auto;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
+              _buildNameStack(team, mirror) +
+            '</div>' +
+            '<div style="flex:1;min-height:0;display:flex;">' + _scoreHalf(team) + '</div>' +
+          '</div>';
+      };
       container.innerHTML =
         '<div style="display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;gap:0;">' +
           _gameLabelRow +
-          _topBlock +
-          '<div style="flex:1;min-height:0;display:flex;align-items:stretch;width:100%;gap:6px;padding:2px clamp(6px,1.5vw,12px);">' +
-            '<div class="court-side" data-court-side="left" style="flex:0 0 auto;max-width:24vw;min-width:0;display:flex;flex-direction:column;justify-content:center;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
-              _buildNameStack(leftTeam) +
-            '</div>' +
-            _scoreHalf(leftTeam) + _scoreHalf(rightTeam) +
-            '<div class="court-side" data-court-side="right" style="flex:0 0 auto;max-width:24vw;min-width:0;display:flex;flex-direction:column;justify-content:center;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
-              _buildNameStack(rightTeam) +
-            '</div>' +
+          '<div style="flex:1;min-height:0;display:flex;align-items:stretch;width:100%;gap:6px;padding:4px clamp(6px,1.5vw,12px) 2px;">' +
+            _lsTeamCol(leftTeam, false) +
+            '<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding:0 clamp(4px,1vw,10px);">' + _topBlock + '</div>' +
+            _lsTeamCol(rightTeam, true) +
           '</div>' +
           swapHint +
           _undoBar +
