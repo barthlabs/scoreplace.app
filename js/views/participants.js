@@ -1987,6 +1987,108 @@ function renderParticipants(container, tournamentId) {
     }).join('');
 
   } else {
+    // v4.5.74: torneio de DUPLAS pré-sorteio → SEÇÃO CANÔNICA (Sem dupla / Duplas
+    // formadas), a MESMA da tela de detalhe do torneio, agora com o toggle Presente
+    // injetado via ctx.cardPresence. Extirpa o grid antigo ("Equipe Formada" /
+    // "Inscrição Individual"). Ver [[project_two_participant_card_renderers]].
+    var _orgEmailsP = {}; var _orgUidsP = {};
+    if (t.organizerEmail) _orgEmailsP[t.organizerEmail] = true;
+    if (t.creatorUid) _orgUidsP[t.creatorUid] = true;
+    if (Array.isArray(t.coHosts)) t.coHosts.forEach(function (ch) { if (ch && ch.status === 'active') { if (ch.email) _orgEmailsP[ch.email] = true; if (ch.uid) _orgUidsP[ch.uid] = true; } });
+    var _hasTournCatsP = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
+    // v4.5.76: escopo do W.O. — 'individual' → W.O. POR MEMBRO (2, esq/dir, igual aos
+    // toggles); 'team'/'time' → UM W.O. do time (falta 1 → time inteiro leva W.O.).
+    // Ver [[project_wo_scope_individual_vs_team]].
+    var woScopeP = (t.woScope || 'individual') === 'individual' ? 'individual' : 'team';
+    var _dsecP = (typeof window._buildDoublesInscritosSection === 'function')
+      ? window._buildDoublesInscritosSection(t, {
+          isOrg: isOrg, drawDone: drawDone,
+          orgUids: _orgUidsP, orgEmails: _orgEmailsP, hasTournCats: _hasTournCatsP,
+          chrome: false,
+          cardPresence: function (p) {
+            if (!(canRollCall || postDrawPresence)) return { skip: false, styleExtra: '', rowHtml: '' };
+            var _grn = 'background:linear-gradient(135deg,rgba(16,185,129,0.5),rgba(5,150,105,0.6)) !important;border:2px solid rgba(16,185,129,0.85) !important;box-shadow:0 0 0 1px rgba(16,185,129,0.4),0 4px 12px rgba(0,0,0,0.14);';
+            var _red = 'background:linear-gradient(135deg,rgba(239,68,68,0.45),rgba(220,38,38,0.58)) !important;border:2px solid rgba(239,68,68,0.8) !important;box-shadow:0 0 0 1px rgba(239,68,68,0.35),0 4px 12px rgba(0,0,0,0.14);';
+            // v4.5.75: DUPLA formada → estado do CARD deriva dos DOIS membros (verde só se
+            // ambos presentes, vermelho se algum ausente); cada membro tem o SEU toggle
+            // (ctx.memberPresence), então SEM linha de presença por entrada (rowHtml='').
+            var _pairKeys = null;
+            if (p && typeof p === 'object' && p.p1Name && p.p2Name) _pairKeys = [String(p.p1Name).trim(), String(p.p2Name).trim()];
+            else { var _nmC = (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || ''); if (_nmC.indexOf('/') !== -1) { var _pp = _nmC.split('/').map(function (s) { return s.trim(); }).filter(Boolean); if (_pp.length >= 2) _pairKeys = _pp; } }
+            if (_pairKeys) {
+              var _q1 = _entryPresent(_pairKeys[0]), _z1 = !_q1 && _entryAbsent(_pairKeys[0]);
+              var _q2 = _entryPresent(_pairKeys[1]), _z2 = !_q2 && _entryAbsent(_pairKeys[1]);
+              var _both = _q1 && _q2, _anyAbs = _z1 || _z2;
+              if (currentFilter === 'present' && !_both) return { skip: true };
+              if (currentFilter === 'absent' && !_anyAbs) return { skip: true };
+              if (currentFilter === 'pending' && (_both || _anyAbs)) return { skip: true };
+              // Escopo TIME → um W.O. do time (na base do card); escopo individual → cada
+              // membro tem o seu W.O. (via memberPresence), então rowHtml fica vazio.
+              var _teamRow = '';
+              if (canRollCall && isOrg && woScopeP === 'team') {
+                var _tEntry = window._pName(p);
+                var _tAbs = _anyAbs || _entryAbsent(_tEntry);
+                var _tE = String(_tEntry).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "');", !_tAbs, { label: _tAbs ? 'Reverter' : 'W.O. do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
+              }
+              return { skip: false, styleExtra: _both ? _grn : (_anyAbs ? _red : ''), rowHtml: _teamRow };
+            }
+            // SOLO
+            var entry = window._pName(p);
+            var mc = _entryPresent(entry);
+            var abs = !mc && _entryAbsent(entry);
+            var pend = !mc && !abs;
+            if (currentFilter === 'present' && !mc) return { skip: true };
+            if (currentFilter === 'absent' && !abs) return { skip: true };
+            if (currentFilter === 'pending' && !pend) return { skip: true };
+            var styleExtra = mc ? _grn : (abs ? _red : '');
+            var rowHtml = '';
+            if (canRollCall) {
+              var _rcEntry = entry.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+              var label = mc ? 'Presente' : 'Ausente';
+              var color = mc ? '#4ade80' : '#f87171';
+              var wo = (!mc && isOrg)
+                ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
+                : '';
+              rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>' +
+                '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\');"><span class="toggle-slider"></span></label>' + wo;
+            } else {
+              var l2 = mc ? 'Presente' : 'Ausente';
+              var c2 = mc ? '#4ade80' : '#f87171';
+              var ic = mc ? '✅' : '🚫';
+              rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + c2 + ';white-space:nowrap;">' + ic + ' ' + l2 + '</span>';
+            }
+            return { skip: false, styleExtra: styleExtra, rowHtml: rowHtml };
+          },
+          // v4.5.75: presença POR MEMBRO da dupla — um toggle por jogador, no bloco dele.
+          memberPresence: function (member, right) {
+            if (!(canRollCall || postDrawPresence)) return { html: '' };
+            var keyName = (member && member.guest) ? String(member.guest).trim()
+              : (window._displayName ? window._displayName(member && member.uid, member && member.guest) : '');
+            if (!keyName) return { html: '' };
+            var mc = _entryPresent(keyName);
+            var abs = !mc && _entryAbsent(keyName);
+            var label = mc ? 'Presente' : 'Ausente';
+            var color = mc ? '#4ade80' : '#f87171';
+            if (!canRollCall) {
+              var ic = mc ? '✅' : '🚫';
+              return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + ic + ' ' + label + '</span></div>' };
+            }
+            var _e = keyName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            var wo = (!mc && isOrg && woScopeP === 'individual')
+              ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
+              : '';
+            var word = '<span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>';
+            var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\');"><span class="toggle-slider"></span></label>';
+            var inner = right ? (wo + toggle + word) : (word + toggle + wo);
+            return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;' + (right ? 'justify-content:flex-end;' : '') + '" onclick="event.stopPropagation();">' + inner + '</div>' };
+          }
+        })
+      : null;
+    if (_dsecP && _dsecP.isDoubles) {
+      gridStyle = '';
+      cardsStr = _dsecP.html;
+    } else {
     // ── Normal mode: team cards with drag/split/delete ──
     gridStyle = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:1rem;';
 
@@ -2209,6 +2311,7 @@ function renderParticipants(container, tournamentId) {
             </div>
         </div>`;
     }).join('');
+    }
   }
 
   // ── Filter controls (only when check-in active) ──

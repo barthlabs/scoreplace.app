@@ -9,6 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.77-beta — chamada de duplas igual à tela do torneio, com presença por jogador <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👥 Chamada de duplas no card certo:</b> na lista de inscritos (chamada), antes do sorteio, os torneios de duplas passam a mostrar o <b>mesmo card canônico</b> da tela do torneio — <b>“Sem dupla” em cima</b> e <b>“Duplas formadas” embaixo</b> —, no lugar do card antigo com os solos misturados no meio.</li>' +
+        '<li><b>✅ Presença por jogador na dupla:</b> cada dupla formada agora tem <b>dois botões de Presente</b>, um para cada jogador (o da esquerda à esquerda, o da direita à direita) — você marca a presença de cada pessoa separadamente.</li>' +
+        '<li><b>🚫 W.O. conforme a configuração:</b> no <b>W.O. individual</b>, cada jogador tem o seu W.O.; no <b>W.O. por time</b>, um único <b>W.O. do time</b> (falta um → o time inteiro leva W.O.).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.74-beta — quem pode lançar o placar é reconhecido pela conta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🔐 Permissão de lançar o placar por identidade (não pelo nome):</b> nos jogos em que os próprios participantes lançam o resultado, o app passou a reconhecer quem está autorizado <b>pela conta da pessoa</b>, e não mais pelo nome escrito no jogo. Antes, dois jogadores de mesmo nome podiam liberar a pessoa errada, e quem tivesse trocado o nome podia acabar bloqueado. Agora cada jogador certo lança o placar do seu jogo — inclusive nas duplas, sem um membro interferir no outro. Jogos antigos e jogadores convidados (sem conta) seguem funcionando pelo nome, como antes.</li>' +

@@ -1,6 +1,267 @@
 // Dynamically update stat-boxes after participant/waitlist changes
 var _t = window._t || function(k) { return k; };
 
+// ─── SEÇÃO CANÔNICA DE DUPLAS (single source of truth) ───────────────────────
+// v4.5.74: a MESMA seção "Sem dupla" (topo) + "Duplas formadas" (embaixo) usada na
+// PÁGINA DE DETALHE do torneio (renderTournaments) E na CHAMADA (#participants).
+// Antes a chamada tinha um grid próprio ("Equipe Formada" / "Inscrição Individual")
+// que o dono mandou EXTIRPAR. Presença (Presente/Ausente + toggle + W.O.) é injetada
+// pela chamada via ctx.cardPresence(p) → { skip, styleExtra, rowHtml }. O detalhe
+// passa sem presença → comportamento idêntico ao de antes.
+// ctx = { isOrg, drawDone, orgUids, orgEmails, peopleCount, hasTournCats,
+//         chrome (inclui h3 + barra de filtro + gerenciador de categorias),
+//         cardPresence(p) -> {skip,styleExtra,rowHtml} }
+// retorna { isDoubles, html } — isDoubles=false quando NÃO é duplas-pré-sorteio
+// (o chamador cai no modo normal).
+window._buildDoublesInscritosSection = function (t, ctx) {
+  ctx = ctx || {};
+  var isOrg = !!ctx.isOrg;
+  var drawDone = !!ctx.drawDone;
+  var _orgUidsShared = ctx.orgUids || {};
+  var _orgEmailsShared = ctx.orgEmails || {};
+  var individualCountParts = (ctx.peopleCount != null) ? ctx.peopleCount : '';
+  var _hasTournCats = !!ctx.hasTournCats;
+  var _chrome = !!ctx.chrome;
+  var _cardPres = (typeof ctx.cardPresence === 'function') ? ctx.cardPresence : null;
+
+  // v4.5.51: detecção ROBUSTA de torneio de duplas (verdade ESTRUTURAL).
+  var _isDoublesTournament = parseInt(t.teamSize || 2) === 2 && (
+    window._isTeamEnrollMode(t.enrollmentMode) ||
+    (Array.isArray(t.participants) && t.participants.some(function (_pp) {
+      return _pp && typeof _pp === 'object' && _pp.p1Name && _pp.p2Name;
+    }))
+  );
+  if (!(_isDoublesTournament && !drawDone)) return { isDoubles: false, html: '' };
+
+  var _allParts = Array.isArray(t.participants) ? t.participants : [];
+  function _isPairEntry(p) {
+    if (typeof p !== 'object' || !p) return false;
+    if (p.p1Name && p.p2Name) return true;
+    var n = p.displayName || p.name || '';
+    return n.indexOf('/') !== -1;
+  }
+  var _pairedParticipants = _allParts.filter(_isPairEntry);
+  var _enrollOrderMapD = window._buildEnrollOrderMap(t);
+  var _pairedMemberKeys = {};
+  _pairedParticipants.forEach(function (pp) {
+    if (pp.p1Uid) _pairedMemberKeys['u:' + pp.p1Uid] = 1;
+    else if (pp.p1Name) _pairedMemberKeys['n:' + String(pp.p1Name).trim().toLowerCase()] = 1;
+    if (pp.p2Uid) _pairedMemberKeys['u:' + pp.p2Uid] = 1;
+    else if (pp.p2Name) _pairedMemberKeys['n:' + String(pp.p2Name).trim().toLowerCase()] = 1;
+  });
+  var _soloParticipants = _allParts.filter(function (p) {
+    if (_isPairEntry(p)) return false;
+    var u = typeof p === 'object' ? (p.uid || '') : '';
+    if (u) return !_pairedMemberKeys['u:' + u];
+    var n = (typeof p === 'string' ? p : (p.displayName || p.name || '')).trim().toLowerCase();
+    return !(n && _pairedMemberKeys['n:' + n]);
+  });
+
+  function _safeAttr(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+  function _duplaCard(p, draggable, tIdStr) {
+    // Presença (só na chamada): estilo verde/vermelho + linha do toggle; pode PULAR
+    // o card (filtro presente/ausente/aguardando).
+    var _prs = _cardPres ? _cardPres(p) : null;
+    if (_prs && _prs.skip) return '';
+
+    var nm = typeof p === 'string' ? p : (p.displayName || p.name || '');
+    var uid = typeof p === 'object' ? (p.uid || '') : '';
+    var email = typeof p === 'object' ? (p.email || '') : '';
+    var _seed = encodeURIComponent(nm);
+    var _fb = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _seed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+    var _photo = (window._playerPhotoCache && window._playerPhotoCache[nm.toLowerCase()] && window._playerPhotoCache[nm.toLowerCase()].indexOf('dicebear.com') === -1)
+      ? window._playerPhotoCache[nm.toLowerCase()] : _fb;
+    var _isOrgP = uid ? !!_orgUidsShared[uid] : (email && !!_orgEmailsShared[email]);
+    var _crown = _isOrgP ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
+    var _pairMembers = (typeof p === 'object' && p && p.p1Name && p.p2Name)
+      ? [{ uid: (p.p1Uid || ''), guest: String(p.p1Name).trim() }, { uid: (p.p2Uid || ''), guest: String(p.p2Name).trim() }]
+      : (nm.includes('/') ? nm.split('/').map(function (s) { return { uid: '', guest: s.trim() }; }).filter(function (x) { return x.guest; }) : null);
+    var members = _pairMembers ? _pairMembers.map(function (m) { return window._displayName(m.uid, m.guest); }) : null;
+    var nameHtml;
+    if (members) {
+      nameHtml = members.map(function (n) {
+        var ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+        var mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : ms;
+        return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;margin-bottom:2px;"><img src="' + window._safeHtml(mp) + '" onerror="this.onerror=null;this.src=\'' + ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(n) + '</span></div>';
+      }).join('');
+    } else {
+      var _soloDisp = window._displayName(uid, nm);
+      var _soloUidAttr = uid ? (' data-uid-name="' + window._safeHtml(uid) + '"') : '';
+      nameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="' + window._safeHtml(_photo) + '" onerror="this.onerror=null;this.src=\'' + _fb + '\'" data-player-name="' + window._safeHtml(nm) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span' + _soloUidAttr + ' style="font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">' + window._safeHtml(_soloDisp) + '</span>' + _crown + '</div>';
+    }
+    var bgStyle = draggable
+      ? 'background:linear-gradient(135deg,rgba(67,56,202,0.6),rgba(99,102,241,0.6));border:1px solid rgba(99,102,241,0.5);'
+      : 'background:linear-gradient(135deg,rgba(15,118,110,0.6),rgba(20,184,166,0.6));border:1px solid rgba(20,184,166,0.5);';
+    var _canPairDrag = isOrg || (t && t.manualPairing === 'open');
+    var dragAttrs = (draggable && _canPairDrag)
+      ? 'draggable="true" ondragstart="window._duplaDragStart(event,\'' + _safeAttr(uid || nm) + '\',\'' + _safeAttr(tIdStr) + '\')" ondragover="event.preventDefault();this.style.outline=\'3px solid #f59e0b\'" ondragleave="this.style.outline=\'\'" ondrop="event.preventDefault();this.style.outline=\'\';window._duplaDropOn(event,\'' + _safeAttr(uid || nm) + '\',\'' + _safeAttr(tIdStr) + '\')"'
+      : '';
+    var labelHtml = !draggable
+      ? '<div style="font-size:0.65rem;color:#34d399;margin-top:3px;">✅ Dupla formada</div>'
+      : (_canPairDrag
+        ? '<div style="font-size:0.65rem;color:rgba(255,255,255,0.45);margin-top:3px;">Arraste para formar dupla</div>'
+        : '<div style="font-size:0.65rem;color:rgba(255,255,255,0.4);margin-top:3px;">Sem dupla</div>');
+    var desfazerBtn = (!draggable && isOrg)
+      ? '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" title="Desfazer dupla" style="--cx-size:24px;">✕</button>'
+      : '';
+    var _delBtnDupla = (isOrg && !drawDone && draggable)
+      ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" style="--cx-size:24px;">✕</button>'
+      : '';
+    var _s1 = (members && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p1Uid) || '', displayName: (p && p.p1Name) || members[0], name: (p && p.p1Name) || members[0] }) : '';
+    var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p2Uid) || '', displayName: (p && p.p2Name) || members[1], name: (p && p.p2Name) || members[1] }) : '';
+    var _body;
+    if (members) {
+      var _memBlock = function (idxM, right) {
+        var _mm = _pairMembers[idxM] || { uid: '', guest: '' };
+        var _disp = window._displayName(_mm.uid, _mm.guest);
+        var _metaName = _disp || _mm.guest;
+        var _seed = _metaName || '?';
+        var _pk = (_metaName || '').toLowerCase();
+        var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(_seed) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+        var _mp = (window._playerPhotoCache && window._playerPhotoCache[_pk] && window._playerPhotoCache[_pk].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_pk] : _ms;
+        var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(_metaName) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+        var _nmFs = (window._INSCRITO_NAME_FONT_PX || 17);
+        var _uidAttr = _mm.uid ? (' data-uid-name="' + window._safeHtml(_mm.uid) + '"') : '';
+        var _nmSpan = '<span class="sp-fit-name"' + _uidAttr + ' title="' + window._safeHtml(_disp) + '" data-fit-h="44" data-fit-max="' + _nmFs + '" style="font-weight:700;font-size:' + _nmFs + 'px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(_disp) + '</span>';
+        var _av = right
+          ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
+          : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
+        var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ uid: _mm.uid, displayName: _metaName, name: _metaName }, _metaName, false, t, isOrg) : '';
+        // v4.5.75: presença POR MEMBRO na dupla — o toggle Presente do jogador fica
+        // DENTRO do bloco dele (esquerda p/ o da esquerda, direita p/ o da direita).
+        var _mPres = (typeof ctx.memberPresence === 'function') ? ctx.memberPresence(_mm, right) : null;
+        var _mPresHtml = (_mPres && _mPres.html) ? _mPres.html : '';
+        return '<div style="min-width:0;display:flex;flex-direction:column;gap:4px;flex:1 1 42%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + _mPresHtml + '</div>';
+      };
+      _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memBlock(0, false) + (_pairMembers[1] ? _memBlock(1, true) : '') + '</div>';
+    } else {
+      _body = nameHtml + ((typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, nm, false, t, isOrg) : '');
+    }
+    function _wmNum(seq, side) { return (window._enrollNumberBadge) ? window._enrollNumberBadge(seq, side) : ''; }
+    var _enrollBadge = (!members && window._enrollNumberBadge && window._enrollNumber)
+      ? window._enrollNumberBadge(window._enrollNumber(_enrollOrderMapD, p))
+      : '';
+    var _wmL = members ? _wmNum(_s1, 'left') : '';
+    var _wmR = (members && members[1]) ? _wmNum(_s2, 'right') : '';
+    var _dpMulti = members ? '1' : '0';
+    var _dpNameAttr = (members ? members.join(' ') : nm).toLowerCase().replace(/"/g, '&quot;');
+    var _dpGender = members ? 'none' : ((typeof window._canonGender === 'function') ? window._canonGender(typeof p === 'object' && p ? p.gender : '') : 'none');
+    var _dpSkill = 'none';
+    if (!members) {
+      var _dpCats = t.skillCategories || [];
+      var _dpCatStr = (typeof p === 'object' && p) ? (p.category || '') : '';
+      for (var _dpi = 0; _dpi < _dpCats.length; _dpi++) { if (_dpCatStr === _dpCats[_dpi] || _dpCatStr.endsWith(' ' + _dpCats[_dpi])) { _dpSkill = _dpCats[_dpi]; break; } }
+    }
+    var _dpOrder = members
+      ? (parseInt(_s1 || '0', 10) || 0)
+      : (window._enrollNumber ? (parseInt(window._enrollNumber(_enrollOrderMapD, p), 10) || 0) : 0);
+    var _dpInactive = (t.allowSelfDeactivation !== false && typeof p === 'object' && p && p.ligaActive === false) ? '1' : '0';
+    var _presStyle = (_prs && _prs.styleExtra) ? _prs.styleExtra : '';
+    // rowHtml na base do card: SOLO → toggle único; DUPLA escopo TIME → um W.O. do
+    // time. DUPLA escopo INDIVIDUAL → rowHtml vazio (cada membro tem seu toggle+W.O.
+    // no bloco dele, via ctx.memberPresence acima).
+    var _presRow = (_prs && _prs.rowHtml)
+      ? '<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-top:2px;" onclick="event.stopPropagation();">' + _prs.rowHtml + '</div>'
+      : '';
+    return '<div class="participant-card" data-part-card="1" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-inactive="' + _dpInactive + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
+      ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + _presStyle + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
+      _enrollBadge + _wmL + _wmR +
+      (function () {
+        var _actions = (desfazerBtn || _delBtnDupla)
+          ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' + desfazerBtn + _delBtnDupla + '</div>'
+          : '';
+        var _labelRow = _actions
+          ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' + (labelHtml || '<span></span>') + _actions + '</div>'
+          : labelHtml;
+        var _inner = _body + _labelRow + _presRow;
+        return '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' + _inner + '</div>';
+      })() +
+      '</div>';
+  }
+
+  // Convites pendentes → card de dupla PENDENTE (âmbar) na seção "Sem dupla".
+  var _cuUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
+  var _reqs = Array.isArray(t.pairRequests) ? t.pairRequests : [];
+  var _pendUids = {};
+  _reqs.forEach(function (r) { if (r && r.inviterUid) _pendUids[r.inviterUid] = 1; if (r && r.inviteeUid) _pendUids[r.inviteeUid] = 1; });
+  var _soloAvailable = _soloParticipants.filter(function (p) { var u = typeof p === 'object' ? (p.uid || '') : ''; return !(u && _pendUids[u]); });
+  var _pendMemBlock = function (n, right) {
+    var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+    var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
+    var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+    var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="44" data-fit-max="17" style="font-weight:700;font-size:17px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
+    var _av = right
+      ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
+      : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
+    var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ displayName: n, name: n }, n, false, t, isOrg) : '';
+    return '<div style="min-width:0;display:flex;flex-direction:column;gap:2px;flex:1 1 40%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
+  };
+  var _pendingCard = function (r) {
+    var amInvitee = _cuUid && r.inviteeUid === _cuUid;
+    var amInviter = _cuUid && r.inviterUid === _cuUid;
+    var tIdA = _safeAttr(String(t.id)), rIdA = _safeAttr(r.id);
+    var _bConfirm = '<button type="button" class="btn btn-success btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 11px;font-size:0.72rem;font-weight:800;" onclick="event.stopPropagation();window._acceptPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">✅ Confirmar</button>';
+    var _bCancel = function (label) { return '<button type="button" class="btn btn-danger btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 11px;font-size:0.72rem;font-weight:800;" onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">' + label + '</button>'; };
+    var _btns = '';
+    if (amInvitee) _btns = _bCancel('❌ Cancelar') + _bConfirm;
+    else if (amInviter) _btns = _bCancel('Cancelar convite');
+    else if (isOrg) _btns = _bCancel('Cancelar');
+    var _status = amInvitee ? ('⏳ ' + window._safeHtml(r.inviterName || 'Alguém') + ' te convidou — aceite ou recuse')
+      : amInviter ? ('⏳ Você convidou ' + window._safeHtml(r.inviteeName || '') + ' — aguardando aceite')
+        : '⏳ Dupla pendente — aguardando aceite';
+    var _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _pendMemBlock(r.inviterName || '', false) + _pendMemBlock(r.inviteeName || '', true) + '</div>';
+    var _ps1 = window._enrollNumber ? window._enrollNumber(_enrollOrderMapD, { uid: r.inviterUid || '', displayName: r.inviterName || '', name: r.inviterName || '' }) : '';
+    var _ps2 = window._enrollNumber ? window._enrollNumber(_enrollOrderMapD, { uid: r.inviteeUid || '', displayName: r.inviteeName || '', name: r.inviteeName || '' }) : '';
+    var _pwmL = (window._enrollNumberBadge && _ps1) ? window._enrollNumberBadge(_ps1, 'left') : '';
+    var _pwmR = (window._enrollNumberBadge && _ps2) ? window._enrollNumberBadge(_ps2, 'right') : '';
+    return '<div style="background:linear-gradient(135deg,rgba(180,130,20,0.32),rgba(251,191,36,0.16));border:1px solid rgba(251,191,36,0.55);border-radius:12px;padding:10px 12px;box-shadow:0 4px 10px rgba(0,0,0,0.1);position:relative;overflow:hidden;">' +
+      _pwmL + _pwmR +
+      '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:8px;">' +
+      _body +
+      '<div style="font-size:0.72rem;color:#fbbf24;font-weight:600;">' + _status + '</div>' +
+      (_btns ? '<div style="display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap;">' + _btns + '</div>' : '') +
+      '</div></div>';
+  };
+  var _pendingCardsHtml = _reqs.length ? ('<div style="display:flex;flex-direction:column;gap:6px;' + (_soloAvailable.length ? 'margin-top:6px;' : '') + '">' + _reqs.map(_pendingCard).join('') + '</div>') : '';
+  var _semDuplaTotal = _soloAvailable.length + _reqs.length;
+  var _doublesFilterBar = (_chrome && typeof window._inscritosBar === 'function')
+    ? window._inscritosBar(t, (_soloAvailable.length + _pairedParticipants.length) > 1)
+    : '';
+  var _headerHtml = _chrome
+    ? ('<h3 style="margin-bottom:1.2rem;font-size:1.1rem;color:var(--text-bright);border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+        '👥 Inscritos <span style="font-size:0.8rem;background:rgba(255,255,255,0.1);padding:3px 10px;border-radius:12px;font-weight:600;margin-left:5px;color:var(--text-muted);">' + individualCountParts + '</span>' +
+      '</h3>' + _doublesFilterBar)
+    : '';
+  var _catMgrHtml = (_chrome && _hasTournCats && isOrg) ? ('<div id="inline-cat-mgr-' + t.id + '"></div>') : '';
+
+  var html =
+    '<div id="sp-inscritos-pairing" class="mt-5 mb-4">' +
+      _headerHtml +
+      ((_soloAvailable.length > 0 || _reqs.length > 0)
+        ? ('<div style="margin-bottom:1.2rem;">' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">' +
+              '<span style="font-size:0.75rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;">🙋 Sem dupla (' + _semDuplaTotal + ')</span>' +
+              '<span style="font-size:0.65rem;color:var(--text-muted);">' + ((isOrg || t.manualPairing === 'open') ? '— Arraste um card sobre outro para formar a dupla' : '— As duplas são formadas pelo organizador') + '</span>' +
+            '</div>' +
+            (_soloAvailable.length > 0 ? ('<div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">' + _soloAvailable.map(function (p) { return _duplaCard(p, true, String(t.id)); }).join('') + '</div>') : '') +
+            _pendingCardsHtml +
+          '</div>')
+        : '<div style="margin-bottom:1rem;padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);font-size:0.82rem;color:#34d399;text-align:center;">✅ Todos com dupla formada</div>') +
+      (_pairedParticipants.length > 0
+        ? ('<div>' +
+            '<div style="font-size:0.75rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas formadas (' + _pairedParticipants.length + ')</div>' +
+            '<div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">' +
+              _pairedParticipants.map(function (p) { return _duplaCard(p, false, String(t.id)); }).join('') +
+            '</div>' +
+          '</div>')
+        : '') +
+      _catMgrHtml +
+    '</div>';
+
+  return { isDoubles: true, html: html };
+};
+
 // v4.0.90 — CORE de placeholders no TOP-LEVEL (carrega sempre, não no lazy-init de
 // renderTournaments) pra a page-route #participantes/<tId> funcionar inclusive em
 // deep-link/cold-load. Recebe a quantidade direto (sem prompt). Fonte ÚNICA usada pelo
@@ -3499,298 +3760,20 @@ function renderTournaments(container, tournamentId = null) {
               ${_ligaSortBtnFinal}
             </div>`;
 
-            // ── Torneios de duplas: layout em duas seções ─────────────────────────
-            // v4.5.51: detecção ROBUSTA de torneio de duplas. O enrollmentMode sozinho NÃO
-            // basta — torneios de Casais legados / Liga de dupla fixa gravam 'individual' e
-            // ficavam de fora do gate, caindo no card ERRADO do grid normal (cardsStr:
-            // "Equipe Formada" + toggle) em vez do card CANÔNICO de dupla (_duplaCard) com a
-            // seção "Sem dupla" no topo. Detecta pela VERDADE ESTRUTURAL: teamSize 2 E
-            // (enroll de time OU existe QUALQUER entrada com p1Name && p2Name). Assim o card
-            // canônico volta sempre, sem depender do enrollmentMode gravado. Individual puro
-            // (sem entradas de dupla estruturais) segue no grid normal. Ver
-            // [[project_two_participant_card_renderers]] e [[project_dupla_entry_structural_not_slash]].
-            const _isDoublesTournament = parseInt(t.teamSize || 2) === 2 && (
-              window._isTeamEnrollMode(t.enrollmentMode) ||
-              (Array.isArray(t.participants) && t.participants.some(function (_pp) {
-                return _pp && typeof _pp === 'object' && _pp.p1Name && _pp.p2Name;
-              }))
-            );
-            const _allParts = Array.isArray(t.participants) ? t.participants : [];
-            // v2.7.90: dupla = entrada com p1Name E p2Name (verdade ESTRUTURAL) OU nome
-            // "A / B" (legado). NÃO depender só de "/" no displayName: duplas formadas
-            // pelo aceite de convite gravam displayName = só o nome do p1 (ex.: "Kelly
-            // Barth", com p1Name/p2Name separados) — antes caíam em SOLO e o card da dupla
-            // sumia (membros viravam solos fantasmas), por isso "os cards não indicavam".
-            function _isPairEntry(p) {
-              if (typeof p !== 'object' || !p) return false;
-              if (p.p1Name && p.p2Name) return true;
-              var n = p.displayName || p.name || '';
-              return n.indexOf('/') !== -1;
-            }
-            const _pairedParticipants = _isDoublesTournament ? _allParts.filter(_isPairEntry) : [];
-            // v2.7.92: número de inscrição CANÔNICO (uid-keyed) — mesmo em todos os cards.
-            const _enrollOrderMapD = window._buildEnrollOrderMap(t);
-            // v2.7.91/92: quem já é membro de uma dupla NUNCA aparece como solo — nem com
-            // entrada solo DUPLICADA no participants[]. Identidade = UID; nome só entra como
-            // chave pra membro SEM conta (princípio uid-first: nunca comparar conta por nome).
-            var _pairedMemberKeys = {};
-            _pairedParticipants.forEach(function(pp) {
-              if (pp.p1Uid) _pairedMemberKeys['u:' + pp.p1Uid] = 1;
-              else if (pp.p1Name) _pairedMemberKeys['n:' + String(pp.p1Name).trim().toLowerCase()] = 1;
-              if (pp.p2Uid) _pairedMemberKeys['u:' + pp.p2Uid] = 1;
-              else if (pp.p2Name) _pairedMemberKeys['n:' + String(pp.p2Name).trim().toLowerCase()] = 1;
-            });
-            const _soloParticipants = _isDoublesTournament ? _allParts.filter(function(p) {
-              if (_isPairEntry(p)) return false;
-              var u = typeof p === 'object' ? (p.uid || '') : '';
-              if (u) return !_pairedMemberKeys['u:' + u];   // com conta: SÓ uid decide (nunca nome)
-              var n = (typeof p === 'string' ? p : (p.displayName || p.name || '')).trim().toLowerCase();
-              return !(n && _pairedMemberKeys['n:' + n]);    // sem conta: nome é o único id
-            }) : [];
-
-            function _duplaCard(p, draggable, tIdStr) {
-              var nm   = typeof p === 'string' ? p : (p.displayName || p.name || '');
-              var uid  = typeof p === 'object' ? (p.uid  || '') : '';
-              var email= typeof p === 'object' ? (p.email|| '') : '';
-              // Foto: busca do _playerPhotoCache (preloaded por uid no bracket.js)
-              var _seed = encodeURIComponent(nm);
-              var _fb   = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _seed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-              var _photo = (window._playerPhotoCache && window._playerPhotoCache[nm.toLowerCase()] && window._playerPhotoCache[nm.toLowerCase()].indexOf('dicebear.com') === -1)
-                ? window._playerPhotoCache[nm.toLowerCase()] : _fb;
-              // Coroa se for organizador
-              var _isOrgP = uid ? !!_orgUidsShared[uid] : (email && !!_orgEmailsShared[email]);
-              var _crown  = _isOrgP ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
-              // Membros da dupla (para cards formados) — v2.7.90: p1Name/p2Name primeiro
-              // (verdade estrutural), só caindo pro split "A / B" quando faltam os campos.
-              // v4.5.61: membros da dupla = uid (IDENTIDADE) + guest (nome só p/ quem NÃO
-              // tem conta). O nome exibido resolve do perfil vivo (users/{uid}) — p1Name/
-              // p2Name gravados NÃO são lidos quando há uid (fim do "Maira/Maira").
-              // Ver [[project_uid_audit_sweep]] / [[project_uid_primary_identity]].
-              var _pairMembers = (typeof p === 'object' && p && p.p1Name && p.p2Name)
-                ? [{ uid: (p.p1Uid || ''), guest: String(p.p1Name).trim() }, { uid: (p.p2Uid || ''), guest: String(p.p2Name).trim() }]
-                : (nm.includes('/') ? nm.split('/').map(function(s){ return { uid: '', guest: s.trim() }; }).filter(function(x){ return x.guest; }) : null);
-              var members = _pairMembers ? _pairMembers.map(function(m){ return window._displayName(m.uid, m.guest); }) : null;
-              var nameHtml;
-              if (members) {
-                nameHtml = members.map(function(n) {
-                  var ms='https://api.dicebear.com/9.x/initials/svg?seed='+encodeURIComponent(n)+'&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-                  var mp=(window._playerPhotoCache&&window._playerPhotoCache[n.toLowerCase()]&&window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com')===-1)?window._playerPhotoCache[n.toLowerCase()]:ms;
-                  return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;margin-bottom:2px;"><img src="'+window._safeHtml(mp)+'" onerror="this.onerror=null;this.src=\''+ms+'\'" data-player-name="'+window._safeHtml(n)+'" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:'+(window._INSCRITO_NAME_FONT_PX||17)+'px;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+window._safeHtml(n)+'</span></div>';
-                }).join('');
-              } else {
-                // v4.5.61: SOLO — nome exibido resolve do perfil vivo por uid; nm gravado
-                // só é usado quando não há uid (guest sem conta).
-                var _soloDisp = window._displayName(uid, nm);
-                var _soloUidAttr = uid ? (' data-uid-name="'+window._safeHtml(uid)+'"') : '';
-                nameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="'+window._safeHtml(_photo)+'" onerror="this.onerror=null;this.src=\''+_fb+'\'" data-player-name="'+window._safeHtml(nm)+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span'+_soloUidAttr+' style="font-weight:700;font-size:'+(window._INSCRITO_NAME_FONT_PX||17)+'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">'+window._safeHtml(_soloDisp)+'</span>'+_crown+'</div>';
-              }
-              // Estilo igual ao card normal
-              var bgStyle = draggable
-                ? 'background:linear-gradient(135deg,rgba(67,56,202,0.6),rgba(99,102,241,0.6));border:1px solid rgba(99,102,241,0.5);'
-                : 'background:linear-gradient(135deg,rgba(15,118,110,0.6),rgba(20,184,166,0.6));border:1px solid rgba(20,184,166,0.5);';
-              // v2.7.93: participante só pode arrastar pra formar dupla se a REGRA permitir
-              // (manualPairing === 'open'); organizador sempre pode. Quando não pode, o card
-              // de solo NEM fica arrastável (antes arrastava, soltava e só então dizia "não pode").
-              var _canPairDrag = isOrg || (t && t.manualPairing === 'open');
-              var dragAttrs = (draggable && _canPairDrag)
-                ? 'draggable="true" ondragstart="window._duplaDragStart(event,\'' + _safeAttr(uid||nm) + '\',\'' + _safeAttr(tIdStr) + '\')" ondragover="event.preventDefault();this.style.outline=\'3px solid #f59e0b\'" ondragleave="this.style.outline=\'\'" ondrop="event.preventDefault();this.style.outline=\'\';window._duplaDropOn(event,\'' + _safeAttr(uid||nm) + '\',\'' + _safeAttr(tIdStr) + '\')"'
-                : '';
-              var labelHtml = !draggable
-                ? '<div style="font-size:0.65rem;color:#34d399;margin-top:3px;">✅ Dupla formada</div>'
-                : (_canPairDrag
-                    ? '<div style="font-size:0.65rem;color:rgba(255,255,255,0.45);margin-top:3px;">Arraste para formar dupla</div>'
-                    : '<div style="font-size:0.65rem;color:rgba(255,255,255,0.4);margin-top:3px;">Sem dupla</div>');
-              // v4.5.59: DUPLA FORMADA → o X (símbolo canônico) DESFAZ a dupla; sem botão
-              // excluir enquanto em dupla. Ver [[project_inscrito_card_canonical]].
-              var desfazerBtn = (!draggable && isOrg)
-                ? '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" title="Desfazer dupla" style="--cx-size:24px;">✕</button>'
-                : '';
-              // v4.5.59: REMOVER inscrito só nos cards SOLO (draggable) — inclusive cada
-              // membro após a dupla ser desfeita. Em dupla FORMADA não aparece (só o
-              // desfazer acima). Mesmo símbolo X, contextos mutuamente exclusivos.
-              var _delBtnDupla = (isOrg && !drawDone && draggable)
-                ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" style="--cx-size:24px;">✕</button>'
-                : '';
-              // v2.7.87: DUPLA FORMADA em 2 colunas — cada pessoa com as categorias DELA
-              // logo abaixo do nome; 1ª à esquerda, 2ª à direita (mesma linha quando couber).
-              // v2.7.99: número de inscrição POR PESSOA, VISÍVEL (não marca-d'água atrás
-              // da foto). Cada membro mostra o SEU nº de inscrição original na borda externa
-              // do seu lado: membro da ESQUERDA → nº à esquerda; da DIREITA → nº à direita.
-              var _s1 = (members && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p1Uid) || '', displayName: (p && p.p1Name) || members[0], name: (p && p.p1Name) || members[0] }) : '';
-              var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p2Uid) || '', displayName: (p && p.p2Name) || members[1], name: (p && p.p2Name) || members[1] }) : '';
-              var _body;
-              if (members) {
-                // v4.5.61: recebe o ÍNDICE do membro; nome resolve por uid (perfil vivo).
-                // O nome gravado (guest) só entra pra quem não tem conta. data-uid-name
-                // deixa a hidratação pós-render preencher/atualizar o nome vivo.
-                var _memBlock = function(idxM, right) {
-                  var _mm = _pairMembers[idxM] || { uid: '', guest: '' };
-                  var _disp = window._displayName(_mm.uid, _mm.guest);
-                  var _metaName = _disp || _mm.guest; // meta (Fem/idade/skill) precisa de um nome p/ resolver
-                  var _seed = _metaName || '?';
-                  var _pk = (_metaName || '').toLowerCase();
-                  var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(_seed) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-                  var _mp = (window._playerPhotoCache && window._playerPhotoCache[_pk] && window._playerPhotoCache[_pk].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_pk] : _ms;
-                  var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(_metaName) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
-                  // v2.8.68/v4.4.105: nome maior (17px) que NÃO trunca — quebra em até 2 linhas
-                  // (altura 44px); só ENCOLHE via auto-fit JS _fitTwoLineNames em casos extremos.
-                  var _nmFs = (window._INSCRITO_NAME_FONT_PX || 17);
-                  var _uidAttr = _mm.uid ? (' data-uid-name="' + window._safeHtml(_mm.uid) + '"') : '';
-                  var _nmSpan = '<span class="sp-fit-name"' + _uidAttr + ' title="' + window._safeHtml(_disp) + '" data-fit-h="44" data-fit-max="' + _nmFs + '" style="font-weight:700;font-size:' + _nmFs + 'px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(_disp) + '</span>';
-                  var _av = right
-                    ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
-                    : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
-                  var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ uid: _mm.uid, displayName: _metaName, name: _metaName }, _metaName, false, t, isOrg) : '';
-                  return '<div style="min-width:0;display:flex;flex-direction:column;gap:4px;flex:1 1 42%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
-                };
-                _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memBlock(0, false) + (_pairMembers[1] ? _memBlock(1, true) : '') + '</div>';
-              } else {
-                _body = nameHtml + ((typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, nm, false, t, isOrg) : '');
-              }
-              // v2.8.49: número de inscrição como MARCA D'ÁGUA no fundo do card (igual ao
-              // card individual). Solo: 1 nº no canto sup. dir. Dupla: o nº ORIGINAL de cada
-              // pessoa no SEU lado — esquerda→canto sup. esquerdo, direita→canto sup. direito.
-              function _wmNum(seq, side) {
-                // v2.8.53: delega pro helper canônico (SVG 90% da altura do card).
-                return (window._enrollNumberBadge) ? window._enrollNumberBadge(seq, side) : '';
-              }
-              var _enrollBadge = (!members && window._enrollNumberBadge && window._enrollNumber)
-                ? window._enrollNumberBadge(window._enrollNumber(_enrollOrderMapD, p))
-                : '';
-              var _wmL = members ? _wmNum(_s1, 'left') : '';
-              var _wmR = (members && members[1]) ? _wmNum(_s2, 'right') : '';
-              // v3.1.x: data-part-* canônicos pra a BARRA de filtro/busca operar TAMBÉM no
-              // modo duplas pré-sorteio (solos + duplas formadas). Solo: 1 pessoa → gênero/
-              // skill reais (e o profile-patch refina depois). Dupla: data-part-multi="1" →
-              // gênero/skill viram wildcard no filtro; a busca casa qualquer um dos nomes.
-              var _dpMulti = members ? '1' : '0';
-              var _dpNameAttr = (members ? members.join(' ') : nm).toLowerCase().replace(/"/g, '&quot;');
-              var _dpGender = members ? 'none' : ((typeof window._canonGender === 'function') ? window._canonGender(typeof p === 'object' && p ? p.gender : '') : 'none');
-              var _dpSkill = 'none';
-              if (!members) {
-                var _dpCats = t.skillCategories || [];
-                var _dpCatStr = (typeof p === 'object' && p) ? (p.category || '') : '';
-                for (var _dpi = 0; _dpi < _dpCats.length; _dpi++) { if (_dpCatStr === _dpCats[_dpi] || _dpCatStr.endsWith(' ' + _dpCats[_dpi])) { _dpSkill = _dpCats[_dpi]; break; } }
-              }
-              var _dpOrder = members
-                ? (parseInt(_s1 || '0', 10) || 0)
-                : (window._enrollNumber ? (parseInt(window._enrollNumber(_enrollOrderMapD, p), 10) || 0) : 0);
-              // v4.4.75: inativo → data-part-inactive p/ o FILTRO ativo/inativo da barra (faltava aqui).
-              var _dpInactive = (t.allowSelfDeactivation !== false && typeof p === 'object' && p && p.ligaActive === false) ? '1' : '0';
-              return '<div class="participant-card" data-part-card="1" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-inactive="' + _dpInactive + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
-                ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
-                _enrollBadge + _wmL + _wmR +
-                (function(){
-                  // CANÔNICO (v4.5.60): o X (símbolo cancelar) fica SEMPRE no CANTO INFERIOR
-                  // DIREITO do card — tanto na DUPLA formada (desfaz) quanto no SOLO (excluir).
-                  // Ação na MESMA linha do status/label de baixo (esq), X à direita.
-                  // Ver [[project_inscrito_card_canonical]].
-                  var _actions = (desfazerBtn || _delBtnDupla)
-                    ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' + desfazerBtn + _delBtnDupla + '</div>'
-                    : '';
-                  var _labelRow = _actions
-                    ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' + (labelHtml || '<span></span>') + _actions + '</div>'
-                    : labelHtml;
-                  var _inner = _body + _labelRow;
-                  return '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' + _inner + '</div>';
-                })() +
-                '</div>';
-            }
-            function _safeAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
-
-            if (_isDoublesTournament && !drawDone) {
-              // v2.7.89: convite pendente vira CARD DE DUPLA PENDENTE (âmbar) DENTRO da
-              // seção "Sem dupla" — visível a todos. Os dois envolvidos saem da lista de
-              // solos (estão em dupla pendente). Botões por papel: convidante = "Cancelar
-              // convite"; convidado = "Confirmar/Cancelar"; demais = sem botão.
-              var _cuUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
-              var _reqs = Array.isArray(t.pairRequests) ? t.pairRequests : [];
-              var _pendUids = {};
-              _reqs.forEach(function(r){ if (r && r.inviterUid) _pendUids[r.inviterUid] = 1; if (r && r.inviteeUid) _pendUids[r.inviteeUid] = 1; });
-              var _soloAvailable = _soloParticipants.filter(function(p){ var u = typeof p === 'object' ? (p.uid || '') : ''; return !(u && _pendUids[u]); });
-              // v2.7.93: bloco de membro do card PENDENTE — igual ao da dupla FORMADA
-              // (avatar + nome + categorias da pessoa abaixo), 1º à esquerda, 2º à direita.
-              var _pendMemBlock = function(n, right){
-                var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-                var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
-                var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
-                // v2.8.88/v4.4.105: nome maior (17px), quebra em até 2 linhas (altura 44px) e só
-                // encolhe em casos extremos — igual ao card de dupla formada.
-                var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="44" data-fit-max="17" style="font-weight:700;font-size:17px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
-                var _av = right
-                  ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
-                  : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
-                var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ displayName: n, name: n }, n, false, t, isOrg) : '';
-                return '<div style="min-width:0;display:flex;flex-direction:column;gap:2px;flex:1 1 40%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
-              };
-              var _pendingCard = function(r){
-                var amInvitee = _cuUid && r.inviteeUid === _cuUid;
-                var amInviter = _cuUid && r.inviterUid === _cuUid;
-                var tIdA = _safeAttr(String(t.id)), rIdA = _safeAttr(r.id);
-                var _bConfirm = '<button type="button" class="btn btn-success btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 11px;font-size:0.72rem;font-weight:800;" onclick="event.stopPropagation();window._acceptPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">✅ Confirmar</button>';
-                var _bCancel = function(label){ return '<button type="button" class="btn btn-danger btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 11px;font-size:0.72rem;font-weight:800;" onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">' + label + '</button>'; };
-                var _btns = '';
-                // v2.7.93: alinhados à DIREITA, embaixo. Convidado: Cancelar à ESQUERDA, Confirmar à DIREITA.
-                if (amInvitee)      _btns = _bCancel('❌ Cancelar') + _bConfirm;
-                else if (amInviter) _btns = _bCancel('Cancelar convite');
-                else if (isOrg)     _btns = _bCancel('Cancelar');
-                var _status = amInvitee ? ('⏳ ' + window._safeHtml(r.inviterName || 'Alguém') + ' te convidou — aceite ou recuse')
-                            : amInviter ? ('⏳ Você convidou ' + window._safeHtml(r.inviteeName || '') + ' — aguardando aceite')
-                            : '⏳ Dupla pendente — aguardando aceite';
-                var _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _pendMemBlock(r.inviterName || '', false) + _pendMemBlock(r.inviteeName || '', true) + '</div>';
-                // v2.8.88: número de inscrição de cada membro como marca-d'água (igual ao
-                // card de dupla formada) — convidante à esquerda, convidado à direita.
-                var _ps1 = window._enrollNumber ? window._enrollNumber(_enrollOrderMapD, { uid: r.inviterUid || '', displayName: r.inviterName || '', name: r.inviterName || '' }) : '';
-                var _ps2 = window._enrollNumber ? window._enrollNumber(_enrollOrderMapD, { uid: r.inviteeUid || '', displayName: r.inviteeName || '', name: r.inviteeName || '' }) : '';
-                var _pwmL = (window._enrollNumberBadge && _ps1) ? window._enrollNumberBadge(_ps1, 'left') : '';
-                var _pwmR = (window._enrollNumberBadge && _ps2) ? window._enrollNumberBadge(_ps2, 'right') : '';
-                return '<div style="background:linear-gradient(135deg,rgba(180,130,20,0.32),rgba(251,191,36,0.16));border:1px solid rgba(251,191,36,0.55);border-radius:12px;padding:10px 12px;box-shadow:0 4px 10px rgba(0,0,0,0.1);position:relative;overflow:hidden;">' +
-                  _pwmL + _pwmR +
-                  '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:8px;">' +
-                    _body +
-                    // CANÔNICO: status na linha de cima; botões (Confirmar/Cancelar)
-                    // numa linha ABAIXO à direita. Ver [[project_inscrito_card_canonical]].
-                    '<div style="font-size:0.72rem;color:#fbbf24;font-weight:600;">' + _status + '</div>' +
-                    (_btns ? '<div style="display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap;">' + _btns + '</div>' : '') +
-                  '</div></div>';
-              };
-              var _pendingCardsHtml = _reqs.length ? ('<div style="display:flex;flex-direction:column;gap:6px;' + (_soloAvailable.length ? 'margin-top:6px;' : '') + '">' + _reqs.map(_pendingCard).join('') + '</div>') : '';
-              var _semDuplaTotal = _soloAvailable.length + _reqs.length;
-              // v3.1.47: BARRA de inscrito CANÔNICA (preset window._inscritosBar) também no
-              // modo duplas pré-sorteio — a regra é: onde há cards de participante, a barra
-              // está lá. Opera sobre os [data-part-card] de AMBAS as seções (Sem dupla +
-              // Duplas formadas) via window._partApplyFilter (que ordena por seção).
-              var _doublesFilterBar = (typeof window._inscritosBar === 'function')
-                ? window._inscritosBar(t, (_soloAvailable.length + _pairedParticipants.length) > 1)
-                : '';
-              // Modo duplas pré-sorteio: Sem Dupla (solos arrastáveis + duplas pendentes âmbar) + Duplas formadas
-              participantsHtml = `
-                <div id="sp-inscritos-pairing" class="mt-5 mb-4">
-                  <h3 style="margin-bottom:1.2rem;font-size:1.1rem;color:var(--text-bright);border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                    👥 Inscritos <span style="font-size:0.8rem;background:rgba(255,255,255,0.1);padding:3px 10px;border-radius:12px;font-weight:600;margin-left:5px;color:var(--text-muted);">${individualCountParts}</span>
-                  </h3>
-                  ${_doublesFilterBar}
-
-                  ${(_soloAvailable.length > 0 || _reqs.length > 0) ? `
-                  <div style="margin-bottom:1.2rem;">
-                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
-                      <span style="font-size:0.75rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;">🙋 Sem dupla (${_semDuplaTotal})</span>
-                      <span style="font-size:0.65rem;color:var(--text-muted);">${(isOrg || t.manualPairing === 'open') ? '— Arraste um card sobre outro para formar a dupla' : '— As duplas são formadas pelo organizador'}</span>
-                    </div>
-                    ${_soloAvailable.length > 0 ? `<div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">${_soloAvailable.map(function(p) { return _duplaCard(p, true, String(t.id)); }).join('')}</div>` : ''}
-                    ${_pendingCardsHtml}
-                  </div>` : '<div style="margin-bottom:1rem;padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);font-size:0.82rem;color:#34d399;text-align:center;">✅ Todos com dupla formada</div>'}
-
-                  ${_pairedParticipants.length > 0 ? `
-                  <div>
-                    <div style="font-size:0.75rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas formadas (${_pairedParticipants.length})</div>
-                    <div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">
-                      ${_pairedParticipants.map(function(p) { return _duplaCard(p, false, String(t.id)); }).join('')}
-                    </div>
-                  </div>` : ''}
-
-                  ${(_hasTournCats && isOrg) ? '<div id="inline-cat-mgr-' + t.id + '"></div>' : ''}
-                </div>`;
+            // ── Torneios de duplas: seção canônica (Sem dupla + Duplas formadas) ──
+            // v4.5.74: EXTRAÍDA p/ window._buildDoublesInscritosSection (single source of
+            // truth) — a MESMA seção é usada na CHAMADA (#participants) com o toggle
+            // Presente injetado via ctx.cardPresence. Ver [[project_two_participant_card_renderers]].
+            var _dsec = (typeof window._buildDoublesInscritosSection === 'function')
+              ? window._buildDoublesInscritosSection(t, {
+                  isOrg: isOrg, drawDone: drawDone,
+                  orgUids: _orgUidsShared, orgEmails: _orgEmailsShared,
+                  peopleCount: individualCountParts, hasTournCats: _hasTournCats,
+                  chrome: true
+                })
+              : null;
+            if (_dsec && _dsec.isDoubles) {
+              participantsHtml = _dsec.html;
             } else {
               // Modo normal (individual ou duplas pós-sorteio)
               // v3.1.47: barra de inscrito CANÔNICA (preset window._inscritosBar — o MESMO
