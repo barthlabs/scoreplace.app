@@ -1093,9 +1093,58 @@ function _autoResolveBye(t, match) {
 }
 
 // ─── Advance winner to next round ────────────────────────��───────────────────
+// ─── Identidade canônica por slot (uid) — v4.5.70 ──────────────────────────
+// UMA leitura/escrita de identidade por slot de match, unificando os 3 esquemas
+// históricos (p1Uid 1v1, team1Uids duplas, team1Obj objeto). O slot carrega
+// SEMPRE o(s) uid(s); o nome (m.p1) é só cache de display. `_advanceWinner`
+// usa isto pra CARREGAR o uid adiante (antes só o nome ia) — o furo que forçava
+// os remendos de reconciliação. Ver memória project_match_slot_uid_identity.
+function _slotUids(m, side) {
+  if (!m) return [];
+  var arr = side === 'p1' ? m.team1Uids : m.team2Uids;
+  if (Array.isArray(arr) && arr.length) return arr.filter(Boolean);
+  var single = side === 'p1' ? m.p1Uid : m.p2Uid;
+  if (single) return [single];
+  var obj = side === 'p1' ? m.team1Obj : m.team2Obj;
+  if (obj && typeof window._participantUids === 'function') {
+    var u = window._participantUids(obj);
+    if (u && u.length) return u;
+  }
+  return [];
+}
+function _slotObj(m, side) {
+  if (!m) return null;
+  return side === 'p1' ? (m.team1Obj || null) : (m.team2Obj || null);
+}
+// Escreve a identidade num slot de destino: team*Uids sempre (forma geral),
+// p*Uid só quando 1v1 (1 uid) pra o hint de _resolveSideLive não truncar dupla.
+function _setSlot(m, side, uids, obj) {
+  uids = (uids || []).filter(Boolean);
+  if (side === 'p1') {
+    m.team1Uids = uids;
+    m.p1Uid = uids.length === 1 ? uids[0] : null;
+    if (obj) m.team1Obj = obj;
+  } else {
+    m.team2Uids = uids;
+    m.p2Uid = uids.length === 1 ? uids[0] : null;
+    if (obj) m.team2Obj = obj;
+  }
+}
+window._slotUids = _slotUids;
+
 function _advanceWinner(t, completedMatch) {
   const winner = completedMatch.winner;
   const loser = winner === completedMatch.p1 ? completedMatch.p2 : completedMatch.p1;
+  // Identidade (uid) dos lados — carregada adiante junto com o nome.
+  const _winSide = (winner === completedMatch.p1) ? 'p1' : 'p2';
+  const _loseSide = _winSide === 'p1' ? 'p2' : 'p1';
+  const _winUids = _slotUids(completedMatch, _winSide);
+  const _loseUids = _slotUids(completedMatch, _loseSide);
+  const _winObj = _slotObj(completedMatch, _winSide);
+  const _loseObj = _slotObj(completedMatch, _loseSide);
+  // Carimba a identidade do vencedor no próprio match (winnerUid não existia).
+  completedMatch.winnerUids = _winUids;
+  completedMatch.winnerUid = _winUids.length === 1 ? _winUids[0] : null;
   // Loser-drop pra chave de perdedores. Vale pra Dupla Eliminatória de torneio
   // normal E pra fase final (playoff) de Liga em Dupla Eliminatória — neste caso
   // o match tem phase:'playoff' + bracket ('upper'/'lower'/'grand'). Aditivo e
@@ -1114,18 +1163,18 @@ function _advanceWinner(t, completedMatch) {
       var fromBye = !!completedMatch.isBye;
       // Play-in matches specify which slot to fill via nextSlot
       if (completedMatch.nextSlot === 'p1') {
-        next.p1 = winner;
+        next.p1 = winner; _setSlot(next, 'p1', _winUids, _winObj);
         if (fromBye) next.p1FromBye = true;
       } else if (completedMatch.nextSlot === 'p2') {
-        next.p2 = winner;
+        next.p2 = winner; _setSlot(next, 'p2', _winUids, _winObj);
         if (fromBye) next.p2FromBye = true;
       } else {
         // Standard advancement: fill first available TBD slot
         if (!next.p1 || next.p1 === 'TBD') {
-          next.p1 = winner;
+          next.p1 = winner; _setSlot(next, 'p1', _winUids, _winObj);
           if (fromBye) next.p1FromBye = true;
         } else if (!next.p2 || next.p2 === 'TBD') {
-          next.p2 = winner;
+          next.p2 = winner; _setSlot(next, 'p2', _winUids, _winObj);
           if (fromBye) next.p2FromBye = true;
         }
       }
@@ -1138,11 +1187,11 @@ function _advanceWinner(t, completedMatch) {
   if (completedMatch.loserMatchId && isDupla) {
     const loserMatch = _findMatch(t, completedMatch.loserMatchId);
     if (loserMatch) {
-      if (completedMatch.loserSlot === 'p1') loserMatch.p1 = loser;
-      else if (completedMatch.loserSlot === 'p2') loserMatch.p2 = loser;
+      if (completedMatch.loserSlot === 'p1') { loserMatch.p1 = loser; _setSlot(loserMatch, 'p1', _loseUids, _loseObj); }
+      else if (completedMatch.loserSlot === 'p2') { loserMatch.p2 = loser; _setSlot(loserMatch, 'p2', _loseUids, _loseObj); }
       else {
-        if (!loserMatch.p1 || loserMatch.p1 === 'TBD') loserMatch.p1 = loser;
-        else if (!loserMatch.p2 || loserMatch.p2 === 'TBD') loserMatch.p2 = loser;
+        if (!loserMatch.p1 || loserMatch.p1 === 'TBD') { loserMatch.p1 = loser; _setSlot(loserMatch, 'p1', _loseUids, _loseObj); }
+        else if (!loserMatch.p2 || loserMatch.p2 === 'TBD') { loserMatch.p2 = loser; _setSlot(loserMatch, 'p2', _loseUids, _loseObj); }
       }
       _autoResolveBye(t, loserMatch);
     }
@@ -1155,11 +1204,11 @@ function _advanceWinner(t, completedMatch) {
   if (completedMatch.loserNextMatchId) {
     const lnMatch = _findMatch(t, completedMatch.loserNextMatchId);
     if (lnMatch) {
-      if (completedMatch.loserNextSlot === 'p1') lnMatch.p1 = loser;
-      else if (completedMatch.loserNextSlot === 'p2') lnMatch.p2 = loser;
+      if (completedMatch.loserNextSlot === 'p1') { lnMatch.p1 = loser; _setSlot(lnMatch, 'p1', _loseUids, _loseObj); }
+      else if (completedMatch.loserNextSlot === 'p2') { lnMatch.p2 = loser; _setSlot(lnMatch, 'p2', _loseUids, _loseObj); }
       else {
-        if (!lnMatch.p1 || lnMatch.p1 === 'TBD') lnMatch.p1 = loser;
-        else if (!lnMatch.p2 || lnMatch.p2 === 'TBD') lnMatch.p2 = loser;
+        if (!lnMatch.p1 || lnMatch.p1 === 'TBD') { lnMatch.p1 = loser; _setSlot(lnMatch, 'p1', _loseUids, _loseObj); }
+        else if (!lnMatch.p2 || lnMatch.p2 === 'TBD') { lnMatch.p2 = loser; _setSlot(lnMatch, 'p2', _loseUids, _loseObj); }
       }
       _autoResolveBye(t, lnMatch);
     }

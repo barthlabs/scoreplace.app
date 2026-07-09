@@ -132,11 +132,14 @@
   function _opVoterInfoMap(t) {
     var info = {};
     var parts = (t && Array.isArray(t.participants)) ? t.participants : [];
+    // v4.5.70: nome POR UID (perfil vivo) quando disponível; nome gravado é só
+    // fallback (guest sem conta, ou perfil ainda não cacheado).
+    var _ln = function (uid, stored) { return (typeof window._nameForUid === 'function' && window._nameForUid(uid)) || stored || ''; };
     parts.forEach(function (p) {
       if (!p || typeof p !== 'object') return;
-      if (p.uid && !info[p.uid]) info[p.uid] = { name: p.displayName || p.name || '', photo: p.photoURL || '' };
-      if (p.p1Uid && !info[p.p1Uid]) info[p.p1Uid] = { name: p.p1Name || '', photo: p.p1PhotoURL || '' };
-      if (p.p2Uid && !info[p.p2Uid]) info[p.p2Uid] = { name: p.p2Name || '', photo: p.p2PhotoURL || '' };
+      if (p.uid && !info[p.uid]) info[p.uid] = { name: _ln(p.uid, p.displayName || p.name), photo: p.photoURL || '' };
+      if (p.p1Uid && !info[p.p1Uid]) info[p.p1Uid] = { name: _ln(p.p1Uid, p.p1Name), photo: p.p1PhotoURL || '' };
+      if (p.p2Uid && !info[p.p2Uid]) info[p.p2Uid] = { name: _ln(p.p2Uid, p.p2Name), photo: p.p2PhotoURL || '' };
     });
     if (t && t.creatorUid && !info[t.creatorUid]) info[t.creatorUid] = { name: t.organizerName || 'Organizador', photo: '' };
     return info;
