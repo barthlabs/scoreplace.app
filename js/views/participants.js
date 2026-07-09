@@ -308,8 +308,21 @@ window._applyWO = function (t, opts) {
   }
 
   // ── Eliminatória / Fase de Grupos ──
-  const _absentInSlot = (slotStr) => {
+  // Casa o AUSENTE contra um slot de match POR UID (identidade real). Recebe o
+  // match + lado (não só a string) pra ler o(s) uid(s) ESTRUTURAL(is) via
+  // window._slotUids (team*Uids→p*Uid→team*Obj). Nome só fallback quando o slot
+  // NÃO tem uid (guest/informal ou rodada legada) OU o ausente não tem uid.
+  // Fecha (a) HOMÔNIMO — dois de mesmo nome, W.O. só num deles; e (b) RENAME —
+  // slot com o nome do sorteio, pessoa renomeada depois (nome não casa, uid sim).
+  // Ver project_match_slot_uid_identity / project_uid_audit_sweep (Parte 14).
+  const _absentInSlot = (m, side) => {
+    const slotStr = m ? m[side] : null;
     if (!slotStr || slotStr === 'TBD' || slotStr === 'BYE') return false;
+    const slotUids = (typeof window._slotUids === 'function') ? window._slotUids(m, side) : [];
+    if (slotUids.length && absentUids.length) {
+      return slotUids.some(u => absentUids.indexOf(u) !== -1);
+    }
+    // fallback por nome (slot sem uid, ou ausente sem uid = guest/legado)
     if (slotStr === absentName) return true;
     const mem = slotStr.includes('/') ? slotStr.split('/').map(n => n.trim()) : [slotStr];
     return mem.indexOf(absentName) !== -1;
@@ -322,9 +335,9 @@ window._applyWO = function (t, opts) {
   // pré-scan: histórico do W.O. desde o momento da decretação (card do ausente
   // mostra "Estava no Jogo N com X") — mesmo que caia em aguarda/TBD/sub.
   const _preAll = _allMatches();
-  const _preMatch = _preAll.find(m => m && !m.winner && (_absentInSlot(m.p1) || _absentInSlot(m.p2)));
+  const _preMatch = _preAll.find(m => m && !m.winner && (_absentInSlot(m, 'p1') || _absentInSlot(m, 'p2')));
   if (_preMatch && typeof window._woHistSet === 'function') {
-    const _slot0 = _absentInSlot(_preMatch.p1) ? 'p1' : 'p2';
+    const _slot0 = _absentInSlot(_preMatch, 'p1') ? 'p1' : 'p2';
     const _entry0 = _preMatch[_slot0] || '';
     if (_entry0.includes('/') && _entry0 !== absentName) {
       const _mem0 = _entry0.split(/\s*\/\s*/).map(n => n.trim());
@@ -360,12 +373,12 @@ window._applyWO = function (t, opts) {
   // 3) escala pra W.O.: adversário(s) vence(m). Re-scan (a sub pode ter mutado).
   const all = _allMatches();
   const pending = (Array.isArray(opts.matches) && opts.matches.length ? opts.matches : all)
-    .filter(m => m && !m.winner && (_absentInSlot(m.p1) || _absentInSlot(m.p2)));
+    .filter(m => m && !m.winner && (_absentInSlot(m, 'p1') || _absentInSlot(m, 'p2')));
   if (!pending.length) return { ok: false, outcome: 'noMatch', reason: 'jogo do ausente não encontrado', absentMarked: true };
 
   let applied = 0, winner = null, matchNum = null, partnerToWaitlist = null, waitedTBD = false, anyKO = false;
   for (const m of pending) {
-    const slot = _absentInSlot(m.p1) ? 'p1' : 'p2';
+    const slot = _absentInSlot(m, 'p1') ? 'p1' : 'p2';
     const oppSide = slot === 'p1' ? 'p2' : 'p1';
     const oppName = m[oppSide];
     // adversário TBD/BYE → não aplica (evita winner='TBD' propagando)

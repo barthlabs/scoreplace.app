@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.79-beta — W.O. atinge o jogo da pessoa certa, pela conta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🚫 W.O. reconhece a pessoa pela conta (não pelo nome):</b> ao marcar alguém como ausente (W.O.), o app agora encontra o jogo certo pela <b>conta da pessoa</b>. Antes, dois jogadores de mesmo nome podiam <b>ambos</b> levar W.O. de uma vez, e quem tivesse trocado o nome depois do sorteio podia ter o W.O. <b>não aplicado</b>. Agora o W.O. cai exatamente no jogo de quem faltou. Jogadores convidados (sem conta) seguem funcionando pelo nome, como antes.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.78-beta — folga e pareamento da Liga seguem a pessoa mesmo se ela trocar o nome <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>⚖️ Justiça da folga e do anti-repetição por identidade:</b> na Liga/Pontos Corridos, o rodízio de <b>quem folga</b> e o <b>anti-repetição de parcerias</b> passaram a contar por <b>pessoa (conta)</b>, não pelo nome escrito. Antes, se alguém trocava o nome no meio da temporada, o app “esquecia” quantas vezes ela já tinha folgado (podia folgar de novo injustamente) e as parcerias já feitas. Agora o histórico segue a pessoa. Contadores antigos são preservados automaticamente.</li>' +
