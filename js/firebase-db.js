@@ -1100,6 +1100,13 @@ window.FirestoreDB = {
   // índice de busca dedicado. limit defensivo de 2000.
   async listInvitableUsers() {
     if (!this.db) return [];
+    // v4.5.68: cache de sessão (TTL 5min). Abrir #explore fazia um scan de até
+    // 2000 docs da coleção `users` TODA VEZ (Sentry: "read spike searchUsers-scan
+    // =306 · rota=#explore"). Sem cache, cada reabertura da tela Explorar relia a
+    // base inteira. Novos cadastros aparecem no máx 5min depois — trade-off aceito
+    // pra lista de convite. Ver memória project_firestore_read_efficiency.
+    var _c = window._invitableUsersCache;
+    if (_c && (Date.now() - _c.at) < 300000) return _c.data.slice();
     var PUBLIC_FIELDS = [
       'displayName', 'displayName_lower', 'email', 'email_lower',
       'photoURL', 'acceptFriendRequests', 'preferredSports', 'city',
@@ -1118,10 +1125,11 @@ window.FirestoreDB = {
         }
         out.push(o);
       });
+      window._invitableUsersCache = { at: Date.now(), data: out };
     } catch (e) {
       window._warn('listInvitableUsers err', e && e.message);
     }
-    return out;
+    return out.slice();
   },
 
   // ---- Friend Requests ----
