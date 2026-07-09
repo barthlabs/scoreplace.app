@@ -4259,9 +4259,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
     state.tieRulePending = false;
 
     if (rule === 'extend') {
-      // Prorrogar: play on with 2-game lead required
-      // Keep tieRule as 'extend' so standard 2-game lead check applies
-      state.tieRule = 'extend';
+      // v4.5.42: PRORROGAR é POR EMPATE — NÃO fixa 'extend'. Mantém 'ask' para
+      // REPERGUNTAR no próximo empate (6-6, 7-7, 8-8, … até alguém abrir 2 de
+      // vantagem ou ativar o tie-break). Só zera o pending e o jogo continua;
+      // o check de 2-game-lead (padrão) segue funcionando com tieRule='ask'.
+      // (antes: state.tieRule='extend' travava a pergunta em definitivo.)
     } else if (rule === 'tiebreak') {
       state.tieRule = 'tiebreak';
       state.isTiebreak = true;
@@ -10226,8 +10228,10 @@ window._openCasualMatch = function(restoreOpts) {
     else parts.push('1-2-3');
     if (cfg.deuceRule) parts.push('AD');
     if (cfg.twoPointAdvantage !== false) {
+      // v4.5.42: 'ask' (perguntar a cada empate) é o PADRÃO → não polui o resumo.
+      // Só mostra quando a regra é diferente do padrão (tie-break direto / prorrogar fixo).
       var tr = cfg.tieRule || 'ask';
-      parts.push('Empate: ' + (_tieRuleLabels[tr] || tr));
+      if (tr !== 'ask') parts.push('Empate: ' + (_tieRuleLabels[tr] || tr));
     } else {
       parts.push('Sem vantagem de 2');
     }
