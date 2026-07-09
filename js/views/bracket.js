@@ -2775,7 +2775,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:1.1rem;">${_soIcon}</span>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:0.82rem;font-weight:700;color:#fbbf24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="if(window._showPlayerStats)window._showPlayerStats('${window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}','${String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${window._safeHtml(t ? window._resolveSideLive(t, m.p1) : m.p1)}</div>
+            <div style="font-size:0.82rem;font-weight:700;color:#fbbf24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="if(window._showPlayerStats)window._showPlayerStats('${window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}','${String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${window._safeHtml(t ? window._resolveSideLive(t, m.p1, m.p1Uid || m.team1Uids) : m.p1)}</div>
             <div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">${_soDetail}</div>
           </div>
         </div>
@@ -4157,7 +4157,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             var _borderPill = _isMe ? 'rgba(34,211,238,0.55)' : border;
             var _colorPill = _isMe ? '#22d3ee' : color;
             var _meBadge = _isMe ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.5px;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
-            return '<span style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;" onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/\'/g, "\\'")) + '\',\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')">' + window._safeHtml(window._resolveSideLive(t, m.p1)) + _ptsLbl + _meBadge + '</span>';
+            return '<span style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;" onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/\'/g, "\\'")) + '\',\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')">' + window._safeHtml(window._resolveSideLive(t, m.p1, m.p1Uid || m.team1Uids)) + _ptsLbl + _meBadge + '</span>';
           }).join('');
           // v4.x: cabeçalho DENTRO do box colorido (igual à Lista de espera) — o título
           // "Desativados (N) — …" fica no mesmo box vermelho dos chips, não solto acima.
@@ -4680,7 +4680,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           prevRoundsInner += '<div style="min-width:200px;flex:1;max-width:280px;background:' + _soBg2 + ';border:1px solid ' + _soBd2 + ';border-radius:8px;padding:8px 12px;font-size:0.8rem;">' +
             '<div style="display:flex;align-items:center;gap:6px;">' +
               '<span style="flex-shrink:0;">' + _soIc2 + '</span>' +
-              '<span style="flex:1;min-width:0;overflow-wrap:anywhere;color:var(--text-muted);">' + window._safeHtml(window._resolveSideLive(t, m.p1) || m.p1) + '</span>' +
+              '<span style="flex:1;min-width:0;overflow-wrap:anywhere;color:var(--text-muted);">' + window._safeHtml(window._resolveSideLive(t, m.p1, m.p1Uid || m.team1Uids) || m.p1) + '</span>' +
               '<span style="flex-shrink:0;font-weight:800;font-size:0.6rem;color:' + _soCol + ';text-transform:uppercase;letter-spacing:0.4px;">' + _soLbl + '</span>' +
             '</div>' +
           '</div>';
@@ -4704,11 +4704,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         else if (isDraw && !hasScore) footer = '<div style="font-size:0.65rem;color:#94a3b8;text-align:center;margin-top:3px;">' + _t('bracket.draw') + '</div>';
         prevRoundsInner += '<div style="min-width: 200px; flex: 1; max-width: 280px; background: rgba(0,0,0,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem;">' +
           '<div style="' + rowS + '">' +
-            '<span style="' + nameS + p1Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p1) || 'TBD') + '</span>' +
+            '<span style="' + nameS + p1Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p1, m.p1Uid || m.team1Uids) || 'TBD') + '</span>' +
             '<span style="' + numS + (p1Win ? 'color:#4ade80;' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP1 : '') + '</span>' +
           '</div>' +
           '<div style="' + rowS + 'margin-top:3px;">' +
-            '<span style="' + nameS + p2Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p2) || 'TBD') + '</span>' +
+            '<span style="' + nameS + p2Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p2, m.p2Uid || m.team2Uids) || 'TBD') + '</span>' +
             '<span style="' + numS + (p2Win ? 'color:#4ade80;' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP2 : '') + '</span>' +
           '</div>' +
           footer +

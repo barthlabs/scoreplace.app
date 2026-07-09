@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.65-beta';
+window.SCOREPLACE_VERSION = '4.5.66-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -2744,10 +2744,29 @@ window._getStandbyPool = function (t) {
 // AO VIVO. As partidas guardam o nome do momento do sorteio; aqui achamos a ENTRADA cujo nome
 // guardado bate com a string e devolvemos _pName(entrada) (uid→perfil). Assim o bracket também
 // puxa do perfil — nada de string velha. BYE/TBD/FOLGA/informal-não-achado → mantém a string.
-window._resolveSideLive = function (t, sideStr) {
+window._resolveSideLive = function (t, sideStr, uidHint) {
   if (!t || typeof sideStr !== 'string') return sideStr || '';
   var s = sideStr.trim();
   if (!s || s === 'TBD' || s === 'BYE' || s === 'FOLGA' || s === 'A definir') return sideStr;
+  // v4.5.66: uid-first — resolve o nome VIVO pelo(s) uid(s) do slot (m.p1Uid / team1Uids),
+  // imune a nome gravado corrompido E a drift de nome pós-sorteio (o matching por nome
+  // abaixo falha quando o nome mudou depois do sorteio). Só usa o nome vivo quando o
+  // perfil está no cache; senão cai no matching por nome (comportamento antigo — zero
+  // regressão). Ver [[project_uid_audit_sweep]].
+  function _liveByUid(u) {
+    if (!u || typeof u !== 'string') return '';
+    return (typeof window._nameForUid === 'function' && window._nameForUid(u)) ||
+           (window._profileNameByUid && window._profileNameByUid[u]) || '';
+  }
+  if (uidHint) {
+    if (Array.isArray(uidHint)) {
+      var _live = uidHint.map(_liveByUid);
+      if (_live.length && _live.every(function (x) { return !!x; })) return _live.join(' / ');
+    } else {
+      var _one = _liveByUid(uidHint);
+      if (_one) return _one;
+    }
+  }
   var pools = [t.participants, t.standbyParticipants, t.waitlist];
   for (var pi = 0; pi < pools.length; pi++) {
     var arr = pools[pi];
