@@ -71,6 +71,7 @@ const SUITES = [
   'tests/draw-name-by-uid.test.js',
   'tests/name-to-uid-live-resolution.test.js',
   'tests/strip-rehydrate-identity.test.js',
+  'tests/letzplay-rating.test.js',
   'js/views/phases-engine.test.js',
   'js/views/phase-generators.test.js',
   'js/views/team-formation.test.js',
