@@ -64,7 +64,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v4.5.95-beta';
+var CACHE_NAME = 'scoreplace-v4.5.97-beta';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do
@@ -194,6 +194,11 @@ self.addEventListener('fetch', function(event) {
 
   // Skip chrome-extension and other non-http
   if (url.indexOf('http') !== 0) return;
+
+  // v4.5.96: pings de checagem de versão (_checkForUpdate) NÃO passam pelo SW — vão
+  // direto à rede (fresh) e NÃO entram no cache. Sem isso, cada ping com `?_swcheck=<now>`
+  // (URL única) virava uma entrada nova no cache → inchaço até o próximo bump.
+  if (url.indexOf('_swcheck') !== -1) return;
 
   // For same-origin static assets: network-first (always try fresh, fallback to cache)
   if (url.indexOf(self.location.origin) === 0) {

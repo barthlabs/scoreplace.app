@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.97-beta — o app se atualiza sozinho <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔄 Atualização automática mais confiável:</b> quando sai uma versão nova, o app passa a pegá-la <b>sozinho</b> — inclusive ao <b>navegar entre telas</b> — sem você precisar recarregar nem fechar/reabrir. Se estiver no meio de algo (placar, formulário), ele espera o momento seguro e mostra um toque "🔄 Nova versão" caso queira atualizar na hora. A checagem ficou <b>leve</b> (não baixa mais o app inteiro toda vez).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.95-beta — Vagas (placeholders) e duplas mais consistentes <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>➕ Reservar vagas (placeholders) corrigido:</b> as vagas agora aparecem sempre com o nome <b>"Jogador NN"</b>, <b>numeradas de forma única</b> — mesmo criando em vários lotes (antes o nome sumia ou repetia). Cada vaga vira um jogador real quando alguém ocupa.</li>' +

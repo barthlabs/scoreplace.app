@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.95-beta';
+window.SCOREPLACE_VERSION = '4.5.97-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -842,13 +842,17 @@ window._devWhatsAppBtnHtml = function (opts) {
     if (window._pendingUpdateReload) { window._applyUpdate(false); if (!opts.force) return; }
     if (!opts.force && (now - window._lastUpdateCheck) < 60000) return;
     window._lastUpdateCheck = now;
-    fetch('/js/store.js?_t=' + now, { cache: 'no-store' }).then(function(r) {
+    // v4.5.96: ping BARATO — /version.txt (~20 bytes, gerado no prerender a cada deploy)
+    // em vez de baixar store.js (400KB) a cada check. URL `_swcheck` = o SW IGNORA (rede
+    // direta, sem cachear). cache:'no-store' evita o cache HTTP. Antes o Range em store.js
+    // não era honrado pelo hosting (voltava 400KB) → caro com checks frequentes.
+    fetch('/version.txt?_swcheck=' + now, { cache: 'no-store' }).then(function(r) {
       if (!r.ok) throw new Error('fetch failed');
       return r.text();
     }).then(function(txt) {
-      var m = txt.match(/SCOREPLACE_VERSION\s*=\s*'([^']+)'/);
-      if (m && m[1] && m[1] !== window.SCOREPLACE_VERSION) {
-        window._log('[AutoUpdate] New version:', m[1], '(running:', window.SCOREPLACE_VERSION + ').');
+      var v = String(txt || '').trim();
+      if (v && v.length < 40 && v !== window.SCOREPLACE_VERSION) {
+        window._log('[AutoUpdate] New version:', v, '(running:', window.SCOREPLACE_VERSION + ').');
         window._showUpdatePill(); // mostra a pílula mesmo se o reload auto for adiado
         window._applyUpdate(!!opts.force);
       }
@@ -866,9 +870,18 @@ window._devWhatsAppBtnHtml = function (opts) {
   window.addEventListener('pageshow', function() { window._checkForUpdate({}); });
   window.addEventListener('focus', function() { window._checkForUpdate({}); });
 
-  // 3. Periódico enquanto o app está aberto (timer pausa em background no iOS,
-  //    mas cobre sessões longas em desktop/Android).
-  setInterval(function() { window._checkForUpdate({}); }, 600000);
+  // 3. NAVEGAÇÃO no app (hashchange) — v4.5.96: o ponto cego era o usuário que fica
+  //    numa aba SÓ, sem trocar de janela/aba (visibilitychange nunca dispara), mas
+  //    navegando MUITO dentro do app (dashboard↔torneio↔chave). Cada troca de rota é
+  //    um momento SEGURO (sem modal/input) e frequente → aplica a versão nova sem o
+  //    usuário fazer nada. Update pendente é aplicado na hora (bypassa o throttle via
+  //    o guard `_pendingUpdateReload` no topo de _checkForUpdate).
+  window.addEventListener('hashchange', function() { window._checkForUpdate({}); });
+
+  // 4. Periódico enquanto o app está aberto (timer pausa em background no iOS, mas
+  //    cobre sessões longas paradas). v4.5.96: 10min → 2min (custo: 1 fetch leve de
+  //    store.js a cada 2min; ganho: janela máx de versão velha cai de 10 pra 2min).
+  setInterval(function() { window._checkForUpdate({}); }, 120000);
 })();
 
 // ─── Live countdown ticker ─────────────────────────────────────────────────
