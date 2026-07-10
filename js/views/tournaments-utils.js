@@ -798,8 +798,16 @@ window._phaseCurrentRoundProgress = function(t) {
   var cur = byRound[curR];
   var total = cur.length, done = cur.filter(function(m){ return m.winner; }).length;
   var starts = [], ends = [];
-  cur.forEach(function(m){ if (m.startedAt) starts.push(+m.startedAt); if (m.resultAt) ends.push(+m.resultAt); });
+  // "Lançar resultado É iniciar" (mesma regra do início efetivo do torneio, ~L863): o placar
+  // conta como início mesmo sem startedAt (lançamento direto, sem placar ao vivo). Senão uma
+  // rodada jogada só por lançamento direto ficava "aguardando início" (roundStartMs null).
+  cur.forEach(function(m){ if (m.startedAt) starts.push(+m.startedAt); if (m.resultAt) { starts.push(+m.resultAt); ends.push(+m.resultAt); } });
   var _idx = rounds.indexOf(curR);
+  // Fim da rodada ANTERIOR desta fase (maior resultAt fora da rodada atual): quando a rodada
+  // atual está sorteada mas ainda sem 1º jogo, é DAQUI que ela ficou "valendo" — a fase não
+  // parou. Usado como fallback do início da rodada (evita "aguardando início" no meio da fase).
+  var _prevEnds = pm.filter(function(m){ return (m.round == null ? 1 : m.round) !== curR && m.resultAt; }).map(function(m){ return +m.resultAt; });
+  var prevRoundEndMs = _prevEnds.length ? Math.max.apply(null, _prevEnds) : null;
   // v4.3.16: NOME FUNCIONAL da rodada (Oitavas/Quartas/Semifinais/Final/3º lugar), por
   // ANALOGIA à nomeação das colunas do bracket — mas contando jogos POR TRILHA (Ouro/Prata
   // somam no mesmo round, então dividimos pelo nº de trilhas). Jogo de 3º lugar não conta
@@ -830,6 +838,7 @@ window._phaseCurrentRoundProgress = function(t) {
     total: total, done: done, pct: total ? Math.round(done / total * 100) : 0,
     complete: total > 0 && done === total,
     roundStartMs: starts.length ? Math.min.apply(null, starts) : null,
+    prevRoundEndMs: prevRoundEndMs,
     roundEndMs: (done === total && ends.length) ? Math.max.apply(null, ends) : null
   };
 };
@@ -984,7 +993,11 @@ window._buildProgressInner = function(t) {
       _labelHead = _pr.name || ('Rodada ' + _roundNum);
       _labelSchedStart = 'início programado';
       _labelSchedEnd = 'final programado';
-      actualStart = _pr.roundStartMs || null;
+      // v4.5.x: fase eliminatória JÁ EM ANDAMENTO mas a rodada atual (ex.: Semifinais) ainda
+      // sem 1º jogo → NÃO é "aguardando início" (o torneio não parou). Usa o fim da rodada
+      // anterior desta fase como início efetivo. Só fica null quando a fase inteira não tem
+      // nenhum jogo jogado — aí sim é "aguardando início" de verdade (mesma fonte do torneio).
+      actualStart = _pr.roundStartMs || _pr.prevRoundEndMs || null;
       var _phL = (t.phases && t.phases[_cp]) || {};
       var _cfgSL = window._tProgParseMs(_phL.startDate ? (_phL.startDate + (_phL.startTime ? ('T' + _phL.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
       var _cfgEL = window._tProgParseMs(_phL.endDate ? (_phL.endDate + (_phL.endTime ? ('T' + _phL.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
@@ -1905,7 +1918,7 @@ window._buildTournamentConfigBox = function (t, opts) {
         ? 'Time inteiro leva W.O.' : 'Individual (substitui só o ausente)');
     // Inscrições após início / novos confrontos (formatos de chave; Liga já tratou acima)
     if (!isLiga) {
-        var le = t.lateEnrollment || 'closed';
+        var le = (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) || 'closed';
         if (le === 'expand') {
             add('Inscrições após início', 'Abertas — geram novos confrontos');
         } else {

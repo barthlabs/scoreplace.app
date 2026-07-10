@@ -263,6 +263,7 @@
           mapping: mapRR, grandFinal: elimDuplaRR || (e0.linhas > 1 && e0.grandFinal !== false),
           thirdPlace: e0.terceiro, lateEnrollment: e0.lateEnrollment || 'closed', drawManual: false
         });
+        if (opts.lateEnrollment) pRR.lateEnrollment = opts.lateEnrollment; // fase inicial = painel
         return { topLevel: top, phases: [pRR, pElimRR], cfg: cfg };
       }
 
@@ -286,6 +287,7 @@
         mapping: _buildMapping(d0, e0.nomes, Math.max(e0.linhas, 2) * 8, e0.linhas),
         grandFinal: elimDupla0 || (e0.linhas > 1 && e0.grandFinal !== false), thirdPlace: e0.terceiro, drawManual: false
       });
+      if (opts.lateEnrollment) p0.lateEnrollment = opts.lateEnrollment; // eliminação direta: fase inicial = painel
       return { topLevel: top, phases: [p0], cfg: cfg };
     }
 
@@ -410,6 +412,10 @@
       phases.push(p1);
     }
 
+    // A fase INICIAL (classificatória, onde há inscrição) honra o painel "Inscrições durante a
+    // fase" (t.lateEnrollment). A eliminatória (fase 2) tem o SEU próprio valor
+    // (cfg.eliminatoria.lateEnrollment), já compilado acima → cada fase gerencia a sua.
+    if (opts.lateEnrollment) phases[0].lateEnrollment = opts.lateEnrollment;
     return { topLevel: top, phases: phases, cfg: cfg };
   }
 

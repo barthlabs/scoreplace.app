@@ -3191,7 +3191,8 @@ window.toggleRegistrationStatus = function (tId) {
     var _hasDrawNow = (Array.isArray(t.matches) && t.matches.length > 0) ||
                       (Array.isArray(t.rounds) && t.rounds.length > 0) ||
                       (Array.isArray(t.groups) && t.groups.length > 0);
-    var _lateMode = (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
+    var _le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+    var _lateMode = (_le === 'standby' || _le === 'expand');
     if (_hasDrawNow && _lateMode && t.status !== 'finished') {
         if (t.status === 'closed') {
             t.status = 'active';

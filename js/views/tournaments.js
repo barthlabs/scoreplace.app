@@ -1568,7 +1568,8 @@ function renderTournaments(container, tournamentId = null) {
         // SORTEIO não encerra as inscrições — elas seguem abertas. Não mostra o
         // diálogo "encerrar prematuramente"; sorteia direto SEM setar 'closed'.
         var _tSort = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
-        var _lateMode = !!(_tSort && (_tSort.lateEnrollment === 'standby' || _tSort.lateEnrollment === 'expand'));
+        var _leSort = _tSort ? (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(_tSort) : _tSort.lateEnrollment) : null;
+        var _lateMode = !!(_tSort && (_leSort === 'standby' || _leSort === 'expand'));
         // v4.5.9: o gate dispara SEMPRE que as inscrições NÃO estão formalmente fechadas
         // (status !== 'closed'), não só quando `isAberto` — que fica false quando o PRAZO
         // já venceu mesmo com o torneio ainda aberto. Pedido do dono: "com as inscrições
@@ -1972,7 +1973,8 @@ function renderTournaments(container, tournamentId = null) {
         // sorteio e só fecham quando o organizador clica "Encerrar Inscrições"
         // (que seta status='closed'). lateEnrollManaged = quando esse modo está
         // ativo após o sorteio (pra mostrar o botão Encerrar/Reabrir).
-        const lateEnrollManaged = sorteioRealizado && !isFinished && (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
+        const _leMng = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+        const lateEnrollManaged = sorteioRealizado && !isFinished && (_leMng === 'standby' || _leMng === 'expand');
         // v4.5.15 (regra do dono): a inscrição tardia só fica ABERTA durante a R1 da fase —
         // FECHA no 1º resultado (ou 1º ponto no placar ao vivo) da R2. window._lateEnrollWindowOpen
         // já é essa regra canônica (round>=2 com resultado, por fase). Depois de fechar, isAberto

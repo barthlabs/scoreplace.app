@@ -709,7 +709,8 @@ window._drawPresentOnly = function (tId) {
   const proceed = function () {
     const t2 = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
     if (t2) {
-      const lateMode = (t2.lateEnrollment === 'standby' || t2.lateEnrollment === 'expand');
+      const _le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t2) : t2.lateEnrollment;
+      const lateMode = (_le === 'standby' || _le === 'expand');
       if (!lateMode && t2.status !== 'closed' && t2.status !== 'finished') t2.status = 'closed';
     }
     if (typeof window._handleSortearClick === 'function') {

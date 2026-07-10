@@ -88,6 +88,38 @@
       '<span>' + label + '</span>' +
       '<span class="toggle-switch"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></span></label>';
   }
+  // Painel "Inscrições durante a fase" DA ELIMINATÓRIA (2ª fase). Espelha visualmente o bloco do
+  // form (#late-enroll-box), mas grava em cfg.eliminatoria.lateEnrollment (não em t.lateEnrollment,
+  // que é da fase inicial). Mesma semântica de 2 toggles → 3 valores: closed | standby | expand.
+  //   master: ligado = Fechadas (🚫) · desligado = Abertas (🔓)
+  //   conf  : ligado = Novos Confrontos (➕) · desligado = Suplentes Apenas (🪑)  [só aparece quando aberta]
+  function _lateEnrollElimBlock(e) {
+    var T = window._t || function (k) { return k; };
+    var v = (['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) >= 0) ? e.lateEnrollment : 'closed';
+    var isClosed = v === 'closed', isExpand = v === 'expand';
+    var onRow = 'border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);';
+    var offRow = 'border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);';
+    function _tg(checked, on) {
+      return '<label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + on + '"><span class="toggle-slider"></span></label>';
+    }
+    function _row(active, icon, title, desc, tg) {
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border-radius:10px;' + (active ? onRow : offRow) + '">' +
+        '<div style="display:flex;gap:8px;align-items:flex-start;min-width:0;"><span style="font-size:1rem;line-height:1.2;">' + icon + '</span>' +
+        '<div style="min-width:0;"><div style="font-weight:600;color:var(--text-main);font-size:0.88rem;">' + title + '</div>' +
+        '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;line-height:1.4;">' + desc + '</div></div></div>' + tg + '</div>';
+    }
+    var masterRow = _row(isClosed, isClosed ? '🚫' : '🔓',
+      T(isClosed ? 'create.lateEnrollClosed' : 'create.lateEnrollOpen'),
+      T(isClosed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc'),
+      _tg(isClosed, 'window._f2ElimLateMaster(this.checked)'));
+    var confRow = isClosed ? '' : ('<div style="margin-top:8px;">' + _row(isExpand, isExpand ? '➕' : '🪑',
+      T(isExpand ? 'create.lateEnrollExpand' : 'create.lateEnrollSuplentesOnly'),
+      T(isExpand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc'),
+      _tg(isExpand, 'window._f2ElimLateConf(this.checked)')) + '</div>');
+    return '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:12px;padding:1rem;margin-top:14px;">' +
+      '<p style="margin:0 0 0.75rem;font-size:0.8rem;color:#fbbf24;font-weight:600;text-transform:uppercase;letter-spacing:1px;">⏱️ ' + T('create.lateEnrollSection') + '</p>' +
+      masterRow + confRow + '</div>';
+  }
   // Janela da fase em dias: (término − 1º sorteio). Base da via de mão dupla rodadas↔repetir.
   // v4.4.62: CONSIDERA O HORÁRIO de cada campo (não meia-noite). 1º sorteio = data+hora do
   // agendamento (sem data, cai no início da fase); fim = data+hora de término da fase.
@@ -471,10 +503,13 @@
               : 'Chaves <b>independentes</b> — cada chave tem seu próprio campeão, sem grande final unindo-as. Ative para cruzá-las numa grande final.') + '</div>';
         }
       }
-      // v4.4.42: "Inscrições durante a fase" só existe na FASE INICIAL do torneio (onde há
-      // inscrição). Com classificatória, ELA é a inicial e tem o bloco (via slot); a eliminatória
-      // (2ª fase) NÃO tem. Sem classificatória, a eliminatória é a inicial e carrega o bloco (slot).
+      // "Inscrições durante a fase": cada fase tem a SUA. Sem classificatória, a eliminatória é a
+      // fase inicial (onde há inscrição) e carrega o bloco do FORM (via slot #f2-classif-extra →
+      // t.lateEnrollment). Com classificatória, ELA é a inicial (tem o bloco do form via slot);
+      // a eliminatória é 2ª fase e ganha o SEU próprio painel (cfg.eliminatoria.lateEnrollment),
+      // que só passa a valer quando o torneio avança de fase.
       if (!cfg.classifAtiva) eb += '<div id="f2-classif-extra" style="margin-top:12px;"></div>';
+      else eb += _lateEnrollElimBlock(e);
     }
     var elimInner = e.ativa ? eb : '';
     // v4.4.52: fase avançou → config da eliminatória travada (cinza, sem cliques). Nota muda
@@ -734,6 +769,20 @@
   window._f2GrandFinal = function (checked) { if (!S) return; S.cfg.eliminatoria.grandFinal = !!checked; _norm(); _rerender(); };
   // v4.4.58: Dupla Eliminatória (repescagem). ON força 1 linha (chave única) no normalize.
   window._f2ElimDupla = function (checked) { S.cfg.eliminatoria.dupla = !!checked; _norm(); _rerender(); };
+  // "Inscrições durante a fase" DA ELIMINATÓRIA (cfg.eliminatoria.lateEnrollment). master ON =
+  // Fechadas; master OFF preserva o conf (expand/standby). conf só vale com inscrição aberta.
+  window._f2ElimLateMaster = function (closedOn) {
+    if (!S) return; var e = S.cfg.eliminatoria;
+    if (closedOn) e.lateEnrollment = 'closed';
+    else e.lateEnrollment = (e.lateEnrollment === 'expand') ? 'expand' : 'standby';
+    _norm(); _rerender();
+  };
+  window._f2ElimLateConf = function (expandOn) {
+    if (!S) return; var e = S.cfg.eliminatoria;
+    if (e.lateEnrollment === 'closed') return; // conf irrelevante quando fechada
+    e.lateEnrollment = expandOn ? 'expand' : 'standby';
+    _norm(); _rerender();
+  };
   window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
   // v4.5.51: abrir a eliminatória com rodada Rei/Rainha (grupos de 4 formam as duplas).
   window._f2ElimOpenRR = function (checked) { if (!S) return; S.cfg.eliminatoria.openReiRainha = !!checked; _norm(); _rerender(); };

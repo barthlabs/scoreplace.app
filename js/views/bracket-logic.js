@@ -2207,7 +2207,8 @@ window._lateEnrollR2Started = function (t) {
 // formato sem inscrição tardia → janela fechada. Regra ÚNICA, por fase (currentPhaseIndex).
 window._lateEnrollWindowOpen = function (t) {
   if (!t) return false;
-  if (t.lateEnrollment !== 'standby' && t.lateEnrollment !== 'expand') return false;
+  var _le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+  if (_le !== 'standby' && _le !== 'expand') return false;
   if (t.status === 'closed') return false; // organizador fechou na mão
   return !window._lateEnrollR2Started(t); // aberta enquanto a 2ª rodada não começou
 };

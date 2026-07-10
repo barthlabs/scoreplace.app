@@ -266,7 +266,8 @@ function renderDashboard(container) {
     const ligaAberta = (typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
     // v2.1.4: late enrollment (Fechadas OFF) — inscrições seguem abertas após o
     // sorteio (e após iniciar) até o organizador encerrar. Mesma regra do detalhe.
-    const lateEnrollOpen = sorteioRealizado && t.status !== 'finished' && t.status !== 'closed' && (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
+    const _leD = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+    const lateEnrollOpen = sorteioRealizado && t.status !== 'finished' && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
     return (t.status !== 'finished' && t.status !== 'closed' && !sorteioRealizado && (!t.registrationLimit || new Date(t.registrationLimit) >= new Date())) || ligaAberta || lateEnrollOpen;
   }).length;
 
@@ -557,7 +558,8 @@ function renderDashboard(container) {
     const ligaAberta = (typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
     // v2.1.4: late enrollment (Fechadas OFF) mantém inscrições abertas após o
     // sorteio e após iniciar, até o organizador encerrar. Mesma regra do detalhe.
-    const lateEnrollOpen = sorteioRealizado && !isFinished && t.status !== 'closed' && (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
+    const _leD = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+    const lateEnrollOpen = sorteioRealizado && !isFinished && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
     const isAberto = (!isFinished && t.status !== 'closed' && !sorteioRealizado && (!t.registrationLimit || new Date(t.registrationLimit) >= new Date())) || ligaAberta || lateEnrollOpen;
     // v1.3.35-beta: "Em Andamento" só com t.tournamentStarted setado pelo
     // botão Iniciar Torneio. Sorteio realizado mantém "Inscrições Encerradas".
@@ -679,7 +681,8 @@ function renderDashboard(container) {
     // Enroll/unenroll button: only when inscriptions are truly open
     // hasDraw = tournament already has matches/rounds/groups drawn
     const hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-    const canEnroll = isAberto && !isFinished && (!hasDraw || ligaAberta || t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
+    const _leE = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+    const canEnroll = isAberto && !isFinished && (!hasDraw || ligaAberta || _leE === 'standby' || _leE === 'expand');
     let enrollBtnHtml = '';
     if (_isInStandby && !isFinished) {
       enrollBtnHtml = `<div style="font-size: 0.6rem; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.4px; background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 6px;">⏳ ${_t('enroll.onWaitlist')}</div><button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._leaveStandby('${t.id}')">🛑 ${_t('enroll.leaveWaitlist')}</button>`;

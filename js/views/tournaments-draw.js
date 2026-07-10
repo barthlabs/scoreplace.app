@@ -496,7 +496,8 @@ window._buildPhase0Pool = function (t, isMon, ts) {
 //   -3  = Tier 3 (R2 do lower já começou) → suplentes individuais (caller dissolve as duplas)
 window._integrateLateDuplas = function (t) {
   if (!t) return 0;
-  if (t.lateEnrollment !== 'expand' && t.lateEnrollment !== 'standby') return 0;
+  var _le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+  if (_le !== 'expand' && _le !== 'standby') return 0;
   if (!/dupla/i.test(t.format || '')) return 0; // Eliminatória Simples: _createExtraGamesFromWaitlist
   if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio ainda não feito
   if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-cat: fora do escopo
@@ -720,7 +721,7 @@ window._dissolveLateDuplas = function (t) {
 
 window._createExtraGamesFromWaitlist = function(t) {
   if (!t) return 0;
-  if (t.lateEnrollment !== 'expand') return 0;
+  if ((window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) !== 'expand') return 0;
   var fmt = t.format || '';
   if (fmt !== 'Eliminatórias Simples' && fmt !== 'Eliminatória Simples') return 0;
   if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-categoria: fora do escopo por ora

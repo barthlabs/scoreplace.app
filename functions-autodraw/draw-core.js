@@ -59,6 +59,21 @@ g.window._rehydrateEntryNames = function (t, resolve) {
   return t;
 };
 
+// ── lateEnrollment POR FASE (espelha store.js) ───────────────────────────────
+// O motor vendored (bracket-logic.js) chama window._expandFormationAllowed pra decidir se
+// forma novo confronto a partir da lista de espera. Sem estes helpers no shim, o guard
+// `typeof === 'function'` era falso e o servidor auto-formava SEMPRE, ignorando o modo
+// "Suplentes Apenas"/"Fechadas". Agora o servidor honra o valor EFETIVO da fase corrente.
+g.window._effectiveLateEnrollment = function (t) {
+  if (!t) return undefined;
+  var ph = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
+  return (ph && ph.lateEnrollment) || t.lateEnrollment;
+};
+g.window._expandFormationAllowed = function (t) {
+  var v = g.window._effectiveLateEnrollment(t);
+  return v !== 'standby' && v !== 'closed';
+};
+
 // Carrega a lógica real do cliente (ordem: deps cross-file antes de bracket-logic).
 require('./vendor/tournaments-utils.js');       // _isLigaFormat, _calcNextDrawDate
 require('./vendor/tournaments-categories.js');  // _displayCategoryName, _sortCategoriesBySkillOrder, _getParticipantCategories, _participantInCategory
