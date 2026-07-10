@@ -1297,7 +1297,7 @@ function renderParticipants(container, tournamentId) {
   // por convite o _pName devolve só o p1 → contava dupla como 1. Ver
   // [[project_count_people_not_entries]].
   const _expandMemberNames = (p) => {
-    if (p && typeof p === 'object' && p.p1Name && p.p2Name) return [String(p.p1Name).trim(), String(p.p2Name).trim()].filter(Boolean);
+    if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) return [(window._displayName(p.p1Uid || '', p.p1Name || '') || p.p1Uid || ''), (window._displayName(p.p2Uid || '', p.p2Name || '') || p.p2Uid || '')].filter(Boolean); // v4.5.86: uid OU nome (migração ITEM 3/Fase 4 apaga nome de quem tem uid)
     const n = window._pName(p);
     if (n && n.indexOf('/') !== -1) return n.split('/').map(s => s.trim()).filter(Boolean);
     return n ? [n] : [];
@@ -2032,7 +2032,7 @@ function renderParticipants(container, tournamentId) {
             // ambos presentes, vermelho se algum ausente); cada membro tem o SEU toggle
             // (ctx.memberPresence), então SEM linha de presença por entrada (rowHtml='').
             var _pairKeys = null;
-            if (p && typeof p === 'object' && p.p1Name && p.p2Name) _pairKeys = [String(p.p1Name).trim(), String(p.p2Name).trim()];
+            if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) _pairKeys = [(p.p1Uid || String(p.p1Name || '').trim()), (p.p2Uid || String(p.p2Name || '').trim())]; // v4.5.86: uid OU nome; presença é uid-keyed (_idMapHas resolve o uid direto)
             else { var _nmC = (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || ''); if (_nmC.indexOf('/') !== -1) { var _pp = _nmC.split('/').map(function (s) { return s.trim(); }).filter(Boolean); if (_pp.length >= 2) _pairKeys = _pp; } }
             if (_pairKeys) {
               var _q1 = _entryPresent(_pairKeys[0]), _z1 = !_q1 && _entryAbsent(_pairKeys[0]);

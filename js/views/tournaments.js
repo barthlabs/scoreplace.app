@@ -74,8 +74,11 @@ window._buildDoublesInscritosSection = function (t, ctx) {
       ? window._playerPhotoCache[nm.toLowerCase()] : _fb;
     var _isOrgP = uid ? !!_orgUidsShared[uid] : (email && !!_orgEmailsShared[email]);
     var _crown = _isOrgP ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
-    var _pairMembers = (typeof p === 'object' && p && p.p1Name && p.p2Name)
-      ? [{ uid: (p.p1Uid || ''), guest: String(p.p1Name).trim() }, { uid: (p.p2Uid || ''), guest: String(p.p2Name).trim() }]
+    // v4.5.86: dupla = uid OU nome (ESPELHA _isPairEntry). A migração ITEM 3/Fase 4 apaga
+    // p1Name/p2Name de quem tem uid → exigir NOME aqui fazia a dupla renderizar como solo.
+    // _displayName(uid,'') resolve o nome VIVO pelo uid (+ data-uid-name hidrata assíncrono).
+    var _pairMembers = (typeof p === 'object' && p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))
+      ? [{ uid: (p.p1Uid || ''), guest: String(p.p1Name || '').trim() }, { uid: (p.p2Uid || ''), guest: String(p.p2Name || '').trim() }]
       : (nm.includes('/') ? nm.split('/').map(function (s) { return { uid: '', guest: s.trim() }; }).filter(function (x) { return x.guest; }) : null);
     var members = _pairMembers ? _pairMembers.map(function (m) { return window._displayName(m.uid, m.guest); }) : null;
     var nameHtml;

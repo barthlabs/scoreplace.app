@@ -9,6 +9,18 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.87-beta — duplas aparecem completas na hora <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👫 Card de dupla sempre com os dois jogadores:</b> em torneios de duplas, às vezes um card aparecia só com um nome (o parceiro sumia por um instante enquanto o perfil carregava). Agora a dupla aparece <b>completa na hora</b>, na lista de inscritos e no detalhe do torneio — o app reconhece os dois jogadores pela conta, sem depender do nome estar gravado.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.86-beta — repescagem completa também na chave de baixo (ninguém passa sem jogar) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔁 Todos jogam, ninguém fica de fora:</b> na Dupla Eliminatória com <b>repescagem</b> e um número de duplas fora da conta certa (ex.: 15), a <b>chave de baixo</b> agora dá uma nova chance ao melhor eliminado da própria rodada, em vez de deixar alguém <b>avançar sem jogar (BYE)</b>. Quem escolhe repescagem <b>nunca mais vê um BYE</b> na chave; quem prefere BYE, escolhe BYE; e quem quiser trava os inscritos numa potência de 2. É o espírito do app — incluir todo mundo. O time que ganha essa nova chance aparece com a marca <b>REP</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.85-beta — identidade do jogador é a conta; o nome vem do perfil <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🛡️ Robustez interna (sem mudança visível):</b> o app deixa de guardar o nome do jogador na inscrição quando ele tem conta — passa a exibir sempre o <b>nome do perfil ao vivo</b>. Se você mudar seu nome no perfil, ele aparece atualizado em todo lugar, sem resíduo antigo. O sorteio continua funcionando normalmente (resolve o nome pela conta na hora). Jogadores <b>convidados sem conta</b> seguem pelo nome digitado, como sempre.</li>' +

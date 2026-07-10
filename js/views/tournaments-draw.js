@@ -2058,13 +2058,18 @@ window._rebuildLowerBracket = function (t, opts) {
     opts.preRound.forEach(m => { if (m && m.bracket === 'lower' && m.round > lround) lround = m.round; });
     function lowerRound(games) { lround++; const arr = []; for (let i = 0; i < games; i++) arr.push(M('lower', lround)); return arr; }
     function slotsOf(arr) { const s = []; arr.forEach(m => { s.push({ m, s: 'p1' }); s.push({ m, s: 'p2' }); }); return s; }
-    function fillOdd(sl, srcRound) {
-        // Repescagem no ímpar sai da rodada inferior ANTERIOR (srcRound). Se essa rodada
-        // NÃO existe (ex.: pré-rodada vazia quando toLower=0 na dupla ímpar), não há de onde
-        // repescar → BYE (o par avança). Sem isso, a vaga repFill fica órfã (slot morto).
-        const hasSrc = t.matches.some(m => m && m.bracket === 'lower' && m.round === srcRound && (cat == null || m.category === cat));
-        if (mode === 'bye' || !hasSrc) { if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; }
-        else { (sl.m.repFill = sl.m.repFill || []).push({ slot: sl.s, srcBracket: 'lower', srcRound: srcRound, rank: 0, cat, tagRep: true }); }
+    function fillOdd(sl, srcRoundPrev) {
+        // Repescagem no ímpar (3ª+ vida): ressuscita o MELHOR derrotado. Em modo REPESCAGEM
+        // NUNCA vira bye — prioriza a PRÓPRIA rodada (que sempre tem jogos normais quando o par
+        // existe); só cai pra rodada anterior num caso degenerado (rodada só com o jogo-ímpar).
+        // Regra do dono: repescagem = sem bye em lugar nenhum. O jogo-ímpar é marcado
+        // isPhaseRepGame p/ não ser fonte de si mesmo; tagRep → badge REP no revivido.
+        if (mode === 'bye') { if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; return; }
+        sl.m.isPhaseRepGame = true;
+        const _has = function (r) { return t.matches.some(m => m && m.bracket === 'lower' && m.round === r && !m.isPhaseRepGame && (cat == null || m.category === cat)); };
+        const src = _has(lround) ? lround : srcRoundPrev;
+        if (!_has(src)) { if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; return; } // degenerado: sem fonte
+        (sl.m.repFill = sl.m.repFill || []).push({ slot: sl.s, srcBracket: 'lower', srcRound: src, rank: 0, cat, tagRep: true });
     }
 
     let prevLower = opts.preRound.slice();
@@ -2237,6 +2242,24 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
     // _integrateLateDuplas Tier 2). Ver project_dupla_elim_repechage.
     let prevLower = lowerRound(preGames);
     feedPre(prevLower);
+    // ── REPESCAGEM RECURSIVA na R1 inferior (3ª vida) — project_lower_bracket_recursive_repechage ──
+    // n ímpar (satout = perdedor do jogo da ímpar superior) E há jogos normais na pré-rodada
+    // (preGames>0 → existe derrotado da própria R1 inf pra ressuscitar): a ímpar da INFERIOR joga
+    // um jogo-repescagem na PRÓPRIA R1 inf — mesmo padrão do jogo da ímpar superior. p1 = perdedor
+    // do jogo da ímpar superior (loserFeed dinâmico), p2 = MELHOR derrotado dos `preGames` jogos
+    // normais desta R1 inf (repFill rank 0, MESMA rodada, isPhaseRepGame → não é fonte de si mesmo;
+    // SEM tagRep porque continua na inferior). Vencedor → merge1 (ocupa a vaga do antigo satout);
+    // perdedor → eliminado (3ª derrota). Assim a R1 inf fica com 4 jogos (n=15) em vez de empurrar
+    // a ímpar direto pro merge1. Regra do dono: ímpar+repescagem = 3ª vida, SEM bye. Quando toLower=0
+    // (n=2^k+1: pré sem jogos normais, nada pra ressuscitar) mantém o comportamento antigo
+    // (satout → merge1, que lá pode dar bye por falta de fonte — caso de borda documentado).
+    if (mode === 'playin' && satout && satout.loserFeed && preGames > 0) {
+        const lowImpar = M('lower', lround, { isPhaseRepGame: true, isLowerImpar: true });
+        satout.loserFeed.loserMatchId = lowImpar.id; satout.loserFeed.loserSlot = 'p1';
+        lowImpar.repFill = [{ slot: 'p2', srcBracket: 'lower', srcRound: lround, rank: 0, cat: cat, tagRep: true }];
+        prevLower.push(lowImpar);   // entra na R1 inf; seu VENCEDOR alimenta o merge1
+        satout = null;              // não injeta mais direto no merge1
+    }
     window._rebuildLowerBracket(t, {
         preRound: prevLower, mergeUppers: mergeUppers, satout: satout,
         upperChamp: (upper[W] && upper[W][0]) || null, W: W, mode: mode,
@@ -2250,15 +2273,20 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
 window._countRepechageDoubleElim = function (n) {
     if (!(n > 2) || (n & (n - 1)) === 0) return null;
     var g = Math.floor(n / 2), hasSat = (n % 2) === 1;
-    var T = 1; while (T < g) T *= 2;
-    var promote = T - g, toLower = g - promote;
+    var T = 1; while (T * 2 <= n) T *= 2;            // maior pow2 <= n (IGUAL ao builder _duplaR1FromPool)
+    var toLower = 2 * g - T;
     var W = Math.round(Math.log(T) / Math.log(2));
-    var total = g;                                  // repescagem R1
-    var uc = T / 2; for (var r = 1; r <= W; r++) { total += uc; uc = Math.floor(uc / 2); } // upper = T-1
-    var alive = toLower / 2; total += alive;         // pré-rodada inferior
+    var total = g + (hasSat ? 1 : 0);               // repescagem R1 (round 0): g normais + jogo da ímpar (n ímpar)
+    var uc = T / 2; for (var r = 1; r <= W; r++) { total += uc; uc = Math.floor(uc / 2); } // upper R1..W
+    // Pré-rodada inferior: preNormal jogos normais + (se n ímpar E há normais p/ ressuscitar) 1 jogo-ímpar.
+    // Se toLower=0 (n=2^k+1), o perdedor da ímpar superior vai direto pro merge1 (satToMerge).
+    var preNormal = toLower / 2;
+    var imparInLower = (hasSat && preNormal > 0) ? 1 : 0;
+    var satToMerge = (hasSat && !imparInLower) ? 1 : 0;
+    var alive = preNormal + imparInLower; total += alive; // pré-rodada inferior
     for (var w = 1; w <= W; w++) {
         var upLose = T / Math.pow(2, w);
-        var ent = alive + upLose + ((w === 1 && hasSat) ? 1 : 0);
+        var ent = alive + upLose + ((w === 1) ? satToMerge : 0);
         ent += ent % 2;
         var merge = ent / 2; total += merge; alive = merge;
     }
