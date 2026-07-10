@@ -2696,6 +2696,11 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
 
 // ─── Swiss pairing ────────────────────────────────────────────────────────────
 function _generateNextRound(t) {
+  // v4.5.85 (ITEM 3 · Fase 4): REHIDRATA o nome das entradas (perfil vivo por uid) ANTES do
+  // sorteio — o storage é só-uid mas o motor lê p.displayName/p1Name (ex.: _getActiveLigaPlayers
+  // descartaria quem não tem nome). Transiente (o save re-sanitiza). No autoDraw o draw-core
+  // provê window._rehydrateEntryNames + _nameForUid (por _profileNameByUid do servidor).
+  if (typeof window._rehydrateEntryNames === 'function') window._rehydrateEntryNames(t);
   // v2.4.28: ANTES de filtrar por categoria, encaixa quem está sem categoria
   // VÁLIDA na mais fraca elegível — senão _computeStandings(t, cat) joga esses
   // inscritos pra fora de TODA rodada e eles ficam de fora do sorteio (desastre

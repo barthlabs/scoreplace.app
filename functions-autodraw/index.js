@@ -54,6 +54,25 @@ async function _loadLiveNames(uidSet) {
   return { profByUid, nameByUid };
 }
 
+// v4.5.85 (ITEM 3 · Fase 4): injeta os nomes VIVOS por uid no draw-core ANTES do sorteio.
+// Storage é só-uid → sem isto o motor (pool por nome) descarta entrada só-uid → 0 rodadas.
+// Best-effort: falha silenciosa cai no nome gravado (legado). Também rehidrata as entradas
+// (o generateLigaRound já rehidrata no topo; para o caminho de fase, chamamos explícito).
+async function _preloadDrawNames(t) {
+  try {
+    if (!drawWindow) return;
+    const uids = new Set();
+    (Array.isArray(t.participants) ? t.participants : []).forEach(p => {
+      if (!p || typeof p !== 'object') return;
+      [p.uid, p.p1Uid, p.p2Uid].forEach(u => { if (u) uids.add(String(u)); });
+      if (Array.isArray(p.participants)) p.participants.forEach(sp => { if (sp && sp.uid) uids.add(String(sp.uid)); });
+    });
+    if (!uids.size) return;
+    const { nameByUid } = await _loadLiveNames(uids);
+    drawWindow._profileNameByUid = nameByUid || {};
+  } catch (e) { /* best-effort; motor cai no nome gravado legado */ }
+}
+
 // Nome exibido de um lado da partida: nomes VIVOS dos uids do slot (dupla junta com
 // " / "); só cai no nome gravado (storedStr) quando o slot não tem uid — guest sem
 // conta, cuja string É a identidade legítima. Nunca devolve vazio.
@@ -224,6 +243,7 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
         // v2.3.91: usa o MESMO motor de sorteio do app (Rei/Rainha, duplas,
         // equilíbrio, categorias, folgas justas, desempate). Muta `t` in-place.
         t.id = tId;
+        await _preloadDrawNames(t); // v4.5.85: nomes vivos por uid antes do motor
         const res = generateLigaRound(t, mostRecentScheduled);
         if (!res.ok) {
           console.log(`Auto-draw: skip ${tId} (${res.reason})`);
@@ -452,6 +472,8 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
   const owed = drawWindow._nextOwedDrawMs(t, nowMs);
   if (typeof owed !== 'number' || owed > nowMs) return; // sem slot devido agora
   const cur = t.currentPhaseIndex || 0;
+  await _preloadDrawNames(t); // v4.5.85: nomes vivos por uid antes do motor de fase
+  if (typeof drawWindow._rehydrateEntryNames === 'function') drawWindow._rehydrateEntryNames(t);
   const ok = drawWindow._phaseGenNextLeagueRound(t, cur);
   if (!ok) { console.log(`Auto-draw phase: skip ${tId} (gen falhou / jogadores insuficientes)`); return; }
   // v3.1.16 (inc 8): a Liga incremental de fase posterior mora em t.phaseRounds[cur]

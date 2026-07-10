@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.84-beta';
+window.SCOREPLACE_VERSION = '4.5.85-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -4739,8 +4739,14 @@ window._peopleInList = function (arr) {
 // enquanto o cache ainda não carregou. Nunca regravamos nome no torneio.
 window._profileNameByUid = window._profileNameByUid || {};
 // resolve um uid pro nome do perfil (ao vivo); storedName/uid só fallback (informal/cache frio).
+// v4.5.85: lê os DOIS caches via _nameForUid (_userProfileCache do render + _profileNameByUid
+// do bracket) — pós-strip a entrada não tem mais storedName, então o resolvedor precisa achar
+// o nome vivo em QUALQUER cache preenchido (o render preenche _userProfileCache).
 window._displayNameForUid = function (uid, storedName) {
-  if (uid && window._profileNameByUid[uid]) return window._profileNameByUid[uid];
+  if (uid) {
+    var live = (typeof window._nameForUid === 'function') ? window._nameForUid(uid) : (window._profileNameByUid[uid] || '');
+    if (live) return live;
+  }
   return storedName || uid || '';
 };
 // Nome de EXIBIÇÃO canônico de uma entrada. Resolve CADA pessoa pelo SEU uid (perfil ao vivo);
@@ -4762,6 +4768,76 @@ window._entryDisplayName = function (p) {
   }
   // indivíduo
   return R(p.uid, p.displayName || p.name);
+};
+
+// ── ITEM 3 · Fase 4 (v4.5.85): SANITIZADOR DE IDENTIDADE NA PERSISTÊNCIA ──────────
+// Identidade de um inscrito = uid; o nome é resolvido do perfil VIVO (users/{uid}) em
+// TODA borda de display/sorteio/authz (Partes 0–13 + Fases 1–3). Logo, NÃO se grava o
+// nome na entrada de quem TEM conta — o campo gravado só apodrece e vira o "Maira/Maira".
+// Guest SEM conta (sem uid no slot) MANTÉM o nome: é a única identidade que ele tem.
+// Este helper roda no LIMITE DE PERSISTÊNCIA (firebase-db.js), SEMPRE sobre a CÓPIA que
+// vai pro Firestore — NUNCA muta o objeto em memória (display em sessão segue intacto).
+// Só toca os campos de nome da ENTRADA (name/displayName/p1Name/p2Name + sub-participants);
+// NÃO toca slots de partida (m.p1/m.p2) nem nada fora de participants/standby/waitlist.
+function _stripUidEntryNames(p) {
+  if (!p || typeof p !== 'object') return p;
+  var q = {}; for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) q[k] = p[k]; }
+  var isPair = !!(q.p1Uid || q.p2Uid || q.p1Name || q.p2Name);
+  if (isPair) {
+    if (q.p1Uid) delete q.p1Name;          // membro 1 tem conta → nome vem do perfil
+    if (q.p2Uid) delete q.p2Name;          // membro 2 tem conta → idem
+    // name/displayName da dupla é o teamString derivado ("A / B") → o display reconstrói
+    // via _entryDisplayName (p1Uid vivo / p2Uid vivo / p*Name só do guest). Remove sempre
+    // que ao menos um membro tem conta (o outro, se guest, ainda resolve pelo p*Name mantido).
+    if (q.p1Uid || q.p2Uid) { delete q.name; delete q.displayName; }
+  } else if (q.uid) {                       // solo com conta
+    delete q.name; delete q.displayName;
+  }
+  if (Array.isArray(q.participants)) {
+    q.participants = q.participants.map(function (s) {
+      if (s && typeof s === 'object' && s.uid) {
+        var r = {}; for (var kk in s) { if (Object.prototype.hasOwnProperty.call(s, kk)) r[kk] = s[kk]; }
+        delete r.name; delete r.displayName; return r;
+      }
+      return s;
+    });
+  }
+  return q;
+}
+// Retorna CÓPIA do array com cada entrada sanitizada (entrada sem uid = guest, intacta).
+window._stripStoredNamesForUidEntries = function (arr) {
+  return Array.isArray(arr) ? arr.map(_stripUidEntryNames) : arr;
+};
+
+// ── ESPELHO DO STRIP: REHIDRATA o nome na borda do SORTEIO (v4.5.85) ──────────────
+// O storage é só-uid (strip acima), mas o MOTOR de sorteio lê p.displayName/p1Name
+// direto (ex.: _getActiveLigaPlayers monta o pool por NOME e DESCARTA quem não tem
+// nome → Liga geraria 0 rodadas com entrada só-uid). Em vez de tocar N leituras do
+// motor (frágil), rehidrata o nome VIVO (por uid) nas entradas EM MEMÓRIA, transiente,
+// ANTES do sorteio. NÃO persiste (todo save re-sanitiza). Guest sem uid intocado.
+// `resolve(uid)` default = window._nameForUid (cliente lê os 2 caches; no autoDraw o
+// draw-core provê seu próprio _nameForUid via _profileNameByUid do servidor).
+window._rehydrateEntryNames = function (t, resolve) {
+  var R = resolve || (typeof window._nameForUid === 'function' ? window._nameForUid : function () { return ''; });
+  var pools = [t && t.participants, t && t.standbyParticipants, t && t.waitlist];
+  pools.forEach(function (arr) {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function (p) {
+      if (!p || typeof p !== 'object') return;
+      if (p.p1Uid && !p.p1Name) { var n1 = R(p.p1Uid); if (n1) p.p1Name = n1; }
+      if (p.p2Uid && !p.p2Name) { var n2 = R(p.p2Uid); if (n2) p.p2Name = n2; }
+      if ((p.p1Name || p.p2Name)) {           // dupla → reconstrói o teamString derivado
+        if (!p.displayName) p.displayName = [p.p1Name, p.p2Name].filter(Boolean).join(' / ');
+        if (!p.name) p.name = p.displayName;
+      } else if (p.uid && !p.displayName) {    // solo com conta
+        var n = R(p.uid); if (n) { p.displayName = n; if (!p.name) p.name = n; }
+      }
+      if (Array.isArray(p.participants)) p.participants.forEach(function (s) {
+        if (s && typeof s === 'object' && s.uid && !s.displayName) { var sn = R(s.uid); if (sn) { s.displayName = sn; if (!s.name) s.name = sn; } }
+      });
+    });
+  });
+  return t;
 };
 
 window._findTournamentById = function (tId) {

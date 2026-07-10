@@ -27,6 +27,38 @@ g.window._warn = function () {};
 g.window._log = function () {};
 g.window._error = function () { console.error.apply(console, arguments); };
 
+// ── ITEM 3 · Fase 4 (v4.5.85): resolução de nome VIVO por uid NO SERVIDOR ─────────
+// O storage é só-uid (o cliente sanitiza no save). O motor de sorteio (vendored) lê
+// p.displayName/p1Name → com entrada só-uid o pool por NOME descarta a pessoa (Liga
+// geraria 0 rodadas). O caller (index.js) POPULA _profileNameByUid a partir de
+// users/{uid} ANTES do sorteio; _nameForUid resolve dele; _rehydrateEntryNames
+// preenche o nome nas entradas EM MEMÓRIA (transiente — o servidor persiste só os
+// campos mutados do sorteio, nunca as entradas). Espelha os helpers de store.js.
+g.window._profileNameByUid = g.window._profileNameByUid || {};
+g.window._nameForUid = function (uid) { return (uid && g.window._profileNameByUid[uid]) || ''; };
+g.window._rehydrateEntryNames = function (t, resolve) {
+  var R = resolve || g.window._nameForUid;
+  var pools = [t && t.participants, t && t.standbyParticipants, t && t.waitlist];
+  pools.forEach(function (arr) {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function (p) {
+      if (!p || typeof p !== 'object') return;
+      if (p.p1Uid && !p.p1Name) { var n1 = R(p.p1Uid); if (n1) p.p1Name = n1; }
+      if (p.p2Uid && !p.p2Name) { var n2 = R(p.p2Uid); if (n2) p.p2Name = n2; }
+      if (p.p1Name || p.p2Name) {
+        if (!p.displayName) p.displayName = [p.p1Name, p.p2Name].filter(Boolean).join(' / ');
+        if (!p.name) p.name = p.displayName;
+      } else if (p.uid && !p.displayName) {
+        var n = R(p.uid); if (n) { p.displayName = n; if (!p.name) p.name = n; }
+      }
+      if (Array.isArray(p.participants)) p.participants.forEach(function (s) {
+        if (s && typeof s === 'object' && s.uid && !s.displayName) { var sn = R(s.uid); if (sn) { s.displayName = sn; if (!s.name) s.name = sn; } }
+      });
+    });
+  });
+  return t;
+};
+
 // Carrega a lógica real do cliente (ordem: deps cross-file antes de bracket-logic).
 require('./vendor/tournaments-utils.js');       // _isLigaFormat, _calcNextDrawDate
 require('./vendor/tournaments-categories.js');  // _displayCategoryName, _sortCategoriesBySkillOrder, _getParticipantCategories, _participantInCategory
@@ -46,6 +78,9 @@ if (typeof g.window._generateNextRound !== 'function') {
 // scheduledTime: Date do horário agendado desta rodada (vira t.lastAutoDrawAt).
 function generateLigaRound(t, scheduledTime) {
   const win = g.window;
+  // v4.5.85 (ITEM 3 · Fase 4): rehidrata nomes por uid ANTES de tudo (standings seeding L76
+  // e _generateNextRound leem p.displayName). _profileNameByUid já populado pelo caller.
+  if (typeof win._rehydrateEntryNames === 'function') win._rehydrateEntryNames(t);
   if (!win._isLigaFormat || !win._isLigaFormat(t)) {
     return { ok: false, reason: 'not-liga' };
   }

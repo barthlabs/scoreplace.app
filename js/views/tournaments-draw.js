@@ -1316,6 +1316,9 @@ function _commitInitialDraw(tId, t, preDraw) {
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
+    // v4.5.85 (ITEM 3 · Fase 4): rehidrata o nome das entradas (perfil vivo por uid) antes do
+    // sorteio inicial — storage só-uid, motor lê nome. Transiente (o save re-sanitiza).
+    if (typeof window._rehydrateEntryNames === 'function') window._rehydrateEntryNames(t);
 
     // v4.1.34 (decisão do dono): Liga (Pontos Corridos) e Rei/Rainha são formatos de
     // PARCEIROS ROTATIVOS — inscrição INDIVIDUAL. Com DUPLAS JÁ FORMADAS o rotativo juntaria

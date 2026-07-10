@@ -250,6 +250,14 @@ window.FirestoreDB = {
       var _prevUids = Array.isArray(tourData.memberUids) ? tourData.memberUids : [];
       cleanData.memberUids = Array.from(new Set(_prevUids.concat(_newUids)));
     }
+    // v4.5.85 (ITEM 3 · Fase 4): SANITIZA identidade — não grava nome de quem tem uid
+    // (resolve do perfil vivo); guest sem uid mantém o nome. Opera na CÓPIA (cleanData),
+    // nunca no tourData em memória. memberEmails/memberUids já foram computados acima.
+    if (typeof window !== 'undefined' && typeof window._stripStoredNamesForUidEntries === 'function') {
+      if (Array.isArray(cleanData.participants)) cleanData.participants = window._stripStoredNamesForUidEntries(cleanData.participants);
+      if (Array.isArray(cleanData.standbyParticipants)) cleanData.standbyParticipants = window._stripStoredNamesForUidEntries(cleanData.standbyParticipants);
+      if (Array.isArray(cleanData.waitlist)) cleanData.waitlist = window._stripStoredNamesForUidEntries(cleanData.waitlist);
+    }
     // v2.6.74: nextDrawAt — ms epoch do próximo sorteio devido (ver _nextOwedDrawMs).
     // É o índice que o autoDraw do servidor consulta com where('nextDrawAt','<=',now)
     // pra disparar perto da hora exata sem varrer a coleção toda. Recalculado em TODO
@@ -356,7 +364,18 @@ window.FirestoreDB = {
       } catch (_ndErr) { /* otimização; nunca derruba a transação */ }
       var clean = self._cleanUndefined(data);
       self._foldMonarchGroups(clean); // Rei/Rainha: grava só matchIds (fonte única = round.matches)
-      transaction.set(ref, clean); // set (sem merge) DENTRO da txn = clobber-free
+      // v4.5.85 (ITEM 3 · Fase 4): PERSISTE cópia sanitizada (sem nome pra quem tem uid),
+      // mas DEVOLVE `clean` COM nome pro caller sincronizar o AppStore local (display em
+      // sessão intacto — o nome vivo já bate; só o Firestore fica só-uid).
+      var _persist = clean;
+      if (typeof window !== 'undefined' && typeof window._stripStoredNamesForUidEntries === 'function') {
+        var _stripped = {};
+        if (Array.isArray(clean.participants)) _stripped.participants = window._stripStoredNamesForUidEntries(clean.participants);
+        if (Array.isArray(clean.standbyParticipants)) _stripped.standbyParticipants = window._stripStoredNamesForUidEntries(clean.standbyParticipants);
+        if (Array.isArray(clean.waitlist)) _stripped.waitlist = window._stripStoredNamesForUidEntries(clean.waitlist);
+        if (Object.keys(_stripped).length) _persist = Object.assign({}, clean, _stripped);
+      }
+      transaction.set(ref, _persist); // set (sem merge) DENTRO da txn = clobber-free
       // Devolve o estado autoritativo HIDRATADO (group.matches como refs) pro caller
       // sincronizar o AppStore sem depender de um render pra reconstruir os grupos.
       try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(clean); } catch (_hmErr2) {}
@@ -544,8 +563,12 @@ window.FirestoreDB = {
       participants.push(self._cleanUndefined(participantObj));
 
       var _enrollData = Object.assign({}, data, { participants: participants });
+      // v4.5.85 (ITEM 3 · Fase 4): persiste array sanitizado (sem nome pra quem tem uid);
+      // `participants` (com nome) segue no retorno pro caller sincronizar o AppStore local.
+      var _persistParts = (typeof window !== 'undefined' && typeof window._stripStoredNamesForUidEntries === 'function')
+        ? window._stripStoredNamesForUidEntries(participants) : participants;
       var updateData = {
-        participants: participants,
+        participants: _persistParts,
         memberEmails: self._computeMemberEmails(_enrollData),
         memberUids:   self._computeMemberUids(_enrollData)
       };
