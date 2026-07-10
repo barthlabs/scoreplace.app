@@ -1464,7 +1464,11 @@ window._phasePlannedRounds = function (t, phaseIdx) {
     var _ivRaw = (ph.drawIntervalDays != null && ph.drawIntervalDays !== '') ? ph.drawIntervalDays : (i0 ? t.drawIntervalDays : null);
     var interval = parseInt(_ivRaw, 10);
     var endDate = ph.endDate || (i0 ? t.endDate : '') || '';
-    var planned = parseInt(ph.rounds, 10) || 1;
+    // Nº de rodadas explicitamente configurado pelo organizador (phases[i].rounds). Quando
+    // presente, é a INTENÇÃO — a janela de datas é só o limite EXTERNO, não a intenção.
+    var _hasCfg = (ph.rounds != null && ph.rounds !== '' && !isNaN(parseInt(ph.rounds, 10)));
+    var _cfg = _hasCfg ? parseInt(ph.rounds, 10) : 0;
+    var planned = _hasCfg ? _cfg : 1;
     if (firstDate && interval >= 1 && endDate) {
         var _fs = String(firstDate).indexOf('T') > -1 ? firstDate : (firstDate + 'T' + firstTime);
         var _es = String(endDate).indexOf('T') > -1 ? endDate : (endDate + 'T23:59:59');
@@ -1478,7 +1482,15 @@ window._phasePlannedRounds = function (t, phaseIdx) {
             // é enganado ("marca 3 rodadas" mas só 2 acontecem). floor((diff-1)/step)+1 =
             // nº de sorteios fd+k*step ESTRITAMENTE antes de ed. Só difere de
             // floor(diff/step)+1 quando o último slot coincide com o fim — exatamente o caso.
-            planned = Math.floor((ed - fd - 1) / (interval * 86400000)) + 1;
+            var _derived = Math.floor((ed - fd - 1) / (interval * 86400000)) + 1;
+            // v4.x (pedido do dono, "Nº de rodadas manda"): a janela de datas é o LIMITE
+            // EXTERNO; o Nº configurado é a intenção. Se a janela comporta MAIS sorteios que
+            // o N pedido (ex.: N=2 mas fim 11/07 23:00 dá 3 slots diários), o N manda (cap);
+            // se comporta MENOS (fim antes de 1º+N×intervalo), a janela reduz (não dá pra
+            // sortear além do fim). Sem N explícito, a janela deriva sozinha (comportamento
+            // legado, sem regressão). Reconcilia o estado inconsistente onde phases[i].rounds
+            // e o fim da fase discordam — a barra passa a bater com o motor de config.
+            planned = _hasCfg ? Math.min(_cfg, _derived) : _derived;
         }
     }
     // Piso pelas rodadas realmente sorteadas.

@@ -591,14 +591,34 @@
     var st = document.getElementById('tourn-start-time'); if (st && S.cfg.rodadas.drawFirstTime) st.value = S.cfg.rodadas.drawFirstTime;
     ['_recalcDuration', '_checkWeather'].forEach(function (fn) { if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} } });
   }
+  // v4.5.88: Nº de RODADAS derivado da janela pela MESMA fórmula ESTRITA do runtime
+  // (window._phasePlannedRounds): floor((fim − 1º − 1ms) / (iv×dia)) + 1 = nº de sorteios
+  // que disparam ESTRITAMENTE antes do fim. Antes usava Math.round(janela/iv), que diverge
+  // do runtime por 1 em janelas fracionárias (ex.: 2,4 dias → round=2, estrito=3) — o editor
+  // mostrava um N e a barra do torneio outro. Retorna null quando não dá pra derivar.
+  function _strictNFromWindow(iv) {
+    if (!S || !S.cfg || !S.cfg.rodadas) return null;
+    iv = parseInt(iv, 10);
+    if (!(iv >= 1)) return null;
+    var _v = function (id) { var el = document.getElementById(id); return el ? (el.value || '') : ''; };
+    var firstDate = S.cfg.rodadas.drawFirstDate || _v('tourn-start-date') || '';
+    var firstTime = (S.cfg.rodadas.drawFirstDate ? (S.cfg.rodadas.drawFirstTime || '') : _v('tourn-start-time')) || '19:00';
+    var endDate = _v('tourn-end-date');
+    var endTime = _v('tourn-end-time') || '23:59';
+    if (!firstDate || !endDate) return null;
+    var fd = new Date(firstDate + 'T' + firstTime).getTime();
+    var ed = new Date(endDate + 'T' + endTime).getTime();
+    if (isNaN(fd) || isNaN(ed) || ed <= fd) return null;
+    return Math.floor((ed - fd - 1) / (iv * 86400000)) + 1;
+  }
   // v4.4.62: recalcula o Nº de RODADAS pela janela (fim − 1º sorteio, COM horário) mantendo o
   // intervalo. Chamado ao mudar data/hora do 1º sorteio, do início ou do fim da fase.
   function _recalcN() {
     if (!S || !S.cfg || !S.cfg.rodadas) return;
     var iv = parseInt(S.cfg.rodadas.drawIntervalDays, 10);
     if (!(iv >= 1)) return; // sem repetição → nº de rodadas não deriva da janela
-    var d = _windowDays();
-    if (d) S.cfg.rodadas.n = Math.max(1, Math.round(d / iv));
+    var n = _strictNFromWindow(iv);
+    if (n != null) S.cfg.rodadas.n = Math.max(1, n);
   }
   // v4.5.47 (pedido do dono): 1º sorteio + repetição + Nº de rodadas → o TÉRMINO da fase DERIVA
   // pra MANTER o Nº de rodadas escolhido. Último sorteio = 1º + (N−1)×intervalo; o fim fica UM
@@ -681,7 +701,7 @@
     var iv = parseInt(v, 10);
     if (!(iv >= 1)) { S.cfg.rodadas.drawIntervalDays = null; _norm(); _f2SchedRefresh(); return; } // vazio → mantém rodadas
     S.cfg.rodadas.drawIntervalDays = iv;
-    var d = _windowDays(); if (d) S.cfg.rodadas.n = Math.max(1, Math.round(d / iv)); // recalcula rodadas
+    var _n = _strictNFromWindow(iv); if (_n != null) S.cfg.rodadas.n = Math.max(1, _n); // recalcula rodadas (estrito = runtime)
     _norm(); _f2SchedRefresh();
   };
   // Slider de classificados: número + resumo da eliminatória ao vivo no arraste; re-render ao soltar.

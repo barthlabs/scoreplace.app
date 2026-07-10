@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.89-beta — Nº de rodadas e datas da fase sempre em sincronia <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📊 A barra do torneio respeita o Nº de rodadas configurado:</b> se a fase tem <b>2 rodadas</b>, o torneio mostra "Rodada X de 2" e conta os jogos por 2 rodadas — mesmo que a data de término deixasse espaço pra uma rodada a mais. A data da fase é o <b>limite externo</b>; o número de rodadas que você escolheu é o que manda.</li>' +
+        '<li><b>🔁 Edição da fase totalmente sincronizada:</b> mudou o <b>Nº de rodadas</b> → o <b>Término</b> se ajusta; mudou o <b>Término</b> → o <b>Nº de rodadas</b> se corrige; mudou o <b>intervalo</b> entre sorteios → o <b>Nº de rodadas</b> se recalcula. Tudo pela mesma conta que a barra usa, então o que você vê na edição é exatamente o que o torneio mostra.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.87-beta — duplas aparecem completas na hora <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>👫 Card de dupla sempre com os dois jogadores:</b> em torneios de duplas, às vezes um card aparecia só com um nome (o parceiro sumia por um instante enquanto o perfil carregava). Agora a dupla aparece <b>completa na hora</b>, na lista de inscritos e no detalhe do torneio — o app reconhece os dois jogadores pela conta, sem depender do nome estar gravado.</li>' +
