@@ -219,8 +219,11 @@
     var ex = document.getElementById(id); if (ex) ex.remove();
     var o = document.createElement('div');
     o.id = id;
-    o.style.cssText = 'position:fixed;inset:0;z-index:100040;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:1rem;';
-    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:90vh;overflow:auto;border-radius:16px;border:1px solid rgba(99,102,241,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
+    // v4.5.100: padding respeita o SAFE-AREA (notch/status bar do PWA) — sem isso o
+    // cabeçalho do painel invadia a área do relógio. max-height desconta os insets + o
+    // padding, então o painel nunca sobe atrás da status bar nem vaza embaixo.
+    o.style.cssText = 'position:fixed;inset:0;z-index:100040;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:calc(env(safe-area-inset-top,0px) + 12px) 12px calc(env(safe-area-inset-bottom,0px) + 12px);';
+    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:calc(100vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 24px);overflow:auto;border-radius:16px;border:1px solid rgba(99,102,241,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
     o.addEventListener('click', function (e) { if (e.target === o) o.remove(); });
     document.body.appendChild(o);
     return o;
@@ -553,18 +556,9 @@
       });
 
       // rodapé da seção
-      // v3.1.64: SEM botão "Votar" por seção — há um único "Confirmar voto(s)" fixo no
-      // topo (window._opVoteAll). No modo EDIÇÃO de uma seção já votada, mantém só o
-      // "Cancelar" pra abortar a alteração.
-      if (votingMode) {
-        // WIZARD: Confirmar o passo → salva esta seção e avança pra próxima (ou finaliza).
-        var _isLastStep = _wizIsEdit || (_pending.length <= 1);
-        var _stepLabel = _wizIsEdit ? '✅ Salvar alteração' : (_isLastStep ? '✅ Confirmar e finalizar' : '✅ Confirmar e continuar →');
-        body += '<button type="button" onclick="window._opVoteStep(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\',\'' + _attr(sec.id) + '\',' + (_wizIsEdit ? 'true' : 'false') + ')" class="btn btn-shine" style="width:100%;margin-top:12px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;border:none;border-radius:11px;padding:13px;font-size:0.96rem;">' + _stepLabel + '</button>';
-        if (voted) {
-          body += '<button type="button" onclick="window._opOpenVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:11px;padding:8px;font-size:0.8rem;margin-top:6px;">↩️ Cancelar alteração</button>';
-        }
-      } else if (voted && !poll.closed) {
+      // v4.5.100: no modo votação/edição os botões (Confirmar/Cancelar) ficam FIXOS no topo
+      // (_wizTop) — não mais no rodapé da seção. Aqui só o "✏️ Alterar" na visão de resultados.
+      if (!votingMode && voted && !poll.closed) {
         body += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;">' +
           '<span style="font-size:0.78rem;color:#34d399;font-weight:700;">✓ Você votou · ' + total + ' voto(s)</span>' +
           '<button type="button" onclick="window._opEditVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\',\'' + _attr(sec.id) + '\')" class="btn" style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.4);font-weight:700;border-radius:10px;padding:7px 12px;font-size:0.8rem;">✏️ Alterar</button>' +
@@ -576,8 +570,10 @@
     // v3.1.63: botões do ORGANIZADOR no TOPO, sempre visíveis (sticky), em grade 2x2:
     //   Editar | Ver votos  /  Re-notificar | Encerrar
     // (com enquete encerrada, só Editar | Ver votos). O "Fechar" do topo vira "← Voltar".
+    // v4.5.100: o menu 2x2 do organizador SOME durante a votação/edição (_wizSec) — dá lugar
+    // ao Cancelar/Confirmar fixo no topo (_wizTop). Volta quando não há o que votar/alterar.
     var _orgTop = '';
-    if (isOrg) {
+    if (isOrg && !_wizSec) {
       var _cellStyle = 'border-radius:10px;padding:10px;font-size:0.82rem;font-weight:700;';
       var _cells =
         '<button type="button" onclick="window._opOpenEditor(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(99,102,241,0.16);color:#a5b4fc;border:1px solid rgba(99,102,241,0.45);">✏️ Editar</button>' +
@@ -607,6 +603,21 @@
         '<button type="button" onclick="window._opVoteAll(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn btn-shine" style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;border:none;border-radius:11px;padding:12px;font-size:0.95rem;">' + _voteLabel + '</button>' +
       '</div>';
     }
+    // v4.5.100: durante a votação/edição (_wizSec), Cancelar + Confirmar ficam FIXOS no topo
+    // (logo abaixo do cabeçalho), substituindo o menu 2x2. Antes ficavam no RODAPÉ da seção.
+    var _wizTop = '';
+    if (_wizSec) {
+      var _wizVoted = _opHasVotedSection(poll, _wizSec.id, uid);
+      var _isLastStepT = _wizIsEdit || (_pending.length <= 1);
+      var _stepLabelT = _wizIsEdit ? '✅ Salvar' : (_isLastStepT ? '✅ Confirmar' : '✅ Confirmar e continuar →');
+      var _cancelBtn = (_wizIsEdit || _wizVoted)
+        ? '<button type="button" onclick="window._opOpenVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="flex:0 0 auto;background:rgba(255,255,255,0.08);color:var(--text-muted);border:1px solid var(--border-color);font-weight:800;border-radius:11px;padding:12px 16px;font-size:0.9rem;">↩️ Cancelar</button>'
+        : '';
+      _wizTop = '<div style="padding:10px 1rem;border-bottom:1px solid var(--border-color);background:var(--bg-card,#0f172a);display:flex;gap:8px;align-items:stretch;">' +
+        _cancelBtn +
+        '<button type="button" onclick="window._opVoteStep(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\',\'' + _attr(_wizSec.id) + '\',' + (_wizIsEdit ? 'true' : 'false') + ')" class="btn btn-shine" style="flex:1;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;border:none;border-radius:11px;padding:12px;font-size:0.95rem;">' + _stepLabelT + '</button>' +
+      '</div>';
+    }
     // rodapé: só o aviso de "encerrada" (os botões subiram pro topo).
     var footer = '';
     if (poll.closed) footer += '<div style="text-align:center;font-size:0.8rem;color:var(--text-muted);font-weight:700;margin-top:4px;">🔒 Enquete encerrada</div>';
@@ -618,6 +629,7 @@
           '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📊 Enquete</span>' +
           '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">← Voltar</button>' +
         '</div>' +
+        _wizTop +
         _voteTop +
         _orgTop +
       '</div>' +

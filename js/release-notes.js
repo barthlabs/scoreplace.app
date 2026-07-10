@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.100-beta — Enquete mais arrumada <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📱 Cabeçalho não invade mais a barra de status:</b> o topo da Enquete (Voltar + título) passou a respeitar a área do relógio/bateria (notch) no app instalado.</li>' +
+        '<li><b>✏️ Alterar voto com Cancelar/Confirmar fixos no topo:</b> ao alterar seu voto, os botões <b>Cancelar</b> e <b>Salvar</b> aparecem <b>fixos logo abaixo do cabeçalho</b> (antes ficavam lá embaixo), e o menu de organizador some pra dar lugar a eles enquanto você altera.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.99-beta — desfazer dupla volta a funcionar <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>↩️ Desfazer dupla de jogadores com conta:</b> o botão de desfazer não encontrava a dupla quando os dois eram jogadores com conta (identificava pelo nome, que é resolvido pela conta). Agora a formação e a dissolução de duplas são feitas pela <b>identidade de cada jogador (a conta)</b> — só uma vaga fictícia (sem conta) é identificada pelo nome. Desfazer funciona em qualquer combinação.</li>' +
