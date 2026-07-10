@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.97-beta';
+window.SCOREPLACE_VERSION = '4.5.98-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -2841,14 +2841,19 @@ window._resolveSideLive = function (t, sideStr, uidHint) {
   }
   if (uidHint) {
     if (Array.isArray(uidHint)) {
+      var _parts = s.split(' / ').map(function (x) { return x.trim(); }).filter(Boolean);
       var _uids = uidHint.filter(Boolean);
-      if (_uids.length) {
-        var _live = _uids.map(_liveByUid);
-        if (_live.every(function (x) { return !!x; })) return _live.join(' / ');
-        // dupla com 1 membro guest (sem uid): completa com a parte gravada do slot.
-        var _parts = s.split(' / ');
-        return _uids.map(function (u, i) { return _liveByUid(u) || _parts[i] || ''; }).join(' / ');
+      // 1 uid por membro (counts batem) → resolve POSICIONAL: nome vivo por uid, fallback à
+      // parte gravada. Cobre 1v1 (conta) e dupla 100% de contas (nome vivo dos dois).
+      if (_parts.length > 0 && _uids.length === _parts.length) {
+        return _parts.map(function (part, i) { return _liveByUid(_uids[i]) || part; }).join(' / ');
       }
+      // v4.5.98: counts NÃO batem — dupla com membro GUEST (placeholder/sem conta, sem uid).
+      // O uidHint só traz os uids de CONTA (_slotUids/_participantUids filtram vazios), então
+      // ele fica MENOR que o nº de membros. NUNCA dropar um membro do side: mantém a string
+      // gravada (foi resolvida no sorteio; guest não renomeia perfil). Antes o `_live.join`
+      // devolvia só os membros-conta → "Lucia" sem "Jogador 01".
+      if (_parts.length > 0) return _parts.join(' / ');
     } else {
       var _one = _liveByUid(uidHint);
       if (_one) return _one;

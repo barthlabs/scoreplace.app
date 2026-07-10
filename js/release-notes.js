@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.98-beta — dupla com vaga aparece completa na chave <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👫 Dupla de conta + vaga (placeholder) não aparece mais sozinha:</b> quando uma dupla era formada por um jogador com conta + uma vaga "Jogador NN", o chaveamento mostrava só o jogador com conta (a vaga sumia). Agora os <b>dois</b> aparecem no card do jogo.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.97-beta — o app se atualiza sozinho <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🔄 Atualização automática mais confiável:</b> quando sai uma versão nova, o app passa a pegá-la <b>sozinho</b> — inclusive ao <b>navegar entre telas</b> — sem você precisar recarregar nem fechar/reabrir. Se estiver no meio de algo (placar, formulário), ele espera o momento seguro e mostra um toque "🔄 Nova versão" caso queira atualizar na hora. A checagem ficou <b>leve</b> (não baixa mais o app inteiro toda vez).</li>' +
