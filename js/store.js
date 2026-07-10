@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.89-beta';
+window.SCOREPLACE_VERSION = '4.5.95-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -17,15 +17,24 @@ window._userProfileCache = window._userProfileCache || {};
 window._userProfilePending = window._userProfilePending || {};
 window._preloadUserProfiles = function (uids) {
   var db = window.FirestoreDB && window.FirestoreDB.db;
-  var list = [];
+  // v4.5.93: _userProfilePending guarda a PROMISE em voo (não só um flag). Um 2º caller
+  // pros mesmos uids AGUARDA a carga já em andamento em vez de resolver na hora com o cache
+  // ainda vazio. Era a corrida do "nome em branco": _ensureParticipantProfiles marcava os
+  // uids como pendentes, depois _hydrateUidNames chamava isto, os uids eram "pulados" (já
+  // pendentes) → resolvia IMEDIATO → setava textContent com _nameForUid ainda vazio, e o
+  // nome só aparecia se um _softRefreshView re-renderizasse (suprimido durante o arraste).
+  var waitFor = [];
+  var toLoad = [];
   (uids || []).forEach(function (u) {
-    if (u && typeof u === 'string' && u.indexOf(' ') === -1 &&
-        !window._userProfileCache[u] && !window._userProfilePending[u]) list.push(u);
+    if (!(u && typeof u === 'string' && u.indexOf(' ') === -1)) return;
+    if (window._userProfileCache[u]) return;                       // já carregado
+    var pend = window._userProfilePending[u];
+    if (pend && typeof pend.then === 'function') { waitFor.push(pend); return; } // em voo → aguarda
+    toLoad.push(u);
   });
-  if (!db || !list.length) return Promise.resolve();
-  list.forEach(function (u) { window._userProfilePending[u] = 1; });
-  return Promise.all(list.map(function (uid) {
-    return db.collection('users').doc(uid).get().then(function (s) {
+  if (!db) return Promise.resolve();
+  toLoad.forEach(function (uid) {
+    var pr = db.collection('users').doc(uid).get().then(function (s) {
       var d = (s && s.exists) ? (s.data() || {}) : {};
       window._userProfileCache[uid] = {
         displayName: d.displayName || d.name || '',
@@ -34,7 +43,10 @@ window._preloadUserProfiles = function (uids) {
         photoURL: d.photoURL || ''
       };
     }).catch(function () {}).then(function () { delete window._userProfilePending[uid]; });
-  }));
+    window._userProfilePending[uid] = pr;
+    waitFor.push(pr);
+  });
+  return waitFor.length ? Promise.all(waitFor) : Promise.resolve();
 };
 window._nameForUid = function (uid) {
   if (!uid) return '';
@@ -54,6 +66,13 @@ window._phoneForUid = function (uid) { var p = uid && window._userProfileCache[u
 // identidade que ele tem. Precisar de fallback = render rodou antes do dado: erro de
 // arquitetura, corrigido carregando o perfil antes, não mascarando com nome gravado.
 window._displayName = function (uid, guestName) {
+  // v4.5.90/91: uid sintético de placeholder ('jog_NN_…', criado antes da v4.5.90) NÃO é
+  // conta — não existe users/jog_…. O próprio uid codifica o número → deriva "Jogador NN"
+  // direto (o nome gravado pode ter sido apagado pelo strip do ITEM 3 → caía no email fake).
+  if (uid && String(uid).indexOf('jog_') === 0) {
+    var _phm = String(uid).match(/^jog_(\d+)/);
+    return _phm ? ('Jogador ' + _phm[1]) : (guestName || '');
+  }
   if (uid) return window._nameForUid(uid);
   return guestName || '';
 };
@@ -4782,6 +4801,21 @@ window._entryDisplayName = function (p) {
 function _stripUidEntryNames(p) {
   if (!p || typeof p !== 'object') return p;
   var q = {}; for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) q[k] = p[k]; }
+  // v4.5.91: PLACEHOLDER (vaga "Jogador NN") NÃO é conta — nome É a identidade. Placeholders
+  // legados nasceram com uid sintético 'jog_NN_…' + email fake, e o strip abaixo apagava o
+  // nome (achando que tinha conta) → card virava o email. Aqui CURA pro formato limpo (só
+  // nome, sem uid/email) em vez de strippar; na próxima gravação some o uid fantasma.
+  var _phUid = q.uid && String(q.uid).indexOf('jog_') === 0;
+  if ((_phUid || q.isPlaceholder === true) && !q.p1Name && !q.p2Name) {
+    var _m = _phUid ? String(q.uid).match(/^jog_(\d+)/) : null;
+    var _cur = String(q.displayName || q.name || '').trim();
+    var _nm = /^(Jogador|Placeholder)\s+\d+$/i.test(_cur) ? _cur : (_m ? ('Jogador ' + _m[1]) : '');
+    if (_nm) { q.name = _nm; q.displayName = _nm; }
+    q.isPlaceholder = true;
+    if (_phUid) delete q.uid;
+    if (q.email && /^jogador\d+@scoreplace\.app$/i.test(String(q.email))) delete q.email;
+    return q;
+  }
   var isPair = !!(q.p1Uid || q.p2Uid || q.p1Name || q.p2Name);
   if (isPair) {
     if (q.p1Uid) delete q.p1Name;          // membro 1 tem conta → nome vem do perfil
@@ -4807,6 +4841,63 @@ function _stripUidEntryNames(p) {
 // Retorna CÓPIA do array com cada entrada sanitizada (entrada sem uid = guest, intacta).
 window._stripStoredNamesForUidEntries = function (arr) {
   return Array.isArray(arr) ? arr.map(_stripUidEntryNames) : arr;
+};
+
+// v4.5.92: DEDUP + cura de PLACEHOLDERS ("Jogador NN"). O strip do ITEM 3 apagava o nome
+// dos placeholders legados (tinham uid sintético 'jog_NN_…'), então adicionar um 2º lote
+// não "via" os números já usados (nomes vazios) e RECOMEÇAVA do 01 → números repetidos
+// (dois "Jogador 02"). Aqui renumera cada placeholder pra um número ÚNICO e cura pro formato
+// limpo (só-nome, sem uid/email fake). SÓ renumera se o torneio NÃO foi sorteado — depois do
+// sorteio as partidas referenciam a vaga por NOME e renumerar quebraria o vínculo. Muta t in
+// place; retorna true se mudou algo. Número atual do placeholder = do nome "Jogador NN", ou
+// (nome apagado) do uid 'jog_NN' ou do email 'jogadorNN@scoreplace.app'.
+window._normalizePlaceholderNumbers = function (t) {
+  if (!t) return false;
+  var drawn = (Array.isArray(t.matches) && t.matches.length > 0) ||
+              (Array.isArray(t.rounds) && t.rounds.length > 0) ||
+              (Array.isArray(t.groups) && t.groups.length > 0);
+  if (drawn) return false;
+  var pools = [t.participants, t.standbyParticipants, t.waitlist];
+  var _phRe = /^(?:Jogador|Placeholder)\s+(\d+)$/i;
+  var isPh = function (p) {
+    return p && typeof p === 'object' && !p.p1Name && !p.p2Name &&
+      ((p.uid && String(p.uid).indexOf('jog_') === 0) || p.isPlaceholder === true ||
+       _phRe.test(String(p.displayName || p.name || '').trim()));
+  };
+  var curNum = function (p) {
+    var m, nm = String(p.displayName || p.name || '').trim();
+    if ((m = nm.match(_phRe))) return parseInt(m[1], 10);
+    if (p.uid && (m = String(p.uid).match(/^jog_0*(\d+)/))) return parseInt(m[1], 10);
+    if (p.email && (m = String(p.email).match(/^jogador0*(\d+)@scoreplace\.app$/i))) return parseInt(m[1], 10);
+    return 0;
+  };
+  // números "tomados" por participantes NÃO-placeholder chamados "Jogador X" (raro) — evita colisão
+  var taken = {};
+  pools.forEach(function (arr) {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function (p) {
+      if (isPh(p)) return;
+      var nm = (typeof p === 'string') ? p : (p && (p.displayName || p.name));
+      var mt = nm && String(nm).trim().match(_phRe); if (mt) taken[parseInt(mt[1], 10)] = 1;
+    });
+  });
+  var nextFree = function (pref) { var n = pref > 0 ? pref : 1; while (taken[n]) n++; return n; };
+  var changed = false;
+  pools.forEach(function (arr) {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function (p) {
+      if (!isPh(p)) return;
+      var num = nextFree(curNum(p)); taken[num] = 1;
+      var nm = 'Jogador ' + String(num).padStart(2, '0');
+      var hadJog = p.uid && String(p.uid).indexOf('jog_') === 0;
+      var hadEmail = p.email && /^jogador\d+@scoreplace\.app$/i.test(String(p.email));
+      if (p.name !== nm || p.displayName !== nm || hadJog || hadEmail || p.isPlaceholder !== true) changed = true;
+      p.name = nm; p.displayName = nm; p.isPlaceholder = true;
+      if (hadJog) delete p.uid;
+      if (hadEmail) delete p.email;
+    });
+  });
+  return changed;
 };
 
 // ── ESPELHO DO STRIP: REHIDRATA o nome na borda do SORTEIO (v4.5.85) ──────────────
@@ -6685,7 +6776,10 @@ window._ensureEnrollSeqs = function(t) {
   function alloc(){ while (used[nf]) nf++; used[nf] = 1; return nf; }
   arr.forEach(function(p){
     if (!p || typeof p !== 'object') return; // string legada: tratada on-the-fly no map
-    if (p.p1Name && p.p2Name) {
+    // v4.5.95: dupla por ESTRUTURA = (p1Uid|p1Name) && (p2Uid|p2Name). Antes exigia
+    // p1Name && p2Name, mas o strip do ITEM 3 apaga o nome de quem tem uid → dupla de
+    // contas reais caía no ramo solo e o 2º membro ficava sem número de inscrição.
+    if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
       if (p.p1Seq == null) p.p1Seq = alloc();
       if (p.p2Seq == null) p.p2Seq = alloc();
     } else if (p.enrollSeq == null) {
@@ -6695,18 +6789,27 @@ window._ensureEnrollSeqs = function(t) {
 };
 window._buildEnrollOrderMap = function(t) {
   if (typeof window._ensureEnrollSeqs === 'function') window._ensureEnrollSeqs(t);
-  var map = {};
   var arr = Array.isArray(t.participants) ? t.participants : [];
   var maxSeq = 0;
   arr.forEach(function(p){ if (p && typeof p === 'object') [p.enrollSeq, p.p1Seq, p.p2Seq].forEach(function(s){ if (s != null && s > maxSeq) maxSeq = s; }); });
   var strNext = maxSeq;
-  function put(uid, name, seq){ if (seq == null) return; if (uid) map['u:'+uid] = seq; if (name) map['n:'+String(name).trim().toLowerCase()] = seq; }
+  // v4.5.91: número exibido = RANK DENSO (1..N na ordem do enrollSeq), não o enrollSeq bruto.
+  // Remover um inscrito re-numera os demais sem deixar buraco (o que era 7 vira 6…). O
+  // enrollSeq guardado segue estável (ordem original); só o número mostrado é compactado.
+  var persons = []; // { keys:[u:uid, n:nome], seq }
+  function add(uid, name, seq){ if (seq == null) return; var keys=[]; if (uid) keys.push('u:'+uid); if (name) keys.push('n:'+String(name).trim().toLowerCase()); if (keys.length) persons.push({ keys: keys, seq: seq }); }
   arr.forEach(function(p){
-    if (typeof p === 'string') { String(p).split(' / ').forEach(function(nm){ nm = nm.trim(); if (nm) put(null, nm, ++strNext); }); return; }
+    if (typeof p === 'string') { String(p).split(' / ').forEach(function(nm){ nm = nm.trim(); if (nm) add(null, nm, ++strNext); }); return; }
     if (!p || typeof p !== 'object') return;
-    if (p.p1Name && p.p2Name) { put(p.p1Uid, p.p1Name, p.p1Seq); put(p.p2Uid, p.p2Name, p.p2Seq); }
-    else { put(p.uid, p.displayName || p.name, p.enrollSeq); }
+    // v4.5.95: dupla por ESTRUTURA (uid OU nome) — o strip do ITEM 3 apaga p1Name/p2Name de
+    // quem tem uid; exigir os dois nomes fazia a dupla cair no ramo solo e o 2º membro (Denise,
+    // Flávia…) ficar SEM número de inscrição. Cada membro entra pelo seu uid+seq.
+    if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) { add(p.p1Uid, p.p1Name, p.p1Seq); add(p.p2Uid, p.p2Name, p.p2Seq); }
+    else { add(p.uid, p.displayName || p.name, p.enrollSeq); }
   });
+  persons.sort(function(a, b){ return a.seq - b.seq; });
+  var map = {};
+  persons.forEach(function(entry, i){ var rank = i + 1; entry.keys.forEach(function(k){ if (map[k] == null) map[k] = rank; }); });
   return map;
 };
 // nº de inscrição de UMA pessoa (1-based) — uid primeiro, nome como fallback.

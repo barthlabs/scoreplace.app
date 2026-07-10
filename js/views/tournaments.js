@@ -277,30 +277,45 @@ window._addPlaceholdersCore = function (id, qtd, onDone) {
     if (!t) return;
     if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
     var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
+    // v4.5.92: antes de numerar os novos, DEDUP + cura os placeholders existentes (números
+    // repetidos de lotes antigos cujo nome foi apagado pelo strip do ITEM 3). Só age pré-sorteio.
+    if (typeof window._normalizePlaceholderNumbers === 'function') window._normalizePlaceholderNumbers(t);
     // coleta TODOS os nomes individuais já usados (inclusive embutidos em duplas e jogos)
     // e numera a partir do MAIOR número existente — evita recriar "Jogador 19" duplicado.
     var existingNames = {};
+    var maxNum = 0;
+    var _bump = function (v) { if (v != null && !isNaN(v) && v > maxNum) maxNum = v; };
     var _addName = function (n) {
         if (!n) return;
-        String(n).split(' / ').forEach(function (part) { var pn = part.trim(); if (pn) existingNames[pn] = true; });
+        String(n).split(' / ').forEach(function (part) {
+            var pn = part.trim(); if (!pn) return; existingNames[pn] = true;
+            var mt = pn.match(/^(?:Jogador|Placeholder)\s+(\d+)$/i); if (mt) _bump(parseInt(mt[1], 10));
+        });
     };
     (t.participants || []).concat(t.standbyParticipants || [], t.waitlist || []).forEach(function (p) {
         _addName(typeof p === 'string' ? p : (p && (p.displayName || p.name)));
+        // v4.5.92: número do placeholder também vem do uid 'jog_NN' / email fake (o strip do
+        // ITEM 3 pode ter apagado o nome) — senão um 2º lote recomeçaria do 01 e duplicaria.
+        if (p && typeof p === 'object') {
+            var mm;
+            if (p.uid && (mm = String(p.uid).match(/^jog_0*(\d+)/))) { _bump(parseInt(mm[1], 10)); existingNames['Jogador ' + String(parseInt(mm[1], 10)).padStart(2, '0')] = true; }
+            if (p.email && (mm = String(p.email).match(/^jogador0*(\d+)@scoreplace\.app$/i))) { _bump(parseInt(mm[1], 10)); existingNames['Jogador ' + String(parseInt(mm[1], 10)).padStart(2, '0')] = true; }
+        }
     });
     var _allM = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
     (_allM || []).forEach(function (m) { if (m) { _addName(m.p1); _addName(m.p2); } });
-    var maxNum = 0;
-    Object.keys(existingNames).forEach(function (nm) {
-        var mt = nm.match(/^(?:Jogador|Placeholder)\s+(\d+)$/i);
-        if (mt) { var v = parseInt(mt[1], 10); if (v > maxNum) maxNum = v; }
-    });
     var made = [];
     var k = maxNum;
     for (var i = 0; i < qtd; i++) {
         var numStr, nm;
         do { k++; numStr = String(k).padStart(2, '0'); nm = 'Jogador ' + numStr; } while (existingNames[nm]);
         existingNames[nm] = true;
-        made.push({ name: nm, displayName: nm, email: 'jogador' + numStr + '@scoreplace.app', uid: 'jog_' + numStr + '_' + Date.now() + '_' + i, isPlaceholder: true });
+        // v4.5.90: placeholder = vaga SEM conta → SEM uid e SEM email (igual ao participante
+        // informal digitado no campo de nome). Antes recebia um uid sintético 'jog_…' que,
+        // pós-ITEM 3 (_displayName resolve SÓ perfil vivo, sem fallback pro nome gravado),
+        // deixava o card com o nome vazio ("…") porque não existe users/jog_…. Identidade do
+        // placeholder é só o nome "Jogador NN"; ganha uid real só quando um jogador ocupa a vaga.
+        made.push({ name: nm, displayName: nm, isPlaceholder: true });
     }
     var dest;
     if (hasDraw) {
@@ -805,6 +820,8 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
     if (!t.teamOrigins) t.teamOrigins = {};
     t.teamOrigins[newName] = 'formada';
     if (window._teamFormation && _u1 && _u2) window._teamFormation.dropRequestsInvolving(t, [_u1, _u2]);
+    // v4.5.94: dupla formada à mão → regra "Já formadas" (config + sorteio, via _isManualPairing).
+    if (typeof window._markDuplasManual === 'function') window._markDuplasManual(t);
     t.updatedAt = new Date().toISOString();
     window.FirestoreDB.saveTournament(t);
     if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');

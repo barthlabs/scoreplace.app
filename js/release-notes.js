@@ -9,6 +9,15 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.95-beta — Vagas (placeholders) e duplas mais consistentes <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>➕ Reservar vagas (placeholders) corrigido:</b> as vagas agora aparecem sempre com o nome <b>"Jogador NN"</b>, <b>numeradas de forma única</b> — mesmo criando em vários lotes (antes o nome sumia ou repetia). Cada vaga vira um jogador real quando alguém ocupa.</li>' +
+        '<li><b>🔢 Números de inscrição sem buraco:</b> ao <b>remover um inscrito</b>, os demais são renumerados automaticamente (o 7 vira 6, e assim por diante). E nas <b>duplas</b>, os <b>dois jogadores</b> mostram o número de inscrição.</li>' +
+        '<li><b>👤 Nomes sempre visíveis:</b> os cards de jogadores com conta não ficam mais <b>sem nome</b> em algumas telas (ex.: ao formar duplas) — o nome do perfil é carregado de forma confiável.</li>' +
+        '<li><b>🤝 "Já formadas" reflete o que você fez:</b> ao montar uma dupla <b>na mão</b>, a opção <b>"Duplas na eliminatória"</b> passa a mostrar <b>"Já formadas"</b> (e o sorteio respeita isso, sem re-sortear duplas por cima).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.89-beta — Nº de rodadas e datas da fase sempre em sincronia <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📊 A barra do torneio respeita o Nº de rodadas configurado:</b> se a fase tem <b>2 rodadas</b>, o torneio mostra "Rodada X de 2" e conta os jogos por 2 rodadas — mesmo que a data de término deixasse espaço pra uma rodada a mais. A data da fase é o <b>limite externo</b>; o número de rodadas que você escolheu é o que manda.</li>' +

@@ -919,6 +919,15 @@ window._isManualPairing = function (t) {
   if (t.fmt2 && typeof t.fmt2 === 'object' && t.fmt2.formacaoDupla) return t.fmt2.formacaoDupla === 'manual';
   return t.manualPairing === 'open';
 };
+// v4.5.94: formar dupla à mão passa a regra pra "Já formadas" — grava na FONTE que
+// _isManualPairing lê (fmt2.formacaoDupla p/ format2; manualPairing p/ legado). Assim o
+// seletor "Duplas na eliminatória" mostra "🤝 Já formadas" E o sorteio para de auto-formar
+// os avulsos (viram "sem dupla" na resolução), coerente com o que o organizador fez à mão.
+window._markDuplasManual = function (t) {
+  if (!t) return;
+  if (t.fmt2 && typeof t.fmt2 === 'object') t.fmt2.formacaoDupla = 'manual';
+  else t.manualPairing = 'open';
+};
 
 // ─── v2.1.20: Diálogo de gênero pré-sorteio (duplas mistas, sorteio livre) ────
 // Mostra ANTES do sorteio quando: duplas (teamSize 2) formadas por pareamento de
@@ -2527,6 +2536,10 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
         t.participants = arr;
         if (!t.teamOrigins) t.teamOrigins = {};
         t.teamOrigins[newName] = 'formada';
+        // v4.5.94: formar dupla MANUALMENTE = regra "Já formadas". Sincroniza a config
+        // (fmt2.formacaoDupla) pra o seletor "Duplas na eliminatória" refletir a mudança —
+        // antes só mexia no enrollmentMode e o seletor continuava "Sorteadas".
+        if (typeof window._markDuplasManual === 'function') window._markDuplasManual(t);
         window.FirestoreDB.saveTournament(t);
         var container = document.getElementById('view-container');
         if (container) renderTournaments(container, tId);
