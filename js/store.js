@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.98-beta';
+window.SCOREPLACE_VERSION = '4.5.99-beta';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)

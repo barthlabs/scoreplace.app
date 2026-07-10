@@ -105,11 +105,17 @@ window._buildDoublesInscritosSection = function (t, ctx) {
       : (_canPairDrag
         ? '<div style="font-size:0.65rem;color:rgba(255,255,255,0.45);margin-top:3px;">Arraste para formar dupla</div>'
         : '<div style="font-size:0.65rem;color:rgba(255,255,255,0.4);margin-top:3px;">Sem dupla</div>');
+    // v4.5.99: identidade de CADA membro = uid; só fictício (sem conta) usa o nome. O strip do
+    // ITEM 3 apaga name/displayName da dupla de contas → casar por STRING falhava (Desfazer não
+    // achava a entrada). Desfazer passa as 2 identidades (uid||nome-guest) e _splitDupla casa o PAR.
+    var _m1Id = (p && (p.p1Uid || p.p1Name)) || '';
+    var _m2Id = (p && (p.p2Uid || p.p2Name)) || '';
+    var _entryName = (members && members.length) ? members.join(' / ') : nm; // só p/ o botão Remover (solo)
     var desfazerBtn = (!draggable && isOrg)
-      ? '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" title="Desfazer dupla" style="--cx-size:24px;">✕</button>'
+      ? '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_m1Id) + '\',\'' + _safeAttr(_m2Id) + '\')" title="Desfazer dupla" style="--cx-size:24px;">✕</button>'
       : '';
     var _delBtnDupla = (isOrg && !drawDone && draggable)
-      ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" style="--cx-size:24px;">✕</button>'
+      ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_entryName) + '\')" style="--cx-size:24px;">✕</button>'
       : '';
     var _s1 = (members && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p1Uid) || '', displayName: (p && p.p1Name) || members[0], name: (p && p.p1Name) || members[0] }) : '';
     var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p2Uid) || '', displayName: (p && p.p2Name) || members[1], name: (p && p.p2Name) || members[1] }) : '';
@@ -1160,16 +1166,33 @@ function renderTournaments(container, tournamentId = null) {
     // existiam DEPOIS de abrir um torneio (eram atribuídos dentro de renderTournaments),
     // então o botão Confirmar/Cancelar no DASHBOARD quebrava. Agora estão no load.
 
-    // Desfazer dupla: separa "Nome1 / Nome2" de volta em dois inscritos solo
-    window._splitDupla = function(tId, teamName) {
+    // Desfazer dupla → 2 inscritos solo. v4.5.99: casa a dupla pela IDENTIDADE DE CADA MEMBRO
+    // (uid; só fictício sem conta usa nome) — o strip do ITEM 3 apaga name/displayName da dupla
+    // de contas, então casar pela STRING "A / B" falhava. `id1`/`id2` = (p1Uid||p1Name) e
+    // (p2Uid||p2Name). Compat: chamada antiga só com o nome inteiro (id2 vazio) cai no match por nome.
+    window._splitDupla = function(tId, id1, id2) {
         var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
         if (!t) return;
         var arr = Array.isArray(t.participants) ? t.participants : [];
 
-        var idx = arr.findIndex(function(p) {
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            return n === teamName;
-        });
+        var idx;
+        if (id2 != null && String(id2) !== '') {
+            var _want = [String(id1 || ''), String(id2 || '')].filter(Boolean).sort();
+            idx = arr.findIndex(function(p) {
+                if (!p || typeof p !== 'object') return false;
+                if (!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))) return false; // só dupla
+                var _got = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort();
+                return _got.length === _want.length && _got.every(function(v, i){ return v === _want[i]; });
+            });
+        } else {
+            var teamName = id1;
+            idx = arr.findIndex(function(p) {
+                if (typeof p === 'string') return p === teamName;
+                if (!p || typeof p !== 'object') return false;
+                var _resolved = (typeof window._pName === 'function') ? window._pName(p) : '';
+                return (p.displayName || p.name || '') === teamName || _resolved === teamName;
+            });
+        }
         if (idx === -1) return;
 
         var entry = arr[idx];
