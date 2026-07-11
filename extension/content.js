@@ -11,7 +11,7 @@
   if (window.__spLzpContent) return;
   window.__spLzpContent = true;
 
-  var EXT_VERSION = '1.15';
+  var EXT_VERSION = '1.16';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }

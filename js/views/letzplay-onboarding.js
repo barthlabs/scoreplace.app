@@ -9,8 +9,9 @@
  */
 (function () {
   // Versão mínima esperada da extensão. Abaixo disso → pede atualização.
-  // 1.12 é a 1ª com import DIRETO (service worker + orquestração no content script).
-  var MIN_EXT_VERSION = '1.12';
+  // 1.16 é a 1ª que busca o letzplay DENTRO da aba (same-origin) — as anteriores
+  // buscavam do service worker (cross-site) e voltavam deslogado (sem jogos).
+  var MIN_EXT_VERSION = '1.16';
   // URL da Chrome Web Store — null enquanto não publicado (mostra instruções manuais).
   var STORE_URL = null;
 
@@ -77,7 +78,8 @@
   var _importActive = false;
   var _ERR = {
     'letzplay-login': 'Você não está logado no letzplay. Abra letzplay.me, entre e tente de novo.',
-    'sem-jogos': 'Não encontrei jogos na sua conta do letzplay.',
+    'no-letzplay-tab': 'Abra o letzplay.me numa aba (logado) e tente de novo — a leitura acontece dentro da sua sessão.',
+    'sem-jogos': 'Não encontrei jogos na sua conta do letzplay (confira se está logado na aba do letzplay).',
     'sem-login': 'Entre na sua conta do scoreplace pra importar.',
     'conta-diferente': 'O @ do letzplay não bate com o do seu perfil no scoreplace.',
     'libs': 'A extensão precisa ser recarregada (chrome://extensions → ↻).',

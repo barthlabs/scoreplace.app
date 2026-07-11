@@ -1,6 +1,11 @@
-/* background.js — service worker (MV3). Faz o fetch cross-origin autenticado ao
- * letzplay.me (host_permissions + cookies da sessão) a pedido do content script.
- * O content script (que tem DOM) parseia; o app dispara tudo. Sem senha.
+/* background.js — service worker (MV3).
+ *
+ * FETCH do letzplay: NÃO dá pra buscar do service worker (contexto da extensão =
+ * cross-site → cookie de sessão + cf_clearance do Cloudflare com SameSite NÃO vão →
+ * volta página deslogada, sem jogos). Solução: rodar o fetch DENTRO da aba do letzplay
+ * (chrome.scripting.executeScript) → requisição same-origin → todos os cookies vão →
+ * passa o Cloudflare + logado. É o mesmo caminho da extração que funcionou. Exige uma
+ * aba do letzplay.me aberta (o Passo 2 pede pra logar/abrir).
  *
  * Também AUTO-INJETA o content script nas abas do scoreplace JÁ ABERTAS quando a
  * extensão é instalada/ativada — assim o usuário NÃO precisa recarregar a página pra
@@ -26,16 +31,30 @@ chrome.runtime.onStartup.addListener(injectIntoOpenScoreplaceTabs);
 // injeção mesmo quando onInstalled não dispara (ex.: reativar extensão já instalada).
 // A guarda no content.js torna injeções repetidas inofensivas.
 injectIntoOpenScoreplaceTabs();
+// Busca uma URL do letzplay DE DENTRO de uma aba do letzplay (same-origin → cookies +
+// Cloudflare OK). Precisa de uma aba letzplay.me aberta.
+function fetchViaLetzplayTab(url, cb) {
+  if (!chrome.scripting || !chrome.tabs) { cb({ ok: false, error: 'no-scripting' }); return; }
+  chrome.tabs.query({ url: 'https://letzplay.me/*' }, function (tabs) {
+    if (!tabs || !tabs.length) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
+    chrome.scripting.executeScript({
+      target: { tabId: tabs[0].id },
+      func: function (u) {
+        return fetch(u, { credentials: 'include' })
+          .then(function (r) { return r.text().then(function (h) { return { ok: r.ok, status: r.status, html: h }; }); })
+          .catch(function (e) { return { ok: false, error: String(e && e.message || e) }; });
+      },
+      args: [url]
+    }).then(function (res) {
+      cb((res && res[0] && res[0].result) || { ok: false, error: 'exec-failed' });
+    }).catch(function (e) { cb({ ok: false, error: String(e && e.message || e) }); });
+  });
+}
+
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg && msg.type === 'lp-fetch' && typeof msg.url === 'string' &&
       msg.url.indexOf('https://letzplay.me/') === 0) {
-    fetch(msg.url, { credentials: 'include' })
-      .then(function (r) {
-        return r.text().then(function (html) {
-          sendResponse({ ok: r.ok, status: r.status, html: html });
-        });
-      })
-      .catch(function (e) { sendResponse({ ok: false, error: String(e && e.message || e) }); });
+    fetchViaLetzplayTab(msg.url, sendResponse);
     return true; // resposta assíncrona
   }
 });
