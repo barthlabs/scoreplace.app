@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "scoreplace — importar letzplay",
-  "version": "1.13",
+  "version": "1.14",
   "description": "Importa seu histórico do letzplay pro scoreplace, na SUA sessão logada (passa o Cloudflare). Só desktop.",
-  "permissions": ["tabs"],
+  "permissions": ["tabs", "scripting"],
   "host_permissions": [
     "https://letzplay.me/*",
     "https://scoreplace.app/*",
