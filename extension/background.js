@@ -39,6 +39,8 @@ function fetchViaLetzplayTab(url, cb) {
     if (!tabs || !tabs.length) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
     chrome.scripting.executeScript({
       target: { tabId: tabs[0].id },
+      world: 'MAIN', // roda no mundo da PÁGINA → fetch idêntico ao da própria letzplay
+                     // (manda os cookies da sessão). No ISOLATED os cookies não iam → 0 jogos.
       func: function (u) {
         return fetch(u, { credentials: 'include' })
           .then(function (r) { return r.text().then(function (h) { return { ok: r.ok, status: r.status, html: h }; }); })

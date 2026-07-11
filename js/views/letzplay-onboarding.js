@@ -9,9 +9,9 @@
  */
 (function () {
   // Versão mínima esperada da extensão. Abaixo disso → pede atualização.
-  // 1.16 é a 1ª que busca o letzplay DENTRO da aba (same-origin) — as anteriores
-  // buscavam do service worker (cross-site) e voltavam deslogado (sem jogos).
-  var MIN_EXT_VERSION = '1.16';
+  // 1.18: busca no mundo MAIN da aba do letzplay (manda os cookies → jogos vêm).
+  // 1.16/1.17 buscavam no mundo ISOLATED (sem cookies) → "sem jogos".
+  var MIN_EXT_VERSION = '1.18';
   // URL da Chrome Web Store — null enquanto não publicado (mostra instruções manuais).
   var STORE_URL = null;
 
