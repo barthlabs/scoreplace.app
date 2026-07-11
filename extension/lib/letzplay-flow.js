@@ -5,10 +5,12 @@
  */
 (function () {
   var root = (typeof window !== 'undefined') ? window : this;
-  var X = root._spExtract;
+  // X (_spExtract) referenciado no MOMENTO DA CHAMADA — nunca capturado no load (se o
+  // extract ainda não tivesse setado no load, detectMe ficava com X morto → null pra sempre).
 
   // ME = handle que aparece em TODOS (ou quase) os cards — o usuário logado joga em todos.
   function detectMe(doc) {
+    var X = root._spExtract;
     if (!X) return null;
     var cards = [].slice.call(doc.querySelectorAll('.row.match'));
     var count = {};
@@ -16,7 +18,7 @@
       var hs = [].slice.call(c.querySelectorAll('a[href^="/"]'))
         .map(function (a) { return X.handleFromHref(a.getAttribute('href')); })
         .filter(Boolean);
-      [].slice.call(new Set(hs)).forEach(function (h) { count[h] = (count[h] || 0) + 1; });
+      Array.from(new Set(hs)).forEach(function (h) { count[h] = (count[h] || 0) + 1; });
     });
     var me = null, best = 0;
     Object.keys(count).forEach(function (h) { if (count[h] > best) { best = count[h]; me = h; } });

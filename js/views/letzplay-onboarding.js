@@ -9,9 +9,9 @@
  */
 (function () {
   // Versão mínima esperada da extensão. Abaixo disso → pede atualização.
-  // 1.18: busca no mundo MAIN da aba do letzplay (manda os cookies → jogos vêm).
-  // 1.16/1.17 buscavam no mundo ISOLATED (sem cookies) → "sem jogos".
-  var MIN_EXT_VERSION = '1.21';
+  // 1.24 é a 1ª que importa de verdade: fetch via inject.js web-accessible (código real da
+  // página → cookie de sessão vai) + fix do detectMe (Array.from(new Set)). Ver memória.
+  var MIN_EXT_VERSION = '1.24';
   // URL da Chrome Web Store — null enquanto não publicado (mostra instruções manuais).
   var STORE_URL = null;
 
@@ -19,7 +19,6 @@
   var _pollTimer = null;
   var _lzLoggedIn = null;   // null=desconhecido, true=logado no letzplay, false=deslogado
   var _lastLzCheck = 0;
-  var _lzDiag = null;       // diagnóstico visível: o que a extensão puxou do letzplay
 
   function _verGte(a, b) {
     var pa = String(a || '0').split('.').map(Number), pb = String(b || '0').split('.').map(Number);

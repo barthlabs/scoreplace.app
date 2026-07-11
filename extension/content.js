@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.21';
+  var EXT_VERSION = '1.25';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -66,9 +66,9 @@
       var loginTitle = /\b(login|entrar)\b/i.test(doc.title || '');
       // loggedIn confiável = achou cards; se não achou mas também não é tela de login, fica indefinido
       var loggedIn = cards > 0 ? true : ((hasPw || loginTitle) ? false : null);
-      post({ __sp_lp: 'letzplay-status', loggedIn: loggedIn, diag: { cards: cards, title: (doc.title || '').slice(0, 40), pw: hasPw } });
+      post({ __sp_lp: 'letzplay-status', loggedIn: loggedIn });
     } catch (e) {
-      post({ __sp_lp: 'letzplay-status', loggedIn: null, error: (e && e.message) || 'fetch', diag: { err: (e && e.message) || 'fetch' } });
+      post({ __sp_lp: 'letzplay-status', loggedIn: null, error: (e && e.message) || 'fetch' });
     }
   }
 
