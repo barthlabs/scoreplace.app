@@ -729,6 +729,17 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     // 2+ tournaments. Harmonized with modal's _boxStat/_sectionShell helpers.
     var _organizerSectionHtml = _buildOrganizerAnalyticsForModal(playerName);
 
+    // v1.8: card "Seu nível (letzplay)" — mudou do perfil pra cá. Aparece nas
+    // Estatísticas quando o jogador visto é o PRÓPRIO usuário e ele tem histórico
+    // letzplay importado. Slot vazio persiste pro bridge (import via extensão)
+    // popular ao vivo se a modal estiver aberta. Import de OUTROS jogadores é
+    // fase à parte (precisa do doc deles) — por ora só a própria conta.
+    var _lpCu = window.AppStore && window.AppStore.currentUser;
+    var _lpIsCurUser = _lpCu && _lpCu.displayName && String(_lpCu.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
+    var _lpInner = (_lpIsCurUser && _lpCu.letzplayImport && typeof window._renderLetzplayCard === 'function')
+      ? window._renderLetzplayCard(_lpCu.letzplayImport) : '';
+    var _lpCardHtml = '<div id="letzplay-card-stats-slot" style="margin-top:12px;">' + _lpInner + '</div>';
+
     modal.innerHTML = '' +
       ((typeof window._renderBackHeader === 'function')
         ? window._renderBackHeader({
@@ -747,6 +758,8 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
       '<div id="player-stats-persistent">' +
         _initialStatsHtml +
       '</div>' +
+      // Card letzplay (só quando é a própria conta com histórico importado)
+      _lpCardHtml +
       // Organizer analytics (if applicable)
       _organizerSectionHtml;
 

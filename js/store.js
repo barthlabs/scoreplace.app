@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7';
+window.SCOREPLACE_VERSION = '1.8';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -509,10 +509,10 @@ window._ensureBootOverlay = function() {
 window._ensureBootOverlay();
 
 // v2.4.93: TETO GLOBAL de splash. Garante que a tela inicial nunca passa de
-// ~4,5s desde o open do app, qualquer que seja o caminho (mesmo dados lentos,
-// _finalizeBootReady atrasado, etc.). Os caminhos mais rápidos (router=1,5s,
-// dash-poller=3,5s) revelam antes quando aplicáveis; este é só o limite.
-window._markBootReady(4500, 'global-cap');
+// ~3,5s (v1.8: era 4,5s) desde o open do app, qualquer que seja o caminho
+// (mesmo dados lentos, _finalizeBootReady atrasado, etc.). Os caminhos mais
+// rápidos (router=1,5s, dash-poller=2,5s) revelam antes quando aplicáveis.
+window._markBootReady(3500, 'global-cap');
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -5534,10 +5534,12 @@ window.AppStore = {
             // um detector de "DOM quieto" — mas a dashboard tem timers/re-renders
             // ~contínuos, então ele batia no teto e revelava só em ~9s (confirmado
             // pelo diagnóstico: dash-poller @ 9002ms). Agora: revela no piso de
-            // 3,5s (desde o open do app). Um teto GLOBAL (_markBootReady(4500))
-            // garante que nunca passa de ~4,5s, mesmo com dados lentos. Quem
+            // 2,5s (v1.8: era 3,5s — o scroll-jank de abertura passou a ser
+            // tratado separado, então o piso virou majoritariamente estético e
+            // baixamos 1s pra acelerar o boot). Um teto GLOBAL (_markBootReady(3500))
+            // garante que nunca passa de ~3,5s, mesmo com dados lentos. Quem
             // realmente trava o scroll (re-render pós-reveal) é tratado separado.
-            window._markBootReady(3500, 'dash-poller');
+            window._markBootReady(2500, 'dash-poller');
           };
           // Auto-scroll: tratado pelo renderDashboard com 600ms após render.
           // v4.5.72: _autoFixStaleNames removido — sob identidade-por-uid o render

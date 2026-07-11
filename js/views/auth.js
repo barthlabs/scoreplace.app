@@ -4578,9 +4578,9 @@ async function simulateLoginSuccess(user) {
     _setVal('profile-edit-letzplay', cu.letzplayHandle ? ('@' + cu.letzplayHandle) : '');
     var _lpConsentEl = document.getElementById('profile-letzplay-consent');
     if (_lpConsentEl) _lpConsentEl.checked = (cu.letzplayConsent === true);
-    var _lpCardSlot = document.getElementById('letzplay-card-slot');
-    if (_lpCardSlot) _lpCardSlot.innerHTML = (typeof window._renderLetzplayCard === 'function')
-      ? window._renderLetzplayCard(cu.letzplayImport) : '';
+    // v1.8: o card "Seu nível (letzplay)" saiu daqui — agora vive nas
+    // Estatísticas do jogador (📊 _showPlayerStats). O perfil só guarda @ +
+    // consentimento (config), sem renderizar o histórico (não pesa o perfil).
     (function() {
       var raw = cu.preferredSports;
       var arr = [];
@@ -6543,9 +6543,8 @@ function setupProfileModal() {
                 }) : '') +
               '</div>' +
             '</div>' +
-            // Card "Seu nível (letzplay)" — populado em _populateProfileModalFields
-            // quando o usuário tem letzplayImport gravado (lê users/{uid}.letzplayImport).
-            '<div id="letzplay-card-slot"></div>' +
+            // v1.8: o card "Seu nível (letzplay)" saiu do perfil e passou pras
+            // Estatísticas do jogador (📊). Aqui só ficam @ + consentimento (config).
             // Esportes Preferidos — pill buttons toggleáveis (v0.15.19).
             // v1.3.6-beta: ao selecionar uma modalidade, abre mini-picker de
             // habilidade (A/B/C/D/FUN) específico daquela modalidade.

@@ -34,8 +34,10 @@
       .then(function () {
         cu.letzplayImport = imp;
         if (!cu.letzplayHandle) cu.letzplayHandle = imp.handle;
-        if (typeof showNotification === 'function') showNotification('🎾 Histórico importado', '@' + imp.handle + ' — seu nível do letzplay foi atualizado.', 'success');
-        var slot = document.getElementById('letzplay-card-slot');
+        if (typeof showNotification === 'function') showNotification('🎾 Histórico importado', '@' + imp.handle + ' — abra 📊 Estatísticas pra ver seu nível.', 'success');
+        // v1.8: o card vive nas Estatísticas (#letzplay-card-stats-slot). Se a
+        // modal estiver aberta, atualiza ao vivo; senão aparece na próxima abertura.
+        var slot = document.getElementById('letzplay-card-stats-slot');
         if (slot && typeof window._renderLetzplayCard === 'function') slot.innerHTML = window._renderLetzplayCard(cu.letzplayImport);
       })
       .catch(function (err) {
