@@ -4578,6 +4578,9 @@ async function simulateLoginSuccess(user) {
     _setVal('profile-edit-letzplay', cu.letzplayHandle ? ('@' + cu.letzplayHandle) : '');
     var _lpConsentEl = document.getElementById('profile-letzplay-consent');
     if (_lpConsentEl) _lpConsentEl.checked = (cu.letzplayConsent === true);
+    var _lpCardSlot = document.getElementById('letzplay-card-slot');
+    if (_lpCardSlot) _lpCardSlot.innerHTML = (typeof window._renderLetzplayCard === 'function')
+      ? window._renderLetzplayCard(cu.letzplayImport) : '';
     (function() {
       var raw = cu.preferredSports;
       var arr = [];
@@ -6536,6 +6539,9 @@ function setupProfileModal() {
                 '<span>Autorizo os organizadores dos meus torneios a importar meu histórico público do letzplay.</span>' +
               '</label>' +
             '</div>' +
+            // Card "Seu nível (letzplay)" — populado em _populateProfileModalFields
+            // quando o usuário tem letzplayImport gravado (lê users/{uid}.letzplayImport).
+            '<div id="letzplay-card-slot"></div>' +
             // Esportes Preferidos — pill buttons toggleáveis (v0.15.19).
             // v1.3.6-beta: ao selecionar uma modalidade, abre mini-picker de
             // habilidade (A/B/C/D/FUN) específico daquela modalidade.
