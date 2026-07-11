@@ -209,12 +209,13 @@
       'style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:var(--primary-color,#818cf8);border-radius:7px;padding:2px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;margin-left:4px;">📋 copiar</button>' +
       '<div style="opacity:0.7;font-size:0.72rem;margin-top:2px;">(o Chrome não deixa abrir esse endereço por link — cole na barra e dê Enter)</div></li>';
     return '<details style="margin-top:8px;"><summary style="cursor:pointer;color:var(--primary-color,#818cf8);font-weight:600;">' + _esc(label) + '</summary>' +
-      '<ol style="margin:8px 0 0;padding-left:20px;line-height:1.7;">' +
+      '<div style="margin:8px 0 6px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);font-size:0.74rem;color:var(--text-muted,#cbd5e1);">⚙️ Instalação <b>temporária</b>, só pra teste enquanto a extensão não está na loja. Quando publicar, vira <b>um clique</b> — nada disso abaixo.</div>' +
+      '<ol style="margin:6px 0 0;padding-left:20px;line-height:1.75;">' +
         chromeLine +
-        '<li>Ligue o <b>Modo do desenvolvedor</b> (canto superior direito)</li>' +
-        '<li><b>Carregar sem compactação</b> → selecione a pasta <code>extension/</code> do scoreplace</li>' +
-        '<li>Volte aqui — esta tela detecta sozinha ✓</li>' +
-        '<li><i>Já tinha instalado?</i> Clique em <b>↻ recarregar</b> no card da extensão pra pegar a versão nova</li>' +
+        '<li>Nessa página, ligue o interruptor <b>Modo do desenvolvedor</b> (fica no canto superior direito).</li>' +
+        '<li>Vai aparecer um botão <b>“Carregar sem compactação”</b> (o Chrome em inglês chama de <i>Load unpacked</i>) — é assim que ele instala uma extensão a partir de uma pasta do computador. Clique nele e escolha a pasta <b>extension</b> do scoreplace.</li>' +
+        '<li>Pronto — volte aqui, esta tela reconhece sozinha ✓</li>' +
+        '<li><i>Já tinha instalado?</i> No card da extensão, clique no <b>↻ (recarregar)</b> pra pegar a versão nova.</li>' +
       '</ol></details>';
   }
 
