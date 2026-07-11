@@ -1460,6 +1460,7 @@ window._translations['pt'] = {
   'auth.friendAcceptedMsg': '{name} aceitou seu convite e agora é seu amigo(a)!',
   'auth.participantEnrolledMsg': '{name} se inscreveu no torneio "{tournament}".',
   'auth.signInGoogle': 'Entrar com Google',
+  'auth.signInApple': 'Entrar com a Apple',
   'auth.loginForStats': 'Faça login para ver suas estatísticas.',
   'auth.disableFundTitle': 'Desativar comunicações fundamentais?',
   'auth.disableFundMsg': 'Você não receberá nenhuma comunicação dos torneios, incluindo avisos indispensáveis como alterações de horário, cancelamentos e resultados. Tem certeza?',

@@ -1226,6 +1226,146 @@ function handleGoogleLogin() {
     });
 }
 
+// ─── Sign in with Apple (Guideline 4.8) ─────────────────────────────────────
+// Mostra o botão em iOS-nativo + web (qualquer navegador). Esconde no Android
+// nativo (não é exigido lá e o fluxo web é frágil em WebView de arquivos locais).
+window._shouldShowAppleBtn = function() {
+  try {
+    var p = (window.Capacitor && window.Capacitor.getPlatform) ? window.Capacitor.getPlatform() : 'web';
+    return p !== 'android';
+  } catch (e) { return true; }
+};
+
+// Nonce aleatório + SHA-256 (Apple exige o hash; Firebase valida o rawNonce)
+function _appleRandomNonce(len) {
+  var chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
+  var out = '';
+  var rnd = new Uint8Array(len || 32);
+  (window.crypto || window.msCrypto).getRandomValues(rnd);
+  for (var i = 0; i < rnd.length; i++) { out += chars[rnd[i] % chars.length]; }
+  return out;
+}
+function _appleSha256Hex(str) {
+  var data = new TextEncoder().encode(str);
+  return window.crypto.subtle.digest('SHA-256', data).then(function(buf) {
+    var arr = Array.prototype.slice.call(new Uint8Array(buf));
+    return arr.map(function(b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  });
+}
+
+function handleAppleLogin() {
+  if (typeof window._resetLoginGuard === 'function') window._resetLoginGuard();
+
+  // Modo dev/local (file://) — simula, igual ao Google
+  if (window.location.protocol === 'file:') {
+    showNotification(_t('auth.simLogin'), _t('auth.simLoginMsg'), 'info');
+    simulateLoginSuccess({ uid: 'local_user', displayName: 'Organizador Teste', email: 'organizador@scoreplace.app', photoURL: '' });
+    return;
+  }
+
+  if (!firebase || !firebase.auth) {
+    showNotification(_t('auth.error'), _t('auth.firebaseError'), 'error');
+    return;
+  }
+
+  showNotification(_t('auth.connecting'), _t('auth.connectingMsg'), 'info');
+
+  var cap = window.Capacitor;
+  var isNative = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+  var platform = (cap && cap.getPlatform) ? cap.getPlatform() : 'web';
+  var nativePlugin = cap && cap.Plugins && cap.Plugins.SignInWithApple;
+
+  // iOS nativo → folha nativa da Apple via plugin + Firebase signInWithCredential
+  if (isNative && platform === 'ios' && nativePlugin) {
+    var rawNonce = _appleRandomNonce(32);
+    _appleSha256Hex(rawNonce).then(function(hashedNonce) {
+      return nativePlugin.authorize({ scopes: 'email name', nonce: hashedNonce });
+    }).then(function(res) {
+      var r = (res && res.response) ? res.response : res;
+      var idToken = r && r.identityToken;
+      if (!idToken) throw new Error('Apple: identityToken ausente');
+      var provider = new firebase.auth.OAuthProvider('apple.com');
+      var credential = provider.credential({ idToken: idToken, rawNonce: rawNonce });
+      var fullName = [r && r.givenName, r && r.familyName].filter(Boolean).join(' ').trim();
+      return firebase.auth().signInWithCredential(credential).then(function(result) {
+        // Apple só envia o nome no PRIMEIRO login; grava se ainda não houver.
+        var u = result.user;
+        if (fullName && u && !u.displayName && u.updateProfile) {
+          return u.updateProfile({ displayName: fullName }).catch(function(){}).then(function(){ return { result: result, fullName: fullName }; });
+        }
+        return { result: result, fullName: fullName };
+      });
+    }).then(function(pack) {
+      _onAppleAuthSuccess(pack.result.user, pack.result, pack.fullName);
+    }).catch(function(err) {
+      _onAppleAuthError(err);
+    });
+    return;
+  }
+
+  // Web (qualquer navegador) → Firebase popup com provedor Apple
+  var webProvider = new firebase.auth.OAuthProvider('apple.com');
+  webProvider.addScope('email');
+  webProvider.addScope('name');
+  firebase.auth().signInWithPopup(webProvider)
+    .then(function(result) {
+      var name = result.user && (result.user.displayName || '');
+      _onAppleAuthSuccess(result.user, result, name);
+    })
+    .catch(function(error) {
+      if (error && (error.code === 'auth/popup-blocked' || error.code === 'auth/operation-not-supported-in-this-environment')) {
+        firebase.auth().signInWithRedirect(webProvider).catch(function(err2) {
+          _onAppleAuthError(err2);
+        });
+        return;
+      }
+      _onAppleAuthError(error);
+    });
+}
+window.handleAppleLogin = handleAppleLogin;
+
+function _onAppleAuthSuccess(user, result, fullName) {
+  if (typeof _forceCloseLoginModal === 'function') _forceCloseLoginModal();
+  var name = (user && user.displayName) || fullName || (user && user.email) || 'Atleta';
+  showNotification(_t('auth.loginDone'), _t('auth.welcomeName', { greeting: window._welcomeWord(user), name: name }), 'success');
+
+  if (window.FirestoreDB && window.FirestoreDB.db && user && user.uid) {
+    var payload = { authProvider: 'apple.com' };
+    if (user.displayName) payload.displayName = user.displayName;
+    else if (fullName) payload.displayName = fullName;
+    window.FirestoreDB.saveUserProfile(user.uid, payload).catch(function(){});
+  }
+
+  try { _tryLinkPendingCredential(result); } catch (e) {
+    window._warn && window._warn('[scoreplace-auth] apple _tryLinkPendingCredential (non-fatal):', e);
+  }
+
+  try {
+    localStorage.setItem('scoreplace_authCache', JSON.stringify({
+      uid: user.uid, email: user.email,
+      displayName: user.displayName || fullName || '',
+      photoURL: user.photoURL || '', authProvider: 'apple.com'
+    }));
+  } catch (e) {}
+
+  simulateLoginSuccess({
+    uid: user.uid, email: user.email,
+    displayName: user.displayName || fullName || '', photoURL: user.photoURL || ''
+  });
+}
+
+function _onAppleAuthError(error) {
+  window._error && window._error('[scoreplace-auth] Apple auth error:', error);
+  if (typeof window._captureException === 'function') {
+    window._captureException(error, { area: 'appleLogin', code: error && (error.code || error.message) });
+  }
+  var code = String((error && (error.code || error.message)) || 'unknown');
+  // Cancelamento do usuário (nativo retorna 1001/canceled; web popup-closed) — silencioso
+  if (/1001|cancel|popup-closed-by-user|cancelled-popup-request/i.test(code)) return;
+  if (typeof _handleAccountLinking === 'function' && _handleAccountLinking(error, 'Apple')) return;
+  showNotification(_t('auth.error'), 'Não foi possível entrar com a Apple. Tente e-mail, celular ou Google.', 'error');
+}
+
 // ─── Account linking helper ─────────────────────────────────────────────────
 // When user tries to sign in with a provider but already has an account with
 // the same email via a different provider, Firebase throws
@@ -5256,6 +5396,15 @@ function setupLoginModal() {
             '<span style="color:var(--text-muted);font-size:1rem;font-weight:700;letter-spacing:1px;">ou</span>' +
             '<div style="flex:1;height:1px;background:var(--border-color);"></div>' +
           '</div>' +
+
+          // --- 4a. Apple (iOS + web; escondido no Android native — Guideline 4.8) ---
+          (window._shouldShowAppleBtn && window._shouldShowAppleBtn() ?
+          '<div style="margin-bottom:8px;">' +
+            '<button type="button" id="login-apple-btn" class="btn hover-lift btn-block" onclick="handleAppleLogin()" style="background:#000;color:#fff;border:1px solid #000;padding:12px 16px;font-size:0.88rem;font-weight:600;">' +
+              '<svg width="18" height="18" viewBox="0 0 384 512" fill="#fff" style="vertical-align:middle;margin-right:8px;"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>' +
+              ((typeof _t === 'function' && _t('auth.signInApple') !== 'auth.signInApple') ? _t('auth.signInApple') : 'Entrar com a Apple') +
+            '</button>' +
+          '</div>' : '') +
 
           // --- 4. Google ---
           '<div style="margin-bottom:4px;">' +
