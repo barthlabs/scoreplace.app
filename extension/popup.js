@@ -89,11 +89,29 @@ function showResult(imp) {
     '<div class="row"><span class="k">Jogos</span><b>' + imp.profile.totals.matches + ' (' + imp.profile.totals.wins + 'V/' + imp.profile.totals.losses + 'D)</b></div>' +
     '<div class="row"><span class="k">Footprint</span><b>' + footOff + ' oficiais · ' + footRec + ' recreativos</b></div>' +
     '<div class="row"><span class="k">Observações</span><b>' + (imp.observations || []).length + ' (ocultas)</b></div>' +
-    '<button id="copy" style="margin-top:10px;background:#1b2230;">📋 Copiar JSON</button>';
+    '<button id="send" style="margin-top:10px;">📤 Enviar pro meu perfil no scoreplace</button>' +
+    '<button id="copy" style="margin-top:8px;background:#1b2230;">📋 Copiar JSON</button>';
   document.getElementById('copy').onclick = function () {
     navigator.clipboard.writeText(JSON.stringify(imp, null, 2));
     document.getElementById('copy').textContent = '✓ Copiado';
   };
+  document.getElementById('send').onclick = function () { sendToScoreplace(imp); };
+}
+
+// Manda o import pra aba do scoreplace (content.js relaya pra página, que grava no doc do usuário).
+function sendToScoreplace(imp) {
+  status('Enviando pro scoreplace…');
+  chrome.tabs.query({ url: ['https://scoreplace.app/*', 'http://localhost/*'] }, function (tabs) {
+    if (!tabs || !tabs.length) {
+      status('⚠️ Abra o scoreplace.app numa aba (logado) e clique de novo.'); return;
+    }
+    chrome.tabs.sendMessage(tabs[0].id, { __sp_lp: 'import', letzplayImport: imp }, function (resp) {
+      if (chrome.runtime.lastError || !resp || !resp.ok) {
+        status('⚠️ Não falei com o scoreplace — recarregue a aba do scoreplace e tente de novo.'); return;
+      }
+      status('✅ Enviado! Confira no seu Perfil (pode precisar reabrir).');
+    });
+  });
 }
 
 async function run() {
