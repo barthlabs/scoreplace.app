@@ -87,6 +87,7 @@ function showResult(imp) {
     '<div class="row"><span class="k">Categoria oficial</span><b class="off mono">' + (off ? off.categoryRaw : '—') + '</b></div>' +
     '<div class="row"><span class="k">Forma (recreativo)</span><b class="mono">' + (r.band || '—') + (r.value ? ' · ' + r.value : '') + '</b></div>' +
     '<div class="row"><span class="k">Jogos</span><b>' + imp.profile.totals.matches + ' (' + imp.profile.totals.wins + 'V/' + imp.profile.totals.losses + 'D)</b></div>' +
+    '<div class="row"><span class="k">Histórico game-a-game</span><b>' + ((imp.games || []).length) + ' jogos</b></div>' +
     '<div class="row"><span class="k">Footprint</span><b>' + footOff + ' oficiais · ' + footRec + ' recreativos</b></div>' +
     '<div class="row"><span class="k">Observações</span><b>' + (imp.observations || []).length + ' (ocultas)</b></div>' +
     '<button id="send" style="margin-top:10px;">📤 Enviar pro meu perfil no scoreplace</button>' +
@@ -98,7 +99,14 @@ function showResult(imp) {
   document.getElementById('send').onclick = function () { sendToScoreplace(imp); };
 }
 
-// Manda o import pra aba do scoreplace (content.js relaya pra página, que grava no doc do usuário).
+// Manda o import pra aba do scoreplace (content.js relaya pra página, que grava no doc do
+// usuário e devolve o resultado REAL — sucesso só quando o Firestore confirma a gravação).
+var ERR_MSG = {
+  'sem-login': '⚠️ Você não está logado no scoreplace. Faça login na aba e tente de novo.',
+  'conta-diferente': '⚠️ O @ importado não bate com o do seu perfil no scoreplace.',
+  'malformado': '⚠️ Import inválido. Rode "Importar meu histórico" de novo.',
+  'sem-resposta': '⚠️ A aba do scoreplace não respondeu — recarregue-a e tente de novo.'
+};
 function sendToScoreplace(imp) {
   status('Enviando pro scoreplace…');
   chrome.tabs.query({ url: ['https://scoreplace.app/*', 'http://localhost/*'] }, function (tabs) {
@@ -106,10 +114,15 @@ function sendToScoreplace(imp) {
       status('⚠️ Abra o scoreplace.app numa aba (logado) e clique de novo.'); return;
     }
     chrome.tabs.sendMessage(tabs[0].id, { __sp_lp: 'import', letzplayImport: imp }, function (resp) {
-      if (chrome.runtime.lastError || !resp || !resp.ok) {
-        status('⚠️ Não falei com o scoreplace — recarregue a aba do scoreplace e tente de novo.'); return;
+      if (chrome.runtime.lastError || !resp) {
+        status('⚠️ Não falei com o scoreplace — recarregue a aba e tente de novo.'); return;
       }
-      status('✅ Enviado! Confira no seu Perfil (pode precisar reabrir).');
+      if (resp.ok) {
+        var n = (resp.count != null) ? resp.count : ((imp.games || []).length);
+        status('✅ Importado! ' + n + ' jogos no seu perfil. Abra 📊 Estatísticas → Histórico de jogos.');
+      } else {
+        status(ERR_MSG[resp.error] || ('⚠️ Falhou: ' + (resp.error || 'erro desconhecido')));
+      }
     });
   });
 }
