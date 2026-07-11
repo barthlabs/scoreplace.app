@@ -11,7 +11,7 @@
   if (window.__spLzpContent) return;
   window.__spLzpContent = true;
 
-  var EXT_VERSION = '1.14';
+  var EXT_VERSION = '1.15';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -61,12 +61,25 @@
     }
   }
 
+  // Checa se o usuário está logado no letzplay (o app não consegue — cross-origin;
+  // a extensão consulta com os cookies da sessão e reporta). Alimenta o "Passo 2 verde".
+  async function checkLetzplay() {
+    try {
+      var doc = await bgFetchDoc('https://letzplay.me/u/matches/history');
+      var loggedOut = !!doc.querySelector('input[type="password"]') || /\b(login|entrar)\b/i.test(doc.title || '');
+      post({ __sp_lp: 'letzplay-status', loggedIn: !loggedOut });
+    } catch (e) {
+      post({ __sp_lp: 'letzplay-status', loggedIn: null, error: (e && e.message) || 'fetch' });
+    }
+  }
+
   window.addEventListener('message', function (e) {
     if (e.source !== window) return;
     var d = e.data;
     if (!d) return;
     if (d.__sp_lp === 'ext-ping') { announce(); return; }
     if (d.__sp_lp === 'run-import') { runDirectImport(); return; }
+    if (d.__sp_lp === 'check-letzplay') { checkLetzplay(); return; }
   });
 
   // ── Relay do POPUP (import via clique no ícone) → página, com resultado real ──

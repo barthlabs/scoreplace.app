@@ -16,6 +16,8 @@
 
   var _ext = { present: false, version: null, seenAt: 0 };
   var _pollTimer = null;
+  var _lzLoggedIn = null;   // null=desconhecido, true=logado no letzplay, false=deslogado
+  var _lastLzCheck = 0;
 
   function _verGte(a, b) {
     var pa = String(a || '0').split('.').map(Number), pb = String(b || '0').split('.').map(Number);
@@ -36,18 +38,28 @@
       : String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; });
   }
 
-  // Escuta o anúncio da extensão (a qualquer momento).
+  // Escuta o anúncio da extensão + o status de login do letzplay (a qualquer momento).
   window.addEventListener('message', function (e) {
     if (e.source !== window) return;
     var d = e.data;
-    if (!d || d.__sp_lp !== 'extension-present') return;
-    _ext.present = true;
-    _ext.version = d.version || null;
-    _ext.seenAt = Date.now();
-    _maybeRenderSteps();
+    if (!d) return;
+    if (d.__sp_lp === 'extension-present') {
+      _ext.present = true;
+      _ext.version = d.version || null;
+      _ext.seenAt = Date.now();
+      // ao detectar a extensão, já pergunta se está logado no letzplay (pro Passo 2 verde)
+      if (_lzLoggedIn !== true) { _lastLzCheck = Date.now(); _checkLetzplay(); }
+      _maybeRenderSteps();
+      return;
+    }
+    if (d.__sp_lp === 'letzplay-status') {
+      if (d.loggedIn === true || d.loggedIn === false) { _lzLoggedIn = d.loggedIn; _maybeRenderSteps(); }
+      return;
+    }
   });
 
   function _ping() { try { window.postMessage({ __sp_lp: 'ext-ping' }, window.location.origin); } catch (e) {} }
+  function _checkLetzplay() { try { window.postMessage({ __sp_lp: 'check-letzplay' }, window.location.origin); } catch (e) {} }
   window._spExtPing = _ping;
   window._spExtState = function () { return _ext; };
 
@@ -233,11 +245,14 @@
     var s1 = extOk ? DONE : (_ext.present ? WARN : CURRENT);
     var html = _stepShell(1, 'Instalar a extensão (uma vez, no desktop)', s1.ic || '1', s1.col, _installStepBody());
 
-    // Passo 2 — letzplay logado (não dá pra detectar cross-origin; instrução)
-    var s2 = extOk ? CURRENT : WAIT;
-    html += _stepShell(2, 'Logar no letzplay', s2.ic || '2', s2.col,
-      'Abra o letzplay e confirme que está logado (a extensão usa a SUA sessão — nenhuma senha passa pelo scoreplace).' +
-      '<div style="margin-top:8px;"><a href="https://letzplay.me/u/matches/history" target="_blank" rel="noopener" style="color:var(--primary-color,#818cf8);font-weight:600;">Abrir meu histórico no letzplay ↗</a></div>');
+    // Passo 2 — logado no letzplay (a extensão detecta na sessão do usuário).
+    var s2 = (_lzLoggedIn === true) ? DONE : (extOk ? CURRENT : WAIT);
+    var s2body = (_lzLoggedIn === true)
+      ? 'Logado no letzplay ✓ — a extensão vai ler seu histórico na sua sessão (nenhuma senha passa pelo scoreplace).'
+      : ('Abra o letzplay e confirme que está logado (a extensão usa a SUA sessão — nenhuma senha passa pelo scoreplace).' +
+         (_lzLoggedIn === false ? '<div style="margin-top:4px;color:#f59e0b;">Ainda não detectei login no letzplay.</div>' : '') +
+         '<div style="margin-top:8px;"><a href="https://letzplay.me/u/matches/history" target="_blank" rel="noopener" style="color:var(--primary-color,#818cf8);font-weight:600;">Abrir meu histórico no letzplay ↗</a></div>');
+    html += _stepShell(2, 'Logar no letzplay', s2.ic || '2', s2.col, s2body);
 
     // Passo 3 — importar
     var s3 = imported ? DONE : (extOk ? CURRENT : WAIT);
@@ -268,7 +283,7 @@
   // usuário tinha aberto (bug "abre e fecha sozinho"). force=true ignora a assinatura.
   var _lastStepsSig = null;
   function _stepsSig() {
-    return [_isMobile(), _ext.present, _ext.version, _gamesCount()].join('|');
+    return [_isMobile(), _ext.present, _ext.version, _gamesCount(), _lzLoggedIn].join('|');
   }
   function _maybeRenderSteps(force) {
     if (!document.getElementById('imp-steps')) return;
@@ -296,6 +311,8 @@
 
     container.innerHTML = hdr + intro;
     _lastStepsSig = null;
+    _lzLoggedIn = null;   // re-checa o login do letzplay a cada abertura da página
+    _lastLzCheck = 0;
     _maybeRenderSteps(true);
 
     // Detecção viva: pinga a extensão e revê o estado enquanto a tela está aberta.
@@ -306,6 +323,10 @@
       // extensão some do estado se não anunciar por >6s (ex: foi removida)
       if (_ext.present && (Date.now() - _ext.seenAt) > 6000) { _ext.present = false; _ext.version = null; }
       _ping();
+      // com a extensão detectada e ainda sem confirmação de login, checa o letzplay
+      // (throttle ~6s; para quando confirmar que está logado — 1 fetch por ciclo).
+      var _extOk = !_isMobile() && _ext.present && _verGte(_ext.version, MIN_EXT_VERSION);
+      if (_extOk && _lzLoggedIn !== true && (Date.now() - _lastLzCheck > 6000)) { _lastLzCheck = Date.now(); _checkLetzplay(); }
       _maybeRenderSteps(); // só re-renderiza se algo mudou → não fecha o <details> aberto
     }, 2000);
   };
