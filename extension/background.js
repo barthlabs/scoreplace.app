@@ -37,26 +37,32 @@ function fetchViaLetzplayTab(url, cb) {
   if (!chrome.scripting || !chrome.tabs) { cb({ ok: false, error: 'no-scripting' }); return; }
   chrome.tabs.query({ url: 'https://letzplay.me/*' }, function (tabs) {
     if (!tabs || !tabs.length) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
+    var injUrl = chrome.runtime.getURL('inject.js');
     chrome.scripting.executeScript({
-      // Mundo ISOLATED (default) só pra ter DOM. O truque: injeta um <script> REAL na
-      // página → o XHR roda como CÓDIGO DA PÁGINA (page-initiated) → o cookie de sessão
-      // vai. Requisição feita direto pelo executeScript (MAIN ou ISOLATED) o Chrome
-      // atribui à EXTENSÃO → cookie SameSite NÃO vai → 0 jogos. Verificado ao vivo.
       target: { tabId: tabs[0].id },
-      func: function (u) {
-        try {
-          var attr = 'data-splp-result';
-          var code = '(function(){try{var x=new XMLHttpRequest();x.open("GET",' + JSON.stringify(u) + ',false);x.withCredentials=true;x.send();document.documentElement.setAttribute(' + JSON.stringify(attr) + ',JSON.stringify({ok:x.status>=200&&x.status<300,status:x.status,html:x.responseText}));}catch(e){document.documentElement.setAttribute(' + JSON.stringify(attr) + ',JSON.stringify({ok:false,error:String(e&&e.message||e)}));}})();';
+      // ISOLATED (default) — carrega o inject.js (web-accessible) como <script src> na
+      // página. Ele roda no mundo REAL da página → fetch page-initiated → cookie vai.
+      // O func aguarda o resultado via postMessage (ISOLATED aguarda Promise; MAIN não).
+      args: [url, injUrl],
+      func: function (u, injSrc) {
+        return new Promise(function (resolve) {
+          var done = false;
+          function finish(res) { if (done) return; done = true; try { window.removeEventListener('message', onMsg); } catch (e) {} resolve(res); }
+          function onMsg(e) {
+            if (e.source !== window) return;
+            var d = e.data;
+            if (!d || !d.__spInjRes || d.__spInjRes.url !== u) return;
+            finish(d.__spInjRes.res);
+          }
+          window.addEventListener('message', onMsg);
           var s = document.createElement('script');
-          s.textContent = code;
+          s.src = injSrc;
+          s.onload = function () { try { window.postMessage({ __spInjReq: { url: u } }, window.location.origin); } catch (e) {} };
+          s.onerror = function () { finish({ ok: false, error: 'inject-load-fail' }); };
           (document.documentElement || document.head).appendChild(s);
-          s.remove(); // o script inline roda SÍNCRONO no append (sync XHR bloqueia) → já setou o attr
-          var raw = document.documentElement.getAttribute(attr);
-          document.documentElement.removeAttribute(attr);
-          return raw ? JSON.parse(raw) : { ok: false, error: 'no-result' };
-        } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
-      },
-      args: [url]
+          setTimeout(function () { finish({ ok: false, error: 'inject-timeout' }); }, 20000);
+        });
+      }
     }).then(function (res) {
       cb((res && res[0] && res[0].result) || { ok: false, error: 'exec-failed' });
     }).catch(function (e) { cb({ ok: false, error: String(e && e.message || e) }); });
