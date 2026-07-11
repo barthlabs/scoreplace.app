@@ -54,7 +54,7 @@ var ERR_MSG = {
 };
 function sendToScoreplace(imp) {
   status('Enviando pro scoreplace…');
-  chrome.tabs.query({ url: ['https://scoreplace.app/*', 'http://localhost/*'] }, function (tabs) {
+  chrome.tabs.query({ url: ['https://scoreplace.app/*', 'https://scoreplace-staging.web.app/*', 'http://localhost/*'] }, function (tabs) {
     if (!tabs || !tabs.length) {
       status('⚠️ Abra o scoreplace.app numa aba (logado) e clique de novo.'); return;
     }
