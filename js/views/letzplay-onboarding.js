@@ -228,7 +228,7 @@
 
     // Passo 2 — letzplay logado (não dá pra detectar cross-origin; instrução)
     var s2 = extOk ? CURRENT : WAIT;
-    html += _stepShell(2, 'Entrar no letzplay', s2.ic || '2', s2.col,
+    html += _stepShell(2, 'Logar no letzplay', s2.ic || '2', s2.col,
       'Abra o letzplay e confirme que está logado (a extensão usa a SUA sessão — nenhuma senha passa pelo scoreplace).' +
       '<div style="margin-top:8px;"><a href="https://letzplay.me/u/matches/history" target="_blank" rel="noopener" style="color:var(--primary-color,#818cf8);font-weight:600;">Abrir meu histórico no letzplay ↗</a></div>');
 
@@ -242,7 +242,7 @@
       s3body = 'Tudo pronto — importe com um clique (sem precisar clicar no ícone da extensão):' +
         '<div style="margin-top:8px;"><button onclick="window._spStartImport&&window._spStartImport()" style="background:linear-gradient(135deg,#84cc16,#65a30d);color:#0b1020;font-weight:800;padding:10px 18px;border-radius:11px;border:none;cursor:pointer;font-size:0.85rem;">🎾 Importar agora</button></div>';
     } else {
-      s3body = 'Depois de instalar a extensão e entrar no letzplay, um botão <b>Importar agora</b> aparece aqui.';
+      s3body = 'Depois de instalar a extensão e logar no letzplay, um botão <b>Importar agora</b> aparece aqui.';
     }
     html += _stepShell(3, 'Importar seu histórico', imported ? '✓' : '3', s3.col, s3body);
 
