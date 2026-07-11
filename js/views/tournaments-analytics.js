@@ -738,9 +738,13 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     var _lpIsCurUser = _lpCu && _lpCu.displayName && String(_lpCu.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
     var _lpInner = (_lpIsCurUser && _lpCu.letzplayImport && typeof window._renderLetzplayCard === 'function')
       ? window._renderLetzplayCard(_lpCu.letzplayImport) : '';
-    // Botão pro Histórico de jogos unificado (LetzPlay + Scoreplace) — só na própria conta.
+    // Botões (só na própria conta): Histórico unificado + Importar do letzplay.
+    // "Importar" chama _spStartImport → se a extensão está instalada, importa direto;
+    // senão abre o tutorial guiado (#importar-letzplay).
+    var _lpHasGames = _lpIsCurUser && _lpCu.letzplayImport && Array.isArray(_lpCu.letzplayImport.games) && _lpCu.letzplayImport.games.length > 0;
     var _lpHistBtn = _lpIsCurUser
-      ? '<button onclick="window.location.hash=\'#historico\'" style="width:100%;margin-top:12px;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color,rgba(255,255,255,0.12));border-radius:12px;padding:11px 14px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;">📜 Histórico de jogos <span style="opacity:0.6;font-weight:500;font-size:0.75rem;">LetzPlay + Scoreplace</span></button>'
+      ? ('<button onclick="window.location.hash=\'#historico\'" style="width:100%;margin-top:12px;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color,rgba(255,255,255,0.12));border-radius:12px;padding:11px 14px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;">📜 Histórico de jogos <span style="opacity:0.6;font-weight:500;font-size:0.75rem;">LetzPlay + Scoreplace</span></button>' +
+         '<button onclick="window._spStartImport&&window._spStartImport()" style="width:100%;margin-top:8px;background:transparent;border:1px solid rgba(132,204,22,0.45);border-radius:12px;padding:10px 14px;cursor:pointer;color:#84cc16;font-size:0.82rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;">🎾 ' + (_lpHasGames ? 'Atualizar' : 'Importar') + ' do letzplay</button>')
       : '';
     var _lpCardHtml = '<div id="letzplay-card-stats-slot" style="margin-top:12px;">' + _lpInner + '</div>' + _lpHistBtn;
 

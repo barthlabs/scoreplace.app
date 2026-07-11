@@ -311,8 +311,11 @@
         '<div id="hist-count" style="font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-top:8px;font-weight:600;"></div>' +
       '</div>';
 
-    var lpHint = (lpCount === 0 && cu.letzplayHandle)
-      ? '<div style="background:rgba(132,204,22,0.08);border:1px dashed rgba(132,204,22,0.4);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:0.76rem;color:var(--text-muted,#cbd5e1);">🎾 Seu histórico do letzplay ainda não foi importado game-a-game. Use a extensão do scoreplace (desktop, logado no letzplay) → <b>Importar meu histórico</b> → <b>Enviar pro scoreplace</b>.</div>'
+    var lpHint = (lpCount === 0)
+      ? '<div style="background:rgba(132,204,22,0.08);border:1px dashed rgba(132,204,22,0.4);border-radius:10px;padding:12px;margin-bottom:10px;font-size:0.78rem;color:var(--text-muted,#cbd5e1);">' +
+          '🎾 Traga também seu histórico do <b>letzplay</b> — depois de importado, ele vive aqui e você pode largar o letzplay.' +
+          '<div style="margin-top:8px;"><button onclick="window._spStartImport&&window._spStartImport()" style="background:linear-gradient(135deg,#84cc16,#65a30d);color:#0b1020;font-weight:800;padding:8px 15px;border-radius:10px;border:none;cursor:pointer;font-size:0.8rem;">Importar do letzplay</button></div>' +
+        '</div>'
       : '';
 
     container.innerHTML = hdr +

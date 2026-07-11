@@ -497,6 +497,15 @@ function initRouter() {
           return;
         }
         break;
+      case 'importar-letzplay':
+        // Fluxo guiado de importação do letzplay (detecção da extensão + passo a passo).
+        if (typeof window._renderImportarLetzplayPage === 'function') {
+          window._renderImportarLetzplayPage(viewContainer);
+        } else {
+          window.location.replace('#dashboard');
+          return;
+        }
+        break;
       case 'fase-final':
         // v2.6.31: playoff de Liga removido (módulo tournaments-playoff.js deletado —
         // nenhum torneio no banco usava). A fase final agora é uma fase do construtor
