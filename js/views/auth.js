@@ -5783,13 +5783,20 @@ window._executeDeleteAccount = async function() {
       'scoreplace_analytics_open'
     ];
     _toCleanup.forEach(function(k) { try { localStorage.removeItem(k); } catch (_e) {} });
-    // Apagar IndexedDB do Firebase Auth também (evita auto-restore da sessão Google
-    // antiga; sem isso, Firebase Auth lembra da conta apesar do delete).
+    // Apagar SÓ o IndexedDB do Firebase AUTH (firebaseLocalStorageDb) — evita
+    // auto-restore da sessão Google antiga. NÃO tocar no IndexedDB do Firestore:
+    // apagar o banco do Firestore com o cliente vivo faz o SDK TERMINAR o cliente
+    // ("FirebaseError: The client has already been terminated"), e um re-login na
+    // MESMA sessão de página passa a falhar em TODOS os reads (loadUserProfile
+    // inclusive → perfil/gênero não carregam → saudação "(a)" + bolinha presa).
+    // Bug reportado + confirmado no Sentry (SCOREPLACE-WEB-6E): excluir conta →
+    // re-login pelo "quick return" → cliente terminado. Regex antiga /firebase|
+    // firestore|firebaseauth/ casava também com "firestore/..." — o erro.
     try {
       if (typeof indexedDB !== 'undefined' && indexedDB.databases) {
         indexedDB.databases().then(function (dbs) {
           (dbs || []).forEach(function (db) {
-            if (db.name && /firebase|firestore|firebaseauth/i.test(db.name)) {
+            if (db.name && /firebaseLocalStorageDb|firebaseauth/i.test(db.name) && !/firestore/i.test(db.name)) {
               try { indexedDB.deleteDatabase(db.name); } catch (_e) {}
             }
           });
