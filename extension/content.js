@@ -6,12 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  // Guarda: o content script pode entrar por 2 caminhos (declaração no manifest em page
-  // load + injeção programática do background ao instalar). Evita listeners duplicados.
-  if (window.__spLzpContent) return;
-  window.__spLzpContent = true;
-
-  var EXT_VERSION = '1.16';
+  var EXT_VERSION = '1.17';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -73,14 +68,21 @@
     }
   }
 
-  window.addEventListener('message', function (e) {
+  // Handler guardado em window: uma RE-INJEÇÃO (após recarregar/atualizar a extensão)
+  // remove o handler velho e instala um novo com chrome.runtime válido — sem recarregar
+  // a PÁGINA. E o guard `chrome.runtime.id` faz um content script MORTO (contexto
+  // invalidado) ignorar mensagens, então só o vivo age (mata o "Extension context invalidated").
+  if (window.__spLzpMsgHandler) { try { window.removeEventListener('message', window.__spLzpMsgHandler); } catch (e) {} }
+  window.__spLzpMsgHandler = function (e) {
     if (e.source !== window) return;
+    if (!chrome.runtime || !chrome.runtime.id) return; // content script órfão → ignora
     var d = e.data;
     if (!d) return;
     if (d.__sp_lp === 'ext-ping') { announce(); return; }
     if (d.__sp_lp === 'run-import') { runDirectImport(); return; }
     if (d.__sp_lp === 'check-letzplay') { checkLetzplay(); return; }
-  });
+  };
+  window.addEventListener('message', window.__spLzpMsgHandler);
 
   // ── Relay do POPUP (import via clique no ícone) → página, com resultado real ──
   chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {

@@ -131,7 +131,9 @@
           '<button onclick="window._spCloseImportOverlay()" class="btn btn-outline btn-block">Fechar</button>');
         _maybeRenderSteps(true);
       } else {
-        var msg = _ERR[d.error] || ('Falhou: ' + (d.error || 'erro'));
+        var msg = /context invalidated/i.test(d.error || '')
+          ? 'A extensão foi atualizada — recarregue esta página (Cmd+R) e tente de novo.'
+          : (_ERR[d.error] || ('Falhou: ' + (d.error || 'erro')));
         _overlayCard('<div style="font-size:2rem;margin-bottom:6px;">⚠️</div>' +
           '<div style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Não deu pra importar</div>' +
           '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);margin-bottom:14px;">' + _esc(msg) + '</div>' +
