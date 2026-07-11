@@ -125,16 +125,16 @@
         _overlayCard('<div style="font-size:2rem;margin-bottom:6px;">✅</div>' +
           '<div style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Importado!</div>' +
           '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);margin-bottom:14px;">' + n + ' jogos do letzplay agora vivem no seu scoreplace.</div>' +
-          '<a href="#historico" onclick="window._spCloseImportOverlay()" style="display:block;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-weight:800;padding:11px;border-radius:12px;text-decoration:none;margin-bottom:8px;">📜 Ver Histórico de jogos</a>' +
-          '<button onclick="window._spCloseImportOverlay()" style="width:100%;background:transparent;border:1px solid var(--border-color,rgba(255,255,255,0.15));color:var(--text-muted,#cbd5e1);padding:9px;border-radius:12px;cursor:pointer;">Fechar</button>');
+          '<a href="#historico" onclick="window._spCloseImportOverlay()" class="btn btn-primary btn-block" style="margin-bottom:8px;">📜 Ver Histórico de jogos</a>' +
+          '<button onclick="window._spCloseImportOverlay()" class="btn btn-outline btn-block">Fechar</button>');
         _maybeRenderSteps(true);
       } else {
         var msg = _ERR[d.error] || ('Falhou: ' + (d.error || 'erro'));
         _overlayCard('<div style="font-size:2rem;margin-bottom:6px;">⚠️</div>' +
           '<div style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Não deu pra importar</div>' +
           '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);margin-bottom:14px;">' + _esc(msg) + '</div>' +
-          '<a href="#importar-letzplay" onclick="window._spCloseImportOverlay()" style="display:block;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color,rgba(255,255,255,0.12));color:var(--text-bright,#fff);font-weight:700;padding:10px;border-radius:12px;text-decoration:none;margin-bottom:8px;">Abrir o passo a passo</a>' +
-          '<button onclick="window._spCloseImportOverlay()" style="width:100%;background:transparent;border:1px solid var(--border-color,rgba(255,255,255,0.15));color:var(--text-muted,#cbd5e1);padding:9px;border-radius:12px;cursor:pointer;">Fechar</button>');
+          '<a href="#importar-letzplay" onclick="window._spCloseImportOverlay()" class="btn btn-primary btn-block" style="margin-bottom:8px;">Abrir o passo a passo</a>' +
+          '<button onclick="window._spCloseImportOverlay()" class="btn btn-outline btn-block">Fechar</button>');
       }
     }
   });
@@ -208,7 +208,7 @@
       return '<span style="color:#f59e0b;">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b>.</span>' + _installHelp('Como atualizar');
     }
     var installBtn = STORE_URL
-      ? '<a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;background:linear-gradient(135deg,#84cc16,#65a30d);color:#0b1020;font-weight:800;padding:9px 16px;border-radius:10px;text-decoration:none;font-size:0.82rem;">🎾 Instalar extensão</a>'
+      ? '<div style="margin-top:10px;"><a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" class="btn btn-primary">🎾 Instalar extensão</a></div>'
       : '<div style="margin-top:6px;color:#94a3b8;">A extensão ainda não está na Chrome Web Store (em preparação). Por enquanto, instale em modo desenvolvedor:</div>';
     return 'Precisa da extensão do scoreplace pra ler seu histórico na sua sessão logada (sem senha).' + installBtn + _installHelp(STORE_URL ? 'Instalar manualmente' : 'Passo a passo (modo desenvolvedor)');
   }
@@ -218,7 +218,7 @@
     // segurança). Então oferecemos um botão que COPIA o endereço pra colar na barra.
     var chromeLine = '<li>Na barra do Chrome, vá em <code>chrome://extensions</code> ' +
       '<button type="button" onclick="var b=this;if(navigator.clipboard){navigator.clipboard.writeText(\'chrome://extensions\').then(function(){b.textContent=\'copiado ✓\';})}" ' +
-      'style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:var(--primary-color,#818cf8);border-radius:7px;padding:2px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;margin-left:4px;">📋 copiar</button>' +
+      'class="btn btn-outline btn-sm" style="margin-left:6px;padding:2px 10px;font-size:0.72rem;">📋 copiar</button>' +
       '<div style="opacity:0.7;font-size:0.72rem;margin-top:2px;">(o Chrome não deixa abrir esse endereço por link — cole na barra e dê Enter)</div></li>';
     return '<details style="margin-top:8px;"><summary style="cursor:pointer;color:var(--primary-color,#818cf8);font-weight:600;">' + _esc(label) + '</summary>' +
       '<div style="margin:8px 0 6px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);font-size:0.74rem;color:var(--text-muted,#cbd5e1);">⚙️ Instalação <b>temporária</b>, só pra teste enquanto a extensão não está na loja. Quando publicar, vira <b>um clique</b> — nada disso abaixo.</div>' +
@@ -251,7 +251,7 @@
       ? 'Logado no letzplay ✓ — a extensão vai ler seu histórico na sua sessão (nenhuma senha passa pelo scoreplace).'
       : ('Abra o letzplay e confirme que está logado (a extensão usa a SUA sessão — nenhuma senha passa pelo scoreplace).' +
          (_lzLoggedIn === false ? '<div style="margin-top:4px;color:#f59e0b;">Ainda não detectei login no letzplay.</div>' : '') +
-         '<div style="margin-top:8px;"><a href="https://letzplay.me/u/matches/history" target="_blank" rel="noopener" style="color:var(--primary-color,#818cf8);font-weight:600;">Abrir meu histórico no letzplay ↗</a></div>');
+         '<div style="margin-top:10px;"><a href="https://letzplay.me/u/matches/history" target="_blank" rel="noopener" class="btn btn-primary btn-sm">Abrir meu histórico no letzplay ↗</a></div>');
     html += _stepShell(2, 'Logar no letzplay', s2.ic || '2', s2.col, s2body);
 
     // Passo 3 — importar
@@ -259,10 +259,10 @@
     var s3body;
     if (imported) {
       s3body = '<div style="color:#22c55e;font-weight:700;">✅ Importado — ' + games + ' jogos no seu perfil.</div>' +
-        '<button onclick="window._spStartImport&&window._spStartImport()" style="margin-top:8px;background:transparent;border:1px solid var(--border-color,rgba(255,255,255,0.15));color:var(--text-muted,#cbd5e1);padding:7px 12px;border-radius:9px;cursor:pointer;font-size:0.78rem;">🔄 Reimportar (atualizar)</button>';
+        '<button onclick="window._spStartImport&&window._spStartImport()" class="btn btn-outline btn-sm" style="margin-top:10px;">🔄 Reimportar</button>';
     } else if (extOk) {
       s3body = 'Tudo pronto — importe com um clique (sem precisar clicar no ícone da extensão):' +
-        '<div style="margin-top:8px;"><button onclick="window._spStartImport&&window._spStartImport()" style="background:linear-gradient(135deg,#84cc16,#65a30d);color:#0b1020;font-weight:800;padding:10px 18px;border-radius:11px;border:none;cursor:pointer;font-size:0.85rem;">🎾 Importar agora</button></div>';
+        '<div style="margin-top:10px;"><button onclick="window._spStartImport&&window._spStartImport()" class="btn btn-primary btn-shine">🎾 Importar agora</button></div>';
     } else {
       s3body = 'Depois de instalar a extensão e logar no letzplay, um botão <b>Importar agora</b> aparece aqui.';
     }
@@ -272,7 +272,7 @@
     var s4 = imported ? DONE : WAIT;
     html += _stepShell(4, 'Ver seu histórico completo', imported ? '✓' : '4', s4.col,
       imported
-        ? 'Pronto! Seu histórico do letzplay agora vive no scoreplace.<div style="margin-top:8px;"><a href="#historico" style="display:inline-block;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color,rgba(255,255,255,0.12));color:var(--text-bright,#fff);font-weight:700;padding:9px 16px;border-radius:10px;text-decoration:none;font-size:0.82rem;">📜 Ver Histórico de jogos</a></div>'
+        ? 'Pronto! Seu histórico do letzplay agora vive no scoreplace.<div style="margin-top:10px;"><a href="#historico" class="btn btn-primary">📜 Ver Histórico de jogos</a></div>'
         : 'Depois de importar, seus jogos aparecem aqui misturados aos do scoreplace — cronológicos, com filtro por fonte, local e competição.');
 
     host.innerHTML = html;
