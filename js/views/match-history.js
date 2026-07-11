@@ -5,7 +5,7 @@
  *   • 🏆 Scoreplace — jogos do próprio app (matchHistory + casuais locais + torneios)
  *
  * Objetivo: uma vez importado o histórico do letzplay, ele VIVE aqui — o usuário
- * pode parar de jogar no letzplay e não perde nada. Filtra por fonte, local,
+ * tudo num lugar só e não perde nada. Filtra por fonte, local,
  * torneio/competição e modalidade. Page-route #historico (padrão centralizado).
  */
 (function () {
@@ -314,7 +314,7 @@
     var _impEntry = (typeof window._spImportEntry === 'function') ? window._spImportEntry({ label: 'Importar do letzplay', variant: 'solid' }) : '';
     var lpHint = (lpCount === 0)
       ? '<div style="background:rgba(132,204,22,0.08);border:1px dashed rgba(132,204,22,0.4);border-radius:10px;padding:12px;margin-bottom:10px;font-size:0.78rem;color:var(--text-muted,#cbd5e1);">' +
-          '🎾 Traga também seu histórico do <b>letzplay</b> — depois de importado, ele vive aqui e você pode largar o letzplay.' +
+          '🎾 Traga também seu histórico do <b>letzplay</b> — depois de importado, ele fica aqui no seu scoreplace, junto dos seus jogos do app.' +
           '<div style="margin-top:8px;">' + _impEntry + '</div>' +
         '</div>'
       : '';

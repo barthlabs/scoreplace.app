@@ -266,7 +266,7 @@
 
     var intro = '<div style="max-width:640px;margin:0 auto;padding:6px 14px 40px;">' +
       '<div style="background:rgba(132,204,22,0.08);border:1px solid rgba(132,204,22,0.35);border-radius:14px;padding:14px;margin-bottom:14px;">' +
-        '<div style="font-size:0.95rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:4px;">Traga seu histórico do letzplay — e pare de depender dele.</div>' +
+        '<div style="font-size:0.95rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:4px;">Traga seu histórico do letzplay pro scoreplace.</div>' +
         '<div style="font-size:0.8rem;color:var(--text-muted,#cbd5e1);line-height:1.5;">Uma vez importado, seus jogos vivem no scoreplace pra sempre. <b>Sem senha</b>: a extensão lê na sua própria sessão logada. É um passo único, no computador.</div>' +
       '</div>' +
       '<div id="imp-steps"></div>' +
