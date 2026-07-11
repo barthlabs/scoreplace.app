@@ -149,6 +149,25 @@
     })();
   };
 
+  window._spIsMobile = _isMobile;
+
+  // Entrada de importação: no DESKTOP = botão que dispara _spStartImport; no CELULAR
+  // (nativo ou web mobile — Chrome do celular não instala extensão) = AVISO de que a
+  // importação é feita no computador. Usado nas Estatísticas e no Histórico.
+  window._spImportEntry = function (opts) {
+    opts = opts || {};
+    if (_isMobile()) {
+      return '<div style="background:rgba(132,204,22,0.08);border:1px dashed rgba(132,204,22,0.4);border-radius:12px;padding:12px;font-size:0.8rem;color:var(--text-muted,#cbd5e1);line-height:1.5;">' +
+        '🎾 <b>Importar do letzplay</b> é feito no <b>computador</b> — o navegador do celular não instala extensão. Abra o <b>scoreplace no desktop</b> (Chrome/Edge/Brave), logado no letzplay, pra trazer seu histórico.' +
+      '</div>';
+    }
+    var label = opts.label || 'Importar do letzplay';
+    if (opts.variant === 'solid') {
+      return '<button onclick="window._spStartImport&&window._spStartImport()" style="background:linear-gradient(135deg,#84cc16,#65a30d);color:#0b1020;font-weight:800;padding:9px 15px;border-radius:10px;border:none;cursor:pointer;font-size:0.8rem;">🎾 ' + _esc(label) + '</button>';
+    }
+    return '<button onclick="window._spStartImport&&window._spStartImport()" style="width:100%;margin-top:8px;background:transparent;border:1px solid rgba(132,204,22,0.45);border-radius:12px;padding:10px 14px;cursor:pointer;color:#84cc16;font-size:0.82rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;">🎾 ' + _esc(label) + '</button>';
+  };
+
   // ── UI ────────────────────────────────────────────────────────────────
   function _stepShell(n, title, statusIcon, statusColor, bodyHtml) {
     return '' +
