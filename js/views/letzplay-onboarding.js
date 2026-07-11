@@ -199,7 +199,9 @@
 
     var extOk = !_isMobile() && _ext.present && _verGte(_ext.version, MIN_EXT_VERSION);
     var games = _gamesCount();
-    var imported = games > 0 || _hasImport();
+    // "importado" = tem jogos game-a-game (o que alimenta o histórico). Um import
+    // v1 antigo (letzplayImport sem games) NÃO conta — o usuário precisa reimportar.
+    var imported = games > 0;
 
     // Passo 1 — extensão
     var s1 = extOk ? DONE : (_ext.present ? WARN : CURRENT);
