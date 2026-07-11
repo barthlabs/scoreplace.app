@@ -6534,10 +6534,14 @@ function setupProfileModal() {
             '<div class="form-group" style="margin-bottom: 10px;">' +
               '<label class="form-label" style="font-size: 0.75rem;">🎾 Conta letzplay <span style="opacity:0.55;font-weight:400;">(opcional)</span></label>' +
               '<input type="text" id="profile-edit-letzplay" class="form-control" style="width: 100%; box-sizing: border-box;" placeholder="@seu_usuario no letzplay" autocomplete="off">' +
-              '<label style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;font-size:0.72rem;color:var(--text-muted);cursor:pointer;line-height:1.3;">' +
-                '<input type="checkbox" id="profile-letzplay-consent" style="width:16px;height:16px;flex:0 0 auto;margin-top:1px;accent-color:var(--primary-color);">' +
-                '<span>Autorizo os organizadores dos meus torneios a importar meu histórico público do letzplay.</span>' +
-              '</label>' +
+              '<div style="margin-top:8px;">' +
+                (window._toggleSwitch ? window._toggleSwitch({
+                  id: 'profile-letzplay-consent',
+                  label: 'Autorizar importação do histórico',
+                  desc: 'Autorizo os organizadores dos meus torneios a importar meu histórico público do letzplay.',
+                  checked: false
+                }) : '') +
+              '</div>' +
             '</div>' +
             // Card "Seu nível (letzplay)" — populado em _populateProfileModalFields
             // quando o usuário tem letzplayImport gravado (lê users/{uid}.letzplayImport).

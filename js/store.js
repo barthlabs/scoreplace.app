@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.4';
+window.SCOREPLACE_VERSION = '1.5';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -6030,6 +6030,14 @@ window.AppStore = {
         // v2.4.3: privacidade de contato.
         if (profile.omitEmail !== undefined) this.currentUser.omitEmail = profile.omitEmail;
         if (profile.omitPhone !== undefined) this.currentUser.omitPhone = profile.omitPhone;
+        // letzplay: handle + consentimento + histórico importado. Salvos no
+        // Firestore por saveUserProfile (auth.js), mas NÃO eram mergeados aqui
+        // no load — então sumiam ao reabrir o app (campo do handle vinha vazio,
+        // card "Seu nível" não renderizava). Bug: conta vinculada "apagava"
+        // toda vez que o app fechava. Fix: mergear no load como os demais.
+        if (profile.letzplayHandle) this.currentUser.letzplayHandle = profile.letzplayHandle;
+        if (profile.letzplayConsent !== undefined) this.currentUser.letzplayConsent = profile.letzplayConsent;
+        if (profile.letzplayImport) this.currentUser.letzplayImport = profile.letzplayImport;
         // v0.17.86: bug crítico — acceptedTerms* não estavam na lista de merge.
         // Toda vez que simulateLoginSuccess re-rodava (ex: onAuthStateChanged
         // por token refresh), currentUser = user (4 campos) wipeava o
