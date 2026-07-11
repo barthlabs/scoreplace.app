@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.15.13';
+window.SCOREPLACE_VERSION = '1.15.14';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)

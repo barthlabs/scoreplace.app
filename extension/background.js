@@ -38,17 +38,22 @@ function fetchViaLetzplayTab(url, cb) {
   chrome.tabs.query({ url: 'https://letzplay.me/*' }, function (tabs) {
     if (!tabs || !tabs.length) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
     chrome.scripting.executeScript({
+      // Mundo ISOLATED (default) só pra ter DOM. O truque: injeta um <script> REAL na
+      // página → o XHR roda como CÓDIGO DA PÁGINA (page-initiated) → o cookie de sessão
+      // vai. Requisição feita direto pelo executeScript (MAIN ou ISOLATED) o Chrome
+      // atribui à EXTENSÃO → cookie SameSite NÃO vai → 0 jogos. Verificado ao vivo.
       target: { tabId: tabs[0].id },
-      world: 'MAIN', // roda no mundo da PÁGINA → manda os cookies da sessão (no ISOLATED
-                     // NÃO ia → 0 jogos). XHR SÍNCRONO porque o mundo MAIN não aguarda a
-                     // Promise de um fetch async — o retorno síncrono é o único confiável.
       func: function (u) {
         try {
-          var xhr = new XMLHttpRequest();
-          xhr.open('GET', u, false); // síncrono
-          xhr.withCredentials = true;
-          xhr.send();
-          return { ok: (xhr.status >= 200 && xhr.status < 300), status: xhr.status, html: xhr.responseText };
+          var attr = 'data-splp-result';
+          var code = '(function(){try{var x=new XMLHttpRequest();x.open("GET",' + JSON.stringify(u) + ',false);x.withCredentials=true;x.send();document.documentElement.setAttribute(' + JSON.stringify(attr) + ',JSON.stringify({ok:x.status>=200&&x.status<300,status:x.status,html:x.responseText}));}catch(e){document.documentElement.setAttribute(' + JSON.stringify(attr) + ',JSON.stringify({ok:false,error:String(e&&e.message||e)}));}})();';
+          var s = document.createElement('script');
+          s.textContent = code;
+          (document.documentElement || document.head).appendChild(s);
+          s.remove(); // o script inline roda SÍNCRONO no append (sync XHR bloqueia) → já setou o attr
+          var raw = document.documentElement.getAttribute(attr);
+          document.documentElement.removeAttribute(attr);
+          return raw ? JSON.parse(raw) : { ok: false, error: 'no-result' };
         } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
       },
       args: [url]

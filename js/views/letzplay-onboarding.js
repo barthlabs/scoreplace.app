@@ -11,7 +11,7 @@
   // Versão mínima esperada da extensão. Abaixo disso → pede atualização.
   // 1.18: busca no mundo MAIN da aba do letzplay (manda os cookies → jogos vêm).
   // 1.16/1.17 buscavam no mundo ISOLATED (sem cookies) → "sem jogos".
-  var MIN_EXT_VERSION = '1.19';
+  var MIN_EXT_VERSION = '1.20';
   // URL da Chrome Web Store — null enquanto não publicado (mostra instruções manuais).
   var STORE_URL = null;
 
