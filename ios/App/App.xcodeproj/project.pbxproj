@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AA10CA7A100900000A55E752 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA10CA7A100900000A55E751 /* Assets.xcassets */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		3C642F95D1DC28B20B736829 /* ScoreplaceWatchPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C086B4DF33BE7E79AA21F7A6 /* ScoreplaceWatchPlugin.swift */; };
 		4C201DBF363C5A75D6D680AC /* WatchSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2387F19430B11E865FC7A2C /* WatchSession.swift */; };
@@ -50,6 +51,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AA10CA7A100900000A55E751 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		2FF51099A8018323CCBDF3D0 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		32D52E37104BBD158BE5D352 /* RemoteView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteView.swift; sourceTree = "<group>"; };
@@ -151,6 +153,7 @@
 				D2387F19430B11E865FC7A2C /* WatchSession.swift */,
 				7A7925D9F67938D04B593D40 /* ScoreplaceWatchCompanionApp.swift */,
 				2FF51099A8018323CCBDF3D0 /* Info.plist */,
+				AA10CA7A100900000A55E751 /* Assets.xcassets */,
 			);
 			name = ScoreplaceWatch;
 			path = Watch;
@@ -251,6 +254,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA10CA7A100900000A55E752 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -329,6 +333,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6724SP9XN7;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Watch/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -339,7 +344,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace.watchapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "watchsimulator watchos";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
@@ -463,6 +468,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6724SP9XN7;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -485,6 +491,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6724SP9XN7;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -507,6 +514,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6724SP9XN7;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Watch/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -517,7 +525,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace.watchapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "watchsimulator watchos";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
