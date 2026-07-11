@@ -39,12 +39,17 @@ function fetchViaLetzplayTab(url, cb) {
     if (!tabs || !tabs.length) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
     chrome.scripting.executeScript({
       target: { tabId: tabs[0].id },
-      world: 'MAIN', // roda no mundo da PÁGINA → fetch idêntico ao da própria letzplay
-                     // (manda os cookies da sessão). No ISOLATED os cookies não iam → 0 jogos.
+      world: 'MAIN', // roda no mundo da PÁGINA → manda os cookies da sessão (no ISOLATED
+                     // NÃO ia → 0 jogos). XHR SÍNCRONO porque o mundo MAIN não aguarda a
+                     // Promise de um fetch async — o retorno síncrono é o único confiável.
       func: function (u) {
-        return fetch(u, { credentials: 'include' })
-          .then(function (r) { return r.text().then(function (h) { return { ok: r.ok, status: r.status, html: h }; }); })
-          .catch(function (e) { return { ok: false, error: String(e && e.message || e) }; });
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', u, false); // síncrono
+          xhr.withCredentials = true;
+          xhr.send();
+          return { ok: (xhr.status >= 200 && xhr.status < 300), status: xhr.status, html: xhr.responseText };
+        } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
       },
       args: [url]
     }).then(function (res) {
