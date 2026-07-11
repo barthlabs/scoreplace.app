@@ -3300,8 +3300,12 @@
     var slot = document.getElementById('venue-reviews-slot');
     if (!slot || !window.VenueDB) return;
     var cu = window.AppStore && window.AppStore.currentUser;
+    window.__venueReviewsPid = venue.placeId;
     var reviews = [];
     try { reviews = await window.VenueDB.loadReviews(venue.placeId, 50); } catch (e) {}
+    // Moderação (Apple Guideline 1.2): oculta avaliações de usuários bloqueados.
+    var _blk = (cu && Array.isArray(cu.blockedUids)) ? cu.blockedUids : [];
+    if (_blk.length) reviews = reviews.filter(function(r) { return _blk.indexOf(r.uid) === -1; });
     var count = reviews.length;
     var avg = 0;
     if (count > 0) {
@@ -3340,6 +3344,11 @@
       var delBtn = canDelete
         ? '<button title="Apagar" onclick="window._venuesDeleteReview(\'' + _safe(venue.placeId) + '\',\'' + _safe(r._id) + '\')" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem;padding:0 4px;opacity:0.5;">✕</button>'
         : '';
+      // Moderação (Guideline 1.2): denunciar avaliação + bloquear autor (só em reviews de terceiros).
+      var modBtns = (cu && cu.uid && r.uid && cu.uid !== r.uid)
+        ? '<button title="Denunciar avaliação" onclick="window._venuesReportReview(\'' + _safe(venue.placeId) + '\',\'' + _safe(r._id) + '\',\'' + _safe(r.uid) + '\')" style="background:transparent;border:none;cursor:pointer;font-size:0.78rem;padding:0 2px;opacity:0.55;">🚩</button>'
+          + '<button title="Bloquear usuário" onclick="window._blockUser(\'' + _safe(r.uid) + '\')" style="background:transparent;border:none;cursor:pointer;font-size:0.78rem;padding:0 2px;opacity:0.55;">🚫</button>'
+        : '';
       list += '<div style="display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--border-color);">' +
         avatar +
         '<div style="flex:1;min-width:0;">' +
@@ -3347,7 +3356,7 @@
             '<span style="font-weight:600;color:var(--text-bright);font-size:0.85rem;">' + _safe(name) + '</span>' +
             _starsHtml(r.rating, '0.8rem', false) +
             (when ? '<span style="color:var(--text-muted);font-size:0.72rem;">· ' + _safe(when) + '</span>' : '') +
-            delBtn +
+            delBtn + modBtns +
           '</div>' +
           (hasText ? '<div style="font-size:0.82rem;color:var(--text-main);margin-top:4px;line-height:1.45;white-space:pre-wrap;">' + _safe(r.text) + '</div>' : '') +
         '</div>' +
@@ -4299,6 +4308,34 @@
         if (v) _hydrateReviews(v);
       }
     }, null, { confirmText: 'Apagar', cancelText: 'Cancelar', type: 'danger' });
+  };
+
+  // Moderação (Apple Guideline 1.2): denunciar uma avaliação como ofensiva/inadequada.
+  window._venuesReportReview = function(placeId, reviewId, reviewedUid) {
+    if (!placeId || !reviewId) return;
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid) { if (window.showNotification) window.showNotification('Faça login', 'Entre para denunciar.', 'error'); return; }
+    if (typeof window.showConfirmDialog !== 'function') return;
+    window.showConfirmDialog(
+      'Denunciar esta avaliação?',
+      'Nossa equipe analisa denúncias em até 24 horas e remove conteúdo que viole as diretrizes. Você também pode bloquear o autor.',
+      async function() {
+        try {
+          await window.VenueDB.reportReview(placeId, reviewId, reviewedUid, '');
+          if (window.showNotification) window.showNotification('Denúncia enviada', 'Obrigado. Vamos analisar em até 24 horas.', 'success');
+        } catch (e) {
+          if (window.showNotification) window.showNotification('Não foi possível enviar', 'Tente novamente em instantes.', 'error');
+        }
+      },
+      null,
+      { confirmText: 'Denunciar', cancelText: 'Cancelar', type: 'danger' }
+    );
+  };
+
+  // Re-hidrata a lista de avaliações do local aberto (usado após bloquear usuário).
+  window._venuesRehydrateReviews = function() {
+    var pid = window.__venueReviewsPid;
+    if (pid) { try { _hydrateReviews({ placeId: pid }); } catch (e) {} }
   };
 
   // Bridge to tournament creation — stashes venue so create-tournament can read.

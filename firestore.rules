@@ -314,6 +314,16 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // ─── Reports (moderação de UGC — Apple Guideline 1.2) ────────────────────
+    // Usuários autenticados criam denúncias de conteúdo (avaliações de locais,
+    // etc.). Write-only: a equipe revisa via console/Admin SDK. Ninguém lê,
+    // edita ou apaga pelo cliente (evita retaliação/adulteração).
+    match /reports/{reportId} {
+      allow create: if request.auth != null
+        && request.resource.data.reporterUid == request.auth.uid;
+      allow read, update, delete: if false;
+    }
+
     // ─── Mail (firestore-send-email extension) ───────────────────────────────
     match /mail/{mailId} {
       allow read: if false;

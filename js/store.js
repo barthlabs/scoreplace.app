@@ -6015,6 +6015,8 @@ window.AppStore = {
         if (Array.isArray(profile.friends)) this.currentUser.friends = profile.friends;
         if (Array.isArray(profile.friendRequestsSent)) this.currentUser.friendRequestsSent = profile.friendRequestsSent;
         if (Array.isArray(profile.friendRequestsReceived)) this.currentUser.friendRequestsReceived = profile.friendRequestsReceived;
+        // Moderação (Guideline 1.2): usuários bloqueados — persiste entre sessões.
+        if (Array.isArray(profile.blockedUids)) this.currentUser.blockedUids = profile.blockedUids;
         // Presence settings — previously set on currentUser via profile save but
         // never actually persisted to Firestore (save payload omitted them).
         // v0.16.5 adds save+load for these so the user's visibility/mute/auto

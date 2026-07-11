@@ -3243,6 +3243,46 @@ function toggleEmailMode(mode) {
   }
 }
 
+// ── Moderação: bloquear usuário (Apple App Store Guideline 1.2 — UGC) ───────
+// Adiciona o uid à lista blockedUids do PRÓPRIO perfil (arrayUnion no doc do
+// dono — regra Firestore já permite o dono editar o próprio doc). Conteúdo de
+// usuários bloqueados (avaliações de locais, etc.) fica oculto para quem
+// bloqueou. Desbloqueio via _unblockUser. name é opcional (rótulo amigável).
+window._blockUser = function(uid, name) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid) { if (window.showNotification) window.showNotification('Faça login', 'Entre para bloquear usuários.', 'error'); return; }
+  if (!uid || uid === cu.uid) return;
+  var nm = name || 'este usuário';
+  var doBlock = function() {
+    try {
+      window.FirestoreDB.db.collection('users').doc(cu.uid).set({
+        blockedUids: firebase.firestore.FieldValue.arrayUnion(uid)
+      }, { merge: true });
+    } catch (e) { window._error('block user:', e); }
+    if (!Array.isArray(cu.blockedUids)) cu.blockedUids = [];
+    if (cu.blockedUids.indexOf(uid) === -1) cu.blockedUids.push(uid);
+    if (window.showNotification) window.showNotification('Usuário bloqueado', 'Você não verá mais o conteúdo dessa pessoa. Desbloqueie no seu perfil quando quiser.', 'success');
+    if (typeof window._venuesRehydrateReviews === 'function') window._venuesRehydrateReviews();
+  };
+  if (typeof window.showConfirmDialog === 'function') {
+    window.showConfirmDialog('Bloquear ' + nm + '?', 'Você não verá mais avaliações e conteúdo dessa pessoa. É possível desbloquear depois no seu perfil.', doBlock, null, { confirmText: 'Bloquear', cancelText: 'Cancelar', type: 'danger' });
+  } else {
+    doBlock();
+  }
+};
+
+window._unblockUser = function(uid) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid || !uid) return;
+  try {
+    window.FirestoreDB.db.collection('users').doc(cu.uid).set({
+      blockedUids: firebase.firestore.FieldValue.arrayRemove(uid)
+    }, { merge: true });
+  } catch (e) { window._error('unblock user:', e); }
+  if (Array.isArray(cu.blockedUids)) { var i = cu.blockedUids.indexOf(uid); if (i !== -1) cu.blockedUids.splice(i, 1); }
+  if (typeof window._venuesRehydrateReviews === 'function') window._venuesRehydrateReviews();
+};
+
 // Auto-amizade quando alguém aceita convite de torneio (com ?ref=UID no link)
 function _autoFriendOnInvite(inviterUid, currentUser) {
   if (!inviterUid || !currentUser || !window.FirestoreDB || !window.FirestoreDB.db) return;
