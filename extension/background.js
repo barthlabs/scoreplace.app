@@ -22,6 +22,10 @@ function injectIntoOpenScoreplaceTabs() {
 }
 chrome.runtime.onInstalled.addListener(injectIntoOpenScoreplaceTabs);
 chrome.runtime.onStartup.addListener(injectIntoOpenScoreplaceTabs);
+// E no start do service worker (roda ao ativar/recarregar a extensão) — garante a
+// injeção mesmo quando onInstalled não dispara (ex.: reativar extensão já instalada).
+// A guarda no content.js torna injeções repetidas inofensivas.
+injectIntoOpenScoreplaceTabs();
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg && msg.type === 'lp-fetch' && typeof msg.url === 'string' &&
       msg.url.indexOf('https://letzplay.me/') === 0) {
