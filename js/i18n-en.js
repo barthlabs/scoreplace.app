@@ -245,7 +245,7 @@ window._translations['en'] = {
   'org.closeRegistration': 'Close Registration',
   'org.reopenRegistration': 'Reopen Registration',
   'org.closeRegConfirmTitle': 'Close Registration',
-  'org.closeRegConfirmMsg': 'Registration is still open. Do you want to close registration early?',
+  'org.closeRegConfirmMsg': 'Registration is still <b>open</b>. Do you want to <b>close registration</b> and run the <b>draw early</b> now?',
   'org.finishTournament': 'Finish Tournament',
   'org.deleteTournament': 'Delete Tournament',
   'org.communicate': 'Message Participants',

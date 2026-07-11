@@ -308,8 +308,21 @@ window._applyWO = function (t, opts) {
   }
 
   // ── Eliminatória / Fase de Grupos ──
-  const _absentInSlot = (slotStr) => {
+  // Casa o AUSENTE contra um slot de match POR UID (identidade real). Recebe o
+  // match + lado (não só a string) pra ler o(s) uid(s) ESTRUTURAL(is) via
+  // window._slotUids (team*Uids→p*Uid→team*Obj). Nome só fallback quando o slot
+  // NÃO tem uid (guest/informal ou rodada legada) OU o ausente não tem uid.
+  // Fecha (a) HOMÔNIMO — dois de mesmo nome, W.O. só num deles; e (b) RENAME —
+  // slot com o nome do sorteio, pessoa renomeada depois (nome não casa, uid sim).
+  // Ver project_match_slot_uid_identity / project_uid_audit_sweep (Parte 14).
+  const _absentInSlot = (m, side) => {
+    const slotStr = m ? m[side] : null;
     if (!slotStr || slotStr === 'TBD' || slotStr === 'BYE') return false;
+    const slotUids = (typeof window._slotUids === 'function') ? window._slotUids(m, side) : [];
+    if (slotUids.length && absentUids.length) {
+      return slotUids.some(u => absentUids.indexOf(u) !== -1);
+    }
+    // fallback por nome (slot sem uid, ou ausente sem uid = guest/legado)
     if (slotStr === absentName) return true;
     const mem = slotStr.includes('/') ? slotStr.split('/').map(n => n.trim()) : [slotStr];
     return mem.indexOf(absentName) !== -1;
@@ -322,9 +335,9 @@ window._applyWO = function (t, opts) {
   // pré-scan: histórico do W.O. desde o momento da decretação (card do ausente
   // mostra "Estava no Jogo N com X") — mesmo que caia em aguarda/TBD/sub.
   const _preAll = _allMatches();
-  const _preMatch = _preAll.find(m => m && !m.winner && (_absentInSlot(m.p1) || _absentInSlot(m.p2)));
+  const _preMatch = _preAll.find(m => m && !m.winner && (_absentInSlot(m, 'p1') || _absentInSlot(m, 'p2')));
   if (_preMatch && typeof window._woHistSet === 'function') {
-    const _slot0 = _absentInSlot(_preMatch.p1) ? 'p1' : 'p2';
+    const _slot0 = _absentInSlot(_preMatch, 'p1') ? 'p1' : 'p2';
     const _entry0 = _preMatch[_slot0] || '';
     if (_entry0.includes('/') && _entry0 !== absentName) {
       const _mem0 = _entry0.split(/\s*\/\s*/).map(n => n.trim());
@@ -360,12 +373,12 @@ window._applyWO = function (t, opts) {
   // 3) escala pra W.O.: adversário(s) vence(m). Re-scan (a sub pode ter mutado).
   const all = _allMatches();
   const pending = (Array.isArray(opts.matches) && opts.matches.length ? opts.matches : all)
-    .filter(m => m && !m.winner && (_absentInSlot(m.p1) || _absentInSlot(m.p2)));
+    .filter(m => m && !m.winner && (_absentInSlot(m, 'p1') || _absentInSlot(m, 'p2')));
   if (!pending.length) return { ok: false, outcome: 'noMatch', reason: 'jogo do ausente não encontrado', absentMarked: true };
 
   let applied = 0, winner = null, matchNum = null, partnerToWaitlist = null, waitedTBD = false, anyKO = false;
   for (const m of pending) {
-    const slot = _absentInSlot(m.p1) ? 'p1' : 'p2';
+    const slot = _absentInSlot(m, 'p1') ? 'p1' : 'p2';
     const oppSide = slot === 'p1' ? 'p2' : 'p1';
     const oppName = m[oppSide];
     // adversário TBD/BYE → não aplica (evita winner='TBD' propagando)
@@ -696,7 +709,8 @@ window._drawPresentOnly = function (tId) {
   const proceed = function () {
     const t2 = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
     if (t2) {
-      const lateMode = (t2.lateEnrollment === 'standby' || t2.lateEnrollment === 'expand');
+      const _le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t2) : t2.lateEnrollment;
+      const lateMode = (_le === 'standby' || _le === 'expand');
       if (!lateMode && t2.status !== 'closed' && t2.status !== 'finished') t2.status = 'closed';
     }
     if (typeof window._handleSortearClick === 'function') {
@@ -1243,6 +1257,23 @@ function renderParticipants(container, tournamentId) {
     return;
   }
 
+  // v4.5.64: PERFIS DOS PARTICIPANTES = PRÉ-REQUISITO DO RENDER. Nome resolve vivo por
+  // uid (users/{uid}); sem fallback pra nome gravado. Garante os perfis e re-renderiza
+  // (soft) quando chegam. Cache persiste → revisita quente. Guard evita loop.
+  (function _ensureProfilesP() {
+    if (typeof window._preloadUserProfiles !== 'function') return;
+    var _need = [];
+    var _push = function(u){ if (u && typeof u === 'string' && u.indexOf(' ') === -1 && !window._userProfileCache[u]) _need.push(u); };
+    var _pl = (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
+    _pl.forEach(function(p){ if (typeof window._participantUids === 'function') { (window._participantUids(p) || []).forEach(_push); } else if (p && typeof p === 'object') { _push(p.uid); _push(p.p1Uid); _push(p.p2Uid); } });
+    if (Array.isArray(t.memberUids)) t.memberUids.forEach(_push);
+    if (!_need.length) return;
+    var _k = '_tprofP_' + (t.id || '');
+    if (window[_k]) return;
+    window[_k] = true;
+    window._preloadUserProfiles(_need).then(function(){ window[_k] = false; if ((window.location.hash || '').indexOf('participants') !== -1 && typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} } }).catch(function(){ window[_k] = false; });
+  })();
+  function _hydrateNamesP() { if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(container); } catch (e) {} } }
   // Pre-load player photos from Firestore (async update after render)
   if (typeof _preloadPlayerPhotos === 'function') {
     _preloadPlayerPhotos(t).then(function() {
@@ -1256,21 +1287,24 @@ function renderParticipants(container, tournamentId) {
           img.src = real;
         }
       });
-    }).catch(function() {});
-  }
+    }).catch(function() {}).then(_hydrateNamesP);
+  } else { setTimeout(_hydrateNamesP, 0); }
 
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
   const parts = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
 
+  // v4.5.78: expande uma entrada em NOMES DE PESSOAS — dupla ESTRUTURAL (p1Name/
+  // p2Name) = 2, "A / B" legado = 2, solo = 1. NÃO usa só _pName(p): em dupla formada
+  // por convite o _pName devolve só o p1 → contava dupla como 1. Ver
+  // [[project_count_people_not_entries]].
+  const _expandMemberNames = (p) => {
+    if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) return [(window._displayName(p.p1Uid || '', p.p1Name || '') || p.p1Uid || ''), (window._displayName(p.p2Uid || '', p.p2Name || '') || p.p2Uid || '')].filter(Boolean); // v4.5.86: uid OU nome (migração ITEM 3/Fase 4 apaga nome de quem tem uid)
+    const n = window._pName(p);
+    if (n && n.indexOf('/') !== -1) return n.split('/').map(s => s.trim()).filter(Boolean);
+    return n ? [n] : [];
+  };
   let individualCount = 0;
-  parts.forEach(p => {
-    const pStr = window._pName(p);
-    if (pStr.includes('/')) {
-      individualCount += pStr.split('/').filter(n => n.trim().length > 0).length;
-    } else {
-      individualCount++;
-    }
-  });
+  parts.forEach(p => { individualCount += _expandMemberNames(p).length; });
 
   // Ordenar: Times primeiro, depois individuais
   parts.sort((a, b) => {
@@ -1374,9 +1408,7 @@ function renderParticipants(container, tournamentId) {
   const _countedNames = {};
   const countIndividuals = (arr) => {
     arr.forEach(p => {
-      const pName = window._pName(p);
-      const names = pName && pName.includes('/') ? pName.split('/').map(n => n.trim()).filter(Boolean) : (pName ? [pName] : []);
-      names.forEach(nm => {
+      _expandMemberNames(p).forEach(nm => {
         const k = nm.toLowerCase();
         if (_countedNames[k]) return;
         _countedNames[k] = 1;
@@ -1388,15 +1420,20 @@ function renderParticipants(container, tournamentId) {
   countIndividuals(parts);
   if (drawDone) countIndividuals(standbyParts);
 
-  // ── Contagem da CHAMADA (por entry: time/individual) — pré e pós sorteio ──
+  // ── Contagem da CHAMADA por PESSOA (dupla = 2), dedup — a presença é por jogador
+  //    (toggle por membro), então a barra conta gente, não entradas. v4.5.78.
   let rcTotal = 0, rcPresent = 0, rcAbsent = 0;
   if (canRollCall || postDrawPresence) {
+    const _seenRc = {};
     parts.forEach(p => {
-      const en = window._pName(p);
-      if (!en) return;
-      rcTotal++;
-      if (_entryPresent(en)) rcPresent++;
-      else if (_entryAbsent(en)) rcAbsent++;
+      _expandMemberNames(p).forEach(nm => {
+        const k = nm.toLowerCase().trim();
+        if (!k || _seenRc[k]) return;
+        _seenRc[k] = 1;
+        rcTotal++;
+        if (_entryPresent(nm)) rcPresent++;
+        else if (_entryAbsent(nm)) rcAbsent++;
+      });
     });
   }
   const rcPending = rcTotal - rcPresent - rcAbsent;
@@ -1491,7 +1528,15 @@ function renderParticipants(container, tournamentId) {
         const matchDecided = !!memberToMatchDecided[n];
         const opponent = memberToOpponent[n] || null;
         const currentTeam = memberToTeam[n] || (isTeam ? pName : null);
-        const _obj = { name: n, teamName: currentTeam, teamIdx: idx, matchNum, matchDecided, opponent };
+        // v4.5.64: uid ESTRUTURAL do slot (não lookup por nome — imune a nome gravado
+        // corrompido). Nome exibido resolve do perfil vivo por esse uid.
+        let _slotUid = '';
+        if (p && typeof p === 'object') {
+          if (p.p1Name && n === String(p.p1Name).trim()) _slotUid = p.p1Uid || '';
+          else if (p.p2Name && n === String(p.p2Name).trim()) _slotUid = p.p2Uid || '';
+          else _slotUid = p.uid || '';
+        }
+        const _obj = { name: n, uid: _slotUid, teamName: currentTeam, teamIdx: idx, matchNum, matchDecided, opponent };
         allIndividuals.push(_obj);
         _indivByName[n.toLowerCase()] = _obj;
       });
@@ -1505,7 +1550,13 @@ function renderParticipants(container, tournamentId) {
       names.forEach(n => {
         const ex = _indivByName[n.toLowerCase()];
         if (ex) { ex.isStandby = true; return; }
-        const _obj = { name: n, teamName: pName.includes('/') ? pName : null, teamIdx: -1, matchNum: null, matchDecided: false, opponent: null, isStandby: true };
+        let _slotUidSb = '';
+        if (p && typeof p === 'object') {
+          if (p.p1Name && n === String(p.p1Name).trim()) _slotUidSb = p.p1Uid || '';
+          else if (p.p2Name && n === String(p.p2Name).trim()) _slotUidSb = p.p2Uid || '';
+          else _slotUidSb = p.uid || '';
+        }
+        const _obj = { name: n, uid: _slotUidSb, teamName: pName.includes('/') ? pName : null, teamIdx: -1, matchNum: null, matchDecided: false, opponent: null, isStandby: true };
         allIndividuals.push(_obj);
         _indivByName[n.toLowerCase()] = _obj;
       });
@@ -1821,7 +1872,7 @@ function renderParticipants(container, tournamentId) {
       // v2.7.54: botão de REMOVER inscrito (só organizador) — poder de tirar qualquer
       // jogador do card, inclusive os da lista de espera. A remoção (tournaments.js)
       // tira de participants E dos storages da espera, casando nome cru/formatado.
-      const _delBtnC = isOrg ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window.removeParticipantFunction('${tId}','${safeName}')" title="Remover inscrito" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;border-radius:7px;flex-shrink:0;background:rgba(239,68,68,0.1);color:#ef4444;border:1px dashed rgba(239,68,68,0.5);">🗑️</button>` : '';
+      const _delBtnC = isOrg ? `<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window.removeParticipantFunction('${tId}','${safeName}')" title="Remover inscrito" style="--cx-size:22px;">✕</button>` : '';
 
       const _safeName = (ind.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
       const _pSeed = encodeURIComponent(ind.name);
@@ -1853,7 +1904,11 @@ function renderParticipants(container, tournamentId) {
       // não quando isWO (match-level). Parceiro presente não deve ter riscado.
       // v2.7.39: NOME COMPLETO — nunca trunca (quebra linha se preciso). Jogo N saiu
       // da linha do nome e foi pra coluna da direita (não disputa espaço com o nome).
-      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span style="font-weight:600;font-size:0.92rem;color:${nameColor};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${_orgStarC}${isStandby ? presenceDot : ''}</div>`;
+      // v4.5.64: nome resolve VIVO por uid (perfil users/{uid}); nome gravado só p/ guest sem uid.
+      const _niUid = ind.uid || '';
+      const _niUidAttr = _niUid ? ` data-uid-name="${window._safeHtml(_niUid)}"` : '';
+      const _niDisp = _niUid ? window._safeHtml(window._displayName(_niUid, ind.name)) : _safeName;
+      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span${_niUidAttr} style="font-weight:600;font-size:0.92rem;color:${nameColor};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_niDisp}</span>${_orgStarC}${isStandby ? presenceDot : ''}</div>`;
       const _jogoTop = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${_jogoColor};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;">${matchLabel}</span>` : '';
       // Faixa do jogo FULL-WIDTH abaixo do header (libera largura pros nomes dos times).
       let _matchStrip = '';
@@ -1952,6 +2007,108 @@ function renderParticipants(container, tournamentId) {
     }).join('');
 
   } else {
+    // v4.5.74: torneio de DUPLAS pré-sorteio → SEÇÃO CANÔNICA (Sem dupla / Duplas
+    // formadas), a MESMA da tela de detalhe do torneio, agora com o toggle Presente
+    // injetado via ctx.cardPresence. Extirpa o grid antigo ("Equipe Formada" /
+    // "Inscrição Individual"). Ver [[project_two_participant_card_renderers]].
+    var _orgEmailsP = {}; var _orgUidsP = {};
+    if (t.organizerEmail) _orgEmailsP[t.organizerEmail] = true;
+    if (t.creatorUid) _orgUidsP[t.creatorUid] = true;
+    if (Array.isArray(t.coHosts)) t.coHosts.forEach(function (ch) { if (ch && ch.status === 'active') { if (ch.email) _orgEmailsP[ch.email] = true; if (ch.uid) _orgUidsP[ch.uid] = true; } });
+    var _hasTournCatsP = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
+    // v4.5.76: escopo do W.O. — 'individual' → W.O. POR MEMBRO (2, esq/dir, igual aos
+    // toggles); 'team'/'time' → UM W.O. do time (falta 1 → time inteiro leva W.O.).
+    // Ver [[project_wo_scope_individual_vs_team]].
+    var woScopeP = (t.woScope || 'individual') === 'individual' ? 'individual' : 'team';
+    var _dsecP = (typeof window._buildDoublesInscritosSection === 'function')
+      ? window._buildDoublesInscritosSection(t, {
+          isOrg: isOrg, drawDone: drawDone,
+          orgUids: _orgUidsP, orgEmails: _orgEmailsP, hasTournCats: _hasTournCatsP,
+          chrome: false,
+          cardPresence: function (p) {
+            if (!(canRollCall || postDrawPresence)) return { skip: false, styleExtra: '', rowHtml: '' };
+            var _grn = 'background:linear-gradient(135deg,rgba(16,185,129,0.5),rgba(5,150,105,0.6)) !important;border:2px solid rgba(16,185,129,0.85) !important;box-shadow:0 0 0 1px rgba(16,185,129,0.4),0 4px 12px rgba(0,0,0,0.14);';
+            var _red = 'background:linear-gradient(135deg,rgba(239,68,68,0.45),rgba(220,38,38,0.58)) !important;border:2px solid rgba(239,68,68,0.8) !important;box-shadow:0 0 0 1px rgba(239,68,68,0.35),0 4px 12px rgba(0,0,0,0.14);';
+            // v4.5.75: DUPLA formada → estado do CARD deriva dos DOIS membros (verde só se
+            // ambos presentes, vermelho se algum ausente); cada membro tem o SEU toggle
+            // (ctx.memberPresence), então SEM linha de presença por entrada (rowHtml='').
+            var _pairKeys = null;
+            if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) _pairKeys = [(p.p1Uid || String(p.p1Name || '').trim()), (p.p2Uid || String(p.p2Name || '').trim())]; // v4.5.86: uid OU nome; presença é uid-keyed (_idMapHas resolve o uid direto)
+            else { var _nmC = (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || ''); if (_nmC.indexOf('/') !== -1) { var _pp = _nmC.split('/').map(function (s) { return s.trim(); }).filter(Boolean); if (_pp.length >= 2) _pairKeys = _pp; } }
+            if (_pairKeys) {
+              var _q1 = _entryPresent(_pairKeys[0]), _z1 = !_q1 && _entryAbsent(_pairKeys[0]);
+              var _q2 = _entryPresent(_pairKeys[1]), _z2 = !_q2 && _entryAbsent(_pairKeys[1]);
+              var _both = _q1 && _q2, _anyAbs = _z1 || _z2;
+              if (currentFilter === 'present' && !_both) return { skip: true };
+              if (currentFilter === 'absent' && !_anyAbs) return { skip: true };
+              if (currentFilter === 'pending' && (_both || _anyAbs)) return { skip: true };
+              // Escopo TIME → um W.O. do time (na base do card); escopo individual → cada
+              // membro tem o seu W.O. (via memberPresence), então rowHtml fica vazio.
+              var _teamRow = '';
+              if (canRollCall && isOrg && woScopeP === 'team') {
+                var _tEntry = window._pName(p);
+                var _tAbs = _anyAbs || _entryAbsent(_tEntry);
+                var _tE = String(_tEntry).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "');", !_tAbs, { label: _tAbs ? 'Reverter' : 'W.O. do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
+              }
+              return { skip: false, styleExtra: _both ? _grn : (_anyAbs ? _red : ''), rowHtml: _teamRow };
+            }
+            // SOLO
+            var entry = window._pName(p);
+            var mc = _entryPresent(entry);
+            var abs = !mc && _entryAbsent(entry);
+            var pend = !mc && !abs;
+            if (currentFilter === 'present' && !mc) return { skip: true };
+            if (currentFilter === 'absent' && !abs) return { skip: true };
+            if (currentFilter === 'pending' && !pend) return { skip: true };
+            var styleExtra = mc ? _grn : (abs ? _red : '');
+            var rowHtml = '';
+            if (canRollCall) {
+              var _rcEntry = entry.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+              var label = mc ? 'Presente' : 'Ausente';
+              var color = mc ? '#4ade80' : '#f87171';
+              var wo = (!mc && isOrg)
+                ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
+                : '';
+              rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>' +
+                '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\');"><span class="toggle-slider"></span></label>' + wo;
+            } else {
+              var l2 = mc ? 'Presente' : 'Ausente';
+              var c2 = mc ? '#4ade80' : '#f87171';
+              var ic = mc ? '✅' : '🚫';
+              rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + c2 + ';white-space:nowrap;">' + ic + ' ' + l2 + '</span>';
+            }
+            return { skip: false, styleExtra: styleExtra, rowHtml: rowHtml };
+          },
+          // v4.5.75: presença POR MEMBRO da dupla — um toggle por jogador, no bloco dele.
+          memberPresence: function (member, right) {
+            if (!(canRollCall || postDrawPresence)) return { html: '' };
+            var keyName = (member && member.guest) ? String(member.guest).trim()
+              : (window._displayName ? window._displayName(member && member.uid, member && member.guest) : '');
+            if (!keyName) return { html: '' };
+            var mc = _entryPresent(keyName);
+            var abs = !mc && _entryAbsent(keyName);
+            var label = mc ? 'Presente' : 'Ausente';
+            var color = mc ? '#4ade80' : '#f87171';
+            if (!canRollCall) {
+              var ic = mc ? '✅' : '🚫';
+              return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + ic + ' ' + label + '</span></div>' };
+            }
+            var _e = keyName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            var wo = (!mc && isOrg && woScopeP === 'individual')
+              ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
+              : '';
+            var word = '<span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>';
+            var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\');"><span class="toggle-slider"></span></label>';
+            var inner = right ? (wo + toggle + word) : (word + toggle + wo);
+            return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;' + (right ? 'justify-content:flex-end;' : '') + '" onclick="event.stopPropagation();">' + inner + '</div>' };
+          }
+        })
+      : null;
+    if (_dsecP && _dsecP.isDoubles) {
+      gridStyle = '';
+      cardsStr = _dsecP.html;
+    } else {
     // ── Normal mode: team cards with drag/split/delete ──
     gridStyle = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:1rem;';
 
@@ -2015,10 +2172,18 @@ function renderParticipants(container, tournamentId) {
           const _mErr = `onerror="this.onerror=null;this.src='${_mInitials}'"`;
           const _nmH = window._safeHtml(_nm);
           const _mPart = _nameToParticipant && _nameToParticipant[_nm];
-          const _mUid  = (_mPart && typeof _mPart === 'object') ? (_mPart.uid || '') : '';
+          // v4.5.64: uid ESTRUTURAL do slot (p1Uid/p2Uid) — não o .uid do capitão.
+          let _mUid = '';
+          if (_mPart && typeof _mPart === 'object') {
+            if (_mPart.p1Name && _nm === String(_mPart.p1Name).trim()) _mUid = _mPart.p1Uid || '';
+            else if (_mPart.p2Name && _nm === String(_mPart.p2Name).trim()) _mUid = _mPart.p2Uid || '';
+            else _mUid = _mPart.uid || '';
+          }
           const _mUidJs = _mUid ? (',{uid:\'' + _mUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
-          const _editAttr = isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${t.id}','${_nmSafe}')" title="Clique para editar" style="font-weight:700;font-size:0.95rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text;"` : `style="font-weight:700;font-size:0.95rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_nmSafe}'${_mUidJs});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_nmSafe}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${_nmH}"`;
-          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;"><img src="${_mPhoto}" ${_mErr} data-player-name="${_nmH}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span ${_editAttr}>${_nmH}</span></div>`;
+          const _mDisp = _mUid ? window._safeHtml(window._displayName(_mUid, _nm)) : _nmH;
+          const _mUidAttr = _mUid ? ` data-uid-name="${window._safeHtml(_mUid)}"` : '';
+          const _editAttr = isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${t.id}','${_nmSafe}')" title="Clique para editar" style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text;"` : `style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_nmSafe}'${_mUidJs});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_nmSafe}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${_nmH}"`;
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;"><img src="${_mPhoto}" ${_mErr} data-player-name="${_nmH}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span${_mUidAttr} ${_editAttr}>${_mDisp}</span></div>`;
         }).join('') + (_orgStar ? `<div style="margin-top:2px;">${_orgStar}</div>` : '');
       } else {
         const _pSafe = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -2031,8 +2196,10 @@ function renderParticipants(container, tournamentId) {
         const _pPart = _nameToParticipant && _nameToParticipant[pName];
         const _pUid  = (_pPart && typeof _pPart === 'object') ? (_pPart.uid || '') : '';
         const _pUidJs = _pUid ? (',{uid:\'' + _pUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
-        const _editAttrN = isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${t.id}','${_pSafe}')" title="Clique para editar" style="font-weight:600;font-size:0.95rem;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:text;"` : `style="font-weight:600;font-size:0.95rem;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_pSafe}'${_pUidJs});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_pSafe}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${_pNameH}"`;
-        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="${_pPhotoN}" ${_pErrN} data-player-name="${_pNameH}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span ${_editAttrN}>${_pNameH}</span>${_orgStar}</div>`;
+        const _pDisp = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : _pNameH;
+        const _pUidAttr = _pUid ? ` data-uid-name="${window._safeHtml(_pUid)}"` : '';
+        const _editAttrN = isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${t.id}','${_pSafe}')" title="Clique para editar" style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:text;"` : `style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_pSafe}'${_pUidJs});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_pSafe}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${_pNameH}"`;
+        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="${_pPhotoN}" ${_pErrN} data-player-name="${_pNameH}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span${_pUidAttr} ${_editAttrN}>${_pDisp}</span>${_orgStar}</div>`;
       }
 
       const safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -2089,7 +2256,7 @@ function renderParticipants(container, tournamentId) {
         dragProps = `draggable="true" ondragstart="window.handleDragStart(event, ${idx}, '${t.id}')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ${idx})"`;
         if (!drawDone) {
           _vipBtn = `<button class="btn btn-micro" title="${isVip ? _t('tourn.removeVip') : _t('tourn.markVip')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ${isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)'}; color: ${isVip ? '#fbbf24' : '#a3842a'}; border: 1px ${isVip ? 'solid' : 'dashed'} ${isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)'};" onclick="event.stopPropagation(); window._toggleVip('${t.id}', '${safeP}');">💎 VIP</button>`;
-          _delBtn = `<button class="btn btn-micro" title="${_t('btn.remove')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(239,68,68,0.1); color: #ef4444; border: 1px dashed rgba(239,68,68,0.5);" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">🗑️</button>`;
+          _delBtn = `<button type="button" class="cancel-x-btn" title="${_t('btn.remove')}" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">✕</button>`;
           if (window._entryTeamMembers(p)) { // v3.0.x: botão dividir só pra dupla (estrutura), não por '/'
             _splitBtn = `<button class="btn btn-micro" title="${_t('participants.splitTeam')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', '${safeP}');">✂️</button>`;
           }
@@ -2164,6 +2331,7 @@ function renderParticipants(container, tournamentId) {
             </div>
         </div>`;
     }).join('');
+    }
   }
 
   // ── Filter controls (only when check-in active) ──
@@ -2190,9 +2358,9 @@ function renderParticipants(container, tournamentId) {
     + '</div>';
   }
   const checkInControls = canCheckIn ? _rollCallBar(totalIndividuals, checkedCount, absentConfirmedCount, pendingCount) : '';
-  // v3.0.x: pré-sorteio (roll-call) conta por ENTRADA (rcTotal — a unidade que entra no
-  // sorteio); pós-sorteio (postDrawPresence, grade por indivíduo) conta por PESSOA
-  // (totalIndividuals=103), consistente com os cards e com INSCRITOS.
+  // v4.5.78: roll-call SEMPRE conta por PESSOA (dupla = 2) — pré-sorteio (rcTotal) e
+  // pós-sorteio (totalIndividuals). A presença é por jogador (toggle por membro), então
+  // a barra reflete gente, não entradas. Ver [[project_count_people_not_entries]].
   const rollCallControls = canRollCall
     ? _rollCallBar(rcTotal, rcPresent, rcAbsent, rcPending)
     : (postDrawPresence ? _rollCallBar(totalIndividuals, checkedCount, absentConfirmedCount, totalIndividuals - checkedCount - absentConfirmedCount) : '');

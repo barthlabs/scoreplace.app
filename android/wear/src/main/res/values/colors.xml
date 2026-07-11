@@ -20,4 +20,7 @@
     <color name="winner_gold">#f59e0b</color>
     <color name="btn_cancel_bg">#26263A</color>
     <color name="btn_confirm_bg">#3B82F6</color>
+    <color name="btn_extend_bg">#10B981</color>
+    <color name="btn_extend_text">#04342C</color>
+    <color name="btn_tiebreak_bg">#A855F7</color>
 </resources>

@@ -2881,11 +2881,15 @@ window._tvBuildNextMatches = function(t) {
     html += '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 16px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
     html += '<div style="flex:1;text-align:center;">';
-    html += '<div style="font-size:1rem;font-weight:700;color:white;">' + presenceP1 + ' ' + window._safeHtml(m.p1 || 'TBD') + '</div>';
+    // v4.5.68: nome vivo por uid do slot (Modo TV).
+    var _rsl = (typeof window._resolveSideLive === 'function') ? window._resolveSideLive : function(_t, s) { return s; };
+    var _tvN1 = _rsl(t, m.p1 || 'TBD', (window._slotUids ? window._slotUids(m, 'p1') : (m.p1Uid || m.team1Uids)));
+    var _tvN2 = _rsl(t, m.p2 || 'TBD', (window._slotUids ? window._slotUids(m, 'p2') : (m.p2Uid || m.team2Uids)));
+    html += '<div style="font-size:1rem;font-weight:700;color:white;">' + presenceP1 + ' ' + window._safeHtml(_tvN1) + '</div>';
     html += '</div>';
     html += '<div style="font-size:0.9rem;font-weight:800;color:rgba(255,255,255,0.25);margin:0 12px;">VS</div>';
     html += '<div style="flex:1;text-align:center;">';
-    html += '<div style="font-size:1rem;font-weight:700;color:white;">' + window._safeHtml(m.p2 || 'TBD') + ' ' + presenceP2 + '</div>';
+    html += '<div style="font-size:1rem;font-weight:700;color:white;">' + window._safeHtml(_tvN2) + ' ' + presenceP2 + '</div>';
     html += '</div>';
     html += '</div>';
     html += courtInfo + roundInfo;
@@ -4261,9 +4265,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
     state.tieRulePending = false;
 
     if (rule === 'extend') {
-      // Prorrogar: play on with 2-game lead required
-      // Keep tieRule as 'extend' so standard 2-game lead check applies
-      state.tieRule = 'extend';
+      // v4.5.42: PRORROGAR é POR EMPATE — NÃO fixa 'extend'. Mantém 'ask' para
+      // REPERGUNTAR no próximo empate (6-6, 7-7, 8-8, … até alguém abrir 2 de
+      // vantagem ou ativar o tie-break). Só zera o pending e o jogo continua;
+      // o check de 2-game-lead (padrão) segue funcionando com tieRule='ask'.
+      // (antes: state.tieRule='extend' travava a pergunta em definitivo.)
     } else if (rule === 'tiebreak') {
       state.tieRule = 'tiebreak';
       state.isTiebreak = true;
@@ -4271,6 +4277,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       state.currentGameP2 = 0;
     }
     _render();
+    _watchNotify(); // v4.5.43: sincroniza o relógio após a decisão (some o prompt)
   };
 
   // Check if match is won (called from _finishSet, so include the just-finished set)
@@ -6192,7 +6199,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Build stacked player names in team box (bracket-style)
     // Serve ball inside team box, left of the serving player's row, draggable to change server
     var _canDragServe = !state.isFinished && !state.serveSkipped && isDoubles && state.totalGamesPlayed < 2;
-    var _buildNameStack = function(team) {
+    var _buildNameStack = function(team, mirror) {
+      // mirror=true (usado no time DIREITO em paisagem): nome à esquerda, foto/
+      // ícone à DIREITA, texto alinhado à direita (espelha o lado esquerdo).
+      var _mirrorCard = mirror ? 'flex-direction:row-reverse;' : '';
+      var _mirrorText = mirror ? 'text-align:right;' : '';
       var players = team === 1 ? p1Players : p2Players;
       var clr = team === 1 ? '#3b82f6' : '#ef4444';
       var bgClr = team === 1 ? 'rgba(59,130,246,0.12)' : 'rgba(239,68,68,0.12)';
@@ -6244,10 +6255,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var ballCardAttr = (isServing && _canDragServe) ? ' data-serve-ball-card="true"' : '';
 
         // Individual player box
-        cards += '<div' + dropAttr + ballCardAttr + ' onclick="window._liveEditName(' + team + ',' + ni + ')" style="cursor:pointer;display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);transition:transform 0.15s,background 0.15s;min-width:0;">' +
+        cards += '<div' + dropAttr + ballCardAttr + ' onclick="window._liveEditName(' + team + ',' + ni + ')" style="cursor:pointer;display:flex;' + _mirrorCard + 'align-items:center;gap:5px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);transition:transform 0.15s,background 0.15s;min-width:0;">' +
           servBall +
           avatar +
-          '<span style="flex:1;min-width:0;font-size:calc(clamp(0.72rem,2.2vw,0.88rem) * var(--live-name-scale,1));font-weight:' + (isServing ? '800' : '600') + ';color:' + (isServing ? '#fbbf24' : 'rgba(255,255,255,0.92)') + ';white-space:normal;overflow-wrap:break-word;word-break:normal;hyphens:none;line-height:1.15;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">' + fullName + '</span>' +
+          '<span style="flex:1;min-width:0;' + _mirrorText + 'font-size:calc(clamp(0.72rem,2.2vw,0.88rem) * var(--live-name-scale,1));font-weight:' + (isServing ? '800' : '600') + ';color:' + (isServing ? '#fbbf24' : 'rgba(255,255,255,0.92)') + ';white-space:normal;overflow-wrap:break-word;word-break:normal;hyphens:none;line-height:1.15;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">' + fullName + '</span>' +
         '</div>';
       }
       // Team box wrapping all players
@@ -6309,12 +6320,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var gamesCenter = '';
     if (showGamesBox) {
       gamesCenter =
-        '<div class="live-games-box" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:clamp(12px,3vh,24px) clamp(16px,4vw,36px);">' +
-          '<span style="font-size:0.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
-          '<div style="display:flex;align-items:center;gap:clamp(12px,4vw,24px);">' +
-            '<span style="font-size:calc(clamp(4rem,14vw,7rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-            '<span style="font-size:calc(clamp(2rem,6vw,3.5rem) * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
-            '<span style="font-size:calc(clamp(4rem,14vw,7rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
+        '<div class="live-games-box" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:4px clamp(14px,3.5vw,22px);">' +
+          '<span style="font-size:0.62rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
+          '<div style="display:flex;align-items:center;gap:clamp(10px,3vw,18px);">' +
+            '<span style="font-size:calc(clamp(3rem,11vw,5rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
+            '<span style="font-size:calc(clamp(1.6rem,5vw,2.6rem) * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
+            '<span style="font-size:calc(clamp(3rem,11vw,5rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
           '</div>' +
         '</div>';
     }
@@ -6326,58 +6337,91 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var display = player === 1 ? p1Display : p2Display;
       var plateBg = _isDeuce ? '#f97316' : '#fff';
       var plateClr = _isDeuce ? '#fff' : '#111';
-      // v4.0.11: height:auto → o box BRANCO abraça o número (sem espaço branco
-      // sobrando); o número é dimensionado pela largura (mesmo tamanho p/ 0/15/
-      // 30/40/AD) no _fitLivePlateText. max-height:100% impede transbordar a linha.
-      return '<div class="ls-plate-box" style="width:100%;height:auto;max-height:100%;background:' + plateBg + ';border-radius:calc(18px * var(--live-plate-scale,1));padding:calc(10px * var(--live-plate-scale,1)) calc(6px * var(--live-plate-scale,1));box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
-        '<span class="ls-plate-num" style="font-size:calc(clamp(4rem,20vw,9rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
+      // v4.5.31: a placa BRANCA abraça o número (height:auto). Raio e padding
+      // FIXOS (não escalam com o slider — senão só cresceria vazio/arredondamento).
+      // O número preenche a MAIOR parte da placa; _fitLivePlateText dimensiona por
+      // referência FIXA de 2 dígitos → 0/15/30/40/AD TODOS no MESMO tamanho e peso.
+      // overflow:hidden é rede de segurança contra estouro em escalas extremas.
+      return '<div class="ls-plate-box" style="width:100%;height:auto;background:' + plateBg + ';border-radius:16px;padding:3px 8px;box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
+        '<span class="ls-plate-num" style="font-size:calc(clamp(3rem,30vw,9rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
       '</div>';
     };
 
-    // v2.2.16-beta: ajusta o tamanho do número e dos botões para preencher o
-    // box disponível em modo portrait. Chamado após render e ao mover o slider.
+    // v4.5.33: dimensiona o número das metades (.ls-score-half) medindo a FONTE
+    // REAL — cria um "40" invisível a 100px, mede a largura de 2 dígitos e calcula
+    // o font-size pra "40" caber ~90% da largura da metade. Assim NUNCA estoura
+    // (independente de aparelho/fonte), TODOS os valores ficam no MESMO tamanho
+    // (a referência é sempre "40", não o valor atual → sem glitch por conteúdo),
+    // e o slider "Placar" cresce até ~99% e trava (não clipa). Mede clientWidth em
+    // DUPLO RAF (layout assentado). Também limita pela altura da metade.
+    var _doFitLivePlateText = function(ov) {
+      var halves = ov.querySelectorAll('.ls-score-half');
+      if (!halves.length) return;
+      var ps = parseFloat(getComputedStyle(ov).getPropertyValue('--live-plate-scale')) || 1;
+      if (!(ps > 0)) ps = 1;
+      // largura de "40" (pior caso) a 100px, medindo a fonte real da 1ª metade.
+      var probe = document.createElement('span');
+      probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;font-weight:900;font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;font-size:100px;';
+      probe.textContent = '40';
+      halves[0].appendChild(probe);
+      var w2 = probe.scrollWidth;
+      if (probe.parentNode) probe.parentNode.removeChild(probe);
+      if (w2 <= 0) return;
+      var minW = Infinity, minH = Infinity;
+      halves.forEach(function(h) {
+        if (h.clientWidth > 10 && h.clientWidth < minW) minW = h.clientWidth;
+        if (h.clientHeight > 10 && h.clientHeight < minH) minH = h.clientHeight;
+      });
+      if (minW === Infinity) return;
+      // "40" ocupa 96% da largura no padrão (ps=1) — o máximo que cabe em 2
+      // dígitos lado a lado sem clipar; teto = 99% (nunca estoura). Em retrato a
+      // LARGURA é o limite físico (não dá pra fazer o número muito mais alto sem
+      // 2 dígitos passarem da metade da tela).
+      var baseFs = 0.96 * minW * 100 / w2;
+      var capFs  = 0.99 * minW * 100 / w2;
+      var fs = Math.min(baseFs * ps, capFs);
+      // v4.5.41: scaleY SÓ no retrato (metade estreita e alta → estica pra
+      // preencher). Em PAISAGEM a metade é larga e baixa → scaleY=1 deixa o
+      // número MUITO maior (limitado só pela altura real, não por altura*1.35).
+      var SY = (window.innerWidth > window.innerHeight) ? 1 : 1.35;
+      // a altura VISUAL é fs*SY; garante que não passe da altura da metade.
+      if (minH !== Infinity && fs * SY > minH * 0.96) fs = minH * 0.96 / SY;
+      fs = Math.floor(fs);
+      if (fs < 12) return;
+      halves.forEach(function(h) {
+        var n = h.querySelector('.ls-plate-num');
+        if (n) { n.style.fontSize = fs + 'px'; n.style.transform = 'scaleY(' + SY + ')'; }
+      });
+    };
     var _fitLivePlateText = function() {
       var ov = document.getElementById('live-scoring-overlay');
       if (!ov) return;
+      // v4.5.34: SÍNCRONO primeiro — mede o DOM recém-inserido (a leitura de
+      // clientWidth força o reflow), então o número já sai no tamanho certo sem
+      // depender do rAF (que às vezes não aplicava → número no fallback do CSS,
+      // clipando em telas estreitas). rAF + timeout reforçam pós-fontes/fotos.
+      _doFitLivePlateText(ov);
       requestAnimationFrame(function() {
-        var boxes = ov.querySelectorAll('.ls-plate-box');
-        if (!boxes.length) return;
-        // Usa sempre 2 chars como referência — pior caso do sistema de pontuação
-        // (15, 30, 40, AD). Garante que todos os boxes tenham o mesmo fontSize
-        // independente do valor atual ("0" não fica maior que "40").
-        // Fonte weight-900 tabular: cada char ≈ 0.65× fontSize em largura.
-        var REF_CHARS = 2;
-        var minFs = Infinity;
-        boxes.forEach(function(box) {
-          var pad = parseFloat(getComputedStyle(box).paddingTop) || 6;
-          // v4.0.11: altura disponível = do PAI (wrapper com a altura da linha),
-          // NÃO do próprio box — o box agora tem height:auto (abraça o número), e
-          // medir a altura dele criaria circularidade (encolhia o número). A
-          // largura é a real restrição (2 chars na metade da tela); usamos ~0.9
-          // dela pro maior valor (AD/40) caber sempre no MESMO tamanho.
-          var availH = ((box.parentElement && box.parentElement.clientHeight) || box.offsetHeight) - pad * 2;
-          var bw = box.offsetWidth - pad * 2;
-          if (availH < 10 || bw < 10) return;
-          var fs = Math.min(availH * 0.92, (bw * 0.9) / (REF_CHARS * 0.66));
-          if (fs < minFs) minFs = fs;
-        });
-        if (minFs === Infinity || minFs < 16) return;
-        var fs = Math.floor(minFs);
-        boxes.forEach(function(box) {
-          var span = box.querySelector('.ls-plate-num');
-          if (span) span.style.fontSize = fs + 'px';
-        });
-        ov.querySelectorAll('.ls-up-btn').forEach(function(btn) {
-          var h = btn.offsetHeight;
-          if (h > 10) btn.style.fontSize = Math.floor(h * 0.55) + 'px';
-        });
-        ov.querySelectorAll('.ls-down-btn').forEach(function(btn) {
-          var h = btn.offsetHeight;
-          if (h > 10) btn.style.fontSize = Math.floor(h * 0.52) + 'px';
+        requestAnimationFrame(function() {
+          var el = document.getElementById('live-scoring-overlay');
+          if (el) _doFitLivePlateText(el);
         });
       });
+      setTimeout(function() {
+        var el = document.getElementById('live-scoring-overlay');
+        if (el) _doFitLivePlateText(el);
+      }, 180);
     };
     window._fitLivePlateText = _fitLivePlateText;
+    // v4.5.34: re-ajusta ao mudar a largura (rotação/resize) — antes o número
+    // ficava com o tamanho medido na largura anterior e CLIPAVA quando estreitava.
+    // Hook global único; _fitLivePlateText sai cedo se o overlay não existe.
+    if (!window._liveScoreResizeHooked) {
+      window._liveScoreResizeHooked = true;
+      var _lsRefit = function() { if (window._fitLivePlateText) window._fitLivePlateText(); };
+      window.addEventListener('resize', _lsRefit);
+      window.addEventListener('orientationchange', _lsRefit);
+    }
 
     // Buttons column builder
     var _buildBtns = function(player) {
@@ -6395,118 +6439,146 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // sacador automaticamente, então arrastar não faz sentido).
     var swapHint = (!state.isFinished && _liveScorePrefs.fixSides) ? '<div style="text-align:center;font-size:0.55rem;color:var(--text-muted);opacity:0.5;margin-top:4px;">← arraste para trocar lado →</div>' : '';
 
-    if (isLandscape) {
-      // ── LANDSCAPE: [Names+Btns Left] [Plate Left] [Games] [Plate Right] [Names+Btns Right] ──
-      // Landscape-specific builders with smaller sizes to fit phone screen
-      var _lsPlate = function(player) {
-        var clr = player === 1 ? 'rgba(59,130,246,0.25)' : 'rgba(239,68,68,0.25)';
-        var display = player === 1 ? p1Display : p2Display;
-        var plateBg = _isDeuce ? '#f97316' : '#fff';
-        var plateClr = _isDeuce ? '#fff' : '#111';
-        // v4.0.5: classes ls-plate-box/ls-plate-num pra o _fitLivePlateText tratar
-        // o NÚMERO em paisagem também — reserva 2 chars (15/30/40/AD), sem truncar.
-        return '<div class="ls-plate-box" style="width:100%;background:' + plateBg + ';border-radius:calc(14px * var(--live-plate-scale,1));padding:calc(clamp(10px,4vh,28px) * var(--live-plate-scale,1)) calc(4px * var(--live-plate-scale,1));box-shadow:0 4px 24px rgba(0,0,0,0.5),0 0 0 3px ' + clr + ';display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
-          '<span class="ls-plate-num" style="font-size:calc(clamp(3.5rem,14vw,7rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + display + '</span>' +
-        '</div>';
-      };
-      var _lsUpBtn = function(player) {
-        var clr = player === 1 ? '#3b82f6' : '#ef4444';
-        return '<button class="live-vol" onclick="window._liveScorePoint(' + player + ')" style="width:100%;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:calc(clamp(2.4rem,6vw,3.2rem) * var(--live-btn-scale,1));font-weight:900;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;min-height:calc(clamp(72px,16vh,110px) * var(--live-btn-scale,1));box-shadow:0 3px 10px rgba(0,0,0,0.3);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.96)\'" ontouchend="this.style.transform=\'\'">▲</button>';
-      };
-      var _lsDownBtn = function(player) {
-        return '<button class="live-vol-sm" onclick="window._liveScoreMinus(' + player + ')" style="width:100%;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.08);color:var(--text-muted);font-size:0.95rem;font-weight:700;border-radius:0 0 12px 12px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;min-height:clamp(40px,6vh,56px);border-top:1px solid rgba(255,255,255,0.06);" ontouchstart="this.style.background=\'rgba(255,255,255,0.15)\'" ontouchend="this.style.background=\'\'">▼</button>';
-      };
-      var _lsBtns = function(player) {
-        if (state.isFinished) return '';
-        return '<div style="width:100%;display:flex;flex-direction:column;">' + _lsUpBtn(player) + _lsDownBtn(player) + '</div>';
-      };
-      // Landscape games box — smaller, colors follow court sides
-      var lsGamesCenter = '';
-      if (showGamesBox) {
-        lsGamesCenter =
-          '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:clamp(4px,1vh,8px) clamp(6px,1.5vw,14px);">' +
-            '<span style="font-size:0.45rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
-            '<div style="display:flex;align-items:center;gap:clamp(4px,1vw,8px);">' +
-              '<span style="font-size:calc(clamp(1.1rem,3.5vw,1.8rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-              '<span style="font-size:calc(clamp(0.7rem,1.5vw,1rem) * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
-              '<span style="font-size:calc(clamp(1.1rem,3.5vw,1.8rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
-            '</div>' +
-          '</div>';
-      }
-
-      container.innerHTML =
-        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;width:100%;gap:0;padding:0;">' +
-          // Sets row
-          setsRow +
-          // Games box — ABOVE the plates to keep score numbers bigger
-          // v1.3.67-beta: undo button beside games box (outside), not inside it
-          // v1.3.68-beta: SVG undo icon in white, games box centered via symmetric flex spacers
-          (showGamesBox ? '<div style="flex-shrink:0;margin-bottom:clamp(2px,0.6vh,6px);display:flex;align-items:center;width:100%;"><div style="flex:1;"></div>' + lsGamesCenter + '<div style="flex:1;display:flex;align-items:center;padding-left:8px;"><button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:30px;height:30px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;"><svg viewBox="0 0 24 24" width="22" height="22" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg></button></div></div>' : '') +
-          // Special label (TIE-BREAK, winner)
-          (gameLabel ? '<div style="text-align:center;font-size:clamp(0.6rem,1.5vw,0.75rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;margin-bottom:clamp(2px,0.5vh,6px);">' + gameLabel + '</div>' : '') +
-          // Main row — 4 columns: [Names+Btns Left] [Plate Left] [Plate Right] [Names+Btns Right]
-          '<div style="display:flex;align-items:center;width:100%;gap:clamp(6px,1vw,10px);justify-content:center;padding:0 6px;">' +
-            // Left column: names + buttons stacked
-            '<div style="flex:0 1 auto;min-width:0;max-width:24vw;display:flex;flex-direction:column;align-items:stretch;gap:3px;">' +
-              _buildNameStack(leftTeam) +
-              _lsBtns(leftTeam) +
-            '</div>' +
-            // Left plate
-            '<div style="flex:1;display:flex;align-items:center;justify-content:center;max-width:32vw;">' +
-              _lsPlate(leftTeam) +
-            '</div>' +
-            // Right plate
-            '<div style="flex:1;display:flex;align-items:center;justify-content:center;max-width:32vw;">' +
-              _lsPlate(rightTeam) +
-            '</div>' +
-            // Right column: names + buttons stacked
-            '<div style="flex:0 1 auto;min-width:0;max-width:24vw;display:flex;flex-direction:column;align-items:stretch;gap:3px;">' +
-              _buildNameStack(rightTeam) +
-              _lsBtns(rightTeam) +
-            '</div>' +
+    // ─────────────────────────────────────────────────────────────────────
+    // v4.5.39: MODELO ÚNICO (Apple Watch) — os MESMOS construtores em RETRATO
+    // e PAISAGEM. Só o ARRANJO muda (retrato empilha; paisagem põe nomes nas
+    // laterais e as metades grandes no meio). Antes a paisagem usava layout
+    // velho (placas brancas + ▲/▼) → inconsistente. Agora tudo consistente.
+    // SETS COMPLETOS apenas (false) → respeita a config de games/set.
+    var _setsLeftN = 0, _setsRightN = 0;
+    try { _setsLeftN = _setsWon(leftTeam, false); _setsRightN = _setsWon(rightTeam, false); } catch (e) {}
+    var _showSets = useSets;
+    var _setsLine = _showSets
+      ? '<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:4px;">' +
+          '<span style="font-size:0.6rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
+          '<div style="display:flex;align-items:center;gap:9px;margin-top:1px;">' +
+            '<span style="font-size:1.3rem;font-weight:800;color:' + (leftTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
+            '<span style="font-size:0.95rem;color:rgba(255,255,255,0.25);">–</span>' +
+            '<span style="font-size:1.3rem;font-weight:800;color:' + (rightTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>' +
           '</div>' +
+        '</div>'
+      : '';
+    // GAMES menor em paisagem (altura curta → usa vh); retrato usa vw.
+    var _gBig  = isLandscape ? 'clamp(2rem,7vh,3.4rem)' : 'clamp(3.15rem,14.4vw,5.85rem)';
+    var _gDash = isLandscape ? 'clamp(1.2rem,4vh,2rem)' : 'clamp(1.8rem,5.4vw,2.7rem)';
+    var _topBlock = showGamesBox
+      ? '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:clamp(6px,1.4vh,14px) 0 clamp(3px,0.8vh,7px);">' +
+          _setsLine +
+          '<span style="font-size:0.66rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
+          '<div style="display:flex;align-items:center;gap:clamp(12px,3.6vw,22px);margin-top:1px;">' +
+            '<span style="font-size:calc(' + _gBig + ' * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
+            '<span style="font-size:calc(' + _gDash + ' * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
+            '<span style="font-size:calc(' + _gBig + ' * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
+          '</div>' +
+        '</div>'
+      : '';
+    // Metade tocável por time (cor do time, tinta de fundo, número colorido).
+    // A metade INTEIRA é o botão +1. Sem placa branca, sem ▲/▼.
+    var _scoreHalf = function(team) {
+      var clr = team === 1 ? '#60A5FA' : '#F87171';
+      var tint = team === 1 ? 'rgba(96,165,250,0.16)' : 'rgba(248,113,113,0.15)';
+      var display = team === 1 ? p1Display : p2Display;
+      var tag = state.isFinished ? 'div' : 'button';
+      var act = state.isFinished ? '' : 'onclick="window._liveScorePoint(' + team + ')" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'"';
+      return '<' + tag + ' class="ls-score-half" ' + act + ' style="flex:1;min-width:0;height:100%;border:none;cursor:' + (state.isFinished ? 'default' : 'pointer') + ';background:' + tint + ';border-radius:16px;display:flex;align-items:center;justify-content:center;padding:0;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform 0.08s;">' +
+        '<span class="ls-plate-num" style="font-size:clamp(2.5rem,16vw,7rem);font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;transform:scaleY(1.35);transform-origin:center;">' + display + '</span>' +
+      '</' + tag + '>';
+    };
+    // Desfazer — ÚNICO botão, full-width, abaixo de tudo (safe-area).
+    var _undoBar = (!state.isFinished)
+      ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:none;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;padding:13px 0 calc(13px + env(safe-area-inset-bottom,0px));font-size:0.95rem;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
+        '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>Desfazer</button>'
+      : '';
+    var _gameLabelRow = gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '';
+    var _portFinishRow = finishBtn; finishBtn = '';
+
+    if (isLandscape) {
+      // ── PAISAGEM (v4.5.41): SETS/GAMES compactos NO TOPO (liberam o centro);
+      // cada time = NOME em UMA LINHA ("P1 / P2", avatar por jogador) em cima +
+      // PLACAR colorido GRANDE embaixo. Sem scaleY (o fit deixa o número encher a
+      // altura da metade larga → muito maior que no 3-colunas). Time DIREITO
+      // espelhado (nome à esquerda, foto à DIREITA, alinhado à direita).
+      var _lsTopBar = showGamesBox
+        ? '<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:clamp(16px,4vw,40px);padding:clamp(4px,1vh,8px) 0;">' +
+            (_showSets ? '<div style="display:flex;align-items:center;gap:6px;">' +
+              '<span style="font-size:0.62rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
+              '<span style="font-size:1.3rem;font-weight:800;color:' + (leftTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;">' + _setsLeftN + '</span>' +
+              '<span style="font-size:0.9rem;color:rgba(255,255,255,0.25);">–</span>' +
+              '<span style="font-size:1.3rem;font-weight:800;color:' + (rightTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;">' + _setsRightN + '</span>' +
+            '</div>' : '') +
+            '<div style="display:flex;align-items:center;gap:6px;">' +
+              '<span style="font-size:0.62rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Games</span>' +
+              '<span style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
+              '<span style="font-size:calc(1.1rem * var(--live-score-scale,1));color:rgba(255,255,255,0.25);">–</span>' +
+              '<span style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
+            '</div>' +
+          '</div>'
+        : '';
+      // Nome em UMA linha: [🎾?] [av]Nome1 / [av]Nome2 (mirror = nome[av], à direita).
+      var _lsNameLine = function(team, mirror) {
+        var players = team === 1 ? p1Players : p2Players;
+        var nameClr = team === 1 ? '#DBEAFE' : '#FECACA';
+        var bgClr = team === 1 ? 'rgba(59,130,246,0.12)' : 'rgba(239,68,68,0.12)';
+        var bdrClr = team === 1 ? 'rgba(59,130,246,0.30)' : 'rgba(239,68,68,0.30)';
+        var _ballShown = false, ballHtml = '', chunks = [];
+        for (var ni = 0; ni < players.length; ni++) {
+          var pn = players[ni], isServing = false;
+          if (serverInfo && !state.isFinished && serverInfo.team === team) {
+            if (serverInfo.pIdx != null) isServing = (serverInfo.pIdx === ni);
+            else if (serverInfo.name === pn && !_ballShown) isServing = true;
+            if (isServing) _ballShown = true;
+          }
+          var fullName = window._safeHtml(pn);
+          var avatar = '<span class="live-av-wrap">' + _liveAvatarHtml(pn, 24) + '</span>';
+          var nameSpan = '<span onclick="window._liveEditName(' + team + ',' + ni + ')" style="cursor:pointer;font-size:calc(clamp(0.85rem,2.4vw,1.15rem) * var(--live-name-scale,1));font-weight:' + (isServing ? '800' : '700') + ';color:' + (isServing ? '#fbbf24' : nameClr) + ';white-space:nowrap;">' + fullName + '</span>';
+          if (isServing) {
+            var dragAttr = _canDragServe ? ' draggable="true" data-serve-ball="true"' : '';
+            var dragStyle = _canDragServe ? 'cursor:grab;' : 'cursor:default;';
+            var ballGlow = _canDragServe ? 'filter:drop-shadow(0 0 4px rgba(255,200,0,0.6));' : 'filter:drop-shadow(0 0 2px rgba(255,200,0,0.3));opacity:0.85;';
+            ballHtml = '<span' + dragAttr + ' data-serve-drop="' + team + '-' + ni + '" style="font-size:0.9rem;line-height:1;flex-shrink:0;' + dragStyle + ballGlow + '">' + _sportBall + '</span>';
+          }
+          chunks.push('<span data-serve-drop="' + team + '-' + ni + '" style="display:inline-flex;align-items:center;gap:5px;min-width:0;">' + (mirror ? nameSpan + avatar : avatar + nameSpan) + '</span>');
+        }
+        var body = chunks.join('<span style="color:rgba(255,255,255,0.25);font-weight:700;flex-shrink:0;">/</span>');
+        var inner = mirror ? body + ballHtml : ballHtml + body;
+        return '<div class="court-side" data-court-side="' + (mirror ? 'right' : 'left') + '" style="flex:0 0 auto;max-width:100%;display:flex;align-items:center;gap:6px;justify-content:' + (mirror ? 'flex-end' : 'flex-start') + ';padding:6px 10px;background:' + bgClr + ';border:1px solid ' + bdrClr + ';border-radius:12px;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' + inner + '</div>';
+      };
+      var _lsTeamCol = function(team, mirror) {
+        return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;padding:2px;' + (mirror ? 'align-items:flex-end;' : 'align-items:flex-start;') + '">' +
+            _lsNameLine(team, mirror) +
+            '<div style="flex:1;min-height:0;width:100%;display:flex;">' + _scoreHalf(team) + '</div>' +
+          '</div>';
+      };
+      container.innerHTML =
+        '<div style="display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;gap:0;">' +
+          _gameLabelRow +
+          _lsTopBar +
+          '<div style="flex:1;min-height:0;display:flex;align-items:stretch;width:100%;gap:8px;padding:2px clamp(6px,1.5vw,12px) 4px;">' +
+            _lsTeamCol(leftTeam, false) +
+            _lsTeamCol(rightTeam, true) +
+          '</div>' +
+          swapHint +
+          _undoBar +
+          _portFinishRow +
         '</div>';
-      // v4.0.5: ajusta o número do placar em PAISAGEM (reserva 2 chars, sem
-      // truncar) — antes só o retrato chamava o fit.
       _fitLivePlateText();
+      setTimeout(function() { _setupCourtSwapDrag(); }, 30);
     } else {
       // ── PORTRAIT: 5 linhas proporcionais preenchendo a tela inteira ──
       // Ordem: Games+Desfazer → Times → Placares → Botões ↑ → Botões ↓
       container.style.overflow = 'hidden';
       container.style.padding = '0';
 
-      // Portrait-specific up/down button builders — sem min-height fixo, preenchem o row
-      var _portUpBtn = function(player) {
-        var clr = player === 1 ? '#3b82f6' : '#ef4444';
-        return '<button class="live-vol ls-up-btn" onclick="window._liveScorePoint(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:calc(clamp(2.4rem,8vw,4rem) * var(--live-btn-scale,1));font-weight:900;border-radius:calc(14px * var(--live-btn-scale,1));display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;box-shadow:0 4px 14px rgba(0,0,0,0.4);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'">▲</button>';
-      };
-      var _portDownBtn = function(player) {
-        return '<button class="live-vol-sm ls-down-btn" onclick="window._liveScoreMinus(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.09);color:var(--text-muted);font-size:calc(clamp(1.1rem,4vw,1.6rem) * var(--live-btn-scale,1));font-weight:700;border-radius:calc(10px * var(--live-btn-scale,1));display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;border:1px solid rgba(255,255,255,0.08);" ontouchstart="this.style.background=\'rgba(255,255,255,0.18)\'" ontouchend="this.style.background=\'rgba(255,255,255,0.09)\'">▼</button>';
-      };
-
-      var portGamesRow = showGamesBox
-        ? '<div style="flex:0 0 auto;display:flex;align-items:center;width:100%;padding:clamp(4px,1vh,8px) clamp(8px,2vw,16px);">' +
-            '<div style="flex:1;"></div>' + gamesCenter +
-            '<div style="flex:1;display:flex;align-items:center;padding-left:10px;">' +
-              '<button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:38px;height:38px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;">' +
-                '<svg viewBox="0 0 24 24" width="28" height="28" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>' +
-              '</button>' +
-            '</div>' +
-          '</div>'
-        : '';
-
-      // Captura finishBtn dentro do layout e evita o append duplo abaixo
-      var portFinishRow = finishBtn;
-      finishBtn = '';
-
+      // v4.5.39: construtores agora são COMPARTILHADOS (definidos antes do split
+      // isLandscape) — _topBlock, _scoreHalf, _undoBar, _gameLabelRow, _portFinishRow.
       container.innerHTML =
         '<div style="display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;gap:0;">' +
           // Sets row (compacto, topo)
           setsRow +
           // Rótulo especial (TIE-BREAK, vencedor)
-          (gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '') +
-          // Games + Desfazer
-          portGamesRow +
+          _gameLabelRow +
+          // SETS + GAMES (topo)
+          _topBlock +
           // Times (fotos/ícones + nomes) — v4.0.9: a linha tem a ALTURA DO
           // CONTEÚDO (flex:0 0 auto) e NÃO encolhe (flex-shrink:0). Antes era
           // flex:2 (proporcional): quando o GAMES box ficava grande, a linha era
@@ -6523,25 +6595,18 @@ window._openLiveScoring = function(tId, matchId, opts) {
               _buildNameStack(rightTeam) +
             '</div>' +
           '</div>' +
-          // Placares — flex escala com --live-plate-scale
-          '<div style="flex:calc(2.8 * var(--live-plate-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
-            '<div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;">' + _buildPlate(leftTeam) + '</div>' +
-            '<div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;">' + _buildPlate(rightTeam) + '</div>' +
+          // Placar — v4.5.34: metades tocáveis por time (Apple Watch style).
+          // flex:4 (divide o espaço com GAMES flex:2 e nomes flex:1.5 → a tinta
+          // não desperdiça, sobra vai pros outros infos). A metade é o botão +1.
+          '<div style="flex:4;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
+            _scoreHalf(leftTeam) + _scoreHalf(rightTeam) +
           '</div>' +
-          // Botões ↑ — flex escala com --live-btn-scale
-          (!state.isFinished ? '<div style="flex:calc(3 * var(--live-btn-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
-            '<div style="flex:1;display:flex;">' + _portUpBtn(leftTeam) + '</div>' +
-            '<div style="flex:1;display:flex;">' + _portUpBtn(rightTeam) + '</div>' +
-          '</div>' : '') +
-          // Botões ↓ — flex escala com --live-btn-scale + safe-area
-          (!state.isFinished ? '<div style="flex:calc(1.5 * var(--live-btn-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px) calc(2px + env(safe-area-inset-bottom,0px));">' +
-            '<div style="flex:1;display:flex;">' + _portDownBtn(leftTeam) + '</div>' +
-            '<div style="flex:1;display:flex;">' + _portDownBtn(rightTeam) + '</div>' +
-          '</div>' : '') +
           // Dica de troca de lado (só com fixSides ativo)
           swapHint +
+          // Desfazer — ÚNICO botão, full-width, abaixo de tudo (compartilhado)
+          _undoBar +
           // Botão Encerrar Partida (apenas partidas casuais sem sets)
-          portFinishRow +
+          _portFinishRow +
         '</div>';
 
       // v2.2.16-beta: fit text to fill plate boxes and buttons
@@ -7555,7 +7620,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Duplas → o relógio pode oferecer o toggle "Re-sortear duplas".
       isDoubles: !!isDoubles,
       isFinished: !!state.isFinished,
-      winner: state.winner || null
+      winner: state.winner || null,
+      // v4.5.43: empate esperando decisão (prorrogar vs tie-break). O relógio
+      // mostra o prompt e devolve a intenção 'resolveTie'. Recorre a cada empate.
+      tieRulePending: !!state.tieRulePending,
+      tiedAt: (state.tieRulePending && cs) ? cs.gamesP1 : null
     };
   };
   // Empurra o estado atual pro relógio (no-op se a ponte não estiver ativa/web).
@@ -10175,8 +10244,10 @@ window._openCasualMatch = function(restoreOpts) {
     else parts.push('1-2-3');
     if (cfg.deuceRule) parts.push('AD');
     if (cfg.twoPointAdvantage !== false) {
+      // v4.5.42: 'ask' (perguntar a cada empate) é o PADRÃO → não polui o resumo.
+      // Só mostra quando a regra é diferente do padrão (tie-break direto / prorrogar fixo).
       var tr = cfg.tieRule || 'ask';
-      parts.push('Empate: ' + (_tieRuleLabels[tr] || tr));
+      if (tr !== 'ask') parts.push('Empate: ' + (_tieRuleLabels[tr] || tr));
     } else {
       parts.push('Sem vantagem de 2');
     }
@@ -10672,14 +10743,17 @@ window._openCasualMatch = function(restoreOpts) {
   // Returns the cardsHtml string (grid content only, no wrapper).
   window._buildCasualMatchCardsHtml = function(matches, cu) {
     function _pname(p, mDoc, isFirstT1) {
-      // v2.2.38-beta: o nome de cada jogador é o NOME REAL do slot. Só o slot do
-      // PRÓPRIO usuário (match por uid) usa o displayName atual dele.
-      // REMOVIDO o heurístico "isFirstT1 && createdBy===cu → displayName" — ele
-      // assumia que o 1º jogador do time 1 era o criador, mas com duplas
-      // SORTEADAS o 1º do time 1 quase nunca é o criador. Resultado: o nome
-      // de outra pessoa (ex: Nelson) era trocado pelo do criador (ex: Rodrigo)
-      // → "Rodrigo Barth / Rodrigo Barth" nas Últimas Partidas.
-      if (p.uid && cu.uid && p.uid === cu.uid && cu.displayName) return cu.displayName;
+      // v4.5.72: identidade-por-uid — o nome de cada jogador resolve do perfil vivo
+      // (users/{uid}); o nome gravado no doc da partida só sobra como fallback pra
+      // não ficar em branco (e é a identidade legítima do guest sem conta).
+      // v2.2.38-beta: REMOVIDO o heurístico "isFirstT1 && createdBy===cu → displayName"
+      // — assumia que o 1º do time 1 era o criador, mas com duplas SORTEADAS quase
+      // nunca é → trocava o nome de outra pessoa pelo do criador.
+      if (p.uid) {
+        var _live = (typeof window._nameForUid === 'function') ? window._nameForUid(p.uid) : '';
+        if (_live) return _live;
+        if (cu && p.uid === cu.uid && cu.displayName) return cu.displayName;
+      }
       return p.displayName || p.name || null;
     }
     function _teamBlock(st, players, score, win) {

@@ -518,15 +518,36 @@ window._cancelDrawResolution = function(tId) {
     if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); // limpa _drawingTid antes do re-render → botão volta a "Sortear"
     var t = window._findTournamentById(tId);
     if (t) {
+        // v4.5.6: cancelar ANTES do sorteio efetivo RESETA todas as decisões — restaura o
+        // elenco ao estado pré-sorteio (sem-dupla/pow2/standby moveram em memória), pra que
+        // sejam reavaliadas no próximo Sortear (pedido do dono). Snapshot vive fora do doc.
+        try {
+            var _snap = window._drawPrepSnapshots && window._drawPrepSnapshots[String(tId)];
+            if (_snap) {
+                if (_snap.participants) t.participants = _snap.participants;
+                if (_snap.waitlist) t.waitlist = _snap.waitlist;
+                if (_snap.standbyParticipants) t.standbyParticipants = _snap.standbyParticipants;
+                if (_snap.monarchWaitlist) t.monarchWaitlist = _snap.monarchWaitlist;
+                if (_snap.teamOrigins) t.teamOrigins = _snap.teamOrigins;
+                delete window._drawPrepSnapshots[String(tId)];
+            }
+        } catch (_eRestore) {}
         if (t._suspendedByPanel) t.status = t._previousStatus || 'open';
         // config "Fechadas": o confirm "Encerrar e Sortear" fechou as inscrições p/ DECIDIR
         // o sorteio (marcou _reopenIfDrawCancelled). Cancelar SEM sortear → REABRE. (Se o
         // sorteio completar, _commitInitialDraw limpa a flag e as inscrições ficam fechadas.)
         else if (t._reopenIfDrawCancelled) t.status = 'open';
         if (typeof window._clearDrawRuntimeFlags === 'function') window._clearDrawRuntimeFlags(t);
+        // v4.5.5: cancelar a resolução da transição de fase reseta o promote da próxima fase
+        // (contagem + flag de "já perguntei") → re-avançar começa do zero (pergunta promote de novo).
+        try {
+            var _pnIdx = (t.currentPhaseIndex || 0) + 1;
+            if (t.phases && t.phases[_pnIdx]) { delete t.phases[_pnIdx]._promoteAsked; delete t.phases[_pnIdx]._promoteLines; }
+            delete t._phaseResInfo;
+        } catch (e) {}
         if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') window.FirestoreDB.saveTournament(t);
     }
-    ['unified-resolution-panel','remainder-resolution-panel','removal-subchoice-panel','solo-resolution-panel','solo-manual-pair-panel','groups-config-panel','reopen-panel','p2-resolution-panel','final-review-panel'].forEach(function(id){ var el=document.getElementById(id); if(el) el.remove(); });
+    ['unified-resolution-panel','phase-promote-panel','remainder-resolution-panel','removal-subchoice-panel','solo-resolution-panel','solo-manual-pair-panel','groups-config-panel','reopen-panel','p2-resolution-panel','final-review-panel'].forEach(function(id){ var el=document.getElementById(id); if(el) el.remove(); });
     window._soloPairState = null;
     document.body.style.overflow = '';
     var c = document.getElementById('view-container');
@@ -812,6 +833,121 @@ window._showInactivePhasePanel = function(tId, inativos){
     document.body.appendChild(overlay);
 };
 
+// ============ PROMOVER LINHA (v4.5.5) — gate ANTERIOR à resolução de pow2 ============
+// Passo SEPARADO da pow2: em transição de fase multi-linha (ex.: Ouro/Prata), o organizador
+// decide (ou não) subir a melhor dupla da linha de baixo pra de cima ANTES de resolver a
+// potência de 2. OBJETIVO: eliminar o RESTO ÍMPAR — uma linha ímpar deixa 1 equipe sem
+// adversário. Promover (cima +1, baixo −1) transforma 25/25 (2 ímpares) em 26/24 (0 ímpares):
+// todos com adversário, gastando MENOS BYE/repescagem. Promover além disso (26/24 → 27/23)
+// volta a ímpar → PIORA, então só se oferece enquanto reduz linhas ímpares. Espelha o padrão
+// do gate de inativos: decide → grava na próxima fase → re-roda _advanceMultiPhase.
+
+// FONTE ÚNICA: promover ajuda? Promover sobe 1 da linha de baixo pra de cima (cima +1,
+// baixo −1) — inverte a paridade das DUAS. Como 2 promoções voltam à paridade inicial, é
+// uma decisão de 0 OU 1: só ajuda quando UMA promoção ZERA as linhas ímpares (tudo par).
+// Se não zerar (ex.: 3 linhas ímpares, ou só uma ímpar), promover não resolve → não oferece
+// (a pow2 cuida do resto). Usado pelo gate (advanceMultiPhase) E pelo painel — mesma regra.
+window._phasePromoteHelps = function(lines) {
+    lines = lines || [];
+    if (lines.length < 2) return false;
+    var _bottom = lines[lines.length - 1];
+    if (!_bottom || _bottom.size <= 1) return false; // motor nunca esvazia a de baixo
+    var _oddCount = function(ls){ return ls.reduce(function(a, l){ return a + ((l.size > 1 && (l.size % 2) === 1) ? 1 : 0); }, 0); };
+    if (_oddCount(lines) === 0) return false; // já está tudo par → nada a fazer
+    // simula 1 promoção: cima (linhas[0]) +1, baixo (última) −1.
+    var _after = lines.map(function(l, i){ return { size: (i === 0) ? l.size + 1 : (i === lines.length - 1 ? l.size - 1 : l.size) }; });
+    return _oddCount(_after) === 0; // 1 promoção deixa TUDO par
+};
+
+window._showPhasePromotePanel = function(tId) {
+    var t = window._findTournamentById(tId);
+    if (!t || !t._phaseResInfo) return;
+    var tIdSafe = String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var _idx = (t._phaseResInfo.nextIdx != null) ? t._phaseResInfo.nextIdx : ((t.currentPhaseIndex || 0) + 1);
+    var _lines = (t._phaseResInfo.lines || []).slice();
+    // Só chega aqui via gate quando _phasePromoteHelps===true (multi-linha + 1 promoção zera
+    // os ímpares). Guarda defensiva: se não ajuda, pula direto pro painel de pow2.
+    if (_lines.length < 2 || typeof window._phasePromoteHelps !== 'function' || !window._phasePromoteHelps(_lines)) {
+        if (t.phases && t.phases[_idx]) t.phases[_idx]._promoteAsked = true;
+        delete t._phaseResInfo;
+        if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+        return;
+    }
+    var _odd = function(s){ return s > 1 && (s % 2) === 1; };
+    var _lastI = _lines.length - 1;
+    // preview pós-promoção: cima (0) +1, baixo (última) −1.
+    var _afterSize = function(i){ return (i === 0) ? _lines[i].size + 1 : (i === _lastI ? _lines[i].size - 1 : _lines[i].size); };
+
+    var existing = document.getElementById('phase-promote-panel'); if (existing) existing.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'phase-promote-panel';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
+    document.body.style.overflow = 'hidden';
+
+    function _lineRow(l, i){
+        var role = (i === 0) ? 'top' : (i === _lastI ? 'bottom' : '');
+        var _now = l.size, _aft = _afterSize(i);
+        var badge = _odd(_now)
+            ? '<span style="font-size:0.68rem;color:#fca5a5;font-weight:700;margin-left:8px;">ímpar — 1 sem adversário</span>'
+            : '<span style="font-size:0.68rem;color:#6ee7b7;font-weight:700;margin-left:8px;">par ✓</span>';
+        var arrow = role === 'top' ? '<span style="color:#6ee7b7;font-weight:900;font-size:0.72rem;">▲ recebe 1</span>'
+                  : role === 'bottom' ? '<span style="color:#fca5a5;font-weight:900;font-size:0.72rem;">▼ cede 1</span>' : '';
+        var change = (_aft !== _now)
+            ? '<span style="font-size:0.9rem;color:var(--text-muted,#94a3b8);"> → </span><span style="font-size:1.3rem;font-weight:900;color:#6ee7b7;">' + _aft + '</span>'
+            : '';
+        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(251,191,36,0.25);border-radius:12px;padding:11px 14px;margin-bottom:8px;">' +
+            '<div style="min-width:0;"><span style="font-weight:800;color:var(--text-bright,#f8fafc);font-size:0.95rem;">' + window._safeHtml(l.label || l.dest || '') + '</span>' + badge + '</div>' +
+            '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;"><span style="font-size:1.3rem;font-weight:900;color:#fbbf24;">' + _now + '</span>' + change + arrow + '</div>' +
+        '</div>';
+    }
+
+    overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:28px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90vh;">' +
+        '<div style="background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:14px 1.4rem;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
+            '<div style="display:flex;align-items:center;gap:12px;">' +
+                '<span style="font-size:1.5rem;flex-shrink:0;">⬆️</span>' +
+                '<div style="min-width:0;">' +
+                    '<h3 style="margin:0;color:#fef3c7;font-size:1.1rem;font-weight:900;letter-spacing:-0.02em;">Promover linha?</h3>' +
+                    '<p style="margin:2px 0 0;color:#fde68a;font-size:0.75rem;opacity:0.9;">As linhas estão ímpares — 1 equipe fica sem adversário. Promover deixa tudo par.</p>' +
+                '</div>' +
+            '</div>' +
+        '</div>' +
+        '<div style="padding:16px 1.4rem;overflow-y:auto;">' +
+            '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);line-height:1.55;margin-bottom:14px;">A melhor dupla da linha de baixo sobe pra de cima (cima +1, baixo −1). Todas as linhas ficam <strong style="color:#6ee7b7;">pares</strong> → todo mundo tem adversário, gastando menos BYE/repescagem. Depois você resolve a potência de 2 de cada uma com os números já ajustados.</div>' +
+            _lines.map(function(l, i){ return _lineRow(l, i); }).join('') +
+            '<button onclick="window._spinButton&&window._spinButton(this,\'…\'); window._phasePromoteApply(\'' + tIdSafe + '\')" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;padding:13px 16px;border-radius:12px;font-weight:800;font-size:0.92rem;cursor:pointer;">⬆️ Promover — deixar tudo par</button>' +
+            '<button onclick="window._phasePromoteSkip(\'' + tIdSafe + '\')" style="width:100%;margin-top:10px;background:rgba(255,255,255,0.06);color:var(--text-bright,#f8fafc);border:1.5px solid rgba(255,255,255,0.2);padding:12px 16px;border-radius:12px;font-weight:700;font-size:0.88rem;cursor:pointer;">Não promover — resolver com BYE/repescagem</button>' +
+            '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="width:100%;margin-top:8px;background:transparent;color:var(--text-muted,#94a3b8);border:none;padding:8px;font-size:0.8rem;cursor:pointer;">Cancelar</button>' +
+        '</div>' +
+    '</div>';
+    document.body.appendChild(overlay);
+};
+
+// PROMOVER (sim) → 1 promoção (deixa tudo par) + marca decidido → segue pro painel de pow2.
+window._phasePromoteApply = function(tId) {
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    var _idx = (t._phaseResInfo && t._phaseResInfo.nextIdx != null) ? t._phaseResInfo.nextIdx : ((t.currentPhaseIndex || 0) + 1);
+    if (t.phases && t.phases[_idx]) { t.phases[_idx]._promoteLines = 1; t.phases[_idx]._promoteAsked = true; }
+    delete t._phaseResInfo;
+    var _p = document.getElementById('phase-promote-panel'); if (_p) _p.remove();
+    document.body.style.overflow = '';
+    if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+    if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+};
+
+// NÃO PROMOVER → mantém as linhas como estão (0 promoções) + marca decidido → painel de pow2.
+window._phasePromoteSkip = function(tId) {
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    var _idx = (t._phaseResInfo && t._phaseResInfo.nextIdx != null) ? t._phaseResInfo.nextIdx : ((t.currentPhaseIndex || 0) + 1);
+    if (t.phases && t.phases[_idx]) { t.phases[_idx]._promoteLines = 0; t.phases[_idx]._promoteAsked = true; }
+    delete t._phaseResInfo;
+    var _p = document.getElementById('phase-promote-panel'); if (_p) _p.remove();
+    document.body.style.overflow = '';
+    if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+    if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+};
+
 window.showUnifiedResolutionPanel = function(tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
@@ -1061,14 +1197,20 @@ window.showUnifiedResolutionPanel = function(tId) {
         let activeOptions = allOptions.filter(function(o) {
             if (excludedKeys.indexOf(o.key) !== -1) return false;
             if (t._phaseResInfo) {
-                // v4.4.111: "Promover linha" só faz sentido com 2+ linhas (sobe da pior pra melhor).
+                // v4.5.5: "Promover linha" NÃO aparece mais aqui. É um passo SEPARADO e
+                // ANTERIOR (gate _showPhasePromotePanel em advanceMultiPhase) — promover muda
+                // as contagens de cada linha, então tem que ser decidido ANTES da pow2 pra
+                // esta ver os números finais (26/24). Misturar as duas decisões confundia:
+                // escolher "promover" não escolhia a solução de pow2 (bug reportado). Este
+                // painel resolve SÓ a pow2, com as contagens já fixadas.
                 var _phaseAllowed = ['playin','standby','bye','exclusion'];
-                if ((t._phaseResInfo.lines || []).length >= 2) _phaseAllowed.push('promote');
                 if (_phaseAllowed.indexOf(o.key) === -1) return false;
                 if (o.key === 'bye' && _phaseNextIsDupla) return false;
                 return true;
             }
             if (o.key === 'bye' && _isDuplaElim) return false;
+            // "Promover linha" nunca aparece no painel de pow2 (é gate próprio, ver acima).
+            if (o.key === 'promote') return false;
             if (info.remainder > 0) return remainderKeys.indexOf(o.key) !== -1;
             return true;
         });
@@ -1270,23 +1412,12 @@ window.showUnifiedResolutionPanel = function(tId) {
         if (!t) return;
         if (!option) { if (typeof showNotification === 'function') showNotification(_t('predraw.adjustTitle'), _t('predraw.selectStrategy'), 'info'); return; }
 
-        // v4.x fase: grava a escolha na próxima fase e avança — UMA escolha vale pra
-        // todas as linhas. (Antes vivia num painel de fase separado, agora canônico aqui.)
+        // v4.x fase: grava a escolha de POW2 na próxima fase e avança — UMA escolha vale
+        // pra todas as linhas. Promover linha NÃO passa mais por aqui (gate próprio,
+        // _showPhasePromotePanel, decidido ANTES deste painel). Este painel resolve só a pow2.
         if (t._phaseResInfo) {
             var _pi = t._phaseResInfo;
             var _idx = (_pi.nextIdx != null) ? _pi.nextIdx : ((t.currentPhaseIndex||0)+1);
-            // v4.4.111: PROMOVER LINHA — não é uma resolução de chave; rebalanceia (sobe 1
-            // da linha de baixo pra de cima) e RE-AVALIA. Se ainda não fechar em pow2, o
-            // painel reaparece com as contagens novas pro organizador escolher BYE/repescagem
-            // (ou promover de novo). Ver project_phase_inactive_resolution.
-            if (option === 'promote') {
-                if (t.phases && t.phases[_idx]) t.phases[_idx]._promoteLines = (parseInt(t.phases[_idx]._promoteLines, 10) || 0) + 1;
-                delete t._phaseResInfo;
-                var _pp2 = document.getElementById('unified-resolution-panel'); if (_pp2) _pp2.remove();
-                document.body.style.overflow = '';
-                if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
-                return;
-            }
             if (t.phases && t.phases[_idx]) t.phases[_idx].bracketResolution = option;
             delete t._phaseResInfo;
             var _pp = document.getElementById('unified-resolution-panel'); if (_pp) _pp.remove();
@@ -1456,20 +1587,55 @@ window._soloCancel = function () {
     window._soloPairState = null;
     document.body.style.overflow = '';
 };
+// Mutator PURO (re-executável sobre o doc fresco): remove os sem-dupla de participants e,
+// se toWaitlist, os empurra pra waitlist (dedup por nome). Usado por _soloResolveWaitlist e
+// _soloResolveExclude via AppStore.mutate.
+window._soloMoveOut = function (tt, toWaitlist) {
+    var solos = window._listSoloEntries(tt);
+    if (!solos.length) return 0;
+    tt.participants = (Array.isArray(tt.participants) ? tt.participants : []).filter(function (p) {
+        var n = window._soloNameOf(p); return !n || !!window._entryTeamMembers(p); // mantém duplas (estrutura) + sem-nome
+    });
+    if (toWaitlist) {
+        if (!Array.isArray(tt.waitlist)) tt.waitlist = [];
+        solos.forEach(function (p) {
+            var n = window._soloNameOf(p);
+            if (!tt.waitlist.some(function (w) { var wn = window._soloNameOf(w); return wn && wn === n; })) tt.waitlist.push(p);
+        });
+    }
+    return solos.length;
+};
 window._soloResolveWaitlist = function (tId, isAberto) {
-    // mantém o comportamento atual (solos → lista de espera via _autoMoveSoloToWaitlist
-    // no re-call), mas agora CONSCIENTE.
+    // Escolha CONSCIENTE do organizador ("Lista de espera") — move os sem-dupla AGORA,
+    // mas SÓ NO DOC LOCAL (draw-time), NÃO persiste separado. Motivos:
+    //  (1) UX: a resolução de sem-dupla é um passo do SORTEIO e deve reaparecer a cada
+    //      Sortear enquanto houver avulsos no elenco. Persistir na hora removia os solos
+    //      pra sempre → o próximo Sortear pulava direto pra pow2 sem perguntar (bug reportado).
+    //  (2) Reversibilidade: se o sorteio não completa (cancela/erro), o elenco fica intacto.
+    // O move naturalmente vira permanente quando o sorteio COMMITA (o doc gravado já reflete
+    // o elenco reduzido). project_concurrency_safe_saves fica pro caminho de W.O., não aqui.
+    var t = window._findTournamentById(tId);
+    if (t) {
+        var moved = window._soloMoveOut(t, true);
+        if (moved > 0) {
+            try { window.AppStore.logAction(tId, moved + ' participante(s) sem dupla enviado(s) para a lista de espera'); } catch (_e) {}
+            if (typeof showNotification !== 'undefined') {
+                showNotification('⏱️ ' + moved + ' sem dupla', 'Enviado(s) para a lista de espera.', 'info');
+            }
+        }
+    }
     window._soloContinueDraw(tId, isAberto);
 };
 window._soloResolveExclude = function (tId, isAberto) {
     var t = window._findTournamentById(tId); if (!t) return;
     var solos = window._listSoloEntries(t);
+    if (!solos.length) { window._soloContinueDraw(tId, isAberto); return; }
     var names = solos.map(window._soloNameOf);
+    var _count = solos.length;
     showConfirmDialog('Excluir do torneio?', names.join(', '), function () {
-        t.participants = (Array.isArray(t.participants) ? t.participants : []).filter(function (p) {
-            var n = window._soloNameOf(p); return !n || !!window._entryTeamMembers(p); // remove só os solos
-        });
-        try { window.AppStore.logAction(tId, solos.length + ' participante(s) sem dupla excluído(s) do sorteio'); } catch (_e) {}
+        // Move só no doc LOCAL (draw-time) — mesma razão do waitlist acima.
+        window._soloMoveOut(t, false);
+        try { window.AppStore.logAction(tId, _count + ' participante(s) sem dupla excluído(s) do sorteio'); } catch (_e) {}
         window._soloContinueDraw(tId, isAberto);
     }, null, { type: 'warning', confirmText: 'Excluir', cancelText: 'Voltar' });
 };
@@ -2797,7 +2963,9 @@ window._handleP2Option = function (tId, option) {
                 });
                 t.p2Resolution = 'exclusion';
                 window.AppStore.logAction(tId, 'Exclusão: removidos ' + removeCount + ' últimos inscritos (' + removedNames.join(', ') + ')');
-                window.AppStore.sync();
+                // v4.5.7: SEM sync() antes do sorteio (clobberava a chave → sorteio-fantasma).
+                // A exclusão persiste no delta do _commitInitialDraw (preDraw usa o elenco
+                // ORIGINAL do snapshot de draw-prep como baseline). Ver _confirmP2Resolution.
                 var p2Panel = document.getElementById('p2-resolution-panel');
                 if (p2Panel) p2Panel.remove();
                 showNotification(_t('draw.removedBracket'), _t('draw.removedBracketMsg', {count: removeCount, bracket: info.lo}), 'warning');
@@ -3023,7 +3191,8 @@ window.toggleRegistrationStatus = function (tId) {
     var _hasDrawNow = (Array.isArray(t.matches) && t.matches.length > 0) ||
                       (Array.isArray(t.rounds) && t.rounds.length > 0) ||
                       (Array.isArray(t.groups) && t.groups.length > 0);
-    var _lateMode = (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
+    var _le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+    var _lateMode = (_le === 'standby' || _le === 'expand');
     if (_hasDrawNow && _lateMode && t.status !== 'finished') {
         if (t.status === 'closed') {
             t.status = 'active';
@@ -3509,7 +3678,13 @@ window._confirmP2Resolution = function (tId, option) {
 
     t.status = 'closed';
     window.AppStore.logAction(tId, actionMsg);
-    window.AppStore.sync();
+    // v4.5.7: NÃO chamar AppStore.sync() aqui — era a CAUSA do sorteio-fantasma. sync()
+    // faz saveTournament(t) que serializa o doc AGORA (com matches:[] — a chave ainda não
+    // foi gerada) e grava assíncrono; esse set podia CHEGAR DEPOIS do commitDrawTx e
+    // sobrescrever a chave por [] + status 'closed' → "sorteou com sucesso mas não mostra a
+    // chave, e o botão Sortear volta". generateDrawFunction logo abaixo persiste TUDO
+    // (status/p2Resolution/matches) atomicamente via _commitInitialDraw. Se o sorteio não
+    // efetivar, nada é gravado — condiz com "decisões transitórias até sortear".
 
     if (document.getElementById('p2-resolution-panel')) document.getElementById('p2-resolution-panel').remove();
     if (document.getElementById('unified-resolution-panel')) document.getElementById('unified-resolution-panel').remove();

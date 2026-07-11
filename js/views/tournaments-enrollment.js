@@ -156,7 +156,8 @@ function _checkEnrollmentEligibility(t, user) {
 
 // Helper: check if late enrollment to standby is allowed
 function _allowsLateEnrollment(t) {
-  var le = t.lateEnrollment || 'closed';
+  // valor EFETIVO da fase corrente (per-phase sobrepõe o top-level) — cada fase gerencia a sua.
+  var le = (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) || 'closed';
   return le === 'standby' || le === 'expand';
 }
 
@@ -316,7 +317,7 @@ function _enrollToStandby(t, tId, participantObj, callback) {
   // de espera" mas nada persistia no servidor (organizador nunca via, e o card
   // dele continuava "Inscrever-se"). Agora: rollback otimista + aviso real.
   window.FirestoreDB.saveTournament(t).then(function() {
-    var modeLabel = (t.lateEnrollment === 'expand') ? _t('enroll.modeExpand') : _t('enroll.modeStandby');
+    var modeLabel = ((window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) === 'expand') ? _t('enroll.modeExpand') : _t('enroll.modeStandby');
     if (typeof showNotification !== 'undefined') showNotification(_t('enroll.waitlistedTitle'), _t('enroll.waitlistedMsg', { name: newName, mode: modeLabel }), 'success');
     if (callback) callback();
   }).catch(function(e) {

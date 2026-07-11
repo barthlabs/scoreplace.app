@@ -21,6 +21,8 @@ struct ScoreState: Decodable {
     var isDoubles: Bool = false         // duplas → oferece o toggle "Re-sortear duplas"
     var isFinished: Bool = false
     var winner: Int? = nil
+    var tieRulePending: Bool = false    // empate esperando decisão (prorrogar/tie-break)
+    var tiedAt: Int? = nil              // games empatados (5, 6, 7…) no momento do prompt
 
     struct Server: Decodable { let team: Int; let name: String }
     struct Team: Decodable { let players: [String] }
@@ -28,7 +30,7 @@ struct ScoreState: Decodable {
     // Decoding tolerante: o snapshot sempre traz as chaves-base, mas `server` e
     // `winner` podem vir null e chaves opcionais (sets/matchId) podem faltar.
     enum CodingKeys: String, CodingKey {
-        case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isDoubles, isFinished, winner
+        case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isDoubles, isFinished, winner, tieRulePending, tiedAt
     }
     init() {}
     init(from decoder: Decoder) throws {
@@ -49,6 +51,8 @@ struct ScoreState: Decodable {
         isDoubles  = (try? c.decodeIfPresent(Bool.self, forKey: .isDoubles)) ?? false
         isFinished = (try? c.decodeIfPresent(Bool.self, forKey: .isFinished)) ?? false
         winner     = (try? c.decodeIfPresent(Int.self, forKey: .winner)) ?? nil
+        tieRulePending = (try? c.decodeIfPresent(Bool.self, forKey: .tieRulePending)) ?? false
+        tiedAt     = (try? c.decodeIfPresent(Int.self, forKey: .tiedAt)) ?? nil
     }
 
     // ── Acessores por TIME (1/2) ──

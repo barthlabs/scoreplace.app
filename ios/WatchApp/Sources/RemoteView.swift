@@ -45,6 +45,7 @@ struct RemoteView: View {
     var onPoint: (Int) -> Void = { _ in }
     var onUndo: () -> Void = {}
     var onReplay: (Bool) -> Void = { _ in }      // Bool = re-sortear duplas
+    var onResolveTie: (String) -> Void = { _ in } // "extend" (prorrogar) | "tiebreak"
     @State private var replayDismissed = false   // Cancelar esconde o prompt
     @State private var reshuffle = false         // toggle "Re-sortear duplas"
 
@@ -54,6 +55,10 @@ struct RemoteView: View {
     var body: some View {
         ZStack {
             mainContent
+            // Empate (5-5, 6-6, 7-7…) esperando decisão: cobre os botões +1 até
+            // o usuário escolher prorrogar ou ativar o tie-break. Recorre a cada
+            // empate enquanto ninguém vence por 2 (motor GSM = fonte única).
+            if state.tieRulePending && !state.isFinished { tieOverlay }
             if state.isFinished { winnerOverlay }   // fim de jogo cobre os botões +1
         }
         .onChange(of: state.isFinished) { _, finished in
@@ -158,6 +163,42 @@ struct RemoteView: View {
         }
         .buttonStyle(.plain)
         .padding(.bottom, 10)   // #3: sem isto o "Desfazer" era cortado pela borda inferior
+    }
+
+    // Empate → escolha do desempate (espelha o overlay do celular). ⚖️ + "Empate
+    // N–N" + Prorrogar (verde) / Tie-break (roxo). Cobre as metades → os toques
+    // +1 não valem enquanto pende. Recorre a cada empate até vencer por 2 ou
+    // ativar o tie-break — a recorrência é decidida no motor, não aqui.
+    private var tieOverlay: some View {
+        let tied = state.tiedAt ?? state.gamesFor(leftTeam)
+        return VStack(spacing: 0) {
+            Spacer(minLength: 4)
+            Text("⚖️").font(.system(size: 30))
+            Text("Empate \(tied)–\(tied)")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.spNameBlue)
+                .padding(.top, 2)
+            Text("Como desempatar?")
+                .font(.system(size: 11)).foregroundColor(.spMeta)
+                .padding(.top, 1)
+            Spacer(minLength: 6)
+            VStack(spacing: 7) {
+                Button(action: { onResolveTie("extend") }) {
+                    Text("Prorrogar").font(.system(size: 13, weight: .bold))
+                        .frame(maxWidth: .infinity).padding(.vertical, 9)
+                        .background(Color(hex: 0x10B981).opacity(0.9)).clipShape(Capsule())
+                }.buttonStyle(.plain).foregroundColor(Color(hex: 0x04342C))
+                Button(action: { onResolveTie("tiebreak") }) {
+                    Text("Tie-break").font(.system(size: 13, weight: .bold))
+                        .frame(maxWidth: .infinity).padding(.vertical, 9)
+                        .background(Color(hex: 0xA855F7).opacity(0.9)).clipShape(Capsule())
+                }.buttonStyle(.plain).foregroundColor(.white)
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.spBg.ignoresSafeArea())   // opaco: bloqueia os +1 até decidir
     }
 
     // Tela de fim de jogo: 🏆 + nomes do time vencedor (cor do time) ou "Empate",

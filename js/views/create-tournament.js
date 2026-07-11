@@ -330,57 +330,16 @@ function setupCreateTournamentModal() {
                   <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseStart')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
-                      <input type="date" class="form-control" id="tourn-start-date" aria-label="Data de início da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._checkWeather(); window._updateLigaRoundsTag && window._updateLigaRoundsTag(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
-                      <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
+                      <input type="date" class="form-control" id="tourn-start-date" aria-label="Data de início da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._checkWeather(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
+                      <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
                     </div>
                   </div>
                   <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseEnd')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
-                      <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
-                      <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
+                      <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
+                      <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
                     </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Agendamento de Sorteios (Liga/Pontos Corridos) — logo abaixo das Datas (v2.6.48); visibilidade via _onFormatoChange -->
-              <!-- v3.1.18: box do Agendamento (verde) com o "Sorteio manual" ANINHADO dentro (box dentro do box) -->
-              <div id="liga-draw-schedule" style="display:none; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 1rem;">
-                  <p style="margin: 0 0 0.25rem; font-size: 0.75rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.drawSchedule')}</p>
-                  <p style="margin: 0 0 0.55rem; font-size: 0.72rem; color: var(--text-muted); line-height:1.45;">Indique o <b>intervalo de repetição</b> ou o <b>número de rodadas</b> — o sistema calcula o outro de acordo.</p>
-                  <p style="margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--text-bright); font-weight: 600;">Primeiro Sorteio</p>
-                  <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:0.5rem;">
-                    <div class="form-group" style="margin:0;flex:0 0 auto;">
-                      <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.dateLabel')}</label>
-                      <input type="date" class="form-control" id="liga-first-draw-date" style="width:175px;padding:6px 8px;font-size:0.85rem;" onchange="window._syncLigaDrawDateToStart(); window._updateLigaRoundsTag && window._updateLigaRoundsTag(); window._updateLigaDrawExplain && window._updateLigaDrawExplain()">
-                    </div>
-                    <div class="form-group" style="margin:0;flex:0 0 auto;">
-                      <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.timeLabel')}</label>
-                      <input type="time" class="form-control" id="liga-first-draw-time" value="19:00" style="width:100px;padding:6px 8px;font-size:0.85rem;" onchange="window._syncLigaDrawDateToStart(); window._updateLigaRoundsTag && window._updateLigaRoundsTag(); window._updateLigaDrawExplain && window._updateLigaDrawExplain()">
-                    </div>
-                    <div class="form-group" style="margin:0;flex:0 0 auto;">
-                      <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.repeatEvery')}</label>
-                      <div style="display:flex;align-items:center;gap:4px;">
-                        <input type="number" class="form-control" id="liga-draw-interval" min="1" max="90" value="7" style="width:55px;padding:6px 8px;font-size:0.85rem;text-align:center;" oninput="window._updateLigaRoundsTag && window._updateLigaRoundsTag(); window._updateLigaDrawExplain && window._updateLigaDrawExplain()">
-                        <span style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap;">${_t('create.daysUnit')}</span>
-                      </div>
-                    </div>
-                    <!-- v3.1.17: rodadas EDITÁVEL — rodadas>1 calcula o INTERVALO (dias entre sorteios) a partir da janela 1º sorteio → fim da fase -->
-                    <div class="form-group" id="liga-rounds-group" style="margin:0;margin-left:18px;flex:0 0 auto;display:none;">
-                      <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;color:#34d399;">Rodadas</label>
-                      <div style="display:flex;align-items:center;gap:4px;">
-                        <input type="number" class="form-control" id="liga-rounds-input" min="1" max="60" style="width:62px;min-height:40px;padding:6px 8px;font-size:0.85rem;text-align:center;font-weight:700;color:#34d399;background:rgba(16,185,129,0.10);border-color:rgba(16,185,129,0.45);box-sizing:border-box;" oninput="window._applyLigaRoundsToEnd && window._applyLigaRoundsToEnd()" title="Digite o nº de rodadas — o intervalo entre sorteios é calculado sozinho a partir do fim da fase">
-                        <span style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap;">rodadas</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div id="liga-draw-explain" style="font-size:0.72rem; color: var(--text-muted); line-height:1.45; margin-top:2px;"></div>
-                  <!-- Sorteio manual — box ANINHADO dentro do Agendamento (v3.1.18) -->
-                  <div style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.28); border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.6rem;">
-                    <div class="toggle-row" style="margin:0;">
-                    <div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">${_t('create.manualDraw')}</span><div class="toggle-desc">${_t('create.manualDrawDesc')}</div></div></div>
-                    <label class="toggle-switch"><input type="checkbox" id="liga-manual-draw"><span class="toggle-slider"></span></label>
                   </div>
                 </div>
               </div>
@@ -1421,7 +1380,7 @@ function setupCreateTournamentModal() {
     });
     // Config específica de Liga/Suíço (season/inatividade/agendamento) que o format2 ainda não
     // cobre guarda inputs escondidos que _onFormatoChange toca → ESCONDE (não remove).
-    ['suico-fields', 'liga-fields', 'liga-draw-schedule', 'suico-draw-schedule-fields', 'game-type-desc']
+    ['suico-fields', 'liga-fields', 'suico-draw-schedule-fields', 'game-type-desc']
       .forEach(function (id) { Array.prototype.forEach.call(document.querySelectorAll('#' + id), function (el) { el.style.setProperty('display', 'none', 'important'); }); });
     // v4.4.9: os toggles de FORMAÇÃO DE DUPLAS ficam VISÍVEIS (o dono quer os detalhados):
     // "Times Sorteados Separados dos Montados" (#mixed-pairing-container) vai LOGO ABAIXO
@@ -2408,10 +2367,6 @@ function setupCreateTournamentModal() {
     _sd('suico-fields', isSuico ? 'block' : 'none');
     _sd('liga-fields', isLiga ? 'block' : 'none');
     // v2.6.48: Agendamento de Sorteios foi extraído do #liga-fields pra logo abaixo
-    // das "Datas da fase" — visibilidade controlada aqui (só Liga/Pontos Corridos).
-    var _dsEl = document.getElementById('liga-draw-schedule');
-    if (_dsEl) _dsEl.style.display = isLiga ? 'block' : 'none';
-    if (isLiga && typeof window._updateLigaRoundsTag === 'function') setTimeout(window._updateLigaRoundsTag, 0);
     _sd('suico-draw-schedule-fields', isSuico ? 'block' : 'none');
     _sd('elim-settings', (isElim || isGrupos) ? 'block' : 'none');
     _sd('grupos-fields', isGrupos ? 'block' : 'none');
@@ -2585,135 +2540,6 @@ function setupCreateTournamentModal() {
         b.style.border = '2px solid rgba(255,255,255,0.18)'; b.style.background = 'rgba(255,255,255,0.06)'; b.style.color = 'var(--text-main)';
       }
     });
-  };
-
-  // Liga: sync draw date to tournament start date
-  window._syncLigaDrawDateToStart = function() {
-    var drawDate = document.getElementById('liga-first-draw-date').value;
-    var drawTime = document.getElementById('liga-first-draw-time').value;
-    if (drawDate) document.getElementById('tourn-start-date').value = drawDate;
-    if (drawTime) document.getElementById('tourn-start-time').value = drawTime;
-    window._recalcDuration();
-  };
-
-  // v2.1.21: tag de rodadas previstas no agendamento da Liga — calcula quantos
-  // sorteios cabem do 1º sorteio até o fim do torneio, no intervalo definido.
-  // rodadas = floor((fim - 1ºsorteio) / intervalo_dias) + 1.
-  // v2.6.47: FORWARD — datas/intervalo → nº de rodadas (preenche o campo editável).
-  // Não sobrescreve enquanto o organizador está DIGITANDO no campo de rodadas.
-  window._updateLigaRoundsTag = function() {
-    var grp = document.getElementById('liga-rounds-group');
-    var input = document.getElementById('liga-rounds-input');
-    if (!grp || !input) return;
-    var dEl = document.getElementById('liga-first-draw-date');
-    var tEl = document.getElementById('liga-first-draw-time');
-    var iEl = document.getElementById('liga-draw-interval');
-    var endDEl = document.getElementById('tourn-end-date');
-    var endTEl = document.getElementById('tourn-end-time');
-    // v2.3.16: cálculo PRECISO por HORA EXATA (igual à barra roxa do progresso).
-    // v2.6.51: `first` = 1º sorteio (liga-first-draw-date) com FALLBACK pro Início
-    // da Fase (tourn-start-date) — assim mexer no Início da fase também recalcula.
-    var sdEl = document.getElementById('tourn-start-date');
-    var stEl = document.getElementById('tourn-start-time');
-    var firstDateVal = (dEl && dEl.value) || (sdEl && sdEl.value) || '';
-    var timeVal = (tEl && tEl.value) || (stEl && stEl.value) || '19:00';
-    var endTimeVal = (endTEl && endTEl.value) || '23:59';
-    var first = firstDateVal ? new Date(firstDateVal + 'T' + timeVal + ':00') : null;
-    var interval = iEl ? parseInt(iEl.value, 10) : 0;
-    var end = (endDEl && endDEl.value) ? new Date(endDEl.value + 'T' + endTimeVal + ':00') : null;
-    // O campo de rodadas aparece assim que há um 1º sorteio/início válido.
-    if (!first || isNaN(first.getTime())) {
-      grp.style.display = 'none';
-      if (window._updateLigaDrawExplain) window._updateLigaDrawExplain();
-      return;
-    }
-    grp.style.display = '';
-    // v2.6.53: SEM "Repetir a cada" (intervalo vazio/0) = sem repetição = 1 rodada.
-    // Antes o campo SUMIA; agora mostra 1 (apagar repetições não esconde as rodadas).
-    // v4.x: o nº de rodadas é DERIVADO do agendamento (1º sorteio + repetição + fim) —
-    // é o modelo do dono: define rodadas OU intervalo OU (início+repetição) e o resto sai
-    // sozinho. O cap/estimativa/avanço leem `_phasePlannedRounds` (mesma fórmula), não um
-    // valor cacheado. Aqui é só o DISPLAY.
-    if (!interval || interval < 1) {
-      if (document.activeElement !== input) input.value = 1;
-    } else if (end && !isNaN(end.getTime()) && end >= first) {
-      var intervalMs = interval * 24 * 60 * 60 * 1000;
-      var rounds = Math.floor((end - first) / intervalMs) + 1;
-      if (rounds < 1) rounds = 1;
-      if (document.activeElement !== input) input.value = rounds; // não brigar com a digitação
-    }
-    if (window._updateLigaDrawExplain) window._updateLigaDrawExplain();
-  };
-
-  // v3.1.17: helper compartilhado — dd/mm a partir de 'yyyy-mm-dd'.
-  window._fmtBrDate = function(s) {
-    if (!s) return '';
-    var p = String(s).split('-'); return (p.length === 3) ? (p[2] + '/' + p[1]) : s;
-  };
-  // v3.1.17: texto que EXPLICA a cadência de sorteios — pedido do dono. 3 estados:
-  //  • intervalo vazio/0 → 1 rodada única (sem repetição);
-  //  • rodadas>1 + janela (1º sorteio → fim da fase) → "a cada X dias" calculado;
-  //  • sem janela completa → instrução pra preencher.
-  window._drawScheduleExplainText = function(o) {
-    var iv = parseInt(o.interval, 10);
-    if (!iv || iv < 1) return 'Sem “repetir a cada” → <b>1 rodada única</b> (o sorteio não se repete).';
-    var rn = parseInt(o.rounds, 10) || 0;
-    if (rn > 1 && o.firstDate && o.endDate) {
-      return '<b>' + rn + ' rodadas</b> → 1 sorteio a cada <b>' + iv + ' dia' + (iv > 1 ? 's' : '') + '</b>, do 1º sorteio (' +
-        window._fmtBrDate(o.firstDate) + ') ao fim da fase (' + window._fmtBrDate(o.endDate) + '). O intervalo é calculado sozinho.';
-    }
-    return 'Defina o fim da fase e o nº de rodadas: o intervalo entre sorteios é calculado automaticamente.';
-  };
-  // v3.1.17: atualiza o texto explicativo da Fase 1 (static template).
-  window._updateLigaDrawExplain = function() {
-    var ex = document.getElementById('liga-draw-explain'); if (!ex) return;
-    var iEl = document.getElementById('liga-draw-interval');
-    var rEl = document.getElementById('liga-rounds-input');
-    var dEl = document.getElementById('liga-first-draw-date');
-    var sdEl = document.getElementById('tourn-start-date');
-    var endDEl = document.getElementById('tourn-end-date');
-    ex.innerHTML = window._drawScheduleExplainText({
-      interval: iEl && iEl.value, rounds: rEl && rEl.value,
-      firstDate: (dEl && dEl.value) || (sdEl && sdEl.value) || '', endDate: endDEl && endDEl.value
-    });
-  };
-  // v3.1.17: REVERSE do campo Rodadas — pedido do dono: rodadas>1 calcula o
-  // INTERVALO (dias entre sorteios) usando a janela 1º sorteio → fim da fase
-  // (interval = (fim − 1ºsorteio) / (rodadas − 1), inverso da convenção antiga).
-  // Sem fim da fase definido, mantém o comportamento legado (rodadas → fim da fase).
-  window._applyLigaRoundsToEnd = function() {
-    var input = document.getElementById('liga-rounds-input');
-    var dEl = document.getElementById('liga-first-draw-date');
-    var tEl = document.getElementById('liga-first-draw-time');
-    var iEl = document.getElementById('liga-draw-interval');
-    var endDEl = document.getElementById('tourn-end-date');
-    var endTEl = document.getElementById('tourn-end-time');
-    if (!input || !iEl) return;
-    var rounds = parseInt(input.value, 10);
-    var sdEl = document.getElementById('tourn-start-date');
-    var stEl = document.getElementById('tourn-start-time');
-    var firstDateVal = (dEl && dEl.value) || (sdEl && sdEl.value) || '';
-    var timeVal = (tEl && tEl.value) || (stEl && stEl.value) || '19:00';
-    var first = firstDateVal ? new Date(firstDateVal + 'T' + timeVal + ':00') : null;
-    if (first && !isNaN(first.getTime()) && rounds >= 2) {
-      var endTimeVal = (endTEl && endTEl.value) || '23:59';
-      var end = (endDEl && endDEl.value) ? new Date(endDEl.value + 'T' + endTimeVal + ':00') : null;
-      if (end && !isNaN(end.getTime()) && end > first) {
-        // NOVO: rodadas + janela → intervalo automático (dias entre sorteios).
-        var ivDays = Math.max(1, Math.round((end - first) / ((rounds - 1) * 86400000)));
-        if (document.activeElement !== iEl) iEl.value = ivDays;
-      } else {
-        // Legado: sem fim válido → rodadas definem o fim (1º sorteio + (N−1)×intervalo).
-        var interval = parseInt(iEl.value, 10);
-        if (interval && interval >= 1 && endDEl) {
-          var ed = new Date(first.getTime() + (rounds - 1) * interval * 86400000);
-          endDEl.value = ed.getFullYear() + '-' + String(ed.getMonth() + 1).padStart(2, '0') + '-' + String(ed.getDate()).padStart(2, '0');
-          if (endTEl) endTEl.value = timeVal;
-          if (typeof window._recalcDuration === 'function') window._recalcDuration();
-        }
-      }
-    }
-    window._updateLigaDrawExplain();
   };
 
   // ─── Category management ──────────────────────────────────────────────────
@@ -3575,24 +3401,10 @@ function setupCreateTournamentModal() {
     if (xContainer) xContainer.style.display = val === 'remove' ? 'block' : 'none';
   };
 
-  window._onLigaManualDrawChange = function () {
-    var manual = document.getElementById('liga-manual-draw');
-    var dateField = document.getElementById('liga-first-draw-date');
-    var timeField = document.getElementById('liga-first-draw-time');
-    var intervalField = document.getElementById('liga-draw-interval');
-    if (!manual) return;
-    var disabled = manual.checked;
-    if (dateField) dateField.disabled = disabled;
-    if (timeField) timeField.disabled = disabled;
-    if (intervalField) intervalField.disabled = disabled;
-  };
-
   // Wire up liga event listeners
   setTimeout(() => {
     const openEnrollEl = document.getElementById('liga-open-enrollment');
     if (openEnrollEl) openEnrollEl.addEventListener('change', window._updateRegDateVisibility);
-    const ligaManualEl = document.getElementById('liga-manual-draw');
-    if (ligaManualEl) ligaManualEl.addEventListener('change', window._onLigaManualDrawChange);
   }, 100);
 
   window._updateAutoCloseVisibility = function () {
@@ -4720,13 +4532,8 @@ function setupCreateTournamentModal() {
     }
     if (typeof window._onLigaBalancedToggle === 'function') window._onLigaBalancedToggle();
 
-    // Agendamento (shared field drawFirstDate, drawFirstTime, drawIntervalDays, drawManual)
-    if (t.format === 'Liga' && t.drawFirstDate) document.getElementById('liga-first-draw-date').value = t.drawFirstDate;
-    if (t.format === 'Liga' && t.drawFirstTime) document.getElementById('liga-first-draw-time').value = t.drawFirstTime;
-    // v2.6.55: restaura o intervalo; 0/null = sem repetição → campo VAZIO (não 7).
-    if (t.format === 'Liga') { var _ivLoad = document.getElementById('liga-draw-interval'); if (_ivLoad) _ivLoad.value = (t.drawIntervalDays && t.drawIntervalDays >= 1) ? t.drawIntervalDays : ''; }
-    if (t.format === 'Liga' && typeof window._updateLigaRoundsTag === 'function') setTimeout(window._updateLigaRoundsTag, 0); // v2.1.21: tag de rodadas no load
-    if (t.format === 'Liga') document.getElementById('liga-manual-draw').checked = !!t.drawManual;
+    // Agendamento (drawFirstDate/Time/IntervalDays/Manual): restaurado pelo format2 a partir
+    // de t.fmt2 (_f2MountInEditForm) — os campos legados escondidos de Liga foram extirpados.
     // Liga round format (derive from drawMode, keep hidden field in sync)
     if (t.ligaRoundFormat) {
       var _rfEl = document.getElementById('liga-round-format');
@@ -5259,33 +5066,9 @@ function setupCreateTournamentModal() {
           // v2.6.29: Fase Final de temporada não é mais marcada na criação. Agora é
           // uma fase do construtor de fases adicionada em sequência à Liga. Não
           // escrevemos playoffEnabled aqui — preserva o valor existente em ligas legadas.
-          // Agendamento
-          tourData.drawFirstDate = document.getElementById('liga-first-draw-date').value || '';
-          tourData.drawFirstTime = document.getElementById('liga-first-draw-time').value || '19:00';
-          // v2.6.55: intervalo VAZIO persiste como 0 = "sem repetição" (1 rodada).
-          // Antes o `|| 7` forçava 7 ao salvar → "os 7 dias voltavam" mesmo tendo
-          // apagado. 0 é tratado como sem-repetição no display e no motor de sorteio.
-          var _ligaIv = parseInt(document.getElementById('liga-draw-interval').value, 10);
-          tourData.drawIntervalDays = (_ligaIv >= 1) ? _ligaIv : 0;
-          tourData.drawManual = document.getElementById('liga-manual-draw').checked;
-          // v0.16.56: Liga com sorteio automático REQUER drawFirstDate.
-          // Se o usuário deixou em branco, defaulta pra amanhã 19:00 (sensível
-          // ao caso comum: criou hoje à noite, primeira rodada amanhã). Sem
-          // isso, a Liga ficava em estado inválido: poller pulava (`if
-          // (!t.drawFirstDate) continue;`), countdown não renderizava, e
-          // botão Sortear ficava escondido (v0.16.55) — org não via nada.
-          if (!tourData.drawManual && !tourData.drawFirstDate) {
-            var _tomorrow = new Date();
-            _tomorrow.setDate(_tomorrow.getDate() + 1);
-            var _yyyy = _tomorrow.getFullYear();
-            var _mm = String(_tomorrow.getMonth() + 1).padStart(2, '0');
-            var _dd = String(_tomorrow.getDate()).padStart(2, '0');
-            tourData.drawFirstDate = _yyyy + '-' + _mm + '-' + _dd;
-            if (!tourData.drawFirstTime) tourData.drawFirstTime = '19:00';
-            if (typeof showNotification === 'function') {
-              showNotification('🎲 Sorteio automático agendado', 'Primeira rodada: amanhã às ' + tourData.drawFirstTime + '. Você pode editar a data depois.', 'info');
-            }
-          }
+          // Agendamento (drawFirstDate/Time/IntervalDays/Manual): DERIVADO do format2 via
+          // Object.assign(tourData, _f2out.topLevel) mais abaixo — não se lê mais os campos
+          // legados escondidos de Liga (extirpados; o configurador único é o format2).
           tourData.ligaRoundFormat = document.getElementById('liga-round-format').value || 'standard';
           // Todos contra todos (round-robin) mode
           if (drawModeValue === 'round_robin') {
@@ -5390,7 +5173,7 @@ function setupCreateTournamentModal() {
         }
         try {
           var _f2sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || tourData.sport;
-          var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry });
+          var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry, lateEnrollment: tourData.lateEnrollment });
           Object.assign(tourData, _f2out.topLevel);
           tourData.phases = _f2out.phases;
           tourData.fmt2 = _f2cfg;
@@ -6545,7 +6328,6 @@ window._prefillFromTemplate = function(tpl) {
   _setV('liga-draw-interval', tpl.drawIntervalDays);
   _setV('suico-draw-interval', tpl.drawIntervalDays);
   if (tpl.drawManual !== undefined) { _setC('liga-draw-manual', tpl.drawManual); _setC('suico-draw-manual', tpl.drawManual); }
-  if (typeof window._updateLigaRoundsTag === 'function') { try { window._updateLigaRoundsTag(); } catch (e) {} }
 
   // Categorias do template — restaura TODAS as 4 dimensões (gênero, habilidade,
   // idade, personalizadas) nos hidden inputs E nos pills/chips, igual ao caminho

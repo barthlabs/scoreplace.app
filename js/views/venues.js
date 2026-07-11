@@ -663,10 +663,14 @@
     // quando o torneio não tem participantes carregados.
     function _vpush(uid, dn, photo) {
       // v2.1.68: displayName + photoURL reais pra AMIGOS aparecerem com nome/foto.
+      // v4.5.72: identidade-por-uid — o nome exibido resolve do perfil vivo por uid;
+      // o nome gravado no inscrito só sobra como fallback pra não deixar em branco
+      // (e é a identidade legítima do guest sem conta, que não tem uid).
+      var _live = (uid && typeof window._nameForUid === 'function') ? window._nameForUid(uid) : '';
       out.push({
         _virtual: true,
         uid: uid || null,
-        displayName: dn || '',
+        displayName: _live || dn || '',
         photoURL: photo || '',
         startsAt: start.getTime(),
         endsAt: endMs,
@@ -1024,7 +1028,7 @@
         if (klass === 'me' && p._id) {
           var docIdSafe = String(p._id).replace(/"/g, '&quot;');
           var pidSafe = String(pidForLeave).replace(/"/g, '&quot;');
-          leaveBtn = '<button onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + docIdSafe + '","' + pidSafe + '","checkin")\' style="background:transparent;color:#ef4444;border:none;padding:0;margin:0;font-weight:900;font-size:1.15rem;line-height:1;cursor:pointer;flex-shrink:0;" title="Sair do local">✕</button>';
+          leaveBtn = '<button type="button" class="cancel-x-btn" onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + docIdSafe + '","' + pidSafe + '","checkin")\' style="--cx-size:24px;" title="Sair do local">✕</button>';
         }
         var nowSports = Array.isArray(p.sports) ? p.sports : [];
         var icons = _sportsIcons(nowSports);
@@ -1155,7 +1159,7 @@
       if (klass === 'me' && p._id) {
         var upDocIdSafe = String(p._id).replace(/"/g, '&quot;');
         var upPidSafe = String(pidForCancel).replace(/"/g, '&quot;');
-        cancelBtn = '<button onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + upDocIdSafe + '","' + upPidSafe + '","planned")\' style="background:transparent;color:#ef4444;border:none;padding:0;margin:0;font-weight:900;font-size:1rem;line-height:1;cursor:pointer;flex-shrink:0;" title="Cancelar plano de ir">✕</button>';
+        cancelBtn = '<button type="button" class="cancel-x-btn" onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + upDocIdSafe + '","' + upPidSafe + '","planned")\' style="--cx-size:20px;" title="Cancelar plano de ir">✕</button>';
       }
       var chipSports = Array.isArray(p.sports) ? p.sports : [];
       var iconStr = _sportsIcons(chipSports);
@@ -2483,22 +2487,70 @@
     return window._haversineKm(a.lat, a.lng, b.lat, b.lng);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // CACHE DE SESSÃO PRO GOOGLE PLACES — controle de custo (v2.4.x, jul/2026)
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONTEXTO CRÍTICO (incidente de billing): cada _loadGoogleNearby dispara N
+  // buscas PARALELAS de Place.searchByText (Text Search, SKU "Pro" — os campos
+  // location + formattedAddress mantêm o tier caro; NÃO dá pra baixar pra
+  // Essentials sem perder o filtro de distância). E refresh() roda VÁRIAS vezes
+  // por entrada na tela: (1) inicial em render(), (2) quando o GPS resolve via
+  // _tryAutoGeolocate, (3) o retry de profile-loaded, (4) o safety-net de 5s.
+  // Resultado antes deste cache: ~4 refreshes × 14 termos = ~56 chamadas Places
+  // por ABERTURA da tela. Medido em prod: 45.663 chamadas em 9 dias (jun/jul
+  // 2026) → estourou o budget de R$100. Ver memória `project_places_api_cost`.
+  //
+  // O cache colapsa refreshes com a MESMA geografia (centro arredondado a ~110m
+  // + raio + modalidades) numa única leva de chamadas, com TTL de 10min. Sobra
+  // apenas 1 leva por entrada de tela; re-navegações e os retries reusam o
+  // cache. Persistido também em sessionStorage pra sobreviver ao reload do
+  // auto-update do PWA dentro da mesma aba.
+  var _googleNearbyCache = {};                 // key -> { at: ms, results: [] }
+  var _GOOGLE_CACHE_TTL_MS = 10 * 60 * 1000;   // 10 minutos
+  function _googleCacheKey(center, radiusKm, sports) {
+    var lat = Math.round(Number(center.lat) * 1000) / 1000; // grid ~110m
+    var lng = Math.round(Number(center.lng) * 1000) / 1000;
+    var arr = Array.isArray(sports) ? sports.slice() : (sports ? [sports] : []);
+    arr.sort();
+    return lat + ',' + lng + '|' + radiusKm + '|' + arr.join(',');
+  }
+  function _googleCacheGet(key) {
+    var now = Date.now();
+    var hit = _googleNearbyCache[key];
+    if (hit && (now - hit.at) < _GOOGLE_CACHE_TTL_MS) return hit.results;
+    try {
+      var raw = sessionStorage.getItem('sp_gplaces_' + key);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && (now - parsed.at) < _GOOGLE_CACHE_TTL_MS) {
+          _googleNearbyCache[key] = parsed; // promove pro cache em memória
+          return parsed.results;
+        }
+      }
+    } catch (_e) {}
+    return null;
+  }
+  function _googleCacheSet(key, results) {
+    var entry = { at: Date.now(), results: results };
+    _googleNearbyCache[key] = entry;
+    try { sessionStorage.setItem('sp_gplaces_' + key, JSON.stringify(entry)); } catch (_e) {}
+  }
+
   // Places nearby: lightweight discovery of external venues (not yet claimed
-  // em scoreplace). Free tier allows ~17k queries/month — debounced + gated
-  // em um centro real pra não queimar cota.
+  // em scoreplace). Gated em um centro real + cache de sessão (acima) pra não
+  // queimar cota.
   //
-  // Estratégia atual (v0.16.2+): **queries paralelas por termo** em vez de
-  // uma única query conjuntiva. Histórico: um único `searchByText` com
-  // "quadra esportiva clube arena tênis padel beach tennis pickleball" mais
-  // o label de localização aparentemente fazia o Google interpretar como
-  // match conjuntivo — venues cujo nome não contém "arena" ou "quadra"
-  // (ex: "Play Tennis Morumbi", "AB Academia de Tênis") eram deprioritizados
-  // ou dropados do ranking, mesmo estando mais próximos que resultados que
-  // apareciam. A cada termo rodamos uma busca focada e mergimos por placeId.
+  // Estratégia (v0.16.2+): **queries paralelas por termo** em vez de uma única
+  // query conjuntiva. Um único `searchByText` com "quadra esportiva clube arena
+  // tênis padel beach tennis pickleball" fazia o Google interpretar como match
+  // conjuntivo — venues cujo nome não contém "arena"/"quadra" (ex: "Play Tennis
+  // Morumbi", "AB Academia de Tênis") eram deprioritizados ou dropados. A cada
+  // termo rodamos uma busca focada e mergimos por placeId.
   //
-  // Custo: 9 termos = 9 API calls por refresh. Refresh é debounced + só roda
-  // quando o user muda filtros ou ganha GPS — tipicamente 5-30 refreshs por
-  // sessão → 45-270 calls/sessão. Bem dentro do free tier.
+  // CUSTO (v2.4.x): reduzido de 14 → 5 termos no modo sem-filtro e de 5 → 3 no
+  // modo com modalidade, + cache de sessão. Antes: ~56 chamadas/entrada de tela;
+  // agora: ~5 na 1ª entrada e ~0 nas repetições dentro do TTL. Se mexer aqui,
+  // NÃO reintroduza termos redundantes sem checar o impacto de billing.
   //
   // locationBias em vez de locationRestriction: vies SEM trava, então lugares
   // relevantes fora do raio também aparecem. O haversine client-side filtra
@@ -2506,10 +2558,15 @@
   // em áreas com poucos venues no raio estrito.
   //
   // NOTA: `state.location` (label textual do GPS/endereço) NÃO é mais anexado
-  // ao textQuery — locationBias já resolve a geografia, e textos como
-  // "Minha localização atual" poluíam o matching.
+  // ao textQuery — locationBias já resolve a geografia.
   async function _loadGoogleNearby(center, radiusKm, sports) {
     if (!center || !window.google || !window.google.maps || !window.google.maps.importLibrary) return [];
+
+    // Cache-first: colapsa os múltiplos refresh() por entrada de tela numa só
+    // leva de chamadas Places. Chave por geografia arredondada + raio + sports.
+    var _cacheKey = _googleCacheKey(center, radiusKm, sports);
+    var _cached = _googleCacheGet(_cacheKey);
+    if (_cached) return _cached;
     try {
       var placesLib = await google.maps.importLibrary('places');
       if (!placesLib || !placesLib.Place || typeof placesLib.Place.searchByText !== 'function') return [];
@@ -2519,29 +2576,29 @@
       // modalidades + tipos de estabelecimento + redes conhecidas. Cada
       // termo retorna ~10 candidatos distintos; o merge por placeId remove
       // overlap e dá coverage muito maior que uma única query.
+      // v2.4.x: enxugado de 14 → 5 termos por controle de custo (cada termo é
+      // 1 chamada Text Search "Pro"). Estes 5 dão a maior cobertura por real:
+      // 2 genéricos de estabelecimento (arena/clube pegam venues multi-esporte
+      // sem a modalidade no nome) + as 3 modalidades mais comuns na base. Os
+      // termos removidos (quadra de X, escola/academia de tênis, vôlei/futevôlei/
+      // tênis de mesa/pickleball) eram largamente redundantes com estes via o
+      // merge por placeId. NÃO reexpandir sem medir billing — ver
+      // memória `project_places_api_cost`.
       var baseTerms = [
-        'beach tennis',
-        'padel',
-        'tênis',
-        'pickleball',
-        'vôlei de praia',
-        'futevôlei',
-        'tênis de mesa',
-        'academia de tênis',
-        'escola de tênis',
         'arena esportiva',
         'clube esportivo',
-        'quadra de tênis',
-        'quadra de padel',
-        'quadra de beach tennis'
+        'beach tennis',
+        'padel',
+        'tênis'
       ];
       // Compat: aceita string (caminho legacy) OU array (multi-select da v0.16.3).
       var sportsArr = Array.isArray(sports) ? sports : (sports ? [sports] : []);
-      // Se há modalidades selecionadas, usamos elas como termos primários +
+      // Se há modalidades selecionadas, usamos elas como termos primários + 2
       // genéricos multi-esporte (pega venues que oferecem a modalidade mas não
-      // têm o nome dela, tipo "Clube X" que tem quadra de padel).
+      // têm o nome dela, tipo "Clube X" que tem quadra de padel). Reduzido de
+      // 4 → 2 genéricos por custo.
       var terms = sportsArr.length > 0
-        ? sportsArr.concat(['arena esportiva', 'clube esportivo', 'academia de tênis', 'escola de tênis'])
+        ? sportsArr.concat(['arena esportiva', 'clube esportivo'])
         : baseTerms;
 
       // v1.0.15-beta: locationBias → locationRestriction strict.
@@ -2561,7 +2618,7 @@
       var promises = terms.map(function(term) {
         return placesLib.Place.searchByText({
           textQuery: term,
-          fields: ['displayName', 'formattedAddress', 'location', 'id', 'types'],
+          fields: ['displayName', 'formattedAddress', 'location', 'id'],
           locationBias: {
             center: biasCenter,
             radius: biasRadiusM
@@ -2596,8 +2653,7 @@
           name: p.displayName || '',
           address: p.formattedAddress || '',
           lat: loc ? loc.lat() : null,
-          lng: loc ? loc.lng() : null,
-          types: p.types || []
+          lng: loc ? loc.lng() : null
         };
       });
       // Defense-in-depth client-side: mesmo com locationRestriction, dropa
@@ -2613,6 +2669,7 @@
       if (droppedFar > 0) {
         window._warn('[Places] dropped ' + droppedFar + ' results outside ' + maxKm + 'km radius');
       }
+      _googleCacheSet(_cacheKey, filtered); // memoiza pra colapsar refreshes repetidos
       return filtered;
     } catch (e) {
       window._warn('Places nearby err:', e && e.message);
@@ -3150,7 +3207,7 @@
           return '<div style="display:flex;align-items:center;gap:8px;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:10px;padding:6px 10px;box-sizing:border-box;">' +
               '<span style="flex:1;min-width:0;font-size:0.8rem;color:var(--text-bright);font-weight:600;">🗓️ ' + timeLbl + '</span>' +
               '<button class="btn btn-sm" onclick=\'window._venuesEditPlanPreferred("' + safePid + '","' + pid + '")\' style="background:#6366f1;color:#fff;border:none;font-weight:700;padding:4px 10px;font-size:0.72rem;" title="Editar esta ida">✏️</button>' +
-              '<button class="btn btn-sm" onclick=\'window._venuesCancelMyPresenceHere("' + pid + '","' + safePid + '","planned")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:4px 10px;font-size:0.72rem;" title="Cancelar esta ida">✕</button>' +
+              '<button type="button" class="cancel-x-btn" onclick=\'window._venuesCancelMyPresenceHere("' + pid + '","' + safePid + '","planned")\' style="--cx-size:24px;" title="Cancelar esta ida">✕</button>' +
             '</div>';
         }).join('') +
       '</div>';
@@ -3243,8 +3300,12 @@
     var slot = document.getElementById('venue-reviews-slot');
     if (!slot || !window.VenueDB) return;
     var cu = window.AppStore && window.AppStore.currentUser;
+    window.__venueReviewsPid = venue.placeId;
     var reviews = [];
     try { reviews = await window.VenueDB.loadReviews(venue.placeId, 50); } catch (e) {}
+    // Moderação (Apple Guideline 1.2): oculta avaliações de usuários bloqueados.
+    var _blk = (cu && Array.isArray(cu.blockedUids)) ? cu.blockedUids : [];
+    if (_blk.length) reviews = reviews.filter(function(r) { return _blk.indexOf(r.uid) === -1; });
     var count = reviews.length;
     var avg = 0;
     if (count > 0) {
@@ -3283,6 +3344,11 @@
       var delBtn = canDelete
         ? '<button title="Apagar" onclick="window._venuesDeleteReview(\'' + _safe(venue.placeId) + '\',\'' + _safe(r._id) + '\')" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem;padding:0 4px;opacity:0.5;">✕</button>'
         : '';
+      // Moderação (Guideline 1.2): denunciar avaliação + bloquear autor (só em reviews de terceiros).
+      var modBtns = (cu && cu.uid && r.uid && cu.uid !== r.uid)
+        ? '<button title="Denunciar avaliação" onclick="window._venuesReportReview(\'' + _safe(venue.placeId) + '\',\'' + _safe(r._id) + '\',\'' + _safe(r.uid) + '\')" style="background:transparent;border:none;cursor:pointer;font-size:0.78rem;padding:0 2px;opacity:0.55;">🚩</button>'
+          + '<button title="Bloquear usuário" onclick="window._blockUser(\'' + _safe(r.uid) + '\')" style="background:transparent;border:none;cursor:pointer;font-size:0.78rem;padding:0 2px;opacity:0.55;">🚫</button>'
+        : '';
       list += '<div style="display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--border-color);">' +
         avatar +
         '<div style="flex:1;min-width:0;">' +
@@ -3290,7 +3356,7 @@
             '<span style="font-weight:600;color:var(--text-bright);font-size:0.85rem;">' + _safe(name) + '</span>' +
             _starsHtml(r.rating, '0.8rem', false) +
             (when ? '<span style="color:var(--text-muted);font-size:0.72rem;">· ' + _safe(when) + '</span>' : '') +
-            delBtn +
+            delBtn + modBtns +
           '</div>' +
           (hasText ? '<div style="font-size:0.82rem;color:var(--text-main);margin-top:4px;line-height:1.45;white-space:pre-wrap;">' + _safe(r.text) + '</div>' : '') +
         '</div>' +
@@ -4242,6 +4308,34 @@
         if (v) _hydrateReviews(v);
       }
     }, null, { confirmText: 'Apagar', cancelText: 'Cancelar', type: 'danger' });
+  };
+
+  // Moderação (Apple Guideline 1.2): denunciar uma avaliação como ofensiva/inadequada.
+  window._venuesReportReview = function(placeId, reviewId, reviewedUid) {
+    if (!placeId || !reviewId) return;
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid) { if (window.showNotification) window.showNotification('Faça login', 'Entre para denunciar.', 'error'); return; }
+    if (typeof window.showConfirmDialog !== 'function') return;
+    window.showConfirmDialog(
+      'Denunciar esta avaliação?',
+      'Nossa equipe analisa denúncias em até 24 horas e remove conteúdo que viole as diretrizes. Você também pode bloquear o autor.',
+      async function() {
+        try {
+          await window.VenueDB.reportReview(placeId, reviewId, reviewedUid, '');
+          if (window.showNotification) window.showNotification('Denúncia enviada', 'Obrigado. Vamos analisar em até 24 horas.', 'success');
+        } catch (e) {
+          if (window.showNotification) window.showNotification('Não foi possível enviar', 'Tente novamente em instantes.', 'error');
+        }
+      },
+      null,
+      { confirmText: 'Denunciar', cancelText: 'Cancelar', type: 'danger' }
+    );
+  };
+
+  // Re-hidrata a lista de avaliações do local aberto (usado após bloquear usuário).
+  window._venuesRehydrateReviews = function() {
+    var pid = window.__venueReviewsPid;
+    if (pid) { try { _hydrateReviews({ placeId: pid }); } catch (e) {} }
   };
 
   // Bridge to tournament creation — stashes venue so create-tournament can read.

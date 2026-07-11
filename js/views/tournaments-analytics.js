@@ -1055,9 +1055,14 @@ window._buildActivityLog = function(tournamentId) {
         if (m.scoreP1 !== undefined && m.scoreP1 !== null) score = m.scoreP1 + ' × ' + (m.scoreP2 || 0);
         else if (m.score1 !== undefined && m.score1 !== null) score = m.score1 + ' × ' + (m.score2 || 0);
         var winner = m.winner || '';
-        var txt = '<b>' + window._safeHtml(p1) + '</b> vs <b>' + window._safeHtml(p2) + '</b>';
+        // v4.5.70: nomes por uid (perfil vivo); fallback ao nome só quando falta uid.
+        var _rs = function(nm, hint){ return (typeof window._resolveSideLive === 'function') ? window._resolveSideLive(t, nm, hint) : nm; };
+        var p1D = _rs(p1, m.p1Uid || m.team1Uids);
+        var p2D = _rs(p2, m.p2Uid || m.team2Uids);
+        var winnerD = winner ? _rs(winner, m.winnerUid || m.winnerUids || (winner === p1 ? (m.p1Uid || m.team1Uids) : (m.p2Uid || m.team2Uids))) : '';
+        var txt = '<b>' + window._safeHtml(p1D) + '</b> vs <b>' + window._safeHtml(p2D) + '</b>';
         if (score) txt += ' — ' + score;
-        if (winner) txt += ' → <span style="color:#4ade80;">' + window._safeHtml(winner) + '</span>';
+        if (winner) txt += ' → <span style="color:#4ade80;">' + window._safeHtml(winnerD) + '</span>';
         txt += ' <span style="opacity:0.5;">(' + item.label + ')</span>';
         events.push({ date: m.updatedAt || m.resultAt || null, icon: '⚔️', text: txt, color: '#94a3b8' });
     });

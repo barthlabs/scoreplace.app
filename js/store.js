@@ -1,4 +1,108 @@
-window.SCOREPLACE_VERSION = '4.5.1-beta';
+window.SCOREPLACE_VERSION = '1.0';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
+// ─────────────────────────────────────────────────────────────────────────────
+// Regra do dono (repetida, agora CANÔNICA): dado de torneio/inscrito guarda
+// APENAS uid. O nome/e-mail/telefone exibido é SEMPRE resolvido do perfil vivo
+// aqui — NUNCA de um campo gravado no inscrito (que apodrece → "Maira/Maira").
+// Única exceção física: participante SEM conta (guest) não tem uid nem perfil;
+// só nesse caso o nome vem de um campo (guestName). Onde HÁ uid, o nome gravado
+// NÃO é lido nem como fallback.
+//   _preloadUserProfiles(uids)  — carrega em lote os perfis por uid (cache).
+//   _nameForUid/_emailForUid/_phoneForUid(uid) — leem o cache (síncrono).
+//   _displayName(uid, guestName) — uid → nome vivo (vazio até hidratar); sem uid → guest.
+//   _hydrateUidNames(root) — pós-render, preenche [data-uid-name] com o nome vivo.
+window._userProfileCache = window._userProfileCache || {};
+window._userProfilePending = window._userProfilePending || {};
+window._preloadUserProfiles = function (uids) {
+  var db = window.FirestoreDB && window.FirestoreDB.db;
+  // v4.5.93: _userProfilePending guarda a PROMISE em voo (não só um flag). Um 2º caller
+  // pros mesmos uids AGUARDA a carga já em andamento em vez de resolver na hora com o cache
+  // ainda vazio. Era a corrida do "nome em branco": _ensureParticipantProfiles marcava os
+  // uids como pendentes, depois _hydrateUidNames chamava isto, os uids eram "pulados" (já
+  // pendentes) → resolvia IMEDIATO → setava textContent com _nameForUid ainda vazio, e o
+  // nome só aparecia se um _softRefreshView re-renderizasse (suprimido durante o arraste).
+  var waitFor = [];
+  var toLoad = [];
+  (uids || []).forEach(function (u) {
+    if (!(u && typeof u === 'string' && u.indexOf(' ') === -1)) return;
+    if (window._userProfileCache[u]) return;                       // já carregado
+    var pend = window._userProfilePending[u];
+    if (pend && typeof pend.then === 'function') { waitFor.push(pend); return; } // em voo → aguarda
+    toLoad.push(u);
+  });
+  if (!db) return Promise.resolve();
+  toLoad.forEach(function (uid) {
+    var pr = db.collection('users').doc(uid).get().then(function (s) {
+      var d = (s && s.exists) ? (s.data() || {}) : {};
+      window._userProfileCache[uid] = {
+        displayName: d.displayName || d.name || '',
+        email: d.email || '',
+        phone: d.phone || '',
+        photoURL: d.photoURL || ''
+      };
+    }).catch(function () {}).then(function () { delete window._userProfilePending[uid]; });
+    window._userProfilePending[uid] = pr;
+    waitFor.push(pr);
+  });
+  return waitFor.length ? Promise.all(waitFor) : Promise.resolve();
+};
+window._nameForUid = function (uid) {
+  if (!uid) return '';
+  var p = window._userProfileCache[uid];
+  if (p && p.displayName) return p.displayName;
+  // v4.5.67: também lê o cache do bracket (_profileNameByUid, populado por
+  // _preloadPlayerPhotos) — UMA leitura unificada, os dois caches valem.
+  if (window._profileNameByUid && window._profileNameByUid[uid]) return window._profileNameByUid[uid];
+  return '';
+};
+window._emailForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.email) || ''; };
+window._phoneForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.phone) || ''; };
+// v4.5.63: SEM fallback pra nome gravado. Quem tem uid → SÓ o nome vivo do perfil
+// (users/{uid}); vazio até o perfil carregar (a UI mostra "…" via CSS `[data-uid-name]:empty`
+// e re-renderiza quando chega — os perfis são PRÉ-REQUISITO do render, carregados junto
+// com o torneio). Guest (sem conta, sem uid) usa o nome dele — não é fallback, é a única
+// identidade que ele tem. Precisar de fallback = render rodou antes do dado: erro de
+// arquitetura, corrigido carregando o perfil antes, não mascarando com nome gravado.
+window._displayName = function (uid, guestName) {
+  // v4.5.90/91: uid sintético de placeholder ('jog_NN_…', criado antes da v4.5.90) NÃO é
+  // conta — não existe users/jog_…. O próprio uid codifica o número → deriva "Jogador NN"
+  // direto (o nome gravado pode ter sido apagado pelo strip do ITEM 3 → caía no email fake).
+  if (uid && String(uid).indexOf('jog_') === 0) {
+    var _phm = String(uid).match(/^jog_(\d+)/);
+    return _phm ? ('Jogador ' + _phm[1]) : (guestName || '');
+  }
+  if (uid) return window._nameForUid(uid);
+  return guestName || '';
+};
+window._hydrateUidNames = function (root) {
+  root = root || (typeof document !== 'undefined' ? document : null);
+  if (!root || !root.querySelectorAll) return Promise.resolve();
+  var els = root.querySelectorAll('[data-uid-name]');
+  if (!els.length) return Promise.resolve();
+  var uids = [];
+  els.forEach(function (e) { var u = e.getAttribute('data-uid-name'); if (u) uids.push(u); });
+  return window._preloadUserProfiles(uids).then(function () {
+    els.forEach(function (e) {
+      var u = e.getAttribute('data-uid-name');
+      var nm = window._nameForUid(u);
+      if (nm) e.textContent = nm;
+    });
+  });
+};
+
+// v4.5.58: helper CANÔNICO do símbolo de cancelar/remover — círculo vermelho,
+// borda branca, X branco (classe .cancel-x-btn em components.css). Use em TODO
+// cancelamento/remoção de ícone. onclickJs = conteúdo do onclick já escapado
+// (usar aspas simples dentro). opts.size = ex '20px' (default 24px via CSS).
+window._cancelXBtn = window._cancelXBtn || function(onclickJs, title, opts) {
+  opts = opts || {};
+  var t = String(title || 'Cancelar').replace(/"/g, '&quot;');
+  var sizeStyle = opts.size ? (' style="--cx-size:' + opts.size + ';"') : '';
+  return '<button type="button" class="cancel-x-btn" title="' + t + '" aria-label="' + t +
+    '" onclick="' + (onclickJs || '') + '"' + sizeStyle + '>✕</button>';
+};
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -761,13 +865,17 @@ window._devWhatsAppBtnHtml = function (opts) {
     if (window._pendingUpdateReload) { window._applyUpdate(false); if (!opts.force) return; }
     if (!opts.force && (now - window._lastUpdateCheck) < 60000) return;
     window._lastUpdateCheck = now;
-    fetch('/js/store.js?_t=' + now, { cache: 'no-store' }).then(function(r) {
+    // v4.5.96: ping BARATO — /version.txt (~20 bytes, gerado no prerender a cada deploy)
+    // em vez de baixar store.js (400KB) a cada check. URL `_swcheck` = o SW IGNORA (rede
+    // direta, sem cachear). cache:'no-store' evita o cache HTTP. Antes o Range em store.js
+    // não era honrado pelo hosting (voltava 400KB) → caro com checks frequentes.
+    fetch('/version.txt?_swcheck=' + now, { cache: 'no-store' }).then(function(r) {
       if (!r.ok) throw new Error('fetch failed');
       return r.text();
     }).then(function(txt) {
-      var m = txt.match(/SCOREPLACE_VERSION\s*=\s*'([^']+)'/);
-      if (m && m[1] && m[1] !== window.SCOREPLACE_VERSION) {
-        window._log('[AutoUpdate] New version:', m[1], '(running:', window.SCOREPLACE_VERSION + ').');
+      var v = String(txt || '').trim();
+      if (v && v.length < 40 && v !== window.SCOREPLACE_VERSION) {
+        window._log('[AutoUpdate] New version:', v, '(running:', window.SCOREPLACE_VERSION + ').');
         window._showUpdatePill(); // mostra a pílula mesmo se o reload auto for adiado
         window._applyUpdate(!!opts.force);
       }
@@ -785,9 +893,18 @@ window._devWhatsAppBtnHtml = function (opts) {
   window.addEventListener('pageshow', function() { window._checkForUpdate({}); });
   window.addEventListener('focus', function() { window._checkForUpdate({}); });
 
-  // 3. Periódico enquanto o app está aberto (timer pausa em background no iOS,
-  //    mas cobre sessões longas em desktop/Android).
-  setInterval(function() { window._checkForUpdate({}); }, 600000);
+  // 3. NAVEGAÇÃO no app (hashchange) — v4.5.96: o ponto cego era o usuário que fica
+  //    numa aba SÓ, sem trocar de janela/aba (visibilitychange nunca dispara), mas
+  //    navegando MUITO dentro do app (dashboard↔torneio↔chave). Cada troca de rota é
+  //    um momento SEGURO (sem modal/input) e frequente → aplica a versão nova sem o
+  //    usuário fazer nada. Update pendente é aplicado na hora (bypassa o throttle via
+  //    o guard `_pendingUpdateReload` no topo de _checkForUpdate).
+  window.addEventListener('hashchange', function() { window._checkForUpdate({}); });
+
+  // 4. Periódico enquanto o app está aberto (timer pausa em background no iOS, mas
+  //    cobre sessões longas paradas). v4.5.96: 10min → 2min (custo: 1 fetch leve de
+  //    store.js a cada 2min; ganho: janela máx de versão velha cai de 10 pra 2min).
+  setInterval(function() { window._checkForUpdate({}); }, 120000);
 })();
 
 // ─── Live countdown ticker ─────────────────────────────────────────────────
@@ -941,6 +1058,7 @@ window._softRefreshView = function() {
                   document.getElementById('casual-match-overlay') ||
                   document.getElementById('unified-resolution-panel') ||
                   document.getElementById('inactive-phase-panel') ||
+                  document.getElementById('phase-promote-panel') ||
                   document.getElementById('groups-config-panel') ||
                   document.getElementById('remainder-resolution-panel') ||
                   document.getElementById('vagas-draw-panel') ||
@@ -1114,14 +1232,36 @@ window._checkTopbarWrap = function() {
     return;
   }
 
-  // Helper: force reflow then check if content exceeds topbar bounds
+  // Helper: force reflow then check if content exceeds topbar bounds.
+  // v4.5.44: o menu é `justify-content:flex-end`, então quando o conteúdo
+  // transborda o ÚLTIMO filho (perfil/login) fica GRUDADO na borda direita e o
+  // aperto vaza pra ESQUERDA — checar só o último filho nunca detectava isso
+  // (bug: labels "Início/Notificações" cortados, sem hamburger). Agora 3 sinais,
+  // qualquer um dispara o próximo passo de encolhimento:
+  //   (1) conteúdo mais à direita passa da borda da topbar;
+  //   (2) o grupo de nav encostou no logo (sem folga → não cabe);
+  //   (3) um label VISÍVEL está sendo cortado pelo próprio max-width (ex.: com
+  //       --ui-scale alto "Notificações" precisa de +120px e clipa).
   function doesntFit() {
     void topbar.offsetHeight;
     var lastChild = menu.lastElementChild;
     if (!lastChild) return false;
     var topbarRight = topbar.getBoundingClientRect().right;
-    var contentRight = lastChild.getBoundingClientRect().right;
-    return contentRight > topbarRight + 2;
+    if (lastChild.getBoundingClientRect().right > topbarRight + 2) return true;
+    // (2) aperto na esquerda: nav pressionado contra o logo (gutter mín. 12px)
+    var logoEl = topbar.querySelector('.page-title');
+    var firstChild = menu.firstElementChild;
+    if (logoEl && firstChild &&
+        firstChild.getBoundingClientRect().left < logoEl.getBoundingClientRect().right + 12) {
+      return true;
+    }
+    // (3) label visível cortado — clientWidth>4 exclui os já ocultos (max-width:0)
+    var labels = menu.querySelectorAll('.topbar-nav-group .nav-label');
+    for (var li = 0; li < labels.length; li++) {
+      var lb = labels[li];
+      if (lb.clientWidth > 4 && lb.scrollWidth > lb.clientWidth + 1) return true;
+    }
+    return false;
   }
 
   // Reset all states
@@ -1828,6 +1968,28 @@ window._memberUidByName = function(t, name) {
         for (var s = 0; s < p.participants.length; s++) {
           var sub = p.participants[s];
           if (sub && (sub.displayName || sub.name || '').trim().toLowerCase() === target && sub.uid) return sub.uid;
+        }
+      }
+    }
+  }
+  // v4.5.84 (ITEM 3 · Fase 3): 2ª passada por nome VIVO (perfil) — só quando o nome GRAVADO não
+  // casou (a passada acima ganha → zero regressão). Resolve a pessoa quando a entrada não tem
+  // p1Name/p2Name/displayName gravado (pós-Fase-4). Vazio no autoDraw (sem _nameForUid).
+  var _live = (typeof window._nameForUid === 'function') ? window._nameForUid : null;
+  if (_live) {
+    for (var pi2 = 0; pi2 < pools.length; pi2++) {
+      var arr2 = pools[pi2];
+      for (var j = 0; j < arr2.length; j++) {
+        var q = arr2[j];
+        if (!q || typeof q !== 'object') continue;
+        if (q.uid && String(_live(q.uid) || '').trim().toLowerCase() === target) return q.uid;
+        if (q.p1Uid && String(_live(q.p1Uid) || '').trim().toLowerCase() === target) return q.p1Uid;
+        if (q.p2Uid && String(_live(q.p2Uid) || '').trim().toLowerCase() === target) return q.p2Uid;
+        if (Array.isArray(q.participants)) {
+          for (var s2 = 0; s2 < q.participants.length; s2++) {
+            var sub2 = q.participants[s2];
+            if (sub2 && sub2.uid && String(_live(sub2.uid) || '').trim().toLowerCase() === target) return sub2.uid;
+          }
         }
       }
     }
@@ -2667,23 +2829,61 @@ window._getStandbyPool = function (t) {
 // AO VIVO. As partidas guardam o nome do momento do sorteio; aqui achamos a ENTRADA cujo nome
 // guardado bate com a string e devolvemos _pName(entrada) (uid→perfil). Assim o bracket também
 // puxa do perfil — nada de string velha. BYE/TBD/FOLGA/informal-não-achado → mantém a string.
-window._resolveSideLive = function (t, sideStr) {
+window._resolveSideLive = function (t, sideStr, uidHint) {
   if (!t || typeof sideStr !== 'string') return sideStr || '';
   var s = sideStr.trim();
-  if (!s || s === 'TBD' || s === 'BYE' || s === 'FOLGA' || s === 'A definir') return sideStr;
-  var pools = [t.participants, t.standbyParticipants, t.waitlist];
-  for (var pi = 0; pi < pools.length; pi++) {
-    var arr = pools[pi];
-    if (!Array.isArray(arr)) continue;
-    for (var i = 0; i < arr.length; i++) {
-      var p = arr[i];
-      if (!p || typeof p !== 'object') continue;
-      if (String(p.displayName || '').trim() === s) return window._pName(p);
-      if (String(p.name || '').trim() === s) return window._pName(p);
-      if (p.p1Name && p.p2Name && (String(p.p1Name).trim() + ' / ' + String(p.p2Name).trim()) === s) return window._pName(p);
+  // sentinelas — nunca resolvem por identidade
+  if (!s || s === 'TBD' || s === 'BYE' || s === 'FOLGA' || s === 'W.O.' ||
+      s === 'A definir' || s === 'BYE (Avança Direto)') return sideStr;
+  // v4.5.71: STRICT UID. A identidade de um slot é o uid — nunca a string de nome.
+  // Resolve o nome VIVO por uid (cache de perfil OU lookup no pool POR UID). O
+  // antigo matching POR NOME foi REMOVIDO: era homônimo-inseguro (dois "Maira"
+  // casavam no primeiro) e mascarava writers sem uid. Quem tem uid SEMPRE resolve
+  // por uid; sem uid = guest (sem conta), e aí a string gravada É a identidade
+  // legítima dele (nunca fica velha — guest não renomeia perfil). Se um slot com
+  // uid não resolver (uid órfão / perfil não pré-carregado), retorna a string só
+  // como rede — isso sinaliza writer/preload a corrigir, não é o caminho normal.
+  // Ver [[project_match_slot_uid_identity]] / [[project_uid_audit_sweep]].
+  function _liveByUid(u) {
+    if (!u || typeof u !== 'string') return '';
+    var n = (typeof window._nameForUid === 'function' && window._nameForUid(u)) ||
+            (window._profileNameByUid && window._profileNameByUid[u]) || '';
+    if (n) return n;
+    // lookup no pool POR UID (síncrono; não depende do cache assíncrono de perfil).
+    var pools = [t.participants, t.standbyParticipants, t.waitlist];
+    for (var pi = 0; pi < pools.length; pi++) {
+      var arr = pools[pi]; if (!Array.isArray(arr)) continue;
+      for (var i = 0; i < arr.length; i++) {
+        var p = arr[i]; if (!p || typeof p !== 'object') continue;
+        if (p.uid === u) return (typeof window._pName === 'function') ? window._pName(p) : (p.displayName || p.name || '');
+        if (p.p1Uid === u) return (typeof window._nameForUid === 'function' && window._nameForUid(u)) || p.p1Name || '';
+        if (p.p2Uid === u) return (typeof window._nameForUid === 'function' && window._nameForUid(u)) || p.p2Name || '';
+      }
+    }
+    return '';
+  }
+  if (uidHint) {
+    if (Array.isArray(uidHint)) {
+      var _parts = s.split(' / ').map(function (x) { return x.trim(); }).filter(Boolean);
+      var _uids = uidHint.filter(Boolean);
+      // 1 uid por membro (counts batem) → resolve POSICIONAL: nome vivo por uid, fallback à
+      // parte gravada. Cobre 1v1 (conta) e dupla 100% de contas (nome vivo dos dois).
+      if (_parts.length > 0 && _uids.length === _parts.length) {
+        return _parts.map(function (part, i) { return _liveByUid(_uids[i]) || part; }).join(' / ');
+      }
+      // v4.5.98: counts NÃO batem — dupla com membro GUEST (placeholder/sem conta, sem uid).
+      // O uidHint só traz os uids de CONTA (_slotUids/_participantUids filtram vazios), então
+      // ele fica MENOR que o nº de membros. NUNCA dropar um membro do side: mantém a string
+      // gravada (foi resolvida no sorteio; guest não renomeia perfil). Antes o `_live.join`
+      // devolvia só os membros-conta → "Lucia" sem "Jogador 01".
+      if (_parts.length > 0) return _parts.join(' / ');
+    } else {
+      var _one = _liveByUid(uidHint);
+      if (_one) return _one;
     }
   }
-  return sideStr; // informal / não achado → mantém a string como está
+  // SEM uid → guest (a string É a identidade) OU rede pra uid órfão. NUNCA casa por nome.
+  return sideStr;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4247,7 +4447,7 @@ window._drawBtnBusy = function(btn, tId) {
   btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>Sorteando…';
   window._drawBusyBtn = s;
   // Fim = primeira tela de solução no DOM (qualquer painel da cadeia de sorteio).
-  var _PANELS = /resolution-panel|groups-config-panel|reopen-panel|final-review-panel|presence-draw-choice|solo-manual-pair-panel|removal-subchoice-panel/;
+  var _PANELS = /resolution-panel|groups-config-panel|reopen-panel|final-review-panel|presence-draw-choice|solo-manual-pair-panel|removal-subchoice-panel|phase-promote-panel/;
   if (typeof MutationObserver === 'function') {
     s.obs = new MutationObserver(function(muts) {
       for (var i = 0; i < muts.length; i++) {
@@ -4626,8 +4826,14 @@ window._peopleInList = function (arr) {
 // enquanto o cache ainda não carregou. Nunca regravamos nome no torneio.
 window._profileNameByUid = window._profileNameByUid || {};
 // resolve um uid pro nome do perfil (ao vivo); storedName/uid só fallback (informal/cache frio).
+// v4.5.85: lê os DOIS caches via _nameForUid (_userProfileCache do render + _profileNameByUid
+// do bracket) — pós-strip a entrada não tem mais storedName, então o resolvedor precisa achar
+// o nome vivo em QUALQUER cache preenchido (o render preenche _userProfileCache).
 window._displayNameForUid = function (uid, storedName) {
-  if (uid && window._profileNameByUid[uid]) return window._profileNameByUid[uid];
+  if (uid) {
+    var live = (typeof window._nameForUid === 'function') ? window._nameForUid(uid) : (window._profileNameByUid[uid] || '');
+    if (live) return live;
+  }
   return storedName || uid || '';
 };
 // Nome de EXIBIÇÃO canônico de uma entrada. Resolve CADA pessoa pelo SEU uid (perfil ao vivo);
@@ -4649,6 +4855,148 @@ window._entryDisplayName = function (p) {
   }
   // indivíduo
   return R(p.uid, p.displayName || p.name);
+};
+
+// ── ITEM 3 · Fase 4 (v4.5.85): SANITIZADOR DE IDENTIDADE NA PERSISTÊNCIA ──────────
+// Identidade de um inscrito = uid; o nome é resolvido do perfil VIVO (users/{uid}) em
+// TODA borda de display/sorteio/authz (Partes 0–13 + Fases 1–3). Logo, NÃO se grava o
+// nome na entrada de quem TEM conta — o campo gravado só apodrece e vira o "Maira/Maira".
+// Guest SEM conta (sem uid no slot) MANTÉM o nome: é a única identidade que ele tem.
+// Este helper roda no LIMITE DE PERSISTÊNCIA (firebase-db.js), SEMPRE sobre a CÓPIA que
+// vai pro Firestore — NUNCA muta o objeto em memória (display em sessão segue intacto).
+// Só toca os campos de nome da ENTRADA (name/displayName/p1Name/p2Name + sub-participants);
+// NÃO toca slots de partida (m.p1/m.p2) nem nada fora de participants/standby/waitlist.
+function _stripUidEntryNames(p) {
+  if (!p || typeof p !== 'object') return p;
+  var q = {}; for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) q[k] = p[k]; }
+  // v4.5.91: PLACEHOLDER (vaga "Jogador NN") NÃO é conta — nome É a identidade. Placeholders
+  // legados nasceram com uid sintético 'jog_NN_…' + email fake, e o strip abaixo apagava o
+  // nome (achando que tinha conta) → card virava o email. Aqui CURA pro formato limpo (só
+  // nome, sem uid/email) em vez de strippar; na próxima gravação some o uid fantasma.
+  var _phUid = q.uid && String(q.uid).indexOf('jog_') === 0;
+  if ((_phUid || q.isPlaceholder === true) && !q.p1Name && !q.p2Name) {
+    var _m = _phUid ? String(q.uid).match(/^jog_(\d+)/) : null;
+    var _cur = String(q.displayName || q.name || '').trim();
+    var _nm = /^(Jogador|Placeholder)\s+\d+$/i.test(_cur) ? _cur : (_m ? ('Jogador ' + _m[1]) : '');
+    if (_nm) { q.name = _nm; q.displayName = _nm; }
+    q.isPlaceholder = true;
+    if (_phUid) delete q.uid;
+    if (q.email && /^jogador\d+@scoreplace\.app$/i.test(String(q.email))) delete q.email;
+    return q;
+  }
+  var isPair = !!(q.p1Uid || q.p2Uid || q.p1Name || q.p2Name);
+  if (isPair) {
+    if (q.p1Uid) delete q.p1Name;          // membro 1 tem conta → nome vem do perfil
+    if (q.p2Uid) delete q.p2Name;          // membro 2 tem conta → idem
+    // name/displayName da dupla é o teamString derivado ("A / B") → o display reconstrói
+    // via _entryDisplayName (p1Uid vivo / p2Uid vivo / p*Name só do guest). Remove sempre
+    // que ao menos um membro tem conta (o outro, se guest, ainda resolve pelo p*Name mantido).
+    if (q.p1Uid || q.p2Uid) { delete q.name; delete q.displayName; }
+  } else if (q.uid) {                       // solo com conta
+    delete q.name; delete q.displayName;
+  }
+  if (Array.isArray(q.participants)) {
+    q.participants = q.participants.map(function (s) {
+      if (s && typeof s === 'object' && s.uid) {
+        var r = {}; for (var kk in s) { if (Object.prototype.hasOwnProperty.call(s, kk)) r[kk] = s[kk]; }
+        delete r.name; delete r.displayName; return r;
+      }
+      return s;
+    });
+  }
+  return q;
+}
+// Retorna CÓPIA do array com cada entrada sanitizada (entrada sem uid = guest, intacta).
+window._stripStoredNamesForUidEntries = function (arr) {
+  return Array.isArray(arr) ? arr.map(_stripUidEntryNames) : arr;
+};
+
+// v4.5.92: DEDUP + cura de PLACEHOLDERS ("Jogador NN"). O strip do ITEM 3 apagava o nome
+// dos placeholders legados (tinham uid sintético 'jog_NN_…'), então adicionar um 2º lote
+// não "via" os números já usados (nomes vazios) e RECOMEÇAVA do 01 → números repetidos
+// (dois "Jogador 02"). Aqui renumera cada placeholder pra um número ÚNICO e cura pro formato
+// limpo (só-nome, sem uid/email fake). SÓ renumera se o torneio NÃO foi sorteado — depois do
+// sorteio as partidas referenciam a vaga por NOME e renumerar quebraria o vínculo. Muta t in
+// place; retorna true se mudou algo. Número atual do placeholder = do nome "Jogador NN", ou
+// (nome apagado) do uid 'jog_NN' ou do email 'jogadorNN@scoreplace.app'.
+window._normalizePlaceholderNumbers = function (t) {
+  if (!t) return false;
+  var drawn = (Array.isArray(t.matches) && t.matches.length > 0) ||
+              (Array.isArray(t.rounds) && t.rounds.length > 0) ||
+              (Array.isArray(t.groups) && t.groups.length > 0);
+  if (drawn) return false;
+  var pools = [t.participants, t.standbyParticipants, t.waitlist];
+  var _phRe = /^(?:Jogador|Placeholder)\s+(\d+)$/i;
+  var isPh = function (p) {
+    return p && typeof p === 'object' && !p.p1Name && !p.p2Name &&
+      ((p.uid && String(p.uid).indexOf('jog_') === 0) || p.isPlaceholder === true ||
+       _phRe.test(String(p.displayName || p.name || '').trim()));
+  };
+  var curNum = function (p) {
+    var m, nm = String(p.displayName || p.name || '').trim();
+    if ((m = nm.match(_phRe))) return parseInt(m[1], 10);
+    if (p.uid && (m = String(p.uid).match(/^jog_0*(\d+)/))) return parseInt(m[1], 10);
+    if (p.email && (m = String(p.email).match(/^jogador0*(\d+)@scoreplace\.app$/i))) return parseInt(m[1], 10);
+    return 0;
+  };
+  // números "tomados" por participantes NÃO-placeholder chamados "Jogador X" (raro) — evita colisão
+  var taken = {};
+  pools.forEach(function (arr) {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function (p) {
+      if (isPh(p)) return;
+      var nm = (typeof p === 'string') ? p : (p && (p.displayName || p.name));
+      var mt = nm && String(nm).trim().match(_phRe); if (mt) taken[parseInt(mt[1], 10)] = 1;
+    });
+  });
+  var nextFree = function (pref) { var n = pref > 0 ? pref : 1; while (taken[n]) n++; return n; };
+  var changed = false;
+  pools.forEach(function (arr) {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function (p) {
+      if (!isPh(p)) return;
+      var num = nextFree(curNum(p)); taken[num] = 1;
+      var nm = 'Jogador ' + String(num).padStart(2, '0');
+      var hadJog = p.uid && String(p.uid).indexOf('jog_') === 0;
+      var hadEmail = p.email && /^jogador\d+@scoreplace\.app$/i.test(String(p.email));
+      if (p.name !== nm || p.displayName !== nm || hadJog || hadEmail || p.isPlaceholder !== true) changed = true;
+      p.name = nm; p.displayName = nm; p.isPlaceholder = true;
+      if (hadJog) delete p.uid;
+      if (hadEmail) delete p.email;
+    });
+  });
+  return changed;
+};
+
+// ── ESPELHO DO STRIP: REHIDRATA o nome na borda do SORTEIO (v4.5.85) ──────────────
+// O storage é só-uid (strip acima), mas o MOTOR de sorteio lê p.displayName/p1Name
+// direto (ex.: _getActiveLigaPlayers monta o pool por NOME e DESCARTA quem não tem
+// nome → Liga geraria 0 rodadas com entrada só-uid). Em vez de tocar N leituras do
+// motor (frágil), rehidrata o nome VIVO (por uid) nas entradas EM MEMÓRIA, transiente,
+// ANTES do sorteio. NÃO persiste (todo save re-sanitiza). Guest sem uid intocado.
+// `resolve(uid)` default = window._nameForUid (cliente lê os 2 caches; no autoDraw o
+// draw-core provê seu próprio _nameForUid via _profileNameByUid do servidor).
+window._rehydrateEntryNames = function (t, resolve) {
+  var R = resolve || (typeof window._nameForUid === 'function' ? window._nameForUid : function () { return ''; });
+  var pools = [t && t.participants, t && t.standbyParticipants, t && t.waitlist];
+  pools.forEach(function (arr) {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function (p) {
+      if (!p || typeof p !== 'object') return;
+      if (p.p1Uid && !p.p1Name) { var n1 = R(p.p1Uid); if (n1) p.p1Name = n1; }
+      if (p.p2Uid && !p.p2Name) { var n2 = R(p.p2Uid); if (n2) p.p2Name = n2; }
+      if ((p.p1Name || p.p2Name)) {           // dupla → reconstrói o teamString derivado
+        if (!p.displayName) p.displayName = [p.p1Name, p.p2Name].filter(Boolean).join(' / ');
+        if (!p.name) p.name = p.displayName;
+      } else if (p.uid && !p.displayName) {    // solo com conta
+        var n = R(p.uid); if (n) { p.displayName = n; if (!p.name) p.name = n; }
+      }
+      if (Array.isArray(p.participants)) p.participants.forEach(function (s) {
+        if (s && typeof s === 'object' && s.uid && !s.displayName) { var sn = R(s.uid); if (sn) { s.displayName = sn; if (!s.name) s.name = sn; } }
+      });
+    });
+  });
+  return t;
 };
 
 window._findTournamentById = function (tId) {
@@ -5054,14 +5402,27 @@ window.AppStore = {
     if (!t || !m) return [];
     var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
     var _uidsOf = (typeof window._participantUids === 'function') ? window._participantUids : function (p) { return (p && p.uid) ? [p.uid] : []; };
+    // Identidade CANÔNICA do slot por uid (v4.5.74) — o slot carrega o(s) uid(s)
+    // via _setSlot; o nome (m.p1) é só cache de display. Ler o uid direto resolve
+    // homônimo certo (nome igual, uids distintos) e sobrevive a nome divergente
+    // (o reconcile de nome foi removido em v4.5.73). É uid-first, NOME fallback:
+    // slot sem uid (guest/informal ou rodada LEGADA sorteada antes do trabalho de
+    // uid) cai no match por nome pra não parar de autorizar jogos antigos.
+    var _slot = (typeof window._slotUids === 'function') ? window._slotUids : null;
     var seen = {};
     ['p1', 'p2'].forEach(function (side) {
       var entry = m[side];
       if (!entry || entry === 'TBD' || entry === 'BYE') return;
-      // 1) casa a ENTRADA inteira (solo ou dupla registrada como "A / B")
+      // 1) IDENTIDADE ESTRUTURAL do slot (uid) — team*Uids → p*Uid → team*Obj.
+      if (_slot) {
+        var su = _slot(m, side);
+        if (su && su.length) { su.forEach(function (u) { if (u) seen[u] = 1; }); return; }
+      }
+      // 2) fallback POR NOME — só quando o slot NÃO tem uid (guest/legado).
+      // 2a) casa a ENTRADA inteira (solo ou dupla registrada como "A / B")
       var p = parts.find(function (pp) { return typeof pp === 'object' && (pp.displayName || pp.name || '') === entry; });
       if (p) { _uidsOf(p).forEach(function (u) { if (u) seen[u] = 1; }); return; }
-      // 2) fallback: dupla cujo slot mostra "A / B" mas cada membro é participante solo
+      // 2b) dupla cujo slot mostra "A / B" mas cada membro é participante solo
       var members = entry.indexOf('/') !== -1 ? entry.split('/').map(function (n) { return n.trim(); }) : [entry];
       members.forEach(function (nm) {
         var mp = parts.find(function (pp) { return typeof pp === 'object' && (pp.displayName || pp.name || '') === nm; });
@@ -5229,10 +5590,10 @@ window.AppStore = {
             window._markBootReady(3500, 'dash-poller');
           };
           // Auto-scroll: tratado pelo renderDashboard com 600ms após render.
-          // Auto-fix stale names after tournaments are loaded (no currentUser check needed)
-          if (typeof window._autoFixStaleNames === 'function') {
-            window._autoFixStaleNames().catch(function(e) { window._warn('Auto-fix stale names error:', e); });
-          }
+          // v4.5.72: _autoFixStaleNames removido — sob identidade-por-uid o render
+          // resolve o nome vivo do perfil (users/{uid}) e nunca lê o nome gravado
+          // no inscrito, então reescrever nomes velhos virou trabalho morto (~105
+          // reads/carga).
           // Auto-close tournaments whose registration deadline has passed
           window._autoCloseExpiredEnrollments();
           // Recupera adminEmails/memberEmails apagados pelo bug v1.6.66
@@ -5704,6 +6065,8 @@ window.AppStore = {
         if (Array.isArray(profile.friends)) this.currentUser.friends = profile.friends;
         if (Array.isArray(profile.friendRequestsSent)) this.currentUser.friendRequestsSent = profile.friendRequestsSent;
         if (Array.isArray(profile.friendRequestsReceived)) this.currentUser.friendRequestsReceived = profile.friendRequestsReceived;
+        // Moderação (Guideline 1.2): usuários bloqueados — persiste entre sessões.
+        if (Array.isArray(profile.blockedUids)) this.currentUser.blockedUids = profile.blockedUids;
         // Presence settings — previously set on currentUser via profile save but
         // never actually persisted to Firestore (save payload omitted them).
         // v0.16.5 adds save+load for these so the user's visibility/mute/auto
@@ -6483,7 +6846,10 @@ window._ensureEnrollSeqs = function(t) {
   function alloc(){ while (used[nf]) nf++; used[nf] = 1; return nf; }
   arr.forEach(function(p){
     if (!p || typeof p !== 'object') return; // string legada: tratada on-the-fly no map
-    if (p.p1Name && p.p2Name) {
+    // v4.5.95: dupla por ESTRUTURA = (p1Uid|p1Name) && (p2Uid|p2Name). Antes exigia
+    // p1Name && p2Name, mas o strip do ITEM 3 apaga o nome de quem tem uid → dupla de
+    // contas reais caía no ramo solo e o 2º membro ficava sem número de inscrição.
+    if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
       if (p.p1Seq == null) p.p1Seq = alloc();
       if (p.p2Seq == null) p.p2Seq = alloc();
     } else if (p.enrollSeq == null) {
@@ -6493,18 +6859,27 @@ window._ensureEnrollSeqs = function(t) {
 };
 window._buildEnrollOrderMap = function(t) {
   if (typeof window._ensureEnrollSeqs === 'function') window._ensureEnrollSeqs(t);
-  var map = {};
   var arr = Array.isArray(t.participants) ? t.participants : [];
   var maxSeq = 0;
   arr.forEach(function(p){ if (p && typeof p === 'object') [p.enrollSeq, p.p1Seq, p.p2Seq].forEach(function(s){ if (s != null && s > maxSeq) maxSeq = s; }); });
   var strNext = maxSeq;
-  function put(uid, name, seq){ if (seq == null) return; if (uid) map['u:'+uid] = seq; if (name) map['n:'+String(name).trim().toLowerCase()] = seq; }
+  // v4.5.91: número exibido = RANK DENSO (1..N na ordem do enrollSeq), não o enrollSeq bruto.
+  // Remover um inscrito re-numera os demais sem deixar buraco (o que era 7 vira 6…). O
+  // enrollSeq guardado segue estável (ordem original); só o número mostrado é compactado.
+  var persons = []; // { keys:[u:uid, n:nome], seq }
+  function add(uid, name, seq){ if (seq == null) return; var keys=[]; if (uid) keys.push('u:'+uid); if (name) keys.push('n:'+String(name).trim().toLowerCase()); if (keys.length) persons.push({ keys: keys, seq: seq }); }
   arr.forEach(function(p){
-    if (typeof p === 'string') { String(p).split(' / ').forEach(function(nm){ nm = nm.trim(); if (nm) put(null, nm, ++strNext); }); return; }
+    if (typeof p === 'string') { String(p).split(' / ').forEach(function(nm){ nm = nm.trim(); if (nm) add(null, nm, ++strNext); }); return; }
     if (!p || typeof p !== 'object') return;
-    if (p.p1Name && p.p2Name) { put(p.p1Uid, p.p1Name, p.p1Seq); put(p.p2Uid, p.p2Name, p.p2Seq); }
-    else { put(p.uid, p.displayName || p.name, p.enrollSeq); }
+    // v4.5.95: dupla por ESTRUTURA (uid OU nome) — o strip do ITEM 3 apaga p1Name/p2Name de
+    // quem tem uid; exigir os dois nomes fazia a dupla cair no ramo solo e o 2º membro (Denise,
+    // Flávia…) ficar SEM número de inscrição. Cada membro entra pelo seu uid+seq.
+    if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) { add(p.p1Uid, p.p1Name, p.p1Seq); add(p.p2Uid, p.p2Name, p.p2Seq); }
+    else { add(p.uid, p.displayName || p.name, p.enrollSeq); }
   });
+  persons.sort(function(a, b){ return a.seq - b.seq; });
+  var map = {};
+  persons.forEach(function(entry, i){ var rank = i + 1; entry.keys.forEach(function(k){ if (map[k] == null) map[k] = rank; }); });
   return map;
 };
 // nº de inscrição de UMA pessoa (1-based) — uid primeiro, nome como fallback.
@@ -6553,22 +6928,32 @@ window._enrollNumberBadge = function(num, side) {
   // transbordava o próprio box e a borda do card (overflow:hidden) cortava. Fix: `textLength`
   // = largura da viewBox (lengthAdjust ajusta espaçamento/glifo) trava a largura, e a viewBox
   // tem largura por dígito generosa (60) — o número nunca vaza, nem na direita nem na esquerda.
-  // height 52% + folga vertical (medido: ~12px topo/base, livre dos cantos arredondados).
+  // v4.5.x: CANÔNICO = 60% da altura do card (centralizado vertical → ~20% de folga topo/base),
+  // como o dono canonizou na v2.8.61. A técnica anti-corte (textLength + viewBox com 60/dígito)
+  // já impede o glifo de vazar, então dá pra voltar aos 60% sem o corte que motivou o 52%+cap.
+  // SEM max-height: 60% resolve contra a caixa do card em qualquer altura (auto-height).
   var vbH = 76;                            // glifo (fonte 100) preenche a viewBox → número cheio
   var vbW = n.length * 60;
-  return '<svg aria-hidden="true" style="position:absolute;top:50%;transform:translateY(-50%);' + side + ':14px;height:52%;max-height:54px;width:auto;pointer-events:none;user-select:none;z-index:0;overflow:visible;" ' +
+  return '<svg aria-hidden="true" style="position:absolute;top:50%;transform:translateY(-50%);' + side + ':14px;height:60%;width:auto;pointer-events:none;user-select:none;z-index:0;overflow:visible;" ' +
     'viewBox="0 0 ' + vbW + ' ' + vbH + '" preserveAspectRatio="xMidYMid meet">' +
     '<text x="' + (vbW / 2) + '" y="' + (vbH / 2) + '" textLength="' + vbW + '" lengthAdjust="spacingAndGlyphs" text-anchor="middle" dominant-baseline="central" font-size="100" font-weight="900" ' +
     'fill="rgba(255,255,255,0.10)" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif">' + window._safeHtml(n) + '</text></svg>';
 };
+
+// CANÔNICO (v4.5.13): tamanho da fonte do NOME do participante nos cards de inscrito (individual,
+// dupla formada, dupla pendente, solo "sem dupla"). Dimensionado pra acompanhar a marca-d'água do
+// nº de inscrição (_enrollNumberBadge, 60% da altura do card). FONTE ÚNICA — todo card de inscrito
+// deve usar `window._INSCRITO_NAME_FONT_PX` no `font-size` (e no `data-fit-max` do auto-fit de 2
+// linhas). NUNCA hardcodar outro valor (0.95rem/0.92rem etc.) → é regressão. O dono canonizou 17px.
+window._INSCRITO_NAME_FONT_PX = 17;
 
 // ═══════════════════════════════════════════════════════════════════════════════════
 // CANÔNICO (v3.1.33): pódio(s) + classificação(ões) do torneio encerrado — UMA fonte só.
 // SEMPRE renderizado por estas linhas, em qualquer view, de acordo com a configuração:
 //   • 1 linha, OU N linhas COM grande final (linha cruza tudo) → 1 PÓDIO geral + 1
 //     "Classificação geral" colapsada embaixo.
-//   • 2/4 linhas SEPARADAS (sem grande final) → para CADA linha, na ordem de tier
-//     (Ouro, Prata, …): o PÓDIO da linha + a classificação DAQUELA linha colapsada logo
+//   • 2/4 chaves SEPARADAS (sem grande final) → para CADA chave, na ordem das chaves
+//     (Chave 1, Chave 2, … OU o nome que o organizador deu): o PÓDIO da chave + a classificação DAQUELA chave colapsada logo
 //     embaixo. 2 linhas = 2 pódios+2 classif; 4 linhas = 4 pódios+4 classif.
 //   • Liga/Suíço (sem chave) → 1 pódio (top 3 da tabela) + classificação da tabela.
 // Modo de classificação: 'personalizada' (1º,2º,3º…) — default. ('blocos' = próxima leva.)
@@ -6725,10 +7110,14 @@ window._renderPodiumsAndClassif = function (t) {
   if (tierKeys.length >= 2 && !hasGF) {
     var tierColors = { gold: '#fbbf24', silver: '#cbd5e1', main: '#10b981', line3: '#cd7f32', line4: '#3b82f6' };
     var palette = ['#fbbf24', '#cbd5e1', '#10b981', '#cd7f32', '#3b82f6', '#ec4899'];
-    var defLbl = { gold: '🥇 Série Ouro', silver: '🥈 Série Prata', line3: 'Série 3', line4: 'Série 4' };
+    // Nome da chave = o que o ORGANIZADOR deu (m.tierLabel). Sem nome → "Chave N" (posicional,
+    // arbitrário). NUNCA "Ouro/Prata" hardcodado: é só um exemplo, não regra — quem nomeia é o
+    // organizador (project_playoff_formats · feedback_dont_canonize_examples). As CORES por chave
+    // (tierColors) são só distinção visual, não nome — casam com a cor da chave no bracket. Este
+    // bloco só roda com 2+ chaves; com 1 chave cai no pódio unificado (sem rótulo de chave).
     var out = tierKeys.map(function (bk, i) {
       var lm = fpMatches.filter(function (m) { return (m.bracket || 'main') === bk; });
-      var title = (lm[0] && lm[0].tierLabel) ? lm[0].tierLabel : (defLbl[bk] || ('Linha ' + (i + 1)));
+      var title = (lm[0] && lm[0].tierLabel) ? String(lm[0].tierLabel).trim() : ('Chave ' + (i + 1));
       var color = tierColors[bk] || palette[i % palette.length];
       var pod = window._linePodiumHtml(t, lm, title, color);
       if (!pod) return '';
@@ -6851,7 +7240,7 @@ window._getCompetitors = function(t) {
     var isTeam = false;
     if (p && typeof p === 'object') {
       if (Array.isArray(p.participants) && p.participants.length > 1) isTeam = true;
-      if (p.p1Name && p.p2Name) isTeam = true;
+      if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) isTeam = true; // uid-first: dupla = 2 slots ocupados (uid OU nome)
     }
     if (name.indexOf(' / ') !== -1) isTeam = true;
     if (isTeam) return true;

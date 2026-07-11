@@ -322,6 +322,27 @@ window.VenueDB = {
     }
   },
 
+  // Denúncia de conteúdo gerado por usuário (moderação — Apple Guideline 1.2).
+  // Grava na coleção top-level `reports` (write-only p/ usuários; revisada pela
+  // equipe via console/Admin SDK). Nenhum PII do denunciante além do uid/nome.
+  async reportReview(venueKey, reviewId, reviewedUid, reason) {
+    if (!this.db || !venueKey || !reviewId) throw new Error('dados obrigatórios');
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid) throw new Error('login obrigatório');
+    await this.db.collection('reports').add({
+      type: 'venue-review',
+      venueKey: venueKey,
+      reviewId: reviewId,
+      reviewedUid: reviewedUid || '',
+      reporterUid: cu.uid,
+      reporterName: cu.displayName || '',
+      reason: String(reason || '').slice(0, 500),
+      status: 'open',
+      createdAt: Date.now()
+    });
+    return true;
+  },
+
   // ── Courts — armazenados como array no próprio doc do venue ─────────────
   // Guardar em subcollection (courts/{id}) exigiria regras Firestore separadas.
   // Em vez disso, gravamos um campo `courts: []` no doc principal do venue —

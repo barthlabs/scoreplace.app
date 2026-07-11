@@ -132,11 +132,14 @@
   function _opVoterInfoMap(t) {
     var info = {};
     var parts = (t && Array.isArray(t.participants)) ? t.participants : [];
+    // v4.5.70: nome POR UID (perfil vivo) quando disponível; nome gravado é só
+    // fallback (guest sem conta, ou perfil ainda não cacheado).
+    var _ln = function (uid, stored) { return (typeof window._nameForUid === 'function' && window._nameForUid(uid)) || stored || ''; };
     parts.forEach(function (p) {
       if (!p || typeof p !== 'object') return;
-      if (p.uid && !info[p.uid]) info[p.uid] = { name: p.displayName || p.name || '', photo: p.photoURL || '' };
-      if (p.p1Uid && !info[p.p1Uid]) info[p.p1Uid] = { name: p.p1Name || '', photo: p.p1PhotoURL || '' };
-      if (p.p2Uid && !info[p.p2Uid]) info[p.p2Uid] = { name: p.p2Name || '', photo: p.p2PhotoURL || '' };
+      if (p.uid && !info[p.uid]) info[p.uid] = { name: _ln(p.uid, p.displayName || p.name), photo: p.photoURL || '' };
+      if (p.p1Uid && !info[p.p1Uid]) info[p.p1Uid] = { name: _ln(p.p1Uid, p.p1Name), photo: p.p1PhotoURL || '' };
+      if (p.p2Uid && !info[p.p2Uid]) info[p.p2Uid] = { name: _ln(p.p2Uid, p.p2Name), photo: p.p2PhotoURL || '' };
     });
     if (t && t.creatorUid && !info[t.creatorUid]) info[t.creatorUid] = { name: t.organizerName || 'Organizador', photo: '' };
     return info;
@@ -216,8 +219,11 @@
     var ex = document.getElementById(id); if (ex) ex.remove();
     var o = document.createElement('div');
     o.id = id;
-    o.style.cssText = 'position:fixed;inset:0;z-index:100040;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:1rem;';
-    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:90vh;overflow:auto;border-radius:16px;border:1px solid rgba(99,102,241,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
+    // v4.5.100: padding respeita o SAFE-AREA (notch/status bar do PWA) — sem isso o
+    // cabeçalho do painel invadia a área do relógio. max-height desconta os insets + o
+    // padding, então o painel nunca sobe atrás da status bar nem vaza embaixo.
+    o.style.cssText = 'position:fixed;inset:0;z-index:100040;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:calc(env(safe-area-inset-top,0px) + 12px) 12px calc(env(safe-area-inset-bottom,0px) + 12px);';
+    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:calc(100vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 24px);overflow:auto;border-radius:16px;border:1px solid rgba(99,102,241,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
     o.addEventListener('click', function (e) { if (e.target === o) o.remove(); });
     document.body.appendChild(o);
     return o;
@@ -405,12 +411,24 @@
   };
 
   // ─── PASSO 3: Votar / ver resultados (por seção, todas na tela) ──────────────────
+  // v4.5.101: "Alterar voto" = re-votar TODAS as perguntas, uma por vez (igual votar), com UM
+  // botão só. `_editAll` = { pollId, idx } = wizard de edição-completa; null = não editando.
+  var _editAll = null;
   window._opOpenVote = function (tId, pollId) {
+    _editAll = null; // reabrir/cancelar sempre volta pra visão de resultados
     var t = _findT(tId); if (!t) return;
     var poll = _findPoll(t, pollId); if (!poll) return;
     _renderVote(t, poll, null);
   };
-  // reabre uma SEÇÃO em modo edição (opções pré-marcadas) pra trocar o voto.
+  // Alterar voto (UM botão): entra no wizard passando por TODAS as perguntas, pré-preenchidas,
+  // uma por página — igual ao fluxo de votar.
+  window._opEditAll = function (tId, pollId) {
+    var t = _findT(tId); if (!t) return;
+    var poll = _findPoll(t, pollId); if (!poll || poll.closed) return;
+    _editAll = { pollId: poll.id, idx: 0 };
+    _renderVote(t, poll, null);
+  };
+  // reabre uma SEÇÃO em modo edição (legado — a UI usa _opEditAll; mantido p/ compat de call-sites).
   window._opEditVote = function (tId, pollId, secId) {
     var t = _findT(tId); if (!t) return;
     var poll = _findPoll(t, pollId); if (!poll || poll.closed) return;
@@ -459,11 +477,22 @@
     // seção, apresenta UMA pergunta por vez — escolhe → Confirmar → próxima → ... — pra
     // deixar claro que há mais pra votar e ninguém deixar seções em branco. Os RESULTADOS
     // (todas as seções juntas) seguem numa página só quando não há mais o que votar.
-    var _pending = canVote ? secs.filter(function (s) { return !_opHasVotedSection(poll, s.id, uid) || editSecId === s.id; }) : [];
+    // v4.5.101: edição-completa (Alterar) = wizard por TODAS as perguntas, NA ORDEM,
+    // pré-preenchidas (idx = pergunta atual). Fora dela, mantém o wizard normal (votar / editar 1).
+    var _editingAll = !!(_editAll && _editAll.pollId === poll.id) && canVote;
+    var _pending = [];
     var _wizSec = null, _wizIsEdit = false;
-    if (_pending.length) {
-      _wizSec = editSecId ? secs.filter(function (s) { return s.id === editSecId; })[0] : _pending[0];
-      _wizIsEdit = !!editSecId;
+    if (_editingAll) {
+      _wizSec = secs[_editAll.idx] || null;
+      if (!_wizSec) { _editAll = null; _editingAll = false; } // idx fora do range → sai da edição
+      else _wizIsEdit = true;
+    }
+    if (!_editingAll) {
+      _pending = canVote ? secs.filter(function (s) { return !_opHasVotedSection(poll, s.id, uid) || editSecId === s.id; }) : [];
+      if (_pending.length) {
+        _wizSec = editSecId ? secs.filter(function (s) { return s.id === editSecId; })[0] : _pending[0];
+        _wizIsEdit = !!editSecId;
+      }
     }
     var _wizIdx = _wizSec ? secs.indexOf(_wizSec) : -1;
 
@@ -471,7 +500,8 @@
     secs.forEach(function (sec, si) {
       if (_wizSec && sec.id !== _wizSec.id) return; // WIZARD: só a seção do passo atual
       var voted = _opHasVotedSection(poll, sec.id, uid);
-      var votingMode = canVote && (!voted || editSecId === sec.id);
+      // v4.5.101: na edição-completa a pergunta atual entra em modo de votação (pré-marcada).
+      var votingMode = canVote && (!voted || editSecId === sec.id || (_editingAll && _wizSec && sec.id === _wizSec.id));
       var showResults = poll.closed || voted || !poll.hideResultsUntilVote;
       var total = _opSectionVoters(poll, sec.id);
       var myChoices = _opGetVote(poll, uid, sec.id);
@@ -480,7 +510,7 @@
       if (_wizSec && sec.id === _wizSec.id) {
         body += '<div style="margin-bottom:13px;">' +
           '<div style="font-size:0.72rem;font-weight:800;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">' +
-            (_wizIsEdit ? '✏️ Alterando' : ('Pergunta ' + (_wizIdx + 1) + ' de ' + secs.length)) + '</div>' +
+            (_editingAll ? ('✏️ Alterando · Pergunta ' + (_wizIdx + 1) + ' de ' + secs.length) : (_wizIsEdit ? '✏️ Alterando' : ('Pergunta ' + (_wizIdx + 1) + ' de ' + secs.length))) + '</div>' +
           '<div style="display:flex;gap:5px;">' + secs.map(function (_s, _i) {
             var done = _opHasVotedSection(poll, _s.id, uid);
             var col = (_i === _wizIdx) ? '#8b5cf6' : (done ? '#34d399' : 'rgba(255,255,255,0.12)');
@@ -490,8 +520,16 @@
       }
       // v3.1.54: sem rótulo "SEÇÃO N" — a própria PERGUNTA em LARANJA + negrito separa
       // as perguntas (pedido do dono). Mesma fonte usada no editor.
+      // v4.5.101: UM ÚNICO botão "✏️ Alterar" alinhado à DIREITA do título da 1ª pergunta
+      // (visão de resultados, se já votou algo) → abre o wizard por TODAS as perguntas.
+      var _showAlterAll = (si === 0) && !_wizSec && canVote && secs.some(function (s) { return _opHasVotedSection(poll, s.id, uid); });
+      var _alterAllBtn = _showAlterAll
+        ? '<button type="button" onclick="window._opEditAll(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="flex:0 0 auto;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.4);font-weight:700;border-radius:10px;padding:6px 12px;font-size:0.8rem;">✏️ Alterar</button>'
+        : '';
       body += '<div id="op-vsec-' + _esc(sec.id) + '" style="margin-bottom:18px;scroll-margin-top:170px;' + (si > 0 ? 'padding-top:16px;border-top:1px solid var(--border-color);' : '') + '">' +
-        '<div style="font-weight:900;font-size:1.02rem;color:#f59e0b;margin-bottom:3px;">' + _esc(sec.question) + '</div>' +
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:3px;">' +
+          '<div style="flex:1;min-width:0;font-weight:900;font-size:1.02rem;color:#f59e0b;">' + _esc(sec.question) + '</div>' + _alterAllBtn +
+        '</div>' +
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:11px;">' + (sec.multiSelect ? 'Marque ✅ no que você quer e 🚫 no que não quer' : 'Escolha uma opção') + (poll.hideResultsUntilVote && !voted && !poll.closed ? ' · resultados após votar' : '') + '</div>';
 
       var myNo = _opGetVoteNo(poll, uid, sec.id);
@@ -550,22 +588,10 @@
       });
 
       // rodapé da seção
-      // v3.1.64: SEM botão "Votar" por seção — há um único "Confirmar voto(s)" fixo no
-      // topo (window._opVoteAll). No modo EDIÇÃO de uma seção já votada, mantém só o
-      // "Cancelar" pra abortar a alteração.
-      if (votingMode) {
-        // WIZARD: Confirmar o passo → salva esta seção e avança pra próxima (ou finaliza).
-        var _isLastStep = _wizIsEdit || (_pending.length <= 1);
-        var _stepLabel = _wizIsEdit ? '✅ Salvar alteração' : (_isLastStep ? '✅ Confirmar e finalizar' : '✅ Confirmar e continuar →');
-        body += '<button type="button" onclick="window._opVoteStep(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\',\'' + _attr(sec.id) + '\',' + (_wizIsEdit ? 'true' : 'false') + ')" class="btn btn-shine" style="width:100%;margin-top:12px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;border:none;border-radius:11px;padding:13px;font-size:0.96rem;">' + _stepLabel + '</button>';
-        if (voted) {
-          body += '<button type="button" onclick="window._opOpenVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:11px;padding:8px;font-size:0.8rem;margin-top:6px;">↩️ Cancelar alteração</button>';
-        }
-      } else if (voted && !poll.closed) {
-        body += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;">' +
-          '<span style="font-size:0.78rem;color:#34d399;font-weight:700;">✓ Você votou · ' + total + ' voto(s)</span>' +
-          '<button type="button" onclick="window._opEditVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\',\'' + _attr(sec.id) + '\')" class="btn" style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.4);font-weight:700;border-radius:10px;padding:7px 12px;font-size:0.8rem;">✏️ Alterar</button>' +
-        '</div>';
+      // v4.5.101: SEM botão "Alterar" por seção — há UM único botão no topo (direita da 1ª
+      // pergunta, _opEditAll) que re-vota todas. Aqui só o indicador "✓ Você votou · N".
+      if (!votingMode && voted && !poll.closed) {
+        body += '<div style="font-size:0.78rem;color:#34d399;font-weight:700;margin-top:6px;">✓ Você votou · ' + total + ' voto(s)</div>';
       }
       body += '</div>';
     });
@@ -573,8 +599,10 @@
     // v3.1.63: botões do ORGANIZADOR no TOPO, sempre visíveis (sticky), em grade 2x2:
     //   Editar | Ver votos  /  Re-notificar | Encerrar
     // (com enquete encerrada, só Editar | Ver votos). O "Fechar" do topo vira "← Voltar".
+    // v4.5.100: o menu 2x2 do organizador SOME durante a votação/edição (_wizSec) — dá lugar
+    // ao Cancelar/Confirmar fixo no topo (_wizTop). Volta quando não há o que votar/alterar.
     var _orgTop = '';
-    if (isOrg) {
+    if (isOrg && !_wizSec) {
       var _cellStyle = 'border-radius:10px;padding:10px;font-size:0.82rem;font-weight:700;';
       var _cells =
         '<button type="button" onclick="window._opOpenEditor(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(99,102,241,0.16);color:#a5b4fc;border:1px solid rgba(99,102,241,0.45);">✏️ Editar</button>' +
@@ -604,6 +632,24 @@
         '<button type="button" onclick="window._opVoteAll(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn btn-shine" style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;border:none;border-radius:11px;padding:12px;font-size:0.95rem;">' + _voteLabel + '</button>' +
       '</div>';
     }
+    // v4.5.100: durante a votação/edição (_wizSec), Cancelar + Confirmar ficam FIXOS no topo
+    // (logo abaixo do cabeçalho), substituindo o menu 2x2. Antes ficavam no RODAPÉ da seção.
+    var _wizTop = '';
+    if (_wizSec) {
+      var _wizVoted = _opHasVotedSection(poll, _wizSec.id, uid);
+      // v4.5.101: na edição-completa o passo é "Salvar e continuar →" até a última pergunta.
+      var _isLastStepT = _editingAll ? (_editAll.idx >= secs.length - 1) : (_wizIsEdit || (_pending.length <= 1));
+      var _stepLabelT = _editingAll
+        ? (_isLastStepT ? '✅ Salvar' : '✅ Salvar e continuar →')
+        : (_wizIsEdit ? '✅ Salvar' : (_isLastStepT ? '✅ Confirmar' : '✅ Confirmar e continuar →'));
+      var _cancelBtn = (_wizIsEdit || _wizVoted)
+        ? '<button type="button" onclick="window._opOpenVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="flex:0 0 auto;background:rgba(255,255,255,0.08);color:var(--text-muted);border:1px solid var(--border-color);font-weight:800;border-radius:11px;padding:12px 16px;font-size:0.9rem;">↩️ Cancelar</button>'
+        : '';
+      _wizTop = '<div style="padding:10px 1rem;border-bottom:1px solid var(--border-color);background:var(--bg-card,#0f172a);display:flex;gap:8px;align-items:stretch;">' +
+        _cancelBtn +
+        '<button type="button" onclick="window._opVoteStep(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\',\'' + _attr(_wizSec.id) + '\',' + (_wizIsEdit ? 'true' : 'false') + ')" class="btn btn-shine" style="flex:1;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;border:none;border-radius:11px;padding:12px;font-size:0.95rem;">' + _stepLabelT + '</button>' +
+      '</div>';
+    }
     // rodapé: só o aviso de "encerrada" (os botões subiram pro topo).
     var footer = '';
     if (poll.closed) footer += '<div style="text-align:center;font-size:0.8rem;color:var(--text-muted);font-weight:700;margin-top:4px;">🔒 Enquete encerrada</div>';
@@ -615,6 +661,7 @@
           '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📊 Enquete</span>' +
           '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">← Voltar</button>' +
         '</div>' +
+        _wizTop +
         _voteTop +
         _orgTop +
       '</div>' +
@@ -737,6 +784,21 @@
     var _prevClone = _prev == null ? undefined : (Array.isArray(_prev) ? _prev.slice() : JSON.parse(JSON.stringify(_prev)));
     if (sec.multiSelect) _opSetVoteMulti(poll, cu.uid, sec.id, yes, no); else _opSetVote(poll, cu.uid, sec.id, yes);
     _save(t).then(function () {
+      // v4.5.101: na edição-completa, AVANÇA o cursor pra próxima pergunta; ao passar da última,
+      // sai da edição (volta pros resultados). Fora dela, mantém a lógica de "faltam N".
+      if (_editAll && _editAll.pollId === poll.id) {
+        _editAll.idx++;
+        var _allSecs = window._opSections(poll).length;
+        var _doneAll = _editAll.idx >= _allSecs;
+        if (_doneAll) _editAll = null;
+        if (typeof showNotification === 'function') {
+          if (_doneAll) showNotification('✓ Alterações salvas', 'Seus votos foram atualizados.', 'success');
+          else showNotification('✓ Salvo', 'Próxima pergunta.', 'success');
+        }
+        _renderVote(t, poll, null);
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        return;
+      }
       // Recalcula quantas seções ainda faltam (a atual já conta como votada agora).
       var _left = window._opSections(poll).filter(function (s) { return !_opHasVotedSection(poll, s.id, cu.uid); }).length;
       if (typeof showNotification === 'function') {

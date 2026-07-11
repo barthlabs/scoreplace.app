@@ -3765,6 +3765,43 @@ async function createRoundWhatsappGroups(db, apiUrl, apiKey, instance, opts) {
     const round = rounds[ri];
     if (!round) return { ok: false, reason: "round-not-found" };
 
+    // ── 2a. Nomes VIVOS por uid (v4.5.73) ────────────────────────────
+    // O label/mensagem do grupo mostra o nome resolvido pela CONTA (uid do slot),
+    // não o nome gravado em m.p1/team1 (que pode estar velho — o motor grava a
+    // partir de p.displayName). Só cai no nome gravado quando o slot não tem uid
+    // (guest sem conta). Espelha window._slotUids. A resolução de TELEFONE segue
+    // por nome gravado (participantMap) — não é display, e o nome bate com o slot.
+    const _slotUidsOf = (m, side) => {
+      if (!m) return [];
+      const arr = side === "p1" ? m.team1Uids : m.team2Uids;
+      if (Array.isArray(arr) && arr.length) return arr.filter(Boolean).map(String);
+      const single = side === "p1" ? m.p1Uid : m.p2Uid;
+      if (single) return [String(single)];
+      return [];
+    };
+    const _monarchGroupsForNames = Array.isArray(round.monarchGroups) ? round.monarchGroups : [];
+    const _roundUids = new Set();
+    const _collectUids = (arr) => {
+      (arr || []).forEach((m) => { if (!m) return; _slotUidsOf(m, "p1").forEach((u) => _roundUids.add(u)); _slotUidsOf(m, "p2").forEach((u) => _roundUids.add(u)); });
+    };
+    if (_monarchGroupsForNames.length) _monarchGroupsForNames.forEach((g) => _collectUids(g && g.matches));
+    else _collectUids(round.matches);
+    const _nameByUid = {};
+    try {
+      const _l = Array.from(_roundUids);
+      for (let i = 0; i < _l.length; i += 100) {
+        const refs = _l.slice(i, i + 100).map((u) => db.collection("users").doc(u));
+        const docs = await db.getAll(...refs);
+        docs.forEach((d) => { if (d.exists) { const dd = d.data() || {}; const dn = String(dd.displayName || dd.name || "").trim(); if (dn) _nameByUid[d.id] = dn; } });
+      }
+    } catch (e) { console.warn("[notifyLeagueRoundWhatsApp] live-names fetch falhou:", e.message); }
+    // Nome exibido de um lado: nomes vivos dos uids do slot (dupla junta com " / ");
+    // fallback pro nome gravado só quando não há uid (guest). Nunca vazio.
+    const _sideDisp = (m, side, storedStr) => {
+      const ns = _slotUidsOf(m, side).map((u) => _nameByUid[u]).filter(Boolean);
+      return ns.length ? ns.join(" / ") : (storedStr || "?");
+    };
+
     // ── 2b. Normaliza a rodada em "unidades" de grupo de WhatsApp ────
     // Liga/Suíço: 1 unidade por PARTIDA (dupla ou individual).
     // Rei/Rainha: 1 unidade por GRUPO de 4 (eles jogam 3 jogos com parceiros
@@ -3795,9 +3832,10 @@ async function createRoundWhatsappGroups(db, apiUrl, apiKey, instance, opts) {
           if (m.p1) playerNames.push(m.p1);
           if (m.p2) playerNames.push(m.p2);
         }
+        // v4.5.73: label pela CONTA (uid do slot); nome gravado só como fallback.
         const matchLabel = Array.isArray(m.team1)
-          ? `${(m.team1 || []).join("+")} vs ${(m.team2 || []).join("+")}`
-          : `${m.p1 || "?"} vs ${m.p2 || "?"}`;
+          ? `${_sideDisp(m, "p1", (m.team1 || []).join(" / "))} vs ${_sideDisp(m, "p2", (m.team2 || []).join(" / "))}`
+          : `${_sideDisp(m, "p1", m.p1)} vs ${_sideDisp(m, "p2", m.p2)}`;
         return { kind: "match", match: m, players: playerNames, subjectLabel: matchLabel };
       });
     }
@@ -3943,7 +3981,7 @@ async function createRoundWhatsappGroups(db, apiUrl, apiKey, instance, opts) {
         // pessoas precisam combinar entre si.
         const games = (unit.group.matches || [])
           .filter((m) => m && !m.isSitOut && !m.isBye)
-          .map((m, gi) => `${gi + 1}) ${m.p1 || "?"} vs ${m.p2 || "?"}`)
+          .map((m, gi) => `${gi + 1}) ${_sideDisp(m, "p1", m.p1)} vs ${_sideDisp(m, "p2", m.p2)}`)
           .join("\n");
         message =
           `🎾 *${tournamentName} — Rodada ${roundNumber}*\n\n` +
@@ -5522,181 +5560,12 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
   }
 );
 
-// ─── propagateProfileNameChange ───────────────────────────────────────────────
-// v2.6.109: quando o displayName do perfil muda, propaga o nome NOVO pra TODOS os
-// torneios onde a pessoa aparece — na hora, sem depender de alguém abrir o torneio.
-// Atualiza participants[] (por uid) + as strings p1/p2/winner e os arrays team1/team2
-// nas matches/rounds/groups/rodadas (singles E duplas "A / B"). Escopo: torneios em
-// que o uid está em memberUids (query indexada). Identidade = uid (autoridade).
-exports.propagateProfileNameChange = onDocumentWritten(
-  { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 300 },
-  async (event) => {
-    const after = event.data.after, before = event.data.before;
-    if (!after.exists) return;
-    const a = after.data(), b = before.exists ? (before.data() || {}) : {};
-    if (a.mergedInto) return;
-    const newName = String(a.displayName || "").trim();
-    const prevName = String(b.displayName || "").trim();
-    if (!newName || newName === prevName) return; // nome não mudou
-    const db = admin.firestore();
-    const uid = event.params.uid;
-    console.log(`[propagateProfileNameChange] uid=${uid} "${prevName}" -> "${newName}"`);
-
-    function renameStr(s, oldNm) {
-      if (s === oldNm) return newName;
-      if (typeof s === "string" && s.indexOf(" / ") !== -1) {
-        const parts = s.split(" / ").map(x => x.trim());
-        if (parts.indexOf(oldNm) !== -1) return parts.map(x => x === oldNm ? newName : x).join(" / ");
-      }
-      return s;
-    }
-    function renameInMatches(matches, oldNm) {
-      if (!Array.isArray(matches) || !oldNm) return { arr: matches, hit: false };
-      let hit = false;
-      const arr = matches.map(m => {
-        if (!m || typeof m !== "object") return m;
-        const nm = Object.assign({}, m);
-        const p1 = renameStr(nm.p1, oldNm); if (p1 !== nm.p1) { nm.p1 = p1; hit = true; }
-        const p2 = renameStr(nm.p2, oldNm); if (p2 !== nm.p2) { nm.p2 = p2; hit = true; }
-        const w = renameStr(nm.winner, oldNm); if (w !== nm.winner) { nm.winner = w; hit = true; }
-        if (Array.isArray(nm.team1)) nm.team1 = nm.team1.map(x => x === oldNm ? (hit = true, newName) : x);
-        if (Array.isArray(nm.team2)) nm.team2 = nm.team2.map(x => x === oldNm ? (hit = true, newName) : x);
-        return nm;
-      });
-      return { arr, hit };
-    }
-
-    let snap;
-    try {
-      snap = await db.collection("tournaments").where("memberUids", "array-contains", uid).get();
-    } catch (e) { console.error("[propagateProfileNameChange] query falhou:", e); return; }
-
-    let fixed = 0;
-    for (const tourDoc of snap.docs) {
-      const t = tourDoc.data();
-      let changed = false;
-      const update = {};
-      let cachedName = null; // nome cacheado deste inscrito NESTE torneio (por uid)
-      if (Array.isArray(t.participants)) {
-        const participants = t.participants.map(p => {
-          if (!p || typeof p !== "object" || (p.uid || "") !== uid) return p;
-          cachedName = String(p.displayName || p.name || "").trim();
-          changed = true;
-          return Object.assign({}, p, { displayName: newName, name: newName });
-        });
-        if (changed) update.participants = participants;
-      }
-      const oldNm = cachedName;
-      if (oldNm && oldNm !== newName) {
-        for (const fld of ["matches", "rounds", "groups", "rodadas"]) {
-          if (!Array.isArray(t[fld])) continue;
-          if (fld === "matches") {
-            const r = renameInMatches(t.matches, oldNm);
-            if (r.hit) { update.matches = r.arr; changed = true; }
-          } else {
-            let hit = false;
-            const arr = t[fld].map(col => {
-              const r = renameInMatches(col && col.matches, oldNm);
-              if (r.hit) hit = true;
-              return Object.assign({}, col, { matches: r.arr });
-            });
-            if (hit) { update[fld] = arr; changed = true; }
-          }
-        }
-      }
-      if (changed && Object.keys(update).length) {
-        try { await tourDoc.ref.update(update); fixed++; }
-        catch (e) { console.error(`[propagateProfileNameChange] update falhou t=${tourDoc.id}:`, e); }
-      }
-    }
-    console.log(`[propagateProfileNameChange] uid=${uid} torneios atualizados: ${fixed}`);
-  }
-);
-
-// ─── reconcileParticipantNames (a cada 2h) ────────────────────────────────────
-// v2.6.109: garante que o nome de CADA inscrito em CADA torneio bate com o perfil
-// ATUAL (por uid) — independente de quando a pessoa mudou o nome ou de alguém abrir
-// o torneio. A CF propagateProfileNameChange dá o "ao vivo" nas mudanças novas; esta
-// varredura limpa o atraso existente (nomes que mudaram antes da CF) e é rede de
-// segurança permanente. Identidade = uid. Só toca no NOME (nunca apaga outros dados).
-exports.reconcileParticipantNames = onSchedule(
-  { schedule: "every 2 hours", region: "us-central1", memory: "512MiB", timeoutSeconds: 540 },
-  async () => {
-    const db = admin.firestore();
-    function renameStr(s, oldNm, newNm) {
-      if (s === oldNm) return newNm;
-      if (typeof s === "string" && s.indexOf(" / ") !== -1) {
-        const parts = s.split(" / ").map(x => x.trim());
-        if (parts.indexOf(oldNm) !== -1) return parts.map(x => x === oldNm ? newNm : x).join(" / ");
-      }
-      return s;
-    }
-    function renameInMatches(matches, oldNm, newNm) {
-      if (!Array.isArray(matches)) return { arr: matches, hit: false };
-      let hit = false;
-      const arr = matches.map(m => {
-        if (!m || typeof m !== "object") return m;
-        const nm = Object.assign({}, m);
-        const p1 = renameStr(nm.p1, oldNm, newNm); if (p1 !== nm.p1) { nm.p1 = p1; hit = true; }
-        const p2 = renameStr(nm.p2, oldNm, newNm); if (p2 !== nm.p2) { nm.p2 = p2; hit = true; }
-        const w = renameStr(nm.winner, oldNm, newNm); if (w !== nm.winner) { nm.winner = w; hit = true; }
-        if (Array.isArray(nm.team1)) nm.team1 = nm.team1.map(x => x === oldNm ? (hit = true, newNm) : x);
-        if (Array.isArray(nm.team2)) nm.team2 = nm.team2.map(x => x === oldNm ? (hit = true, newNm) : x);
-        return nm;
-      });
-      return { arr, hit };
-    }
-
-    const tours = await db.collection("tournaments").get();
-    let totalFixed = 0, namesFixed = 0;
-    for (const tourDoc of tours.docs) {
-      const t = tourDoc.data();
-      if (t.status === "finished") continue; // encerrados: não mexe
-      if (!Array.isArray(t.participants) || !t.participants.length) continue;
-      const uids = [...new Set(t.participants.filter(p => p && typeof p === "object" && p.uid).map(p => p.uid))];
-      if (!uids.length) continue;
-      // perfis atuais (batch via getAll)
-      const nameByUid = {};
-      for (let i = 0; i < uids.length; i += 100) {
-        const refs = uids.slice(i, i + 100).map(u => db.collection("users").doc(u));
-        const docs = await db.getAll(...refs);
-        docs.forEach(d => { if (d.exists) { const dn = String((d.data() || {}).displayName || "").trim(); if (dn) nameByUid[d.id] = dn; } });
-      }
-      let changed = false;
-      const renames = [];
-      const participants = t.participants.map(p => {
-        if (!p || typeof p !== "object" || !p.uid) return p;
-        const cur = nameByUid[p.uid];
-        const cached = String(p.displayName || p.name || "").trim();
-        if (cur && cur !== cached) {
-          changed = true; namesFixed++;
-          if (cached) renames.push({ o: cached, n: cur });
-          return Object.assign({}, p, { displayName: cur, name: cur });
-        }
-        return p;
-      });
-      if (!changed) continue;
-      const update = { participants };
-      for (const { o, n } of renames) {
-        for (const fld of ["matches", "rounds", "groups", "rodadas"]) {
-          const base = update[fld] || t[fld];
-          if (!Array.isArray(base)) continue;
-          if (fld === "matches") {
-            const r = renameInMatches(base, o, n);
-            if (r.hit) update.matches = r.arr;
-          } else {
-            let hit = false;
-            const arr = base.map(col => { const r = renameInMatches(col && col.matches, o, n); if (r.hit) hit = true; return Object.assign({}, col, { matches: r.arr }); });
-            if (hit) update[fld] = arr;
-          }
-        }
-      }
-      try { await tourDoc.ref.update(update); totalFixed++; }
-      catch (e) { console.error(`[reconcileParticipantNames] update falhou t=${tourDoc.id}:`, e); }
-    }
-    console.log(`[reconcileParticipantNames] torneios reconciliados: ${totalFixed} | nomes corrigidos: ${namesFixed}`);
-  }
-);
+// ─── (removido em v4.5.73) propagateProfileNameChange + reconcileParticipantNames ──
+// Sob identidade-por-uid, o cliente resolve o nome exibido do perfil vivo (users/{uid})
+// e NUNCA lê o nome gravado no inscrito/match — então reescrever nomes velhos nos
+// torneios virou trabalho morto (espelha a remoção de _autoFixStaleNames/_propagateNameChange
+// no cliente, v4.5.72). O texto das notificações de sorteio passou a resolver o nome pelo
+// uid do slot no momento do envio (functions-autodraw + createRoundWhatsappGroups).
 
 // ─── scheduledAutoMergeCleanup (diário 04:45 BRT) ─────────────────────────
 // Varre toda a coleção users em busca de phones E emails duplicados e mescla

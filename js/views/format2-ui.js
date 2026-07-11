@@ -88,6 +88,38 @@
       '<span>' + label + '</span>' +
       '<span class="toggle-switch"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></span></label>';
   }
+  // Painel "Inscrições durante a fase" DA ELIMINATÓRIA (2ª fase). Espelha visualmente o bloco do
+  // form (#late-enroll-box), mas grava em cfg.eliminatoria.lateEnrollment (não em t.lateEnrollment,
+  // que é da fase inicial). Mesma semântica de 2 toggles → 3 valores: closed | standby | expand.
+  //   master: ligado = Fechadas (🚫) · desligado = Abertas (🔓)
+  //   conf  : ligado = Novos Confrontos (➕) · desligado = Suplentes Apenas (🪑)  [só aparece quando aberta]
+  function _lateEnrollElimBlock(e) {
+    var T = window._t || function (k) { return k; };
+    var v = (['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) >= 0) ? e.lateEnrollment : 'closed';
+    var isClosed = v === 'closed', isExpand = v === 'expand';
+    var onRow = 'border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);';
+    var offRow = 'border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);';
+    function _tg(checked, on) {
+      return '<label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + on + '"><span class="toggle-slider"></span></label>';
+    }
+    function _row(active, icon, title, desc, tg) {
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border-radius:10px;' + (active ? onRow : offRow) + '">' +
+        '<div style="display:flex;gap:8px;align-items:flex-start;min-width:0;"><span style="font-size:1rem;line-height:1.2;">' + icon + '</span>' +
+        '<div style="min-width:0;"><div style="font-weight:600;color:var(--text-main);font-size:0.88rem;">' + title + '</div>' +
+        '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;line-height:1.4;">' + desc + '</div></div></div>' + tg + '</div>';
+    }
+    var masterRow = _row(isClosed, isClosed ? '🚫' : '🔓',
+      T(isClosed ? 'create.lateEnrollClosed' : 'create.lateEnrollOpen'),
+      T(isClosed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc'),
+      _tg(isClosed, 'window._f2ElimLateMaster(this.checked)'));
+    var confRow = isClosed ? '' : ('<div style="margin-top:8px;">' + _row(isExpand, isExpand ? '➕' : '🪑',
+      T(isExpand ? 'create.lateEnrollExpand' : 'create.lateEnrollSuplentesOnly'),
+      T(isExpand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc'),
+      _tg(isExpand, 'window._f2ElimLateConf(this.checked)')) + '</div>');
+    return '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:12px;padding:1rem;margin-top:14px;">' +
+      '<p style="margin:0 0 0.75rem;font-size:0.8rem;color:#fbbf24;font-weight:600;text-transform:uppercase;letter-spacing:1px;">⏱️ ' + T('create.lateEnrollSection') + '</p>' +
+      masterRow + confRow + '</div>';
+  }
   // Janela da fase em dias: (término − 1º sorteio). Base da via de mão dupla rodadas↔repetir.
   // v4.4.62: CONSIDERA O HORÁRIO de cada campo (não meia-noite). 1º sorteio = data+hora do
   // agendamento (sem data, cai no início da fase); fim = data+hora de término da fase.
@@ -252,6 +284,11 @@
     var rotativo = isDupla && (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada');
     var scoreInd = cfg._scoreBy === 'individual';
     var classif = '';
+    // v4.5.49: o AGENDAMENTO (Rodadas: repetição + nº de rodadas) e as DATAS/Inscrições da fase
+    // (#f2-classif-extra) vão num acumulador SEPARADO — ficam SEMPRE editáveis, mesmo com a fase
+    // classificatória já sorteada (o organizador ajusta a temporada: repetição, nº de rodadas e
+    // término da fase durante a fase). Só a ESTRUTURA (formato/grupos/formação) é travada.
+    var classifSchedule = '';
 
     // v4.4.51: editando torneio cuja fase classificatória JÁ FOI SORTEADA → trava a config
     // DELA (cinza, sem cliques). A eliminatória segue editável até avançar de fase. Em criação
@@ -332,7 +369,7 @@
       rInner = _toggleRight('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') +
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Dentro de cada grupo, todos contra todos' + (cfg.rodadas.turnos === 'ida_volta' ? ' — ida e volta' : '') + '.</div>';
     }
-    classif += _sec('Rodadas', rInner);
+    classifSchedule += _sec('Rodadas', rInner);
 
     var e = cfg.eliminatoria;
     // Toggle da eliminatória (habilitado, MENOS quando a fase já avançou → travado). Desligar →
@@ -352,9 +389,42 @@
             _pill(isDupla, 'window._f2Disputa(\'dupla\')', '👥 Duplas') + '<div style="height:12px;"></div>';
         }
         if (isDupla) {
-          eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Duplas na eliminatória</div>' +
-            _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '🤝 Já formadas') +
-            _pill(cfg.formacaoDupla !== 'manual', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas') + '<div style="height:12px;"></div>';
+          // v4.5.51: nova alternativa — ABRIR COM REI/RAINHA. Quando ON, as duplas NÃO são "já
+          // formadas" nem "sorteadas": elas emergem de uma rodada Rei/Rainha (grupos de 4). Some
+          // o par Já formadas/Sorteadas e aparecem o CORTE por grupo + a ESTRATÉGIA do pareamento.
+          var _openRR = !!cfg.eliminatoria.openReiRainha;
+          eb += _toggleRight('Abrir com rodada Rei/Rainha', _openRR, 'window._f2ElimOpenRR(this.checked)') +
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">' + (_openRR
+              ? 'A eliminatória começa por <b>uma rodada Rei/Rainha</b>: grupos de 4 sorteados, e as <b>duplas se formam dentro de cada grupo</b> pelo resultado.'
+              : 'Ative para a eliminatória <b>começar por uma rodada Rei/Rainha</b> (grupos de 4 que formam as duplas).') + '</div>';
+          if (_openRR) {
+            var _cut = cfg.eliminatoria.reiRainhaCut === 2 ? 2 : 4;
+            eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Quantos de cada grupo de 4 avançam</div>' +
+              _pill(_cut === 4, 'window._f2ElimRRCut(4)', '4 · todos (2 duplas)') +
+              _pill(_cut === 2, 'window._f2ElimRRCut(2)', '2 · os melhores (1 dupla)') + '<div style="height:12px;"></div>';
+            var _fxRR = (cfg.eliminatoria.formacao === 'equilibrio') ? 'equilibrio' : 'performance';
+            eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Como formar as duplas no grupo</div>' +
+              _pill(_fxRR === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') +
+              _pill(_fxRR === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') +
+              '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">' + (_fxRR === 'performance'
+                ? 'Performance: os melhores do grupo jogam juntos (1º+2º, depois 3º+4º).'
+                : 'Equilíbrio: forte com fraco (1º+4º, 2º+3º) — duplas mais parelhas.') + '</div>';
+          } else {
+            eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Duplas na eliminatória</div>' +
+              _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '🤝 Já formadas') +
+              _pill(cfg.formacaoDupla !== 'manual', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas') + '<div style="height:10px;"></div>';
+            if (cfg.formacaoDupla === 'manual') {
+              // Já formadas: quem forma as duplas? Toggle ON = participantes podem (arrastar/soltar);
+              // OFF (padrão) = só o organizador. → t.manualPairing ('open' | 'organizer_only').
+              eb += _toggleRight('Participantes podem formar suas duplas', !!cfg.manualPairingOpen, 'window._f2ElimManualPairing(this.checked)') +
+                '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (cfg.manualPairingOpen
+                  ? 'Os participantes podem formar suas próprias duplas (arrastar e soltar). O organizador também pode.'
+                  : 'Apenas o organizador forma as duplas.') + '</div><div style="height:12px;"></div>';
+            } else {
+              // Sorteadas: as duplas da R1 saem no sorteio, seguindo livre/equilibrado entre gêneros.
+              eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:-2px;">As duplas da 1ª rodada são <b>sorteadas</b> no momento do sorteio, seguindo a opção <b>livre</b> ou <b>equilibrado entre gêneros</b>.</div><div style="height:12px;"></div>';
+            }
+          }
         }
       } else {
         // COM classificatória: escopo (2+ grupos) + Nº de classificados + resumo.
@@ -418,10 +488,10 @@
           : 'Eliminação simples — uma derrota e está fora. Ative para <b>Dupla Eliminatória</b>: só sai com 2 derrotas (quem perde na chave de cima cai na de baixo).') + '</div>';
       // Linhas (chaves paralelas): só na eliminatória SIMPLES — a dupla-elim é chave única.
       if (!e.dupla) {
-        eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Linhas (chaves paralelas — nomes livres)</div>';
+        eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Chaves paralelas (nomes livres)</div>';
         eb += [1, 2, 4].map(function (n) { return _pill(e.linhas === n, 'window._f2Linhas(' + n + ')', String(n)); }).join('');
         for (var i = 0; i < e.linhas; i++) {
-          eb += '<div style="margin-top:6px;"><input type="text" value="' + _safe(e.nomes[i] || '') + '" placeholder="Nome da linha ' + (i + 1) + ' (opcional)" oninput="window._f2LineName(' + i + ',this.value)" style="width:100%;max-width:300px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;"></div>';
+          eb += '<div style="margin-top:6px;"><input type="text" value="' + _safe(e.nomes[i] || '') + '" placeholder="Nome da chave ' + (i + 1) + ' (opcional)" oninput="window._f2LineName(' + i + ',this.value)" style="width:100%;max-width:300px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;"></div>';
         }
         // v4.4.73: Grande Final — só na SIMPLES com 2/4 linhas (na dupla-elim é sempre,
         // não tem toggle). ON = campeões das linhas se cruzam numa grande final (após a
@@ -429,14 +499,17 @@
         if (e.linhas > 1) {
           eb += '<div style="margin-top:14px;">' + _toggleRight('Grande Final', e.grandFinal !== false, 'window._f2GrandFinal(this.checked)') + '</div>' +
             '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' + (e.grandFinal !== false
-              ? 'Os campeões das linhas se cruzam numa <b>grande final</b> (com grandes semifinais), renderizada logo após a 1ª linha. Desative para deixar as linhas <b>independentes</b> — cada uma com seu próprio campeão.'
-              : 'Linhas <b>independentes</b> — cada linha tem seu próprio campeão, sem grande final unindo-as. Ative para cruzá-las numa grande final.') + '</div>';
+              ? 'Os campeões das chaves se cruzam numa <b>grande final</b> (com grandes semifinais), renderizada logo após a 1ª chave. Desative para deixar as chaves <b>independentes</b> — cada uma com seu próprio campeão.'
+              : 'Chaves <b>independentes</b> — cada chave tem seu próprio campeão, sem grande final unindo-as. Ative para cruzá-las numa grande final.') + '</div>';
         }
       }
-      // v4.4.42: "Inscrições durante a fase" só existe na FASE INICIAL do torneio (onde há
-      // inscrição). Com classificatória, ELA é a inicial e tem o bloco (via slot); a eliminatória
-      // (2ª fase) NÃO tem. Sem classificatória, a eliminatória é a inicial e carrega o bloco (slot).
+      // "Inscrições durante a fase": cada fase tem a SUA. Sem classificatória, a eliminatória é a
+      // fase inicial (onde há inscrição) e carrega o bloco do FORM (via slot #f2-classif-extra →
+      // t.lateEnrollment). Com classificatória, ELA é a inicial (tem o bloco do form via slot);
+      // a eliminatória é 2ª fase e ganha o SEU próprio painel (cfg.eliminatoria.lateEnrollment),
+      // que só passa a valer quando o torneio avança de fase.
       if (!cfg.classifAtiva) eb += '<div id="f2-classif-extra" style="margin-top:12px;"></div>';
+      else eb += _lateEnrollElimBlock(e);
     }
     var elimInner = e.ativa ? eb : '';
     // v4.4.52: fase avançou → config da eliminatória travada (cinza, sem cliques). Nota muda
@@ -450,20 +523,22 @@
     }
 
     // Slot (Datas + Inscrições) dentro da CLASSIFICATÓRIA quando ela está ativa.
-    if (cfg.classifAtiva) classif += '<div id="f2-classif-extra" style="margin-top:4px;"></div>';
+    if (cfg.classifAtiva) classifSchedule += '<div id="f2-classif-extra" style="margin-top:4px;"></div>';
 
     // Toggle da classificatória (sempre habilitado, MENOS quando já sorteada → travado).
     // Desligar → eliminação direta.
     var classifToggle = '<label class="toggle-switch" style="cursor:' + (_classifLocked ? 'not-allowed' : 'pointer') + ';' + (_classifLocked ? 'opacity:0.5;' : '') + '">' +
       '<input type="checkbox"' + (cfg.classifAtiva ? ' checked' : '') + (_classifLocked ? ' disabled' : '') + ' onchange="window._f2ClassifAtiva(this.checked)">' +
       '<span class="toggle-slider"></span></label>';
-    var classifInner = cfg.classifAtiva ? classif : '';
-    // v4.4.51: fase classificatória já sorteada → conteúdo cinza e sem interação (a config
-    // dela não muda mais). O #f2-classif-extra (Datas/Inscrições) fica dentro do wrapper, então
-    // também trava — coerente com "as opções da fase classificatória ficam cinzas".
+    var classifInner = cfg.classifAtiva ? (classif + classifSchedule) : '';
+    // v4.4.51/v4.5.49: fase classificatória já sorteada → só a ESTRUTURA (formato/grupos/formação)
+    // fica cinza e sem interação. O AGENDAMENTO (repetição, nº de rodadas) e as DATAS/Inscrições
+    // (#f2-classif-extra, dentro de classifSchedule) ficam FORA do wrapper → SEMPRE editáveis, pra
+    // o organizador ajustar a temporada durante a fase (reduzir/estender rodadas, mudar o término).
     if (_classifLocked) {
-      classifInner = '<div style="font-size:0.76rem;color:#c7d2fe;background:rgba(129,140,248,0.12);border:1px solid rgba(129,140,248,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">🔒 <b>Fase classificatória já sorteada</b> — a configuração não pode mais ser alterada. Você ainda pode ajustar a <b>fase eliminatória</b> antes de avançar de fase.</div>' +
-        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + classif + '</div>';
+      classifInner = '<div style="font-size:0.76rem;color:#c7d2fe;background:rgba(129,140,248,0.12);border:1px solid rgba(129,140,248,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">🔒 <b>Estrutura travada</b> — formato, grupos e formação não mudam mais (fase já sorteada). Você ainda pode ajustar o <b>agendamento</b> (repetição, nº de rodadas, término da fase) e a <b>fase eliminatória</b>.</div>' +
+        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + classif + '</div>' +
+        classifSchedule;
     }
 
     // v4.4.52: cadeado 🔒 ENTRE o título e o toggle quando a fase está travada.
@@ -502,6 +577,7 @@
   };
   window._f2Parceria = function (v) { S.cfg.parceria = v; _norm(); _rerender(); };
   window._f2Form = function (v) { S.cfg.formacaoDupla = v; _norm(); _rerender(); };
+  window._f2ElimManualPairing = function (checked) { S.cfg.manualPairingOpen = !!checked; _norm(); _rerender(); };
   // v4.4.19: "Formação das equipes" — 1 controle: Montadas (fixa+manual) / Sorteio
   // (fixa+sorteio) / Rei/Rainha (rotativo, só 1 grupo).
   window._f2TeamForm = function (v) {
@@ -525,15 +601,18 @@
   };
   window._f2Modo = function (v) { S.cfg.rodadas.modo = v; _norm(); _rerender(); };
   window._f2Turnos = function (v) { S.cfg.rodadas.turnos = v; _norm(); _rerender(); };
-  // VIA DE MÃO DUPLA (v4.4.29): editar RODADAS recalcula o REPETIR pela janela da fase; apagar
-  // rodadas NÃO mexe no repetir (e mantém o campo vazio até o user digitar).
+  // CANON (v4.5.24, regra-mãe): editar o Nº de RODADAS → MOVE a DATA FINAL (mantém V). Fim =
+  // 1º + N×repetição (última rodada tem 1 intervalo pra ser jogada → todos os N sorteios disparam).
+  // Só cai no legado (deriva o intervalo pela janela) quando não dá pra derivar o fim (sem V/1º sorteio).
   window._f2Rn = function (v) {
     if (!S) return;
     var n = parseInt(v, 10);
     if (!(n >= 1)) { return; } // vazio → mantém tudo (repetir intacto), sem re-render
     S.cfg.rodadas.n = n;
     if (n <= 1) S.cfg.rodadas.drawIntervalDays = null;             // 1 rodada não repete
-    else { var d = _windowDays(); if (d) S.cfg.rodadas.drawIntervalDays = Math.max(1, Math.round(d / n)); }
+    // v4.5.47: com repetição definida, o Nº de rodadas define o TÉRMINO da fase (1º + N×intervalo).
+    // Só quando não dá pra derivar o fim (sem repetição/1º sorteio) cai no legado: intervalo pela janela.
+    else if (!_syncEndFromSchedule()) { var d = _windowDays(); if (d) S.cfg.rodadas.drawIntervalDays = Math.max(1, Math.round(d / n)); }
     _norm(); _f2SchedRefresh(); // v4.4.71: atualiza no lugar (sem destruir o input em edição)
   };
   // Agendamento dos sorteios (modo "nº de rodadas"). Toggle "Sortear manualmente" (checked =
@@ -545,7 +624,27 @@
   function _mirrorPhaseStart() {
     var sd = document.getElementById('tourn-start-date'); if (sd && S.cfg.rodadas.drawFirstDate) sd.value = S.cfg.rodadas.drawFirstDate;
     var st = document.getElementById('tourn-start-time'); if (st && S.cfg.rodadas.drawFirstTime) st.value = S.cfg.rodadas.drawFirstTime;
-    ['_recalcDuration', '_checkWeather', '_updateLigaRoundsTag'].forEach(function (fn) { if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} } });
+    ['_recalcDuration', '_checkWeather'].forEach(function (fn) { if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} } });
+  }
+  // v4.5.88: Nº de RODADAS derivado da janela pela MESMA fórmula ESTRITA do runtime
+  // (window._phasePlannedRounds): floor((fim − 1º − 1ms) / (iv×dia)) + 1 = nº de sorteios
+  // que disparam ESTRITAMENTE antes do fim. Antes usava Math.round(janela/iv), que diverge
+  // do runtime por 1 em janelas fracionárias (ex.: 2,4 dias → round=2, estrito=3) — o editor
+  // mostrava um N e a barra do torneio outro. Retorna null quando não dá pra derivar.
+  function _strictNFromWindow(iv) {
+    if (!S || !S.cfg || !S.cfg.rodadas) return null;
+    iv = parseInt(iv, 10);
+    if (!(iv >= 1)) return null;
+    var _v = function (id) { var el = document.getElementById(id); return el ? (el.value || '') : ''; };
+    var firstDate = S.cfg.rodadas.drawFirstDate || _v('tourn-start-date') || '';
+    var firstTime = (S.cfg.rodadas.drawFirstDate ? (S.cfg.rodadas.drawFirstTime || '') : _v('tourn-start-time')) || '19:00';
+    var endDate = _v('tourn-end-date');
+    var endTime = _v('tourn-end-time') || '23:59';
+    if (!firstDate || !endDate) return null;
+    var fd = new Date(firstDate + 'T' + firstTime).getTime();
+    var ed = new Date(endDate + 'T' + endTime).getTime();
+    if (isNaN(fd) || isNaN(ed) || ed <= fd) return null;
+    return Math.floor((ed - fd - 1) / (iv * 86400000)) + 1;
   }
   // v4.4.62: recalcula o Nº de RODADAS pela janela (fim − 1º sorteio, COM horário) mantendo o
   // intervalo. Chamado ao mudar data/hora do 1º sorteio, do início ou do fim da fase.
@@ -553,8 +652,35 @@
     if (!S || !S.cfg || !S.cfg.rodadas) return;
     var iv = parseInt(S.cfg.rodadas.drawIntervalDays, 10);
     if (!(iv >= 1)) return; // sem repetição → nº de rodadas não deriva da janela
-    var d = _windowDays();
-    if (d) S.cfg.rodadas.n = Math.max(1, Math.round(d / iv));
+    var n = _strictNFromWindow(iv);
+    if (n != null) S.cfg.rodadas.n = Math.max(1, n);
+  }
+  // v4.5.47 (pedido do dono): 1º sorteio + repetição + Nº de rodadas → o TÉRMINO da fase DERIVA
+  // pra MANTER o Nº de rodadas escolhido. Último sorteio = 1º + (N−1)×intervalo; o fim fica UM
+  // intervalo além (o "tempo médio de uma rodada" = dias de repetição), dando à última rodada a
+  // janela pra ser jogada → fim = 1º + N×intervalo, na MESMA hora do 1º sorteio. Cai ESTRITAMENTE
+  // depois do último sorteio, então os N sorteios disparam e a contagem estrita (_phasePlannedRounds)
+  // relê exatamente N. Escreve nos campos de término da fase (#tourn-end-date/#tourn-end-time).
+  // Retorna true se conseguiu derivar o fim (precisa de 1º sorteio + intervalo + rodadas).
+  function _syncEndFromSchedule() {
+    if (!S || !S.cfg || !S.cfg.rodadas) return false;
+    var r = S.cfg.rodadas;
+    var n = parseInt(r.n, 10);
+    var iv = parseInt(r.drawIntervalDays, 10);
+    if (!(n >= 1) || !(iv >= 1)) return false;
+    var _v = function (id) { var el = document.getElementById(id); return el ? (el.value || '') : ''; };
+    var firstDate = r.drawFirstDate || _v('tourn-start-date') || '';
+    var firstTime = (r.drawFirstDate ? (r.drawFirstTime || '19:00') : (_v('tourn-start-time') || '19:00'));
+    if (!firstDate) return false;
+    var first = new Date(firstDate + 'T' + firstTime);
+    if (isNaN(first.getTime())) return false;
+    var end = new Date(first.getTime() + n * iv * 86400000);
+    var endDEl = document.getElementById('tourn-end-date');
+    if (!endDEl) return false;
+    endDEl.value = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
+    var endTEl = document.getElementById('tourn-end-time'); if (endTEl) endTEl.value = firstTime;
+    ['_recalcDuration', '_checkWeather'].forEach(function (fn) { if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} } });
+    return true;
   }
   // Exposto pros campos legados de Início/Término da fase (#tourn-start/end-date/time).
   window._f2RecalcRoundsFromWindow = function () { if (!S || !S.cfg || S.cfg.rodadas.modo !== 'fixo') return; _recalcN(); _norm(); _f2SchedRefresh(); };
@@ -597,18 +723,20 @@
     // (nextDrawAt nem era computado). Só na transição vazia→setada (não briga com
     // edições de data já preenchida nem com o manual reativado depois).
     if (nowSet && !was) S.cfg.rodadas.drawManual = false;
+    // CANON (v4.5.24): mexeu em qualquer coisa que NÃO seja o Nº de rodadas → recalcula as RODADAS
+    // pela janela (mantém V e F). Só editar o campo "Nº de rodadas" move a data final (_f2Rn).
     _mirrorPhaseStart(); _recalcN(); _norm();
     if (was !== nowSet) _rerender(); else _f2SchedRefresh();
   };
   window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _mirrorPhaseStart(); _recalcN(); _norm(); _f2SchedRefresh(); };
-  // VIA DE MÃO DUPLA (v4.4.29): editar REPETIR recalcula as RODADAS pela janela; apagar o repetir
-  // o deixa VAZIO (sem repetição) e NÃO mexe nas rodadas — nunca volta sozinho.
+  // CANON (v4.5.24): editar REPETIR (mantendo F) → recalcula as RODADAS pela janela; apagar o
+  // repetir o deixa VAZIO (sem repetição) e NÃO mexe nas rodadas — nunca volta sozinho.
   window._f2SchedInterval = function (v) {
     if (!S) return;
     var iv = parseInt(v, 10);
     if (!(iv >= 1)) { S.cfg.rodadas.drawIntervalDays = null; _norm(); _f2SchedRefresh(); return; } // vazio → mantém rodadas
     S.cfg.rodadas.drawIntervalDays = iv;
-    var d = _windowDays(); if (d) S.cfg.rodadas.n = Math.max(1, Math.round(d / iv)); // recalcula rodadas
+    var _n = _strictNFromWindow(iv); if (_n != null) S.cfg.rodadas.n = Math.max(1, _n); // recalcula rodadas (estrito = runtime)
     _norm(); _f2SchedRefresh();
   };
   // Slider de classificados: número + resumo da eliminatória ao vivo no arraste; re-render ao soltar.
@@ -641,7 +769,24 @@
   window._f2GrandFinal = function (checked) { if (!S) return; S.cfg.eliminatoria.grandFinal = !!checked; _norm(); _rerender(); };
   // v4.4.58: Dupla Eliminatória (repescagem). ON força 1 linha (chave única) no normalize.
   window._f2ElimDupla = function (checked) { S.cfg.eliminatoria.dupla = !!checked; _norm(); _rerender(); };
+  // "Inscrições durante a fase" DA ELIMINATÓRIA (cfg.eliminatoria.lateEnrollment). master ON =
+  // Fechadas; master OFF preserva o conf (expand/standby). conf só vale com inscrição aberta.
+  window._f2ElimLateMaster = function (closedOn) {
+    if (!S) return; var e = S.cfg.eliminatoria;
+    if (closedOn) e.lateEnrollment = 'closed';
+    else e.lateEnrollment = (e.lateEnrollment === 'expand') ? 'expand' : 'standby';
+    _norm(); _rerender();
+  };
+  window._f2ElimLateConf = function (expandOn) {
+    if (!S) return; var e = S.cfg.eliminatoria;
+    if (e.lateEnrollment === 'closed') return; // conf irrelevante quando fechada
+    e.lateEnrollment = expandOn ? 'expand' : 'standby';
+    _norm(); _rerender();
+  };
   window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
+  // v4.5.51: abrir a eliminatória com rodada Rei/Rainha (grupos de 4 formam as duplas).
+  window._f2ElimOpenRR = function (checked) { if (!S) return; S.cfg.eliminatoria.openReiRainha = !!checked; _norm(); _rerender(); };
+  window._f2ElimRRCut = function (n) { if (!S) return; S.cfg.eliminatoria.reiRainhaCut = (parseInt(n, 10) === 2) ? 2 : 4; _norm(); _rerender(); };
   // v4.4.x: estratégia ÚNICA da eliminatória (performance/equilíbrio/sorteio) — dirige formação
   // das duplas E semeadura dos confrontos (compilador deriva bracketSeeding).
   window._f2Formacao = function (v) { S.cfg.eliminatoria.formacao = v; _norm(); _rerender(); };

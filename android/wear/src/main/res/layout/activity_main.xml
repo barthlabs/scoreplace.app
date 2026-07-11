@@ -448,4 +448,80 @@
         </LinearLayout>
     </ScrollView>
 
+    <!-- Empate (5-5, 6-6, 7-7…) esperando decisão: cobre tudo e trava os +1 até
+         escolher prorrogar ou ativar o tie-break. Recorre a cada empate (motor
+         GSM = fonte única no JS). Espelha o overlay do celular e do watchOS. -->
+    <LinearLayout
+        android:id="@+id/tie_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_horizontal|center_vertical"
+        android:background="@color/winner_scrim"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingStart="30dp"
+        android:paddingEnd="30dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="⚖️"
+            android:textSize="26sp"
+            android:includeFontPadding="false" />
+
+        <TextView
+            android:id="@+id/tie_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Empate"
+            android:textColor="@color/name_blue"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="2dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Como desempatar?"
+            android:textColor="@color/meta"
+            android:textSize="10sp"
+            android:layout_marginTop="1dp"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/btn_tie_extend"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Prorrogar"
+            android:textColor="@color/btn_extend_text"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp"
+            android:background="@drawable/pill"
+            android:backgroundTint="@color/btn_extend_bg"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/btn_tie_tiebreak"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Tie-break"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp"
+            android:layout_marginTop="7dp"
+            android:background="@drawable/pill"
+            android:backgroundTint="@color/btn_tiebreak_bg"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
 </FrameLayout>

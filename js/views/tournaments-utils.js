@@ -433,177 +433,6 @@ window._deduplicateParticipants = function(t) {
     return removedCount;
 };
 
-// ── Fix orphaned match names ─────────────────────────────────────────────────
-// Detects phantom participant objects (name not in any team string or match)
-// and pairs them with team string members that have no corresponding object.
-// Example: Object "Ciça Mange" + String "C M / Michelle" → "C M" is old name of "Ciça Mange"
-// Returns number of fixes applied.
-window._fixOrphanedMatchNames = function(t) {
-    if (!t) return 0;
-    // Only run AFTER draw — before draw, no one has matches and that's normal
-    var hasMatches = (Array.isArray(t.matches) && t.matches.length > 0) ||
-                     (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-                     (Array.isArray(t.groups) && t.groups.length > 0);
-    if (!hasMatches) return 0;
-    var parts = Array.isArray(t.participants) ? t.participants : [];
-    if (parts.length === 0) return 0;
-
-    // 1. Separate participant OBJECT names from team STRING member names
-    var objectNames = {};  // names from participant objects
-    var stringMemberNames = {};  // individual names extracted from team strings
-    var objectByEmail = {}; // email → object name
-
-    parts.forEach(function(p) {
-        if (typeof p === 'string') {
-            if (p.indexOf(' / ') !== -1) {
-                p.split(' / ').forEach(function(n) { var nm = n.trim(); if (nm) stringMemberNames[nm] = true; });
-            } else {
-                stringMemberNames[p] = true;
-            }
-        } else if (typeof p === 'object' && p) {
-            var nm = p.displayName || p.name || '';
-            if (nm) {
-                objectNames[nm] = true;
-                if (p.email) objectByEmail[p.email] = nm;
-            }
-        }
-    });
-
-    // 2. Find phantom objects: object names NOT in any team string
-    var phantoms = []; // participant objects whose names don't appear in team strings or matches
-    var allStringNames = Object.keys(stringMemberNames);
-
-    Object.keys(objectNames).forEach(function(objName) {
-        if (!stringMemberNames[objName]) {
-            phantoms.push(objName);
-        }
-    });
-
-    if (phantoms.length === 0) return 0;
-
-    // 3. Find unaccounted team members: team string names that have no participant object
-    var unaccounted = [];
-    allStringNames.forEach(function(strName) {
-        if (!objectNames[strName]) {
-            unaccounted.push(strName);
-        }
-    });
-
-    if (unaccounted.length === 0) return 0;
-    window._debug('[FixOrphans] Phantom objects (not in draw):', phantoms, 'Unaccounted team members:', unaccounted);
-
-    // 4. Try to pair phantoms with unaccounted names
-    var fixes = [];
-
-    // Strategy A: if exactly 1 phantom and 1 unaccounted → same person
-    if (phantoms.length === 1 && unaccounted.length === 1) {
-        fixes.push({ oldName: unaccounted[0], newName: phantoms[0] });
-    } else {
-        // Strategy B: initials matching — "C M" could be initials of "Ciça Mange"
-        var _usedPhantoms = {};
-        var _usedUnaccounted = {};
-        phantoms.forEach(function(phantom) {
-            if (_usedPhantoms[phantom]) return;
-            var phantomParts = phantom.split(/\s+/).filter(function(w) { return w.length > 0; });
-            if (phantomParts.length < 2) return; // need at least 2 words to match initials
-
-            unaccounted.forEach(function(uName) {
-                if (_usedUnaccounted[uName] || _usedPhantoms[phantom]) return;
-                // Check if uName could be initials of phantom
-                var uParts = uName.split(/\s+/).filter(function(w) { return w.length > 0; });
-                if (uParts.length !== phantomParts.length) return; // must have same number of parts
-                var allMatch = true;
-                for (var i = 0; i < uParts.length; i++) {
-                    // Each part of uName should be 1-2 chars and match the first char of phantom part (case-insensitive, accent-insensitive)
-                    var uPart = uParts[i].replace(/[.]/g, '');
-                    if (uPart.length > 3) { allMatch = false; break; } // not an initial
-                    var pFirstChar = phantomParts[i].charAt(0).toLowerCase()
-                        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                    var uFirstChar = uPart.charAt(0).toLowerCase()
-                        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                    if (pFirstChar !== uFirstChar) { allMatch = false; break; }
-                }
-                if (allMatch) {
-                    window._debug('[FixOrphans] Initials match: "' + uName + '" → "' + phantom + '"');
-                    fixes.push({ oldName: uName, newName: phantom });
-                    _usedPhantoms[phantom] = true;
-                    _usedUnaccounted[uName] = true;
-                }
-            });
-        });
-    }
-
-    if (fixes.length === 0) {
-        // Strategy C: show organizer notification for manual fix
-        if (typeof window.AppStore !== 'undefined' && window.AppStore.currentUser) {
-            var isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
-            if (isOrg && phantoms.length > 0 && unaccounted.length > 0) {
-                // Show a banner/notification the organizer can act on
-                phantoms.forEach(function(phantom) {
-                    var msg = '"' + phantom + '" está inscrito(a) mas não aparece nas partidas.';
-                    if (unaccounted.length <= 3) {
-                        msg += ' Pode ser: ' + unaccounted.map(function(u) { return '"' + u + '"'; }).join(', ') + '.';
-                        msg += ' Use a edição inline (clique no nome) para corrigir.';
-                    }
-                    if (typeof showNotification === 'function') {
-                        showNotification(_t('utils.noMatch'), msg, 'warning', 10000);
-                    }
-                });
-            }
-        }
-        return 0;
-    }
-
-    // 5. Apply fixes using _propagateNameChange
-    window._debug('[FixOrphans] Applying ' + fixes.length + ' fix(es):', fixes.map(function(f) { return '"' + f.oldName + '" → "' + f.newName + '"'; }));
-    var fixCount = 0;
-    fixes.forEach(function(f) {
-        if (typeof window._propagateNameChange === 'function') {
-            var uid = null, email = null;
-            parts.forEach(function(p) {
-                if (typeof p !== 'object' || !p) return;
-                var nm = p.displayName || p.name || '';
-                if (nm === f.newName) { uid = p.uid || null; email = p.email || null; }
-            });
-            window._propagateNameChange(f.oldName, f.newName, uid, email, true); // v2.4.42: silent (fix automático)
-            fixCount++;
-        }
-    });
-
-    // Also remove the duplicate object participant (the phantom) after propagation
-    // because the team string now has the correct name
-    if (fixCount > 0) {
-        fixes.forEach(function(f) {
-            // Remove the object participant — their name is now in the team string
-            for (var i = parts.length - 1; i >= 0; i--) {
-                var p = parts[i];
-                if (typeof p === 'object' && p) {
-                    var nm = p.displayName || p.name || '';
-                    if (nm === f.newName) {
-                        // Check if their name now exists in a team string (after propagation)
-                        var inTeam = parts.some(function(p2) {
-                            return typeof p2 === 'string' && p2.indexOf(f.newName) !== -1 && p2.indexOf(' / ') !== -1;
-                        });
-                        if (inTeam) {
-                            parts.splice(i, 1);
-                            window._debug('[FixOrphans] Removed duplicate object "' + nm + '" (now in team string)');
-                        }
-                    }
-                }
-            }
-        });
-
-        if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-            t.updatedAt = new Date().toISOString();
-            window.FirestoreDB.saveTournament(t).catch(function(e) { window._warn('[FixOrphans] Save error:', e); });
-        }
-        if (typeof showNotification === 'function') {
-            showNotification(_t('utils.namesFixed'), fixes.map(function(f) { return '"' + f.oldName + '" → "' + f.newName + '"'; }).join(', '), 'info');
-        }
-    }
-    return fixCount;
-};
-
 window._getTournamentProgress = function(t) {
     if (!t) return { total: 0, completed: 0, pct: 0 };
     var allMatches = (typeof window._collectAllMatches === 'function')
@@ -729,7 +558,10 @@ window._ligaTournamentProgress = function(t) {
     var intervalDays = parseInt(t.drawIntervalDays) || 7; if (intervalDays < 1) intervalDays = 1;
     var intervalMs = intervalDays * 86400000;
     if (!isNaN(firstDraw) && endMs && endMs > firstDraw) {
-      roundsPlanned = Math.floor((endMs - firstDraw) / intervalMs) + 1;
+      // v4.x: contagem ESTRITA (mesma regra de _phasePlannedRounds) — um sorteio agendado
+      // EXATAMENTE no fim não dispara, logo não conta como rodada. Sem isto, o organizador
+      // via "3 rodadas" quando só 2 aconteciam.
+      roundsPlanned = Math.floor((endMs - firstDraw - 1) / intervalMs) + 1;
     }
   }
   if (roundsPlanned < t.rounds.length) roundsPlanned = t.rounds.length;
@@ -966,8 +798,16 @@ window._phaseCurrentRoundProgress = function(t) {
   var cur = byRound[curR];
   var total = cur.length, done = cur.filter(function(m){ return m.winner; }).length;
   var starts = [], ends = [];
-  cur.forEach(function(m){ if (m.startedAt) starts.push(+m.startedAt); if (m.resultAt) ends.push(+m.resultAt); });
+  // "Lançar resultado É iniciar" (mesma regra do início efetivo do torneio, ~L863): o placar
+  // conta como início mesmo sem startedAt (lançamento direto, sem placar ao vivo). Senão uma
+  // rodada jogada só por lançamento direto ficava "aguardando início" (roundStartMs null).
+  cur.forEach(function(m){ if (m.startedAt) starts.push(+m.startedAt); if (m.resultAt) { starts.push(+m.resultAt); ends.push(+m.resultAt); } });
   var _idx = rounds.indexOf(curR);
+  // Fim da rodada ANTERIOR desta fase (maior resultAt fora da rodada atual): quando a rodada
+  // atual está sorteada mas ainda sem 1º jogo, é DAQUI que ela ficou "valendo" — a fase não
+  // parou. Usado como fallback do início da rodada (evita "aguardando início" no meio da fase).
+  var _prevEnds = pm.filter(function(m){ return (m.round == null ? 1 : m.round) !== curR && m.resultAt; }).map(function(m){ return +m.resultAt; });
+  var prevRoundEndMs = _prevEnds.length ? Math.max.apply(null, _prevEnds) : null;
   // v4.3.16: NOME FUNCIONAL da rodada (Oitavas/Quartas/Semifinais/Final/3º lugar), por
   // ANALOGIA à nomeação das colunas do bracket — mas contando jogos POR TRILHA (Ouro/Prata
   // somam no mesmo round, então dividimos pelo nº de trilhas). Jogo de 3º lugar não conta
@@ -998,6 +838,7 @@ window._phaseCurrentRoundProgress = function(t) {
     total: total, done: done, pct: total ? Math.round(done / total * 100) : 0,
     complete: total > 0 && done === total,
     roundStartMs: starts.length ? Math.min.apply(null, starts) : null,
+    prevRoundEndMs: prevRoundEndMs,
     roundEndMs: (done === total && ends.length) ? Math.max.apply(null, ends) : null
   };
 };
@@ -1152,7 +993,11 @@ window._buildProgressInner = function(t) {
       _labelHead = _pr.name || ('Rodada ' + _roundNum);
       _labelSchedStart = 'início programado';
       _labelSchedEnd = 'final programado';
-      actualStart = _pr.roundStartMs || null;
+      // v4.5.x: fase eliminatória JÁ EM ANDAMENTO mas a rodada atual (ex.: Semifinais) ainda
+      // sem 1º jogo → NÃO é "aguardando início" (o torneio não parou). Usa o fim da rodada
+      // anterior desta fase como início efetivo. Só fica null quando a fase inteira não tem
+      // nenhum jogo jogado — aí sim é "aguardando início" de verdade (mesma fonte do torneio).
+      actualStart = _pr.roundStartMs || _pr.prevRoundEndMs || null;
       var _phL = (t.phases && t.phases[_cp]) || {};
       var _cfgSL = window._tProgParseMs(_phL.startDate ? (_phL.startDate + (_phL.startTime ? ('T' + _phL.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
       var _cfgEL = window._tProgParseMs(_phL.endDate ? (_phL.endDate + (_phL.endTime ? ('T' + _phL.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
@@ -1632,13 +1477,34 @@ window._phasePlannedRounds = function (t, phaseIdx) {
     var _ivRaw = (ph.drawIntervalDays != null && ph.drawIntervalDays !== '') ? ph.drawIntervalDays : (i0 ? t.drawIntervalDays : null);
     var interval = parseInt(_ivRaw, 10);
     var endDate = ph.endDate || (i0 ? t.endDate : '') || '';
-    var planned = parseInt(ph.rounds, 10) || 1;
+    // Nº de rodadas explicitamente configurado pelo organizador (phases[i].rounds). Quando
+    // presente, é a INTENÇÃO — a janela de datas é só o limite EXTERNO, não a intenção.
+    var _hasCfg = (ph.rounds != null && ph.rounds !== '' && !isNaN(parseInt(ph.rounds, 10)));
+    var _cfg = _hasCfg ? parseInt(ph.rounds, 10) : 0;
+    var planned = _hasCfg ? _cfg : 1;
     if (firstDate && interval >= 1 && endDate) {
         var _fs = String(firstDate).indexOf('T') > -1 ? firstDate : (firstDate + 'T' + firstTime);
         var _es = String(endDate).indexOf('T') > -1 ? endDate : (endDate + 'T23:59:59');
         var fd = new Date(_fs).getTime();
         var ed = new Date(_es).getTime();
-        if (!isNaN(fd) && !isNaN(ed) && ed > fd) planned = Math.floor((ed - fd) / (interval * 86400000)) + 1;
+        if (!isNaN(fd) && !isNaN(ed) && ed > fd) {
+            // v4.x: contagem ESTRITA. Um sorteio agendado EXATAMENTE no fim da fase NÃO
+            // dispara — o poller pula qualquer slot com horário >= fim (bracket-logic
+            // _checkLigaAutoDraws: guardas now>fim e scheduled>fim). Então esse último
+            // slot não pode virar rodada e não deve entrar na contagem, senão o organizador
+            // é enganado ("marca 3 rodadas" mas só 2 acontecem). floor((diff-1)/step)+1 =
+            // nº de sorteios fd+k*step ESTRITAMENTE antes de ed. Só difere de
+            // floor(diff/step)+1 quando o último slot coincide com o fim — exatamente o caso.
+            var _derived = Math.floor((ed - fd - 1) / (interval * 86400000)) + 1;
+            // v4.x (pedido do dono, "Nº de rodadas manda"): a janela de datas é o LIMITE
+            // EXTERNO; o Nº configurado é a intenção. Se a janela comporta MAIS sorteios que
+            // o N pedido (ex.: N=2 mas fim 11/07 23:00 dá 3 slots diários), o N manda (cap);
+            // se comporta MENOS (fim antes de 1º+N×intervalo), a janela reduz (não dá pra
+            // sortear além do fim). Sem N explícito, a janela deriva sozinha (comportamento
+            // legado, sem regressão). Reconcilia o estado inconsistente onde phases[i].rounds
+            // e o fim da fase discordam — a barra passa a bater com o motor de config.
+            planned = _hasCfg ? Math.min(_cfg, _derived) : _derived;
+        }
     }
     // Piso pelas rodadas realmente sorteadas.
     var drawn = 0;
@@ -2052,7 +1918,7 @@ window._buildTournamentConfigBox = function (t, opts) {
         ? 'Time inteiro leva W.O.' : 'Individual (substitui só o ausente)');
     // Inscrições após início / novos confrontos (formatos de chave; Liga já tratou acima)
     if (!isLiga) {
-        var le = t.lateEnrollment || 'closed';
+        var le = (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) || 'closed';
         if (le === 'expand') {
             add('Inscrições após início', 'Abertas — geram novos confrontos');
         } else {

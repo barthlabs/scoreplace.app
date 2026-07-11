@@ -38,9 +38,10 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private TextView pointLeft, pointRight, gamesLeft, gamesRight, setLabel;
     private TextView nameL1, nameL2, nameR1, nameR2, ballL1, ballL2, ballR1, ballR2;
     private LinearLayout setsRow;
-    private View winnerOverlay, replayControls, reshuffleRow;
+    private View winnerOverlay, replayControls, reshuffleRow, tieOverlay;
     private TextView setsLeft, setsRight, winnerLabel, winnerNames, winnerScore;
     private TextView btnReplayCancel, btnReplayConfirm;
+    private TextView tieLabel, btnTieExtend, btnTieTiebreak;
     private Switch reshuffleSwitch;
     private boolean replayDismissed = false; // Cancelar esconde o prompt
 
@@ -72,6 +73,10 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         reshuffleSwitch = findViewById(R.id.reshuffle_switch);
         btnReplayCancel = findViewById(R.id.btn_replay_cancel);
         btnReplayConfirm = findViewById(R.id.btn_replay_confirm);
+        tieOverlay = findViewById(R.id.tie_overlay);
+        tieLabel = findViewById(R.id.tie_label);
+        btnTieExtend = findViewById(R.id.btn_tie_extend);
+        btnTieTiebreak = findViewById(R.id.btn_tie_tiebreak);
 
         // Toque por POSIÇÃO → intenção pra o TIME que está naquele lado.
         halfLeft.setOnClickListener(v -> sendPoint(courtLeft));
@@ -84,6 +89,26 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             replayControls.setVisibility(View.GONE);
         });
         btnReplayConfirm.setOnClickListener(v -> sendReplay(reshuffleSwitch.isChecked()));
+        // Empate → prorrogar (mantém 'ask' no motor → recorre) ou tie-break.
+        btnTieExtend.setOnClickListener(v -> sendResolveTie("extend"));
+        btnTieTiebreak.setOnClickListener(v -> sendResolveTie("tiebreak"));
+    }
+
+    // Intenção "resolveTie" — escolha do desempate no empate (5-5, 6-6…).
+    private void sendResolveTie(String rule) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("v", 1);
+            o.put("type", "resolveTie");
+            o.put("rule", rule);
+            o.put("id", UUID.randomUUID().toString());
+            final byte[] bytes = o.toString().getBytes(StandardCharsets.UTF_8);
+            Wearable.getNodeClient(this).getConnectedNodes()
+                .addOnSuccessListener(nodes -> {
+                    MessageClient mc = Wearable.getMessageClient(this);
+                    for (Node node : nodes) mc.sendMessage(node.getId(), PATH_INTENT, bytes);
+                });
+        } catch (Exception e) { /* no-op */ }
     }
 
     // Intenção "replay" com o flag de re-sortear duplas.
@@ -200,13 +225,29 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             }
 
             winnerOverlay.setVisibility(View.VISIBLE);
+            tieOverlay.setVisibility(View.GONE);
             halfLeft.setClickable(false);
             halfRight.setClickable(false);
         } else {
             winnerOverlay.setVisibility(View.GONE);
             replayDismissed = false;   // recomeçou → prompt volta a aparecer
-            halfLeft.setClickable(true);
-            halfRight.setClickable(true);
+
+            // #3: Empate esperando decisão (5-5, 6-6, 7-7…) — cobre as metades e
+            // trava os +1 até prorrogar ou ativar o tie-break.
+            boolean tiePending = s.optBoolean("tieRulePending", false);
+            if (tiePending) {
+                int tiedAt = s.isNull("tiedAt")
+                    ? (games != null ? games.optInt(leftTeam - 1, 0) : 0)
+                    : s.optInt("tiedAt", 0);
+                tieLabel.setText("Empate " + tiedAt + "–" + tiedAt);
+                tieOverlay.setVisibility(View.VISIBLE);
+                halfLeft.setClickable(false);
+                halfRight.setClickable(false);
+            } else {
+                tieOverlay.setVisibility(View.GONE);
+                halfLeft.setClickable(true);
+                halfRight.setClickable(true);
+            }
         }
     }
 

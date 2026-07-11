@@ -9,6 +9,181 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.102-beta — inscrições por fase + fim do "aguardando início" fantasma <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⏱️ "Inscrições durante a fase" agora é por fase:</b> a configuração da <b>Classificatória</b> vale só nela e <b>termina quando o torneio avança</b>; a <b>Eliminatória</b> ganhou o <b>seu próprio conjunto</b> de opções (Abertas / Suplentes Apenas / Novos Confrontos). Cada fase gerencia a sua.</li>' +
+        '<li><b>🏁 Fim do "Aguardando início" indevido:</b> na fase eliminatória em andamento, uma rodada recém-sorteada (ex.: <b>Semifinais</b>) sem o 1º jogo lançado mostrava "⏳ Aguardando início" como se o torneio tivesse parado. Agora ela conta como <b>em andamento</b> a partir do fim da rodada anterior — só fica "aguardando" quando a fase realmente não tem nenhum jogo.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.101-beta — alterar voto igual a votar <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>✏️ Um único "Alterar" que passa por todas as perguntas:</b> na Enquete, alterar o voto agora é igual a votar — <b>um botão só</b> (à direita do título da 1ª pergunta) abre <b>cada pergunta em uma página</b>, já com suas respostas marcadas, e você avança "Salvar e continuar →" até o fim. Acabaram os vários botões de alterar espalhados.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.100-beta — Enquete mais arrumada <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📱 Cabeçalho não invade mais a barra de status:</b> o topo da Enquete (Voltar + título) passou a respeitar a área do relógio/bateria (notch) no app instalado.</li>' +
+        '<li><b>✏️ Alterar voto com Cancelar/Confirmar fixos no topo:</b> ao alterar seu voto, os botões <b>Cancelar</b> e <b>Salvar</b> aparecem <b>fixos logo abaixo do cabeçalho</b> (antes ficavam lá embaixo), e o menu de organizador some pra dar lugar a eles enquanto você altera.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.99-beta — desfazer dupla volta a funcionar <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>↩️ Desfazer dupla de jogadores com conta:</b> o botão de desfazer não encontrava a dupla quando os dois eram jogadores com conta (identificava pelo nome, que é resolvido pela conta). Agora a formação e a dissolução de duplas são feitas pela <b>identidade de cada jogador (a conta)</b> — só uma vaga fictícia (sem conta) é identificada pelo nome. Desfazer funciona em qualquer combinação.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.98-beta — dupla com vaga aparece completa na chave <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👫 Dupla de conta + vaga (placeholder) não aparece mais sozinha:</b> quando uma dupla era formada por um jogador com conta + uma vaga "Jogador NN", o chaveamento mostrava só o jogador com conta (a vaga sumia). Agora os <b>dois</b> aparecem no card do jogo.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.97-beta — o app se atualiza sozinho <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔄 Atualização automática mais confiável:</b> quando sai uma versão nova, o app passa a pegá-la <b>sozinho</b> — inclusive ao <b>navegar entre telas</b> — sem você precisar recarregar nem fechar/reabrir. Se estiver no meio de algo (placar, formulário), ele espera o momento seguro e mostra um toque "🔄 Nova versão" caso queira atualizar na hora. A checagem ficou <b>leve</b> (não baixa mais o app inteiro toda vez).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.95-beta — Vagas (placeholders) e duplas mais consistentes <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>➕ Reservar vagas (placeholders) corrigido:</b> as vagas agora aparecem sempre com o nome <b>"Jogador NN"</b>, <b>numeradas de forma única</b> — mesmo criando em vários lotes (antes o nome sumia ou repetia). Cada vaga vira um jogador real quando alguém ocupa.</li>' +
+        '<li><b>🔢 Números de inscrição sem buraco:</b> ao <b>remover um inscrito</b>, os demais são renumerados automaticamente (o 7 vira 6, e assim por diante). E nas <b>duplas</b>, os <b>dois jogadores</b> mostram o número de inscrição.</li>' +
+        '<li><b>👤 Nomes sempre visíveis:</b> os cards de jogadores com conta não ficam mais <b>sem nome</b> em algumas telas (ex.: ao formar duplas) — o nome do perfil é carregado de forma confiável.</li>' +
+        '<li><b>🤝 "Já formadas" reflete o que você fez:</b> ao montar uma dupla <b>na mão</b>, a opção <b>"Duplas na eliminatória"</b> passa a mostrar <b>"Já formadas"</b> (e o sorteio respeita isso, sem re-sortear duplas por cima).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.89-beta — Nº de rodadas e datas da fase sempre em sincronia <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📊 A barra do torneio respeita o Nº de rodadas configurado:</b> se a fase tem <b>2 rodadas</b>, o torneio mostra "Rodada X de 2" e conta os jogos por 2 rodadas — mesmo que a data de término deixasse espaço pra uma rodada a mais. A data da fase é o <b>limite externo</b>; o número de rodadas que você escolheu é o que manda.</li>' +
+        '<li><b>🔁 Edição da fase totalmente sincronizada:</b> mudou o <b>Nº de rodadas</b> → o <b>Término</b> se ajusta; mudou o <b>Término</b> → o <b>Nº de rodadas</b> se corrige; mudou o <b>intervalo</b> entre sorteios → o <b>Nº de rodadas</b> se recalcula. Tudo pela mesma conta que a barra usa, então o que você vê na edição é exatamente o que o torneio mostra.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.87-beta — duplas aparecem completas na hora <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👫 Card de dupla sempre com os dois jogadores:</b> em torneios de duplas, às vezes um card aparecia só com um nome (o parceiro sumia por um instante enquanto o perfil carregava). Agora a dupla aparece <b>completa na hora</b>, na lista de inscritos e no detalhe do torneio — o app reconhece os dois jogadores pela conta, sem depender do nome estar gravado.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.86-beta — repescagem completa também na chave de baixo (ninguém passa sem jogar) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔁 Todos jogam, ninguém fica de fora:</b> na Dupla Eliminatória com <b>repescagem</b> e um número de duplas fora da conta certa (ex.: 15), a <b>chave de baixo</b> agora dá uma nova chance ao melhor eliminado da própria rodada, em vez de deixar alguém <b>avançar sem jogar (BYE)</b>. Quem escolhe repescagem <b>nunca mais vê um BYE</b> na chave; quem prefere BYE, escolhe BYE; e quem quiser trava os inscritos numa potência de 2. É o espírito do app — incluir todo mundo. O time que ganha essa nova chance aparece com a marca <b>REP</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.85-beta — identidade do jogador é a conta; o nome vem do perfil <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🛡️ Robustez interna (sem mudança visível):</b> o app deixa de guardar o nome do jogador na inscrição quando ele tem conta — passa a exibir sempre o <b>nome do perfil ao vivo</b>. Se você mudar seu nome no perfil, ele aparece atualizado em todo lugar, sem resíduo antigo. O sorteio continua funcionando normalmente (resolve o nome pela conta na hora). Jogadores <b>convidados sem conta</b> seguem pelo nome digitado, como sempre.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.84-beta — o app acha o jogador pela conta mesmo sem o nome gravado <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🛡️ Robustez interna (sem mudança visível):</b> ao resolver quem é cada jogador de um jogo (classificação, W.O., substituição), o app agora reconhece a pessoa pela <b>conta dela</b> (nome do perfil ao vivo), mesmo que o nome não esteja gravado na inscrição. É mais um passo de preparação para o app usar a <b>conta</b> como identidade única em toda parte — hoje o comportamento é idêntico ao anterior, e jogadores convidados sem conta seguem pelo nome, como sempre.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.83-beta — sorteio resolve o nome do jogador pela conta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🛡️ Robustez interna (sem mudança visível):</b> ao sortear e ao desfazer duplas, o app passa a resolver o <b>nome de cada jogador pela conta dele</b> (perfil ao vivo), não só pelo nome gravado na inscrição. É mais um passo para o app usar a <b>conta</b> como identidade única em toda parte. Hoje o comportamento é idêntico ao anterior — jogadores convidados sem conta seguem pelo nome, como sempre.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.82-beta — duplas reconhecidas pela conta dos dois jogadores <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🛡️ Robustez interna (sem mudança visível):</b> em mais pontos do app, uma <b>dupla</b> passa a ser reconhecida pela <b>conta dos dois jogadores</b>, não só pelo nome gravado. É um passo de preparação para o app usar a <b>conta</b> como identidade única em toda parte — hoje o comportamento é idêntico ao anterior, sem nada diferente na tela.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.81-beta — chamada de duplas conta PESSOAS (dupla = 2) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👥 Presença conta por pessoa:</b> na chamada de torneios de duplas, a barra de presença (Todos / Presentes / Aguardando / W.O.) e a contagem de inscritos passaram a contar <b>cada jogador</b> — uma dupla vale <b>2 pessoas</b>, não 1. Antes, duplas formadas por convite entravam como 1 e o total ficava menor do que o número real de jogadores.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.80-beta — substituto do Rei/Rainha pontua como ele mesmo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👑 W.O. no Rei/Rainha carrega a conta do substituto:</b> quando alguém leva W.O. num grupo de Rei/Rainha e uma <b>folga entra no lugar</b>, agora o lugar dela no jogo passa a ser <b>da conta dela</b> — os pontos e a exibição do nome vão para o substituto, não para quem faltou. Antes, o jogo trocava só o nome visível mas mantinha a identidade de quem saiu, podendo creditar os pontos do substituto na pessoa errada e mostrar o nome trocado. Reverter o W.O. também devolve tudo certo. O <b>Jogador X</b> (sem conta) continua sem pontuar, como antes.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.79-beta — W.O. atinge o jogo da pessoa certa, pela conta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🚫 W.O. reconhece a pessoa pela conta (não pelo nome):</b> ao marcar alguém como ausente (W.O.), o app agora encontra o jogo certo pela <b>conta da pessoa</b>. Antes, dois jogadores de mesmo nome podiam <b>ambos</b> levar W.O. de uma vez, e quem tivesse trocado o nome depois do sorteio podia ter o W.O. <b>não aplicado</b>. Agora o W.O. cai exatamente no jogo de quem faltou. Jogadores convidados (sem conta) seguem funcionando pelo nome, como antes.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.78-beta — folga e pareamento da Liga seguem a pessoa mesmo se ela trocar o nome <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⚖️ Justiça da folga e do anti-repetição por identidade:</b> na Liga/Pontos Corridos, o rodízio de <b>quem folga</b> e o <b>anti-repetição de parcerias</b> passaram a contar por <b>pessoa (conta)</b>, não pelo nome escrito. Antes, se alguém trocava o nome no meio da temporada, o app “esquecia” quantas vezes ela já tinha folgado (podia folgar de novo injustamente) e as parcerias já feitas. Agora o histórico segue a pessoa. Contadores antigos são preservados automaticamente.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.77-beta — chamada de duplas igual à tela do torneio, com presença por jogador <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👥 Chamada de duplas no card certo:</b> na lista de inscritos (chamada), antes do sorteio, os torneios de duplas passam a mostrar o <b>mesmo card canônico</b> da tela do torneio — <b>“Sem dupla” em cima</b> e <b>“Duplas formadas” embaixo</b> —, no lugar do card antigo com os solos misturados no meio.</li>' +
+        '<li><b>✅ Presença por jogador na dupla:</b> cada dupla formada agora tem <b>dois botões de Presente</b>, um para cada jogador (o da esquerda à esquerda, o da direita à direita) — você marca a presença de cada pessoa separadamente.</li>' +
+        '<li><b>🚫 W.O. conforme a configuração:</b> no <b>W.O. individual</b>, cada jogador tem o seu W.O.; no <b>W.O. por time</b>, um único <b>W.O. do time</b> (falta um → o time inteiro leva W.O.).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.74-beta — quem pode lançar o placar é reconhecido pela conta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔐 Permissão de lançar o placar por identidade (não pelo nome):</b> nos jogos em que os próprios participantes lançam o resultado, o app passou a reconhecer quem está autorizado <b>pela conta da pessoa</b>, e não mais pelo nome escrito no jogo. Antes, dois jogadores de mesmo nome podiam liberar a pessoa errada, e quem tivesse trocado o nome podia acabar bloqueado. Agora cada jogador certo lança o placar do seu jogo — inclusive nas duplas, sem um membro interferir no outro. Jogos antigos e jogadores convidados (sem conta) seguem funcionando pelo nome, como antes.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.67-beta — nome sempre certo em todas as telas <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🆔 Nome de cada pessoa resolvido pela conta (não pelo texto do jogo), em todo o app:</b> na lista de inscritos, no <b>chaveamento</b> e no painel de <b>Meus Resultados</b>, o nome agora vem sempre do perfil vivo da pessoa (pela conta), e não mais do nome escrito na hora do sorteio. Acaba com nome aparecendo <b>em branco</b>, com a confusão de homônimos (o antigo "Maira/Maira") e com nome desatualizado depois que alguém troca o nome — e o nome de um membro da dupla nunca preenche o do outro.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.51-beta — o card de dupla volta a ser o certo, com "Sem dupla" em cima <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👫 Torneio de duplas mostra de novo o card canônico:</b> em torneios de duplas (inclusive Casais/Pontos Corridos criados antes), a lista de inscritos voltou a separar <b>“Sem dupla” em cima</b> e <b>“Duplas formadas” embaixo</b>, com o card de dupla padronizado (arrastar um sobre o outro para formar, ↩️ Desfazer para separar). Alguns desses torneios estavam caindo no card errado do modo individual — agora a detecção de “é torneio de duplas” olha as próprias duplas já formadas, e não só a configuração gravada.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.27-beta — quem forma as duplas na eliminatória <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🤝 Duplas “já formadas”: você escolhe quem forma:</b> ao criar/editar um torneio de duplas com eliminatória direta e a opção <b>“Já formadas”</b>, agora há um interruptor <b>“Participantes podem formar suas duplas”</b>. Ligado, os próprios jogadores montam suas duplas (arrastar e soltar) — e o organizador também pode. Desligado (padrão), <b>só o organizador</b> forma as duplas.</li>' +
+        '<li><b>🎲 Duplas “Sorteadas”:</b> deixa claro que, nesse modo, as duplas da 1ª rodada saem no sorteio seguindo a opção <b>livre</b> ou <b>equilibrado entre gêneros</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.26-beta — "Confrontos Diretos" também nunca mais troca dois jogadores <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⚔️ A matriz "Confrontos Diretos" agora fala por identidade:</b> na tela de classificação, a tabela cruzada de quem venceu quem (⚔️ Confrontos Diretos) passou a identificar cada pessoa pela sua conta, e não mais pelo nome escrito no jogo. Antes — mesmo com a classificação já corrigida na v4.5.0 — se alguém trocava o nome no meio do torneio, os confrontos dessa pessoa apareciam na linha de um homônimo. Agora cada célula da matriz mostra o retrospecto certo da pessoa certa.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.25-beta — dupla tardia entra na chave inferior quando o mata-mata já andou (Dupla Eliminatória) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🤝 Formou 2 duplas na lista de espera com a 2ª rodada já em andamento → entram na chave inferior:</b> em <b>Dupla Eliminatória</b>, se a 2ª rodada da chave superior já começou (mas a da chave inferior ainda não), o novo confronto formado na lista de espera entra na <b>1ª rodada da chave inferior</b> — o vencedor segue na disputa e o derrotado é eliminado. Complementa o comportamento da v4.5.24: enquanto a 2ª rodada de cima ainda não começou, o confronto entra na chave superior; se a chave inferior já andou, viram suplentes. Todos os resultados já lançados são <b>preservados</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.24-beta — duplas da lista de espera entram na chave (Dupla Eliminatória) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🤝 Formou 2 duplas na lista de espera → viram confronto na chave:</b> em <b>Dupla Eliminatória</b> com inscrição aberta, ao juntar 2 duplas na lista de espera (arrastando), elas entram como um <b>novo confronto na 1ª rodada da chave superior</b> — como se tivessem sido sorteadas: o vencedor segue na chave superior e o derrotado cai pra chave inferior. Uma dupla sozinha pode preencher uma vaga sem adversário; se sobrar 1 dupla sem par, ela aguarda. Os jogos da 1ª rodada <b>já jogados são preservados</b>.</li>' +
+        '<li><b>👤 Entrou tarde demais? Vira suplente:</b> se o torneio já avançou muito (a 2ª rodada da chave inferior já começou), as pessoas na lista de espera passam a ser <b>suplentes individuais</b> (cobrem W.O.), e as duplas ali formadas são desfeitas.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.20-beta — inscrição aberta na 1ª rodada e formação de duplas na lista de espera <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📝 Inscrições abertas durante a 1ª rodada, encerram na 2ª:</b> quando o organizador configura inscrição depois do início, o torneio segue aceitando gente e formando novos confrontos durante a <b>1ª rodada da fase</b>. No <b>primeiro resultado (ou primeiro ponto no placar ao vivo) da 2ª rodada</b>, as inscrições se encerram automaticamente — o botão <b>+ Participante</b> fica cinza e o <b>Encerrar Inscrições</b> some. Vale para qualquer formato, por fase.</li>' +
+        '<li><b>🏆 Torneio encerra sozinho depois da grande final:</b> em eliminatórias com inscrição tardia, ao decidir a última partida o torneio agora fecha automaticamente e mostra o <b>pódio</b> e a <b>classificação final</b> — antes podia ficar "em andamento" pra sempre.</li>' +
+        '<li><b>🤝 Formar duplas na lista de espera (arrastar e soltar):</b> em torneios de duplas com inscrição aberta na 1ª rodada, a lista de espera abaixo da chave vira uma área onde os avulsos aparecem como cards e podem ser <b>arrastados um sobre o outro (pelo ⠿) para formar uma dupla</b> — com o presente/ausente de cada jogador ali mesmo. Funciona no computador e no celular.</li>' +
+        '<li><b>🎴 Cards de inscrito mais legíveis:</b> nome dos participantes maior e número de inscrição padronizado nos cards.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.0-beta — a classificação nunca mais confunde dois jogadores <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🆔 Classificação e desempate por identidade, não por nome:</b> a tabela de classificação (Pontos Corridos, Suíço e Rei/Rainha) agora identifica cada pessoa pela sua conta, e não mais só pelo nome escrito no jogo. Antes, se alguém trocava o nome no meio do torneio, ou se havia dois jogadores com nomes parecidos, os pontos e o critério de <b>confronto direto</b> podiam cair na linha errada — misturando dois jogadores ou "sumindo" com os jogos de um deles. Agora cada linha soma exatamente os jogos da pessoa certa, e o nome exibido continua o do cadastro.</li>' +

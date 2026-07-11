@@ -22,6 +22,66 @@ try {
 initializeApp();
 const db = getFirestore();
 
+// v4.5.73: identidade do slot = uid (espelha window._slotUids de bracket-logic.js).
+// O slot carrega SEMPRE o(s) uid(s) — team*Uids (dupla/monarch) ou p*Uid (1v1); o
+// nome (m.p1) é só cache de display, que pode envelhecer. Usado pra resolver o nome
+// VIVO do perfil no texto das notificações, em vez do nome gravado no slot.
+function _slotUidsOf(m, side) {
+  if (!m) return [];
+  const arr = side === 'p1' ? m.team1Uids : m.team2Uids;
+  if (Array.isArray(arr) && arr.length) return arr.filter(Boolean).map(String);
+  const single = side === 'p1' ? m.p1Uid : m.p2Uid;
+  if (single) return [String(single)];
+  return [];
+}
+
+// Busca em lote os nomes VIVOS (users/{uid}.displayName) de um conjunto de uids.
+// Retorna { profByUid, nameByUid }. Reaproveitado pra checar notifyPlatform sem
+// re-ler o mesmo doc. Nome ausente → não entra no mapa (o caller cai no fallback).
+async function _loadLiveNames(uidSet) {
+  const list = Array.from(uidSet);
+  const profByUid = {};
+  for (let i = 0; i < list.length; i += 100) {
+    const refs = list.slice(i, i + 100).map(u => db.collection('users').doc(u));
+    const docs = await db.getAll(...refs);
+    docs.forEach(d => { if (d.exists) profByUid[d.id] = d.data() || {}; });
+  }
+  const nameByUid = {};
+  Object.keys(profByUid).forEach(u => {
+    const dn = String(profByUid[u].displayName || profByUid[u].name || '').trim();
+    if (dn) nameByUid[u] = dn;
+  });
+  return { profByUid, nameByUid };
+}
+
+// v4.5.85 (ITEM 3 · Fase 4): injeta os nomes VIVOS por uid no draw-core ANTES do sorteio.
+// Storage é só-uid → sem isto o motor (pool por nome) descarta entrada só-uid → 0 rodadas.
+// Best-effort: falha silenciosa cai no nome gravado (legado). Também rehidrata as entradas
+// (o generateLigaRound já rehidrata no topo; para o caminho de fase, chamamos explícito).
+async function _preloadDrawNames(t) {
+  try {
+    if (!drawWindow) return;
+    const uids = new Set();
+    (Array.isArray(t.participants) ? t.participants : []).forEach(p => {
+      if (!p || typeof p !== 'object') return;
+      [p.uid, p.p1Uid, p.p2Uid].forEach(u => { if (u) uids.add(String(u)); });
+      if (Array.isArray(p.participants)) p.participants.forEach(sp => { if (sp && sp.uid) uids.add(String(sp.uid)); });
+    });
+    if (!uids.size) return;
+    const { nameByUid } = await _loadLiveNames(uids);
+    drawWindow._profileNameByUid = nameByUid || {};
+  } catch (e) { /* best-effort; motor cai no nome gravado legado */ }
+}
+
+// Nome exibido de um lado da partida: nomes VIVOS dos uids do slot (dupla junta com
+// " / "); só cai no nome gravado (storedStr) quando o slot não tem uid — guest sem
+// conta, cuja string É a identidade legítima. Nunca devolve vazio.
+function _sideDisplayName(uids, nameByUid, storedStr) {
+  const ns = (uids || []).map(u => nameByUid[u]).filter(Boolean);
+  if (ns.length) return ns.join(' / ');
+  return storedStr || '?';
+}
+
 // Kill-switch de notificações no staging (ver functions/index.js). No projeto de
 // staging, push (FCM) NÃO é enviado — pra simular torneios com inscritos reais
 // sem disparar nada. Em prod IS_STAGING é false → comportamento idêntico.
@@ -183,6 +243,7 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
         // v2.3.91: usa o MESMO motor de sorteio do app (Rei/Rainha, duplas,
         // equilíbrio, categorias, folgas justas, desempate). Muta `t` in-place.
         t.id = tId;
+        await _preloadDrawNames(t); // v4.5.85: nomes vivos por uid antes do motor
         const res = generateLigaRound(t, mostRecentScheduled);
         if (!res.ok) {
           console.log(`Auto-draw: skip ${tId} (${res.reason})`);
@@ -282,19 +343,27 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
         if (_newRound && Array.isArray(_newRound.matches)) {
           _newRound.matches.forEach(m => {
             if (m && !m.isSitOut && !m.isBye) {
-              roundMatches.push({ p1: m.p1 || '', p2: m.p2 || '', label: m.label || '' });
+              // v4.5.73: carrega os uids do slot pra resolver nome vivo + casar "meu jogo".
+              roundMatches.push({ p1: m.p1 || '', p2: m.p2 || '', label: m.label || '',
+                p1Uids: _slotUidsOf(m, 'p1'), p2Uids: _slotUidsOf(m, 'p2') });
             }
           });
         }
 
-        // Casa nome do TIME inteiro ("A / B") OU membro individual ("A") contra o lado.
-        const _isInSide = (name, side) => {
-          if (!name || !side) return false;
-          const n = String(name).trim().toLowerCase();
-          const s = String(side).trim().toLowerCase();
-          if (s === n) return true;
-          return s.split(' / ').some(x => x.trim() === n);
-        };
+        const activePlayers = (Array.isArray(t.participants) ? t.participants : [])
+          .filter(p => p && typeof p === 'object' && p.ligaActive !== false);
+
+        // v4.5.73: nomes exibidos resolvidos pela CONTA (uid), não pelo nome gravado
+        // no slot — o motor grava m.p1 a partir de p.displayName de participants, que
+        // sem o reconcile de nomes envelhece. Junta os uids da rodada + dos participantes
+        // e busca o nome VIVO em lote (reaproveitado pra checar notifyPlatform sem re-ler).
+        const _allUids = new Set();
+        roundMatches.forEach(m => { m.p1Uids.forEach(u => _allUids.add(u)); m.p2Uids.forEach(u => _allUids.add(u)); });
+        activePlayers.forEach(p => {
+          [p.uid, p.p1Uid, p.p2Uid].forEach(u => { if (u) _allUids.add(String(u)); });
+          if (Array.isArray(p.participants)) p.participants.forEach(sp => { if (sp && sp.uid) _allUids.add(String(sp.uid)); });
+        });
+        const { profByUid: _profByUid, nameByUid: _nameByUid } = await _loadLiveNames(_allUids);
 
         // Prazo p/ lançar resultados = próximo sorteio (data + hora). Formatado em
         // UTC pra ecoar o wall-clock pretendido (drawFirstTime é interpretado como
@@ -310,12 +379,17 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
           }
         } catch (e) { /* best-effort: sem prazo se o helper falhar */ }
 
-        // Monta o texto personalizado pro jogo(s) deste participante/time.
-        const buildPlayerMsg = (teamName) => {
-          const mine = roundMatches.filter(m => _isInSide(teamName, m.p1) || _isInSide(teamName, m.p2));
+        // Monta o texto personalizado pro jogo(s) deste participante/time. "Meu jogo"
+        // por INTERSEÇÃO DE UID (uids do participante ∩ uids do slot) — não por nome.
+        // Nomes exibidos = nome vivo do perfil por uid (fallback pro gravado só p/ guest).
+        const buildPlayerMsg = (myUidSet) => {
+          const mine = roundMatches.filter(m =>
+            m.p1Uids.some(u => myUidSet.has(u)) || m.p2Uids.some(u => myUidSet.has(u)));
           if (!mine.length) return null;
           const gamesText = mine.map((pm, i) =>
-            (pm.label || ('Jogo ' + (i + 1))) + ':\n' + (pm.p1 || '?') + '\nvs\n' + (pm.p2 || '?')
+            (pm.label || ('Jogo ' + (i + 1))) + ':\n' +
+            _sideDisplayName(pm.p1Uids, _nameByUid, pm.p1) + '\nvs\n' +
+            _sideDisplayName(pm.p2Uids, _nameByUid, pm.p2)
           ).join('\n\n');
           return '🔄 Nova rodada no torneio ' + (t.name || '') + '!' +
             '\n\n' + gamesText +
@@ -323,26 +397,22 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
             (deadlineLabel ? '\n⏰ Lance os resultados até ' + deadlineLabel : '');
         };
 
-        const activePlayers = (Array.isArray(t.participants) ? t.participants : [])
-          .filter(p => p && typeof p === 'object' && p.ligaActive !== false);
         const notifiedUids = new Set();
         for (const p of activePlayers) {
-          const teamName = p.displayName || p.name || '';
-          const personalMsg = buildPlayerMsg(teamName);
-          const message = personalMsg || 'Nova rodada sorteada! Confira seus jogos.';
           const uids = [];
           [p.uid, p.p1Uid, p.p2Uid].forEach(u => { if (u) uids.push(String(u)); });
           if (Array.isArray(p.participants)) {
             p.participants.forEach(sp => { if (sp && sp.uid) uids.push(String(sp.uid)); });
           }
+          const personalMsg = buildPlayerMsg(new Set(uids));
+          const message = personalMsg || 'Nova rodada sorteada! Confira seus jogos.';
           for (const uid of uids) {
             if (notifiedUids.has(uid)) continue;
             notifiedUids.add(uid);
+            const profile = _profByUid[uid]; // já carregado no batch acima
+            if (!profile) continue;           // perfil inexistente → pula (igual !userDoc.exists)
+            if (profile.notifyPlatform === false) continue;
             try {
-              const userDoc = await db.collection('users').doc(uid).get();
-              if (!userDoc.exists) continue;
-              const profile = userDoc.data() || {};
-              if (profile.notifyPlatform === false) continue;
               await db.collection('users').doc(uid).collection('notifications').add({
                 type: 'draw',
                 fromUid: 'system',
@@ -402,6 +472,8 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
   const owed = drawWindow._nextOwedDrawMs(t, nowMs);
   if (typeof owed !== 'number' || owed > nowMs) return; // sem slot devido agora
   const cur = t.currentPhaseIndex || 0;
+  await _preloadDrawNames(t); // v4.5.85: nomes vivos por uid antes do motor de fase
+  if (typeof drawWindow._rehydrateEntryNames === 'function') drawWindow._rehydrateEntryNames(t);
   const ok = drawWindow._phaseGenNextLeagueRound(t, cur);
   if (!ok) { console.log(`Auto-draw phase: skip ${tId} (gen falhou / jogadores insuficientes)`); return; }
   // v3.1.16 (inc 8): a Liga incremental de fase posterior mora em t.phaseRounds[cur]
@@ -428,37 +500,41 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
   });
   const _slotRounds = (t.phaseRounds[cur] && t.phaseRounds[cur].rounds) || [];
   const newMax = _slotRounds.reduce((mx, r) => Math.max(mx, (r && r.round) || 1), 0);
+  // v4.5.73: carrega uids do slot (resolve nome vivo + casa "meu jogo" por uid).
   const roundMatches = ((_slotRounds.find(r => ((r && r.round) || 1) === newMax) || {}).matches || [])
-    .filter(m => !m.isSitOut && !m.isBye).map(m => ({ p1: m.p1 || '', p2: m.p2 || '', label: m.label || '' }));
+    .filter(m => !m.isSitOut && !m.isBye)
+    .map(m => ({ p1: m.p1 || '', p2: m.p2 || '', label: m.label || '',
+      p1Uids: _slotUidsOf(m, 'p1'), p2Uids: _slotUidsOf(m, 'p2') }));
   console.log(`Auto-draw phase: fase ${cur + 1} rodada ${newMax} (${roundMatches.length} jogos) para ${tId}`);
 
-  // Notifica o POOL da fase (subconjunto classificado), por uid. Casa nome do TIME
-  // ("A / B") ou membro individual ("A") contra o lado da partida.
+  // Notifica o POOL da fase (subconjunto classificado), por uid. Nome exibido =
+  // nome vivo do perfil por uid; "meu jogo" por interseção de uid (não por nome).
   const pool = (t.phaseRounds[cur] && Array.isArray(t.phaseRounds[cur].pool)) ? t.phaseRounds[cur].pool : [];
-  const _isInSide = (name, side) => {
-    if (!name || !side) return false;
-    const n = String(name).trim().toLowerCase(), s = String(side).trim().toLowerCase();
-    return s === n || s.split(' / ').some(x => x.trim() === n);
-  };
-  const buildMsg = (teamName) => {
-    const mine = roundMatches.filter(m => _isInSide(teamName, m.p1) || _isInSide(teamName, m.p2));
+  const _allUids = new Set();
+  roundMatches.forEach(m => { m.p1Uids.forEach(u => _allUids.add(u)); m.p2Uids.forEach(u => _allUids.add(u)); });
+  pool.forEach(p => { [p && p.uid, p && p.p1Uid, p && p.p2Uid].forEach(u => { if (u) _allUids.add(String(u)); }); });
+  const { profByUid: _profByUid, nameByUid: _nameByUid } = await _loadLiveNames(_allUids);
+  const buildMsg = (myUidSet) => {
+    const mine = roundMatches.filter(m =>
+      m.p1Uids.some(u => myUidSet.has(u)) || m.p2Uids.some(u => myUidSet.has(u)));
     if (!mine.length) return null;
-    const gamesText = mine.map((pm, i) => (pm.label || ('Jogo ' + (i + 1))) + ':\n' + (pm.p1 || '?') + '\nvs\n' + (pm.p2 || '?')).join('\n\n');
+    const gamesText = mine.map((pm, i) => (pm.label || ('Jogo ' + (i + 1))) + ':\n' +
+      _sideDisplayName(pm.p1Uids, _nameByUid, pm.p1) + '\nvs\n' +
+      _sideDisplayName(pm.p2Uids, _nameByUid, pm.p2)).join('\n\n');
     return '🔄 Nova rodada no torneio ' + (t.name || '') + '!\n\n' + gamesText + (t.venue ? '\n\n📍 ' + t.venue : '');
   };
   const notified = new Set();
   for (const p of pool) {
-    const teamName = (p && (p.displayName || p.name)) || '';
-    const message = buildMsg(teamName) || 'Nova rodada sorteada! Confira seus jogos.';
     const uids = [];
     [p && p.uid, p && p.p1Uid, p && p.p2Uid].forEach(u => { if (u) uids.push(String(u)); });
+    const message = buildMsg(new Set(uids)) || 'Nova rodada sorteada! Confira seus jogos.';
     for (const uid of uids) {
       if (notified.has(uid)) continue;
       notified.add(uid);
       try {
-        const userDoc = await db.collection('users').doc(uid).get();
-        if (!userDoc.exists) continue;
-        if ((userDoc.data() || {}).notifyPlatform === false) continue;
+        const profile = _profByUid[uid]; // já carregado no batch acima
+        if (!profile) continue;
+        if (profile.notifyPlatform === false) continue;
         await db.collection('users').doc(uid).collection('notifications').add({
           type: 'draw', fromUid: 'system', fromName: 'scoreplace.app', fromPhoto: '',
           tournamentId: tId, tournamentName: t.name || '', message, createdAt: now.toISOString(), read: false

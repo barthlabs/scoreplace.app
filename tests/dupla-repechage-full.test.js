@@ -81,6 +81,44 @@ run(12, 2, 25);   // g=6,T=8,sobe2,inferior=4→2 jogos
 run(6, 1, 13);    // g=3,T=4,sobe1,inferior=2→1 jogo (cadência sem battle intercalada)
 run(10, 1, 23);   // g=5,T=8,sobe3,inferior=2→1 jogo
 
+// ── REPESCAGEM RECURSIVA na R1 inferior (n ímpar) — project_lower_bracket_recursive_repechage ──
+// n ímpar + repescagem: a ímpar da inferior joga um jogo-repescagem (3ª vida) na PRÓPRIA R1 inf,
+// ressuscitando o melhor derrotado dos jogos normais dela. A R1 inf GANHA 1 jogo (o ímpar) e o
+// perdedor do jogo da ímpar SUPERIOR não vai mais direto pro merge1. REPRODUZ a falha: no código
+// velho a R1 inf tinha 1 jogo A MENOS (satout pulava pro merge1) e não havia jogo-ímpar na inferior.
+function runOddLower(n, expLowerR1, expTotal) {
+  console.log('\n== n=' + n + ' duplas (ímpar → repescagem recursiva na inferior) ==');
+  const t = build(n);
+  const all0 = window._collectAllMatches(t);
+  const lowerR1 = all0.filter(m => m.bracket === 'lower' && m.round === 1);
+  ok(lowerR1.length === expLowerR1, 'n=' + n + ': R1 inferior = ' + expLowerR1 + ' jogos (got ' + lowerR1.length + ')');
+  const lowImpar = lowerR1.filter(m => m.isPhaseRepGame && m.isLowerImpar);
+  ok(lowImpar.length === 1, 'n=' + n + ': 1 jogo-ímpar (3ª vida) na R1 inferior (got ' + lowImpar.length + ')');
+  const after = simulate(t);
+  const stuck = after.filter(m => !m.winner && m.p1 && m.p2 && m.p1 !== 'TBD' && m.p2 !== 'TBD' && m.p1 !== 'BYE (Avança Direto)');
+  const deadTBD = after.filter(m => !m.winner && (m.p1 === 'TBD' || m.p2 === 'TBD' || !m.p1 || !m.p2));
+  ok(stuck.length === 0, 'n=' + n + ': nenhum jogo travado (got ' + stuck.length + ')');
+  ok(deadTBD.length === 0, 'n=' + n + ': nenhuma vaga morta (got ' + deadTBD.length + ' ' + JSON.stringify(deadTBD.slice(0,4).map(s => (s.bracket||'-')+'R'+s.round+':'+s.p1+'/'+s.p2)) + ')');
+  ok(after.length === expTotal, 'n=' + n + ': total de jogos = ' + expTotal + ' (got ' + after.length + ')');
+  const impar = after.filter(m => m.bracket === 'lower' && m.round === 1 && m.isLowerImpar)[0];
+  ok(impar && impar.winner, 'n=' + n + ': jogo-ímpar da inferior resolvido (3ª vida jogada)');
+  const grand = after.filter(m => m.bracket === 'grand');
+  ok(grand.length >= 1 && grand[grand.length - 1].winner, 'n=' + n + ': campeão único');
+}
+runOddLower(15, 4, 30);   // 3 normais + 1 ímpar; era 3 jogos/29 total no código velho
+runOddLower(13, 3, 28);   // 2 normais + 1 ímpar; era 2 jogos/27
+runOddLower(11, 2, 25);   // 1 normal  + 1 ímpar; era 1 jogo/24
+// n=2^k+1 (toLower=0): sem jogos normais na pré → sem fonte pra ressuscitar → mantém satout→merge1.
+function runOddNoImpar(n) {
+  const t = build(n);
+  const lowerR1 = window._collectAllMatches(t).filter(m => m.bracket === 'lower' && m.round === 1);
+  ok(!lowerR1.some(m => m.isLowerImpar), 'n=' + n + ' (2^k+1): SEM jogo-ímpar na inferior (nada pra ressuscitar)');
+  const after = simulate(t);
+  const grand = after.filter(m => m.bracket === 'grand');
+  ok(grand.length >= 1 && grand[grand.length - 1].winner, 'n=' + n + ' (2^k+1): campeão único');
+}
+runOddNoImpar(9); runOddNoImpar(17);
+
 // VARREDURA AMPLA — a lógica de repescagem deve valer p/ QUALQUER nº de inscritos
 // (pares E ímpares), menos potências de 2 (que usam a dupla-elim padrão). Invariantes
 // estruturais: todos entram, ninguém trava, sem vaga morta, campeão único.
@@ -89,15 +127,28 @@ function sweep(n) {
   if (isPow2) return;                       // pow2 = caminho padrão (não repescagem)
   const t = build(n);
   const all0 = window._collectAllMatches(t);
-  // todos os n inscritos entram: repescagem R1 (2*floor(n/2)) + satout (ímpar)
+  // Todos os n inscritos entram na repescagem R1 (round 0). A dupla ÍMPAR agora joga o repGame
+  // NA R1 sup (isPhaseRepGame, p1=ímpar, p2=TBD até o repescado ser definido) — não vai mais
+  // direto pro lower. Logo TODOS os n aparecem em round 0 (excl. TBD/BYE).
   const rep = all0.filter(m => m.isPhaseRepR1);
-  const teams = new Set(); rep.forEach(m => { teams.add(m.p1); teams.add(m.p2); });
-  const entered = teams.size + (n % 2 === 1 ? 1 : 0);
-  ok(entered === n, 'n=' + n + ': todos os ' + n + ' inscritos entram (got ' + entered + ')');
+  const teams = new Set();
+  rep.forEach(m => { [m.p1, m.p2].forEach(x => { if (x && x !== 'TBD' && x !== 'BYE (Avança Direto)') teams.add(x); }); });
+  ok(teams.size === n, 'n=' + n + ': todos os ' + n + ' inscritos entram (got ' + teams.size + ')');
+  // a ÍMPAR (n ímpar) fica na chave SUPERIOR (repGame), NÃO cai direto pro lower
+  if (n % 2 === 1) {
+    const repGame = all0.filter(m => m.isPhaseRepGame && m.bracket === 'upper' && m.round === 0);
+    ok(repGame.length === 1, 'n=' + n + ': 1 jogo da ímpar na R1 sup (got ' + repGame.length + ')');
+    const satName = repGame[0] && repGame[0].p1;
+    ok(!all0.some(m => m.bracket === 'lower' && (m.p1 === satName || m.p2 === satName)), 'n=' + n + ': ímpar (' + satName + ') NAO entra direto no lower');
+  }
   const after = simulate(t);
   const stuck = after.filter(m => !m.winner && m.p1 && m.p2 && m.p1 !== 'TBD' && m.p2 !== 'TBD' && m.p1 !== 'BYE (Avança Direto)');
   const deadTBD = after.filter(m => !m.winner && (m.p1 === 'TBD' || m.p2 === 'TBD' || !m.p1 || !m.p2));
   const grand = after.filter(m => m.bracket === 'grand');
+  // REGRA DO DONO: repescagem = SEM bye em lugar nenhum (nem no caso n=2^k+1, que antes
+  // caía em bye no merge inferior por falta de fonte pra ressuscitar). project_lower_bracket_recursive_repechage
+  const byes = after.filter(m => m.p1 === 'BYE (Avança Direto)' || m.p2 === 'BYE (Avança Direto)');
+  ok(byes.length === 0, 'n=' + n + ' (repescagem): ZERO byes (got ' + byes.length + ' ' + JSON.stringify(byes.slice(0,4).map(s => (s.bracket||'-')+'R'+s.round)) + ')');
   ok(stuck.length === 0, 'n=' + n + ': nenhum jogo travado (got ' + stuck.length + ')');
   ok(deadTBD.length === 0, 'n=' + n + ': nenhuma vaga morta (got ' + deadTBD.length + ' ' + JSON.stringify(deadTBD.slice(0,4).map(s => (s.bracket||'-')+'R'+s.round+':'+s.p1+'/'+s.p2)) + ')');
   ok(grand.length >= 1 && grand[grand.length - 1].winner, 'n=' + n + ': campeao unico');
@@ -105,9 +156,36 @@ function sweep(n) {
 console.log('\n== VARREDURA n=5..40 (pares e ímpares, exceto pow2) ==');
 for (let n = 5; n <= 40; n++) sweep(n);
 
-// NOTA: BYE fora de pow2 no dupla-elim NÃO é robusto ainda (fluxo assimétrico na inferior com
-// muitos byes → vagas mortas p/ n grande). _duplaR1FromPool não emite mode:'bye'; resolução
-// canônica/completa p/ dupla fora de pow2 = REPESCAGEM (playin). Ver feedback_resolution_one_logic.
+// ── BYE CANÔNICO (bracketResolution='bye') — bye é bye, mesma semeadura do single-elim ─────
+// Completa até a MENOR pow2 >= n com BYEs nos melhores semeados; o BYE avança direto pra R2 sup;
+// o perdedor do jogo real cai na chave inferior. Invariantes: byes = pow2-n, todos entram,
+// nada trava, sem vaga morta, campeão único, e a(s) dupla(s) com BYE já estão na R2 sup.
+function sweepBye(n) {
+  const isPow2 = (n & (n - 1)) === 0;
+  if (isPow2) return;
+  const t = build(n, 'bye');
+  const powB = (() => { let p = 1; while (p < n) p *= 2; return p; })();
+  const r1 = window._collectAllMatches(t).filter(m => m.round === 1 && m.bracket === 'upper');
+  const byeGames = r1.filter(m => m.isBye);
+  ok(byeGames.length === powB - n, 'bye n=' + n + ': ' + (powB - n) + ' BYE(s) na R1 sup (got ' + byeGames.length + ')');
+  // todas as n duplas aparecem na R1 sup (excl. BYE)
+  const teams = new Set();
+  r1.forEach(m => { [m.p1, m.p2].forEach(x => { if (x && x !== 'TBD' && x !== 'BYE (Avança Direto)') teams.add(x); }); });
+  ok(teams.size === n, 'bye n=' + n + ': todas as ' + n + ' duplas na R1 sup (got ' + teams.size + ')');
+  // cada dupla com BYE já está na R2 sup
+  const r2 = window._collectAllMatches(t).filter(m => m.round === 2 && m.bracket === 'upper');
+  const allByeInR2 = byeGames.every(bg => r2.some(m => m.p1 === bg.winner || m.p2 === bg.winner));
+  ok(allByeInR2, 'bye n=' + n + ': dupla(s) com BYE já na R2 sup');
+  const after = simulate(t);
+  const stuck = after.filter(m => !m.winner && m.p1 && m.p2 && m.p1 !== 'TBD' && m.p2 !== 'TBD' && m.p1 !== 'BYE (Avança Direto)');
+  const deadTBD = after.filter(m => !m.winner && (m.p1 === 'TBD' || m.p2 === 'TBD' || !m.p1 || !m.p2) && !m.isBye);
+  ok(stuck.length === 0, 'bye n=' + n + ': nenhum jogo travado (got ' + stuck.length + ')');
+  ok(deadTBD.length === 0, 'bye n=' + n + ': nenhuma vaga morta (got ' + deadTBD.length + ' ' + JSON.stringify(deadTBD.slice(0,4).map(s => (s.bracket||'-')+'R'+s.round+':'+s.p1+'/'+s.p2)) + ')');
+  const grand = after.filter(m => m.bracket === 'grand');
+  ok(grand.length >= 1 && grand[grand.length - 1].winner, 'bye n=' + n + ': campeao unico');
+}
+console.log('\n== VARREDURA BYE n=5..40 (fora de pow2) ==');
+for (let n = 5; n <= 40; n++) sweepBye(n);
 
 console.log('\n' + (fail === 0 ? '✅ TODOS PASSARAM' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 process.exit(fail === 0 ? 0 : 1);

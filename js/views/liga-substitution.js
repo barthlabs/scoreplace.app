@@ -90,6 +90,14 @@ function _groupCategory(group) {
 // convidáveis.
 function _nameUidMap(t) {
   var map = {};
+  // v4.5.84 (ITEM 3 · Fase 3): nome VIVO por uid (perfil) — aditivo, resolve entrada só-uid
+  // (sem p1Name/p2Name gravado, pós-Fase-4). Nunca sobrescreve a chave de nome gravado.
+  var _live = (typeof window._nameForUid === 'function') ? window._nameForUid : null;
+  function _putLive(uid) {
+    if (!_live || !uid) return;
+    var ln = String(_live(uid) || '').trim();
+    if (ln && !map[ln]) map[ln] = uid;
+  }
   (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {})).forEach(function (p) {
     if (!p || typeof p !== 'object') return;
     var nm = p.displayName || p.name || '';
@@ -97,6 +105,8 @@ function _nameUidMap(t) {
     if (p.p1Name && p.p1Uid) map[p.p1Name] = p.p1Uid;
     if (p.p2Name && p.p2Uid) map[p.p2Name] = p.p2Uid;
     (p.participants || []).forEach(function (sp) { if (sp && (sp.displayName || sp.name) && sp.uid) map[sp.displayName || sp.name] = sp.uid; });
+    _putLive(p.p1Uid); _putLive(p.p2Uid); _putLive(p.uid);
+    (p.participants || []).forEach(function (sp) { if (sp) _putLive(sp.uid); });
   });
   return map;
 }
@@ -136,6 +146,9 @@ function _addWoMarker(t, round, roundIndex, name, category) {
     p1: name, p2: 'W.O.', isSitOut: true, sitOutReason: 'wo', sitOutPoints: 0,
     label: 'R' + (roundIndex + 1) + ' • W.O.'
   };
+  // v4.5.71: identidade por uid no slot real (p1). W.O. é sentinela (sem uid).
+  var _woUid = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(t) || {})[name] : null;
+  if (_woUid) { o.p1Uid = _woUid; o.team1Uids = [_woUid]; }
   if (category) o.category = category;
   round.matches.push(o);
 }
@@ -150,6 +163,9 @@ function _addFolgaMarker(t, round, roundIndex, name, category) {
     p1: name, p2: 'FOLGA', isSitOut: true, sitOutReason: 'remainder', sitOutPoints: pts,
     label: 'R' + (roundIndex + 1) + ' • Folga'
   };
+  // v4.5.71: identidade por uid no slot real (p1). FOLGA é sentinela (sem uid).
+  var _foUid = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(t) || {})[name] : null;
+  if (_foUid) { o.p1Uid = _foUid; o.team1Uids = [_foUid]; }
   if (category) o.category = category;
   round.matches.push(o);
 }
@@ -635,9 +651,27 @@ window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest) 
   _commitLiga(tId, function (ft) {
     var playing = _monPlaying(ft, gName, pIdx);
     if (!playing.length) return;
+    // v4.5.x (Parte 14 — identidade por uid no slot): além do NOME, troca o UID do
+    // slot (ausente → substituto). Folga real = uid dela; Jogador X = null (ghost, não
+    // pontua). Sem isto o slot mantinha o uid do AUSENTE enquanto o nome virava o do
+    // substituto → a classificação por uid (_monKey) creditava os jogos do substituto
+    // na linha do ausente. Casa o slot do ausente por uid quando ambos têm uid (nome só
+    // fallback p/ slot/ausente sem uid — guest/legado). Espelha _rewriteSlot (v4.4.117).
+    var _n2u = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(ft) || {}) : {};
+    var absentUid = _n2u[absentName] || null;
+    var fillUid = isGuest ? null : (_n2u[fillName] || null);
+    var _rwSide = function (m, nk, uk) {
+      var names = m[nk]; if (!Array.isArray(names)) return;
+      var uids = Array.isArray(m[uk]) ? m[uk].slice() : names.map(function () { return null; });
+      names.forEach(function (n, i) {
+        var hit = (absentUid && uids[i]) ? (uids[i] === absentUid) : (n === absentName);
+        if (hit) { names[i] = fillName; uids[i] = fillUid; }
+      });
+      m[uk] = uids;
+    };
     playing.forEach(function (m) {
-      if (Array.isArray(m.team1)) m.team1 = m.team1.map(function (n) { return n === absentName ? fillName : n; });
-      if (Array.isArray(m.team2)) m.team2 = m.team2.map(function (n) { return n === absentName ? fillName : n; });
+      _rwSide(m, 'team1', 'team1Uids');
+      _rwSide(m, 'team2', 'team2Uids');
       if (m.team1 && m.team2) { m.p1 = m.team1.join(' / '); m.p2 = m.team2.join(' / '); }
     });
     // remove marcador W.O. anterior deste grupo (idempotente)
@@ -648,6 +682,8 @@ window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest) 
       bracket: 'monarch', isMonarch: true, monarchGroup: gIdx, groupIdx: gIdx, groupName: gName,
       phaseIndex: pIdx, round: (playing[0] && playing[0].round) || 1,
       isSitOut: true, sitOutReason: 'wo', sitOutPoints: 0, p1: absentName, p2: 'W.O.',
+      // v4.5.71: identidade por uid no slot real (p1 = ausente). W.O. é sentinela.
+      p1Uid: ((typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(ft) || {})[absentName] : null) || null,
       woReplacedBy: fillName, woIsGuest: !!isGuest, label: 'W.O.',
       category: (playing[0] && playing[0].category) || undefined
     });
@@ -672,9 +708,23 @@ window._monWoRevert = function (tId, pIdx, gName) {
   }
   var absentName = wm.p1, fillName = wm.woReplacedBy, isGuest = wm.woIsGuest;
   _commitLiga(tId, function (ft) {
+    // v4.5.x (Parte 14): reverte NOME e UID do slot (substituto → ausente). Casa o slot
+    // do substituto por uid quando ambos têm uid (Jogador X = null → cai no nome).
+    var _n2u = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(ft) || {}) : {};
+    var absentUid = _n2u[absentName] || null;
+    var fillUid = isGuest ? null : (_n2u[fillName] || null);
+    var _rwSide = function (m, nk, uk) {
+      var names = m[nk]; if (!Array.isArray(names)) return;
+      var uids = Array.isArray(m[uk]) ? m[uk].slice() : names.map(function () { return null; });
+      names.forEach(function (n, i) {
+        var hit = (fillUid && uids[i]) ? (uids[i] === fillUid) : (n === fillName);
+        if (hit) { names[i] = absentName; uids[i] = absentUid; }
+      });
+      m[uk] = uids;
+    };
     _monPlaying(ft, gName, pIdx).forEach(function (m) {
-      if (Array.isArray(m.team1)) m.team1 = m.team1.map(function (n) { return n === fillName ? absentName : n; });
-      if (Array.isArray(m.team2)) m.team2 = m.team2.map(function (n) { return n === fillName ? absentName : n; });
+      _rwSide(m, 'team1', 'team1Uids');
+      _rwSide(m, 'team2', 'team2Uids');
       if (m.team1 && m.team2) { m.p1 = m.team1.join(' / '); m.p2 = m.team2.join(' / '); }
     });
     ft.matches = (ft.matches || []).filter(function (m) { return !(m.bracket === 'monarch' && m.groupName === gName && ((m.phaseIndex || 0) === pIdx) && m.isSitOut && m.sitOutReason === 'wo'); });

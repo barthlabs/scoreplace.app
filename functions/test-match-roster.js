@@ -1,7 +1,7 @@
 // Teste PURO da lógica de roster da CF syncMatchRosters (project_match_result_docs
 // inc 3b). Sem Firebase — só a matemática de computeRosterChanges. Rodar:
 //   node functions/test-match-roster.js
-const { collectMatches, matchRoster, computeRosterChanges, rosterKey, buildSeedDoc, subdocSignature, buildMirrorDoc } = require("./match-roster");
+const { collectMatches, matchRoster, slotUids, computeRosterChanges, rosterKey, buildSeedDoc, subdocSignature, buildMirrorDoc } = require("./match-roster");
 
 let pass = 0, fail = 0;
 function ok(c, msg) { if (c) { pass++; console.log("  ✓ " + msg); } else { fail++; console.error("  ✗ " + msg); } }
@@ -122,6 +122,61 @@ ok(subdocSignature(buildSeedDoc(tDisp, tDisp.matches[1])) !== sigBefore, "assina
 // buildMirrorDoc carrega o contexto de exibição
 const mir = buildMirrorDoc(tDisp, tDisp.matches[0], "T9", "2026-02-02");
 ok(mir.p1 === "A" && mir.tournamentName === "Copa Teste" && mir.roundLabel === "Final", "buildMirrorDoc inclui contexto de exibição");
+
+// ── IDENTIDADE POR uid do SLOT (v4.5.74) — a brecha de authz que fecha aqui ──
+// A regressão: com o reconcile de nome removido (v4.5.73), resolver o roster por
+// NOME libera a pessoa ERRADA em caso de homônimo, e BLOQUEIA quando o nome
+// diverge. O slot carrega o uid canônico (team*Uids / p*Uid / team*Obj) — ler
+// dele resolve certo. Fallback por nome só quando o slot NÃO tem uid (guest/legado).
+console.log("──── roster por uid do slot (homônimo + legado) ────");
+
+// Reproduz a LÓGICA VELHA (só por nome) pra provar que ela erra o homônimo.
+function oldMatchRosterByName(t, m) {
+  const ps = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  const seen = {};
+  ["p1", "p2"].forEach((side) => {
+    const entry = m[side];
+    if (!entry || entry === "TBD" || entry === "BYE") return;
+    const p = ps.find((pp) => typeof pp === "object" && (pp.displayName || pp.name || "") === entry);
+    if (p) { (p.uid ? [p.uid] : []).forEach((u) => { if (u) seen[u] = 1; }); return; }
+  });
+  return Object.keys(seen);
+}
+
+// HOMÔNIMO: dois uids, MESMO displayName "João". O slot aponta pro SEGUNDO (uJ2).
+const homParts = [
+  { uid: "uJ1", displayName: "João" },
+  { uid: "uJ2", displayName: "João" },
+  { uid: "uZ", displayName: "Zé" },
+];
+const tHom = { participants: homParts, matches: [{ id: "h1", p1: "João", p2: "Zé", p1Uid: "uJ2", p2Uid: "uZ" }] };
+// velho (por nome) casa o PRIMEIRO João = uJ1 → ERRADO (libera a pessoa errada)
+eqArr(oldMatchRosterByName(tHom, tHom.matches[0]), ["uJ1", "uZ"], "VELHO (por nome) casa o homônimo ERRADO (uJ1)");
+ok(rosterKey(oldMatchRosterByName(tHom, tHom.matches[0])) !== rosterKey(["uJ2", "uZ"]), "VELHO NÃO bate o uid certo do slot (uJ2) — a falha");
+// novo (por uid do slot) casa o CERTO = uJ2
+eqArr(matchRoster(tHom, tHom.matches[0]), ["uJ2", "uZ"], "NOVO (por uid do slot) casa o homônimo CERTO (uJ2)");
+
+// NOME DIVERGENTE: cache de display velho ("João Antigo") não existe mais nos
+// participantes, mas o slot ainda carrega o uid → velho BLOQUEIA, novo resolve.
+const tDiv = { participants: homParts, matches: [{ id: "d1", p1: "João Antigo", p2: "Zé", p1Uid: "uJ2", p2Uid: "uZ" }] };
+eqArr(oldMatchRosterByName(tDiv, tDiv.matches[0]), ["uZ"], "VELHO perde o lado com nome divergente (só uZ) — bloquearia o outro");
+eqArr(matchRoster(tDiv, tDiv.matches[0]), ["uJ2", "uZ"], "NOVO resolve o lado divergente pelo uid do slot (uJ2)");
+
+// DUPLA por team*Uids (identidade estrutural da dupla no slot).
+const tTeam = { participants: homParts, matches: [{ id: "t1", p1: "João / Zé", p2: "BYE", team1Uids: ["uJ2", "uZ"] }] };
+eqArr(matchRoster(tTeam, tTeam.matches[0]), ["uJ2", "uZ"], "dupla por team1Uids → [uJ2,uZ] (p2 BYE ignorado)");
+eqArr(slotUids(tTeam.matches[0], "p1"), ["uJ2", "uZ"], "slotUids lê team1Uids direto");
+
+// team*Obj (objeto participante embutido no slot).
+const tObj = { participants: homParts, matches: [{ id: "o1", p1: "Dupla", p2: "Zé", team1Obj: { p1Uid: "uJ1", p2Uid: "uJ2" }, p2Uid: "uZ" }] };
+eqArr(matchRoster(tObj, tObj.matches[0]), ["uJ1", "uJ2", "uZ"], "team1Obj resolve via participantUids (p1Uid+p2Uid) + p2 por uid");
+
+// LEGADO/GUEST: slot SEM nenhum uid → cai no fallback por nome e continua autorizando.
+const tLegacy = { participants: parts, matches: [{ id: "leg1", p1: "A", p2: "B" }] };
+eqArr(matchRoster(tLegacy, tLegacy.matches[0]), ["uA", "uB"], "slot sem uid (legado) → fallback por nome mantém [uA,uB]");
+// GUEST sem conta: nome não casa participante nenhum → roster vazio (sem authz), esperado.
+const tGuest = { participants: parts, matches: [{ id: "g1", p1: "Convidado Sem Conta", p2: "A" }] };
+eqArr(matchRoster(tGuest, tGuest.matches[0]), ["uA"], "guest sem conta (sem uid, sem match de nome) → só o lado com conta [uA]");
 
 console.log("════════════════════════════════════════");
 console.log((fail === 0 ? "✅" : "❌") + " match-roster: " + pass + " ok, " + fail + " falharam");

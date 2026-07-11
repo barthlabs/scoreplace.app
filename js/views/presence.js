@@ -458,13 +458,17 @@
     // parceiro sumia. Mantém o "pelo menos 1" anônimo quando o torneio não tem
     // participantes carregados.
     function _vpush(uid, email, dn, photo) {
+      // v4.5.72: identidade-por-uid — nome exibido resolve do perfil vivo por uid;
+      // nome gravado só sobra como fallback pra não ficar em branco (e é a
+      // identidade legítima do guest sem conta, que não tem uid).
+      var _live = (uid && typeof window._nameForUid === 'function') ? window._nameForUid(uid) : '';
       out.push({
         _virtual: true,
         _tournamentId: t.id,
         _tournamentName: t.name || 'Torneio',
         uid: uid || null,
         email_lower: (email || '').toLowerCase(),
-        displayName: dn || '',
+        displayName: _live || dn || '',
         photoURL: photo || '',
         startsAt: start.getTime(),
         endsAt: endMs,

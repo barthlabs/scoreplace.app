@@ -227,6 +227,20 @@ async function main() {
 
     fs.writeFileSync(INDEX_PATH, newIndex, 'utf8');
     console.log(`[prerender] ✓ index.html atualizado (${newIndex.length} bytes total)`);
+
+    // v4.5.96: gera /version.txt (versão crua) pra o _checkForUpdate pingar BARATO (~20 bytes)
+    // em vez de baixar store.js (400KB) a cada checagem. Sincronizado AQUI porque o prerender
+    // roda em TODO bump/deploy (pre-push hook + `npm run prerender`) → nunca fica stale.
+    try {
+      const storeSrc = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
+      const vm = storeSrc.match(/SCOREPLACE_VERSION\s*=\s*'([^']+)'/);
+      if (vm && vm[1]) {
+        fs.writeFileSync(path.join(ROOT, 'version.txt'), vm[1], 'utf8');
+        console.log('[prerender] ✓ version.txt = ' + vm[1]);
+      } else {
+        console.warn('[prerender] SCOREPLACE_VERSION não encontrado em store.js — version.txt não gerado');
+      }
+    } catch (e) { console.warn('[prerender] version.txt falhou:', e && e.message); }
   } finally {
     if (browser) await browser.close();
     server.close();

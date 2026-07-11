@@ -768,6 +768,13 @@ window._updateTopbarForUser = function(user) {
         _loadingIndicator +
       '</div>';
     if (typeof window._ensureTopbarLogoff === 'function') window._ensureTopbarLogoff(btnLogin);
+    // v4.5.44: o perfil logado (avatar + nome + Sair) é mais largo que o botão
+    // "Login" — re-avalia o encolhimento da topbar AGORA. Sem isto, quando o
+    // login resolve async depois do check de load (comum em PWA já logado a
+    // largura fixa), a topbar ficava sem hamburger com labels cortados.
+    if (typeof window._checkTopbarWrap === 'function') {
+      requestAnimationFrame(function() { window._checkTopbarWrap(); });
+    }
   } catch (e) {
     window._warn('[scoreplace-auth] _updateTopbarForUser error:', e);
   }
@@ -1535,7 +1542,7 @@ window._verifiedCurrentUser = function() {
 // dinâmico — usuário vê 🇧🇷 +55 (DDI) ao lado do que digitou (DDD + número).
 // v1.8.17-beta: máscara de telefone BR — formata dígitos progressivamente
 // conforme o usuário digita: (DDD) 9XXXX-XXXX ou (DDD) XXXX-XXXX
-// Exposto como window._ para uso em _repairNullIdentityParticipants e outros.
+// Exposto como window._ para reuso em outros pontos (fallback de exibição de telefone).
 window._maskBRPhone = function _maskBRPhone(digits) {
   var d = String(digits || '').replace(/\D/g, '');
   if (d.length === 0) return '';
@@ -3459,6 +3466,46 @@ function toggleEmailMode(mode) {
   }
 }
 
+// ── Moderação: bloquear usuário (Apple App Store Guideline 1.2 — UGC) ───────
+// Adiciona o uid à lista blockedUids do PRÓPRIO perfil (arrayUnion no doc do
+// dono — regra Firestore já permite o dono editar o próprio doc). Conteúdo de
+// usuários bloqueados (avaliações de locais, etc.) fica oculto para quem
+// bloqueou. Desbloqueio via _unblockUser. name é opcional (rótulo amigável).
+window._blockUser = function(uid, name) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid) { if (window.showNotification) window.showNotification('Faça login', 'Entre para bloquear usuários.', 'error'); return; }
+  if (!uid || uid === cu.uid) return;
+  var nm = name || 'este usuário';
+  var doBlock = function() {
+    try {
+      window.FirestoreDB.db.collection('users').doc(cu.uid).set({
+        blockedUids: firebase.firestore.FieldValue.arrayUnion(uid)
+      }, { merge: true });
+    } catch (e) { window._error('block user:', e); }
+    if (!Array.isArray(cu.blockedUids)) cu.blockedUids = [];
+    if (cu.blockedUids.indexOf(uid) === -1) cu.blockedUids.push(uid);
+    if (window.showNotification) window.showNotification('Usuário bloqueado', 'Você não verá mais o conteúdo dessa pessoa. Desbloqueie no seu perfil quando quiser.', 'success');
+    if (typeof window._venuesRehydrateReviews === 'function') window._venuesRehydrateReviews();
+  };
+  if (typeof window.showConfirmDialog === 'function') {
+    window.showConfirmDialog('Bloquear ' + nm + '?', 'Você não verá mais avaliações e conteúdo dessa pessoa. É possível desbloquear depois no seu perfil.', doBlock, null, { confirmText: 'Bloquear', cancelText: 'Cancelar', type: 'danger' });
+  } else {
+    doBlock();
+  }
+};
+
+window._unblockUser = function(uid) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid || !uid) return;
+  try {
+    window.FirestoreDB.db.collection('users').doc(cu.uid).set({
+      blockedUids: firebase.firestore.FieldValue.arrayRemove(uid)
+    }, { merge: true });
+  } catch (e) { window._error('unblock user:', e); }
+  if (Array.isArray(cu.blockedUids)) { var i = cu.blockedUids.indexOf(uid); if (i !== -1) cu.blockedUids.splice(i, 1); }
+  if (typeof window._venuesRehydrateReviews === 'function') window._venuesRehydrateReviews();
+};
+
 // Auto-amizade quando alguém aceita convite de torneio (com ?ref=UID no link)
 function _autoFriendOnInvite(inviterUid, currentUser) {
   if (!inviterUid || !currentUser || !window.FirestoreDB || !window.FirestoreDB.db) return;
@@ -4431,11 +4478,8 @@ async function simulateLoginSuccess(user) {
 
   // Check tournament reminders and nearby tournaments (delayed to let data load)
   setTimeout(function() {
-    // Auto-detect and fix stale participant names in tournaments
-    // (handles cases where user changed name before propagation code existed)
-    if (typeof window._autoFixStaleNames === 'function') {
-      window._autoFixStaleNames().catch(function(e) { window._warn('Auto-fix stale names error:', e); });
-    }
+    // v4.5.72: _autoFixStaleNames removido (identidade-por-uid: o render resolve
+    // o nome vivo do perfil por uid, não lê nome gravado no inscrito).
 
     // Load templates from Firestore (with localStorage migration)
     if (typeof window._loadTemplates === 'function') {
@@ -4614,6 +4658,9 @@ async function simulateLoginSuccess(user) {
     _setVal('profile-edit-gender', cu.gender || '');
     _setVal('profile-edit-birthdate', (typeof window._isoToDisplayDate === 'function') ? window._isoToDisplayDate(cu.birthDate) : (cu.birthDate || ''));
     _setVal('profile-edit-city', cu.city || '');
+    _setVal('profile-edit-letzplay', cu.letzplayHandle ? ('@' + cu.letzplayHandle) : '');
+    var _lpConsentEl = document.getElementById('profile-letzplay-consent');
+    if (_lpConsentEl) _lpConsentEl.checked = (cu.letzplayConsent === true);
     (function() {
       var raw = cu.preferredSports;
       var arr = [];
@@ -6129,438 +6176,6 @@ window._applyProfileSportsUI = function(arr) {
   }
 };
 
-// ─── Auto-detect & fix stale participant names ─────────────────────────────���
-// Defined at module level so available immediately on script load (not inside setupProfileModal).
-window._autoFixStaleNames = async function(forceTournamentId) {
-  if (!window.AppStore || !Array.isArray(window.AppStore.tournaments)) return;
-  if (!window.FirestoreDB || !window.FirestoreDB.db) return;
-  if (window.AppStore.tournaments.length === 0) return;
-  var now = Date.now();
-  // Skip cooldown if forcing a specific tournament
-  if (!forceTournamentId) {
-    if (window._autoFixStaleNames._lastRun && (now - window._autoFixStaleNames._lastRun) < 30000) return;
-  }
-  window._autoFixStaleNames._lastRun = now;
-
-  // v1.8.19-beta: reparar participantes sem nome (phone-only auth) PRIMEIRO,
-  // antes do restante do fix de nomes obsoletos.
-  if (typeof window._repairNullIdentityParticipants === 'function') {
-    await window._repairNullIdentityParticipants();
-  }
-
-  var tournamentsToScan = forceTournamentId
-    ? window.AppStore.tournaments.filter(function(t) { return t.id === forceTournamentId; })
-    : window.AppStore.tournaments;
-  window._debug('[AutoFixNames] Scanning ' + tournamentsToScan.length + ' tournaments...');
-
-  var uidMap = {};
-  var emailMap = {};
-  tournamentsToScan.forEach(function(t) {
-    var parts = Array.isArray(t.participants) ? t.participants : [];
-    parts.forEach(function(p) {
-      if (typeof p === 'object' && p !== null) {
-        var pName = p.displayName || p.name || '';
-        if (!pName) return;
-        // Nomes de time de dupla ("A / B") nunca são nomes desatualizados —
-        // são o nome correto da equipe. Ignorar para não sobrescrever.
-        if (pName.indexOf(' / ') !== -1) return;
-        var pUid = p.uid && p.uid.length > 0 ? p.uid : null;
-        if (pUid && !uidMap[pUid]) {
-          uidMap[pUid] = { storedName: pName, email: p.email || '' };
-        }
-        if (p.email && !emailMap[p.email]) {
-          emailMap[p.email] = pName;
-        }
-      }
-    });
-    // Also scan match players (p1/p2) — they may reference stale names even when participant objects are updated
-    var _scanMatch = function(m) {
-      if (!m) return;
-      // Extract individual names from team strings
-      [m.p1, m.p2].forEach(function(pStr) {
-        if (!pStr || typeof pStr !== 'string') return;
-        var names = pStr.indexOf(' / ') !== -1 ? pStr.split(' / ').map(function(n) { return n.trim(); }) : [pStr];
-        names.forEach(function(name) {
-          if (!name || name === 'BYE' || name === 'TBD') return;
-          // Check if this name exists as a participant object with different name
-          parts.forEach(function(p2) {
-            if (typeof p2 !== 'object' || p2 === null) return;
-            var p2Name = p2.displayName || p2.name || '';
-            if (!p2Name || p2Name === name) return;
-            // Same uid or email but different display name → stale name in match
-            if ((p2.uid && p2.uid.length > 0) || p2.email) {
-              // Will be caught by the uid/email map comparison below
-            }
-          });
-        });
-      });
-    };
-    if (typeof window._collectAllMatches === 'function') {
-      window._collectAllMatches(t).forEach(_scanMatch);
-    } else {
-      // Defensive fallback: bracket-model.js not loaded.
-      if (Array.isArray(t.matches)) t.matches.forEach(_scanMatch);
-      if (Array.isArray(t.rounds)) t.rounds.forEach(function(r) { if (r && Array.isArray(r.matches)) r.matches.forEach(_scanMatch); });
-      if (Array.isArray(t.groups)) t.groups.forEach(function(g) {
-        if (!g) return;
-        if (Array.isArray(g.matches)) g.matches.forEach(_scanMatch);
-        if (Array.isArray(g.rounds)) g.rounds.forEach(function(gr) { if (Array.isArray(gr)) gr.forEach(_scanMatch); else if (gr && Array.isArray(gr.matches)) gr.matches.forEach(_scanMatch); });
-      });
-    }
-  });
-
-  var uids = Object.keys(uidMap);
-  var emails = Object.keys(emailMap);
-  window._debug('[AutoFixNames] Found ' + uids.length + ' UIDs and ' + emails.length + ' emails to check');
-  if (uids.length === 0 && emails.length === 0) return;
-
-  // v2.2.9: cache de sessão para evitar re-buscar profiles já conhecidos.
-  // v2.4.19-beta: forceTournamentId NÃO reseta mais o cache inteiro. O único
-  // caller forçado (tournaments.js, automático ao abrir um torneio) rodava com
-  // force → o cache era zerado a cada visualização → todos os perfis dos
-  // participantes eram relidos do Firestore (ex: ~84 reads por abertura do
-  // Confra), e o cache dos OUTROS torneios era jogado fora junto, sem nunca
-  // render benefício. Isso gerava picos recorrentes de leitura (Sentry "read
-  // spike: autofix-uid=84..138" na rota do torneio ativo). O force já pula o
-  // throttle de 30s (linha ~4660) e o flag _tournChecks já limita a 1x por
-  // sessão/torneio — então NÃO precisa zerar o cache. Agora o force reutiliza
-  // o cache e só busca uids/emails ainda não carregados; reabrir um torneio já
-  // visto custa ~0 leituras. Trade-off aceito: um participante que renomeia o
-  // perfil no meio da sessão só é repescado no próximo carregamento da página
-  // (a correção de nomes é best-effort, não sync em tempo real).
-  if (!window._autoFixNamesCache) {
-    window._autoFixNamesCache = { profileMap: {}, emailProfileMap: {}, uidsLoaded: {}, emailsLoaded: {} };
-  }
-  var _cache = window._autoFixNamesCache;
-
-  var profileMap = _cache.profileMap;
-  var emailProfileMap = _cache.emailProfileMap;
-
-  // Só buscar UIDs/emails que ainda não estão no cache
-  var uidsToFetch = uids.filter(function(uid) { return !_cache.uidsLoaded[uid]; });
-  var emailsToFetchRaw = emails.filter(function(e) { return !_cache.emailsLoaded[e] && !emailProfileMap[e]; });
-
-  window._debug('[AutoFixNames] Cache hit: ' + (uids.length - uidsToFetch.length) + ' UIDs, fetching ' + uidsToFetch.length + ' new');
-
-  try {
-    for (var i = 0; i < uidsToFetch.length; i += 10) {
-      var batch = uidsToFetch.slice(i, i + 10);
-      var snap = await window.FirestoreDB.db.collection('users')
-        .where(firebase.firestore.FieldPath.documentId(), 'in', batch).get();
-      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'autofix-uid'); } catch (e) {}
-      snap.forEach(function(doc) {
-        var data = doc.data();
-        if (data.displayName) {
-          profileMap[doc.id] = { displayName: data.displayName, email: data.email || '', previousDisplayNames: Array.isArray(data.previousDisplayNames) ? data.previousDisplayNames : [] };
-          if (data.email) emailProfileMap[data.email] = { displayName: data.displayName, uid: doc.id, previousDisplayNames: Array.isArray(data.previousDisplayNames) ? data.previousDisplayNames : [] };
-        }
-      });
-      // Marcar como carregados mesmo que não tenham displayName (evita re-buscar ghosts)
-      batch.forEach(function(uid) { _cache.uidsLoaded[uid] = true; });
-    }
-    var emailsToFetch = emailsToFetchRaw.filter(function(e) { return !emailProfileMap[e]; });
-    for (var j = 0; j < emailsToFetch.length; j += 10) {
-      var emailBatch = emailsToFetch.slice(j, j + 10);
-      var esnap = await window.FirestoreDB.db.collection('users')
-        .where('email', 'in', emailBatch).get();
-      try { if (window._noteFsReads) window._noteFsReads(esnap.size, 'autofix-email'); } catch (e) {}
-      esnap.forEach(function(doc) {
-        var data = doc.data();
-        if (data.displayName && data.email) {
-          emailProfileMap[data.email] = { displayName: data.displayName, uid: doc.id, previousDisplayNames: Array.isArray(data.previousDisplayNames) ? data.previousDisplayNames : [] };
-        }
-      });
-      emailBatch.forEach(function(e) { _cache.emailsLoaded[e] = true; });
-    }
-  } catch(e) {
-    window._warn('[AutoFixNames] Error fetching profiles:', e);
-    return;
-  }
-
-  // Build reverse map: currentProfileName → { uid, email } for detecting stale names in matches
-  var _currentNameToProfile = {};
-  Object.keys(profileMap).forEach(function(uid) {
-    var p = profileMap[uid];
-    _currentNameToProfile[p.displayName] = { uid: uid, email: p.email };
-  });
-  Object.keys(emailProfileMap).forEach(function(email) {
-    var p = emailProfileMap[email];
-    if (!_currentNameToProfile[p.displayName]) _currentNameToProfile[p.displayName] = { uid: p.uid, email: email };
-  });
-
-  var fixes = [];
-  var _addFix = function(oldN, newN, uid, email) {
-    if (!oldN || !newN || oldN === newN) return;
-    if (!fixes.some(function(f) { return f.oldName === oldN && f.newName === newN; })) {
-      fixes.push({ oldName: oldN, newName: newN, uid: uid, email: email });
-    }
-  };
-
-  uids.forEach(function(uid) {
-    var stored = uidMap[uid].storedName;
-    var profile = profileMap[uid];
-    if (profile && stored && profile.displayName !== stored) {
-      _addFix(stored, profile.displayName, uid, uidMap[uid].email || profile.email);
-    }
-  });
-  emails.forEach(function(email) {
-    var stored = emailMap[email];
-    var profile = emailProfileMap[email];
-    if (profile && stored && profile.displayName !== stored) {
-      _addFix(stored, profile.displayName, profile.uid || null, email);
-    }
-  });
-
-  // Also scan match p1/p2 and sorteioRealizado for stale names not caught above
-  // (e.g., when participant object was already updated but match strings still have old name)
-  tournamentsToScan.forEach(function(t) {
-    var _knownCurrentNames = {};
-    var parts = Array.isArray(t.participants) ? t.participants : [];
-    parts.forEach(function(p) {
-      if (typeof p === 'object' && p !== null) {
-        var nm = p.displayName || p.name || '';
-        if (nm) _knownCurrentNames[nm] = { uid: p.uid || null, email: p.email || null };
-      }
-    });
-    var _checkStaleInStr = function(str) {
-      if (!str || typeof str !== 'string') return;
-      var names = str.indexOf(' / ') !== -1 ? str.split(' / ').map(function(n) { return n.trim(); }) : [str];
-      names.forEach(function(name) {
-        if (!name || name === 'BYE' || name === 'TBD' || _knownCurrentNames[name]) return;
-        // This name is in a match but NOT a current participant name — check all profiles
-        Object.keys(_currentNameToProfile).forEach(function(profileName) {
-          if (profileName === name) return; // name IS current — no fix needed
-          var prof = _currentNameToProfile[profileName];
-          // Check if this stale name was previously used by this profile's uid/email
-          if (prof.uid && uidMap[prof.uid] && uidMap[prof.uid].storedName === name) {
-            _addFix(name, profileName, prof.uid, prof.email);
-          } else if (prof.email && emailMap[prof.email] === name) {
-            _addFix(name, profileName, prof.uid, prof.email);
-          }
-        });
-      });
-    };
-    var _scanMatchStale = function(m) { if (!m) return; _checkStaleInStr(m.p1); _checkStaleInStr(m.p2); _checkStaleInStr(m.winner); };
-    if (typeof window._collectAllMatches === 'function') {
-      window._collectAllMatches(t).forEach(_scanMatchStale);
-    } else {
-      // Defensive fallback: bracket-model.js not loaded.
-      if (Array.isArray(t.matches)) t.matches.forEach(_scanMatchStale);
-      if (Array.isArray(t.rounds)) t.rounds.forEach(function(r) { if (r && Array.isArray(r.matches)) r.matches.forEach(_scanMatchStale); });
-      if (Array.isArray(t.groups)) t.groups.forEach(function(g) {
-        if (!g) return;
-        if (Array.isArray(g.matches)) g.matches.forEach(_scanMatchStale);
-        if (Array.isArray(g.rounds)) g.rounds.forEach(function(gr) { if (Array.isArray(gr)) gr.forEach(_scanMatchStale); else if (gr && Array.isArray(gr.matches)) gr.matches.forEach(_scanMatchStale); });
-      });
-    }
-    // g.players is a roster field (not a match), handled separately.
-    if (Array.isArray(t.groups)) t.groups.forEach(function(g) {
-      if (g && Array.isArray(g.players)) g.players.forEach(function(pl) { _checkStaleInStr(pl); });
-    });
-    if (Array.isArray(t.sorteioRealizado)) t.sorteioRealizado.forEach(function(item) {
-      if (typeof item === 'string') _checkStaleInStr(item);
-      else if (typeof item === 'object' && item) { _checkStaleInStr(item.name); _checkStaleInStr(item.displayName); }
-    });
-  });
-
-  // Also check previousDisplayNames: scan ALL tournament strings for old names
-  // This catches the case where participant object is already updated but team strings have old name
-  var _prevNameMap = {}; // oldName → { newName, uid, email }
-  Object.keys(profileMap).forEach(function(uid) {
-    var p = profileMap[uid];
-    if (p.previousDisplayNames && p.previousDisplayNames.length > 0) {
-      p.previousDisplayNames.forEach(function(oldN) {
-        _prevNameMap[oldN] = { newName: p.displayName, uid: uid, email: p.email };
-      });
-    }
-  });
-  Object.keys(emailProfileMap).forEach(function(email) {
-    var p = emailProfileMap[email];
-    if (p.previousDisplayNames && p.previousDisplayNames.length > 0) {
-      p.previousDisplayNames.forEach(function(oldN) {
-        if (!_prevNameMap[oldN]) _prevNameMap[oldN] = { newName: p.displayName, uid: p.uid, email: email };
-      });
-    }
-  });
-
-  if (Object.keys(_prevNameMap).length > 0) {
-    window._debug('[AutoFixNames] Previous display names found:', Object.keys(_prevNameMap));
-    // Scan ALL tournament data for these old names
-    tournamentsToScan.forEach(function(t) {
-      var parts = Array.isArray(t.participants) ? t.participants : [];
-      var _allStrings = [];
-      // Collect all string data to search
-      parts.forEach(function(p) { if (typeof p === 'string') _allStrings.push(p); });
-      var _collectFromMatch = function(m) {
-        if (!m) return;
-        if (m.p1) _allStrings.push(m.p1);
-        if (m.p2) _allStrings.push(m.p2);
-        if (m.winner) _allStrings.push(m.winner);
-      };
-      if (typeof window._collectAllMatches === 'function') {
-        window._collectAllMatches(t).forEach(_collectFromMatch);
-      } else {
-        // Defensive fallback: bracket-model.js not loaded.
-        if (Array.isArray(t.matches)) t.matches.forEach(_collectFromMatch);
-        if (Array.isArray(t.rounds)) t.rounds.forEach(function(r) { if (r && Array.isArray(r.matches)) r.matches.forEach(_collectFromMatch); });
-        if (Array.isArray(t.groups)) t.groups.forEach(function(g) {
-          if (!g) return;
-          if (Array.isArray(g.matches)) g.matches.forEach(_collectFromMatch);
-          if (Array.isArray(g.rounds)) g.rounds.forEach(function(gr) { if (Array.isArray(gr)) gr.forEach(_collectFromMatch); else if (gr && Array.isArray(gr.matches)) gr.matches.forEach(_collectFromMatch); });
-        });
-      }
-      // g.players is a roster field (not a match), handled separately.
-      if (Array.isArray(t.groups)) t.groups.forEach(function(g) {
-        if (g && Array.isArray(g.players)) g.players.forEach(function(pl) { _allStrings.push(pl); });
-      });
-      if (Array.isArray(t.sorteioRealizado)) t.sorteioRealizado.forEach(function(item) {
-        if (typeof item === 'string') _allStrings.push(item);
-        else if (typeof item === 'object' && item) { if (item.name) _allStrings.push(item.name); if (item.displayName) _allStrings.push(item.displayName); }
-      });
-
-      // Check each string for old names
-      _allStrings.forEach(function(str) {
-        Object.keys(_prevNameMap).forEach(function(oldName) {
-          if (str === oldName || (str.indexOf(oldName) !== -1 && str.indexOf(' / ') !== -1)) {
-            var info = _prevNameMap[oldName];
-            _addFix(oldName, info.newName, info.uid, info.email);
-          }
-        });
-      });
-    });
-  }
-
-  if (fixes.length > 0) {
-    window._debug('[AutoFixNames] Fixing ' + fixes.length + ' stale name(s):', fixes.map(function(f) { return '"' + f.oldName + '" → "' + f.newName + '"'; }));
-    fixes.forEach(function(f) {
-      // v2.4.42: silent=true — sincronização automática de nomes (background) NÃO
-      // mostra toast. Só o rename feito pelo próprio usuário no perfil avisa.
-      window._propagateNameChange(f.oldName, f.newName, f.uid, f.email, true);
-    });
-    setTimeout(function() { if (typeof window._softRefreshView === 'function') window._softRefreshView(); }, 500);
-  } else {
-    window._debug('[AutoFixNames] All names up to date');
-  }
-};
-
-// ─── Repair null-identity participants (phone-only Firebase auth) ──────────
-// Participantes que se inscreveram por celular (sem e-mail, sem displayName)
-// ficam com name/displayName/email = null no Firestore e aparecem como
-// "Participante N" na UI. Esta função:
-//   1. Encontra participantes com uid mas sem nenhum identificador textual
-//   2. Busca o perfil em users/{uid}
-//   3. Atualiza com email (preferência) ou telefone formatado "+55 (DDD) XXXXX-XXXX"
-//   4. Salva os torneios afetados e propaga o nome em matches/brackets
-// Chamada automaticamente por _autoFixStaleNames na carga de dados.
-window._repairNullIdentityParticipants = async function() {
-  if (!window.AppStore || !Array.isArray(window.AppStore.tournaments)) return 0;
-  if (!window.FirestoreDB || !window.FirestoreDB.db) return 0;
-  var cu = window.AppStore.currentUser;
-  if (!cu) return 0;
-
-  // Formata telefone → "+55 (DDD) XXXXX-XXXX" (DDI sempre presente no BD).
-  function _phoneRawDigits(raw) {
-    if (!raw) return '';
-    var d = String(raw).replace(/\D/g, '');
-    if (d.length > 11 && d.substring(0, 2) === '55') d = d.substring(2);
-    if (d.length > 11) d = d.substring(d.length - 11);
-    if (d.length === 11) return '+55 (' + d.substring(0,2) + ') ' + d.substring(2,7) + '-' + d.substring(7);
-    if (d.length === 10) return '+55 (' + d.substring(0,2) + ') ' + d.substring(2,6) + '-' + d.substring(6);
-    return raw;
-  }
-
-  // Coletar uid → [{t, idx}] de participantes sem nome
-  var needsFix = {}; // uid → [{t, idx}]
-  window.AppStore.tournaments.forEach(function(t) {
-    var parts = Array.isArray(t.participants) ? t.participants : [];
-    parts.forEach(function(p, idx) {
-      if (typeof p !== 'object' || !p || !p.uid) return;
-      if (p.displayName || p.name || p.email) return; // já tem identificador
-      // v1.8.90: duplas (com ' / ') nunca precisam de repair — têm nome composto
-      var _nm = p.displayName || p.name || '';
-      if (_nm.indexOf(' / ') !== -1) return;
-      if (!needsFix[p.uid]) needsFix[p.uid] = [];
-      needsFix[p.uid].push({ t: t, idx: idx });
-    });
-  });
-
-  var uids = Object.keys(needsFix);
-  if (uids.length === 0) return 0;
-  window._log('[RepairNullIdentity] ' + uids.length + ' participante(s) sem nome encontrado(s)');
-
-  // Buscar perfis em lotes de 10
-  var profileMap = {};
-  try {
-    for (var i = 0; i < uids.length; i += 10) {
-      var batch = uids.slice(i, i + 10);
-      var snap = await window.FirestoreDB.db.collection('users')
-        .where(firebase.firestore.FieldPath.documentId(), 'in', batch).get();
-      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'autofix-uid'); } catch (e) {}
-      snap.forEach(function(doc) {
-        var d = doc.data();
-        profileMap[doc.id] = {
-          displayName: d.displayName || '',
-          email: d.email || '',
-          phone: d.phone || ''
-        };
-      });
-    }
-  } catch(e) {
-    window._warn('[RepairNullIdentity] Erro ao buscar perfis:', e);
-    return 0;
-  }
-
-  var modifiedTournaments = new Set();
-  var repairCount = 0;
-  uids.forEach(function(uid) {
-    var profile = profileMap[uid];
-    if (!profile) return;
-    // Melhor identificador: displayName > email > dígitos do telefone (sem máscara)
-    // A máscara é aplicada ao exibir por _pNameDisplay() em store.js.
-    var identifier = profile.displayName || profile.email || _phoneRawDigits(profile.phone);
-    if (!identifier) return;
-
-    needsFix[uid].forEach(function(entry) {
-      var p = entry.t.participants[entry.idx];
-      if (typeof p !== 'object' || !p) return;
-      p.displayName = identifier;
-      p.name = identifier;
-      if (!p.email && profile.email) p.email = profile.email;
-      if (!p.phone && profile.phone) p.phone = profile.phone;
-      modifiedTournaments.add(entry.t);
-      repairCount++;
-      window._log('[RepairNullIdentity] uid=' + uid.substring(0, 8) + '... → "' + identifier + '"');
-    });
-  });
-
-  if (modifiedTournaments.size === 0) return 0;
-
-  // Salvar somente torneios onde o usuário é organizador (tem permissão Firestore)
-  var saved = 0;
-  modifiedTournaments.forEach(function(t) {
-    var canWrite = (t.organizerEmail && cu.email && t.organizerEmail === cu.email) ||
-                   (t.creatorUid && cu.uid && t.creatorUid === cu.uid) ||
-                   (Array.isArray(t.coHosts) && t.coHosts.some(function(ch) {
-                     return ch.status === 'active' && (ch.uid === cu.uid || ch.email === cu.email);
-                   }));
-    if (!canWrite) return;
-    if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-      window.FirestoreDB.saveTournament(t).catch(function(e) {
-        window._warn('[RepairNullIdentity] Erro ao salvar torneio', t.id, e);
-      });
-      saved++;
-    }
-  });
-
-  window._log('[RepairNullIdentity] ' + repairCount + ' participante(s) corrigido(s) em ' + saved + ' torneio(s) salvo(s)');
-  if (saved > 0) {
-    setTimeout(function() {
-      if (typeof window._softRefreshView === 'function') window._softRefreshView();
-    }, 800);
-  }
-  return repairCount;
-};
-
 // ─── Propagate displayName change across all tournaments ─────────────────
 window._propagateNameChange = function _propagateNameChange(oldName, newName, targetUid, targetEmail, silent) {
   if (!oldName || !newName || oldName === newName) return;
@@ -6976,6 +6591,17 @@ function setupProfileModal() {
             '<div class="form-group" style="margin-bottom: 10px;">' +
               '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelCity') + '</label>' +
               '<input type="text" id="profile-edit-city" class="form-control" style="width: 100%; box-sizing: border-box;" placeholder="Ex: São Paulo">' +
+            '</div>' +
+            // Conta letzplay: handle + consentimento (pré-requisito do import do
+            // histórico). Campo aditivo/opcional; a LEITURA dos dados (extensão do
+            // organizador) é fase à parte — aqui só coletamos handle + autorização.
+            '<div class="form-group" style="margin-bottom: 10px;">' +
+              '<label class="form-label" style="font-size: 0.75rem;">🎾 Conta letzplay <span style="opacity:0.55;font-weight:400;">(opcional)</span></label>' +
+              '<input type="text" id="profile-edit-letzplay" class="form-control" style="width: 100%; box-sizing: border-box;" placeholder="@seu_usuario no letzplay" autocomplete="off">' +
+              '<label style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;font-size:0.72rem;color:var(--text-muted);cursor:pointer;line-height:1.3;">' +
+                '<input type="checkbox" id="profile-letzplay-consent" style="width:16px;height:16px;flex:0 0 auto;margin-top:1px;accent-color:var(--primary-color);">' +
+                '<span>Autorizo os organizadores dos meus torneios a importar meu histórico público do letzplay.</span>' +
+              '</label>' +
             '</div>' +
             // Esportes Preferidos — pill buttons toggleáveis (v0.15.19).
             // v1.3.6-beta: ao selecionar uma modalidade, abre mini-picker de
@@ -8426,6 +8052,9 @@ function setupProfileModal() {
       var genderIn = _v('profile-edit-gender'); // select value ('', 'feminino', 'masculino', 'outro')
       var birthRaw = _v('profile-edit-birthdate');
       var cityIn = (_v('profile-edit-city') || '').trim();
+      // letzplay: guarda o handle SEM '@' (canônico); consentimento é boolean.
+      var letzplayHandleIn = (_v('profile-edit-letzplay') || '').trim().replace(/^@+/, '');
+      var letzplayConsentIn = _chk('profile-letzplay-consent', false);
       var phoneEl = document.getElementById('profile-edit-phone');
       var phoneDigits = (phoneEl && (phoneEl.getAttribute('data-digits') || '')).replace(/\D/g, '');
       var phoneCountry = _v('profile-phone-country') || '55';
@@ -8669,6 +8298,7 @@ function setupProfileModal() {
       if (birthDate) payload.birthDate = birthDate;
       if (age != null) payload.age = age;
       if (cityIn) payload.city = cityIn;
+      if (letzplayHandleIn) payload.letzplayHandle = letzplayHandleIn;
       // v2.5.x: celular NÃO é gravado direto quando MUDA — precisa ser verificado
       // por SMS/WhatsApp (botão "Verificar e vincular", que prova posse e, se for
       // de outra conta, mescla). Só persiste aqui se o número for IGUAL ao já
@@ -8736,6 +8366,7 @@ function setupProfileModal() {
       // v2.4.3: privacidade de contato (default OFF).
       payload.omitEmail = omitEmail;
       payload.omitPhone = omitPhone;
+      payload.letzplayConsent = letzplayConsentIn;
 
       // Denormalizados para lookups case-insensitive
       if (payload.displayName) payload.displayName_lower = String(payload.displayName).toLowerCase();

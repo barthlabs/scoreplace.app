@@ -27,6 +27,8 @@ window._clearDrawRuntimeFlags = function (t) {
     'hasRepechage', 'repechageConfig', 'standbyMode', 'standbyPick',
     // suspensão de painel / estágio corrente
     '_suspendedByPanel', '_previousStatus', 'currentStage', '_reopenIfDrawCancelled',
+    // v4.5.10: marca de auto-fecho por prazo vencido (só afeta o gate do Sortear) — limpa no reset/reabrir
+    '_autoClosedByDeadline',
     // Sorteio de Vagas + snapshots + flags internos do motor
     'drawSelectionDone', 'waitlistOrder', 'preDrawEnrollees', 'pendingDraw',
     '_drawBalanceMode', '_canonicalDraw', '_cleanupApplied', '_skipCatValidation',
@@ -44,6 +46,10 @@ window._clearDrawRuntimeFlags = function (t) {
 // (t.phases, t.scoring, categorias, tiebreakers…). Base do re-sorteio e do reset.
 window._clearTournamentDraw = function (t) {
   if (!t) return;
+  // v4.5.6: o reset já restaura o elenco (waitlist/standby → participants abaixo). Descarta
+  // qualquer snapshot de draw-prep pendente pra não restaurar um elenco obsoleto num cancel
+  // posterior. "O botão de reset do sorteio reseta tudo também" (pedido do dono).
+  try { if (window._drawPrepSnapshots && t.id != null) delete window._drawPrepSnapshots[String(t.id)]; } catch (_eSnap) {}
   // v3.0.x: o reset volta ao estado de INSCRIÇÕES — então desmonta as duplas
   // FORMADAS PELO SORTEIO (teamOrigins[...] === 'sorteada') de volta pros
   // indivíduos, devolve os suplentes da lista de espera pros inscritos e dedup.
@@ -60,13 +66,16 @@ window._clearTournamentDraw = function (t) {
     var _out = [];
     _arr.forEach(function (p) {
       var nm = (p && typeof p === 'object') ? (p.displayName || p.name || '') : String(p || '');
-      var isTeam = (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) || (p && typeof p === 'object' && p.p1Name && p.p2Name) || (nm.indexOf(' / ') !== -1);
+      var isTeam = (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) || (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) || (nm.indexOf(' / ') !== -1);
       if (nm && _origins[nm] === 'sorteada' && isTeam) {
         if (Array.isArray(p.participants) && p.participants.length) {
           p.participants.forEach(function (s) { _out.push(s); });
-        } else if (p.p1Name && p.p2Name) {
-          _out.push({ name: p.p1Name, displayName: p.p1Name, uid: p.p1Uid, email: p.p1Email, photoURL: p.p1Photo });
-          _out.push({ name: p.p2Name, displayName: p.p2Name, uid: p.p2Uid, email: p.p2Email, photoURL: p.p2Photo });
+        } else if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+          // FASE 2: nome do membro resolve pelo uid (perfil ao vivo); nome gravado só fallback (guest/cache frio)
+          var _dnA = window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '');
+          var _dnB = window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '');
+          _out.push({ name: _dnA, displayName: _dnA, uid: p.p1Uid, email: p.p1Email, photoURL: p.p1Photo });
+          _out.push({ name: _dnB, displayName: _dnB, uid: p.p2Uid, email: p.p2Email, photoURL: p.p2Photo });
         } else {
           nm.split('/').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (x) { _out.push({ name: x, displayName: x }); });
         }
@@ -196,8 +205,21 @@ window._devSimulateCurrentPhase = function (tId) {
   if (!t) return;
   function realTeam(s) { return s && s !== 'TBD' && s !== 'BYE' && s !== '—'; }
   function byeSlot(s) { return !s || s === 'BYE' || s === '—'; } // BYE/vazio (NÃO TBD — TBD = não pronto)
-  var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
-  var todo = all.filter(function (m) {
+  // FONTE ÚNICA: os jogos a preencher vêm do MOTOR, não de uma varredura própria.
+  // _phasesEngine.pendingMatches é o ESPELHO EXATO de phaseComplete — o mesmo enumerador
+  // que decide se a fase acabou. Antes o simulador varria por conta própria
+  // (_collectAllMatches), um SEGUNDO caminho que podia divergir do motor: um grupo ficava
+  // de fora do simular e a fase era dada por encerrada sem ele (bug do grupo Y, Rei/Rainha).
+  // Agora simular preenche EXATAMENTE o que o motor exige pra fechar a fase atual — sem
+  // caminho alternativo. Torneio de fase única legado (sem t.phases) cai no fallback.
+  var pend;
+  if (window._phasesEngine && typeof window._phasesEngine.isMultiPhase === 'function' &&
+      window._phasesEngine.isMultiPhase(t) && typeof window._phasesEngine.pendingMatches === 'function') {
+    pend = window._phasesEngine.pendingMatches(t).map(function (x) { return x && x.match; });
+  } else {
+    pend = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+  }
+  var todo = pend.filter(function (m) {
     if (!m || m.winner || m.isSitOut || m.isBye) return false;
     var p1ok = realTeam(m.p1), p2ok = realTeam(m.p2);
     if (p1ok && p2ok) return true;            // jogo normal
@@ -421,16 +443,293 @@ window._applyMixedOriginCategories = function(t, participants) {
 // semis→quartas…), vencedores avançam e, ao terminar a R1, os melhores
 // derrotados (originais + tardios) entram por repescagem pra fechar a potência
 // de 2. Reusa o motor de repescagem/avanço que já existe.
+// Constrói o POOL da fase 0 (entradas com displayName) do jeito EXATO do sorteio inicial.
+// Extraído de generateDrawFunction pra ser reusado pela regeneração de dupla-elim quando
+// duplas tardias entram (window._integrateLateDuplas). isMon = Rei/Rainha (decompõe em pessoas);
+// ts = teamSize efetivo (duplas mantidas como 1 entrada). NÃO forma duplas — assume que
+// t.participants já tem as entradas certas (o sorteio inicial já rodou _formDoublesTeams).
+window._buildPhase0Pool = function (t, isMon, ts) {
+  var _raw = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}));
+  var _pName = window._pName ? window._pName : function (p) { return typeof p === 'string' ? p : (p && (p.displayName || p.name) || ''); };
+  var pool;
+  if (isMon) {
+    pool = [];
+    _raw.forEach(function (p) {
+      if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
+        p.participants.forEach(function (s) { var nm = (s && (s.displayName || s.name)) || String(s || ''); pool.push((s && typeof s === 'object') ? Object.assign({ displayName: nm }, s) : { displayName: nm }); });
+      } else if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '')), uid: p.p1Uid || null, name: p.p1Name || null, gender: p.p1Gender || p.gender });
+        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '')), uid: p.p2Uid || null, name: p.p2Name || null, gender: p.p2Gender || p.gender });
+      } else {
+        var nm = _pName(p); pool.push((typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm });
+      }
+    });
+  } else {
+    pool = _raw
+      .filter(function (p) { return ts <= 1 || !!window._entryTeamMembers(p) || (typeof p === 'object' && !p.p1Name && !Array.isArray(p.participants)); })
+      .map(function (p) { var nm = _pName(p); return (typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm }; });
+  }
+  return pool;
+};
+
+// INCREMENT 2 (regra do dono): duplas formadas na lista de espera durante a R1 (janela de
+// inscrição tardia aberta) entram na chave "como se tivessem sido sorteadas no sorteio
+// original" — vencedor segue no upper, derrotado cai pro lower, e o ajuste de pow2 (repescagem/
+// bye) é REFEITO pela resolução escolhida pelo organizador. Como a estrutura da dupla-elim
+// (repescagem: quem vai direto pro upper vs. play-in, tamanho do lower) é derivada do TOTAL de
+// duplas e a semeadura re-pareia a R1, a única forma correta e segura é REGENERAR a fase 0 com o
+// pool completo (originais + tardias) — reusando o MESMO motor do sorteio inicial. Só roda
+// enquanto NENHUM jogo da R1 tem resultado (re-semear não pode atropelar jogo já jogado); se já
+// houver resultado, retorna -1 (o chamador mantém as duplas como suplentes e avisa).
+// Retorna: nº de duplas integradas (>0), 0 (nada a fazer), -1 (travado por jogo já jogado).
+//
+// ⚠️ DESABILITADA (v4.5.22): a abordagem de REGENERAR estava ERRADA (pedido do dono). O modelo
+// correto é APPEND por progressão: 2 duplas (ou 1 numa vaga sem adversário) → jogo na R1 do UPPER
+// se a R2 do upper não começou; se a R2 do upper já começou → jogo na R1 do LOWER; se a R2 do
+// lower já começou → suplentes individuais (duplas desfeitas). Sendo reconstruída nesse modelo.
+// Modelo de APPEND por progressão (repescagem/playin). window._lastIntegrateTier guarda o tier
+// (1 ou 2) do último append bem-sucedido pro caller escolher a mensagem. Retorno:
+//   >0  = nº de duplas integradas — Tier 1 (R2 upper não começou → R1 do upper, vencedor sobe/
+//         derrotado cai) OU Tier 2 (R2 upper já começou → R1 da chave inferior, vencedor segue/
+//         derrotado eliminado). Diferencie pelo window._lastIntegrateTier.
+//    0  = nada a fazer (sem duplas formadas, ou 1 dupla sem par disponível → aguarda)
+//   -3  = Tier 3 (R2 do lower já começou) → suplentes individuais (caller dissolve as duplas)
+window._integrateLateDuplas = function (t) {
+  if (!t) return 0;
+  var _le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+  if (_le !== 'expand' && _le !== 'standby') return 0;
+  if (!/dupla/i.test(t.format || '')) return 0; // Eliminatória Simples: _createExtraGamesFromWaitlist
+  if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio ainda não feito
+  if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-cat: fora do escopo
+
+  var _isPair = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
+  var _nm = function (p) { return window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || ''; };
+  var formed = [];
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (Array.isArray(t[k])) t[k].forEach(function (p) { if (_isPair(p) && p._lateJoin) formed.push(p); });
+  });
+  if (!formed.length) return 0;
+
+  // Só a estrutura de REPESCAGEM (playin) tem repR1 round 0 (todos jogam a "R1 do upper").
+  // Pow2 puro (needsDoubleElim, byes na upper R1) fica pra depois.
+  var repR1 = t.matches.filter(function (m) { return m && m.round === 0 && m.isPhaseRepR1 && m.bracket === 'upper'; });
+  if (!repR1.length) return 0;
+
+  // Tier: "R1 upper" = round 0; "R2 upper" = round 1. "R1 lower" = round 1; "R2 lower" = round 2.
+  var _hasResult = function (m) { return m && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length) || m.startedAt); };
+  var upperR2Started = t.matches.some(function (m) { return m && m.bracket === 'upper' && m.round >= 1 && _hasResult(m); });
+  var lowerR2Started = t.matches.some(function (m) { return m && m.bracket === 'lower' && m.round >= 2 && _hasResult(m); });
+  if (lowerR2Started) return -3; // TIER 3
+  if (upperR2Started) {
+    // ===== TIER 2: append no LOWER R1 (pré-rodada) — R2 do upper já em curso =====
+    // Não dá pra re-semear o upper (tem resultados). As duplas tardias entram como jogo(s)
+    // NOVO(s) na R1 da chave inferior; a inferior round>=2 + grande final são reconstruídas
+    // religando os perdedores de TODO o upper. Preserva o upper inteiro e a R1 inferior.
+    // W = nº de rodadas do upper (playin: upper rounds 1..W). mergeUppers = upper[1..W].
+    var upperRounds = {};
+    t.matches.forEach(function (m) {
+      if (m && m.bracket === 'upper' && m.round >= 1) { (upperRounds[m.round] = upperRounds[m.round] || []).push(m); }
+    });
+    var W2 = 0; Object.keys(upperRounds).forEach(function (r) { r = +r; if (r > W2) W2 = r; });
+    if (!W2) return 0; // upper não estruturado (defensivo)
+    var mergeUppers2 = [];
+    for (var r2 = 1; r2 <= W2; r2++) {
+      mergeUppers2.push((upperRounds[r2] || []).slice().sort(function (a, b) { return (a.id < b.id ? -1 : a.id > b.id ? 1 : 0); }));
+    }
+    var upperChamp2 = (upperRounds[W2] && upperRounds[W2][0]) || null;
+
+    // satout (n ímpar) = entrada DIRETA no 1º merge da chave inferior (round mínimo >= 2): slot
+    // com nome real que NÃO é alimentado por sobrevivente da pré-rodada (nextMatchId) nem por
+    // perdedor do upper (loserMatchId). Detectado direto na chave atual — robusto e independe de
+    // t.participants (que o motor pode não ter populado no fluxo de teste).
+    var lowerMerges2 = t.matches.filter(function (m) { return m && m.bracket === 'lower' && m.round >= 2; });
+    var minMergeR = null; lowerMerges2.forEach(function (m) { if (minMergeR == null || m.round < minMergeR) minMergeR = m.round; });
+    var satout2 = null;
+    lowerMerges2.filter(function (m) { return m.round === minMergeR; }).forEach(function (mg) {
+      ['p1', 'p2'].forEach(function (slot) {
+        if (satout2) return;
+        var v = mg[slot];
+        if (!v || v === 'TBD' || v === 'BYE (Avança Direto)') return;
+        var fedByLower = t.matches.some(function (x) { return x && x.bracket === 'lower' && x.round === 1 && x.nextMatchId === mg.id && x.nextSlot === slot; });
+        var fedByUpper = t.matches.some(function (x) { return x && x.bracket === 'upper' && x.loserMatchId === mg.id && x.loserSlot === slot; });
+        if (!fedByLower && !fedByUpper) satout2 = { name: v, obj: (slot === 'p1' ? mg.team1Obj : mg.team2Obj) || null };
+      });
+    });
+
+    // Pré-rodada existente (lower round 1) + jogo(s) novo(s) com as duplas tardias (2 a 2).
+    var lowerR1 = t.matches.filter(function (m) { return m && m.bracket === 'lower' && m.round === 1; });
+    var idp2 = 'p0-lj2-' + Date.now();
+    var newLow = [], usedNames2 = {};
+    for (var k2 = 0; k2 + 1 < formed.length; k2 += 2) {
+      var a2 = formed[k2], b2 = formed[k2 + 1];
+      newLow.push({
+        id: idp2 + '-lowR1-' + newLow.length, round: 1, bracket: 'lower',
+        p1: _nm(a2), p2: _nm(b2), team1Obj: a2, team2Obj: b2,
+        winner: null, phaseIndex: 0, category: null
+      });
+      usedNames2[_nm(a2)] = 1; usedNames2[_nm(b2)] = 1;
+    }
+    // 1 dupla ímpar sobrando: a pré-rodada playin nasce SEMPRE cheia (toLower par) → não há
+    // vaga livre; a dupla aguarda na lista de espera até formar par. (Regra do dono: "senão
+    // aguarda".) Se um dia o bye-mode deixar slot BYE real na R1 inferior, preenche aqui.
+    var BYE2 = 'BYE (Avança Direto)';
+    if (formed.length % 2 === 1) {
+      var lone = formed[formed.length - 1];
+      for (var li = 0; li < lowerR1.length; li++) {
+        var lm = lowerR1[li];
+        if (lm.winner) continue;
+        if (lm.p1 === BYE2) { lm.p1 = _nm(lone); lm.team1Obj = lone; delete lm.p1FromBye; usedNames2[_nm(lone)] = 1; break; }
+        if (lm.p2 === BYE2) { lm.p2 = _nm(lone); lm.team2Obj = lone; delete lm.p2FromBye; usedNames2[_nm(lone)] = 1; break; }
+      }
+    }
+    if (!newLow.length && !Object.keys(usedNames2).length) return 0; // <2 duplas e sem vaga livre → aguarda
+
+    // Persiste jogos novos e move duplas da lista de espera → participantes.
+    newLow.forEach(function (m) {
+      if (typeof window._appendCanonicalColumn === 'function') { window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'lower', round: 1, matches: [m] }); }
+      else { t.matches.push(m); }
+    });
+    if (!Array.isArray(t.participants)) t.participants = [];
+    if (!t.teamOrigins) t.teamOrigins = {};
+    var integrated2 = 0;
+    formed.forEach(function (d) {
+      if (!usedNames2[_nm(d)]) return; // sobra: continua na lista de espera
+      var clone = Object.assign({}, d); delete clone._lateJoin;
+      t.participants.push(clone); t.teamOrigins[_nm(d)] = 'formada'; integrated2++;
+    });
+    ['standbyParticipants', 'waitlist'].forEach(function (k) {
+      if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(_isPair(p) && p._lateJoin && usedNames2[_nm(p)]); });
+    });
+
+    // Reconstrói lower round>=2 + grande final com a pré-rodada ESTENDIDA (existentes + novos).
+    var preRound2 = lowerR1.concat(newLow);
+    window._rebuildLowerBracket(t, {
+      preRound: preRound2, mergeUppers: mergeUppers2, satout: satout2,
+      upperChamp: upperChamp2, W: W2, mode: 'playin', cat: null, phaseIndex: 0,
+      idPrefix: idp2, ts: Date.now(), wipe: true
+    });
+    t.matches.forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; });
+
+    // Re-propaga: upper JÁ decididos dropam perdedor na nova vaga inferior; lower R1 decididos
+    // avançam. Ordem: upper (round asc) antes de lower (round asc) → cascata correta.
+    var decided2 = t.matches.filter(function (m) { return m && m.winner && (m.bracket === 'upper' || m.bracket === 'lower'); })
+      .sort(function (a, b) {
+        var ba = (a.bracket === 'upper') ? 0 : 1, bb = (b.bracket === 'upper') ? 0 : 1;
+        return (ba - bb) || ((a.round || 0) - (b.round || 0));
+      });
+    decided2.forEach(function (m) { if (typeof window._advanceWinner === 'function') { try { window._advanceWinner(t, m); } catch (e) {} } });
+    if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }
+
+    if (typeof window._computeMemberUids === 'function') { try { window._computeMemberUids(t); } catch (e) {} }
+    if (window.AppStore && typeof window.AppStore.logAction === 'function') {
+      window.AppStore.logAction(t.id, integrated2 + ' dupla(s) tardia(s) → R1 da chave inferior (append) — chave estendida');
+    }
+    if (!integrated2) return 0;
+    window._lastIntegrateTier = 2;
+    return integrated2;
+  }
+
+  // ===== TIER 1: append no upper R1 (round-0 repR1) preservando resultados + rebuild + re-propaga =====
+  // satTeam atual = dupla inscrita que NÃO está em nenhum jogo repR1 (ficou de fora / foi pro lower).
+  var inRep = {};
+  repR1.forEach(function (m) { if (m.p1) inRep[m.p1] = 1; if (m.p2) inRep[m.p2] = 1; });
+  var parts = Array.isArray(t.participants) ? t.participants : [];
+  var satTeam = null;
+  for (var pi = 0; pi < parts.length && !satTeam; pi++) { if (_isPair(parts[pi]) && !inRep[_nm(parts[pi])]) satTeam = parts[pi]; }
+
+  // Pool não-pareado = [satTeam?] + duplas tardias. Forma jogos 2-a-2; SOBRA de 1 dupla nova aguarda.
+  var unpaired = (satTeam ? [satTeam] : []).concat(formed);
+  var idp = 'p0-lj-' + Date.now();
+  var newGames = [], usedNames = {};
+  var base = repR1.length;
+  for (var i = 0; i + 1 < unpaired.length; i += 2) {
+    var a = unpaired[i], b = unpaired[i + 1];
+    var gnum = base + newGames.length;
+    newGames.push({
+      id: idp + '-rep' + gnum, round: 0, bracket: 'upper', isPhaseRepR1: true,
+      p1: _nm(a), p2: _nm(b), team1Obj: a, team2Obj: b,
+      p1Seed: gnum * 2, p2Seed: gnum * 2 + 1, winner: null, phaseIndex: 0, category: null
+    });
+    usedNames[_nm(a)] = 1; usedNames[_nm(b)] = 1;
+  }
+  if (!newGames.length) return 0; // 1 dupla nova sem par (e sem satTeam) → aguarda na lista de espera
+
+  // As duplas NOVAS que entraram num jogo viram inscritas; saem da lista de espera. A que sobrou fica.
+  if (!Array.isArray(t.participants)) t.participants = [];
+  if (!t.teamOrigins) t.teamOrigins = {};
+  var integrated = 0;
+  formed.forEach(function (d) {
+    if (!usedNames[_nm(d)]) return; // sobra: continua na lista de espera
+    var clone = Object.assign({}, d); delete clone._lateJoin;
+    t.participants.push(clone); t.teamOrigins[_nm(d)] = 'formada'; integrated++;
+  });
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(_isPair(p) && p._lateJoin && usedNames[_nm(p)]); });
+  });
+
+  // Conjunto repR1 final = antigos (com resultados) + novos. Downstream é reconstruído do zero.
+  var allRep = repR1.concat(newGames);
+  t.matches = allRep.slice();
+  if (t.thirdPlaceMatch) delete t.thirdPlaceMatch;
+
+  // meta nova (todos pareados → sem satTeam; n par). Mesma matemática de _duplaR1FromPool.
+  var g = allRep.length;
+  var T = 1; while (T < g) T *= 2;
+  var meta = {
+    g: g, T: T, promote: (T - g), toLower: (2 * g - T), n: (2 * g),
+    hasSat: false, satName: null, satObj: null, idPrefix: idp, category: null, mode: 'playin'
+  };
+  window._buildRepechageDoubleElim(t, meta);
+  t.matches.forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; });
+
+  // Re-propaga os vencedores JÁ decididos dos repR1 (winner→upper); _resolveRepFills fecha o resto.
+  allRep.forEach(function (m) { if (m.winner && typeof window._advanceWinner === 'function') { try { window._advanceWinner(t, m); } catch (e) {} } });
+  if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }
+
+  if (typeof window._computeMemberUids === 'function') { try { window._computeMemberUids(t); } catch (e) {} }
+  if (window.AppStore && typeof window.AppStore.logAction === 'function') {
+    window.AppStore.logAction(t.id, integrated + ' dupla(s) tardia(s) → R1 upper (append) — chave estendida');
+  }
+  window._lastIntegrateTier = 1;
+  return integrated;
+};
+
+// TIER 3: desfaz as duplas formadas na lista de espera de volta em suplentes INDIVIDUAIS.
+// Usado quando a R2 da chave inferior já começou (tarde demais pra formar confronto novo).
+// Retorna nº de duplas desfeitas.
+window._dissolveLateDuplas = function (t) {
+  if (!t) return 0;
+  var _isPair = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
+  var undone = 0;
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (!Array.isArray(t[k])) return;
+    var out = [];
+    t[k].forEach(function (p) {
+      if (_isPair(p) && p._lateJoin) {
+        // FASE 2: nome do membro pelo uid quando há conta; nome gravado só p/ guest
+        var _dn1 = p.p1Uid ? (window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '')) : null;
+        var _dn2 = p.p2Uid ? (window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '')) : null;
+        out.push(p.p1Uid ? { displayName: _dn1, name: _dn1, uid: p.p1Uid, _lateJoin: true } : p.p1Name);
+        out.push(p.p2Uid ? { displayName: _dn2, name: _dn2, uid: p.p2Uid, _lateJoin: true } : p.p2Name);
+        undone++;
+      } else { out.push(p); }
+    });
+    t[k] = out;
+  });
+  return undone;
+};
+
 window._createExtraGamesFromWaitlist = function(t) {
   if (!t) return 0;
-  if (t.lateEnrollment !== 'expand') return 0;
+  if ((window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) !== 'expand') return 0;
   var fmt = t.format || '';
   if (fmt !== 'Eliminatórias Simples' && fmt !== 'Eliminatória Simples') return 0;
   if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-categoria: fora do escopo por ora
   if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio já feito
-  // trava: se a R2+ já tem resultado, a qualificação fechou (não cresce mais)
-  var r2HasResult = t.matches.some(function(m){ return m && m.round >= 2 && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length)); });
-  if (r2HasResult) return 0;
+  // trava: se a 2ª RODADA da fase já começou a ser jogada, a qualificação fechou (não cresce
+  // mais). v4.5.16: usa a regra canônica window._lateEnrollR2Started — "R2" = 2ª rodada DISTINTA
+  // (não `round===2` literal, que quebrava com play-in/repescagem onde a 2ª rodada é round=1).
+  if (typeof window._lateEnrollR2Started === 'function' && window._lateEnrollR2Started(t)) return 0;
 
   var _name = function(p){ return window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p && (p.displayName || p.name) || '')); };
   var _sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
@@ -464,7 +763,8 @@ window._createExtraGamesFromWaitlist = function(t) {
   var created = 0;
   var _rm = function(used, arr){ return Array.isArray(arr) ? arr.filter(function(p){ return used.indexOf(_name(p)) === -1; }) : arr; };
   while (pool.length >= _minPool) {
-    var n1, n2, used;
+    var n1, n2, used, _lateU1 = [], _lateU2 = [];
+    var _pu = function(x){ return (typeof window._participantUids === 'function') ? window._participantUids(x) : []; };
     if (_isTeams) {
       var four = pool.splice(0, 4);
       var formed = window._formDoublesTeams(four, 2, t.teamOrigins);
@@ -472,6 +772,7 @@ window._createExtraGamesFromWaitlist = function(t) {
       if (teams.length < 2) break;
       var t1 = teams[0], t2 = teams[1];
       n1 = t1.displayName || t1.name; n2 = t2.displayName || t2.name;
+      _lateU1 = _pu(t1); _lateU2 = _pu(t2);
       // tardios viram INSCRITOS (duplas) — para aparecer na lista, marcar presença/W.O.
       [t1, t2].forEach(function(tm){
         var nm = tm.displayName || tm.name;
@@ -485,6 +786,7 @@ window._createExtraGamesFromWaitlist = function(t) {
       var two = pool.splice(0, 2);
       var s1 = two[0], s2 = two[1];
       n1 = _name(s1); n2 = _name(s2);
+      _lateU1 = _pu(s1); _lateU2 = _pu(s2);
       [s1, s2].forEach(function(sp){
         var nm = _name(sp);
         var exists = t.participants.some(function(p){ var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); return n === nm; });
@@ -498,6 +800,9 @@ window._createExtraGamesFromWaitlist = function(t) {
     t.matches.push({
       id: 'xr1-' + t.id + '-' + ts + '-' + created,
       round: 1, p1: n1, p2: n2, winner: null, isExtra: true,
+      // v4.5.71: identidade por uid nos slots (jogo tardio).
+      p1Uid: (_lateU1.length === 1 ? _lateU1[0] : null), team1Uids: _lateU1,
+      p2Uid: (_lateU2.length === 1 ? _lateU2[0] : null), team2Uids: _lateU2,
       // v4.1.36: carimbar fase+chave — o renderer canônico (_renderPhaseBracket →
       // colsFor) filtra por m.bracket==='main' E o numerador global por phaseIndex.
       // Sem isso, jogos tardios ficam invisíveis (sem card, sem "Jogo N").
@@ -614,6 +919,15 @@ window._isManualPairing = function (t) {
   if (!t) return false;
   if (t.fmt2 && typeof t.fmt2 === 'object' && t.fmt2.formacaoDupla) return t.fmt2.formacaoDupla === 'manual';
   return t.manualPairing === 'open';
+};
+// v4.5.94: formar dupla à mão passa a regra pra "Já formadas" — grava na FONTE que
+// _isManualPairing lê (fmt2.formacaoDupla p/ format2; manualPairing p/ legado). Assim o
+// seletor "Duplas na eliminatória" mostra "🤝 Já formadas" E o sorteio para de auto-formar
+// os avulsos (viram "sem dupla" na resolução), coerente com o que o organizador fez à mão.
+window._markDuplasManual = function (t) {
+  if (!t) return;
+  if (t.fmt2 && typeof t.fmt2 === 'object') t.fmt2.formacaoDupla = 'manual';
+  else t.manualPairing = 'open';
 };
 
 // ─── v2.1.20: Diálogo de gênero pré-sorteio (duplas mistas, sorteio livre) ────
@@ -1012,6 +1326,9 @@ function _commitInitialDraw(tId, t, preDraw) {
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
+    // v4.5.85 (ITEM 3 · Fase 4): rehidrata o nome das entradas (perfil vivo por uid) antes do
+    // sorteio inicial — storage só-uid, motor lê nome. Transiente (o save re-sanitiza).
+    if (typeof window._rehydrateEntryNames === 'function') window._rehydrateEntryNames(t);
 
     // v4.1.34 (decisão do dono): Liga (Pontos Corridos) e Rei/Rainha são formatos de
     // PARCEIROS ROTATIVOS — inscrição INDIVIDUAL. Com DUPLAS JÁ FORMADAS o rotativo juntaria
@@ -1025,7 +1342,7 @@ window.generateDrawFunction = function (tId) {
     if (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t) &&
         !(typeof window._isMonarchFormat === 'function' && window._isMonarchFormat(t))) {
         var _hasFormedPair = (Array.isArray(t.participants) ? t.participants : []).some(function (p) {
-            return p && typeof p === 'object' && p.p1Name && p.p2Name;
+            return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name);
         });
         if (_hasFormedPair) {
             if (typeof showAlertDialog === 'function') showAlertDialog(
@@ -1094,8 +1411,9 @@ window.generateDrawFunction = function (tId) {
     // Store active tournament ID for views that need it
     window._lastActiveTournamentId = tId;
 
-    // ── Fix orphaned names + Deduplicação de participantes ────
-    if (typeof window._fixOrphanedMatchNames === 'function') window._fixOrphanedMatchNames(t);
+    // ── Deduplicação de participantes ────
+    // v4.5.72: _fixOrphanedMatchNames removido (identidade-por-uid: render resolve
+    // o nome vivo por uid; o remendo de nome órfão por heurística virou morto).
     if (typeof window._deduplicateParticipants === 'function') {
         var _dupCount = window._deduplicateParticipants(t);
         if (_dupCount > 0) {
@@ -1169,12 +1487,33 @@ window.generateDrawFunction = function (tId) {
         t.drawVisibility = 'public';
     }
 
+    // v4.5.6: SORTEIO EFETIVO — passou todos os gates. As decisões (sem-dupla/pow2) agora
+    // ficam PERMANENTES → o snapshot de draw-prep deixa de valer (cancel não restaura mais).
+    var _prepSnap = null;
+    try { _prepSnap = window._drawPrepSnapshots && window._drawPrepSnapshots[String(tId)]; } catch (_eSnapGet) {}
+
     // BLINDAGEM: snapshot do estado PRÉ-sorteio (aqui `t` ainda não tem chave — passamos
     // todos os gates de validação/re-sorteio acima). Os 3 saves de sorteio abaixo trocam
     // syncImmediate (merge doc inteiro, lost-update) por _commitInitialDraw (delta atômico
     // sobre o fresco). Um snapshot só serve os 3 ramos. project_concurrency_safe_saves.
     var _preDraw;
     try { _preDraw = JSON.parse(JSON.stringify(t)); } catch (_e) { _preDraw = {}; }
+    // v4.5.7: usa o elenco ORIGINAL (snapshot de draw-prep) como baseline do roster no
+    // _preDraw → o delta do _commitInitialDraw captura TODAS as decisões que mexeram no
+    // elenco ANTES daqui (sem-dupla→espera, standby, exclusão) e as persiste ATOMICAMENTE
+    // com a chave. Sem isto, waitlist/standbyParticipants ficavam iguais em preDraw e t →
+    // fora do delta → não gravavam (e dependiam do sync() que clobberava a chave). Ver
+    // _startDraw (snapshot) / _cancelDrawResolution (restore).
+    if (_prepSnap) {
+        try {
+            if (_prepSnap.participants) _preDraw.participants = _prepSnap.participants;
+            if (_prepSnap.waitlist) _preDraw.waitlist = _prepSnap.waitlist;
+            if (_prepSnap.standbyParticipants) _preDraw.standbyParticipants = _prepSnap.standbyParticipants;
+            if (_prepSnap.monarchWaitlist) _preDraw.monarchWaitlist = _prepSnap.monarchWaitlist;
+            if (_prepSnap.teamOrigins) _preDraw.teamOrigins = _prepSnap.teamOrigins;
+        } catch (_eBase) {}
+    }
+    try { if (window._drawPrepSnapshots) delete window._drawPrepSnapshots[String(tId)]; } catch (_eSnapClr) {}
 
     // v4.1.30: o SORTEIO LIMPA a presença — "acabou de sortear, ninguém está presente"
     // (dono). A partir daqui presença vem SÓ de: (a) lançar resultado = quem jogou está
@@ -1227,32 +1566,9 @@ window.generateDrawFunction = function (tId) {
         // taggeado, ou t.rounds/t.standings nativo no caso da Liga/Suíço).
         t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
         t.currentPhaseIndex = 0; delete t._phaseMaterialized;
-        var _rawParts0 = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}));
-        var _pool0;
-        if (_isMon0) {
-            // Rei/Rainha: DECOMPÕE qualquer entrada-time (casais/misto pré-formados) nos seus
-            // membros individuais — o parceiro rotaciona, então cada PESSOA é uma entrada do
-            // pool. Cada uma carrega uid pra resolução de nome AO VIVO pelo perfil.
-            _pool0 = [];
-            _rawParts0.forEach(function (p) {
-                if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
-                    p.participants.forEach(function (s) {
-                        var nm = (s && (s.displayName || s.name)) || String(s || '');
-                        _pool0.push((s && typeof s === 'object') ? Object.assign({ displayName: nm }, s) : { displayName: nm });
-                    });
-                } else if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
-                    _pool0.push({ displayName: p.p1Name || p.p1Uid || '', uid: p.p1Uid || null, name: p.p1Name || null, gender: p.p1Gender || p.gender });
-                    _pool0.push({ displayName: p.p2Name || p.p2Uid || '', uid: p.p2Uid || null, name: p.p2Name || null, gender: p.p2Gender || p.gender });
-                } else {
-                    var nm = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName || p.name || ''));
-                    _pool0.push((typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm });
-                }
-            });
-        } else {
-            _pool0 = _rawParts0
-                .filter(function (p) { return _ts0 <= 1 || !!window._entryTeamMembers(p) || (typeof p === 'object' && !p.p1Name && !Array.isArray(p.participants)); })
-                .map(function (p) { var nm = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName || p.name || '')); return (typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm }; });
-        }
+        // v4.5.21: pool-build extraído p/ window._buildPhase0Pool (reusado pela integração de
+        // duplas tardias _integrateLateDuplas — MESMO pool que o sorteio inicial).
+        var _pool0 = window._buildPhase0Pool(t, _isMon0, _ts0);
         var _built0 = _E0.generatePhase(_pool0, _cfg0, {
             t: t, idPrefix: 'p0-' + Date.now(),
             isVip: function (e) { return window._entryHasVip(t, e); },
@@ -1697,6 +2013,121 @@ window._buildDoubleElimBracket = function (t, opts) {
     });
 };
 
+// ── MOTOR ÚNICO da CHAVE INFERIOR + GRANDE FINAL (Dupla Eliminatória com repescagem) ──
+// Recebe a PRÉ-RODADA (lower round 1) JÁ criada e alimentada, os arrays de rodadas do UPPER
+// cujos perdedores caem (mergeUppers = [upper[1..W]] no playin), o satout (entra direto no 1º
+// merge), o jogo-campeão do upper (→ grande final p1), e W (nº de rodadas do upper). Cria os
+// merges (cada um absorve TODOS os sobreviventes da inferior + os perdedores da rodada superior
+// correspondente) + battles finais + grande final, relinkando nextMatchId (sobreviventes da
+// inferior) e loserMatchId (perdedores do upper). Contagem ÍMPAR num merge/battle → repFill
+// (playin, melhor derrotado da inferior repesca) ou BYE (bye-mode). REUSADO por:
+//   • _buildRepechageDoubleElim (sorteio inicial): wipe=false, pré-rodada recém-criada.
+//   • _integrateLateDuplas Tier 2 (dupla tardia entra na R1 inferior com a R2 do upper já em
+//     curso): wipe=true — remove lower round>=2 + grand antigos e reconstrói com a pré-rodada
+//     ESTENDIDA (jogos existentes + jogo novo), preservando o upper inteiro e a R1 inferior.
+// Ver project_dupla_elim_repechage / feedback_resolution_one_logic.
+window._rebuildLowerBracket = function (t, opts) {
+    opts = opts || {};
+    if (!t || !Array.isArray(t.matches) || !Array.isArray(opts.preRound) || !Array.isArray(opts.mergeUppers)) return null;
+    const _pi = (opts.phaseIndex != null) ? opts.phaseIndex : null;
+    const cat = (opts.cat != null) ? opts.cat : null;
+    const mode = opts.mode || 'playin';
+    const W = opts.W;
+    const satout = opts.satout || null;
+    const upperChamp = opts.upperChamp || null;
+    const ts = opts.ts || Date.now();
+    const idp = (opts.idPrefix || ('rdeL-' + ts)) + '-L';   // salt '-L' → ids da inferior nunca colidem
+    const BYE = 'BYE (Avança Direto)';
+    let cnt = 0;
+
+    // Tier 2 (wipe): remove lower round>=2 + grande final da MESMA categoria/fase antes de
+    // reconstruir. A pré-rodada (round 1) e o upper inteiro (com resultados) são preservados.
+    if (opts.wipe) {
+        t.matches = t.matches.filter(function (m) {
+            if (!m) return false;
+            var sameCat = (cat == null) || (m.category === cat) || (m.category == null);
+            var samePhase = (_pi == null) || ((m.phaseIndex || 0) === _pi);
+            if (!sameCat || !samePhase) return true;                 // outra categoria/fase: intocado
+            if (m.bracket === 'grand') return false;                 // grande final: reconstrói
+            if (m.bracket === 'lower' && m.round >= 2) return false;  // merges/battles: reconstrói
+            return true;                                             // upper + lower R1: preserva
+        });
+    }
+
+    function M(bracket, round, extra) {
+        const m = Object.assign({ id: idp + '-' + bracket + '-r' + round + '-' + (cnt++) + '-' + ts, bracket, round, p1: 'TBD', p2: 'TBD', winner: null }, extra || {});
+        if (_pi != null) m.phaseIndex = _pi;
+        if (cat != null) m.category = cat;
+        if (typeof window._appendCanonicalColumn === 'function') {
+            window._appendCanonicalColumn(t, { phase: (bracket === 'grand' ? 'grandfinal' : 'elim'), bracket, round, matches: [m] });
+        } else { t.matches.push(m); }
+        return m;
+    }
+    // lround continua da pré-rodada recebida (round máximo da inferior em opts.preRound = 1).
+    let lround = 1;
+    opts.preRound.forEach(m => { if (m && m.bracket === 'lower' && m.round > lround) lround = m.round; });
+    function lowerRound(games) { lround++; const arr = []; for (let i = 0; i < games; i++) arr.push(M('lower', lround)); return arr; }
+    function slotsOf(arr) { const s = []; arr.forEach(m => { s.push({ m, s: 'p1' }); s.push({ m, s: 'p2' }); }); return s; }
+    function fillOdd(sl, srcRoundPrev) {
+        // Repescagem no ímpar (3ª+ vida): ressuscita o MELHOR derrotado. Em modo REPESCAGEM
+        // NUNCA vira bye — prioriza a PRÓPRIA rodada (que sempre tem jogos normais quando o par
+        // existe); só cai pra rodada anterior num caso degenerado (rodada só com o jogo-ímpar).
+        // Regra do dono: repescagem = sem bye em lugar nenhum. O jogo-ímpar é marcado
+        // isPhaseRepGame p/ não ser fonte de si mesmo; tagRep → badge REP no revivido.
+        if (mode === 'bye') { if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; return; }
+        sl.m.isPhaseRepGame = true;
+        const _has = function (r) { return t.matches.some(m => m && m.bracket === 'lower' && m.round === r && !m.isPhaseRepGame && (cat == null || m.category === cat)); };
+        const src = _has(lround) ? lround : srcRoundPrev;
+        if (!_has(src)) { if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; return; } // degenerado: sem fonte
+        (sl.m.repFill = sl.m.repFill || []).push({ slot: sl.s, srcBracket: 'lower', srcRound: src, rank: 0, cat, tagRep: true });
+    }
+
+    let prevLower = opts.preRound.slice();
+    let alive = prevLower.length;
+    const K = opts.mergeUppers.length;
+    for (let w = 0; w < K; w++) {
+        const upLosers = opts.mergeUppers[w] || [];
+        const directNames = (w === 0 && satout) ? [satout] : [];
+        let entrants = alive + upLosers.length + directNames.length;
+        const repNeed = entrants % 2;
+        entrants += repNeed;
+        const merge = lowerRound(entrants / 2);
+        const s = slotsOf(merge); let si = 0;
+        prevLower.forEach(pm => { const sl = s[si++]; pm.nextMatchId = sl.m.id; pm.nextSlot = sl.s; });
+        upLosers.forEach(um => { const sl = s[si++]; um.loserMatchId = sl.m.id; um.loserSlot = sl.s; });
+        directNames.forEach(d => {
+            const sl = s[si++];
+            if (d.loserFeed) {
+                // wiring DINÂMICO: o perdedor do jogo-fonte (repGame da dupla ímpar) cai NESTE slot
+                // quando o jogo é decidido (via _advanceWinner/loserMatchId). Não há nome no build.
+                d.loserFeed.loserMatchId = sl.m.id; d.loserFeed.loserSlot = sl.s;
+            } else if (sl.s === 'p1') { sl.m.p1 = d.name; if (d.obj) sl.m.team1Obj = d.obj; }
+            else { sl.m.p2 = d.name; if (d.obj) sl.m.team2Obj = d.obj; }
+        });
+        if (repNeed) fillOdd(s[si++], lround - 1);
+        prevLower = merge; alive = merge.length;
+    }
+    // battles finais (sem battle intercalada entre merges): reduz a 1 depois de consumir todo o
+    // upper. Pra 14 duplas: pré 3, merge 4, merge 3, merge 2 (semi), battle 1 (final) = 3-4-3-2-1.
+    while (alive > 1) {
+        let bent = alive; const brep = bent % 2; bent += brep;
+        const battle = lowerRound(bent / 2);
+        const bs = slotsOf(battle); let bsi = 0;
+        prevLower.forEach(pm => { const sl = bs[bsi++]; pm.nextMatchId = sl.m.id; pm.nextSlot = sl.s; });
+        if (brep) fillOdd(bs[bsi++], lround - 1);
+        prevLower = battle; alive = battle.length;
+    }
+
+    // ---- GRANDE FINAL ----
+    const gf = M('grand', W + 1, { label: 'Grande Final' });
+    if (upperChamp) { upperChamp.nextMatchId = gf.id; upperChamp.nextSlot = 'p1'; }
+    if (prevLower && prevLower[0]) { prevLower[0].nextMatchId = gf.id; prevLower[0].nextSlot = 'p2'; }
+
+    // resolve vagas repFill já decididas (BYEs inferiores auto-resolvem no _advanceWinner).
+    if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }
+    return gf;
+};
+
 // ── DUPLA ELIMINATÓRIA fora de potência de 2, com REPESCAGEM (não elimina na 1ª) ──
 // Lê a repescagem R1 (round 0, isPhaseRepR1) que o _duplaR1FromPool criou e monta:
 //   • CHAVE SUPERIOR de T: R1 (T/2 jogos) = g vencedores da repescagem + os `promote`
@@ -1730,14 +2161,6 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
     let lround = 0;
     function lowerRound(games) { lround++; const arr = []; for (let i = 0; i < games; i++) arr.push(M('lower', lround)); return arr; }
     function slotsOf(arr) { const s = []; arr.forEach(m => { s.push({ m, s: 'p1' }); s.push({ m, s: 'p2' }); }); return s; }
-    // Contagem ímpar na inferior: modo 'bye' → vaga vira BYE (o adjacente avança livre, sem
-    // repescar); modo 'playin' → REPESCAGEM (melhor derrotado da rodada inferior anterior VOLTA
-    // — foi eliminado e retorna). tagRep:true → leva a TAG REP (é repescagem de verdade, ≠ da
-    // queda normal do upper pra inferior). Regra do dono (caso Fernando). Ver feedback_resolution_one_logic.
-    function fillOdd(sl, srcRound) {
-        if (mode === 'bye') { if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; }
-        else { (sl.m.repFill = sl.m.repFill || []).push({ slot: sl.s, srcBracket: 'lower', srcRound: srcRound, rank: 0, cat, tagRep: true }); }
-    }
 
     // ---- CHAVE SUPERIOR + preparação da PRÉ-rodada inferior (por modo) ----
     // Os DOIS modos convergem no MESMO motor de chave inferior (merge/battle + suavização
@@ -1783,19 +2206,32 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
         W = Math.round(Math.log(T) / Math.log(2));
         const rep = t.matches.filter(m => m && m.isPhaseRepR1 && m.round === 0 && (cat == null || m.category === cat) && (_pi == null || (m.phaseIndex || 0) === _pi))
             .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        // A DUPLA ÍMPAR joga o repGame na R1 sup (não vai direto pro lower). Espelha o
+        // genTierBracket: g vencedores + directSpots melhores derrotados (direto pra R2) +
+        // o VENCEDOR do repGame preenchem a chave de T; o PERDEDOR do repGame cai no lower.
+        const repGame = rep.filter(m => m.isPhaseRepGame)[0] || null;
+        const normalRep = rep.filter(m => !m.isPhaseRepGame);            // g jogos "cheios"
+        const directSpots = repGame ? (promote - 1) : promote;          // melhores derrotados que sobem DIRETO
+        const entrants = [];                                             // semente 0..T-1 da chave de T
+        for (let ei = 0; ei < normalRep.length; ei++) entrants.push({ fromR1: normalRep[ei] });
+        for (let di = 0; di < directSpots; di++) entrants.push({ repDirect: di });   // di-ésimo melhor derrotado
+        if (repGame) entrants.push({ fromRepGame: repGame });           // vencedor do jogo da ímpar
         upper[1] = [];
         for (let i = 0; i < T / 2; i++) upper[1].push(M('upper', 1));
-        for (let e = 0; e < T; e++) {
-            const gm = upper[1][Math.floor(e / 2)], slot = (e % 2 === 0) ? 'p1' : 'p2';
-            if (e < g) { if (rep[e]) { rep[e].nextMatchId = gm.id; rep[e].nextSlot = slot; } }
-            else { (gm.repFill = gm.repFill || []).push({ slot, srcBracket: 'upper', srcRound: 0, rank: (e - g), cat, tagRep: true }); } // sobe pra chave superior → TAG REP
-        }
+        const _wireEnt = function (ent, slot, gm) {
+            if (!ent) return;
+            if (ent.fromR1) { ent.fromR1.nextMatchId = gm.id; ent.fromR1.nextSlot = slot; }
+            else if (ent.fromRepGame) { ent.fromRepGame.nextMatchId = gm.id; ent.fromRepGame.nextSlot = slot; }
+            else if (ent.repDirect != null) { (gm.repFill = gm.repFill || []).push({ slot, srcBracket: 'upper', srcRound: 0, rank: ent.repDirect, cat, tagRep: true }); } // sobe pra chave superior → TAG REP
+        };
+        for (let e = 0; e < T; e++) { _wireEnt(entrants[e], (e % 2 === 0) ? 'p1' : 'p2', upper[1][Math.floor(e / 2)]); }
         for (let r = 2; r <= W; r++) {
             upper[r] = [];
             const pc = upper[r - 1].length / 2;
             for (let j = 0; j < pc; j++) upper[r].push(M('upper', r));
             upper[r - 1].forEach((pm, idx) => { const nm = upper[r][Math.floor(idx / 2)]; pm.nextMatchId = nm.id; pm.nextSlot = (idx % 2 === 0) ? 'p1' : 'p2'; });
         }
+        // Pré-rodada inferior: os `toLower` piores derrotados (rank promote..). toLower é sempre par.
         preGames = toLower / 2;
         feedPre = function (pre) {
             pre.forEach((m, i) => { m.repFill = [
@@ -1804,49 +2240,41 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
             ]; });
         };
         mergeUppers = []; for (let r = 1; r <= W; r++) mergeUppers.push(upper[r]);
-        satout = (meta.hasSat && meta.satName) ? { name: meta.satName, obj: meta.satObj } : null;
+        // A ímpar NÃO entra direto no lower — joga o repGame. O PERDEDOR do repGame entra no 1º
+        // merge inferior, EXATAMENTE onde o satout estático entrava (mesma contagem de vagas),
+        // só que via wiring dinâmico (loserFeed → loserMatchId), pois quem cai só se sabe ao jogar.
+        satout = repGame ? { loserFeed: repGame } : null;
     }
 
-    // ---- CHAVE INFERIOR (motor ÚNICO) ----
+    // ---- CHAVE INFERIOR + GRANDE FINAL (motor ÚNICO — extraído p/ _rebuildLowerBracket) ----
+    // A pré-rodada (lower round 1) nasce aqui (por modo, via feedPre); merges/battles/grande
+    // final saem no motor reusável (o MESMO usado quando duplas tardias entram na R1 inferior —
+    // _integrateLateDuplas Tier 2). Ver project_dupla_elim_repechage.
     let prevLower = lowerRound(preGames);
     feedPre(prevLower);
-    let alive = prevLower.length;
-    const K = mergeUppers.length;
-    for (let w = 0; w < K; w++) {
-        const upLosers = mergeUppers[w];
-        const directNames = (w === 0 && satout) ? [satout] : [];
-        let entrants = alive + upLosers.length + directNames.length;
-        const repNeed = entrants % 2;
-        entrants += repNeed;
-        const merge = lowerRound(entrants / 2);
-        const s = slotsOf(merge); let si = 0;
-        prevLower.forEach(pm => { const sl = s[si++]; pm.nextMatchId = sl.m.id; pm.nextSlot = sl.s; });
-        upLosers.forEach(um => { const sl = s[si++]; um.loserMatchId = sl.m.id; um.loserSlot = sl.s; });
-        directNames.forEach(d => { const sl = s[si++]; if (sl.s === 'p1') { sl.m.p1 = d.name; if (d.obj) sl.m.team1Obj = d.obj; } else { sl.m.p2 = d.name; if (d.obj) sl.m.team2Obj = d.obj; } });
-        if (repNeed) fillOdd(s[si++], lround - 1);
-        prevLower = merge; alive = merge.length;
+    // ── REPESCAGEM RECURSIVA na R1 inferior (3ª vida) — project_lower_bracket_recursive_repechage ──
+    // n ímpar (satout = perdedor do jogo da ímpar superior) E há jogos normais na pré-rodada
+    // (preGames>0 → existe derrotado da própria R1 inf pra ressuscitar): a ímpar da INFERIOR joga
+    // um jogo-repescagem na PRÓPRIA R1 inf — mesmo padrão do jogo da ímpar superior. p1 = perdedor
+    // do jogo da ímpar superior (loserFeed dinâmico), p2 = MELHOR derrotado dos `preGames` jogos
+    // normais desta R1 inf (repFill rank 0, MESMA rodada, isPhaseRepGame → não é fonte de si mesmo;
+    // SEM tagRep porque continua na inferior). Vencedor → merge1 (ocupa a vaga do antigo satout);
+    // perdedor → eliminado (3ª derrota). Assim a R1 inf fica com 4 jogos (n=15) em vez de empurrar
+    // a ímpar direto pro merge1. Regra do dono: ímpar+repescagem = 3ª vida, SEM bye. Quando toLower=0
+    // (n=2^k+1: pré sem jogos normais, nada pra ressuscitar) mantém o comportamento antigo
+    // (satout → merge1, que lá pode dar bye por falta de fonte — caso de borda documentado).
+    if (mode === 'playin' && satout && satout.loserFeed && preGames > 0) {
+        const lowImpar = M('lower', lround, { isPhaseRepGame: true, isLowerImpar: true });
+        satout.loserFeed.loserMatchId = lowImpar.id; satout.loserFeed.loserSlot = 'p1';
+        lowImpar.repFill = [{ slot: 'p2', srcBracket: 'lower', srcRound: lround, rank: 0, cat: cat, tagRep: true }];
+        prevLower.push(lowImpar);   // entra na R1 inf; seu VENCEDOR alimenta o merge1
+        satout = null;              // não injeta mais direto no merge1
     }
-    // battles finais: sem battle INTERCALADA entre merges (dono) — cada rodada absorve TODOS
-    // os vencedores da inferior + os perdedores da rodada superior correspondente. Só depois de
-    // consumir todas as rodadas superiores é que sobra >1 → reduz a 1 (última = FINAL da inferior).
-    // Pra 14: pré 3, merge 4, merge 3, merge 2 (semifinal), battle 1 (final) = 3-4-3-2-1.
-    while (alive > 1) {
-        let bent = alive; const brep = bent % 2; bent += brep;
-        const battle = lowerRound(bent / 2);
-        const bs = slotsOf(battle); let bsi = 0;
-        prevLower.forEach(pm => { const sl = bs[bsi++]; pm.nextMatchId = sl.m.id; pm.nextSlot = sl.s; });
-        if (brep) fillOdd(bs[bsi++], lround - 1);
-        prevLower = battle; alive = battle.length;
-    }
-
-    // ---- GRANDE FINAL ----
-    const gf = M('grand', W + 1, { label: 'Grande Final' });
-    if (upper[W] && upper[W][0]) { upper[W][0].nextMatchId = gf.id; upper[W][0].nextSlot = 'p1'; }
-    if (prevLower && prevLower[0]) { prevLower[0].nextMatchId = gf.id; prevLower[0].nextSlot = 'p2'; }
-
-    // resolve vagas repFill já decididas. Os BYEs inferiores (pré-rodada ímpar) auto-resolvem
-    // quando o derrotado real cai (loserMatchId → _autoResolveBye no _advanceWinner).
-    if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }
+    window._rebuildLowerBracket(t, {
+        preRound: prevLower, mergeUppers: mergeUppers, satout: satout,
+        upperChamp: (upper[W] && upper[W][0]) || null, W: W, mode: mode,
+        cat: cat, phaseIndex: _pi, idPrefix: idp, ts: ts, wipe: false
+    });
 };
 
 // Conta o total de jogos de uma Dupla Eliminatória com repescagem (n fora de pow2).
@@ -1855,15 +2283,20 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
 window._countRepechageDoubleElim = function (n) {
     if (!(n > 2) || (n & (n - 1)) === 0) return null;
     var g = Math.floor(n / 2), hasSat = (n % 2) === 1;
-    var T = 1; while (T < g) T *= 2;
-    var promote = T - g, toLower = g - promote;
+    var T = 1; while (T * 2 <= n) T *= 2;            // maior pow2 <= n (IGUAL ao builder _duplaR1FromPool)
+    var toLower = 2 * g - T;
     var W = Math.round(Math.log(T) / Math.log(2));
-    var total = g;                                  // repescagem R1
-    var uc = T / 2; for (var r = 1; r <= W; r++) { total += uc; uc = Math.floor(uc / 2); } // upper = T-1
-    var alive = toLower / 2; total += alive;         // pré-rodada inferior
+    var total = g + (hasSat ? 1 : 0);               // repescagem R1 (round 0): g normais + jogo da ímpar (n ímpar)
+    var uc = T / 2; for (var r = 1; r <= W; r++) { total += uc; uc = Math.floor(uc / 2); } // upper R1..W
+    // Pré-rodada inferior: preNormal jogos normais + (se n ímpar E há normais p/ ressuscitar) 1 jogo-ímpar.
+    // Se toLower=0 (n=2^k+1), o perdedor da ímpar superior vai direto pro merge1 (satToMerge).
+    var preNormal = toLower / 2;
+    var imparInLower = (hasSat && preNormal > 0) ? 1 : 0;
+    var satToMerge = (hasSat && !imparInLower) ? 1 : 0;
+    var alive = preNormal + imparInLower; total += alive; // pré-rodada inferior
     for (var w = 1; w <= W; w++) {
         var upLose = T / Math.pow(2, w);
-        var ent = alive + upLose + ((w === 1 && hasSat) ? 1 : 0);
+        var ent = alive + upLose + ((w === 1) ? satToMerge : 0);
         ent += ent % 2;
         var merge = ent / 2; total += merge; alive = merge;
     }
@@ -2104,6 +2537,10 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
         t.participants = arr;
         if (!t.teamOrigins) t.teamOrigins = {};
         t.teamOrigins[newName] = 'formada';
+        // v4.5.94: formar dupla MANUALMENTE = regra "Já formadas". Sincroniza a config
+        // (fmt2.formacaoDupla) pra o seletor "Duplas na eliminatória" refletir a mudança —
+        // antes só mexia no enrollmentMode e o seletor continuava "Sorteadas".
+        if (typeof window._markDuplasManual === 'function') window._markDuplasManual(t);
         window.FirestoreDB.saveTournament(t);
         var container = document.getElementById('view-container');
         if (container) renderTournaments(container, tId);

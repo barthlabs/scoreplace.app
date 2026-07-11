@@ -43,19 +43,22 @@
   // Detecta 3 formas: participants[], campos p{N}Name/fixedPair, ou nome "X / Y"
   // (convenção canônica de dupla no app — Fase de Grupos de duplas).
   function _isTeamEntry(s) {
-    return !!(s && ((Array.isArray(s.participants) && s.participants.length > 1) || s.p2Name || s.fixedPair || (typeof s.name === 'string' && /\s\/\s/.test(s.name))));
+    return !!(s && ((Array.isArray(s.participants) && s.participants.length > 1) || s.p2Name || s.p2Uid || s.fixedPair || (typeof s.name === 'string' && /\s\/\s/.test(s.name))));
   }
   // Normaliza uma colocação-que-é-time num teamObj canônico, preservando membros
   // (uids/emails/fotos quando existem). Usado no carry-forward ('keep') — a dupla
   // SEGUE junta. Quando só há o nome "X / Y", divide pelos nomes (sem uid).
   function _asTeam(s) {
     if (Array.isArray(s.participants) && s.participants.length > 1) return mkTeam(s.participants);
-    if (s.p2Name || s.fixedPair) {
+    if (s.p2Name || s.p2Uid || s.fixedPair) {
       var members = [];
       for (var k = 1; k <= 4; k++) {
-        var nm = s['p' + k + 'Name']; if (!nm) break;
+        var _uk = s['p' + k + 'Uid'], _nk = s['p' + k + 'Name'];
+        if (!_nk && !_uk) break;
+        // FASE 2: nome do membro pelo uid (perfil ao vivo); nome gravado só fallback (guest/cache frio)
+        var nm = (_uk && typeof window !== 'undefined' && window._displayNameForUid) ? window._displayNameForUid(_uk, _nk) : (_nk || _uk || '');
         var mem = { name: nm };
-        if (s['p' + k + 'Uid']) mem.uid = s['p' + k + 'Uid'];
+        if (_uk) mem.uid = _uk;
         if (s['p' + k + 'Email']) mem.email = s['p' + k + 'Email'];
         if (s['p' + k + 'Photo']) mem.photoURL = s['p' + k + 'Photo'];
         members.push(mem);
@@ -555,12 +558,14 @@
       // todas as linhas). Default 'bye' = comportamento legado. Setado pelo painel.
       var _res = (phaseCfg && phaseCfg.bracketResolution) || 'bye';
       var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey, _res, _tierThird, bracketSeeding);
-      // v2.6.79: nome da linha/chave = o que o organizador digitou (mapping[].label);
-      // sem ícone de medalha hardcoded. Fallback genérico "Chave N" (ordem da linha).
+      // Nome da chave = o que o ORGANIZADOR digitou (mapping[].label). Sem nome, com 2+ chaves →
+      // default POSICIONAL "Chave N" (ordem da chave). NUNCA Ouro/Prata (exemplo ≠ regra,
+      // feedback_dont_canonize_examples). Com 1 chave só e SEM nome custom → NÃO grava tierLabel:
+      // o inscrito não vê rótulo de chave (igual categoria única). O organizador renomeia quando quiser.
       var _mp = mapping.filter(function (m) { return m.dest === dest; })[0];
       var _custom = (_mp && _mp.label) ? String(_mp.label).trim() : '';
-      var _label = _custom || (DEST_LABEL[dest] || ('Chave ' + (destOrder.indexOf(dest) + 1)));
-      res.matches.forEach(function (m) { m.tierLabel = _label; });
+      var _label = _custom || (destOrder.length > 1 ? (DEST_LABEL[dest] || ('Chave ' + (destOrder.indexOf(dest) + 1))) : '');
+      if (_label) res.matches.forEach(function (m) { m.tierLabel = _label; });
       allMatches = allMatches.concat(res.matches);
       if (res.waitlist && res.waitlist.length) phaseWaitlist = phaseWaitlist.concat(res.waitlist);
       tiers[dest] = res;
@@ -822,10 +827,12 @@
       // derrotados) e a grande final são montados por _buildRepechageDoubleElim, que lê
       // esta repescagem R1. Aqui só a R1 + os metadados. Ver project_dupla_elim_repechage.
       var g = Math.floor(n / 2);
-      var hasSat = (n % 2) === 1;                          // n ímpar → 1 dupla fica de fora da R1
+      var hasSat = (n % 2) === 1;                          // n ímpar → 1 dupla é a "ímpar" da R1 sup
       var satTeam = hasSat ? pool[n - 1] : null;
       var playing = hasSat ? pool.slice(0, n - 1) : pool.slice();
-      var T = 1; while (T < g) T *= 2;                     // menor pow2 >= vencedores (=chave superior)
+      var T = 1; while (T * 2 <= n) T *= 2;                // maior pow2 <= n (=chave superior). MESMA base
+                                                            // do single-elim (genTierBracket): a ímpar joga
+                                                            // a R1 sup, NÃO cai direto pra chave inferior.
       var repR1 = [];
       for (var gi = 0; gi < g; gi++) {
         var ra = playing[gi], rb = playing[playing.length - 1 - gi];
@@ -835,20 +842,51 @@
           p1Seed: gi, p2Seed: (playing.length - 1 - gi), winner: null
         });
       }
+      // DUPLA ÍMPAR (n ímpar): cria o JOGO DA ÍMPAR na R1 SUPERIOR (não vai direto pro lower).
+      // Espelha o repGame do single-elim (genTierBracket): satTeam × repescado da PRÓPRIA R1 sup
+      // (o "primeiro que cairia" = melhor derrotado logo abaixo do corte, rank=directSpots). O builder
+      // liga o VENCEDOR à R2 sup e o PERDEDOR à chave inferior. Ver project_dupla_elim_repechage.
+      if (hasSat) {
+        var directSpots = (T - g) - 1;                     // melhores derrotados que sobem DIRETO; o próximo joga a ímpar
+        repR1.push({
+          id: idPrefix + '-repsat', round: 0, bracket: 'upper', isPhaseRepR1: true, isPhaseRepGame: true,
+          p1: satTeam.displayName, p2: 'TBD', team1Obj: satTeam, p1Seed: -1, winner: null,
+          repFill: [{ slot: 'p2', srcBracket: 'upper', srcRound: 0, rank: directSpots, tagRep: true }]
+        });
+      }
       return {
         matches: repR1, needsRepechageDoubleElim: true,
         repMeta: {
-          g: g, T: T, promote: (T - g), toLower: (g - (T - g)), n: n,
+          g: g, T: T, promote: (T - g), toLower: (2 * g - T), n: n,
           hasSat: hasSat, satName: satTeam ? satTeam.displayName : null, satObj: satTeam || null,
           idPrefix: idPrefix
         }
       };
     }
-    // Pareamento cru (bye/default). DÍVIDA CONHECIDA: p/ dupla-elim FORA de pow2 isto NÃO
-    // completa até a pow2 (14 → 7 jogos ímpares → vagas mortas no _buildDoubleElimBracket).
-    // BYE de verdade em dupla-elim é um problema difícil (fluxo assimétrico na chave inferior
-    // com muitos byes) — tentado e não ficou robusto p/ n grande. Enquanto isso, a resolução
-    // canônica/COMPLETA p/ dupla fora de pow2 é REPESCAGEM (playin). Ver feedback_resolution_one_logic.
+    // BYE CANÔNICO fora de pow2 — MESMA lógica do single-elim (genTierBracket): completa até a
+    // MENOR pow2 >= n com BYEs nos MELHORES semeados (espelho 1×N: p1=melhor, p2=pior; sobra vira
+    // BYE nos topo). O BYE avança direto pra R2 sup. A ÚNICA diferença no dupla é o perdedor do
+    // jogo REAL cair na chave inferior — feito pelo builder (mode:'bye'). bye é bye, indep. de formato.
+    if (resolution === 'bye' && n > 2 && !pow2) {
+      var BYE_L = 'BYE (Avança Direto)';
+      var powB = 1; while (powB < n) powB *= 2;                 // menor pow2 >= n
+      var r1B = [];
+      for (var bi = 0; bi < powB / 2; bi++) {
+        var ba = pool[bi] || null, bb = pool[powB - 1 - bi] || null; // espelho: BYEs caem nos melhores
+        var isByeB = !ba || !bb;
+        r1B.push({
+          id: idPrefix + '-u' + bi, round: 1, bracket: 'upper',
+          p1: ba ? ba.displayName : BYE_L, p2: bb ? bb.displayName : BYE_L,
+          team1Obj: ba || null, team2Obj: bb || null,
+          p1Seed: bi, p2Seed: (powB - 1 - bi),
+          winner: isByeB ? ((ba || bb).displayName) : null, isBye: isByeB, scoreP1: null, scoreP2: null
+        });
+      }
+      return { matches: r1B, needsRepechageDoubleElim: true, repMeta: { mode: 'bye', hi: powB, n: n, idPrefix: idPrefix } };
+    }
+    // Pareamento cru (default sem resolução explícita). DÍVIDA CONHECIDA: p/ dupla-elim FORA de
+    // pow2 isto NÃO completa até a pow2 (14 → 7 jogos ímpares → vagas mortas). As resoluções
+    // canônicas fora de pow2 são REPESCAGEM (playin) e BYE (acima). Ver feedback_resolution_one_logic.
     var dms = [];
     for (var i = 0; i < n; i += 2) {
       var a = pool[i], b = (i + 1 < n) ? pool[i + 1] : null;
@@ -869,7 +907,9 @@
     var dupla = !!(cfg && (cfg.formatCode === 'elim_dupla' || /dupla/i.test(String(cfg.format || ''))));
     if (pool.length === 1) {
       // 1 inscrito → campeão por BYE (preserva o legado da Fase 0).
-      return { matches: [{ id: idPrefix + '-bye', round: 1, bracket: 'main', p1: pool[0].displayName, p2: 'BYE (Avança Direto)', winner: pool[0].displayName, isBye: true }] };
+      // v4.5.71: identidade por uid no slot real (p1 = campeão).
+      var _byeUids = (typeof window._participantUids === 'function') ? window._participantUids(pool[0]) : [];
+      return { matches: [{ id: idPrefix + '-bye', round: 1, bracket: 'main', p1: pool[0].displayName, p2: 'BYE (Avança Direto)', winner: pool[0].displayName, isBye: true, team1Obj: pool[0], p1Uid: (_byeUids.length === 1 ? _byeUids[0] : null), team1Uids: _byeUids, winnerUid: (_byeUids.length === 1 ? _byeUids[0] : null), winnerUids: _byeUids }] };
     }
     if (dupla) {
       // Dupla Eliminatória: gera a R1 do upper (com repescagem quando resolution='playin'
@@ -1450,11 +1490,13 @@
     // Linhas independentes: um grupo por bracketKey, ordenado por exitRound desc.
     var byBracket = {};
     tierMatches.forEach(function (m) { (byBracket[m.bracket] = byBracket[m.bracket] || []).push(m); });
-    return Object.keys(byBracket).map(function (bk) {
+    return Object.keys(byBracket).map(function (bk, i) {
       var ms = byBracket[bk];
       var names = _tierTeamNames(ms);
       names.sort(function (a, b) { return _tierExitRound(b, ms) - _tierExitRound(a, ms); });
-      return { name: (ms[0] && ms[0].tierLabel) || bk, standings: names.map(entry) };
+      // Nome do grupo = tierLabel do organizador; sem ele, "Chave N" posicional (nunca a
+      // chave-key crua 'gold'/'main' — não é rótulo humano).
+      return { name: (ms[0] && ms[0].tierLabel) || ('Chave ' + (i + 1)), standings: names.map(entry) };
     });
   }
 
@@ -1611,6 +1653,26 @@
       var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
       var _anyNonPow2 = _lines.some(function (l) { return l.size > 1 && (l.size & (l.size - 1)) !== 0; });
       if (_anyNonPow2) {
+        // v4.5.5: PROMOVER LINHA é um passo SEPARADO e ANTERIOR à resolução de pow2 —
+        // NÃO uma opção de chave. Promover sobe a melhor dupla da linha de baixo pra de
+        // cima (cima +1, baixo −1), mudando as CONTAGENS de cada linha (ex.: 25/25 → 26/24).
+        // Só depois de fixadas as contagens é que a pow2 é proposta — e aí cada linha
+        // resolve com o SEU número (26 e 24 rendem BYE/repescagem diferentes). Antes as duas
+        // decisões vinham misturadas no mesmo painel, e escolher "promover" não escolhia a
+        // solução de pow2 (bug reportado). Multi-linha → pergunta o promote primeiro; uma vez
+        // decidido (_promoteAsked) segue pro painel de pow2. selectQualifiers já aplica
+        // _promoteLines, então _lines aqui já reflete o promote acumulado. Ver
+        // feedback_resolution_one_logic / project_numeric_resolution_canon.
+        // Promover é decisão de 0 ou 1: só faz sentido quando UMA promoção ZERA as linhas
+        // ímpares (linha ímpar = 1 equipe sem adversário). 25/25 (2 ímpares) → 26/24 (tudo
+        // par): resolve. _phasePromoteHelps é a fonte única (mesma regra do painel). Só
+        // pergunta uma vez por transição (_promoteAsked).
+        if (_lines.length >= 2 && !_nextCfg._promoteAsked && typeof window._showPhasePromotePanel === 'function' &&
+            typeof window._phasePromoteHelps === 'function' && window._phasePromoteHelps(_lines)) {
+          t._phaseResInfo = { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) };
+          window._showPhasePromotePanel(tId);
+          return;
+        }
         // v3.1.23: quando uma linha não fecha em potência de 2, SEMPRE pergunta ao
         // organizador como resolver (Play-in/Repescagem · Lista de espera · BYE ·
         // Exclusão) — com o equilíbrio de Nash, o tempo estimado e o nº de partidas
@@ -1710,6 +1772,7 @@
         var src = all.filter(function (x) {
           return x && x.bracket === slot.srcBracket && x.round === slot.srcRound &&
             (slot.cat == null || x.category === slot.cat) &&
+            !x.isPhaseRepGame &&  // o jogo da ÍMPAR não é fonte de repescado (seu perdedor cai via loserMatchId)
             x.p1 && x.p1 !== 'TBD' && x.p2 && x.p2 !== 'TBD';
         });
         if (!src.length || src.some(function (x) { return !x.winner; })) { keep.push(slot); return; }

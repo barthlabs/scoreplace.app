@@ -640,7 +640,7 @@ function _computeStandings(t, category) {
     const name = (typeof window._entryDisplayName === 'function')
       ? window._entryDisplayName(p)
       : ((typeof p === 'string') ? p
-        : (p.p1Name && p.p2Name) ? (p.p1Name + ' / ' + p.p2Name)
+        : ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) ? ((p.p1Name || p.p1Uid || '') + ' / ' + (p.p2Name || p.p2Uid || ''))
         : (Array.isArray(p.participants) && p.participants.length > 1)
           ? p.participants.map(function (x) { return (typeof x === 'string') ? x : (x.displayName || x.name || ''); }).filter(Boolean).join(' / ')
           : (p.displayName || p.name || ''));
@@ -655,7 +655,7 @@ function _computeStandings(t, category) {
     }
     // v4.4.122: uid do participante = identidade (só individual; dupla pré-formada "p1 / p2" e
     // participante-string não têm uid único → name-key). O SEED define o s.name canônico.
-    var _pUid = (p && typeof p === 'object' && !(p.p1Name && p.p2Name) && !(Array.isArray(p.participants) && p.participants.length > 1)) ? (p.uid || null) : null;
+    var _pUid = (p && typeof p === 'object' && !((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) && !(Array.isArray(p.participants) && p.participants.length > 1)) ? (p.uid || null) : null;
     var _pk = _idKey(name, _pUid);
     if (name && !scoreMap[_pk]) scoreMap[_pk] = { key: _pk, uid: (_pUid || _uidOfKey(_pk)), name: name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, category: category || '', setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0 };
   });
@@ -1093,9 +1093,58 @@ function _autoResolveBye(t, match) {
 }
 
 // ─── Advance winner to next round ────────────────────────��───────────────────
+// ─── Identidade canônica por slot (uid) — v4.5.70 ──────────────────────────
+// UMA leitura/escrita de identidade por slot de match, unificando os 3 esquemas
+// históricos (p1Uid 1v1, team1Uids duplas, team1Obj objeto). O slot carrega
+// SEMPRE o(s) uid(s); o nome (m.p1) é só cache de display. `_advanceWinner`
+// usa isto pra CARREGAR o uid adiante (antes só o nome ia) — o furo que forçava
+// os remendos de reconciliação. Ver memória project_match_slot_uid_identity.
+function _slotUids(m, side) {
+  if (!m) return [];
+  var arr = side === 'p1' ? m.team1Uids : m.team2Uids;
+  if (Array.isArray(arr) && arr.length) return arr.filter(Boolean);
+  var single = side === 'p1' ? m.p1Uid : m.p2Uid;
+  if (single) return [single];
+  var obj = side === 'p1' ? m.team1Obj : m.team2Obj;
+  if (obj && typeof window._participantUids === 'function') {
+    var u = window._participantUids(obj);
+    if (u && u.length) return u;
+  }
+  return [];
+}
+function _slotObj(m, side) {
+  if (!m) return null;
+  return side === 'p1' ? (m.team1Obj || null) : (m.team2Obj || null);
+}
+// Escreve a identidade num slot de destino: team*Uids sempre (forma geral),
+// p*Uid só quando 1v1 (1 uid) pra o hint de _resolveSideLive não truncar dupla.
+function _setSlot(m, side, uids, obj) {
+  uids = (uids || []).filter(Boolean);
+  if (side === 'p1') {
+    m.team1Uids = uids;
+    m.p1Uid = uids.length === 1 ? uids[0] : null;
+    if (obj) m.team1Obj = obj;
+  } else {
+    m.team2Uids = uids;
+    m.p2Uid = uids.length === 1 ? uids[0] : null;
+    if (obj) m.team2Obj = obj;
+  }
+}
+window._slotUids = _slotUids;
+
 function _advanceWinner(t, completedMatch) {
   const winner = completedMatch.winner;
   const loser = winner === completedMatch.p1 ? completedMatch.p2 : completedMatch.p1;
+  // Identidade (uid) dos lados — carregada adiante junto com o nome.
+  const _winSide = (winner === completedMatch.p1) ? 'p1' : 'p2';
+  const _loseSide = _winSide === 'p1' ? 'p2' : 'p1';
+  const _winUids = _slotUids(completedMatch, _winSide);
+  const _loseUids = _slotUids(completedMatch, _loseSide);
+  const _winObj = _slotObj(completedMatch, _winSide);
+  const _loseObj = _slotObj(completedMatch, _loseSide);
+  // Carimba a identidade do vencedor no próprio match (winnerUid não existia).
+  completedMatch.winnerUids = _winUids;
+  completedMatch.winnerUid = _winUids.length === 1 ? _winUids[0] : null;
   // Loser-drop pra chave de perdedores. Vale pra Dupla Eliminatória de torneio
   // normal E pra fase final (playoff) de Liga em Dupla Eliminatória — neste caso
   // o match tem phase:'playoff' + bracket ('upper'/'lower'/'grand'). Aditivo e
@@ -1114,18 +1163,18 @@ function _advanceWinner(t, completedMatch) {
       var fromBye = !!completedMatch.isBye;
       // Play-in matches specify which slot to fill via nextSlot
       if (completedMatch.nextSlot === 'p1') {
-        next.p1 = winner;
+        next.p1 = winner; _setSlot(next, 'p1', _winUids, _winObj);
         if (fromBye) next.p1FromBye = true;
       } else if (completedMatch.nextSlot === 'p2') {
-        next.p2 = winner;
+        next.p2 = winner; _setSlot(next, 'p2', _winUids, _winObj);
         if (fromBye) next.p2FromBye = true;
       } else {
         // Standard advancement: fill first available TBD slot
         if (!next.p1 || next.p1 === 'TBD') {
-          next.p1 = winner;
+          next.p1 = winner; _setSlot(next, 'p1', _winUids, _winObj);
           if (fromBye) next.p1FromBye = true;
         } else if (!next.p2 || next.p2 === 'TBD') {
-          next.p2 = winner;
+          next.p2 = winner; _setSlot(next, 'p2', _winUids, _winObj);
           if (fromBye) next.p2FromBye = true;
         }
       }
@@ -1138,11 +1187,11 @@ function _advanceWinner(t, completedMatch) {
   if (completedMatch.loserMatchId && isDupla) {
     const loserMatch = _findMatch(t, completedMatch.loserMatchId);
     if (loserMatch) {
-      if (completedMatch.loserSlot === 'p1') loserMatch.p1 = loser;
-      else if (completedMatch.loserSlot === 'p2') loserMatch.p2 = loser;
+      if (completedMatch.loserSlot === 'p1') { loserMatch.p1 = loser; _setSlot(loserMatch, 'p1', _loseUids, _loseObj); }
+      else if (completedMatch.loserSlot === 'p2') { loserMatch.p2 = loser; _setSlot(loserMatch, 'p2', _loseUids, _loseObj); }
       else {
-        if (!loserMatch.p1 || loserMatch.p1 === 'TBD') loserMatch.p1 = loser;
-        else if (!loserMatch.p2 || loserMatch.p2 === 'TBD') loserMatch.p2 = loser;
+        if (!loserMatch.p1 || loserMatch.p1 === 'TBD') { loserMatch.p1 = loser; _setSlot(loserMatch, 'p1', _loseUids, _loseObj); }
+        else if (!loserMatch.p2 || loserMatch.p2 === 'TBD') { loserMatch.p2 = loser; _setSlot(loserMatch, 'p2', _loseUids, _loseObj); }
       }
       _autoResolveBye(t, loserMatch);
     }
@@ -1155,11 +1204,11 @@ function _advanceWinner(t, completedMatch) {
   if (completedMatch.loserNextMatchId) {
     const lnMatch = _findMatch(t, completedMatch.loserNextMatchId);
     if (lnMatch) {
-      if (completedMatch.loserNextSlot === 'p1') lnMatch.p1 = loser;
-      else if (completedMatch.loserNextSlot === 'p2') lnMatch.p2 = loser;
+      if (completedMatch.loserNextSlot === 'p1') { lnMatch.p1 = loser; _setSlot(lnMatch, 'p1', _loseUids, _loseObj); }
+      else if (completedMatch.loserNextSlot === 'p2') { lnMatch.p2 = loser; _setSlot(lnMatch, 'p2', _loseUids, _loseObj); }
       else {
-        if (!lnMatch.p1 || lnMatch.p1 === 'TBD') lnMatch.p1 = loser;
-        else if (!lnMatch.p2 || lnMatch.p2 === 'TBD') lnMatch.p2 = loser;
+        if (!lnMatch.p1 || lnMatch.p1 === 'TBD') { lnMatch.p1 = loser; _setSlot(lnMatch, 'p1', _loseUids, _loseObj); }
+        else if (!lnMatch.p2 || lnMatch.p2 === 'TBD') { lnMatch.p2 = loser; _setSlot(lnMatch, 'p2', _loseUids, _loseObj); }
       }
       _autoResolveBye(t, lnMatch);
     }
@@ -2053,6 +2102,9 @@ function _updateProgressiveClassification(t) {
 function _maybeFinishMultiPhase(t) {
   if (!t || t.status === 'finished') return false;
   if (!(window._isMultiPhase && window._isMultiPhase(t))) return false;
+  // v4.5.12: mesma regra da inscrição tardia POR FASE — janela aberta (R1 da fase atual) não
+  // auto-encerra; fecha no 1º resultado de R2 (ver window._lateEnrollWindowOpen).
+  if (window._lateEnrollWindowOpen && window._lateEnrollWindowOpen(t)) return false;
   var cur = t.currentPhaseIndex || 0;
   var last = t.phases.length - 1;
   if (cur < 1 || cur < last) return false; // ainda em fase classificatória ou há fases por vir
@@ -2119,18 +2171,60 @@ function _maybeFinishMultiPhase(t) {
 }
 window._maybeFinishMultiPhase = _maybeFinishMultiPhase;
 
+// v4.5.12 CANÔNICO (pedido do dono): a janela da INSCRIÇÃO TARDIA ('standby'/'expand') está
+// ABERTA enquanto a fase atual ainda está na R1 (ninguém jogou 2 jogos com resultado) e FECHA
+// no lançamento do resultado de QUALQUER jogo da R2 (o 1º time a ter 2 jogos COM resultado na
+// fase). Regra ÚNICA, pra qualquer formato configurado assim, avaliada POR FASE
+// (currentPhaseIndex). Multi-fase: cada fase reabre na sua própria R1. Enquanto aberta:
+// aceita novos inscritos + forma novos confrontos e o torneio NÃO auto-encerra. `status
+// === 'closed'` (organizador fechou na mão) ou formato sem inscrição tardia → janela fechada.
+// A SEGUNDA RODADA da fase já começou a ser jogada? "R2" = 2ª rodada, NÃO o número literal
+// `round===2` — com play-in/repescagem o `round` começa em 0, então a 2ª rodada ("Quartas")
+// pode ser round=1. Calculamos a 2ª rodada DISTINTA da LINHA PRINCIPAL (chave superior; exclui
+// a chave inferior/grande final da Dupla). "Começou a jogar" = winner OU placar OU sets OU
+// m.startedAt (proxy do 1º ponto no placar ao vivo, _openLiveScoring). Só a fase corrente.
+// NÃO checa lateEnrollment/status — é a pergunta pura "R2 já começou?" (usada por
+// _lateEnrollWindowOpen E pelo botão Encerrar/Reabrir, que some quando a R2 começa).
+window._lateEnrollR2Started = function (t) {
+  if (!t) return false;
+  var cur = t.currentPhaseIndex || 0;
+  var main = (Array.isArray(t.matches) ? t.matches : []).filter(function (m) {
+    return m && !m.isBye && (m.phaseIndex || 0) === cur && m.bracket !== 'lower' && m.bracket !== 'grand' && m.round != null;
+  });
+  if (!main.length) return false;
+  var uniqRounds = main.map(function (m) { return m.round; }).sort(function (a, b) { return a - b; })
+    .filter(function (v, i, a) { return a.indexOf(v) === i; });
+  if (uniqRounds.length < 2) return false; // só existe a 1ª rodada ainda → R2 não começou
+  var secondRound = uniqRounds[1];
+  return main.some(function (m) {
+    return m.round >= secondRound &&
+           (m.winner || m.startedAt || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length));
+  });
+};
+
+// A janela da INSCRIÇÃO TARDIA ('standby'/'expand') está ABERTA enquanto a fase está na R1 e
+// FECHA no 1º resultado/ponto da R2 (2ª rodada). `status==='closed'` (fechado na mão) ou
+// formato sem inscrição tardia → janela fechada. Regra ÚNICA, por fase (currentPhaseIndex).
+window._lateEnrollWindowOpen = function (t) {
+  if (!t) return false;
+  var _le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+  if (_le !== 'standby' && _le !== 'expand') return false;
+  if (t.status === 'closed') return false; // organizador fechou na mão
+  return !window._lateEnrollR2Started(t); // aberta enquanto a 2ª rodada não começou
+};
+
 function _maybeFinishElimination(t) {
   if (t.status === 'finished') return;
   // v2.6.97: construtor de fases tem encerramento próprio (última fase concluída).
   if (window._isMultiPhase && window._isMultiPhase(t)) { _maybeFinishMultiPhase(t); return; }
-  // v2.4.20: inscrição TARDIA ('standby'/'expand') mantém a Eliminatória ABERTA —
-  // completar os jogos atuais NÃO encerra o torneio. Novos confrontos da lista de
-  // espera (a cada 4), repescagem e a próxima rodada ainda podem entrar. Só encerra
-  // quando o organizador fecha as inscrições ("Encerrar Inscrições" → status='closed',
-  // ver toggleRegistrationStatus). Bug Vivi Hirata (Eliminatórias Simples + inscrição
-  // aberta): completar o 1º confronto marcava 'finished' e travava a inscrição em
-  // TODOS os caminhos, apesar de cards/config mostrarem aberto.
-  if ((t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand') && t.status !== 'closed') return;
+  // v4.5.12: inscrição TARDIA ('standby'/'expand') — REGRA CANÔNICA (pedido do dono): a
+  // janela de aceitar novos inscritos/confrontos fica aberta DURANTE a R1 da fase e FECHA no
+  // lançamento do resultado de QUALQUER jogo da R2 (qualquer time que já jogou 2 jogos com
+  // resultado na fase atual). Enquanto a janela está ABERTA, o torneio NÃO auto-encerra
+  // (dá pra entrar mais gente e formar novos confrontos na R1). Depois que fecha, segue o
+  // fluxo normal e encerra quando a chave completa. Vale pra QUALQUER formato configurado
+  // assim, POR FASE (multi-fase: cada fase tem sua R1/R2). Ver window._lateEnrollWindowOpen.
+  if (window._lateEnrollWindowOpen && window._lateEnrollWindowOpen(t)) return;
   if (t.currentStage === 'groups') return;
   // v2.0.4: BUG — o formato salvo é 'Eliminatórias Simples' (plural), mas aqui
   // checava 'Eliminatória Simples' (singular) → a função saía cedo e o torneio
@@ -2603,6 +2697,11 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
 
 // ─── Swiss pairing ────────────────────────────────────────────────────────────
 function _generateNextRound(t) {
+  // v4.5.85 (ITEM 3 · Fase 4): REHIDRATA o nome das entradas (perfil vivo por uid) ANTES do
+  // sorteio — o storage é só-uid mas o motor lê p.displayName/p1Name (ex.: _getActiveLigaPlayers
+  // descartaria quem não tem nome). Transiente (o save re-sanitiza). No autoDraw o draw-core
+  // provê window._rehydrateEntryNames + _nameForUid (por _profileNameByUid do servidor).
+  if (typeof window._rehydrateEntryNames === 'function') window._rehydrateEntryNames(t);
   // v2.4.28: ANTES de filtrar por categoria, encaixa quem está sem categoria
   // VÁLIDA na mais fraca elegível — senão _computeStandings(t, cat) joga esses
   // inscritos pra fora de TODA rodada e eles ficam de fora do sorteio (desastre
@@ -2684,11 +2783,25 @@ function _getInactiveLigaPlayers(t) {
   return names;
 }
 
+// v4.5.78 (uid-audit Parte 14): chave de identidade por uid pros contadores de
+// fairness do motor de sorteio (sitOutHistory/opponentHistory). Resolve o NOME do
+// jogador → uid via _buildNameToUid; sem uid (guest sem conta OU rodada legada)
+// usa o próprio nome. Fecha o "reset ao renomear no meio da Liga": o contador
+// segue o UID, não a string de nome (que muda quando a pessoa troca o nome).
+// NOTA: os arrays de trabalho do embaralhamento ainda são NOMES → homônimo dentro
+// do shuffle segue limitado (identidade-por-uid nos arrays é leva à parte).
+function _fairnessKey(n2u, name) {
+  if (name == null) return name;
+  var u = n2u && n2u[String(name).trim()];
+  return u ? ('uid:' + u) : String(name);
+}
+
 // Helper: choose which players sit out this round based on fairness (least sit-outs first)
 function _chooseSitOutPlayers(t, players, numToSitOut, category) {
   if (numToSitOut <= 0) return { playing: players, sitOut: [] };
   // Build sit-out count per player from history
   var history = t.sitOutHistory || {};
+  var _n2u = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
   // v0.16.58: Firestore não aceita field names que começam E terminam com
   // `__` (reserva pra internos como `__name__`). Antes usávamos `__all__`
   // como chave default, o que causava `[invalid-argument]` no save:
@@ -2702,7 +2815,12 @@ function _chooseSitOutPlayers(t, players, numToSitOut, category) {
   var catHistory = history[catKey] || {};
   // Sort players by sit-out count ascending, then by standing position (worse players sit out first)
   var indexed = players.map(function(name, idx) {
-    return { name: name, sitOuts: catHistory[name] || 0, rank: idx };
+    var k = _fairnessKey(_n2u, name);
+    // uid-first; cai no contador legado chaveado por nome (docs antigos) quando a
+    // chave de uid ainda não existe — sem perder o histórico já acumulado.
+    var so = catHistory[k];
+    if (so === undefined && k !== name) so = catHistory[name];
+    return { name: name, sitOuts: so || 0, rank: idx };
   });
   // Players with fewest sit-outs go first (play); ties broken by rank (worse rank sits out)
   indexed.sort(function(a, b) {
@@ -2736,23 +2854,55 @@ function _recordSitOut(t, sitOutPlayers, category, reason) {
   // afeta resultado de partida).
   var catKey = category || '_default_';
   if (!t.sitOutHistory[catKey]) t.sitOutHistory[catKey] = {};
+  var cat = t.sitOutHistory[catKey];
+  var _n2u = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
   sitOutPlayers.forEach(function(name) {
-    t.sitOutHistory[catKey][name] = (t.sitOutHistory[catKey][name] || 0) + 1;
+    var k = _fairnessKey(_n2u, name);
+    // migração lossless: se há contador legado por nome e a chave de uid ainda
+    // não existe, herda o valor e apaga a chave de nome (o contador segue o uid).
+    if (k !== name && cat[k] === undefined && cat[name] !== undefined) { cat[k] = cat[name]; delete cat[name]; }
+    cat[k] = (cat[k] || 0) + 1;
   });
 }
 
+// v4.5.78: fábrica de keyOf(name)→uid pros shuffles (usa o mesmo _fairnessKey).
+function _fairnessKeyOf(n2u) {
+  return function (name) { return _fairnessKey(n2u, name); };
+}
+
+// v4.5.78: migração lossless do opponentHistory de UMA categoria de chaves-de-par
+// por NOME ("a|||b") pra chaves por UID ("uid:X|||uid:Y"). Idempotente ('uid:X' não
+// está em n2u → _fairnessKey devolve a própria string). Roda no início do gerador
+// de rodada (antes do scorer LER o histórico) pra o anti-repeat enxergar o passado
+// mesmo após rename. Soma contadores quando dois nomes colapsam no mesmo uid.
+function _migrateOppHistToUid(t, catKey, n2u) {
+  var cat = t.opponentHistory && t.opponentHistory[catKey];
+  if (!cat || typeof cat !== 'object') return;
+  var out = {};
+  Object.keys(cat).forEach(function (pk) {
+    var parts = String(pk).split('|||');
+    if (parts.length !== 2) { out[pk] = (out[pk] || 0) + cat[pk]; return; }
+    var a = _fairnessKey(n2u, parts[0]), b = _fairnessKey(n2u, parts[1]);
+    var nk = a < b ? a + '|||' + b : b + '|||' + a;
+    out[nk] = (out[nk] || 0) + cat[pk];
+  });
+  t.opponentHistory[catKey] = out;
+}
+
 // Helper: record which players were grouped together this round (for anti-repeat pairing)
+// v4.5.78: chave do par por UID (via _fairnessKey), não por nome — imune a rename.
 function _recordOpponentHistory(t, groups, category) {
   if (!groups || groups.length === 0) return;
   if (!t.opponentHistory) t.opponentHistory = {};
   var catKey = (category || '_default_').replace(/\s+/g, '_');
   if (!t.opponentHistory[catKey]) t.opponentHistory[catKey] = {};
   var h = t.opponentHistory[catKey];
+  var n2u = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
   groups.forEach(function(grp) {
     var members = Array.isArray(grp) ? grp : (grp.players || []);
     for (var i = 0; i < members.length; i++) {
       for (var j = i + 1; j < members.length; j++) {
-        var a = members[i], b = members[j];
+        var a = _fairnessKey(n2u, members[i]), b = _fairnessKey(n2u, members[j]);
         var key = a < b ? a + '|||' + b : b + '|||' + a;
         h[key] = (h[key] || 0) + 1;
       }
@@ -2762,13 +2912,17 @@ function _recordOpponentHistory(t, groups, category) {
 
 // Helper: score a player ordering by repeat-opponent count (lower = better)
 // groupSize = number of players per group (4 for doubles)
-function _scoreShuffle(playerOrder, opponentHistory, groupSize) {
+// keyOf (v4.5.78): resolve o NOME do jogador → chave de identidade (uid). Assim a
+// chave do par (a|||b) do opponentHistory é por uid, não por nome — imune a rename.
+// Default = identidade (comportamento legado, usado por callers sem histórico uid).
+function _scoreShuffle(playerOrder, opponentHistory, groupSize, keyOf) {
+  keyOf = keyOf || function (x) { return x; };
   var score = 0;
   for (var i = 0; i < playerOrder.length; i += groupSize) {
     var grp = playerOrder.slice(i, i + groupSize);
     for (var gi = 0; gi < grp.length; gi++) {
       for (var gj = gi + 1; gj < grp.length; gj++) {
-        var a = grp[gi], b = grp[gj];
+        var a = keyOf(grp[gi]), b = keyOf(grp[gj]);
         var key = a < b ? a + '|||' + b : b + '|||' + a;
         var c = opponentHistory[key] || 0;
         score += c * c; // squared: strongly penalise high-repeat pairs
@@ -2779,18 +2933,18 @@ function _scoreShuffle(playerOrder, opponentHistory, groupSize) {
 }
 
 // Helper: try N random shuffles and return the one with fewest repeat opponents
-function _bestShuffle(players, opponentHistory, groupSize, attempts) {
+function _bestShuffle(players, opponentHistory, groupSize, attempts, keyOf) {
   attempts = attempts || 150;
   groupSize = groupSize || 4;
   var best = players.slice();
-  var bestScore = _scoreShuffle(best, opponentHistory, groupSize);
+  var bestScore = _scoreShuffle(best, opponentHistory, groupSize, keyOf);
   for (var a = 0; a < attempts; a++) {
     var candidate = players.slice();
     for (var i = candidate.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
       var tmp = candidate[i]; candidate[i] = candidate[j]; candidate[j] = tmp;
     }
-    var s = _scoreShuffle(candidate, opponentHistory, groupSize);
+    var s = _scoreShuffle(candidate, opponentHistory, groupSize, keyOf);
     if (s < bestScore) { bestScore = s; best = candidate; }
   }
   return best;
@@ -2816,12 +2970,12 @@ function _plainShuffle(arr) {
 // Sem cluster válido (config ausente, ou cluster ≥ total), cai no _bestShuffle global
 // — comportamento legado intocado. clusterSize é arredondado pra baixo a múltiplo de
 // groupSize pra que as fronteiras de cluster batam com as fronteiras de grupo.
-function _clusteredBestShuffle(players, opponentHistory, groupSize, clusterSize, attempts, rankIndex) {
+function _clusteredBestShuffle(players, opponentHistory, groupSize, clusterSize, attempts, rankIndex, keyOf) {
   groupSize = groupSize || 4;
   var n = players.length;
   var eff = Math.floor((parseInt(clusterSize, 10) || 0) / groupSize) * groupSize;
   if (!eff || eff < groupSize || eff >= n) {
-    return _bestShuffle(players, opponentHistory, groupSize, attempts);
+    return _bestShuffle(players, opponentHistory, groupSize, attempts, keyOf);
   }
   var ordered = players.slice().sort(function(a, b) {
     var ra = (rankIndex && rankIndex[a] != null) ? rankIndex[a] : 1e9;
@@ -2830,7 +2984,7 @@ function _clusteredBestShuffle(players, opponentHistory, groupSize, clusterSize,
   });
   var out = [];
   for (var i = 0; i < ordered.length; i += eff) {
-    out = out.concat(_bestShuffle(ordered.slice(i, i + eff), opponentHistory, groupSize, attempts));
+    out = out.concat(_bestShuffle(ordered.slice(i, i + eff), opponentHistory, groupSize, attempts, keyOf));
   }
   return out;
 }
@@ -2934,6 +3088,15 @@ window._buildMonarchGroup = _buildMonarchGroup;
 // (Vivian × Vivi Hirata) nunca mais se cruzam no PA/render/sync.
 function _buildNameToUid(t) {
   var map = {};
+  // v4.5.84 (ITEM 3 · Fase 3): resolver de nome VIVO por uid (perfil), quando disponível
+  // (cliente). No autoDraw (sem store.js) window._nameForUid é undefined → cai só nas chaves de
+  // nome GRAVADO (comportamento de hoje; o preload servidor é a Fase 4).
+  var _live = (typeof window !== 'undefined' && typeof window._nameForUid === 'function') ? window._nameForUid : null;
+  function _putLive(uid) {
+    if (!_live || !uid) return;
+    var ln = String(_live(uid) || '').trim();
+    if (ln && !map[ln]) map[ln] = uid; // aditivo: nunca sobrescreve a chave de nome gravado
+  }
   var parr = Array.isArray(t && t.participants) ? t.participants : Object.values((t && t.participants) || {});
   parr.forEach(function (p) {
     if (!p || typeof p !== 'object') return;
@@ -2944,10 +3107,81 @@ function _buildNameToUid(t) {
     });
     var nm = String((p.displayName || p.name) || '').trim();
     if (nm && p.uid && !map[nm]) map[nm] = p.uid;
+    // v4.5.84: chave de nome VIVO por uid (resolve entrada só-uid, sem p1Name/p2Name — pós-Fase-4).
+    _putLive(p.p1Uid); _putLive(p.p2Uid); _putLive(p.uid);
+    if (Array.isArray(p.participants)) p.participants.forEach(function (s) { if (s) _putLive(s.uid); });
   });
   return map;
 }
 window._buildNameToUid = _buildNameToUid;
+
+// v4.5.26: matriz de Confrontos Diretos (H2H) POR UID — espelha a identidade-por-uid de
+// _computeStandings (_idKey). O render (bracket.js) só formata o que sai daqui.
+// Bug anterior (chave por NOME): se o displayName de alguém é clobberado no meio do torneio
+// (Vivian→"Vivi Hirata", uid correto no slot p1Uid/p2Uid), os jogos dela não casavam com a
+// linha dela (por nome) e vazavam pro homônimo. Aqui a chave da linha vem do próprio
+// standings (s.key, já resolvido por _computeStandings) e a de cada lado do jogo é resolvida
+// pela MESMA regra do _idKey: slot uid explícito → nome→uid dos jogos → nome→uid do elenco →
+// nome puro (legado). O win/loss de cada jogo segue por nome DENTRO do jogo
+// (m.winner === m.p1) — consistente mesmo com nome trocado (winner/p1/p2 clobberados igual).
+// Retorna { keys:[chave...], keyName:{chave→nome de exibição}, matrix:{a:{b:{w,d,l}}} } na
+// ordem das linhas de `computedRows` (a classificação).
+function _buildHeadToHead(t, computedRows, rounds) {
+  var _n2u = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
+  // nome→uid derivado dos PRÓPRIOS jogos (mesma fonte que _computeStandings usa no _idKey),
+  // pra o lado do jogo e a linha resolverem a MESMA chave mesmo sem s.key/slot uid.
+  var _matchN2u = {};
+  (rounds || []).forEach(function (r) {
+    ((r && r.matches) || []).forEach(function (m) {
+      if (!m) return;
+      if (m.p1 && m.p1Uid && !_matchN2u[m.p1]) _matchN2u[m.p1] = m.p1Uid;
+      if (m.p2 && m.p2Uid && !_matchN2u[m.p2]) _matchN2u[m.p2] = m.p2Uid;
+    });
+  });
+  function _keyFor(name, slotUid) {
+    if (name == null) return name;
+    var u = slotUid || _matchN2u[name] || _n2u[name] || null;
+    return u ? ('uid:' + u) : String(name);
+  }
+  var keys = [];
+  var keyName = {};
+  var seen = {};
+  (computedRows || []).forEach(function (s) {
+    if (!s) return;
+    // s.key já é a chave canônica do _computeStandings; fallback pra resolução local.
+    var k = (s.key != null) ? s.key : _keyFor(s.name, s.uid ? s.uid : null);
+    if (seen[k]) return; // dois rows na mesma chave não deveriam ocorrer; dedup por segurança
+    seen[k] = 1;
+    keys.push(k);
+    keyName[k] = s.name;
+  });
+  var matrix = {};
+  keys.forEach(function (a) { matrix[a] = {}; keys.forEach(function (b) { matrix[a][b] = { w: 0, d: 0, l: 0 }; }); });
+  (rounds || []).forEach(function (rd) {
+    ((rd && rd.matches) || []).forEach(function (m) {
+      if (!m || !m.winner || !m.p1 || !m.p2) return;
+      if (m.isBye || m.isSitOut) return;
+      if (m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return;
+      var k1 = _keyFor(m.p1, m.p1Uid);
+      var k2 = _keyFor(m.p2, m.p2Uid);
+      // só conta o jogo se ambos os lados são linhas DESTA classificação
+      if (!matrix[k1] || !matrix[k1][k2]) return;
+      var isDraw = m.winner === 'draw' || m.draw;
+      if (isDraw) {
+        matrix[k1][k2].d++;
+        matrix[k2][k1].d++;
+      } else if (m.winner === m.p1) {
+        matrix[k1][k2].w++;
+        matrix[k2][k1].l++;
+      } else if (m.winner === m.p2) {
+        matrix[k2][k1].w++;
+        matrix[k1][k2].l++;
+      }
+    });
+  });
+  return { keys: keys, keyName: keyName, matrix: matrix };
+}
+window._buildHeadToHead = _buildHeadToHead;
 
 // v2.7.3: ÚNICA fonte da partida de FOLGA (sit-out). Antes construída à mão em 3
 // lugares (round-robin, Rei/Rainha, Suíço) — drift de label/reason/pontos.
@@ -2967,6 +3201,8 @@ function _buildSitOut(opts) {
     isSitOut: true, sitOutPoints: opts.points, sitOutReason: reason,
     label: 'R' + opts.roundNum + ' • Folga' + (isInactive ? ' (inativo)' : '') + catLabel
   };
+  // v4.5.71: identidade por uid no slot real (p1). FOLGA é sentinela (sem uid).
+  if (opts.playerUid) { o.p1Uid = opts.playerUid; o.team1Uids = [opts.playerUid]; }
   if (category) o.category = category;
   return o;
 }
@@ -2985,6 +3221,8 @@ function _buildBye(opts) {
     p1: opts.player, p2: 'BYE', winner: opts.player, isBye: true,
     label: 'R' + opts.roundNum + ' • BYE' + catLabel
   };
+  // v4.5.71: identidade por uid no slot real (p1 = vencedor do BYE). BYE é sentinela.
+  if (opts.playerUid) { o.p1Uid = opts.playerUid; o.team1Uids = [opts.playerUid]; o.winnerUid = opts.playerUid; o.winnerUids = [opts.playerUid]; }
   if (category) o.category = category;
   return o;
 }
@@ -3189,11 +3427,11 @@ function _monarchIndividuals(t, names) {
     if (Array.isArray(p.participants) && p.participants.length > 1) {
       mem = p.participants.map(function (x) { return (typeof x === 'string') ? x : (x && (x.displayName || x.name)) || ''; }).filter(Boolean);
     } else if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
-      mem = [p.p1Name || p.p1Uid || '', p.p2Name || p.p2Uid || ''].filter(Boolean);
+      mem = [(window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '')), (window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || ''))].filter(Boolean);
     }
     if (!mem || mem.length < 2) return;
     var label = (typeof window._entryDisplayName === 'function') ? window._entryDisplayName(p)
-      : ((p.p1Name && p.p2Name) ? (p.p1Name + ' / ' + p.p2Name) : (p.displayName || p.name || mem.join(' / ')));
+      : (((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) ? ((p.p1Name || p.p1Uid || '') + ' / ' + (p.p2Name || p.p2Uid || '')) : (p.displayName || p.name || mem.join(' / ')));
     if (label) byLabel[label] = mem;
   });
   var seen = {}, out = [];
@@ -3266,12 +3504,15 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   // formação (quando ainda não há histórico de adversários).
   var _rrGroupsBy = (t.reiRainhaGroupsBy || 'ranking');
   if (isLiga) {
-    var rrOpHist = (t.opponentHistory && t.opponentHistory[(category || '_default_').replace(/\s+/g, '_')]) || {};
+    var _rrCatKey = (category || '_default_').replace(/\s+/g, '_');
+    var _rrN2u = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
+    _migrateOppHistToUid(t, _rrCatKey, _rrN2u); // v4.5.78: legado nome→uid antes de ler
+    var rrOpHist = (t.opponentHistory && t.opponentHistory[_rrCatKey]) || {};
     var _hasHist = rrOpHist && Object.keys(rrOpHist).length > 0;
     if (!_hasHist && _rrGroupsBy === 'sorteio') {
       playingPlayers = _plainShuffle(playingPlayers); // 1ª rodada por sorteio
     } else {
-      playingPlayers = _bestShuffle(playingPlayers, rrOpHist, 4, 200);
+      playingPlayers = _bestShuffle(playingPlayers, rrOpHist, 4, 200, _fairnessKeyOf(_rrN2u));
     }
   } else if (_rrGroupsBy === 'sorteio') {
     playingPlayers = _plainShuffle(playingPlayers);
@@ -3299,7 +3540,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     allSitOuts.forEach(function(name, si) {
       var isInactive = inactiveSitOuts.indexOf(name) !== -1;
       var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);
-      var soObj = _buildSitOut({ player: name, roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'sitout-rr-r', idIndex: si, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });
+      var soObj = _buildSitOut({ player: name, playerUid: (_n2uMap[name] || null), roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'sitout-rr-r', idIndex: si, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });
       sitOutMatches.push(soObj);
     });
   }
@@ -3321,12 +3562,12 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
           if (category) rObj.category = category;
           remainderMatches.push(rObj);
         } else {
-          var byeObj = _buildBye({ player: remPlayers[ri], roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'bye-rr-r' });
+          var byeObj = _buildBye({ player: remPlayers[ri], playerUid: (_n2uMap[remPlayers[ri]] || null), roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'bye-rr-r' });
           remainderMatches.push(byeObj);
         }
       }
     } else if (remRemainder === 1) {
-      var byeObj2 = _buildBye({ player: players[players.length - 1], roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'bye-rr-r' });
+      var byeObj2 = _buildBye({ player: players[players.length - 1], playerUid: (_n2uMap[players[players.length - 1]] || null), roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'bye-rr-r' });
       remainderMatches.push(byeObj2);
     }
   }
@@ -3408,8 +3649,11 @@ function _generateNextRoundForPlayers(t, category, _rn) {
   // ─── Liga: form doubles and match them (dupla vs dupla), anti-repeat ─────
   if (_isLigaFmtHere) {
     // First shuffle to determine sit-outs (using opponent history for fairness)
-    var ligaOpHist = (t.opponentHistory && t.opponentHistory[(category || '_default_').replace(/\s+/g, '_')]) || {};
-    var shuffled = _bestShuffle(players.slice(), ligaOpHist, 4, 200);
+    var _ligaCatKey = (category || '_default_').replace(/\s+/g, '_');
+    _migrateOppHistToUid(t, _ligaCatKey, _n2uGen); // v4.5.78: legado nome→uid antes de ler
+    var _ligaKeyOf = _fairnessKeyOf(_n2uGen);
+    var ligaOpHist = (t.opponentHistory && t.opponentHistory[_ligaCatKey]) || {};
+    var shuffled = _bestShuffle(players.slice(), ligaOpHist, 4, 200, _ligaKeyOf);
 
     // Handle sit-outs: need multiple of 4 for doubles matches
     var remainder = shuffled.length % 4;
@@ -3430,8 +3674,8 @@ function _generateNextRoundForPlayers(t, category, _rn) {
     standings.forEach(function(s, _ri) { _ligaRankIndex[s.name] = _ri; });
     var _ligaBalanced = (t.equilibrado !== false) && t.clusterSize;
     playingPlayers = _ligaBalanced
-      ? _clusteredBestShuffle(playingPlayers, ligaOpHist, 4, t.clusterSize, 200, _ligaRankIndex)
-      : _bestShuffle(playingPlayers, ligaOpHist, 4, 200);
+      ? _clusteredBestShuffle(playingPlayers, ligaOpHist, 4, t.clusterSize, 200, _ligaRankIndex, _ligaKeyOf)
+      : _bestShuffle(playingPlayers, ligaOpHist, 4, 200, _ligaKeyOf);
 
     // Form doubles: take consecutive pairs of 4 → team1 = [0,1] vs team2 = [2,3]
     var newMatches = [];
@@ -3466,7 +3710,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
     allSitOuts.forEach(function(name, idx) {
       var isInactive = inactiveSitOutsSwiss.indexOf(name) !== -1;
       var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);
-      var soObj = _buildSitOut({ player: name, roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'sitout-r', idIndex: idx, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });
+      var soObj = _buildSitOut({ player: name, playerUid: _uidForName(name), roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'sitout-r', idIndex: idx, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });
       newMatches.push(soObj);
     });
 
@@ -3535,7 +3779,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
 
   // Remainder: BYE for non-Liga
   players.filter(p => !matched.has(p)).forEach(p => {
-    var byeObj = _buildBye({ player: p, roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'bye-r' });
+    var byeObj = _buildBye({ player: p, playerUid: _uidForName(p), roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'bye-r' });
     newMatches.push(byeObj);
   });
 

@@ -24,7 +24,12 @@ sandbox.setTimeout = setTimeout;
 sandbox.clearTimeout = clearTimeout;
 
 // --- stubs mínimos que os arquivos referenciam em runtime ---
+// Labels de prod que a LÓGICA compara por igualdade (não é só exibição): ex. _autoResolveBye
+// compara o slot com _t('bui.byeLabel'). Com a chave crua, BYEs inferiores não auto-resolviam
+// no headless (falso "vaga morta"). Espelha o pt-BR real.
+const _T_LABELS = { 'bui.byeLabel': 'BYE (Avança Direto)' };
 sandbox._t = function (k, vars) {
+  if (!vars && _T_LABELS[k] != null) return _T_LABELS[k];
   if (vars && typeof k === 'string') {
     return k.replace(/\{(\w+)\}/g, (_, n) => (vars[n] != null ? vars[n] : '{' + n + '}'));
   }

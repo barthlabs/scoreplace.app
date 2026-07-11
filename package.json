@@ -1,6 +1,6 @@
 {
   "name": "scoreplace-app",
-  "version": "0.17.58-alpha",
+  "version": "1.0.0",
   "private": true,
   "description": "scoreplace.app — vanilla JS SPA. Package.json existe apenas para devDependencies de tooling (Playwright, Lighthouse). NÃO há build step nem bundler — index.html serve js/ e css/ direto.",
   "scripts": {

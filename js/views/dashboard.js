@@ -266,7 +266,8 @@ function renderDashboard(container) {
     const ligaAberta = (typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
     // v2.1.4: late enrollment (Fechadas OFF) — inscrições seguem abertas após o
     // sorteio (e após iniciar) até o organizador encerrar. Mesma regra do detalhe.
-    const lateEnrollOpen = sorteioRealizado && t.status !== 'finished' && t.status !== 'closed' && (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
+    const _leD = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+    const lateEnrollOpen = sorteioRealizado && t.status !== 'finished' && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
     return (t.status !== 'finished' && t.status !== 'closed' && !sorteioRealizado && (!t.registrationLimit || new Date(t.registrationLimit) >= new Date())) || ligaAberta || lateEnrollOpen;
   }).length;
 
@@ -557,7 +558,8 @@ function renderDashboard(container) {
     const ligaAberta = (typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
     // v2.1.4: late enrollment (Fechadas OFF) mantém inscrições abertas após o
     // sorteio e após iniciar, até o organizador encerrar. Mesma regra do detalhe.
-    const lateEnrollOpen = sorteioRealizado && !isFinished && t.status !== 'closed' && (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
+    const _leD = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+    const lateEnrollOpen = sorteioRealizado && !isFinished && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
     const isAberto = (!isFinished && t.status !== 'closed' && !sorteioRealizado && (!t.registrationLimit || new Date(t.registrationLimit) >= new Date())) || ligaAberta || lateEnrollOpen;
     // v1.3.35-beta: "Em Andamento" só com t.tournamentStarted setado pelo
     // botão Iniciar Torneio. Sorteio realizado mantém "Inscrições Encerradas".
@@ -679,7 +681,8 @@ function renderDashboard(container) {
     // Enroll/unenroll button: only when inscriptions are truly open
     // hasDraw = tournament already has matches/rounds/groups drawn
     const hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-    const canEnroll = isAberto && !isFinished && (!hasDraw || ligaAberta || t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
+    const _leE = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+    const canEnroll = isAberto && !isFinished && (!hasDraw || ligaAberta || _leE === 'standby' || _leE === 'expand');
     let enrollBtnHtml = '';
     if (_isInStandby && !isFinished) {
       enrollBtnHtml = `<div style="font-size: 0.6rem; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.4px; background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 6px;">⏳ ${_t('enroll.onWaitlist')}</div><button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._leaveStandby('${t.id}')">🛑 ${_t('enroll.leaveWaitlist')}</button>`;
@@ -1696,7 +1699,7 @@ function renderDashboard(container) {
         return null;
       }
       // Um jogador (linha): avatar + nome
-      function _playerRow(name) {
+      function _playerRow(name, uid) {
         var isMe = _isMe(name);
         var photo = _photoForPlayer(name);
         // Usa _profileAvatarUrl (dicebear initials como fallback) — mesmo pipeline do bracket
@@ -1704,11 +1707,15 @@ function renderDashboard(container) {
           ? window._profileAvatarUrl(name, photo, 28)
           : (photo || ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(name) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28'));
         var avatarEl = '<img src="' + avatarSrc + '" data-player-name="' + _sf(name) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src=\'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(name) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28\'">';
-        var nameEl = '<span style="font-size:0.8rem;font-weight:' + (isMe ? '700' : '500') + ';color:' + (isMe ? '#f1f5f9' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(name) + (isMe ? ' <span style="font-size:0.65em;color:#818cf8;font-weight:800;">(você)</span>' : '') + '</span>';
+        // v4.5.67: nome resolve VIVO por uid. data-uid-name fica no span INTERNO só do
+        // nome (não no externo, senão a hidratação — textContent — apagaria o "(você)").
+        var _disp = (uid && typeof window._displayName === 'function') ? window._displayName(uid, name) : name;
+        var _uidAttr = uid ? (' data-uid-name="' + _sf(uid) + '"') : '';
+        var nameEl = '<span style="font-size:0.8rem;font-weight:' + (isMe ? '700' : '500') + ';color:' + (isMe ? '#f1f5f9' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span' + _uidAttr + '>' + _sf(_disp) + '</span>' + (isMe ? ' <span style="font-size:0.65em;color:#818cf8;font-weight:800;">(você)</span>' : '') + '</span>';
         return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl + nameEl + '</div>';
       }
       // Time: jogadores EMPILHADOS verticalmente (um em cima do outro)
-      function _teamHtml(teamStr) {
+      function _teamHtml(teamStr, uids) {
         // v3.1.26: lado "a definir" (TBD/vazio) — placeholder discreto, sem avatar.
         if (!teamStr || teamStr === 'TBD') {
           return '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;color:#64748b;font-style:italic;font-size:0.82rem;">' +
@@ -1717,9 +1724,12 @@ function renderDashboard(container) {
         }
         var parts = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
         return '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">' +
-          parts.map(_playerRow).join('') +
+          parts.map(function(n, i) { return _playerRow(n, uids && uids[i]); }).join('') +
         '</div>';
       }
+      // uid do slot (dupla → team1Uids/team2Uids; 1v1 → p1Uid/p2Uid) p/ resolver nome vivo.
+      var _p1Uids = (Array.isArray(item.m.team1Uids) && item.m.team1Uids.length) ? item.m.team1Uids : (item.m.p1Uid ? [item.m.p1Uid] : null);
+      var _p2Uids = (Array.isArray(item.m.team2Uids) && item.m.team2Uids.length) ? item.m.team2Uids : (item.m.p2Uid ? [item.m.p2Uid] : null);
 
       var rowStyle = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);margin-bottom:4px;';
       var scoreInputStyle = 'width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;-moz-appearance:textfield;';
@@ -1784,9 +1794,9 @@ function renderDashboard(container) {
               goToBtn +
             '</div>' +
           '</div>' +
-          '<div style="' + rowStyle + '">' + _teamHtml(p1) + '<div id="score-p1-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p1ScoreHtml + '</div></div>' +
+          '<div style="' + rowStyle + '">' + _teamHtml(p1, _p1Uids) + '<div id="score-p1-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p1ScoreHtml + '</div></div>' +
           '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
-          '<div style="' + rowStyle + '">' + _teamHtml(p2) + '<div id="score-p2-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p2ScoreHtml + '</div></div>' +
+          '<div style="' + rowStyle + '">' + _teamHtml(p2, _p2Uids) + '<div id="score-p2-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p2ScoreHtml + '</div></div>' +
         '</div>' +
       '</div>';
     }
@@ -2970,6 +2980,10 @@ function renderDashboard(container) {
   // carrega as fotos reais (por uid) dos torneios em que o usuário participa
   // e troca os avatares iniciais pelas fotos de perfil. Mesmo padrão de
   // participants.js (swap por data-player-name).
+  // v4.5.67: hidrata NOMES por uid (data-uid-name) — resolve do perfil vivo. Roda
+  // PÓS-render (chained no preload de fotos). _preloadPlayerPhotos já popula
+  // _profileNameByUid, que _nameForUid lê → nome vivo nos cards de Meus Resultados.
+  function _dashHydrateNames() { if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(container); } catch (e) {} } }
   if (typeof _preloadPlayerPhotos === 'function' && typeof participacoes !== 'undefined' && Array.isArray(participacoes)) {
     var _phTournaments = participacoes.slice(0, 20);
     Promise.all(_phTournaments.map(function(t) {
@@ -2985,8 +2999,8 @@ function renderDashboard(container) {
           img.src = real;
         }
       });
-    }).catch(function() {});
-  }
+    }).catch(function() {}).then(_dashHydrateNames);
+  } else { setTimeout(_dashHydrateNames, 0); }
 
   // Auto-scroll para resultados pendentes de aprovação.
   // 600ms = após todos os _jumpTop do router (último em 350ms) e após a
@@ -3716,32 +3730,68 @@ function _hydrateFriendsPresenceWidget() {
     // de preferidos) — Google placeId é mais estável e tem dados completos
     // no `loadVenue`.
     var venuesByPid = {};
+    var _bucketKeys = []; // ordem de criação dos buckets (canon names)
     var _canonName = function(name) {
       return String(name || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     };
     var _isSyntheticPid = function(pid) {
       return typeof pid === 'string' && pid.indexOf('pref_') === 0;
     };
+    // v4.5.45: o canon puro deixava "Clube Paineiras do Morumby" e "Clube
+    // Paineiras do Morumby, São Paulo" como DOIS cards (mesmo local físico, um
+    // com sufixo de cidade). Agora dois nomes casam quando um é PREFIXO do outro
+    // na fronteira de vírgula/espaço (Nome ⊂ "Nome, Cidade") OU quando as
+    // coordenadas estão a menos de ~200m. Guard de 6 chars evita mesclar nomes
+    // curtos por engano ("Clube A" vs "Clube AB").
+    var _nameMatch = function(a, b) {
+      if (!a || !b) return false;
+      if (a === b) return true;
+      var shorter = a.length <= b.length ? a : b;
+      var longer  = a.length <= b.length ? b : a;
+      if (shorter.length < 6) return false;
+      if (longer.indexOf(shorter) !== 0) return false;
+      var nextChar = longer.charAt(shorter.length);
+      return nextChar === ',' || nextChar === ' ' || nextChar === '';
+    };
+    var _closeCoords = function(a, b) {
+      if (a.venueLat == null || a.venueLon == null || b.venueLat == null || b.venueLon == null) return false;
+      if (typeof window._haversineKm !== 'function') return false;
+      return window._haversineKm(a.venueLat, a.venueLon, b.venueLat, b.venueLon) < 0.2; // ~200m
+    };
     list.forEach(function(p) {
       var canon = _canonName(p.venueName) || p.placeId || '';
       if (!canon) return;
-      if (!venuesByPid[canon]) {
+      // procura bucket existente por nome (exato/prefixo) OU coordenadas ~200m
+      var matchKey = null;
+      for (var bi = 0; bi < _bucketKeys.length; bi++) {
+        var k = _bucketKeys[bi];
+        if (_nameMatch(canon, k) || _closeCoords(venuesByPid[k], p)) { matchKey = k; break; }
+      }
+      if (matchKey == null) {
         venuesByPid[canon] = {
           placeId: p.placeId,
           venueName: p.venueName || 'Local',
           venueLat: p.venueLat,
           venueLon: p.venueLon
         };
+        _bucketKeys.push(canon);
       } else {
-        // Já tem bucket. Se este doc tem placeId Google (não-synthetic) e
-        // o bucket atual tem synthetic, troca pra usar o real.
-        var existing = venuesByPid[canon];
+        var existing = venuesByPid[matchKey];
+        // placeId: prefere o Google (não-synthetic) — dados completos no loadVenue
         if (_isSyntheticPid(existing.placeId) && !_isSyntheticPid(p.placeId) && p.placeId) {
           existing.placeId = p.placeId;
         }
+        // nome de exibição: prefere o MAIS CURTO (sem sufixo de cidade)
+        if (p.venueName && _canonName(p.venueName).length < _canonName(existing.venueName).length) {
+          existing.venueName = p.venueName;
+        }
+        // completa coords se faltavam (pra futuros matches por proximidade)
+        if (existing.venueLat == null && p.venueLat != null) {
+          existing.venueLat = p.venueLat; existing.venueLon = p.venueLon;
+        }
       }
     });
-    var venueList = Object.keys(venuesByPid).map(function(k) { return venuesByPid[k]; });
+    var venueList = _bucketKeys.map(function(k) { return venuesByPid[k]; });
 
     var _safe = window._safeHtml || function(s) { return String(s || ''); };
     var sanitizePid = function(pid) { return 'dash_' + String(pid || '').replace(/[^a-zA-Z0-9]/g, '_'); };
@@ -3751,7 +3801,7 @@ function _hydrateFriendsPresenceWidget() {
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">' +
           '<span style="width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;"></span>' +
           '<span style="font-weight:700;color:var(--text-bright);font-size:0.95rem;">Movimento nos seus locais</span>' +
-          '<a href="#place" style="margin-left:auto;font-size:0.78rem;color:var(--primary-color);text-decoration:none;font-weight:600;">Ver tudo →</a>' +
+          '<a href="#place" class="btn btn-sm btn-success hover-lift" style="margin-left:auto;text-decoration:none;">Ver tudo →</a>' +
         '</div>';
 
     // v0.16.78: banner prominente listando os planos/checkins do PRÓPRIO user
@@ -3799,7 +3849,7 @@ function _hydrateFriendsPresenceWidget() {
               '<div style="font-weight:700;color:var(--text-bright);font-size:0.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 Você está em <span style="color:#10b981;">' + pVenue + '</span>' + (pSports ? ' <span style="font-weight:500;color:var(--text-muted);">· ' + _safe(pSports) + '</span>' : '') + '</div>' +
               '<div style="font-size:0.7rem;color:var(--text-muted);">expira em <b data-countdown-target="' + endsAt + '">…</b></div>' +
             '</div>' +
-            '<button onclick="window._dashCancelPresence(\'' + docId + '\')" style="background:transparent;color:#ef4444;border:none;padding:0;margin:0;font-weight:900;font-size:1.05rem;line-height:1;cursor:pointer;flex-shrink:0;" title="Sair do local">✕</button>' +
+            '<button type="button" class="cancel-x-btn" onclick="window._dashCancelPresence(\'' + docId + '\')" style="--cx-size:24px;" title="Sair do local">✕</button>' +
           '</div>';
       });
       ownPlans.slice(0, 3).forEach(function(p) {
@@ -3819,7 +3869,7 @@ function _hydrateFriendsPresenceWidget() {
               (p._tournName ? '<div style="font-size:0.7rem;color:#fbbf24;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🏆 ' + _safe(p._tournName) + '</div>' : '') +
               '<div style="font-size:0.7rem;color:var(--text-muted);">' + _safe(dayLabel) + ' às <b>' + _safe(hhmm) + '</b></div>' +
             '</div>' +
-            '<button onclick="window._dashCancelPresence(\'' + docId + '\')" style="background:transparent;color:#ef4444;border:none;padding:0;margin:0;font-weight:900;font-size:1.05rem;line-height:1;cursor:pointer;flex-shrink:0;" title="Cancelar plano">✕</button>' +
+            '<button type="button" class="cancel-x-btn" onclick="window._dashCancelPresence(\'' + docId + '\')" style="--cx-size:24px;" title="Cancelar plano">✕</button>' +
           '</div>';
       });
       html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">' + myRows + '</div>';

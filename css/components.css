@@ -559,6 +559,66 @@ button[style*="linear-gradient"]:not(.btn):active {
   box-shadow: 0 4px 14px rgba(0,0,0,0.2);
 }
 
+/* --- Símbolo CANÔNICO de cancelar/remover (v4.5.58) ---
+   Círculo vermelho, borda branca, X branco no centro. Símbolo UNIVERSAL pra
+   qualquer cancelamento/remoção de ícone: sair do local, cancelar plano de ida,
+   remover co-organizador, etc. Tamanho via --cx-size (default 24px).
+   NUNCA reintroduzir ✕ solto colorido — usar sempre esta classe ou window._cancelXBtn. */
+.cancel-x-btn {
+  --cx-size: 24px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* !important vence o min-height:44px de touch-target no responsive.css (@media)
+     — sem isso o círculo vira elipse (largura 24px, altura 44px). */
+  width: var(--cx-size) !important;
+  height: var(--cx-size) !important;
+  min-width: var(--cx-size) !important;
+  min-height: var(--cx-size) !important;
+  max-height: var(--cx-size) !important;
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+  background: #dc2626;
+  border: 2px solid #fff;
+  /* v4.5.60: o ✕ (glifo) é escondido — o X é DESENHADO por 2 barras (::before/::after)
+     pra ter peso consistente e cheio, independente de fonte. */
+  font-size: 0;
+  color: transparent;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.30);
+  transition: transform 0.12s ease, background 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+/* X desenhado — barras brancas grossas (peso aumentado, v4.5.60). */
+.cancel-x-btn::before,
+.cancel-x-btn::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--cx-size) * 0.5);
+  height: calc(var(--cx-size) * 0.19);
+  background: #fff;
+  border-radius: 2px;
+}
+.cancel-x-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
+.cancel-x-btn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
+.cancel-x-btn:hover { background: #b91c1c; transform: scale(1.08); }
+.cancel-x-btn:active { transform: scale(0.92); }
+/* Nos cards de inscrito o X fica SEMPRE na linha inferior à direita (canto inf. dir.).
+   Isso é garantido IN-FLOW pelos renderers (participants.js + tournaments.js) — NÃO
+   usar position:absolute aqui: no card de check-in o X divide a linha de baixo com os
+   botões W.O./Presente-Ausente e um X absoluto (z-index) os cobriria. */
+
+/* v4.5.63: nome que resolve por uid mas ainda não carregou o perfil = span VAZIO com
+   data-uid-name → mostra "…" (carregando), NUNCA branco quebrado nem nome gravado.
+   Some assim que a hidratação/re-render preenche o nome vivo. */
+[data-uid-name]:empty::after { content: "…"; opacity: 0.4; font-weight: 400; letter-spacing: 1px; }
+
 /* --- Variantes Transparentes (SOMENTE Add Bot e Apagar) --- */
 .btn-danger-ghost {
   background: var(--btn-danger-ghost-bg, rgba(239,68,68,0.15));
