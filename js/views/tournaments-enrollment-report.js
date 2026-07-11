@@ -1160,6 +1160,61 @@
   // v1.3.9-beta: render no view-container — page-route #analise/<tId>.
   // Topbar fica visível, _renderBackHeader cuida do cabeçalho com hamburger
   // funcional. Padrão centralizado (vide CLAUDE.md "REGRA CRITICA v1.3.5").
+  // Seção "Histórico letzplay" — status por inscrito (lê letzplayImport/handle/consent
+  // do perfil). Anti-gato do organizador: quem já tem histórico (com categoria OFICIAL),
+  // quem autorizou e falta buscar, quem NÃO autorizou (🔴), e quem não informou @.
+  function _renderLetzplaySection(rows, t, profileMap) {
+    profileMap = profileMap || {};
+    var imp = [], wait = [], denied = [], noh = [];
+    (rows || []).forEach(function (r) {
+      var prof = (r.uid && profileMap[r.uid]) ? profileMap[r.uid] : null;
+      var li = prof && prof.letzplayImport;
+      var handle = prof && prof.letzplayHandle;
+      var consent = prof && prof.letzplayConsent === true;
+      if (li) imp.push({ r: r, li: li });
+      else if (handle && consent) wait.push(r);
+      else if (handle && !consent) denied.push(r);
+      else noh.push(r);
+    });
+    // Só mostra a seção se ao menos alguém tem @ letzplay (evita poluir torneios sem uso).
+    if (imp.length + wait.length + denied.length === 0) return '';
+
+    var C = {
+      green: { bg: 'rgba(16,185,129,0.14)', fg: '#2dd4a0' },
+      amber: { bg: 'rgba(240,180,69,0.14)', fg: '#f0b445' },
+      red: { bg: 'rgba(242,106,106,0.14)', fg: '#f26a6a' },
+      grey: { bg: 'rgba(133,146,166,0.14)', fg: '#8592a6' }
+    };
+    function pill(c, n, label) {
+      return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 10px;border-radius:20px;background:' + c.bg + ';color:' + c.fg + ';"><span style="width:8px;height:8px;border-radius:50%;background:' + c.fg + ';"></span>' + n + ' ' + label + '</span>';
+    }
+    function line(name, extra) {
+      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px;"><span>' + _esc(name || '—') + '</span>' + (extra || '') + '</div>';
+    }
+    function group(color, label, itemsHtml) {
+      return itemsHtml ? '<div style="font-size:11px;font-weight:700;color:' + color + ';margin:8px 0 2px;">' + label + '</div>' + itemsHtml : '';
+    }
+    var impHtml = imp.map(function (o) {
+      var oc = o.li.officialCategory;
+      var band = o.li.rating && o.li.rating.band;
+      return line(o.r.name, '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#2dd4a0;">' + _esc(oc ? oc.categoryRaw : (band || '—')) + '</span>');
+    }).join('');
+    var restHtml = function (arr) { return arr.map(function (r) { return line(r.name); }).join(''); };
+
+    return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:15px 16px;margin-bottom:14px;">' +
+      '<div style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">🎾 Histórico letzplay</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">' +
+        pill(C.green, imp.length, 'com histórico') + pill(C.amber, wait.length, 'aguardando') +
+        pill(C.red, denied.length, 'não autorizou') + pill(C.grey, noh.length, 'sem @') +
+      '</div>' +
+      group('#2dd4a0', '🟢 Com histórico (categoria oficial)', impHtml) +
+      group('#f0b445', '🟡 Autorizou, aguardando busca', restHtml(wait)) +
+      group('#f26a6a', '🔴 Não autorizou', restHtml(denied)) +
+      group('#8592a6', '⚪ Sem @ letzplay', restHtml(noh)) +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:11px;border-top:1px solid var(--border-color);padding-top:9px;">A busca ativa (de quem autorizou) roda na extensão desktop do organizador. Quem está 🟢 já tem o histórico completo.</div>' +
+      '</div>';
+  }
+
   function _renderPage(container, t, rows, profileMap, parts, resolvedFor) {
     if (!container) return;
     var hdr = (typeof window._renderBackHeader === 'function')
@@ -1182,6 +1237,7 @@
       '<div style="max-width:760px;margin:0 auto;padding:1rem;">' +
       subtitle +
       _renderOverview(rows, t) +
+      _renderLetzplaySection(rows, t, profileMap) +
       _renderCategoryTable(rows, t) +
       _renderInscritosList(rows, t) +
       // v2.4.33: seção "Perfis Incompletos" editável removida — a edição de
