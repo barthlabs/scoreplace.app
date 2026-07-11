@@ -738,7 +738,11 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     var _lpIsCurUser = _lpCu && _lpCu.displayName && String(_lpCu.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
     var _lpInner = (_lpIsCurUser && _lpCu.letzplayImport && typeof window._renderLetzplayCard === 'function')
       ? window._renderLetzplayCard(_lpCu.letzplayImport) : '';
-    var _lpCardHtml = '<div id="letzplay-card-stats-slot" style="margin-top:12px;">' + _lpInner + '</div>';
+    // Botão pro Histórico de jogos unificado (LetzPlay + Scoreplace) — só na própria conta.
+    var _lpHistBtn = _lpIsCurUser
+      ? '<button onclick="window.location.hash=\'#historico\'" style="width:100%;margin-top:12px;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color,rgba(255,255,255,0.12));border-radius:12px;padding:11px 14px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;">📜 Histórico de jogos <span style="opacity:0.6;font-weight:500;font-size:0.75rem;">LetzPlay + Scoreplace</span></button>'
+      : '';
+    var _lpCardHtml = '<div id="letzplay-card-stats-slot" style="margin-top:12px;">' + _lpInner + '</div>' + _lpHistBtn;
 
     modal.innerHTML = '' +
       ((typeof window._renderBackHeader === 'function')

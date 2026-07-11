@@ -488,6 +488,15 @@ function initRouter() {
           return;
         }
         break;
+      case 'historico':
+        // Histórico de jogos unificado (LetzPlay importado + Scoreplace), cronológico + filtros.
+        if (typeof window._renderHistoricoPage === 'function') {
+          window._renderHistoricoPage(viewContainer);
+        } else {
+          window.location.replace('#dashboard');
+          return;
+        }
+        break;
       case 'fase-final':
         // v2.6.31: playoff de Liga removido (módulo tournaments-playoff.js deletado —
         // nenhum torneio no banco usava). A fase final agora é uma fase do construtor

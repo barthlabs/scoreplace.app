@@ -21,7 +21,9 @@
   var root = (typeof window !== 'undefined') ? window
            : (typeof global !== 'undefined') ? global : this;
 
-  var SCHEMA_VERSION = 1;
+  // v2: passou a preservar os jogos individuais (games[]) — matéria-prima do
+  // Histórico de Jogos cronológico. Imports v1 (sem games) continuam válidos.
+  var SCHEMA_VERSION = 2;
 
   // Token de categoria → rating-base (escala beach, calibrável). Faixa sobreposta
   // ("D+/C-") vira a média dos tokens presentes.
@@ -175,12 +177,39 @@
       if (hv > offBest) { offBest = hv; officialCategory = { categoryRaw: f.categoryRaw, skill: hardest }; }
     });
 
+    // v2: jogos individuais preservados (data, oponente, parceiro, placar, won,
+    // torneio/ranking, clube). A ordem do array = ordem de import (letzplay
+    // entrega mais recente primeiro) — usada como fallback de ordenação quando a
+    // data crua não é parseável. Matéria-prima do Histórico de Jogos cronológico.
+    var lpSport = raw.sport || (Array.isArray(raw.sports) ? raw.sports[0] : null) || null;
+    var games = matches.map(function (m, i) {
+      return {
+        idx: i,
+        date: m.date || null,
+        sport: lpSport,
+        official: m.official === true,
+        kind: m.kind || (m.official === true ? 'tournament' : 'ranking'),
+        competition: m.categoryRaw || '',
+        club: m.club || null,
+        round: (m.round != null) ? m.round : null,
+        year: (m.year != null) ? m.year : null,
+        partnerName: m.partnerName || null,
+        partnerHandle: m.partnerHandle || null,
+        oppNames: Array.isArray(m.oppNames) ? m.oppNames.slice() : [],
+        oppHandles: Array.isArray(m.oppHandles) ? m.oppHandles.slice() : [],
+        myScore: (typeof m.myScore === 'number') ? m.myScore : null,
+        oppScore: (typeof m.oppScore === 'number') ? m.oppScore : null,
+        won: (m.won === true) ? true : (m.won === false ? false : null)
+      };
+    });
+
     return {
       source: 'letzplay',
       version: SCHEMA_VERSION,
       handle: raw.handle || '',
       importedAt: opts.importedAt || null,
       officialCategory: officialCategory,
+      games: games,
       profile: {
         name: raw.name || '',
         memberSince: raw.memberSince || null,
