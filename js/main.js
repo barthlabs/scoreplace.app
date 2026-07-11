@@ -1712,6 +1712,10 @@ if (typeof setupProfileModal === 'function') {
 // iOS Safari (navigator.standalone), Edge, Firefox.
 window._isInstalledAsPWA = function() {
   try {
+    // App nativo (Capacitor iOS/Android da loja) = já é o app instalado; nunca
+    // mostrar "Instalar app"/banners de PWA lá dentro (o display-mode padrão do
+    // WKWebView/Capacitor não bate em standalone, então precisa deste check).
+    if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) return true;
     if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
     if (window.navigator.standalone === true) return true;
     if (window.matchMedia && window.matchMedia('(display-mode: minimal-ui)').matches) return true;
