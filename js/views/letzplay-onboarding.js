@@ -175,9 +175,9 @@
     }
     var label = opts.label || 'Importar do letzplay';
     if (opts.variant === 'solid') {
-      return '<button onclick="window._spStartImport&&window._spStartImport()" style="background:linear-gradient(135deg,#84cc16,#65a30d);color:#0b1020;font-weight:800;padding:9px 15px;border-radius:10px;border:none;cursor:pointer;font-size:0.8rem;">🎾 ' + _esc(label) + '</button>';
+      return '<button onclick="window._spStartImport&&window._spStartImport()" class="btn btn-primary btn-sm">🎾 ' + _esc(label) + '</button>';
     }
-    return '<button onclick="window._spStartImport&&window._spStartImport()" style="width:100%;margin-top:8px;background:transparent;border:1px solid rgba(132,204,22,0.45);border-radius:12px;padding:10px 14px;cursor:pointer;color:#84cc16;font-size:0.82rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;">🎾 ' + _esc(label) + '</button>';
+    return '<button onclick="window._spStartImport&&window._spStartImport()" class="btn btn-primary btn-block" style="margin-top:8px;">🎾 ' + _esc(label) + '</button>';
   };
 
   // ── UI ────────────────────────────────────────────────────────────────
