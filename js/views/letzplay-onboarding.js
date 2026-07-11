@@ -44,7 +44,7 @@
     _ext.present = true;
     _ext.version = d.version || null;
     _ext.seenAt = Date.now();
-    if (document.getElementById('imp-steps')) _renderSteps();
+    _maybeRenderSteps();
   });
 
   function _ping() { try { window.postMessage({ __sp_lp: 'ext-ping' }, window.location.origin); } catch (e) {} }
@@ -115,7 +115,7 @@
           '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);margin-bottom:14px;">' + n + ' jogos do letzplay agora vivem no seu scoreplace.</div>' +
           '<a href="#historico" onclick="window._spCloseImportOverlay()" style="display:block;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-weight:800;padding:11px;border-radius:12px;text-decoration:none;margin-bottom:8px;">📜 Ver Histórico de jogos</a>' +
           '<button onclick="window._spCloseImportOverlay()" style="width:100%;background:transparent;border:1px solid var(--border-color,rgba(255,255,255,0.15));color:var(--text-muted,#cbd5e1);padding:9px;border-radius:12px;cursor:pointer;">Fechar</button>');
-        if (document.getElementById('imp-steps')) _renderSteps();
+        _maybeRenderSteps(true);
       } else {
         var msg = _ERR[d.error] || ('Falhou: ' + (d.error || 'erro'));
         _overlayCard('<div style="font-size:2rem;margin-bottom:6px;">⚠️</div>' +
@@ -202,9 +202,15 @@
   }
 
   function _installHelp(label) {
+    // chrome:// não pode ser aberto por link de um site (o Chrome bloqueia por
+    // segurança). Então oferecemos um botão que COPIA o endereço pra colar na barra.
+    var chromeLine = '<li>Na barra do Chrome, vá em <code>chrome://extensions</code> ' +
+      '<button type="button" onclick="var b=this;if(navigator.clipboard){navigator.clipboard.writeText(\'chrome://extensions\').then(function(){b.textContent=\'copiado ✓\';})}" ' +
+      'style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:var(--primary-color,#818cf8);border-radius:7px;padding:2px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;margin-left:4px;">📋 copiar</button>' +
+      '<div style="opacity:0.7;font-size:0.72rem;margin-top:2px;">(o Chrome não deixa abrir esse endereço por link — cole na barra e dê Enter)</div></li>';
     return '<details style="margin-top:8px;"><summary style="cursor:pointer;color:var(--primary-color,#818cf8);font-weight:600;">' + _esc(label) + '</summary>' +
       '<ol style="margin:8px 0 0;padding-left:20px;line-height:1.7;">' +
-        '<li>Abra <code>chrome://extensions</code></li>' +
+        chromeLine +
         '<li>Ligue o <b>Modo do desenvolvedor</b> (canto superior direito)</li>' +
         '<li><b>Carregar sem compactação</b> → selecione a pasta <code>extension/</code> do scoreplace</li>' +
         '<li>Volte aqui — esta tela detecta sozinha ✓</li>' +
@@ -256,6 +262,21 @@
     host.innerHTML = html;
   }
 
+  // Só re-renderiza os passos quando o ESTADO muda (extensão presente/versão, jogos,
+  // mobile). Sem isso, o poll de 2s re-renderizava sempre e FECHAVA o <details> que o
+  // usuário tinha aberto (bug "abre e fecha sozinho"). force=true ignora a assinatura.
+  var _lastStepsSig = null;
+  function _stepsSig() {
+    return [_isMobile(), _ext.present, _ext.version, _gamesCount()].join('|');
+  }
+  function _maybeRenderSteps(force) {
+    if (!document.getElementById('imp-steps')) return;
+    var sig = _stepsSig();
+    if (!force && sig === _lastStepsSig) return;
+    _lastStepsSig = sig;
+    _renderSteps();
+  }
+
   window._renderImportarLetzplayPage = function (container) {
     if (!container) container = document.getElementById('view-container');
     if (!container) return;
@@ -273,7 +294,8 @@
     '</div>';
 
     container.innerHTML = hdr + intro;
-    _renderSteps();
+    _lastStepsSig = null;
+    _maybeRenderSteps(true);
 
     // Detecção viva: pinga a extensão e revê o estado enquanto a tela está aberta.
     _ping();
@@ -283,7 +305,7 @@
       // extensão some do estado se não anunciar por >6s (ex: foi removida)
       if (_ext.present && (Date.now() - _ext.seenAt) > 6000) { _ext.present = false; _ext.version = null; }
       _ping();
-      _renderSteps();
+      _maybeRenderSteps(); // só re-renderiza se algo mudou → não fecha o <details> aberto
     }, 2000);
   };
 })();
