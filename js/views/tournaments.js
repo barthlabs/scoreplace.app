@@ -2949,7 +2949,7 @@ function renderTournaments(container, tournamentId = null) {
                 ${isOrg ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window._saveAsTemplate('${t.id}')">💾 ${window._t ? window._t('btn.saveTemplate') : 'Salvar como Template'}</button>` : ''}
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
-                ${isOrg ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
+                ${isOrg ? `<button class="btn hover-lift" style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border:none;" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
                 ${/* v4.1.24: "📅 Combinar jogos" REMOVIDO das Ferramentas do Organizador — NÃO é
                       ferramenta de organizador. Combinar horário é ação de PARTICIPANTE (mesmo que
                       ele seja o organizador), feita a partir do próprio JOGO no chaveamento
