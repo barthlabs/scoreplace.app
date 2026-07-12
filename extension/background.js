@@ -172,12 +172,18 @@ function _spDeriveScan(handle, base, rk) {
   if (realRank != null) { for (var i = 0; i < realCats.length; i++) { if (strongestOf([realCats[i]]) === realRank) { rankingCategory = realCats[i]; break; } } }
   var gender = /Feminina|\bFem\b/i.test(allCats.join(' ')) ? 'feminino' : (/Masculina|\bMasc\b/i.test(allCats.join(' ')) ? 'masculino' : null);
   var skill = realRank != null ? LTR[realRank] : null;
+  // categoria REPRESENTATIVA pro perfil (checada): borda MAIS FRACA da banda ativa —
+  // conservador (não força ninguém pra cima só por jogar em ranking mais forte).
+  // Ex: "C+/B-" → C (não B). Título/domínio empurra pra cima é tratado no anti-gato.
+  function weakestOf(catStr) { var rs = []; (' ' + String(catStr || '').toUpperCase() + ' ').replace(/[\s\/]([A-D])[+\-]?(?=[\s\/])/g, function (_m, l) { rs.push(RANK[l]); return _m; }); return rs.length ? Math.max.apply(null, rs) : null; }
+  var profRank = rankingCategory ? weakestOf(rankingCategory) : realRank;
+  var profileSkill = profRank != null ? LTR[profRank] : null;
   // Campeonatos (título) por categoria — regra da federação: campeão sobe.
   var champions = tournaments.filter(function (t) { return t.champion && t.category; }).map(function (t) { return t.category; });
   return {
     handle: handle, name: base.name || rk.name || null,
     rankingCategory: rankingCategory, allCategories: allCats,
-    gender: gender, skill: skill, champions: champions,
+    gender: gender, skill: skill, profileSkill: profileSkill, champions: champions,
     rankings: rankings, tournaments: tournaments,
     totals: base.totals || rk.totals || {},
     lastPlayed: base.lastPlayed || rk.lastPlayed || null, source: 'public-profile' };

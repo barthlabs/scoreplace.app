@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.15.39';
+window.SCOREPLACE_VERSION = '1.15.40';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
@@ -6190,16 +6190,25 @@ window.AppStore = {
     var scan = (snap.data() || {}).scan || {};
     var patch = {};
     if (!cu.gender && scan.gender) patch.gender = scan.gender;
-    if (scan.skill) {
+    // CATEGORIA CHECADA: a apurada do letzplay VIRA a oficial e SOBRESCREVE a declarada
+    // (a declarada só vale pra quem nunca puxou histórico). Conservadora: profileSkill
+    // (borda mais fraca da banda ativa). Marca a fonte = 'letzplay' → o app sabe que é
+    // checada, não declarada.
+    var checked = scan.profileSkill || scan.skill;
+    if (checked) {
       var sport = 'Beach Tennis'; // letzplay = beach tennis
-      var sbs = (cu.skillBySport && typeof cu.skillBySport === 'object') ? cu.skillBySport : {};
-      if (!sbs[sport]) { sbs = Object.assign({}, sbs); sbs[sport] = scan.skill; patch.skillBySport = sbs; }
+      var sbs = (cu.skillBySport && typeof cu.skillBySport === 'object') ? Object.assign({}, cu.skillBySport) : {};
+      var src = (cu.skillBySportSource && typeof cu.skillBySportSource === 'object') ? Object.assign({}, cu.skillBySportSource) : {};
+      if (sbs[sport] !== checked || src[sport] !== 'letzplay') {
+        sbs[sport] = checked; src[sport] = 'letzplay';
+        patch.skillBySport = sbs; patch.skillBySportSource = src;
+      }
     }
     if (!Object.keys(patch).length) return;
     try {
       await db.collection('users').doc(cu.uid).set(patch, { merge: true });
       Object.assign(cu, patch);
-      window._log('[letzplay self-populate] preenchido do scan:', Object.keys(patch).join(', '));
+      window._log('[letzplay self-populate] categoria checada do scan:', Object.keys(patch).join(', '));
     } catch (e) { window._warn('[letzplay self-populate] falhou', e); }
   },
 
