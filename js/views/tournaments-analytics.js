@@ -736,11 +736,12 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     // fase à parte (precisa do doc deles) — por ora só a própria conta.
     var _lpCu = window.AppStore && window.AppStore.currentUser;
     var _lpIsCurUser = _lpCu && _lpCu.displayName && String(_lpCu.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
-    // Nível GERAL: mistura scoreplace (torneios oficiais + V/D) no card do letzplay.
-    var _spExtra = _lpIsCurUser ? {
+    // Nível GERAL: mistura scoreplace (torneios oficiais + V/D) do jogador VISTO.
+    var _spExtra = {
       tournaments: (stats.tournamentNames || []).map(function(tn) { return { name: tn.name, sport: tn.sport, year: null }; }),
       wins: stats.totalWins || 0, losses: stats.totalLosses || 0
-    } : null;
+    };
+    // Conta própria: import está no AppStore. Terceiros: carregado async (se autorizado).
     var _lpInner = (_lpIsCurUser && _lpCu.letzplayImport && typeof window._renderLetzplayCard === 'function')
       ? window._renderLetzplayCard(_lpCu.letzplayImport, _spExtra) : '';
     // Botões (só na própria conta): Histórico unificado + Importar do letzplay.
@@ -916,6 +917,27 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     }
 
     // Load persistent per-user matchHistory — primary data source, survives deletion
+    var _lastMerged = null;
+    // Terceiros: letzplay é público → se o jogador visto autorizou o import,
+    // mostramos o card "nível (geral)" dele e dobramos os jogos nas estatísticas.
+    if (!_lpIsCurUser && resolvedUid && window.FirestoreDB) {
+        var _tpDb = window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb());
+        if (_tpDb) {
+            _tpDb.collection('users').doc(resolvedUid).get().then(function(doc) {
+                var d = doc.exists ? (doc.data() || {}) : null;
+                if (!d || d.letzplayConsent !== true || !d.letzplayImport || !Array.isArray(d.letzplayImport.games) || !d.letzplayImport.games.length) return;
+                window._spLetzplayImportByUid[resolvedUid] = d.letzplayImport;
+                var cardSlot = modal.querySelector('#letzplay-card-stats-slot');
+                if (cardSlot && typeof window._renderLetzplayCard === 'function') cardSlot.innerHTML = window._renderLetzplayCard(d.letzplayImport, _spExtra);
+                var pslot = modal.querySelector('#player-stats-persistent');
+                if (pslot && _lastMerged) {
+                    pslot.innerHTML = window._renderPersistentMatchStats(_lastMerged, resolvedUid) +
+                        (stats.tournamentsPlayed > 0 ? '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);padding:6px 0;">📋 Torneios Disputados (' + stats.tournamentsPlayed + ')</summary><div style="margin-top:6px;">' + tourListHtml + '</div></details>' : '');
+                    if (typeof window._initStatsAnimation === 'function') window._initStatsAnimation(pslot);
+                }
+            }).catch(function() {});
+        }
+    }
     if (resolvedUid && window.FirestoreDB && typeof window.FirestoreDB.loadUserMatchHistory === 'function') {
         var slot = modal.querySelector('#player-stats-persistent');
         // Merge Firestore records with localStorage v2 casual cache so the hero-box
@@ -954,10 +976,11 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         window.FirestoreDB.loadUserMatchHistory(resolvedUid).then(function(records) {
             if (!slot) return;
             var merged = _mergeLocalCasualV2(records || []);
+            _lastMerged = merged;   // pro re-render quando o letzplay de terceiro chega
             // Always render the full metric grid (zeros if no data) so players
             // see what's trackable and are encouraged to play matches via the app.
-            slot.innerHTML = window._renderPersistentMatchStats(merged, resolvedUid) +
-                (stats.tournamentsPlayed > 0 ? '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);padding:6px 0;">📋 Torneios Disputados (' + stats.tournamentsPlayed + ')</summary><div style="margin-top:6px;">' + tourListHtml + '</div></details>' : '');
+            var _footer = (stats.tournamentsPlayed > 0 ? '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);padding:6px 0;">📋 Torneios Disputados (' + stats.tournamentsPlayed + ')</summary><div style="margin-top:6px;">' + tourListHtml + '</div></details>' : '');
+            slot.innerHTML = window._renderPersistentMatchStats(merged, resolvedUid) + _footer;
             // v1.0.37-beta: re-anima stats DEPOIS do innerHTML async — o
             // _initStatsAnimation inicial agarrou os elementos zerados que
             // foram substituídos. Bug reportado: "a animação das estatisticas
@@ -965,6 +988,19 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
             if (typeof window._initStatsAnimation === 'function') {
                 window._initStatsAnimation(slot);
             }
+            // Cross-ref @letzplay → nome do scoreplace: carrega os @handles e
+            // re-renderiza com os nomes corrigidos de quem já entrou no app.
+            try {
+                var _lpg = _letzplayGamesForUid(resolvedUid);
+                if (_lpg.length && typeof window._loadLetzplayNameCache === 'function') {
+                    var _hs = [];
+                    _lpg.forEach(function(g){ if (g.partnerHandle) _hs.push(g.partnerHandle); (g.oppHandles||[]).forEach(function(h){ if (h) _hs.push(h); }); });
+                    if (_hs.length) window._loadLetzplayNameCache(_hs).then(function(){
+                        var s2 = modal.querySelector('#player-stats-persistent');
+                        if (s2) { s2.innerHTML = window._renderPersistentMatchStats(merged, resolvedUid) + _footer; if (typeof window._initStatsAnimation === 'function') window._initStatsAnimation(s2); }
+                    }).catch(function(){});
+                }
+            } catch(e) {}
         }).catch(function(e) {
             window._warn('[player-stats] loadUserMatchHistory failed', e);
             if (slot) {
@@ -1176,10 +1212,14 @@ window._buildActivityLog = function(tournamentId) {
 // v1.15.19: os jogos importados do letzplay entram nas estatísticas de barras
 // (do que dá pra extrair: V/D, games ganhos/perdidos, sets). Só quando a conta
 // vista é a do próprio usuário logado (o import só existe pra própria conta).
+window._spLetzplayImportByUid = window._spLetzplayImportByUid || {};
 function _letzplayGamesForUid(uid) {
+    if (!uid) return [];
     var cu = window.AppStore && window.AppStore.currentUser;
-    if (!cu || !uid || cu.uid !== uid) return [];
-    var imp = cu.letzplayImport;
+    if (cu && cu.uid === uid && cu.letzplayImport && Array.isArray(cu.letzplayImport.games)) return cu.letzplayImport.games;
+    // terceiros: letzplay é público; mostramos se a pessoa autorizou o import
+    // (doc carregado sob demanda em _showPlayerStats → cache por uid).
+    var imp = window._spLetzplayImportByUid[uid];
     return (imp && Array.isArray(imp.games)) ? imp.games : [];
 }
 // Dobra os jogos do letzplay nos agregados: oficial→torneio (t/🏆), ranking→casual
@@ -1728,10 +1768,12 @@ window._renderPersistentMatchStats = function(records, uid) {
         for (var i = 0; i < top.length; i++) {
             var e = top[i];
             var wr = e.played > 0 ? Math.round(e.wins / e.played * 100) : 0;
-            var av = window._avatarHtml({ photoURL: e.photoURL, displayName: e.name }, 26);
+            // cross-ref @letzplay → nome do scoreplace quando a pessoa já entrou
+            var dispName = (e.letzplayHandle && window._spNameForLetzplay) ? window._spNameForLetzplay(e.letzplayHandle, e.name) : e.name;
+            var av = window._avatarHtml({ photoURL: e.photoURL, displayName: dispName }, 26);
             h += '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--info-pill-bg);border:1px solid var(--border-color);border-radius:8px;margin-bottom:3px;">' +
                 av +
-                '<span style="flex:1;min-width:0;font-size:0.78rem;color:var(--text-main,#e5e7eb);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _safe(e.name || 'Jogador') + '</span>' +
+                '<span style="flex:1;min-width:0;font-size:0.78rem;color:var(--text-main,#e5e7eb);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _safe(dispName || 'Jogador') + '</span>' +
                 '<span style="font-size:0.68rem;color:var(--success-color,#22c55e);font-weight:700;">' + e.wins + 'V</span>' +
                 '<span style="font-size:0.68rem;color:var(--danger-color,#ef4444);font-weight:700;">' + e.losses + 'D</span>' +
                 (e.draws ? '<span style="font-size:0.68rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + e.draws + 'E</span>' : '') +
@@ -1744,6 +1786,27 @@ window._renderPersistentMatchStats = function(records, uid) {
 
     var casualRel = _computeH2hAndPartners(casual);
     var tournRel = _computeH2hAndPartners(tournament);
+    // v1.15.20: parceiros/adversários também contam letzplay (oficial→torneios,
+    // ranking→casuais). Entradas guardam o @handle pra cross-ref com o scoreplace.
+    (function () {
+        function bump(map, key, name, handle, didWin) {
+            if (!map[key]) map[key] = { name: name, uid: null, letzplayHandle: handle || null, photoURL: null, played: 0, wins: 0, losses: 0, draws: 0 };
+            map[key].played++;
+            if (didWin) map[key].wins++; else map[key].losses++;
+        }
+        _letzplayGamesForUid(uid).forEach(function (g) {
+            if (g.won !== true && g.won !== false) return;
+            var rel = g.official ? tournRel : casualRel;
+            if (g.partnerHandle || g.partnerName) {
+                bump(rel.partners, 'lp:' + (g.partnerHandle || g.partnerName), g.partnerName || g.partnerHandle, g.partnerHandle, g.won);
+            }
+            (g.oppHandles || []).forEach(function (h, i) {
+                var nm = (g.oppNames || [])[i] || h;
+                if (!h && !nm) return;
+                bump(rel.h2h, 'lp:' + (h || nm), nm, h, g.won);
+            });
+        });
+    })();
 
     return '<div style="border-top:1px solid var(--border-color,rgba(255,255,255,0.1));padding-top:10px;">' +
         '<div style="font-size:0.82rem;font-weight:700;color:var(--text-bright,#fff);margin-bottom:4px;">📊 Estatísticas Detalhadas</div>' +

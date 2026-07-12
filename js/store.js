@@ -1,4 +1,46 @@
-window.SCOREPLACE_VERSION = '1.15.19';
+window.SCOREPLACE_VERSION = '1.15.20';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
+// ─────────────────────────────────────────────────────────────────────────────
+// Guardamos os @handles dos parceiros/adversários importados do letzplay. Quando
+// alguém entra no scoreplace e define seu @letzplay no perfil, o nome importado
+// (às vezes truncado/errado) é substituído pelo displayName real dele — em todo
+// lugar que mostra histórico/estatísticas. Cache global (handle_lower → {name,uid,
+// photoURL} ou null se consultado e não encontrado) evita re-query.
+window._spLetzplayNameCache = window._spLetzplayNameCache || {};
+window._loadLetzplayNameCache = async function (handles) {
+  var cache = window._spLetzplayNameCache;
+  var db = window.FirestoreDB && (window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
+  if (!db) return cache;
+  var want = [];
+  (handles || []).forEach(function (h) {
+    if (!h) return; var k = String(h).toLowerCase();
+    if (!(k in cache) && want.indexOf(h) < 0) want.push(h);
+  });
+  if (!want.length) return cache;
+  for (var i = 0; i < want.length; i += 10) {
+    var batch = want.slice(i, i + 10);
+    try {
+      var snap = await db.collection('users').where('letzplayHandle', 'in', batch).get();
+      snap.forEach(function (doc) {
+        var d = doc.data() || {};
+        if (d.letzplayHandle) {
+          cache[String(d.letzplayHandle).toLowerCase()] = { name: d.displayName || null, uid: doc.id, photoURL: d.photoURL || null };
+        }
+      });
+    } catch (e) { /* índice/rede: só não resolve, cai no nome importado */ }
+    batch.forEach(function (h) { var k = String(h).toLowerCase(); if (!(k in cache)) cache[k] = null; });
+  }
+  return cache;
+};
+// Nome a exibir para um @handle: displayName do scoreplace se existir, senão o
+// nome importado (fallback).
+window._spNameForLetzplay = function (handle, fallback) {
+  if (!handle) return fallback;
+  var e = window._spLetzplayNameCache[String(handle).toLowerCase()];
+  return (e && e.name) ? e.name : fallback;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)

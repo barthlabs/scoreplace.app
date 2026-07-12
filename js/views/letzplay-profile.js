@@ -119,9 +119,9 @@
         // duplas
         (pairsHtml ? '<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted,#8b93a3);margin-bottom:4px;">Suas duplas</div>' + pairsHtml + '</div>' : '') +
 
-        // privacidade
+        // privacidade — dados públicos do letzplay, trazidos com autorização
         '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:12px;border-top:1px solid var(--border-color,#28313f);padding-top:9px;">' +
-          esc((imp.observations || []).length) + ' registros de adversários guardados (ocultos até cada um entrar no scoreplace). Importado' +
+          'Histórico público do letzplay (nomes e placares), importado com sua autorização' +
           (imp.importedAt ? ' em ' + esc(String(imp.importedAt).slice(0, 10)) : '') + '.' +
         '</div>' +
       '</div>';

@@ -120,7 +120,10 @@
         partner: partner,
         result: (g.won === true) ? 'V' : (g.won === false ? 'D' : '?'),
         scoreA: scoreA,
-        scoreB: scoreB
+        scoreB: scoreB,
+        // cru pra cross-ref @→nome do scoreplace no render (corrige nomes importados)
+        lpPartner: (g.partnerHandle || g.partnerName) ? { name: g.partnerName, handle: g.partnerHandle } : null,
+        lpOpps: (g.oppHandles || []).map(function (h, i) { return { name: (g.oppNames || [])[i] || '', handle: h }; })
       };
     });
   }
@@ -227,13 +230,26 @@
       '</div>';
   }
 
+  // Nome de exibição de um jogador do letzplay: displayName do scoreplace se a
+  // pessoa já entrou e vinculou o @, senão o nome importado.
+  function _resolveLpName(x) {
+    if (!x) return '';
+    var fb = _bestPlayer(x.name, x.handle);
+    return window._spNameForLetzplay ? window._spNameForLetzplay(x.handle, fb) : fb;
+  }
   function _gameCard(it) {
     var GREEN = '#22c55e', RED = '#ef4444', NEUT = 'var(--text-bright,#fff)';
     var aWin = it.result === 'V', aLose = it.result === 'D';
     var aColor = aWin ? GREEN : (aLose ? RED : NEUT);
     var bColor = aWin ? RED : (aLose ? GREEN : NEUT);
-    var teamA = _esc(_meName) + (it.partner ? ' / ' + _esc(it.partner) : '');
-    var teamB = _esc(it.opponent || '—');
+    var partner = it.partner, opp = it.opponent;
+    if (it.source === 'letzplay') {
+      partner = it.lpPartner ? _resolveLpName(it.lpPartner) : null;
+      var oppList = (it.lpOpps || []).map(_resolveLpName).filter(Boolean);
+      opp = oppList.length ? oppList.join(' / ') : '—';
+    }
+    var teamA = _esc(_meName) + (partner ? ' / ' + _esc(partner) : '');
+    var teamB = _esc(opp || '—');
     var meta = [];
     if (it.competitionLabel) meta.push(_esc(it.competitionLabel));
     if (it.venue) meta.push('📍 ' + _esc(it.venue));
@@ -379,5 +395,22 @@
       '</div>';
 
     _renderList();
+
+    // Cross-ref @letzplay → nome do scoreplace: carrega em lote os @handles dos
+    // parceiros/adversários e re-renderiza com os nomes corrigidos de quem já
+    // entrou no app e vinculou o @.
+    if (typeof window._loadLetzplayNameCache === 'function') {
+      var _handles = [];
+      _all.forEach(function (it) {
+        if (it.source !== 'letzplay') return;
+        if (it.lpPartner && it.lpPartner.handle) _handles.push(it.lpPartner.handle);
+        (it.lpOpps || []).forEach(function (o) { if (o.handle) _handles.push(o.handle); });
+      });
+      if (_handles.length) {
+        window._loadLetzplayNameCache(_handles).then(function () {
+          if (document.getElementById('hist-list')) _renderList();
+        }).catch(function () {});
+      }
+    }
   };
 })();
