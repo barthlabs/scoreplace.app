@@ -1346,20 +1346,12 @@
     var ctx = window._lzScanCtx;
     if (!ctx || !ctx.targets || !ctx.targets.length) return;
     _lzScanOverlay('<div style="font-size:1.5rem;margin-bottom:8px;">🔌</div><div style="font-weight:700;color:var(--text-bright,#fff);">Conectando à extensão…</div>');
-    var started = false, done = false;
+    var started = false, done = false, versions = [];
     function onMsg(e) {
       if (e.source !== window) return; var d = e.data; if (!d) return;
-      if (d.__sp_lp === 'extension-present' && !started) {
-        if (!_verGE(d.version, _LZ_MIN_EXT)) {
-          started = true; done = true; window.removeEventListener('message', onMsg);
-          _lzScanOverlay(_lzScanErrHtml('Sua extensão está na versão ' + (d.version || '?') + '. Recarregue a extensão pra v' + _LZ_MIN_EXT + ' em chrome://extensions e tente de novo.'));
-          return;
-        }
-        started = true;
-        _lzScanOverlay(_lzScanProgressHtml(ctx.targets, 0, ctx.targets.length));
-        window.postMessage({ __sp_lp: 'run-org-scan', targets: ctx.targets, tournamentId: ctx.tId }, window.location.origin);
-        return;
-      }
+      // Coleta as versões que anunciam (pode haver content scripts órfãos de versões
+      // antigas na página) — a decisão usa a MAIOR versão, tomada no timeout abaixo.
+      if (d.__sp_lp === 'extension-present') { if (d.version) versions.push(d.version); return; }
       if (d.__sp_lp === 'org-scan-progress' && d.tournamentId === ctx.tId) {
         _lzScanOverlay(_lzScanProgressHtml(ctx.targets, d.done || 0, d.total || ctx.targets.length));
         return;
@@ -1372,11 +1364,17 @@
     }
     window.addEventListener('message', onMsg);
     window.postMessage({ __sp_lp: 'ext-ping' }, window.location.origin);
-    // extensão não respondeu ao ping → provavelmente inativa/não recarregada
+    // Junta as respostas do ping (~900ms) e decide pela MAIOR versão presente.
     setTimeout(function () {
-      if (started || done) return; window.removeEventListener('message', onMsg);
-      _lzScanOverlay(_lzScanErrHtml('A extensão do scoreplace não respondeu. Recarregue a extensão (v' + _LZ_MIN_EXT + ') em chrome://extensions e tente de novo.'));
-    }, 3500);
+      if (done || started) return;
+      var reload = 'Recarregue a extensão pra v' + _LZ_MIN_EXT + ' em chrome://extensions, recarregue esta página e tente de novo.';
+      if (!versions.length) { window.removeEventListener('message', onMsg); _lzScanOverlay(_lzScanErrHtml('A extensão do scoreplace não respondeu. ' + reload)); return; }
+      var best = versions.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
+      if (!_verGE(best, _LZ_MIN_EXT)) { window.removeEventListener('message', onMsg); _lzScanOverlay(_lzScanErrHtml('Sua extensão está na versão ' + best + '. ' + reload)); return; }
+      started = true;
+      _lzScanOverlay(_lzScanProgressHtml(ctx.targets, 0, ctx.targets.length));
+      window.postMessage({ __sp_lp: 'run-org-scan', targets: ctx.targets, tournamentId: ctx.tId }, window.location.origin);
+    }, 900);
     // segurança: scan iniciou mas travou
     setTimeout(function () {
       if (done || !started) return; window.removeEventListener('message', onMsg);
