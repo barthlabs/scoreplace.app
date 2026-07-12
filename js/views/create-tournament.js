@@ -592,6 +592,18 @@ function setupCreateTournamentModal() {
                   <input type="range" id="tourn-rigor-slider" min="0" max="2" step="1" value="0" oninput="window._rigorLive(this.value)" style="width:100%; accent-color:#38bdf8;">
                   <input type="hidden" id="tourn-rigor" value="casual">
                   <div id="tourn-rigor-desc" style="font-size:0.74rem; color:var(--text-muted); margin-top:6px; line-height:1.45;">🎾 <b>Casual</b> — não verifica o histórico dos inscritos. Qualquer pessoa se inscreve; as categorias são só informativas.</div>
+                  <!-- Informações exigidas (só quando o rigor não é Casual). Cada uma
+                       vira requisito checado no "Inscrever-se". -->
+                  <div id="rigor-require-block" style="display:none; margin-top:12px;">
+                    <div style="font-size:0.72rem; color:var(--text-muted); font-weight:700; margin-bottom:6px;">Exigir dos inscritos:</div>
+                    <div style="display:flex; flex-direction:column; gap:7px;">
+                      <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:0.82rem;color:var(--text-main);cursor:pointer;"><span>⚧ Gênero</span><span class="toggle-switch" style="--toggle-on-bg:#38bdf8;--toggle-on-glow:rgba(56,189,248,0.3);--toggle-on-border:#38bdf8;"><input type="checkbox" id="rigor-req-gender"><span class="toggle-slider"></span></span></label>
+                      <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:0.82rem;color:var(--text-main);cursor:pointer;"><span>🎯 Categoria (nível)</span><span class="toggle-switch" style="--toggle-on-bg:#38bdf8;--toggle-on-glow:rgba(56,189,248,0.3);--toggle-on-border:#38bdf8;"><input type="checkbox" id="rigor-req-category"><span class="toggle-slider"></span></span></label>
+                      <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:0.82rem;color:var(--text-main);cursor:pointer;"><span>🎂 Idade</span><span class="toggle-switch" style="--toggle-on-bg:#38bdf8;--toggle-on-glow:rgba(56,189,248,0.3);--toggle-on-border:#38bdf8;"><input type="checkbox" id="rigor-req-age"><span class="toggle-slider"></span></span></label>
+                      <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:0.82rem;color:var(--text-main);cursor:pointer;"><span>🎾 Histórico (letzplay)</span><span class="toggle-switch" style="--toggle-on-bg:#38bdf8;--toggle-on-glow:rgba(56,189,248,0.3);--toggle-on-border:#38bdf8;"><input type="checkbox" id="rigor-req-history"><span class="toggle-slider"></span></span></label>
+                    </div>
+                    <div style="font-size:0.7rem; color:var(--text-muted); margin-top:7px; line-height:1.4;">No <b>Oficial</b>, quem não tiver isso no perfil <b>não se inscreve</b>. No <b>Moderado</b>, entra mas é <b>avisado</b> a completar.</div>
+                  </div>
                 </div>
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #a855f7; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.catSection')}</p>
                 <div style="margin-bottom:0.75rem;">
@@ -1319,6 +1331,8 @@ function setupCreateTournamentModal() {
     var lvl = window._RIGOR_LEVELS[+v] || 'casual';
     var hid = document.getElementById('tourn-rigor'); if (hid) hid.value = lvl;
     var d = document.getElementById('tourn-rigor-desc'); if (d) d.innerHTML = window._RIGOR_DESCS[lvl] || '';
+    // toggles "Exigir dos inscritos" só valem fora do Casual
+    var rb = document.getElementById('rigor-require-block'); if (rb) rb.style.display = (lvl === 'casual') ? 'none' : 'block';
   };
   window._setRigorFromValue = function(lvl) {
     var idx = window._RIGOR_LEVELS.indexOf(lvl); if (idx < 0) idx = 0;
@@ -4653,6 +4667,11 @@ function setupCreateTournamentModal() {
 
     // v1.15.25: rigor da inscrição (default casual pra torneios antigos sem o campo)
     if (typeof window._setRigorFromValue === 'function') window._setRigorFromValue(t.rigor || 'casual');
+    // v1.15.31: informações exigidas
+    var _rr = t.rigorRequire || {};
+    [['rigor-req-gender', _rr.gender], ['rigor-req-category', _rr.category], ['rigor-req-age', _rr.age], ['rigor-req-history', _rr.history]].forEach(function (p) {
+      var el = document.getElementById(p[0]); if (el) el.checked = !!p[1];
+    });
 
     // Categorias (gênero + habilidade + idade)
     if (t.genderCategories && t.genderCategories.length > 0) {
@@ -5275,6 +5294,9 @@ function setupCreateTournamentModal() {
         // v1.15.25: rigor da inscrição (casual/moderado/oficial) — política geral do torneio.
         var _rigorEl = document.getElementById('tourn-rigor');
         tourData.rigor = (_rigorEl && _rigorEl.value) || 'casual';
+        // v1.15.31: informações exigidas dos inscritos (só valem fora do casual).
+        var _rchk = function (id) { var e = document.getElementById(id); return !!(e && e.checked); };
+        tourData.rigorRequire = { gender: _rchk('rigor-req-gender'), category: _rchk('rigor-req-category'), age: _rchk('rigor-req-age'), history: _rchk('rigor-req-history') };
         tourData.ageCategories = catData.ageCategories || []; // v1.2.0
         tourData.customCategories = catData.customCategories || []; // v2.1.80
         tourData.combinedCategories = catData.combinedCategories || [];

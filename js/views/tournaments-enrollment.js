@@ -151,6 +151,35 @@ function _checkEnrollmentEligibility(t, user) {
         }
     }
 
+    // ── Rigor da inscrição: informações exigidas (v1.15.31) ────────────────────
+    // Os toggles do organizador definem O QUE é exigido no perfil. No OFICIAL,
+    // faltando algo → bloqueia. No MODERADO → deixa entrar mas AVISA (notice).
+    var rigor = t.rigor || 'casual';
+    if (rigor !== 'casual') {
+        var req = t.rigorRequire || {};
+        var missing = [];
+        if (req.gender && !user.gender) missing.push('gênero');
+        if (req.category) {
+            var hasSkill = (user.skillBySport && t.sport && user.skillBySport[t.sport]) || user.defaultCategory;
+            if (!hasSkill) missing.push('categoria/nível');
+        }
+        if (req.age && !user.birthDate) missing.push('data de nascimento');
+        if (req.history) {
+            var hasHist = user.letzplayImport || (user.letzplayHandle && user.letzplayConsent === true);
+            if (!hasHist) missing.push('histórico do letzplay (@ + autorização)');
+        }
+        if (missing.length) {
+            var list = missing.join(', ');
+            if (rigor === 'oficial') {
+                return { ok: false, title: 'Complete seu perfil pra se inscrever',
+                    msg: 'Este torneio é Oficial e exige no seu perfil: ' + list + '. Atualize seu perfil e tente de novo.' };
+            }
+            // moderado → avisa, mas permite inscrever
+            return { ok: true, notice: { title: 'Perfil incompleto',
+                msg: 'Faltam no seu perfil: ' + list + '. Você foi inscrito, mas o organizador pode pedir esses dados — complete quando puder.' } };
+        }
+    }
+
     return { ok: true };
 }
 
@@ -419,6 +448,10 @@ window.enrollCurrentUser = function (tId) {
         if (!_elig.ok) {
             showAlertDialog(_elig.title, _elig.msg, null, { type: 'warning' });
             return;
+        }
+        // Rigor Moderado: perfil incompleto → avisa (não bloqueia) e segue a inscrição.
+        if (_elig.notice) {
+            showAlertDialog(_elig.notice.title, _elig.notice.msg, null, { type: 'info' });
         }
 
         // Verifica se as inscrições estão realmente abertas
