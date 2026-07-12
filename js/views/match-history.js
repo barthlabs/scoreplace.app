@@ -65,6 +65,25 @@
   }
 
   // ── Fonte 1: LetzPlay (games do import) ──────────────────────────────────────
+  // O nome renderizado no card do letzplay às vezes é só inicial ("AC") ou vazio →
+  // prefere o @handle (identidade real). Nome "cheio" (tem espaço, ou >3 chars e não é
+  // tudo maiúscula) vence. São OS JOGOS DO USUÁRIO: ele tem direito de saber quem jogou.
+  function _bestPlayer(name, handle) {
+    var n = (name || '').trim();
+    var h = (handle || '').trim();
+    var isInitials = !n || (n.length <= 3 && /^[A-Za-zÀ-ÿ.\-]+$/.test(n) && n === n.toUpperCase());
+    if (!isInitials) return n;
+    return h || n || '';
+  }
+  function _lpTeam(names, handles) {
+    var a = names || [], b = handles || [], out = [];
+    for (var k = 0; k < Math.max(a.length, b.length); k++) {
+      var v = _bestPlayer(a[k], b[k]);
+      if (v) out.push(v);
+    }
+    return out.join(' / ');
+  }
+
   function _fromLetzplay(cu) {
     var imp = cu && cu.letzplayImport;
     var games = imp && Array.isArray(imp.games) ? imp.games : [];
@@ -72,8 +91,8 @@
     var importedAtTs = imp.importedAt ? (Date.parse(imp.importedAt) || null) : null;
     return games.map(function (g, i) {
       var ts = _lpDateToTs(g.date, importedAtTs, (g.idx != null ? g.idx : i));
-      var opp = (g.oppNames && g.oppNames.length ? g.oppNames : g.oppHandles || []).join(' / ');
-      var partner = g.partnerName || g.partnerHandle || null;
+      var opp = _lpTeam(g.oppNames, g.oppHandles);
+      var partner = _bestPlayer(g.partnerName, g.partnerHandle) || null;
       var score = (typeof g.myScore === 'number' && typeof g.oppScore === 'number')
         ? (g.myScore + '–' + g.oppScore) : '';
       var venue = _prettyClub(g.club);
@@ -184,8 +203,8 @@
 
   function _gameCard(it) {
     var vs = it.partner
-      ? ('Você / ' + _esc(it.partner) + ' <span style="opacity:0.6;">vs</span> ' + _esc(it.opponent))
-      : ('Você <span style="opacity:0.6;">vs</span> ' + _esc(it.opponent));
+      ? (_esc(_meName) + ' / ' + _esc(it.partner) + ' <span style="opacity:0.6;">vs</span> ' + _esc(it.opponent))
+      : (_esc(_meName) + ' <span style="opacity:0.6;">vs</span> ' + _esc(it.opponent));
     var meta = [];
     if (it.competitionLabel) meta.push(_esc(it.competitionLabel));
     if (it.venue) meta.push('📍 ' + _esc(it.venue));
@@ -206,6 +225,7 @@
 
   // Estado de filtros (vive no módulo enquanto a página está aberta).
   var _all = [];
+  var _meName = 'Você';   // nome do dono nos cards (seu nome real, não "Você")
   var _filters = { source: 'all', sport: '', venue: '', comp: '' };
 
   function _applyFilters() {
@@ -269,6 +289,8 @@
     if (!container) container = document.getElementById('view-container');
     if (!container) return;
     var cu = window.AppStore && window.AppStore.currentUser;
+    // Nome do dono nos cards — o nome real do perfil (não "Você"). São os jogos DELE.
+    _meName = (cu && (cu.displayName || (cu.letzplayHandle ? '@' + cu.letzplayHandle : null) || cu.email)) || 'Você';
 
     var hdr = (typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({ href: '#dashboard', label: 'Voltar', middleHtml: '<span style="font-weight:700;">📜 Histórico de jogos</span>' })
