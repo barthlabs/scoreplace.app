@@ -1163,6 +1163,29 @@
   // Seção "Histórico letzplay" — status por inscrito (lê letzplayImport/handle/consent
   // do perfil). Anti-gato do organizador: quem já tem histórico (com categoria OFICIAL),
   // quem autorizou e falta buscar, quem NÃO autorizou (🔴), e quem não informou @.
+  // Rank de nível: A=0 (mais forte) … D=3, FUN=4. Extrai o token de nível mais
+  // FORTE de uma ou mais strings de categoria do letzplay (ex.: "Social Masc D+ / C-"
+  // → C=2). Só pega letra A-D como token (precedida de espaço/barra/início e seguida
+  // de +/-/espaço/barra/fim), pra não casar letras dentro de "Social", "Masc" etc.
+  var _SKILL_RANK = { A: 0, B: 1, C: 2, D: 3, FUN: 4, F: 4, OPEN: 4 };
+  function _lzRankFrom(catStrs) {
+    var ranks = [];
+    (catStrs || []).forEach(function (cs) {
+      var s = ' ' + String(cs || '').toUpperCase() + ' ';
+      if (/\bFUN\b|\bOPEN\b/.test(s)) ranks.push(4);
+      var re = /[\s\/]([A-D])[+\-]?(?=[\s\/])/g, m;
+      while ((m = re.exec(s))) ranks.push(_SKILL_RANK[m[1]]);
+    });
+    return ranks.length ? Math.min.apply(null, ranks) : null;
+  }
+  function _declRankFrom(skills) {
+    var ranks = (skills || []).map(function (x) {
+      var u = String(x || '').toUpperCase().replace(/[^A-Z]/g, '');
+      return (u in _SKILL_RANK) ? _SKILL_RANK[u] : null;
+    }).filter(function (v) { return v != null; });
+    return ranks.length ? Math.min.apply(null, ranks) : null;
+  }
+
   function _renderLetzplaySection(rows, t, profileMap) {
     profileMap = profileMap || {};
     var imp = [], wait = [], denied = [], noh = [];
@@ -1194,19 +1217,47 @@
     function group(color, label, itemsHtml) {
       return itemsHtml ? '<div style="font-size:11px;font-weight:700;color:' + color + ';margin:8px 0 2px;">' + label + '</div>' + itemsHtml : '';
     }
+    // Anti-gato: compara a categoria DECLARADA no torneio (effectiveSkills) com o
+    // NÍVEL REAL do letzplay (categoria oficial + banda de rating). Se declarou mais
+    // FRACO que joga, sinaliza. Ranks: A=0 (mais forte) … D=3, FUN=4.
+    var flagged = 0;
     var impHtml = imp.map(function (o) {
       var oc = o.li.officialCategory;
       var band = o.li.rating && o.li.rating.band;
-      return line(o.r.name, '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#2dd4a0;">' + _esc(oc ? oc.categoryRaw : (band || '—')) + '</span>');
+      var realCat = oc ? oc.categoryRaw : (band || '—');
+      var realRank = _lzRankFrom([oc ? oc.categoryRaw : '', band || '']);
+      var declRank = _declRankFrom(o.r.effectiveSkills);
+      var declLabel = (o.r.effectiveSkills && o.r.effectiveSkills.length) ? o.r.effectiveSkills.join('/') : '—';
+      var right = '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#2dd4a0;">' + _esc(realCat) + '</span>';
+      var flagHtml = '';
+      if (realRank != null && declRank != null && declRank > realRank) {
+        flagged++;
+        var gap = declRank - realRank;   // >0 = declarou mais fraco que joga
+        var strong = gap >= 2;
+        var fg = strong ? '#f26a6a' : '#f0b445';
+        flagHtml = '<div style="font-size:11px;color:' + fg + ';margin-top:1px;">' + (strong ? '🚩🚩' : '🚩') +
+          ' declarou <b>' + _esc(declLabel) + '</b> · joga <b>' + _esc(realCat) + '</b> no letzplay</div>';
+      } else if (declRank != null && realRank != null) {
+        flagHtml = '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:1px;">✔ declarou ' + _esc(declLabel) + ' · coerente</div>';
+      }
+      return '<div style="padding:4px 0;font-size:12.5px;">' +
+        '<div style="display:flex;justify-content:space-between;gap:10px;"><span>' + _esc(o.r.name || '—') + '</span>' + right + '</div>' +
+        flagHtml +
+      '</div>';
     }).join('');
     var restHtml = function (arr) { return arr.map(function (r) { return line(r.name); }).join(''); };
 
+    var flagBanner = flagged > 0
+      ? '<div style="background:rgba(242,106,106,0.12);border:1px solid rgba(242,106,106,0.4);border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:12.5px;color:#f26a6a;font-weight:600;">🚩 ' +
+          flagged + ' inscrito' + (flagged === 1 ? '' : 's') + ' declarou categoria mais fraca que o nível do letzplay — confira abaixo.</div>'
+      : '';
     return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:15px 16px;margin-bottom:14px;">' +
       '<div style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">🎾 Histórico letzplay</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">' +
         pill(C.green, imp.length, 'com histórico') + pill(C.amber, wait.length, 'aguardando') +
         pill(C.red, denied.length, 'não autorizou') + pill(C.grey, noh.length, 'sem @') +
       '</div>' +
+      flagBanner +
       group('#2dd4a0', '🟢 Com histórico (categoria oficial)', impHtml) +
       group('#f0b445', '🟡 Autorizou, aguardando busca', restHtml(wait)) +
       group('#f26a6a', '🔴 Não autorizou', restHtml(denied)) +
