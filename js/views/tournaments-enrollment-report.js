@@ -1008,6 +1008,13 @@
       else { bar.style.display = 'none'; btn.disabled = true; btn.textContent = '💾 Salvar alterações'; }
     });
   };
+  // Cancelar: descarta as edições pendentes (drag de gênero/categoria) e re-renderiza.
+  window._erCancelEdits = function () {
+    _pendingEdits = {};
+    if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
+    if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
+    window._erUpdateSaveBar();
+  };
   // Realça o card editado sem re-render da lista (o ● aparece só no próximo render).
   function _erMarkCardModified(order) {
     try {
@@ -1287,12 +1294,12 @@
     var formalCats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
     var catsBoxInner = formalCats.length
       ? '<div style="display:flex;flex-wrap:wrap;gap:8px;">' + formalCats.map(function (c) {
-          return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:700;padding:5px 12px;border-radius:20px;background:rgba(99,102,241,0.16);color:var(--text-bright,#fff);border:1px solid rgba(99,102,241,0.4);">' + _esc(c) + ' <span style="opacity:0.7;">(' + catCount(c) + ')</span></span>';
+          return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:16px;font-weight:700;padding:6px 14px;border-radius:20px;background:rgba(99,102,241,0.16);color:var(--text-bright,#fff);border:1px solid rgba(99,102,241,0.4);">' + _esc(c) + ' <span style="opacity:0.7;">(' + catCount(c) + ')</span></span>';
         }).join('') + '</div>'
-      : '<span style="font-size:13px;color:var(--text-muted);">Nenhuma categoria formal — o sorteio mistura todos. Use os botões “Criar categoria” abaixo.</span>';
-    var catsBox = '<div style="background:var(--bg-darker,rgba(0,0,0,0.18));border:1px solid var(--border-color);border-radius:12px;padding:10px 14px;margin-bottom:12px;">' +
-      '<div style="font-size:13px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;">🗂️ Categorias no torneio</div>' + catsBoxInner + '</div>';
-    var totalBar = '<div style="font-size:16px;font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;">Total de inscritos: ' + total + '</div>';
+      : '<span style="font-size:15px;color:var(--text-muted);">Nenhuma categoria formal — o sorteio mistura todos. Use os botões “Criar categoria” abaixo.</span>';
+    var catsBox = '<div style="background:var(--bg-darker,rgba(0,0,0,0.18));border:1px solid var(--border-color);border-radius:12px;padding:12px 14px;margin-bottom:12px;">' +
+      '<div style="font-size:15px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary,#c8cdd6);margin-bottom:9px;">🗂️ Categorias no torneio</div>' + catsBoxInner + '</div>';
+    var totalBar = '<div style="font-size:18px;font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;">Total de inscritos: ' + total + '</div>';
     // Sem gênero: faixa full-width embaixo, mesmas caixas de categoria.
     var semSection = '';
     if (semTotal) {
@@ -1375,24 +1382,32 @@
     var lastUpdateHtml = _ld
       ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Última verificação: <b style="color:var(--text-bright,#fff);">' + _ld.toLocaleDateString('pt-BR') + ' ' + _ld.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '</b></div>'
       : '';
-    var btnCss = 'flex:1;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:11px 12px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.86rem;font-weight:700;';
+    // Botões no padrão do app (gradiente + hover-lift); Completa com BRILHO (btn-shine).
     var scanBtn = (_isOrg && targets.length)
-      ? '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
-          '<button type="button" id="lz-scan-btn-essential" onclick="window._lzOrgScan(\'essential\')" title="Busca rápida: só o nível real do ranking ativo" style="' + btnCss + '">🔎 Verificar no letzplay — essencial (' + targets.length + ')</button>' +
-          '<button type="button" id="lz-scan-btn-full" onclick="window._lzOrgScan(\'full\')" title="Busca completa: rankings + torneios + jogos" style="' + btnCss + '">📚 Completa (' + targets.length + ')</button>' +
+      ? '<div style="display:flex;gap:8px;margin-bottom:10px;">' +
+          '<button type="button" id="lz-scan-btn-essential" onclick="window._lzOrgScan(\'essential\')" title="Busca rápida: só o nível real do ranking ativo" class="btn hover-lift" style="flex:1;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;cursor:pointer;">🔎 Verificar no letzplay — essencial (' + targets.length + ')</button>' +
+          '<button type="button" id="lz-scan-btn-full" onclick="window._lzOrgScan(\'full\')" title="Busca completa: rankings + torneios + jogos" class="btn btn-shine hover-lift" style="flex:1;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;cursor:pointer;">📚 Completa (' + targets.length + ')</button>' +
         '</div>'
       : '';
     // Legenda (todos os rótulos) — código de cor da verificação.
-    function leg(c, txt) { return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:' + c + ';"><span style="width:10px;height:10px;border-radius:50%;background:' + c + ';"></span>' + txt + '</span>'; }
-    var legend = '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px;">' +
+    function leg(c, txt) { return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:' + c + ';"><span style="width:11px;height:11px;border-radius:50%;background:' + c + ';"></span>' + txt + '</span>'; }
+    var legend = '<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;">' +
       leg(_LZ_COL.red, 'deve subir') + leg(_LZ_COL.yellow, 'pode subir') + leg(_LZ_COL.blue, 'rebaixar') + leg(_LZ_COL.green, 'coerente') + leg(_LZ_COL.white, 'sem verificação') +
       '</div>';
-    var hint = _isOrg ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no fim.</div>' : '';
-    var saveBar = _isOrg ? '<div id="er-mx-save-bar" style="display:none;margin-top:10px;"><button id="er-mx-save-btn" disabled onclick="window._erSaveEdits(\'' + _esc(String(t.id)) + '\',\'' + _esc(String(t.sport || '')) + '\')" class="btn btn-success" style="width:100%;font-weight:800;padding:11px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;">💾 Salvar alterações</button></div>' : '';
+    var hint = _isOrg ? '<div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no topo.</div>' : '';
+    // Barra Cancelar/Salvar — STICKY no topo (abaixo do cabeçalho fixo), aparece só
+    // quando há alteração pendente (drag de gênero/categoria).
+    var saveBar = _isOrg
+      ? '<div id="er-mx-save-bar" style="display:none;position:sticky;top:52px;z-index:6;background:var(--bg-card);padding:8px 0 10px;margin-bottom:6px;">' +
+          '<div style="display:flex;gap:10px;">' +
+            '<button type="button" onclick="window._erCancelEdits()" class="btn hover-lift" style="flex:0 0 auto;font-size:0.9rem;font-weight:800;padding:11px 20px;border-radius:10px;background:rgba(133,146,166,0.18);border:1px solid rgba(133,146,166,0.5);color:#c8cdd6;cursor:pointer;">Cancelar</button>' +
+            '<button id="er-mx-save-btn" onclick="window._erSaveEdits(\'' + _esc(String(t.id)) + '\',\'' + _esc(String(t.sport || '')) + '\')" class="btn btn-shine hover-lift" style="flex:1;font-size:0.96rem;font-weight:800;padding:11px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;cursor:pointer;">💾 Salvar alterações</button>' +
+          '</div></div>'
+      : '';
     return '<div id="er-categories-section" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px 18px;margin-bottom:14px;">' +
-      '<div style="font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;">🗂️ Categorias <span style="opacity:0.7;">· apuração pelo letzplay</span></div>' +
-      scanBtn + lastUpdateHtml + legend + hint +
-      '<div id="er-cat-matrix">' + _matrixInner(rows, t) + '</div>' + saveBar +
+      '<div style="font-size:15px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary,#c8cdd6);margin-bottom:8px;">🗂️ Categorias <span style="opacity:0.7;">· apuração pelo letzplay</span></div>' +
+      saveBar + scanBtn + lastUpdateHtml + legend + hint +
+      '<div id="er-cat-matrix">' + _matrixInner(rows, t) + '</div>' +
     '</div>';
   }
 
@@ -1708,15 +1723,16 @@
     var btn = document.getElementById(mode === 'full' ? 'lz-scan-btn-full' : 'lz-scan-btn-essential');
     var otherBtn = document.getElementById(mode === 'full' ? 'lz-scan-btn-essential' : 'lz-scan-btn-full');
     var origHtml = btn ? btn.innerHTML : '';
-    var pillBg = 'var(--info-pill-bg,rgba(99,102,241,0.15))';
+    var origBg = btn ? btn.style.background : ''; // preserva o gradiente do botão
+    var pillBg = 'rgba(99,102,241,0.20)'; // trilho de fundo do progresso
     function setBtn(txt, pct) {
       if (otherBtn) otherBtn.disabled = true;
       if (!btn) return;
       btn.disabled = true;
-      btn.style.background = (pct != null) ? ('linear-gradient(90deg, rgba(56,189,248,0.5) ' + pct + '%, ' + pillBg + ' ' + pct + '%)') : pillBg;
+      btn.style.background = (pct != null) ? ('linear-gradient(90deg, rgba(56,189,248,0.65) ' + pct + '%, ' + pillBg + ' ' + pct + '%)') : pillBg;
       btn.textContent = txt;
     }
-    function restore() { if (otherBtn) otherBtn.disabled = false; if (btn) { btn.disabled = false; btn.style.background = pillBg; btn.innerHTML = origHtml; } }
+    function restore() { if (otherBtn) otherBtn.disabled = false; if (btn) { btn.disabled = false; btn.style.background = origBg; btn.innerHTML = origHtml; } }
     function fail(msg) { restore(); if (typeof showNotification === 'function') showNotification('Não deu pra buscar', msg, 'error'); }
     setBtn('🔌 Conectando à extensão…', null);
     var started = false, done = false, versions = [], bestScans = {}, resultTimer = null;
