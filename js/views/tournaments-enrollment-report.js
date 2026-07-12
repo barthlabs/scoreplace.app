@@ -1255,7 +1255,8 @@
     // Card do atleta — tamanho padrão (min 150px), nome com ellipsis.
     function chip(r) {
       var pe = _pendingEdits[r.order] || {}; var edited = Object.keys(pe).length > 0;
-      var nameCol = edited ? '#f59e0b' : (r._lzColor || 'var(--text-bright,#fff)');
+      // não verificado = MESMO cinza da legenda "sem verificação" (_LZ_COL.white).
+      var nameCol = edited ? '#f59e0b' : (r._lzColor || _LZ_COL.white);
       var border = edited ? 'rgba(245,158,11,0.55)' : (r._lzColor ? (r._lzColor + '55') : 'var(--border-color)');
       return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')" ' +
         'style="cursor:grab;font-size:0.9rem;font-weight:600;padding:6px 10px;border-radius:7px;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + _esc(r.name || '(sem nome)') + ' — arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + '</div>';
@@ -1374,19 +1375,25 @@
     }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
     window._lzScanCtx = { tId: t.id, targets: targets };
 
-    var lastTs = 0;
-    Object.keys(scanMap).forEach(function (uid) { var s = scanMap[uid]; if (s && s.scannedAt) { var v = Date.parse(s.scannedAt) || 0; if (v > lastTs) lastTs = v; } });
+    // Última verificação + o MODO usado (essencial/completa) do scan mais recente.
+    var lastTs = 0, lastMode = null;
+    Object.keys(scanMap).forEach(function (uid) {
+      var s = scanMap[uid]; if (s && s.scannedAt) { var v = Date.parse(s.scannedAt) || 0; if (v > lastTs) { lastTs = v; lastMode = (s.scan && s.scan._mode) || 'essential'; } }
+    });
     var _ld = lastTs ? new Date(lastTs) : null;
-    var lastUpdateHtml = _ld
-      ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Última verificação: <b style="color:var(--text-bright,#fff);">' + _ld.toLocaleDateString('pt-BR') + ' ' + _ld.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '</b></div>'
-      : '';
-    // Botões no padrão do app (gradiente + hover-lift); Completa com BRILHO (btn-shine).
+    var _dateStr = _ld ? (_ld.toLocaleDateString('pt-BR') + ' ' + _ld.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })) : '';
+    function dateLine() { return _ld ? '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Última verificação: <b style="color:var(--text-bright,#fff);">' + _dateStr + '</b></div>' : ''; }
+    // Título + botões Essencial / Completa (padrão do app; Completa com BRILHO). A data
+    // da última verificação fica EMBAIXO do botão que foi efetivamente usado.
+    var essCss = 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;cursor:pointer;';
+    var fullCss = 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;cursor:pointer;';
     var scanBtn = (_isOrg && targets.length)
-      ? '<div style="display:flex;gap:8px;margin-bottom:10px;">' +
-          '<button type="button" id="lz-scan-btn-essential" onclick="window._lzOrgScan(\'essential\')" title="Busca rápida: só o nível real do ranking ativo" class="btn hover-lift" style="flex:1;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;cursor:pointer;">🔎 Verificar no letzplay — essencial (' + targets.length + ')</button>' +
-          '<button type="button" id="lz-scan-btn-full" onclick="window._lzOrgScan(\'full\')" title="Busca completa: rankings + torneios + jogos" class="btn btn-shine hover-lift" style="flex:1;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;cursor:pointer;">📚 Completa (' + targets.length + ')</button>' +
+      ? '<div style="font-size:15px;font-weight:800;color:var(--text-secondary,#c8cdd6);margin-bottom:8px;">🎾 Verificar histórico no letzplay (' + targets.length + ')</div>' +
+        '<div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-start;">' +
+          '<div style="flex:1;"><button type="button" id="lz-scan-btn-essential" onclick="window._lzOrgScan(\'essential\')" title="Busca rápida: só o nível real do ranking ativo" class="btn hover-lift" style="' + essCss + '">🔎 Essencial</button>' + (lastMode === 'essential' ? dateLine() : '') + '</div>' +
+          '<div style="flex:1;"><button type="button" id="lz-scan-btn-full" onclick="window._lzOrgScan(\'full\')" title="Busca completa: rankings + torneios + jogos" class="btn btn-shine hover-lift" style="' + fullCss + '">📚 Completa</button>' + (lastMode === 'full' ? dateLine() : '') + '</div>' +
         '</div>'
-      : '';
+      : (_ld ? '<div style="margin-bottom:10px;">' + dateLine() + '</div>' : '');
     // Legenda (todos os rótulos) — código de cor da verificação.
     function leg(c, txt) { return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:' + c + ';"><span style="width:11px;height:11px;border-radius:50%;background:' + c + ';"></span>' + txt + '</span>'; }
     var legend = '<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;">' +
@@ -1404,7 +1411,7 @@
       : '';
     return '<div id="er-categories-section" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px 18px;margin-bottom:14px;">' +
       '<div style="font-size:15px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary,#c8cdd6);margin-bottom:8px;">🗂️ Categorias <span style="opacity:0.7;">· apuração pelo letzplay</span></div>' +
-      saveBar + scanBtn + lastUpdateHtml + legend + hint +
+      saveBar + scanBtn + legend + hint +
       '<div id="er-cat-matrix">' + _matrixInner(rows, t) + '</div>' +
     '</div>';
   }
@@ -1716,6 +1723,7 @@
   // organizador fica na tela). Erros viram toast e o botão volta ao normal.
   window._lzOrgScan = function (mode) {
     mode = (mode === 'full') ? 'full' : 'essential';
+    window._lzPendingMode = mode; // registra o modo pra gravar no scan (última verificação)
     var ctx = window._lzScanCtx;
     if (!ctx || !ctx.targets || !ctx.targets.length) return;
     var btn = document.getElementById(mode === 'full' ? 'lz-scan-btn-full' : 'lz-scan-btn-essential');
@@ -1791,7 +1799,9 @@
     var nowIso = new Date().toISOString();
     // GRAVA POR PESSOA (uid), GLOBAL — reutilizável em qualquer torneio. Puxou uma
     // vez, vale pra sempre (letzplayScans/{uid}, não mais por torneio).
+    var scanMode = (window._lzPendingMode === 'full') ? 'full' : 'essential';
     var writes = ok.map(function (s) {
+      if (s.scan && typeof s.scan === 'object') s.scan._mode = scanMode; // modo dentro do scan (regra Firestore não bloqueia sub-campo)
       return db.collection('letzplayScans').doc(s.uid)
         .set({ handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid }, { merge: true });
     });
