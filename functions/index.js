@@ -807,6 +807,65 @@ exports.flushNotifEmailDigest = onSchedule(
   }
 );
 
+// ─── Digest de WhatsApp (v1.16) ──────────────────────────────────────────────
+// Notificações com política 'agrupado' no catálogo (ex.: inscrições de terceiros)
+// vão pra `whatsapp_digest_queue` (via FirestoreDB.queueWhatsAppDigest, flushAtMs =
+// now + 1h). Esta função junta TODOS os itens pendentes do mesmo telefone numa
+// ÚNICA mensagem e enfileira em `whatsapp_queue` (o processWhatsAppQueue envia).
+// Reduz volume/custo do WhatsApp oficial. Espelha flushNotifEmailDigest.
+exports.flushWhatsAppDigest = onSchedule(
+  {
+    schedule: "every 15 minutes",
+    timeZone: "America/Sao_Paulo",
+    region: "us-central1",
+  },
+  async () => {
+    const db = admin.firestore();
+    const now = Date.now();
+    const dueSnap = await db.collection("whatsapp_digest_queue").where("flushAtMs", "<=", now).get();
+    if (dueSnap.empty) {
+      console.log("[flushWhatsAppDigest] nada vencido");
+      return;
+    }
+    const duePhones = new Set();
+    dueSnap.forEach((d) => { const p = d.data().phone; if (p) duePhones.add(p); });
+
+    let sent = 0;
+    for (const phone of duePhones) {
+      // Consolida TODOS os itens pendentes desse telefone (vencidos ou não).
+      const allSnap = await db.collection("whatsapp_digest_queue").where("phone", "==", phone).get();
+      const items = [];
+      allSnap.forEach((d) => items.push(Object.assign({ _id: d.id }, d.data())));
+      if (items.length === 0) continue;
+      items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      try {
+        const lines = items.map((it) => "• " + String(it.line || "").replace(/^[🔴🟠🟢]\s*/, ""));
+        const urls = [...new Set(items.map((it) => it.tournamentUrl).filter(Boolean))];
+        let msg = "🔔 *scoreplace* — resumo da última hora:\n" + lines.join("\n");
+        if (urls.length === 1) msg += "\n\n👉 " + urls[0];
+        await db.collection("whatsapp_queue").add({
+          phones: [phone],
+          message: msg,
+          createdAt: new Date().toISOString(),
+          status: "pending",
+        });
+        // Limpa os itens consolidados.
+        let batch = db.batch();
+        let n = 0;
+        for (const it of items) {
+          batch.delete(db.collection("whatsapp_digest_queue").doc(it._id));
+          if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); }
+        }
+        if (n % 400 !== 0) await batch.commit();
+        sent++;
+      } catch (err) {
+        console.error("[flushWhatsAppDigest] falha pra", phone, err);
+      }
+    }
+    console.log("[flushWhatsAppDigest] digests:", sent, "| telefones vencidos:", duePhones.size);
+  }
+);
+
 // ─── Scheduled cleanup: old casual matches ───────────────────────────────────
 // Finished casual match docs live in the top-level `casualMatches` collection.
 // Each has `status: 'finished'` and `finishedAt` (ISO string) set the moment

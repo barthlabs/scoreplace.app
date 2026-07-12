@@ -1409,6 +1409,31 @@ window.FirestoreDB = {
     }
   },
 
+  // Digest de WhatsApp (tipos com política 'agrupado' no catálogo): acumula 1 linha
+  // por evento numa fila; a Cloud Function flushWhatsAppDigest junta tudo do mesmo
+  // telefone numa ÚNICA mensagem a cada ~1h (reduz volume/custo). Espelha queueNotifEmail.
+  async queueWhatsAppDigest(phones, line, opts) {
+    if (!this.db || !phones || !phones.length) return;
+    if (window.SCOREPLACE_ENV === 'staging') { try { window._warn && window._warn('[staging] WhatsApp suprimido (queueWhatsAppDigest)'); } catch(_e){} return; }
+    var now = Date.now();
+    var mins = 60; // janela de 1h
+    opts = opts || {};
+    try {
+      for (var i = 0; i < phones.length; i++) {
+        if (!phones[i]) continue;
+        await this.db.collection('whatsapp_digest_queue').add({
+          phone: phones[i],
+          line: line || '',
+          tournamentUrl: opts.tournamentUrl || '',
+          createdAt: now,
+          flushAtMs: now + mins * 60 * 1000
+        });
+      }
+    } catch (e) {
+      window._warn('Erro ao enfileirar WhatsApp digest:', e);
+    }
+  },
+
   // ---- Templates ----
 
   async saveTemplate(uid, templateData) {

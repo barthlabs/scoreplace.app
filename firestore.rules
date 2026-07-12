@@ -380,6 +380,12 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
+    // ─── WhatsApp digest queue (v1.16) — acumula 'agrupado', flushWhatsAppDigest junta ──
+    match /whatsapp_digest_queue/{id} {
+      allow read: if false;
+      allow write: if request.auth != null;
+    }
+
     // ─── Email verification codes (v3.0.x) — SERVER-ONLY ──────────────────────
     // sendVerificationCode/verifyEmailCode (Cloud Functions, Admin SDK) gravam e leem o
     // código de confirmação HASHEADO. O cliente NUNCA acessa — senão poderia ler o hash
