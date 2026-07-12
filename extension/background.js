@@ -118,9 +118,12 @@ function _spExtractProfileInTab(h) {
       var cat = catFrom(label) || catFrom(block);
       var active = !/\bInativo\b|\bConcluído\b|\bConcluido\b/i.test(block);
       var pos = (block.match(/(\d+)\s*º/) || [])[1];
-      rankings.push({ path: path, label: label, category: cat, active: active, position: pos ? +pos : null });
+      var field = (block.match(/(\d+)\s*Jogadores/i) || [])[1];
+      rankings.push({ path: path, label: label, category: cat, active: active,
+        position: pos ? +pos : null, fieldSize: field ? +field : null });
     });
-  // TORNEIOS estruturados.
+  // TORNEIOS estruturados — colocação/título vem no prefixo do label ("Campeão • ...",
+  // "QF • ...", "Vice • ..."). Título = campeão/vencedor (pesa na regra de subida).
   var tournaments = [], seenT = {};
   Array.prototype.slice.call(document.querySelectorAll('a[href*="/tournaments/"]'))
     .forEach(function (a) {
@@ -129,7 +132,10 @@ function _spExtractProfileInTab(h) {
       var label = (a.textContent || '').replace(/\s+/g, ' ').trim();
       var cat = catFrom(label);
       if (!cat && !/\/tournaments\/\d/.test(path)) return; // ignora CTAs genéricos
-      tournaments.push({ path: path, label: label, category: cat });
+      var pref = (label.split('•')[0] || '').trim();
+      var champion = /Campe[ãa]o|Campe[ãa]|Campe[õo]es|Vencedor|Vencedora|Título|1[º°]\s*Lugar|🏆/i.test(pref);
+      var placement = (pref && pref.length <= 24) ? pref : null; // "Campeão","Vice","SF","QF"…
+      tournaments.push({ path: path, label: label, category: cat, champion: champion, placement: placement });
     });
   return {
     handle: h, name: title || null,
@@ -166,10 +172,12 @@ function _spDeriveScan(handle, base, rk) {
   if (realRank != null) { for (var i = 0; i < realCats.length; i++) { if (strongestOf([realCats[i]]) === realRank) { rankingCategory = realCats[i]; break; } } }
   var gender = /Feminina|\bFem\b/i.test(allCats.join(' ')) ? 'feminino' : (/Masculina|\bMasc\b/i.test(allCats.join(' ')) ? 'masculino' : null);
   var skill = realRank != null ? LTR[realRank] : null;
+  // Campeonatos (título) por categoria — regra da federação: campeão sobe.
+  var champions = tournaments.filter(function (t) { return t.champion && t.category; }).map(function (t) { return t.category; });
   return {
     handle: handle, name: base.name || rk.name || null,
     rankingCategory: rankingCategory, allCategories: allCats,
-    gender: gender, skill: skill,
+    gender: gender, skill: skill, champions: champions,
     rankings: rankings, tournaments: tournaments,
     totals: base.totals || rk.totals || {},
     lastPlayed: base.lastPlayed || rk.lastPlayed || null, source: 'public-profile' };

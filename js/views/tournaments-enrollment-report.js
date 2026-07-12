@@ -1239,36 +1239,76 @@
       return '<div style="font-size:12px;font-weight:700;color:' + color + ';margin:12px 0 3px;">' + label + '</div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(' + (minw || '150px') + ',1fr));gap:0 18px;">' + itemsHtml + '</div>';
     }
-    // Anti-gato: compara a categoria DECLARADA no torneio (effectiveSkills) com o
-    // NÍVEL REAL do letzplay (categoria/rating do import OU do perfil público buscado).
-    // Se declarou mais FRACO que joga, sinaliza. Ranks: A=0 (mais forte) … D=3, FUN=4.
+    // Anti-gato pela REGRA DA FEDERAÇÃO (pode competir ACIMA, não ABAIXO; desempenho
+    // manda; campeão sobe). Só é violação quem DOMINA (título ou topo da tabela) numa
+    // categoria igual/mais fácil que a declarada → deve subir. Jogar num ranking mais
+    // forte SEM dominar (como quem sobe de nível aos poucos) é permitido → não sinaliza.
+    // Ranks: A=0 (mais forte) … D=3, FUN=4.
     var flagged = 0;
-    // O CÓDIGO DE COR já diz o status (verde=coerente, azul=rebaixar, amarelo/vermelho=subir).
-    // Sem palavras: só o nome colorido + (declarada / apurada) em letras. Ex: (C / B).
     var _LTR = ['A', 'B', 'C', 'D', 'FUN'];
-    function knownLine(name, realCat, realRank, effSkills, srcIcon) {
+    // Junta os sinais de desempenho: banda (onde está ranqueado), categorias DOMINADAS
+    // (título OU top-15% da tabela OU winPct alto), e nº de títulos.
+    function _lzEvidence(champCats, rankings, bandCats) {
+      var titleRanks = (champCats || []).map(function (c) { return _lzRankFrom([c]); }).filter(function (r) { return r != null; });
+      var domRanks = titleRanks.slice();
+      (rankings || []).forEach(function (r) {
+        var cr = _lzRankFrom([r.category || r.categoryRaw]);
+        if (cr == null) return;
+        if (r.active === false) return;
+        var topStanding = (r.position && r.fieldSize && (r.position / r.fieldSize) <= 0.15);
+        var highWin = (typeof r.winPct === 'number' && r.winPct >= 70 && (r.games == null || r.games >= 6));
+        if (topStanding || highWin) domRanks.push(cr);
+      });
+      var bandRanks = (bandCats || []).map(function (c) { return _lzRankFrom([c]); }).filter(function (r) { return r != null; });
+      return {
+        bandRank: bandRanks.length ? Math.min.apply(null, bandRanks) : null,
+        dominatedRank: domRanks.length ? Math.min.apply(null, domRanks) : null,
+        titleCount: titleRanks.length
+      };
+    }
+    // Veredito → cor + categoria apurada. gap só conta como violação quando há DOMÍNIO.
+    function _lzVerdict(declRank, ev) {
+      ev = ev || {};
+      if (declRank == null) return { color: '#8592a6', flag: false, apurada: null };
+      if (ev.dominatedRank != null) {
+        var shouldRank = Math.max(0, ev.dominatedRank - 1); // campeão da X deve ir pra X-1
+        if (shouldRank < declRank) { // deveria estar acima da declarada → deve subir
+          var strong = (declRank - shouldRank) >= 2 || (ev.titleCount || 0) >= 3;
+          return { color: strong ? '#f26a6a' : '#f0b445', flag: true, apurada: shouldRank };
+        }
+        return { color: '#2dd4a0', flag: false, apurada: Math.min(declRank, shouldRank) };
+      }
+      if (ev.bandRank != null) {
+        if (ev.bandRank < declRank) return { color: '#2dd4a0', flag: false, apurada: ev.bandRank }; // joga acima (permitido)
+        if (ev.bandRank > declRank) return { color: '#38bdf8', flag: false, apurada: ev.bandRank }; // vai mal → poderia rebaixar
+      }
+      return { color: '#2dd4a0', flag: false, apurada: (ev.bandRank != null ? ev.bandRank : declRank) };
+    }
+    // Sem palavras: nome colorido (código de cor = status) + (declarada / apurada). Ex: (C / B).
+    function knownLine(name, effSkills, ev, srcIcon) {
       var declRank = _declRankFrom(effSkills);
       var declLabel = (effSkills && effSkills.length) ? effSkills.join('/') : '—';
-      var st = _lzStatus(declRank, realRank);
-      var known = (declRank != null && realRank != null);
-      if (st.flag) flagged++;
-      var apLabel = (realRank != null) ? _LTR[realRank] : (realCat || '—');
-      var nameColor = known ? st.color : 'var(--text-main,#e5e7eb)';
-      var right = known
-        ? '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:' + st.color + ';">(' + _esc(declLabel) + ' / ' + _esc(apLabel) + ') <span style="opacity:0.5;">' + srcIcon + '</span></span>'
-        : '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:var(--text-muted,#8592a6);">' + _esc(realCat || '—') + ' <span style="opacity:0.5;">' + srcIcon + '</span></span>';
+      var v = _lzVerdict(declRank, ev);
+      var known = (declRank != null && v.apurada != null);
+      if (v.flag) flagged++;
+      var apLabel = (v.apurada != null) ? _LTR[v.apurada] : '—';
+      var nameColor = known ? v.color : 'var(--text-main,#e5e7eb)';
+      var right = '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:' + (known ? v.color : 'var(--text-muted,#8592a6)') + ';">' +
+        (known ? ('(' + _esc(declLabel) + ' / ' + _esc(apLabel) + ')') : '—') + ' <span style="opacity:0.5;">' + srcIcon + '</span></span>';
       return '<div style="padding:4px 0;font-size:0.86rem;display:flex;justify-content:space-between;gap:10px;">' +
         '<span style="color:' + nameColor + ';font-weight:600;">' + _esc(name || '—') + '</span>' + right +
       '</div>';
     }
     var impHtml = imp.map(function (o) {
-      var oc = o.li.officialCategory, band = o.li.rating && o.li.rating.band;
-      var realCat = oc ? oc.categoryRaw : (band || '—');
-      return knownLine(o.r.name, realCat, _lzRankFrom([oc ? oc.categoryRaw : '', band || '']), o.r.effectiveSkills, '🎾');
+      var li = o.li, oc = li.officialCategory, band = li.rating && li.rating.band;
+      var champCats = (li.tournaments || []).filter(function (t) { return t.title; }).map(function (t) { return t.categoryRaw; });
+      var ev = _lzEvidence(champCats, li.rankings || [], [oc ? oc.categoryRaw : '', band || '']);
+      return knownLine(o.r.name, o.r.effectiveSkills, ev, '🎾');
     }).join('');
     var scannedHtml = scanned.map(function (o) {
-      var cat = o.scan.rankingCategory || '—';
-      return knownLine(o.r.name, cat, _lzRankFrom([cat]), o.r.effectiveSkills, '🔎');
+      var s = o.scan;
+      var ev = _lzEvidence(s.champions || [], s.rankings || [], [s.rankingCategory].concat(s.allCategories || []));
+      return knownLine(o.r.name, o.r.effectiveSkills, ev, '🔎');
     }).join('');
     var restHtml = function (arr) { return arr.map(function (x) { return line(x.r ? x.r.name : x.name); }).join(''); };
 
@@ -1299,7 +1339,7 @@
 
     var flagBanner = flagged > 0
       ? '<div style="background:rgba(242,106,106,0.12);border:1px solid rgba(242,106,106,0.4);border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:0.86rem;color:#f26a6a;font-weight:600;">🚩 ' +
-          flagged + ' inscrito' + (flagged === 1 ? '' : 's') + ' declarou categoria mais fraca que o nível do letzplay — confira abaixo.</div>'
+          flagged + ' inscrito' + (flagged === 1 ? '' : 's') + ' com desempenho acima da categoria declarada (título ou topo da tabela) — deveria' + (flagged === 1 ? '' : 'm') + ' subir. Confira abaixo.</div>'
       : '';
     return '<div id="lz-history-section" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px 18px;margin-bottom:14px;">' +
       '<div style="font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">🎾 Histórico letzplay</div>' +
@@ -1326,7 +1366,7 @@
     for (var i = 0; i < Math.max(a.length, b.length); i++) { var x = a[i] || 0, y = b[i] || 0; if (x !== y) return x > y; }
     return true;
   }
-  var _LZ_MIN_EXT = '1.32';
+  var _LZ_MIN_EXT = '1.33';
 
   // Busca ativa: o PRÓPRIO botão vira barra de progresso 0–100% (sem modal, o
   // organizador fica na tela). Erros viram toast e o botão volta ao normal.
