@@ -1249,48 +1249,114 @@ function _lpAnalyticsTs(s) {
 // Gráfico "sobe e desce" do desempenho: linha de FORMA cumulativa (+1 vitória /
 // −1 derrota) em ordem cronológica, misturando scoreplace (casual+torneio) e
 // letzplay. SVG puro, responsivo, área preenchida; verde se termina positivo.
+// mmm/yy (marco temporal do eixo)
+function _spFmtMark(ts) {
+    try { var d = new Date(ts); if (isNaN(d.getTime())) return ''; return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', ''); }
+    catch (e) { return ''; }
+}
+// Constrói o gráfico de forma para uma categoria (all/r/t) e uma janela temporal
+// (sliderVal 0=tudo … 100=última semana). Retorna pedaços de HTML (svg/stats/axis/
+// winLabel). Usado no render inicial e no redraw interativo.
+window._spBuildForm = function (events, source, sliderVal) {
+    var W = 320, H = 96, pad = 6;
+    function empty(msg) { return { svg: '<div style="height:80px;display:flex;align-items:center;justify-content:center;color:var(--text-muted,#94a3b8);font-size:0.7rem;">' + msg + '</div>', stats: '—', axis: '', winLabel: 'tudo', clr: '#94a3b8' }; }
+    var filt = (events || []).filter(function (e) { return source === 'all' || e.t === source; });
+    if (!filt.length) return empty('Sem jogos nesta categoria.');
+    var minTs = filt[0].ts, maxTs = filt[filt.length - 1].ts;
+    var spanDays = Math.max(7, (maxTs - minTs) / 86400000);
+    var winDays = spanDays * Math.pow(7 / spanDays, (sliderVal || 0) / 100);
+    var cutoff = maxTs - winDays * 86400000;
+    var win = filt.filter(function (e) { return e.ts >= cutoff; });
+    if (win.length < 1) win = filt.slice(-1);
+    var n = win.length, wins = 0;
+    for (var k = 0; k < n; k++) if (win[k].win) wins++;
+    var losses = n - wins, pct = n ? Math.round(wins / n * 100) : 0, saldo = wins - losses;
+    var pts = [], cum = 0, mn = 0, mx = 0;
+    for (var i = 0; i < n; i++) { cum += win[i].win ? 1 : -1; pts.push(cum); if (cum < mn) mn = cum; if (cum > mx) mx = cum; }
+    var span = (mx - mn) || 1;
+    function X(i) { return pad + (n <= 1 ? (W - 2 * pad) / 2 : (i / (n - 1)) * (W - 2 * pad)); }
+    function Y(v) { return pad + (1 - (v - mn) / span) * (H - 2 * pad); }
+    var line = pts.map(function (v, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ');
+    var y0 = Y(0);
+    var area = 'M' + X(0).toFixed(1) + ' ' + y0.toFixed(1) + ' ' + pts.map(function (v, i) { return 'L' + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ') + ' L' + X(n - 1).toFixed(1) + ' ' + y0.toFixed(1) + ' Z';
+    var end = pts[n - 1] || 0;
+    var clr = saldo > 0 ? '#22c55e' : (saldo < 0 ? '#ef4444' : '#94a3b8');
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%;height:80px;display:block;">' +
+        '<line x1="' + pad + '" y1="' + y0.toFixed(1) + '" x2="' + (W - pad) + '" y2="' + y0.toFixed(1) + '" stroke="var(--border-color,rgba(255,255,255,0.18))" stroke-width="1" stroke-dasharray="3 3"></line>' +
+        '<path d="' + area + '" fill="' + clr + '22"></path>' +
+        '<path d="' + line + '" fill="none" stroke="' + clr + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>' +
+        '<circle cx="' + X(n - 1).toFixed(1) + '" cy="' + Y(end).toFixed(1) + '" r="3.2" fill="' + clr + '"></circle>' +
+    '</svg>';
+    // marcos temporais: datas em índices igualmente espaçados
+    var idxs = n >= 4 ? [0, Math.round((n - 1) / 3), Math.round(2 * (n - 1) / 3), n - 1] : (n === 1 ? [0] : [0, n - 1]);
+    var marks = idxs.map(function (ix) { return '<span>' + _spFmtMark(win[ix].ts) + '</span>'; });
+    var axis = '<div style="display:flex;justify-content:space-between;font-size:0.55rem;color:var(--text-muted,#94a3b8);margin-top:3px;">' + marks.join('') + '</div>';
+    var stats = n + ' jogos · <span style="color:#22c55e;">' + wins + 'V</span> <span style="color:#ef4444;">' + losses + 'D</span> · ' + pct + '% · saldo ' + (saldo > 0 ? '+' : '') + saldo;
+    var wl;
+    if (winDays >= spanDays - 0.5) wl = 'tudo';
+    else if (winDays <= 7.5) wl = 'última semana';
+    else if (winDays <= 31) wl = 'últimos ' + Math.round(winDays) + ' dias';
+    else if (winDays <= 365) wl = 'últimos ' + Math.round(winDays / 30) + ' meses';
+    else wl = 'últimos ' + (Math.round(winDays / 365 * 10) / 10) + ' anos';
+    return { svg: svg, stats: stats, axis: axis, winLabel: wl, clr: clr };
+};
+// troca a categoria (Geral/Rankings/Torneios) e redesenha
+window._spFormSetSource = function (src) {
+    var pills = document.querySelectorAll('#sp-form-pills [data-src]');
+    Array.prototype.forEach.call(pills, function (p) {
+        var a = p.getAttribute('data-src') === src;
+        p.setAttribute('data-active', a ? '1' : '0');
+        p.style.background = a ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'var(--bg-darker,#171a2b)';
+        p.style.color = a ? '#fff' : 'var(--text-main,#cbd5e1)';
+    });
+    window._spFormRedraw();
+};
+// lê categoria ativa + slider e reconstrói svg/stats/eixo/label
+window._spFormRedraw = function () {
+    var data = window._spFormData; if (!data) return;
+    var src = 'all', ap = document.querySelector('#sp-form-pills [data-active="1"]'); if (ap) src = ap.getAttribute('data-src');
+    var sl = document.getElementById('sp-form-slider'), v = sl ? +sl.value : 0;
+    var b = window._spBuildForm(data.events, src, v);
+    function set(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+    set('sp-form-svg', b.svg); set('sp-form-stats', b.stats); set('sp-form-axis', b.axis);
+    var wl = document.getElementById('sp-form-winlabel'); if (wl) wl.textContent = b.winLabel;
+};
 function _formTrendHtml(casualRecs, tournRecs, lpGames, uid) {
     var ev = [];
-    function pushRec(r) {
+    function push(r, t) {
         if (r.winnerTeam !== 1 && r.winnerTeam !== 2) return;
         var me = (r.players || []).filter(function(p){ return p.uid === uid; })[0];
         if (!me) return;
-        ev.push({ ts: (r.finishedAt ? (Date.parse(r.finishedAt) || 0) : 0), win: r.winnerTeam === me.team });
+        ev.push({ ts: (r.finishedAt ? (Date.parse(r.finishedAt) || 0) : 0), win: r.winnerTeam === me.team, t: t });
     }
-    (casualRecs || []).forEach(pushRec);
-    (tournRecs || []).forEach(pushRec);
+    (casualRecs || []).forEach(function(r){ push(r, 'r'); });   // casuais → rankings (⚡)
+    (tournRecs || []).forEach(function(r){ push(r, 't'); });    // torneios (🏆)
     (lpGames || []).forEach(function(g) {
         if (g.won !== true && g.won !== false) return;
-        ev.push({ ts: _lpAnalyticsTs(g.date) || 0, win: g.won });
+        ev.push({ ts: _lpAnalyticsTs(g.date) || 0, win: g.won, t: g.official ? 't' : 'r' });
     });
     if (ev.length < 3) return '';   // trend só faz sentido com histórico
     ev.sort(function(a, b){ return a.ts - b.ts; });
-    // série cumulativa
-    var pts = [], cum = 0, min = 0, max = 0;
-    for (var i = 0; i < ev.length; i++) { cum += ev[i].win ? 1 : -1; pts.push(cum); if (cum < min) min = cum; if (cum > max) max = cum; }
-    var W = 320, H = 96, pad = 6;
-    var n = pts.length;
-    var span = (max - min) || 1;
-    function X(i) { return pad + (n === 1 ? 0 : (i / (n - 1)) * (W - 2 * pad)); }
-    function Y(v) { return pad + (1 - (v - min) / span) * (H - 2 * pad); }
-    var line = pts.map(function(v, i){ return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ');
-    var y0 = Y(0);
-    var area = 'M' + X(0).toFixed(1) + ' ' + y0.toFixed(1) + ' ' + pts.map(function(v, i){ return 'L' + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ') + ' L' + X(n - 1).toFixed(1) + ' ' + y0.toFixed(1) + ' Z';
-    var end = pts[n - 1];
-    var clr = end > 0 ? '#22c55e' : (end < 0 ? '#ef4444' : '#94a3b8');
-    var wins = ev.filter(function(e){ return e.win; }).length;
-    return '<div style="margin-top:2px;margin-bottom:8px;padding:10px 12px;border-radius:12px;background:var(--info-box-bg);border:1px solid ' + clr + '33;">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+    window._spFormData = { events: ev };
+    var b = window._spBuildForm(ev, 'all', 0);
+    function pill(src, label, active) {
+        return '<button data-src="' + src + '" data-active="' + (active ? '1' : '0') + '" onclick="window._spFormSetSource(\'' + src + '\')" ' +
+            'style="border:1px solid var(--border-color,rgba(255,255,255,0.15));background:' + (active ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'var(--bg-darker,#171a2b)') + ';color:' + (active ? '#fff' : 'var(--text-main,#cbd5e1)') + ';border-radius:999px;padding:3px 10px;font-size:0.66rem;font-weight:700;cursor:pointer;">' + label + '</button>';
+    }
+    return '<div style="margin-top:2px;margin-bottom:8px;padding:10px 12px;border-radius:12px;background:var(--info-box-bg);border:1px solid ' + b.clr + '33;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
           '<span style="font-size:0.68rem;font-weight:800;color:var(--text-bright,#fff);text-transform:uppercase;letter-spacing:0.6px;">📈 Forma (desempenho)</span>' +
-          '<span style="font-size:0.6rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + n + ' jogos · ' + wins + 'V ' + (n - wins) + 'D</span>' +
+          '<span id="sp-form-stats" style="font-size:0.6rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + b.stats + '</span>' +
         '</div>' +
-        '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%;height:80px;display:block;">' +
-          '<line x1="' + pad + '" y1="' + y0.toFixed(1) + '" x2="' + (W - pad) + '" y2="' + y0.toFixed(1) + '" stroke="var(--border-color,rgba(255,255,255,0.18))" stroke-width="1" stroke-dasharray="3 3"></line>' +
-          '<path d="' + area + '" fill="' + clr + '22"></path>' +
-          '<path d="' + line + '" fill="none" stroke="' + clr + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>' +
-          '<circle cx="' + X(n - 1).toFixed(1) + '" cy="' + Y(end).toFixed(1) + '" r="3.2" fill="' + clr + '"></circle>' +
-        '</svg>' +
-        '<div style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--text-muted,#94a3b8);margin-top:3px;"><span>mais antigo</span><span>saldo ' + (end > 0 ? '+' : '') + end + '</span><span>mais recente</span></div>' +
+        '<div id="sp-form-pills" style="display:flex;gap:6px;margin-bottom:8px;">' + pill('all', 'Geral', true) + pill('r', 'Rankings', false) + pill('t', 'Torneios', false) + '</div>' +
+        '<div id="sp-form-svg">' + b.svg + '</div>' +
+        '<div id="sp-form-axis">' + b.axis + '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">' +
+          '<span style="font-size:0.55rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">tudo</span>' +
+          '<input type="range" id="sp-form-slider" min="0" max="100" value="0" oninput="window._spFormRedraw()" style="flex:1;accent-color:#22c55e;">' +
+          '<span style="font-size:0.55rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">semana</span>' +
+        '</div>' +
+        '<div style="text-align:center;font-size:0.55rem;color:var(--text-muted,#94a3b8);margin-top:2px;">janela: <b id="sp-form-winlabel" style="color:var(--text-bright,#fff);">' + b.winLabel + '</b></div>' +
       '</div>';
 }
 
