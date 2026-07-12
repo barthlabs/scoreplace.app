@@ -68,12 +68,23 @@
   // O nome renderizado no card do letzplay às vezes é só inicial ("AC") ou vazio →
   // prefere o @handle (identidade real). Nome "cheio" (tem espaço, ou >3 chars e não é
   // tudo maiúscula) vence. São OS JOGOS DO USUÁRIO: ele tem direito de saber quem jogou.
+  // Handle do letzplay ("AdrianoColetta", "ArnaldoMenezes1") → nome de apresentação
+  // legível ("Adriano Coletta", "Arnaldo Menezes"): tira dígitos finais, troca _/. por
+  // espaço, quebra camelCase e capitaliza cada palavra.
+  function _prettyHandle(h) {
+    h = String(h == null ? '' : h).trim();
+    if (!h) return '';
+    h = h.replace(/[_.]+/g, ' ').replace(/\d+$/, '');
+    h = h.replace(/([a-zà-ÿ0-9])([A-ZÀ-Ý])/g, '$1 $2');
+    h = h.replace(/\s+/g, ' ').trim();
+    return h.split(' ').map(function (w) { return w ? (w.charAt(0).toUpperCase() + w.slice(1)) : w; }).join(' ');
+  }
   function _bestPlayer(name, handle) {
     var n = (name || '').trim();
     var h = (handle || '').trim();
     var isInitials = !n || (n.length <= 3 && /^[A-Za-zÀ-ÿ.\-]+$/.test(n) && n === n.toUpperCase());
     if (!isInitials) return n;
-    return h || n || '';
+    return _prettyHandle(h) || n || '';
   }
   function _lpTeam(names, handles) {
     var a = names || [], b = handles || [], out = [];

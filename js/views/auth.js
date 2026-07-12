@@ -6542,6 +6542,9 @@ function setupProfileModal() {
                   checked: false
                 }) : '') +
               '</div>' +
+              '<div onclick="(window._showPlayerStats&&window.AppStore&&window.AppStore.currentUser)&&window._showPlayerStats(window.AppStore.currentUser.displayName)" style="margin-top:8px;font-size:0.72rem;color:var(--text-muted,#94a3b8);line-height:1.4;cursor:pointer;">' +
+                '💡 A sincronização do seu histórico é feita pelas suas <b style="color:var(--text-bright,#fff);">estatísticas</b> na tela inicial.' +
+              '</div>' +
             '</div>' +
             // v1.8: o card "Seu nível (letzplay)" saiu do perfil e passou pras
             // Estatísticas do jogador (📊). Aqui só ficam @ + consentimento (config).

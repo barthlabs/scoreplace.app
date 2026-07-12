@@ -697,7 +697,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
 
     var modal = document.createElement('div');
-    modal.style.cssText = 'background:var(--bg-card,#1e2235);color:var(--text-main,#d1d5db);border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:20px;padding:1.5rem;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);position:relative;';
+    modal.style.cssText = 'background:var(--bg-card,#1e2235);color:var(--text-main,#d1d5db);border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:20px;padding:1.5rem;max-width:960px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);position:relative;';
 
     // Build tournament list HTML
     var tourListHtml = stats.tournamentNames.map(function(tn) {
@@ -736,8 +736,13 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     // fase à parte (precisa do doc deles) — por ora só a própria conta.
     var _lpCu = window.AppStore && window.AppStore.currentUser;
     var _lpIsCurUser = _lpCu && _lpCu.displayName && String(_lpCu.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
+    // Nível GERAL: mistura scoreplace (torneios oficiais + V/D) no card do letzplay.
+    var _spExtra = _lpIsCurUser ? {
+      tournaments: (stats.tournamentNames || []).map(function(tn) { return { name: tn.name, sport: tn.sport, year: null }; }),
+      wins: stats.totalWins || 0, losses: stats.totalLosses || 0
+    } : null;
     var _lpInner = (_lpIsCurUser && _lpCu.letzplayImport && typeof window._renderLetzplayCard === 'function')
-      ? window._renderLetzplayCard(_lpCu.letzplayImport) : '';
+      ? window._renderLetzplayCard(_lpCu.letzplayImport, _spExtra) : '';
     // Botões (só na própria conta): Histórico unificado + Importar do letzplay.
     // "Importar" chama _spStartImport → se a extensão está instalada, importa direto;
     // senão abre o tutorial guiado (#importar-letzplay).
@@ -745,9 +750,18 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     var _lpImportEntry = (typeof window._spImportEntry === 'function')
       ? window._spImportEntry({ label: (_lpHasGames ? 'Atualizar do letzplay' : 'Importar do letzplay'), variant: 'outline' })
       : '';
+    // Data/hora da última importação, logo abaixo do botão Atualizar.
+    var _lpUpdatedAt = '';
+    if (_lpHasGames && _lpCu.letzplayImport && _lpCu.letzplayImport.importedAt) {
+      var _lpD = new Date(_lpCu.letzplayImport.importedAt);
+      if (!isNaN(_lpD.getTime())) {
+        _lpUpdatedAt = '<div style="text-align:center;font-size:0.68rem;color:var(--text-muted,#94a3b8);margin-top:6px;">Última atualização: ' +
+          _lpD.toLocaleDateString('pt-BR') + ' ' + _lpD.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '</div>';
+      }
+    }
     var _lpHistBtn = _lpIsCurUser
       ? ('<button onclick="window.location.hash=\'#historico\'" style="width:100%;margin-top:12px;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color,rgba(255,255,255,0.12));border-radius:12px;padding:11px 14px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;">📜 Histórico de jogos <span style="opacity:0.6;font-weight:500;font-size:0.75rem;">LetzPlay + Scoreplace</span></button>' +
-         '<div style="margin-top:8px;">' + _lpImportEntry + '</div>')
+         '<div style="margin-top:8px;">' + _lpImportEntry + '</div>' + _lpUpdatedAt)
       : '';
     var _lpCardHtml = '<div id="letzplay-card-stats-slot" style="margin-top:12px;">' + _lpInner + '</div>' + _lpHistBtn;
 
@@ -1159,6 +1173,87 @@ window._buildActivityLog = function(tournamentId) {
     '</div>';
 };
 
+// v1.15.19: os jogos importados do letzplay entram nas estatísticas de barras
+// (do que dá pra extrair: V/D, games ganhos/perdidos, sets). Só quando a conta
+// vista é a do próprio usuário logado (o import só existe pra própria conta).
+function _letzplayGamesForUid(uid) {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !uid || cu.uid !== uid) return [];
+    var imp = cu.letzplayImport;
+    return (imp && Array.isArray(imp.games)) ? imp.games : [];
+}
+// Dobra os jogos do letzplay nos agregados: oficial→torneio (t/🏆), ranking→casual
+// (c/⚡). myScore/oppScore no beach tennis são GAMES; 1 set por jogo (set único).
+// Métricas que o letzplay não tem (saque, recepção, quebras, tiebreaks, tempos,
+// sequências ponto-a-ponto) ficam só com o scoreplace.
+function _foldLetzplayIntoAggs(games, c, t) {
+    (games || []).forEach(function(g) {
+        if (g.won !== true && g.won !== false) return;   // sem resultado definido
+        var agg = g.official ? t : c;
+        agg.matches++;
+        if (g.won) agg.wins++; else agg.losses++;
+        if (typeof g.myScore === 'number') agg.gamesWon += g.myScore;
+        if (typeof g.oppScore === 'number') agg.gamesLost += g.oppScore;
+        agg.setsWon += g.won ? 1 : 0;
+        agg.setsLost += g.won ? 0 : 1;
+    });
+}
+// dd/mm/yy(yy) ou ISO → timestamp (ms); null se não parsear.
+function _lpAnalyticsTs(s) {
+    if (!s) return null;
+    var n = Date.parse(s); if (!isNaN(n)) return n;
+    var m = String(s).match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (m) { var y = +m[3]; if (y < 100) y += 2000; var d = new Date(y, (+m[2]) - 1, +m[1]).getTime(); if (!isNaN(d)) return d; }
+    return null;
+}
+// Gráfico "sobe e desce" do desempenho: linha de FORMA cumulativa (+1 vitória /
+// −1 derrota) em ordem cronológica, misturando scoreplace (casual+torneio) e
+// letzplay. SVG puro, responsivo, área preenchida; verde se termina positivo.
+function _formTrendHtml(casualRecs, tournRecs, lpGames, uid) {
+    var ev = [];
+    function pushRec(r) {
+        if (r.winnerTeam !== 1 && r.winnerTeam !== 2) return;
+        var me = (r.players || []).filter(function(p){ return p.uid === uid; })[0];
+        if (!me) return;
+        ev.push({ ts: (r.finishedAt ? (Date.parse(r.finishedAt) || 0) : 0), win: r.winnerTeam === me.team });
+    }
+    (casualRecs || []).forEach(pushRec);
+    (tournRecs || []).forEach(pushRec);
+    (lpGames || []).forEach(function(g) {
+        if (g.won !== true && g.won !== false) return;
+        ev.push({ ts: _lpAnalyticsTs(g.date) || 0, win: g.won });
+    });
+    if (ev.length < 3) return '';   // trend só faz sentido com histórico
+    ev.sort(function(a, b){ return a.ts - b.ts; });
+    // série cumulativa
+    var pts = [], cum = 0, min = 0, max = 0;
+    for (var i = 0; i < ev.length; i++) { cum += ev[i].win ? 1 : -1; pts.push(cum); if (cum < min) min = cum; if (cum > max) max = cum; }
+    var W = 320, H = 96, pad = 6;
+    var n = pts.length;
+    var span = (max - min) || 1;
+    function X(i) { return pad + (n === 1 ? 0 : (i / (n - 1)) * (W - 2 * pad)); }
+    function Y(v) { return pad + (1 - (v - min) / span) * (H - 2 * pad); }
+    var line = pts.map(function(v, i){ return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ');
+    var y0 = Y(0);
+    var area = 'M' + X(0).toFixed(1) + ' ' + y0.toFixed(1) + ' ' + pts.map(function(v, i){ return 'L' + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ') + ' L' + X(n - 1).toFixed(1) + ' ' + y0.toFixed(1) + ' Z';
+    var end = pts[n - 1];
+    var clr = end > 0 ? '#22c55e' : (end < 0 ? '#ef4444' : '#94a3b8');
+    var wins = ev.filter(function(e){ return e.win; }).length;
+    return '<div style="margin-top:2px;margin-bottom:8px;padding:10px 12px;border-radius:12px;background:var(--info-box-bg);border:1px solid ' + clr + '33;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+          '<span style="font-size:0.68rem;font-weight:800;color:var(--text-bright,#fff);text-transform:uppercase;letter-spacing:0.6px;">📈 Forma (desempenho)</span>' +
+          '<span style="font-size:0.6rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + n + ' jogos · ' + wins + 'V ' + (n - wins) + 'D</span>' +
+        '</div>' +
+        '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%;height:80px;display:block;">' +
+          '<line x1="' + pad + '" y1="' + y0.toFixed(1) + '" x2="' + (W - pad) + '" y2="' + y0.toFixed(1) + '" stroke="var(--border-color,rgba(255,255,255,0.18))" stroke-width="1" stroke-dasharray="3 3"></line>' +
+          '<path d="' + area + '" fill="' + clr + '22"></path>' +
+          '<path d="' + line + '" fill="none" stroke="' + clr + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>' +
+          '<circle cx="' + X(n - 1).toFixed(1) + '" cy="' + Y(end).toFixed(1) + '" r="3.2" fill="' + clr + '"></circle>' +
+        '</svg>' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--text-muted,#94a3b8);margin-top:3px;"><span>mais antigo</span><span>saldo ' + (end > 0 ? '+' : '') + end + '</span><span>mais recente</span></div>' +
+      '</div>';
+}
+
 // Renders the persistent matchHistory block for a given uid's records.
 // Splits casual vs tournament, aggregates serve/receive/killer/breaks/streaks,
 // and produces head-to-head + partnership tables. Records are written per-player
@@ -1512,6 +1607,9 @@ window._renderPersistentMatchStats = function(records, uid) {
     function _unifiedStatsHtml(casualRecs, tournRecs, casualRel, tournRel) {
         var c = _aggregate(casualRecs || []);
         var t = _aggregate(tournRecs || []);
+        // v1.15.19: dobra os jogos do letzplay nos agregados (oficial→🏆, ranking→⚡).
+        var _lpGames = _letzplayGamesForUid(uid);
+        if (_lpGames.length) _foldLetzplayIntoAggs(_lpGames, c, t);
         var totalMatches = c.matches + t.matches;
         var badge = totalMatches + ' partida' + (totalMatches === 1 ? '' : 's') +
             ' · ⚡ ' + c.matches + ' · 🏆 ' + t.matches;
@@ -1554,6 +1652,9 @@ window._renderPersistentMatchStats = function(records, uid) {
 
         var html = _sectionShell('persist-stats-unified', 'Desempenho', '📊', '#a855f7', badge);
 
+        // Gráfico "sobe e desce" da forma (scoreplace + letzplay, cronológico).
+        html += _formTrendHtml(casualRecs, tournRecs, _lpGames, uid);
+
         // Diverging bar rows — row 1 has no center metric (wins/losses IS the metric),
         // rows 2+ show metric in center with "perdidos"/"vencidos" at the sides.
         // TB breakdown rows follow the Tiebreaks row so all tie-break metrics stay grouped.
@@ -1571,7 +1672,10 @@ window._renderPersistentMatchStats = function(records, uid) {
                     tbLostMinCraw, tbLostMinTraw, tbLostMaxCraw, tbLostMaxTraw,
                     { leftClr: '#ef4444', rightClr: '#ef4444', noPct: true });
         }
-        html += '<div style="display:flex;flex-direction:column;gap:2px;margin-top:2px;">' +
+        // v1.15.19: as duas áreas (verm/verde e azul) lado a lado quando a largura
+        // permite (grid auto-fit); empilham no estreito.
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px 18px;margin-top:2px;align-items:start;">';
+        html += '<div style="display:flex;flex-direction:column;gap:2px;">' +
             _diffBarRow('', 'Derrotas', 'Vitórias', c.losses, t.losses, c.wins, t.wins) +
             _diffBarRow('Sets', 'perdidos', 'vencidos', c.setsLost, t.setsLost, c.setsWon, t.setsWon) +
             _diffBarRow('Games', 'perdidos', 'vencidos', c.gamesLost, t.gamesLost, c.gamesWon, t.gamesWon) +
@@ -1581,7 +1685,7 @@ window._renderPersistentMatchStats = function(records, uid) {
         '</div>';
 
         // Supplementary stats — casuais left (light blue), torneios right (dark blue)
-        html += '<div style="margin-top:10px;display:flex;flex-direction:column;gap:2px;">' +
+        html += '<div style="display:flex;flex-direction:column;gap:2px;">' +
             _dualBarRow('Aproveitamento', apC.raw, apT.raw, apC.display, apT.display) +
             _dualBarRow('% Saque', svC.raw, svT.raw, svC.display, svT.display) +
             _dualBarRow('% Recepção', rcC.raw, rcT.raw, rcC.display, rcT.display) +
@@ -1594,6 +1698,7 @@ window._renderPersistentMatchStats = function(records, uid) {
             _dualBarRow('Ponto Mais Longo', longPtCms, longPtTms, longPtCdisp, longPtTdisp) +
             _dualBarRow('Ponto Mais Curto', shortPtCms, shortPtTms, shortPtCdisp, shortPtTdisp) +
         '</div>';
+        html += '</div>';   // fecha o grid lado-a-lado
 
         // Top 5 Parceiros / Adversários — keep per-source separation (casual vs torneios
         // involve different relationships) but render inside the unified section.

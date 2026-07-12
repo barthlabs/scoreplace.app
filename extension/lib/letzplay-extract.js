@@ -123,9 +123,47 @@
     return teams;
   }
 
+  // normaliza p/ casar nome↔handle: sem acento, minúsculo, só alfanumérico.
+  function _normName(s) {
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  /** VERIFICADO AO VIVO (jul/2026): o link do jogador no card é só o avatar (sem texto).
+   * O NOME DE APRESENTAÇÃO real vive num <span class="match-players-double|single">
+   * ("Gersom Otsu João Scassa"), na ordem dos avatares. Casa cada handle ao seu nome:
+   * consome palavras enquanto a concatenação normalizada é prefixo do handle; o último
+   * handle do time leva as palavras restantes. Ex.: [FabioSimaoB, msmano] +
+   * "Fábio Simão Max Mano" → {FabioSimaoB:"Fábio Simão", msmano:"Max Mano"}. */
+  function namesByHandleFromCard(card) {
+    var map = {};
+    var rows = Array.prototype.slice.call(card.querySelectorAll('.row.match-player'));
+    rows.forEach(function (row) {
+      var handles = Array.prototype.slice.call(row.querySelectorAll('.match-player-info a[href^="/"]'))
+        .map(function (a) { return handleFromHref(a.getAttribute('href')); }).filter(Boolean);
+      var span = row.querySelector('.match-players-double, .match-players-single');
+      var namesText = span ? (span.textContent || '').replace(/\s+/g, ' ').trim() : '';
+      var words = namesText ? namesText.split(' ').filter(Boolean) : [];
+      var wi = 0;
+      handles.forEach(function (h, hi) {
+        var isLast = hi === handles.length - 1;
+        if (isLast) { if (wi < words.length) { map[h] = words.slice(wi).join(' '); wi = words.length; } return; }
+        var target = _normName(h).replace(/\d+$/, ''), acc = '', used = [];
+        while (wi < words.length) {
+          var cand = acc + _normName(words[wi]);
+          if (target.indexOf(cand) === 0) { acc = cand; used.push(words[wi]); wi++; if (acc === target) break; }
+          else break;
+        }
+        if (!used.length && wi < words.length) { used.push(words[wi]); wi++; } // não deixa faminto
+        if (used.length) map[h] = used.join(' ');
+      });
+    });
+    return map;
+  }
+
   /** Extrai os jogos da página de histórico. Cada jogo é um `.row.match`.
-   * VERIFICADO AO VIVO: 14 jogos reais de @RodrigoBarth extraídos corretamente
-   * (parceiro / adversários / placar / vitória). */
+   * VERIFICADO AO VIVO: jogos reais de @RodrigoBarth extraídos corretamente
+   * (parceiro / adversários / NOME de apresentação / placar / vitória). */
   function extractMatchesFromDoc(doc, meHandle) {
     doc = doc || (typeof document !== 'undefined' ? document : null);
     if (!doc) return [];
@@ -147,7 +185,15 @@
         official: !!tournLink,
         teams: extractTeamsFromBody(body)
       }, meHandle);
-      if (m) out.push(m);
+      if (m) {
+        // Resolve NOME de apresentação real (o card só traz avatar+handle no link).
+        var nameByHandle = namesByHandleFromCard(card);
+        if (m.partnerHandle && nameByHandle[m.partnerHandle]) m.partnerName = nameByHandle[m.partnerHandle];
+        m.oppNames = (m.oppHandles || []).map(function (h, i) {
+          return nameByHandle[h] || (m.oppNames && m.oppNames[i]) || '';
+        });
+        out.push(m);
+      }
     });
     return out;
   }
@@ -158,6 +204,7 @@
     parseRankingRef: parseRankingRef,
     matchFromCard: matchFromCard,
     extractTeamsFromBody: extractTeamsFromBody,
+    namesByHandleFromCard: namesByHandleFromCard,
     extractMatchesFromDoc: extractMatchesFromDoc
   };
 })();

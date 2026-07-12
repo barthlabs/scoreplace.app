@@ -26,9 +26,15 @@
       (x ? '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:1px;">' + esc(x) + '</div>' : '') + '</div>';
   }
 
-  /** Retorna o HTML do card, ou '' se não há import. */
-  root._renderLetzplayCard = function (imp) {
+  /** Retorna o HTML do card "Seu nível (geral)", ou '' se não há import.
+   * spExtra (opcional) mistura o scoreplace: { tournaments:[{name,sport,year}],
+   * wins, losses } — torneios do scoreplace entram na coluna OFICIAL e as V/D
+   * somam no Total. */
+  root._renderLetzplayCard = function (imp, spExtra) {
     if (!imp || typeof imp !== 'object') return '';
+    spExtra = spExtra || {};
+    var spT = Array.isArray(spExtra.tournaments) ? spExtra.tournaments : [];
+    var spW = spExtra.wins || 0, spL = spExtra.losses || 0;
     var off = imp.officialCategory || null;
     var r = imp.rating || {};
     var st = imp.stats || {};
@@ -44,13 +50,17 @@
       ? '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(off.categoryRaw) + '</span>'
       : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
 
-    var footOff = (imp.footprint || []).filter(function (f) { return f.official; });
-    var footRec = (imp.footprint || []).filter(function (f) { return !f.official; });
+    // OFICIAL = torneios do letzplay (🎾) + torneios do scoreplace (🏆). RECREATIVO = rankings do letzplay.
+    var footOff = (imp.footprint || []).filter(function (f) { return f.official; })
+      .map(function (f) { return { label: f.categoryRaw, year: f.year, pos: f.position, src: '🎾' }; });
+    spT.forEach(function (s) { footOff.push({ label: s.name, year: s.year, pos: null, src: '🏆' }); });
+    var footRec = (imp.footprint || []).filter(function (f) { return !f.official; })
+      .map(function (f) { return { label: f.categoryRaw, year: f.year, pos: f.position, src: '🎾' }; });
     function footList(arr) {
       return arr.map(function (f) {
         var yr = f.year ? (' · ' + f.year) : '';
-        var pos = (f.position != null) ? (' · ' + f.position + 'º') : '';
-        return '<div style="font-size:12px;color:var(--text-muted,#8b93a3);padding:3px 0;">• ' + esc(f.categoryRaw) + yr + pos + '</div>';
+        var pos = (f.pos != null) ? (' · ' + f.pos + 'º') : '';
+        return '<div style="font-size:12px;color:var(--text-muted,#8b93a3);padding:3px 0;">' + (f.src || '•') + ' ' + esc(f.label) + yr + pos + '</div>';
       }).join('') || '<div style="font-size:12px;color:var(--text-muted,#8b93a3);">—</div>';
     }
 
@@ -63,11 +73,16 @@
 
     var totW = (st.wins != null) ? st.wins : (imp.profile && imp.profile.totals ? imp.profile.totals.wins : '');
     var totL = (st.losses != null) ? st.losses : (imp.profile && imp.profile.totals ? imp.profile.totals.losses : '');
+    // soma scoreplace (V/D) ao total do letzplay
+    var totWn = (typeof totW === 'number') ? totW : (parseInt(totW, 10) || 0);
+    var totLn = (typeof totL === 'number') ? totL : (parseInt(totL, 10) || 0);
+    var totalWL = (totWn + spW) + '–' + (totLn + spL);
     var streak = st.currentStreak ? (st.currentStreak.count + (st.currentStreak.type === 'W' ? 'V' : 'D')) : '—';
 
     return '' +
       '<div style="background:var(--bg-card,#141a24);border:1px solid var(--border-color,#28313f);border-radius:14px;padding:15px 16px;margin:12px 0;">' +
-        '<div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text-muted,#8b93a3);margin-bottom:11px;">🎾 Seu nível (letzplay · @' + esc(imp.handle) + ')</div>' +
+        '<div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text-muted,#8b93a3);margin-bottom:3px;">🎾 Seu nível (geral)</div>' +
+        '<div style="font-size:10.5px;color:var(--text-muted,#8b93a3);margin-bottom:11px;">letzplay @' + esc(imp.handle) + ' + scoreplace</div>' +
 
         // Oficial vs forma
         '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;margin-bottom:4px;">' +
@@ -90,9 +105,9 @@
 
         // tiles
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:14px;">' +
-          tile('Total', totW + '–' + totL, imp.profile && imp.profile.memberSince ? ('desde ' + imp.profile.memberSince) : '') +
+          tile('Total', totalWL, 'letzplay + scoreplace') +
           tile('Sequência', streak, 'atual') +
-          tile('Oficiais', (st.official && st.official.games != null) ? st.official.games : footOff.length, 'torneios') +
+          tile('Oficiais', footOff.length, 'torneios') +
         '</div>' +
 
         // footprint
