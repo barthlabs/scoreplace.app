@@ -90,11 +90,59 @@ function fetchViaLetzplayTab(url, cb) {
   });
 }
 
+// EXTRATOR do PERFIL PÚBLICO — roda no DOM RENDERIZADO da aba do letzplay (o perfil
+// é SPA: categoria/torneios vêm por JS e NÃO estão no HTML cru do fetch). Self-contained.
+function _spExtractProfileInTab(h) {
+  var bt = (document.body && document.body.textContent || '').replace(/\s+/g, ' ');
+  var num = function (re) { var m = bt.match(re); return m ? +m[1] : null; };
+  var title = (document.title || '').replace(/\s*[-|]\s*Letzplay.*$/i, '').trim();
+  var CAT_RE = /(Masculina|Feminina|Mista|Masc|Fem)\s*-?\s*([A-D][+\-]?(?:\s*\/\s*[A-D][+\-]?)?)/;
+  var catFrom = function (tx) { var m = String(tx || '').match(CAT_RE); return m ? (m[1] + ' ' + m[2]).replace(/\s+/g, ' ').trim() : null; };
+  var links = Array.prototype.slice.call(document.querySelectorAll('a[href*="/rankings/"], a[href*="/tournaments/"]'))
+    .map(function (a) { return (a.textContent || '').replace(/\s+/g, ' ').trim(); });
+  var cats = []; links.forEach(function (tx) { var c = catFrom(tx); if (c && cats.indexOf(c) < 0) cats.push(c); });
+  return { handle: h, name: title || null, rankingCategory: cats[0] || null, allCategories: cats,
+    totals: { matches: num(/(\d+)\s*Jogos/), rankings: num(/(\d+)\s*Rankings/), tournaments: num(/(\d+)\s*Torneios/) },
+    lastPlayed: (bt.match(/Jogou h[áa]\s*(\d+\s*\w+)/) || [])[1] || null, source: 'public-profile' };
+}
+// Navega a aba do letzplay pro perfil, espera o JS renderizar e extrai do DOM.
+// Faz até 5 tentativas (o JS pode demorar a carregar torneios/rankings).
+function scanProfileViaTab(handle, cb) {
+  if (!chrome.scripting || !chrome.tabs) { cb({ ok: false, error: 'no-scripting' }); return; }
+  ensureLetzplayTab(function (tabId) {
+    if (!tabId) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
+    var url = 'https://letzplay.me/' + encodeURIComponent(handle);
+    chrome.tabs.update(tabId, { url: url }, function () {
+      if (chrome.runtime.lastError) { cb({ ok: false, error: 'nav-fail' }); return; }
+      var navDone = false;
+      function onUpd(tid, info) { if (tid === tabId && info.status === 'complete' && !navDone) { navDone = true; chrome.tabs.onUpdated.removeListener(onUpd); attempt(0); } }
+      chrome.tabs.onUpdated.addListener(onUpd);
+      setTimeout(function () { if (!navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} attempt(0); } }, 12000);
+      function attempt(n) {
+        setTimeout(function () {
+          chrome.scripting.executeScript({ target: { tabId: tabId }, func: _spExtractProfileInTab, args: [handle] })
+            .then(function (res) {
+              var scan = (res && res[0] && res[0].result) || null;
+              if (scan && scan.rankingCategory) { cb({ ok: true, scan: scan }); return; } // achou categoria
+              if (n < 4) { attempt(n + 1); return; }  // ainda não renderizou → tenta de novo
+              cb({ ok: true, scan: scan });            // desiste: devolve o que tem (pode ser sem categoria)
+            })
+            .catch(function (e) { if (n < 4) attempt(n + 1); else cb({ ok: false, error: String(e && e.message || e) }); });
+        }, n === 0 ? 1600 : 1300);
+      }
+    });
+  });
+}
+
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg && msg.type === 'lp-fetch' && typeof msg.url === 'string' &&
       msg.url.indexOf('https://letzplay.me/') === 0) {
     fetchViaLetzplayTab(msg.url, sendResponse);
     return true; // resposta assíncrona
+  }
+  if (msg && msg.type === 'lp-scan-profile' && typeof msg.handle === 'string') {
+    scanProfileViaTab(msg.handle, sendResponse);
+    return true; // assíncrona
   }
   if (msg && msg.type === 'lp-close-scan-tab') { closeAutoScanTab(); sendResponse({ ok: true }); return true; }
 });

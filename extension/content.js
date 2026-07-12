@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.29';
+  var EXT_VERSION = '1.30';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -61,9 +61,16 @@
   // PERFIL PÚBLICO de cada um (letzplay.me/{handle}), parseamos categoria/totais e
   // devolvemos pro app gravar em tournaments/{tId}/letzplayScans. Público → não expõe
   // dado privado; passa o Cloudflare pela sessão do navegador do organizador.
+  // Busca o perfil via aba RENDERIZADA (o perfil letzplay é SPA — categoria vem por JS).
+  function scanProfile(handle) {
+    return new Promise(function (resolve) {
+      chrome.runtime.sendMessage({ type: 'lp-scan-profile', handle: handle }, function (r) {
+        if (chrome.runtime.lastError) { resolve({ ok: false, error: chrome.runtime.lastError.message }); return; }
+        resolve(r || { ok: false, error: 'no-resp' });
+      });
+    });
+  }
   async function runOrgScan(targets, tournamentId) {
-    var X = window._spExtract;
-    if (!X || !X.parsePublicProfile) { post({ __sp_lp: 'org-scan-result', tournamentId: tournamentId, ok: false, error: 'libs' }); return; }
     targets = Array.isArray(targets) ? targets : [];
     var scans = [];
     for (var i = 0; i < targets.length; i++) {
@@ -71,12 +78,8 @@
       if (!tg.handle) continue;
       // avisa QUEM está sendo carregado agora (nome + @) antes de buscar
       post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: i, total: targets.length, current: { uid: tg.uid || null, name: tg.name || null, handle: tg.handle } });
-      try {
-        var doc = await bgFetchDoc('https://letzplay.me/' + encodeURIComponent(tg.handle));
-        scans.push({ uid: tg.uid || null, handle: tg.handle, name: tg.name || null, scan: X.parsePublicProfile(doc, tg.handle) });
-      } catch (e) {
-        scans.push({ uid: tg.uid || null, handle: tg.handle, name: tg.name || null, scan: null, error: (e && e.message) || 'fetch' });
-      }
+      var r = await scanProfile(tg.handle);
+      scans.push({ uid: tg.uid || null, handle: tg.handle, name: tg.name || null, scan: (r && r.ok) ? r.scan : null, error: r && r.error });
       post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: scans.length, total: targets.length, current: { uid: tg.uid || null, name: tg.name || null, handle: tg.handle } });
     }
     // fecha a aba do letzplay que a extensão abriu (se abriu)
