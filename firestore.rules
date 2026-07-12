@@ -247,6 +247,18 @@ service cloud.firestore {
       }
     }
 
+    // ─── Scan público letzplay POR PESSOA (uid), global e reutilizável ─────────
+    // letzplayScans/{uid} — o organizador busca o PERFIL PÚBLICO letzplay do inscrito
+    // (categoria/nível/totais) via extensão e grava aqui, keyed por uid. Puxou uma vez,
+    // vale pra TODOS os torneios (não precisa re-puxar). Dado é público no letzplay.
+    // Leitura: qualquer authed. Escrita: qualquer authed (organizador) — dado público.
+    match /letzplayScans/{scanUid} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasOnly(['handle', 'scan', 'scannedAt', 'scannedBy']);
+      allow delete: if request.auth != null;
+    }
+
     // ─── User profiles ───────────────────────────────────────────────────────
     // Diff that only touches the friend-relationship arrays. Used to let a
     // caller modify another user's friends / friendRequestsReceived /

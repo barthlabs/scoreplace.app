@@ -1202,7 +1202,7 @@
 
   function _renderLetzplaySection(rows, t, profileMap, scanMap) {
     profileMap = profileMap || {}; scanMap = scanMap || {};
-    window._lzRenderCtx = { t: t, rows: rows, profileMap: profileMap };   // p/ re-render in-place pós-busca
+    window._lzRenderCtx = { t: t, rows: rows, profileMap: profileMap, scanMap: scanMap };   // p/ re-render in-place pós-busca
     var imp = [], scanned = [], wait = [], denied = [], noh = [];
     (rows || []).forEach(function (r) {
       var prof = (r.uid && profileMap[r.uid]) ? profileMap[r.uid] : null;
@@ -1342,7 +1342,7 @@
     function restore() { if (btn) { btn.disabled = false; btn.style.background = pillBg; btn.innerHTML = origHtml; } }
     function fail(msg) { restore(); if (typeof showNotification === 'function') showNotification('Não deu pra buscar', msg, 'error'); }
     setBtn('🔌 Conectando à extensão…', null);
-    var started = false, done = false, versions = [];
+    var started = false, done = false, versions = [], bestScans = {}, resultTimer = null;
     function onMsg(e) {
       if (e.source !== window) return; var d = e.data; if (!d) return;
       // Junta as versões anunciadas (pode haver content scripts órfãos) — usa a MAIOR.
@@ -1354,10 +1354,23 @@
         return;
       }
       if (d.__sp_lp === 'org-scan-result' && d.tournamentId === ctx.tId) {
-        done = true; window.removeEventListener('message', onMsg);
-        if (!d.ok) { fail('Erro: ' + (d.error || 'desconhecido') + '.'); return; }
-        setBtn('💾 Salvando…', 100);
-        _saveScansAndReload(ctx.tId, d.scans || [], fail);
+        if (!d.ok) return;   // uma extensão falhou; aguarda outra (caso duplicadas)
+        // Merge preferindo o scan COM categoria — cobre extensões duplicadas (uma
+        // velha devolve null, uma nova devolve a categoria).
+        (d.scans || []).forEach(function (s) {
+          if (!s.uid) return;
+          var cur = bestScans[s.uid];
+          var sCat = !!(s.scan && s.scan.rankingCategory);
+          var cCat = !!(cur && cur.scan && cur.scan.rankingCategory);
+          if (!cur || (sCat && !cCat)) bestScans[s.uid] = s;
+        });
+        // debounce: espera ~2s por resultados de outras extensões, depois salva o melhor
+        if (resultTimer) clearTimeout(resultTimer);
+        resultTimer = setTimeout(function () {
+          done = true; window.removeEventListener('message', onMsg);
+          setBtn('💾 Salvando…', 100);
+          _saveScansAndReload(ctx.tId, Object.keys(bestScans).map(function (u) { return bestScans[u]; }), fail);
+        }, 2000);
       }
     }
     window.addEventListener('message', onMsg);
@@ -1384,24 +1397,27 @@
     }
     var db = firebase.firestore();
     var meUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
+    var nowIso = new Date().toISOString();
+    // GRAVA POR PESSOA (uid), GLOBAL — reutilizável em qualquer torneio. Puxou uma
+    // vez, vale pra sempre (letzplayScans/{uid}, não mais por torneio).
     var writes = ok.map(function (s) {
-      return db.collection('tournaments').doc(tId).collection('letzplayScans').doc(s.uid)
-        .set({ handle: s.handle, scan: s.scan, scannedAt: new Date().toISOString(), scannedBy: meUid }, { merge: true });
+      return db.collection('letzplayScans').doc(s.uid)
+        .set({ handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid }, { merge: true });
     });
     Promise.all(writes).then(function () {
-      // re-render SÓ a seção letzplay in-place (o botão vive nela → é substituído).
-      _fetchScans(tId).then(function (newScanMap) {
-        var rctx = window._lzRenderCtx, el = document.getElementById('lz-history-section');
-        if (rctx && el && rctx.t && rctx.t.id === tId) {
-          var tmp = document.createElement('div');
-          tmp.innerHTML = _renderLetzplaySection(rctx.rows, rctx.t, rctx.profileMap, newScanMap);
-          var newEl = tmp.firstElementChild;
-          if (newEl) el.replaceWith(newEl);
-        } else if (window.location.hash === '#analise/' + tId) {
-          var c = document.getElementById('view-container'); if (c) window.renderEnrollmentReportPage(c, tId);
-        }
-        if (typeof showNotification === 'function') showNotification('Busca concluída', ok.length + ' carregado(s)' + (failed.length ? (' · ' + failed.length + ' falhou') : ''), 'success');
-      });
+      // re-render SÓ a seção letzplay in-place, mesclando os scans novos no scanMap atual.
+      var rctx = window._lzRenderCtx, el = document.getElementById('lz-history-section');
+      if (rctx && el && rctx.t && rctx.t.id === tId) {
+        var merged = Object.assign({}, rctx.scanMap || {});
+        ok.forEach(function (s) { merged[s.uid] = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid }; });
+        var tmp = document.createElement('div');
+        tmp.innerHTML = _renderLetzplaySection(rctx.rows, rctx.t, rctx.profileMap, merged);
+        var newEl = tmp.firstElementChild;
+        if (newEl) el.replaceWith(newEl);
+      } else if (window.location.hash === '#analise/' + tId) {
+        var c = document.getElementById('view-container'); if (c) window.renderEnrollmentReportPage(c, tId);
+      }
+      if (typeof showNotification === 'function') showNotification('Busca concluída', ok.length + ' carregado(s)' + (failed.length ? (' · ' + failed.length + ' falhou') : ''), 'success');
     }).catch(function (e) {
       if (typeof onFail === 'function') onFail('Erro ao salvar: ' + String((e && e.message) || e));
     });
@@ -1487,19 +1503,23 @@
 
     _renderLoading(container, t);
 
-    // v1.3.24-beta: passa parts inteiro pro _fetchProfiles — agora ele
-    // tenta rescue por email/displayName quando participantObj não tem uid.
-    // v1.15.24: carrega também os scans do organizador (busca ativa letzplay).
-    Promise.all([_fetchProfiles(parts), _fetchScans(tId)]).then(function (res) {
-      var fetchResult = res[0], scanMap = res[1] || {};
-      // Re-checa se ainda na rota — user pode ter navegado fora durante o fetch
+    // v1.3.24-beta: _fetchProfiles tenta rescue por email/displayName sem uid.
+    // v1.15.35: os scans letzplay são GLOBAIS por uid (letzplayScans/{uid}) — precisamos
+    // dos perfis primeiro pra saber quem autorizou-sem-import, e só então buscar os scans.
+    _fetchProfiles(parts).then(function (fetchResult) {
       if (window.location.hash !== '#analise/' + tId) return;
-      var rows = _buildRows(t, parts, fetchResult);
       var byUid = fetchResult.byUid || {};
-      var resolved = fetchResult.resolvedFor || {};
-      window._log('[EnrollmentReport v1.3.24] profiles fetched:', Object.keys(byUid).length,
-        'rescued:', Object.keys(resolved).length, 'scans:', Object.keys(scanMap).length);
-      _renderPage(container, t, rows, byUid, parts, resolved, scanMap);
+      // candidatos = inscritos com @ + consentimento, sem import próprio.
+      var candUids = parts.filter(function (p) {
+        var prof = p.uid && byUid[p.uid];
+        return prof && prof.letzplayHandle && prof.letzplayConsent === true && !prof.letzplayImport;
+      }).map(function (p) { return p.uid; });
+      _fetchGlobalScans(candUids).then(function (scanMap) {
+        if (window.location.hash !== '#analise/' + tId) return;
+        var rows = _buildRows(t, parts, fetchResult);
+        window._log('[EnrollmentReport] profiles:', Object.keys(byUid).length, 'scans:', Object.keys(scanMap).length);
+        _renderPage(container, t, rows, byUid, parts, fetchResult.resolvedFor || {}, scanMap);
+      });
     }).catch(function (err) {
       window._error('[EnrollmentReport] erro:', err);
       if (window.location.hash !== '#analise/' + tId) return;
@@ -1508,13 +1528,19 @@
     });
   };
 
-  // Scans do organizador (busca ativa): tournaments/{tId}/letzplayScans/{uid}.
-  function _fetchScans(tId) {
+  // Scans letzplay GLOBAIS por uid (letzplayScans/{uid}) — reutilizáveis entre torneios.
+  // Busca só os uids relevantes (autorizaram-sem-import) → poucos reads.
+  function _fetchGlobalScans(uids) {
     try {
       var db = firebase.firestore();
-      return db.collection('tournaments').doc(tId).collection('letzplayScans').get()
-        .then(function (snap) { var m = {}; snap.forEach(function (doc) { m[doc.id] = doc.data(); }); return m; })
-        .catch(function () { return {}; });
+      var uniq = {}; (uids || []).forEach(function (u) { if (u) uniq[u] = 1; });
+      var list = Object.keys(uniq);
+      if (!list.length) return Promise.resolve({});
+      return Promise.all(list.map(function (u) {
+        return db.collection('letzplayScans').doc(u).get()
+          .then(function (d) { return d.exists ? { uid: u, data: d.data() } : null; })
+          .catch(function () { return null; });
+      })).then(function (arr) { var m = {}; arr.forEach(function (x) { if (x) m[x.uid] = x.data; }); return m; });
     } catch (e) { return Promise.resolve({}); }
   }
 
