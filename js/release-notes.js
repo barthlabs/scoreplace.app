@@ -8,6 +8,15 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #38bdf8;border-radius:12px;padding:14px 16px;background:rgba(56,189,248,0.08);">' +
+      '<div style="font-weight:800; color:#7dd3fc; font-size:1rem; margin-bottom:8px;">🏷️ v1.15 — Histórico letzplay + Estatísticas repaginadas + anti-gato pro organizador <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎾 Traga seu histórico do letzplay:</b> uma extensão do Chrome (desktop) importa seus jogos do letzplay pro scoreplace, na sua sessão logada. Eles entram no seu <b>Histórico de jogos</b> unificado (letzplay + scoreplace), com nomes de apresentação reais dos parceiros e adversários.</li>' +
+        '<li><b>📊 Estatísticas repaginadas:</b> novo <b>gráfico de Forma</b> (sobe e desce) com slider de janela temporal (tudo ↔ última semana), marcos de data e filtro Geral / Rankings / Torneios. As <b>barras</b> e os <b>Top parceiros/adversários</b> agora somam letzplay + scoreplace, lado a lado, aproveitando a largura da tela. E o card <b>"Seu nível (geral)"</b> mistura as duas fontes.</li>' +
+        '<li><b>🎚️ Rigor da inscrição:</b> ao criar/editar um torneio você define, no topo das Categorias, o quão exigente é a inscrição — de <b>Casual</b> (não liga pro histórico) a <b>Oficial</b> (exige perfil/histórico compatível com as categorias).</li>' +
+        '<li><b>🚩 Anti-gato pro organizador:</b> na <b>Análise de Inscritos</b>, a seção Histórico letzplay mostra o nível de cada inscrito e <b>sinaliza quem declarou categoria mais fraca que o nível real</b>. Um botão no topo busca o perfil público de quem autorizou.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.102-beta — inscrições por fase + fim do "aguardando início" fantasma <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
