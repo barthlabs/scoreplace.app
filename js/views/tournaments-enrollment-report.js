@@ -1191,37 +1191,54 @@
       var key = (sk && groups.indexOf(sk) !== -1) ? sk : '__none__';
       (g === 'feminino' ? fem : g === 'masculino' ? masc : semG)[key].push(r);
     });
+    function sumBox(b) { return groups.reduce(function (a, g) { return a + b[g].length; }, 0); }
+    var femTotal = sumBox(fem), mascTotal = sumBox(masc), semTotal = sumBox(semG), total = (rows || []).length;
+
     function chip(r) {
       var pe = _pendingEdits[r.order] || {}; var edited = Object.keys(pe).length > 0;
       // nome PINTADO pela verificação letzplay (r._lzColor); editado = âmbar.
       var nameCol = edited ? '#f59e0b' : (r._lzColor || 'var(--text-bright,#fff)');
       var border = edited ? 'rgba(245,158,11,0.55)' : (r._lzColor ? (r._lzColor + '55') : 'var(--border-color)');
-      var srcIcon = r._lzSrc ? (' <span style="opacity:0.45;font-size:0.7rem;">' + r._lzSrc + '</span>') : '';
+      var srcIcon = r._lzSrc ? (' <span style="opacity:0.45;font-size:0.8rem;">' + r._lzSrc + '</span>') : '';
       return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')" ' +
-        'style="cursor:grab;font-size:0.8rem;font-weight:600;padding:3px 8px;margin:2px 0;border-radius:6px;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + srcIcon + '</div>';
+        'style="cursor:grab;font-size:0.95rem;font-weight:600;padding:5px 10px;margin:3px 0;border-radius:7px;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + srcIcon + '</div>';
     }
-    function catZone(genderKey, sk, arr, wide) {
-      var label = (sk === '__none__') ? 'Sem habilidade' : sk;
-      var chipsWrap = wide
-        ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 10px;">' + arr.map(chip).join('') + '</div>'
-        : arr.map(chip).join('');
+    // Célula-alvo (gênero × habilidade). min-height garante alinhamento entre colunas.
+    function cell(genderKey, sk, arr, tint) {
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
-        'style="border:1px dashed var(--border-color);border-radius:8px;padding:5px 7px;margin:5px 0;min-height:26px;">' +
-        '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:2px;">' + label + ' (' + arr.length + ')</div>' +
-        chipsWrap + '</div>';
+        'style="border:1px dashed ' + tint + ';border-radius:8px;padding:5px 8px;min-height:36px;">' + arr.map(chip).join('') + '</div>';
     }
-    function box(title, color, genderKey, data, wide) {
-      var inner = groups.map(function (g) { return catZone(genderKey, g, data[g], wide); }).join('');
-      return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'\')" ' +
-        'style="' + (wide ? '' : 'flex:1 1 220px;min-width:200px;') + 'background:var(--bg-darker,rgba(0,0,0,0.15));border:1px solid ' + color + ';border-radius:10px;padding:8px 10px;">' +
-        '<div style="font-size:13px;font-weight:800;color:' + color + ';margin-bottom:6px;">' + title + '</div>' + inner + '</div>';
+    var femTint = 'rgba(236,72,153,0.30)', mascTint = 'rgba(59,130,246,0.30)';
+    function ghead(icon, gKey, name, color, tot) {
+      return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + gKey + '\',\'\')" ' +
+        'style="font-size:17px;font-weight:800;color:' + color + ';border-bottom:2px solid ' + color + ';padding-bottom:5px;">' +
+        icon + ' ' + name + ' <span style="opacity:0.8;font-size:15px;">(' + tot + ')</span></div>';
     }
-    var semCount = groups.reduce(function (a, g) { return a + semG[g].length; }, 0);
-    return '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;">' +
-      box('♀ Feminino', '#ec4899', 'feminino', fem) +
-      box('♂ Masculino', '#3b82f6', 'masculino', masc) +
-      '</div>' +
-      (semCount ? '<div style="margin-top:10px;">' + box('? Sem gênero — arraste ↑ pra Feminino ou Masculino', '#8592a6', null, semG, true) + '</div>' : '');
+    // GRID: 3 colunas (habilidade | Feminino | Masculino). Cada habilidade é uma LINHA,
+    // então D fem e D masc ficam alinhados na mesma linha.
+    var gridRows = '<div></div>' +
+      ghead('♀', 'feminino', 'Feminino', '#ec4899', femTotal) +
+      ghead('♂', 'masculino', 'Masculino', '#3b82f6', mascTotal);
+    groups.forEach(function (sk) {
+      var label = (sk === '__none__') ? 'Sem hab.' : sk;
+      gridRows += '<div style="display:flex;align-items:flex-start;padding-top:10px;font-size:15px;font-weight:800;color:var(--text-muted);">' + label + '</div>' +
+        cell('feminino', sk, fem[sk], femTint) + cell('masculino', sk, masc[sk], mascTint);
+    });
+    var grid = '<div style="display:grid;grid-template-columns:minmax(48px,auto) 1fr 1fr;gap:8px 14px;align-items:start;">' + gridRows + '</div>';
+    var totalBar = '<div style="font-size:16px;font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;">Total de inscritos: ' + total + '</div>';
+    // Sem gênero: FAIXA embaixo (largura total), categorias em grid horizontal.
+    var semSection = '';
+    if (semTotal) {
+      var semInner = groups.map(function (sk) {
+        var label = (sk === '__none__') ? 'Sem habilidade' : sk;
+        return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'\',\'' + sk + '\')" style="border:1px dashed var(--border-color);border-radius:8px;padding:5px 8px;margin:5px 0;min-height:32px;">' +
+          '<div style="font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:3px;">' + label + ' (' + semG[sk].length + ')</div>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:0 12px;">' + semG[sk].map(chip).join('') + '</div></div>';
+      }).join('');
+      semSection = '<div style="margin-top:16px;background:var(--bg-darker,rgba(0,0,0,0.15));border:1px solid #8592a6;border-radius:10px;padding:10px 12px;">' +
+        '<div style="font-size:17px;font-weight:800;color:#8592a6;margin-bottom:6px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste ↑ pra Feminino ou Masculino</div>' + semInner + '</div>';
+    }
+    return totalBar + grid + semSection;
   }
   window._erRenderMatrix = function () {
     var el = document.getElementById('er-cat-matrix');
@@ -1271,8 +1288,8 @@
         '</div>'
       : '';
     // Legenda (todos os rótulos) — código de cor da verificação.
-    function leg(c, txt) { return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted);"><span style="width:9px;height:9px;border-radius:50%;background:' + c + ';"></span>' + txt + '</span>'; }
-    var legend = '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;">' +
+    function leg(c, txt) { return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:' + c + ';"><span style="width:10px;height:10px;border-radius:50%;background:' + c + ';"></span>' + txt + '</span>'; }
+    var legend = '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px;">' +
       leg(_LZ_COL.red, 'deve subir') + leg(_LZ_COL.yellow, 'pode subir') + leg(_LZ_COL.blue, 'rebaixar') + leg(_LZ_COL.green, 'coerente') + leg(_LZ_COL.white, 'sem verificação') +
       '</div>';
     var hint = _isOrg ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no fim.</div>' : '';
