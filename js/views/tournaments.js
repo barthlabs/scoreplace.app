@@ -2350,7 +2350,7 @@ function renderTournaments(container, tournamentId = null) {
         // v2.6.106: Análise CONTINUA visível pro organizador depois do sorteio/início
         // (analisa o perfil dos inscritos — útil a qualquer momento). Antes (v2.1.45)
         // sumia após o sorteio; o organizador pediu de volta.
-        const enrollmentReportBtn = isOrg ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); window._openEnrollmentReport('${t.id}')">📊 Análise</button>` : '';
+        const enrollmentReportBtn = isOrg ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); window._openEnrollmentReport('${t.id}')">🔍 Análise</button>` : '';
 
         const isSuicoFormat = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
         const isLigaFormat = window._isLigaFormat(t);
@@ -2949,7 +2949,7 @@ function renderTournaments(container, tournamentId = null) {
                 ${isOrg ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window._saveAsTemplate('${t.id}')">💾 ${window._t ? window._t('btn.saveTemplate') : 'Salvar como Template'}</button>` : ''}
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
-                ${isOrg ? `<button class="btn btn-tool-indigo hover-lift" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
+                ${isOrg ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
                 ${/* v4.1.24: "📅 Combinar jogos" REMOVIDO das Ferramentas do Organizador — NÃO é
                       ferramenta de organizador. Combinar horário é ação de PARTICIPANTE (mesmo que
                       ele seja o organizador), feita a partir do próprio JOGO no chaveamento
