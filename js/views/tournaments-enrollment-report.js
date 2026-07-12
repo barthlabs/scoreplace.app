@@ -1266,7 +1266,7 @@
     function catBox(genderKey, sk, arr, color, tint) {
       var label = (sk === '__none__') ? 'Sem habilidade' : sk;
       var btn = (sk !== '__none__' && skillTotal(sk) >= MIN_CAT)
-        ? createBtn('window._erToggleSkill(\'' + tIdEsc + '\',\'' + sk + '\')', createdSkills.indexOf(sk) !== -1)
+        ? createBtn('window._erToggleSkill(\'' + tIdEsc + '\',\'' + sk + '\',this)', createdSkills.indexOf(sk) !== -1)
         : '';
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
         'style="border:1.5px solid ' + tint + ';border-radius:10px;padding:8px 10px;background:var(--bg-darker,rgba(0,0,0,0.15));">' +
@@ -1275,7 +1275,7 @@
     }
     // Cabeçalho do gênero (drop = só gênero) + botão criar categoria por gênero.
     function ghead(icon, gKey, name, color, tot) {
-      var btn = (tot >= MIN_CAT) ? createBtn('window._erToggleGender(\'' + tIdEsc + '\')', genderOn) : '';
+      var btn = (tot >= MIN_CAT) ? createBtn('window._erToggleGender(\'' + tIdEsc + '\',this)', genderOn) : '';
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + gKey + '\',\'\')" ' +
         'style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:17px;font-weight:800;color:' + color + ';border-bottom:2px solid ' + color + ';padding-bottom:6px;">' +
         '<span>' + icon + ' ' + name + ' <span style="opacity:0.8;font-size:15px;">(' + tot + ')</span></span>' + btn + '</div>';
@@ -1324,22 +1324,41 @@
     if (!skills.length) return genders.slice();
     var out = []; genders.forEach(function (g) { skills.forEach(function (s) { out.push(g + ' ' + s); }); }); return out;
   }
+  // Feedback imediato no botão clicado (cinza "Criando…"/"Revertendo…") sem re-render.
+  function _erSetBtnBusy(btn, reverting) {
+    if (!btn) return;
+    btn.disabled = true;
+    btn.className = 'btn btn-outline btn-sm';
+    btn.textContent = reverting ? '⏳ Revertendo…' : '⏳ Criando…';
+  }
   function _erCommitCats(t) {
     t.combinedCategories = _erComputeCombined(t.genderCategories, t.skillCategories);
-    try { if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t); } catch (e) {}
-    window._erRenderMatrix();
+    // Suprime o re-render da página inteira que o snapshot do Firestore dispararia
+    // (era o "carregando" que pulava a tela). Re-render só a matriz, in-place.
+    window._suppressSoftRefresh = true;
+    var done = function () {
+      window._erRenderMatrix();
+      setTimeout(function () { window._suppressSoftRefresh = false; }, 1200);
+    };
+    try {
+      var p = (window.FirestoreDB && window.FirestoreDB.saveTournament) ? window.FirestoreDB.saveTournament(t) : null;
+      if (p && typeof p.then === 'function') p.then(done, done); else setTimeout(done, 300);
+    } catch (e) { done(); }
   }
-  window._erToggleGender = function (tId) {
+  window._erToggleGender = function (tId, btn) {
     if (!_liveState || !_liveState.isOrg) return;
     var t = _erFindT(tId); if (!t) return;
-    t.genderCategories = ((t.genderCategories || []).length > 0) ? [] : ['Fem', 'Masc'];
+    var reverting = (t.genderCategories || []).length > 0;
+    _erSetBtnBusy(btn, reverting);
+    t.genderCategories = reverting ? [] : ['Fem', 'Masc'];
     _erCommitCats(t);
   };
-  window._erToggleSkill = function (tId, sk) {
+  window._erToggleSkill = function (tId, sk, btn) {
     if (!_liveState || !_liveState.isOrg) return;
     var t = _erFindT(tId); if (!t) return;
     var sc = (t.skillCategories || []).slice();
     var i = sc.indexOf(sk);
+    _erSetBtnBusy(btn, i >= 0);
     if (i >= 0) sc.splice(i, 1); else sc.push(sk);
     sc.sort(function (a, b) { return _DEFAULT_SKILLS.indexOf(a) - _DEFAULT_SKILLS.indexOf(b); });
     t.skillCategories = sc;
