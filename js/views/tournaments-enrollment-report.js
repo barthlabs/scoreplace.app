@@ -1266,50 +1266,57 @@
         titleCount: titleRanks.length
       };
     }
-    // Veredito → cor + categoria apurada. gap só conta como violação quando há DOMÍNIO.
+    // Veredito → 5 níveis (código de cor É o status; sem palavras no item):
+    //   ⚪ branco  = sem info      🟢 verde = coerente
+    //   🔵 azul   = sug. rebaixar 🟡 amarelo = pode subir  🔴 vermelho = deve subir
+    var _LZ_COL = { white: '#8592a6', green: '#2dd4a0', blue: '#38bdf8', yellow: '#f0b445', red: '#f26a6a' };
     function _lzVerdict(declRank, ev) {
       ev = ev || {};
-      if (declRank == null) return { color: '#8592a6', flag: false, apurada: null };
+      if (declRank == null) return { key: 'white', apurada: null };
+      // DOMÍNIO (título/topo) numa categoria <= declarada → deve/pode subir.
       if (ev.dominatedRank != null) {
-        var shouldRank = Math.max(0, ev.dominatedRank - 1); // campeão da X deve ir pra X-1
-        if (shouldRank < declRank) { // deveria estar acima da declarada → deve subir
+        var shouldRank = Math.max(0, ev.dominatedRank - 1); // campeão da X vai pra X-1
+        if (shouldRank < declRank) {
           var strong = (declRank - shouldRank) >= 2 || (ev.titleCount || 0) >= 3;
-          return { color: strong ? '#f26a6a' : '#f0b445', flag: true, apurada: shouldRank };
+          return { key: strong ? 'red' : 'yellow', apurada: shouldRank }; // deve / pode subir
         }
-        return { color: '#2dd4a0', flag: false, apurada: Math.min(declRank, shouldRank) };
       }
-      if (ev.bandRank != null) {
-        if (ev.bandRank < declRank) return { color: '#2dd4a0', flag: false, apurada: ev.bandRank }; // joga acima (permitido)
-        if (ev.bandRank > declRank) return { color: '#38bdf8', flag: false, apurada: ev.bandRank }; // vai mal → poderia rebaixar
-      }
-      return { color: '#2dd4a0', flag: false, apurada: (ev.bandRank != null ? ev.bandRank : declRank) };
+      // Sem domínio: ranqueado ACIMA da declarada = pode subir; ABAIXO = sug. rebaixar.
+      if (ev.bandRank != null && ev.bandRank < declRank) return { key: 'yellow', apurada: ev.bandRank };
+      if (ev.bandRank != null && ev.bandRank > declRank) return { key: 'blue', apurada: ev.bandRank };
+      return { key: 'green', apurada: (ev.bandRank != null ? ev.bandRank : declRank) };
     }
-    // Sem palavras: nome colorido (código de cor = status) + (declarada / apurada). Ex: (C / B).
-    function knownLine(name, effSkills, ev, srcIcon) {
+    // Linha de uma pessoa COM dado → { key, html }. Nome colorido pelo status + (declarada / apurada).
+    function personLine(name, effSkills, ev, srcIcon) {
       var declRank = _declRankFrom(effSkills);
       var declLabel = (effSkills && effSkills.length) ? effSkills.join('/') : '—';
       var v = _lzVerdict(declRank, ev);
       var known = (declRank != null && v.apurada != null);
-      if (v.flag) flagged++;
+      var color = known ? _LZ_COL[v.key] : _LZ_COL.white;
       var apLabel = (v.apurada != null) ? _LTR[v.apurada] : '—';
-      var nameColor = known ? v.color : 'var(--text-main,#e5e7eb)';
-      var right = '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:' + (known ? v.color : 'var(--text-muted,#8592a6)') + ';">' +
+      var right = '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:' + color + ';">' +
         (known ? ('(' + _esc(declLabel) + ' / ' + _esc(apLabel) + ')') : '—') + ' <span style="opacity:0.5;">' + srcIcon + '</span></span>';
-      return '<div style="padding:4px 0;font-size:0.86rem;display:flex;justify-content:space-between;gap:10px;">' +
-        '<span style="color:' + nameColor + ';font-weight:600;">' + _esc(name || '—') + '</span>' + right +
+      var html = '<div style="padding:4px 0;font-size:0.86rem;display:flex;justify-content:space-between;gap:10px;">' +
+        '<span style="color:' + color + ';font-weight:600;">' + _esc(name || '—') + '</span>' + right +
       '</div>';
+      return { key: known ? v.key : 'white', html: html };
     }
-    var impHtml = imp.map(function (o) {
+    // Classifica TODOS com dado (import 🎾 ou scan 🔎) por STATUS (não por fonte).
+    var buckets = { red: [], yellow: [], blue: [], green: [], white: [] };
+    imp.forEach(function (o) {
       var li = o.li, oc = li.officialCategory, band = li.rating && li.rating.band;
       var champCats = (li.tournaments || []).filter(function (t) { return t.title; }).map(function (t) { return t.categoryRaw; });
       var ev = _lzEvidence(champCats, li.rankings || [], [oc ? oc.categoryRaw : '', band || '']);
-      return knownLine(o.r.name, o.r.effectiveSkills, ev, '🎾');
-    }).join('');
-    var scannedHtml = scanned.map(function (o) {
+      var pl = personLine(o.r.name, o.r.effectiveSkills, ev, '🎾');
+      buckets[pl.key].push(pl.html);
+    });
+    scanned.forEach(function (o) {
       var s = o.scan;
       var ev = _lzEvidence(s.champions || [], s.rankings || [], [s.rankingCategory].concat(s.allCategories || []));
-      return knownLine(o.r.name, o.r.effectiveSkills, ev, '🔎');
-    }).join('');
+      var pl = personLine(o.r.name, o.r.effectiveSkills, ev, '🔎');
+      buckets[pl.key].push(pl.html);
+    });
+    flagged = buckets.red.length; // 🚩 = só "deve subir" (obrigatório)
     var restHtml = function (arr) { return arr.map(function (x) { return line(x.r ? x.r.name : x.name); }).join(''); };
 
     // Alvos da busca ativa = TODOS que autorizaram (@ + consentimento) e ainda não
@@ -1339,24 +1346,35 @@
 
     var flagBanner = flagged > 0
       ? '<div style="background:rgba(242,106,106,0.12);border:1px solid rgba(242,106,106,0.4);border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:0.86rem;color:#f26a6a;font-weight:600;">🚩 ' +
-          flagged + ' inscrito' + (flagged === 1 ? '' : 's') + ' com desempenho acima da categoria declarada (título ou topo da tabela) — deveria' + (flagged === 1 ? '' : 'm') + ' subir. Confira abaixo.</div>'
+          flagged + ' inscrito' + (flagged === 1 ? '' : 's') + ' com título/domínio na categoria — deve' + (flagged === 1 ? '' : 'm') + ' subir. Confira abaixo.</div>'
       : '';
     return '<div id="lz-history-section" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px 18px;margin-bottom:14px;">' +
       '<div style="font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">🎾 Histórico letzplay</div>' +
       scanBtn +
       lastUpdateHtml +
+      // Pills = contagem por STATUS (só as 5 cores do anti-gato). Só mostra > 0.
       '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">' +
-        pill(C.green, imp.length, 'com histórico') + (scanned.length ? pill(C.blue, scanned.length, 'buscado') : '') +
-        pill(C.amber, wait.length, 'aguardando') +
-        pill(C.red, denied.length, 'não autorizou') + pill(C.grey, noh.length, 'sem @') +
+        (buckets.red.length ? pill(C.red, buckets.red.length, 'deve subir') : '') +
+        (buckets.yellow.length ? pill(C.amber, buckets.yellow.length, 'pode subir') : '') +
+        (buckets.blue.length ? pill(C.blue, buckets.blue.length, 'rebaixar') : '') +
+        (buckets.green.length ? pill(C.green, buckets.green.length, 'coerente') : '') +
+        (buckets.white.length ? pill(C.grey, buckets.white.length, 'sem info') : '') +
       '</div>' +
       flagBanner +
-      group('#2dd4a0', '🟢 Com histórico (categoria oficial)', impHtml, '270px') +
-      group('#38bdf8', '🔵 Buscado no letzplay (público)', scannedHtml, '270px') +
-      group('#f0b445', '🟡 Autorizou, aguardando busca', restHtml(wait), '170px') +
-      group('#f26a6a', '🔴 Não autorizou', restHtml(denied), '160px') +
-      group('#8592a6', '⚪ Sem @ letzplay', restHtml(noh), '160px') +
-      '<div style="font-size:12px;color:var(--text-muted);margin-top:11px;border-top:1px solid var(--border-color);padding-top:9px;line-height:1.5;">A busca ativa lê o <b>perfil público</b> do letzplay (nome, categoria/nível) — precisa da <b>extensão do scoreplace no Chrome (desktop)</b>. 🎾 = histórico importado · 🔎 = perfil público buscado.</div>' +
+      // Grupos por STATUS — cabeçalho na COR do status (código de cor consistente).
+      group(C.red.fg, '🔴 Deve subir (título / domínio)', buckets.red.join(''), '250px') +
+      group(C.amber.fg, '🟡 Pode subir (ranqueado acima)', buckets.yellow.join(''), '250px') +
+      group(C.blue.fg, '🔵 Sugestão de rebaixamento', buckets.blue.join(''), '250px') +
+      group(C.green.fg, '🟢 Coerente', buckets.green.join(''), '250px') +
+      group(C.grey.fg, '⚪ Sem informação (com @, sem comparação)', buckets.white.join(''), '250px') +
+      // Sem histórico ainda — NEUTRO (cinza), não usa as cores de status. É processo, não veredito.
+      (wait.length + denied.length + noh.length > 0
+        ? '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:14px 0 3px;border-top:1px solid var(--border-color);padding-top:10px;">Sem histórico ainda</div>' +
+          (wait.length ? '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:4px;">🔎 ' + wait.length + ' autorizou — falta buscar</div>' + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 16px;">' + restHtml(wait) + '</div>' : '') +
+          (denied.length ? '<div style="font-size:0.82rem;color:var(--text-muted);margin:6px 0 4px;">🚫 ' + denied.length + ' não autorizou a busca</div>' + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 16px;">' + restHtml(denied) + '</div>' : '') +
+          (noh.length ? '<div style="font-size:0.82rem;color:var(--text-muted);margin-top:6px;">👤 ' + noh.length + ' sem @ letzplay</div>' : '')
+        : '') +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:11px;border-top:1px solid var(--border-color);padding-top:9px;line-height:1.5;">Cor = nível apurado vs. declarado. 🎾 histórico importado · 🔎 perfil público buscado. A busca lê o <b>perfil público</b> do letzplay e precisa da <b>extensão no Chrome (desktop)</b>.</div>' +
       '</div>';
   }
 
