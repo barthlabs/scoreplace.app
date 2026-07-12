@@ -1916,13 +1916,20 @@
       return;
     }
 
-    _renderLoading(container, t);
+    // Loading = tela RICA (window._showLoading: bola + barra) SÓ na primeira carga.
+    // No re-render (a seção já existe) não mostra loader nenhum — troca silenciosa.
+    var _firstLoad = !(container && container.querySelector && container.querySelector('#er-categories-section'));
+    function _doneLoading() { if (typeof window._hideLoading === 'function') window._hideLoading(); }
+    if (_firstLoad) {
+      if (typeof window._showLoading === 'function') window._showLoading('Carregando análise dos inscritos…');
+      else _renderLoading(container, t);
+    }
 
     // v1.3.24-beta: _fetchProfiles tenta rescue por email/displayName sem uid.
     // v1.15.35: os scans letzplay são GLOBAIS por uid (letzplayScans/{uid}) — precisamos
     // dos perfis primeiro pra saber quem autorizou-sem-import, e só então buscar os scans.
     _fetchProfiles(parts).then(function (fetchResult) {
-      if (window.location.hash !== '#analise/' + tId) return;
+      if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }
       var byUid = fetchResult.byUid || {};
       // candidatos = inscritos com @ + consentimento, sem import próprio.
       var candUids = parts.filter(function (p) {
@@ -1930,13 +1937,15 @@
         return prof && prof.letzplayHandle && prof.letzplayConsent === true && !prof.letzplayImport;
       }).map(function (p) { return p.uid; });
       _fetchGlobalScans(candUids).then(function (scanMap) {
-        if (window.location.hash !== '#analise/' + tId) return;
+        if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }
         var rows = _buildRows(t, parts, fetchResult);
         window._log('[EnrollmentReport] profiles:', Object.keys(byUid).length, 'scans:', Object.keys(scanMap).length);
         _renderPage(container, t, rows, byUid, parts, fetchResult.resolvedFor || {}, scanMap);
+        _doneLoading();
       });
     }).catch(function (err) {
       window._error('[EnrollmentReport] erro:', err);
+      _doneLoading();
       if (window.location.hash !== '#analise/' + tId) return;
       var rows = _buildRows(t, parts, { byUid: {}, resolvedFor: {} });
       _renderPage(container, t, rows, {}, parts, {}, {});
