@@ -9,7 +9,16 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #38bdf8;border-radius:12px;padding:14px 16px;background:rgba(56,189,248,0.08);">' +
-      '<div style="font-weight:800; color:#7dd3fc; font-size:1rem; margin-bottom:8px;">🏷️ v1.15 — Histórico letzplay + Estatísticas repaginadas + anti-gato pro organizador <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#7dd3fc; font-size:1rem; margin-bottom:8px;">🏷️ v1.16 — Análise de Inscritos repaginada: apuração pelo letzplay + criação de categorias <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Julho, 2026 · ferramentas do organizador)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🗂️ Uma seção só — "Categorias · apuração pelo letzplay":</b> matriz <b>Gênero × Categoria</b> com os inscritos agrupados por habilidade, cada nome <b>pintado pela verificação</b> do letzplay (🟢 coerente · 🟡 pode subir · 🔴 deve subir · 🔵 rebaixar · ⚪ sem verificação).</li>' +
+        '<li><b>🔎 Verificar histórico no letzplay:</b> a busca do organizador puxa o <b>perfil inteiro</b> (rankings com a banda real + torneios + jogos), em modo <b>Essencial</b> (rápido) ou <b>Completa</b>. Grava por pessoa e alimenta gênero/habilidade do perfil.</li>' +
+        '<li><b>⚖️ Anti-gato pela regra da federação:</b> só quem <b>domina</b> (título ou topo da tabela) numa categoria igual/mais fácil sobe. Estar ranqueado numa banda acima sem dominar é permitido — competir acima pode, abaixo não.</li>' +
+        '<li><b>➕ Criar categorias direto da matriz:</b> botões formalizam categorias por <b>gênero</b> e por <b>habilidade</b>, com o box "Categorias no torneio" mostrando a contagem. Arraste os inscritos entre categorias pra estudar a divisão.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v1.15 — Histórico letzplay + Estatísticas repaginadas + anti-gato pro organizador <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🎾 Traga seu histórico do letzplay:</b> uma extensão do Chrome (desktop) importa seus jogos do letzplay pro scoreplace, na sua sessão logada. Eles entram no seu <b>Histórico de jogos</b> unificado (letzplay + scoreplace), com nomes de apresentação reais dos parceiros e adversários.</li>' +
         '<li><b>📊 Estatísticas repaginadas:</b> novo <b>gráfico de Forma</b> (sobe e desce) com slider de janela temporal (tudo ↔ última semana), marcos de data e filtro Geral / Rankings / Torneios. As <b>barras</b> e os <b>Top parceiros/adversários</b> agora somam letzplay + scoreplace, lado a lado, aproveitando a largura da tela. E o card <b>"Seu nível (geral)"</b> mistura as duas fontes.</li>' +
