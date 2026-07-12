@@ -1249,10 +1249,13 @@ function _lpAnalyticsTs(s) {
 // Gráfico "sobe e desce" do desempenho: linha de FORMA cumulativa (+1 vitória /
 // −1 derrota) em ordem cronológica, misturando scoreplace (casual+torneio) e
 // letzplay. SVG puro, responsivo, área preenchida; verde se termina positivo.
-// mmm/yy (marco temporal do eixo)
+// mmm/yy (marco temporal do eixo) — ex.: "abr/22"
 function _spFmtMark(ts) {
-    try { var d = new Date(ts); if (isNaN(d.getTime())) return ''; return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', ''); }
-    catch (e) { return ''; }
+    try {
+        var d = new Date(ts); if (isNaN(d.getTime())) return '';
+        var mon = d.toLocaleDateString('pt-BR', { month: 'short' }).replace(/\.$/, '');
+        return mon + '/' + String(d.getFullYear()).slice(-2);
+    } catch (e) { return ''; }
 }
 // Constrói o gráfico de forma para uma categoria (all/r/t) e uma janela temporal
 // (sliderVal 0=tudo … 100=última semana). Retorna pedaços de HTML (svg/stats/axis/
