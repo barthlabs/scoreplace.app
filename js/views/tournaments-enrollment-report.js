@@ -1421,9 +1421,11 @@
     var hint = _isOrg ? '<div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no topo.</div>' : '';
     // Barra Cancelar/Salvar — STICKY no topo (abaixo do cabeçalho fixo), aparece só
     // quando há alteração pendente (drag de gênero/categoria).
+    // FIXO no topo do viewport (abaixo do cabeçalho), sempre visível quando há alteração —
+    // não fica preso dentro do box (a pessoa não precisa rolar pra achar).
     var saveBar = _isOrg
-      ? '<div id="er-mx-save-bar" style="display:none;position:sticky;top:52px;z-index:6;background:var(--bg-card);padding:8px 0 10px;margin-bottom:6px;">' +
-          '<div style="display:flex;gap:10px;">' +
+      ? '<div id="er-mx-save-bar" style="display:none;position:fixed;top:52px;left:0;right:0;z-index:500;background:var(--bg-card,#161b28);border-bottom:1px solid var(--border-color);box-shadow:0 6px 18px rgba(0,0,0,0.40);padding:10px 1.25rem;">' +
+          '<div style="display:flex;gap:10px;max-width:100%;margin:0 auto;">' +
             '<button type="button" onclick="window._erCancelEdits()" class="btn hover-lift" style="flex:0 0 auto;font-size:0.9rem;font-weight:800;padding:11px 20px;border-radius:10px;background:rgba(133,146,166,0.18);border:1px solid rgba(133,146,166,0.5);color:#c8cdd6;cursor:pointer;">Cancelar</button>' +
             '<button id="er-mx-save-btn" onclick="window._erSaveEdits(\'' + _esc(String(t.id)) + '\',\'' + _esc(String(t.sport || '')) + '\')" class="btn btn-shine hover-lift" style="flex:1;font-size:0.96rem;font-weight:800;padding:11px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;cursor:pointer;">💾 Salvar alterações</button>' +
           '</div></div>'
