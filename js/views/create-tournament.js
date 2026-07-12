@@ -580,6 +580,20 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="gsm-fixedSetGames" value="6">
               </div>
 
+              <!-- Rigor da inscrição (v1.15.25) — espectro Casual ↔ Oficial.
+                   Casual: não liga pro histórico. Oficial: exige perfil/histórico
+                   compatível com as categorias (nível, idade, gênero). As travas
+                   duras entram gradualmente; por ora salva a política. -->
+              <div style="background: rgba(56,189,248,0.06); border: 1px solid rgba(56,189,248,0.18); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin: 0 0 0.6rem; font-size: 0.8rem; color: #38bdf8; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎚️ Rigor da inscrição</p>
+                <div style="display:flex; justify-content:space-between; font-size:0.66rem; color:var(--text-muted); font-weight:700; margin-bottom:2px;">
+                  <span>Casual</span><span>Moderado</span><span>Oficial</span>
+                </div>
+                <input type="range" id="tourn-rigor-slider" min="0" max="2" step="1" value="0" oninput="window._rigorLive(this.value)" style="width:100%; accent-color:#38bdf8;">
+                <input type="hidden" id="tourn-rigor" value="casual">
+                <div id="tourn-rigor-desc" style="font-size:0.74rem; color:var(--text-muted); margin-top:6px; line-height:1.45;">🎾 <b>Casual</b> — não verifica o histórico dos inscritos. Qualquer pessoa se inscreve; as categorias são só informativas.</div>
+              </div>
+
               <!-- Categorias do Torneio -->
               <div style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #a855f7; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.catSection')}</p>
@@ -1295,6 +1309,24 @@ function setupCreateTournamentModal() {
     var descEl = document.getElementById('formato-desc');
     if (descEl) descEl.textContent = _formatoDescs[value] || '';
     window._onFormatoChange();
+  };
+
+  // ── Rigor da inscrição (Casual ↔ Oficial) — 3 stops ──
+  window._RIGOR_LEVELS = ['casual', 'moderado', 'oficial'];
+  window._RIGOR_DESCS = {
+    casual: '🎾 <b>Casual</b> — não verifica o histórico dos inscritos. Qualquer pessoa se inscreve; as categorias são só informativas.',
+    moderado: '🔎 <b>Moderado</b> — a pessoa <b>se inscreve, mas fica pendente</b> de ajuste do organizador: o histórico é puxado e divergências de categoria são sinalizadas (🚩) pra você revisar/ajustar antes de confirmar.',
+    oficial: '🏆 <b>Oficial</b> — exige perfil e histórico <b>compatíveis</b> com as categorias do torneio (nível, idade, gênero). Sem histórico ou fora do perfil, a pessoa não se inscreve. <i>(as travas entram gradualmente)</i>'
+  };
+  window._rigorLive = function(v) {
+    var lvl = window._RIGOR_LEVELS[+v] || 'casual';
+    var hid = document.getElementById('tourn-rigor'); if (hid) hid.value = lvl;
+    var d = document.getElementById('tourn-rigor-desc'); if (d) d.innerHTML = window._RIGOR_DESCS[lvl] || '';
+  };
+  window._setRigorFromValue = function(lvl) {
+    var idx = window._RIGOR_LEVELS.indexOf(lvl); if (idx < 0) idx = 0;
+    var sl = document.getElementById('tourn-rigor-slider'); if (sl) sl.value = String(idx);
+    window._rigorLive(idx);
   };
 
   // ── Draw Mode Selection (Sorteio / Rei/Rainha) ──
@@ -4620,6 +4652,9 @@ function setupCreateTournamentModal() {
       });
     }
 
+    // v1.15.25: rigor da inscrição (default casual pra torneios antigos sem o campo)
+    if (typeof window._setRigorFromValue === 'function') window._setRigorFromValue(t.rigor || 'casual');
+
     // Categorias (gênero + habilidade + idade)
     if (t.genderCategories && t.genderCategories.length > 0) {
       document.getElementById('tourn-gender-categories').value = t.genderCategories.join(',');
@@ -5238,6 +5273,9 @@ function setupCreateTournamentModal() {
         var catData = window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {};
         tourData.genderCategories = catData.genderCategories || [];
         tourData.skillCategories = catData.skillCategories || [];
+        // v1.15.25: rigor da inscrição (casual/moderado/oficial) — política geral do torneio.
+        var _rigorEl = document.getElementById('tourn-rigor');
+        tourData.rigor = (_rigorEl && _rigorEl.value) || 'casual';
         tourData.ageCategories = catData.ageCategories || []; // v1.2.0
         tourData.customCategories = catData.customCategories || []; // v2.1.80
         tourData.combinedCategories = catData.combinedCategories || [];
