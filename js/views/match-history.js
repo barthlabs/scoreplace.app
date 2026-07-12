@@ -93,8 +93,8 @@
       var ts = _lpDateToTs(g.date, importedAtTs, (g.idx != null ? g.idx : i));
       var opp = _lpTeam(g.oppNames, g.oppHandles);
       var partner = _bestPlayer(g.partnerName, g.partnerHandle) || null;
-      var score = (typeof g.myScore === 'number' && typeof g.oppScore === 'number')
-        ? (g.myScore + '–' + g.oppScore) : '';
+      var scoreA = (typeof g.myScore === 'number') ? String(g.myScore) : '';
+      var scoreB = (typeof g.oppScore === 'number') ? String(g.oppScore) : '';
       var venue = _prettyClub(g.club);
       var comp = (g.official ? 'Torneio' : 'Ranking') + (g.competition ? ' · ' + g.competition : '');
       return {
@@ -108,7 +108,8 @@
         opponent: opp || '—',
         partner: partner,
         result: (g.won === true) ? 'V' : (g.won === false ? 'D' : '?'),
-        score: score
+        scoreA: scoreA,
+        scoreB: scoreB
       };
     });
   }
@@ -121,6 +122,21 @@
       if (String(ts[i].id) === String(tournamentId)) return ts[i].venue || '';
     }
     return '';
+  }
+
+  // Quebra o resumo do placar ("6–2", "2 a 1", "6-2 6-4") no par de números do
+  // 1º confronto e orienta pelo resultado (vencedor fica com o maior). Um número
+  // por time — pra render "placar do time na mesma linha do time".
+  function _splitScore(summary, result) {
+    var s = String(summary || '').trim();
+    if (!s) return { a: '', b: '' };
+    var m = s.match(/(\d+)\s*[–\-xX×a]\s*(\d+)/);
+    if (!m) return { a: s, b: '' };
+    var n1 = +m[1], n2 = +m[2];
+    var hi = Math.max(n1, n2), lo = Math.min(n1, n2);
+    if (result === 'V') return { a: String(hi), b: String(lo) };
+    if (result === 'D') return { a: String(lo), b: String(hi) };
+    return { a: String(n1), b: String(n2) };
   }
 
   function _scoreplaceRecordToItem(r, myUid) {
@@ -154,7 +170,8 @@
       opponent: opp.filter(Boolean).join(' / ') || '—',
       partner: partner.filter(Boolean).join(' / ') || null,
       result: result,
-      score: r.scoreSummary || ''
+      scoreA: _splitScore(r.scoreSummary, result).a,
+      scoreB: _splitScore(r.scoreSummary, result).b
     };
   }
 
@@ -183,17 +200,6 @@
     return out;
   }
 
-  function _resultPill(result) {
-    var map = {
-      'V': { t: 'Vitória', bg: 'rgba(16,185,129,0.16)', bd: 'rgba(16,185,129,0.5)', c: '#10b981' },
-      'D': { t: 'Derrota', bg: 'rgba(239,68,68,0.14)', bd: 'rgba(239,68,68,0.45)', c: '#ef4444' },
-      'E': { t: 'Empate', bg: 'rgba(148,163,184,0.16)', bd: 'rgba(148,163,184,0.45)', c: '#94a3b8' },
-      '?': { t: '—', bg: 'rgba(148,163,184,0.10)', bd: 'rgba(148,163,184,0.3)', c: '#94a3b8' }
-    };
-    var s = map[result] || map['?'];
-    return '<span style="display:inline-block;font-size:0.66rem;font-weight:800;padding:1px 7px;border-radius:999px;background:' + s.bg + ';border:1px solid ' + s.bd + ';color:' + s.c + ';">' + s.t + '</span>';
-  }
-
   function _sourceBadge(source) {
     if (source === 'letzplay') {
       return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:999px;background:rgba(132,204,22,0.16);border:1px solid rgba(132,204,22,0.5);color:#84cc16;">🎾 LetzPlay</span>';
@@ -201,25 +207,35 @@
     return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:999px;background:rgba(99,102,241,0.16);border:1px solid rgba(99,102,241,0.5);color:#818cf8;">🏆 Scoreplace</span>';
   }
 
+  // Linha de um time: nomes à esquerda, placar à direita, ambos na cor do time
+  // (verde vencedor / vermelho perdedor). Sem texto "Vitória/Derrota".
+  function _teamRow(names, score, color) {
+    return '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;">' +
+        '<div style="font-size:0.84rem;font-weight:700;line-height:1.3;color:' + color + ';min-width:0;overflow-wrap:anywhere;">' + names + '</div>' +
+        (score !== '' ? '<div style="font-size:0.95rem;font-weight:800;white-space:nowrap;color:' + color + ';">' + _esc(score) + '</div>' : '') +
+      '</div>';
+  }
+
   function _gameCard(it) {
-    var vs = it.partner
-      ? (_esc(_meName) + ' / ' + _esc(it.partner) + ' <span style="opacity:0.6;">vs</span> ' + _esc(it.opponent))
-      : (_esc(_meName) + ' <span style="opacity:0.6;">vs</span> ' + _esc(it.opponent));
+    var GREEN = '#22c55e', RED = '#ef4444', NEUT = 'var(--text-bright,#fff)';
+    var aWin = it.result === 'V', aLose = it.result === 'D';
+    var aColor = aWin ? GREEN : (aLose ? RED : NEUT);
+    var bColor = aWin ? RED : (aLose ? GREEN : NEUT);
+    var teamA = _esc(_meName) + (it.partner ? ' / ' + _esc(it.partner) : '');
+    var teamB = _esc(it.opponent || '—');
     var meta = [];
     if (it.competitionLabel) meta.push(_esc(it.competitionLabel));
     if (it.venue) meta.push('📍 ' + _esc(it.venue));
     if (it.sport) meta.push(_esc(it.sport));
     return '' +
-      '<div style="background:var(--bg-card,#1e2235);border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:10px 12px;margin-bottom:8px;">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;">' +
-          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' + _sourceBadge(it.source) + _resultPill(it.result) + '</div>' +
+      '<div style="background:var(--bg-card,#1e2235);border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px;">' +
+          _sourceBadge(it.source) +
           '<div style="font-size:0.68rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">' + _esc(_dateLabel(it.ts)) + '</div>' +
         '</div>' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
-          '<div style="font-size:0.85rem;color:var(--text-bright,#fff);font-weight:600;line-height:1.3;">' + vs + '</div>' +
-          (it.score ? '<div style="font-size:0.95rem;font-weight:800;color:var(--text-bright,#fff);white-space:nowrap;">' + _esc(it.score) + '</div>' : '') +
-        '</div>' +
-        (meta.length ? '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-top:4px;">' + meta.join(' · ') + '</div>' : '') +
+        _teamRow(teamA, it.scoreA != null ? it.scoreA : '', aColor) +
+        _teamRow(teamB, it.scoreB != null ? it.scoreB : '', bColor) +
+        (meta.length ? '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-top:4px;overflow-wrap:anywhere;">' + meta.join(' · ') + '</div>' : '') +
       '</div>';
   }
 
@@ -245,7 +261,7 @@
     var countEl = document.getElementById('hist-count');
     if (countEl) countEl.textContent = rows.length + (rows.length === 1 ? ' jogo' : ' jogos');
     if (!rows.length) {
-      host.innerHTML = '<div style="text-align:center;padding:40px 16px;color:var(--text-muted,#94a3b8);font-size:0.85rem;">Nenhum jogo com esses filtros.</div>';
+      host.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px 16px;color:var(--text-muted,#94a3b8);font-size:0.85rem;">Nenhum jogo com esses filtros.</div>';
       return;
     }
     host.innerHTML = rows.map(_gameCard).join('');
@@ -318,19 +334,23 @@
 
     var lpCount = lp.length, spCount = sp.length;
 
+    // Barra de filtro trava logo abaixo do cabeçalho (padrão sticky canônico:
+    // topbar + dropdown do hamburger + back-header). Full-bleed com fundo darker.
     var filterBar = '' +
-      '<div style="position:sticky;top:0;z-index:2;background:var(--bg-dark,#111114);padding:10px 0 8px;">' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' +
-          _srcPill('all', 'Todos', 'all', true) +
-          _srcPill('letzplay', '🎾 LetzPlay' + (lpCount ? ' (' + lpCount + ')' : ''), 'letzplay', false) +
-          _srcPill('scoreplace', '🏆 Scoreplace' + (spCount ? ' (' + spCount + ')' : ''), 'scoreplace', false) +
+      '<div style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:5;background:var(--bg-darker,#171a2b);margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));">' +
+        '<div style="max-width:1080px;margin:0 auto;padding:10px 14px 8px;">' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' +
+            _srcPill('all', 'Todos', 'all', true) +
+            _srcPill('letzplay', '🎾 LetzPlay' + (lpCount ? ' (' + lpCount + ')' : ''), 'letzplay', false) +
+            _srcPill('scoreplace', '🏆 Scoreplace' + (spCount ? ' (' + spCount + ')' : ''), 'scoreplace', false) +
+          '</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+            _select('f-sport', 'sport', 'Modalidade', sports) +
+            _select('f-venue', 'venue', 'Local', venues) +
+            _select('f-comp', 'comp', 'Torneio/Competição', comps) +
+          '</div>' +
+          '<div id="hist-count" style="font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-top:8px;font-weight:600;"></div>' +
         '</div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-          _select('f-sport', 'sport', 'Modalidade', sports) +
-          _select('f-venue', 'venue', 'Local', venues) +
-          _select('f-comp', 'comp', 'Torneio/Competição', comps) +
-        '</div>' +
-        '<div id="hist-count" style="font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-top:8px;font-weight:600;"></div>' +
       '</div>';
 
     var _impEntry = (typeof window._spImportEntry === 'function') ? window._spImportEntry({ label: 'Importar do letzplay', variant: 'solid' }) : '';
@@ -342,9 +362,9 @@
       : '';
 
     container.innerHTML = hdr +
-      '<div style="max-width:640px;margin:0 auto;padding:0 14px 40px;">' +
+      '<div style="max-width:1080px;margin:0 auto;padding:0 14px 40px;">' +
         filterBar + lpHint +
-        '<div id="hist-list" style="margin-top:6px;"></div>' +
+        '<div id="hist-list" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;align-items:start;"></div>' +
       '</div>';
 
     _renderList();
