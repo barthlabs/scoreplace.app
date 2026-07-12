@@ -584,7 +584,7 @@ function setupCreateTournamentModal() {
                    Casual: não liga pro histórico. Oficial: exige perfil/histórico
                    compatível com as categorias (nível, idade, gênero). As travas
                    duras entram gradualmente; por ora salva a política. -->
-              <div style="background: rgba(56,189,248,0.06); border: 1px solid rgba(56,189,248,0.18); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+              <div id="rigor-section" style="background: rgba(56,189,248,0.06); border: 1px solid rgba(56,189,248,0.18); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.6rem; font-size: 0.8rem; color: #38bdf8; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎚️ Rigor da inscrição</p>
                 <div style="display:flex; justify-content:space-between; font-size:0.66rem; color:var(--text-muted); font-weight:700; margin-bottom:2px;">
                   <span>Casual</span><span>Moderado</span><span>Oficial</span>
@@ -1459,6 +1459,12 @@ function setupCreateTournamentModal() {
       // Categorias · #fase1-box. Insere Categorias antes do box, depois GSM antes de Categorias.
       if (_catBlock && _catBlock.parentElement) { try { _formParent.insertBefore(_catBlock, box); } catch (e) {} }
       if (_gsm && _gsm.parentElement) { try { _formParent.insertBefore(_gsm, (_catBlock && _catBlock.parentElement === _formParent) ? _catBlock : box); } catch (e) {} }
+      // v1.15.27: Rigor da inscrição também sai do #fase1-box e vai pra ANTES do GSM
+      // (entre Máx. Participantes e Formato da Partida). Parte GERAL, não da fase.
+      var _rig = document.getElementById('rigor-section');
+      if (_rig && _rig.parentElement) {
+        try { _formParent.insertBefore(_rig, (_gsm && _gsm.parentElement === _formParent) ? _gsm : ((_catBlock && _catBlock.parentElement === _formParent) ? _catBlock : box)); } catch (e) {}
+      }
     }
     // Injeta o mount e inicia a config (default do esporte ou t.fmt2 do torneio em edição).
     // v4.4.17: editId-aware — se já há mount PRA ESTE torneio, mantém (não apaga config
