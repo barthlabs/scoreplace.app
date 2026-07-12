@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.27';
+  var EXT_VERSION = '1.28';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -69,14 +69,18 @@
     for (var i = 0; i < targets.length; i++) {
       var tg = targets[i] || {};
       if (!tg.handle) continue;
+      // avisa QUEM está sendo carregado agora (nome + @) antes de buscar
+      post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: i, total: targets.length, current: { uid: tg.uid || null, name: tg.name || null, handle: tg.handle } });
       try {
         var doc = await bgFetchDoc('https://letzplay.me/' + encodeURIComponent(tg.handle));
-        scans.push({ uid: tg.uid || null, handle: tg.handle, scan: X.parsePublicProfile(doc, tg.handle) });
+        scans.push({ uid: tg.uid || null, handle: tg.handle, name: tg.name || null, scan: X.parsePublicProfile(doc, tg.handle) });
       } catch (e) {
-        scans.push({ uid: tg.uid || null, handle: tg.handle, scan: null, error: (e && e.message) || 'fetch' });
+        scans.push({ uid: tg.uid || null, handle: tg.handle, name: tg.name || null, scan: null, error: (e && e.message) || 'fetch' });
       }
-      post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: scans.length, total: targets.length });
+      post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: scans.length, total: targets.length, current: { uid: tg.uid || null, name: tg.name || null, handle: tg.handle } });
     }
+    // fecha a aba do letzplay que a extensão abriu (se abriu)
+    try { chrome.runtime.sendMessage({ type: 'lp-close-scan-tab' }); } catch (e) {}
     post({ __sp_lp: 'org-scan-result', tournamentId: tournamentId, ok: true, scans: scans });
   }
 

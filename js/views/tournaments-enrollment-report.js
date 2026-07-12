@@ -1185,9 +1185,24 @@
     }).filter(function (v) { return v != null; });
     return ranks.length ? Math.min.apply(null, ranks) : null;
   }
+  // Status/cor da categoria (declarada × nível real). gap = declRank - realRank
+  // (rank: A=0 mais forte … D=3, FUN=4). declarou mais fraco (gap>0) = deve subir.
+  //   🟢 verde  = coerente (gap 0)
+  //   🟡 amarelo= deve subir leve (gap 1)
+  //   🔴 vermelho= precisa subir (gap ≥2)
+  //   🔵 azul   = deve rebaixar (gap <0 — declarou mais forte que joga)
+  function _lzStatus(declRank, realRank) {
+    if (declRank == null || realRank == null) return { color: '#8592a6', emoji: '', label: 'sem comparação', flag: false };
+    var gap = declRank - realRank;
+    if (gap <= -1) return { color: '#38bdf8', emoji: '🔵', label: 'deve rebaixar', flag: false };
+    if (gap === 0) return { color: '#2dd4a0', emoji: '🟢', label: 'coerente', flag: false };
+    if (gap === 1) return { color: '#f0b445', emoji: '🟡', label: 'deve subir', flag: true };
+    return { color: '#f26a6a', emoji: '🔴', label: 'precisa subir', flag: true };
+  }
 
   function _renderLetzplaySection(rows, t, profileMap, scanMap) {
     profileMap = profileMap || {}; scanMap = scanMap || {};
+    window._lzRenderCtx = { t: t, rows: rows, profileMap: profileMap };   // p/ re-render in-place pós-busca
     var imp = [], scanned = [], wait = [], denied = [], noh = [];
     (rows || []).forEach(function (r) {
       var prof = (r.uid && profileMap[r.uid]) ? profileMap[r.uid] : null;
@@ -1227,20 +1242,20 @@
     function knownLine(name, realCat, realRank, effSkills, srcIcon) {
       var declRank = _declRankFrom(effSkills);
       var declLabel = (effSkills && effSkills.length) ? effSkills.join('/') : '—';
-      var right = '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#2dd4a0;">' + _esc(realCat) + ' <span style="opacity:0.6;">' + srcIcon + '</span></span>';
-      var flagHtml = '';
-      if (realRank != null && declRank != null && declRank > realRank) {
-        flagged++;
-        var strong = (declRank - realRank) >= 2;
-        var fg = strong ? '#f26a6a' : '#f0b445';
-        flagHtml = '<div style="font-size:11px;color:' + fg + ';margin-top:1px;">' + (strong ? '🚩🚩' : '🚩') +
-          ' declarou <b>' + _esc(declLabel) + '</b> · joga <b>' + _esc(realCat) + '</b> no letzplay</div>';
-      } else if (declRank != null && realRank != null) {
-        flagHtml = '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:1px;">✔ declarou ' + _esc(declLabel) + ' · coerente</div>';
+      var st = _lzStatus(declRank, realRank);
+      var known = (declRank != null && realRank != null);
+      if (st.flag) flagged++;
+      var nameColor = known ? st.color : 'var(--text-main,#e5e7eb)';
+      var right = '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:' + st.color + ';">' + _esc(realCat) + ' <span style="opacity:0.55;">' + srcIcon + '</span></span>';
+      var sub = '';
+      if (known) {
+        sub = (st.emoji === '🟢')
+          ? '<div style="font-size:11px;color:' + st.color + ';margin-top:1px;">' + st.emoji + ' declarou ' + _esc(declLabel) + ' · coerente</div>'
+          : '<div style="font-size:11px;color:' + st.color + ';margin-top:1px;">' + st.emoji + ' declarou <b>' + _esc(declLabel) + '</b> · joga <b>' + _esc(realCat) + '</b> → <b>' + st.label + '</b></div>';
       }
       return '<div style="padding:4px 0;font-size:12.5px;">' +
-        '<div style="display:flex;justify-content:space-between;gap:10px;"><span>' + _esc(name || '—') + '</span>' + right + '</div>' +
-        flagHtml +
+        '<div style="display:flex;justify-content:space-between;gap:10px;"><span style="color:' + nameColor + ';font-weight:600;">' + _esc(name || '—') + '</span>' + right + '</div>' +
+        sub +
       '</div>';
     }
     var impHtml = imp.map(function (o) {
@@ -1259,14 +1274,14 @@
       .filter(function (x) { return x.uid && x.handle; });
     window._lzScanCtx = { tId: t.id, targets: targets };
     var scanBtn = targets.length
-      ? '<button id="lz-scan-btn" onclick="window._lzOrgScan()" style="margin-bottom:12px;width:100%;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.82rem;font-weight:700;">🔎 Buscar histórico de quem autorizou (' + targets.length + ' · letzplay público)</button>'
+      ? '<button type="button" id="lz-scan-btn" onclick="window._lzOrgScan()" style="margin-bottom:12px;width:100%;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.82rem;font-weight:700;">🔎 Buscar histórico de quem autorizou (' + targets.length + ' · letzplay público)</button>'
       : '';
 
     var flagBanner = flagged > 0
       ? '<div style="background:rgba(242,106,106,0.12);border:1px solid rgba(242,106,106,0.4);border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:12.5px;color:#f26a6a;font-weight:600;">🚩 ' +
           flagged + ' inscrito' + (flagged === 1 ? '' : 's') + ' declarou categoria mais fraca que o nível do letzplay — confira abaixo.</div>'
       : '';
-    return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:15px 16px;margin-bottom:14px;">' +
+    return '<div id="lz-history-section" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:15px 16px;margin-bottom:14px;">' +
       '<div style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">🎾 Histórico letzplay</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">' +
         pill(C.green, imp.length, 'com histórico') + (scanned.length ? pill(C.blue, scanned.length, 'buscado') : '') +
@@ -1284,45 +1299,121 @@
       '</div>';
   }
 
-  // Busca ativa: dispara a extensão pra buscar os perfis públicos e grava os scans.
+  // ── Overlay de progresso da busca ativa ──
+  function _lzScanOverlay(html) {
+    var o = document.getElementById('lz-scan-overlay');
+    if (!o) {
+      o = document.createElement('div');
+      o.id = 'lz-scan-overlay';
+      o.style.cssText = 'position:fixed;inset:0;z-index:10050;background:rgba(6,8,16,0.72);display:flex;align-items:center;justify-content:center;padding:20px;';
+      o.innerHTML = '<div id="lz-scan-card" style="background:var(--bg-card,#1e2235);border:1px solid var(--border-color,rgba(255,255,255,0.12));border-radius:18px;max-width:440px;width:100%;padding:22px;color:var(--text-main,#cbd5e1);box-shadow:0 20px 60px rgba(0,0,0,0.5);text-align:center;"></div>';
+      document.body.appendChild(o);
+    }
+    var c = document.getElementById('lz-scan-card'); if (c) c.innerHTML = html;
+  }
+  function _lzScanClose() { var o = document.getElementById('lz-scan-overlay'); if (o) o.remove(); }
+  function _lzScanErrHtml(msg) {
+    return '<div style="font-size:2rem;margin-bottom:6px;">⚠️</div>' +
+      '<div style="font-weight:700;color:var(--text-bright,#fff);margin-bottom:8px;">Não deu pra buscar</div>' +
+      '<div style="font-size:0.82rem;color:var(--text-muted,#cbd5e1);line-height:1.5;margin-bottom:14px;">' + _esc(msg) + '</div>' +
+      '<button type="button" onclick="var o=document.getElementById(\'lz-scan-overlay\');if(o)o.remove();" style="background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:9px 18px;cursor:pointer;color:var(--text-bright,#fff);font-weight:700;">Fechar</button>';
+  }
+  // barra + números + lista de pessoas (nome + @) sendo carregadas
+  function _lzScanProgressHtml(targets, doneN, total) {
+    var pct = total ? Math.min(99, Math.round(doneN / total * 100)) : 4;
+    var list = (targets || []).map(function (t, i) {
+      var mark = i < doneN ? '<span style="color:#2dd4a0;">✓</span>' : (i === doneN ? '<span>🔄</span>' : '<span style="opacity:0.4;">•</span>');
+      var active = i === doneN;
+      return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px;' + (active ? 'color:var(--text-bright,#fff);font-weight:600;' : 'color:var(--text-muted,#94a3b8);') + '">' +
+        mark + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc(t.name || t.handle) + ' <span style="opacity:0.6;">@' + _esc(t.handle) + '</span></span></div>';
+    }).join('');
+    return '<div style="font-size:1.5rem;margin-bottom:6px;">🔎</div>' +
+      '<div style="font-weight:700;color:var(--text-bright,#fff);margin-bottom:12px;">Buscando histórico no letzplay</div>' +
+      '<div style="height:12px;border-radius:999px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.1));"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#38bdf8,#0ea5e9);transition:width .3s;"></div></div>' +
+      '<div style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin:8px 0 12px;">' + Math.min(doneN, total) + ' de ' + total + ' inscritos</div>' +
+      '<div style="text-align:left;max-height:220px;overflow-y:auto;border-top:1px solid var(--border-color);padding-top:8px;">' + list + '</div>';
+  }
+  // compara versões "a.b.c" — a >= b?
+  function _verGE(a, b) {
+    a = String(a || '0').split('.').map(Number); b = String(b || '0').split('.').map(Number);
+    for (var i = 0; i < Math.max(a.length, b.length); i++) { var x = a[i] || 0, y = b[i] || 0; if (x !== y) return x > y; }
+    return true;
+  }
+  var _LZ_MIN_EXT = '1.28';
+
+  // Busca ativa: pinga a extensão (checa versão), dispara o scan e mostra progresso.
   window._lzOrgScan = function () {
     var ctx = window._lzScanCtx;
     if (!ctx || !ctx.targets || !ctx.targets.length) return;
-    var btn = document.getElementById('lz-scan-btn');
-    if (btn) { btn.disabled = true; btn.textContent = '🔎 Buscando…'; }
-    var done = false;
+    _lzScanOverlay('<div style="font-size:1.5rem;margin-bottom:8px;">🔌</div><div style="font-weight:700;color:var(--text-bright,#fff);">Conectando à extensão…</div>');
+    var started = false, done = false;
     function onMsg(e) {
       if (e.source !== window) return; var d = e.data; if (!d) return;
-      if (d.__sp_lp === 'org-scan-progress' && d.tournamentId === ctx.tId) { if (btn) btn.textContent = '🔎 Buscando… ' + d.done + '/' + d.total; return; }
+      if (d.__sp_lp === 'extension-present' && !started) {
+        if (!_verGE(d.version, _LZ_MIN_EXT)) {
+          started = true; done = true; window.removeEventListener('message', onMsg);
+          _lzScanOverlay(_lzScanErrHtml('Sua extensão está na versão ' + (d.version || '?') + '. Recarregue a extensão pra v' + _LZ_MIN_EXT + ' em chrome://extensions e tente de novo.'));
+          return;
+        }
+        started = true;
+        _lzScanOverlay(_lzScanProgressHtml(ctx.targets, 0, ctx.targets.length));
+        window.postMessage({ __sp_lp: 'run-org-scan', targets: ctx.targets, tournamentId: ctx.tId }, window.location.origin);
+        return;
+      }
+      if (d.__sp_lp === 'org-scan-progress' && d.tournamentId === ctx.tId) {
+        _lzScanOverlay(_lzScanProgressHtml(ctx.targets, d.done || 0, d.total || ctx.targets.length));
+        return;
+      }
       if (d.__sp_lp === 'org-scan-result' && d.tournamentId === ctx.tId) {
         done = true; window.removeEventListener('message', onMsg);
-        if (!d.ok) { if (btn) { btn.disabled = false; btn.textContent = '🔎 Tentar novamente'; } if (typeof showNotification === 'function') showNotification('Não foi possível buscar', 'Erro: ' + (d.error || 'desconhecido') + '. Mantenha uma aba do letzplay aberta.', 'error'); return; }
+        if (!d.ok) { _lzScanOverlay(_lzScanErrHtml('Erro: ' + (d.error || 'desconhecido') + '.')); return; }
         _saveScansAndReload(ctx.tId, d.scans || []);
       }
     }
     window.addEventListener('message', onMsg);
-    window.postMessage({ __sp_lp: 'run-org-scan', targets: ctx.targets, tournamentId: ctx.tId }, window.location.origin);
+    window.postMessage({ __sp_lp: 'ext-ping' }, window.location.origin);
+    // extensão não respondeu ao ping → provavelmente inativa/não recarregada
     setTimeout(function () {
-      if (done) return; window.removeEventListener('message', onMsg);
-      if (btn) { btn.disabled = false; btn.textContent = '🔎 Buscar histórico'; }
-      if (typeof showNotification === 'function') showNotification('Extensão necessária', 'Instale/ative a extensão do scoreplace no Chrome (desktop) e mantenha uma aba do letzplay aberta.', 'warning');
-    }, 30000);
+      if (started || done) return; window.removeEventListener('message', onMsg);
+      _lzScanOverlay(_lzScanErrHtml('A extensão do scoreplace não respondeu. Recarregue a extensão (v' + _LZ_MIN_EXT + ') em chrome://extensions e tente de novo.'));
+    }, 3500);
+    // segurança: scan iniciou mas travou
+    setTimeout(function () {
+      if (done || !started) return; window.removeEventListener('message', onMsg);
+      _lzScanOverlay(_lzScanErrHtml('A busca demorou demais. Tente de novo.'));
+    }, 90000);
   };
   function _saveScansAndReload(tId, scans) {
+    var ok = scans.filter(function (s) { return s.uid && s.scan; });
+    var failed = scans.filter(function (s) { return !(s.uid && s.scan); });
+    if (!ok.length) {
+      var err = (failed[0] && failed[0].error) || 'sem dados';
+      _lzScanOverlay(_lzScanErrHtml('Nenhum perfil carregado (' + err + '). Tente de novo.'));
+      return;
+    }
     var db = firebase.firestore();
     var meUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
-    var ok = scans.filter(function (s) { return s.uid && s.scan; });
     var writes = ok.map(function (s) {
       return db.collection('tournaments').doc(tId).collection('letzplayScans').doc(s.uid)
         .set({ handle: s.handle, scan: s.scan, scannedAt: new Date().toISOString(), scannedBy: meUid }, { merge: true });
     });
     Promise.all(writes).then(function () {
-      if (typeof showNotification === 'function') showNotification('Busca concluída', ok.length + ' de ' + scans.length + ' perfil(is) encontrado(s).', 'success');
-      if (typeof window.renderEnrollmentReportPage === 'function' && window.location.hash === '#analise/' + tId) {
-        var c = document.getElementById('view-container'); if (c) window.renderEnrollmentReportPage(c, tId);
-      }
+      // re-render SÓ a seção letzplay (sem mexer no scroll da página)
+      _fetchScans(tId).then(function (newScanMap) {
+        var rctx = window._lzRenderCtx, el = document.getElementById('lz-history-section');
+        if (rctx && el && rctx.t && rctx.t.id === tId) {
+          var tmp = document.createElement('div');
+          tmp.innerHTML = _renderLetzplaySection(rctx.rows, rctx.t, rctx.profileMap, newScanMap);
+          var newEl = tmp.firstElementChild;
+          if (newEl) el.replaceWith(newEl);
+        } else if (window.location.hash === '#analise/' + tId) {
+          var c = document.getElementById('view-container'); if (c) window.renderEnrollmentReportPage(c, tId);
+        }
+        _lzScanClose();
+        if (typeof showNotification === 'function') showNotification('Busca concluída', ok.length + ' carregado(s)' + (failed.length ? (' · ' + failed.length + ' falhou') : ''), 'success');
+      });
     }).catch(function (e) {
-      if (typeof showNotification === 'function') showNotification('Erro ao salvar', String((e && e.message) || e), 'error');
+      _lzScanOverlay(_lzScanErrHtml('Erro ao salvar: ' + String((e && e.message) || e)));
     });
   }
 

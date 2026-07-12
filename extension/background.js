@@ -31,15 +31,36 @@ chrome.runtime.onStartup.addListener(injectIntoOpenScoreplaceTabs);
 // injeção mesmo quando onInstalled não dispara (ex.: reativar extensão já instalada).
 // A guarda no content.js torna injeções repetidas inofensivas.
 injectIntoOpenScoreplaceTabs();
+// Garante uma aba do letzplay pra rodar o fetch same-origin (cookies + Cloudflare OK).
+// Se já existe uma aba letzplay.me, reusa. Senão ABRE UMA em background (perfil público
+// não exige login) e a lembra em _autoScanTabId pra fechar ao fim da busca do organizador.
+var _autoScanTabId = null;
+function ensureLetzplayTab(cb) {
+  chrome.tabs.query({ url: 'https://letzplay.me/*' }, function (tabs) {
+    if (tabs && tabs.length) { cb(tabs[0].id); return; }
+    chrome.tabs.create({ url: 'https://letzplay.me/', active: false }, function (tab) {
+      if (chrome.runtime.lastError || !tab || !tab.id) { cb(null); return; }
+      _autoScanTabId = tab.id;
+      var settled = false;
+      function finish() { if (settled) return; settled = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} setTimeout(function () { cb(tab.id); }, 1600); }
+      function onUpd(tabId, info) { if (tabId === tab.id && info.status === 'complete') finish(); }
+      chrome.tabs.onUpdated.addListener(onUpd);
+      setTimeout(function () { if (!settled) { settled = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} cb(tab.id); } }, 15000);
+    });
+  });
+}
+function closeAutoScanTab() {
+  if (_autoScanTabId != null) { var id = _autoScanTabId; _autoScanTabId = null; try { chrome.tabs.remove(id, function () { void chrome.runtime.lastError; }); } catch (e) {} }
+}
 // Busca uma URL do letzplay DE DENTRO de uma aba do letzplay (same-origin → cookies +
-// Cloudflare OK). Precisa de uma aba letzplay.me aberta.
+// Cloudflare OK). Cria a aba se necessário (perfil público).
 function fetchViaLetzplayTab(url, cb) {
   if (!chrome.scripting || !chrome.tabs) { cb({ ok: false, error: 'no-scripting' }); return; }
-  chrome.tabs.query({ url: 'https://letzplay.me/*' }, function (tabs) {
-    if (!tabs || !tabs.length) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
-    var injUrl = chrome.runtime.getURL('inject.js');
+  var injUrl = chrome.runtime.getURL('inject.js');
+  ensureLetzplayTab(function (tabId) {
+    if (!tabId) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
     chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
+      target: { tabId: tabId },
       // ISOLATED (default) — carrega o inject.js (web-accessible) como <script src> na
       // página. Ele roda no mundo REAL da página → fetch page-initiated → cookie vai.
       // O func aguarda o resultado via postMessage (ISOLATED aguarda Promise; MAIN não).
@@ -75,4 +96,5 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     fetchViaLetzplayTab(msg.url, sendResponse);
     return true; // resposta assíncrona
   }
+  if (msg && msg.type === 'lp-close-scan-tab') { closeAutoScanTab(); sendResponse({ ok: true }); return true; }
 });
