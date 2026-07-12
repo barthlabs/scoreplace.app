@@ -1218,31 +1218,39 @@
         'style="cursor:grab;font-size:0.9rem;font-weight:600;padding:6px 10px;border-radius:7px;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + _esc(r.name || '(sem nome)') + ' — arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + '</div>';
     }
     function cardGrid(arr) { return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;">' + sortList(arr).map(chip).join('') + '</div>'; }
-    // Sub-seção de categoria DENTRO do box de gênero: cabeçalho "C (N)" + cards.
-    // É drop zone (gênero + categoria).
-    function catSection(genderKey, sk, arr, tint) {
+    // Box de categoria (borda na cor do gênero) — título "C (N)" DENTRO. Drop = gênero+categoria.
+    function catBox(genderKey, sk, arr, color, tint) {
       var label = (sk === '__none__') ? 'Sem habilidade' : sk;
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
-        'style="border:1px dashed ' + tint + ';border-radius:8px;padding:6px 8px;margin:7px 0;min-height:30px;">' +
-        '<div style="font-size:14px;font-weight:800;color:var(--text-secondary,#c8cdd6);margin-bottom:5px;">' + label + ' <span style="color:var(--text-muted);font-weight:700;">(' + arr.length + ')</span></div>' +
+        'style="border:1.5px solid ' + tint + ';border-radius:10px;padding:8px 10px;background:var(--bg-darker,rgba(0,0,0,0.15));">' +
+        '<div style="font-size:14px;font-weight:800;color:' + color + ';margin-bottom:5px;">' + label + ' <span style="opacity:0.7;font-weight:700;">(' + arr.length + ')</span></div>' +
         cardGrid(arr) + '</div>';
     }
-    // Box de gênero — BORDA colorida definida; drop no box = atribui só gênero.
-    function box(icon, gKey, name, color, tint, data, tot, wide) {
-      var inner = groups.map(function (sk) { return catSection(gKey, sk, data[sk], tint); }).join('');
-      return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (gKey || '') + '\',\'\')" ' +
-        'style="' + (wide ? 'width:100%;' : 'flex:1 1 320px;min-width:290px;') + 'background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid ' + color + ';border-radius:12px;padding:10px 12px;">' +
-        '<div style="font-size:17px;font-weight:800;color:' + color + ';border-bottom:2px solid ' + color + ';padding-bottom:6px;margin-bottom:2px;">' + icon + ' ' + name + ' <span style="opacity:0.8;font-size:15px;">(' + tot + ')</span></div>' + inner + '</div>';
+    // Cabeçalho do gênero (drop = só gênero).
+    function ghead(icon, gKey, name, color, tot) {
+      return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + gKey + '\',\'\')" ' +
+        'style="font-size:17px;font-weight:800;color:' + color + ';border-bottom:2px solid ' + color + ';padding-bottom:6px;">' +
+        icon + ' ' + name + ' <span style="opacity:0.8;font-size:15px;">(' + tot + ')</span></div>';
     }
+    var femCol = '#ec4899', mascCol = '#3b82f6';
+    var femTint = 'rgba(236,72,153,0.45)', mascTint = 'rgba(59,130,246,0.45)';
+    // GRID alinhado: 2 colunas (Feminino | Masculino); cada habilidade é uma LINHA →
+    // C fem e C masc na mesma linha. align-items:stretch mantém a linha uniforme.
+    var gridRows = ghead('♀', 'feminino', 'Feminino', femCol, femTotal) + ghead('♂', 'masculino', 'Masculino', mascCol, mascTotal);
+    groups.forEach(function (sk) {
+      gridRows += catBox('feminino', sk, fem[sk], femCol, femTint) + catBox('masculino', sk, masc[sk], mascCol, mascTint);
+    });
+    var grid = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px 12px;align-items:stretch;">' + gridRows + '</div>';
     var totalBar = '<div style="font-size:16px;font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;">Total de inscritos: ' + total + '</div>';
-    var boxes = '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">' +
-      box('♀', 'feminino', 'Feminino', '#ec4899', 'rgba(236,72,153,0.30)', fem, femTotal) +
-      box('♂', 'masculino', 'Masculino', '#3b82f6', 'rgba(59,130,246,0.30)', masc, mascTotal) +
-      '</div>';
-    var semSection = semTotal
-      ? '<div style="margin-top:12px;">' + box('?', '', 'Sem gênero — arraste pra Feminino ou Masculino', '#8592a6', 'rgba(133,146,166,0.30)', semG, semTotal, true) + '</div>'
-      : '';
-    return totalBar + boxes + semSection;
+    // Sem gênero: faixa full-width embaixo, mesmas caixas de categoria.
+    var semSection = '';
+    if (semTotal) {
+      var semInner = groups.map(function (sk) { return catBox('', sk, semG[sk], '#8592a6', 'rgba(133,146,166,0.45)'); }).join('');
+      semSection = '<div style="margin-top:14px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid #8592a6;border-radius:12px;padding:10px 12px;">' +
+        '<div style="font-size:17px;font-weight:800;color:#8592a6;border-bottom:2px solid #8592a6;padding-bottom:6px;margin-bottom:8px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste pra Feminino ou Masculino</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:9px;">' + semInner + '</div></div>';
+    }
+    return totalBar + grid + semSection;
   }
   window._erRenderMatrix = function () {
     var el = document.getElementById('er-cat-matrix');
