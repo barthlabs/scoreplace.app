@@ -1051,7 +1051,10 @@
       }
       if ('category' in pe) {
         var cv = pe.category;
-        if (cv && validCats.indexOf(cv) !== -1) {
+        // Aceita cv em validCats OU (torneio sem categorias configuradas / cat
+        // fabricada pela matriz) qualquer cv que decomponha numa habilidade válida.
+        var _cvOk = cv && (validCats.indexOf(cv) !== -1 || (function () { var dd = _decomposeCat(cv, t); return !!(dd && dd.skill); })());
+        if (_cvOk) {
           if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(p, [cv]);
           else { p.categories = [cv]; p.category = cv; }
           p.categorySource = 'organizador'; delete p.wasUncategorized; delete p.autoWeakestCat; delete p.staleCat;
@@ -1186,10 +1189,15 @@
     var i, d;
     for (i = 0; i < cats.length; i++) { d = _decomposeCat(cats[i], t); if (d.skill === skill && d.gender === gTok) return cats[i]; }
     for (i = 0; i < cats.length; i++) { d = _decomposeCat(cats[i], t); if (d.skill === skill && (d.gender === 'Misto' || !d.gender)) return cats[i]; }
-    return null;
+    // Torneio sem essa categoria configurada (ex: informal, skillCategories vazio) →
+    // FABRICA a categoria pelo gênero + habilidade. `_decomposeCat` reconhece "Fem D".
+    return gTok ? (gTok + ' ' + skill) : skill;
   }
   function _matrixInner(rows, t) {
-    var skills = (t.skillCategories && t.skillCategories.length) ? t.skillCategories.slice() : _DEFAULT_SKILLS;
+    // Buckets do ESTUDO = sempre A-D-FUN (+ custom); NÃO dependem de skillCategories
+    // (essas marcam quais foram FORMALIZADAS via botão "Criar categoria").
+    var skills = _DEFAULT_SKILLS.slice();
+    (t.skillCategories || []).forEach(function (s) { if (skills.indexOf(s) < 0) skills.push(s); });
     var groups = skills.concat(['__none__']);
     function emptyBox() { var o = {}; groups.forEach(function (g) { o[g] = []; }); return o; }
     var fem = emptyBox(), masc = emptyBox(), semG = emptyBox();
@@ -1201,11 +1209,41 @@
     function sumBox(b) { return groups.reduce(function (a, g) { return a + b[g].length; }, 0); }
     var femTotal = sumBox(fem), mascTotal = sumBox(masc), semTotal = sumBox(semG), total = (rows || []).length;
 
-    // Ordena: VERIFICADOS (com apuração letzplay) no topo, depois alfabético.
+    // FORMALIZAÇÃO de categorias (torneio informal → formal). genderOn = divisão por
+    // gênero criada; createdSkills = habilidades formalizadas. Botões abaixo alternam.
+    var genderOn = (t.genderCategories || []).length > 0;
+    var createdSkills = (t.skillCategories || []);
+    var tIdEsc = _esc(String(t.id));
+    var MIN_CAT = 2; // mínimo de pessoas pra oferecer "Criar categoria"
+    function skillTotal(sk) { return fem[sk].length + masc[sk].length + semG[sk].length; }
+    function catCount(catName) {
+      var d = _decomposeCat(catName, t), n = 0;
+      (rows || []).forEach(function (r) {
+        var g = _mxGenderOf(r), sk = _mxSkillOf(r, t);
+        var gOk = !d.gender || (d.gender === 'Fem' && g === 'feminino') || (d.gender === 'Masc' && g === 'masculino');
+        var sOk = !d.skill || (sk === d.skill);
+        if (gOk && sOk) n++;
+      });
+      return n;
+    }
+    function createBtn(call, created) {
+      var lbl = created ? '↩ Reverter' : '➕ Criar categoria';
+      var bg = created ? 'rgba(133,146,166,0.18)' : 'rgba(16,185,129,0.18)';
+      var bc = created ? 'rgba(133,146,166,0.5)' : 'rgba(16,185,129,0.55)';
+      var fg = created ? '#8592a6' : '#2dd4a0';
+      return '<button type="button" onclick="event.stopPropagation();' + call + '" style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;background:' + bg + ';border:1px solid ' + bc + ';color:' + fg + ';cursor:pointer;white-space:nowrap;">' + lbl + '</button>';
+    }
+
+    // Ordena: EDITADOS (âmbar, ainda não salvos) vão pro FINAL; entre os demais,
+    // VERIFICADOS (apuração letzplay) no topo, depois alfabético. Ao salvar, o
+    // pending limpa → cada um entra no lugar certo (cor + alfabético).
     function sortList(arr) {
       return arr.slice().sort(function (a, b) {
+        var ae = (_pendingEdits[a.order] && Object.keys(_pendingEdits[a.order]).length) ? 1 : 0;
+        var be = (_pendingEdits[b.order] && Object.keys(_pendingEdits[b.order]).length) ? 1 : 0;
+        if (ae !== be) return ae - be; // editados por último
         var av = a._lzColor ? 0 : 1, bv = b._lzColor ? 0 : 1;
-        if (av !== bv) return av - bv;
+        if (av !== bv) return av - bv; // verificados no topo
         return String(a.name || '~').localeCompare(String(b.name || '~'), 'pt', { sensitivity: 'base' });
       });
     }
@@ -1218,19 +1256,23 @@
         'style="cursor:grab;font-size:0.9rem;font-weight:600;padding:6px 10px;border-radius:7px;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + _esc(r.name || '(sem nome)') + ' — arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + '</div>';
     }
     function cardGrid(arr) { return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;">' + sortList(arr).map(chip).join('') + '</div>'; }
-    // Box de categoria (borda na cor do gênero) — título "C (N)" DENTRO. Drop = gênero+categoria.
+    // Box de categoria (borda na cor do gênero) — título "C (N)" + botão criar. Drop = gênero+categoria.
     function catBox(genderKey, sk, arr, color, tint) {
       var label = (sk === '__none__') ? 'Sem habilidade' : sk;
+      var btn = (sk !== '__none__' && skillTotal(sk) >= MIN_CAT)
+        ? createBtn('window._erToggleSkill(\'' + tIdEsc + '\',\'' + sk + '\')', createdSkills.indexOf(sk) !== -1)
+        : '';
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
         'style="border:1.5px solid ' + tint + ';border-radius:10px;padding:8px 10px;background:var(--bg-darker,rgba(0,0,0,0.15));">' +
-        '<div style="font-size:14px;font-weight:800;color:' + color + ';margin-bottom:5px;">' + label + ' <span style="opacity:0.7;font-weight:700;">(' + arr.length + ')</span></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px;"><span style="font-size:14px;font-weight:800;color:' + color + ';">' + label + ' <span style="opacity:0.7;font-weight:700;">(' + arr.length + ')</span></span>' + btn + '</div>' +
         cardGrid(arr) + '</div>';
     }
-    // Cabeçalho do gênero (drop = só gênero).
+    // Cabeçalho do gênero (drop = só gênero) + botão criar categoria por gênero.
     function ghead(icon, gKey, name, color, tot) {
+      var btn = (tot >= MIN_CAT) ? createBtn('window._erToggleGender(\'' + tIdEsc + '\')', genderOn) : '';
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + gKey + '\',\'\')" ' +
-        'style="font-size:17px;font-weight:800;color:' + color + ';border-bottom:2px solid ' + color + ';padding-bottom:6px;">' +
-        icon + ' ' + name + ' <span style="opacity:0.8;font-size:15px;">(' + tot + ')</span></div>';
+        'style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:17px;font-weight:800;color:' + color + ';border-bottom:2px solid ' + color + ';padding-bottom:6px;">' +
+        '<span>' + icon + ' ' + name + ' <span style="opacity:0.8;font-size:15px;">(' + tot + ')</span></span>' + btn + '</div>';
     }
     var femCol = '#ec4899', mascCol = '#3b82f6';
     var femTint = 'rgba(236,72,153,0.45)', mascTint = 'rgba(59,130,246,0.45)';
@@ -1241,6 +1283,15 @@
       gridRows += catBox('feminino', sk, fem[sk], femCol, femTint) + catBox('masculino', sk, masc[sk], mascCol, mascTint);
     });
     var grid = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px 12px;align-items:stretch;">' + gridRows + '</div>';
+    // "Categorias no torneio" — resultado das formalizações + contagem (acima do total).
+    var formalCats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
+    var catsBoxInner = formalCats.length
+      ? '<div style="display:flex;flex-wrap:wrap;gap:8px;">' + formalCats.map(function (c) {
+          return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:700;padding:5px 12px;border-radius:20px;background:rgba(99,102,241,0.16);color:var(--text-bright,#fff);border:1px solid rgba(99,102,241,0.4);">' + _esc(c) + ' <span style="opacity:0.7;">(' + catCount(c) + ')</span></span>';
+        }).join('') + '</div>'
+      : '<span style="font-size:13px;color:var(--text-muted);">Nenhuma categoria formal — o sorteio mistura todos. Use os botões “Criar categoria” abaixo.</span>';
+    var catsBox = '<div style="background:var(--bg-darker,rgba(0,0,0,0.18));border:1px solid var(--border-color);border-radius:12px;padding:10px 14px;margin-bottom:12px;">' +
+      '<div style="font-size:13px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;">🗂️ Categorias no torneio</div>' + catsBoxInner + '</div>';
     var totalBar = '<div style="font-size:16px;font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;">Total de inscritos: ' + total + '</div>';
     // Sem gênero: faixa full-width embaixo, mesmas caixas de categoria.
     var semSection = '';
@@ -1250,11 +1301,43 @@
         '<div style="font-size:17px;font-weight:800;color:#8592a6;border-bottom:2px solid #8592a6;padding-bottom:6px;margin-bottom:8px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste pra Feminino ou Masculino</div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:9px;">' + semInner + '</div></div>';
     }
-    return totalBar + grid + semSection;
+    return catsBox + totalBar + grid + semSection;
   }
   window._erRenderMatrix = function () {
     var el = document.getElementById('er-cat-matrix');
     if (el && _liveState) el.innerHTML = _matrixInner(_liveState.rows, _liveState.t);
+  };
+  // ─ Formalizar categorias (botões "Criar categoria") — mexe em genderCategories /
+  //   skillCategories / combinedCategories do torneio e PERSISTE. NÃO atribui p.category
+  //   (a matriz é estudo administrativo — o sorteio só passa a separar se houver categorias).
+  function _erFindT(tId) { return (window.AppStore && window.AppStore.tournaments) ? window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); }) : null; }
+  function _erComputeCombined(genders, skills) {
+    genders = genders || []; skills = skills || [];
+    if (!genders.length && !skills.length) return [];
+    if (!genders.length) return skills.slice();
+    if (!skills.length) return genders.slice();
+    var out = []; genders.forEach(function (g) { skills.forEach(function (s) { out.push(g + ' ' + s); }); }); return out;
+  }
+  function _erCommitCats(t) {
+    t.combinedCategories = _erComputeCombined(t.genderCategories, t.skillCategories);
+    try { if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t); } catch (e) {}
+    window._erRenderMatrix();
+  }
+  window._erToggleGender = function (tId) {
+    if (!_liveState || !_liveState.isOrg) return;
+    var t = _erFindT(tId); if (!t) return;
+    t.genderCategories = ((t.genderCategories || []).length > 0) ? [] : ['Fem', 'Masc'];
+    _erCommitCats(t);
+  };
+  window._erToggleSkill = function (tId, sk) {
+    if (!_liveState || !_liveState.isOrg) return;
+    var t = _erFindT(tId); if (!t) return;
+    var sc = (t.skillCategories || []).slice();
+    var i = sc.indexOf(sk);
+    if (i >= 0) sc.splice(i, 1); else sc.push(sk);
+    sc.sort(function (a, b) { return _DEFAULT_SKILLS.indexOf(a) - _DEFAULT_SKILLS.indexOf(b); });
+    t.skillCategories = sc;
+    _erCommitCats(t);
   };
   window._erMxDragStart = function (ev, order) { window._erMxDrag = order; try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(order)); } catch (e) {} };
   window._erMxOver = function (ev) { ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {} };
