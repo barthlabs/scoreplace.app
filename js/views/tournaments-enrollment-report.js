@@ -1000,12 +1000,13 @@
     return n;
   }
   window._erUpdateSaveBar = function () {
-    var bar = document.getElementById('er-save-bar');
-    var btn = document.getElementById('er-save-btn');
-    if (!bar || !btn) return;
     var n = _erPendingCount();
-    if (n > 0) { bar.style.display = ''; btn.disabled = false; btn.textContent = '💾 Salvar alterações (' + n + ')'; }
-    else { bar.style.display = 'none'; btn.disabled = true; btn.textContent = '💾 Salvar alterações'; }
+    [['er-save-bar', 'er-save-btn'], ['er-mx-save-bar', 'er-mx-save-btn']].forEach(function (ids) {
+      var bar = document.getElementById(ids[0]); var btn = document.getElementById(ids[1]);
+      if (!bar || !btn) return;
+      if (n > 0) { bar.style.display = ''; btn.disabled = false; btn.textContent = '💾 Salvar alterações (' + n + ')'; }
+      else { bar.style.display = 'none'; btn.disabled = true; btn.textContent = '💾 Salvar alterações'; }
+    });
   };
   // Realça o card editado sem re-render da lista (o ● aparece só no próximo render).
   function _erMarkCardModified(order) {
@@ -1079,6 +1080,7 @@
     var finish = function (extra) {
       window._erUpdateSaveBar();
       if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
+      if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
       if (typeof showNotification === 'function') showNotification('✅ Alterações salvas', nEdits + ' inscrito(s) atualizado(s).' + (extra ? ' ' + extra : ''), 'success');
     };
     if (profileAssignments.length > 0 && window.firebase && firebase.functions) {
@@ -1089,6 +1091,99 @@
       finish('');
     }
   };
+
+  // ─── Matriz Gênero × Categoria (drag-and-drop) ──────────────────────
+  // 3 boxes: ♀ Feminino · ♂ Masculino · ? Sem gênero. Dentro de cada box, os
+  // nomes ficam agrupados por categoria (habilidade aferida do letzplay/scoreplace)
+  // + "Sem habilidade". Arrastar um nome pra um box atribui GÊNERO; pra uma
+  // categoria dentro do box atribui GÊNERO + CATEGORIA. Reusa _pendingEdits + save.
+  var _GENMAP = { feminino: 'Fem', masculino: 'Masc' };
+  function _mxGenderOf(r) {
+    var pe = _pendingEdits[r.order] || {};
+    var g = (pe.gender != null) ? pe.gender : (r.gender || '');
+    g = String(g).toLowerCase();
+    if (g.indexOf('fem') === 0) return 'feminino';
+    if (g.indexOf('masc') === 0) return 'masculino';
+    return null;
+  }
+  function _mxSkillOf(r, t) {
+    var pe = _pendingEdits[r.order] || {};
+    if (pe.category != null) { if (!pe.category) return null; var d = _decomposeCat(pe.category, t); return d.skill || null; }
+    if (r.effectiveSkills && r.effectiveSkills.length) return r.effectiveSkills[0];
+    return null;
+  }
+  function _mxFindValidCat(t, genderKey, skill) {
+    var cats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
+    var gTok = _GENMAP[genderKey];
+    var i, d;
+    for (i = 0; i < cats.length; i++) { d = _decomposeCat(cats[i], t); if (d.skill === skill && d.gender === gTok) return cats[i]; }
+    for (i = 0; i < cats.length; i++) { d = _decomposeCat(cats[i], t); if (d.skill === skill && (d.gender === 'Misto' || !d.gender)) return cats[i]; }
+    return null;
+  }
+  function _matrixInner(rows, t) {
+    var skills = (t.skillCategories && t.skillCategories.length) ? t.skillCategories.slice() : _DEFAULT_SKILLS;
+    var groups = skills.concat(['__none__']);
+    function emptyBox() { var o = {}; groups.forEach(function (g) { o[g] = []; }); return o; }
+    var fem = emptyBox(), masc = emptyBox(), semG = emptyBox();
+    (rows || []).forEach(function (r) {
+      var g = _mxGenderOf(r), sk = _mxSkillOf(r, t);
+      var key = (sk && groups.indexOf(sk) !== -1) ? sk : '__none__';
+      (g === 'feminino' ? fem : g === 'masculino' ? masc : semG)[key].push(r);
+    });
+    function chip(r) {
+      var pe = _pendingEdits[r.order] || {}; var edited = Object.keys(pe).length > 0;
+      return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')" ' +
+        'style="cursor:grab;font-size:0.8rem;padding:3px 8px;margin:2px 0;border-radius:6px;background:' + (edited ? 'rgba(245,158,11,0.14)' : 'var(--info-pill-bg,rgba(99,102,241,0.12))') + ';color:var(--text-bright,#fff);border:1px solid ' + (edited ? 'rgba(245,158,11,0.55)' : 'var(--border-color)') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + '</div>';
+    }
+    function catZone(genderKey, sk, arr) {
+      var label = (sk === '__none__') ? 'Sem habilidade' : sk;
+      return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
+        'style="border:1px dashed var(--border-color);border-radius:8px;padding:5px 7px;margin:5px 0;min-height:26px;">' +
+        '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:2px;">' + label + ' (' + arr.length + ')</div>' +
+        arr.map(chip).join('') + '</div>';
+    }
+    function box(title, color, genderKey, data) {
+      var inner = groups.map(function (g) { return catZone(genderKey, g, data[g]); }).join('');
+      return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'\')" ' +
+        'style="flex:1 1 200px;min-width:190px;background:var(--bg-darker,rgba(0,0,0,0.15));border:1px solid ' + color + ';border-radius:10px;padding:8px 10px;">' +
+        '<div style="font-size:13px;font-weight:800;color:' + color + ';margin-bottom:6px;">' + title + '</div>' + inner + '</div>';
+    }
+    var semCount = groups.reduce(function (a, g) { return a + semG[g].length; }, 0);
+    return '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;">' +
+      box('♀ Feminino', '#ec4899', 'feminino', fem) +
+      box('♂ Masculino', '#3b82f6', 'masculino', masc) +
+      (semCount ? box('? Sem gênero — arraste →', '#8592a6', null, semG) : '') +
+      '</div>';
+  }
+  window._erRenderMatrix = function () {
+    var el = document.getElementById('er-cat-matrix');
+    if (el && _liveState) el.innerHTML = _matrixInner(_liveState.rows, _liveState.t);
+  };
+  window._erMxDragStart = function (ev, order) { window._erMxDrag = order; try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(order)); } catch (e) {} };
+  window._erMxOver = function (ev) { ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {} };
+  window._erMxDrop = function (ev, genderKey, sk) {
+    ev.preventDefault(); ev.stopPropagation();
+    if (!_liveState || !_liveState.isOrg) return;
+    var order = (window._erMxDrag != null) ? window._erMxDrag : parseInt((ev.dataTransfer && ev.dataTransfer.getData('text/plain')) || '', 10);
+    window._erMxDrag = null;
+    if (order == null || isNaN(order)) return;
+    if (!_pendingEdits[order]) _pendingEdits[order] = {};
+    if (genderKey === 'feminino' || genderKey === 'masculino') _pendingEdits[order].gender = genderKey;
+    if (sk && sk !== '__none__') { var vc = _mxFindValidCat(_liveState.t, genderKey, sk); if (vc) _pendingEdits[order].category = vc; }
+    else if (sk === '__none__') { _pendingEdits[order].category = ''; }
+    window._erRenderMatrix();
+    window._erUpdateSaveBar();
+  };
+  function _renderCategoryMatrix(rows, t) {
+    var _isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    var hint = _isOrg ? 'Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no fim.' : '';
+    var saveBar = _isOrg ? '<div id="er-mx-save-bar" style="display:none;margin-top:10px;"><button id="er-mx-save-btn" disabled onclick="window._erSaveEdits(\'' + _esc(String(t.id)) + '\',\'' + _esc(String(t.sport || '')) + '\')" class="btn btn-success" style="width:100%;font-weight:800;padding:11px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;">💾 Salvar alterações</button></div>' : '';
+    return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px 18px;margin-bottom:14px;">' +
+      '<div style="font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">🗂️ Categorias por gênero</div>' +
+      (hint ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">' + hint + '</div>' : '') +
+      '<div id="er-cat-matrix">' + _matrixInner(rows, t) + '</div>' + saveBar +
+    '</div>';
+  }
 
   // Re-renderiza só a lista conforme busca/sort/filtros — sem refetch nem
   // re-render da página. Chamado por oninput/onchange dos controles.
@@ -1517,6 +1612,7 @@
       '<div style="max-width:100%;margin:0 auto;padding:1rem 1.25rem;">' +
       subtitle +
       _renderLetzplaySection(rows, t, profileMap, scanMap) +
+      _renderCategoryMatrix(rows, t) +
       _renderOverview(rows, t) +
       _renderCategoryTable(rows, t) +
       _renderInscritosList(rows, t) +
