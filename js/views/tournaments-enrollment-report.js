@@ -1243,23 +1243,22 @@
     // NÍVEL REAL do letzplay (categoria/rating do import OU do perfil público buscado).
     // Se declarou mais FRACO que joga, sinaliza. Ranks: A=0 (mais forte) … D=3, FUN=4.
     var flagged = 0;
+    // O CÓDIGO DE COR já diz o status (verde=coerente, azul=rebaixar, amarelo/vermelho=subir).
+    // Sem palavras: só o nome colorido + (declarada / apurada) em letras. Ex: (C / B).
+    var _LTR = ['A', 'B', 'C', 'D', 'FUN'];
     function knownLine(name, realCat, realRank, effSkills, srcIcon) {
       var declRank = _declRankFrom(effSkills);
       var declLabel = (effSkills && effSkills.length) ? effSkills.join('/') : '—';
       var st = _lzStatus(declRank, realRank);
       var known = (declRank != null && realRank != null);
       if (st.flag) flagged++;
+      var apLabel = (realRank != null) ? _LTR[realRank] : (realCat || '—');
       var nameColor = known ? st.color : 'var(--text-main,#e5e7eb)';
-      var right = '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:' + st.color + ';">' + _esc(realCat) + ' <span style="opacity:0.55;">' + srcIcon + '</span></span>';
-      var sub = '';
-      if (known) {
-        sub = (st.emoji === '🟢')
-          ? '<div style="font-size:12px;color:' + st.color + ';margin-top:1px;">' + st.emoji + ' declarou ' + _esc(declLabel) + ' · coerente</div>'
-          : '<div style="font-size:12px;color:' + st.color + ';margin-top:1px;">' + st.emoji + ' declarou <b>' + _esc(declLabel) + '</b> · joga <b>' + _esc(realCat) + '</b> → <b>' + st.label + '</b></div>';
-      }
-      return '<div style="padding:4px 0;font-size:0.86rem;">' +
-        '<div style="display:flex;justify-content:space-between;gap:10px;"><span style="color:' + nameColor + ';font-weight:600;">' + _esc(name || '—') + '</span>' + right + '</div>' +
-        sub +
+      var right = known
+        ? '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:' + st.color + ';">(' + _esc(declLabel) + ' / ' + _esc(apLabel) + ') <span style="opacity:0.5;">' + srcIcon + '</span></span>'
+        : '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:var(--text-muted,#8592a6);">' + _esc(realCat || '—') + ' <span style="opacity:0.5;">' + srcIcon + '</span></span>';
+      return '<div style="padding:4px 0;font-size:0.86rem;display:flex;justify-content:space-between;gap:10px;">' +
+        '<span style="color:' + nameColor + ';font-weight:600;">' + _esc(name || '—') + '</span>' + right +
       '</div>';
     }
     var impHtml = imp.map(function (o) {
@@ -1288,10 +1287,14 @@
     var lastUpdateHtml = _ld
       ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Última atualização: <b style="color:var(--text-bright,#fff);">' + _ld.toLocaleDateString('pt-BR') + ' ' + _ld.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '</b></div>'
       : '';
-    // Botão SEMPRE visível quando há alguém autorizado (buscar/atualizar).
-    var scanLabel = scanned.length ? '🔄 Atualizar histórico do letzplay' : '🔎 Buscar histórico do letzplay';
+    // Dois modos: ESSENCIAL (só o ranking real — rápido, pra flag) e COMPLETA (perfil
+    // inteiro: rankings + torneios + jogos — pra migrar a pessoa pro scoreplace).
+    var btnCss = 'flex:1;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:11px 12px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.86rem;font-weight:700;';
     var scanBtn = targets.length
-      ? '<button type="button" id="lz-scan-btn" onclick="window._lzOrgScan()" style="margin-bottom:8px;width:100%;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:11px 14px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.92rem;font-weight:700;">' + scanLabel + ' (' + targets.length + ')</button>'
+      ? '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+          '<button type="button" id="lz-scan-btn-essential" onclick="window._lzOrgScan(\'essential\')" title="Busca rápida: só o nível real do ranking ativo (pra conferir a categoria)" style="' + btnCss + '">🔎 Essencial (' + targets.length + ')</button>' +
+          '<button type="button" id="lz-scan-btn-full" onclick="window._lzOrgScan(\'full\')" title="Busca completa: rankings + torneios + jogos (perfil inteiro do letzplay)" style="' + btnCss + '">📚 Completa (' + targets.length + ')</button>' +
+        '</div>'
       : '';
 
     var flagBanner = flagged > 0
@@ -1323,23 +1326,26 @@
     for (var i = 0; i < Math.max(a.length, b.length); i++) { var x = a[i] || 0, y = b[i] || 0; if (x !== y) return x > y; }
     return true;
   }
-  var _LZ_MIN_EXT = '1.31';
+  var _LZ_MIN_EXT = '1.32';
 
   // Busca ativa: o PRÓPRIO botão vira barra de progresso 0–100% (sem modal, o
   // organizador fica na tela). Erros viram toast e o botão volta ao normal.
-  window._lzOrgScan = function () {
+  window._lzOrgScan = function (mode) {
+    mode = (mode === 'full') ? 'full' : 'essential';
     var ctx = window._lzScanCtx;
     if (!ctx || !ctx.targets || !ctx.targets.length) return;
-    var btn = document.getElementById('lz-scan-btn');
+    var btn = document.getElementById(mode === 'full' ? 'lz-scan-btn-full' : 'lz-scan-btn-essential');
+    var otherBtn = document.getElementById(mode === 'full' ? 'lz-scan-btn-essential' : 'lz-scan-btn-full');
     var origHtml = btn ? btn.innerHTML : '';
     var pillBg = 'var(--info-pill-bg,rgba(99,102,241,0.15))';
     function setBtn(txt, pct) {
+      if (otherBtn) otherBtn.disabled = true;
       if (!btn) return;
       btn.disabled = true;
       btn.style.background = (pct != null) ? ('linear-gradient(90deg, rgba(56,189,248,0.5) ' + pct + '%, ' + pillBg + ' ' + pct + '%)') : pillBg;
       btn.textContent = txt;
     }
-    function restore() { if (btn) { btn.disabled = false; btn.style.background = pillBg; btn.innerHTML = origHtml; } }
+    function restore() { if (otherBtn) otherBtn.disabled = false; if (btn) { btn.disabled = false; btn.style.background = pillBg; btn.innerHTML = origHtml; } }
     function fail(msg) { restore(); if (typeof showNotification === 'function') showNotification('Não deu pra buscar', msg, 'error'); }
     setBtn('🔌 Conectando à extensão…', null);
     var started = false, done = false, versions = [], bestScans = {}, resultTimer = null;
@@ -1383,7 +1389,7 @@
       if (!_verGE(best, _LZ_MIN_EXT)) { window.removeEventListener('message', onMsg); fail('Sua extensão está na versão ' + best + '. ' + reload); return; }
       started = true;
       setBtn('🔎 Buscando… 0%', 0);
-      window.postMessage({ __sp_lp: 'run-org-scan', targets: ctx.targets, tournamentId: ctx.tId }, window.location.origin);
+      window.postMessage({ __sp_lp: 'run-org-scan', targets: ctx.targets, tournamentId: ctx.tId, mode: mode }, window.location.origin);
     }, 900);
     setTimeout(function () { if (done || !started) return; window.removeEventListener('message', onMsg); fail('A busca demorou demais. Tente de novo.'); }, 90000);
   };

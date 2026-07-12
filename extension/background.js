@@ -91,53 +91,138 @@ function fetchViaLetzplayTab(url, cb) {
 }
 
 // EXTRATOR do PERFIL PÚBLICO — roda no DOM RENDERIZADO da aba do letzplay (o perfil
-// é SPA: categoria/torneios vêm por JS e NÃO estão no HTML cru do fetch). Self-contained.
+// é SPA: rankings/torneios/jogos vêm por JS e NÃO estão no HTML cru do fetch).
+// Self-contained; extrai TUDO que a página atual expõe (base OU /rankings OU /tournaments).
+// A PÁGINA BASE (/{handle}) mostra torneios + jogos recentes + totais; a de RANKINGS
+// (/{handle}/rankings) mostra a categoria REAL de cada ranking com a banda (ex: "Fem C+/B-")
+// e status Ativo/Inativo — é DE LÁ que sai o nível competitivo real (o principal só lista
+// torneios, cuja categoria pode ser mais baixa por falta de experiência oficial).
 function _spExtractProfileInTab(h) {
   var bt = (document.body && document.body.textContent || '').replace(/\s+/g, ' ');
   var num = function (re) { var m = bt.match(re); return m ? +m[1] : null; };
-  var title = (document.title || '').replace(/\s*[-|]\s*Letzplay.*$/i, '').trim();
+  var title = (document.title || '')
+    .replace(/^\s*(Rankings|Torneios|Jogos)\s+de\s+/i, '')
+    .replace(/\s*[-|]\s*Letzplay.*$/i, '').trim();
   var CAT_RE = /(Masculina|Feminina|Mista|Masc|Fem)\s*-?\s*([A-D][+\-]?(?:\s*\/\s*[A-D][+\-]?)?)/;
   var catFrom = function (tx) { var m = String(tx || '').match(CAT_RE); return m ? (m[1] + ' ' + m[2]).replace(/\s+/g, ' ').trim() : null; };
-  var links = Array.prototype.slice.call(document.querySelectorAll('a[href*="/rankings/"], a[href*="/tournaments/"]'))
-    .map(function (a) { return (a.textContent || '').replace(/\s+/g, ' ').trim(); });
-  var cats = []; links.forEach(function (tx) { var c = catFrom(tx); if (c && cats.indexOf(c) < 0) cats.push(c); });
-  // Deriva gênero + habilidade das categorias — pra alimentar o perfil da pessoa.
-  var catStr = cats.join(' ');
-  var gender = /Feminina|\bFem\b/i.test(catStr) ? 'feminino' : (/Masculina|\bMasc\b/i.test(catStr) ? 'masculino' : null);
-  var RANK = { A: 0, B: 1, C: 2, D: 3 }, LTR = ['A', 'B', 'C', 'D'], ranks = [];
-  (' ' + catStr.toUpperCase() + ' ').replace(/[\s\/]([A-D])[+\-]?(?=[\s\/])/g, function (_m, l) { ranks.push(RANK[l]); return _m; });
-  var skill = ranks.length ? LTR[Math.min.apply(null, ranks)] : null;
-  return { handle: h, name: title || null, rankingCategory: cats[0] || null, allCategories: cats,
-    gender: gender, skill: skill,
+  // RANKINGS estruturados: sobe do <a> do ranking até o card e lê status + posição.
+  var rankings = [], seenR = {};
+  Array.prototype.slice.call(document.querySelectorAll('a[href*="/rankings/"]'))
+    .filter(function (a) { return !/player-stats/.test(a.getAttribute('href') || ''); })
+    .forEach(function (a) {
+      var path = a.pathname || (a.getAttribute('href') || '');
+      if (seenR[path]) return; seenR[path] = 1;
+      var label = (a.textContent || '').replace(/\s+/g, ' ').trim();
+      var el = a; for (var i = 0; i < 5 && el.parentElement; i++) { el = el.parentElement; if (/ativo|inativo|rodada|jogadores/i.test(el.textContent || '')) break; }
+      var block = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      var cat = catFrom(label) || catFrom(block);
+      var active = !/\bInativo\b|\bConcluído\b|\bConcluido\b/i.test(block);
+      var pos = (block.match(/(\d+)\s*º/) || [])[1];
+      rankings.push({ path: path, label: label, category: cat, active: active, position: pos ? +pos : null });
+    });
+  // TORNEIOS estruturados.
+  var tournaments = [], seenT = {};
+  Array.prototype.slice.call(document.querySelectorAll('a[href*="/tournaments/"]'))
+    .forEach(function (a) {
+      var path = a.pathname || (a.getAttribute('href') || '');
+      if (seenT[path] || /\/u\/tournaments/.test(path)) return; seenT[path] = 1;
+      var label = (a.textContent || '').replace(/\s+/g, ' ').trim();
+      var cat = catFrom(label);
+      if (!cat && !/\/tournaments\/\d/.test(path)) return; // ignora CTAs genéricos
+      tournaments.push({ path: path, label: label, category: cat });
+    });
+  return {
+    handle: h, name: title || null,
+    rankings: rankings, tournaments: tournaments,
     totals: { matches: num(/(\d+)\s*Jogos/), rankings: num(/(\d+)\s*Rankings/), tournaments: num(/(\d+)\s*Torneios/) },
-    lastPlayed: (bt.match(/Jogou h[áa]\s*(\d+\s*\w+)/) || [])[1] || null, source: 'public-profile' };
+    lastPlayed: (bt.match(/Jogou h[áa]\s*(\d+\s*\w+)/) || [])[1] || null
+  };
 }
-// Navega a aba do letzplay pro perfil, espera o JS renderizar e extrai do DOM.
-// Faz até 5 tentativas (o JS pode demorar a carregar torneios/rankings).
-function scanProfileViaTab(handle, cb) {
+// Deriva os campos do scan a partir dos dados brutos das duas páginas (base + rankings).
+// Banda REAL = categoria mais forte entre os rankings ATIVOS (fallback: todos rankings;
+// fallback: torneios). Skill = letra mais forte da banda. Roda no background (plain JS).
+function _spDeriveScan(handle, base, rk) {
+  base = base || {}; rk = rk || {};
+  var RANK = { A: 0, B: 1, C: 2, D: 3 }, LTR = ['A', 'B', 'C', 'D'];
+  var rankings = (rk.rankings && rk.rankings.length) ? rk.rankings : (base.rankings || []);
+  var tournaments = (base.tournaments && base.tournaments.length) ? base.tournaments : (rk.tournaments || []);
+  function strongestOf(cats) {
+    var ranks = [];
+    cats.forEach(function (c) { (' ' + String(c || '').toUpperCase() + ' ').replace(/[\s\/]([A-D])[+\-]?(?=[\s\/])/g, function (_m, l) { ranks.push(RANK[l]); return _m; }); });
+    return ranks.length ? Math.min.apply(null, ranks) : null;
+  }
+  var activeCats = rankings.filter(function (r) { return r.active && r.category; }).map(function (r) { return r.category; });
+  var allRankCats = rankings.filter(function (r) { return r.category; }).map(function (r) { return r.category; });
+  var tourCats = tournaments.filter(function (t) { return t.category; }).map(function (t) { return t.category; });
+  var allCats = [];
+  activeCats.concat(allRankCats).concat(tourCats).forEach(function (c) { if (c && allCats.indexOf(c) < 0) allCats.push(c); });
+  // categoria oficial de referência = banda do ranking ativo mais forte (real), senão qualquer ranking, senão torneio
+  var realRank = strongestOf(activeCats);
+  var realCats = activeCats;
+  if (realRank == null) { realRank = strongestOf(allRankCats); realCats = allRankCats; }
+  if (realRank == null) { realRank = strongestOf(tourCats); realCats = tourCats; }
+  // rótulo da categoria real = o primeiro que contém a letra mais forte
+  var rankingCategory = null;
+  if (realRank != null) { for (var i = 0; i < realCats.length; i++) { if (strongestOf([realCats[i]]) === realRank) { rankingCategory = realCats[i]; break; } } }
+  var gender = /Feminina|\bFem\b/i.test(allCats.join(' ')) ? 'feminino' : (/Masculina|\bMasc\b/i.test(allCats.join(' ')) ? 'masculino' : null);
+  var skill = realRank != null ? LTR[realRank] : null;
+  return {
+    handle: handle, name: base.name || rk.name || null,
+    rankingCategory: rankingCategory, allCategories: allCats,
+    gender: gender, skill: skill,
+    rankings: rankings, tournaments: tournaments,
+    totals: base.totals || rk.totals || {},
+    lastPlayed: base.lastPlayed || rk.lastPlayed || null, source: 'public-profile' };
+}
+// Navega a aba do letzplay pelo perfil. mode='essential' → só /rankings (rápido,
+// pega a banda REAL do ranking ativo, suficiente pra flag anti-gato). mode='full' →
+// base (/{handle}: nome, totais, torneios, jogos) + /rankings, mescla tudo (pra
+// migrar a pessoa pro scoreplace). Espera o JS renderizar; retry.
+function scanProfileViaTab(handle, mode, cb) {
   if (!chrome.scripting || !chrome.tabs) { cb({ ok: false, error: 'no-scripting' }); return; }
   ensureLetzplayTab(function (tabId) {
     if (!tabId) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
-    var url = 'https://letzplay.me/' + encodeURIComponent(handle);
-    chrome.tabs.update(tabId, { url: url }, function () {
-      if (chrome.runtime.lastError) { cb({ ok: false, error: 'nav-fail' }); return; }
-      var navDone = false;
-      function onUpd(tid, info) { if (tid === tabId && info.status === 'complete' && !navDone) { navDone = true; chrome.tabs.onUpdated.removeListener(onUpd); attempt(0); } }
-      chrome.tabs.onUpdated.addListener(onUpd);
-      setTimeout(function () { if (!navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} attempt(0); } }, 12000);
-      function attempt(n) {
+    var enc = encodeURIComponent(handle);
+    // extrai a página atual com retry até render (need = função que valida o resultado)
+    function extractWithRetry(need, done) {
+      var n = 0;
+      function attempt() {
         setTimeout(function () {
           chrome.scripting.executeScript({ target: { tabId: tabId }, func: _spExtractProfileInTab, args: [handle] })
             .then(function (res) {
-              var scan = (res && res[0] && res[0].result) || null;
-              if (scan && scan.rankingCategory) { cb({ ok: true, scan: scan }); return; } // achou categoria
-              if (n < 4) { attempt(n + 1); return; }  // ainda não renderizou → tenta de novo
-              cb({ ok: true, scan: scan });            // desiste: devolve o que tem (pode ser sem categoria)
+              var data = (res && res[0] && res[0].result) || null;
+              if ((data && need(data)) || n >= 4) { done(data); return; }
+              n++; attempt();
             })
-            .catch(function (e) { if (n < 4) attempt(n + 1); else cb({ ok: false, error: String(e && e.message || e) }); });
+            .catch(function (e) { if (n >= 4) done(null); else { n++; attempt(); } });
         }, n === 0 ? 1600 : 1300);
       }
-    });
+      attempt();
+    }
+    function goThen(url, next) {
+      var navDone = false;
+      function onUpd(tid, info) { if (tid === tabId && info.status === 'complete' && !navDone) { navDone = true; chrome.tabs.onUpdated.removeListener(onUpd); next(); } }
+      chrome.tabs.onUpdated.addListener(onUpd);
+      chrome.tabs.update(tabId, { url: url }, function () { if (chrome.runtime.lastError) { if (!navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} next(); } } });
+      setTimeout(function () { if (!navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} next(); } }, 12000);
+    }
+    function doRankings(base) {
+      // página de rankings: banda REAL por ranking (com status ativo/inativo)
+      goThen('https://letzplay.me/' + enc + '/rankings', function () {
+        extractWithRetry(function (d) { return d.rankings && d.rankings.length; }, function (rk) {
+          cb({ ok: true, scan: _spDeriveScan(handle, base, rk) });
+        });
+      });
+    }
+    if (mode === 'full') {
+      // base primeiro (nome, totais, torneios, jogos), depois rankings
+      goThen('https://letzplay.me/' + enc, function () {
+        extractWithRetry(function (d) { return d.name || (d.tournaments && d.tournaments.length) || (d.totals && d.totals.matches != null); }, doRankings);
+      });
+    } else {
+      // essencial: só /rankings (a banda real está lá; o title dá o nome)
+      doRankings({});
+    }
   });
 }
 
@@ -148,7 +233,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     return true; // resposta assíncrona
   }
   if (msg && msg.type === 'lp-scan-profile' && typeof msg.handle === 'string') {
-    scanProfileViaTab(msg.handle, sendResponse);
+    scanProfileViaTab(msg.handle, msg.mode === 'full' ? 'full' : 'essential', sendResponse);
     return true; // assíncrona
   }
   if (msg && msg.type === 'lp-close-scan-tab') { closeAutoScanTab(); sendResponse({ ok: true }); return true; }
