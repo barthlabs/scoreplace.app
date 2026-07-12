@@ -210,15 +210,16 @@
     var name = null;
     var tt = (doc.title || '').replace(/\s*[-|]\s*Letzplay.*$/i, '').trim();
     if (tt) name = tt;
-    // categorias dos rankings (nível). Mantém a categoria CRUA COMPLETA (ex.:
-    // "Social Masc D+ / C-") — sem truncar como o parseCategory do import — porque
-    // o range inteiro importa pro flag de nível (D+/C- = joga até C-). Tira só o
-    // "Rodada N •" e o "| ANO".
-    var cleanCat = function (tx) { return String(tx || '').replace(/^.*?•\s*/, '').replace(/\s*\|.*$/, '').trim(); };
-    var rankTexts = Array.prototype.slice.call(doc.querySelectorAll('a[href*="/rankings/"]'))
-      .map(function (a) { return (a.textContent || '').replace(/\s+/g, ' ').trim(); })
-      .filter(function (v, i, arr) { return v && arr.indexOf(v) === i; });
-    var cats = rankTexts.map(cleanCat).filter(Boolean);
+    // categoria (nível) = token gênero+nível dos links de RANKING e TORNEIO. Perfis
+    // variam: uns mostram ranking ("Rodada 9 • Social Masc D+ / C- | 2026"), outros
+    // só torneios ("Interno Ciclo 2 - Feminina D Duplas"). Regex pega "Feminina D",
+    // "Masc D+ / C-" etc. — preservando o range (D+/C-) pro flag de nível.
+    var CAT_RE = /(Masculina|Feminina|Mista|Masc|Fem)\s*-?\s*([A-D][+\-]?(?:\s*\/\s*[A-D][+\-]?)?)/;
+    var catFrom = function (tx) { var m = String(tx || '').match(CAT_RE); return m ? (m[1] + ' ' + m[2]).replace(/\s+/g, ' ').trim() : null; };
+    var linkTexts = Array.prototype.slice.call(doc.querySelectorAll('a[href*="/rankings/"], a[href*="/tournaments/"]'))
+      .map(function (a) { return (a.textContent || '').replace(/\s+/g, ' ').trim(); });
+    var cats = [];
+    linkTexts.forEach(function (tx) { var c = catFrom(tx); if (c && cats.indexOf(c) < 0) cats.push(c); });
     var lastPlayed = (bt.match(/Jogou h[áa]\s*(\d+\s*\w+)/) || [])[1] || null;
     return {
       handle: handle || null,
