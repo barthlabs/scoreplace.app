@@ -1201,53 +1201,48 @@
     function sumBox(b) { return groups.reduce(function (a, g) { return a + b[g].length; }, 0); }
     var femTotal = sumBox(fem), mascTotal = sumBox(masc), semTotal = sumBox(semG), total = (rows || []).length;
 
-    // Card do atleta — tamanho padrão (min 150px, altura fixa), nome com ellipsis.
+    // Ordena: VERIFICADOS (com apuração letzplay) no topo, depois alfabético.
+    function sortList(arr) {
+      return arr.slice().sort(function (a, b) {
+        var av = a._lzColor ? 0 : 1, bv = b._lzColor ? 0 : 1;
+        if (av !== bv) return av - bv;
+        return String(a.name || '~').localeCompare(String(b.name || '~'), 'pt', { sensitivity: 'base' });
+      });
+    }
+    // Card do atleta — tamanho padrão (min 150px), nome com ellipsis.
     function chip(r) {
       var pe = _pendingEdits[r.order] || {}; var edited = Object.keys(pe).length > 0;
-      // nome PINTADO pela verificação letzplay (r._lzColor); editado = âmbar.
       var nameCol = edited ? '#f59e0b' : (r._lzColor || 'var(--text-bright,#fff)');
       var border = edited ? 'rgba(245,158,11,0.55)' : (r._lzColor ? (r._lzColor + '55') : 'var(--border-color)');
       return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')" ' +
         'style="cursor:grab;font-size:0.9rem;font-weight:600;padding:6px 10px;border-radius:7px;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + _esc(r.name || '(sem nome)') + ' — arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + '</div>';
     }
-    // Cards em GRID: 2-3 colunas conforme a largura (auto-fill + minmax fixo).
-    function cardGrid(arr) { return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;">' + arr.map(chip).join('') + '</div>'; }
-    // Célula-alvo (gênero × habilidade). min-height garante alinhamento entre colunas.
-    function cell(genderKey, sk, arr, tint) {
+    function cardGrid(arr) { return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;">' + sortList(arr).map(chip).join('') + '</div>'; }
+    // Sub-seção de categoria DENTRO do box de gênero: cabeçalho "C (N)" + cards.
+    // É drop zone (gênero + categoria).
+    function catSection(genderKey, sk, arr, tint) {
+      var label = (sk === '__none__') ? 'Sem habilidade' : sk;
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
-        'style="border:1px dashed ' + tint + ';border-radius:8px;padding:6px;min-height:38px;">' + cardGrid(arr) + '</div>';
+        'style="border:1px dashed ' + tint + ';border-radius:8px;padding:6px 8px;margin:7px 0;min-height:30px;">' +
+        '<div style="font-size:14px;font-weight:800;color:var(--text-secondary,#c8cdd6);margin-bottom:5px;">' + label + ' <span style="color:var(--text-muted);font-weight:700;">(' + arr.length + ')</span></div>' +
+        cardGrid(arr) + '</div>';
     }
-    var femTint = 'rgba(236,72,153,0.30)', mascTint = 'rgba(59,130,246,0.30)';
-    function ghead(icon, gKey, name, color, tot) {
-      return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + gKey + '\',\'\')" ' +
-        'style="font-size:17px;font-weight:800;color:' + color + ';border-bottom:2px solid ' + color + ';padding-bottom:5px;">' +
-        icon + ' ' + name + ' <span style="opacity:0.8;font-size:15px;">(' + tot + ')</span></div>';
+    // Box de gênero — BORDA colorida definida; drop no box = atribui só gênero.
+    function box(icon, gKey, name, color, tint, data, tot, wide) {
+      var inner = groups.map(function (sk) { return catSection(gKey, sk, data[sk], tint); }).join('');
+      return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (gKey || '') + '\',\'\')" ' +
+        'style="' + (wide ? 'width:100%;' : 'flex:1 1 320px;min-width:290px;') + 'background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid ' + color + ';border-radius:12px;padding:10px 12px;">' +
+        '<div style="font-size:17px;font-weight:800;color:' + color + ';border-bottom:2px solid ' + color + ';padding-bottom:6px;margin-bottom:2px;">' + icon + ' ' + name + ' <span style="opacity:0.8;font-size:15px;">(' + tot + ')</span></div>' + inner + '</div>';
     }
-    // GRID: 3 colunas (habilidade | Feminino | Masculino). Cada habilidade é uma LINHA,
-    // então D fem e D masc ficam alinhados na mesma linha.
-    var gridRows = '<div></div>' +
-      ghead('♀', 'feminino', 'Feminino', '#ec4899', femTotal) +
-      ghead('♂', 'masculino', 'Masculino', '#3b82f6', mascTotal);
-    groups.forEach(function (sk) {
-      var label = (sk === '__none__') ? 'Sem hab.' : sk;
-      gridRows += '<div style="display:flex;align-items:flex-start;padding-top:10px;font-size:15px;font-weight:800;color:var(--text-muted);">' + label + '</div>' +
-        cell('feminino', sk, fem[sk], femTint) + cell('masculino', sk, masc[sk], mascTint);
-    });
-    var grid = '<div style="display:grid;grid-template-columns:minmax(48px,auto) 1fr 1fr;gap:8px 14px;align-items:start;">' + gridRows + '</div>';
     var totalBar = '<div style="font-size:16px;font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;">Total de inscritos: ' + total + '</div>';
-    // Sem gênero: FAIXA embaixo (largura total), categorias em grid horizontal.
-    var semSection = '';
-    if (semTotal) {
-      var semInner = groups.map(function (sk) {
-        var label = (sk === '__none__') ? 'Sem habilidade' : sk;
-        return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'\',\'' + sk + '\')" style="border:1px dashed var(--border-color);border-radius:8px;padding:5px 8px;margin:5px 0;min-height:32px;">' +
-          '<div style="font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:3px;">' + label + ' (' + semG[sk].length + ')</div>' +
-          cardGrid(semG[sk]) + '</div>';
-      }).join('');
-      semSection = '<div style="margin-top:16px;background:var(--bg-darker,rgba(0,0,0,0.15));border:1px solid #8592a6;border-radius:10px;padding:10px 12px;">' +
-        '<div style="font-size:17px;font-weight:800;color:#8592a6;margin-bottom:6px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste ↑ pra Feminino ou Masculino</div>' + semInner + '</div>';
-    }
-    return totalBar + grid + semSection;
+    var boxes = '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">' +
+      box('♀', 'feminino', 'Feminino', '#ec4899', 'rgba(236,72,153,0.30)', fem, femTotal) +
+      box('♂', 'masculino', 'Masculino', '#3b82f6', 'rgba(59,130,246,0.30)', masc, mascTotal) +
+      '</div>';
+    var semSection = semTotal
+      ? '<div style="margin-top:12px;">' + box('?', '', 'Sem gênero — arraste pra Feminino ou Masculino', '#8592a6', 'rgba(133,146,166,0.30)', semG, semTotal, true) + '</div>'
+      : '';
+    return totalBar + boxes + semSection;
   }
   window._erRenderMatrix = function () {
     var el = document.getElementById('er-cat-matrix');
