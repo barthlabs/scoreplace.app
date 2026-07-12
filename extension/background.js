@@ -101,7 +101,14 @@ function _spExtractProfileInTab(h) {
   var links = Array.prototype.slice.call(document.querySelectorAll('a[href*="/rankings/"], a[href*="/tournaments/"]'))
     .map(function (a) { return (a.textContent || '').replace(/\s+/g, ' ').trim(); });
   var cats = []; links.forEach(function (tx) { var c = catFrom(tx); if (c && cats.indexOf(c) < 0) cats.push(c); });
+  // Deriva gênero + habilidade das categorias — pra alimentar o perfil da pessoa.
+  var catStr = cats.join(' ');
+  var gender = /Feminina|\bFem\b/i.test(catStr) ? 'feminino' : (/Masculina|\bMasc\b/i.test(catStr) ? 'masculino' : null);
+  var RANK = { A: 0, B: 1, C: 2, D: 3 }, LTR = ['A', 'B', 'C', 'D'], ranks = [];
+  (' ' + catStr.toUpperCase() + ' ').replace(/[\s\/]([A-D])[+\-]?(?=[\s\/])/g, function (_m, l) { ranks.push(RANK[l]); return _m; });
+  var skill = ranks.length ? LTR[Math.min.apply(null, ranks)] : null;
   return { handle: h, name: title || null, rankingCategory: cats[0] || null, allCategories: cats,
+    gender: gender, skill: skill,
     totals: { matches: num(/(\d+)\s*Jogos/), rankings: num(/(\d+)\s*Rankings/), tournaments: num(/(\d+)\s*Torneios/) },
     lastPlayed: (bt.match(/Jogou h[áa]\s*(\d+\s*\w+)/) || [])[1] || null, source: 'public-profile' };
 }

@@ -6131,6 +6131,9 @@ window.AppStore = {
             window._warn('[selfHealFriends] background failed:', e);
           });
         }, 0);
+        // v1.15.37: alimenta gênero/habilidade do PRÓPRIO scan letzplay (quando um
+        // organizador buscou o perfil público). Só self-write, só o que falta.
+        setTimeout(function() { self._selfPopulateFromLetzplayScan().catch(function() {}); }, 0);
       }
       // v0.17.3: sinaliza que o profile load attempt completou (sucesso OU
       // doc inexistente — first-time user). Views que dependem de campos do
@@ -6174,6 +6177,32 @@ window.AppStore = {
   // o dedup era só no momento de notificar; agora a lista persistida é
   // canônica. Não bloqueia render — usuário pode usar o app enquanto roda.
   // Idempotente: pode chamar várias vezes, só faz write quando há mudança.
+  // v1.15.37: alimenta gênero + habilidade (Beach Tennis) do PRÓPRIO scan letzplay
+  // (letzplayScans/{uid}, gravado por um organizador na busca ativa). Self-write, só
+  // preenche o que falta no perfil — nunca sobrescreve o que a pessoa já definiu.
+  async _selfPopulateFromLetzplayScan() {
+    var cu = this.currentUser; if (!cu || !cu.uid) return;
+    var db = window.FirestoreDB && (window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
+    if (!db) return;
+    var snap;
+    try { snap = await db.collection('letzplayScans').doc(cu.uid).get(); } catch (e) { return; }
+    if (!snap.exists) return;
+    var scan = (snap.data() || {}).scan || {};
+    var patch = {};
+    if (!cu.gender && scan.gender) patch.gender = scan.gender;
+    if (scan.skill) {
+      var sport = 'Beach Tennis'; // letzplay = beach tennis
+      var sbs = (cu.skillBySport && typeof cu.skillBySport === 'object') ? cu.skillBySport : {};
+      if (!sbs[sport]) { sbs = Object.assign({}, sbs); sbs[sport] = scan.skill; patch.skillBySport = sbs; }
+    }
+    if (!Object.keys(patch).length) return;
+    try {
+      await db.collection('users').doc(cu.uid).set(patch, { merge: true });
+      Object.assign(cu, patch);
+      window._log('[letzplay self-populate] preenchido do scan:', Object.keys(patch).join(', '));
+    } catch (e) { window._warn('[letzplay self-populate] falhou', e); }
+  },
+
   async _selfHealFriendsList() {
     if (!this.currentUser || !window.FirestoreDB || !window.FirestoreDB.db) return;
     var uid = this.currentUser.uid;
