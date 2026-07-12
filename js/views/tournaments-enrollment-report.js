@@ -240,8 +240,15 @@
     var resolvedFor = {};
 
     // ─ Camada 1: direct uid fetch ────────────────────────────────────
+    // Busca TODOS os uids — inclusive p1Uid/p2Uid das duplas (senão o nome do
+    // parceiro sai "(sem nome)": a inscrição guarda só uid, o nome vem do perfil).
     var uids = {};
-    parts.forEach(function (p) { if (p && p.uid) uids[p.uid] = 1; });
+    parts.forEach(function (p) {
+      if (!p) return;
+      if (p.uid) uids[p.uid] = 1;
+      if (p.p1Uid) uids[p.p1Uid] = 1;
+      if (p.p2Uid) uids[p.p2Uid] = 1;
+    });
     var uidPromises = Object.keys(uids).map(function (uid) {
       return db.collection('users').doc(uid).get()
         .then(function (doc) { if (doc.exists) byUid[uid] = doc.data(); })
@@ -1509,8 +1516,8 @@
     container.innerHTML = hdr +
       '<div style="max-width:100%;margin:0 auto;padding:1rem 1.25rem;">' +
       subtitle +
-      _renderOverview(rows, t) +
       _renderLetzplaySection(rows, t, profileMap, scanMap) +
+      _renderOverview(rows, t) +
       _renderCategoryTable(rows, t) +
       _renderInscritosList(rows, t) +
       // v2.4.33: seção "Perfis Incompletos" editável removida — a edição de
