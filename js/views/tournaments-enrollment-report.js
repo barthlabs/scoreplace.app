@@ -1227,16 +1227,16 @@
       grey: { bg: 'rgba(133,146,166,0.14)', fg: '#8592a6' }
     };
     function pill(c, n, label) {
-      return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 10px;border-radius:20px;background:' + c.bg + ';color:' + c.fg + ';"><span style="width:8px;height:8px;border-radius:50%;background:' + c.fg + ';"></span>' + n + ' ' + label + '</span>';
+      return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:6px 12px;border-radius:20px;background:' + c.bg + ';color:' + c.fg + ';"><span style="width:8px;height:8px;border-radius:50%;background:' + c.fg + ';"></span>' + n + ' ' + label + '</span>';
     }
     function line(name, extra) {
-      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px;"><span>' + _esc(name || '—') + '</span>' + (extra || '') + '</div>';
+      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:0.86rem;"><span>' + _esc(name || '—') + '</span>' + (extra || '') + '</div>';
     }
     // Itens em COLUNAS (grid) pra aproveitar a largura e economizar altura.
     // minw = largura mínima da coluna (nomes simples: estreita; conhecidos c/ categoria: larga).
     function group(color, label, itemsHtml, minw) {
       if (!itemsHtml) return '';
-      return '<div style="font-size:11px;font-weight:700;color:' + color + ';margin:10px 0 2px;">' + label + '</div>' +
+      return '<div style="font-size:12px;font-weight:700;color:' + color + ';margin:12px 0 3px;">' + label + '</div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(' + (minw || '150px') + ',1fr));gap:0 18px;">' + itemsHtml + '</div>';
     }
     // Anti-gato: compara a categoria DECLARADA no torneio (effectiveSkills) com o
@@ -1254,10 +1254,10 @@
       var sub = '';
       if (known) {
         sub = (st.emoji === '🟢')
-          ? '<div style="font-size:11px;color:' + st.color + ';margin-top:1px;">' + st.emoji + ' declarou ' + _esc(declLabel) + ' · coerente</div>'
-          : '<div style="font-size:11px;color:' + st.color + ';margin-top:1px;">' + st.emoji + ' declarou <b>' + _esc(declLabel) + '</b> · joga <b>' + _esc(realCat) + '</b> → <b>' + st.label + '</b></div>';
+          ? '<div style="font-size:12px;color:' + st.color + ';margin-top:1px;">' + st.emoji + ' declarou ' + _esc(declLabel) + ' · coerente</div>'
+          : '<div style="font-size:12px;color:' + st.color + ';margin-top:1px;">' + st.emoji + ' declarou <b>' + _esc(declLabel) + '</b> · joga <b>' + _esc(realCat) + '</b> → <b>' + st.label + '</b></div>';
       }
-      return '<div style="padding:4px 0;font-size:12.5px;">' +
+      return '<div style="padding:4px 0;font-size:0.86rem;">' +
         '<div style="display:flex;justify-content:space-between;gap:10px;"><span style="color:' + nameColor + ';font-weight:600;">' + _esc(name || '—') + '</span>' + right + '</div>' +
         sub +
       '</div>';
@@ -1273,33 +1273,47 @@
     }).join('');
     var restHtml = function (arr) { return arr.map(function (x) { return line(x.r ? x.r.name : x.name); }).join(''); };
 
-    // Alvos da busca ativa (autorizaram, têm @, ainda sem histórico/scan).
-    var targets = wait.map(function (w) { return { uid: w.r.uid, handle: w.handle, name: w.r.name }; })
-      .filter(function (x) { return x.uid && x.handle; });
+    // Alvos da busca ativa = TODOS que autorizaram (@ + consentimento) e ainda não
+    // têm histórico PRÓPRIO importado. Inclui os já buscados (pra atualizar).
+    var targets = (rows || []).filter(function (r) {
+      var prof = r.uid && profileMap[r.uid];
+      return prof && prof.letzplayHandle && prof.letzplayConsent === true && !prof.letzplayImport;
+    }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
     window._lzScanCtx = { tId: t.id, targets: targets };
+
+    // Última atualização = scan mais recente do torneio.
+    var lastTs = 0;
+    Object.keys(scanMap).forEach(function (uid) { var s = scanMap[uid]; if (s && s.scannedAt) { var v = Date.parse(s.scannedAt) || 0; if (v > lastTs) lastTs = v; } });
+    var _ld = lastTs ? new Date(lastTs) : null;
+    var lastUpdateHtml = _ld
+      ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Última atualização: <b style="color:var(--text-bright,#fff);">' + _ld.toLocaleDateString('pt-BR') + ' ' + _ld.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '</b></div>'
+      : '';
+    // Botão SEMPRE visível quando há alguém autorizado (buscar/atualizar).
+    var scanLabel = scanned.length ? '🔄 Atualizar histórico do letzplay' : '🔎 Buscar histórico do letzplay';
     var scanBtn = targets.length
-      ? '<button type="button" id="lz-scan-btn" onclick="window._lzOrgScan()" style="margin-bottom:12px;width:100%;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.82rem;font-weight:700;">🔎 Buscar histórico de quem autorizou (' + targets.length + ' · letzplay público)</button>'
+      ? '<button type="button" id="lz-scan-btn" onclick="window._lzOrgScan()" style="margin-bottom:8px;width:100%;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:11px 14px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.92rem;font-weight:700;">' + scanLabel + ' (' + targets.length + ')</button>'
       : '';
 
     var flagBanner = flagged > 0
-      ? '<div style="background:rgba(242,106,106,0.12);border:1px solid rgba(242,106,106,0.4);border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:12.5px;color:#f26a6a;font-weight:600;">🚩 ' +
+      ? '<div style="background:rgba(242,106,106,0.12);border:1px solid rgba(242,106,106,0.4);border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:0.86rem;color:#f26a6a;font-weight:600;">🚩 ' +
           flagged + ' inscrito' + (flagged === 1 ? '' : 's') + ' declarou categoria mais fraca que o nível do letzplay — confira abaixo.</div>'
       : '';
-    return '<div id="lz-history-section" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:15px 16px;margin-bottom:14px;">' +
-      '<div style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">🎾 Histórico letzplay</div>' +
+    return '<div id="lz-history-section" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px 18px;margin-bottom:14px;">' +
+      '<div style="font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">🎾 Histórico letzplay</div>' +
+      scanBtn +
+      lastUpdateHtml +
       '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">' +
         pill(C.green, imp.length, 'com histórico') + (scanned.length ? pill(C.blue, scanned.length, 'buscado') : '') +
         pill(C.amber, wait.length, 'aguardando') +
         pill(C.red, denied.length, 'não autorizou') + pill(C.grey, noh.length, 'sem @') +
       '</div>' +
       flagBanner +
-      scanBtn +
       group('#2dd4a0', '🟢 Com histórico (categoria oficial)', impHtml, '270px') +
       group('#38bdf8', '🔵 Buscado no letzplay (público)', scannedHtml, '270px') +
-      group('#f0b445', '🟡 Autorizou, aguardando busca', restHtml(wait), '160px') +
-      group('#f26a6a', '🔴 Não autorizou', restHtml(denied), '150px') +
-      group('#8592a6', '⚪ Sem @ letzplay', restHtml(noh), '150px') +
-      '<div style="font-size:11px;color:var(--text-muted);margin-top:11px;border-top:1px solid var(--border-color);padding-top:9px;">A busca ativa lê o <b>perfil público</b> do letzplay (nome, categoria/nível) — precisa da <b>extensão do scoreplace no Chrome (desktop)</b> e uma aba do letzplay aberta. 🎾 = histórico importado · 🔎 = perfil público buscado.</div>' +
+      group('#f0b445', '🟡 Autorizou, aguardando busca', restHtml(wait), '170px') +
+      group('#f26a6a', '🔴 Não autorizou', restHtml(denied), '160px') +
+      group('#8592a6', '⚪ Sem @ letzplay', restHtml(noh), '160px') +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:11px;border-top:1px solid var(--border-color);padding-top:9px;line-height:1.5;">A busca ativa lê o <b>perfil público</b> do letzplay (nome, categoria/nível) — precisa da <b>extensão do scoreplace no Chrome (desktop)</b>. 🎾 = histórico importado · 🔎 = perfil público buscado.</div>' +
       '</div>';
   }
 
@@ -1413,7 +1427,7 @@
     _pendingEdits = {}; // v2.4.34: cada carga da página começa sem edições pendentes
 
     container.innerHTML = hdr +
-      '<div style="max-width:1080px;margin:0 auto;padding:1rem;">' +
+      '<div style="max-width:100%;margin:0 auto;padding:1rem 1.25rem;">' +
       subtitle +
       _renderOverview(rows, t) +
       _renderLetzplaySection(rows, t, profileMap, scanMap) +
@@ -1447,7 +1461,7 @@
     var loaderHtml = (typeof window._renderBallLoader === 'function')
       ? window._renderBallLoader('Carregando perfis dos inscritos…', { minHeight: '40vh' })
       : '<div style="text-align:center;padding:48px 12px;color:var(--text-muted);font-size:0.85rem;">⏳ Carregando perfis dos inscritos…</div>';
-    container.innerHTML = hdr + '<div style="max-width:1080px;margin:0 auto;padding:1rem;">' + loaderHtml + '</div>';
+    container.innerHTML = hdr + '<div style="max-width:100%;margin:0 auto;padding:1rem 1.25rem;">' + loaderHtml + '</div>';
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
   }
 
