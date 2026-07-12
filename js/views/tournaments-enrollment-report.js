@@ -1259,7 +1259,7 @@
       .filter(function (x) { return x.uid && x.handle; });
     window._lzScanCtx = { tId: t.id, targets: targets };
     var scanBtn = targets.length
-      ? '<button id="lz-scan-btn" onclick="window._lzOrgScan()" style="margin-top:8px;width:100%;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.82rem;font-weight:700;">🔎 Buscar histórico dos ' + targets.length + ' inscritos (letzplay público)</button>'
+      ? '<button id="lz-scan-btn" onclick="window._lzOrgScan()" style="margin-bottom:12px;width:100%;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.82rem;font-weight:700;">🔎 Buscar histórico de quem autorizou (' + targets.length + ' · letzplay público)</button>'
       : '';
 
     var flagBanner = flagged > 0
@@ -1274,10 +1274,10 @@
         pill(C.red, denied.length, 'não autorizou') + pill(C.grey, noh.length, 'sem @') +
       '</div>' +
       flagBanner +
+      scanBtn +
       group('#2dd4a0', '🟢 Com histórico (categoria oficial)', impHtml) +
       group('#38bdf8', '🔵 Buscado no letzplay (público)', scannedHtml) +
       group('#f0b445', '🟡 Autorizou, aguardando busca', restHtml(wait)) +
-      scanBtn +
       group('#f26a6a', '🔴 Não autorizou', restHtml(denied)) +
       group('#8592a6', '⚪ Sem @ letzplay', restHtml(noh)) +
       '<div style="font-size:11px;color:var(--text-muted);margin-top:11px;border-top:1px solid var(--border-color);padding-top:9px;">A busca ativa lê o <b>perfil público</b> do letzplay (nome, categoria/nível) — precisa da <b>extensão do scoreplace no Chrome (desktop)</b> e uma aba do letzplay aberta. 🎾 = histórico importado · 🔎 = perfil público buscado.</div>' +
