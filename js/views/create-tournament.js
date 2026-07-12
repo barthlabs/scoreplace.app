@@ -580,22 +580,19 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="gsm-fixedSetGames" value="6">
               </div>
 
-              <!-- Rigor da inscrição (v1.15.25) — espectro Casual ↔ Oficial.
-                   Casual: não liga pro histórico. Oficial: exige perfil/histórico
-                   compatível com as categorias (nível, idade, gênero). As travas
-                   duras entram gradualmente; por ora salva a política. -->
-              <div id="rigor-section" style="background: rgba(56,189,248,0.06); border: 1px solid rgba(56,189,248,0.18); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.6rem; font-size: 0.8rem; color: #38bdf8; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎚️ Rigor da inscrição</p>
-                <div style="display:flex; justify-content:space-between; font-size:0.66rem; color:var(--text-muted); font-weight:700; margin-bottom:2px;">
-                  <span>Casual</span><span>Moderado</span><span>Oficial</span>
-                </div>
-                <input type="range" id="tourn-rigor-slider" min="0" max="2" step="1" value="0" oninput="window._rigorLive(this.value)" style="width:100%; accent-color:#38bdf8;">
-                <input type="hidden" id="tourn-rigor" value="casual">
-                <div id="tourn-rigor-desc" style="font-size:0.74rem; color:var(--text-muted); margin-top:6px; line-height:1.45;">🎾 <b>Casual</b> — não verifica o histórico dos inscritos. Qualquer pessoa se inscreve; as categorias são só informativas.</div>
-              </div>
-
-              <!-- Categorias do Torneio -->
+              <!-- Categorias do Torneio (com o Rigor da inscrição no topo do box) -->
               <div style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <!-- Rigor da inscrição (v1.15.28) — no topo do box de Categorias.
+                     Espectro Casual ↔ Oficial; travas duras entram gradualmente. -->
+                <div id="rigor-section" style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.08);">
+                  <p style="margin: 0 0 0.6rem; font-size: 0.8rem; color: #38bdf8; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎚️ Rigor da inscrição</p>
+                  <div style="display:flex; justify-content:space-between; font-size:0.66rem; color:var(--text-muted); font-weight:700; margin-bottom:2px;">
+                    <span>Casual</span><span>Moderado</span><span>Oficial</span>
+                  </div>
+                  <input type="range" id="tourn-rigor-slider" min="0" max="2" step="1" value="0" oninput="window._rigorLive(this.value)" style="width:100%; accent-color:#38bdf8;">
+                  <input type="hidden" id="tourn-rigor" value="casual">
+                  <div id="tourn-rigor-desc" style="font-size:0.74rem; color:var(--text-muted); margin-top:6px; line-height:1.45;">🎾 <b>Casual</b> — não verifica o histórico dos inscritos. Qualquer pessoa se inscreve; as categorias são só informativas.</div>
+                </div>
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #a855f7; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.catSection')}</p>
                 <div style="margin-bottom:0.75rem;">
                   <label class="form-label" style="margin-bottom:6px;">${_t('create.genderCatLabel')}</label>
@@ -1459,12 +1456,8 @@ function setupCreateTournamentModal() {
       // Categorias · #fase1-box. Insere Categorias antes do box, depois GSM antes de Categorias.
       if (_catBlock && _catBlock.parentElement) { try { _formParent.insertBefore(_catBlock, box); } catch (e) {} }
       if (_gsm && _gsm.parentElement) { try { _formParent.insertBefore(_gsm, (_catBlock && _catBlock.parentElement === _formParent) ? _catBlock : box); } catch (e) {} }
-      // v1.15.27: Rigor da inscrição também sai do #fase1-box e vai pra ANTES do GSM
-      // (entre Máx. Participantes e Formato da Partida). Parte GERAL, não da fase.
-      var _rig = document.getElementById('rigor-section');
-      if (_rig && _rig.parentElement) {
-        try { _formParent.insertBefore(_rig, (_gsm && _gsm.parentElement === _formParent) ? _gsm : ((_catBlock && _catBlock.parentElement === _formParent) ? _catBlock : box)); } catch (e) {}
-      }
+      // v1.15.28: o Rigor da inscrição vive DENTRO do box de Categorias (no topo),
+      // então acompanha a realocação do bloco de categorias — sem mover separado.
     }
     // Injeta o mount e inicia a config (default do esporte ou t.fmt2 do torneio em edição).
     // v4.4.17: editId-aware — se já há mount PRA ESTE torneio, mantém (não apaga config
