@@ -198,8 +198,42 @@
     return out;
   }
 
+  /** BUSCA ATIVA DO ORGANIZADOR (anti-gato): parseia o PERFIL PÚBLICO letzplay.me/{handle}
+   * — categoria (nível), totais e última atividade. Não precisa do histórico completo:
+   * a categoria do ranking é o indicador de nível pro flag de rebaixamento.
+   * VERIFICADO AO VIVO (jul/2026) em /GersomOtsu. */
+  function parsePublicProfile(doc, handle) {
+    if (!doc) return null;
+    var bt = (doc.body && doc.body.textContent || '').replace(/\s+/g, ' ');
+    var num = function (re) { var m = bt.match(re); return m ? +m[1] : null; };
+    // nome: <title> "Nome - Letzplay" (mais confiável que headers variáveis)
+    var name = null;
+    var tt = (doc.title || '').replace(/\s*[-|]\s*Letzplay.*$/i, '').trim();
+    if (tt) name = tt;
+    // categorias dos rankings (nível). Mantém a categoria CRUA COMPLETA (ex.:
+    // "Social Masc D+ / C-") — sem truncar como o parseCategory do import — porque
+    // o range inteiro importa pro flag de nível (D+/C- = joga até C-). Tira só o
+    // "Rodada N •" e o "| ANO".
+    var cleanCat = function (tx) { return String(tx || '').replace(/^.*?•\s*/, '').replace(/\s*\|.*$/, '').trim(); };
+    var rankTexts = Array.prototype.slice.call(doc.querySelectorAll('a[href*="/rankings/"]'))
+      .map(function (a) { return (a.textContent || '').replace(/\s+/g, ' ').trim(); })
+      .filter(function (v, i, arr) { return v && arr.indexOf(v) === i; });
+    var cats = rankTexts.map(cleanCat).filter(Boolean);
+    var lastPlayed = (bt.match(/Jogou h[áa]\s*(\d+\s*\w+)/) || [])[1] || null;
+    return {
+      handle: handle || null,
+      name: name,
+      rankingCategory: cats[0] || null,     // categoria do ranking (nível)
+      allCategories: cats,
+      totals: { matches: num(/(\d+)\s*Jogos/), rankings: num(/(\d+)\s*Rankings/), tournaments: num(/(\d+)\s*Torneios/) },
+      lastPlayed: lastPlayed,
+      source: 'public-profile'
+    };
+  }
+
   root._spExtract = {
     handleFromHref: handleFromHref,
+    parsePublicProfile: parsePublicProfile,
     parseCategory: parseCategory,
     parseRankingRef: parseRankingRef,
     matchFromCard: matchFromCard,

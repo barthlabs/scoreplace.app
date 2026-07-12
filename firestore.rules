@@ -229,6 +229,22 @@ service cloud.firestore {
         );
         allow delete: if request.auth != null && isAdminOf(parentT());
       }
+
+      // ─── Busca ativa letzplay do organizador (anti-gato) ───────────────────
+      // tournaments/{id}/letzplayScans/{uid} — o organizador varre o PERFIL
+      // PÚBLICO letzplay dos inscritos que autorizaram (categoria/nível) via a
+      // extensão. Só o admin (org/co-host) escreve; qualquer authed que pode ler
+      // o torneio lê (co-organizadores veem o mesmo).
+      match /letzplayScans/{scanUid} {
+        function parentTs() {
+          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+        }
+        allow read: if (request.auth != null) || (parentTs().isPublic == true);
+        allow create, update: if request.auth != null
+          && (isTournamentAdmin(parentTs()) || isTournamentAdminByUid(parentTs()));
+        allow delete: if request.auth != null
+          && (isTournamentAdmin(parentTs()) || isTournamentAdminByUid(parentTs()));
+      }
     }
 
     // ─── User profiles ───────────────────────────────────────────────────────

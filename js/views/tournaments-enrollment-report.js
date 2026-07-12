@@ -1186,24 +1186,27 @@
     return ranks.length ? Math.min.apply(null, ranks) : null;
   }
 
-  function _renderLetzplaySection(rows, t, profileMap) {
-    profileMap = profileMap || {};
-    var imp = [], wait = [], denied = [], noh = [];
+  function _renderLetzplaySection(rows, t, profileMap, scanMap) {
+    profileMap = profileMap || {}; scanMap = scanMap || {};
+    var imp = [], scanned = [], wait = [], denied = [], noh = [];
     (rows || []).forEach(function (r) {
       var prof = (r.uid && profileMap[r.uid]) ? profileMap[r.uid] : null;
       var li = prof && prof.letzplayImport;
       var handle = prof && prof.letzplayHandle;
       var consent = prof && prof.letzplayConsent === true;
+      var sc = (r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
       if (li) imp.push({ r: r, li: li });
-      else if (handle && consent) wait.push(r);
+      else if (sc) scanned.push({ r: r, scan: sc });
+      else if (handle && consent) wait.push({ r: r, handle: handle });
       else if (handle && !consent) denied.push(r);
       else noh.push(r);
     });
     // Só mostra a seção se ao menos alguém tem @ letzplay (evita poluir torneios sem uso).
-    if (imp.length + wait.length + denied.length === 0) return '';
+    if (imp.length + scanned.length + wait.length + denied.length === 0) return '';
 
     var C = {
       green: { bg: 'rgba(16,185,129,0.14)', fg: '#2dd4a0' },
+      blue: { bg: 'rgba(56,189,248,0.14)', fg: '#38bdf8' },
       amber: { bg: 'rgba(240,180,69,0.14)', fg: '#f0b445' },
       red: { bg: 'rgba(242,106,106,0.14)', fg: '#f26a6a' },
       grey: { bg: 'rgba(133,146,166,0.14)', fg: '#8592a6' }
@@ -1218,22 +1221,17 @@
       return itemsHtml ? '<div style="font-size:11px;font-weight:700;color:' + color + ';margin:8px 0 2px;">' + label + '</div>' + itemsHtml : '';
     }
     // Anti-gato: compara a categoria DECLARADA no torneio (effectiveSkills) com o
-    // NÍVEL REAL do letzplay (categoria oficial + banda de rating). Se declarou mais
-    // FRACO que joga, sinaliza. Ranks: A=0 (mais forte) … D=3, FUN=4.
+    // NÍVEL REAL do letzplay (categoria/rating do import OU do perfil público buscado).
+    // Se declarou mais FRACO que joga, sinaliza. Ranks: A=0 (mais forte) … D=3, FUN=4.
     var flagged = 0;
-    var impHtml = imp.map(function (o) {
-      var oc = o.li.officialCategory;
-      var band = o.li.rating && o.li.rating.band;
-      var realCat = oc ? oc.categoryRaw : (band || '—');
-      var realRank = _lzRankFrom([oc ? oc.categoryRaw : '', band || '']);
-      var declRank = _declRankFrom(o.r.effectiveSkills);
-      var declLabel = (o.r.effectiveSkills && o.r.effectiveSkills.length) ? o.r.effectiveSkills.join('/') : '—';
-      var right = '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#2dd4a0;">' + _esc(realCat) + '</span>';
+    function knownLine(name, realCat, realRank, effSkills, srcIcon) {
+      var declRank = _declRankFrom(effSkills);
+      var declLabel = (effSkills && effSkills.length) ? effSkills.join('/') : '—';
+      var right = '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#2dd4a0;">' + _esc(realCat) + ' <span style="opacity:0.6;">' + srcIcon + '</span></span>';
       var flagHtml = '';
       if (realRank != null && declRank != null && declRank > realRank) {
         flagged++;
-        var gap = declRank - realRank;   // >0 = declarou mais fraco que joga
-        var strong = gap >= 2;
+        var strong = (declRank - realRank) >= 2;
         var fg = strong ? '#f26a6a' : '#f0b445';
         flagHtml = '<div style="font-size:11px;color:' + fg + ';margin-top:1px;">' + (strong ? '🚩🚩' : '🚩') +
           ' declarou <b>' + _esc(declLabel) + '</b> · joga <b>' + _esc(realCat) + '</b> no letzplay</div>';
@@ -1241,11 +1239,28 @@
         flagHtml = '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:1px;">✔ declarou ' + _esc(declLabel) + ' · coerente</div>';
       }
       return '<div style="padding:4px 0;font-size:12.5px;">' +
-        '<div style="display:flex;justify-content:space-between;gap:10px;"><span>' + _esc(o.r.name || '—') + '</span>' + right + '</div>' +
+        '<div style="display:flex;justify-content:space-between;gap:10px;"><span>' + _esc(name || '—') + '</span>' + right + '</div>' +
         flagHtml +
       '</div>';
+    }
+    var impHtml = imp.map(function (o) {
+      var oc = o.li.officialCategory, band = o.li.rating && o.li.rating.band;
+      var realCat = oc ? oc.categoryRaw : (band || '—');
+      return knownLine(o.r.name, realCat, _lzRankFrom([oc ? oc.categoryRaw : '', band || '']), o.r.effectiveSkills, '🎾');
     }).join('');
-    var restHtml = function (arr) { return arr.map(function (r) { return line(r.name); }).join(''); };
+    var scannedHtml = scanned.map(function (o) {
+      var cat = o.scan.rankingCategory || '—';
+      return knownLine(o.r.name, cat, _lzRankFrom([cat]), o.r.effectiveSkills, '🔎');
+    }).join('');
+    var restHtml = function (arr) { return arr.map(function (x) { return line(x.r ? x.r.name : x.name); }).join(''); };
+
+    // Alvos da busca ativa (autorizaram, têm @, ainda sem histórico/scan).
+    var targets = wait.map(function (w) { return { uid: w.r.uid, handle: w.handle, name: w.r.name }; })
+      .filter(function (x) { return x.uid && x.handle; });
+    window._lzScanCtx = { tId: t.id, targets: targets };
+    var scanBtn = targets.length
+      ? '<button id="lz-scan-btn" onclick="window._lzOrgScan()" style="margin-top:8px;width:100%;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.82rem;font-weight:700;">🔎 Buscar histórico dos ' + targets.length + ' inscritos (letzplay público)</button>'
+      : '';
 
     var flagBanner = flagged > 0
       ? '<div style="background:rgba(242,106,106,0.12);border:1px solid rgba(242,106,106,0.4);border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:12.5px;color:#f26a6a;font-weight:600;">🚩 ' +
@@ -1254,20 +1269,66 @@
     return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:15px 16px;margin-bottom:14px;">' +
       '<div style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">🎾 Histórico letzplay</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">' +
-        pill(C.green, imp.length, 'com histórico') + pill(C.amber, wait.length, 'aguardando') +
+        pill(C.green, imp.length, 'com histórico') + (scanned.length ? pill(C.blue, scanned.length, 'buscado') : '') +
+        pill(C.amber, wait.length, 'aguardando') +
         pill(C.red, denied.length, 'não autorizou') + pill(C.grey, noh.length, 'sem @') +
       '</div>' +
       flagBanner +
       group('#2dd4a0', '🟢 Com histórico (categoria oficial)', impHtml) +
+      group('#38bdf8', '🔵 Buscado no letzplay (público)', scannedHtml) +
       group('#f0b445', '🟡 Autorizou, aguardando busca', restHtml(wait)) +
+      scanBtn +
       group('#f26a6a', '🔴 Não autorizou', restHtml(denied)) +
       group('#8592a6', '⚪ Sem @ letzplay', restHtml(noh)) +
-      '<div style="font-size:11px;color:var(--text-muted);margin-top:11px;border-top:1px solid var(--border-color);padding-top:9px;">A busca ativa (de quem autorizou) roda na extensão desktop do organizador. Quem está 🟢 já tem o histórico completo.</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:11px;border-top:1px solid var(--border-color);padding-top:9px;">A busca ativa lê o <b>perfil público</b> do letzplay (nome, categoria/nível) — precisa da <b>extensão do scoreplace no Chrome (desktop)</b> e uma aba do letzplay aberta. 🎾 = histórico importado · 🔎 = perfil público buscado.</div>' +
       '</div>';
   }
 
-  function _renderPage(container, t, rows, profileMap, parts, resolvedFor) {
+  // Busca ativa: dispara a extensão pra buscar os perfis públicos e grava os scans.
+  window._lzOrgScan = function () {
+    var ctx = window._lzScanCtx;
+    if (!ctx || !ctx.targets || !ctx.targets.length) return;
+    var btn = document.getElementById('lz-scan-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '🔎 Buscando…'; }
+    var done = false;
+    function onMsg(e) {
+      if (e.source !== window) return; var d = e.data; if (!d) return;
+      if (d.__sp_lp === 'org-scan-progress' && d.tournamentId === ctx.tId) { if (btn) btn.textContent = '🔎 Buscando… ' + d.done + '/' + d.total; return; }
+      if (d.__sp_lp === 'org-scan-result' && d.tournamentId === ctx.tId) {
+        done = true; window.removeEventListener('message', onMsg);
+        if (!d.ok) { if (btn) { btn.disabled = false; btn.textContent = '🔎 Tentar novamente'; } if (typeof showNotification === 'function') showNotification('Não foi possível buscar', 'Erro: ' + (d.error || 'desconhecido') + '. Mantenha uma aba do letzplay aberta.', 'error'); return; }
+        _saveScansAndReload(ctx.tId, d.scans || []);
+      }
+    }
+    window.addEventListener('message', onMsg);
+    window.postMessage({ __sp_lp: 'run-org-scan', targets: ctx.targets, tournamentId: ctx.tId }, window.location.origin);
+    setTimeout(function () {
+      if (done) return; window.removeEventListener('message', onMsg);
+      if (btn) { btn.disabled = false; btn.textContent = '🔎 Buscar histórico'; }
+      if (typeof showNotification === 'function') showNotification('Extensão necessária', 'Instale/ative a extensão do scoreplace no Chrome (desktop) e mantenha uma aba do letzplay aberta.', 'warning');
+    }, 30000);
+  };
+  function _saveScansAndReload(tId, scans) {
+    var db = firebase.firestore();
+    var meUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
+    var ok = scans.filter(function (s) { return s.uid && s.scan; });
+    var writes = ok.map(function (s) {
+      return db.collection('tournaments').doc(tId).collection('letzplayScans').doc(s.uid)
+        .set({ handle: s.handle, scan: s.scan, scannedAt: new Date().toISOString(), scannedBy: meUid }, { merge: true });
+    });
+    Promise.all(writes).then(function () {
+      if (typeof showNotification === 'function') showNotification('Busca concluída', ok.length + ' de ' + scans.length + ' perfil(is) encontrado(s).', 'success');
+      if (typeof window.renderEnrollmentReportPage === 'function' && window.location.hash === '#analise/' + tId) {
+        var c = document.getElementById('view-container'); if (c) window.renderEnrollmentReportPage(c, tId);
+      }
+    }).catch(function (e) {
+      if (typeof showNotification === 'function') showNotification('Erro ao salvar', String((e && e.message) || e), 'error');
+    });
+  }
+
+  function _renderPage(container, t, rows, profileMap, parts, resolvedFor, scanMap) {
     if (!container) return;
+    scanMap = scanMap || {};
     var hdr = (typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({
         href: '#tournaments/' + t.id,
@@ -1288,7 +1349,7 @@
       '<div style="max-width:760px;margin:0 auto;padding:1rem;">' +
       subtitle +
       _renderOverview(rows, t) +
-      _renderLetzplaySection(rows, t, profileMap) +
+      _renderLetzplaySection(rows, t, profileMap, scanMap) +
       _renderCategoryTable(rows, t) +
       _renderInscritosList(rows, t) +
       // v2.4.33: seção "Perfis Incompletos" editável removida — a edição de
@@ -1347,22 +1408,34 @@
 
     // v1.3.24-beta: passa parts inteiro pro _fetchProfiles — agora ele
     // tenta rescue por email/displayName quando participantObj não tem uid.
-    _fetchProfiles(parts).then(function (fetchResult) {
+    // v1.15.24: carrega também os scans do organizador (busca ativa letzplay).
+    Promise.all([_fetchProfiles(parts), _fetchScans(tId)]).then(function (res) {
+      var fetchResult = res[0], scanMap = res[1] || {};
       // Re-checa se ainda na rota — user pode ter navegado fora durante o fetch
       if (window.location.hash !== '#analise/' + tId) return;
       var rows = _buildRows(t, parts, fetchResult);
       var byUid = fetchResult.byUid || {};
       var resolved = fetchResult.resolvedFor || {};
       window._log('[EnrollmentReport v1.3.24] profiles fetched:', Object.keys(byUid).length,
-        'rescued:', Object.keys(resolved).length, 'rows:', rows);
-      _renderPage(container, t, rows, byUid, parts, resolved);
+        'rescued:', Object.keys(resolved).length, 'scans:', Object.keys(scanMap).length);
+      _renderPage(container, t, rows, byUid, parts, resolved, scanMap);
     }).catch(function (err) {
       window._error('[EnrollmentReport] erro:', err);
       if (window.location.hash !== '#analise/' + tId) return;
       var rows = _buildRows(t, parts, { byUid: {}, resolvedFor: {} });
-      _renderPage(container, t, rows, {}, parts, {});
+      _renderPage(container, t, rows, {}, parts, {}, {});
     });
   };
+
+  // Scans do organizador (busca ativa): tournaments/{tId}/letzplayScans/{uid}.
+  function _fetchScans(tId) {
+    try {
+      var db = firebase.firestore();
+      return db.collection('tournaments').doc(tId).collection('letzplayScans').get()
+        .then(function (snap) { var m = {}; snap.forEach(function (doc) { m[doc.id] = doc.data(); }); return m; })
+        .catch(function () { return {}; });
+    } catch (e) { return Promise.resolve({}); }
+  }
 
   // Compat: preserva _openEnrollmentReport pra todos os call-sites antigos —
   // navega pra hash #analise/<tId> que dispara renderEnrollmentReportPage.

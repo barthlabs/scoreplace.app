@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.26';
+  var EXT_VERSION = '1.27';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -56,6 +56,30 @@
     }
   }
 
+  // ── BUSCA ATIVA DO ORGANIZADOR (anti-gato) ──
+  // O app manda uma lista de {uid, handle} de inscritos que autorizaram; buscamos o
+  // PERFIL PÚBLICO de cada um (letzplay.me/{handle}), parseamos categoria/totais e
+  // devolvemos pro app gravar em tournaments/{tId}/letzplayScans. Público → não expõe
+  // dado privado; passa o Cloudflare pela sessão do navegador do organizador.
+  async function runOrgScan(targets, tournamentId) {
+    var X = window._spExtract;
+    if (!X || !X.parsePublicProfile) { post({ __sp_lp: 'org-scan-result', tournamentId: tournamentId, ok: false, error: 'libs' }); return; }
+    targets = Array.isArray(targets) ? targets : [];
+    var scans = [];
+    for (var i = 0; i < targets.length; i++) {
+      var tg = targets[i] || {};
+      if (!tg.handle) continue;
+      try {
+        var doc = await bgFetchDoc('https://letzplay.me/' + encodeURIComponent(tg.handle));
+        scans.push({ uid: tg.uid || null, handle: tg.handle, scan: X.parsePublicProfile(doc, tg.handle) });
+      } catch (e) {
+        scans.push({ uid: tg.uid || null, handle: tg.handle, scan: null, error: (e && e.message) || 'fetch' });
+      }
+      post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: scans.length, total: targets.length });
+    }
+    post({ __sp_lp: 'org-scan-result', tournamentId: tournamentId, ok: true, scans: scans });
+  }
+
   // Checa se o usuário está logado no letzplay (o app não consegue — cross-origin;
   // a extensão consulta com os cookies da sessão e reporta). Alimenta o "Passo 2 verde".
   async function checkLetzplay() {
@@ -85,6 +109,7 @@
     if (d.__sp_lp === 'ext-ping') { announce(); return; }
     if (d.__sp_lp === 'run-import') { runDirectImport(); return; }
     if (d.__sp_lp === 'check-letzplay') { checkLetzplay(); return; }
+    if (d.__sp_lp === 'run-org-scan') { runOrgScan(d.targets, d.tournamentId); return; }
   };
   window.addEventListener('message', window.__spLzpMsgHandler);
 
