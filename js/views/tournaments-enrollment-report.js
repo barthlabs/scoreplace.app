@@ -1095,37 +1095,44 @@
   // ─── Verificação letzplay (escopo do módulo — usada pela matriz) ─────
   var _LZ_COL = { white: '#8592a6', green: '#2dd4a0', blue: '#38bdf8', yellow: '#f0b445', red: '#f26a6a' };
   var _LTR = ['A', 'B', 'C', 'D', 'FUN'];
+  // DESEMPENHO manda — NÃO a banda do ranking. Estar ranqueado numa banda acima
+  // (ex: clube joga a pessoa numa C/B) NÃO é sinal de subir; só DOMINAR é:
+  //   • título (campeão) → titleRank    • topo da tabela / win% alto → standingRank
   function _lzEvidence(champCats, rankings, bandCats) {
     var titleRanks = (champCats || []).map(function (c) { return _lzRankFrom([c]); }).filter(function (r) { return r != null; });
-    var domRanks = titleRanks.slice();
+    var standingRanks = [];
     (rankings || []).forEach(function (r) {
       var cr = _lzRankFrom([r.category || r.categoryRaw]);
       if (cr == null || r.active === false) return;
       var topStanding = (r.position && r.fieldSize && (r.position / r.fieldSize) <= 0.15);
       var highWin = (typeof r.winPct === 'number' && r.winPct >= 70 && (r.games == null || r.games >= 6));
-      if (topStanding || highWin) domRanks.push(cr);
+      if (topStanding || highWin) standingRanks.push(cr);
     });
     var bandRanks = (bandCats || []).map(function (c) { return _lzRankFrom([c]); }).filter(function (r) { return r != null; });
     return {
+      titleRank: titleRanks.length ? Math.min.apply(null, titleRanks) : null,
+      standingRank: standingRanks.length ? Math.min.apply(null, standingRanks) : null,
       bandRank: bandRanks.length ? Math.min.apply(null, bandRanks) : null,
-      dominatedRank: domRanks.length ? Math.min.apply(null, domRanks) : null,
       titleCount: titleRanks.length
     };
   }
   // 5 níveis: ⚪ sem info · 🟢 coerente · 🔵 rebaixar · 🟡 pode subir · 🔴 deve subir.
+  // SÓ domínio (título/topo) empurra pra cima. Banda alta sem dominar = coerente.
   function _lzVerdict(declRank, ev) {
     ev = ev || {};
     if (declRank == null) return { key: 'white', apurada: null };
-    if (ev.dominatedRank != null) {
-      var shouldRank = Math.max(0, ev.dominatedRank - 1);
-      if (shouldRank < declRank) {
-        var strong = (declRank - shouldRank) >= 2 || (ev.titleCount || 0) >= 3;
-        return { key: strong ? 'red' : 'yellow', apurada: shouldRank };
-      }
+    // Campeão na categoria declarada (ou mais fácil) → DEVE subir (regra federação).
+    if (ev.titleRank != null) {
+      var shouldT = Math.max(0, ev.titleRank - 1);
+      if (shouldT < declRank) return { key: 'red', apurada: shouldT };
     }
-    if (ev.bandRank != null && ev.bandRank < declRank) return { key: 'yellow', apurada: ev.bandRank };
-    if (ev.bandRank != null && ev.bandRank > declRank) return { key: 'blue', apurada: ev.bandRank };
-    return { key: 'green', apurada: (ev.bandRank != null ? ev.bandRank : declRank) };
+    // Topo da tabela / vencendo muito na categoria declarada (ou mais fácil) → PODE subir.
+    if (ev.standingRank != null) {
+      var shouldS = Math.max(0, ev.standingRank - 1);
+      if (shouldS < declRank) return { key: 'yellow', apurada: shouldS };
+    }
+    // Sem domínio → coerente. Jogar/ser ranqueado acima é permitido (compete acima).
+    return { key: 'green', apurada: declRank };
   }
   // Marca cada linha com a verificação letzplay: _lzColor (cor do status), _lzSkill
   // (categoria apurada), _lzSrc (🎾 import / 🔎 scan). null = não verificado.
@@ -1194,19 +1201,21 @@
     function sumBox(b) { return groups.reduce(function (a, g) { return a + b[g].length; }, 0); }
     var femTotal = sumBox(fem), mascTotal = sumBox(masc), semTotal = sumBox(semG), total = (rows || []).length;
 
+    // Card do atleta — tamanho padrão (min 150px, altura fixa), nome com ellipsis.
     function chip(r) {
       var pe = _pendingEdits[r.order] || {}; var edited = Object.keys(pe).length > 0;
       // nome PINTADO pela verificação letzplay (r._lzColor); editado = âmbar.
       var nameCol = edited ? '#f59e0b' : (r._lzColor || 'var(--text-bright,#fff)');
       var border = edited ? 'rgba(245,158,11,0.55)' : (r._lzColor ? (r._lzColor + '55') : 'var(--border-color)');
-      var srcIcon = r._lzSrc ? (' <span style="opacity:0.45;font-size:0.8rem;">' + r._lzSrc + '</span>') : '';
       return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')" ' +
-        'style="cursor:grab;font-size:0.95rem;font-weight:600;padding:5px 10px;margin:3px 0;border-radius:7px;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + srcIcon + '</div>';
+        'style="cursor:grab;font-size:0.9rem;font-weight:600;padding:6px 10px;border-radius:7px;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + _esc(r.name || '(sem nome)') + ' — arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + '</div>';
     }
+    // Cards em GRID: 2-3 colunas conforme a largura (auto-fill + minmax fixo).
+    function cardGrid(arr) { return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;">' + arr.map(chip).join('') + '</div>'; }
     // Célula-alvo (gênero × habilidade). min-height garante alinhamento entre colunas.
     function cell(genderKey, sk, arr, tint) {
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
-        'style="border:1px dashed ' + tint + ';border-radius:8px;padding:5px 8px;min-height:36px;">' + arr.map(chip).join('') + '</div>';
+        'style="border:1px dashed ' + tint + ';border-radius:8px;padding:6px;min-height:38px;">' + cardGrid(arr) + '</div>';
     }
     var femTint = 'rgba(236,72,153,0.30)', mascTint = 'rgba(59,130,246,0.30)';
     function ghead(icon, gKey, name, color, tot) {
@@ -1233,7 +1242,7 @@
         var label = (sk === '__none__') ? 'Sem habilidade' : sk;
         return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'\',\'' + sk + '\')" style="border:1px dashed var(--border-color);border-radius:8px;padding:5px 8px;margin:5px 0;min-height:32px;">' +
           '<div style="font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:3px;">' + label + ' (' + semG[sk].length + ')</div>' +
-          '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:0 12px;">' + semG[sk].map(chip).join('') + '</div></div>';
+          cardGrid(semG[sk]) + '</div>';
       }).join('');
       semSection = '<div style="margin-top:16px;background:var(--bg-darker,rgba(0,0,0,0.15));border:1px solid #8592a6;border-radius:10px;padding:10px 12px;">' +
         '<div style="font-size:17px;font-weight:800;color:#8592a6;margin-bottom:6px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste ↑ pra Feminino ou Masculino</div>' + semInner + '</div>';
