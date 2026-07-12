@@ -1234,11 +1234,9 @@
       return n;
     }
     function createBtn(call, created) {
+      var cls = created ? 'btn btn-outline btn-sm hover-lift' : 'btn btn-success btn-sm hover-lift';
       var lbl = created ? '↩ Reverter' : '➕ Criar categoria';
-      var bg = created ? 'rgba(133,146,166,0.18)' : 'rgba(16,185,129,0.18)';
-      var bc = created ? 'rgba(133,146,166,0.5)' : 'rgba(16,185,129,0.55)';
-      var fg = created ? '#8592a6' : '#2dd4a0';
-      return '<button type="button" onclick="event.stopPropagation();' + call + '" style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;background:' + bg + ';border:1px solid ' + bc + ';color:' + fg + ';cursor:pointer;white-space:nowrap;">' + lbl + '</button>';
+      return '<button type="button" onclick="event.stopPropagation();' + call + '" class="' + cls + '">' + lbl + '</button>';
     }
 
     // Ordena: EDITADOS (âmbar, ainda não salvos) vão pro FINAL; entre os demais,

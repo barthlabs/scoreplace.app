@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.15.52';
+window.SCOREPLACE_VERSION = '1.15.53';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
