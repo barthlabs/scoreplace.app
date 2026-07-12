@@ -1001,12 +1001,19 @@
   }
   window._erUpdateSaveBar = function () {
     var n = _erPendingCount();
-    [['er-save-bar', 'er-save-btn'], ['er-mx-save-bar', 'er-mx-save-btn']].forEach(function (ids) {
-      var bar = document.getElementById(ids[0]); var btn = document.getElementById(ids[1]);
-      if (!bar || !btn) return;
+    // Barra inline no back-header (Cancelar/Salvar) — display flex.
+    var inline = document.getElementById('er-mx-save-inline');
+    var inlineBtn = document.getElementById('er-mx-save-btn');
+    if (inline && inlineBtn) {
+      if (n > 0) { inline.style.display = 'flex'; inlineBtn.disabled = false; inlineBtn.textContent = '💾 Salvar (' + n + ')'; }
+      else { inline.style.display = 'none'; inlineBtn.disabled = true; inlineBtn.textContent = '💾 Salvar'; }
+    }
+    // Barra da lista de inscritos legada (er-save-bar), se existir.
+    var bar = document.getElementById('er-save-bar'); var btn = document.getElementById('er-save-btn');
+    if (bar && btn) {
       if (n > 0) { bar.style.display = ''; btn.disabled = false; btn.textContent = '💾 Salvar alterações (' + n + ')'; }
       else { bar.style.display = 'none'; btn.disabled = true; btn.textContent = '💾 Salvar alterações'; }
-    });
+    }
   };
   // Cancelar: descarta as edições pendentes (drag de gênero/categoria) e re-renderiza.
   window._erCancelEdits = function () {
@@ -1421,15 +1428,8 @@
     var hint = _isOrg ? '<div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no topo.</div>' : '';
     // Barra Cancelar/Salvar — STICKY no topo (abaixo do cabeçalho fixo), aparece só
     // quando há alteração pendente (drag de gênero/categoria).
-    // FIXO no topo do viewport (abaixo do cabeçalho), sempre visível quando há alteração —
-    // não fica preso dentro do box (a pessoa não precisa rolar pra achar).
-    var saveBar = _isOrg
-      ? '<div id="er-mx-save-bar" style="display:none;position:fixed;top:52px;left:0;right:0;z-index:500;background:var(--bg-card,#161b28);border-bottom:1px solid var(--border-color);box-shadow:0 6px 18px rgba(0,0,0,0.40);padding:10px 1.25rem;">' +
-          '<div style="display:flex;gap:10px;max-width:100%;margin:0 auto;">' +
-            '<button type="button" onclick="window._erCancelEdits()" class="btn hover-lift" style="flex:0 0 auto;font-size:0.9rem;font-weight:800;padding:11px 20px;border-radius:10px;background:rgba(133,146,166,0.18);border:1px solid rgba(133,146,166,0.5);color:#c8cdd6;cursor:pointer;">Cancelar</button>' +
-            '<button id="er-mx-save-btn" onclick="window._erSaveEdits(\'' + _esc(String(t.id)) + '\',\'' + _esc(String(t.sport || '')) + '\')" class="btn btn-shine hover-lift" style="flex:1;font-size:0.96rem;font-weight:800;padding:11px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;cursor:pointer;">💾 Salvar alterações</button>' +
-          '</div></div>'
-      : '';
+    // Cancelar/Salvar vive na barra Voltar (rightHtml, em _renderPage) — não aqui.
+    var saveBar = '';
     return '<div id="er-categories-section" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px 18px;margin-bottom:14px;">' +
       '<div style="font-size:15px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary,#c8cdd6);margin-bottom:8px;">🗂️ Categorias <span style="opacity:0.7;">· apuração pelo letzplay</span></div>' +
       saveBar + scanBtn + legend + hint +
@@ -1848,11 +1848,21 @@
   function _renderPage(container, t, rows, profileMap, parts, resolvedFor, scanMap) {
     if (!container) return;
     scanMap = scanMap || {};
+    var _isOrgHdr = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    // Cancelar/Salvar DENTRO da barra Voltar (canônico rightHtml) — sempre visível
+    // com a barra fixa, nunca atrás dela. Escondido até haver alteração.
+    var _saveInline = _isOrgHdr
+      ? '<div id="er-mx-save-inline" style="display:none;align-items:center;gap:8px;flex-shrink:0;">' +
+          '<button type="button" onclick="window._erCancelEdits()" class="btn btn-outline btn-sm hover-lift" style="flex-shrink:0;">Cancelar</button>' +
+          '<button id="er-mx-save-btn" onclick="window._erSaveEdits(\'' + _esc(String(t.id)) + '\',\'' + _esc(String(t.sport || '')) + '\')" class="btn btn-success btn-sm btn-shine hover-lift" style="flex-shrink:0;">💾 Salvar</button>' +
+        '</div>'
+      : '';
     var hdr = (typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({
         href: '#tournaments/' + t.id,
         label: 'Voltar',
-        middleHtml: '<span style="font-size:0.88rem;font-weight:700;color:var(--text-bright);">📊 Análise de Inscritos</span>',
+        middleHtml: '<span style="flex:1;font-size:0.88rem;font-weight:700;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📊 Análise de Inscritos</span>',
+        rightHtml: _saveInline,
       })
       : '';
 
