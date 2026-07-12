@@ -3697,6 +3697,12 @@ async function _notifyDevRecovery(db, title, body) {
   } catch (e) { /* ignore */ }
 }
 
+/* DESATIVADO 2026-07-12 — Evolution/VPS Hetzner removido; número banido; migração pro Meta Cloud API
+   (Meta hospeda, não precisa de restart de VPS). As duas funções abaixo (whatsappHealthGuard a cada
+   10 min + whatsappNightlyRestart 04:30) só batiam no /instance/restart do Evolution morto e emailavam
+   o dev a cada falha. DELETADAS do Firebase (functions:delete) e comentadas aqui pra não ressuscitarem
+   num deploy futuro. Reimplementar monitoramento SÓ quando o Meta Cloud API estiver no ar (mecanismo
+   diferente — sem restart de servidor). Ver memória project_whatsapp_meta_2fa_block.
 exports.whatsappHealthGuard = onSchedule(
   {
     schedule: "every 10 minutes",
@@ -3784,6 +3790,7 @@ exports.whatsappNightlyRestart = onSchedule(
     console.log("[whatsappNightlyRestart] restart preventivo:", r.ok ? "ok" : ("falhou: " + r.error));
   }
 );
+*/
 
 // ─── notifyLeagueRoundWhatsApp ─────────────────────────────────────────────
 // Chamada pelo cliente após sortear nova rodada da Liga/Suíço.
