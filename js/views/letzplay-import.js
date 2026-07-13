@@ -68,6 +68,9 @@
       name: x.name || '',
       club: x.club || '',
       sport: x.sport || '',
+      // id do torneio — usado pra casar a DATA pelos jogos DAQUELE torneio (não por
+      // categoria; senão "Masc D" jogada em 2 torneios pega a data do mais recente).
+      tourneyId: (x.tourneyId != null) ? x.tourneyId : null,
       categoryRaw: x.categoryRaw || '',
       gender: x.gender || null,
       ageBand: ageBandOf(x.categoryRaw, x.ageBand),

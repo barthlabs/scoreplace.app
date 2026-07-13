@@ -72,14 +72,22 @@
       return String(slug).split(/[-_]/).map(function (w) { return w.length <= 3 ? w.toUpperCase() : (w.charAt(0).toUpperCase() + w.slice(1)); }).join(' ');
     }
     var _games = Array.isArray(imp.games) ? imp.games : [];
-    function concluded(f, official) {                                 // {when, ts} do último jogo da competição
+    function concluded(f, official) {                                 // {when, ts} do último jogo DAQUELE torneio
       var best = 0;
+      // Quando o torneio tem id (import novo), casa a data pelos jogos DAQUELE torneio
+      // (tourneyId) — não por categoria. Isso conserta "Masc D" jogada em 2 torneios
+      // pegando a data do mais recente. Sem id (import antigo), cai no match por categoria.
+      var byId = (f.tourneyId != null);
       for (var i = 0; i < _games.length; i++) {
         var g = _games[i];
         if (g.official !== official) continue;
-        if (g.competition !== f.categoryRaw) continue;
-        if (f.year != null && g.year != null && g.year !== f.year) continue;
-        if (f.club && g.club && g.club !== f.club) continue;
+        if (byId) {
+          if (g.tourneyId == null || String(g.tourneyId) !== String(f.tourneyId)) continue;
+        } else {
+          if (g.competition !== f.categoryRaw) continue;
+          if (f.year != null && g.year != null && g.year !== f.year) continue;
+          if (f.club && g.club && g.club !== f.club) continue;
+        }
         var t = _ts(g.date); if (t > best) best = t;
       }
       if (best) return { when: monYr(best), ts: best };

@@ -8,11 +8,10 @@
  * o content script). Sem extensão → nenhum anúncio → mostramos "instalar".
  */
 (function () {
-  // Versão mínima ACEITA da extensão. Abaixo disso → pede atualização (não fica verde).
-  // Exige a ATUAL (1.31) porque as correções críticas estão nela: 1.30 = URL do torneio
-  // /tournaments (nome real); 1.31 = não abrir aba do letzplay junto com o scoreplace.
-  // Versões anteriores "funcionam" mas com os bugs — por isso o gate exige a mais nova.
-  var MIN_EXT_VERSION = '1.32';
+  // Versão mínima ACEITA da extensão = SEMPRE a atual (correções críticas de import só
+  // existem na mais nova: URL /tournaments dos nomes, não-abrir-aba, data por torneio…).
+  // Abaixo disso → pede atualização (não fica verde). Bumpar junto com EXT_VERSION.
+  var MIN_EXT_VERSION = '1.33';
   // URL da Chrome Web Store — null enquanto não publicado (mostra instruções manuais).
   var STORE_URL = null;
 
