@@ -11,6 +11,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #22c55e;border-radius:12px;padding:14px 16px;background:rgba(34,197,94,0.08);">' +
+      '<div style="font-weight:800; color:#4ade80; font-size:1rem; margin-bottom:8px;">📱 v1.1.12 — Verificar celular e recuperar conta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📲 O SMS de verificação volta a chegar:</b> o botão <b>"Verificar e vincular"</b> do celular no perfil estava dando <b>erro interno</b> e o código não era enviado. Corrigido — o SMS sai normalmente agora.</li>' +
+        '<li><b>🔀 Recuperar sua conta ao reinstalar o app:</b> se você entrar com um nome que já era seu (mesmo telefone ou e-mail), o app agora oferece <b>unir as contas</b> em vez de bloquear com "esse nome já é de outra pessoa".</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #84cc16;border-radius:12px;padding:14px 16px;background:rgba(132,204,22,0.08);">' +
       '<div style="font-weight:800; color:#a3e635; font-size:1rem; margin-bottom:8px;">🎾 v1.1.3 — Nome real dos torneios do letzplay <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

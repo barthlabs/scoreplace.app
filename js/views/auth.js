@@ -7699,13 +7699,24 @@ function setupProfileModal() {
       }
       window._profilePhoneCtx.e164 = e164;
       var otpEl = document.getElementById(ctx.otpId);
-      var recEl = document.getElementById(ctx.recaptchaId);
+      // reCAPTCHA invisível NÃO pode ficar em display:none — o iframe não recebe
+      // dimensões, o token sai inválido e o backend responde auth/internal-error
+      // (o SMS nunca chega). Espelha _ensureRecaptchaInBody do login: recria o nó
+      // FRESCO, off-screen mas EM LAYOUT, direto no body. Recriar (em vez de só
+      // .clear()) evita o "reCAPTCHA has already been rendered" na 2ª tentativa.
+      // Ver lição v1.3.76-beta em _ensureRecaptchaInBody.
+      try { if (window._profilePhoneRecaptcha) window._profilePhoneRecaptcha.clear(); } catch(e){}
+      var _recOld = document.getElementById(ctx.recaptchaId);
+      if (_recOld && _recOld.parentNode) _recOld.parentNode.removeChild(_recOld);
+      var recEl = document.createElement('div');
+      recEl.id = ctx.recaptchaId;
+      recEl.style.cssText = 'position:fixed;bottom:0;right:0;z-index:0;width:1px;height:1px;overflow:hidden;';
+      document.body.appendChild(recEl);
       if (otpEl) { otpEl.style.display = 'block'; otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Enviando código para ' + window._safeHtml(e164) + '…</div>'; }
       var cfg = firebase.app().options;
       var sapp = firebase.apps.find(function(a){ return a.name === 'profilephone'; }) || firebase.initializeApp(cfg, 'profilephone');
       try { sapp.auth().setPersistence(firebase.auth.Auth.Persistence.NONE); } catch(e){}
       window._profilePhoneSurvivor = cu.uid;
-      try { if (window._profilePhoneRecaptcha) window._profilePhoneRecaptcha.clear(); } catch(e){}
       window._profilePhoneRecaptcha = new firebase.auth.RecaptchaVerifier(recEl, { size: 'invisible' }, sapp);
       window._profilePhoneE164 = e164;
       window._profilePhoneRecaptcha.render().then(function() {
@@ -8245,25 +8256,59 @@ function setupProfileModal() {
         }
       }
 
-      // ── 2.5 GATE DE NOME ÚNICO (v2.6.104) ───────────────────────────────────
-      // Se o nome MUDOU e já existe de OUTRA pessoa (uid diferente), bloqueia — a
-      // regra que combinamos: não pode dois usuários distintos com o mesmo nome.
-      // Só checa quando o nome muda (saves que não mexem no nome passam, mesmo com
-      // duplicata legada). Nome-que-é-telefone é exceção. Fail-open (erro não trava).
+      // ── 2.5 GATE DE NOME ÚNICO — merge-aware (v3.x) ─────────────────────────
+      // Se o nome MUDOU e já existe de OUTRA pessoa (uid diferente, não-tombstone),
+      // NÃO bloqueia de cara: se essa conta tem o MESMO telefone/e-mail que o
+      // usuário, é a conta ANTERIOR dele → oferece MESCLAR (relato: testadora
+      // reinstalou o app e foi barrada — "esse nome/telefone já é de outra pessoa"
+      // — em vez de recuperar a própria conta). Só bloqueia (pedindo variante)
+      // quando é de fato outra pessoa. Nome-que-é-contato é exceção. Fail-open
+      // (erro de consulta não trava o save). Consolida os antigos gates 2 + 2b.
       if (finalName && finalName.trim().toLowerCase() !== (_oldDisplayName || '').trim().toLowerCase()
           && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(finalName))
-          && window.FirestoreDB && typeof window.FirestoreDB.isDisplayNameTaken === 'function') {
-        var _conflictUid = null;
-        try { _conflictUid = await window.FirestoreDB.isDisplayNameTaken(finalName, cu.uid); } catch (e) {}
-        if (_conflictUid) {
-          if (typeof showAlertDialog === 'function') {
-            showAlertDialog('Esse nome já está em uso', 'Já existe outra pessoa cadastrada como "' + finalName + '". Escolha um nome diferente — pode incluir o sobrenome ou uma inicial (ex.: "' + finalName + ' M.").', null, { type: 'warning' });
-          } else if (typeof showNotification !== 'undefined') {
-            showNotification('Nome em uso', 'Já existe "' + finalName + '". Escolha outro.', 'warning');
+          && window.FirestoreDB && window.FirestoreDB.db) {
+        try {
+          var _nameLower = finalName.trim().toLowerCase();
+          var _nameSnap = await window.FirestoreDB.db.collection('users')
+            .where('displayName_lower', '==', _nameLower).limit(8).get();
+          // Conflitos = outras contas VIVAS com o mesmo nome (exclui self e
+          // tombstones mergedInto — mesma exclusão do isDisplayNameTaken).
+          var _conflicts = _nameSnap.docs.filter(function (d) {
+            var dd = d.data() || {};
+            return d.id !== uid && !dd.mergedInto;
+          });
+          if (_conflicts.length > 0) {
+            // É a conta anterior do próprio usuário? (mesmo telefone OU e-mail)
+            var _myPhone = (typeof window._normalizePhoneE164 === 'function' && phoneDigits)
+              ? window._normalizePhoneE164(phoneDigits, phoneCountry || '55') : phoneDigits;
+            var _myEmail = (cu.email || '').toLowerCase();
+            var _mergeCand = null;
+            for (var _ci = 0; _ci < _conflicts.length; _ci++) {
+              var _cd = _conflicts[_ci].data() || {};
+              var _cdPhone = _cd.phone || '';
+              var _cdEmail = (_cd.email || _cd.email_lower || '').toLowerCase();
+              if ((_myPhone && _cdPhone && _myPhone === _cdPhone) ||
+                  (_myEmail && _cdEmail && _myEmail === _cdEmail)) {
+                _mergeCand = { uid: _conflicts[_ci].id, data: _cd };
+                break;
+              }
+            }
+            var _sbtn = document.getElementById('profile-save-btn');
+            if (_sbtn && typeof window._unspinButton === 'function') window._unspinButton(_sbtn);
+            if (_mergeCand) {
+              // Conta anterior do próprio usuário → oferecer mesclar (não bloquear).
+              if (typeof window._triggerAccountMerge === 'function') {
+                window._triggerAccountMerge(_mergeCand.uid, _mergeCand.data);
+              }
+            } else if (typeof showAlertDialog === 'function') {
+              showAlertDialog('Esse nome já está em uso', 'Já existe outra pessoa cadastrada como "' + finalName + '". Escolha um nome diferente — pode incluir o sobrenome ou uma inicial (ex.: "' + finalName + ' M.").', null, { type: 'warning' });
+            } else if (typeof showNotification !== 'undefined') {
+              showNotification('Nome em uso', 'Já existe "' + finalName + '". Escolha outro.', 'warning');
+            }
+            return;
           }
-          var _sbtn = document.getElementById('profile-save-btn');
-          if (_sbtn && typeof window._unspinButton === 'function') window._unspinButton(_sbtn);
-          return;
+        } catch (_nameErr) {
+          if (window._warn) window._warn('[Profile] gate de nome único (fail-open):', _nameErr);
         }
       }
 
@@ -8307,51 +8352,10 @@ function setupProfileModal() {
       // nome do usuário.' Trade-off correto: nunca bloquear save de perfil
       // por nome. Organizadores corrigem manualmente nomes ruins via UI.
 
-      // ── 2b. NOME ÚNICO — verifica conflito antes de salvar ──────────────
-      // Só verifica quando o nome realmente mudou.
-      if (finalName && finalName.toLowerCase() !== (_oldDisplayName || '').toLowerCase()) {
-        try {
-          var nameLower = finalName.toLowerCase();
-          var nameConflictSnap = await window.FirestoreDB.db.collection('users')
-            .where('displayName_lower', '==', nameLower)
-            .limit(5)
-            .get();
-          var conflicts = nameConflictSnap.docs.filter(function(d) { return d.id !== uid; });
-          if (conflicts.length > 0) {
-            // Verifica se algum conflito é candidato a mesclagem (mesmo phone ou email)
-            var myPhone = (typeof window._normalizePhoneE164 === 'function' && phoneDigits)
-              ? window._normalizePhoneE164(phoneDigits, phoneCountry || '55')
-              : phoneDigits;
-            var myEmail = (cu.email || '').toLowerCase();
-            var mergeCandidate = null;
-            for (var ci = 0; ci < conflicts.length; ci++) {
-              var cd = conflicts[ci].data() || {};
-              var cdPhone = cd.phone || '';
-              var cdEmail = (cd.email || cd.email_lower || '').toLowerCase();
-              if ((myPhone && cdPhone && myPhone === cdPhone) ||
-                  (myEmail && cdEmail && myEmail === cdEmail)) {
-                mergeCandidate = { uid: conflicts[ci].id, data: cd };
-                break;
-              }
-            }
-            if (mergeCandidate) {
-              // Candidato a mesclagem — acionar fluxo existente de merge
-              if (typeof window._triggerAccountMerge === 'function') {
-                window._triggerAccountMerge(mergeCandidate.uid, mergeCandidate.data);
-              }
-            } else {
-              // Nome em uso por conta distinta — bloquear save
-              if (typeof showNotification === 'function') {
-                showNotification('Perfil', 'Este nome de exibição já está em uso na plataforma. Escolha outro.', 'error');
-              }
-              return;
-            }
-          }
-        } catch (nameCheckErr) {
-          window._warn('[Profile] unique name check failed (non-blocking):', nameCheckErr);
-          // Falha na verificação não bloqueia o save — worst-case: nome duplicado
-        }
-      }
+      // ── 2b. (REMOVIDO v3.x) — consolidado no gate 2.5 merge-aware acima.
+      //   Antes eram dois gates redundantes: o 2 (isDisplayNameTaken) bloqueava
+      //   SEM checar mesclagem e dava return ANTES do 2b (merge-aware) rodar —
+      //   por isso a oferta de mesclar nunca aparecia. Agora há um só.
 
       // ── 3. CONSTRUIR PAYLOAD — só inclui campos não-vazios ──────────────
       // Regra: Firestore set({merge:true}) preserva campos omitidos. Então
