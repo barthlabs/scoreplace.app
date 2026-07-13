@@ -172,16 +172,19 @@
   // importação é feita no computador. Usado nas Estatísticas e no Histórico.
   window._spImportEntry = function (opts) {
     opts = opts || {};
-    if (_isMobile()) {
-      return '<div style="background:rgba(132,204,22,0.08);border:1px dashed rgba(132,204,22,0.4);border-radius:12px;padding:12px;font-size:0.8rem;color:var(--text-muted,#cbd5e1);line-height:1.5;">' +
-        '🎾 <b>Importar do letzplay</b> é feito no <b>computador</b> — o navegador do celular não instala extensão. Abra o <b>scoreplace no desktop</b> (Chrome/Edge/Brave), logado no letzplay, pra trazer seu histórico.' +
-      '</div>';
-    }
     var label = opts.label || 'Importar do letzplay';
-    if (opts.variant === 'solid') {
-      return '<button onclick="window._spStartImport&&window._spStartImport()" class="btn btn-primary btn-sm">🎾 ' + _esc(label) + '</button>';
+    if (_isMobile()) {
+      // Não-desktop: botão CINZA/desabilitado + explicação abaixo. A importação
+      // precisa da extensão, que só existe no navegador do computador.
+      var _dCls = (opts.variant === 'solid') ? 'btn btn-sm' : 'btn btn-block';
+      var _dStyle = 'opacity:0.55;background:var(--bg-darker,#2a2f45);color:var(--text-muted,#94a3b8);border:1px solid var(--border-color,rgba(255,255,255,0.12));cursor:not-allowed;' + (opts.variant === 'solid' ? '' : 'margin-top:8px;');
+      return '<button type="button" disabled aria-disabled="true" class="' + _dCls + '" style="' + _dStyle + '">🎾 ' + _esc(label) + '</button>' +
+        '<div style="font-size:0.72rem;color:var(--text-muted,#94a3b8);line-height:1.5;margin-top:6px;text-align:center;">🖥️ A importação do letzplay é feita <b>no desktop</b> (Chrome/Edge/Brave) — o navegador do celular não instala extensão. Abra o scoreplace no computador, logado no letzplay.</div>';
     }
-    return '<button onclick="window._spStartImport&&window._spStartImport()" class="btn btn-primary btn-block" style="margin-top:8px;">🎾 ' + _esc(label) + '</button>';
+    if (opts.variant === 'solid') {
+      return '<button type="button" onclick="window._spStartImport&&window._spStartImport()" class="btn btn-primary btn-sm">🎾 ' + _esc(label) + '</button>';
+    }
+    return '<button type="button" onclick="window._spStartImport&&window._spStartImport()" class="btn btn-primary btn-block" style="margin-top:8px;">🎾 ' + _esc(label) + '</button>';
   };
 
   // ── UI ────────────────────────────────────────────────────────────────

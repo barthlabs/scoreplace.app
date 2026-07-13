@@ -1068,6 +1068,18 @@ function handleGoogleLogin() {
     return;
   }
 
+  // App NATIVO (iOS): o popup/redirect do Firebase é bloqueado no WebView do
+  // Capacitor (auth/invalid-cordova-configuration / popup bloqueado). Usa o
+  // Google Sign-In NATIVO via plugin @capgo/capacitor-social-login → idToken →
+  // firebase signInWithCredential. Mesmo padrão do Sign in with Apple.
+  var _capG = window.Capacitor;
+  if (_capG && _capG.isNativePlatform && _capG.isNativePlatform()
+      && _capG.getPlatform && _capG.getPlatform() === 'ios'
+      && _capG.Plugins && _capG.Plugins.SocialLogin) {
+    _googleNativeLogin(_capG.Plugins.SocialLogin);
+    return;
+  }
+
   // Real Firebase authentication
   if (!authProvider) {
     showNotification(_t('auth.error'), _t('auth.firebaseError'), 'error');
@@ -1224,6 +1236,66 @@ function handleGoogleLogin() {
         showNotification(_t('auth.googleError'), msg, 'error');
       }
     });
+}
+
+// ─── Google Sign-In NATIVO (iOS/Capacitor) ──────────────────────────────────
+// O popup/redirect do Firebase não funciona no WebView do app; usa o plugin
+// @capgo/capacitor-social-login (Google Sign-In nativo) → idToken → Firebase.
+var _socialLoginInited = false;
+function _googleNativeLogin(plugin) {
+  if (typeof window._resetLoginGuard === 'function') window._resetLoginGuard();
+  showNotification(_t('auth.connecting'), _t('auth.connectingMsg'), 'info');
+  // iOS client ID do GoogleService-Info.plist (não é segredo — vai no app bundle).
+  var iosClientId = '382268772878-9uqbuaa7ho56q6d76t7cq5cbcc9edeum.apps.googleusercontent.com';
+  var initP = _socialLoginInited
+    ? Promise.resolve()
+    : plugin.initialize({ google: { iOSClientId: iosClientId } }).then(function(){ _socialLoginInited = true; });
+  initP.then(function() {
+    return plugin.login({ provider: 'google', options: { scopes: ['profile', 'email'], forcePrompt: true } });
+  }).then(function(res) {
+    var r = (res && res.result) ? res.result : res;
+    var idToken = r && r.idToken;
+    var accessToken = r && r.accessToken && (r.accessToken.token || r.accessToken);
+    if (!idToken) throw new Error('Google: idToken ausente na resposta do plugin');
+    var cred = firebase.auth.GoogleAuthProvider.credential(idToken, (typeof accessToken === 'string' ? accessToken : null));
+    return firebase.auth().signInWithCredential(cred);
+  }).then(function(result) {
+    _onGoogleAuthSuccess(result.user, result);
+  }).catch(function(err) {
+    var code = String((err && (err.code || err.message)) || 'unknown');
+    // cancelamento do usuário — silencioso (iOS: -5/1001/canceled/SIGN_IN_CANCELLED)
+    if (/cancel|1001|(^|[^0-9])-5([^0-9]|$)|SIGN_IN_CANCELLED|the user canceled/i.test(code)) return;
+    window._error && window._error('[scoreplace-auth] Google nativo erro:', err);
+    if (typeof window._captureException === 'function') {
+      window._captureException(err, { area: 'googleNativeLogin', code: code });
+    }
+    if (typeof _handleAccountLinking === 'function' && _handleAccountLinking(err, 'Google')) return;
+    showNotification(_t('auth.error'), 'Não foi possível entrar com o Google. Tente Apple, e-mail ou celular.', 'error');
+  });
+}
+window._googleNativeLogin = _googleNativeLogin;
+
+function _onGoogleAuthSuccess(user, result) {
+  if (typeof _forceCloseLoginModal === 'function') _forceCloseLoginModal();
+  var name = (user && (user.displayName || user.email)) || _t('auth.defaultUser');
+  showNotification(_t('auth.loginDone'), _t('auth.welcomeName', { greeting: window._welcomeWord(user), name: name }), 'success');
+  if (window.FirestoreDB && window.FirestoreDB.db && user && user.uid) {
+    window.FirestoreDB.saveUserProfile(user.uid, {
+      authProvider: 'google.com',
+      displayName: user.displayName || '',
+      photoURL: user.photoURL || ''
+    }).catch(function(){});
+  }
+  try { _tryLinkPendingCredential(result); } catch (e) {
+    window._warn && window._warn('[scoreplace-auth] google _tryLinkPendingCredential (non-fatal):', e);
+  }
+  try {
+    localStorage.setItem('scoreplace_authCache', JSON.stringify({
+      uid: user.uid, email: user.email,
+      displayName: user.displayName, photoURL: user.photoURL, authProvider: 'google.com'
+    }));
+  } catch (e) {}
+  simulateLoginSuccess({ uid: user.uid, email: user.email, displayName: user.displayName, photoURL: user.photoURL });
 }
 
 // ─── Sign in with Apple (Guideline 4.8) ─────────────────────────────────────
@@ -6542,8 +6614,13 @@ function setupProfileModal() {
                   checked: false
                 }) : '') +
               '</div>' +
+              // v1.24: botão de importar do letzplay direto no perfil (além das Estatísticas).
+              // _spImportEntry: desktop = botão ativo; não-desktop = botão cinza + aviso "só no desktop".
+              '<div style="margin-top:10px;">' +
+                (typeof window._spImportEntry === 'function' ? window._spImportEntry({ label: ((window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.letzplayImport && Array.isArray(window.AppStore.currentUser.letzplayImport.games) && window.AppStore.currentUser.letzplayImport.games.length) ? 'Atualizar do letzplay' : 'Importar do letzplay') }) : '') +
+              '</div>' +
               '<div onclick="(window._showPlayerStats&&window.AppStore&&window.AppStore.currentUser)&&window._showPlayerStats(window.AppStore.currentUser.displayName)" style="margin-top:8px;font-size:0.72rem;color:var(--text-muted,#94a3b8);line-height:1.4;cursor:pointer;">' +
-                '💡 A sincronização do seu histórico é feita pelas suas <b style="color:var(--text-bright,#fff);">estatísticas</b> na tela inicial.' +
+                '💡 Você também importa pelas suas <b style="color:var(--text-bright,#fff);">📊 Estatísticas</b> na tela inicial.' +
               '</div>' +
             '</div>' +
             // v1.8: o card "Seu nível (letzplay)" saiu do perfil e passou pras
