@@ -254,8 +254,10 @@ service cloud.firestore {
     // Leitura: qualquer authed. Escrita: qualquer authed (organizador) — dado público.
     match /letzplayScans/{scanUid} {
       allow read: if request.auth != null;
+      // scannedByName + tournamentId/Name identificam quem/qual torneio puxou; fullImport
+      // é o histórico COMPLETO (só no scan "completo") que vira o letzplayImport do dono.
       allow create, update: if request.auth != null
-        && request.resource.data.keys().hasOnly(['handle', 'scan', 'scannedAt', 'scannedBy']);
+        && request.resource.data.keys().hasOnly(['handle', 'scan', 'scannedAt', 'scannedBy', 'scannedByName', 'tournamentId', 'tournamentName', 'fullImport']);
       allow delete: if request.auth != null;
     }
 

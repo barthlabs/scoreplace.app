@@ -6623,6 +6623,23 @@ function setupProfileModal() {
               '<div style="margin-top:10px;">' +
                 (typeof window._spImportEntry === 'function' ? window._spImportEntry({ label: ((window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.letzplayImport && Array.isArray(window.AppStore.currentUser.letzplayImport.games) && window.AppStore.currentUser.letzplayImport.games.length) ? 'Atualizar do letzplay' : 'Importar do letzplay') }) : '') +
               '</div>' +
+              // Data/hora da última importação + procedência (auto vs organizador + torneio).
+              (function () {
+                var _cu = window.AppStore && window.AppStore.currentUser;
+                var _imp = _cu && _cu.letzplayImport;
+                if (!_imp || !_imp.importedAt) return '';
+                var _d = new Date(_imp.importedAt);
+                if (isNaN(_d.getTime())) return '';
+                var _sh = (typeof window._safeHtml === 'function') ? window._safeHtml : function (x) { return x; };
+                var _when = _d.toLocaleDateString('pt-BR') + ' ' + _d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                var _via = '';
+                if (_imp.importedVia === 'organizer') {
+                  var _org = _imp.importedByName ? (' por ' + _sh(_imp.importedByName)) : ' por um organizador';
+                  var _tn = _imp.importedTournamentName ? (' no torneio <b>' + _sh(_imp.importedTournamentName) + '</b>') : '';
+                  _via = '<br>importado' + _org + _tn;
+                }
+                return '<div style="text-align:center;font-size:0.68rem;color:var(--text-muted,#94a3b8);margin-top:6px;line-height:1.45;">Última atualização: ' + _when + _via + '</div>';
+              })() +
               '<div onclick="(window._showPlayerStats&&window.AppStore&&window.AppStore.currentUser)&&window._showPlayerStats(window.AppStore.currentUser.displayName)" style="margin-top:8px;font-size:0.72rem;color:var(--text-muted,#94a3b8);line-height:1.4;cursor:pointer;">' +
                 '💡 Você também importa pelas suas <b style="color:var(--text-bright,#fff);">📊 Estatísticas</b> na tela inicial.' +
               '</div>' +

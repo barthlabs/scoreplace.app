@@ -1821,10 +1821,16 @@
     // GRAVA POR PESSOA (uid), GLOBAL — reutilizável em qualquer torneio. Puxou uma
     // vez, vale pra sempre (letzplayScans/{uid}, não mais por torneio).
     var scanMode = (window._lzPendingMode === 'full') ? 'full' : 'essential';
+    var meName = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.displayName) || null;
+    var _tour = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId)
+      : ((window.AppStore && window.AppStore.tournaments) || []).filter(function (t) { return String(t.id) === String(tId); })[0];
+    var tName = _tour ? (_tour.name || null) : null;
     var writes = ok.map(function (s) {
       if (s.scan && typeof s.scan === 'object') s.scan._mode = scanMode; // modo dentro do scan (regra Firestore não bloqueia sub-campo)
-      return db.collection('letzplayScans').doc(s.uid)
-        .set({ handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid }, { merge: true });
+      var doc = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, scannedByName: meName, tournamentId: String(tId), tournamentName: tName };
+      // Só o scan COMPLETO leva o histórico inteiro (letzplayImport) pro perfil do participante.
+      if (scanMode === 'full' && s.fullImport) doc.fullImport = s.fullImport;
+      return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
     });
     Promise.all(writes).then(function () {
       // re-render a seção Categorias in-place, mesclando os scans novos no scanMap.

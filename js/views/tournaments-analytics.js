@@ -768,8 +768,16 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     if (_lpHasGames && _lpCu.letzplayImport && _lpCu.letzplayImport.importedAt) {
       var _lpD = new Date(_lpCu.letzplayImport.importedAt);
       if (!isNaN(_lpD.getTime())) {
-        _lpUpdatedAt = '<div style="text-align:center;font-size:0.68rem;color:var(--text-muted,#94a3b8);margin-top:6px;">Última atualização: ' +
-          _lpD.toLocaleDateString('pt-BR') + ' ' + _lpD.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '</div>';
+        var _lpImp = _lpCu.letzplayImport;
+        var _lpSh = (typeof window._safeHtml === 'function') ? window._safeHtml : function (x) { return x; };
+        var _lpVia = '';
+        if (_lpImp.importedVia === 'organizer') {
+          var _lpOrg = _lpImp.importedByName ? (' por ' + _lpSh(_lpImp.importedByName)) : ' por um organizador';
+          var _lpTn = _lpImp.importedTournamentName ? (' no torneio <b>' + _lpSh(_lpImp.importedTournamentName) + '</b>') : '';
+          _lpVia = '<br>importado' + _lpOrg + _lpTn;
+        }
+        _lpUpdatedAt = '<div style="text-align:center;font-size:0.68rem;color:var(--text-muted,#94a3b8);margin-top:6px;line-height:1.45;">Última atualização: ' +
+          _lpD.toLocaleDateString('pt-BR') + ' ' + _lpD.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + _lpVia + '</div>';
       }
     }
     var _lpHistBtn = _lpIsCurUser

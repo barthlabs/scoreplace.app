@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.0.9';
+window.SCOREPLACE_VERSION = '1.0.10';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
@@ -6351,7 +6351,8 @@ window.AppStore = {
     var snap;
     try { snap = await db.collection('letzplayScans').doc(cu.uid).get(); } catch (e) { return; }
     if (!snap.exists) return;
-    var scan = (snap.data() || {}).scan || {};
+    var data = snap.data() || {};
+    var scan = data.scan || {};
     var patch = {};
     if (!cu.gender && scan.gender) patch.gender = scan.gender;
     // CATEGORIA CHECADA: a apurada do letzplay VIRA a oficial e SOBRESCREVE a declarada
@@ -6366,6 +6367,23 @@ window.AppStore = {
       if (sbs[sport] !== checked || src[sport] !== 'letzplay') {
         sbs[sport] = checked; src[sport] = 'letzplay';
         patch.skillBySport = sbs; patch.skillBySportSource = src;
+      }
+    }
+    // Import COMPLETO trazido por organizador (scan "completo"): vira o letzplayImport
+    // do PRÓPRIO dono, com procedência. Precedência: vence o MAIS RECENTE — um org-scan
+    // antigo nunca sobrescreve um self-import mais novo.
+    var fi = data.fullImport;
+    if (fi && typeof fi === 'object' && Array.isArray(fi.footprint)) {
+      var scanTs = Date.parse(data.scannedAt || '') || 0;
+      var curImp = cu.letzplayImport;
+      var curTs = (curImp && curImp.importedAt) ? (Date.parse(curImp.importedAt) || 0) : 0;
+      if (!curImp || scanTs > curTs) {
+        fi.importedVia = 'organizer';
+        fi.importedByName = data.scannedByName || null;
+        fi.importedTournamentName = data.tournamentName || null;
+        fi.importedAt = data.scannedAt || fi.importedAt || null;
+        patch.letzplayImport = fi;
+        if (!cu.letzplayHandle && fi.handle) patch.letzplayHandle = fi.handle;
       }
     }
     if (!Object.keys(patch).length) return;

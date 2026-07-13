@@ -41,6 +41,10 @@
     }
 
     var gamesCount = Array.isArray(imp.games) ? imp.games.length : 0;
+    // Procedência: self-import. Limpa atribuição de organizador (se havia) — o dono mandou.
+    imp.importedVia = 'self';
+    imp.importedByName = null;
+    imp.importedTournamentName = null;
     var payload = { letzplayImport: imp };
     if (!cu.letzplayHandle) payload.letzplayHandle = imp.handle;   // preenche o @ se ainda não tinha
     window.firebase.firestore().collection('users').doc(cu.uid)
