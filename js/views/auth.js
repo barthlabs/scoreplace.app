@@ -4725,6 +4725,10 @@ async function simulateLoginSuccess(user) {
       // v1.3.41-beta: default ON se já tem telefone cadastrado e não escolheu OFF explicitamente
       { id: 'profile-notify-whatsapp', val: cu.notifyWhatsApp === true || (cu.notifyWhatsApp !== false && !!(cu.phone && String(cu.phone).replace(/\D/g,'').length >= 8)) },
       { id: 'profile-hints-enabled', val: _hintsEnabled },
+      // Vibração: default ON — só 'off' explícito desliga (device-local).
+      { id: 'profile-haptics-enabled', val: (function () { try { return localStorage.getItem('scoreplace_haptics') !== 'off'; } catch (e) { return true; } })() },
+      // Sons: default OFF — só 'on' explícito liga (device-local).
+      { id: 'profile-sound-enabled', val: (function () { try { return localStorage.getItem('scoreplace_sound') === 'on'; } catch (e) { return false; } })() },
       { id: 'profile-presence-auto-checkin', val: !!cu.presenceAutoCheckin },
       // v2.4.3: privacidade — ocultar e-mail/telefone (default OFF).
       { id: 'profile-omit-email', val: cu.omitEmail === true },
@@ -6735,6 +6739,19 @@ function setupProfileModal() {
                 '<button type="button" data-theme-val="dark" onclick="window._setProfileTheme(\'dark\')" class="btn btn-sm" style="flex:1;font-size:0.78rem;padding:9px 4px;border-radius:10px;transition:all 0.2s;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌙 ' + _t('profile.themeNight') + '</button>' +
                 '<button type="button" data-theme-val="light" onclick="window._setProfileTheme(\'light\')" class="btn btn-sm" style="flex:1;font-size:0.78rem;padding:9px 4px;border-radius:10px;transition:all 0.2s;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">☀️ ' + _t('profile.themeLight') + '</button>' +
               '</div>' +
+            '</div>' +
+            // Vibração (haptic) — ligado por padrão. Fonte de verdade é o
+            // localStorage 'scoreplace_haptics' (lido por window._hapticsMuted).
+            // No app nativo (iOS/Android) usa o Taptic real; no web Android usa
+            // a Vibration API. onchange dá efeito imediato + preview ao ligar.
+            '<div style="margin-bottom: 1rem;">' +
+              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-haptics-enabled', label: _t('profile.haptics'), icon: '📳', checked: true, color: '#6366f1', desc: _t('profile.hapticsDesc'), onchange: 'if(window._setHapticsEnabled)window._setHapticsEnabled(this.checked)' }) : '') +
+            '</div>' +
+            // Sons de UI — DESLIGADO por padrão. Fonte de verdade é o localStorage
+            // 'scoreplace_sound' (lido por window._soundMuted). onchange dá efeito
+            // imediato + preview (toca o "Sino") ao ligar.
+            '<div style="margin-bottom: 1rem;">' +
+              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-sound-enabled', label: _t('profile.sound'), icon: '🔊', checked: false, color: '#10b981', desc: _t('profile.soundDesc'), onchange: 'if(window._setSoundEnabled)window._setSoundEnabled(this.checked)' }) : '') +
             '</div>' +
             // Visual Hints toggle — v1.9.96: oculto enquanto as dicas estão
             // desativadas globalmente (window._HINTS_ENABLED !== true). Sem isso

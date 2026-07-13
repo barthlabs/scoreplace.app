@@ -11,6 +11,20 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.08);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🔊 v1.0.9 — Sons nos momentos-chave <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔊 Feedback sonoro:</b> sons discretos nos momentos que importam — <b>sino</b> ao concluir sortear/inscrever/adicionar participante, <b>apito</b> ao iniciar a partida ao vivo, toques ao fechar <b>game/set</b>, <b>torcida</b> ao vencer a partida e uma pequena fanfarra quando o torneio <b>sagra o campeão</b>. Tudo gerado no app, sem download.</li>' +
+        '<li><b>⚙️ Liga/desliga no Perfil:</b> novo toggle <b>"Sons"</b> na aparência do perfil, <b>desligado por padrão</b>. Fica em silêncio se o aparelho estiver no mudo.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #818cf8;border-radius:12px;padding:14px 16px;background:rgba(129,140,248,0.08);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">📳 v1.0.8 — Vibração no toque <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📳 Vibração ao tocar:</b> todo botão e toggle do app agora dá um tique de vibração ao ser tocado. Nos apps instalados (iPhone e Android) usa o motor de vibração real do aparelho; no navegador Android usa a vibração do sistema.</li>' +
+        '<li><b>⚙️ Liga/desliga no Perfil:</b> novo toggle <b>"Vibração"</b> na seção de aparência do perfil, <b>ligado por padrão</b>. Desligar silencia a vibração no aparelho.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #38bdf8;border-radius:12px;padding:14px 16px;background:rgba(56,189,248,0.08);">' +
       '<div style="font-weight:800; color:#7dd3fc; font-size:1rem; margin-bottom:8px;">🏷️ v1.0.4 — Importe seu histórico do letzplay + Estatísticas repaginadas + Análise de Inscritos anti-gato <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

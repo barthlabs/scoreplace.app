@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.0.7';
+window.SCOREPLACE_VERSION = '1.0.9';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
@@ -397,11 +397,44 @@ window._monarchGlobalJogoNum = function (t, m, isMe) {
   var COALESCE_MS = 70;
   var _lastT = 0, _lastPri = 0;
 
-  // Mute: respeita opt-out explícito (localStorage). Wireável a um toggle de perfil.
+  // Mute: respeita opt-out explícito (localStorage). Ligado por padrão — só o
+  // valor exato 'off' silencia. Wireado ao toggle "Vibração" no perfil (auth.js).
   window._hapticsMuted = function () {
     try { if (localStorage.getItem('scoreplace_haptics') === 'off') return true; } catch (e) {}
     return false;
   };
+  // Liga/desliga a vibração (toggle "Vibração" do perfil). Efeito imediato:
+  // grava a preferência e, ao LIGAR, dá um tique de confirmação como preview.
+  window._setHapticsEnabled = function (on) {
+    try { localStorage.setItem('scoreplace_haptics', on ? 'on' : 'off'); } catch (e) {}
+    if (on) { _lastT = 0; _lastPri = 0; if (window._haptic) window._haptic('success'); }
+  };
+
+  // ── App NATIVO (iOS/Android via Capacitor): Taptic/haptics REAL do device ──
+  // No iPhone o navigator.vibrate NÃO existe e o truque do <input switch> não
+  // vibra (Apple exige toque trusted) — a ÚNICA forma de vibrar no iOS é o
+  // plugin nativo @capacitor/haptics. Acessado via a ponte window.Capacitor.
+  // Enums do plugin são strings simples ('LIGHT'/'MEDIUM'/'HEAVY',
+  // 'SUCCESS'/'WARNING'/'ERROR') — passamos direto sem importar o pacote.
+  function _capHaptics() {
+    try {
+      var C = window.Capacitor;
+      if (C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.Haptics) {
+        return C.Plugins.Haptics;
+      }
+    } catch (e) {}
+    return null;
+  }
+  // Mapa tipo → chamada nativa. impact = "tique" de apertar; notification =
+  // feedback semântico (deu certo / atenção / erro).
+  var IMPACT = { light: 'LIGHT', tap: 'LIGHT', medium: 'MEDIUM', undo: 'MEDIUM' };
+  var NOTIF  = { success: 'SUCCESS', warning: 'WARNING', error: 'ERROR' };
+  function _capFire(H, type) {
+    try {
+      if (NOTIF[type]) { H.notification({ type: NOTIF[type] }); return; }
+      H.impact({ style: IMPACT[type] || 'LIGHT' });
+    } catch (e) {}
+  }
 
   // ── Fallback iOS: switch escondido que dispara o Taptic ao ser alternado ──
   var _iosLabel = null, _iosTried = false;
@@ -440,6 +473,11 @@ window._monarchGlobalJogoNum = function (t, m, isMe) {
     var pri = PRI[type] || 1;
     if (now - _lastT < COALESCE_MS && pri <= _lastPri) return; // coalesce
     _lastT = now; _lastPri = pri;
+    // 1º: app nativo (cobre iOS, que não tem navigator.vibrate; e dá Taptic
+    // real no Android também). Só existe dentro do WebView do app instalado.
+    var H = _capHaptics();
+    if (H) { _capFire(H, type); return; }
+    // 2º: web Android — Vibration API.
     if (SUPPORTS_VIBRATE) {
       try { navigator.vibrate(PATTERNS[type] != null ? PATTERNS[type] : 12); return; } catch (e) {}
     }
@@ -470,6 +508,132 @@ window._monarchGlobalJogoNum = function (t, m, isMe) {
     } catch (_e) {}
   }
   try { document.addEventListener('pointerdown', _onPointerDown, true); } catch (e) {}
+})();
+
+// ─── Sons de UI (Web Audio, sintetizados) ────────────────────────────────────
+// window._sound(tipo) é o ÚNICO ponto de áudio de UI do app. Diferente do haptic,
+// NÃO é ligado no listener global de todo botão — só em momentos semânticos
+// (a vibração cobre o toque comum). Tons gerados por código: zero arquivo, roda
+// offline, funciona no web e dentro do app nativo (Web Audio no WebView).
+// Default DESLIGADO — só 'on' no localStorage habilita (toggle "Sons" no perfil).
+// Tipos: 'sino', 'apito', 'game', 'set', 'vitoria', 'rejeicao', 'campeao'.
+(function _setupSounds() {
+  var ctx = null, master = null;
+  window._soundMuted = function () {
+    try { return localStorage.getItem('scoreplace_sound') !== 'on'; } catch (e) { return true; }
+  };
+  function ensure() {
+    if (window._soundMuted && window._soundMuted()) return false;
+    try {
+      if (!ctx) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return false;
+        ctx = new AC(); master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
+      }
+      if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+      return true;
+    } catch (e) { return false; }
+  }
+  // Destrava o AudioContext no primeiro gesto (iOS/Chrome exigem). No-op se
+  // sons desligados ou já rodando. Não toca nada — só prepara o contexto pra
+  // que sons disparados em callbacks async (resultado salvo etc.) soem.
+  function _unlock() { if (ctx && ctx.state === 'running') return; ensure(); }
+  try { document.addEventListener('pointerdown', _unlock, true); } catch (e) {}
+
+  window._setSoundEnabled = function (on) {
+    try { localStorage.setItem('scoreplace_sound', on ? 'on' : 'off'); } catch (e) {}
+    if (on && ensure()) { try { window._sound('sino'); } catch (e) {} } // preview ao ligar
+  };
+
+  // ── síntese (portada do banco de sons aprovado) ──
+  function tone(o) {
+    var t0 = ctx.currentTime + (o.t || 0), dur = o.dur, osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.type = o.type || 'sine';
+    osc.frequency.setValueAtTime(o.f, t0);
+    if (o.f2) osc.frequency.exponentialRampToValueAtTime(o.f2, t0 + dur);
+    var peak = Math.max(0.0002, (o.g == null ? 0.4 : o.g));
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + (o.a || 0.004));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g).connect(master); osc.start(t0); osc.stop(t0 + dur + 0.03);
+  }
+  function seq(arr) { arr.forEach(tone); }
+  function mkNoise(dur) {
+    var b = ctx.createBuffer(1, Math.max(1, Math.ceil(ctx.sampleRate * dur)), ctx.sampleRate), d = b.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b;
+  }
+  function whistle(dur) {
+    var t0 = ctx.currentTime;
+    var src = ctx.createBufferSource(); src.buffer = mkNoise(dur);
+    var bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 16;
+    var ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.0001, t0); ng.gain.exponentialRampToValueAtTime(0.4, t0 + 0.03);
+    ng.gain.setValueAtTime(0.4, t0 + dur - 0.1); ng.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bp).connect(ng).connect(master); src.start(t0); src.stop(t0 + dur + 0.03);
+    var osc = ctx.createOscillator(); osc.type = 'sine'; osc.frequency.value = 3150;
+    var lfo = ctx.createOscillator(); lfo.frequency.value = 22;
+    var lg = ctx.createGain(); lg.gain.value = 130; lfo.connect(lg).connect(osc.frequency);
+    var og = ctx.createGain();
+    og.gain.setValueAtTime(0.0001, t0); og.gain.exponentialRampToValueAtTime(0.22, t0 + 0.04);
+    og.gain.setValueAtTime(0.22, t0 + dur - 0.12); og.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(og).connect(master); osc.start(t0); lfo.start(t0); osc.stop(t0 + dur + 0.03); lfo.stop(t0 + dur + 0.03);
+  }
+  function clap(t0, g) {
+    var s = ctx.createBufferSource(); s.buffer = mkNoise(0.02);
+    var hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1200 + Math.random() * 900;
+    var gg = ctx.createGain();
+    gg.gain.setValueAtTime(0.0001, t0); gg.gain.exponentialRampToValueAtTime(g, t0 + 0.001);
+    gg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.03 + Math.random() * 0.02);
+    s.connect(hp).connect(gg).connect(master); s.start(t0); s.stop(t0 + 0.07);
+  }
+  function applause(dur) {
+    var t0 = ctx.currentTime;
+    function bed(fLo, fHi, peak) {
+      var src = ctx.createBufferSource(); src.buffer = mkNoise(dur);
+      var hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = fLo;
+      var lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = fHi;
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(peak * 0.15, t0 + 0.12);
+      g.gain.exponentialRampToValueAtTime(peak, t0 + dur * 0.42);
+      g.gain.setValueAtTime(peak, t0 + dur - 0.7);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      src.connect(hp).connect(lp).connect(g).connect(master); src.start(t0); src.stop(t0 + dur + 0.05);
+    }
+    bed(180, 1000, 0.24); bed(1300, 5200, 0.15);
+    var count = Math.floor(dur * 44), peakAt = 0.5;
+    for (var i = 0; i < count; i++) {
+      var frac = Math.pow(Math.random(), 0.62);
+      var ramp = Math.min(1, frac / peakAt);
+      clap(t0 + frac * (dur - 0.2), (0.03 + Math.random() * 0.09) * (0.3 + 0.7 * ramp));
+    }
+    for (var k = 0; k < 3; k++) {
+      var wt = t0 + dur * 0.35 + Math.random() * (dur * 0.5);
+      var o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(2600, wt); o.frequency.exponentialRampToValueAtTime(1700, wt + 0.18);
+      var og = ctx.createGain();
+      og.gain.setValueAtTime(0.0001, wt); og.gain.exponentialRampToValueAtTime(0.05, wt + 0.03); og.gain.exponentialRampToValueAtTime(0.0001, wt + 0.2);
+      o.connect(og).connect(master); o.start(wt); o.stop(wt + 0.25);
+    }
+  }
+
+  var LIB = {
+    sino: function () { tone({ f: 1319, dur: .5, g: .32, a: .002 }); tone({ f: 2637, dur: .4, g: .09, a: .002 }); },
+    apito: function () { whistle(0.95); },
+    game: function () { seq([{ type: 'triangle', f: 784, dur: .06, g: .36 }, { type: 'triangle', f: 988, t: .07, dur: .12, g: .36 }]); },
+    set: function () { seq([{ type: 'triangle', f: 523, dur: .1, g: .36 }, { type: 'triangle', f: 659, t: .1, dur: .1, g: .36 }, { type: 'triangle', f: 784, t: .2, dur: .1, g: .36 }, { type: 'triangle', f: 1047, t: .3, dur: .28, g: .4 }, { f: 2093, t: .3, dur: .24, g: .1 }]); },
+    vitoria: function () { applause(3.1); },
+    rejeicao: function () { seq([{ f: 494, dur: .06, g: .38 }, { f: 370, t: .07, dur: .13, g: .38 }]); },
+    campeao: function () {
+      [523, 659, 784, 1047, 784, 1047, 1319].forEach(function (fr, i) { tone({ type: 'square', f: fr, t: i * .075, dur: .09, g: .2 }); });
+      tone({ type: 'square', f: 1568, t: .56, dur: .36, g: .24, a: .005 }); tone({ type: 'square', f: 2093, t: .56, dur: .3, g: .1, a: .005 });
+    }
+  };
+  window._sound = function (type) {
+    if (!ensure()) return;
+    var fn = LIB[type]; if (!fn) return;
+    try { fn(); } catch (e) {}
+  };
 })();
 
 // ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────

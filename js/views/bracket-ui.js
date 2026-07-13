@@ -1790,6 +1790,10 @@ window._saveResultInline = function (tId, matchId) {
   // pelo organizador OU pelo adversário, libera o slot.
   if (m.pendingResult) delete m.pendingResult;
 
+  // Som: resultado lançado/confirmado fora do placar ao vivo → fanfarra "Set".
+  // (o caminho de proposta que precisa de aprovação já retornou acima.)
+  if (window._sound) window._sound('set');
+
   // v2.3.46: quando true, o save NÃO re-renderiza o bracket inteiro — só
   // atualiza o card lançado in-place. Mantém a página estática (sem pulo de
   // scroll, sem colapsar "Demais jogos", sem mexer na classificação) enquanto
@@ -1806,6 +1810,10 @@ window._saveResultInline = function (tId, matchId) {
   if (!isGroupMatch && !isRoundMatch) {
     // Eliminatórias — vencedor avança
     _advanceWinner(t, m);
+    // Som: se este resultado encerrou a eliminatória → campeão coroado (segue o
+    // "Set" que já tocou acima). Salvar num torneio já encerrado não ocorre, então
+    // status 'finished' aqui = acabou de encerrar.
+    if (t.status === 'finished' && window._sound) window._sound('campeao');
     showNotification(_t('result.saved'), `${m.winner} avança!`, 'success');
   } else if (isRoundMatch) {
     // Liga/Suíço/Ranking — atualizar standings
@@ -2103,6 +2111,8 @@ window._approveResult = function(tId, matchId) {
   // Toast por contexto
   if (_ctx.kind === 'elim') showNotification('✅ Resultado aprovado', m.winner + ' avança!', 'success');
   else showNotification('✅ Resultado aprovado', _ctx.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: _ctx.winner}), 'success');
+  // Som: resultado confirmado fora do placar ao vivo → fanfarra do "Set".
+  if (window._sound) window._sound('set');
 
   var _logMsg = 'Resultado aprovado: ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + (m.draw ? ' — Empate' : ' — Vencedor: ' + m.winner);
   window.AppStore.logAction(tId, _logMsg);
@@ -2195,6 +2205,8 @@ window._contestResult = function(tId, matchId) {
     '❌ Contestar resultado',
     'O organizador será notificado para apurar e lançar o resultado definitivo. Confirma a contestação?',
     function() {
+      // Som: placar não aprovado (contestado) → "dois pra baixo".
+      if (window._sound) window._sound('rejeicao');
       var _disputedByName = cu.displayName || cu.email || 'Jogador';
       // BLINDAGEM (v4.0.121): marca a disputa ATÔMICO pelo portão (local + fresco).
       window.AppStore.mutate(tId, function (ft) {
@@ -4003,6 +4015,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _localizeRoleLabels();
   }
 
+  // Som: apito de árbitro ao ABRIR uma partida nova pra jogar ao vivo. Só numa
+  // partida realmente nova — não em modo visualização, não retomando estado
+  // salvo (initialLiveState/casualDocId), não já finalizada, sem pontos ainda.
+  if (window._sound && !(opts && opts.viewOnly) && !(opts && opts.initialLiveState)
+      && !(opts && opts.casualDocId) && !state.isFinished && !_matchStartTime) {
+    window._sound('apito');
+  }
+
   // If joining an active match, try to load initial liveState from Firestore immediately
   var _initDocId = isCasual && opts ? opts.casualDocId : null;
   if (_initDocId && window.FirestoreDB && window.FirestoreDB.db) {
@@ -4462,9 +4482,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var setResult = _checkSetWon();
         if (setResult > 0) {
           _finishSet(setResult);
+        } else {
+          // Som: ganhou um game e o set continua → toque curto "Game".
+          // setResult === -1 = entrou em tiebreak (game foi ganho, toca);
+          // setResult === -2 = aguardando diálogo de regra de empate (não toca).
+          if (setResult !== -2 && window._sound) window._sound('game');
         }
-        // setResult === -1 means we entered tiebreak, already handled
-        // setResult === -2 means waiting for tie rule dialog (ask mode)
       }
     }
 
@@ -4486,6 +4509,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       state.isFinished = true;
       state.winner = matchWinner;
       _matchEndTime = Date.now();
+      // Som: partida vencida no placar ao vivo → torcida (crescendo de gol).
+      if (window._sound) window._sound('vitoria');
       // v2.1.39: TORNEIO — grava o resultado na chave AUTOMATICAMENTE no último
       // ponto (sem botão "Confirmar"). Idempotente via _resultSaved. keepOpen
       // mantém o resumo/estatísticas na tela; o "Voltar" leva à chave já gravada.
@@ -4525,6 +4550,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     } else {
       // Start new set
       state.sets.push({ gamesP1: 0, gamesP2: 0, tiebreak: null });
+      // Som: set fechado e a partida continua → fanfarra "Set".
+      if (window._sound) window._sound('set');
     }
   }
 

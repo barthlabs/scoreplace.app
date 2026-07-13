@@ -621,6 +621,7 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     t.participants.push(participantObj);
 
     // Show success and navigate immediately (no wait for network)
+    if (window._sound) window._sound('sino');
     if (typeof showNotification !== 'undefined') showNotification(_t('enroll.enrolledTitle'), _t('enroll.enrolledMsg', { name: window._safeHtml(t.name) }), 'success');
     // Trophy hook — enrollment milestone
     setTimeout(function() {
@@ -838,6 +839,7 @@ window.submitTeamEnroll = function (tId) {
     t.teamOrigins = _teamOrigins;
 
     // Show success and navigate immediately (no wait for network)
+    if (window._sound) window._sound('sino');
     if (typeof showNotification !== 'undefined') showNotification(_t('enroll.enrolledTitle'), _t('enroll.teamEnrolledMsg', { name: window._safeHtml(t.name) }), 'success');
     window._scrollToParticipant(tId, teamString);
     // v2.8.86: enquete ativa → notifica cada novo inscrito da dupla (fundamental).
@@ -1133,6 +1135,7 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
                         return;
                     }
                     t.participants = result.participants;
+                    if (window._sound) window._sound('sino'); // +Participante concluído
                     if (result.autoCloseTriggered) {
                         t.status = 'closed';
                         if (typeof showNotification !== 'undefined') showNotification(_t('enroll.autoClosedTitle'), '"' + window._safeHtml(t.name) + '" ' + _t('enroll.autoClosedMsg', { count: t.maxParticipants }), 'success');
@@ -1156,6 +1159,7 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
                 let arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
                 arr.push(participantObj);
                 t.participants = arr;
+                if (window._sound) window._sound('sino'); // +Participante concluído (fallback)
                 try {
                     if (typeof window._onParticipantAddedToMonarchRound === 'function') {
                         var _wlRes2 = window._onParticipantAddedToMonarchRound(t, participantObj.name, (participantObj.categories && participantObj.categories[0]) || participantObj.category || null);

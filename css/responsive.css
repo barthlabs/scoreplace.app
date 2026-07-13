@@ -66,8 +66,11 @@
     transform: translateY(0);
   }
 
+  /* Modal fullscreen no mobile vai top:0. No app nativo (viewport-fit=cover) o
+     topo fica SOB a barra de status/notch — o header colava no relógio. Empurra
+     o header pelo safe-area-inset-top. No navegador o inset=0, sem efeito. */
   .modal-header {
-    padding: 1.25rem;
+    padding: calc(1.25rem + env(safe-area-inset-top, 0px)) 1.25rem 1.25rem;
     position: sticky;
     top: 0;
     z-index: 10;
