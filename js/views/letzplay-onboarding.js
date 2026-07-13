@@ -48,8 +48,11 @@
       _ext.present = true;
       _ext.version = d.version || null;
       _ext.seenAt = Date.now();
-      // ao detectar a extensão, já pergunta se está logado no letzplay (pro Passo 2 verde)
-      if (_lzLoggedIn !== true) { _lastLzCheck = Date.now(); _checkLetzplay(); }
+      // SÓ checa login do letzplay quando o usuário ESTÁ na página de importação
+      // (#imp-steps existe). Sem esse guard, abrir o scoreplace em qualquer tela
+      // disparava a checagem — que abria uma aba do letzplay junto. A checagem em si
+      // também não abre aba (usa só uma já aberta; ver noCreateTab no content.js).
+      if (document.getElementById('imp-steps') && _lzLoggedIn !== true) { _lastLzCheck = Date.now(); _checkLetzplay(); }
       _maybeRenderSteps();
       return;
     }

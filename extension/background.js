@@ -35,9 +35,12 @@ injectIntoOpenScoreplaceTabs();
 // Se já existe uma aba letzplay.me, reusa. Senão ABRE UMA em background (perfil público
 // não exige login) e a lembra em _autoScanTabId pra fechar ao fim da busca do organizador.
 var _autoScanTabId = null;
-function ensureLetzplayTab(cb) {
+function ensureLetzplayTab(cb, noCreate) {
   chrome.tabs.query({ url: 'https://letzplay.me/*' }, function (tabs) {
     if (tabs && tabs.length) { cb(tabs[0].id); return; }
+    // noCreate: NÃO abre uma aba nova (usado pela checagem de login) — assim abrir o
+    // scoreplace nunca abre o letzplay junto. Só o import/org-scan (ação explícita) cria.
+    if (noCreate) { cb(null); return; }
     chrome.tabs.create({ url: 'https://letzplay.me/', active: false }, function (tab) {
       if (chrome.runtime.lastError || !tab || !tab.id) { cb(null); return; }
       _autoScanTabId = tab.id;
@@ -54,7 +57,7 @@ function closeAutoScanTab() {
 }
 // Busca uma URL do letzplay DE DENTRO de uma aba do letzplay (same-origin → cookies +
 // Cloudflare OK). Cria a aba se necessário (perfil público).
-function fetchViaLetzplayTab(url, cb) {
+function fetchViaLetzplayTab(url, cb, noCreate) {
   if (!chrome.scripting || !chrome.tabs) { cb({ ok: false, error: 'no-scripting' }); return; }
   var injUrl = chrome.runtime.getURL('inject.js');
   ensureLetzplayTab(function (tabId) {
@@ -87,7 +90,7 @@ function fetchViaLetzplayTab(url, cb) {
     }).then(function (res) {
       cb((res && res[0] && res[0].result) || { ok: false, error: 'exec-failed' });
     }).catch(function (e) { cb({ ok: false, error: String(e && e.message || e) }); });
-  });
+  }, noCreate);
 }
 
 // EXTRATOR do PERFIL PÚBLICO — roda no DOM RENDERIZADO da aba do letzplay (o perfil
@@ -243,7 +246,7 @@ function scanProfileViaTab(handle, mode, cb) {
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg && msg.type === 'lp-fetch' && typeof msg.url === 'string' &&
       msg.url.indexOf('https://letzplay.me/') === 0) {
-    fetchViaLetzplayTab(msg.url, sendResponse);
+    fetchViaLetzplayTab(msg.url, sendResponse, !!msg.noCreateTab);
     return true; // resposta assíncrona
   }
   if (msg && msg.type === 'lp-scan-profile' && typeof msg.handle === 'string') {

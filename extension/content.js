@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.30';
+  var EXT_VERSION = '1.31';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -15,9 +15,10 @@
 
   // ── Import DIRETO (via background fetch + parse aqui, que tem DOM) ──
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-  function bgFetchRaw(url) {
+  function bgFetchRaw(url, opts) {
+    opts = opts || {};
     return new Promise(function (resolve) {
-      chrome.runtime.sendMessage({ type: 'lp-fetch', url: url }, function (r) {
+      chrome.runtime.sendMessage({ type: 'lp-fetch', url: url, noCreateTab: !!opts.noCreateTab }, function (r) {
         if (chrome.runtime.lastError) { resolve({ ok: false, error: chrome.runtime.lastError.message }); return; }
         resolve(r || { ok: false, error: 'no-resp' });
       });
@@ -27,12 +28,12 @@
   // limita rajadas de fetch (paginação do histórico + 1 fetch por torneio pro nome).
   // Sem espaçar, o nome do torneio volta vazio ("0 de 4") e às vezes o import inteiro
   // falha. Espera crescente entre tentativas e desiste em erro que não é rate-limit.
-  async function bgFetchDoc(url) {
+  async function bgFetchDoc(url, opts) {
     var backoff = [0, 1500, 3500, 7000];
     var last = null;
     for (var i = 0; i < backoff.length; i++) {
       if (backoff[i]) await sleep(backoff[i]);
-      var r = await bgFetchRaw(url);
+      var r = await bgFetchRaw(url, opts);
       if (r && r.ok) return new DOMParser().parseFromString(r.html, 'text/html');
       last = r;
       var st = r && r.status;
@@ -198,7 +199,10 @@
   // a extensão consulta com os cookies da sessão e reporta). Alimenta o "Passo 2 verde".
   async function checkLetzplay() {
     try {
-      var doc = await bgFetchDoc('https://letzplay.me/u/matches/history');
+      // noCreateTab: a checagem de login NUNCA abre uma aba do letzplay — só usa uma já
+      // aberta. Se não houver, fica "indefinido" (não abre nada). letzplay só abre quando
+      // o usuário clica no botão "Abrir meu histórico no letzplay" ou manda importar.
+      var doc = await bgFetchDoc('https://letzplay.me/u/matches/history', { noCreateTab: true });
       var cards = doc.querySelectorAll('.row.match').length;
       var hasPw = !!doc.querySelector('input[type="password"]');
       var loginTitle = /\b(login|entrar)\b/i.test(doc.title || '');
