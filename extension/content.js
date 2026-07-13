@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.31';
+  var EXT_VERSION = '1.32';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -66,29 +66,39 @@
   // Busca 1x por torneio (cacheia por club/tourneyId). Best-effort: se falhar/404, mantém
   // a categoria (sem regressão). Retorna {total, resolved} pra observabilidade do import.
   async function fillTourneyNames(raw) {
-    var list = (raw.tournaments || []).filter(function (t) { return t.tourneyId && t.club; });
-    var cache = {}, resolved = 0, did = 0;
-    for (var i = 0; i < list.length; i++) {
-      var t = list[i], id = t.club + '/' + t.tourneyId;
-      if (id in cache) { if (cache[id]) t.name = cache[id]; continue; }
-      if (did > 0) await sleep(800);   // espaça pra não estourar o rate-limit do letzplay
-      did++;
-      try {
-        var d = await bgFetchDoc('https://letzplay.me/' + t.club + '/tournaments/' + t.tourneyId);
-        var nm = tourneyNameFromDoc(d);
-        cache[id] = nm || null;
-        if (nm) { t.name = nm; resolved++; }
-      } catch (e) { cache[id] = null; }
-    }
-    // Propaga pros jogos individuais (mesma chave club/tourneyId) — sem isso o nome real
-    // ficava só no footprint e o Histórico/gráfico continuava mostrando a categoria.
-    (raw.matches || []).forEach(function (m) {
-      if (m && m.tourneyId && m.club) {
-        var nm2 = cache[m.club + '/' + m.tourneyId];
-        if (nm2) m.tourneyName = nm2;
-      }
+    // Lista ÚNICA de torneios (club/tourneyId) — várias categorias do mesmo torneio não
+    // devem ser buscadas/contadas 2x.
+    var seen = {}, uniq = [];
+    (raw.tournaments || []).forEach(function (t) {
+      if (!t.tourneyId || !t.club) return;
+      var id = t.club + '/' + t.tourneyId;
+      if (!seen[id]) { seen[id] = 1; uniq.push({ id: id, club: t.club, tourneyId: t.tourneyId, categoryRaw: t.categoryRaw || '' }); }
     });
-    return { total: Object.keys(cache).length, resolved: resolved };
+    var cache = {}, resolved = 0, failed = [];
+    for (var i = 0; i < uniq.length; i++) {
+      // Progresso da FASE DE NOMES (parte lenta, 1 fetch por torneio) — o app mostra
+      // "buscando nomes: i de N torneios" com a bolinha girando. Sem isso, depois dos
+      // jogos a tela parecia travada.
+      post({ __sp_lp: 'import-progress', phase: 'names', done: i, total: uniq.length });
+      var u = uniq[i];
+      if (i > 0) await sleep(1500);   // espaça bem pra PEGAR TODOS (evita 403 na rajada)
+      try {
+        var d = await bgFetchDoc('https://letzplay.me/' + u.club + '/tournaments/' + u.tourneyId);
+        var nm = tourneyNameFromDoc(d);
+        cache[u.id] = nm || null;
+        if (nm) { resolved++; } else { failed.push(u.categoryRaw || u.id); }
+      } catch (e) { cache[u.id] = null; failed.push(u.categoryRaw || u.id); }
+    }
+    post({ __sp_lp: 'import-progress', phase: 'names', done: uniq.length, total: uniq.length });
+    // Aplica os nomes: no footprint (tournaments) E em cada jogo (matches) — sem os jogos,
+    // o Histórico/gráfico continuava mostrando só a categoria.
+    (raw.tournaments || []).forEach(function (t) {
+      if (t.tourneyId && t.club) { var n1 = cache[t.club + '/' + t.tourneyId]; if (n1) t.name = n1; }
+    });
+    (raw.matches || []).forEach(function (m) {
+      if (m && m.tourneyId && m.club) { var n2 = cache[m.club + '/' + m.tourneyId]; if (n2) m.tourneyName = n2; }
+    });
+    return { total: uniq.length, resolved: resolved, failed: failed };
   }
 
   // Import COMPLETO de um participante a partir do perfil PÚBLICO /{handle}/matches

@@ -115,27 +115,16 @@
       return '<div style="font-size:12.5px;color:var(--text-main,#cbd5e1);font-weight:600;line-height:1.4;word-break:break-word;overflow-wrap:anywhere;padding:5px 0;">' +
         (f.src || '•') + ' ' + esc(f.name) + wh + '</div>';
     }
-    // RANKING: nome (esq) + saldo (UM número V−D, dir na linha do nome); categoria + data
-    // numa 2ª linha embaixo. Nome longo quebra linha.
+    // RANKING: nome (esq) + categoria + data numa 2ª linha embaixo. SEM número/saldo à
+    // direita (o usuário não quer os números vermelhos). Nome longo quebra linha.
     function footRowRanking(f) {
-      var right = '';
-      if (f.wins != null && f.losses != null && (f.wins + f.losses) > 0) {
-        var saldo = f.wins - f.losses;
-        var col = saldo > 0 ? '#2dd4a0' : (saldo < 0 ? '#f87171' : 'var(--text-muted,#8b93a3)');
-        right = '<span style="color:' + col + ';">' + (saldo > 0 ? '+' : '') + saldo + '</span>';
-      } else if (f.pos != null) {
-        right = '<span style="color:var(--text-muted,#8b93a3);">' + f.pos + 'º</span>';
-      }
       var subBits = [];
       if (f.cat) subBits.push(esc(f.cat));
       if (f.when) subBits.push(esc(f.when));
       var sub = subBits.join(' · ');
-      return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:5px 0;">' +
-        '<div style="min-width:0;flex:1;">' +
-          '<div style="font-size:12.5px;color:var(--text-main,#cbd5e1);font-weight:600;line-height:1.35;word-break:break-word;overflow-wrap:anywhere;">' + (f.src || '•') + ' ' + esc(f.name) + '</div>' +
-          (sub ? '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:1px;">' + sub + '</div>' : '') +
-        '</div>' +
-        (right ? '<div style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:700;white-space:nowrap;flex-shrink:0;line-height:1.35;">' + right + '</div>' : '') +
+      return '<div style="padding:5px 0;">' +
+        '<div style="font-size:12.5px;color:var(--text-main,#cbd5e1);font-weight:600;line-height:1.35;word-break:break-word;overflow-wrap:anywhere;">' + (f.src || '•') + ' ' + esc(f.name) + '</div>' +
+        (sub ? '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:1px;">' + sub + '</div>' : '') +
       '</div>';
     }
     function footList(arr, kind) {

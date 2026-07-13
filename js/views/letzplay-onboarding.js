@@ -12,7 +12,7 @@
   // Exige a ATUAL (1.31) porque as correções críticas estão nela: 1.30 = URL do torneio
   // /tournaments (nome real); 1.31 = não abrir aba do letzplay junto com o scoreplace.
   // Versões anteriores "funcionam" mas com os bugs — por isso o gate exige a mais nova.
-  var MIN_EXT_VERSION = '1.31';
+  var MIN_EXT_VERSION = '1.32';
   // URL da Chrome Web Store — null enquanto não publicado (mostra instruções manuais).
   var STORE_URL = null;
 
@@ -124,19 +124,44 @@
     if (o && o.parentNode) o.parentNode.removeChild(o);
   };
 
-  function _progressHtml(done, total, saving) {
-    var pct = total ? Math.min(99, Math.round(done / total * 100)) : (done ? 60 : 8);
-    return '<div style="font-size:2rem;margin-bottom:6px;">🎾</div>' +
-      '<div style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;">' + (saving ? 'Salvando no seu perfil…' : 'Importando seu histórico…') + '</div>' +
-      '<div style="height:12px;border-radius:999px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.1));"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#84cc16,#65a30d);transition:width .3s;"></div></div>' +
-      '<div style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;">' + (total ? (done + ' de ' + total + ' jogos') : (done + ' jogos…')) + '</div>';
+  // Progresso com BOLINHA QUE SEMPRE GIRA (spinner CSS) — cria a estrutura 1x e depois só
+  // atualiza texto/barra IN-PLACE (sem recriar), pra o spinner não reiniciar/travar. Fases:
+  // 'jogos' (paginação) → 'names' (busca 1 fetch por torneio, parte lenta) → 'saving'.
+  function _showProgress(done, total, saving, phase) {
+    if (!document.getElementById('sp-imp-spin-style')) {
+      var st = document.createElement('style'); st.id = 'sp-imp-spin-style';
+      st.textContent = '@keyframes spImpSpin{to{transform:rotate(360deg);}}';
+      document.head.appendChild(st);
+    }
+    if (!document.getElementById('sp-imp-bar')) {
+      _overlayCard(
+        '<div style="width:44px;height:44px;margin:0 auto 12px;border-radius:50%;border:4px solid var(--bg-darker,#171a2b);border-top-color:#84cc16;animation:spImpSpin 0.8s linear infinite;"></div>' +
+        '<div id="sp-imp-label" style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;"></div>' +
+        '<div style="height:12px;border-radius:999px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.1));"><div id="sp-imp-bar" style="height:100%;width:8%;background:linear-gradient(90deg,#84cc16,#65a30d);transition:width .3s;"></div></div>' +
+        '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;"></div>'
+      );
+    }
+    var label, sub, pct;
+    if (saving) { label = 'Salvando no seu perfil…'; sub = 'quase lá'; pct = 99; }
+    else if (phase === 'names') {
+      label = 'Buscando os nomes dos torneios…';
+      sub = total ? (done + ' de ' + total + ' torneios') : 'lendo do letzplay…';
+      pct = total ? Math.max(6, Math.round(done / total * 100)) : 50;
+    } else {
+      label = 'Importando seus jogos…';
+      sub = total ? (done + ' de ' + total + ' jogos') : (done + ' jogos…');
+      pct = total ? Math.min(99, Math.round(done / total * 100)) : (done ? 60 : 8);
+    }
+    var l = document.getElementById('sp-imp-label'); if (l) l.textContent = label;
+    var b = document.getElementById('sp-imp-bar'); if (b) b.style.width = pct + '%';
+    var s = document.getElementById('sp-imp-sub'); if (s) s.textContent = sub;
   }
 
   window.addEventListener('message', function (e) {
     if (e.source !== window) return;
     var d = e.data; if (!d) return;
     if (d.__sp_lp === 'import-progress') {
-      if (_importActive) _overlayCard(_progressHtml(d.done || 0, d.total || null, !!d.saving));
+      if (_importActive) _showProgress(d.done || 0, d.total || null, !!d.saving, d.phase);
       return;
     }
     if (d.__sp_lp === 'import-result') {
@@ -194,7 +219,7 @@
     (function wait() {
       if (_ext.present && _verGte(_ext.version, MIN_EXT_VERSION)) {
         _importActive = true;
-        _overlayCard(_progressHtml(0, null, false));
+        _showProgress(0, null, false);
         try { window.postMessage({ __sp_lp: 'run-import' }, window.location.origin); } catch (e) {}
         return;
       }
