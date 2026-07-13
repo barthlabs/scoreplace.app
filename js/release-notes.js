@@ -11,6 +11,14 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.08);">' +
+      '<div style="font-weight:800; color:#fbbf24; font-size:1rem; margin-bottom:8px;">⌚ v1.1 — Placar no relógio <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⌚ Apple Watch e Wear OS:</b> controle o <b>placar ao vivo</b> direto do relógio — marque ponto de cada time, desfaça, resolva empates (prorrogar/tie-break) e, em partida casual, jogue novamente. O relógio espelha o placar do celular em tempo real, com a bola no sacador; toda a regra continua no celular (fonte única).</li>' +
+        '<li><b>📲 Instalação simples:</b> o app do relógio agora acompanha o app do iPhone/Android — aparece pra instalar (ou instala sozinho) sem precisar procurar na lojinha do relógio.</li>' +
+        '<li><b>🎾 Sacador em sincronia:</b> ao trocar o sacador no celular, o relógio reflete na hora.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.08);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🔊 v1.0.9 — Sons nos momentos-chave <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

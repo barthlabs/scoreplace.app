@@ -5338,6 +5338,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     state.serveSkipped = false;
     state.servePending = false;
     _render();
+    _watchNotify(); // relógio sai do "Iniciar" e passa a mostrar o placar/sacador
   };
 
   // Skip serve tracking
@@ -5345,6 +5346,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     state.serveSkipped = true;
     state.servePending = false;
     _render();
+    _watchNotify(); // relógio começa sem rastrear sacador
   };
 
   // Auto-confirm serve order from proposed order (no separate picker screen)
@@ -5393,6 +5395,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       state.serveOrder[3] = { team: team, name: otherPlayer || state.serveOrder[3].name };
     }
     _render();
+    _watchNotify(); // relógio reflete a troca de sacador feita no celular
   };
 
   // ── Render function ──
