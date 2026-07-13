@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.27';
+  var EXT_VERSION = '1.28';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -14,14 +14,34 @@
   announce();
 
   // ── Import DIRETO (via background fetch + parse aqui, que tem DOM) ──
-  function bgFetchDoc(url) {
-    return new Promise(function (resolve, reject) {
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function bgFetchRaw(url) {
+    return new Promise(function (resolve) {
       chrome.runtime.sendMessage({ type: 'lp-fetch', url: url }, function (r) {
-        if (chrome.runtime.lastError) { var e0 = new Error(chrome.runtime.lastError.message); e0.url = url; reject(e0); return; }
-        if (!r || !r.ok) { var e1 = new Error((r && r.error) || ('HTTP ' + (r && r.status))); e1.url = url; reject(e1); return; }
-        resolve(new DOMParser().parseFromString(r.html, 'text/html'));
+        if (chrome.runtime.lastError) { resolve({ ok: false, error: chrome.runtime.lastError.message }); return; }
+        resolve(r || { ok: false, error: 'no-resp' });
       });
     });
+  }
+  // Busca com RETRY+BACKOFF em 403/429 (Too Many Requests) — o letzplay/Cloudflare
+  // limita rajadas de fetch (paginação do histórico + 1 fetch por torneio pro nome).
+  // Sem espaçar, o nome do torneio volta vazio ("0 de 4") e às vezes o import inteiro
+  // falha. Espera crescente entre tentativas e desiste em erro que não é rate-limit.
+  async function bgFetchDoc(url) {
+    var backoff = [0, 1500, 3500, 7000];
+    var last = null;
+    for (var i = 0; i < backoff.length; i++) {
+      if (backoff[i]) await sleep(backoff[i]);
+      var r = await bgFetchRaw(url);
+      if (r && r.ok) return new DOMParser().parseFromString(r.html, 'text/html');
+      last = r;
+      var st = r && r.status;
+      var rateLimited = (st === 403 || st === 429) || /429|403|too many/i.test((r && r.error) || '');
+      if (!rateLimited) break;   // erro que não é rate-limit → repetir não adianta
+    }
+    var e = new Error((last && last.error) || ('HTTP ' + (last && last.status)));
+    e.url = url; e.httpStatus = last && last.status;
+    throw e;
   }
 
   // Nome REAL do torneio a partir da página /{club}/tourneys/{id}. O card do jogo só
@@ -40,10 +60,12 @@
   // a categoria (sem regressão). Retorna {total, resolved} pra observabilidade do import.
   async function fillTourneyNames(raw) {
     var list = (raw.tournaments || []).filter(function (t) { return t.tourneyId && t.club; });
-    var cache = {}, resolved = 0;
+    var cache = {}, resolved = 0, did = 0;
     for (var i = 0; i < list.length; i++) {
       var t = list[i], id = t.club + '/' + t.tourneyId;
       if (id in cache) { if (cache[id]) t.name = cache[id]; continue; }
+      if (did > 0) await sleep(800);   // espaça pra não estourar o rate-limit do letzplay
+      did++;
       try {
         var d = await bgFetchDoc('https://letzplay.me/' + t.club + '/tourneys/' + t.tourneyId);
         var nm = tourneyNameFromDoc(d);
@@ -73,6 +95,7 @@
     var all = X.extractMatchesFromDoc(doc1, handle);
     var maxPage = F.detectMaxPage(doc1);
     for (var p = 2; p <= maxPage; p++) {
+      await sleep(500);   // espaça a paginação pra não estourar o rate-limit
       var d = await bgFetchDoc(base + '?page=' + p);
       all = all.concat(X.extractMatchesFromDoc(d, handle));
     }
@@ -100,6 +123,7 @@
       var all = X.extractMatchesFromDoc(doc1, me);
       post({ __sp_lp: 'import-progress', done: all.length, total: total });
       for (var p = 2; p <= maxPage; p++) {
+        await sleep(500);   // espaça a paginação pra não estourar o rate-limit
         var d = await bgFetchDoc('https://letzplay.me/u/matches/history?page=' + p);
         all = all.concat(X.extractMatchesFromDoc(d, me));
         post({ __sp_lp: 'import-progress', done: all.length, total: total });
@@ -119,7 +143,9 @@
       // mensagem crua + a URL que falhou pro app mostrar (fim do "erro sem nenhuma dica").
       var raw2 = (err && err.message) || 'fetch';
       var badUrl = (err && err.url) ? String(err.url).replace('https://letzplay.me', '') : null;
-      var code = /Failed to fetch|NetworkError|network|load failed|ERR_/i.test(raw2) ? 'net' : 'fetch';
+      var st2 = err && err.httpStatus;
+      var code = (st2 === 403 || st2 === 429 || /\b(429|403)\b|too many/i.test(raw2)) ? 'rate'
+        : /Failed to fetch|NetworkError|network|load failed|ERR_/i.test(raw2) ? 'net' : 'fetch';
       post({ __sp_lp: 'import-result', ok: false, error: code, detail: raw2 + (badUrl ? (' · ' + badUrl) : '') });
     }
   }

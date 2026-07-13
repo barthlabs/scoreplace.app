@@ -99,7 +99,8 @@
     'sem-resposta': 'A extensão não respondeu. Recarregue a página e tente de novo.',
     'invalido': 'Não consegui montar o histórico. Tente de novo.',
     'net': 'Não consegui falar com o letzplay. Confira: (1) uma aba do letzplay.me aberta e logada, (2) sua conexão, (3) nenhum bloqueador/VPN barrando letzplay.me. Depois tente de novo.',
-    'fetch': 'A leitura do letzplay falhou. Deixe uma aba do letzplay.me aberta e logada, recarregue esta página e tente de novo.'
+    'fetch': 'A leitura do letzplay falhou. Deixe uma aba do letzplay.me aberta e logada, recarregue esta página e tente de novo.',
+    'rate': 'O letzplay limitou as leituras (muitas de uma vez — HTTP 403/429). Espere ~1 minuto e tente de novo. Esta versão já espaça as buscas pra evitar isso.'
   };
 
   function _overlayCard(html) {

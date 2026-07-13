@@ -85,29 +85,53 @@
       if (best) return { when: monYr(best), ts: best };
       return { when: (f.year ? String(f.year) : null), ts: (f.year ? new Date(f.year, 11, 31).getTime() : 0) };
     }
-    // label letzplay: clube (quando houver) + NOME REAL do torneio (f.name, do og:title
-    // via fillTourneyNames) — só cai na categoria quando o nome real não foi resolvido.
-    // Scoreplace: nome do torneio.
-    function lpLabel(f) {
+    // NOME do torneio pra a linha de cima: clube (quando houver) + NOME REAL (f.name,
+    // do og:title via fillTourneyNames). Sem nome real, o rótulo é o próprio clube; sem
+    // clube, cai na categoria. A categoria vai numa 2ª linha embaixo (não aqui).
+    function lpName(f) {
       var c = prettyClub(f.club);
-      var nm = (f.name && f.name !== f.categoryRaw) ? f.name : f.categoryRaw;
-      return c ? (c + ' · ' + nm) : nm;
+      var nm = (f.name && f.name !== f.categoryRaw) ? f.name : null;
+      if (nm) return c ? (c + ' · ' + nm) : nm;
+      return c || f.categoryRaw || '';
     }
 
     // OFICIAL = torneios letzplay (🎾) + torneios scoreplace (🏆). RANKING = rankings letzplay.
+    // Cada linha guarda: name (topo-esq), cat+when (embaixo-esq), wins/losses ou pos (direita).
     var footOff = (imp.footprint || []).filter(function (f) { return f.official; })
-      .map(function (f) { var c = concluded(f, true); return { label: lpLabel(f), when: c.when, ts: c.ts, pos: f.position, src: '🎾' }; });
-    spT.forEach(function (s) { var t = _ts(s.date); footOff.push({ label: s.name, when: monYr(s.date) || (s.year ? String(s.year) : null), ts: t || (s.year ? new Date(s.year, 11, 31).getTime() : 0), pos: null, src: '🏆' }); });
+      .map(function (f) { var c = concluded(f, true); var nm = lpName(f); return { name: nm, cat: (f.categoryRaw && f.categoryRaw !== nm) ? f.categoryRaw : '', when: c.when, ts: c.ts, pos: f.position, wins: f.wins, losses: f.losses, src: '🎾' }; });
+    spT.forEach(function (s) { var t = _ts(s.date); footOff.push({ name: s.name, cat: s.sport || '', when: monYr(s.date) || (s.year ? String(s.year) : null), ts: t || (s.year ? new Date(s.year, 11, 31).getTime() : 0), pos: null, wins: null, losses: null, src: '🏆' }); });
     var footRec = (imp.footprint || []).filter(function (f) { return !f.official; })
-      .map(function (f) { var c = concluded(f, false); return { label: lpLabel(f), when: c.when, ts: c.ts, pos: f.position, src: '🎾' }; });
+      .map(function (f) { var c = concluded(f, false); var nm = lpName(f); return { name: nm, cat: (f.categoryRaw && f.categoryRaw !== nm) ? f.categoryRaw : '', when: c.when, ts: c.ts, pos: f.position, wins: f.wins, losses: f.losses, src: '🎾' }; });
     footOff.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });  // mais recente no topo
     footRec.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+    // Linha: NOME (esq, negrito) + saldo V–D / colocação (dir, mesma linha do nome);
+    // categoria + data numa 2ª linha à esquerda embaixo do nome.
+    function footRow(f) {
+      // Saldo = UM número (vitórias − derrotas), com sinal e cor. Sem jogos, cai na colocação.
+      var right = '';
+      if (f.wins != null && f.losses != null && (f.wins + f.losses) > 0) {
+        var saldo = f.wins - f.losses;
+        var col = saldo > 0 ? '#2dd4a0' : (saldo < 0 ? '#f87171' : 'var(--text-muted,#8b93a3)');
+        right = '<span style="color:' + col + ';">' + (saldo > 0 ? '+' : '') + saldo + '</span>';
+      } else if (f.pos != null) {
+        right = '<span style="color:var(--text-muted,#8b93a3);">' + f.pos + 'º</span>';
+      }
+      var subBits = [];
+      if (f.cat) subBits.push(esc(f.cat));
+      if (f.when) subBits.push(esc(f.when));
+      var sub = subBits.join(' · ');
+      // Nome pode quebrar em várias linhas (nomes longos não são cortados); o saldo fica
+      // no topo à direita, alinhado à 1ª linha do nome.
+      return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:5px 0;">' +
+        '<div style="min-width:0;flex:1;">' +
+          '<div style="font-size:12.5px;color:var(--text-main,#cbd5e1);font-weight:600;line-height:1.35;word-break:break-word;overflow-wrap:anywhere;">' + (f.src || '•') + ' ' + esc(f.name) + '</div>' +
+          (sub ? '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:1px;">' + sub + '</div>' : '') +
+        '</div>' +
+        (right ? '<div style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:700;white-space:nowrap;flex-shrink:0;line-height:1.35;">' + right + '</div>' : '') +
+      '</div>';
+    }
     function footList(arr) {
-      return arr.map(function (f) {
-        var wh = f.when ? (' · ' + f.when) : '';
-        var pos = (f.pos != null) ? (' · ' + f.pos + 'º') : '';
-        return '<div style="font-size:12px;color:var(--text-muted,#8b93a3);padding:3px 0;">' + (f.src || '•') + ' ' + esc(f.label) + wh + pos + '</div>';
-      }).join('') || '<div style="font-size:12px;color:var(--text-muted,#8b93a3);">—</div>';
+      return arr.map(footRow).join('') || '<div style="font-size:12px;color:var(--text-muted,#8b93a3);">—</div>';
     }
 
     var pairsHtml = (st.pairs || []).slice(0, 6).map(function (p) {
