@@ -154,7 +154,12 @@ window._buildDoublesInscritosSection = function (t, ctx) {
     var _wmL = members ? _wmNum(_s1, 'left') : '';
     var _wmR = (members && members[1]) ? _wmNum(_s2, 'right') : '';
     var _dpMulti = members ? '1' : '0';
-    var _dpNameAttr = (members ? members.join(' ') : nm).toLowerCase().replace(/"/g, '&quot;');
+    // v?.?.?: nome RESOLVIDO (via uid) pro compacto e pro filtro. `nm` cru fica VAZIO
+    // pras contas cujo displayName foi apagado no strip do ITEM 3 (dupla/uid) — e o
+    // modo compacto do arraste mostra só `data-participant-name` (::before), então o
+    // card encolhido ficava SEM NOME. _pName resolve ao vivo (solo → nome; dupla → "A / B").
+    var _resolvedCardName = (typeof window._pName === 'function') ? (window._pName(p) || nm) : (members ? members.join(' / ') : nm);
+    var _dpNameAttr = (members ? members.join(' ') : (_resolvedCardName || nm)).toLowerCase().replace(/"/g, '&quot;');
     var _dpGender = members ? 'none' : ((typeof window._canonGender === 'function') ? window._canonGender(typeof p === 'object' && p ? p.gender : '') : 'none');
     var _dpSkill = 'none';
     if (!members) {
@@ -173,7 +178,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
     var _presRow = (_prs && _prs.rowHtml)
       ? '<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-top:2px;" onclick="event.stopPropagation();">' + _prs.rowHtml + '</div>'
       : '';
-    return '<div class="participant-card" data-part-card="1" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-inactive="' + _dpInactive + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
+    return '<div class="participant-card" data-part-card="1" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-inactive="' + _dpInactive + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(_resolvedCardName || nm) + '" ' + dragAttrs +
       ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + _presStyle + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
       _enrollBadge + _wmL + _wmR +
       (function () {

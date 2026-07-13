@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.1.3';
+window.SCOREPLACE_VERSION = '1.1.5';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
@@ -3591,6 +3591,18 @@ if (!window._spDragCompactWired) {
   window._spDragCompactWired = true;
   try { document.addEventListener('dragend', function () { window._setDragCompact(false); }, true); } catch (e) {}
   try { document.addEventListener('drop', function () { setTimeout(function () { window._setDragCompact(false); }, 0); }, true); } catch (e) {}
+  // v?.?.?: iOS/WKWebView não dispara `dragend`/`drop` do HTML5 nativo de forma
+  // confiável (drag-and-drop nativo é flaky no WebKit touch) — o modo compacto
+  // ficava PRESO ligado e os cards do organizador ficavam PERMANENTEMENTE pequenos.
+  // touchend/touchcancel/pointerup desligam o compacto quando o dedo/ponteiro solta.
+  // No desktop esses NÃO disparam durante um drag nativo (o pointer é consumido pelo
+  // DnD), então não interferem no arraste em andamento — só limpam um estado preso.
+  var _clearStuckCompact = function () {
+    try { if (document.body && document.body.classList.contains('sp-drag-compact')) window._setDragCompact(false); } catch (e) {}
+  };
+  try { document.addEventListener('touchend', _clearStuckCompact, true); } catch (e) {}
+  try { document.addEventListener('touchcancel', _clearStuckCompact, true); } catch (e) {}
+  try { document.addEventListener('pointerup', _clearStuckCompact, true); } catch (e) {}
   // v2.8.42: ativação GLOBAL da estrela de co-organização ao iniciar QUALQUER
   // arraste de card de inscrito — independente de qual dragstart inline rodou
   // (_mergeDragStart / handleDragStart / _duplaDragStart) ou se o try/catch dele

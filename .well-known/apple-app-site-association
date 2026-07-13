@@ -1,0 +1,23 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "6724SP9XN7.app.scoreplace",
+        "appIDs": ["6724SP9XN7.app.scoreplace"],
+        "paths": ["NOT /.well-known/*", "*"],
+        "components": [
+          {
+            "/": "/.well-known/*",
+            "exclude": true,
+            "comment": "arquivos de verificacao nunca abrem o app"
+          },
+          {
+            "/": "*",
+            "comment": "qualquer URL scoreplace.app abre o app (rotas sao por hash, ex.: /#tournaments/ID)"
+          }
+        ]
+      }
+    ]
+  }
+}

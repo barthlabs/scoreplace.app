@@ -18,6 +18,18 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Deep linking: App Links verificados (https). Um convite de torneio
+                 (https://scoreplace.app/#tournaments/ID) tocado no WhatsApp abre o app
+                 direto, sem chooser. Requer /.well-known/assetlinks.json publicado com o
+                 SHA-256 da chave de assinatura (Play App Signing). singleTask + onNewIntent
+                 → Capacitor Bridge → plugin @capacitor/app (evento appUrlOpen). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="scoreplace.app" />
+            </intent-filter>
         </activity>
 
         <provider

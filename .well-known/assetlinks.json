@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.scoreplace",
+      "sha256_cert_fingerprints": [
+        "BC:B2:41:AA:9B:D7:FC:C9:00:C7:3F:1E:F2:15:30:A7:E2:11:0A:5C:0B:0D:90:F5:61:E4:70:9B:23:6A:DE:00"
+      ]
+    }
+  }
+]
