@@ -11,6 +11,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #84cc16;border-radius:12px;padding:14px 16px;background:rgba(132,204,22,0.08);">' +
+      '<div style="font-weight:800; color:#a3e635; font-size:1rem; margin-bottom:8px;">🎾 v1.1.1 — Nome real dos torneios do letzplay <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🏷️ Nome de verdade nas estatísticas:</b> jogos importados do letzplay agora mostram o <b>nome real do torneio</b> (não mais só a categoria tipo "Masculina D") no Histórico, no gráfico de forma e no card "Seu nível". Reimporte para preencher os nomes nos jogos antigos (extensão v1.27).</li>' +
+        '<li><b>🔎 Erro de importação com dica:</b> quando a importação falha, o app agora explica o que houve e mostra os <b>detalhes técnicos</b> (qual endereço/erro) — fim do "deu erro e não sei por quê". Ao concluir, indica quantos nomes de torneio foram resolvidos.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.08);">' +
       '<div style="font-weight:800; color:#fbbf24; font-size:1rem; margin-bottom:8px;">⌚ v1.1 — Placar no relógio <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

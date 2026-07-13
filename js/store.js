@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.1.0';
+window.SCOREPLACE_VERSION = '1.1.1';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
@@ -182,6 +182,34 @@ window._formatDisplayName = function (fmt) {
   if (fmt === 'Liga' || fmt === 'Ranking') return 'Pontos Corridos';
   if (fmt === 'Fase de Grupos + Eliminatórias') return 'Fase de Grupos';
   return fmt;
+};
+
+// Nome de EXIBIÇÃO da competição de um jogo importado do letzplay. Preferência:
+//   1) g.tourneyName (nome real gravado no próprio jogo — imports novos, ext ≥1.27);
+//   2) nome real do footprint casado por (clube|categoria|ano) — resgata imports antigos
+//      cujo footprint.name já traz o nome real mas os jogos ainda guardam só a categoria;
+//   3) g.competition (categoria — fallback, ex: "Masculina D").
+// `imp` é o letzplayImport (pra achar o footprint). Rankings (não-oficiais) não têm nome
+// de torneio → sempre a categoria. Usado por Estatísticas, gráfico de forma e Histórico.
+window._spGameComp = function (imp, g) {
+  if (!g) return '';
+  if (g.tourneyName) return g.tourneyName;
+  if (!imp || !g.official) return g.competition || '';
+  var map = imp.__spCompNameMap;
+  if (!map) {
+    map = {};
+    (imp.footprint || []).forEach(function (f) {
+      if (!f || !f.official) return;
+      var nm = (f.name && f.name !== f.categoryRaw) ? f.name : null;
+      if (!nm) return;
+      var k = (f.club || '') + '|' + (f.categoryRaw || '') + '|' + (f.year != null ? f.year : '');
+      if (!map[k]) map[k] = nm;
+    });
+    try { Object.defineProperty(imp, '__spCompNameMap', { value: map, enumerable: false, configurable: true }); }
+    catch (e) { imp.__spCompNameMap = map; }
+  }
+  var key = (g.club || '') + '|' + (g.competition || '') + '|' + (g.year != null ? g.year : '');
+  return map[key] || g.competition || '';
 };
 
 // Rótulo do TIPO do torneio pra EXIBIÇÃO (cards, pílulas, títulos, badges). Rei/Rainha é MODO

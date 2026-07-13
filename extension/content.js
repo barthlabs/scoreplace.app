@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.26';
+  var EXT_VERSION = '1.27';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -17,8 +17,8 @@
   function bgFetchDoc(url) {
     return new Promise(function (resolve, reject) {
       chrome.runtime.sendMessage({ type: 'lp-fetch', url: url }, function (r) {
-        if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
-        if (!r || !r.ok) { reject(new Error((r && r.error) || ('HTTP ' + (r && r.status)))); return; }
+        if (chrome.runtime.lastError) { var e0 = new Error(chrome.runtime.lastError.message); e0.url = url; reject(e0); return; }
+        if (!r || !r.ok) { var e1 = new Error((r && r.error) || ('HTTP ' + (r && r.status))); e1.url = url; reject(e1); return; }
         resolve(new DOMParser().parseFromString(r.html, 'text/html'));
       });
     });
@@ -34,11 +34,13 @@
       return t || null;
     } catch (e) { return null; }
   }
-  // Preenche raw.tournaments[].name com o nome real (busca 1x por torneio; cacheia).
-  // Best-effort: se falhar/404, mantém a categoria (sem regressão).
+  // Preenche o nome REAL do torneio — tanto em raw.tournaments[].name (footprint) quanto
+  // em CADA jogo raw.matches[].tourneyName (o que alimenta o Histórico e as Estatísticas).
+  // Busca 1x por torneio (cacheia por club/tourneyId). Best-effort: se falhar/404, mantém
+  // a categoria (sem regressão). Retorna {total, resolved} pra observabilidade do import.
   async function fillTourneyNames(raw) {
     var list = (raw.tournaments || []).filter(function (t) { return t.tourneyId && t.club; });
-    var cache = {};
+    var cache = {}, resolved = 0;
     for (var i = 0; i < list.length; i++) {
       var t = list[i], id = t.club + '/' + t.tourneyId;
       if (id in cache) { if (cache[id]) t.name = cache[id]; continue; }
@@ -46,9 +48,18 @@
         var d = await bgFetchDoc('https://letzplay.me/' + t.club + '/tourneys/' + t.tourneyId);
         var nm = tourneyNameFromDoc(d);
         cache[id] = nm || null;
-        if (nm) t.name = nm;
+        if (nm) { t.name = nm; resolved++; }
       } catch (e) { cache[id] = null; }
     }
+    // Propaga pros jogos individuais (mesma chave club/tourneyId) — sem isso o nome real
+    // ficava só no footprint e o Histórico/gráfico continuava mostrando a categoria.
+    (raw.matches || []).forEach(function (m) {
+      if (m && m.tourneyId && m.club) {
+        var nm2 = cache[m.club + '/' + m.tourneyId];
+        if (nm2) m.tourneyName = nm2;
+      }
+    });
+    return { total: Object.keys(cache).length, resolved: resolved };
   }
 
   // Import COMPLETO de um participante a partir do perfil PÚBLICO /{handle}/matches
@@ -94,15 +105,22 @@
         post({ __sp_lp: 'import-progress', done: all.length, total: total });
       }
       var raw = F.buildRaw(me, all);
-      try { await fillTourneyNames(raw); } catch (e) {}   // nome real dos torneios (best-effort)
+      var nameStats = null;
+      try { nameStats = await fillTourneyNames(raw); } catch (e) {}   // nome real dos torneios (best-effort)
       var imp = I.normalize(raw, { importedAt: new Date().toISOString() });
+      if (nameStats) imp.tourneyNameStats = nameStats;   // observabilidade: X/Y nomes resolvidos
       var v = I.validate(imp);
       if (!v.valid) { post({ __sp_lp: 'import-result', ok: false, error: 'invalido' }); return; }
       post({ __sp_lp: 'import-progress', done: all.length, total: total, saving: true });
       // entrega pro bridge gravar; ele devolve o {import-result} final (ok/erro do Firestore).
       post({ __sp_lp: 'import', letzplayImport: imp });
     } catch (err) {
-      post({ __sp_lp: 'import-result', ok: false, error: (err && err.message) || 'fetch' });
+      // Diagnóstico honesto: separa erro de REDE ('Failed to fetch') dos demais e leva a
+      // mensagem crua + a URL que falhou pro app mostrar (fim do "erro sem nenhuma dica").
+      var raw2 = (err && err.message) || 'fetch';
+      var badUrl = (err && err.url) ? String(err.url).replace('https://letzplay.me', '') : null;
+      var code = /Failed to fetch|NetworkError|network|load failed|ERR_/i.test(raw2) ? 'net' : 'fetch';
+      post({ __sp_lp: 'import-result', ok: false, error: code, detail: raw2 + (badUrl ? (' · ' + badUrl) : '') });
     }
   }
 

@@ -107,14 +107,17 @@
       var scoreA = (typeof g.myScore === 'number') ? String(g.myScore) : '';
       var scoreB = (typeof g.oppScore === 'number') ? String(g.oppScore) : '';
       var venue = _prettyClub(g.club);
-      var comp = (g.official ? 'Torneio' : 'Ranking') + (g.competition ? ' · ' + g.competition : '');
+      // Nome REAL do torneio quando disponível (tourneyName ou resgate via footprint);
+      // rankings e imports sem nome caem na categoria.
+      var realComp = (window._spGameComp ? window._spGameComp(imp, g) : (g.tourneyName || g.competition)) || '';
+      var comp = (g.official ? 'Torneio' : 'Ranking') + (realComp ? ' · ' + realComp : '');
       return {
         ts: ts,
         source: 'letzplay',
         sport: g.sport || 'Beach Tennis',
         official: g.official === true,
         venue: venue,
-        competition: g.competition || (g.official ? 'Torneio' : 'Ranking'),
+        competition: realComp || (g.official ? 'Torneio' : 'Ranking'),
         competitionLabel: comp,
         opponent: opp || '—',
         partner: partner,

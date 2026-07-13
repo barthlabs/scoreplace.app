@@ -190,6 +190,10 @@
         official: m.official === true,
         kind: m.kind || (m.official === true ? 'tournament' : 'ranking'),
         competition: m.categoryRaw || '',
+        // Nome REAL do torneio (og:title da página do torneio, via fillTourneyNames) —
+        // o Histórico/Estatísticas exibem tourneyName quando existe, senão a categoria.
+        tourneyName: m.tourneyName || null,
+        tourneyId: (m.tourneyId != null) ? m.tourneyId : null,
         club: m.club || null,
         round: (m.round != null) ? m.round : null,
         year: (m.year != null) ? m.year : null,

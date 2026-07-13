@@ -85,8 +85,14 @@
       if (best) return { when: monYr(best), ts: best };
       return { when: (f.year ? String(f.year) : null), ts: (f.year ? new Date(f.year, 11, 31).getTime() : 0) };
     }
-    // label letzplay: clube (quando houver) + categoria. Scoreplace: nome do torneio.
-    function lpLabel(f) { var c = prettyClub(f.club); return c ? (c + ' · ' + f.categoryRaw) : f.categoryRaw; }
+    // label letzplay: clube (quando houver) + NOME REAL do torneio (f.name, do og:title
+    // via fillTourneyNames) — só cai na categoria quando o nome real não foi resolvido.
+    // Scoreplace: nome do torneio.
+    function lpLabel(f) {
+      var c = prettyClub(f.club);
+      var nm = (f.name && f.name !== f.categoryRaw) ? f.name : f.categoryRaw;
+      return c ? (c + ' · ' + nm) : nm;
+    }
 
     // OFICIAL = torneios letzplay (🎾) + torneios scoreplace (🏆). RANKING = rankings letzplay.
     var footOff = (imp.footprint || []).filter(function (f) { return f.official; })

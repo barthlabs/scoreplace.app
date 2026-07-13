@@ -1243,6 +1243,13 @@ function _letzplayGamesForUid(uid) {
     var imp = window._spLetzplayImportByUid[uid];
     return (imp && Array.isArray(imp.games)) ? imp.games : [];
 }
+// O letzplayImport inteiro (pra resolver o nome REAL do torneio de cada jogo via _spGameComp).
+function _letzplayImportForUid(uid) {
+    if (!uid) return null;
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (cu && cu.uid === uid && cu.letzplayImport) return cu.letzplayImport;
+    return window._spLetzplayImportByUid[uid] || null;
+}
 // Dobra os jogos do letzplay nos agregados: oficial→torneio (t/🏆), ranking→casual
 // (c/⚡). myScore/oppScore no beach tennis são GAMES; 1 set por jogo (set único).
 // Métricas que o letzplay não tem (saque, recepção, quebras, tiebreaks, tempos,
@@ -1448,7 +1455,7 @@ window._spFormRedraw = function () {
     set('sp-form-svg', b.svg); set('sp-form-stats', b.stats);
     var wl = document.getElementById('sp-form-winlabel'); if (wl) wl.textContent = b.winLabel;
 };
-function _formTrendHtml(casualRecs, tournRecs, lpGames, uid) {
+function _formTrendHtml(casualRecs, tournRecs, lpGames, uid, lpImp) {
     var ev = [];
     function push(r, t) {
         if (r.winnerTeam !== 1 && r.winnerTeam !== 2) return;
@@ -1468,8 +1475,9 @@ function _formTrendHtml(casualRecs, tournRecs, lpGames, uid) {
     (tournRecs || []).forEach(function (r) { push(r, 't'); });    // torneios (🏆)
     (lpGames || []).forEach(function (g) {
         if (g.won !== true && g.won !== false) return;
+        var _comp = (window._spGameComp ? window._spGameComp(lpImp, g) : (g.tourneyName || g.competition)) || (g.official ? 'Torneio' : 'Ranking');
         ev.push({ ts: _lpAnalyticsTs(g.date) || 0, win: g.won, t: g.official ? 't' : 'r',
-            comp: g.competition || (g.official ? 'Torneio' : 'Ranking'), official: !!g.official,
+            comp: _comp, official: !!g.official,
             partner: g.partnerName || null, opps: Array.isArray(g.oppNames) ? g.oppNames.slice() : [],
             mine: (typeof g.myScore === 'number' ? g.myScore : null), theirs: (typeof g.oppScore === 'number' ? g.oppScore : null),
             sport: g.sport || 'Beach Tennis' });
@@ -1901,7 +1909,7 @@ window._renderPersistentMatchStats = function(records, uid) {
         var html = _sectionShell('persist-stats-unified', 'Desempenho', '📊', '#a855f7', badge);
 
         // Gráfico "sobe e desce" da forma (scoreplace + letzplay, cronológico).
-        html += _formTrendHtml(casualRecs, tournRecs, _lpGames, uid);
+        html += _formTrendHtml(casualRecs, tournRecs, _lpGames, uid, _letzplayImportForUid(uid));
 
         // Diverging bar rows — row 1 has no center metric (wins/losses IS the metric),
         // rows 2+ show metric in center with "perdidos"/"vencidos" at the sides.

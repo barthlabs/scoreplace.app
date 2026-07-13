@@ -73,6 +73,19 @@
     var cu = window.AppStore && window.AppStore.currentUser;
     return !!(cu && cu.letzplayImport);
   }
+  // {total, resolved} de nomes de torneio da última importação (ext ≥1.27 grava
+  // letzplayImport.tourneyNameStats). Fallback: conta no footprint quantos torneios
+  // têm nome != categoria (resgata imports que já resolveram nomes sem a stat).
+  function _tourneyNameStats() {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var imp = cu && cu.letzplayImport;
+    if (!imp) return null;
+    if (imp.tourneyNameStats && typeof imp.tourneyNameStats.total === 'number') return imp.tourneyNameStats;
+    var off = (imp.footprint || []).filter(function (f) { return f && f.official; });
+    if (!off.length) return null;
+    var resolved = off.filter(function (f) { return f.name && f.name !== f.categoryRaw; }).length;
+    return { total: off.length, resolved: resolved };
+  }
 
   // ── Import DIRETO disparado pelo app (extensão capaz) + overlay de progresso ──
   var _importActive = false;
@@ -84,7 +97,9 @@
     'conta-diferente': 'O @ do letzplay não bate com o do seu perfil no scoreplace.',
     'libs': 'A extensão precisa ser recarregada (chrome://extensions → ↻).',
     'sem-resposta': 'A extensão não respondeu. Recarregue a página e tente de novo.',
-    'invalido': 'Não consegui montar o histórico. Tente de novo.'
+    'invalido': 'Não consegui montar o histórico. Tente de novo.',
+    'net': 'Não consegui falar com o letzplay. Confira: (1) uma aba do letzplay.me aberta e logada, (2) sua conexão, (3) nenhum bloqueador/VPN barrando letzplay.me. Depois tente de novo.',
+    'fetch': 'A leitura do letzplay falhou. Deixe uma aba do letzplay.me aberta e logada, recarregue esta página e tente de novo.'
   };
 
   function _overlayCard(html) {
@@ -124,9 +139,16 @@
       _importActive = false;
       if (d.ok) {
         var n = (d.count != null) ? d.count : _gamesCount();
+        // Observabilidade: quantos torneios tiveram o NOME REAL resolvido (X/Y). Se veio
+        // 0/Y, o nome real não pôde ser lido — o Histórico mostra a categoria por ora.
+        var _ns = _tourneyNameStats();
+        var nsLine = (_ns && _ns.total > 0)
+          ? '<div style="font-size:0.72rem;color:' + (_ns.resolved > 0 ? '#2dd4a0' : '#f59e0b') + ';margin-bottom:12px;">🏷️ nomes de torneio: ' + _ns.resolved + ' de ' + _ns.total + (_ns.resolved === 0 ? ' — o letzplay não deixou ler o nome desta vez (mostra a categoria).' : ' resolvidos.') + '</div>'
+          : '';
         _overlayCard('<div style="font-size:2rem;margin-bottom:6px;">✅</div>' +
           '<div style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Importado!</div>' +
-          '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);margin-bottom:14px;">' + n + ' jogos do letzplay agora vivem no seu scoreplace.</div>' +
+          '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);margin-bottom:8px;">' + n + ' jogos do letzplay agora vivem no seu scoreplace.</div>' +
+          nsLine +
           '<a href="#historico" onclick="window._spCloseImportOverlay()" class="btn btn-primary btn-block" style="margin-bottom:8px;">📜 Ver Histórico de jogos</a>' +
           '<button onclick="window._spCloseImportOverlay()" class="btn btn-outline btn-block">Fechar</button>');
         _maybeRenderSteps(true);
@@ -134,9 +156,16 @@
         var msg = /context invalidated/i.test(d.error || '')
           ? 'A extensão foi atualizada — recarregue esta página (Cmd+R) e tente de novo.'
           : (_ERR[d.error] || ('Falhou: ' + (d.error || 'erro')));
+        // Detalhe técnico cru (URL + mensagem real do fetch) num expansível — fim do
+        // "erro sem nenhuma dica": dá o que foi que falhou, pra reportar/diagnosticar.
+        var detailHtml = d.detail
+          ? '<details style="margin:2px 0 14px;text-align:left;"><summary style="cursor:pointer;font-size:0.72rem;color:var(--text-muted,#94a3b8);">detalhes técnicos</summary>' +
+            '<div style="font-family:ui-monospace,Menlo,monospace;font-size:0.68rem;color:#94a3b8;background:var(--bg-darker,#171a2b);border-radius:8px;padding:8px 10px;margin-top:6px;word-break:break-all;">' + _esc(d.detail) + '</div></details>'
+          : '';
         _overlayCard('<div style="font-size:2rem;margin-bottom:6px;">⚠️</div>' +
           '<div style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Não deu pra importar</div>' +
-          '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);margin-bottom:14px;">' + _esc(msg) + '</div>' +
+          '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);margin-bottom:' + (detailHtml ? '8px' : '14px') + ';">' + _esc(msg) + '</div>' +
+          detailHtml +
           '<a href="#importar-letzplay" onclick="window._spCloseImportOverlay()" class="btn btn-primary btn-block" style="margin-bottom:8px;">Abrir o passo a passo</a>' +
           '<button onclick="window._spCloseImportOverlay()" class="btn btn-outline btn-block">Fechar</button>');
       }
