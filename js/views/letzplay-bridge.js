@@ -56,6 +56,9 @@
         // Atualiza o que estiver aberto: card nas Estatísticas e/ou a página de Histórico.
         var slot = document.getElementById('letzplay-card-stats-slot');
         if (slot && typeof window._renderLetzplayCard === 'function') slot.innerHTML = window._renderLetzplayCard(cu.letzplayImport);
+        // Perfil aberto: refresca o botão de import + "Última atualização" na hora.
+        var pslot = document.getElementById('profile-lz-import-slot');
+        if (pslot && typeof window._renderProfileLzImportSlot === 'function') pslot.innerHTML = window._renderProfileLzImportSlot();
         if ((window.location.hash || '').indexOf('historico') !== -1 && typeof window._renderHistoricoPage === 'function') {
           try { window._renderHistoricoPage(document.getElementById('view-container')); } catch (e) {}
         }
