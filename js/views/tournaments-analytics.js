@@ -1281,106 +1281,224 @@ function _spFmtMark(ts) {
 // Constrói o gráfico de forma para uma categoria (all/r/t) e uma janela temporal
 // (sliderVal 0=tudo … 100=última semana). Retorna pedaços de HTML (svg/stats/axis/
 // winLabel). Usado no render inicial e no redraw interativo.
-window._spBuildForm = function (events, source, sliderVal) {
-    var W = 320, H = 96, pad = 6;
-    function empty(msg) { return { svg: '<div style="height:80px;display:flex;align-items:center;justify-content:center;color:var(--text-muted,#94a3b8);font-size:0.7rem;">' + msg + '</div>', stats: '—', axis: '', winLabel: 'tudo', clr: '#94a3b8' }; }
+var _SP_MON = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+function _spMonYr(ts) { var d = new Date(ts); if (isNaN(d.getTime())) return ''; return _SP_MON[d.getMonth()] + '/' + String(d.getFullYear()).slice(-2); }
+function _spEsc(s) { return (typeof window._safeHtml === 'function') ? window._safeHtml(s == null ? '' : String(s)) : String(s == null ? '' : s); }
+// Tipos de gráfico que são série temporal (usam o slider de janela).
+window._SP_TIMESERIES = { saldo: 1, pct: 1, games: 1 };
+window._SP_CHART_LABELS = { saldo: 'Saldo V/D', pct: 'Aproveitamento (%)', games: 'Saldo de games', bars: 'V/D por torneio', partner: 'Com quem você ganha', opp: 'Retrospecto (adversário)', month: 'Jogos por mês' };
+
+// Aplica fonte (Geral/Rankings/Torneios) + janela temporal (só série temporal).
+function _spApplyWindow(events, source, sliderVal, isTs) {
     var filt = (events || []).filter(function (e) { return source === 'all' || e.t === source; });
-    if (!filt.length) return empty('Sem jogos nesta categoria.');
+    if (!filt.length || !isTs) return { win: filt, wl: 'tudo' };
     var minTs = filt[0].ts, maxTs = filt[filt.length - 1].ts;
     var spanDays = Math.max(7, (maxTs - minTs) / 86400000);
     var winDays = spanDays * Math.pow(7 / spanDays, (sliderVal || 0) / 100);
     var cutoff = maxTs - winDays * 86400000;
     var win = filt.filter(function (e) { return e.ts >= cutoff; });
     if (win.length < 1) win = filt.slice(-1);
-    var n = win.length, wins = 0;
-    for (var k = 0; k < n; k++) if (win[k].win) wins++;
-    var losses = n - wins, pct = n ? Math.round(wins / n * 100) : 0, saldo = wins - losses;
-    var pts = [], cum = 0, mn = 0, mx = 0;
-    for (var i = 0; i < n; i++) { cum += win[i].win ? 1 : -1; pts.push(cum); if (cum < mn) mn = cum; if (cum > mx) mx = cum; }
-    var span = (mx - mn) || 1;
-    function X(i) { return pad + (n <= 1 ? (W - 2 * pad) / 2 : (i / (n - 1)) * (W - 2 * pad)); }
-    function Y(v) { return pad + (1 - (v - mn) / span) * (H - 2 * pad); }
-    var line = pts.map(function (v, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ');
-    var y0 = Y(0);
-    var area = 'M' + X(0).toFixed(1) + ' ' + y0.toFixed(1) + ' ' + pts.map(function (v, i) { return 'L' + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ') + ' L' + X(n - 1).toFixed(1) + ' ' + y0.toFixed(1) + ' Z';
-    var end = pts[n - 1] || 0;
-    var clr = saldo > 0 ? '#22c55e' : (saldo < 0 ? '#ef4444' : '#94a3b8');
-    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%;height:80px;display:block;">' +
-        '<line x1="' + pad + '" y1="' + y0.toFixed(1) + '" x2="' + (W - pad) + '" y2="' + y0.toFixed(1) + '" stroke="var(--border-color,rgba(255,255,255,0.18))" stroke-width="1" stroke-dasharray="3 3"></line>' +
-        '<path d="' + area + '" fill="' + clr + '22"></path>' +
-        '<path d="' + line + '" fill="none" stroke="' + clr + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>' +
-        '<circle cx="' + X(n - 1).toFixed(1) + '" cy="' + Y(end).toFixed(1) + '" r="3.2" fill="' + clr + '"></circle>' +
-    '</svg>';
-    // marcos temporais: datas em índices igualmente espaçados
-    var idxs = n >= 4 ? [0, Math.round((n - 1) / 3), Math.round(2 * (n - 1) / 3), n - 1] : (n === 1 ? [0] : [0, n - 1]);
-    var marks = idxs.map(function (ix) { return '<span>' + _spFmtMark(win[ix].ts) + '</span>'; });
-    var axis = '<div style="display:flex;justify-content:space-between;font-size:0.55rem;color:var(--text-muted,#94a3b8);margin-top:3px;">' + marks.join('') + '</div>';
-    var stats = n + ' jogos · <span style="color:#22c55e;">' + wins + 'V</span> <span style="color:#ef4444;">' + losses + 'D</span> · ' + pct + '% · saldo ' + (saldo > 0 ? '+' : '') + saldo;
     var wl;
     if (winDays >= spanDays - 0.5) wl = 'tudo';
     else if (winDays <= 7.5) wl = 'última semana';
     else if (winDays <= 31) wl = 'últimos ' + Math.round(winDays) + ' dias';
     else if (winDays <= 365) wl = 'últimos ' + Math.round(winDays / 30) + ' meses';
     else wl = 'últimos ' + (Math.round(winDays / 365 * 10) / 10) + ' anos';
-    return { svg: svg, stats: stats, axis: axis, winLabel: wl, clr: clr };
+    return { win: win, wl: wl };
+}
+function _spEmpty(msg) { return { svg: '<div style="height:120px;display:flex;align-items:center;justify-content:center;color:var(--text-muted,#94a3b8);font-size:0.72rem;text-align:center;padding:0 12px;">' + msg + '</div>', stats: '—', axis: '', winLabel: 'tudo', clr: '#94a3b8' }; }
+
+// Série temporal (saldo / % móvel / saldo de games) com pico, vale e linhas de fim
+// de torneio (nome + valor no ponto). vals[i] casa com win[i].
+function _spLineSvg(win, vals, opt) {
+    var W = 680, H = 172, padL = 16, padR = 16, top = 50, bot = 132, axisY = 156;
+    var n = vals.length, base = opt.base || 0, fmt = opt.fmt || function (v) { return (v > base ? '+' : '') + v; };
+    var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+    if (opt.base === 50) { mn = Math.min(mn, 30); mx = Math.max(mx, 70); }
+    if (mn === mx) { mn -= 1; mx += 1; }
+    function X(i) { return padL + (n <= 1 ? (W - padL - padR) / 2 : (i / (n - 1)) * (W - padL - padR)); }
+    function Y(v) { return top + (1 - (v - mn) / (mx - mn)) * (bot - top); }
+    var end = vals[n - 1], clr = end > base ? '#16a34a' : (end < base ? '#dc2626' : '#94a3b8');
+    var yb = Y(base);
+    var path = vals.map(function (v, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ');
+    var area = 'M' + X(0).toFixed(1) + ' ' + yb.toFixed(1) + ' ' + vals.map(function (v, i) { return 'L' + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ') + ' L' + X(n - 1).toFixed(1) + ' ' + yb.toFixed(1) + ' Z';
+    var pi = vals.indexOf(mx), vi = vals.indexOf(mn);
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block;" role="img" aria-label="gráfico de desempenho">';
+    // fins de torneio: último jogo de cada competição oficial na janela
+    var lastByComp = {};
+    win.forEach(function (e, i) { if (e.official && e.comp) lastByComp[e.comp] = i; });
+    var ends = Object.keys(lastByComp).map(function (c) { return { i: lastByComp[c], label: c }; }).sort(function (a, b) { return b.i - a.i; }).slice(0, 4);
+    ends.forEach(function (e) {
+        var x = X(e.i).toFixed(1);
+        s += '<line x1="' + x + '" y1="' + top + '" x2="' + x + '" y2="' + bot + '" stroke="var(--text-secondary,#8b93a3)" stroke-width="1" stroke-dasharray="2 3" opacity="0.55"></line>';
+        var nm = e.label.length > 22 ? (e.label.slice(0, 21) + '…') : e.label;
+        s += '<text x="' + x + '" y="22" text-anchor="middle" font-size="10.5" fill="var(--text-secondary,#8b93a3)">' + _spEsc(nm) + '</text>';
+        s += '<text x="' + x + '" y="34" text-anchor="middle" font-size="10.5" font-weight="600" fill="' + (vals[e.i] >= base ? '#16a34a' : '#dc2626') + '">' + fmt(vals[e.i]) + '</text>';
+    });
+    s += '<line x1="' + padL + '" y1="' + yb.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + yb.toFixed(1) + '" stroke="var(--text-muted,#94a3b8)" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"></line>';
+    s += '<path d="' + area + '" fill="' + clr + '" opacity="0.10"></path>';
+    s += '<path d="' + path + '" fill="none" stroke="' + clr + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>';
+    s += '<circle cx="' + X(pi).toFixed(1) + '" cy="' + Y(mx).toFixed(1) + '" r="3.2" fill="#16a34a"></circle>';
+    s += '<text x="' + X(pi).toFixed(1) + '" y="' + (Y(mx) - 8).toFixed(1) + '" text-anchor="middle" font-size="12" font-weight="600" fill="#16a34a">' + fmt(mx) + '</text>';
+    s += '<circle cx="' + X(vi).toFixed(1) + '" cy="' + Y(mn).toFixed(1) + '" r="3.2" fill="#dc2626"></circle>';
+    s += '<text x="' + X(vi).toFixed(1) + '" y="' + (Y(mn) + 16).toFixed(1) + '" text-anchor="middle" font-size="12" font-weight="600" fill="#dc2626">' + fmt(mn) + '</text>';
+    s += '<circle cx="' + X(n - 1).toFixed(1) + '" cy="' + Y(end).toFixed(1) + '" r="3.4" fill="' + clr + '" stroke="var(--info-box-bg,#141a24)" stroke-width="2"></circle>';
+    // eixo temporal
+    var idxs = n >= 4 ? [0, Math.round((n - 1) / 3), Math.round(2 * (n - 1) / 3), n - 1] : (n === 1 ? [0] : [0, n - 1]);
+    idxs.forEach(function (ix) { s += '<text x="' + X(ix).toFixed(1) + '" y="' + axisY + '" text-anchor="' + (ix === 0 ? 'start' : (ix === n - 1 ? 'end' : 'middle')) + '" font-size="10" fill="var(--text-muted,#94a3b8)">' + _spMonYr(win[ix].ts) + '</text>'; });
+    s += '</svg>';
+    return { svg: s, clr: clr };
+}
+// Barras (diverging V/D ou simples) para os cortes categóricos.
+function _spBarsSvg(cats, opt) {
+    opt = opt || {};
+    var W = 680, H = 172, padL = 16, padR = 16, mid = opt.diverging ? 96 : 132, maxH = opt.diverging ? 58 : 104;
+    var n = cats.length; if (!n) return { svg: '', clr: '#94a3b8' };
+    var topMax = Math.max.apply(null, cats.map(function (c) { return c.up || 0; })) || 1;
+    var botMax = Math.max.apply(null, cats.map(function (c) { return c.down || 0; })) || 1;
+    var bw = Math.min(64, (W - padL - padR) / n - 12);
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block;" role="img" aria-label="gráfico de barras">';
+    if (opt.diverging) s += '<line x1="' + padL + '" y1="' + mid + '" x2="' + (W - padR) + '" y2="' + mid + '" stroke="var(--text-muted,#94a3b8)" stroke-width="1" opacity="0.5"></line>';
+    cats.forEach(function (c, i) {
+        var cx = padL + (i + 0.5) * ((W - padL - padR) / n);
+        var nm = c.name.length > 16 ? (c.name.slice(0, 15) + '…') : c.name;
+        if (opt.diverging) {
+            var uh = (c.up || 0) / topMax * maxH, dh = (c.down || 0) / botMax * maxH;
+            if (c.up) { s += '<rect x="' + (cx - bw / 2) + '" y="' + (mid - uh) + '" width="' + bw + '" height="' + uh + '" rx="3" fill="#16a34a"></rect>'; s += '<text x="' + cx + '" y="' + (mid - uh - 4) + '" text-anchor="middle" font-size="11" font-weight="600" fill="#16a34a">' + c.up + 'V</text>'; }
+            if (c.down) { s += '<rect x="' + (cx - bw / 2) + '" y="' + mid + '" width="' + bw + '" height="' + dh + '" rx="3" fill="#dc2626"></rect>'; s += '<text x="' + cx + '" y="' + (mid + dh + 13) + '" text-anchor="middle" font-size="11" font-weight="600" fill="#dc2626">' + c.down + 'D</text>'; }
+        } else {
+            var bh = (c.up || 0) / topMax * maxH;
+            s += '<rect x="' + (cx - bw / 2) + '" y="' + (mid - bh) + '" width="' + bw + '" height="' + bh + '" rx="3" fill="#6366f1"></rect>';
+            s += '<text x="' + cx + '" y="' + (mid - bh - 4) + '" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text-bright,#fff)">' + (opt.valFmt ? opt.valFmt(c) : c.up) + '</text>';
+        }
+        s += '<text x="' + cx + '" y="' + (H - 6) + '" text-anchor="middle" font-size="10.5" fill="var(--text-secondary,#8b93a3)">' + _spEsc(nm) + '</text>';
+    });
+    s += '</svg>';
+    return { svg: s, clr: '#6366f1' };
+}
+
+// Dispatcher: monta o gráfico do tipo `kind` a partir dos eventos enriquecidos.
+window._spBuildForm = function (events, source, sliderVal, kind) {
+    kind = kind || 'saldo';
+    var isTs = !!window._SP_TIMESERIES[kind];
+    var w = _spApplyWindow(events, source, sliderVal, isTs);
+    var win = w.win, n = win.length;
+    if (!n) return _spEmpty('Sem jogos nesta seleção.');
+    var wins = 0; for (var k = 0; k < n; k++) if (win[k].win) wins++;
+    var losses = n - wins, pctAll = n ? Math.round(wins / n * 100) : 0, saldoAll = wins - losses;
+    var stats = n + ' jogos · <span style="color:#16a34a;">' + wins + 'V</span> <span style="color:#dc2626;">' + losses + 'D</span> · ' + pctAll + '% · saldo ' + (saldoAll > 0 ? '+' : '') + saldoAll;
+    var r, i2;
+    if (kind === 'saldo') {
+        var cum = 0, vals = []; for (i2 = 0; i2 < n; i2++) { cum += win[i2].win ? 1 : -1; vals.push(cum); }
+        r = _spLineSvg(win, vals, { base: 0 });
+    } else if (kind === 'games') {
+        var g = 0, gv = []; for (i2 = 0; i2 < n; i2++) { var e = win[i2]; if (typeof e.mine === 'number' && typeof e.theirs === 'number') g += (e.mine - e.theirs); gv.push(g); }
+        if (!gv.some(function (v) { return v !== 0; })) return _spEmpty('Sem placar de games nesta seleção (o letzplay traz; casuais/torneios variam).');
+        r = _spLineSvg(win, gv, { base: 0 });
+    } else if (kind === 'pct') {
+        var pv = [], WN = 10; for (i2 = 0; i2 < n; i2++) { var a = Math.max(0, i2 - WN + 1), c = 0, tot = 0; for (var j = a; j <= i2; j++) { tot++; if (win[j].win) c++; } pv.push(Math.round(c / tot * 100)); }
+        r = _spLineSvg(win, pv, { base: 50, fmt: function (v) { return v + '%'; } });
+    } else if (kind === 'bars') {
+        var byC = {}; win.forEach(function (e) { var c = e.comp || (e.official ? 'Torneio' : 'Ranking'); (byC[c] = byC[c] || { name: c, up: 0, down: 0, ts: 0 }); if (e.win) byC[c].up++; else byC[c].down++; if (e.ts > byC[c].ts) byC[c].ts = e.ts; });
+        var cats = Object.keys(byC).map(function (c) { return byC[c]; }).sort(function (a, b) { return b.ts - a.ts; }).slice(0, 8);
+        r = _spBarsSvg(cats, { diverging: true });
+    } else if (kind === 'partner') {
+        var byP = {}; win.forEach(function (e) { if (!e.partner) return; (byP[e.partner] = byP[e.partner] || { name: e.partner, up: 0, down: 0 }); if (e.win) byP[e.partner].up++; else byP[e.partner].down++; });
+        var pc = Object.keys(byP).map(function (p) { return byP[p]; }).sort(function (a, b) { return (b.up + b.down) - (a.up + a.down); }).slice(0, 8);
+        if (!pc.length) return _spEmpty('Sem parceiros identificados nesta seleção.');
+        r = _spBarsSvg(pc, { diverging: true });
+    } else if (kind === 'opp') {
+        var byO = {}; win.forEach(function (e) { (e.opps || []).forEach(function (o) { if (!o) return; (byO[o] = byO[o] || { name: o, up: 0, down: 0 }); if (e.win) byO[o].up++; else byO[o].down++; }); });
+        var oc = Object.keys(byO).map(function (o) { return byO[o]; }).sort(function (a, b) { return (b.up + b.down) - (a.up + a.down); }).slice(0, 8);
+        if (!oc.length) return _spEmpty('Sem adversários identificados nesta seleção.');
+        r = _spBarsSvg(oc, { diverging: true });
+    } else if (kind === 'month') {
+        var byM = {}; win.forEach(function (e) { var key = _spMonYr(e.ts); if (!key) return; (byM[key] = byM[key] || { name: key, up: 0, ts: e.ts }); byM[key].up++; });
+        var mc = Object.keys(byM).map(function (m) { return byM[m]; }).sort(function (a, b) { return a.ts - b.ts; }).slice(-10);
+        r = _spBarsSvg(mc, { diverging: false, valFmt: function (c) { return c.up; } });
+    } else { r = _spEmpty('—'); }
+    return { svg: r.svg, stats: stats, axis: '', winLabel: w.wl, clr: r.clr || '#16a34a' };
 };
-// troca a categoria (Geral/Rankings/Torneios) e redesenha
+// troca a fonte (Geral/Rankings/Torneios) e redesenha
 window._spFormSetSource = function (src) {
     var pills = document.querySelectorAll('#sp-form-pills [data-src]');
     Array.prototype.forEach.call(pills, function (p) {
         var a = p.getAttribute('data-src') === src;
         p.setAttribute('data-active', a ? '1' : '0');
-        p.style.background = a ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'var(--bg-darker,#171a2b)';
+        p.style.background = a ? 'linear-gradient(135deg,#16a34a,#15803d)' : 'var(--bg-darker,#171a2b)';
         p.style.color = a ? '#fff' : 'var(--text-main,#cbd5e1)';
     });
     window._spFormRedraw();
 };
-// lê categoria ativa + slider e reconstrói svg/stats/eixo/label
+// troca o TIPO de gráfico (dropdown) e redesenha; mostra/esconde o slider
+window._spFormSetChart = function (kind) {
+    window._spFormChart = kind;
+    var sliderWrap = document.getElementById('sp-form-slider-wrap');
+    if (sliderWrap) sliderWrap.style.display = window._SP_TIMESERIES[kind] ? '' : 'none';
+    window._spFormRedraw();
+};
+// lê fonte + tipo + slider e reconstrói svg/stats/label
 window._spFormRedraw = function () {
     var data = window._spFormData; if (!data) return;
     var src = 'all', ap = document.querySelector('#sp-form-pills [data-active="1"]'); if (ap) src = ap.getAttribute('data-src');
+    var sel = document.getElementById('sp-form-chart'), kind = sel ? sel.value : (window._spFormChart || 'saldo');
     var sl = document.getElementById('sp-form-slider'), v = sl ? +sl.value : 0;
-    var b = window._spBuildForm(data.events, src, v);
+    var b = window._spBuildForm(data.events, src, v, kind);
     function set(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
-    set('sp-form-svg', b.svg); set('sp-form-stats', b.stats); set('sp-form-axis', b.axis);
+    set('sp-form-svg', b.svg); set('sp-form-stats', b.stats);
     var wl = document.getElementById('sp-form-winlabel'); if (wl) wl.textContent = b.winLabel;
 };
 function _formTrendHtml(casualRecs, tournRecs, lpGames, uid) {
     var ev = [];
     function push(r, t) {
         if (r.winnerTeam !== 1 && r.winnerTeam !== 2) return;
-        var me = (r.players || []).filter(function(p){ return p.uid === uid; })[0];
+        var me = (r.players || []).filter(function (p) { return p.uid === uid; })[0];
         if (!me) return;
-        ev.push({ ts: (r.finishedAt ? (Date.parse(r.finishedAt) || 0) : 0), win: r.winnerTeam === me.team, t: t });
+        var partner = null, opps = [];
+        (r.players || []).forEach(function (p) {
+            if (p.uid === uid) return;
+            if (p.team === me.team) { if (p.name) partner = p.name; }
+            else if (p.name) opps.push(p.name);
+        });
+        ev.push({ ts: (r.finishedAt ? (Date.parse(r.finishedAt) || 0) : 0), win: r.winnerTeam === me.team, t: t,
+            comp: r.tournamentName || r.tournament || (t === 't' ? 'Torneio' : 'Casual'), official: t === 't',
+            partner: partner, opps: opps, mine: null, theirs: null, sport: r.sport || null });
     }
-    (casualRecs || []).forEach(function(r){ push(r, 'r'); });   // casuais → rankings (⚡)
-    (tournRecs || []).forEach(function(r){ push(r, 't'); });    // torneios (🏆)
-    (lpGames || []).forEach(function(g) {
+    (casualRecs || []).forEach(function (r) { push(r, 'r'); });   // casuais → rankings (⚡)
+    (tournRecs || []).forEach(function (r) { push(r, 't'); });    // torneios (🏆)
+    (lpGames || []).forEach(function (g) {
         if (g.won !== true && g.won !== false) return;
-        ev.push({ ts: _lpAnalyticsTs(g.date) || 0, win: g.won, t: g.official ? 't' : 'r' });
+        ev.push({ ts: _lpAnalyticsTs(g.date) || 0, win: g.won, t: g.official ? 't' : 'r',
+            comp: g.competition || (g.official ? 'Torneio' : 'Ranking'), official: !!g.official,
+            partner: g.partnerName || null, opps: Array.isArray(g.oppNames) ? g.oppNames.slice() : [],
+            mine: (typeof g.myScore === 'number' ? g.myScore : null), theirs: (typeof g.oppScore === 'number' ? g.oppScore : null),
+            sport: g.sport || 'Beach Tennis' });
     });
     if (ev.length < 3) return '';   // trend só faz sentido com histórico
-    ev.sort(function(a, b){ return a.ts - b.ts; });
+    ev.sort(function (a, b) { return a.ts - b.ts; });
     window._spFormData = { events: ev };
-    var b = window._spBuildForm(ev, 'all', 0);
+    window._spFormChart = 'saldo';
+    var b = window._spBuildForm(ev, 'all', 0, 'saldo');
     function pill(src, label, active) {
         return '<button data-src="' + src + '" data-active="' + (active ? '1' : '0') + '" onclick="window._spFormSetSource(\'' + src + '\')" ' +
-            'style="border:1px solid var(--border-color,rgba(255,255,255,0.15));background:' + (active ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'var(--bg-darker,#171a2b)') + ';color:' + (active ? '#fff' : 'var(--text-main,#cbd5e1)') + ';border-radius:999px;padding:3px 10px;font-size:0.66rem;font-weight:700;cursor:pointer;">' + label + '</button>';
+            'style="border:1px solid var(--border-color,rgba(255,255,255,0.15));background:' + (active ? 'linear-gradient(135deg,#16a34a,#15803d)' : 'var(--bg-darker,#171a2b)') + ';color:' + (active ? '#fff' : 'var(--text-main,#cbd5e1)') + ';border-radius:999px;padding:3px 10px;font-size:0.66rem;font-weight:700;cursor:pointer;">' + label + '</button>';
     }
+    var opts = Object.keys(window._SP_CHART_LABELS).map(function (k) { return '<option value="' + k + '">' + window._SP_CHART_LABELS[k] + '</option>'; }).join('');
     return '<div style="margin-top:2px;margin-bottom:8px;padding:10px 12px;border-radius:12px;background:var(--info-box-bg);border:1px solid ' + b.clr + '33;">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
-          '<span style="font-size:0.68rem;font-weight:800;color:var(--text-bright,#fff);text-transform:uppercase;letter-spacing:0.6px;">📈 Forma (desempenho)</span>' +
+          '<select id="sp-form-chart" onchange="window._spFormSetChart(this.value)" style="font-size:0.78rem;font-weight:800;color:var(--text-bright,#fff);background:var(--bg-darker,#171a2b);border:1px solid var(--border-color,rgba(255,255,255,0.18));border-radius:8px;padding:4px 8px;cursor:pointer;">' + opts + '</select>' +
           '<span id="sp-form-stats" style="font-size:0.6rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + b.stats + '</span>' +
         '</div>' +
         '<div id="sp-form-pills" style="display:flex;gap:6px;margin-bottom:8px;">' + pill('all', 'Geral', true) + pill('r', 'Rankings', false) + pill('t', 'Torneios', false) + '</div>' +
         '<div id="sp-form-svg">' + b.svg + '</div>' +
-        '<div id="sp-form-axis">' + b.axis + '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">' +
-          '<span style="font-size:0.55rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">tudo</span>' +
-          '<input type="range" id="sp-form-slider" min="0" max="100" value="0" oninput="window._spFormRedraw()" style="flex:1;accent-color:#22c55e;">' +
-          '<span style="font-size:0.55rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">semana</span>' +
+        '<div id="sp-form-slider-wrap">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">' +
+            '<span style="font-size:0.55rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">tudo</span>' +
+            '<input type="range" id="sp-form-slider" min="0" max="100" value="0" oninput="window._spFormRedraw()" style="flex:1;accent-color:#16a34a;">' +
+            '<span style="font-size:0.55rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">semana</span>' +
+          '</div>' +
+          '<div style="text-align:center;font-size:0.55rem;color:var(--text-muted,#94a3b8);margin-top:2px;">janela: <b id="sp-form-winlabel" style="color:var(--text-bright,#fff);">' + b.winLabel + '</b></div>' +
         '</div>' +
-        '<div style="text-align:center;font-size:0.55rem;color:var(--text-muted,#94a3b8);margin-top:2px;">janela: <b id="sp-form-winlabel" style="color:var(--text-bright,#fff);">' + b.winLabel + '</b></div>' +
       '</div>';
 }
 
