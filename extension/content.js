@@ -51,6 +51,28 @@
     }
   }
 
+  // Import COMPLETO de um participante a partir do perfil PÚBLICO /{handle}/matches
+  // (paginado, sem login gate — mesmo shape do self-import). Usado só no org-scan modo
+  // "completo". Retorna o letzplayImport normalizado (com nomes de torneio) ou null.
+  async function importFromHandleMatches(handle) {
+    var X = window._spExtract, I = window._spImport, F = window._spFlow;
+    if (!X || !I || !F || !handle) return null;
+    var base = 'https://letzplay.me/' + encodeURIComponent(handle) + '/matches';
+    var doc1 = await bgFetchDoc(base);
+    var all = X.extractMatchesFromDoc(doc1, handle);
+    var maxPage = F.detectMaxPage(doc1);
+    for (var p = 2; p <= maxPage; p++) {
+      var d = await bgFetchDoc(base + '?page=' + p);
+      all = all.concat(X.extractMatchesFromDoc(d, handle));
+    }
+    if (!all.length) return null;
+    var raw = F.buildRaw(handle, all);
+    try { await fillTourneyNames(raw); } catch (e) {}
+    var imp = I.normalize(raw, { importedAt: new Date().toISOString() });
+    var v = I.validate(imp);
+    return (v && v.valid) ? imp : null;
+  }
+
   async function runDirectImport() {
     var X = window._spExtract, I = window._spImport, F = window._spFlow;
     if (!X || !I || !F) { post({ __sp_lp: 'import-result', ok: false, error: 'libs' }); return; }
@@ -107,7 +129,14 @@
       // avisa QUEM está sendo carregado agora (nome + @) antes de buscar
       post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: i, total: targets.length, current: { uid: tg.uid || null, name: tg.name || null, handle: tg.handle } });
       var r = await scanProfile(tg.handle, mode);
-      scans.push({ uid: tg.uid || null, handle: tg.handle, name: tg.name || null, scan: (r && r.ok) ? r.scan : null, error: r && r.error });
+      // Modo COMPLETO: além do resumo (anti-gato), puxa o histórico inteiro do
+      // participante do perfil público → letzplayImport completo (vai pro perfil dele).
+      var fullImp = null;
+      if (r && r.ok && mode === 'full') {
+        post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: i, total: targets.length, current: { uid: tg.uid || null, name: tg.name || null, handle: tg.handle, phase: 'jogos' } });
+        try { fullImp = await importFromHandleMatches(tg.handle); } catch (e) {}
+      }
+      scans.push({ uid: tg.uid || null, handle: tg.handle, name: tg.name || null, scan: (r && r.ok) ? r.scan : null, fullImport: fullImp, error: r && r.error });
       post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: scans.length, total: targets.length, current: { uid: tg.uid || null, name: tg.name || null, handle: tg.handle } });
     }
     // fecha a aba do letzplay que a extensão abriu (se abriu)
