@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.17';
+window.SCOREPLACE_VERSION = '1.0.2';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
@@ -688,7 +688,7 @@ window._matchHasRealPlay = function (m) {
 };
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
-window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
+window.SCOREPLACE_DEV_WHATSAPP = '5511966581959'; // +55 11 96658-1959
 window._devWhatsAppTip = 'Clique aqui para a sua Linha direta com o desenvolvedor do scoreplace.app. ' +
   'Tem dúvida, crítica ou sugestão? Achou algo que não funcionou como esperava? ' +
   'Precisa de ajuda com algo com relação ao app? Por favor fale conosco! ' +

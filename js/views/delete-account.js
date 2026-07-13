@@ -11,8 +11,8 @@
   function renderDeleteAccountPage(container) {
     var _t = window._t || function (k) { return k; };
     var supportEmail = 'contato@barthlabs.com';
-    var waNumber = '5511916936454';
-    var waLabel = '+55 11 91693-6454';
+    var waNumber = '5511966581959';
+    var waLabel = '+55 11 96658-1959';
 
     var H2 = 'font-size:1.05rem;font-weight:700;color:var(--text-bright);margin:1.5rem 0 0.6rem;';
     var P = 'font-size:0.9rem;color:var(--text-main);line-height:1.7;margin:0 0 0.75rem;';
