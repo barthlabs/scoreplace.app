@@ -50,17 +50,52 @@
       ? '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(off.categoryRaw) + '</span>'
       : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
 
-    // OFICIAL = torneios do letzplay (🎾) + torneios do scoreplace (🏆). RECREATIVO = rankings do letzplay.
+    // Data de conclusão (mês/ano). Letzplay: derivada do ÚLTIMO jogo daquela
+    // competição (imp.games tem dd/mm/aa). Scoreplace: endDate do torneio.
+    var _MON = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    function monYr(raw) {
+      if (!raw) return null;
+      var s = String(raw).trim(), m;
+      if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/))) {
+        var mo = +m[2], y = +m[3]; if (y < 100) y += 2000;
+        return (mo >= 1 && mo <= 12) ? (_MON[mo - 1] + '/' + y) : String(y);
+      }
+      if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) {
+        var mo2 = +m[2]; return (mo2 >= 1 && mo2 <= 12 ? _MON[mo2 - 1] + '/' : '') + m[1];
+      }
+      var d = new Date(s); return isNaN(d.getTime()) ? null : (_MON[d.getMonth()] + '/' + d.getFullYear());
+    }
+    function dnum(raw) {
+      var m = String(raw || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if (m) { var y = +m[3]; if (y < 100) y += 2000; return y * 10000 + (+m[2]) * 100 + (+m[1]); }
+      var d = new Date(raw); return isNaN(d.getTime()) ? 0 : (d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate());
+    }
+    var _games = Array.isArray(imp.games) ? imp.games : [];
+    function concludedWhen(f, official) {
+      var best = 0, bestRaw = null;
+      for (var i = 0; i < _games.length; i++) {
+        var g = _games[i];
+        if (g.official !== official) continue;
+        if (g.competition !== f.categoryRaw) continue;
+        if (f.year != null && g.year != null && g.year !== f.year) continue;
+        if (f.club && g.club && g.club !== f.club) continue;
+        var dn = dnum(g.date);
+        if (dn > best) { best = dn; bestRaw = g.date; }
+      }
+      return bestRaw ? monYr(bestRaw) : (f.year ? String(f.year) : null);
+    }
+
+    // OFICIAL = torneios do letzplay (🎾) + torneios do scoreplace (🏆). RANKING = rankings do letzplay.
     var footOff = (imp.footprint || []).filter(function (f) { return f.official; })
-      .map(function (f) { return { label: f.categoryRaw, year: f.year, pos: f.position, src: '🎾' }; });
-    spT.forEach(function (s) { footOff.push({ label: s.name, year: s.year, pos: null, src: '🏆' }); });
+      .map(function (f) { return { label: f.categoryRaw, when: concludedWhen(f, true), pos: f.position, src: '🎾' }; });
+    spT.forEach(function (s) { footOff.push({ label: s.name, when: monYr(s.date) || (s.year ? String(s.year) : null), pos: null, src: '🏆' }); });
     var footRec = (imp.footprint || []).filter(function (f) { return !f.official; })
-      .map(function (f) { return { label: f.categoryRaw, year: f.year, pos: f.position, src: '🎾' }; });
+      .map(function (f) { return { label: f.categoryRaw, when: concludedWhen(f, false), pos: f.position, src: '🎾' }; });
     function footList(arr) {
       return arr.map(function (f) {
-        var yr = f.year ? (' · ' + f.year) : '';
+        var wh = f.when ? (' · ' + f.when) : '';
         var pos = (f.pos != null) ? (' · ' + f.pos + 'º') : '';
-        return '<div style="font-size:12px;color:var(--text-muted,#8b93a3);padding:3px 0;">' + (f.src || '•') + ' ' + esc(f.label) + yr + pos + '</div>';
+        return '<div style="font-size:12px;color:var(--text-muted,#8b93a3);padding:3px 0;">' + (f.src || '•') + ' ' + esc(f.label) + wh + pos + '</div>';
       }).join('') || '<div style="font-size:12px;color:var(--text-muted,#8b93a3);">—</div>';
     }
 
@@ -87,7 +122,7 @@
         // Oficial vs forma
         '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;margin-bottom:4px;">' +
           '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria oficial</span><br>' + offHtml + '</div>' +
-          '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">forma (recreativo)</span><br>' +
+          '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">forma</span><br>' +
             '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;">' + esc(r.band || '—') + '</span>' +
             (r.value ? '<span style="font-size:11px;color:var(--text-muted,#8b93a3);"> · ' + r.value + '</span>' : '') + '</div>' +
         '</div>' +
@@ -113,7 +148,7 @@
         // footprint
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">' +
           '<div><div style="font-size:11px;font-weight:700;color:#2dd4a0;margin-bottom:3px;">OFICIAL (torneio)</div>' + footList(footOff) + '</div>' +
-          '<div><div style="font-size:11px;font-weight:700;color:var(--text-muted,#8b93a3);margin-bottom:3px;">RECREATIVO (ranking)</div>' + footList(footRec) + '</div>' +
+          '<div><div style="font-size:11px;font-weight:700;color:var(--text-muted,#8b93a3);margin-bottom:3px;">RANKING</div>' + footList(footRec) + '</div>' +
         '</div>' +
 
         // duplas

@@ -581,7 +581,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         if (!isParticipant) return;
 
         stats.tournamentsPlayed++;
-        stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: (window._formatLabel ? window._formatLabel(t) : t.format) || '' });
+        stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: (window._formatLabel ? window._formatLabel(t) : t.format) || '', date: t.endDate || t.startDate || t.date || null });
 
         // Track sports and formats
         if (t.sport) stats.sports[t.sport] = (stats.sports[t.sport] || 0) + 1;
@@ -738,7 +738,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     var _lpIsCurUser = _lpCu && _lpCu.displayName && String(_lpCu.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
     // Nível GERAL: mistura scoreplace (torneios oficiais + V/D) do jogador VISTO.
     var _spExtra = {
-      tournaments: (stats.tournamentNames || []).map(function(tn) { return { name: tn.name, sport: tn.sport, year: null }; }),
+      tournaments: (stats.tournamentNames || []).map(function(tn) { return { name: tn.name, sport: tn.sport, year: null, date: tn.date || null }; }),
       wins: stats.totalWins || 0, losses: stats.totalLosses || 0
     };
     // Conta própria: import está no AppStore. Terceiros: carregado async (se autorizado).
@@ -780,12 +780,13 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         avatarHtml +
         '<h3 style="margin:0;font-size:1.3rem;color:var(--text-bright,#fff);">' + safeN + '</h3>' +
       '</div>' +
+      // Card letzplay "Seu nível (geral)" — subido pro TOPO das estatísticas
+      // (pedido do dono jul/2026). Só na própria conta com histórico importado.
+      _lpCardHtml +
       // Main body: persistent matchHistory stats (primary)
       '<div id="player-stats-persistent">' +
         _initialStatsHtml +
       '</div>' +
-      // Card letzplay (só quando é a própria conta com histórico importado)
-      _lpCardHtml +
       // Organizer analytics (if applicable)
       _organizerSectionHtml;
 
