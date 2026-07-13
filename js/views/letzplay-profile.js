@@ -95,19 +95,29 @@
       return c || f.categoryRaw || '';
     }
 
-    // OFICIAL = torneios letzplay (🎾) + torneios scoreplace (🏆). RANKING = rankings letzplay.
-    // Cada linha guarda: name (topo-esq), cat+when (embaixo-esq), wins/losses ou pos (direita).
+    // OFICIAL = torneios (eventos únicos): letzplay (🎾) + scoreplace mata-mata (🏆).
+    // RANKING = temporadas contínuas: rankings letzplay (🎾) + Liga/Pontos Corridos do
+    // scoreplace (🏆). Liga é ranking, NÃO torneio — vai na coluna de ranking.
     var footOff = (imp.footprint || []).filter(function (f) { return f.official; })
       .map(function (f) { var c = concluded(f, true); var nm = lpName(f); return { name: nm, cat: (f.categoryRaw && f.categoryRaw !== nm) ? f.categoryRaw : '', when: c.when, ts: c.ts, pos: f.position, wins: f.wins, losses: f.losses, src: '🎾' }; });
-    spT.forEach(function (s) { var t = _ts(s.date); footOff.push({ name: s.name, cat: s.sport || '', when: monYr(s.date) || (s.year ? String(s.year) : null), ts: t || (s.year ? new Date(s.year, 11, 31).getTime() : 0), pos: null, wins: null, losses: null, src: '🏆' }); });
     var footRec = (imp.footprint || []).filter(function (f) { return !f.official; })
       .map(function (f) { var c = concluded(f, false); var nm = lpName(f); return { name: nm, cat: (f.categoryRaw && f.categoryRaw !== nm) ? f.categoryRaw : '', when: c.when, ts: c.ts, pos: f.position, wins: f.wins, losses: f.losses, src: '🎾' }; });
+    spT.forEach(function (s) {
+      var t = _ts(s.date);
+      var row = { name: s.name, cat: s.sport || '', when: monYr(s.date) || (s.year ? String(s.year) : null), ts: t || (s.year ? new Date(s.year, 11, 31).getTime() : 0), pos: null, wins: null, losses: null, src: '🏆' };
+      if (s.isRanking) footRec.push(row); else footOff.push(row);   // Liga → ranking
+    });
     footOff.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });  // mais recente no topo
     footRec.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
-    // Linha: NOME (esq, negrito) + saldo V–D / colocação (dir, mesma linha do nome);
-    // categoria + data numa 2ª linha à esquerda embaixo do nome.
-    function footRow(f) {
-      // Saldo = UM número (vitórias − derrotas), com sinal e cor. Sem jogos, cai na colocação.
+    // OFICIAL (torneio): 1 LINHA só — nome + data, SEM saldo. Nome longo quebra linha.
+    function footRowOfficial(f) {
+      var wh = f.when ? ('<span style="color:var(--text-muted,#8b93a3);font-weight:400;"> · ' + esc(f.when) + '</span>') : '';
+      return '<div style="font-size:12.5px;color:var(--text-main,#cbd5e1);font-weight:600;line-height:1.4;word-break:break-word;overflow-wrap:anywhere;padding:5px 0;">' +
+        (f.src || '•') + ' ' + esc(f.name) + wh + '</div>';
+    }
+    // RANKING: nome (esq) + saldo (UM número V−D, dir na linha do nome); categoria + data
+    // numa 2ª linha embaixo. Nome longo quebra linha.
+    function footRowRanking(f) {
       var right = '';
       if (f.wins != null && f.losses != null && (f.wins + f.losses) > 0) {
         var saldo = f.wins - f.losses;
@@ -120,8 +130,6 @@
       if (f.cat) subBits.push(esc(f.cat));
       if (f.when) subBits.push(esc(f.when));
       var sub = subBits.join(' · ');
-      // Nome pode quebrar em várias linhas (nomes longos não são cortados); o saldo fica
-      // no topo à direita, alinhado à 1ª linha do nome.
       return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:5px 0;">' +
         '<div style="min-width:0;flex:1;">' +
           '<div style="font-size:12.5px;color:var(--text-main,#cbd5e1);font-weight:600;line-height:1.35;word-break:break-word;overflow-wrap:anywhere;">' + (f.src || '•') + ' ' + esc(f.name) + '</div>' +
@@ -130,8 +138,9 @@
         (right ? '<div style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:700;white-space:nowrap;flex-shrink:0;line-height:1.35;">' + right + '</div>' : '') +
       '</div>';
     }
-    function footList(arr) {
-      return arr.map(footRow).join('') || '<div style="font-size:12px;color:var(--text-muted,#8b93a3);">—</div>';
+    function footList(arr, kind) {
+      var fn = (kind === 'off') ? footRowOfficial : footRowRanking;
+      return arr.map(fn).join('') || '<div style="font-size:12px;color:var(--text-muted,#8b93a3);">—</div>';
     }
 
     var pairsHtml = (st.pairs || []).slice(0, 6).map(function (p) {
@@ -201,8 +210,8 @@
 
         // footprint
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">' +
-          '<div><div style="font-size:11px;font-weight:700;color:#2dd4a0;margin-bottom:3px;">OFICIAL (torneio)</div>' + footList(footOff) + '</div>' +
-          '<div><div style="font-size:11px;font-weight:700;color:var(--text-muted,#8b93a3);margin-bottom:3px;">RANKING</div>' + footList(footRec) + '</div>' +
+          '<div><div style="font-size:11px;font-weight:700;color:#2dd4a0;margin-bottom:3px;">OFICIAL (torneio)</div>' + footList(footOff, 'off') + '</div>' +
+          '<div><div style="font-size:11px;font-weight:700;color:var(--text-muted,#8b93a3);margin-bottom:3px;">RANKING</div>' + footList(footRec, 'rec') + '</div>' +
         '</div>' +
 
         // duplas

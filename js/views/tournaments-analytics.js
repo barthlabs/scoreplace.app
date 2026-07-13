@@ -593,7 +593,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         if (!_started) return;
 
         stats.tournamentsPlayed++;
-        stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: (window._formatLabel ? window._formatLabel(t) : t.format) || '', date: t.endDate || t.startDate || t.date || null });
+        stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: (window._formatLabel ? window._formatLabel(t) : t.format) || '', date: t.endDate || t.startDate || t.date || null, isRanking: !!(window._isLigaFormat && window._isLigaFormat(t)) });
 
         // Track sports and formats
         if (t.sport) stats.sports[t.sport] = (stats.sports[t.sport] || 0) + 1;
@@ -750,7 +750,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     var _lpIsCurUser = _lpCu && _lpCu.displayName && String(_lpCu.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
     // Nível GERAL: mistura scoreplace (torneios oficiais + V/D) do jogador VISTO.
     var _spExtra = {
-      tournaments: (stats.tournamentNames || []).map(function(tn) { return { name: tn.name, sport: tn.sport, year: null, date: tn.date || null }; }),
+      tournaments: (stats.tournamentNames || []).map(function(tn) { return { name: tn.name, sport: tn.sport, year: null, date: tn.date || null, isRanking: !!tn.isRanking }; }),
       wins: stats.totalWins || 0, losses: stats.totalLosses || 0
     };
     // Conta própria: import está no AppStore. Terceiros: carregado async (se autorizado).

@@ -146,10 +146,14 @@
         var nsLine = (_ns && _ns.total > 0)
           ? '<div style="font-size:0.72rem;color:' + (_ns.resolved > 0 ? '#2dd4a0' : '#f59e0b') + ';margin-bottom:12px;">🏷️ nomes de torneio: ' + _ns.resolved + ' de ' + _ns.total + (_ns.resolved === 0 ? ' — o letzplay não deixou ler o nome desta vez (mostra a categoria).' : ' resolvidos.') + '</div>'
           : '';
+        var _title = d.unchanged ? 'Tudo em dia' : 'Importado!';
+        var _body = d.unchanged
+          ? 'Nada novo no letzplay desde a última vez — mantive seu histórico e só atualizei a data desta conferida.'
+          : (n + ' jogos do letzplay agora vivem no seu scoreplace.');
         _overlayCard('<div style="font-size:2rem;margin-bottom:6px;">✅</div>' +
-          '<div style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Importado!</div>' +
-          '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);margin-bottom:8px;">' + n + ' jogos do letzplay agora vivem no seu scoreplace.</div>' +
-          nsLine +
+          '<div style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">' + _title + '</div>' +
+          '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);margin-bottom:8px;">' + _body + '</div>' +
+          (d.unchanged ? '' : nsLine) +
           '<a href="#historico" onclick="window._spCloseImportOverlay()" class="btn btn-primary btn-block" style="margin-bottom:8px;">📜 Ver Histórico de jogos</a>' +
           '<button onclick="window._spCloseImportOverlay()" class="btn btn-outline btn-block">Fechar</button>');
         _maybeRenderSteps(true);

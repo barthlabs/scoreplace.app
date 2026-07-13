@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.28';
+  var EXT_VERSION = '1.30';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -44,10 +44,16 @@
     throw e;
   }
 
-  // Nome REAL do torneio a partir da página /{club}/tourneys/{id}. O card do jogo só
-  // traz a categoria; o nome vive no og:title ("Informações do Torneio {nome}").
+  // Nome REAL do torneio a partir da página /{club}/tournaments/{id} (VERIFICADO AO VIVO
+  // jul/2026: a URL é /tournaments/ COM "n" — /tourneys/ dá 404). Preferência:
+  //   1) heading limpo <h2 class="title with-avatar"> = "Interno Ciclo 2 Competitivo - Masculina D"
+  //      (nome exato, SEM o nome do clube grudado);
+  //   2) fallback og:title "Informações do Torneio {nome} - {clube}" (tira prefixo/sufixo;
+  //      ainda traz o clube no fim, por isso o h2 é preferido).
   function tourneyNameFromDoc(doc) {
     try {
+      var h2 = doc.querySelector('h2.title.with-avatar, .title.with-avatar');
+      if (h2) { var hn = (h2.textContent || '').replace(/\s+/g, ' ').trim(); if (hn) return hn; }
       var og = doc.querySelector('meta[property="og:title"]');
       var t = (og ? (og.getAttribute('content') || '') : (doc.title || '')).replace(/\s+/g, ' ').trim();
       t = t.replace(/\s*-\s*Letzplay\s*$/i, '').replace(/^Informa[çc][õo]es do Torneio\s+/i, '');
@@ -67,7 +73,7 @@
       if (did > 0) await sleep(800);   // espaça pra não estourar o rate-limit do letzplay
       did++;
       try {
-        var d = await bgFetchDoc('https://letzplay.me/' + t.club + '/tourneys/' + t.tourneyId);
+        var d = await bgFetchDoc('https://letzplay.me/' + t.club + '/tournaments/' + t.tourneyId);
         var nm = tourneyNameFromDoc(d);
         cache[id] = nm || null;
         if (nm) { t.name = nm; resolved++; }

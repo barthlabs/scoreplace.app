@@ -13,10 +13,53 @@
       && Array.isArray(imp.footprint) && Array.isArray(imp.observations);
   }
 
-  function reply(ok, error, count) {
+  function reply(ok, error, count, extra) {
     try {
-      window.postMessage({ __sp_lp: 'import-result', ok: !!ok, error: error || null, count: (count != null ? count : null) }, window.location.origin);
+      var msg = { __sp_lp: 'import-result', ok: !!ok, error: error || null, count: (count != null ? count : null) };
+      if (extra && typeof extra === 'object') { for (var k in extra) if (extra.hasOwnProperty(k)) msg[k] = extra[k]; }
+      window.postMessage(msg, window.location.origin);
     } catch (e) {}
+  }
+
+  // Assinatura estável do CONTEÚDO do import (ignora importedAt/metadados) — pra saber
+  // se a reimportação trouxe algo novo. Nomes de torneio entram: se resolveu um nome que
+  // antes faltava, é mudança (vale gravar).
+  function _contentSig(imp) {
+    if (!imp) return '';
+    var g = (imp.games || []).map(function (x) {
+      return [x.date, x.competition, x.tourneyName || '', x.won, (x.oppHandles || []).join(','), x.partnerHandle || '', x.myScore, x.oppScore].join('~');
+    });
+    var f = (imp.footprint || []).map(function (x) { return [x.official ? 1 : 0, x.club, x.categoryRaw, x.name || '', x.wins, x.losses].join('~'); });
+    return JSON.stringify({ n: g.length, g: g, f: f });
+  }
+
+  // Merge que NUNCA regride: escolhe a base mais completa (mais jogos) e preenche os
+  // nomes reais de torneio a partir das DUAS versões (um 403 que voltou "0 nomes" não
+  // apaga os nomes já resolvidos antes). importedAt sempre vira a hora nova.
+  function _mergeImport(prev, next) {
+    if (!prev) return next;
+    var pn = (prev.games || []).length, nn = (next.games || []).length;
+    var base = (nn >= pn) ? next : prev;          // mais completo vence (não perde jogos)
+    var nameMap = {};
+    function harvest(imp) {
+      (imp.games || []).forEach(function (x) {
+        if (x.official && x.tourneyName) { var k = (x.club || '') + '|' + (x.competition || '') + '|' + (x.year != null ? x.year : ''); if (!nameMap[k]) nameMap[k] = x.tourneyName; }
+      });
+      (imp.footprint || []).forEach(function (x) {
+        if (x.official && x.name && x.name !== x.categoryRaw) { var k = (x.club || '') + '|' + (x.categoryRaw || '') + '|' + (x.year != null ? x.year : ''); if (!nameMap[k]) nameMap[k] = x.name; }
+      });
+    }
+    harvest(prev); harvest(next);   // nomes das duas fontes
+    (base.games || []).forEach(function (x) {
+      if (x.official && !x.tourneyName) { var k = (x.club || '') + '|' + (x.competition || '') + '|' + (x.year != null ? x.year : ''); if (nameMap[k]) x.tourneyName = nameMap[k]; }
+    });
+    (base.footprint || []).forEach(function (x) {
+      if (x.official && (!x.name || x.name === x.categoryRaw)) { var k = (x.club || '') + '|' + (x.categoryRaw || '') + '|' + (x.year != null ? x.year : ''); if (nameMap[k]) x.name = nameMap[k]; }
+    });
+    // carrega stats de nome resolvido, se a nova versão trouxe melhor
+    if (next.tourneyNameStats) base.tourneyNameStats = next.tourneyNameStats;
+    base.importedAt = next.importedAt || base.importedAt;   // SEMPRE a data/hora nova
+    return base;
   }
 
   window.addEventListener('message', function (e) {
@@ -40,6 +83,13 @@
       reply(false, 'conta-diferente'); return;
     }
 
+    // Merge preservando o que já existe: reimportação não regride (nomes/jogos) e, se não
+    // trouxe nada novo, só atualiza a data/hora. prev = o que já está gravado.
+    var prev = (cu.letzplayImport && looksValid(cu.letzplayImport)) ? cu.letzplayImport : null;
+    var prevSig = _contentSig(prev);
+    imp = _mergeImport(prev, imp);
+    var unchanged = !!prev && (_contentSig(imp) === prevSig);   // nada novo → só a data muda
+
     var gamesCount = Array.isArray(imp.games) ? imp.games.length : 0;
     // Procedência: self-import. Limpa atribuição de organizador (se havia) — o dono mandou.
     imp.importedVia = 'self';
@@ -52,7 +102,10 @@
       .then(function () {
         cu.letzplayImport = imp;
         if (!cu.letzplayHandle) cu.letzplayHandle = imp.handle;
-        if (typeof showNotification === 'function') showNotification('🎾 Histórico importado', '@' + imp.handle + ' — ' + gamesCount + ' jogos. Veja em 📊 Estatísticas → Histórico.', 'success');
+        if (typeof showNotification === 'function') showNotification(
+          unchanged ? '🎾 Nada novo no letzplay' : '🎾 Histórico importado',
+          unchanged ? ('@' + imp.handle + ' — sem novidades; só atualizei a data.') : ('@' + imp.handle + ' — ' + gamesCount + ' jogos. Veja em 📊 Estatísticas → Histórico.'),
+          'success');
         // Atualiza o que estiver aberto: card nas Estatísticas e/ou a página de Histórico.
         var slot = document.getElementById('letzplay-card-stats-slot');
         if (slot && typeof window._renderLetzplayCard === 'function') slot.innerHTML = window._renderLetzplayCard(cu.letzplayImport);
@@ -62,7 +115,7 @@
         if ((window.location.hash || '').indexOf('historico') !== -1 && typeof window._renderHistoricoPage === 'function') {
           try { window._renderHistoricoPage(document.getElementById('view-container')); } catch (e) {}
         }
-        reply(true, null, gamesCount);
+        reply(true, null, gamesCount, { unchanged: unchanged });
       })
       .catch(function (err) {
         if (typeof showNotification === 'function') showNotification('Erro ao importar', (err && err.message) || 'Tente de novo.', 'error');
