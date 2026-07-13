@@ -1394,10 +1394,15 @@
     window._lzRenderCtx = { t: t, rows: rows, profileMap: profileMap, scanMap: scanMap };
     var _isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
 
-    // Alvos da busca ativa = quem autorizou (@ + consentimento) e não tem import próprio.
+    // Alvos da busca = TODOS os competidores autorizados (@ + consentimento). O ORGANIZADOR
+    // competidor entra auto-autorizado (é o próprio dado público dele). Inclui quem JÁ tem
+    // import — pra atualizar os desatualizados; a precedência (scan mais novo) só sobrescreve
+    // quando de fato é mais recente, então perfil atual não é clobbado à toa.
+    var _meUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
     var targets = (rows || []).filter(function (r) {
       var prof = r.uid && profileMap[r.uid];
-      return prof && prof.letzplayHandle && prof.letzplayConsent === true && !prof.letzplayImport;
+      if (!prof || !prof.letzplayHandle) return false;
+      return (_meUid && r.uid === _meUid) || prof.letzplayConsent === true;
     }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
     window._lzScanCtx = { tId: t.id, targets: targets };
 
@@ -1673,11 +1678,14 @@
     flagged = buckets.red.length; // 🚩 = só "deve subir" (obrigatório)
     var restHtml = function (arr) { return arr.map(function (x) { return line(x.r ? x.r.name : x.name); }).join(''); };
 
-    // Alvos da busca ativa = TODOS que autorizaram (@ + consentimento) e ainda não
-    // têm histórico PRÓPRIO importado. Inclui os já buscados (pra atualizar).
+    // Alvos da busca = TODOS os competidores autorizados (@ + consentimento). O ORGANIZADOR
+    // competidor entra auto-autorizado (próprio dado público). Inclui quem JÁ tem import —
+    // pra atualizar os desatualizados; a precedência só sobrescreve se o scan for mais novo.
+    var _meUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
     var targets = (rows || []).filter(function (r) {
       var prof = r.uid && profileMap[r.uid];
-      return prof && prof.letzplayHandle && prof.letzplayConsent === true && !prof.letzplayImport;
+      if (!prof || !prof.letzplayHandle) return false;
+      return (_meUid && r.uid === _meUid) || prof.letzplayConsent === true;
     }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
     window._lzScanCtx = { tId: t.id, targets: targets };
 

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.0.10';
+window.SCOREPLACE_VERSION = '1.0.11';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
@@ -6374,10 +6374,13 @@ window.AppStore = {
     // antigo nunca sobrescreve um self-import mais novo.
     var fi = data.fullImport;
     if (fi && typeof fi === 'object' && Array.isArray(fi.footprint)) {
-      var scanTs = Date.parse(data.scannedAt || '') || 0;
+      // "Só atualiza se desatualizado": aplica o scan só quando ele traz MAIS jogos que o
+      // perfil atual (ou quando não há perfil). Um re-scan que não trouxe jogo novo não
+      // mexe no perfil (nem troca a procedência à toa).
+      var fiGames = Array.isArray(fi.games) ? fi.games.length : 0;
       var curImp = cu.letzplayImport;
-      var curTs = (curImp && curImp.importedAt) ? (Date.parse(curImp.importedAt) || 0) : 0;
-      if (!curImp || scanTs > curTs) {
+      var curGames = (curImp && Array.isArray(curImp.games)) ? curImp.games.length : 0;
+      if (!curImp || fiGames > curGames) {
         fi.importedVia = 'organizer';
         fi.importedByName = data.scannedByName || null;
         fi.importedTournamentName = data.tournamentName || null;
