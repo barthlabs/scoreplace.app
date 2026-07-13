@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.1.5';
+window.SCOREPLACE_VERSION = '1.1.6';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
@@ -1086,6 +1086,19 @@ window._devWhatsAppBtnHtml = function (opts) {
     }).then(function(txt) {
       var v = String(txt || '').trim();
       if (v && v.length < 40 && v !== window.SCOREPLACE_VERSION) {
+        // GUARD ANTI-LOOP: se JÁ recarregamos por ESTE mesmo valor de version.txt e ele
+        // AINDA não bate com o store.js carregado, é DEPLOY INCONSISTENTE (version.txt !=
+        // store.js servido). Recarregar de novo é loop eterno — então NÃO recarrega:
+        // só mostra a pílula (o usuário decide). sessionStorage = escopo por aba/sessão:
+        // uma tentativa de reload por valor distinto; numa versão realmente nova, tenta.
+        var reloadedFor = null;
+        try { reloadedFor = sessionStorage.getItem('sp_update_reloaded_for'); } catch (e) {}
+        if (reloadedFor === v) {
+          window._log('[AutoUpdate] version.txt=' + v + ' != running ' + window.SCOREPLACE_VERSION + ' MESMO após reload — deploy inconsistente. Sem loop: só a pílula.');
+          window._showUpdatePill();
+          return;
+        }
+        try { sessionStorage.setItem('sp_update_reloaded_for', v); } catch (e) {}
         window._log('[AutoUpdate] New version:', v, '(running:', window.SCOREPLACE_VERSION + ').');
         window._showUpdatePill(); // mostra a pílula mesmo se o reload auto for adiado
         window._applyUpdate(!!opts.force);
