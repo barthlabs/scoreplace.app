@@ -135,7 +135,7 @@
     }
     if (!document.getElementById('sp-imp-bar')) {
       _overlayCard(
-        '<div style="width:44px;height:44px;margin:0 auto 12px;border-radius:50%;border:4px solid var(--bg-darker,#171a2b);border-top-color:#84cc16;animation:spImpSpin 0.8s linear infinite;"></div>' +
+        '<div style="font-size:2.4rem;margin:0 auto 10px;display:inline-block;animation:spImpSpin 0.85s linear infinite;">🎾</div>' +
         '<div id="sp-imp-label" style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;"></div>' +
         '<div style="height:12px;border-radius:999px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.1));"><div id="sp-imp-bar" style="height:100%;width:8%;background:linear-gradient(90deg,#84cc16,#65a30d);transition:width .3s;"></div></div>' +
         '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;"></div>'
