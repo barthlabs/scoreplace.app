@@ -54,13 +54,22 @@
     return m ? { club: m[1], rankingId: m[2] } : { club: null, rankingId: null };
   }
 
+  /** '/paineiras-bt/tournaments/38847' -> { club:'paineiras-bt', tourneyId:'38847' }.
+   * O card do jogo linka via /tournaments/{id}; a página real é /{club}/tourneys/{id}
+   * (o content.js busca lá o nome real do torneio). Aceita as duas grafias. */
+  function parseTourneyRef(href) {
+    var m = String(href || '').match(/^\/([^\/]+)\/(?:tournaments|tourneys)\/(\d+)/);
+    return m ? { club: m[1], tourneyId: m[2] } : { club: null, tourneyId: null };
+  }
+
   /** Monta um jogo a partir do card já decomposto em 2 times, resolvendo qual é o "meu"
    * lado (contém meHandle), o parceiro, os adversários e quem venceu (pelo placar).
    * card = { catHref, catText, dateText, teams:[{handles,names,score},{...}] }. */
   function matchFromCard(card, meHandle) {
     if (!card) return null;
     var cat = parseCategory(card.catText);
-    var ref = parseRankingRef(card.catHref);
+    var isT = card.official === true;
+    var ref = isT ? parseTourneyRef(card.catHref) : parseRankingRef(card.catHref);
     var teams = Array.isArray(card.teams) ? card.teams : [];
     var myIdx = -1;
     for (var i = 0; i < teams.length; i++) {
@@ -80,7 +89,7 @@
       categoryRaw: cat.categoryRaw, round: cat.round, year: cat.year,
       official: card.official === true,                             // torneio = OFICIAL; ranking = recreativo
       kind: card.official === true ? 'tournament' : 'ranking',
-      club: ref.club, rankingId: ref.rankingId,
+      club: ref.club, rankingId: isT ? null : ref.rankingId, tourneyId: isT ? ref.tourneyId : null,
       partnerHandle: partnerHandle, partnerName: partnerName,
       oppHandles: (opp.handles || []).slice(),
       oppNames: (opp.names || []).slice(),

@@ -44,10 +44,10 @@
     var rankings = {}, tournaments = {};
     matches.forEach(function (m) {
       var bucket = m.official ? tournaments : rankings;
-      var key = (m.club || '') + '|' + (m.categoryRaw || '') + '|' + (m.rankingId || '');
+      var key = (m.club || '') + '|' + (m.categoryRaw || '') + '|' + (m.rankingId || '') + '|' + (m.tourneyId || '');
       if (!bucket[key]) bucket[key] = {
         name: m.categoryRaw, club: m.club, sport: 'Beach Tennis', categoryRaw: m.categoryRaw,
-        year: m.year, status: 'done', wins: 0, losses: 0
+        year: m.year, status: 'done', wins: 0, losses: 0, tourneyId: m.tourneyId || null
       };
       if (m.won) bucket[key].wins++; else if (m.won === false) bucket[key].losses++;
     });

@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.25';
+  var EXT_VERSION = '1.26';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -22,6 +22,33 @@
         resolve(new DOMParser().parseFromString(r.html, 'text/html'));
       });
     });
+  }
+
+  // Nome REAL do torneio a partir da página /{club}/tourneys/{id}. O card do jogo só
+  // traz a categoria; o nome vive no og:title ("Informações do Torneio {nome}").
+  function tourneyNameFromDoc(doc) {
+    try {
+      var og = doc.querySelector('meta[property="og:title"]');
+      var t = (og ? (og.getAttribute('content') || '') : (doc.title || '')).replace(/\s+/g, ' ').trim();
+      t = t.replace(/\s*-\s*Letzplay\s*$/i, '').replace(/^Informa[çc][õo]es do Torneio\s+/i, '');
+      return t || null;
+    } catch (e) { return null; }
+  }
+  // Preenche raw.tournaments[].name com o nome real (busca 1x por torneio; cacheia).
+  // Best-effort: se falhar/404, mantém a categoria (sem regressão).
+  async function fillTourneyNames(raw) {
+    var list = (raw.tournaments || []).filter(function (t) { return t.tourneyId && t.club; });
+    var cache = {};
+    for (var i = 0; i < list.length; i++) {
+      var t = list[i], id = t.club + '/' + t.tourneyId;
+      if (id in cache) { if (cache[id]) t.name = cache[id]; continue; }
+      try {
+        var d = await bgFetchDoc('https://letzplay.me/' + t.club + '/tourneys/' + t.tourneyId);
+        var nm = tourneyNameFromDoc(d);
+        cache[id] = nm || null;
+        if (nm) t.name = nm;
+      } catch (e) { cache[id] = null; }
+    }
   }
 
   async function runDirectImport() {
@@ -45,6 +72,7 @@
         post({ __sp_lp: 'import-progress', done: all.length, total: total });
       }
       var raw = F.buildRaw(me, all);
+      try { await fillTourneyNames(raw); } catch (e) {}   // nome real dos torneios (best-effort)
       var imp = I.normalize(raw, { importedAt: new Date().toISOString() });
       var v = I.validate(imp);
       if (!v.valid) { post({ __sp_lp: 'import-result', ok: false, error: 'invalido' }); return; }
