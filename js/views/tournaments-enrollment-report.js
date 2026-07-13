@@ -1738,7 +1738,7 @@
     for (var i = 0; i < Math.max(a.length, b.length); i++) { var x = a[i] || 0, y = b[i] || 0; if (x !== y) return x > y; }
     return true;
   }
-  var _LZ_MIN_EXT = '1.16';
+  var _LZ_MIN_EXT = '1.25';
 
   // Busca ativa: o PRÓPRIO botão vira barra de progresso 0–100% (sem modal, o
   // organizador fica na tela). Erros viram toast e o botão volta ao normal.

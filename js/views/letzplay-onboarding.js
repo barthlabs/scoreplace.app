@@ -11,7 +11,7 @@
   // Versão mínima esperada da extensão. Abaixo disso → pede atualização.
   // 1.24 é a 1ª que importa de verdade: fetch via inject.js web-accessible (código real da
   // página → cookie de sessão vai) + fix do detectMe (Array.from(new Set)). Ver memória.
-  var MIN_EXT_VERSION = '1.24';
+  var MIN_EXT_VERSION = '1.25';
   // URL da Chrome Web Store — null enquanto não publicado (mostra instruções manuais).
   var STORE_URL = null;
 
