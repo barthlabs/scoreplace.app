@@ -571,14 +571,26 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         return all;
     };
 
+    // uid do jogador visto — detecção por uid (memberUids/participante) além do nome,
+    // senão duplas/times cujo _pName não bate exatamente somem da lista.
+    var _viewedUid = (typeof window._resolvePlayerUid === 'function') ? window._resolvePlayerUid(playerName) : null;
+
     tournaments.forEach(function(t) {
-        // Check if player is a participant
+        // Check if player is a participant (nome OU uid)
         var pList = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
         var isParticipant = pList.some(function(p) {
-            var name = window._pName(p);
-            return _nameMatch(name, playerName);
+            if (_nameMatch(window._pName(p), playerName)) return true;
+            if (_viewedUid && typeof window._participantUids === 'function') {
+                return (window._participantUids(p) || []).indexOf(_viewedUid) >= 0;
+            }
+            return false;
         });
+        if (!isParticipant && _viewedUid && Array.isArray(t.memberUids)) isParticipant = t.memberUids.indexOf(_viewedUid) >= 0;
         if (!isParticipant) return;
+
+        // Só torneios que já começaram (têm sorteio) ou encerraram — não-iniciados fora.
+        var _started = (_getAllMatches(t).length > 0) || t.status === 'active' || t.status === 'finished' || t.status === 'closed';
+        if (!_started) return;
 
         stats.tournamentsPlayed++;
         stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: (window._formatLabel ? window._formatLabel(t) : t.format) || '', date: t.endDate || t.startDate || t.date || null });
