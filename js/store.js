@@ -1,4 +1,27 @@
-window.SCOREPLACE_VERSION = '1.1.18';
+window.SCOREPLACE_VERSION = '1.1.19';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
+// ─────────────────────────────────────────────────────────────────────────────
+// Tem que bater com extension/manifest.json "version" E com EXT_VERSION em
+// extension/content.js. NUNCA declarar um mínimo separado em outro arquivo: era
+// isso que estava quebrado — o onboarding exigia 1.35 e a Análise de Inscritos
+// exigia 1.25 enquanto a extensão já era 1.36. Resultado real (14/jul/2026): a
+// busca completa rodou com a extensão 1.35 (que desiste na 4ª tentativa de rajada),
+// tomou 403 do Cloudflare e gravou ZERO jogos para os 4 inscritos — sem erro
+// nenhum, porque o resumo (que usa navegação de aba, não fetch) veio normal.
+// O commit a12d811a já tinha unificado isto uma vez em 1.25 e a divergência voltou;
+// por isso agora é UM valor + trava no deploy (scripts/check-ext-version.js).
+// Auto-atualização: quando a extensão estiver publicada na Chrome Web Store, o
+// Chrome atualiza sozinho e este gate para de disparar. Enquanto não está, o gate
+// BLOQUEIA e pede a atualização manual pelo zip — de propósito.
+window.SP_EXT_VERSION = '1.37';
+// O zip da versão exigida, servido pelo próprio site (fica na raiz do repo → GitHub Pages
+// entrega). Derivado de SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não
+// aceita, e a trava de deploy (scripts/check-ext-version.js) garante que o arquivo existe.
+// Enquanto não há versão na Chrome Web Store não existe auto-update — então o caminho de
+// atualização tem que estar a UM CLIQUE, não "ache a pasta do projeto no seu computador".
+window._spExtZipUrl = function () { return '/scoreplace-letzplay-ext-' + window.SP_EXT_VERSION + '.zip'; };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)

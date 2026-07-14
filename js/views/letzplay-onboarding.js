@@ -10,8 +10,9 @@
 (function () {
   // Versão mínima ACEITA da extensão = SEMPRE a atual (correções críticas de import só
   // existem na mais nova: URL /tournaments dos nomes, não-abrir-aba, data por torneio…).
-  // Abaixo disso → pede atualização (não fica verde). Bumpar junto com EXT_VERSION.
-  var MIN_EXT_VERSION = '1.35';
+  // FONTE ÚNICA: window.SP_EXT_VERSION (store.js). NUNCA hardcodar um número aqui — o
+  // valor solto que existia (1.35) divergiu da extensão (1.36) e deixou passar versão velha.
+  var MIN_EXT_VERSION = window.SP_EXT_VERSION;
   // URL da Chrome Web Store — null enquanto não publicado (mostra instruções manuais).
   var STORE_URL = null;
 
@@ -319,14 +320,24 @@
       '<button type="button" onclick="var b=this;if(navigator.clipboard){navigator.clipboard.writeText(\'chrome://extensions\').then(function(){b.textContent=\'copiado ✓\';})}" ' +
       'class="btn btn-outline btn-sm" style="margin-left:6px;padding:2px 10px;font-size:0.72rem;">📋 copiar</button>' +
       '<div style="opacity:0.7;font-size:0.72rem;margin-top:2px;">(o Chrome não deixa abrir esse endereço por link — cole na barra e dê Enter)</div></li>';
+    // O zip fica a UM CLIQUE, sempre na versão que o gate exige. Antes, o passo 1 mandava
+    // "escolha a pasta extension do scoreplace" — que só existe pra quem tem o repositório
+    // clonado. Sem um download aqui, atualizar dependia de achar o arquivo em algum lugar,
+    // e foi assim que a extensão ficou parada na 1.35 enquanto o app já pedia mais nova.
+    var zipUrl = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    var zipBtn = zipUrl
+      ? '<div style="margin:8px 0 10px;"><a href="' + _esc(zipUrl) + '" download class="btn btn-primary btn-sm" style="text-decoration:none;">⬇️ Baixar a extensão (v' + _esc(MIN_EXT_VERSION) + ')</a>' +
+        '<div style="opacity:0.75;font-size:0.72rem;margin-top:4px;">Baixe e <b>descompacte</b> o arquivo — a pasta que sair dele é a que você vai escolher no passo 3.</div></div>'
+      : '';
     return '<details style="margin-top:8px;"><summary style="cursor:pointer;color:var(--primary-color,#818cf8);font-weight:600;">' + _esc(label) + '</summary>' +
-      '<div style="margin:8px 0 6px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);font-size:0.74rem;color:var(--text-muted,#cbd5e1);">⚙️ Instalação <b>temporária</b>, só pra teste enquanto a extensão não está na loja. Quando publicar, vira <b>um clique</b> — nada disso abaixo.</div>' +
+      '<div style="margin:8px 0 6px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);font-size:0.74rem;color:var(--text-muted,#cbd5e1);">⚙️ Instalação <b>temporária</b>, só pra teste enquanto a extensão não está na loja. Quando publicar, o Chrome atualiza <b>sozinho</b> — nada disso abaixo.</div>' +
+      zipBtn +
       '<ol style="margin:6px 0 0;padding-left:20px;line-height:1.75;">' +
         chromeLine +
         '<li>Nessa página, ligue o interruptor <b>Modo do desenvolvedor</b> (fica no canto superior direito).</li>' +
-        '<li>Vai aparecer um botão <b>“Carregar sem compactação”</b> (o Chrome em inglês chama de <i>Load unpacked</i>) — é assim que ele instala uma extensão a partir de uma pasta do computador. Clique nele e escolha a pasta <b>extension</b> do scoreplace.</li>' +
+        '<li>Vai aparecer um botão <b>“Carregar sem compactação”</b> (o Chrome em inglês chama de <i>Load unpacked</i>) — é assim que ele instala uma extensão a partir de uma pasta do computador. Clique nele e escolha a pasta que saiu do zip.</li>' +
         '<li>Pronto — volte aqui, esta tela reconhece sozinha ✓</li>' +
-        '<li><i>Já tinha instalado?</i> No card da extensão, clique no <b>↻ (recarregar)</b> pra pegar a versão nova.</li>' +
+        '<li><i>Já tinha instalado?</i> Remova a versão antiga e carregue a pasta nova (ou clique no <b>↻</b> do card se apontar pra mesma pasta).</li>' +
       '</ol></details>';
   }
 

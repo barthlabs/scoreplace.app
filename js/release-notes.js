@@ -12,6 +12,16 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
+      '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">🐢 v1.1.19 — Busca do letzplay que não mente <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🟢 Quem foi verificado aparece verde:</b> se o nível veio do próprio letzplay, o nome fica verde na hora — antes só saía do roxo depois que a própria pessoa entrasse no app, o que podia nunca acontecer.</li>' +
+        '<li><b>👤 A busca já preenche o perfil do inscrito:</b> gênero, nível e histórico entram direto, sem depender de o jogador logar.</li>' +
+        '<li><b>🐢 Navegação no ritmo de gente:</b> a busca agora vai no compasso de quem lê a página, com pausas irregulares, e <b>aprende</b> o limite do letzplay — se ele pede calma, o app desacelera e <b>não esquece</b> na próxima vez. Demora mais e traz tudo.</li>' +
+        '<li><b>🚫 Fim da "busca concluída" sem trazer nada:</b> quando o letzplay bloqueia, o app mostra que está esperando em vez de parecer travado, e nunca mais dá a busca por completa sem os jogos.</li>' +
+        '<li><b>⬇️ Extensão a um clique:</b> botão pra baixar a versão certa, e o app avisa se a sua estiver velha (a antiga desistia calada e não trazia os jogos).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
       '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">⚡ v1.1.17 — Casual, presença e análise mais espertas <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>⚡ Partida casual lembra sua última configuração:</b> a modalidade e o placar que você usou por último voltam já selecionados — chega de começar e só perceber no primeiro ponto que estava em Pickleball em vez de Beach Tennis.</li>' +

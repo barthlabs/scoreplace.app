@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.36';
+  var EXT_VERSION = '1.37';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -34,9 +34,14 @@
   //     com espera menor. O background reinicia sozinho na mensagem seguinte.
   //   • erro DEFINITIVO (404, sem aba do letzplay) → não adianta insistir → sobe o erro.
   // O ESPAÇAMENTO entre requisições vive na fila do background.js — aqui é só a re-tentativa.
+  // `blocked` = desafio do Cloudflare (às vezes servido com status 200 — ver inject.js).
+  // Sem contar isso como rate-limit, bgFetchDoc devolvia a página de desafio como se
+  // fosse o histórico: 0 jogos extraídos, "sem-jogos", zero retry. Foi o modo real de
+  // falha de 14/jul/2026.
   function _isRate(r) {
     var st = r && r.status;
-    return (st === 403 || st === 429) || /\b(429|403)\b|too many/i.test((r && r.error) || '');
+    return !!(r && r.blocked) || (st === 403 || st === 429 || st === 503) ||
+      /\b(429|403)\b|too many|cf-challenge/i.test((r && r.error) || '');
   }
   function _isTransient(r) {
     var st = r && r.status;
@@ -51,11 +56,22 @@
       last = r;
       if (_isRate(r)) {
         var ra = parseInt(r && r.retryAfter, 10);
-        var waitMs = (ra > 0) ? Math.min(90000, ra * 1000) : Math.min(60000, 2000 * Math.pow(2, i));
+        // Backoff com RUÍDO: 2s/4s/8s cravados são tão robóticos quanto a rajada que
+        // causou o bloqueio. Quem volta exatamente no tempo do relógio é máquina. Quando
+        // o servidor manda um retry-after, obedecemos e ainda somamos uma folga humana.
+        var jit = 0.8 + Math.random() * 0.7;
+        var waitMs = (ra > 0)
+          ? Math.min(90000, Math.round(ra * 1000 + 500 + Math.random() * 2500))
+          : Math.min(60000, Math.round(2000 * Math.pow(2, i) * jit));
+        // A espera tem que ser VISÍVEL. Uma pausa de 60s calada é indistinguível de
+        // travamento — e foi por isso que a busca "parecia funcionando" enquanto não
+        // baixava nada. O app mostra isto na barra e rearma o watchdog de ociosidade.
+        post({ __sp_lp: 'lz-throttle', waitMs: waitMs, attempt: i + 1,
+          gap: (r && r.pace && r.pace.gap) || null, source: (ra > 0 ? 'retry-after' : 'backoff') });
         await sleep(waitMs);
         continue;
       }
-      if (_isTransient(r) && i < 4) { await sleep(1500 * (i + 1)); continue; }
+      if (_isTransient(r) && i < 4) { await sleep(Math.round(1500 * (i + 1) * (0.8 + Math.random() * 0.6))); continue; }
       break;   // erro definitivo (404, sem aba, etc.) → insistir não adianta
     }
     var e = new Error((last && last.error) || ('HTTP ' + (last && last.status)));
@@ -350,12 +366,22 @@
       var r = await scanProfile(tg.handle, mode);
       // Modo COMPLETO: além do resumo (anti-gato), puxa o histórico inteiro do
       // participante do perfil público → letzplayImport completo (vai pro perfil dele).
-      var fullImp = null;
+      // O motivo da falha do histórico PRECISA subir. Este catch era vazio: em 14/jul/2026
+      // os 4 inscritos tomaram 403 do Cloudflare na paginação, o erro foi descartado, e a
+      // busca reportou sucesso com ZERO jogos gravados — sem nenhuma pista do que houve.
+      var fullImp = null, fullErr = null;
       if (r && r.ok && mode === 'full') {
         var onProg = (function (idx, t) { return function (e) { prog(idx, t, e); }; })(i, tg);
-        try { fullImp = await importFromHandleMatches(tg.handle, onProg); } catch (e) {}
+        try {
+          fullImp = await importFromHandleMatches(tg.handle, onProg);
+          if (!fullImp) fullErr = 'sem-jogos';   // página lida, mas nenhum jogo extraído
+        } catch (e) {
+          var em = String((e && e.message) || e);
+          var st = e && e.httpStatus;
+          fullErr = ((st === 403 || st === 429 || /\b(403|429)\b/.test(em)) ? 'rate: ' : 'erro: ') + em.slice(0, 120);
+        }
       }
-      scans.push({ uid: tg.uid || null, handle: tg.handle, name: tg.name || null, scan: (r && r.ok) ? r.scan : null, fullImport: fullImp, error: r && r.error });
+      scans.push({ uid: tg.uid || null, handle: tg.handle, name: tg.name || null, scan: (r && r.ok) ? r.scan : null, fullImport: fullImp, fullError: fullErr, error: r && r.error });
       prog(scans.length, tg);
       // ENTREGA PARCIAL: manda o que já tem a cada pessoa concluída. Se o navegador
       // fechar/a página recarregar no meio, o que já foi lido ESTÁ salvo — nunca se
