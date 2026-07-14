@@ -25,6 +25,31 @@ EXPORT_DIR="${TMPDIR:-/tmp}/scoreplace-$STAMP-export"
 EXPORT_OPTS="$REPO_ROOT/scripts/ios-exportOptions.plist"
 EMBEDDED_WATCH="Products/Applications/App.app/Watch/ScoreplaceWatch.app"
 
+# ── TRAVA DE TREE NATIVO ────────────────────────────────────────────────────
+# Recusa arquivar a partir de um tree SEM a fiação nativa. Arquivar do main = app
+# QUEBRADO (sem login nativo, 403 em tudo). O marcador _handleGoogleLoginNative em
+# js/views/auth.js só existe no branch native/v1-submit.
+# Bypass consciente: ALLOW_NON_NATIVE_BUILD=1. Ver project_release_pipeline_canonical.
+BR="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+if [ "${ALLOW_NON_NATIVE_BUILD:-}" = "1" ]; then
+  echo "⚠ ALLOW_NON_NATIVE_BUILD=1 → trava de tree nativo PULADA (branch: $BR)."
+elif ! grep -q "_handleGoogleLoginNative" "$REPO_ROOT/js/views/auth.js" 2>/dev/null; then
+  echo ""
+  echo "❌ TRAVA DE BUILD — este tree NÃO tem a fiação nativa (branch: $BR)."
+  echo "   Faltou _handleGoogleLoginNative em js/views/auth.js → arquivar daqui"
+  echo "   gera app QUEBRADO: sem login nativo, 403 em tudo."
+  echo ""
+  echo "   Arquive a partir do worktree do native/v1-submit:"
+  echo "     cd .claude/worktrees/native-submit"
+  echo "     git merge main            # traz as features novas"
+  echo "     scripts/ios-archive.sh"
+  echo ""
+  echo "   (Bypass consciente: ALLOW_NON_NATIVE_BUILD=1 scripts/ios-archive.sh)"
+  exit 1
+fi
+echo "▶ Tree nativo OK (branch: $BR)."
+# ────────────────────────────────────────────────────────────────────────────
+
 echo "▶ Sincronizando web assets (cap sync ios)…"
 ( cd "$REPO_ROOT" && npx --no-install cap sync ios >/dev/null 2>&1 ) \
   || echo "  ⚠ cap sync falhou/ausente — seguindo com o www já presente."
@@ -57,6 +82,8 @@ if [ "$WATCH_ID" != "app.scoreplace.watchapp" ] || [ "$WATCH_COMPANION" != "app.
   exit 1
 fi
 echo "  ✅ $EMBEDDED_WATCH presente (id=$WATCH_ID, companion=$WATCH_COMPANION)."
+echo "  ⚠ MODELO APPLE: watch vai EMBUTIDO neste ÚNICO arquivo — NUNCA arquive/suba"
+echo "    o watch como artefato separado. (No Android é o oposto: 2 .aab separados.)"
 
 if [ "${1:-}" != "--export" ]; then
   echo ""
@@ -80,3 +107,8 @@ echo "Pra enviar (precisa das credenciais da conta Apple — ação sua):"
 echo "  xcrun altool --upload-app -f \"$IPA\" --type ios \\"
 echo "    --apiKey <KEY_ID> --apiIssuer <ISSUER_ID>"
 echo "  (ou abrir no app Transporter / Xcode Organizer)."
+echo ""
+echo "🚦 GATE OBRIGATÓRIO (Apple): este IPA vai pro TESTFLIGHT PRIMEIRO."
+echo "   NÃO submeta à ANÁLISE ainda. O dono instala pelo TestFlight no iPhone e"
+echo "   confirma que A ENTRADA NÃO QUEBROU (login/onboarding). Só DEPOIS dessa"
+echo "   confirmação é que se manda pra revisão no App Store Connect."
