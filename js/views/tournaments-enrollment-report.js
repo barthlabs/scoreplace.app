@@ -1677,8 +1677,11 @@
   //  • Clicar de novo enquanto roda: não faz nada (a barra já está na tela).
   //  • O que já foi lido é salvo mesmo se o resto falhar (resultado parcial).
   var _LZ_IDLE_MS = 180000;
-  // Orçamento de um lote da busca completa. 30min é o teto que o dono aceitou esperar.
-  var _LZ_BATCH_BUDGET_MS = 30 * 60 * 1000;
+  // Orçamento de UM lote da busca completa (definido pelo dono): 20min por clique.
+  // Não é o tempo total — 100 inscritos somam ~3h, mas divididos em lotes de 20min, e
+  // nenhuma espera isolada passa disso. Cada pessoa concluída já é gravada (entrega
+  // parcial), então fechar o navegador entre lotes não perde nada.
+  var _LZ_BATCH_BUDGET_MS = 20 * 60 * 1000;
   var _LZ_FULL_MS_KEY = 'scoreplace_lz_full_ms';
   // Quanto custa, MEDIDO, uma pessoa na busca completa. Começa em ~2min (a conta pela
   // cadência da extensão: ~22 requisições × ~3,5s) e passa a valer o tempo real assim que
@@ -1699,6 +1702,22 @@
     var ts = (sc && sc.scannedAt) ? (Date.parse(sc.scannedAt) || 0) : 0;
     return ts ? (Date.now() - ts) : Number.MAX_SAFE_INTEGER;
   }
+  // Planeja UM lote: quem entra agora e quantos ficam pro próximo clique.
+  // Só a COMPLETA é loteada — ela custa ~22 requisições por pessoa (páginas do histórico
+  // + 1 por competição), ~2min em cadência humana. A ESSENCIAL é 1 navegação (~8s), então
+  // 100 inscritos saem em ~14min num clique só e lotear seria burocracia à toa.
+  // Exposto pra teste (tests/letzplay-batch.test.js): é uma decisão do dono (20min por
+  // clique, mais desatualizados primeiro) e não pode derivar em silêncio.
+  window._lzPlanBatch = function (targets, mode, perPessoaMsOverride) {
+    targets = (targets || []).slice();
+    if (mode !== 'full') return { targets: targets, sobram: 0, cabem: targets.length };
+    // Mais desatualizado primeiro; nunca varrido vem antes de todo mundo.
+    targets.sort(function (a, b) { return _lzStaleness(b) - _lzStaleness(a); });
+    var perPessoaMs = perPessoaMsOverride || _lzMeasuredFullMs();
+    var cabem = Math.max(1, Math.floor(_LZ_BATCH_BUDGET_MS / perPessoaMs));
+    var lote = (targets.length > cabem) ? targets.slice(0, cabem) : targets;
+    return { targets: lote, sobram: targets.length - lote.length, cabem: cabem };
+  };
   window._lzScanRunning = false;
   window._lzOrgScan = function (mode) {
     mode = (mode === 'full') ? 'full' : 'essential';
@@ -1717,13 +1736,8 @@
     // tempo, priorizando quem está há mais tempo sem atualizar; o organizador clica de
     // novo pro próximo lote. A ESSENCIAL não precisa disso (~8s por pessoa → 100 em ~13min).
     var totalPend = targets.length;
-    if (mode === 'full') {
-      // Ordena pelo MAIS DESATUALIZADO primeiro (nunca varrido = infinitamente velho).
-      targets = targets.slice().sort(function (a, b) { return _lzStaleness(b) - _lzStaleness(a); });
-      var perPessoaMs = _lzMeasuredFullMs();
-      var cabem = Math.max(1, Math.floor(_LZ_BATCH_BUDGET_MS / perPessoaMs));
-      if (targets.length > cabem) targets = targets.slice(0, cabem);
-    }
+    var _plano = window._lzPlanBatch(targets, mode);
+    targets = _plano.targets;
     window._lzScanRunning = true;
     window._lzPendingMode = mode; // registra o modo pra gravar no scan (última verificação)
     var total = targets.length;
