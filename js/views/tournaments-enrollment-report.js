@@ -1402,6 +1402,33 @@
     window._erRenderMatrix();
     window._erUpdateSaveBar();
   };
+  // ── Frescor da verificação (v1.1.18) ────────────────────────────────
+  // "Os que estão atualizados a menos de 6 dias não precisam ser atualizados."
+  // Fontes de dado fresco, por pessoa: (a) o scan global do organizador
+  // (letzplayScans/{uid}.scannedAt + scan._mode) e (b) o import que a PRÓPRIA pessoa
+  // fez do histórico dela (perfil.letzplayImport.importedAt) — que é sempre completo.
+  var _LZ_FRESH_DAYS = 6;
+  function _lzIsFresh(iso) {
+    var ts = iso ? (Date.parse(iso) || 0) : 0;
+    if (!ts) return false;
+    return (Date.now() - ts) < (_LZ_FRESH_DAYS * 86400000);
+  }
+  // → { essential: bool, full: bool } = "já tenho dado fresco o bastante pra este modo?"
+  function _lzFreshness(uid, profileMap, scanMap) {
+    var out = { essential: false, full: false };
+    if (!uid) return out;
+    var prof = profileMap && profileMap[uid];
+    var imp = prof && prof.letzplayImport;
+    if (imp && _lzIsFresh(imp.importedAt)) { out.essential = true; out.full = true; }
+    var sc = scanMap && scanMap[uid];
+    if (sc && _lzIsFresh(sc.scannedAt)) {
+      out.essential = true;
+      // completa só está coberta por outra completa (ou pelo import próprio, acima)
+      if ((sc.scan && sc.scan._mode) === 'full' || sc.fullImport) out.full = true;
+    }
+    return out;
+  }
+
   // Seção ÚNICA da Análise: Categorias com apuração pelo letzplay. Junta os botões
   // de busca, a legenda de cores e a matriz (nomes pintados pela verificação).
   function _renderCategoriesSection(rows, t, profileMap, scanMap) {
@@ -1420,7 +1447,17 @@
       if (!prof || !prof.letzplayHandle) return false;
       return (_meUid && r.uid === _meUid) || prof.letzplayConsent === true;
     }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
-    window._lzScanCtx = { tId: t.id, targets: targets };
+    // PENDENTES = quem está DESATUALIZADO (> 6 dias). Re-varrer quem foi lido anteontem
+    // só gasta tempo e leitura do letzplay (que responde com rate-limit em rajada).
+    // Separado por MODO: um "essencial" fresco NÃO cobre um pedido de "completa" (a
+    // completa lê os jogos, que a essencial nem olha); uma "completa" fresca cobre as duas.
+    var pend = { essential: [], full: [] };
+    targets.forEach(function (tg) {
+      var have = _lzFreshness(tg.uid, profileMap, scanMap);
+      if (!have.essential) pend.essential.push(tg);
+      if (!have.full) pend.full.push(tg);
+    });
+    window._lzScanCtx = { tId: t.id, targets: targets, pend: pend };
 
     // Última verificação + o MODO usado (essencial/completa) do scan mais recente.
     var lastTs = 0, lastMode = null;
@@ -1434,11 +1471,35 @@
     // da última verificação fica EMBAIXO do botão que foi efetivamente usado.
     var essCss = 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;cursor:pointer;';
     var fullCss = 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;cursor:pointer;';
+    // CINZA + INATIVO = "não há nada novo pra buscar". Uma busca COMPLETA fresca apaga
+    // os DOIS botões (ela contém a essencial); uma ESSENCIAL fresca apaga só o dela —
+    // a completa continua acesa porque lê os jogos, que a essencial nem olha.
+    var _greyCss = 'background:var(--bg-darker,#171a2b);color:var(--text-muted,#8592a6);border:1px solid var(--border-color,rgba(255,255,255,0.10));cursor:not-allowed;opacity:0.75;';
+    // Cada botão mostra QUANTOS ele vai buscar de verdade (os frescos < 6 dias ficam de
+    // fora). Sem NINGUÉM pendente o botão fica CINZA E INATIVO — só volta a acender
+    // quando entrar um inscrito novo autorizado ou quando algum dos já buscados passar
+    // dos 6 dias. Nada de re-buscar à toa: cada busca é leitura no letzplay, que
+    // responde com rate-limit em rajada.
+    function scanCol(mode, id, label, css, title, shine) {
+      var nPend = (pend[mode] || []).length, nAll = targets.length;
+      var doneAll = nPend === 0;
+      var cnt = doneAll ? '' : (nPend < nAll ? ' (' + nPend + ' de ' + nAll + ')' : ' (' + nAll + ')');
+      var btnCss = doneAll ? (_greyCss + 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;') : css;
+      var dis = doneAll ? ' disabled' : '';
+      var tip = doneAll ? 'Todos verificados há menos de ' + _LZ_FRESH_DAYS + ' dias — nada novo pra buscar' : title;
+      return '<div style="flex:1;">' +
+        '<button type="button" id="' + id + '"' + dis + ' onclick="window._lzOrgScan(\'' + mode + '\')" title="' + _esc(tip) + '" class="btn' + (doneAll ? '' : ' hover-lift') + (shine && !doneAll ? ' btn-shine' : '') + '" style="' + btnCss + '">' +
+          label + (doneAll ? ' ✅' : cnt) + '</button>' +
+        (doneAll
+          ? '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Atualizado (&lt; ' + _LZ_FRESH_DAYS + ' dias)</div>'
+          : (lastMode === mode ? dateLine() : '')) +
+      '</div>';
+    }
     var scanBtn = (_isOrg && targets.length)
       ? '<div style="font-size:15px;font-weight:800;color:var(--text-secondary,#c8cdd6);margin-bottom:8px;">🎾 Verificar histórico no letzplay (' + targets.length + ')</div>' +
         '<div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-start;">' +
-          '<div style="flex:1;"><button type="button" id="lz-scan-btn-essential" onclick="window._lzOrgScan(\'essential\')" title="Busca rápida: só o nível real do ranking ativo" class="btn hover-lift" style="' + essCss + '">🔎 Essencial</button>' + (lastMode === 'essential' ? dateLine() : '') + '</div>' +
-          '<div style="flex:1;"><button type="button" id="lz-scan-btn-full" onclick="window._lzOrgScan(\'full\')" title="Busca completa: rankings + torneios + jogos" class="btn btn-shine hover-lift" style="' + fullCss + '">📚 Completa</button>' + (lastMode === 'full' ? dateLine() : '') + '</div>' +
+          scanCol('essential', 'lz-scan-btn-essential', '🔎 Essencial', essCss, 'Busca rápida: só o nível real do ranking ativo', false) +
+          scanCol('full', 'lz-scan-btn-full', '📚 Completa', fullCss, 'Busca completa: rankings + torneios + jogos', true) +
         '</div>'
       : (_ld ? '<div style="margin-bottom:10px;">' + dateLine() + '</div>' : '');
     // Legenda (todos os rótulos) — código de cor da verificação.
@@ -1560,202 +1621,6 @@
     }).filter(function (v) { return v != null; });
     return ranks.length ? Math.min.apply(null, ranks) : null;
   }
-  // Status/cor da categoria (declarada × nível real). gap = declRank - realRank
-  // (rank: A=0 mais forte … D=3, FUN=4). declarou mais fraco (gap>0) = deve subir.
-  //   🟢 verde  = coerente (gap 0)
-  //   🟡 amarelo= deve subir leve (gap 1)
-  //   🔴 vermelho= precisa subir (gap ≥2)
-  //   🔵 azul   = deve rebaixar (gap <0 — declarou mais forte que joga)
-  function _lzStatus(declRank, realRank) {
-    if (declRank == null || realRank == null) return { color: '#8592a6', emoji: '', label: 'sem comparação', flag: false };
-    var gap = declRank - realRank;
-    if (gap <= -1) return { color: '#38bdf8', emoji: '🔵', label: 'deve rebaixar', flag: false };
-    if (gap === 0) return { color: '#2dd4a0', emoji: '🟢', label: 'coerente', flag: false };
-    if (gap === 1) return { color: '#f0b445', emoji: '🟡', label: 'deve subir', flag: true };
-    return { color: '#f26a6a', emoji: '🔴', label: 'precisa subir', flag: true };
-  }
-
-  function _renderLetzplaySection(rows, t, profileMap, scanMap) {
-    profileMap = profileMap || {}; scanMap = scanMap || {};
-    window._lzRenderCtx = { t: t, rows: rows, profileMap: profileMap, scanMap: scanMap };   // p/ re-render in-place pós-busca
-    var imp = [], scanned = [], wait = [], denied = [], noh = [];
-    (rows || []).forEach(function (r) {
-      var prof = (r.uid && profileMap[r.uid]) ? profileMap[r.uid] : null;
-      var li = prof && prof.letzplayImport;
-      var handle = prof && prof.letzplayHandle;
-      var consent = prof && prof.letzplayConsent === true;
-      var sc = (r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
-      if (li) imp.push({ r: r, li: li });
-      else if (sc) scanned.push({ r: r, scan: sc });
-      else if (handle && consent) wait.push({ r: r, handle: handle });
-      else if (handle && !consent) denied.push(r);
-      else noh.push(r);
-    });
-    // Só mostra a seção se ao menos alguém tem @ letzplay (evita poluir torneios sem uso).
-    if (imp.length + scanned.length + wait.length + denied.length === 0) return '';
-
-    var C = {
-      green: { bg: 'rgba(16,185,129,0.14)', fg: '#2dd4a0' },
-      blue: { bg: 'rgba(56,189,248,0.14)', fg: '#38bdf8' },
-      amber: { bg: 'rgba(240,180,69,0.14)', fg: '#f0b445' },
-      red: { bg: 'rgba(242,106,106,0.14)', fg: '#f26a6a' },
-      grey: { bg: 'rgba(133,146,166,0.14)', fg: '#8592a6' }
-    };
-    function pill(c, n, label) {
-      return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:6px 12px;border-radius:20px;background:' + c.bg + ';color:' + c.fg + ';"><span style="width:8px;height:8px;border-radius:50%;background:' + c.fg + ';"></span>' + n + ' ' + label + '</span>';
-    }
-    function line(name, extra) {
-      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:0.86rem;"><span>' + _esc(name || '—') + '</span>' + (extra || '') + '</div>';
-    }
-    // Itens em COLUNAS (grid) pra aproveitar a largura e economizar altura.
-    // minw = largura mínima da coluna (nomes simples: estreita; conhecidos c/ categoria: larga).
-    function group(color, label, itemsHtml, minw) {
-      if (!itemsHtml) return '';
-      return '<div style="font-size:12px;font-weight:700;color:' + color + ';margin:12px 0 3px;">' + label + '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(' + (minw || '150px') + ',1fr));gap:0 18px;">' + itemsHtml + '</div>';
-    }
-    // Anti-gato pela REGRA DA FEDERAÇÃO (pode competir ACIMA, não ABAIXO; desempenho
-    // manda; campeão sobe). Só é violação quem DOMINA (título ou topo da tabela) numa
-    // categoria igual/mais fácil que a declarada → deve subir. Jogar num ranking mais
-    // forte SEM dominar (como quem sobe de nível aos poucos) é permitido → não sinaliza.
-    // Ranks: A=0 (mais forte) … D=3, FUN=4.
-    var flagged = 0;
-    var _LTR = ['A', 'B', 'C', 'D', 'FUN'];
-    // Junta os sinais de desempenho: banda (onde está ranqueado), categorias DOMINADAS
-    // (título OU top-15% da tabela OU winPct alto), e nº de títulos.
-    function _lzEvidence(champCats, rankings, bandCats) {
-      var titleRanks = (champCats || []).map(function (c) { return _lzRankFrom([c]); }).filter(function (r) { return r != null; });
-      var domRanks = titleRanks.slice();
-      (rankings || []).forEach(function (r) {
-        var cr = _lzRankFrom([r.category || r.categoryRaw]);
-        if (cr == null) return;
-        if (r.active === false) return;
-        var topStanding = (r.position && r.fieldSize && (r.position / r.fieldSize) <= 0.15);
-        var highWin = (typeof r.winPct === 'number' && r.winPct >= 70 && (r.games == null || r.games >= 6));
-        if (topStanding || highWin) domRanks.push(cr);
-      });
-      var bandRanks = (bandCats || []).map(function (c) { return _lzRankFrom([c]); }).filter(function (r) { return r != null; });
-      return {
-        bandRank: bandRanks.length ? Math.min.apply(null, bandRanks) : null,
-        dominatedRank: domRanks.length ? Math.min.apply(null, domRanks) : null,
-        titleCount: titleRanks.length
-      };
-    }
-    // Veredito → 5 níveis (código de cor É o status; sem palavras no item):
-    //   ⚪ branco  = sem info      🟢 verde = coerente
-    //   🔵 azul   = sug. rebaixar 🟡 amarelo = pode subir  🔴 vermelho = deve subir
-    var _LZ_COL = { white: '#8592a6', green: '#2dd4a0', blue: '#38bdf8', yellow: '#f0b445', red: '#f26a6a' };
-    function _lzVerdict(declRank, ev) {
-      ev = ev || {};
-      if (declRank == null) return { key: 'white', apurada: null };
-      // DOMÍNIO (título/topo) numa categoria <= declarada → deve/pode subir.
-      if (ev.dominatedRank != null) {
-        var shouldRank = Math.max(0, ev.dominatedRank - 1); // campeão da X vai pra X-1
-        if (shouldRank < declRank) {
-          var strong = (declRank - shouldRank) >= 2 || (ev.titleCount || 0) >= 3;
-          return { key: strong ? 'red' : 'yellow', apurada: shouldRank }; // deve / pode subir
-        }
-      }
-      // Sem domínio: ranqueado ACIMA da declarada = pode subir; ABAIXO = sug. rebaixar.
-      if (ev.bandRank != null && ev.bandRank < declRank) return { key: 'yellow', apurada: ev.bandRank };
-      if (ev.bandRank != null && ev.bandRank > declRank) return { key: 'blue', apurada: ev.bandRank };
-      return { key: 'green', apurada: (ev.bandRank != null ? ev.bandRank : declRank) };
-    }
-    // Linha de uma pessoa COM dado → { key, html }. Nome colorido pelo status + (declarada / apurada).
-    function personLine(name, effSkills, ev, srcIcon) {
-      var declRank = _declRankFrom(effSkills);
-      var declLabel = (effSkills && effSkills.length) ? effSkills.join('/') : '—';
-      var v = _lzVerdict(declRank, ev);
-      var known = (declRank != null && v.apurada != null);
-      var color = known ? _LZ_COL[v.key] : _LZ_COL.white;
-      var apLabel = (v.apurada != null) ? _LTR[v.apurada] : '—';
-      var right = '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:' + color + ';">' +
-        (known ? ('(' + _esc(declLabel) + ' / ' + _esc(apLabel) + ')') : '—') + ' <span style="opacity:0.5;">' + srcIcon + '</span></span>';
-      var html = '<div style="padding:4px 0;font-size:0.86rem;display:flex;justify-content:space-between;gap:10px;">' +
-        '<span style="color:' + color + ';font-weight:600;">' + _esc(name || '—') + '</span>' + right +
-      '</div>';
-      return { key: known ? v.key : 'white', html: html };
-    }
-    // Classifica TODOS com dado (import 🎾 ou scan 🔎) por STATUS (não por fonte).
-    var buckets = { red: [], yellow: [], blue: [], green: [], white: [] };
-    imp.forEach(function (o) {
-      var li = o.li, oc = li.officialCategory, band = li.rating && li.rating.band;
-      var champCats = (li.tournaments || []).filter(function (t) { return t.title; }).map(function (t) { return t.categoryRaw; });
-      var ev = _lzEvidence(champCats, li.rankings || [], [oc ? oc.categoryRaw : '', band || '']);
-      var pl = personLine(o.r.name, o.r.effectiveSkills, ev, '🎾');
-      buckets[pl.key].push(pl.html);
-    });
-    scanned.forEach(function (o) {
-      var s = o.scan;
-      var ev = _lzEvidence(s.champions || [], s.rankings || [], [s.rankingCategory].concat(s.allCategories || []));
-      var pl = personLine(o.r.name, o.r.effectiveSkills, ev, '🔎');
-      buckets[pl.key].push(pl.html);
-    });
-    flagged = buckets.red.length; // 🚩 = só "deve subir" (obrigatório)
-    var restHtml = function (arr) { return arr.map(function (x) { return line(x.r ? x.r.name : x.name); }).join(''); };
-
-    // Alvos da busca = TODOS os competidores autorizados (@ + consentimento). O ORGANIZADOR
-    // competidor entra auto-autorizado (próprio dado público). Inclui quem JÁ tem import —
-    // pra atualizar os desatualizados; a precedência só sobrescreve se o scan for mais novo.
-    var _meUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
-    var targets = (rows || []).filter(function (r) {
-      var prof = r.uid && profileMap[r.uid];
-      if (!prof || !prof.letzplayHandle) return false;
-      return (_meUid && r.uid === _meUid) || prof.letzplayConsent === true;
-    }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
-    window._lzScanCtx = { tId: t.id, targets: targets };
-
-    // Última atualização = scan mais recente do torneio.
-    var lastTs = 0;
-    Object.keys(scanMap).forEach(function (uid) { var s = scanMap[uid]; if (s && s.scannedAt) { var v = Date.parse(s.scannedAt) || 0; if (v > lastTs) lastTs = v; } });
-    var _ld = lastTs ? new Date(lastTs) : null;
-    var lastUpdateHtml = _ld
-      ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Última atualização: <b style="color:var(--text-bright,#fff);">' + _ld.toLocaleDateString('pt-BR') + ' ' + _ld.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '</b></div>'
-      : '';
-    // Dois modos: ESSENCIAL (só o ranking real — rápido, pra flag) e COMPLETA (perfil
-    // inteiro: rankings + torneios + jogos — pra migrar a pessoa pro scoreplace).
-    var btnCss = 'flex:1;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:11px 12px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.86rem;font-weight:700;';
-    var scanBtn = targets.length
-      ? '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
-          '<button type="button" id="lz-scan-btn-essential" onclick="window._lzOrgScan(\'essential\')" title="Busca rápida: só o nível real do ranking ativo (pra conferir a categoria)" style="' + btnCss + '">🔎 Essencial (' + targets.length + ')</button>' +
-          '<button type="button" id="lz-scan-btn-full" onclick="window._lzOrgScan(\'full\')" title="Busca completa: rankings + torneios + jogos (perfil inteiro do letzplay)" style="' + btnCss + '">📚 Completa (' + targets.length + ')</button>' +
-        '</div>'
-      : '';
-
-    var flagBanner = flagged > 0
-      ? '<div style="background:rgba(242,106,106,0.12);border:1px solid rgba(242,106,106,0.4);border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:0.86rem;color:#f26a6a;font-weight:600;">🚩 ' +
-          flagged + ' inscrito' + (flagged === 1 ? '' : 's') + ' com título/domínio na categoria — deve' + (flagged === 1 ? '' : 'm') + ' subir. Confira abaixo.</div>'
-      : '';
-    return '<div id="lz-history-section" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px 18px;margin-bottom:14px;">' +
-      '<div style="font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">🎾 Histórico letzplay</div>' +
-      scanBtn +
-      lastUpdateHtml +
-      // Pills = contagem por STATUS (só as 5 cores do anti-gato). Só mostra > 0.
-      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">' +
-        (buckets.red.length ? pill(C.red, buckets.red.length, 'deve subir') : '') +
-        (buckets.yellow.length ? pill(C.amber, buckets.yellow.length, 'pode subir') : '') +
-        (buckets.blue.length ? pill(C.blue, buckets.blue.length, 'rebaixar') : '') +
-        (buckets.green.length ? pill(C.green, buckets.green.length, 'coerente') : '') +
-        (buckets.white.length ? pill(C.grey, buckets.white.length, 'sem info') : '') +
-      '</div>' +
-      flagBanner +
-      // Grupos por STATUS — cabeçalho na COR do status (código de cor consistente).
-      group(C.red.fg, '🔴 Deve subir (título / domínio)', buckets.red.join(''), '250px') +
-      group(C.amber.fg, '🟡 Pode subir (ranqueado acima)', buckets.yellow.join(''), '250px') +
-      group(C.blue.fg, '🔵 Sugestão de rebaixamento', buckets.blue.join(''), '250px') +
-      group(C.green.fg, '🟢 Coerente', buckets.green.join(''), '250px') +
-      group(C.grey.fg, '⚪ Sem informação (com @, sem comparação)', buckets.white.join(''), '250px') +
-      // Sem histórico ainda — NEUTRO (cinza), não usa as cores de status. É processo, não veredito.
-      (wait.length + denied.length + noh.length > 0
-        ? '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:14px 0 3px;border-top:1px solid var(--border-color);padding-top:10px;">Sem histórico ainda</div>' +
-          (wait.length ? '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:4px;">🔎 ' + wait.length + ' autorizou — falta buscar</div>' + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 16px;">' + restHtml(wait) + '</div>' : '') +
-          (denied.length ? '<div style="font-size:0.82rem;color:var(--text-muted);margin:6px 0 4px;">🚫 ' + denied.length + ' não autorizou a busca</div>' + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 16px;">' + restHtml(denied) + '</div>' : '') +
-          (noh.length ? '<div style="font-size:0.82rem;color:var(--text-muted);margin-top:6px;">👤 ' + noh.length + ' sem @ letzplay</div>' : '')
-        : '') +
-      '<div style="font-size:12px;color:var(--text-muted);margin-top:11px;border-top:1px solid var(--border-color);padding-top:9px;line-height:1.5;">Cor = nível apurado vs. declarado. 🎾 histórico importado · 🔎 perfil público buscado. A busca lê o <b>perfil público</b> do letzplay e precisa da <b>extensão no Chrome (desktop)</b>.</div>' +
-      '</div>';
-  }
-
   // compara versões "a.b.c" — a >= b?
   function _verGE(a, b) {
     a = String(a || '0').split('.').map(Number); b = String(b || '0').split('.').map(Number);
@@ -1764,77 +1629,144 @@
   }
   var _LZ_MIN_EXT = '1.25';
 
-  // Busca ativa: o PRÓPRIO botão vira barra de progresso 0–100% (sem modal, o
-  // organizador fica na tela). Erros viram toast e o botão volta ao normal.
+  // Fração de progresso DENTRO de uma pessoa (o modo completo lê perfil → jogos →
+  // torneios). Sem isto a barra fica parada em "0% · Fulano" por minutos no 1º
+  // participante e parece travada — foi o que o organizador reportou.
+  var _LZ_PHASE_FRAC = { perfil: 0.15, jogos: 0.45, torneios: 0.8 };
+
+  // Busca ativa do organizador. REGRAS (v1.1.18):
+  //  • Barra de progresso canônica (bolinha girando + fase descrita) — nunca "travado".
+  //  • NÃO existe prazo total: a busca completa de 4 pessoas passa MUITO de 90s
+  //    (paginação + 1 fetch por torneio + espera do rate-limit). O antigo timeout de
+  //    90s matava buscas SADIAS no meio → "não deu pra buscar" com tudo funcionando.
+  //    Agora o único corte é OCIOSIDADE: 3 min sem NENHUMA notícia da extensão.
+  //  • Clicar de novo enquanto roda: não faz nada (a barra já está na tela).
+  //  • O que já foi lido é salvo mesmo se o resto falhar (resultado parcial).
+  var _LZ_IDLE_MS = 180000;
+  window._lzScanRunning = false;
   window._lzOrgScan = function (mode) {
     mode = (mode === 'full') ? 'full' : 'essential';
-    window._lzPendingMode = mode; // registra o modo pra gravar no scan (última verificação)
+    if (window._lzScanRunning) return;   // já rodando → a barra está na tela
     var ctx = window._lzScanCtx;
     if (!ctx || !ctx.targets || !ctx.targets.length) return;
-    var btn = document.getElementById(mode === 'full' ? 'lz-scan-btn-full' : 'lz-scan-btn-essential');
-    var otherBtn = document.getElementById(mode === 'full' ? 'lz-scan-btn-essential' : 'lz-scan-btn-full');
-    var origHtml = btn ? btn.innerHTML : '';
-    var origBg = btn ? btn.style.background : ''; // preserva o gradiente do botão
-    var pillBg = 'rgba(99,102,241,0.20)'; // trilho de fundo do progresso
-    function setBtn(txt, pct) {
-      if (otherBtn) otherBtn.disabled = true;
-      if (!btn) return;
-      btn.disabled = true;
-      btn.style.background = (pct != null) ? ('linear-gradient(90deg, rgba(56,189,248,0.65) ' + pct + '%, ' + pillBg + ' ' + pct + '%)') : pillBg;
-      btn.textContent = txt;
+    // Alvos = só quem está DESATUALIZADO (> 6 dias). Com zero pendentes o botão está
+    // cinza/inativo, então este caminho é só rede de segurança (nunca deve ser clicável).
+    var targets = (ctx.pend && ctx.pend[mode]) || ctx.targets;
+    if (!targets.length) return;
+    window._lzScanRunning = true;
+    window._lzPendingMode = mode; // registra o modo pra gravar no scan (última verificação)
+    var total = targets.length;
+    var bestScans = {}, versions = [], started = false, done = false, resultTimer = null, idleTimer = null;
+    function scanList() { return Object.keys(bestScans).map(function (u) { return bestScans[u]; }); }
+    function setProg(o) {
+      o = o || {};
+      window._spProgressOverlay({
+        label: o.label || (mode === 'full' ? '📚 Busca completa no letzplay' : '🔎 Verificando no letzplay'),
+        sub: o.sub || '', pct: o.pct, onCancel: o.noCancel ? null : cancel
+      });
     }
-    function restore() { if (otherBtn) otherBtn.disabled = false; if (btn) { btn.disabled = false; btn.style.background = origBg; btn.innerHTML = origHtml; } }
-    function fail(msg) { restore(); if (typeof showNotification === 'function') showNotification('Não deu pra buscar', msg, 'error'); }
-    setBtn('🔌 Conectando à extensão…', null);
-    var started = false, done = false, versions = [], bestScans = {}, resultTimer = null;
+    function cleanup() {
+      done = true;
+      window._lzScanRunning = false;
+      window.removeEventListener('message', onMsg);
+      if (idleTimer) clearTimeout(idleTimer);
+      if (resultTimer) clearTimeout(resultTimer);
+      if (typeof window._spCloseImportOverlay === 'function') window._spCloseImportOverlay();
+    }
+    function cancel() {
+      if (done) return;
+      var got = scanList().filter(function (s) { return s.uid && s.scan; });
+      cleanup();
+      // Cancelou no meio? O que JÁ foi lido não se perde — grava e mostra.
+      if (got.length) _saveScansAndReload(ctx.tId, got, function (m) { _toastErr(m); });
+      else if (typeof showNotification === 'function') showNotification('Busca cancelada', 'Nada foi alterado.', 'info');
+    }
+    function _toastErr(msg) { if (typeof showNotification === 'function') showNotification('Não deu pra buscar', msg, 'error'); }
+    // Falha: NUNCA joga fora o que já foi lido — salva o parcial e explica o resto.
+    function fail(msg) {
+      var got = scanList().filter(function (s) { return s.uid && s.scan; });
+      cleanup();
+      if (got.length) {
+        _saveScansAndReload(ctx.tId, got, _toastErr);
+        if (typeof showNotification === 'function') {
+          showNotification('Busca interrompida', got.length + ' de ' + total + ' foram salvos. ' + msg, 'warning');
+        }
+        return;
+      }
+      _toastErr(msg);
+    }
+    // Watchdog por OCIOSIDADE: rearmado a cada notícia da extensão. Só dispara se a
+    // busca ficar realmente muda (extensão morta/recarregada no meio).
+    function ping() {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(function () {
+        if (done) return;
+        fail('A extensão parou de responder (3 min em silêncio). Recarregue a página e tente de novo — o que já foi lido está salvo.');
+      }, _LZ_IDLE_MS);
+    }
+    function mergeScans(list) {
+      // Merge preferindo o scan COM categoria — cobre extensões duplicadas (uma
+      // velha devolve null, uma nova devolve a categoria).
+      (list || []).forEach(function (s) {
+        if (!s.uid) return;
+        var cur = bestScans[s.uid];
+        var sCat = !!(s.scan && s.scan.rankingCategory);
+        var cCat = !!(cur && cur.scan && cur.scan.rankingCategory);
+        if (!cur || (sCat && !cCat)) bestScans[s.uid] = s;
+      });
+    }
     function onMsg(e) {
       if (e.source !== window) return; var d = e.data; if (!d) return;
       // Junta as versões anunciadas (pode haver content scripts órfãos) — usa a MAIOR.
       if (d.__sp_lp === 'extension-present') { if (d.version) versions.push(d.version); return; }
       if (d.__sp_lp === 'org-scan-progress' && d.tournamentId === ctx.tId) {
-        var total = d.total || ctx.targets.length; var pct = total ? Math.round((d.done || 0) / total * 100) : 0;
-        var who = (d.current && d.current.name) ? (' · ' + d.current.name) : '';
-        setBtn('🔎 Buscando… ' + pct + '%' + who, pct);
+        ping();
+        var tot = d.total || total;
+        var cur = d.current || {};
+        var frac = _LZ_PHASE_FRAC[cur.phase] || 0;
+        var pct = tot ? Math.min(99, Math.round(((d.done || 0) + frac) / tot * 100)) : 0;
+        var who = cur.name || cur.handle || '';
+        var note = cur.note ? (' · ' + cur.note) : '';
+        setProg({ label: (mode === 'full' ? '📚 Busca completa no letzplay' : '🔎 Verificando no letzplay'),
+          sub: ((d.done || 0) + 1) + ' de ' + tot + ' · ' + who + note, pct: Math.max(3, pct) });
         return;
       }
       if (d.__sp_lp === 'org-scan-result' && d.tournamentId === ctx.tId) {
         if (!d.ok) return;   // uma extensão falhou; aguarda outra (caso duplicadas)
-        // Merge preferindo o scan COM categoria — cobre extensões duplicadas (uma
-        // velha devolve null, uma nova devolve a categoria).
-        (d.scans || []).forEach(function (s) {
-          if (!s.uid) return;
-          var cur = bestScans[s.uid];
-          var sCat = !!(s.scan && s.scan.rankingCategory);
-          var cCat = !!(cur && cur.scan && cur.scan.rankingCategory);
-          if (!cur || (sCat && !cCat)) bestScans[s.uid] = s;
-        });
+        ping();
+        mergeScans(d.scans);
+        // parcial = a extensão só avisando o que já leu; o fim vem sem `partial`.
+        if (d.partial) return;
         // debounce: espera ~2s por resultados de outras extensões, depois salva o melhor
         if (resultTimer) clearTimeout(resultTimer);
         resultTimer = setTimeout(function () {
-          done = true; window.removeEventListener('message', onMsg);
-          setBtn('💾 Salvando…', 100);
-          _saveScansAndReload(ctx.tId, Object.keys(bestScans).map(function (u) { return bestScans[u]; }), fail);
+          var got = scanList();
+          cleanup();
+          if (typeof window._showLoading === 'function') window._showLoading('Salvando o que foi encontrado…');
+          _saveScansAndReload(ctx.tId, got, _toastErr);
         }, 2000);
       }
     }
+    setProg({ label: '🔌 Conectando à extensão…', sub: 'só um instante', pct: 2, noCancel: true });
     window.addEventListener('message', onMsg);
     window.postMessage({ __sp_lp: 'ext-ping' }, window.location.origin);
+    ping();
     setTimeout(function () {
       if (done || started) return;
       var reload = 'Recarregue a extensão pra v' + _LZ_MIN_EXT + ' em chrome://extensions, recarregue a página e tente de novo.';
-      if (!versions.length) { window.removeEventListener('message', onMsg); fail('A extensão não respondeu. ' + reload); return; }
+      if (!versions.length) { cleanup(); _toastErr('A extensão não respondeu. ' + reload); return; }
       var best = versions.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
-      if (!_verGE(best, _LZ_MIN_EXT)) { window.removeEventListener('message', onMsg); fail('Sua extensão está na versão ' + best + '. ' + reload); return; }
+      if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _toastErr('Sua extensão está na versão ' + best + '. ' + reload); return; }
       started = true;
-      setBtn('🔎 Buscando… 0%', 0);
-      window.postMessage({ __sp_lp: 'run-org-scan', targets: ctx.targets, tournamentId: ctx.tId, mode: mode }, window.location.origin);
+      setProg({ sub: 'preparando ' + total + (total === 1 ? ' inscrito' : ' inscritos'), pct: 3 });
+      window.postMessage({ __sp_lp: 'run-org-scan', targets: targets, tournamentId: ctx.tId, mode: mode }, window.location.origin);
     }, 900);
-    setTimeout(function () { if (done || !started) return; window.removeEventListener('message', onMsg); fail('A busca demorou demais. Tente de novo.'); }, 90000);
   };
   function _saveScansAndReload(tId, scans, onFail) {
     var ok = scans.filter(function (s) { return s.uid && s.scan; });
     var failed = scans.filter(function (s) { return !(s.uid && s.scan); });
     if (!ok.length) {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
       var err = (failed[0] && failed[0].error) || 'sem dados';
       if (typeof onFail === 'function') onFail('Nenhum perfil carregado (' + err + ').');
       return;
@@ -1857,11 +1789,14 @@
       return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
     });
     Promise.all(writes).then(function () {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
       // re-render a seção Categorias in-place, mesclando os scans novos no scanMap.
       var rctx = window._lzRenderCtx, el = document.getElementById('er-categories-section');
       if (rctx && el && rctx.t && rctx.t.id === tId) {
         var merged = Object.assign({}, rctx.scanMap || {});
-        ok.forEach(function (s) { merged[s.uid] = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid }; });
+        // fullImport vai junto: é o que marca este uid como "completa fresca" no
+        // re-render (senão o botão Completa voltaria a pedir os mesmos inscritos).
+        ok.forEach(function (s) { merged[s.uid] = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, fullImport: s.fullImport || null }; });
         var tmp = document.createElement('div');
         tmp.innerHTML = _renderCategoriesSection(rctx.rows, rctx.t, rctx.profileMap, merged);
         var newEl = tmp.firstElementChild;
@@ -1871,6 +1806,7 @@
       }
       if (typeof showNotification === 'function') showNotification('Busca concluída', ok.length + ' carregado(s)' + (failed.length ? (' · ' + failed.length + ' falhou') : ''), 'success');
     }).catch(function (e) {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
       if (typeof onFail === 'function') onFail('Erro ao salvar: ' + String((e && e.message) || e));
     });
   }
@@ -1973,10 +1909,13 @@
     _fetchProfiles(parts).then(function (fetchResult) {
       if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }
       var byUid = fetchResult.byUid || {};
-      // candidatos = inscritos com @ + consentimento, sem import próprio.
+      // Candidatos = TODO inscrito com @ + consentimento (v1.1.18: inclui quem já tem
+      // import próprio). Antes eles ficavam de fora e a página não sabia QUANDO cada um
+      // foi verificado — sem isso não dá pra aplicar a regra dos 6 dias. O veredito não
+      // muda: em _erApplyLzToRows o import próprio continua tendo precedência sobre o scan.
       var candUids = parts.filter(function (p) {
         var prof = p.uid && byUid[p.uid];
-        return prof && prof.letzplayHandle && prof.letzplayConsent === true && !prof.letzplayImport;
+        return prof && prof.letzplayHandle && prof.letzplayConsent === true;
       }).map(function (p) { return p.uid; });
       _fetchGlobalScans(candUids).then(function (scanMap) {
         if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }

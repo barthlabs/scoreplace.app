@@ -12,8 +12,13 @@
     var u = d.__spInjReq.url;
     fetch(u, { credentials: 'include' })
       .then(function (r) {
+        // retryAfter: quando o letzplay/Cloudflare limita (403/429) ele diz EM QUANTOS
+        // segundos aceita de novo. Respeitar isso é o que faz o import nunca falhar por
+        // rajada — chutar backoff é pior que obedecer o servidor.
+        var ra = null;
+        try { ra = r.headers.get('retry-after'); } catch (e) {}
         return r.text().then(function (h) {
-          window.postMessage({ __spInjRes: { url: u, res: { ok: r.ok, status: r.status, html: h } } }, window.location.origin);
+          window.postMessage({ __spInjRes: { url: u, res: { ok: r.ok, status: r.status, retryAfter: ra, html: h } } }, window.location.origin);
         });
       })
       .catch(function (err) {

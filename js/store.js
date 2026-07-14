@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.1.17';
+window.SCOREPLACE_VERSION = '1.1.18';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
@@ -1315,6 +1315,11 @@ window._softRefreshView = function() {
                   document.getElementById('removal-subchoice-panel') ||
                   document.getElementById('incomplete-teams-panel') ||
                   document.getElementById('flyer-print-overlay') ||
+                  // v1.1.18: busca/import do letzplay (bolinha + barra). A busca do
+                  // organizador dura MINUTOS; sem isto, um snapshot do Firestore no meio
+                  // (torneio vivo) varria a barra de progresso e o organizador achava que
+                  // tinha travado. Ver [[project_letzplay_scan_stability]].
+                  document.getElementById('sp-import-overlay') ||
                   // v2.7.96: diálogos padrão (confirm/alert/input). Sem isto, em torneio
                   // VIVO (Confra: snapshots frequentes ao simular resultados) o snapshot
                   // disparava _softRefreshView → initRouter → _dismissAllOverlays e varria a
