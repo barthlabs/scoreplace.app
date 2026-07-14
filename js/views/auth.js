@@ -562,16 +562,28 @@ var _firebaseConfigProd = {
   //     pra não quebrar sessão/fluxo antigo).
   // Reverter = voltar pra "scoreplace-app.firebaseapp.com" e deployar.
   // Ver project_recaptcha_offscreen_not_display_none e project_native_webview_hostname.
-  // ⚠️ REVERTIDO em v1.1.33: auth.scoreplace.app quebrou o login com Google —
-  // o popup do /__/auth/handler devolvia "The requested action is invalid".
-  // O handler responde 200 e o RecaptchaVerifier.render() resolve, mas o OAuth
-  // não completa: o handler servido pelo custom domain não estava provisionado
-  // pro fluxo de sign-in (o Hosting serve o site, não a app config de auth).
-  // Voltar pra cá é seguro — este domínio nunca saiu do OAuth nem dos
-  // Authorized domains. NÃO retomar sem provar o Google login ponta a ponta
-  // em scoreplace-app.web.app (clicando de verdade, não só render()).
-  // Ver project_custom_auth_domain.
-  authDomain: "scoreplace-app.firebaseapp.com",
+  // v1.1.34 — authDomain CUSTOM. O SDK carrega o iframe de auth (reCAPTCHA do phone
+  // auth + handler do OAuth) a partir do authDomain. Com firebaseapp.com isso é
+  // CROSS-SITE em relação ao app (scoreplace.app) → WebKit bloqueia por ITP → o
+  // token do reCAPTCHA não volta → auth/internal-error e o SMS não sai no app
+  // nativo iOS (a WKWebView do Capacitor roda como scoreplace.app).
+  // auth.scoreplace.app é o MESMO site → não é terceiro → sem ITP.
+  //
+  // ⚠️ A v1.1.32 tentou isso e QUEBROU o login com Google ("The requested action is
+  // invalid"). A causa NÃO era o handler (responde 200 nos 3 domínios) nem o OAuth:
+  // era a RESTRIÇÃO DE REFERRER da Browser API key, que não listava o domínio novo
+  // → a chamada de API saía do auth.scoreplace.app e a própria key recusava.
+  // Corrigido: "auth.scoreplace.app/*" adicionado aos allowedReferrers (aditivo).
+  //
+  // Pré-requisitos — se QUALQUER um cair, o login quebra em web+Android+iOS:
+  //   • Browser API key: referrer auth.scoreplace.app/* (a pegadinha que custou a v1.1.32);
+  //   • Hosting: custom domain auth.scoreplace.app servindo /__/auth/* com SSL;
+  //   • Firebase Auth → Authorized domains;
+  //   • OAuth web client: origem JS + redirect .../__/auth/handler (o de
+  //     firebaseapp.com FICOU → reverter é imediato).
+  // Validado CLICANDO em "Entrar com Google" (login completou) — HTTP 200 e
+  // RecaptchaVerifier.render() NÃO são prova. Ver project_custom_auth_domain.
+  authDomain: "auth.scoreplace.app",
   projectId: "scoreplace-app",
   storageBucket: "scoreplace-app.firebasestorage.app",
   messagingSenderId: "382268772878",
