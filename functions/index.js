@@ -2548,6 +2548,136 @@ exports.sendWhatsAppMagicLink = onCall(
   }
 );
 
+// ─── WhatsApp Cloud API oficial (Meta) — login por CÓDIGO de 6 dígitos (v1.1.15) ─
+// Migração do Evolution (morto) pro Cloud API oficial. No login por celular, SMS
+// (Firebase, código opaco) e WhatsApp (código NOSSO) são enviados ao mesmo tempo;
+// o campo de código aceita QUALQUER um dos dois — o cliente tenta o confirm do
+// Firebase primeiro, e se não bater cai em verifyWhatsAppLoginCode.
+// GATE: o template `scoreplace_login_code` (AUTHENTICATION) só passa a existir quando
+// a verificação da empresa da Meta aprovar. Até lá, sendWhatsAppLoginCode devolve
+// {ok:false} e o app degrada limpo (SMS/e-mail seguem). IDs canônicos + estado na
+// memória project_whatsapp_meta_2fa_block.
+// ⚠️ Payload do template AUTH (COPY_CODE) NÃO foi testável até o template existir —
+// validar o envio de verdade no 1º deploy pós-aprovação.
+const WHATSAPP_CLOUD_TOKEN = defineSecret("WHATSAPP_CLOUD_API_TOKEN");
+const WA_CLOUD_API = "https://graph.facebook.com/v22.0";
+const WA_CLOUD_PHONE_ID = "1318311631355405";      // Phone Number ID Barthlabs (não é segredo)
+const WA_LOGIN_TEMPLATE = "scoreplace_login_code"; // template AUTHENTICATION, OTP COPY_CODE
+const WA_LOGIN_TEMPLATE_LANG = "pt_BR";
+
+// Envia um código de autenticação via template do Cloud API. {ok} ou {ok:false,error}.
+async function _sendWhatsAppAuthCode(token, phone, code) {
+  if (IS_STAGING) { console.log("[staging] WA Cloud auth code suprimido →", String(phone)); return { ok: true, suppressed: true }; }
+  const to = String(phone || "").replace(/[^\d]/g, "");
+  const url = WA_CLOUD_API + "/" + WA_CLOUD_PHONE_ID + "/messages";
+  const body = {
+    messaging_product: "whatsapp",
+    to: to,
+    type: "template",
+    template: {
+      name: WA_LOGIN_TEMPLATE,
+      language: { code: WA_LOGIN_TEMPLATE_LANG },
+      components: [
+        { type: "body", parameters: [{ type: "text", text: code }] },
+        // Botão OTP (COPY_CODE) — o parâmetro leva o mesmo código pro "copiar código".
+        { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] },
+      ],
+    },
+  };
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    return { ok: false, error: "fetch failed: " + (e.message || String(e)) };
+  }
+  let data = null;
+  try { data = await resp.json(); } catch (e) { /* body não-json */ }
+  if (!resp.ok) {
+    return { ok: false, error: "HTTP " + resp.status + ": " + (data && data.error ? JSON.stringify(data.error) : resp.statusText) };
+  }
+  const messageId = data && data.messages && data.messages[0] && data.messages[0].id;
+  return { ok: true, messageId: messageId };
+}
+
+// Gera código de 6 dígitos, guarda em whatsappLoginCodes/{phone} e manda via Cloud API.
+// Chamado em paralelo com o SMS do Firebase no login por celular. Best-effort.
+exports.sendWhatsAppLoginCode = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, secrets: [WHATSAPP_CLOUD_TOKEN] },
+  async (request) => {
+    const phone = _normalizePhoneE164((request.data && request.data.phone) || "");
+    if (!phone) return { ok: false, reason: "invalid-phone" };
+
+    // Acha ou cria a conta do telefone (o código loga essa conta via custom token).
+    let userRecord;
+    try {
+      userRecord = await admin.auth().getUserByPhoneNumber("+" + phone);
+    } catch (err) {
+      if (err.code === "auth/user-not-found") {
+        try { userRecord = await admin.auth().createUser({ phoneNumber: "+" + phone }); }
+        catch (e) { console.error("[sendWhatsAppLoginCode] createUser falhou:", e.code || e.message); return { ok: false, reason: "create-user-error" }; }
+      } else {
+        console.error("[sendWhatsAppLoginCode] lookup falhou:", err.code || err.message);
+        return { ok: false, reason: "lookup-error" };
+      }
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
+    try {
+      await admin.firestore().collection("whatsappLoginCodes").doc(phone).set({
+        code: code, uid: userRecord.uid, phone: phone, attempts: 0,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 min
+      });
+    } catch (e) {
+      console.error("[sendWhatsAppLoginCode] Firestore write falhou:", e.code || e.message);
+      return { ok: false, reason: "store-error" };
+    }
+
+    let token;
+    try { token = WHATSAPP_CLOUD_TOKEN.value(); } catch (e) { return { ok: false, reason: "secret-missing" }; }
+    const result = await _sendWhatsAppAuthCode(token, phone, code);
+    if (!result.ok) {
+      console.warn("[sendWhatsAppLoginCode] envio falhou pra", phone, ":", result.error);
+      return { ok: false, reason: "wa-send-failed", error: result.error };
+    }
+    console.log("[sendWhatsAppLoginCode] código enviado pra", phone, "uid:", userRecord.uid);
+    return { ok: true };
+  }
+);
+
+// Confere o código digitado contra whatsappLoginCodes/{phone}. Se bater (não expirou /
+// sob limite), devolve custom token pro cliente fazer signInWithCustomToken.
+exports.verifyWhatsAppLoginCode = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30 },
+  async (request) => {
+    const phone = _normalizePhoneE164((request.data && request.data.phone) || "");
+    const code = String((request.data && request.data.code) || "").replace(/[^\d]/g, "");
+    if (!phone || code.length !== 6) return { ok: false, reason: "invalid-input" };
+
+    const ref = admin.firestore().collection("whatsappLoginCodes").doc(phone);
+    const snap = await ref.get();
+    if (!snap.exists) return { ok: false, reason: "no-code" };
+    const d = snap.data();
+    const expMs = d.expiresAt && d.expiresAt.toMillis ? d.expiresAt.toMillis() : (d.expiresAt ? new Date(d.expiresAt).getTime() : 0);
+    if (!expMs || expMs < Date.now()) { try { await ref.delete(); } catch (_e) {} return { ok: false, reason: "expired" }; }
+    if ((d.attempts || 0) >= 5) { try { await ref.delete(); } catch (_e) {} return { ok: false, reason: "too-many-attempts" }; }
+    if (String(d.code) !== code) {
+      try { await ref.update({ attempts: (d.attempts || 0) + 1 }); } catch (_e) {}
+      return { ok: false, reason: "wrong-code" };
+    }
+    try { await ref.delete(); } catch (_e) {} // consome o código
+    let customToken;
+    try { customToken = await admin.auth().createCustomToken(d.uid, { source: "whatsapp_login_code" }); }
+    catch (e) { console.error("[verifyWhatsAppLoginCode] createCustomToken falhou:", e.code || e.message); return { ok: false, reason: "token-error" }; }
+    console.log("[verifyWhatsAppLoginCode] OK pra", phone, "uid:", d.uid);
+    return { ok: true, customToken: customToken };
+  }
+);
+
 // Sanitiza telefone pra E.164 sem '+' (formato Evolution API espera).
 // Aceita "+55 11 99999-8888", "55 11 99999-8888", "11 99999-8888",
 // "(11) 99999-8888". Sempre normaliza pra "5511999998888".

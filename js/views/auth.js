@@ -1693,7 +1693,7 @@ window._entrarExpandRegister = function(mode, raw) {
   if (btn) btn.textContent = 'Criar conta e entrar';
   if (hint) {
     if (mode === 'phone') {
-      hint.innerHTML = '✨ Número novo por aqui — vamos criar sua conta. Você vai receber um <b>código por SMS</b> e um <b>link no WhatsApp</b> pra confirmar o número.';
+      hint.innerHTML = '✨ Número novo por aqui — vamos criar sua conta. Você vai receber um <b>código por SMS</b> e um <b>código no WhatsApp</b> pra confirmar o número.';
     } else if (typeof window._isUnreliableEmailDomain === 'function' && window._isUnreliableEmailDomain(raw)) {
       // v3.0.x: nota GENTIL (sem alarme, sem Google). Esses provedores às vezes seguram a
       // confirmação; o caminho pelo celular fica oferecido com calma na tela seguinte.
@@ -1879,7 +1879,7 @@ window._entrarSetupPhonePassword = function(e164withPlus, password, displayName)
   // Pendência lida pelo hook em handlePhoneVerifyCode (e best-effort no ?wt=).
   window._phonePwSetup = { phone: e164withPlus, password: password, displayName: displayName || '' };
   try { sessionStorage.setItem('sp_pwSetup', JSON.stringify(window._phonePwSetup)); } catch (_e) {}
-  window._entrarStatus('📱 Enviamos um <b>código por SMS</b> e um <b>link pelo WhatsApp</b> pra confirmar seu número. Confirme abaixo pra concluir.', 'info');
+  window._entrarStatus('📱 Enviamos um <b>código por SMS</b> e um <b>código pelo WhatsApp</b> pra confirmar seu número. Confirme abaixo pra concluir.', 'info');
   if (typeof handlePhoneLogin === 'function') handlePhoneLogin();
 };
 
@@ -2372,43 +2372,41 @@ function handlePhoneLogin() {
   // confirmação aparece NA HORA — a pessoa entra pelo link do WhatsApp mesmo que o
   // SMS/reCAPTCHA falhe. O SMS roda depois, em segundo plano, e a sua falha vira só
   // uma nota discreta (sem toast assustador) porque o WhatsApp é o caminho primário.
-  window._waMagicLinkResult = null;
+  window._phoneLoginE164 = phone; // pro fallback do código do WhatsApp na verificação
   _showPhoneVerificationStep();
   var _smsNote0 = document.getElementById('phone-step-sms-note');
   if (_smsNote0) _smsNote0.innerHTML = '';
   var _waStatus0 = document.getElementById('phone-step-wa-status');
-  if (_waStatus0) _waStatus0.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">⏳ Enviando link pelo WhatsApp…</span>';
-  showNotification('📱 Acesso a caminho', 'Enviamos um link pelo WhatsApp pra ' + phone + '. Toque nele pra entrar — ou digite o código que chega por SMS.', 'info');
+  if (_waStatus0) _waStatus0.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">⏳ Enviando código pelo WhatsApp…</span>';
+  showNotification('📱 Código a caminho', 'Enviamos um código por SMS e por WhatsApp pra ' + phone + '. Digite o que chegar primeiro.', 'info');
 
-  // WhatsApp magic link — não depende de reCAPTCHA nem de SMS.
+  // Código do WhatsApp (nosso, via Cloud API oficial) — não depende de reCAPTCHA nem
+  // do SMS. Vem no MESMO campo do código do SMS: a verificação tenta o confirm do
+  // Firebase primeiro e, se não bater, cai em verifyWhatsAppLoginCode. O template
+  // AUTHENTICATION só existe quando a Meta aprovar a verificação da empresa; até lá
+  // isto devolve {ok:false} e o app segue no SMS (degrada limpo).
   (function() {
-    var WA_FN_URL = 'https://us-central1-scoreplace-app.cloudfunctions.net/sendWhatsAppMagicLink';
-    fetch(WA_FN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: { phone: phone } })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(body) {
-      var d = body && body.result;
-      window._log('[WA magic link] resultado:', JSON.stringify(d));
-      window._waMagicLinkResult = d;
-      var ws = document.getElementById('phone-step-wa-status');
-      if (!ws) return;
-      if (d && d.ok) {
-        ws.innerHTML = '<span style="color:#10b981;font-size:0.74rem;font-weight:700;">✅ Link enviado pelo WhatsApp — toque nele pra entrar.</span>';
-      } else {
-        var reason = (d && d.reason) || 'unknown';
-        ws.innerHTML = (reason === 'user-not-found')
-          ? '<span style="color:var(--text-muted);font-size:0.72rem;">Número novo por aqui — confirme pelo código do SMS abaixo.</span>'
-          : '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora (' + reason + ') — use o código do SMS abaixo.</span>';
-      }
-    })
-    .catch(function(err) {
-      window._warn('[WA magic link] fetch falhou:', err && err.message);
-      var ws = document.getElementById('phone-step-wa-status');
-      if (ws) ws.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora — use o código do SMS abaixo.</span>';
-    });
+    try {
+      firebase.functions().httpsCallable('sendWhatsAppLoginCode')({ phone: phone })
+        .then(function(res) {
+          var d = res && res.data;
+          window._log && window._log('[WA login code] resultado:', JSON.stringify(d));
+          var ws = document.getElementById('phone-step-wa-status');
+          if (!ws) return;
+          if (d && d.ok) {
+            ws.innerHTML = '<span style="color:#10b981;font-size:0.74rem;font-weight:700;">✅ Código enviado pelo WhatsApp — digite acima.</span>';
+          } else {
+            ws.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora — use o código do SMS abaixo.</span>';
+          }
+        })
+        .catch(function(err) {
+          window._warn && window._warn('[WA login code] falhou:', err && err.message);
+          var ws = document.getElementById('phone-step-wa-status');
+          if (ws) ws.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora — use o código do SMS abaixo.</span>';
+        });
+    } catch (e) {
+      window._warn && window._warn('[WA login code] init falhou:', e && e.message);
+    }
   })();
 
   // ── SMS (canal secundário) ─────────────────────────────────────────────────
@@ -2429,7 +2427,7 @@ function handlePhoneLogin() {
     window._phoneLoginInFlight = false;
     window._warn && window._warn('[phoneLogin] reCAPTCHA init falhou:', e && (e.message || e));
     var _n0 = document.getElementById('phone-step-sms-note');
-    if (_n0) _n0.innerHTML = '<span style="color:#fbbf24;font-size:0.72rem;">⚠️ SMS indisponível neste navegador — entre pelo link do WhatsApp acima.</span>';
+    if (_n0) _n0.innerHTML = '<span style="color:#fbbf24;font-size:0.72rem;">⚠️ SMS indisponível neste navegador — use o código do WhatsApp acima.</span>';
     return;
   }
 
@@ -2488,8 +2486,8 @@ function handlePhoneVerifyCode() {
   }
 
   if (!window._phoneConfirmationResult) {
-    showNotification(_t('auth.error'), _t('auth.sessionExpiredMsg'), 'error');
-    _resetPhoneLoginUI();
+    // SMS não disponível (reCAPTCHA/SMS falhou) — o código pode ser o do WhatsApp.
+    _verifyWhatsAppLoginCodeAndSignIn(code);
     return;
   }
 
@@ -2630,14 +2628,52 @@ function handlePhoneVerifyCode() {
     })
     .catch(function(error) {
       window._error('Phone verify error:', error);
-      if (error.code === 'auth/invalid-verification-code') {
-        showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error');
-      } else if (error.code === 'auth/code-expired') {
-        showNotification(_t('auth.codeExpired'), _t('auth.codeExpiredMsg'), 'error');
-        _resetPhoneLoginUI();
+      // O código digitado pode ser o do WhatsApp (não o do SMS): tenta o nosso antes de errar.
+      if (error.code === 'auth/invalid-verification-code' || error.code === 'auth/code-expired') {
+        _verifyWhatsAppLoginCodeAndSignIn(code);
       } else {
         showNotification(_t('auth.error'), error.message || _t('auth.loginErrorMsg'), 'error');
       }
+    });
+}
+
+// v1.1.15: o campo de código do login por celular aceita o código do SMS (Firebase)
+// OU o do WhatsApp (nosso, via Cloud API). Se o confirm do Firebase não bater, o
+// código pode ser o do WhatsApp — validamos aqui e logamos via custom token (espelha
+// o completar do magic link ?wt=). Degrade-safe: só roda quando o SMS não bateu.
+function _verifyWhatsAppLoginCodeAndSignIn(code) {
+  var phone = window._phoneLoginE164;
+  if (!phone) { showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error'); return; }
+  firebase.functions().httpsCallable('verifyWhatsAppLoginCode')({ phone: phone, code: code })
+    .then(function(res) {
+      var d = res && res.data;
+      if (d && d.ok && d.customToken) {
+        firebase.auth().signInWithCustomToken(d.customToken)
+          .then(function() {
+            window._phoneConfirmationResult = null;
+            try { _resetPhoneRecaptcha(); } catch (e) {}
+            var user = firebase.auth().currentUser;
+            showNotification(_t('auth.loginDone'), _t('auth.welcome', { greeting: user ? window._welcomeWord(user) : '' }), 'success');
+            var modal = document.getElementById('modal-login');
+            if (modal) modal.classList.remove('active');
+            try { _resetPhoneLoginUI(); } catch (e) {}
+          })
+          .catch(function(err) {
+            window._error && window._error('[waLoginCode] signInWithCustomToken falhou:', err);
+            showNotification(_t('auth.error'), _t('auth.loginErrorMsg'), 'error');
+          });
+      } else {
+        var reason = d && d.reason;
+        if (reason === 'expired' || reason === 'no-code') {
+          showNotification(_t('auth.codeExpired'), _t('auth.codeExpiredMsg'), 'error');
+        } else {
+          showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error');
+        }
+      }
+    })
+    .catch(function(err) {
+      window._warn && window._warn('[waLoginCode] verify falhou:', err && err.message);
+      showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error');
     });
 }
 
