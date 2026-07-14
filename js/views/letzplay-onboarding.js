@@ -419,12 +419,30 @@
       return 'Extensão detectada e pronta. <b>v' + _esc(_ext.version) + '</b> ✓';
     }
     if (_ext.present && !_verGte(_ext.version, MIN_EXT_VERSION)) {
-      return '<span style="color:#f59e0b;">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b>.</span>' + _installHelp('Como atualizar');
+      // O botão de baixar fica VISÍVEL aqui, não escondido dentro do "Como atualizar".
+      // Enquanto não há versão na loja não existe auto-update: sem o download na cara, o
+      // usuário lê "atualize pra v1.38" e não tem de onde. Foi exatamente o que aconteceu
+      // — o zip existia, servido, e ainda assim ninguém achava.
+      return '<span style="color:#f59e0b;">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b> ' +
+        '(a antiga desiste quando o letzplay limita e não traz os jogos).</span>' +
+        _zipBtn() + _installHelp('Como atualizar');
     }
     var installBtn = STORE_URL
       ? '<div style="margin-top:10px;"><a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" class="btn btn-primary">🎾 Instalar extensão</a></div>'
-      : '<div style="margin-top:6px;color:#94a3b8;">A extensão ainda não está na Chrome Web Store (em preparação). Por enquanto, instale em modo desenvolvedor:</div>';
+      : '<div style="margin-top:6px;color:#94a3b8;">A extensão ainda não está na Chrome Web Store (em preparação). Baixe e instale em modo desenvolvedor:</div>' + _zipBtn();
     return 'Precisa da extensão do scoreplace pra ler seu histórico na sua sessão logada (sem senha).' + installBtn + _installHelp(STORE_URL ? 'Instalar manualmente' : 'Passo a passo (modo desenvolvedor)');
+  }
+
+  // Botão de baixar o zip da versão EXIGIDA. Mora aqui (fora do _installHelp) porque
+  // precisa aparecer VISÍVEL nos avisos de "instale"/"atualize", não só dentro do
+  // <details> colapsado — download que existe mas ninguém acha é download que não existe.
+  // A URL sai de SP_EXT_VERSION, então nunca aponta pra versão que o gate recusa, e a
+  // trava check-ext-version garante que o arquivo está lá.
+  function _zipBtn() {
+    var zipUrl = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    if (!zipUrl) return '';
+    return '<div style="margin:10px 0;"><a href="' + _esc(zipUrl) + '" download class="btn btn-primary" style="text-decoration:none;">⬇️ Baixar a extensão (v' + _esc(MIN_EXT_VERSION) + ')</a>' +
+      '<div style="opacity:0.75;font-size:0.72rem;margin-top:4px;">Baixe e <b>descompacte</b> — a pasta que sair do zip é a que você escolhe em <code>chrome://extensions</code> → “Carregar sem compactação”.</div></div>';
   }
 
   function _installHelp(label) {
@@ -438,11 +456,7 @@
     // "escolha a pasta extension do scoreplace" — que só existe pra quem tem o repositório
     // clonado. Sem um download aqui, atualizar dependia de achar o arquivo em algum lugar,
     // e foi assim que a extensão ficou parada na 1.35 enquanto o app já pedia mais nova.
-    var zipUrl = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
-    var zipBtn = zipUrl
-      ? '<div style="margin:8px 0 10px;"><a href="' + _esc(zipUrl) + '" download class="btn btn-primary btn-sm" style="text-decoration:none;">⬇️ Baixar a extensão (v' + _esc(MIN_EXT_VERSION) + ')</a>' +
-        '<div style="opacity:0.75;font-size:0.72rem;margin-top:4px;">Baixe e <b>descompacte</b> o arquivo — a pasta que sair dele é a que você vai escolher no passo 3.</div></div>'
-      : '';
+    var zipBtn = _zipBtn();
     return '<details style="margin-top:8px;"><summary style="cursor:pointer;color:var(--primary-color,#818cf8);font-weight:600;">' + _esc(label) + '</summary>' +
       '<div style="margin:8px 0 6px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);font-size:0.74rem;color:var(--text-muted,#cbd5e1);">⚙️ Instalação <b>temporária</b>, só pra teste enquanto a extensão não está na loja. Quando publicar, o Chrome atualiza <b>sozinho</b> — nada disso abaixo.</div>' +
       zipBtn +
