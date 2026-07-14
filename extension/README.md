@@ -11,7 +11,11 @@ Puxa o histórico do letzplay **na sua sessão logada** (passa o Cloudflare, que
 3. **Carregar sem compactação** → selecione a pasta `extension/`.
 4. Fixe o ícone da extensão na barra, se quiser.
 
-> **Já carregou antes?** Depois de qualquer atualização, clique em **↻ (recarregar)** no card da extensão em `chrome://extensions` — senão roda a versão velha. Versão atual do manifest: **1.10**.
+> **Já carregou antes?** Depois de qualquer atualização, clique em **↻ (recarregar)** no card da extensão em `chrome://extensions` — senão roda a versão velha. Versão atual do manifest: **1.36**.
+
+> **Recebeu um `.zip`?** O Chrome não carrega o zip direto: **descompacte** e aponte o
+> "Carregar sem compactação" pra pasta que sair. Se já tinha uma versão carregada, use
+> **↻ (recarregar)** no card dela depois de trocar os arquivos.
 
 ## Como usar (auto-import — o próprio jogador)
 
