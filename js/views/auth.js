@@ -3868,15 +3868,11 @@ window._gateEnterApp = function() {
     window._pendingVerifyName = null;
     window._postVerifyGoToProfile = true;
     if (window.showNotification) window.showNotification('✅ Conta confirmada!', 'Telefone autenticado. Vamos completar seu perfil.', 'success');
-    // v3.0.x: avisa por WhatsApp que daqui pra frente entra com CELULAR + SENHA — é o
-    // caminho confiável pra quem tem e-mail (Hotmail/Outlook/UOL) que não recebe a confirmação.
-    try {
-      var _gatePh = window._gatePhonePending || '';
-      if (_gatePh && window.FirestoreDB && typeof window.FirestoreDB.queueWhatsApp === 'function') {
-        window.FirestoreDB.queueWhatsApp([_gatePh],
-          '✅ Sua conta no scoreplace.app está confirmada!\n\nDe agora em diante, entre com o seu *celular + senha* (a mesma senha que você cadastrou) — não precisa do e-mail.\n\n👉 ' + (window.SCOREPLACE_URL || 'https://scoreplace.app') + '\n\nscoreplace.app · Jogue em outro nível');
-      }
-    } catch (_we) {}
+    // v1.1.30: o aviso "de agora em diante entre com celular + senha" ia por WhatsApp
+    // em texto livre (Evolution). O Cloud API não manda texto livre business-initiated
+    // — só template aprovado — e este aviso não tem template próprio. O usuário já vê
+    // a mesma informação no toast acima + na tela de perfil, então o WhatsApp saiu em
+    // vez de virar mais um template pago. Ver `project_whatsapp_meta_2fa_block`.
     Promise.resolve(simulateLoginSuccess({ uid: u2.uid, email: u2.email, displayName: u2.displayName, photoURL: u2.photoURL }))
       .then(function() {
         window.location.hash = '#profile';

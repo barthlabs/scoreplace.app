@@ -4303,6 +4303,17 @@ window._safeHtml = function(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 };
 
+// Sanitiza um parâmetro de template do WhatsApp Cloud API.
+// A Meta REJEITA o envio se o valor tiver quebra de linha, tab ou 4+ espaços
+// seguidos, e corta em 1024 chars. Nossas mensagens vêm de texto livre (nome de
+// torneio, comentário do organizador), então tudo passa por aqui antes de virar
+// {{n}}. Ver memória `project_whatsapp_meta_2fa_block`.
+window._waParam = function(v) {
+  var s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  if (s.length > 1024) s = s.slice(0, 1021) + '...';
+  return s || '-'; // parâmetro vazio também é rejeitado pela Meta
+};
+
 // ── Loader GLOBAL (v4.0.88) — "enquanto não entregar a informação, carregando… sempre" ──
 // Padrão canônico do app: TODA ação que processa antes de entregar uma tela deve chamar
 // window._showLoading(msg) no clique. O loader some SOZINHO quando o resultado chega:

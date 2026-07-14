@@ -71,6 +71,7 @@ const SUITES = [
   'tests/liga-render.test.js',
   'tests/swiss-render.test.js',
   'tests/match-roster-uid.test.js',
+  'tests/wa-template-map.test.js',
   'tests/fairness-uid-identity.test.js',
   'tests/dupla-detection-uid.test.js',
   'tests/draw-name-by-uid.test.js',

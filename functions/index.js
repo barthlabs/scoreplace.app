@@ -839,13 +839,22 @@ exports.flushWhatsAppDigest = onSchedule(
       if (items.length === 0) continue;
       items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
       try {
-        const lines = items.map((it) => "• " + String(it.line || "").replace(/^[🔴🟠🟢]\s*/, ""));
+        // v1.1.30: vira o template sp_inscricoes_resumo. Parâmetro de template NÃO
+        // aceita \n (a Meta rejeita o envio), então as linhas são juntadas com ", "
+        // — e não com quebra de linha como era no texto livre do Evolution.
+        const resumo = items
+          .map((it) => String(it.line || "").replace(/^[🔴🟠🟢]\s*/, "").replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+          .join(", ");
+        const nome = String(items[0].toName || "").trim() || "jogador";
+        const torneio = String(items[0].tournamentName || "").trim() || "seu torneio";
         const urls = [...new Set(items.map((it) => it.tournamentUrl).filter(Boolean))];
-        let msg = "🔔 *scoreplace* — resumo da última hora:\n" + lines.join("\n");
-        if (urls.length === 1) msg += "\n\n👉 " + urls[0];
+        let suffix = "#dashboard";
+        if (urls.length === 1) { const i = urls[0].indexOf("#"); if (i !== -1) suffix = urls[0].slice(i); }
         await db.collection("whatsapp_queue").add({
-          phones: [phone],
-          message: msg,
+          template: "sp_inscricoes_resumo",
+          urlSuffix: suffix,
+          recipients: [{ phone: phone, params: [nome, torneio, resumo.slice(0, 900) || "veja no app"] }],
           createdAt: new Date().toISOString(),
           status: "pending",
         });
@@ -2668,6 +2677,45 @@ const WA_CLOUD_PHONE_ID = "1318311631355405";      // Phone Number ID Barthlabs 
 const WA_LOGIN_TEMPLATE = "scoreplace_login_code"; // template AUTHENTICATION, OTP COPY_CODE
 const WA_LOGIN_TEMPLATE_LANG = "pt_BR";
 
+// Envia uma NOTIFICAÇÃO via template UTILITY do Cloud API (não-auth).
+// v1.1.30 — substitui o _sendWhatsAppText do Evolution: o Cloud API não manda
+// texto livre business-initiated, só template aprovado. `params` são os {{n}} do
+// corpo ({{1}} = nome de quem recebe) e `urlSuffix` é o sufixo do botão (a base
+// https://scoreplace.app/ é fixa no template). Ver project_whatsapp_meta_2fa_block.
+async function _sendWhatsAppTemplateMsg(token, phone, templateName, params, urlSuffix) {
+  if (IS_STAGING) { console.log("[staging] WA Cloud template suprimido →", String(phone)); return { ok: true, suppressed: true }; }
+  const to = String(phone || "").replace(/[^\d]/g, "");
+  const components = [];
+  if (Array.isArray(params) && params.length) {
+    components.push({ type: "body", parameters: params.map((p) => ({ type: "text", text: String(p) })) });
+  }
+  // Botão URL dinâmico: index 0, sub_type "url" — o parâmetro é só o SUFIXO.
+  components.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: String(urlSuffix || "#dashboard") }] });
+  const body = {
+    messaging_product: "whatsapp",
+    to: to,
+    type: "template",
+    template: { name: templateName, language: { code: WA_LOGIN_TEMPLATE_LANG }, components: components },
+  };
+  let resp;
+  try {
+    resp = await fetch(WA_CLOUD_API + "/" + WA_CLOUD_PHONE_ID + "/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    return { ok: false, error: "fetch failed: " + (e.message || String(e)) };
+  }
+  let data = null;
+  try { data = await resp.json(); } catch (e) { /* body não-json */ }
+  if (!resp.ok) {
+    return { ok: false, error: "HTTP " + resp.status + ": " + (data && data.error ? JSON.stringify(data.error) : resp.statusText) };
+  }
+  const messageId = data && data.messages && data.messages[0] && data.messages[0].id;
+  return { ok: true, messageId: messageId };
+}
+
 // Envia um código de autenticação via template do Cloud API. {ok} ou {ok:false,error}.
 async function _sendWhatsAppAuthCode(token, phone, code) {
   if (IS_STAGING) { console.log("[staging] WA Cloud auth code suprimido →", String(phone)); return { ok: true, suppressed: true }; }
@@ -3768,7 +3816,7 @@ exports.processWhatsAppQueue = onDocumentCreated(
     region: "us-central1",
     timeoutSeconds: 60,
     memory: "256MiB",
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
+    secrets: [WHATSAPP_CLOUD_TOKEN],
     retryConfig: { retryCount: 2 }, // Firebase auto-retries 2x em caso de unhandled error
   },
   async (event) => {
@@ -3776,11 +3824,15 @@ exports.processWhatsAppQueue = onDocumentCreated(
     if (!snap) return;
     if (IS_STAGING) { try { await snap.ref.update({ status: "suppressed_staging", processedAt: new Date().toISOString() }); } catch (_e) {} return; }
     const data = snap.data();
-    if (!data || !data.message || !Array.isArray(data.phones) || data.phones.length === 0) {
-      console.warn("[processWhatsAppQueue] doc inválido — skip:", event.params.queueId);
+    // v1.1.30 — shape novo: { template, recipients:[{phone,params}], urlSuffix }.
+    // O shape antigo ({phones,message}) era texto livre do Evolution e NÃO tem como
+    // ser enviado pelo Cloud API (só template aprovado) → falha explícita, não silenciosa.
+    if (!data || !data.template || !Array.isArray(data.recipients) || data.recipients.length === 0) {
+      const legacy = data && data.message ? " (doc legado com texto livre — Evolution)" : "";
+      console.warn("[processWhatsAppQueue] doc inválido — skip:", event.params.queueId, legacy);
       await snap.ref.update({
         status: "failed",
-        lastError: "missing phones[] or message",
+        lastError: "missing template/recipients[]" + legacy,
         processedAt: new Date().toISOString(),
       });
       return;
@@ -3788,35 +3840,32 @@ exports.processWhatsAppQueue = onDocumentCreated(
     // Idempotência: se já processado (retry do trigger), skip
     if (data.status === "sent" || data.status === "partial") return;
 
-    const apiUrl = EVOLUTION_API_URL.value();
-    const apiKey = EVOLUTION_API_KEY.value();
-    const instance = EVOLUTION_INSTANCE.value();
-    if (!apiUrl || !apiKey || !instance) {
-      console.error("[processWhatsAppQueue] secrets ausentes");
+    let token;
+    try { token = WHATSAPP_CLOUD_TOKEN.value(); } catch (e) { token = null; }
+    if (!token) {
+      console.error("[processWhatsAppQueue] WHATSAPP_CLOUD_API_TOKEN ausente");
       await snap.ref.update({
         status: "failed",
-        lastError: "Evolution secrets not configured",
+        lastError: "WHATSAPP_CLOUD_API_TOKEN not configured",
         processedAt: new Date().toISOString(),
       });
       return;
     }
 
     const deliveries = [];
-    for (const rawPhone of data.phones) {
-      const phone = _normalizePhoneE164(rawPhone);
+    for (const r of data.recipients) {
+      const phone = _normalizePhoneE164(r && r.phone);
       if (!phone) {
-        deliveries.push({ phone: String(rawPhone), ok: false, error: "invalid phone format" });
+        deliveries.push({ phone: String((r && r.phone) || ""), ok: false, error: "invalid phone format" });
         continue;
       }
-      const result = await _sendWhatsAppText(apiUrl, apiKey, instance, phone, data.message);
+      const result = await _sendWhatsAppTemplateMsg(token, phone, data.template, r.params || [], data.urlSuffix);
       // Omitir campos undefined — Firestore rejeita undefined como valor
       const delivery = { phone: phone, ok: result.ok };
       if (result.messageId !== undefined) delivery.messageId = result.messageId;
       if (result.error !== undefined) delivery.error = result.error;
       deliveries.push(delivery);
-      // Pequena pausa entre msgs múltiplas — Evolution já tem delay interno
-      // mas adicional 200ms reduz chance de rate-limit do WhatsApp Web.
-      if (data.phones.length > 1) await new Promise((r) => setTimeout(r, 200));
+      if (data.recipients.length > 1) await new Promise((r2) => setTimeout(r2, 200));
     }
 
     const okCount = deliveries.filter((d) => d.ok).length;

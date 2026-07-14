@@ -187,6 +187,10 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
 
         // Auto-dispatch email & WhatsApp for this individual notification
         // (skip when called from _notifyTournamentParticipants which does batch dispatch)
+        // v1.1.30: primeiro nome de quem RECEBE — vira o {{1}} do template do
+        // WhatsApp ("Olá, Rodrigo."). Primeiro nome só: o template é curto e
+        // "Olá, Rodrigo" lê melhor que "Olá, Rodrigo Barth".
+        var _toName = String(profile.displayName || '').trim().split(/\s+/)[0] || '';
         if ((email || phone) && typeof window._dispatchChannels === 'function') {
             var tUrl = notifData.tournamentId ? 'https://scoreplace.app/#tournaments/' + notifData.tournamentId : 'https://scoreplace.app';
             // v1.8.1-beta: pass ALL notifData fields so rich email templates
@@ -197,13 +201,19 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
             _tplData.subject = 'scoreplace.app — ' + (notifData.tournamentName || 'Notificação');
             if (!_tplData.message) _tplData.message = '';
             window._dispatchChannels(
-                { emails: email ? [email] : [], phones: phone ? [phone] : [] },
+                {
+                    emails: email ? [email] : [],
+                    phones: phone ? [phone] : [],
+                    // waRecipients carrega o NOME junto do telefone — o template
+                    // é personalizado por pessoa, então phones[] sozinho não basta.
+                    waRecipients: phone ? [{ phone: phone, name: _toName }] : []
+                },
                 notifData.type || 'info',
                 _tplData
             );
         }
 
-        return { email: email, phone: phone };
+        return { email: email, phone: phone, name: _toName };
     } catch(e) {
         window._warn('_sendUserNotification error:', e);
         return null;
@@ -260,6 +270,7 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
     var nd = Object.assign({}, notifData, { tournamentId: String(t.id), tournamentName: t.name || '' });
     var allEmails = [];
     var allPhones = [];
+    var allWaRecipients = []; // v1.1.30: {phone,name} — template do WA é personalizado
 
     for (var i = 0; i < recipients.length; i++) {
         try {
@@ -273,13 +284,16 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
             if (uid) {
                 var result = await window._sendUserNotification(uid, nd, true); // skip individual dispatch; batch below
                 if (result && result.email) allEmails.push(result.email);
-                if (result && result.phone) allPhones.push(result.phone);
+                if (result && result.phone) {
+                    allPhones.push(result.phone);
+                    allWaRecipients.push({ phone: result.phone, name: result.name || '' });
+                }
             }
         } catch(e) { window._warn('Notify participant error:', e); }
     }
 
     // Auto-dispatch email & WhatsApp channels
-    var channelResult = { emails: allEmails, phones: allPhones };
+    var channelResult = { emails: allEmails, phones: allPhones, waRecipients: allWaRecipients };
     if ((allEmails.length > 0 || allPhones.length > 0) && typeof window._dispatchChannels === 'function') {
         var tUrl = 'https://scoreplace.app/#tournaments/' + String(t.id);
         // v1.8.1-beta: pass all nd fields so rich email templates receive full payload
@@ -332,6 +346,73 @@ window._notifCta = function(type, td) {
   return { label: 'Abrir scoreplace', url: base };
 };
 
+// v1.1.30: mapeia tipo de notificação → template APROVADO do WhatsApp Cloud API.
+// O Cloud API não manda texto livre business-initiated (o Evolution mandava), então
+// cada tipo tem que cair num dos 7 templates. Retorna null quando não há template
+// pro tipo → o WhatsApp é pulado (e-mail e in-app seguem normais), nunca quebra.
+// Os params são posicionais: {{1}} é SEMPRE o nome de quem recebe.
+// Ver memória `project_whatsapp_meta_2fa_block` pros nomes e regras da Meta.
+window._waTemplateFor = function(type, td, toName) {
+  td = td || {};
+  var t = String(type || '');
+  var nome = toName || 'jogador';
+  var torneio = td.tournamentName || 'seu torneio';
+  var quem = td.fromName || td.inviterName || td.pairInviterName || td.byName || 'Alguém';
+  var msg = td.message || '';
+
+  if (t === 'draw' || t === 'new_round' || t === 'new_phase') {
+    // playerMatch = o jogo específico da pessoa ("A/B x C/D"); sem ele, o texto
+    // do próprio evento serve (ex.: "rodada 2 sorteada").
+    return { template: 'sp_sorteio_jogo', params: [nome, torneio, td.playerMatch || msg || 'confira no app'] };
+  }
+  if (t === 'match-pending-approval' || t === 'match-rejected' || t === 'match-disputed') {
+    return { template: 'sp_placar_confirmar', params: [nome, quem, torneio] };
+  }
+  if (t === 'pair_invite')  return { template: 'sp_convite_recebido', params: [nome, quem, 'formar dupla no torneio ' + torneio] };
+  if (t === 'cohost_invite' || t === 'host_transfer_invite') return { template: 'sp_convite_recebido', params: [nome, quem, 'co-organizar o torneio ' + torneio] };
+  if (t === 'liga-sub-invite') return { template: 'sp_convite_recebido', params: [nome, quem, 'assumir uma vaga no torneio ' + torneio] };
+  if (t === 'casual_invite') return { template: 'sp_convite_recebido', params: [nome, quem, 'uma partida casual no scoreplace.app'] };
+  if (t === 'poll' || t === 'schedule') return { template: 'sp_enquete_aberta', params: [nome, torneio, msg || 'sua resposta é necessária'] };
+  if (t === 'org_communication') return { template: 'sp_comunicado_torneio', params: [nome, torneio, msg || 'abra o app'] };
+  if (t === 'presence_checkin' || t === 'presence_plan') {
+    return { template: 'sp_presenca_amigo', params: [nome, quem, td.venue || td.venueName || 'um local'] };
+  }
+  return null;
+};
+
+// Sufixo do botão URL do template (a base `https://scoreplace.app/` é fixa NO
+// template — a Meta só deixa variar o sufixo). Deriva do CTA canônico por tipo.
+window._waUrlSuffix = function(type, td) {
+    var cta = window._notifCta(type, td);
+    var url = (cta && cta.url) || '';
+    var i = url.indexOf('#');
+    return i !== -1 ? url.slice(i) : '#dashboard';
+};
+
+// Enfileira UM template do WhatsApp pra todos os destinatários de channelResult,
+// com params personalizados por pessoa. Usado pelo fluxo normal e pelos convites
+// (pair/cohost) que bypassam o digest. Sem template pro tipo → não manda nada.
+function _waSendTemplate(channelResult, templateType, templateData) {
+    if (!channelResult || !channelResult.phones || !channelResult.phones.length) return;
+    if (!window.FirestoreDB || typeof window.FirestoreDB.queueWhatsAppTemplate !== 'function') return;
+    var to = (channelResult.waRecipients && channelResult.waRecipients.length)
+        ? channelResult.waRecipients
+        : channelResult.phones.map(function (p) { return { phone: p, name: '' }; });
+    var recips = [];
+    var tpl = null;
+    to.forEach(function (r) {
+        var m = window._waTemplateFor(templateType, templateData, r.name);
+        if (!m) return;
+        tpl = m.template;
+        recips.push({ phone: r.phone, params: m.params });
+    });
+    if (!recips.length || !tpl) {
+        window._warn && window._warn('[WhatsApp] sem template pro tipo "' + templateType + '" — pulado');
+        return;
+    }
+    window.FirestoreDB.queueWhatsAppTemplate(recips, tpl, window._waUrlSuffix(templateType, templateData));
+}
+
 window._dispatchChannels = function(channelResult, templateType, templateData) {
     if (!channelResult) return;
     templateData = templateData || {};
@@ -357,10 +438,11 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
               '</div>';
             window.FirestoreDB.queueEmail(channelResult.emails, '🤝 Convite de dupla — ' + (templateData.tournamentName || 'scoreplace.app'), _html);
         }
-        if (channelResult.phones && channelResult.phones.length > 0 && window.FirestoreDB && typeof window.FirestoreDB.queueWhatsApp === 'function') {
-            var _wa = '🔴 🤝 *Convite de dupla*\n\n' + (templateData.pairInviterName || 'Alguém') + ' quer formar dupla com você' + (templateData.tournamentName ? ' em ' + templateData.tournamentName : '') + '.\n\n✅ Aceitar: ' + _acc + '\n❌ Recusar: ' + _rej;
-            window.FirestoreDB.queueWhatsApp(channelResult.phones, _wa);
-        }
+        // v1.1.30: o WhatsApp perdeu os botões Aceitar/Recusar próprios — o Cloud API
+        // só manda template aprovado, e template não aceita 2 URLs dinâmicas distintas.
+        // Cai no sp_convite_recebido (1 botão → torneio, onde a pessoa responde).
+        // O E-MAIL acima mantém os dois botões de ação diretos.
+        _waSendTemplate(channelResult, 'pair_invite', templateData);
         return; // não cai no digest
     }
     // v2.8.52: CONVITE DE CO-ORGANIZAÇÃO — botões Aceitar (direita) / Recusar (esquerda)
@@ -385,10 +467,9 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
               '</div>';
             window.FirestoreDB.queueEmail(channelResult.emails, '👑 Convite de co-organização — ' + (templateData.tournamentName || 'scoreplace.app'), _chtml);
         }
-        if (channelResult.phones && channelResult.phones.length > 0 && window.FirestoreDB && typeof window.FirestoreDB.queueWhatsApp === 'function') {
-            var _cwa = '🔴 👑 *Convite de co-organização*\n\n' + (templateData.inviterName || templateData.fromName || 'O organizador') + ' convidou você pra co-organizar' + (templateData.tournamentName ? ' ' + templateData.tournamentName : '') + '.\n\n✅ Aceitar: ' + _cacc + '\n❌ Recusar: ' + _crej;
-            window.FirestoreDB.queueWhatsApp(channelResult.phones, _cwa);
-        }
+        // v1.1.30: idem pair_invite — WhatsApp vai por template (1 botão → torneio);
+        // os botões Aceitar/Recusar diretos seguem no e-mail.
+        _waSendTemplate(channelResult, 'cohost_invite', templateData);
         return; // não cai no digest
     }
     // ── Email ──
@@ -426,25 +507,25 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
         var _waPol = (typeof window._waPolicy === 'function') ? window._waPolicy(templateType) : 'imediato';
         if (_waPol !== 'nenhum') {
             var waMsg = templateData.message || templateData.tournamentName || 'Notificação do scoreplace.app';
-            var _waCat = (window.NOTIF_CATALOG && window.NOTIF_CATALOG[templateType]) || {};
-            var _waLvl = _waCat.level || 'all';
-            var _waEmoji = _waLvl === 'fundamental' ? '🔴' : (_waLvl === 'important' ? '🟠' : '🟢');
             var _waCta = window._notifCta(templateType, templateData);
             if (_waPol === 'agrupado') {
-                // Vira 1 linha do resumo de 1h — sem emoji de nível nem CTA por item
-                // (o digest põe UM link comum no fim se todos forem do mesmo torneio).
+                // Vira 1 linha do resumo de 24h (v1.1.30) — o flush monta o template
+                // sp_inscricoes_resumo juntando as linhas do mesmo telefone.
                 if (window.FirestoreDB && typeof window.FirestoreDB.queueWhatsAppDigest === 'function') {
+                    // names[] casa por índice com phones[] (mesma ordem em ambos os
+                    // caminhos que montam channelResult).
+                    var _dNames = (channelResult.waRecipients && channelResult.waRecipients.length)
+                        ? channelResult.waRecipients.map(function (r) { return r.name || ''; })
+                        : [];
                     window.FirestoreDB.queueWhatsAppDigest(channelResult.phones, waMsg, {
-                        tournamentUrl: (_waCta && _waCta.url) || templateData.tournamentUrl || ''
+                        tournamentUrl: (_waCta && _waCta.url) || templateData.tournamentUrl || '',
+                        tournamentName: templateData.tournamentName || '',
+                        names: _dNames
                     });
                 }
             } else {
-                // imediato: emoji de importância + CTA por mensagem (como antes)
-                waMsg = _waEmoji + ' ' + waMsg;
-                if (_waCta && _waCta.url) waMsg += '\n\n👉 ' + _waCta.label + ': ' + _waCta.url;
-                if (window.FirestoreDB && typeof window.FirestoreDB.queueWhatsApp === 'function') {
-                    window.FirestoreDB.queueWhatsApp(channelResult.phones, waMsg);
-                }
+                // imediato: 1 template aprovado, params personalizados por pessoa.
+                _waSendTemplate(channelResult, templateType, templateData);
             }
         }
     }
