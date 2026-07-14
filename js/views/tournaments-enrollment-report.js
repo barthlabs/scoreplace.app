@@ -1719,6 +1719,37 @@
     targets.sort(function (a, b) { return _lzStaleness(b) - _lzStaleness(a); });
     return { targets: targets, sobram: 0 };
   };
+  // Extensão ausente/velha → DIÁLOGO COM BOTÃO QUE BAIXA, não um toast de texto.
+  //
+  // O organizador NÃO passa pelo onboarding do letzplay (#importar-letzplay) — aquilo é o
+  // fluxo de quem importa o PRÓPRIO histórico. Ele vive na Análise de Inscritos, e aqui o
+  // gate mandava "baixe a v1.38 em scoreplace.app/..." num toast: texto que some, não
+  // clica, e manda o cara copiar URL na mão. O zip existia, servido, e mesmo assim não
+  // havia como chegar nele a partir da tela onde o bloqueio acontece.
+  // Sem versão na loja não há auto-update, então o download TEM que estar aqui.
+  function _lzExtDialog(versaoAtual) {
+    var url = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    var titulo = versaoAtual ? ('🧩 Sua extensão é a v' + versaoAtual) : '🧩 Extensão não encontrada';
+    var corpo = versaoAtual
+      ? 'A busca precisa da <b>v' + _LZ_MIN_EXT + '</b>. A v' + versaoAtual + ' desiste quando o letzplay limita o acesso e conclui a busca <b>sem trazer os jogos</b> — sem erro nenhum.'
+      : 'Não achei a extensão do scoreplace neste navegador. É ela que lê o letzplay dentro da sua sessão logada.';
+    corpo += '<br><br><b>Instalar:</b><br>' +
+      '1. Baixe o zip e <b>descompacte</b><br>' +
+      '2. Abra <code>chrome://extensions</code> → ligue <b>Modo do desenvolvedor</b><br>' +
+      '3. <b>Carregar sem compactação</b> → escolha a pasta que saiu do zip' +
+      (versaoAtual ? ' (e remova a v' + versaoAtual + ')' : '') + '<br>' +
+      '4. Recarregue esta página';
+    if (typeof window.showConfirmDialog !== 'function' || !url) {
+      _toastErr(titulo + ' — a busca precisa da v' + _LZ_MIN_EXT + '.');
+      return;
+    }
+    window.showConfirmDialog(titulo, corpo, function () {
+      var a = document.createElement('a');
+      a.href = url; a.setAttribute('download', '');
+      document.body.appendChild(a); a.click(); a.remove();
+    }, null, { confirmText: '⬇️ Baixar a v' + _LZ_MIN_EXT, cancelText: 'Agora não', type: 'warning' });
+  }
+
   // Quanto tempo a busca vai levar, em texto — MOSTRADO ANTES de começar. Um job de 3h
   // que arranca sem avisar é uma emboscada; avisado, é uma escolha.
   function _lzEtaLabel(n, mode) {
@@ -1755,7 +1786,7 @@
         'Pode deixar rodando e usar o app normalmente. Dá pra <b>interromper a qualquer momento</b> — cada pessoa é salva assim que fica pronta, então nada do que já veio se perde.\n\n' +
         'Começo pelos mais desatualizados.',
         function () { _lzRunScan(mode, targets); },
-        null, 'Buscar (' + _eta + ')', 'Agora não'
+        null, { confirmText: 'Buscar (' + _eta + ')', cancelText: 'Agora não', type: 'info' }
       );
       return;
     }
@@ -1909,15 +1940,13 @@
     ping();
     setTimeout(function () {
       if (done || started) return;
-      var reload = 'Baixe a v' + _LZ_MIN_EXT + ' em scoreplace.app' + (typeof window._spExtZipUrl === 'function' ? window._spExtZipUrl() : '') +
-        ', carregue em chrome://extensions, recarregue a página e tente de novo.';
-      if (!versions.length) { cleanup(); _toastErr('A extensão não respondeu. ' + reload); return; }
+      if (!versions.length) { cleanup(); _lzExtDialog(null); return; }
       var best = versions.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
       // BLOQUEIA versão velha — não avisa e deixa passar. Em 14/jul/2026 o mínimo estava
       // congelado em '1.25' enquanto a extensão ia na 1.36: a 1.35 passou no gate e gravou
       // ZERO jogos para 4 inscritos, reportando "busca concluída". Uma extensão defasada
       // não é um detalhe cosmético — ela silenciosamente não traz o dado.
-      if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _toastErr('Sua extensão está na v' + best + ' e a busca precisa da v' + _LZ_MIN_EXT + ' (a antiga desiste quando o letzplay limita e não traz os jogos). ' + reload); return; }
+      if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
       started = true;
       setProg({ sub: 'preparando ' + total + (total === 1 ? ' inscrito' : ' inscritos'), pct: 3 });
       window.postMessage({ __sp_lp: 'run-org-scan', targets: targets, tournamentId: ctx.tId, mode: mode }, window.location.origin);
