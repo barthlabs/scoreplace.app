@@ -247,6 +247,38 @@ service cloud.firestore {
       }
     }
 
+    // ─── Histórico letzplay: 1 doc por COMPETIÇÃO, 1 doc por PARTIDA ──────────
+    // letzplayTournaments/{compId}/matches/{gid} — mesmo molde dos nossos jogos
+    // (tournaments/{id}/results/{matchId}), que é como o letzplay também organiza.
+    //
+    // POR QUE NÃO É UM DOC POR USUÁRIO: uma partida do letzplay tem 4 pessoas, então ela
+    // é importada até 4 vezes (uma por perspectiva). Como doc compartilhado, o mesmo jogo
+    // vira UM doc (o gid é neutro de perspectiva — ver js/letzplay-model.js) e importar
+    // uma pessoa já preenche o pedaço dos parceiros/adversários. Como doc por usuário,
+    // seria o mesmo jogo repetido 4x, com o placar invertido em metade das cópias.
+    //
+    // Dado é PÚBLICO no letzplay (qualquer um lê o perfil de qualquer um sem login), então
+    // leitura/escrita por qualquer authed — mesma política de letzplayScans. A whitelist
+    // de chaves é o que impede um cliente de pendurar campo arbitrário.
+    //
+    // A leitura do histórico de alguém é collectionGroup('matches') com
+    // where('players','array-contains', handle) — o mesmo padrão que `results` usa pra ler
+    // os jogos de um uid sem carregar o torneio. Por isso `allow read` NÃO faz get() no
+    // pai: um get() por doc tornaria a listagem cara.
+    match /letzplayTournaments/{compId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasOnly(['compId', 'club', 'kind', 'letzId', 'name', 'categoryRaw', 'sport', 'standings', 'logo', 'updatedAt', 'seenFrom']);
+      allow delete: if false;   // histórico é acervo: ninguém apaga pelo cliente
+
+      match /matches/{gid} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null
+          && request.resource.data.keys().hasOnly(['gid', 'comp', 'club', 'kind', 'sport', 'date', 'dateMs', 'round', 'teams', 'winner', 'players', 'updatedAt', 'seenFrom']);
+        allow delete: if false;
+      }
+    }
+
     // ─── Scan público letzplay POR PESSOA (uid), global e reutilizável ─────────
     // letzplayScans/{uid} — o organizador busca o PERFIL PÚBLICO letzplay do inscrito
     // (categoria/nível/totais) via extensão e grava aqui, keyed por uid. Puxou uma vez,

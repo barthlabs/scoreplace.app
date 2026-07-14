@@ -102,6 +102,18 @@
       .then(function () {
         cu.letzplayImport = imp;
         if (!cu.letzplayHandle) cu.letzplayHandle = imp.handle;
+        // ESCRITA DUPLA (transição): além do letzplayImport (formato antigo, 1 doc por
+        // usuário), grava no canônico — 1 doc por competição, 1 por partida. Os dois
+        // convivem até os leitores migrarem e o acervo antigo ser backfillado; o beta não
+        // permite trocar schema debaixo de dado existente. Best-effort de propósito: se a
+        // escrita canônica falhar, o import do usuário NÃO pode falhar junto.
+        if (typeof window._lzHistoryWrite === 'function') {
+          window._lzHistoryWrite(imp, imp.handle).then(function (r) {
+            window._log && window._log('[lz história] autoimport:', JSON.stringify(r));
+          }).catch(function (e) {
+            window._log && window._log('[lz história] autoimport falhou (não bloqueia):', (e && e.message) || e);
+          });
+        }
         if (typeof showNotification === 'function') showNotification(
           unchanged ? '🎾 Nada novo no letzplay' : '🎾 Histórico importado',
           unchanged ? ('@' + imp.handle + ' — sem novidades; só atualizei a data.') : ('@' + imp.handle + ' — ' + gamesCount + ' jogos. Veja em 📊 Estatísticas → Histórico.'),

@@ -1951,7 +1951,19 @@
       }
       var doc = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, scannedByName: meName, tournamentId: String(tId), tournamentName: tName };
       if (gotFull) doc.fullImport = s.fullImport;
-      return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
+      var w = db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
+      // ESCRITA DUPLA (transição): o histórico também vai pro canônico — 1 doc por
+      // competição, 1 por partida, compartilhado. É aqui que o ganho aparece: a mesma
+      // partida trazida por 4 pessoas vira UM doc, e varrer alguém já preenche o pedaço
+      // dos parceiros/adversários dela. Best-effort: falhar aqui não pode derrubar o scan.
+      if (gotFull && typeof window._lzHistoryWrite === 'function') {
+        w = w.then(function () {
+          return window._lzHistoryWrite(s.fullImport, s.handle)
+            .then(function (r) { window._log && window._log('[lz história] scan', s.handle + ':', JSON.stringify(r)); })
+            .catch(function (e) { window._log && window._log('[lz história] scan falhou (não bloqueia):', (e && e.message) || e); });
+        });
+      }
+      return w;
     })).then(function () { return ok.length; });
   }
   function _saveScansAndReload(tId, scans, onFail) {

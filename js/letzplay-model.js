@@ -102,7 +102,17 @@
     var placares = t.map(function (x) { return x.score == null ? '' : x.score; }).join('-');
     var times = t.map(function (x) { return x.handles.join(','); }).join('~');
     var club = _low(g && g.club) || 'sem-clube';
-    return [club, dateKey(g && g.date), times, placares].join('|');
+    return _docId([club, dateKey(g && g.date), times, placares].join('|'));
+  }
+  // O gid VIRA id de documento no Firestore, que proíbe '/' e o padrão '__x__', e limita
+  // a 1500 bytes. Um handle com barra derrubaria a escrita inteira; o corte protege de
+  // um caso patológico (chave gigante) sem afetar nada real (~80 chars no pior caso
+  // medido). Mantemos a chave LEGÍVEL de propósito — foi lendo o id cru que a divergência
+  // de compId apareceu; um hash opaco teria escondido.
+  function _docId(s) {
+    var out = String(s).replace(/\//g, '_');
+    if (/^__.*__$/.test(out)) out = 'x' + out;
+    return out.length > 1400 ? out.slice(0, 1400) : out;
   }
 
   // Doc canônico da PARTIDA — neutro de perspectiva.
@@ -144,10 +154,54 @@
     };
   }
 
+  // A partida SABE a que competição pertence? Só o id do letzplay serve. Sem ele, o
+  // compId cai num balde de categoria ("paineiras-bt__cmista-d") que junta ANOS de
+  // rankings diferentes — um torneio que não existe.
+  function hasRealComp(g) {
+    return !!((g && g.tourneyId != null && _s(g.tourneyId)) || (g && g.rankingId != null && _s(g.rankingId)));
+  }
+
+  // Converte um letzplayImport CRU (perspectiva de meHandle) nos docs canônicos.
+  //
+  // REGRA DURA: partida sem id de competição NÃO é gravável. Motivo: o doc da partida
+  // pendura no doc da competição, então o CAMINHO depende do compId — e é justamente o
+  // campo cuja captura variou por versão (o autoimport do Rodrigo, 14/jul 04:13, tem
+  // 81/81; o scan da Kelly, 13/jul 14:05, tem 0/152, porque a captura por referência só
+  // entrou às 00:25 de 14/jul). Gravar num balde de categoria colocaria o MESMO jogo em
+  // dois caminhos diferentes conforme a idade do import — dedup furada e torneio
+  // inventado. Pular e CONTAR é honesto: se algum caminho parar de capturar id, aparece
+  // em `skipped` na hora, em vez de virar torneio falso em silêncio.
+  function historyDocs(imp, meHandle) {
+    var games = (imp && imp.games) || [];
+    var me = meHandle || (imp && imp.handle);
+    var comps = {}, matches = {}, skipped = 0;
+    games.forEach(function (g) {
+      if (!hasRealComp(g)) { skipped++; return; }
+      var m = toMatchDoc(g, me);
+      if (!m.dateMs || m.players.length < 2) { skipped++; return; }
+      matches[m.gid] = m;                       // mesmo gid 2x no mesmo import → 1 doc
+      var c = toCompDoc(g);
+      var prev = comps[c.compId];
+      // Melhor conhecido vence: um import que trouxe o NOME real do torneio completa o
+      // doc de quem só tinha a categoria.
+      comps[c.compId] = prev ? {
+        compId: c.compId, club: c.club || prev.club, kind: c.kind || prev.kind,
+        letzId: c.letzId != null ? c.letzId : prev.letzId,
+        name: c.name || prev.name, categoryRaw: c.categoryRaw || prev.categoryRaw,
+        sport: c.sport || prev.sport
+      } : c;
+    });
+    return {
+      comps: Object.keys(comps).map(function (k) { return comps[k]; }),
+      matches: Object.keys(matches).map(function (k) { return matches[k]; }),
+      skipped: skipped
+    };
+  }
+
   var API = {
     dateKey: dateKey, dateMs: dateMs,
-    compId: compId, matchId: matchId,
-    toMatchDoc: toMatchDoc, toCompDoc: toCompDoc
+    compId: compId, matchId: matchId, hasRealComp: hasRealComp,
+    toMatchDoc: toMatchDoc, toCompDoc: toCompDoc, historyDocs: historyDocs
   };
   root._spLzModel = API;
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
