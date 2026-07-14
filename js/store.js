@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.1.15';
+window.SCOREPLACE_VERSION = '1.1.16';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
@@ -992,8 +992,12 @@ window._devWhatsAppBtnHtml = function (opts) {
       // não precisa do authCache para persistir.
       'scoreplace_casual_history',// stats casuais legacy v1
       'scoreplace_casual_history_v2', // stats casuais v2 (era esse o culpado)
-      'scoreplace_casual_last',   // último casual restored
-      'scoreplace_casual_prefs',  // prefs casual
+      // scoreplace_casual_last e scoreplace_casual_prefs REMOVIDOS daqui —
+      // são PREFERÊNCIAS (última modalidade + config de placar casual), não
+      // stats. Igual gsm_prefs/theme/lang, devem sobreviver ao cleanup e ao
+      // wipe intermitente do iOS PWA. Apagá-los fazia a partida casual "esquecer"
+      // a última modalidade e cair no primeiro esporte preferido (ex: pickleball)
+      // — enquanto a "ida planejada" (scoreplace_planmem_*, nunca apagado) lembrava.
       'scoreplace_deleted_ids',   // tombstones de ids deletados
       'scoreplace_analytics_open' // estado de details aberto
     ];

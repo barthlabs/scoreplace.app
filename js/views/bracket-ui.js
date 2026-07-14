@@ -12065,6 +12065,13 @@ window._openCasualMatch = function(restoreOpts) {
 
   // Start the match (directly opens live scoring)
   window._casualStart = async function() {
+    // Persiste a modalidade + dupla/individual escolhidos AO INICIAR — não só no
+    // clique do seletor. Assim, se o usuário aceitar o esporte que já veio
+    // pré-selecionado (sem tocar no botão), essa escolha também fica lembrada
+    // pra próxima partida. A config de placar (sets/games/contagem) já é salva
+    // por esporte em scoreplace_casual_prefs quando alterada. Espelha o comportamento
+    // da "ida planejada", que grava a config no confirmar.
+    _persistLastCasualChoice();
     // Stop lobby refresh
     if (_setupRefreshInterval) { clearInterval(_setupRefreshInterval); _setupRefreshInterval = null; }
     var players = _buildPlayers();

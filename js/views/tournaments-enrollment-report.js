@@ -1110,7 +1110,11 @@
   };
 
   // ─── Verificação letzplay (escopo do módulo — usada pela matriz) ─────
-  var _LZ_COL = { white: '#8592a6', green: '#2dd4a0', blue: '#38bdf8', yellow: '#f0b445', red: '#f26a6a' };
+  // white = NÃO AUTORIZOU (branco puro) · violet = autorizou mas ainda não verificado.
+  // O estado "sem verificação" (cinza) foi removido: agora todo nome é ou verificado
+  // (verde/amarelo/azul/vermelho), ou autorizado-aguardando (violeta), ou não-autorizou
+  // (branco). Ver _erApplyLzToRows.
+  var _LZ_COL = { white: '#f3f4f6', violet: '#a78bfa', green: '#2dd4a0', blue: '#38bdf8', yellow: '#f0b445', red: '#f26a6a' };
   var _LTR = ['A', 'B', 'C', 'D', 'FUN'];
   // DESEMPENHO manda — NÃO a banda do ranking. Estar ranqueado numa banda acima
   // (ex: clube joga a pessoa numa C/B) NÃO é sinal de subir; só DOMINAR é:
@@ -1157,7 +1161,11 @@
     profileMap = profileMap || {}; scanMap = scanMap || {};
     (rows || []).forEach(function (r) {
       r._lzColor = null; r._lzSkill = null; r._lzSrc = null;
+      r._lzVerified = false; r._lzAuthorized = false;
       var prof = r.uid && profileMap[r.uid];
+      // Autorizou = tem letzplay indicado no perfil (@handle) E ligou o toggle
+      // "Autorizar importação". É o que separa violeta (autorizou) de branco (não).
+      r._lzAuthorized = !!(prof && prof.letzplayHandle && prof.letzplayConsent === true);
       var li = prof && prof.letzplayImport;
       var sc = (r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
       if (li) {
@@ -1165,14 +1173,21 @@
         var champCats = (li.tournaments || []).filter(function (x) { return x.title; }).map(function (x) { return x.categoryRaw; });
         var ev = _lzEvidence(champCats, li.rankings || [], [oc ? oc.categoryRaw : '', band || '']);
         var v = _lzVerdict(_declRankFrom(r.effectiveSkills), ev);
-        r._lzColor = _LZ_COL[v.key]; r._lzSrc = '🎾';
+        r._lzSrc = '🎾';
         r._lzSkill = (oc && oc.skill) ? oc.skill : (v.apurada != null ? _LTR[v.apurada] : null);
+        // Veredito 'white' = importado mas sem nível declarado pra comparar → não é
+        // "verificado" de fato; cai pro estado autorizado (violeta) abaixo.
+        if (v.key !== 'white') { r._lzColor = _LZ_COL[v.key]; r._lzVerified = true; }
       } else if (sc) {
         var ev2 = _lzEvidence(sc.champions || [], sc.rankings || [], [sc.rankingCategory].concat(sc.allCategories || []));
         var v2 = _lzVerdict(_declRankFrom(r.effectiveSkills), ev2);
-        r._lzColor = _LZ_COL[v2.key]; r._lzSrc = '🔎';
+        r._lzSrc = '🔎';
         r._lzSkill = sc.profileSkill || sc.skill || (v2.apurada != null ? _LTR[v2.apurada] : null);
+        if (v2.key !== 'white') { r._lzColor = _LZ_COL[v2.key]; r._lzVerified = true; }
       }
+      // Cor final do nome (o cinza "sem verificação" SAIU): veredito verificado >
+      // autorizou-mas-ainda-não-verificado (violeta) > não-autorizou (branco).
+      if (!r._lzColor) r._lzColor = r._lzAuthorized ? _LZ_COL.violet : _LZ_COL.white;
     });
   }
 
@@ -1262,7 +1277,8 @@
     // Card do atleta — tamanho padrão (min 150px), nome com ellipsis.
     function chip(r) {
       var pe = _pendingEdits[r.order] || {}; var edited = Object.keys(pe).length > 0;
-      // não verificado = MESMO cinza da legenda "sem verificação" (_LZ_COL.white).
+      // _lzColor já vem resolvido por _erApplyLzToRows: veredito verificado, ou
+      // violeta (autorizou), ou branco (não autorizou). Fallback branco por segurança.
       var nameCol = edited ? '#f59e0b' : (r._lzColor || _LZ_COL.white);
       var border = edited ? 'rgba(245,158,11,0.55)' : (r._lzColor ? (r._lzColor + '55') : 'var(--border-color)');
       return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')" ' +
@@ -1428,7 +1444,7 @@
     // Legenda (todos os rótulos) — código de cor da verificação.
     function leg(c, txt) { return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:' + c + ';"><span style="width:11px;height:11px;border-radius:50%;background:' + c + ';"></span>' + txt + '</span>'; }
     var legend = '<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;">' +
-      leg(_LZ_COL.red, 'deve subir') + leg(_LZ_COL.yellow, 'pode subir') + leg(_LZ_COL.blue, 'rebaixar') + leg(_LZ_COL.green, 'coerente') + leg(_LZ_COL.white, 'sem verificação') +
+      leg(_LZ_COL.red, 'deve subir') + leg(_LZ_COL.yellow, 'pode subir') + leg(_LZ_COL.blue, 'rebaixar') + leg(_LZ_COL.green, 'coerente') + leg(_LZ_COL.violet, 'autorizado') + leg(_LZ_COL.white, 'não autorizou') +
       '</div>';
     var hint = _isOrg ? '<div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no topo.</div>' : '';
     // Barra Cancelar/Salvar — STICKY no topo (abaixo do cabeçalho fixo), aparece só
