@@ -68,9 +68,11 @@
       name: x.name || '',
       club: x.club || '',
       sport: x.sport || '',
-      // id do torneio — usado pra casar a DATA pelos jogos DAQUELE torneio (não por
-      // categoria; senão "Masc D" jogada em 2 torneios pega a data do mais recente).
+      // id da competição — a REFERÊNCIA usada pra resolver nome/logo/classificação e casar a
+      // DATA pelos jogos DAQUELA competição (não por categoria). Torneio=tourneyId, ranking=rankingId.
       tourneyId: (x.tourneyId != null) ? x.tourneyId : null,
+      rankingId: (x.rankingId != null) ? x.rankingId : null,
+      logo: x.logo || null,
       categoryRaw: x.categoryRaw || '',
       gender: x.gender || null,
       ageBand: ageBandOf(x.categoryRaw, x.ageBand),
@@ -81,6 +83,9 @@
       wins: x.wins != null ? x.wins : null,
       losses: x.losses != null ? x.losses : null,
       winPct: x.winPct != null ? x.winPct : null,
+      // Classificação COMPLETA do torneio (todos os grupos + posições), gravada UMA VEZ
+      // aqui — resolvida por referência (club/tourneyId), nunca repetida nos jogos.
+      standings: Array.isArray(x.standings) ? x.standings : null,
       title: x.title === true
     };
   }
@@ -197,6 +202,7 @@
         // o Histórico/Estatísticas exibem tourneyName quando existe, senão a categoria.
         tourneyName: m.tourneyName || null,
         tourneyId: (m.tourneyId != null) ? m.tourneyId : null,
+        rankingId: (m.rankingId != null) ? m.rankingId : null,
         club: m.club || null,
         round: (m.round != null) ? m.round : null,
         year: (m.year != null) ? m.year : null,

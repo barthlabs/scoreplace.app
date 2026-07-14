@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.1.12';
+window.SCOREPLACE_VERSION = '1.1.14';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
@@ -191,25 +191,47 @@ window._formatDisplayName = function (fmt) {
 //   3) g.competition (categoria — fallback, ex: "Masculina D").
 // `imp` é o letzplayImport (pra achar o footprint). Rankings (não-oficiais) não têm nome
 // de torneio → sempre a categoria. Usado por Estatísticas, gráfico de forma e Histórico.
+// Índice canônico das COMPETIÇÕES do letzplay por REFERÊNCIA: torneio = `t/club/tourneyId`,
+// ranking = `r/club/rankingId`. Cada jogo guarda só o id (nunca o nome); o nome + logo +
+// classificação vivem UMA vez no footprint. Resolver SEMPRE pela referência — casar por
+// categoria+ano era frágil e é o que fazia "só alguns terem nome". Torneios E rankings têm
+// nome real (ex.: "Competitivo Fem B | 2026 2a Etapa"). Retorna a entrada do footprint ou null.
+function _spBuildCompIdx(imp) {
+  var idx = imp.__spCompIdx;
+  if (!idx) {
+    idx = {};
+    (imp.footprint || []).forEach(function (f) {
+      if (!f) return;
+      if (f.tourneyId != null) { var kt = 't/' + (f.club || '') + '/' + f.tourneyId; if (!idx[kt]) idx[kt] = f; }
+      if (f.rankingId != null) { var kr = 'r/' + (f.club || '') + '/' + f.rankingId; if (!idx[kr]) idx[kr] = f; }
+    });
+    try { Object.defineProperty(imp, '__spCompIdx', { value: idx, enumerable: false, configurable: true }); }
+    catch (e) { imp.__spCompIdx = idx; }
+  }
+  return idx;
+}
+// Footprint de um JOGO (torneio via tourneyId, ranking via rankingId) ou null.
+window._spCompByRef = function (imp, g) {
+  if (!imp || !g) return null;
+  var idx = _spBuildCompIdx(imp);
+  if (g.official && g.tourneyId != null) return idx['t/' + (g.club || '') + '/' + g.tourneyId] || null;
+  if (!g.official && g.rankingId != null) return idx['r/' + (g.club || '') + '/' + g.rankingId] || null;
+  return null;
+};
+// Footprint por string de referência ('t/club/id' ou 'r/club/id') — usado pela tela de detalhe.
+window._spCompByRefStr = function (imp, ref) {
+  if (!imp || !ref) return null;
+  return _spBuildCompIdx(imp)[ref] || null;
+};
+
 window._spGameComp = function (imp, g) {
   if (!g) return '';
+  // 1) resolve pela REFERÊNCIA (torneio: tourneyId; ranking: rankingId) — fonte de verdade.
+  var f = window._spCompByRef(imp, g);
+  if (f && f.name && f.name !== f.categoryRaw) return f.name;
+  // 2) fallback pra imports ANTIGOS que denormalizavam o nome no jogo; senão a categoria.
   if (g.tourneyName) return g.tourneyName;
-  if (!imp || !g.official) return g.competition || '';
-  var map = imp.__spCompNameMap;
-  if (!map) {
-    map = {};
-    (imp.footprint || []).forEach(function (f) {
-      if (!f || !f.official) return;
-      var nm = (f.name && f.name !== f.categoryRaw) ? f.name : null;
-      if (!nm) return;
-      var k = (f.club || '') + '|' + (f.categoryRaw || '') + '|' + (f.year != null ? f.year : '');
-      if (!map[k]) map[k] = nm;
-    });
-    try { Object.defineProperty(imp, '__spCompNameMap', { value: map, enumerable: false, configurable: true }); }
-    catch (e) { imp.__spCompNameMap = map; }
-  }
-  var key = (g.club || '') + '|' + (g.competition || '') + '|' + (g.year != null ? g.year : '');
-  return map[key] || g.competition || '';
+  return g.competition || '';
 };
 
 // Rótulo do TIPO do torneio pra EXIBIÇÃO (cards, pílulas, títulos, badges). Rei/Rainha é MODO

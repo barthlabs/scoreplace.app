@@ -5,6 +5,9 @@
   },
   "hosting": {
     "public": ".",
+    "predeploy": [
+      "npm run prerender"
+    ],
     "ignore": [
       "firebase.json",
       "**/node_modules/**",

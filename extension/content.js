@@ -61,42 +61,161 @@
       return t || null;
     } catch (e) { return null; }
   }
-  // Preenche o nome REAL do torneio — tanto em raw.tournaments[].name (footprint) quanto
-  // em CADA jogo raw.matches[].tourneyName (o que alimenta o Histórico e as Estatísticas).
-  // Busca 1x por torneio (cacheia por club/tourneyId). Best-effort: se falhar/404, mantém
-  // a categoria (sem regressão). Retorna {total, resolved} pra observabilidade do import.
+
+  function _rowNum(txt, re) { var m = txt.match(re); return m ? +m[1] : null; }
+
+  // Classificação COMPLETA (todos os grupos + posições) da MESMA página do torneio —
+  // server-rendered, vem no HTML CRU (verificado ao vivo jul/2026: `.table-group` +
+  // "Posição" + nomes já estão no fetch, sem rodar JS). Cada `.table-group` é um grupo;
+  // cada linha traz posição + nomes da dupla + handles + V/D. Guardada UMA vez por
+  // torneio (raw.tournaments[].standings → footprint[].standings), NUNCA repetida nos
+  // jogos. Retorna [{ group, rows:[{ pos, players[], handles[], wins, losses }] }] ou null.
+  function tourneyStandingsFromDoc(doc) {
+    try {
+      var groups = [];
+      var tgs = doc.querySelectorAll('.table-group');
+      for (var i = 0; i < tgs.length; i++) {
+        var tg = tgs[i];
+        var titleEl = tg.querySelector('.table-field-title b');
+        var title = titleEl ? (titleEl.textContent || '').replace(/\s+/g, ' ').trim() : ('Grupo ' + (i + 1));
+        var rows = [];
+        var kids = tg.children;
+        for (var k = 0; k < kids.length; k++) {
+          var row = kids[k];
+          if (!row.classList || !row.classList.contains('row')) continue;
+          var nmEl = row.querySelector('.break-line');
+          if (!nmEl) continue;   // linha de cabeçalho (sem nomes)
+          var players = (nmEl.innerHTML || '').split(/<br\s*\/?>/i)
+            .map(function (s) { return s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); })
+            .filter(Boolean);
+          var handles = [].slice.call(row.querySelectorAll('a[href^="/"]'))
+            .map(function (a) { return a.getAttribute('href'); })
+            .filter(function (h) { return /^\/[A-Za-z0-9_]+$/.test(h); })
+            .map(function (h) { return h.slice(1); });
+          var posM = ((row.querySelector('.points') || {}).textContent || '').match(/(\d+)\s*º/);
+          var txt = (row.textContent || '').replace(/\s+/g, ' ');
+          rows.push({
+            pos: posM ? +posM[1] : null,
+            players: players,
+            handles: handles,
+            wins: _rowNum(txt, /(\d+)\s*Vit/i),
+            losses: _rowNum(txt, /(\d+)\s*Derrota/i)
+          });
+        }
+        if (rows.length) groups.push({ group: title, rows: rows });
+      }
+      return groups.length ? groups : null;
+    } catch (e) { return null; }
+  }
+
+  // Logo do torneio/ranking: imagem (cloudinary) do avatar ao lado do título
+  // (`.title.with-avatar`). NÃO é o og:image (esse é o logo genérico da plataforma) nem
+  // o logo do clube (esse é o 1º cloudinary do doc, no nav). Sobe até 4 ancestrais do
+  // título procurando a 1ª <img cloudinary> — verificado ao vivo jul/2026.
+  function tourneyLogoFromDoc(doc) {
+    try {
+      var tw = doc.querySelector('.title.with-avatar');
+      if (!tw) return null;
+      var p = tw;
+      for (var up = 0; up < 4 && p; up++) {
+        var img = p.querySelector('img[src*="cloudinary"]');
+        if (img) { var s = img.getAttribute('src'); if (s) return s; }
+        p = p.parentElement;
+      }
+      return null;
+    } catch (e) { return null; }
+  }
+
+  // Classificação de RANKING (`.table-ranking`, estrutura diferente do torneio) — jogadores
+  // (individual ou dupla) ordenados por PONTOS. A posição É a ordem na tabela (a página já
+  // vem ordenada). Retorna [{ group:'Classificação', ranking:true, rows:[{pos,players,handles,points,inactive}] }].
+  function rankingStandingsFromDoc(doc) {
+    try {
+      var tr = doc.querySelector('.table-ranking');
+      if (!tr) return null;
+      var rows = [], pos = 0;
+      var kids = tr.children;
+      for (var k = 0; k < kids.length; k++) {
+        var row = kids[k];
+        if (!row.classList || !row.classList.contains('row')) continue;
+        var link = row.querySelector('a[href^="/"]');
+        if (!link) continue;   // linha de cabeçalho (sem jogador)
+        var players;
+        var nmEl = row.querySelector('.break-line');
+        if (nmEl) {
+          players = (nmEl.innerHTML || '').split(/<br\s*\/?>/i)
+            .map(function (s) { return s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); })
+            .filter(function (s) { return s && !/^(Inativo|Ativo)$/i.test(s); });
+        }
+        if (!players || !players.length) {
+          players = [(link.textContent || '').replace(/\s+/g, ' ').trim()].filter(Boolean);
+        }
+        var handles = [].slice.call(row.querySelectorAll('a[href^="/"]'))
+          .map(function (a) { return a.getAttribute('href'); })
+          .filter(function (h) { return /^\/[A-Za-z0-9_]+$/.test(h); })
+          .map(function (h) { return h.slice(1); });
+        var ptsM = ((row.querySelector('.points') || {}).textContent || '').match(/(\d+)/);
+        pos++;
+        rows.push({
+          pos: pos,
+          players: players,
+          handles: handles,
+          points: ptsM ? +ptsM[1] : null,
+          inactive: /Inativo/i.test(row.textContent || '')
+        });
+      }
+      return rows.length ? [{ group: 'Classificação', ranking: true, rows: rows }] : null;
+    } catch (e) { return null; }
+  }
+  // Preenche NOME REAL + CLASSIFICAÇÃO + LOGO de cada TORNEIO e cada RANKING, gravados UMA
+  // VEZ por competição em raw.tournaments[]/raw.rankings[] (→ footprint[].name/.standings/.logo).
+  // Cada jogo guarda só a REFERÊNCIA (club + tourneyId/rankingId) — o app resolve por
+  // referência via window._spGameComp (nunca repetimos o nome em cada doc de partida). 1 fetch
+  // por competição (nome + classificação + logo saem do MESMO fetch — zero requisição extra).
+  // Torneio: /{club}/tournaments/{id} (.table-group). Ranking: /{club}/rankings/{id}
+  // (.table-ranking). Best-effort: se falhar/404, mantém a categoria. Retorna {total, resolved}.
   async function fillTourneyNames(raw) {
-    // Lista ÚNICA de torneios (club/tourneyId) — várias categorias do mesmo torneio não
-    // devem ser buscadas/contadas 2x.
     var seen = {}, uniq = [];
     (raw.tournaments || []).forEach(function (t) {
       if (!t.tourneyId || !t.club) return;
-      var id = t.club + '/' + t.tourneyId;
-      if (!seen[id]) { seen[id] = 1; uniq.push({ id: id, club: t.club, tourneyId: t.tourneyId, categoryRaw: t.categoryRaw || '' }); }
+      var id = 't/' + t.club + '/' + t.tourneyId;
+      if (!seen[id]) { seen[id] = 1; uniq.push({ id: id, type: 't', club: t.club, cid: t.tourneyId, categoryRaw: t.categoryRaw || '' }); }
     });
-    var cache = {}, resolved = 0, failed = [];
+    (raw.rankings || []).forEach(function (r) {
+      if (!r.rankingId || !r.club) return;
+      var id = 'r/' + r.club + '/' + r.rankingId;
+      if (!seen[id]) { seen[id] = 1; uniq.push({ id: id, type: 'r', club: r.club, cid: r.rankingId, categoryRaw: r.categoryRaw || '' }); }
+    });
+    var cache = {}, standCache = {}, logoCache = {}, resolved = 0, failed = [];
     for (var i = 0; i < uniq.length; i++) {
-      // Progresso da FASE DE NOMES (parte lenta, 1 fetch por torneio) — o app mostra
-      // "buscando nomes: i de N torneios" com a bolinha girando. Sem isso, depois dos
-      // jogos a tela parecia travada.
       post({ __sp_lp: 'import-progress', phase: 'names', done: i, total: uniq.length });
       var u = uniq[i];
       if (i > 0) await sleep(1500);   // espaça bem pra PEGAR TODOS (evita 403 na rajada)
       try {
-        var d = await bgFetchDoc('https://letzplay.me/' + u.club + '/tournaments/' + u.tourneyId);
+        var url = 'https://letzplay.me/' + u.club + '/' + (u.type === 't' ? 'tournaments' : 'rankings') + '/' + u.cid;
+        var d = await bgFetchDoc(url);
         var nm = tourneyNameFromDoc(d);
         cache[u.id] = nm || null;
+        standCache[u.id] = (u.type === 't') ? tourneyStandingsFromDoc(d) : rankingStandingsFromDoc(d);
+        logoCache[u.id] = tourneyLogoFromDoc(d);
         if (nm) { resolved++; } else { failed.push(u.categoryRaw || u.id); }
       } catch (e) { cache[u.id] = null; failed.push(u.categoryRaw || u.id); }
     }
     post({ __sp_lp: 'import-progress', phase: 'names', done: uniq.length, total: uniq.length });
-    // Aplica os nomes: no footprint (tournaments) E em cada jogo (matches) — sem os jogos,
-    // o Histórico/gráfico continuava mostrando só a categoria.
+    // Aplica UMA VEZ por competição (nome + classificação + logo). Jogos só guardam a referência.
     (raw.tournaments || []).forEach(function (t) {
-      if (t.tourneyId && t.club) { var n1 = cache[t.club + '/' + t.tourneyId]; if (n1) t.name = n1; }
+      if (!t.tourneyId || !t.club) return;
+      var k = 't/' + t.club + '/' + t.tourneyId;
+      if (cache[k]) t.name = cache[k];
+      if (standCache[k]) t.standings = standCache[k];
+      if (logoCache[k]) t.logo = logoCache[k];
     });
-    (raw.matches || []).forEach(function (m) {
-      if (m && m.tourneyId && m.club) { var n2 = cache[m.club + '/' + m.tourneyId]; if (n2) m.tourneyName = n2; }
+    (raw.rankings || []).forEach(function (r) {
+      if (!r.rankingId || !r.club) return;
+      var k = 'r/' + r.club + '/' + r.rankingId;
+      if (cache[k]) r.name = cache[k];
+      if (standCache[k]) r.standings = standCache[k];
+      if (logoCache[k]) r.logo = logoCache[k];
     });
     return { total: uniq.length, resolved: resolved, failed: failed };
   }

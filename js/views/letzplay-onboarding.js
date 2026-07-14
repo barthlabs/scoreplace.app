@@ -11,7 +11,7 @@
   // Versão mínima ACEITA da extensão = SEMPRE a atual (correções críticas de import só
   // existem na mais nova: URL /tournaments dos nomes, não-abrir-aba, data por torneio…).
   // Abaixo disso → pede atualização (não fica verde). Bumpar junto com EXT_VERSION.
-  var MIN_EXT_VERSION = '1.33';
+  var MIN_EXT_VERSION = '1.35';
   // URL da Chrome Web Store — null enquanto não publicado (mostra instruções manuais).
   var STORE_URL = null;
 
@@ -232,16 +232,24 @@
   // Entrada de importação: no DESKTOP = botão que dispara _spStartImport; no CELULAR
   // (nativo ou web mobile — Chrome do celular não instala extensão) = AVISO de que a
   // importação é feita no computador. Usado nas Estatísticas e no Histórico.
+  // Botão de importar/atualizar/reimportar DESABILITADO (cinza, não clicável) + aviso de
+  // que a importação do letzplay é só no desktop. Padrão único usado em TODOS os pontos
+  // (entrada de import, Reimportar do passo 3…) — o navegador do celular não instala extensão.
+  function _mobileImportBlocked(label, opts) {
+    opts = opts || {};
+    var cls = (opts.variant === 'solid') ? 'btn btn-sm' : 'btn btn-block';
+    var style = 'opacity:0.55;background:var(--bg-darker,#2a2f45);color:var(--text-muted,#94a3b8);border:1px solid var(--border-color,rgba(255,255,255,0.12));cursor:not-allowed;' + (opts.variant === 'solid' ? '' : 'margin-top:8px;');
+    var note = opts.shortNote
+      ? '<div style="font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-top:6px;">🖥️ Funciona só no <b>desktop</b> (o navegador do celular não instala extensão).</div>'
+      : '<div style="font-size:0.72rem;color:var(--text-muted,#94a3b8);line-height:1.5;margin-top:6px;text-align:center;">🖥️ A importação do letzplay é feita <b>no desktop</b> (Chrome/Edge/Brave) — o navegador do celular não instala extensão. Abra o scoreplace no computador, logado no letzplay.</div>';
+    return '<button type="button" disabled aria-disabled="true" class="' + cls + '" style="' + style + '">🎾 ' + _esc(label) + '</button>' + note;
+  }
   window._spImportEntry = function (opts) {
     opts = opts || {};
     var label = opts.label || 'Importar do letzplay';
     if (_isMobile()) {
-      // Não-desktop: botão CINZA/desabilitado + explicação abaixo. A importação
-      // precisa da extensão, que só existe no navegador do computador.
-      var _dCls = (opts.variant === 'solid') ? 'btn btn-sm' : 'btn btn-block';
-      var _dStyle = 'opacity:0.55;background:var(--bg-darker,#2a2f45);color:var(--text-muted,#94a3b8);border:1px solid var(--border-color,rgba(255,255,255,0.12));cursor:not-allowed;' + (opts.variant === 'solid' ? '' : 'margin-top:8px;');
-      return '<button type="button" disabled aria-disabled="true" class="' + _dCls + '" style="' + _dStyle + '">🎾 ' + _esc(label) + '</button>' +
-        '<div style="font-size:0.72rem;color:var(--text-muted,#94a3b8);line-height:1.5;margin-top:6px;text-align:center;">🖥️ A importação do letzplay é feita <b>no desktop</b> (Chrome/Edge/Brave) — o navegador do celular não instala extensão. Abra o scoreplace no computador, logado no letzplay.</div>';
+      // Não-desktop: botão CINZA/desabilitado + explicação abaixo (padrão único).
+      return _mobileImportBlocked(label, { variant: opts.variant });
     }
     if (opts.variant === 'solid') {
       return '<button type="button" onclick="window._spStartImport&&window._spStartImport()" class="btn btn-primary btn-sm">🎾 ' + _esc(label) + '</button>';
@@ -328,7 +336,9 @@
     var s3body;
     if (imported) {
       s3body = '<div style="color:#22c55e;font-weight:700;">✅ Importado — ' + games + ' jogos no seu perfil.</div>' +
-        '<button onclick="window._spStartImport&&window._spStartImport()" class="btn btn-outline btn-sm" style="margin-top:10px;">🔄 Reimportar</button>';
+        (_isMobile()
+          ? '<div style="margin-top:10px;">' + _mobileImportBlocked('Reimportar', { variant: 'solid', shortNote: true }) + '</div>'
+          : '<button onclick="window._spStartImport&&window._spStartImport()" class="btn btn-outline btn-sm" style="margin-top:10px;">🔄 Reimportar</button>');
     } else if (extOk) {
       s3body = 'Tudo pronto — importe com um clique (sem precisar clicar no ícone da extensão):' +
         '<div style="margin-top:10px;"><button onclick="window._spStartImport&&window._spStartImport()" class="btn btn-primary btn-shine">🎾 Importar agora</button></div>';
@@ -369,6 +379,21 @@
     var hdr = (typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({ href: '#dashboard', label: 'Voltar', middleHtml: '<span style="font-weight:700;">🎾 Importar do letzplay</span>' })
       : '';
+
+    // No CELULAR não dá pra importar (o navegador do celular não instala extensão) —
+    // então nem mostramos o passo a passo. Só a explicação de que é no desktop.
+    if (_isMobile()) {
+      if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+      container.innerHTML = hdr +
+        '<div style="max-width:560px;margin:0 auto;padding:6px 14px 40px;">' +
+          '<div style="background:var(--bg-card,#1e2235);border:1px solid rgba(245,158,11,0.35);border-radius:14px;padding:20px 16px;text-align:center;">' +
+            '<div style="font-size:2rem;margin-bottom:8px;">🖥️</div>' +
+            '<div style="font-size:1rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:8px;">A importação do letzplay é feita no desktop</div>' +
+            '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);line-height:1.55;">Ela usa uma extensão de navegador que lê seu histórico na sua própria sessão logada — e o navegador do celular não instala extensão.<br><br>Abra o <b>scoreplace no computador</b> (Chrome/Edge/Brave), logado no letzplay, e o passo a passo aparece aqui. Depois de importado, seus jogos aparecem no celular normalmente.</div>' +
+          '</div>' +
+        '</div>';
+      return;
+    }
 
     var intro = '<div style="max-width:640px;margin:0 auto;padding:6px 14px 40px;">' +
       '<div style="background:rgba(132,204,22,0.08);border:1px solid rgba(132,204,22,0.35);border-radius:14px;padding:14px;margin-bottom:14px;">' +

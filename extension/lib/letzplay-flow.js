@@ -47,7 +47,8 @@
       var key = (m.club || '') + '|' + (m.categoryRaw || '') + '|' + (m.rankingId || '') + '|' + (m.tourneyId || '');
       if (!bucket[key]) bucket[key] = {
         name: m.categoryRaw, club: m.club, sport: 'Beach Tennis', categoryRaw: m.categoryRaw,
-        year: m.year, status: 'done', wins: 0, losses: 0, tourneyId: m.tourneyId || null
+        year: m.year, status: 'done', wins: 0, losses: 0,
+        tourneyId: m.tourneyId || null, rankingId: m.rankingId || null
       };
       if (m.won) bucket[key].wins++; else if (m.won === false) bucket[key].losses++;
     });
