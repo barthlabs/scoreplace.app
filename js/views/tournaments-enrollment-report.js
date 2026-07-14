@@ -1174,6 +1174,18 @@
   // então a incompletude é AUTO-DECLARADA, não inferida. Medido em produção (14/jul):
   // os 4 inscritos declaravam torneios e capturaram menos do que declaram.
   // Sem total declarado (dado antigo) não dá pra afirmar completude → trata como incompleto.
+  // O AUTOIMPORT trouxe tudo? Agora dá pra AFIRMAR em vez de presumir: o import guarda
+  // `declaredGames` — quantos o letzplay declara na própria página ("81 Jogos • 36 Vit").
+  // 81 declarados e 81 guardados = completo. Sem o campo (import anterior à v1.39) caímos
+  // no antigo "se salvou, paginou tudo" — que era verdade só porque falhar não salvava;
+  // agora que salvamos parcial, presumir seria absolver dado pela metade.
+  function _lzImportComplete(li) {
+    if (!li) return false;
+    var n = (li.games || []).length;
+    if (li.declaredGames == null) return n > 0;          // legado: sem o número, confia no all-or-nothing
+    if (li.partialReason) return false;                   // ele mesmo diz que parou no meio
+    return n >= li.declaredGames;
+  }
   function _lzScanComplete(sc) {
     if (!sc) return false;
     var t = sc.totals || {};
@@ -1203,6 +1215,10 @@
         r._lzSkill = (oc && oc.skill) ? oc.skill : (v.apurada != null ? _LTR[v.apurada] : null);
         // Veredito 'white' = importado mas sem nível declarado pra comparar → não é
         // "verificado" de fato; cai pro estado autorizado (violeta) abaixo.
+        // Mesma regra do scan: VERDE (coerente) exige ter olhado TUDO. Com o histórico
+        // pela metade, "não achei título contra" é ausência de dado, não absolvição —
+        // e título é o que manda subir. Vermelho/amarelo seguem valendo: achar é prova.
+        if (v.key === 'green' && !_lzImportComplete(li)) v = { key: 'white', apurada: null };
         if (v.key !== 'white') { r._lzColor = _LZ_COL[v.key]; r._lzVerified = true; }
       } else if (sc) {
         var ev2 = _lzEvidence(sc.champions || [], sc.rankings || [], [sc.rankingCategory].concat(sc.allCategories || []));

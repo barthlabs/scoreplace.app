@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.38';
+  var EXT_VERSION = '1.39';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -268,17 +268,28 @@
     var doc1 = await bgFetchDoc(base);
     var all = X.extractMatchesFromDoc(doc1, handle);
     var maxPage = F.detectMaxPage(doc1);
-    for (var p = 2; p <= maxPage; p++) {
-      // avisa a CADA página: sem isto a busca fica minutos em silêncio e parece travada
-      if (onProg) onProg({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage });
-      var d = await bgFetchDoc(base + '?page=' + p);   // espaçamento: fila do background
-      all = all.concat(X.extractMatchesFromDoc(d, handle));
+    var total = F.parseTotalGames(doc1);   // quantos o letzplay DIZ que existem (ver runDirectImport)
+    // PARCIAL VALE MAIS QUE NADA: um erro na página 5 de 8 jogava fora as 4 primeiras.
+    // O doc canônico é keyed por gid → a próxima passada completa, não duplica.
+    var parcial = null;
+    try {
+      for (var p = 2; p <= maxPage; p++) {
+        // avisa a CADA página: sem isto a busca fica minutos em silêncio e parece travada
+        if (onProg) onProg({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage });
+        var d = await bgFetchDoc(base + '?page=' + p);   // espaçamento: fila do background
+        all = all.concat(X.extractMatchesFromDoc(d, handle));
+      }
+    } catch (errPag) {
+      if (!all.length) throw errPag;
+      parcial = (errPag && errPag.message) || 'paginação interrompida';
     }
     if (!all.length) return null;
-    if (onProg) onProg({ phase: 'jogos', note: all.length + ' jogos lidos' });
+    if (onProg) onProg({ phase: 'jogos', note: all.length + (total ? ' de ' + total : '') + ' jogos lidos' });
     var raw = F.buildRaw(handle, all);
     try { await fillTourneyNames(raw, onProg); } catch (e) {}
     var imp = I.normalize(raw, { importedAt: new Date().toISOString() });
+    imp.declaredGames = (total != null) ? total : null;
+    if (parcial) imp.partialReason = String(parcial).slice(0, 120);
     var v = I.validate(imp);
     return (v && v.valid) ? imp : null;
   }
@@ -295,19 +306,39 @@
       var me = F.detectMe(doc1);
       if (!me) { post({ __sp_lp: 'import-result', ok: false, error: 'sem-jogos' }); return; }
       var maxPage = F.detectMaxPage(doc1);
+      // O PRIMEIRO DADO É QUANTOS JOGOS EXISTEM. O letzplay declara na própria página
+      // ("81 Jogos • 36 Vit"), num fetch que já estamos fazendo. Guardado em
+      // `declaredGames`, ele resolve três coisas de uma vez:
+      //   • PROVA DE COMPLETUDE: 81 declarados e 81 guardados = pronto, nada a inferir;
+      //   • NOVIDADE BARATA: uma semana depois lê 84 → faltam 3, busca só o começo da
+      //     lista (o letzplay entrega o mais recente primeiro) em vez de repaginar tudo;
+      //   • critério do VERDE (coerente) sem chute — ver _lzScanComplete no app.
+      // Antes ele era lido e JOGADO FORA: só alimentava a barra de progresso.
       var total = F.parseTotalGames(doc1);
       var all = X.extractMatchesFromDoc(doc1, me);
       post({ __sp_lp: 'import-progress', done: all.length, total: total });
-      for (var p = 2; p <= maxPage; p++) {
-        var d = await bgFetchDoc('https://letzplay.me/u/matches/history?page=' + p);   // espaçamento: fila do background
-        all = all.concat(X.extractMatchesFromDoc(d, me));
-        post({ __sp_lp: 'import-progress', done: all.length, total: total });
+      // PARCIAL VALE MAIS QUE NADA. Se a paginação morrer no meio (rate-limit, aba
+      // fechada, rede), o que já veio é histórico REAL do atleta e fica mais perto de
+      // completar. Antes, um erro na página 5 de 8 jogava fora as 4 primeiras. É seguro
+      // porque o doc canônico é keyed por gid: a próxima passada COMPLETA, não duplica.
+      var parcial = null;
+      try {
+        for (var p = 2; p <= maxPage; p++) {
+          var d = await bgFetchDoc('https://letzplay.me/u/matches/history?page=' + p);   // espaçamento: fila do background
+          all = all.concat(X.extractMatchesFromDoc(d, me));
+          post({ __sp_lp: 'import-progress', done: all.length, total: total });
+        }
+      } catch (errPag) {
+        if (!all.length) throw errPag;          // nada veio → é falha mesmo
+        parcial = (errPag && errPag.message) || 'paginação interrompida';
       }
       var raw = F.buildRaw(me, all);
       var nameStats = null;
       try { nameStats = await fillTourneyNames(raw); } catch (e) {}   // nome real dos torneios (best-effort)
       var imp = I.normalize(raw, { importedAt: new Date().toISOString() });
       if (nameStats) imp.tourneyNameStats = nameStats;   // observabilidade: X/Y nomes resolvidos
+      imp.declaredGames = (total != null) ? total : null;
+      if (parcial) imp.partialReason = String(parcial).slice(0, 120);
       var v = I.validate(imp);
       if (!v.valid) { post({ __sp_lp: 'import-result', ok: false, error: 'invalido' }); return; }
       post({ __sp_lp: 'import-progress', done: all.length, total: total, saving: true });

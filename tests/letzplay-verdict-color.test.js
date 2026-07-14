@@ -142,5 +142,49 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
   ok(r._lzColor === COL.violet, 'sem totais declarados não dá pra afirmar completude → roxo');
 }
 
+
+// ── 10. declaredGames: "puxou 81 de 81" é PROVA; "60 de 81" não absolve ──
+// Ideia do dono: "será que o primeiro dado no letzplay do usuário nao seria sempre o
+// numero de jogos no letzplay? registrou 81, puxou 81 nem olha de novo. daqui uma semana
+// puxou e viu 84, puxa os utlimos jogos (3 que faltam e está pronto)."
+// O letzplay declara o total na própria página; guardá-lo dá prova de completude de graça.
+{
+  const impCompleto = { handle: 'RodrigoBarth', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
+    rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81), declaredGames: 81 };
+  const r = run({ uid: 'r1', effectiveSkills: [] }, { r1: Object.assign({ letzplayImport: impCompleto }, profAuthorized) }, {});
+  ok(r._lzColor === COL.green, 'autoimport 81 de 81 declarados → VERDE (veio: ' + r._lzColor + ')');
+  ok(r._lzSrc === '🎾', 'fonte = autoimport');
+}
+{
+  // PARCIAL salvo (a paginação morreu na metade): tem 60 dos 81 → não absolve
+  const impParcial = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
+    rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(60), declaredGames: 81 };
+  const r = run({ uid: 'r2', effectiveSkills: [] }, { r2: Object.assign({ letzplayImport: impParcial }, profAuthorized) }, {});
+  ok(r._lzColor === COL.violet, '60 de 81 declarados → ROXO, não verde (veio: ' + r._lzColor + ')');
+}
+{
+  // ele mesmo diz que parou no meio, mesmo com a contagem batendo
+  const impInterrompido = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
+    rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81), declaredGames: 81,
+    partialReason: 'rate: HTTP 403' };
+  const r = run({ uid: 'r3', effectiveSkills: [] }, { r3: Object.assign({ letzplayImport: impInterrompido }, profAuthorized) }, {});
+  ok(r._lzColor === COL.violet, 'partialReason presente → ROXO mesmo com a contagem batendo');
+}
+{
+  // import LEGADO (sem declaredGames): mantém o comportamento antigo — não regride
+  const impLegado = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
+    rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81) };
+  const r = run({ uid: 'r4', effectiveSkills: [] }, { r4: Object.assign({ letzplayImport: impLegado }, profAuthorized) }, {});
+  ok(r._lzColor === COL.green, 'import legado sem declaredGames → segue VERDE (não regride quem já tinha)');
+}
+{
+  // acusação NÃO depende de completude: achar título é prova mesmo com 60 de 81
+  const impGato = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
+    rating: { band: 'D+/C-' }, rankings: [], games: new Array(60), declaredGames: 81,
+    tournaments: [{ categoryRaw: 'Masculina C', title: true }] };
+  const r = run({ uid: 'r5', effectiveSkills: ['D'] }, { r5: Object.assign({ letzplayImport: impGato }, profAuthorized) }, {});
+  ok(r._lzColor === COL.red, 'campeão achado em import PARCIAL → VERMELHO (achar é prova; não achar não é)');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
