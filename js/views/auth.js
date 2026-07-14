@@ -562,7 +562,16 @@ var _firebaseConfigProd = {
   //     pra não quebrar sessão/fluxo antigo).
   // Reverter = voltar pra "scoreplace-app.firebaseapp.com" e deployar.
   // Ver project_recaptcha_offscreen_not_display_none e project_native_webview_hostname.
-  authDomain: "auth.scoreplace.app",
+  // ⚠️ REVERTIDO em v1.1.33: auth.scoreplace.app quebrou o login com Google —
+  // o popup do /__/auth/handler devolvia "The requested action is invalid".
+  // O handler responde 200 e o RecaptchaVerifier.render() resolve, mas o OAuth
+  // não completa: o handler servido pelo custom domain não estava provisionado
+  // pro fluxo de sign-in (o Hosting serve o site, não a app config de auth).
+  // Voltar pra cá é seguro — este domínio nunca saiu do OAuth nem dos
+  // Authorized domains. NÃO retomar sem provar o Google login ponta a ponta
+  // em scoreplace-app.web.app (clicando de verdade, não só render()).
+  // Ver project_custom_auth_domain.
+  authDomain: "scoreplace-app.firebaseapp.com",
   projectId: "scoreplace-app",
   storageBucket: "scoreplace-app.firebasestorage.app",
   messagingSenderId: "382268772878",
