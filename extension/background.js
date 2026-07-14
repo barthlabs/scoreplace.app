@@ -13,6 +13,114 @@
  * o botão surge sozinho). Content scripts declarados no manifest só entram em page LOAD;
  * este re-injeta nas abas que já estavam abertas antes do install.
  */
+/* ── FILA GLOBAL: o letzplay é UM recurso compartilhado (v1.36) ────────────────
+ * TUDO que toca o letzplay (fetch same-origin OU navegação do perfil) passa por
+ * aqui, UMA operação por vez. Motivo: existe UMA aba do letzplay; `scanProfileViaTab`
+ * NAVEGA essa aba. Duas buscas ao mesmo tempo (o organizador clicou de novo, ou duas
+ * abas do scoreplace abertas) navegavam a MESMA aba em paralelo → uma lia o perfil da
+ * outra, e o `closeAutoScanTab` da primeira matava a segunda no meio. Serializado:
+ * clicar de novo NUNCA quebra — no máximo entra na fila e demora mais.
+ *
+ * ESPAÇAMENTO ADAPTATIVO: o letzplay/Cloudflare limita rajadas (403/429). O intervalo
+ * entre requisições CRESCE sozinho a cada rate-limit e volta a encolher depois de
+ * sucessos. Preferimos demorar a falhar — o content.js ainda re-tenta por cima disto.
+ */
+// PASSO APRENDIDO (v1.37) — medimos o letzplay e alargamos até ele parar de travar.
+//
+// Três defeitos que faziam a "adaptação" da v1.36 não adaptar nada:
+//  1. O passo vivia SÓ em memória. O service worker MV3 é reciclado a cada ~30s ocioso,
+//     então o gap aprendido voltava pro piso a toda hora e a rajada recomeçava do zero.
+//     Agora persiste em chrome.storage.local: o que aprendemos vale entre buscas, entre
+//     reciclagens e entre sessões.
+//  2. Acelerava a cada sucesso ISOLADO (×0.85), então logo depois de um bloqueio voltava
+//     a correr e tomava bloqueio de novo — oscilava em vez de convergir. Agora é
+//     assimétrico: sobe rápido no bloqueio, só desce depois de MUITO sucesso seguido e
+//     nunca abaixo do piso aprendido (_floor), que é o maior passo onde já apanhamos.
+//  3. Teto de 10s era baixo demais pra bloqueio sustentado do Cloudflare. Vai a 60s.
+// Preferimos SEMPRE demorar a falhar: o organizador aceita esperar, não aceita "busca
+// concluída" com zero jogos (que foi o que aconteceu em 14/jul/2026).
+// CADÊNCIA HUMANA (o plano original): a captura tem que PARECER navegação de gente.
+// `gap` é o tempo BASE entre operações — nunca a espera literal. A espera real é sorteada
+// numa faixa em torno dele (_qWait), porque intervalo cravado e idêntico é assinatura de
+// robô: o Cloudflare barra por PADRÃO, não só por volume. Piso de ~1,8s = o tempo mínimo
+// plausível pra alguém ler uma página e clicar na próxima; abaixo disso nenhum humano vai.
+var _Q_DEFAULTS = { gap: 2600, floor: 2000, min: 1800, max: 60000 };
+var _q = { chain: Promise.resolve(), busy: 0, last: 0, okStreak: 0, blocks: 0,
+  gap: _Q_DEFAULTS.gap, floor: _Q_DEFAULTS.floor, min: _Q_DEFAULTS.min, max: _Q_DEFAULTS.max };
+// Espera REAL de uma operação: base sorteada 0,7×–1,8× (nunca duas iguais) + uma pausa
+// longa ocasional (~8%), que é o equivalente a olhar pro lado / ler com calma. Sem esse
+// ruído, 30 requisições espaçadas identicamente denunciam automação mesmo devagar.
+function _qWait() {
+  var lo = _q.gap * 0.7, hi = _q.gap * 1.8;
+  var w = lo + Math.random() * (hi - lo);
+  if (Math.random() < 0.08) w += 2000 + Math.random() * 4000;
+  return Math.round(w);
+}
+var _Q_KEY = 'sp_lz_pace';
+// Carrega o passo aprendido assim que o SW sobe (a reciclagem do MV3 não pode nos fazer
+// esquecer o que já medimos). É best-effort: se falhar, seguimos com o default.
+try {
+  chrome.storage && chrome.storage.local && chrome.storage.local.get([_Q_KEY], function (o) {
+    var s = o && o[_Q_KEY];
+    if (!s) return;
+    if (typeof s.gap === 'number') _q.gap = Math.min(_q.max, Math.max(_q.min, s.gap));
+    if (typeof s.floor === 'number') _q.floor = Math.min(_q.max, Math.max(_q.min, s.floor));
+  });
+} catch (e) {}
+var _qSaveT = null;
+// `now` = grava JÁ. Usado ao FREAR: o service worker MV3 pode ser morto a qualquer
+// instante, e perder um "vá mais devagar" recém-aprendido significa rajar de novo e
+// apanhar de novo. Perder um "pode acelerar" não custa nada — esse pode esperar o debounce.
+function _qSave(now) {
+  var write = function () {
+    try { chrome.storage && chrome.storage.local && chrome.storage.local.set(_qDump()); } catch (e) {}
+  };
+  if (now) { if (_qSaveT) { clearTimeout(_qSaveT); _qSaveT = null; } write(); return; }
+  if (_qSaveT) return;   // agrupa gravações (a fila muda o gap várias vezes por busca)
+  _qSaveT = setTimeout(function () { _qSaveT = null; write(); }, 500);
+}
+function _qDump() { var o = {}; o[_Q_KEY] = { gap: _q.gap, floor: _q.floor, at: Date.now() }; return o; }
+// Estado medido, pro app MOSTRAR (nunca mais "travado" sem explicação).
+function _qStats() { return { gap: _q.gap, floor: _q.floor, blocks: _q.blocks, busy: _q.busy }; }
+function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+// BLOQUEIO → alarga o passo E sobe o PISO: este ritmo comprovadamente não é seguro, então
+// não voltamos a ele nem depois de mil sucessos. É o "aumentando até não travar mais".
+function _qSlower() {
+  _q.gap = Math.min(_q.max, Math.round(_q.gap * 2) + 400);
+  _q.floor = Math.min(_q.max, Math.max(_q.floor, Math.round(_q.gap * 0.75)));
+  _q.okStreak = 0; _q.blocks++;
+  _qSave(true);   // freio grava na hora — o SW pode morrer antes de um debounce
+}
+// Só afrouxa depois de 12 sucessos SEGUIDOS, e só 10% de cada vez — e jamais abaixo do
+// piso aprendido. Descer rápido é o que recriava a rajada.
+function _qFaster() {
+  _q.okStreak++;
+  if (_q.okStreak < 12) return;
+  _q.okStreak = 0;
+  var next = Math.max(_q.floor, Math.round(_q.gap * 0.9));
+  if (next !== _q.gap) { _q.gap = next; _qSave(); }
+}
+// Marca o resultado vindo de QUALQUER caminho — fetch, navegação, ou página de desafio
+// devolvida com status 200 (`blocked`). Um desafio do Cloudflare É um bloqueio: contar
+// como sucesso fazia a fila acelerar exatamente quando devia frear.
+function _qNoteStatus(st, blocked) {
+  if (blocked || st === 403 || st === 429 || st === 503) _qSlower();
+  else if (st >= 200 && st < 300) _qFaster();
+}
+function enqueue(fn) {
+  _q.busy++;
+  var run = _q.chain.then(function () {
+    // Espera SORTEADA a cada operação (nunca o mesmo intervalo duas vezes) e medida a
+    // partir do fim da anterior — é o ritmo de quem lê a página antes de ir pra próxima.
+    var wait = _qWait() - (Date.now() - _q.last);
+    return (wait > 0 ? _sleep(wait) : Promise.resolve()).then(fn);
+  });
+  // a CORRENTE nunca quebra: um erro numa operação não pode travar a fila inteira.
+  _q.chain = run.then(function () { _q.last = Date.now(); }, function () { _q.last = Date.now(); });
+  function dec(v) { _q.busy = Math.max(0, _q.busy - 1); return v; }
+  return run.then(dec, function (e) { dec(); throw e; });
+}
+
 var CS_MATCHES = ['https://scoreplace.app/*', 'https://scoreplace-staging.web.app/*', 'http://localhost/*'];
 var CS_FILES = ['lib/letzplay-rating.js', 'lib/letzplay-import.js', 'lib/letzplay-extract.js', 'lib/letzplay-flow.js', 'content.js'];
 function injectIntoOpenScoreplaceTabs() {
@@ -52,7 +160,10 @@ function ensureLetzplayTab(cb, noCreate) {
     });
   });
 }
+// Só fecha a aba quando a fila esvaziou. Antes, o fim de UMA busca fechava a aba de
+// OUTRA ainda rodando (organizador clicou de novo) → "no-letzplay-tab" no meio.
 function closeAutoScanTab() {
+  if (_q.busy > 0) return;   // ainda tem operação na fila usando a aba
   if (_autoScanTabId != null) { var id = _autoScanTabId; _autoScanTabId = null; try { chrome.tabs.remove(id, function () { void chrome.runtime.lastError; }); } catch (e) {} }
 }
 // Busca uma URL do letzplay DE DENTRO de uma aba do letzplay (same-origin → cookies +
@@ -100,6 +211,19 @@ function fetchViaLetzplayTab(url, cb, noCreate) {
 // (/{handle}/rankings) mostra a categoria REAL de cada ranking com a banda (ex: "Fem C+/B-")
 // e status Ativo/Inativo — é DE LÁ que sai o nível competitivo real (o principal só lista
 // torneios, cuja categoria pode ser mais baixa por falta de experiência oficial).
+// SONDA: a aba está no perfil de verdade, ou o Cloudflare pôs o desafio na frente?
+// Sem isto, um desafio na aba era indistinguível de "perfil ainda renderizando" — o
+// extrator voltava vazio, tentávamos de novo no mesmo ritmo, e o resultado era um scan
+// vazio sem nenhuma pista. Roda no mundo da página (executeScript sem args).
+function _spProbeTab() {
+  var t = document.title || '';
+  var b = (document.body && document.body.textContent || '').slice(0, 2000);
+  return {
+    challenge: /Just a moment|Verifying you are human|Checking your browser|Attention Required/i.test(t + ' ' + b) ||
+      !!document.querySelector('#challenge-form, #cf-challenge-running, [class*="cf-browser-verification"]'),
+    title: t.slice(0, 120)
+  };
+}
 function _spExtractProfileInTab(h) {
   var bt = (document.body && document.body.textContent || '').replace(/\s+/g, ' ');
   var num = function (re) { var m = bt.match(re); return m ? +m[1] : null; };
@@ -202,17 +326,40 @@ function scanProfileViaTab(handle, mode, cb) {
     var enc = encodeURIComponent(handle);
     // extrai a página atual com retry até render (need = função que valida o resultado)
     function extractWithRetry(need, done) {
+      // A NAVEGAÇÃO também mede. Antes só o fetch alimentava a fila: se o Cloudflare
+      // mostrasse o desafio na ABA, a extração só voltava vazia e nós tentávamos de novo
+      // no mesmo ritmo — sem nunca aprender que precisávamos ir mais devagar.
+      // Espera também CRESCE com o passo aprendido: se o letzplay está limitando, dar
+      // 1.3s pro SPA renderizar é otimismo; usamos o gap medido como base.
       var n = 0;
       function attempt() {
+        // Tempo de "ler a página" antes de extrair: sorteado, derivado do passo aprendido.
+        // Era 1600/1300ms cravado — além de ser pouco quando o letzplay está limitando, é
+        // regular demais pra passar por gente.
+        var base = Math.max(1500, Math.min(9000, Math.round(_q.gap * 0.8 * (0.75 + Math.random() * 0.9))));
         setTimeout(function () {
-          chrome.scripting.executeScript({ target: { tabId: tabId }, func: _spExtractProfileInTab, args: [handle] })
-            .then(function (res) {
-              var data = (res && res[0] && res[0].result) || null;
-              if ((data && need(data)) || n >= 4) { done(data); return; }
-              n++; attempt();
+          chrome.scripting.executeScript({ target: { tabId: tabId }, func: _spProbeTab })
+            .then(function (pr) {
+              var probe = (pr && pr[0] && pr[0].result) || null;
+              // Desafio do Cloudflare NA ABA → é bloqueio: alarga o passo e tenta de novo
+              // (até 8x). Desistir aqui devolvia perfil vazio como se fosse "sem dados".
+              if (probe && probe.challenge) {
+                _qSlower();
+                if (n < 8) { n++; attempt(); return; }
+                done(null); return;
+              }
+              return chrome.scripting.executeScript({ target: { tabId: tabId }, func: _spExtractProfileInTab, args: [handle] })
+                .then(function (res) {
+                  var data = (res && res[0] && res[0].result) || null;
+                  if (data && need(data)) { _qFaster(); done(data); return; }
+                  // Ainda não renderizou (ou veio vazio): re-tenta com paciência. 8 tentativas
+                  // com espera derivada do passo medido — "demora mais, mas não falha".
+                  if (n >= 8) { done(data); return; }
+                  n++; attempt();
+                });
             })
-            .catch(function (e) { if (n >= 4) done(null); else { n++; attempt(); } });
-        }, n === 0 ? 1600 : 1300);
+            .catch(function () { if (n >= 8) done(null); else { n++; attempt(); } });
+        }, n === 0 ? base : Math.min(15000, base + n * 900));
       }
       attempt();
     }
@@ -246,11 +393,26 @@ function scanProfileViaTab(handle, mode, cb) {
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg && msg.type === 'lp-fetch' && typeof msg.url === 'string' &&
       msg.url.indexOf('https://letzplay.me/') === 0) {
-    fetchViaLetzplayTab(msg.url, sendResponse, !!msg.noCreateTab);
+    // pela FILA: uma requisição por vez, espaçada (nunca em rajada → nunca toma 429).
+    enqueue(function () {
+      return new Promise(function (res) { fetchViaLetzplayTab(msg.url, res, !!msg.noCreateTab); });
+    }).then(function (r) {
+      // `blocked` = desafio do Cloudflare devolvido COM status 200 (inject.js detecta).
+      // Passar isso adiante é o que faz a fila frear no caso que antes lia como sucesso.
+      _qNoteStatus(r && r.status, r && r.blocked);
+      if (r && typeof r === 'object') r.pace = _qStats();   // o app mostra o ritmo medido
+      sendResponse(r);
+    }, function (e) { sendResponse({ ok: false, error: String((e && e.message) || e) }); });
     return true; // resposta assíncrona
   }
+  // Passo medido, sob demanda — o app usa pra explicar a espera ("letzplay limitando,
+  // indo de 1,2s pra 9,6s por página") em vez de parecer travado.
+  if (msg && msg.type === 'lp-pace') { sendResponse(_qStats()); return true; }
   if (msg && msg.type === 'lp-scan-profile' && typeof msg.handle === 'string') {
-    scanProfileViaTab(msg.handle, msg.mode === 'full' ? 'full' : 'essential', sendResponse);
+    // NAVEGA a aba compartilhada → obrigatoriamente serializado com todo o resto.
+    enqueue(function () {
+      return new Promise(function (res) { scanProfileViaTab(msg.handle, msg.mode === 'full' ? 'full' : 'essential', res); });
+    }).then(sendResponse, function (e) { sendResponse({ ok: false, error: String((e && e.message) || e) }); });
     return true; // assíncrona
   }
   if (msg && msg.type === 'lp-close-scan-tab') { closeAutoScanTab(); sendResponse({ ok: true }); return true; }

@@ -29,6 +29,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # O predeploy do hosting (firebase.json) roda `npm run prerender`, que usa
+      # @playwright/test (devDependency). Sem instalar as deps do repo + o browser
+      # Chromium, o deploy falha com "Cannot find module '@playwright/test'".
+      # --ignore-scripts evita lifecycle scripts inesperados; só precisamos do
+      # node_modules pro prerender. (index.html JÁ vem pré-renderizado pelo git
+      # pre-push hook; aqui o prerender só reconfirma — é idempotente.)
+      - name: Install repo deps (predeploy prerender)
+        run: npm ci --ignore-scripts
+      - name: Install Playwright Chromium (predeploy prerender)
+        run: npx playwright install --with-deps chromium
       - name: Install firebase-tools
         run: npm install -g firebase-tools@15.12.0
       - name: Write service account key

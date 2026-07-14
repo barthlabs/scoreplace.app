@@ -12,8 +12,26 @@
     var u = d.__spInjReq.url;
     fetch(u, { credentials: 'include' })
       .then(function (r) {
+        // retryAfter: quando o letzplay/Cloudflare limita (403/429) ele diz EM QUANTOS
+        // segundos aceita de novo. Respeitar isso é o que faz o import nunca falhar por
+        // rajada — chutar backoff é pior que obedecer o servidor.
+        var ra = null, cfm = null;
+        try { ra = r.headers.get('retry-after'); } catch (e) {}
+        try { cfm = r.headers.get('cf-mitigated'); } catch (e) {}
         return r.text().then(function (h) {
-          window.postMessage({ __spInjRes: { url: u, res: { ok: r.ok, status: r.status, html: h } } }, window.location.origin);
+          // BLOQUEIO DISFARÇADO DE SUCESSO: o Cloudflare às vezes devolve a página de
+          // desafio ("Just a moment…") com status 200/503. Sem esta detecção, r.ok=true,
+          // o HTML volta SEM jogo nenhum, o import conclui "sem-jogos" e — pior — a fila
+          // interpreta como sucesso e ACELERA, tomando bloqueio de novo. Foi assim que a
+          // busca de 14/jul/2026 gravou zero jogos "com sucesso". Um desafio é um NÃO:
+          // tem que contar como bloqueio pra fila desacelerar e o content re-tentar.
+          var blocked = (cfm != null) ||
+            /<title>\s*Just a moment/i.test(h) ||
+            /challenge-platform|cf_chl_opt|__cf_chl_|cf-browser-verification/i.test(h);
+          window.postMessage({ __spInjRes: { url: u, res: {
+            ok: r.ok && !blocked, status: r.status, retryAfter: ra, blocked: blocked,
+            error: blocked ? 'cf-challenge' : undefined, html: h
+          } } }, window.location.origin);
         });
       })
       .catch(function (err) {

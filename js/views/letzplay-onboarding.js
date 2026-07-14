@@ -10,8 +10,9 @@
 (function () {
   // Versão mínima ACEITA da extensão = SEMPRE a atual (correções críticas de import só
   // existem na mais nova: URL /tournaments dos nomes, não-abrir-aba, data por torneio…).
-  // Abaixo disso → pede atualização (não fica verde). Bumpar junto com EXT_VERSION.
-  var MIN_EXT_VERSION = '1.35';
+  // FONTE ÚNICA: window.SP_EXT_VERSION (store.js). NUNCA hardcodar um número aqui — o
+  // valor solto que existia (1.35) divergiu da extensão (1.36) e deixou passar versão velha.
+  var MIN_EXT_VERSION = window.SP_EXT_VERSION;
   // URL da Chrome Web Store — null enquanto não publicado (mostra instruções manuais).
   var STORE_URL = null;
 
@@ -123,10 +124,26 @@
     if (o && o.parentNode) o.parentNode.removeChild(o);
   };
 
-  // Progresso com BOLINHA QUE SEMPRE GIRA (spinner CSS) — cria a estrutura 1x e depois só
-  // atualiza texto/barra IN-PLACE (sem recriar), pra o spinner não reiniciar/travar. Fases:
-  // 'jogos' (paginação) → 'names' (busca 1 fetch por torneio, parte lenta) → 'saving'.
-  function _showProgress(done, total, saving, phase) {
+  // CARD CANÔNICO de progresso do letzplay (v1.1.18): BOLINHA QUE SEMPRE GIRA (spinner
+  // CSS) + barra + label + sub. Cria a estrutura 1x e depois só atualiza texto/barra
+  // IN-PLACE (sem recriar), pra o spinner não reiniciar/travar.
+  // Usado por DOIS fluxos: o import do próprio usuário (aqui) e a busca do organizador
+  // na Análise de Inscritos (tournaments-enrollment-report.js) — leitura mecânica igual
+  // nos dois; qualquer melhoria vale pros dois. Ver [[project_letzplay_scan_stability]].
+  //   opts: { label, sub, pct, onCancel }  — onCancel presente → mostra "Cancelar".
+  // Ticker do regressivo: 1s, só enquanto há overlay E contagem ativa. Se a barra sumiu
+  // ou a contagem acabou, ele se desliga sozinho (nada de timer órfão rodando pra sempre).
+  var _etaTimer = null;
+  function _etaTick() {
+    var el = document.getElementById('sp-imp-eta');
+    if (!el) { if (_etaTimer) { clearInterval(_etaTimer); _etaTimer = null; } return; }
+    var txt = (typeof window._spEtaText === 'function') ? window._spEtaText() : '';
+    el.textContent = txt ? ('⏳ ' + txt) : '';
+    if (txt && !_etaTimer) _etaTimer = setInterval(_etaTick, 1000);
+    if (!txt && _etaTimer) { clearInterval(_etaTimer); _etaTimer = null; }
+  }
+  window._spProgressOverlay = function (opts) {
+    opts = opts || {};
     if (!document.getElementById('sp-imp-spin-style')) {
       var st = document.createElement('style'); st.id = 'sp-imp-spin-style';
       st.textContent = '@keyframes spImpSpin{to{transform:rotate(360deg);}}';
@@ -137,23 +154,132 @@
         '<div style="font-size:2.4rem;margin:0 auto 10px;display:inline-block;animation:spImpSpin 0.85s linear infinite;">🎾</div>' +
         '<div id="sp-imp-label" style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;"></div>' +
         '<div style="height:12px;border-radius:999px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.1));"><div id="sp-imp-bar" style="height:100%;width:8%;background:linear-gradient(90deg,#84cc16,#65a30d);transition:width .3s;"></div></div>' +
-        '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;"></div>'
+        '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;"></div>' +
+        '<div id="sp-imp-eta" style="font-size:0.78rem;color:var(--text-bright,#e2e8f0);margin-top:6px;font-weight:700;font-variant-numeric:tabular-nums;"></div>' +
+        '<div id="sp-imp-actions" style="margin-top:14px;display:none;"></div>'
       );
     }
+    var l = document.getElementById('sp-imp-label'); if (l) l.textContent = opts.label || '';
+    var b = document.getElementById('sp-imp-bar'); if (b && opts.pct != null) b.style.width = opts.pct + '%';
+    var s = document.getElementById('sp-imp-sub'); if (s) s.textContent = opts.sub || '';
+    // O regressivo tem que ANDAR sozinho: sem um tick próprio ele só mudaria quando
+    // chegasse notícia da extensão — e ficaria parado justamente nas esperas longas, que
+    // é quando o usuário mais precisa ver que a busca está viva.
+    _etaTick();
+    var a = document.getElementById('sp-imp-actions');
+    if (a) {
+      if (opts.onCancel && !a.firstChild) {
+        a.style.display = 'block';
+        var btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'btn btn-outline btn-sm'; btn.textContent = 'Cancelar';
+        btn.onclick = function () { try { opts.onCancel(); } catch (e) {} };
+        a.appendChild(btn);
+      } else if (!opts.onCancel) { a.style.display = 'none'; a.innerHTML = ''; }
+    }
+  };
+
+  // ─── CRONÔMETRO REGRESSIVO CANÔNICO (v1.1.20) ──────────────────────────────
+  // Vale pros TRÊS botões (essencial, completa, autoimport) — é o mesmo overlay.
+  //
+  // Regra do dono: "coloque uma estimativa de tempo regressiva pra concluir e pode ir
+  // ajustando, aumentando ou diminuindo se necessário, desde que quando chegar em 100%
+  // chegue a 0 segundos."
+  //
+  // COMO A GARANTIA 100%⇔0s É ESTRUTURAL (não um ajuste no fim): a porcentagem E o tempo
+  // saem da MESMA contagem de unidades — pct=(done+frac)/total e falta=(total-done-frac).
+  // Se done===total, os dois zeram juntos por construção; não há como divergir.
+  //
+  // AJUSTA SOZINHO: cada unidade concluída é MEDIDA e alimenta uma média móvel (EWMA), que
+  // puxa a estimativa pra cima ou pra baixo conforme a realidade — inclusive quando o
+  // letzplay manda desacelerar. Uma espera anunciada (lz-throttle) é somada na hora, senão
+  // o número desceria durante uma pausa de 60s e mentiria.
+  var _eta = null;
+  window._spEtaBegin = function (total, seedMs) {
+    _eta = { total: Math.max(1, total || 1), done: 0, frac: 0, perMs: seedMs || 9000,
+      lastAt: Date.now(), samples: 0, extraMs: 0 };
+  };
+  window._spEtaEnd = function () { _eta = null; };
+  // Uma unidade terminou: mede quanto REALMENTE levou e reajusta a média.
+  window._spEtaUnit = function () {
+    if (!_eta) return;
+    var dt = Date.now() - _eta.lastAt;
+    _eta.lastAt = Date.now(); _eta.done++; _eta.samples++; _eta.frac = 0; _eta.extraMs = 0;
+    // 1ª amostra manda (a semente era chute); depois suaviza pra não oscilar a cada pessoa.
+    _eta.perMs = (_eta.samples === 1) ? dt : Math.round(_eta.perMs * 0.6 + dt * 0.4);
+  };
+  window._spEtaFrac = function (f) { if (_eta) _eta.frac = Math.max(0, Math.min(0.95, f || 0)); };
+  // Sincroniza com uma contagem ABSOLUTA (o autoimport reporta "42 de 152 jogos", não
+  // "+1"). Mede o tempo real do salto e reajusta a média — um salto de 20 jogos numa
+  // página vale 20 unidades, então dividimos pelo tamanho do salto pra achar o custo
+  // unitário. Sem isso, a semente por jogo (um chute) nunca seria corrigida.
+  window._spEtaSync = function (doneAbs) {
+    if (!_eta || doneAbs == null) return;
+    var d = Math.max(0, Math.min(_eta.total, doneAbs));
+    if (d <= _eta.done) return;                    // nunca anda pra trás
+    var salto = d - _eta.done;
+    var dt = Date.now() - _eta.lastAt;
+    _eta.done = d; _eta.lastAt = Date.now(); _eta.samples++; _eta.frac = 0; _eta.extraMs = 0;
+    var unitMs = dt / salto;
+    _eta.perMs = (_eta.samples === 1) ? unitMs : Math.round(_eta.perMs * 0.6 + unitMs * 0.4);
+  };
+  // Espera IMPOSTA pelo letzplay: entra direto na conta (o tempo AUMENTA, como previsto).
+  window._spEtaDelay = function (ms) { if (_eta) _eta.extraMs += (ms || 0); };
+  window._spEtaMs = function () {
+    if (!_eta) return null;
+    var falta = _eta.total - _eta.done - _eta.frac;
+    if (falta <= 0) return 0;                       // 100% ⇒ 0s, por construção
+    var est = falta * _eta.perMs + _eta.extraMs;
+    // Desconta o que já se passou na unidade atual — é isso que faz o número ANDAR entre
+    // uma conclusão e outra, em vez de ficar congelado.
+    var jaNaAtual = Math.min(Date.now() - _eta.lastAt, _eta.perMs * 0.9);
+    return Math.max(3000, Math.round(est - jaNaAtual));   // piso: nunca 0s com trabalho pendente
+  };
+  window._spEtaPct = function () {
+    if (!_eta) return null;
+    return Math.max(1, Math.min(99, Math.round((_eta.done + _eta.frac) / _eta.total * 100)));
+  };
+  window._spEtaText = function () {
+    var ms = window._spEtaMs();
+    if (ms == null) return '';
+    if (ms <= 0) return 'concluído';
+    // Os SEGUNDOS aparecem sempre que faltar menos de 1h: sem eles, uma busca de 14min
+    // fica um minuto inteiro parada em "~14min" e parece travada — que é justamente o
+    // que o regressivo existe pra evitar. Acima de 1h, min a min já comunica movimento.
+    var s = Math.round(ms / 1000);
+    if (s < 60) return 'faltam ~' + s + 's';
+    var m = Math.floor(s / 60);
+    if (m < 60) return 'faltam ~' + m + 'min ' + String(s % 60).padStart(2, '0') + 's';
+    return 'faltam ~' + Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0') + 'min';
+  };
+
+  // Fases do import do próprio usuário: 'jogos' (paginação) → 'names' (1 fetch por
+  // torneio, parte lenta) → 'saving'.
+  // Unidades do regressivo no autoimport: JOGOS na fase de paginação e TORNEIOS na fase
+  // de nomes. São contagens diferentes, então cada fase reinicia a contagem (a média de
+  // uma não serve pra outra: nome de torneio é 1 fetch, jogo é uma fração de página).
+  var _etaPhase = null;
+  function _showProgress(done, total, saving, phase) {
     var label, sub, pct;
-    if (saving) { label = 'Salvando no seu perfil…'; sub = 'quase lá'; pct = 99; }
-    else if (phase === 'names') {
+    if (saving) {
+      label = 'Salvando no seu perfil…'; sub = 'quase lá'; pct = 99;
+      window._spEtaEnd(); _etaPhase = null;
+    } else if (phase === 'names') {
       label = 'Buscando os nomes dos torneios…';
       sub = total ? (done + ' de ' + total + ' torneios') : 'lendo do letzplay…';
       pct = total ? Math.max(6, Math.round(done / total * 100)) : 50;
+      if (total && _etaPhase !== 'names') { _etaPhase = 'names'; window._spEtaBegin(total, 4200); }
     } else {
       label = 'Importando seus jogos…';
       sub = total ? (done + ' de ' + total + ' jogos') : (done + ' jogos…');
       pct = total ? Math.min(99, Math.round(done / total * 100)) : (done ? 60 : 8);
+      // Semente por JOGO: uma página traz ~10-20 jogos por requisição, então cada jogo
+      // custa uma fração do passo. A medição real corrige isso já na 1ª página.
+      if (total && _etaPhase !== 'jogos') { _etaPhase = 'jogos'; window._spEtaBegin(total, 320); }
     }
-    var l = document.getElementById('sp-imp-label'); if (l) l.textContent = label;
-    var b = document.getElementById('sp-imp-bar'); if (b) b.style.width = pct + '%';
-    var s = document.getElementById('sp-imp-sub'); if (s) s.textContent = sub;
+    // Sincroniza a contagem com o que a extensão reportou — assim pct e regressivo
+    // continuam saindo da MESMA fonte e zeram juntos.
+    if (typeof window._spEtaSync === 'function') window._spEtaSync(done);
+    window._spProgressOverlay({ label: label, sub: sub, pct: pct });
   }
 
   window.addEventListener('message', function (e) {
@@ -161,6 +287,20 @@
     var d = e.data; if (!d) return;
     if (d.__sp_lp === 'import-progress') {
       if (_importActive) _showProgress(d.done || 0, d.total || null, !!d.saving, d.phase);
+      return;
+    }
+    // O letzplay mandou esperar: a espera entra NA CONTA (o regressivo aumenta) e vira
+    // texto. Sem isso o número continuaria descendo durante uma pausa de 60s — mentindo,
+    // e chegando perto de 0s com trabalho pendente.
+    if (d.__sp_lp === 'lz-throttle') {
+      if (!_importActive) return;
+      window._spEtaDelay(d.waitMs || 0);
+      // NÃO expor "o letzplay pediu pra ir mais devagar": é problema NOSSO, não do usuário.
+      // Pra ele, esperar o rate-limit e ler uma página são a mesma coisa — o import está
+      // andando. A espera já entra no regressivo (_spEtaDelay), então o "quanto falta"
+      // continua honesto sem transformar um detalhe de infraestrutura em ansiedade.
+      window._spProgressOverlay({ label: '⚙️ Processando informações…',
+        sub: 'o import continua — pode deixar rodando' });
       return;
     }
     if (d.__sp_lp === 'import-result') {
@@ -282,12 +422,30 @@
       return 'Extensão detectada e pronta. <b>v' + _esc(_ext.version) + '</b> ✓';
     }
     if (_ext.present && !_verGte(_ext.version, MIN_EXT_VERSION)) {
-      return '<span style="color:#f59e0b;">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b>.</span>' + _installHelp('Como atualizar');
+      // O botão de baixar fica VISÍVEL aqui, não escondido dentro do "Como atualizar".
+      // Enquanto não há versão na loja não existe auto-update: sem o download na cara, o
+      // usuário lê "atualize pra v1.38" e não tem de onde. Foi exatamente o que aconteceu
+      // — o zip existia, servido, e ainda assim ninguém achava.
+      return '<span style="color:#f59e0b;">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b> ' +
+        '(a antiga desiste quando o letzplay limita e não traz os jogos).</span>' +
+        _zipBtn() + _installHelp('Como atualizar');
     }
     var installBtn = STORE_URL
       ? '<div style="margin-top:10px;"><a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" class="btn btn-primary">🎾 Instalar extensão</a></div>'
-      : '<div style="margin-top:6px;color:#94a3b8;">A extensão ainda não está na Chrome Web Store (em preparação). Por enquanto, instale em modo desenvolvedor:</div>';
+      : '<div style="margin-top:6px;color:#94a3b8;">A extensão ainda não está na Chrome Web Store (em preparação). Baixe e instale em modo desenvolvedor:</div>' + _zipBtn();
     return 'Precisa da extensão do scoreplace pra ler seu histórico na sua sessão logada (sem senha).' + installBtn + _installHelp(STORE_URL ? 'Instalar manualmente' : 'Passo a passo (modo desenvolvedor)');
+  }
+
+  // Botão de baixar o zip da versão EXIGIDA. Mora aqui (fora do _installHelp) porque
+  // precisa aparecer VISÍVEL nos avisos de "instale"/"atualize", não só dentro do
+  // <details> colapsado — download que existe mas ninguém acha é download que não existe.
+  // A URL sai de SP_EXT_VERSION, então nunca aponta pra versão que o gate recusa, e a
+  // trava check-ext-version garante que o arquivo está lá.
+  function _zipBtn() {
+    var zipUrl = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    if (!zipUrl) return '';
+    return '<div style="margin:10px 0;"><a href="' + _esc(zipUrl) + '" download class="btn btn-primary" style="text-decoration:none;">⬇️ Baixar a extensão (v' + _esc(MIN_EXT_VERSION) + ')</a>' +
+      '<div style="opacity:0.75;font-size:0.72rem;margin-top:4px;">Baixe e <b>descompacte</b> — a pasta que sair do zip é a que você escolhe em <code>chrome://extensions</code> → “Carregar sem compactação”.</div></div>';
   }
 
   function _installHelp(label) {
@@ -297,14 +455,20 @@
       '<button type="button" onclick="var b=this;if(navigator.clipboard){navigator.clipboard.writeText(\'chrome://extensions\').then(function(){b.textContent=\'copiado ✓\';})}" ' +
       'class="btn btn-outline btn-sm" style="margin-left:6px;padding:2px 10px;font-size:0.72rem;">📋 copiar</button>' +
       '<div style="opacity:0.7;font-size:0.72rem;margin-top:2px;">(o Chrome não deixa abrir esse endereço por link — cole na barra e dê Enter)</div></li>';
+    // O zip fica a UM CLIQUE, sempre na versão que o gate exige. Antes, o passo 1 mandava
+    // "escolha a pasta extension do scoreplace" — que só existe pra quem tem o repositório
+    // clonado. Sem um download aqui, atualizar dependia de achar o arquivo em algum lugar,
+    // e foi assim que a extensão ficou parada na 1.35 enquanto o app já pedia mais nova.
+    var zipBtn = _zipBtn();
     return '<details style="margin-top:8px;"><summary style="cursor:pointer;color:var(--primary-color,#818cf8);font-weight:600;">' + _esc(label) + '</summary>' +
-      '<div style="margin:8px 0 6px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);font-size:0.74rem;color:var(--text-muted,#cbd5e1);">⚙️ Instalação <b>temporária</b>, só pra teste enquanto a extensão não está na loja. Quando publicar, vira <b>um clique</b> — nada disso abaixo.</div>' +
+      '<div style="margin:8px 0 6px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);font-size:0.74rem;color:var(--text-muted,#cbd5e1);">⚙️ Instalação <b>temporária</b>, só pra teste enquanto a extensão não está na loja. Quando publicar, o Chrome atualiza <b>sozinho</b> — nada disso abaixo.</div>' +
+      zipBtn +
       '<ol style="margin:6px 0 0;padding-left:20px;line-height:1.75;">' +
         chromeLine +
         '<li>Nessa página, ligue o interruptor <b>Modo do desenvolvedor</b> (fica no canto superior direito).</li>' +
-        '<li>Vai aparecer um botão <b>“Carregar sem compactação”</b> (o Chrome em inglês chama de <i>Load unpacked</i>) — é assim que ele instala uma extensão a partir de uma pasta do computador. Clique nele e escolha a pasta <b>extension</b> do scoreplace.</li>' +
+        '<li>Vai aparecer um botão <b>“Carregar sem compactação”</b> (o Chrome em inglês chama de <i>Load unpacked</i>) — é assim que ele instala uma extensão a partir de uma pasta do computador. Clique nele e escolha a pasta que saiu do zip.</li>' +
         '<li>Pronto — volte aqui, esta tela reconhece sozinha ✓</li>' +
-        '<li><i>Já tinha instalado?</i> No card da extensão, clique no <b>↻ (recarregar)</b> pra pegar a versão nova.</li>' +
+        '<li><i>Já tinha instalado?</i> Remova a versão antiga e carregue a pasta nova (ou clique no <b>↻</b> do card se apontar pra mesma pasta).</li>' +
       '</ol></details>';
   }
 

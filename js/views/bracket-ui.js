@@ -2005,6 +2005,9 @@ function _notifyOrgAndCoHosts(t, notifData) {
     t.coHosts.forEach(function(ch){ if (ch && ch.status === 'active' && ch.uid && !seen[ch.uid]) { seen[ch.uid] = true; window._sendUserNotification(ch.uid, notifData); } });
   }
 }
+// Exposto no window pra reuso cross-file: o consenso de W.O. (wo-claim.js) escala a
+// disputa pelo MESMO helper, incluindo co-hosts (paridade com o placar).
+window._notifyOrgAndCoHosts = _notifyOrgAndCoHosts;
 
 // Mutação PURA de aplicar um resultado APROVADO (pending → final) sobre o `t`
 // passado: aplica scores/sets/winner, auto check-in, delete pendingResult, e o
@@ -12072,6 +12075,13 @@ window._openCasualMatch = function(restoreOpts) {
 
   // Start the match (directly opens live scoring)
   window._casualStart = async function() {
+    // Persiste a modalidade + dupla/individual escolhidos AO INICIAR — não só no
+    // clique do seletor. Assim, se o usuário aceitar o esporte que já veio
+    // pré-selecionado (sem tocar no botão), essa escolha também fica lembrada
+    // pra próxima partida. A config de placar (sets/games/contagem) já é salva
+    // por esporte em scoreplace_casual_prefs quando alterada. Espelha o comportamento
+    // da "ida planejada", que grava a config no confirmar.
+    _persistLastCasualChoice();
     // Stop lobby refresh
     if (_setupRefreshInterval) { clearInterval(_setupRefreshInterval); _setupRefreshInterval = null; }
     var players = _buildPlayers();

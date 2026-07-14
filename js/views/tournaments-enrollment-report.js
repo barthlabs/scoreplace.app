@@ -1110,7 +1110,11 @@
   };
 
   // ─── Verificação letzplay (escopo do módulo — usada pela matriz) ─────
-  var _LZ_COL = { white: '#8592a6', green: '#2dd4a0', blue: '#38bdf8', yellow: '#f0b445', red: '#f26a6a' };
+  // white = NÃO AUTORIZOU (branco puro) · violet = autorizou mas ainda não verificado.
+  // O estado "sem verificação" (cinza) foi removido: agora todo nome é ou verificado
+  // (verde/amarelo/azul/vermelho), ou autorizado-aguardando (violeta), ou não-autorizou
+  // (branco). Ver _erApplyLzToRows.
+  var _LZ_COL = { white: '#f3f4f6', violet: '#a78bfa', green: '#2dd4a0', blue: '#38bdf8', yellow: '#f0b445', red: '#f26a6a' };
   var _LTR = ['A', 'B', 'C', 'D', 'FUN'];
   // DESEMPENHO manda — NÃO a banda do ranking. Estar ranqueado numa banda acima
   // (ex: clube joga a pessoa numa C/B) NÃO é sinal de subir; só DOMINAR é:
@@ -1135,9 +1139,21 @@
   }
   // 5 níveis: ⚪ sem info · 🟢 coerente · 🔵 rebaixar · 🟡 pode subir · 🔴 deve subir.
   // SÓ domínio (título/topo) empurra pra cima. Banda alta sem dominar = coerente.
-  function _lzVerdict(declRank, ev) {
+  function _lzVerdict(declRank, ev, apuradoRank) {
     ev = ev || {};
-    if (declRank == null) return { key: 'white', apurada: null };
+    // SEM nível declarado, mas COM nível apurado no letzplay → COERENTE (verde), e o
+    // apurado vira a categoria. Não há divergência possível: o número veio do próprio
+    // letzplay, então não tem como ser incoerente com ele. Antes isto caía em 'white'
+    // e a pessoa ficava ROXA ("autorizou, aguardando") mesmo com o perfil lido com
+    // sucesso — só saía do roxo quando ELA MESMA logava no app e o _selfPopulate
+    // gravava o skillBySport. Caso real: Flavia Campion, scan OK (Fem D+/C-, apurado D),
+    // roxa porque skillBySport={} — enquanto a Kelly, que tinha logado depois do scan,
+    // ficou verde. A leitura do organizador não pode depender do login do inscrito.
+    if (declRank == null) {
+      return (apuradoRank != null)
+        ? { key: 'green', apurada: apuradoRank }
+        : { key: 'white', apurada: null };
+    }
     // Campeão na categoria declarada (ou mais fácil) → DEVE subir (regra federação).
     if (ev.titleRank != null) {
       var shouldT = Math.max(0, ev.titleRank - 1);
@@ -1153,28 +1169,103 @@
   }
   // Marca cada linha com a verificação letzplay: _lzColor (cor do status), _lzSkill
   // (categoria apurada), _lzSrc (🎾 import / 🔎 scan). null = não verificado.
+  // O scan capturou TUDO o que o perfil do letzplay diz que existe? O próprio perfil
+  // declara os totais ("3 Rankings · 2 Torneios · 66 Jogos") e nós contamos o que veio —
+  // então a incompletude é AUTO-DECLARADA, não inferida. Medido em produção (14/jul):
+  // os 4 inscritos declaravam torneios e capturaram menos do que declaram.
+  // Sem total declarado (dado antigo) não dá pra afirmar completude → trata como incompleto.
+  // O AUTOIMPORT trouxe tudo? Agora dá pra AFIRMAR em vez de presumir: o import guarda
+  // `declaredGames` — quantos o letzplay declara na própria página ("81 Jogos • 36 Vit").
+  // 81 declarados e 81 guardados = completo. Sem o campo (import anterior à v1.39) caímos
+  // no antigo "se salvou, paginou tudo" — que era verdade só porque falhar não salvava;
+  // agora que salvamos parcial, presumir seria absolver dado pela metade.
+  function _lzImportComplete(li) {
+    if (!li) return false;
+    var n = (li.games || []).length;
+    if (li.declaredGames == null) return n > 0;          // legado: sem o número, confia no all-or-nothing
+    if (li.partialReason) return false;                   // ele mesmo diz que parou no meio
+    return n >= li.declaredGames;
+  }
+  function _lzScanComplete(sc) {
+    if (!sc) return false;
+    var t = sc.totals || {};
+    if (t.rankings == null || t.tournaments == null) return false;
+    return (sc.rankings || []).length >= t.rankings && (sc.tournaments || []).length >= t.tournaments;
+  }
   function _erApplyLzToRows(rows, profileMap, scanMap) {
     profileMap = profileMap || {}; scanMap = scanMap || {};
     (rows || []).forEach(function (r) {
       r._lzColor = null; r._lzSkill = null; r._lzSrc = null;
+      r._lzVerified = false; r._lzAuthorized = false;
       var prof = r.uid && profileMap[r.uid];
-      var li = prof && prof.letzplayImport;
+      // Autorizou = tem letzplay indicado no perfil (@handle) E ligou o toggle
+      // "Autorizar importação". É o que separa violeta (autorizou) de branco (não).
+      r._lzAuthorized = !!(prof && prof.letzplayHandle && prof.letzplayConsent === true);
+      // O HISTÓRICO PODE ESTAR EM DOIS LUGARES, e eu só olhava um:
+      //   • users/{uid}.letzplayImport      → a pessoa fez o autoimport dela;
+      //   • letzplayScans/{uid}.fullImport  → o ORGANIZADOR puxou por ela (busca completa).
+      // Caso real (14/jul 17:57): a Kelly tinha 152 jogos COMPLETOS no fullImport do scan e
+      // aparecia ROXA — porque ela nunca fez autoimport, então eu caía no scan resumido
+      // (torneios 2/8), julgava incompleto e não absolvia. O dado estava lá; a tela mentia.
+      // Não dá pra depender do letzplayImport: ele só é preenchido pela applyLetzplayScans
+      // (que roda depois) ou pelo login da própria pessoa — de novo fazendo a leitura do
+      // organizador depender do inscrito. Vence o que tem MAIS jogos (mesma regra da CF).
+      var _fi = (r.uid && scanMap[r.uid] && scanMap[r.uid].fullImport) || null;
+      var _own = prof && prof.letzplayImport;
+      var _nGames = function (x) { return (x && Array.isArray(x.games)) ? x.games.length : -1; };
+      var li = (_nGames(_fi) > _nGames(_own)) ? _fi : _own;
       var sc = (r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
       if (li) {
         var oc = li.officialCategory, band = li.rating && li.rating.band;
         var champCats = (li.tournaments || []).filter(function (x) { return x.title; }).map(function (x) { return x.categoryRaw; });
         var ev = _lzEvidence(champCats, li.rankings || [], [oc ? oc.categoryRaw : '', band || '']);
-        var v = _lzVerdict(_declRankFrom(r.effectiveSkills), ev);
-        r._lzColor = _LZ_COL[v.key]; r._lzSrc = '🎾';
+        // apurado = o MESMO nível que exibimos em _lzSkill; serve de veredito quando a
+        // pessoa não declarou nada (veio do letzplay → coerente por definição).
+        var apuLi = (oc && oc.skill) ? _declRankFrom([oc.skill]) : null;
+        var v = _lzVerdict(_declRankFrom(r.effectiveSkills), ev, apuLi);
+        r._lzSrc = '🎾';
         r._lzSkill = (oc && oc.skill) ? oc.skill : (v.apurada != null ? _LTR[v.apurada] : null);
+        // Veredito 'white' = importado mas sem nível declarado pra comparar → não é
+        // "verificado" de fato; cai pro estado autorizado (violeta) abaixo.
+        // Mesma regra do scan: VERDE (coerente) exige ter olhado TUDO. Com o histórico
+        // pela metade, "não achei título contra" é ausência de dado, não absolvição —
+        // e título é o que manda subir. Vermelho/amarelo seguem valendo: achar é prova.
+        if (v.key === 'green' && !_lzImportComplete(li)) v = { key: 'white', apurada: null };
+        if (v.key !== 'white') { r._lzColor = _LZ_COL[v.key]; r._lzVerified = true; }
       } else if (sc) {
         var ev2 = _lzEvidence(sc.champions || [], sc.rankings || [], [sc.rankingCategory].concat(sc.allCategories || []));
-        var v2 = _lzVerdict(_declRankFrom(r.effectiveSkills), ev2);
-        r._lzColor = _LZ_COL[v2.key]; r._lzSrc = '🔎';
+        // profileSkill = borda MAIS FRACA da banda ativa (conservador, ver _spDeriveScan).
+        var apuSc = _declRankFrom([sc.profileSkill || sc.skill]);
+        var v2 = _lzVerdict(_declRankFrom(r.effectiveSkills), ev2, apuSc);
+        // VERDE EXIGE CAPTURA COMPLETA. O próprio scan sabe quanto FALTOU: o perfil do
+        // letzplay declara os totais e nós contamos o que veio. Medido em produção:
+        //   Flavia  → 2 torneios declarados, 0 capturados
+        //   Kelly   → 8 declarados, 2 capturados
+        // Verde significa "coerente". Afirmar coerência sem ter olhado os torneios é
+        // chute: o TÍTULO é o que manda subir de categoria e mora justamente lá. Sem eles,
+        // "não achei nada contra" não é evidência de nada — é ausência de dado.
+        // Cai pra violeta (autorizou, aguardando informação boa), que é o estado honesto.
+        // Vermelho/amarelo NÃO dependem disso: evidência positiva encontrada é prova,
+        // mesmo com captura incompleta. O que a falta de dado impede é a ABSOLVIÇÃO.
+        if (v2.key === 'green' && !_lzScanComplete(sc)) v2 = { key: 'white', apurada: null };
+        r._lzSrc = '🔎';
         r._lzSkill = sc.profileSkill || sc.skill || (v2.apurada != null ? _LTR[v2.apurada] : null);
+        if (v2.key !== 'white') { r._lzColor = _LZ_COL[v2.key]; r._lzVerified = true; }
       }
+      // Cor final do nome (o cinza "sem verificação" SAIU): veredito verificado >
+      // autorizou-mas-ainda-não-verificado (violeta) > não-autorizou (branco).
+      if (!r._lzColor) r._lzColor = r._lzAuthorized ? _LZ_COL.violet : _LZ_COL.white;
     });
   }
+  // Exposto pro teste headless (tests/letzplay-verdict-color.test.js) e por ser o
+  // resolvedor CANÔNICO da cor do nome — quem precisar da cor usa esta, não recria.
+  window._erApplyLzToRows = _erApplyLzToRows;
+  // Exposto pra verificação da seção (botões de busca + rótulo de data) sem precisar de
+  // torneio real + auth — é a tela onde o organizador ficou travado sem saber.
+  window._erRenderCategoriesSection = function (rows, t, profileMap, scanMap) {
+    return _renderCategoriesSection(rows, t, profileMap, scanMap);
+  };
+  window._LZ_COL = _LZ_COL;
 
   // ─── Matriz Gênero × Categoria (drag-and-drop) ──────────────────────
   // 2 colunas (♀ Feminino · ♂ Masculino) + "? Sem gênero" numa FAIXA embaixo.
@@ -1262,7 +1353,8 @@
     // Card do atleta — tamanho padrão (min 150px), nome com ellipsis.
     function chip(r) {
       var pe = _pendingEdits[r.order] || {}; var edited = Object.keys(pe).length > 0;
-      // não verificado = MESMO cinza da legenda "sem verificação" (_LZ_COL.white).
+      // _lzColor já vem resolvido por _erApplyLzToRows: veredito verificado, ou
+      // violeta (autorizou), ou branco (não autorizou). Fallback branco por segurança.
       var nameCol = edited ? '#f59e0b' : (r._lzColor || _LZ_COL.white);
       var border = edited ? 'rgba(245,158,11,0.55)' : (r._lzColor ? (r._lzColor + '55') : 'var(--border-color)');
       return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')" ' +
@@ -1386,6 +1478,51 @@
     window._erRenderMatrix();
     window._erUpdateSaveBar();
   };
+  // ── Frescor da verificação (v1.1.18) ────────────────────────────────
+  // "Os que estão atualizados a menos de 6 dias não precisam ser atualizados."
+  // Fontes de dado fresco, por pessoa: (a) o scan global do organizador
+  // (letzplayScans/{uid}.scannedAt + scan._mode) e (b) o import que a PRÓPRIA pessoa
+  // fez do histórico dela (perfil.letzplayImport.importedAt) — que é sempre completo.
+  var _LZ_FRESH_DAYS = 6;
+  // TRAVA DESLIGADA enquanto não fechamos que a busca funciona de ponta a ponta.
+  // A regra dos 6 dias existe pra não re-buscar à toa (cada busca é leitura no letzplay,
+  // que responde com rate-limit em rajada). Mas ela também IMPEDE re-testar: em 14/jul o
+  // scan gravou _mode='full' sem trazer jogo nenhum, os 4 inscritos passaram a contar como
+  // "atualizados", e os dois botões ficaram inativos — o organizador ficou travado sem
+  // saber, sem poder tentar de novo. Enquanto o sistema não está validado, poder repetir
+  // vale mais que economizar leitura. Religar = _LZ_FRESH_OFF = false.
+  var _LZ_FRESH_OFF = true;
+  function _lzIsFresh(iso) {
+    if (_LZ_FRESH_OFF) return false;   // nada é "fresco" → os botões nunca ficam inativos
+    var ts = iso ? (Date.parse(iso) || 0) : 0;
+    if (!ts) return false;
+    return (Date.now() - ts) < (_LZ_FRESH_DAYS * 86400000);
+  }
+  // → { essential: bool, full: bool } = "já tenho dado fresco o bastante pra este modo?"
+  function _lzFreshness(uid, profileMap, scanMap) {
+    var out = { essential: false, full: false };
+    if (!uid) return out;
+    var prof = profileMap && profileMap[uid];
+    var imp = prof && prof.letzplayImport;
+    if (imp && _lzIsFresh(imp.importedAt)) { out.essential = true; out.full = true; }
+    var sc = scanMap && scanMap[uid];
+    if (sc && _lzIsFresh(sc.scannedAt)) {
+      out.essential = true;
+      // Completa só está coberta por outra completa DE VERDADE. Duas armadilhas aqui,
+      // ambas viram fantasma (14/jul/2026):
+      //  • _mode='full' era gravado mesmo quando o histórico não veio (fullImport=null)
+      //    → o app dava a completa por feita e DESABILITAVA o botão de buscar de novo.
+      //    Agora _saveScansAndReload só grava 'full' quando vieram jogos.
+      //  • sc.fullImport sobrevive ao set({merge:true}) de um scan NOVO que não trouxe
+      //    nada — um import de ontem parecia fresco por causa do scannedAt de hoje.
+      //    Por isso o frescor do histórico é medido pelo timestamp DELE (importedAt),
+      //    nunca pelo scannedAt do scan que o acompanha.
+      if ((sc.scan && sc.scan._mode) === 'full') out.full = true;
+      if (sc.fullImport && _lzIsFresh(sc.fullImport.importedAt)) out.full = true;
+    }
+    return out;
+  }
+
   // Seção ÚNICA da Análise: Categorias com apuração pelo letzplay. Junta os botões
   // de busca, a legenda de cores e a matriz (nomes pintados pela verificação).
   function _renderCategoriesSection(rows, t, profileMap, scanMap) {
@@ -1404,7 +1541,17 @@
       if (!prof || !prof.letzplayHandle) return false;
       return (_meUid && r.uid === _meUid) || prof.letzplayConsent === true;
     }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
-    window._lzScanCtx = { tId: t.id, targets: targets };
+    // PENDENTES = quem está DESATUALIZADO (> 6 dias). Re-varrer quem foi lido anteontem
+    // só gasta tempo e leitura do letzplay (que responde com rate-limit em rajada).
+    // Separado por MODO: um "essencial" fresco NÃO cobre um pedido de "completa" (a
+    // completa lê os jogos, que a essencial nem olha); uma "completa" fresca cobre as duas.
+    var pend = { essential: [], full: [] };
+    targets.forEach(function (tg) {
+      var have = _lzFreshness(tg.uid, profileMap, scanMap);
+      if (!have.essential) pend.essential.push(tg);
+      if (!have.full) pend.full.push(tg);
+    });
+    window._lzScanCtx = { tId: t.id, targets: targets, pend: pend };
 
     // Última verificação + o MODO usado (essencial/completa) do scan mais recente.
     var lastTs = 0, lastMode = null;
@@ -1418,17 +1565,41 @@
     // da última verificação fica EMBAIXO do botão que foi efetivamente usado.
     var essCss = 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;cursor:pointer;';
     var fullCss = 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;cursor:pointer;';
+    // CINZA + INATIVO = "não há nada novo pra buscar". Uma busca COMPLETA fresca apaga
+    // os DOIS botões (ela contém a essencial); uma ESSENCIAL fresca apaga só o dela —
+    // a completa continua acesa porque lê os jogos, que a essencial nem olha.
+    // CINZA de verdade. Era var(--bg-darker) — que no tema escuro é quase PRETO, então o
+    // botão inativo sumia no fundo e não lia como "desabilitado", lia como buraco.
+    var _greyCss = 'background:#4a5163;color:#c3c9d6;border:1px solid #5b6376;cursor:not-allowed;opacity:0.9;';
+    // Cada botão mostra QUANTOS ele vai buscar de verdade (os frescos < 6 dias ficam de
+    // fora). Sem NINGUÉM pendente o botão fica CINZA E INATIVO — só volta a acender
+    // quando entrar um inscrito novo autorizado ou quando algum dos já buscados passar
+    // dos 6 dias. Nada de re-buscar à toa: cada busca é leitura no letzplay, que
+    // responde com rate-limit em rajada.
+    function scanCol(mode, id, label, css, title, shine) {
+      var nPend = (pend[mode] || []).length, nAll = targets.length;
+      var doneAll = nPend === 0;
+      var cnt = doneAll ? '' : (nPend < nAll ? ' (' + nPend + ' de ' + nAll + ')' : ' (' + nAll + ')');
+      var btnCss = doneAll ? (_greyCss + 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;') : css;
+      var dis = doneAll ? ' disabled' : '';
+      var tip = doneAll ? 'Todos verificados há menos de ' + _LZ_FRESH_DAYS + ' dias — nada novo pra buscar' : title;
+      return '<div style="flex:1;">' +
+        '<button type="button" id="' + id + '"' + dis + ' onclick="window._lzOrgScan(\'' + mode + '\')" title="' + _esc(tip) + '" class="btn' + (doneAll ? '' : ' hover-lift') + (shine && !doneAll ? ' btn-shine' : '') + '" style="' + btnCss + '">' +
+          label + (doneAll ? ' ✅' : cnt) + '</button>' +
+        (lastMode === mode || doneAll ? dateLine() : '') +
+      '</div>';
+    }
     var scanBtn = (_isOrg && targets.length)
       ? '<div style="font-size:15px;font-weight:800;color:var(--text-secondary,#c8cdd6);margin-bottom:8px;">🎾 Verificar histórico no letzplay (' + targets.length + ')</div>' +
         '<div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-start;">' +
-          '<div style="flex:1;"><button type="button" id="lz-scan-btn-essential" onclick="window._lzOrgScan(\'essential\')" title="Busca rápida: só o nível real do ranking ativo" class="btn hover-lift" style="' + essCss + '">🔎 Essencial</button>' + (lastMode === 'essential' ? dateLine() : '') + '</div>' +
-          '<div style="flex:1;"><button type="button" id="lz-scan-btn-full" onclick="window._lzOrgScan(\'full\')" title="Busca completa: rankings + torneios + jogos" class="btn btn-shine hover-lift" style="' + fullCss + '">📚 Completa</button>' + (lastMode === 'full' ? dateLine() : '') + '</div>' +
+          scanCol('essential', 'lz-scan-btn-essential', '🔎 Essencial', essCss, 'Busca rápida: só o nível real do ranking ativo', false) +
+          scanCol('full', 'lz-scan-btn-full', '📚 Completa', fullCss, 'Busca completa: rankings + torneios + jogos', true) +
         '</div>'
       : (_ld ? '<div style="margin-bottom:10px;">' + dateLine() + '</div>' : '');
     // Legenda (todos os rótulos) — código de cor da verificação.
     function leg(c, txt) { return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:' + c + ';"><span style="width:11px;height:11px;border-radius:50%;background:' + c + ';"></span>' + txt + '</span>'; }
     var legend = '<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;">' +
-      leg(_LZ_COL.red, 'deve subir') + leg(_LZ_COL.yellow, 'pode subir') + leg(_LZ_COL.blue, 'rebaixar') + leg(_LZ_COL.green, 'coerente') + leg(_LZ_COL.white, 'sem verificação') +
+      leg(_LZ_COL.red, 'deve subir') + leg(_LZ_COL.yellow, 'pode subir') + leg(_LZ_COL.blue, 'rebaixar') + leg(_LZ_COL.green, 'coerente') + leg(_LZ_COL.violet, 'autorizado') + leg(_LZ_COL.white, 'não autorizou') +
       '</div>';
     var hint = _isOrg ? '<div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no topo.</div>' : '';
     // Barra Cancelar/Salvar — STICKY no topo (abaixo do cabeçalho fixo), aparece só
@@ -1544,281 +1715,357 @@
     }).filter(function (v) { return v != null; });
     return ranks.length ? Math.min.apply(null, ranks) : null;
   }
-  // Status/cor da categoria (declarada × nível real). gap = declRank - realRank
-  // (rank: A=0 mais forte … D=3, FUN=4). declarou mais fraco (gap>0) = deve subir.
-  //   🟢 verde  = coerente (gap 0)
-  //   🟡 amarelo= deve subir leve (gap 1)
-  //   🔴 vermelho= precisa subir (gap ≥2)
-  //   🔵 azul   = deve rebaixar (gap <0 — declarou mais forte que joga)
-  function _lzStatus(declRank, realRank) {
-    if (declRank == null || realRank == null) return { color: '#8592a6', emoji: '', label: 'sem comparação', flag: false };
-    var gap = declRank - realRank;
-    if (gap <= -1) return { color: '#38bdf8', emoji: '🔵', label: 'deve rebaixar', flag: false };
-    if (gap === 0) return { color: '#2dd4a0', emoji: '🟢', label: 'coerente', flag: false };
-    if (gap === 1) return { color: '#f0b445', emoji: '🟡', label: 'deve subir', flag: true };
-    return { color: '#f26a6a', emoji: '🔴', label: 'precisa subir', flag: true };
-  }
-
-  function _renderLetzplaySection(rows, t, profileMap, scanMap) {
-    profileMap = profileMap || {}; scanMap = scanMap || {};
-    window._lzRenderCtx = { t: t, rows: rows, profileMap: profileMap, scanMap: scanMap };   // p/ re-render in-place pós-busca
-    var imp = [], scanned = [], wait = [], denied = [], noh = [];
-    (rows || []).forEach(function (r) {
-      var prof = (r.uid && profileMap[r.uid]) ? profileMap[r.uid] : null;
-      var li = prof && prof.letzplayImport;
-      var handle = prof && prof.letzplayHandle;
-      var consent = prof && prof.letzplayConsent === true;
-      var sc = (r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
-      if (li) imp.push({ r: r, li: li });
-      else if (sc) scanned.push({ r: r, scan: sc });
-      else if (handle && consent) wait.push({ r: r, handle: handle });
-      else if (handle && !consent) denied.push(r);
-      else noh.push(r);
-    });
-    // Só mostra a seção se ao menos alguém tem @ letzplay (evita poluir torneios sem uso).
-    if (imp.length + scanned.length + wait.length + denied.length === 0) return '';
-
-    var C = {
-      green: { bg: 'rgba(16,185,129,0.14)', fg: '#2dd4a0' },
-      blue: { bg: 'rgba(56,189,248,0.14)', fg: '#38bdf8' },
-      amber: { bg: 'rgba(240,180,69,0.14)', fg: '#f0b445' },
-      red: { bg: 'rgba(242,106,106,0.14)', fg: '#f26a6a' },
-      grey: { bg: 'rgba(133,146,166,0.14)', fg: '#8592a6' }
-    };
-    function pill(c, n, label) {
-      return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:6px 12px;border-radius:20px;background:' + c.bg + ';color:' + c.fg + ';"><span style="width:8px;height:8px;border-radius:50%;background:' + c.fg + ';"></span>' + n + ' ' + label + '</span>';
-    }
-    function line(name, extra) {
-      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:0.86rem;"><span>' + _esc(name || '—') + '</span>' + (extra || '') + '</div>';
-    }
-    // Itens em COLUNAS (grid) pra aproveitar a largura e economizar altura.
-    // minw = largura mínima da coluna (nomes simples: estreita; conhecidos c/ categoria: larga).
-    function group(color, label, itemsHtml, minw) {
-      if (!itemsHtml) return '';
-      return '<div style="font-size:12px;font-weight:700;color:' + color + ';margin:12px 0 3px;">' + label + '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(' + (minw || '150px') + ',1fr));gap:0 18px;">' + itemsHtml + '</div>';
-    }
-    // Anti-gato pela REGRA DA FEDERAÇÃO (pode competir ACIMA, não ABAIXO; desempenho
-    // manda; campeão sobe). Só é violação quem DOMINA (título ou topo da tabela) numa
-    // categoria igual/mais fácil que a declarada → deve subir. Jogar num ranking mais
-    // forte SEM dominar (como quem sobe de nível aos poucos) é permitido → não sinaliza.
-    // Ranks: A=0 (mais forte) … D=3, FUN=4.
-    var flagged = 0;
-    var _LTR = ['A', 'B', 'C', 'D', 'FUN'];
-    // Junta os sinais de desempenho: banda (onde está ranqueado), categorias DOMINADAS
-    // (título OU top-15% da tabela OU winPct alto), e nº de títulos.
-    function _lzEvidence(champCats, rankings, bandCats) {
-      var titleRanks = (champCats || []).map(function (c) { return _lzRankFrom([c]); }).filter(function (r) { return r != null; });
-      var domRanks = titleRanks.slice();
-      (rankings || []).forEach(function (r) {
-        var cr = _lzRankFrom([r.category || r.categoryRaw]);
-        if (cr == null) return;
-        if (r.active === false) return;
-        var topStanding = (r.position && r.fieldSize && (r.position / r.fieldSize) <= 0.15);
-        var highWin = (typeof r.winPct === 'number' && r.winPct >= 70 && (r.games == null || r.games >= 6));
-        if (topStanding || highWin) domRanks.push(cr);
-      });
-      var bandRanks = (bandCats || []).map(function (c) { return _lzRankFrom([c]); }).filter(function (r) { return r != null; });
-      return {
-        bandRank: bandRanks.length ? Math.min.apply(null, bandRanks) : null,
-        dominatedRank: domRanks.length ? Math.min.apply(null, domRanks) : null,
-        titleCount: titleRanks.length
-      };
-    }
-    // Veredito → 5 níveis (código de cor É o status; sem palavras no item):
-    //   ⚪ branco  = sem info      🟢 verde = coerente
-    //   🔵 azul   = sug. rebaixar 🟡 amarelo = pode subir  🔴 vermelho = deve subir
-    var _LZ_COL = { white: '#8592a6', green: '#2dd4a0', blue: '#38bdf8', yellow: '#f0b445', red: '#f26a6a' };
-    function _lzVerdict(declRank, ev) {
-      ev = ev || {};
-      if (declRank == null) return { key: 'white', apurada: null };
-      // DOMÍNIO (título/topo) numa categoria <= declarada → deve/pode subir.
-      if (ev.dominatedRank != null) {
-        var shouldRank = Math.max(0, ev.dominatedRank - 1); // campeão da X vai pra X-1
-        if (shouldRank < declRank) {
-          var strong = (declRank - shouldRank) >= 2 || (ev.titleCount || 0) >= 3;
-          return { key: strong ? 'red' : 'yellow', apurada: shouldRank }; // deve / pode subir
-        }
-      }
-      // Sem domínio: ranqueado ACIMA da declarada = pode subir; ABAIXO = sug. rebaixar.
-      if (ev.bandRank != null && ev.bandRank < declRank) return { key: 'yellow', apurada: ev.bandRank };
-      if (ev.bandRank != null && ev.bandRank > declRank) return { key: 'blue', apurada: ev.bandRank };
-      return { key: 'green', apurada: (ev.bandRank != null ? ev.bandRank : declRank) };
-    }
-    // Linha de uma pessoa COM dado → { key, html }. Nome colorido pelo status + (declarada / apurada).
-    function personLine(name, effSkills, ev, srcIcon) {
-      var declRank = _declRankFrom(effSkills);
-      var declLabel = (effSkills && effSkills.length) ? effSkills.join('/') : '—';
-      var v = _lzVerdict(declRank, ev);
-      var known = (declRank != null && v.apurada != null);
-      var color = known ? _LZ_COL[v.key] : _LZ_COL.white;
-      var apLabel = (v.apurada != null) ? _LTR[v.apurada] : '—';
-      var right = '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:' + color + ';">' +
-        (known ? ('(' + _esc(declLabel) + ' / ' + _esc(apLabel) + ')') : '—') + ' <span style="opacity:0.5;">' + srcIcon + '</span></span>';
-      var html = '<div style="padding:4px 0;font-size:0.86rem;display:flex;justify-content:space-between;gap:10px;">' +
-        '<span style="color:' + color + ';font-weight:600;">' + _esc(name || '—') + '</span>' + right +
-      '</div>';
-      return { key: known ? v.key : 'white', html: html };
-    }
-    // Classifica TODOS com dado (import 🎾 ou scan 🔎) por STATUS (não por fonte).
-    var buckets = { red: [], yellow: [], blue: [], green: [], white: [] };
-    imp.forEach(function (o) {
-      var li = o.li, oc = li.officialCategory, band = li.rating && li.rating.band;
-      var champCats = (li.tournaments || []).filter(function (t) { return t.title; }).map(function (t) { return t.categoryRaw; });
-      var ev = _lzEvidence(champCats, li.rankings || [], [oc ? oc.categoryRaw : '', band || '']);
-      var pl = personLine(o.r.name, o.r.effectiveSkills, ev, '🎾');
-      buckets[pl.key].push(pl.html);
-    });
-    scanned.forEach(function (o) {
-      var s = o.scan;
-      var ev = _lzEvidence(s.champions || [], s.rankings || [], [s.rankingCategory].concat(s.allCategories || []));
-      var pl = personLine(o.r.name, o.r.effectiveSkills, ev, '🔎');
-      buckets[pl.key].push(pl.html);
-    });
-    flagged = buckets.red.length; // 🚩 = só "deve subir" (obrigatório)
-    var restHtml = function (arr) { return arr.map(function (x) { return line(x.r ? x.r.name : x.name); }).join(''); };
-
-    // Alvos da busca = TODOS os competidores autorizados (@ + consentimento). O ORGANIZADOR
-    // competidor entra auto-autorizado (próprio dado público). Inclui quem JÁ tem import —
-    // pra atualizar os desatualizados; a precedência só sobrescreve se o scan for mais novo.
-    var _meUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
-    var targets = (rows || []).filter(function (r) {
-      var prof = r.uid && profileMap[r.uid];
-      if (!prof || !prof.letzplayHandle) return false;
-      return (_meUid && r.uid === _meUid) || prof.letzplayConsent === true;
-    }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
-    window._lzScanCtx = { tId: t.id, targets: targets };
-
-    // Última atualização = scan mais recente do torneio.
-    var lastTs = 0;
-    Object.keys(scanMap).forEach(function (uid) { var s = scanMap[uid]; if (s && s.scannedAt) { var v = Date.parse(s.scannedAt) || 0; if (v > lastTs) lastTs = v; } });
-    var _ld = lastTs ? new Date(lastTs) : null;
-    var lastUpdateHtml = _ld
-      ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Última atualização: <b style="color:var(--text-bright,#fff);">' + _ld.toLocaleDateString('pt-BR') + ' ' + _ld.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '</b></div>'
-      : '';
-    // Dois modos: ESSENCIAL (só o ranking real — rápido, pra flag) e COMPLETA (perfil
-    // inteiro: rankings + torneios + jogos — pra migrar a pessoa pro scoreplace).
-    var btnCss = 'flex:1;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color);border-radius:10px;padding:11px 12px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.86rem;font-weight:700;';
-    var scanBtn = targets.length
-      ? '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
-          '<button type="button" id="lz-scan-btn-essential" onclick="window._lzOrgScan(\'essential\')" title="Busca rápida: só o nível real do ranking ativo (pra conferir a categoria)" style="' + btnCss + '">🔎 Essencial (' + targets.length + ')</button>' +
-          '<button type="button" id="lz-scan-btn-full" onclick="window._lzOrgScan(\'full\')" title="Busca completa: rankings + torneios + jogos (perfil inteiro do letzplay)" style="' + btnCss + '">📚 Completa (' + targets.length + ')</button>' +
-        '</div>'
-      : '';
-
-    var flagBanner = flagged > 0
-      ? '<div style="background:rgba(242,106,106,0.12);border:1px solid rgba(242,106,106,0.4);border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:0.86rem;color:#f26a6a;font-weight:600;">🚩 ' +
-          flagged + ' inscrito' + (flagged === 1 ? '' : 's') + ' com título/domínio na categoria — deve' + (flagged === 1 ? '' : 'm') + ' subir. Confira abaixo.</div>'
-      : '';
-    return '<div id="lz-history-section" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px 18px;margin-bottom:14px;">' +
-      '<div style="font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">🎾 Histórico letzplay</div>' +
-      scanBtn +
-      lastUpdateHtml +
-      // Pills = contagem por STATUS (só as 5 cores do anti-gato). Só mostra > 0.
-      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">' +
-        (buckets.red.length ? pill(C.red, buckets.red.length, 'deve subir') : '') +
-        (buckets.yellow.length ? pill(C.amber, buckets.yellow.length, 'pode subir') : '') +
-        (buckets.blue.length ? pill(C.blue, buckets.blue.length, 'rebaixar') : '') +
-        (buckets.green.length ? pill(C.green, buckets.green.length, 'coerente') : '') +
-        (buckets.white.length ? pill(C.grey, buckets.white.length, 'sem info') : '') +
-      '</div>' +
-      flagBanner +
-      // Grupos por STATUS — cabeçalho na COR do status (código de cor consistente).
-      group(C.red.fg, '🔴 Deve subir (título / domínio)', buckets.red.join(''), '250px') +
-      group(C.amber.fg, '🟡 Pode subir (ranqueado acima)', buckets.yellow.join(''), '250px') +
-      group(C.blue.fg, '🔵 Sugestão de rebaixamento', buckets.blue.join(''), '250px') +
-      group(C.green.fg, '🟢 Coerente', buckets.green.join(''), '250px') +
-      group(C.grey.fg, '⚪ Sem informação (com @, sem comparação)', buckets.white.join(''), '250px') +
-      // Sem histórico ainda — NEUTRO (cinza), não usa as cores de status. É processo, não veredito.
-      (wait.length + denied.length + noh.length > 0
-        ? '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:14px 0 3px;border-top:1px solid var(--border-color);padding-top:10px;">Sem histórico ainda</div>' +
-          (wait.length ? '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:4px;">🔎 ' + wait.length + ' autorizou — falta buscar</div>' + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 16px;">' + restHtml(wait) + '</div>' : '') +
-          (denied.length ? '<div style="font-size:0.82rem;color:var(--text-muted);margin:6px 0 4px;">🚫 ' + denied.length + ' não autorizou a busca</div>' + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 16px;">' + restHtml(denied) + '</div>' : '') +
-          (noh.length ? '<div style="font-size:0.82rem;color:var(--text-muted);margin-top:6px;">👤 ' + noh.length + ' sem @ letzplay</div>' : '')
-        : '') +
-      '<div style="font-size:12px;color:var(--text-muted);margin-top:11px;border-top:1px solid var(--border-color);padding-top:9px;line-height:1.5;">Cor = nível apurado vs. declarado. 🎾 histórico importado · 🔎 perfil público buscado. A busca lê o <b>perfil público</b> do letzplay e precisa da <b>extensão no Chrome (desktop)</b>.</div>' +
-      '</div>';
-  }
-
   // compara versões "a.b.c" — a >= b?
   function _verGE(a, b) {
     a = String(a || '0').split('.').map(Number); b = String(b || '0').split('.').map(Number);
     for (var i = 0; i < Math.max(a.length, b.length); i++) { var x = a[i] || 0, y = b[i] || 0; if (x !== y) return x > y; }
     return true;
   }
-  var _LZ_MIN_EXT = '1.25';
+  // FONTE ÚNICA: window.SP_EXT_VERSION (store.js). Este valor era '1.25' fixo enquanto a
+  // extensão já ia na 1.36 — foi o que deixou a busca de 14/jul/2026 rodar com a 1.35 e
+  // gravar ZERO jogos (a 1.35 desiste na 4ª tentativa de rajada; a 1.36 tem fila global +
+  // 8 tentativas + respeita retry-after). Sem número solto aqui, nunca mais diverge.
+  var _LZ_MIN_EXT = window.SP_EXT_VERSION;
 
-  // Busca ativa: o PRÓPRIO botão vira barra de progresso 0–100% (sem modal, o
-  // organizador fica na tela). Erros viram toast e o botão volta ao normal.
+  // Fração de progresso DENTRO de uma pessoa (o modo completo lê perfil → jogos →
+  // torneios). Sem isto a barra fica parada em "0% · Fulano" por minutos no 1º
+  // participante e parece travada — foi o que o organizador reportou.
+  var _LZ_PHASE_FRAC = { perfil: 0.15, jogos: 0.45, torneios: 0.8 };
+
+  // Busca ativa do organizador. REGRAS (v1.1.18):
+  //  • Barra de progresso canônica (bolinha girando + fase descrita) — nunca "travado".
+  //  • NÃO existe prazo total: a busca completa de 4 pessoas passa MUITO de 90s
+  //    (paginação + 1 fetch por torneio + espera do rate-limit). O antigo timeout de
+  //    90s matava buscas SADIAS no meio → "não deu pra buscar" com tudo funcionando.
+  //    Agora o único corte é OCIOSIDADE: 3 min sem NENHUMA notícia da extensão.
+  //  • Clicar de novo enquanto roda: não faz nada (a barra já está na tela).
+  //  • O que já foi lido é salvo mesmo se o resto falhar (resultado parcial).
+  var _LZ_IDLE_MS = 180000;
+  var _LZ_FULL_MS_KEY = 'scoreplace_lz_full_ms';
+  // Quanto custa, MEDIDO, uma pessoa na busca completa. Começa em ~2min (a conta pela
+  // cadência da extensão: ~22 requisições × ~3,5s) e passa a valer o tempo real assim que
+  // uma busca termina — inclusive o quanto o letzplay estiver limitando HOJE. É isso que
+  // faz o tamanho do lote e o regressivo acertarem em vez de repetir um chute fixo.
+  function _lzMeasuredFullMs() {
+    var v = parseInt(localStorage.getItem(_LZ_FULL_MS_KEY) || '', 10);
+    return (v > 5000 && v < 900000) ? v : 120000;
+  }
+  function _lzRecordFullMs(ms) {
+    if (!(ms > 5000)) return;
+    var cur = _lzMeasuredFullMs();
+    localStorage.setItem(_LZ_FULL_MS_KEY, String(Math.round(cur * 0.5 + ms * 0.5)));
+  }
+  // Antiguidade em ms (maior = mais desatualizado). Nunca varrido → vem primeiro sempre.
+  function _lzStaleness(tg) {
+    var sc = (window._lzRenderCtx && window._lzRenderCtx.scanMap) ? window._lzRenderCtx.scanMap[tg.uid] : null;
+    var ts = (sc && sc.scannedAt) ? (Date.parse(sc.scannedAt) || 0) : 0;
+    return ts ? (Date.now() - ts) : Number.MAX_SAFE_INTEGER;
+  }
+  // Ordena a varredura: JOB ÚNICO, sem corte por lote.
+  //
+  // O lote de 20min foi tentado e DESCARTADO pelo dono, por um motivo que vale mais que o
+  // tempo: _"divididos em lotes podem confundir o organizador que pensa que puxou tudo mas
+  // nao puxou e nao puxa de novo."_ É a MESMA família de bug que passamos o dia matando —
+  // sistema que reporta sucesso sem ter trazido o dado. Um job longo com o tempo na tela e
+  // um botão de interromper é honesto; um lote silencioso não é.
+  //
+  // Segurança do job longo (é o que torna as 3h aceitáveis):
+  //   • cada pessoa é GRAVADA assim que conclui (_lzPersistScans no parcial) — fechar a
+  //     aba/dormir o notebook perde no máximo a pessoa em andamento;
+  //   • Interromper salva o que já veio;
+  //   • a ordem é do MAIS DESATUALIZADO pro mais recente, então interromper no meio deixa
+  //     pra trás justamente quem estava mais atualizado — o corte nunca é arbitrário.
+  // Exposto pra teste (tests/letzplay-batch.test.js): a ordem é decisão do dono.
+  window._lzPlanScan = function (targets, mode) {
+    targets = (targets || []).slice();
+    if (mode !== 'full') return { targets: targets, sobram: 0 };
+    // Mais desatualizado primeiro; nunca varrido vem antes de todo mundo.
+    targets.sort(function (a, b) { return _lzStaleness(b) - _lzStaleness(a); });
+    return { targets: targets, sobram: 0 };
+  };
+  // Extensão ausente/velha → DIÁLOGO COM BOTÃO QUE BAIXA, não um toast de texto.
+  //
+  // O organizador NÃO passa pelo onboarding do letzplay (#importar-letzplay) — aquilo é o
+  // fluxo de quem importa o PRÓPRIO histórico. Ele vive na Análise de Inscritos, e aqui o
+  // gate mandava "baixe a v1.38 em scoreplace.app/..." num toast: texto que some, não
+  // clica, e manda o cara copiar URL na mão. O zip existia, servido, e mesmo assim não
+  // havia como chegar nele a partir da tela onde o bloqueio acontece.
+  // Sem versão na loja não há auto-update, então o download TEM que estar aqui.
+  function _lzExtDialog(versaoAtual) {
+    var url = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    var titulo = versaoAtual ? ('🧩 Sua extensão é a v' + versaoAtual) : '🧩 Extensão não encontrada';
+    var corpo = versaoAtual
+      ? 'A busca precisa da <b>v' + _LZ_MIN_EXT + '</b>. A v' + versaoAtual + ' desiste quando o letzplay limita o acesso e conclui a busca <b>sem trazer os jogos</b> — sem erro nenhum.'
+      : 'Não achei a extensão do scoreplace neste navegador. É ela que lê o letzplay dentro da sua sessão logada.';
+    corpo += '<br><br><b>Instalar:</b><br>' +
+      '1. Baixe o zip e <b>descompacte</b><br>' +
+      '2. Abra <code>chrome://extensions</code> → ligue <b>Modo do desenvolvedor</b><br>' +
+      '3. <b>Carregar sem compactação</b> → escolha a pasta que saiu do zip' +
+      (versaoAtual ? ' (e remova a v' + versaoAtual + ')' : '') + '<br>' +
+      '4. Recarregue esta página';
+    if (typeof window.showConfirmDialog !== 'function' || !url) {
+      _toastErr(titulo + ' — a busca precisa da v' + _LZ_MIN_EXT + '.');
+      return;
+    }
+    window.showConfirmDialog(titulo, corpo, function () {
+      var a = document.createElement('a');
+      a.href = url; a.setAttribute('download', '');
+      document.body.appendChild(a); a.click(); a.remove();
+    }, null, { confirmText: '⬇️ Baixar a v' + _LZ_MIN_EXT, cancelText: 'Agora não', type: 'warning' });
+  }
+
+  // Quanto tempo a busca vai levar, em texto — MOSTRADO ANTES de começar. Um job de 3h
+  // que arranca sem avisar é uma emboscada; avisado, é uma escolha.
+  function _lzEtaLabel(n, mode) {
+    var ms = n * (mode === 'full' ? _lzMeasuredFullMs() : 8500);
+    var min = Math.round(ms / 60000);
+    if (min < 60) return '~' + Math.max(1, min) + 'min';
+    return '~' + (ms / 3600000).toFixed(1).replace('.', ',') + 'h';
+  }
+  window._lzScanRunning = false;
   window._lzOrgScan = function (mode) {
     mode = (mode === 'full') ? 'full' : 'essential';
-    window._lzPendingMode = mode; // registra o modo pra gravar no scan (última verificação)
+    if (window._lzScanRunning) return;   // já rodando → a barra está na tela
     var ctx = window._lzScanCtx;
     if (!ctx || !ctx.targets || !ctx.targets.length) return;
-    var btn = document.getElementById(mode === 'full' ? 'lz-scan-btn-full' : 'lz-scan-btn-essential');
-    var otherBtn = document.getElementById(mode === 'full' ? 'lz-scan-btn-essential' : 'lz-scan-btn-full');
-    var origHtml = btn ? btn.innerHTML : '';
-    var origBg = btn ? btn.style.background : ''; // preserva o gradiente do botão
-    var pillBg = 'rgba(99,102,241,0.20)'; // trilho de fundo do progresso
-    function setBtn(txt, pct) {
-      if (otherBtn) otherBtn.disabled = true;
-      if (!btn) return;
-      btn.disabled = true;
-      btn.style.background = (pct != null) ? ('linear-gradient(90deg, rgba(56,189,248,0.65) ' + pct + '%, ' + pillBg + ' ' + pct + '%)') : pillBg;
-      btn.textContent = txt;
+    // Alvos = só quem está DESATUALIZADO (> 6 dias). Com zero pendentes o botão está
+    // cinza/inativo, então este caminho é só rede de segurança (nunca deve ser clicável).
+    var targets = (ctx.pend && ctx.pend[mode]) || ctx.targets;
+    if (!targets.length) return;
+    // A COMPLETA custa ~22 requisições por pessoa (páginas do histórico + 1 por competição)
+    // → ~2min em cadência humana (obrigatória: correr faz o Cloudflare bloquear e não vem
+    // jogo nenhum). 100 inscritos = ~3h. É UM job, avisado e interrompível — o lote foi
+    // descartado por esconder do organizador que faltava gente (ver _lzPlanScan).
+    var _plano = window._lzPlanScan(targets, mode);
+    targets = _plano.targets;
+    // Job longo (>20min) avisa ANTES. Diz que dá pra interromper e que nada se perde —
+    // sem isso o organizador ou não clica (com medo) ou clica e abandona no meio achando
+    // que travou. Só a completa costuma chegar lá; a essencial de 100 dá ~14min.
+    if (mode === 'full' && targets.length * _lzMeasuredFullMs() > 20 * 60 * 1000 &&
+        typeof window.showConfirmDialog === 'function') {
+      var _eta = _lzEtaLabel(targets.length, mode);
+      window.showConfirmDialog(
+        '📚 Busca completa: ' + _eta,
+        'Vou ler o histórico inteiro de ' + targets.length + ' inscrito(s) no letzplay, no ritmo que ele aceita (ir mais rápido faz ele bloquear e não vir jogo nenhum).\n\n' +
+        'Pode deixar rodando e usar o app normalmente. Dá pra <b>interromper a qualquer momento</b> — cada pessoa é salva assim que fica pronta, então nada do que já veio se perde.\n\n' +
+        'Começo pelos mais desatualizados.',
+        function () { _lzRunScan(mode, targets); },
+        null, { confirmText: 'Buscar (' + _eta + ')', cancelText: 'Agora não', type: 'info' }
+      );
+      return;
     }
-    function restore() { if (otherBtn) otherBtn.disabled = false; if (btn) { btn.disabled = false; btn.style.background = origBg; btn.innerHTML = origHtml; } }
-    function fail(msg) { restore(); if (typeof showNotification === 'function') showNotification('Não deu pra buscar', msg, 'error'); }
-    setBtn('🔌 Conectando à extensão…', null);
-    var started = false, done = false, versions = [], bestScans = {}, resultTimer = null;
+    _lzRunScan(mode, targets);
+  };
+  function _lzRunScan(mode, targets) {
+    var ctx = window._lzScanCtx;
+    if (!ctx || !targets || !targets.length) return;
+    window._lzScanRunning = true;
+    window._lzPendingMode = mode; // registra o modo pra gravar no scan (última verificação)
+    var total = targets.length;
+    // Semente do regressivo: a essencial é 1 navegação por pessoa; a completa é a paginação
+    // inteira. A medição real corrige já na 1ª pessoa concluída.
+    window._spEtaBegin(total, mode === 'full' ? _lzMeasuredFullMs() : 8500);
+    var bestScans = {}, versions = [], started = false, done = false, resultTimer = null, idleTimer = null;
+    var _gravados = {};   // uids já persistidos incrementalmente (não regrava no fim)
+    function scanList() { return Object.keys(bestScans).map(function (u) { return bestScans[u]; }); }
+    function setProg(o) {
+      o = o || {};
+      window._spProgressOverlay({
+        label: o.label || (mode === 'full' ? '📚 Busca completa no letzplay' : '🔎 Verificando no letzplay'),
+        sub: o.sub || '', pct: o.pct, onCancel: o.noCancel ? null : cancel
+      });
+    }
+    var _startedAt = Date.now();
+    function cleanup() {
+      done = true;
+      window._lzScanRunning = false;
+      // Guarda o custo REAL por pessoa da completa: é o que dimensiona o próximo lote e
+      // a estimativa inicial. Assim o "N mais desatualizados" acompanha o quanto o
+      // letzplay está limitando hoje, em vez de repetir um chute fixo.
+      var _feitos = scanList().filter(function (s) { return s.uid && s.scan; }).length;
+      if (mode === 'full' && _feitos > 0) _lzRecordFullMs((Date.now() - _startedAt) / _feitos);
+      if (typeof window._spEtaEnd === 'function') window._spEtaEnd();
+      window.removeEventListener('message', onMsg);
+      if (idleTimer) clearTimeout(idleTimer);
+      if (resultTimer) clearTimeout(resultTimer);
+      if (typeof window._spCloseImportOverlay === 'function') window._spCloseImportOverlay();
+    }
+    function cancel() {
+      if (done) return;
+      var got = scanList().filter(function (s) { return s.uid && s.scan; });
+      cleanup();
+      // Cancelou no meio? O que JÁ foi lido não se perde — grava e mostra.
+      if (got.length) _saveScansAndReload(ctx.tId, got, function (m) { _toastErr(m); });
+      else if (typeof showNotification === 'function') showNotification('Busca cancelada', 'Nada foi alterado.', 'info');
+    }
+    function _toastErr(msg) { if (typeof showNotification === 'function') showNotification('Não deu pra buscar', msg, 'error'); }
+    // Falha: NUNCA joga fora o que já foi lido — salva o parcial e explica o resto.
+    function fail(msg) {
+      var got = scanList().filter(function (s) { return s.uid && s.scan; });
+      cleanup();
+      if (got.length) {
+        _saveScansAndReload(ctx.tId, got, _toastErr);
+        if (typeof showNotification === 'function') {
+          showNotification('Busca interrompida', got.length + ' de ' + total + ' foram salvos. ' + msg, 'warning');
+        }
+        return;
+      }
+      _toastErr(msg);
+    }
+    // Watchdog por OCIOSIDADE: rearmado a cada notícia da extensão. Só dispara se a
+    // busca ficar realmente muda (extensão morta/recarregada no meio).
+    function ping() {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(function () {
+        if (done) return;
+        fail('A extensão parou de responder (3 min em silêncio). Recarregue a página e tente de novo — o que já foi lido está salvo.');
+      }, _LZ_IDLE_MS);
+    }
+    function mergeScans(list) {
+      // Merge preferindo o scan COM categoria — cobre extensões duplicadas (uma
+      // velha devolve null, uma nova devolve a categoria).
+      (list || []).forEach(function (s) {
+        if (!s.uid) return;
+        var cur = bestScans[s.uid];
+        var sCat = !!(s.scan && s.scan.rankingCategory);
+        var cCat = !!(cur && cur.scan && cur.scan.rankingCategory);
+        if (!cur || (sCat && !cCat)) bestScans[s.uid] = s;
+      });
+    }
     function onMsg(e) {
       if (e.source !== window) return; var d = e.data; if (!d) return;
       // Junta as versões anunciadas (pode haver content scripts órfãos) — usa a MAIOR.
       if (d.__sp_lp === 'extension-present') { if (d.version) versions.push(d.version); return; }
+      // O letzplay pediu pra esperar. Isso é PROGRESSO (o sistema está se adaptando ao
+      // ritmo dele), não travamento: rearma o watchdog e explica a espera. Sem isto, uma
+      // pausa legítima de 60s ficava muda e, somada, podia estourar os 3 min de ociosidade
+      // e matar uma busca que estava indo bem.
+      if (d.__sp_lp === 'lz-throttle') {
+        ping();
+        // A espera entra na conta: o regressivo AUMENTA (é o previsto — "pode ir ajustando,
+        // aumentando ou diminuindo"). Sem isso ele desceria durante a pausa e mentiria.
+        window._spEtaDelay(d.waitMs || 0);
+        // NÃO expor "o letzplay pediu pra ir mais devagar" nem o ritmo em s/página: é
+        // detalhe de infraestrutura NOSSO. Pro organizador, esperar o rate-limit e ler uma
+        // página são a mesma coisa — a busca está andando. A espera já entra no regressivo
+        // (_spEtaDelay), então o "quanto falta" segue honesto sem virar ansiedade.
+        setProg({ label: '⚙️ Processando informações…',
+          sub: 'a busca continua — pode deixar rodando e usar o app', pct: null });
+        return;
+      }
       if (d.__sp_lp === 'org-scan-progress' && d.tournamentId === ctx.tId) {
-        var total = d.total || ctx.targets.length; var pct = total ? Math.round((d.done || 0) / total * 100) : 0;
-        var who = (d.current && d.current.name) ? (' · ' + d.current.name) : '';
-        setBtn('🔎 Buscando… ' + pct + '%' + who, pct);
+        ping();
+        var tot = d.total || total;
+        var cur = d.current || {};
+        var frac = _LZ_PHASE_FRAC[cur.phase] || 0;
+        // pct e regressivo saem da MESMA contagem (_spEtaSync/_spEtaFrac) — é o que garante
+        // que 100% e 0s chegam juntos, sem ajuste cosmético no fim.
+        window._spEtaSync(d.done || 0);
+        window._spEtaFrac(frac);
+        var pct = window._spEtaPct() || (tot ? Math.min(99, Math.round(((d.done || 0) + frac) / tot * 100)) : 0);
+        var who = cur.name || cur.handle || '';
+        var note = cur.note ? (' · ' + cur.note) : '';
+        setProg({ label: (mode === 'full' ? '📚 Busca completa no letzplay' : '🔎 Verificando no letzplay'),
+          sub: ((d.done || 0) + 1) + ' de ' + tot + ' · ' + who + note, pct: Math.max(3, pct) });
         return;
       }
       if (d.__sp_lp === 'org-scan-result' && d.tournamentId === ctx.tId) {
         if (!d.ok) return;   // uma extensão falhou; aguarda outra (caso duplicadas)
-        // Merge preferindo o scan COM categoria — cobre extensões duplicadas (uma
-        // velha devolve null, uma nova devolve a categoria).
-        (d.scans || []).forEach(function (s) {
-          if (!s.uid) return;
-          var cur = bestScans[s.uid];
-          var sCat = !!(s.scan && s.scan.rankingCategory);
-          var cCat = !!(cur && cur.scan && cur.scan.rankingCategory);
-          if (!cur || (sCat && !cCat)) bestScans[s.uid] = s;
-        });
+        ping();
+        mergeScans(d.scans);
+        // parcial = a extensão avisando o que já leu. GRAVA AGORA quem acabou de ficar
+        // pronto: antes isto era `return` seco e o Firestore só era tocado no FIM, então
+        // uma busca de 3h que morresse no minuto 179 perdia tudo — apesar de a extensão
+        // prometer que "o que já foi lido está salvo". Cada uid é gravado UMA vez (_gravados).
+        if (d.partial) {
+          var novos = scanList().filter(function (s) { return s.uid && s.scan && !_gravados[s.uid]; });
+          if (novos.length) {
+            novos.forEach(function (s) { _gravados[s.uid] = 1; });
+            _lzPersistScans(ctx.tId, novos).catch(function (e) {
+              // Falhou a gravação incremental? Solta o uid pra tentar de novo no fim —
+              // melhor gravar duas vezes que perder.
+              novos.forEach(function (s) { delete _gravados[s.uid]; });
+              window._log && window._log('[lz parcial] não gravou (tenta no fim):', (e && e.message) || e);
+            });
+          }
+          return;
+        }
         // debounce: espera ~2s por resultados de outras extensões, depois salva o melhor
         if (resultTimer) clearTimeout(resultTimer);
         resultTimer = setTimeout(function () {
-          done = true; window.removeEventListener('message', onMsg);
-          setBtn('💾 Salvando…', 100);
-          _saveScansAndReload(ctx.tId, Object.keys(bestScans).map(function (u) { return bestScans[u]; }), fail);
+          var got = scanList();
+          cleanup();
+          if (typeof window._showLoading === 'function') window._showLoading('Salvando o que foi encontrado…');
+          _saveScansAndReload(ctx.tId, got, _toastErr);
         }, 2000);
       }
     }
+    setProg({ label: '🔌 Conectando à extensão…', sub: 'só um instante', pct: 2, noCancel: true });
     window.addEventListener('message', onMsg);
     window.postMessage({ __sp_lp: 'ext-ping' }, window.location.origin);
+    ping();
     setTimeout(function () {
       if (done || started) return;
-      var reload = 'Recarregue a extensão pra v' + _LZ_MIN_EXT + ' em chrome://extensions, recarregue a página e tente de novo.';
-      if (!versions.length) { window.removeEventListener('message', onMsg); fail('A extensão não respondeu. ' + reload); return; }
+      if (!versions.length) { cleanup(); _lzExtDialog(null); return; }
       var best = versions.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
-      if (!_verGE(best, _LZ_MIN_EXT)) { window.removeEventListener('message', onMsg); fail('Sua extensão está na versão ' + best + '. ' + reload); return; }
+      // BLOQUEIA versão velha — não avisa e deixa passar. Em 14/jul/2026 o mínimo estava
+      // congelado em '1.25' enquanto a extensão ia na 1.36: a 1.35 passou no gate e gravou
+      // ZERO jogos para 4 inscritos, reportando "busca concluída". Uma extensão defasada
+      // não é um detalhe cosmético — ela silenciosamente não traz o dado.
+      if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
       started = true;
-      setBtn('🔎 Buscando… 0%', 0);
-      window.postMessage({ __sp_lp: 'run-org-scan', targets: ctx.targets, tournamentId: ctx.tId, mode: mode }, window.location.origin);
+      setProg({ sub: 'preparando ' + total + (total === 1 ? ' inscrito' : ' inscritos'), pct: 3 });
+      window.postMessage({ __sp_lp: 'run-org-scan', targets: targets, tournamentId: ctx.tId, mode: mode }, window.location.origin);
     }, 900);
-    setTimeout(function () { if (done || !started) return; window.removeEventListener('message', onMsg); fail('A busca demorou demais. Tente de novo.'); }, 90000);
   };
+  // GRAVA um punhado de scans em letzplayScans/{uid}. Extraído de _saveScansAndReload
+  // pra poder ser chamado A CADA PESSOA concluída, e não só no fim.
+  //
+  // POR QUE ISSO IMPORTA: a extensão sempre mandou resultado parcial a cada pessoa, mas o
+  // app fazia `if (d.partial) return;` — acumulava em MEMÓRIA e só escrevia no Firestore
+  // no fim. Numa busca completa de 100 inscritos (~3h), fechar a aba, dormir o notebook ou
+  // um refresh perdia TUDO, apesar de o comentário na extensão prometer que "o que já foi
+  // lido está salvo". Agora cada pessoa é gravada assim que fica pronta.
+  function _lzPersistScans(tId, scans) {
+    var ok = (scans || []).filter(function (s) { return s.uid && s.scan; });
+    if (!ok.length) return Promise.resolve(0);
+    var db = firebase.firestore();
+    var meUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
+    var nowIso = new Date().toISOString();
+    var scanMode = (window._lzPendingMode === 'full') ? 'full' : 'essential';
+    var meName = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.displayName) || null;
+    var _tour = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId)
+      : ((window.AppStore && window.AppStore.tournaments) || []).filter(function (t) { return String(t.id) === String(tId); })[0];
+    var tName = _tour ? (_tour.name || null) : null;
+    return Promise.all(ok.map(function (s) {
+      var gotFull = !!(s.fullImport && Array.isArray(s.fullImport.games) && s.fullImport.games.length);
+      if (s.scan && typeof s.scan === 'object') {
+        s.scan._mode = (scanMode === 'full' && gotFull) ? 'full' : 'essential';
+        s.scan._fullGames = gotFull ? s.fullImport.games.length : 0;
+        s.scan._fullError = (scanMode === 'full' && !gotFull) ? (s.fullError || 'sem-jogos') : null;
+      }
+      var doc = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, scannedByName: meName, tournamentId: String(tId), tournamentName: tName };
+      if (gotFull) doc.fullImport = s.fullImport;
+      var w = db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
+      // ESCRITA DUPLA (transição): o histórico também vai pro canônico — 1 doc por
+      // competição, 1 por partida, compartilhado. É aqui que o ganho aparece: a mesma
+      // partida trazida por 4 pessoas vira UM doc, e varrer alguém já preenche o pedaço
+      // dos parceiros/adversários dela. Best-effort: falhar aqui não pode derrubar o scan.
+      if (gotFull && typeof window._lzHistoryWrite === 'function') {
+        w = w.then(function () {
+          return window._lzHistoryWrite(s.fullImport, s.handle)
+            .then(function (r) { window._log && window._log('[lz história] scan', s.handle + ':', JSON.stringify(r)); })
+            .catch(function (e) { window._log && window._log('[lz história] scan falhou (não bloqueia):', (e && e.message) || e); });
+        });
+      }
+      return w;
+    })).then(function () { return ok.length; });
+  }
   function _saveScansAndReload(tId, scans, onFail) {
     var ok = scans.filter(function (s) { return s.uid && s.scan; });
     var failed = scans.filter(function (s) { return !(s.uid && s.scan); });
     if (!ok.length) {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
       var err = (failed[0] && failed[0].error) || 'sem dados';
       if (typeof onFail === 'function') onFail('Nenhum perfil carregado (' + err + ').');
       return;
@@ -1834,18 +2081,53 @@
       : ((window.AppStore && window.AppStore.tournaments) || []).filter(function (t) { return String(t.id) === String(tId); })[0];
     var tName = _tour ? (_tour.name || null) : null;
     var writes = ok.map(function (s) {
-      if (s.scan && typeof s.scan === 'object') s.scan._mode = scanMode; // modo dentro do scan (regra Firestore não bloqueia sub-campo)
+      // "Completa" é uma AFIRMAÇÃO sobre o dado, não sobre a intenção do clique: só vale
+      // quando os jogos REALMENTE vieram. Em 14/jul/2026 gravamos _mode='full' para 4
+      // inscritos com fullImport=null (a extensão 1.35 tomou 403 e desistiu em silêncio)
+      // → o app deu a completa por feita e travou o botão de refazer pela regra dos 6 dias.
+      var gotFull = !!(s.fullImport && Array.isArray(s.fullImport.games) && s.fullImport.games.length);
+      if (s.scan && typeof s.scan === 'object') {
+        // sub-campos do scan: a regra do Firestore valida as chaves do TOPO do doc, então
+        // diagnóstico novo entra aqui sem precisar mexer/deployar firestore.rules.
+        s.scan._mode = (scanMode === 'full' && gotFull) ? 'full' : 'essential';
+        s.scan._fullGames = gotFull ? s.fullImport.games.length : 0;
+        // POR QUE não veio o histórico — o `catch {}` da extensão engolia isto e a busca
+        // reportava sucesso sem nenhum jogo. Sem motivo gravado, não há como diagnosticar.
+        s.scan._fullError = (scanMode === 'full' && !gotFull) ? (s.fullError || 'sem-jogos') : null;
+      }
       var doc = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, scannedByName: meName, tournamentId: String(tId), tournamentName: tName };
       // Só o scan COMPLETO leva o histórico inteiro (letzplayImport) pro perfil do participante.
-      if (scanMode === 'full' && s.fullImport) doc.fullImport = s.fullImport;
+      // Não gravar `fullImport: null` quando falhou: o set é merge, e apagar um histórico
+      // BOM de uma varredura anterior por causa de um 403 de hoje seria perda de dado real.
+      if (gotFull) doc.fullImport = s.fullImport;
       return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
     });
     Promise.all(writes).then(function () {
+      // APLICA no perfil de cada inscrito (gênero + nível + histórico) AGORA, via Cloud
+      // Function — as rules não deixam o organizador escrever em users/{uid} alheio, e
+      // esperar a pessoa logar (o _selfPopulate) fazia a Análise depender do login dela.
+      // Best-effort: se a CF falhar, os scans já estão gravados e a cor já sai do scan;
+      // o _selfPopulate continua existindo como rede de segurança no login.
+      try {
+        if (window.firebase && firebase.functions) {
+          firebase.functions().httpsCallable('applyLetzplayScans')({
+            tournamentId: String(tId), uids: ok.map(function (s) { return s.uid; })
+          }).then(function (res) {
+            var r = (res && res.data) || {};
+            window._log && window._log('[applyLetzplayScans] perfis gravados:', r.written, 'pulados:', (r.skipped || []).length);
+          }).catch(function (err) {
+            window._log && window._log('[applyLetzplayScans] falhou (não bloqueia):', (err && err.message) || err);
+          });
+        }
+      } catch (e) {}
+      if (typeof window._hideLoading === 'function') window._hideLoading();
       // re-render a seção Categorias in-place, mesclando os scans novos no scanMap.
       var rctx = window._lzRenderCtx, el = document.getElementById('er-categories-section');
       if (rctx && el && rctx.t && rctx.t.id === tId) {
         var merged = Object.assign({}, rctx.scanMap || {});
-        ok.forEach(function (s) { merged[s.uid] = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid }; });
+        // fullImport vai junto: é o que marca este uid como "completa fresca" no
+        // re-render (senão o botão Completa voltaria a pedir os mesmos inscritos).
+        ok.forEach(function (s) { merged[s.uid] = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, fullImport: s.fullImport || null }; });
         var tmp = document.createElement('div');
         tmp.innerHTML = _renderCategoriesSection(rctx.rows, rctx.t, rctx.profileMap, merged);
         var newEl = tmp.firstElementChild;
@@ -1853,8 +2135,17 @@
       } else if (window.location.hash === '#analise/' + tId) {
         var c = document.getElementById('view-container'); if (c) window.renderEnrollmentReportPage(c, tId);
       }
-      if (typeof showNotification === 'function') showNotification('Busca concluída', ok.length + ' carregado(s)' + (failed.length ? (' · ' + failed.length + ' falhou') : ''), 'success');
+      // Diz quantos JOGOS vieram, não só "carregado". Um scan sem jogos é o modo de falha
+      // real (14/jul: 4 "carregados", zero jogos) — o número tem que estar na cara.
+      var _comJogos = ok.filter(function (s) { return s.scan && s.scan._fullGames > 0; }).length;
+      var _det = (window._lzPendingMode === 'full')
+        ? (_comJogos + ' com histórico' + (_comJogos < ok.length ? (' · ' + (ok.length - _comJogos) + ' sem jogos') : ''))
+        : (ok.length + ' carregado(s)');
+      if (typeof showNotification === 'function') {
+        showNotification('Busca concluída', _det + (failed.length ? (' · ' + failed.length + ' falhou') : ''), 'success');
+      }
     }).catch(function (e) {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
       if (typeof onFail === 'function') onFail('Erro ao salvar: ' + String((e && e.message) || e));
     });
   }
@@ -1957,10 +2248,13 @@
     _fetchProfiles(parts).then(function (fetchResult) {
       if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }
       var byUid = fetchResult.byUid || {};
-      // candidatos = inscritos com @ + consentimento, sem import próprio.
+      // Candidatos = TODO inscrito com @ + consentimento (v1.1.18: inclui quem já tem
+      // import próprio). Antes eles ficavam de fora e a página não sabia QUANDO cada um
+      // foi verificado — sem isso não dá pra aplicar a regra dos 6 dias. O veredito não
+      // muda: em _erApplyLzToRows o import próprio continua tendo precedência sobre o scan.
       var candUids = parts.filter(function (p) {
         var prof = p.uid && byUid[p.uid];
-        return prof && prof.letzplayHandle && prof.letzplayConsent === true && !prof.letzplayImport;
+        return prof && prof.letzplayHandle && prof.letzplayConsent === true;
       }).map(function (p) { return p.uid; });
       _fetchGlobalScans(candUids).then(function (scanMap) {
         if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }

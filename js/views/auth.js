@@ -543,7 +543,47 @@ window._handlePhoneOwnershipLink = function () {
 // arriscadas sem encostar nos dados reais do Confra. Ver docs/staging.md.
 var _firebaseConfigProd = {
   apiKey: "AIzaSyB7AyOojV_Pm50Kr7bovVY4jVTTNbKOK0A",
-  authDomain: "scoreplace-app.firebaseapp.com",
+  // v1.1.32 — authDomain CUSTOM (auth.scoreplace.app), não mais firebaseapp.com.
+  //
+  // Por quê: o SDK web carrega o iframe de auth (reCAPTCHA do phone auth, handler
+  // do OAuth) a partir do authDomain. Com firebaseapp.com isso é CROSS-SITE em
+  // relação ao app (scoreplace.app) → o WebKit (Safari/iOS) bloqueia por ITP e o
+  // token do reCAPTCHA nunca volta → `auth/internal-error` e o SMS não sai. Isso
+  // derrubava o "Verificar e vincular" celular no app nativo iOS (bug conhecido do
+  // Capacitor: reCAPTCHA web não carrega em WKWebView). auth.scoreplace.app é o
+  // MESMO site do app → deixa de ser terceiro → o ITP não bloqueia.
+  //
+  // Pré-requisitos (todos feitos em 14/jul/2026, senão o login quebra em web+iOS+Android):
+  //   • auth.scoreplace.app no Firebase Hosting (CNAME → scoreplace-app.web.app,
+  //     TXT _acme-challenge.auth) servindo /__/auth/handler com SSL válido;
+  //   • domínio em Firebase Auth → Authorized domains;
+  //   • OAuth web client: origem JS https://auth.scoreplace.app + redirect URI
+  //     https://auth.scoreplace.app/__/auth/handler (o de firebaseapp.com FICOU,
+  //     pra não quebrar sessão/fluxo antigo).
+  // Reverter = voltar pra "scoreplace-app.firebaseapp.com" e deployar.
+  // Ver project_recaptcha_offscreen_not_display_none e project_native_webview_hostname.
+  // v1.1.34 — authDomain CUSTOM. O SDK carrega o iframe de auth (reCAPTCHA do phone
+  // auth + handler do OAuth) a partir do authDomain. Com firebaseapp.com isso é
+  // CROSS-SITE em relação ao app (scoreplace.app) → WebKit bloqueia por ITP → o
+  // token do reCAPTCHA não volta → auth/internal-error e o SMS não sai no app
+  // nativo iOS (a WKWebView do Capacitor roda como scoreplace.app).
+  // auth.scoreplace.app é o MESMO site → não é terceiro → sem ITP.
+  //
+  // ⚠️ A v1.1.32 tentou isso e QUEBROU o login com Google ("The requested action is
+  // invalid"). A causa NÃO era o handler (responde 200 nos 3 domínios) nem o OAuth:
+  // era a RESTRIÇÃO DE REFERRER da Browser API key, que não listava o domínio novo
+  // → a chamada de API saía do auth.scoreplace.app e a própria key recusava.
+  // Corrigido: "auth.scoreplace.app/*" adicionado aos allowedReferrers (aditivo).
+  //
+  // Pré-requisitos — se QUALQUER um cair, o login quebra em web+Android+iOS:
+  //   • Browser API key: referrer auth.scoreplace.app/* (a pegadinha que custou a v1.1.32);
+  //   • Hosting: custom domain auth.scoreplace.app servindo /__/auth/* com SSL;
+  //   • Firebase Auth → Authorized domains;
+  //   • OAuth web client: origem JS + redirect .../__/auth/handler (o de
+  //     firebaseapp.com FICOU → reverter é imediato).
+  // Validado CLICANDO em "Entrar com Google" (login completou) — HTTP 200 e
+  // RecaptchaVerifier.render() NÃO são prova. Ver project_custom_auth_domain.
+  authDomain: "auth.scoreplace.app",
   projectId: "scoreplace-app",
   storageBucket: "scoreplace-app.firebasestorage.app",
   messagingSenderId: "382268772878",
@@ -4078,15 +4118,11 @@ window._gateEnterApp = function() {
     window._pendingVerifyName = null;
     window._postVerifyGoToProfile = true;
     if (window.showNotification) window.showNotification('✅ Conta confirmada!', 'Telefone autenticado. Vamos completar seu perfil.', 'success');
-    // v3.0.x: avisa por WhatsApp que daqui pra frente entra com CELULAR + SENHA — é o
-    // caminho confiável pra quem tem e-mail (Hotmail/Outlook/UOL) que não recebe a confirmação.
-    try {
-      var _gatePh = window._gatePhonePending || '';
-      if (_gatePh && window.FirestoreDB && typeof window.FirestoreDB.queueWhatsApp === 'function') {
-        window.FirestoreDB.queueWhatsApp([_gatePh],
-          '✅ Sua conta no scoreplace.app está confirmada!\n\nDe agora em diante, entre com o seu *celular + senha* (a mesma senha que você cadastrou) — não precisa do e-mail.\n\n👉 ' + (window.SCOREPLACE_URL || 'https://scoreplace.app') + '\n\nscoreplace.app · Jogue em outro nível');
-      }
-    } catch (_we) {}
+    // v1.1.30: o aviso "de agora em diante entre com celular + senha" ia por WhatsApp
+    // em texto livre (Evolution). O Cloud API não manda texto livre business-initiated
+    // — só template aprovado — e este aviso não tem template próprio. O usuário já vê
+    // a mesma informação no toast acima + na tela de perfil, então o WhatsApp saiu em
+    // vez de virar mais um template pago. Ver `project_whatsapp_meta_2fa_block`.
     Promise.resolve(simulateLoginSuccess({ uid: u2.uid, email: u2.email, displayName: u2.displayName, photoURL: u2.photoURL }))
       .then(function() {
         window.location.hash = '#profile';

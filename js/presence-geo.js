@@ -157,22 +157,34 @@
     });
   }
 
+  // Estado do overlay de sugestão de check-in por GPS (pendente entre abrir e confirmar).
+  var _pendingGeoSuggest = null;
+
+  function _escAttr(s) { return String(s == null ? '' : s).replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+  // v2.x: em vez de um confirm sim/não que registrava TODAS as modalidades, o
+  // pop-up "Você está aqui?" agora mostra os MESMOS botões de modalidade da "ida
+  // planejada" — pills toggleáveis pré-selecionadas com a ÚLTIMA config usada.
+  // Assim o usuário pode confirmar rápido (default = última vez) ou desativar/ativar
+  // modalidades antes de confirmar, sem cair em "todas as preferidas".
   function suggest(cu, location, cfg) {
     var place = location.name || 'um local conhecido';
-    var sports = (cfg && cfg.sports) || [];
-    var label = sports.join('/');
-    var msg = label
-      ? 'Parece que você chegou em <b>' + place + '</b>. Está para jogar <b>' + label + '</b>? Confirmando, seus amigos poderão ver que você está no local.'
-      : 'Parece que você chegou em <b>' + place + '</b>. Está para jogar? Confirmando, seus amigos poderão ver que você está no local.';
-    if (typeof window.showConfirmDialog !== 'function') return;
-    window.showConfirmDialog(
-      '📍 Você está aqui?',
-      msg,
-      function() {
-        if (sports.length) {
-          autoRegister(cu, location, cfg); // mantém modalidades + horário de saída da última vez
-        } else {
-          // No preferred sport — drop into the manual view pre-filled with this venue.
+    // Conjunto de pills = união(preferidas, última config). Default ATIVO = última
+    // config usada; se não houver histórico, todas ativas.
+    var lastCfg = lastPresenceCfg(cu);
+    var lastSports = (lastCfg && lastCfg.sports) ? lastCfg.sports.slice() : [];
+    var candidate = preferredSportsAll(cu);
+    lastSports.forEach(function(s) { if (candidate.indexOf(s) === -1) candidate.push(s); });
+    var windowMs = (cfg && cfg.windowMs) || window.PresenceDB.CHECKIN_WINDOW_MS;
+
+    // Sem NENHUMA modalidade candidata (perfil sem preferidas nem histórico) →
+    // manda pra tela manual pré-preenchida com este local (comportamento antigo).
+    if (!candidate.length) {
+      if (typeof window.showConfirmDialog !== 'function') return;
+      window.showConfirmDialog(
+        '📍 Você está aqui?',
+        'Parece que você chegou em <b>' + place + '</b>. Está para jogar? Confirmando, seus amigos poderão ver que você está no local.',
+        function() {
           try {
             sessionStorage.setItem('_presencePrefill', JSON.stringify({
               placeId: location.placeId,
@@ -183,12 +195,88 @@
             }));
           } catch (e) {}
           window.location.hash = '#presence';
-        }
-      },
-      null,
-      { confirmText: 'Sim, estou aqui', cancelText: 'Agora não', type: 'info' }
-    );
+        },
+        null,
+        { confirmText: 'Sim, estou aqui', cancelText: 'Agora não', type: 'info' }
+      );
+      return;
+    }
+
+    _pendingGeoSuggest = { cu: cu, location: location, windowMs: windowMs };
+    var prev = document.getElementById('geo-checkin-overlay');
+    if (prev) prev.remove();
+
+    var pills = candidate.map(function(s) {
+      var on = lastSports.length ? (lastSports.indexOf(s) !== -1) : true;
+      var pillStyle = on
+        ? 'background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:1px solid rgba(16,185,129,0.45);opacity:1;text-decoration:none;'
+        : 'background:var(--bg-darker);color:var(--text-muted);border:1px solid var(--border-color);opacity:0.55;text-decoration:line-through;';
+      return '<button type="button" class="geo-checkin-pill" data-sport="' + _escAttr(s) + '" data-active="' + (on ? '1' : '0') + '" ' +
+             'onclick="window._geoCheckinTogglePill(this)" ' +
+             'style="padding:8px 14px;border-radius:999px;font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.15s;' + pillStyle + '">' +
+             _escAttr(s) + '</button>';
+    }).join('');
+
+    var overlay = document.createElement('div');
+    overlay.id = 'geo-checkin-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10030;display:flex;align-items:center;justify-content:center;padding:16px;';
+    overlay.innerHTML =
+      '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:22px;max-width:420px;width:100%;">' +
+        '<h3 style="margin:0 0 8px 0;color:var(--text-bright);">📍 Você está aqui?</h3>' +
+        '<p style="margin:0 0 16px 0;color:var(--text-muted);font-size:0.85rem;">Parece que você chegou em <b>' + _escAttr(place) + '</b>. Confirme as modalidades — seus amigos poderão ver que você está no local.</p>' +
+        '<div style="margin-bottom:18px;">' +
+          '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:8px;">' +
+          (candidate.length > 1 ? 'Modalidades (clique para ativar/desativar):' : 'Modalidade:') +
+          '</div>' +
+          '<div id="geo-checkin-pills" style="display:flex;gap:8px;flex-wrap:wrap;">' + pills + '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+          '<button type="button" class="btn btn-outline" onclick="window._geoCheckinDismiss()">Agora não</button>' +
+          '<button type="button" class="btn btn-primary" onclick="window._geoCheckinConfirm()" style="background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;">Sim, estou aqui</button>' +
+        '</div>' +
+      '</div>';
+    overlay.addEventListener('click', function(ev) { if (ev.target === overlay) window._geoCheckinDismiss(); });
+    document.body.appendChild(overlay);
   }
+
+  window._geoCheckinTogglePill = function(btn) {
+    if (!btn) return;
+    var active = btn.getAttribute('data-active') === '1';
+    if (active) {
+      btn.setAttribute('data-active', '0');
+      btn.style.background = 'var(--bg-darker)';
+      btn.style.color = 'var(--text-muted)';
+      btn.style.border = '1px solid var(--border-color)';
+      btn.style.opacity = '0.55';
+      btn.style.textDecoration = 'line-through';
+    } else {
+      btn.setAttribute('data-active', '1');
+      btn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
+      btn.style.color = '#fff';
+      btn.style.border = '1px solid rgba(16,185,129,0.45)';
+      btn.style.opacity = '1';
+      btn.style.textDecoration = 'none';
+    }
+  };
+
+  window._geoCheckinDismiss = function() {
+    var ov = document.getElementById('geo-checkin-overlay');
+    if (ov) ov.remove();
+    _pendingGeoSuggest = null;
+  };
+
+  window._geoCheckinConfirm = function() {
+    if (!_pendingGeoSuggest) return;
+    var pills = document.querySelectorAll('#geo-checkin-pills [data-sport][data-active="1"]');
+    if (pills.length === 0) {
+      if (window.showNotification) window.showNotification('Selecione ao menos uma modalidade.', '', 'warning');
+      return;
+    }
+    var sports = Array.prototype.slice.call(pills).map(function(p) { return p.getAttribute('data-sport'); });
+    var st = _pendingGeoSuggest;
+    window._geoCheckinDismiss();
+    autoRegister(st.cu, st.location, { sports: sports, windowMs: st.windowMs });
+  };
 
   // v2.8.30: normaliza nome de local (trim/lower/sem acento) pra casar o preferido
   // ↔ presença salva quando o placeId difere (preferido sintético vs Google).

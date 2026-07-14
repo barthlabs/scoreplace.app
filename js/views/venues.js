@@ -4420,17 +4420,51 @@
   // "agora" é implícito (startsAt = now, endsAt = now + CHECKIN_WINDOW_MS).
   var _pendingCheckInState = null;
 
+  // Última config de check-in usada (modalidades) — escrita por PresenceDB.savePresence
+  // a cada check-in (chave global scoreplace_presence_lastcfg_<uid>, nunca apagada).
+  // É a MESMA fonte que o auto check-in por GPS consulta. Usada pra pré-selecionar
+  // as pills do overlay de "Estou aqui agora": se da última vez o usuário jogou só
+  // Beach Tennis, o padrão vem só com Beach Tennis — não com TODAS as preferidas.
+  function _lastCheckinSports() {
+    try {
+      var cu = window.AppStore && window.AppStore.currentUser;
+      if (!cu || !cu.uid || !window.PresenceDB) return [];
+      var raw = localStorage.getItem('scoreplace_presence_lastcfg_' + cu.uid);
+      if (!raw) return [];
+      var c = JSON.parse(raw);
+      return Array.isArray(c.sports)
+        ? c.sports.map(window.PresenceDB.normalizeSport).filter(Boolean)
+        : [];
+    } catch (e) { return []; }
+  }
+
   function _openInlineCheckInOverlay(v, sports) {
     _pendingCheckInState = { venue: v, sports: sports };
     var prev = document.getElementById('venue-checkin-overlay');
     if (prev) prev.remove();
     var nowDate = new Date();
     var nowLabel = window._formatHHMM(nowDate);
+    // Default das pills = ÚLTIMA config de check-in usada (não todas). Se não há
+    // histórico, ou nenhuma das últimas modalidades está disponível neste local,
+    // cai pra TODAS ativas (comportamento antigo) — nunca deixa vazio.
+    var _norm = (window.PresenceDB && window.PresenceDB.normalizeSport) || function(x){ return x; };
+    var _last = _lastCheckinSports();
+    var _defActive = {};
+    (sports || []).forEach(function(s) {
+      _defActive[s] = _last.length ? _last.some(function(ls) { return ls === _norm(s); }) : true;
+    });
+    if (!(sports || []).some(function(s) { return _defActive[s]; })) {
+      (sports || []).forEach(function(s) { _defActive[s] = true; });
+    }
     var sportsPills = (sports || []).map(function(s) {
       var safeS = _safe(s);
-      return '<button type="button" class="checkin-sport-pill" data-sport="' + safeS + '" data-active="1" ' +
+      var on = !!_defActive[s];
+      var pillStyle = on
+        ? 'background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:1px solid rgba(16,185,129,0.45);opacity:1;text-decoration:none;'
+        : 'background:var(--bg-darker);color:var(--text-muted);border:1px solid var(--border-color);opacity:0.55;text-decoration:line-through;';
+      return '<button type="button" class="checkin-sport-pill" data-sport="' + safeS + '" data-active="' + (on ? '1' : '0') + '" ' +
              'onclick="window._venuesToggleCheckInSport(this)" ' +
-             'style="padding:8px 14px;border-radius:999px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:1px solid rgba(16,185,129,0.45);font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.15s;">' +
+             'style="padding:8px 14px;border-radius:999px;font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.15s;' + pillStyle + '">' +
              safeS + '</button>';
     }).join('');
     var overlay = document.createElement('div');

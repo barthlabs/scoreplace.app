@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.35';
+  var EXT_VERSION = '1.39';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -24,21 +24,55 @@
       });
     });
   }
-  // Busca com RETRY+BACKOFF em 403/429 (Too Many Requests) — o letzplay/Cloudflare
-  // limita rajadas de fetch (paginação do histórico + 1 fetch por torneio pro nome).
-  // Sem espaçar, o nome do torneio volta vazio ("0 de 4") e às vezes o import inteiro
-  // falha. Espera crescente entre tentativas e desiste em erro que não é rate-limit.
+  // Busca PACIENTE: "demora mais, mas não falha" (v1.36). O letzplay/Cloudflare limita
+  // rajadas (403/429) e o service worker da extensão pode ser reciclado no meio (MV3) —
+  // ambos são TRANSITÓRIOS e reagir com backoff resolve; desistir na 4ª tentativa (como
+  // antes) transformava um soluço passageiro em "não deu pra buscar".
+  //   • rate-limit (403/429) → espera o `retry-after` que o SERVIDOR pediu; sem header,
+  //     backoff exponencial (2s→4s→8s… teto 60s). Até 8 tentativas.
+  //   • rede/SW morto ('Failed to fetch', 'port closed', 'no-resp') → também re-tenta,
+  //     com espera menor. O background reinicia sozinho na mensagem seguinte.
+  //   • erro DEFINITIVO (404, sem aba do letzplay) → não adianta insistir → sobe o erro.
+  // O ESPAÇAMENTO entre requisições vive na fila do background.js — aqui é só a re-tentativa.
+  // `blocked` = desafio do Cloudflare (às vezes servido com status 200 — ver inject.js).
+  // Sem contar isso como rate-limit, bgFetchDoc devolvia a página de desafio como se
+  // fosse o histórico: 0 jogos extraídos, "sem-jogos", zero retry. Foi o modo real de
+  // falha de 14/jul/2026.
+  function _isRate(r) {
+    var st = r && r.status;
+    return !!(r && r.blocked) || (st === 403 || st === 429 || st === 503) ||
+      /\b(429|403)\b|too many|cf-challenge/i.test((r && r.error) || '');
+  }
+  function _isTransient(r) {
+    var st = r && r.status;
+    if (st >= 500) return true;   // erro do servidor → tentar de novo faz sentido
+    return /Failed to fetch|NetworkError|network|load failed|ERR_|no-resp|port closed|message channel|Extension context|inject-timeout|exec-failed/i.test((r && r.error) || '');
+  }
   async function bgFetchDoc(url, opts) {
-    var backoff = [0, 1500, 3500, 7000];
     var last = null;
-    for (var i = 0; i < backoff.length; i++) {
-      if (backoff[i]) await sleep(backoff[i]);
+    for (var i = 0; i < 8; i++) {
       var r = await bgFetchRaw(url, opts);
       if (r && r.ok) return new DOMParser().parseFromString(r.html, 'text/html');
       last = r;
-      var st = r && r.status;
-      var rateLimited = (st === 403 || st === 429) || /429|403|too many/i.test((r && r.error) || '');
-      if (!rateLimited) break;   // erro que não é rate-limit → repetir não adianta
+      if (_isRate(r)) {
+        var ra = parseInt(r && r.retryAfter, 10);
+        // Backoff com RUÍDO: 2s/4s/8s cravados são tão robóticos quanto a rajada que
+        // causou o bloqueio. Quem volta exatamente no tempo do relógio é máquina. Quando
+        // o servidor manda um retry-after, obedecemos e ainda somamos uma folga humana.
+        var jit = 0.8 + Math.random() * 0.7;
+        var waitMs = (ra > 0)
+          ? Math.min(90000, Math.round(ra * 1000 + 500 + Math.random() * 2500))
+          : Math.min(60000, Math.round(2000 * Math.pow(2, i) * jit));
+        // A espera tem que ser VISÍVEL. Uma pausa de 60s calada é indistinguível de
+        // travamento — e foi por isso que a busca "parecia funcionando" enquanto não
+        // baixava nada. O app mostra isto na barra e rearma o watchdog de ociosidade.
+        post({ __sp_lp: 'lz-throttle', waitMs: waitMs, attempt: i + 1,
+          gap: (r && r.pace && r.pace.gap) || null, source: (ra > 0 ? 'retry-after' : 'backoff') });
+        await sleep(waitMs);
+        continue;
+      }
+      if (_isTransient(r) && i < 4) { await sleep(Math.round(1500 * (i + 1) * (0.8 + Math.random() * 0.6))); continue; }
+      break;   // erro definitivo (404, sem aba, etc.) → insistir não adianta
     }
     var e = new Error((last && last.error) || ('HTTP ' + (last && last.status)));
     e.url = url; e.httpStatus = last && last.status;
@@ -174,7 +208,7 @@
   // por competição (nome + classificação + logo saem do MESMO fetch — zero requisição extra).
   // Torneio: /{club}/tournaments/{id} (.table-group). Ranking: /{club}/rankings/{id}
   // (.table-ranking). Best-effort: se falhar/404, mantém a categoria. Retorna {total, resolved}.
-  async function fillTourneyNames(raw) {
+  async function fillTourneyNames(raw, onProg) {
     var seen = {}, uniq = [];
     (raw.tournaments || []).forEach(function (t) {
       if (!t.tourneyId || !t.club) return;
@@ -188,9 +222,12 @@
     });
     var cache = {}, standCache = {}, logoCache = {}, resolved = 0, failed = [];
     for (var i = 0; i < uniq.length; i++) {
-      post({ __sp_lp: 'import-progress', phase: 'names', done: i, total: uniq.length });
+      // Progresso: 'names' pro import do próprio usuário; onProg quando é a busca do
+      // organizador (Análise de Inscritos), que tem barra própria.
+      if (onProg) onProg({ phase: 'torneios', note: (i + 1) + ' de ' + uniq.length });
+      else post({ __sp_lp: 'import-progress', phase: 'names', done: i, total: uniq.length });
       var u = uniq[i];
-      if (i > 0) await sleep(1500);   // espaça bem pra PEGAR TODOS (evita 403 na rajada)
+      // (o espaçamento entre requisições é da FILA do background.js — ver enqueue())
       try {
         var url = 'https://letzplay.me/' + u.club + '/' + (u.type === 't' ? 'tournaments' : 'rankings') + '/' + u.cid;
         var d = await bgFetchDoc(url);
@@ -201,7 +238,7 @@
         if (nm) { resolved++; } else { failed.push(u.categoryRaw || u.id); }
       } catch (e) { cache[u.id] = null; failed.push(u.categoryRaw || u.id); }
     }
-    post({ __sp_lp: 'import-progress', phase: 'names', done: uniq.length, total: uniq.length });
+    if (!onProg) post({ __sp_lp: 'import-progress', phase: 'names', done: uniq.length, total: uniq.length });
     // Aplica UMA VEZ por competição (nome + classificação + logo). Jogos só guardam a referência.
     (raw.tournaments || []).forEach(function (t) {
       if (!t.tourneyId || !t.club) return;
@@ -223,22 +260,36 @@
   // Import COMPLETO de um participante a partir do perfil PÚBLICO /{handle}/matches
   // (paginado, sem login gate — mesmo shape do self-import). Usado só no org-scan modo
   // "completo". Retorna o letzplayImport normalizado (com nomes de torneio) ou null.
-  async function importFromHandleMatches(handle) {
+  async function importFromHandleMatches(handle, onProg) {
     var X = window._spExtract, I = window._spImport, F = window._spFlow;
     if (!X || !I || !F || !handle) return null;
     var base = 'https://letzplay.me/' + encodeURIComponent(handle) + '/matches';
+    if (onProg) onProg({ phase: 'jogos', note: 'abrindo histórico' });
     var doc1 = await bgFetchDoc(base);
     var all = X.extractMatchesFromDoc(doc1, handle);
     var maxPage = F.detectMaxPage(doc1);
-    for (var p = 2; p <= maxPage; p++) {
-      await sleep(500);   // espaça a paginação pra não estourar o rate-limit
-      var d = await bgFetchDoc(base + '?page=' + p);
-      all = all.concat(X.extractMatchesFromDoc(d, handle));
+    var total = F.parseTotalGames(doc1);   // quantos o letzplay DIZ que existem (ver runDirectImport)
+    // PARCIAL VALE MAIS QUE NADA: um erro na página 5 de 8 jogava fora as 4 primeiras.
+    // O doc canônico é keyed por gid → a próxima passada completa, não duplica.
+    var parcial = null;
+    try {
+      for (var p = 2; p <= maxPage; p++) {
+        // avisa a CADA página: sem isto a busca fica minutos em silêncio e parece travada
+        if (onProg) onProg({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage });
+        var d = await bgFetchDoc(base + '?page=' + p);   // espaçamento: fila do background
+        all = all.concat(X.extractMatchesFromDoc(d, handle));
+      }
+    } catch (errPag) {
+      if (!all.length) throw errPag;
+      parcial = (errPag && errPag.message) || 'paginação interrompida';
     }
     if (!all.length) return null;
+    if (onProg) onProg({ phase: 'jogos', note: all.length + (total ? ' de ' + total : '') + ' jogos lidos' });
     var raw = F.buildRaw(handle, all);
-    try { await fillTourneyNames(raw); } catch (e) {}
+    try { await fillTourneyNames(raw, onProg); } catch (e) {}
     var imp = I.normalize(raw, { importedAt: new Date().toISOString() });
+    imp.declaredGames = (total != null) ? total : null;
+    if (parcial) imp.partialReason = String(parcial).slice(0, 120);
     var v = I.validate(imp);
     return (v && v.valid) ? imp : null;
   }
@@ -255,20 +306,39 @@
       var me = F.detectMe(doc1);
       if (!me) { post({ __sp_lp: 'import-result', ok: false, error: 'sem-jogos' }); return; }
       var maxPage = F.detectMaxPage(doc1);
+      // O PRIMEIRO DADO É QUANTOS JOGOS EXISTEM. O letzplay declara na própria página
+      // ("81 Jogos • 36 Vit"), num fetch que já estamos fazendo. Guardado em
+      // `declaredGames`, ele resolve três coisas de uma vez:
+      //   • PROVA DE COMPLETUDE: 81 declarados e 81 guardados = pronto, nada a inferir;
+      //   • NOVIDADE BARATA: uma semana depois lê 84 → faltam 3, busca só o começo da
+      //     lista (o letzplay entrega o mais recente primeiro) em vez de repaginar tudo;
+      //   • critério do VERDE (coerente) sem chute — ver _lzScanComplete no app.
+      // Antes ele era lido e JOGADO FORA: só alimentava a barra de progresso.
       var total = F.parseTotalGames(doc1);
       var all = X.extractMatchesFromDoc(doc1, me);
       post({ __sp_lp: 'import-progress', done: all.length, total: total });
-      for (var p = 2; p <= maxPage; p++) {
-        await sleep(500);   // espaça a paginação pra não estourar o rate-limit
-        var d = await bgFetchDoc('https://letzplay.me/u/matches/history?page=' + p);
-        all = all.concat(X.extractMatchesFromDoc(d, me));
-        post({ __sp_lp: 'import-progress', done: all.length, total: total });
+      // PARCIAL VALE MAIS QUE NADA. Se a paginação morrer no meio (rate-limit, aba
+      // fechada, rede), o que já veio é histórico REAL do atleta e fica mais perto de
+      // completar. Antes, um erro na página 5 de 8 jogava fora as 4 primeiras. É seguro
+      // porque o doc canônico é keyed por gid: a próxima passada COMPLETA, não duplica.
+      var parcial = null;
+      try {
+        for (var p = 2; p <= maxPage; p++) {
+          var d = await bgFetchDoc('https://letzplay.me/u/matches/history?page=' + p);   // espaçamento: fila do background
+          all = all.concat(X.extractMatchesFromDoc(d, me));
+          post({ __sp_lp: 'import-progress', done: all.length, total: total });
+        }
+      } catch (errPag) {
+        if (!all.length) throw errPag;          // nada veio → é falha mesmo
+        parcial = (errPag && errPag.message) || 'paginação interrompida';
       }
       var raw = F.buildRaw(me, all);
       var nameStats = null;
       try { nameStats = await fillTourneyNames(raw); } catch (e) {}   // nome real dos torneios (best-effort)
       var imp = I.normalize(raw, { importedAt: new Date().toISOString() });
       if (nameStats) imp.tourneyNameStats = nameStats;   // observabilidade: X/Y nomes resolvidos
+      imp.declaredGames = (total != null) ? total : null;
+      if (parcial) imp.partialReason = String(parcial).slice(0, 120);
       var v = I.validate(imp);
       if (!v.valid) { post({ __sp_lp: 'import-result', ok: false, error: 'invalido' }); return; }
       post({ __sp_lp: 'import-progress', done: all.length, total: total, saving: true });
@@ -300,26 +370,56 @@
       });
     });
   }
-  async function runOrgScan(targets, tournamentId, mode) {
+  // Uma busca por vez NESTA aba: o organizador clicando de novo (ansioso, achando que
+  // travou) não dispara uma segunda varredura em cima da primeira — recebe a mesma.
+  // (A fila do background ainda protege contra 2 ABAS do scoreplace fazendo isso.)
+  var _orgScanRunning = null;
+  function runOrgScan(targets, tournamentId, mode) {
+    if (_orgScanRunning) return _orgScanRunning;
+    _orgScanRunning = _runOrgScan(targets, tournamentId, mode)
+      .catch(function () {})
+      .then(function () { _orgScanRunning = null; });
+    return _orgScanRunning;
+  }
+  async function _runOrgScan(targets, tournamentId, mode) {
     targets = Array.isArray(targets) ? targets : [];
     var scans = [];
+    function prog(i, tg, extra) {
+      var cur = { uid: tg.uid || null, name: tg.name || null, handle: tg.handle };
+      if (extra) { cur.phase = extra.phase || null; cur.note = extra.note || null; }
+      post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: i, total: targets.length, current: cur });
+    }
     for (var i = 0; i < targets.length; i++) {
       var tg = targets[i] || {};
       if (!tg.handle) continue;
       // avisa QUEM está sendo carregado agora (nome + @) antes de buscar
-      post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: i, total: targets.length, current: { uid: tg.uid || null, name: tg.name || null, handle: tg.handle } });
+      prog(i, tg, { phase: 'perfil', note: 'lendo o perfil' });
       var r = await scanProfile(tg.handle, mode);
       // Modo COMPLETO: além do resumo (anti-gato), puxa o histórico inteiro do
       // participante do perfil público → letzplayImport completo (vai pro perfil dele).
-      var fullImp = null;
+      // O motivo da falha do histórico PRECISA subir. Este catch era vazio: em 14/jul/2026
+      // os 4 inscritos tomaram 403 do Cloudflare na paginação, o erro foi descartado, e a
+      // busca reportou sucesso com ZERO jogos gravados — sem nenhuma pista do que houve.
+      var fullImp = null, fullErr = null;
       if (r && r.ok && mode === 'full') {
-        post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: i, total: targets.length, current: { uid: tg.uid || null, name: tg.name || null, handle: tg.handle, phase: 'jogos' } });
-        try { fullImp = await importFromHandleMatches(tg.handle); } catch (e) {}
+        var onProg = (function (idx, t) { return function (e) { prog(idx, t, e); }; })(i, tg);
+        try {
+          fullImp = await importFromHandleMatches(tg.handle, onProg);
+          if (!fullImp) fullErr = 'sem-jogos';   // página lida, mas nenhum jogo extraído
+        } catch (e) {
+          var em = String((e && e.message) || e);
+          var st = e && e.httpStatus;
+          fullErr = ((st === 403 || st === 429 || /\b(403|429)\b/.test(em)) ? 'rate: ' : 'erro: ') + em.slice(0, 120);
+        }
       }
-      scans.push({ uid: tg.uid || null, handle: tg.handle, name: tg.name || null, scan: (r && r.ok) ? r.scan : null, fullImport: fullImp, error: r && r.error });
-      post({ __sp_lp: 'org-scan-progress', tournamentId: tournamentId, done: scans.length, total: targets.length, current: { uid: tg.uid || null, name: tg.name || null, handle: tg.handle } });
+      scans.push({ uid: tg.uid || null, handle: tg.handle, name: tg.name || null, scan: (r && r.ok) ? r.scan : null, fullImport: fullImp, fullError: fullErr, error: r && r.error });
+      prog(scans.length, tg);
+      // ENTREGA PARCIAL: manda o que já tem a cada pessoa concluída. Se o navegador
+      // fechar/a página recarregar no meio, o que já foi lido ESTÁ salvo — nunca se
+      // perde uma varredura inteira por causa do último participante.
+      post({ __sp_lp: 'org-scan-result', tournamentId: tournamentId, ok: true, partial: true, scans: scans.slice() });
     }
-    // fecha a aba do letzplay que a extensão abriu (se abriu)
+    // fecha a aba do letzplay que a extensão abriu (se abriu e a fila esvaziou)
     try { chrome.runtime.sendMessage({ type: 'lp-close-scan-tab' }); } catch (e) {}
     post({ __sp_lp: 'org-scan-result', tournamentId: tournamentId, ok: true, scans: scans });
   }

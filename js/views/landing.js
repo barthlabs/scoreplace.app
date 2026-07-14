@@ -164,13 +164,24 @@
     var t = (window._t || function (k) { return k; });
     return '<footer class="landing-footer">' +
       '<p>scoreplace.app v' + ver + '</p>' +
-      '<p><a href="mailto:scoreplace.app@gmail.com">scoreplace.app@gmail.com</a></p>' +
+      // contato@barthlabs.com (não o gmail): é o e-mail da empresa e o mesmo do
+      // portfólio Barthlabs na Meta — o revisor casa site × registro.
+      '<p><a href="mailto:contato@barthlabs.com">contato@barthlabs.com</a></p>' +
       // v0.17.71: links pra privacy + termos (LGPD-ready pra beta)
       '<p style="margin-top:12px;font-size:0.75rem;">' +
         '<a href="#privacy">' + t('privacy.title') + '</a>' +
         ' · ' +
         '<a href="#terms">' + t('terms.title') + '</a>' +
       '</p>' +
+      // Razão social por extenso no HTML estático: a Meta casa o site contra o
+      // registro do portfólio na verificação da empresa e o crawler dela não
+      // executa JS, então isto NÃO pode viver só no i18n de #privacy/#terms.
+      '<address class="landing-legal">' +
+        '<span>Terra Barth Serviços Administrativos Ltda</span>' +
+        '<span>CNPJ 51.590.996/0001-73</span>' +
+        '<span>Rua Ministro Alfredo Nasser, 68 — São Paulo, SP, 05516-090, Brasil</span>' +
+        '<a href="tel:+5511966581959">+55 11 96658-1959</a>' +
+      '</address>' +
     '</footer>';
   }
 
@@ -251,6 +262,7 @@
     /* Footer */
     '.landing-footer { text-align: center; padding: 24px 0; border-top: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-muted); }' +
     '.landing-footer a { color: var(--primary-color); text-decoration: none; }' +
+    '.landing-legal { display: flex; flex-direction: column; gap: 2px; margin-top: 14px; font-size: 0.75rem; font-style: normal; line-height: 1.5; opacity: 0.85; }' +
 
     /* Mobile */
     '@media (max-width: 767px) {' +

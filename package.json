@@ -15,7 +15,10 @@
     "prerender:dry": "node tools/prerender-landing.js --dry-run",
     "lighthouse": "lighthouse https://scoreplace.app/ --quiet --chrome-flags=\"--headless=new --no-sandbox --incognito\" --output=json --output=html --form-factor=mobile --screenEmulation.mobile=true --only-categories=performance,accessibility,best-practices,seo --max-wait-for-load=60000",
     "build:www": "node tools/build-www.js",
-    "cap:sync": "node tools/build-www.js && node node_modules/@capacitor/cli/bin/capacitor sync"
+    "cap:sync": "node tools/build-www.js && node node_modules/@capacitor/cli/bin/capacitor sync",
+    "ext:zip": "bash scripts/build-ext-zip.sh",
+    "check:ext": "node scripts/check-ext-version.js",
+    "check:cache": "node scripts/check-cache-busters.js"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

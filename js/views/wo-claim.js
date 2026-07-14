@@ -386,12 +386,18 @@
     var cu = _cu(); if (!cu || !cu.uid) return;
     var canConfirm = _confirmerUids(t, rc, c).indexOf(cu.uid) !== -1 || _isOrg(t);
     if (!canConfirm) return;
-    var orgU = t.creatorUid ? [t.creatorUid] : [];
     var data = _notifData(t, '⚠️ W.O. contestado', 'A falta de "' + c.absentName + '" em "' + (t.name || '') + '" foi contestada. Você decide.');
     _commit(tId, function (ft) {
       var c2 = _claimById(ft, claimId); if (!c2 || c2.status !== 'pending') return false;
       c2.status = 'disputed'; c2.disputedByUid = cu.uid;
-    }, function () { _notify(t, orgU, data); window._woOpenClaim(tId, _ctxKey(ctx)); }, 'Registrando a contestação…');
+    }, function () {
+      // Escala a disputa pro organizador + co-organizadores ativos — MESMO helper do
+      // placar (_contestResult → _notifyOrgAndCoHosts). Antes só t.creatorUid era
+      // avisado, então co-host de torneio nunca sabia de um W.O. contestado. (portado de v4.4.121)
+      if (typeof window._notifyOrgAndCoHosts === 'function') window._notifyOrgAndCoHosts(t, data);
+      else _notify(t, t.creatorUid ? [t.creatorUid] : [], data);
+      window._woOpenClaim(tId, _ctxKey(ctx));
+    }, 'Registrando a contestação…');
   };
 
   // Envolvidos num claim (jogadores do contexto + ausente + organizador), menos o

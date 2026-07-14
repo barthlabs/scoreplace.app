@@ -1,4 +1,27 @@
-window.SCOREPLACE_VERSION = '1.1.15';
+window.SCOREPLACE_VERSION = '1.1.34';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
+// ─────────────────────────────────────────────────────────────────────────────
+// Tem que bater com extension/manifest.json "version" E com EXT_VERSION em
+// extension/content.js. NUNCA declarar um mínimo separado em outro arquivo: era
+// isso que estava quebrado — o onboarding exigia 1.35 e a Análise de Inscritos
+// exigia 1.25 enquanto a extensão já era 1.36. Resultado real (14/jul/2026): a
+// busca completa rodou com a extensão 1.35 (que desiste na 4ª tentativa de rajada),
+// tomou 403 do Cloudflare e gravou ZERO jogos para os 4 inscritos — sem erro
+// nenhum, porque o resumo (que usa navegação de aba, não fetch) veio normal.
+// O commit a12d811a já tinha unificado isto uma vez em 1.25 e a divergência voltou;
+// por isso agora é UM valor + trava no deploy (scripts/check-ext-version.js).
+// Auto-atualização: quando a extensão estiver publicada na Chrome Web Store, o
+// Chrome atualiza sozinho e este gate para de disparar. Enquanto não está, o gate
+// BLOQUEIA e pede a atualização manual pelo zip — de propósito.
+window.SP_EXT_VERSION = '1.39';
+// O zip da versão exigida, servido pelo próprio site (fica na raiz do repo → GitHub Pages
+// entrega). Derivado de SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não
+// aceita, e a trava de deploy (scripts/check-ext-version.js) garante que o arquivo existe.
+// Enquanto não há versão na Chrome Web Store não existe auto-update — então o caminho de
+// atualização tem que estar a UM CLIQUE, não "ache a pasta do projeto no seu computador".
+window._spExtZipUrl = function () { return '/scoreplace-letzplay-ext-' + window.SP_EXT_VERSION + '.zip'; };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
@@ -992,8 +1015,12 @@ window._devWhatsAppBtnHtml = function (opts) {
       // não precisa do authCache para persistir.
       'scoreplace_casual_history',// stats casuais legacy v1
       'scoreplace_casual_history_v2', // stats casuais v2 (era esse o culpado)
-      'scoreplace_casual_last',   // último casual restored
-      'scoreplace_casual_prefs',  // prefs casual
+      // scoreplace_casual_last e scoreplace_casual_prefs REMOVIDOS daqui —
+      // são PREFERÊNCIAS (última modalidade + config de placar casual), não
+      // stats. Igual gsm_prefs/theme/lang, devem sobreviver ao cleanup e ao
+      // wipe intermitente do iOS PWA. Apagá-los fazia a partida casual "esquecer"
+      // a última modalidade e cair no primeiro esporte preferido (ex: pickleball)
+      // — enquanto a "ida planejada" (scoreplace_planmem_*, nunca apagado) lembrava.
       'scoreplace_deleted_ids',   // tombstones de ids deletados
       'scoreplace_analytics_open' // estado de details aberto
     ];
@@ -1311,6 +1338,11 @@ window._softRefreshView = function() {
                   document.getElementById('removal-subchoice-panel') ||
                   document.getElementById('incomplete-teams-panel') ||
                   document.getElementById('flyer-print-overlay') ||
+                  // v1.1.18: busca/import do letzplay (bolinha + barra). A busca do
+                  // organizador dura MINUTOS; sem isto, um snapshot do Firestore no meio
+                  // (torneio vivo) varria a barra de progresso e o organizador achava que
+                  // tinha travado. Ver [[project_letzplay_scan_stability]].
+                  document.getElementById('sp-import-overlay') ||
                   // v2.7.96: diálogos padrão (confirm/alert/input). Sem isto, em torneio
                   // VIVO (Confra: snapshots frequentes ao simular resultados) o snapshot
                   // disparava _softRefreshView → initRouter → _dismissAllOverlays e varria a
@@ -4277,6 +4309,17 @@ window.renderSupportPage = function(container) {
 window._safeHtml = function(str) {
   if (!str) return '';
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+};
+
+// Sanitiza um parâmetro de template do WhatsApp Cloud API.
+// A Meta REJEITA o envio se o valor tiver quebra de linha, tab ou 4+ espaços
+// seguidos, e corta em 1024 chars. Nossas mensagens vêm de texto livre (nome de
+// torneio, comentário do organizador), então tudo passa por aqui antes de virar
+// {{n}}. Ver memória `project_whatsapp_meta_2fa_block`.
+window._waParam = function(v) {
+  var s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  if (s.length > 1024) s = s.slice(0, 1021) + '...';
+  return s || '-'; // parâmetro vazio também é rejeitado pela Meta
 };
 
 // ── Loader GLOBAL (v4.0.88) — "enquanto não entregar a informação, carregando… sempre" ──

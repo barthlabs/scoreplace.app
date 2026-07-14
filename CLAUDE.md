@@ -6,7 +6,7 @@ Plataforma web de gestao de torneios esportivos e board games. App SPA (Single P
 
 > ⚠️ **CONVENÇÃO CRÍTICA — nomes de formato são SÓ EXIBIÇÃO (desde jun/2026, staging):** na tela, "Liga" virou **"Pontos Corridos"** e "Grupos + Eliminatórias" virou **"Fase de Grupos"**. MAS o valor interno `t.format` é INTOCADO de propósito: continua `'Liga'` (legado `'Ranking'`) e `'Fase de Grupos + Eliminatórias'`; os códigos seguem `'liga'`/`'grupos_mata'`; `_isLigaFormat` checa `=== 'Liga'`. **Regra dos dois lados:** falando com o usuário/UI = use os nomes novos; lendo/escrevendo LÓGICA = os valores são AINDA os antigos — NUNCA "consertar" `=== 'Liga'` achando que é resíduo (quebra motor de sorteio/autoDraw/dados). Exibição passa por `window._formatDisplayName(fmt)` (store.js) ou pelas chaves i18n `format.*`. Detalhe na memória `project_format_rename_display_only`.
 
-- **Versao atual:** `1.9.7-beta` (definida em `window.SCOREPLACE_VERSION` no store.js)
+- **Versao atual:** `1.1.17` (definida em `window.SCOREPLACE_VERSION` no store.js; esquema alinhado às lojas desde a v1.1 — ver memória `project_version_scheme_store_aligned`)
 - **Convenção de versão (a partir de 30 Abr 2026):** `MAJOR.MINOR.PATCH-channel` no padrão semver. Em fase **beta**, incremento PATCH a cada deploy (`1.0.0-beta` → `1.0.1-beta` → `1.0.2-beta` → ...). MINOR sobe quando há feature significativa nova; MAJOR reservado pra v2.0 (mudanças incompatíveis). Estável: dropar o `-beta` (`1.0.0`).
 - **URL principal:** https://scoreplace.app
 - **GitHub repo:** `rstbarth/scoreplace.app`
@@ -49,7 +49,15 @@ Projeto criado em Março 2026 como **scoreplace.app**. Lançado em beta soft em 
 
 ### Changelog
 
-> **Nota:** entre v0.8.6 e v0.15.45 foram ~400 version bumps. O bloco abaixo consolida por tema. Para detalhe de uma versão específica, consulte `git log --oneline | grep vX.Y.Z`.
+> **Nota:** entre v0.8.6 e v0.15.45 foram ~400 version bumps. O bloco abaixo consolida por tema. Para detalhe de uma versão específica, consulte `git log --oneline | grep vX.Y.Z`. **Aviso de esquema:** a partir da v1.1 a numeração foi alinhada às lojas (native), então `1.1.x` é MAIS NOVO que os `1.9.x-beta`/`4.x-beta` legados abaixo.
+
+**v1.1.16–1.1.17 (14 Jul 2026) — Casual lembra config + check-in/GPS por modalidade + cor "autorizado" + W.O. co-hosts**
+- **Partida casual persiste a última config** (bracket-ui.js): `scoreplace_casual_last`/`_prefs` deixam de ser apagados no beta-cleanup (store.js) — são preferências, não stats — e passam a persistir também ao INICIAR a partida (não só no clique do seletor). Fim do "abre em Pickleball em vez do último Beach Tennis".
+- **Check-in de local por última modalidade** (venues.js + presence-geo.js): o overlay "Estou aqui agora" e o pop-up de GPS "Você está aqui?" agora pré-selecionam a ÚLTIMA config de check-in (`scoreplace_presence_lastcfg`) com pills toggleáveis (paridade com "planejar ida"), em vez de marcar TODAS as preferidas.
+- **Cor "autorizado" (violeta) na Análise de Inscritos** (tournaments-enrollment-report.js): o cinza "sem verificação" saiu. Nome fica: veredito verificado (cores) > autorizou letzplay mas não verificado (violeta `#a78bfa`) > não autorizou (branco). `_lzVerified`/`_lzAuthorized` prontos pro futuro "rigor das regras" (excluir não-autorizados no encerramento). Ver memória `project_letzplay_authorization_color_and_rigor`.
+- **W.O. contestado escala pro organizador + co-hosts** (wo-claim.js + bracket-ui.js): usa `window._notifyOrgAndCoHosts` (mesmo helper do placar) — antes só `t.creatorUid` era avisado. Portado de trabalho antigo (v4.4.121) que estava perdido num branch local.
+- **CI de staging consertada** (.github/workflows/staging.yml): instala `npm ci` + Playwright Chromium antes do `firebase deploy` — o predeploy `npm run prerender` quebrava com "Cannot find module @playwright/test".
+
 
 **v1.9.40-beta (Junho 2026) — Fluxo de aprovação de resultado por participantes + individualidade de UIDs**
 - **`window._participantUids(p)` (v1.9.40)**: helper canônico em store.js que retorna todos os UIDs de um participante (`p.uid + p.p1Uid + p.p2Uid + sub-participants[]`). Usado em todos os pontos de notificação, aprovação e lookup para garantir que cada pessoa de uma dupla é tratada individualmente. Nunca o UID de um membro preenche dados de outro.

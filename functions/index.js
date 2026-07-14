@@ -839,13 +839,22 @@ exports.flushWhatsAppDigest = onSchedule(
       if (items.length === 0) continue;
       items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
       try {
-        const lines = items.map((it) => "• " + String(it.line || "").replace(/^[🔴🟠🟢]\s*/, ""));
+        // v1.1.30: vira o template sp_inscricoes_resumo. Parâmetro de template NÃO
+        // aceita \n (a Meta rejeita o envio), então as linhas são juntadas com ", "
+        // — e não com quebra de linha como era no texto livre do Evolution.
+        const resumo = items
+          .map((it) => String(it.line || "").replace(/^[🔴🟠🟢]\s*/, "").replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+          .join(", ");
+        const nome = String(items[0].toName || "").trim() || "jogador";
+        const torneio = String(items[0].tournamentName || "").trim() || "seu torneio";
         const urls = [...new Set(items.map((it) => it.tournamentUrl).filter(Boolean))];
-        let msg = "🔔 *scoreplace* — resumo da última hora:\n" + lines.join("\n");
-        if (urls.length === 1) msg += "\n\n👉 " + urls[0];
+        let suffix = "#dashboard";
+        if (urls.length === 1) { const i = urls[0].indexOf("#"); if (i !== -1) suffix = urls[0].slice(i); }
         await db.collection("whatsapp_queue").add({
-          phones: [phone],
-          message: msg,
+          template: "sp_inscricoes_resumo",
+          urlSuffix: suffix,
+          recipients: [{ phone: phone, params: [nome, torneio, resumo.slice(0, 900) || "veja no app"] }],
           createdAt: new Date().toISOString(),
           status: "pending",
         });
@@ -1951,6 +1960,109 @@ exports.setParticipantsProfile = onCall(
   }
 );
 
+// ─── applyLetzplayScans (v1.1.19) ────────────────────────────────────────────
+// Aplica o resultado da busca letzplay do organizador NO PERFIL de cada inscrito
+// (users/{uid}): gênero, nível apurado (skillBySport) e, quando a busca foi completa,
+// o histórico (letzplayImport).
+//
+// POR QUE ESTA FUNÇÃO EXISTE:
+// As rules só deixam o DONO escrever no próprio users/{uid}. Por isso a única forma de
+// o scan do organizador chegar ao perfil era o _selfPopulateFromLetzplayScan, que roda
+// QUANDO A PESSOA LOGA. Efeito real (14/jul/2026): a Kelly logou depois do scan e ficou
+// verde na Análise; a Flavia, com scan igualmente lido, ficou roxa por nunca ter logado.
+// Regra do dono: "o preenchimento do banco de dados e a leitura pelo organizador deve
+// ser independente de log do usuário." Admin SDK ignora as rules → grava agora.
+//
+// PRECEDÊNCIA (decidida pelo dono): o letzplay VENCE SEMPRE em gênero e nível — o dado
+// veio do próprio letzplay, não há como divergir dele. O HISTÓRICO é a exceção: só
+// substitui se trouxer MAIS jogos (um scan antigo nunca apaga um self-import mais novo).
+//
+// O servidor RELÊ letzplayScans/{uid} — não confia em payload do cliente (qualquer authed
+// escreve nessa coleção; sem reler, dava pra forjar o nível de terceiros via esta função).
+// Deploy:  firebase deploy --only functions:applyLetzplayScans
+exports.applyLetzplayScans = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 120, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const uids = (request.data && request.data.uids) || [];
+    if (!tournamentId || !Array.isArray(uids) || uids.length === 0) {
+      throw new HttpsError("invalid-argument", "tournamentId e uids são obrigatórios");
+    }
+
+    const db = admin.firestore();
+    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
+    if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const t = tSnap.data();
+    const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
+    const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
+      (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
+      (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
+      (callerEmail && adminEmails.indexOf(callerEmail) !== -1);
+    if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode aplicar a busca letzplay");
+
+    // letzplay é Beach Tennis — mesma constante do cliente (_selfPopulateFromLetzplayScan).
+    const SPORT = "Beach Tennis";
+    let written = 0; const skipped = [];
+
+    for (const rawUid of uids) {
+      const uid = rawUid ? String(rawUid) : "";
+      if (!uid) { skipped.push({ uid, reason: "no-uid" }); continue; }
+
+      const scanSnap = await db.collection("letzplayScans").doc(uid).get();
+      if (!scanSnap.exists) { skipped.push({ uid, reason: "no-scan" }); continue; }
+      const data = scanSnap.data() || {};
+      const scan = data.scan || {};
+
+      const userRef = db.collection("users").doc(uid);
+      const userSnap = await userRef.get();
+      if (!userSnap.exists) { skipped.push({ uid, reason: "no-user" }); continue; }
+      const cur = userSnap.data() || {};
+
+      const upd = {};
+      if (scan.gender === "masculino" || scan.gender === "feminino") upd.gender = scan.gender;
+
+      // profileSkill = borda MAIS FRACA da banda ativa (conservador — ver _spDeriveScan).
+      const checked = scan.profileSkill || scan.skill;
+      if (checked) {
+        const sbs = (cur.skillBySport && typeof cur.skillBySport === "object") ? Object.assign({}, cur.skillBySport) : {};
+        const src = (cur.skillBySportSource && typeof cur.skillBySportSource === "object") ? Object.assign({}, cur.skillBySportSource) : {};
+        sbs[SPORT] = checked;
+        src[SPORT] = "letzplay";
+        upd.skillBySport = sbs;
+        upd.skillBySportSource = src;
+      }
+
+      // Histórico: só entra se trouxer MAIS jogos que o atual (nunca regride o perfil).
+      const fi = data.fullImport;
+      if (fi && typeof fi === "object" && Array.isArray(fi.footprint)) {
+        const fiGames = Array.isArray(fi.games) ? fi.games.length : 0;
+        const curGames = (cur.letzplayImport && Array.isArray(cur.letzplayImport.games)) ? cur.letzplayImport.games.length : 0;
+        if (fiGames > curGames) {
+          fi.importedVia = "organizer";
+          fi.importedByName = data.scannedByName || null;
+          fi.importedTournamentName = data.tournamentName || null;
+          fi.importedAt = data.scannedAt || fi.importedAt || null;
+          upd.letzplayImport = fi;
+          if (!cur.letzplayHandle && fi.handle) upd.letzplayHandle = fi.handle;
+        }
+      }
+
+      if (Object.keys(upd).length === 0) { skipped.push({ uid, reason: "nothing" }); continue; }
+      upd.letzplayAppliedBy = callerUid;
+      upd.letzplayAppliedAt = admin.firestore.FieldValue.serverTimestamp();
+      await userRef.update(upd);
+      written++;
+    }
+
+    console.log("[applyLetzplayScans] torneio", tournamentId, "gravados:", written, "pulados:", skipped.length, JSON.stringify(skipped));
+    return { ok: true, written, skipped };
+  }
+);
+
 // ─── Comunicado do organizador (fan-out server-side) ────────────────────────
 // v2.4.61: ANTES o "Comunicar Inscritos" notificava cada inscrito num loop
 // SEQUENCIAL no NAVEGADOR do organizador (~1 ida ao Firestore por pessoa).
@@ -2051,6 +2163,7 @@ exports.sendOrgCommunication = onCall(
 
     const emails = [];
     const phones = [];
+    const waRecipients = []; // v1.1.30: {phone,name} — template do Cloud API é personalizado
     let platformWritten = 0;
     const skipped = [];
     // v2.4.63: manifesto por destinatário pro painel de controle de comunicados.
@@ -2122,6 +2235,12 @@ exports.sendOrgCommunication = onCall(
           if (profile.notifyEmail !== false && profile.email) { emails.push(profile.email); detail.email = true; detail.emailAddr = String(profile.email).toLowerCase(); }
           if (profile.notifyWhatsApp === true && profile.phone) {
             phones.push(profile.phone);
+            // v1.1.30: o Cloud API manda TEMPLATE personalizado ({{1}} = primeiro
+            // nome de quem recebe), então o telefone sozinho não basta.
+            waRecipients.push({
+              phone: String(profile.phone),
+              name: String(profile.displayName || profile.name || "").trim().split(/\s+/)[0] || "",
+            });
             detail.whatsapp = true;
             detail.phone = String(profile.phone);
           }
@@ -2156,11 +2275,23 @@ exports.sendOrgCommunication = onCall(
 
     // ── Fila de WhatsApp (processada por processWhatsAppQueue) ──
     let whatsappQueueId = "";
-    if (phones.length) {
-      const emoji = level === "fundamental" ? "🔴" : (level === "important" ? "🟠" : "🟢");
+    if (waRecipients.length) {
+      // v1.1.30: comunicado vai pelo template sp_comunicado_torneio (o Cloud API não
+      // manda texto livre business-initiated). {{1}} nome, {{2}} torneio, {{3}} a
+      // mensagem do organizador — texto humano, então passa pelo sanitizador (a Meta
+      // rejeita \n / 4+ espaços em parâmetro). Ver project_whatsapp_meta_2fa_block.
+      const _p = (v) => {
+        let s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+        if (s.length > 1024) s = s.slice(0, 1021) + "...";
+        return s || "-";
+      };
       const waRef = await db.collection("whatsapp_queue").add({
-        phones: phones,
-        message: emoji + " " + fullMsg,
+        template: "sp_comunicado_torneio",
+        urlSuffix: "#tournaments/" + tournamentId,
+        recipients: waRecipients.map((r) => ({
+          phone: r.phone,
+          params: [_p(r.name || "jogador"), _p(t.name || "seu torneio"), _p(rawMessage || fullMsg)],
+        })),
         createdAt: new Date().toISOString(),
         status: "pending",
       });
@@ -2564,6 +2695,45 @@ const WA_CLOUD_API = "https://graph.facebook.com/v22.0";
 const WA_CLOUD_PHONE_ID = "1318311631355405";      // Phone Number ID Barthlabs (não é segredo)
 const WA_LOGIN_TEMPLATE = "scoreplace_login_code"; // template AUTHENTICATION, OTP COPY_CODE
 const WA_LOGIN_TEMPLATE_LANG = "pt_BR";
+
+// Envia uma NOTIFICAÇÃO via template UTILITY do Cloud API (não-auth).
+// v1.1.30 — substitui o _sendWhatsAppText do Evolution: o Cloud API não manda
+// texto livre business-initiated, só template aprovado. `params` são os {{n}} do
+// corpo ({{1}} = nome de quem recebe) e `urlSuffix` é o sufixo do botão (a base
+// https://scoreplace.app/ é fixa no template). Ver project_whatsapp_meta_2fa_block.
+async function _sendWhatsAppTemplateMsg(token, phone, templateName, params, urlSuffix) {
+  if (IS_STAGING) { console.log("[staging] WA Cloud template suprimido →", String(phone)); return { ok: true, suppressed: true }; }
+  const to = String(phone || "").replace(/[^\d]/g, "");
+  const components = [];
+  if (Array.isArray(params) && params.length) {
+    components.push({ type: "body", parameters: params.map((p) => ({ type: "text", text: String(p) })) });
+  }
+  // Botão URL dinâmico: index 0, sub_type "url" — o parâmetro é só o SUFIXO.
+  components.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: String(urlSuffix || "#dashboard") }] });
+  const body = {
+    messaging_product: "whatsapp",
+    to: to,
+    type: "template",
+    template: { name: templateName, language: { code: WA_LOGIN_TEMPLATE_LANG }, components: components },
+  };
+  let resp;
+  try {
+    resp = await fetch(WA_CLOUD_API + "/" + WA_CLOUD_PHONE_ID + "/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    return { ok: false, error: "fetch failed: " + (e.message || String(e)) };
+  }
+  let data = null;
+  try { data = await resp.json(); } catch (e) { /* body não-json */ }
+  if (!resp.ok) {
+    return { ok: false, error: "HTTP " + resp.status + ": " + (data && data.error ? JSON.stringify(data.error) : resp.statusText) };
+  }
+  const messageId = data && data.messages && data.messages[0] && data.messages[0].id;
+  return { ok: true, messageId: messageId };
+}
 
 // Envia um código de autenticação via template do Cloud API. {ok} ou {ok:false,error}.
 async function _sendWhatsAppAuthCode(token, phone, code) {
@@ -3665,7 +3835,7 @@ exports.processWhatsAppQueue = onDocumentCreated(
     region: "us-central1",
     timeoutSeconds: 60,
     memory: "256MiB",
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
+    secrets: [WHATSAPP_CLOUD_TOKEN],
     retryConfig: { retryCount: 2 }, // Firebase auto-retries 2x em caso de unhandled error
   },
   async (event) => {
@@ -3673,11 +3843,15 @@ exports.processWhatsAppQueue = onDocumentCreated(
     if (!snap) return;
     if (IS_STAGING) { try { await snap.ref.update({ status: "suppressed_staging", processedAt: new Date().toISOString() }); } catch (_e) {} return; }
     const data = snap.data();
-    if (!data || !data.message || !Array.isArray(data.phones) || data.phones.length === 0) {
-      console.warn("[processWhatsAppQueue] doc inválido — skip:", event.params.queueId);
+    // v1.1.30 — shape novo: { template, recipients:[{phone,params}], urlSuffix }.
+    // O shape antigo ({phones,message}) era texto livre do Evolution e NÃO tem como
+    // ser enviado pelo Cloud API (só template aprovado) → falha explícita, não silenciosa.
+    if (!data || !data.template || !Array.isArray(data.recipients) || data.recipients.length === 0) {
+      const legacy = data && data.message ? " (doc legado com texto livre — Evolution)" : "";
+      console.warn("[processWhatsAppQueue] doc inválido — skip:", event.params.queueId, legacy);
       await snap.ref.update({
         status: "failed",
-        lastError: "missing phones[] or message",
+        lastError: "missing template/recipients[]" + legacy,
         processedAt: new Date().toISOString(),
       });
       return;
@@ -3685,35 +3859,32 @@ exports.processWhatsAppQueue = onDocumentCreated(
     // Idempotência: se já processado (retry do trigger), skip
     if (data.status === "sent" || data.status === "partial") return;
 
-    const apiUrl = EVOLUTION_API_URL.value();
-    const apiKey = EVOLUTION_API_KEY.value();
-    const instance = EVOLUTION_INSTANCE.value();
-    if (!apiUrl || !apiKey || !instance) {
-      console.error("[processWhatsAppQueue] secrets ausentes");
+    let token;
+    try { token = WHATSAPP_CLOUD_TOKEN.value(); } catch (e) { token = null; }
+    if (!token) {
+      console.error("[processWhatsAppQueue] WHATSAPP_CLOUD_API_TOKEN ausente");
       await snap.ref.update({
         status: "failed",
-        lastError: "Evolution secrets not configured",
+        lastError: "WHATSAPP_CLOUD_API_TOKEN not configured",
         processedAt: new Date().toISOString(),
       });
       return;
     }
 
     const deliveries = [];
-    for (const rawPhone of data.phones) {
-      const phone = _normalizePhoneE164(rawPhone);
+    for (const r of data.recipients) {
+      const phone = _normalizePhoneE164(r && r.phone);
       if (!phone) {
-        deliveries.push({ phone: String(rawPhone), ok: false, error: "invalid phone format" });
+        deliveries.push({ phone: String((r && r.phone) || ""), ok: false, error: "invalid phone format" });
         continue;
       }
-      const result = await _sendWhatsAppText(apiUrl, apiKey, instance, phone, data.message);
+      const result = await _sendWhatsAppTemplateMsg(token, phone, data.template, r.params || [], data.urlSuffix);
       // Omitir campos undefined — Firestore rejeita undefined como valor
       const delivery = { phone: phone, ok: result.ok };
       if (result.messageId !== undefined) delivery.messageId = result.messageId;
       if (result.error !== undefined) delivery.error = result.error;
       deliveries.push(delivery);
-      // Pequena pausa entre msgs múltiplas — Evolution já tem delay interno
-      // mas adicional 200ms reduz chance de rate-limit do WhatsApp Web.
-      if (data.phones.length > 1) await new Promise((r) => setTimeout(r, 200));
+      if (data.recipients.length > 1) await new Promise((r2) => setTimeout(r2, 200));
     }
 
     const okCount = deliveries.filter((d) => d.ok).length;
@@ -3807,16 +3978,12 @@ async function _evolutionRestart(apiUrl, apiKey, instance) {
   }
 }
 
-// Enfileira aviso ao dev (WhatsApp + e-mail) sobre uma auto-recuperação.
+// Enfileira aviso ao dev sobre uma auto-recuperação.
+// v1.1.30: o trecho de WhatsApp saiu — enfileirava texto livre no shape antigo
+// (que o processWhatsAppQueue do Cloud API rejeita) e no número BANIDO
+// 5511916936454. Dead code de qualquer jeito: só era chamado pelo
+// whatsappHealthGuard, deletado com o Evolution/VPS. O e-mail abaixo basta.
 async function _notifyDevRecovery(db, title, body) {
-  try {
-    await db.collection("whatsapp_queue").add({
-      phones: ["5511916936454"],
-      message: "🩺 " + title + "\n" + body,
-      createdAt: new Date().toISOString(),
-      status: "pending",
-    });
-  } catch (e) { /* ignore */ }
   try {
     await _enqueueMail(db, {
       to: ["scoreplace.app@gmail.com"],
