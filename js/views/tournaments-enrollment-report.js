@@ -1201,7 +1201,19 @@
       // Autorizou = tem letzplay indicado no perfil (@handle) E ligou o toggle
       // "Autorizar importação". É o que separa violeta (autorizou) de branco (não).
       r._lzAuthorized = !!(prof && prof.letzplayHandle && prof.letzplayConsent === true);
-      var li = prof && prof.letzplayImport;
+      // O HISTÓRICO PODE ESTAR EM DOIS LUGARES, e eu só olhava um:
+      //   • users/{uid}.letzplayImport      → a pessoa fez o autoimport dela;
+      //   • letzplayScans/{uid}.fullImport  → o ORGANIZADOR puxou por ela (busca completa).
+      // Caso real (14/jul 17:57): a Kelly tinha 152 jogos COMPLETOS no fullImport do scan e
+      // aparecia ROXA — porque ela nunca fez autoimport, então eu caía no scan resumido
+      // (torneios 2/8), julgava incompleto e não absolvia. O dado estava lá; a tela mentia.
+      // Não dá pra depender do letzplayImport: ele só é preenchido pela applyLetzplayScans
+      // (que roda depois) ou pelo login da própria pessoa — de novo fazendo a leitura do
+      // organizador depender do inscrito. Vence o que tem MAIS jogos (mesma regra da CF).
+      var _fi = (r.uid && scanMap[r.uid] && scanMap[r.uid].fullImport) || null;
+      var _own = prof && prof.letzplayImport;
+      var _nGames = function (x) { return (x && Array.isArray(x.games)) ? x.games.length : -1; };
+      var li = (_nGames(_fi) > _nGames(_own)) ? _fi : _own;
       var sc = (r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
       if (li) {
         var oc = li.officialCategory, band = li.rating && li.rating.band;

@@ -186,5 +186,37 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
   ok(r._lzColor === COL.red, 'campeão achado em import PARCIAL → VERMELHO (achar é prova; não achar não é)');
 }
 
+
+// ── 11. O histórico do SCAN conta — não só o autoimport da pessoa ──
+// Caso real (14/jul 17:57): a busca do organizador gravou 152 jogos da Kelly em
+// letzplayScans/{uid}.fullImport e ela aparecia ROXA. Motivo: eu só olhava
+// users/{uid}.letzplayImport, que ela não tem (nunca fez autoimport) — e caía no scan
+// resumido (torneios 2/8), julgava incompleto e não absolvia. O dado estava lá; a tela
+// mentia, e o dono concluiu (pela tela, corretamente) que a busca não gravou nada.
+// Depender do letzplayImport é fazer a leitura do organizador esperar o inscrito logar.
+{
+  const fullDoOrg = { games: new Array(152), officialCategory: { categoryRaw: 'Feminina C', skill: 'C' },
+    rating: { band: 'C+/B-' }, rankings: [], tournaments: [] };
+  const scanResumido = Object.assign({}, scanKelly, { tournaments: [], totals: { rankings: 8, tournaments: 8, matches: 152 } });
+  const r = run({ uid: 'k9', effectiveSkills: [] }, { k9: profAuthorized }, { k9: { scan: scanResumido, fullImport: fullDoOrg } });
+  ok(r._lzColor === COL.green, 'histórico completo no fullImport do SCAN → VERDE (veio: ' + r._lzColor + ')');
+  ok(r._lzSrc === '🎾', 'fonte = histórico (🎾), não o resumo (🔎)');
+  ok(r._lzSkill === 'C', 'nível vem do officialCategory do histórico');
+}
+{
+  // sem fullImport (o organizador cancelou antes dela) → segue no resumo → roxo
+  const r = run({ uid: 'f9', effectiveSkills: [] }, { f9: profAuthorized }, { f9: { scan: scanFlavia } });
+  ok(r._lzColor === COL.violet, 'sem histórico puxado → ROXO (veio: ' + r._lzColor + ')');
+}
+{
+  // vence quem tem MAIS jogos (mesma regra da applyLetzplayScans)
+  const pequeno = { games: new Array(10), officialCategory: { categoryRaw: 'Feminina C', skill: 'C' }, rating: {}, rankings: [], tournaments: [] };
+  const grande = { games: new Array(152), officialCategory: { categoryRaw: 'Feminina B', skill: 'B' }, rating: {}, rankings: [], tournaments: [] };
+  const r = run({ uid: 'm9', effectiveSkills: [] },
+    { m9: Object.assign({ letzplayImport: pequeno }, profAuthorized) },
+    { m9: { scan: scanKelly, fullImport: grande } });
+  ok(r._lzSkill === 'B', 'entre autoimport (10 jogos) e scan do org (152), vence o de MAIS jogos');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
