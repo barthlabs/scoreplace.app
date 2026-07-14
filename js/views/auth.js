@@ -7981,6 +7981,61 @@ function setupProfileModal() {
       }
       window._profilePhoneCtx.e164 = e164;
       var otpEl = document.getElementById(ctx.otpId);
+
+      // ── NATIVO (Capacitor iOS/Android): SEM reCAPTCHA ───────────────────────
+      // O reCAPTCHA do Firebase JS SDK NÃO carrega no WKWebView → o token nunca
+      // volta → auth/internal-error e o SMS não sai. Era o que quebrava este botão
+      // no app iOS (o login por telefone já desviava pra cá desde a v4.3.21; o
+      // perfil não — e ficou anos caindo no reCAPTCHA). Usa o mesmo plugin
+      // (@capacitor-firebase/authentication): iOS via APNs, Android via Play
+      // Integrity. Espelha _sendPhoneCodeNative, MAS confirma na instância
+      // SECUNDÁRIA ('profilephone') — o plugin autentica na camada nativa, e o
+      // .confirm() aqui NÃO pode tocar a sessão principal (senão o merge/prova de
+      // posse derrubaria o login do usuário). NA WEB _isNativeAuthAvailable() é
+      // false → segue o reCAPTCHA abaixo, intocado.
+      if (typeof _isNativeAuthAvailable === 'function' && _isNativeAuthAvailable()) {
+        var _sappN = firebase.apps.find(function (a) { return a.name === 'profilephone'; })
+          || firebase.initializeApp(firebase.app().options, 'profilephone');
+        try { _sappN.auth().setPersistence(firebase.auth.Auth.Persistence.NONE); } catch (e) {}
+        window._profilePhoneSurvivor = cu.uid;
+        window._profilePhoneE164 = e164;
+        if (otpEl) { otpEl.style.display = 'block'; otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Enviando código para ' + window._safeHtml(e164) + '…</div>'; }
+        var FAp = window.Capacitor.Plugins.FirebaseAuthentication;
+        var _failN = function (msg) {
+          if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível enviar o código: ' + window._safeHtml(String(msg || 'erro')) + '</div>';
+        };
+        FAp.removeAllListeners().then(function () {
+          FAp.addListener('phoneCodeSent', function (ev) {
+            var vId = ev && ev.verificationId;
+            if (!vId) { _failN('Falha ao iniciar a verificação.'); return; }
+            // Mesma assinatura do confirmationResult do web → _profileConfirmPhoneCode
+            // (e o merge) rodam INTOCADOS.
+            window._profilePhoneConfirmation = {
+              confirm: function (code) {
+                var cred = firebase.auth.PhoneAuthProvider.credential(vId, code);
+                return _sappN.auth().signInWithCredential(cred);
+              }
+            };
+            if (otpEl) otpEl.innerHTML =
+              '<div style="font-size:0.78rem;color:var(--text-bright);margin-bottom:6px;">📲 Digite o código que chegou por <b>SMS</b>:</div>' +
+              '<div style="display:flex;gap:8px;">' +
+                '<input id="' + ctx.codeId + '" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456" style="flex:1;min-width:0;letter-spacing:4px;text-align:center;">' +
+                '<button type="button" onclick="window._profileConfirmPhoneCode()" class="btn btn-success" style="white-space:nowrap;">Confirmar</button>' +
+              '</div>';
+            var c = document.getElementById(ctx.codeId); if (c) { try { c.focus(); } catch (e) {} }
+          });
+          FAp.addListener('phoneVerificationFailed', function (ev) {
+            window._error('[scoreplace-auth] profile native phone verification failed:', ev);
+            _failN(ev && ev.message);
+          });
+          return FAp.signInWithPhoneNumber({ phoneNumber: e164 });
+        }).catch(function (err) {
+          window._error('[scoreplace-auth] profile native signInWithPhoneNumber error:', err);
+          _failN(err && (err.message || err.code));
+        });
+        return;
+      }
+
       // reCAPTCHA invisível NÃO pode ficar em display:none — o iframe não recebe
       // dimensões, o token sai inválido e o backend responde auth/internal-error
       // (o SMS nunca chega). Espelha _ensureRecaptchaInBody do login: recria o nó
