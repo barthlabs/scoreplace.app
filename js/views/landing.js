@@ -164,7 +164,9 @@
     var t = (window._t || function (k) { return k; });
     return '<footer class="landing-footer">' +
       '<p>scoreplace.app v' + ver + '</p>' +
-      '<p><a href="mailto:scoreplace.app@gmail.com">scoreplace.app@gmail.com</a></p>' +
+      // contato@barthlabs.com (não o gmail): é o e-mail da empresa e o mesmo do
+      // portfólio Barthlabs na Meta — o revisor casa site × registro.
+      '<p><a href="mailto:contato@barthlabs.com">contato@barthlabs.com</a></p>' +
       // v0.17.71: links pra privacy + termos (LGPD-ready pra beta)
       '<p style="margin-top:12px;font-size:0.75rem;">' +
         '<a href="#privacy">' + t('privacy.title') + '</a>' +
