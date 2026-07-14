@@ -123,10 +123,15 @@
     if (o && o.parentNode) o.parentNode.removeChild(o);
   };
 
-  // Progresso com BOLINHA QUE SEMPRE GIRA (spinner CSS) — cria a estrutura 1x e depois só
-  // atualiza texto/barra IN-PLACE (sem recriar), pra o spinner não reiniciar/travar. Fases:
-  // 'jogos' (paginação) → 'names' (busca 1 fetch por torneio, parte lenta) → 'saving'.
-  function _showProgress(done, total, saving, phase) {
+  // CARD CANÔNICO de progresso do letzplay (v1.1.18): BOLINHA QUE SEMPRE GIRA (spinner
+  // CSS) + barra + label + sub. Cria a estrutura 1x e depois só atualiza texto/barra
+  // IN-PLACE (sem recriar), pra o spinner não reiniciar/travar.
+  // Usado por DOIS fluxos: o import do próprio usuário (aqui) e a busca do organizador
+  // na Análise de Inscritos (tournaments-enrollment-report.js) — leitura mecânica igual
+  // nos dois; qualquer melhoria vale pros dois. Ver [[project_letzplay_scan_stability]].
+  //   opts: { label, sub, pct, onCancel }  — onCancel presente → mostra "Cancelar".
+  window._spProgressOverlay = function (opts) {
+    opts = opts || {};
     if (!document.getElementById('sp-imp-spin-style')) {
       var st = document.createElement('style'); st.id = 'sp-imp-spin-style';
       st.textContent = '@keyframes spImpSpin{to{transform:rotate(360deg);}}';
@@ -137,9 +142,28 @@
         '<div style="font-size:2.4rem;margin:0 auto 10px;display:inline-block;animation:spImpSpin 0.85s linear infinite;">🎾</div>' +
         '<div id="sp-imp-label" style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;"></div>' +
         '<div style="height:12px;border-radius:999px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.1));"><div id="sp-imp-bar" style="height:100%;width:8%;background:linear-gradient(90deg,#84cc16,#65a30d);transition:width .3s;"></div></div>' +
-        '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;"></div>'
+        '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;"></div>' +
+        '<div id="sp-imp-actions" style="margin-top:14px;display:none;"></div>'
       );
     }
+    var l = document.getElementById('sp-imp-label'); if (l) l.textContent = opts.label || '';
+    var b = document.getElementById('sp-imp-bar'); if (b && opts.pct != null) b.style.width = opts.pct + '%';
+    var s = document.getElementById('sp-imp-sub'); if (s) s.textContent = opts.sub || '';
+    var a = document.getElementById('sp-imp-actions');
+    if (a) {
+      if (opts.onCancel && !a.firstChild) {
+        a.style.display = 'block';
+        var btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'btn btn-outline btn-sm'; btn.textContent = 'Cancelar';
+        btn.onclick = function () { try { opts.onCancel(); } catch (e) {} };
+        a.appendChild(btn);
+      } else if (!opts.onCancel) { a.style.display = 'none'; a.innerHTML = ''; }
+    }
+  };
+
+  // Fases do import do próprio usuário: 'jogos' (paginação) → 'names' (1 fetch por
+  // torneio, parte lenta) → 'saving'.
+  function _showProgress(done, total, saving, phase) {
     var label, sub, pct;
     if (saving) { label = 'Salvando no seu perfil…'; sub = 'quase lá'; pct = 99; }
     else if (phase === 'names') {
@@ -151,9 +175,7 @@
       sub = total ? (done + ' de ' + total + ' jogos') : (done + ' jogos…');
       pct = total ? Math.min(99, Math.round(done / total * 100)) : (done ? 60 : 8);
     }
-    var l = document.getElementById('sp-imp-label'); if (l) l.textContent = label;
-    var b = document.getElementById('sp-imp-bar'); if (b) b.style.width = pct + '%';
-    var s = document.getElementById('sp-imp-sub'); if (s) s.textContent = sub;
+    window._spProgressOverlay({ label: label, sub: sub, pct: pct });
   }
 
   window.addEventListener('message', function (e) {

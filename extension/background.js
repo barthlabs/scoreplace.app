@@ -13,6 +13,42 @@
  * o botão surge sozinho). Content scripts declarados no manifest só entram em page LOAD;
  * este re-injeta nas abas que já estavam abertas antes do install.
  */
+/* ── FILA GLOBAL: o letzplay é UM recurso compartilhado (v1.36) ────────────────
+ * TUDO que toca o letzplay (fetch same-origin OU navegação do perfil) passa por
+ * aqui, UMA operação por vez. Motivo: existe UMA aba do letzplay; `scanProfileViaTab`
+ * NAVEGA essa aba. Duas buscas ao mesmo tempo (o organizador clicou de novo, ou duas
+ * abas do scoreplace abertas) navegavam a MESMA aba em paralelo → uma lia o perfil da
+ * outra, e o `closeAutoScanTab` da primeira matava a segunda no meio. Serializado:
+ * clicar de novo NUNCA quebra — no máximo entra na fila e demora mais.
+ *
+ * ESPAÇAMENTO ADAPTATIVO: o letzplay/Cloudflare limita rajadas (403/429). O intervalo
+ * entre requisições CRESCE sozinho a cada rate-limit e volta a encolher depois de
+ * sucessos. Preferimos demorar a falhar — o content.js ainda re-tenta por cima disto.
+ */
+// gap inicial 1200ms = o espaçamento que a prática mostrou necessário pra pegar TODOS os
+// nomes de torneio sem tomar 403 na rajada (era um sleep(1500) solto no content.js; agora
+// é o piso GLOBAL, valendo pra paginação de jogos e navegação de perfil também).
+var _q = { chain: Promise.resolve(), busy: 0, gap: 1200, min: 1200, max: 10000, last: 0 };
+function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function _qSlower() { _q.gap = Math.min(_q.max, Math.round(_q.gap * 2) + 400); }
+function _qFaster() { _q.gap = Math.max(_q.min, Math.round(_q.gap * 0.85)); }
+// Marca rate-limit vindo de QUALQUER caminho (fetch ou navegação bloqueada).
+function _qNoteStatus(st) {
+  if (st === 403 || st === 429) _qSlower();
+  else if (st >= 200 && st < 300) _qFaster();
+}
+function enqueue(fn) {
+  _q.busy++;
+  var run = _q.chain.then(function () {
+    var wait = _q.gap - (Date.now() - _q.last);
+    return (wait > 0 ? _sleep(wait) : Promise.resolve()).then(fn);
+  });
+  // a CORRENTE nunca quebra: um erro numa operação não pode travar a fila inteira.
+  _q.chain = run.then(function () { _q.last = Date.now(); }, function () { _q.last = Date.now(); });
+  function dec(v) { _q.busy = Math.max(0, _q.busy - 1); return v; }
+  return run.then(dec, function (e) { dec(); throw e; });
+}
+
 var CS_MATCHES = ['https://scoreplace.app/*', 'https://scoreplace-staging.web.app/*', 'http://localhost/*'];
 var CS_FILES = ['lib/letzplay-rating.js', 'lib/letzplay-import.js', 'lib/letzplay-extract.js', 'lib/letzplay-flow.js', 'content.js'];
 function injectIntoOpenScoreplaceTabs() {
@@ -52,7 +88,10 @@ function ensureLetzplayTab(cb, noCreate) {
     });
   });
 }
+// Só fecha a aba quando a fila esvaziou. Antes, o fim de UMA busca fechava a aba de
+// OUTRA ainda rodando (organizador clicou de novo) → "no-letzplay-tab" no meio.
 function closeAutoScanTab() {
+  if (_q.busy > 0) return;   // ainda tem operação na fila usando a aba
   if (_autoScanTabId != null) { var id = _autoScanTabId; _autoScanTabId = null; try { chrome.tabs.remove(id, function () { void chrome.runtime.lastError; }); } catch (e) {} }
 }
 // Busca uma URL do letzplay DE DENTRO de uma aba do letzplay (same-origin → cookies +
@@ -246,11 +285,20 @@ function scanProfileViaTab(handle, mode, cb) {
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg && msg.type === 'lp-fetch' && typeof msg.url === 'string' &&
       msg.url.indexOf('https://letzplay.me/') === 0) {
-    fetchViaLetzplayTab(msg.url, sendResponse, !!msg.noCreateTab);
+    // pela FILA: uma requisição por vez, espaçada (nunca em rajada → nunca toma 429).
+    enqueue(function () {
+      return new Promise(function (res) { fetchViaLetzplayTab(msg.url, res, !!msg.noCreateTab); });
+    }).then(function (r) {
+      _qNoteStatus(r && r.status);
+      sendResponse(r);
+    }, function (e) { sendResponse({ ok: false, error: String((e && e.message) || e) }); });
     return true; // resposta assíncrona
   }
   if (msg && msg.type === 'lp-scan-profile' && typeof msg.handle === 'string') {
-    scanProfileViaTab(msg.handle, msg.mode === 'full' ? 'full' : 'essential', sendResponse);
+    // NAVEGA a aba compartilhada → obrigatoriamente serializado com todo o resto.
+    enqueue(function () {
+      return new Promise(function (res) { scanProfileViaTab(msg.handle, msg.mode === 'full' ? 'full' : 'essential', res); });
+    }).then(sendResponse, function (e) { sendResponse({ ok: false, error: String((e && e.message) || e) }); });
     return true; // assíncrona
   }
   if (msg && msg.type === 'lp-close-scan-tab') { closeAutoScanTab(); sendResponse({ ok: true }); return true; }
