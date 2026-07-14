@@ -543,7 +543,26 @@ window._handlePhoneOwnershipLink = function () {
 // arriscadas sem encostar nos dados reais do Confra. Ver docs/staging.md.
 var _firebaseConfigProd = {
   apiKey: "AIzaSyB7AyOojV_Pm50Kr7bovVY4jVTTNbKOK0A",
-  authDomain: "scoreplace-app.firebaseapp.com",
+  // v1.1.32 — authDomain CUSTOM (auth.scoreplace.app), não mais firebaseapp.com.
+  //
+  // Por quê: o SDK web carrega o iframe de auth (reCAPTCHA do phone auth, handler
+  // do OAuth) a partir do authDomain. Com firebaseapp.com isso é CROSS-SITE em
+  // relação ao app (scoreplace.app) → o WebKit (Safari/iOS) bloqueia por ITP e o
+  // token do reCAPTCHA nunca volta → `auth/internal-error` e o SMS não sai. Isso
+  // derrubava o "Verificar e vincular" celular no app nativo iOS (bug conhecido do
+  // Capacitor: reCAPTCHA web não carrega em WKWebView). auth.scoreplace.app é o
+  // MESMO site do app → deixa de ser terceiro → o ITP não bloqueia.
+  //
+  // Pré-requisitos (todos feitos em 14/jul/2026, senão o login quebra em web+iOS+Android):
+  //   • auth.scoreplace.app no Firebase Hosting (CNAME → scoreplace-app.web.app,
+  //     TXT _acme-challenge.auth) servindo /__/auth/handler com SSL válido;
+  //   • domínio em Firebase Auth → Authorized domains;
+  //   • OAuth web client: origem JS https://auth.scoreplace.app + redirect URI
+  //     https://auth.scoreplace.app/__/auth/handler (o de firebaseapp.com FICOU,
+  //     pra não quebrar sessão/fluxo antigo).
+  // Reverter = voltar pra "scoreplace-app.firebaseapp.com" e deployar.
+  // Ver project_recaptcha_offscreen_not_display_none e project_native_webview_hostname.
+  authDomain: "auth.scoreplace.app",
   projectId: "scoreplace-app",
   storageBucket: "scoreplace-app.firebasestorage.app",
   messagingSenderId: "382268772878",
