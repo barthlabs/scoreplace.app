@@ -11,6 +11,15 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
+      '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">⚡ v1.1.17 — Casual, presença e análise mais espertas <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⚡ Partida casual lembra sua última configuração:</b> a modalidade e o placar que você usou por último voltam já selecionados — chega de começar e só perceber no primeiro ponto que estava em Pickleball em vez de Beach Tennis.</li>' +
+        '<li><b>📍 "Cheguei pra jogar":</b> ao chegar num local, o app pergunta com os <b>botões de modalidade</b> (como no "planejar ida") já marcados com o que você jogou por último — não mais todas as modalidades de uma vez. É só confirmar ou ajustar.</li>' +
+        '<li><b>🟣 "Autorizado" na análise de inscritos:</b> na tela do organizador, quem tem o letzplay no perfil e <b>autorizou</b> a importação aparece em <b>violeta</b>; quem não autorizou fica em branco. O cinza "sem verificação" saiu.</li>' +
+        '<li><b>⚠️ W.O. contestado avisa a organização inteira:</b> ao contestar um W.O., agora o <b>organizador e os co-organizadores</b> são notificados — antes só o criador do torneio sabia.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #22c55e;border-radius:12px;padding:14px 16px;background:rgba(34,197,94,0.08);">' +
       '<div style="font-weight:800; color:#4ade80; font-size:1rem; margin-bottom:8px;">📱 v1.1.12 — Verificar celular e recuperar conta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
