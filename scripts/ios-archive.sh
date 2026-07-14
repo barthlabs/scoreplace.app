@@ -36,6 +36,7 @@ xcodebuild \
   -configuration Release \
   -destination 'generic/platform=iOS' \
   -archivePath "$ARCHIVE" \
+  -allowProvisioningUpdates \
   archive
 
 # ── VALIDAÇÃO CRÍTICA: o watch app precisa estar embutido ──
@@ -68,7 +69,8 @@ echo "▶ Exportando pra App Store Connect…  → $EXPORT_DIR"
 xcodebuild -exportArchive \
   -archivePath "$ARCHIVE" \
   -exportPath "$EXPORT_DIR" \
-  -exportOptionsPlist "$EXPORT_OPTS"
+  -exportOptionsPlist "$EXPORT_OPTS" \
+  -allowProvisioningUpdates
 
 IPA="$(find "$EXPORT_DIR" -name '*.ipa' -maxdepth 1 | head -1)"
 echo ""
