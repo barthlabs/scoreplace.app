@@ -4,7 +4,7 @@
 <dict>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>app.scoreplace</string>
+		<string>$(AppIdentifierPrefix)app.scoreplace</string>
 	</array>
 	<key>com.apple.developer.applesignin</key>
 	<array>
