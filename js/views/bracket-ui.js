@@ -2005,6 +2005,9 @@ function _notifyOrgAndCoHosts(t, notifData) {
     t.coHosts.forEach(function(ch){ if (ch && ch.status === 'active' && ch.uid && !seen[ch.uid]) { seen[ch.uid] = true; window._sendUserNotification(ch.uid, notifData); } });
   }
 }
+// Exposto no window pra reuso cross-file: o consenso de W.O. (wo-claim.js) escala a
+// disputa pelo MESMO helper, incluindo co-hosts (paridade com o placar).
+window._notifyOrgAndCoHosts = _notifyOrgAndCoHosts;
 
 // Mutação PURA de aplicar um resultado APROVADO (pending → final) sobre o `t`
 // passado: aplica scores/sets/winner, auto check-in, delete pendingResult, e o
