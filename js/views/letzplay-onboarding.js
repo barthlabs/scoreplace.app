@@ -295,9 +295,12 @@
     if (d.__sp_lp === 'lz-throttle') {
       if (!_importActive) return;
       window._spEtaDelay(d.waitMs || 0);
-      var secs = Math.round((d.waitMs || 0) / 1000);
-      window._spProgressOverlay({ label: '🐢 letzplay pediu pra ir mais devagar',
-        sub: 'aguardando ' + secs + 's antes de tentar de novo — o import continua' });
+      // NÃO expor "o letzplay pediu pra ir mais devagar": é problema NOSSO, não do usuário.
+      // Pra ele, esperar o rate-limit e ler uma página são a mesma coisa — o import está
+      // andando. A espera já entra no regressivo (_spEtaDelay), então o "quanto falta"
+      // continua honesto sem transformar um detalhe de infraestrutura em ansiedade.
+      window._spProgressOverlay({ label: '⚙️ Processando informações…',
+        sub: 'o import continua — pode deixar rodando' });
       return;
     }
     if (d.__sp_lp === 'import-result') {

@@ -1933,10 +1933,12 @@
         // A espera entra na conta: o regressivo AUMENTA (é o previsto — "pode ir ajustando,
         // aumentando ou diminuindo"). Sem isso ele desceria durante a pausa e mentiria.
         window._spEtaDelay(d.waitMs || 0);
-        var secs = Math.round((d.waitMs || 0) / 1000);
-        var paceTxt = d.gap ? (' · ritmo ' + (d.gap / 1000).toFixed(1) + 's/página') : '';
-        setProg({ label: '🐢 letzplay pediu pra ir mais devagar',
-          sub: 'aguardando ' + secs + 's antes de tentar de novo' + paceTxt + ' — a busca continua', pct: null });
+        // NÃO expor "o letzplay pediu pra ir mais devagar" nem o ritmo em s/página: é
+        // detalhe de infraestrutura NOSSO. Pro organizador, esperar o rate-limit e ler uma
+        // página são a mesma coisa — a busca está andando. A espera já entra no regressivo
+        // (_spEtaDelay), então o "quanto falta" segue honesto sem virar ansiedade.
+        setProg({ label: '⚙️ Processando informações…',
+          sub: 'a busca continua — pode deixar rodando e usar o app', pct: null });
         return;
       }
       if (d.__sp_lp === 'org-scan-progress' && d.tournamentId === ctx.tId) {
