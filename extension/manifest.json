@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "scoreplace — importar letzplay",
+  "version": "1.35",
+  "description": "Importa seu histórico do letzplay pro scoreplace, na sua sessão logada. Só desktop.",
+  "permissions": [
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://letzplay.me/*",
+    "https://scoreplace.app/*",
+    "https://scoreplace-staging.web.app/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Importar histórico letzplay",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://scoreplace.app/*",
+        "https://scoreplace-staging.web.app/*",
+        "http://localhost/*"
+      ],
+      "js": [
+        "lib/letzplay-rating.js",
+        "lib/letzplay-import.js",
+        "lib/letzplay-extract.js",
+        "lib/letzplay-flow.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "inject.js"
+      ],
+      "matches": [
+        "https://letzplay.me/*"
+      ]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

@@ -1,4 +1,46 @@
-window.SCOREPLACE_VERSION = '1.0';
+window.SCOREPLACE_VERSION = '1.1.15';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
+// ─────────────────────────────────────────────────────────────────────────────
+// Guardamos os @handles dos parceiros/adversários importados do letzplay. Quando
+// alguém entra no scoreplace e define seu @letzplay no perfil, o nome importado
+// (às vezes truncado/errado) é substituído pelo displayName real dele — em todo
+// lugar que mostra histórico/estatísticas. Cache global (handle_lower → {name,uid,
+// photoURL} ou null se consultado e não encontrado) evita re-query.
+window._spLetzplayNameCache = window._spLetzplayNameCache || {};
+window._loadLetzplayNameCache = async function (handles) {
+  var cache = window._spLetzplayNameCache;
+  var db = window.FirestoreDB && (window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
+  if (!db) return cache;
+  var want = [];
+  (handles || []).forEach(function (h) {
+    if (!h) return; var k = String(h).toLowerCase();
+    if (!(k in cache) && want.indexOf(h) < 0) want.push(h);
+  });
+  if (!want.length) return cache;
+  for (var i = 0; i < want.length; i += 10) {
+    var batch = want.slice(i, i + 10);
+    try {
+      var snap = await db.collection('users').where('letzplayHandle', 'in', batch).get();
+      snap.forEach(function (doc) {
+        var d = doc.data() || {};
+        if (d.letzplayHandle) {
+          cache[String(d.letzplayHandle).toLowerCase()] = { name: d.displayName || null, uid: doc.id, photoURL: d.photoURL || null };
+        }
+      });
+    } catch (e) { /* índice/rede: só não resolve, cai no nome importado */ }
+    batch.forEach(function (h) { var k = String(h).toLowerCase(); if (!(k in cache)) cache[k] = null; });
+  }
+  return cache;
+};
+// Nome a exibir para um @handle: displayName do scoreplace se existir, senão o
+// nome importado (fallback).
+window._spNameForLetzplay = function (handle, fallback) {
+  if (!handle) return fallback;
+  var e = window._spLetzplayNameCache[String(handle).toLowerCase()];
+  return (e && e.name) ? e.name : fallback;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE POR UID — nome/e-mail/telefone vivem SÓ em users/{uid} (v4.5.61)
@@ -140,6 +182,56 @@ window._formatDisplayName = function (fmt) {
   if (fmt === 'Liga' || fmt === 'Ranking') return 'Pontos Corridos';
   if (fmt === 'Fase de Grupos + Eliminatórias') return 'Fase de Grupos';
   return fmt;
+};
+
+// Nome de EXIBIÇÃO da competição de um jogo importado do letzplay. Preferência:
+//   1) g.tourneyName (nome real gravado no próprio jogo — imports novos, ext ≥1.27);
+//   2) nome real do footprint casado por (clube|categoria|ano) — resgata imports antigos
+//      cujo footprint.name já traz o nome real mas os jogos ainda guardam só a categoria;
+//   3) g.competition (categoria — fallback, ex: "Masculina D").
+// `imp` é o letzplayImport (pra achar o footprint). Rankings (não-oficiais) não têm nome
+// de torneio → sempre a categoria. Usado por Estatísticas, gráfico de forma e Histórico.
+// Índice canônico das COMPETIÇÕES do letzplay por REFERÊNCIA: torneio = `t/club/tourneyId`,
+// ranking = `r/club/rankingId`. Cada jogo guarda só o id (nunca o nome); o nome + logo +
+// classificação vivem UMA vez no footprint. Resolver SEMPRE pela referência — casar por
+// categoria+ano era frágil e é o que fazia "só alguns terem nome". Torneios E rankings têm
+// nome real (ex.: "Competitivo Fem B | 2026 2a Etapa"). Retorna a entrada do footprint ou null.
+function _spBuildCompIdx(imp) {
+  var idx = imp.__spCompIdx;
+  if (!idx) {
+    idx = {};
+    (imp.footprint || []).forEach(function (f) {
+      if (!f) return;
+      if (f.tourneyId != null) { var kt = 't/' + (f.club || '') + '/' + f.tourneyId; if (!idx[kt]) idx[kt] = f; }
+      if (f.rankingId != null) { var kr = 'r/' + (f.club || '') + '/' + f.rankingId; if (!idx[kr]) idx[kr] = f; }
+    });
+    try { Object.defineProperty(imp, '__spCompIdx', { value: idx, enumerable: false, configurable: true }); }
+    catch (e) { imp.__spCompIdx = idx; }
+  }
+  return idx;
+}
+// Footprint de um JOGO (torneio via tourneyId, ranking via rankingId) ou null.
+window._spCompByRef = function (imp, g) {
+  if (!imp || !g) return null;
+  var idx = _spBuildCompIdx(imp);
+  if (g.official && g.tourneyId != null) return idx['t/' + (g.club || '') + '/' + g.tourneyId] || null;
+  if (!g.official && g.rankingId != null) return idx['r/' + (g.club || '') + '/' + g.rankingId] || null;
+  return null;
+};
+// Footprint por string de referência ('t/club/id' ou 'r/club/id') — usado pela tela de detalhe.
+window._spCompByRefStr = function (imp, ref) {
+  if (!imp || !ref) return null;
+  return _spBuildCompIdx(imp)[ref] || null;
+};
+
+window._spGameComp = function (imp, g) {
+  if (!g) return '';
+  // 1) resolve pela REFERÊNCIA (torneio: tourneyId; ranking: rankingId) — fonte de verdade.
+  var f = window._spCompByRef(imp, g);
+  if (f && f.name && f.name !== f.categoryRaw) return f.name;
+  // 2) fallback pra imports ANTIGOS que denormalizavam o nome no jogo; senão a categoria.
+  if (g.tourneyName) return g.tourneyName;
+  return g.competition || '';
 };
 
 // Rótulo do TIPO do torneio pra EXIBIÇÃO (cards, pílulas, títulos, badges). Rei/Rainha é MODO
@@ -355,11 +447,44 @@ window._monarchGlobalJogoNum = function (t, m, isMe) {
   var COALESCE_MS = 70;
   var _lastT = 0, _lastPri = 0;
 
-  // Mute: respeita opt-out explícito (localStorage). Wireável a um toggle de perfil.
+  // Mute: respeita opt-out explícito (localStorage). Ligado por padrão — só o
+  // valor exato 'off' silencia. Wireado ao toggle "Vibração" no perfil (auth.js).
   window._hapticsMuted = function () {
     try { if (localStorage.getItem('scoreplace_haptics') === 'off') return true; } catch (e) {}
     return false;
   };
+  // Liga/desliga a vibração (toggle "Vibração" do perfil). Efeito imediato:
+  // grava a preferência e, ao LIGAR, dá um tique de confirmação como preview.
+  window._setHapticsEnabled = function (on) {
+    try { localStorage.setItem('scoreplace_haptics', on ? 'on' : 'off'); } catch (e) {}
+    if (on) { _lastT = 0; _lastPri = 0; if (window._haptic) window._haptic('success'); }
+  };
+
+  // ── App NATIVO (iOS/Android via Capacitor): Taptic/haptics REAL do device ──
+  // No iPhone o navigator.vibrate NÃO existe e o truque do <input switch> não
+  // vibra (Apple exige toque trusted) — a ÚNICA forma de vibrar no iOS é o
+  // plugin nativo @capacitor/haptics. Acessado via a ponte window.Capacitor.
+  // Enums do plugin são strings simples ('LIGHT'/'MEDIUM'/'HEAVY',
+  // 'SUCCESS'/'WARNING'/'ERROR') — passamos direto sem importar o pacote.
+  function _capHaptics() {
+    try {
+      var C = window.Capacitor;
+      if (C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.Haptics) {
+        return C.Plugins.Haptics;
+      }
+    } catch (e) {}
+    return null;
+  }
+  // Mapa tipo → chamada nativa. impact = "tique" de apertar; notification =
+  // feedback semântico (deu certo / atenção / erro).
+  var IMPACT = { light: 'LIGHT', tap: 'LIGHT', medium: 'MEDIUM', undo: 'MEDIUM' };
+  var NOTIF  = { success: 'SUCCESS', warning: 'WARNING', error: 'ERROR' };
+  function _capFire(H, type) {
+    try {
+      if (NOTIF[type]) { H.notification({ type: NOTIF[type] }); return; }
+      H.impact({ style: IMPACT[type] || 'LIGHT' });
+    } catch (e) {}
+  }
 
   // ── Fallback iOS: switch escondido que dispara o Taptic ao ser alternado ──
   var _iosLabel = null, _iosTried = false;
@@ -398,29 +523,11 @@ window._monarchGlobalJogoNum = function (t, m, isMe) {
     var pri = PRI[type] || 1;
     if (now - _lastT < COALESCE_MS && pri <= _lastPri) return; // coalesce
     _lastT = now; _lastPri = pri;
-    // ── Nativo (Capacitor iOS/Android): Taptic Engine / vibrador REAL ──
-    // v4.3.21: agora que o app roda nativo, @capacitor/haptics dispara o retorno
-    // tátil de verdade. No iPhone a Vibration API NÃO existe (ver bloco abaixo),
-    // então SEM isto o haptic é no-op total no iOS — botões, placar ao vivo e o
-    // futuro controle no relógio ficavam mudos. Com o plugin, iOS ganha Taptic
-    // real e o Android ganha impacto semântico consistente (light/medium/heavy)
-    // em vez do vibrate() cru. Fire-and-forget (impact/notification são async;
-    // não bloqueiam o gesto). NO-OP na WEB (Capacitor undefined) → caminho web
-    // 100% intocado; segue pro navigator.vibrate / no-op de sempre.
-    try {
-      var C = window.Capacitor;
-      if (C && typeof C.isNativePlatform === 'function' && C.isNativePlatform() && C.Plugins && C.Plugins.Haptics) {
-        var H = C.Plugins.Haptics;
-        if (type === 'success' || type === 'warning' || type === 'error') {
-          H.notification({ type: type === 'success' ? 'SUCCESS' : (type === 'warning' ? 'WARNING' : 'ERROR') }).catch(function () {});
-        } else {
-          // tap/light → LIGHT (tique de botão); medium/undo → MEDIUM.
-          var _style = (type === 'medium' || type === 'undo') ? 'MEDIUM' : 'LIGHT';
-          H.impact({ style: _style }).catch(function () {});
-        }
-        return;
-      }
-    } catch (e) {}
+    // 1º: app nativo (cobre iOS, que não tem navigator.vibrate; e dá Taptic
+    // real no Android também). Só existe dentro do WebView do app instalado.
+    var H = _capHaptics();
+    if (H) { _capFire(H, type); return; }
+    // 2º: web Android — Vibration API.
     if (SUPPORTS_VIBRATE) {
       try { navigator.vibrate(PATTERNS[type] != null ? PATTERNS[type] : 12); return; } catch (e) {}
     }
@@ -451,6 +558,132 @@ window._monarchGlobalJogoNum = function (t, m, isMe) {
     } catch (_e) {}
   }
   try { document.addEventListener('pointerdown', _onPointerDown, true); } catch (e) {}
+})();
+
+// ─── Sons de UI (Web Audio, sintetizados) ────────────────────────────────────
+// window._sound(tipo) é o ÚNICO ponto de áudio de UI do app. Diferente do haptic,
+// NÃO é ligado no listener global de todo botão — só em momentos semânticos
+// (a vibração cobre o toque comum). Tons gerados por código: zero arquivo, roda
+// offline, funciona no web e dentro do app nativo (Web Audio no WebView).
+// Default DESLIGADO — só 'on' no localStorage habilita (toggle "Sons" no perfil).
+// Tipos: 'sino', 'apito', 'game', 'set', 'vitoria', 'rejeicao', 'campeao'.
+(function _setupSounds() {
+  var ctx = null, master = null;
+  window._soundMuted = function () {
+    try { return localStorage.getItem('scoreplace_sound') !== 'on'; } catch (e) { return true; }
+  };
+  function ensure() {
+    if (window._soundMuted && window._soundMuted()) return false;
+    try {
+      if (!ctx) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return false;
+        ctx = new AC(); master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
+      }
+      if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+      return true;
+    } catch (e) { return false; }
+  }
+  // Destrava o AudioContext no primeiro gesto (iOS/Chrome exigem). No-op se
+  // sons desligados ou já rodando. Não toca nada — só prepara o contexto pra
+  // que sons disparados em callbacks async (resultado salvo etc.) soem.
+  function _unlock() { if (ctx && ctx.state === 'running') return; ensure(); }
+  try { document.addEventListener('pointerdown', _unlock, true); } catch (e) {}
+
+  window._setSoundEnabled = function (on) {
+    try { localStorage.setItem('scoreplace_sound', on ? 'on' : 'off'); } catch (e) {}
+    if (on && ensure()) { try { window._sound('sino'); } catch (e) {} } // preview ao ligar
+  };
+
+  // ── síntese (portada do banco de sons aprovado) ──
+  function tone(o) {
+    var t0 = ctx.currentTime + (o.t || 0), dur = o.dur, osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.type = o.type || 'sine';
+    osc.frequency.setValueAtTime(o.f, t0);
+    if (o.f2) osc.frequency.exponentialRampToValueAtTime(o.f2, t0 + dur);
+    var peak = Math.max(0.0002, (o.g == null ? 0.4 : o.g));
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + (o.a || 0.004));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g).connect(master); osc.start(t0); osc.stop(t0 + dur + 0.03);
+  }
+  function seq(arr) { arr.forEach(tone); }
+  function mkNoise(dur) {
+    var b = ctx.createBuffer(1, Math.max(1, Math.ceil(ctx.sampleRate * dur)), ctx.sampleRate), d = b.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b;
+  }
+  function whistle(dur) {
+    var t0 = ctx.currentTime;
+    var src = ctx.createBufferSource(); src.buffer = mkNoise(dur);
+    var bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 16;
+    var ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.0001, t0); ng.gain.exponentialRampToValueAtTime(0.4, t0 + 0.03);
+    ng.gain.setValueAtTime(0.4, t0 + dur - 0.1); ng.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bp).connect(ng).connect(master); src.start(t0); src.stop(t0 + dur + 0.03);
+    var osc = ctx.createOscillator(); osc.type = 'sine'; osc.frequency.value = 3150;
+    var lfo = ctx.createOscillator(); lfo.frequency.value = 22;
+    var lg = ctx.createGain(); lg.gain.value = 130; lfo.connect(lg).connect(osc.frequency);
+    var og = ctx.createGain();
+    og.gain.setValueAtTime(0.0001, t0); og.gain.exponentialRampToValueAtTime(0.22, t0 + 0.04);
+    og.gain.setValueAtTime(0.22, t0 + dur - 0.12); og.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(og).connect(master); osc.start(t0); lfo.start(t0); osc.stop(t0 + dur + 0.03); lfo.stop(t0 + dur + 0.03);
+  }
+  function clap(t0, g) {
+    var s = ctx.createBufferSource(); s.buffer = mkNoise(0.02);
+    var hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1200 + Math.random() * 900;
+    var gg = ctx.createGain();
+    gg.gain.setValueAtTime(0.0001, t0); gg.gain.exponentialRampToValueAtTime(g, t0 + 0.001);
+    gg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.03 + Math.random() * 0.02);
+    s.connect(hp).connect(gg).connect(master); s.start(t0); s.stop(t0 + 0.07);
+  }
+  function applause(dur) {
+    var t0 = ctx.currentTime;
+    function bed(fLo, fHi, peak) {
+      var src = ctx.createBufferSource(); src.buffer = mkNoise(dur);
+      var hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = fLo;
+      var lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = fHi;
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(peak * 0.15, t0 + 0.12);
+      g.gain.exponentialRampToValueAtTime(peak, t0 + dur * 0.42);
+      g.gain.setValueAtTime(peak, t0 + dur - 0.7);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      src.connect(hp).connect(lp).connect(g).connect(master); src.start(t0); src.stop(t0 + dur + 0.05);
+    }
+    bed(180, 1000, 0.24); bed(1300, 5200, 0.15);
+    var count = Math.floor(dur * 44), peakAt = 0.5;
+    for (var i = 0; i < count; i++) {
+      var frac = Math.pow(Math.random(), 0.62);
+      var ramp = Math.min(1, frac / peakAt);
+      clap(t0 + frac * (dur - 0.2), (0.03 + Math.random() * 0.09) * (0.3 + 0.7 * ramp));
+    }
+    for (var k = 0; k < 3; k++) {
+      var wt = t0 + dur * 0.35 + Math.random() * (dur * 0.5);
+      var o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(2600, wt); o.frequency.exponentialRampToValueAtTime(1700, wt + 0.18);
+      var og = ctx.createGain();
+      og.gain.setValueAtTime(0.0001, wt); og.gain.exponentialRampToValueAtTime(0.05, wt + 0.03); og.gain.exponentialRampToValueAtTime(0.0001, wt + 0.2);
+      o.connect(og).connect(master); o.start(wt); o.stop(wt + 0.25);
+    }
+  }
+
+  var LIB = {
+    sino: function () { tone({ f: 1319, dur: .5, g: .32, a: .002 }); tone({ f: 2637, dur: .4, g: .09, a: .002 }); },
+    apito: function () { whistle(0.95); },
+    game: function () { seq([{ type: 'triangle', f: 784, dur: .06, g: .36 }, { type: 'triangle', f: 988, t: .07, dur: .12, g: .36 }]); },
+    set: function () { seq([{ type: 'triangle', f: 523, dur: .1, g: .36 }, { type: 'triangle', f: 659, t: .1, dur: .1, g: .36 }, { type: 'triangle', f: 784, t: .2, dur: .1, g: .36 }, { type: 'triangle', f: 1047, t: .3, dur: .28, g: .4 }, { f: 2093, t: .3, dur: .24, g: .1 }]); },
+    vitoria: function () { applause(3.1); },
+    rejeicao: function () { seq([{ f: 494, dur: .06, g: .38 }, { f: 370, t: .07, dur: .13, g: .38 }]); },
+    campeao: function () {
+      [523, 659, 784, 1047, 784, 1047, 1319].forEach(function (fr, i) { tone({ type: 'square', f: fr, t: i * .075, dur: .09, g: .2 }); });
+      tone({ type: 'square', f: 1568, t: .56, dur: .36, g: .24, a: .005 }); tone({ type: 'square', f: 2093, t: .56, dur: .3, g: .1, a: .005 });
+    }
+  };
+  window._sound = function (type) {
+    if (!ensure()) return;
+    var fn = LIB[type]; if (!fn) return;
+    try { fn(); } catch (e) {}
+  };
 })();
 
 // ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────
@@ -532,10 +765,10 @@ window._ensureBootOverlay = function() {
 window._ensureBootOverlay();
 
 // v2.4.93: TETO GLOBAL de splash. Garante que a tela inicial nunca passa de
-// ~4,5s desde o open do app, qualquer que seja o caminho (mesmo dados lentos,
-// _finalizeBootReady atrasado, etc.). Os caminhos mais rápidos (router=1,5s,
-// dash-poller=3,5s) revelam antes quando aplicáveis; este é só o limite.
-window._markBootReady(4500, 'global-cap');
+// ~3,5s (v1.8: era 4,5s) desde o open do app, qualquer que seja o caminho
+// (mesmo dados lentos, _finalizeBootReady atrasado, etc.). Os caminhos mais
+// rápidos (router=1,5s, dash-poller=2,5s) revelam antes quando aplicáveis.
+window._markBootReady(3500, 'global-cap');
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -669,7 +902,7 @@ window._matchHasRealPlay = function (m) {
 };
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
-window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
+window.SCOREPLACE_DEV_WHATSAPP = '5511966581959'; // +55 11 96658-1959
 window._devWhatsAppTip = 'Clique aqui para a sua Linha direta com o desenvolvedor do scoreplace.app. ' +
   'Tem dúvida, crítica ou sugestão? Achou algo que não funcionou como esperava? ' +
   'Precisa de ajuda com algo com relação ao app? Por favor fale conosco! ' +
@@ -875,6 +1108,19 @@ window._devWhatsAppBtnHtml = function (opts) {
     }).then(function(txt) {
       var v = String(txt || '').trim();
       if (v && v.length < 40 && v !== window.SCOREPLACE_VERSION) {
+        // GUARD ANTI-LOOP: se JÁ recarregamos por ESTE mesmo valor de version.txt e ele
+        // AINDA não bate com o store.js carregado, é DEPLOY INCONSISTENTE (version.txt !=
+        // store.js servido). Recarregar de novo é loop eterno — então NÃO recarrega:
+        // só mostra a pílula (o usuário decide). sessionStorage = escopo por aba/sessão:
+        // uma tentativa de reload por valor distinto; numa versão realmente nova, tenta.
+        var reloadedFor = null;
+        try { reloadedFor = sessionStorage.getItem('sp_update_reloaded_for'); } catch (e) {}
+        if (reloadedFor === v) {
+          window._log('[AutoUpdate] version.txt=' + v + ' != running ' + window.SCOREPLACE_VERSION + ' MESMO após reload — deploy inconsistente. Sem loop: só a pílula.');
+          window._showUpdatePill();
+          return;
+        }
+        try { sessionStorage.setItem('sp_update_reloaded_for', v); } catch (e) {}
         window._log('[AutoUpdate] New version:', v, '(running:', window.SCOREPLACE_VERSION + ').');
         window._showUpdatePill(); // mostra a pílula mesmo se o reload auto for adiado
         window._applyUpdate(!!opts.force);
@@ -3380,6 +3626,18 @@ if (!window._spDragCompactWired) {
   window._spDragCompactWired = true;
   try { document.addEventListener('dragend', function () { window._setDragCompact(false); }, true); } catch (e) {}
   try { document.addEventListener('drop', function () { setTimeout(function () { window._setDragCompact(false); }, 0); }, true); } catch (e) {}
+  // v?.?.?: iOS/WKWebView não dispara `dragend`/`drop` do HTML5 nativo de forma
+  // confiável (drag-and-drop nativo é flaky no WebKit touch) — o modo compacto
+  // ficava PRESO ligado e os cards do organizador ficavam PERMANENTEMENTE pequenos.
+  // touchend/touchcancel/pointerup desligam o compacto quando o dedo/ponteiro solta.
+  // No desktop esses NÃO disparam durante um drag nativo (o pointer é consumido pelo
+  // DnD), então não interferem no arraste em andamento — só limpam um estado preso.
+  var _clearStuckCompact = function () {
+    try { if (document.body && document.body.classList.contains('sp-drag-compact')) window._setDragCompact(false); } catch (e) {}
+  };
+  try { document.addEventListener('touchend', _clearStuckCompact, true); } catch (e) {}
+  try { document.addEventListener('touchcancel', _clearStuckCompact, true); } catch (e) {}
+  try { document.addEventListener('pointerup', _clearStuckCompact, true); } catch (e) {}
   // v2.8.42: ativação GLOBAL da estrela de co-organização ao iniciar QUALQUER
   // arraste de card de inscrito — independente de qual dragstart inline rodou
   // (_mergeDragStart / handleDragStart / _duplaDragStart) ou se o try/catch dele
@@ -5584,10 +5842,12 @@ window.AppStore = {
             // um detector de "DOM quieto" — mas a dashboard tem timers/re-renders
             // ~contínuos, então ele batia no teto e revelava só em ~9s (confirmado
             // pelo diagnóstico: dash-poller @ 9002ms). Agora: revela no piso de
-            // 3,5s (desde o open do app). Um teto GLOBAL (_markBootReady(4500))
-            // garante que nunca passa de ~4,5s, mesmo com dados lentos. Quem
+            // 2,5s (v1.8: era 3,5s — o scroll-jank de abertura passou a ser
+            // tratado separado, então o piso virou majoritariamente estético e
+            // baixamos 1s pra acelerar o boot). Um teto GLOBAL (_markBootReady(3500))
+            // garante que nunca passa de ~3,5s, mesmo com dados lentos. Quem
             // realmente trava o scroll (re-render pós-reveal) é tratado separado.
-            window._markBootReady(3500, 'dash-poller');
+            window._markBootReady(2500, 'dash-poller');
           };
           // Auto-scroll: tratado pelo renderDashboard com 600ms após render.
           // v4.5.72: _autoFixStaleNames removido — sob identidade-por-uid o render
@@ -6080,6 +6340,14 @@ window.AppStore = {
         // v2.4.3: privacidade de contato.
         if (profile.omitEmail !== undefined) this.currentUser.omitEmail = profile.omitEmail;
         if (profile.omitPhone !== undefined) this.currentUser.omitPhone = profile.omitPhone;
+        // letzplay: handle + consentimento + histórico importado. Salvos no
+        // Firestore por saveUserProfile (auth.js), mas NÃO eram mergeados aqui
+        // no load — então sumiam ao reabrir o app (campo do handle vinha vazio,
+        // card "Seu nível" não renderizava). Bug: conta vinculada "apagava"
+        // toda vez que o app fechava. Fix: mergear no load como os demais.
+        if (profile.letzplayHandle) this.currentUser.letzplayHandle = profile.letzplayHandle;
+        if (profile.letzplayConsent !== undefined) this.currentUser.letzplayConsent = profile.letzplayConsent;
+        if (profile.letzplayImport) this.currentUser.letzplayImport = profile.letzplayImport;
         // v0.17.86: bug crítico — acceptedTerms* não estavam na lista de merge.
         // Toda vez que simulateLoginSuccess re-rodava (ex: onAuthStateChanged
         // por token refresh), currentUser = user (4 campos) wipeava o
@@ -6129,6 +6397,9 @@ window.AppStore = {
             window._warn('[selfHealFriends] background failed:', e);
           });
         }, 0);
+        // v1.15.37: alimenta gênero/habilidade do PRÓPRIO scan letzplay (quando um
+        // organizador buscou o perfil público). Só self-write, só o que falta.
+        setTimeout(function() { self._selfPopulateFromLetzplayScan().catch(function() {}); }, 0);
       }
       // v0.17.3: sinaliza que o profile load attempt completou (sucesso OU
       // doc inexistente — first-time user). Views que dependem de campos do
@@ -6172,6 +6443,62 @@ window.AppStore = {
   // o dedup era só no momento de notificar; agora a lista persistida é
   // canônica. Não bloqueia render — usuário pode usar o app enquanto roda.
   // Idempotente: pode chamar várias vezes, só faz write quando há mudança.
+  // v1.15.37: alimenta gênero + habilidade (Beach Tennis) do PRÓPRIO scan letzplay
+  // (letzplayScans/{uid}, gravado por um organizador na busca ativa). Self-write, só
+  // preenche o que falta no perfil — nunca sobrescreve o que a pessoa já definiu.
+  async _selfPopulateFromLetzplayScan() {
+    var cu = this.currentUser; if (!cu || !cu.uid) return;
+    var db = window.FirestoreDB && (window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
+    if (!db) return;
+    var snap;
+    try { snap = await db.collection('letzplayScans').doc(cu.uid).get(); } catch (e) { return; }
+    if (!snap.exists) return;
+    var data = snap.data() || {};
+    var scan = data.scan || {};
+    var patch = {};
+    if (!cu.gender && scan.gender) patch.gender = scan.gender;
+    // CATEGORIA CHECADA: a apurada do letzplay VIRA a oficial e SOBRESCREVE a declarada
+    // (a declarada só vale pra quem nunca puxou histórico). Conservadora: profileSkill
+    // (borda mais fraca da banda ativa). Marca a fonte = 'letzplay' → o app sabe que é
+    // checada, não declarada.
+    var checked = scan.profileSkill || scan.skill;
+    if (checked) {
+      var sport = 'Beach Tennis'; // letzplay = beach tennis
+      var sbs = (cu.skillBySport && typeof cu.skillBySport === 'object') ? Object.assign({}, cu.skillBySport) : {};
+      var src = (cu.skillBySportSource && typeof cu.skillBySportSource === 'object') ? Object.assign({}, cu.skillBySportSource) : {};
+      if (sbs[sport] !== checked || src[sport] !== 'letzplay') {
+        sbs[sport] = checked; src[sport] = 'letzplay';
+        patch.skillBySport = sbs; patch.skillBySportSource = src;
+      }
+    }
+    // Import COMPLETO trazido por organizador (scan "completo"): vira o letzplayImport
+    // do PRÓPRIO dono, com procedência. Precedência: vence o MAIS RECENTE — um org-scan
+    // antigo nunca sobrescreve um self-import mais novo.
+    var fi = data.fullImport;
+    if (fi && typeof fi === 'object' && Array.isArray(fi.footprint)) {
+      // "Só atualiza se desatualizado": aplica o scan só quando ele traz MAIS jogos que o
+      // perfil atual (ou quando não há perfil). Um re-scan que não trouxe jogo novo não
+      // mexe no perfil (nem troca a procedência à toa).
+      var fiGames = Array.isArray(fi.games) ? fi.games.length : 0;
+      var curImp = cu.letzplayImport;
+      var curGames = (curImp && Array.isArray(curImp.games)) ? curImp.games.length : 0;
+      if (!curImp || fiGames > curGames) {
+        fi.importedVia = 'organizer';
+        fi.importedByName = data.scannedByName || null;
+        fi.importedTournamentName = data.tournamentName || null;
+        fi.importedAt = data.scannedAt || fi.importedAt || null;
+        patch.letzplayImport = fi;
+        if (!cu.letzplayHandle && fi.handle) patch.letzplayHandle = fi.handle;
+      }
+    }
+    if (!Object.keys(patch).length) return;
+    try {
+      await db.collection('users').doc(cu.uid).set(patch, { merge: true });
+      Object.assign(cu, patch);
+      window._log('[letzplay self-populate] categoria checada do scan:', Object.keys(patch).join(', '));
+    } catch (e) { window._warn('[letzplay self-populate] falhou', e); }
+  },
+
   async _selfHealFriendsList() {
     if (!this.currentUser || !window.FirestoreDB || !window.FirestoreDB.db) return;
     var uid = this.currentUser.uid;

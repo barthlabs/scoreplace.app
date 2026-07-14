@@ -1589,6 +1589,7 @@ window.generateDrawFunction = function (tId) {
                 if (typeof _notifyLigaRoundWhatsApp === 'function') _notifyLigaRoundWhatsApp(t, 0);
                 window.location.hash = '#bracket/' + tId;
                 setTimeout(function () {
+                    if (window._sound) window._sound('sino');
                     showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: _lrc }), 'success');
                     if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
                 }, 140);
@@ -1633,6 +1634,7 @@ window.generateDrawFunction = function (tId) {
             // toast só DEPOIS do hashchange render a chave e o _showLoading sumir (hashchange é
             // assíncrono; sem o delay o toast nasce sob o loader z-index 100050).
             setTimeout(function () {
+                if (window._sound) window._sound('sino');
                 showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
                 if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
             }, 140);
@@ -1739,6 +1741,7 @@ window.generateDrawFunction = function (tId) {
 
         var _swRoundMatches = (t.rounds[0] && t.rounds[0].matches || []).filter(function(m) { return !m.isSitOut; }).length;
         if (document.getElementById('final-review-panel')) document.getElementById('final-review-panel').remove(); document.body.style.overflow = '';
+        if (window._sound) window._sound('sino');
         showNotification(_t('tdraw.swissStarted'), _t('tdraw.swissStartedMsg', { rounds: _swRounds, n: _swRoundMatches, lo: _swLo, format: _origFormat }), 'success');
         if (typeof window._notifyDrawPersonalized === 'function') {
             window._notifyDrawPersonalized(t, tId);

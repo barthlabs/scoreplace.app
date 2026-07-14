@@ -6,29 +6,4 @@
 	<string>382268772878-9uqbuaa7ho56q6d76t7cq5cbcc9edeum.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
 	<string>com.googleusercontent.apps.382268772878-9uqbuaa7ho56q6d76t7cq5cbcc9edeum</string>
-	<key>API_KEY</key>
-	<string>AIzaSyBI8z9CV_VORj0VxWE8l6px7-OOMDq5etI</string>
-	<key>GCM_SENDER_ID</key>
-	<string>382268772878</string>
-	<key>PLIST_VERSION</key>
-	<string>1</string>
-	<key>BUNDLE_ID</key>
-	<string>app.scoreplace</string>
-	<key>PROJECT_ID</key>
-	<string>scoreplace-app</string>
-	<key>STORAGE_BUCKET</key>
-	<string>scoreplace-app.firebasestorage.app</string>
-	<key>IS_ADS_ENABLED</key>
-	<false></false>
-	<key>IS_ANALYTICS_ENABLED</key>
-	<false></false>
-	<key>IS_APPINVITE_ENABLED</key>
-	<true></true>
-	<key>IS_GCM_ENABLED</key>
-	<true></true>
-	<key>IS_SIGNIN_ENABLED</key>
-	<true></true>
-	<key>GOOGLE_APP_ID</key>
-	<string>1:382268772878:ios:31726cd677ec7c0e4be25f</string>
-</dict>
 </plist>

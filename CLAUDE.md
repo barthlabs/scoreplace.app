@@ -1144,8 +1144,9 @@ como `rstbarth@gmail.com`; deploy é ação outward-facing → confirmar com o u
 
 **Segredos** (Evolution API, Stripe, etc.) vivem em `firebase functions:secrets:set …`,
 NUNCA no git. `infra/whatsapp/` tem o Evolution API (Railway). O número que envia
-WhatsApp e o do "Fale com o Desenvolvedor" é **barthlabs +55 11 91693-6454**
-(`SCOREPLACE_DEV_WHATSAPP = '5511916936454'` em store.js).
+WhatsApp e o do "Fale com o Desenvolvedor" é **barthlabs +55 11 96658-1959**
+(`SCOREPLACE_DEV_WHATSAPP = '5511966581959'` em store.js). O número antigo
+`+55 11 91693-6454` foi banido (jul/2026) — migrando pro Meta Cloud API.
 
 ## Deploy
 

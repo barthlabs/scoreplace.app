@@ -6,5 +6,13 @@
 	<array>
 		<string>app.scoreplace</string>
 	</array>
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:scoreplace.app</string>
+	</array>
 </dict>
 </plist>

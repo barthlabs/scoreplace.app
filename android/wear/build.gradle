@@ -4,14 +4,31 @@ android {
     namespace "app.scoreplace.wear"
     compileSdk rootProject.ext.compileSdkVersion
 
+    // Assinatura de release via android/keystore.properties (mesma upload key do :app).
+    // Play exige que o AAB do Wear seja assinado com a MESMA chave do app do celular.
+    def keystorePropsFile = rootProject.file("keystore.properties")
+    def keystoreProps = new Properties()
+    if (keystorePropsFile.exists()) keystoreProps.load(new FileInputStream(keystorePropsFile))
+
+    signingConfigs {
+        release {
+            if (keystorePropsFile.exists()) {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+
     defaultConfig {
         // MESMO applicationId do celular: o Wear Data Layer só entrega mensagens
         // entre apps de mesmo package (e mesma assinatura — debug key serve).
         applicationId "app.scoreplace"
         minSdkVersion 30
         targetSdkVersion 34
-        versionCode 1
-        versionName "0.1"
+        versionCode 6
+        versionName "1.1.15"
     }
 
     buildTypes {
@@ -21,6 +38,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (keystorePropsFile.exists()) signingConfig signingConfigs.release
         }
     }
 

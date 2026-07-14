@@ -1,0 +1,427 @@
+/* letzplay-onboarding.js — fluxo COMPLETO e guiado de importação do letzplay:
+ * detecta a extensão (instalada / versão / ausente), guia o usuário passo a passo
+ * (instalar → entrar no letzplay → importar → ver histórico) e reflete AO VIVO o
+ * estado de cada etapa. Page-route #importar-letzplay (padrão centralizado).
+ *
+ * Detecção: o content.js da extensão anuncia {__sp_lp:'extension-present', version}
+ * na carga e responde ao nosso {__sp_lp:'ext-ping'} (SPA muda de rota sem recarregar
+ * o content script). Sem extensão → nenhum anúncio → mostramos "instalar".
+ */
+(function () {
+  // Versão mínima ACEITA da extensão = SEMPRE a atual (correções críticas de import só
+  // existem na mais nova: URL /tournaments dos nomes, não-abrir-aba, data por torneio…).
+  // Abaixo disso → pede atualização (não fica verde). Bumpar junto com EXT_VERSION.
+  var MIN_EXT_VERSION = '1.35';
+  // URL da Chrome Web Store — null enquanto não publicado (mostra instruções manuais).
+  var STORE_URL = null;
+
+  var _ext = { present: false, version: null, seenAt: 0 };
+  var _pollTimer = null;
+  var _lzLoggedIn = null;   // null=desconhecido, true=logado no letzplay, false=deslogado
+  var _lastLzCheck = 0;
+
+  function _verGte(a, b) {
+    var pa = String(a || '0').split('.').map(Number), pb = String(b || '0').split('.').map(Number);
+    for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+      var x = pa[i] || 0, y = pb[i] || 0;
+      if (x > y) return true; if (x < y) return false;
+    }
+    return true;
+  }
+
+  function _isMobile() {
+    return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') ||
+      (window.SCOREPLACE_PLATFORM && window.SCOREPLACE_PLATFORM !== 'web');
+  }
+
+  function _esc(s) {
+    return (typeof window._safeHtml === 'function') ? window._safeHtml(s == null ? '' : String(s))
+      : String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; });
+  }
+
+  // Escuta o anúncio da extensão + o status de login do letzplay (a qualquer momento).
+  window.addEventListener('message', function (e) {
+    if (e.source !== window) return;
+    var d = e.data;
+    if (!d) return;
+    if (d.__sp_lp === 'extension-present') {
+      _ext.present = true;
+      _ext.version = d.version || null;
+      _ext.seenAt = Date.now();
+      // SÓ checa login do letzplay quando o usuário ESTÁ na página de importação
+      // (#imp-steps existe). Sem esse guard, abrir o scoreplace em qualquer tela
+      // disparava a checagem — que abria uma aba do letzplay junto. A checagem em si
+      // também não abre aba (usa só uma já aberta; ver noCreateTab no content.js).
+      if (document.getElementById('imp-steps') && _lzLoggedIn !== true) { _lastLzCheck = Date.now(); _checkLetzplay(); }
+      _maybeRenderSteps();
+      return;
+    }
+    if (d.__sp_lp === 'letzplay-status') {
+      if (d.loggedIn === true || d.loggedIn === false) { _lzLoggedIn = d.loggedIn; _maybeRenderSteps(); }
+      return;
+    }
+  });
+
+  function _ping() { try { window.postMessage({ __sp_lp: 'ext-ping' }, window.location.origin); } catch (e) {} }
+  function _checkLetzplay() { try { window.postMessage({ __sp_lp: 'check-letzplay' }, window.location.origin); } catch (e) {} }
+  window._spExtPing = _ping;
+  window._spExtState = function () { return _ext; };
+
+  function _gamesCount() {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var g = cu && cu.letzplayImport && cu.letzplayImport.games;
+    return Array.isArray(g) ? g.length : 0;
+  }
+  function _hasImport() {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    return !!(cu && cu.letzplayImport);
+  }
+  // {total, resolved} de nomes de torneio da última importação (ext ≥1.27 grava
+  // letzplayImport.tourneyNameStats). Fallback: conta no footprint quantos torneios
+  // têm nome != categoria (resgata imports que já resolveram nomes sem a stat).
+  function _tourneyNameStats() {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var imp = cu && cu.letzplayImport;
+    if (!imp) return null;
+    if (imp.tourneyNameStats && typeof imp.tourneyNameStats.total === 'number') return imp.tourneyNameStats;
+    var off = (imp.footprint || []).filter(function (f) { return f && f.official; });
+    if (!off.length) return null;
+    var resolved = off.filter(function (f) { return f.name && f.name !== f.categoryRaw; }).length;
+    return { total: off.length, resolved: resolved };
+  }
+
+  // ── Import DIRETO disparado pelo app (extensão capaz) + overlay de progresso ──
+  var _importActive = false;
+  var _ERR = {
+    'letzplay-login': 'Você não está logado no letzplay. Abra letzplay.me, entre e tente de novo.',
+    'no-letzplay-tab': 'Abra o letzplay.me numa aba (logado) e tente de novo — a leitura acontece dentro da sua sessão.',
+    'sem-jogos': 'Não encontrei jogos na sua conta do letzplay (confira se está logado na aba do letzplay).',
+    'sem-login': 'Entre na sua conta do scoreplace pra importar.',
+    'conta-diferente': 'O @ do letzplay não bate com o do seu perfil no scoreplace.',
+    'libs': 'A extensão precisa ser recarregada (chrome://extensions → ↻).',
+    'sem-resposta': 'A extensão não respondeu. Recarregue a página e tente de novo.',
+    'invalido': 'Não consegui montar o histórico. Tente de novo.',
+    'net': 'Não consegui falar com o letzplay. Confira: (1) uma aba do letzplay.me aberta e logada, (2) sua conexão, (3) nenhum bloqueador/VPN barrando letzplay.me. Depois tente de novo.',
+    'fetch': 'A leitura do letzplay falhou. Deixe uma aba do letzplay.me aberta e logada, recarregue esta página e tente de novo.',
+    'rate': 'O letzplay limitou as leituras (muitas de uma vez — HTTP 403/429). Espere ~1 minuto e tente de novo. Esta versão já espaça as buscas pra evitar isso.'
+  };
+
+  function _overlayCard(html) {
+    var o = document.getElementById('sp-import-overlay');
+    if (!o) {
+      o = document.createElement('div');
+      o.id = 'sp-import-overlay';
+      o.style.cssText = 'position:fixed;inset:0;z-index:100050;background:rgba(6,10,20,0.8);display:flex;align-items:center;justify-content:center;padding:20px;';
+      o.innerHTML = '<div id="sp-import-card" style="background:var(--bg-card,#1e2235);border:1px solid var(--border-color,rgba(255,255,255,0.12));border-radius:18px;max-width:400px;width:100%;padding:22px;text-align:center;color:var(--text-main,#cbd5e1);box-shadow:0 20px 60px rgba(0,0,0,0.5);"></div>';
+      document.body.appendChild(o);
+    }
+    var c = document.getElementById('sp-import-card');
+    if (c) c.innerHTML = html;
+  }
+  window._spCloseImportOverlay = function () {
+    var o = document.getElementById('sp-import-overlay');
+    if (o && o.parentNode) o.parentNode.removeChild(o);
+  };
+
+  // Progresso com BOLINHA QUE SEMPRE GIRA (spinner CSS) — cria a estrutura 1x e depois só
+  // atualiza texto/barra IN-PLACE (sem recriar), pra o spinner não reiniciar/travar. Fases:
+  // 'jogos' (paginação) → 'names' (busca 1 fetch por torneio, parte lenta) → 'saving'.
+  function _showProgress(done, total, saving, phase) {
+    if (!document.getElementById('sp-imp-spin-style')) {
+      var st = document.createElement('style'); st.id = 'sp-imp-spin-style';
+      st.textContent = '@keyframes spImpSpin{to{transform:rotate(360deg);}}';
+      document.head.appendChild(st);
+    }
+    if (!document.getElementById('sp-imp-bar')) {
+      _overlayCard(
+        '<div style="font-size:2.4rem;margin:0 auto 10px;display:inline-block;animation:spImpSpin 0.85s linear infinite;">🎾</div>' +
+        '<div id="sp-imp-label" style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;"></div>' +
+        '<div style="height:12px;border-radius:999px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.1));"><div id="sp-imp-bar" style="height:100%;width:8%;background:linear-gradient(90deg,#84cc16,#65a30d);transition:width .3s;"></div></div>' +
+        '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;"></div>'
+      );
+    }
+    var label, sub, pct;
+    if (saving) { label = 'Salvando no seu perfil…'; sub = 'quase lá'; pct = 99; }
+    else if (phase === 'names') {
+      label = 'Buscando os nomes dos torneios…';
+      sub = total ? (done + ' de ' + total + ' torneios') : 'lendo do letzplay…';
+      pct = total ? Math.max(6, Math.round(done / total * 100)) : 50;
+    } else {
+      label = 'Importando seus jogos…';
+      sub = total ? (done + ' de ' + total + ' jogos') : (done + ' jogos…');
+      pct = total ? Math.min(99, Math.round(done / total * 100)) : (done ? 60 : 8);
+    }
+    var l = document.getElementById('sp-imp-label'); if (l) l.textContent = label;
+    var b = document.getElementById('sp-imp-bar'); if (b) b.style.width = pct + '%';
+    var s = document.getElementById('sp-imp-sub'); if (s) s.textContent = sub;
+  }
+
+  window.addEventListener('message', function (e) {
+    if (e.source !== window) return;
+    var d = e.data; if (!d) return;
+    if (d.__sp_lp === 'import-progress') {
+      if (_importActive) _showProgress(d.done || 0, d.total || null, !!d.saving, d.phase);
+      return;
+    }
+    if (d.__sp_lp === 'import-result') {
+      if (!_importActive) return;
+      _importActive = false;
+      if (d.ok) {
+        var n = (d.count != null) ? d.count : _gamesCount();
+        // Observabilidade: quantos torneios tiveram o NOME REAL resolvido (X/Y). Se veio
+        // 0/Y, o nome real não pôde ser lido — o Histórico mostra a categoria por ora.
+        var _ns = _tourneyNameStats();
+        var nsLine = (_ns && _ns.total > 0)
+          ? '<div style="font-size:0.72rem;color:' + (_ns.resolved > 0 ? '#2dd4a0' : '#f59e0b') + ';margin-bottom:12px;">🏷️ nomes de torneio: ' + _ns.resolved + ' de ' + _ns.total + (_ns.resolved === 0 ? ' — o letzplay não deixou ler o nome desta vez (mostra a categoria).' : ' resolvidos.') + '</div>'
+          : '';
+        var _title = d.unchanged ? 'Tudo em dia' : 'Importado!';
+        var _body = d.unchanged
+          ? 'Nada novo no letzplay desde a última vez — mantive seu histórico e só atualizei a data desta conferida.'
+          : (n + ' jogos do letzplay agora vivem no seu scoreplace.');
+        _overlayCard('<div style="font-size:2rem;margin-bottom:6px;">✅</div>' +
+          '<div style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">' + _title + '</div>' +
+          '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);margin-bottom:8px;">' + _body + '</div>' +
+          (d.unchanged ? '' : nsLine) +
+          '<a href="#historico" onclick="window._spCloseImportOverlay()" class="btn btn-primary btn-block" style="margin-bottom:8px;">📜 Ver Histórico de jogos</a>' +
+          '<button onclick="window._spCloseImportOverlay()" class="btn btn-outline btn-block">Fechar</button>');
+        _maybeRenderSteps(true);
+      } else {
+        var msg = /context invalidated/i.test(d.error || '')
+          ? 'A extensão foi atualizada — recarregue esta página (Cmd+R) e tente de novo.'
+          : (_ERR[d.error] || ('Falhou: ' + (d.error || 'erro')));
+        // Detalhe técnico cru (URL + mensagem real do fetch) num expansível — fim do
+        // "erro sem nenhuma dica": dá o que foi que falhou, pra reportar/diagnosticar.
+        var detailHtml = d.detail
+          ? '<details style="margin:2px 0 14px;text-align:left;"><summary style="cursor:pointer;font-size:0.72rem;color:var(--text-muted,#94a3b8);">detalhes técnicos</summary>' +
+            '<div style="font-family:ui-monospace,Menlo,monospace;font-size:0.68rem;color:#94a3b8;background:var(--bg-darker,#171a2b);border-radius:8px;padding:8px 10px;margin-top:6px;word-break:break-all;">' + _esc(d.detail) + '</div></details>'
+          : '';
+        _overlayCard('<div style="font-size:2rem;margin-bottom:6px;">⚠️</div>' +
+          '<div style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Não deu pra importar</div>' +
+          '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);margin-bottom:' + (detailHtml ? '8px' : '14px') + ';">' + _esc(msg) + '</div>' +
+          detailHtml +
+          '<a href="#importar-letzplay" onclick="window._spCloseImportOverlay()" class="btn btn-primary btn-block" style="margin-bottom:8px;">Abrir o passo a passo</a>' +
+          '<button onclick="window._spCloseImportOverlay()" class="btn btn-outline btn-block">Fechar</button>');
+      }
+    }
+  });
+
+  // PONTO DE ENTRADA ÚNICO: extensão instalada+capaz → importa DIRETO; senão → tutorial.
+  window._spStartImport = function () {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid) {
+      if (typeof showNotification === 'function') showNotification('Faça login', 'Entre pra importar seu histórico.', 'warning');
+      return;
+    }
+    if (_isMobile()) { window.location.hash = '#importar-letzplay'; return; }
+    _ping();
+    var t0 = Date.now();
+    (function wait() {
+      if (_ext.present && _verGte(_ext.version, MIN_EXT_VERSION)) {
+        _importActive = true;
+        _showProgress(0, null, false);
+        try { window.postMessage({ __sp_lp: 'run-import' }, window.location.origin); } catch (e) {}
+        return;
+      }
+      if (Date.now() - t0 > 1300) { window.location.hash = '#importar-letzplay'; return; } // sem extensão (ou velha) → tutorial
+      setTimeout(wait, 150);
+    })();
+  };
+
+  window._spIsMobile = _isMobile;
+
+  // Entrada de importação: no DESKTOP = botão que dispara _spStartImport; no CELULAR
+  // (nativo ou web mobile — Chrome do celular não instala extensão) = AVISO de que a
+  // importação é feita no computador. Usado nas Estatísticas e no Histórico.
+  // Botão de importar/atualizar/reimportar DESABILITADO (cinza, não clicável) + aviso de
+  // que a importação do letzplay é só no desktop. Padrão único usado em TODOS os pontos
+  // (entrada de import, Reimportar do passo 3…) — o navegador do celular não instala extensão.
+  function _mobileImportBlocked(label, opts) {
+    opts = opts || {};
+    var cls = (opts.variant === 'solid') ? 'btn btn-sm' : 'btn btn-block';
+    var style = 'opacity:0.55;background:var(--bg-darker,#2a2f45);color:var(--text-muted,#94a3b8);border:1px solid var(--border-color,rgba(255,255,255,0.12));cursor:not-allowed;' + (opts.variant === 'solid' ? '' : 'margin-top:8px;');
+    var note = opts.shortNote
+      ? '<div style="font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-top:6px;">🖥️ Funciona só no <b>desktop</b> (o navegador do celular não instala extensão).</div>'
+      : '<div style="font-size:0.72rem;color:var(--text-muted,#94a3b8);line-height:1.5;margin-top:6px;text-align:center;">🖥️ A importação do letzplay é feita <b>no desktop</b> (Chrome/Edge/Brave) — o navegador do celular não instala extensão. Abra o scoreplace no computador, logado no letzplay.</div>';
+    return '<button type="button" disabled aria-disabled="true" class="' + cls + '" style="' + style + '">🎾 ' + _esc(label) + '</button>' + note;
+  }
+  window._spImportEntry = function (opts) {
+    opts = opts || {};
+    var label = opts.label || 'Importar do letzplay';
+    if (_isMobile()) {
+      // Não-desktop: botão CINZA/desabilitado + explicação abaixo (padrão único).
+      return _mobileImportBlocked(label, { variant: opts.variant });
+    }
+    if (opts.variant === 'solid') {
+      return '<button type="button" onclick="window._spStartImport&&window._spStartImport()" class="btn btn-primary btn-sm">🎾 ' + _esc(label) + '</button>';
+    }
+    return '<button type="button" onclick="window._spStartImport&&window._spStartImport()" class="btn btn-primary btn-block" style="margin-top:8px;">🎾 ' + _esc(label) + '</button>';
+  };
+
+  // ── UI ────────────────────────────────────────────────────────────────
+  function _stepShell(n, title, statusIcon, statusColor, bodyHtml) {
+    return '' +
+      '<div style="display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:14px;margin-bottom:10px;background:var(--bg-card,#1e2235);">' +
+        '<div style="flex:0 0 30px;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.9rem;background:' + statusColor + ';color:#0b1020;">' + statusIcon + '</div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright,#fff);margin-bottom:2px;">' + _esc(title) + '</div>' +
+          '<div style="font-size:0.8rem;color:var(--text-muted,#cbd5e1);line-height:1.45;">' + bodyHtml + '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  var DONE = { ic: '✓', col: '#22c55e' };
+  var CURRENT = { ic: '›', col: '#fbbf24' };
+  var WAIT = { ic: '', col: 'rgba(148,163,184,0.4)' };
+  var WARN = { ic: '!', col: '#f59e0b' };
+
+  function _installStepBody() {
+    if (_isMobile()) {
+      return '<span style="color:#f59e0b;">A importação é feita <b>no computador</b> (Chrome/Edge/Brave). No celular não dá pra instalar extensão — abra o scoreplace no desktop pra importar.</span>';
+    }
+    if (_ext.present && _verGte(_ext.version, MIN_EXT_VERSION)) {
+      return 'Extensão detectada e pronta. <b>v' + _esc(_ext.version) + '</b> ✓';
+    }
+    if (_ext.present && !_verGte(_ext.version, MIN_EXT_VERSION)) {
+      return '<span style="color:#f59e0b;">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b>.</span>' + _installHelp('Como atualizar');
+    }
+    var installBtn = STORE_URL
+      ? '<div style="margin-top:10px;"><a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" class="btn btn-primary">🎾 Instalar extensão</a></div>'
+      : '<div style="margin-top:6px;color:#94a3b8;">A extensão ainda não está na Chrome Web Store (em preparação). Por enquanto, instale em modo desenvolvedor:</div>';
+    return 'Precisa da extensão do scoreplace pra ler seu histórico na sua sessão logada (sem senha).' + installBtn + _installHelp(STORE_URL ? 'Instalar manualmente' : 'Passo a passo (modo desenvolvedor)');
+  }
+
+  function _installHelp(label) {
+    // chrome:// não pode ser aberto por link de um site (o Chrome bloqueia por
+    // segurança). Então oferecemos um botão que COPIA o endereço pra colar na barra.
+    var chromeLine = '<li>Na barra do Chrome, vá em <code>chrome://extensions</code> ' +
+      '<button type="button" onclick="var b=this;if(navigator.clipboard){navigator.clipboard.writeText(\'chrome://extensions\').then(function(){b.textContent=\'copiado ✓\';})}" ' +
+      'class="btn btn-outline btn-sm" style="margin-left:6px;padding:2px 10px;font-size:0.72rem;">📋 copiar</button>' +
+      '<div style="opacity:0.7;font-size:0.72rem;margin-top:2px;">(o Chrome não deixa abrir esse endereço por link — cole na barra e dê Enter)</div></li>';
+    return '<details style="margin-top:8px;"><summary style="cursor:pointer;color:var(--primary-color,#818cf8);font-weight:600;">' + _esc(label) + '</summary>' +
+      '<div style="margin:8px 0 6px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);font-size:0.74rem;color:var(--text-muted,#cbd5e1);">⚙️ Instalação <b>temporária</b>, só pra teste enquanto a extensão não está na loja. Quando publicar, vira <b>um clique</b> — nada disso abaixo.</div>' +
+      '<ol style="margin:6px 0 0;padding-left:20px;line-height:1.75;">' +
+        chromeLine +
+        '<li>Nessa página, ligue o interruptor <b>Modo do desenvolvedor</b> (fica no canto superior direito).</li>' +
+        '<li>Vai aparecer um botão <b>“Carregar sem compactação”</b> (o Chrome em inglês chama de <i>Load unpacked</i>) — é assim que ele instala uma extensão a partir de uma pasta do computador. Clique nele e escolha a pasta <b>extension</b> do scoreplace.</li>' +
+        '<li>Pronto — volte aqui, esta tela reconhece sozinha ✓</li>' +
+        '<li><i>Já tinha instalado?</i> No card da extensão, clique no <b>↻ (recarregar)</b> pra pegar a versão nova.</li>' +
+      '</ol></details>';
+  }
+
+  function _renderSteps() {
+    var host = document.getElementById('imp-steps');
+    if (!host) return;
+
+    var extOk = !_isMobile() && _ext.present && _verGte(_ext.version, MIN_EXT_VERSION);
+    var games = _gamesCount();
+    // "importado" = tem jogos game-a-game (o que alimenta o histórico). Um import
+    // v1 antigo (letzplayImport sem games) NÃO conta — o usuário precisa reimportar.
+    var imported = games > 0;
+
+    // Passo 1 — extensão
+    var s1 = extOk ? DONE : (_ext.present ? WARN : CURRENT);
+    var html = _stepShell(1, 'Instalar a extensão (uma vez, no desktop)', s1.ic || '1', s1.col, _installStepBody());
+
+    // Passo 2 — logado no letzplay (a extensão detecta na sessão do usuário).
+    var s2 = (_lzLoggedIn === true) ? DONE : (extOk ? CURRENT : WAIT);
+    var s2body = (_lzLoggedIn === true)
+      ? 'Logado no letzplay ✓ — a extensão vai ler seu histórico na sua sessão (nenhuma senha passa pelo scoreplace).'
+      : ('Abra o letzplay e confirme que está logado (a extensão usa a SUA sessão — nenhuma senha passa pelo scoreplace).' +
+         (_lzLoggedIn === false ? '<div style="margin-top:4px;color:#f59e0b;">Ainda não detectei login no letzplay.</div>' : '') +
+         '<div style="margin-top:10px;"><a href="https://letzplay.me/u/matches/history" target="_blank" rel="noopener" class="btn btn-primary btn-sm">Abrir meu histórico no letzplay ↗</a></div>');
+    html += _stepShell(2, 'Logar no letzplay', s2.ic || '2', s2.col, s2body);
+
+    // Passo 3 — importar
+    var s3 = imported ? DONE : (extOk ? CURRENT : WAIT);
+    var s3body;
+    if (imported) {
+      s3body = '<div style="color:#22c55e;font-weight:700;">✅ Importado — ' + games + ' jogos no seu perfil.</div>' +
+        (_isMobile()
+          ? '<div style="margin-top:10px;">' + _mobileImportBlocked('Reimportar', { variant: 'solid', shortNote: true }) + '</div>'
+          : '<button onclick="window._spStartImport&&window._spStartImport()" class="btn btn-outline btn-sm" style="margin-top:10px;">🔄 Reimportar</button>');
+    } else if (extOk) {
+      s3body = 'Tudo pronto — importe com um clique (sem precisar clicar no ícone da extensão):' +
+        '<div style="margin-top:10px;"><button onclick="window._spStartImport&&window._spStartImport()" class="btn btn-primary btn-shine">🎾 Importar agora</button></div>';
+    } else {
+      s3body = 'Depois de instalar a extensão e logar no letzplay, um botão <b>Importar agora</b> aparece aqui.';
+    }
+    html += _stepShell(3, 'Importar seu histórico', imported ? '✓' : '3', s3.col, s3body);
+
+    // Passo 4 — histórico
+    var s4 = imported ? DONE : WAIT;
+    html += _stepShell(4, 'Ver seu histórico completo', imported ? '✓' : '4', s4.col,
+      imported
+        ? 'Pronto! Seu histórico do letzplay agora vive no scoreplace.<div style="margin-top:10px;"><a href="#historico" class="btn btn-primary">📜 Ver Histórico de jogos</a></div>'
+        : 'Depois de importar, seus jogos aparecem aqui misturados aos do scoreplace — cronológicos, com filtro por fonte, local e competição.');
+
+    host.innerHTML = html;
+  }
+
+  // Só re-renderiza os passos quando o ESTADO muda (extensão presente/versão, jogos,
+  // mobile). Sem isso, o poll de 2s re-renderizava sempre e FECHAVA o <details> que o
+  // usuário tinha aberto (bug "abre e fecha sozinho"). force=true ignora a assinatura.
+  var _lastStepsSig = null;
+  function _stepsSig() {
+    return [_isMobile(), _ext.present, _ext.version, _gamesCount(), _lzLoggedIn].join('|');
+  }
+  function _maybeRenderSteps(force) {
+    if (!document.getElementById('imp-steps')) return;
+    var sig = _stepsSig();
+    if (!force && sig === _lastStepsSig) return;
+    _lastStepsSig = sig;
+    _renderSteps();
+  }
+
+  window._renderImportarLetzplayPage = function (container) {
+    if (!container) container = document.getElementById('view-container');
+    if (!container) return;
+
+    var hdr = (typeof window._renderBackHeader === 'function')
+      ? window._renderBackHeader({ href: '#dashboard', label: 'Voltar', middleHtml: '<span style="font-weight:700;">🎾 Importar do letzplay</span>' })
+      : '';
+
+    // No CELULAR não dá pra importar (o navegador do celular não instala extensão) —
+    // então nem mostramos o passo a passo. Só a explicação de que é no desktop.
+    if (_isMobile()) {
+      if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+      container.innerHTML = hdr +
+        '<div style="max-width:560px;margin:0 auto;padding:6px 14px 40px;">' +
+          '<div style="background:var(--bg-card,#1e2235);border:1px solid rgba(245,158,11,0.35);border-radius:14px;padding:20px 16px;text-align:center;">' +
+            '<div style="font-size:2rem;margin-bottom:8px;">🖥️</div>' +
+            '<div style="font-size:1rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:8px;">A importação do letzplay é feita no desktop</div>' +
+            '<div style="font-size:0.85rem;color:var(--text-muted,#cbd5e1);line-height:1.55;">Ela usa uma extensão de navegador que lê seu histórico na sua própria sessão logada — e o navegador do celular não instala extensão.<br><br>Abra o <b>scoreplace no computador</b> (Chrome/Edge/Brave), logado no letzplay, e o passo a passo aparece aqui. Depois de importado, seus jogos aparecem no celular normalmente.</div>' +
+          '</div>' +
+        '</div>';
+      return;
+    }
+
+    var intro = '<div style="max-width:640px;margin:0 auto;padding:6px 14px 40px;">' +
+      '<div style="background:rgba(132,204,22,0.08);border:1px solid rgba(132,204,22,0.35);border-radius:14px;padding:14px;margin-bottom:14px;">' +
+        '<div style="font-size:0.95rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:4px;">Traga seu histórico do letzplay pro scoreplace.</div>' +
+        '<div style="font-size:0.8rem;color:var(--text-muted,#cbd5e1);line-height:1.5;">Uma vez importado, seus jogos vivem no scoreplace pra sempre. <b>Sem senha</b>: a extensão lê na sua própria sessão logada. É um passo único, no computador.</div>' +
+      '</div>' +
+      '<div id="imp-steps"></div>' +
+    '</div>';
+
+    container.innerHTML = hdr + intro;
+    _lastStepsSig = null;
+    _lzLoggedIn = null;   // re-checa o login do letzplay a cada abertura da página
+    _lastLzCheck = 0;
+    _maybeRenderSteps(true);
+
+    // Detecção viva: pinga a extensão e revê o estado enquanto a tela está aberta.
+    _ping();
+    if (_pollTimer) clearInterval(_pollTimer);
+    _pollTimer = setInterval(function () {
+      if (!document.getElementById('imp-steps')) { clearInterval(_pollTimer); _pollTimer = null; return; }
+      // extensão some do estado se não anunciar por >6s (ex: foi removida)
+      if (_ext.present && (Date.now() - _ext.seenAt) > 6000) { _ext.present = false; _ext.version = null; }
+      _ping();
+      // com a extensão detectada e ainda sem confirmação de login, checa o letzplay
+      // (throttle ~6s; para quando confirmar que está logado — 1 fetch por ciclo).
+      var _extOk = !_isMobile() && _ext.present && _verGte(_ext.version, MIN_EXT_VERSION);
+      if (_extOk && _lzLoggedIn !== true && (Date.now() - _lastLzCheck > 6000)) { _lastLzCheck = Date.now(); _checkLetzplay(); }
+      _maybeRenderSteps(); // só re-renderiza se algo mudou → não fecha o <details> aberto
+    }, 2000);
+  };
+})();

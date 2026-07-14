@@ -807,6 +807,65 @@ exports.flushNotifEmailDigest = onSchedule(
   }
 );
 
+// ─── Digest de WhatsApp (v1.16) ──────────────────────────────────────────────
+// Notificações com política 'agrupado' no catálogo (ex.: inscrições de terceiros)
+// vão pra `whatsapp_digest_queue` (via FirestoreDB.queueWhatsAppDigest, flushAtMs =
+// now + 1h). Esta função junta TODOS os itens pendentes do mesmo telefone numa
+// ÚNICA mensagem e enfileira em `whatsapp_queue` (o processWhatsAppQueue envia).
+// Reduz volume/custo do WhatsApp oficial. Espelha flushNotifEmailDigest.
+exports.flushWhatsAppDigest = onSchedule(
+  {
+    schedule: "every 15 minutes",
+    timeZone: "America/Sao_Paulo",
+    region: "us-central1",
+  },
+  async () => {
+    const db = admin.firestore();
+    const now = Date.now();
+    const dueSnap = await db.collection("whatsapp_digest_queue").where("flushAtMs", "<=", now).get();
+    if (dueSnap.empty) {
+      console.log("[flushWhatsAppDigest] nada vencido");
+      return;
+    }
+    const duePhones = new Set();
+    dueSnap.forEach((d) => { const p = d.data().phone; if (p) duePhones.add(p); });
+
+    let sent = 0;
+    for (const phone of duePhones) {
+      // Consolida TODOS os itens pendentes desse telefone (vencidos ou não).
+      const allSnap = await db.collection("whatsapp_digest_queue").where("phone", "==", phone).get();
+      const items = [];
+      allSnap.forEach((d) => items.push(Object.assign({ _id: d.id }, d.data())));
+      if (items.length === 0) continue;
+      items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      try {
+        const lines = items.map((it) => "• " + String(it.line || "").replace(/^[🔴🟠🟢]\s*/, ""));
+        const urls = [...new Set(items.map((it) => it.tournamentUrl).filter(Boolean))];
+        let msg = "🔔 *scoreplace* — resumo da última hora:\n" + lines.join("\n");
+        if (urls.length === 1) msg += "\n\n👉 " + urls[0];
+        await db.collection("whatsapp_queue").add({
+          phones: [phone],
+          message: msg,
+          createdAt: new Date().toISOString(),
+          status: "pending",
+        });
+        // Limpa os itens consolidados.
+        let batch = db.batch();
+        let n = 0;
+        for (const it of items) {
+          batch.delete(db.collection("whatsapp_digest_queue").doc(it._id));
+          if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); }
+        }
+        if (n % 400 !== 0) await batch.commit();
+        sent++;
+      } catch (err) {
+        console.error("[flushWhatsAppDigest] falha pra", phone, err);
+      }
+    }
+    console.log("[flushWhatsAppDigest] digests:", sent, "| telefones vencidos:", duePhones.size);
+  }
+);
+
 // ─── Scheduled cleanup: old casual matches ───────────────────────────────────
 // Finished casual match docs live in the top-level `casualMatches` collection.
 // Each has `status: 'finished'` and `finishedAt` (ISO string) set the moment
@@ -2489,6 +2548,136 @@ exports.sendWhatsAppMagicLink = onCall(
   }
 );
 
+// ─── WhatsApp Cloud API oficial (Meta) — login por CÓDIGO de 6 dígitos (v1.1.15) ─
+// Migração do Evolution (morto) pro Cloud API oficial. No login por celular, SMS
+// (Firebase, código opaco) e WhatsApp (código NOSSO) são enviados ao mesmo tempo;
+// o campo de código aceita QUALQUER um dos dois — o cliente tenta o confirm do
+// Firebase primeiro, e se não bater cai em verifyWhatsAppLoginCode.
+// GATE: o template `scoreplace_login_code` (AUTHENTICATION) só passa a existir quando
+// a verificação da empresa da Meta aprovar. Até lá, sendWhatsAppLoginCode devolve
+// {ok:false} e o app degrada limpo (SMS/e-mail seguem). IDs canônicos + estado na
+// memória project_whatsapp_meta_2fa_block.
+// ⚠️ Payload do template AUTH (COPY_CODE) NÃO foi testável até o template existir —
+// validar o envio de verdade no 1º deploy pós-aprovação.
+const WHATSAPP_CLOUD_TOKEN = defineSecret("WHATSAPP_CLOUD_API_TOKEN");
+const WA_CLOUD_API = "https://graph.facebook.com/v22.0";
+const WA_CLOUD_PHONE_ID = "1318311631355405";      // Phone Number ID Barthlabs (não é segredo)
+const WA_LOGIN_TEMPLATE = "scoreplace_login_code"; // template AUTHENTICATION, OTP COPY_CODE
+const WA_LOGIN_TEMPLATE_LANG = "pt_BR";
+
+// Envia um código de autenticação via template do Cloud API. {ok} ou {ok:false,error}.
+async function _sendWhatsAppAuthCode(token, phone, code) {
+  if (IS_STAGING) { console.log("[staging] WA Cloud auth code suprimido →", String(phone)); return { ok: true, suppressed: true }; }
+  const to = String(phone || "").replace(/[^\d]/g, "");
+  const url = WA_CLOUD_API + "/" + WA_CLOUD_PHONE_ID + "/messages";
+  const body = {
+    messaging_product: "whatsapp",
+    to: to,
+    type: "template",
+    template: {
+      name: WA_LOGIN_TEMPLATE,
+      language: { code: WA_LOGIN_TEMPLATE_LANG },
+      components: [
+        { type: "body", parameters: [{ type: "text", text: code }] },
+        // Botão OTP (COPY_CODE) — o parâmetro leva o mesmo código pro "copiar código".
+        { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] },
+      ],
+    },
+  };
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    return { ok: false, error: "fetch failed: " + (e.message || String(e)) };
+  }
+  let data = null;
+  try { data = await resp.json(); } catch (e) { /* body não-json */ }
+  if (!resp.ok) {
+    return { ok: false, error: "HTTP " + resp.status + ": " + (data && data.error ? JSON.stringify(data.error) : resp.statusText) };
+  }
+  const messageId = data && data.messages && data.messages[0] && data.messages[0].id;
+  return { ok: true, messageId: messageId };
+}
+
+// Gera código de 6 dígitos, guarda em whatsappLoginCodes/{phone} e manda via Cloud API.
+// Chamado em paralelo com o SMS do Firebase no login por celular. Best-effort.
+exports.sendWhatsAppLoginCode = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, secrets: [WHATSAPP_CLOUD_TOKEN] },
+  async (request) => {
+    const phone = _normalizePhoneE164((request.data && request.data.phone) || "");
+    if (!phone) return { ok: false, reason: "invalid-phone" };
+
+    // Acha ou cria a conta do telefone (o código loga essa conta via custom token).
+    let userRecord;
+    try {
+      userRecord = await admin.auth().getUserByPhoneNumber("+" + phone);
+    } catch (err) {
+      if (err.code === "auth/user-not-found") {
+        try { userRecord = await admin.auth().createUser({ phoneNumber: "+" + phone }); }
+        catch (e) { console.error("[sendWhatsAppLoginCode] createUser falhou:", e.code || e.message); return { ok: false, reason: "create-user-error" }; }
+      } else {
+        console.error("[sendWhatsAppLoginCode] lookup falhou:", err.code || err.message);
+        return { ok: false, reason: "lookup-error" };
+      }
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
+    try {
+      await admin.firestore().collection("whatsappLoginCodes").doc(phone).set({
+        code: code, uid: userRecord.uid, phone: phone, attempts: 0,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 min
+      });
+    } catch (e) {
+      console.error("[sendWhatsAppLoginCode] Firestore write falhou:", e.code || e.message);
+      return { ok: false, reason: "store-error" };
+    }
+
+    let token;
+    try { token = WHATSAPP_CLOUD_TOKEN.value(); } catch (e) { return { ok: false, reason: "secret-missing" }; }
+    const result = await _sendWhatsAppAuthCode(token, phone, code);
+    if (!result.ok) {
+      console.warn("[sendWhatsAppLoginCode] envio falhou pra", phone, ":", result.error);
+      return { ok: false, reason: "wa-send-failed", error: result.error };
+    }
+    console.log("[sendWhatsAppLoginCode] código enviado pra", phone, "uid:", userRecord.uid);
+    return { ok: true };
+  }
+);
+
+// Confere o código digitado contra whatsappLoginCodes/{phone}. Se bater (não expirou /
+// sob limite), devolve custom token pro cliente fazer signInWithCustomToken.
+exports.verifyWhatsAppLoginCode = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30 },
+  async (request) => {
+    const phone = _normalizePhoneE164((request.data && request.data.phone) || "");
+    const code = String((request.data && request.data.code) || "").replace(/[^\d]/g, "");
+    if (!phone || code.length !== 6) return { ok: false, reason: "invalid-input" };
+
+    const ref = admin.firestore().collection("whatsappLoginCodes").doc(phone);
+    const snap = await ref.get();
+    if (!snap.exists) return { ok: false, reason: "no-code" };
+    const d = snap.data();
+    const expMs = d.expiresAt && d.expiresAt.toMillis ? d.expiresAt.toMillis() : (d.expiresAt ? new Date(d.expiresAt).getTime() : 0);
+    if (!expMs || expMs < Date.now()) { try { await ref.delete(); } catch (_e) {} return { ok: false, reason: "expired" }; }
+    if ((d.attempts || 0) >= 5) { try { await ref.delete(); } catch (_e) {} return { ok: false, reason: "too-many-attempts" }; }
+    if (String(d.code) !== code) {
+      try { await ref.update({ attempts: (d.attempts || 0) + 1 }); } catch (_e) {}
+      return { ok: false, reason: "wrong-code" };
+    }
+    try { await ref.delete(); } catch (_e) {} // consome o código
+    let customToken;
+    try { customToken = await admin.auth().createCustomToken(d.uid, { source: "whatsapp_login_code" }); }
+    catch (e) { console.error("[verifyWhatsAppLoginCode] createCustomToken falhou:", e.code || e.message); return { ok: false, reason: "token-error" }; }
+    console.log("[verifyWhatsAppLoginCode] OK pra", phone, "uid:", d.uid);
+    return { ok: true, customToken: customToken };
+  }
+);
+
 // Sanitiza telefone pra E.164 sem '+' (formato Evolution API espera).
 // Aceita "+55 11 99999-8888", "55 11 99999-8888", "11 99999-8888",
 // "(11) 99999-8888". Sempre normaliza pra "5511999998888".
@@ -3638,6 +3827,12 @@ async function _notifyDevRecovery(db, title, body) {
   } catch (e) { /* ignore */ }
 }
 
+/* DESATIVADO 2026-07-12 — Evolution/VPS Hetzner removido; número banido; migração pro Meta Cloud API
+   (Meta hospeda, não precisa de restart de VPS). As duas funções abaixo (whatsappHealthGuard a cada
+   10 min + whatsappNightlyRestart 04:30) só batiam no /instance/restart do Evolution morto e emailavam
+   o dev a cada falha. DELETADAS do Firebase (functions:delete) e comentadas aqui pra não ressuscitarem
+   num deploy futuro. Reimplementar monitoramento SÓ quando o Meta Cloud API estiver no ar (mecanismo
+   diferente — sem restart de servidor). Ver memória project_whatsapp_meta_2fa_block.
 exports.whatsappHealthGuard = onSchedule(
   {
     schedule: "every 10 minutes",
@@ -3725,6 +3920,7 @@ exports.whatsappNightlyRestart = onSchedule(
     console.log("[whatsappNightlyRestart] restart preventivo:", r.ok ? "ok" : ("falhou: " + r.error));
   }
 );
+*/
 
 // ─── notifyLeagueRoundWhatsApp ─────────────────────────────────────────────
 // Chamada pelo cliente após sortear nova rodada da Liga/Suíço.

@@ -1439,6 +1439,205 @@ function _sendPhoneCodeNative(phoneE164) {
   });
 }
 window._sendPhoneCodeNative = _sendPhoneCodeNative;
+// ─── Google Sign-In NATIVO (iOS/Capacitor) ──────────────────────────────────
+// O popup/redirect do Firebase não funciona no WebView do app; usa o plugin
+// @capgo/capacitor-social-login (Google Sign-In nativo) → idToken → Firebase.
+var _socialLoginInited = false;
+function _googleNativeLogin(plugin) {
+  if (typeof window._resetLoginGuard === 'function') window._resetLoginGuard();
+  showNotification(_t('auth.connecting'), _t('auth.connectingMsg'), 'info');
+  // iOS client ID do GoogleService-Info.plist (não é segredo — vai no app bundle).
+  var iosClientId = '382268772878-9uqbuaa7ho56q6d76t7cq5cbcc9edeum.apps.googleusercontent.com';
+  var initP = _socialLoginInited
+    ? Promise.resolve()
+    : plugin.initialize({ google: { iOSClientId: iosClientId } }).then(function(){ _socialLoginInited = true; });
+  initP.then(function() {
+    return plugin.login({ provider: 'google', options: { scopes: ['profile', 'email'], forcePrompt: true } });
+  }).then(function(res) {
+    var r = (res && res.result) ? res.result : res;
+    var idToken = r && r.idToken;
+    var accessToken = r && r.accessToken && (r.accessToken.token || r.accessToken);
+    if (!idToken) throw new Error('Google: idToken ausente na resposta do plugin');
+    var cred = firebase.auth.GoogleAuthProvider.credential(idToken, (typeof accessToken === 'string' ? accessToken : null));
+    return firebase.auth().signInWithCredential(cred);
+  }).then(function(result) {
+    _onGoogleAuthSuccess(result.user, result);
+  }).catch(function(err) {
+    var code = String((err && (err.code || err.message)) || 'unknown');
+    // cancelamento do usuário — silencioso (iOS: -5/1001/canceled/SIGN_IN_CANCELLED)
+    if (/cancel|1001|(^|[^0-9])-5([^0-9]|$)|SIGN_IN_CANCELLED|the user canceled/i.test(code)) return;
+    window._error && window._error('[scoreplace-auth] Google nativo erro:', err);
+    if (typeof window._captureException === 'function') {
+      window._captureException(err, { area: 'googleNativeLogin', code: code });
+    }
+    if (typeof _handleAccountLinking === 'function' && _handleAccountLinking(err, 'Google')) return;
+    showNotification(_t('auth.error'), 'Não foi possível entrar com o Google. Tente Apple, e-mail ou celular.', 'error');
+  });
+}
+window._googleNativeLogin = _googleNativeLogin;
+
+function _onGoogleAuthSuccess(user, result) {
+  if (typeof _forceCloseLoginModal === 'function') _forceCloseLoginModal();
+  var name = (user && (user.displayName || user.email)) || _t('auth.defaultUser');
+  showNotification(_t('auth.loginDone'), _t('auth.welcomeName', { greeting: window._welcomeWord(user), name: name }), 'success');
+  if (window.FirestoreDB && window.FirestoreDB.db && user && user.uid) {
+    window.FirestoreDB.saveUserProfile(user.uid, {
+      authProvider: 'google.com',
+      displayName: user.displayName || '',
+      photoURL: user.photoURL || ''
+    }).catch(function(){});
+  }
+  try { _tryLinkPendingCredential(result); } catch (e) {
+    window._warn && window._warn('[scoreplace-auth] google _tryLinkPendingCredential (non-fatal):', e);
+  }
+  try {
+    localStorage.setItem('scoreplace_authCache', JSON.stringify({
+      uid: user.uid, email: user.email,
+      displayName: user.displayName, photoURL: user.photoURL, authProvider: 'google.com'
+    }));
+  } catch (e) {}
+  simulateLoginSuccess({ uid: user.uid, email: user.email, displayName: user.displayName, photoURL: user.photoURL });
+}
+
+// ─── Sign in with Apple (Guideline 4.8) ─────────────────────────────────────
+// Mostra o botão em iOS-nativo + web (qualquer navegador). Esconde no Android
+// nativo (não é exigido lá e o fluxo web é frágil em WebView de arquivos locais).
+window._shouldShowAppleBtn = function() {
+  try {
+    var p = (window.Capacitor && window.Capacitor.getPlatform) ? window.Capacitor.getPlatform() : 'web';
+    return p !== 'android';
+  } catch (e) { return true; }
+};
+
+// Nonce aleatório + SHA-256 (Apple exige o hash; Firebase valida o rawNonce)
+function _appleRandomNonce(len) {
+  var chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
+  var out = '';
+  var rnd = new Uint8Array(len || 32);
+  (window.crypto || window.msCrypto).getRandomValues(rnd);
+  for (var i = 0; i < rnd.length; i++) { out += chars[rnd[i] % chars.length]; }
+  return out;
+}
+function _appleSha256Hex(str) {
+  var data = new TextEncoder().encode(str);
+  return window.crypto.subtle.digest('SHA-256', data).then(function(buf) {
+    var arr = Array.prototype.slice.call(new Uint8Array(buf));
+    return arr.map(function(b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  });
+}
+
+function handleAppleLogin() {
+  if (typeof window._resetLoginGuard === 'function') window._resetLoginGuard();
+
+  // Modo dev/local (file://) — simula, igual ao Google
+  if (window.location.protocol === 'file:') {
+    showNotification(_t('auth.simLogin'), _t('auth.simLoginMsg'), 'info');
+    simulateLoginSuccess({ uid: 'local_user', displayName: 'Organizador Teste', email: 'organizador@scoreplace.app', photoURL: '' });
+    return;
+  }
+
+  if (!firebase || !firebase.auth) {
+    showNotification(_t('auth.error'), _t('auth.firebaseError'), 'error');
+    return;
+  }
+
+  showNotification(_t('auth.connecting'), _t('auth.connectingMsg'), 'info');
+
+  var cap = window.Capacitor;
+  var isNative = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+  var platform = (cap && cap.getPlatform) ? cap.getPlatform() : 'web';
+  var nativePlugin = cap && cap.Plugins && cap.Plugins.SignInWithApple;
+
+  // iOS nativo → folha nativa da Apple via plugin + Firebase signInWithCredential
+  if (isNative && platform === 'ios' && nativePlugin) {
+    var rawNonce = _appleRandomNonce(32);
+    _appleSha256Hex(rawNonce).then(function(hashedNonce) {
+      return nativePlugin.authorize({ scopes: 'email name', nonce: hashedNonce });
+    }).then(function(res) {
+      var r = (res && res.response) ? res.response : res;
+      var idToken = r && r.identityToken;
+      if (!idToken) throw new Error('Apple: identityToken ausente');
+      var provider = new firebase.auth.OAuthProvider('apple.com');
+      var credential = provider.credential({ idToken: idToken, rawNonce: rawNonce });
+      var fullName = [r && r.givenName, r && r.familyName].filter(Boolean).join(' ').trim();
+      return firebase.auth().signInWithCredential(credential).then(function(result) {
+        // Apple só envia o nome no PRIMEIRO login; grava se ainda não houver.
+        var u = result.user;
+        if (fullName && u && !u.displayName && u.updateProfile) {
+          return u.updateProfile({ displayName: fullName }).catch(function(){}).then(function(){ return { result: result, fullName: fullName }; });
+        }
+        return { result: result, fullName: fullName };
+      });
+    }).then(function(pack) {
+      _onAppleAuthSuccess(pack.result.user, pack.result, pack.fullName);
+    }).catch(function(err) {
+      _onAppleAuthError(err);
+    });
+    return;
+  }
+
+  // Web (qualquer navegador) → Firebase popup com provedor Apple
+  var webProvider = new firebase.auth.OAuthProvider('apple.com');
+  webProvider.addScope('email');
+  webProvider.addScope('name');
+  firebase.auth().signInWithPopup(webProvider)
+    .then(function(result) {
+      var name = result.user && (result.user.displayName || '');
+      _onAppleAuthSuccess(result.user, result, name);
+    })
+    .catch(function(error) {
+      if (error && (error.code === 'auth/popup-blocked' || error.code === 'auth/operation-not-supported-in-this-environment')) {
+        firebase.auth().signInWithRedirect(webProvider).catch(function(err2) {
+          _onAppleAuthError(err2);
+        });
+        return;
+      }
+      _onAppleAuthError(error);
+    });
+}
+window.handleAppleLogin = handleAppleLogin;
+
+function _onAppleAuthSuccess(user, result, fullName) {
+  if (typeof _forceCloseLoginModal === 'function') _forceCloseLoginModal();
+  var name = (user && user.displayName) || fullName || (user && user.email) || 'Atleta';
+  showNotification(_t('auth.loginDone'), _t('auth.welcomeName', { greeting: window._welcomeWord(user), name: name }), 'success');
+
+  if (window.FirestoreDB && window.FirestoreDB.db && user && user.uid) {
+    var payload = { authProvider: 'apple.com' };
+    if (user.displayName) payload.displayName = user.displayName;
+    else if (fullName) payload.displayName = fullName;
+    window.FirestoreDB.saveUserProfile(user.uid, payload).catch(function(){});
+  }
+
+  try { _tryLinkPendingCredential(result); } catch (e) {
+    window._warn && window._warn('[scoreplace-auth] apple _tryLinkPendingCredential (non-fatal):', e);
+  }
+
+  try {
+    localStorage.setItem('scoreplace_authCache', JSON.stringify({
+      uid: user.uid, email: user.email,
+      displayName: user.displayName || fullName || '',
+      photoURL: user.photoURL || '', authProvider: 'apple.com'
+    }));
+  } catch (e) {}
+
+  simulateLoginSuccess({
+    uid: user.uid, email: user.email,
+    displayName: user.displayName || fullName || '', photoURL: user.photoURL || ''
+  });
+}
+
+function _onAppleAuthError(error) {
+  window._error && window._error('[scoreplace-auth] Apple auth error:', error);
+  if (typeof window._captureException === 'function') {
+    window._captureException(error, { area: 'appleLogin', code: error && (error.code || error.message) });
+  }
+  var code = String((error && (error.code || error.message)) || 'unknown');
+  // Cancelamento do usuário (nativo retorna 1001/canceled; web popup-closed) — silencioso
+  if (/1001|cancel|popup-closed-by-user|cancelled-popup-request/i.test(code)) return;
+  if (typeof _handleAccountLinking === 'function' && _handleAccountLinking(error, 'Apple')) return;
+  showNotification(_t('auth.error'), 'Não foi possível entrar com a Apple. Tente e-mail, celular ou Google.', 'error');
+}
 
 // ─── Account linking helper ─────────────────────────────────────────────────
 // When user tries to sign in with a provider but already has an account with
@@ -1695,7 +1894,7 @@ window._entrarExpandRegister = function(mode, raw) {
   if (btn) btn.textContent = 'Criar conta e entrar';
   if (hint) {
     if (mode === 'phone') {
-      hint.innerHTML = '✨ Número novo por aqui — vamos criar sua conta. Você vai receber um <b>código por SMS</b> e um <b>link no WhatsApp</b> pra confirmar o número.';
+      hint.innerHTML = '✨ Número novo por aqui — vamos criar sua conta. Você vai receber um <b>código por SMS</b> e um <b>código no WhatsApp</b> pra confirmar o número.';
     } else if (typeof window._isUnreliableEmailDomain === 'function' && window._isUnreliableEmailDomain(raw)) {
       // v3.0.x: nota GENTIL (sem alarme, sem Google). Esses provedores às vezes seguram a
       // confirmação; o caminho pelo celular fica oferecido com calma na tela seguinte.
@@ -1881,7 +2080,7 @@ window._entrarSetupPhonePassword = function(e164withPlus, password, displayName)
   // Pendência lida pelo hook em handlePhoneVerifyCode (e best-effort no ?wt=).
   window._phonePwSetup = { phone: e164withPlus, password: password, displayName: displayName || '' };
   try { sessionStorage.setItem('sp_pwSetup', JSON.stringify(window._phonePwSetup)); } catch (_e) {}
-  window._entrarStatus('📱 Enviamos um <b>código por SMS</b> e um <b>link pelo WhatsApp</b> pra confirmar seu número. Confirme abaixo pra concluir.', 'info');
+  window._entrarStatus('📱 Enviamos um <b>código por SMS</b> e um <b>código pelo WhatsApp</b> pra confirmar seu número. Confirme abaixo pra concluir.', 'info');
   if (typeof handlePhoneLogin === 'function') handlePhoneLogin();
 };
 
@@ -2374,43 +2573,41 @@ function handlePhoneLogin() {
   // confirmação aparece NA HORA — a pessoa entra pelo link do WhatsApp mesmo que o
   // SMS/reCAPTCHA falhe. O SMS roda depois, em segundo plano, e a sua falha vira só
   // uma nota discreta (sem toast assustador) porque o WhatsApp é o caminho primário.
-  window._waMagicLinkResult = null;
+  window._phoneLoginE164 = phone; // pro fallback do código do WhatsApp na verificação
   _showPhoneVerificationStep();
   var _smsNote0 = document.getElementById('phone-step-sms-note');
   if (_smsNote0) _smsNote0.innerHTML = '';
   var _waStatus0 = document.getElementById('phone-step-wa-status');
-  if (_waStatus0) _waStatus0.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">⏳ Enviando link pelo WhatsApp…</span>';
-  showNotification('📱 Acesso a caminho', 'Enviamos um link pelo WhatsApp pra ' + phone + '. Toque nele pra entrar — ou digite o código que chega por SMS.', 'info');
+  if (_waStatus0) _waStatus0.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">⏳ Enviando código pelo WhatsApp…</span>';
+  showNotification('📱 Código a caminho', 'Enviamos um código por SMS e por WhatsApp pra ' + phone + '. Digite o que chegar primeiro.', 'info');
 
-  // WhatsApp magic link — não depende de reCAPTCHA nem de SMS.
+  // Código do WhatsApp (nosso, via Cloud API oficial) — não depende de reCAPTCHA nem
+  // do SMS. Vem no MESMO campo do código do SMS: a verificação tenta o confirm do
+  // Firebase primeiro e, se não bater, cai em verifyWhatsAppLoginCode. O template
+  // AUTHENTICATION só existe quando a Meta aprovar a verificação da empresa; até lá
+  // isto devolve {ok:false} e o app segue no SMS (degrada limpo).
   (function() {
-    var WA_FN_URL = 'https://us-central1-scoreplace-app.cloudfunctions.net/sendWhatsAppMagicLink';
-    fetch(WA_FN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: { phone: phone } })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(body) {
-      var d = body && body.result;
-      window._log('[WA magic link] resultado:', JSON.stringify(d));
-      window._waMagicLinkResult = d;
-      var ws = document.getElementById('phone-step-wa-status');
-      if (!ws) return;
-      if (d && d.ok) {
-        ws.innerHTML = '<span style="color:#10b981;font-size:0.74rem;font-weight:700;">✅ Link enviado pelo WhatsApp — toque nele pra entrar.</span>';
-      } else {
-        var reason = (d && d.reason) || 'unknown';
-        ws.innerHTML = (reason === 'user-not-found')
-          ? '<span style="color:var(--text-muted);font-size:0.72rem;">Número novo por aqui — confirme pelo código do SMS abaixo.</span>'
-          : '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora (' + reason + ') — use o código do SMS abaixo.</span>';
-      }
-    })
-    .catch(function(err) {
-      window._warn('[WA magic link] fetch falhou:', err && err.message);
-      var ws = document.getElementById('phone-step-wa-status');
-      if (ws) ws.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora — use o código do SMS abaixo.</span>';
-    });
+    try {
+      firebase.functions().httpsCallable('sendWhatsAppLoginCode')({ phone: phone })
+        .then(function(res) {
+          var d = res && res.data;
+          window._log && window._log('[WA login code] resultado:', JSON.stringify(d));
+          var ws = document.getElementById('phone-step-wa-status');
+          if (!ws) return;
+          if (d && d.ok) {
+            ws.innerHTML = '<span style="color:#10b981;font-size:0.74rem;font-weight:700;">✅ Código enviado pelo WhatsApp — digite acima.</span>';
+          } else {
+            ws.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora — use o código do SMS abaixo.</span>';
+          }
+        })
+        .catch(function(err) {
+          window._warn && window._warn('[WA login code] falhou:', err && err.message);
+          var ws = document.getElementById('phone-step-wa-status');
+          if (ws) ws.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora — use o código do SMS abaixo.</span>';
+        });
+    } catch (e) {
+      window._warn && window._warn('[WA login code] init falhou:', e && e.message);
+    }
   })();
 
   // ── NATIVO (Capacitor): SMS sem reCAPTCHA via plugin ───────────────────────
@@ -2440,7 +2637,7 @@ function handlePhoneLogin() {
     window._phoneLoginInFlight = false;
     window._warn && window._warn('[phoneLogin] reCAPTCHA init falhou:', e && (e.message || e));
     var _n0 = document.getElementById('phone-step-sms-note');
-    if (_n0) _n0.innerHTML = '<span style="color:#fbbf24;font-size:0.72rem;">⚠️ SMS indisponível neste navegador — entre pelo link do WhatsApp acima.</span>';
+    if (_n0) _n0.innerHTML = '<span style="color:#fbbf24;font-size:0.72rem;">⚠️ SMS indisponível neste navegador — use o código do WhatsApp acima.</span>';
     return;
   }
 
@@ -2499,8 +2696,8 @@ function handlePhoneVerifyCode() {
   }
 
   if (!window._phoneConfirmationResult) {
-    showNotification(_t('auth.error'), _t('auth.sessionExpiredMsg'), 'error');
-    _resetPhoneLoginUI();
+    // SMS não disponível (reCAPTCHA/SMS falhou) — o código pode ser o do WhatsApp.
+    _verifyWhatsAppLoginCodeAndSignIn(code);
     return;
   }
 
@@ -2641,14 +2838,52 @@ function handlePhoneVerifyCode() {
     })
     .catch(function(error) {
       window._error('Phone verify error:', error);
-      if (error.code === 'auth/invalid-verification-code') {
-        showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error');
-      } else if (error.code === 'auth/code-expired') {
-        showNotification(_t('auth.codeExpired'), _t('auth.codeExpiredMsg'), 'error');
-        _resetPhoneLoginUI();
+      // O código digitado pode ser o do WhatsApp (não o do SMS): tenta o nosso antes de errar.
+      if (error.code === 'auth/invalid-verification-code' || error.code === 'auth/code-expired') {
+        _verifyWhatsAppLoginCodeAndSignIn(code);
       } else {
         showNotification(_t('auth.error'), error.message || _t('auth.loginErrorMsg'), 'error');
       }
+    });
+}
+
+// v1.1.15: o campo de código do login por celular aceita o código do SMS (Firebase)
+// OU o do WhatsApp (nosso, via Cloud API). Se o confirm do Firebase não bater, o
+// código pode ser o do WhatsApp — validamos aqui e logamos via custom token (espelha
+// o completar do magic link ?wt=). Degrade-safe: só roda quando o SMS não bateu.
+function _verifyWhatsAppLoginCodeAndSignIn(code) {
+  var phone = window._phoneLoginE164;
+  if (!phone) { showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error'); return; }
+  firebase.functions().httpsCallable('verifyWhatsAppLoginCode')({ phone: phone, code: code })
+    .then(function(res) {
+      var d = res && res.data;
+      if (d && d.ok && d.customToken) {
+        firebase.auth().signInWithCustomToken(d.customToken)
+          .then(function() {
+            window._phoneConfirmationResult = null;
+            try { _resetPhoneRecaptcha(); } catch (e) {}
+            var user = firebase.auth().currentUser;
+            showNotification(_t('auth.loginDone'), _t('auth.welcome', { greeting: user ? window._welcomeWord(user) : '' }), 'success');
+            var modal = document.getElementById('modal-login');
+            if (modal) modal.classList.remove('active');
+            try { _resetPhoneLoginUI(); } catch (e) {}
+          })
+          .catch(function(err) {
+            window._error && window._error('[waLoginCode] signInWithCustomToken falhou:', err);
+            showNotification(_t('auth.error'), _t('auth.loginErrorMsg'), 'error');
+          });
+      } else {
+        var reason = d && d.reason;
+        if (reason === 'expired' || reason === 'no-code') {
+          showNotification(_t('auth.codeExpired'), _t('auth.codeExpiredMsg'), 'error');
+        } else {
+          showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error');
+        }
+      }
+    })
+    .catch(function(err) {
+      window._warn && window._warn('[waLoginCode] verify falhou:', err && err.message);
+      showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error');
     });
 }
 
@@ -4546,12 +4781,42 @@ async function simulateLoginSuccess(user) {
   };
 
   // Populate all form fields in the profile modal from window.AppStore.currentUser.
+  // Botão de importar do letzplay + "Última atualização" (data/hora + procedência).
+  // Renderizado num slot que _populateProfileModalFields refresca quando o
+  // letzplayImport chega (o modal é montado 1x, antes do perfil carregar).
+  window._renderProfileLzImportSlot = function () {
+    var _cu = window.AppStore && window.AppStore.currentUser;
+    var _imp = _cu && _cu.letzplayImport;
+    var _hasGames = !!(_imp && Array.isArray(_imp.games) && _imp.games.length);
+    var btn = (typeof window._spImportEntry === 'function')
+      ? window._spImportEntry({ label: (_hasGames ? 'Atualizar do letzplay' : 'Importar do letzplay') }) : '';
+    var updated = '';
+    if (_imp && _imp.importedAt) {
+      var _d = new Date(_imp.importedAt);
+      if (!isNaN(_d.getTime())) {
+        var _sh = (typeof window._safeHtml === 'function') ? window._safeHtml : function (x) { return x; };
+        var _when = _d.toLocaleDateString('pt-BR') + ' ' + _d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        var _via = '';
+        if (_imp.importedVia === 'organizer') {
+          var _org = _imp.importedByName ? (' por ' + _sh(_imp.importedByName)) : ' por um organizador';
+          var _tn = _imp.importedTournamentName ? (' no torneio <b>' + _sh(_imp.importedTournamentName) + '</b>') : '';
+          _via = '<br>importado' + _org + _tn;
+        }
+        updated = '<div style="text-align:center;font-size:0.68rem;color:var(--text-muted,#94a3b8);margin-top:6px;line-height:1.45;">Última atualização: ' + _when + _via + '</div>';
+      }
+    }
+    return btn + updated;
+  };
+
   // Extracted from _openMyProfileModal so we can re-populate after a fresh
   // Firestore fetch lands (guards against PWA-reinstall race where the modal
   // opens before loadUserProfile() merges the saved fields into currentUser).
   window._populateProfileModalFields = function() {
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!cu) return;
+    // Refresca o botão de import + "Última atualização" com o estado atual do letzplayImport.
+    var _lzSlot = document.getElementById('profile-lz-import-slot');
+    if (_lzSlot && typeof window._renderProfileLzImportSlot === 'function') _lzSlot.innerHTML = window._renderProfileLzImportSlot();
 
     // Fallback robusto pra dados que vieram do provedor (Google/Apple/FB).
     try {
@@ -4661,6 +4926,9 @@ async function simulateLoginSuccess(user) {
     _setVal('profile-edit-letzplay', cu.letzplayHandle ? ('@' + cu.letzplayHandle) : '');
     var _lpConsentEl = document.getElementById('profile-letzplay-consent');
     if (_lpConsentEl) _lpConsentEl.checked = (cu.letzplayConsent === true);
+    // v1.8: o card "Seu nível (letzplay)" saiu daqui — agora vive nas
+    // Estatísticas do jogador (📊 _showPlayerStats). O perfil só guarda @ +
+    // consentimento (config), sem renderizar o histórico (não pesa o perfil).
     (function() {
       var raw = cu.preferredSports;
       var arr = [];
@@ -4733,6 +5001,10 @@ async function simulateLoginSuccess(user) {
       // v1.3.41-beta: default ON se já tem telefone cadastrado e não escolheu OFF explicitamente
       { id: 'profile-notify-whatsapp', val: cu.notifyWhatsApp === true || (cu.notifyWhatsApp !== false && !!(cu.phone && String(cu.phone).replace(/\D/g,'').length >= 8)) },
       { id: 'profile-hints-enabled', val: _hintsEnabled },
+      // Vibração: default ON — só 'off' explícito desliga (device-local).
+      { id: 'profile-haptics-enabled', val: (function () { try { return localStorage.getItem('scoreplace_haptics') !== 'off'; } catch (e) { return true; } })() },
+      // Sons: default OFF — só 'on' explícito liga (device-local).
+      { id: 'profile-sound-enabled', val: (function () { try { return localStorage.getItem('scoreplace_sound') === 'on'; } catch (e) { return false; } })() },
       { id: 'profile-presence-auto-checkin', val: !!cu.presenceAutoCheckin },
       // v2.4.3: privacidade — ocultar e-mail/telefone (default OFF).
       { id: 'profile-omit-email', val: cu.omitEmail === true },
@@ -5480,6 +5752,15 @@ function setupLoginModal() {
             '<div style="flex:1;height:1px;background:var(--border-color);"></div>' +
           '</div>' +
 
+          // --- 4a. Apple (iOS + web; escondido no Android native — Guideline 4.8) ---
+          (window._shouldShowAppleBtn && window._shouldShowAppleBtn() ?
+          '<div style="margin-bottom:8px;">' +
+            '<button type="button" id="login-apple-btn" class="btn hover-lift btn-block" onclick="handleAppleLogin()" style="background:#000;color:#fff;border:1px solid #000;padding:12px 16px;font-size:0.88rem;font-weight:600;">' +
+              '<svg width="18" height="18" viewBox="0 0 384 512" fill="#fff" style="vertical-align:middle;margin-right:8px;"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>' +
+              ((typeof _t === 'function' && _t('auth.signInApple') !== 'auth.signInApple') ? _t('auth.signInApple') : 'Entrar com a Apple') +
+            '</button>' +
+          '</div>' : '') +
+
           // --- 4. Google ---
           '<div style="margin-bottom:4px;">' +
             '<button type="button" id="login-google-btn" class="btn hover-lift btn-block" onclick="handleGoogleLogin()" style="background:#fff;color:#333;border:1px solid #ddd;padding:12px 16px;font-size:0.88rem;font-weight:600;">' +
@@ -5857,13 +6138,20 @@ window._executeDeleteAccount = async function() {
       'scoreplace_analytics_open'
     ];
     _toCleanup.forEach(function(k) { try { localStorage.removeItem(k); } catch (_e) {} });
-    // Apagar IndexedDB do Firebase Auth também (evita auto-restore da sessão Google
-    // antiga; sem isso, Firebase Auth lembra da conta apesar do delete).
+    // Apagar SÓ o IndexedDB do Firebase AUTH (firebaseLocalStorageDb) — evita
+    // auto-restore da sessão Google antiga. NÃO tocar no IndexedDB do Firestore:
+    // apagar o banco do Firestore com o cliente vivo faz o SDK TERMINAR o cliente
+    // ("FirebaseError: The client has already been terminated"), e um re-login na
+    // MESMA sessão de página passa a falhar em TODOS os reads (loadUserProfile
+    // inclusive → perfil/gênero não carregam → saudação "(a)" + bolinha presa).
+    // Bug reportado + confirmado no Sentry (SCOREPLACE-WEB-6E): excluir conta →
+    // re-login pelo "quick return" → cliente terminado. Regex antiga /firebase|
+    // firestore|firebaseauth/ casava também com "firestore/..." — o erro.
     try {
       if (typeof indexedDB !== 'undefined' && indexedDB.databases) {
         indexedDB.databases().then(function (dbs) {
           (dbs || []).forEach(function (db) {
-            if (db.name && /firebase|firestore|firebaseauth/i.test(db.name)) {
+            if (db.name && /firebaseLocalStorageDb|firebaseauth/i.test(db.name) && !/firestore/i.test(db.name)) {
               try { indexedDB.deleteDatabase(db.name); } catch (_e) {}
             }
           });
@@ -6598,11 +6886,27 @@ function setupProfileModal() {
             '<div class="form-group" style="margin-bottom: 10px;">' +
               '<label class="form-label" style="font-size: 0.75rem;">🎾 Conta letzplay <span style="opacity:0.55;font-weight:400;">(opcional)</span></label>' +
               '<input type="text" id="profile-edit-letzplay" class="form-control" style="width: 100%; box-sizing: border-box;" placeholder="@seu_usuario no letzplay" autocomplete="off">' +
-              '<label style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;font-size:0.72rem;color:var(--text-muted);cursor:pointer;line-height:1.3;">' +
-                '<input type="checkbox" id="profile-letzplay-consent" style="width:16px;height:16px;flex:0 0 auto;margin-top:1px;accent-color:var(--primary-color);">' +
-                '<span>Autorizo os organizadores dos meus torneios a importar meu histórico público do letzplay.</span>' +
-              '</label>' +
+              '<div style="margin-top:8px;">' +
+                (window._toggleSwitch ? window._toggleSwitch({
+                  id: 'profile-letzplay-consent',
+                  label: 'Autorizar importação do histórico',
+                  desc: 'Autorizo os organizadores dos meus torneios a importar meu histórico público do letzplay.',
+                  checked: false
+                }) : '') +
+              '</div>' +
+              // v1.24: botão de importar do letzplay + "Última atualização" num SLOT dinâmico.
+              // O modal é montado 1x; sem slot, o botão/data ficam congelados no estado de
+              // quando o modal foi criado (antes do letzplayImport carregar). _populateProfileModalFields
+              // refresca este slot via window._renderProfileLzImportSlot() quando o perfil chega.
+              '<div id="profile-lz-import-slot" style="margin-top:10px;">' +
+                (typeof window._renderProfileLzImportSlot === 'function' ? window._renderProfileLzImportSlot() : '') +
+              '</div>' +
+              '<div onclick="(window._showPlayerStats&&window.AppStore&&window.AppStore.currentUser)&&window._showPlayerStats(window.AppStore.currentUser.displayName)" style="margin-top:8px;font-size:0.72rem;color:var(--text-muted,#94a3b8);line-height:1.4;cursor:pointer;">' +
+                '💡 Você também importa pelas suas <b style="color:var(--text-bright,#fff);">📊 Estatísticas</b> na tela inicial.' +
+              '</div>' +
             '</div>' +
+            // v1.8: o card "Seu nível (letzplay)" saiu do perfil e passou pras
+            // Estatísticas do jogador (📊). Aqui só ficam @ + consentimento (config).
             // Esportes Preferidos — pill buttons toggleáveis (v0.15.19).
             // v1.3.6-beta: ao selecionar uma modalidade, abre mini-picker de
             // habilidade (A/B/C/D/FUN) específico daquela modalidade.
@@ -6713,6 +7017,19 @@ function setupProfileModal() {
                 '<button type="button" data-theme-val="dark" onclick="window._setProfileTheme(\'dark\')" class="btn btn-sm" style="flex:1;font-size:0.78rem;padding:9px 4px;border-radius:10px;transition:all 0.2s;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌙 ' + _t('profile.themeNight') + '</button>' +
                 '<button type="button" data-theme-val="light" onclick="window._setProfileTheme(\'light\')" class="btn btn-sm" style="flex:1;font-size:0.78rem;padding:9px 4px;border-radius:10px;transition:all 0.2s;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">☀️ ' + _t('profile.themeLight') + '</button>' +
               '</div>' +
+            '</div>' +
+            // Vibração (haptic) — ligado por padrão. Fonte de verdade é o
+            // localStorage 'scoreplace_haptics' (lido por window._hapticsMuted).
+            // No app nativo (iOS/Android) usa o Taptic real; no web Android usa
+            // a Vibration API. onchange dá efeito imediato + preview ao ligar.
+            '<div style="margin-bottom: 1rem;">' +
+              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-haptics-enabled', label: _t('profile.haptics'), icon: '📳', checked: true, color: '#6366f1', desc: _t('profile.hapticsDesc'), onchange: 'if(window._setHapticsEnabled)window._setHapticsEnabled(this.checked)' }) : '') +
+            '</div>' +
+            // Sons de UI — DESLIGADO por padrão. Fonte de verdade é o localStorage
+            // 'scoreplace_sound' (lido por window._soundMuted). onchange dá efeito
+            // imediato + preview (toca o "Sino") ao ligar.
+            '<div style="margin-bottom: 1rem;">' +
+              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-sound-enabled', label: _t('profile.sound'), icon: '🔊', checked: false, color: '#10b981', desc: _t('profile.soundDesc'), onchange: 'if(window._setSoundEnabled)window._setSoundEnabled(this.checked)' }) : '') +
             '</div>' +
             // Visual Hints toggle — v1.9.96: oculto enquanto as dicas estão
             // desativadas globalmente (window._HINTS_ENABLED !== true). Sem isso
@@ -7628,13 +7945,24 @@ function setupProfileModal() {
       }
       window._profilePhoneCtx.e164 = e164;
       var otpEl = document.getElementById(ctx.otpId);
-      var recEl = document.getElementById(ctx.recaptchaId);
+      // reCAPTCHA invisível NÃO pode ficar em display:none — o iframe não recebe
+      // dimensões, o token sai inválido e o backend responde auth/internal-error
+      // (o SMS nunca chega). Espelha _ensureRecaptchaInBody do login: recria o nó
+      // FRESCO, off-screen mas EM LAYOUT, direto no body. Recriar (em vez de só
+      // .clear()) evita o "reCAPTCHA has already been rendered" na 2ª tentativa.
+      // Ver lição v1.3.76-beta em _ensureRecaptchaInBody.
+      try { if (window._profilePhoneRecaptcha) window._profilePhoneRecaptcha.clear(); } catch(e){}
+      var _recOld = document.getElementById(ctx.recaptchaId);
+      if (_recOld && _recOld.parentNode) _recOld.parentNode.removeChild(_recOld);
+      var recEl = document.createElement('div');
+      recEl.id = ctx.recaptchaId;
+      recEl.style.cssText = 'position:fixed;bottom:0;right:0;z-index:0;width:1px;height:1px;overflow:hidden;';
+      document.body.appendChild(recEl);
       if (otpEl) { otpEl.style.display = 'block'; otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Enviando código para ' + window._safeHtml(e164) + '…</div>'; }
       var cfg = firebase.app().options;
       var sapp = firebase.apps.find(function(a){ return a.name === 'profilephone'; }) || firebase.initializeApp(cfg, 'profilephone');
       try { sapp.auth().setPersistence(firebase.auth.Auth.Persistence.NONE); } catch(e){}
       window._profilePhoneSurvivor = cu.uid;
-      try { if (window._profilePhoneRecaptcha) window._profilePhoneRecaptcha.clear(); } catch(e){}
       window._profilePhoneRecaptcha = new firebase.auth.RecaptchaVerifier(recEl, { size: 'invisible' }, sapp);
       window._profilePhoneE164 = e164;
       window._profilePhoneRecaptcha.render().then(function() {
@@ -8174,25 +8502,59 @@ function setupProfileModal() {
         }
       }
 
-      // ── 2.5 GATE DE NOME ÚNICO (v2.6.104) ───────────────────────────────────
-      // Se o nome MUDOU e já existe de OUTRA pessoa (uid diferente), bloqueia — a
-      // regra que combinamos: não pode dois usuários distintos com o mesmo nome.
-      // Só checa quando o nome muda (saves que não mexem no nome passam, mesmo com
-      // duplicata legada). Nome-que-é-telefone é exceção. Fail-open (erro não trava).
+      // ── 2.5 GATE DE NOME ÚNICO — merge-aware (v3.x) ─────────────────────────
+      // Se o nome MUDOU e já existe de OUTRA pessoa (uid diferente, não-tombstone),
+      // NÃO bloqueia de cara: se essa conta tem o MESMO telefone/e-mail que o
+      // usuário, é a conta ANTERIOR dele → oferece MESCLAR (relato: testadora
+      // reinstalou o app e foi barrada — "esse nome/telefone já é de outra pessoa"
+      // — em vez de recuperar a própria conta). Só bloqueia (pedindo variante)
+      // quando é de fato outra pessoa. Nome-que-é-contato é exceção. Fail-open
+      // (erro de consulta não trava o save). Consolida os antigos gates 2 + 2b.
       if (finalName && finalName.trim().toLowerCase() !== (_oldDisplayName || '').trim().toLowerCase()
           && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(finalName))
-          && window.FirestoreDB && typeof window.FirestoreDB.isDisplayNameTaken === 'function') {
-        var _conflictUid = null;
-        try { _conflictUid = await window.FirestoreDB.isDisplayNameTaken(finalName, cu.uid); } catch (e) {}
-        if (_conflictUid) {
-          if (typeof showAlertDialog === 'function') {
-            showAlertDialog('Esse nome já está em uso', 'Já existe outra pessoa cadastrada como "' + finalName + '". Escolha um nome diferente — pode incluir o sobrenome ou uma inicial (ex.: "' + finalName + ' M.").', null, { type: 'warning' });
-          } else if (typeof showNotification !== 'undefined') {
-            showNotification('Nome em uso', 'Já existe "' + finalName + '". Escolha outro.', 'warning');
+          && window.FirestoreDB && window.FirestoreDB.db) {
+        try {
+          var _nameLower = finalName.trim().toLowerCase();
+          var _nameSnap = await window.FirestoreDB.db.collection('users')
+            .where('displayName_lower', '==', _nameLower).limit(8).get();
+          // Conflitos = outras contas VIVAS com o mesmo nome (exclui self e
+          // tombstones mergedInto — mesma exclusão do isDisplayNameTaken).
+          var _conflicts = _nameSnap.docs.filter(function (d) {
+            var dd = d.data() || {};
+            return d.id !== uid && !dd.mergedInto;
+          });
+          if (_conflicts.length > 0) {
+            // É a conta anterior do próprio usuário? (mesmo telefone OU e-mail)
+            var _myPhone = (typeof window._normalizePhoneE164 === 'function' && phoneDigits)
+              ? window._normalizePhoneE164(phoneDigits, phoneCountry || '55') : phoneDigits;
+            var _myEmail = (cu.email || '').toLowerCase();
+            var _mergeCand = null;
+            for (var _ci = 0; _ci < _conflicts.length; _ci++) {
+              var _cd = _conflicts[_ci].data() || {};
+              var _cdPhone = _cd.phone || '';
+              var _cdEmail = (_cd.email || _cd.email_lower || '').toLowerCase();
+              if ((_myPhone && _cdPhone && _myPhone === _cdPhone) ||
+                  (_myEmail && _cdEmail && _myEmail === _cdEmail)) {
+                _mergeCand = { uid: _conflicts[_ci].id, data: _cd };
+                break;
+              }
+            }
+            var _sbtn = document.getElementById('profile-save-btn');
+            if (_sbtn && typeof window._unspinButton === 'function') window._unspinButton(_sbtn);
+            if (_mergeCand) {
+              // Conta anterior do próprio usuário → oferecer mesclar (não bloquear).
+              if (typeof window._triggerAccountMerge === 'function') {
+                window._triggerAccountMerge(_mergeCand.uid, _mergeCand.data);
+              }
+            } else if (typeof showAlertDialog === 'function') {
+              showAlertDialog('Esse nome já está em uso', 'Já existe outra pessoa cadastrada como "' + finalName + '". Escolha um nome diferente — pode incluir o sobrenome ou uma inicial (ex.: "' + finalName + ' M.").', null, { type: 'warning' });
+            } else if (typeof showNotification !== 'undefined') {
+              showNotification('Nome em uso', 'Já existe "' + finalName + '". Escolha outro.', 'warning');
+            }
+            return;
           }
-          var _sbtn = document.getElementById('profile-save-btn');
-          if (_sbtn && typeof window._unspinButton === 'function') window._unspinButton(_sbtn);
-          return;
+        } catch (_nameErr) {
+          if (window._warn) window._warn('[Profile] gate de nome único (fail-open):', _nameErr);
         }
       }
 
@@ -8236,51 +8598,10 @@ function setupProfileModal() {
       // nome do usuário.' Trade-off correto: nunca bloquear save de perfil
       // por nome. Organizadores corrigem manualmente nomes ruins via UI.
 
-      // ── 2b. NOME ÚNICO — verifica conflito antes de salvar ──────────────
-      // Só verifica quando o nome realmente mudou.
-      if (finalName && finalName.toLowerCase() !== (_oldDisplayName || '').toLowerCase()) {
-        try {
-          var nameLower = finalName.toLowerCase();
-          var nameConflictSnap = await window.FirestoreDB.db.collection('users')
-            .where('displayName_lower', '==', nameLower)
-            .limit(5)
-            .get();
-          var conflicts = nameConflictSnap.docs.filter(function(d) { return d.id !== uid; });
-          if (conflicts.length > 0) {
-            // Verifica se algum conflito é candidato a mesclagem (mesmo phone ou email)
-            var myPhone = (typeof window._normalizePhoneE164 === 'function' && phoneDigits)
-              ? window._normalizePhoneE164(phoneDigits, phoneCountry || '55')
-              : phoneDigits;
-            var myEmail = (cu.email || '').toLowerCase();
-            var mergeCandidate = null;
-            for (var ci = 0; ci < conflicts.length; ci++) {
-              var cd = conflicts[ci].data() || {};
-              var cdPhone = cd.phone || '';
-              var cdEmail = (cd.email || cd.email_lower || '').toLowerCase();
-              if ((myPhone && cdPhone && myPhone === cdPhone) ||
-                  (myEmail && cdEmail && myEmail === cdEmail)) {
-                mergeCandidate = { uid: conflicts[ci].id, data: cd };
-                break;
-              }
-            }
-            if (mergeCandidate) {
-              // Candidato a mesclagem — acionar fluxo existente de merge
-              if (typeof window._triggerAccountMerge === 'function') {
-                window._triggerAccountMerge(mergeCandidate.uid, mergeCandidate.data);
-              }
-            } else {
-              // Nome em uso por conta distinta — bloquear save
-              if (typeof showNotification === 'function') {
-                showNotification('Perfil', 'Este nome de exibição já está em uso na plataforma. Escolha outro.', 'error');
-              }
-              return;
-            }
-          }
-        } catch (nameCheckErr) {
-          window._warn('[Profile] unique name check failed (non-blocking):', nameCheckErr);
-          // Falha na verificação não bloqueia o save — worst-case: nome duplicado
-        }
-      }
+      // ── 2b. (REMOVIDO v3.x) — consolidado no gate 2.5 merge-aware acima.
+      //   Antes eram dois gates redundantes: o 2 (isDisplayNameTaken) bloqueava
+      //   SEM checar mesclagem e dava return ANTES do 2b (merge-aware) rodar —
+      //   por isso a oferta de mesclar nunca aparecia. Agora há um só.
 
       // ── 3. CONSTRUIR PAYLOAD — só inclui campos não-vazios ──────────────
       // Regra: Firestore set({merge:true}) preserva campos omitidos. Então

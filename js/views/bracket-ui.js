@@ -1790,6 +1790,10 @@ window._saveResultInline = function (tId, matchId) {
   // pelo organizador OU pelo adversário, libera o slot.
   if (m.pendingResult) delete m.pendingResult;
 
+  // Som: resultado lançado/confirmado fora do placar ao vivo → fanfarra "Set".
+  // (o caminho de proposta que precisa de aprovação já retornou acima.)
+  if (window._sound) window._sound('set');
+
   // v2.3.46: quando true, o save NÃO re-renderiza o bracket inteiro — só
   // atualiza o card lançado in-place. Mantém a página estática (sem pulo de
   // scroll, sem colapsar "Demais jogos", sem mexer na classificação) enquanto
@@ -1806,6 +1810,10 @@ window._saveResultInline = function (tId, matchId) {
   if (!isGroupMatch && !isRoundMatch) {
     // Eliminatórias — vencedor avança
     _advanceWinner(t, m);
+    // Som: se este resultado encerrou a eliminatória → campeão coroado (segue o
+    // "Set" que já tocou acima). Salvar num torneio já encerrado não ocorre, então
+    // status 'finished' aqui = acabou de encerrar.
+    if (t.status === 'finished' && window._sound) window._sound('campeao');
     showNotification(_t('result.saved'), `${m.winner} avança!`, 'success');
   } else if (isRoundMatch) {
     // Liga/Suíço/Ranking — atualizar standings
@@ -2103,6 +2111,8 @@ window._approveResult = function(tId, matchId) {
   // Toast por contexto
   if (_ctx.kind === 'elim') showNotification('✅ Resultado aprovado', m.winner + ' avança!', 'success');
   else showNotification('✅ Resultado aprovado', _ctx.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: _ctx.winner}), 'success');
+  // Som: resultado confirmado fora do placar ao vivo → fanfarra do "Set".
+  if (window._sound) window._sound('set');
 
   var _logMsg = 'Resultado aprovado: ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + (m.draw ? ' — Empate' : ' — Vencedor: ' + m.winner);
   window.AppStore.logAction(tId, _logMsg);
@@ -2195,6 +2205,8 @@ window._contestResult = function(tId, matchId) {
     '❌ Contestar resultado',
     'O organizador será notificado para apurar e lançar o resultado definitivo. Confirma a contestação?',
     function() {
+      // Som: placar não aprovado (contestado) → "dois pra baixo".
+      if (window._sound) window._sound('rejeicao');
       var _disputedByName = cu.displayName || cu.email || 'Jogador';
       // BLINDAGEM (v4.0.121): marca a disputa ATÔMICO pelo portão (local + fresco).
       window.AppStore.mutate(tId, function (ft) {
@@ -3915,12 +3927,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (!btn) return;
     var cnt = Array.isArray(readyUids) ? readyUids.length : 0;
     if (_myRestartClicked) {
-      btn.disabled = true;
-      btn.onclick = null;
+      // v1.1.4: continua CLICÁVEL — 2º toque força o início (escape do fantasma).
+      btn.disabled = false;
+      btn.onclick = function() { window._liveScoreGoToSetup(); };
       btn.style.background = 'rgba(251,191,36,0.14)';
       btn.style.color = '#fbbf24';
       btn.style.boxShadow = 'none';
-      btn.textContent = '⏳ Aguardando o outro time';
+      btn.textContent = '⏳ Aguardando o outro — toque p/ iniciar já';
     } else if (cnt > 0) {
       btn.textContent = '🔄 Iniciar (' + cnt + ' pronto' + (cnt > 1 ? 's' : '') + ')';
     }
@@ -4003,6 +4016,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
       for (var _ilsJ = 0; _ilsJ < _ils.p2Players.length && _ilsJ < p2Players.length; _ilsJ++) p2Players[_ilsJ] = _ils.p2Players[_ilsJ];
     }
     _localizeRoleLabels();
+  }
+
+  // Som: apito de árbitro ao ABRIR uma partida nova pra jogar ao vivo. Só numa
+  // partida realmente nova — não em modo visualização, não retomando estado
+  // salvo (initialLiveState/casualDocId), não já finalizada, sem pontos ainda.
+  if (window._sound && !(opts && opts.viewOnly) && !(opts && opts.initialLiveState)
+      && !(opts && opts.casualDocId) && !state.isFinished && !_matchStartTime) {
+    window._sound('apito');
   }
 
   // If joining an active match, try to load initial liveState from Firestore immediately
@@ -4464,9 +4485,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var setResult = _checkSetWon();
         if (setResult > 0) {
           _finishSet(setResult);
+        } else {
+          // Som: ganhou um game e o set continua → toque curto "Game".
+          // setResult === -1 = entrou em tiebreak (game foi ganho, toca);
+          // setResult === -2 = aguardando diálogo de regra de empate (não toca).
+          if (setResult !== -2 && window._sound) window._sound('game');
         }
-        // setResult === -1 means we entered tiebreak, already handled
-        // setResult === -2 means waiting for tie rule dialog (ask mode)
       }
     }
 
@@ -4488,6 +4512,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       state.isFinished = true;
       state.winner = matchWinner;
       _matchEndTime = Date.now();
+      // Som: partida vencida no placar ao vivo → torcida (crescendo de gol).
+      if (window._sound) window._sound('vitoria');
       // v2.1.39: TORNEIO — grava o resultado na chave AUTOMATICAMENTE no último
       // ponto (sem botão "Confirmar"). Idempotente via _resultSaved. keepOpen
       // mantém o resumo/estatísticas na tela; o "Voltar" leva à chave já gravada.
@@ -4527,6 +4553,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     } else {
       // Start new set
       state.sets.push({ gamesP1: 0, gamesP2: 0, tiebreak: null });
+      // Som: set fechado e a partida continua → fanfarra "Set".
+      if (window._sound) window._sound('set');
     }
   }
 
@@ -5313,6 +5341,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     state.serveSkipped = false;
     state.servePending = false;
     _render();
+    _watchNotify(); // relógio sai do "Iniciar" e passa a mostrar o placar/sacador
   };
 
   // Skip serve tracking
@@ -5320,6 +5349,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     state.serveSkipped = true;
     state.servePending = false;
     _render();
+    _watchNotify(); // relógio começa sem rastrear sacador
   };
 
   // Auto-confirm serve order from proposed order (no separate picker screen)
@@ -5368,6 +5398,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       state.serveOrder[3] = { team: team, name: otherPlayer || state.serveOrder[3].name };
     }
     _render();
+    _watchNotify(); // relógio reflete a troca de sacador feita no celular
   };
 
   // ── Render function ──
@@ -8618,7 +8649,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // clica fica "⏳ Aguardando os outros"; os demais precisam clicar também
     // (pelo menos 1 de cada time). Quando atingido, o cliente de menor uid
     // dispara a nova partida; os outros seguem pelo nextRoomCode/setupAt.
-    if (_myRestartClicked) return;
+    // v1.1.4: 2º toque enquanto aguarda = INICIAR MESMO ASSIM. Sem isto o
+    // usuário ficava PRESO em "Aguardando o outro time" quando o outro lado é
+    // fantasma (1 device com contas de amigos, ou uid stale) e nunca respondia.
+    // O 1º toque continua sendo só "pronto/aguardar" (não reintroduz a revanche
+    // de um clique só); é preciso um 2º toque deliberado pra forçar. Os demais
+    // ainda conectados migram pela nextRoomCode.
+    if (_myRestartClicked) {
+      if (!_restartInitiated) { _restartInitiated = true; _doRestartNow(); }
+      return;
+    }
     _myRestartClicked = true;
     if (state.isFinished && !_resultSaved) { try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {} }
     if (isCasual && isDoubles && state.isFinished && state.winner != null) {
@@ -9062,34 +9102,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // no painel de estatísticas (substitui o ✕ Fechar do header). Para o host de
   // partida casual finalizada: grava hostClosed:true (evacua guests). Para
   // qualquer usuário: fecha o overlay local sem pedir confirmação.
-  // v2.2.26-beta: "✕ Encerrar" da tela de stats. Em MULTIPLAYER usa o mesmo
-  // consenso do ✕ mid-game: grava closePending e mostra "Aguardando confirmação"
-  // — assim, se um jogador clicou "Jogar" e outro clica "Encerrar", quem clicou
-  // Jogar é AVISADO ("Fulano quer encerrar — Confirmar/Recusar") e aceita sair
-  // ou recusa (volta pras stats). Solo (ou sem outros uids) encerra direto.
+  // v1.1.4: "✕ Encerrar" da tela de stats — SEM consenso. A partida JÁ terminou
+  // (esta tela só existe com isFinished=true) e o resultado já foi salvo, então
+  // sair é uma ação PESSOAL: nunca pode depender da confirmação de outro jogador.
+  // Antes (v2.2.26) o consenso multiplayer gravava closePending e mostrava
+  // "Aguardando confirmação" travando a tela quando o outro lado era um fantasma
+  // (partida de 1 device com contas de amigos inscritas, ou uid stale em
+  // playerUids) — a partida ficava "presa" e nunca encerrava. Agora fecha direto:
+  // _liveScoreCloseStats já trata os dois casos (host → grava hostClosed:true e
+  // evacua os demais; guest → apenas sai da própria vaga e limpa o ponteiro).
   window._liveStatsClose = function() {
-    var _cuLC = window.AppStore && window.AppStore.currentUser;
-    var _myUidLC = _cuLC && _cuLC.uid;
-    if (isCasual && _casualDocId && _myUidLC &&
-        Array.isArray(_knownPlayerUids) && _knownPlayerUids.length > 1 && !_myCloseClicked) {
-      _myCloseClicked = true;
-      var _dbLC = window.FirestoreDB && window.FirestoreDB.db;
-      if (_dbLC) {
-        _dbLC.collection('casualMatches').doc(_casualDocId).update({
-          closePending: {
-            by: _myUidLC,
-            byName: (_cuLC.displayName || _cuLC.email || 'Alguém'),
-            at: Date.now(),
-            confirmedBy: []
-          }
-        }).catch(function(e) {
-          _myCloseClicked = false;
-          window._warn && window._warn('[statsClose] update failed', e);
-        });
-      }
-      _showClosePendingBanner(true, '');
-      return;
-    }
     window._liveScoreCloseStats();
   };
 

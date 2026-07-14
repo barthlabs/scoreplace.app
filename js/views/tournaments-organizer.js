@@ -418,20 +418,34 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
         }
     }
     // ── WhatsApp ──
+    // v1.16: política de entrega por TIPO decidida pelo app (nunca pelo usuário):
+    //   'nenhum'   → não vai por WhatsApp (só e-mail/in-app) — corta custo/ban
+    //   'agrupado' → resumo de 1h (flushWhatsAppDigest) — ex.: inscrições de terceiros
+    //   'imediato' → manda na hora (default)
     if (channelResult.phones && channelResult.phones.length > 0) {
-        var waMsg = templateData.message || templateData.tournamentName || 'Notificação do scoreplace.app';
-        // v2.1.17: prefixo de cor por importância (WhatsApp é texto puro, então
-        // a "cor" vira emoji no início): 🔴 fundamental · 🟠 importante · 🟢 geral.
-        var _waCat = (window.NOTIF_CATALOG && window.NOTIF_CATALOG[templateType]) || {};
-        var _waLvl = _waCat.level || 'all';
-        var _waEmoji = _waLvl === 'fundamental' ? '🔴' : (_waLvl === 'important' ? '🟠' : '🟢');
-        waMsg = _waEmoji + ' ' + waMsg;
-        // v2.8.51: TODA notificação WhatsApp leva um call-to-action (link) — antes era
-        // só texto ("X se inscreveu") sem como agir. Ex.: "👉 Ver chave: <url>".
-        var _waCta = window._notifCta(templateType, templateData);
-        if (_waCta && _waCta.url) waMsg += '\n\n👉 ' + _waCta.label + ': ' + _waCta.url;
-        if (window.FirestoreDB && typeof window.FirestoreDB.queueWhatsApp === 'function') {
-            window.FirestoreDB.queueWhatsApp(channelResult.phones, waMsg);
+        var _waPol = (typeof window._waPolicy === 'function') ? window._waPolicy(templateType) : 'imediato';
+        if (_waPol !== 'nenhum') {
+            var waMsg = templateData.message || templateData.tournamentName || 'Notificação do scoreplace.app';
+            var _waCat = (window.NOTIF_CATALOG && window.NOTIF_CATALOG[templateType]) || {};
+            var _waLvl = _waCat.level || 'all';
+            var _waEmoji = _waLvl === 'fundamental' ? '🔴' : (_waLvl === 'important' ? '🟠' : '🟢');
+            var _waCta = window._notifCta(templateType, templateData);
+            if (_waPol === 'agrupado') {
+                // Vira 1 linha do resumo de 1h — sem emoji de nível nem CTA por item
+                // (o digest põe UM link comum no fim se todos forem do mesmo torneio).
+                if (window.FirestoreDB && typeof window.FirestoreDB.queueWhatsAppDigest === 'function') {
+                    window.FirestoreDB.queueWhatsAppDigest(channelResult.phones, waMsg, {
+                        tournamentUrl: (_waCta && _waCta.url) || templateData.tournamentUrl || ''
+                    });
+                }
+            } else {
+                // imediato: emoji de importância + CTA por mensagem (como antes)
+                waMsg = _waEmoji + ' ' + waMsg;
+                if (_waCta && _waCta.url) waMsg += '\n\n👉 ' + _waCta.label + ': ' + _waCta.url;
+                if (window.FirestoreDB && typeof window.FirestoreDB.queueWhatsApp === 'function') {
+                    window.FirestoreDB.queueWhatsApp(channelResult.phones, waMsg);
+                }
+            }
         }
     }
 };

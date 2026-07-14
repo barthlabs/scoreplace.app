@@ -2,6 +2,11 @@
   "appId": "app.scoreplace",
   "appName": "scoreplace",
   "webDir": "www",
+  "server": {
+    "hostname": "scoreplace.app",
+    "iosScheme": "https",
+    "androidScheme": "https"
+  },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 1000,

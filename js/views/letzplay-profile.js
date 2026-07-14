@@ -1,0 +1,385 @@
+/* scoreplace.app — letzplay-profile.js
+ * Card "Seu nível (letzplay)" no perfil. Lê users/{uid}.letzplayImport (já normalizado)
+ * e renderiza: categoria OFICIAL (torneio) + rating recreativo (forma) num medidor
+ * fluido FUN→A, footprint oficial×recreativo, duplas, stats. Self-contained (sem deps).
+ */
+(function () {
+  var root = (typeof window !== 'undefined') ? window : this;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  // rating (1300..1850 ~ FUN..A) → posição 0..100% no medidor.
+  function ratingPct(v) {
+    if (v == null) return 35;
+    var p = (v - 1300) / (1850 - 1300) * 100;
+    return Math.max(3, Math.min(97, p));
+  }
+
+  // tile centralizado. valHtml já é HTML (permite cor); x = sublinha.
+  function tileH(k, valHtml, x) {
+    return '<div style="background:var(--bg-darker,#0f1420);border:1px solid var(--border-color,#28313f);border-radius:9px;padding:9px 11px;text-align:center;">' +
+      '<div style="font-size:11px;color:var(--text-muted,#8b93a3);font-weight:600;">' + esc(k) + '</div>' +
+      '<div style="font-family:ui-monospace,Menlo,monospace;font-size:18px;font-weight:700;margin-top:2px;">' + valHtml + '</div>' +
+      (x ? '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:1px;">' + esc(x) + '</div>' : '') + '</div>';
+  }
+  function tile(k, v, x) { return tileH(k, esc(v), x); }
+
+  /** Retorna o HTML do card "Seu nível (geral)", ou '' se não há import.
+   * spExtra (opcional) mistura o scoreplace: { tournaments:[{name,sport,year}],
+   * wins, losses } — torneios do scoreplace entram na coluna OFICIAL e as V/D
+   * somam no Total. */
+  root._renderLetzplayCard = function (imp, spExtra) {
+    if (!imp || typeof imp !== 'object') return '';
+    spExtra = spExtra || {};
+    var spT = Array.isArray(spExtra.tournaments) ? spExtra.tournaments : [];
+    var spW = spExtra.wins || 0, spL = spExtra.losses || 0;
+    var off = imp.officialCategory || null;
+    var r = imp.rating || {};
+    var st = imp.stats || {};
+    var pct = ratingPct(r.value);
+
+    // medidor: gradiente verde-no-centro (do rating) → vermelho nas pontas.
+    var gStops = 'linear-gradient(90deg,#dc2626 0%,#ef7a2b ' + Math.max(6, pct - 22) + '%,#eab308 ' +
+      Math.max(10, pct - 12) + '%,#16a34a ' + Math.max(14, pct - 5) + '%,#16a34a ' +
+      Math.min(88, pct + 5) + '%,#eab308 ' + Math.min(92, pct + 14) + '%,#ef7a2b ' +
+      Math.min(97, pct + 26) + '%,#dc2626 100%)';
+
+    var offHtml = off
+      ? '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(off.categoryRaw) + '</span>'
+      : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
+
+    // ── Data de conclusão (mês/ano) + ordenação cronológica ──────────────
+    // Letzplay: último jogo da competição (imp.games). Scoreplace: end/startDate
+    // do torneio. Datas letzplay vêm "Sábado, 20/06/26" (dia-da-semana antes) —
+    // extrai dd/mm/aa em QUALQUER posição (âncora ^…$ falhava e sumia a data).
+    var _MON = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    function _ts(raw) {
+      if (typeof raw === 'number') return raw;                        // já é timestamp
+      var s = String(raw || '').trim(); if (!s) return 0;
+      // dd/mm/aa (Brasil) tem PRIORIDADE — Date.parse assume mm/dd (US) e inverte.
+      var m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+      if (m) { var y = +m[3]; if (y < 100) y += 2000; var t = new Date(y, (+m[2]) - 1, +m[1]).getTime(); if (!isNaN(t)) return t; }
+      var n = Date.parse(s); if (!isNaN(n)) return n;                 // ISO (scoreplace) / nativo
+      return 0;
+    }
+    function monYr(raw) { var t = _ts(raw); if (!t) return null; var d = new Date(t); return _MON[d.getMonth()] + '/' + d.getFullYear(); }
+    function prettyClub(slug) {
+      if (!slug) return '';
+      return String(slug).split(/[-_]/).map(function (w) { return w.length <= 3 ? w.toUpperCase() : (w.charAt(0).toUpperCase() + w.slice(1)); }).join(' ');
+    }
+    var _games = Array.isArray(imp.games) ? imp.games : [];
+    function concluded(f, official) {                                 // {when, ts} do último jogo DAQUELE torneio
+      var best = 0;
+      // Quando o torneio tem id (import novo), casa a data pelos jogos DAQUELE torneio
+      // (tourneyId) — não por categoria. Isso conserta "Masc D" jogada em 2 torneios
+      // pegando a data do mais recente. Sem id (import antigo), cai no match por categoria.
+      var refId = (f.tourneyId != null) ? f.tourneyId : (f.rankingId != null ? f.rankingId : null);
+      var refField = (f.tourneyId != null) ? 'tourneyId' : 'rankingId';
+      for (var i = 0; i < _games.length; i++) {
+        var g = _games[i];
+        if (g.official !== official) continue;
+        if (refId != null) {
+          if (g[refField] == null || String(g[refField]) !== String(refId)) continue;
+        } else {
+          if (g.competition !== f.categoryRaw) continue;
+          if (f.year != null && g.year != null && g.year !== f.year) continue;
+          if (f.club && g.club && g.club !== f.club) continue;
+        }
+        var t = _ts(g.date); if (t > best) best = t;
+      }
+      if (best) return { when: monYr(best), ts: best };
+      return { when: (f.year ? String(f.year) : null), ts: (f.year ? new Date(f.year, 11, 31).getTime() : 0) };
+    }
+    // NOME do torneio pra a linha de cima: clube (quando houver) + NOME REAL (f.name,
+    // do og:title via fillTourneyNames). Sem nome real, o rótulo é o próprio clube; sem
+    // clube, cai na categoria. A categoria vai numa 2ª linha embaixo (não aqui).
+    function lpName(f) {
+      var c = prettyClub(f.club);
+      var nm = (f.name && f.name !== f.categoryRaw) ? f.name : null;
+      if (nm) return c ? (c + ' · ' + nm) : nm;
+      return c || f.categoryRaw || '';
+    }
+
+    // OFICIAL = torneios (eventos únicos): letzplay (🎾) + scoreplace mata-mata (🏆).
+    // RANKING = temporadas contínuas: rankings letzplay (🎾) + Liga/Pontos Corridos do
+    // scoreplace (🏆). Liga é ranking, NÃO torneio — vai na coluna de ranking.
+    var footOff = (imp.footprint || []).filter(function (f) { return f.official; })
+      .map(function (f) { var c = concluded(f, true); var nm = lpName(f); return { name: nm, cat: (f.categoryRaw && f.categoryRaw !== nm) ? f.categoryRaw : '', when: c.when, ts: c.ts, pos: f.position, wins: f.wins, losses: f.losses, src: '🎾', logo: f.logo || null, ref: (f.tourneyId != null && f.club) ? ('t/' + f.club + '/' + f.tourneyId) : null }; });
+    var footRec = (imp.footprint || []).filter(function (f) { return !f.official; })
+      .map(function (f) { var c = concluded(f, false); var nm = lpName(f); return { name: nm, cat: (f.categoryRaw && f.categoryRaw !== nm) ? f.categoryRaw : '', when: c.when, ts: c.ts, pos: f.position, wins: f.wins, losses: f.losses, src: '🎾', logo: f.logo || null, ref: (f.rankingId != null && f.club) ? ('r/' + f.club + '/' + f.rankingId) : null }; });
+    spT.forEach(function (s) {
+      var t = _ts(s.date);
+      var row = { name: s.name, cat: s.sport || '', when: monYr(s.date) || (s.year ? String(s.year) : null), ts: t || (s.year ? new Date(s.year, 11, 31).getTime() : 0), pos: null, wins: null, losses: null, src: '🏆', spId: s.id || s.tId || null };
+      if (s.isRanking) footRec.push(row); else footOff.push(row);   // Liga → ranking
+    });
+    // Guarda o import do card atual pra o handler de clique da linha resolver o detalhe.
+    root._spCardImp = imp;
+    footOff.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });  // mais recente no topo
+    footRec.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+    // Abre o detalhe (letzplay torneio/ranking → gráfico+classificação+jogos; scoreplace → torneio real).
+    function clickAttrs(f) {
+      if (f.ref) return ' data-lp-ref="' + esc(f.ref) + '" style="cursor:pointer;" title="Ver detalhes">';
+      if (f.spId) return ' data-sp-tid="' + esc(f.spId) + '" style="cursor:pointer;" title="Abrir torneio">';
+      return '>';
+    }
+    // Logo real do letzplay (cloudinary) quando importado; senão o emoji bola. 18x18 redondo.
+    function iconHtml(f) {
+      if (f.logo) return '<img src="' + esc(f.logo) + '" alt="" loading="lazy" style="width:18px;height:18px;border-radius:5px;object-fit:cover;vertical-align:-4px;margin-right:2px;" onerror="this.style.display=\'none\';">';
+      return (f.src || '•') + ' ';
+    }
+    var caret = '<span style="color:var(--text-muted,#8b93a3);font-weight:400;"> ›</span>';
+    // OFICIAL (torneio): 1 LINHA só — nome + data, SEM saldo. Nome longo quebra linha.
+    function footRowOfficial(f) {
+      var wh = f.when ? ('<span style="color:var(--text-muted,#8b93a3);font-weight:400;"> · ' + esc(f.when) + '</span>') : '';
+      var clickable = f.ref || f.spId;
+      return '<div class="lp-foot-row"' + clickAttrs(f) + '<div style="font-size:12.5px;color:var(--text-main,#cbd5e1);font-weight:600;line-height:1.4;word-break:break-word;overflow-wrap:anywhere;padding:5px 0;' + (clickable ? 'cursor:pointer;' : '') + '">' +
+        iconHtml(f) + esc(f.name) + wh + (clickable ? caret : '') + '</div></div>';
+    }
+    // RANKING: nome (esq) + categoria + data numa 2ª linha embaixo. SEM número/saldo à
+    // direita (o usuário não quer os números vermelhos). Nome longo quebra linha.
+    function footRowRanking(f) {
+      var subBits = [];
+      if (f.cat) subBits.push(esc(f.cat));
+      if (f.when) subBits.push(esc(f.when));
+      var sub = subBits.join(' · ');
+      var clickable = f.ref || f.spId;
+      return '<div class="lp-foot-row"' + clickAttrs(f) + '<div style="padding:5px 0;' + (clickable ? 'cursor:pointer;' : '') + '">' +
+        '<div style="font-size:12.5px;color:var(--text-main,#cbd5e1);font-weight:600;line-height:1.35;word-break:break-word;overflow-wrap:anywhere;">' + iconHtml(f) + esc(f.name) + (clickable ? caret : '') + '</div>' +
+        (sub ? '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:1px;">' + sub + '</div>' : '') +
+      '</div></div>';
+    }
+    function footList(arr, kind) {
+      var fn = (kind === 'off') ? footRowOfficial : footRowRanking;
+      return arr.map(fn).join('') || '<div style="font-size:12px;color:var(--text-muted,#8b93a3);">—</div>';
+    }
+
+    var pairsHtml = (st.pairs || []).slice(0, 6).map(function (p) {
+      var strong = (p.wins > p.losses);
+      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px;">' +
+        '<span>com <b>' + esc(p.partner) + '</b></span>' +
+        '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:' + (strong ? '#2dd4a0' : 'var(--text-muted,#8b93a3)') + ';">' + p.wins + '–' + p.losses + '</span></div>';
+    }).join('');
+
+    var totW = (st.wins != null) ? st.wins : (imp.profile && imp.profile.totals ? imp.profile.totals.wins : '');
+    var totL = (st.losses != null) ? st.losses : (imp.profile && imp.profile.totals ? imp.profile.totals.losses : '');
+    // soma scoreplace (V/D) ao total do letzplay
+    var totWn = ((typeof totW === 'number') ? totW : (parseInt(totW, 10) || 0)) + spW;
+    var totLn = ((typeof totL === 'number') ? totL : (parseInt(totL, 10) || 0)) + spL;
+    var _gTot = totWn + totLn;
+    var winPct = _gTot ? Math.round(totWn / _gTot * 100) : 0;
+    // Total: verde nas vitórias (V), vermelho nas derrotas (D).
+    var totalHtml = '<span style="color:#2dd4a0;">' + totWn + ' V</span>' +
+      '<span style="color:var(--text-muted,#8b93a3);"> – </span>' +
+      '<span style="color:#f87171;">' + totLn + ' D</span>';
+
+    // Sequência atual: derivada dos jogos letzplay (com data), do mais recente
+    // pra trás — conta a fila de resultados iguais no topo.
+    var _sg = _games.filter(function (g) { return typeof g.won === 'boolean'; })
+      .map(function (g, i) { return { ts: _ts(g.date) || (1e12 - i), won: g.won }; })
+      .sort(function (a, b) { return b.ts - a.ts; });
+    var _stN = 0, _stT = null;
+    for (var _si = 0; _si < _sg.length; _si++) {
+      if (_si === 0) { _stT = _sg[0].won; _stN = 1; }
+      else if (_sg[_si].won === _stT) _stN++;
+      else break;
+    }
+    var streakHtml = _stN
+      ? '<span style="color:' + (_stT ? '#2dd4a0' : '#f87171') + ';">' + _stN + (_stT ? 'V' : 'D') + '</span>'
+      : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
+
+    return '' +
+      '<div style="background:var(--bg-card,#141a24);border:1px solid var(--border-color,#28313f);border-radius:14px;padding:15px 16px;margin:12px 0;">' +
+        '<div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text-muted,#8b93a3);margin-bottom:3px;">🎾 Seu nível (geral)</div>' +
+        '<div style="font-size:10.5px;color:var(--text-muted,#8b93a3);margin-bottom:11px;">letzplay @' + esc(imp.handle) + ' + scoreplace</div>' +
+
+        // Oficial vs forma
+        '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;margin-bottom:4px;">' +
+          '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria oficial</span><br>' + offHtml + '</div>' +
+          '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">forma</span><br>' +
+            '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;">' + esc(r.band || '—') + '</span>' +
+            (r.value ? '<span style="font-size:11px;color:var(--text-muted,#8b93a3);"> · ' + r.value + '</span>' : '') + '</div>' +
+        '</div>' +
+
+        // medidor
+        '<div style="margin-top:10px;">' +
+          '<div style="display:flex;">' + ['FUN', 'D', 'C', 'B', 'A'].map(function (t) {
+            return '<span style="flex:1;text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:700;color:var(--text-muted,#8b93a3);">' + t + '</span>';
+          }).join('') + '</div>' +
+          '<div style="position:relative;height:20px;border-radius:11px;margin-top:5px;background:' + gStops + ';box-shadow:inset 0 1px 4px rgba(0,0,0,.3);">' +
+            '<span style="position:absolute;top:50%;left:' + pct.toFixed(1) + '%;transform:translate(-50%,-50%);width:15px;height:15px;border-radius:50%;background:#fff;border:3px solid #0f9d6b;box-shadow:0 0 0 4px rgba(16,157,107,.22);"></span>' +
+          '</div>' +
+          '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted,#8b93a3);margin-top:7px;"><span>↓ abaixo</span><span style="color:#2dd4a0;font-weight:700;">no seu nível</span><span>acima ↑</span></div>' +
+        '</div>' +
+
+        // tiles
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:14px;">' +
+          tileH('Total', totalHtml, winPct + '% · letzplay + scoreplace') +
+          tileH('Sequência', streakHtml, 'atual') +
+          tile('Oficiais', footOff.length, 'torneios') +
+        '</div>' +
+
+        // footprint
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">' +
+          '<div><div style="font-size:11px;font-weight:700;color:#2dd4a0;margin-bottom:3px;">OFICIAL (torneio)</div>' + footList(footOff, 'off') + '</div>' +
+          '<div><div style="font-size:11px;font-weight:700;color:var(--text-muted,#8b93a3);margin-bottom:3px;">RANKING</div>' + footList(footRec, 'rec') + '</div>' +
+        '</div>' +
+
+        // duplas
+        (pairsHtml ? '<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted,#8b93a3);margin-bottom:4px;">Suas duplas</div>' + pairsHtml + '</div>' : '') +
+
+        // privacidade — dados públicos do letzplay, trazidos com autorização
+        '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:12px;border-top:1px solid var(--border-color,#28313f);padding-top:9px;">' +
+          'Histórico público do letzplay (nomes e placares), importado com sua autorização' +
+          (imp.importedAt ? ' em ' + esc(String(imp.importedAt).slice(0, 10)) : '') + '.' +
+        '</div>' +
+      '</div>';
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DETALHE DO TORNEIO (letzplay): gráfico do SEU desempenho + classificação
+  // completa (todos os participantes) + os SEUS jogos. Aberto ao clicar numa
+  // linha da lista OFICIAL/RANKING. Resolve tudo por REFERÊNCIA (club/tourneyId).
+  // ─────────────────────────────────────────────────────────────────────────
+  function lpTs(raw) {
+    if (typeof raw === 'number') return raw;
+    var s = String(raw || '').trim(); if (!s) return 0;
+    var m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (m) { var y = +m[3]; if (y < 100) y += 2000; var t = new Date(y, (+m[2]) - 1, +m[1]).getTime(); if (!isNaN(t)) return t; }
+    var n = Date.parse(s); return isNaN(n) ? 0 : n;
+  }
+  // Sparkline do saldo acumulado (V=+1, D=−1) nos jogos DAQUELE torneio, cronológico.
+  function saldoSvg(games) {
+    var g2 = games.filter(function (g) { return g.won === true || g.won === false; })
+      .slice().sort(function (a, b) { return lpTs(a.date) - lpTs(b.date); });
+    var pts = [], s = 0;
+    g2.forEach(function (g) { s += g.won ? 1 : -1; pts.push(s); });
+    if (pts.length < 2) return '';
+    var W = 300, H = 96, pad = 12;
+    var allv = pts.concat([0]);
+    var min = Math.min.apply(null, allv), max = Math.max.apply(null, allv), range = (max - min) || 1;
+    var stepX = (W - 2 * pad) / (pts.length - 1);
+    function X(i) { return pad + i * stepX; }
+    function Y(v) { return pad + (1 - (v - min) / range) * (H - 2 * pad); }
+    var d = pts.map(function (v, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ');
+    var last = pts[pts.length - 1];
+    var clr = last > 0 ? '#2dd4a0' : (last < 0 ? '#f87171' : '#8b93a3');
+    var zY = Y(0).toFixed(1);
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="96" preserveAspectRatio="none" style="display:block;">' +
+      '<line x1="' + pad + '" y1="' + zY + '" x2="' + (W - pad) + '" y2="' + zY + '" stroke="rgba(255,255,255,.16)" stroke-dasharray="3 3"/>' +
+      '<path d="' + d + '" fill="none" stroke="' + clr + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+      '<circle cx="' + X(pts.length - 1).toFixed(1) + '" cy="' + Y(last).toFixed(1) + '" r="3.6" fill="' + clr + '"/>' +
+    '</svg>';
+  }
+  function standingsHtml(standings, myHandle) {
+    if (!standings || !standings.length) {
+      return '<div style="font-size:12px;color:var(--text-muted,#8b93a3);padding:8px 0;">Classificação completa disponível após reimportar com a extensão atualizada.</div>';
+    }
+    var myH = String(myHandle || '').toLowerCase();
+    return standings.map(function (grp) {
+      var isRk = grp.ranking === true;   // ranking: mostra PONTOS; torneio: mostra V–D
+      var rows = (grp.rows || []).map(function (r) {
+        var mine = (r.handles || []).some(function (h) { return String(h).toLowerCase() === myH; });
+        var players = (r.players || []).map(esc).join(' / ') || '—';
+        var rightVal = isRk
+          ? (r.points != null ? ('<b>' + r.points + '</b> pts') : '')
+          : ((r.wins != null || r.losses != null) ? ((r.wins || 0) + '–' + (r.losses || 0)) : '');
+        var inactive = r.inactive ? ' <span style="color:#f59e0b;font-size:10px;">inativo</span>' : '';
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;' +
+          (mine ? 'background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.35);' : '') + '">' +
+          '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:800;color:' + (mine ? '#2dd4a0' : 'var(--text-muted,#8b93a3)') + ';min-width:22px;">' + (r.pos != null ? r.pos + 'º' : '–') + '</span>' +
+          '<span style="flex:1;font-size:12.5px;color:var(--text-main,#cbd5e1);font-weight:' + (mine ? '700' : '500') + ';">' + players + (mine ? ' <span style="color:#2dd4a0;font-size:11px;">(você)</span>' : '') + inactive + '</span>' +
+          (rightVal ? '<span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--text-muted,#8b93a3);">' + rightVal + '</span>' : '') +
+        '</div>';
+      }).join('');
+      // Ranking = classificação única (o header "CLASSIFICAÇÃO" acima já rotula) → sem
+      // título de grupo redundante. Torneio = mostra "GRUPO 01/02…".
+      var groupTitle = isRk ? '' :
+        '<div style="font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#2dd4a0;margin-bottom:4px;">' + esc(grp.group || 'Grupo') + '</div>';
+      return '<div style="margin-top:10px;">' + groupTitle + rows + '</div>';
+    }).join('');
+  }
+  function gamesHtml(games) {
+    var g2 = games.slice().sort(function (a, b) { return lpTs(b.date) - lpTs(a.date); });
+    if (!g2.length) return '<div style="font-size:12px;color:var(--text-muted,#8b93a3);padding:8px 0;">Sem jogos seus registrados aqui.</div>';
+    return g2.map(function (g) {
+      var won = g.won === true, lost = g.won === false;
+      var badge = won ? '<span style="color:#2dd4a0;font-weight:800;">V</span>' : (lost ? '<span style="color:#f87171;font-weight:800;">D</span>' : '<span style="color:var(--text-muted,#8b93a3);">–</span>');
+      var opps = (Array.isArray(g.oppNames) ? g.oppNames.filter(Boolean) : []).map(esc).join(' / ') || 'adversário';
+      var withP = g.partnerName ? '<span style="color:var(--text-muted,#8b93a3);">com ' + esc(g.partnerName) + '</span> ' : '';
+      var score = (typeof g.myScore === 'number' && typeof g.oppScore === 'number')
+        ? '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:var(--text-main,#cbd5e1);">' + g.myScore + '–' + g.oppScore + '</span>' : '';
+      var dt = g.date ? '<span style="color:var(--text-muted,#8b93a3);font-size:11px;">' + esc(String(g.date).replace(/^[^,]*,\s*/, '')) + '</span>' : '';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border-color,#28313f);">' +
+        '<span style="min-width:16px;text-align:center;">' + badge + '</span>' +
+        '<span style="flex:1;font-size:12.5px;color:var(--text-main,#cbd5e1);">' + withP + '<span style="color:var(--text-muted,#8b93a3);">vs</span> ' + opps + '</span>' +
+        score + ' ' + dt +
+      '</div>';
+    }).join('');
+  }
+
+  function closeLpTourneyDetail() {
+    var el = document.getElementById('lp-tourney-detail-overlay');
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    document.removeEventListener('keydown', _lpDetailEsc);
+  }
+  function _lpDetailEsc(e) { if (e.key === 'Escape') closeLpTourneyDetail(); }
+  root._closeLpTourneyDetail = closeLpTourneyDetail;
+
+  // ref = 't/club/tourneyId' (torneio) ou 'r/club/rankingId' (ranking).
+  root._openLpTourneyDetail = function (ref) {
+    var imp = root._spCardImp;
+    if (!imp || !ref) return;
+    var parts = String(ref).split('/');
+    var kind = parts[0], club = parts[1], cid = parts.slice(2).join('/');
+    var isRanking = (kind === 'r');
+    var f = (window._spCompByRefStr ? window._spCompByRefStr(imp, ref) : null);
+    var name = (f && f.name && f.name !== f.categoryRaw) ? f.name : (f ? f.categoryRaw : cid);
+    var standings = f ? f.standings : null;
+    var logo = f ? f.logo : null;
+    var idField = isRanking ? 'rankingId' : 'tourneyId';
+    var myGames = (Array.isArray(imp.games) ? imp.games : []).filter(function (g) {
+      return g && (!!g.official === !isRanking) && g[idField] != null && String(g[idField]) === String(cid) && (g.club || '') === club;
+    });
+    var w = myGames.filter(function (g) { return g.won === true; }).length;
+    var l = myGames.filter(function (g) { return g.won === false; }).length;
+    var spark = saldoSvg(myGames);
+    var kindLabel = isRanking ? 'ranking' : 'torneio';
+    var logoHtml = logo
+      ? '<img src="' + esc(logo) + '" alt="" style="width:34px;height:34px;border-radius:8px;object-fit:cover;flex:0 0 34px;" onerror="this.style.display=\'none\';">'
+      : '<span style="font-size:22px;">🎾</span>';
+
+    closeLpTourneyDetail();
+    var ov = document.createElement('div');
+    ov.id = 'lp-tourney-detail-overlay';
+    ov.style.cssText = 'position:fixed;inset:60px 0 0 0;z-index:10020;background:var(--bg-dark,#0b0f17);overflow-y:auto;-webkit-overflow-scrolling:touch;';
+    ov.innerHTML =
+      '<div style="max-width:640px;margin:0 auto;padding:14px 16px 60px;">' +
+        '<button onclick="window._closeLpTourneyDetail()" style="background:var(--bg-card,#141a24);border:1px solid var(--border-color,#28313f);color:var(--text-main,#cbd5e1);border-radius:10px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;">← Voltar</button>' +
+        '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 2px;">' + logoHtml +
+          '<div style="font-size:17px;font-weight:800;color:var(--text-bright,#fff);line-height:1.3;">' + esc(name) + '</div></div>' +
+        '<div style="font-size:12px;color:var(--text-muted,#8b93a3);margin-bottom:14px;">Seu desempenho: <span style="color:#2dd4a0;font-weight:700;">' + w + ' V</span> – <span style="color:#f87171;font-weight:700;">' + l + ' D</span> · ' + myGames.length + ' jogo' + (myGames.length === 1 ? '' : 's') + '</div>' +
+        (spark ? ('<div style="background:var(--info-box-bg,#141a24);border:1px solid var(--border-color,#28313f);border-radius:12px;padding:12px;margin-bottom:16px;">' +
+          '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted,#8b93a3);margin-bottom:6px;">Saldo V/D ao longo do ' + kindLabel + '</div>' + spark + '</div>') : '') +
+        '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted,#8b93a3);margin-bottom:2px;">Classificação</div>' +
+        standingsHtml(standings, imp.handle) +
+        '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted,#8b93a3);margin:18px 0 2px;">Seus jogos</div>' +
+        gamesHtml(myGames) +
+      '</div>';
+    document.body.appendChild(ov);
+    document.addEventListener('keydown', _lpDetailEsc);
+  };
+
+  // Delegação de clique nas linhas da lista (letzplay torneio/ranking → detalhe; scoreplace → torneio).
+  document.addEventListener('click', function (e) {
+    var row = e.target && e.target.closest ? e.target.closest('.lp-foot-row') : null;
+    if (!row) return;
+    var ref = row.getAttribute('data-lp-ref');
+    if (ref) { e.preventDefault(); root._openLpTourneyDetail(ref); return; }
+    var sid = row.getAttribute('data-sp-tid');
+    if (sid) { e.preventDefault(); window.location.hash = '#tournaments/' + sid; }
+  });
+})();

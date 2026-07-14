@@ -64,7 +64,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v1.0.1';
+var CACHE_NAME = 'scoreplace-v1.1.15';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do
@@ -90,6 +90,8 @@ var STATIC_ASSETS = [
   '/js/ui.js',
   '/js/router.js',
   '/js/main.js',
+  '/js/deep-link.js',
+  '/js/pwa-migrate-banner.js',
   '/js/views/dashboard.js',
   '/js/views/tournaments-utils.js',
   '/js/views/tournaments-sharing.js',

@@ -229,6 +229,36 @@ service cloud.firestore {
         );
         allow delete: if request.auth != null && isAdminOf(parentT());
       }
+
+      // ─── Busca ativa letzplay do organizador (anti-gato) ───────────────────
+      // tournaments/{id}/letzplayScans/{uid} — o organizador varre o PERFIL
+      // PÚBLICO letzplay dos inscritos que autorizaram (categoria/nível) via a
+      // extensão. Só o admin (org/co-host) escreve; qualquer authed que pode ler
+      // o torneio lê (co-organizadores veem o mesmo).
+      match /letzplayScans/{scanUid} {
+        function parentTs() {
+          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+        }
+        allow read: if (request.auth != null) || (parentTs().isPublic == true);
+        allow create, update: if request.auth != null
+          && (isTournamentAdmin(parentTs()) || isTournamentAdminByUid(parentTs()));
+        allow delete: if request.auth != null
+          && (isTournamentAdmin(parentTs()) || isTournamentAdminByUid(parentTs()));
+      }
+    }
+
+    // ─── Scan público letzplay POR PESSOA (uid), global e reutilizável ─────────
+    // letzplayScans/{uid} — o organizador busca o PERFIL PÚBLICO letzplay do inscrito
+    // (categoria/nível/totais) via extensão e grava aqui, keyed por uid. Puxou uma vez,
+    // vale pra TODOS os torneios (não precisa re-puxar). Dado é público no letzplay.
+    // Leitura: qualquer authed. Escrita: qualquer authed (organizador) — dado público.
+    match /letzplayScans/{scanUid} {
+      allow read: if request.auth != null;
+      // scannedByName + tournamentId/Name identificam quem/qual torneio puxou; fullImport
+      // é o histórico COMPLETO (só no scan "completo") que vira o letzplayImport do dono.
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasOnly(['handle', 'scan', 'scannedAt', 'scannedBy', 'scannedByName', 'tournamentId', 'tournamentName', 'fullImport']);
+      allow delete: if request.auth != null;
     }
 
     // ─── User profiles ───────────────────────────────────────────────────────
@@ -348,6 +378,12 @@ service cloud.firestore {
     // desde 08/mai), enquanto e-mail (mail/) funcionava. Mesmo modelo do mail/:
     // qualquer autenticado pode enfileirar; o envio é feito pela Cloud Function.
     match /whatsapp_queue/{id} {
+      allow read: if false;
+      allow write: if request.auth != null;
+    }
+
+    // ─── WhatsApp digest queue (v1.16) — acumula 'agrupado', flushWhatsAppDigest junta ──
+    match /whatsapp_digest_queue/{id} {
       allow read: if false;
       allow write: if request.auth != null;
     }

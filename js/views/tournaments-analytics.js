@@ -571,17 +571,29 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         return all;
     };
 
+    // uid do jogador visto — detecção por uid (memberUids/participante) além do nome,
+    // senão duplas/times cujo _pName não bate exatamente somem da lista.
+    var _viewedUid = (typeof window._resolvePlayerUid === 'function') ? window._resolvePlayerUid(playerName) : null;
+
     tournaments.forEach(function(t) {
-        // Check if player is a participant
+        // Check if player is a participant (nome OU uid)
         var pList = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
         var isParticipant = pList.some(function(p) {
-            var name = window._pName(p);
-            return _nameMatch(name, playerName);
+            if (_nameMatch(window._pName(p), playerName)) return true;
+            if (_viewedUid && typeof window._participantUids === 'function') {
+                return (window._participantUids(p) || []).indexOf(_viewedUid) >= 0;
+            }
+            return false;
         });
+        if (!isParticipant && _viewedUid && Array.isArray(t.memberUids)) isParticipant = t.memberUids.indexOf(_viewedUid) >= 0;
         if (!isParticipant) return;
 
+        // Só torneios que já começaram (têm sorteio) ou encerraram — não-iniciados fora.
+        var _started = (_getAllMatches(t).length > 0) || t.status === 'active' || t.status === 'finished' || t.status === 'closed';
+        if (!_started) return;
+
         stats.tournamentsPlayed++;
-        stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: (window._formatLabel ? window._formatLabel(t) : t.format) || '' });
+        stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: (window._formatLabel ? window._formatLabel(t) : t.format) || '', date: t.endDate || t.startDate || t.date || null, isRanking: !!(window._isLigaFormat && window._isLigaFormat(t)) });
 
         // Track sports and formats
         if (t.sport) stats.sports[t.sport] = (stats.sports[t.sport] || 0) + 1;
@@ -697,7 +709,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
 
     var modal = document.createElement('div');
-    modal.style.cssText = 'background:var(--bg-card,#1e2235);color:var(--text-main,#d1d5db);border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:20px;padding:1.5rem;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);position:relative;';
+    modal.style.cssText = 'background:var(--bg-card,#1e2235);color:var(--text-main,#d1d5db);border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:20px;padding:1.5rem;max-width:960px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);position:relative;';
 
     // Build tournament list HTML
     var tourListHtml = stats.tournamentNames.map(function(tn) {
@@ -729,6 +741,51 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     // 2+ tournaments. Harmonized with modal's _boxStat/_sectionShell helpers.
     var _organizerSectionHtml = _buildOrganizerAnalyticsForModal(playerName);
 
+    // v1.8: card "Seu nível (letzplay)" — mudou do perfil pra cá. Aparece nas
+    // Estatísticas quando o jogador visto é o PRÓPRIO usuário e ele tem histórico
+    // letzplay importado. Slot vazio persiste pro bridge (import via extensão)
+    // popular ao vivo se a modal estiver aberta. Import de OUTROS jogadores é
+    // fase à parte (precisa do doc deles) — por ora só a própria conta.
+    var _lpCu = window.AppStore && window.AppStore.currentUser;
+    var _lpIsCurUser = _lpCu && _lpCu.displayName && String(_lpCu.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
+    // Nível GERAL: mistura scoreplace (torneios oficiais + V/D) do jogador VISTO.
+    var _spExtra = {
+      tournaments: (stats.tournamentNames || []).map(function(tn) { return { name: tn.name, sport: tn.sport, year: null, date: tn.date || null, isRanking: !!tn.isRanking }; }),
+      wins: stats.totalWins || 0, losses: stats.totalLosses || 0
+    };
+    // Conta própria: import está no AppStore. Terceiros: carregado async (se autorizado).
+    var _lpInner = (_lpIsCurUser && _lpCu.letzplayImport && typeof window._renderLetzplayCard === 'function')
+      ? window._renderLetzplayCard(_lpCu.letzplayImport, _spExtra) : '';
+    // Botões (só na própria conta): Histórico unificado + Importar do letzplay.
+    // "Importar" chama _spStartImport → se a extensão está instalada, importa direto;
+    // senão abre o tutorial guiado (#importar-letzplay).
+    var _lpHasGames = _lpIsCurUser && _lpCu.letzplayImport && Array.isArray(_lpCu.letzplayImport.games) && _lpCu.letzplayImport.games.length > 0;
+    var _lpImportEntry = (typeof window._spImportEntry === 'function')
+      ? window._spImportEntry({ label: (_lpHasGames ? 'Atualizar do letzplay' : 'Importar do letzplay'), variant: 'outline' })
+      : '';
+    // Data/hora da última importação, logo abaixo do botão Atualizar.
+    var _lpUpdatedAt = '';
+    if (_lpHasGames && _lpCu.letzplayImport && _lpCu.letzplayImport.importedAt) {
+      var _lpD = new Date(_lpCu.letzplayImport.importedAt);
+      if (!isNaN(_lpD.getTime())) {
+        var _lpImp = _lpCu.letzplayImport;
+        var _lpSh = (typeof window._safeHtml === 'function') ? window._safeHtml : function (x) { return x; };
+        var _lpVia = '';
+        if (_lpImp.importedVia === 'organizer') {
+          var _lpOrg = _lpImp.importedByName ? (' por ' + _lpSh(_lpImp.importedByName)) : ' por um organizador';
+          var _lpTn = _lpImp.importedTournamentName ? (' no torneio <b>' + _lpSh(_lpImp.importedTournamentName) + '</b>') : '';
+          _lpVia = '<br>importado' + _lpOrg + _lpTn;
+        }
+        _lpUpdatedAt = '<div style="text-align:center;font-size:0.68rem;color:var(--text-muted,#94a3b8);margin-top:6px;line-height:1.45;">Última atualização: ' +
+          _lpD.toLocaleDateString('pt-BR') + ' ' + _lpD.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + _lpVia + '</div>';
+      }
+    }
+    var _lpHistBtn = _lpIsCurUser
+      ? ('<button onclick="window.location.hash=\'#historico\'" style="width:100%;margin-top:12px;background:var(--info-pill-bg,rgba(99,102,241,0.15));border:1px solid var(--border-color,rgba(255,255,255,0.12));border-radius:12px;padding:11px 14px;cursor:pointer;color:var(--text-bright,#fff);font-size:0.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;">📜 Histórico de jogos <span style="opacity:0.6;font-weight:500;font-size:0.75rem;">LetzPlay + Scoreplace</span></button>' +
+         '<div style="margin-top:8px;">' + _lpImportEntry + '</div>' + _lpUpdatedAt)
+      : '';
+    var _lpCardHtml = '<div id="letzplay-card-stats-slot" style="margin-top:12px;">' + _lpInner + '</div>' + _lpHistBtn;
+
     modal.innerHTML = '' +
       ((typeof window._renderBackHeader === 'function')
         ? window._renderBackHeader({
@@ -743,6 +800,9 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         avatarHtml +
         '<h3 style="margin:0;font-size:1.3rem;color:var(--text-bright,#fff);">' + safeN + '</h3>' +
       '</div>' +
+      // Card letzplay "Seu nível (geral)" — subido pro TOPO das estatísticas
+      // (pedido do dono jul/2026). Só na própria conta com histórico importado.
+      _lpCardHtml +
       // Main body: persistent matchHistory stats (primary)
       '<div id="player-stats-persistent">' +
         _initialStatsHtml +
@@ -878,6 +938,27 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     }
 
     // Load persistent per-user matchHistory — primary data source, survives deletion
+    var _lastMerged = null;
+    // Terceiros: letzplay é público → se o jogador visto autorizou o import,
+    // mostramos o card "nível (geral)" dele e dobramos os jogos nas estatísticas.
+    if (!_lpIsCurUser && resolvedUid && window.FirestoreDB) {
+        var _tpDb = window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb());
+        if (_tpDb) {
+            _tpDb.collection('users').doc(resolvedUid).get().then(function(doc) {
+                var d = doc.exists ? (doc.data() || {}) : null;
+                if (!d || d.letzplayConsent !== true || !d.letzplayImport || !Array.isArray(d.letzplayImport.games) || !d.letzplayImport.games.length) return;
+                window._spLetzplayImportByUid[resolvedUid] = d.letzplayImport;
+                var cardSlot = modal.querySelector('#letzplay-card-stats-slot');
+                if (cardSlot && typeof window._renderLetzplayCard === 'function') cardSlot.innerHTML = window._renderLetzplayCard(d.letzplayImport, _spExtra);
+                var pslot = modal.querySelector('#player-stats-persistent');
+                if (pslot && _lastMerged) {
+                    pslot.innerHTML = window._renderPersistentMatchStats(_lastMerged, resolvedUid) +
+                        (stats.tournamentsPlayed > 0 ? '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);padding:6px 0;">📋 Torneios Disputados (' + stats.tournamentsPlayed + ')</summary><div style="margin-top:6px;">' + tourListHtml + '</div></details>' : '');
+                    if (typeof window._initStatsAnimation === 'function') window._initStatsAnimation(pslot);
+                }
+            }).catch(function() {});
+        }
+    }
     if (resolvedUid && window.FirestoreDB && typeof window.FirestoreDB.loadUserMatchHistory === 'function') {
         var slot = modal.querySelector('#player-stats-persistent');
         // Merge Firestore records with localStorage v2 casual cache so the hero-box
@@ -916,10 +997,11 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         window.FirestoreDB.loadUserMatchHistory(resolvedUid).then(function(records) {
             if (!slot) return;
             var merged = _mergeLocalCasualV2(records || []);
+            _lastMerged = merged;   // pro re-render quando o letzplay de terceiro chega
             // Always render the full metric grid (zeros if no data) so players
             // see what's trackable and are encouraged to play matches via the app.
-            slot.innerHTML = window._renderPersistentMatchStats(merged, resolvedUid) +
-                (stats.tournamentsPlayed > 0 ? '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);padding:6px 0;">📋 Torneios Disputados (' + stats.tournamentsPlayed + ')</summary><div style="margin-top:6px;">' + tourListHtml + '</div></details>' : '');
+            var _footer = (stats.tournamentsPlayed > 0 ? '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);padding:6px 0;">📋 Torneios Disputados (' + stats.tournamentsPlayed + ')</summary><div style="margin-top:6px;">' + tourListHtml + '</div></details>' : '');
+            slot.innerHTML = window._renderPersistentMatchStats(merged, resolvedUid) + _footer;
             // v1.0.37-beta: re-anima stats DEPOIS do innerHTML async — o
             // _initStatsAnimation inicial agarrou os elementos zerados que
             // foram substituídos. Bug reportado: "a animação das estatisticas
@@ -927,6 +1009,19 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
             if (typeof window._initStatsAnimation === 'function') {
                 window._initStatsAnimation(slot);
             }
+            // Cross-ref @letzplay → nome do scoreplace: carrega os @handles e
+            // re-renderiza com os nomes corrigidos de quem já entrou no app.
+            try {
+                var _lpg = _letzplayGamesForUid(resolvedUid);
+                if (_lpg.length && typeof window._loadLetzplayNameCache === 'function') {
+                    var _hs = [];
+                    _lpg.forEach(function(g){ if (g.partnerHandle) _hs.push(g.partnerHandle); (g.oppHandles||[]).forEach(function(h){ if (h) _hs.push(h); }); });
+                    if (_hs.length) window._loadLetzplayNameCache(_hs).then(function(){
+                        var s2 = modal.querySelector('#player-stats-persistent');
+                        if (s2) { s2.innerHTML = window._renderPersistentMatchStats(merged, resolvedUid) + _footer; if (typeof window._initStatsAnimation === 'function') window._initStatsAnimation(s2); }
+                    }).catch(function(){});
+                }
+            } catch(e) {}
         }).catch(function(e) {
             window._warn('[player-stats] loadUserMatchHistory failed', e);
             if (slot) {
@@ -1134,6 +1229,286 @@ window._buildActivityLog = function(tournamentId) {
       '</details>' +
     '</div>';
 };
+
+// v1.15.19: os jogos importados do letzplay entram nas estatísticas de barras
+// (do que dá pra extrair: V/D, games ganhos/perdidos, sets). Só quando a conta
+// vista é a do próprio usuário logado (o import só existe pra própria conta).
+window._spLetzplayImportByUid = window._spLetzplayImportByUid || {};
+function _letzplayGamesForUid(uid) {
+    if (!uid) return [];
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (cu && cu.uid === uid && cu.letzplayImport && Array.isArray(cu.letzplayImport.games)) return cu.letzplayImport.games;
+    // terceiros: letzplay é público; mostramos se a pessoa autorizou o import
+    // (doc carregado sob demanda em _showPlayerStats → cache por uid).
+    var imp = window._spLetzplayImportByUid[uid];
+    return (imp && Array.isArray(imp.games)) ? imp.games : [];
+}
+// O letzplayImport inteiro (pra resolver o nome REAL do torneio de cada jogo via _spGameComp).
+function _letzplayImportForUid(uid) {
+    if (!uid) return null;
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (cu && cu.uid === uid && cu.letzplayImport) return cu.letzplayImport;
+    return window._spLetzplayImportByUid[uid] || null;
+}
+// Dobra os jogos do letzplay nos agregados: oficial→torneio (t/🏆), ranking→casual
+// (c/⚡). myScore/oppScore no beach tennis são GAMES; 1 set por jogo (set único).
+// Métricas que o letzplay não tem (saque, recepção, quebras, tiebreaks, tempos,
+// sequências ponto-a-ponto) ficam só com o scoreplace.
+function _foldLetzplayIntoAggs(games, c, t) {
+    (games || []).forEach(function(g) {
+        if (g.won !== true && g.won !== false) return;   // sem resultado definido
+        var agg = g.official ? t : c;
+        agg.matches++;
+        if (g.won) agg.wins++; else agg.losses++;
+        if (typeof g.myScore === 'number') agg.gamesWon += g.myScore;
+        if (typeof g.oppScore === 'number') agg.gamesLost += g.oppScore;
+        agg.setsWon += g.won ? 1 : 0;
+        agg.setsLost += g.won ? 0 : 1;
+    });
+}
+// dd/mm/yy(yy) ou ISO → timestamp (ms); null se não parsear.
+function _lpAnalyticsTs(s) {
+    if (!s) return null;
+    var n = Date.parse(s); if (!isNaN(n)) return n;
+    var m = String(s).match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (m) { var y = +m[3]; if (y < 100) y += 2000; var d = new Date(y, (+m[2]) - 1, +m[1]).getTime(); if (!isNaN(d)) return d; }
+    return null;
+}
+// Gráfico "sobe e desce" do desempenho: linha de FORMA cumulativa (+1 vitória /
+// −1 derrota) em ordem cronológica, misturando scoreplace (casual+torneio) e
+// letzplay. SVG puro, responsivo, área preenchida; verde se termina positivo.
+// mmm/yy (marco temporal do eixo) — ex.: "abr/22"
+function _spFmtMark(ts) {
+    try {
+        var d = new Date(ts); if (isNaN(d.getTime())) return '';
+        var mon = d.toLocaleDateString('pt-BR', { month: 'short' }).replace(/\.$/, '');
+        return mon + '/' + String(d.getFullYear()).slice(-2);
+    } catch (e) { return ''; }
+}
+// Constrói o gráfico de forma para uma categoria (all/r/t) e uma janela temporal
+// (sliderVal 0=tudo … 100=última semana). Retorna pedaços de HTML (svg/stats/axis/
+// winLabel). Usado no render inicial e no redraw interativo.
+var _SP_MON = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+function _spMonYr(ts) { var d = new Date(ts); if (isNaN(d.getTime())) return ''; return _SP_MON[d.getMonth()] + '/' + String(d.getFullYear()).slice(-2); }
+function _spEsc(s) { return (typeof window._safeHtml === 'function') ? window._safeHtml(s == null ? '' : String(s)) : String(s == null ? '' : s); }
+// Tipos de gráfico que são série temporal (usam o slider de janela).
+window._SP_TIMESERIES = { saldo: 1, pct: 1, games: 1 };
+window._SP_CHART_LABELS = { saldo: 'Saldo V/D', pct: 'Aproveitamento (%)', games: 'Saldo de games', bars: 'V/D por torneio', partner: 'Com quem você ganha', opp: 'Retrospecto (adversário)', month: 'Jogos por mês' };
+
+// Aplica fonte (Geral/Rankings/Torneios) + janela temporal (só série temporal).
+function _spApplyWindow(events, source, sliderVal, isTs) {
+    var filt = (events || []).filter(function (e) { return source === 'all' || e.t === source; });
+    if (!filt.length || !isTs) return { win: filt, wl: 'tudo' };
+    var minTs = filt[0].ts, maxTs = filt[filt.length - 1].ts;
+    var spanDays = Math.max(7, (maxTs - minTs) / 86400000);
+    var winDays = spanDays * Math.pow(7 / spanDays, (sliderVal || 0) / 100);
+    var cutoff = maxTs - winDays * 86400000;
+    var win = filt.filter(function (e) { return e.ts >= cutoff; });
+    if (win.length < 1) win = filt.slice(-1);
+    var wl;
+    if (winDays >= spanDays - 0.5) wl = 'tudo';
+    else if (winDays <= 7.5) wl = 'última semana';
+    else if (winDays <= 31) wl = 'últimos ' + Math.round(winDays) + ' dias';
+    else if (winDays <= 365) wl = 'últimos ' + Math.round(winDays / 30) + ' meses';
+    else wl = 'últimos ' + (Math.round(winDays / 365 * 10) / 10) + ' anos';
+    return { win: win, wl: wl };
+}
+function _spEmpty(msg) { return { svg: '<div style="height:120px;display:flex;align-items:center;justify-content:center;color:var(--text-muted,#94a3b8);font-size:0.72rem;text-align:center;padding:0 12px;">' + msg + '</div>', stats: '—', axis: '', winLabel: 'tudo', clr: '#94a3b8' }; }
+
+// Série temporal (saldo / % móvel / saldo de games) com pico, vale e linhas de fim
+// de torneio (nome + valor no ponto). vals[i] casa com win[i].
+function _spLineSvg(win, vals, opt) {
+    var W = 680, H = 172, padL = 16, padR = 16, top = 50, bot = 132, axisY = 156;
+    var n = vals.length, base = opt.base || 0, fmt = opt.fmt || function (v) { return (v > base ? '+' : '') + v; };
+    var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+    if (opt.base === 50) { mn = Math.min(mn, 30); mx = Math.max(mx, 70); }
+    if (mn === mx) { mn -= 1; mx += 1; }
+    function X(i) { return padL + (n <= 1 ? (W - padL - padR) / 2 : (i / (n - 1)) * (W - padL - padR)); }
+    function Y(v) { return top + (1 - (v - mn) / (mx - mn)) * (bot - top); }
+    var end = vals[n - 1], clr = end > base ? '#16a34a' : (end < base ? '#dc2626' : '#94a3b8');
+    var yb = Y(base);
+    var path = vals.map(function (v, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ');
+    var area = 'M' + X(0).toFixed(1) + ' ' + yb.toFixed(1) + ' ' + vals.map(function (v, i) { return 'L' + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ') + ' L' + X(n - 1).toFixed(1) + ' ' + yb.toFixed(1) + ' Z';
+    var pi = vals.indexOf(mx), vi = vals.indexOf(mn);
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block;" role="img" aria-label="gráfico de desempenho">';
+    // fins de torneio: último jogo de cada competição oficial na janela
+    var lastByComp = {};
+    win.forEach(function (e, i) { if (e.official && e.comp) lastByComp[e.comp] = i; });
+    var ends = Object.keys(lastByComp).map(function (c) { return { i: lastByComp[c], label: c }; }).sort(function (a, b) { return b.i - a.i; }).slice(0, 4);
+    ends.forEach(function (e) {
+        var x = X(e.i).toFixed(1);
+        s += '<line x1="' + x + '" y1="' + top + '" x2="' + x + '" y2="' + bot + '" stroke="var(--text-secondary,#8b93a3)" stroke-width="1" stroke-dasharray="2 3" opacity="0.55"></line>';
+        var nm = e.label.length > 22 ? (e.label.slice(0, 21) + '…') : e.label;
+        s += '<text x="' + x + '" y="22" text-anchor="middle" font-size="10.5" fill="var(--text-secondary,#8b93a3)">' + _spEsc(nm) + '</text>';
+        s += '<text x="' + x + '" y="34" text-anchor="middle" font-size="10.5" font-weight="600" fill="' + (vals[e.i] >= base ? '#16a34a' : '#dc2626') + '">' + fmt(vals[e.i]) + '</text>';
+    });
+    s += '<line x1="' + padL + '" y1="' + yb.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + yb.toFixed(1) + '" stroke="var(--text-muted,#94a3b8)" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"></line>';
+    s += '<path d="' + area + '" fill="' + clr + '" opacity="0.10"></path>';
+    s += '<path d="' + path + '" fill="none" stroke="' + clr + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>';
+    s += '<circle cx="' + X(pi).toFixed(1) + '" cy="' + Y(mx).toFixed(1) + '" r="3.2" fill="#16a34a"></circle>';
+    s += '<text x="' + X(pi).toFixed(1) + '" y="' + (Y(mx) - 8).toFixed(1) + '" text-anchor="middle" font-size="12" font-weight="600" fill="#16a34a">' + fmt(mx) + '</text>';
+    s += '<circle cx="' + X(vi).toFixed(1) + '" cy="' + Y(mn).toFixed(1) + '" r="3.2" fill="#dc2626"></circle>';
+    s += '<text x="' + X(vi).toFixed(1) + '" y="' + (Y(mn) + 16).toFixed(1) + '" text-anchor="middle" font-size="12" font-weight="600" fill="#dc2626">' + fmt(mn) + '</text>';
+    s += '<circle cx="' + X(n - 1).toFixed(1) + '" cy="' + Y(end).toFixed(1) + '" r="3.4" fill="' + clr + '" stroke="var(--info-box-bg,#141a24)" stroke-width="2"></circle>';
+    // eixo temporal
+    var idxs = n >= 4 ? [0, Math.round((n - 1) / 3), Math.round(2 * (n - 1) / 3), n - 1] : (n === 1 ? [0] : [0, n - 1]);
+    idxs.forEach(function (ix) { s += '<text x="' + X(ix).toFixed(1) + '" y="' + axisY + '" text-anchor="' + (ix === 0 ? 'start' : (ix === n - 1 ? 'end' : 'middle')) + '" font-size="10" fill="var(--text-muted,#94a3b8)">' + _spMonYr(win[ix].ts) + '</text>'; });
+    s += '</svg>';
+    return { svg: s, clr: clr };
+}
+// Barras (diverging V/D ou simples) para os cortes categóricos.
+function _spBarsSvg(cats, opt) {
+    opt = opt || {};
+    var W = 680, H = 172, padL = 16, padR = 16, mid = opt.diverging ? 96 : 132, maxH = opt.diverging ? 58 : 104;
+    var n = cats.length; if (!n) return { svg: '', clr: '#94a3b8' };
+    var topMax = Math.max.apply(null, cats.map(function (c) { return c.up || 0; })) || 1;
+    var botMax = Math.max.apply(null, cats.map(function (c) { return c.down || 0; })) || 1;
+    var bw = Math.min(64, (W - padL - padR) / n - 12);
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block;" role="img" aria-label="gráfico de barras">';
+    if (opt.diverging) s += '<line x1="' + padL + '" y1="' + mid + '" x2="' + (W - padR) + '" y2="' + mid + '" stroke="var(--text-muted,#94a3b8)" stroke-width="1" opacity="0.5"></line>';
+    cats.forEach(function (c, i) {
+        var cx = padL + (i + 0.5) * ((W - padL - padR) / n);
+        var nm = c.name.length > 16 ? (c.name.slice(0, 15) + '…') : c.name;
+        if (opt.diverging) {
+            var uh = (c.up || 0) / topMax * maxH, dh = (c.down || 0) / botMax * maxH;
+            if (c.up) { s += '<rect x="' + (cx - bw / 2) + '" y="' + (mid - uh) + '" width="' + bw + '" height="' + uh + '" rx="3" fill="#16a34a"></rect>'; s += '<text x="' + cx + '" y="' + (mid - uh - 4) + '" text-anchor="middle" font-size="11" font-weight="600" fill="#16a34a">' + c.up + 'V</text>'; }
+            if (c.down) { s += '<rect x="' + (cx - bw / 2) + '" y="' + mid + '" width="' + bw + '" height="' + dh + '" rx="3" fill="#dc2626"></rect>'; s += '<text x="' + cx + '" y="' + (mid + dh + 13) + '" text-anchor="middle" font-size="11" font-weight="600" fill="#dc2626">' + c.down + 'D</text>'; }
+        } else {
+            var bh = (c.up || 0) / topMax * maxH;
+            s += '<rect x="' + (cx - bw / 2) + '" y="' + (mid - bh) + '" width="' + bw + '" height="' + bh + '" rx="3" fill="#6366f1"></rect>';
+            s += '<text x="' + cx + '" y="' + (mid - bh - 4) + '" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text-bright,#fff)">' + (opt.valFmt ? opt.valFmt(c) : c.up) + '</text>';
+        }
+        s += '<text x="' + cx + '" y="' + (H - 6) + '" text-anchor="middle" font-size="10.5" fill="var(--text-secondary,#8b93a3)">' + _spEsc(nm) + '</text>';
+    });
+    s += '</svg>';
+    return { svg: s, clr: '#6366f1' };
+}
+
+// Dispatcher: monta o gráfico do tipo `kind` a partir dos eventos enriquecidos.
+window._spBuildForm = function (events, source, sliderVal, kind) {
+    kind = kind || 'saldo';
+    var isTs = !!window._SP_TIMESERIES[kind];
+    var w = _spApplyWindow(events, source, sliderVal, isTs);
+    var win = w.win, n = win.length;
+    if (!n) return _spEmpty('Sem jogos nesta seleção.');
+    var wins = 0; for (var k = 0; k < n; k++) if (win[k].win) wins++;
+    var losses = n - wins, pctAll = n ? Math.round(wins / n * 100) : 0, saldoAll = wins - losses;
+    var stats = n + ' jogos · <span style="color:#16a34a;">' + wins + 'V</span> <span style="color:#dc2626;">' + losses + 'D</span> · ' + pctAll + '% · saldo ' + (saldoAll > 0 ? '+' : '') + saldoAll;
+    var r, i2;
+    if (kind === 'saldo') {
+        var cum = 0, vals = []; for (i2 = 0; i2 < n; i2++) { cum += win[i2].win ? 1 : -1; vals.push(cum); }
+        r = _spLineSvg(win, vals, { base: 0 });
+    } else if (kind === 'games') {
+        var g = 0, gv = []; for (i2 = 0; i2 < n; i2++) { var e = win[i2]; if (typeof e.mine === 'number' && typeof e.theirs === 'number') g += (e.mine - e.theirs); gv.push(g); }
+        if (!gv.some(function (v) { return v !== 0; })) return _spEmpty('Sem placar de games nesta seleção (o letzplay traz; casuais/torneios variam).');
+        r = _spLineSvg(win, gv, { base: 0 });
+    } else if (kind === 'pct') {
+        var pv = [], WN = 10; for (i2 = 0; i2 < n; i2++) { var a = Math.max(0, i2 - WN + 1), c = 0, tot = 0; for (var j = a; j <= i2; j++) { tot++; if (win[j].win) c++; } pv.push(Math.round(c / tot * 100)); }
+        r = _spLineSvg(win, pv, { base: 50, fmt: function (v) { return v + '%'; } });
+    } else if (kind === 'bars') {
+        var byC = {}; win.forEach(function (e) { var c = e.comp || (e.official ? 'Torneio' : 'Ranking'); (byC[c] = byC[c] || { name: c, up: 0, down: 0, ts: 0 }); if (e.win) byC[c].up++; else byC[c].down++; if (e.ts > byC[c].ts) byC[c].ts = e.ts; });
+        var cats = Object.keys(byC).map(function (c) { return byC[c]; }).sort(function (a, b) { return b.ts - a.ts; }).slice(0, 8);
+        r = _spBarsSvg(cats, { diverging: true });
+    } else if (kind === 'partner') {
+        var byP = {}; win.forEach(function (e) { if (!e.partner) return; (byP[e.partner] = byP[e.partner] || { name: e.partner, up: 0, down: 0 }); if (e.win) byP[e.partner].up++; else byP[e.partner].down++; });
+        var pc = Object.keys(byP).map(function (p) { return byP[p]; }).sort(function (a, b) { return (b.up + b.down) - (a.up + a.down); }).slice(0, 8);
+        if (!pc.length) return _spEmpty('Sem parceiros identificados nesta seleção.');
+        r = _spBarsSvg(pc, { diverging: true });
+    } else if (kind === 'opp') {
+        var byO = {}; win.forEach(function (e) { (e.opps || []).forEach(function (o) { if (!o) return; (byO[o] = byO[o] || { name: o, up: 0, down: 0 }); if (e.win) byO[o].up++; else byO[o].down++; }); });
+        var oc = Object.keys(byO).map(function (o) { return byO[o]; }).sort(function (a, b) { return (b.up + b.down) - (a.up + a.down); }).slice(0, 8);
+        if (!oc.length) return _spEmpty('Sem adversários identificados nesta seleção.');
+        r = _spBarsSvg(oc, { diverging: true });
+    } else if (kind === 'month') {
+        var byM = {}; win.forEach(function (e) { var key = _spMonYr(e.ts); if (!key) return; (byM[key] = byM[key] || { name: key, up: 0, ts: e.ts }); byM[key].up++; });
+        var mc = Object.keys(byM).map(function (m) { return byM[m]; }).sort(function (a, b) { return a.ts - b.ts; }).slice(-10);
+        r = _spBarsSvg(mc, { diverging: false, valFmt: function (c) { return c.up; } });
+    } else { r = _spEmpty('—'); }
+    return { svg: r.svg, stats: stats, axis: '', winLabel: w.wl, clr: r.clr || '#16a34a' };
+};
+// troca a fonte (Geral/Rankings/Torneios) e redesenha
+window._spFormSetSource = function (src) {
+    var pills = document.querySelectorAll('#sp-form-pills [data-src]');
+    Array.prototype.forEach.call(pills, function (p) {
+        var a = p.getAttribute('data-src') === src;
+        p.setAttribute('data-active', a ? '1' : '0');
+        p.style.background = a ? 'linear-gradient(135deg,#16a34a,#15803d)' : 'var(--bg-darker,#171a2b)';
+        p.style.color = a ? '#fff' : 'var(--text-main,#cbd5e1)';
+    });
+    window._spFormRedraw();
+};
+// troca o TIPO de gráfico (dropdown) e redesenha; mostra/esconde o slider
+window._spFormSetChart = function (kind) {
+    window._spFormChart = kind;
+    var sliderWrap = document.getElementById('sp-form-slider-wrap');
+    if (sliderWrap) sliderWrap.style.display = window._SP_TIMESERIES[kind] ? '' : 'none';
+    window._spFormRedraw();
+};
+// lê fonte + tipo + slider e reconstrói svg/stats/label
+window._spFormRedraw = function () {
+    var data = window._spFormData; if (!data) return;
+    var src = 'all', ap = document.querySelector('#sp-form-pills [data-active="1"]'); if (ap) src = ap.getAttribute('data-src');
+    var sel = document.getElementById('sp-form-chart'), kind = sel ? sel.value : (window._spFormChart || 'saldo');
+    var sl = document.getElementById('sp-form-slider'), v = sl ? +sl.value : 0;
+    var b = window._spBuildForm(data.events, src, v, kind);
+    function set(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+    set('sp-form-svg', b.svg); set('sp-form-stats', b.stats);
+    var wl = document.getElementById('sp-form-winlabel'); if (wl) wl.textContent = b.winLabel;
+};
+function _formTrendHtml(casualRecs, tournRecs, lpGames, uid, lpImp) {
+    var ev = [];
+    function push(r, t) {
+        if (r.winnerTeam !== 1 && r.winnerTeam !== 2) return;
+        var me = (r.players || []).filter(function (p) { return p.uid === uid; })[0];
+        if (!me) return;
+        var partner = null, opps = [];
+        (r.players || []).forEach(function (p) {
+            if (p.uid === uid) return;
+            if (p.team === me.team) { if (p.name) partner = p.name; }
+            else if (p.name) opps.push(p.name);
+        });
+        ev.push({ ts: (r.finishedAt ? (Date.parse(r.finishedAt) || 0) : 0), win: r.winnerTeam === me.team, t: t,
+            comp: r.tournamentName || r.tournament || (t === 't' ? 'Torneio' : 'Casual'), official: t === 't',
+            partner: partner, opps: opps, mine: null, theirs: null, sport: r.sport || null });
+    }
+    (casualRecs || []).forEach(function (r) { push(r, 'r'); });   // casuais → rankings (⚡)
+    (tournRecs || []).forEach(function (r) { push(r, 't'); });    // torneios (🏆)
+    (lpGames || []).forEach(function (g) {
+        if (g.won !== true && g.won !== false) return;
+        var _comp = (window._spGameComp ? window._spGameComp(lpImp, g) : (g.tourneyName || g.competition)) || (g.official ? 'Torneio' : 'Ranking');
+        ev.push({ ts: _lpAnalyticsTs(g.date) || 0, win: g.won, t: g.official ? 't' : 'r',
+            comp: _comp, official: !!g.official,
+            partner: g.partnerName || null, opps: Array.isArray(g.oppNames) ? g.oppNames.slice() : [],
+            mine: (typeof g.myScore === 'number' ? g.myScore : null), theirs: (typeof g.oppScore === 'number' ? g.oppScore : null),
+            sport: g.sport || 'Beach Tennis' });
+    });
+    if (ev.length < 3) return '';   // trend só faz sentido com histórico
+    ev.sort(function (a, b) { return a.ts - b.ts; });
+    window._spFormData = { events: ev };
+    window._spFormChart = 'saldo';
+    var b = window._spBuildForm(ev, 'all', 0, 'saldo');
+    function pill(src, label, active) {
+        return '<button data-src="' + src + '" data-active="' + (active ? '1' : '0') + '" onclick="window._spFormSetSource(\'' + src + '\')" ' +
+            'style="border:1px solid var(--border-color,rgba(255,255,255,0.15));background:' + (active ? 'linear-gradient(135deg,#16a34a,#15803d)' : 'var(--bg-darker,#171a2b)') + ';color:' + (active ? '#fff' : 'var(--text-main,#cbd5e1)') + ';border-radius:999px;padding:3px 10px;font-size:0.66rem;font-weight:700;cursor:pointer;">' + label + '</button>';
+    }
+    var opts = Object.keys(window._SP_CHART_LABELS).map(function (k) { return '<option value="' + k + '">' + window._SP_CHART_LABELS[k] + '</option>'; }).join('');
+    return '<div style="margin-top:2px;margin-bottom:8px;padding:10px 12px;border-radius:12px;background:var(--info-box-bg);border:1px solid ' + b.clr + '33;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
+          '<select id="sp-form-chart" onchange="window._spFormSetChart(this.value)" style="font-size:0.78rem;font-weight:800;color:var(--text-bright,#fff);background:var(--bg-darker,#171a2b);border:1px solid var(--border-color,rgba(255,255,255,0.18));border-radius:8px;padding:4px 8px;cursor:pointer;">' + opts + '</select>' +
+          '<span id="sp-form-stats" style="font-size:0.6rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + b.stats + '</span>' +
+        '</div>' +
+        '<div id="sp-form-pills" style="display:flex;gap:6px;margin-bottom:8px;">' + pill('all', 'Geral', true) + pill('r', 'Rankings', false) + pill('t', 'Torneios', false) + '</div>' +
+        '<div id="sp-form-svg">' + b.svg + '</div>' +
+        '<div id="sp-form-slider-wrap">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">' +
+            '<span style="font-size:0.55rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">tudo</span>' +
+            '<input type="range" id="sp-form-slider" min="0" max="100" value="0" oninput="window._spFormRedraw()" style="flex:1;accent-color:#16a34a;">' +
+            '<span style="font-size:0.55rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">semana</span>' +
+          '</div>' +
+          '<div style="text-align:center;font-size:0.55rem;color:var(--text-muted,#94a3b8);margin-top:2px;">janela: <b id="sp-form-winlabel" style="color:var(--text-bright,#fff);">' + b.winLabel + '</b></div>' +
+        '</div>' +
+      '</div>';
+}
 
 // Renders the persistent matchHistory block for a given uid's records.
 // Splits casual vs tournament, aggregates serve/receive/killer/breaks/streaks,
@@ -1488,6 +1863,9 @@ window._renderPersistentMatchStats = function(records, uid) {
     function _unifiedStatsHtml(casualRecs, tournRecs, casualRel, tournRel) {
         var c = _aggregate(casualRecs || []);
         var t = _aggregate(tournRecs || []);
+        // v1.15.19: dobra os jogos do letzplay nos agregados (oficial→🏆, ranking→⚡).
+        var _lpGames = _letzplayGamesForUid(uid);
+        if (_lpGames.length) _foldLetzplayIntoAggs(_lpGames, c, t);
         var totalMatches = c.matches + t.matches;
         var badge = totalMatches + ' partida' + (totalMatches === 1 ? '' : 's') +
             ' · ⚡ ' + c.matches + ' · 🏆 ' + t.matches;
@@ -1530,6 +1908,9 @@ window._renderPersistentMatchStats = function(records, uid) {
 
         var html = _sectionShell('persist-stats-unified', 'Desempenho', '📊', '#a855f7', badge);
 
+        // Gráfico "sobe e desce" da forma (scoreplace + letzplay, cronológico).
+        html += _formTrendHtml(casualRecs, tournRecs, _lpGames, uid, _letzplayImportForUid(uid));
+
         // Diverging bar rows — row 1 has no center metric (wins/losses IS the metric),
         // rows 2+ show metric in center with "perdidos"/"vencidos" at the sides.
         // TB breakdown rows follow the Tiebreaks row so all tie-break metrics stay grouped.
@@ -1547,7 +1928,10 @@ window._renderPersistentMatchStats = function(records, uid) {
                     tbLostMinCraw, tbLostMinTraw, tbLostMaxCraw, tbLostMaxTraw,
                     { leftClr: '#ef4444', rightClr: '#ef4444', noPct: true });
         }
-        html += '<div style="display:flex;flex-direction:column;gap:2px;margin-top:2px;">' +
+        // v1.15.19: as duas áreas (verm/verde e azul) lado a lado quando a largura
+        // permite (grid auto-fit); empilham no estreito.
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px 18px;margin-top:2px;align-items:start;">';
+        html += '<div style="display:flex;flex-direction:column;gap:2px;">' +
             _diffBarRow('', 'Derrotas', 'Vitórias', c.losses, t.losses, c.wins, t.wins) +
             _diffBarRow('Sets', 'perdidos', 'vencidos', c.setsLost, t.setsLost, c.setsWon, t.setsWon) +
             _diffBarRow('Games', 'perdidos', 'vencidos', c.gamesLost, t.gamesLost, c.gamesWon, t.gamesWon) +
@@ -1557,7 +1941,7 @@ window._renderPersistentMatchStats = function(records, uid) {
         '</div>';
 
         // Supplementary stats — casuais left (light blue), torneios right (dark blue)
-        html += '<div style="margin-top:10px;display:flex;flex-direction:column;gap:2px;">' +
+        html += '<div style="display:flex;flex-direction:column;gap:2px;">' +
             _dualBarRow('Aproveitamento', apC.raw, apT.raw, apC.display, apT.display) +
             _dualBarRow('% Saque', svC.raw, svT.raw, svC.display, svT.display) +
             _dualBarRow('% Recepção', rcC.raw, rcT.raw, rcC.display, rcT.display) +
@@ -1570,6 +1954,7 @@ window._renderPersistentMatchStats = function(records, uid) {
             _dualBarRow('Ponto Mais Longo', longPtCms, longPtTms, longPtCdisp, longPtTdisp) +
             _dualBarRow('Ponto Mais Curto', shortPtCms, shortPtTms, shortPtCdisp, shortPtTdisp) +
         '</div>';
+        html += '</div>';   // fecha o grid lado-a-lado
 
         // Top 5 Parceiros / Adversários — keep per-source separation (casual vs torneios
         // involve different relationships) but render inside the unified section.
@@ -1599,10 +1984,12 @@ window._renderPersistentMatchStats = function(records, uid) {
         for (var i = 0; i < top.length; i++) {
             var e = top[i];
             var wr = e.played > 0 ? Math.round(e.wins / e.played * 100) : 0;
-            var av = window._avatarHtml({ photoURL: e.photoURL, displayName: e.name }, 26);
+            // cross-ref @letzplay → nome do scoreplace quando a pessoa já entrou
+            var dispName = (e.letzplayHandle && window._spNameForLetzplay) ? window._spNameForLetzplay(e.letzplayHandle, e.name) : e.name;
+            var av = window._avatarHtml({ photoURL: e.photoURL, displayName: dispName }, 26);
             h += '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--info-pill-bg);border:1px solid var(--border-color);border-radius:8px;margin-bottom:3px;">' +
                 av +
-                '<span style="flex:1;min-width:0;font-size:0.78rem;color:var(--text-main,#e5e7eb);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _safe(e.name || 'Jogador') + '</span>' +
+                '<span style="flex:1;min-width:0;font-size:0.78rem;color:var(--text-main,#e5e7eb);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _safe(dispName || 'Jogador') + '</span>' +
                 '<span style="font-size:0.68rem;color:var(--success-color,#22c55e);font-weight:700;">' + e.wins + 'V</span>' +
                 '<span style="font-size:0.68rem;color:var(--danger-color,#ef4444);font-weight:700;">' + e.losses + 'D</span>' +
                 (e.draws ? '<span style="font-size:0.68rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + e.draws + 'E</span>' : '') +
@@ -1615,6 +2002,27 @@ window._renderPersistentMatchStats = function(records, uid) {
 
     var casualRel = _computeH2hAndPartners(casual);
     var tournRel = _computeH2hAndPartners(tournament);
+    // v1.15.20: parceiros/adversários também contam letzplay (oficial→torneios,
+    // ranking→casuais). Entradas guardam o @handle pra cross-ref com o scoreplace.
+    (function () {
+        function bump(map, key, name, handle, didWin) {
+            if (!map[key]) map[key] = { name: name, uid: null, letzplayHandle: handle || null, photoURL: null, played: 0, wins: 0, losses: 0, draws: 0 };
+            map[key].played++;
+            if (didWin) map[key].wins++; else map[key].losses++;
+        }
+        _letzplayGamesForUid(uid).forEach(function (g) {
+            if (g.won !== true && g.won !== false) return;
+            var rel = g.official ? tournRel : casualRel;
+            if (g.partnerHandle || g.partnerName) {
+                bump(rel.partners, 'lp:' + (g.partnerHandle || g.partnerName), g.partnerName || g.partnerHandle, g.partnerHandle, g.won);
+            }
+            (g.oppHandles || []).forEach(function (h, i) {
+                var nm = (g.oppNames || [])[i] || h;
+                if (!h && !nm) return;
+                bump(rel.h2h, 'lp:' + (h || nm), nm, h, g.won);
+            });
+        });
+    })();
 
     return '<div style="border-top:1px solid var(--border-color,rgba(255,255,255,0.1));padding-top:10px;">' +
         '<div style="font-size:0.82rem;font-weight:700;color:var(--text-bright,#fff);margin-bottom:4px;">📊 Estatísticas Detalhadas</div>' +
