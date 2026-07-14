@@ -1169,6 +1169,17 @@
   }
   // Marca cada linha com a verificação letzplay: _lzColor (cor do status), _lzSkill
   // (categoria apurada), _lzSrc (🎾 import / 🔎 scan). null = não verificado.
+  // O scan capturou TUDO o que o perfil do letzplay diz que existe? O próprio perfil
+  // declara os totais ("3 Rankings · 2 Torneios · 66 Jogos") e nós contamos o que veio —
+  // então a incompletude é AUTO-DECLARADA, não inferida. Medido em produção (14/jul):
+  // os 4 inscritos declaravam torneios e capturaram menos do que declaram.
+  // Sem total declarado (dado antigo) não dá pra afirmar completude → trata como incompleto.
+  function _lzScanComplete(sc) {
+    if (!sc) return false;
+    var t = sc.totals || {};
+    if (t.rankings == null || t.tournaments == null) return false;
+    return (sc.rankings || []).length >= t.rankings && (sc.tournaments || []).length >= t.tournaments;
+  }
   function _erApplyLzToRows(rows, profileMap, scanMap) {
     profileMap = profileMap || {}; scanMap = scanMap || {};
     (rows || []).forEach(function (r) {
@@ -1198,6 +1209,17 @@
         // profileSkill = borda MAIS FRACA da banda ativa (conservador, ver _spDeriveScan).
         var apuSc = _declRankFrom([sc.profileSkill || sc.skill]);
         var v2 = _lzVerdict(_declRankFrom(r.effectiveSkills), ev2, apuSc);
+        // VERDE EXIGE CAPTURA COMPLETA. O próprio scan sabe quanto FALTOU: o perfil do
+        // letzplay declara os totais e nós contamos o que veio. Medido em produção:
+        //   Flavia  → 2 torneios declarados, 0 capturados
+        //   Kelly   → 8 declarados, 2 capturados
+        // Verde significa "coerente". Afirmar coerência sem ter olhado os torneios é
+        // chute: o TÍTULO é o que manda subir de categoria e mora justamente lá. Sem eles,
+        // "não achei nada contra" não é evidência de nada — é ausência de dado.
+        // Cai pra violeta (autorizou, aguardando informação boa), que é o estado honesto.
+        // Vermelho/amarelo NÃO dependem disso: evidência positiva encontrada é prova,
+        // mesmo com captura incompleta. O que a falta de dado impede é a ABSOLVIÇÃO.
+        if (v2.key === 'green' && !_lzScanComplete(sc)) v2 = { key: 'white', apurada: null };
         r._lzSrc = '🔎';
         r._lzSkill = sc.profileSkill || sc.skill || (v2.apurada != null ? _LTR[v2.apurada] : null);
         if (v2.key !== 'white') { r._lzColor = _LZ_COL[v2.key]; r._lzVerified = true; }
