@@ -2163,6 +2163,7 @@ exports.sendOrgCommunication = onCall(
 
     const emails = [];
     const phones = [];
+    const waRecipients = []; // v1.1.30: {phone,name} — template do Cloud API é personalizado
     let platformWritten = 0;
     const skipped = [];
     // v2.4.63: manifesto por destinatário pro painel de controle de comunicados.
@@ -2234,6 +2235,12 @@ exports.sendOrgCommunication = onCall(
           if (profile.notifyEmail !== false && profile.email) { emails.push(profile.email); detail.email = true; detail.emailAddr = String(profile.email).toLowerCase(); }
           if (profile.notifyWhatsApp === true && profile.phone) {
             phones.push(profile.phone);
+            // v1.1.30: o Cloud API manda TEMPLATE personalizado ({{1}} = primeiro
+            // nome de quem recebe), então o telefone sozinho não basta.
+            waRecipients.push({
+              phone: String(profile.phone),
+              name: String(profile.displayName || profile.name || "").trim().split(/\s+/)[0] || "",
+            });
             detail.whatsapp = true;
             detail.phone = String(profile.phone);
           }
@@ -2268,11 +2275,23 @@ exports.sendOrgCommunication = onCall(
 
     // ── Fila de WhatsApp (processada por processWhatsAppQueue) ──
     let whatsappQueueId = "";
-    if (phones.length) {
-      const emoji = level === "fundamental" ? "🔴" : (level === "important" ? "🟠" : "🟢");
+    if (waRecipients.length) {
+      // v1.1.30: comunicado vai pelo template sp_comunicado_torneio (o Cloud API não
+      // manda texto livre business-initiated). {{1}} nome, {{2}} torneio, {{3}} a
+      // mensagem do organizador — texto humano, então passa pelo sanitizador (a Meta
+      // rejeita \n / 4+ espaços em parâmetro). Ver project_whatsapp_meta_2fa_block.
+      const _p = (v) => {
+        let s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+        if (s.length > 1024) s = s.slice(0, 1021) + "...";
+        return s || "-";
+      };
       const waRef = await db.collection("whatsapp_queue").add({
-        phones: phones,
-        message: emoji + " " + fullMsg,
+        template: "sp_comunicado_torneio",
+        urlSuffix: "#tournaments/" + tournamentId,
+        recipients: waRecipients.map((r) => ({
+          phone: r.phone,
+          params: [_p(r.name || "jogador"), _p(t.name || "seu torneio"), _p(rawMessage || fullMsg)],
+        })),
         createdAt: new Date().toISOString(),
         status: "pending",
       });
@@ -3959,16 +3978,12 @@ async function _evolutionRestart(apiUrl, apiKey, instance) {
   }
 }
 
-// Enfileira aviso ao dev (WhatsApp + e-mail) sobre uma auto-recuperação.
+// Enfileira aviso ao dev sobre uma auto-recuperação.
+// v1.1.30: o trecho de WhatsApp saiu — enfileirava texto livre no shape antigo
+// (que o processWhatsAppQueue do Cloud API rejeita) e no número BANIDO
+// 5511916936454. Dead code de qualquer jeito: só era chamado pelo
+// whatsappHealthGuard, deletado com o Evolution/VPS. O e-mail abaixo basta.
 async function _notifyDevRecovery(db, title, body) {
-  try {
-    await db.collection("whatsapp_queue").add({
-      phones: ["5511916936454"],
-      message: "🩺 " + title + "\n" + body,
-      createdAt: new Date().toISOString(),
-      status: "pending",
-    });
-  } catch (e) { /* ignore */ }
   try {
     await _enqueueMail(db, {
       to: ["scoreplace.app@gmail.com"],
