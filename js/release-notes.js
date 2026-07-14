@@ -12,6 +12,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
+      '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">📊 v1.1.24 — Seu histórico ficou mais interessante <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📊 Seu retrospecto:</b> no Histórico de jogos agora aparece <b>com quem você mais joga</b> e <b>contra quem</b>, com seu aproveitamento ao lado de cada um — algo que o letzplay não mostra. Acompanha os filtros: escolha um torneio e veja o retrospecto só dele.</li>' +
+        '<li><b>🏆 Nome real do torneio:</b> os jogos importados agora exibem o nome verdadeiro da competição, não só a categoria.</li>' +
+        '<li><b>📅 Data certa em qualquer país:</b> jogo de 07/08 aparecia como 06/08 dependendo do fuso. Corrigido no mundo todo.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
       '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">⏳ v1.1.20 — Busca com tempo na tela <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>⏳ Quanto falta, na tela:</b> as três buscas (verificar, completa e importar o seu histórico) mostram um cronômetro regressivo que se ajusta sozinho — e chega a zero exatamente quando chega a 100%.</li>' +

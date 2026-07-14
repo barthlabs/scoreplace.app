@@ -334,12 +334,91 @@
     });
   }
 
+  // ── Resumo relacional ────────────────────────────────────────────────────
+  // Só existe porque a partida virou doc compartilhado com os 4 jogadores identificados
+  // por handle: dá pra cruzar "com quem" e "contra quem". O letzplay lista jogos; aqui o
+  // histórico responde perguntas ("com quem eu ganho mais?"), que é o que o dono pediu —
+  // ver tudo o que tem no letzplay, "apresentado de forma mais amigável e interessante".
+  // Roda sobre as MESMAS linhas já filtradas, então acompanha o filtro ativo.
+  function _tally(rows, pega) {
+    var m = {};
+    rows.forEach(function (r) {
+      (pega(r) || []).forEach(function (p) {
+        var k = (p.handle || p.name || '').toLowerCase();
+        if (!k) return;
+        if (!m[k]) m[k] = { handle: p.handle || '', nomes: {}, v: 0, d: 0, n: 0 };
+        m[k].n++;
+        if (r.result === 'V') m[k].v++; else if (r.result === 'D') m[k].d++;
+        var nome = _bestPlayer(p.name, p.handle);
+        if (nome) m[k].nomes[nome] = (m[k].nomes[nome] || 0) + 1;
+      });
+    });
+    // NOME = o MAIS FREQUENTE, nunca o mais longo. O raspador às vezes cola texto vizinho
+    // do card e o mesmo handle aparece com dois nomes — medido nos dados reais:
+    //   joaoscassa      → "João Scassa" (maioria) e "Campos João Scassa" (poucos)
+    //   douglasleonardo → "Douglas Leonardo" e "Diegues Douglas Leonardo"
+    // "Mais longo vence" escolhia justamente o corrompido. O handle é a identidade; o nome
+    // é exibição ruidosa, então a moda é o que resiste a captura suja.
+    return Object.keys(m).map(function (k) {
+      var x = m[k];
+      var nome = Object.keys(x.nomes).sort(function (a, b) {
+        return (x.nomes[b] - x.nomes[a]) || (a.length - b.length);   // empate → o mais curto (menos ruído colado)
+      })[0] || _prettyHandle(x.handle) || k;
+      return { nome: nome, v: x.v, d: x.d, n: x.n };
+    })
+      // Ordena por quantidade de jogos: "com quem eu mais jogo" é a pergunta natural.
+      // Corte em 3 jogos — abaixo disso é ruído estatístico, não relação.
+      .filter(function (x) { return x.n >= 3; })
+      .sort(function (a, b) { return b.n - a.n; }).slice(0, 5);
+  }
+  function _pctBadge(v, n) {
+    var p = n ? Math.round(v / n * 100) : 0;
+    var cor = p >= 60 ? '#2dd4a0' : (p >= 40 ? '#f0b445' : '#f26a6a');
+    return '<span style="color:' + cor + ';font-weight:800;font-variant-numeric:tabular-nums;">' + p + '%</span>';
+  }
+  function _linhasPessoas(titulo, dica, lista) {
+    if (!lista.length) return '';
+    return '<div style="flex:1;min-width:210px;">' +
+      '<div style="font-size:0.72rem;font-weight:800;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">' + _esc(titulo) + '</div>' +
+      '<div style="font-size:0.68rem;color:var(--text-muted,#94a3b8);opacity:0.75;margin-bottom:6px;">' + _esc(dica) + '</div>' +
+      lista.map(function (x) {
+        return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.06));">' +
+          '<span style="flex:1;font-size:0.82rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc(x.nome) + '</span>' +
+          '<span style="font-size:0.72rem;color:var(--text-muted,#94a3b8);font-variant-numeric:tabular-nums;">' + x.v + 'V ' + x.d + 'D</span>' +
+          _pctBadge(x.v, x.n) +
+        '</div>';
+      }).join('') + '</div>';
+  }
+  function _renderResumo(rows) {
+    var slot = document.getElementById('hist-resumo');
+    if (!slot) return;
+    // Menos de 5 jogos não tem padrão pra mostrar — só ocuparia a tela.
+    if (rows.length < 5) { slot.innerHTML = ''; return; }
+    var v = rows.filter(function (r) { return r.result === 'V'; }).length;
+    var d = rows.filter(function (r) { return r.result === 'D'; }).length;
+    var parceiros = _tally(rows, function (r) { return r.lpPartner ? [r.lpPartner] : (r.partner ? [{ name: r.partner }] : []); });
+    var adversarios = _tally(rows, function (r) { return r.lpOpps || []; });
+    if (!parceiros.length && !adversarios.length) { slot.innerHTML = ''; return; }
+    slot.innerHTML =
+      '<div style="margin-top:12px;padding:14px 16px;border-radius:12px;background:var(--bg-darker,#171a2b);border:1px solid var(--border-color,rgba(255,255,255,0.08));">' +
+        '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px;">' +
+          '<span style="font-weight:800;">📊 Seu retrospecto</span>' +
+          '<span style="font-size:0.8rem;color:var(--text-muted,#94a3b8);">' + rows.length + ' jogos · ' + v + 'V ' + d + 'D · ' + _pctBadge(v, v + d) + ' de vitórias</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:22px;flex-wrap:wrap;">' +
+          _linhasPessoas('🤝 Com quem você mais joga', 'seu aproveitamento ao lado de cada um', parceiros) +
+          _linhasPessoas('⚔️ Contra quem você mais joga', 'seu aproveitamento contra cada um', adversarios) +
+        '</div>' +
+      '</div>';
+  }
+
   function _renderList() {
     var host = document.getElementById('hist-list');
     if (!host) return;
     var rows = _applyFilters();
     var countEl = document.getElementById('hist-count');
     if (countEl) countEl.textContent = rows.length + (rows.length === 1 ? ' jogo' : ' jogos');
+    _renderResumo(rows);   // acompanha o filtro: o retrospecto é SEMPRE do que está na tela
     if (!rows.length) {
       host.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px 16px;color:var(--text-muted,#94a3b8);font-size:0.85rem;">Nenhum jogo com esses filtros.</div>';
       return;
@@ -452,6 +531,7 @@
     container.innerHTML = hdr +
       '<div style="max-width:1080px;margin:0 auto;padding:0 14px 40px;">' +
         filterBar + lpHint +
+        '<div id="hist-resumo"></div>' +
         '<div id="hist-list" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;align-items:start;"></div>' +
       '</div>';
 
