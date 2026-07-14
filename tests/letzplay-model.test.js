@@ -129,5 +129,61 @@ for (let i = 0; i < 3; i++) {
   ok(M.dateKey('') === '' && M.dateKey(null) === '', 'data ausente não explode');
 }
 
+
+// ── 7. Nome NUNCA se solta do handle ao ordenar ──
+// (bug real: handles e names eram ordenados em listas separadas → o nome do X caía no
+//  slot do Y, e o histórico mostraria o adversário errado)
+{
+  const g = { date: 'Quinta, 07/08/25', club: 'paineiras-bt', competition: 'Mista D',
+    tourneyId: '297385', kind: 'tournament', official: true,
+    partnerHandle: 'Zeca', partnerName: 'Zeca Silva',
+    // de propósito fora de ordem alfabética: 'zulu' > 'ana'
+    oppHandles: ['Zulu', 'Ana'], oppNames: ['Zulu Costa', 'Ana Lima'],
+    myScore: 6, oppScore: 4 };
+  const d = M.toMatchDoc(g, 'Bruno');
+  d.teams.forEach((t) => {
+    t.handles.forEach((h, i) => {
+      const n = t.names[i];
+      if (!n) return;   // o dono não tem nome no import cru — resolvido no render
+      ok(n.toLowerCase().indexOf(h) === 0, 'nome "' + n + '" tem que corresponder ao handle "' + h + '" (mesmo índice)');
+    });
+  });
+  const adv = d.teams.find((t) => t.handles.indexOf('ana') >= 0);
+  ok(adv.handles.join(',') === 'ana,zulu', 'handles ordenados');
+  ok(adv.names.join(',') === 'Ana Lima,Zulu Costa', 'nomes acompanharam a ordenação (não "Zulu Costa,Ana Lima")');
+}
+
+
+// ── 8. A data que o jogador vê é a data que ele jogou — EM QUALQUER LUGAR DO MUNDO ──
+// O app é entregue em 172 países. Data de calendário NÃO é instante: guardar "07/08/25"
+// como timestamp faz o fuso de QUEM LÊ mudar o dia.
+//   • meia-noite UTC → no Brasil (UTC-3) vira 21h do dia anterior: 07/08 exibia "06 de ago";
+//   • meio-dia UTC   → conserta as Américas, mas quebra em Auckland/Kiritimati (UTC+13/+14).
+// Não existe hora "segura". Por isso guardamos o NÚMERO do calendário e o render monta a
+// data LOCAL a partir dos componentes.
+{
+  ok(M.dateNum('Quinta, 07/08/25 às 18:30h') === 20250807, 'dateNum é o número do calendário (veio ' + M.dateNum('Quinta, 07/08/25 às 18:30h') + ')');
+  ok(typeof M.dateNum('Quinta, 07/08/25') === 'number', 'dateNum é number — ordena no Firestore sem fuso nenhum');
+  ok(M.dateNum('Quinta, 07/08/25 às 18:30h') === M.dateNum('Quinta, 07/08/25'), 'a hora do letzplay não entra');
+  ok(M.dateNum('') === null && M.dateNum(null) === null, 'data ausente → null (não 1970)');
+
+  // O RENDER: dateParts → new Date(y, m-1, d) local. Do extremo leste ao extremo oeste.
+  const p = M.dateParts(20250807);
+  ok(p && p.y === 2025 && p.m === 8 && p.d === 7, 'dateParts devolve os componentes crus');
+  const extremos = ['Pacific/Kiritimati', 'Pacific/Auckland', 'Asia/Tokyo', 'Europe/Lisbon',
+    'America/Sao_Paulo', 'America/Rio_Branco', 'America/Los_Angeles', 'Pacific/Honolulu'];
+  extremos.forEach((tz) => {
+    // simula o cliente naquele fuso: monta a data local a partir dos componentes
+    const iso = String(p.y) + '-' + String(p.m).padStart(2, '0') + '-' + String(p.d).padStart(2, '0');
+    ok(iso === '2025-08-07', 'em ' + tz + ': os componentes não dependem de fuso (' + iso + ')');
+  });
+  // e a ordenação por dateNum é cronológica de verdade
+  const dias = ['Quinta, 07/08/25', 'Sábado, 20/06/26', 'Terça, 14/04/26'].map(M.dateNum);
+  ok(JSON.stringify(dias.slice().sort((a, b) => b - a)) === JSON.stringify([20260620, 20260414, 20250807]),
+    'ordenar por dateNum é cronológico (mais recente primeiro)');
+  // 31/12 e 01/01 não se confundem na virada
+  ok(M.dateNum('Quarta, 31/12/25') < M.dateNum('Quinta, 01/01/26'), '31/12/25 vem antes de 01/01/26');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-model: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

@@ -39,11 +39,25 @@
     var y = m[3].length === 2 ? ('20' + m[3]) : m[3];
     return y + m[2] + m[1];
   }
-  function dateMs(raw) {
+  // DATA DE CALENDÁRIO NÃO É INSTANTE. "07/08/25" é um dia, não um ponto no tempo — o
+  // letzplay não diz em que fuso o jogo foi jogado, e o app roda em 172 países. Guardar
+  // como timestamp é lossy por construção: o fuso de QUEM LÊ passa a alterar o dado.
+  //   • meia-noite UTC → no Brasil (UTC-3) vira 21h do dia ANTERIOR: 07/08 vira "06 de ago";
+  //   • meio-dia UTC  → conserta as Américas e a Europa, mas em Auckland (UTC+13) vira o
+  //     dia SEGUINTE. Não existe hora "segura" — qualquer instante quebra em algum fuso.
+  // Então guardamos o NÚMERO do calendário (20250807): ordena igual, não tem fuso, e o
+  // render monta a data LOCAL a partir dos componentes (ver dateParts) — a data que o
+  // jogador vê é sempre a data em que ele jogou, em qualquer lugar do mundo.
+  function dateNum(raw) {
     var k = dateKey(raw);
-    if (!k) return null;
-    var t = Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8));
-    return isNaN(t) ? null : t;
+    return k ? +k : null;
+  }
+  // Componentes pra montar a data LOCAL no render: new Date(y, m-1, d) — nunca UTC,
+  // nunca parse de string (que reintroduz fuso).
+  function dateParts(n) {
+    var s = String(n || '');
+    if (!/^\d{8}$/.test(s)) return null;
+    return { y: +s.slice(0, 4), m: +s.slice(4, 6), d: +s.slice(6, 8) };
   }
 
   // ── identidade da COMPETIÇÃO ─────────────────────────────────────────
@@ -63,17 +77,25 @@
   // Entrada: um jogo CRU do import (visão de `meHandle`). Saída: os dois times já
   // canônicos — cada um com handles ordenados, e os times ordenados entre si pelo
   // primeiro handle. Ordenar é o que faz Kelly e Rodrigo produzirem o MESMO doc.
+  // Pareia handle↔nome ANTES de ordenar. Ordenar os handles e os nomes em listas
+  // separadas desalinha os dois (o nome do jogador X acaba no slot do Y) — o handle é a
+  // identidade, o nome é só exibição, e eles não podem se soltar um do outro.
+  function _pares(hs, ns) {
+    return (hs || []).map(function (h, i) { return { h: _low(h), n: _s((ns || [])[i]) }; })
+      .filter(function (x) { return x.h; })
+      .sort(function (a, b) { return a.h < b.h ? -1 : (a.h > b.h ? 1 : 0); });
+  }
   function _teams(g, meHandle) {
     var me = _low(meHandle || (g && g.meHandle));
-    var meus = [me, _low(g && g.partnerHandle)].filter(Boolean).sort();
-    var deles = ((g && g.oppHandles) || []).map(_low).filter(Boolean).sort();
-    var nomesMeus = [];   // nome de exibição, casado por posição só quando dá
-    var nomesDeles = ((g && g.oppNames) || []).map(_s).filter(Boolean);
-    var A = { handles: meus, names: nomesMeus, score: _num(g && g.myScore) };
-    var B = { handles: deles, names: nomesDeles, score: _num(g && g.oppScore) };
+    // O import cru não traz o nome do PRÓPRIO dono no jogo (ele é o "eu"); fica vazio e o
+    // render resolve pelo handle — que é o que o app já faz pra todo mundo.
+    var meus = _pares([me, g && g.partnerHandle], ['', g && g.partnerName]);
+    var deles = _pares((g && g.oppHandles) || [], (g && g.oppNames) || []);
+    var A = { handles: meus.map(function (p) { return p.h; }), names: meus.map(function (p) { return p.n; }), score: _num(g && g.myScore) };
+    var B = { handles: deles.map(function (p) { return p.h; }), names: deles.map(function (p) { return p.n; }), score: _num(g && g.oppScore) };
     // Ordem canônica dos TIMES: pelo 1º handle. Sem isto, "A vs B" e "B vs A" (o mesmo
     // jogo visto dos dois lados) gerariam ids diferentes.
-    var inverte = (deles[0] || '') < (meus[0] || '');
+    var inverte = (B.handles[0] || '') < (A.handles[0] || '');
     return inverte ? [B, A] : [A, B];
   }
   function _num(v) { return (typeof v === 'number' && !isNaN(v)) ? v : null; }
@@ -133,7 +155,7 @@
       kind: (g && g.kind) || ((g && g.official) ? 'tournament' : 'ranking'),
       sport: (g && g.sport) || null,
       date: _s(g && g.date) || null,
-      dateMs: dateMs(g && g.date),
+      dateNum: dateNum(g && g.date),
       round: (g && g.round != null) ? g.round : null,
       teams: t,
       winner: vencedor,
@@ -178,7 +200,7 @@
     games.forEach(function (g) {
       if (!hasRealComp(g)) { skipped++; return; }
       var m = toMatchDoc(g, me);
-      if (!m.dateMs || m.players.length < 2) { skipped++; return; }
+      if (!m.dateNum || m.players.length < 2) { skipped++; return; }
       matches[m.gid] = m;                       // mesmo gid 2x no mesmo import → 1 doc
       var c = toCompDoc(g);
       var prev = comps[c.compId];
@@ -199,7 +221,7 @@
   }
 
   var API = {
-    dateKey: dateKey, dateMs: dateMs,
+    dateKey: dateKey, dateNum: dateNum, dateParts: dateParts,
     compId: compId, matchId: matchId, hasRealComp: hasRealComp,
     toMatchDoc: toMatchDoc, toCompDoc: toCompDoc, historyDocs: historyDocs
   };

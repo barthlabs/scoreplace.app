@@ -95,6 +95,56 @@
     return out.join(' / ');
   }
 
+  // LEITURA CANÔNICA: os jogos vêm de letzplayTournaments/{comp}/matches (1 doc por
+  // partida, compartilhado pelos 4 jogadores) em vez de cu.letzplayImport.games (1 doc
+  // por usuário). Mesma forma de linha do _fromLetzplay — a tela não muda.
+  //
+  // O doc canônico é NEUTRO de perspectiva (dois times, dois placares), então aqui é onde
+  // a perspectiva volta: descubro qual time é o meu pelo handle e derivo parceiro,
+  // adversário e resultado. É de propósito que o "eu ganhei" não esteja gravado no doc —
+  // ele é o mesmo pros 4 jogadores.
+  async function _fromLetzplayCanonical(cu) {
+    if (typeof window._lzHistoryRead !== 'function') return null;
+    var handle = cu && cu.letzplayHandle;
+    if (!handle) return null;
+    var h = String(handle).toLowerCase();
+    var r = await window._lzHistoryRead(h, 800);
+    var matches = (r && r.matches) || [];
+    if (!matches.length) return null;   // null (não []) = "sem acervo" → usa o formato antigo
+    var comps = (r && r.comps) || {};
+    return matches.map(function (m) {
+      var meuIdx = (m.teams || []).findIndex(function (t) { return (t.handles || []).indexOf(h) >= 0; });
+      if (meuIdx < 0) meuIdx = 0;
+      var meu = m.teams[meuIdx] || { handles: [], names: [] };
+      var outro = m.teams[1 - meuIdx] || { handles: [], names: [] };
+      var pi = (meu.handles || []).findIndex(function (x) { return x !== h; });
+      var comp = comps[m.comp] || {};
+      var realComp = comp.name || comp.categoryRaw || '';
+      var oficial = (m.kind || comp.kind) === 'tournament';
+      // Data LOCAL a partir do número do calendário — nunca converter instante, senão o
+      // fuso de quem lê muda o dia (o app roda em 172 países). new Date(y, m-1, d) é a
+      // única forma de "07/08/25" continuar sendo 07/08 em qualquer lugar do mundo.
+      var dp = window._spLzModel && window._spLzModel.dateParts(m.dateNum);
+      var ts = dp ? new Date(dp.y, dp.m - 1, dp.d).getTime() : 0;
+      return {
+        ts: ts,
+        source: 'letzplay',
+        sport: m.sport || comp.sport || 'Beach Tennis',
+        official: oficial,
+        venue: _prettyClub(m.club || comp.club),
+        competition: realComp || (oficial ? 'Torneio' : 'Ranking'),
+        competitionLabel: (oficial ? 'Torneio' : 'Ranking') + (realComp ? ' · ' + realComp : ''),
+        opponent: _lpTeam(outro.names, outro.handles) || '—',
+        partner: (pi >= 0) ? (_bestPlayer((meu.names || [])[pi], meu.handles[pi]) || null) : null,
+        result: (m.winner == null) ? '?' : (m.winner === meuIdx ? 'V' : 'D'),
+        scoreA: (typeof meu.score === 'number') ? String(meu.score) : '',
+        scoreB: (typeof outro.score === 'number') ? String(outro.score) : '',
+        lpPartner: (pi >= 0) ? { name: (meu.names || [])[pi] || '', handle: meu.handles[pi] } : null,
+        lpOpps: (outro.handles || []).map(function (hh, i) { return { name: (outro.names || [])[i] || '', handle: hh }; })
+      };
+    });
+  }
+
   function _fromLetzplay(cu) {
     var imp = cu && cu.letzplayImport;
     var games = imp && Array.isArray(imp.games) ? imp.games : [];
@@ -351,7 +401,15 @@
     container.innerHTML = hdr + '<div style="max-width:640px;margin:0 auto;padding:40px 16px;text-align:center;color:var(--text-muted,#94a3b8);">' +
       (typeof window._renderBallLoader === 'function' ? window._renderBallLoader('Carregando seu histórico…') : 'Carregando…') + '</div>';
 
-    var lp = _fromLetzplay(cu);
+    // LEITURA DUPLA (transição): tenta o acervo canônico primeiro (1 doc por partida,
+    // compartilhado); se ele ainda não tem nada pra este handle, cai no letzplayImport
+    // antigo. Enquanto o backfill não roda, os dois convivem — beta não permite trocar
+    // schema debaixo de dado existente. Falha na leitura canônica NÃO pode esconder o
+    // histórico: cai pro antigo e segue.
+    var lp = null;
+    try { lp = await _fromLetzplayCanonical(cu); }
+    catch (e) { window._log && window._log('[histórico] canônico falhou, usando o formato antigo:', (e && e.message) || e); }
+    if (!lp) lp = _fromLetzplay(cu);
     var sp = [];
     try { sp = await _fromScoreplace(cu); } catch (e) { sp = []; }
 

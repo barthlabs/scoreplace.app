@@ -274,7 +274,7 @@ service cloud.firestore {
       match /matches/{gid} {
         allow read: if request.auth != null;
         allow create, update: if request.auth != null
-          && request.resource.data.keys().hasOnly(['gid', 'comp', 'club', 'kind', 'sport', 'date', 'dateMs', 'round', 'teams', 'winner', 'players', 'updatedAt', 'seenFrom']);
+          && request.resource.data.keys().hasOnly(['gid', 'comp', 'club', 'kind', 'sport', 'date', 'dateNum', 'round', 'teams', 'winner', 'players', 'updatedAt', 'seenFrom']);
         allow delete: if false;
       }
     }

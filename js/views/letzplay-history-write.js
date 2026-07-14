@@ -58,17 +58,32 @@
 
   // Histórico de uma pessoa, do formato canônico. É a razão de o jogo ser doc próprio:
   // uma query só, sem carregar torneio — mesmo padrão de `results` (playerUids).
-  // Exige o índice composto matches(players CONTAINS, dateMs DESC) — ver
-  // firestore.indexes.json. Sem ele o Firestore recusa a query (não devolve vazio).
+  //
+  // O orderBy NÃO é enfeite: `array-contains` sozinho exigiria uma isenção de índice de
+  // campo à parte, então a leitura canônica SEMPRE ordena. Com ele, basta o composto
+  // matches(players CONTAINS, dateNum DESC) — ver firestore.indexes.json. Sem índice o
+  // Firestore RECUSA a query (não devolve vazio), então falha aqui é barulhenta.
+  //
+  // Devolve { matches, comps } — as competições vêm junto porque o doc da partida guarda
+  // só a REFERÊNCIA (comp), nunca o nome repetido em cada jogo. São ~7 gets pra 81 jogos.
   async function ler(handle, limite) {
     var db = window.FirestoreDB && (window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
-    if (!db || !handle) return [];
+    if (!db || !handle) return { matches: [], comps: {} };
     var snap = await db.collectionGroup('matches')
       .where('players', 'array-contains', String(handle).toLowerCase())
-      .orderBy('dateMs', 'desc')
+      .orderBy('dateNum', 'desc')
       .limit(limite || 500)
       .get();
-    return snap.docs.map(function (d) { return d.data(); });
+    var matches = snap.docs.map(function (d) { return d.data(); });
+    var ids = {};
+    matches.forEach(function (m) { if (m.comp) ids[m.comp] = 1; });
+    var keys = Object.keys(ids);
+    var comps = {};
+    var docs = await Promise.all(keys.map(function (k) {
+      return db.collection('letzplayTournaments').doc(k).get().catch(function () { return null; });
+    }));
+    docs.forEach(function (d) { if (d && d.exists) comps[d.id] = d.data(); });
+    return { matches: matches, comps: comps };
   }
 
   window._lzHistoryWrite = gravar;
