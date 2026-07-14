@@ -16,7 +16,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>⏳ Quanto falta, na tela:</b> as três buscas (verificar, completa e importar o seu histórico) mostram um cronômetro regressivo que se ajusta sozinho — e chega a zero exatamente quando chega a 100%.</li>' +
         '<li><b>🐢 Se o letzplay pedir calma, o tempo sobe:</b> a espera entra na conta em vez de o número mentir. 100 inscritos na verificação levam ~14min.</li>' +
-        '<li><b>📚 Busca completa por lote:</b> ela lê o histórico inteiro de cada pessoa (~2min cada), então vai em lotes de 20min, começando pelos mais desatualizados. Clique de novo pro próximo lote — o que já veio fica salvo.</li>' +
+        '<li><b>📚 Busca completa num job só:</b> o organizador puxa o histórico de todos os inscritos de uma vez, começando pelos mais desatualizados. Mostra quanto falta, dá pra <b>interromper quando quiser</b>, e cada pessoa é salva assim que fica pronta — nada do que já veio se perde.</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +

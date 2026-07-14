@@ -41,7 +41,7 @@ const SUITES = [
   'tests/letzplay-verdict-color.test.js',
   'tests/letzplay-pace.test.js',
   'tests/letzplay-eta.test.js',
-  'tests/letzplay-batch.test.js',
+  'tests/letzplay-scan-order.test.js',
   'tests/phase0-elim.test.js',
   'tests/phase0-monarch.test.js',
   'tests/phase0-monarch-duplas.test.js',

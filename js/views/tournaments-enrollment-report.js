@@ -1677,11 +1677,6 @@
   //  • Clicar de novo enquanto roda: não faz nada (a barra já está na tela).
   //  • O que já foi lido é salvo mesmo se o resto falhar (resultado parcial).
   var _LZ_IDLE_MS = 180000;
-  // Orçamento de UM lote da busca completa (definido pelo dono): 20min por clique.
-  // Não é o tempo total — 100 inscritos somam ~3h, mas divididos em lotes de 20min, e
-  // nenhuma espera isolada passa disso. Cada pessoa concluída já é gravada (entrega
-  // parcial), então fechar o navegador entre lotes não perde nada.
-  var _LZ_BATCH_BUDGET_MS = 20 * 60 * 1000;
   var _LZ_FULL_MS_KEY = 'scoreplace_lz_full_ms';
   // Quanto custa, MEDIDO, uma pessoa na busca completa. Começa em ~2min (a conta pela
   // cadência da extensão: ~22 requisições × ~3,5s) e passa a valer o tempo real assim que
@@ -1702,22 +1697,36 @@
     var ts = (sc && sc.scannedAt) ? (Date.parse(sc.scannedAt) || 0) : 0;
     return ts ? (Date.now() - ts) : Number.MAX_SAFE_INTEGER;
   }
-  // Planeja UM lote: quem entra agora e quantos ficam pro próximo clique.
-  // Só a COMPLETA é loteada — ela custa ~22 requisições por pessoa (páginas do histórico
-  // + 1 por competição), ~2min em cadência humana. A ESSENCIAL é 1 navegação (~8s), então
-  // 100 inscritos saem em ~14min num clique só e lotear seria burocracia à toa.
-  // Exposto pra teste (tests/letzplay-batch.test.js): é uma decisão do dono (20min por
-  // clique, mais desatualizados primeiro) e não pode derivar em silêncio.
-  window._lzPlanBatch = function (targets, mode, perPessoaMsOverride) {
+  // Ordena a varredura: JOB ÚNICO, sem corte por lote.
+  //
+  // O lote de 20min foi tentado e DESCARTADO pelo dono, por um motivo que vale mais que o
+  // tempo: _"divididos em lotes podem confundir o organizador que pensa que puxou tudo mas
+  // nao puxou e nao puxa de novo."_ É a MESMA família de bug que passamos o dia matando —
+  // sistema que reporta sucesso sem ter trazido o dado. Um job longo com o tempo na tela e
+  // um botão de interromper é honesto; um lote silencioso não é.
+  //
+  // Segurança do job longo (é o que torna as 3h aceitáveis):
+  //   • cada pessoa é GRAVADA assim que conclui (_lzPersistScans no parcial) — fechar a
+  //     aba/dormir o notebook perde no máximo a pessoa em andamento;
+  //   • Interromper salva o que já veio;
+  //   • a ordem é do MAIS DESATUALIZADO pro mais recente, então interromper no meio deixa
+  //     pra trás justamente quem estava mais atualizado — o corte nunca é arbitrário.
+  // Exposto pra teste (tests/letzplay-batch.test.js): a ordem é decisão do dono.
+  window._lzPlanScan = function (targets, mode) {
     targets = (targets || []).slice();
-    if (mode !== 'full') return { targets: targets, sobram: 0, cabem: targets.length };
+    if (mode !== 'full') return { targets: targets, sobram: 0 };
     // Mais desatualizado primeiro; nunca varrido vem antes de todo mundo.
     targets.sort(function (a, b) { return _lzStaleness(b) - _lzStaleness(a); });
-    var perPessoaMs = perPessoaMsOverride || _lzMeasuredFullMs();
-    var cabem = Math.max(1, Math.floor(_LZ_BATCH_BUDGET_MS / perPessoaMs));
-    var lote = (targets.length > cabem) ? targets.slice(0, cabem) : targets;
-    return { targets: lote, sobram: targets.length - lote.length, cabem: cabem };
+    return { targets: targets, sobram: 0 };
   };
+  // Quanto tempo a busca vai levar, em texto — MOSTRADO ANTES de começar. Um job de 3h
+  // que arranca sem avisar é uma emboscada; avisado, é uma escolha.
+  function _lzEtaLabel(n, mode) {
+    var ms = n * (mode === 'full' ? _lzMeasuredFullMs() : 8500);
+    var min = Math.round(ms / 60000);
+    if (min < 60) return '~' + Math.max(1, min) + 'min';
+    return '~' + (ms / 3600000).toFixed(1).replace('.', ',') + 'h';
+  }
   window._lzScanRunning = false;
   window._lzOrgScan = function (mode) {
     mode = (mode === 'full') ? 'full' : 'essential';
@@ -1728,24 +1737,41 @@
     // cinza/inativo, então este caminho é só rede de segurança (nunca deve ser clicável).
     var targets = (ctx.pend && ctx.pend[mode]) || ctx.targets;
     if (!targets.length) return;
-    // ── LOTE (v1.1.20) ──────────────────────────────────────────────────────
-    // A COMPLETA custa ~22 requisições por pessoa (páginas do histórico + 1 por
-    // competição). Em cadência humana (~3,5s por requisição, e tem que ser humana, senão
-    // o Cloudflare bloqueia e não vem jogo nenhum) isso dá ~2min por pessoa: 100 inscritos
-    // seriam ~3h numa tacada. Então a completa vai por LOTE, dentro de um orçamento de
-    // tempo, priorizando quem está há mais tempo sem atualizar; o organizador clica de
-    // novo pro próximo lote. A ESSENCIAL não precisa disso (~8s por pessoa → 100 em ~13min).
-    var totalPend = targets.length;
-    var _plano = window._lzPlanBatch(targets, mode);
+    // A COMPLETA custa ~22 requisições por pessoa (páginas do histórico + 1 por competição)
+    // → ~2min em cadência humana (obrigatória: correr faz o Cloudflare bloquear e não vem
+    // jogo nenhum). 100 inscritos = ~3h. É UM job, avisado e interrompível — o lote foi
+    // descartado por esconder do organizador que faltava gente (ver _lzPlanScan).
+    var _plano = window._lzPlanScan(targets, mode);
     targets = _plano.targets;
+    // Job longo (>20min) avisa ANTES. Diz que dá pra interromper e que nada se perde —
+    // sem isso o organizador ou não clica (com medo) ou clica e abandona no meio achando
+    // que travou. Só a completa costuma chegar lá; a essencial de 100 dá ~14min.
+    if (mode === 'full' && targets.length * _lzMeasuredFullMs() > 20 * 60 * 1000 &&
+        typeof window.showConfirmDialog === 'function') {
+      var _eta = _lzEtaLabel(targets.length, mode);
+      window.showConfirmDialog(
+        '📚 Busca completa: ' + _eta,
+        'Vou ler o histórico inteiro de ' + targets.length + ' inscrito(s) no letzplay, no ritmo que ele aceita (ir mais rápido faz ele bloquear e não vir jogo nenhum).\n\n' +
+        'Pode deixar rodando e usar o app normalmente. Dá pra <b>interromper a qualquer momento</b> — cada pessoa é salva assim que fica pronta, então nada do que já veio se perde.\n\n' +
+        'Começo pelos mais desatualizados.',
+        function () { _lzRunScan(mode, targets); },
+        null, 'Buscar (' + _eta + ')', 'Agora não'
+      );
+      return;
+    }
+    _lzRunScan(mode, targets);
+  };
+  function _lzRunScan(mode, targets) {
+    var ctx = window._lzScanCtx;
+    if (!ctx || !targets || !targets.length) return;
     window._lzScanRunning = true;
     window._lzPendingMode = mode; // registra o modo pra gravar no scan (última verificação)
     var total = targets.length;
-    var sobram = totalPend - total;   // ficaram pro próximo lote
     // Semente do regressivo: a essencial é 1 navegação por pessoa; a completa é a paginação
     // inteira. A medição real corrige já na 1ª pessoa concluída.
     window._spEtaBegin(total, mode === 'full' ? _lzMeasuredFullMs() : 8500);
     var bestScans = {}, versions = [], started = false, done = false, resultTimer = null, idleTimer = null;
+    var _gravados = {};   // uids já persistidos incrementalmente (não regrava no fim)
     function scanList() { return Object.keys(bestScans).map(function (u) { return bestScans[u]; }); }
     function setProg(o) {
       o = o || {};
@@ -1850,8 +1876,23 @@
         if (!d.ok) return;   // uma extensão falhou; aguarda outra (caso duplicadas)
         ping();
         mergeScans(d.scans);
-        // parcial = a extensão só avisando o que já leu; o fim vem sem `partial`.
-        if (d.partial) return;
+        // parcial = a extensão avisando o que já leu. GRAVA AGORA quem acabou de ficar
+        // pronto: antes isto era `return` seco e o Firestore só era tocado no FIM, então
+        // uma busca de 3h que morresse no minuto 179 perdia tudo — apesar de a extensão
+        // prometer que "o que já foi lido está salvo". Cada uid é gravado UMA vez (_gravados).
+        if (d.partial) {
+          var novos = scanList().filter(function (s) { return s.uid && s.scan && !_gravados[s.uid]; });
+          if (novos.length) {
+            novos.forEach(function (s) { _gravados[s.uid] = 1; });
+            _lzPersistScans(ctx.tId, novos).catch(function (e) {
+              // Falhou a gravação incremental? Solta o uid pra tentar de novo no fim —
+              // melhor gravar duas vezes que perder.
+              novos.forEach(function (s) { delete _gravados[s.uid]; });
+              window._log && window._log('[lz parcial] não gravou (tenta no fim):', (e && e.message) || e);
+            });
+          }
+          return;
+        }
         // debounce: espera ~2s por resultados de outras extensões, depois salva o melhor
         if (resultTimer) clearTimeout(resultTimer);
         resultTimer = setTimeout(function () {
@@ -1878,13 +1919,41 @@
       // não é um detalhe cosmético — ela silenciosamente não traz o dado.
       if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _toastErr('Sua extensão está na v' + best + ' e a busca precisa da v' + _LZ_MIN_EXT + ' (a antiga desiste quando o letzplay limita e não traz os jogos). ' + reload); return; }
       started = true;
-      // Diz de saída quanto vai levar e, se houve corte por lote, que sobraram pessoas —
-      // senão o organizador acha que varreu todo mundo e fica sem saber que falta clicar.
-      var _lote = sobram > 0 ? (' · ' + sobram + ' fica(m) pro próximo lote') : '';
-      setProg({ sub: 'preparando ' + total + (total === 1 ? ' inscrito' : ' inscritos') + _lote, pct: 3 });
+      setProg({ sub: 'preparando ' + total + (total === 1 ? ' inscrito' : ' inscritos'), pct: 3 });
       window.postMessage({ __sp_lp: 'run-org-scan', targets: targets, tournamentId: ctx.tId, mode: mode }, window.location.origin);
     }, 900);
   };
+  // GRAVA um punhado de scans em letzplayScans/{uid}. Extraído de _saveScansAndReload
+  // pra poder ser chamado A CADA PESSOA concluída, e não só no fim.
+  //
+  // POR QUE ISSO IMPORTA: a extensão sempre mandou resultado parcial a cada pessoa, mas o
+  // app fazia `if (d.partial) return;` — acumulava em MEMÓRIA e só escrevia no Firestore
+  // no fim. Numa busca completa de 100 inscritos (~3h), fechar a aba, dormir o notebook ou
+  // um refresh perdia TUDO, apesar de o comentário na extensão prometer que "o que já foi
+  // lido está salvo". Agora cada pessoa é gravada assim que fica pronta.
+  function _lzPersistScans(tId, scans) {
+    var ok = (scans || []).filter(function (s) { return s.uid && s.scan; });
+    if (!ok.length) return Promise.resolve(0);
+    var db = firebase.firestore();
+    var meUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
+    var nowIso = new Date().toISOString();
+    var scanMode = (window._lzPendingMode === 'full') ? 'full' : 'essential';
+    var meName = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.displayName) || null;
+    var _tour = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId)
+      : ((window.AppStore && window.AppStore.tournaments) || []).filter(function (t) { return String(t.id) === String(tId); })[0];
+    var tName = _tour ? (_tour.name || null) : null;
+    return Promise.all(ok.map(function (s) {
+      var gotFull = !!(s.fullImport && Array.isArray(s.fullImport.games) && s.fullImport.games.length);
+      if (s.scan && typeof s.scan === 'object') {
+        s.scan._mode = (scanMode === 'full' && gotFull) ? 'full' : 'essential';
+        s.scan._fullGames = gotFull ? s.fullImport.games.length : 0;
+        s.scan._fullError = (scanMode === 'full' && !gotFull) ? (s.fullError || 'sem-jogos') : null;
+      }
+      var doc = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, scannedByName: meName, tournamentId: String(tId), tournamentName: tName };
+      if (gotFull) doc.fullImport = s.fullImport;
+      return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
+    })).then(function () { return ok.length; });
+  }
   function _saveScansAndReload(tId, scans, onFail) {
     var ok = scans.filter(function (s) { return s.uid && s.scan; });
     var failed = scans.filter(function (s) { return !(s.uid && s.scan); });
