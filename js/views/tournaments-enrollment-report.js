@@ -1210,6 +1210,11 @@
   // Exposto pro teste headless (tests/letzplay-verdict-color.test.js) e por ser o
   // resolvedor CANÔNICO da cor do nome — quem precisar da cor usa esta, não recria.
   window._erApplyLzToRows = _erApplyLzToRows;
+  // Exposto pra verificação da seção (botões de busca + rótulo de data) sem precisar de
+  // torneio real + auth — é a tela onde o organizador ficou travado sem saber.
+  window._erRenderCategoriesSection = function (rows, t, profileMap, scanMap) {
+    return _renderCategoriesSection(rows, t, profileMap, scanMap);
+  };
   window._LZ_COL = _LZ_COL;
 
   // ─── Matriz Gênero × Categoria (drag-and-drop) ──────────────────────
@@ -1429,7 +1434,16 @@
   // (letzplayScans/{uid}.scannedAt + scan._mode) e (b) o import que a PRÓPRIA pessoa
   // fez do histórico dela (perfil.letzplayImport.importedAt) — que é sempre completo.
   var _LZ_FRESH_DAYS = 6;
+  // TRAVA DESLIGADA enquanto não fechamos que a busca funciona de ponta a ponta.
+  // A regra dos 6 dias existe pra não re-buscar à toa (cada busca é leitura no letzplay,
+  // que responde com rate-limit em rajada). Mas ela também IMPEDE re-testar: em 14/jul o
+  // scan gravou _mode='full' sem trazer jogo nenhum, os 4 inscritos passaram a contar como
+  // "atualizados", e os dois botões ficaram inativos — o organizador ficou travado sem
+  // saber, sem poder tentar de novo. Enquanto o sistema não está validado, poder repetir
+  // vale mais que economizar leitura. Religar = _LZ_FRESH_OFF = false.
+  var _LZ_FRESH_OFF = true;
   function _lzIsFresh(iso) {
+    if (_LZ_FRESH_OFF) return false;   // nada é "fresco" → os botões nunca ficam inativos
     var ts = iso ? (Date.parse(iso) || 0) : 0;
     if (!ts) return false;
     return (Date.now() - ts) < (_LZ_FRESH_DAYS * 86400000);
@@ -1504,7 +1518,9 @@
     // CINZA + INATIVO = "não há nada novo pra buscar". Uma busca COMPLETA fresca apaga
     // os DOIS botões (ela contém a essencial); uma ESSENCIAL fresca apaga só o dela —
     // a completa continua acesa porque lê os jogos, que a essencial nem olha.
-    var _greyCss = 'background:var(--bg-darker,#171a2b);color:var(--text-muted,#8592a6);border:1px solid var(--border-color,rgba(255,255,255,0.10));cursor:not-allowed;opacity:0.75;';
+    // CINZA de verdade. Era var(--bg-darker) — que no tema escuro é quase PRETO, então o
+    // botão inativo sumia no fundo e não lia como "desabilitado", lia como buraco.
+    var _greyCss = 'background:#4a5163;color:#c3c9d6;border:1px solid #5b6376;cursor:not-allowed;opacity:0.9;';
     // Cada botão mostra QUANTOS ele vai buscar de verdade (os frescos < 6 dias ficam de
     // fora). Sem NINGUÉM pendente o botão fica CINZA E INATIVO — só volta a acender
     // quando entrar um inscrito novo autorizado ou quando algum dos já buscados passar
@@ -1520,9 +1536,7 @@
       return '<div style="flex:1;">' +
         '<button type="button" id="' + id + '"' + dis + ' onclick="window._lzOrgScan(\'' + mode + '\')" title="' + _esc(tip) + '" class="btn' + (doneAll ? '' : ' hover-lift') + (shine && !doneAll ? ' btn-shine' : '') + '" style="' + btnCss + '">' +
           label + (doneAll ? ' ✅' : cnt) + '</button>' +
-        (doneAll
-          ? '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Atualizado (&lt; ' + _LZ_FRESH_DAYS + ' dias)</div>'
-          : (lastMode === mode ? dateLine() : '')) +
+        (lastMode === mode || doneAll ? dateLine() : '') +
       '</div>';
     }
     var scanBtn = (_isOrg && targets.length)
