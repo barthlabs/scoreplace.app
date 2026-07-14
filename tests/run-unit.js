@@ -40,6 +40,7 @@ const SUITES = [
   'tests/chave-label-default.test.js',
   'tests/letzplay-verdict-color.test.js',
   'tests/letzplay-pace.test.js',
+  'tests/letzplay-eta.test.js',
   'tests/phase0-elim.test.js',
   'tests/phase0-monarch.test.js',
   'tests/phase0-monarch-duplas.test.js',

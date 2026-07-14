@@ -12,6 +12,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
+      '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">⏳ v1.1.20 — Busca com tempo na tela <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⏳ Quanto falta, na tela:</b> as três buscas (verificar, completa e importar o seu histórico) mostram um cronômetro regressivo que se ajusta sozinho — e chega a zero exatamente quando chega a 100%.</li>' +
+        '<li><b>🐢 Se o letzplay pedir calma, o tempo sobe:</b> a espera entra na conta em vez de o número mentir. 100 inscritos na verificação levam ~14min.</li>' +
+        '<li><b>📚 Busca completa por lote:</b> ela lê o histórico inteiro de cada pessoa (~2min cada), então vai em lotes de até 30min, começando pelos mais desatualizados. Clique de novo pro próximo lote.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
       '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">🐢 v1.1.19 — Busca do letzplay que não mente <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🟢 Quem foi verificado aparece verde:</b> se o nível veio do próprio letzplay, o nome fica verde na hora — antes só saía do roxo depois que a própria pessoa entrasse no app, o que podia nunca acontecer.</li>' +

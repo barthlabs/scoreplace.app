@@ -1677,6 +1677,28 @@
   //  • Clicar de novo enquanto roda: não faz nada (a barra já está na tela).
   //  • O que já foi lido é salvo mesmo se o resto falhar (resultado parcial).
   var _LZ_IDLE_MS = 180000;
+  // Orçamento de um lote da busca completa. 30min é o teto que o dono aceitou esperar.
+  var _LZ_BATCH_BUDGET_MS = 30 * 60 * 1000;
+  var _LZ_FULL_MS_KEY = 'scoreplace_lz_full_ms';
+  // Quanto custa, MEDIDO, uma pessoa na busca completa. Começa em ~2min (a conta pela
+  // cadência da extensão: ~22 requisições × ~3,5s) e passa a valer o tempo real assim que
+  // uma busca termina — inclusive o quanto o letzplay estiver limitando HOJE. É isso que
+  // faz o tamanho do lote e o regressivo acertarem em vez de repetir um chute fixo.
+  function _lzMeasuredFullMs() {
+    var v = parseInt(localStorage.getItem(_LZ_FULL_MS_KEY) || '', 10);
+    return (v > 5000 && v < 900000) ? v : 120000;
+  }
+  function _lzRecordFullMs(ms) {
+    if (!(ms > 5000)) return;
+    var cur = _lzMeasuredFullMs();
+    localStorage.setItem(_LZ_FULL_MS_KEY, String(Math.round(cur * 0.5 + ms * 0.5)));
+  }
+  // Antiguidade em ms (maior = mais desatualizado). Nunca varrido → vem primeiro sempre.
+  function _lzStaleness(tg) {
+    var sc = (window._lzRenderCtx && window._lzRenderCtx.scanMap) ? window._lzRenderCtx.scanMap[tg.uid] : null;
+    var ts = (sc && sc.scannedAt) ? (Date.parse(sc.scannedAt) || 0) : 0;
+    return ts ? (Date.now() - ts) : Number.MAX_SAFE_INTEGER;
+  }
   window._lzScanRunning = false;
   window._lzOrgScan = function (mode) {
     mode = (mode === 'full') ? 'full' : 'essential';
@@ -1687,9 +1709,28 @@
     // cinza/inativo, então este caminho é só rede de segurança (nunca deve ser clicável).
     var targets = (ctx.pend && ctx.pend[mode]) || ctx.targets;
     if (!targets.length) return;
+    // ── LOTE (v1.1.20) ──────────────────────────────────────────────────────
+    // A COMPLETA custa ~22 requisições por pessoa (páginas do histórico + 1 por
+    // competição). Em cadência humana (~3,5s por requisição, e tem que ser humana, senão
+    // o Cloudflare bloqueia e não vem jogo nenhum) isso dá ~2min por pessoa: 100 inscritos
+    // seriam ~3h numa tacada. Então a completa vai por LOTE, dentro de um orçamento de
+    // tempo, priorizando quem está há mais tempo sem atualizar; o organizador clica de
+    // novo pro próximo lote. A ESSENCIAL não precisa disso (~8s por pessoa → 100 em ~13min).
+    var totalPend = targets.length;
+    if (mode === 'full') {
+      // Ordena pelo MAIS DESATUALIZADO primeiro (nunca varrido = infinitamente velho).
+      targets = targets.slice().sort(function (a, b) { return _lzStaleness(b) - _lzStaleness(a); });
+      var perPessoaMs = _lzMeasuredFullMs();
+      var cabem = Math.max(1, Math.floor(_LZ_BATCH_BUDGET_MS / perPessoaMs));
+      if (targets.length > cabem) targets = targets.slice(0, cabem);
+    }
     window._lzScanRunning = true;
     window._lzPendingMode = mode; // registra o modo pra gravar no scan (última verificação)
     var total = targets.length;
+    var sobram = totalPend - total;   // ficaram pro próximo lote
+    // Semente do regressivo: a essencial é 1 navegação por pessoa; a completa é a paginação
+    // inteira. A medição real corrige já na 1ª pessoa concluída.
+    window._spEtaBegin(total, mode === 'full' ? _lzMeasuredFullMs() : 8500);
     var bestScans = {}, versions = [], started = false, done = false, resultTimer = null, idleTimer = null;
     function scanList() { return Object.keys(bestScans).map(function (u) { return bestScans[u]; }); }
     function setProg(o) {
@@ -1699,9 +1740,16 @@
         sub: o.sub || '', pct: o.pct, onCancel: o.noCancel ? null : cancel
       });
     }
+    var _startedAt = Date.now();
     function cleanup() {
       done = true;
       window._lzScanRunning = false;
+      // Guarda o custo REAL por pessoa da completa: é o que dimensiona o próximo lote e
+      // a estimativa inicial. Assim o "N mais desatualizados" acompanha o quanto o
+      // letzplay está limitando hoje, em vez de repetir um chute fixo.
+      var _feitos = scanList().filter(function (s) { return s.uid && s.scan; }).length;
+      if (mode === 'full' && _feitos > 0) _lzRecordFullMs((Date.now() - _startedAt) / _feitos);
+      if (typeof window._spEtaEnd === 'function') window._spEtaEnd();
       window.removeEventListener('message', onMsg);
       if (idleTimer) clearTimeout(idleTimer);
       if (resultTimer) clearTimeout(resultTimer);
@@ -1759,6 +1807,9 @@
       // e matar uma busca que estava indo bem.
       if (d.__sp_lp === 'lz-throttle') {
         ping();
+        // A espera entra na conta: o regressivo AUMENTA (é o previsto — "pode ir ajustando,
+        // aumentando ou diminuindo"). Sem isso ele desceria durante a pausa e mentiria.
+        window._spEtaDelay(d.waitMs || 0);
         var secs = Math.round((d.waitMs || 0) / 1000);
         var paceTxt = d.gap ? (' · ritmo ' + (d.gap / 1000).toFixed(1) + 's/página') : '';
         setProg({ label: '🐢 letzplay pediu pra ir mais devagar',
@@ -1770,7 +1821,11 @@
         var tot = d.total || total;
         var cur = d.current || {};
         var frac = _LZ_PHASE_FRAC[cur.phase] || 0;
-        var pct = tot ? Math.min(99, Math.round(((d.done || 0) + frac) / tot * 100)) : 0;
+        // pct e regressivo saem da MESMA contagem (_spEtaSync/_spEtaFrac) — é o que garante
+        // que 100% e 0s chegam juntos, sem ajuste cosmético no fim.
+        window._spEtaSync(d.done || 0);
+        window._spEtaFrac(frac);
+        var pct = window._spEtaPct() || (tot ? Math.min(99, Math.round(((d.done || 0) + frac) / tot * 100)) : 0);
         var who = cur.name || cur.handle || '';
         var note = cur.note ? (' · ' + cur.note) : '';
         setProg({ label: (mode === 'full' ? '📚 Busca completa no letzplay' : '🔎 Verificando no letzplay'),
@@ -1809,7 +1864,10 @@
       // não é um detalhe cosmético — ela silenciosamente não traz o dado.
       if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _toastErr('Sua extensão está na v' + best + ' e a busca precisa da v' + _LZ_MIN_EXT + ' (a antiga desiste quando o letzplay limita e não traz os jogos). ' + reload); return; }
       started = true;
-      setProg({ sub: 'preparando ' + total + (total === 1 ? ' inscrito' : ' inscritos'), pct: 3 });
+      // Diz de saída quanto vai levar e, se houve corte por lote, que sobraram pessoas —
+      // senão o organizador acha que varreu todo mundo e fica sem saber que falta clicar.
+      var _lote = sobram > 0 ? (' · ' + sobram + ' fica(m) pro próximo lote') : '';
+      setProg({ sub: 'preparando ' + total + (total === 1 ? ' inscrito' : ' inscritos') + _lote, pct: 3 });
       window.postMessage({ __sp_lp: 'run-org-scan', targets: targets, tournamentId: ctx.tId, mode: mode }, window.location.origin);
     }, 900);
   };
@@ -1887,7 +1945,15 @@
       } else if (window.location.hash === '#analise/' + tId) {
         var c = document.getElementById('view-container'); if (c) window.renderEnrollmentReportPage(c, tId);
       }
-      if (typeof showNotification === 'function') showNotification('Busca concluída', ok.length + ' carregado(s)' + (failed.length ? (' · ' + failed.length + ' falhou') : ''), 'success');
+      // Diz quantos JOGOS vieram, não só "carregado". Um scan sem jogos é o modo de falha
+      // real (14/jul: 4 "carregados", zero jogos) — o número tem que estar na cara.
+      var _comJogos = ok.filter(function (s) { return s.scan && s.scan._fullGames > 0; }).length;
+      var _det = (window._lzPendingMode === 'full')
+        ? (_comJogos + ' com histórico' + (_comJogos < ok.length ? (' · ' + (ok.length - _comJogos) + ' sem jogos') : ''))
+        : (ok.length + ' carregado(s)');
+      if (typeof showNotification === 'function') {
+        showNotification('Busca concluída', _det + (failed.length ? (' · ' + failed.length + ' falhou') : ''), 'success');
+      }
     }).catch(function (e) {
       if (typeof window._hideLoading === 'function') window._hideLoading();
       if (typeof onFail === 'function') onFail('Erro ao salvar: ' + String((e && e.message) || e));
