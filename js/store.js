@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.4';
+window.SCOREPLACE_VERSION = '1.2.5';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -925,7 +925,14 @@ window._matchHasRealPlay = function (m) {
 };
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
-window.SCOREPLACE_DEV_WHATSAPP = '5511966581959'; // +55 11 96658-1959
+// v1.2.5: número trocado pro WhatsApp PESSOAL. O anterior (+55 11 96658-1959, barthlabs)
+// teve o WhatsApp Business banido pela Meta em 14/jul — o template sp_inscricoes_resumo foi
+// recategorizado UTILITY→MARKETING às 19:21 e a conta caiu às 19:29; a apelação foi negada.
+// O link wa.me daquele número virou beco sem saída. A LINHA telefônica segue viva (o ban é
+// só do WhatsApp), então os `tel:` do rodapé/endereço legal continuam válidos.
+// Este aqui é conta pessoal e uso MANUAL (a pessoa escreve, um humano responde) — não é
+// automação, então não é o que a Meta pune. Ver [[project_whatsapp_meta_2fa_block]].
+window.SCOREPLACE_DEV_WHATSAPP = '5511997237733'; // +55 11 99723-7733 (pessoal)
 window._devWhatsAppTip = 'Clique aqui para a sua Linha direta com o desenvolvedor do scoreplace.app. ' +
   'Tem dúvida, crítica ou sugestão? Achou algo que não funcionou como esperava? ' +
   'Precisa de ajuda com algo com relação ao app? Por favor fale conosco! ' +

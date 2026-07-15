@@ -11,8 +11,11 @@
   function renderDeleteAccountPage(container) {
     var _t = window._t || function (k) { return k; };
     var supportEmail = 'contato@barthlabs.com';
-    var waNumber = '5511966581959';
-    var waLabel = '+55 11 96658-1959';
+    // v1.2.5: o canal de WhatsApp saiu daqui. Apontava pro +55 11 96658-1959, cujo
+    // WhatsApp Business foi banido pela Meta (14/jul, apelação negada) — esta é a página
+    // que a Google Play exige pra exclusão de dados, então oferecer um canal morto é
+    // risco na revisão, além de deixar o titular sem resposta. O e-mail abaixo é o canal
+    // (e está comprovadamente entregando). Ver [[project_whatsapp_meta_2fa_block]].
 
     var H2 = 'font-size:1.05rem;font-weight:700;color:var(--text-bright);margin:1.5rem 0 0.6rem;';
     var P = 'font-size:0.9rem;color:var(--text-main);line-height:1.7;margin:0 0 0.75rem;';
@@ -59,9 +62,6 @@
             '<li style="' + LI + '">E-mail: ' +
               '<a href="mailto:' + supportEmail + '?subject=Excluir%20minha%20conta%20scoreplace" ' +
               'style="color:var(--primary-color);">' + supportEmail + '</a></li>' +
-            '<li style="' + LI + '">WhatsApp: ' +
-              '<a href="https://wa.me/' + waNumber + '?text=Quero%20excluir%20minha%20conta%20scoreplace" ' +
-              'target="_blank" rel="noopener" style="color:var(--primary-color);">' + waLabel + '</a></li>' +
           '</ul>' +
           '<p style="' + P + '">' +
             'Concluímos a exclusão em até <b>7 dias úteis</b> após confirmarmos a titularidade da conta.' +

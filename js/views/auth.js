@@ -3411,7 +3411,7 @@ window._resetPhoneVerify = function() {
 
   var _fail = function(msg) {
     if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar'; }
-    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + (msg || 'Código incorreto. Confira no SMS/WhatsApp.') + '</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + (msg || 'Código incorreto. Confira o SMS.') + '</span>';
     if (ci) { ci.focus(); ci.select && ci.select(); }
   };
 
@@ -3724,7 +3724,7 @@ window._showEmailVerificationGate = function(email, name) {
       '<button onclick="window._gateVerifyCode()" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;margin-bottom:8px;">✅ Confirmar</button>' +
       '<button onclick="window._gateResendCode(this)" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.82rem;font-weight:700;padding:9px;margin-bottom:14px;">📨 Reenviar código</button>' +
       '<div style="display:flex;align-items:center;gap:10px;margin:6px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">não recebeu o código?</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
-      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Confirme pelo <b>celular</b> — código por SMS + botão de autenticar no WhatsApp.</div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Confirme pelo <b>celular</b> — você recebe um código por SMS.</div>' +
       _phoneBtn;
   } else {
     _middle =
@@ -3732,7 +3732,7 @@ window._showEmailVerificationGate = function(email, name) {
       '<button onclick="window._checkEmailVerified()" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;margin-bottom:10px;">✅ Já confirmei</button>' +
       '<button onclick="window._resendVerifyEmail()" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.88rem;font-weight:700;padding:11px;margin-bottom:10px;">📨 Reenviar e-mail</button>' +
       '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">ou</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
-      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Não chegou o e-mail? Confirme pelo seu celular — recebe um código por SMS e WhatsApp.</div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Não chegou o e-mail? Confirme pelo seu celular — recebe um código por SMS.</div>' +
       _phoneBtn;
   }
   ov.innerHTML =
@@ -3749,7 +3749,7 @@ window._showEmailVerificationGate = function(email, name) {
 
 // ── Autenticação por celular no gate (v2.4.24) ──────────────────────────────
 // Alternativa pra quando o e-mail de confirmação não chega. A pessoa prova que
-// controla um telefone (SMS do Firebase + código/botão nosso pelo WhatsApp) e
+// controla um telefone (SMS do Firebase; o canal WhatsApp saiu na v1.2.5 — banido) e
 // a conta é confirmada (emailVerified=true) com o telefone salvo no perfil.
 window._gatePhoneConfirmation = null;
 window._gatePhonePending = null;
@@ -3760,7 +3760,11 @@ window._gatePhoneStart = function() {
   card.innerHTML =
     '<div style="font-size:2.2rem;margin-bottom:8px;">📱</div>' +
     '<div style="font-size:1.15rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:8px;">Confirmar por celular</div>' +
-    '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:16px;">Digite seu número com DDD. Você recebe um código por <b>SMS</b> e por <b>WhatsApp</b> (com botão de 1 toque).</div>' +
+    // v1.2.5: a promessa de WhatsApp saiu — o número foi banido pela Meta (14/jul) e a
+    // apelação negada. Prometer um canal morto é pior que não oferecer: a pessoa espera
+    // um botão de 1 toque que nunca chega e não procura o SMS. O SMS é do Firebase, não
+    // depende da Meta. Ver [[project_whatsapp_meta_2fa_block]].
+    '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:16px;">Digite seu número com DDD. Você recebe um código por <b>SMS</b>.</div>' +
     '<div style="display:flex;gap:8px;align-items:stretch;margin-bottom:12px;">' +
       '<span style="display:flex;align-items:center;padding:0 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);border-radius:10px;font-size:0.95rem;font-weight:700;color:var(--text-bright);">🇧🇷 +55</span>' +
       '<input id="gate-phone-input" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-8888" style="flex:1;min-width:0;box-sizing:border-box;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:1rem;" />' +
@@ -3798,19 +3802,15 @@ window._gatePhoneSend = function() {
   if (!u) { if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">Sessão expirada. Entre de novo.</span>'; return; }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">⏳ Enviando código por SMS e WhatsApp...</span>';
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">⏳ Enviando código por SMS...</span>';
   window._gatePhonePending = phoneE164;
 
-  // (1) WhatsApp em paralelo (código nosso + botão de 1 toque).
-  try {
-    if (firebase.functions) {
-      firebase.functions().httpsCallable('sendPhoneVerifyWhatsApp')({ phone: phoneE164 })
-        .then(function(r) { window._log && window._log('[gatePhone] WA:', JSON.stringify(r && r.data)); })
-        .catch(function(e) { window._warn && window._warn('[gatePhone] WA falhou:', e && (e.code || e.message)); });
-    }
-  } catch (e) {}
+  // v1.2.5: a chamada a sendPhoneVerifyWhatsApp saiu. O WhatsApp Business foi banido pela
+  // Meta (14/jul, apelação negada) — a CF só gastava um round-trip pra falhar no catch, e
+  // pior: fazia o status prometer um canal que não existe. O SMS abaixo (Firebase) é o
+  // único caminho, e nunca dependeu da Meta. Ver [[project_whatsapp_meta_2fa_block]].
 
-  // (2) SMS via Firebase — vincula o telefone à conta atual (mantém o e-mail).
+  // SMS via Firebase — vincula o telefone à conta atual (mantém o e-mail).
   try {
     if (typeof _ensureRecaptchaInBody === 'function') _ensureRecaptchaInBody();
     if (typeof _resetPhoneRecaptcha === 'function') _resetPhoneRecaptcha();
@@ -3842,8 +3842,8 @@ window._gateShowCodeStep = function(phoneE164, smsErrCode) {
   var card = document.querySelector('#email-verify-gate > div');
   if (!card) return;
   var smsNote = smsErrCode
-    ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:10px;">Não foi possível enviar SMS agora — use o código ou o botão do WhatsApp.</div>'
-    : '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;">Enviamos um código por <b>SMS</b> e por <b>WhatsApp</b>. Digite qualquer um deles — ou toque no botão da mensagem do WhatsApp pra entrar direto.</div>';
+    ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:10px;">Não foi possível enviar o SMS agora. Tente reenviar em alguns instantes.</div>'
+    : '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;">Enviamos um código por <b>SMS</b>. Digite ele aqui.</div>';
   card.innerHTML =
     '<div style="font-size:2.2rem;margin-bottom:8px;">🔑</div>' +
     '<div style="font-size:1.15rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Digite o código</div>' +
@@ -3872,23 +3872,16 @@ window._gatePhoneVerify = function() {
 
   var _fail = function(msg) {
     if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar'; }
-    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + (msg || 'Código incorreto. Confira no SMS/WhatsApp.') + '</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + (msg || 'Código incorreto. Confira o SMS.') + '</span>';
     if (ci) { ci.focus(); ci.select && ci.select(); }
   };
 
   // 1) Tenta como código NOSSO (WhatsApp) via Cloud Function.
-  var tryWhatsAppCode = function() {
-    if (!firebase.functions) return _fail();
-    return firebase.functions().httpsCallable('verifyPhoneGate')({ code: code })
-      .then(function(r) {
-        var d = (r && r.data) || {};
-        if (d.ok) { window._gateEnterApp(); return true; }
-        return false;
-      })
-      .catch(function() { return false; });
-  };
-
-  // 2) Tenta como código do Firebase (SMS) — confirma o link e finaliza no server.
+  // v1.2.5: tryWhatsAppCode REMOVIDO. Validava o código de 6 dígitos que o WhatsApp mandava
+  // (verifyPhoneGate{code} lê gateVerifications/{uid}) — como o WhatsApp foi banido (14/jul,
+  // apelação negada), esse doc nunca mais é criado: a chamada só gastava um round-trip pra
+  // devolver false antes de cair no SMS. Agora o SMS é direto.
+  // Tenta como código do Firebase (SMS) — confirma o link e finaliza no server.
   var tryFirebaseSms = function() {
     if (!window._gatePhoneConfirmation) return Promise.resolve(false);
     return window._gatePhoneConfirmation.confirm(code)
@@ -3905,11 +3898,8 @@ window._gatePhoneVerify = function() {
       .catch(function() { return false; });
   };
 
-  tryWhatsAppCode().then(function(done) {
-    if (done) return;
-    tryFirebaseSms().then(function(done2) {
-      if (!done2) _fail();
-    });
+  tryFirebaseSms().then(function(done2) {
+    if (!done2) _fail();
   });
 };
 
