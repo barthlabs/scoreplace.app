@@ -129,6 +129,10 @@ require('./vendor/bracket-model.js');           // _appendCanonicalColumn
 require('./vendor/bracket-logic.js');           // _computeStandings, _generateNextRound, geradores
 require('./vendor/phases-engine.js');           // _phasesEngine.generatePhase/storePhase
 require('./vendor/phase-generators.js');        // _phaseGen (precisa de phases-engine)
+// Helpers do SORTEIO INICIAL (_buildPhase0Cfg/_buildPhase0Pool/_formDoublesTeams/
+// _buildDoubleElimBracket/_buildRepechageDoubleElim/_applyMixedOriginCategories). O arquivo
+// tem DOM, mas só dentro de funções que o servidor nunca chama — no load é limpo.
+require('./vendor/tournaments-draw.js');
 
 // Sanity: o dispatcher precisa ter sido exposto (v2.3.91+ do cliente).
 if (typeof g.window._generateNextRound !== 'function') {
@@ -288,4 +292,105 @@ function canRecompile(t) {
   return true;
 }
 
-module.exports = { generateLigaRound, compileFromFmt2, canRecompile, _window: g.window };
+// ── SORTEIO INICIAL NO SERVIDOR (Etapa 3) ────────────────────────────────────
+// Espelha o TRECHO DO MOTOR de `generateDrawFunction` (tournaments-draw.js:1539-1642) —
+// e SÓ ele. Tudo que vem ANTES lá é UI/decisão e FICA NO CLIENTE: gates de re-sorteio,
+// diálogos, e os painéis de resolução (pow2 / resto / sem-dupla). Esses painéis já
+// gravam a decisão no doc (`p2Resolution`/`oddResolution`/`incompleteResolution`), então
+// o servidor só LÊ o que o organizador decidiu e EXECUTA. Painel = UI = cliente;
+// execução = cânone = CF.
+//
+// ⚠️ NÃO faz o commit: quem chama decide como persistir (o cliente usa _commitInitialDraw,
+// um delta atômico sobre o doc fresco — ver project_concurrency_safe_saves). Aqui só muta
+// `t` em memória e devolve o que mudou.
+//
+// PRÉ-CONDIÇÃO: `canRecompile(t)` — sem chave ainda. Chamar com chave existente é
+// re-sorteio, que é decisão do organizador no cliente (project_draw_once_canonical_order).
+function drawInitial(t, opts) {
+  opts = opts || {};
+  const win = g.window;
+  if (!t) return { ok: false, reason: 'no-tournament' };
+  if (!canRecompile(t)) return { ok: false, reason: 'already-drawn' };
+
+  // Nome vivo por uid antes do motor (storage é só-uid; o motor lê nome). Espelha a
+  // linha 1331 do cliente. O caller popula _profileNameByUid.
+  if (typeof win._rehydrateEntryNames === 'function') win._rehydrateEntryNames(t);
+
+  // Suíço-classificatório tem ramo próprio no cliente (round-gen incremental) — ainda
+  // não canonizado. Não fingir que sabe: devolve e o cliente sorteia.
+  if (t.p2Resolution === 'swiss') return { ok: false, reason: 'swiss-not-canonical' };
+
+  const _E0 = win._phasesEngine;
+  const _cfg0 = win._buildPhase0Cfg(t);
+
+  // Rei/Rainha é MODO INDIVIDUAL (parceiros rotativos) — nunca duplas fixas. Sem esta
+  // trava, uma fase Rei/Rainha num torneio de dupla juntava 2 duplas num "time de 4"
+  // (bug do Confra). Espelha as linhas 1547-1548. Ver project_rei_rainha_is_drawmode_not_format.
+  const _isMon0 = !!(_cfg0 && (_cfg0.reiRainha === true || _cfg0.drawMode === 'rei_rainha'))
+    || !!(win._isMonarchFormat && win._isMonarchFormat(t));
+
+  let _ts0 = _isMon0 ? 1 : (parseInt(t.teamSize, 10) || 1);
+  const _enr0 = t.enrollmentMode || t.enrollment || 'individual';
+  if (!_isMon0 && win._isTeamEnrollMode(_enr0) && _ts0 < 2) _ts0 = 2;
+
+  let _allMale = 0;
+  if (_ts0 > 1) {
+    if (!t.teamOrigins) t.teamOrigins = {};
+    const _f0 = win._formDoublesTeams(
+      Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}),
+      _ts0, t.teamOrigins, t._drawBalanceMode);
+    t.participants = _f0.participants;
+    _allMale = _f0.allMaleCount || 0;   // o cliente TOASTA isto; aqui volta no retorno
+    if (t.mixedPairingSeparated && _enr0 === 'misto' && _ts0 === 2 && typeof win._applyMixedOriginCategories === 'function') {
+      win._applyMixedOriginCategories(t, t.participants);
+    }
+  }
+
+  // Reset do storage stale da fase 0 (generatePhase/storePhase reescrevem).
+  t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
+  t.currentPhaseIndex = 0; delete t._phaseMaterialized;
+  if (!t.drawVisibility) t.drawVisibility = 'public';
+  // v4.1.30: o SORTEIO LIMPA a presença — "acabou de sortear, ninguém está presente".
+  t.checkedIn = {}; t.absent = {};
+
+  const _pool0 = win._buildPhase0Pool(t, _isMon0, _ts0);
+  const _built0 = _E0.generatePhase(_pool0, _cfg0, {
+    t: t, idPrefix: 'p0-' + (opts.idStamp || Date.now()),
+    isVip: function (e) { return win._entryHasVip(t, e); },
+    catOf: function (e) {
+      const c = (typeof win._getParticipantCategories === 'function') ? win._getParticipantCategories(e) : [];
+      return (c && c[0]) || '';
+    }
+  });
+
+  // Liga/Suíço: generatePhase já escreveu t.rounds/t.standings (storage NATIVO).
+  if (_built0 && _built0.appliedToT) {
+    t._canonicalDraw = true; t.status = 'active';
+    const _lrc = (_built0.roundMatchCount != null) ? _built0.roundMatchCount
+      : ((t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return !m.isSitOut; }).length);
+    const _lso = (t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return m.isSitOut; }).length;
+    t.updatedAt = new Date().toISOString();
+    return { ok: true, native: true, format: t.format, matchCount: _lrc, sitOuts: _lso, allMaleCount: _allMale };
+  }
+
+  // Eliminatória / Grupos / Rei-Rainha: matches flat taggeados na fase 0 via storePhase.
+  const _r0 = _E0.storePhase(t, 0, _built0);
+  // storePhase pode FALHAR (ex.: 'no-entrants' — split por categoria não casou ninguém).
+  // NUNCA tratar como sucesso: era isso que dava "diz que sorteou mas não mostra chave".
+  if (!_r0 || !_r0.ok) return { ok: false, reason: 'store-failed', error: (_r0 && _r0.error) || 'motor vazio' };
+
+  if (_built0.needsDoubleElim && typeof win._buildDoubleElimBracket === 'function') {
+    win._buildDoubleElimBracket(t);
+    (t.matches || []).forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; });
+  }
+  if (_built0.needsRepechageDoubleElim && typeof win._buildRepechageDoubleElim === 'function') {
+    const _metas0 = (_built0.repMetaByCat && _built0.repMetaByCat.length) ? _built0.repMetaByCat : [_built0.repMeta];
+    _metas0.forEach(function (mm) { win._buildRepechageDoubleElim(t, mm); });
+    (t.matches || []).forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; });
+  }
+  t._canonicalDraw = true; t.status = 'active';
+  t.updatedAt = new Date().toISOString();
+  return { ok: true, native: false, format: t.format, matchCount: (t.matches || []).length, allMaleCount: _allMale };
+}
+
+module.exports = { generateLigaRound, compileFromFmt2, canRecompile, drawInitial, _window: g.window };

@@ -5012,26 +5012,9 @@ window._toggleHidden = function (tId, event) {
 // usuário E no feed de descoberta pública — sem isso, ações em torneio DESCOBERTO (não
 // inscrito), como "Falar com o organizador", davam "Torneio não encontrado" (só olhavam
 // AppStore.tournaments). Comparação por String (ids podem vir number/string).
-// v3.0.x: detecção CANÔNICA de dupla/time. Retorna a lista de membros (nomes, só p/
-// exibição/contagem) quando p é uma ENTRADA DE TIME; null se é individual.
-//
-// PRINCÍPIO (regra do dono, gravada): uma DUPLA é definida pelos DOIS SLOTS (p1 e p2)
-// ocupados — slot ocupado = uid (identidade real) OU, só pra jogador INFORMAL sem conta,
-// o nome do slot. A identidade interna é SEMPRE o uid quando existe; o nome é só exibição.
-// O '/' num displayName é PURAMENTE exibição ("Kelly / Rodrigo") e NUNCA define dupla.
-// Uma string solta também nunca é dupla. (lista participants[] cobre o formato de array.)
-window._entryTeamMembers = function (p) {
-  if (!p || typeof p !== 'object') return null; // string/individual — '/' é só exibição
-  if (Array.isArray(p.participants) && p.participants.length) {
-    return p.participants.map(function (s) { return (s && (s.displayName || s.name)) || String(s || ''); }).filter(Boolean);
-  }
-  var hasP1 = !!(p.p1Uid || p.p1Name); // slot 1 ocupado: uid (real) ou nome (informal)
-  var hasP2 = !!(p.p2Uid || p.p2Name); // slot 2 ocupado
-  if (hasP1 && hasP2) {
-    return [p.p1Name || p.p1Uid || '', p.p2Name || p.p2Uid || ''];
-  }
-  return null;
-};
+// _entryTeamMembers: MOVIDO para js/views/identity-core.js (jul/2026) — é o cânone da
+// detecção de dupla (slots p1/p2 por uid) e o motor de sorteio precisa dele NO SERVIDOR
+// (_formDoublesTeams o chama). Mesma razão dos _idMap*/_entryHasVip. Segue em window.*.
 
 // ⚠️ CANÔNICO — quantas PESSOAS numa LISTA de entradas (solo=1, dupla=2, time=nº de
 // membros). Pra contagem de inscritos do TORNEIO inteiro use window._countCompetitors(t)

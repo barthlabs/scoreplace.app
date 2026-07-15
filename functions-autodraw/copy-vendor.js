@@ -27,6 +27,11 @@ const FILES = [
   'bracket-logic.js',          // _computeStandings, _generateNextRound, geradores Rei/Rainha + padrão + round-robin
   'phases-engine.js',          // _phasesEngine.generatePhase — motor multi-fase (lógica pura)
   'phase-generators.js',       // _phaseGen — geradores de fase (depende de phases-engine)
+  // _buildPhase0Cfg/_buildPhase0Pool/_formDoublesTeams/_buildDoubleElimBracket/
+  // _buildRepechageDoubleElim/_applyMixedOriginCategories — os helpers do SORTEIO INICIAL.
+  // O arquivo tem DOM (painéis/diálogos), mas só dentro de funções que o servidor NUNCA
+  // chama — no load ele é limpo (mesma regra do _fireLigaAutoDraw, ver README).
+  'tournaments-draw.js',
 ];
 
 if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });

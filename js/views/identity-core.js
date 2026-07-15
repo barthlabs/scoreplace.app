@@ -179,3 +179,30 @@ window._entryHasVip = function(t, entry) {
   }
   return false;
 };
+
+// ── Detecção CANÔNICA de dupla/time (movida do store.js em jul/2026) ─────────
+// Vive aqui porque o SORTEIO roda no servidor e _formDoublesTeams chama esta função
+// (vendor/tournaments-draw.js:347). Ficou faltando na 1ª leva do identity-core e o
+// sorteio inicial do servidor ESTOURAVA em qualquer torneio de duplas — pego pelo
+// teste cliente×servidor (test-drawinitial.js, caso "Fase de Grupos · duplas").
+// Ver project_dupla_entry_structural_not_slash / project_count_people_not_entries.
+// v3.0.x: detecção CANÔNICA de dupla/time. Retorna a lista de membros (nomes, só p/
+// exibição/contagem) quando p é uma ENTRADA DE TIME; null se é individual.
+//
+// PRINCÍPIO (regra do dono, gravada): uma DUPLA é definida pelos DOIS SLOTS (p1 e p2)
+// ocupados — slot ocupado = uid (identidade real) OU, só pra jogador INFORMAL sem conta,
+// o nome do slot. A identidade interna é SEMPRE o uid quando existe; o nome é só exibição.
+// O '/' num displayName é PURAMENTE exibição ("Kelly / Rodrigo") e NUNCA define dupla.
+// Uma string solta também nunca é dupla. (lista participants[] cobre o formato de array.)
+window._entryTeamMembers = function (p) {
+  if (!p || typeof p !== 'object') return null; // string/individual — '/' é só exibição
+  if (Array.isArray(p.participants) && p.participants.length) {
+    return p.participants.map(function (s) { return (s && (s.displayName || s.name)) || String(s || ''); }).filter(Boolean);
+  }
+  var hasP1 = !!(p.p1Uid || p.p1Name); // slot 1 ocupado: uid (real) ou nome (informal)
+  var hasP2 = !!(p.p2Uid || p.p2Name); // slot 2 ocupado
+  if (hasP1 && hasP2) {
+    return [p.p1Name || p.p1Uid || '', p.p2Name || p.p2Uid || ''];
+  }
+  return null;
+};
