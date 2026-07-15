@@ -12,6 +12,15 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
+      '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">💬 v1.2.9 — WhatsApp: agora é você quem manda <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>💬 O grupo do jogo e do torneio continua igual:</b> você cria o grupo no seu WhatsApp, cola o link no app e todo mundo entra num toque. Nada muda aqui — é o caminho que não depende de ninguém além de você.</li>' +
+        '<li><b>📵 O app parou de mandar mensagem por WhatsApp.</b> O número que enviava foi bloqueado pelo WhatsApp e não volta. Em vez de prometer o que não chega, tiramos: seus avisos vão por <b>notificação no app</b> e <b>e-mail</b>, que sempre funcionaram.</li>' +
+        '<li><b>🔑 Login e senha por celular agora são só por SMS.</b> Se o SMS não sair, o app <b>avisa na hora</b> e mostra a saída pelo e-mail — antes ficava um aviso discreto porque o WhatsApp era o plano B.</li>' +
+        '<li><b>⚙️ O botão "WhatsApp" no seu perfil mudou de sentido:</b> antes ligava o envio de avisos; agora diz se <b>você aceita ser chamado no WhatsApp</b> — pelo organizador, pelos outros jogadores, e se entra nos grupos. Desligou? Falam com você por e-mail e pelas notificações do app. Quem já tem celular cadastrado continua ligado, como estava.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
       '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">📊 v1.1.24 — Seu histórico ficou mais interessante <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📊 Seu retrospecto:</b> no Histórico de jogos agora aparece <b>com quem você mais joga</b> e <b>contra quem</b>, com seu aproveitamento ao lado de cada um — algo que o letzplay não mostra. Acompanha os filtros: escolha um torneio e veja o retrospecto só dele.</li>' +
