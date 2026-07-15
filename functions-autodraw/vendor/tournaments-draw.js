@@ -1323,6 +1323,49 @@ function _commitInitialDraw(tId, t, preDraw) {
     return _p;
 }
 
+// ── CHAMADA DA CF drawRound — fetch() DIRETO, sem o SDK ──────────────────────────────
+// POR QUE NÃO httpsCallable (custou um teste real na staging): o SDK compat monta o
+// "contexto" da chamada ANTES de enviar — auth token, App Check e o token de
+// Instance-ID/FCM. Com o usuário LOGADO o FCM já está inicializado, o SDK pede o token
+// de messaging, isso estoura ("Messaging: A problem occurred while subscribing the user
+// to FCM…") e a promise REJEITA sem a requisição sair: a CF nunca é tocada e o usuário vê
+// um erro de push no lugar do sorteio. Deslogado o SDK pula esse passo — por isso o teste
+// anônimo passava e o do organizador não.
+// Este projeto JÁ foi mordido por isso: v1.0.40 filtrou o ruído "Messaging:" no magic link
+// e a v1.3.86 trocou httpsCallable por fetch() direto pelo MESMO motivo. Filtrar não basta
+// — a chamada nem sai. Aqui falamos o protocolo callable na mão: POST {data}, resposta
+// {result} ou {error:{status,message}}.
+// projectId vem do app (NUNCA hardcodar 'scoreplace-app': quebraria na staging, que roda
+// no projeto scoreplace-staging — ver [[project_staging_env]]).
+window._callDrawRound = function (payload) {
+    var fb = window.firebase;
+    var user = fb && fb.auth && fb.auth().currentUser;
+    if (!user) return Promise.reject(Object.assign(new Error('Entre na sua conta pra sortear.'), { code: 'functions/unauthenticated' }));
+    var pid = '';
+    try { pid = fb.app().options.projectId; } catch (e) {}
+    if (!pid) return Promise.reject(Object.assign(new Error('App não inicializado.'), { code: 'functions/internal' }));
+    var url = 'https://us-central1-' + pid + '.cloudfunctions.net/drawRound';
+    return user.getIdToken().then(function (tok) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+            body: JSON.stringify({ data: payload })
+        });
+    }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+            if (j && j.error) {
+                // Mapeia o status do protocolo callable pro mesmo `code` que o SDK daria,
+                // pro catch do chamador não precisar saber que trocamos de transporte.
+                var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
+                throw Object.assign(new Error(j.error.message || 'Falha no sorteio'),
+                    { code: 'functions/' + (st || 'internal') });
+            }
+            if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { code: 'functions/internal' });
+            return { data: (j && j.result) || {} };
+        });
+    });
+};
+
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
@@ -1552,14 +1595,7 @@ window.generateDrawFunction = function (tId) {
         // velha que se quer matar. Só 'swiss' (round-gen incremental, não canonizado) segue
         // no ramo local abaixo. Ver [[project_draw_canonization_cf]].
         var _redraw = !!t._redrawConfirmed; // o gate limpou só o LOCAL; o doc ainda tem a chave
-        var _fn = null;
-        try { _fn = firebase.functions().httpsCallable('drawRound'); } catch (_eFn) { _fn = null; }
-        if (!_fn) {
-            if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
-            showNotification('⚠️ Sorteio indisponível', 'Não foi possível falar com o servidor. Confira a conexão e tente de novo.', 'error');
-            return;
-        }
-        _fn({ tournamentId: String(tId), allowRedraw: _redraw }).then(function (_res) {
+        window._callDrawRound({ tournamentId: String(tId), allowRedraw: _redraw }).then(function (_res) {
             var d = (_res && _res.data) || {};
             if (!d.ok || !d.tournament) throw new Error('resposta inválida do servidor');
             // Estado AUTORITATIVO do servidor no `t` local. Mutação in-place: preserva as

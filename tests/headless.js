@@ -85,13 +85,14 @@ function _drawRoundStub(payload) {
   };
 }
 sandbox.firebase = {
-  functions: () => ({
-    httpsCallable: (name) => (name === 'drawRound'
-      ? _drawRoundStub
-      : (() => Promise.resolve({ data: {} }))),
-  }),
+  functions: () => ({ httpsCallable: () => (() => Promise.resolve({ data: {} })) }),
   firestore: () => ({}),
 };
+// O sorteio NÃO passa mais pelo httpsCallable (o SDK estoura no token de FCM com usuário
+// logado — ver _callDrawRound em tournaments-draw.js). O cliente chama window._callDrawRound;
+// é ELE que o teste tem de stubar, senão exercitaria um caminho que não existe mais.
+// tournaments-draw.js define o real no load; sobrescrevemos DEPOIS (ver render-harness).
+sandbox._callDrawRound = _drawRoundStub;
 let _ls = {};
 sandbox.localStorage = {
   getItem: (k) => (k in _ls ? _ls[k] : null),
@@ -106,6 +107,9 @@ const VIEWS = path.join(__dirname, '..', 'js', 'views');
 function load(rel) {
   const full = path.join(VIEWS, rel);
   vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: full });
+  // tournaments-draw.js define o _callDrawRound REAL (fetch pra CF) no load — no teste não
+  // há rede nem Firebase. Reaplica o stub DEPOIS de cada arquivo pra o real nunca vencer.
+  sandbox._callDrawRound = _drawRoundStub;
 }
 
 // Ordem importa (mesma do index.html / draw-core.js): utils → categorias → model → logic
@@ -116,4 +120,4 @@ load('bracket-model.js');           // _appendCanonicalColumn
 load('bracket-logic.js');           // _computeStandings, _advanceWinner, _findMatch, _maybeFinish*, _generateNextRound
 load('phases-engine.js');           // window._phasesEngine: buildEntrantsByDest, materializeNextPhase, bracketPhaseGroups…
 
-module.exports = { window: sandbox, sandbox, load, E: sandbox._phasesEngine };
+module.exports = { window: sandbox, sandbox, load, E: sandbox._phasesEngine, drawRoundStub: _drawRoundStub };
