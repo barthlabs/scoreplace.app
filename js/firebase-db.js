@@ -67,24 +67,11 @@ window.FirestoreDB = {
   // antiga do auto-draw) batia nessa regra. Defesa global aqui pega esse
   // padrão em qualquer campo, em qualquer profundidade — protege contra
   // futuras introduções acidentais e cobre docs legacy ainda em memória.
+  // Delega pro cânone em js/views/persist-core.js — a MESMA função que a Cloud Function
+  // do sorteio carrega (vendor/) antes de gravar. Uma implementação só, zero drift.
   _cleanUndefined(obj) {
-    if (obj === null || obj === undefined) return null;
-    if (Array.isArray(obj)) {
-      return obj.map(function(item) { return window.FirestoreDB._cleanUndefined(item); });
-    }
-    if (typeof obj === 'object' && obj.constructor === Object) {
-      var cleaned = {};
-      Object.keys(obj).forEach(function(key) {
-        if (obj[key] === undefined) return;
-        // Firestore rejeita keys com padrão `__xxx__` em qualquer field nested.
-        if (typeof key === 'string' && key.length >= 4 && key.indexOf('__') === 0 && key.lastIndexOf('__') === key.length - 2) {
-          return;
-        }
-        cleaned[key] = window.FirestoreDB._cleanUndefined(obj[key]);
-      });
-      return cleaned;
-    }
-    return obj;
+    return (typeof window !== 'undefined' && typeof window._cleanUndefined === 'function')
+      ? window._cleanUndefined(obj) : null;
   },
 
   // v4.4.70 FONTE ÚNICA Rei/Rainha: delega pro normalizador CANÔNICO em
@@ -112,22 +99,11 @@ window.FirestoreDB = {
   // creator, current organizer, active co-hosts. Used by Firestore rules to
   // authorize full-edit and delete operations in O(1). Participants never
   // appear here; only admins.
+  // Delega pro cânone em js/views/persist-core.js — a MESMA função que a Cloud Function
+  // do sorteio carrega (vendor/) antes de gravar. Uma implementação só, zero drift.
   _computeAdminEmails(data) {
-    if (!data) return [];
-    var set = {};
-    var push = function(e) {
-      if (!e || typeof e !== 'string') return;
-      var norm = e.trim().toLowerCase();
-      if (norm) set[norm] = true;
-    };
-    push(data.creatorEmail);
-    push(data.organizerEmail);
-    if (Array.isArray(data.coHosts)) {
-      data.coHosts.forEach(function(ch) {
-        if (ch && ch.status === 'active') push(ch.email);
-      });
-    }
-    return Object.keys(set);
+    return (typeof window !== 'undefined' && typeof window._computeAdminEmails === 'function')
+      ? window._computeAdminEmails(data) : [];
   },
 
   // v2.8.79: adminUids[] — UIDs dos principais de nível organizador (criador +
@@ -135,42 +111,21 @@ window.FirestoreDB = {
   // pode ter email '' (conta por telefone) → as regras precisam autorizar
   // edição/escrita por UID, não por email. Recomputa a cada save (encolhe
   // quando um co-host é removido — diferente de memberUids que nunca encolhe).
+  // Delega pro cânone em js/views/persist-core.js — a MESMA função que a Cloud Function
+  // do sorteio carrega (vendor/) antes de gravar. Uma implementação só, zero drift.
   _computeAdminUids(data) {
-    if (!data) return [];
-    var set = {};
-    var push = function(u) { if (u && typeof u === 'string' && u.length >= 4) set[u] = true; };
-    push(data.creatorUid);
-    if (Array.isArray(data.coHosts)) {
-      data.coHosts.forEach(function(ch) { if (ch && ch.status === 'active') push(ch.uid); });
-    }
-    return Object.keys(set);
+    return (typeof window !== 'undefined' && typeof window._computeAdminUids === 'function')
+      ? window._computeAdminUids(data) : [];
   },
 
   // v1.8.62: memberUids[] — UIDs de todos os participantes + organizador.
   // Permite que usuários phone-only (sem email) sejam identificados nas
   // regras do Firestore, onde authEmail() retorna '' para esses usuários.
+  // Delega pro cânone em js/views/persist-core.js — a MESMA função que a Cloud Function
+  // do sorteio carrega (vendor/) antes de gravar. Uma implementação só, zero drift.
   _computeMemberUids(data) {
-    if (!data) return [];
-    var set = {};
-    var push = function(u) {
-      if (!u || typeof u !== 'string' || u.length < 4) return;
-      set[u] = true;
-    };
-    push(data.creatorUid);
-    if (Array.isArray(data.coHosts)) {
-      data.coHosts.forEach(function(ch) { if (ch && ch.status === 'active') push(ch.uid); });
-    }
-    var parts = Array.isArray(data.participants) ? data.participants : [];
-    parts.forEach(function(p) {
-      if (!p || typeof p === 'string') return;
-      push(p.uid);
-      // Dupla formada: p1Uid e p2Uid
-      push(p.p1Uid); push(p.p2Uid);
-      if (Array.isArray(p.participants)) {
-        p.participants.forEach(function(sub) { if (sub) push(sub.uid); });
-      }
-    });
-    return Object.keys(set);
+    return (typeof window !== 'undefined' && typeof window._computeMemberUids === 'function')
+      ? window._computeMemberUids(data) : [];
   },
 
   async saveTournament(tourData, options) {

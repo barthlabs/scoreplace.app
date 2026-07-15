@@ -79,6 +79,7 @@ loadAbs(path.join(ROOT, 'views', 'tournaments.js'));
 // não define mais _participantUids/_memberUidByName/_idMap*/_entryHasVip. Antes do store.js,
 // como no index.html.
 loadAbs(path.join(ROOT, 'views', 'identity-core.js'));
+loadAbs(path.join(ROOT, 'views', 'persist-core.js'));
 loadAbs(path.join(ROOT, 'store.js'));
 // bracket-model: schema Rei/Rainha — o PAR _foldMonarchGroups (grava só matchIds) +
 // _hydrateMonarchGroups (relê como refs). O hydrate saiu do bracket.js (v1.2.25) pra cá,

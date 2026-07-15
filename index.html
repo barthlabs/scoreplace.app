@@ -333,6 +333,9 @@
   <!-- Cânone de identidade por uid (extraído do store.js). ANTES do store.js: é puro e
        o servidor (Cloud Function do sorteio) carrega o MESMO arquivo — ver identity-core.js -->
   <script src="js/views/identity-core.js?v=1.2.25" defer></script>
+  <!-- Normalizações do limite de persistência (extraídas do firebase-db.js). Puro, e o
+       servidor carrega o MESMO arquivo antes de gravar — ver persist-core.js -->
+  <script src="js/views/persist-core.js?v=1.2.25" defer></script>
   <script src="js/store.js?v=1.2.25" defer></script>
   <!-- Fonte única das regras das modalidades (antes de create-tournament.js e bracket-ui.js, que derivam dela) -->
   <script src="js/views/sport-rules.js?v=4.0.50-beta" defer></script>

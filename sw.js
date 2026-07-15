@@ -85,6 +85,7 @@ var STATIC_ASSETS = [
   '/js/analytics.js',
   '/js/notification-catalog.js',
   '/js/views/identity-core.js',
+  '/js/views/persist-core.js',
   '/js/store.js',
   '/js/firebase-db.js',
   '/js/notifications.js',

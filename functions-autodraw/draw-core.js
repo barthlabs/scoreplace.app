@@ -121,6 +121,9 @@ g.window._expandFormationAllowed = function (t) {
 // no servidor (toca document no load), e espelhar as funções aqui criaria uma 2ª versão do
 // código — o bug de versão que a canonização quer matar. Agora é UM arquivo só, vendored.
 require('./vendor/identity-core.js');
+require('./vendor/persist-core.js');            // _cleanUndefined + _computeAdminEmails/Uids/MemberUids
+                                                // — o boundary de escrita (o que a drawRound grava
+                                                // tem de sair pela MESMA regra do cliente)
 require('./vendor/sport-rules.js');             // SPORT_RULES — dep de format2 (allowsSingles/teamSize)
 require('./vendor/tournaments-utils.js');       // _isLigaFormat, _calcNextDrawDate
 require('./vendor/tournaments-categories.js');  // _displayCategoryName, _sortCategoriesBySkillOrder, _getParticipantCategories, _participantInCategory
