@@ -3641,6 +3641,20 @@ exports.resolveMergedLogin = onCall(
     const snap = await db.collection("users").doc(uid).get();
     const mergedInto = snap.exists && snap.data().mergedInto;
     if (!mergedInto || typeof mergedInto !== "string" || mergedInto === uid) return { merged: false };
+
+    // v1.2.9 — DEFESA EM PROFUNDIDADE contra o sequestro de conta (provado no emulador em
+    // 15/jul/2026). Esta função dá um CUSTOM TOKEN do uid apontado por `mergedInto`, ou
+    // seja, trata um campo do perfil como PROVA. As rules agora impedem o cliente de
+    // escrevê-lo (tests/rules-privileged-fields.test.js), mas confiar SÓ nelas é frágil:
+    // uma regressão numa rule volta a abrir a conta de todo mundo, silenciosamente.
+    // `mergedAt` só existe via serverTimestamp() do Admin SDK nos writes de merge — um
+    // tombstone forjado (ou legado) não tem Timestamp aqui, e sem prova não há token.
+    const _mergedAt = snap.data().mergedAt;
+    if (!_mergedAt || typeof _mergedAt.toDate !== "function") {
+      console.warn("[resolveMergedLogin] mergedInto SEM mergedAt(Timestamp) em " + uid +
+        " → tombstone não foi escrito pelo servidor. Token NEGADO.");
+      return { merged: false };
+    }
     // Segue a cadeia (caso o sobrevivente também tenha sido mesclado depois).
     let target = mergedInto; let guard = 0;
     while (guard++ < 5) {

@@ -306,16 +306,41 @@ service cloud.firestore {
       // (searchUsers range query) and participant detail views.
       allow read: if request.auth != null;
 
-      // Create: only the user themselves (first-time profile creation).
-      allow create: if request.auth != null && request.auth.uid == userId;
+      // v1.2.9 — CAMPOS PRIVILEGIADOS: só o Admin SDK (Cloud Functions) escreve.
+      //
+      // SEQUESTRO DE CONTA (achado e provado no emulador em 15/jul/2026): o `allow update`
+      // dizia "owner may touch anything" e só se preocupava com edição CROSS-user. Mas
+      // `mergedInto` é lido pela CF resolveMergedLogin, que devolve um CUSTOM TOKEN do uid
+      // apontado. Então bastava a pessoa escrever no PRÓPRIO perfil
+      //     users/{meu-uid} = { mergedInto: "<uid-da-vítima>" }
+      // e chamar resolveMergedLogin pra entrar na conta de qualquer um. Um campo que o
+      // servidor TRATA COMO PROVA nunca pode ser escrito por quem ele autoriza.
+      //
+      // Bloquear não quebra nada: nenhum caminho do cliente escreve estes campos (0 writes
+      // no js/ — só leituras), e o Admin SDK ignora rules por definição.
+      //   mergedInto/mergedAt → prova de merge (resolveMergedLogin dá custom token)
+      //   plan/planExpiresAt  → assinatura Pro (só o webhook do Stripe pode conceder)
+      function privilegedUserFields() {
+        return ['mergedInto', 'mergedAt', 'plan', 'planExpiresAt'];
+      }
+      function touchesPrivileged() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(privilegedUserFields());
+      }
 
-      // Update: owner may touch anything; any other authenticated user may
-      // update ONLY the three friend arrays (so sendFriendRequest can add
-      // the caller's uid to the target's friendRequestsReceived, accept can
+      // Create: only the user themselves (first-time profile creation).
+      // O bloqueio precisa valer no CREATE também — senão o buraco reabre: apagar o próprio
+      // perfil e recriá-lo já com `mergedInto` seria o mesmo sequestro por outro caminho.
+      allow create: if request.auth != null && request.auth.uid == userId
+        && !request.resource.data.keys().hasAny(privilegedUserFields());
+
+      // Update: owner may touch anything EXCEPT the privileged fields above; any other
+      // authenticated user may update ONLY the three friend arrays (so sendFriendRequest
+      // can add the caller's uid to the target's friendRequestsReceived, accept can
       // add caller to target's friends, etc.). Prevents cross-user edits of
       // profile PII while keeping the friendship flow working.
       allow update: if request.auth != null
-        && (request.auth.uid == userId || isFriendArrayDiff());
+        && ((request.auth.uid == userId && !touchesPrivileged()) || isFriendArrayDiff());
 
       // Delete: owner only.
       allow delete: if request.auth != null && request.auth.uid == userId;
