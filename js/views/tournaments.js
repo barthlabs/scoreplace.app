@@ -2719,6 +2719,11 @@ function renderTournaments(container, tournamentId = null) {
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._shareTournament('${t.id}');">📋 Compartilhar</button>
+              ${/* Grupo do torneio no WhatsApp: "Entrar no grupo" é ação de PARTICIPANTE (fica
+                    aqui, junto de Convidar/Compartilhar), enquanto CRIAR/trocar o link é ação de
+                    ORGANIZADOR (fica nas Ferramentas). O próprio chip decide o que mostrar: só
+                    aparece pra INSCRITO (ou org) e só quando o grupo existe. */ ''}
+              ${(typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
               ${(!isFinished && t.startDate) ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tournamentAddToCalendar('${t.id}');">📅 Adicionar à agenda</button>` : ''}
             </div>` : ''}
 
@@ -2955,6 +2960,10 @@ function renderTournaments(container, tournamentId = null) {
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
                 ${isOrg ? `<button class="btn hover-lift" style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border:none;" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
+                ${/* Criar/trocar o link do grupo do torneio É ferramenta de organizador (o grupo é
+                      oficial do evento) — diferente do grupo do JOGO, que é dos jogadores e mora no
+                      card do chaveamento. O chip só renderiza pra org/co-host. */ ''}
+                ${(typeof window._waGrpTournamentOrgChip === 'function') ? window._waGrpTournamentOrgChip(t) : ''}
                 ${/* v4.1.24: "📅 Combinar jogos" REMOVIDO das Ferramentas do Organizador — NÃO é
                       ferramenta de organizador. Combinar horário é ação de PARTICIPANTE (mesmo que
                       ele seja o organizador), feita a partir do próprio JOGO no chaveamento

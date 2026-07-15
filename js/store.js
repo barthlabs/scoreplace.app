@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.1';
+window.SCOREPLACE_VERSION = '1.2.2';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -1343,6 +1343,14 @@ window._softRefreshView = function() {
                   // (torneio vivo) varria a barra de progresso e o organizador achava que
                   // tinha travado. Ver [[project_letzplay_scan_stability]].
                   document.getElementById('sp-import-overlay') ||
+                  // v1.2.2: combinar jogo (enquete) e grupo do WhatsApp. Ambos são
+                  // fixed/z-100040 e caíam no sweep genérico do _dismissAllOverlays.
+                  // O próprio save destes fluxos ecoa um snapshot → _softRefreshView →
+                  // initRouter → sweep: o overlay se fechava sozinho no meio da ação
+                  // (mesma classe da v0.15.89 / v2.7.96). O sch-overlay é ANTERIOR a
+                  // esta leva e estava desprotegido desde que subiu.
+                  document.getElementById('sch-overlay') ||
+                  document.getElementById('wa-group-overlay') ||
                   // v2.7.96: diálogos padrão (confirm/alert/input). Sem isto, em torneio
                   // VIVO (Confra: snapshots frequentes ao simular resultados) o snapshot
                   // disparava _softRefreshView → initRouter → _dismissAllOverlays e varria a

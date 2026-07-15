@@ -3316,8 +3316,22 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ${vsRow}
       ${p2Row}
       ${winnerBadge}
-      ${(typeof window._schCardChip === 'function') ? window._schCardChip(t, m) : ''}
+      ${_cardFooterChips(t, m)}
     </div>`;
+}
+
+// Rodapé do card: as ações de PARTICIPANTE sobre o próprio jogo, lado a lado.
+// Hoje são duas irmãs — "📅 Combinar jogo" (enquete de horário dentro do app) e
+// "💬 Criar/Abrir grupo" (o grupo do WhatsApp onde o jogo é de fato combinado).
+// Não são redundantes: a enquete decide o horário com dado estruturado; o grupo é
+// a conversa. Ambas obedecem ao MESMO gate (jogador do confronto, rodada atual,
+// jogo sem resultado) — fonte única nos helpers do schedule-poll.js.
+// Os dois chips retornam elemento PURO; a centralização é aqui.
+function _cardFooterChips(t, m) {
+  var sch = (typeof window._schCardChip === 'function') ? window._schCardChip(t, m) : '';
+  var wa = (typeof window._waGrpCardChip === 'function') ? window._waGrpCardChip(t, m) : '';
+  if (!sch && !wa) return '';
+  return '<div style="display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + sch + wa + '</div>';
 }
 // v2.3.46: exposto pra que _saveResultInline possa re-renderizar UM card
 // individual in-place (sem re-render do bracket inteiro), preservando scroll,
@@ -3474,6 +3488,9 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var statusBadge = groupDone ? '<span style="font-size:0.65rem;padding:2px 8px;border-radius:6px;background:rgba(16,185,129,0.15);color:#4ade80;font-weight:700;">' + _t('bracket.complete') + '</span>' : '';
 
     var _schGrpBtn2 = (typeof window._schGroupChip === 'function') ? window._schGroupChip(t, matches) : '';
+    // Rei/Rainha: o grupo do WhatsApp é ÚNICO por GRUPO (3 jogos, mesmas 4 pessoas),
+    // igual à enquete. Fica ao lado dela no cabeçalho.
+    var _waGrpBtn2 = (typeof window._waGrpGroupChip === 'function') ? window._waGrpGroupChip(t, matches) : '';
     // v4.1.39: controle de W.O. canônico do grupo (botão W.O. → folga/Jogador X, ou pílula + reverter).
     var _woCtrlM = (typeof window._monWoControlHtml === 'function') ? window._monWoControlHtml(t.id, _pIdxM, sg.name, groupDone) : '';
     // Controle de PRESENÇA do grupo (entre Combinar e W.O.) — helper ÚNICO compartilhado
@@ -3482,7 +3499,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     html += '<div data-group-box="1" style="scroll-margin-top:120px;background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : '#fbbf24') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
         '<h3 style="margin:0;font-size:1.1rem;color:var(--text-bright);flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
-        (statusBadge || '') + _schGrpBtn2 + _grpArrived + _woCtrlM +
+        (statusBadge || '') + _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
       '</div>' +
       // v4.3.12 (pedido do dono): a tabela de classificação do grupo fica SEMPRE ACIMA das
       // chaves (mesmo padrão de renderGroupStage). Antes vinha depois dos cards de jogo.
@@ -4445,8 +4462,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // logo abaixo dela — a linha de botões fica limpa.
           var _grpArrivedL = (typeof window._monGroupArrivedBtn === 'function') ? window._monGroupArrivedBtn(t, g.matches, gDone) : '';
           var _schGrpBtn = (isMyGroup && typeof window._schGroupChip === 'function') ? window._schGroupChip(t, g.matches) : '';
+          var _waGrpBtn = (isMyGroup && typeof window._waGrpGroupChip === 'function') ? window._waGrpGroupChip(t, g.matches) : '';
           var _woActive = !!g.woAbsent;
-          var _rightCtrl = (_woActive ? '' : (_ligaCtrl || '')) + _grpArrivedL + _schGrpBtn;
+          var _rightCtrl = (_woActive ? '' : (_ligaCtrl || '')) + _grpArrivedL + _schGrpBtn + _waGrpBtn;
           var _woStateLine = (_woActive && _ligaCtrl)
             ? '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:-0.15rem 0 0.6rem;">' + _ligaCtrl + '</div>'
             : '';

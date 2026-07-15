@@ -35,6 +35,7 @@ const SUITES = [
   'tests/sport-scoring-rules.test.js',
   'tests/result-approval-gate.test.js',
   'tests/draw-schedule.test.js',
+  'tests/wa-group-link.test.js',
   'tests/elim-seed.test.js',
   'tests/elim-reirainha-opening.test.js',
   'tests/chave-label-default.test.js',
