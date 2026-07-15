@@ -29,6 +29,7 @@ const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const _mergeRules = require("./merge-rules");
+const _uidSweep = require("./uid-sweep");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -112,173 +113,63 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
   for (const tourDoc of tourSnaps.docs) {
     const t = tourDoc.data();
     let changed = false;
-    const update = {};
+    let next = t;
 
-    // v1.2.2: memberEmails[] saiu do schema — membro é uid (memberUids, logo abaixo).
-
-    // memberUids[] — array das QUERIES (array-contains em getVisibleTournaments).
-    // v3.0.59: sem repontar isto, o torneio sumia pro sobrevivente após o merge
-    // (bug pego no teste E2E — memberUids continuava no uid apagado).
-    const memberUids = Array.isArray(t.memberUids) ? [...t.memberUids] : [];
-    const uidIdx = dropUid ? memberUids.indexOf(dropUid) : -1;
-    if (uidIdx !== -1) {
-      if (keepUid && !memberUids.includes(keepUid)) memberUids.splice(uidIdx, 1, keepUid);
-      else memberUids.splice(uidIdx, 1);
-      update.memberUids = memberUids;
-      changed = true;
-    }
-
-    // Propriedade por uid: creatorUid / organizerUid → conta sobrevivente.
+    // ── UID: varredura CANÔNICA (functions/uid-sweep.js) ──────────────────────
+    // Regra do dono (jul/2026): "onde estiver o uid, merja ou exclui. TUDO" — e canonizar,
+    // pra que campo NOVO com uid já nasça coberto sem ninguém lembrar de atualizar lista.
+    // Aqui havia ~140 linhas listando campo por campo, e a lista SEMPRE ficou incompleta:
+    // não via membro de dupla (p1Uid/p2Uid), não via mapa por uid (checkedIn/absent/vips/
+    // votos de enquete), e não via `organizerId` — que existe em 6 dos 8 torneios de prod e
+    // nunca foi re-apontado em merge nenhum. Todos achados de forma reativa, depois do
+    // estrago. A varredura acha o uid onde ele estiver, em qualquer profundidade, inclusive
+    // como CHAVE de mapa; preserva Timestamp/GeoPoint por referência; dedupa array quando os
+    // dois uids estavam no mesmo; e no choque de chave o valor do SOBREVIVENTE prevalece.
     if (dropUid && keepUid) {
-      if (t.creatorUid === dropUid)   { update.creatorUid = keepUid;   changed = true; }
-      if (t.organizerUid === dropUid) { update.organizerUid = keepUid; changed = true; }
+      const swept = _uidSweep.remapUid(t, dropUid, keepUid);
+      if (swept.changed) { next = swept.value; changed = true; }
     }
-    // Propriedade por e-mail (legado): creatorEmail / organizerEmail.
+
+    // ── E-MAIL/NOME: não são identidade, mas seguem gravados em campos legados ──
+    // (o uid acima é a identidade; isto aqui é só higiene de dados antigos)
+    const update = {};
     if (dropEmail && keepEmail) {
-      if (String(t.creatorEmail || "").toLowerCase() === dropEmail.toLowerCase())   { update.creatorEmail = keepEmail;   changed = true; }
-      if (String(t.organizerEmail || "").toLowerCase() === dropEmail.toLowerCase()) { update.organizerEmail = keepEmail; changed = true; }
-    }
-
-    // v1.2.7: MAPAS POR UID. Todo estado por-pessoa do torneio é chaveado pelo uid
-    // (regra do dono, jun/2026: "sempre identifica pelo uid. vips, checkin, ausente e
-    // enquete inclusive"). Nada disto era re-apontado no merge: a pessoa perdia o check-in,
-    // o voto na enquete e o histórico de W.O. — silenciosamente, porque a chave morta
-    // simplesmente deixa de casar com alguém. Pego ao mesclar a Raquel Unger (o voto dela
-    // em opinionPolls[].votes sobreviveu apontando pro uid deletado). Em prod havia 42
-    // chaves de checkedIn, 15 votos, 2 absent e 1 woHistory nessa condição.
-    // Se o keep JÁ tem a chave, a do drop é descartada (não sobrescreve o estado atual).
-    ["checkedIn", "absent", "vips", "sitOutHistory", "woHistory", "ligaGhosts"].forEach((campo) => {
-      const m = t[campo];
-      if (!m || typeof m !== "object" || Array.isArray(m) || !(dropUid in m)) return;
-      const novo = Object.assign({}, m);
-      if (!(keepUid in novo)) novo[keepUid] = novo[dropUid];
-      delete novo[dropUid];
-      update[campo] = novo;
-      changed = true;
-    });
-    // Votos de enquete (opinionPolls[].votes e polls[].votes) — mesma ideia, um nível abaixo.
-    ["opinionPolls", "polls"].forEach((campo) => {
-      if (!Array.isArray(t[campo])) return;
-      let hit = false;
-      const arr = t[campo].map((p) => {
-        if (!p || !p.votes || typeof p.votes !== "object" || !(dropUid in p.votes)) return p;
-        hit = true;
-        const v = Object.assign({}, p.votes);
-        if (!(keepUid in v)) v[keepUid] = v[dropUid];
-        delete v[dropUid];
-        return Object.assign({}, p, { votes: v });
-      });
-      if (hit) { update[campo] = arr; changed = true; }
-    });
-
-    // participants[]
-    // v1.2.2: SLOT-AWARE. Antes só olhava p.uid — quem estava como MEMBRO DE DUPLA
-    // (p1Uid/p2Uid) ou em sub-participants[] não era re-apontado, e o merge deleta a conta
-    // antiga do Auth logo em seguida (deleteUser) → uid ÓRFÃO na hora, garantido. Mesma
-    // classe de bug que o filtro solo-only de _executeDeleteAccount (auth.js). Aqui NÃO se
-    // remove ninguém: o merge preserva a pessoa e só troca a identidade morta pela viva.
-    // Ver [[project_orphan_uid_entries]] / [[project_account_merge_email]].
-    if (Array.isArray(t.participants)) {
-      // UID ONLY: casa exclusivamente pelo uid que está morrendo no merge. Casar por e-mail
-      // aqui era rede de segurança e mordia: o merge existe justamente porque a MESMA pessoa
-      // tem contas com identificadores diferentes, então o e-mail não decide identidade.
-      // Ficto (organizador digitou o nome, sem uid) não é conta e nunca entra num merge.
-      const _isDrop = (u) => !!(u && u === dropUid);
-      const parts = t.participants.map(p => {
-        if (!p || typeof p !== "object") return p;
+      if (String(next.creatorEmail || "").toLowerCase() === dropEmail.toLowerCase())   { update.creatorEmail = keepEmail;   changed = true; }
+      if (String(next.organizerEmail || "").toLowerCase() === dropEmail.toLowerCase()) { update.organizerEmail = keepEmail; changed = true; }
+      const parts = Array.isArray(next.participants) ? next.participants : null;
+      if (parts) {
         let hit = false;
-        const updated = Object.assign({}, p);
-        // slot solo
-        if (_isDrop(p.uid)) {
+        const novos = parts.map((p) => {
+          if (!p || typeof p !== "object") return p;
+          const q = Object.assign({}, p);
+          let h = false;
+          if (String(p.email || "").toLowerCase() === dropEmail.toLowerCase())   { q.email = keepEmail; h = true; }
+          if (String(p.p1Email || "").toLowerCase() === dropEmail.toLowerCase()) { q.p1Email = keepEmail; h = true; }
+          if (String(p.p2Email || "").toLowerCase() === dropEmail.toLowerCase()) { q.p2Email = keepEmail; h = true; }
+          if (!h) return p;
           hit = true;
-          updated.uid = keepUid;
-          if (keepEmail) updated.email = keepEmail;
-          if (keepName)  { updated.displayName = keepName; updated.name = keepName; }
-        }
-        // membro de dupla (p1/p2) — o nome da dupla (displayName "A / B") NÃO é reescrito:
-        // o display reconstrói de p1Uid/p2Uid pelo perfil vivo.
-        if (_isDrop(p.p1Uid)) {
-          hit = true;
-          updated.p1Uid = keepUid;
-          if (keepEmail) updated.p1Email = keepEmail;
-          if (keepName)  updated.p1Name = keepName;
-        }
-        if (_isDrop(p.p2Uid)) {
-          hit = true;
-          updated.p2Uid = keepUid;
-          if (keepEmail) updated.p2Email = keepEmail;
-          if (keepName)  updated.p2Name = keepName;
-        }
-        // sub-participants[]
-        if (Array.isArray(p.participants)) {
-          let subHit = false;
-          const subs = p.participants.map(s => {
-            if (!s || typeof s !== "object" || !_isDrop(s.uid)) return s;
-            subHit = true;
-            const q = Object.assign({}, s);
-            q.uid = keepUid;
-            if (keepEmail) q.email = keepEmail;
-            if (keepName)  { q.displayName = keepName; q.name = keepName; }
-            return q;
-          });
-          if (subHit) { hit = true; updated.participants = subs; }
-        }
-        if (!hit) return p;
-        changed = true;
-        return updated;
-      });
-      if (changed) update.participants = parts;
-    }
-
-    // v4.4.116: re-aponta uid + nome nos jogos POR UID (dropUid → keepUid). Nunca por nome
-    // (fim do clobber de homônimo). Também trata monarchGroups[].matches, que existem além
-    // de rounds[].matches em Rei/Rainha.
-    if (dropUid && keepName) {
-      const structs = [
-        { key: "matches", plain: true  },
-        { key: "rounds",  plain: false },
-        { key: "groups",  plain: false },
-        { key: "rodadas", plain: false },
-      ];
-      for (const { key, plain } of structs) {
-        if (!Array.isArray(t[key])) continue;
-        if (plain) {
-          const r = _replaceNameInMatches(t[key], dropUid, keepName, keepUid);
-          if (r.hit) { update[key] = r.arr; changed = true; }
-        } else {
-          let hit = false;
-          const updated = t[key].map(item => {
-            if (!item || typeof item !== "object") return item;
-            let it = item;
-            if (Array.isArray(item.matches)) {
-              const r = _replaceNameInMatches(item.matches, dropUid, keepName, keepUid);
-              if (r.hit) { hit = true; it = Object.assign({}, it, { matches: r.arr }); }
-            }
-            if (Array.isArray(item.monarchGroups)) {
-              const mg = item.monarchGroups.map(g => {
-                if (!g || !Array.isArray(g.matches)) return g;
-                const r = _replaceNameInMatches(g.matches, dropUid, keepName, keepUid);
-                if (r.hit) { hit = true; return Object.assign({}, g, { matches: r.arr }); }
-                return g;
-              });
-              it = Object.assign({}, it, { monarchGroups: mg });
-            }
-            return it;
-          });
-          if (hit) { update[key] = updated; changed = true; }
-        }
+          return q;
+        });
+        if (hit) { next = Object.assign({}, next, { participants: novos }); changed = true; }
       }
     }
 
-    if (changed) {
-      batch.update(tourDoc.ref, update);
-      tourFixed++;
-      batchCount++;
-      if (batchCount >= 400) {
-        await batch.commit();
-        batch = db.batch();
-        batchCount = 0;
-      }
+    if (!changed) continue;
+
+    // O sweep devolve o doc INTEIRO; grava só os campos que mudaram de fato.
+    const payload = Object.assign({}, update);
+    for (const k of Object.keys(next)) {
+      if (JSON.stringify(next[k]) !== JSON.stringify(t[k])) payload[k] = next[k];
+    }
+    if (!Object.keys(payload).length) continue;
+
+    batch.update(tourDoc.ref, payload);
+    tourFixed++;
+    batchCount++;
+    if (batchCount >= 400) {
+      await batch.commit();
+      batch = db.batch();
+      batchCount = 0;
     }
   }
   if (batchCount > 0) await batch.commit();

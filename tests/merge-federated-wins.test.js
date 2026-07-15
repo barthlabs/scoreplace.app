@@ -83,20 +83,18 @@ ok(isFederated({ providerData: [{ providerId: 'google.com' }] }) === true, 'isFe
 ok(isFederated({ providerData: [{ providerId: 'phone' }] }) === false, 'isFederated: phone não é federado');
 
 
-// ── MAPAS POR UID: o merge tem que re-apontar TODO estado por-pessoa ─────────
-// Regra do dono (jun/2026): "sempre identifica pelo uid. vips, checkin, ausente e enquete
-// inclusive". O _repairTournaments não tocava nenhum desses mapas — a pessoa perdia o
-// check-in, o voto e o histórico de W.O. no merge, sem erro nenhum. Pego ao mesclar a
-// Raquel Unger: o voto dela em opinionPolls[].votes ficou apontando pro uid deletado.
+// ── MAPAS POR UID e todo o resto: agora é o CÂNONE quem varre ────────────────
+// _repairTournaments listava campo a campo e a lista sempre ficava incompleta (não via
+// membro de dupla, nem mapa por uid, nem organizerId — que existe em 6/8 torneios de prod).
+// Trocada pela varredura canônica: functions/uid-sweep.js (testado em tests/uid-sweep.test.js).
 const repBloco = src.slice(src.indexOf('async function _repairTournaments'), src.indexOf('function _profileScore'));
-['checkedIn', 'absent', 'vips', 'sitOutHistory', 'woHistory', 'ligaGhosts'].forEach(function (campo) {
-  ok(repBloco.includes('"' + campo + '"'), '_repairTournaments re-aponta o mapa ' + campo);
-});
-ok(repBloco.includes('"opinionPolls"') && repBloco.includes('"polls"'),
-  '_repairTournaments re-aponta votos de enquete (opinionPolls/polls)');
-ok(/votes/.test(repBloco), '_repairTournaments desce até .votes (o mapa fica um nível abaixo)');
-ok(/if \(!\(keepUid in novo\)\)/.test(repBloco),
-  'mapa: o estado do sobrevivente PREVALECE (não é sobrescrito pelo do absorvido)');
+ok(/_uidSweep\.remapUid\(/.test(repBloco), '_repairTournaments usa a varredura canônica (uid-sweep)');
+ok(/require\(["']\.\/uid-sweep["']\)/.test(src), 'index.js importa functions/uid-sweep');
+// "não lista campo a campo" = não LÊ os mapas por nome (t.checkedIn / t["checkedIn"]).
+// Mencionar checkedIn no comentário que explica o histórico é esperado — o que não pode
+// voltar é o CÓDIGO tratando campo a campo, que é o que apodrecia.
+ok(/\bt\.checkedIn\b|\["checkedIn"\]|'checkedIn'/.test(repBloco) === false,
+  '_repairTournaments NÃO lista mais campo a campo (a lista é o que apodrecia)');
 
 // ── enrollSeq: a ORDEM DE INSCRIÇÃO não pode mudar no remap ──────────────────
 // _repairTournaments copia a entrada e troca só o uid — enrollSeq vai junto.

@@ -76,6 +76,7 @@ const SUITES = [
   'tests/fairness-uid-identity.test.js',
   'tests/delete-account-dupla-orphan.test.js',
   'tests/merge-federated-wins.test.js',
+  'tests/uid-sweep.test.js',
   'tests/dupla-detection-uid.test.js',
   'tests/draw-name-by-uid.test.js',
   'tests/name-to-uid-live-resolution.test.js',
