@@ -42,8 +42,54 @@ sandbox._debug = function () {};
 sandbox._safeHtml = (s) => String(s == null ? '' : s);
 sandbox._safeText = (s) => String(s == null ? '' : s);
 sandbox.showNotification = function () {};
+// v1.2.25: o SORTEIO INICIAL saiu do cliente — generateDrawFunction agora chama a CF
+// `drawRound`. Pra continuar exercitando o sorteio REAL, o stub roda o MESMO motor que o
+// servidor: draw-core.drawInitial (que carrega vendor/, cópia exata de js/views/*). NÃO é
+// uma reimplementação do sorteio em código de teste — seria uma 2ª versão, o bug que a
+// canonização mata. Cross-realm é seguro: drawInitial recebe/muta um objeto simples.
+let _drawCore = null;
+try { _drawCore = require('../functions-autodraw/draw-core.js'); } catch (e) { _drawCore = null; }
+function _drawRoundStub(payload) {
+  // Thenable SÍNCRONO: os harnesses são síncronos (buildViaDraw devolve `t` na hora) e uma
+  // Promise real só resolveria na microtask, devolvendo um `t` ainda sem chave.
+  let val = null, err = null;
+  try {
+    if (!_drawCore) throw new Error('draw-core indisponível no harness');
+    const tId = String((payload && payload.tournamentId) || '');
+    // Mesmo lookup canônico que o cliente usa (_findTournamentById) — [[project_find_tournament_by_id]].
+    // Fallback pra AppStore.tournaments: nem todo teste stuba o resolvedor.
+    let t = null;
+    if (typeof sandbox._findTournamentById === 'function') t = sandbox._findTournamentById(tId);
+    if (!t) {
+      const list = (sandbox.AppStore && Array.isArray(sandbox.AppStore.tournaments)) ? sandbox.AppStore.tournaments : [];
+      t = list.find((x) => String(x.id) === tId);
+    }
+    if (!t) throw new Error('not-found');
+    // Espelha a CF: re-sorteio limpa pelo reset canônico antes de redesenhar.
+    if (payload && payload.allowRedraw) { try { _drawCore._window._clearTournamentDraw(t); } catch (e2) {} }
+    const res = _drawCore.drawInitial(t, { idStamp: 1 });
+    if (!res || !res.ok) throw new Error((res && res.reason) || 'draw-failed');
+    // SERIALIZA, como o fio faz. Devolver a MESMA referência de `t` quebraria: o cliente
+    // esvazia o `t` local (delete) antes de copiar do retorno — se forem o mesmo objeto,
+    // copia de si mesmo já vazio. O callable real serializa; o stub espelha isso.
+    val = { data: { ok: true, format: res.format, native: !!res.native,
+      matchCount: res.matchCount, sitOuts: res.sitOuts || 0, allMaleCount: res.allMaleCount || 0,
+      tournament: JSON.parse(JSON.stringify(t)) } };
+  } catch (e) { err = e; }
+  return {
+    then(cb) {
+      if (!err) { try { cb(val); } catch (e3) { err = e3; } }
+      return { catch(cb2) { if (err) cb2(err); return null; } };
+    },
+    catch(cb2) { if (err) cb2(err); return null; },
+  };
+}
 sandbox.firebase = {
-  functions: () => ({ httpsCallable: () => (() => Promise.resolve({ data: {} })) }),
+  functions: () => ({
+    httpsCallable: (name) => (name === 'drawRound'
+      ? _drawRoundStub
+      : (() => Promise.resolve({ data: {} }))),
+  }),
   firestore: () => ({}),
 };
 let _ls = {};

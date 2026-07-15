@@ -102,6 +102,9 @@ sandbox.AppStore.logAction = noop;
 sandbox.AppStore.getTournament = function (id) { return sandbox.AppStore.tournaments.find(function (x) { return String(x.id) === String(id); }); };
 sandbox._notifyDrawPersonalized = noop;
 sandbox._notifyTournamentParticipants = noop;
+
+// O stub da CF `drawRound` (que roda o motor REAL via draw-core) vive no headless.js —
+// base deste harness. Ver lá.
 sandbox.showAlertDialog = noop;
 sandbox.checkOddEntries = function () { return { isOdd: false }; };
 sandbox.showOddEntriesPanel = noop;

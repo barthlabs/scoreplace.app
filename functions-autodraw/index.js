@@ -278,6 +278,16 @@ exports.drawRound = onCall(async (request) => {
       throw new HttpsError('failed-precondition', (res && res.reason) || 'draw-failed');
     }
 
+    // Histórico do sorteio: quem GRAVA o sorteio grava a entrada. No cliente ela só
+    // persistia carona no delta do _commitInitialDraw (logAction só mexe na memória) —
+    // com a gravação aqui, ela se perderia. Mesmo texto do cliente (tournaments-draw.js).
+    const msg = res.native
+      ? `Sorteio Realizado — ${t.format}: Rodada 1 gerada com ${res.matchCount} partida(s)` +
+        (res.sitOuts ? ` e ${res.sitOuts} folga(s)` : '') + ' [motor canônico]'
+      : `Sorteio Realizado — ${t.format} (motor canônico)`;
+    if (!Array.isArray(t.history)) t.history = [];
+    t.history.push({ date: new Date().toISOString(), message: msg });
+
     // v4.1.30: o sorteio LIMPA a presença (drawInitial já zera checkedIn/absent).
     const b = _applyWriteBoundary(t);
     tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
