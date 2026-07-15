@@ -2947,9 +2947,22 @@ function renderTournaments(container, tournamentId = null) {
               var _arbitrosBtn = (_hasRefereeEntry && t.id)
                 ? '<button class="btn hover-lift" style="background:linear-gradient(135deg,rgba(20,184,166,0.18),rgba(6,182,212,0.18));color:#2dd4bf;border:1px solid rgba(20,184,166,0.45);font-size:0.82rem;padding:8px 16px;border-radius:10px;font-weight:600;cursor:pointer;" onclick="event.stopPropagation();window.location.hash=\'#arbitros/' + t.id + '\'">🧑‍⚖️ Árbitros</button>'
                 : '';
+              // v1.2.13: "FERRAMENTAS DO ORGANIZADOR" era `rgba(255,255,255,0.35)` HARDCODED —
+              // branco a 35% não dá leitura em NENHUM dos casos reportados: sobre a foto do
+              // local some na imagem (qualquer tema), e no tema CLARO sem foto é branco em
+              // fundo claro. Agora: com foto → texto claro + text-shadow duplo (o scrim não
+              // cobre este label, então a sombra é o que garante contraste sobre foto
+              // arbitrária); sem foto → var(--text-muted), que já é tema-aware.
+              // ⚠️ `!important` inline é OBRIGATÓRIO no caso da foto: o tema claro tem CSS
+              // com !important que inverte cores claras inline (#f1f5f9 → escuro) e viraria
+              // texto escuro sobre foto. Inline !important vence. Ver feedback_dark_tarja_light_text.
+              var _toolsCss = venuePhotoBg
+                ? 'color:#f1f5f9 !important; text-shadow:0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95);'
+                : 'color:var(--text-muted);';
+              var _toolsBorder = venuePhotoBg ? 'rgba(255,255,255,0.28)' : 'var(--border-color, rgba(255,255,255,0.12))';
               return `
-            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.12);">
-              <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.35); margin-bottom: 10px;">${_t('org.tools')}</div>
+            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid ${_toolsBorder};">
+              <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
                 ${!isFinished ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}

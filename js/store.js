@@ -4287,17 +4287,39 @@ window._haversineKm = function(lat1, lon1, lat2, lon2) {
 // _loadParticipantProfilesByName e aplicada nos slots [data-pmeta-name].
 window._partProfileByName = window._partProfileByName || {};
 
+// v1.2.13: as 3 pills (gênero · nível · idade) tinham cor CALIBRADA PRO TEMA ESCURO
+// hardcoded — texto claro (#a5b4fc / #fbbf24) sobre tint de 16%. No TEMA CLARO o card
+// é claro → texto claro sobre fundo claro = sem leitura (reportado com screenshot).
+// Regra do dono (feedback_dark_tarja_light_text): "sobre fundo claro → tint + cor";
+// "tema claro → fonte ESCURA sobre fundo claro". Então no claro a pill mantém o tint
+// (a identidade da cor) e o TEXTO vira a variante forte/escura da MESMA cor — nunca um
+// cinza genérico, que perderia o significado (rosa=fem, índigo=nível, âmbar=idade).
+// Fonte única: os 3 badges abaixo são usados pelo card de inscritos em tournaments.js
+// E participants.js (project_two_participant_card_renderers) — corrigir aqui cobre os dois.
+window._profileMetaIsLight = function() {
+  try { return (document.documentElement.getAttribute('data-theme') || 'dark') === 'light'; }
+  catch (e) { return false; }
+};
+
 window._profileMetaGenderBadge = function(g) {
   if (!g) return '';
   var key = String(g).toLowerCase().trim();
+  // [ícone, rótulo, rgb-do-tint, texto-no-CLARO, texto-no-ESCURO]
+  // As cores 4 e 5 foram MEDIDAS no browser (contraste WCAG contra o card + tint 16%),
+  // não escolhidas no olho. O tom PURO do tint (ex.: rgb(236,72,153)) reprovava nos DOIS
+  // temas: 3.5:1 no escuro / 3.77:1 no claro — daí um tom mais fundo no claro e um mais
+  // claro no escuro. Mínimo AA pra texto pequeno = 4.5:1 (a pill é 0.62rem).
   var map = {
-    fem: ['♀', 'Fem', '236,72,153'], feminino: ['♀', 'Fem', '236,72,153'], f: ['♀', 'Fem', '236,72,153'],
-    masc: ['♂', 'Masc', '59,130,246'], masculino: ['♂', 'Masc', '59,130,246'], m: ['♂', 'Masc', '59,130,246'],
-    misto: ['⚥', 'Misto', '168,85,247'], misto_aleatorio: ['⚥', 'Misto', '168,85,247'], misto_obrigatorio: ['⚥', 'Misto', '168,85,247']
+    fem: ['♀', 'Fem', '236,72,153', '#831843', '#f472b6'], feminino: ['♀', 'Fem', '236,72,153', '#831843', '#f472b6'], f: ['♀', 'Fem', '236,72,153', '#831843', '#f472b6'],
+    masc: ['♂', 'Masc', '59,130,246', '#1e3a8a', '#60a5fa'], masculino: ['♂', 'Masc', '59,130,246', '#1e3a8a', '#60a5fa'], m: ['♂', 'Masc', '59,130,246', '#1e3a8a', '#60a5fa'],
+    misto: ['⚥', 'Misto', '168,85,247', '#4c1d95', '#c4b5fd'], misto_aleatorio: ['⚥', 'Misto', '168,85,247', '#4c1d95', '#c4b5fd'], misto_obrigatorio: ['⚥', 'Misto', '168,85,247', '#4c1d95', '#c4b5fd']
   };
   var e = map[key];
   if (!e) return '';
-  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(' + e[2] + ',0.16);color:rgb(' + e[2] + ');border:1px solid rgba(' + e[2] + ',0.4);display:inline-flex;align-items:center;gap:3px;line-height:1.5;">' + e[0] + ' ' + e[1] + '</span>';
+  var _lt = window._profileMetaIsLight();
+  var _fg = _lt ? e[3] : e[4];
+  var _bd = _lt ? 0.55 : 0.4;
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(' + e[2] + ',0.16);color:' + _fg + ';border:1px solid rgba(' + e[2] + ',' + _bd + ');display:inline-flex;align-items:center;gap:3px;line-height:1.5;">' + e[0] + ' ' + e[1] + '</span>';
 };
 
 window._profileMetaExtractSkill = function(catStr, t) {
@@ -4313,7 +4335,11 @@ window._profileMetaExtractSkill = function(catStr, t) {
 
 window._profileMetaSkillBadge = function(skill) {
   if (!skill) return '';
-  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);line-height:1.5;">' + window._safeHtml(skill) + '</span>';
+  // Claro: índigo-800 (#3730a3) sobre o tint — o #a5b4fc do escuro somia no card claro.
+  var _lt = window._profileMetaIsLight();
+  var _fg = _lt ? '#312e81' : '#a5b4fc';
+  var _bd = _lt ? 0.5 : 0.35;
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(99,102,241,0.18);color:' + _fg + ';border:1px solid rgba(99,102,241,' + _bd + ');line-height:1.5;">' + window._safeHtml(skill) + '</span>';
 };
 
 window._profileMetaAgeBadge = function(birthDate, t) {
@@ -4331,7 +4357,13 @@ window._profileMetaAgeBadge = function(birthDate, t) {
   var bucket = null;
   for (var i = 0; i < th.length; i++) { if (age >= th[i].val) { bucket = th[i].cat; break; } }
   if (!bucket) return '';
-  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(245,158,11,0.16);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);line-height:1.5;">' + window._safeHtml(bucket) + '</span>';
+  // Claro: âmbar-900 (#78350f). MEDIDO no browser: o âmbar-700 (#b45309) que os
+  // countdowns usam dá só 2.59:1 sobre o card claro + tint — reprova WCAG AA. Aqui
+  // precisa de tom mais fundo que o do texto solto dos countdowns.
+  var _ltA = window._profileMetaIsLight();
+  var _fgA = _ltA ? '#78350f' : '#fbbf24';
+  var _bdA = _ltA ? 0.55 : 0.4;
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(245,158,11,0.16);color:' + _fgA + ';border:1px solid rgba(245,158,11,' + _bdA + ');line-height:1.5;">' + window._safeHtml(bucket) + '</span>';
 };
 
 // v2.4.39: tag "sem cat" na COR do eixo que está faltando (no lugar onde o badge
