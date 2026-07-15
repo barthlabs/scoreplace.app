@@ -28,6 +28,7 @@ const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https")
 const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
+const _mergeRules = require("./merge-rules");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -271,14 +272,25 @@ function _profileScore(data) {
 
 /**
  * Choose which of two Firestore DocumentSnapshot objects to keep.
- * v3.0.57: REGRA DO DONO — a conta MAIS ANTIGA prevalece (uid mais antigo),
- * com o displayName DELA. Pedido explícito: merge bidirecional, sobrevive sempre
- * a conta mais antiga, não importa se vincula e-mail antigo a celular novo ou o
- * contrário. createdAt é o critério primário; ausente perde pra quem tem idade
- * conhecida; empate/ambos sem createdAt → cai no perfil mais completo (legado).
- * Returns { keepDoc, dropDoc }.
+ *
+ * v1.2.6 — REGRA DO DONO: a conta FEDERADA (Google/Apple) prevalece. Provedor federado não
+ * se transfere entre uids: apagar a conta Google apaga o login da pessoa (celular e senha se
+ * movem, ele não). Espelha _mergeAccountsKeepOlder — os dois pontos de decisão do merge
+ * precisam concordar, senão o auto-merge e o merge explícito escolhem sobreviventes
+ * diferentes pra mesma dupla. Decide pelo `authProvider` do próprio doc (gravado em 166/166
+ * dos perfis) pra não precisar bater no Auth aqui.
+ *
+ * v3.0.57 (desempate, ainda vale): entre duas federadas — ou duas não-federadas — sobrevive a
+ * MAIS ANTIGA, com o displayName dela. createdAt é o critério; ausente perde pra quem tem
+ * idade conhecida; empate/ambos sem createdAt → perfil mais completo (legado).
+ * Ver [[project_account_merge_email]]. Returns { keepDoc, dropDoc }.
  */
 function _determineMergeWinner(docA, docB) {
+  const fa = _mergeRules.isFederatedProfile(docA.data());
+  const fb = _mergeRules.isFederatedProfile(docB.data());
+  if (fa !== fb) {
+    return fa ? { keepDoc: docA, dropDoc: docB } : { keepDoc: docB, dropDoc: docA };
+  }
   const ts = doc => {
     const c = doc.data().createdAt;
     if (c == null) return null;
@@ -368,14 +380,22 @@ function _isSyntheticAuthEmail(email) {
 }
 
 /**
- * v3.0.59: MOTOR ÚNICO de fusão bidirecional, mantendo a conta MAIS ANTIGA.
- * Recebe dois uids JÁ PROVADOS como sendo da mesma pessoa (um pela sessão, o outro
- * por verificação de e-mail/celular). Determina o mais antigo pela data de criação
- * no Firebase Auth (metadata.creationTime), mantém ele (uid + displayName dele),
- * move os dados do mais novo pra ele (_executeMerge), TRANSFERE a credencial que
- * faltava (celular↔e-mail real) e APAGA o usuário Auth mais novo. Idempotente-ish:
- * se um já está mergedInto, não faz nada. Retorna { survivorUid, droppedUid }.
- * Direção-agnóstico: serve e-mail→celular E celular→e-mail.
+ * MOTOR ÚNICO de fusão bidirecional.
+ *
+ * v1.2.6 — REGRA DO DONO: sobrevive a conta FEDERADA (Google/Apple). Entre duas federadas
+ * (ou duas não-federadas) sobrevive a MAIS ANTIGA, que era a regra única até aqui (v3.0.59).
+ * O motivo é técnico: provedor federado não se transfere entre uids — apagar a conta Google
+ * apaga o login. Celular e e-mail/senha se movem via updateUser, então a federada é sempre a
+ * que tem de ficar. Ver o bloco de comentário na escolha do keepU e [[project_account_merge_email]].
+ *
+ * Recebe dois uids JÁ PROVADOS como sendo da mesma pessoa (um pela sessão, o outro por
+ * verificação de e-mail/celular). Mantém o sobrevivente (uid + displayName dele), move os
+ * dados do outro (_executeMerge — que preserva enrollSeq, ou seja, a ORDEM DE INSCRIÇÃO nos
+ * torneios), TRANSFERE a credencial que faltava (celular↔e-mail real) e APAGA o Auth do
+ * absorvido. Idempotente-ish: se um já está mergedInto, não faz nada.
+ * Retorna { survivorUid, droppedUid }. Direção-agnóstico: e-mail→celular E celular→e-mail.
+ *
+ * Nome mantido por compat (é chamado de vários pontos); hoje "KeepOlder" é só o desempate.
  */
 async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   if (!uidA || !uidB || uidA === uidB) throw new HttpsError("invalid-argument", "uids inválidos pra merge");
@@ -393,10 +413,25 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
     return { survivorUid: (da.data() && da.data().mergedInto) || (dbb.data() && dbb.data().mergedInto) || uidA, droppedUid: null, already: true };
   }
 
-  const tA = new Date(ua.metadata.creationTime || 0).getTime();
-  const tB = new Date(ub.metadata.creationTime || 0).getTime();
-  const keepU = (tA <= tB) ? ua : ub;   // mais antigo (createdAt menor) sobrevive
-  const dropU = (tA <= tB) ? ub : ua;
+  // v1.2.6 — REGRA DO DONO: a conta FEDERADA (Google/Apple) sempre vence; entre duas
+  // federadas (ou duas não-federadas), volta a valer a mais antiga.
+  //
+  // Não é preferência, é limite do Firebase: provedor federado NÃO se transfere entre uids
+  // — ele morre com a conta. Telefone e e-mail/senha se movem (updateUser, logo abaixo).
+  // Então manter a "mais antiga" quando ela é phone e a nova é Google apaga justamente o
+  // login que a pessoa usa: o e-mail vai pro sobrevivente, mas o provider google.com some,
+  // e "Entrar com Google" passa a bater em auth/account-exists-with-different-credential
+  // (o projeto usa uma conta por e-mail). O resolveMergedLogin não salva — ele depende de a
+  // pessoa CONSEGUIR logar na conta com mergedInto, que acabou de ser deletada.
+  //
+  // Caso real (Mônica Rossi, jul/2026): phone criado 31/mai com o perfil todo + a vaga na
+  // Confra; Google criado 11/jun, com os únicos logins recentes. Pela regra antiga ela
+  // ganharia a Confra e perderia a entrada. Mantendo a federada: o phone é movido pra ela,
+  // e a pessoa entra por Google OU telefone. Ver [[project_account_merge_email]].
+  const _pick = _mergeRules.pickSurvivor(ua, ub);
+  const keepU = _pick.keep, dropU = _pick.drop;
+  console.log(`[merge] keep=${keepU.uid} [${(keepU.providerData || []).map((p) => p.providerId).join(",")}] ` +
+    `← drop=${dropU.uid} (critério: ${_pick.reason === "federated" ? "conta federada vence" : "mais antiga vence"})`);
   const keepDoc = (keepU.uid === uidA) ? da : dbb;
   const dropDoc = (dropU.uid === uidA) ? da : dbb;
 
