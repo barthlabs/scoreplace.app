@@ -107,6 +107,48 @@ ok(JSON.stringify(mu) === '["uid_1_longo","uid_2_longo","uid_3_longo","uid_4_lon
    '_computeMemberUids: solo + dupla (p1Uid/p2Uid) + sub-participants + admins');
 ok(mu.indexOf('xy') === -1, '_computeMemberUids: uid curto (<4) descartado');
 
+console.log('──── 5. _applyWriteBoundary da drawRound: PERSIST sanitizado × CLEAN com nome ────');
+// A assimetria do cliente (firebase-db.js:mutateTournament): PERSISTE a cópia sem nome pra quem
+// tem uid, mas DEVOLVE a cópia COM nome pro caller notificar/exibir. Trocar os dois = ou nome
+// gravado no Firestore (fura o só-uid) ou entrada sem nome na tela.
+// Extrai a função do index.js sem subir o firebase-admin (require do módulo pediria creds).
+const fs = require('fs'), vm = require('vm'), pathm = require('path');
+const idx = fs.readFileSync(pathm.join(__dirname, 'index.js'), 'utf8');
+const bi = idx.indexOf('function _applyWriteBoundary(');
+ok(bi !== -1, '_applyWriteBoundary existe no index.js');
+if (bi !== -1) {
+  const bj = idx.indexOf('\n}\n', bi) + 3;
+  const bctx = { drawWindow: w, HttpsError: class extends Error {}, console };
+  vm.createContext(bctx);
+  vm.runInContext(idx.slice(bi, bj) + '\nglobalThis.__b = _applyWriteBoundary;', bctx);
+  const boundary = bctx.__b;
+
+  w._profileNameByUid = { uid_A_longo: 'Ana Lima', uid_B_longo: 'Bruno Sá' };
+  const mm1 = { id: 'm1', p1: 'Ana Lima', p2: 'Bruno Sá' };
+  const doc2 = {
+    id: 'T1', creatorUid: 'uid_A_longo', organizerEmail: 'a@x.com',
+    participants: [{ uid: 'uid_A_longo', displayName: 'Ana Lima' }, { displayName: 'Zé Guest' },
+                   { uid: 'uid_B_longo', displayName: 'Bruno Sá' }],
+    rounds: [{ matches: [mm1], monarchGroups: [{ name: 'G1', matches: [mm1] }] }],
+  };
+  const b = boundary(doc2);
+
+  ok(!has(b.persist.participants[0], 'displayName'), 'PERSIST: nome de quem tem perfil sanitizado (storage só-uid)');
+  ok(b.persist.participants[1].displayName === 'Zé Guest', 'PERSIST: guest mantém o nome');
+  ok(b.clean.participants[0].displayName === 'Ana Lima', 'CLEAN (devolvido ao cliente): nome PRESERVADO');
+  // REGRESSÃO REAL (v1.2.25): Object.assign é RASO → persist.rounds É clean.rounds. Hidratar
+  // `clean` antes do set devolvia group.matches pro persist e o Firestore gravaria cada jogo
+  // Rei/Rainha EM DOBRO. Os dois têm de sair FOLDADOS; quem recebe hidrata no ingest.
+  ok(!has(b.persist.rounds[0].monarchGroups[0], 'matches'),
+     'PERSIST: grupos FOLDADOS — não regrava o jogo Rei/Rainha em dobro (Object.assign é raso!)');
+  ok(!has(b.clean.rounds[0].monarchGroups[0], 'matches'),
+     'CLEAN: também foldado (é como o doc É no Firestore; o ingest do cliente hidrata)');
+  ok(JSON.stringify(b.persist.rounds[0].monarchGroups[0].matchIds) === '["m1"]', 'PERSIST: matchIds preservados');
+  ok(JSON.stringify(b.persist.adminUids) === '["uid_A_longo"]', 'denormalizado adminUids recomputado no boundary');
+  ok(b.persist.memberUids.length === 2 && b.persist.memberUids.indexOf('uid_B_longo') !== -1,
+     'denormalizado memberUids recomputado (só quem tem uid)');
+}
+
 console.log('\n════════════════════════════════════════');
 if (fail) { console.error(`❌ persist-boundary: ${pass} ok, ${fail} falharam`); process.exit(1); }
 console.log(`✅ persist-boundary: ${pass} ok, 0 falharam`);

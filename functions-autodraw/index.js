@@ -163,6 +163,11 @@ function _isTournamentAdmin(t, uid, email) {
 // Todos os helpers vêm do MESMO arquivo que o app carrega (vendor/ via copy-vendor):
 // persist-core (clean/compute*), bracket-model (fold), identity-core (strip),
 // tournaments-utils (_nextOwedDrawMs). Ver [[feedback_functions_must_mirror_app]].
+// Devolve { persist, clean } — a MESMA assimetria do cliente: PERSISTE a cópia sanitizada
+// (sem nome pra quem tem uid) mas DEVOLVE `clean` COM nome e re-hidratado, pro caller
+// sincronizar estado/exibir sem depender de um render. Nunca gravar `clean`, nunca devolver
+// `persist`: trocar os dois re-introduz nome gravado no Firestore (fura o storage só-uid) ou
+// entrega ao cliente entradas sem nome (some da tela).
 function _applyWriteBoundary(data) {
   const w = drawWindow;
   if (!w) throw new HttpsError('internal', 'draw-core indisponível');
@@ -185,10 +190,18 @@ function _applyWriteBoundary(data) {
   w._foldMonarchGroups(clean); // Rei/Rainha: grava só matchIds (fonte única = round.matches)
   // Storage é só-uid: quem TEM perfil vivo não leva nome gravado (o display resolve por uid).
   // Guest e uid órfão MANTÊM o nome — é a única identidade que têm.
+  let persist = clean;
+  const stripped = {};
   ['participants', 'standbyParticipants', 'waitlist'].forEach((k) => {
-    if (Array.isArray(clean[k])) clean[k] = w._stripStoredNamesForUidEntries(clean[k]);
+    if (Array.isArray(clean[k])) stripped[k] = w._stripStoredNamesForUidEntries(clean[k]);
   });
-  return clean;
+  if (Object.keys(stripped).length) persist = Object.assign({}, clean, stripped);
+  // ⚠️ NÃO hidratar `clean` aqui: Object.assign é RASO, então persist.rounds É clean.rounds —
+  // hidratar devolveria group.matches pro persist e o Firestore gravaria cada jogo Rei/Rainha
+  // EM DOBRO (o incidente que o fold existe pra evitar). O cliente escapa por ORDEM (dá o set
+  // antes de hidratar); não dependemos dessa sutileza. Os dois saem FOLDADOS — que é como o doc
+  // realmente é no Firestore — e quem receber hidrata no ingest, igual faz com o listener.
+  return { persist: persist, clean: clean };
 }
 
 // Campos de chave que o re-sorteio zera antes de redesenhar (espelha tournaments-draw.js:1567
@@ -261,9 +274,14 @@ exports.drawRound = onCall(async (request) => {
     }
 
     // v4.1.30: o sorteio LIMPA a presença (drawInitial já zera checkedIn/absent).
-    tx.set(ref, _applyWriteBoundary(t)); // set (sem merge) DENTRO da txn = clobber-free
+    const b = _applyWriteBoundary(t);
+    tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+    // Devolve o doc COM nome (b.clean, não b.persist) — o cliente precisa dele pra notificar
+    // (_notifyDrawPersonalized lê os nomes) e pra sincronizar o AppStore sem esperar o listener.
+    // Vem FOLDADO (como o doc é no Firestore); o ingest do cliente hidrata, igual ao listener.
     return { ok: true, format: res.format, native: !!res.native, matchCount: res.matchCount,
-             sitOuts: res.sitOuts || 0, allMaleCount: res.allMaleCount || 0, redraw: hadBracket };
+             sitOuts: res.sitOuts || 0, allMaleCount: res.allMaleCount || 0, redraw: hadBracket,
+             tournament: b.clean };
   });
 
   console.log(`drawRound: ${tId} sorteado por ${uid} — ${out.format}, ${out.matchCount} jogo(s)` +
