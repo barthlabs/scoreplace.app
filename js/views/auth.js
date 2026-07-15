@@ -11,10 +11,19 @@
 // antes do usuário humano consume. Solução: o email aponta pra wrapper URL
 // nossa que SÓ executa o redirect via JS no browser real do humano. Scanners
 // fazem GET/HEAD e param antes do JS rodar, então não tocam no oobCode.
+// v1.2.4: o MESMO resolver atende ?vt=TOKEN (confirmação de conta). O e-mail de
+// confirmação mandava o oobCode CRU e caía no bug idêntico ao de cima — 7 pessoas em prod
+// travadas no gate porque o scanner queimava o link antes delas (Val pediu 3 confirmações,
+// Paulo 3 resets de senha achando que era a senha). Generalizado em vez de duplicado: o
+// fluxo é o mesmo (busca o token, redireciona o browser real), só muda a copy.
+// Ver [[project_orphan_uid_entries]] / [[project_email_deliverability_hotmail]].
 (function _handleMagicLinkWrapper() {
   try {
     var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
     var token = qs && qs.get('ml');
+    var vToken = qs && qs.get('vt');
+    var isVerify = !token && !!vToken;
+    if (!token && vToken) token = vToken;
     if (!token) return;
 
     // Loading screen — usuário sabe que tá entrando, não acha que travou.
@@ -29,7 +38,9 @@
         (isError ? '<a href="/" style="margin-top:8px;color:' + fg + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + fg + ';padding:8px 18px;border-radius:8px;">Voltar e pedir novo link</a>' : '') +
         '</div>';
     };
-    showStatus('🎾', 'Entrando no scoreplace.app...', 'Carregando seu acesso seguro');
+    showStatus('🎾',
+      isVerify ? 'Confirmando seu e-mail...' : 'Entrando no scoreplace.app...',
+      isVerify ? 'Ativando sua conta no scoreplace.app' : 'Carregando seu acesso seguro');
 
     // Aguarda Firestore estar pronto (firebase-db.js carrega antes deste).
     var tries = 0;
@@ -42,7 +53,10 @@
       }
       db.collection('magicLinks').doc(token).get().then(function(doc) {
         if (!doc.exists) {
-          showStatus('🔗', 'Link inválido ou expirado', 'Esse link não existe mais. Volte e peça um novo no campo de login.', true);
+          showStatus('🔗', 'Link inválido ou expirado',
+            isVerify
+              ? 'Esse link de confirmação não existe mais. Entre com seu e-mail e senha — a tela de confirmação tem um botão pra reenviar.'
+              : 'Esse link não existe mais. Volte e peça um novo no campo de login.', true);
           return;
         }
         var data = doc.data() || {};
@@ -53,7 +67,9 @@
         // Salva email no localStorage pra signInWithEmailLink completar
         // sem perguntar. Cross-device também: o Firebase auth handler
         // anexa ?eml=email ao continueUrl (já no actionCodeSettings).
-        if (data.email) {
+        // v1.2.4: só no LOGIN — o link de confirmação (?vt=) não faz signIn,
+        // então gravar isto ali só deixaria lixo no localStorage.
+        if (data.email && !isVerify) {
           try { window.localStorage.setItem('scoreplace_emailForSignIn', data.email); } catch(_){}
         }
         // Redireciona o BROWSER pro firebaseLink real — só agora o oobCode

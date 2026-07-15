@@ -1381,7 +1381,37 @@ function _buildVerificationEmailContent(link, name) {
 
 // Enfileira o e-mail rico de verificação na coleção mail/ (SMTP via extensão
 // firestore-send-email). Lança se o add falhar.
+// v1.2.4: WRAPPER URL no e-mail de confirmação — mesma correção que a v1.0.30 fez no magic
+// link, que nunca chegou aqui. `generateEmailVerificationLink` devolve uma URL com oobCode de
+// USO ÚNICO; scanner anti-phishing (Outlook/corp, e o Gmail também) prefetcha o link pra
+// checar e CONSOME o código antes do humano clicar → "link inválido" e a pessoa nunca entra.
+// Evidência em prod (jul/2026): 7 contas travadas no gate — Val pediu 3 confirmações,
+// Paulo 3 resets de senha (culpando a senha), Zilda recebia 32 e-mails do app mas não
+// conseguia entrar, e está inscrita na Confra. Agora o e-mail aponta pra
+// scoreplace.app/?vt=TOKEN: o scanner faz GET/HEAD na NOSSA URL (não executa JS, não
+// consome nada) e só o browser real resolve o oobCode. Reusa a coleção magicLinks —
+// mesmas rules (leitura pública: o token de 24 chars É o segredo) e mesmo cleanup
+// (cleanupOldMagicLinks). Ver [[project_email_deliverability_hotmail]].
+async function _wrapVerificationLink(firebaseLink, email) {
+  const crypto = require("crypto");
+  const token = crypto.randomBytes(18).toString("base64url");
+  try {
+    await admin.firestore().collection("magicLinks").doc(token).set({
+      firebaseLink: firebaseLink,
+      email: email,
+      kind: "verify",   // distingue do magic link de login (o handler trata igual: redireciona)
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),  // oobCode de verificação dura mais que o de login
+    });
+  } catch (err) {
+    console.error("[verifyLink] falha ao salvar magicLinks/" + token + " — caindo no link direto", err);
+    return firebaseLink;   // degrada pro comportamento antigo em vez de não mandar e-mail
+  }
+  return "https://scoreplace.app/?vt=" + encodeURIComponent(token);
+}
+
 async function _queueVerificationEmail(db, email, link, name) {
+  link = await _wrapVerificationLink(link, email);
   const { html, text } = _buildVerificationEmailContent(link, name);
   await _enqueueMail(db, {
     to: [email],
