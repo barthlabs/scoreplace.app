@@ -206,3 +206,69 @@ window._entryTeamMembers = function (p) {
   }
   return null;
 };
+
+// ── ITEM 3 · Fase 4 (v4.5.85): SANITIZADOR DE IDENTIDADE NA PERSISTÊNCIA ──────────
+// Identidade de um inscrito = uid; o nome é resolvido do perfil VIVO (users/{uid}) em
+// TODA borda de display/sorteio/authz (Partes 0–13 + Fases 1–3). Logo, NÃO se grava o
+// nome na entrada de quem TEM conta — o campo gravado só apodrece e vira o "Maira/Maira".
+// Guest SEM conta (sem uid no slot) MANTÉM o nome: é a única identidade que ele tem.
+// Este helper roda no LIMITE DE PERSISTÊNCIA (firebase-db.js), SEMPRE sobre a CÓPIA que
+// vai pro Firestore — NUNCA muta o objeto em memória (display em sessão segue intacto).
+// Só toca os campos de nome da ENTRADA (name/displayName/p1Name/p2Name + sub-participants);
+// NÃO toca slots de partida (m.p1/m.p2) nem nada fora de participants/standby/waitlist.
+function _stripUidEntryNames(p) {
+  if (!p || typeof p !== 'object') return p;
+  var q = {}; for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) q[k] = p[k]; }
+  // v4.5.91: PLACEHOLDER (vaga "Jogador NN") NÃO é conta — nome É a identidade. Placeholders
+  // legados nasceram com uid sintético 'jog_NN_…' + email fake, e o strip abaixo apagava o
+  // nome (achando que tinha conta) → card virava o email. Aqui CURA pro formato limpo (só
+  // nome, sem uid/email) em vez de strippar; na próxima gravação some o uid fantasma.
+  var _phUid = q.uid && String(q.uid).indexOf('jog_') === 0;
+  if ((_phUid || q.isPlaceholder === true) && !q.p1Name && !q.p2Name) {
+    var _m = _phUid ? String(q.uid).match(/^jog_(\d+)/) : null;
+    var _cur = String(q.displayName || q.name || '').trim();
+    var _nm = /^(Jogador|Placeholder)\s+\d+$/i.test(_cur) ? _cur : (_m ? ('Jogador ' + _m[1]) : '');
+    if (_nm) { q.name = _nm; q.displayName = _nm; }
+    q.isPlaceholder = true;
+    if (_phUid) delete q.uid;
+    if (q.email && /^jogador\d+@scoreplace\.app$/i.test(String(q.email))) delete q.email;
+    return q;
+  }
+  // v1.2.2: só stripa o nome de quem TEM perfil RESOLVÍVEL. O strip apagava o nome de todo
+  // uid, apostando que users/{uid} sempre estaria lá pra devolvê-lo. Quando a pessoa recria a
+  // conta (uid novo) o users/ do uid velho some — e a inscrição, já stripada, fica SEM NENHUMA
+  // âncora de nome: o resolvedor caía no uid cru, e o sorteio gravava esse uid como nome
+  // (Ranking/staging, jul/2026). Sem perfil, o nome gravado é a ÚNICA identidade que resta —
+  // preservá-lo é o mesmo princípio que já vale pro guest. Não reintroduz o "Maira/Maira":
+  // o display SEMPRE prefere o perfil vivo, e o nome gravado só entra quando não há perfil.
+  // Cache frio no save → preserva o nome (conservador); nunca apaga o que não sabe repor.
+  // Ver [[project_orphan_uid_entries]] / [[project_uid_primary_identity]].
+  var _resolves = function (u) {
+    return !!(u && typeof window._nameForUid === 'function' && window._nameForUid(u));
+  };
+  var isPair = !!(q.p1Uid || q.p2Uid || q.p1Name || q.p2Name);
+  if (isPair) {
+    if (_resolves(q.p1Uid)) delete q.p1Name;   // membro 1 tem perfil → nome vem de lá
+    if (_resolves(q.p2Uid)) delete q.p2Name;   // membro 2 tem perfil → idem
+    // name/displayName da dupla é o teamString derivado ("A / B") → o display reconstrói
+    // via _entryDisplayName (p1Uid vivo / p2Uid vivo / p*Name só do guest). Remove sempre
+    // que ao menos um membro tem perfil (o outro, se guest/órfão, resolve pelo p*Name mantido).
+    if (_resolves(q.p1Uid) || _resolves(q.p2Uid)) { delete q.name; delete q.displayName; }
+  } else if (_resolves(q.uid)) {               // solo com perfil
+    delete q.name; delete q.displayName;
+  }
+  if (Array.isArray(q.participants)) {
+    q.participants = q.participants.map(function (s) {
+      if (s && typeof s === 'object' && _resolves(s.uid)) {
+        var r = {}; for (var kk in s) { if (Object.prototype.hasOwnProperty.call(s, kk)) r[kk] = s[kk]; }
+        delete r.name; delete r.displayName; return r;
+      }
+      return s;
+    });
+  }
+  return q;
+}
+// Retorna CÓPIA do array com cada entrada sanitizada (entrada sem uid = guest, intacta).
+window._stripStoredNamesForUidEntries = function (arr) {
+  return Array.isArray(arr) ? arr.map(_stripUidEntryNames) : arr;
+};

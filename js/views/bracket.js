@@ -1904,46 +1904,10 @@ window._phaseGameOffset = function (t, phaseIndex) {
 // de cada fase: Dupla Elim intercala upper/lower por rodada + grand no fim; senão tiers na
 // ordem gold→silver→main→line3→line4→(extras), colunas por rodada asc, 3º-lugar ANTES da
 // final, grande-final por último. BYEs não consomem número (igual ao render).
-// v4.4.69 FONTE ÚNICA Rei/Rainha (schema, sem gambiarra): o jogo mora UMA vez em
-// round.matches. Os grupos guardam só `matchIds` — o Firestore NUNCA mais grava
-// cópia do jogo (o fold em saveTournament/mutateTournament/_saveToCache remove
-// group.matches do payload). Esta função HIDRATA a leitura: reconstrói
-// group.matches como REFERÊNCIAS aos objetos de round.matches (o MESMO objeto,
-// nunca cópia) — divergência é impossível por construção, sem sync perpétuo.
-// Idempotente. MIGRA docs legados com group.matches embutido: dobra em matchIds,
-// garante o objeto no plano (fundindo resultado se só a cópia do grupo tinha) e
-// relinka. Roda no ingest (onSnapshot/cache), no topo do render e na transação.
-window._hydrateMonarchGroups = function (t) {
-  if (!t || !Array.isArray(t.rounds)) return t;
-  t.rounds.forEach(function (rd) {
-    if (!rd || !Array.isArray(rd.monarchGroups) || !rd.monarchGroups.length) return;
-    if (!Array.isArray(rd.matches)) rd.matches = [];
-    var byId = {};
-    rd.matches.forEach(function (m) { if (m && m.id != null) byId[String(m.id)] = m; });
-    rd.monarchGroups.forEach(function (g) {
-      if (!g) return;
-      // (a) LEGADO: cópias embutidas sem matchIds → dobra em matchIds + migra pro plano.
-      if (!Array.isArray(g.matchIds) && Array.isArray(g.matches)) {
-        g.matchIds = [];
-        g.matches.forEach(function (gm) {
-          if (!gm || gm.id == null) return;
-          g.matchIds.push(String(gm.id));
-          var flat = byId[String(gm.id)];
-          if (!flat) { rd.matches.push(gm); byId[String(gm.id)] = gm; } // só no grupo → adota no plano
-          else if (flat !== gm && gm.winner && !flat.winner) {          // placar salvo só na cópia → funde
-            flat.winner = gm.winner; flat.scoreP1 = gm.scoreP1; flat.scoreP2 = gm.scoreP2; flat.draw = gm.draw;
-            if (!flat.startedAt) flat.startedAt = gm.startedAt; if (!flat.resultAt) flat.resultAt = gm.resultAt;
-          }
-        });
-      }
-      // (b) reconstrói group.matches como REFERÊNCIAS do plano (fonte única).
-      if (Array.isArray(g.matchIds)) {
-        g.matches = g.matchIds.map(function (id) { return byId[String(id)]; }).filter(Boolean);
-      }
-    });
-  });
-  return t;
-};
+// _hydrateMonarchGroups saiu daqui (v1.2.25) → js/views/bracket-model.js, ao lado do
+// _foldMonarchGroups: fold (grava só matchIds) e hydrate (relê como refs) são O PAR do
+// mesmo schema e agora moram juntos. O servidor precisa do hydrate no boundary de escrita
+// e bracket.js é render — não carrega em Node. Chamadores seguem em window._hydrateMonarchGroups.
 
 window._assignGlobalGameNumbers = function (t) {
   if (!t) return;
