@@ -24,6 +24,10 @@ try {
   console.error('[autoDraw] draw-core indisponível — autoDraw vai pular:', e && e.message);
 }
 
+// Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
+// no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
+const CF_VERSION = '1.2.26';
+
 initializeApp();
 const db = getFirestore();
 
@@ -222,7 +226,7 @@ function _clearForRedraw(t) {
 // staging a CF recusou e não sobrou NENHUMA linha: instância subiu e silêncio. Ficamos cegos.
 // Todo caminho de recusa passa por aqui: loga o motivo ANTES de lançar.
 function _drawFail(code, reason, ctx) {
-  console.error('drawRound RECUSOU:', reason, JSON.stringify(ctx || {}));
+  console.error(`drawRound v${CF_VERSION} RECUSOU:`, reason, JSON.stringify(ctx || {}));
   return new HttpsError(code, reason);
 }
 
@@ -255,7 +259,9 @@ exports.drawRound = onCall(async (request) => {
   }
   await _preloadDrawNames(pre.data()); // popula drawWindow._profileNameByUid
 
-  console.log(`drawRound: pedido de ${uid} pro torneio ${tId}` + (allowRedraw ? ' [re-sorteio]' : ''));
+  // A VERSÃO no log é o contrato: se a linha não disser CF_VERSION, é build velha atendendo
+  // (deploy não pegou / instância antiga). Sem isto não dá pra saber que código respondeu.
+  console.log(`drawRound v${CF_VERSION}: pedido de ${uid} pro torneio ${tId}` + (allowRedraw ? ' [re-sorteio]' : ''));
 
   let out;
   try {
