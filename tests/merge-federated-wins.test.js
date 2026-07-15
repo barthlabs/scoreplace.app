@@ -82,6 +82,22 @@ ok(isFederatedProfile({}) === false, 'perfil sem authProvider → não federado'
 ok(isFederated({ providerData: [{ providerId: 'google.com' }] }) === true, 'isFederated lê providerData');
 ok(isFederated({ providerData: [{ providerId: 'phone' }] }) === false, 'isFederated: phone não é federado');
 
+
+// ── MAPAS POR UID: o merge tem que re-apontar TODO estado por-pessoa ─────────
+// Regra do dono (jun/2026): "sempre identifica pelo uid. vips, checkin, ausente e enquete
+// inclusive". O _repairTournaments não tocava nenhum desses mapas — a pessoa perdia o
+// check-in, o voto e o histórico de W.O. no merge, sem erro nenhum. Pego ao mesclar a
+// Raquel Unger: o voto dela em opinionPolls[].votes ficou apontando pro uid deletado.
+const repBloco = src.slice(src.indexOf('async function _repairTournaments'), src.indexOf('function _profileScore'));
+['checkedIn', 'absent', 'vips', 'sitOutHistory', 'woHistory', 'ligaGhosts'].forEach(function (campo) {
+  ok(repBloco.includes('"' + campo + '"'), '_repairTournaments re-aponta o mapa ' + campo);
+});
+ok(repBloco.includes('"opinionPolls"') && repBloco.includes('"polls"'),
+  '_repairTournaments re-aponta votos de enquete (opinionPolls/polls)');
+ok(/votes/.test(repBloco), '_repairTournaments desce até .votes (o mapa fica um nível abaixo)');
+ok(/if \(!\(keepUid in novo\)\)/.test(repBloco),
+  'mapa: o estado do sobrevivente PREVALECE (não é sobrescrito pelo do absorvido)');
+
 // ── enrollSeq: a ORDEM DE INSCRIÇÃO não pode mudar no remap ──────────────────
 // _repairTournaments copia a entrada e troca só o uid — enrollSeq vai junto.
 const blocoRep = src.slice(src.indexOf('async function _repairTournaments'), src.indexOf('function _profileScore'));

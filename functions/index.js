@@ -139,6 +139,38 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
       if (String(t.organizerEmail || "").toLowerCase() === dropEmail.toLowerCase()) { update.organizerEmail = keepEmail; changed = true; }
     }
 
+    // v1.2.7: MAPAS POR UID. Todo estado por-pessoa do torneio é chaveado pelo uid
+    // (regra do dono, jun/2026: "sempre identifica pelo uid. vips, checkin, ausente e
+    // enquete inclusive"). Nada disto era re-apontado no merge: a pessoa perdia o check-in,
+    // o voto na enquete e o histórico de W.O. — silenciosamente, porque a chave morta
+    // simplesmente deixa de casar com alguém. Pego ao mesclar a Raquel Unger (o voto dela
+    // em opinionPolls[].votes sobreviveu apontando pro uid deletado). Em prod havia 42
+    // chaves de checkedIn, 15 votos, 2 absent e 1 woHistory nessa condição.
+    // Se o keep JÁ tem a chave, a do drop é descartada (não sobrescreve o estado atual).
+    ["checkedIn", "absent", "vips", "sitOutHistory", "woHistory", "ligaGhosts"].forEach((campo) => {
+      const m = t[campo];
+      if (!m || typeof m !== "object" || Array.isArray(m) || !(dropUid in m)) return;
+      const novo = Object.assign({}, m);
+      if (!(keepUid in novo)) novo[keepUid] = novo[dropUid];
+      delete novo[dropUid];
+      update[campo] = novo;
+      changed = true;
+    });
+    // Votos de enquete (opinionPolls[].votes e polls[].votes) — mesma ideia, um nível abaixo.
+    ["opinionPolls", "polls"].forEach((campo) => {
+      if (!Array.isArray(t[campo])) return;
+      let hit = false;
+      const arr = t[campo].map((p) => {
+        if (!p || !p.votes || typeof p.votes !== "object" || !(dropUid in p.votes)) return p;
+        hit = true;
+        const v = Object.assign({}, p.votes);
+        if (!(keepUid in v)) v[keepUid] = v[dropUid];
+        delete v[dropUid];
+        return Object.assign({}, p, { votes: v });
+      });
+      if (hit) { update[campo] = arr; changed = true; }
+    });
+
     // participants[]
     // v1.2.2: SLOT-AWARE. Antes só olhava p.uid — quem estava como MEMBRO DE DUPLA
     // (p1Uid/p2Uid) ou em sub-participants[] não era re-apontado, e o merge deleta a conta
