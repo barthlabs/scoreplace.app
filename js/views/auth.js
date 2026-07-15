@@ -5834,28 +5834,46 @@ window._executeDeleteAccount = async function() {
       if (count > 0) await batch.commit();
     } catch (e) { window._warn('Erro ao excluir notificações:', e); }
 
-    // 2b. Remove user from tournament participants
+    // 2b. Remove user from tournament participants.
+    // v1.2.2: usa a operação CANÔNICA de saída (FirestoreDB.deenrollParticipant), a mesma do
+    // botão "Desinscrever-se". O filtro caseiro que morava aqui era `p.email !== email &&
+    // p.uid !== uid` — só olhava o slot SOLO. Quem estava como MEMBRO DE DUPLA (p1Uid/p2Uid)
+    // ou em sub-participants[] NÃO era removido: o perfil era apagado e a inscrição ficava
+    // apontando pro uid morto = ÓRFÃO (caso real: Michelle, BT Corpus Christi). A tela promete
+    // "suas inscrições em torneios" e o código não cumpria pra duplas. O canônico é uid-first +
+    // slot-aware, roda em transação e — decisivo — RECOMPUTA memberUids/memberEmails, que o
+    // filtro antigo nunca tocava (a pessoa seguia "membro" nas queries array-contains).
+    // Política da dupla vem de lá e não se inventa aqui: sai a entrada inteira, porque dupla
+    // não joga com uma pessoa só. Ver [[project_orphan_uid_entries]].
+    // UID ONLY: quem exclui a conta está logado, logo tem uid. _participantUids cobre todo
+    // slot onde a pessoa pode existir (uid, p1Uid, p2Uid, sub-participants[]) — nada de casar
+    // por nome/e-mail. Inscrito sem uid é ficto (o organizador digitou o nome, não tem conta
+    // e não loga): não é a pessoa que está excluindo, e sai pela mão do organizador.
+    var _isMe = function(p) {
+      return window._participantUids(p).indexOf(uid) !== -1;
+    };
     try {
       var tournsSnap = await db.collection('tournaments').get();
-      var tBatch = db.batch();
-      var tCount = 0;
-      tournsSnap.forEach(function(doc) {
-        var data = doc.data();
-        var participants = data.participants || [];
-        var filtered = participants.filter(function(p) {
-          return p.email !== email && p.uid !== uid;
-        });
-        if (filtered.length !== participants.length) {
-          tBatch.update(doc.ref, { participants: filtered });
-          tCount++;
+      for (var ti = 0; ti < tournsSnap.docs.length; ti++) {
+        var tDoc = tournsSnap.docs[ti];
+        var tData = tDoc.data();
+        if ((tData.participants || []).some(_isMe)) {
+          try {
+            await window.FirestoreDB.deenrollParticipant(tDoc.id, uid);
+          } catch (e1) { window._warn('[delete] deenroll falhou em ' + tDoc.id + ':', e1); }
         }
-        if (tCount >= 450) {
-          tBatch.commit();
-          tBatch = db.batch();
-          tCount = 0;
+        // Lista de espera / standby: deenrollParticipant só mexe em participants[], e ficar
+        // aqui com uid morto reapareceria no painel de espera.
+        var _sb = Array.isArray(tData.standbyParticipants) ? tData.standbyParticipants : [];
+        var _wl = Array.isArray(tData.waitlist) ? tData.waitlist : [];
+        var _sbNew = _sb.filter(function(p) { return !_isMe(p); });
+        var _wlNew = _wl.filter(function(p) { return !_isMe(p); });
+        if (_sbNew.length !== _sb.length || _wlNew.length !== _wl.length) {
+          try {
+            await tDoc.ref.update({ standbyParticipants: _sbNew, waitlist: _wlNew });
+          } catch (e2) { window._warn('[delete] limpar espera falhou em ' + tDoc.id + ':', e2); }
         }
-      });
-      if (tCount > 0) await tBatch.commit();
+      }
     } catch (e) { window._warn('Erro ao remover inscrições:', e); }
 
     // 2c. Delete tournaments organized by this user.

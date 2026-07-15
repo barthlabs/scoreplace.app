@@ -618,9 +618,8 @@ window._isMyOwnPlayerName = function(t, name, user) {
   var uid = user.uid || '';
   var email = (user.email || '').toLowerCase();
   var dn = user.displayName || '';
-  var isMember =
-    (Array.isArray(t.memberUids) && uid && t.memberUids.indexOf(uid) !== -1) ||
-    (Array.isArray(t.memberEmails) && email && t.memberEmails.indexOf(email) !== -1);
+  // v1.2.2: membro é uid em memberUids — sem fallback por e-mail.
+  var isMember = (Array.isArray(t.memberUids) && uid && t.memberUids.indexOf(uid) !== -1);
   if (dn && name === dn && isMember) return true;
   // uid no objeto do participante (top-level ou sub-participante de dupla)
   if (uid && Array.isArray(t.participants)) {

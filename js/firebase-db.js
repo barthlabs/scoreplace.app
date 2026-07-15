@@ -102,44 +102,11 @@ window.FirestoreDB = {
 
   // ---- Tournaments ----
 
-  // Denormalized field `memberEmails[]` holds every email that has a
-  // relationship with the tournament (creator + organizer + active co-hosts +
-  // participants). A single `array-contains` query against this field
-  // replaces the current pattern of loading the entire collection at login
-  // and filtering client-side. Kept in sync on every write path below.
-  _computeMemberEmails(data) {
-    if (!data) return [];
-    var set = {};
-    var push = function(e) {
-      if (!e || typeof e !== 'string') return;
-      var norm = e.trim().toLowerCase();
-      if (norm) set[norm] = true;
-    };
-    push(data.creatorEmail);
-    push(data.organizerEmail);
-    if (Array.isArray(data.coHosts)) {
-      data.coHosts.forEach(function(ch) {
-        if (ch && ch.status === 'active') push(ch.email);
-      });
-    }
-    var parts = Array.isArray(data.participants) ? data.participants : [];
-    // v1.8.65: também considerar linkedEmails de cada participante
-    // (carregados do perfil do usuário se disponíveis)
-    parts.forEach(function(p) {
-      if (!p) return;
-      if (typeof p === 'string') {
-        // Name-only or team string ("Ana / Bruno") — no email to extract.
-        // A bare string that happens to be an email is rare but handled.
-        if (p.indexOf('@') > 0 && p.indexOf(' / ') === -1) push(p);
-        return;
-      }
-      push(p.email);
-      if (Array.isArray(p.participants)) {
-        p.participants.forEach(function(sub) { if (sub) push(sub.email); });
-      }
-    });
-    return Object.keys(set);
-  },
+  // v1.2.2: _computeMemberEmails REMOVIDA junto com o campo memberEmails[]. Identidade de
+  // membro é o uid (memberUids) — e-mail/telefone são ATRIBUTOS do perfil, resolvidos pelo
+  // uid (_emailForUid/_phoneForUid), nunca chave. O campo só sobrevivia como fallback, e
+  // fallback é rede de segurança pra código que não confia na própria identidade.
+  // Ver [[project_uid_primary_identity]] / [[project_orphan_uid_entries]].
 
   // Subset of memberEmails restricted to organizer-level principals —
   // creator, current organizer, active co-hosts. Used by Firestore rules to
@@ -229,13 +196,12 @@ window.FirestoreDB = {
       // ENCOLHER a lista e fazer participantes sumirem do listener deles.
       delete cleanData.memberUids;
     } else {
-      // v1.8.96: nunca encolher memberEmails — merge com o que já existia
-      // em memória para não perder emails de participantes que têm uid mas
-      // não têm email no objeto participante (ex: duplas formadas por drag).
-      var _newEmails  = this._computeMemberEmails(cleanData);
-      var _prevEmails = Array.isArray(tourData.memberEmails) ? tourData.memberEmails : [];
-      var _mergedEmails = Array.from(new Set(_prevEmails.concat(_newEmails)));
-      cleanData.memberEmails = _mergedEmails;
+      // v1.2.2: memberEmails NÃO é mais escrito — identidade de membro é o uid (memberUids).
+      // O campo saiu do schema; quem precisa do e-mail de alguém resolve pelo uid no perfil
+      // (_emailForUid). O `delete` não é decorativo: o doc carregado do banco ainda TRAZ o
+      // campo, e sem isto o save o devolveria intacto — ele nunca sairia dos documentos.
+      // Ver [[project_uid_primary_identity]].
+      delete cleanData.memberEmails;
       cleanData.adminEmails  = this._computeAdminEmails(cleanData);
       cleanData.adminUids    = this._computeAdminUids(cleanData); // v2.8.79: co-host por uid
       // v1.9.84: memberUids TAMBÉM nunca encolhe — mesma lógica do memberEmails.
@@ -351,7 +317,6 @@ window.FirestoreDB = {
         var n = Array.isArray(next) ? next : [];
         return Array.from(new Set(p.concat(n)));
       };
-      data.memberEmails = _union(data.memberEmails, self._computeMemberEmails(data));
       data.adminEmails  = self._computeAdminEmails(data);
       data.adminUids    = self._computeAdminUids(data);
       data.memberUids   = _union(data.memberUids, self._computeMemberUids(data));
@@ -569,8 +534,7 @@ window.FirestoreDB = {
         ? window._stripStoredNamesForUidEntries(participants) : participants;
       var updateData = {
         participants: _persistParts,
-        memberEmails: self._computeMemberEmails(_enrollData),
-        memberUids:   self._computeMemberUids(_enrollData)
+        memberUids:   self._computeMemberUids(_enrollData)   // v1.2.2: só uid
       };
       if (extraUpdates) {
         Object.keys(extraUpdates).forEach(function(k) {
@@ -606,7 +570,9 @@ window.FirestoreDB = {
 
   // Atomic deenrollment — prevents race conditions where deenroll overwrites
   // concurrent enrollments by other users
-  async deenrollParticipant(tournamentId, userEmail, userDisplayName, userUid) {
+  // v1.2.2: assinatura UID ONLY — userEmail/userDisplayName saíram porque a identidade é o
+  // uid; parâmetro que ninguém lê é convite pra alguém "usar como fallback" de novo.
+  async deenrollParticipant(tournamentId, userUid) {
     if (!this.db) throw new Error('Firestore not initialized');
     var docRef = this.db.collection('tournaments').doc(String(tournamentId));
     var self = this;
@@ -616,32 +582,28 @@ window.FirestoreDB = {
       var data = doc.data();
       var participants = Array.isArray(data.participants) ? data.participants : (data.participants ? Object.values(data.participants) : []);
 
-      var _emailLc = userEmail ? String(userEmail).toLowerCase() : '';
+      // v1.2.2: UID ONLY. Identidade de quem sai é o uid — e só. Os fallbacks por e-mail e
+      // por NOME que moravam aqui eram rede de segurança pra writers que não gravavam uid;
+      // o preço era casar por nome (homônimo-inseguro: dois "Maira" e sai a errada) e por
+      // e-mail (que a pessoa troca). Quem chama esta função é SEMPRE alguém logado saindo
+      // (botão "Desinscrever-se" e exclusão de conta) — logado tem uid, ponto. Inscrito sem
+      // uid é guest informal, que não loga e é removido pelo organizador por outro caminho.
+      // _participantUids cobre TODO slot onde uma pessoa existe: uid, p1Uid, p2Uid e
+      // sub-participants[]. Remove a entrada inteira quando bate — dupla não joga com uma
+      // pessoa só. Ver [[project_uid_primary_identity]] / [[project_orphan_uid_entries]].
+      if (!userUid) throw new Error('deenrollParticipant: uid obrigatório (identidade é uid)');
+      var _pUids = (typeof window !== 'undefined' && window._participantUids)
+        ? window._participantUids
+        : function (p) {
+            var out = [];
+            if (!p || typeof p !== 'object') return out;
+            [p.uid, p.p1Uid, p.p2Uid].forEach(function (u) { if (u) out.push(u); });
+            if (Array.isArray(p.participants)) p.participants.forEach(function (s) { if (s && s.uid) out.push(s.uid); });
+            return out;
+          };
       var newParticipants = participants.filter(function(p) {
-        if (typeof p === 'string') {
-          if (p.indexOf(' / ') !== -1) return true; // keep teams (string legada "A / B")
-          return p !== userEmail && p !== userDisplayName;
-        }
-        // v3.0.x: IDENTIDADE POR SLOT, uid-first — espelha enrollParticipant.
-        // A dupla formada por aceite grava p1Uid/p2Uid/p1Name/p2Name com
-        // displayName = SÓ o p1 (ex.: "Kelly Barth", sem "/"). Sem checar os
-        // slots aqui, o p2 (ex.: Rodrigo) clicava "Desinscrever-se" e NADA
-        // acontecia (filtro nunca casava → notFound). Remove a dupla inteira
-        // quando qualquer slot bate — a dupla não joga com uma pessoa só.
-        if (userUid && ((p.uid && p.uid === userUid) || (p.p1Uid && p.p1Uid === userUid) || (p.p2Uid && p.p2Uid === userUid))) return false;
-        if (_emailLc) {
-          if (p.email && String(p.email).toLowerCase() === _emailLc) return false;
-          if (p.p1Email && String(p.p1Email).toLowerCase() === _emailLc) return false;
-          if (p.p2Email && String(p.p2Email).toLowerCase() === _emailLc) return false;
-        }
-        // Nome como ÚLTIMO fallback (conta legada/sem uid).
-        if (userDisplayName) {
-          if (p.displayName && p.displayName === userDisplayName) return false;
-          if (p.name && p.name === userDisplayName) return false;
-          if (p.p1Name && p.p1Name === userDisplayName) return false;
-          if (p.p2Name && p.p2Name === userDisplayName) return false;
-        }
-        return true;
+        if (!p || typeof p !== 'object') return true;  // string legada = guest, não tem uid
+        return _pUids(p).indexOf(userUid) === -1;
       });
 
       if (newParticipants.length === participants.length) {
@@ -649,9 +611,13 @@ window.FirestoreDB = {
       }
 
       var _deenrollData = Object.assign({}, data, { participants: newParticipants });
+      // v1.2.2: só memberUids. memberEmails NÃO é recomputado — quem decide quem é membro é
+      // o uid (as rules leem memberUids; o e-mail só valia como fallback de torneio legado
+      // sem memberUids, coisa que não existe mais). Recomputar aqui era, aliás, o ÚNICO ponto
+      // que encolhia memberEmails — o saveTournament nunca encolhe, então os dois já viviam
+      // divergentes. Ver [[project_uid_primary_identity]].
       transaction.update(docRef, {
         participants: newParticipants,
-        memberEmails: self._computeMemberEmails(_deenrollData),
         memberUids:   self._computeMemberUids(_deenrollData)
       });
       return { notFound: false, participants: newParticipants };
@@ -696,13 +662,12 @@ window.FirestoreDB = {
   // `memberEmails` field. Replaces `loadAllTournaments()` at login once the
   // backfill is complete and the composite index is live. Kept side-by-side
   // for now so the swap is a one-line change.
-  async loadMyTournaments(email) {
-    if (!this.db || !email) return [];
-    var norm = String(email).trim().toLowerCase();
-    if (!norm) return [];
+  // v1.2.2: UID ONLY (era loadMyTournaments(email) → where memberEmails).
+  async loadMyTournaments(uid) {
+    if (!this.db || !uid) return [];
     try {
       var snap = await this.db.collection('tournaments')
-        .where('memberEmails', 'array-contains', norm)
+        .where('memberUids', 'array-contains', uid)
         .get();
       var tournaments = [];
       snap.forEach(function(doc) {

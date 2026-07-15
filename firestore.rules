@@ -42,7 +42,7 @@ service cloud.firestore {
     // outside this set requires admin rights.
     function isEnrollmentOnlyDiff() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['participants', 'memberEmails', 'memberUids', 'status', 'teamOrigins',
+        .hasOnly(['participants', 'memberUids', 'status', 'teamOrigins',
           // v2.1.5: inscrição tardia (standby/expand) — um NOVO inscrito que
           // ainda não está em participants escreve a si mesmo na lista de
           // espera. isParticipantBracketDiff exige já-ser-participante, então
@@ -52,27 +52,24 @@ service cloud.firestore {
     }
 
     // Participante aceita convite de co-organização (muda seu próprio status
-    // de 'pending' para 'active' em coHosts + atualiza adminEmails/memberEmails).
-    // Só permitido para quem já está em memberEmails (é participante do torneio).
+    // de 'pending' para 'active' em coHosts + atualiza adminEmails).
+    // Só permitido para quem já é participante do torneio (memberUids).
     function isCoHostAcceptanceDiff() {
       return isTournamentParticipant(resource.data)
         && request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['coHosts', 'adminEmails', 'memberEmails']);
+           .hasOnly(['coHosts', 'adminEmails']);   // v1.2.2: memberEmails saiu do schema
     }
 
     // Participant of the tournament.
-    // v1.8.99: uid é a fonte primária — funciona para todos os tipos de login.
-    // Email mantido como fallback para torneios sem memberUids (legado).
+    // v1.2.2: UID ONLY. O fallback por memberEmails saiu — participante é quem está em
+    // memberUids, e pronto. Ele existia pra torneio legado sem memberUids: não há mais
+    // nenhum (todos os docs têm memberUids populado). Fallback num GATE de permissão é o
+    // pior lugar pra ter rede de segurança: e-mail é atributo do perfil (a pessoa troca),
+    // não identidade. Ver [[project_uid_primary_identity]].
     function isTournamentParticipant(data) {
-      return request.auth != null && (
-        // Fonte primária: uid no memberUids
-        (data.memberUids is list && data.memberUids.size() > 0
-         && request.auth.uid in data.memberUids)
-        // Fallback: email para torneios antigos sem memberUids
-        || (authEmail() != ''
-            && !(data.memberUids is list && data.memberUids.size() > 0)
-            && data.memberEmails is list && authEmail() in data.memberEmails)
-      );
+      return request.auth != null
+        && data.memberUids is list
+        && request.auth.uid in data.memberUids;
     }
     // v1.8.65: usuário pode gerenciar seus próprios emails vinculados
     function isOwnLinkedEmailDiff() {
@@ -131,7 +128,7 @@ service cloud.firestore {
           // Status — pode mudar pra 'finished' quando última partida aprovada
           'status',
           // Inscrição — overlap com isEnrollmentOnlyDiff
-          'participants', 'memberEmails', 'teamOrigins',
+          'participants', 'teamOrigins',
           // v1.8.99: memberUids sempre recomputado em saveTournament
           'memberUids',
           // Convites de dupla pendentes (participante envia/aceita/cancela)

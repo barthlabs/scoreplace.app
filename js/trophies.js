@@ -321,29 +321,18 @@
         })
         .catch(function() { _casualGuestDone = true; _processCasualMatchMap(); }),
 
-      // Torneios — v3.0.81 (Parte 12 varredura uid): identidade = UID. Query
-      // primária por `memberUids` (array-contains uid); `memberEmails` só como
-      // FALLBACK legado (torneio antigo sem memberUids, ou user só em email).
-      // CRÍTICO: o p2 de uma dupla está em memberUids (via p1Uid/p2Uid) mas NÃO
-      // em memberEmails (`_computeMemberEmails` não captura email de slot de
-      // dupla) → a query só-email PERDIA todos os torneios onde o user é
-      // parceiro de dupla, zerando troféus dele. Dedup por doc id.
+      // Torneios — v1.2.2: UID ONLY. A query por `memberEmails` saiu: além de ser
+      // fallback, ela NUNCA capturou o e-mail de slot de dupla (_computeMemberEmails
+      // só olhava o solo), então trazia menos que a query por uid — nunca mais. O uid
+      // cobre solo + p1Uid/p2Uid + sub-participants[], que é a identidade real.
       (function() {
         var _tMap = {};
-        var _norm = (cu.email && typeof cu.email === 'string') ? cu.email.trim().toLowerCase() : '';
         var _qUid = db.collection('tournaments')
           .where('memberUids', 'array-contains', uid)
           .get()
           .then(function(snap) { snap.forEach(function(doc) { _tMap[doc.id] = doc.data(); }); })
           .catch(function() {});
-        var _qEmail = _norm
-          ? db.collection('tournaments')
-              .where('memberEmails', 'array-contains', _norm)
-              .get()
-              .then(function(snap) { snap.forEach(function(doc) { if (!_tMap[doc.id]) _tMap[doc.id] = doc.data(); }); })
-              .catch(function() {})
-          : Promise.resolve();
-        return Promise.all([_qUid, _qEmail]).then(function() {
+        return _qUid.then(function() {
           var enrolled = 0, wins = 0, podiums = 0, ligaPart = 0, withTenPlus = 0, matchesWon = 0;
           Object.keys(_tMap).forEach(function(_id) {
             var t = _tMap[_id];

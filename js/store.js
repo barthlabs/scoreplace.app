@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.2';
+window.SCOREPLACE_VERSION = '1.2.3';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -4848,16 +4848,15 @@ window._recoverWipedAdminEmails = function() {
     if (orgEmail !== myEmail) return; // só o dono recupera
 
     // Recomputa usando os mesmos helpers de firebase-db.js
+    // v1.2.2: só adminEmails — memberEmails saiu do schema (membro é uid, via memberUids).
     var newAdminEmails = window.FirestoreDB._computeAdminEmails(t);
-    var newMemberEmails = window.FirestoreDB._computeMemberEmails(t);
 
-    // Escrita cirúrgica — só adminEmails e memberEmails (Firestore rule permite)
+    // Escrita cirúrgica — só adminEmails (Firestore rule permite)
     window.FirestoreDB.db.collection('tournaments').doc(String(t.id))
-      .update({ adminEmails: newAdminEmails, memberEmails: newMemberEmails })
+      .update({ adminEmails: newAdminEmails })
       .then(function() {
         // Atualiza AppStore em memória para que a sessão atual funcione
         t.adminEmails = newAdminEmails;
-        t.memberEmails = newMemberEmails;
         window._log('[Recovery v1.6.68] restaurado adminEmails para torneio', t.id,
           '→', newAdminEmails);
       })
@@ -5107,16 +5106,32 @@ window._peopleInList = function (arr) {
 // resolve daqui. O pXName guardado é APENAS fallback pra jogador INFORMAL (sem conta/uid) ou
 // enquanto o cache ainda não carregou. Nunca regravamos nome no torneio.
 window._profileNameByUid = window._profileNameByUid || {};
-// resolve um uid pro nome do perfil (ao vivo); storedName/uid só fallback (informal/cache frio).
+// resolve um uid pro nome do perfil (ao vivo); storedName só fallback (informal/cache frio).
 // v4.5.85: lê os DOIS caches via _nameForUid (_userProfileCache do render + _profileNameByUid
 // do bracket) — pós-strip a entrada não tem mais storedName, então o resolvedor precisa achar
 // o nome vivo em QUALQUER cache preenchido (o render preenche _userProfileCache).
+// v1.2.2: NUNCA devolver o uid. O antigo `|| uid` vazava o uid CRU na tela quando a inscrição
+// aponta pra um uid sem users/ (pessoa recriou a conta → uid novo; a inscrição ficou no velho)
+// E a entrada foi stripada (sem displayName). Pior: o motor de sorteio usa este retorno COMO
+// NOME e grava em m.p1 → o uid virava identidade PERMANENTE no doc (aconteceu no Ranking do
+// staging, 5 sit-outs). Ordem: perfil vivo → storedName (e-mail/telefone que o _pName passa,
+// pra jogador informal ou conta sumida) → rótulo neutro. O sufixo curto do uid no rótulo NÃO é
+// enfeite: o nome é chave no motor de sorteio, e dois "Jogador sem perfil" iguais colidiriam
+// (um sumiria do sorteio). Ver [[project_orphan_uid_entries]] / [[project_match_slot_uid_identity]].
+window._ORPHAN_UID_LABEL = 'Jogador sem perfil';
 window._displayNameForUid = function (uid, storedName) {
   if (uid) {
     var live = (typeof window._nameForUid === 'function') ? window._nameForUid(uid) : (window._profileNameByUid[uid] || '');
     if (live) return live;
   }
-  return storedName || uid || '';
+  if (storedName) return storedName;
+  return uid ? (window._ORPHAN_UID_LABEL + ' (' + String(uid).slice(0, 4) + ')') : '';
+};
+// true quando a entrada/uid não tem perfil resolvível — a inscrição aponta pra uma conta que
+// não existe mais. Usado pelo relatório de inscritos pra o organizador ver e resolver.
+window._isOrphanUid = function (uid) {
+  if (!uid || String(uid).indexOf('jog_') === 0) return false;
+  return !((typeof window._nameForUid === 'function') ? window._nameForUid(uid) : '');
 };
 // Nome de EXIBIÇÃO canônico de uma entrada. Resolve CADA pessoa pelo SEU uid (perfil ao vivo);
 // "/" é só junção de display de uma dupla. Identidade nunca é o nome guardado.
@@ -5135,8 +5150,11 @@ window._entryDisplayName = function (p) {
       return (typeof s === 'string') ? s : R(s && s.uid, s && (s.displayName || s.name));
     }).filter(Boolean).join(' / ');
   }
-  // indivíduo
-  return R(p.uid, p.displayName || p.name);
+  // indivíduo — v1.2.2: e-mail/telefone entram no fallback igual ao _pName. Os dois
+  // resolvedores tinham a MESMA ordem exceto aqui, então uma inscrição órfã com e-mail
+  // aparecia pelo e-mail no _pName e como rótulo neutro no _entryDisplayName (mesma
+  // pessoa, dois nomes, dependendo da tela).
+  return R(p.uid, p.displayName || p.name || p.email || (p.phone ? String(p.phone) : ''));
 };
 
 // ── ITEM 3 · Fase 4 (v4.5.85): SANITIZADOR DE IDENTIDADE NA PERSISTÊNCIA ──────────
@@ -5166,20 +5184,32 @@ function _stripUidEntryNames(p) {
     if (q.email && /^jogador\d+@scoreplace\.app$/i.test(String(q.email))) delete q.email;
     return q;
   }
+  // v1.2.2: só stripa o nome de quem TEM perfil RESOLVÍVEL. O strip apagava o nome de todo
+  // uid, apostando que users/{uid} sempre estaria lá pra devolvê-lo. Quando a pessoa recria a
+  // conta (uid novo) o users/ do uid velho some — e a inscrição, já stripada, fica SEM NENHUMA
+  // âncora de nome: o resolvedor caía no uid cru, e o sorteio gravava esse uid como nome
+  // (Ranking/staging, jul/2026). Sem perfil, o nome gravado é a ÚNICA identidade que resta —
+  // preservá-lo é o mesmo princípio que já vale pro guest. Não reintroduz o "Maira/Maira":
+  // o display SEMPRE prefere o perfil vivo, e o nome gravado só entra quando não há perfil.
+  // Cache frio no save → preserva o nome (conservador); nunca apaga o que não sabe repor.
+  // Ver [[project_orphan_uid_entries]] / [[project_uid_primary_identity]].
+  var _resolves = function (u) {
+    return !!(u && typeof window._nameForUid === 'function' && window._nameForUid(u));
+  };
   var isPair = !!(q.p1Uid || q.p2Uid || q.p1Name || q.p2Name);
   if (isPair) {
-    if (q.p1Uid) delete q.p1Name;          // membro 1 tem conta → nome vem do perfil
-    if (q.p2Uid) delete q.p2Name;          // membro 2 tem conta → idem
+    if (_resolves(q.p1Uid)) delete q.p1Name;   // membro 1 tem perfil → nome vem de lá
+    if (_resolves(q.p2Uid)) delete q.p2Name;   // membro 2 tem perfil → idem
     // name/displayName da dupla é o teamString derivado ("A / B") → o display reconstrói
     // via _entryDisplayName (p1Uid vivo / p2Uid vivo / p*Name só do guest). Remove sempre
-    // que ao menos um membro tem conta (o outro, se guest, ainda resolve pelo p*Name mantido).
-    if (q.p1Uid || q.p2Uid) { delete q.name; delete q.displayName; }
-  } else if (q.uid) {                       // solo com conta
+    // que ao menos um membro tem perfil (o outro, se guest/órfão, resolve pelo p*Name mantido).
+    if (_resolves(q.p1Uid) || _resolves(q.p2Uid)) { delete q.name; delete q.displayName; }
+  } else if (_resolves(q.uid)) {               // solo com perfil
     delete q.name; delete q.displayName;
   }
   if (Array.isArray(q.participants)) {
     q.participants = q.participants.map(function (s) {
-      if (s && typeof s === 'object' && s.uid) {
+      if (s && typeof s === 'object' && _resolves(s.uid)) {
         var r = {}; for (var kk in s) { if (Object.prototype.hasOwnProperty.call(s, kk)) r[kk] = s[kk]; }
         delete r.name; delete r.displayName; return r;
       }
@@ -5765,13 +5795,15 @@ window.AppStore = {
     var store = this;
     var isFirstSnapshot = true;
     var coll = window.FirestoreDB.db.collection('tournaments');
-    var norm = email ? String(email).trim().toLowerCase() : '';
-    // v1.8.98: uid como fonte primária — mais confiável que email
+    // v1.2.2: UID ONLY. O branch por memberEmails saiu — quem chega aqui está logado, logo
+    // tem uid; era fallback pra um cenário que não existe. Pior: memberEmails NUNCA capturou
+    // e-mail de slot de dupla (_computeMemberEmails só olhava o solo), então a query por
+    // e-mail PERDIA todo torneio onde a pessoa é parceira — o uid não tem esse buraco.
+    // Ver [[project_uid_primary_identity]].
     var _cuNow = window.AppStore && window.AppStore.currentUser;
     var _uid = _cuNow && _cuNow.uid ? _cuNow.uid : '';
-    var query = _uid
-      ? coll.where('memberUids', 'array-contains', _uid)
-      : (norm ? coll.where('memberEmails', 'array-contains', norm) : coll);
+    if (!_uid) { window._warn('[realtime] sem uid — listener não inicia (identidade é uid)'); return; }
+    var query = coll.where('memberUids', 'array-contains', _uid);
     this._realtimeUnsubscribe = query
       .onSnapshot(function(snap) {
         try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-tournaments'); } catch (e) {}
@@ -5882,38 +5914,11 @@ window.AppStore = {
           window._autoCloseExpiredEnrollments();
           // Recupera adminEmails/memberEmails apagados pelo bug v1.6.66
           setTimeout(function() { window._recoverWipedAdminEmails(); }, 2000);
-          // v1.8.98: listener usa uid como primário — busca complementar
-          // por email para torneios antigos sem memberUids preenchido
-          var _cu2 = window.AppStore && window.AppStore.currentUser;
-          if (_cu2 && _cu2.email && _cu2.uid && window.FirestoreDB && window.FirestoreDB.db) {
-            var _norm2 = String(_cu2.email).trim().toLowerCase();
-            window.FirestoreDB.db.collection('tournaments')
-              .where('memberEmails', 'array-contains', _norm2)
-              .get()
-              .then(function(snap2) {
-                var existing = new Set(store.tournaments.map(function(t){ return String(t.id); }));
-                var added = 0;
-                snap2.forEach(function(doc) {
-                  var id = String(doc.id);
-                  if (!existing.has(id)) {
-                    var _td = doc.data();
-                    if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(_td); } catch(e){} }
-                    store.tournaments.push(_td);
-                    added++;
-                  }
-                });
-                if (added > 0) {
-                  store._saveToCache();
-                  if (typeof window._softRefreshView === 'function') window._softRefreshView();
-                }
-              })
-              .catch(function() {})
-              // v2.4.5: só libera o boot loader DEPOIS que a query complementar
-              // assenta (o _softRefreshView dela roda atrás do splash).
-              .then(function() { _finalizeBootReady(); });
-          } else {
-            _finalizeBootReady();
-          }
+          // v1.2.2: a busca complementar por `memberEmails` saiu. Existia pra achar torneio
+          // antigo sem memberUids preenchido — não há mais nenhum, e o campo saiu do schema
+          // (identidade é uid; o listener por memberUids já traz tudo). Sem ela, nada mais
+          // atrasa o boot: libera o loader direto. Ver [[project_uid_primary_identity]].
+          _finalizeBootReady();
           return;
         }
 
@@ -6233,12 +6238,13 @@ window.AppStore = {
         cursor: cursor
       });
       // Drop tournaments the user already has a relationship with — they
-      // already see those via the scoped listener. Uses the denormalized
-      // memberEmails[] so no extra reads.
+      // already see those via the scoped listener. Usa o denormalizado
+      // memberUids[] (v1.2.2: era memberEmails) — sem reads extras.
+      var _myUid = this.currentUser && this.currentUser.uid;
       var filtered = (res.tournaments || []).filter(function(t) {
-        if (!myEmail) return true;
-        if (!Array.isArray(t.memberEmails)) return true;
-        return t.memberEmails.indexOf(myEmail) === -1;
+        if (!_myUid) return true;
+        if (!Array.isArray(t.memberUids)) return true;
+        return t.memberUids.indexOf(_myUid) === -1;
       });
       this.publicDiscovery = opts.append
         ? this.publicDiscovery.concat(filtered)
@@ -6257,9 +6263,10 @@ window.AppStore = {
     if (!window.FirestoreDB || !window.FirestoreDB.db) return;
     this._loading = true;
     try {
-      var email = this.currentUser && this.currentUser.email;
-      var tournaments = email
-        ? await window.FirestoreDB.loadMyTournaments(email)
+      // v1.2.2: UID ONLY — o escopo dos "meus torneios" é memberUids.
+      var _uid = this.currentUser && this.currentUser.uid;
+      var tournaments = _uid
+        ? await window.FirestoreDB.loadMyTournaments(_uid)
         : await window.FirestoreDB.loadAllTournaments();
       var deletedIds = this._deletedTournamentIds || [];
       if (deletedIds.length > 0) {
@@ -6807,15 +6814,8 @@ window.AppStore = {
       // v1.8.99: uid é a única fonte de identificação
       if (t.creatorUid === cu.uid) return true;
       if (Array.isArray(t.memberUids) && t.memberUids.indexOf(cu.uid) !== -1) return true;
-      // Fallback estreito: só para torneios antigos migrados antes da v1.8.99
-      // (memberUids pode estar vazio se a migração falhou)
-      if (!Array.isArray(t.memberUids) || t.memberUids.length === 0) {
-        if (cu.email) {
-          var _em = cu.email.toLowerCase();
-          if (t.organizerEmail && t.organizerEmail.toLowerCase() === _em) return true;
-          if (Array.isArray(t.memberEmails) && t.memberEmails.indexOf(_em) !== -1) return true;
-        }
-      }
+      // v1.2.2: sem fallback por e-mail — membro é quem está em memberUids, ponto.
+      // (o fallback existia pra torneio migrado antes da v1.8.99; não há mais nenhum)
       return false;
     });
   },

@@ -113,15 +113,7 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
     let changed = false;
     const update = {};
 
-    // memberEmails[]
-    const memberEmails = Array.isArray(t.memberEmails) ? [...t.memberEmails] : [];
-    const emailIdx = dropEmail ? memberEmails.indexOf(dropEmail) : -1;
-    if (emailIdx !== -1) {
-      if (keepEmail && !memberEmails.includes(keepEmail)) memberEmails.splice(emailIdx, 1, keepEmail);
-      else memberEmails.splice(emailIdx, 1);
-      update.memberEmails = memberEmails;
-      changed = true;
-    }
+    // v1.2.2: memberEmails[] saiu do schema — membro é uid (memberUids, logo abaixo).
 
     // memberUids[] — array das QUERIES (array-contains em getVisibleTournaments).
     // v3.0.59: sem repontar isto, o torneio sumia pro sobrevivente após o merge
@@ -147,18 +139,59 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
     }
 
     // participants[]
+    // v1.2.2: SLOT-AWARE. Antes só olhava p.uid — quem estava como MEMBRO DE DUPLA
+    // (p1Uid/p2Uid) ou em sub-participants[] não era re-apontado, e o merge deleta a conta
+    // antiga do Auth logo em seguida (deleteUser) → uid ÓRFÃO na hora, garantido. Mesma
+    // classe de bug que o filtro solo-only de _executeDeleteAccount (auth.js). Aqui NÃO se
+    // remove ninguém: o merge preserva a pessoa e só troca a identidade morta pela viva.
+    // Ver [[project_orphan_uid_entries]] / [[project_account_merge_email]].
     if (Array.isArray(t.participants)) {
+      // UID ONLY: casa exclusivamente pelo uid que está morrendo no merge. Casar por e-mail
+      // aqui era rede de segurança e mordia: o merge existe justamente porque a MESMA pessoa
+      // tem contas com identificadores diferentes, então o e-mail não decide identidade.
+      // Ficto (organizador digitou o nome, sem uid) não é conta e nunca entra num merge.
+      const _isDrop = (u) => !!(u && u === dropUid);
       const parts = t.participants.map(p => {
-        const pUid   = p.uid || p.id || "";
-        const pEmail = (p.email || p.displayName || "").toLowerCase();
-        const hit = (pUid && pUid === dropUid) ||
-                    (dropEmail && pEmail === dropEmail.toLowerCase());
+        if (!p || typeof p !== "object") return p;
+        let hit = false;
+        const updated = Object.assign({}, p);
+        // slot solo
+        if (_isDrop(p.uid)) {
+          hit = true;
+          updated.uid = keepUid;
+          if (keepEmail) updated.email = keepEmail;
+          if (keepName)  { updated.displayName = keepName; updated.name = keepName; }
+        }
+        // membro de dupla (p1/p2) — o nome da dupla (displayName "A / B") NÃO é reescrito:
+        // o display reconstrói de p1Uid/p2Uid pelo perfil vivo.
+        if (_isDrop(p.p1Uid)) {
+          hit = true;
+          updated.p1Uid = keepUid;
+          if (keepEmail) updated.p1Email = keepEmail;
+          if (keepName)  updated.p1Name = keepName;
+        }
+        if (_isDrop(p.p2Uid)) {
+          hit = true;
+          updated.p2Uid = keepUid;
+          if (keepEmail) updated.p2Email = keepEmail;
+          if (keepName)  updated.p2Name = keepName;
+        }
+        // sub-participants[]
+        if (Array.isArray(p.participants)) {
+          let subHit = false;
+          const subs = p.participants.map(s => {
+            if (!s || typeof s !== "object" || !_isDrop(s.uid)) return s;
+            subHit = true;
+            const q = Object.assign({}, s);
+            q.uid = keepUid;
+            if (keepEmail) q.email = keepEmail;
+            if (keepName)  { q.displayName = keepName; q.name = keepName; }
+            return q;
+          });
+          if (subHit) { hit = true; updated.participants = subs; }
+        }
         if (!hit) return p;
         changed = true;
-        const updated = Object.assign({}, p);
-        if (keepUid)   updated.uid = keepUid;
-        if (keepEmail) updated.email = keepEmail;
-        if (keepName)  { updated.displayName = keepName; updated.name = keepName; }
         return updated;
       });
       if (changed) update.participants = parts;
@@ -519,106 +552,11 @@ exports.purgePerfilFotoTrophies = onRequest(
   }
 );
 
-// ─── One-shot: recover wiped adminEmails / memberEmails ──────────────────────
-// v1.6.66 partial-object save bug wiped adminEmails[] and memberEmails[] on
-// tournaments that auto-closed. This function scans all tournaments where
-// adminEmails is missing or empty and repopulates from organizerEmail/
-// creatorEmail/coHosts/participants.
-//
-// Chamada: curl 'https://us-central1-scoreplace-app.cloudfunctions.net/recoverAdminEmails?secret=SCOREPLACE_ADMINEMAILS_RECOVERY_20260516'
-// Função one-shot. Pode ser removida no próximo deploy após confirmação.
-exports.recoverAdminEmails = onRequest(
-  { region: "us-central1", timeoutSeconds: 540, memory: "512MiB" },
-  async (req, res) => {
-    // v3.0.x: endpoint admin one-shot (mai/2026, já executado) DESATIVADO. Segredo
-    // hardcoded em repo PÚBLICO → exposição. Sempre 410; corpo abaixo inalcançável.
-    res.status(410).json({ error: "gone — endpoint admin desativado" });
-    return;
-    const SECRET = null; // (inalcançável)
-    if (req.query.secret !== SECRET) {
-      res.status(403).json({ error: "forbidden" });
-      return;
-    }
-    const db = admin.firestore();
-
-    function computeAdminEmails(data) {
-      const emails = new Set();
-      const add = (e) => { if (e && typeof e === "string" && e.includes("@")) emails.add(e.toLowerCase().trim()); };
-      add(data.creatorEmail);
-      add(data.organizerEmail);
-      if (Array.isArray(data.coHosts)) data.coHosts.forEach(h => add(typeof h === "string" ? h : h && h.email));
-      return Array.from(emails);
-    }
-
-    function computeMemberEmails(data) {
-      const emails = new Set();
-      const add = (e) => { if (e && typeof e === "string" && e.includes("@")) emails.add(e.toLowerCase().trim()); };
-      add(data.creatorEmail);
-      add(data.organizerEmail);
-      if (Array.isArray(data.coHosts)) data.coHosts.forEach(h => add(typeof h === "string" ? h : h && h.email));
-      if (Array.isArray(data.participants)) {
-        data.participants.forEach(p => {
-          if (!p) return;
-          if (typeof p === "string") { add(p); return; }
-          add(p.email);
-          if (typeof p.displayName === "string" && p.displayName.includes("@")) add(p.displayName);
-          if (typeof p.name === "string") {
-            if (p.name.includes("@")) add(p.name);
-            // doubles: "email1/email2"
-            if (p.name.includes("/")) p.name.split("/").forEach(n => add(n.trim()));
-          }
-        });
-      }
-      return Array.from(emails);
-    }
-
-    const snap = await db.collection("tournaments").get();
-    let checked = 0;
-    let repaired = 0;
-    let skipped = 0;
-    const errors = [];
-
-    // Batch writes (max 500 per batch)
-    const BATCH_SIZE = 400;
-    let ops = [];
-
-    snap.docs.forEach(doc => {
-      checked++;
-      const data = doc.data();
-      const adminList = data.adminEmails;
-      const isEmpty = !Array.isArray(adminList) || adminList.length === 0;
-      if (!isEmpty) { skipped++; return; }
-
-      const newAdmin = computeAdminEmails(data);
-      const newMember = computeMemberEmails(data);
-      if (newAdmin.length === 0) { skipped++; return; }
-
-      ops.push({ ref: doc.ref, newAdmin, newMember, name: data.name || doc.id });
-    });
-
-    // Commit in batches
-    for (let i = 0; i < ops.length; i += BATCH_SIZE) {
-      const chunk = ops.slice(i, i + BATCH_SIZE);
-      const batch = db.batch();
-      chunk.forEach(op => batch.update(op.ref, { adminEmails: op.newAdmin, memberEmails: op.newMember }));
-      try {
-        await batch.commit();
-        repaired += chunk.length;
-      } catch (err) {
-        chunk.forEach(op => errors.push({ id: op.ref.id, name: op.name, err: String(err && err.message) }));
-      }
-    }
-
-    res.json({
-      ok: true,
-      checked,
-      repaired,
-      skipped,
-      errors: errors.length > 0 ? errors : undefined,
-      message: `Recovery concluído. ${repaired} torneios reparados de ${checked} verificados.`,
-    });
-  }
-);
+// v1.2.2: `recoverAdminEmails` REMOVIDA (~101 linhas). Era one-shot de mai/2026 pro
+// bug v1.6.66 (save de objeto parcial apagava adminEmails/memberEmails), ja executada e ja
+// desativada (respondia 410, corpo inalcancavel). Era o ultimo lugar que computava
+// memberEmails - e o campo saiu do schema: membro e uid (memberUids).
+// Ver [[project_uid_primary_identity]] / [[project_dead_code_cleanup]].
 
 // ─── Helper: batched delete of a query, page by page ─────────────────────────
 // Firestore caps batch writes at 500 docs. We pull pages of up to 400 and
@@ -4639,8 +4577,9 @@ async function _computeBackfillStats(db, uid, userData) {
 
   function _isTournamentQualified(t) {
     if (t.status !== "finished") return false;
+    // v1.2.2: participants é a fonte; memberUids como reserva (memberEmails saiu).
     const count = (t.participants && t.participants.length) ||
-                  (t.memberEmails && t.memberEmails.length) || 0;
+                  (t.memberUids && t.memberUids.length) || 0;
     return count >= 4;
   }
 
@@ -4673,9 +4612,11 @@ async function _computeBackfillStats(db, uid, userData) {
       .catch(() => {}),
 
     // Tournaments the user is enrolled in
-    ...(email ? [
+    // v1.2.2: UID ONLY (era memberEmails — que nunca capturou slot de dupla, então
+    // subcontava torneios de quem joga em dupla).
+    ...(uid ? [
       db.collection("tournaments")
-        .where("memberEmails", "array-contains", email)
+        .where("memberUids", "array-contains", uid)
         .get()
         .then((snap) => {
           snap.forEach((doc) => {
@@ -5299,18 +5240,7 @@ exports.mergePhoneAccount = onCall(
       let changed = false;
       const update = {};
 
-      // 2a. memberEmails[]
-      const memberEmails = Array.isArray(t.memberEmails) ? [...t.memberEmails] : [];
-      const emailIdx = oldEmail ? memberEmails.indexOf(oldEmail) : -1;
-      if (emailIdx !== -1 && newEmail && !memberEmails.includes(newEmail)) {
-        memberEmails.splice(emailIdx, 1, newEmail);
-        update.memberEmails = memberEmails;
-        changed = true;
-      } else if (emailIdx !== -1 && newEmail && memberEmails.includes(newEmail)) {
-        memberEmails.splice(emailIdx, 1);
-        update.memberEmails = memberEmails;
-        changed = true;
-      }
+      // v1.2.2: memberEmails[] saiu do schema — quem é membro é o uid (2a-bis abaixo).
 
       // 2a-bis. memberUids[] (v2.5.x — antes não era migrado; quebrava visibilidade)
       if (Array.isArray(t.memberUids) && t.memberUids.indexOf(oldUid) !== -1) {
@@ -5669,15 +5599,7 @@ exports.fixMergedParticipants = onRequest(
         let changed = false;
         const update = {};
 
-        // memberEmails
-        const memberEmails = Array.isArray(t.memberEmails) ? [...t.memberEmails] : [];
-        const emailIdx = oldEmail ? memberEmails.indexOf(oldEmail) : -1;
-        if (emailIdx !== -1) {
-          if (newEmail && !memberEmails.includes(newEmail)) memberEmails.splice(emailIdx, 1, newEmail);
-          else memberEmails.splice(emailIdx, 1);
-          update.memberEmails = memberEmails;
-          changed = true;
-        }
+        // v1.2.2: memberEmails saiu do schema — membro é uid (memberUids, tratado abaixo).
 
         // participants[]
         if (Array.isArray(t.participants)) {

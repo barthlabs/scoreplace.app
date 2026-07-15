@@ -224,10 +224,9 @@
         if (entry) {
           entry.status = 'active';
           if (!Array.isArray(ft.adminEmails)) ft.adminEmails = [];
-          if (!Array.isArray(ft.memberEmails)) ft.memberEmails = [];
           var ce = user.email || entry.email || '';
           if (ce && !ft.adminEmails.includes(ce)) ft.adminEmails.push(ce);
-          if (ce && !ft.memberEmails.includes(ce)) ft.memberEmails.push(ce);
+          // v1.2.2: memberEmails saiu — o co-host entra em memberUids (recomputado no save).
           _orgRef = ft.creatorUid || ft.creatorEmail || ft.organizerEmail;
           _entryFound = true; _applied = true;
         }

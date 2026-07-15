@@ -985,15 +985,12 @@ window.deenrollCurrentUser = function (tId) {
                 var _savedParticipants = Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants || {}).slice();
                 // Remove from local state immediately
                 t.participants = _savedParticipants.filter(function(p) {
-                    // v3.0.76: uid-first + slot-aware — espelha deenrollParticipant (transação).
-                    // Sem isto, a dupla cujo p2 é o usuário (uid em p2Uid, displayName só do p1)
-                    // não saía no re-render otimista; só voltava no onSnapshot.
-                    if (typeof window._userMatchesParticipant === 'function') return !window._userMatchesParticipant(user, p);
-                    if (typeof p === 'string') return p !== user.email && p !== user.displayName;
-                    var pEmail = p.email || '';
-                    var pName = p.displayName || p.name || '';
-                    var pUid = p.uid || '';
-                    return !(pEmail === user.email || (user.uid && pUid === user.uid) || (pName && pName === user.displayName));
+                    // v1.2.2: UID ONLY — tem que ser o MESMO critério de deenrollParticipant
+                    // (a transação que roda logo abaixo). Enquanto isto casava por nome/e-mail
+                    // e a transação não, o otimista sumia com a entrada na tela e o onSnapshot
+                    // a trazia de volta — pior que não remover, porque parece que funcionou.
+                    // _participantUids cobre uid + p1Uid + p2Uid + sub-participants[].
+                    return window._participantUids(p).indexOf(user.uid) === -1;
                 });
 
                 // Show success and re-render immediately (no wait for network)
@@ -1005,7 +1002,7 @@ window.deenrollCurrentUser = function (tId) {
 
                 // --- Background: Firestore transaction for consistency ---
                 if (window.FirestoreDB && typeof window.FirestoreDB.deenrollParticipant === 'function') {
-                    window.FirestoreDB.deenrollParticipant(tId, user.email, user.displayName, user.uid).then(function(result) {
+                    window.FirestoreDB.deenrollParticipant(tId, user.uid).then(function(result) {
                         if (result && !result.notFound) {
                             t.participants = result.participants;
                         }

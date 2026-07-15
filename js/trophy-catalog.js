@@ -848,8 +848,9 @@ window._applyDailyMatchLimit = function(matches, limitPerDay) {
 window._isTournamentQualifiedForTrophy = function(t) {
   if (!t) return false;
   if (t.status !== 'finished') return false;
+  // v1.2.2: participants é a fonte; memberUids como reserva (memberEmails saiu).
   var count = (t.participants && t.participants.length) ||
-              (t.memberEmails && t.memberEmails.length) || 0;
+              (t.memberUids && t.memberUids.length) || 0;
   return count >= 4;
 };
 

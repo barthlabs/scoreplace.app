@@ -3110,6 +3110,17 @@ function _buildNameToUid(t) {
     // v4.5.84: chave de nome VIVO por uid (resolve entrada só-uid, sem p1Name/p2Name — pós-Fase-4).
     _putLive(p.p1Uid); _putLive(p.p2Uid); _putLive(p.uid);
     if (Array.isArray(p.participants)) p.participants.forEach(function (s) { if (s) _putLive(s.uid); });
+    // v1.2.2: chave pelo nome de EXIBIÇÃO CANÔNICO (_entryDisplayName) — a MESMA função que
+    // _computeStandings usa pra nomear o pool do sorteio. Sem isto o mapa e o pool falavam
+    // línguas diferentes: uma inscrição órfã (uid sem users/, entrada stripada) não tem nome
+    // gravado NEM perfil vivo, então nenhuma das chaves acima nascia e o uid SUMIA do sorteio
+    // → _buildSitOut gravava o sit-out sem p1Uid, e o chip ficava presa ao nome de fallback
+    // pra sempre (nem remapear a conta consertava, porque não sobrava uid pra re-resolver).
+    // Aditivo e por último: só cria a chave que ninguém criou. Ver [[project_orphan_uid_entries]].
+    if (p.uid && typeof window._entryDisplayName === 'function') {
+      var _dn = String(window._entryDisplayName(p) || '').trim();
+      if (_dn && !map[_dn]) map[_dn] = p.uid;
+    }
   });
   return map;
 }

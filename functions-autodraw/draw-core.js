@@ -36,6 +36,47 @@ g.window._error = function () { console.error.apply(console, arguments); };
 // campos mutados do sorteio, nunca as entradas). Espelha os helpers de store.js.
 g.window._profileNameByUid = g.window._profileNameByUid || {};
 g.window._nameForUid = function (uid) { return (uid && g.window._profileNameByUid[uid]) || ''; };
+
+// ── v1.2.2: PARIDADE com store.js — _displayNameForUid/_entryDisplayName/_pName ───
+// O vendor CHAMA os três (bracket-logic L640/3323/3430/3433/3630, tournaments-categories
+// L720), mas o shim não os definia → cada call site caía no seu fallback INLINE, e vários
+// terminam em `|| p.p1Uid` (vaza o uid CRU) ou em `|| ''` (a pessoa some das standings).
+// Servidor e cliente resolviam nome por regras DIFERENTES. Espelham store.js 1:1 — se mudar
+// lá, muda aqui. Ver [[feedback_functions_must_mirror_app]] / [[project_orphan_uid_entries]].
+g.window._ORPHAN_UID_LABEL = 'Jogador sem perfil';
+g.window._displayNameForUid = function (uid, storedName) {
+  if (uid) { var live = g.window._nameForUid(uid); if (live) return live; }
+  if (storedName) return storedName;
+  return uid ? (g.window._ORPHAN_UID_LABEL + ' (' + String(uid).slice(0, 4) + ')') : '';
+};
+g.window._isOrphanUid = function (uid) {
+  if (!uid || String(uid).indexOf('jog_') === 0) return false;
+  return !g.window._nameForUid(uid);
+};
+g.window._entryDisplayName = function (p) {
+  if (p == null) return '';
+  if (typeof p === 'string') return p;
+  var R = g.window._displayNameForUid;
+  if (p.p1Uid || p.p2Uid || (p.p1Name && p.p2Name)) {
+    var n1 = R(p.p1Uid, p.p1Name), n2 = R(p.p2Uid, p.p2Name);
+    if (n1 && n2) return n1 + ' / ' + n2;
+  }
+  if (Array.isArray(p.participants) && p.participants.length > 1) {
+    return p.participants.map(function (s) {
+      return (typeof s === 'string') ? s : R(s && s.uid, s && (s.displayName || s.name));
+    }).filter(Boolean).join(' / ');
+  }
+  return R(p.uid, p.displayName || p.name || p.email || (p.phone ? String(p.phone) : ''));
+};
+// _pName do servidor = _entryDisplayName + fallback do caller. O _pNameDisplay (máscara de
+// telefone) do cliente é PURO DISPLAY e não existe aqui: o servidor só usa o nome como CHAVE
+// de pool/pareamento, e mascarar mudaria a chave sem mudar a identidade.
+g.window._pName = function (p, fallback) {
+  var fb = (fallback !== undefined && fallback !== null) ? fallback : '';
+  if (!p) return fb;
+  return g.window._entryDisplayName(p) || fb;
+};
+
 g.window._rehydrateEntryNames = function (t, resolve) {
   var R = resolve || g.window._nameForUid;
   var pools = [t && t.participants, t && t.standbyParticipants, t && t.waitlist];
