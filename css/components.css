@@ -286,6 +286,34 @@ body.hamburger-open .topbar {
 /* ==== BOTOES — Sistema Padronizado v0.3.3 ==== */
 
 /* --- Base --- */
+/* REGRA DO DONO (v1.2.11): numa linha de botões, se UM botão quebra em 2 linhas,
+   os de 1 linha acompanham a ALTURA dele — nada de botão baixinho ao lado de
+   botão alto. Marque a linha com class="btn-row".
+   Por que no filho e não em `align-items:stretch` no container: as linhas do app
+   misturam botões com <h3>/badges, e esticar o título mudaria o layout. Aqui só
+   os .btn esticam; o resto mantém o alinhamento do container.
+   O !important vence o align-self implícito herdado do align-items inline. */
+.btn-row > .btn { align-self: stretch !important; }
+/* E os botoes ENCOLHEM em vez de a linha quebrar. O `.btn` global tem
+   white-space:nowrap, entao ele nao cede largura: quando a soma passa do container o
+   ultimo botao cai sozinho pra linha de baixo — foi o que aconteceu com o "Abrir
+   grupo" no chaveamento. Raspar pixel (gap/padding) so adia: em tela menor, ou com o
+   tamanho de texto do iOS aumentado, estoura de novo. Aqui o texto quebra DENTRO do
+   proprio botao (que ja e o caso do "Combinar jogos") e a linha se mantem inteira em
+   qualquer largura. min-width:0 e o que permite o encolhimento — sem ele o item de
+   flex/grid nao passa do min-content. E flex-shrink:1 !important porque alguns botoes
+   (ex.: "Cheguei", em bracket.js) trazem flex-shrink:0 INLINE — inline vence classe, e
+   um so botao que nao cede ja empurra o vizinho pra linha de baixo. Dentro de uma
+   .btn-row ceder largura e a regra. */
+.btn-row .btn { white-space: normal; min-width: 0; flex-shrink: 1 !important; }
+.btn-row > * { min-width: 0; }
+/* E NAO quebrar a linha. Detalhe nao-obvio do flexbox: com flex-wrap:wrap o navegador
+   PREFERE quebrar a encolher — so espreme quando um item sozinho nao cabe. Ou seja,
+   enquanto houver `wrap` o encolhimento acima nunca entra em acao e o ultimo botao cai
+   pra linha de baixo. Com nowrap + min-width:0 + white-space:normal os botoes cedem
+   largura (o texto quebra dentro deles) e a linha se mantem inteira. */
+.btn-row { flex-wrap: nowrap !important; }
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1630,4 +1658,16 @@ body.sp-scroll-locked {
 html, body,
 .modal-overlay, .modal, .modal-content, .bottom-sheet {
   overscroll-behavior: contain;
+}
+
+/* Análise de Inscritos — rótulo do botão de categoria por largura. Em tela estreita
+   as 2 colunas de gênero têm ~50% cada, e "➕ Criar categoria" não cabe: era ele que
+   empurrava a coluna Masculino pra fora da tela. As duas versões vão no DOM e o CSS
+   escolhe — nada de medir largura em JS (o relatório re-renderiza sozinho e a medida
+   ficaria defasada). Ver createBtn em tournaments-enrollment-report.js. */
+.er-lbl-short { display: inline; }
+.er-lbl-full { display: none; }
+@media (min-width: 520px) {
+  .er-lbl-short { display: none; }
+  .er-lbl-full { display: inline; }
 }

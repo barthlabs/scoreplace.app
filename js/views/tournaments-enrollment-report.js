@@ -1333,8 +1333,14 @@
     }
     function createBtn(call, created) {
       var cls = created ? 'btn btn-outline btn-sm hover-lift' : 'btn btn-success btn-sm hover-lift';
-      var lbl = created ? '↩ Reverter' : '➕ Criar categoria';
-      return '<button type="button" onclick="event.stopPropagation();' + call + '" class="' + cls + '">' + lbl + '</button>';
+      // Rotulo CURTO em tela estreita: "➕ Criar categoria" nao cabe numa coluna de
+      // 50% no celular — era ele que empurrava a coluna Masculino pra fora. O texto
+      // longo volta acima de 520px. Duas versoes no DOM + CSS decide (nao JS): o
+      // relatorio re-renderiza sozinho e um teste de largura em JS ficaria defasado.
+      var lbl = created
+        ? '<span class="er-lbl-full">↩ Reverter</span><span class="er-lbl-short">↩</span>'
+        : '<span class="er-lbl-full">➕ Criar categoria</span><span class="er-lbl-short">➕ cat.</span>';
+      return '<button type="button" onclick="event.stopPropagation();' + call + '" class="' + cls + '" style="min-width:0;">' + lbl + '</button>';
     }
 
     // Ordena: EDITADOS (âmbar, ainda não salvos) vão pro FINAL; entre os demais,
@@ -1358,18 +1364,27 @@
       var nameCol = edited ? '#f59e0b' : (r._lzColor || _LZ_COL.white);
       var border = edited ? 'rgba(245,158,11,0.55)' : (r._lzColor ? (r._lzColor + '55') : 'var(--border-color)');
       return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')" ' +
-        'style="cursor:grab;font-size:0.9rem;font-weight:600;padding:6px 10px;border-radius:7px;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + _esc(r.name || '(sem nome)') + ' — arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + '</div>';
+        'style="cursor:grab;font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + _esc(r.name || '(sem nome)') + ' — arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + '</div>';
     }
-    function cardGrid(arr) { return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;">' + sortList(arr).map(chip).join('') + '</div>'; }
+    function cardGrid(arr) {
+      // minmax(0,...) e o que impede o estouro: com min-width:auto o nome longo
+      // empurrava a coluna pra fora da tela (a Masculino ficava cortada).
+      return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(130px,100%),1fr));gap:4px;min-width:0;">' + sortList(arr).map(chip).join('') + '</div>';
+    }
     // Box de categoria (borda na cor do gênero) — título "C (N)" + botão criar. Drop = gênero+categoria.
     function catBox(genderKey, sk, arr, color, tint) {
       var label = (sk === '__none__') ? 'Sem habilidade' : sk;
-      var btn = (sk !== '__none__' && skillTotal(sk) >= MIN_CAT)
+      // Botao em TODAS as habilidades do torneio (A/B/C/D/FUN), nao so nas que ja tem
+      // gente. Antes o gate era skillTotal(sk) >= MIN_CAT — um total GLOBAL (soma dos 3
+      // generos) enquanto a caixa mostra a contagem LOCAL: dava "C (0)" COM botao (12
+      // pessoas em C no torneio) e "A (0)" SEM botao. Mesmo numero na tela, comportamento
+      // diferente = parece bug. Pedido do dono: tem que ter em todas.
+      var btn = (sk !== '__none__')
         ? createBtn('window._erToggleSkill(\'' + tIdEsc + '\',\'' + sk + '\',this)', createdSkills.indexOf(sk) !== -1)
         : '';
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
         'style="border:1.5px solid ' + tint + ';border-radius:10px;padding:8px 10px;background:var(--bg-darker,rgba(0,0,0,0.15));">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px;"><span style="font-size:14px;font-weight:800;color:' + color + ';">' + label + ' <span style="opacity:0.7;font-weight:700;">(' + arr.length + ')</span></span>' + btn + '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px;min-width:0;"><span style="font-size:14px;font-weight:800;color:' + color + ';min-width:0;">' + label + ' <span style="opacity:0.7;font-weight:700;">(' + arr.length + ')</span></span>' + btn + '</div>' +
         cardGrid(arr) + '</div>';
     }
     // Cabeçalho do gênero (drop = só gênero) + botão criar categoria por gênero.
@@ -1387,7 +1402,7 @@
     groups.forEach(function (sk) {
       gridRows += catBox('feminino', sk, fem[sk], femCol, femTint) + catBox('masculino', sk, masc[sk], mascCol, mascTint);
     });
-    var grid = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px 12px;align-items:stretch;">' + gridRows + '</div>';
+    var grid = '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 8px;align-items:stretch;">' + gridRows + '</div>';
     // "Categorias no torneio" — resultado das formalizações + contagem (acima do total).
     var formalCats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
     var catsBoxInner = formalCats.length

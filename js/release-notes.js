@@ -11,6 +11,16 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #25D366;border-radius:12px;padding:14px 16px;background:rgba(37,211,102,0.08);">' +
+      '<div style="font-weight:800; color:#25D366; font-size:1rem; margin-bottom:8px;">💬 v1.2.24 — O grupo do WhatsApp entra no app <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>💬 Grupo do jogo:</b> no seu jogo do chaveamento agora tem <b>Criar grupo</b>. Você cria um grupo vazio no WhatsApp, cola o link de convite no app — e os outros jogadores daquele jogo passam a ver <b>Abrir grupo</b>. Ninguém precisa salvar o telefone de ninguém, e nenhum telefone é exposto.</li>' +
+        '<li><b>🏆 Grupo do torneio:</b> o organizador cria o grupo oficial nas Ferramentas do Organizador, e quem está inscrito ganha o botão <b>Entrar no grupo</b>. A tela ensina a deixar o grupo só seu: mural (só admin escreve) e <b>Aprovar novos membros</b>, que é a trava de quem entra.</li>' +
+        '<li><b>⭐ Favoritos e torneios ocultados agora seguem a sua conta:</b> antes moravam só no navegador e sumiam sozinhos (o iPhone limpa esse armazenamento de tempos em tempos) ou não apareciam em outro aparelho. Agora entram junto com o seu login, em qualquer celular ou computador.</li>' +
+        '<li><b>📊 Análise de Inscritos no celular:</b> as colunas Feminino e Masculino cabem na tela (a de Masculino ficava cortada), os nomes ficaram menores e o botão de criar categoria aparece em todas as habilidades.</li>' +
+        '<li><b>🎯 Chaveamento:</b> os botões de um mesmo jogo ficam todos na mesma altura e não pulam mais pra linha de baixo; e ao abrir o torneio a tela para sempre no mesmo ponto do seu grupo.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.08);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🔑 v1.2.10 — Esqueceu a senha e o e-mail não chega? Agora tem saída <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

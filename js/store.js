@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.10';
+window.SCOREPLACE_VERSION = '1.2.24';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -4956,93 +4956,164 @@ window._applyThemeIcon = function(theme) {
   } catch (e) {}
 })();
 
-// ─── Favoritos (localStorage) ────────────────────────────────────────────────
-// Favoritos — v2.6.50: re-chaveado por UID (identidade estável). Antes a chave era
-// só `scoreplace_favorites_<email>`; como o email NÃO é estável (zerado p/ contas
-// sintéticas em auth.js, ausente em re-render pré-auth, mudável), a chave trocava e
-// o favorito "sumia". Agora: leitura em UNIÃO de [uid-key, email-key, legado] —
-// acha o favorito independente de qual identidade está presente; escrita nas chaves
-// de identidade (uid + email) — migra sozinho e remoção fica consistente.
-window._favReadKeys = function() {
+// ─── Favoritos e Ocultados — VIVEM NA CONTA (users/{uid}) ────────────────────
+// v1.2.11 — POR QUE ISTO MUDOU DE CASA (não devolver pro localStorage):
+// Os dois moravam SÓ no localStorage, chaveados por uid/email. Isso nunca ia
+// funcionar por dois motivos independentes:
+//   1. O iOS Safari/PWA ZERA o localStorage periodicamente (ITP) — está escrito no
+//      comentário do beta-cleanup logo acima. O usuário favoritava, o iOS limpava, e
+//      o favorito "sumia sozinho". Nenhum esquema de chave resolve isso.
+//   2. Preferência de CONTA não pode morar no DEVICE: entrar pelo celular e pelo
+//      desktop dava listas diferentes, e trocar de aparelho zerava tudo.
+// Agora a VERDADE é users/{uid}.favorites / .hiddenTournaments. O localStorage
+// continua, mas rebaixado a ESPELHO: serve pra primeira pintura (antes do perfil
+// carregar) e pro offline — nunca é fonte quando há perfil carregado.
+//
+// Escrita: arrayUnion/arrayRemove no doc do usuário — NUNCA um set do array inteiro.
+// É o mesmo padrão dos `friends` (ver saveUserProfileToFirestore, que de propósito
+// NÃO inclui friends no payload): dois devices mexendo na lista não se atropelam, e
+// um save concorrente não apaga o que o outro acabou de pôr.
+// As rules já permitem (dono escreve tudo menos os campos privilegiados).
+
+// Espelho local — só pra 1ª pintura/offline. Chaves por identidade (uid+email) porque
+// o email não é estável; a união na leitura acha a lista em qualquer uma delas.
+function _prefKeys(kind) {
   var cu = window.AppStore && window.AppStore.currentUser;
   var keys = [];
-  if (cu && cu.uid) keys.push('scoreplace_favorites_uid_' + cu.uid);
-  if (cu && cu.email) keys.push('scoreplace_favorites_' + cu.email);
-  if (keys.length === 0) keys.push('scoreplace_favorites'); // deslogado / pré-auth
+  if (cu && cu.uid) keys.push('scoreplace_' + kind + '_uid_' + cu.uid);
+  if (cu && cu.email) keys.push('scoreplace_' + kind + '_' + cu.email);
+  if (keys.length === 0) keys.push('scoreplace_' + kind);
   return keys;
-};
-window._favWriteKeys = function() {
-  // mesmas chaves da leitura (de identidade quando logado) — escreve a lista
-  // unificada em todas, então a remoção "pega" em qualquer caminho.
-  return window._favReadKeys();
-};
-
-window._getFavorites = function() {
+}
+function _mirrorRead(kind) {
+  var set = {};
   try {
-    var set = {};
-    window._favReadKeys().forEach(function(k) {
-      try { var raw = localStorage.getItem(k); if (raw) JSON.parse(raw).forEach(function(id){ set[String(id)] = 1; }); } catch (e) {}
+    _prefKeys(kind).forEach(function (k) {
+      try { var raw = localStorage.getItem(k); if (raw) JSON.parse(raw).forEach(function (id) { set[String(id)] = 1; }); } catch (e) {}
     });
-    return Object.keys(set);
-  } catch (e) { return []; }
+  } catch (e) {}
+  return Object.keys(set);
+}
+function _mirrorWrite(kind, list) {
+  var payload = JSON.stringify(list || []);
+  try { _prefKeys(kind).forEach(function (k) { try { localStorage.setItem(k, payload); } catch (e) {} }); } catch (e) {}
+}
+// Lista efetiva: a CONTA manda. Sem perfil carregado (pré-auth/offline) cai no espelho.
+// Nunca UNIR conta+espelho: o espelho de um device fica com o item que a pessoa tirou
+// noutro, e a união o ressuscitaria — "desfavoritei e voltou".
+function _prefList(kind, field) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (cu && Array.isArray(cu[field])) return cu[field].map(String);
+  return _mirrorRead(kind);
+}
+// Persiste UM item na conta. Otimista: quem chama já mexeu na lista local.
+function _prefPersist(field, id, add) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid) return Promise.resolve(false);   // deslogado → só espelho
+  var db = window.FirestoreDB && (window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
+  if (!db) return Promise.resolve(false);
+  try {
+    var fv = firebase.firestore.FieldValue;
+    var patch = {};
+    patch[field] = add ? fv.arrayUnion(String(id)) : fv.arrayRemove(String(id));
+    return db.collection('users').doc(cu.uid).set(patch, { merge: true }).then(function () { return true; });
+  } catch (e) { return Promise.reject(e); }
+}
+// Migração 1x POR DEVICE: sobe o que já existia no localStorage pra conta. Guardada por
+// flag porque sem ela o espelho de um device reintroduziria, a cada login, o item que a
+// pessoa removeu noutro. Depois disso o espelho é só escrita.
+window._migrateLocalPrefsToAccount = function () {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid) return;
+  var FLAG = 'scoreplace_prefs_migrated_v1_' + cu.uid;
+  try { if (localStorage.getItem(FLAG)) { _syncMirrors(); return; } } catch (e) {}
+  var jobs = [];
+  [['favorites', 'favorites'], ['hidden', 'hiddenTournaments']].forEach(function (pair) {
+    var local = _mirrorRead(pair[0]);
+    var remote = Array.isArray(cu[pair[1]]) ? cu[pair[1]].map(String) : [];
+    local.forEach(function (id) {
+      if (remote.indexOf(String(id)) === -1) {
+        if (!Array.isArray(cu[pair[1]])) cu[pair[1]] = remote;
+        cu[pair[1]].push(String(id));
+        jobs.push(_prefPersist(pair[1], id, true));
+      }
+    });
+  });
+  Promise.all(jobs).then(function () {
+    try { localStorage.setItem(FLAG, '1'); } catch (e) {}
+    _syncMirrors();
+  }).catch(function (e) { try { console.warn('[prefs] migração falhou:', e); } catch (_e) {} });
 };
+// Espelho := conta (não o contrário).
+function _syncMirrors() {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu) return;
+  if (Array.isArray(cu.favorites)) _mirrorWrite('favorites', cu.favorites);
+  if (Array.isArray(cu.hiddenTournaments)) _mirrorWrite('hidden', cu.hiddenTournaments);
+}
+window._syncPrefMirrors = _syncMirrors;
 
-window._isFavorite = function(tId) {
-  var favs = window._getFavorites();
-  return favs.indexOf(String(tId)) !== -1;
-};
+window._getFavorites = function () { return _prefList('favorites', 'favorites'); };
+window._isFavorite = function (tId) { return window._getFavorites().indexOf(String(tId)) !== -1; };
 
-window._toggleFavorite = function(tId, event) {
+window._toggleFavorite = function (tId, event) {
   if (event) { event.stopPropagation(); event.preventDefault(); }
-  var favs = window._getFavorites();
   var id = String(tId);
-  var idx = favs.indexOf(id);
-  var nowFav = (idx === -1);
-  if (nowFav) { favs.push(id); } else { favs.splice(idx, 1); }
-  var payload = JSON.stringify(favs);
-  window._favWriteKeys().forEach(function(k) { try { localStorage.setItem(k, payload); } catch (e) {} });
-  // Update heart icons on the page
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var list = window._getFavorites();
+  var nowFav = list.indexOf(id) === -1;
+  var next = nowFav ? list.concat([id]) : list.filter(function (x) { return x !== id; });
+  if (cu) cu.favorites = next;
+  _mirrorWrite('favorites', next);
+  _paintStars(id, nowFav);
+  _prefPersist('favorites', id, nowFav).catch(function (err) {
+    // Reverte: sem isto a estrela mente (fica cheia e o servidor não sabe).
+    var back = nowFav ? next.filter(function (x) { return x !== id; }) : next.concat([id]);
+    if (cu) cu.favorites = back;
+    _mirrorWrite('favorites', back);
+    _paintStars(id, !nowFav);
+    if (typeof showNotification === 'function') {
+      showNotification('⚠️ Não salvou', 'O favorito não foi registrado na sua conta (' + ((err && (err.code || err.message)) || 'tente de novo') + ').', 'error');
+    }
+    try { console.error('[favoritos] rejeitado:', err); } catch (e) {}
+  });
+};
+
+function _paintStars(id, nowFav) {
   var stars = document.querySelectorAll('[data-fav-id="' + id + '"]');
-  stars.forEach(function(el) {
+  stars.forEach(function (el) {
     // v2.8.5: favoritado = emoji ❤️ (volume nativo); não-favoritado = ♡ (contorno).
-    // Antes o clique sobrescrevia com ♥ (texto), revertendo o emoji do render inicial.
     el.textContent = nowFav ? '❤️' : '♡';
     el.title = nowFav ? 'Remover dos favoritos' : 'Adicionar aos favoritos';
     el.style.color = nowFav ? '#f43f5e' : 'rgba(255,255,255,0.4)';
   });
-};
+}
 
 // v2.8.40: torneios OCULTADOS pelo usuário — somem da lista normal e vão pra uma
-// seção "Torneios ocultados" no fim da dashboard. Mesmo esquema de chaves dos
-// favoritos (uid + email, união na leitura), pra sobreviver a troca de identidade.
-// Só faz sentido pra torneios em que o usuário NÃO está inscrito (o botão só
-// aparece neles). Toggle re-renderiza a dashboard (o card muda de seção).
-window._hiddenReadKeys = function() {
-  var cu = window.AppStore && window.AppStore.currentUser;
-  var keys = [];
-  if (cu && cu.uid) keys.push('scoreplace_hidden_uid_' + cu.uid);
-  if (cu && cu.email) keys.push('scoreplace_hidden_' + cu.email);
-  if (keys.length === 0) keys.push('scoreplace_hidden');
-  return keys;
-};
-window._getHidden = function() {
-  try {
-    var set = {};
-    window._hiddenReadKeys().forEach(function(k) {
-      try { var raw = localStorage.getItem(k); if (raw) JSON.parse(raw).forEach(function(id){ set[String(id)] = 1; }); } catch (e) {}
-    });
-    return Object.keys(set);
-  } catch (e) { return []; }
-};
-window._isHidden = function(tId) { return window._getHidden().indexOf(String(tId)) !== -1; };
-window._toggleHidden = function(tId, event) {
+// seção "Torneios ocultados" no fim da dashboard. Só faz sentido pra torneios em que
+// o usuário NÃO está inscrito (o botão só aparece neles).
+window._getHidden = function () { return _prefList('hidden', 'hiddenTournaments'); };
+window._isHidden = function (tId) { return window._getHidden().indexOf(String(tId)) !== -1; };
+
+window._toggleHidden = function (tId, event) {
   if (event) { event.stopPropagation(); event.preventDefault(); }
-  var list = window._getHidden();
   var id = String(tId);
-  var idx = list.indexOf(id);
-  if (idx === -1) list.push(id); else list.splice(idx, 1);
-  var payload = JSON.stringify(list);
-  window._hiddenReadKeys().forEach(function(k) { try { localStorage.setItem(k, payload); } catch (e) {} });
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var list = window._getHidden();
+  var nowHidden = list.indexOf(id) === -1;
+  var next = nowHidden ? list.concat([id]) : list.filter(function (x) { return x !== id; });
+  if (cu) cu.hiddenTournaments = next;
+  _mirrorWrite('hidden', next);
+  _prefPersist('hiddenTournaments', id, nowHidden).catch(function (err) {
+    var back = nowHidden ? next.filter(function (x) { return x !== id; }) : next.concat([id]);
+    if (cu) cu.hiddenTournaments = back;
+    _mirrorWrite('hidden', back);
+    if (typeof showNotification === 'function') {
+      showNotification('⚠️ Não salvou', 'Não foi possível registrar na sua conta (' + ((err && (err.code || err.message)) || 'tente de novo') + ').', 'error');
+    }
+    try { console.error('[ocultados] rejeitado:', err); } catch (e) {}
+    if (typeof window._dashRerender === 'function') window._dashRerender({ compact: true });
+  });
   // v4.0.62: ocultar/desocultar → re-render COMPACTO (junta o conteúdo, sem o
   // spacer de keep-room que deixava "tela preta" até a seção de ocultados).
   if (typeof window._dashRerender === 'function') { window._dashRerender({ compact: true }); return; }
@@ -6322,6 +6393,11 @@ window.AppStore = {
         }
         if (profile.gender) this.currentUser.gender = profile.gender;
         if (profile.preferredSports) this.currentUser.preferredSports = profile.preferredSports;
+        // v1.2.11: favoritos e ocultados VÊM DA CONTA (users/{uid}), não do device.
+        // Arrays: usar !== undefined (lista VAZIA é um valor legítimo — "desfavoritei
+        // tudo" — e com truthy-check o [] seria ignorado e a lista velha ressuscitaria).
+        if (Array.isArray(profile.favorites)) this.currentUser.favorites = profile.favorites.map(String);
+        if (Array.isArray(profile.hiddenTournaments)) this.currentUser.hiddenTournaments = profile.hiddenTournaments.map(String);
         if (profile.defaultCategory) this.currentUser.defaultCategory = profile.defaultCategory;
         // v1.3.6-beta: skillBySport — habilidade por modalidade
         if (profile.skillBySport && typeof profile.skillBySport === 'object') {
@@ -6414,6 +6490,11 @@ window.AppStore = {
         if (profile.acceptedTermsAt) this.currentUser.acceptedTermsAt = profile.acceptedTermsAt;
         if (profile.acceptedTermsVersion) this.currentUser.acceptedTermsVersion = profile.acceptedTermsVersion;
       }
+      // v1.2.11: favoritos/ocultados que ficaram no localStorage deste device sobem
+      // pra conta (1x por device, com flag). Depois disto o espelho local é só
+      // escrita — a conta manda. Roda logo após o merge do perfil, quando
+      // currentUser.favorites/.hiddenTournaments já refletem o servidor.
+      try { if (typeof window._migrateLocalPrefsToAccount === 'function') window._migrateLocalPrefsToAccount(); } catch (e) {}
       // v0.17.6: self-heal de cu.friends — roda em background após profile
       // load. Resolve emails legados pra uid, dropa órfãos e dedup. Persiste
       // a lista limpa no Firestore. Atende pedido do usuário pra prevenir
