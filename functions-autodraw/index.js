@@ -204,13 +204,18 @@ function _applyWriteBoundary(data) {
   return { persist: persist, clean: clean };
 }
 
-// Campos de chave que o re-sorteio zera antes de redesenhar (espelha tournaments-draw.js:1567
-// e o clear do gate de re-sorteio). Só roda com allowRedraw — o CONFIRM é do cliente.
-function _clearBracketForRedraw(t) {
-  t.matches = [];
-  delete t.groups; delete t.rounds; delete t.standings;
-  delete t.thirdPlaceMatch; delete t.rodadas;
-  t.currentPhaseIndex = 0; delete t._phaseMaterialized;
+// Re-sorteio: usa o RESET CANÔNICO do cliente (window._clearTournamentDraw, vendorado em
+// tournaments-draw.js) — NÃO uma limpeza à mão. Ele faz muito mais que zerar a chave: desmonta
+// as duplas FORMADAS PELO SORTEIO (teamOrigins 'sorteada') de volta pros indivíduos, devolve
+// waitlist/standby/monarchWaitlist pro pool e dedup. Uma lista à mão aqui divergiria do reset
+// que o organizador VÊ na tela — e o servidor re-sortearia o elenco velho, ainda pareado.
+// O CONFIRM continua no cliente (é UI); só a execução é daqui.
+function _clearForRedraw(t) {
+  const w = drawWindow;
+  if (!w || typeof w._clearTournamentDraw !== 'function') {
+    throw new HttpsError('internal', 'Reset de re-sorteio indisponível no servidor.');
+  }
+  w._clearTournamentDraw(t);
 }
 
 exports.drawRound = onCall(async (request) => {
@@ -263,7 +268,7 @@ exports.drawRound = onCall(async (request) => {
       if (!allowRedraw) {
         throw new HttpsError('failed-precondition', 'already-drawn');
       }
-      _clearBracketForRedraw(t);
+      _clearForRedraw(t);
     }
 
     const res = drawInitial(t, { idStamp: Date.now() });

@@ -149,6 +149,33 @@ if (bi !== -1) {
      'denormalizado memberUids recomputado (só quem tem uid)');
 }
 
+console.log('──── 6. re-sorteio: o servidor usa o RESET CANÔNICO, não uma limpeza à mão ────');
+// O gate de re-sorteio do cliente chama _clearTournamentDraw(t) — SÓ NA MEMÓRIA (zero
+// persistência) — e re-chama generateDrawFunction. Com a drawRound o servidor lê o doc FRESCO,
+// que ainda tem a chave E o elenco antigo pareado. Se o servidor limpasse à mão só
+// matches/rounds/groups, re-sortearia um elenco DIFERENTE do que o organizador vê na tela.
+ok(typeof w._clearTournamentDraw === 'function', '_clearTournamentDraw alcançável no servidor (vendor tournaments-draw)');
+if (typeof w._clearTournamentDraw === 'function') {
+  const tR = {
+    id: 'T', format: 'Eliminatórias Simples', teamSize: 2, status: 'active',
+    teamOrigins: { 'Ana / Bruno': 'sorteada' },
+    participants: [{ p1Name: 'Ana', p2Name: 'Bruno', displayName: 'Ana / Bruno',
+                     participants: [{ displayName: 'Ana' }, { displayName: 'Bruno' }] }],
+    waitlist: [{ displayName: 'Carla' }],
+    matches: [{ id: 'm1', p1: 'Ana / Bruno', p2: 'BYE' }],
+    currentPhaseIndex: 0, standings: [{ x: 1 }],
+  };
+  w._clearTournamentDraw(tR);
+  const nomes = (tR.participants || []).map((p) => p.displayName || p.name).sort();
+  ok((tR.matches || []).length === 0, 'reset: chave zerada');
+  ok(nomes.length === 3, 'reset: dupla SORTEADA desmontada em indivíduos + suplente devolvido (3 pessoas)');
+  ok(nomes.indexOf('Carla') !== -1, 'reset: quem estava na lista de espera VOLTA pro pool');
+  ok((tR.waitlist || []).length === 0, 'reset: waitlist esvaziada');
+  // A prova de que a limpeza à mão NÃO serve: ela só mexeria na chave.
+  ok(!(tR.participants || []).some((p) => p.p1Name && p.p2Name),
+     'reset: NENHUMA dupla sorteada sobrevive (limpeza à mão deixaria — e o servidor sortearia elenco errado)');
+}
+
 console.log('\n════════════════════════════════════════');
 if (fail) { console.error(`❌ persist-boundary: ${pass} ok, ${fail} falharam`); process.exit(1); }
 console.log(`✅ persist-boundary: ${pass} ok, 0 falharam`);
