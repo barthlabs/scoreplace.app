@@ -24,11 +24,23 @@
 // Valores que NÃO são JSON puro (Timestamp, GeoPoint, DocumentReference, Buffer…) precisam
 // passar INTACTOS: um deep-walk ingênuo os converteria em objeto plano e corromperia o campo
 // silenciosamente (o save aceita, o dado apodrece). Detecta por construtor não-plain.
+//
+// CROSS-REALM: `proto === Object.prototype` sozinho é frágil — um objeto criado noutro realm
+// (vm.createContext, worker, outro módulo com seu próprio globals) tem um Object.prototype
+// DIFERENTE, e o check reprovaria um objeto plano legítimo. Isso não é teórico: pegou no
+// E2E desta função, onde `Object.assign({}, doc)` feito dentro de um vm sandbox era tratado
+// como Timestamp e devolvido intacto — o purge silenciosamente não limpava nada. Na CF real
+// roda tudo num realm só, mas um check de identidade não pode depender disso: se ele errar
+// pra MENOS, corrompe Timestamp; pra MAIS, deixa dado sujo passar. Por isso o fallback
+// estrutural: proto cujo constructor se chama "Object" e que não herda de mais nada.
 function isPlainContainer(v) {
   if (v === null || typeof v !== "object") return false;
   if (Array.isArray(v)) return true;
   const proto = Object.getPrototypeOf(v);
-  return proto === Object.prototype || proto === null;
+  if (proto === null || proto === Object.prototype) return true;
+  // outro realm: reconhece um Object.prototype "estrangeiro" pela forma, não pela identidade
+  return Object.getPrototypeOf(proto) === null &&
+         !!proto.constructor && proto.constructor.name === "Object";
 }
 
 /**

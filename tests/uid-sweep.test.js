@@ -92,6 +92,26 @@ eq(ct.uid, NEW, 'e o uid ao lado do Timestamp foi trocado');
 ok(isPlainContainer(ts) === false, 'isPlainContainer: Timestamp não é container plano');
 ok(isPlainContainer({}) === true && isPlainContainer([]) === true, 'isPlainContainer: {} e [] são');
 
+
+// ── CROSS-REALM: objeto plano vindo de outro realm ───────────────────────────
+// `proto === Object.prototype` reprova objeto criado noutro realm (vm/worker/outro módulo
+// com globals próprios) — e aí o walk o trata como Timestamp e devolve INTACTO, sem limpar
+// nada. Pegou de verdade no E2E desta função: Object.assign({}, doc) feito dentro de um vm
+// sandbox passava batido e o purge não removia o uid. Silencioso: nenhum erro, dado sujo.
+const vm = require('vm');
+const _sb = {}; vm.createContext(_sb);
+const alienObj = vm.runInContext('({ uid: "' + OLD + '", nested: { uid: "' + OLD + '" } })', _sb);
+const alienArr = vm.runInContext('([1, 2])', _sb);
+ok(isPlainContainer(alienObj) === true, 'objeto de OUTRO realm é container plano');
+ok(isPlainContainer(alienArr) === true, 'array de OUTRO realm é container plano');
+const ar = remapUid(alienObj, OLD, NEW);
+eq(ar.value.uid, NEW, 'cross-realm: uid trocado (não é devolvido intacto por engano)');
+eq(ar.value.nested.uid, NEW, 'cross-realm: desce nos aninhados');
+// e o que NÃO pode ser tratado como plano continua preservado
+ok(isPlainContainer(new Date()) === false, 'Date preservado (não é plano)');
+ok(isPlainContainer(Buffer.from('x')) === false, 'Buffer preservado');
+ok(isPlainContainer(Object.create(null)) === true, 'Object.create(null) é plano');
+
 // ── Não toca o que não é o uid ────────────────────────────────────────────────
 const outros = { uid: 'uid_outro', nome: 'Fulano', memberUids: ['uid_a', 'uid_b'] };
 const o = remapUid(outros, OLD, NEW);
