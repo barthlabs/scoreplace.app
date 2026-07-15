@@ -109,24 +109,26 @@ ok(isMe({ name: 'Elide Luccas' }) === false, 'ficto sem uid não é removido jun
 ok(W._participantUids({ p1Name: 'Mari', p2Name: 'Flavia' }).length === 0,
   'dupla ficta (Mari / Flavia) não tem uid nenhum — invisível pra este caminho');
 
-// ── O CALL SITE usa mesmo o canônico? ─────────────────────────────────────────
-// Os asserts acima provam que as PEÇAS certas funcionam, mas não que auth.js as usa —
-// _executeDeleteAccount depende de firebase.auth().currentUser + db + DOM e não roda aqui.
-// Sem esta checagem, reverter o auth.js pro filtro caseiro deixaria a suíte VERDE com o
-// bug de volta. É uma checagem estrutural (não substitui um E2E do fluxo de exclusão).
+// ── ONDE a lógica vive agora: SERVIDOR (v1.2.8) ─────────────────────────────
+// A exclusão saiu do cliente e virou CF (deleteAccount). O motivo é este bug: o auth.js
+// rodava a versão em CACHE de cada pessoa — a de lá era solo-only e não via membro de dupla.
+// Código de identidade no cliente = cada usuário com a sua regra. Ver tests/delete-account-canon.test.js.
 const authSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'auth.js'), 'utf8');
-const delBlock = authSrc.slice(authSrc.indexOf('_executeDeleteAccount'), authSrc.indexOf('2c. Delete tournaments organized'));
+// ATENÇÃO: indexOf('_executeDeleteAccount') pega o ONCLICK do botão, não a função.
+// Ancorar na declaração; senão o bloco começa no lugar errado e os asserts mentem.
+const _di = authSrc.indexOf('window._executeDeleteAccount = async function');
+const delBlock = authSrc.slice(_di, _di + 3000);
 ok(delBlock.length > 0, 'bloco de exclusão de conta localizado em auth.js');
+ok(/httpsCallable\(['"]deleteAccount['"]\)/.test(delBlock),
+  'auth.js DISPARA a CF deleteAccount (não executa a regra)');
 ok(/p\.email\s*!==\s*email\s*&&\s*p\.uid\s*!==\s*uid/.test(delBlock) === false,
-  'auth.js NÃO usa mais o filtro caseiro solo-only (o que gerava o órfão)');
-ok(/_participantUids/.test(delBlock),
-  'auth.js casa por UID ONLY, slot-aware (_participantUids)');
-ok(/_userMatchesParticipant/.test(delBlock) === false,
-  'auth.js NÃO usa matcher com fallback de e-mail/nome na exclusão');
-ok(/deenrollParticipant/.test(delBlock),
-  'auth.js usa a saída canônica (transação + recomputa memberUids)');
-ok(/standbyParticipants/.test(delBlock) && /waitlist/.test(delBlock),
-  'auth.js também limpa lista de espera/standby ao excluir conta');
+  'auth.js NÃO tem mais o filtro caseiro solo-only (o que gerava o órfão)');
+ok(/collection\(['"]tournaments['"]\)/.test(delBlock) === false,
+  'auth.js NÃO escreve mais em torneios (a CF faz, com Admin SDK, ignorando rules)');
+
+const cfSrc = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+ok(/exports\.deleteAccount = onCall\(/.test(cfSrc), 'a CF deleteAccount existe');
+ok(cfSrc.includes('_uidSweep.findUidPaths'), 'a CF usa o cânone de varredura de uid');
 
 // ── deenrollParticipant: uid only e SÓ memberUids ─────────────────────────────
 const dbSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), 'utf8');

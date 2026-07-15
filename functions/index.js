@@ -5048,6 +5048,234 @@ exports.scheduledTrophyCheck = onSchedule(
 // um link de confirmação PRO E-MAIL (prova de posse de B). Ao clicar, confirmEmailMerge
 // funde A+B via _mergeAccountsKeepOlder — sem fricção, sem precisar logar na outra conta.
 // Deploy: firebase deploy --only functions:requestEmailMerge,functions:confirmEmailMerge
+
+// ─── EXCLUSÃO DE CONTA — CÂNONE NO SERVIDOR (v1.2.8) ─────────────────────────
+// Antes isto rodava no CLIENTE (auth.js `_executeDeleteAccount`, ~13 escritas do celular
+// da pessoa). Três problemas, todos reais:
+//   1. VERSÃO: cada usuário rodava a lógica do app que tinha em cache — o filtro lá era
+//      solo-only (p.uid/p.email) e não via membro de DUPLA, então a conta sumia e a
+//      inscrição ficava órfã (caso Michelle). Com iOS/Android nas lojas, uma versão velha
+//      pode viver meses no aparelho. Aqui, a regra é uma só pra todo mundo, sempre.
+//   2. PERMISSÃO: o cliente precisa que as RULES autorizem mexer em torneio de terceiro.
+//      checkedIn/absent/vips/votos NÃO estão em isEnrollmentOnlyDiff → o Firestore negava,
+//      o catch engolia, e a conta era apagada deixando lixo. Admin SDK ignora rules.
+//   3. ATOMICIDADE: 13 escritas do celular; rede caindo no meio = conta apagada com
+//      inscrições vivas — o órfão que caçamos o dia inteiro.
+//
+// REGRA DO DONO (jul/2026): "onde estiver o uid, merja ou exclui. TUDO" + "mantém
+// resultados com conta excluída".
+//
+// O QUE APAGA vs O QUE MANTÉM:
+//   • users/{uid} → vira TOMBSTONE MÍNIMO { deleted: true, deletedAt }. Sem nome, e-mail,
+//     telefone, foto, aniversário, amigos. O uid sobra como âncora ANÔNIMA: string opaca
+//     que não liga a pessoa nenhuma (é o que a página pública chama de "registros que não
+//     identificam você"). O tombstone é o que deixa a UI dizer "Conta excluída" em vez de
+//     "Jogador sem perfil" (que é o rótulo de uid órfão por DEFEITO, não por escolha).
+//   • torneio SEM sorteio → a inscrição sai inteira (ninguém depende dela).
+//   • torneio COM jogos → a entrada FICA, reduzida a { uid, deleted }. Sem isto o placar e
+//     a classificação DOS ADVERSÁRIOS mudariam retroativamente. É a decisão do dono.
+//     Os nomes gravados nos slots (m.p1/team1[]) são limpos — nome é dado pessoal.
+//   • friends[] de OUTRAS pessoas → o uid sai (senão elas ficam com amigo fantasma).
+//   • presences, notificações, torneios que ela organizou → apagados.
+//
+// Iniciais ("E. M.") foram descartadas de propósito: num torneio pequeno, iniciais + data +
+// adversários re-identificam a pessoa — é pseudonimização, e a LGPD trata isso como dado
+// pessoal. A página pública promete anonimizar, então "Conta excluída" é o que cumpre.
+exports.deleteAccount = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 540, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "login obrigatório");
+    const db = admin.firestore();
+    const out = { uid, tournamentsLeft: 0, tournamentsAnonymized: 0, tournamentsDeleted: 0,
+      friendsCleaned: 0, presencesDeleted: 0, notificationsDeleted: 0, casualLeft: 0 };
+
+    let email = "";
+    try { const au = await admin.auth().getUser(uid); email = (au.email || "").toLowerCase(); } catch (e) {}
+
+    // 1) Torneios que ela ORGANIZA → apagados (o dono sai, o torneio vai junto).
+    const organizados = new Map();
+    for (const q of [
+      db.collection("tournaments").where("creatorUid", "==", uid),
+      db.collection("tournaments").where("organizerUid", "==", uid),
+      ...(email ? [db.collection("tournaments").where("organizerEmail", "==", email)] : []),
+    ]) {
+      try { (await q.get()).docs.forEach((d) => organizados.set(d.id, d.ref)); } catch (e) {}
+    }
+    for (const [, ref] of organizados) { await ref.delete().catch(() => {}); out.tournamentsDeleted++; }
+
+    // 2) Torneios em que ela PARTICIPA — o cânone acha o uid onde ele estiver.
+    const snap = await db.collection("tournaments").get();
+    for (const doc of snap.docs) {
+      if (organizados.has(doc.id)) continue;
+      const t = doc.data();
+      if (!_uidSweep.findUidPaths(t, uid).length) continue;
+
+      const jogou = _tournamentHasPlayedMatches(t, uid);
+      let next = t;
+
+      if (jogou) {
+        // MANTÉM o resultado: a entrada vira { uid, deleted } e os NOMES saem dos slots.
+        next = _anonymizeEntries(next, uid);
+        next = _stripNamesInMatches(next, uid);
+        out.tournamentsAnonymized++;
+      } else {
+        // Não jogou: sai inteira. Slot de dupla leva a entrada junto (dupla não joga só).
+        const parts = (t.participants || []).filter((p) => !p || typeof p !== "object" ||
+          !_uidSweep.findUidPaths(p, uid).length);
+        next = Object.assign({}, t, { participants: parts });
+        out.tournamentsLeft++;
+      }
+      // Sobrou uid em mapa/array (check-in, voto, waitlist…)? O cânone limpa o resto.
+      next = _purgeUidEverywhere(next, uid, jogou);
+      next.memberUids = (next.memberUids || []).filter((u) => u !== uid);
+      next.updatedAt = new Date().toISOString();
+      await doc.ref.set(next).catch((e) => console.error("[deleteAccount] torneio " + doc.id, e.message));
+    }
+
+    // 3) O uid dela no friends[] de OUTRAS pessoas.
+    try {
+      const amigos = await db.collection("users").where("friends", "array-contains", uid).get();
+      let b = db.batch(), n = 0;
+      for (const d of amigos.docs) {
+        b.update(d.ref, { friends: admin.firestore.FieldValue.arrayRemove(uid) });
+        out.friendsCleaned++;
+        if (++n >= 400) { await b.commit(); b = db.batch(); n = 0; }
+      }
+      if (n) await b.commit();
+    } catch (e) { console.error("[deleteAccount] friends:", e.message); }
+
+    // 4) Presenças/check-ins.
+    try { out.presencesDeleted = await _batchDeleteQuery(db.collection("presences").where("uid", "==", uid)); }
+    catch (e) { console.error("[deleteAccount] presences:", e.message); }
+
+    // 5) Partidas casuais — sai dos participantes; a sala fica pros outros.
+    try {
+      const cs = await db.collection("casualMatches").where("playerUids", "array-contains", uid).get();
+      for (const d of cs.docs) {
+        const swept = _purgeUidEverywhere(d.data(), uid, false);
+        await d.ref.set(swept).catch(() => {});
+        out.casualLeft++;
+      }
+    } catch (e) { console.error("[deleteAccount] casual:", e.message); }
+
+    // 6) Notificações + perfil → TOMBSTONE mínimo (zero dado pessoal).
+    try {
+      const nt = await db.collection("users").doc(uid).collection("notifications").get();
+      let b = db.batch(), n = 0;
+      for (const d of nt.docs) { b.delete(d.ref); out.notificationsDeleted++; if (++n >= 400) { await b.commit(); b = db.batch(); n = 0; } }
+      if (n) await b.commit();
+    } catch (e) {}
+    await db.collection("users").doc(uid).set({
+      deleted: true,
+      deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });   // set SEM merge: sobrescreve o doc inteiro — todo dado pessoal some aqui
+
+    // 7) Auth por último: se algo acima falhar, a pessoa ainda consegue re-tentar logada.
+    try { await admin.auth().deleteUser(uid); }
+    catch (e) { console.error("[deleteAccount] deleteUser:", e.code || e.message); throw new HttpsError("internal", "conta não pôde ser removida do login: " + (e.code || e.message)); }
+
+    console.log("[deleteAccount] " + JSON.stringify(out));
+    return Object.assign({ ok: true }, out);
+  }
+);
+
+// A pessoa tem jogo COM RESULTADO neste torneio? (BYE/folga não conta — não é jogo dela)
+function _tournamentHasPlayedMatches(t, uid) {
+  const temResultado = (m) => m && !m.isSitOut && !m.isBye &&
+    (m.winner || m.winnerUid || (Array.isArray(m.sets) && m.sets.length) ||
+     typeof m.scoreP1 === "number" || typeof m.scoreP2 === "number");
+  const daPessoa = (m) => _uidSweep.findUidPaths(m, uid).length > 0;
+  const todos = [];
+  (t.matches || []).forEach((m) => todos.push(m));
+  (t.rounds || []).forEach((r) => { (r.matches || []).forEach((m) => todos.push(m));
+    (r.monarchGroups || []).forEach((g) => (g.matches || []).forEach((m) => todos.push(m))); });
+  (t.groups || []).forEach((g) => (g.matches || []).forEach((m) => todos.push(m)));
+  (t.rodadas || []).forEach((r) => (r.matches || []).forEach((m) => todos.push(m)));
+  if (t.thirdPlaceMatch) todos.push(t.thirdPlaceMatch);
+  return todos.some((m) => temResultado(m) && daPessoa(m));
+}
+
+// Entrada de inscrito → { uid, deleted } (mantém o slot, mata o dado pessoal).
+function _anonymizeEntries(t, uid) {
+  if (!Array.isArray(t.participants)) return t;
+  const parts = t.participants.map((p) => {
+    if (!p || typeof p !== "object" || !_uidSweep.findUidPaths(p, uid).length) return p;
+    const q = {};
+    // preserva SÓ o que a chave/classificação precisa: uid e a posição na dupla
+    ["uid", "p1Uid", "p2Uid", "enrollSeq", "p1Seq", "p2Seq", "category", "categories"].forEach((k) => {
+      if (p[k] !== undefined) q[k] = p[k];
+    });
+    if (Array.isArray(p.participants)) {
+      q.participants = p.participants.map((s) => (s && s.uid === uid) ? { uid: uid, deleted: true } : s);
+    }
+    if (p.uid === uid || p.p1Uid === uid || p.p2Uid === uid) q.deleted = true;
+    return q;
+  });
+  return Object.assign({}, t, { participants: parts });
+}
+
+// Nome gravado no slot do jogo é dado pessoal — sai. O uid fica (âncora anônima) e a UI
+// resolve pro rótulo "Conta excluída" via tombstone.
+function _stripNamesInMatches(t, uid) {
+  const ROTULO = "Conta excluída";
+  const fix = (m) => {
+    if (!m || typeof m !== "object") return m;
+    let q = m, hit = false;
+    const set = (k, v) => { if (!hit) { q = Object.assign({}, m); hit = true; } q[k] = v; };
+    if (m.p1Uid === uid && m.p1) set("p1", ROTULO);
+    if (m.p2Uid === uid && m.p2) set("p2", ROTULO);
+    ["team1", "team2"].forEach((nk) => {
+      const uk = nk + "Uids";
+      if (!Array.isArray(m[nk]) || !Array.isArray(m[uk])) return;
+      const i = m[uk].indexOf(uid);
+      if (i === -1 || !m[nk][i]) return;
+      const arr = m[nk].slice(); arr[i] = ROTULO; set(nk, arr);
+    });
+    if (m.winnerUid === uid && m.winner) set("winner", ROTULO);
+    return q;
+  };
+  const next = Object.assign({}, t);
+  if (Array.isArray(next.matches)) next.matches = next.matches.map(fix);
+  ["rounds", "groups", "rodadas"].forEach((k) => {
+    if (!Array.isArray(next[k])) return;
+    next[k] = next[k].map((it) => {
+      if (!it || typeof it !== "object") return it;
+      const o = Object.assign({}, it);
+      if (Array.isArray(o.matches)) o.matches = o.matches.map(fix);
+      if (Array.isArray(o.monarchGroups)) o.monarchGroups = o.monarchGroups.map((g) =>
+        (g && Array.isArray(g.matches)) ? Object.assign({}, g, { matches: g.matches.map(fix) }) : g);
+      return o;
+    });
+  });
+  if (next.thirdPlaceMatch) next.thirdPlaceMatch = fix(next.thirdPlaceMatch);
+  return next;
+}
+
+// Tira o uid de mapas/arrays. Se `manterSlots`, preserva os slots de identidade dos JOGOS
+// (senão o placar dos adversários quebra) — some só do estado por-pessoa.
+function _purgeUidEverywhere(node, uid, manterSlots) {
+  const SLOTS_DE_JOGO = new Set(["p1Uid", "p2Uid", "winnerUid", "team1Uids", "team2Uids",
+    "winnerUids", "playersUids", "uid", "p1Seq", "p2Seq", "enrollSeq"]);
+  function walk(v, key) {
+    if (v === null || typeof v !== "object") return v;
+    if (!_uidSweep.isPlainContainer(v)) return v;
+    if (Array.isArray(v)) {
+      if (manterSlots && SLOTS_DE_JOGO.has(key)) return v;   // team1Uids etc: intacto
+      return v.filter((x) => x !== uid).map((x) => walk(x, key));
+    }
+    const out = {};
+    for (const k of Object.keys(v)) {
+      if (k === uid) continue;                                // chave de mapa por-pessoa
+      if (manterSlots && SLOTS_DE_JOGO.has(k) && v[k] === uid) { out[k] = v[k]; continue; }
+      if (!manterSlots && SLOTS_DE_JOGO.has(k) && v[k] === uid) continue;
+      out[k] = walk(v[k], k);
+    }
+    return out;
+  }
+  return walk(node, "");
+}
+
 exports.requestEmailMerge = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
