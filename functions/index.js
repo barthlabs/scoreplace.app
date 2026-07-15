@@ -391,6 +391,38 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   if (upd.phoneNumber) { profUpd.phone = upd.phoneNumber; profUpd.phoneCountry = profUpd.phoneCountry || "55"; }
   await db.collection("users").doc(keepU.uid).set(profUpd, { merge: true }).catch(() => {});
 
+  // 5) v1.2.9 — CREDENCIAL ÓRFÃ: registra o redirect de login.
+  //
+  // O passo 3 só move a credencial do absorvido quando o sobrevivente NÃO tinha aquele tipo.
+  // Quando os DOIS têm (duas contas Google, p.ex.), o e-mail do absorvido não vai pra lugar
+  // nenhum: a conta Auth dele acabou de ser apagada e o Firebase não põe dois provedores do
+  // mesmo tipo na mesma conta. Resultado: a pessoa clica "Entrar com Google", escolhe aquele
+  // e-mail, o Google autentica, o Firebase não acha ninguém e **cria uma conta nova e vazia**
+  // — uma duplicata, pior que antes. É o caso do Eduardo Mange (dudumange@gmail.com +
+  // eduardo@mange.adv.br, ambas google.com).
+  //
+  // Este doc é o que o resolveLoginRedirect usa pra mandar a pessoa pra conta certa.
+  // Só o Admin SDK escreve (rules: deny-all) — é PROVA, e o merge é o único momento que sabe,
+  // com autoridade, que aquele identificador era daquela pessoa. Não dá pra derivar isso de
+  // `linkedEmails`/`email` do perfil: o cliente escreve esses campos, então alguém poderia
+  // reivindicar o e-mail de outro e capturar o login dele.
+  // Ver [[project_privileged_fields_never_client_writable]].
+  const _orphans = [];
+  if (dropEmail && !upd.email) _orphans.push(String(dropEmail).toLowerCase());
+  if (dropPhone && !upd.phoneNumber) _orphans.push(String(dropPhone));
+  for (const key of _orphans) {
+    try {
+      await db.collection("loginRedirects").doc(key).set({
+        ownerUid: keepU.uid,
+        fromUid: dropU.uid,
+        at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log(`[merge] credencial órfã "${key}" → redirect pra ${keepU.uid}`);
+    } catch (e) {
+      console.error("[merge] loginRedirects falhou pra " + key + ":", e.code || e.message);
+    }
+  }
+
   return { survivorUid: keepU.uid, droppedUid: dropU.uid, already: false };
 }
 
@@ -3672,6 +3704,87 @@ exports.resolveMergedLogin = onCall(
       throw new HttpsError("internal", "não foi possível redirecionar o login");
     }
     return { merged: true, survivorUid: target, customToken };
+  }
+);
+
+// v1.2.9 — LOGIN COM A CREDENCIAL DA CONTA ABSORVIDA.
+//
+// Quando duas contas do MESMO tipo são fundidas (duas Google, p.ex.), a credencial do
+// absorvido não migra: o Firebase não põe dois provedores do mesmo tipo numa conta, e a conta
+// dele foi apagada. A pessoa clica "Entrar com Google", escolhe aquele e-mail, o Google
+// autentica e o Firebase **cria uma conta nova e vazia** — uma duplicata. O resolveMergedLogin
+// não cobre: ele exige logar na conta que tem o tombstone, e essa não existe mais.
+//
+// Aqui o merge deixou `loginRedirects/{email|phone}` → dono. Esta função troca a conta vazia
+// recém-criada pela conta certa, via custom token. Pedido do dono (jul/2026): "o mecanismo que
+// resolve o login já vê que a conta se relaciona com a outra e faz o login pela outra sem o
+// usuário ter que se preocupar se entra com uma ou com outra".
+//
+// SEGURANÇA — de onde vem cada coisa importa:
+//   • o identificador vem do TOKEN (request.auth.token), verificado pelo provedor — nunca
+//     do corpo da chamada, que o cliente controla;
+//   • o dono vem de `loginRedirects`, que só o Admin SDK escreve (rules: deny-all). Usar
+//     `linkedEmails`/`email` do perfil seria um sequestro pronto: o cliente escreve esses
+//     campos e poderia reivindicar o e-mail de outro. Ver
+//     [[project_privileged_fields_never_client_writable]];
+//   • só age em conta SEM perfil — quem já tem perfil é dono de si e segue o fluxo normal.
+exports.resolveLoginRedirect = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "login obrigatório");
+    const db = admin.firestore();
+    const tok = (request.auth && request.auth.token) || {};
+
+    // 1) Conta com perfil é dona de si — nunca redireciona.
+    const own = await db.collection("users").doc(uid).get();
+    if (own.exists && !own.data().mergedInto) return { redirected: false, reason: "has_profile" };
+
+    // 2) Chaves candidatas, SÓ do token verificado.
+    const keys = [];
+    if (tok.email && tok.email_verified === true) keys.push(String(tok.email).toLowerCase());
+    if (tok.phone_number) keys.push(String(tok.phone_number));
+    if (!keys.length) return { redirected: false, reason: "no_verified_identifier" };
+
+    // 3) Acha o dono na fonte confiável.
+    let target = null;
+    for (const k of keys) {
+      const snap = await db.collection("loginRedirects").doc(k).get();
+      if (snap.exists && snap.data().ownerUid) { target = snap.data().ownerUid; break; }
+    }
+    if (!target || target === uid) return { redirected: false, reason: "no_redirect" };
+
+    // 4) O dono também pode ter sido mesclado depois — segue a cadeia.
+    let guard = 0;
+    while (guard++ < 5) {
+      const ts = await db.collection("users").doc(target).get();
+      if (!ts.exists) return { redirected: false, reason: "owner_gone" };
+      const next = ts.data().mergedInto;
+      if (next && typeof next === "string" && next !== target) { target = next; continue; }
+      break;
+    }
+    if (target === uid) return { redirected: false, reason: "self" };
+
+    // 5) A conta de destino tem que estar viva no Auth.
+    try { await admin.auth().getUser(target); }
+    catch (e) { return { redirected: false, reason: "owner_auth_gone" }; }
+
+    let customToken;
+    try {
+      customToken = await admin.auth().createCustomToken(target, { source: "login_redirect" });
+    } catch (err) {
+      console.error("[resolveLoginRedirect] createCustomToken falhou:", err.code || err.message);
+      throw new HttpsError("internal", "não foi possível redirecionar o login");
+    }
+
+    // 6) Limpa a conta vazia recém-criada pelo provedor. Só depois do token na mão, e só
+    //    porque ela não tem perfil (nada a perder). Se falhar, o redirect segue — a conta
+    //    órfã fica pro cleanupAbandonedAuth.
+    try { await admin.auth().deleteUser(uid); }
+    catch (e) { console.warn("[resolveLoginRedirect] deleteUser(órfã) falhou:", e.code || e.message); }
+
+    console.log(`[resolveLoginRedirect] ${uid} (conta vazia) → ${target} via ${keys.join("|")}`);
+    return { redirected: true, survivorUid: target, customToken };
   }
 );
 

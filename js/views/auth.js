@@ -4087,6 +4087,39 @@ async function simulateLoginSuccess(user) {
     }
   } catch (e) { window._warn('[merged-login] checagem mergedInto falhou:', e); window._mergedRedirectInProgress = false; }
 
+  // v1.2.9: LOGIN COM A CREDENCIAL DA CONTA ABSORVIDA. Caso IRMÃO do de cima, e o que ele
+  // NÃO cobre: lá a conta existe e tem tombstone; aqui ela NEM EXISTE. Quando duas contas do
+  // mesmo tipo são fundidas (duas Google), a credencial da absorvida não migra — o Firebase
+  // não põe dois provedores do mesmo tipo numa conta. A pessoa clica "Entrar com Google",
+  // escolhe aquele e-mail, o Google autentica e o Firebase cria uma conta NOVA e VAZIA: sem
+  // perfil, sem torneios, sem tombstone pra ler. Uma duplicata — pior que antes do merge.
+  // A CF resolveLoginRedirect troca essa conta vazia pela conta certa (o merge registrou o
+  // dono em loginRedirects, que só o Admin SDK escreve). Pedido do dono (jul/2026): "as duas
+  // são aceitas" — a pessoa não precisa lembrar com qual e-mail se cadastrou.
+  // Ver [[project_privileged_fields_never_client_writable]].
+  try {
+    if (newUid && window.FirestoreDB && window.FirestoreDB.db && !window._mergedRedirectInProgress) {
+      var _pdoc = await window.FirestoreDB.db.collection('users').doc(newUid).get();
+      if (!_pdoc.exists) {   // sem perfil = conta possivelmente recém-criada pelo provedor
+        window._mergedRedirectInProgress = true;
+        try {
+          var _lrFn = firebase.functions().httpsCallable('resolveLoginRedirect');
+          var _lr = await _lrFn({});
+          if (_lr && _lr.data && _lr.data.redirected && _lr.data.customToken) {
+            window._log('[login-redirect] credencial de conta absorvida — entrando na conta certa');
+            window._simulateLoginInProgress = false;
+            window._simulateLoginInProgressAt = 0;
+            window._simulateLoginInProgressUid = '';
+            await firebase.auth().signInWithCustomToken(_lr.data.customToken);
+            window._mergedRedirectInProgress = false;
+            return; // onAuthStateChanged re-dispara com a conta certa
+          }
+        } catch (_lre) { window._warn('[login-redirect] resolveLoginRedirect falhou:', _lre); }
+        window._mergedRedirectInProgress = false;
+      }
+    }
+  } catch (e) { window._warn('[login-redirect] checagem falhou:', e); window._mergedRedirectInProgress = false; }
+
   // v1.9.78: GATE de verificação de e-mail. Conta e-mail/senha NÃO verificada
   // não entra no app — mostra o gate de confirmação (bloqueia tudo; sem merge/
   // sugestão). Google e telefone já entram verificados. Roda em todo caminho de

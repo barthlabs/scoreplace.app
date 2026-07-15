@@ -408,6 +408,22 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    // ─── Login redirects (v1.2.9) — PROVA, escrita só pelo Admin SDK ─────────
+    // Quando duas contas do MESMO tipo são fundidas (duas Google, p.ex.), a credencial da
+    // absorvida não migra — o Firebase não põe dois provedores do mesmo tipo numa conta, e a
+    // conta dela é apagada. Quem loga com aquele e-mail cai numa conta nova e VAZIA. O merge
+    // grava aqui `{email|telefone} → ownerUid` e a CF resolveLoginRedirect manda a pessoa pra
+    // conta certa via custom token.
+    //
+    // deny-all TOTAL: este doc concede acesso a uma conta, então é prova. Se o cliente
+    // pudesse escrever, bastaria reivindicar o e-mail de outro pra capturar o login dele —
+    // que é exatamente por que o redirect NÃO usa `linkedEmails`/`email` do perfil (o cliente
+    // escreve esses). A leitura também é fechada: o mapa e-mail→uid é PII.
+    // Ver [[project_privileged_fields_never_client_writable]].
+    match /loginRedirects/{key} {
+      allow read, write: if false;
+    }
+
     // ─── Mail (firestore-send-email extension) ───────────────────────────────
     match /mail/{mailId} {
       allow read: if false;
