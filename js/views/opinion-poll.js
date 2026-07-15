@@ -885,6 +885,9 @@
   // wa.me precisa de dígitos com DDI sem '+'. Telefone canônico já vem com DDI
   // (>=12 díg); legado (~11) → prefixa o país (phoneCountry ou 55). <10 = sem número.
   function _opPhoneFull(profile) {
+    // v1.2.9: respeita o toggle "WhatsApp" de quem VAI RECEBER (default ON quando
+    // há telefone). Desligado → sem wa.me, o organizador fala por outro canal.
+    if (profile && profile.notifyWhatsApp === false) return '';
     var d = (profile && profile.phone) ? String(profile.phone).replace(/\D/g, '') : '';
     if (d.length < 10) return '';
     if (d.length >= 12) return d;

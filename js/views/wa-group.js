@@ -16,8 +16,14 @@
 //               faz sentido "só admin escreve".
 //
 // CONSEQUÊNCIAS DE DESENHO — não "otimizar" isso sem entender:
-//  · NÃO expomos telefone de ninguém. O link de convite tornou desnecessário, e
-//    é isso que mantém a feature fora de LGPD/consentimento/toggle de perfil.
+//  · NÃO expomos telefone de ninguém. O link de convite tornou isso desnecessário,
+//    e é isso que mantém a feature fora de LGPD/consentimento.
+//  · v1.2.9 — CORREÇÃO da linha acima: ela dizia "fora de ... toggle de perfil".
+//    Não vale mais. O toggle `notifyWhatsApp` PASSA a valer aqui, e o motivo NÃO é
+//    LGPD (segue sem telefone exposto): é que quem desliga não quer WhatsApp, ponto
+//    — nem pra ser chamado, nem pra ser posto em grupo. Ele fica no e-mail + na
+//    notificação da plataforma/celular. Vale igual pra ORGANIZADOR e PARTICIPANTE.
+//    Gate de fonte única: _waAllowed(cu). Ver [[project_whatsapp_meta_2fa_block]].
 //  · NÃO existe API, WABA, portfólio, token nem selo verde no caminho. O
 //    transporte é o WhatsApp do PRÓPRIO usuário (mesma filosofia do "copiar
 //    convite" e do e-mail que sai do usuário). Zero custo, zero risco de ban.
@@ -91,6 +97,17 @@
   function _isOrg(t, cu) {
     return !!(typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, cu));
   }
+  // v1.2.9: o toggle "WhatsApp" do perfil (notifyWhatsApp) vale pra ORGANIZADOR e
+  // PARTICIPANTE por igual: ligado = pode ser contatado E incluído em grupo por
+  // WhatsApp; desligado = fica no e-mail + notificação da plataforma/celular.
+  // Desligado, nenhum chip de grupo aparece — nem criar, nem entrar. Não adianta
+  // esconder só o "entrar": quem não quer WhatsApp também não hospeda grupo.
+  // Default ON (!== false) pra ninguém perder a feature sem ter escolhido.
+  // Gate de FONTE ÚNICA — todos os chips passam por aqui. Ver
+  // project_whatsapp_meta_2fa_block.
+  function _waAllowed(cu) {
+    return !!cu && cu.notifyWhatsApp !== false;
+  }
   function _isEnrolled(t, cu) {
     return !!(typeof window._isUserEnrolledInTournament === 'function' && window._isUserEnrolledInTournament(cu, t));
   }
@@ -150,6 +167,7 @@
   // mesmo fora da rodada atual — quem já tem grupo continua achando ele.
   function _matchChip(t, m, groupMode) {
     var cu = _cu(); if (!cu || !cu.uid) return '';
+    if (!_waAllowed(cu)) return '';
     if (!window._schUserIsPlayer(t, m, cu)) return '';
     var args = '\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\',' + (groupMode ? '1' : '0');
     var open = 'event.stopPropagation(); window._waGrpOpen(' + args + ')';
@@ -190,6 +208,7 @@
   window._waGrpTournamentOrgChip = function (t) {
     try {
       var cu = _cu(); if (!t || !cu || !cu.uid) return '';
+      if (!_waAllowed(cu)) return '';
       if (!_isOrg(t, cu)) return '';
       var open = 'event.stopPropagation(); window._waGrpOpenTournament(\'' + _attr(t.id) + '\')';
       return _btn((t.waGroup && t.waGroup.link) ? 'Grupo do torneio' : 'Criar grupo do torneio', open);
@@ -201,6 +220,7 @@
   window._waGrpTournamentJoinChip = function (t) {
     try {
       var cu = _cu(); if (!t || !cu || !cu.uid) return '';
+      if (!_waAllowed(cu)) return '';
       if (!t.waGroup || !t.waGroup.link) return '';
       if (!_isEnrolled(t, cu) && !_isOrg(t, cu)) return '';
       return _btn('Entrar no grupo', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'\')');

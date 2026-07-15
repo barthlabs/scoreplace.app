@@ -1359,70 +1359,12 @@ window.FirestoreDB = {
 
   // ---- WhatsApp Queue (for future Cloud Function integration) ----
 
-  // Enfileira uma notificação de WhatsApp por TEMPLATE (Meta Cloud API).
-  //
-  // Por que não existe mais texto livre: o Evolution (WhatsApp Web) aceitava
-  // qualquer string, mas o Cloud API só permite texto livre DENTRO da janela de
-  // 24h aberta pelo usuário. Notificação nossa é business-initiated → é template
-  // aprovado ou nada. Ver memória `project_whatsapp_meta_2fa_block`.
-  //
-  // recipients: [{ phone, params: [...] }] — params PERSONALIZADOS por pessoa
-  // (o {{1}} de todos os templates é o nome de quem recebe), por isso não dá pra
-  // mandar `phones[]` com uma mensagem só.
-  // urlSuffix: sufixo do botão URL (base fixa `https://scoreplace.app/` no template).
-  async queueWhatsAppTemplate(recipients, template, urlSuffix) {
-    if (!this.db || !template) return;
-    var list = (recipients || []).filter(function (r) { return r && r.phone; });
-    if (!list.length) return;
-    if (window.SCOREPLACE_ENV === 'staging') { try { window._warn && window._warn('[staging] WhatsApp suprimido (queueWhatsAppTemplate)'); } catch(_e){} return; }
-    try {
-      await this.db.collection('whatsapp_queue').add({
-        template: template,
-        urlSuffix: urlSuffix || '#dashboard',
-        recipients: list.map(function (r) {
-          return { phone: String(r.phone), params: (r.params || []).map(window._waParam) };
-        }),
-        createdAt: new Date().toISOString(),
-        status: 'pending'
-      });
-    } catch (e) {
-      window._warn('Erro ao enfileirar WhatsApp:', e);
-    }
-  },
-
-  // Digest de WhatsApp (tipos com política 'agrupado' no catálogo): acumula 1 linha
-  // por evento numa fila; a Cloud Function flushWhatsAppDigest junta tudo do mesmo
-  // telefone numa ÚNICA mensagem a cada ~1h (reduz volume/custo). Espelha queueNotifEmail.
-  // opts: { tournamentUrl, tournamentName, names? }
-  // names[i] casa com phones[i] — o flush usa pra montar o "Olá, {{1}}" do template.
-  async queueWhatsAppDigest(phones, line, opts) {
-    if (!this.db || !phones || !phones.length) return;
-    if (window.SCOREPLACE_ENV === 'staging') { try { window._warn && window._warn('[staging] WhatsApp suprimido (queueWhatsAppDigest)'); } catch(_e){} return; }
-    var now = Date.now();
-    // v1.1.30: janela de 24h (era 1h). Inscrição de terceiro não é urgente pro
-    // organizador e o Cloud API cobra POR ENTREGA — 1 resumo/dia no lugar de até
-    // 24/dia é o maior corte de custo disponível sem perder informação.
-    var mins = 24 * 60;
-    opts = opts || {};
-    try {
-      for (var i = 0; i < phones.length; i++) {
-        if (!phones[i]) continue;
-        await this.db.collection('whatsapp_digest_queue').add({
-          phone: phones[i],
-          line: line || '',
-          tournamentUrl: opts.tournamentUrl || '',
-          // v1.1.30: o flush monta um TEMPLATE (sp_inscricoes_resumo) e precisa do
-          // nome de quem recebe + do torneio pra preencher {{1}} e {{2}}.
-          toName: (opts.names && opts.names[i]) || '',
-          tournamentName: opts.tournamentName || '',
-          createdAt: now,
-          flushAtMs: now + mins * 60 * 1000
-        });
-      }
-    } catch (e) {
-      window._warn('Erro ao enfileirar WhatsApp digest:', e);
-    }
-  },
+  // v1.2.9: queueWhatsAppTemplate + queueWhatsAppDigest REMOVIDOS. O número foi
+  // banido, a apelação negada e o portfólio Meta está morto — não há canal pra
+  // onde enfileirar. As coleções whatsapp_queue/whatsapp_digest_queue saíram
+  // junto (rules + Cloud Functions). O WhatsApp que sobrou no produto é 100%
+  // cliente: link wa.me e grupo criado pelo usuário (js/views/wa-group.js).
+  // Ver project_whatsapp_meta_2fa_block.
 
   // ---- Templates ----
 

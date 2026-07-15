@@ -425,22 +425,11 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // ─── WhatsApp queue (Cloud Function processWhatsAppQueue → Evolution API) ──
-    // v2.1.15: FALTAVA esta regra — sem ela, toda escrita em whatsapp_queue era
-    // NEGADA (default deny), e queueWhatsApp falhava silencioso no try/catch.
-    // Resultado: notificação por WhatsApp nunca era enfileirada (fila vazia
-    // desde 08/mai), enquanto e-mail (mail/) funcionava. Mesmo modelo do mail/:
-    // qualquer autenticado pode enfileirar; o envio é feito pela Cloud Function.
-    match /whatsapp_queue/{id} {
-      allow read: if false;
-      allow write: if request.auth != null;
-    }
-
-    // ─── WhatsApp digest queue (v1.16) — acumula 'agrupado', flushWhatsAppDigest junta ──
-    match /whatsapp_digest_queue/{id} {
-      allow read: if false;
-      allow write: if request.auth != null;
-    }
+    // v1.2.9: as regras de whatsapp_queue / whatsapp_digest_queue / whatsapp_round_queue
+    // saíram junto com a integração (número banido, apelação negada, portfólio Meta
+    // morto). Sem regra, o default-deny cobre: se algum código velho tentar enfileirar,
+    // a escrita é NEGADA — que é o certo, já que não há quem consuma a fila.
+    // Ver project_whatsapp_meta_2fa_block.
 
     // ─── Email verification codes (v3.0.x) — SERVER-ONLY ──────────────────────
     // sendVerificationCode/verifyEmailCode (Cloud Functions, Admin SDK) gravam e leem o

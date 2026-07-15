@@ -1586,7 +1586,6 @@ window.generateDrawFunction = function (tId) {
             window._lastActiveTournamentId = tId;
             // "Sorteando…" fica até persistir + navegar; toast só depois da chave na tela (pedido do dono).
             _commitInitialDraw(tId, t, _preDraw).then(function () {
-                if (typeof _notifyLigaRoundWhatsApp === 'function') _notifyLigaRoundWhatsApp(t, 0);
                 window.location.hash = '#bracket/' + tId;
                 setTimeout(function () {
                     if (window._sound) window._sound('sino');
@@ -1747,9 +1746,6 @@ window.generateDrawFunction = function (tId) {
             window._notifyDrawPersonalized(t, tId);
         }
         _commitInitialDraw(tId, t, _preDraw).then(function() {
-            if (typeof _notifyLigaRoundWhatsApp === 'function') {
-                _notifyLigaRoundWhatsApp(t, 0);
-            }
             window.location.hash = '#bracket/' + tId;
         });
         return;

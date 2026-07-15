@@ -622,7 +622,10 @@ window._translations['en'] = {
   'profile.notifChannels': 'Notification channels:',
   'profile.notifPlatform': 'Platform',
   'profile.notifEmail': 'Email',
-  'profile.notifWhatsApp': 'WhatsApp',
+  // v1.2.9: WhatsApp is no longer a notification channel (API is dead) — the toggle
+  // is now a CONTACT preference (the wa.me button that opens a chat with you).
+  'profile.contactWhatsApp': 'Allow WhatsApp contact',
+  'profile.contactWhatsAppHint': 'On, whoever needs to reach you (organizer, players) opens WhatsApp in one tap. Off, they use email.',
   'profile.labelLocations': 'Preferred playing locations',
   'profile.locationsDesc': 'Add locations where you usually play. You will be notified of nearby tournaments.',
   'profile.searchLocation': 'Search address, venue, or ZIP...',

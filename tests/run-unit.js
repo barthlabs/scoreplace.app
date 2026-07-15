@@ -72,7 +72,6 @@ const SUITES = [
   'tests/liga-render.test.js',
   'tests/swiss-render.test.js',
   'tests/match-roster-uid.test.js',
-  'tests/wa-template-map.test.js',
   'tests/fairness-uid-identity.test.js',
   'tests/delete-account-dupla-orphan.test.js',
   'tests/merge-federated-wins.test.js',
