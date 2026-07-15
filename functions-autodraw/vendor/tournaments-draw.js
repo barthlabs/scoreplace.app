@@ -1385,6 +1385,10 @@ window.generateDrawFunction = function (tId) {
                     // User confirmed — allow redraw by clearing existing data
                     // v2.6.98: limpa TAMBÉM estado de fase/encerramento (re-sortear um
                     // torneio multi-fase precisa voltar à Fase 0, senão fica resíduo).
+                    // v1.2.25: marca ANTES do clear. O clear é SÓ local — o doc no Firestore
+                    // segue com a chave, então o sorteio no servidor recusaria ('already-drawn')
+                    // sem este flag. Ele é a única memória de que o organizador confirmou.
+                    t._redrawConfirmed = true;
                     window._clearTournamentDraw(t);
                     window.generateDrawFunction(tId);
                 },
@@ -1396,6 +1400,7 @@ window.generateDrawFunction = function (tId) {
         showAlertDialog(_t('draw.redrawTitle'),
             _t('draw.redrawMsg'),
             function() {
+                t._redrawConfirmed = true; // ver acima: o clear é só local; o doc ainda tem a chave
                 window._clearTournamentDraw(t);
                 window.generateDrawFunction(tId);
             },
@@ -1537,110 +1542,64 @@ window.generateDrawFunction = function (tId) {
     // com isPhaseRepR1 + _resolveRepFills no _advanceWinner). Só 'swiss' segue no ramo
     // próprio (round-gen incremental = vendor/cron, canonizado por último).
     if (t.p2Resolution !== 'swiss') {
-        var _E0 = window._phasesEngine;
-        var _cfg0 = window._buildPhase0Cfg(t);
-        // Rei/Rainha é MODO INDIVIDUAL (parceiros ROTATIVOS), nunca duplas fixas — o pool é
-        // de PESSOAS. Sem esta trava, uma fase Rei/Rainha num torneio de dupla (teamSize>1
-        // ou inscrição misto/time) formava duplas e o gerador juntava 2 duplas num "time de
-        // 4" (bug reportado — Confra). Detecta pela cfg da fase 0 (mesma fonte do gerador) +
-        // _isMonarchFormat como rede. Ver project_rei_rainha_is_drawmode_not_format.
-        var _isMon0 = !!(_cfg0 && (_cfg0.reiRainha === true || _cfg0.drawMode === 'rei_rainha'))
-            || !!(window._isMonarchFormat && window._isMonarchFormat(t));
-        // Formação de duplas (eixo da inscrição) quando teamSize > 1 — pool-prep, não chave.
-        // NUNCA em Rei/Rainha (força individual).
-        var _ts0 = _isMon0 ? 1 : (parseInt(t.teamSize, 10) || 1);
-        var _enr0 = t.enrollmentMode || t.enrollment || 'individual';
-        if (!_isMon0 && window._isTeamEnrollMode(_enr0) && _ts0 < 2) _ts0 = 2;
-        if (_ts0 > 1) {
-            if (!t.teamOrigins) t.teamOrigins = {};
-            var _f0 = _formDoublesTeams(Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}), _ts0, t.teamOrigins, t._drawBalanceMode);
-            t.participants = _f0.participants;
-            if (t._drawBalanceMode === 'equilibrado' && _f0.allMaleCount > 0 && typeof showNotification !== 'undefined') {
-                showNotification('⚖️ Sorteio equilibrado', _f0.allMaleCount + ' dupla(s) ficaram 100% masculinas — não havia mulheres suficientes pra cobrir todas.', 'warning');
-            }
-            if (t.mixedPairingSeparated && _enr0 === 'misto' && _ts0 === 2 && typeof window._applyMixedOriginCategories === 'function') {
-                window._applyMixedOriginCategories(t, t.participants);
-            }
+        // ── MOTOR NO SERVIDOR (Etapa 3 · fase B) ────────────────────────────────────────
+        // O app PEDE, a CF `drawRound` SORTEIA e GRAVA. Assim todo mundo sorteia com a MESMA
+        // versão do motor — app/binário de loja desatualizado não sorteia mais diferente
+        // ("os cânones rodam em CF, disparados pelo app" — dono, jul/2026).
+        // Os gates e painéis ACIMA ficam: são UI e já gravaram a decisão no doc
+        // (p2Resolution/oddResolution/incompleteResolution); o servidor lê o que o organizador
+        // decidiu e executa. SEM fallback local — o motor do cliente é justamente a versão
+        // velha que se quer matar. Só 'swiss' (round-gen incremental, não canonizado) segue
+        // no ramo local abaixo. Ver [[project_draw_canonization_cf]].
+        var _redraw = !!t._redrawConfirmed; // o gate limpou só o LOCAL; o doc ainda tem a chave
+        var _fn = null;
+        try { _fn = firebase.functions().httpsCallable('drawRound'); } catch (_eFn) { _fn = null; }
+        if (!_fn) {
+            if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+            showNotification('⚠️ Sorteio indisponível', 'Não foi possível falar com o servidor. Confira a conexão e tente de novo.', 'error');
+            return;
         }
-        // Reset do storage stale da fase 0 (generatePhase/storePhase reescrevem t.matches
-        // taggeado, ou t.rounds/t.standings nativo no caso da Liga/Suíço).
-        t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
-        t.currentPhaseIndex = 0; delete t._phaseMaterialized;
-        // v4.5.21: pool-build extraído p/ window._buildPhase0Pool (reusado pela integração de
-        // duplas tardias _integrateLateDuplas — MESMO pool que o sorteio inicial).
-        var _pool0 = window._buildPhase0Pool(t, _isMon0, _ts0);
-        var _built0 = _E0.generatePhase(_pool0, _cfg0, {
-            t: t, idPrefix: 'p0-' + Date.now(),
-            isVip: function (e) { return window._entryHasVip(t, e); },
-            catOf: function (e) { var c = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(e) : []; return (c && c[0]) || ''; }
-        });
-
-        // Liga / Suíço (cadência incremental): generatePhase já escreveu t.rounds/t.standings
-        // via _generateNextRound (storage NATIVO, lido por renderStandings/autoDraw da CF).
-        if (_built0 && _built0.appliedToT) {
-            t._canonicalDraw = true; t.status = 'active';
-            var _lrc = (_built0.roundMatchCount != null) ? _built0.roundMatchCount : ((t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return !m.isSitOut; }).length);
-            var _lso = (t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return m.isSitOut; }).length;
-            window.AppStore.logAction(tId, `Sorteio Realizado — ${t.format}: Rodada 1 gerada com ${_lrc} partida(s)` + (_lso ? ` e ${_lso} folga(s)` : '') + ' [motor canônico]');
+        _fn({ tournamentId: String(tId), allowRedraw: _redraw }).then(function (_res) {
+            var d = (_res && _res.data) || {};
+            if (!d.ok || !d.tournament) throw new Error('resposta inválida do servidor');
+            // Estado AUTORITATIVO do servidor no `t` local. Mutação in-place: preserva as
+            // referências que outras views/closures já seguram. Vem FOLDADO (como o doc É no
+            // Firestore) → hidrata igual ao ingest do listener.
+            Object.keys(t).forEach(function (k) { delete t[k]; });
+            Object.keys(d.tournament).forEach(function (k) { t[k] = d.tournament[k]; });
+            if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(t); } catch (_eH) {} }
+            try { window.AppStore._saveToCache(); } catch (_eC) {}
             if (document.getElementById('final-review-panel')) { document.getElementById('final-review-panel').remove(); document.body.style.overflow = ''; }
             window._lastActiveTournamentId = tId;
-            // "Sorteando…" fica até persistir + navegar; toast só depois da chave na tela (pedido do dono).
-            _commitInitialDraw(tId, t, _preDraw).then(function () {
-                window.location.hash = '#bracket/' + tId;
-                setTimeout(function () {
-                    if (window._sound) window._sound('sino');
-                    showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: _lrc }), 'success');
-                    if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
-                }, 140);
-            });
-            return;
-        }
-
-        // Eliminatória / Grupos / Rei-Rainha: matches flat taggeados na fase 0 via storePhase.
-        var _r0 = _E0.storePhase(t, 0, _built0);
-        // v4.4.100: storePhase FALHOU (ex.: 'no-entrants' — o split por categoria não casou
-        // ninguém). NÃO reusar a mensagem de SUCESSO (_t('tdraw.drawDone') = "Sorteio
-        // realizado com sucesso!") aqui — era isso que fazia o "diz que sorteou mas não
-        // mostra chave". Encerra o loader e mostra ERRO real. (O motor agora tem rede de
-        // segurança que evita chegar aqui no caso de categoria — ver phases-engine.js.)
-        if (!_r0 || !_r0.ok) {
-            if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
-            showNotification('⚠️ Sorteio não gerou a chave', 'Nenhum jogo foi criado (' + ((_r0 && _r0.error) || 'motor vazio') + '). Confira inscritos/categorias e tente de novo.', 'error');
-            return;
-        }
-        // Dupla Eliminatória clássica: _buildDoubleElimBracket monta upper R2+/lower/grande
-        // final a partir da R1 (lê t.matches) e tagueia tudo na fase 0. Mesmo do legado.
-        if (_built0.needsDoubleElim && typeof window._buildDoubleElimBracket === 'function') {
-            window._buildDoubleElimBracket(t);
-            (t.matches || []).forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; });
-        }
-        // Dupla Eliminatória fora de pow2 c/ repescagem (não elimina na 1ª): monta upper de T
-        // + chave inferior com TODOS os derrotados + grande final. Ver project_dupla_elim_repechage.
-        if (_built0.needsRepechageDoubleElim && typeof window._buildRepechageDoubleElim === 'function') {
-            var _metas0 = (_built0.repMetaByCat && _built0.repMetaByCat.length) ? _built0.repMetaByCat : [_built0.repMeta];
-            _metas0.forEach(function (mm) { window._buildRepechageDoubleElim(t, mm); });
-            (t.matches || []).forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; });
-        }
-        t._canonicalDraw = true; t.status = 'active';
-        window.AppStore.logAction(tId, 'Sorteio Realizado — ' + t.format + ' (motor canônico)');
-        if (document.getElementById('final-review-panel')) { document.getElementById('final-review-panel').remove(); document.body.style.overflow = ''; }
-        window._lastActiveTournamentId = tId;
-        // "Sorteando…" fica na tela até o SORTEIO ESTAR PERSISTIDO E A CHAVE NAVEGADA. Só então
-        // o toast + a navegação (o _showLoading some no hashchange do #bracket). Antes o toast
-        // disparava ANTES do commit → "sorteio realizado" aparecia antes da chave. (pedido do dono)
-        _commitInitialDraw(tId, t, _preDraw).then(function () {
+            // Toast do equilíbrio: o motor é do servidor, mas quem AVISA é a UI.
+            if (d.allMaleCount > 0 && typeof showNotification !== 'undefined') {
+                showNotification('⚖️ Sorteio equilibrado', d.allMaleCount + ' dupla(s) ficaram 100% masculinas — não havia mulheres suficientes pra cobrir todas.', 'warning');
+            }
+            // "Sorteando…" fica até a chave estar na tela (some no hashchange); toast só depois.
             window.location.hash = '#bracket/' + tId;
-            // toast só DEPOIS do hashchange render a chave e o _showLoading sumir (hashchange é
-            // assíncrono; sem o delay o toast nasce sob o loader z-index 100050).
             setTimeout(function () {
                 if (window._sound) window._sound('sino');
-                showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
+                if (d.native) showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: d.matchCount }), 'success');
+                else showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
                 if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
             }, 140);
+        }).catch(function (err) {
+            if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+            var _code = (err && err.code) || '';
+            var _msg = (err && err.message) || String(err);
+            window._lastSaveError = { tournamentId: tId, code: _code, message: _msg, at: new Date().toISOString() };
+            if (/already-drawn/.test(_msg)) {
+                showNotification('⚠️ Já sorteado', 'Outro organizador sorteou este torneio agora há pouco. Atualize a tela pra ver a chave.', 'warning');
+            } else if (_code === 'functions/permission-denied') {
+                showNotification('⚠️ Sem permissão', 'Só o organizador ou um co-organizador pode sortear.', 'error');
+            } else if (/swiss-not-canonical/.test(_msg)) {
+                showNotification('⚠️ Sorteio não realizado', 'Este formato ainda não é sorteado pelo servidor. Avise o desenvolvedor.', 'error');
+            } else {
+                showNotification('⚠️ Sorteio não realizado', _msg.substring(0, 200), 'error');
+            }
         });
         return;
     }
-
     // ── Rei/Rainha e Fase de Grupos NÃO têm branch por formato aqui: são desenhados pelo
     // MOTOR CANÔNICO acima (generatePhase). Rei/Rainha é MODO de sorteio (drawMode), não
     // formato; Grupos+Elim é PILHA DE FASES (grupos → eliminatória), não um formato. Os

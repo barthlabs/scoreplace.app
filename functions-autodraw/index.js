@@ -218,6 +218,14 @@ function _clearForRedraw(t) {
   w._clearTournamentDraw(t);
 }
 
+// Um HttpsError é erro ESPERADO de callable — o framework NÃO o loga. No 1º teste real na
+// staging a CF recusou e não sobrou NENHUMA linha: instância subiu e silêncio. Ficamos cegos.
+// Todo caminho de recusa passa por aqui: loga o motivo ANTES de lançar.
+function _drawFail(code, reason, ctx) {
+  console.error('drawRound RECUSOU:', reason, JSON.stringify(ctx || {}));
+  return new HttpsError(code, reason);
+}
+
 exports.drawRound = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const email = request.auth && request.auth.token && request.auth.token.email;
@@ -229,7 +237,7 @@ exports.drawRound = onCall(async (request) => {
 
   // Motor indisponível → NUNCA improvisar. Devolve erro e o cliente decide.
   if (typeof drawInitial !== 'function' || !drawWindow) {
-    throw new HttpsError('internal', 'Motor de sorteio indisponível no servidor.');
+    throw _drawFail('internal', 'Motor de sorteio indisponível no servidor.', { tId });
   }
 
   const ref = db.collection('tournaments').doc(tId);
@@ -238,13 +246,20 @@ exports.drawRound = onCall(async (request) => {
   // vivos (N reads em users/ — transação exige todo read ANTES de qualquer write, e nome é
   // dado advisory de display; o autoDraw faz igual).
   const pre = await ref.get();
-  if (!pre.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
   if (!_isTournamentAdmin(pre.data(), uid, email)) {
-    throw new HttpsError('permission-denied', 'Só o organizador ou um co-organizador pode sortear.');
+    const _p = pre.data();
+    throw _drawFail('permission-denied', 'Só o organizador ou um co-organizador pode sortear.',
+      { tId, uid, email: email || '(sem email)', creatorUid: _p.creatorUid,
+        adminUids: _p.adminUids, adminEmails: _p.adminEmails, organizerEmail: _p.organizerEmail });
   }
   await _preloadDrawNames(pre.data()); // popula drawWindow._profileNameByUid
 
-  const out = await db.runTransaction(async (tx) => {
+  console.log(`drawRound: pedido de ${uid} pro torneio ${tId}` + (allowRedraw ? ' [re-sorteio]' : ''));
+
+  let out;
+  try {
+    out = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
     const t = snap.data();
@@ -253,7 +268,7 @@ exports.drawRound = onCall(async (request) => {
     // Re-checa authz sobre o doc FRESCO: entre o read de fora e a transação o organizador
     // pode ter perdido o acesso (transferência de organização / co-host removido).
     if (!_isTournamentAdmin(t, uid, email)) {
-      throw new HttpsError('permission-denied', 'Só o organizador ou um co-organizador pode sortear.');
+      throw _drawFail('permission-denied', 'Só o organizador ou um co-organizador pode sortear (doc fresco).', { tId, uid });
     }
 
     // Rei/Rainha: o doc fresco traz grupos só com matchIds — hidrata ANTES do motor,
@@ -266,7 +281,10 @@ exports.drawRound = onCall(async (request) => {
       // preHadBracket vem de um snapshot local): se já tem chave e o organizador não pediu
       // re-sorteio, outro admin sorteou primeiro — não clobbera a chave dele.
       if (!allowRedraw) {
-        throw new HttpsError('failed-precondition', 'already-drawn');
+        throw _drawFail('failed-precondition', 'already-drawn',
+          { tId, matches: (t.matches || []).length, rounds: (t.rounds || []).length,
+            groups: (t.groups || []).length, currentPhaseIndex: t.currentPhaseIndex,
+            phaseMaterialized: t._phaseMaterialized });
       }
       _clearForRedraw(t);
     }
@@ -275,7 +293,10 @@ exports.drawRound = onCall(async (request) => {
     if (!res || !res.ok) {
       // storePhase falho (ex.: 'no-entrants') NUNCA vira sucesso — era isso que dava
       // "diz que sorteou mas não mostra chave".
-      throw new HttpsError('failed-precondition', (res && res.reason) || 'draw-failed');
+      throw _drawFail('failed-precondition', (res && res.reason) || 'draw-failed',
+        { tId, format: t.format, teamSize: t.teamSize, enrollmentMode: t.enrollmentMode,
+          participantes: (t.participants || []).length, p2Resolution: t.p2Resolution,
+          erro: (res && res.error) || '' });
     }
 
     // Histórico do sorteio: quem GRAVA o sorteio grava a entrada. No cliente ela só
@@ -297,7 +318,15 @@ exports.drawRound = onCall(async (request) => {
     return { ok: true, format: res.format, native: !!res.native, matchCount: res.matchCount,
              sitOuts: res.sitOuts || 0, allMaleCount: res.allMaleCount || 0, redraw: hadBracket,
              tournament: b.clean };
-  });
+    });
+  } catch (e) {
+    // HttpsError já foi logado pelo _drawFail — repassa. Qualquer OUTRO erro (motor
+    // estourando, Firestore, bug meu) chegaria ao cliente como 'internal' SEM RASTRO:
+    // loga com stack antes de repassar. Foi a cegueira do 1º teste real.
+    if (e instanceof HttpsError) throw e;
+    console.error(`drawRound EXPLODIU no torneio ${tId} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha no sorteio: ' + String((e && e.message) || e).slice(0, 300));
+  }
 
   console.log(`drawRound: ${tId} sorteado por ${uid} — ${out.format}, ${out.matchCount} jogo(s)` +
     (out.redraw ? ' [re-sorteio]' : ' [1º sorteio]'));

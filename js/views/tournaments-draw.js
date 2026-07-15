@@ -1584,6 +1584,11 @@ window.generateDrawFunction = function (tId) {
                 if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
             }, 140);
         }).catch(function (err) {
+            // O loader NÃO some sozinho aqui: ele só cai no hashchange do #bracket (que não
+            // vai acontecer) ou no backstop de 15s. Sem esconder na mão, o toast de erro nasce
+            // ATRÁS do overlay e o usuário fica 15s olhando "Sorteando…" sem conseguir ler o
+            // motivo — foi exatamente o que aconteceu no 1º teste real na staging.
+            if (typeof window._hideLoading === 'function') window._hideLoading();
             if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
             var _code = (err && err.code) || '';
             var _msg = (err && err.message) || String(err);
