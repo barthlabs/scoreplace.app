@@ -11,6 +11,14 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.08);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🔑 v1.2.10 — Esqueceu a senha e o e-mail não chega? Agora tem saída <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📱 Voltou o "Redefinir por celular".</b> Em "Esqueci minha senha", se a sua conta tem celular cadastrado, agora aparece o botão pra receber um <b>código por SMS</b> e trocar a senha. O caminho existia, mas estava escondido por um erro nosso — ninguém conseguia chegar nele.</li>' +
+        '<li><b>⚠️ Hotmail, Outlook, UOL, BOL, Terra:</b> esses provedores costumam segurar nosso e-mail. Agora o app <b>avisa</b> e já oferece o SMS como caminho recomendado, em vez de mandar o link e deixar você esperando um e-mail que talvez nunca chegue.</li>' +
+        '<li><b>✅ Fim de um aviso errado.</b> Se você tocasse duas vezes seguidas em "Esqueci minha senha", o app dizia que tinha mandado um <b>SMS</b> — mas não tinha mandado nada. Agora só falamos do que realmente saiu.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
       '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">💬 v1.2.9 — WhatsApp: agora é você quem manda <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

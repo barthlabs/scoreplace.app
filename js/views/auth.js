@@ -1593,6 +1593,35 @@ window._entrarPhoneRecoveryFallback = function(raw) {
   if (typeof handlePhoneLogin === 'function') handlePhoneLogin();
 };
 
+// v1.2.10: oferta de reset por SMS no caminho do E-MAIL. Depois que o WhatsApp saiu
+// (v1.2.9), o SMS é a ÚNICA saída pra quem tem e-mail que engole transacional — e o
+// app já sabe quem são (_isUnreliableEmailDomain: Hotmail/Outlook/Live/MSN/UOL/BOL/
+// Terra). Sem isto, "Esqueci minha senha" com um Hotmail é beco sem saída: mandamos
+// o link pro provedor que a gente mesmo classifica como não-confiável e paramos ali.
+// `maskedPhone` vem do checkAccount (channels.phone, mascarado) — só oferecemos o
+// SMS quando a conta REALMENTE tem celular cadastrado, senão o botão frustra.
+// Devolve '' quando não há celular → o chamador concatena sem precisar de if.
+window._entrarOfferPhoneResetHtml = function(email, maskedPhone) {
+  if (!maskedPhone) return '';
+  var esc = window._safeHtml || function(s){ return s; };
+  var bad = (typeof window._isUnreliableEmailDomain === 'function') &&
+            window._isUnreliableEmailDomain(email);
+  // Escape do argumento do onclick: barra ANTES da aspa (regra do CLAUDE.md —
+  // inverter a ordem re-escapa a barra da própria aspa e quebra o handler).
+  var arg = String(email || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var lead = bad
+    ? '⚠️ Esse provedor costuma <b>segurar</b> nosso e-mail.'
+    : 'Não chegou?';
+  return '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.12);">' +
+      '<div style="font-size:0.76rem;color:var(--text-muted);line-height:1.45;margin-bottom:8px;">' +
+        lead + ' Redefina pelo celular <b>' + esc(maskedPhone) + '</b> — você recebe um código por <b>SMS</b>.' +
+      '</div>' +
+      '<button onclick="window._resetPhoneStart(\'' + arg + '\')" class="btn btn-block" ' +
+        'style="background:#25d366;color:#0a1f12;font-size:0.86rem;font-weight:800;padding:10px;">' +
+        '📱 Redefinir por celular' + (bad ? ' (recomendado)' : '') + '</button>' +
+    '</div>';
+};
+
 // "Esqueci minha senha": dispara o reset SEM precisar errar a senha antes. Checa
 // se a conta EXISTE primeiro (o app já assume enumeração — distingue entrar de
 // criar conta), pra dar a mensagem certa: sem conta → criar; Google sem senha →
@@ -1613,13 +1642,19 @@ window._entrarForgotPassword = function() {
   }
   window._entrarStatus('Verificando…', 'info');
   var esc = window._safeHtml || function(s){ return s; };
+  // Celular mascarado da conta (checkAccount) — preenchido abaixo, usado pra
+  // oferecer o SMS quando o e-mail é o canal fraco.
+  var _acctPhone = null;
   var _showSent = function(res) {
     var ch = (res && res.channels) || {};
     var parts = [];
     if (ch.email) parts.push('e-mail <b>' + esc(ch.email) + '</b>');
-    if (ch.phone) parts.push('SMS <b>' + esc(ch.phone) + '</b>');
+    // v1.2.10: `ch.phone` NÃO vira mais "enviamos por SMS". O dispatchAccountRecovery
+    // não tem perna de SMS (a de celular era 100% WhatsApp e saiu na v1.2.9), então
+    // anunciar SMS aqui era promessa falsa — e caía justo em quem depende dele.
     var canais = parts.length ? (' por ' + parts.join(' e ')) : '';
-    window._entrarStatus('🔑 Enviamos um link pra redefinir a senha' + canais + '.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha (com confirmação). Não chegou? Veja o spam.</span>', 'success');
+    var oferta = (mode !== 'phone') ? window._entrarOfferPhoneResetHtml(raw, _acctPhone) : '';
+    window._entrarStatus('🔑 Enviamos um link pra redefinir a senha' + canais + '.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha (com confirmação). Não chegou? Veja o spam.</span>' + oferta, 'success');
   };
   var _noAccount = function() {
     // Sem conta, mas e-mail do Google → quase sempre a pessoa entra com Google.
@@ -1628,6 +1663,9 @@ window._entrarForgotPassword = function() {
     window._entrarStatus('🤔 Não encontramos nenhuma conta com ' + what + '. Pra <b>criar uma conta nova</b>, digite uma senha acima e toque em <b>Entrar</b>.', 'warning');
   };
   window._entrarCheckAccount(raw).then(function(info) {
+    // Canal de celular da conta (mascarado). Só existe se a pessoa cadastrou —
+    // é o que autoriza oferecer o SMS como saída quando o e-mail não chega.
+    _acctPhone = (info && info.channels && info.channels.phone) || null;
     // Conta social SEM senha (e a verificação funcionou) → manda pro provedor.
     if (info && info.exists) {
       var social = info.socialProviders || [];
@@ -1652,7 +1690,10 @@ window._entrarForgotPassword = function() {
       }
       try { firebase.auth().languageCode = 'pt-BR'; } catch (_e) {}
       firebase.auth().sendPasswordResetEmail(raw).then(function () {
-        window._entrarStatus('🔑 Enviamos um link pra redefinir a senha por e-mail <b>' + esc(raw) + '</b>.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha. Não chegou? Veja o spam/lixeira.</span>', 'success');
+        // Mesma oferta de SMS do _showSent: este é o caminho MAIS provável pra
+        // quem tem provedor ruim (o dispatch rico não retorna canal e cai aqui).
+        var oferta = window._entrarOfferPhoneResetHtml(raw, _acctPhone);
+        window._entrarStatus('🔑 Enviamos um link pra redefinir a senha por e-mail <b>' + esc(raw) + '</b>.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha. Não chegou? Veja o spam/lixeira.</span>' + oferta, 'success');
       }).catch(function (err) {
         var code = (err && err.code) || '';
         if (code === 'auth/user-not-found') { _noAccount(); return; }
@@ -2975,9 +3016,17 @@ window._resetPhoneStart = function(email) {
   var email2 = window._resetPhoneEmail || '';
   var panel = document.getElementById('reset-password-panel');
   if (!panel) {
-    // Sem painel (caso raro) — cria um inline acima do form de login.
-    var anchor = document.getElementById('email-login-mode');
-    if (!anchor) return;
+    // Sem painel — cria um inline no modal de login.
+    // v1.2.10: `#email-login-mode` é do modal de login ANTIGO, removido na v4.3.19
+    // (hoje é #login-identifier + #entrar-status). Como ele não existe em lugar
+    // nenhum do repo, esta função era um NO-OP: saía no `return` e o painel nunca
+    // renderizava — ou seja, o reset por SMS estava inalcançável. Passou batido
+    // porque o WhatsApp cobria o buraco; quando ele saiu (v1.2.9), o SMS virou a
+    // única saída pra e-mail que engole transacional (Hotmail/Outlook/UOL) e o
+    // beco sem saída apareceu. Ancora no modal atual, mantendo o legado no fim.
+    var anchor = document.getElementById('entrar-status') ||
+                 document.getElementById('email-login-mode');
+    if (!anchor || !anchor.parentNode) return;
     panel = document.createElement('div');
     panel.id = 'reset-password-panel';
     panel.style.cssText = 'margin-bottom:12px;padding:14px 16px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.25);border-radius:12px;';

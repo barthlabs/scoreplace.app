@@ -2917,8 +2917,14 @@ exports.dispatchAccountRecovery = onCall(
     const tSnap = await throttleRef.get().catch(() => null);
     const last = (tSnap && tSnap.exists && tSnap.data().lastSentAt) || 0;
     if (last && (Date.now() - last) < 10 * 60 * 1000) {
+      // v1.2.10: `phone` SEMPRE null — esta função não tem canal de celular (a perna
+      // era 100% WhatsApp e saiu na v1.2.9; ver comentário na perna de e-mail abaixo).
+      // O caminho normal já devolve phone:null via `out`; só o throttled continuava
+      // mandando o número mascarado, e o cliente renderiza isso como "enviamos por
+      // SMS (••) •••••-••11". Ou seja: quem tocasse 2x em 10 min — justo quem não
+      // recebeu o e-mail — ficava esperando um SMS que nunca foi enviado.
       return { ok: true, throttled: true,
-        channels: { email: realEmail ? _maskEmail(realEmail) : null, phone: phone ? _maskPhone(phone) : null } };
+        channels: { email: realEmail ? _maskEmail(realEmail) : null, phone: null } };
     }
 
     const out = { email: null, phone: null };
