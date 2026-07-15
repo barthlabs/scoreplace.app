@@ -75,6 +75,10 @@ loadAbs(path.join(ROOT, 'i18n-pt.js'));
 // tournaments (_buildPodiumHtml) → store (_renderPodiumsAndClassif) → bracket (nomes de rodada).
 loadAbs(path.join(ROOT, 'views', 'tournaments-draw.js'));
 loadAbs(path.join(ROOT, 'views', 'tournaments.js'));
+// identity-core: cânone de identidade por uid, extraído do store.js (jul/2026) — o store.js
+// não define mais _participantUids/_memberUidByName/_idMap*/_entryHasVip. Antes do store.js,
+// como no index.html.
+loadAbs(path.join(ROOT, 'views', 'identity-core.js'));
 loadAbs(path.join(ROOT, 'store.js'));
 loadAbs(path.join(ROOT, 'views', 'bracket.js'));
 

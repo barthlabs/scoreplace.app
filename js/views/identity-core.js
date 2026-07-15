@@ -1,0 +1,181 @@
+/* identity-core.js — CÂNONE DE IDENTIDADE POR UID (extraído do store.js em jul/2026)
+ *
+ * IDENTIDADE = uid em TODO mapa por-pessoa do torneio (checkedIn / absent / vips).
+ * Regra do dono (jun/2026): "sempre identifica pelo uid. vips, checkin, ausente e
+ * enquete inclusive." Ver [[project_id_maps_uid_keyed]] / [[project_uid_primary_identity]].
+ *
+ * POR QUE VIVE NUM ARQUIVO PRÓPRIO (e não mais dentro do store.js):
+ * o SORTEIO está sendo canonizado numa Cloud Function — "os cânones rodam em CF,
+ * disparados pelo app, pra evitar que cada usuário rode uma versão diferente com app
+ * desatualizado" (decisão do dono, jul/2026). O motor de sorteio precisa de _entryHasVip
+ * e dos _idMap*, mas o store.js NÃO carrega no servidor (toca document no load). As duas
+ * saídas eram: espelhar as funções no shim da CF (= criar uma 2ª versão do código = exatamente
+ * o bug de versão que se quer matar) ou extrair. Extraído. O servidor carrega ESTE arquivo
+ * via functions-autodraw/vendor/ (copy-vendor no predeploy) → uma versão só, zero drift.
+ *
+ * REGRA: este arquivo é PURO — nada de document/AppStore/localStorage/firebase. Se precisar
+ * de DOM, não pertence aqui (quebra o carregamento no servidor). Única dep externa tolerada:
+ * window._nameForUid (store.js), sempre atrás de `typeof === 'function'` — ausente no servidor.
+ *
+ * Carregado ANTES do store.js (index.html) e por tests.html / tests-draw-resolution.html /
+ * tests/render-harness.js / functions-autodraw. Nada aqui é chamado no load — só definições.
+ */
+// Helper canônico: retorna TODOS os UIDs de um participante.
+// Duplas têm p1Uid/p2Uid além de uid. Garante individualidade.
+window._participantUids = function(p) {
+  if (typeof p !== 'object' || !p) return [];
+  var seen = {};
+  var uids = [];
+  function _add(u) { if (u && !seen[u]) { seen[u] = true; uids.push(u); } }
+  _add(p.uid); _add(p.p1Uid); _add(p.p2Uid);
+  if (Array.isArray(p.participants)) p.participants.forEach(function(s) { if (s) _add(s.uid); });
+  return uids;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IDENTIDADE = uid em TODO mapa por-pessoa do torneio (checkedIn / absent / vips).
+// Regra do dono (jun/2026): "sempre identifica pelo uid. vips, checkin, ausente e
+// enquete inclusive." Esses mapas eram chaveados por NOME — dois jogadores de
+// mesmo nome colidiam no mesmo estado. Agora a chave canônica é o uid da pessoa;
+// o nome só vale como FALLBACK (jogador informal sem conta, ou doc legado).
+//
+// _memberUidByName(t, name): resolve o nome de UMA pessoa para o uid dela dentro
+// do torneio — varre solos (p.uid), slots de dupla (p1Name/p1Uid, p2Name/p2Uid),
+// sub-participants[], e também espera/standby (pra substitutos resolverem).
+// Retorna '' pra jogador informal (sem conta).
+window._memberUidByName = function(t, name) {
+  if (!t || !name) return '';
+  var target = String(name).trim().toLowerCase();
+  if (!target) return '';
+  var pools = [];
+  if (Array.isArray(t.participants)) pools.push(t.participants);
+  if (Array.isArray(t.standbyParticipants)) pools.push(t.standbyParticipants);
+  if (Array.isArray(t.waitlist)) pools.push(t.waitlist);
+  for (var pi = 0; pi < pools.length; pi++) {
+    var arr = pools[pi];
+    for (var i = 0; i < arr.length; i++) {
+      var p = arr[i];
+      if (!p || typeof p !== 'object') continue;
+      if ((p.displayName || p.name || '').trim().toLowerCase() === target && p.uid) return p.uid;
+      if ((p.p1Name || '').trim().toLowerCase() === target && p.p1Uid) return p.p1Uid;
+      if ((p.p2Name || '').trim().toLowerCase() === target && p.p2Uid) return p.p2Uid;
+      if (Array.isArray(p.participants)) {
+        for (var s = 0; s < p.participants.length; s++) {
+          var sub = p.participants[s];
+          if (sub && (sub.displayName || sub.name || '').trim().toLowerCase() === target && sub.uid) return sub.uid;
+        }
+      }
+    }
+  }
+  // v4.5.84 (ITEM 3 · Fase 3): 2ª passada por nome VIVO (perfil) — só quando o nome GRAVADO não
+  // casou (a passada acima ganha → zero regressão). Resolve a pessoa quando a entrada não tem
+  // p1Name/p2Name/displayName gravado (pós-Fase-4). Vazio no autoDraw (sem _nameForUid).
+  var _live = (typeof window._nameForUid === 'function') ? window._nameForUid : null;
+  if (_live) {
+    for (var pi2 = 0; pi2 < pools.length; pi2++) {
+      var arr2 = pools[pi2];
+      for (var j = 0; j < arr2.length; j++) {
+        var q = arr2[j];
+        if (!q || typeof q !== 'object') continue;
+        if (q.uid && String(_live(q.uid) || '').trim().toLowerCase() === target) return q.uid;
+        if (q.p1Uid && String(_live(q.p1Uid) || '').trim().toLowerCase() === target) return q.p1Uid;
+        if (q.p2Uid && String(_live(q.p2Uid) || '').trim().toLowerCase() === target) return q.p2Uid;
+        if (Array.isArray(q.participants)) {
+          for (var s2 = 0; s2 < q.participants.length; s2++) {
+            var sub2 = q.participants[s2];
+            if (sub2 && sub2.uid && String(_live(sub2.uid) || '').trim().toLowerCase() === target) return sub2.uid;
+          }
+        }
+      }
+    }
+  }
+  return '';
+};
+
+// _memberNameByUid(t, uid): reverso de _memberUidByName — dado um uid, devolve o
+// displayName da pessoa dentro do torneio. Usado pra "traduzir" chaves uid de
+// volta pra nome quando o consumidor precisa cruzar com a CHAVE (m.p1/m.p2, que
+// são nomes — camada do bracket, Parte 8). Retorna '' se o uid não bate ninguém
+// (ex.: a chave do mapa já é um nome legado, não um uid).
+window._memberNameByUid = function(t, uid) {
+  if (!t || !uid) return '';
+  var pools = [];
+  if (Array.isArray(t.participants)) pools.push(t.participants);
+  if (Array.isArray(t.standbyParticipants)) pools.push(t.standbyParticipants);
+  if (Array.isArray(t.waitlist)) pools.push(t.waitlist);
+  for (var pi = 0; pi < pools.length; pi++) {
+    var arr = pools[pi];
+    for (var i = 0; i < arr.length; i++) {
+      var p = arr[i];
+      if (!p || typeof p !== 'object') continue;
+      if (p.uid === uid) return p.displayName || p.name || '';
+      if (p.p1Uid === uid) return p.p1Name || '';
+      if (p.p2Uid === uid) return p.p2Name || '';
+      if (Array.isArray(p.participants)) {
+        for (var s = 0; s < p.participants.length; s++) {
+          var sub = p.participants[s];
+          if (sub && sub.uid === uid) return sub.displayName || sub.name || '';
+        }
+      }
+    }
+  }
+  return '';
+};
+
+// _idMapKey(t, who): chave canônica {uid, name} de UMA pessoa. `who` pode ser
+// string (nome — resolve via varredura) OU objeto de pessoa única (usa who.uid).
+// NÃO use objeto de DUPLA aqui (dois uids) — os mapas são por-pessoa; readers
+// iteram indivíduos decompostos.
+window._idMapKey = function(t, who) {
+  if (who && typeof who === 'object') {
+    return { uid: who.uid || '', name: (who.displayName || who.name || '') };
+  }
+  var nm = String(who == null ? '' : who);
+  return { uid: window._memberUidByName(t, nm), name: nm };
+};
+// Leitura: uid-key primeiro, nome só fallback (legado/informal). Retorna o valor
+// cru armazenado (ex.: Date.now()) pra ordenação por timestamp continuar valendo.
+window._idMapGet = function(t, map, who) {
+  if (!map || who == null) return undefined;
+  var k = window._idMapKey(t, who);
+  if (k.uid && map[k.uid] != null) return map[k.uid];
+  return k.name ? map[k.name] : undefined;
+};
+window._idMapHas = function(t, map, who) { return !!window._idMapGet(t, map, who); };
+// Escrita: chaveia por uid quando há conta; migra (apaga a chave-nome legada).
+// Jogador informal (sem uid) continua por nome.
+window._idMapSet = function(t, map, who, val) {
+  if (!map || who == null) return;
+  var k = window._idMapKey(t, who);
+  if (k.uid) { map[k.uid] = val; if (k.name && k.name !== k.uid && map[k.name] != null) delete map[k.name]; }
+  else if (k.name) map[k.name] = val;
+};
+window._idMapDel = function(t, map, who) {
+  if (!map || who == null) return;
+  var k = window._idMapKey(t, who);
+  if (k.uid && map[k.uid] != null) delete map[k.uid];
+  if (k.name && map[k.name] != null) delete map[k.name];
+};
+
+// _entryHasVip(t, entry): VIP é flag de ENTRADA (qualquer membro VIP → entrada
+// VIP), armazenada por uid de cada membro (ver _toggleVip). Aceita objeto
+// (solo/dupla — usa _participantUids) OU string ("A / B" = time → resolve cada
+// membro; ou nome solo). Nome só fallback legado. Unifica todos os readers de VIP.
+window._entryHasVip = function(t, entry) {
+  if (!t || !t.vips || entry == null) return false;
+  var vips = t.vips;
+  if (typeof entry === 'object') {
+    var uids = (typeof window._participantUids === 'function') ? window._participantUids(entry) : (entry.uid ? [entry.uid] : []);
+    for (var i = 0; i < uids.length; i++) { if (vips[uids[i]]) return true; }
+    var nm = entry.displayName || entry.name || '';
+    return nm ? !!vips[nm] : false;
+  }
+  var s = String(entry);
+  var members = s.indexOf('/') !== -1 ? s.split('/').map(function(x){ return x.trim(); }).filter(Boolean) : [s];
+  for (var j = 0; j < members.length; j++) {
+    var u = window._memberUidByName(t, members[j]);
+    if (u && vips[u]) return true;
+    if (vips[members[j]]) return true; // fallback nome legado
+  }
+  return false;
+};

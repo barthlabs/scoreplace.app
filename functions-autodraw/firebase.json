@@ -8,7 +8,7 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**",
-      "test-draw.js"
+      "test-*.js"
     ]
   }
 }

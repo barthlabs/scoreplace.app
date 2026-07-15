@@ -18,10 +18,15 @@ const OUT_DIR = path.resolve(__dirname, 'vendor');
 
 // Ordem não importa pra cópia; o draw-core carrega na ordem certa.
 const FILES = [
+  'identity-core.js',          // _participantUids, _memberUidByName, _idMap*, _entryHasVip (cânone uid)
+  'sport-rules.js',            // window.SPORT_RULES — dep de format2 (allowsSingles/teamSize)
   'tournaments-utils.js',      // _isLigaFormat, _calcNextDrawDate
   'tournaments-categories.js', // _displayCategoryName, _sortCategoriesBySkillOrder, _getParticipantCategories, _participantInCategory
+  'format2.js',                // FORMAT2.normalize/compileToPhases — CONFIGURADOR canônico (fmt2 → phases)
   'bracket-model.js',          // _appendCanonicalColumn
   'bracket-logic.js',          // _computeStandings, _generateNextRound, geradores Rei/Rainha + padrão + round-robin
+  'phases-engine.js',          // _phasesEngine.generatePhase — motor multi-fase (lógica pura)
+  'phase-generators.js',       // _phaseGen — geradores de fase (depende de phases-engine)
 ];
 
 if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });

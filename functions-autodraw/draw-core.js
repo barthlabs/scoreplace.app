@@ -115,15 +115,31 @@ g.window._expandFormationAllowed = function (t) {
   return v !== 'standby' && v !== 'closed';
 };
 
-// Carrega a lógica real do cliente (ordem: deps cross-file antes de bracket-logic).
+// Carrega a lógica real do cliente (ordem: deps cross-file antes de quem as consome).
+// identity-core: cânone de identidade por uid (_participantUids/_memberUidByName/_idMap*/
+// _entryHasVip). Extraído do store.js em jul/2026 EXATAMENTE por isto: o store.js não carrega
+// no servidor (toca document no load), e espelhar as funções aqui criaria uma 2ª versão do
+// código — o bug de versão que a canonização quer matar. Agora é UM arquivo só, vendored.
+require('./vendor/identity-core.js');
+require('./vendor/sport-rules.js');             // SPORT_RULES — dep de format2 (allowsSingles/teamSize)
 require('./vendor/tournaments-utils.js');       // _isLigaFormat, _calcNextDrawDate
 require('./vendor/tournaments-categories.js');  // _displayCategoryName, _sortCategoriesBySkillOrder, _getParticipantCategories, _participantInCategory
+require('./vendor/format2.js');                 // FORMAT2.normalize/compileToPhases (precisa de SPORT_RULES)
 require('./vendor/bracket-model.js');           // _appendCanonicalColumn
 require('./vendor/bracket-logic.js');           // _computeStandings, _generateNextRound, geradores
+require('./vendor/phases-engine.js');           // _phasesEngine.generatePhase/storePhase
+require('./vendor/phase-generators.js');        // _phaseGen (precisa de phases-engine)
 
 // Sanity: o dispatcher precisa ter sido exposto (v2.3.91+ do cliente).
 if (typeof g.window._generateNextRound !== 'function') {
   throw new Error('[draw-core] window._generateNextRound ausente — vendor/bracket-logic.js desatualizado (precisa expor o dispatcher).');
+}
+// Sanity: o configurador canônico de formato.
+if (!g.window.FORMAT2 || typeof g.window.FORMAT2.compileToPhases !== 'function') {
+  throw new Error('[draw-core] window.FORMAT2.compileToPhases ausente — vendor/format2.js desatualizado ou SPORT_RULES não carregou.');
+}
+if (!g.window._phasesEngine || typeof g.window._phasesEngine.generatePhase !== 'function') {
+  throw new Error('[draw-core] window._phasesEngine.generatePhase ausente — vendor/phases-engine.js desatualizado.');
 }
 
 // ── Entry point ─────────────────────────────────────────────────────────────
@@ -214,4 +230,62 @@ function generateLigaRound(t, scheduledTime) {
   };
 }
 
-module.exports = { generateLigaRound, _window: g.window };
+// ── CÂNONE DE FORMATO NO SERVIDOR: fmt2 → topLevel + phases ──────────────────
+// Decisão do dono (jul/2026): "os cânones rodam em CF, disparados pelo app — assim evita
+// cada usuário rodar uma função diferente com app desatualizado".
+//
+// POR QUE ISTO É O FURO PRINCIPAL (mais que o sorteio em si): `compileToPhases` roda hoje
+// no SALVAR do cliente (create-tournament.js:5229, format2-ui.js:827) e GRAVA `t.phases[]` +
+// os campos top-level (`format`/`gruposCount`/`ligaRoundFormat`/…) no doc. Um app velho
+// compila com um format2 velho e grava o doc JÁ ERRADO — aí qualquer sorteio, mesmo o do
+// servidor, executaria fielmente a config errada. Mover só o sorteio não fecha o buraco.
+//
+// O QUE DESTRAVA: o cliente também persiste a config CRUA em `t.fmt2`
+// (create-tournament.js:5232). Ou seja, `t.phases` é DERIVADO e reproduzível a partir do
+// `fmt2` — o servidor recompila do intent e ignora o que o app velho compilou.
+//
+// LEGADO (decisão do dono): torneio sem `t.fmt2` é anterior ao format2 → NÃO inventa config;
+// devolve {ok:false, reason:'no-fmt2'} e o caller confia no `t.phases` que está no doc.
+//
+// ⚠️ SÓ CHAMAR NA FASE 0 SEM CHAVE. Recompilar no meio do torneio destruiria estado de fase
+// (currentPhaseIndex/_phaseMaterialized). O guard é do caller — ver `canRecompile`.
+//
+// Espelha create-tournament.js:5229-5236 (a MESMA ordem de escrita). Se mudar lá, muda aqui.
+function compileFromFmt2(t, opts) {
+  opts = opts || {};
+  const win = g.window;
+  if (!t || !t.fmt2 || typeof t.fmt2 !== 'object') {
+    return { ok: false, reason: 'no-fmt2' };
+  }
+  try {
+    const out = win.FORMAT2.compileToPhases(t.fmt2, {
+      sport: opts.sport || t.sport,
+      resultEntry: t.resultEntry,
+      lateEnrollment: t.lateEnrollment,
+    });
+    Object.assign(t, out.topLevel);
+    t.phases = out.phases;
+    // `fmt2` é o intent — re-normalizado pelo compilador; regrava a forma canônica.
+    t.fmt2 = out.cfg;
+    if (t.format === 'Fase de Grupos') { t.ligaRoundFormat = 'standard'; t.ligaDrawMode = 'standard'; }
+    return { ok: true, phases: out.phases.length, format: t.format, summary: win.FORMAT2.summary(out.cfg) };
+  } catch (e) {
+    // Sem fallback silencioso (espelha o cliente: aborta em vez de sortear formato errado).
+    return { ok: false, reason: 'compile-failed', error: String(e && e.message || e) };
+  }
+}
+
+// Recompilar é seguro SÓ antes de existir chave (fase 0 intocada). Depois disso o doc carrega
+// estado de fase que a recompilação atropelaria.
+function canRecompile(t) {
+  if (!t) return false;
+  const hasDraw = (Array.isArray(t.matches) && t.matches.length > 0)
+    || (Array.isArray(t.rounds) && t.rounds.length > 0)
+    || (Array.isArray(t.groups) && t.groups.length > 0);
+  if (hasDraw) return false;
+  if ((t.currentPhaseIndex || 0) > 0) return false;
+  if (t._phaseMaterialized != null) return false;
+  return true;
+}
+
+module.exports = { generateLigaRound, compileFromFmt2, canRecompile, _window: g.window };
