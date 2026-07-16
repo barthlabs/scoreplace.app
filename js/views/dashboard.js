@@ -2783,7 +2783,12 @@ function renderDashboard(container) {
     ">
 
       <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; text-align: left;">
-        <h2 style="margin:0; font-size: calc(var(--sp-u) * 2.3); font-weight: 700; flex:1; color:var(--hero-text);">${_t('dashboard.welcome', {greeting: (window._welcomeWord ? window._welcomeWord() : 'Bem-vindo'), name: (window._firstNameOnly ? window._firstNameOnly(userName) : userName)})}${_proBadge}</h2>
+        <!-- CÂNONE fit-name-to-box DENTRO da escala por área: box de altura FIXA
+             em --sp-u (escala por área) + a fonte encolhe (rem) pra caber nome
+             longo em vez de estourar. Ver window._fitNames (store.js). -->
+        <div style="flex:1; min-width:0; height:calc(var(--sp-u) * 2.7); overflow:hidden; display:flex; align-items:center;">
+          <h2 class="sp-name-fit" data-maxrem="2.3" data-minrem="1.1" style="margin:0; font-size:2.3rem; font-weight:700; color:var(--hero-text); line-height:1.1; white-space:nowrap; max-width:100%;">${_t('dashboard.welcome', {greeting: (window._welcomeWord ? window._welcomeWord() : 'Bem-vindo'), name: (window._firstNameOnly ? window._firstNameOnly(userName) : userName)})}${_proBadge}</h2>
+        </div>
         ${window.AppStore.currentUser ? '<div style="display:flex;flex-direction:column;gap:5px;align-items:stretch;"><button onclick="window.location.hash=\'#trofeus\'" style="background:var(--hero-glass-bg);border:1px solid var(--hero-glass-border);border-radius:12px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--hero-text);font-size:0.78rem;font-weight:600;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background=\'var(--hero-glass-bg-hover)\'" onmouseout="this.style.background=\'var(--hero-glass-bg)\'"><span style="font-size:1rem;">🏆</span> Conquistas</button><button onclick="if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + window._safeHtml((window.AppStore.currentUser.displayName || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")) + '\')" style="background:var(--hero-glass-bg);border:1px solid var(--hero-glass-border);border-radius:12px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--hero-text);font-size:0.78rem;font-weight:600;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background=\'var(--hero-glass-bg-hover)\'" onmouseout="this.style.background=\'var(--hero-glass-bg)\'"><span style="font-size:1rem;">📊</span> ' + _t('dashboard.statistics') + '</button></div>' : ''}
       </div>
       <div style="text-align:center;margin-bottom:8px;font-size:0.75rem;color:var(--hero-text-soft);font-weight:600;letter-spacing:0.5px;">v${window.SCOREPLACE_VERSION || ''}</div>
@@ -2969,6 +2974,8 @@ function renderDashboard(container) {
     })()}
   `;
   container.innerHTML = html;
+  // CÂNONE fit-name-to-box: ajusta a fonte dos nomes ao box fixo (saudação etc.).
+  if (typeof window._fitNames === 'function') { try { window._fitNames(container); } catch (e) {} }
   // v2.8.46: re-aplica a busca in-place após qualquer re-render (ex.: trocar
   // modalidade com busca ativa) — sem isso a busca "sumiria" no re-render.
   if (window._dashSearch && typeof window._applyDashSearchInPlace === 'function') {

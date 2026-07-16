@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fit-name-to-box harness</title>
+<style>
+  /* Emula o cânone de escala por área: --sp-u = 1rem, root font-size fluido. */
+  :root { --sp-u: 1rem; --hero-text:#fff; --text-bright:#f3f4f6; }
+  html { font-size: clamp(13px, 3.74vw, 17px); }
+  body { background:#0a0e1a; color:#e5e7eb; font-family:system-ui,sans-serif; padding:16px; }
+  h3 { margin:20px 0 8px; font-size:0.9rem; color:#9ca3af; }
+  /* Box de altura FIXA em --sp-u (escala por área). Largura fixa aqui só p/ o
+     harness poder medir (a viewport do painel MCP reporta innerWidth=0). */
+  .greet-box { width:280px; height:calc(var(--sp-u) * 2.7); overflow:hidden; display:flex; align-items:center; border:1px solid #333; margin:4px 0; }
+  .greet-box h2 { margin:0; font-weight:700; color:var(--hero-text); line-height:1.1; white-space:nowrap; max-width:100%; }
+  .card { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid #374151; border-radius:10px; width:180px; margin:4px 0; }
+  .card .namecol { flex:1; min-width:0; }
+  #report { margin-top:24px; font-size:0.8rem; white-space:pre-wrap; color:#a7f3af; border-top:1px solid #374151; padding-top:12px; }
+</style>
+</head>
+<body>
+<h3>Saudação — box altura fixa (2.7 × --sp-u), fonte encolhe em rem</h3>
+<div id="greet-host"></div>
+
+<h3>Cards de pessoas — box 2.15 × --sp-u, fonte encolhe (sem "…")</h3>
+<div id="cards-host"></div>
+
+<div id="report">rodando…</div>
+
+<script>window._safeHtml = function (s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);}); };</script>
+<script src="/js/store.js"></script>
+<script>
+  function nameLines(raw){ var t=(raw||'').trim(); if(!t) return {l1:'',l2:''}; if(t.indexOf('@')!==-1) return {l1:t,l2:''}; var tk=t.split(/\s+/).filter(Boolean); if(tk.length<=1) return {l1:tk[0]||t,l2:''}; return {l1:tk[0], l2:tk[tk.length-1]}; }
+  function nameHtml(l1,l2){
+    var inner='<div style="font-weight:700;line-height:1.2;">'+window._safeHtml(l1)+'</div>'+(l2?'<div style="font-weight:600;line-height:1.15;opacity:0.82;">'+window._safeHtml(l2)+'</div>':'');
+    return '<div style="height:calc(var(--sp-u) * 2.15);overflow:hidden;display:flex;flex-direction:column;justify-content:center;"><div class="sp-name-fit" data-maxrem="0.82" data-minrem="0.55" style="color:var(--text-bright);font-size:0.82rem;width:100%;">'+inner+'</div></div>';
+  }
+  var names=['Ana','Rodrigo','Maria Fernanda Albuquerque','Bernardino','Zé','João Pedro dos Santos Nascimento'];
+  var gh=document.getElementById('greet-host');
+  names.forEach(function(n){ var b=document.createElement('div'); b.className='greet-box'; b.innerHTML='<h2 class="sp-name-fit" data-maxrem="2.3" data-minrem="1.1" style="font-size:2.3rem;">Bem-vindo(a), '+window._safeHtml(n.split(' ')[0])+'!</h2>'; gh.appendChild(b); });
+  var ch=document.getElementById('cards-host');
+  names.forEach(function(n){ var nl=nameLines(n); var c=document.createElement('div'); c.className='card'; c.setAttribute('data-person-card','1'); c.innerHTML='<div style="width:34px;height:34px;border-radius:50%;background:#6366f1;flex-shrink:0;"></div><div class="namecol">'+nameHtml(nl.l1,nl.l2)+'</div>'; ch.appendChild(c); });
+
+  function run(){
+    if (typeof window._fitNames!=='function'){ document.getElementById('report').textContent='FALHA: window._fitNames indefinido'; return; }
+    window._fitNames(document);
+    setTimeout(function(){
+      var out=['window._fitNames OK · root font='+getComputedStyle(document.documentElement).fontSize];
+      document.querySelectorAll('.sp-name-fit').forEach(function(el){
+        var b=el.parentElement; var fit=(el.scrollWidth<=b.clientWidth+1 && el.scrollHeight<=b.clientHeight+1);
+        out.push('  "'+el.textContent.trim().slice(0,40)+'" → '+el.style.fontSize+'  '+(fit?'✓':'✗ (minRem)'));
+      });
+      document.getElementById('report').textContent=out.join('\n');
+    }, 400);
+  }
+  requestAnimationFrame(function(){ requestAnimationFrame(run); });
+</script>
+</body>
+</html>

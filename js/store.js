@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.30';
+window.SCOREPLACE_VERSION = '1.2.31';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -2683,6 +2683,108 @@ window._firstNameOnly = function(name) {
   var first = s.split(/\s+/)[0];
   return first || s;
 };
+
+// ───────────────────────────────────────────────────────────────────────────
+// CÂNONE fit-name-to-box (jul/2026) — DENTRO da escala por área.
+// [[project_name_fit_box_canonical]] × [[project_web_area_scaling_canon]].
+//
+// Regra do dono: nome de perfil vive num BOX INVISÍVEL de tamanho FIXO (mesmo
+// pra todo usuário); a fonte é a variável — nome LONGO encolhe pra caber, nome
+// CURTO pode ficar maior, dupla pode quebrar linha. Vale em TODA tela.
+//
+// COMO CASA COM A ESCALA POR ÁREA: o "teto" e o "piso" da fonte são em REM
+// (= var(--sp-u)), então herdam o cânone — crescem com a área (root font-size
+// fluido no mobile + `zoom` no body no desktop). O fit só ENCOLHE, por
+// comprimento do nome, DENTRO desse envelope já escalado. Nada de px fixo (o
+// cânone proíbe "font-size fixo" como caminho alternativo). Iterar em rem
+// também evita a ambiguidade de `zoom` × getComputedStyle: a comparação usa
+// scrollWidth/clientWidth (px de layout), e a fonte é declarada em rem.
+//
+// Uso: o elemento do NOME leva `.sp-name-fit` + `data-maxrem`/`data-minrem`
+// (múltiplos de rem/--sp-u). Seu PARENT é o box de tamanho FIXO — altura em
+// rem/--sp-u + overflow:hidden — pra o box TAMBÉM escalar por área.
+//
+// EXCEÇÃO: o RELÓGIO não usa isto — lá o nome já é só o 1º nome
+// (_watchShortNames em bracket-ui.js) por causa da tela minúscula.
+(function() {
+  var _ro = null;
+
+  // Ajusta UM elemento `.sp-name-fit` ao box pai. false = box sem dimensão.
+  function _fitOne(el) {
+    if (!el) return true;
+    var box = el.parentElement;
+    if (!box) return true;
+    var bw = box.clientWidth, bh = box.clientHeight;
+    if (!bw || !bh) return false; // layout pendente
+    var maxR = parseFloat(el.getAttribute('data-maxrem')) || 1.5;
+    var minR = parseFloat(el.getAttribute('data-minrem')) || 0.7;
+    if (minR > maxR) minR = maxR;
+    var fs = maxR;
+    el.style.fontSize = fs + 'rem';
+    var guard = 0;
+    // passo 0.03rem (~0.5px a 16px) com +1px de folga sub-pixel.
+    while (guard++ < 200 && (el.scrollWidth > bw + 1 || el.scrollHeight > bh + 1) && fs > minR) {
+      fs = Math.max(minR, fs - 0.03);
+      el.style.fontSize = fs + 'rem';
+    }
+    el.setAttribute('data-fitted', '1');
+    el.setAttribute('data-fitw', bw);
+    el.setAttribute('data-fith', bh);
+    if (_ro) { try { _ro.observe(box); } catch (e) {} }
+    return true;
+  }
+  window._fitNameToBox = _fitOne;
+
+  // Varre `root` (default document) por `.sp-name-fit` ainda não ajustados.
+  // Re-tenta por setTimeout enquanto algum box não tem dimensão.
+  window._fitNames = function(root, retry) {
+    try {
+      var scope = (root && root.querySelectorAll) ? root : document;
+      var els = scope.querySelectorAll('.sp-name-fit:not([data-fitted])');
+      var pending = false;
+      Array.prototype.forEach.call(els, function(el) {
+        if (!_fitOne(el)) pending = true;
+      });
+      if (pending && (retry || 0) < 12) {
+        setTimeout(function() { window._fitNames(root, (retry || 0) + 1); }, 60);
+      }
+    } catch (e) {}
+  };
+
+  // ResizeObserver: box mudou de tamanho (rotação, re-layout, expandir/colapsar,
+  // MUDANÇA DE ZOOM da escala por área) → re-ajusta. Só em mudança real (>2px)
+  // pra não oscilar. Box é fixo por construção → sem loop de feedback.
+  if (typeof ResizeObserver !== 'undefined') {
+    _ro = new ResizeObserver(function(entries) {
+      entries.forEach(function(entry) {
+        var box = entry.target;
+        var el = box.querySelector(':scope > .sp-name-fit');
+        if (!el) { try { _ro.unobserve(box); } catch (e) {} return; }
+        var bw = box.clientWidth, bh = box.clientHeight;
+        if (!bw || !bh) return;
+        var pw = parseFloat(el.getAttribute('data-fitw')) || 0;
+        var ph = parseFloat(el.getAttribute('data-fith')) || 0;
+        if (Math.abs(bw - pw) < 2 && Math.abs(bh - ph) < 2) return;
+        el.removeAttribute('data-fitted');
+        _fitOne(el);
+      });
+    });
+  }
+
+  // Fallback pra ResizeObserver: re-ajusta tudo em resize de janela (debounced).
+  // Cobre a mudança do `zoom` por área quando a largura da viewport muda.
+  var _rt = null;
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('resize', function() {
+      if (_rt) clearTimeout(_rt);
+      _rt = setTimeout(function() {
+        var els = document.querySelectorAll('.sp-name-fit[data-fitted]');
+        Array.prototype.forEach.call(els, function(el) { el.removeAttribute('data-fitted'); });
+        window._fitNames(document, 0);
+      }, 150);
+    });
+  }
+})();
 
 // v2.4.23: saudação concordante com o gênero do perfil.
 // PT: "Bem-vinda" pra gênero feminino, "Bem-vindo" pra masculino/desconhecido.
