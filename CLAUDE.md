@@ -1151,10 +1151,12 @@ como `rstbarth@gmail.com`; deploy é ação outward-facing → confirmar com o u
   torneio ao vivo), validar com o emulador (`firebase emulators:start --only functions`).
 
 **Segredos** (Evolution API, Stripe, etc.) vivem em `firebase functions:secrets:set …`,
-NUNCA no git. `infra/whatsapp/` tem o Evolution API (Railway). O número que envia
-WhatsApp e o do "Fale com o Desenvolvedor" é **barthlabs +55 11 96658-1959**
-(`SCOREPLACE_DEV_WHATSAPP = '5511966581959'` em store.js). O número antigo
-`+55 11 91693-6454` foi banido (jul/2026) — migrando pro Meta Cloud API.
+NUNCA no git. `infra/whatsapp/` tem o Evolution API (Railway). O número do
+"Fale com o Desenvolvedor" é **barthlabs +55 11 98772-6873** (WhatsApp Business
+orgânico apenas — `SCOREPLACE_DEV_WHATSAPP = '5511987726873'` em store.js). Números
+queimados (não usar): `+55 11 91693-6454` e `+55 11 96658-1959` (WhatsApp Business
+banidos pela Meta, jul/2026) e o stopgap pessoal `+55 11 99723-7733` (conta TIM
+bloqueada, jul/2026).
 
 ## Deploy
 
