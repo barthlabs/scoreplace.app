@@ -3814,7 +3814,7 @@
     // inputs 16→12, margin-bottom do grid 18→14 — tudo proporcionalmente mais
     // enxuto pra que os campos virem ELEMENTO do modal, não DOMINAREM ele.
     overlay.innerHTML =
-      '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:18px;max-width:420px;width:100%;box-sizing:border-box;max-height:88vh;overflow-y:auto;">' +
+      '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:18px;max-width:420px;width:100%;box-sizing:border-box;max-height:88%;overflow-y:auto;">' +
         '<h3 style="margin:0 0 10px 0;color:var(--text-bright);">🗓️ Planejar ida</h3>' +
         // v0.16.68/70: nome do local em destaque maior — usuário pediu (duas
         // vezes) mais ênfase. 1.05→1.2rem, font-weight 700.

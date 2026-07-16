@@ -1536,7 +1536,7 @@ function _mountProfileSheet(innerHtml) {
   var panel = document.createElement('div');
   panel.id = 'user-profile-sheet';
   panel.setAttribute('onclick', 'event.stopPropagation()');
-  panel.style.cssText = 'background:var(--bg-card);border-radius:20px 20px 0 0;padding:0 0 36px;width:100%;max-width:480px;box-shadow:0 -4px 40px rgba(0,0,0,0.4);transform:translateY(100%);transition:transform 0.28s cubic-bezier(0.32,0.72,0,1);overflow-y:auto;max-height:90vh;';
+  panel.style.cssText = 'background:var(--bg-card);border-radius:20px 20px 0 0;padding:0 0 36px;width:100%;max-width:480px;box-shadow:0 -4px 40px rgba(0,0,0,0.4);transform:translateY(100%);transition:transform 0.28s cubic-bezier(0.32,0.72,0,1);overflow-y:auto;max-height:90%;';
   var backRow =
     '<div style="display:flex;align-items:center;padding:14px 20px 0;margin-bottom:6px;">' +
       '<button onclick="window._closeUserProfileSheet()" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.08);border:none;border-radius:20px;padding:7px 16px;color:var(--text-muted,#94a3b8);font-size:0.85rem;font-weight:600;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.13)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.08)\'">' +

@@ -737,7 +737,7 @@ window._showAbsenteeResolutionDialog = function (tId, present, absentees, procee
 
   const dialog = document.createElement('div');
   dialog.id = 'absentee-resolution-dialog';
-  dialog.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:100012;padding:16px;';
+  dialog.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:100012;padding:16px;';
   dialog.innerHTML =
     '<div style="background:var(--surface-color);border:1px solid var(--border-color);border-radius:16px;max-width:440px;width:100%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
       '<div style="background:rgba(245,158,11,0.1);border-bottom:1px solid var(--border-color);padding:1.1rem 1.25rem;display:flex;align-items:center;gap:12px;">' +

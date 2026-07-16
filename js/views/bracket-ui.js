@@ -2941,7 +2941,7 @@ window._tvMode = function(tId) {
   // Create overlay
   var overlay = document.createElement('div');
   overlay.id = 'tv-mode-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:#0a0e1a;z-index:99999;overflow:auto;display:flex;flex-direction:column;';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#0a0e1a;z-index:99999;overflow:auto;display:flex;flex-direction:column;';
 
   // Hero section with venue photo background
   // v4.0.21: foto de fundo custom do organizador tem prioridade sobre a do Google.
@@ -8775,7 +8775,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var overlay = document.createElement('div');
   overlay.id = 'live-scoring-overlay';
   // v0.17.52: bg respeita tema (var(--bg-darker)) em vez de hardcoded.
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;background:var(--bg-darker);z-index:100002;display:flex;flex-direction:column;overflow:hidden;touch-action:manipulation;';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;height:100%;background:var(--bg-darker);z-index:100002;display:flex;flex-direction:column;overflow:hidden;touch-action:manipulation;';
 
   // Header — 3-column: [AO VIVO + info] [Sets display center] [Reset + Close]
   var headerBg = 'linear-gradient(135deg,#1e293b 0%,#0f172a 100%)';
@@ -8894,7 +8894,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Outer: quase-transparente e pointer-events:none → toques fora fecham pelo botão
     // ou caem no placar (para ver mudanças em tempo real)
     panel.style.cssText = 'position:fixed;inset:0;z-index:100012;background:transparent;display:flex;align-items:flex-end;justify-content:center;pointer-events:none;';
-    panel.innerHTML = '<div style="pointer-events:all;background:rgba(10,14,26,0.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.18);border-radius:18px 18px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);max-height:calc(100dvh - 10px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;">' +
+    panel.innerHTML = '<div style="pointer-events:all;background:rgba(10,14,26,0.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.18);border-radius:18px 18px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);max-height:calc(100% - 10px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
         '<div style="font-size:1.1rem;font-weight:800;color:#fff;">Ajustar</div>' +
         '<button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:1rem;cursor:pointer;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>' +
@@ -9449,7 +9449,7 @@ window._openScanQR = function() {
   // discreto no rodapé. Sem overlay competindo com o feed da câmera.
   var ov = document.createElement('div');
   ov.id = 'scan-qr-overlay';
-  ov.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;background:#000;z-index:100003;display:flex;flex-direction:column;overflow:hidden;';
+  ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;height:100%;background:#000;z-index:100003;display:flex;flex-direction:column;overflow:hidden;';
 
   var _scanStream = null;
   var _scanInterval = null;
@@ -11986,7 +11986,7 @@ window._openCasualMatch = function(restoreOpts) {
     // pequeno o conteúdo (QR 280px + código + botões) passava da tela e ficava
     // cortado com align-items:center sem overflow. overscroll-behavior:contain
     // impede o scroll de vazar pra dashboard atrás.
-    qrOv.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;background:#0a0e1a;z-index:100003;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:1.5rem 1rem calc(1.5rem + env(safe-area-inset-bottom));box-sizing:border-box;';
+    qrOv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;height:100%;background:#0a0e1a;z-index:100003;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:1.5rem 1rem calc(1.5rem + env(safe-area-inset-bottom));box-sizing:border-box;';
 
     qrOv.innerHTML =
       '<div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:400px;">' +
@@ -12402,7 +12402,7 @@ window._openCasualMatch = function(restoreOpts) {
   // visível (inclui atrás da barra do Safari), então a parte de baixo do
   // conteúdo (QR + Últimas Partidas) ficava fora da tela e o scroll interno
   // não alcançava. 100dvh = viewport visível real → tudo cabe e scrolla.
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;background:var(--bg-darker);z-index:100002;display:flex;flex-direction:column;overflow:hidden;touch-action:manipulation;';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;height:100%;background:var(--bg-darker);z-index:100002;display:flex;flex-direction:column;overflow:hidden;touch-action:manipulation;';
   // v1.6.27-beta: animação pulse pro ícone "?" de gênero indefinido —
   // chama atenção do user de que é clicável (cinza sem pulse era ignorado).
   // Append em <head> em vez de overlay div pra garantir parse como CSS

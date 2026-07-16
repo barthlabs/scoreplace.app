@@ -711,7 +711,7 @@ window._openCommunicationsPanel = async function(tId) {
     var existing = document.getElementById(modalId);
     if (existing) existing.remove();
     var html = '<div id="' + modalId + '" class="modal-overlay active" style="z-index:10000;">' +
-      '<div class="modal" style="max-width:640px;width:96%;max-height:88vh;display:flex;flex-direction:column;">' +
+      '<div class="modal" style="max-width:640px;width:96%;max-height:88%;display:flex;flex-direction:column;">' +
         '<div class="modal-header" style="padding:1.25rem 1.25rem 0;">' +
           '<h2 class="card-title" style="margin:0;font-size:1rem;">📊 Comunicados enviados</h2>' +
           '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove();">&times;</button>' +
@@ -762,7 +762,7 @@ window._openCommunicationDetail = async function(tId, commId) {
     var existing = document.getElementById(modalId);
     if (existing) existing.remove();
     var html = '<div id="' + modalId + '" class="modal-overlay active" style="z-index:10001;">' +
-      '<div class="modal" style="max-width:680px;width:96%;max-height:90vh;display:flex;flex-direction:column;">' +
+      '<div class="modal" style="max-width:680px;width:96%;max-height:90%;display:flex;flex-direction:column;">' +
         '<div class="modal-header" style="padding:1.25rem 1.25rem 0;">' +
           '<h2 class="card-title" style="margin:0;font-size:1rem;">📊 Detalhe do comunicado</h2>' +
           '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove();">&times;</button>' +

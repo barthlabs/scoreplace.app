@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.26';
+window.SCOREPLACE_VERSION = '1.2.28';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -3926,7 +3926,7 @@ window._inscritosFilterBar = function (opts) {
         // vazando o fundo entre o cabeçalho e a barra. -1px sobrepõe; como a topbar tem
         // z-index maior e mesma cor, o overlap é invisível. `padding-top:2px` extra de
         // folga: a barra cobre qualquer rounding antialiased acima dos controles.
-        wrapStyle = ' style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:30;background:var(--bg-darker,#111114);margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);margin-bottom:6px;padding:9px 10px 7px;box-sizing:border-box;"';
+        wrapStyle = ' style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:30;background:var(--bg-darker,#111114);margin-left:0;margin-right:0;margin-bottom:6px;padding:9px 10px 7px;box-sizing:border-box;"';
     }
     return '<div id="fbwrap-' + key + '"' + wrapStyle + '>' + window._fbInner(key) + '</div>';
 };
@@ -4218,9 +4218,9 @@ window._showUpgradeModal = function(reason) {
 
   modal = document.createElement('div');
   modal.id = 'modal-upgrade';
-  modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:100000;';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:100000;';
   modal.innerHTML =
-    '<div style="background:var(--surface-color);border:1px solid var(--border-color);border-radius:20px;max-width:380px;width:92%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+    '<div style="background:var(--surface-color);border:1px solid var(--border-color);border-radius:20px;max-width:380px;width:92%;max-height:90%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
       '<div style="background:linear-gradient(135deg,#3b82f6,#6366f1);padding:1.2rem;text-align:center;flex-shrink:0;">' +
         '<div style="font-size:2rem;margin-bottom:0.3rem;">🚀</div>' +
         '<div style="font-size:1.2rem;font-weight:800;color:#fff;">scoreplace Pro</div>' +

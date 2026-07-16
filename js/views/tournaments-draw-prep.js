@@ -119,7 +119,7 @@ window._showGroupsConfigPanel = function(tId) {
 
     var overlay = document.createElement('div');
     overlay.id = 'groups-config-panel';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
     document.body.style.overflow = 'hidden';
 
     // Generate all valid group configurations
@@ -283,7 +283,7 @@ window._showGroupsConfigPanel = function(tId) {
     }
 
     function renderPanel() {
-        var html = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:32px;margin:auto 0;border:1px solid rgba(59,130,246,0.25);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90vh;">' +
+        var html = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:32px;margin:auto 0;border:1px solid rgba(59,130,246,0.25);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90%;">' +
             '<div style="background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 50%,#3b82f6 100%);padding:12px 1.5rem;display:flex;align-items:center;gap:12px;flex-shrink:0;">' +
                 '<span style="font-size:1.5rem;">🏟️</span>' +
                 '<div><h3 style="margin:0;color:#dbeafe;font-size:1.1rem;font-weight:900;">' + _t('predraw.groupsTitle') + '</h3>' +
@@ -429,7 +429,7 @@ window._showRemainderPanel = function(tId, info, t) {
     overlay.id = 'remainder-resolution-panel';
     // Use svh (small viewport height) so iOS Safari's dynamic address bar
     // doesn't push the modal partially off-screen.
-    overlay.style.cssText = 'position:fixed;inset:0;width:100vw;min-height:100vh;min-height:100dvh;background:rgba(0,0,0,0.96);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:0.75rem;overflow:hidden;';
+    overlay.style.cssText = 'position:fixed;inset:0;width:100%;min-height:100%;min-height:100%;background:rgba(0,0,0,0.96);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:0.75rem;overflow:hidden;';
     document.body.style.overflow = 'hidden';
 
     overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:28px;border:1px solid rgba(139,92,246,0.3);box-shadow:0 30px 100px rgba(0,0,0,0.7),0 0 60px rgba(139,92,246,0.1);overflow:hidden;animation:modalFadeIn 0.3s cubic-bezier(0.16,1,0.3,1);display:flex;flex-direction:column;max-height:94svh;">' +
@@ -586,12 +586,12 @@ window._showRemovalSubChoice = function(tId, mode, info) {
 
     var overlay = document.createElement('div');
     overlay.id = 'removal-subchoice-panel';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.95);z-index:100000;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:100000;display:flex;align-items:center;justify-content:center;padding:1rem;';
 
     var _gradStart = isStandby ? '#1e40af' : '#991b1b';
     var _gradEnd = isStandby ? '#3b82f6' : '#dc2626';
 
-    overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:500px;border-radius:24px;border:1px solid rgba(251,191,36,0.2);box-shadow:0 30px 100px rgba(0,0,0,0.7);overflow:hidden;display:flex;flex-direction:column;max-height:90vh;">' +
+    overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:500px;border-radius:24px;border:1px solid rgba(251,191,36,0.2);box-shadow:0 30px 100px rgba(0,0,0,0.7);overflow:hidden;display:flex;flex-direction:column;max-height:90%;">' +
         // Sticky top bar with Voltar button
         '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,' + _gradStart + ' 0%,' + _gradEnd + ' 100%);padding:12px 1.5rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:10px;">' +
@@ -803,7 +803,7 @@ window._showInactivePhasePanel = function(tId, inativos){
     var existing = document.getElementById('inactive-phase-panel'); if (existing) existing.remove();
     var overlay = document.createElement('div');
     overlay.id = 'inactive-phase-panel';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
     document.body.style.overflow = 'hidden';
     function _optCard(choice, icon, title, desc, accent){
         return '<button onclick="window._spinButton&&window._spinButton(this,\'Aplicando…\'); window._resolvePhaseInactives(\'' + tIdSafe + '\', \'' + choice + '\')" ' +
@@ -813,7 +813,7 @@ window._showInactivePhasePanel = function(tId, inativos){
             '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);line-height:1.45;">' + desc + '</div>' +
         '</button>';
     }
-    overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:28px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90vh;">' +
+    overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:28px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90%;">' +
         '<div style="background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:14px 1.4rem;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:12px;">' +
                 '<span style="font-size:1.5rem;flex-shrink:0;">😴</span>' +
@@ -881,7 +881,7 @@ window._showPhasePromotePanel = function(tId) {
     var existing = document.getElementById('phase-promote-panel'); if (existing) existing.remove();
     var overlay = document.createElement('div');
     overlay.id = 'phase-promote-panel';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
     document.body.style.overflow = 'hidden';
 
     function _lineRow(l, i){
@@ -901,7 +901,7 @@ window._showPhasePromotePanel = function(tId) {
         '</div>';
     }
 
-    overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:28px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90vh;">' +
+    overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:28px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90%;">' +
         '<div style="background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:14px 1.4rem;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:12px;">' +
                 '<span style="font-size:1.5rem;flex-shrink:0;">⬆️</span>' +
@@ -1026,7 +1026,7 @@ window.showUnifiedResolutionPanel = function(tId) {
     // Create overlay
     const overlay = document.createElement('div');
     overlay.id = 'unified-resolution-panel';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
     document.body.style.overflow = 'hidden';
 
     // Build issues description
@@ -1512,7 +1512,7 @@ window.showUnifiedResolutionPanel = function(tId) {
         '</div>' +
     '</div>';
 
-    overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:800px;border-radius:32px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);display:flex;flex-direction:column;max-height:90vh;">' +
+    overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:800px;border-radius:32px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);display:flex;flex-direction:column;max-height:90%;">' +
         // Sticky top bar with cancel button
         '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:12px 1.5rem;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:12px;">' +
@@ -1663,7 +1663,7 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
     var ov = document.createElement('div');
     ov.id = 'solo-resolution-panel';
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:1rem;';
-    ov.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:95%;max-width:560px;max-height:90vh;overflow-y:auto;border-radius:24px;border:1px solid rgba(251,191,36,0.25);box-shadow:0 40px 120px rgba(0,0,0,0.8);">' +
+    ov.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:95%;max-width:560px;max-height:90%;overflow-y:auto;border-radius:24px;border:1px solid rgba(251,191,36,0.25);box-shadow:0 40px 120px rgba(0,0,0,0.8);">' +
         '<div style="position:sticky;top:0;z-index:2;background:linear-gradient(135deg,#78350f,#b45309);padding:14px 1.5rem 16px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid rgba(255,255,255,0.1);">' +
             // título (linha própria, sem botões competindo → "N sem dupla" não quebra)
             '<div style="display:flex;align-items:center;gap:11px;">' +
@@ -1849,10 +1849,10 @@ window.showDissolveTeamsPanel = function (tId) {
 
     const overlay = document.createElement('div');
     overlay.id = 'dissolve-panel';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.95);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:99999;display:flex;align-items:center;justify-content:center;';
 
     overlay.innerHTML = `
-        <div style="background:var(--bg-card,#1e293b);width:96%;max-width:900px;height:85vh;border-radius:24px;display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
+        <div style="background:var(--bg-card,#1e293b);width:96%;max-width:900px;height:85%;border-radius:24px;display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
             <div style="padding:1.5rem 2rem;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;">
                 <div>
                     <h3 style="margin:0;color:white;">${_t('predraw.reallocTitle')}</h3>
@@ -2197,7 +2197,7 @@ window._showPollCreationDialog = function(tId, context, pollOptions) {
 
     var overlay = document.createElement('div');
     overlay.id = 'poll-creation-dialog';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.92);z-index:100001;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:100001;display:flex;align-items:center;justify-content:center;padding:1rem;';
     document.body.style.overflow = 'hidden';
 
     var optionsHtml = pollOptions.map(function(opt) {
@@ -2395,7 +2395,7 @@ window._showPollVotingDialog = function(tId, pollId) {
 
     var overlay = document.createElement('div');
     overlay.id = 'poll-voting-dialog';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.92);z-index:100001;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:100001;display:flex;align-items:center;justify-content:center;padding:1rem;';
     document.body.style.overflow = 'hidden';
 
     // Countdown string
