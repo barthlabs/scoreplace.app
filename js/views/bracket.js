@@ -364,6 +364,18 @@ function renderBracket(container, tournamentId, isInline) {
   // Waitlist panel — shown at the end of every bracket view (Liga/Suíço/Grupos/Monarch/Elim)
   const standbyHtml = _renderStandbyPanel(t, isOrg);
 
+  // Banner: W.O. onde nenhum suplente presente atende a categoria — o organizador escolhe
+  // quem assume (ou dá W.O. ao time). Persistente até resolver (o dialog pode ser fechado).
+  var _subChoiceBanner = '';
+  if (isOrg && Array.isArray(t.woSubChoices) && t.woSubChoices.some(function (x) { return x && !x.resolved; })) {
+    var _nPend = t.woSubChoices.filter(function (x) { return x && !x.resolved; }).length;
+    _subChoiceBanner = '<div style="margin:0 0 1rem;padding:13px 16px;background:linear-gradient(135deg,rgba(251,191,36,0.16),rgba(239,68,68,0.12));border:1px solid rgba(251,191,36,0.5);border-radius:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+      '<span style="font-size:1.3rem;">⚠️</span>' +
+      '<div style="flex:1;min-width:180px;font-size:0.86rem;color:var(--text-bright);line-height:1.4;">' + _nPend + ' substituição(ões) de W.O. aguardando: nenhum suplente presente atende a categoria.</div>' +
+      '<button type="button" onclick="window._woShowSubChoiceDialog(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" class="btn" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:800;border:none;border-radius:10px;padding:9px 16px;font-size:0.85rem;cursor:pointer;flex-shrink:0;">Definir substituto</button>' +
+    '</div>';
+  }
+
   // v2.4.30: banner de convite pra substituir num grupo (W.O.) — aparece pro
   // jogador convidado aceitar/recusar no topo do bracket da Liga.
   var _ligaInviteBanner = (typeof window._ligaInviteBannerHtml === 'function') ? window._ligaInviteBannerHtml(t) : '';
@@ -441,7 +453,7 @@ function renderBracket(container, tournamentId, isInline) {
         : '<div style="flex:1;min-width:0;">' + _currentContent + '</div>';
       var _bodyWrap = '<div style="display:flex;align-items:flex-start;gap:10px;">' + _prevBtn + _revealBody + '</div>';
 
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + _nextBanner + _bodyWrap;
+      container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + progressBarHtml + _nextBanner + _bodyWrap;
       _applyMyMatchesFilter();
       return;
     }
@@ -476,14 +488,14 @@ function renderBracket(container, tournamentId, isInline) {
     // usa. Sem ele, a fase classificatória fechava 100% mas o botão "Avançar" nunca aparecia
     // (banner era calculado na linha ~402 e descartado). Os outros ramos (Liga 428, grupos 436)
     // já o inseriam; só este esquecia.
-    container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml);
+    container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml);
     _applyMyMatchesFilter();
     return;
   }
 
   // ── Liga / Suíço (Liga inclui antigo Ranking) ──────────────────────────────
   if (isLiga || isSuico) {
-    container.innerHTML = headerHtml + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml, { standbyHtml: standbyHtml });
+    container.innerHTML = headerHtml + _subChoiceBanner + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml, { standbyHtml: standbyHtml });
     _applyMyMatchesFilter();
     return;
   }
@@ -491,7 +503,7 @@ function renderBracket(container, tournamentId, isInline) {
   // ── Fase de Grupos ─────────────────────────────────────────────────────────
   if (isGrupos && t.groups && t.groups.length > 0) {
     if (t.currentStage === 'groups') {
-      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml;
+      container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml;
       _applyMyMatchesFilter();
       return;
     }
@@ -522,7 +534,7 @@ function renderBracket(container, tournamentId, isInline) {
   // (see renderSingleElimBracket / renderDoubleElimBracket). No separate card.
   try {
     if (isDupla) {
-      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
+      container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
     } else {
       container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult, standbyHtml);
     }

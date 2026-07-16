@@ -28,7 +28,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '1.2.34';
+const CF_VERSION = '1.2.35';
 
 initializeApp();
 const db = getFirestore();

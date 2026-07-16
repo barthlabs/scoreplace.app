@@ -526,12 +526,75 @@
       if (applied && applied.ok) {
         _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '". ' + (applied.note || '')));
         window._woCloseOverlay();
+        // Nenhum suplente presente atende a categoria → o organizador escolhe (dialog).
+        if (applied.needsSubChoice && _canManage(t)) { window._woShowSubChoiceDialog(String(t.id)); return; }
+        if (applied.needsSubChoice) { if (typeof showNotification === 'function') showNotification('⏳ Aguardando o organizador', 'Nenhum suplente presente atende a categoria — o organizador vai definir.', 'info'); return; }
         if (typeof showNotification === 'function') showNotification('✅ W.O. aplicado', applied.note || '', 'success');
       } else if (applied) {
         if (typeof showNotification === 'function') showNotification('Não aplicou', applied.reason || (orgResolve ? '' : 'Tente pelo painel do organizador.'), 'warning');
       }
     }, 'Aplicando o W.O.…');
   }
+
+  // ─── ESCOLHA DE SUPLENTE quando NENHUM presente atende a categoria ─────────────
+  // Só o organizador. Lê t.woSubChoices (marcado pelo motor quando o único suplente
+  // presente quebraria a categoria — gênero/idade/skill/custom). Para cada pendência,
+  // mostra as opções (aceitar um suplente que quebra a regra) OU dar W.O. ao time.
+  // Nome resolvido por UID (o rótulo pode estar velho). Ver [[project_wo_individual_substitution_rule]].
+  function _pendingSubChoices(t) {
+    return (Array.isArray(t.woSubChoices) ? t.woSubChoices : []).filter(function (x) { return x && !x.resolved; });
+  }
+  function _nameOfUid(t, uid, fallback) {
+    var n = (typeof window._displayNameForUid === 'function') ? window._displayNameForUid(uid, '') : '';
+    return n || fallback || String(uid || '?');
+  }
+  window._woShowSubChoiceDialog = function (tId) {
+    var t = _findT(tId); if (!t) return;
+    if (!_canManage(t)) { if (typeof showNotification === 'function') showNotification('Só o organizador', 'Só o organizador resolve a substituição que quebra a categoria.', 'warning'); return; }
+    var pend = _pendingSubChoices(t);
+    if (!pend.length) { window._woCloseOverlay(); return; }
+    var gc = pend[0]; // um de cada vez
+    var absN = _nameOfUid(t, gc.absentUid, gc.absentName);
+    var catTxt = (gc.absentCategories && gc.absentCategories.length) ? gc.absentCategories.join(', ') : '';
+    var opts = (gc.options || []).map(function (o) {
+      var nm = _nameOfUid(t, o.uid, o.name);
+      var oc = (o.categories && o.categories.length) ? o.categories.join(', ') : (o.gender || '');
+      return '<button type="button" onclick="window._woResolveSubChoiceUI(\'' + _attr(t.id) + '\',\'' + _attr(gc.absentUid) + '\',\'' + _attr(o.uid) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.4);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.9rem;">⚠️ ' + _esc(nm) + (oc ? ' <span style="font-weight:500;opacity:0.7;font-size:0.8rem;">(' + _esc(oc) + ')</span>' : '') + '<br><span style="font-weight:400;font-size:0.76rem;opacity:0.7;">Entra quebrando a categoria' + (catTxt ? ' ' + _esc(catTxt) : '') + '.</span></button>';
+    }).join('');
+    var woTeam = '<button type="button" onclick="window._woResolveSubChoiceUI(\'' + _attr(t.id) + '\',\'' + _attr(gc.absentUid) + '\',\'\')" class="btn" style="display:block;width:100%;text-align:left;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.9rem;">🚫 Dar W.O. ao time<br><span style="font-weight:400;font-size:0.76rem;opacity:0.7;">Ninguém assume — o adversário vence.</span></button>';
+    _overlay(_header('Substituto quebra a categoria') +
+      '<div style="padding:1.1rem;">' +
+        '<div style="font-size:0.86rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5;"><b style="color:var(--text-bright);">' + _esc(absN) + '</b>' + (catTxt ? ' (' + _esc(catTxt) + ')' : '') + ' faltou, e nenhum suplente presente atende a categoria. Escolha quem assume — ou dê W.O. ao time.</div>' +
+        opts + woTeam +
+      '</div>');
+  };
+  // aplica a escolha do organizador: subUid vazio = W.O. ao time (marca resolvido e escala).
+  window._woResolveSubChoiceUI = function (tId, absentUid, subUid) {
+    var t = _findT(tId); if (!t) return;
+    if (subUid) {
+      // aceite explícito: o motor coloca o suplente (pulando o filtro de categoria)
+      _commit(tId, function (ft) {
+        if (typeof window._woResolveSubChoice === 'function') window._woResolveSubChoice(String(ft.id), absentUid, subUid);
+      }, function () {
+        window._woCloseOverlay();
+        if (typeof showNotification === 'function') showNotification('✅ Substituto definido', _nameOfUid(t, subUid, '') + ' assumiu a vaga.', 'success');
+        var t2 = _findT(tId); if (t2 && _pendingSubChoices(t2).length) window._woShowSubChoiceDialog(tId); // próxima pendência
+      }, 'Aplicando a substituição…');
+    } else {
+      // W.O. ao time: marca a pendência resolvida e re-roda o W.O. pra escalar (sem sub).
+      _commit(tId, function (ft) {
+        if (Array.isArray(ft.woSubChoices)) ft.woSubChoices.forEach(function (x) { if (x.absentUid === absentUid) x.resolved = true; });
+        // limpa o check-in do(s) suplente(s) daquela pendência pra não re-disparar, e escala:
+        var gc = (Array.isArray(ft.woSubChoices) ? ft.woSubChoices : []).find(function (x) { return x.absentUid === absentUid; });
+        var absName = (gc && gc.absentName) || (typeof window._memberNameByUid === 'function' ? window._memberNameByUid(ft, absentUid) : '') || absentUid;
+        if (typeof window._applyWO === 'function') window._applyWO(ft, { absentName: absName, absentUids: [absentUid], scope: 'match', noSubBehavior: 'escalate', woScope: ft.woScope || 'individual', _forceNoSub: true });
+      }, function () {
+        window._woCloseOverlay();
+        if (typeof showNotification === 'function') showNotification('🚫 W.O. ao time', 'Ninguém assumiu a vaga — o adversário venceu.', 'warning');
+        var t2 = _findT(tId); if (t2 && _pendingSubChoices(t2).length) window._woShowSubChoiceDialog(tId);
+      }, 'Registrando o W.O.…');
+    }
+  };
 
   // ─── APLICAÇÃO do W.O. — funil no motor único _applyWO (participants.js) ────────
   function _applyClaim(t, c, rc) {
@@ -553,10 +616,11 @@
       if (!r || !r.ok) return { ok: false, reason: (r && r.reason) || 'não aplicou' };
       var note = r.outcome === 'ligaDelegated' ? (r.note || 'Escolha o substituto (folga / Jogador X).')
         : r.outcome === 'subbed' ? 'Substituto da lista de espera entrou no lugar.'
+        : r.outcome === 'needsSubChoice' ? 'Nenhum suplente presente atende a categoria — escolha o substituto.'
         : r.outcome === 'woApplied' ? 'Adversário venceu por W.O.'
         : r.outcome === 'waitedTBD' ? 'Ausência registrada — adversário ainda não definido.'
         : '';
-      return { ok: true, note: note };
+      return { ok: true, note: note, needsSubChoice: r.outcome === 'needsSubChoice' };
     } catch (e) {
       try { console.error('[wo-claim] apply falhou:', e); } catch (_e) {}
       return { ok: false, reason: (e && e.message) || 'erro ao aplicar' };

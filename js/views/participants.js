@@ -519,9 +519,17 @@ window._applyWO = function (t, opts) {
   const pool = (typeof window._getStandbyPool === 'function') ? window._getStandbyPool(t) : [];
   const _isPresent = p => { const ci = window._idMapGet(t, t.checkedIn, p); return typeof ci === 'number' ? ci > 0 : !!ci; };
   const presentInPool = pool.filter(_isPresent);
-  if (woScope === 'individual' && pool.length && presentInPool.length && typeof window._processWoSubstitutions === 'function') {
+  // _forceNoSub: o organizador escolheu "W.O. ao time" no diálogo de categoria — pula a
+  // tentativa de substituição e escala direto (o adversário vence).
+  if (woScope === 'individual' && !opts._forceNoSub && pool.length && presentInPool.length && typeof window._processWoSubstitutions === 'function') {
     const r = window._applyWoSubsToTournament(t);
     if (r && r.subCount > 0) return { ok: true, outcome: 'subbed', subCount: r.subCount, subDetails: r.subDetails || [] };
+    // Há suplente presente, mas NENHUM atende a categoria do ausente → NÃO escala pra W.O.
+    // do time: a decisão é do organizador (aceitar a quebra ou o próximo que atenda).
+    // Fica registrado em t.woSubChoices; a UI (_woShowSubChoiceDialog) resolve.
+    if (r && Array.isArray(r.subChoicePending) && r.subChoicePending.length) {
+      return { ok: true, outcome: 'needsSubChoice', subChoicePending: r.subChoicePending };
+    }
   }
 
   // 2) sem substituto presente com lista NÃO-vazia → aguarda (só se pedido)

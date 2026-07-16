@@ -253,5 +253,30 @@ console.log('\nCategoria genérica (idade/habilidade/custom) — mesma trava, po
      rNo.subCount === 1 && tNo.matches[0].p1Uid === 'sX', 'p1Uid=' + tNo.matches[0].p1Uid);
 }
 
+// ── FLUXO 7 · o organizador dá W.O. AO TIME (recusa a quebra) ────────────────
+// A outra saída da pendência: em vez de aceitar o suplente que quebra a categoria, o
+// organizador dá W.O. ao time (subUid vazio) — o adversário vence, ninguém assume.
+console.log('\nPendência de categoria → organizador dá W.O. ao time (recusa a quebra):');
+{
+  const t = {
+    id: 'WT', format: 'Eliminatórias Simples', enrollmentMode: 'teams', teamSize: 2,
+    woScope: 'individual', genderCategories: ['misto_obrigatorio'], combinedCategories: ['Misto Obrig.'],
+    participants: [{ p1Uid: 'a1', p2Uid: 'b1', p1Gender: 'masculino', p2Gender: 'feminino', categories: ['Misto Obrig.'] }],
+    standbyParticipants: [{ uid: 'sF', gender: 'feminino', categories: ['Misto Obrig.'] }],
+    waitlist: [], checkedIn: { sF: 1 }, absent: {}, vips: {},
+    matches: [{ id: 'm1', round: 1, p1: 'X / X', p2: 'X / X', team1Uids: ['a1', 'b1'], team2Uids: ['a2', 'b2'], winner: null }],
+  };
+  sandbox.AppStore.tournaments = [t];
+  sandbox._findTournamentById = (id) => sandbox.AppStore.tournaments.find((x) => String(x.id) === String(id));
+  const r = sandbox._applyWO(t, { absentName: 'X', absentUids: ['a1'], scope: 'match', woScope: 'individual', noSubBehavior: 'escalate' });
+  ok('W.O. num membro sem suplente da categoria → needsSubChoice (não escala calado)',
+     r.outcome === 'needsSubChoice' && !t.matches[0].winner, 'outcome=' + r.outcome);
+  // organizador dá W.O. ao time: _forceNoSub escala, adversário vence
+  if (Array.isArray(t.woSubChoices)) t.woSubChoices.forEach((x) => { if (x.absentUid === 'a1') x.resolved = true; });
+  const r2 = sandbox._applyWO(t, { absentName: 'X', absentUids: ['a1'], scope: 'match', noSubBehavior: 'escalate', woScope: 'individual', _forceNoSub: true });
+  ok('W.O. ao time → adversário vence (o jogo decide)', !!t.matches[0].winner && t.matches[0].wo === true,
+     'winner=' + t.matches[0].winner + ' wo=' + t.matches[0].wo);
+}
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ` uid-poison: ${pass} ok, ${fail} falharam\n`);
 process.exit(fail === 0 ? 0 : 1);
