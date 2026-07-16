@@ -2,7 +2,7 @@ name: ScoreplaceWatchPreview
 options:
   bundleIdPrefix: app.scoreplace
   deploymentTarget:
-    watchOS: "10.0"
+    watchOS: "8.0"
 targets:
   ScoreplaceWatchPreview:
     type: application

@@ -5107,6 +5107,37 @@ window._openLiveScoring = function(tId, matchId, opts) {
     return eligible;
   }
 
+  // Quem PODE ser escolhido como sacador AGORA. Espelha EXATAMENTE a regra de
+  // aceitação do _liveSetServer — se divergir, o relógio oferece um nome que o
+  // celular ignora em silêncio e o botão fica morto (o _liveSetServer rejeita
+  // com `if (state.serveOrder[1].team !== team) return;`).
+  //   1º game (totalGamesPlayed 0) → os 4 jogadores: define quem abre o saque.
+  //   2º game (totalGamesPlayed 1) → só os 2 do time que saca em 2º; o time que
+  //                                   abriu já está travado.
+  //   daí em diante           → ninguém (hard lock no _liveSetServer).
+  // A regra vive AQUI (celular); o relógio só desenha a lista que receber.
+  function _serveEligibleNow() {
+    if (state.serveSkipped || !isDoubles || state.isFinished) return [];
+    if (state.totalGamesPlayed >= 2) return [];
+    var out = [], i;
+    if (state.totalGamesPlayed === 0) {
+      for (i = 0; i < p1Players.length; i++) {
+        if (p1Players[i]) out.push({ team: 1, playerIdx: i, name: p1Players[i] });
+      }
+      for (i = 0; i < p2Players.length; i++) {
+        if (p2Players[i]) out.push({ team: 2, playerIdx: i, name: p2Players[i] });
+      }
+      return out;
+    }
+    if (state.serveOrder.length < 4) return [];
+    var t = state.serveOrder[1].team;
+    var ps = t === 1 ? p1Players : p2Players;
+    for (i = 0; i < ps.length; i++) {
+      if (ps[i]) out.push({ team: t, playerIdx: i, name: ps[i] });
+    }
+    return out;
+  }
+
   // Serve picker overlay no longer used — serve is set inline via draggable ball
   function _needsServePick() {
     return false;
@@ -6674,16 +6705,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
     // Show persistent tie-break button during Prorrogação (extend mode)
     // Only visible to registered users playing the match — others can't change the tie rule.
-    if (state.tieRule === 'extend' && !state.isFinished && !state.isTiebreak && _isViewerInMatch) {
-      var cs = _currentSet();
-      var isReady = cs.gamesP1 === cs.gamesP2 && cs.gamesP1 >= state.gamesPerSet - 1;
-      var tbLabel = isReady
-        ? 'Ir para Tie-break (' + cs.gamesP1 + '×' + cs.gamesP2 + ')'
-        : 'Tie-break';
-      // More prominent when games are tied at or past deuce
-      var tbStyle = isReady
-        ? 'width:100%;padding:16px;border-radius:14px;font-size:1.05rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;box-shadow:0 4px 20px rgba(139,92,246,0.45);transition:transform 0.1s;animation:tb-pulse 1.5s ease-in-out infinite;'
-        : 'width:100%;padding:12px;border-radius:12px;font-size:0.85rem;font-weight:700;border:2px solid rgba(192,132,252,0.3);cursor:pointer;background:rgba(192,132,252,0.08);color:#c084fc;transition:background 0.2s;';
+    // O botão só existe quando o tie-break É UMA DECISÃO REAL: os games têm de
+    // estar EMPATADOS no deuce da modalidade (gamesPerSet-1) ou além. Antes a
+    // condição não olhava o placar, então em Prorrogação o botão aparecia desde
+    // 0-0 — oferecendo desempate antes de existir qualquer ponto.
+    var _tbEligible = state.tieRule === 'extend' && !state.isFinished && !state.isTiebreak && _isViewerInMatch;
+    var _cs = _tbEligible ? _currentSet() : null;
+    var _tbReady = !!_cs && _cs.gamesP1 === _cs.gamesP2 && _cs.gamesP1 >= state.gamesPerSet - 1;
+    if (_tbEligible && _tbReady) {
+      var tbLabel = 'Ir para Tie-break (' + _cs.gamesP1 + '×' + _cs.gamesP2 + ')';
+      var tbStyle = 'width:100%;padding:16px;border-radius:14px;font-size:1.05rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;box-shadow:0 4px 20px rgba(139,92,246,0.45);transition:transform 0.1s;animation:tb-pulse 1.5s ease-in-out infinite;';
       container.insertAdjacentHTML('beforeend',
         '<style>@keyframes tb-pulse{0%,100%{box-shadow:0 4px 20px rgba(139,92,246,0.45)}50%{box-shadow:0 4px 30px rgba(139,92,246,0.7),0 0 40px rgba(139,92,246,0.25)}}</style>' +
         '<div style="padding:0 1rem 1rem;flex-shrink:0;">' +
@@ -7372,6 +7403,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
             try { _releaseWakeLock(); } catch(e) {}
             var ov = document.getElementById('live-scoring-overlay');
             if (ov) ov.remove();
+            _watchTeardown();
             var cu = window.AppStore && window.AppStore.currentUser;
             var wasOrganizer = cu && _casualCreatedBy && cu.uid === _casualCreatedBy;
             if (!wasOrganizer && typeof showNotification === 'function') {
@@ -7407,6 +7439,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
               try { _releaseWakeLock(); } catch(e) {}
               var _ovHC = document.getElementById('live-scoring-overlay');
               if (_ovHC) _ovHC.remove();
+              _watchTeardown();
               // v2.2.16-beta: limpa referência de sala para o guest não ficar
               // com ponteiro morto para uma sala encerrada pelo host.
               try {
@@ -7548,6 +7581,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
               try { _releaseWakeLock(); } catch(e) {}
               var ov = document.getElementById('live-scoring-overlay');
               if (ov) ov.remove();
+              _watchTeardown();
               if (typeof window._casualReopenSetup === 'function') {
                 // v1.6.60-beta: keepSession preserva _sessionDocId para que
                 // gêneros e formação de duplas sejam propagados via Firestore.
@@ -7650,6 +7684,22 @@ window._openLiveScoring = function(tId, matchId, opts) {
       canReplay: !!isCasual,
       // Duplas → o relógio pode oferecer o toggle "Re-sortear duplas".
       isDoubles: !!isDoubles,
+      // Seleção de sacador. A REGRA é toda daqui — o relógio recebe a lista
+      // pronta e só desenha. canSetServer sai da própria lista (vazia = travado),
+      // então o seletor nunca aparece oferecendo alguém que o _liveSetServer
+      // recusaria em silêncio.
+      canSetServer: _serveEligibleNow().length > 0,
+      serveEligible: _serveEligibleNow(),
+      // Fase da escolha: 0 = quem ABRE o saque (4 nomes) · 1 = quem faz o 2º
+      // saque do set (só o time que não abriu) · -1 = travado. O relógio usa a
+      // MUDANÇA de fase pra pedir confirmação entre o 1º e o 2º game.
+      servePickPhase: _serveEligibleNow().length > 0 ? state.totalGamesPlayed : -1,
+      // Quem OCUPA o slot em disputa agora (o motor sempre tem um padrão —
+      // no 2º saque é opponents[0], escolhido sem ninguém confirmar). O relógio
+      // abre o seletor já com este nome aceso, então "Confirmar" sem mexer em
+      // nada = manter o que está. Sem isto o relógio não teria o que pré-marcar.
+      servePickCurrent: (state.serveOrder && state.serveOrder[state.totalGamesPlayed])
+        ? (state.serveOrder[state.totalGamesPlayed].name || '') : '',
       isFinished: !!state.isFinished,
       winner: state.winner || null,
       // v4.5.43: empate esperando decisão (prorrogar vs tie-break). O relógio
@@ -7662,6 +7712,21 @@ window._openLiveScoring = function(tId, matchId, opts) {
   function _watchNotify() {
     if (window.WatchBridge && window.WatchBridge._onEngineState) {
       try { window.WatchBridge._onEngineState(window._getLiveScoreState()); } catch (e) {}
+    }
+  }
+  // Desfaz a fiação do relógio quando o placar fecha. TEM de rodar em TODO
+  // caminho de fechamento: sem isto o relógio nunca sabe que acabou e fica
+  // preso na tela de vitória (o overlay de vencedor cobre os botões +1 e, se o
+  // usuário já dispensou o "Jogar novamente", não sobra saída nenhuma — só
+  // matando o app do relógio). Bug real: o ✕ "Encerrar" (_liveScoreCloseStats)
+  // removia o overlay mas não avisava a ponte, enquanto _closeLiveScoring avisava.
+  // Agora os dois chamam ESTA função — o teardown é único de fato.
+  function _watchTeardown() {
+    window._getLiveScoreState = null;
+    window._liveScorePoint = null;
+    window._liveScoreUndoLastPoint = null;
+    if (window.WatchBridge && window.WatchBridge.pushInactive) {
+      try { window.WatchBridge.pushInactive(); } catch (e) {}
     }
   }
   // Estado INICIAL pro relógio assim que o placar abre (torneio, Rei/Rainha OU
@@ -8784,7 +8849,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // é position:fixed;top:0 full-bleed sob a status bar/ilha; sem o inset o "AO VIVO"
   // e os botões Ajustar/Resetar/Fechar encavalavam no relógio/bateria do sistema.
   // Inerte na web (insets=0). Depende de viewport-fit=cover estar ativo (preservado).
-  var headerHtml = '<div style="background:' + headerBg + ';padding:calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:4px;">' +
+  // O padding-top segue a MESMA fórmula da .topbar (layout.css), que foi calibrada
+  // no aparelho: o inset reserva ~59px mas a status bar/ilha ocupam menos, então
+  // puxa 12px pra cima — o máximo antes de encavalar no relógio. Antes aqui era
+  // `10px + inset` (22px a MAIS que a topbar), desperdiçando faixa no cabeçalho.
+  // max() protege quem não tem notch (inset=0).
+  var headerPadTop = 'max(8px, calc(env(safe-area-inset-top, 0px) - 12px))';
+  var headerHtml = '<div style="background:' + headerBg + ';padding:' + headerPadTop + ' 12px 8px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:4px;">' +
     // Left: AO VIVO + match info
     '<div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0;">' +
       '<span style="font-size:1rem;">📡</span>' +
@@ -9159,6 +9230,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _releaseWakeLock();
     var _ovCS = document.getElementById('live-scoring-overlay');
     if (_ovCS) _ovCS.remove();
+    // Faltava aqui: sem o teardown o relógio ficava preso na tela de vitória.
+    _watchTeardown();
   };
 
   // Close handler — always confirms before leaving
@@ -9205,14 +9278,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       if (ov) ov.remove();
       // Ponte do relógio: o placar fechou → desfaz a fiação (pra o próximo hello
       // do relógio responder "inativo") e empurra um estado inativo agora, senão
-      // o relógio fica com o placar anterior "congelado". Cobre todos os caminhos
-      // de fechamento (é o teardown único). No-op na web (WatchBridge inerte).
-      window._getLiveScoreState = null;
-      window._liveScorePoint = null;
-      window._liveScoreUndoLastPoint = null;
-      if (window.WatchBridge && window.WatchBridge.pushInactive) {
-        try { window.WatchBridge.pushInactive(); } catch (e) {}
-      }
+      // o relógio fica com o placar anterior "congelado". No-op na web (inerte).
+      _watchTeardown();
     };
     var cu = window.AppStore && window.AppStore.currentUser;
     var isOrganizer = isCasual && cu && cu.uid && _casualCreatedBy && cu.uid === _casualCreatedBy;
@@ -10032,7 +10099,15 @@ window._openCasualMatch = function(restoreOpts) {
   var initialSport = '';
   var persistedDoubles = null;
   try {
-    var _lastPrefs = JSON.parse(localStorage.getItem('scoreplace_casual_last') || '{}');
+    var _lastPrefs = {};
+    try { _lastPrefs = JSON.parse(localStorage.getItem('scoreplace_casual_last') || '{}') || {}; } catch(e) {}
+    // O perfil VENCE o cache: o localStorage é limpo periodicamente pelo iOS, e
+    // quando isso acontecia a escolha do usuário sumia e caíamos no primeiro
+    // esporte preferido do perfil (ex: Pickleball). Espelha _loadLiveScorePrefs.
+    var _cuLast = window.AppStore && window.AppStore.currentUser;
+    if (_cuLast && _cuLast.casualLast && typeof _cuLast.casualLast === 'object') {
+      _lastPrefs = Object.assign({}, _lastPrefs, _cuLast.casualLast);
+    }
     if (_lastPrefs.sport && sports.find(function(s){ return s.key === _lastPrefs.sport; })) {
       initialSport = _lastPrefs.sport;
       if (typeof _lastPrefs.isDoubles === 'boolean') persistedDoubles = _lastPrefs.isDoubles;
@@ -10212,13 +10287,34 @@ window._openCasualMatch = function(restoreOpts) {
   // Projeção casual: advantageRule→deuceRule + twoPointAdvantage + tieRule (comportamento de empate).
   var _casualDefaults = window._casualScoringDefaultsMap();
 
+  // Config de placar por esporte. Fonte de verdade: users/{uid}.casualPrefs;
+  // localStorage é só cache instantâneo. Antes vivia SÓ no localStorage e o iOS
+  // limpa o storage periodicamente — a config configurada pelo usuário sumia.
+  function _readCasualPrefs() {
+    var p = {};
+    try { p = JSON.parse(localStorage.getItem('scoreplace_casual_prefs') || '{}') || {}; } catch(e) {}
+    var _cu = window.AppStore && window.AppStore.currentUser;
+    if (_cu && _cu.casualPrefs && typeof _cu.casualPrefs === 'object') {
+      p = Object.assign({}, p, _cu.casualPrefs); // perfil vence o cache
+    }
+    return p;
+  }
+  function _writeCasualPrefs(prefs) {
+    try { localStorage.setItem('scoreplace_casual_prefs', JSON.stringify(prefs)); } catch(e) {}
+    var _cu = window.AppStore && window.AppStore.currentUser;
+    if (_cu) _cu.casualPrefs = prefs;
+    if (_cu && _cu.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+      try { window.FirestoreDB.saveUserProfile(_cu.uid, { casualPrefs: prefs }).catch(function(){}); } catch(e) {}
+    }
+  }
+
   function _getConfig() {
     // v1.7.1-beta: defaults usados como base — prefs armazenadas sem 'type'
     // causavam useSets=false, bypassing GSM completamente e mostrando 0/1/2/3
     // em vez de 15/30/40 mesmo com countingType:'tennis' configurado.
     var _defaults = _casualDefaults[selectedSport] || { type:'sets', setsToWin:1, gamesPerSet:6, tiebreakEnabled:false, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:false, superTiebreakPoints:10, countingType:'tennis', deuceRule:false, twoPointAdvantage:true, tieRule:'ask' };
     try {
-      var prefs = JSON.parse(localStorage.getItem('scoreplace_casual_prefs') || '{}');
+      var prefs = _readCasualPrefs();
       if (prefs[selectedSport]) {
         var stored = prefs[selectedSport];
         // Migrate legacy advantageRule → deuceRule and DROP the old key so it
@@ -10227,7 +10323,7 @@ window._openCasualMatch = function(restoreOpts) {
           if (stored.deuceRule === undefined) stored.deuceRule = !!stored.advantageRule;
           delete stored.advantageRule;
           prefs[selectedSport] = stored;
-          try { localStorage.setItem('scoreplace_casual_prefs', JSON.stringify(prefs)); } catch(e) {}
+          _writeCasualPrefs(prefs);
         }
         if (stored.twoPointAdvantage === undefined) stored.twoPointAdvantage = true;
         // Merge: defaults first, then stored on top — garante que campos ausentes
@@ -10752,6 +10848,10 @@ window._openCasualMatch = function(restoreOpts) {
     setTimeout(function() {
       if (typeof window._casualLoadLastMatches === 'function') window._casualLoadLastMatches();
     }, 200);
+    // Ponte do relógio: o lobby (re)renderizou — empurra pro relógio trocar
+    // "Aguardando…" por "Iniciar" e refletir nomes/modalidade atuais. Este é o
+    // ponto único: o polling do lobby também passa por aqui a cada mudança.
+    _watchNotifySetup();
   }
 
   // v1.8.6-beta: shared card renderer — builds the "Últimas Partidas" grid HTML
@@ -11282,9 +11382,15 @@ window._openCasualMatch = function(restoreOpts) {
 
   // Persist last-used sport + doubles toggle so the next casual match opens with the same defaults
   function _persistLastCasualChoice() {
-    try {
-      localStorage.setItem('scoreplace_casual_last', JSON.stringify({ sport: selectedSport, isDoubles: !!isDoubles }));
-    } catch(e) {}
+    var _last = { sport: selectedSport, isDoubles: !!isDoubles };
+    try { localStorage.setItem('scoreplace_casual_last', JSON.stringify(_last)); } catch(e) {}
+    // Grava TAMBÉM no perfil (fonte de verdade). Sem isto, a escolha vive só no
+    // localStorage e some quando o iOS limpa o storage. Espelha _saveLiveScorePrefs.
+    var _cu = window.AppStore && window.AppStore.currentUser;
+    if (_cu) _cu.casualLast = _last;
+    if (_cu && _cu.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+      try { window.FirestoreDB.saveUserProfile(_cu.uid, { casualLast: _last }).catch(function(){}); } catch(e) {}
+    }
   }
 
   // Sport selection handler — also resets doubles default
@@ -11531,6 +11637,7 @@ window._openCasualMatch = function(restoreOpts) {
     if (code.length >= 4) {
       var ov = document.getElementById('casual-match-overlay');
       if (ov) ov.remove();
+      _watchSetupTeardown(); // entrando na sala de outro — este lobby morreu
       window.location.hash = '#casual/' + code;
     } else {
       inp.style.borderColor = '#ef4444';
@@ -11646,9 +11753,9 @@ window._openCasualMatch = function(restoreOpts) {
   function _saveTempCfg() {
     if (!_tempCfg) return;
     try {
-      var prefs = JSON.parse(localStorage.getItem('scoreplace_casual_prefs') || '{}');
+      var prefs = _readCasualPrefs();
       prefs[selectedSport] = _tempCfg;
-      localStorage.setItem('scoreplace_casual_prefs', JSON.stringify(prefs));
+      _writeCasualPrefs(prefs);
     } catch(e) {}
   }
 
@@ -12065,6 +12172,55 @@ window._openCasualMatch = function(restoreOpts) {
     }
   };
 
+  // ── Ponte do relógio: estado do LOBBY ──────────────────────────────────────
+  // Enquanto a montagem da partida casual está aberta, o relógio deixa de dizer
+  // só "Aguardando…" e passa a oferecer "Iniciar" — antes NÃO existia jeito de
+  // começar a partida sem pegar o celular. Retorna null quando a montagem não
+  // está no ar (aí a ponte cai no estado inativo normal).
+  window._getCasualSetupState = function() {
+    if (!document.getElementById('casual-match-overlay')) return null;
+    var ids = isDoubles
+      ? ['casual-p1a-name', 'casual-p1b-name', 'casual-p2a-name', 'casual-p2b-name']
+      : ['casual-p1-name', 'casual-p2-name'];
+    var names = [];
+    for (var i = 0; i < ids.length; i++) {
+      var el = document.getElementById(ids[i]);
+      // placeholder como fallback: slot vazio mostra "Jogador 3" no relógio,
+      // igual o celular — em vez de um vazio que não diz nada.
+      names.push(el ? (el.value || el.placeholder || '') : '');
+    }
+    return {
+      canStart: true,
+      sportName: selectedSport,
+      isDoubles: !!isDoubles,
+      teams: isDoubles
+        ? { '1': { players: [names[0], names[1]] }, '2': { players: [names[2], names[3]] } }
+        : { '1': { players: [names[0]] }, '2': { players: [names[1]] } }
+    };
+  };
+  // Empurra o lobby pro relógio (no-op na web / sem ponte).
+  function _watchNotifySetup() {
+    if (window.WatchBridge && window.WatchBridge.pushCurrent) {
+      try { window.WatchBridge.pushCurrent(); } catch (e) {}
+    }
+  }
+  // O lobby saiu do ar → avisa o relógio pra tirar o "Iniciar".
+  //
+  // NÃO anula window._getCasualSetupState de propósito: ele já se protege sozinho
+  // (retorna null quando a overlay não existe), e anular quebrava o retorno ao
+  // lobby — _casualReopenSetup reusa ESTE closure e nunca re-executa a atribuição,
+  // então depois de "iniciar → fechar → voltar ao lobby" o relógio nunca mais
+  // ofereceria "Iniciar". Um _openCasualMatch novo sobrescreve o getter naturalmente.
+  //
+  // skipPush=true quando o placar ao vivo abre logo em seguida: ele empurra o
+  // próprio estado, e mandar "inativo" antes faria o relógio piscar
+  // "Aguardando…" por um instante entre o lobby e a partida.
+  function _watchSetupTeardown(skipPush) {
+    if (!skipPush && window.WatchBridge && window.WatchBridge.pushInactive) {
+      try { window.WatchBridge.pushInactive(); } catch (e) {}
+    }
+  }
+
   // Start the match (directly opens live scoring)
   window._casualStart = async function() {
     // Persiste a modalidade + dupla/individual escolhidos AO INICIAR — não só no
@@ -12372,6 +12528,8 @@ window._openCasualMatch = function(restoreOpts) {
     // Close setup overlay
     var ov = document.getElementById('casual-match-overlay');
     if (ov) ov.remove();
+    // skipPush: _openLiveScoring logo abaixo empurra o estado ao vivo.
+    _watchSetupTeardown(true);
     var qrOv = document.getElementById('casual-qr-overlay');
     if (qrOv) qrOv.remove();
 
@@ -12522,6 +12680,7 @@ window._openCasualMatch = function(restoreOpts) {
           clearInterval(_setupRefreshInterval); _setupRefreshInterval = null;
           var _ov = document.getElementById('casual-match-overlay');
           if (_ov) _ov.remove();
+          _watchSetupTeardown();
           if (typeof showNotification === 'function') showNotification(_t('casual.matchCancelled'), _t('casual.matchCancelledMsg'), 'info');
           try { window.location.hash = '#dashboard'; } catch(e) {}
           return;
@@ -12534,6 +12693,7 @@ window._openCasualMatch = function(restoreOpts) {
           clearInterval(_setupRefreshInterval); _setupRefreshInterval = null;
           var _ovHCSetup = document.getElementById('casual-match-overlay');
           if (_ovHCSetup) _ovHCSetup.remove();
+          _watchSetupTeardown();
           var _ovQRHC = document.getElementById('casual-qr-overlay');
           if (_ovQRHC) _ovQRHC.remove();
           if (typeof showNotification === 'function') showNotification(_t('casual.matchCancelled'), _t('casual.matchCancelledMsg'), 'info');
@@ -12560,6 +12720,7 @@ window._openCasualMatch = function(restoreOpts) {
               clearInterval(_setupRefreshInterval); _setupRefreshInterval = null;
               var _ovAN = document.getElementById('casual-match-overlay');
               if (_ovAN) _ovAN.remove();
+              _watchSetupTeardown(true); // o placar ao vivo abre em seguida
               var _qrAN = document.getElementById('casual-qr-overlay');
               if (_qrAN) _qrAN.remove();
               var _newPlayers = Array.isArray(freshNew.players) ? freshNew.players : [];
@@ -12596,6 +12757,7 @@ window._openCasualMatch = function(restoreOpts) {
           clearInterval(_setupRefreshInterval); _setupRefreshInterval = null;
           var _ovA = document.getElementById('casual-match-overlay');
           if (_ovA) _ovA.remove();
+          _watchSetupTeardown(true); // o placar ao vivo abre em seguida
           var _qrA = document.getElementById('casual-qr-overlay');
           if (_qrA) _qrA.remove();
           var _freshPlayers = Array.isArray(fresh.players) ? fresh.players : [];
@@ -12950,10 +13112,10 @@ window._openCasualMatch = function(restoreOpts) {
     } catch(e) {}
   };
 
-  setTimeout(function() {
-    var el = isDoubles ? document.getElementById('casual-p2a-name') : document.getElementById('casual-p2-name');
-    if (el && !el.value) el.focus();
-  }, 300);
+  // O autofocus no nome do adversário foi REMOVIDO: no celular ele subia o
+  // teclado sozinho ao abrir a partida, empurrando a tela toda pra cima antes
+  // do usuário pedir qualquer coisa. O teclado só deve aparecer quando o
+  // usuário TOCA num campo de nome.
 };
 
 // ─── Casual Match Join Screen (route: #casual/{roomCode}) ─────────────────────

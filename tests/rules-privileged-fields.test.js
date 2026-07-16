@@ -81,6 +81,12 @@ const S = v => ({ stringValue: v });
   out.createComMergedInto = await req('PATCH', 'users/uid_novo', 'uid_novo',
     { fields: { displayName: S('Novo'), mergedInto: S(V) } });
 
+  // ── loginRedirects: PROVA (concede acesso a conta) → deny-all ──
+  // Se desse pra escrever, bastava reivindicar o e-mail de outro pra capturar o login dele.
+  out.escreveLoginRedirect = await req('PATCH', 'loginRedirects/vitima%40gmail.com', A,
+    { fields: { ownerUid: S(A) } });
+  out.leLoginRedirect = await req('GET', 'loginRedirects/vitima%40gmail.com', A);
+
   console.log('__JSON__' + JSON.stringify(out));
   process.exit(0);
 })();
@@ -129,6 +135,14 @@ ok(novo.editaProprioNome === 200, 'legítimo: editar o próprio nome ainda funci
 ok(novo.editaProprioTelefone === 200, 'legítimo: editar o próprio telefone ainda funciona (got ' + novo.editaProprioTelefone + ')');
 ok(novo.editaLinkedEmails === 200, 'legítimo: vincular e-mail secundário ainda funciona (got ' + novo.editaLinkedEmails + ')');
 ok(novo.crossUser === 403, 'controle: editar o perfil de OUTRO segue negado (got ' + novo.crossUser + ')');
+
+// ── loginRedirects (v1.2.9): mapa credencial→dono que o merge grava ─────────
+// É PROVA: a CF resolveLoginRedirect dá custom token do ownerUid daqui. Cliente não escreve
+// (reivindicaria o e-mail de outro) nem lê (o mapa e-mail→uid é PII).
+ok(novo.escreveLoginRedirect === 403,
+  '🔒 loginRedirects: escrita NEGADA — senão bastava reivindicar o e-mail de outro (got ' + novo.escreveLoginRedirect + ')');
+ok(novo.leLoginRedirect === 403,
+  '🔒 loginRedirects: leitura NEGADA (mapa e-mail→uid é PII) (got ' + novo.leLoginRedirect + ')');
 
 // ── 2. RULES ANTIGAS: o ataque tem que PASSAR ────────────────────────────────
 // Sem isto o teste não prova nada: se ele passasse nos dois, não estaria testando o fix.

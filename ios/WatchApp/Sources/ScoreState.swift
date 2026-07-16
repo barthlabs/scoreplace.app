@@ -23,6 +23,29 @@ struct ScoreState: Decodable {
     var winner: Int? = nil
     var tieRulePending: Bool = false    // empate esperando decisão (prorrogar/tie-break)
     var tiedAt: Int? = nil              // games empatados (5, 6, 7…) no momento do prompt
+    // Montagem da partida casual aberta no celular → o relógio oferece "Iniciar"
+    // em vez de só "Aguardando…". Vem do lobby, não do motor GSM.
+    var canStart: Bool = false
+    var sportName: String = ""          // modalidade do lobby (ex. "Beach Tennis")
+    // A ordem de saque ainda pode mudar (duplas, 2 primeiros jogos). Espelha o
+    // _canDragServe do celular; o hard lock de verdade vive no motor.
+    var canSetServer: Bool = false
+    // Quem pode ser escolhido AGORA — lista pronta, vinda do celular (regra em
+    // _serveEligibleNow). O relógio NUNCA deriva isso: no 2º game só o time que
+    // não abriu o saque é aceito, e oferecer o outro dava botão morto.
+    var serveEligible: [ServeSlot] = []
+    // 0 = escolhendo quem ABRE o saque · 1 = confirmando o 2º saque do set
+    // · -1 = travado. A MUDANÇA de fase é o gatilho da confirmação no relógio.
+    var servePickPhase: Int = -1
+    // Quem OCUPA o slot em disputa agora. O seletor abre com este nome já aceso,
+    // então "Confirmar" sem tocar em nada = manter o que o motor já assumiu.
+    var servePickCurrent: String = ""
+
+    struct ServeSlot: Decodable, Hashable {
+        let team: Int
+        let playerIdx: Int
+        let name: String
+    }
 
     struct Server: Decodable { let team: Int; let name: String }
     struct Team: Decodable { let players: [String] }
@@ -31,6 +54,7 @@ struct ScoreState: Decodable {
     // `winner` podem vir null e chaves opcionais (sets/matchId) podem faltar.
     enum CodingKeys: String, CodingKey {
         case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isDoubles, isFinished, winner, tieRulePending, tiedAt
+        case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent
     }
     init() {}
     init(from decoder: Decoder) throws {
@@ -53,6 +77,12 @@ struct ScoreState: Decodable {
         winner     = (try? c.decodeIfPresent(Int.self, forKey: .winner)) ?? nil
         tieRulePending = (try? c.decodeIfPresent(Bool.self, forKey: .tieRulePending)) ?? false
         tiedAt     = (try? c.decodeIfPresent(Int.self, forKey: .tiedAt)) ?? nil
+        canStart   = (try? c.decodeIfPresent(Bool.self, forKey: .canStart)) ?? false
+        sportName  = (try? c.decodeIfPresent(String.self, forKey: .sportName)) ?? ""
+        canSetServer = (try? c.decodeIfPresent(Bool.self, forKey: .canSetServer)) ?? false
+        serveEligible = (try? c.decodeIfPresent([ServeSlot].self, forKey: .serveEligible)) ?? []
+        servePickPhase = (try? c.decodeIfPresent(Int.self, forKey: .servePickPhase)) ?? -1
+        servePickCurrent = (try? c.decodeIfPresent(String.self, forKey: .servePickCurrent)) ?? ""
     }
 
     // ── Acessores por TIME (1/2) ──
@@ -78,6 +108,51 @@ struct ScoreState: Decodable {
     var showsSets: Bool { setsToWin > 1 }
     // Nomes do time vencedor (para a tela de fim de jogo); vazio se empate/aberto.
     var winnerNames: [String] { (winner == 1 || winner == 2) ? players(winner!) : [] }
+
+    // Lobby aberto no celular, nada ao vivo → o relógio oferece "Iniciar".
+    static var mockLobby: ScoreState {
+        var s = ScoreState()
+        s.active = false
+        s.canStart = true
+        s.sportName = "Beach Tennis"
+        s.isDoubles = true
+        s.teams = [
+            "1": Team(players: ["Rodrigo Barth", "Jogador 2"]),
+            "2": Team(players: ["Jogador 3", "Jogador 4"])
+        ]
+        return s
+    }
+
+    // Fase 0 — escolhendo quem ABRE o saque: os 4 nomes.
+    static var mockServe: ScoreState {
+        var s = ScoreState.mock
+        s.canSetServer = true
+        s.isDoubles = true
+        s.servePickPhase = 0
+        s.servePickCurrent = "Jogador 01"
+        s.serveEligible = [
+            ServeSlot(team: 1, playerIdx: 0, name: "Jogador 01"),
+            ServeSlot(team: 1, playerIdx: 1, name: "Jogador 02"),
+            ServeSlot(team: 2, playerIdx: 0, name: "Jogador 03"),
+            ServeSlot(team: 2, playerIdx: 1, name: "Jogador 04")
+        ]
+        return s
+    }
+
+    // Fase 1 — confirmando o 2º saque do set: SÓ o time que não abriu (aqui o
+    // time 1 abriu, então só o time 2 aparece).
+    static var mockServe2nd: ScoreState {
+        var s = ScoreState.mock
+        s.canSetServer = true
+        s.isDoubles = true
+        s.servePickPhase = 1
+        s.servePickCurrent = "Jogador 03"
+        s.serveEligible = [
+            ServeSlot(team: 2, playerIdx: 0, name: "Jogador 03"),
+            ServeSlot(team: 2, playerIdx: 1, name: "Jogador 04")
+        ]
+        return s
+    }
 
     // Estado de exemplo — usado no #Preview e no app de preview standalone.
     static var mock: ScoreState {

@@ -110,7 +110,10 @@
   function _mirror(ctx) {
     var m0 = ctx.m; if (!m0 || !m0.isMonarch) return;
     (window._schGroupMatches(ctx.t, m0) || []).forEach(function (sm) {
-      if (sm && sm !== m0) sm.waGroup = m0.waGroup;
+      if (!sm || sm === m0) return;
+      // Espelha os DOIS sentidos: criar/trocar copia, apagar APAGA. Sem o delete,
+      // apagar no m0 deixaria os jogos irmãos com o link morto (o chip lê por match).
+      if (m0.waGroup) sm.waGroup = m0.waGroup; else delete sm.waGroup;
     });
   }
 
@@ -131,6 +134,13 @@
     };
     if (ctx.scope === 'tournament') return withSport([]) || 'Torneio';
     var m = ctx.m;
+    // Rei/Rainha (modo grupo): o grupo cobre os 3 jogos da RODADA daquele grupo —
+    // "Jogo N" não serve (são três, e o m0 nem sempre tem _gameNum). Usa "R{rodada}",
+    // a MESMA convenção que o motor já grava no label do jogo ('R' + roundNum, ver
+    // bracket-logic). Sem colisão: cada pessoa está em um só grupo por rodada.
+    if (ctx.groupMode) {
+      return withSport([(m && m.round != null) ? ('R' + m.round) : 'Rodada']);
+    }
     return withSport([(m && m._gameNum != null) ? ('Jogo ' + m._gameNum) : 'Jogo']);
   }
 
@@ -317,7 +327,19 @@
       'No grupo: <b style="color:var(--text-bright);">Convidar via link → Copiar</b>. A partir daí ' +
       (isT ? 'os inscritos só clicam em "Entrar no grupo"' : 'os outros só clicam em "Abrir grupo"') + ' — ninguém mais monta nada.');
 
-    if (wg && wg.link) body += '</details>';
+    if (wg && wg.link) {
+      // Apagar SEM pôr outro no lugar: volta tudo ao estado anterior à criação do
+      // grupo (o botão some do card e reaparece o "Criar grupo"). É a saída pro
+      // grupo apagado no WhatsApp — o link fica órfão e não temos como detectar
+      // isso sozinhos (o WhatsApp não devolve status pra nós).
+      body += '<div style="border-top:1px solid var(--border-color);margin-top:6px;padding-top:10px;">' +
+        '<button type="button" class="btn hover-lift" onclick="window._waGrpDeleteLink(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ')" ' +
+        'style="background:rgba(239,68,68,0.14);border:1px solid rgba(239,68,68,0.45);color:#f87171;width:100%;justify-content:center;">🗑️ Apagar o link</button>' +
+        '<div style="font-size:0.66rem;color:var(--text-muted);line-height:1.5;margin-top:6px;">Tira o link sem pôr outro no lugar — some o botão ' +
+        (isT ? '"Entrar no grupo"' : '"Abrir grupo"') + ' e volta o "Criar grupo", como era antes. Use quando o grupo foi apagado no WhatsApp.</div>' +
+        '</div>';
+      body += '</details>';
+    }
 
     _overlay(header + '<div style="padding:1rem;">' + body + '</div>');
   }
@@ -382,6 +404,34 @@
       var msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
       _notify('⚠️ Não salvou', 'Não foi possível registrar no servidor (' + msg + ').', 'error');
       try { console.error('[wa-group] rejeitado:', err); } catch (e) {}
+    });
+  };
+
+  // Apaga o link — volta ao estado "sem grupo". Mesmo gate de quem pode criar
+  // (jogador do confronto / organizador do torneio) e mesmo padrão otimista +
+  // revert do save.
+  window._waGrpDeleteLink = function (tId, matchId, groupMode) {
+    var ctx = _ctx(tId, matchId, groupMode); if (!ctx) return;
+    var cu = _cu();
+    if (!cu || !cu.uid || !_canManage(ctx, cu)) { _notify('Sem permissão', '', 'warning'); return; }
+    var prev = ctx.target.waGroup;
+    if (!prev || !prev.link) { window._waGrpClose(); return; }
+    if (!window.confirm('Apagar o link do grupo? O botão some pra todo mundo e volta o "Criar grupo".')) return;
+
+    delete ctx.target.waGroup;
+    if (ctx.groupMode) _mirror(ctx);
+
+    _save(ctx.t).then(function () {
+      window._waGrpClose();
+      _notify('Link apagado', 'Voltou ao estado de antes do grupo.', 'success');
+      if (typeof window._rerenderBracket === 'function' && ctx.scope === 'match') window._rerenderBracket(ctx.t.id);
+      else if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    }).catch(function (err) {
+      ctx.target.waGroup = prev;
+      if (ctx.groupMode) _mirror(ctx);
+      var msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
+      _notify('⚠️ Não apagou', 'Não foi possível registrar no servidor (' + msg + ').', 'error');
+      try { console.error('[wa-group] delete rejeitado:', err); } catch (e) {}
     });
   };
 

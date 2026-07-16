@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.8';
+window.SCOREPLACE_VERSION = '1.2.9';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -6371,6 +6371,13 @@ window.AppStore = {
         // check-in choices survive app restarts.
         // v1.9.63: preferências de tamanho do placar ao vivo (sliders).
         if (profile.liveScorePrefs && typeof profile.liveScorePrefs === 'object') this.currentUser.liveScorePrefs = profile.liveScorePrefs;
+        // Partida casual: última modalidade + dupla/individual (casualLast) e config
+        // de placar por esporte (casualPrefs). Moravam SÓ no localStorage — que o iOS
+        // limpa periodicamente — então a escolha do usuário sumia e a partida voltava
+        // pro primeiro esporte preferido do perfil (ex: Pickleball). O perfil é a fonte
+        // de verdade; o localStorage segue como cache instantâneo. Espelha liveScorePrefs.
+        if (profile.casualLast && typeof profile.casualLast === 'object') this.currentUser.casualLast = profile.casualLast;
+        if (profile.casualPrefs && typeof profile.casualPrefs === 'object') this.currentUser.casualPrefs = profile.casualPrefs;
         if (profile.presenceVisibility) this.currentUser.presenceVisibility = profile.presenceVisibility;
         if (profile.presenceMuteDays !== undefined) this.currentUser.presenceMuteDays = profile.presenceMuteDays;
         if (profile.presenceMuteUntil !== undefined) this.currentUser.presenceMuteUntil = profile.presenceMuteUntil;
