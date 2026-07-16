@@ -65,8 +65,27 @@ sandbox._pName = (p, fb) => {
 };
 
 load('identity-core.js');
+// _getStandbyPool CANÔNICO (cópia literal do store.js — dedup por uid). O store.js inteiro
+// não carrega em Node (toca document/timers no load); só esta função importa aqui.
+sandbox._getStandbyPool = function (t) {
+  if (!t) return [];
+  var sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
+  var wl = Array.isArray(t.waitlist) ? t.waitlist : [];
+  var _key = function (p) { var u = sandbox._participantUids(p); return u.length ? 'u:' + u.slice().sort().join('+') : 'n:' + sandbox._pName(p); };
+  var seen = new Set(sp.map(_key));
+  var pool = sp.slice();
+  wl.forEach(function (w) { var k = _key(w); if (k !== 'n:' && !seen.has(k)) { seen.add(k); pool.push(w); } });
+  return pool;
+};
+sandbox._collectAllMatches = function (t) { return Array.isArray(t.matches) ? t.matches.slice() : []; };
+sandbox._woHistSet = function () {}; sandbox._woHistGet = function () { return null; }; sandbox._woHistDel = function () {};
+sandbox._woIsKnockoutMatch = function () { return true; };
+sandbox._advanceWinner = function () {};
+sandbox._canonGender = function (g){ var x=String(g||'').toLowerCase(); if(x.indexOf('fem')===0)return 'Fem'; if(x.indexOf('masc')===0)return 'Masc'; if(x.indexOf('mist')===0||x.indexOf('mix')===0)return 'Misto'; return 'none'; };
+
 load('tournaments-utils.js');
 load('bracket-logic.js');   // _slotUids
+load('tournaments-categories.js'); // _getParticipantCategories / _participantInCategory
 load('wo-claim.js');        // _woMatchMembers
 load('draw-decisions.js');  // _entryIsPresent / _applyPresenceRoll
 load('participants.js');    // _applyWO — o motor
@@ -153,6 +172,85 @@ console.log('\nVIP — flag por uid:');
   const t2 = { id: 'T6', vips: { [POISON]: true }, participants: [{ p1Uid: 'a1', p2Uid: 'b1' }] };
   ok('VIP gravado por NOME não contamina quem tem uid',
      sandbox._entryHasVip(t2, t2.participants[0]) === false);
+}
+
+// ── FLUXO 5 · substituição de W.O. por GÊNERO (participants._applyWoSubsToTournament) ──
+// Misto obrigatório: só entra automático suplente do MESMO gênero. Gênero lido por UID.
+// Veneno: todos "X"; o gênero mora no OBJETO por uid (p1Gender/p2Gender/gender), nunca no nome.
+console.log('\nSubstituição de W.O. — regra de gênero por uid (misto obrigatório):');
+{
+  // dupla mista: a1=Masc, b1=Fem. suplentes: sF (Fem) e sM (Masc), ambos presentes.
+  const mkT = () => ({
+    id: 'G', format: 'Eliminatórias Simples', enrollmentMode: 'teams', teamSize: 2,
+    woScope: 'individual', genderCategories: ['misto_obrigatorio'],
+    participants: [
+      { p1Uid: 'a1', p2Uid: 'b1', p1Gender: 'masculino', p2Gender: 'feminino' },
+      { p1Uid: 'a2', p2Uid: 'b2', p1Gender: 'masculino', p2Gender: 'feminino' },
+    ],
+    standbyParticipants: [{ uid: 'sF', gender: 'feminino' }, { uid: 'sM', gender: 'masculino' }],
+    waitlist: [], checkedIn: { sF: 1, sM: 1 }, absent: {}, vips: {},
+    matches: [{ id: 'm1', round: 1, p1: 'X / X', p2: 'X / X',
+                team1Uids: ['a1', 'b1'], team2Uids: ['a2', 'b2'], winner: null }],
+  });
+  // W.O. na b1 (Fem) → tem que entrar sF (Fem), NUNCA sM (Masc)
+  let t = mkT(); t.absent = { b1: 1 };
+  let r = sandbox._applyWoSubsToTournament(t);
+  const m = t.matches[0];
+  ok('mulher ausente → suplente MULHER entra (por uid, não FIFO)',
+     r.subCount === 1 && (m.team1Uids || []).indexOf('sF') !== -1 && (m.team1Uids || []).indexOf('sM') === -1,
+     'team1Uids=' + JSON.stringify(m.team1Uids));
+  // W.O. no a1 (Masc) sem nenhum homem suplente → pendência, NÃO substitui calado
+  t = mkT(); t.standbyParticipants = [{ uid: 'sF', gender: 'feminino' }]; t.checkedIn = { sF: 1 }; t.absent = { a1: 1 };
+  r = sandbox._applyWoSubsToTournament(t);
+  ok('homem ausente sem homem suplente → NÃO substitui automático',
+     r.subCount === 0 && (r.subChoicePending || []).length === 1,
+     'subCount=' + r.subCount + ' pending=' + (r.subChoicePending || []).length);
+  ok('a pendência é por uid (alvo a1, opção sF)',
+     r.subChoicePending[0].absentUid === 'a1' && r.subChoicePending[0].options[0].uid === 'sF');
+  // organizador ACEITA a quebra → sF entra no lugar do homem
+  const t2 = mkT(); t2.standbyParticipants = [{ uid: 'sF', gender: 'feminino' }]; t2.checkedIn = { sF: 1 }; t2.absent = { a1: 1 };
+  sandbox._findTournamentById = (id) => (String(id) === 'G' ? t2 : null);
+  const rr = sandbox._woResolveSubChoice('G', 'a1', 'sF');
+  ok('organizador aceita a quebra → sF assume a vaga do a1',
+     rr.subCount === 1 && (t2.matches[0].team1Uids || []).indexOf('sF') !== -1,
+     'team1Uids=' + JSON.stringify(t2.matches[0].team1Uids));
+}
+
+// ── FLUXO 6 · a regra vale pra QUALQUER categoria — não só gênero ────────────
+// Dono: "a regra de gênero aqui é um exemplo, mas deve funcionar sempre que o suplente
+// não atende a regra da categoria — pode ser idade ou habilidade [ou personalizada]."
+console.log('\nCategoria genérica (idade/habilidade/custom) — mesma trava, por uid:');
+{
+  // torneio por HABILIDADE: categoria "A". Ausente é A; suplentes: um B, um A.
+  const mkT = (cats) => ({
+    id: 'C', format: 'Eliminatórias Simples', enrollmentMode: 'individual', teamSize: 1,
+    woScope: 'individual', skillCategories: ['A', 'B'], combinedCategories: ['A', 'B'],
+    participants: [
+      { uid: 'p1', categories: ['A'] }, { uid: 'p2', categories: ['A'] },
+    ],
+    standbyParticipants: [{ uid: 'sB', categories: ['B'] }, { uid: 'sA', categories: ['A'] }],
+    waitlist: [], checkedIn: { sB: 1, sA: 1 }, absent: { p1: 1 }, vips: {},
+    matches: [{ id: 'm1', round: 1, p1: 'X', p2: 'X', p1Uid: 'p1', p2Uid: 'p2', winner: null }],
+  });
+  let t = mkT();
+  let r = sandbox._applyWoSubsToTournament(t);
+  ok('ausente categoria A → entra o suplente A (não o B), por uid',
+     r.subCount === 1 && t.matches[0].p1Uid === 'sA',
+     'p1Uid=' + t.matches[0].p1Uid);
+  // só suplente B disponível → pendência (organizador escolhe), não mete o B calado
+  t = mkT(); t.standbyParticipants = [{ uid: 'sB', categories: ['B'] }]; t.checkedIn = { sB: 1 };
+  r = sandbox._applyWoSubsToTournament(t);
+  ok('ausente A sem suplente A → pendência (idade/skill = mesma regra do gênero)',
+     r.subCount === 0 && (r.subChoicePending || []).length === 1,
+     'pending=' + (r.subChoicePending || []).length);
+  // sem categorias no torneio → qualquer suplente serve (FIFO)
+  const tNo = { id: 'N', format: 'Eliminatórias Simples', enrollmentMode: 'individual', teamSize: 1,
+    woScope: 'individual', participants: [{ uid: 'p1' }, { uid: 'p2' }],
+    standbyParticipants: [{ uid: 'sX' }], waitlist: [], checkedIn: { sX: 1 }, absent: { p1: 1 }, vips: {},
+    matches: [{ id: 'm1', round: 1, p1: 'X', p2: 'X', p1Uid: 'p1', p2Uid: 'p2', winner: null }] };
+  const rNo = sandbox._applyWoSubsToTournament(tNo);
+  ok('torneio SEM categorias → qualquer suplente entra (FIFO)',
+     rNo.subCount === 1 && tNo.matches[0].p1Uid === 'sX', 'p1Uid=' + tNo.matches[0].p1Uid);
 }
 
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ` uid-poison: ${pass} ok, ${fail} falharam\n`);

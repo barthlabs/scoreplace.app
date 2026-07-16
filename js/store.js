@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.33';
+window.SCOREPLACE_VERSION = '1.2.34';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -2957,12 +2957,18 @@ window._pName = function(p, fallback) {
 // espera; aqui é só o pool bruto de W.O./substituição.
 window._getStandbyPool = function (t) {
   if (!t) return [];
-  var getName = function (p) { return window._pName(p); };
   var sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
   var wl = Array.isArray(t.waitlist) ? t.waitlist : [];
-  var spNames = new Set(sp.map(getName));
+  // dedup por UID (era por _pName): dois suplentes homônimos colapsavam num só e o 2º
+  // sumia da fila — o mesmo hack de nome que o uid veio matar. Fictício (sem uid) cai no
+  // nome, que é a identidade dele. Ver [[project_uid_identity_canon_locked]].
+  var _key = function (p) {
+    var u = (typeof window._participantUids === 'function') ? window._participantUids(p) : (p && p.uid ? [p.uid] : []);
+    return u.length ? 'u:' + u.slice().sort().join('+') : 'n:' + window._pName(p);
+  };
+  var seen = new Set(sp.map(_key));
   var pool = sp.slice();
-  wl.forEach(function (w) { var wn = getName(w); if (wn && !spNames.has(wn)) pool.push(w); });
+  wl.forEach(function (w) { var k = _key(w); if (k !== 'n:' && !seen.has(k)) { seen.add(k); pool.push(w); } });
   return pool;
 };
 
