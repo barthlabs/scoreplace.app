@@ -1061,13 +1061,15 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       !(p && Array.isArray(p.participants) && p.participants.length) &&
       name.indexOf('/') === -1 &&
       !(window._isPlaceholderName && window._isPlaceholderName(name)));
-    const _phDragHandle = (isOrg && _isSoloRealLate)
-      ? `<span data-ph-drag="${name.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" data-ph-uid="${String(_pUid).replace(/"/g, '&quot;')}" title="Arraste sobre uma vaga (Jogador NN) na chave para ocupá-la" style="cursor:grab;touch-action:none;font-size:1.05rem;color:#94a3b8;flex-shrink:0;user-select:none;-webkit-user-select:none;padding:0 2px;line-height:1;">⠿</span>`
+    // v1.2.31 (dono): o card INTEIRO é a área de arrasto — sem ícone de handle. Card nenhum
+    // no app anuncia arrasto com "pontinhos"; ter só aqui quebra o padrão e não ajuda.
+    // Os data-attrs (que o _wirePlaceholderDnD lê) vão no próprio card, abaixo.
+    const _phDragAttrs = (isOrg && _isSoloRealLate)
+      ? `data-ph-drag="${name.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" data-ph-uid="${String(_pUid).replace(/"/g, '&quot;')}" title="Arraste sobre uma vaga (Jogador NN) na chave para ocupá-la" `
       : '';
 
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)'};border-radius:10px;border-left:4px solid ${isNext ? '#f59e0b' : 'rgba(255,255,255,0.08)'};${dimAbsent ? 'opacity:0.5;' : ''}">
-        ${_phDragHandle}
+      <div ${_phDragAttrs}style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)'};border-radius:10px;border-left:4px solid ${isNext ? '#f59e0b' : 'rgba(255,255,255,0.08)'};${dimAbsent ? 'opacity:0.5;' : ''}${_phDragAttrs ? 'cursor:grab;touch-action:none;' : ''}">
         <div style="width:26px;height:26px;border-radius:50%;background:${isNext ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.08)'};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;color:${isNext ? '#000' : '#94a3b8'};flex-shrink:0;">${i + 1}</div>
         <span style="font-weight:600;font-size:0.88rem;color:${isNext ? '#fbbf24' : '#94a3b8'};flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">${name}${isNext && _policy === 'locked' ? ' <span style="font-size:0.62rem;font-weight:700;color:#fbbf24;background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>' : ''}</span>
         <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAb ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}"><input type="checkbox" ${mc ? 'checked' : ''} ${isAb ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${_tIdSafe}', '${safeName}');"`}><span class="toggle-slider"></span></label>
