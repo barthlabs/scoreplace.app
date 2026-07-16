@@ -13,12 +13,14 @@ const { getMessaging } = require('firebase-admin/messaging');
 let generateLigaRound = null;
 let drawInitial = null;   // v1.2.25: motor do SORTEIO INICIAL (Etapa 3 · fase A) — usado pela drawRound
 let canRecompile = null;
+let hasDrawnBracket = null;  // régua de 'já tem chave' — a MESMA do cliente (matches/rounds/groups)
 let drawWindow = null; // window do shim Node — expõe _calcNextDrawDate (prazo p/ lançar resultado)
 try {
   const _dc = require('./draw-core.js');
   generateLigaRound = _dc.generateLigaRound;
   drawInitial = _dc.drawInitial;
   canRecompile = _dc.canRecompile;
+  hasDrawnBracket = _dc.hasDrawnBracket;
   drawWindow = _dc._window;
 } catch (e) {
   console.error('[autoDraw] draw-core indisponível — autoDraw vai pular:', e && e.message);
@@ -26,7 +28,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '1.2.29';
+const CF_VERSION = '1.2.30';
 
 initializeApp();
 const db = getFirestore();
@@ -293,7 +295,10 @@ exports.drawRound = onCall(async (request) => {
     // igual mutateTournament faz antes do mutator.
     try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
 
-    const hadBracket = !canRecompile(t);
+    // Régua do SORTEIO, não a do recompile: torneio RESETADO tem _phaseMaterialized=0 (o
+    // reset grava assim) e o canRecompile barrava com 'already-drawn' sem haver chave —
+    // e o cliente, que conta só matches/rounds/groups, nem pedia re-sorteio. Bug v1.2.29.
+    const hadBracket = hasDrawnBracket(t);
     if (hadBracket) {
       // Guarda de duplo-sorteio DENTRO da transação (mais forte que a do cliente, cujo
       // preHadBracket vem de um snapshot local): se já tem chave e o organizador não pediu

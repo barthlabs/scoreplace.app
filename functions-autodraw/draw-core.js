@@ -288,16 +288,35 @@ function compileFromFmt2(t, opts) {
   }
 }
 
-// Recompilar é seguro SÓ antes de existir chave (fase 0 intocada). Depois disso o doc carrega
-// estado de fase que a recompilação atropelaria.
-function canRecompile(t) {
+// "Já tem chave?" — a MESMA definição que o cliente usa (tournaments-draw.js:1174 e o
+// contrato do CLAUDE.md): matches OU rounds OU groups com conteúdo. Nada além disso.
+// É a régua do sorteio: quem responde true já foi sorteado.
+function hasDrawnBracket(t) {
   if (!t) return false;
-  const hasDraw = (Array.isArray(t.matches) && t.matches.length > 0)
+  return (Array.isArray(t.matches) && t.matches.length > 0)
     || (Array.isArray(t.rounds) && t.rounds.length > 0)
     || (Array.isArray(t.groups) && t.groups.length > 0);
-  if (hasDraw) return false;
+}
+
+// Recompilar o FORMATO é seguro SÓ antes de existir chave (fase 0 intocada). Depois disso o
+// doc carrega estado de fase que a recompilação atropelaria. É pergunta DIFERENTE de "já tem
+// chave?" — por isso são duas funções.
+//
+// ⚠️ v1.2.29 — `_phaseMaterialized` NÃO pode ser testado com `!= null`. O RESET do sorteio
+// (`_clearTournamentDraw`, tournaments-draw.js:111) grava `t._phaseMaterialized = 0` como
+// estado LIMPO, e `0 != null` é TRUE. Resultado: todo torneio já resetado uma vez era lido
+// como "já sorteado" e a CF recusava com 'already-drawn' PRA SEMPRE — com matches/rounds/
+// groups todos em zero (relatado em staging: "sorteio travado, diz que outro organizador já
+// sorteou; sou o único organizador"). Pior: o gate do CLIENTE conta só matches/rounds/groups,
+// então ele nem pedia re-sorteio — os dois lados discordavam do que é "ter chave", que é
+// exatamente a divergência que esta canonização existe pra matar.
+// Se a fase 0 tivesse MESMO sido materializada, haveria matches/rounds/groups — o
+// `hasDrawnBracket` já cobre. Aqui só interessa fase POSTERIOR (> 0).
+function canRecompile(t) {
+  if (!t) return false;
+  if (hasDrawnBracket(t)) return false;
   if ((t.currentPhaseIndex || 0) > 0) return false;
-  if (t._phaseMaterialized != null) return false;
+  if ((t._phaseMaterialized || 0) > 0) return false;
   return true;
 }
 
@@ -331,7 +350,10 @@ function drawInitial(t, opts) {
   opts = opts || {};
   const win = g.window;
   if (!t) return { ok: false, reason: 'no-tournament' };
-  if (!canRecompile(t)) return { ok: false, reason: 'already-drawn' };
+  // "Já sorteado?" usa a régua do SORTEIO (hasDrawnBracket) — a mesma do cliente. Usar
+  // canRecompile aqui (que também barra estado de FASE) foi o bug da v1.2.29: torneio
+  // resetado tem _phaseMaterialized=0 e era recusado com 'already-drawn' sem ter chave.
+  if (hasDrawnBracket(t)) return { ok: false, reason: 'already-drawn' };
 
   // Nome vivo por uid antes do motor (storage é só-uid; o motor lê nome). Espelha a
   // linha 1331 do cliente. O caller popula _profileNameByUid.
@@ -424,4 +446,4 @@ function drawInitial(t, opts) {
   return { ok: true, native: false, format: t.format, matchCount: (t.matches || []).length, allMaleCount: _allMale, decisions: _decisions };
 }
 
-module.exports = { generateLigaRound, compileFromFmt2, canRecompile, drawInitial, _window: g.window };
+module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, _window: g.window };

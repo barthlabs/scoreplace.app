@@ -132,5 +132,37 @@ console.log('\nRESTO — 19 avulsos, sorteio de duplas, método "últimos inscri
   ok('remove os ÚLTIMOS (P17,P18,P19)', r.removedNames === 'P17, P18, P19', r.removedNames);
 }
 
+// ── "JÁ SORTEADO?" — a régua tem que ser a MESMA do cliente ─────────────────
+// Bug real, pego na 1ª tentativa do dono na staging (v1.2.29): "sorteio travado, disse que
+// outro organizador já sorteou — sou o único organizador". O log entregou:
+//   RECUSOU: already-drawn {"matches":0,"rounds":0,"groups":0,"phaseMaterialized":0}
+// Zero chave, mas recusou. Causa: `canRecompile` testava `t._phaseMaterialized != null`, e o
+// RESET do sorteio (`_clearTournamentDraw`) grava `_phaseMaterialized = 0` como estado LIMPO
+// — `0 != null` é TRUE. Todo torneio já resetado uma vez ficava impossível de sortear.
+// E o cliente conta só matches/rounds/groups → nem pedia re-sorteio: os dois lados
+// discordavam do que é "ter chave", que é a divergência que esta canonização mata.
+console.log('\n"Já sorteado?" usa a régua do cliente (matches/rounds/groups):');
+{
+  const reset = () => Object.assign(mkT(), {
+    participants: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => ({ uid: 'u' + i, displayName: 'J' + i, name: 'J' + i })),
+    enrollmentMode: 'individual', teamSize: 1,
+    matches: [], rounds: [], groups: [], currentPhaseIndex: 0, _phaseMaterialized: 0,
+  });
+  ok('torneio RESETADO (_phaseMaterialized=0, zero chave) NÃO é "já sorteado"',
+     core.hasDrawnBracket(reset()) === false);
+  const t = reset();
+  const r = core.drawInitial(t, { idStamp: 7 });
+  ok('e volta a sortear', r && r.ok === true && r1(t) === 4, 'R1=' + r1(t) + ' reason=' + (r && r.reason || '—'));
+
+  // Com chave de verdade, recusa (a proteção continua valendo).
+  const drawn = reset(); core.drawInitial(drawn, { idStamp: 8 });
+  ok('torneio COM chave é "já sorteado"', core.hasDrawnBracket(drawn) === true);
+  ok('e recusa 2º sorteio sem allowRedraw',
+     (core.drawInitial(drawn, { idStamp: 9 }) || {}).reason === 'already-drawn');
+  // Liga (storage nativo em rounds) também conta como chave.
+  ok('Liga com rounds preenchido é "já sorteado"',
+     core.hasDrawnBracket({ rounds: [{ matches: [] }] }) === true);
+}
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ` ${pass} passaram, ${fail} falharam\n`);
 process.exit(fail === 0 ? 0 : 1);
