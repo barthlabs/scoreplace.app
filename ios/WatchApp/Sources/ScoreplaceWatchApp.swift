@@ -9,7 +9,7 @@ import SwiftUI
 struct ScoreplaceWatchApp: App {
     var body: some Scene {
         WindowGroup {
-            RemoteView(state: .mock)
+            RemoteView(state: .mockLobby)
         }
     }
 }

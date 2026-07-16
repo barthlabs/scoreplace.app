@@ -7653,9 +7653,52 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Leitor read-only do estado do placar, indexado por TIME (1/2). Vive aqui
   // dentro do closure pra enxergar state/_formatGamePoint/_currentSet/etc.
   // Na web ninguém consome (WatchBridge é inerte) → zero efeito.
+  // Nome curto SÓ PRO RELÓGIO — exceção deliberada à regra de sempre mostrar o
+  // nome de perfil inteiro (a tela do relógio é pequena). Primeiro nome; se dois
+  // jogadores têm o MESMO primeiro nome, desempata com a inicial do sobrenome
+  // (Rodrigo B / Rodrigo U). Vive AQUI, no caminho exclusivo do snapshot do
+  // relógio — o app (celular) nunca abrevia. Ver feedback_maximize_screen_area.
+  function _watchShortNames(names) {
+    var map = {};
+    var first = function (n) { return String(n || '').trim().split(/\s+/)[0] || String(n || ''); };
+    var lastIni = function (n) {
+      var p = String(n || '').trim().split(/\s+/);
+      return p.length > 1 ? (p[p.length - 1].charAt(0) || '').toUpperCase() : '';
+    };
+    var firstCount = {};
+    names.forEach(function (n) { var f = first(n).toLowerCase(); if (f) firstCount[f] = (firstCount[f] || 0) + 1; });
+    names.forEach(function (n) {
+      if (map[n] !== undefined) return;
+      var f = first(n);
+      if (firstCount[f.toLowerCase()] > 1) {
+        var li = lastIni(n);
+        map[n] = li ? (f + ' ' + li) : f;
+      } else { map[n] = f; }
+    });
+    // Se "Rodrigo B" ainda colide (mesmo 1º nome E mesma inicial), cai pro nome
+    // inteiro pra não confundir dois jogadores.
+    var sc = {};
+    Object.keys(map).forEach(function (k) { var s = map[k].toLowerCase(); sc[s] = (sc[s] || 0) + 1; });
+    Object.keys(map).forEach(function (k) { if (sc[map[k].toLowerCase()] > 1) map[k] = k; });
+    return map;
+  }
+
   window._getLiveScoreState = function() {
     var cs = _currentSet();
     var srv = _getCurrentServer();
+    // Mapa de abreviação construído da UNIÃO de todos os nomes da partida
+    // (inclui os 4 do Rei/Rainha, que rotacionam) pra a abreviação ser estável.
+    var _allNames = p1Players.concat(p2Players);
+    if (_reiRainhaMode && _reiRainhaPlayers) _allNames = _allNames.concat(_reiRainhaPlayers);
+    var _wnMap = _watchShortNames(_allNames);
+    var _wn = function (n) { return _wnMap[n] !== undefined ? _wnMap[n] : (String(n || '').trim().split(/\s+/)[0] || n); };
+    // Listas abreviadas (uma vez). Todo campo de nome do relógio passa por _wn —
+    // é a consistência que faz o matching por nome (bola no sacador, item aceso
+    // no seletor) continuar batendo: os dois lados abreviam igual.
+    var _elig = _serveEligibleNow().map(function (e) { return { team: e.team, playerIdx: e.playerIdx, name: _wn(e.name) }; });
+    var _rr = _rrStandingsNow().map(function (r) { return { name: _wn(r.name), wins: r.wins }; });
+    var _spCurRaw = (state.serveOrder && state.serveOrder[state.totalGamesPlayed])
+      ? (state.serveOrder[state.totalGamesPlayed].name || '') : '';
     return {
       v: 1,
       type: 'state',
@@ -7668,10 +7711,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       games: cs ? [cs.gamesP1, cs.gamesP2] : [0, 0],
       isTiebreak: !!state.isTiebreak,
       courtLeft: _courtLeft,
-      server: srv ? { team: srv.team, name: srv.name } : null,
+      server: srv ? { team: srv.team, name: _wn(srv.name) } : null,
       teams: {
-        '1': { players: p1Players.slice() },
-        '2': { players: p2Players.slice() }
+        '1': { players: p1Players.map(_wn) },
+        '2': { players: p2Players.map(_wn) }
       },
       // Sets ganhos por time [time1, time2]. Durante o jogo conta só sets
       // FECHADOS (o set atual em curso não é "ganho" ainda); ao encerrar,
@@ -7685,6 +7728,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // de 3 (duplas rotacionam), não a um recomeço — o relógio oferece
       // "Jogo N de 3" no lugar.
       canReplay: !!isCasual && !_reiRainhaMode,
+      // ⚡ casual · 🏆 torneio — o relógio mostra o ícone certo na faixa da modalidade.
+      isCasual: !!isCasual,
+      // Modalidade (pra faixa "⚡/🏆 <modalidade>" no seletor de sacador, igual ao
+      // Iniciar). Casual = opts.sportName; torneio = t.sport.
+      sportName: (isCasual ? ((opts && opts.sportName) || '') : (t && t.sport ? t.sport : '')),
       // ── Rei/Rainha: 3 jogos, 4 pessoas, duplas trocam a cada jogo ──
       // rrRound: 0=1º jogo · 1=2º · 2=3º · 3=série encerrada (sentinela do motor).
       // O relógio usa isto pra mostrar "Jogo N de 3" e oferecer avançar/ver final.
@@ -7692,25 +7740,28 @@ window._openLiveScoring = function(tId, matchId, opts) {
       rrRound: _reiRainhaRound,
       // Vitórias por PESSOA, já ordenado — a dupla muda todo jogo, o mérito é
       // individual. O relógio só desenha; a contagem é toda do motor.
-      rrStandings: _rrStandingsNow(),
+      rrStandings: _rr,
       // Duplas → o relógio pode oferecer o toggle "Re-sortear duplas".
       isDoubles: !!isDoubles,
+      // Sugestão de Rei/Rainha no fim de jogo (2 pares distintos jogados, falta o
+      // 3º) → o toggle "Re-sortear" vira "👑 Rei/Rainha" e o Iniciar (ligado)
+      // dispara o rrActivate (ativa a série retroativa e começa o 3º jogo).
+      rrSuggest: _rrSuggestNow(),
       // Seleção de sacador. A REGRA é toda daqui — o relógio recebe a lista
       // pronta e só desenha. canSetServer sai da própria lista (vazia = travado),
       // então o seletor nunca aparece oferecendo alguém que o _liveSetServer
       // recusaria em silêncio.
-      canSetServer: _serveEligibleNow().length > 0,
-      serveEligible: _serveEligibleNow(),
+      canSetServer: _elig.length > 0,
+      serveEligible: _elig,
       // Fase da escolha: 0 = quem ABRE o saque (4 nomes) · 1 = quem faz o 2º
       // saque do set (só o time que não abriu) · -1 = travado. O relógio usa a
       // MUDANÇA de fase pra pedir confirmação entre o 1º e o 2º game.
-      servePickPhase: _serveEligibleNow().length > 0 ? state.totalGamesPlayed : -1,
+      servePickPhase: _elig.length > 0 ? state.totalGamesPlayed : -1,
       // Quem OCUPA o slot em disputa agora (o motor sempre tem um padrão —
       // no 2º saque é opponents[0], escolhido sem ninguém confirmar). O relógio
       // abre o seletor já com este nome aceso, então "Confirmar" sem mexer em
-      // nada = manter o que está. Sem isto o relógio não teria o que pré-marcar.
-      servePickCurrent: (state.serveOrder && state.serveOrder[state.totalGamesPlayed])
-        ? (state.serveOrder[state.totalGamesPlayed].name || '') : '',
+      // nada = manter o que está. Abreviado (_wn) igual à lista, pra o "aceso" casar.
+      servePickCurrent: _wn(_spCurRaw),
       isFinished: !!state.isFinished,
       winner: state.winner || null,
       // v4.5.43: empate esperando decisão (prorrogar vs tie-break). O relógio
@@ -7732,6 +7783,32 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
     out.sort(function (a, b) { return b.wins - a.wins || a.name.localeCompare(b.name); });
     return out;
+  }
+
+  // Sugestão de Rei/Rainha no relógio: casual + duplas, NÃO já em Rei/Rainha, e
+  // com EXATAMENTE 2 PARES DISTINTOS já jogados (partida atual + histórico da
+  // sessão, deduplicados por chave de partição) entre os MESMOS 4 jogadores — ou
+  // seja, só falta o 3º par pra fechar a série. Mesma regra de partição do
+  // _activateReiRainhaRetroactive; o relógio só desenha o toggle "👑 Rei/Rainha".
+  function _rrSuggestNow() {
+    if (_reiRainhaMode) return false;
+    if (!isCasual || !isDoubles) return false;
+    var cur1 = p1Players.slice(), cur2 = p2Players.slice();
+    if (cur1.length + cur2.length !== 4) return false;
+    var playerSet = cur1.concat(cur2).slice().sort().join('\x00');
+    function _pk(t1, t2) {
+      var s1 = t1.slice().sort().join('|'), s2 = t2.slice().sort().join('|');
+      return [s1, s2].sort().join('::');
+    }
+    var keys = {};
+    keys[_pk(cur1, cur2)] = true;
+    for (var i = 0; i < _sessionGameHistory.length; i++) {
+      var gh = _sessionGameHistory[i];
+      if (!gh || !gh.p1 || !gh.p2) continue;
+      if (gh.p1.concat(gh.p2).slice().sort().join('\x00') !== playerSet) continue; // outros jogadores
+      keys[_pk(gh.p1, gh.p2)] = true;
+    }
+    return Object.keys(keys).length === 2;
   }
 
   // Empurra o estado atual pro relógio (no-op se a ponte não estiver ativa/web).

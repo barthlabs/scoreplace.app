@@ -45,6 +45,9 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
     func sendReiRainhaFinal() {
         sendIntent(["v": 1, "type": "rrFinal", "id": UUID().uuidString])
     }
+    func sendReiRainhaStart() {
+        sendIntent(["v": 1, "type": "rrActivate", "id": UUID().uuidString])
+    }
     /// Escolhe o sacador nos 2 primeiros jogos (equivale a arrastar a bola no
     /// celular). O celular decide se ainda vale — o hard lock vive no motor.
     func sendSetServer(team: Int, playerIdx: Int) {

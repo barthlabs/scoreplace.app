@@ -131,6 +131,18 @@
           window._reiRainhaShowFinal();
         }
         break;
+      case 'rrActivate':
+        // Sugestão de Rei/Rainha aceita no fim de jogo (toggle "👑 Rei/Rainha" +
+        // Iniciar): ativa a série RETROATIVA (os 2 jogos já disputados viram
+        // rodadas) e avança pro 3º jogo (par que falta). Reusa as MESMAS funções
+        // do celular — a rotação/contagem vive lá, nunca aqui.
+        if (typeof window._statsToggleReiRainha === 'function') {
+          window._statsToggleReiRainha({ checked: true });
+          if (typeof window._reiRainhaNextRound === 'function') {
+            window._reiRainhaNextRound();
+          }
+        }
+        break;
       case 'setServer':
         // Escolha do sacador nos 2 primeiros jogos (o equivalente no relógio ao
         // arrastar a bola no celular). Dirige a MESMA função — o hard lock de

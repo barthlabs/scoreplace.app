@@ -18,7 +18,12 @@ struct ScoreState: Decodable {
     var sets: [Int] = [0, 0]            // sets ganhos [time1, time2]
     var setsToWin: Int = 1              // melhor-de-N (1 = set único, ex. Beach Tennis)
     var canReplay: Bool = false         // partida casual → oferece "Jogar novamente"
+    var isCasual: Bool = false          // ⚡ casual · 🏆 torneio (ícone da faixa)
     var isDoubles: Bool = false         // duplas → oferece o toggle "Re-sortear duplas"
+    // Sugestão de Rei/Rainha no fim de jogo: 2 jogos com PARES distintos já
+    // rolaram e só falta o 3º par pra fechar a série → o toggle "Re-sortear"
+    // vira "👑 Rei/Rainha" (dourado). Ligado = o Iniciar começa o 3º jogo/série.
+    var rrSuggest: Bool = false
     var isFinished: Bool = false
     var winner: Int? = nil
     var tieRulePending: Bool = false    // empate esperando decisão (prorrogar/tie-break)
@@ -65,9 +70,9 @@ struct ScoreState: Decodable {
     // Decoding tolerante: o snapshot sempre traz as chaves-base, mas `server` e
     // `winner` podem vir null e chaves opcionais (sets/matchId) podem faltar.
     enum CodingKeys: String, CodingKey {
-        case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isDoubles, isFinished, winner, tieRulePending, tiedAt
+        case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isCasual, isDoubles, isFinished, winner, tieRulePending, tiedAt
         case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent
-        case reiRainha, rrRound, rrStandings
+        case reiRainha, rrRound, rrStandings, rrSuggest
     }
     init() {}
     init(from decoder: Decoder) throws {
@@ -85,6 +90,7 @@ struct ScoreState: Decodable {
         sets       = (try? c.decodeIfPresent([Int].self, forKey: .sets)) ?? [0, 0]
         setsToWin  = (try? c.decodeIfPresent(Int.self, forKey: .setsToWin)) ?? 1
         canReplay  = (try? c.decodeIfPresent(Bool.self, forKey: .canReplay)) ?? false
+        isCasual   = (try? c.decodeIfPresent(Bool.self, forKey: .isCasual)) ?? false
         isDoubles  = (try? c.decodeIfPresent(Bool.self, forKey: .isDoubles)) ?? false
         isFinished = (try? c.decodeIfPresent(Bool.self, forKey: .isFinished)) ?? false
         winner     = (try? c.decodeIfPresent(Int.self, forKey: .winner)) ?? nil
@@ -99,6 +105,7 @@ struct ScoreState: Decodable {
         reiRainha  = (try? c.decodeIfPresent(Bool.self, forKey: .reiRainha)) ?? false
         rrRound    = (try? c.decodeIfPresent(Int.self, forKey: .rrRound)) ?? 0
         rrStandings = (try? c.decodeIfPresent([RRStanding].self, forKey: .rrStandings)) ?? []
+        rrSuggest  = (try? c.decodeIfPresent(Bool.self, forKey: .rrSuggest)) ?? false
     }
 
     // ── Acessores por TIME (1/2) ──
@@ -126,16 +133,41 @@ struct ScoreState: Decodable {
     var winnerNames: [String] { (winner == 1 || winner == 2) ? players(winner!) : [] }
 
     // Lobby aberto no celular, nada ao vivo → o relógio oferece "Iniciar".
+    // Nomes JÁ curtos (primeiro nome — _watchShortNames no celular); server
+    // setado = sacador inicial escolhido (mostra o box + a bola no preview).
     static var mockLobby: ScoreState {
         var s = ScoreState()
         s.active = false
         s.canStart = true
+        s.isCasual = true
         s.sportName = "Beach Tennis"
         s.isDoubles = true
         s.teams = [
-            "1": Team(players: ["Rodrigo Barth", "Jogador 2"]),
-            "2": Team(players: ["Jogador 3", "Jogador 4"])
+            "1": Team(players: ["Rodrigo", "Nelson"]),
+            "2": Team(players: ["Kelly", "Zilda"])
         ]
+        s.server = Server(team: 1, name: "Rodrigo")
+        return s
+    }
+
+    // Fim de jogo (casual, time 1 vence) — pra verificar a tela de vencedor.
+    static var mockWinner: ScoreState {
+        var s = ScoreState.mockStore
+        s.isFinished = true
+        s.winner = 1
+        s.canReplay = true
+        s.setsToWin = 1          // Beach Tennis, set único → placar final em games
+        s.games = [6, 4]         // final realista 6-4
+        s.rrSuggest = true       // variação: toggle vira "👑 Rei/Rainha"
+        return s
+    }
+
+    // Empate 5-5/6-6/7-7 no placar → escolher prorrogar ou tie-break.
+    static var mockTie: ScoreState {
+        var s = ScoreState.mockLive
+        s.games = [5, 5]
+        s.tieRulePending = true
+        s.tiedAt = 5
         return s
     }
 
@@ -158,14 +190,14 @@ struct ScoreState: Decodable {
     // Fase 1 — confirmando o 2º saque do set: SÓ o time que não abriu (aqui o
     // time 1 abriu, então só o time 2 aparece).
     static var mockServe2nd: ScoreState {
-        var s = ScoreState.mock
+        var s = ScoreState.mockStore   // time 1 (Davi/Ana) abriu → time 2 escolhe o 2º
         s.canSetServer = true
         s.isDoubles = true
         s.servePickPhase = 1
-        s.servePickCurrent = "Jogador 03"
+        s.servePickCurrent = "Noé"
         s.serveEligible = [
-            ServeSlot(team: 2, playerIdx: 0, name: "Jogador 03"),
-            ServeSlot(team: 2, playerIdx: 1, name: "Jogador 04")
+            ServeSlot(team: 2, playerIdx: 0, name: "Noé"),
+            ServeSlot(team: 2, playerIdx: 1, name: "Rute")
         ]
         return s
     }
@@ -197,6 +229,40 @@ struct ScoreState: Decodable {
             RRStanding(name: "Jogador 02", wins: 1),
             RRStanding(name: "Jogador 04", wins: 0)
         ]
+        return s
+    }
+
+    // Placar ao vivo (duplas, primeiro-nome curto, sacador Rodrigo) — pra verificar
+    // o layout do placar no app de preview. setsToWin>1 pra a linha SETS aparecer.
+    static var mockLive: ScoreState {
+        var s = ScoreState()
+        s.active = true
+        s.isCasual = true
+        s.sportName = "Beach Tennis"
+        s.setLabel = "Set 1"
+        s.points = ["40", "30"]
+        s.games = [1, 2]
+        s.sets = [1, 0]
+        s.setsToWin = 3
+        s.isDoubles = true
+        s.courtLeft = 1
+        s.server = Server(team: 1, name: "Rodrigo")
+        s.teams = [
+            "1": Team(players: ["Rodrigo", "Nelson"]),
+            "2": Team(players: ["Kelly", "Zilda"])
+        ]
+        return s
+    }
+
+    // Imagens das lojas: nomes genéricos BÍBLICOS, duplas MISTAS (masc + fem em
+    // cada time), com a bolinha do sacador. Sem expor nome de ninguém real.
+    static var mockStore: ScoreState {
+        var s = ScoreState.mockLive
+        s.teams = [
+            "1": Team(players: ["Davi", "Ana"]),
+            "2": Team(players: ["Noé", "Rute"])
+        ]
+        s.server = Server(team: 1, name: "Davi")
         return s
     }
 
