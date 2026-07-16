@@ -109,10 +109,10 @@ window._buildAnalyticsSection = function _buildAnalyticsSection(organizados) {
     '<div style="margin-top:8px;padding:16px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;">' +
       // Stat cards row
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;">' +
-        '<div class="stat-box"><div style="font-size:1.5rem;font-weight:800;color:var(--primary-color);">' + total + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.totalTournaments') + '</div></div>' +
-        '<div class="stat-box"><div style="font-size:1.5rem;font-weight:800;color:var(--primary-color);">' + uniqueCount + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.uniqueParticipants') + '</div></div>' +
-        '<div class="stat-box"><div style="font-size:1.5rem;font-weight:800;color:var(--primary-color);">' + avgParts + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.avgParticipants') + '</div></div>' +
-        '<div class="stat-box"><div style="font-size:1.5rem;font-weight:800;color:var(--primary-color);">' + bestMonthLabel + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.bestMonth') + '</div></div>' +
+        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--primary-color);">' + total + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.totalTournaments') + '</div></div>' +
+        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--primary-color);">' + uniqueCount + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.uniqueParticipants') + '</div></div>' +
+        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--primary-color);">' + avgParts + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.avgParticipants') + '</div></div>' +
+        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--primary-color);">' + bestMonthLabel + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.bestMonth') + '</div></div>' +
       '</div>' +
       // Bar charts
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
@@ -2783,29 +2783,29 @@ function renderDashboard(container) {
     ">
 
       <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; text-align: left;">
-        <h2 style="margin:0; font-size: 2.2rem; font-weight: 700; flex:1; color:var(--hero-text);">${_t('dashboard.welcome', {greeting: (window._welcomeWord ? window._welcomeWord() : 'Bem-vindo'), name: (window._firstNameOnly ? window._firstNameOnly(userName) : userName)})}${_proBadge}</h2>
+        <h2 style="margin:0; font-size: calc(var(--sp-u) * 2.3); font-weight: 700; flex:1; color:var(--hero-text);">${_t('dashboard.welcome', {greeting: (window._welcomeWord ? window._welcomeWord() : 'Bem-vindo'), name: (window._firstNameOnly ? window._firstNameOnly(userName) : userName)})}${_proBadge}</h2>
         ${window.AppStore.currentUser ? '<div style="display:flex;flex-direction:column;gap:5px;align-items:stretch;"><button onclick="window.location.hash=\'#trofeus\'" style="background:var(--hero-glass-bg);border:1px solid var(--hero-glass-border);border-radius:12px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--hero-text);font-size:0.78rem;font-weight:600;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background=\'var(--hero-glass-bg-hover)\'" onmouseout="this.style.background=\'var(--hero-glass-bg)\'"><span style="font-size:1rem;">🏆</span> Conquistas</button><button onclick="if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + window._safeHtml((window.AppStore.currentUser.displayName || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")) + '\')" style="background:var(--hero-glass-bg);border:1px solid var(--hero-glass-border);border-radius:12px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--hero-text);font-size:0.78rem;font-weight:600;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background=\'var(--hero-glass-bg-hover)\'" onmouseout="this.style.background=\'var(--hero-glass-bg)\'"><span style="font-size:1rem;">📊</span> ' + _t('dashboard.statistics') + '</button></div>' : ''}
       </div>
       <div style="text-align:center;margin-bottom:8px;font-size:0.75rem;color:var(--hero-text-soft);font-weight:600;letter-spacing:0.5px;">v${window.SCOREPLACE_VERSION || ''}</div>
 
       <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 1.5rem;">
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;width:100%;max-width:580px;">
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;width:100%;max-width:min(96%, calc(var(--sp-u) * 46));">
           <!-- v0.17.45: Row 1 mais alta — min-height 64→80px, ícone 1.4→1.7rem.
                v0.17.55: white-space:normal explícito no label pra OVERRIDE o
                white-space:nowrap herdado da classe .btn (components.css:192).
                Sem isso, o texto não quebrava E era cortado pelo overflow:hidden.
                Combinação completa: display:block; width:100%; white-space:normal
                + overflow:hidden no botão (defense-in-depth). -->
-          <button class="btn btn-cta hover-lift" id="btn-casual-match" style="--shine-delay:0s;background:linear-gradient(135deg,#38bdf8,#0ea5e9); color: #ffffff; flex:1;min-width:0; min-height: 80px; font-size: 0.95rem; font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="if(typeof window._openCasualMatch==='function')window._openCasualMatch();">
-            <span style="font-size:1.7rem;line-height:1;">⚡</span>
+          <button class="btn btn-cta hover-lift" id="btn-casual-match" style="--shine-delay:0s;background:linear-gradient(135deg,#38bdf8,#0ea5e9); color: #ffffff; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="if(typeof window._openCasualMatch==='function')window._openCasualMatch();">
+            <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">⚡</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">${_t('dashboard.casualMatch')}</span>
           </button>
-          <button class="btn btn-cta hover-lift" id="btn-create-tournament-in-box" style="--shine-delay:0.6s;background: #1e40af; color: #ffffff; flex:1;min-width:0; min-height: 80px; font-size: 0.95rem; font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='#1e40af'" onclick="if(typeof openModal==='function')openModal('modal-quick-create');">
-            <span style="font-size:1.7rem;line-height:1;">🏆</span>
+          <button class="btn btn-cta hover-lift" id="btn-create-tournament-in-box" style="--shine-delay:0.6s;background: #1e40af; color: #ffffff; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='#1e40af'" onclick="if(typeof openModal==='function')openModal('modal-quick-create');">
+            <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">🏆</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">${_t('dashboard.newTournament')}</span>
           </button>
-          <button class="btn btn-cta hover-lift" id="btn-place" title="Procure lugares para seus jogos e marque presença" style="--shine-delay:1.2s;background:linear-gradient(135deg,#FFD700,#DAA520); color: #1a0f00; flex:1;min-width:0; min-height: 80px; font-size: 0.95rem; font-weight: 800; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="window.location.hash='#place'">
-            <span style="font-size:1.7rem;line-height:1;">📍</span>
+          <button class="btn btn-cta hover-lift" id="btn-place" title="Procure lugares para seus jogos e marque presença" style="--shine-delay:1.2s;background:linear-gradient(135deg,#FFD700,#DAA520); color: #1a0f00; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 800; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="window.location.hash='#place'">
+            <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">📍</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">Place</span>
           </button>
         </div>
