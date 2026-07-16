@@ -1250,116 +1250,11 @@ function renderTournaments(container, tournamentId = null) {
     // arrastar e soltar na seção "Sem Dupla" do torneio (v1.8.81)
     window._showPartnerPicker = function(tId) { /* removido */ };
 
-    // Auto-mover participantes solo para waitlist antes do sorteio em torneios de duplas
-    window._autoMoveSoloToWaitlist = function(t) {
-        if (!t) return 0;
-        // v4.4.97: dupla FORMADA (manual) — os avulsos sem-dupla são PENDÊNCIA
-        // CONSCIENTE (reabrir/formar/lista/exclusão via _showRemainderPanel), NUNCA
-        // mover em silêncio pra lista de espera. Só o modo SORTEIO (auto-pareamento)
-        // move solos automaticamente. Sem isso, o painel de sem-dupla era pulado e o
-        // fluxo caía direto no pow2 ignorando os avulsos (regressão do v4.4.96, que
-        // fez esta função reconhecer 'teams' e passar a comê-los antes de perguntar).
-        if (typeof window._isManualPairing === 'function' && window._isManualPairing(t)) return 0;
-        var enrollmentMode = t.enrollmentMode || t.enrollment || 'individual';
-        var teamSize = parseInt(t.teamSize) || 1;
-        if (!(window._isTeamEnrollMode(enrollmentMode) && teamSize === 2)) return 0;
-
-        var parts = Array.isArray(t.participants) ? t.participants : [];
-        var solo = parts.filter(function(p) {
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            return n && !window._entryTeamMembers(p); // v3.0.x: dupla por estrutura (p1Name/p2Name), não por '/' no nome
-        });
-        if (solo.length === 0) return 0;
-
-        // Remove solos dos participants e adiciona à waitlist
-        t.participants = parts.filter(function(p) {
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            return !n || window._entryTeamMembers(p); // v3.0.x: mantém duplas (estrutura) + entradas sem-nome
-        });
-        if (!Array.isArray(t.waitlist)) t.waitlist = [];
-        solo.forEach(function(p) {
-            // Evita duplicata na waitlist
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            var already = t.waitlist.some(function(w) {
-                var wn = typeof w === 'string' ? w : (w.displayName || w.name || '');
-                return wn === n;
-            });
-            if (!already) t.waitlist.push(p);
-        });
-        return solo.length;
-    };
-
-    // Move jogadores marcados como ausentes (W.O.) de t.participants para
-    // t.standbyParticipants antes do sorteio, para que o bracket não os inclua.
-    // Eles ficam disponíveis para substituição durante o torneio.
-    window._autoMoveAbsentToStandby = function(t) {
-        if (!t || !t.absent || Object.keys(t.absent).length === 0) return 0;
-        var absentMap = t.absent;
-        var parts = Array.isArray(t.participants) ? t.participants : [];
-        var toMove = parts.filter(function(p) {
-            return window._idMapHas(t, absentMap, p); // uid-first (objeto p)
-        });
-        if (toMove.length === 0) return 0;
-        var moveSet = {};
-        toMove.forEach(function(p) {
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            if (n) moveSet[n] = true;
-        });
-        t.participants = parts.filter(function(p) {
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            return !n || !moveSet[n];
-        });
-        if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
-        toMove.forEach(function(p) {
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            var already = t.standbyParticipants.some(function(w) {
-                var wn = typeof w === 'string' ? w : (w.displayName || w.name || '');
-                return wn === n;
-            });
-            if (!already) t.standbyParticipants.push(p);
-        });
-        return toMove.length;
-    };
-
-    // v2.2.39: "Garantir sorteio só entre os presentes" — move todos os NÃO
-    // presentes (sem check-in OU marcados ausentes) de t.participants para a
-    // lista de espera, para que o sorteio inclua apenas quem fez a chamada.
-    // Ausentes podem voltar depois (regra de 4 presentes acumulados na espera).
-    // "Presente" = NÃO ausente E (nome com check-in direto OU, sendo dupla
-    // "A / B", todos os membros com check-in) — espelha a regra canônica de
-    // presença de equipe usada na substituição (participants.js).
-    window._isParticipantPresent = function(t, name) {
-        if (!t || !name) return false;
-        var ci = t.checkedIn || {}, ab = t.absent || {};
-        if (window._idMapHas(t, ab, name)) return false;
-        if (window._idMapHas(t, ci, name)) return true;
-        if (name.indexOf('/') !== -1) {
-            var members = name.split('/').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
-            if (members.length >= 2 && members.every(function(m) { return window._idMapHas(t, ci, m); })) return true;
-        }
-        return false;
-    };
-
-    window._moveAbsentToWaitlistForPresentDraw = function(t) {
-        if (!t) return 0;
-        var parts = Array.isArray(t.participants) ? t.participants : [];
-        var _nm = function(p) { return typeof p === 'string' ? p : (p && (p.displayName || p.name) || ''); };
-        var notPresent = parts.filter(function(p) {
-            var n = _nm(p);
-            return n && !window._isParticipantPresent(t, n);
-        });
-        if (notPresent.length === 0) return 0;
-        var moveSet = {};
-        notPresent.forEach(function(p) { var n = _nm(p); if (n) moveSet[n] = true; });
-        t.participants = parts.filter(function(p) { var n = _nm(p); return !n || !moveSet[n]; });
-        if (!Array.isArray(t.waitlist)) t.waitlist = [];
-        notPresent.forEach(function(p) {
-            var n = _nm(p);
-            var already = t.waitlist.some(function(w) { return _nm(w) === n; });
-            if (!already) t.waitlist.push(p);
-        });
-        return notPresent.length;
-    };
+    // ── _autoMoveSoloToWaitlist / _autoMoveAbsentToStandby / _isParticipantPresent /
+    //    _moveAbsentToWaitlistForPresentDraw MOVERAM-SE para js/views/draw-decisions.js
+    //    (v1.2.29): são mutadores puros do elenco que o SORTEIO usa, e o sorteio roda na
+    //    CF — que carrega draw-decisions.js vendorado, mas não esta view. Ver
+    //    docs/sorteio-ciclo-decisoes.md. As chamadas seguem iguais (window._x).
 
     // v2.2.39: diálogo de escolha do modo de sorteio quando as inscrições
     // seguem ABERTAS após o sorteio. Organizador escolhe entre sortear com
@@ -1436,7 +1331,8 @@ function renderTournaments(container, tournamentId = null) {
             if (!tt) { close(); return; }
             var _nm = function(p) { return typeof p === 'string' ? p : (p && (p.displayName || p.name) || ''); };
             var parts = Array.isArray(tt.participants) ? tt.participants : [];
-            var presentCount = parts.filter(function(p) { return window._isParticipantPresent(tt, _nm(p)); }).length;
+            // ENTRADA, não rótulo — a presença é dos uids dos slots (ver _entryIsPresent).
+            var presentCount = parts.filter(function(p) { return window._isParticipantPresent(tt, p); }).length;
             if (presentCount < 2) {
                 if (typeof showNotification !== 'undefined') {
                     showNotification('⚠️ Poucos presentes', 'Marque pelo menos 2 participantes presentes (check-in) antes de sortear só entre os presentes.', 'warning');

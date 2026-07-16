@@ -136,6 +136,12 @@ require('./vendor/phase-generators.js');        // _phaseGen (precisa de phases-
 // _buildDoubleElimBracket/_buildRepechageDoubleElim/_applyMixedOriginCategories). O arquivo
 // tem DOM, mas só dentro de funções que o servidor nunca chama — no load é limpo.
 require('./vendor/tournaments-draw.js');
+// checkPowerOf2/checkOddEntries/_diagnoseAll/_soloMoveOut — mesma regra: DOM só dentro de
+// funções que o servidor não chama. Dep de draw-decisions (o núcleo do pow2 lê checkPowerOf2).
+require('./vendor/tournaments-draw-prep.js');
+// _applyDrawDecisions + os núcleos PUROS extraídos dos handlers de painel. É o que permite
+// o servidor APLICAR a decisão do organizador ao elenco com a MESMA função do cliente.
+require('./vendor/draw-decisions.js');
 
 // Sanity: o dispatcher precisa ter sido exposto (v2.3.91+ do cliente).
 if (typeof g.window._generateNextRound !== 'function') {
@@ -297,11 +303,23 @@ function canRecompile(t) {
 
 // ── SORTEIO INICIAL NO SERVIDOR (Etapa 3) ────────────────────────────────────
 // Espelha o TRECHO DO MOTOR de `generateDrawFunction` (tournaments-draw.js:1539-1642) —
-// e SÓ ele. Tudo que vem ANTES lá é UI/decisão e FICA NO CLIENTE: gates de re-sorteio,
-// diálogos, e os painéis de resolução (pow2 / resto / sem-dupla). Esses painéis já
-// gravam a decisão no doc (`p2Resolution`/`oddResolution`/`incompleteResolution`), então
-// o servidor só LÊ o que o organizador decidiu e EXECUTA. Painel = UI = cliente;
-// execução = cânone = CF.
+// e SÓ ele. Tudo que vem ANTES lá é UI/ESCOLHA e FICA NO CLIENTE: gates de re-sorteio,
+// diálogos e os painéis de resolução (pow2 / resto / sem-dupla / ímpar).
+//
+// ⚠️ CORREÇÃO (v1.2.29) — a versão anterior deste comentário dizia que "esses painéis já
+// gravam a decisão no doc (p2Resolution/oddResolution/incompleteResolution), então o
+// servidor só LÊ o que o organizador decidiu". ISSO ERA FALSO e foi a causa da quebra que
+// a v1.2.28 reverteu. O que os painéis gravam é o MODO; o ELENCO (quem foi pra espera /
+// quem saiu / quem ficou sem dupla) era mutado só EM MEMÓRIA e persistia de CARONA no
+// delta do `_commitInitialDraw` — de propósito (v4.5.7 tirou o sync() porque ele
+// clobberava a chave). Sem o commit do cliente, esse delta some e o servidor lê o elenco
+// VELHO: 35 inscritos → chave de 32 com 14 BYEs.
+//
+// COMO É AGORA: o cliente manda o PACOTE DE DECISÕES (`opts.decisions`, contrato em
+// docs/sorteio-ciclo-decisoes.md §5) e o servidor APLICA com `_applyDrawDecisions`
+// (vendor/draw-decisions.js) — as MESMAS funções que os painéis chamam — sobre o doc
+// FRESCO, dentro da transação, ANTES do motor. Escolha = UI = cliente;
+// aplicação + sorteio = cânone = CF.
 //
 // ⚠️ NÃO faz o commit: quem chama decide como persistir (o cliente usa _commitInitialDraw,
 // um delta atômico sobre o doc fresco — ver project_concurrency_safe_saves). Aqui só muta
@@ -318,6 +336,16 @@ function drawInitial(t, opts) {
   // Nome vivo por uid antes do motor (storage é só-uid; o motor lê nome). Espelha a
   // linha 1331 do cliente. O caller popula _profileNameByUid.
   if (typeof win._rehydrateEntryNames === 'function') win._rehydrateEntryNames(t);
+
+  // ── PACOTE DE DECISÕES ────────────────────────────────────────────────────────────
+  // Aplica ao ELENCO o que o organizador escolheu nos painéis, com as MESMAS funções que
+  // os painéis usam, sobre o doc FRESCO. Tem que rodar ANTES de qualquer leitura de
+  // elenco (formação de duplas / pool / cfg) — é o passo que faltava e que fez o servidor
+  // sortear o elenco velho. Ver docs/sorteio-ciclo-decisoes.md.
+  let _decisions = null;
+  if (opts.decisions && typeof win._applyDrawDecisions === 'function') {
+    _decisions = win._applyDrawDecisions(t, opts.decisions).applied;
+  }
 
   // Suíço-classificatório tem ramo próprio no cliente (round-gen incremental) — ainda
   // não canonizado. Não fingir que sabe: devolve e o cliente sorteia.
@@ -373,7 +401,7 @@ function drawInitial(t, opts) {
       : ((t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return !m.isSitOut; }).length);
     const _lso = (t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return m.isSitOut; }).length;
     t.updatedAt = new Date().toISOString();
-    return { ok: true, native: true, format: t.format, matchCount: _lrc, sitOuts: _lso, allMaleCount: _allMale };
+    return { ok: true, native: true, format: t.format, matchCount: _lrc, sitOuts: _lso, allMaleCount: _allMale, decisions: _decisions };
   }
 
   // Eliminatória / Grupos / Rei-Rainha: matches flat taggeados na fase 0 via storePhase.
@@ -393,7 +421,7 @@ function drawInitial(t, opts) {
   }
   t._canonicalDraw = true; t.status = 'active';
   t.updatedAt = new Date().toISOString();
-  return { ok: true, native: false, format: t.format, matchCount: (t.matches || []).length, allMaleCount: _allMale };
+  return { ok: true, native: false, format: t.format, matchCount: (t.matches || []).length, allMaleCount: _allMale, decisions: _decisions };
 }
 
 module.exports = { generateLigaRound, compileFromFmt2, canRecompile, drawInitial, _window: g.window };

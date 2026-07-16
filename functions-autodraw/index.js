@@ -26,7 +26,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '1.2.28';
+const CF_VERSION = '1.2.29';
 
 initializeApp();
 const db = getFirestore();
@@ -136,10 +136,17 @@ function _ligaSeasonEnded(t, now) {
 // função diferente com app desatualizado" (dono, jul/2026). O app PEDE, o servidor
 // SORTEIA e GRAVA. Binário de loja velho deixa de sortear com motor velho.
 //
-// SPLIT CANÔNICO — painel fica, execução vai: gates de re-sorteio e os painéis de
-// resolução (pow2/resto/sem-dupla) são UI e FICAM no cliente; eles já gravam a decisão
-// no doc (p2Resolution/oddResolution/incompleteResolution). Aqui só LÊ o que o
-// organizador decidiu e EXECUTA.
+// SPLIT CANÔNICO — painel ESCOLHE, servidor APLICA: os gates de re-sorteio e os painéis
+// de resolução (pow2/resto/sem-dupla) são UI e FICAM no cliente. A ESCOLHA viaja no
+// `request.data.decisions` e é aplicada AQUI, sobre o doc fresco, com as MESMAS funções do
+// cliente (draw-decisions.js, vendorado).
+//
+// ⚠️ v1.2.29 — a versão anterior deste comentário dizia que "os painéis já gravam a decisão
+// no doc, aqui só lê e executa". ERA FALSO e foi a causa da quebra revertida na v1.2.28: o
+// que os painéis gravavam era o MODO; o ELENCO (quem foi pra espera / quem saiu) era mutado
+// só em memória e ia pro banco de carona no delta do _commitInitialDraw do cliente. Sem esse
+// commit, o delta some e o servidor lê o elenco VELHO — 35 inscritos viraram chave de 32 com
+// 14 BYEs. Ver docs/sorteio-ciclo-decisoes.md.
 
 // Espelha isTournamentAdmin() das firestore.rules:20. As rules protegem o WRITE; esta
 // função protege o RPC — a CF grava com Admin SDK (bypassa rules), então sem isto
@@ -238,6 +245,10 @@ exports.drawRound = onCall(async (request) => {
   const tId = String((request.data && request.data.tournamentId) || '').trim();
   if (!tId) throw new HttpsError('invalid-argument', 'tournamentId é obrigatório.');
   const allowRedraw = !!(request.data && request.data.allowRedraw);
+  // Pacote de decisões do pré-sorteio (o organizador ESCOLHEU nos painéis; aqui a gente
+  // APLICA, com as mesmas funções do cliente, sobre o doc fresco). Ver
+  // docs/sorteio-ciclo-decisoes.md §5. Sem pacote = nada a aplicar (torneio sem pendência).
+  const decisions = (request.data && request.data.decisions) || null;
 
   // Motor indisponível → NUNCA improvisar. Devolve erro e o cliente decide.
   if (typeof drawInitial !== 'function' || !drawWindow) {
@@ -261,7 +272,8 @@ exports.drawRound = onCall(async (request) => {
 
   // A VERSÃO no log é o contrato: se a linha não disser CF_VERSION, é build velha atendendo
   // (deploy não pegou / instância antiga). Sem isto não dá pra saber que código respondeu.
-  console.log(`drawRound v${CF_VERSION}: pedido de ${uid} pro torneio ${tId}` + (allowRedraw ? ' [re-sorteio]' : ''));
+  console.log(`drawRound v${CF_VERSION}: pedido de ${uid} pro torneio ${tId}` + (allowRedraw ? ' [re-sorteio]' : '') +
+    (decisions ? ' decisoes=' + JSON.stringify(decisions) : ' (sem decisoes)'));
 
   let out;
   try {
@@ -295,14 +307,14 @@ exports.drawRound = onCall(async (request) => {
       _clearForRedraw(t);
     }
 
-    const res = drawInitial(t, { idStamp: Date.now() });
+    const res = drawInitial(t, { idStamp: Date.now(), decisions: decisions });
     if (!res || !res.ok) {
       // storePhase falho (ex.: 'no-entrants') NUNCA vira sucesso — era isso que dava
       // "diz que sorteou mas não mostra chave".
       throw _drawFail('failed-precondition', (res && res.reason) || 'draw-failed',
         { tId, format: t.format, teamSize: t.teamSize, enrollmentMode: t.enrollmentMode,
           participantes: (t.participants || []).length, p2Resolution: t.p2Resolution,
-          erro: (res && res.error) || '' });
+          decisoes: decisions, erro: (res && res.error) || '' });
     }
 
     // Histórico do sorteio: quem GRAVA o sorteio grava a entrada. No cliente ela só

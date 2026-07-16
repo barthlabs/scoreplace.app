@@ -773,28 +773,12 @@ window._showAbsenteeResolutionDialog = function (tId, present, absentees, procee
 window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
   const t = window._findTournamentById(tId);
   if (!t) return;
-  // Núcleo PURO da chamada pré-sorteio (transaction-safe): particiona presentes×
-  // ausentes pelo check-in do `tt` passado, move ausentes p/ espera|desclassificados
-  // (dedup por nome) e seta participants=presentes. Idempotente (2ª passada: todos os
-  // participantes restantes já são presentes → ninguém a mover). Reusável no portão.
-  var _applyRoll = function (tt) {
-    if (!tt.checkedIn) tt.checkedIn = {};
-    if (!tt.absent) tt.absent = {};
-    var _pp = Array.isArray(tt.participants) ? tt.participants : Object.values(tt.participants || {});
-    var pres = [], abs = [];
-    _pp.forEach(function (p) { if (window._idMapHas(tt, tt.checkedIn, p)) pres.push(p); else abs.push(p); });
-    var bucket = (mode === 'waitlist') ? 'waitlist' : 'disqualified';
-    if (!Array.isArray(tt[bucket])) tt[bucket] = [];
-    abs.forEach(function (p) {
-      var en = window._pName(p);
-      if (!tt[bucket].some(function (w) { return window._pName(w) === en; })) tt[bucket].push(p);
-      // Estado neutro (pode ser chamado depois p/ substituir W.O.)
-      window._idMapDel(tt, tt.checkedIn, p);
-      window._idMapDel(tt, tt.absent, p);
-    });
-    tt.participants = pres;
-    return { present: pres, absent: abs };
-  };
+  // Núcleo PURO da chamada pré-sorteio: EXTRAÍDO pra draw-decisions.js
+  // (window._applyPresenceRoll) — a CF `drawRound` aplica a MESMA função sobre o doc
+  // fresco quando o pacote de decisões traz `absentees`. Aqui era uma closure local:
+  // o servidor não conseguia chamá-la e teria que reimplementar a partição (2ª versão
+  // do código = o bug que a canonização mata). Ver docs/sorteio-ciclo-decisoes.md.
+  var _applyRoll = function (tt) { return window._applyPresenceRoll(tt, mode); };
   var _rc = _applyRoll(t); // local otimista + arrays pra UI/log
   var present = _rc.present, absentees = _rc.absent;
 

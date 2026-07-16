@@ -33,6 +33,14 @@ const FILES = [
   // O arquivo tem DOM (painéis/diálogos), mas só dentro de funções que o servidor NUNCA
   // chama — no load ele é limpo (mesma regra do _fireLigaAutoDraw, ver README).
   'tournaments-draw.js',
+  // checkPowerOf2/checkOddEntries/_diagnoseAll/_soloMoveOut — o diagnóstico e os núcleos
+  // de elenco que a resolução usa. Mesmo caso do tournaments-draw.js: tem DOM (painéis),
+  // mas só DENTRO de funções que o servidor nunca chama; no load é limpo (verificado).
+  'tournaments-draw-prep.js',
+  // _applyDrawDecisions + núcleos PUROS extraídos dos handlers de painel (resto/pow2/
+  // ímpar/chamada). É o que faz o servidor aplicar a decisão do organizador ao elenco
+  // com a MESMA função do cliente. Ver docs/sorteio-ciclo-decisoes.md.
+  'draw-decisions.js',
 ];
 
 if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });

@@ -62,7 +62,10 @@ sandbox._profileAvatarUrl = function (n) { return 'avatar://' + n; };
 sandbox.AppStore = sandbox.AppStore || { tournaments: [], logAction: noop, sync: noop, currentUser: null };
 
 var ROOT = path.join(__dirname, '..', 'js');
-function loadAbs(full) { vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: full }); }
+function loadAbs(full) {
+  vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: full });
+  sandbox._callDrawRound = h.drawRoundStub; // ver headless: o arquivo real sobrescreveria o stub
+}
 
 // i18n REAL — pra os nomes de rodada saírem em pt-BR ("Semifinais"/"Final"/"Quartas de Final")
 // em vez da chave crua ("bracket.semiFinal"). i18n.js define window._t + _translations;
@@ -102,6 +105,9 @@ sandbox.AppStore.logAction = noop;
 sandbox.AppStore.getTournament = function (id) { return sandbox.AppStore.tournaments.find(function (x) { return String(x.id) === String(id); }); };
 sandbox._notifyDrawPersonalized = noop;
 sandbox._notifyTournamentParticipants = noop;
+
+// O stub da CF `drawRound` (que roda o motor REAL via draw-core) vive no headless.js —
+// base deste harness. Ver lá.
 sandbox.showAlertDialog = noop;
 sandbox.checkOddEntries = function () { return { isOdd: false }; };
 sandbox.showOddEntriesPanel = noop;

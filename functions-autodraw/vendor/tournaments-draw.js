@@ -32,6 +32,8 @@ window._clearDrawRuntimeFlags = function (t) {
     // Sorteio de Vagas + snapshots + flags internos do motor
     'drawSelectionDone', 'waitlistOrder', 'preDrawEnrollees', 'pendingDraw',
     '_drawBalanceMode', '_canonicalDraw', '_cleanupApplied', '_skipCatValidation',
+    // pacote de decisões do pré-sorteio (vai pra CF na chamada; cancelar zera junto)
+    '_drawDecisions',
     // estado de PLAY derivado do sorteio (standings/eliminação/W.O./substituição)
     'swissEliminated', 'swissRoundsData', 'swissStandings', 'classification',
     'opponentHistory', 'woClaims', 'ligaSubInvites', 'ligaRRSchedule'
@@ -1595,7 +1597,20 @@ window.generateDrawFunction = function (tId) {
         // velha que se quer matar. Só 'swiss' (round-gen incremental, não canonizado) segue
         // no ramo local abaixo. Ver [[project_draw_canonization_cf]].
         var _redraw = !!t._redrawConfirmed; // o gate limpou só o LOCAL; o doc ainda tem a chave
-        window._callDrawRound({ tournamentId: String(tId), allowRedraw: _redraw }).then(function (_res) {
+        // ── PACOTE DE DECISÕES (v1.2.29) — a peça que faltava e derrubou a v1.2.28 ────────
+        // Os painéis são UI e ESCOLHEM; quem APLICA ao elenco é a CF, com as MESMAS funções
+        // (draw-decisions.js, vendorado). Antes, o elenco decidido (sem-dupla→espera, pow2→
+        // espera/exclusão) só existia NA MEMÓRIA do cliente e ia pro banco de CARONA no delta
+        // do _commitInitialDraw. Sem esse commit, o delta some e o servidor lê o elenco VELHO:
+        // 35 inscritos → chave de 32 com 14 BYEs. Agora a escolha viaja explícita.
+        //
+        // O pacote leva SÓ o que NÃO chega ao doc por outro caminho. Ímpar/incompletos/chamada
+        // JÁ gravam (sync/mutate) — a CF lê do doc; mandá-los seria re-aplicar sobre um doc já
+        // resolvido (e "remover o último" não tem alvo: cortaria OUTRA pessoa). Os que vão
+        // aqui são todos re-aplicáveis sem efeito: sem-dupla (não há mais avulso), pow2 e resto
+        // (o alvo é a potência de 2, já atingida). Ver docs/sorteio-ciclo-decisoes.md.
+        var _decisions = t._drawDecisions || null;
+        window._callDrawRound({ tournamentId: String(tId), allowRedraw: _redraw, decisions: _decisions }).then(function (_res) {
             var d = (_res && _res.data) || {};
             if (!d.ok || !d.tournament) throw new Error('resposta inválida do servidor');
             // Estado AUTORITATIVO do servidor no `t` local. Mutação in-place: preserva as
