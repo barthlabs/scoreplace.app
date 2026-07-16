@@ -898,6 +898,21 @@ body.sp-drag-compact .sp-dnd-host .participant-card::before {
   }
 }
 
+/* v1.2.28: fim dos ESPAÇOS PRETOS VAZIOS na dashboard. Os slots de widget
+   (movimento nos locais, partida casual ativa, presença ativa) têm margin-bottom
+   no wrapper e ficam VAZIOS na maior parte do tempo (sem casual/presença/movimento)
+   → reservavam espaço morto escuro. `:empty` zera a margem/altura quando não há
+   conteúdo; quando o widget hidrata, a margem volta sozinha. Regra única, canônica —
+   qualquer slot novo que também possa ficar vazio deve entrar aqui. */
+#dashboard-presences-widget:empty,
+#dashboard-casual-link-widget:empty,
+#dashboard-myactive-widget:empty,
+#dash-profile-nudge-slot:empty {
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+}
+
 /* ==== MODALS ==== */
 .modal-overlay {
   position: fixed;

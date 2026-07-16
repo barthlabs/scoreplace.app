@@ -2905,11 +2905,11 @@ function renderDashboard(container) {
            da topbar. Aparece com >1 torneio visível (pedido do usuário). -->
       ${allUnique.length > 1 ? _dashFilterBar : ''}
       ${runningBandHtml}
+      ${runningBottomHtml}
       ${awaitingStartHtml}
       ${favoritesBandHtml}
       ${(window._dashView === 'compact') ? '<div class="compact-list">' + _buildCompactList(filtered) + '</div>' : '<div class="cards-grid">' + filteredHtml + '</div>'}
     </div>
-    ${runningBottomHtml}
     ${(window._dashView === 'compact') ? '' : finishedSectionHtml}
     ${(() => {
       // v0.16.60: diag SEMPRE visível, independente de filtro — usuário
