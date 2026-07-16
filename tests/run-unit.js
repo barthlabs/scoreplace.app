@@ -60,7 +60,8 @@ const SUITES = [
   'tests/apply-result.test.js',
   'tests/apply-round-close.test.js',
   'tests/apply-wo.test.js',
-  'tests/wo-individual.test.js',   // W.O. individual: o alvo é a PESSOA (uid do slot), nunca a dupla
+  'tests/wo-individual.test.js',
+  'tests/uid-poison.test.js',      // TRAVA do cânone: fixture envenenado (todos com o mesmo nome + rótulo velho) — quem resolve por nome fica VERMELHO   // W.O. individual: o alvo é a PESSOA (uid do slot), nunca a dupla
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',

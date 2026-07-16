@@ -384,16 +384,52 @@ window._applyWO = function (t, opts) {
     // adversário TBD/BYE → não aplica (evita winner='TBD' propagando)
     if (!oppName || oppName === 'TBD' || oppName === 'BYE') { waitedTBD = true; continue; }
     const entryStr = m[slot] || '';
-    const isTeamEntry = entryStr.includes('/');
-    const members = isTeamEntry ? entryStr.split(/\s*\/\s*/).map(n => n.trim()) : [entryStr];
-    const isIndividualWO = woScope === 'individual' && isTeamEntry && members.indexOf(absentName) !== -1 && entryStr !== absentName;
+    // ── É W.O. INDIVIDUAL (uma PESSOA da dupla) ou do LADO inteiro? — POR UID ──────
+    // v1.2.33: isto decidia por NOME — `entryStr.includes('/')` + `split('/')` +
+    // `members.indexOf(absentName)`. Errado por dois motivos: (1) a barra é TIPOGRAFIA,
+    // não separador — o lado é 2 SLOTS com 2 uid ([[project_uid_identity_canon_locked]]);
+    // (2) casar por nome só acerta quando o rótulo do slot bate exatamente com o
+    // displayName vivo — homônimo, rename ou nome resolvido diferente caíam no `else` e
+    // viravam W.O. de TIME, calados, contra o toggle individual.
+    // Agora: o lado é uma dupla se os SLOTS têm 2+ uid; e é individual se o ausente é UM
+    // desses uids. Nome só entra quando não há uid nenhum (guest/fictício — a exceção).
+    const slotUids = (typeof window._slotUids === 'function') ? window._slotUids(m, slot).filter(Boolean) : [];
+    let isTeamEntry, members, isIndividualWO;
+    if (slotUids.length) {
+      isTeamEntry = slotUids.length > 1;
+      members = slotUids;
+      isIndividualWO = woScope === 'individual' && isTeamEntry &&
+        absentUids.length > 0 && slotUids.some(u => absentUids.indexOf(u) !== -1) &&
+        !slotUids.every(u => absentUids.indexOf(u) !== -1); // o lado TODO ausente = W.O. do lado
+    } else {
+      // Sem uid no slot: guest/fictício/legado — o nome é a única identidade que existe.
+      isTeamEntry = entryStr.includes('/');
+      members = isTeamEntry ? entryStr.split(/\s*\/\s*/).map(n => n.trim()) : [entryStr];
+      isIndividualWO = woScope === 'individual' && isTeamEntry && members.indexOf(absentName) !== -1 && entryStr !== absentName;
+    }
     // W.O. individual de dupla sem substituto → parceiro vai pra lista de espera
     if (isIndividualWO) {
-      const partner = members.find(n => n !== absentName);
-      if (partner) {
-        if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
-        if (!t.standbyParticipants.some(p => _getName(p) === partner)) t.standbyParticipants.push(partner);
-        partnerToWaitlist = partner;
+      // O PARCEIRO é o outro SLOT (uid), não "o outro nome depois da barra".
+      let partner = null;
+      if (slotUids.length) {
+        const pUid = slotUids.find(u => absentUids.indexOf(u) === -1);
+        if (pUid) {
+          const _parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+          // a entrada do parceiro (a dupla) já está fora do elenco; guarda a PESSOA por uid
+          partner = (typeof window._displayNameForUid === 'function') ? window._displayNameForUid(pUid, '') : '';
+          if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+          const _has = t.standbyParticipants.some(p => (typeof window._participantUids === 'function')
+            ? window._participantUids(p).indexOf(pUid) !== -1 : _getName(p) === partner);
+          if (!_has) t.standbyParticipants.push({ uid: pUid, displayName: partner || undefined });
+          partnerToWaitlist = partner || pUid;
+        }
+      } else {
+        partner = members.find(n => n !== absentName);
+        if (partner) {
+          if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+          if (!t.standbyParticipants.some(p => _getName(p) === partner)) t.standbyParticipants.push(partner);
+          partnerToWaitlist = partner;
+        }
       }
     }
     // 'W.O.' no lado AUSENTE (perdedor); vencedor = oponente
