@@ -11,6 +11,12 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
+      '<div style="font-weight:800; color:#818cf8; font-size:1rem; margin-bottom:8px;">📞 v1.2.30 — Novo canal do desenvolvedor <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(16 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📞 Fale com o Desenvolvedor:</b> o WhatsApp de contato mudou para <b>+55 11 98772-6873</b>. O botão verde no app já aponta pro número novo — é só clicar e falar com a gente.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #25D366;border-radius:12px;padding:14px 16px;background:rgba(37,211,102,0.08);">' +
       '<div style="font-weight:800; color:#25D366; font-size:1rem; margin-bottom:8px;">💬 v1.2.24 — O grupo do WhatsApp entra no app <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

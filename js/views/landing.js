@@ -180,7 +180,7 @@
         '<span>Terra Barth Serviços Administrativos Ltda</span>' +
         '<span>CNPJ 51.590.996/0001-73</span>' +
         '<span>Rua Ministro Alfredo Nasser, 68 — São Paulo, SP, 05516-090, Brasil</span>' +
-        '<a href="tel:+5511966581959">+55 11 96658-1959</a>' +
+        '<a href="tel:+5511987726873">+55 11 98772-6873</a>' +
       '</address>' +
     '</footer>';
   }

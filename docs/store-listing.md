@@ -22,7 +22,7 @@ Base de submissão: branch `native/v1-submit` (login nativo + smartwatch + fix h
 | Idiomas suportados | pt-BR, en (i18n no app) |
 | Versão exibida (marketing) | **a definir** — hoje `SCOREPLACE_VERSION = 4.3.35-beta` |
 | Site | https://scoreplace.app |
-| Suporte | scoreplace.app@gmail.com · WhatsApp +55 11 96658-1959 |
+| Suporte | scoreplace.app@gmail.com · WhatsApp +55 11 98772-6873 |
 | Política de Privacidade | https://scoreplace.app/#privacy |
 | Termos de Uso | https://scoreplace.app/#terms |
 | Firebase | projeto `scoreplace-app` (config já versionada no repo) |
