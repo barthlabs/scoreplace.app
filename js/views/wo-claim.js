@@ -123,21 +123,63 @@
     return 'g|' + ctx.roundIndex + '|' + ctx.groupName;
   }
   // membros "apontáveis" + matches + uids — resolvido do ctx fresco OU do claim.
+  // ALVOS do W.O. num jogo. Cada alvo = { name, uids:[…] } — SEMPRE com uid junto, porque
+  // o resto do fluxo (confirmadores, _applyWO) identifica por uid, e nome de dupla não
+  // resolve pessoa nenhuma em t.participants (os inscritos são as DUPLAS).
+  //
+  // v1.2.32 — W.O. INDIVIDUAL: o alvo é a PESSOA, não o LADO. Antes isto era
+  // `members: [m.p1, m.p2]` — os dois lados — e a tela oferecia "2 duplas": o organizador
+  // só conseguia dar W.O. na dupla inteira, contra o toggle `woScope: 'individual'`. O motor
+  // (_applyWO) não tinha culpa: `isIndividualWO` exige que o absentName seja o MEMBRO
+  // (`entryStr !== absentName`), e recebia a dupla — então fazia W.O. de time, obedecendo.
+  // Dono: _"o individual pressupõe que no momento do W.O. não é do time todo sem escolha"_.
+  // Decompõe pelos uids dos SLOTS (`_slotUids` — team*Uids/p*Uid), nunca quebrando o nome
+  // no '/': a barra é tipografia. Ver [[project_wo_individual_substitution_rule]] /
+  // [[project_uid_identity_canon_locked]].
+  //
+  // Lado com 0 ou 1 uid (guest/fictício, que só tem nome) fica como LADO — é a exceção
+  // canônica: sem uid não há pessoa a apontar individualmente.
+  function _matchMembers(t, m) {
+    var indiv = (t.woScope || 'individual') === 'individual';
+    var out = [];
+    ['p1', 'p2'].forEach(function (side) {
+      var s = m[side];
+      if (!s || s === 'TBD' || s === 'BYE') return;
+      var uids = (typeof window._slotUids === 'function') ? window._slotUids(m, side).filter(Boolean) : [];
+      if (indiv && uids.length > 1) {
+        uids.forEach(function (u) {
+          var nm = (typeof window._displayNameForUid === 'function') ? window._displayNameForUid(u, '') : '';
+          out.push({ name: nm || String(u), uids: [u] });
+        });
+        return;
+      }
+      out.push({ name: s, uids: uids.length ? uids : _nameUids(t, s) });
+    });
+    return out;
+  }
+
+  // Exposto: é o ponto ÚNICO que decide "quem pode levar W.O. neste jogo". Testado em
+  // tests/wo-individual.test.js — a régua do cânone, não um detalhe de tela.
+  window._woMatchMembers = function (t, m) { return _matchMembers(t, m); };
+
   function _resolveCtx(t, ctx) {
     if (ctx.scope === 'match') {
       var m = _findMatchById(t, ctx.matchId);
       if (!m) return null;
-      var sides = [m.p1, m.p2].filter(function (s) { return s && s !== 'TBD' && s !== 'BYE'; });
-      return { scope: 'match', m: m, matchId: ctx.matchId, members: sides, matches: [m], done: !!(m.winner || m.isBye || m.isSitOut) };
+      return { scope: 'match', m: m, matchId: ctx.matchId, members: _matchMembers(t, m), matches: [m], done: !!(m.winner || m.isBye || m.isSitOut) };
     }
     var matches = Array.isArray(ctx.matches) ? ctx.matches : (Array.isArray(ctx.matchIds) ? ctx.matchIds.map(function (id) { return _findMatchById(t, id); }).filter(Boolean) : []);
     var players = Array.isArray(ctx.players) ? ctx.players.slice() : [];
     var done = matches.length > 0 && matches.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
-    return { scope: 'group', roundIndex: ctx.roundIndex, groupName: ctx.groupName, members: players, players: players, matches: matches, done: done };
+    // Grupo/Liga: o pool já é de PESSOAS (players são nomes individuais) — só anexa o uid.
+    var members = players.map(function (nm) { return { name: nm, uids: _nameUids(t, nm) }; });
+    return { scope: 'group', roundIndex: ctx.roundIndex, groupName: ctx.groupName, members: members, players: players, matches: matches, done: done };
   }
+  // Uids de TODA a gente do contexto (quem pode apontar / quem confirma). Lê o uid que o
+  // alvo já carrega — resolver por nome aqui devolvia [] pra pessoa dentro de dupla.
   function _allCtxUids(t, rc) {
     var out = {};
-    rc.members.forEach(function (nm) { _nameUids(t, nm).forEach(function (u) { out[u] = 1; }); });
+    rc.members.forEach(function (mb) { (mb && mb.uids || []).forEach(function (u) { if (u) out[u] = 1; }); });
     return Object.keys(out);
   }
 
@@ -282,8 +324,12 @@
     // ── sem claim: declarar quem faltou ──
     var canDeclare = (uid && _allCtxUids(t, rc).indexOf(uid) !== -1) || _canManage(t);
     if (!canDeclare) { _woCloseOverlay(); return; }
-    var picks = rc.members.map(function (nm) {
-      return '<button type="button" onclick="window._woDeclare(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(nm) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 ' + _esc(nm) + '</button>';
+    // Um botão por ALVO. No W.O. individual de duplas isso são as 4 PESSOAS do jogo (não os
+    // 2 lados): o organizador aponta uma por vez — podendo, no limite, as duas da mesma dupla
+    // levarem W.O., mas cada uma por escolha. O uid viaja junto (é ele que identifica).
+    var picks = rc.members.map(function (mb) {
+      var _u = (mb.uids || [])[0] || '';
+      return '<button type="button" onclick="window._woDeclare(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 ' + _esc(mb.name) + '</button>';
     }).join('');
     _overlay(_header('Faltou alguém?') +
       '<div style="padding:1.1rem;">' +
@@ -342,7 +388,9 @@
   function _isLigaGroup(t, c) { return c && c.scope === 'group' && (_isLiga(t) || _isMonarchFmt(t)); }
 
   // ─── ações ─────────────────────────────────────────────────────────────────────
-  window._woDeclare = function (tId, ctxKey, absentName) {
+  // absentUid: o uid da PESSOA apontada (vem do botão do picker). É a identidade real do
+  // alvo — `_nameUids` só serve de rede pro fictício/legado (sem conta, o nome é tudo que há).
+  window._woDeclare = function (tId, ctxKey, absentName, absentUid) {
     var t = _findT(tId); if (!t) return;
     var ctx = _ctxReg[ctxKey]; if (!ctx) return;
     var rc = _resolveCtx(t, ctx); if (!rc) return;
@@ -352,7 +400,7 @@
       id: 'wo_' + Date.now() + '_' + _rand(),
       scope: rc.scope,
       byUid: cu.uid, byName: cu.displayName || _voterName(t, cu.uid) || '',
-      absentName: absentName, absentUids: _nameUids(t, absentName),
+      absentName: absentName, absentUids: absentUid ? [String(absentUid)] : _nameUids(t, absentName),
       status: 'pending', confirms: {}, createdAt: new Date().toISOString()
     };
     if (rc.scope === 'match') { c.matchId = rc.matchId; }
