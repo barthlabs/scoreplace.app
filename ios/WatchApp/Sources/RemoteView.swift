@@ -61,7 +61,10 @@ struct RemoteView: View {
             if state.tieRulePending && !state.isFinished { tieOverlay }
             if state.isFinished { winnerOverlay }   // fim de jogo cobre os botões +1
         }
-        .onChange(of: state.isFinished) { _, finished in
+        // Forma de 1 parâmetro (recebe o valor novo) de propósito: a de 2 params
+        // é watchOS 10+ e sozinha empurrava o mínimo do watch app pra 10.0 — o que
+        // sumia o scoreplace da lista do app Relógio em quem tem Series 3 (máx 8.8.2).
+        .onChange(of: state.isFinished) { finished in
             if !finished { replayDismissed = false; reshuffle = false }  // recomeçou → reseta
         }
     }
