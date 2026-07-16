@@ -887,10 +887,13 @@ body.sp-drag-compact .sp-dnd-host .participant-card::before {
   }
 }
 
+/* v1.2.26: em tela grande os cards de torneio ficam em 2 colunas (não 3) —
+   com o container agora ocupando até 2040px, 2 colunas dão cards maiores e mais
+   legíveis, aproveitando a área sem espremer 3 por linha. Pedido do dono. */
 @media (min-width: 1200px) {
   .cards-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 2rem;
   }
 }
