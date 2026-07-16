@@ -117,6 +117,20 @@
           window._casualStart();
         }
         break;
+      case 'rrNext':
+        // Rei/Rainha: avança pro próximo jogo da série de 3 (rotaciona as duplas
+        // e zera o placar). Dirige a MESMA função do botão do celular — a
+        // rotação e a contagem de vitórias vivem lá, nunca aqui.
+        if (typeof window._reiRainhaNextRound === 'function') {
+          window._reiRainhaNextRound();
+        }
+        break;
+      case 'rrFinal':
+        // Rei/Rainha: encerra a série e mostra a classificação final.
+        if (typeof window._reiRainhaShowFinal === 'function') {
+          window._reiRainhaShowFinal();
+        }
+        break;
       case 'setServer':
         // Escolha do sacador nos 2 primeiros jogos (o equivalente no relógio ao
         // arrastar a bola no celular). Dirige a MESMA função — o hard lock de

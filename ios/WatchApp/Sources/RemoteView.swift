@@ -49,6 +49,8 @@ struct RemoteView: View {
     var onResolveTie: (String) -> Void = { _ in } // "extend" (prorrogar) | "tiebreak"
     var onStart: () -> Void = {}                  // "Iniciar" a partida montada no celular
     var onSetServer: (Int, Int) -> Void = { _, _ in } // (time, índice do jogador)
+    var onReiRainhaNext: () -> Void = {}          // próximo jogo da série de 3
+    var onReiRainhaFinal: () -> Void = {}         // encerra a série → classificação
     @State private var replayDismissed = false   // Cancelar esconde o prompt
     @State private var reshuffle = false         // toggle "Re-sortear duplas"
     @State private var pickingServer = false     // seletor de sacador aberto
@@ -109,7 +111,13 @@ struct RemoteView: View {
             // Linha do relógio: Set + cadeado à esquerda, palavra GAMES
             // centralizada (o relógio do sistema fica à direita).
             ZStack {
-                Text("GAMES").font(.system(size: 9)).kerning(1).foregroundColor(.spMetaDim)
+                // No Rei/Rainha o rótulo vira "JOGO N/3": saber em que ponto da
+                // série você está importa mais que a palavra GAMES, e as duplas
+                // trocam a cada jogo — sem isto o relógio não dá nenhuma pista.
+                Text(state.reiRainha && state.rrRound < 3
+                     ? "JOGO \(state.rrRound + 1)/3" : "GAMES")
+                    .font(.system(size: 9)).kerning(1)
+                    .foregroundColor(state.reiRainha ? Color(hex: 0xF59E0B) : .spMetaDim)
                 HStack(spacing: 4) {
                     if state.active {
                         // SETS só em melhor-de-N (showsSets). Em set único — Beach
@@ -441,12 +449,15 @@ struct RemoteView: View {
         let pal = TeamPalette.of(w == 2 ? 2 : 1)
         return ScrollView {
             VStack(spacing: 3) {
-                Text("🏆").font(.system(size: 34))
+                // Troféu e nomes encolhem no 40mm: em tamanho cheio, o botão do
+                // Rei/Rainha ("Jogo N de 3") caía abaixo da dobra e exigia rolar
+                // pra achar a ação principal da tela. Medido no simulador.
+                Text("🏆").font(.system(size: isSmallWatch ? 24 : 34))
                 if w == 1 || w == 2 {
                     Text("Vencedor").font(.system(size: 11)).kerning(1).foregroundColor(.spMeta)
                     ForEach(state.winnerNames, id: \.self) { n in
                         Text(n)
-                            .font(.system(size: 22, weight: .semibold))
+                            .font(.system(size: isSmallWatch ? 17 : 22, weight: .semibold))
                             .foregroundColor(pal.name)
                             .lineLimit(2)
                             .multilineTextAlignment(.center)
@@ -458,7 +469,14 @@ struct RemoteView: View {
                     Text("Empate").font(.system(size: 18, weight: .semibold)).foregroundColor(.spMeta)
                 }
                 Text(finalScoreLine).font(.system(size: 12)).foregroundColor(.spMetaDim).padding(.top, 3)
-                if state.canReplay && !replayDismissed {
+                // Rei/Rainha manda no fim de jogo: a série de 3 continua (duplas
+                // rotacionam), então NÃO é "jogar novamente" — é o próximo jogo.
+                // Depois do 3º, a série encerra e vem a classificação individual.
+                if state.reiRainha && state.rrRound < 3 {
+                    reiRainhaControls.padding(.top, 8)
+                } else if state.reiRainha {
+                    rrStandingsView.padding(.top, 8)
+                } else if state.canReplay && !replayDismissed {
                     replayControls.padding(.top, 10)
                 } else {
                     // Sem esta linha a tela de vitória vira um beco sem saída MUDO:
@@ -476,6 +494,67 @@ struct RemoteView: View {
             .padding(.vertical, 10)
         }
         .background(Color.spBg.ignoresSafeArea())   // opaco: fim de jogo é tela definitiva
+    }
+
+    // Rei/Rainha, fim de um jogo da série: avança pro próximo (o celular rotaciona
+    // as duplas) ou, no 3º, encerra e mostra a classificação. Os rótulos seguem os
+    // do celular ("Jogo N de 3", "Ver Resultado Final") pra não inventar vocabulário.
+    private var reiRainhaControls: some View {
+        VStack(spacing: 5) {
+            Text("Jogo \(min(state.rrRound + 1, 3)) de 3 concluído")
+                .font(.system(size: 11))
+                .foregroundColor(.spMetaDim)
+            if state.rrRound < 2 {
+                Button(action: onReiRainhaNext) {
+                    Text("⚡ Jogo \(state.rrRound + 2) de 3")
+                        .font(.system(size: 14, weight: .bold))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity).padding(.vertical, 9)
+                        .background(Color(hex: 0xF59E0B).opacity(0.95)).clipShape(Capsule())
+                }
+                .buttonStyle(.plain).foregroundColor(Color(hex: 0x3A2600))
+            } else {
+                Button(action: onReiRainhaFinal) {
+                    Text("👑 Resultado Final")
+                        .font(.system(size: 14, weight: .bold))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity).padding(.vertical, 9)
+                        .background(Color(hex: 0xB45309).opacity(0.95)).clipShape(Capsule())
+                }
+                .buttonStyle(.plain).foregroundColor(.white)
+            }
+        }
+        .padding(.horizontal, 8)
+    }
+
+    // Classificação final da série (rrRound == 3). Vitórias por PESSOA — a dupla
+    // mudou a cada jogo, então o mérito é individual. Invicto (3V) é o Rei/Rainha.
+    // A ordenação e a contagem vêm prontas do celular.
+    private var rrStandingsView: some View {
+        VStack(spacing: 4) {
+            Text("👑 Rei/Rainha")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(Color(hex: 0xF59E0B))
+            ForEach(Array(state.rrStandings.enumerated()), id: \.element) { idx, p in
+                HStack(spacing: 5) {
+                    Text(idx == 0 ? "🥇" : idx == 1 ? "🥈" : idx == 2 ? "🥉" : "4️⃣")
+                        .font(.system(size: 12))
+                    Text(p.name)
+                        .font(.system(size: 13, weight: p.wins == 3 ? .bold : .regular))
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    Spacer()
+                    Text("\(p.wins)V")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(p.wins == 3 ? Color(hex: 0xF59E0B) : .spMetaDim)
+                }
+                .foregroundColor(p.wins == 3 ? Color(hex: 0xFDE68A) : .spNameBlueD)
+                .padding(.vertical, 5).padding(.horizontal, 8)
+                .frame(maxWidth: .infinity)
+                .background(Color(hex: 0xF59E0B).opacity(p.wins == 3 ? 0.18 : 0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+            }
+        }
+        .padding(.horizontal, 8)
     }
 
     // "Jogar novamente?" (só casual): a pergunta em cima + Cancelar/Confirmar

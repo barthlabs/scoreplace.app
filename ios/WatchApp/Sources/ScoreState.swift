@@ -40,6 +40,18 @@ struct ScoreState: Decodable {
     // Quem OCUPA o slot em disputa agora. O seletor abre com este nome já aceso,
     // então "Confirmar" sem tocar em nada = manter o que o motor já assumiu.
     var servePickCurrent: String = ""
+    // ── Rei/Rainha: 3 jogos, 4 pessoas, duplas trocam a cada jogo ──
+    var reiRainha: Bool = false
+    // 0=1º jogo · 1=2º · 2=3º · 3=série encerrada.
+    var rrRound: Int = 0
+    // Vitórias por PESSOA, já ordenado pelo celular (a dupla muda todo jogo, o
+    // mérito é individual). O relógio só desenha.
+    var rrStandings: [RRStanding] = []
+
+    struct RRStanding: Decodable, Hashable {
+        let name: String
+        let wins: Int
+    }
 
     struct ServeSlot: Decodable, Hashable {
         let team: Int
@@ -55,6 +67,7 @@ struct ScoreState: Decodable {
     enum CodingKeys: String, CodingKey {
         case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isDoubles, isFinished, winner, tieRulePending, tiedAt
         case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent
+        case reiRainha, rrRound, rrStandings
     }
     init() {}
     init(from decoder: Decoder) throws {
@@ -83,6 +96,9 @@ struct ScoreState: Decodable {
         serveEligible = (try? c.decodeIfPresent([ServeSlot].self, forKey: .serveEligible)) ?? []
         servePickPhase = (try? c.decodeIfPresent(Int.self, forKey: .servePickPhase)) ?? -1
         servePickCurrent = (try? c.decodeIfPresent(String.self, forKey: .servePickCurrent)) ?? ""
+        reiRainha  = (try? c.decodeIfPresent(Bool.self, forKey: .reiRainha)) ?? false
+        rrRound    = (try? c.decodeIfPresent(Int.self, forKey: .rrRound)) ?? 0
+        rrStandings = (try? c.decodeIfPresent([RRStanding].self, forKey: .rrStandings)) ?? []
     }
 
     // ── Acessores por TIME (1/2) ──
@@ -150,6 +166,36 @@ struct ScoreState: Decodable {
         s.serveEligible = [
             ServeSlot(team: 2, playerIdx: 0, name: "Jogador 03"),
             ServeSlot(team: 2, playerIdx: 1, name: "Jogador 04")
+        ]
+        return s
+    }
+
+    // Rei/Rainha — fim do 1º jogo: o relógio oferece "Jogo 2 de 3".
+    static var mockRRMid: ScoreState {
+        var s = ScoreState.mock
+        s.isDoubles = true
+        s.isFinished = true
+        s.winner = 1
+        s.canReplay = false      // no R/R o fim leva ao PRÓXIMO jogo, não a recomeçar
+        s.reiRainha = true
+        s.rrRound = 0
+        return s
+    }
+
+    // Rei/Rainha — série encerrada: classificação individual (invicto = coroa).
+    static var mockRRFinal: ScoreState {
+        var s = ScoreState.mock
+        s.isDoubles = true
+        s.isFinished = true
+        s.winner = 1
+        s.canReplay = false
+        s.reiRainha = true
+        s.rrRound = 3
+        s.rrStandings = [
+            RRStanding(name: "Rodrigo Barth", wins: 3),
+            RRStanding(name: "Jogador 03", wins: 2),
+            RRStanding(name: "Jogador 02", wins: 1),
+            RRStanding(name: "Jogador 04", wins: 0)
         ]
         return s
     }

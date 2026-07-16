@@ -7681,7 +7681,18 @@ window._openLiveScoring = function(tId, matchId, opts) {
       setsToWin: state.setsToWin || 1,
       // "Jogar novamente" só faz sentido em partida casual (recomeça com os
       // mesmos jogadores). Em torneio o resultado é definitivo → sem botão.
-      canReplay: !!isCasual,
+      // No Rei/Rainha NÃO se aplica: o fim de um jogo leva ao PRÓXIMO da série
+      // de 3 (duplas rotacionam), não a um recomeço — o relógio oferece
+      // "Jogo N de 3" no lugar.
+      canReplay: !!isCasual && !_reiRainhaMode,
+      // ── Rei/Rainha: 3 jogos, 4 pessoas, duplas trocam a cada jogo ──
+      // rrRound: 0=1º jogo · 1=2º · 2=3º · 3=série encerrada (sentinela do motor).
+      // O relógio usa isto pra mostrar "Jogo N de 3" e oferecer avançar/ver final.
+      reiRainha: !!_reiRainhaMode,
+      rrRound: _reiRainhaRound,
+      // Vitórias por PESSOA, já ordenado — a dupla muda todo jogo, o mérito é
+      // individual. O relógio só desenha; a contagem é toda do motor.
+      rrStandings: _rrStandingsNow(),
       // Duplas → o relógio pode oferecer o toggle "Re-sortear duplas".
       isDoubles: !!isDoubles,
       // Seleção de sacador. A REGRA é toda daqui — o relógio recebe a lista
@@ -7708,6 +7719,21 @@ window._openLiveScoring = function(tId, matchId, opts) {
       tiedAt: (state.tieRulePending && cs) ? cs.gamesP1 : null
     };
   };
+  // Classificação do Rei/Rainha (vitórias por PESSOA — a dupla muda a cada jogo,
+  // o mérito é individual). Mesmo critério do _reiRainhaShowFinal: mais vitórias
+  // primeiro, nome como desempate. _reiRainhaPlayers só existe depois da 1ª
+  // rotação, então antes disso montamos a partir dos times atuais.
+  function _rrStandingsNow() {
+    if (!_reiRainhaMode) return [];
+    var names = _reiRainhaPlayers || p1Players.slice().concat(p2Players.slice());
+    var out = [];
+    for (var i = 0; i < 4 && i < names.length; i++) {
+      if (names[i]) out.push({ name: names[i], wins: _reiRainhaWins[i] || 0 });
+    }
+    out.sort(function (a, b) { return b.wins - a.wins || a.name.localeCompare(b.name); });
+    return out;
+  }
+
   // Empurra o estado atual pro relógio (no-op se a ponte não estiver ativa/web).
   function _watchNotify() {
     if (window.WatchBridge && window.WatchBridge._onEngineState) {
@@ -8018,6 +8044,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
 
     _render();
+    // Faltava: sem isto o relógio ficava congelado no jogo ANTERIOR (placar do
+    // jogo que acabou, duplas velhas) enquanto o celular já estava no próximo.
+    _watchNotify();
     if (typeof window.showNotification === 'function') {
       window.showNotification('👑 Jogo ' + (_reiRainhaRound + 1) + ' de 3',
         p1Players.join(' & ') + ' vs ' + p2Players.join(' & '), 'info');
@@ -8335,6 +8364,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '</label>' +
         '</div>';
     }
+    // Faltava: o relógio precisa saber que a SÉRIE acabou (rrRound=3) pra sair
+    // do "Jogo N de 3" e mostrar a classificação final. Sem isto ele ficava
+    // oferecendo avançar uma rodada que não existe mais.
+    _watchNotify();
   };
 
   // ── fim Rei/Rainha ────────────────────────────────────────────────────────────
