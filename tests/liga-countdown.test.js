@@ -50,7 +50,12 @@ ok(typeof W._ligaCountdownEvent === 'function', '_ligaCountdownEvent existe');
   };
   const e = W._ligaCountdownEvent(t);
   ok(e && e.kind === 'first-draw', '[BUG-A] antes do 1º sorteio → first-draw (não tournament-end) — got ' + (e && e.kind));
-  ok(e && Math.abs(e.ts - (now + 6 * HOUR)) < 2 * HOUR, '[BUG-A] regressiva mira o 1º sorteio (~+6h) — got ' + (e && iso(e.ts)));
+  // ⚠️ SEM aritmética de fuso: `_owedDrawSlotMs` (math do servidor) interpreta a data do
+  // sorteio em BRT. Assert de "≈ now+6h" passava na máquina do dono (BRT) e QUEBRAVA no CI
+  // (UTC) por 3h — teste dependente de fuso é teste ruim (o gate pegou). O contrato real é:
+  // a regressiva mira EXATAMENTE o slot que o servidor vai disparar, e ele está no futuro.
+  ok(e && e.ts === W._nextOwedDrawMs(t), '[BUG-A] regressiva mira o slot do servidor — got ' + (e && e.ts) + ' vs ' + W._nextOwedDrawMs(t));
+  ok(e && e.ts > now, '[BUG-A] o 1º sorteio está no futuro');
   // [BUG-A2] O RÓTULO tem que dizer a verdade: startDate já passou ⇒ a temporada JÁ começou,
   // então NUNCA rotular de "Início da Temporada" (mentira reportada pelo dono, 17/jul).
   ok(e && e.labelKey === 'tourn.nextDraw', '[BUG-A2] rótulo = "Próximo sorteio" (o evento é o SORTEIO) — got ' + (e && e.labelKey));
