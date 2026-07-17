@@ -1198,7 +1198,7 @@ function setupHelpModal() {
       '</div>');
 
   var html = '<div class="modal-overlay" id="modal-help">' +
-    '<div class="modal" style="max-width:560px; padding:0; max-height:85vh; display:flex; flex-direction:column;">' +
+    '<div class="modal" style="max-width:560px; padding:0; max-height:85%; display:flex; flex-direction:column;">' +
       _helpHdr +
       '<div id="help-sections-container" style="padding:1.25rem 1.5rem 1.5rem; overflow-y:auto; flex:1;">' +
         sectionsHtml +
@@ -1605,7 +1605,7 @@ window.renderHelpPage = function (container) {
           '<div style="font-weight:600;font-size:0.85rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(tpl.name) + '</div>' +
           '<div style="font-size:0.75rem;color:var(--text-muted);">' + window._safeHtml((window._formatLabel ? window._formatLabel(tpl) : tpl.format) || '') + '</div>' +
         '</div>' +
-        '<button class="btn btn-micro btn-danger-ghost" onclick="event.stopPropagation();window._qcDeleteTemplate(\'' + window._safeHtml(tpl._id || String(i)) + '\')" title="Apagar">✕</button>' +
+        '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window._qcDeleteTemplate(\'' + window._safeHtml(tpl._id || String(i)) + '\')" title="Apagar" style="--cx-size:20px;">✕</button>' +
       '</div>';
     });
     html += '</div>';
@@ -2090,7 +2090,7 @@ window._log("scoreplace.app v" + (window.SCOREPLACE_VERSION || '?') + " Iniciali
   // Create search overlay
   var overlay = document.createElement('div');
   overlay.id = 'quick-search-overlay';
-  overlay.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);z-index:99998;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);';
+  overlay.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:99998;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);';
   overlay.onclick = function(e) { if (e.target === overlay) window._closeQuickSearch(); };
 
   var modal = document.createElement('div');

@@ -82,6 +82,24 @@ if [ "$WATCH_ID" != "app.scoreplace.watchapp" ] || [ "$WATCH_COMPANION" != "app.
   exit 1
 fi
 echo "  ✅ $EMBEDDED_WATCH presente (id=$WATCH_ID, companion=$WATCH_COMPANION)."
+
+# ── PISO DE watchOS: o relógio do dono é um Series 3 (A1859), que só vai até o
+# watchOS 8.8.2. Se o mínimo do watch app subir acima de 8.0, o scoreplace some
+# da lista do app Relógio no iPhone — SEM erro nenhum, só desaparece. Foi o que
+# aconteceu na 1.2.1 (mínimo 10.0, empurrado por um único .onChange de 2 params).
+# Uma API nova de watchOS 9/10 sobe esse mínimo sozinha: esta trava grita antes.
+WATCH_MIN="$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$WATCH_PATH/Info.plist" 2>/dev/null || echo '')"
+WATCH_MIN_MAX="8.0"
+if [ -z "$WATCH_MIN" ] || [ "$(printf '%s\n%s\n' "$WATCH_MIN" "$WATCH_MIN_MAX" | sort -V | tail -1)" != "$WATCH_MIN_MAX" ]; then
+  echo ""
+  echo "❌ FALHA: mínimo do watch app = '$WATCH_MIN' (máximo tolerado: $WATCH_MIN_MAX)."
+  echo "   Acima de $WATCH_MIN_MAX o app SOME da lista do app Relógio no Apple Watch"
+  echo "   Series 3 (máx 8.8.2) — silenciosamente, sem erro. NÃO envie esta build."
+  echo "   Cheque WATCHOS_DEPLOYMENT_TARGET e APIs novas demais (ex: .onChange de"
+  echo "   2 params = watchOS 10+) nas fontes do watch."
+  exit 1
+fi
+echo "  ✅ mínimo do watch = $WATCH_MIN (≤ $WATCH_MIN_MAX → Series 3 enxerga o app)."
 echo "  ⚠ MODELO APPLE: watch vai EMBUTIDO neste ÚNICO arquivo — NUNCA arquive/suba"
 echo "    o watch como artefato separado. (No Android é o oposto: 2 .aab separados.)"
 
@@ -100,6 +118,33 @@ xcodebuild -exportArchive \
   -allowProvisioningUpdates
 
 IPA="$(find "$EXPORT_DIR" -name '*.ipa' -maxdepth 1 | head -1)"
+
+# ── VALIDAÇÃO DO IPA: o que sobe é o .ipa, NÃO o .xcarchive. Validar só o archive
+# (como era até aqui) deixa passar qualquer perda de watch no export/re-assinatura
+# — o script dizia "✅ Export pronto" sem nunca ter olhado dentro do IPA.
+if [ -z "$IPA" ]; then
+  echo "❌ FALHA: nenhum .ipa gerado em $EXPORT_DIR."
+  exit 1
+fi
+echo "▶ Validando o companion do relógio DENTRO do .ipa…"
+IPA_CHECK="${TMPDIR:-/tmp}/scoreplace-$STAMP-ipacheck"
+rm -rf "$IPA_CHECK"; mkdir -p "$IPA_CHECK"
+unzip -qq "$IPA" -d "$IPA_CHECK" || { echo "❌ FALHA: não consegui abrir o .ipa."; exit 1; }
+IPA_WATCH="$(find "$IPA_CHECK/Payload" -maxdepth 3 -type d -name 'ScoreplaceWatch.app' | head -1)"
+if [ -z "$IPA_WATCH" ]; then
+  echo "❌ FALHA: o .ipa NÃO contém Watch/ScoreplaceWatch.app."
+  echo "   O archive tinha o relógio, mas o export o perdeu → NÃO envie esta build."
+  exit 1
+fi
+IPA_WATCH_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$IPA_WATCH/Info.plist" 2>/dev/null || echo '')"
+IPA_WATCH_MIN="$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$IPA_WATCH/Info.plist" 2>/dev/null || echo '')"
+if [ "$IPA_WATCH_ID" != "app.scoreplace.watchapp" ]; then
+  echo "❌ FALHA: bundle id do watch no .ipa inesperado ('$IPA_WATCH_ID')."
+  exit 1
+fi
+echo "  ✅ .ipa contém o relógio (id=$IPA_WATCH_ID, mínimo=$IPA_WATCH_MIN)."
+rm -rf "$IPA_CHECK"
+
 echo ""
 echo "✅ Export pronto: $IPA"
 echo ""

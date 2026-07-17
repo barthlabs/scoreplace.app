@@ -15,7 +15,12 @@ struct ScoreplaceWatchCompanionApp: App {
                 onPoint: { team in session.sendPoint(team) },
                 onUndo: { session.sendUndo() },
                 onReplay: { shuffle in session.sendReplay(shuffle: shuffle) },
-                onResolveTie: { rule in session.sendResolveTie(rule) }
+                onResolveTie: { rule in session.sendResolveTie(rule) },
+                onStart: { session.sendStart() },
+                onSetServer: { team, idx in session.sendSetServer(team: team, playerIdx: idx) },
+                onReiRainhaNext: { session.sendReiRainhaNext() },
+                onReiRainhaFinal: { session.sendReiRainhaFinal() },
+                onReiRainhaStart: { session.sendReiRainhaStart() }
             )
             .onAppear { session.hello() } // pede o estado atual ao aparecer
         }

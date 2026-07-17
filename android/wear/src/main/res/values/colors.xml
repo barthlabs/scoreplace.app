@@ -23,4 +23,18 @@
     <color name="btn_extend_bg">#10B981</color>
     <color name="btn_extend_text">#04342C</color>
     <color name="btn_tiebreak_bg">#A855F7</color>
+    <!-- Iniciar (start) — verde igual ao botão do celular -->
+    <color name="start_green">#10B981</color>
+    <color name="start_green_text">#04342C</color>
+    <!-- Rei/Rainha — âmbar da série de 3 -->
+    <color name="rr_amber">#F59E0B</color>
+    <color name="rr_amber_dark">#B45309</color>
+    <color name="rr_amber_text">#3A2600</color>
+    <color name="rr_amber_name">#FDE68A</color>
+    <color name="rr_row_bg">#241A0A</color>
+    <!-- Vencedor: barra Fechar (vermelho) + placar do perdedor -->
+    <color name="win_red">#EF4444</color>
+    <!-- Sacador aceso no seletor -->
+    <color name="serve_sel_stroke">#F97316</color>
+    <color name="serve_bar_bg">#241A0A</color>
 </resources>

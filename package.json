@@ -7,6 +7,7 @@
     "test": "node tests/run-unit.js",
     "test:unit": "node tests/run-unit.js",
     "test:concurrency": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace \"node tests/concurrency/run.js\"",
+    "test:rules": "node tests/rules-privileged-fields.test.js",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
@@ -18,7 +19,9 @@
     "cap:sync": "node tools/build-www.js && node node_modules/@capacitor/cli/bin/capacitor sync",
     "ext:zip": "bash scripts/build-ext-zip.sh",
     "check:ext": "node scripts/check-ext-version.js",
-    "check:cache": "node scripts/check-cache-busters.js"
+    "check:cache": "node scripts/check-cache-busters.js",
+    "sync:staging": "node tools/sync-staging-from-prod.js",
+    "cf:check": "node tools/check-functions-parity.js"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

@@ -9,6 +9,9 @@ const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/test-utils.js',
   'tests/bracket-logic.test.js',
+  // Trava a canonização: o cliente NÃO sorteia a Liga agendada (fim da corrida
+  // cliente×CF). Se alguém religar o poller, esta suíte fica vermelha.
+  'tests/liga-autodraw-server-only.test.js',
   'tests/draw-cores.test.js',
   'tests/phase-transition-matrix.test.js',
   'tests/phase-adversarial.test.js',
@@ -35,6 +38,7 @@ const SUITES = [
   'tests/sport-scoring-rules.test.js',
   'tests/result-approval-gate.test.js',
   'tests/draw-schedule.test.js',
+  'tests/wa-group-link.test.js',
   'tests/elim-seed.test.js',
   'tests/elim-reirainha-opening.test.js',
   'tests/chave-label-default.test.js',
@@ -52,10 +56,26 @@ const SUITES = [
   'tests/phase0-groups-canonical.test.js',
   'tests/phase-identity.test.js',
   'tests/no-format-regression.test.js',
+  'tests/area-scaling-canon.test.js',
   'tests/duplas-teams-enrollmode.test.js',
   'tests/apply-result.test.js',
   'tests/apply-round-close.test.js',
   'tests/apply-wo.test.js',
+  'tests/wo-individual.test.js',
+  'tests/uid-poison.test.js',
+  // Mesmo veneno, porta dos INSCRITOS (store.js — o uid-poison só carrega js/views/*).
+  // Identificar inscrito por nome/e-mail (era o caso do organizador) fica VERMELHO aqui.
+  'tests/uid-poison-inscritos.test.js',
+  // Nº de inscrição é da PESSOA: formar/desfazer dupla NÃO mexe; só a saída renumera.
+  'tests/enroll-number-canon.test.js',
+  // Flexibilizar equilíbrio: forma duplas mesmo-gênero da sobra em vez de deixar gente de fora.
+  'tests/flexibilize-balance.test.js',
+  // Flexibilizado não mira pow2: o resto vira só o avulso (3→1); pow2 é a próxima tela.
+  'tests/flexibilize-remainder.test.js',
+  // Flexibilizar como DECISÃO replicada na CF (_applyDrawDecisions forma as duplas do zero).
+  'tests/flexibilize-decision-cf.test.js',
+  // Nome da dupla tardia vem do uid ao vivo (nunca a string "undefined").
+  'tests/late-join-name-uid.test.js',
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
@@ -63,16 +83,33 @@ const SUITES = [
   'tests/phase0-swiss-elim.test.js',
   'tests/dupla-repechage-full.test.js',
   'tests/late-dupla-tier2.test.js',
+  // Gap (dono, 17/jul): dupla FORMADA na lista de espera entra na Eliminatória Simples também.
+  'tests/late-dupla-single-elim.test.js',
+  // Gap (dono, 17/jul, screenshot): dupla ímpar no repGame ("VS A definir") recebe a dupla tardia.
+  'tests/late-dupla-repgame-fill.test.js',
+  // Gap (dono, 17/jul, torneio REAL): dupla formada entra no lugar do repescado (chave playin).
+  'tests/late-dupla-repfill-playin.test.js',
+  // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
+  'tests/count-competitors.test.js',
   'tests/phase-repechage-lines.test.js',
   'tests/reset-tournament.test.js',
   'tests/dupla-elim-render.test.js',
   'tests/monarch-render.test.js',
+  'tests/game-numbering.test.js',
+  'tests/cancel-x-canon.test.js',
   'tests/groups-render.test.js',
   'tests/liga-render.test.js',
+  'tests/liga-countdown.test.js',
+  'tests/sched-config-coherent.test.js',
   'tests/swiss-render.test.js',
   'tests/match-roster-uid.test.js',
-  'tests/wa-template-map.test.js',
   'tests/fairness-uid-identity.test.js',
+  'tests/delete-account-dupla-orphan.test.js',
+  'tests/merge-federated-wins.test.js',
+  'tests/login-redirect.test.js',
+  'tests/uid-sweep.test.js',
+  'tests/reset-phone-reachable.test.js',
+  'tests/delete-account-canon.test.js',
   'tests/dupla-detection-uid.test.js',
   'tests/draw-name-by-uid.test.js',
   'tests/name-to-uid-live-resolution.test.js',
@@ -86,7 +123,11 @@ const SUITES = [
   'js/views/phase-brick4.test.js',
   'functions-autodraw/test-draw.js',
   'functions-autodraw/test-groupsby.js',
+  // Integração de tardios no servidor (draw-core.integrateLateEntries) — v1.2.57.
+  'functions-autodraw/test-integrate-late.js',
   'functions/test-match-roster.js',
+  // Inscrição/desinscrição no servidor (CF) — espelha a transação do cliente.
+  'functions/test-enroll-core.js',
 ];
 
 let failed = [];

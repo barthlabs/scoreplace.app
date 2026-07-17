@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg">
@@ -21,68 +22,85 @@
             android:background="@color/half_blue"
             android:clickable="true"
             android:focusable="true"
-            android:paddingTop="66dp"
-            android:paddingBottom="42dp">
+            android:paddingTop="50dp"
+            android:paddingBottom="26dp">
 
             <TextView
                 android:id="@+id/point_left"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:scaleY="1.28"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center"
                 android:text="40"
                 android:textColor="@color/team_blue"
-                android:textSize="72sp"
+                android:textSize="70sp"
                 android:textStyle="bold"
                 android:includeFontPadding="false" />
 
-            <Space
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
+            <!-- Nomes do time ESQUERDO: alinhados à DIREITA (colados no centro). A
+                 bola de saque (GRANDE) fica colada no lado de FORA do nome, só no
+                 sacador (GONE quando não saca → o nome não sai do centro). Nomes já
+                 vêm curtos (primeiro nome) → 1 linha. -->
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:gravity="end|center_vertical"
+                android:paddingEnd="7dp">
                 <TextView
                     android:id="@+id/ball_l1"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="●"
                     android:textColor="@color/serve_ball"
-                    android:textSize="10sp"
-                    android:layout_marginEnd="4dp" />
+                    android:textSize="15sp"
+                    android:includeFontPadding="false"
+                    android:layout_marginEnd="3dp"
+                    android:visibility="gone" />
                 <TextView
                     android:id="@+id/name_l1"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:maxWidth="88dp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:gravity="end"
                     android:text="Rodrigo"
                     android:textColor="@color/name_blue"
-                    android:textSize="12sp" />
+                    android:textSize="16sp"
+                    android:includeFontPadding="false" />
             </LinearLayout>
 
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="2dp">
+                android:gravity="end|center_vertical"
+                android:paddingEnd="7dp"
+                android:layout_marginTop="1dp">
                 <TextView
                     android:id="@+id/ball_l2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="●"
                     android:textColor="@color/serve_ball"
-                    android:textSize="10sp"
-                    android:layout_marginEnd="4dp"
+                    android:textSize="15sp"
+                    android:includeFontPadding="false"
+                    android:layout_marginEnd="3dp"
                     android:visibility="gone" />
                 <TextView
                     android:id="@+id/name_l2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:maxWidth="88dp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:gravity="end"
                     android:text="Nelson"
                     android:textColor="@color/name_blue_dim"
-                    android:textSize="12sp" />
+                    android:textSize="16sp"
+                    android:includeFontPadding="false" />
             </LinearLayout>
         </LinearLayout>
 
@@ -97,69 +115,83 @@
             android:background="@color/half_red"
             android:clickable="true"
             android:focusable="true"
-            android:paddingTop="66dp"
-            android:paddingBottom="42dp">
+            android:paddingTop="50dp"
+            android:paddingBottom="26dp">
 
             <TextView
                 android:id="@+id/point_right"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:scaleY="1.28"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center"
                 android:text="30"
                 android:textColor="@color/team_red"
-                android:textSize="72sp"
+                android:textSize="70sp"
                 android:textStyle="bold"
                 android:includeFontPadding="false" />
 
-            <Space
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
+            <!-- Nomes do time DIREITO: alinhados à ESQUERDA (colados no centro). Bola
+                 GRANDE colada no lado de FORA (direita) do nome, só no sacador. -->
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:gravity="start|center_vertical"
+                android:paddingStart="7dp">
+                <TextView
+                    android:id="@+id/name_r1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:maxWidth="88dp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:gravity="start"
+                    android:text="Kelly"
+                    android:textColor="@color/name_red"
+                    android:textSize="16sp"
+                    android:includeFontPadding="false" />
                 <TextView
                     android:id="@+id/ball_r1"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="●"
                     android:textColor="@color/serve_ball"
-                    android:textSize="10sp"
-                    android:layout_marginEnd="4dp"
+                    android:textSize="15sp"
+                    android:includeFontPadding="false"
+                    android:layout_marginStart="3dp"
                     android:visibility="gone" />
-                <TextView
-                    android:id="@+id/name_r1"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Kelly"
-                    android:textColor="@color/name_red"
-                    android:textSize="12sp" />
             </LinearLayout>
 
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="2dp">
+                android:gravity="start|center_vertical"
+                android:paddingStart="7dp"
+                android:layout_marginTop="1dp">
+                <TextView
+                    android:id="@+id/name_r2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:maxWidth="88dp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:gravity="start"
+                    android:text="Zilda"
+                    android:textColor="@color/name_red_dim"
+                    android:textSize="16sp"
+                    android:includeFontPadding="false" />
                 <TextView
                     android:id="@+id/ball_r2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="●"
                     android:textColor="@color/serve_ball"
-                    android:textSize="10sp"
-                    android:layout_marginEnd="4dp"
+                    android:textSize="15sp"
+                    android:includeFontPadding="false"
+                    android:layout_marginStart="3dp"
                     android:visibility="gone" />
-                <TextView
-                    android:id="@+id/name_r2"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Zilda"
-                    android:textColor="@color/name_red_dim"
-                    android:textSize="12sp" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>
@@ -171,7 +203,7 @@
         android:layout_gravity="top|center_horizontal"
         android:orientation="vertical"
         android:gravity="center_horizontal"
-        android:layout_marginTop="12dp">
+        android:layout_marginTop="4dp">
 
         <!-- "Aguardando…" quando não há partida (só visível inativo) -->
         <TextView
@@ -183,58 +215,8 @@
             android:textSize="10sp"
             android:visibility="gone" />
 
-        <!-- SETS no lugar do rótulo do set: rótulo em cima, "0 - 0" embaixo
-             (empilhado — cabe melhor no topo curvo da tela redonda). Mostrado
-             quando a partida está ativa. -->
-        <LinearLayout
-            android:id="@+id/sets_row"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:visibility="gone">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="SETS"
-                android:textColor="@color/meta_dim"
-                android:textSize="8sp"
-                android:letterSpacing="0.15" />
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="bottom">
-                <TextView
-                    android:id="@+id/sets_left"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="0"
-                    android:textColor="@color/team_blue"
-                    android:textSize="15sp"
-                    android:textStyle="bold"
-                    android:includeFontPadding="false" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="-"
-                    android:textColor="@color/dash"
-                    android:textSize="12sp"
-                    android:layout_marginStart="5dp"
-                    android:layout_marginEnd="5dp" />
-                <TextView
-                    android:id="@+id/sets_right"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="0"
-                    android:textColor="@color/team_red"
-                    android:textSize="15sp"
-                    android:textStyle="bold"
-                    android:includeFontPadding="false" />
-            </LinearLayout>
-        </LinearLayout>
-
         <TextView
+            android:id="@+id/games_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="GAMES"
@@ -242,6 +224,7 @@
             android:textSize="8sp"
             android:letterSpacing="0.15" />
 
+        <!-- Números dos games (os sets viraram texto CURVO na borda — ver sets_arc_*). -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -276,132 +259,309 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Rodapé: Desfazer -->
-    <LinearLayout
-        android:id="@+id/btn_undo"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:background="@drawable/undo_pill"
-        android:clickable="true"
-        android:focusable="true"
-        android:paddingStart="14dp"
-        android:paddingEnd="14dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp"
-        android:layout_marginBottom="8dp">
+    <!-- Palavra "SETS" curva na borda às 10h (branca), à esquerda dos números. -->
+    <androidx.wear.widget.CurvedTextView
+        android:id="@+id/sets_word_arc"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:text="SETS"
+        android:textColor="@color/meta_dim"
+        android:textSize="9sp"
+        android:letterSpacing="0.08"
+        android:visibility="gone" />
 
-        <TextView
+    <!-- SETS na BORDA CURVA: "0" do time esquerdo às 11h (topo-esq) e do time
+         direito à 1h (topo-dir), colados na borda. Cada um numa cor de time (curvo
+         = 1 cor por view, então 2 views). Texto/cor/visibilidade em runtime. -->
+    <androidx.wear.widget.CurvedTextView
+        android:id="@+id/sets_arc_left"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:text="0"
+        android:textColor="@color/team_blue"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+    <androidx.wear.widget.CurvedTextView
+        android:id="@+id/sets_arc_right"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:text="0"
+        android:textColor="@color/team_red"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <!-- Rodapé: DESFAZER = barra inferior (mesmo formato/posição do Iniciar) —
+         topo reto, largura cheia, colada na base, cantos cortados pela curva. O
+         "Sacador" (só nos 2 primeiros jogos) é uma pílula logo ACIMA da barra. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+
+        <!-- Barra do sacador — abre o seletor. Só visível nos 2 primeiros jogos
+             (duplas): canSetServer. -->
+        <LinearLayout
+            android:id="@+id/serve_bar"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="↺  Desfazer"
-            android:textColor="@color/undo_text"
-            android:textSize="11sp" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/pill"
+            android:backgroundTint="@color/serve_bar_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:layout_marginBottom="6dp"
+            android:visibility="gone">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="●"
+                android:textColor="@color/serve_ball"
+                android:textSize="9sp"
+                android:layout_marginEnd="4dp" />
+            <TextView
+                android:id="@+id/serve_bar_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Sacador"
+                android:textColor="@color/rr_amber_name"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:maxWidth="90dp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <!-- Barra Desfazer: cor sólida (topo reto), largura cheia. Mínima — o alvo
+             de toque é a largura inteira, então altura pequena segue funcional. -->
+        <LinearLayout
+            android:id="@+id/btn_undo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@color/btn_cancel_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingTop="3dp"
+            android:paddingBottom="5dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="↺  Desfazer"
+                android:textColor="@color/undo_text"
+                android:textSize="12sp" />
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- Fim de jogo: cobre tudo e absorve toques (trava os botões +1).
-         ScrollView pra nunca cortar quando há prompt de "Jogar novamente". -->
-    <ScrollView
+    <!-- Fim de jogo — MESMO modelo das outras telas: modalidade curva no topo,
+         🏆 + Vencedor + nomes + placar (games; vencedor VERDE, perdedor VERMELHO)
+         FLUTUAM no centro; casual = toggle "Re-sortear" (compacto, OFF) + barra
+         dividida Fechar (vermelho) / Iniciar (verde) na base. Cobre as metades. -->
+    <FrameLayout
         android:id="@+id/winner_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@color/winner_scrim"
         android:clickable="true"
         android:focusable="true"
-        android:fillViewport="true"
         android:visibility="gone">
 
-        <!-- Recuo lateral generoso: na tela redonda o conteúdo precisa caber
-             dentro do círculo (senão os botões encostam e cortam na borda). -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:paddingStart="34dp"
-            android:paddingEnd="34dp"
-            android:paddingTop="10dp"
-            android:paddingBottom="14dp">
+            android:layout_height="match_parent"
+            android:orientation="vertical">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🏆"
-                android:textSize="27sp"
-                android:includeFontPadding="false" />
-
-            <TextView
-                android:id="@+id/winner_label"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="VENCEDOR"
-                android:textColor="@color/meta"
-                android:textSize="10sp"
-                android:letterSpacing="0.1"
-                android:layout_marginTop="3dp" />
-
-            <TextView
-                android:id="@+id/winner_names"
+            <!-- Central flutuante (weight=1). -->
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="vertical"
                 android:gravity="center"
-                android:text=""
-                android:textColor="@color/name_blue"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:layout_marginTop="1dp"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp" />
+                android:paddingTop="14dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp">
 
-            <TextView
-                android:id="@+id/winner_score"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text=""
-                android:textColor="@color/meta_dim"
-                android:textSize="11sp"
-                android:layout_marginTop="4dp" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🏆"
+                    android:textSize="22sp"
+                    android:includeFontPadding="false" />
 
-            <!-- "Jogar novamente?" + Cancelar/Confirmar + toggle Re-sortear.
-                 Só casual (canReplay). -->
+                <TextView
+                    android:id="@+id/winner_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Vencedor"
+                    android:textColor="@color/meta"
+                    android:textSize="10sp"
+                    android:letterSpacing="0.08"
+                    android:layout_marginTop="2dp" />
+
+                <TextView
+                    android:id="@+id/winner_names"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text=""
+                    android:textColor="@color/team_blue"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="2dp" />
+
+                <!-- Placar em games: vencedor VERDE, perdedor VERMELHO (cor em runtime). -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="4dp">
+                    <TextView
+                        android:id="@+id/winner_score_l"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="6"
+                        android:textColor="@color/start_green"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:includeFontPadding="false" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="–"
+                        android:textColor="@color/dash"
+                        android:textSize="13sp"
+                        android:layout_marginStart="5dp"
+                        android:layout_marginEnd="5dp" />
+                    <TextView
+                        android:id="@+id/winner_score_r"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="4"
+                        android:textColor="@color/team_red"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:includeFontPadding="false" />
+                </LinearLayout>
+
+                <!-- Rei/Rainha (série de 3). -->
+                <TextView
+                    android:id="@+id/rr_series_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="@color/meta_dim"
+                    android:textSize="11sp"
+                    android:layout_marginTop="6dp"
+                    android:visibility="gone" />
+                <TextView
+                    android:id="@+id/btn_rr_next"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="⚡ Jogo 2 de 3"
+                    android:textColor="@color/rr_amber_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:paddingTop="9dp"
+                    android:paddingBottom="9dp"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/pill"
+                    android:backgroundTint="@color/rr_amber"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:visibility="gone" />
+                <TextView
+                    android:id="@+id/rr_final_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="👑 Rei/Rainha"
+                    android:textColor="@color/rr_amber"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="6dp"
+                    android:visibility="gone" />
+                <LinearLayout
+                    android:id="@+id/rr_standings"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="4dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/winner_waiting"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Aguardando o celular…"
+                    android:textColor="@color/meta_dim"
+                    android:textSize="11sp"
+                    android:layout_marginTop="10dp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <!-- Base: toggle Re-sortear (compacto) + barra dividida. Só casual. -->
             <LinearLayout
                 android:id="@+id/replay_controls"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:gravity="center_horizontal"
-                android:layout_marginTop="10dp"
                 android:visibility="gone">
 
-                <TextView
+                <!-- Toggle COMPACTO: "Re-sortear / duplas" (2 linhas) + switch, centrado. -->
+                <LinearLayout
+                    android:id="@+id/reshuffle_row"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Jogar novamente?"
-                    android:textColor="@color/name_blue"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
+                    android:layout_gravity="center_horizontal"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="8dp"
+                    android:visibility="gone">
+                    <TextView
+                        android:id="@+id/reshuffle_label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Re-sortear\nduplas"
+                        android:textColor="@color/meta"
+                        android:textSize="11sp"
+                        android:gravity="end"
+                        android:layout_marginEnd="6dp" />
+                    <Switch
+                        android:id="@+id/reshuffle_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
 
+                <!-- Barra dividida: Fechar (vermelho) | Iniciar (verde), topo reto. -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="6dp">
+                    android:orientation="horizontal">
                     <TextView
                         android:id="@+id/btn_replay_cancel"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:gravity="center"
-                        android:text="Cancelar"
-                        android:textColor="@color/undo_text"
-                        android:textSize="12sp"
-                        android:paddingTop="7dp"
+                        android:gravity="end"
+                        android:paddingEnd="6dp"
+                        android:text="Fechar"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:paddingTop="4dp"
                         android:paddingBottom="7dp"
-                        android:layout_marginEnd="4dp"
-                        android:background="@drawable/pill"
-                        android:backgroundTint="@color/btn_cancel_bg"
+                        android:background="@color/win_red"
                         android:clickable="true"
                         android:focusable="true" />
                     <TextView
@@ -409,87 +569,48 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:gravity="center"
-                        android:text="Confirmar"
-                        android:textColor="#FFFFFF"
-                        android:textSize="12sp"
+                        android:gravity="start"
+                        android:paddingStart="6dp"
+                        android:text="Iniciar"
+                        android:textColor="@color/start_green_text"
+                        android:textSize="14sp"
                         android:textStyle="bold"
-                        android:paddingTop="7dp"
+                        android:paddingTop="4dp"
                         android:paddingBottom="7dp"
-                        android:layout_marginStart="4dp"
-                        android:background="@drawable/pill"
-                        android:backgroundTint="@color/btn_confirm_bg"
+                        android:background="@color/start_green"
                         android:clickable="true"
                         android:focusable="true" />
                 </LinearLayout>
-
-                <!-- Re-sortear duplas — só em duplas -->
-                <LinearLayout
-                    android:id="@+id/reshuffle_row"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_marginTop="6dp"
-                    android:visibility="gone">
-                    <Switch
-                        android:id="@+id/reshuffle_switch"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Re-sortear"
-                        android:textColor="@color/meta"
-                        android:textSize="11sp"
-                        android:layout_marginStart="2dp" />
-                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
-    </ScrollView>
+
+        <!-- Modalidade curva às 11h (igual às outras telas). -->
+        <androidx.wear.widget.CurvedTextView
+            android:id="@+id/winner_arc_sport"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:text="⚡ Beach Tennis"
+            android:textColor="@color/meta"
+            android:textSize="12sp" />
+    </FrameLayout>
 
     <!-- Empate (5-5, 6-6, 7-7…) esperando decisão: cobre tudo e trava os +1 até
          escolher prorrogar ou ativar o tie-break. Recorre a cada empate (motor
          GSM = fonte única no JS). Espelha o overlay do celular e do watchOS. -->
+    <!-- Empate — 3 SETORES: Prorrogar = BARRA no topo (estoura as laterais, cortada
+         pela curva), ⚖️ + placar FLUTUAM no meio, Tie-break = BARRA na base. Sem
+         modalidade. -->
     <LinearLayout
         android:id="@+id/tie_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:gravity="center_horizontal|center_vertical"
         android:background="@color/winner_scrim"
         android:clickable="true"
         android:focusable="true"
-        android:paddingStart="30dp"
-        android:paddingEnd="30dp"
         android:visibility="gone">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="⚖️"
-            android:textSize="26sp"
-            android:includeFontPadding="false" />
-
-        <TextView
-            android:id="@+id/tie_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Empate"
-            android:textColor="@color/name_blue"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_marginTop="2dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Como desempatar?"
-            android:textColor="@color/meta"
-            android:textSize="10sp"
-            android:layout_marginTop="1dp"
-            android:layout_marginBottom="8dp" />
-
+        <!-- SETOR 1: Prorrogar (barra verde, topo reto, largura cheia). -->
         <TextView
             android:id="@+id/btn_tie_extend"
             android:layout_width="match_parent"
@@ -497,15 +618,63 @@
             android:gravity="center"
             android:text="Prorrogar"
             android:textColor="@color/btn_extend_text"
-            android:textSize="13sp"
+            android:textSize="17sp"
             android:textStyle="bold"
             android:paddingTop="9dp"
             android:paddingBottom="9dp"
-            android:background="@drawable/pill"
-            android:backgroundTint="@color/btn_extend_bg"
+            android:background="@color/btn_extend_bg"
             android:clickable="true"
             android:focusable="true" />
 
+        <!-- SETOR 2: ⚖️ + placar (cor dos times) flutuam no meio. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚖️"
+                android:textSize="30sp"
+                android:includeFontPadding="false" />
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="1dp">
+                <TextView
+                    android:id="@+id/tie_score_l"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="5"
+                    android:textColor="@color/team_blue"
+                    android:textSize="36sp"
+                    android:textStyle="bold"
+                    android:includeFontPadding="false" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="–"
+                    android:textColor="@color/dash"
+                    android:textSize="22sp"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginEnd="6dp" />
+                <TextView
+                    android:id="@+id/tie_score_r"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="5"
+                    android:textColor="@color/team_red"
+                    android:textSize="36sp"
+                    android:textStyle="bold"
+                    android:includeFontPadding="false" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- SETOR 3: Tie-break (barra roxa, base, largura cheia). -->
         <TextView
             android:id="@+id/btn_tie_tiebreak"
             android:layout_width="match_parent"
@@ -513,15 +682,158 @@
             android:gravity="center"
             android:text="Tie-break"
             android:textColor="#FFFFFF"
-            android:textSize="13sp"
+            android:textSize="17sp"
             android:textStyle="bold"
             android:paddingTop="9dp"
             android:paddingBottom="9dp"
-            android:layout_marginTop="7dp"
-            android:background="@drawable/pill"
-            android:backgroundTint="@color/btn_tiebreak_bg"
+            android:background="@color/btn_tiebreak_bg"
             android:clickable="true"
             android:focusable="true" />
     </LinearLayout>
+
+    <!-- Iniciar (montagem casual aberta no celular, nada ao vivo). ESPELHA a tela
+         Iniciar do Apple pelo modelo de 3 SETORES, centrada pela tela redonda:
+         SETOR 1 faixa da modalidade (ícone ⚡/🏆 + nome) colada no topo;
+         SETOR 2 central FLUTUANTE = "1º sacador" + os 4 nomes (toque = escolhe o
+         sacador inicial, aceso vira box laranja + bola, cor forte do time);
+         SETOR 3 botão-barra "Iniciar" colado na base — topo RETO, estoura a
+         largura → cantos inferiores cortados pela curva da tela. Dispara a MESMA
+         _casualStart() do celular. -->
+    <FrameLayout
+        android:id="@+id/start_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/winner_scrim"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <!-- SETORES 2+3: central (nomes) FLUTUA no meio + botão-barra na base.
+             O cromo (modalidade / "1º sacador") vive no ARCO do topo (abaixo),
+             então o centro inteiro fica pros nomes. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:paddingTop="20dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp">
+                <LinearLayout
+                    android:id="@+id/start_players"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center_horizontal" />
+            </LinearLayout>
+
+            <!-- SETOR 3: botão-barra na base — cor sólida (topo reto), largura cheia
+                 (cantos inferiores cortados pela curva da tela). -->
+            <TextView
+                android:id="@+id/btn_start"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="Iniciar"
+                android:textColor="@color/start_green_text"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:paddingTop="4dp"
+                android:paddingBottom="7dp"
+                android:background="@color/start_green"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- SETOR 1 (redondo): cromo CURVO seguindo o bezel do topo. Modalidade
+             (⚡/🏆 + nome) na metade ESQUERDA do arco, "1º sacador" na metade
+             DIREITA. Ângulo/âncora setados em Java (respeita o idioma do Wear;
+             o Apple usa faixa reta — cada aparelho tem seu design). -->
+        <androidx.wear.widget.CurvedTextView
+            android:id="@+id/start_arc_sport"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:text="⚡ Beach Tennis"
+            android:textColor="@color/meta"
+            android:textSize="12sp" />
+        <androidx.wear.widget.CurvedTextView
+            android:id="@+id/start_arc_prompt"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:text="1º sacador"
+            android:textColor="@color/name_blue"
+            android:textSize="12sp" />
+    </FrameLayout>
+
+    <!-- Seletor de sacador — MESMO modelo do Iniciar: prompt CURVO "2º sacador" no
+         12h, nomes grandes selecionáveis (box+bola, cor de time) DISTRIBUÍDOS no
+         centro, barra "Confirmar" na base. A lista vem PRONTA do celular
+         (serveEligible; fase 1 = só o time que não abriu). Preenchido em runtime. -->
+    <FrameLayout
+        android:id="@+id/serve_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/winner_scrim"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+            <!-- Central: nomes distribuídos (runtime), com folga do topo pro prompt curvo. -->
+            <LinearLayout
+                android:id="@+id/serve_list"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:paddingTop="34dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp" />
+
+            <!-- Confirmar: barra sólida na base (topo reto, largura cheia). -->
+            <TextView
+                android:id="@+id/btn_serve_confirm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="Confirmar"
+                android:textColor="@color/start_green_text"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:paddingTop="4dp"
+                android:paddingBottom="7dp"
+                android:background="@color/start_green"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- ⚡/🏆 + modalidade curva às 11h (igual ao Iniciar). -->
+        <androidx.wear.widget.CurvedTextView
+            android:id="@+id/serve_arc_sport"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:text="⚡ Beach Tennis"
+            android:textColor="@color/meta"
+            android:textSize="12sp" />
+
+        <!-- Prompt curvo "2º sacador" no 12h (igual ao "1º sacador" do Iniciar). -->
+        <androidx.wear.widget.CurvedTextView
+            android:id="@+id/serve_arc_prompt"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:text="2º sacador"
+            android:textColor="@color/name_blue"
+            android:textStyle="bold"
+            android:textSize="13sp" />
+    </FrameLayout>
 
 </FrameLayout>

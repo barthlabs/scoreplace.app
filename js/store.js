@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.1';
+window.SCOREPLACE_VERSION = '1.3';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -393,47 +393,12 @@ window._formatLabel = function (t) {
   };
 })();
 
-// ─── Número GLOBAL do "Jogo N" em Rei/Rainha-Liga (v4.0.2) ───────────────────
-// Espelha EXATAMENTE a numeração do bracket (bracket.js, caminho monarch-Liga):
-// na rodada, os jogos dos OUTROS grupos são contados primeiro e o grupo do
-// usuário recebe os números seguintes (por isso o 1º jogo do seu grupo pode ser
-// "Jogo 73"). Offset pelas rodadas anteriores (round.matches sem sit-outs).
-// `isMe(name)` identifica o usuário logado entre os players individuais do grupo.
-// Verificado contra dados reais do Confra (25 grupos/75 jogos → grupo do dono = 73/74/75).
-window._monarchGlobalJogoNum = function (t, m, isMe) {
-  try {
-    if (!t || !m || !m.id || typeof isMe !== 'function') return null;
-    var rounds = t.rounds || [];
-    var ri = -1, roundGroups = null;
-    for (var i = 0; i < rounds.length && ri < 0; i++) {
-      var mg = (rounds[i] && rounds[i].monarchGroups) || [];
-      for (var gi = 0; gi < mg.length && ri < 0; gi++) {
-        var ms = (mg[gi] && mg[gi].matches) || [];
-        for (var k = 0; k < ms.length; k++) { if (ms[k] && ms[k].id === m.id) { ri = i; roundGroups = mg; break; } }
-      }
-    }
-    if (ri < 0 || !roundGroups) return null;
-    var prev = 0;
-    for (var pr = 0; pr < ri; pr++) {
-      var pm = (rounds[pr] && rounds[pr].matches) || [];
-      prev += pm.filter(function (x) { return x && !x.isSitOut; }).length;
-    }
-    var hasMe = function (g) { return ((g.players) || []).some(function (p) { return isMe(p); }); };
-    var myG = [], otherG = [];
-    roundGroups.forEach(function (g) { (hasMe(g) ? myG : otherG).push(g); });
-    if (!myG.length) {
-      var n0 = prev;
-      for (var a0 = 0; a0 < roundGroups.length; a0++) { var ms0 = (roundGroups[a0].matches) || []; for (var b0 = 0; b0 < ms0.length; b0++) { n0++; if (ms0[b0].id === m.id) return n0; } }
-      return null;
-    }
-    var otherCount = 0; otherG.forEach(function (g) { otherCount += ((g.matches) || []).length; });
-    var n = prev + otherCount;
-    for (var a = 0; a < myG.length; a++) { var ms = (myG[a].matches) || []; for (var b = 0; b < ms.length; b++) { n++; if (ms[b].id === m.id) return n; } }
-    n = prev;
-    for (var a2 = 0; a2 < otherG.length; a2++) { var ms2 = (otherG[a2].matches) || []; for (var b2 = 0; b2 < ms2.length; b2++) { n++; if (ms2[b2].id === m.id) return n; } }
-    return null;
-  } catch (e) { return null; }
-};
+// ─── (REMOVIDO v1.2.37) _monarchGlobalJogoNum ───────────────────────────────
+// Era um 2º numerador SÓ pra Rei/Rainha, usado apenas pela dashboard. Espelhava um
+// bracket ANTIGO ("grupo do usuário por último" → Jogo 73) e divergiu do atual, que
+// numera na ordem dos grupos (→ Jogo 19): a dashboard dizia 73, a chave dizia 19.
+// FONTE ÚNICA é window._assignGlobalGameNumbers → m._gameNum (bracket.js). Proibido
+// 2º contador. Ver project_game_numbering_canonical.
 
 // ─── Haptic feedback CANÔNICO (v4.0.0) ───────────────────────────────────────
 // Retorno tátil de "apertar botão" em TODO o app — botões, toggles, checkboxes.
@@ -925,7 +890,13 @@ window._matchHasRealPlay = function (m) {
 };
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
-window.SCOREPLACE_DEV_WHATSAPP = '5511966581959'; // +55 11 96658-1959
+// v1.2.30: número trocado pro NOVO barthlabs (+55 11 98772-6873), WhatsApp Business
+// orgânico apenas. Histórico dos números queimados: o barthlabs original
+// (+55 11 96658-1959) teve o WhatsApp Business banido pela Meta em 14/jul; o stopgap
+// pessoal (+55 11 99723-7733, conta TIM) também foi bloqueado. Uso MANUAL (a pessoa
+// escreve, um humano responde) — não é automação, então não é o que a Meta pune.
+// Ver [[project_whatsapp_meta_2fa_block]].
+window.SCOREPLACE_DEV_WHATSAPP = '5511987726873'; // +55 11 98772-6873 (barthlabs)
 window._devWhatsAppTip = 'Clique aqui para a sua Linha direta com o desenvolvedor do scoreplace.app. ' +
   'Tem dúvida, crítica ou sugestão? Achou algo que não funcionou como esperava? ' +
   'Precisa de ajuda com algo com relação ao app? Por favor fale conosco! ' +
@@ -1343,6 +1314,14 @@ window._softRefreshView = function() {
                   // (torneio vivo) varria a barra de progresso e o organizador achava que
                   // tinha travado. Ver [[project_letzplay_scan_stability]].
                   document.getElementById('sp-import-overlay') ||
+                  // v1.2.2: combinar jogo (enquete) e grupo do WhatsApp. Ambos são
+                  // fixed/z-100040 e caíam no sweep genérico do _dismissAllOverlays.
+                  // O próprio save destes fluxos ecoa um snapshot → _softRefreshView →
+                  // initRouter → sweep: o overlay se fechava sozinho no meio da ação
+                  // (mesma classe da v0.15.89 / v2.7.96). O sch-overlay é ANTERIOR a
+                  // esta leva e estava desprotegido desde que subiu.
+                  document.getElementById('sch-overlay') ||
+                  document.getElementById('wa-group-overlay') ||
                   // v2.7.96: diálogos padrão (confirm/alert/input). Sem isto, em torneio
                   // VIVO (Confra: snapshots frequentes ao simular resultados) o snapshot
                   // disparava _softRefreshView → initRouter → _dismissAllOverlays e varria a
@@ -2203,165 +2182,13 @@ window._hamburgerOutsideClick = function(e) {
 
 // ─── Constantes globais ─────────────────────────────────────────────────────
 window.SCOREPLACE_URL = 'https://scoreplace.app';
-// Helper canônico: retorna TODOS os UIDs de um participante.
-// Duplas têm p1Uid/p2Uid além de uid. Garante individualidade.
-window._participantUids = function(p) {
-  if (typeof p !== 'object' || !p) return [];
-  var seen = {};
-  var uids = [];
-  function _add(u) { if (u && !seen[u]) { seen[u] = true; uids.push(u); } }
-  _add(p.uid); _add(p.p1Uid); _add(p.p2Uid);
-  if (Array.isArray(p.participants)) p.participants.forEach(function(s) { if (s) _add(s.uid); });
-  return uids;
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// IDENTIDADE = uid em TODO mapa por-pessoa do torneio (checkedIn / absent / vips).
-// Regra do dono (jun/2026): "sempre identifica pelo uid. vips, checkin, ausente e
-// enquete inclusive." Esses mapas eram chaveados por NOME — dois jogadores de
-// mesmo nome colidiam no mesmo estado. Agora a chave canônica é o uid da pessoa;
-// o nome só vale como FALLBACK (jogador informal sem conta, ou doc legado).
-//
-// _memberUidByName(t, name): resolve o nome de UMA pessoa para o uid dela dentro
-// do torneio — varre solos (p.uid), slots de dupla (p1Name/p1Uid, p2Name/p2Uid),
-// sub-participants[], e também espera/standby (pra substitutos resolverem).
-// Retorna '' pra jogador informal (sem conta).
-window._memberUidByName = function(t, name) {
-  if (!t || !name) return '';
-  var target = String(name).trim().toLowerCase();
-  if (!target) return '';
-  var pools = [];
-  if (Array.isArray(t.participants)) pools.push(t.participants);
-  if (Array.isArray(t.standbyParticipants)) pools.push(t.standbyParticipants);
-  if (Array.isArray(t.waitlist)) pools.push(t.waitlist);
-  for (var pi = 0; pi < pools.length; pi++) {
-    var arr = pools[pi];
-    for (var i = 0; i < arr.length; i++) {
-      var p = arr[i];
-      if (!p || typeof p !== 'object') continue;
-      if ((p.displayName || p.name || '').trim().toLowerCase() === target && p.uid) return p.uid;
-      if ((p.p1Name || '').trim().toLowerCase() === target && p.p1Uid) return p.p1Uid;
-      if ((p.p2Name || '').trim().toLowerCase() === target && p.p2Uid) return p.p2Uid;
-      if (Array.isArray(p.participants)) {
-        for (var s = 0; s < p.participants.length; s++) {
-          var sub = p.participants[s];
-          if (sub && (sub.displayName || sub.name || '').trim().toLowerCase() === target && sub.uid) return sub.uid;
-        }
-      }
-    }
-  }
-  // v4.5.84 (ITEM 3 · Fase 3): 2ª passada por nome VIVO (perfil) — só quando o nome GRAVADO não
-  // casou (a passada acima ganha → zero regressão). Resolve a pessoa quando a entrada não tem
-  // p1Name/p2Name/displayName gravado (pós-Fase-4). Vazio no autoDraw (sem _nameForUid).
-  var _live = (typeof window._nameForUid === 'function') ? window._nameForUid : null;
-  if (_live) {
-    for (var pi2 = 0; pi2 < pools.length; pi2++) {
-      var arr2 = pools[pi2];
-      for (var j = 0; j < arr2.length; j++) {
-        var q = arr2[j];
-        if (!q || typeof q !== 'object') continue;
-        if (q.uid && String(_live(q.uid) || '').trim().toLowerCase() === target) return q.uid;
-        if (q.p1Uid && String(_live(q.p1Uid) || '').trim().toLowerCase() === target) return q.p1Uid;
-        if (q.p2Uid && String(_live(q.p2Uid) || '').trim().toLowerCase() === target) return q.p2Uid;
-        if (Array.isArray(q.participants)) {
-          for (var s2 = 0; s2 < q.participants.length; s2++) {
-            var sub2 = q.participants[s2];
-            if (sub2 && sub2.uid && String(_live(sub2.uid) || '').trim().toLowerCase() === target) return sub2.uid;
-          }
-        }
-      }
-    }
-  }
-  return '';
-};
-
-// _memberNameByUid(t, uid): reverso de _memberUidByName — dado um uid, devolve o
-// displayName da pessoa dentro do torneio. Usado pra "traduzir" chaves uid de
-// volta pra nome quando o consumidor precisa cruzar com a CHAVE (m.p1/m.p2, que
-// são nomes — camada do bracket, Parte 8). Retorna '' se o uid não bate ninguém
-// (ex.: a chave do mapa já é um nome legado, não um uid).
-window._memberNameByUid = function(t, uid) {
-  if (!t || !uid) return '';
-  var pools = [];
-  if (Array.isArray(t.participants)) pools.push(t.participants);
-  if (Array.isArray(t.standbyParticipants)) pools.push(t.standbyParticipants);
-  if (Array.isArray(t.waitlist)) pools.push(t.waitlist);
-  for (var pi = 0; pi < pools.length; pi++) {
-    var arr = pools[pi];
-    for (var i = 0; i < arr.length; i++) {
-      var p = arr[i];
-      if (!p || typeof p !== 'object') continue;
-      if (p.uid === uid) return p.displayName || p.name || '';
-      if (p.p1Uid === uid) return p.p1Name || '';
-      if (p.p2Uid === uid) return p.p2Name || '';
-      if (Array.isArray(p.participants)) {
-        for (var s = 0; s < p.participants.length; s++) {
-          var sub = p.participants[s];
-          if (sub && sub.uid === uid) return sub.displayName || sub.name || '';
-        }
-      }
-    }
-  }
-  return '';
-};
-
-// _idMapKey(t, who): chave canônica {uid, name} de UMA pessoa. `who` pode ser
-// string (nome — resolve via varredura) OU objeto de pessoa única (usa who.uid).
-// NÃO use objeto de DUPLA aqui (dois uids) — os mapas são por-pessoa; readers
-// iteram indivíduos decompostos.
-window._idMapKey = function(t, who) {
-  if (who && typeof who === 'object') {
-    return { uid: who.uid || '', name: (who.displayName || who.name || '') };
-  }
-  var nm = String(who == null ? '' : who);
-  return { uid: window._memberUidByName(t, nm), name: nm };
-};
-// Leitura: uid-key primeiro, nome só fallback (legado/informal). Retorna o valor
-// cru armazenado (ex.: Date.now()) pra ordenação por timestamp continuar valendo.
-window._idMapGet = function(t, map, who) {
-  if (!map || who == null) return undefined;
-  var k = window._idMapKey(t, who);
-  if (k.uid && map[k.uid] != null) return map[k.uid];
-  return k.name ? map[k.name] : undefined;
-};
-window._idMapHas = function(t, map, who) { return !!window._idMapGet(t, map, who); };
-// Escrita: chaveia por uid quando há conta; migra (apaga a chave-nome legada).
-// Jogador informal (sem uid) continua por nome.
-window._idMapSet = function(t, map, who, val) {
-  if (!map || who == null) return;
-  var k = window._idMapKey(t, who);
-  if (k.uid) { map[k.uid] = val; if (k.name && k.name !== k.uid && map[k.name] != null) delete map[k.name]; }
-  else if (k.name) map[k.name] = val;
-};
-window._idMapDel = function(t, map, who) {
-  if (!map || who == null) return;
-  var k = window._idMapKey(t, who);
-  if (k.uid && map[k.uid] != null) delete map[k.uid];
-  if (k.name && map[k.name] != null) delete map[k.name];
-};
-
-// _entryHasVip(t, entry): VIP é flag de ENTRADA (qualquer membro VIP → entrada
-// VIP), armazenada por uid de cada membro (ver _toggleVip). Aceita objeto
-// (solo/dupla — usa _participantUids) OU string ("A / B" = time → resolve cada
-// membro; ou nome solo). Nome só fallback legado. Unifica todos os readers de VIP.
-window._entryHasVip = function(t, entry) {
-  if (!t || !t.vips || entry == null) return false;
-  var vips = t.vips;
-  if (typeof entry === 'object') {
-    var uids = (typeof window._participantUids === 'function') ? window._participantUids(entry) : (entry.uid ? [entry.uid] : []);
-    for (var i = 0; i < uids.length; i++) { if (vips[uids[i]]) return true; }
-    var nm = entry.displayName || entry.name || '';
-    return nm ? !!vips[nm] : false;
-  }
-  var s = String(entry);
-  var members = s.indexOf('/') !== -1 ? s.split('/').map(function(x){ return x.trim(); }).filter(Boolean) : [s];
-  for (var j = 0; j < members.length; j++) {
-    var u = window._memberUidByName(t, members[j]);
-    if (u && vips[u]) return true;
-    if (vips[members[j]]) return true; // fallback nome legado
-  }
-  return false;
-};
+// ─── Identidade por uid: MOVIDO para js/views/identity-core.js (jul/2026) ────
+// _participantUids, _memberUidByName, _memberNameByUid, _idMapKey/Get/Has/Set/Del
+// e _entryHasVip agora vivem em js/views/identity-core.js — carregado ANTES deste
+// arquivo. Motivo: o sorteio virou cânone de Cloud Function e precisa desses helpers,
+// mas o store.js não carrega no servidor (toca document no load). Extrair evitou ter
+// uma 2ª cópia das funções no servidor. Continuam em window.* — nada mudou pra quem
+// chama. NÃO redefinir aqui: o último a carregar vence (project_global_function_clobber).
 
 // ─── woHistory uid-keyed (Parte 9 da varredura, v3.0.78-beta) ────────────────
 // t.woHistory é o registro de W.O. (key = pessoa ausente; value = meta
@@ -2669,6 +2496,108 @@ window._firstNameOnly = function(name) {
   var first = s.split(/\s+/)[0];
   return first || s;
 };
+
+// ───────────────────────────────────────────────────────────────────────────
+// CÂNONE fit-name-to-box (jul/2026) — DENTRO da escala por área.
+// [[project_name_fit_box_canonical]] × [[project_web_area_scaling_canon]].
+//
+// Regra do dono: nome de perfil vive num BOX INVISÍVEL de tamanho FIXO (mesmo
+// pra todo usuário); a fonte é a variável — nome LONGO encolhe pra caber, nome
+// CURTO pode ficar maior, dupla pode quebrar linha. Vale em TODA tela.
+//
+// COMO CASA COM A ESCALA POR ÁREA: o "teto" e o "piso" da fonte são em REM
+// (= var(--sp-u)), então herdam o cânone — crescem com a área (root font-size
+// fluido no mobile + `zoom` no body no desktop). O fit só ENCOLHE, por
+// comprimento do nome, DENTRO desse envelope já escalado. Nada de px fixo (o
+// cânone proíbe "font-size fixo" como caminho alternativo). Iterar em rem
+// também evita a ambiguidade de `zoom` × getComputedStyle: a comparação usa
+// scrollWidth/clientWidth (px de layout), e a fonte é declarada em rem.
+//
+// Uso: o elemento do NOME leva `.sp-name-fit` + `data-maxrem`/`data-minrem`
+// (múltiplos de rem/--sp-u). Seu PARENT é o box de tamanho FIXO — altura em
+// rem/--sp-u + overflow:hidden — pra o box TAMBÉM escalar por área.
+//
+// EXCEÇÃO: o RELÓGIO não usa isto — lá o nome já é só o 1º nome
+// (_watchShortNames em bracket-ui.js) por causa da tela minúscula.
+(function() {
+  var _ro = null;
+
+  // Ajusta UM elemento `.sp-name-fit` ao box pai. false = box sem dimensão.
+  function _fitOne(el) {
+    if (!el) return true;
+    var box = el.parentElement;
+    if (!box) return true;
+    var bw = box.clientWidth, bh = box.clientHeight;
+    if (!bw || !bh) return false; // layout pendente
+    var maxR = parseFloat(el.getAttribute('data-maxrem')) || 1.5;
+    var minR = parseFloat(el.getAttribute('data-minrem')) || 0.7;
+    if (minR > maxR) minR = maxR;
+    var fs = maxR;
+    el.style.fontSize = fs + 'rem';
+    var guard = 0;
+    // passo 0.03rem (~0.5px a 16px) com +1px de folga sub-pixel.
+    while (guard++ < 200 && (el.scrollWidth > bw + 1 || el.scrollHeight > bh + 1) && fs > minR) {
+      fs = Math.max(minR, fs - 0.03);
+      el.style.fontSize = fs + 'rem';
+    }
+    el.setAttribute('data-fitted', '1');
+    el.setAttribute('data-fitw', bw);
+    el.setAttribute('data-fith', bh);
+    if (_ro) { try { _ro.observe(box); } catch (e) {} }
+    return true;
+  }
+  window._fitNameToBox = _fitOne;
+
+  // Varre `root` (default document) por `.sp-name-fit` ainda não ajustados.
+  // Re-tenta por setTimeout enquanto algum box não tem dimensão.
+  window._fitNames = function(root, retry) {
+    try {
+      var scope = (root && root.querySelectorAll) ? root : document;
+      var els = scope.querySelectorAll('.sp-name-fit:not([data-fitted])');
+      var pending = false;
+      Array.prototype.forEach.call(els, function(el) {
+        if (!_fitOne(el)) pending = true;
+      });
+      if (pending && (retry || 0) < 12) {
+        setTimeout(function() { window._fitNames(root, (retry || 0) + 1); }, 60);
+      }
+    } catch (e) {}
+  };
+
+  // ResizeObserver: box mudou de tamanho (rotação, re-layout, expandir/colapsar,
+  // MUDANÇA DE ZOOM da escala por área) → re-ajusta. Só em mudança real (>2px)
+  // pra não oscilar. Box é fixo por construção → sem loop de feedback.
+  if (typeof ResizeObserver !== 'undefined') {
+    _ro = new ResizeObserver(function(entries) {
+      entries.forEach(function(entry) {
+        var box = entry.target;
+        var el = box.querySelector(':scope > .sp-name-fit');
+        if (!el) { try { _ro.unobserve(box); } catch (e) {} return; }
+        var bw = box.clientWidth, bh = box.clientHeight;
+        if (!bw || !bh) return;
+        var pw = parseFloat(el.getAttribute('data-fitw')) || 0;
+        var ph = parseFloat(el.getAttribute('data-fith')) || 0;
+        if (Math.abs(bw - pw) < 2 && Math.abs(bh - ph) < 2) return;
+        el.removeAttribute('data-fitted');
+        _fitOne(el);
+      });
+    });
+  }
+
+  // Fallback pra ResizeObserver: re-ajusta tudo em resize de janela (debounced).
+  // Cobre a mudança do `zoom` por área quando a largura da viewport muda.
+  var _rt = null;
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('resize', function() {
+      if (_rt) clearTimeout(_rt);
+      _rt = setTimeout(function() {
+        var els = document.querySelectorAll('.sp-name-fit[data-fitted]');
+        Array.prototype.forEach.call(els, function(el) { el.removeAttribute('data-fitted'); });
+        window._fitNames(document, 0);
+      }, 150);
+    });
+  }
+})();
 
 // v2.4.23: saudação concordante com o gênero do perfil.
 // PT: "Bem-vinda" pra gênero feminino, "Bem-vindo" pra masculino/desconhecido.
@@ -3094,12 +3023,18 @@ window._pName = function(p, fallback) {
 // espera; aqui é só o pool bruto de W.O./substituição.
 window._getStandbyPool = function (t) {
   if (!t) return [];
-  var getName = function (p) { return window._pName(p); };
   var sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
   var wl = Array.isArray(t.waitlist) ? t.waitlist : [];
-  var spNames = new Set(sp.map(getName));
+  // dedup por UID (era por _pName): dois suplentes homônimos colapsavam num só e o 2º
+  // sumia da fila — o mesmo hack de nome que o uid veio matar. Fictício (sem uid) cai no
+  // nome, que é a identidade dele. Ver [[project_uid_identity_canon_locked]].
+  var _key = function (p) {
+    var u = (typeof window._participantUids === 'function') ? window._participantUids(p) : (p && p.uid ? [p.uid] : []);
+    return u.length ? 'u:' + u.slice().sort().join('+') : 'n:' + window._pName(p);
+  };
+  var seen = new Set(sp.map(_key));
   var pool = sp.slice();
-  wl.forEach(function (w) { var wn = getName(w); if (wn && !spNames.has(wn)) pool.push(w); });
+  wl.forEach(function (w) { var k = _key(w); if (k !== 'n:' && !seen.has(k)) { seen.add(k); pool.push(w); } });
   return pool;
 };
 
@@ -3911,7 +3846,7 @@ window._inscritosFilterBar = function (opts) {
         // vazando o fundo entre o cabeçalho e a barra. -1px sobrepõe; como a topbar tem
         // z-index maior e mesma cor, o overlap é invisível. `padding-top:2px` extra de
         // folga: a barra cobre qualquer rounding antialiased acima dos controles.
-        wrapStyle = ' style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:30;background:var(--bg-darker,#111114);margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);margin-bottom:6px;padding:9px 10px 7px;box-sizing:border-box;"';
+        wrapStyle = ' style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:30;background:var(--bg-darker,#111114);margin-left:0;margin-right:0;margin-bottom:6px;padding:9px 10px 7px;box-sizing:border-box;"';
     }
     return '<div id="fbwrap-' + key + '"' + wrapStyle + '>' + window._fbInner(key) + '</div>';
 };
@@ -4175,7 +4110,8 @@ window._canCreateTournament = function() {
   if (!user) return false;
   var active = window.AppStore.tournaments.filter(function(t) {
     // v2.8.79: uid-primário (criador por uid; organizerEmail como fallback)
-    var mine = (user.uid && t.creatorUid === user.uid) || (user.email && t.organizerEmail === user.email);
+    // v1.2.44: só uid (ver AppStore.isOrganizer — e-mail não identifica ninguém).
+    var mine = !!(user.uid && t.creatorUid === user.uid);
     return mine && t.status !== 'finished' && t.status !== 'cancelled';
   });
   return active.length < window.PLAN_LIMITS.FREE_MAX_TOURNAMENTS;
@@ -4211,9 +4147,9 @@ window._showUpgradeModal = function(reason) {
 
   modal = document.createElement('div');
   modal.id = 'modal-upgrade';
-  modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:100000;';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:100000;';
   modal.innerHTML =
-    '<div style="background:var(--surface-color);border:1px solid var(--border-color);border-radius:20px;max-width:380px;width:92%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+    '<div style="background:var(--surface-color);border:1px solid var(--border-color);border-radius:20px;max-width:380px;width:92%;max-height:90%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
       '<div style="background:linear-gradient(135deg,#3b82f6,#6366f1);padding:1.2rem;text-align:center;flex-shrink:0;">' +
         '<div style="font-size:2rem;margin-bottom:0.3rem;">🚀</div>' +
         '<div style="font-size:1.2rem;font-weight:800;color:#fff;">scoreplace Pro</div>' +
@@ -4311,16 +4247,6 @@ window._safeHtml = function(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 };
 
-// Sanitiza um parâmetro de template do WhatsApp Cloud API.
-// A Meta REJEITA o envio se o valor tiver quebra de linha, tab ou 4+ espaços
-// seguidos, e corta em 1024 chars. Nossas mensagens vêm de texto livre (nome de
-// torneio, comentário do organizador), então tudo passa por aqui antes de virar
-// {{n}}. Ver memória `project_whatsapp_meta_2fa_block`.
-window._waParam = function(v) {
-  var s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
-  if (s.length > 1024) s = s.slice(0, 1021) + '...';
-  return s || '-'; // parâmetro vazio também é rejeitado pela Meta
-};
 
 // ── Loader GLOBAL (v4.0.88) — "enquanto não entregar a informação, carregando… sempre" ──
 // Padrão canônico do app: TODA ação que processa antes de entregar uma tela deve chamar
@@ -4461,17 +4387,39 @@ window._haversineKm = function(lat1, lon1, lat2, lon2) {
 // _loadParticipantProfilesByName e aplicada nos slots [data-pmeta-name].
 window._partProfileByName = window._partProfileByName || {};
 
+// v1.2.13: as 3 pills (gênero · nível · idade) tinham cor CALIBRADA PRO TEMA ESCURO
+// hardcoded — texto claro (#a5b4fc / #fbbf24) sobre tint de 16%. No TEMA CLARO o card
+// é claro → texto claro sobre fundo claro = sem leitura (reportado com screenshot).
+// Regra do dono (feedback_dark_tarja_light_text): "sobre fundo claro → tint + cor";
+// "tema claro → fonte ESCURA sobre fundo claro". Então no claro a pill mantém o tint
+// (a identidade da cor) e o TEXTO vira a variante forte/escura da MESMA cor — nunca um
+// cinza genérico, que perderia o significado (rosa=fem, índigo=nível, âmbar=idade).
+// Fonte única: os 3 badges abaixo são usados pelo card de inscritos em tournaments.js
+// E participants.js (project_two_participant_card_renderers) — corrigir aqui cobre os dois.
+window._profileMetaIsLight = function() {
+  try { return (document.documentElement.getAttribute('data-theme') || 'dark') === 'light'; }
+  catch (e) { return false; }
+};
+
 window._profileMetaGenderBadge = function(g) {
   if (!g) return '';
   var key = String(g).toLowerCase().trim();
+  // [ícone, rótulo, rgb-do-tint, texto-no-CLARO, texto-no-ESCURO]
+  // As cores 4 e 5 foram MEDIDAS no browser (contraste WCAG contra o card + tint 16%),
+  // não escolhidas no olho. O tom PURO do tint (ex.: rgb(236,72,153)) reprovava nos DOIS
+  // temas: 3.5:1 no escuro / 3.77:1 no claro — daí um tom mais fundo no claro e um mais
+  // claro no escuro. Mínimo AA pra texto pequeno = 4.5:1 (a pill é 0.62rem).
   var map = {
-    fem: ['♀', 'Fem', '236,72,153'], feminino: ['♀', 'Fem', '236,72,153'], f: ['♀', 'Fem', '236,72,153'],
-    masc: ['♂', 'Masc', '59,130,246'], masculino: ['♂', 'Masc', '59,130,246'], m: ['♂', 'Masc', '59,130,246'],
-    misto: ['⚥', 'Misto', '168,85,247'], misto_aleatorio: ['⚥', 'Misto', '168,85,247'], misto_obrigatorio: ['⚥', 'Misto', '168,85,247']
+    fem: ['♀', 'Fem', '236,72,153', '#831843', '#f472b6'], feminino: ['♀', 'Fem', '236,72,153', '#831843', '#f472b6'], f: ['♀', 'Fem', '236,72,153', '#831843', '#f472b6'],
+    masc: ['♂', 'Masc', '59,130,246', '#1e3a8a', '#60a5fa'], masculino: ['♂', 'Masc', '59,130,246', '#1e3a8a', '#60a5fa'], m: ['♂', 'Masc', '59,130,246', '#1e3a8a', '#60a5fa'],
+    misto: ['⚥', 'Misto', '168,85,247', '#4c1d95', '#c4b5fd'], misto_aleatorio: ['⚥', 'Misto', '168,85,247', '#4c1d95', '#c4b5fd'], misto_obrigatorio: ['⚥', 'Misto', '168,85,247', '#4c1d95', '#c4b5fd']
   };
   var e = map[key];
   if (!e) return '';
-  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(' + e[2] + ',0.16);color:rgb(' + e[2] + ');border:1px solid rgba(' + e[2] + ',0.4);display:inline-flex;align-items:center;gap:3px;line-height:1.5;">' + e[0] + ' ' + e[1] + '</span>';
+  var _lt = window._profileMetaIsLight();
+  var _fg = _lt ? e[3] : e[4];
+  var _bd = _lt ? 0.55 : 0.4;
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(' + e[2] + ',0.16);color:' + _fg + ';border:1px solid rgba(' + e[2] + ',' + _bd + ');display:inline-flex;align-items:center;gap:3px;line-height:1.5;">' + e[0] + ' ' + e[1] + '</span>';
 };
 
 window._profileMetaExtractSkill = function(catStr, t) {
@@ -4487,7 +4435,11 @@ window._profileMetaExtractSkill = function(catStr, t) {
 
 window._profileMetaSkillBadge = function(skill) {
   if (!skill) return '';
-  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);line-height:1.5;">' + window._safeHtml(skill) + '</span>';
+  // Claro: índigo-800 (#3730a3) sobre o tint — o #a5b4fc do escuro somia no card claro.
+  var _lt = window._profileMetaIsLight();
+  var _fg = _lt ? '#312e81' : '#a5b4fc';
+  var _bd = _lt ? 0.5 : 0.35;
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(99,102,241,0.18);color:' + _fg + ';border:1px solid rgba(99,102,241,' + _bd + ');line-height:1.5;">' + window._safeHtml(skill) + '</span>';
 };
 
 window._profileMetaAgeBadge = function(birthDate, t) {
@@ -4505,7 +4457,13 @@ window._profileMetaAgeBadge = function(birthDate, t) {
   var bucket = null;
   for (var i = 0; i < th.length; i++) { if (age >= th[i].val) { bucket = th[i].cat; break; } }
   if (!bucket) return '';
-  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(245,158,11,0.16);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);line-height:1.5;">' + window._safeHtml(bucket) + '</span>';
+  // Claro: âmbar-900 (#78350f). MEDIDO no browser: o âmbar-700 (#b45309) que os
+  // countdowns usam dá só 2.59:1 sobre o card claro + tint — reprova WCAG AA. Aqui
+  // precisa de tom mais fundo que o do texto solto dos countdowns.
+  var _ltA = window._profileMetaIsLight();
+  var _fgA = _ltA ? '#78350f' : '#fbbf24';
+  var _bdA = _ltA ? 0.55 : 0.4;
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(245,158,11,0.16);color:' + _fgA + ';border:1px solid rgba(245,158,11,' + _bdA + ');line-height:1.5;">' + window._safeHtml(bucket) + '</span>';
 };
 
 // v2.4.39: tag "sem cat" na COR do eixo que está faltando (no lugar onde o badge
@@ -4867,16 +4825,15 @@ window._recoverWipedAdminEmails = function() {
     if (orgEmail !== myEmail) return; // só o dono recupera
 
     // Recomputa usando os mesmos helpers de firebase-db.js
+    // v1.2.2: só adminEmails — memberEmails saiu do schema (membro é uid, via memberUids).
     var newAdminEmails = window.FirestoreDB._computeAdminEmails(t);
-    var newMemberEmails = window.FirestoreDB._computeMemberEmails(t);
 
-    // Escrita cirúrgica — só adminEmails e memberEmails (Firestore rule permite)
+    // Escrita cirúrgica — só adminEmails (Firestore rule permite)
     window.FirestoreDB.db.collection('tournaments').doc(String(t.id))
-      .update({ adminEmails: newAdminEmails, memberEmails: newMemberEmails })
+      .update({ adminEmails: newAdminEmails })
       .then(function() {
         // Atualiza AppStore em memória para que a sessão atual funcione
         t.adminEmails = newAdminEmails;
-        t.memberEmails = newMemberEmails;
         window._log('[Recovery v1.6.68] restaurado adminEmails para torneio', t.id,
           '→', newAdminEmails);
       })
@@ -4979,93 +4936,164 @@ window._applyThemeIcon = function(theme) {
   } catch (e) {}
 })();
 
-// ─── Favoritos (localStorage) ────────────────────────────────────────────────
-// Favoritos — v2.6.50: re-chaveado por UID (identidade estável). Antes a chave era
-// só `scoreplace_favorites_<email>`; como o email NÃO é estável (zerado p/ contas
-// sintéticas em auth.js, ausente em re-render pré-auth, mudável), a chave trocava e
-// o favorito "sumia". Agora: leitura em UNIÃO de [uid-key, email-key, legado] —
-// acha o favorito independente de qual identidade está presente; escrita nas chaves
-// de identidade (uid + email) — migra sozinho e remoção fica consistente.
-window._favReadKeys = function() {
+// ─── Favoritos e Ocultados — VIVEM NA CONTA (users/{uid}) ────────────────────
+// v1.2.11 — POR QUE ISTO MUDOU DE CASA (não devolver pro localStorage):
+// Os dois moravam SÓ no localStorage, chaveados por uid/email. Isso nunca ia
+// funcionar por dois motivos independentes:
+//   1. O iOS Safari/PWA ZERA o localStorage periodicamente (ITP) — está escrito no
+//      comentário do beta-cleanup logo acima. O usuário favoritava, o iOS limpava, e
+//      o favorito "sumia sozinho". Nenhum esquema de chave resolve isso.
+//   2. Preferência de CONTA não pode morar no DEVICE: entrar pelo celular e pelo
+//      desktop dava listas diferentes, e trocar de aparelho zerava tudo.
+// Agora a VERDADE é users/{uid}.favorites / .hiddenTournaments. O localStorage
+// continua, mas rebaixado a ESPELHO: serve pra primeira pintura (antes do perfil
+// carregar) e pro offline — nunca é fonte quando há perfil carregado.
+//
+// Escrita: arrayUnion/arrayRemove no doc do usuário — NUNCA um set do array inteiro.
+// É o mesmo padrão dos `friends` (ver saveUserProfileToFirestore, que de propósito
+// NÃO inclui friends no payload): dois devices mexendo na lista não se atropelam, e
+// um save concorrente não apaga o que o outro acabou de pôr.
+// As rules já permitem (dono escreve tudo menos os campos privilegiados).
+
+// Espelho local — só pra 1ª pintura/offline. Chaves por identidade (uid+email) porque
+// o email não é estável; a união na leitura acha a lista em qualquer uma delas.
+function _prefKeys(kind) {
   var cu = window.AppStore && window.AppStore.currentUser;
   var keys = [];
-  if (cu && cu.uid) keys.push('scoreplace_favorites_uid_' + cu.uid);
-  if (cu && cu.email) keys.push('scoreplace_favorites_' + cu.email);
-  if (keys.length === 0) keys.push('scoreplace_favorites'); // deslogado / pré-auth
+  if (cu && cu.uid) keys.push('scoreplace_' + kind + '_uid_' + cu.uid);
+  if (cu && cu.email) keys.push('scoreplace_' + kind + '_' + cu.email);
+  if (keys.length === 0) keys.push('scoreplace_' + kind);
   return keys;
-};
-window._favWriteKeys = function() {
-  // mesmas chaves da leitura (de identidade quando logado) — escreve a lista
-  // unificada em todas, então a remoção "pega" em qualquer caminho.
-  return window._favReadKeys();
-};
-
-window._getFavorites = function() {
+}
+function _mirrorRead(kind) {
+  var set = {};
   try {
-    var set = {};
-    window._favReadKeys().forEach(function(k) {
-      try { var raw = localStorage.getItem(k); if (raw) JSON.parse(raw).forEach(function(id){ set[String(id)] = 1; }); } catch (e) {}
+    _prefKeys(kind).forEach(function (k) {
+      try { var raw = localStorage.getItem(k); if (raw) JSON.parse(raw).forEach(function (id) { set[String(id)] = 1; }); } catch (e) {}
     });
-    return Object.keys(set);
-  } catch (e) { return []; }
+  } catch (e) {}
+  return Object.keys(set);
+}
+function _mirrorWrite(kind, list) {
+  var payload = JSON.stringify(list || []);
+  try { _prefKeys(kind).forEach(function (k) { try { localStorage.setItem(k, payload); } catch (e) {} }); } catch (e) {}
+}
+// Lista efetiva: a CONTA manda. Sem perfil carregado (pré-auth/offline) cai no espelho.
+// Nunca UNIR conta+espelho: o espelho de um device fica com o item que a pessoa tirou
+// noutro, e a união o ressuscitaria — "desfavoritei e voltou".
+function _prefList(kind, field) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (cu && Array.isArray(cu[field])) return cu[field].map(String);
+  return _mirrorRead(kind);
+}
+// Persiste UM item na conta. Otimista: quem chama já mexeu na lista local.
+function _prefPersist(field, id, add) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid) return Promise.resolve(false);   // deslogado → só espelho
+  var db = window.FirestoreDB && (window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
+  if (!db) return Promise.resolve(false);
+  try {
+    var fv = firebase.firestore.FieldValue;
+    var patch = {};
+    patch[field] = add ? fv.arrayUnion(String(id)) : fv.arrayRemove(String(id));
+    return db.collection('users').doc(cu.uid).set(patch, { merge: true }).then(function () { return true; });
+  } catch (e) { return Promise.reject(e); }
+}
+// Migração 1x POR DEVICE: sobe o que já existia no localStorage pra conta. Guardada por
+// flag porque sem ela o espelho de um device reintroduziria, a cada login, o item que a
+// pessoa removeu noutro. Depois disso o espelho é só escrita.
+window._migrateLocalPrefsToAccount = function () {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid) return;
+  var FLAG = 'scoreplace_prefs_migrated_v1_' + cu.uid;
+  try { if (localStorage.getItem(FLAG)) { _syncMirrors(); return; } } catch (e) {}
+  var jobs = [];
+  [['favorites', 'favorites'], ['hidden', 'hiddenTournaments']].forEach(function (pair) {
+    var local = _mirrorRead(pair[0]);
+    var remote = Array.isArray(cu[pair[1]]) ? cu[pair[1]].map(String) : [];
+    local.forEach(function (id) {
+      if (remote.indexOf(String(id)) === -1) {
+        if (!Array.isArray(cu[pair[1]])) cu[pair[1]] = remote;
+        cu[pair[1]].push(String(id));
+        jobs.push(_prefPersist(pair[1], id, true));
+      }
+    });
+  });
+  Promise.all(jobs).then(function () {
+    try { localStorage.setItem(FLAG, '1'); } catch (e) {}
+    _syncMirrors();
+  }).catch(function (e) { try { console.warn('[prefs] migração falhou:', e); } catch (_e) {} });
 };
+// Espelho := conta (não o contrário).
+function _syncMirrors() {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu) return;
+  if (Array.isArray(cu.favorites)) _mirrorWrite('favorites', cu.favorites);
+  if (Array.isArray(cu.hiddenTournaments)) _mirrorWrite('hidden', cu.hiddenTournaments);
+}
+window._syncPrefMirrors = _syncMirrors;
 
-window._isFavorite = function(tId) {
-  var favs = window._getFavorites();
-  return favs.indexOf(String(tId)) !== -1;
-};
+window._getFavorites = function () { return _prefList('favorites', 'favorites'); };
+window._isFavorite = function (tId) { return window._getFavorites().indexOf(String(tId)) !== -1; };
 
-window._toggleFavorite = function(tId, event) {
+window._toggleFavorite = function (tId, event) {
   if (event) { event.stopPropagation(); event.preventDefault(); }
-  var favs = window._getFavorites();
   var id = String(tId);
-  var idx = favs.indexOf(id);
-  var nowFav = (idx === -1);
-  if (nowFav) { favs.push(id); } else { favs.splice(idx, 1); }
-  var payload = JSON.stringify(favs);
-  window._favWriteKeys().forEach(function(k) { try { localStorage.setItem(k, payload); } catch (e) {} });
-  // Update heart icons on the page
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var list = window._getFavorites();
+  var nowFav = list.indexOf(id) === -1;
+  var next = nowFav ? list.concat([id]) : list.filter(function (x) { return x !== id; });
+  if (cu) cu.favorites = next;
+  _mirrorWrite('favorites', next);
+  _paintStars(id, nowFav);
+  _prefPersist('favorites', id, nowFav).catch(function (err) {
+    // Reverte: sem isto a estrela mente (fica cheia e o servidor não sabe).
+    var back = nowFav ? next.filter(function (x) { return x !== id; }) : next.concat([id]);
+    if (cu) cu.favorites = back;
+    _mirrorWrite('favorites', back);
+    _paintStars(id, !nowFav);
+    if (typeof showNotification === 'function') {
+      showNotification('⚠️ Não salvou', 'O favorito não foi registrado na sua conta (' + ((err && (err.code || err.message)) || 'tente de novo') + ').', 'error');
+    }
+    try { console.error('[favoritos] rejeitado:', err); } catch (e) {}
+  });
+};
+
+function _paintStars(id, nowFav) {
   var stars = document.querySelectorAll('[data-fav-id="' + id + '"]');
-  stars.forEach(function(el) {
+  stars.forEach(function (el) {
     // v2.8.5: favoritado = emoji ❤️ (volume nativo); não-favoritado = ♡ (contorno).
-    // Antes o clique sobrescrevia com ♥ (texto), revertendo o emoji do render inicial.
     el.textContent = nowFav ? '❤️' : '♡';
     el.title = nowFav ? 'Remover dos favoritos' : 'Adicionar aos favoritos';
     el.style.color = nowFav ? '#f43f5e' : 'rgba(255,255,255,0.4)';
   });
-};
+}
 
 // v2.8.40: torneios OCULTADOS pelo usuário — somem da lista normal e vão pra uma
-// seção "Torneios ocultados" no fim da dashboard. Mesmo esquema de chaves dos
-// favoritos (uid + email, união na leitura), pra sobreviver a troca de identidade.
-// Só faz sentido pra torneios em que o usuário NÃO está inscrito (o botão só
-// aparece neles). Toggle re-renderiza a dashboard (o card muda de seção).
-window._hiddenReadKeys = function() {
-  var cu = window.AppStore && window.AppStore.currentUser;
-  var keys = [];
-  if (cu && cu.uid) keys.push('scoreplace_hidden_uid_' + cu.uid);
-  if (cu && cu.email) keys.push('scoreplace_hidden_' + cu.email);
-  if (keys.length === 0) keys.push('scoreplace_hidden');
-  return keys;
-};
-window._getHidden = function() {
-  try {
-    var set = {};
-    window._hiddenReadKeys().forEach(function(k) {
-      try { var raw = localStorage.getItem(k); if (raw) JSON.parse(raw).forEach(function(id){ set[String(id)] = 1; }); } catch (e) {}
-    });
-    return Object.keys(set);
-  } catch (e) { return []; }
-};
-window._isHidden = function(tId) { return window._getHidden().indexOf(String(tId)) !== -1; };
-window._toggleHidden = function(tId, event) {
+// seção "Torneios ocultados" no fim da dashboard. Só faz sentido pra torneios em que
+// o usuário NÃO está inscrito (o botão só aparece neles).
+window._getHidden = function () { return _prefList('hidden', 'hiddenTournaments'); };
+window._isHidden = function (tId) { return window._getHidden().indexOf(String(tId)) !== -1; };
+
+window._toggleHidden = function (tId, event) {
   if (event) { event.stopPropagation(); event.preventDefault(); }
-  var list = window._getHidden();
   var id = String(tId);
-  var idx = list.indexOf(id);
-  if (idx === -1) list.push(id); else list.splice(idx, 1);
-  var payload = JSON.stringify(list);
-  window._hiddenReadKeys().forEach(function(k) { try { localStorage.setItem(k, payload); } catch (e) {} });
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var list = window._getHidden();
+  var nowHidden = list.indexOf(id) === -1;
+  var next = nowHidden ? list.concat([id]) : list.filter(function (x) { return x !== id; });
+  if (cu) cu.hiddenTournaments = next;
+  _mirrorWrite('hidden', next);
+  _prefPersist('hiddenTournaments', id, nowHidden).catch(function (err) {
+    var back = nowHidden ? next.filter(function (x) { return x !== id; }) : next.concat([id]);
+    if (cu) cu.hiddenTournaments = back;
+    _mirrorWrite('hidden', back);
+    if (typeof showNotification === 'function') {
+      showNotification('⚠️ Não salvou', 'Não foi possível registrar na sua conta (' + ((err && (err.code || err.message)) || 'tente de novo') + ').', 'error');
+    }
+    try { console.error('[ocultados] rejeitado:', err); } catch (e) {}
+    if (typeof window._dashRerender === 'function') window._dashRerender({ compact: true });
+  });
   // v4.0.62: ocultar/desocultar → re-render COMPACTO (junta o conteúdo, sem o
   // spacer de keep-room que deixava "tela preta" até a seção de ocultados).
   if (typeof window._dashRerender === 'function') { window._dashRerender({ compact: true }); return; }
@@ -5084,26 +5112,9 @@ window._toggleHidden = function(tId, event) {
 // usuário E no feed de descoberta pública — sem isso, ações em torneio DESCOBERTO (não
 // inscrito), como "Falar com o organizador", davam "Torneio não encontrado" (só olhavam
 // AppStore.tournaments). Comparação por String (ids podem vir number/string).
-// v3.0.x: detecção CANÔNICA de dupla/time. Retorna a lista de membros (nomes, só p/
-// exibição/contagem) quando p é uma ENTRADA DE TIME; null se é individual.
-//
-// PRINCÍPIO (regra do dono, gravada): uma DUPLA é definida pelos DOIS SLOTS (p1 e p2)
-// ocupados — slot ocupado = uid (identidade real) OU, só pra jogador INFORMAL sem conta,
-// o nome do slot. A identidade interna é SEMPRE o uid quando existe; o nome é só exibição.
-// O '/' num displayName é PURAMENTE exibição ("Kelly / Rodrigo") e NUNCA define dupla.
-// Uma string solta também nunca é dupla. (lista participants[] cobre o formato de array.)
-window._entryTeamMembers = function (p) {
-  if (!p || typeof p !== 'object') return null; // string/individual — '/' é só exibição
-  if (Array.isArray(p.participants) && p.participants.length) {
-    return p.participants.map(function (s) { return (s && (s.displayName || s.name)) || String(s || ''); }).filter(Boolean);
-  }
-  var hasP1 = !!(p.p1Uid || p.p1Name); // slot 1 ocupado: uid (real) ou nome (informal)
-  var hasP2 = !!(p.p2Uid || p.p2Name); // slot 2 ocupado
-  if (hasP1 && hasP2) {
-    return [p.p1Name || p.p1Uid || '', p.p2Name || p.p2Uid || ''];
-  }
-  return null;
-};
+// _entryTeamMembers: MOVIDO para js/views/identity-core.js (jul/2026) — é o cânone da
+// detecção de dupla (slots p1/p2 por uid) e o motor de sorteio precisa dele NO SERVIDOR
+// (_formDoublesTeams o chama). Mesma razão dos _idMap*/_entryHasVip. Segue em window.*.
 
 // ⚠️ CANÔNICO — quantas PESSOAS numa LISTA de entradas (solo=1, dupla=2, time=nº de
 // membros). Pra contagem de inscritos do TORNEIO inteiro use window._countCompetitors(t)
@@ -5126,16 +5137,32 @@ window._peopleInList = function (arr) {
 // resolve daqui. O pXName guardado é APENAS fallback pra jogador INFORMAL (sem conta/uid) ou
 // enquanto o cache ainda não carregou. Nunca regravamos nome no torneio.
 window._profileNameByUid = window._profileNameByUid || {};
-// resolve um uid pro nome do perfil (ao vivo); storedName/uid só fallback (informal/cache frio).
+// resolve um uid pro nome do perfil (ao vivo); storedName só fallback (informal/cache frio).
 // v4.5.85: lê os DOIS caches via _nameForUid (_userProfileCache do render + _profileNameByUid
 // do bracket) — pós-strip a entrada não tem mais storedName, então o resolvedor precisa achar
 // o nome vivo em QUALQUER cache preenchido (o render preenche _userProfileCache).
+// v1.2.2: NUNCA devolver o uid. O antigo `|| uid` vazava o uid CRU na tela quando a inscrição
+// aponta pra um uid sem users/ (pessoa recriou a conta → uid novo; a inscrição ficou no velho)
+// E a entrada foi stripada (sem displayName). Pior: o motor de sorteio usa este retorno COMO
+// NOME e grava em m.p1 → o uid virava identidade PERMANENTE no doc (aconteceu no Ranking do
+// staging, 5 sit-outs). Ordem: perfil vivo → storedName (e-mail/telefone que o _pName passa,
+// pra jogador informal ou conta sumida) → rótulo neutro. O sufixo curto do uid no rótulo NÃO é
+// enfeite: o nome é chave no motor de sorteio, e dois "Jogador sem perfil" iguais colidiriam
+// (um sumiria do sorteio). Ver [[project_orphan_uid_entries]] / [[project_match_slot_uid_identity]].
+window._ORPHAN_UID_LABEL = 'Jogador sem perfil';
 window._displayNameForUid = function (uid, storedName) {
   if (uid) {
     var live = (typeof window._nameForUid === 'function') ? window._nameForUid(uid) : (window._profileNameByUid[uid] || '');
     if (live) return live;
   }
-  return storedName || uid || '';
+  if (storedName) return storedName;
+  return uid ? (window._ORPHAN_UID_LABEL + ' (' + String(uid).slice(0, 4) + ')') : '';
+};
+// true quando a entrada/uid não tem perfil resolvível — a inscrição aponta pra uma conta que
+// não existe mais. Usado pelo relatório de inscritos pra o organizador ver e resolver.
+window._isOrphanUid = function (uid) {
+  if (!uid || String(uid).indexOf('jog_') === 0) return false;
+  return !((typeof window._nameForUid === 'function') ? window._nameForUid(uid) : '');
 };
 // Nome de EXIBIÇÃO canônico de uma entrada. Resolve CADA pessoa pelo SEU uid (perfil ao vivo);
 // "/" é só junção de display de uma dupla. Identidade nunca é o nome guardado.
@@ -5154,63 +5181,18 @@ window._entryDisplayName = function (p) {
       return (typeof s === 'string') ? s : R(s && s.uid, s && (s.displayName || s.name));
     }).filter(Boolean).join(' / ');
   }
-  // indivíduo
-  return R(p.uid, p.displayName || p.name);
+  // indivíduo — v1.2.2: e-mail/telefone entram no fallback igual ao _pName. Os dois
+  // resolvedores tinham a MESMA ordem exceto aqui, então uma inscrição órfã com e-mail
+  // aparecia pelo e-mail no _pName e como rótulo neutro no _entryDisplayName (mesma
+  // pessoa, dois nomes, dependendo da tela).
+  return R(p.uid, p.displayName || p.name || p.email || (p.phone ? String(p.phone) : ''));
 };
 
-// ── ITEM 3 · Fase 4 (v4.5.85): SANITIZADOR DE IDENTIDADE NA PERSISTÊNCIA ──────────
-// Identidade de um inscrito = uid; o nome é resolvido do perfil VIVO (users/{uid}) em
-// TODA borda de display/sorteio/authz (Partes 0–13 + Fases 1–3). Logo, NÃO se grava o
-// nome na entrada de quem TEM conta — o campo gravado só apodrece e vira o "Maira/Maira".
-// Guest SEM conta (sem uid no slot) MANTÉM o nome: é a única identidade que ele tem.
-// Este helper roda no LIMITE DE PERSISTÊNCIA (firebase-db.js), SEMPRE sobre a CÓPIA que
-// vai pro Firestore — NUNCA muta o objeto em memória (display em sessão segue intacto).
-// Só toca os campos de nome da ENTRADA (name/displayName/p1Name/p2Name + sub-participants);
-// NÃO toca slots de partida (m.p1/m.p2) nem nada fora de participants/standby/waitlist.
-function _stripUidEntryNames(p) {
-  if (!p || typeof p !== 'object') return p;
-  var q = {}; for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) q[k] = p[k]; }
-  // v4.5.91: PLACEHOLDER (vaga "Jogador NN") NÃO é conta — nome É a identidade. Placeholders
-  // legados nasceram com uid sintético 'jog_NN_…' + email fake, e o strip abaixo apagava o
-  // nome (achando que tinha conta) → card virava o email. Aqui CURA pro formato limpo (só
-  // nome, sem uid/email) em vez de strippar; na próxima gravação some o uid fantasma.
-  var _phUid = q.uid && String(q.uid).indexOf('jog_') === 0;
-  if ((_phUid || q.isPlaceholder === true) && !q.p1Name && !q.p2Name) {
-    var _m = _phUid ? String(q.uid).match(/^jog_(\d+)/) : null;
-    var _cur = String(q.displayName || q.name || '').trim();
-    var _nm = /^(Jogador|Placeholder)\s+\d+$/i.test(_cur) ? _cur : (_m ? ('Jogador ' + _m[1]) : '');
-    if (_nm) { q.name = _nm; q.displayName = _nm; }
-    q.isPlaceholder = true;
-    if (_phUid) delete q.uid;
-    if (q.email && /^jogador\d+@scoreplace\.app$/i.test(String(q.email))) delete q.email;
-    return q;
-  }
-  var isPair = !!(q.p1Uid || q.p2Uid || q.p1Name || q.p2Name);
-  if (isPair) {
-    if (q.p1Uid) delete q.p1Name;          // membro 1 tem conta → nome vem do perfil
-    if (q.p2Uid) delete q.p2Name;          // membro 2 tem conta → idem
-    // name/displayName da dupla é o teamString derivado ("A / B") → o display reconstrói
-    // via _entryDisplayName (p1Uid vivo / p2Uid vivo / p*Name só do guest). Remove sempre
-    // que ao menos um membro tem conta (o outro, se guest, ainda resolve pelo p*Name mantido).
-    if (q.p1Uid || q.p2Uid) { delete q.name; delete q.displayName; }
-  } else if (q.uid) {                       // solo com conta
-    delete q.name; delete q.displayName;
-  }
-  if (Array.isArray(q.participants)) {
-    q.participants = q.participants.map(function (s) {
-      if (s && typeof s === 'object' && s.uid) {
-        var r = {}; for (var kk in s) { if (Object.prototype.hasOwnProperty.call(s, kk)) r[kk] = s[kk]; }
-        delete r.name; delete r.displayName; return r;
-      }
-      return s;
-    });
-  }
-  return q;
-}
-// Retorna CÓPIA do array com cada entrada sanitizada (entrada sem uid = guest, intacta).
-window._stripStoredNamesForUidEntries = function (arr) {
-  return Array.isArray(arr) ? arr.map(_stripUidEntryNames) : arr;
-};
+// ── SANITIZADOR DE IDENTIDADE NA PERSISTÊNCIA → js/views/identity-core.js ────────
+// _stripStoredNamesForUidEntries/_stripUidEntryNames saíram daqui (v1.2.25): o SORTEIO
+// no servidor reescreve t.participants (forma as duplas) e precisa persistir pela MESMA
+// regra de sanitização do cliente — senão o servidor re-introduz nome gravado em entrada
+// com uid e fura o storage só-uid. store.js não carrega em Node; identity-core sim.
 
 // v4.5.92: DEDUP + cura de PLACEHOLDERS ("Jogador NN"). O strip do ITEM 3 apagava o nome
 // dos placeholders legados (tinham uid sintético 'jog_NN_…'), então adicionar um 2º lote
@@ -5784,13 +5766,15 @@ window.AppStore = {
     var store = this;
     var isFirstSnapshot = true;
     var coll = window.FirestoreDB.db.collection('tournaments');
-    var norm = email ? String(email).trim().toLowerCase() : '';
-    // v1.8.98: uid como fonte primária — mais confiável que email
+    // v1.2.2: UID ONLY. O branch por memberEmails saiu — quem chega aqui está logado, logo
+    // tem uid; era fallback pra um cenário que não existe. Pior: memberEmails NUNCA capturou
+    // e-mail de slot de dupla (_computeMemberEmails só olhava o solo), então a query por
+    // e-mail PERDIA todo torneio onde a pessoa é parceira — o uid não tem esse buraco.
+    // Ver [[project_uid_primary_identity]].
     var _cuNow = window.AppStore && window.AppStore.currentUser;
     var _uid = _cuNow && _cuNow.uid ? _cuNow.uid : '';
-    var query = _uid
-      ? coll.where('memberUids', 'array-contains', _uid)
-      : (norm ? coll.where('memberEmails', 'array-contains', norm) : coll);
+    if (!_uid) { window._warn('[realtime] sem uid — listener não inicia (identidade é uid)'); return; }
+    var query = coll.where('memberUids', 'array-contains', _uid);
     this._realtimeUnsubscribe = query
       .onSnapshot(function(snap) {
         try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-tournaments'); } catch (e) {}
@@ -5901,38 +5885,11 @@ window.AppStore = {
           window._autoCloseExpiredEnrollments();
           // Recupera adminEmails/memberEmails apagados pelo bug v1.6.66
           setTimeout(function() { window._recoverWipedAdminEmails(); }, 2000);
-          // v1.8.98: listener usa uid como primário — busca complementar
-          // por email para torneios antigos sem memberUids preenchido
-          var _cu2 = window.AppStore && window.AppStore.currentUser;
-          if (_cu2 && _cu2.email && _cu2.uid && window.FirestoreDB && window.FirestoreDB.db) {
-            var _norm2 = String(_cu2.email).trim().toLowerCase();
-            window.FirestoreDB.db.collection('tournaments')
-              .where('memberEmails', 'array-contains', _norm2)
-              .get()
-              .then(function(snap2) {
-                var existing = new Set(store.tournaments.map(function(t){ return String(t.id); }));
-                var added = 0;
-                snap2.forEach(function(doc) {
-                  var id = String(doc.id);
-                  if (!existing.has(id)) {
-                    var _td = doc.data();
-                    if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(_td); } catch(e){} }
-                    store.tournaments.push(_td);
-                    added++;
-                  }
-                });
-                if (added > 0) {
-                  store._saveToCache();
-                  if (typeof window._softRefreshView === 'function') window._softRefreshView();
-                }
-              })
-              .catch(function() {})
-              // v2.4.5: só libera o boot loader DEPOIS que a query complementar
-              // assenta (o _softRefreshView dela roda atrás do splash).
-              .then(function() { _finalizeBootReady(); });
-          } else {
-            _finalizeBootReady();
-          }
+          // v1.2.2: a busca complementar por `memberEmails` saiu. Existia pra achar torneio
+          // antigo sem memberUids preenchido — não há mais nenhum, e o campo saiu do schema
+          // (identidade é uid; o listener por memberUids já traz tudo). Sem ela, nada mais
+          // atrasa o boot: libera o loader direto. Ver [[project_uid_primary_identity]].
+          _finalizeBootReady();
           return;
         }
 
@@ -6252,12 +6209,13 @@ window.AppStore = {
         cursor: cursor
       });
       // Drop tournaments the user already has a relationship with — they
-      // already see those via the scoped listener. Uses the denormalized
-      // memberEmails[] so no extra reads.
+      // already see those via the scoped listener. Usa o denormalizado
+      // memberUids[] (v1.2.2: era memberEmails) — sem reads extras.
+      var _myUid = this.currentUser && this.currentUser.uid;
       var filtered = (res.tournaments || []).filter(function(t) {
-        if (!myEmail) return true;
-        if (!Array.isArray(t.memberEmails)) return true;
-        return t.memberEmails.indexOf(myEmail) === -1;
+        if (!_myUid) return true;
+        if (!Array.isArray(t.memberUids)) return true;
+        return t.memberUids.indexOf(_myUid) === -1;
       });
       this.publicDiscovery = opts.append
         ? this.publicDiscovery.concat(filtered)
@@ -6276,9 +6234,10 @@ window.AppStore = {
     if (!window.FirestoreDB || !window.FirestoreDB.db) return;
     this._loading = true;
     try {
-      var email = this.currentUser && this.currentUser.email;
-      var tournaments = email
-        ? await window.FirestoreDB.loadMyTournaments(email)
+      // v1.2.2: UID ONLY — o escopo dos "meus torneios" é memberUids.
+      var _uid = this.currentUser && this.currentUser.uid;
+      var tournaments = _uid
+        ? await window.FirestoreDB.loadMyTournaments(_uid)
         : await window.FirestoreDB.loadAllTournaments();
       var deletedIds = this._deletedTournamentIds || [];
       if (deletedIds.length > 0) {
@@ -6337,6 +6296,11 @@ window.AppStore = {
         }
         if (profile.gender) this.currentUser.gender = profile.gender;
         if (profile.preferredSports) this.currentUser.preferredSports = profile.preferredSports;
+        // v1.2.11: favoritos e ocultados VÊM DA CONTA (users/{uid}), não do device.
+        // Arrays: usar !== undefined (lista VAZIA é um valor legítimo — "desfavoritei
+        // tudo" — e com truthy-check o [] seria ignorado e a lista velha ressuscitaria).
+        if (Array.isArray(profile.favorites)) this.currentUser.favorites = profile.favorites.map(String);
+        if (Array.isArray(profile.hiddenTournaments)) this.currentUser.hiddenTournaments = profile.hiddenTournaments.map(String);
         if (profile.defaultCategory) this.currentUser.defaultCategory = profile.defaultCategory;
         // v1.3.6-beta: skillBySport — habilidade por modalidade
         if (profile.skillBySport && typeof profile.skillBySport === 'object') {
@@ -6429,6 +6393,11 @@ window.AppStore = {
         if (profile.acceptedTermsAt) this.currentUser.acceptedTermsAt = profile.acceptedTermsAt;
         if (profile.acceptedTermsVersion) this.currentUser.acceptedTermsVersion = profile.acceptedTermsVersion;
       }
+      // v1.2.11: favoritos/ocultados que ficaram no localStorage deste device sobem
+      // pra conta (1x por device, com flag). Depois disto o espelho local é só
+      // escrita — a conta manda. Roda logo após o merge do perfil, quando
+      // currentUser.favorites/.hiddenTournaments já refletem o servidor.
+      try { if (typeof window._migrateLocalPrefsToAccount === 'function') window._migrateLocalPrefsToAccount(); } catch (e) {}
       // v0.17.6: self-heal de cu.friends — roda em background após profile
       // load. Resolve emails legados pra uid, dropa órfãos e dedup. Persiste
       // a lista limpa no Firestore. Atende pedido do usuário pra prevenir
@@ -6787,22 +6756,22 @@ window.AppStore = {
   // já mostravam o mesmo conteúdo, só os botões de admin variavam, e isso
   // já era checado por isOrganizer(t) per-torneio.
 
+  // v1.2.44 — SÓ UID. O organizador é `creatorUid`; o co-host é `ch.uid`. O fallback por
+  // `organizerEmail === email` / `ch.email === email` saiu: e-mail não identifica ninguém
+  // (cânone do dono), e quem segura uma string de e-mail igual ganhava as ferramentas do
+  // organizador. Ele existia "pra torneio antigo sem creatorUid" — medido em prod+staging
+  // (jul/2026): ZERO torneios reais sem creatorUid, e todo creatorUid resolve em users/ e
+  // bate com o dono do e-mail. Ou seja: não salvava ninguém.
+  // Conta recriada (uid novo) se resolve pelo remap/merge — não por porta de e-mail aqui.
+  // Ver [[project_uid_identity_canon_locked]] / [[project_account_merge_email]].
   isOrganizer(tournament) {
     if (!this.currentUser) return false;
-    var email = this.currentUser.email;
     var uid = this.currentUser.uid;
-    // v2.8.79: uid é identidade primária. Criador por uid OU organizerEmail.
-    if (uid && tournament.creatorUid && tournament.creatorUid === uid) return true;
-    if (email && tournament.organizerEmail === email) return true;
+    if (!uid || !tournament) return false;
+    if (tournament.creatorUid && tournament.creatorUid === uid) return true;
     if (Array.isArray(tournament.coHosts)) {
       return tournament.coHosts.some(function(ch) {
-        if (!ch || ch.status !== 'active') return false;
-        // Co-host casa por UID (primário) OU email (fallback, ambos não-vazios).
-        // ANTES casava só `ch.email === email`: co-host com email '' (ex.: conta
-        // por telefone) nunca virava organizador — sumiam Análise/Enquete/etc.
-        if (uid && ch.uid && ch.uid === uid) return true;
-        if (email && ch.email && ch.email === email) return true;
-        return false;
+        return !!(ch && ch.status === 'active' && ch.uid && ch.uid === uid);
       });
     }
     return false;
@@ -6826,15 +6795,8 @@ window.AppStore = {
       // v1.8.99: uid é a única fonte de identificação
       if (t.creatorUid === cu.uid) return true;
       if (Array.isArray(t.memberUids) && t.memberUids.indexOf(cu.uid) !== -1) return true;
-      // Fallback estreito: só para torneios antigos migrados antes da v1.8.99
-      // (memberUids pode estar vazio se a migração falhou)
-      if (!Array.isArray(t.memberUids) || t.memberUids.length === 0) {
-        if (cu.email) {
-          var _em = cu.email.toLowerCase();
-          if (t.organizerEmail && t.organizerEmail.toLowerCase() === _em) return true;
-          if (Array.isArray(t.memberEmails) && t.memberEmails.indexOf(_em) !== -1) return true;
-        }
-      }
+      // v1.2.2: sem fallback por e-mail — membro é quem está em memberUids, ponto.
+      // (o fallback existia pra torneio migrado antes da v1.8.99; não há mais nenhum)
       return false;
     });
   },
@@ -6843,10 +6805,9 @@ window.AppStore = {
     if (!this.currentUser) return [];
     var uid = this.currentUser.uid;
     var email = this.currentUser.email;
+    // v1.2.44: só uid (o fallback por organizerEmail saiu — ver AppStore.isOrganizer).
     return this.tournaments.filter(function(t) {
-      if (uid && t.creatorUid === uid) return true;
-      // Fallback: organizerEmail para torneios antigos sem creatorUid
-      return email && t.organizerEmail === email;
+      return !!(uid && t.creatorUid === uid);
     });
   },
 
@@ -6969,8 +6930,9 @@ window.AppStore = {
     var email = this.currentUser.email;
     var uid = this.currentUser.uid;
     // v2.8.79: uid-primário (criador por uid; organizerEmail como fallback)
+    // v1.2.44: só uid (ver AppStore.isOrganizer).
     return this.tournaments.some(function(t) {
-      return (uid && t.creatorUid === uid) || (email && t.organizerEmail === email);
+      return !!(uid && t.creatorUid === uid);
     });
   }
 };
@@ -7158,37 +7120,48 @@ window._teamNameBreakHtml = function(name, tournament) {
 //  • object { uid, email, displayName, ... } → top-level fields
 //  • object { ..., participants: [ m1, m2 ] }→ team — recurse into each member
 //  • object whose displayName/name contains " / " → treat label as team string
+// "Esta pessoa É esta inscrição?" — porta gêmea de _getCompetitors (o botão
+// Inscrever-se/Desinscrever-se e a desinscrição passam por aqui).
+//
+// CÂNONE (dono, jul/2026): quem tem conta é identificado por UID e mais nada. Um slot/entrada
+// que TEM uid casa SÓ por uid — o nome e o e-mail gravados ali são rótulo velho (o strip não
+// os repõe, e-mail muda, conta é recriada, nome colide). Fictício (SEM uid) casa pelo NOME
+// digitado: é a única identidade que ele tem. E-mail NUNCA identifica ninguém.
+//
+// v1.2.44 — removidos os fallbacks por e-mail (`m.email`, `p1Email`, `p2Email`) e por nome
+// de quem TEM uid. Eles davam match em pessoa ERRADA: e-mail repetido (família, conta
+// recriada, contas mescladas) ou homônimo respondiam "você está inscrito" pra quem não está
+// — e a desinscrição sai pela mesma porta. Medido em prod+staging antes de remover: UMA única
+// entrada sem uid carrega e-mail (torneio já encerrado); todas as outras sem uid são
+// fictícios só-nome, que o cânone manda casar por nome mesmo. Travado por
+// tests/uid-poison-inscritos.test.js. Ver [[project_uid_identity_canon_locked]].
 window._userMatchesParticipant = function(user, p) {
   if (!user || !p) return false;
-  var ue = (user.email || '').toLowerCase();
   var un = user.displayName || '';
   var uu = user.uid || '';
+  // Uma PESSOA (entrada solo, membro de dupla ou sub-participante).
   function matchMember(m) {
     if (!m) return false;
-    if (typeof m === 'string') {
-      var s = m.trim();
-      return (ue && s.toLowerCase() === ue) || (un && s === un);
-    }
-    if (uu && m.uid && m.uid === uu) return true;
-    if (ue && m.email && m.email.toLowerCase() === ue) return true;
-    if (un && m.displayName && m.displayName === un) return true;
-    if (un && m.name && m.name === un) return true;
+    if (typeof m === 'string') return !!(un && m.trim() === un);   // fictício legado: nome é a identidade
+    if (m.uid) return !!(uu && m.uid === uu);                      // tem conta → SÓ uid, nunca nome/e-mail
+    return !!(un && ((m.displayName && m.displayName === un) || (m.name && m.name === un))); // fictício
+  }
+  // String legada "A / B": sem slots, o nome é a única identidade que existe.
+  if (typeof p === 'string') {
+    return p.split(' / ').map(function(s) { return s.trim(); }).filter(Boolean).some(matchMember);
+  }
+  // DUPLA por ESTRUTURA (slots p1/p2) — 2 pessoas, cada uma com a SUA identidade.
+  // O rótulo "A / B" (displayName) é TIPOGRAFIA, não identidade: quando há slots, eles mandam
+  // e o label NÃO é fatiado. Ver [[project_dupla_entry_structural_not_slash]].
+  if (p.p1Uid || p.p2Uid || p.p1Name || p.p2Name) {
+    if (matchMember({ uid: p.p1Uid, name: p.p1Name })) return true;
+    if (matchMember({ uid: p.p2Uid, name: p.p2Name })) return true;
     return false;
   }
-  if (typeof p === 'string') {
-    var parts = p.split(' / ').map(function(s) { return s.trim(); }).filter(Boolean);
-    return parts.some(matchMember);
-  }
   if (matchMember(p)) return true;
-  // v2.7.91: dupla formada pelo aceite grava p1Name/p2Name/p1Uid/p2Uid com displayName
-  // = só o nome do p1 (ex.: "Kelly Barth"). Sem checar esses campos, o p2 (ex.: Rodrigo)
-  // não era reconhecido como inscrito → botão "Inscrever-se" reaparecia → inscrição em
-  // DOBRO. Esta é a RAIZ da duplicata, não só um sintoma de render.
-  if (uu && ((p.p1Uid && p.p1Uid === uu) || (p.p2Uid && p.p2Uid === uu))) return true;
-  if (un && ((p.p1Name && p.p1Name === un) || (p.p2Name && p.p2Name === un))) return true;
-  if (ue && ((p.p1Email && p.p1Email.toLowerCase() === ue) || (p.p2Email && p.p2Email.toLowerCase() === ue))) return true;
   if (Array.isArray(p.participants) && p.participants.some(matchMember)) return true;
-  var label = p.displayName || p.name || '';
+  // Sem slots e sem sub-array: dupla de fictícios guardada só como rótulo "A / B" (legado).
+  var label = p.uid ? '' : (p.displayName || p.name || '');
   if (label && label.indexOf(' / ') !== -1) {
     return label.split(' / ').map(function(s) { return s.trim(); }).filter(Boolean).some(matchMember);
   }
@@ -7204,16 +7177,20 @@ window._isUserEnrolledInTournament = function(user, tournament) {
 // v2.7.97: NÚMERO DE INSCRIÇÃO POR PESSOA. Antes a dupla compartilhava UM número e a
 // contagem somava 1 pela dupla ("12 em vez de 13"). Agora CADA pessoa tem o SEU número:
 // solo → p.enrollSeq; dupla → p.p1Seq (membro esquerdo) e p.p2Seq (membro direito).
-// _ensureEnrollSeqs atribui seqs faltantes (legado/novos inscritos) preenchendo lacunas
-// SEM colidir com os já guardados (o form guarda os originais → ficam estáveis).
+// v1.2.46 CÂNONE (dono): o número é CRONOLÓGICO e a fila NÃO tem lacuna. Quem não tem
+// número entra no FIM da fila (max+1) — NUNCA preenche um vago deixado por quem saiu.
+// Fechar a lacuna é papel do rank denso (_buildEnrollOrderMap): remover o 2º faz o 3º
+// virar 2º. Se preenchêssemos o vago AQUI, um inscrito TARDIO pegava um número baixo e
+// o rank o jogava pra FRENTE de quem entrou antes — foi o bug real (Nelson entrou por
+// último e apareceu como 14, num vago, em vez de 20). max+1 sobre TODOS os seqs já
+// guardados nunca colide (os do form ficam estáveis).
 window._ensureEnrollSeqs = function(t) {
   if (!t) return;
   var arr = Array.isArray(t.participants) ? t.participants : [];
-  var used = {};
-  function mark(s){ if (s != null && !isNaN(s)) used[s] = 1; }
-  arr.forEach(function(p){ if (p && typeof p === 'object') { mark(p.enrollSeq); mark(p.p1Seq); mark(p.p2Seq); } });
-  var nf = 1;
-  function alloc(){ while (used[nf]) nf++; used[nf] = 1; return nf; }
+  var maxSeq = 0;
+  arr.forEach(function(p){ if (p && typeof p === 'object') [p.enrollSeq, p.p1Seq, p.p2Seq].forEach(function(s){ if (s != null && !isNaN(s) && s > maxSeq) maxSeq = s; }); });
+  var nf = maxSeq;
+  function alloc(){ nf += 1; return nf; }
   arr.forEach(function(p){
     if (!p || typeof p !== 'object') return; // string legada: tratada on-the-fly no map
     // v4.5.95: dupla por ESTRUTURA = (p1Uid|p1Name) && (p2Uid|p2Name). Antes exigia
@@ -7576,51 +7553,33 @@ window._tournamentDateRange = function (t) {
   return { start: startStr, end: endStr };
 };
 
-// ─── Competitors helper: filter out non-competing organizers from participants ─
-// Returns an array of participants excluding the organizer/co-hosts who didn't
-// explicitly enroll (selfEnrolled flag). Works for both old and new tournaments.
+// ─── INSCRITOS = participants[]. Ponto. ───────────────────────────────────────
+// CÂNONE (dono, jul/2026): a inscrição É a entrada em participants[]. Quem está lá
+// APARECE na lista e compete — inclusive organizador e co-organizadores (organizar
+// não desinscreve ninguém). Quem NÃO está lá não aparece. A tela mostra o BANCO.
+//
+// Identidade é UID, sempre — nome/e-mail/telefone NUNCA identificam quem tem conta.
+// (Fictício sem conta é a única exceção: o nome digitado é a identidade que ele tem —
+// e ele nunca é organizador, então nem entra nesta conta.) Ver
+// [[project_uid_identity_canon_locked]].
+//
+// O QUE FOI REMOVIDO AQUI (v1.2.44) e por quê: existia um filtro que excluía
+// "organizador/co-host que não se auto-inscreveu", identificando-os por
+// `organizerEmail`, `organizerName` e `coHost.email` — os três proibidos pelo cânone.
+// Ele só poupava quem tivesse a flag `selfEnrolled` na entrada; quando essa flag não
+// está na entrada (o doc guarda `{uid, enrollSeq}` — o strip do ITEM 3 e os gravadores
+// novos não a repõem), o organizador INSCRITO era derrubado pelo NOME: o cabeçalho
+// contava 14 (lê participants[] cru) e a lista renderizava 13 ("Duplas Mistas
+// Sorteadas", staging, jul/2026). O botão dizia "Desinscrever-se" — porque o botão lê
+// participants[] por uid, ou seja, a porta CERTA já discordava desta.
+// Varredura em prod+staging antes de remover: ZERO entradas fantasma de organizador —
+// toda entrada de organizador em participants[] era inscrição real (a criação começa
+// com `participants: []`, ninguém é auto-inserido). O filtro não protegia nada real e
+// custava um inscrito de verdade. Travado por tests/uid-poison-inscritos.test.js.
 window._getCompetitors = function(t) {
   if (!t || !t.participants) return [];
-  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-  var orgEmail = (t.organizerEmail || '').toLowerCase();
-  var orgName = (t.organizerName || '').toLowerCase();
-  // v2.4.83: só co-hosts ATIVOS deixam de ser competidores. Um convite de
-  // co-organização PENDENTE não muda o status do participante — ele continua
-  // inscrito (e competindo) até aceitar. Antes, qualquer co-host (mesmo pendente)
-  // era excluído na hora do convite, fazendo o inscrito "sumir" da lista assim
-  // que era arrastado pra promover — e impedindo a tag "Aguardando aceite".
-  var coHostEmails = {};
-  if (Array.isArray(t.coHosts)) {
-    t.coHosts.forEach(function(ch) { if (ch.email && ch.status === 'active') coHostEmails[ch.email.toLowerCase()] = true; });
-  }
-  return parts.filter(function(p) {
-    if (p && p.selfEnrolled) return true; // explicitly enrolled — always keep
-    var email = '', name = '';
-    if (typeof p === 'string') {
-      name = p.toLowerCase();
-    } else if (p) {
-      email = (p.email || '').toLowerCase();
-      name = (p.displayName || p.name || '').toLowerCase();
-    }
-    // Times/duplas são SEMPRE competidores reais — nunca excluir por match com
-    // organizador/co-host. Uma dupla que inclui o organizador (ex: "Kelly /
-    // Rodrigo Barth", onde Rodrigo é o org) é uma equipe que joga e conta como
-    // competidor — caso contrário o programa some com 1 time inteiro e mostra
-    // "2 inscritos / 1 time" quando são 4 inscritos / 2 times.
-    var isTeam = false;
-    if (p && typeof p === 'object') {
-      if (Array.isArray(p.participants) && p.participants.length > 1) isTeam = true;
-      if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) isTeam = true; // uid-first: dupla = 2 slots ocupados (uid OU nome)
-    }
-    if (name.indexOf(' / ') !== -1) isTeam = true;
-    if (isTeam) return true;
-    // Exclude organizer who didn't self-enroll (apenas entradas SOLO)
-    if (orgEmail && email && email === orgEmail) return false;
-    if (!email && orgName && name && name === orgName) return false;
-    // Exclude co-hosts who didn't self-enroll
-    if (email && coHostEmails[email]) return false;
-    return true;
-  });
+  // Cópia (o filter de antes também devolvia array novo — callers ordenam este retorno).
+  return Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants);
 };
 
 // v0.17.42: updateViewModeVisibility removido junto com o botão Visão.

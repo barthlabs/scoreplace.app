@@ -1085,7 +1085,7 @@ window.renderCategoryManagerPage = function(container, tId) {
 
         var catNameEscId = catName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var detailModalId = 'cat-detail-modal-' + catNameEscId;
-        var detailHtml = '<div id="' + detailModalId + '" style="display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);z-index:10001;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;" onclick="event.stopPropagation();">' +
+        var detailHtml = '<div id="' + detailModalId + '" style="display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);z-index:10001;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;" onclick="event.stopPropagation();">' +
             '<div style="background:var(--bg-card);width:95%;max-width:600px;border-radius:18px;border:1px solid var(--border-color);box-shadow:0 24px 48px rgba(0,0,0,0.5);margin:auto;animation:fadeIn 0.2s ease;">' +
             '<div style="padding:1.25rem 1.5rem;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">' +
             '<h3 style="margin:0;font-size:1.15rem;color:var(--text-bright);">🏷️ ' + window._displayCategoryName(catName) + '</h3>' +

@@ -19,6 +19,17 @@ function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
 // ═══ 1. SANITIZADOR (_stripStoredNamesForUidEntries) ═════════════════════════════
 ok(typeof W._stripStoredNamesForUidEntries === 'function', '_stripStoredNamesForUidEntries existe');
 
+// v1.2.2: o contrato do strip é "tem PERFIL → o nome vem de lá, não grava". Antes era "tem
+// uid → não grava", que é a MESMA coisa só enquanto users/{uid} existe. Quando a pessoa
+// recria a conta, o users/ do uid velho some e a entrada stripada fica sem âncora nenhuma —
+// o resolvedor caía no uid cru e o sorteio gravava o uid como nome. Então "tem conta" agora
+// se prova com o perfil vivo, e estes perfis precisam existir ANTES dos casos abaixo (eles
+// são as pessoas COM conta). Sem isto, os casos 1 exercitariam o caminho de ÓRFÃO.
+['uA', 'u1', 'u2', 'us1'].forEach(function (u, i) {
+  var n = ['Ana', 'Ana', 'Bia', 'Sub1'][i];
+  W._profileNameByUid[u] = n; W._userProfileCache[u] = { displayName: n };
+});
+
 // solo COM conta → nome sai, uid fica
 var soloAcc = { uid: 'uA', name: 'Ana', displayName: 'Ana', email: 'a@x.com' };
 var sA = W._stripStoredNamesForUidEntries([soloAcc])[0];
@@ -51,6 +62,32 @@ var subEntry = { participants: [{ uid: 'us1', displayName: 'Sub1' }, { displayNa
 var sS = W._stripStoredNamesForUidEntries([subEntry])[0];
 ok(!has(sS.participants[0], 'displayName'), 'sub com conta: displayName removido');
 ok(sS.participants[1].displayName === 'GuestSub', 'sub guest: displayName mantido');
+
+// ═══ 1b. ÓRFÃO: uid sem users/ (a pessoa recriou a conta) ════════════════════════
+// Bug real (Ranking/staging, jul/2026): o strip apagava o nome, o users/ do uid velho não
+// existia mais, e o resolvedor devolvia o UID CRU — que o sorteio gravava como nome em m.p1.
+// Sem perfil, o nome gravado é a ÚNICA identidade que resta: preservar, igual ao guest.
+var orfao = { uid: 'uMORTO', name: 'Cátia Cavedon', displayName: 'Cátia Cavedon' };
+var sO = W._stripStoredNamesForUidEntries([orfao])[0];
+ok(sO.displayName === 'Cátia Cavedon' && sO.name === 'Cátia Cavedon',
+  'ÓRFÃO solo: nome PRESERVADO (uid sem perfil não tem de onde repor)');
+ok(sO.uid === 'uMORTO', 'ÓRFÃO solo: uid preservado (identidade continua sendo o uid)');
+
+// dupla com um membro órfão → só o membro COM perfil perde o nome
+var duplaOrfa = { p1Uid: 'u1', p1Name: 'Ana', p2Uid: 'uMORTO', p2Name: 'Cátia Cavedon' };
+var sDO = W._stripStoredNamesForUidEntries([duplaOrfa])[0];
+ok(!has(sDO, 'p1Name'), 'dupla c/ órfão: membro COM perfil perde p1Name');
+ok(sDO.p2Name === 'Cátia Cavedon', 'dupla c/ órfão: membro órfão MANTÉM p2Name');
+
+// E o resolvedor nunca pode devolver o uid cru.
+ok(W._displayNameForUid('uMORTO', 'Cátia Cavedon') === 'Cátia Cavedon',
+  'resolvedor: órfão COM nome gravado → nome (nunca o uid)');
+ok(W._displayNameForUid('uMORTO', 'c@x.com') === 'c@x.com',
+  'resolvedor: órfão só com e-mail → e-mail (nunca o uid)');
+var semNada = W._displayNameForUid('uMORTO', '');
+ok(semNada.indexOf('uMORTO') === -1 && /^Jogador sem perfil/.test(semNada),
+  'resolvedor: órfão sem nome/e-mail → rótulo neutro, NUNCA o uid (got ' + JSON.stringify(semNada) + ')');
+ok(W._displayNameForUid('uA', '') === 'Ana', 'resolvedor: uid COM perfil → nome vivo (não regrediu)');
 
 // ═══ 2. REHIDRATA no SORTEIO — Liga só-uid: 0 rodadas SEM, rodada COM ════════════
 // perfis vivos (o que users/{uid} traria pro cache)

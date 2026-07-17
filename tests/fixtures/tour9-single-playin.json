@@ -1,0 +1,657 @@
+{
+ "id": "FIX9",
+ "format": "Eliminatórias Simples",
+ "teamSize": 2,
+ "lateEnrollment": "expand",
+ "p2Resolution": "playin",
+ "status": "in_progress",
+ "currentPhaseIndex": 0,
+ "matches": [
+  {
+   "p1Seed": 0,
+   "round": 0,
+   "winner": null,
+   "p2Seed": 7,
+   "p2": "Flávia Barchetta / FERNANDO CARLOS CERRI",
+   "team1Obj": {
+    "participants": [
+     {
+      "ligaActive": true,
+      "uid": "ahvjU7vGHOU4hDd9FtAii3BnR0x2",
+      "gender": "feminino",
+      "name": "Renata Esberard",
+      "displayName": "Renata Esberard",
+      "enrollSeq": 16
+     },
+     {
+      "enrollSeq": 12,
+      "displayName": "Luigi Perri",
+      "name": "Luigi Perri",
+      "gender": "masculino",
+      "ligaActive": true,
+      "uid": "N618NnDUlYeIXrL75UqgBjsZhO53"
+     }
+    ],
+    "p1Name": "Renata Esberard",
+    "name": "Renata Esberard / Luigi Perri",
+    "p2Name": "Luigi Perri",
+    "displayName": "Renata Esberard / Luigi Perri",
+    "p2Uid": "N618NnDUlYeIXrL75UqgBjsZhO53",
+    "p1Uid": "ahvjU7vGHOU4hDd9FtAii3BnR0x2"
+   },
+   "phaseIndex": 0,
+   "nextSlot": "p1",
+   "nextMatchId": "p0-1784313899515-5",
+   "bracket": "main",
+   "category": null,
+   "id": "p0-1784313899515-0",
+   "isPhaseRepR1": true,
+   "team2Obj": {
+    "p1Name": "Flávia Barchetta",
+    "name": "Flávia Barchetta / FERNANDO CARLOS CERRI",
+    "p2Name": "FERNANDO CARLOS CERRI",
+    "participants": [
+     {
+      "ligaActive": true,
+      "uid": "inKQvoP7ASXaRpCdfpagKpqF8iS2",
+      "name": "Flávia Barchetta",
+      "gender": "feminino",
+      "displayName": "Flávia Barchetta",
+      "enrollSeq": 3
+     },
+     {
+      "uid": "WUtXna2dpHOT86R2nKfZuHbMgUB3",
+      "ligaActive": true,
+      "name": "FERNANDO CARLOS CERRI",
+      "gender": "masculino",
+      "displayName": "FERNANDO CARLOS CERRI",
+      "enrollSeq": 11
+     }
+    ],
+    "displayName": "Flávia Barchetta / FERNANDO CARLOS CERRI",
+    "p2Uid": "WUtXna2dpHOT86R2nKfZuHbMgUB3",
+    "p1Uid": "inKQvoP7ASXaRpCdfpagKpqF8iS2"
+   },
+   "p1": "Renata Esberard / Luigi Perri",
+   "_gameNum": 1
+  },
+  {
+   "winner": null,
+   "p2Seed": 6,
+   "p2": "Patricia Paixao / Pedro Serrano",
+   "p1Seed": 1,
+   "round": 0,
+   "team1Obj": {
+    "displayName": "Patrícia Pedreira / Gersom Hideo Otsu",
+    "p2Uid": "xbi4rH4HTxPZN8vXdU34gx4jGSB2",
+    "p1Uid": "XgC04OBlI4U9QDFNTWUzOZL99dz2",
+    "participants": [
+     {
+      "gender": "feminino",
+      "name": "Patrícia Pedreira",
+      "ligaActive": true,
+      "uid": "XgC04OBlI4U9QDFNTWUzOZL99dz2",
+      "enrollSeq": 8,
+      "displayName": "Patrícia Pedreira"
+     },
+     {
+      "displayName": "Gersom Hideo Otsu",
+      "enrollSeq": 7,
+      "ligaActive": true,
+      "uid": "xbi4rH4HTxPZN8vXdU34gx4jGSB2",
+      "name": "Gersom Hideo Otsu",
+      "gender": "masculino"
+     }
+    ],
+    "p1Name": "Patrícia Pedreira",
+    "p2Name": "Gersom Hideo Otsu",
+    "name": "Patrícia Pedreira / Gersom Hideo Otsu"
+   },
+   "nextSlot": "p2",
+   "phaseIndex": 0,
+   "nextMatchId": "p0-1784313899515-5",
+   "bracket": "main",
+   "category": null,
+   "isPhaseRepR1": true,
+   "team2Obj": {
+    "p1Uid": "lwACVPtDGJQtM4cpdeBnk0XsMl92",
+    "p2Uid": "beLF1MoTxRb8lQvTiKQfLrPBzGr1",
+    "displayName": "Patricia Paixao / Pedro Serrano",
+    "participants": [
+     {
+      "name": "Patricia Paixao",
+      "gender": "feminino",
+      "uid": "lwACVPtDGJQtM4cpdeBnk0XsMl92",
+      "ligaActive": true,
+      "enrollSeq": 14,
+      "displayName": "Patricia Paixao"
+     },
+     {
+      "ligaActive": true,
+      "uid": "beLF1MoTxRb8lQvTiKQfLrPBzGr1",
+      "gender": "masculino",
+      "name": "Pedro Serrano",
+      "displayName": "Pedro Serrano",
+      "enrollSeq": 9
+     }
+    ],
+    "name": "Patricia Paixao / Pedro Serrano",
+    "p2Name": "Pedro Serrano",
+    "p1Name": "Patricia Paixao"
+   },
+   "p1": "Patrícia Pedreira / Gersom Hideo Otsu",
+   "id": "p0-1784313899515-1",
+   "_gameNum": 2
+  },
+  {
+   "bracket": "main",
+   "nextMatchId": "p0-1784313899515-6",
+   "category": null,
+   "id": "p0-1784313899515-2",
+   "isPhaseRepR1": true,
+   "p1": "Denise Soares / Sergio Borges X Training",
+   "team2Obj": {
+    "displayName": "Nádia Santiago Lazarin / Francisco Rossi Reck de Salvo",
+    "p1Uid": "YijDdvhFwBYRPPJw1VjRZugky1R2",
+    "p2Uid": "VLJEQbX29nStjpAmeBzXDxwnLAr1",
+    "p1Name": "Nádia Santiago Lazarin",
+    "p2Name": "Francisco Rossi Reck de Salvo",
+    "name": "Nádia Santiago Lazarin / Francisco Rossi Reck de Salvo",
+    "participants": [
+     {
+      "gender": "feminino",
+      "name": "Nádia Santiago Lazarin",
+      "uid": "YijDdvhFwBYRPPJw1VjRZugky1R2",
+      "ligaActive": true,
+      "enrollSeq": 18,
+      "displayName": "Nádia Santiago Lazarin"
+     },
+     {
+      "enrollSeq": 20,
+      "displayName": "Francisco Rossi Reck de Salvo",
+      "name": "Francisco Rossi Reck de Salvo",
+      "gender": "masculino",
+      "ligaActive": true,
+      "uid": "VLJEQbX29nStjpAmeBzXDxwnLAr1"
+     }
+    ]
+   },
+   "p1Seed": 2,
+   "round": 0,
+   "p2Seed": 5,
+   "winner": null,
+   "p2": "Nádia Santiago Lazarin / Francisco Rossi Reck de Salvo",
+   "nextSlot": "p1",
+   "phaseIndex": 0,
+   "team1Obj": {
+    "p2Name": "Sergio Borges X Training",
+    "name": "Denise Soares / Sergio Borges X Training",
+    "p1Name": "Denise Soares",
+    "participants": [
+     {
+      "ligaActive": true,
+      "uid": "IBtg5IfI4SgScA9W9F1iBkih8IA3",
+      "gender": "feminino",
+      "name": "Denise Soares",
+      "displayName": "Denise Soares",
+      "enrollSeq": 5
+     },
+     {
+      "uid": "D9oPltmv7RRGBRQGDA1Q62c67fD2",
+      "ligaActive": true,
+      "name": "Sergio Borges X Training",
+      "gender": "masculino",
+      "displayName": "Sergio Borges X Training",
+      "enrollSeq": 19
+     }
+    ],
+    "p1Uid": "IBtg5IfI4SgScA9W9F1iBkih8IA3",
+    "p2Uid": "D9oPltmv7RRGBRQGDA1Q62c67fD2",
+    "displayName": "Denise Soares / Sergio Borges X Training"
+   },
+   "_gameNum": 3
+  },
+  {
+   "round": 0,
+   "p1Seed": 3,
+   "p2": "Adriana Zalaf / Maria Reck",
+   "winner": null,
+   "p2Seed": 4,
+   "team1Obj": {
+    "displayName": "Lucia Helena Silva Cerri / Nei Almeida",
+    "p1Uid": "ZPkdce6t1Eh5eGIFC0iTMjkU1ph1",
+    "p2Uid": "ZFKs7TCWUHabKiU60aDIjd6WQgC3",
+    "participants": [
+     {
+      "displayName": "Lucia Helena Silva Cerri",
+      "enrollSeq": 2,
+      "ligaActive": true,
+      "uid": "ZPkdce6t1Eh5eGIFC0iTMjkU1ph1",
+      "gender": "feminino",
+      "name": "Lucia Helena Silva Cerri"
+     },
+     {
+      "name": "Nei Almeida",
+      "gender": "masculino",
+      "uid": "ZFKs7TCWUHabKiU60aDIjd6WQgC3",
+      "ligaActive": true,
+      "enrollSeq": 4,
+      "displayName": "Nei Almeida"
+     }
+    ],
+    "p1Name": "Lucia Helena Silva Cerri",
+    "p2Name": "Nei Almeida",
+    "name": "Lucia Helena Silva Cerri / Nei Almeida"
+   },
+   "nextSlot": "p2",
+   "phaseIndex": 0,
+   "category": null,
+   "nextMatchId": "p0-1784313899515-6",
+   "bracket": "main",
+   "id": "p0-1784313899515-3",
+   "team2Obj": {
+    "participants": [
+     {
+      "displayName": "Adriana Zalaf",
+      "enrollSeq": 13,
+      "ligaActive": true,
+      "uid": "Q480tHiDOnPyfJq8v5QKac6Fmsa2",
+      "gender": "feminino",
+      "name": "Adriana Zalaf"
+     },
+     {
+      "gender": "feminino",
+      "name": "Maria Reck",
+      "ligaActive": true,
+      "uid": "Qc27r33IPAS4yHRZjw9TwxdKCKv1",
+      "enrollSeq": 17,
+      "displayName": "Maria Reck"
+     }
+    ],
+    "name": "Adriana Zalaf / Maria Reck",
+    "p2Name": "Maria Reck",
+    "p1Name": "Adriana Zalaf",
+    "p1Uid": "Q480tHiDOnPyfJq8v5QKac6Fmsa2",
+    "p2Uid": "Qc27r33IPAS4yHRZjw9TwxdKCKv1",
+    "displayName": "Adriana Zalaf / Maria Reck"
+   },
+   "p1": "Lucia Helena Silva Cerri / Nei Almeida",
+   "isPhaseRepR1": true,
+   "_gameNum": 4
+  },
+  {
+   "winner": null,
+   "p2": "TBD",
+   "round": 0,
+   "phaseIndex": 0,
+   "nextSlot": "p2",
+   "team1Obj": {
+    "displayName": "Kelly Barth / Rodrigo Barth",
+    "p2Uid": "B17n7JCXYOfqahlcLZ0fKxGGyUu1",
+    "p1Uid": "OkQJOEkLMchgKYFZb8nLJm7nLPH2",
+    "participants": [
+     {
+      "ligaActive": true,
+      "uid": "OkQJOEkLMchgKYFZb8nLJm7nLPH2",
+      "name": "Kelly Barth",
+      "gender": "feminino",
+      "displayName": "Kelly Barth",
+      "enrollSeq": 10
+     },
+     {
+      "displayName": "Rodrigo Barth",
+      "enrollSeq": 1,
+      "ligaActive": true,
+      "uid": "B17n7JCXYOfqahlcLZ0fKxGGyUu1",
+      "name": "Rodrigo Barth",
+      "gender": "masculino"
+     }
+    ],
+    "p1Name": "Kelly Barth",
+    "name": "Kelly Barth / Rodrigo Barth",
+    "p2Name": "Rodrigo Barth"
+   },
+   "repFill": [
+    {
+     "slot": "p2",
+     "rank": 3,
+     "srcBracket": "main",
+     "srcRound": 0,
+     "tagRep": true
+    }
+   ],
+   "bracket": "main",
+   "nextMatchId": "p0-1784313899515-8",
+   "category": null,
+   "p1": "Kelly Barth / Rodrigo Barth",
+   "isPhaseRepGame": true,
+   "id": "p0-1784313899515-4",
+   "_gameNum": 5
+  },
+  {
+   "nextSlot": "p1",
+   "phaseIndex": 0,
+   "p1": "TBD",
+   "id": "p0-1784313899515-5",
+   "winner": null,
+   "p2": "TBD",
+   "bracket": "main",
+   "nextMatchId": "p0-1784313899515-9",
+   "category": null,
+   "round": 1,
+   "_gameNum": 6
+  },
+  {
+   "p2": "TBD",
+   "winner": null,
+   "round": 1,
+   "category": null,
+   "nextMatchId": "p0-1784313899515-9",
+   "bracket": "main",
+   "p1": "TBD",
+   "nextSlot": "p2",
+   "phaseIndex": 0,
+   "id": "p0-1784313899515-6",
+   "_gameNum": 7
+  },
+  {
+   "id": "p0-1784313899515-7",
+   "p1": "TBD",
+   "nextSlot": "p1",
+   "phaseIndex": 0,
+   "round": 1,
+   "category": null,
+   "nextMatchId": "p0-1784313899515-10",
+   "bracket": "main",
+   "p2": "TBD",
+   "repFill": [
+    {
+     "srcBracket": "main",
+     "tagRep": true,
+     "srcRound": 0,
+     "slot": "p1",
+     "rank": 0
+    },
+    {
+     "srcBracket": "main",
+     "srcRound": 0,
+     "tagRep": true,
+     "rank": 1,
+     "slot": "p2"
+    }
+   ],
+   "winner": null,
+   "_gameNum": 8
+  },
+  {
+   "winner": null,
+   "repFill": [
+    {
+     "slot": "p1",
+     "rank": 2,
+     "srcBracket": "main",
+     "tagRep": true,
+     "srcRound": 0
+    }
+   ],
+   "p2": "TBD",
+   "bracket": "main",
+   "nextMatchId": "p0-1784313899515-10",
+   "category": null,
+   "round": 1,
+   "nextSlot": "p2",
+   "phaseIndex": 0,
+   "p1": "TBD",
+   "id": "p0-1784313899515-8",
+   "_gameNum": 9
+  },
+  {
+   "id": "p0-1784313899515-9",
+   "p1": "TBD",
+   "phaseIndex": 0,
+   "nextSlot": "p1",
+   "loserNextSlot": "p1",
+   "category": null,
+   "round": 2,
+   "bracket": "main",
+   "loserNextMatchId": "p0-1784313899515-12",
+   "nextMatchId": "p0-1784313899515-11",
+   "p2": "TBD",
+   "winner": null,
+   "_gameNum": 10
+  },
+  {
+   "id": "p0-1784313899515-10",
+   "loserNextSlot": "p2",
+   "nextSlot": "p2",
+   "phaseIndex": 0,
+   "p1": "TBD",
+   "nextMatchId": "p0-1784313899515-11",
+   "loserNextMatchId": "p0-1784313899515-12",
+   "bracket": "main",
+   "round": 2,
+   "category": null,
+   "winner": null,
+   "p2": "TBD",
+   "_gameNum": 11
+  },
+  {
+   "phaseIndex": 0,
+   "winner": null,
+   "p1": "TBD",
+   "p2": "TBD",
+   "bracket": "main",
+   "category": null,
+   "id": "p0-1784313899515-11",
+   "round": 3,
+   "_gameNum": 13
+  },
+  {
+   "category": null,
+   "round": 3,
+   "bracket": "main",
+   "isThirdPlace": true,
+   "p2": "TBD",
+   "winner": null,
+   "id": "p0-1784313899515-12",
+   "p1": "TBD",
+   "phaseIndex": 0,
+   "_gameNum": 12
+  }
+ ],
+ "standbyParticipants": [
+  "tonho",
+  {
+   "uid": "NvsXrlXdyQMz1SPjIxaQNId3y6Y2",
+   "_lateJoin": true
+  }
+ ],
+ "waitlist": [],
+ "participants": [
+  {
+   "participants": [
+    {
+     "ligaActive": true,
+     "uid": "inKQvoP7ASXaRpCdfpagKpqF8iS2",
+     "gender": "feminino",
+     "enrollSeq": 3
+    },
+    {
+     "gender": "masculino",
+     "enrollSeq": 11,
+     "uid": "WUtXna2dpHOT86R2nKfZuHbMgUB3",
+     "ligaActive": true
+    }
+   ],
+   "p2Uid": "WUtXna2dpHOT86R2nKfZuHbMgUB3",
+   "p1Uid": "inKQvoP7ASXaRpCdfpagKpqF8iS2",
+   "p1Seq": 1,
+   "p2Seq": 2
+  },
+  {
+   "p1Uid": "OkQJOEkLMchgKYFZb8nLJm7nLPH2",
+   "p2Uid": "B17n7JCXYOfqahlcLZ0fKxGGyUu1",
+   "participants": [
+    {
+     "gender": "feminino",
+     "enrollSeq": 10,
+     "ligaActive": true,
+     "uid": "OkQJOEkLMchgKYFZb8nLJm7nLPH2"
+    },
+    {
+     "gender": "masculino",
+     "enrollSeq": 1,
+     "uid": "B17n7JCXYOfqahlcLZ0fKxGGyUu1",
+     "ligaActive": true
+    }
+   ],
+   "p1Seq": 3,
+   "p2Seq": 4
+  },
+  {
+   "p2Uid": "VLJEQbX29nStjpAmeBzXDxwnLAr1",
+   "participants": [
+    {
+     "gender": "feminino",
+     "enrollSeq": 18,
+     "uid": "YijDdvhFwBYRPPJw1VjRZugky1R2",
+     "ligaActive": true
+    },
+    {
+     "uid": "VLJEQbX29nStjpAmeBzXDxwnLAr1",
+     "ligaActive": true,
+     "gender": "masculino",
+     "enrollSeq": 20
+    }
+   ],
+   "p1Uid": "YijDdvhFwBYRPPJw1VjRZugky1R2",
+   "p1Seq": 5,
+   "p2Seq": 6
+  },
+  {
+   "p2Uid": "N618NnDUlYeIXrL75UqgBjsZhO53",
+   "p1Uid": "ahvjU7vGHOU4hDd9FtAii3BnR0x2",
+   "participants": [
+    {
+     "gender": "feminino",
+     "enrollSeq": 16,
+     "ligaActive": true,
+     "uid": "ahvjU7vGHOU4hDd9FtAii3BnR0x2"
+    },
+    {
+     "gender": "masculino",
+     "enrollSeq": 12,
+     "uid": "N618NnDUlYeIXrL75UqgBjsZhO53",
+     "ligaActive": true
+    }
+   ],
+   "p1Seq": 7,
+   "p2Seq": 8
+  },
+  {
+   "participants": [
+    {
+     "enrollSeq": 8,
+     "gender": "feminino",
+     "uid": "XgC04OBlI4U9QDFNTWUzOZL99dz2",
+     "ligaActive": true
+    },
+    {
+     "uid": "xbi4rH4HTxPZN8vXdU34gx4jGSB2",
+     "ligaActive": true,
+     "enrollSeq": 7,
+     "gender": "masculino"
+    }
+   ],
+   "p1Uid": "XgC04OBlI4U9QDFNTWUzOZL99dz2",
+   "p2Uid": "xbi4rH4HTxPZN8vXdU34gx4jGSB2",
+   "p1Seq": 9,
+   "p2Seq": 10
+  },
+  {
+   "p2Uid": "D9oPltmv7RRGBRQGDA1Q62c67fD2",
+   "p1Uid": "IBtg5IfI4SgScA9W9F1iBkih8IA3",
+   "participants": [
+    {
+     "ligaActive": true,
+     "uid": "IBtg5IfI4SgScA9W9F1iBkih8IA3",
+     "gender": "feminino",
+     "enrollSeq": 5
+    },
+    {
+     "enrollSeq": 19,
+     "gender": "masculino",
+     "ligaActive": true,
+     "uid": "D9oPltmv7RRGBRQGDA1Q62c67fD2"
+    }
+   ],
+   "p1Seq": 11,
+   "p2Seq": 12
+  },
+  {
+   "participants": [
+    {
+     "enrollSeq": 2,
+     "gender": "feminino",
+     "uid": "ZPkdce6t1Eh5eGIFC0iTMjkU1ph1",
+     "ligaActive": true
+    },
+    {
+     "gender": "masculino",
+     "enrollSeq": 4,
+     "ligaActive": true,
+     "uid": "ZFKs7TCWUHabKiU60aDIjd6WQgC3"
+    }
+   ],
+   "p2Uid": "ZFKs7TCWUHabKiU60aDIjd6WQgC3",
+   "p1Uid": "ZPkdce6t1Eh5eGIFC0iTMjkU1ph1",
+   "p1Seq": 13,
+   "p2Seq": 14
+  },
+  {
+   "participants": [
+    {
+     "gender": "feminino",
+     "enrollSeq": 14,
+     "ligaActive": true,
+     "uid": "lwACVPtDGJQtM4cpdeBnk0XsMl92"
+    },
+    {
+     "ligaActive": true,
+     "uid": "beLF1MoTxRb8lQvTiKQfLrPBzGr1",
+     "enrollSeq": 9,
+     "gender": "masculino"
+    }
+   ],
+   "p2Uid": "beLF1MoTxRb8lQvTiKQfLrPBzGr1",
+   "p1Uid": "lwACVPtDGJQtM4cpdeBnk0XsMl92",
+   "p1Seq": 15,
+   "p2Seq": 16
+  },
+  {
+   "participants": [
+    {
+     "uid": "Q480tHiDOnPyfJq8v5QKac6Fmsa2",
+     "ligaActive": true,
+     "gender": "feminino",
+     "enrollSeq": 13
+    },
+    {
+     "enrollSeq": 17,
+     "gender": "feminino",
+     "uid": "Qc27r33IPAS4yHRZjw9TwxdKCKv1",
+     "ligaActive": true
+    }
+   ],
+   "p2Uid": "Qc27r33IPAS4yHRZjw9TwxdKCKv1",
+   "p1Uid": "Q480tHiDOnPyfJq8v5QKac6Fmsa2",
+   "p1Seq": 17,
+   "p2Seq": 18
+  }
+ ],
+ "teamOrigins": {
+  " / ": "sorteada"
+ },
+ "checkedIn": {},
+ "absent": {}
+}

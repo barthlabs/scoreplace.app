@@ -11,6 +11,63 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">👥 v1.2.44 — Organizador inscrito volta a aparecer entre os inscritos <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👥 A lista de inscritos mostra todo mundo:</b> quando o organizador se inscrevia no próprio torneio, o card dele sumia da lista — o topo dizia "14 inscritos" e apareciam 13, enquanto o botão dele já dizia "Desinscrever-se". Agora quem está inscrito aparece, sempre: organizador e co-organizador inclusive. <b>Organizar não desinscreve ninguém</b> — a lista mostra exatamente quem está inscrito.</li>' +
+        '<li><b>🔐 Quem é quem não depende mais de e-mail nem de nome:</b> o app identificava participante e organizador comparando e-mail ou nome. Isso errava a pessoa quando dois inscritos dividem o mesmo e-mail (casal, família), quando alguém trocou de e-mail ou refez a conta, ou quando dois jogadores têm nomes iguais — a ponto de um inscrito comum poder aparecer como organizador. Cada pessoa com conta agora é reconhecida pela conta dela, e só por ela.</li>' +
+        '<li><b>✅ Botão "Inscrever-se / Desinscrever-se" confiável:</b> pela mesma razão, o botão podia dizer que você estava inscrito num torneio de um homônimo — e a desinscrição saía por esse mesmo caminho. Corrigido.</li>' +
+        '<li><b>🙋 Jogador convidado (sem conta) segue pelo nome:</b> quem o organizador cadastra na mão, sem conta no app, continua sendo identificado pelo nome digitado — como sempre foi.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #fb923c;border-radius:12px;padding:14px 16px;background:rgba(251,146,60,0.08);">' +
+      '<div style="font-weight:800; color:#fb923c; font-size:1rem; margin-bottom:8px;">⏱️ v1.2.37 — O relógio e o número do jogo agora falam a verdade <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎲 Regressiva pro sorteio:</b> na Liga/Pontos Corridos, antes do 1º sorteio o relógio agora conta pro <b>sorteio</b> — e diz "Próximo sorteio", não "Início da Temporada" quando a temporada já começou. Antes ele podia mostrar "Fim do torneio" mesmo faltando o sorteio.</li>' +
+        '<li><b>▶️ Rodada em andamento não some mais:</b> com um jogo rolando, o box mostra a rodada e o tempo — a regressiva de fim de torneio não esconde mais isso.</li>' +
+        '<li><b>👑 "Jogo N" bate com a chave:</b> no Rei/Rainha, o card "Próximo Jogo" da tela inicial mostrava um número diferente do que aparecia no chaveamento (ex.: 73 em vez de 19). Agora os dois vêm da mesma fonte e sempre coincidem.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #58a6ff;border-radius:12px;padding:14px 16px;background:rgba(88,166,255,0.08);">' +
+      '<div style="font-weight:800; color:#58a6ff; font-size:1rem; margin-bottom:8px;">↺ v1.2.34 — Voltar pro padrão sugerido com um clique <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>↺ Restaurar sugestão (Pontos Avançados):</b> na criação/edição do torneio, um botão volta todos os valores e chaves da pontuação (participação, vitória, games, tie-break, W.O., etc.) pros números sugeridos pelo app — sem precisar ajustar campo por campo.</li>' +
+        '<li><b>↺ Restaurar padrão (Critérios de Desempate):</b> outro botão devolve os critérios e a ordem deles pro arranjo sugerido, incluindo o que fica em "não considerados". Mexeu demais e quer recomeçar? Um clique resolve.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
+      '<div style="font-weight:800; color:#818cf8; font-size:1rem; margin-bottom:8px;">📞 v1.2.30 — Novo canal do desenvolvedor <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(16 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📞 Fale com o Desenvolvedor:</b> o WhatsApp de contato mudou para <b>+55 11 98772-6873</b>. O botão verde no app já aponta pro número novo — é só clicar e falar com a gente.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #25D366;border-radius:12px;padding:14px 16px;background:rgba(37,211,102,0.08);">' +
+      '<div style="font-weight:800; color:#25D366; font-size:1rem; margin-bottom:8px;">💬 v1.2.24 — O grupo do WhatsApp entra no app <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>💬 Grupo do jogo:</b> no seu jogo do chaveamento agora tem <b>Criar grupo</b>. Você cria um grupo vazio no WhatsApp, cola o link de convite no app — e os outros jogadores daquele jogo passam a ver <b>Abrir grupo</b>. Ninguém precisa salvar o telefone de ninguém, e nenhum telefone é exposto.</li>' +
+        '<li><b>🏆 Grupo do torneio:</b> o organizador cria o grupo oficial nas Ferramentas do Organizador, e quem está inscrito ganha o botão <b>Entrar no grupo</b>. A tela ensina a deixar o grupo só seu: mural (só admin escreve) e <b>Aprovar novos membros</b>, que é a trava de quem entra.</li>' +
+        '<li><b>⭐ Favoritos e torneios ocultados agora seguem a sua conta:</b> antes moravam só no navegador e sumiam sozinhos (o iPhone limpa esse armazenamento de tempos em tempos) ou não apareciam em outro aparelho. Agora entram junto com o seu login, em qualquer celular ou computador.</li>' +
+        '<li><b>📊 Análise de Inscritos no celular:</b> as colunas Feminino e Masculino cabem na tela (a de Masculino ficava cortada), os nomes ficaram menores e o botão de criar categoria aparece em todas as habilidades.</li>' +
+        '<li><b>🎯 Chaveamento:</b> os botões de um mesmo jogo ficam todos na mesma altura e não pulam mais pra linha de baixo; e ao abrir o torneio a tela para sempre no mesmo ponto do seu grupo.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.08);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🔑 v1.2.10 — Esqueceu a senha e o e-mail não chega? Agora tem saída <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📱 Voltou o "Redefinir por celular".</b> Em "Esqueci minha senha", se a sua conta tem celular cadastrado, agora aparece o botão pra receber um <b>código por SMS</b> e trocar a senha. O caminho existia, mas estava escondido por um erro nosso — ninguém conseguia chegar nele.</li>' +
+        '<li><b>⚠️ Hotmail, Outlook, UOL, BOL, Terra:</b> esses provedores costumam segurar nosso e-mail. Agora o app <b>avisa</b> e já oferece o SMS como caminho recomendado, em vez de mandar o link e deixar você esperando um e-mail que talvez nunca chegue.</li>' +
+        '<li><b>✅ Fim de um aviso errado.</b> Se você tocasse duas vezes seguidas em "Esqueci minha senha", o app dizia que tinha mandado um <b>SMS</b> — mas não tinha mandado nada. Agora só falamos do que realmente saiu.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
+      '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">💬 v1.2.9 — WhatsApp: agora é você quem manda <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>💬 O grupo do jogo e do torneio continua igual:</b> você cria o grupo no seu WhatsApp, cola o link no app e todo mundo entra num toque. Nada muda aqui — é o caminho que não depende de ninguém além de você.</li>' +
+        '<li><b>📵 O app parou de mandar mensagem por WhatsApp.</b> O número que enviava foi bloqueado pelo WhatsApp e não volta. Em vez de prometer o que não chega, tiramos: seus avisos vão por <b>notificação no app</b> e <b>e-mail</b>, que sempre funcionaram.</li>' +
+        '<li><b>🔑 Login e senha por celular agora são só por SMS.</b> Se o SMS não sair, o app <b>avisa na hora</b> e mostra a saída pelo e-mail — antes ficava um aviso discreto porque o WhatsApp era o plano B.</li>' +
+        '<li><b>⚙️ O botão "WhatsApp" no seu perfil mudou de sentido:</b> antes ligava o envio de avisos; agora diz se <b>você aceita ser chamado no WhatsApp</b> — pelo organizador, pelos outros jogadores, e se entra nos grupos. Desligou? Falam com você por e-mail e pelas notificações do app. Quem já tem celular cadastrado continua ligado, como estava.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
       '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">📊 v1.1.24 — Seu histórico ficou mais interessante <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

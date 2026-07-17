@@ -1,5 +1,6 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
@@ -10,14 +11,26 @@ const { getMessaging } = require('firebase-admin/messaging');
 // Require defensivo: se draw-core falhar ao carregar, NÃO derruba o módulo
 // (sendPushNotification continua funcionando); autoDraw apenas pula.
 let generateLigaRound = null;
+let drawInitial = null;   // v1.2.25: motor do SORTEIO INICIAL (Etapa 3 · fase A) — usado pela drawRound
+let integrateLateFn = null; // v1.2.57: integração de tardios no servidor — usado pela integrateLateEntries
+let canRecompile = null;
+let hasDrawnBracket = null;  // régua de 'já tem chave' — a MESMA do cliente (matches/rounds/groups)
 let drawWindow = null; // window do shim Node — expõe _calcNextDrawDate (prazo p/ lançar resultado)
 try {
   const _dc = require('./draw-core.js');
   generateLigaRound = _dc.generateLigaRound;
+  drawInitial = _dc.drawInitial;
+  integrateLateFn = _dc.integrateLateEntries;
+  canRecompile = _dc.canRecompile;
+  hasDrawnBracket = _dc.hasDrawnBracket;
   drawWindow = _dc._window;
 } catch (e) {
   console.error('[autoDraw] draw-core indisponível — autoDraw vai pular:', e && e.message);
 }
+
+// Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
+// no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
+const CF_VERSION = '1.3';
 
 initializeApp();
 const db = getFirestore();
@@ -121,6 +134,287 @@ function _ligaSeasonEnded(t, now) {
   }
   return false;
 }
+
+// ─── SORTEIO INICIAL SOB DEMANDA (Etapa 3 · fase B) ─────────────────────────
+// "Os cânones rodam em CF, disparados pelo app — assim evita cada usuário rodar uma
+// função diferente com app desatualizado" (dono, jul/2026). O app PEDE, o servidor
+// SORTEIA e GRAVA. Binário de loja velho deixa de sortear com motor velho.
+//
+// SPLIT CANÔNICO — painel ESCOLHE, servidor APLICA: os gates de re-sorteio e os painéis
+// de resolução (pow2/resto/sem-dupla) são UI e FICAM no cliente. A ESCOLHA viaja no
+// `request.data.decisions` e é aplicada AQUI, sobre o doc fresco, com as MESMAS funções do
+// cliente (draw-decisions.js, vendorado).
+//
+// ⚠️ v1.2.29 — a versão anterior deste comentário dizia que "os painéis já gravam a decisão
+// no doc, aqui só lê e executa". ERA FALSO e foi a causa da quebra revertida na v1.2.28: o
+// que os painéis gravavam era o MODO; o ELENCO (quem foi pra espera / quem saiu) era mutado
+// só em memória e ia pro banco de carona no delta do _commitInitialDraw do cliente. Sem esse
+// commit, o delta some e o servidor lê o elenco VELHO — 35 inscritos viraram chave de 32 com
+// 14 BYEs. Ver docs/sorteio-ciclo-decisoes.md.
+
+// Espelha isTournamentAdmin() das firestore.rules:20. As rules protegem o WRITE; esta
+// função protege o RPC — a CF grava com Admin SDK (bypassa rules), então sem isto
+// qualquer autenticado sortearia o torneio de qualquer um. Os 4 caminhos são os mesmos,
+// na mesma ordem. Se mudar lá, muda aqui.
+function _isTournamentAdmin(t, uid, email) {
+  if (!t || !uid) return false;
+  const mail = String(email || '').toLowerCase();
+  // (1) creatorUid — mais confiável, imutável.
+  if (typeof t.creatorUid === 'string' && t.creatorUid === uid) return true;
+  // (2) adminUids — co-hosts ativos por UID (cobre co-host com email '' / conta por telefone).
+  if (Array.isArray(t.adminUids) && t.adminUids.length > 0 && t.adminUids.indexOf(uid) !== -1) return true;
+  // (3) adminEmails — backward compat + co-hosts com email.
+  const hasAdminEmails = Array.isArray(t.adminEmails) && t.adminEmails.length > 0;
+  if (mail && hasAdminEmails && t.adminEmails.indexOf(mail) !== -1) return true;
+  // (4) recovery — adminEmails vazio/ausente → organizerEmail (bug v1.6.66 apagava o campo).
+  if (mail && !hasAdminEmails && typeof t.organizerEmail === 'string'
+      && t.organizerEmail.toLowerCase() === mail) return true;
+  return false;
+}
+
+// Espelha o LIMITE DE PERSISTÊNCIA de FirestoreDB.mutateTournament (firebase-db.js:297) —
+// os passos entre o mutator e o `set`. Sem isto o doc do servidor sai diferente do doc do
+// cliente, que é exatamente o bug de duas versões que esta Etapa existe pra matar.
+// Todos os helpers vêm do MESMO arquivo que o app carrega (vendor/ via copy-vendor):
+// persist-core (clean/compute*), bracket-model (fold), identity-core (strip),
+// tournaments-utils (_nextOwedDrawMs). Ver [[feedback_functions_must_mirror_app]].
+// Devolve { persist, clean } — a MESMA assimetria do cliente: PERSISTE a cópia sanitizada
+// (sem nome pra quem tem uid) mas DEVOLVE `clean` COM nome e re-hidratado, pro caller
+// sincronizar estado/exibir sem depender de um render. Nunca gravar `clean`, nunca devolver
+// `persist`: trocar os dois re-introduz nome gravado no Firestore (fura o storage só-uid) ou
+// entrega ao cliente entradas sem nome (some da tela).
+function _applyWriteBoundary(data) {
+  const w = drawWindow;
+  if (!w) throw new HttpsError('internal', 'draw-core indisponível');
+  // NUNCA ENCOLHE (união com o que já está no doc): um uid que só existe no denormalizado
+  // (co-host por path que não popula participants) não pode sumir e derrubar o listener
+  // `array-contains` de quem depende dele. Mesma blindagem do cliente.
+  const _union = (prev, next) => Array.from(new Set(
+    (Array.isArray(prev) ? prev : []).concat(Array.isArray(next) ? next : [])));
+
+  data.adminEmails = w._computeAdminEmails(data);
+  data.adminUids = w._computeAdminUids(data);
+  data.memberUids = _union(data.memberUids, w._computeMemberUids(data));
+  try {
+    const owed = w._nextOwedDrawMs(data);
+    if (typeof owed === 'number') data.nextDrawAt = owed;
+    else delete data.nextDrawAt;
+  } catch (e) { /* otimização; nunca derruba a gravação */ }
+
+  const clean = w._cleanUndefined(data);
+  w._foldMonarchGroups(clean); // Rei/Rainha: grava só matchIds (fonte única = round.matches)
+  // Storage é só-uid: quem TEM perfil vivo não leva nome gravado (o display resolve por uid).
+  // Guest e uid órfão MANTÊM o nome — é a única identidade que têm.
+  let persist = clean;
+  const stripped = {};
+  ['participants', 'standbyParticipants', 'waitlist'].forEach((k) => {
+    if (Array.isArray(clean[k])) stripped[k] = w._stripStoredNamesForUidEntries(clean[k]);
+  });
+  if (Object.keys(stripped).length) persist = Object.assign({}, clean, stripped);
+  // ⚠️ NÃO hidratar `clean` aqui: Object.assign é RASO, então persist.rounds É clean.rounds —
+  // hidratar devolveria group.matches pro persist e o Firestore gravaria cada jogo Rei/Rainha
+  // EM DOBRO (o incidente que o fold existe pra evitar). O cliente escapa por ORDEM (dá o set
+  // antes de hidratar); não dependemos dessa sutileza. Os dois saem FOLDADOS — que é como o doc
+  // realmente é no Firestore — e quem receber hidrata no ingest, igual faz com o listener.
+  return { persist: persist, clean: clean };
+}
+
+// Re-sorteio: usa o RESET CANÔNICO do cliente (window._clearTournamentDraw, vendorado em
+// tournaments-draw.js) — NÃO uma limpeza à mão. Ele faz muito mais que zerar a chave: desmonta
+// as duplas FORMADAS PELO SORTEIO (teamOrigins 'sorteada') de volta pros indivíduos, devolve
+// waitlist/standby/monarchWaitlist pro pool e dedup. Uma lista à mão aqui divergiria do reset
+// que o organizador VÊ na tela — e o servidor re-sortearia o elenco velho, ainda pareado.
+// O CONFIRM continua no cliente (é UI); só a execução é daqui.
+function _clearForRedraw(t) {
+  const w = drawWindow;
+  if (!w || typeof w._clearTournamentDraw !== 'function') {
+    throw new HttpsError('internal', 'Reset de re-sorteio indisponível no servidor.');
+  }
+  w._clearTournamentDraw(t);
+}
+
+// Um HttpsError é erro ESPERADO de callable — o framework NÃO o loga. No 1º teste real na
+// staging a CF recusou e não sobrou NENHUMA linha: instância subiu e silêncio. Ficamos cegos.
+// Todo caminho de recusa passa por aqui: loga o motivo ANTES de lançar.
+function _drawFail(code, reason, ctx) {
+  console.error(`drawRound v${CF_VERSION} RECUSOU:`, reason, JSON.stringify(ctx || {}));
+  return new HttpsError(code, reason);
+}
+
+exports.drawRound = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const email = request.auth && request.auth.token && request.auth.token.email;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta pra sortear.');
+
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!tId) throw new HttpsError('invalid-argument', 'tournamentId é obrigatório.');
+  const allowRedraw = !!(request.data && request.data.allowRedraw);
+  // Pacote de decisões do pré-sorteio (o organizador ESCOLHEU nos painéis; aqui a gente
+  // APLICA, com as mesmas funções do cliente, sobre o doc fresco). Ver
+  // docs/sorteio-ciclo-decisoes.md §5. Sem pacote = nada a aplicar (torneio sem pendência).
+  const decisions = (request.data && request.data.decisions) || null;
+
+  // Motor indisponível → NUNCA improvisar. Devolve erro e o cliente decide.
+  if (typeof drawInitial !== 'function' || !drawWindow) {
+    throw _drawFail('internal', 'Motor de sorteio indisponível no servidor.', { tId });
+  }
+
+  const ref = db.collection('tournaments').doc(tId);
+
+  // Leitura FORA da transação só pra (a) falhar cedo em authz e (b) pré-carregar os nomes
+  // vivos (N reads em users/ — transação exige todo read ANTES de qualquer write, e nome é
+  // dado advisory de display; o autoDraw faz igual).
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid, email)) {
+    const _p = pre.data();
+    throw _drawFail('permission-denied', 'Só o organizador ou um co-organizador pode sortear.',
+      { tId, uid, email: email || '(sem email)', creatorUid: _p.creatorUid,
+        adminUids: _p.adminUids, adminEmails: _p.adminEmails, organizerEmail: _p.organizerEmail });
+  }
+  await _preloadDrawNames(pre.data()); // popula drawWindow._profileNameByUid
+
+  // A VERSÃO no log é o contrato: se a linha não disser CF_VERSION, é build velha atendendo
+  // (deploy não pegou / instância antiga). Sem isto não dá pra saber que código respondeu.
+  console.log(`drawRound v${CF_VERSION}: pedido de ${uid} pro torneio ${tId}` + (allowRedraw ? ' [re-sorteio]' : '') +
+    (decisions ? ' decisoes=' + JSON.stringify(decisions) : ' (sem decisoes)'));
+
+  let out;
+  try {
+    out = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const t = snap.data();
+    t.id = tId;
+
+    // Re-checa authz sobre o doc FRESCO: entre o read de fora e a transação o organizador
+    // pode ter perdido o acesso (transferência de organização / co-host removido).
+    if (!_isTournamentAdmin(t, uid, email)) {
+      throw _drawFail('permission-denied', 'Só o organizador ou um co-organizador pode sortear (doc fresco).', { tId, uid });
+    }
+
+    // Rei/Rainha: o doc fresco traz grupos só com matchIds — hidrata ANTES do motor,
+    // igual mutateTournament faz antes do mutator.
+    try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+
+    // Régua do SORTEIO, não a do recompile: torneio RESETADO tem _phaseMaterialized=0 (o
+    // reset grava assim) e o canRecompile barrava com 'already-drawn' sem haver chave —
+    // e o cliente, que conta só matches/rounds/groups, nem pedia re-sorteio. Bug v1.2.29.
+    const hadBracket = hasDrawnBracket(t);
+    if (hadBracket) {
+      // Guarda de duplo-sorteio DENTRO da transação (mais forte que a do cliente, cujo
+      // preHadBracket vem de um snapshot local): se já tem chave e o organizador não pediu
+      // re-sorteio, outro admin sorteou primeiro — não clobbera a chave dele.
+      if (!allowRedraw) {
+        throw _drawFail('failed-precondition', 'already-drawn',
+          { tId, matches: (t.matches || []).length, rounds: (t.rounds || []).length,
+            groups: (t.groups || []).length, currentPhaseIndex: t.currentPhaseIndex,
+            phaseMaterialized: t._phaseMaterialized });
+      }
+      _clearForRedraw(t);
+    }
+
+    const res = drawInitial(t, { idStamp: Date.now(), decisions: decisions });
+    if (!res || !res.ok) {
+      // storePhase falho (ex.: 'no-entrants') NUNCA vira sucesso — era isso que dava
+      // "diz que sorteou mas não mostra chave".
+      throw _drawFail('failed-precondition', (res && res.reason) || 'draw-failed',
+        { tId, format: t.format, teamSize: t.teamSize, enrollmentMode: t.enrollmentMode,
+          participantes: (t.participants || []).length, p2Resolution: t.p2Resolution,
+          decisoes: decisions, erro: (res && res.error) || '' });
+    }
+
+    // Histórico do sorteio: quem GRAVA o sorteio grava a entrada. No cliente ela só
+    // persistia carona no delta do _commitInitialDraw (logAction só mexe na memória) —
+    // com a gravação aqui, ela se perderia. Mesmo texto do cliente (tournaments-draw.js).
+    const msg = res.native
+      ? `Sorteio Realizado — ${t.format}: Rodada 1 gerada com ${res.matchCount} partida(s)` +
+        (res.sitOuts ? ` e ${res.sitOuts} folga(s)` : '') + ' [motor canônico]'
+      : `Sorteio Realizado — ${t.format} (motor canônico)`;
+    if (!Array.isArray(t.history)) t.history = [];
+    t.history.push({ date: new Date().toISOString(), message: msg });
+
+    // v4.1.30: o sorteio LIMPA a presença (drawInitial já zera checkedIn/absent).
+    const b = _applyWriteBoundary(t);
+    tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+    // Devolve o doc COM nome (b.clean, não b.persist) — o cliente precisa dele pra notificar
+    // (_notifyDrawPersonalized lê os nomes) e pra sincronizar o AppStore sem esperar o listener.
+    // Vem FOLDADO (como o doc é no Firestore); o ingest do cliente hidrata, igual ao listener.
+    return { ok: true, format: res.format, native: !!res.native, matchCount: res.matchCount,
+             sitOuts: res.sitOuts || 0, allMaleCount: res.allMaleCount || 0, redraw: hadBracket,
+             tournament: b.clean };
+    });
+  } catch (e) {
+    // HttpsError já foi logado pelo _drawFail — repassa. Qualquer OUTRO erro (motor
+    // estourando, Firestore, bug meu) chegaria ao cliente como 'internal' SEM RASTRO:
+    // loga com stack antes de repassar. Foi a cegueira do 1º teste real.
+    if (e instanceof HttpsError) throw e;
+    console.error(`drawRound EXPLODIU no torneio ${tId} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha no sorteio: ' + String((e && e.message) || e).slice(0, 300));
+  }
+
+  console.log(`drawRound: ${tId} sorteado por ${uid} — ${out.format}, ${out.matchCount} jogo(s)` +
+    (out.redraw ? ' [re-sorteio]' : ' [1º sorteio]'));
+  return out;
+});
+
+// ─── Integração de TARDIOS no servidor (v1.2.57) ────────────────────────────
+// O organizador DISPARA ao abrir o bracket; a mutação (tardios entram na chave) + a
+// persistência rodam AQUI, com as mesmas funções vendoradas que o cliente rodava. Espelha a
+// estrutura da drawRound: authz (uid + admin), transação sobre o doc FRESCO, motor canônico,
+// _applyWriteBoundary + tx.set (clobber-free). `changed=false` → NÃO grava (idempotente).
+// Ver project_canon_runs_on_server / project_late_enrollment_elimination.
+exports.integrateLateEntries = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const email = request.auth && request.auth.token && request.auth.token.email;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!tId) throw new HttpsError('invalid-argument', 'tournamentId é obrigatório.');
+
+  if (typeof integrateLateFn !== 'function' || !drawWindow) {
+    throw _drawFail('internal', 'Motor de integração indisponível no servidor.', { tId });
+  }
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid, email)) {
+    throw _drawFail('permission-denied', 'Só o organizador ou um co-organizador integra tardios.', { tId, uid });
+  }
+  await _preloadDrawNames(pre.data()); // nome vivo por uid antes de formar duplas/rótulos
+
+  let out;
+  try {
+    out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const t = snap.data(); t.id = tId;
+      if (!_isTournamentAdmin(t, uid, email)) {
+        throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      }
+      // Rei/Rainha: o doc fresco traz grupos só com matchIds — hidrata ANTES do motor.
+      try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+
+      const res = integrateLateFn(t, {});
+      if (!res || !res.ok) {
+        throw _drawFail('failed-precondition', (res && res.reason) || 'integrate-failed', { tId, format: t.format });
+      }
+      if (!res.changed) return { ok: true, changed: false }; // nada a integrar → não grava
+      const b = _applyWriteBoundary(t);
+      tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+      return { ok: true, changed: true, extra: res.extra, duplas: res.duplas, duplasTier: res.duplasTier,
+               dissolved: res.dissolved, monarch: res.monarch, tournament: b.clean };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error(`integrateLateEntries EXPLODIU no torneio ${tId} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha na integração de tardios: ' + String((e && e.message) || e).slice(0, 300));
+  }
+
+  console.log(`integrateLateEntries v${CF_VERSION}: ${tId} por ${uid} — changed=${out.changed}` +
+    (out.changed ? ` extra=${out.extra||0} duplas=${out.duplas||0}(tier${out.duplasTier||0}) dissolved=${out.dissolved||0} monarch=${out.monarch||0}` : ''));
+  return out;
+});
 
 // ─── Auto-Draw: runs every hour, checks for pending draws ───────────────────
 // v2.6.74: sorteio NA HORA + custo baixo. Cadência de 1 minuto, mas em vez de
@@ -430,23 +724,11 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
           }
         }
 
-        // v3.0.x: enfileira criação de grupos de WhatsApp da rodada. O autoDraw
-        // roda neste codebase (sem a callable notifyLeagueRoundWhatsApp nem os
-        // segredos do Evolution); o trigger processRoundWhatsappGroups (codebase
-        // default) consome a fila e cria os grupos (1 por partida na Liga; 1 por
-        // grupo de 4 no Rei/Rainha). Antes só o sorteio MANUAL/publish do cliente
-        // chamava a callable — auto-sorteio ficava sem grupo de WhatsApp.
-        try {
-          await db.collection('whatsapp_round_queue').add({
-            tournamentId: tId,
-            roundIndex: res.roundIndex,
-            nextDrawDateStr: deadlineLabel || 'Não agendado',
-            source: 'autoDraw',
-            createdAt: now.toISOString(),
-          });
-        } catch (e) {
-          console.warn(`[auto-draw] enfileirar grupos WhatsApp falhou para ${tId}:`, e.message);
-        }
+        // v1.2.9: o enfileiramento de grupos de WhatsApp da rodada saiu. Os grupos
+        // automáticos dependiam do Evolution/Groups API — número banido, apelação
+        // negada, portfólio Meta morto. O grupo agora é criado pelo PRÓPRIO usuário
+        // no WhatsApp dele e colado no app (js/views/wa-group.js), sem API nenhuma.
+        // Ver project_whatsapp_meta_2fa_block.
       } catch (err) {
         // Falha no sorteio NUNCA escreve dados parciais/errados — apenas loga e
         // deixa o cliente (organizador) sortear. Defense-in-depth.

@@ -108,15 +108,14 @@ function _notifDedupCheck(uid, type, tId, matchId) {
 }
 
 // _skipDispatch: `true` pula e-mail E WhatsApp (só plataforma in-app). Também
-// aceita um objeto `{ skipEmail, skipWhatsApp }` pra pular canais individuais —
-// usado por "Falar com o organizador" (abre o WhatsApp direto pelo wa.me, então
-// pula o auto-dispatch de WhatsApp mas mantém a cópia por e-mail).
+// aceita um objeto `{ skipEmail }` pra pular canais individuais —
+// usado por "Falar com o organizador". v1.2.9: não há mais auto-dispatch de
+// WhatsApp pra pular — `skipWhatsApp` virou no-op e só a cópia por e-mail importa.
 window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     if (!window.FirestoreDB || !window.FirestoreDB.db || !uid) return;
     var _skipOpt = (_skipDispatch && typeof _skipDispatch === 'object') ? _skipDispatch : null;
     var _skipAll = (_skipDispatch === true);
     var _skipEmail = _skipAll || !!(_skipOpt && _skipOpt.skipEmail);
-    var _skipWhatsApp = _skipAll || !!(_skipOpt && _skipOpt.skipWhatsApp);
     // Dedup guard: mesma notificação pro mesmo uid dentro de 5 min é silenciada.
     if (_notifDedupCheck(uid, notifData.type || '', notifData.tournamentId || '', notifData.matchId || '')) {
         window._log('[notif] dedup suprimiu', notifData.type, 'para uid', uid.substring(0, 8) + '...');
@@ -178,20 +177,16 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         // Email dispatch — writes to 'mail' Firestore collection, processed by
         // the "Trigger Email from Firestore" extension.
         var email = (!_skipEmail && profile.notifyEmail !== false && profile.email) ? profile.email : null;
-        // v1.3.37-beta: WhatsApp dispatch — Cloud Function processWhatsAppQueue
-        // consome whatsapp_queue e POSTa pra Evolution API self-hosted no
-        // Railway (infra/whatsapp/README.md). Só envia se opt-in explícito
-        // (notifyWhatsApp=true) E telefone preenchido. Default é OFF —
-        // notifyWhatsApp tem que ser truthy.
-        var phone = (!_skipWhatsApp && profile.notifyWhatsApp === true && profile.phone) ? profile.phone : null;
+        // v1.2.9: a resolução de telefone saiu — não há canal de WhatsApp pra onde
+        // mandar (número banido, portfólio Meta morto). Ver project_whatsapp_meta_2fa_block.
 
-        // Auto-dispatch email & WhatsApp for this individual notification
+        // Auto-dispatch email for this individual notification
         // (skip when called from _notifyTournamentParticipants which does batch dispatch)
         // v1.1.30: primeiro nome de quem RECEBE — vira o {{1}} do template do
         // WhatsApp ("Olá, Rodrigo."). Primeiro nome só: o template é curto e
         // "Olá, Rodrigo" lê melhor que "Olá, Rodrigo Barth".
         var _toName = String(profile.displayName || '').trim().split(/\s+/)[0] || '';
-        if ((email || phone) && typeof window._dispatchChannels === 'function') {
+        if (email && typeof window._dispatchChannels === 'function') {
             var tUrl = notifData.tournamentId ? 'https://scoreplace.app/#tournaments/' + notifData.tournamentId : 'https://scoreplace.app';
             // v1.8.1-beta: pass ALL notifData fields so rich email templates
             // can access player1/player2/score1/score2/matchLines/playerMatch etc.
@@ -201,19 +196,13 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
             _tplData.subject = 'scoreplace.app — ' + (notifData.tournamentName || 'Notificação');
             if (!_tplData.message) _tplData.message = '';
             window._dispatchChannels(
-                {
-                    emails: email ? [email] : [],
-                    phones: phone ? [phone] : [],
-                    // waRecipients carrega o NOME junto do telefone — o template
-                    // é personalizado por pessoa, então phones[] sozinho não basta.
-                    waRecipients: phone ? [{ phone: phone, name: _toName }] : []
-                },
+                { emails: email ? [email] : [] },
                 notifData.type || 'info',
                 _tplData
             );
         }
 
-        return { email: email, phone: phone, name: _toName };
+        return { email: email, name: _toName };
     } catch(e) {
         window._warn('_sendUserNotification error:', e);
         return null;
@@ -269,8 +258,6 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
 
     var nd = Object.assign({}, notifData, { tournamentId: String(t.id), tournamentName: t.name || '' });
     var allEmails = [];
-    var allPhones = [];
-    var allWaRecipients = []; // v1.1.30: {phone,name} — template do WA é personalizado
 
     for (var i = 0; i < recipients.length; i++) {
         try {
@@ -284,17 +271,13 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
             if (uid) {
                 var result = await window._sendUserNotification(uid, nd, true); // skip individual dispatch; batch below
                 if (result && result.email) allEmails.push(result.email);
-                if (result && result.phone) {
-                    allPhones.push(result.phone);
-                    allWaRecipients.push({ phone: result.phone, name: result.name || '' });
-                }
             }
         } catch(e) { window._warn('Notify participant error:', e); }
     }
 
-    // Auto-dispatch email & WhatsApp channels
-    var channelResult = { emails: allEmails, phones: allPhones, waRecipients: allWaRecipients };
-    if ((allEmails.length > 0 || allPhones.length > 0) && typeof window._dispatchChannels === 'function') {
+    // Auto-dispatch email channel
+    var channelResult = { emails: allEmails };
+    if (allEmails.length > 0 && typeof window._dispatchChannels === 'function') {
         var tUrl = 'https://scoreplace.app/#tournaments/' + String(t.id);
         // v1.8.1-beta: pass all nd fields so rich email templates receive full payload
         var _tplData = Object.assign({}, nd);
@@ -346,72 +329,6 @@ window._notifCta = function(type, td) {
   return { label: 'Abrir scoreplace', url: base };
 };
 
-// v1.1.30: mapeia tipo de notificação → template APROVADO do WhatsApp Cloud API.
-// O Cloud API não manda texto livre business-initiated (o Evolution mandava), então
-// cada tipo tem que cair num dos 7 templates. Retorna null quando não há template
-// pro tipo → o WhatsApp é pulado (e-mail e in-app seguem normais), nunca quebra.
-// Os params são posicionais: {{1}} é SEMPRE o nome de quem recebe.
-// Ver memória `project_whatsapp_meta_2fa_block` pros nomes e regras da Meta.
-window._waTemplateFor = function(type, td, toName) {
-  td = td || {};
-  var t = String(type || '');
-  var nome = toName || 'jogador';
-  var torneio = td.tournamentName || 'seu torneio';
-  var quem = td.fromName || td.inviterName || td.pairInviterName || td.byName || 'Alguém';
-  var msg = td.message || '';
-
-  if (t === 'draw' || t === 'new_round' || t === 'new_phase') {
-    // playerMatch = o jogo específico da pessoa ("A/B x C/D"); sem ele, o texto
-    // do próprio evento serve (ex.: "rodada 2 sorteada").
-    return { template: 'sp_sorteio_jogo', params: [nome, torneio, td.playerMatch || msg || 'confira no app'] };
-  }
-  if (t === 'match-pending-approval' || t === 'match-rejected' || t === 'match-disputed') {
-    return { template: 'sp_placar_confirmar', params: [nome, quem, torneio] };
-  }
-  if (t === 'pair_invite')  return { template: 'sp_convite_recebido', params: [nome, quem, 'formar dupla no torneio ' + torneio] };
-  if (t === 'cohost_invite' || t === 'host_transfer_invite') return { template: 'sp_convite_recebido', params: [nome, quem, 'co-organizar o torneio ' + torneio] };
-  if (t === 'liga-sub-invite') return { template: 'sp_convite_recebido', params: [nome, quem, 'assumir uma vaga no torneio ' + torneio] };
-  if (t === 'casual_invite') return { template: 'sp_convite_recebido', params: [nome, quem, 'uma partida casual no scoreplace.app'] };
-  if (t === 'poll' || t === 'schedule') return { template: 'sp_enquete_aberta', params: [nome, torneio, msg || 'sua resposta é necessária'] };
-  if (t === 'org_communication') return { template: 'sp_comunicado_torneio', params: [nome, torneio, msg || 'abra o app'] };
-  if (t === 'presence_checkin' || t === 'presence_plan') {
-    return { template: 'sp_presenca_amigo', params: [nome, quem, td.venue || td.venueName || 'um local'] };
-  }
-  return null;
-};
-
-// Sufixo do botão URL do template (a base `https://scoreplace.app/` é fixa NO
-// template — a Meta só deixa variar o sufixo). Deriva do CTA canônico por tipo.
-window._waUrlSuffix = function(type, td) {
-    var cta = window._notifCta(type, td);
-    var url = (cta && cta.url) || '';
-    var i = url.indexOf('#');
-    return i !== -1 ? url.slice(i) : '#dashboard';
-};
-
-// Enfileira UM template do WhatsApp pra todos os destinatários de channelResult,
-// com params personalizados por pessoa. Usado pelo fluxo normal e pelos convites
-// (pair/cohost) que bypassam o digest. Sem template pro tipo → não manda nada.
-function _waSendTemplate(channelResult, templateType, templateData) {
-    if (!channelResult || !channelResult.phones || !channelResult.phones.length) return;
-    if (!window.FirestoreDB || typeof window.FirestoreDB.queueWhatsAppTemplate !== 'function') return;
-    var to = (channelResult.waRecipients && channelResult.waRecipients.length)
-        ? channelResult.waRecipients
-        : channelResult.phones.map(function (p) { return { phone: p, name: '' }; });
-    var recips = [];
-    var tpl = null;
-    to.forEach(function (r) {
-        var m = window._waTemplateFor(templateType, templateData, r.name);
-        if (!m) return;
-        tpl = m.template;
-        recips.push({ phone: r.phone, params: m.params });
-    });
-    if (!recips.length || !tpl) {
-        window._warn && window._warn('[WhatsApp] sem template pro tipo "' + templateType + '" — pulado');
-        return;
-    }
-    window.FirestoreDB.queueWhatsAppTemplate(recips, tpl, window._waUrlSuffix(templateType, templateData));
-}
 
 window._dispatchChannels = function(channelResult, templateType, templateData) {
     if (!channelResult) return;
@@ -438,11 +355,8 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
               '</div>';
             window.FirestoreDB.queueEmail(channelResult.emails, '🤝 Convite de dupla — ' + (templateData.tournamentName || 'scoreplace.app'), _html);
         }
-        // v1.1.30: o WhatsApp perdeu os botões Aceitar/Recusar próprios — o Cloud API
-        // só manda template aprovado, e template não aceita 2 URLs dinâmicas distintas.
-        // Cai no sp_convite_recebido (1 botão → torneio, onde a pessoa responde).
-        // O E-MAIL acima mantém os dois botões de ação diretos.
-        _waSendTemplate(channelResult, 'pair_invite', templateData);
+        // v1.2.9: o WhatsApp saiu (canal morto) — o e-mail acima mantém os dois
+        // botões de ação diretos, e a notificação in-app cobre o resto.
         return; // não cai no digest
     }
     // v2.8.52: CONVITE DE CO-ORGANIZAÇÃO — botões Aceitar (direita) / Recusar (esquerda)
@@ -467,9 +381,8 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
               '</div>';
             window.FirestoreDB.queueEmail(channelResult.emails, '👑 Convite de co-organização — ' + (templateData.tournamentName || 'scoreplace.app'), _chtml);
         }
-        // v1.1.30: idem pair_invite — WhatsApp vai por template (1 botão → torneio);
-        // os botões Aceitar/Recusar diretos seguem no e-mail.
-        _waSendTemplate(channelResult, 'cohost_invite', templateData);
+        // v1.2.9: idem pair_invite — o WhatsApp saiu; os botões Aceitar/Recusar
+        // seguem no e-mail.
         return; // não cai no digest
     }
     // ── Email ──
@@ -498,37 +411,11 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
             window.FirestoreDB.queueEmail(channelResult.emails, subject, html);
         }
     }
-    // ── WhatsApp ──
-    // v1.16: política de entrega por TIPO decidida pelo app (nunca pelo usuário):
-    //   'nenhum'   → não vai por WhatsApp (só e-mail/in-app) — corta custo/ban
-    //   'agrupado' → resumo de 1h (flushWhatsAppDigest) — ex.: inscrições de terceiros
-    //   'imediato' → manda na hora (default)
-    if (channelResult.phones && channelResult.phones.length > 0) {
-        var _waPol = (typeof window._waPolicy === 'function') ? window._waPolicy(templateType) : 'imediato';
-        if (_waPol !== 'nenhum') {
-            var waMsg = templateData.message || templateData.tournamentName || 'Notificação do scoreplace.app';
-            var _waCta = window._notifCta(templateType, templateData);
-            if (_waPol === 'agrupado') {
-                // Vira 1 linha do resumo de 24h (v1.1.30) — o flush monta o template
-                // sp_inscricoes_resumo juntando as linhas do mesmo telefone.
-                if (window.FirestoreDB && typeof window.FirestoreDB.queueWhatsAppDigest === 'function') {
-                    // names[] casa por índice com phones[] (mesma ordem em ambos os
-                    // caminhos que montam channelResult).
-                    var _dNames = (channelResult.waRecipients && channelResult.waRecipients.length)
-                        ? channelResult.waRecipients.map(function (r) { return r.name || ''; })
-                        : [];
-                    window.FirestoreDB.queueWhatsAppDigest(channelResult.phones, waMsg, {
-                        tournamentUrl: (_waCta && _waCta.url) || templateData.tournamentUrl || '',
-                        tournamentName: templateData.tournamentName || '',
-                        names: _dNames
-                    });
-                }
-            } else {
-                // imediato: 1 template aprovado, params personalizados por pessoa.
-                _waSendTemplate(channelResult, templateType, templateData);
-            }
-        }
-    }
+    // v1.2.9: o canal WhatsApp saiu daqui por inteiro (número banido, apelação
+    // negada, portfólio Meta morto — ver project_whatsapp_meta_2fa_block). Sobram
+    // in-app + e-mail. O WhatsApp que existe no produto é 100% cliente e não passa
+    // por notificação: link wa.me ("Falar com o organizador", "Fale com o
+    // Desenvolvedor") e o grupo criado pelo próprio usuário (js/views/wa-group.js).
 };
 
 /**
@@ -824,7 +711,7 @@ window._openCommunicationsPanel = async function(tId) {
     var existing = document.getElementById(modalId);
     if (existing) existing.remove();
     var html = '<div id="' + modalId + '" class="modal-overlay active" style="z-index:10000;">' +
-      '<div class="modal" style="max-width:640px;width:96%;max-height:88vh;display:flex;flex-direction:column;">' +
+      '<div class="modal" style="max-width:640px;width:96%;max-height:88%;display:flex;flex-direction:column;">' +
         '<div class="modal-header" style="padding:1.25rem 1.25rem 0;">' +
           '<h2 class="card-title" style="margin:0;font-size:1rem;">📊 Comunicados enviados</h2>' +
           '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove();">&times;</button>' +
@@ -875,7 +762,7 @@ window._openCommunicationDetail = async function(tId, commId) {
     var existing = document.getElementById(modalId);
     if (existing) existing.remove();
     var html = '<div id="' + modalId + '" class="modal-overlay active" style="z-index:10001;">' +
-      '<div class="modal" style="max-width:680px;width:96%;max-height:90vh;display:flex;flex-direction:column;">' +
+      '<div class="modal" style="max-width:680px;width:96%;max-height:90%;display:flex;flex-direction:column;">' +
         '<div class="modal-header" style="padding:1.25rem 1.25rem 0;">' +
           '<h2 class="card-title" style="margin:0;font-size:1rem;">📊 Detalhe do comunicado</h2>' +
           '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove();">&times;</button>' +
@@ -968,6 +855,11 @@ window._openCommunicationDetail = async function(tId, commId) {
 // WhatsApp, já que o wa.me entrega direto).
 var _WA_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" aria-hidden="true" style="flex-shrink:0;"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 1.67c2.2 0 4.27.86 5.82 2.42a8.18 8.18 0 0 1 2.42 5.82c0 4.54-3.7 8.24-8.25 8.24a8.2 8.2 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24zm4.52 10.37c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.16.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.43.13-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18-.06-.1-.22-.16-.47-.28z"/></svg>';
 
+// Exposto: ÍCONE CANÔNICO do WhatsApp do app. Quem precisar (wa-group.js — os
+// botões "Criar/Abrir grupo" e "Entrar no grupo") consome daqui em vez de colar
+// outra cópia do path SVG. Um ícone, um lugar.
+window._WA_ICON_SVG = _WA_ICON_SVG;
+
 // Botão canônico — usado por dashboard.js e tournaments.js (detalhe). Começa
 // azul "Falar com o organizador"; _hydrateContactOrgButtons flipa pra verde
 // (WhatsApp) quando o organizador tem telefone.
@@ -1009,11 +901,14 @@ window._hydrateContactOrgButtons = async function(root) {
       cache[uid] = prof || null;
     }
     var phone = (prof && prof.phone) ? String(prof.phone).replace(/\D/g, '') : '';
-    // v4.0.36: WhatsApp de CONTATO direto não depende de notifyWhatsApp. Esse
-    // toggle é a preferência do org de receber NOTIFICAÇÕES automáticas por
-    // WhatsApp — não deve bloquear um participante de falar com ele. Se tem
-    // número cadastrado, o botão fica verde (WhatsApp).
-    var waOk = phone.length >= 10;
+    // v1.2.9: REVERTE a v4.0.36 — que dizia "contato direto não depende de
+    // notifyWhatsApp, o toggle é só pra NOTIFICAÇÕES automáticas". Aquele canal
+    // morreu (número banido, portfólio Meta morto), então o toggle não rege mais
+    // notificação nenhuma: ele passa a significar "aceito ser chamado no WhatsApp".
+    // Quem desliga não quer WhatsApp — e aí o botão cai pro e-mail.
+    // Default ON quando há telefone (!== false), então ninguém perde o botão sem
+    // ter escolhido. Ver project_whatsapp_meta_2fa_block.
+    var waOk = phone.length >= 10 && (!prof || prof.notifyWhatsApp !== false);
     if (waOk) {
       btn.style.background = 'linear-gradient(135deg,#25D366,#128C7E)';
       btn.style.color = '#fff';
@@ -1032,7 +927,9 @@ window._resolveOrgContact = function(t, profile) {
                 (t.organizerEmail ? String(t.organizerEmail).split('@')[0] : '') || 'o organizador';
   var phoneDigits = (profile && profile.phone) ? String(profile.phone).replace(/\D/g, '') : '';
   var email = (profile && profile.email) || t.organizerEmail || '';
-  var useWhatsApp = phoneDigits.length >= 10;
+  // v1.2.9: respeita o toggle "WhatsApp" do perfil do ALVO (default ON quando há
+  // telefone). Desligado → useWhatsApp=false → o contato cai pro e-mail.
+  var useWhatsApp = phoneDigits.length >= 10 && (!profile || profile.notifyWhatsApp !== false);
   var phoneFull = '';
   if (useWhatsApp) {
     var cc = (profile && profile.phoneCountry ? String(profile.phoneCountry).replace(/\D/g, '') : '') || '55';

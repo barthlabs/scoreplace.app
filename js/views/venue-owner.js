@@ -762,7 +762,7 @@
                 '<button type="button" id="vlogo-lock-btn" onclick="window._toggleVenueLogoLock()" title="Travar logo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.8rem;cursor:pointer;">🔓</button>' +
                 '<button type="button" onclick="window._downloadVenueLogo()" title="Baixar logo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.8rem;cursor:pointer;">⬇️</button>' +
                 '<button type="button" onclick="document.getElementById(\'vlogo-file-input\').click()" title="Upload de arquivo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.8rem;cursor:pointer;">📁</button>' +
-                '<button type="button" onclick="window._clearVenueLogo()" title="Remover logo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.08);color:#f87171;font-size:0.8rem;cursor:pointer;">✕</button>' +
+                '<button type="button" class="cancel-x-btn" onclick="window._clearVenueLogo()" title="Remover logo" style="--cx-size:24px;">✕</button>' +
               '</div>' +
               '<input type="file" id="vlogo-file-input" accept="image/*" style="display:none;" onchange="window._handleVenueLogoUpload(event)">' +
               '<input type="hidden" id="vlogo-data" value="' + _safe(ex.logoData || '') + '">' +
@@ -1058,7 +1058,7 @@
           (canEdit
             ? '<div style="display:flex;gap:4px;flex-shrink:0;">' +
                 '<button class="btn btn-sm" onclick="window._courtsToggleForm(' + JSON.stringify(c).replace(/'/g, '&#39;').replace(/"/g, '&quot;') + ')" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;padding:4px 10px;font-size:0.72rem;">Editar</button>' +
-                '<button class="btn btn-sm" onclick="window._venueCourtDelete(\'' + safeKey + '\',\'' + safeId + '\')" style="background:transparent;border:1px solid var(--danger-color);color:var(--danger-color);padding:4px 10px;font-size:0.72rem;">✕</button>' +
+                '<button type="button" class="cancel-x-btn" title="Apagar quadra" onclick="window._venueCourtDelete(\'' + safeKey + '\',\'' + safeId + '\')" style="--cx-size:20px;">✕</button>' +
               '</div>'
             : '') +
         '</div>';

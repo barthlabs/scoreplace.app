@@ -611,7 +611,7 @@ window._openInvitePrint = function(opts) {
     '</div>';
 
   overlay.innerHTML =
-    '<div style="background:var(--card-bg,#1e2235);border-radius:18px;padding:18px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);box-sizing:border-box;display:flex;flex-direction:column;max-height:92vh;">' +
+    '<div style="background:var(--card-bg,#1e2235);border-radius:18px;padding:18px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);box-sizing:border-box;display:flex;flex-direction:column;max-height:92%;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap;">' +
         '<div style="font-size:1.1rem;font-weight:800;color:var(--text-bright,#fff);">🖨️ Imprimir convite</div>' +
         '<div style="font-size:0.72rem;color:var(--text-muted,#94a3b8);">ajuste e veja na hora</div>' +

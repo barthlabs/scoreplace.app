@@ -407,8 +407,8 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     background: rgba(0, 0, 0, 0.75);
     backdrop-filter: blur(4px);
     display: flex;
@@ -501,8 +501,8 @@ function showAlertDialog(title, message, onOk, options = {}) {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     background: rgba(0, 0, 0, 0.75);
     backdrop-filter: blur(4px);
     display: flex;
@@ -582,8 +582,8 @@ function showInputDialog(title, message, onSubmit, options = {}) {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     background: rgba(0, 0, 0, 0.75);
     backdrop-filter: blur(4px);
     display: flex;
@@ -683,8 +683,8 @@ function showMultiInputDialog(title, items, onSubmit, options = {}) {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     background: rgba(0, 0, 0, 0.75);
     backdrop-filter: blur(4px);
     display: flex;
@@ -717,7 +717,7 @@ function showMultiInputDialog(title, items, onSubmit, options = {}) {
       border-radius: 16px;
       max-width: 420px;
       width: 90%;
-      max-height: 80vh;
+      max-height: 80%;
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
       display: flex;

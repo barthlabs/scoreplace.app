@@ -1,0 +1,93 @@
+# PARIDADE DE CLOUD FUNCTIONS — prod → staging, automático.
+#
+# POR QUÊ: o staging.yml só sobe HOSTING. As functions da staging ficaram congeladas
+# numa versão velha e o ambiente divergiu de prod sem ninguém ver (jul/2026: faltavam
+# 8 funções que existiam em prod — deleteAccount, stripeWebhook, sendVerificationCode,
+# confirmEmailMerge, requestEmailMerge, verifyEmailCode, applyLetzplayScans,
+# createCheckoutSession — e sobravam 10 zumbis, incluindo whatsappHealthGuard e
+# whatsappNightlyRestart, que ainda reiniciavam o wa.scoreplace.app todo dia).
+# Dono: _"o ambiente em stag deve ser sempre o mesmo ambiente em prod. senão algo que
+# funciona na stag pode não responder da mesma forma em prod. sem isso nenhum teste tem
+# valor."_ Estava certo: o teste de staging não valia nada nesses fluxos.
+#
+# DIREÇÃO: SEMPRE prod → staging, NUNCA o contrário. Este workflow só escreve na
+# staging. Prod continua sendo deploy explícito (comando expresso), como o dono manda.
+# Ambos saem do MESMO código (main), então main é a fonte e a staging segue sozinha.
+#
+# ⚠️ FOOTGUN (queimou de verdade, jul/2026): `functions-autodraw/firebase.json` NÃO
+# declara `codebase`, então cai no codebase `default` — o MESMO do `functions/`. Rodar
+# `firebase deploy --only functions --force` da raiz faz o Firebase enxergar só o
+# conteúdo de functions/ como o codebase default e APAGAR autoDraw, autoDrawReconcile,
+# drawRound e sendPushNotification. Por isso cada codebase abaixo é deployada
+# alvejando as funções PELO NOME: alvo nominal pula a análise de deleção por completo.
+# Ver [[project_autodraw_deploy_footgun]].
+name: Paridade de Functions (prod → staging)
+
+on:
+  push:
+    branches: [main, 'feature/**']
+    paths:
+      - 'functions/**'
+      - 'functions-autodraw/**'
+      - 'functions-stripe/**'
+      - '.github/workflows/staging-functions.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: staging-functions
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Credencial da staging
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_STAGING }}' > "$RUNNER_TEMP/sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> $GITHUB_ENV
+
+      # 15.12.0 = a mesma do staging.yml. NÃO baixar: a 13.x não conhece o runtime
+      # nodejs24 do functions-autodraw ("Detected node engine 24… Valid versions are
+      # 20, 22") e o deploy morre.
+      - name: firebase-tools
+        run: npm i -g firebase-tools@15.12.0
+
+      # functions/ — codebase `default`. Alvo nominal (nunca `--only functions` puro:
+      # ver o footgun no cabeçalho). A lista sai dos próprios exports do fonte.
+      - name: Deploy functions/ → staging
+        run: |
+          cd functions && npm ci --omit=dev || npm install --omit=dev
+          cd ..
+          ALVOS=$(grep -oE '^exports\.[a-zA-Z0-9_]+' functions/index.js \
+            | sed 's/exports\.//' | sort -u | sed 's/^/functions:/' | paste -sd, -)
+          echo "alvos: $ALVOS"
+          firebase deploy --only "$ALVOS" --project scoreplace-staging --non-interactive
+
+      # functions-autodraw/ — mesmo codebase `default`, fonte diferente. SEMPRE por nome.
+      - name: Deploy functions-autodraw/ → staging
+        run: |
+          cd functions-autodraw
+          npm ci --omit=dev || npm install --omit=dev
+          ALVOS=$(grep -oE '^exports\.[a-zA-Z0-9_]+' index.js \
+            | sed 's/exports\.//' | sort -u | sed 's/^/functions:/' | paste -sd, -)
+          echo "alvos: $ALVOS"
+          firebase deploy --only "$ALVOS" --project scoreplace-staging --non-interactive
+
+      # functions-stripe/ — codebase `stripe` (isolado de verdade): pode ir pelo nome
+      # da codebase, sem risco de apagar as outras.
+      - name: Deploy functions-stripe/ → staging
+        run: |
+          cd functions-stripe
+          npm ci --omit=dev || npm install --omit=dev
+          firebase deploy --only functions:stripe --project scoreplace-staging --non-interactive
+
+      # Zumbi = função no ar que não existe mais no código. O deploy por alvo nominal
+      # (obrigatório, por causa do footgun) NÃO apaga nada — então a checagem abaixo é
+      # o que impede o lixo de voltar a se acumular em silêncio.
+      - name: Checar divergência prod × staging
+        run: node tools/check-functions-parity.js

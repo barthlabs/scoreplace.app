@@ -25,8 +25,24 @@
       && window.Capacitor.Plugins.ScoreplaceWatch) || null;
   }
 
+  // Sem placar ao vivo aberto. Mas se a MONTAGEM da partida casual está no ar,
+  // o relógio pode iniciá-la — então mandamos canStart + os nomes do lobby, e
+  // ele troca "Aguardando…" por "Iniciar". Antes não havia como começar uma
+  // partida sem pegar o celular.
   function inactiveState() {
-    return { v: 1, type: 'state', active: false, isFinished: false, winner: null };
+    var s = { v: 1, type: 'state', active: false, isFinished: false, winner: null, canStart: false };
+    if (typeof window._getCasualSetupState === 'function') {
+      try {
+        var setup = window._getCasualSetupState();
+        if (setup && setup.canStart) {
+          s.canStart = true;
+          s.sportName = setup.sportName || '';
+          s.isDoubles = !!setup.isDoubles;
+          s.teams = setup.teams || {};
+        }
+      } catch (e) {}
+    }
+    return s;
   }
 
   // Estado atual do motor, indexado por TIME (1/2). Se não há partida ao vivo
@@ -92,6 +108,49 @@
         if ((intent.rule === 'extend' || intent.rule === 'tiebreak')
             && typeof window._liveResolveTie === 'function') {
           window._liveResolveTie(intent.rule);
+        }
+        break;
+      case 'start':
+        // "Iniciar" no relógio — dispara a MESMA função do botão do celular.
+        // Só existe enquanto a montagem está aberta (canStart no snapshot).
+        if (typeof window._casualStart === 'function') {
+          window._casualStart();
+        }
+        break;
+      case 'rrNext':
+        // Rei/Rainha: avança pro próximo jogo da série de 3 (rotaciona as duplas
+        // e zera o placar). Dirige a MESMA função do botão do celular — a
+        // rotação e a contagem de vitórias vivem lá, nunca aqui.
+        if (typeof window._reiRainhaNextRound === 'function') {
+          window._reiRainhaNextRound();
+        }
+        break;
+      case 'rrFinal':
+        // Rei/Rainha: encerra a série e mostra a classificação final.
+        if (typeof window._reiRainhaShowFinal === 'function') {
+          window._reiRainhaShowFinal();
+        }
+        break;
+      case 'rrActivate':
+        // Sugestão de Rei/Rainha aceita no fim de jogo (toggle "👑 Rei/Rainha" +
+        // Iniciar): ativa a série RETROATIVA (os 2 jogos já disputados viram
+        // rodadas) e avança pro 3º jogo (par que falta). Reusa as MESMAS funções
+        // do celular — a rotação/contagem vive lá, nunca aqui.
+        if (typeof window._statsToggleReiRainha === 'function') {
+          window._statsToggleReiRainha({ checked: true });
+          if (typeof window._reiRainhaNextRound === 'function') {
+            window._reiRainhaNextRound();
+          }
+        }
+        break;
+      case 'setServer':
+        // Escolha do sacador nos 2 primeiros jogos (o equivalente no relógio ao
+        // arrastar a bola no celular). Dirige a MESMA função — o hard lock de
+        // "após 2 jogos ninguém muda" vive lá, nunca aqui.
+        if ((intent.team === 1 || intent.team === 2)
+            && typeof intent.playerIdx === 'number'
+            && typeof window._liveSetServer === 'function') {
+          window._liveSetServer(intent.team, intent.playerIdx);
         }
         break;
       case 'hello':

@@ -123,21 +123,63 @@
     return 'g|' + ctx.roundIndex + '|' + ctx.groupName;
   }
   // membros "apontáveis" + matches + uids — resolvido do ctx fresco OU do claim.
+  // ALVOS do W.O. num jogo. Cada alvo = { name, uids:[…] } — SEMPRE com uid junto, porque
+  // o resto do fluxo (confirmadores, _applyWO) identifica por uid, e nome de dupla não
+  // resolve pessoa nenhuma em t.participants (os inscritos são as DUPLAS).
+  //
+  // v1.2.32 — W.O. INDIVIDUAL: o alvo é a PESSOA, não o LADO. Antes isto era
+  // `members: [m.p1, m.p2]` — os dois lados — e a tela oferecia "2 duplas": o organizador
+  // só conseguia dar W.O. na dupla inteira, contra o toggle `woScope: 'individual'`. O motor
+  // (_applyWO) não tinha culpa: `isIndividualWO` exige que o absentName seja o MEMBRO
+  // (`entryStr !== absentName`), e recebia a dupla — então fazia W.O. de time, obedecendo.
+  // Dono: _"o individual pressupõe que no momento do W.O. não é do time todo sem escolha"_.
+  // Decompõe pelos uids dos SLOTS (`_slotUids` — team*Uids/p*Uid), nunca quebrando o nome
+  // no '/': a barra é tipografia. Ver [[project_wo_individual_substitution_rule]] /
+  // [[project_uid_identity_canon_locked]].
+  //
+  // Lado com 0 ou 1 uid (guest/fictício, que só tem nome) fica como LADO — é a exceção
+  // canônica: sem uid não há pessoa a apontar individualmente.
+  function _matchMembers(t, m) {
+    var indiv = (t.woScope || 'individual') === 'individual';
+    var out = [];
+    ['p1', 'p2'].forEach(function (side) {
+      var s = m[side];
+      if (!s || s === 'TBD' || s === 'BYE') return;
+      var uids = (typeof window._slotUids === 'function') ? window._slotUids(m, side).filter(Boolean) : [];
+      if (indiv && uids.length > 1) {
+        uids.forEach(function (u) {
+          var nm = (typeof window._displayNameForUid === 'function') ? window._displayNameForUid(u, '') : '';
+          out.push({ name: nm || String(u), uids: [u] });
+        });
+        return;
+      }
+      out.push({ name: s, uids: uids.length ? uids : _nameUids(t, s) });
+    });
+    return out;
+  }
+
+  // Exposto: é o ponto ÚNICO que decide "quem pode levar W.O. neste jogo". Testado em
+  // tests/wo-individual.test.js — a régua do cânone, não um detalhe de tela.
+  window._woMatchMembers = function (t, m) { return _matchMembers(t, m); };
+
   function _resolveCtx(t, ctx) {
     if (ctx.scope === 'match') {
       var m = _findMatchById(t, ctx.matchId);
       if (!m) return null;
-      var sides = [m.p1, m.p2].filter(function (s) { return s && s !== 'TBD' && s !== 'BYE'; });
-      return { scope: 'match', m: m, matchId: ctx.matchId, members: sides, matches: [m], done: !!(m.winner || m.isBye || m.isSitOut) };
+      return { scope: 'match', m: m, matchId: ctx.matchId, members: _matchMembers(t, m), matches: [m], done: !!(m.winner || m.isBye || m.isSitOut) };
     }
     var matches = Array.isArray(ctx.matches) ? ctx.matches : (Array.isArray(ctx.matchIds) ? ctx.matchIds.map(function (id) { return _findMatchById(t, id); }).filter(Boolean) : []);
     var players = Array.isArray(ctx.players) ? ctx.players.slice() : [];
     var done = matches.length > 0 && matches.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
-    return { scope: 'group', roundIndex: ctx.roundIndex, groupName: ctx.groupName, members: players, players: players, matches: matches, done: done };
+    // Grupo/Liga: o pool já é de PESSOAS (players são nomes individuais) — só anexa o uid.
+    var members = players.map(function (nm) { return { name: nm, uids: _nameUids(t, nm) }; });
+    return { scope: 'group', roundIndex: ctx.roundIndex, groupName: ctx.groupName, members: members, players: players, matches: matches, done: done };
   }
+  // Uids de TODA a gente do contexto (quem pode apontar / quem confirma). Lê o uid que o
+  // alvo já carrega — resolver por nome aqui devolvia [] pra pessoa dentro de dupla.
   function _allCtxUids(t, rc) {
     var out = {};
-    rc.members.forEach(function (nm) { _nameUids(t, nm).forEach(function (u) { out[u] = 1; }); });
+    rc.members.forEach(function (mb) { (mb && mb.uids || []).forEach(function (u) { if (u) out[u] = 1; }); });
     return Object.keys(out);
   }
 
@@ -202,7 +244,7 @@
     var o = document.createElement('div');
     o.id = id;
     o.style.cssText = 'position:fixed;inset:0;z-index:100045;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:1rem;';
-    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:440px;max-height:90vh;overflow:auto;border-radius:16px;border:1px solid rgba(239,68,68,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
+    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:440px;max-height:90%;overflow:auto;border-radius:16px;border:1px solid rgba(239,68,68,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
     o.addEventListener('click', function (e) { if (e.target === o) o.remove(); });
     document.body.appendChild(o);
     return o;
@@ -282,8 +324,12 @@
     // ── sem claim: declarar quem faltou ──
     var canDeclare = (uid && _allCtxUids(t, rc).indexOf(uid) !== -1) || _canManage(t);
     if (!canDeclare) { _woCloseOverlay(); return; }
-    var picks = rc.members.map(function (nm) {
-      return '<button type="button" onclick="window._woDeclare(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(nm) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 ' + _esc(nm) + '</button>';
+    // Um botão por ALVO. No W.O. individual de duplas isso são as 4 PESSOAS do jogo (não os
+    // 2 lados): o organizador aponta uma por vez — podendo, no limite, as duas da mesma dupla
+    // levarem W.O., mas cada uma por escolha. O uid viaja junto (é ele que identifica).
+    var picks = rc.members.map(function (mb) {
+      var _u = (mb.uids || [])[0] || '';
+      return '<button type="button" onclick="window._woDeclare(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 ' + _esc(mb.name) + '</button>';
     }).join('');
     _overlay(_header('Faltou alguém?') +
       '<div style="padding:1.1rem;">' +
@@ -342,7 +388,9 @@
   function _isLigaGroup(t, c) { return c && c.scope === 'group' && (_isLiga(t) || _isMonarchFmt(t)); }
 
   // ─── ações ─────────────────────────────────────────────────────────────────────
-  window._woDeclare = function (tId, ctxKey, absentName) {
+  // absentUid: o uid da PESSOA apontada (vem do botão do picker). É a identidade real do
+  // alvo — `_nameUids` só serve de rede pro fictício/legado (sem conta, o nome é tudo que há).
+  window._woDeclare = function (tId, ctxKey, absentName, absentUid) {
     var t = _findT(tId); if (!t) return;
     var ctx = _ctxReg[ctxKey]; if (!ctx) return;
     var rc = _resolveCtx(t, ctx); if (!rc) return;
@@ -352,7 +400,7 @@
       id: 'wo_' + Date.now() + '_' + _rand(),
       scope: rc.scope,
       byUid: cu.uid, byName: cu.displayName || _voterName(t, cu.uid) || '',
-      absentName: absentName, absentUids: _nameUids(t, absentName),
+      absentName: absentName, absentUids: absentUid ? [String(absentUid)] : _nameUids(t, absentName),
       status: 'pending', confirms: {}, createdAt: new Date().toISOString()
     };
     if (rc.scope === 'match') { c.matchId = rc.matchId; }
@@ -478,12 +526,75 @@
       if (applied && applied.ok) {
         _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '". ' + (applied.note || '')));
         window._woCloseOverlay();
+        // Nenhum suplente presente atende a categoria → o organizador escolhe (dialog).
+        if (applied.needsSubChoice && _canManage(t)) { window._woShowSubChoiceDialog(String(t.id)); return; }
+        if (applied.needsSubChoice) { if (typeof showNotification === 'function') showNotification('⏳ Aguardando o organizador', 'Nenhum suplente presente atende a categoria — o organizador vai definir.', 'info'); return; }
         if (typeof showNotification === 'function') showNotification('✅ W.O. aplicado', applied.note || '', 'success');
       } else if (applied) {
         if (typeof showNotification === 'function') showNotification('Não aplicou', applied.reason || (orgResolve ? '' : 'Tente pelo painel do organizador.'), 'warning');
       }
     }, 'Aplicando o W.O.…');
   }
+
+  // ─── ESCOLHA DE SUPLENTE quando NENHUM presente atende a categoria ─────────────
+  // Só o organizador. Lê t.woSubChoices (marcado pelo motor quando o único suplente
+  // presente quebraria a categoria — gênero/idade/skill/custom). Para cada pendência,
+  // mostra as opções (aceitar um suplente que quebra a regra) OU dar W.O. ao time.
+  // Nome resolvido por UID (o rótulo pode estar velho). Ver [[project_wo_individual_substitution_rule]].
+  function _pendingSubChoices(t) {
+    return (Array.isArray(t.woSubChoices) ? t.woSubChoices : []).filter(function (x) { return x && !x.resolved; });
+  }
+  function _nameOfUid(t, uid, fallback) {
+    var n = (typeof window._displayNameForUid === 'function') ? window._displayNameForUid(uid, '') : '';
+    return n || fallback || String(uid || '?');
+  }
+  window._woShowSubChoiceDialog = function (tId) {
+    var t = _findT(tId); if (!t) return;
+    if (!_canManage(t)) { if (typeof showNotification === 'function') showNotification('Só o organizador', 'Só o organizador resolve a substituição que quebra a categoria.', 'warning'); return; }
+    var pend = _pendingSubChoices(t);
+    if (!pend.length) { window._woCloseOverlay(); return; }
+    var gc = pend[0]; // um de cada vez
+    var absN = _nameOfUid(t, gc.absentUid, gc.absentName);
+    var catTxt = (gc.absentCategories && gc.absentCategories.length) ? gc.absentCategories.join(', ') : '';
+    var opts = (gc.options || []).map(function (o) {
+      var nm = _nameOfUid(t, o.uid, o.name);
+      var oc = (o.categories && o.categories.length) ? o.categories.join(', ') : (o.gender || '');
+      return '<button type="button" onclick="window._woResolveSubChoiceUI(\'' + _attr(t.id) + '\',\'' + _attr(gc.absentUid) + '\',\'' + _attr(o.uid) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.4);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.9rem;">⚠️ ' + _esc(nm) + (oc ? ' <span style="font-weight:500;opacity:0.7;font-size:0.8rem;">(' + _esc(oc) + ')</span>' : '') + '<br><span style="font-weight:400;font-size:0.76rem;opacity:0.7;">Entra quebrando a categoria' + (catTxt ? ' ' + _esc(catTxt) : '') + '.</span></button>';
+    }).join('');
+    var woTeam = '<button type="button" onclick="window._woResolveSubChoiceUI(\'' + _attr(t.id) + '\',\'' + _attr(gc.absentUid) + '\',\'\')" class="btn" style="display:block;width:100%;text-align:left;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.9rem;">🚫 Dar W.O. ao time<br><span style="font-weight:400;font-size:0.76rem;opacity:0.7;">Ninguém assume — o adversário vence.</span></button>';
+    _overlay(_header('Substituto quebra a categoria') +
+      '<div style="padding:1.1rem;">' +
+        '<div style="font-size:0.86rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5;"><b style="color:var(--text-bright);">' + _esc(absN) + '</b>' + (catTxt ? ' (' + _esc(catTxt) + ')' : '') + ' faltou, e nenhum suplente presente atende a categoria. Escolha quem assume — ou dê W.O. ao time.</div>' +
+        opts + woTeam +
+      '</div>');
+  };
+  // aplica a escolha do organizador: subUid vazio = W.O. ao time (marca resolvido e escala).
+  window._woResolveSubChoiceUI = function (tId, absentUid, subUid) {
+    var t = _findT(tId); if (!t) return;
+    if (subUid) {
+      // aceite explícito: o motor coloca o suplente (pulando o filtro de categoria)
+      _commit(tId, function (ft) {
+        if (typeof window._woResolveSubChoice === 'function') window._woResolveSubChoice(String(ft.id), absentUid, subUid);
+      }, function () {
+        window._woCloseOverlay();
+        if (typeof showNotification === 'function') showNotification('✅ Substituto definido', _nameOfUid(t, subUid, '') + ' assumiu a vaga.', 'success');
+        var t2 = _findT(tId); if (t2 && _pendingSubChoices(t2).length) window._woShowSubChoiceDialog(tId); // próxima pendência
+      }, 'Aplicando a substituição…');
+    } else {
+      // W.O. ao time: marca a pendência resolvida e re-roda o W.O. pra escalar (sem sub).
+      _commit(tId, function (ft) {
+        if (Array.isArray(ft.woSubChoices)) ft.woSubChoices.forEach(function (x) { if (x.absentUid === absentUid) x.resolved = true; });
+        // limpa o check-in do(s) suplente(s) daquela pendência pra não re-disparar, e escala:
+        var gc = (Array.isArray(ft.woSubChoices) ? ft.woSubChoices : []).find(function (x) { return x.absentUid === absentUid; });
+        var absName = (gc && gc.absentName) || (typeof window._memberNameByUid === 'function' ? window._memberNameByUid(ft, absentUid) : '') || absentUid;
+        if (typeof window._applyWO === 'function') window._applyWO(ft, { absentName: absName, absentUids: [absentUid], scope: 'match', noSubBehavior: 'escalate', woScope: ft.woScope || 'individual', _forceNoSub: true });
+      }, function () {
+        window._woCloseOverlay();
+        if (typeof showNotification === 'function') showNotification('🚫 W.O. ao time', 'Ninguém assumiu a vaga — o adversário venceu.', 'warning');
+        var t2 = _findT(tId); if (t2 && _pendingSubChoices(t2).length) window._woShowSubChoiceDialog(tId);
+      }, 'Registrando o W.O.…');
+    }
+  };
 
   // ─── APLICAÇÃO do W.O. — funil no motor único _applyWO (participants.js) ────────
   function _applyClaim(t, c, rc) {
@@ -505,10 +616,11 @@
       if (!r || !r.ok) return { ok: false, reason: (r && r.reason) || 'não aplicou' };
       var note = r.outcome === 'ligaDelegated' ? (r.note || 'Escolha o substituto (folga / Jogador X).')
         : r.outcome === 'subbed' ? 'Substituto da lista de espera entrou no lugar.'
+        : r.outcome === 'needsSubChoice' ? 'Nenhum suplente presente atende a categoria — escolha o substituto.'
         : r.outcome === 'woApplied' ? 'Adversário venceu por W.O.'
         : r.outcome === 'waitedTBD' ? 'Ausência registrada — adversário ainda não definido.'
         : '';
-      return { ok: true, note: note };
+      return { ok: true, note: note, needsSubChoice: r.outcome === 'needsSubChoice' };
     } catch (e) {
       try { console.error('[wo-claim] apply falhou:', e); } catch (_e) {}
       return { ok: false, reason: (e && e.message) || 'erro ao aplicar' };

@@ -210,6 +210,19 @@ function renderBracket(container, tournamentId, isInline) {
     }
   }
 
+  // v1.2.58: DUPLA formada na espera entra NO LUGAR DO REPESCADO na chave PLAYIN (Elim
+  // Simples/Dupla Elim): preenche o slot repFill da ímpar (JOGO N "VS A definir"), some 1
+  // repescado. Reusa a mecânica repFill — sem reconstruir. Ver project_late_dupla_fills_awaiting_slot.
+  if (isOrg && typeof window._fillRepFillWithLateDuplas === 'function') {
+    try {
+      var _nRF = window._fillRepFillWithLateDuplas(t);
+      if (_nRF > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        window.FirestoreDB.saveTournament(t);
+        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nRF + ' dupla(s) na chave', 'Entrou no lugar do repescado — a chave recalculou os repescados.', 'success');
+      }
+    } catch (e) {}
+  }
+
   // v2.1.26: tardios entram NA chave — SÓ o organizador dispara (escrita de
   // matches/participants só passa nas rules como admin). Auto ao abrir o bracket.
   if (isOrg && typeof window._createExtraGamesFromWaitlist === 'function') {
@@ -364,6 +377,18 @@ function renderBracket(container, tournamentId, isInline) {
   // Waitlist panel — shown at the end of every bracket view (Liga/Suíço/Grupos/Monarch/Elim)
   const standbyHtml = _renderStandbyPanel(t, isOrg);
 
+  // Banner: W.O. onde nenhum suplente presente atende a categoria — o organizador escolhe
+  // quem assume (ou dá W.O. ao time). Persistente até resolver (o dialog pode ser fechado).
+  var _subChoiceBanner = '';
+  if (isOrg && Array.isArray(t.woSubChoices) && t.woSubChoices.some(function (x) { return x && !x.resolved; })) {
+    var _nPend = t.woSubChoices.filter(function (x) { return x && !x.resolved; }).length;
+    _subChoiceBanner = '<div style="margin:0 0 1rem;padding:13px 16px;background:linear-gradient(135deg,rgba(251,191,36,0.16),rgba(239,68,68,0.12));border:1px solid rgba(251,191,36,0.5);border-radius:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+      '<span style="font-size:1.3rem;">⚠️</span>' +
+      '<div style="flex:1;min-width:180px;font-size:0.86rem;color:var(--text-bright);line-height:1.4;">' + _nPend + ' substituição(ões) de W.O. aguardando: nenhum suplente presente atende a categoria.</div>' +
+      '<button type="button" onclick="window._woShowSubChoiceDialog(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" class="btn" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:800;border:none;border-radius:10px;padding:9px 16px;font-size:0.85rem;cursor:pointer;flex-shrink:0;">Definir substituto</button>' +
+    '</div>';
+  }
+
   // v2.4.30: banner de convite pra substituir num grupo (W.O.) — aparece pro
   // jogador convidado aceitar/recusar no topo do bracket da Liga.
   var _ligaInviteBanner = (typeof window._ligaInviteBannerHtml === 'function') ? window._ligaInviteBannerHtml(t) : '';
@@ -441,7 +466,7 @@ function renderBracket(container, tournamentId, isInline) {
         : '<div style="flex:1;min-width:0;">' + _currentContent + '</div>';
       var _bodyWrap = '<div style="display:flex;align-items:flex-start;gap:10px;">' + _prevBtn + _revealBody + '</div>';
 
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + _nextBanner + _bodyWrap;
+      container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + progressBarHtml + _nextBanner + _bodyWrap;
       _applyMyMatchesFilter();
       return;
     }
@@ -476,14 +501,14 @@ function renderBracket(container, tournamentId, isInline) {
     // usa. Sem ele, a fase classificatória fechava 100% mas o botão "Avançar" nunca aparecia
     // (banner era calculado na linha ~402 e descartado). Os outros ramos (Liga 428, grupos 436)
     // já o inseriam; só este esquecia.
-    container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml);
+    container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml);
     _applyMyMatchesFilter();
     return;
   }
 
   // ── Liga / Suíço (Liga inclui antigo Ranking) ──────────────────────────────
   if (isLiga || isSuico) {
-    container.innerHTML = headerHtml + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml, { standbyHtml: standbyHtml });
+    container.innerHTML = headerHtml + _subChoiceBanner + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml, { standbyHtml: standbyHtml });
     _applyMyMatchesFilter();
     return;
   }
@@ -491,7 +516,7 @@ function renderBracket(container, tournamentId, isInline) {
   // ── Fase de Grupos ─────────────────────────────────────────────────────────
   if (isGrupos && t.groups && t.groups.length > 0) {
     if (t.currentStage === 'groups') {
-      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml;
+      container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml;
       _applyMyMatchesFilter();
       return;
     }
@@ -522,7 +547,7 @@ function renderBracket(container, tournamentId, isInline) {
   // (see renderSingleElimBracket / renderDoubleElimBracket). No separate card.
   try {
     if (isDupla) {
-      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
+      container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
     } else {
       container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult, standbyHtml);
     }
@@ -785,8 +810,20 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   }).join('');
 
   // Cards DUPLA FORMADA (teal) — 2 pessoas + Desfazer.
+  // v1.2.55: nome de CADA membro pelo SEU uid (cânone: identidade é uid; nome vem do perfil
+  // AO VIVO). O `pXName` guardado é APENAS fallback do guest sem conta (ex.: tonho). Antes o
+  // card fazia String(p.p2Name) cru → quando a entrada TEM uid o nome é stripado no save, então
+  // p2Name vinha undefined e virava a string "undefined" (Leila, com uid, aparecia assim).
+  var _ljMemberName = function (uid, stored) {
+    var s = (stored == null) ? '' : String(stored);
+    if (typeof window._displayNameForUid === 'function') {
+      var r = window._displayNameForUid(uid || '', s);
+      if (r) return String(r).trim();
+    }
+    return s.trim();
+  };
   var duplasHtml = _duplas.map(function (p) {
-    var m1 = String(p.p1Name).trim(), m2 = String(p.p2Name).trim();
+    var m1 = _ljMemberName(p.p1Uid, p.p1Name), m2 = _ljMemberName(p.p2Uid, p.p2Name);
     var desfazer = isOrg
       ? '<button type="button" class="btn btn-danger btn-micro" onclick="event.stopPropagation();window._splitLateDupla(\'' + tIdSafe + '\',\'' + _sa(_nm(p)) + '\')" style="min-height:0;height:26px;padding:0 10px;font-size:0.68rem;font-weight:800;white-space:nowrap;">↩️ Desfazer</button>'
       : '';
@@ -831,11 +868,27 @@ window._formLateJoinDupla = function (tId, src, tgt) {
   };
   var a = _pull(src), b = _pull(tgt);
   if (!a || !b) { if (a) { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; t.standbyParticipants.push(a); } if (b) { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; t.standbyParticipants.push(b); } return; }
-  var an = (window._pName ? window._pName(a, '') : (a.displayName || a.name || '')), bn = (window._pName ? window._pName(b, '') : (b.displayName || b.name || ''));
+  // v1.2.55: nunca gravar undefined em pXName. Com uid o nome é stripado no save e resolvido
+  // do perfil ao vivo no render (_ljMemberName). Sem uid (guest, ex.: tonho) o nome É a
+  // identidade → guarda. `|| ''` evita o "undefined" que aparecia quando o cache estava frio.
+  var an = ((window._pName ? window._pName(a, '') : (a.displayName || a.name || '')) || (typeof a === 'object' ? (a.displayName || a.name) : a) || '');
+  var bn = ((window._pName ? window._pName(b, '') : (b.displayName || b.name || '')) || (typeof b === 'object' ? (b.displayName || b.name) : b) || '');
   if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+  // v1.2.45: CARREGA o nº de inscrição de cada um pra dentro da dupla (p1Seq/p2Seq).
+  // CÂNONE (dono): o número é da PESSOA e a acompanha SEMPRE — formar dupla (manual ou
+  // sorteio) e desfazer NÃO mexem nele; só a saída de um inscrito renumera (aí o 3º vira
+  // 2º). Sem isto, o seq sumia aqui, `_ensureEnrollSeqs` inventava um novo na hora de
+  // renderizar, e o "Desfazer dupla" devolvia fielmente esse número INVENTADO — foi assim
+  // que uma simulação desfeita embaralhou os 20 números do "Duplas Mistas Sorteadas".
+  // Os outros dois caminhos de formação (_formDuplaByUids e o merge do sorteio) já
+  // preservam desde a v2.7.97; este era o que faltava.
+  if (window._ensureEnrollSeqs) window._ensureEnrollSeqs(t);
+  var _sqA = (typeof a === 'object' && a && a.enrollSeq != null) ? a.enrollSeq : null;
+  var _sqB = (typeof b === 'object' && b && b.enrollSeq != null) ? b.enrollSeq : null;
   t.standbyParticipants.push({
     p1Name: an, p1Uid: (typeof a === 'object' ? (a.uid || '') : ''),
     p2Name: bn, p2Uid: (typeof b === 'object' ? (b.uid || '') : ''),
+    p1Seq: _sqA, p2Seq: _sqB,
     displayName: an + ' / ' + bn, name: an + ' / ' + bn, _lateJoin: true
   });
   t.updatedAt = new Date().toISOString();
@@ -1061,13 +1114,15 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       !(p && Array.isArray(p.participants) && p.participants.length) &&
       name.indexOf('/') === -1 &&
       !(window._isPlaceholderName && window._isPlaceholderName(name)));
-    const _phDragHandle = (isOrg && _isSoloRealLate)
-      ? `<span data-ph-drag="${name.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" data-ph-uid="${String(_pUid).replace(/"/g, '&quot;')}" title="Arraste sobre uma vaga (Jogador NN) na chave para ocupá-la" style="cursor:grab;touch-action:none;font-size:1.05rem;color:#94a3b8;flex-shrink:0;user-select:none;-webkit-user-select:none;padding:0 2px;line-height:1;">⠿</span>`
+    // v1.2.31 (dono): o card INTEIRO é a área de arrasto — sem ícone de handle. Card nenhum
+    // no app anuncia arrasto com "pontinhos"; ter só aqui quebra o padrão e não ajuda.
+    // Os data-attrs (que o _wirePlaceholderDnD lê) vão no próprio card, abaixo.
+    const _phDragAttrs = (isOrg && _isSoloRealLate)
+      ? `data-ph-drag="${name.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" data-ph-uid="${String(_pUid).replace(/"/g, '&quot;')}" title="Arraste sobre uma vaga (Jogador NN) na chave para ocupá-la" `
       : '';
 
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)'};border-radius:10px;border-left:4px solid ${isNext ? '#f59e0b' : 'rgba(255,255,255,0.08)'};${dimAbsent ? 'opacity:0.5;' : ''}">
-        ${_phDragHandle}
+      <div ${_phDragAttrs}style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)'};border-radius:10px;border-left:4px solid ${isNext ? '#f59e0b' : 'rgba(255,255,255,0.08)'};${dimAbsent ? 'opacity:0.5;' : ''}${_phDragAttrs ? 'cursor:grab;touch-action:none;' : ''}">
         <div style="width:26px;height:26px;border-radius:50%;background:${isNext ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.08)'};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;color:${isNext ? '#000' : '#94a3b8'};flex-shrink:0;">${i + 1}</div>
         <span style="font-weight:600;font-size:0.88rem;color:${isNext ? '#fbbf24' : '#94a3b8'};flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">${name}${isNext && _policy === 'locked' ? ' <span style="font-size:0.62rem;font-weight:700;color:#fbbf24;background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>' : ''}</span>
         <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAb ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}"><input type="checkbox" ${mc ? 'checked' : ''} ${isAb ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${_tIdSafe}', '${safeName}');"`}><span class="toggle-slider"></span></label>
@@ -1904,46 +1959,10 @@ window._phaseGameOffset = function (t, phaseIndex) {
 // de cada fase: Dupla Elim intercala upper/lower por rodada + grand no fim; senão tiers na
 // ordem gold→silver→main→line3→line4→(extras), colunas por rodada asc, 3º-lugar ANTES da
 // final, grande-final por último. BYEs não consomem número (igual ao render).
-// v4.4.69 FONTE ÚNICA Rei/Rainha (schema, sem gambiarra): o jogo mora UMA vez em
-// round.matches. Os grupos guardam só `matchIds` — o Firestore NUNCA mais grava
-// cópia do jogo (o fold em saveTournament/mutateTournament/_saveToCache remove
-// group.matches do payload). Esta função HIDRATA a leitura: reconstrói
-// group.matches como REFERÊNCIAS aos objetos de round.matches (o MESMO objeto,
-// nunca cópia) — divergência é impossível por construção, sem sync perpétuo.
-// Idempotente. MIGRA docs legados com group.matches embutido: dobra em matchIds,
-// garante o objeto no plano (fundindo resultado se só a cópia do grupo tinha) e
-// relinka. Roda no ingest (onSnapshot/cache), no topo do render e na transação.
-window._hydrateMonarchGroups = function (t) {
-  if (!t || !Array.isArray(t.rounds)) return t;
-  t.rounds.forEach(function (rd) {
-    if (!rd || !Array.isArray(rd.monarchGroups) || !rd.monarchGroups.length) return;
-    if (!Array.isArray(rd.matches)) rd.matches = [];
-    var byId = {};
-    rd.matches.forEach(function (m) { if (m && m.id != null) byId[String(m.id)] = m; });
-    rd.monarchGroups.forEach(function (g) {
-      if (!g) return;
-      // (a) LEGADO: cópias embutidas sem matchIds → dobra em matchIds + migra pro plano.
-      if (!Array.isArray(g.matchIds) && Array.isArray(g.matches)) {
-        g.matchIds = [];
-        g.matches.forEach(function (gm) {
-          if (!gm || gm.id == null) return;
-          g.matchIds.push(String(gm.id));
-          var flat = byId[String(gm.id)];
-          if (!flat) { rd.matches.push(gm); byId[String(gm.id)] = gm; } // só no grupo → adota no plano
-          else if (flat !== gm && gm.winner && !flat.winner) {          // placar salvo só na cópia → funde
-            flat.winner = gm.winner; flat.scoreP1 = gm.scoreP1; flat.scoreP2 = gm.scoreP2; flat.draw = gm.draw;
-            if (!flat.startedAt) flat.startedAt = gm.startedAt; if (!flat.resultAt) flat.resultAt = gm.resultAt;
-          }
-        });
-      }
-      // (b) reconstrói group.matches como REFERÊNCIAS do plano (fonte única).
-      if (Array.isArray(g.matchIds)) {
-        g.matches = g.matchIds.map(function (id) { return byId[String(id)]; }).filter(Boolean);
-      }
-    });
-  });
-  return t;
-};
+// _hydrateMonarchGroups saiu daqui (v1.2.25) → js/views/bracket-model.js, ao lado do
+// _foldMonarchGroups: fold (grava só matchIds) e hydrate (relê como refs) são O PAR do
+// mesmo schema e agora moram juntos. O servidor precisa do hydrate no boundary de escrita
+// e bracket.js é render — não carrega em Node. Chamadores seguem em window._hydrateMonarchGroups.
 
 window._assignGlobalGameNumbers = function (t) {
   if (!t) return;
@@ -3294,7 +3313,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
           <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
           ${readyBadge}
         </div>
-        <div id="header-btns-${m.id}" style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;">${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}</div>
+        <div id="header-btns-${m.id}" class="btn-row" style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;">${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}</div>
       </div>`;
   }
 
@@ -3316,8 +3335,22 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ${vsRow}
       ${p2Row}
       ${winnerBadge}
-      ${(typeof window._schCardChip === 'function') ? window._schCardChip(t, m) : ''}
+      ${_cardFooterChips(t, m)}
     </div>`;
+}
+
+// Rodapé do card: as ações de PARTICIPANTE sobre o próprio jogo, lado a lado.
+// Hoje são duas irmãs — "📅 Combinar jogo" (enquete de horário dentro do app) e
+// "💬 Criar/Abrir grupo" (o grupo do WhatsApp onde o jogo é de fato combinado).
+// Não são redundantes: a enquete decide o horário com dado estruturado; o grupo é
+// a conversa. Ambas obedecem ao MESMO gate (jogador do confronto, rodada atual,
+// jogo sem resultado) — fonte única nos helpers do schedule-poll.js.
+// Os dois chips retornam elemento PURO; a centralização é aqui.
+function _cardFooterChips(t, m) {
+  var sch = (typeof window._schCardChip === 'function') ? window._schCardChip(t, m) : '';
+  var wa = (typeof window._waGrpCardChip === 'function') ? window._waGrpCardChip(t, m) : '';
+  if (!sch && !wa) return '';
+  return '<div class="btn-row" style="display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + sch + wa + '</div>';
 }
 // v2.3.46: exposto pra que _saveResultInline possa re-renderizar UM card
 // individual in-place (sem re-render do bracket inteiro), preservando scroll,
@@ -3474,15 +3507,18 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var statusBadge = groupDone ? '<span style="font-size:0.65rem;padding:2px 8px;border-radius:6px;background:rgba(16,185,129,0.15);color:#4ade80;font-weight:700;">' + _t('bracket.complete') + '</span>' : '';
 
     var _schGrpBtn2 = (typeof window._schGroupChip === 'function') ? window._schGroupChip(t, matches) : '';
+    // Rei/Rainha: o grupo do WhatsApp é ÚNICO por GRUPO (3 jogos, mesmas 4 pessoas),
+    // igual à enquete. Fica ao lado dela no cabeçalho.
+    var _waGrpBtn2 = (typeof window._waGrpGroupChip === 'function') ? window._waGrpGroupChip(t, matches) : '';
     // v4.1.39: controle de W.O. canônico do grupo (botão W.O. → folga/Jogador X, ou pílula + reverter).
     var _woCtrlM = (typeof window._monWoControlHtml === 'function') ? window._monWoControlHtml(t.id, _pIdxM, sg.name, groupDone) : '';
     // Controle de PRESENÇA do grupo (entre Combinar e W.O.) — helper ÚNICO compartilhado
     // com o render de grupo Rei/Rainha da rota Liga (t.rounds[].monarchGroups).
     var _grpArrived = window._monGroupArrivedBtn(t, matches, groupDone);
     html += '<div data-group-box="1" style="scroll-margin-top:120px;background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : '#fbbf24') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
-      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
+      '<div class="btn-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
         '<h3 style="margin:0;font-size:1.1rem;color:var(--text-bright);flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
-        (statusBadge || '') + _schGrpBtn2 + _grpArrived + _woCtrlM +
+        (statusBadge || '') + _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
       '</div>' +
       // v4.3.12 (pedido do dono): a tabela de classificação do grupo fica SEMPRE ACIMA das
       // chaves (mesmo padrão de renderGroupStage). Antes vinha depois dos cards de jogo.
@@ -4445,8 +4481,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // logo abaixo dela — a linha de botões fica limpa.
           var _grpArrivedL = (typeof window._monGroupArrivedBtn === 'function') ? window._monGroupArrivedBtn(t, g.matches, gDone) : '';
           var _schGrpBtn = (isMyGroup && typeof window._schGroupChip === 'function') ? window._schGroupChip(t, g.matches) : '';
+          var _waGrpBtn = (isMyGroup && typeof window._waGrpGroupChip === 'function') ? window._waGrpGroupChip(t, g.matches) : '';
           var _woActive = !!g.woAbsent;
-          var _rightCtrl = (_woActive ? '' : (_ligaCtrl || '')) + _grpArrivedL + _schGrpBtn;
+          var _rightCtrl = (_woActive ? '' : (_ligaCtrl || '')) + _grpArrivedL + _schGrpBtn + _waGrpBtn;
           var _woStateLine = (_woActive && _ligaCtrl)
             ? '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:-0.15rem 0 0.6rem;">' + _ligaCtrl + '</div>'
             : '';
@@ -4464,7 +4501,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') +
                 _monarchBadge +
               '</div>' +
-              (_rightCtrl ? '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">' + _rightCtrl + '</span>' : '') +
+              (_rightCtrl ? '<span class="btn-row" style="margin-left:auto;display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">' + _rightCtrl + '</span>' : '') +
             '</div>' +
             // Linha "Jogadores: …" REMOVIDA (pedido do dono — redundante: a classificação
             // do grupo já lista os 4). O ausente de W.O. segue sinalizado na linha de

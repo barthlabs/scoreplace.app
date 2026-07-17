@@ -985,15 +985,12 @@ window.deenrollCurrentUser = function (tId) {
                 var _savedParticipants = Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants || {}).slice();
                 // Remove from local state immediately
                 t.participants = _savedParticipants.filter(function(p) {
-                    // v3.0.76: uid-first + slot-aware — espelha deenrollParticipant (transação).
-                    // Sem isto, a dupla cujo p2 é o usuário (uid em p2Uid, displayName só do p1)
-                    // não saía no re-render otimista; só voltava no onSnapshot.
-                    if (typeof window._userMatchesParticipant === 'function') return !window._userMatchesParticipant(user, p);
-                    if (typeof p === 'string') return p !== user.email && p !== user.displayName;
-                    var pEmail = p.email || '';
-                    var pName = p.displayName || p.name || '';
-                    var pUid = p.uid || '';
-                    return !(pEmail === user.email || (user.uid && pUid === user.uid) || (pName && pName === user.displayName));
+                    // v1.2.2: UID ONLY — tem que ser o MESMO critério de deenrollParticipant
+                    // (a transação que roda logo abaixo). Enquanto isto casava por nome/e-mail
+                    // e a transação não, o otimista sumia com a entrada na tela e o onSnapshot
+                    // a trazia de volta — pior que não remover, porque parece que funcionou.
+                    // _participantUids cobre uid + p1Uid + p2Uid + sub-participants[].
+                    return window._participantUids(p).indexOf(user.uid) === -1;
                 });
 
                 // Show success and re-render immediately (no wait for network)
@@ -1005,7 +1002,7 @@ window.deenrollCurrentUser = function (tId) {
 
                 // --- Background: Firestore transaction for consistency ---
                 if (window.FirestoreDB && typeof window.FirestoreDB.deenrollParticipant === 'function') {
-                    window.FirestoreDB.deenrollParticipant(tId, user.email, user.displayName, user.uid).then(function(result) {
+                    window.FirestoreDB.deenrollParticipant(tId, user.uid).then(function(result) {
                         if (result && !result.notFound) {
                             t.participants = result.participants;
                         }
@@ -1450,7 +1447,7 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
     '<div style="background:var(--bg-card,#1e293b);border-radius:16px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,0.5);margin:auto;">' +
       '<div style="padding:14px 16px;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));display:flex;justify-content:space-between;align-items:center;">' +
         '<span style="font-weight:700;font-size:0.95rem;color:var(--text-bright,#f1f5f9);">'+title+'</span>' +
-        '<button onclick="document.getElementById(\'add-participant-overlay\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1;">×</button>' +
+        /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="document.getElementById(\'add-participant-overlay\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1;">×</button>' +
       '</div>' +
       '<div style="padding:16px;">' +
         '<div style="position:relative;">' +
@@ -1460,7 +1457,7 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
         '<div id="ap-dropdown" style="display:none;border:1px solid var(--border-color,rgba(255,255,255,0.12));border-radius:8px;margin-top:4px;max-height:240px;overflow-y:auto;background:var(--bg-card,#1e293b);"></div>' +
         '<div id="ap-selected" style="display:none;margin-top:8px;padding:8px 12px;border-radius:8px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);align-items:center;gap:8px;">' +
           '<span id="ap-sel-text" style="font-size:0.88rem;color:var(--text-bright);flex:1;font-weight:600;"></span>' +
-          '<button onclick="window._apClear()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.9rem;padding:0;">×</button>' +
+          '<button type="button" class="cancel-x-btn" title="Limpar" onclick="window._apClear()" style="--cx-size:18px;">✕</button>' +
         '</div>' +
         '<div style="display:flex;gap:8px;margin-top:14px;">' +
           '<button onclick="document.getElementById(\'add-participant-overlay\').remove()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;">Cancelar</button>' +

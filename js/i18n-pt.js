@@ -635,7 +635,10 @@ window._translations['pt'] = {
   'profile.notifChannels': 'Canais de notificação:',
   'profile.notifPlatform': 'Plataforma',
   'profile.notifEmail': 'E-mail',
-  'profile.notifWhatsApp': 'WhatsApp',
+  // v1.2.9: o WhatsApp não é mais canal de notificação (API morta) — o toggle agora
+  // é preferência de CONTATO (o botão wa.me que abre conversa com você).
+  'profile.contactWhatsApp': 'Aceito contato por WhatsApp',
+  'profile.contactWhatsAppHint': 'Ligado, quem precisa falar com você (organizador, participantes) abre o WhatsApp num toque. Desligado, falam por e-mail.',
   'profile.labelLocations': 'Locais de preferência para jogar',
   'profile.locationsDesc': 'Adicione locais onde costuma jogar. Você será notificado de torneios próximos.',
   'profile.searchLocation': 'Buscar endereço, local ou CEP...',
@@ -1815,6 +1818,10 @@ window._translations['pt'] = {
   'create.rankingTypeHint': 'Personalizado: cada participante recebe colocação específica. Em blocos: eliminados na mesma fase compartilham a colocação.',
   'create.tiebreakerSection': 'Critérios de Desempate (arraste para reordenar)',
   'create.tiebreakerDesc': 'Os critérios serão aplicados na ordem abaixo. Arraste para alterar a prioridade.',
+  'create.tbResetBtn': 'Restaurar padrão',
+  'create.tbResetToast': 'Critérios de desempate restaurados pra ordem sugerida.',
+  'create.advResetBtn': 'Restaurar sugestão',
+  'create.advResetToast': 'Pontuação restaurada pros valores sugeridos.',
   'create.tbHeadToHead': 'Confronto Direto',
   'create.tbPointDiff': 'Saldo de Pontos',
   'create.tbWins': 'Número de Vitórias',

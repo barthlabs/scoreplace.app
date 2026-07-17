@@ -67,24 +67,11 @@ window.FirestoreDB = {
   // antiga do auto-draw) batia nessa regra. Defesa global aqui pega esse
   // padrão em qualquer campo, em qualquer profundidade — protege contra
   // futuras introduções acidentais e cobre docs legacy ainda em memória.
+  // Delega pro cânone em js/views/persist-core.js — a MESMA função que a Cloud Function
+  // do sorteio carrega (vendor/) antes de gravar. Uma implementação só, zero drift.
   _cleanUndefined(obj) {
-    if (obj === null || obj === undefined) return null;
-    if (Array.isArray(obj)) {
-      return obj.map(function(item) { return window.FirestoreDB._cleanUndefined(item); });
-    }
-    if (typeof obj === 'object' && obj.constructor === Object) {
-      var cleaned = {};
-      Object.keys(obj).forEach(function(key) {
-        if (obj[key] === undefined) return;
-        // Firestore rejeita keys com padrão `__xxx__` em qualquer field nested.
-        if (typeof key === 'string' && key.length >= 4 && key.indexOf('__') === 0 && key.lastIndexOf('__') === key.length - 2) {
-          return;
-        }
-        cleaned[key] = window.FirestoreDB._cleanUndefined(obj[key]);
-      });
-      return cleaned;
-    }
-    return obj;
+    return (typeof window !== 'undefined' && typeof window._cleanUndefined === 'function')
+      ? window._cleanUndefined(obj) : null;
   },
 
   // v4.4.70 FONTE ÚNICA Rei/Rainha: delega pro normalizador CANÔNICO em
@@ -102,65 +89,21 @@ window.FirestoreDB = {
 
   // ---- Tournaments ----
 
-  // Denormalized field `memberEmails[]` holds every email that has a
-  // relationship with the tournament (creator + organizer + active co-hosts +
-  // participants). A single `array-contains` query against this field
-  // replaces the current pattern of loading the entire collection at login
-  // and filtering client-side. Kept in sync on every write path below.
-  _computeMemberEmails(data) {
-    if (!data) return [];
-    var set = {};
-    var push = function(e) {
-      if (!e || typeof e !== 'string') return;
-      var norm = e.trim().toLowerCase();
-      if (norm) set[norm] = true;
-    };
-    push(data.creatorEmail);
-    push(data.organizerEmail);
-    if (Array.isArray(data.coHosts)) {
-      data.coHosts.forEach(function(ch) {
-        if (ch && ch.status === 'active') push(ch.email);
-      });
-    }
-    var parts = Array.isArray(data.participants) ? data.participants : [];
-    // v1.8.65: também considerar linkedEmails de cada participante
-    // (carregados do perfil do usuário se disponíveis)
-    parts.forEach(function(p) {
-      if (!p) return;
-      if (typeof p === 'string') {
-        // Name-only or team string ("Ana / Bruno") — no email to extract.
-        // A bare string that happens to be an email is rare but handled.
-        if (p.indexOf('@') > 0 && p.indexOf(' / ') === -1) push(p);
-        return;
-      }
-      push(p.email);
-      if (Array.isArray(p.participants)) {
-        p.participants.forEach(function(sub) { if (sub) push(sub.email); });
-      }
-    });
-    return Object.keys(set);
-  },
+  // v1.2.2: _computeMemberEmails REMOVIDA junto com o campo memberEmails[]. Identidade de
+  // membro é o uid (memberUids) — e-mail/telefone são ATRIBUTOS do perfil, resolvidos pelo
+  // uid (_emailForUid/_phoneForUid), nunca chave. O campo só sobrevivia como fallback, e
+  // fallback é rede de segurança pra código que não confia na própria identidade.
+  // Ver [[project_uid_primary_identity]] / [[project_orphan_uid_entries]].
 
   // Subset of memberEmails restricted to organizer-level principals —
   // creator, current organizer, active co-hosts. Used by Firestore rules to
   // authorize full-edit and delete operations in O(1). Participants never
   // appear here; only admins.
+  // Delega pro cânone em js/views/persist-core.js — a MESMA função que a Cloud Function
+  // do sorteio carrega (vendor/) antes de gravar. Uma implementação só, zero drift.
   _computeAdminEmails(data) {
-    if (!data) return [];
-    var set = {};
-    var push = function(e) {
-      if (!e || typeof e !== 'string') return;
-      var norm = e.trim().toLowerCase();
-      if (norm) set[norm] = true;
-    };
-    push(data.creatorEmail);
-    push(data.organizerEmail);
-    if (Array.isArray(data.coHosts)) {
-      data.coHosts.forEach(function(ch) {
-        if (ch && ch.status === 'active') push(ch.email);
-      });
-    }
-    return Object.keys(set);
+    return (typeof window !== 'undefined' && typeof window._computeAdminEmails === 'function')
+      ? window._computeAdminEmails(data) : [];
   },
 
   // v2.8.79: adminUids[] — UIDs dos principais de nível organizador (criador +
@@ -168,42 +111,21 @@ window.FirestoreDB = {
   // pode ter email '' (conta por telefone) → as regras precisam autorizar
   // edição/escrita por UID, não por email. Recomputa a cada save (encolhe
   // quando um co-host é removido — diferente de memberUids que nunca encolhe).
+  // Delega pro cânone em js/views/persist-core.js — a MESMA função que a Cloud Function
+  // do sorteio carrega (vendor/) antes de gravar. Uma implementação só, zero drift.
   _computeAdminUids(data) {
-    if (!data) return [];
-    var set = {};
-    var push = function(u) { if (u && typeof u === 'string' && u.length >= 4) set[u] = true; };
-    push(data.creatorUid);
-    if (Array.isArray(data.coHosts)) {
-      data.coHosts.forEach(function(ch) { if (ch && ch.status === 'active') push(ch.uid); });
-    }
-    return Object.keys(set);
+    return (typeof window !== 'undefined' && typeof window._computeAdminUids === 'function')
+      ? window._computeAdminUids(data) : [];
   },
 
   // v1.8.62: memberUids[] — UIDs de todos os participantes + organizador.
   // Permite que usuários phone-only (sem email) sejam identificados nas
   // regras do Firestore, onde authEmail() retorna '' para esses usuários.
+  // Delega pro cânone em js/views/persist-core.js — a MESMA função que a Cloud Function
+  // do sorteio carrega (vendor/) antes de gravar. Uma implementação só, zero drift.
   _computeMemberUids(data) {
-    if (!data) return [];
-    var set = {};
-    var push = function(u) {
-      if (!u || typeof u !== 'string' || u.length < 4) return;
-      set[u] = true;
-    };
-    push(data.creatorUid);
-    if (Array.isArray(data.coHosts)) {
-      data.coHosts.forEach(function(ch) { if (ch && ch.status === 'active') push(ch.uid); });
-    }
-    var parts = Array.isArray(data.participants) ? data.participants : [];
-    parts.forEach(function(p) {
-      if (!p || typeof p === 'string') return;
-      push(p.uid);
-      // Dupla formada: p1Uid e p2Uid
-      push(p.p1Uid); push(p.p2Uid);
-      if (Array.isArray(p.participants)) {
-        p.participants.forEach(function(sub) { if (sub) push(sub.uid); });
-      }
-    });
-    return Object.keys(set);
+    return (typeof window !== 'undefined' && typeof window._computeMemberUids === 'function')
+      ? window._computeMemberUids(data) : [];
   },
 
   async saveTournament(tourData, options) {
@@ -229,13 +151,12 @@ window.FirestoreDB = {
       // ENCOLHER a lista e fazer participantes sumirem do listener deles.
       delete cleanData.memberUids;
     } else {
-      // v1.8.96: nunca encolher memberEmails — merge com o que já existia
-      // em memória para não perder emails de participantes que têm uid mas
-      // não têm email no objeto participante (ex: duplas formadas por drag).
-      var _newEmails  = this._computeMemberEmails(cleanData);
-      var _prevEmails = Array.isArray(tourData.memberEmails) ? tourData.memberEmails : [];
-      var _mergedEmails = Array.from(new Set(_prevEmails.concat(_newEmails)));
-      cleanData.memberEmails = _mergedEmails;
+      // v1.2.2: memberEmails NÃO é mais escrito — identidade de membro é o uid (memberUids).
+      // O campo saiu do schema; quem precisa do e-mail de alguém resolve pelo uid no perfil
+      // (_emailForUid). O `delete` não é decorativo: o doc carregado do banco ainda TRAZ o
+      // campo, e sem isto o save o devolveria intacto — ele nunca sairia dos documentos.
+      // Ver [[project_uid_primary_identity]].
+      delete cleanData.memberEmails;
       cleanData.adminEmails  = this._computeAdminEmails(cleanData);
       cleanData.adminUids    = this._computeAdminUids(cleanData); // v2.8.79: co-host por uid
       // v1.9.84: memberUids TAMBÉM nunca encolhe — mesma lógica do memberEmails.
@@ -351,7 +272,6 @@ window.FirestoreDB = {
         var n = Array.isArray(next) ? next : [];
         return Array.from(new Set(p.concat(n)));
       };
-      data.memberEmails = _union(data.memberEmails, self._computeMemberEmails(data));
       data.adminEmails  = self._computeAdminEmails(data);
       data.adminUids    = self._computeAdminUids(data);
       data.memberUids   = _union(data.memberUids, self._computeMemberUids(data));
@@ -466,7 +386,57 @@ window.FirestoreDB = {
 
   // Atomic enrollment — uses Firestore transaction to prevent race conditions
   // where concurrent enrollments overwrite each other's participants array
+  // Fala o protocolo callable NA MÃO (POST {data} → {result}|{error}), igual
+  // window._callDrawRound. NÃO usa httpsCallable de propósito: com o usuário
+  // LOGADO o SDK compat tenta montar o token FCM antes de enviar e a promise
+  // REJEITA sem a requisição sair ("Messaging: …") — a CF nem é tocada. Ver
+  // js/views/tournaments-draw.js (_callDrawRound) e v1.3.86.
+  async _callFn(name, payload) {
+    var fb = window.firebase;
+    var user = fb && fb.auth && fb.auth().currentUser;
+    if (!user) throw Object.assign(new Error('login necessário'), { code: 'functions/unauthenticated' });
+    var pid = '';
+    try { pid = fb.app().options.projectId; } catch (e) {}
+    if (!pid) throw Object.assign(new Error('App não inicializado'), { code: 'functions/internal' });
+    var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + name;
+    var tok = await user.getIdToken();
+    var r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+      body: JSON.stringify({ data: payload })
+    });
+    var j = await r.json().catch(function () { return {}; });
+    if (j && j.error) {
+      var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
+      throw Object.assign(new Error(j.error.message || 'Falha'), { code: 'functions/' + (st || 'internal') });
+    }
+    if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { code: 'functions/internal' });
+    return (j && j.result) || {};
+  },
+
+  // Inscrição via Cloud Function (Admin SDK, servidor) com FALLBACK pra transação
+  // do cliente. A CF não passa pela fila IndexedDB quebrada do SDK 10.8.1 (bug
+  // fatal no iOS Safari que fazia a inscrição falhar) nem pelas rules. O fallback
+  // preserva o comportamento anterior se a CF estiver fora — e é IDEMPOTENTE:
+  // se a CF gravou mas a resposta se perdeu, a transação relê e o "já inscrito"
+  // pega (sem duplicar). Ver [[project_firestore_assertion_bug]].
   async enrollParticipant(tournamentId, participantObj, extraUpdates) {
+    try {
+      return await this._callFn('enrollParticipant', {
+        tournamentId: String(tournamentId),
+        participantObj: participantObj,
+        extraUpdates: extraUpdates || null
+      });
+    } catch (e) {
+      if (window._warn) window._warn('[enrollParticipant] CF falhou (' + ((e && e.code) || e) + ') — fallback pra transação cliente');
+      if (typeof window._captureException === 'function') {
+        window._captureException(e, { area: 'enrollParticipant-cf-fallback', tournamentId: String(tournamentId), code: e && e.code });
+      }
+      return this._enrollParticipantTx(tournamentId, participantObj, extraUpdates);
+    }
+  },
+
+  async _enrollParticipantTx(tournamentId, participantObj, extraUpdates) {
     if (!this.db) throw new Error('Firestore not initialized');
     // Guard: rejeitar participante completamente sem identificador.
     // Evita objetos fantasmas {name:null,email:null,displayName:null} causados
@@ -569,8 +539,7 @@ window.FirestoreDB = {
         ? window._stripStoredNamesForUidEntries(participants) : participants;
       var updateData = {
         participants: _persistParts,
-        memberEmails: self._computeMemberEmails(_enrollData),
-        memberUids:   self._computeMemberUids(_enrollData)
+        memberUids:   self._computeMemberUids(_enrollData)   // v1.2.2: só uid
       };
       if (extraUpdates) {
         Object.keys(extraUpdates).forEach(function(k) {
@@ -606,7 +575,24 @@ window.FirestoreDB = {
 
   // Atomic deenrollment — prevents race conditions where deenroll overwrites
   // concurrent enrollments by other users
-  async deenrollParticipant(tournamentId, userEmail, userDisplayName, userUid) {
+  // v1.2.2: assinatura UID ONLY — userEmail/userDisplayName saíram porque a identidade é o
+  // uid; parâmetro que ninguém lê é convite pra alguém "usar como fallback" de novo.
+  async deenrollParticipant(tournamentId, userUid) {
+    try {
+      return await this._callFn('deenrollParticipant', {
+        tournamentId: String(tournamentId),
+        userUid: String(userUid || '')
+      });
+    } catch (e) {
+      if (window._warn) window._warn('[deenrollParticipant] CF falhou (' + ((e && e.code) || e) + ') — fallback pra transação cliente');
+      if (typeof window._captureException === 'function') {
+        window._captureException(e, { area: 'deenrollParticipant-cf-fallback', tournamentId: String(tournamentId), code: e && e.code });
+      }
+      return this._deenrollParticipantTx(tournamentId, userUid);
+    }
+  },
+
+  async _deenrollParticipantTx(tournamentId, userUid) {
     if (!this.db) throw new Error('Firestore not initialized');
     var docRef = this.db.collection('tournaments').doc(String(tournamentId));
     var self = this;
@@ -616,32 +602,28 @@ window.FirestoreDB = {
       var data = doc.data();
       var participants = Array.isArray(data.participants) ? data.participants : (data.participants ? Object.values(data.participants) : []);
 
-      var _emailLc = userEmail ? String(userEmail).toLowerCase() : '';
+      // v1.2.2: UID ONLY. Identidade de quem sai é o uid — e só. Os fallbacks por e-mail e
+      // por NOME que moravam aqui eram rede de segurança pra writers que não gravavam uid;
+      // o preço era casar por nome (homônimo-inseguro: dois "Maira" e sai a errada) e por
+      // e-mail (que a pessoa troca). Quem chama esta função é SEMPRE alguém logado saindo
+      // (botão "Desinscrever-se" e exclusão de conta) — logado tem uid, ponto. Inscrito sem
+      // uid é guest informal, que não loga e é removido pelo organizador por outro caminho.
+      // _participantUids cobre TODO slot onde uma pessoa existe: uid, p1Uid, p2Uid e
+      // sub-participants[]. Remove a entrada inteira quando bate — dupla não joga com uma
+      // pessoa só. Ver [[project_uid_primary_identity]] / [[project_orphan_uid_entries]].
+      if (!userUid) throw new Error('deenrollParticipant: uid obrigatório (identidade é uid)');
+      var _pUids = (typeof window !== 'undefined' && window._participantUids)
+        ? window._participantUids
+        : function (p) {
+            var out = [];
+            if (!p || typeof p !== 'object') return out;
+            [p.uid, p.p1Uid, p.p2Uid].forEach(function (u) { if (u) out.push(u); });
+            if (Array.isArray(p.participants)) p.participants.forEach(function (s) { if (s && s.uid) out.push(s.uid); });
+            return out;
+          };
       var newParticipants = participants.filter(function(p) {
-        if (typeof p === 'string') {
-          if (p.indexOf(' / ') !== -1) return true; // keep teams (string legada "A / B")
-          return p !== userEmail && p !== userDisplayName;
-        }
-        // v3.0.x: IDENTIDADE POR SLOT, uid-first — espelha enrollParticipant.
-        // A dupla formada por aceite grava p1Uid/p2Uid/p1Name/p2Name com
-        // displayName = SÓ o p1 (ex.: "Kelly Barth", sem "/"). Sem checar os
-        // slots aqui, o p2 (ex.: Rodrigo) clicava "Desinscrever-se" e NADA
-        // acontecia (filtro nunca casava → notFound). Remove a dupla inteira
-        // quando qualquer slot bate — a dupla não joga com uma pessoa só.
-        if (userUid && ((p.uid && p.uid === userUid) || (p.p1Uid && p.p1Uid === userUid) || (p.p2Uid && p.p2Uid === userUid))) return false;
-        if (_emailLc) {
-          if (p.email && String(p.email).toLowerCase() === _emailLc) return false;
-          if (p.p1Email && String(p.p1Email).toLowerCase() === _emailLc) return false;
-          if (p.p2Email && String(p.p2Email).toLowerCase() === _emailLc) return false;
-        }
-        // Nome como ÚLTIMO fallback (conta legada/sem uid).
-        if (userDisplayName) {
-          if (p.displayName && p.displayName === userDisplayName) return false;
-          if (p.name && p.name === userDisplayName) return false;
-          if (p.p1Name && p.p1Name === userDisplayName) return false;
-          if (p.p2Name && p.p2Name === userDisplayName) return false;
-        }
-        return true;
+        if (!p || typeof p !== 'object') return true;  // string legada = guest, não tem uid
+        return _pUids(p).indexOf(userUid) === -1;
       });
 
       if (newParticipants.length === participants.length) {
@@ -649,9 +631,13 @@ window.FirestoreDB = {
       }
 
       var _deenrollData = Object.assign({}, data, { participants: newParticipants });
+      // v1.2.2: só memberUids. memberEmails NÃO é recomputado — quem decide quem é membro é
+      // o uid (as rules leem memberUids; o e-mail só valia como fallback de torneio legado
+      // sem memberUids, coisa que não existe mais). Recomputar aqui era, aliás, o ÚNICO ponto
+      // que encolhia memberEmails — o saveTournament nunca encolhe, então os dois já viviam
+      // divergentes. Ver [[project_uid_primary_identity]].
       transaction.update(docRef, {
         participants: newParticipants,
-        memberEmails: self._computeMemberEmails(_deenrollData),
         memberUids:   self._computeMemberUids(_deenrollData)
       });
       return { notFound: false, participants: newParticipants };
@@ -696,13 +682,12 @@ window.FirestoreDB = {
   // `memberEmails` field. Replaces `loadAllTournaments()` at login once the
   // backfill is complete and the composite index is live. Kept side-by-side
   // for now so the swap is a one-line change.
-  async loadMyTournaments(email) {
-    if (!this.db || !email) return [];
-    var norm = String(email).trim().toLowerCase();
-    if (!norm) return [];
+  // v1.2.2: UID ONLY (era loadMyTournaments(email) → where memberEmails).
+  async loadMyTournaments(uid) {
+    if (!this.db || !uid) return [];
     try {
       var snap = await this.db.collection('tournaments')
-        .where('memberEmails', 'array-contains', norm)
+        .where('memberUids', 'array-contains', uid)
         .get();
       var tournaments = [];
       snap.forEach(function(doc) {
@@ -1394,70 +1379,12 @@ window.FirestoreDB = {
 
   // ---- WhatsApp Queue (for future Cloud Function integration) ----
 
-  // Enfileira uma notificação de WhatsApp por TEMPLATE (Meta Cloud API).
-  //
-  // Por que não existe mais texto livre: o Evolution (WhatsApp Web) aceitava
-  // qualquer string, mas o Cloud API só permite texto livre DENTRO da janela de
-  // 24h aberta pelo usuário. Notificação nossa é business-initiated → é template
-  // aprovado ou nada. Ver memória `project_whatsapp_meta_2fa_block`.
-  //
-  // recipients: [{ phone, params: [...] }] — params PERSONALIZADOS por pessoa
-  // (o {{1}} de todos os templates é o nome de quem recebe), por isso não dá pra
-  // mandar `phones[]` com uma mensagem só.
-  // urlSuffix: sufixo do botão URL (base fixa `https://scoreplace.app/` no template).
-  async queueWhatsAppTemplate(recipients, template, urlSuffix) {
-    if (!this.db || !template) return;
-    var list = (recipients || []).filter(function (r) { return r && r.phone; });
-    if (!list.length) return;
-    if (window.SCOREPLACE_ENV === 'staging') { try { window._warn && window._warn('[staging] WhatsApp suprimido (queueWhatsAppTemplate)'); } catch(_e){} return; }
-    try {
-      await this.db.collection('whatsapp_queue').add({
-        template: template,
-        urlSuffix: urlSuffix || '#dashboard',
-        recipients: list.map(function (r) {
-          return { phone: String(r.phone), params: (r.params || []).map(window._waParam) };
-        }),
-        createdAt: new Date().toISOString(),
-        status: 'pending'
-      });
-    } catch (e) {
-      window._warn('Erro ao enfileirar WhatsApp:', e);
-    }
-  },
-
-  // Digest de WhatsApp (tipos com política 'agrupado' no catálogo): acumula 1 linha
-  // por evento numa fila; a Cloud Function flushWhatsAppDigest junta tudo do mesmo
-  // telefone numa ÚNICA mensagem a cada ~1h (reduz volume/custo). Espelha queueNotifEmail.
-  // opts: { tournamentUrl, tournamentName, names? }
-  // names[i] casa com phones[i] — o flush usa pra montar o "Olá, {{1}}" do template.
-  async queueWhatsAppDigest(phones, line, opts) {
-    if (!this.db || !phones || !phones.length) return;
-    if (window.SCOREPLACE_ENV === 'staging') { try { window._warn && window._warn('[staging] WhatsApp suprimido (queueWhatsAppDigest)'); } catch(_e){} return; }
-    var now = Date.now();
-    // v1.1.30: janela de 24h (era 1h). Inscrição de terceiro não é urgente pro
-    // organizador e o Cloud API cobra POR ENTREGA — 1 resumo/dia no lugar de até
-    // 24/dia é o maior corte de custo disponível sem perder informação.
-    var mins = 24 * 60;
-    opts = opts || {};
-    try {
-      for (var i = 0; i < phones.length; i++) {
-        if (!phones[i]) continue;
-        await this.db.collection('whatsapp_digest_queue').add({
-          phone: phones[i],
-          line: line || '',
-          tournamentUrl: opts.tournamentUrl || '',
-          // v1.1.30: o flush monta um TEMPLATE (sp_inscricoes_resumo) e precisa do
-          // nome de quem recebe + do torneio pra preencher {{1}} e {{2}}.
-          toName: (opts.names && opts.names[i]) || '',
-          tournamentName: opts.tournamentName || '',
-          createdAt: now,
-          flushAtMs: now + mins * 60 * 1000
-        });
-      }
-    } catch (e) {
-      window._warn('Erro ao enfileirar WhatsApp digest:', e);
-    }
-  },
+  // v1.2.9: queueWhatsAppTemplate + queueWhatsAppDigest REMOVIDOS. O número foi
+  // banido, a apelação negada e o portfólio Meta está morto — não há canal pra
+  // onde enfileirar. As coleções whatsapp_queue/whatsapp_digest_queue saíram
+  // junto (rules + Cloud Functions). O WhatsApp que sobrou no produto é 100%
+  // cliente: link wa.me e grupo criado pelo usuário (js/views/wa-group.js).
+  // Ver project_whatsapp_meta_2fa_block.
 
   // ---- Templates ----
 

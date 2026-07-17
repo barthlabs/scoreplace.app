@@ -107,55 +107,7 @@ window.NOTIF_CATALOG = {
   casual_link_rejected:        { level: 'all',         icon: '❌', color: 'var(--text-muted)' }
 };
 
-// ========================================
-// Política de entrega por WhatsApp por tipo — DECISÃO DO APP (nunca config de
-// usuário/organizador). O que a pessoa controla é SÓ notifyWhatsApp (liga/desliga)
-// e notifyLevel. AQUI decide-se COMO cada tipo chega:
-//   'imediato' (default, ausente) = manda na hora
-//   'agrupado'                     = resumo de 1h (flushWhatsAppDigest)
-//   'nenhum'                        = não vai por WhatsApp (só e-mail + in-app)
-// Login/verificação por WhatsApp NÃO passa por aqui (é o seguro contra e-mail/SMS
-// falharem) — segue sempre imediato no fluxo de auth.
-// ========================================
-window.NOTIF_WHATSAPP_POLICY = {
-  // Inscrição de terceiros → resumo de 1h pro organizador (não 1 msg por inscrito)
-  enrollment_new:                'agrupado',
-  enrollment_cancelled:          'agrupado',
-  // Baixa urgência → só e-mail + in-app (não gasta WhatsApp)
-  enrollment_confirm:            'nenhum',
-  enrollment_cancelled_confirm:  'nenhum',
-  enrollments_closed:            'nenhum',
-  enrollments_reopened:          'nenhum',
-  tournament_created:            'nenhum',
-  tournament_update:             'nenhum',
-  tournament_updated:            'nenhum',
-  tournament_finished:           'nenhum',
-  tournament_invite:             'nenhum',
-  tournament_reminder:           'nenhum',
-  tournament_nearby:             'nenhum',
-  tournament_deleted:            'nenhum',
-  result:                        'nenhum',
-  'category-data-request':       'nenhum',
-  'category-change-request':     'nenhum',
-  'category-change-result':      'nenhum',
-  category_assignment:           'nenhum',
-  participant_removed:           'nenhum',
-  host_invite_accepted:          'nenhum',
-  host_invite_rejected:          'nenhum',
-  cohost_invite_sent:            'nenhum',
-  host_transfer_sent:            'nenhum',
-  cohost_removed:                'nenhum',
-  friend_request:                'nenhum',
-  friend_accepted:               'nenhum',
-  'liga-sub-result':             'nenhum',
-  casual_link_request:           'nenhum',
-  casual_link_accepted:          'nenhum',
-  casual_link_rejected:          'nenhum'
-  // Resto = 'imediato' (default): draw, new_round, new_phase, match-pending-approval,
-  // match-rejected, liga-sub-invite, poll, presence_checkin, presence_plan (amigo no
-  // local = urgente), casual_invite, org_communication, pair_invite, cohost_invite.
-};
-window._waPolicy = function (type) {
-  var p = window.NOTIF_WHATSAPP_POLICY && window.NOTIF_WHATSAPP_POLICY[type];
-  return (p === 'agrupado' || p === 'nenhum') ? p : 'imediato';
-};
+// v1.2.9: NOTIF_WHATSAPP_POLICY + _waPolicy REMOVIDOS. A política de entrega por
+// WhatsApp (imediato/agrupado/nenhum) não tem mais canal pra reger — número banido,
+// apelação negada, portfólio Meta morto. Ver project_whatsapp_meta_2fa_block.
+

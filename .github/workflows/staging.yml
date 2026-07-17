@@ -37,6 +37,13 @@ jobs:
       # pre-push hook; aqui o prerender só reconfirma — é idempotente.)
       - name: Install repo deps (predeploy prerender)
         run: npm ci --ignore-scripts
+      # GATE: a suíte unitária roda ANTES do deploy — se falhar, o job para e NADA vai pra
+      # staging. É o que faz as travas (fixture envenenado uid-poison, apply-wo, etc.)
+      # valerem SEM depender de alguém lembrar de rodar `npm test`: elas rodam sozinhas em
+      # todo push, em qualquer máquina. Pedido do dono: "essa trava vai funcionar em outras
+      # sessões ou saindo dessa você esquece?" — agora funciona sem a minha memória.
+      - name: Testes unitários (gate — bloqueia o deploy se falhar)
+        run: npm test
       - name: Install Playwright Chromium (predeploy prerender)
         run: npx playwright install --with-deps chromium
       - name: Install firebase-tools

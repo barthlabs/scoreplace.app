@@ -159,6 +159,10 @@
     return ids;
   }
   function _schIsCurrentRoundMatch(t, m) { return !!(m && m.id != null && _currentRoundIdSet(t)[m.id]); }
+  // Exposto pro wa-group.js (botão "💬 Criar grupo", irmão do "📅 Combinar jogo"
+  // no mesmo rodapé do card). O gate de quem vê os dois TEM que ser o mesmo —
+  // fonte única aqui, nunca reimplementado lá.
+  window._schIsCurrentRoundMatch = _schIsCurrentRoundMatch;
 
   // ─── uids dos jogadores do match (singles + duplas + monarch) ──────────────────
   function _schMatchUids(t, m) {
@@ -182,11 +186,15 @@
     if (typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, user) > 0) return true;
     return !!(user.uid && _schMatchUids(t, m).indexOf(user.uid) !== -1);
   }
+  // Exposto pro wa-group.js — ver nota em _schIsCurrentRoundMatch.
+  window._schMatchUids = _schMatchUids;
+  window._schUserIsPlayer = _schUserIsPlayer;
 
   function _schFindMatch(t, matchId) {
     var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
     return (all || []).find(function (m) { return m && String(m.id) === String(matchId); }) || null;
   }
+  window._schFindMatch = _schFindMatch;
   function _ensureSchedule(m) {
     if (!m.schedule || typeof m.schedule !== 'object') m.schedule = { options: [], votes: {}, dayVotes: {} };
     var s = m.schedule;
@@ -316,7 +324,7 @@
     var o = document.createElement('div');
     o.id = id;
     o.style.cssText = 'position:fixed;inset:0;z-index:100040;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:1rem;';
-    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:90vh;overflow:auto;border-radius:16px;border:1px solid rgba(16,185,129,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
+    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:90%;overflow:auto;border-radius:16px;border:1px solid rgba(16,185,129,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
     o.addEventListener('click', function (e) { if (e.target === o) o.remove(); });
     document.body.appendChild(o);
     return o;
@@ -331,8 +339,11 @@
       // Rei/Rainha: o "Combinar jogos" é ÚNICO por GRUPO (no cabeçalho do grupo,
       // via _schGroupChip) — não um por jogo. Suprime o chip por card aqui.
       if (m.isMonarch) return '';
+      // v1.2.2: retorna elemento PURO (sem wrapper próprio), igual ao _schGroupChip.
+      // Quem centraliza é o rodapé do card (_cardFooterChips em bracket.js), que agora
+      // divide a linha com o "💬 Criar grupo" (wa-group.js). Único call site.
       if (m.scheduledAt) {
-        return '<div style="display:flex;justify-content:center;margin:8px 0 2px;"><span style="display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.45);color:#34d399;font-weight:800;font-size:0.78rem;border-radius:999px;padding:5px 12px;">📅 ' + _esc(_fmtDateTime(m.scheduledAt)) + '</span></div>';
+        return '<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.45);color:#34d399;font-weight:800;font-size:0.78rem;border-radius:999px;padding:5px 12px;">📅 ' + _esc(_fmtDateTime(m.scheduledAt)) + '</span>';
       }
       if (m.winner || m.isBye || m.isSitOut) return '';
       if (!m.p1 || !m.p2 || m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return '';
@@ -340,13 +351,12 @@
       if (!_schIsCurrentRoundMatch(t, m)) return '';
       if (!_schUserIsPlayer(t, m, cu)) return '';
       var n = (m.schedule && Array.isArray(m.schedule.options)) ? m.schedule.options.length : 0;
-      return '<div style="display:flex;justify-content:center;margin:8px 0 2px;">' +
-        // v4.1.25: volume + altura PADRÃO (mesmas classes dos botões do header do card):
-        // .btn dá o volume almofadado, .btn-shine o brilho, .btn-micro a altura padrão.
-        '<button class="btn btn-micro btn-shine hover-lift" onclick="event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" ' +
+      // v4.1.25: volume + altura PADRÃO (mesmas classes dos botões do header do card):
+      // .btn dá o volume almofadado, .btn-shine o brilho, .btn-micro a altura padrão.
+      return '<button class="btn btn-micro btn-shine hover-lift" onclick="event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" ' +
         'style="background:#3b82f6;color:#fff;font-size:0.72rem;font-weight:800;">' +
         '📅 Combinar jogo' + (n ? ' <span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:1px 7px;font-size:0.72rem;">' + n + '</span>' : '') +
-        '</button></div>';
+        '</button>';
     } catch (e) { return ''; }
   };
 
@@ -366,6 +376,10 @@
     });
     return sibs.length ? sibs : [m0];
   }
+  // Exposto pro wa-group.js — no Rei/Rainha o grupo do WhatsApp é ÚNICO por
+  // grupo (3 jogos, mesmas 4 pessoas), então ele espelha pelos irmãos igual ao
+  // _schMirrorToGroup faz com o scheduledAt.
+  window._schGroupMatches = _schGroupMatches;
   function _schGroupFirst(groupMatches) {
     if (!Array.isArray(groupMatches) || !groupMatches.length) return null;
     return groupMatches.find(function (m) { return m && !m.isBye && !m.isSitOut; }) || groupMatches[0];
@@ -516,7 +530,7 @@
       var manage = canManage ? (
         '<span style="display:inline-flex;gap:4px;flex-shrink:0;">' +
           '<button type="button" title="Editar" onclick="window._schEditOption(' + oa + ')" class="btn" style="background:rgba(255,255,255,0.06);color:#cbd5e1;border:1px solid var(--border-color);border-radius:7px;padding:3px 7px;font-size:0.82rem;line-height:1;">✏️</button>' +
-          '<button type="button" title="Apagar" onclick="window._schDeleteOption(' + oa + ')" class="btn" style="background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);border-radius:7px;padding:3px 7px;font-size:0.82rem;line-height:1;">✕</button>' +
+          '<button type="button" title="Apagar" onclick="window._schDeleteOption(' + oa + ')" class="cancel-x-btn" style="--cx-size:20px;">✕</button>' +
         '</span>') : '';
 
       var rows = '';

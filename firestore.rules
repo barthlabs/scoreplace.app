@@ -42,7 +42,7 @@ service cloud.firestore {
     // outside this set requires admin rights.
     function isEnrollmentOnlyDiff() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['participants', 'memberEmails', 'memberUids', 'status', 'teamOrigins',
+        .hasOnly(['participants', 'memberUids', 'status', 'teamOrigins',
           // v2.1.5: inscrição tardia (standby/expand) — um NOVO inscrito que
           // ainda não está em participants escreve a si mesmo na lista de
           // espera. isParticipantBracketDiff exige já-ser-participante, então
@@ -52,27 +52,24 @@ service cloud.firestore {
     }
 
     // Participante aceita convite de co-organização (muda seu próprio status
-    // de 'pending' para 'active' em coHosts + atualiza adminEmails/memberEmails).
-    // Só permitido para quem já está em memberEmails (é participante do torneio).
+    // de 'pending' para 'active' em coHosts + atualiza adminEmails).
+    // Só permitido para quem já é participante do torneio (memberUids).
     function isCoHostAcceptanceDiff() {
       return isTournamentParticipant(resource.data)
         && request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['coHosts', 'adminEmails', 'memberEmails']);
+           .hasOnly(['coHosts', 'adminEmails']);   // v1.2.2: memberEmails saiu do schema
     }
 
     // Participant of the tournament.
-    // v1.8.99: uid é a fonte primária — funciona para todos os tipos de login.
-    // Email mantido como fallback para torneios sem memberUids (legado).
+    // v1.2.2: UID ONLY. O fallback por memberEmails saiu — participante é quem está em
+    // memberUids, e pronto. Ele existia pra torneio legado sem memberUids: não há mais
+    // nenhum (todos os docs têm memberUids populado). Fallback num GATE de permissão é o
+    // pior lugar pra ter rede de segurança: e-mail é atributo do perfil (a pessoa troca),
+    // não identidade. Ver [[project_uid_primary_identity]].
     function isTournamentParticipant(data) {
-      return request.auth != null && (
-        // Fonte primária: uid no memberUids
-        (data.memberUids is list && data.memberUids.size() > 0
-         && request.auth.uid in data.memberUids)
-        // Fallback: email para torneios antigos sem memberUids
-        || (authEmail() != ''
-            && !(data.memberUids is list && data.memberUids.size() > 0)
-            && data.memberEmails is list && authEmail() in data.memberEmails)
-      );
+      return request.auth != null
+        && data.memberUids is list
+        && request.auth.uid in data.memberUids;
     }
     // v1.8.65: usuário pode gerenciar seus próprios emails vinculados
     function isOwnLinkedEmailDiff() {
@@ -131,7 +128,7 @@ service cloud.firestore {
           // Status — pode mudar pra 'finished' quando última partida aprovada
           'status',
           // Inscrição — overlap com isEnrollmentOnlyDiff
-          'participants', 'memberEmails', 'teamOrigins',
+          'participants', 'teamOrigins',
           // v1.8.99: memberUids sempre recomputado em saveTournament
           'memberUids',
           // Convites de dupla pendentes (participante envia/aceita/cancela)
@@ -309,16 +306,41 @@ service cloud.firestore {
       // (searchUsers range query) and participant detail views.
       allow read: if request.auth != null;
 
-      // Create: only the user themselves (first-time profile creation).
-      allow create: if request.auth != null && request.auth.uid == userId;
+      // v1.2.9 — CAMPOS PRIVILEGIADOS: só o Admin SDK (Cloud Functions) escreve.
+      //
+      // SEQUESTRO DE CONTA (achado e provado no emulador em 15/jul/2026): o `allow update`
+      // dizia "owner may touch anything" e só se preocupava com edição CROSS-user. Mas
+      // `mergedInto` é lido pela CF resolveMergedLogin, que devolve um CUSTOM TOKEN do uid
+      // apontado. Então bastava a pessoa escrever no PRÓPRIO perfil
+      //     users/{meu-uid} = { mergedInto: "<uid-da-vítima>" }
+      // e chamar resolveMergedLogin pra entrar na conta de qualquer um. Um campo que o
+      // servidor TRATA COMO PROVA nunca pode ser escrito por quem ele autoriza.
+      //
+      // Bloquear não quebra nada: nenhum caminho do cliente escreve estes campos (0 writes
+      // no js/ — só leituras), e o Admin SDK ignora rules por definição.
+      //   mergedInto/mergedAt → prova de merge (resolveMergedLogin dá custom token)
+      //   plan/planExpiresAt  → assinatura Pro (só o webhook do Stripe pode conceder)
+      function privilegedUserFields() {
+        return ['mergedInto', 'mergedAt', 'plan', 'planExpiresAt'];
+      }
+      function touchesPrivileged() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(privilegedUserFields());
+      }
 
-      // Update: owner may touch anything; any other authenticated user may
-      // update ONLY the three friend arrays (so sendFriendRequest can add
-      // the caller's uid to the target's friendRequestsReceived, accept can
+      // Create: only the user themselves (first-time profile creation).
+      // O bloqueio precisa valer no CREATE também — senão o buraco reabre: apagar o próprio
+      // perfil e recriá-lo já com `mergedInto` seria o mesmo sequestro por outro caminho.
+      allow create: if request.auth != null && request.auth.uid == userId
+        && !request.resource.data.keys().hasAny(privilegedUserFields());
+
+      // Update: owner may touch anything EXCEPT the privileged fields above; any other
+      // authenticated user may update ONLY the three friend arrays (so sendFriendRequest
+      // can add the caller's uid to the target's friendRequestsReceived, accept can
       // add caller to target's friends, etc.). Prevents cross-user edits of
       // profile PII while keeping the friendship flow working.
       allow update: if request.auth != null
-        && (request.auth.uid == userId || isFriendArrayDiff());
+        && ((request.auth.uid == userId && !touchesPrivileged()) || isFriendArrayDiff());
 
       // Delete: owner only.
       allow delete: if request.auth != null && request.auth.uid == userId;
@@ -386,6 +408,22 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    // ─── Login redirects (v1.2.9) — PROVA, escrita só pelo Admin SDK ─────────
+    // Quando duas contas do MESMO tipo são fundidas (duas Google, p.ex.), a credencial da
+    // absorvida não migra — o Firebase não põe dois provedores do mesmo tipo numa conta, e a
+    // conta dela é apagada. Quem loga com aquele e-mail cai numa conta nova e VAZIA. O merge
+    // grava aqui `{email|telefone} → ownerUid` e a CF resolveLoginRedirect manda a pessoa pra
+    // conta certa via custom token.
+    //
+    // deny-all TOTAL: este doc concede acesso a uma conta, então é prova. Se o cliente
+    // pudesse escrever, bastaria reivindicar o e-mail de outro pra capturar o login dele —
+    // que é exatamente por que o redirect NÃO usa `linkedEmails`/`email` do perfil (o cliente
+    // escreve esses). A leitura também é fechada: o mapa e-mail→uid é PII.
+    // Ver [[project_privileged_fields_never_client_writable]].
+    match /loginRedirects/{key} {
+      allow read, write: if false;
+    }
+
     // ─── Mail (firestore-send-email extension) ───────────────────────────────
     match /mail/{mailId} {
       allow read: if false;
@@ -403,22 +441,11 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // ─── WhatsApp queue (Cloud Function processWhatsAppQueue → Evolution API) ──
-    // v2.1.15: FALTAVA esta regra — sem ela, toda escrita em whatsapp_queue era
-    // NEGADA (default deny), e queueWhatsApp falhava silencioso no try/catch.
-    // Resultado: notificação por WhatsApp nunca era enfileirada (fila vazia
-    // desde 08/mai), enquanto e-mail (mail/) funcionava. Mesmo modelo do mail/:
-    // qualquer autenticado pode enfileirar; o envio é feito pela Cloud Function.
-    match /whatsapp_queue/{id} {
-      allow read: if false;
-      allow write: if request.auth != null;
-    }
-
-    // ─── WhatsApp digest queue (v1.16) — acumula 'agrupado', flushWhatsAppDigest junta ──
-    match /whatsapp_digest_queue/{id} {
-      allow read: if false;
-      allow write: if request.auth != null;
-    }
+    // v1.2.9: as regras de whatsapp_queue / whatsapp_digest_queue / whatsapp_round_queue
+    // saíram junto com a integração (número banido, apelação negada, portfólio Meta
+    // morto). Sem regra, o default-deny cobre: se algum código velho tentar enfileirar,
+    // a escrita é NEGADA — que é o certo, já que não há quem consuma a fila.
+    // Ver project_whatsapp_meta_2fa_block.
 
     // ─── Email verification codes (v3.0.x) — SERVER-ONLY ──────────────────────
     // sendVerificationCode/verifyEmailCode (Cloud Functions, Admin SDK) gravam e leem o

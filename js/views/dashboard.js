@@ -109,10 +109,10 @@ window._buildAnalyticsSection = function _buildAnalyticsSection(organizados) {
     '<div style="margin-top:8px;padding:16px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;">' +
       // Stat cards row
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;">' +
-        '<div class="stat-box"><div style="font-size:1.5rem;font-weight:800;color:var(--primary-color);">' + total + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.totalTournaments') + '</div></div>' +
-        '<div class="stat-box"><div style="font-size:1.5rem;font-weight:800;color:var(--primary-color);">' + uniqueCount + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.uniqueParticipants') + '</div></div>' +
-        '<div class="stat-box"><div style="font-size:1.5rem;font-weight:800;color:var(--primary-color);">' + avgParts + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.avgParticipants') + '</div></div>' +
-        '<div class="stat-box"><div style="font-size:1.5rem;font-weight:800;color:var(--primary-color);">' + bestMonthLabel + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.bestMonth') + '</div></div>' +
+        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--primary-color);">' + total + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.totalTournaments') + '</div></div>' +
+        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--primary-color);">' + uniqueCount + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.uniqueParticipants') + '</div></div>' +
+        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--primary-color);">' + avgParts + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.avgParticipants') + '</div></div>' +
+        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--primary-color);">' + bestMonthLabel + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.bestMonth') + '</div></div>' +
       '</div>' +
       // Bar charts
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
@@ -802,54 +802,35 @@ function renderDashboard(container) {
 
               // Liga: um único countdown excludente (início → próximo sorteio → fim da temporada)
               if (_isLiga) {
-                var _ligaEv = null;
-                // 1. Não começou → countdown para início
-                if (t.startDate && !sorteioRealizado) {
-                  var _sd = new Date(t.startDate).getTime();
-                  if (!isNaN(_sd) && _sd > _now) _ligaEv = { ts: _sd, label: _t('tourn.ligaStart'), icon: '🏁', color: '#10b981' };
-                }
-                // Fim do torneio: endDate ou fim da temporada; multi-fase = fim da última fase.
-                var _tEndTsD = null;
-                if (t.endDate) { var _edD = new Date(String(t.endDate).indexOf('T') > -1 ? t.endDate : (t.endDate + 'T23:59:59')).getTime(); if (!isNaN(_edD)) _tEndTsD = _edD; }
-                if (_tEndTsD == null) { var _smD = t.ligaSeasonMonths || t.rankingSeasonMonths; if (_smD && t.startDate) { var _ssdD = new Date(t.startDate); if (!isNaN(_ssdD.getTime())) { var _seD = new Date(_ssdD); _seD.setMonth(_seD.getMonth() + parseInt(_smD)); _tEndTsD = _seD.getTime(); } } }
-                if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._tournamentScheduledWindow === 'function') { var _wD = window._tournamentScheduledWindow(t); if (_wD && _wD.endMs) _tEndTsD = _wD.endMs; }
-                var _H48D = 48 * 60 * 60 * 1000;
-                // toggle Liga "Ativado/Desativado" SEMPRE à direita (independente de countdown).
+                // v4.x: FONTE ÚNICA da decisão dos estados — window._ligaCountdownEvent
+                // (tournaments-utils.js), a MESMA do detalhe (tournaments.js). Aqui só se
+                // renderiza + o toggle Liga (sempre à direita, independente do countdown).
+                var _ce = (typeof window._ligaCountdownEvent === 'function') ? window._ligaCountdownEvent(t) : null;
                 var _ligaToggleDash = (typeof window._buildLigaActiveToggleHtml === 'function')
                   ? window._buildLigaActiveToggleHtml(t)
                   : '';
                 var _toggleRowDash = _ligaToggleDash
                   ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _ligaToggleDash + '</div>'
                   : '';
-                // 2. Começou + sorteio agendado de verdade → próximo sorteio (fonte única —
-                // fase única E multi-fase fase 0 Liga auto-draw).
-                if (!_ligaEv && sorteioRealizado && typeof window._ligaNextDrawEventTs === 'function') {
-                  var _ndTsD = window._ligaNextDrawEventTs(t);
-                  if (_ndTsD && _ndTsD > _now && (_tEndTsD == null || _ndTsD <= _tEndTsD)) _ligaEv = { ts: _ndTsD, label: _t('tourn.nextDraw'), icon: '🎲', color: '#fb923c' };
-                }
-                // 3. Sem sorteio por vir → fim do torneio SÓ nas últimas 48h.
-                if (!_ligaEv && _tEndTsD != null && _tEndTsD > _now && (_tEndTsD - _now) <= _H48D) {
-                  _ligaEv = { ts: _tEndTsD, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' };
-                }
                 var _cm = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
                 var _rbCt = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
                 var _ctColor = _rbCt.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
-                // 4. Começou, sem sorteio agendado e fora das 48h finais → RODADA EM ANDAMENTO
-                // (fonte única _ligaRoundInProgressRow — decorrido da rodada atual, tick automático).
-                if (!_ligaEv && sorteioRealizado && typeof window._ligaRoundInProgressRow === 'function') {
+                // Rodada em andamento (sem regressiva) → box próprio + toggle.
+                if (_ce && _ce.kind === 'round-in-progress' && typeof window._ligaRoundInProgressRow === 'function') {
                   var _ripStandaloneD = window._ligaRoundInProgressRow(t, _ctColor);
                   if (_ripStandaloneD) {
                     return _toggleRowDash +
                       '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _ripStandaloneD + '</div>';
                   }
                 }
-                if (!_ligaEv) return _toggleRowDash; // sem countdown → só o toggle (direita)
+                if (!_ce) return _toggleRowDash; // sem countdown → só o toggle (direita)
+                var _ligaEv = { ts: _ce.ts, label: _t(_ce.labelKey), icon: _ce.icon, color: _ce.color };
                 var _ct = window._formatCountdown ? window._formatCountdown(_ligaEv.ts - _now) : '';
                 var _rgb = _cm[_ligaEv.color] || '139,92,246';
                 // v4.4.x: 2ª linha "Rodada em andamento" (tempo decorrido da rodada) sempre que
                 // o box for o de "Próximo sorteio". Tick automático via data-elapsed-since.
                 var _roundLineD = '';
-                if (_ligaEv.label === _t('tourn.nextDraw') && typeof window._ligaRoundInProgressRow === 'function') {
+                if (_ce.kind === 'next-draw' && typeof window._ligaRoundInProgressRow === 'function') {
                   var _ripRowD = window._ligaRoundInProgressRow(t, _ctColor, { iconSize: '1.1rem', labelSize: '0.8rem', valueSize: '1.05rem' });
                   if (_ripRowD) {
                     _roundLineD = '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(' + _rgb + ',0.3);">' + _ripRowD + '</div>';
@@ -1325,7 +1306,7 @@ function renderDashboard(container) {
         '</div>' +
         '<div style="display:flex;gap:6px;flex-shrink:0;">' +
           '<button class="btn btn-primary btn-sm hover-lift" onclick="' + _openProfile + '" style="white-space:nowrap;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;">Completar →</button>' +
-          '<button class="btn btn-sm" onclick="window._dismissProfileNudge()" style="background:transparent;border:1px solid var(--border-color);color:var(--text-muted);font-size:0.78rem;" title="Descartar nesta sessão">✕</button>' +
+          '<button type="button" class="cancel-x-btn" onclick="window._dismissProfileNudge()" style="--cx-size:20px;" title="Descartar nesta sessão">✕</button>' +
         '</div>' +
       '</div>';
   }
@@ -1669,15 +1650,15 @@ function renderDashboard(container) {
       else if (faseLower.indexOf('final') !== -1) faseColor = '#fbbf24'; // ouro só pra Final real
 
       // matchLabel — JOGO N GLOBAL (fonte única _assignGlobalGameNumbers, igual ao bracket).
-      // Rei/Rainha segue pelo _monarchBoxLabel (numeração por grupo → global) mais abaixo.
-      var matchLabel = (item.m && !item.m.isMonarch && item.m._gameNum != null)
+      // v1.2.37: Rei/Rainha NÃO é mais exceção. Antes o `!isMonarch` mandava o monarch pro
+      // `m.label` (que em Rei/Rainha é "Jogo 1/2/3" POR GRUPO) e um 2º numerador só dele
+      // (_monarchGlobalJogoNum) — que espelhava um bracket ANTIGO ("grupo do usuário por
+      // último" → Jogo 73) e divergiu do atual (numera na ordem dos grupos → Jogo 19).
+      // Fonte única = m._gameNum, carimbado acima. Proibido 2º contador.
+      var matchLabel = (item.m && item.m._gameNum != null)
         ? ('Jogo ' + item.m._gameNum)
         : (item.m.label || 'JOGO 1');
-      // v4.0.2: em Rei/Rainha o m.label é "Jogo N" POR GRUPO (sempre Jogo 1/2/3).
-      // O número GLOBAL que o usuário vê no bracket (ex.: Jogo 73) vem do helper
-      // canônico — outros grupos contam primeiro, o grupo do usuário vem depois.
-      var _gJogoNum = (item.m && item.m.isMonarch && tRef && typeof window._monarchGlobalJogoNum === 'function')
-        ? window._monarchGlobalJogoNum(tRef, item.m, _isMe) : null;
+      var _gJogoNum = (item.m && item.m.isMonarch && item.m._gameNum != null) ? item.m._gameNum : null;
       var _monarchBoxLabel = (_gJogoNum != null) ? ('Jogo ' + _gJogoNum) : null;
 
       // Foto real do jogador: tenta _playerPhotoCache, depois perfil do usuário
@@ -1787,7 +1768,7 @@ function renderDashboard(container) {
             '</h4>' +
           '</div>') +
         '<div id="card-' + mId + '" style="background:' + cardBgStr + ';border:2px solid ' + cardBorderStr + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;gap:8px;flex-wrap:wrap;">' +
+          '<div class="btn-row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;gap:8px;flex-wrap:wrap;">' +
             '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;flex-shrink:0;display:inline-flex;align-items:center;">' + (item.m.isMonarch ? '<span style="font-size:1.05rem;line-height:1;margin-right:5px;">👑</span>' : '') + _sf(_monarchBoxLabel || opts.boxLabelOverride || matchLabel) + '</span>' +
             '<div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;min-width:0;margin-left:auto;">' +
               '<div id="header-btns-' + mId + '" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">' + finalHeaderBtns + '</div>' +
@@ -1917,8 +1898,10 @@ function renderDashboard(container) {
       var _metaStr = _meta.join(' · ');
       // v4.1.20: "JOGO N" GLOBAL (fonte única). Antes parseava _ngM.label — que muitas
       // vezes não traz número → caía em "Jogo" pelado (bug reportado na dashboard).
+      // v1.2.37: Rei/Rainha NÃO é exceção — o `!isMonarch` daqui era o bug do "JOGO 73"
+      // (caía no parse do m.label, que em Rei/Rainha é o nº POR GRUPO/legado). Fonte única.
       var _boxU;
-      if (_ngM && !_ngM.isMonarch && _ngM._gameNum != null) {
+      if (_ngM && _ngM._gameNum != null) {
         _boxU = 'Jogo ' + _ngM._gameNum;
       } else {
         var _jgU = String(_ngM.label || '').match(/Jogo\s*\d+/i);
@@ -1985,7 +1968,8 @@ function renderDashboard(container) {
         }
 
         // mesmo estilo de coluna que _miniBracketCard — JOGO N GLOBAL (fonte única).
-        var matchLabel2 = (m2 && !m2.isMonarch && m2._gameNum != null)
+        // v1.2.37: sem exceção pra Rei/Rainha (ver matchLabel acima).
+        var matchLabel2 = (m2 && m2._gameNum != null)
           ? ('Jogo ' + m2._gameNum)
           : (m2.label || 'JOGO 1');
         var rowStyle2 = 'display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;margin-bottom:4px;';
@@ -2024,9 +2008,9 @@ function renderDashboard(container) {
         // v2.3.63: no header de cada box mostra só "JOGO N" (o grupo+torneio já
         // aparece no cabeçalho compartilhado). Fallback pro label completo
         // quando não há "jogo N" (ex.: eliminatórias "Final").
-        // v4.0.2: Rei/Rainha usa o número GLOBAL (idem card "Próximo Jogo").
-        var _gJogoNum2 = (m2 && m2.isMonarch && tRef2 && typeof window._monarchGlobalJogoNum === 'function')
-          ? window._monarchGlobalJogoNum(tRef2, m2, _isMe) : null;
+        // v1.2.37: Rei/Rainha usa o número GLOBAL da FONTE ÚNICA (m._gameNum), igual ao
+        // bracket. Antes vinha do _monarchGlobalJogoNum (2º numerador, já removido).
+        var _gJogoNum2 = (m2 && m2.isMonarch && m2._gameNum != null) ? m2._gameNum : null;
         var _boxLabel = (_gJogoNum2 != null) ? ('Jogo ' + _gJogoNum2) : (_fp2.jogo || matchLabel2);
         var _body = _posBadge +
           '<div onclick="window.location.hash=\'#bracket/' + _esc2(item.tId) + '\'" style="cursor:pointer;background:var(--bg-card);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' +
@@ -2783,29 +2767,34 @@ function renderDashboard(container) {
     ">
 
       <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; text-align: left;">
-        <h2 style="margin:0; font-size: 2.2rem; font-weight: 700; flex:1; color:var(--hero-text);">${_t('dashboard.welcome', {greeting: (window._welcomeWord ? window._welcomeWord() : 'Bem-vindo'), name: (window._firstNameOnly ? window._firstNameOnly(userName) : userName)})}${_proBadge}</h2>
+        <!-- CÂNONE fit-name-to-box DENTRO da escala por área: box de altura FIXA
+             em --sp-u (escala por área) + a fonte encolhe (rem) pra caber nome
+             longo em vez de estourar. Ver window._fitNames (store.js). -->
+        <div style="flex:1; min-width:0; height:calc(var(--sp-u) * 2.7); overflow:hidden; display:flex; align-items:center;">
+          <h2 class="sp-name-fit" data-maxrem="2.3" data-minrem="1.1" style="margin:0; font-size:2.3rem; font-weight:700; color:var(--hero-text); line-height:1.1; white-space:nowrap; max-width:100%;">${_t('dashboard.welcome', {greeting: (window._welcomeWord ? window._welcomeWord() : 'Bem-vindo'), name: (window._firstNameOnly ? window._firstNameOnly(userName) : userName)})}${_proBadge}</h2>
+        </div>
         ${window.AppStore.currentUser ? '<div style="display:flex;flex-direction:column;gap:5px;align-items:stretch;"><button onclick="window.location.hash=\'#trofeus\'" style="background:var(--hero-glass-bg);border:1px solid var(--hero-glass-border);border-radius:12px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--hero-text);font-size:0.78rem;font-weight:600;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background=\'var(--hero-glass-bg-hover)\'" onmouseout="this.style.background=\'var(--hero-glass-bg)\'"><span style="font-size:1rem;">🏆</span> Conquistas</button><button onclick="if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + window._safeHtml((window.AppStore.currentUser.displayName || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")) + '\')" style="background:var(--hero-glass-bg);border:1px solid var(--hero-glass-border);border-radius:12px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--hero-text);font-size:0.78rem;font-weight:600;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background=\'var(--hero-glass-bg-hover)\'" onmouseout="this.style.background=\'var(--hero-glass-bg)\'"><span style="font-size:1rem;">📊</span> ' + _t('dashboard.statistics') + '</button></div>' : ''}
       </div>
       <div style="text-align:center;margin-bottom:8px;font-size:0.75rem;color:var(--hero-text-soft);font-weight:600;letter-spacing:0.5px;">v${window.SCOREPLACE_VERSION || ''}</div>
 
       <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 1.5rem;">
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;width:100%;max-width:580px;">
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;width:100%;max-width:min(96%, calc(var(--sp-u) * 46));">
           <!-- v0.17.45: Row 1 mais alta — min-height 64→80px, ícone 1.4→1.7rem.
                v0.17.55: white-space:normal explícito no label pra OVERRIDE o
                white-space:nowrap herdado da classe .btn (components.css:192).
                Sem isso, o texto não quebrava E era cortado pelo overflow:hidden.
                Combinação completa: display:block; width:100%; white-space:normal
                + overflow:hidden no botão (defense-in-depth). -->
-          <button class="btn btn-cta hover-lift" id="btn-casual-match" style="--shine-delay:0s;background:linear-gradient(135deg,#38bdf8,#0ea5e9); color: #ffffff; flex:1;min-width:0; min-height: 80px; font-size: 0.95rem; font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="if(typeof window._openCasualMatch==='function')window._openCasualMatch();">
-            <span style="font-size:1.7rem;line-height:1;">⚡</span>
+          <button class="btn btn-cta hover-lift" id="btn-casual-match" style="--shine-delay:0s;background:linear-gradient(135deg,#38bdf8,#0ea5e9); color: #ffffff; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="if(typeof window._openCasualMatch==='function')window._openCasualMatch();">
+            <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">⚡</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">${_t('dashboard.casualMatch')}</span>
           </button>
-          <button class="btn btn-cta hover-lift" id="btn-create-tournament-in-box" style="--shine-delay:0.6s;background: #1e40af; color: #ffffff; flex:1;min-width:0; min-height: 80px; font-size: 0.95rem; font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='#1e40af'" onclick="if(typeof openModal==='function')openModal('modal-quick-create');">
-            <span style="font-size:1.7rem;line-height:1;">🏆</span>
+          <button class="btn btn-cta hover-lift" id="btn-create-tournament-in-box" style="--shine-delay:0.6s;background: #1e40af; color: #ffffff; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='#1e40af'" onclick="if(typeof openModal==='function')openModal('modal-quick-create');">
+            <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">🏆</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">${_t('dashboard.newTournament')}</span>
           </button>
-          <button class="btn btn-cta hover-lift" id="btn-place" title="Procure lugares para seus jogos e marque presença" style="--shine-delay:1.2s;background:linear-gradient(135deg,#FFD700,#DAA520); color: #1a0f00; flex:1;min-width:0; min-height: 80px; font-size: 0.95rem; font-weight: 800; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="window.location.hash='#place'">
-            <span style="font-size:1.7rem;line-height:1;">📍</span>
+          <button class="btn btn-cta hover-lift" id="btn-place" title="Procure lugares para seus jogos e marque presença" style="--shine-delay:1.2s;background:linear-gradient(135deg,#FFD700,#DAA520); color: #1a0f00; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 800; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="window.location.hash='#place'">
+            <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">📍</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">Place</span>
           </button>
         </div>
@@ -2905,11 +2894,11 @@ function renderDashboard(container) {
            da topbar. Aparece com >1 torneio visível (pedido do usuário). -->
       ${allUnique.length > 1 ? _dashFilterBar : ''}
       ${runningBandHtml}
+      ${runningBottomHtml}
       ${awaitingStartHtml}
       ${favoritesBandHtml}
       ${(window._dashView === 'compact') ? '<div class="compact-list">' + _buildCompactList(filtered) + '</div>' : '<div class="cards-grid">' + filteredHtml + '</div>'}
     </div>
-    ${runningBottomHtml}
     ${(window._dashView === 'compact') ? '' : finishedSectionHtml}
     ${(() => {
       // v0.16.60: diag SEMPRE visível, independente de filtro — usuário
@@ -2969,6 +2958,8 @@ function renderDashboard(container) {
     })()}
   `;
   container.innerHTML = html;
+  // CÂNONE fit-name-to-box: ajusta a fonte dos nomes ao box fixo (saudação etc.).
+  if (typeof window._fitNames === 'function') { try { window._fitNames(container); } catch (e) {} }
   // v2.8.46: re-aplica a busca in-place após qualquer re-render (ex.: trocar
   // modalidade com busca ativa) — sem isso a busca "sumiria" no re-render.
   if (window._dashSearch && typeof window._applyDashSearchInPlace === 'function') {

@@ -89,6 +89,21 @@ function setupCreateTournamentModal() {
   };
   // — Bloco 3: Pontuação Avançada (GSM) da Fase 1. idx 0 = IDs sem sufixo (save/load/motor
   //   intactos). Construtor de fases 2+ removido (Camada 2) — só existe a Fase 1. —
+  // Fonte ÚNICA dos valores/estados SUGERIDOS da Pontuação Avançada. O render (`row`) e o
+  // reset (`_resetAdvScoring`) leem daqui — sem drift. `_applyLive` é o default do toggle
+  // "Aplicar pontos de placar ao vivo".
+  var _ADV_SCORING_DEFAULTS = {
+    participation:  { value: 150,  enabled: true },
+    match_won:      { value: 150,  enabled: true },
+    game_won:       { value: 50,   enabled: true },
+    game_lost:      { value: -20,  enabled: true },
+    tiebreak_point: { value: 2,    enabled: true },
+    wo_penalty:     { value: -100, enabled: true },
+    killing_point:  { value: 10,   enabled: false },
+    point_scored:   { value: 1,    enabled: false },
+    _applyLive: true
+  };
+  window._ADV_SCORING_DEFAULTS = _ADV_SCORING_DEFAULTS;
   window._advScoringHtml = function(idx, initialDisplay, advData) {
     var T = window._t || function(k){ return k; };
     var s = idx === 0 ? '' : ('-' + idx);
@@ -97,6 +112,9 @@ function setupCreateTournamentModal() {
     var enabledOn = !!(advData && advData.enabled);
     var applyLiveOn = !advData || advData.applyLiveScoring !== false;
     function row(key, label, desc, val, checked) {
+      // Default canônico do mapa (fonte única); o arg literal só serve de fallback.
+      var _d = _ADV_SCORING_DEFAULTS[key];
+      if (_d) { val = _d.value; checked = _d.enabled; }
       if (cats && cats[key]) { checked = !!cats[key].enabled; val = (cats[key].value != null ? cats[key].value : val); }
       return '<div class="adv-row" data-adv-key="' + key + '" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">'
         + '<label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" class="adv-enabled"' + (checked ? ' checked' : '') + '><span class="toggle-slider"></span></label>'
@@ -110,6 +128,7 @@ function setupCreateTournamentModal() {
     h += '<label class="toggle-switch toggle-sm"><input type="checkbox" id="adv-scoring-enabled' + s + '"' + (enabledOn ? ' checked' : '') + ' onchange="window._onAdvScoringToggle(' + idx + ')"><span class="toggle-slider"></span></label>';
     h += '</div>';
     h += '<div id="adv-scoring-body' + s + '" style="display:' + (enabledOn ? 'block' : 'none') + '; margin-top:12px;">';
+    h += '<div style="display:flex; justify-content:flex-end; margin-bottom:8px;"><button type="button" onclick="window._resetAdvScoring(' + idx + ')" style="padding:5px 12px; border-radius:8px; border:1px solid rgba(251,191,36,0.35); background:rgba(251,191,36,0.1); color:#fbbf24; font-size:0.74rem; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:5px;">↺ ' + T('create.advResetBtn') + '</button></div>';
     h += '<p style="font-size:0.7rem; color:#10b981; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px;">' + T('create.advScoringGroupA') + '</p>';
     h += '<div style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px;">';
     h += row('participation', 'create.advParticipation', 'create.advParticipationDesc', '150', true);
@@ -147,10 +166,27 @@ function setupCreateTournamentModal() {
     var apply = document.getElementById('adv-apply-live' + s);
     return { enabled: !!enEl.checked, categories: catsObj, applyLiveScoring: apply ? !!apply.checked : true };
   };
+  // Restaura os VALORES/estados sugeridos da Pontuação Avançada (sem mexer no toggle mestre
+  // "Sistema de Pontos Avançado" — isso é a escolha de usar ou não o sistema).
+  window._resetAdvScoring = function(idx) {
+    var T = window._t || function(k){ return k; };
+    var s = idx === 0 ? '' : ('-' + idx);
+    var body = document.getElementById('adv-scoring-body' + s);
+    if (!body) return;
+    Array.prototype.forEach.call(body.querySelectorAll('.adv-row'), function(rw){
+      var key = rw.dataset.advKey; var d = _ADV_SCORING_DEFAULTS[key]; if (!d) return;
+      var en = rw.querySelector('.adv-enabled'); var val = rw.querySelector('.adv-value');
+      if (en) en.checked = !!d.enabled;
+      if (val) val.value = d.value;
+    });
+    var apply = document.getElementById('adv-apply-live' + s);
+    if (apply) apply.checked = _ADV_SCORING_DEFAULTS._applyLive !== false;
+    if (window.showNotification) window.showNotification('💯 ' + T('create.advResetBtn'), T('create.advResetToast'), 'success');
+  };
   if (!document.getElementById('modal-create-tournament')) {
     const modalHtml = `
       <div class="modal-overlay" id="modal-create-tournament">
-        <div class="modal" style="max-width: 800px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; max-height: 90vh; overflow-y: auto; overflow-x: hidden;">
+        <div class="modal" style="max-width: 800px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; max-height: 90%; overflow-y: auto; overflow-x: hidden;">
           <!-- Back header placeholder — populated by _renderBackHeader + action buttons in setupCreateTournamentModal -->
           <div id="create-tournament-header-host"></div>
           <h2 id="create-modal-title" style="display:none;">${_t('create.modalTitle')}</h2>
@@ -918,21 +954,22 @@ function setupCreateTournamentModal() {
               <!-- Critérios de Desempate -->
               <div id="tiebreaker-section" style="background: rgba(88,166,255,0.06); border: 1px solid rgba(88,166,255,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.5rem; font-size: 0.8rem; color: #58a6ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.tiebreakerSection')}</p>
-                <small class="text-muted" style="display:block;margin-bottom:0.75rem;">${_t('create.tiebreakerDesc')}</small>
+                <small class="text-muted" style="display:block;margin-bottom:0.5rem;">${_t('create.tiebreakerDesc')}</small>
+                <div style="display:flex;justify-content:flex-end;margin-bottom:0.6rem;"><button type="button" onclick="window._resetTiebreakers()" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(88,166,255,0.35);background:rgba(88,166,255,0.1);color:#58a6ff;font-size:0.74rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">↺ ${_t('create.tbResetBtn')}</button></div>
                 <ul id="tiebreaker-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">
-                  <li draggable="true" data-tb="pontos_avancados" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 💯 ${_t('create.tbAdvancedPoints')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbAdvancedPointsNote')}</small><span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('pontos_avancados')" style="cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
-                  <li draggable="true" data-tb="confronto_direto" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbHeadToHeadTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 🆚 ${_t('create.tbHeadToHead')}<span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
-                  <li draggable="true" data-tb="saldo_pontos" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbPointDiffTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ⚖️ ${_t('create.tbPointDiff')}<span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
-                  <li draggable="true" data-tb="vitorias" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbWinsTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 🏆 ${_t('create.tbWins')}<span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
-                  <li draggable="true" data-tb="buchholz" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbBuchholzTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 💪 ${_t('create.tbBuchholz')} <small style="opacity:0.5; font-size:0.75rem;">(${_t('create.tbBuchholzAbbr')})</small> <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('buchholz')" style="cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
-                  <li draggable="true" data-tb="sonneborn_berger" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbSonnebornTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ⭐ ${_t('create.tbSonneborn')} <small style="opacity:0.5; font-size:0.75rem;">(${_t('create.tbSonnebornAbbr')})</small> <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('sonneborn_berger')" style="cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
-                  <li draggable="true" data-tb="antiguidade" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 👴 ${_t('create.tbOldest')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbOldestNote')}</small><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
-                  <li draggable="true" data-tb="sorteio" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 🎲 ${_t('create.tbRandom')}<span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
+                  <li draggable="true" data-tb="pontos_avancados" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 💯 ${_t('create.tbAdvancedPoints')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbAdvancedPointsNote')}</small><span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('pontos_avancados')" style="cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></li>
+                  <li draggable="true" data-tb="confronto_direto" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbHeadToHeadTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 🆚 ${_t('create.tbHeadToHead')}<button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></li>
+                  <li draggable="true" data-tb="saldo_pontos" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbPointDiffTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ⚖️ ${_t('create.tbPointDiff')}<button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></li>
+                  <li draggable="true" data-tb="vitorias" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbWinsTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 🏆 ${_t('create.tbWins')}<button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></li>
+                  <li draggable="true" data-tb="buchholz" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbBuchholzTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 💪 ${_t('create.tbBuchholz')} <small style="opacity:0.5; font-size:0.75rem;">(${_t('create.tbBuchholzAbbr')})</small> <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('buchholz')" style="cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></li>
+                  <li draggable="true" data-tb="sonneborn_berger" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbSonnebornTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ⭐ ${_t('create.tbSonneborn')} <small style="opacity:0.5; font-size:0.75rem;">(${_t('create.tbSonnebornAbbr')})</small> <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('sonneborn_berger')" style="cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></li>
+                  <li draggable="true" data-tb="antiguidade" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 👴 ${_t('create.tbOldest')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbOldestNote')}</small><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></li>
+                  <li draggable="true" data-tb="sorteio" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 🎲 ${_t('create.tbRandom')}<button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></li>
                 </ul>
                 <p style="margin: 1rem 0 0.4rem; font-size: 0.78rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">${_t('create.tbExcludedSection')}</p>
                 <small class="text-muted" style="display:block;margin-bottom:0.5rem;">${_t('create.tbExcludedDesc')}</small>
                 <ul id="tiebreaker-excluded-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;min-height:40px;border:1px dashed rgba(255,255,255,0.12);border-radius:8px;padding:6px;">
-                  <li draggable="true" data-tb="juventude" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 👶 ${_t('create.tbYoungest')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbYoungestNote')}</small><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#34d399;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRestoreBtn')}">↩</span></li>
+                  <li draggable="true" data-tb="juventude" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 👶 ${_t('create.tbYoungest')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbYoungestNote')}</small><button type="button" data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#34d399;font-weight:700;font-size:0.95rem;padding:0 6px;line-height:1;" title="${_t('create.tbRestoreBtn')}">↩</button></li>
                 </ul>
               </div>
 
@@ -1009,16 +1046,24 @@ function setupCreateTournamentModal() {
       var _tbClearMarks = function() { _tbAllLis().forEach(function(li) { li.style.borderTop = ''; }); };
 
       // Atualiza o botão ✕/↩ conforme o box em que o critério está
+      // v1.2.39: o estado ATIVO usa o ✕ CANÔNICO (.cancel-x-btn — círculo vermelho, anel
+      // branco, X branco); o estado EXCLUÍDO é ↩ (reativar), que NÃO é cancelamento e por
+      // isso não leva o cânone. Alterna a CLASSE, não só a cor. cssText escreve o estilo
+      // COMPLETO em cada estado (cssText substitui tudo — nunca contar com o que havia).
       window._tbUpdateRowControls = function(li) {
         if (!li) return;
         var btn = li.querySelector('[data-tb-move]');
         if (!btn) return;
         var inExcluded = li.parentNode && li.parentNode.id === 'tiebreaker-excluded-list';
         if (inExcluded) {
-          btn.textContent = '↩'; btn.style.color = '#34d399';
+          btn.classList.remove('cancel-x-btn');
+          btn.textContent = '↩';
+          btn.style.cssText = 'margin-left:auto;background:none;border:none;cursor:pointer;color:#34d399;font-weight:700;font-size:0.95rem;padding:0 6px;line-height:1;';
           btn.title = (window._t ? window._t('create.tbRestoreBtn') : 'Reativar critério');
         } else {
-          btn.textContent = '✕'; btn.style.color = '#f87171';
+          btn.classList.add('cancel-x-btn');
+          btn.textContent = '✕';
+          btn.style.cssText = '--cx-size:20px;margin-left:auto;';
           btn.title = (window._t ? window._t('create.tbRemoveBtn') : 'Não considerar este critério');
         }
       };
@@ -1051,6 +1096,29 @@ function setupCreateTournamentModal() {
           if (key === 'antiguidade' || key === 'juventude') window._tbNormalizeAge(key);
         }
         window._tbUpdateRowControls(li);
+      };
+
+      // Arranjo SUGERIDO dos critérios (ordem ativa + excluídos). Fonte única do reset.
+      // Bate com a ordem inicial dos <li> no HTML da seção de desempate.
+      var _TB_DEFAULT_ACTIVE = ['pontos_avancados', 'confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
+      var _TB_DEFAULT_EXCLUDED = ['juventude'];
+      // Restaura os critérios de desempate pra ordem + divisão (ativo/excluído) sugeridas.
+      // Reusa os <li> existentes (appendChild move o nó; iterar na ordem default reordena).
+      window._resetTiebreakers = function() {
+        var T = window._t || function(k){ return k; };
+        var active = document.getElementById('tiebreaker-list');
+        var excluded = document.getElementById('tiebreaker-excluded-list');
+        if (!active || !excluded) return;
+        var _find = function(key) { return document.querySelector('#tiebreaker-list li[data-tb="' + key + '"], #tiebreaker-excluded-list li[data-tb="' + key + '"]'); };
+        _TB_DEFAULT_ACTIVE.forEach(function(key) {
+          var li = _find(key);
+          if (li) { active.appendChild(li); if (window._tbUpdateRowControls) window._tbUpdateRowControls(li); }
+        });
+        _TB_DEFAULT_EXCLUDED.forEach(function(key) {
+          var li = _find(key);
+          if (li) { excluded.appendChild(li); if (window._tbUpdateRowControls) window._tbUpdateRowControls(li); }
+        });
+        if (window.showNotification) window.showNotification('🎯 ' + T('create.tbResetBtn'), T('create.tbResetToast'), 'success');
       };
 
       let dragItem = null;
@@ -2737,7 +2805,7 @@ function setupCreateTournamentModal() {
       var escAttr = String(label).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       return '<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;font-size:0.8rem;border:2px solid #14b8a6;background:rgba(20,184,166,0.18);color:#5eead4;font-weight:700;">' +
         _esc(label) +
-        '<button type="button" title="Remover" onclick="window._removeCustomCat(\'' + escAttr + '\')" style="background:none;border:none;color:#5eead4;cursor:pointer;font-size:1rem;line-height:1;padding:0;font-weight:900;">×</button>' +
+        '<button type="button" class="cancel-x-btn" title="Remover" onclick="window._removeCustomCat(\'' + escAttr + '\')" style="--cx-size:18px;">✕</button>' +
         '</span>';
     }).join('');
   };
@@ -5940,9 +6008,9 @@ window._openGSMConfig = function(targetPhase) {
 
   var overlay = document.createElement('div');
   overlay.id = 'gsm-config-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:100000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:100000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;';
 
-  overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:600px;border-radius:20px;border:1px solid rgba(168,85,247,0.25);box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden;margin:auto 0;max-height:90vh;display:flex;flex-direction:column;">' +
+  overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:600px;border-radius:20px;border:1px solid rgba(168,85,247,0.25);box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden;margin:auto 0;max-height:90%;display:flex;flex-direction:column;">' +
     '<div style="background:linear-gradient(135deg,#6d28d9 0%,#a855f7 100%);padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">' +
       '<h3 style="margin:0;color:#f5f3ff;font-size:1.1rem;font-weight:800;">⚙️ Personalizado</h3>' +
       '<div style="display:flex;gap:8px;">' +
@@ -6935,7 +7003,7 @@ window._showTemplatePickerInCreate = function() {
         '<div style="font-size:0.75rem;color:var(--text-muted);">' + window._safeHtml(_fmtLabel) +
           (tpl.venue ? ' · ' + window._safeHtml(tpl.venue) : '') + '</div>' +
       '</div>' +
-      '<button class="btn btn-micro btn-danger-ghost" onclick="event.stopPropagation();window._deleteTemplateInCreate(\'' + window._safeHtml(tpl._id || String(i)) + '\')" title="Apagar">✕</button>' +
+      '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window._deleteTemplateInCreate(\'' + window._safeHtml(tpl._id || String(i)) + '\')" title="Apagar" style="--cx-size:20px;">✕</button>' +
     '</div>';
   });
   html += '</div>';
@@ -7105,7 +7173,7 @@ window._showTiebreakInfo = function(criterion) {
   const overlay = document.createElement('div');
   overlay.id = 'tiebreak-info-overlay';
   overlay.style.cssText =
-    'position:fixed;top:0;left:0;width:100vw;height:100vh;' +
+    'position:fixed;top:0;left:0;width:100%;height:100%;' +
     'background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);' +
     'display:flex;align-items:flex-start;justify-content:center;' +
     'z-index:100020;padding:5vh 1rem;overflow-y:auto;';

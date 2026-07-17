@@ -11,10 +11,19 @@
 // antes do usuário humano consume. Solução: o email aponta pra wrapper URL
 // nossa que SÓ executa o redirect via JS no browser real do humano. Scanners
 // fazem GET/HEAD e param antes do JS rodar, então não tocam no oobCode.
+// v1.2.4: o MESMO resolver atende ?vt=TOKEN (confirmação de conta). O e-mail de
+// confirmação mandava o oobCode CRU e caía no bug idêntico ao de cima — 7 pessoas em prod
+// travadas no gate porque o scanner queimava o link antes delas (Val pediu 3 confirmações,
+// Paulo 3 resets de senha achando que era a senha). Generalizado em vez de duplicado: o
+// fluxo é o mesmo (busca o token, redireciona o browser real), só muda a copy.
+// Ver [[project_orphan_uid_entries]] / [[project_email_deliverability_hotmail]].
 (function _handleMagicLinkWrapper() {
   try {
     var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
     var token = qs && qs.get('ml');
+    var vToken = qs && qs.get('vt');
+    var isVerify = !token && !!vToken;
+    if (!token && vToken) token = vToken;
     if (!token) return;
 
     // Loading screen — usuário sabe que tá entrando, não acha que travou.
@@ -29,7 +38,9 @@
         (isError ? '<a href="/" style="margin-top:8px;color:' + fg + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + fg + ';padding:8px 18px;border-radius:8px;">Voltar e pedir novo link</a>' : '') +
         '</div>';
     };
-    showStatus('🎾', 'Entrando no scoreplace.app...', 'Carregando seu acesso seguro');
+    showStatus('🎾',
+      isVerify ? 'Confirmando seu e-mail...' : 'Entrando no scoreplace.app...',
+      isVerify ? 'Ativando sua conta no scoreplace.app' : 'Carregando seu acesso seguro');
 
     // Aguarda Firestore estar pronto (firebase-db.js carrega antes deste).
     var tries = 0;
@@ -42,7 +53,10 @@
       }
       db.collection('magicLinks').doc(token).get().then(function(doc) {
         if (!doc.exists) {
-          showStatus('🔗', 'Link inválido ou expirado', 'Esse link não existe mais. Volte e peça um novo no campo de login.', true);
+          showStatus('🔗', 'Link inválido ou expirado',
+            isVerify
+              ? 'Esse link de confirmação não existe mais. Entre com seu e-mail e senha — a tela de confirmação tem um botão pra reenviar.'
+              : 'Esse link não existe mais. Volte e peça um novo no campo de login.', true);
           return;
         }
         var data = doc.data() || {};
@@ -53,7 +67,9 @@
         // Salva email no localStorage pra signInWithEmailLink completar
         // sem perguntar. Cross-device também: o Firebase auth handler
         // anexa ?eml=email ao continueUrl (já no actionCodeSettings).
-        if (data.email) {
+        // v1.2.4: só no LOGIN — o link de confirmação (?vt=) não faz signIn,
+        // então gravar isto ali só deixaria lixo no localStorage.
+        if (data.email && !isVerify) {
           try { window.localStorage.setItem('scoreplace_emailForSignIn', data.email); } catch(_){}
         }
         // Redireciona o BROWSER pro firebaseLink real — só agora o oobCode
@@ -144,122 +160,10 @@
   } catch(e) {}
 })();
 
-// v1.3.83-beta: WhatsApp Magic Link Wrapper — detecta /?wt=TOKEN gerado por
-// sendWhatsAppMagicLink (Cloud Function). Diferente do ?ml= (email magic link
-// que redireciona pro Firebase), o ?wt= usa signInWithCustomToken — login
-// direto sem OTP, sem redirecionamento extra.
-(function _handleWhatsAppMagicLink() {
-  try {
-    var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
-    var token = qs && qs.get('wt');
-    if (!token) return;
-
-    var bg = '#0f172a';
-    var fg = '#25d366'; // verde WhatsApp
-    document.documentElement.style.background = bg;
-
-    var showStatus = function(emoji, title, subtitle, isError, extraHtml) {
-      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + bg + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
-        '<div style="font-size:2.4rem;line-height:1;">' + emoji + '</div>' +
-        '<div style="font-size:1.05rem;font-weight:700;color:' + (isError ? '#ef4444' : fg) + ';">' + title + '</div>' +
-        (subtitle ? '<div style="font-size:0.85rem;color:#94a3b8;max-width:340px;line-height:1.5;">' + subtitle + '</div>' : '') +
-        (isError ? '<a href="/" style="margin-top:8px;color:' + fg + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + fg + ';padding:8px 18px;border-radius:8px;">Voltar ao início</a>' : '') +
-        (extraHtml || '') +
-        '</div>';
-    };
-
-    // Detecta iOS + browser não-Safari (Chrome, Firefox, Edge no iPhone/iPad).
-    // No iPhone, apenas o Safari suporta instalação como PWA e tem melhor suporte
-    // a cookies/auth de terceiros. Se o link abriu em outro browser, oferecemos
-    // abrir no Safari via o scheme x-safari-https:// (abre o Safari diretamente).
-    var _ua = navigator.userAgent || '';
-    var _isIOS = /iPad|iPhone|iPod/.test(_ua) && !window.MSStream;
-    var _isSafari = /Safari/.test(_ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA/.test(_ua);
-    if (_isIOS && !_isSafari) {
-      var safarUri = 'x-safari-https://scoreplace.app/?wt=' + encodeURIComponent(token);
-      var btnStyle = 'display:inline-block;margin-top:6px;background:' + fg + ';color:#000;font-weight:700;font-size:0.9rem;padding:12px 22px;border-radius:10px;text-decoration:none;';
-      var skipStyle = 'display:inline-block;margin-top:10px;color:#64748b;font-size:0.78rem;text-decoration:underline;cursor:pointer;';
-      showStatus('🧭', 'Abra no Safari', 'No iPhone, o login pelo WhatsApp funciona melhor no Safari.',
-        false,
-        '<a href="' + safarUri + '" style="' + btnStyle + '">Abrir no Safari</a>' +
-        '<div style="' + skipStyle + '" onclick="document.getElementById(\'wt-continue\').style.display=\'block\';this.style.display=\'none\';">Continuar no Chrome mesmo assim</div>' +
-        '<div id="wt-continue" style="display:none;margin-top:10px;color:#94a3b8;font-size:0.78rem;">Aguarde...</div>'
-      );
-      // Ouve clique em "Continuar no Chrome" para disparar o fluxo normal
-      var waitContinue = setInterval(function() {
-        var el = document.getElementById('wt-continue');
-        if (el && el.style.display !== 'none') {
-          clearInterval(waitContinue);
-          continueLogin();
-        }
-      }, 200);
-      return;
-    }
-
-    showStatus('💬', 'Entrando via WhatsApp...', 'Validando seu link de acesso seguro');
-    continueLogin();
-
-    function continueLogin() {
-      var tries = 0;
-      var resolve = function() {
-        var db = window.FirestoreDB && window.FirestoreDB.db;
-        // Só chama auth() quando o APP estiver inicializado (fb.apps.length) —
-        // chamar antes do initializeApp lança "No Firebase App created".
-        var _appReady = window.firebase && window.firebase.apps && window.firebase.apps.length;
-        var auth = (_appReady && window.firebase.auth) ? window.firebase.auth() : null;
-        if (!db || !auth) {
-          if (tries++ < 80) return setTimeout(resolve, 100); // até 8s
-          showStatus('⚠️', 'Não foi possível carregar', 'Verifique sua conexão e tente abrir o link de novo.', true);
-          return;
-        }
-        db.collection('magicLinks').doc(token).get().then(function(doc) {
-          if (!doc.exists) {
-            showStatus('🔗', 'Link inválido ou expirado', 'Esse link não existe mais. Volte ao app e faça login novamente.', true);
-            return;
-          }
-          var data = doc.data() || {};
-          if (data.type !== 'customToken' || !data.customToken) {
-            showStatus('🔗', 'Link inválido', 'Formato de link não reconhecido. Peça um novo pelo app.', true);
-            return;
-          }
-          // Verifica expiração client-side (defense-in-depth)
-          if (data.expiresAt) {
-            var exp = data.expiresAt.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt);
-            if (exp < new Date()) {
-              showStatus('⏱️', 'Link expirado', 'O link de WhatsApp expirou. Abra o app e faça login novamente.', true);
-              return;
-            }
-          }
-          showStatus('💬', 'Quase lá...', 'Abrindo sua conta');
-          auth.signInWithCustomToken(data.customToken).then(function() {
-            // IMPORTANTE: showStatus() substituiu todo o document.body.innerHTML,
-            // então o #view-container não existe mais. Não adianta só fazer
-            // replaceState — o router não acharia o container. Fazemos um reload
-            // completo para /#dashboard. O auth token foi persistido por
-            // signInWithCustomToken (IndexedDB), então Firebase Auth verá o
-            // usuário logado após o reload e o app abre normalmente.
-            showStatus('✅', 'Você entrou!', 'Carregando o app...');
-            setTimeout(function() {
-              window.location.replace('/#dashboard');
-            }, 400);
-          }).catch(function(err) {
-            window._error('[wtMagicLink] signInWithCustomToken failed:', err);
-            if (typeof window._captureException === 'function') {
-              window._captureException(err, { area: 'wtMagicLink', token: token.substring(0, 6) + '...' });
-            }
-            showStatus('⚠️', 'Não foi possível entrar', 'O link pode ter expirado. Tente fazer login pelo app normalmente.', true);
-          });
-        }).catch(function(err) {
-          window._error('[wtMagicLink] Firestore fetch failed:', err);
-          showStatus('⚠️', 'Erro ao validar o link', 'Tente abrir de novo. Se persistir, faça login pelo app.', true);
-        });
-      };
-      resolve();
-    }
-  } catch (e) {
-    window._error('[wtMagicLink] handler crashed:', e);
-  }
-})();
+// v1.2.9: o handler do magic link por WhatsApp (?wt=) saiu junto com a Cloud
+// Function sendWhatsAppMagicLink. Número banido, apelação negada, portfólio Meta
+// morto — nenhum link desses é gerado desde então. Login por celular = SMS.
+// Ver project_whatsapp_meta_2fa_block.
 
 // v3.0.59: União de contas por e-mail — ?mh=TOKEN gerado por requestEmailMerge.
 // Clicar no link (que só chegou no e-mail da conta B) PROVA a posse dessa conta.
@@ -312,77 +216,17 @@
   } catch (e) { if (window._error) window._error('[mhMerge] handler crashed:', e); }
 })();
 
-// ── Autenticação por celular pelo botão do WhatsApp (?gv=TOKEN) ──────────────
-// v2.4.24: alternativa ao link do e-mail quando o e-mail de confirmação não
-// chega (ex.: UOL filtra). A pessoa toca no botão que mandamos no WhatsApp →
-// o Cloud Function verifyPhoneGateToken marca emailVerified + salva o telefone
-// e devolve um custom token pra logar direto, sem digitar nada.
-(function _handlePhoneGateToken() {
-  try {
-    var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
-    var token = qs && qs.get('gv');
-    if (!token) return;
+// v1.2.9: o handler do botão do WhatsApp no gate (?gv=) saiu junto com a Cloud
+// Function verifyPhoneGateToken. Nada grava gateTokens desde que o canal morreu.
+// Quem não recebe o e-mail de confirmação usa o SMS. Ver project_whatsapp_meta_2fa_block.
 
-    var bg = '#0f172a';
-    var fg = '#25d366';
-    document.documentElement.style.background = bg;
-    var showStatus = function(emoji, title, subtitle, isError) {
-      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + bg + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
-        '<div style="font-size:2.4rem;line-height:1;">' + emoji + '</div>' +
-        '<div style="font-size:1.05rem;font-weight:700;color:' + (isError ? '#ef4444' : fg) + ';">' + title + '</div>' +
-        (subtitle ? '<div style="font-size:0.85rem;color:#94a3b8;max-width:340px;line-height:1.5;">' + subtitle + '</div>' : '') +
-        (isError ? '<a href="/" style="margin-top:8px;color:' + fg + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + fg + ';padding:8px 18px;border-radius:8px;">Voltar ao início</a>' : '') +
-        '</div>';
-    };
-
-    showStatus('💬', 'Confirmando sua conta...', 'Validando o código do WhatsApp');
-
-    var tries = 0;
-    (function resolve() {
-      var fb = window.firebase;
-      // IMPORTANTE: esperar o APP inicializar (fb.apps.length), não só o SDK.
-      // firebase.initializeApp() roda DEPOIS destes IIFEs no mesmo auth.js — se
-      // chamarmos fb.functions() antes do init, lança "No Firebase App created"
-      // e a tela mostra "Erro ao carregar" (bug do reset por link, v2.6.12).
-      if (!fb || !fb.auth || !fb.functions || !(fb.apps && fb.apps.length)) {
-        if (tries++ < 80) return setTimeout(resolve, 100); // até 8s
-        showStatus('⚠️', 'Não foi possível carregar', 'Verifique sua conexão e tente abrir o link de novo.', true);
-        return;
-      }
-      var fn;
-      try { fn = fb.functions().httpsCallable('verifyPhoneGateToken'); }
-      catch (e) { showStatus('⚠️', 'Erro ao carregar', 'Tente abrir o link de novo.', true); return; }
-      fn({ token: token }).then(function(res) {
-        var d = (res && res.data) || {};
-        if (!d.ok) {
-          if (d.reason === 'expired') { showStatus('⏱️', 'Link expirado', 'O código do WhatsApp expirou. Abra o app e peça um novo.', true); return; }
-          showStatus('🔗', 'Link inválido', 'Esse link não é mais válido. Abra o app e tente de novo.', true);
-          return;
-        }
-        if (d.customToken) {
-          fb.auth().signInWithCustomToken(d.customToken).then(function() {
-            showStatus('✅', 'Conta confirmada!', 'Entrando no app...');
-            setTimeout(function() { window.location.replace('/#dashboard'); }, 500);
-          }).catch(function() {
-            showStatus('✅', 'Conta confirmada!', 'Volte ao app e faça login com seu e-mail e senha.', false);
-          });
-        } else {
-          showStatus('✅', 'Conta confirmada!', 'Volte ao app e faça login com seu e-mail e senha.', false);
-        }
-      }).catch(function(err) {
-        if (window._error) window._error('[gvToken] failed:', err);
-        showStatus('⚠️', 'Erro ao confirmar', 'Tente abrir o link de novo. Se persistir, entre pelo app.', true);
-      });
-    })();
-  } catch (e) {
-    if (window._error) window._error('[gvToken] handler crashed:', e);
-  }
-})();
-
-// ── Redefinir senha pelo botão do WhatsApp (?pr=TOKEN) ───────────────────────
-// v2.4.97: a pessoa pediu reset por celular e tocou no botão do WhatsApp →
-// verifyPasswordResetPhoneToken devolve um custom token; logamos a conta e
-// mostramos a tela de nova senha (e-mail pré-preenchido) direto aqui.
+// ── Redefinir senha pelo link do e-mail (?pr=TOKEN) ──────────────────────────
+// ⚠️ NÃO é do WhatsApp, apesar do histórico. Nasceu na v2.4.97 pro botão do
+// WhatsApp, mas a v2.6.x fez o e-mail de "Esqueci minha senha" usar o MESMO
+// wrapper: hoje `?pr=` é o link CANÔNICO do reset por e-mail (wrapper em vez do
+// oobCode cru, que scanners anti-phishing consumiam antes do clique). Emissores
+// vivos: sendPasswordReset e dispatchAccountRecovery — os dois por e-mail.
+// v1.2.9: quase caiu junto com a remoção do WhatsApp. Não remover.
 (function _handlePasswordResetToken() {
   try {
     var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
@@ -390,7 +234,7 @@
     if (!token) return;
 
     var bg = '#0f172a';
-    var fg = '#25d366';
+    var fg = '#10b981'; // verde do app (o link vem por E-MAIL, não WhatsApp)
     document.documentElement.style.background = bg;
     var showStatus = function(emoji, title, subtitle, isError) {
       document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + bg + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
@@ -421,7 +265,7 @@
       fn({ token: token }).then(function(res) {
         var d = (res && res.data) || {};
         if (!d.ok) {
-          if (d.reason === 'expired') { showStatus('⏱️', 'Link expirado', 'O código do WhatsApp expirou. Abra o app e peça um novo.', true); return; }
+          if (d.reason === 'expired') { showStatus('⏱️', 'Link expirado', 'O link expirou. Abra o app e peça a redefinição de novo.', true); return; }
           showStatus('🔗', 'Link inválido', 'Esse link não é mais válido. Abra o app e tente de novo.', true);
           return;
         }
@@ -448,92 +292,12 @@
   }
 })();
 
-// ── Confirmar posse do celular pelo link do WhatsApp (?pv=TOKEN) ──────────────
-// v2.6.x: quem abre o link JÁ LOGADO na conta principal confirma o número em 1
-// toque (sem digitar código). Precisa da sessão principal — se não estiver
-// logado, guarda o token e processa após o login. Self-contained (não depende do
-// código do perfil). Fluxo: verifyPhoneOwnershipToken → custom token da conta de
-// telefone → instância secundária (prova) → mergePhoneAccount (dryRun → reivindica
-// se número novo, ou pede confirmação se for unir contas).
-window._handlePhoneOwnershipLink = function () {
-  try {
-    var token = null;
-    try {
-      var qs = new URLSearchParams(window.location.search);
-      token = qs.get('pv') || null;
-    } catch (e) {}
-    if (!token) { try { token = sessionStorage.getItem('sp_pvToken') || null; } catch (e) {} }
-    if (!token || window._pvHandling) return;
-    var fb = window.firebase;
-    if (!fb || !fb.auth || !fb.functions) return;
-    var cu = window.AppStore && window.AppStore.currentUser;
-    function ov(html) {
-      var o = document.getElementById('pv-overlay');
-      if (!o) { o = document.createElement('div'); o.id = 'pv-overlay'; document.body.appendChild(o); }
-      o.style.cssText = 'position:fixed;inset:0;z-index:100061;background:rgba(0,0,0,0.62);display:flex;align-items:center;justify-content:center;padding:24px;';
-      o.innerHTML = '<div style="max-width:360px;width:100%;background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:22px;text-align:center;color:var(--text-bright,#fff);font-size:0.9rem;line-height:1.5;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' + html + '</div>';
-      return o;
-    }
-    function close() { var o = document.getElementById('pv-overlay'); if (o) o.remove(); }
-    if (!cu || !cu.uid) {
-      try { sessionStorage.setItem('sp_pvToken', token); } catch (e) {}
-      ov('<div style="font-size:1.8rem;">📱</div><div style="margin-top:8px;">Pra confirmar este celular, <b>entre na sua conta</b> primeiro.</div><button onclick="if(window.openModal)openModal(\'modal-login\')" style="margin-top:14px;background:#25d366;color:#0a1f12;border:none;padding:9px 18px;border-radius:10px;font-weight:800;cursor:pointer;">Entrar</button>');
-      return;
-    }
-    window._pvHandling = true;
-    try { sessionStorage.removeItem('sp_pvToken'); } catch (e) {}
-    try { history.replaceState(null, '', window.location.pathname + window.location.hash); } catch (e) {}
-    ov('<div style="font-size:1.8rem;">📱</div><div style="margin-top:8px;">Confirmando seu celular…</div>');
-    var survivor = cu.uid;
-    fb.functions().httpsCallable('verifyPhoneOwnershipToken')({ token: token }).then(function (res) {
-      var d = (res && res.data) || {};
-      if (!d.ok || !d.customToken) {
-        ov('<div style="font-size:1.8rem;">⚠️</div><div style="margin-top:8px;color:#fca5a5;">' + (d.reason === 'expired' ? 'Esse link expirou. Peça um novo no app.' : 'Link inválido. Tente pelo app.') + '</div><button onclick="document.getElementById(\'pv-overlay\').remove()" style="margin-top:14px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:8px 18px;border-radius:10px;cursor:pointer;">Fechar</button>');
-        window._pvHandling = false;
-        return;
-      }
-      var cfg = fb.app().options;
-      var sapp = fb.apps.find(function (a) { return a.name === 'profilephone'; }) || fb.initializeApp(cfg, 'profilephone');
-      try { sapp.auth().setPersistence(fb.auth.Auth.Persistence.NONE); } catch (e) {}
-      sapp.auth().signInWithCustomToken(d.customToken).then(function (cred) {
-        var phoneUser = cred.user;
-        function setStatus(html) { ov(html); }
-        function callMerge(dry) {
-          return phoneUser.getIdToken().then(function (proof) {
-            return fb.auth().currentUser.getIdToken().then(function (mainTok) {
-              return fetch('https://us-central1-scoreplace-app.cloudfunctions.net/mergePhoneAccount', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mainTok },
-                body: JSON.stringify({ data: { oldUid: phoneUser.uid, proofIdToken: proof, dryRun: !!dry } })
-              });
-            });
-          }).then(function (r) { return r.json(); }).then(function (j) { return (j && j.result) || (j && j.error ? { _error: j.error } : null); });
-        }
-        function done(merged) {
-          try { sapp.auth().signOut(); } catch (e) {}
-          setStatus('<div style="font-size:1.8rem;">✅</div><div style="margin-top:8px;">' + (merged ? 'Contas unidas e celular vinculado!' : 'Celular verificado e vinculado!') + '</div>');
-          setTimeout(function () { try { window.location.hash = '#profile'; } catch (e) {} window.location.reload(); }, 1500);
-        }
-        function fail(m) { try { sapp.auth().signOut(); } catch (e) {} window._pvHandling = false; setStatus('<div style="font-size:1.8rem;">⚠️</div><div style="margin-top:8px;color:#fca5a5;">Não foi possível: ' + (window._safeHtml ? window._safeHtml(String(m || 'erro')) : 'erro') + '</div><button onclick="document.getElementById(\'pv-overlay\').remove()" style="margin-top:14px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:8px 18px;border-radius:10px;cursor:pointer;">Fechar</button>'); }
-        function eMsg(r) { return (r && r._error && (r._error.message || r._error.status)) || 'erro'; }
-        if (phoneUser.uid === survivor) { done(false); return; }
-        callMerge(true).then(function (rep) {
-          if (!rep || rep._error) { fail(eMsg(rep)); return; }
-          if (rep.merged === false) { callMerge(false).then(function (r2) { (r2 && r2.ok) ? done(false) : fail(eMsg(r2)); }); return; }
-          var bits = [];
-          if (rep.tournaments) bits.push(rep.tournaments + ' torneio(s)');
-          if (rep.casualMatches) bits.push(rep.casualMatches + ' partida(s)');
-          if (rep.presences) bits.push(rep.presences + ' presença(s)');
-          var resumo = bits.length ? (' Vamos trazer ' + bits.join(', ') + ' pra esta conta.') : '';
-          var doIt = function () { setStatus('<div style="margin-top:8px;">Unindo as contas…</div>'); callMerge(false).then(function (r2) { (r2 && r2.ok) ? done(true) : fail(eMsg(r2)); }); };
-          var cancel = function () { try { sapp.auth().signOut(); } catch (e) {} window._pvHandling = false; close(); };
-          if (typeof showConfirmDialog === 'function') {
-            showConfirmDialog('🔀 Esse número já é de outra conta sua', 'Esse celular pertence a outra conta sua.' + resumo + ' Quer unir as duas contas?', doIt, cancel, 'Unir contas', 'Cancelar');
-          } else { doIt(); }
-        }).catch(function (e) { fail(e && (e.code || e.message)); });
-      }).catch(function (e) { window._pvHandling = false; ov('<div style="color:#fca5a5;">Erro ao confirmar. Tente pelo app.</div>'); });
-    }).catch(function () { window._pvHandling = false; ov('<div style="color:#fca5a5;">Erro. Tente de novo.</div>'); });
-  } catch (e) { if (window._error) window._error('[pvLink] crashed:', e); }
-};
+
+// v1.2.9: o handler do link de posse do celular por WhatsApp (?pv=) saiu junto
+// com a Cloud Function verifyPhoneOwnershipToken. Nada grava phoneOwnershipTokens
+// desde que o canal morreu. Confirmar celular no perfil = SMS (o caminho primário,
+// que é quem produz o proofIdToken do merge). Ver project_whatsapp_meta_2fa_block.
+
 
 // ─── Config Firebase: PRODUÇÃO por padrão, STAGING só por hostname ────────────
 // scoreplace.app (e qualquer host que NÃO seja o staging, incl. localhost de
@@ -1934,11 +1698,11 @@ window._entrarExpandRegister = function(mode, raw) {
   if (btn) btn.textContent = 'Criar conta e entrar';
   if (hint) {
     if (mode === 'phone') {
-      hint.innerHTML = '✨ Número novo por aqui — vamos criar sua conta. Você vai receber um <b>código por SMS</b> e um <b>código no WhatsApp</b> pra confirmar o número.';
+      hint.innerHTML = '✨ Número novo por aqui — vamos criar sua conta. Você vai receber um <b>código por SMS</b> pra confirmar o número.';
     } else if (typeof window._isUnreliableEmailDomain === 'function' && window._isUnreliableEmailDomain(raw)) {
       // v3.0.x: nota GENTIL (sem alarme, sem Google). Esses provedores às vezes seguram a
       // confirmação; o caminho pelo celular fica oferecido com calma na tela seguinte.
-      hint.innerHTML = '✨ E-mail novo por aqui — vamos criar sua conta. <span style="opacity:0.85;">Se a confirmação não chegar, você confirma rapidinho pelo <b>celular</b> (SMS + WhatsApp) na próxima tela.</span>';
+      hint.innerHTML = '✨ E-mail novo por aqui — vamos criar sua conta. <span style="opacity:0.85;">Se a confirmação não chegar, você confirma rapidinho pelo <b>celular</b> (SMS) na próxima tela.</span>';
     } else {
       hint.innerHTML = '✨ E-mail novo por aqui — vamos criar sua conta. Confirme abaixo.';
     }
@@ -1954,7 +1718,7 @@ window._entrarShowRecovery = function(res, noPassword) {
   var esc = window._safeHtml || function(s){ return s; };
   var parts = [];
   if (ch.email) parts.push('e-mail <b>' + esc(ch.email) + '</b>');
-  if (ch.phone) parts.push('WhatsApp <b>' + esc(ch.phone) + '</b>');
+  if (ch.phone) parts.push('SMS <b>' + esc(ch.phone) + '</b>');
   var canais = parts.length ? parts.join(' e ') : 'seus contatos cadastrados';
   var head = noPassword
     ? '🔑 Essa conta ainda não tem senha. Enviamos um link pra você criar uma — por ' + canais + '.'
@@ -2009,13 +1773,13 @@ window._entrarShowGoogleSuggestion = function(provider) {
   }
 };
 
-// v4.0.35: recuperação por CELULAR cai no acesso por WhatsApp. BUG reportado
+// v4.0.35: recuperação por CELULAR cai no acesso por celular. BUG reportado
 // (Adriano, conta só-celular): "Esqueci minha senha" mostrava "Não deu pra confirmar
 // agora. Verifique sua conexão…" mesmo com 5G — a mensagem era um fallback errado,
 // porque o reset NATIVO do Firebase só sabe mandar e-mail e a conta não tem e-mail
-// real. Em vez disso, pra celular disparamos o fluxo de acesso por WhatsApp (link
-// mágico + SMS): a pessoa entra pelo link do WhatsApp e depois define uma senha nova
-// no perfil. É o caminho mais confiável pra quem não usa e-mail.
+// real. Em vez disso, pra celular disparamos o login por celular: a pessoa entra com
+// o código do SMS e depois define uma senha nova no perfil.
+// v1.2.9: era "link mágico do WhatsApp + SMS" — o WhatsApp saiu, sobrou o SMS.
 window._entrarPhoneRecoveryFallback = function(raw) {
   var country = (document.getElementById('login-identifier-country') || {}).value || '55';
   var e164 = window._entrarPhoneE164(raw, country);
@@ -2026,14 +1790,43 @@ window._entrarPhoneRecoveryFallback = function(raw) {
   var hc = document.getElementById('login-phone-country');
   if (hp) hp.value = localDigits;
   if (hc) hc.value = country;
-  window._entrarStatus('📱 Pra esse número, vamos te mandar um <b>acesso pelo WhatsApp</b> — toque no link pra entrar e depois defina uma senha nova no seu perfil.', 'info');
+  window._entrarStatus('📱 Pra esse número, vamos te mandar um <b>código por SMS</b> — entre com ele e depois defina uma senha nova no seu perfil.', 'info');
   if (typeof handlePhoneLogin === 'function') handlePhoneLogin();
+};
+
+// v1.2.10: oferta de reset por SMS no caminho do E-MAIL. Depois que o WhatsApp saiu
+// (v1.2.9), o SMS é a ÚNICA saída pra quem tem e-mail que engole transacional — e o
+// app já sabe quem são (_isUnreliableEmailDomain: Hotmail/Outlook/Live/MSN/UOL/BOL/
+// Terra). Sem isto, "Esqueci minha senha" com um Hotmail é beco sem saída: mandamos
+// o link pro provedor que a gente mesmo classifica como não-confiável e paramos ali.
+// `maskedPhone` vem do checkAccount (channels.phone, mascarado) — só oferecemos o
+// SMS quando a conta REALMENTE tem celular cadastrado, senão o botão frustra.
+// Devolve '' quando não há celular → o chamador concatena sem precisar de if.
+window._entrarOfferPhoneResetHtml = function(email, maskedPhone) {
+  if (!maskedPhone) return '';
+  var esc = window._safeHtml || function(s){ return s; };
+  var bad = (typeof window._isUnreliableEmailDomain === 'function') &&
+            window._isUnreliableEmailDomain(email);
+  // Escape do argumento do onclick: barra ANTES da aspa (regra do CLAUDE.md —
+  // inverter a ordem re-escapa a barra da própria aspa e quebra o handler).
+  var arg = String(email || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var lead = bad
+    ? '⚠️ Esse provedor costuma <b>segurar</b> nosso e-mail.'
+    : 'Não chegou?';
+  return '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.12);">' +
+      '<div style="font-size:0.76rem;color:var(--text-muted);line-height:1.45;margin-bottom:8px;">' +
+        lead + ' Redefina pelo celular <b>' + esc(maskedPhone) + '</b> — você recebe um código por <b>SMS</b>.' +
+      '</div>' +
+      '<button onclick="window._resetPhoneStart(\'' + arg + '\')" class="btn btn-block" ' +
+        'style="background:#25d366;color:#0a1f12;font-size:0.86rem;font-weight:800;padding:10px;">' +
+        '📱 Redefinir por celular' + (bad ? ' (recomendado)' : '') + '</button>' +
+    '</div>';
 };
 
 // "Esqueci minha senha": dispara o reset SEM precisar errar a senha antes. Checa
 // se a conta EXISTE primeiro (o app já assume enumeração — distingue entrar de
 // criar conta), pra dar a mensagem certa: sem conta → criar; Google sem senha →
-// entrar com Google; com senha/celular → manda o link por e-mail + WhatsApp.
+// entrar com Google; com senha/celular → manda o link por e-mail, ou código por SMS.
 window._entrarForgotPassword = function() {
   var idEl = document.getElementById('login-identifier');
   var raw = idEl ? idEl.value.trim() : '';
@@ -2050,13 +1843,19 @@ window._entrarForgotPassword = function() {
   }
   window._entrarStatus('Verificando…', 'info');
   var esc = window._safeHtml || function(s){ return s; };
+  // Celular mascarado da conta (checkAccount) — preenchido abaixo, usado pra
+  // oferecer o SMS quando o e-mail é o canal fraco.
+  var _acctPhone = null;
   var _showSent = function(res) {
     var ch = (res && res.channels) || {};
     var parts = [];
     if (ch.email) parts.push('e-mail <b>' + esc(ch.email) + '</b>');
-    if (ch.phone) parts.push('WhatsApp <b>' + esc(ch.phone) + '</b>');
+    // v1.2.10: `ch.phone` NÃO vira mais "enviamos por SMS". O dispatchAccountRecovery
+    // não tem perna de SMS (a de celular era 100% WhatsApp e saiu na v1.2.9), então
+    // anunciar SMS aqui era promessa falsa — e caía justo em quem depende dele.
     var canais = parts.length ? (' por ' + parts.join(' e ')) : '';
-    window._entrarStatus('🔑 Enviamos um link pra redefinir a senha' + canais + '.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha (com confirmação). Não chegou? Veja o spam.</span>', 'success');
+    var oferta = (mode !== 'phone') ? window._entrarOfferPhoneResetHtml(raw, _acctPhone) : '';
+    window._entrarStatus('🔑 Enviamos um link pra redefinir a senha' + canais + '.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha (com confirmação). Não chegou? Veja o spam.</span>' + oferta, 'success');
   };
   var _noAccount = function() {
     // Sem conta, mas e-mail do Google → quase sempre a pessoa entra com Google.
@@ -2065,6 +1864,9 @@ window._entrarForgotPassword = function() {
     window._entrarStatus('🤔 Não encontramos nenhuma conta com ' + what + '. Pra <b>criar uma conta nova</b>, digite uma senha acima e toque em <b>Entrar</b>.', 'warning');
   };
   window._entrarCheckAccount(raw).then(function(info) {
+    // Canal de celular da conta (mascarado). Só existe se a pessoa cadastrou —
+    // é o que autoriza oferecer o SMS como saída quando o e-mail não chega.
+    _acctPhone = (info && info.channels && info.channels.phone) || null;
     // Conta social SEM senha (e a verificação funcionou) → manda pro provedor.
     if (info && info.exists) {
       var social = info.socialProviders || [];
@@ -2081,7 +1883,7 @@ window._entrarForgotPassword = function() {
     // sai mesmo se o dispatch rico (PT + ?pr=) falhar.
     var _nativeEmailReset = function() {
       // Celular: o reset nativo do Firebase só manda e-mail, e conta só-celular não
-      // tem e-mail real. Vai pro acesso por WhatsApp (entra e troca a senha depois).
+      // tem e-mail real. Vai pro acesso por celular/SMS (entra e troca a senha depois).
       if (mode === 'phone') { window._entrarPhoneRecoveryFallback(raw); return; }
       if (!window.firebase || !firebase.auth) {
         window._entrarStatus('⚠️ Não deu pra confirmar agora. Verifique sua conexão e toque de novo em "Esqueci minha senha".', 'warning');
@@ -2089,7 +1891,10 @@ window._entrarForgotPassword = function() {
       }
       try { firebase.auth().languageCode = 'pt-BR'; } catch (_e) {}
       firebase.auth().sendPasswordResetEmail(raw).then(function () {
-        window._entrarStatus('🔑 Enviamos um link pra redefinir a senha por e-mail <b>' + esc(raw) + '</b>.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha. Não chegou? Veja o spam/lixeira.</span>', 'success');
+        // Mesma oferta de SMS do _showSent: este é o caminho MAIS provável pra
+        // quem tem provedor ruim (o dispatch rico não retorna canal e cai aqui).
+        var oferta = window._entrarOfferPhoneResetHtml(raw, _acctPhone);
+        window._entrarStatus('🔑 Enviamos um link pra redefinir a senha por e-mail <b>' + esc(raw) + '</b>.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha. Não chegou? Veja o spam/lixeira.</span>' + oferta, 'success');
       }).catch(function (err) {
         var code = (err && err.code) || '';
         if (code === 'auth/user-not-found') { _noAccount(); return; }
@@ -2120,7 +1925,7 @@ window._entrarSetupPhonePassword = function(e164withPlus, password, displayName)
   // Pendência lida pelo hook em handlePhoneVerifyCode (e best-effort no ?wt=).
   window._phonePwSetup = { phone: e164withPlus, password: password, displayName: displayName || '' };
   try { sessionStorage.setItem('sp_pwSetup', JSON.stringify(window._phonePwSetup)); } catch (_e) {}
-  window._entrarStatus('📱 Enviamos um <b>código por SMS</b> e um <b>código pelo WhatsApp</b> pra confirmar seu número. Confirme abaixo pra concluir.', 'info');
+  window._entrarStatus('📱 Enviamos um <b>código por SMS</b> pra confirmar seu número. Confirme abaixo pra concluir.', 'info');
   if (typeof handlePhoneLogin === 'function') handlePhoneLogin();
 };
 
@@ -2143,7 +1948,7 @@ window._entrarDoRegister = function(mode, raw, password) {
             window.FirestoreDB.saveUserProfile(user.uid, { authProvider: 'password', email: user.email || raw.toLowerCase(), displayName: name, updatedAt: new Date().toISOString() }).catch(function(){});
           }
           if (typeof _sendRichVerificationEmail === 'function') _sendRichVerificationEmail(user, name);
-          window._entrarStatus('✅ Conta criada! Enviamos um <b>link de confirmação</b> pro seu e-mail — abra pra ativar.<br><span style="color:var(--text-muted);">Não chegou (UOL/Hotmail)? Volte e cadastre com <b>celular</b> — recebe SMS + WhatsApp.</span>', 'success');
+          window._entrarStatus('✅ Conta criada! Enviamos um <b>link de confirmação</b> pro seu e-mail — abra pra ativar.<br><span style="color:var(--text-muted);">Não chegou (UOL/Hotmail)? Volte e cadastre com <b>celular</b> — recebe um código por SMS.</span>', 'success');
         });
       })
       .catch(function(error) {
@@ -2605,61 +2410,27 @@ function handlePhoneLogin() {
   if (window._phoneLoginInFlight) return;
   window._phoneLoginInFlight = true;
 
-  // ── v4.0.35: WhatsApp PRIMEIRO, SMS como canal secundário (e sem travar) ────
-  // O reCAPTCHA do SMS quebra com frequência (especialmente no iOS Safari) e
-  // deixava o usuário preso: o passo de código só aparecia DEPOIS do SMS dar certo,
-  // então quando o reCAPTCHA falhava, a pessoa via só um erro e ficava sem caminho.
-  // Agora o link de acesso pelo WhatsApp é disparado ANTES do SMS e o passo de
-  // confirmação aparece NA HORA — a pessoa entra pelo link do WhatsApp mesmo que o
-  // SMS/reCAPTCHA falhe. O SMS roda depois, em segundo plano, e a sua falha vira só
-  // uma nota discreta (sem toast assustador) porque o WhatsApp é o caminho primário.
-  window._phoneLoginE164 = phone; // pro fallback do código do WhatsApp na verificação
+  // v1.2.9: o canal WhatsApp saiu (número banido, apelação negada, portfólio Meta
+  // morto — ver project_whatsapp_meta_2fa_block). Isso REVERTE o desenho da v4.0.35,
+  // que tinha feito o WhatsApp primário justamente porque o reCAPTCHA do SMS quebra
+  // muito no iOS Safari. Sem rede de segurança, a falha do SMS deixa de ser nota
+  // discreta e volta a ser ERRO barulhento — é o único canal, e o usuário precisa
+  // saber pra pedir de novo ou entrar por e-mail.
   _showPhoneVerificationStep();
   var _smsNote0 = document.getElementById('phone-step-sms-note');
-  if (_smsNote0) _smsNote0.innerHTML = '';
-  var _waStatus0 = document.getElementById('phone-step-wa-status');
-  if (_waStatus0) _waStatus0.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">⏳ Enviando código pelo WhatsApp…</span>';
-  showNotification('📱 Código a caminho', 'Enviamos um código por SMS e por WhatsApp pra ' + phone + '. Digite o que chegar primeiro.', 'info');
-
-  // Código do WhatsApp (nosso, via Cloud API oficial) — não depende de reCAPTCHA nem
-  // do SMS. Vem no MESMO campo do código do SMS: a verificação tenta o confirm do
-  // Firebase primeiro e, se não bater, cai em verifyWhatsAppLoginCode. O template
-  // AUTHENTICATION só existe quando a Meta aprovar a verificação da empresa; até lá
-  // isto devolve {ok:false} e o app segue no SMS (degrada limpo).
-  (function() {
-    try {
-      firebase.functions().httpsCallable('sendWhatsAppLoginCode')({ phone: phone })
-        .then(function(res) {
-          var d = res && res.data;
-          window._log && window._log('[WA login code] resultado:', JSON.stringify(d));
-          var ws = document.getElementById('phone-step-wa-status');
-          if (!ws) return;
-          if (d && d.ok) {
-            ws.innerHTML = '<span style="color:#10b981;font-size:0.74rem;font-weight:700;">✅ Código enviado pelo WhatsApp — digite acima.</span>';
-          } else {
-            ws.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora — use o código do SMS abaixo.</span>';
-          }
-        })
-        .catch(function(err) {
-          window._warn && window._warn('[WA login code] falhou:', err && err.message);
-          var ws = document.getElementById('phone-step-wa-status');
-          if (ws) ws.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora — use o código do SMS abaixo.</span>';
-        });
-    } catch (e) {
-      window._warn && window._warn('[WA login code] init falhou:', e && e.message);
-    }
-  })();
+  if (_smsNote0) _smsNote0.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">⏳ Enviando código por SMS…</span>';
+  showNotification('📱 Código a caminho', 'Enviamos um código por SMS pra ' + phone + '.', 'info');
 
   // ── NATIVO (Capacitor): SMS sem reCAPTCHA via plugin ───────────────────────
   // No app nativo, pula todo o caminho reCAPTCHA (que quebra no WKWebView) e usa
-  // o Phone Auth nativo do plugin. WhatsApp acima já foi disparado como canal
-  // paralelo. Na WEB _isNativeAuthAvailable() é sempre false → segue reCAPTCHA.
+  // o Phone Auth nativo do plugin. Na WEB _isNativeAuthAvailable() é sempre false → segue reCAPTCHA.
+  // (WhatsApp saiu na v1.2.9 — SMS é o canal ÚNICO; ver project_whatsapp_is_wame_only.)
   if (typeof _isNativeAuthAvailable === 'function' && _isNativeAuthAvailable()) {
     _sendPhoneCodeNative(phone);
     return;
   }
 
-  // ── SMS (canal secundário) ─────────────────────────────────────────────────
+  // ── SMS (canal ÚNICO) ──────────────────────────────────────────────────────
   // v1.3.76-beta: container pro body ANTES de qualquer operação de reCAPTCHA pra
   // o iframe não ficar clipado por overflow:hidden do modal.
   _ensureRecaptchaInBody();
@@ -2673,11 +2444,12 @@ function handlePhoneLogin() {
       'expired-callback': function() { _resetPhoneRecaptcha(); }
     });
   } catch (e) {
-    // reCAPTCHA nem inicializa (navegador hostil) — sem problema: o WhatsApp já foi.
+    // v1.2.9: sem o WhatsApp, reCAPTCHA morto = sem código nenhum. Erro barulhento.
     window._phoneLoginInFlight = false;
     window._warn && window._warn('[phoneLogin] reCAPTCHA init falhou:', e && (e.message || e));
     var _n0 = document.getElementById('phone-step-sms-note');
-    if (_n0) _n0.innerHTML = '<span style="color:#fbbf24;font-size:0.72rem;">⚠️ SMS indisponível neste navegador — use o código do WhatsApp acima.</span>';
+    if (_n0) _n0.innerHTML = '<span style="color:#ef4444;font-size:0.72rem;">⚠️ Não foi possível enviar o SMS neste navegador. Entre com seu e-mail, ou tente pelo Safari/Chrome.</span>';
+    showNotification('Não deu pra enviar o SMS', 'Este navegador bloqueou a verificação. Entre com seu e-mail, ou tente por outro navegador.', 'error');
     return;
   }
 
@@ -2700,17 +2472,26 @@ function handlePhoneLogin() {
         window._captureException(error, { area: 'phoneLogin', code: error && error.code, message: error && error.message });
       }
       _resetPhoneRecaptcha();
-      // SMS é secundário: NÃO mostramos toast de erro (o WhatsApp já foi e é o
-      // caminho principal). Só uma nota inline discreta — o passo + link do WhatsApp
-      // continuam na tela, então o usuário nunca fica sem saída.
+      // v1.2.9: o SMS virou o ÚNICO canal (o WhatsApp saiu). A falha dele agora
+      // deixa a pessoa SEM código, então vira erro visível + saída pelo e-mail.
       var code = (error && error.code) || 'unknown';
-      var smsMsg;
-      if (code === 'auth/invalid-phone-number') smsMsg = '⚠️ Número inválido pro SMS. Confira o DDI + DDD + número.';
-      else if (code === 'auth/too-many-requests') smsMsg = 'ℹ️ Muitas tentativas de SMS — use o link do WhatsApp acima.';
-      else if (code === 'auth/operation-not-allowed') smsMsg = 'ℹ️ SMS desabilitado nesta conta — use o link do WhatsApp acima.';
-      else smsMsg = 'ℹ️ SMS indisponível agora — use o link do WhatsApp acima.';
+      var smsMsg, toastMsg;
+      if (code === 'auth/invalid-phone-number') {
+        smsMsg = '⚠️ Número inválido. Confira o DDI + DDD + número.';
+        toastMsg = 'Confira o DDI + DDD + número e tente de novo.';
+      } else if (code === 'auth/too-many-requests') {
+        smsMsg = '⚠️ Muitas tentativas. Aguarde alguns minutos ou entre com seu e-mail.';
+        toastMsg = 'Muitas tentativas seguidas. Aguarde alguns minutos ou entre com seu e-mail.';
+      } else if (code === 'auth/operation-not-allowed') {
+        smsMsg = '⚠️ SMS indisponível. Entre com seu e-mail.';
+        toastMsg = 'O SMS está indisponível nesta conta. Entre com seu e-mail.';
+      } else {
+        smsMsg = '⚠️ Não foi possível enviar o SMS. Tente de novo ou entre com seu e-mail.';
+        toastMsg = 'Não foi possível enviar o SMS. Tente de novo ou entre com seu e-mail.';
+      }
       var note = document.getElementById('phone-step-sms-note');
-      if (note) note.innerHTML = '<span style="color:#fbbf24;font-size:0.72rem;">' + smsMsg + '</span>';
+      if (note) note.innerHTML = '<span style="color:#ef4444;font-size:0.72rem;">' + smsMsg + '</span>';
+      showNotification('Não deu pra enviar o SMS', toastMsg, 'error');
     });
 }
 
@@ -2736,8 +2517,11 @@ function handlePhoneVerifyCode() {
   }
 
   if (!window._phoneConfirmationResult) {
-    // SMS não disponível (reCAPTCHA/SMS falhou) — o código pode ser o do WhatsApp.
-    _verifyWhatsAppLoginCodeAndSignIn(code);
+    // v1.2.9: antes, aqui caía no código do WhatsApp quando o SMS falhava. Sem esse
+    // canal, não existe código nenhum pra conferir — o SMS nunca saiu. Dizer "código
+    // errado" seria mentira e mandaria a pessoa digitar de novo pra sempre.
+    showNotification('Nenhum código foi enviado',
+      'O SMS não chegou a ser enviado. Feche e peça o código de novo, ou entre com seu e-mail.', 'error');
     return;
   }
 
@@ -2878,54 +2662,18 @@ function handlePhoneVerifyCode() {
     })
     .catch(function(error) {
       window._error('Phone verify error:', error);
-      // O código digitado pode ser o do WhatsApp (não o do SMS): tenta o nosso antes de errar.
-      if (error.code === 'auth/invalid-verification-code' || error.code === 'auth/code-expired') {
-        _verifyWhatsAppLoginCodeAndSignIn(code);
+      // v1.2.9: o campo aceitava o código do SMS OU o do WhatsApp; com o WhatsApp
+      // fora, só resta o do SMS — código que não bate é código errado mesmo.
+      if (error.code === 'auth/invalid-verification-code') {
+        showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error');
+      } else if (error.code === 'auth/code-expired') {
+        showNotification(_t('auth.codeExpired'), _t('auth.codeExpiredMsg'), 'error');
       } else {
         showNotification(_t('auth.error'), error.message || _t('auth.loginErrorMsg'), 'error');
       }
     });
 }
 
-// v1.1.15: o campo de código do login por celular aceita o código do SMS (Firebase)
-// OU o do WhatsApp (nosso, via Cloud API). Se o confirm do Firebase não bater, o
-// código pode ser o do WhatsApp — validamos aqui e logamos via custom token (espelha
-// o completar do magic link ?wt=). Degrade-safe: só roda quando o SMS não bateu.
-function _verifyWhatsAppLoginCodeAndSignIn(code) {
-  var phone = window._phoneLoginE164;
-  if (!phone) { showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error'); return; }
-  firebase.functions().httpsCallable('verifyWhatsAppLoginCode')({ phone: phone, code: code })
-    .then(function(res) {
-      var d = res && res.data;
-      if (d && d.ok && d.customToken) {
-        firebase.auth().signInWithCustomToken(d.customToken)
-          .then(function() {
-            window._phoneConfirmationResult = null;
-            try { _resetPhoneRecaptcha(); } catch (e) {}
-            var user = firebase.auth().currentUser;
-            showNotification(_t('auth.loginDone'), _t('auth.welcome', { greeting: user ? window._welcomeWord(user) : '' }), 'success');
-            var modal = document.getElementById('modal-login');
-            if (modal) modal.classList.remove('active');
-            try { _resetPhoneLoginUI(); } catch (e) {}
-          })
-          .catch(function(err) {
-            window._error && window._error('[waLoginCode] signInWithCustomToken falhou:', err);
-            showNotification(_t('auth.error'), _t('auth.loginErrorMsg'), 'error');
-          });
-      } else {
-        var reason = d && d.reason;
-        if (reason === 'expired' || reason === 'no-code') {
-          showNotification(_t('auth.codeExpired'), _t('auth.codeExpiredMsg'), 'error');
-        } else {
-          showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error');
-        }
-      }
-    })
-    .catch(function(err) {
-      window._warn && window._warn('[waLoginCode] verify falhou:', err && err.message);
-      showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error');
-    });
-}
 
 function _resetPhoneRecaptcha() {
   if (window._phoneRecaptchaVerifier) {
@@ -3393,7 +3141,7 @@ function _sendPasswordResetEmail(email) {
           '<button onclick="document.getElementById(\'reset-password-panel\').remove()" style="margin-top:10px;background:none;border:none;color:var(--primary-color);cursor:pointer;font-size:0.8rem;text-decoration:underline;">Fechar</button>' +
           // v2.4.97: caminho alternativo por celular (e-mail não chega no UOL/Hotmail).
           '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">ou</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
-          '<div style="font-size:0.74rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Não chegou o e-mail? Redefina pelo seu <b>celular cadastrado</b> — recebe um código por SMS e WhatsApp.</div>' +
+          '<div style="font-size:0.74rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Não chegou o e-mail? Redefina pelo seu <b>celular cadastrado</b> — recebe um código por SMS.</div>' +
           '<button onclick="window._resetPhoneStart(\'' + _safeResetEmail + '\')" class="btn btn-block" style="background:#25d366;color:#0a1f12;font-size:0.88rem;font-weight:800;padding:11px;">📱 Redefinir por celular</button>' +
         '</div>';
     }
@@ -3444,7 +3192,7 @@ function _sendPasswordResetEmail(email) {
 // ─── Redefinir senha por celular (v2.4.97) ───────────────────────────────────
 // Caminho alternativo dentro do painel "Link enviado!" pra quem não recebe o
 // e-mail de reset. A pessoa digita o celular CADASTRADO na conta → recebe
-// código por SMS (Firebase) + WhatsApp (código + botão) → confirma → define
+// código por SMS (Firebase) → confirma → define
 // nova senha (e-mail pré-preenchido) e entra. Espelha o gate por celular.
 window._resetPhoneEmail = '';
 window._resetSmsConfirmation = null;
@@ -3478,9 +3226,17 @@ window._resetPhoneStart = function(email) {
   var email2 = window._resetPhoneEmail || '';
   var panel = document.getElementById('reset-password-panel');
   if (!panel) {
-    // Sem painel (caso raro) — cria um inline acima do form de login.
-    var anchor = document.getElementById('email-login-mode');
-    if (!anchor) return;
+    // Sem painel — cria um inline no modal de login.
+    // v1.2.10: `#email-login-mode` é do modal de login ANTIGO, removido na v4.3.19
+    // (hoje é #login-identifier + #entrar-status). Como ele não existe em lugar
+    // nenhum do repo, esta função era um NO-OP: saía no `return` e o painel nunca
+    // renderizava — ou seja, o reset por SMS estava inalcançável. Passou batido
+    // porque o WhatsApp cobria o buraco; quando ele saiu (v1.2.9), o SMS virou a
+    // única saída pra e-mail que engole transacional (Hotmail/Outlook/UOL) e o
+    // beco sem saída apareceu. Ancora no modal atual, mantendo o legado no fim.
+    var anchor = document.getElementById('entrar-status') ||
+                 document.getElementById('email-login-mode');
+    if (!anchor || !anchor.parentNode) return;
     panel = document.createElement('div');
     panel.id = 'reset-password-panel';
     panel.style.cssText = 'margin-bottom:12px;padding:14px 16px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.25);border-radius:12px;';
@@ -3488,7 +3244,7 @@ window._resetPhoneStart = function(email) {
   }
   panel.innerHTML =
     '<div style="font-weight:700;font-size:0.9rem;color:var(--text-bright);margin-bottom:4px;">📱 Redefinir por celular</div>' +
-    '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:10px;line-height:1.45;">Digite o celular <b>cadastrado nesta conta</b>. Você recebe um código por <b>SMS</b> e por <b>WhatsApp</b> (com botão de 1 toque).</div>' +
+    '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:10px;line-height:1.45;">Digite o celular <b>cadastrado nesta conta</b>. Você recebe um código por <b>SMS</b>.</div>' +
     '<div style="display:flex;gap:8px;align-items:stretch;margin-bottom:6px;">' +
       '<span style="display:flex;align-items:center;padding:0 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);border-radius:10px;font-size:0.9rem;font-weight:700;color:var(--text-bright);white-space:nowrap;">🇧🇷 +55</span>' +
       '<input id="reset-phone-input" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-8888" oninput="window._resetPhoneMask(this)" style="flex:1;min-width:0;box-sizing:border-box;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright);font-size:1rem;" />' +
@@ -3579,7 +3335,7 @@ window._resetShowCodeStep = function(phoneE164) {
   panel.innerHTML =
     '<div style="font-weight:700;font-size:0.9rem;color:var(--text-bright);margin-bottom:4px;">🔑 Digite o código</div>' +
     '<div style="font-size:0.8rem;color:#25d366;font-weight:700;margin-bottom:8px;">' + (window._safeHtml ? window._safeHtml(phoneE164 || '') : (phoneE164 || '')) + '</div>' +
-    '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:10px;line-height:1.45;">Enviamos um código por <b>SMS</b> e por <b>WhatsApp</b>. Digite qualquer um — ou toque no botão da mensagem do WhatsApp pra redefinir direto.</div>' +
+    '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:10px;line-height:1.45;">Enviamos um código por <b>SMS</b>. Digite ele abaixo pra redefinir sua senha.</div>' +
     '<input id="reset-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:8px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright);font-size:1.3rem;font-weight:800;margin-bottom:10px;" />' +
     '<button id="reset-code-verify-btn" onclick="window._resetPhoneVerify()" class="btn btn-success btn-block" style="font-size:0.9rem;font-weight:800;padding:11px;margin-bottom:8px;">✅ Confirmar</button>' +
     '<div id="reset-code-status" style="min-height:18px;font-size:0.74rem;margin-bottom:6px;"></div>' +
@@ -3605,7 +3361,7 @@ window._resetPhoneVerify = function() {
 
   var _fail = function(msg) {
     if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar'; }
-    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + (msg || 'Código incorreto. Confira no SMS/WhatsApp.') + '</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + (msg || 'Código incorreto. Confira o SMS.') + '</span>';
     if (ci) { ci.focus(); ci.select && ci.select(); }
   };
 
@@ -3918,7 +3674,7 @@ window._showEmailVerificationGate = function(email, name) {
       '<button onclick="window._gateVerifyCode()" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;margin-bottom:8px;">✅ Confirmar</button>' +
       '<button onclick="window._gateResendCode(this)" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.82rem;font-weight:700;padding:9px;margin-bottom:14px;">📨 Reenviar código</button>' +
       '<div style="display:flex;align-items:center;gap:10px;margin:6px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">não recebeu o código?</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
-      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Confirme pelo <b>celular</b> — código por SMS + botão de autenticar no WhatsApp.</div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Confirme pelo <b>celular</b> — você recebe um código por SMS.</div>' +
       _phoneBtn;
   } else {
     _middle =
@@ -3926,7 +3682,7 @@ window._showEmailVerificationGate = function(email, name) {
       '<button onclick="window._checkEmailVerified()" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;margin-bottom:10px;">✅ Já confirmei</button>' +
       '<button onclick="window._resendVerifyEmail()" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.88rem;font-weight:700;padding:11px;margin-bottom:10px;">📨 Reenviar e-mail</button>' +
       '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">ou</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
-      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Não chegou o e-mail? Confirme pelo seu celular — recebe um código por SMS e WhatsApp.</div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Não chegou o e-mail? Confirme pelo seu celular — recebe um código por SMS.</div>' +
       _phoneBtn;
   }
   ov.innerHTML =
@@ -3943,7 +3699,7 @@ window._showEmailVerificationGate = function(email, name) {
 
 // ── Autenticação por celular no gate (v2.4.24) ──────────────────────────────
 // Alternativa pra quando o e-mail de confirmação não chega. A pessoa prova que
-// controla um telefone (SMS do Firebase + código/botão nosso pelo WhatsApp) e
+// controla um telefone (SMS do Firebase; o canal WhatsApp saiu na v1.2.5 — banido) e
 // a conta é confirmada (emailVerified=true) com o telefone salvo no perfil.
 window._gatePhoneConfirmation = null;
 window._gatePhonePending = null;
@@ -3954,7 +3710,11 @@ window._gatePhoneStart = function() {
   card.innerHTML =
     '<div style="font-size:2.2rem;margin-bottom:8px;">📱</div>' +
     '<div style="font-size:1.15rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:8px;">Confirmar por celular</div>' +
-    '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:16px;">Digite seu número com DDD. Você recebe um código por <b>SMS</b> e por <b>WhatsApp</b> (com botão de 1 toque).</div>' +
+    // v1.2.5: a promessa de WhatsApp saiu — o número foi banido pela Meta (14/jul) e a
+    // apelação negada. Prometer um canal morto é pior que não oferecer: a pessoa espera
+    // um botão de 1 toque que nunca chega e não procura o SMS. O SMS é do Firebase, não
+    // depende da Meta. Ver [[project_whatsapp_meta_2fa_block]].
+    '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:16px;">Digite seu número com DDD. Você recebe um código por <b>SMS</b>.</div>' +
     '<div style="display:flex;gap:8px;align-items:stretch;margin-bottom:12px;">' +
       '<span style="display:flex;align-items:center;padding:0 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);border-radius:10px;font-size:0.95rem;font-weight:700;color:var(--text-bright);">🇧🇷 +55</span>' +
       '<input id="gate-phone-input" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-8888" style="flex:1;min-width:0;box-sizing:border-box;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:1rem;" />' +
@@ -3992,19 +3752,15 @@ window._gatePhoneSend = function() {
   if (!u) { if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">Sessão expirada. Entre de novo.</span>'; return; }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">⏳ Enviando código por SMS e WhatsApp...</span>';
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">⏳ Enviando código por SMS...</span>';
   window._gatePhonePending = phoneE164;
 
-  // (1) WhatsApp em paralelo (código nosso + botão de 1 toque).
-  try {
-    if (firebase.functions) {
-      firebase.functions().httpsCallable('sendPhoneVerifyWhatsApp')({ phone: phoneE164 })
-        .then(function(r) { window._log && window._log('[gatePhone] WA:', JSON.stringify(r && r.data)); })
-        .catch(function(e) { window._warn && window._warn('[gatePhone] WA falhou:', e && (e.code || e.message)); });
-    }
-  } catch (e) {}
+  // v1.2.5: a chamada a sendPhoneVerifyWhatsApp saiu. O WhatsApp Business foi banido pela
+  // Meta (14/jul, apelação negada) — a CF só gastava um round-trip pra falhar no catch, e
+  // pior: fazia o status prometer um canal que não existe. O SMS abaixo (Firebase) é o
+  // único caminho, e nunca dependeu da Meta. Ver [[project_whatsapp_meta_2fa_block]].
 
-  // (2) SMS via Firebase — vincula o telefone à conta atual (mantém o e-mail).
+  // SMS via Firebase — vincula o telefone à conta atual (mantém o e-mail).
   try {
     if (typeof _ensureRecaptchaInBody === 'function') _ensureRecaptchaInBody();
     if (typeof _resetPhoneRecaptcha === 'function') _resetPhoneRecaptcha();
@@ -4036,8 +3792,8 @@ window._gateShowCodeStep = function(phoneE164, smsErrCode) {
   var card = document.querySelector('#email-verify-gate > div');
   if (!card) return;
   var smsNote = smsErrCode
-    ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:10px;">Não foi possível enviar SMS agora — use o código ou o botão do WhatsApp.</div>'
-    : '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;">Enviamos um código por <b>SMS</b> e por <b>WhatsApp</b>. Digite qualquer um deles — ou toque no botão da mensagem do WhatsApp pra entrar direto.</div>';
+    ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:10px;">Não foi possível enviar o SMS agora. Tente reenviar em alguns instantes.</div>'
+    : '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;">Enviamos um código por <b>SMS</b>. Digite ele aqui.</div>';
   card.innerHTML =
     '<div style="font-size:2.2rem;margin-bottom:8px;">🔑</div>' +
     '<div style="font-size:1.15rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Digite o código</div>' +
@@ -4066,23 +3822,16 @@ window._gatePhoneVerify = function() {
 
   var _fail = function(msg) {
     if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar'; }
-    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + (msg || 'Código incorreto. Confira no SMS/WhatsApp.') + '</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + (msg || 'Código incorreto. Confira o SMS.') + '</span>';
     if (ci) { ci.focus(); ci.select && ci.select(); }
   };
 
   // 1) Tenta como código NOSSO (WhatsApp) via Cloud Function.
-  var tryWhatsAppCode = function() {
-    if (!firebase.functions) return _fail();
-    return firebase.functions().httpsCallable('verifyPhoneGate')({ code: code })
-      .then(function(r) {
-        var d = (r && r.data) || {};
-        if (d.ok) { window._gateEnterApp(); return true; }
-        return false;
-      })
-      .catch(function() { return false; });
-  };
-
-  // 2) Tenta como código do Firebase (SMS) — confirma o link e finaliza no server.
+  // v1.2.5: tryWhatsAppCode REMOVIDO. Validava o código de 6 dígitos que o WhatsApp mandava
+  // (verifyPhoneGate{code} lê gateVerifications/{uid}) — como o WhatsApp foi banido (14/jul,
+  // apelação negada), esse doc nunca mais é criado: a chamada só gastava um round-trip pra
+  // devolver false antes de cair no SMS. Agora o SMS é direto.
+  // Tenta como código do Firebase (SMS) — confirma o link e finaliza no server.
   var tryFirebaseSms = function() {
     if (!window._gatePhoneConfirmation) return Promise.resolve(false);
     return window._gatePhoneConfirmation.confirm(code)
@@ -4099,11 +3848,8 @@ window._gatePhoneVerify = function() {
       .catch(function() { return false; });
   };
 
-  tryWhatsAppCode().then(function(done) {
-    if (done) return;
-    tryFirebaseSms().then(function(done2) {
-      if (!done2) _fail();
-    });
+  tryFirebaseSms().then(function(done2) {
+    if (!done2) _fail();
   });
 };
 
@@ -4291,6 +4037,39 @@ async function simulateLoginSuccess(user) {
     }
   } catch (e) { window._warn('[merged-login] checagem mergedInto falhou:', e); window._mergedRedirectInProgress = false; }
 
+  // v1.2.9: LOGIN COM A CREDENCIAL DA CONTA ABSORVIDA. Caso IRMÃO do de cima, e o que ele
+  // NÃO cobre: lá a conta existe e tem tombstone; aqui ela NEM EXISTE. Quando duas contas do
+  // mesmo tipo são fundidas (duas Google), a credencial da absorvida não migra — o Firebase
+  // não põe dois provedores do mesmo tipo numa conta. A pessoa clica "Entrar com Google",
+  // escolhe aquele e-mail, o Google autentica e o Firebase cria uma conta NOVA e VAZIA: sem
+  // perfil, sem torneios, sem tombstone pra ler. Uma duplicata — pior que antes do merge.
+  // A CF resolveLoginRedirect troca essa conta vazia pela conta certa (o merge registrou o
+  // dono em loginRedirects, que só o Admin SDK escreve). Pedido do dono (jul/2026): "as duas
+  // são aceitas" — a pessoa não precisa lembrar com qual e-mail se cadastrou.
+  // Ver [[project_privileged_fields_never_client_writable]].
+  try {
+    if (newUid && window.FirestoreDB && window.FirestoreDB.db && !window._mergedRedirectInProgress) {
+      var _pdoc = await window.FirestoreDB.db.collection('users').doc(newUid).get();
+      if (!_pdoc.exists) {   // sem perfil = conta possivelmente recém-criada pelo provedor
+        window._mergedRedirectInProgress = true;
+        try {
+          var _lrFn = firebase.functions().httpsCallable('resolveLoginRedirect');
+          var _lr = await _lrFn({});
+          if (_lr && _lr.data && _lr.data.redirected && _lr.data.customToken) {
+            window._log('[login-redirect] credencial de conta absorvida — entrando na conta certa');
+            window._simulateLoginInProgress = false;
+            window._simulateLoginInProgressAt = 0;
+            window._simulateLoginInProgressUid = '';
+            await firebase.auth().signInWithCustomToken(_lr.data.customToken);
+            window._mergedRedirectInProgress = false;
+            return; // onAuthStateChanged re-dispara com a conta certa
+          }
+        } catch (_lre) { window._warn('[login-redirect] resolveLoginRedirect falhou:', _lre); }
+        window._mergedRedirectInProgress = false;
+      }
+    }
+  } catch (e) { window._warn('[login-redirect] checagem falhou:', e); window._mergedRedirectInProgress = false; }
+
   // v1.9.78: GATE de verificação de e-mail. Conta e-mail/senha NÃO verificada
   // não entra no app — mostra o gate de confirmação (bloqueia tudo; sem merge/
   // sugestão). Google e telefone já entram verificados. Roda em todo caminho de
@@ -4334,7 +4113,7 @@ async function simulateLoginSuccess(user) {
   window._log('[scoreplace-auth] currentUser set (' + (sameUser ? 'merged' : 'replaced') + '), running early router refresh');
   // v2.6.x: se a pessoa abriu o link de 1 toque do WhatsApp (?pv=) — ou guardou o
   // token antes de logar — confirma o celular agora que a sessão está pronta.
-  try { setTimeout(function () { if (window._handlePhoneOwnershipLink) window._handlePhoneOwnershipLink(); }, 900); } catch (e) {}
+
 
   // v2.6.x: se a pessoa veio do erro clássico "tentei entrar com e-mail+senha,
   // mas a conta é Google" e clicou em "Entrar com Google" na sugestão, reforça
@@ -5753,7 +5532,7 @@ function setupLoginModal() {
           // SMS code verification step (mostrado só após handlePhoneLogin enviar SMS)
           '<div id="phone-step-code" style="display:none;margin-bottom:4px;">' +
             '<div style="font-size:0.78rem;font-weight:600;color:var(--text-bright);margin-bottom:6px;">📱 Confirme o código</div>' +
-            '<p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:6px;">Digite o código de 6 dígitos recebido por SMS — ou clique no link que chegou no <strong>WhatsApp</strong> para entrar direto:</p>' +
+            '<p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:6px;">Digite o código de 6 dígitos recebido por SMS:</p>' +
             // v1.0.27-beta: grid 1fr auto pra distribuição determinística —
             // input toma todo o espaço, botão Verificar só seu conteúdo.
             '<form onsubmit="event.preventDefault(); handlePhoneVerifyCode();">' +
@@ -5917,7 +5696,7 @@ window._confirmDeleteAccount = function() {
   // First confirmation
   var overlay = document.createElement('div');
   overlay.id = 'modal-delete-account';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:100001;';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:100001;';
   overlay.innerHTML =
     '<div style="background:var(--surface-color);border:1px solid var(--border-color);border-radius:16px;max-width:400px;width:92%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
       '<div style="background:linear-gradient(135deg,#dc2626,#991b1b);padding:1.2rem;text-align:center;">' +
@@ -5958,244 +5737,40 @@ window._confirmDeleteAccount = function() {
 };
 
 // v1.9.82: prompt de senha mascarado pra re-autenticar antes de excluir a conta.
-function _promptPasswordForDelete() {
-  return new Promise(function(resolve) {
-    var ov = document.createElement('div');
-    ov.id = 'del-reauth-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:100060;background:rgba(0,0,0,0.78);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:1rem;';
-    ov.innerHTML = '<div style="background:var(--surface-color,#1e293b);border:1px solid var(--border-color,rgba(255,255,255,0.12));border-radius:16px;max-width:380px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
-      '<div style="font-weight:800;font-size:1rem;color:var(--text-bright,#fff);margin-bottom:6px;">🔒 Confirme sua senha</div>' +
-      '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:14px;line-height:1.45;">Pra excluir totalmente sua conta de login (e liberar o e-mail pra uso futuro), confirme sua senha.</div>' +
-      '<input type="password" id="del-reauth-pwd" placeholder="sua senha" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:8px;border:1px solid var(--border-color,rgba(255,255,255,0.15));background:var(--bg-dark,#0f172a);color:var(--text-bright,#fff);font-size:0.92rem;margin-bottom:14px;">' +
-      '<div style="display:flex;gap:8px;">' +
-        '<button id="del-reauth-cancel" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
-        '<button id="del-reauth-ok" style="flex:1;padding:10px;border-radius:8px;border:none;background:#ef4444;color:#fff;font-weight:700;cursor:pointer;font-size:0.85rem;">Confirmar exclusão</button>' +
-      '</div></div>';
-    document.body.appendChild(ov);
-    var inp = ov.querySelector('#del-reauth-pwd');
-    setTimeout(function() { if (inp) inp.focus(); }, 60);
-    var done = function(v) { if (ov.parentNode) ov.remove(); resolve(v); };
-    ov.querySelector('#del-reauth-cancel').onclick = function() { done(null); };
-    ov.querySelector('#del-reauth-ok').onclick = function() { done(inp.value || null); };
-    inp.addEventListener('keypress', function(e) { if (e.key === 'Enter') done(inp.value || null); });
-  });
-}
+// v1.2.8: _promptPasswordForDelete/_reauthForDelete REMOVIDOS (~51 linhas). Existiam porque
+// firebaseUser.delete() falha com auth/requires-recent-login em sessão antiga: pra excluir a
+// conta a pessoa tinha que reabrir o popup do Google ou digitar a senha de novo. A exclusão
+// virou CF (Admin SDK → deleteUser não exige login recente), então a fricção sumiu junto.
 
-// v1.9.82: re-autentica o usuário antes de excluir a conta de Auth — sem isso,
-// firebaseUser.delete() falha com auth/requires-recent-login quando a sessão é
-// antiga, deixando a conta de login órfã (e-mail preso "já em uso"). Google →
-// popup; e-mail/senha → prompt de senha. Retorna true se re-autenticou.
-async function _reauthForDelete(firebaseUser, email) {
-  var providers = (firebaseUser.providerData || []).map(function(p) { return p && p.providerId; });
-  if (providers.indexOf('google.com') !== -1) {
-    try {
-      var gp = new firebase.auth.GoogleAuthProvider();
-      try { gp.setCustomParameters({ prompt: 'select_account' }); } catch (e) {}
-      await firebaseUser.reauthenticateWithPopup(gp);
-      return true;
-    } catch (e) { window._warn('[delete] reauth google falhou:', e && e.code); return false; }
-  }
-  if (providers.indexOf('password') !== -1 && email) {
-    var pwd = await _promptPasswordForDelete();
-    if (!pwd) return false;
-    try {
-      var cred = firebase.auth.EmailAuthProvider.credential(email, pwd);
-      await firebaseUser.reauthenticateWithCredential(cred);
-      return true;
-    } catch (e) {
-      showNotification('Senha incorreta', 'Não foi possível confirmar. Sua conta de login não foi excluída.', 'warning');
-      return false;
-    }
-  }
-  return false;
-}
 
 window._executeDeleteAccount = async function() {
   var user = window.AppStore.currentUser;
   var firebaseUser = firebase.auth().currentUser;
   if (!user || !firebaseUser) return;
 
-  var uid = user.uid || firebaseUser.uid;
-  var email = user.email || firebaseUser.email;
-  var db = window.FirestoreDB.db;
-
-  // Show loading state
   var btn = document.getElementById('btn-confirm-delete-account');
-  if (btn) { btn.textContent = _t('auth.verifying'); btn.style.pointerEvents = 'none'; btn.style.opacity = '0.6'; }
+  if (btn) { btn.textContent = _t('auth.deletingData'); btn.style.pointerEvents = 'none'; btn.style.opacity = '0.6'; }
 
   try {
-    // 1. Delete all user data first, then delete auth account
-    if (btn) btn.textContent = _t('auth.deletingData');
+    // v1.2.8: a exclusão virou CÂNONE NO SERVIDOR (CF deleteAccount). O cliente só dispara.
+    // Antes eram ~13 escritas daqui, e isso quebrava de três jeitos:
+    //   1. VERSÃO — cada pessoa rodava a lógica do app que tinha em cache. A daqui era
+    //      solo-only (p.uid/p.email) e não via membro de DUPLA: a conta sumia e a inscrição
+    //      ficava órfã (caso Michelle). Com as lojas, versão velha vive meses no aparelho.
+    //   2. PERMISSÃO — o cliente depende das RULES pra mexer em torneio de terceiro, e
+    //      checkedIn/votos não estão em isEnrollmentOnlyDiff: o Firestore negava, o catch
+    //      engolia, a conta ia embora e o lixo ficava. A CF usa Admin SDK e ignora rules.
+    //   3. ATOMICIDADE — rede caindo no meio das 13 escritas = conta apagada com inscrição
+    //      viva. Exatamente o órfão que caçamos.
+    // Regra do dono: "onde estiver o uid, exclui. TUDO" + "mantém resultados com conta
+    // excluída". Ver [[project_orphan_uid_entries]] / functions/uid-sweep.js.
+    var _fn = firebase.functions().httpsCallable('deleteAccount');
+    var _res = await _fn({});
+    window._log && window._log('[deleteAccount]', JSON.stringify(_res && _res.data));
 
-    // 2a. Delete user notifications subcollection
-    try {
-      var notifsSnap = await db.collection('users').doc(uid).collection('notifications').get();
-      var batch = db.batch();
-      var count = 0;
-      notifsSnap.forEach(function(doc) {
-        batch.delete(doc.ref);
-        count++;
-        if (count >= 450) {
-          batch.commit();
-          batch = db.batch();
-          count = 0;
-        }
-      });
-      if (count > 0) await batch.commit();
-    } catch (e) { window._warn('Erro ao excluir notificações:', e); }
+    // A CF já apagou a conta de Auth — aqui só encerra a sessão local.
+    try { await firebase.auth().signOut(); } catch (e) {}
 
-    // 2b. Remove user from tournament participants
-    try {
-      var tournsSnap = await db.collection('tournaments').get();
-      var tBatch = db.batch();
-      var tCount = 0;
-      tournsSnap.forEach(function(doc) {
-        var data = doc.data();
-        var participants = data.participants || [];
-        var filtered = participants.filter(function(p) {
-          return p.email !== email && p.uid !== uid;
-        });
-        if (filtered.length !== participants.length) {
-          tBatch.update(doc.ref, { participants: filtered });
-          tCount++;
-        }
-        if (tCount >= 450) {
-          tBatch.commit();
-          tBatch = db.batch();
-          tCount = 0;
-        }
-      });
-      if (tCount > 0) await tBatch.commit();
-    } catch (e) { window._warn('Erro ao remover inscrições:', e); }
-
-    // 2c. Delete tournaments organized by this user.
-    // v3.0.69: dono canônico é creatorUid (uid), não organizerEmail. Antes a query
-    // só achava por organizerEmail — torneio com creatorUid===uid mas organizerEmail
-    // diferente/ausente (e-mail trocado, organizador só-celular com e-mail sintético)
-    // ficava órfão de uma conta já excluída. Agora busca por uid (primário) E por
-    // e-mail (fallback legado), deduplicando por id.
-    try {
-      var _delRefs = {};
-      if (uid) {
-        var byUidSnap = await db.collection('tournaments').where('creatorUid', '==', uid).get();
-        byUidSnap.forEach(function(doc) { _delRefs[doc.id] = doc.ref; });
-      }
-      if (email) {
-        var byEmailSnap = await db.collection('tournaments').where('organizerEmail', '==', email).get();
-        byEmailSnap.forEach(function(doc) { _delRefs[doc.id] = doc.ref; });
-      }
-      var _delIds = Object.keys(_delRefs);
-      if (_delIds.length > 0) {
-        var dBatch = db.batch();
-        var dCount = 0;
-        _delIds.forEach(function(id) {
-          dBatch.delete(_delRefs[id]);
-          dCount++;
-          if (dCount >= 450) { dBatch.commit(); dBatch = db.batch(); dCount = 0; }
-        });
-        if (dCount > 0) await dBatch.commit();
-      }
-    } catch (e) { window._warn('Erro ao excluir torneios:', e); }
-
-    // 2c2. v1.9.90: remove este uid das listas de amizade de quem é amigo dele.
-    // Sem isso, ao excluir a conta a referência some do perfil (que é deletado),
-    // mas continua nos friends[]/requests dos AMIGOS — aparecendo como "Usuário"
-    // fantasma na lista deles. Só toca os docs dos amigos diretos (eficiente).
-    try {
-      var _myFriends = Array.isArray(user.friends) ? user.friends.slice() : [];
-      var _mySent = Array.isArray(user.friendRequestsSent) ? user.friendRequestsSent : [];
-      var _myRecv = Array.isArray(user.friendRequestsReceived) ? user.friendRequestsReceived : [];
-      var _touchUids = {};
-      _myFriends.concat(_mySent, _myRecv).forEach(function(fu) {
-        if (fu && typeof fu === 'string' && fu.indexOf('@') === -1) _touchUids[fu] = true;
-      });
-      var _arrRemove = firebase.firestore.FieldValue.arrayRemove(uid);
-      await Promise.all(Object.keys(_touchUids).map(function(fu) {
-        return db.collection('users').doc(fu).update({
-          friends: _arrRemove,
-          friendRequestsSent: _arrRemove,
-          friendRequestsReceived: _arrRemove
-        }).catch(function() {});
-      }));
-    } catch (e) { window._warn('Erro ao limpar amizades:', e); }
-
-    // 2d. Delete user profile document
-    try {
-      await db.collection('users').doc(uid).delete();
-    } catch (e) { window._warn('Erro ao excluir perfil:', e); }
-
-    // 3. Delete Firebase Auth account.
-    // v1.9.82: se falhar por requires-recent-login, re-autentica e tenta DE
-    // NOVO — senão a conta de login fica órfã e o e-mail trava "já em uso",
-    // impedindo o usuário de recriar a conta. Bug reportado: "exclui a conta e
-    // não consigo recriar com o mesmo e-mail".
-    try {
-      await firebaseUser.delete();
-    } catch (e) {
-      if (e && e.code === 'auth/requires-recent-login') {
-        var _reauthed = false;
-        try { _reauthed = await _reauthForDelete(firebaseUser, email); } catch (re) {}
-        if (_reauthed) {
-          try {
-            await firebaseUser.delete();
-          } catch (e2) {
-            window._warn('Auth delete após reauth:', e2 && (e2.code || e2.message));
-            showNotification('Conta de login mantida', 'Seus dados foram excluídos, mas o e-mail pode continuar reservado. Contate o suporte se precisar reusá-lo.', 'warning');
-          }
-        } else {
-          showNotification('Conta de login mantida', 'Seus dados foram excluídos, mas o e-mail não foi liberado (confirmação cancelada). Pra liberar, exclua de novo e confirme a senha.', 'warning');
-        }
-      } else {
-        window._warn('Auth delete:', e.code || e.message);
-      }
-      try { await firebase.auth().signOut(); } catch (so) {}
-    }
-
-    // 4. Clean up local state
-    if (window.AppStore.stopRealtimeListener) window.AppStore.stopRealtimeListener();
-    window.AppStore.currentUser = null;
-    window.AppStore.tournaments = [];
-    window.AppStore.viewMode = 'participant';
-    // v1.0.6-beta: limpar localStorage de auth/cache pra evitar loop "Carregando..."
-    // Bug reportado: após excluir conta, router via `currentUser=null` (loggedIn=false)
-    // mas `scoreplace_authCache` ainda presente (loggedIn=false + hasCache=true) →
-    // router caía no branch da tennis ball "Carregando..." esperando auth resolver
-    // que nunca vai resolver porque a conta foi excluída. Limpando o cache, router
-    // vê (loggedIn=false + hasCache=false) → renderLanding() → usuário volta pra
-    // landing page, comportamento correto.
-    var _toCleanup = [
-      'scoreplace_authCache',
-      'scoreplace_fcm_dismissed',
-      'scoreplace_deleted_ids',
-      'scoreplace_casual_history',
-      'scoreplace_casual_history_v2',
-      'scoreplace_casual_last',
-      'scoreplace_casual_prefs',
-      'scoreplace_analytics_open'
-    ];
-    _toCleanup.forEach(function(k) { try { localStorage.removeItem(k); } catch (_e) {} });
-    // Apagar SÓ o IndexedDB do Firebase AUTH (firebaseLocalStorageDb) — evita
-    // auto-restore da sessão Google antiga. NÃO tocar no IndexedDB do Firestore:
-    // apagar o banco do Firestore com o cliente vivo faz o SDK TERMINAR o cliente
-    // ("FirebaseError: The client has already been terminated"), e um re-login na
-    // MESMA sessão de página passa a falhar em TODOS os reads (loadUserProfile
-    // inclusive → perfil/gênero não carregam → saudação "(a)" + bolinha presa).
-    // Bug reportado + confirmado no Sentry (SCOREPLACE-WEB-6E): excluir conta →
-    // re-login pelo "quick return" → cliente terminado. Regex antiga /firebase|
-    // firestore|firebaseauth/ casava também com "firestore/..." — o erro.
-    try {
-      if (typeof indexedDB !== 'undefined' && indexedDB.databases) {
-        indexedDB.databases().then(function (dbs) {
-          (dbs || []).forEach(function (db) {
-            if (db.name && /firebaseLocalStorageDb|firebaseauth/i.test(db.name) && !/firestore/i.test(db.name)) {
-              try { indexedDB.deleteDatabase(db.name); } catch (_e) {}
-            }
-          });
-        }).catch(function () {});
-      }
-    } catch (_e) {}
-
-    // 5. Close modals and update UI
     var modal = document.getElementById('modal-delete-account');
     if (modal) modal.remove();
     var profileModal = document.getElementById('modal-profile');
@@ -6798,7 +6373,7 @@ function setupProfileModal() {
             '<label class="form-label" style="font-size:0.75rem;">📧 E-mail</label>' +
             '<div style="display:flex;gap:8px;align-items:center;">' +
               '<input type="email" id="profile-edit-email" class="form-control" placeholder="seu@email.com" autocomplete="off" style="flex:1;min-width:0;box-sizing:border-box;">' +
-              '<button type="button" onclick="window._profileCancelEmailEdit()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--text-muted);padding:6px 10px;border-radius:8px;font-size:0.82rem;cursor:pointer;white-space:nowrap;line-height:1;">✕</button>' +
+              '<button type="button" class="cancel-x-btn" title="Cancelar" onclick="window._profileCancelEmailEdit()" style="--cx-size:24px;">✕</button>' +
             '</div>' +
             // v2.5.x: e-mail exige verificação de posse (link de confirmação).
             '<div style="margin-top:6px;">' +
@@ -6838,7 +6413,7 @@ function setupProfileModal() {
               // as duas (com confirmação). Sem isso, o número não vira válido.
               '<div style="margin-top:6px;">' +
                 '<button type="button" id="profile-phone-verify-btn" onclick="window._profileVerifyPhone && window._profileVerifyPhone()" style="background:#25d366;color:#0a1f12;border:none;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">📱 Verificar e vincular</button>' +
-                '<span id="profile-phone-verify-hint" style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Confirme por SMS/WhatsApp. Se o número já for de outra conta, as duas serão unidas (com sua confirmação).</span>' +
+                '<span id="profile-phone-verify-hint" style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Confirme por SMS. Se o número já for de outra conta, as duas serão unidas (com sua confirmação).</span>' +
                 '<div id="profile-phone-otp" style="display:none;margin-top:8px;"></div>' +
                 '<div id="profile-phone-recaptcha" style="display:none;"></div>' +
               '</div>' +
@@ -6860,7 +6435,7 @@ function setupProfileModal() {
               '</div>' +
               '<div style="margin-top:6px;">' +
                 '<button type="button" onclick="window._profileVerifyPhone && window._profileVerifyPhone({linked:true})" style="background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.4);color:#6ee7b7;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">📲 Verificar e vincular</button>' +
-                '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;display:block;margin-top:4px;">Confirme por SMS/WhatsApp. O número vira mais um login da sua conta (com a sua senha).</span>' +
+                '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;display:block;margin-top:4px;">Confirme por SMS. O número vira mais um login da sua conta (com a sua senha).</span>' +
                 '<div id="profile-link-phone-otp" style="display:none;margin-top:8px;"></div>' +
                 '<div id="profile-link-phone-recaptcha" style="display:none;"></div>' +
               '</div>' +
@@ -6870,8 +6445,8 @@ function setupProfileModal() {
             // revela o número aos membros). Ela segue avisada por notificação 1:1
             // do app + plataforma/e-mail — número fica privado.
             '<div class="omit-toggle" style="margin:0 0 6px 0;">' +
-              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-phone', label: 'Ocultar seu telefone <button type="button" onclick="window._toggleFieldHint(event,\'hint-omit-phone\')" title="Quando ligado, ninguém vê seu telefone no app e você fica fora dos grupos automáticos de WhatsApp. Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
-              '<span id="hint-omit-phone" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Quando ligado, ninguém vê seu telefone no app <b>e você fica fora dos grupos automáticos de WhatsApp</b> (assim seu número não aparece pra ninguém). Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual.</span>' +
+              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-phone', label: 'Ocultar seu telefone <button type="button" onclick="window._toggleFieldHint(event,\'hint-omit-phone\')" title="Quando ligado, ninguém vê seu telefone no app. Você continua sendo avisado por notificação no app e e-mail." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
+              '<span id="hint-omit-phone" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Quando ligado, ninguém vê seu telefone no app. Você continua sendo avisado por notificação no app e e-mail. (O grupo de WhatsApp do torneio não expõe telefone de ninguém — quem entra vai por link de convite.)</span>' +
             '</div>' +
             // ── Senha (v2.6.x): link que expande os campos pra definir/trocar ──
             '<div style="margin:8px 0 12px;">' +
@@ -7040,7 +6615,15 @@ function setupProfileModal() {
                 '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + _t('profile.notifChannels') + '</div>' +
                 (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-platform', label: _t('profile.notifPlatform'), icon: '🔔', checked: true }) : '') +
                 (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-email', label: _t('profile.notifEmail'), icon: '✉️', checked: true, color: '#3b82f6' }) : '') +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-whatsapp', label: _t('profile.notifWhatsApp'), icon: '💬', checked: false, color: '#25d366' }) : '') +
+              '</div>' +
+              // v1.2.9: o WhatsApp deixou de ser CANAL DE NOTIFICAÇÃO (o número foi
+              // banido e o portfólio Meta morreu — nada é enviado por API). O que
+              // sobrou é o wa.me: alguém toca no botão e abre a conversa contigo.
+              // Por isso o toggle saiu de "Canais de notificação" e virou uma
+              // preferência de CONTATO — pra quem não quer ser chamado no WhatsApp.
+              '<div style="margin-top:10px;">' +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-whatsapp', label: _t('profile.contactWhatsApp'), icon: '💬', checked: false, color: '#25d366' }) : '') +
+                '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:block;margin-top:4px;">' + _t('profile.contactWhatsAppHint') + '</span>' +
               '</div>' +
             '</div>' +
             '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
@@ -8060,18 +7643,11 @@ function setupProfileModal() {
         return sapp.auth().signInWithPhoneNumber(e164, window._profilePhoneRecaptcha);
       }).then(function(confirmation) {
         window._profilePhoneConfirmation = confirmation;
-        // v2.5.x: dispara TAMBÉM o código por WhatsApp, em paralelo (regra: celular
-        // sempre SMS + WhatsApp). Best-effort — não bloqueia o SMS.
-        try {
-          firebase.auth().currentUser.getIdToken().then(function(mainTok) {
-            return fetch('https://us-central1-scoreplace-app.cloudfunctions.net/sendPhoneOwnershipWhatsApp', {
-              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mainTok },
-              body: JSON.stringify({ data: { phone: e164 } })
-            });
-          }).catch(function(){});
-        } catch (e) {}
+        // v1.2.9: o disparo paralelo por WhatsApp saiu (canal morto — ver
+        // project_whatsapp_meta_2fa_block). O SMS sempre foi o caminho primário aqui:
+        // é ele que produz o proofIdToken do merge, então nada do merge se perde.
         if (otpEl) otpEl.innerHTML =
-          '<div style="font-size:0.78rem;color:var(--text-bright);margin-bottom:6px;">📲 Digite o código que chegou por <b>SMS</b> ou <b>WhatsApp</b>:</div>' +
+          '<div style="font-size:0.78rem;color:var(--text-bright);margin-bottom:6px;">📲 Digite o código que chegou por <b>SMS</b>:</div>' +
           '<div style="display:flex;gap:8px;">' +
             '<input id="' + ctx.codeId + '" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456" style="flex:1;min-width:0;letter-spacing:4px;text-align:center;">' +
             '<button type="button" onclick="window._profileConfirmPhoneCode()" class="btn btn-success" style="white-space:nowrap;">Confirmar</button>' +
@@ -8176,32 +7752,17 @@ function setupProfileModal() {
       var otpEl = document.getElementById(ctx.otpId);
       if (!/^\d{6}$/.test(code)) { showNotification('Código', 'Digite os 6 dígitos.', 'warning'); return; }
       if (otpEl) otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Confirmando…</div>';
-      var sapp = firebase.app('profilephone');
-      var e164 = window._profilePhoneE164;
-      // 1) tenta o código do SMS (Firebase). 2) se falhar, tenta o código do WhatsApp.
-      var smsTry = window._profilePhoneConfirmation
-        ? window._profilePhoneConfirmation.confirm(code).then(function(result) { return result.user; })
-        : Promise.reject(new Error('no-sms-confirmation'));
-      smsTry.then(function(phoneUser) {
-        return window._profilePhoneMergeFromSecondary(phoneUser, otpEl);
+      // v1.2.9: só o código do SMS (Firebase). O fallback pelo código do WhatsApp
+      // saiu com o canal — e não custa nada ao merge: o proofIdToken sempre veio
+      // do SMS. Ver project_whatsapp_meta_2fa_block.
+      if (!window._profilePhoneConfirmation) {
+        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">O código não chegou a ser enviado. Feche e tente de novo.</div>';
+        return;
+      }
+      window._profilePhoneConfirmation.confirm(code).then(function(result) {
+        return window._profilePhoneMergeFromSecondary(result.user, otpEl);
       }).catch(function() {
-        // fallback: código do WhatsApp → custom token → signInWithCustomToken
-        firebase.auth().currentUser.getIdToken().then(function(mainTok) {
-          return fetch('https://us-central1-scoreplace-app.cloudfunctions.net/verifyPhoneOwnershipWhatsApp', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mainTok },
-            body: JSON.stringify({ data: { phone: e164, code: code } })
-          });
-        }).then(function(r) { return r.json(); }).then(function(j) {
-          var res = j && j.result;
-          if (res && res.ok && res.customToken) {
-            return sapp.auth().signInWithCustomToken(res.customToken).then(function(cred) {
-              return window._profilePhoneMergeFromSecondary(cred.user, otpEl);
-            });
-          }
-          if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>';
-        }).catch(function() {
-          if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>';
-        });
+        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>';
       });
     };
 
@@ -8214,7 +7775,7 @@ function setupProfileModal() {
       container.innerHTML = linked.map(function(em) {
         return '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);">' +
           '<span style="flex:1;font-size:0.82rem;color:var(--text-bright);">✅ ' + window._safeHtml(em) + '</span>' +
-          '<button type="button" onclick="window._profileUnlinkEmail(\'' + em.replace(/'/g,"\\'") + '\')" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:0.9rem;padding:0 2px;" title="Remover">×</button>' +
+          '<button type="button" class="cancel-x-btn" onclick="window._profileUnlinkEmail(\'' + em.replace(/'/g,"\\'") + '\')" style="--cx-size:18px;" title="Remover">✕</button>' +
         '</div>';
       }).join('');
     };
@@ -8233,7 +7794,7 @@ function setupProfileModal() {
       container.innerHTML = linked.map(function(ph) {
         return '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);">' +
           '<span style="flex:1;font-size:0.82rem;color:var(--text-bright);">✅ ' + window._safeHtml(fmt(ph)) + '</span>' +
-          '<button type="button" onclick="window._profileUnlinkPhone(\'' + ph.replace(/'/g,"\\'") + '\')" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:0.9rem;padding:0 2px;" title="Remover">×</button>' +
+          '<button type="button" class="cancel-x-btn" onclick="window._profileUnlinkPhone(\'' + ph.replace(/'/g,"\\'") + '\')" style="--cx-size:18px;" title="Remover">✕</button>' +
         '</div>';
       }).join('');
     };
@@ -8912,7 +8473,7 @@ function setupProfileModal() {
           var _pendMsg = (_phoneChangedUnverified && _emailChangedUnverified)
             ? 'O novo celular e o novo e-mail ainda não foram salvos. Toque em "Verificar e vincular" em cada um pra confirmar.'
             : (_phoneChangedUnverified
-              ? 'O novo número ainda não foi salvo. Toque em "📱 Verificar e vincular" pra confirmar por SMS/WhatsApp.'
+              ? 'O novo número ainda não foi salvo. Toque em "📱 Verificar e vincular" pra confirmar por SMS.'
               : 'O novo e-mail ainda não foi salvo. Toque em "✉️ Verificar e vincular" pra confirmar pelo link.');
           showNotification('Perfil salvo — falta confirmar contato', _pendMsg, 'warning');
         } else {

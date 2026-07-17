@@ -618,9 +618,8 @@ window._isMyOwnPlayerName = function(t, name, user) {
   var uid = user.uid || '';
   var email = (user.email || '').toLowerCase();
   var dn = user.displayName || '';
-  var isMember =
-    (Array.isArray(t.memberUids) && uid && t.memberUids.indexOf(uid) !== -1) ||
-    (Array.isArray(t.memberEmails) && email && t.memberEmails.indexOf(email) !== -1);
+  // v1.2.2: membro é uid em memberUids — sem fallback por e-mail.
+  var isMember = (Array.isArray(t.memberUids) && uid && t.memberUids.indexOf(uid) !== -1);
   if (dn && name === dn && isMember) return true;
   // uid no objeto do participante (top-level ou sub-participante de dupla)
   if (uid && Array.isArray(t.participants)) {
@@ -2944,7 +2943,7 @@ window._tvMode = function(tId) {
   // Create overlay
   var overlay = document.createElement('div');
   overlay.id = 'tv-mode-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:#0a0e1a;z-index:99999;overflow:auto;display:flex;flex-direction:column;';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#0a0e1a;z-index:99999;overflow:auto;display:flex;flex-direction:column;';
 
   // Hero section with venue photo background
   // v4.0.21: foto de fundo custom do organizador tem prioridade sobre a do Google.
@@ -5110,6 +5109,37 @@ window._openLiveScoring = function(tId, matchId, opts) {
     return eligible;
   }
 
+  // Quem PODE ser escolhido como sacador AGORA. Espelha EXATAMENTE a regra de
+  // aceitação do _liveSetServer — se divergir, o relógio oferece um nome que o
+  // celular ignora em silêncio e o botão fica morto (o _liveSetServer rejeita
+  // com `if (state.serveOrder[1].team !== team) return;`).
+  //   1º game (totalGamesPlayed 0) → os 4 jogadores: define quem abre o saque.
+  //   2º game (totalGamesPlayed 1) → só os 2 do time que saca em 2º; o time que
+  //                                   abriu já está travado.
+  //   daí em diante           → ninguém (hard lock no _liveSetServer).
+  // A regra vive AQUI (celular); o relógio só desenha a lista que receber.
+  function _serveEligibleNow() {
+    if (state.serveSkipped || !isDoubles || state.isFinished) return [];
+    if (state.totalGamesPlayed >= 2) return [];
+    var out = [], i;
+    if (state.totalGamesPlayed === 0) {
+      for (i = 0; i < p1Players.length; i++) {
+        if (p1Players[i]) out.push({ team: 1, playerIdx: i, name: p1Players[i] });
+      }
+      for (i = 0; i < p2Players.length; i++) {
+        if (p2Players[i]) out.push({ team: 2, playerIdx: i, name: p2Players[i] });
+      }
+      return out;
+    }
+    if (state.serveOrder.length < 4) return [];
+    var t = state.serveOrder[1].team;
+    var ps = t === 1 ? p1Players : p2Players;
+    for (i = 0; i < ps.length; i++) {
+      if (ps[i]) out.push({ team: t, playerIdx: i, name: ps[i] });
+    }
+    return out;
+  }
+
   // Serve picker overlay no longer used — serve is set inline via draggable ball
   function _needsServePick() {
     return false;
@@ -5628,7 +5658,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
                   (isWinner ? '🏆 ' : '') + 'Time ' + ps.team + ' · ' + window._safeHtml(teamLabel) +
                 '</div>' +
               '</div>' +
-              '<button onclick="document.getElementById(\'player-match-stats-modal\').remove()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:700;cursor:pointer;">✕</button>' +
+              /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="document.getElementById(\'player-match-stats-modal\').remove()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:700;cursor:pointer;">✕</button>' +
             '</div>' +
             // Serve stats grid
             (hasServeData ? (
@@ -6042,7 +6072,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '<div style="display:flex;gap:8px;width:100%;">' +
             '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="flex:1;padding:14px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Iniciar</button>' +
             '<button onclick="window._liveScoreShareCasual()" title="Compartilhar resultado" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:#25d366;color:white;box-shadow:0 4px 20px rgba(37,211,102,0.3);">📤</button>' +
-            '<button onclick="window._liveStatsClose()" title="Encerrar" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);">✕</button>' +
+            /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="window._liveStatsClose()" title="Encerrar" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);">✕</button>' +
           '</div>';
       }
 
@@ -6677,16 +6707,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
     // Show persistent tie-break button during Prorrogação (extend mode)
     // Only visible to registered users playing the match — others can't change the tie rule.
-    if (state.tieRule === 'extend' && !state.isFinished && !state.isTiebreak && _isViewerInMatch) {
-      var cs = _currentSet();
-      var isReady = cs.gamesP1 === cs.gamesP2 && cs.gamesP1 >= state.gamesPerSet - 1;
-      var tbLabel = isReady
-        ? 'Ir para Tie-break (' + cs.gamesP1 + '×' + cs.gamesP2 + ')'
-        : 'Tie-break';
-      // More prominent when games are tied at or past deuce
-      var tbStyle = isReady
-        ? 'width:100%;padding:16px;border-radius:14px;font-size:1.05rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;box-shadow:0 4px 20px rgba(139,92,246,0.45);transition:transform 0.1s;animation:tb-pulse 1.5s ease-in-out infinite;'
-        : 'width:100%;padding:12px;border-radius:12px;font-size:0.85rem;font-weight:700;border:2px solid rgba(192,132,252,0.3);cursor:pointer;background:rgba(192,132,252,0.08);color:#c084fc;transition:background 0.2s;';
+    // O botão só existe quando o tie-break É UMA DECISÃO REAL: os games têm de
+    // estar EMPATADOS no deuce da modalidade (gamesPerSet-1) ou além. Antes a
+    // condição não olhava o placar, então em Prorrogação o botão aparecia desde
+    // 0-0 — oferecendo desempate antes de existir qualquer ponto.
+    var _tbEligible = state.tieRule === 'extend' && !state.isFinished && !state.isTiebreak && _isViewerInMatch;
+    var _cs = _tbEligible ? _currentSet() : null;
+    var _tbReady = !!_cs && _cs.gamesP1 === _cs.gamesP2 && _cs.gamesP1 >= state.gamesPerSet - 1;
+    if (_tbEligible && _tbReady) {
+      var tbLabel = 'Ir para Tie-break (' + _cs.gamesP1 + '×' + _cs.gamesP2 + ')';
+      var tbStyle = 'width:100%;padding:16px;border-radius:14px;font-size:1.05rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;box-shadow:0 4px 20px rgba(139,92,246,0.45);transition:transform 0.1s;animation:tb-pulse 1.5s ease-in-out infinite;';
       container.insertAdjacentHTML('beforeend',
         '<style>@keyframes tb-pulse{0%,100%{box-shadow:0 4px 20px rgba(139,92,246,0.45)}50%{box-shadow:0 4px 30px rgba(139,92,246,0.7),0 0 40px rgba(139,92,246,0.25)}}</style>' +
         '<div style="padding:0 1rem 1rem;flex-shrink:0;">' +
@@ -7375,6 +7405,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
             try { _releaseWakeLock(); } catch(e) {}
             var ov = document.getElementById('live-scoring-overlay');
             if (ov) ov.remove();
+            _watchTeardown();
             var cu = window.AppStore && window.AppStore.currentUser;
             var wasOrganizer = cu && _casualCreatedBy && cu.uid === _casualCreatedBy;
             if (!wasOrganizer && typeof showNotification === 'function') {
@@ -7410,6 +7441,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
               try { _releaseWakeLock(); } catch(e) {}
               var _ovHC = document.getElementById('live-scoring-overlay');
               if (_ovHC) _ovHC.remove();
+              _watchTeardown();
               // v2.2.16-beta: limpa referência de sala para o guest não ficar
               // com ponteiro morto para uma sala encerrada pelo host.
               try {
@@ -7551,6 +7583,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
               try { _releaseWakeLock(); } catch(e) {}
               var ov = document.getElementById('live-scoring-overlay');
               if (ov) ov.remove();
+              _watchTeardown();
               if (typeof window._casualReopenSetup === 'function') {
                 // v1.6.60-beta: keepSession preserva _sessionDocId para que
                 // gêneros e formação de duplas sejam propagados via Firestore.
@@ -7622,9 +7655,52 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Leitor read-only do estado do placar, indexado por TIME (1/2). Vive aqui
   // dentro do closure pra enxergar state/_formatGamePoint/_currentSet/etc.
   // Na web ninguém consome (WatchBridge é inerte) → zero efeito.
+  // Nome curto SÓ PRO RELÓGIO — exceção deliberada à regra de sempre mostrar o
+  // nome de perfil inteiro (a tela do relógio é pequena). Primeiro nome; se dois
+  // jogadores têm o MESMO primeiro nome, desempata com a inicial do sobrenome
+  // (Rodrigo B / Rodrigo U). Vive AQUI, no caminho exclusivo do snapshot do
+  // relógio — o app (celular) nunca abrevia. Ver feedback_maximize_screen_area.
+  function _watchShortNames(names) {
+    var map = {};
+    var first = function (n) { return String(n || '').trim().split(/\s+/)[0] || String(n || ''); };
+    var lastIni = function (n) {
+      var p = String(n || '').trim().split(/\s+/);
+      return p.length > 1 ? (p[p.length - 1].charAt(0) || '').toUpperCase() : '';
+    };
+    var firstCount = {};
+    names.forEach(function (n) { var f = first(n).toLowerCase(); if (f) firstCount[f] = (firstCount[f] || 0) + 1; });
+    names.forEach(function (n) {
+      if (map[n] !== undefined) return;
+      var f = first(n);
+      if (firstCount[f.toLowerCase()] > 1) {
+        var li = lastIni(n);
+        map[n] = li ? (f + ' ' + li) : f;
+      } else { map[n] = f; }
+    });
+    // Se "Rodrigo B" ainda colide (mesmo 1º nome E mesma inicial), cai pro nome
+    // inteiro pra não confundir dois jogadores.
+    var sc = {};
+    Object.keys(map).forEach(function (k) { var s = map[k].toLowerCase(); sc[s] = (sc[s] || 0) + 1; });
+    Object.keys(map).forEach(function (k) { if (sc[map[k].toLowerCase()] > 1) map[k] = k; });
+    return map;
+  }
+
   window._getLiveScoreState = function() {
     var cs = _currentSet();
     var srv = _getCurrentServer();
+    // Mapa de abreviação construído da UNIÃO de todos os nomes da partida
+    // (inclui os 4 do Rei/Rainha, que rotacionam) pra a abreviação ser estável.
+    var _allNames = p1Players.concat(p2Players);
+    if (_reiRainhaMode && _reiRainhaPlayers) _allNames = _allNames.concat(_reiRainhaPlayers);
+    var _wnMap = _watchShortNames(_allNames);
+    var _wn = function (n) { return _wnMap[n] !== undefined ? _wnMap[n] : (String(n || '').trim().split(/\s+/)[0] || n); };
+    // Listas abreviadas (uma vez). Todo campo de nome do relógio passa por _wn —
+    // é a consistência que faz o matching por nome (bola no sacador, item aceso
+    // no seletor) continuar batendo: os dois lados abreviam igual.
+    var _elig = _serveEligibleNow().map(function (e) { return { team: e.team, playerIdx: e.playerIdx, name: _wn(e.name) }; });
+    var _rr = _rrStandingsNow().map(function (r) { return { name: _wn(r.name), wins: r.wins }; });
+    var _spCurRaw = (state.serveOrder && state.serveOrder[state.totalGamesPlayed])
+      ? (state.serveOrder[state.totalGamesPlayed].name || '') : '';
     return {
       v: 1,
       type: 'state',
@@ -7637,10 +7713,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       games: cs ? [cs.gamesP1, cs.gamesP2] : [0, 0],
       isTiebreak: !!state.isTiebreak,
       courtLeft: _courtLeft,
-      server: srv ? { team: srv.team, name: srv.name } : null,
+      server: srv ? { team: srv.team, name: _wn(srv.name) } : null,
       teams: {
-        '1': { players: p1Players.slice() },
-        '2': { players: p2Players.slice() }
+        '1': { players: p1Players.map(_wn) },
+        '2': { players: p2Players.map(_wn) }
       },
       // Sets ganhos por time [time1, time2]. Durante o jogo conta só sets
       // FECHADOS (o set atual em curso não é "ganho" ainda); ao encerrar,
@@ -7650,9 +7726,44 @@ window._openLiveScoring = function(tId, matchId, opts) {
       setsToWin: state.setsToWin || 1,
       // "Jogar novamente" só faz sentido em partida casual (recomeça com os
       // mesmos jogadores). Em torneio o resultado é definitivo → sem botão.
-      canReplay: !!isCasual,
+      // No Rei/Rainha NÃO se aplica: o fim de um jogo leva ao PRÓXIMO da série
+      // de 3 (duplas rotacionam), não a um recomeço — o relógio oferece
+      // "Jogo N de 3" no lugar.
+      canReplay: !!isCasual && !_reiRainhaMode,
+      // ⚡ casual · 🏆 torneio — o relógio mostra o ícone certo na faixa da modalidade.
+      isCasual: !!isCasual,
+      // Modalidade (pra faixa "⚡/🏆 <modalidade>" no seletor de sacador, igual ao
+      // Iniciar). Casual = opts.sportName; torneio = t.sport.
+      sportName: (isCasual ? ((opts && opts.sportName) || '') : (t && t.sport ? t.sport : '')),
+      // ── Rei/Rainha: 3 jogos, 4 pessoas, duplas trocam a cada jogo ──
+      // rrRound: 0=1º jogo · 1=2º · 2=3º · 3=série encerrada (sentinela do motor).
+      // O relógio usa isto pra mostrar "Jogo N de 3" e oferecer avançar/ver final.
+      reiRainha: !!_reiRainhaMode,
+      rrRound: _reiRainhaRound,
+      // Vitórias por PESSOA, já ordenado — a dupla muda todo jogo, o mérito é
+      // individual. O relógio só desenha; a contagem é toda do motor.
+      rrStandings: _rr,
       // Duplas → o relógio pode oferecer o toggle "Re-sortear duplas".
       isDoubles: !!isDoubles,
+      // Sugestão de Rei/Rainha no fim de jogo (2 pares distintos jogados, falta o
+      // 3º) → o toggle "Re-sortear" vira "👑 Rei/Rainha" e o Iniciar (ligado)
+      // dispara o rrActivate (ativa a série retroativa e começa o 3º jogo).
+      rrSuggest: _rrSuggestNow(),
+      // Seleção de sacador. A REGRA é toda daqui — o relógio recebe a lista
+      // pronta e só desenha. canSetServer sai da própria lista (vazia = travado),
+      // então o seletor nunca aparece oferecendo alguém que o _liveSetServer
+      // recusaria em silêncio.
+      canSetServer: _elig.length > 0,
+      serveEligible: _elig,
+      // Fase da escolha: 0 = quem ABRE o saque (4 nomes) · 1 = quem faz o 2º
+      // saque do set (só o time que não abriu) · -1 = travado. O relógio usa a
+      // MUDANÇA de fase pra pedir confirmação entre o 1º e o 2º game.
+      servePickPhase: _elig.length > 0 ? state.totalGamesPlayed : -1,
+      // Quem OCUPA o slot em disputa agora (o motor sempre tem um padrão —
+      // no 2º saque é opponents[0], escolhido sem ninguém confirmar). O relógio
+      // abre o seletor já com este nome aceso, então "Confirmar" sem mexer em
+      // nada = manter o que está. Abreviado (_wn) igual à lista, pra o "aceso" casar.
+      servePickCurrent: _wn(_spCurRaw),
       isFinished: !!state.isFinished,
       winner: state.winner || null,
       // v4.5.43: empate esperando decisão (prorrogar vs tie-break). O relógio
@@ -7661,10 +7772,66 @@ window._openLiveScoring = function(tId, matchId, opts) {
       tiedAt: (state.tieRulePending && cs) ? cs.gamesP1 : null
     };
   };
+  // Classificação do Rei/Rainha (vitórias por PESSOA — a dupla muda a cada jogo,
+  // o mérito é individual). Mesmo critério do _reiRainhaShowFinal: mais vitórias
+  // primeiro, nome como desempate. _reiRainhaPlayers só existe depois da 1ª
+  // rotação, então antes disso montamos a partir dos times atuais.
+  function _rrStandingsNow() {
+    if (!_reiRainhaMode) return [];
+    var names = _reiRainhaPlayers || p1Players.slice().concat(p2Players.slice());
+    var out = [];
+    for (var i = 0; i < 4 && i < names.length; i++) {
+      if (names[i]) out.push({ name: names[i], wins: _reiRainhaWins[i] || 0 });
+    }
+    out.sort(function (a, b) { return b.wins - a.wins || a.name.localeCompare(b.name); });
+    return out;
+  }
+
+  // Sugestão de Rei/Rainha no relógio: casual + duplas, NÃO já em Rei/Rainha, e
+  // com EXATAMENTE 2 PARES DISTINTOS já jogados (partida atual + histórico da
+  // sessão, deduplicados por chave de partição) entre os MESMOS 4 jogadores — ou
+  // seja, só falta o 3º par pra fechar a série. Mesma regra de partição do
+  // _activateReiRainhaRetroactive; o relógio só desenha o toggle "👑 Rei/Rainha".
+  function _rrSuggestNow() {
+    if (_reiRainhaMode) return false;
+    if (!isCasual || !isDoubles) return false;
+    var cur1 = p1Players.slice(), cur2 = p2Players.slice();
+    if (cur1.length + cur2.length !== 4) return false;
+    var playerSet = cur1.concat(cur2).slice().sort().join('\x00');
+    function _pk(t1, t2) {
+      var s1 = t1.slice().sort().join('|'), s2 = t2.slice().sort().join('|');
+      return [s1, s2].sort().join('::');
+    }
+    var keys = {};
+    keys[_pk(cur1, cur2)] = true;
+    for (var i = 0; i < _sessionGameHistory.length; i++) {
+      var gh = _sessionGameHistory[i];
+      if (!gh || !gh.p1 || !gh.p2) continue;
+      if (gh.p1.concat(gh.p2).slice().sort().join('\x00') !== playerSet) continue; // outros jogadores
+      keys[_pk(gh.p1, gh.p2)] = true;
+    }
+    return Object.keys(keys).length === 2;
+  }
+
   // Empurra o estado atual pro relógio (no-op se a ponte não estiver ativa/web).
   function _watchNotify() {
     if (window.WatchBridge && window.WatchBridge._onEngineState) {
       try { window.WatchBridge._onEngineState(window._getLiveScoreState()); } catch (e) {}
+    }
+  }
+  // Desfaz a fiação do relógio quando o placar fecha. TEM de rodar em TODO
+  // caminho de fechamento: sem isto o relógio nunca sabe que acabou e fica
+  // preso na tela de vitória (o overlay de vencedor cobre os botões +1 e, se o
+  // usuário já dispensou o "Jogar novamente", não sobra saída nenhuma — só
+  // matando o app do relógio). Bug real: o ✕ "Encerrar" (_liveScoreCloseStats)
+  // removia o overlay mas não avisava a ponte, enquanto _closeLiveScoring avisava.
+  // Agora os dois chamam ESTA função — o teardown é único de fato.
+  function _watchTeardown() {
+    window._getLiveScoreState = null;
+    window._liveScorePoint = null;
+    window._liveScoreUndoLastPoint = null;
+    if (window.WatchBridge && window.WatchBridge.pushInactive) {
+      try { window.WatchBridge.pushInactive(); } catch (e) {}
     }
   }
   // Estado INICIAL pro relógio assim que o placar abre (torneio, Rei/Rainha OU
@@ -7956,6 +8123,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
 
     _render();
+    // Faltava: sem isto o relógio ficava congelado no jogo ANTERIOR (placar do
+    // jogo que acabou, duplas velhas) enquanto o celular já estava no próximo.
+    _watchNotify();
     if (typeof window.showNotification === 'function') {
       window.showNotification('👑 Jogo ' + (_reiRainhaRound + 1) + ' de 3',
         p1Players.join(' & ') + ' vs ' + p2Players.join(' & '), 'info');
@@ -8273,6 +8443,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '</label>' +
         '</div>';
     }
+    // Faltava: o relógio precisa saber que a SÉRIE acabou (rrRound=3) pra sair
+    // do "Jogo N de 3" e mostrar a classificação final. Sem isto ele ficava
+    // oferecendo avançar uma rodada que não existe mais.
+    _watchNotify();
   };
 
   // ── fim Rei/Rainha ────────────────────────────────────────────────────────────
@@ -8780,7 +8954,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var overlay = document.createElement('div');
   overlay.id = 'live-scoring-overlay';
   // v0.17.52: bg respeita tema (var(--bg-darker)) em vez de hardcoded.
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;background:var(--bg-darker);z-index:100002;display:flex;flex-direction:column;overflow:hidden;touch-action:manipulation;';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;height:100%;background:var(--bg-darker);z-index:100002;display:flex;flex-direction:column;overflow:hidden;touch-action:manipulation;';
 
   // Header — 3-column: [AO VIVO + info] [Sets display center] [Reset + Close]
   var headerBg = 'linear-gradient(135deg,#1e293b 0%,#0f172a 100%)';
@@ -8789,7 +8963,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // é position:fixed;top:0 full-bleed sob a status bar/ilha; sem o inset o "AO VIVO"
   // e os botões Ajustar/Resetar/Fechar encavalavam no relógio/bateria do sistema.
   // Inerte na web (insets=0). Depende de viewport-fit=cover estar ativo (preservado).
-  var headerHtml = '<div style="background:' + headerBg + ';padding:calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:4px;">' +
+  // O padding-top segue a MESMA fórmula da .topbar (layout.css), que foi calibrada
+  // no aparelho: o inset reserva ~59px mas a status bar/ilha ocupam menos, então
+  // puxa 12px pra cima — o máximo antes de encavalar no relógio. Antes aqui era
+  // `10px + inset` (22px a MAIS que a topbar), desperdiçando faixa no cabeçalho.
+  // max() protege quem não tem notch (inset=0).
+  var headerPadTop = 'max(8px, calc(env(safe-area-inset-top, 0px) - 12px))';
+  var headerHtml = '<div style="background:' + headerBg + ';padding:' + headerPadTop + ' 12px 8px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:4px;">' +
     // Left: AO VIVO + match info
     '<div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0;">' +
       '<span style="font-size:1rem;">📡</span>' +
@@ -8899,10 +9079,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Outer: quase-transparente e pointer-events:none → toques fora fecham pelo botão
     // ou caem no placar (para ver mudanças em tempo real)
     panel.style.cssText = 'position:fixed;inset:0;z-index:100012;background:transparent;display:flex;align-items:flex-end;justify-content:center;pointer-events:none;';
-    panel.innerHTML = '<div style="pointer-events:all;background:rgba(10,14,26,0.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.18);border-radius:18px 18px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);max-height:calc(100dvh - 10px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;">' +
+    panel.innerHTML = '<div style="pointer-events:all;background:rgba(10,14,26,0.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.18);border-radius:18px 18px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);max-height:calc(100% - 10px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
         '<div style="font-size:1.1rem;font-weight:800;color:#fff;">Ajustar</div>' +
-        '<button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:1rem;cursor:pointer;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>' +
+        /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:1rem;cursor:pointer;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>' +
       '</div>' +
       row('scoreScale', 'Games', '--live-score-scale') +
       row('nameScale', 'Nomes', '--live-name-scale') +
@@ -9164,6 +9344,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _releaseWakeLock();
     var _ovCS = document.getElementById('live-scoring-overlay');
     if (_ovCS) _ovCS.remove();
+    // Faltava aqui: sem o teardown o relógio ficava preso na tela de vitória.
+    _watchTeardown();
   };
 
   // Close handler — always confirms before leaving
@@ -9210,14 +9392,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       if (ov) ov.remove();
       // Ponte do relógio: o placar fechou → desfaz a fiação (pra o próximo hello
       // do relógio responder "inativo") e empurra um estado inativo agora, senão
-      // o relógio fica com o placar anterior "congelado". Cobre todos os caminhos
-      // de fechamento (é o teardown único). No-op na web (WatchBridge inerte).
-      window._getLiveScoreState = null;
-      window._liveScorePoint = null;
-      window._liveScoreUndoLastPoint = null;
-      if (window.WatchBridge && window.WatchBridge.pushInactive) {
-        try { window.WatchBridge.pushInactive(); } catch (e) {}
-      }
+      // o relógio fica com o placar anterior "congelado". No-op na web (inerte).
+      _watchTeardown();
     };
     var cu = window.AppStore && window.AppStore.currentUser;
     var isOrganizer = isCasual && cu && cu.uid && _casualCreatedBy && cu.uid === _casualCreatedBy;
@@ -9454,7 +9630,7 @@ window._openScanQR = function() {
   // discreto no rodapé. Sem overlay competindo com o feed da câmera.
   var ov = document.createElement('div');
   ov.id = 'scan-qr-overlay';
-  ov.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;background:#000;z-index:100003;display:flex;flex-direction:column;overflow:hidden;';
+  ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;height:100%;background:#000;z-index:100003;display:flex;flex-direction:column;overflow:hidden;';
 
   var _scanStream = null;
   var _scanInterval = null;
@@ -10040,7 +10216,15 @@ window._openCasualMatch = function(restoreOpts) {
   var initialSport = '';
   var persistedDoubles = null;
   try {
-    var _lastPrefs = JSON.parse(localStorage.getItem('scoreplace_casual_last') || '{}');
+    var _lastPrefs = {};
+    try { _lastPrefs = JSON.parse(localStorage.getItem('scoreplace_casual_last') || '{}') || {}; } catch(e) {}
+    // O perfil VENCE o cache: o localStorage é limpo periodicamente pelo iOS, e
+    // quando isso acontecia a escolha do usuário sumia e caíamos no primeiro
+    // esporte preferido do perfil (ex: Pickleball). Espelha _loadLiveScorePrefs.
+    var _cuLast = window.AppStore && window.AppStore.currentUser;
+    if (_cuLast && _cuLast.casualLast && typeof _cuLast.casualLast === 'object') {
+      _lastPrefs = Object.assign({}, _lastPrefs, _cuLast.casualLast);
+    }
     if (_lastPrefs.sport && sports.find(function(s){ return s.key === _lastPrefs.sport; })) {
       initialSport = _lastPrefs.sport;
       if (typeof _lastPrefs.isDoubles === 'boolean') persistedDoubles = _lastPrefs.isDoubles;
@@ -10220,13 +10404,34 @@ window._openCasualMatch = function(restoreOpts) {
   // Projeção casual: advantageRule→deuceRule + twoPointAdvantage + tieRule (comportamento de empate).
   var _casualDefaults = window._casualScoringDefaultsMap();
 
+  // Config de placar por esporte. Fonte de verdade: users/{uid}.casualPrefs;
+  // localStorage é só cache instantâneo. Antes vivia SÓ no localStorage e o iOS
+  // limpa o storage periodicamente — a config configurada pelo usuário sumia.
+  function _readCasualPrefs() {
+    var p = {};
+    try { p = JSON.parse(localStorage.getItem('scoreplace_casual_prefs') || '{}') || {}; } catch(e) {}
+    var _cu = window.AppStore && window.AppStore.currentUser;
+    if (_cu && _cu.casualPrefs && typeof _cu.casualPrefs === 'object') {
+      p = Object.assign({}, p, _cu.casualPrefs); // perfil vence o cache
+    }
+    return p;
+  }
+  function _writeCasualPrefs(prefs) {
+    try { localStorage.setItem('scoreplace_casual_prefs', JSON.stringify(prefs)); } catch(e) {}
+    var _cu = window.AppStore && window.AppStore.currentUser;
+    if (_cu) _cu.casualPrefs = prefs;
+    if (_cu && _cu.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+      try { window.FirestoreDB.saveUserProfile(_cu.uid, { casualPrefs: prefs }).catch(function(){}); } catch(e) {}
+    }
+  }
+
   function _getConfig() {
     // v1.7.1-beta: defaults usados como base — prefs armazenadas sem 'type'
     // causavam useSets=false, bypassing GSM completamente e mostrando 0/1/2/3
     // em vez de 15/30/40 mesmo com countingType:'tennis' configurado.
     var _defaults = _casualDefaults[selectedSport] || { type:'sets', setsToWin:1, gamesPerSet:6, tiebreakEnabled:false, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:false, superTiebreakPoints:10, countingType:'tennis', deuceRule:false, twoPointAdvantage:true, tieRule:'ask' };
     try {
-      var prefs = JSON.parse(localStorage.getItem('scoreplace_casual_prefs') || '{}');
+      var prefs = _readCasualPrefs();
       if (prefs[selectedSport]) {
         var stored = prefs[selectedSport];
         // Migrate legacy advantageRule → deuceRule and DROP the old key so it
@@ -10235,7 +10440,7 @@ window._openCasualMatch = function(restoreOpts) {
           if (stored.deuceRule === undefined) stored.deuceRule = !!stored.advantageRule;
           delete stored.advantageRule;
           prefs[selectedSport] = stored;
-          try { localStorage.setItem('scoreplace_casual_prefs', JSON.stringify(prefs)); } catch(e) {}
+          _writeCasualPrefs(prefs);
         }
         if (stored.twoPointAdvantage === undefined) stored.twoPointAdvantage = true;
         // Merge: defaults first, then stored on top — garante que campos ausentes
@@ -10578,7 +10783,7 @@ window._openCasualMatch = function(restoreOpts) {
             : '<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:11px;color:white;font-weight:700;flex-shrink:0;">' + window._safeHtml(_lfi) + '</div>';
           _leftEl = '<div style="position:relative;flex-shrink:0;" title="' + window._safeHtml(_linkedFriendProfile.displayName || '') + '">' +
             _lfAvHtml +
-            '<button type="button" onmousedown="event.preventDefault()" onclick="window._casualUnlinkSlot(' + ci + ')" style="position:absolute;bottom:-3px;right:-4px;background:none;border:none;color:#ef4444;font-size:0.85rem;font-weight:900;cursor:pointer;padding:0;line-height:1;text-shadow:0 0 3px rgba(0,0,0,0.9),0 0 2px rgba(0,0,0,0.9);" title="Desvincular">✕</button>' +
+            '<button type="button" class="cancel-x-btn" onmousedown="event.preventDefault()" onclick="window._casualUnlinkSlot(' + ci + ')" style="--cx-size:16px;position:absolute;bottom:-3px;right:-4px;" title="Desvincular">✕</button>' +
             '</div>';
         } else if (_coachMode) {
           _leftEl = '<div data-drag-handle="1" style="width:22px;min-width:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:grab;color:var(--text-muted);font-size:1.1rem;line-height:1;-webkit-user-select:none;user-select:none;touch-action:none;" title="Arrastar para formar dupla">⠿</div>';
@@ -10760,6 +10965,10 @@ window._openCasualMatch = function(restoreOpts) {
     setTimeout(function() {
       if (typeof window._casualLoadLastMatches === 'function') window._casualLoadLastMatches();
     }, 200);
+    // Ponte do relógio: o lobby (re)renderizou — empurra pro relógio trocar
+    // "Aguardando…" por "Iniciar" e refletir nomes/modalidade atuais. Este é o
+    // ponto único: o polling do lobby também passa por aqui a cada mudança.
+    _watchNotifySetup();
   }
 
   // v1.8.6-beta: shared card renderer — builds the "Últimas Partidas" grid HTML
@@ -11290,9 +11499,15 @@ window._openCasualMatch = function(restoreOpts) {
 
   // Persist last-used sport + doubles toggle so the next casual match opens with the same defaults
   function _persistLastCasualChoice() {
-    try {
-      localStorage.setItem('scoreplace_casual_last', JSON.stringify({ sport: selectedSport, isDoubles: !!isDoubles }));
-    } catch(e) {}
+    var _last = { sport: selectedSport, isDoubles: !!isDoubles };
+    try { localStorage.setItem('scoreplace_casual_last', JSON.stringify(_last)); } catch(e) {}
+    // Grava TAMBÉM no perfil (fonte de verdade). Sem isto, a escolha vive só no
+    // localStorage e some quando o iOS limpa o storage. Espelha _saveLiveScorePrefs.
+    var _cu = window.AppStore && window.AppStore.currentUser;
+    if (_cu) _cu.casualLast = _last;
+    if (_cu && _cu.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+      try { window.FirestoreDB.saveUserProfile(_cu.uid, { casualLast: _last }).catch(function(){}); } catch(e) {}
+    }
   }
 
   // Sport selection handler — also resets doubles default
@@ -11539,6 +11754,7 @@ window._openCasualMatch = function(restoreOpts) {
     if (code.length >= 4) {
       var ov = document.getElementById('casual-match-overlay');
       if (ov) ov.remove();
+      _watchSetupTeardown(); // entrando na sala de outro — este lobby morreu
       window.location.hash = '#casual/' + code;
     } else {
       inp.style.borderColor = '#ef4444';
@@ -11654,9 +11870,9 @@ window._openCasualMatch = function(restoreOpts) {
   function _saveTempCfg() {
     if (!_tempCfg) return;
     try {
-      var prefs = JSON.parse(localStorage.getItem('scoreplace_casual_prefs') || '{}');
+      var prefs = _readCasualPrefs();
       prefs[selectedSport] = _tempCfg;
-      localStorage.setItem('scoreplace_casual_prefs', JSON.stringify(prefs));
+      _writeCasualPrefs(prefs);
     } catch(e) {}
   }
 
@@ -11994,7 +12210,7 @@ window._openCasualMatch = function(restoreOpts) {
     // pequeno o conteúdo (QR 280px + código + botões) passava da tela e ficava
     // cortado com align-items:center sem overflow. overscroll-behavior:contain
     // impede o scroll de vazar pra dashboard atrás.
-    qrOv.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;background:#0a0e1a;z-index:100003;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:1.5rem 1rem calc(1.5rem + env(safe-area-inset-bottom));box-sizing:border-box;';
+    qrOv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;height:100%;background:#0a0e1a;z-index:100003;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:1.5rem 1rem calc(1.5rem + env(safe-area-inset-bottom));box-sizing:border-box;';
 
     qrOv.innerHTML =
       '<div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:400px;">' +
@@ -12072,6 +12288,55 @@ window._openCasualMatch = function(restoreOpts) {
       showNotification('Convites enviados!', sent + ' de ' + total + ' amigos notificados.', 'success');
     }
   };
+
+  // ── Ponte do relógio: estado do LOBBY ──────────────────────────────────────
+  // Enquanto a montagem da partida casual está aberta, o relógio deixa de dizer
+  // só "Aguardando…" e passa a oferecer "Iniciar" — antes NÃO existia jeito de
+  // começar a partida sem pegar o celular. Retorna null quando a montagem não
+  // está no ar (aí a ponte cai no estado inativo normal).
+  window._getCasualSetupState = function() {
+    if (!document.getElementById('casual-match-overlay')) return null;
+    var ids = isDoubles
+      ? ['casual-p1a-name', 'casual-p1b-name', 'casual-p2a-name', 'casual-p2b-name']
+      : ['casual-p1-name', 'casual-p2-name'];
+    var names = [];
+    for (var i = 0; i < ids.length; i++) {
+      var el = document.getElementById(ids[i]);
+      // placeholder como fallback: slot vazio mostra "Jogador 3" no relógio,
+      // igual o celular — em vez de um vazio que não diz nada.
+      names.push(el ? (el.value || el.placeholder || '') : '');
+    }
+    return {
+      canStart: true,
+      sportName: selectedSport,
+      isDoubles: !!isDoubles,
+      teams: isDoubles
+        ? { '1': { players: [names[0], names[1]] }, '2': { players: [names[2], names[3]] } }
+        : { '1': { players: [names[0]] }, '2': { players: [names[1]] } }
+    };
+  };
+  // Empurra o lobby pro relógio (no-op na web / sem ponte).
+  function _watchNotifySetup() {
+    if (window.WatchBridge && window.WatchBridge.pushCurrent) {
+      try { window.WatchBridge.pushCurrent(); } catch (e) {}
+    }
+  }
+  // O lobby saiu do ar → avisa o relógio pra tirar o "Iniciar".
+  //
+  // NÃO anula window._getCasualSetupState de propósito: ele já se protege sozinho
+  // (retorna null quando a overlay não existe), e anular quebrava o retorno ao
+  // lobby — _casualReopenSetup reusa ESTE closure e nunca re-executa a atribuição,
+  // então depois de "iniciar → fechar → voltar ao lobby" o relógio nunca mais
+  // ofereceria "Iniciar". Um _openCasualMatch novo sobrescreve o getter naturalmente.
+  //
+  // skipPush=true quando o placar ao vivo abre logo em seguida: ele empurra o
+  // próprio estado, e mandar "inativo" antes faria o relógio piscar
+  // "Aguardando…" por um instante entre o lobby e a partida.
+  function _watchSetupTeardown(skipPush) {
+    if (!skipPush && window.WatchBridge && window.WatchBridge.pushInactive) {
+      try { window.WatchBridge.pushInactive(); } catch (e) {}
+    }
+  }
 
   // Start the match (directly opens live scoring)
   window._casualStart = async function() {
@@ -12380,6 +12645,8 @@ window._openCasualMatch = function(restoreOpts) {
     // Close setup overlay
     var ov = document.getElementById('casual-match-overlay');
     if (ov) ov.remove();
+    // skipPush: _openLiveScoring logo abaixo empurra o estado ao vivo.
+    _watchSetupTeardown(true);
     var qrOv = document.getElementById('casual-qr-overlay');
     if (qrOv) qrOv.remove();
 
@@ -12410,7 +12677,7 @@ window._openCasualMatch = function(restoreOpts) {
   // visível (inclui atrás da barra do Safari), então a parte de baixo do
   // conteúdo (QR + Últimas Partidas) ficava fora da tela e o scroll interno
   // não alcançava. 100dvh = viewport visível real → tudo cabe e scrolla.
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;background:var(--bg-darker);z-index:100002;display:flex;flex-direction:column;overflow:hidden;touch-action:manipulation;';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;height:100%;background:var(--bg-darker);z-index:100002;display:flex;flex-direction:column;overflow:hidden;touch-action:manipulation;';
   // v1.6.27-beta: animação pulse pro ícone "?" de gênero indefinido —
   // chama atenção do user de que é clicável (cinza sem pulse era ignorado).
   // Append em <head> em vez de overlay div pra garantir parse como CSS
@@ -12530,6 +12797,7 @@ window._openCasualMatch = function(restoreOpts) {
           clearInterval(_setupRefreshInterval); _setupRefreshInterval = null;
           var _ov = document.getElementById('casual-match-overlay');
           if (_ov) _ov.remove();
+          _watchSetupTeardown();
           if (typeof showNotification === 'function') showNotification(_t('casual.matchCancelled'), _t('casual.matchCancelledMsg'), 'info');
           try { window.location.hash = '#dashboard'; } catch(e) {}
           return;
@@ -12542,6 +12810,7 @@ window._openCasualMatch = function(restoreOpts) {
           clearInterval(_setupRefreshInterval); _setupRefreshInterval = null;
           var _ovHCSetup = document.getElementById('casual-match-overlay');
           if (_ovHCSetup) _ovHCSetup.remove();
+          _watchSetupTeardown();
           var _ovQRHC = document.getElementById('casual-qr-overlay');
           if (_ovQRHC) _ovQRHC.remove();
           if (typeof showNotification === 'function') showNotification(_t('casual.matchCancelled'), _t('casual.matchCancelledMsg'), 'info');
@@ -12568,6 +12837,7 @@ window._openCasualMatch = function(restoreOpts) {
               clearInterval(_setupRefreshInterval); _setupRefreshInterval = null;
               var _ovAN = document.getElementById('casual-match-overlay');
               if (_ovAN) _ovAN.remove();
+              _watchSetupTeardown(true); // o placar ao vivo abre em seguida
               var _qrAN = document.getElementById('casual-qr-overlay');
               if (_qrAN) _qrAN.remove();
               var _newPlayers = Array.isArray(freshNew.players) ? freshNew.players : [];
@@ -12604,6 +12874,7 @@ window._openCasualMatch = function(restoreOpts) {
           clearInterval(_setupRefreshInterval); _setupRefreshInterval = null;
           var _ovA = document.getElementById('casual-match-overlay');
           if (_ovA) _ovA.remove();
+          _watchSetupTeardown(true); // o placar ao vivo abre em seguida
           var _qrA = document.getElementById('casual-qr-overlay');
           if (_qrA) _qrA.remove();
           var _freshPlayers = Array.isArray(fresh.players) ? fresh.players : [];
@@ -12958,10 +13229,10 @@ window._openCasualMatch = function(restoreOpts) {
     } catch(e) {}
   };
 
-  setTimeout(function() {
-    var el = isDoubles ? document.getElementById('casual-p2a-name') : document.getElementById('casual-p2-name');
-    if (el && !el.value) el.focus();
-  }, 300);
+  // O autofocus no nome do adversário foi REMOVIDO: no celular ele subia o
+  // teclado sozinho ao abrir a partida, empurrando a tela toda pra cima antes
+  // do usuário pedir qualquer coisa. O teclado só deve aparecer quando o
+  // usuário TOCA num campo de nome.
 };
 
 // ─── Casual Match Join Screen (route: #casual/{roomCode}) ─────────────────────

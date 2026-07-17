@@ -3342,7 +3342,7 @@
       }
       var canDelete = cu && cu.uid === r.uid;
       var delBtn = canDelete
-        ? '<button title="Apagar" onclick="window._venuesDeleteReview(\'' + _safe(venue.placeId) + '\',\'' + _safe(r._id) + '\')" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem;padding:0 4px;opacity:0.5;">✕</button>'
+        ? '<button type="button" class="cancel-x-btn" title="Apagar" onclick="window._venuesDeleteReview(\'' + _safe(venue.placeId) + '\',\'' + _safe(r._id) + '\')" style="--cx-size:18px;">✕</button>'
         : '';
       // Moderação (Guideline 1.2): denunciar avaliação + bloquear autor (só em reviews de terceiros).
       var modBtns = (cu && cu.uid && r.uid && cu.uid !== r.uid)
@@ -3814,7 +3814,7 @@
     // inputs 16→12, margin-bottom do grid 18→14 — tudo proporcionalmente mais
     // enxuto pra que os campos virem ELEMENTO do modal, não DOMINAREM ele.
     overlay.innerHTML =
-      '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:18px;max-width:420px;width:100%;box-sizing:border-box;max-height:88vh;overflow-y:auto;">' +
+      '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:18px;max-width:420px;width:100%;box-sizing:border-box;max-height:88%;overflow-y:auto;">' +
         '<h3 style="margin:0 0 10px 0;color:var(--text-bright);">🗓️ Planejar ida</h3>' +
         // v0.16.68/70: nome do local em destaque maior — usuário pediu (duas
         // vezes) mais ênfase. 1.05→1.2rem, font-weight 700.

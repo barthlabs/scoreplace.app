@@ -529,10 +529,16 @@ window._countCompetitors = function(t) {
     var addTeam = function(label) { var k = String(label == null ? '' : label).trim().toLowerCase(); if (k && !seenTeam[k]) { seenTeam[k] = 1; teams++; return true; } return false; };
     var tally = function(arr) {
         (Array.isArray(arr) ? arr : (arr ? Object.values(arr) : [])).forEach(function(p) {
+            // v1.2.60: chave do TIME por uids — o nome é stripado no save de entrada com uid
+            // ([[project_uid_identity_canon_locked]]), então `displayName`/`p1Name` vinham VAZIOS
+            // e `addTeam('')` PULAVA a dupla → contava só as duplas com nome (bug real 8/4 vs 26/13).
+            var _tUids = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
+            var _tKey = _tUids.length ? ('t:' + _tUids.slice().sort().join('|')) : null;
             if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
-                if (addTeam(p.displayName || p.name)) p.participants.forEach(function(s) { addP(s, s && (s.displayName || s.name)); });
-            } else if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
-                if (addTeam(p.displayName || (p.p1Name + ' / ' + p.p2Name))) { addP({ uid: p.p1Uid, email: p.p1Email }, p.p1Name); addP({ uid: p.p2Uid, email: p.p2Email }, p.p2Name); }
+                if (addTeam(_tKey || p.displayName || p.name)) p.participants.forEach(function(s) { addP(s, s && (s.displayName || s.name)); });
+            } else if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+                // ESTRUTURAL (uid OU nome) — [[project_dupla_entry_structural_not_slash]]. Antes exigia p1Name&&p2Name.
+                if (addTeam(_tKey || p.displayName || ((p.p1Name || '') + ' / ' + (p.p2Name || '')))) { addP({ uid: p.p1Uid, email: p.p1Email }, p.p1Name); addP({ uid: p.p2Uid, email: p.p2Email }, p.p2Name); }
             } else {
                 var s = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '');
                 if (s && s.indexOf('/') !== -1) {
@@ -1250,116 +1256,11 @@ function renderTournaments(container, tournamentId = null) {
     // arrastar e soltar na seção "Sem Dupla" do torneio (v1.8.81)
     window._showPartnerPicker = function(tId) { /* removido */ };
 
-    // Auto-mover participantes solo para waitlist antes do sorteio em torneios de duplas
-    window._autoMoveSoloToWaitlist = function(t) {
-        if (!t) return 0;
-        // v4.4.97: dupla FORMADA (manual) — os avulsos sem-dupla são PENDÊNCIA
-        // CONSCIENTE (reabrir/formar/lista/exclusão via _showRemainderPanel), NUNCA
-        // mover em silêncio pra lista de espera. Só o modo SORTEIO (auto-pareamento)
-        // move solos automaticamente. Sem isso, o painel de sem-dupla era pulado e o
-        // fluxo caía direto no pow2 ignorando os avulsos (regressão do v4.4.96, que
-        // fez esta função reconhecer 'teams' e passar a comê-los antes de perguntar).
-        if (typeof window._isManualPairing === 'function' && window._isManualPairing(t)) return 0;
-        var enrollmentMode = t.enrollmentMode || t.enrollment || 'individual';
-        var teamSize = parseInt(t.teamSize) || 1;
-        if (!(window._isTeamEnrollMode(enrollmentMode) && teamSize === 2)) return 0;
-
-        var parts = Array.isArray(t.participants) ? t.participants : [];
-        var solo = parts.filter(function(p) {
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            return n && !window._entryTeamMembers(p); // v3.0.x: dupla por estrutura (p1Name/p2Name), não por '/' no nome
-        });
-        if (solo.length === 0) return 0;
-
-        // Remove solos dos participants e adiciona à waitlist
-        t.participants = parts.filter(function(p) {
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            return !n || window._entryTeamMembers(p); // v3.0.x: mantém duplas (estrutura) + entradas sem-nome
-        });
-        if (!Array.isArray(t.waitlist)) t.waitlist = [];
-        solo.forEach(function(p) {
-            // Evita duplicata na waitlist
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            var already = t.waitlist.some(function(w) {
-                var wn = typeof w === 'string' ? w : (w.displayName || w.name || '');
-                return wn === n;
-            });
-            if (!already) t.waitlist.push(p);
-        });
-        return solo.length;
-    };
-
-    // Move jogadores marcados como ausentes (W.O.) de t.participants para
-    // t.standbyParticipants antes do sorteio, para que o bracket não os inclua.
-    // Eles ficam disponíveis para substituição durante o torneio.
-    window._autoMoveAbsentToStandby = function(t) {
-        if (!t || !t.absent || Object.keys(t.absent).length === 0) return 0;
-        var absentMap = t.absent;
-        var parts = Array.isArray(t.participants) ? t.participants : [];
-        var toMove = parts.filter(function(p) {
-            return window._idMapHas(t, absentMap, p); // uid-first (objeto p)
-        });
-        if (toMove.length === 0) return 0;
-        var moveSet = {};
-        toMove.forEach(function(p) {
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            if (n) moveSet[n] = true;
-        });
-        t.participants = parts.filter(function(p) {
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            return !n || !moveSet[n];
-        });
-        if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
-        toMove.forEach(function(p) {
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            var already = t.standbyParticipants.some(function(w) {
-                var wn = typeof w === 'string' ? w : (w.displayName || w.name || '');
-                return wn === n;
-            });
-            if (!already) t.standbyParticipants.push(p);
-        });
-        return toMove.length;
-    };
-
-    // v2.2.39: "Garantir sorteio só entre os presentes" — move todos os NÃO
-    // presentes (sem check-in OU marcados ausentes) de t.participants para a
-    // lista de espera, para que o sorteio inclua apenas quem fez a chamada.
-    // Ausentes podem voltar depois (regra de 4 presentes acumulados na espera).
-    // "Presente" = NÃO ausente E (nome com check-in direto OU, sendo dupla
-    // "A / B", todos os membros com check-in) — espelha a regra canônica de
-    // presença de equipe usada na substituição (participants.js).
-    window._isParticipantPresent = function(t, name) {
-        if (!t || !name) return false;
-        var ci = t.checkedIn || {}, ab = t.absent || {};
-        if (window._idMapHas(t, ab, name)) return false;
-        if (window._idMapHas(t, ci, name)) return true;
-        if (name.indexOf('/') !== -1) {
-            var members = name.split('/').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
-            if (members.length >= 2 && members.every(function(m) { return window._idMapHas(t, ci, m); })) return true;
-        }
-        return false;
-    };
-
-    window._moveAbsentToWaitlistForPresentDraw = function(t) {
-        if (!t) return 0;
-        var parts = Array.isArray(t.participants) ? t.participants : [];
-        var _nm = function(p) { return typeof p === 'string' ? p : (p && (p.displayName || p.name) || ''); };
-        var notPresent = parts.filter(function(p) {
-            var n = _nm(p);
-            return n && !window._isParticipantPresent(t, n);
-        });
-        if (notPresent.length === 0) return 0;
-        var moveSet = {};
-        notPresent.forEach(function(p) { var n = _nm(p); if (n) moveSet[n] = true; });
-        t.participants = parts.filter(function(p) { var n = _nm(p); return !n || !moveSet[n]; });
-        if (!Array.isArray(t.waitlist)) t.waitlist = [];
-        notPresent.forEach(function(p) {
-            var n = _nm(p);
-            var already = t.waitlist.some(function(w) { return _nm(w) === n; });
-            if (!already) t.waitlist.push(p);
-        });
-        return notPresent.length;
-    };
+    // ── _autoMoveSoloToWaitlist / _autoMoveAbsentToStandby / _isParticipantPresent /
+    //    _moveAbsentToWaitlistForPresentDraw MOVERAM-SE para js/views/draw-decisions.js
+    //    (v1.2.29): são mutadores puros do elenco que o SORTEIO usa, e o sorteio roda na
+    //    CF — que carrega draw-decisions.js vendorado, mas não esta view. Ver
+    //    docs/sorteio-ciclo-decisoes.md. As chamadas seguem iguais (window._x).
 
     // v2.2.39: diálogo de escolha do modo de sorteio quando as inscrições
     // seguem ABERTAS após o sorteio. Organizador escolhe entre sortear com
@@ -1436,7 +1337,8 @@ function renderTournaments(container, tournamentId = null) {
             if (!tt) { close(); return; }
             var _nm = function(p) { return typeof p === 'string' ? p : (p && (p.displayName || p.name) || ''); };
             var parts = Array.isArray(tt.participants) ? tt.participants : [];
-            var presentCount = parts.filter(function(p) { return window._isParticipantPresent(tt, _nm(p)); }).length;
+            // ENTRADA, não rótulo — a presença é dos uids dos slots (ver _entryIsPresent).
+            var presentCount = parts.filter(function(p) { return window._isParticipantPresent(tt, p); }).length;
             if (presentCount < 2) {
                 if (typeof showNotification !== 'undefined') {
                     showNotification('⚠️ Poucos presentes', 'Marque pelo menos 2 participantes presentes (check-in) antes de sortear só entre os presentes.', 'warning');
@@ -2153,7 +2055,7 @@ function renderTournaments(container, tournamentId = null) {
 
         // Para duplas (teamSize===2): modal suprimido — fluxo é direto (inscrição + _showPartnerPicker)
         const teamEnrollModalHtml = isDoublesTournament ? '' : `
-         <div id="team-enroll-modal-${t.id}" class="team-enroll-modal-container" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 10000; align-items: flex-start; justify-content: center; cursor: default; overflow-y: auto; padding: 2rem 0;" onclick="event.stopPropagation()">
+         <div id="team-enroll-modal-${t.id}" class="team-enroll-modal-container" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 10000; align-items: flex-start; justify-content: center; cursor: default; overflow-y: auto; padding: 2rem 0;" onclick="event.stopPropagation()">
             <div style="background: var(--bg-card); width: 90%; max-width: 450px; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 20px 40px rgba(0,0,0,0.4); margin: auto; animation: fadeIn 0.2s ease;">
 
                <div style="padding: 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
@@ -2189,7 +2091,7 @@ function renderTournaments(container, tournamentId = null) {
                               <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:1rem;pointer-events:none;">🔍</span>
                               <div id="partner-chip-${t.id}" style="display:none;position:absolute;top:8px;left:8px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);border-radius:20px;padding:2px 8px 2px 6px;font-size:0.8rem;color:#a5b4fc;display:none;align-items:center;gap:5px;max-width:calc(100% - 40px);">
                                  <span id="partner-chip-name-${t.id}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-                                 <button type="button" onclick="window._partnerPickerClear('${t.id}')" style="background:none;border:none;color:#a5b4fc;cursor:pointer;font-size:0.9rem;padding:0;line-height:1;">×</button>
+                                 <button type="button" class="cancel-x-btn" title="Limpar" onclick="window._partnerPickerClear('${t.id}')" style="--cx-size:18px;">✕</button>
                               </div>
                            </div>
                            <div id="partner-dropdown-${t.id}" style="display:none;position:absolute;z-index:1000;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.4);max-height:240px;overflow-y:auto;width:min(400px,calc(90vw - 3rem));margin-top:2px;"></div>
@@ -2719,6 +2621,11 @@ function renderTournaments(container, tournamentId = null) {
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._shareTournament('${t.id}');">📋 Compartilhar</button>
+              ${/* Grupo do torneio no WhatsApp: "Entrar no grupo" é ação de PARTICIPANTE (fica
+                    aqui, junto de Convidar/Compartilhar), enquanto CRIAR/trocar o link é ação de
+                    ORGANIZADOR (fica nas Ferramentas). O próprio chip decide o que mostrar: só
+                    aparece pra INSCRITO (ou org) e só quando o grupo existe. */ ''}
+              ${(typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
               ${(!isFinished && t.startDate) ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tournamentAddToCalendar('${t.id}');">📅 Adicionar à agenda</button>` : ''}
             </div>` : ''}
 
@@ -2755,62 +2662,21 @@ function renderTournaments(container, tournamentId = null) {
 
               // Liga: um único countdown excludente (início → próximo sorteio → fim da temporada)
               if (_isLiga) {
-                var _ligaEvent = null;
-                // 1. Torneio ainda não começou? → countdown para início
-                if (t.startDate && !sorteioRealizado) {
-                  var _sd = new Date(t.startDate).getTime();
-                  if (!isNaN(_sd) && _sd > _now) _ligaEvent = { ts: _sd, label: _t('tourn.ligaStart'), icon: '🏁', color: '#10b981' };
-                }
-                // Fim do torneio: endDate (limite real, ex. "13/06 19:59") ou,
-                // na ausência dela, o fim da temporada (ligaSeasonMonths).
-                var _tEndTs = null;
-                if (t.endDate) {
-                  var _edStr = String(t.endDate).indexOf('T') > -1 ? t.endDate : (t.endDate + 'T23:59:59');
-                  var _edMs = new Date(_edStr).getTime();
-                  if (!isNaN(_edMs)) _tEndTs = _edMs;
-                }
-                if (_tEndTs == null) {
-                  var _smEnd = t.ligaSeasonMonths || t.rankingSeasonMonths;
-                  if (_smEnd && t.startDate) {
-                    var _ssdEnd = new Date(t.startDate);
-                    if (!isNaN(_ssdEnd.getTime())) {
-                      var _seEnd = new Date(_ssdEnd);
-                      _seEnd.setMonth(_seEnd.getMonth() + parseInt(_smEnd));
-                      _tEndTs = _seEnd.getTime();
-                    }
-                  }
-                }
-                // v2.7.14: multi-fase → fim do torneio = fim da ÚLTIMA fase (janela
-                // programada), não t.endDate (que é a fase ATUAL). Ex.: Confra acaba
-                // 12/11 (fim da fase 1), não 19/06 (fim da fase 0).
-                if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._tournamentScheduledWindow === 'function') {
-                  var _winEnd = window._tournamentScheduledWindow(t);
-                  if (_winEnd && _winEnd.endMs) _tEndTs = _winEnd.endMs;
-                }
-                // 2. Já começou e HÁ sorteio agendado de verdade? → countdown para o próximo
-                // sorteio. Fonte única _ligaNextDrawEventTs cobre fase única E multi-fase (fase
-                // 0 Liga auto-draw) — antes o multi-fase era pulado, escondendo o relógio.
-                var _H48 = 48 * 60 * 60 * 1000;
-                if (!_ligaEvent && sorteioRealizado && typeof window._ligaNextDrawEventTs === 'function') {
-                  var _ndTs = window._ligaNextDrawEventTs(t);
-                  if (_ndTs && _ndTs > _now && (_tEndTs == null || _ndTs <= _tEndTs)) {
-                    _ligaEvent = { ts: _ndTs, label: _t('tourn.nextDraw'), icon: '🎲', color: '#fb923c' };
-                  }
-                }
-                // 3. Sem sorteio por vir → fim do torneio SÓ nas últimas 48h.
-                if (!_ligaEvent && _tEndTs != null && _tEndTs > _now && (_tEndTs - _now) <= _H48) {
-                  _ligaEvent = { ts: _tEndTs, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' };
-                }
-                // 4. Começou, sem sorteio agendado e fora das 48h finais → RODADA EM ANDAMENTO
-                // (fonte única _ligaRoundInProgressRow — decorrido da rodada atual, tick automático).
-                if (!_ligaEvent && sorteioRealizado && typeof window._ligaRoundInProgressRow === 'function') {
+                // v4.x: FONTE ÚNICA da decisão dos estados — window._ligaCountdownEvent
+                // (tournaments-utils.js). Antes a lógica vivia duplicada aqui e no dashboard.js,
+                // sem teste → vivia regredindo. Aqui só se RENDERIZA o que o helper decidiu.
+                var _ce = (typeof window._ligaCountdownEvent === 'function') ? window._ligaCountdownEvent(t) : null;
+                // Rodada em andamento (sem regressiva) → box próprio.
+                if (_ce && _ce.kind === 'round-in-progress') {
                   var _rbEl = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
-                  var _ripStandalone = window._ligaRoundInProgressRow(t, _rbEl.fg);
+                  var _ripStandalone = (typeof window._ligaRoundInProgressRow === 'function') ? window._ligaRoundInProgressRow(t, _rbEl.fg) : '';
                   if (_ripStandalone) {
                     return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbEl.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _ripStandalone + '</div>';
                   }
+                  return '';
                 }
-                if (!_ligaEvent) return '';
+                if (!_ce) return '';
+                var _ligaEvent = { ts: _ce.ts, label: _t(_ce.labelKey), icon: _ce.icon, color: _ce.color };
                 var _countdownText = window._formatCountdown ? window._formatCountdown(_ligaEvent.ts - _now) : '';
                 var _colorMap = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
                 var _rgb = _colorMap[_ligaEvent.color] || '139,92,246';
@@ -2823,7 +2689,7 @@ function renderTournaments(container, tournamentId = null) {
                 // v4.4.x: 2ª linha "Rodada em andamento" com o tempo DECORRIDO da rodada atual —
                 // sempre que o box for o de "Próximo sorteio". Tick automático via data-elapsed-since.
                 var _roundLine = '';
-                if (_ligaEvent.label === _t('tourn.nextDraw') && typeof window._ligaRoundInProgressRow === 'function') {
+                if (_ce.kind === 'next-draw' && typeof window._ligaRoundInProgressRow === 'function') {
                   var _ripRow = window._ligaRoundInProgressRow(t, _ctColor, { iconSize: '1.2rem', labelSize: '0.9rem', valueSize: '1.25rem' });
                   if (_ripRow) {
                     _roundLine = '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(' + _rgb + ',0.3);">' + _ripRow + '</div>';
@@ -2942,9 +2808,22 @@ function renderTournaments(container, tournamentId = null) {
               var _arbitrosBtn = (_hasRefereeEntry && t.id)
                 ? '<button class="btn hover-lift" style="background:linear-gradient(135deg,rgba(20,184,166,0.18),rgba(6,182,212,0.18));color:#2dd4bf;border:1px solid rgba(20,184,166,0.45);font-size:0.82rem;padding:8px 16px;border-radius:10px;font-weight:600;cursor:pointer;" onclick="event.stopPropagation();window.location.hash=\'#arbitros/' + t.id + '\'">🧑‍⚖️ Árbitros</button>'
                 : '';
+              // v1.2.13: "FERRAMENTAS DO ORGANIZADOR" era `rgba(255,255,255,0.35)` HARDCODED —
+              // branco a 35% não dá leitura em NENHUM dos casos reportados: sobre a foto do
+              // local some na imagem (qualquer tema), e no tema CLARO sem foto é branco em
+              // fundo claro. Agora: com foto → texto claro + text-shadow duplo (o scrim não
+              // cobre este label, então a sombra é o que garante contraste sobre foto
+              // arbitrária); sem foto → var(--text-muted), que já é tema-aware.
+              // ⚠️ `!important` inline é OBRIGATÓRIO no caso da foto: o tema claro tem CSS
+              // com !important que inverte cores claras inline (#f1f5f9 → escuro) e viraria
+              // texto escuro sobre foto. Inline !important vence. Ver feedback_dark_tarja_light_text.
+              var _toolsCss = venuePhotoBg
+                ? 'color:#f1f5f9 !important; text-shadow:0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95);'
+                : 'color:var(--text-muted);';
+              var _toolsBorder = venuePhotoBg ? 'rgba(255,255,255,0.28)' : 'var(--border-color, rgba(255,255,255,0.12))';
               return `
-            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.12);">
-              <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.35); margin-bottom: 10px;">${_t('org.tools')}</div>
+            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid ${_toolsBorder};">
+              <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
                 ${!isFinished ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
@@ -2955,6 +2834,10 @@ function renderTournaments(container, tournamentId = null) {
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
                 ${isOrg ? `<button class="btn hover-lift" style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border:none;" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
+                ${/* Criar/trocar o link do grupo do torneio É ferramenta de organizador (o grupo é
+                      oficial do evento) — diferente do grupo do JOGO, que é dos jogadores e mora no
+                      card do chaveamento. O chip só renderiza pra org/co-host. */ ''}
+                ${(typeof window._waGrpTournamentOrgChip === 'function') ? window._waGrpTournamentOrgChip(t) : ''}
                 ${/* v4.1.24: "📅 Combinar jogos" REMOVIDO das Ferramentas do Organizador — NÃO é
                       ferramenta de organizador. Combinar horário é ação de PARTICIPANTE (mesmo que
                       ele seja o organizador), feita a partir do próprio JOGO no chaveamento

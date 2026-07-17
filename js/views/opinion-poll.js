@@ -223,7 +223,7 @@
     // cabeçalho do painel invadia a área do relógio. max-height desconta os insets + o
     // padding, então o painel nunca sobe atrás da status bar nem vaza embaixo.
     o.style.cssText = 'position:fixed;inset:0;z-index:100040;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:calc(env(safe-area-inset-top,0px) + 12px) 12px calc(env(safe-area-inset-bottom,0px) + 12px);';
-    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:calc(100vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 24px);overflow:auto;border-radius:16px;border:1px solid rgba(99,102,241,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
+    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:calc(100% - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 24px);overflow:auto;border-radius:16px;border:1px solid rgba(99,102,241,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
     o.addEventListener('click', function (e) { if (e.target === o) o.remove(); });
     document.body.appendChild(o);
     return o;
@@ -245,7 +245,7 @@
       // votos viravam órfãos (apareciam zerados). Opção nova fica sem o attr → gera id.
       '<input type="text" class="op-opt-input"' + (optId ? ' data-opt-id="' + _esc(optId) + '"' : '') + ' value="' + _esc(text || '') + '" placeholder="Texto da opção" maxlength="80" ' +
       'style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:9px 11px;color:var(--text-bright,#f1f5f9);font-size:0.9rem;box-sizing:border-box;">' +
-      '<button type="button" onclick="this.closest(\'.op-opt-row\').remove()" title="Remover opção" style="background:none;border:none;color:#ef4444;font-weight:900;font-size:0.9rem;cursor:pointer;flex-shrink:0;padding:4px;">✕</button>' +
+      '<button type="button" class="cancel-x-btn" onclick="this.closest(\'.op-opt-row\').remove()" title="Remover opção" style="--cx-size:20px;">✕</button>' +
     '</div>';
   }
   // Adiciona opção na seção do botão clicado.
@@ -272,7 +272,7 @@
       // v3.1.54: sem rótulo "SEÇÃO" — só o ✕ pra remover (à direita). A PERGUNTA fica
       // em LARANJA + negrito, a MESMA fonte da visualização (pedido do dono).
       '<div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:8px;">' +
-        '<button type="button" onclick="window._opRemoveSection(this)" title="Remover pergunta" style="background:none;border:none;color:#ef4444;font-weight:900;font-size:0.95rem;cursor:pointer;padding:2px 4px;">✕</button>' +
+        '<button type="button" class="cancel-x-btn" onclick="window._opRemoveSection(this)" title="Remover pergunta" style="--cx-size:20px;">✕</button>' +
       '</div>' +
       '<input type="text" class="op-sec-q" value="' + _esc((sec && sec.question) || '') + '" placeholder="Pergunta da seção" maxlength="140" style="width:100%;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:10px;padding:10px 12px;color:#f59e0b;font-weight:800;font-size:0.97rem;box-sizing:border-box;margin-bottom:10px;">' +
       '<div class="op-sec-opts">' + optsHtml + '</div>' +
@@ -885,6 +885,9 @@
   // wa.me precisa de dígitos com DDI sem '+'. Telefone canônico já vem com DDI
   // (>=12 díg); legado (~11) → prefixa o país (phoneCountry ou 55). <10 = sem número.
   function _opPhoneFull(profile) {
+    // v1.2.9: respeita o toggle "WhatsApp" de quem VAI RECEBER (default ON quando
+    // há telefone). Desligado → sem wa.me, o organizador fala por outro canal.
+    if (profile && profile.notifyWhatsApp === false) return '';
     var d = (profile && profile.phone) ? String(profile.phone).replace(/\D/g, '') : '';
     if (d.length < 10) return '';
     if (d.length >= 12) return d;

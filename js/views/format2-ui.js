@@ -161,7 +161,9 @@
     // atualiza os valores derivados sem reconstruir os inputs (preserva a digitação nativa).
     var ivInput = '<span style="display:inline-flex;align-items:center;gap:6px;">' +
       '<input id="f2-sched-iv" type="number" min="1" max="60" value="' + ivVal + '" placeholder="—" onchange="window._f2SchedInterval(this.value)" style="' + inp + 'width:90px;text-align:center;">' +
-      '<button type="button" id="f2-sched-ivx" title="Sem repetição" onclick="window._f2SchedInterval(\'\')" style="background:none;border:none;color:#f87171;font-size:1.05rem;cursor:pointer;line-height:1;padding:2px 5px;display:' + (ivVal ? 'inline' : 'none') + ';">✕</button>' +
+      // v1.2.38: usa o ✕ CANÔNICO (.cancel-x-btn — círculo vermelho, borda branca, X branco).
+      // Era um "✕ solto colorido", que o cânone proíbe explicitamente (components.css:555).
+      '<button type="button" id="f2-sched-ivx" class="cancel-x-btn" title="Sem repetição" onclick="window._f2SchedInterval(\'\')" style="--cx-size:20px;' + (ivVal ? '' : 'display:none;') + '">✕</button>' +
     '</span>';
     var row2 = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;">' +
       fld('Repetir a cada (dias)', ivInput) +
@@ -491,7 +493,11 @@
         eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Chaves paralelas (nomes livres)</div>';
         eb += [1, 2, 4].map(function (n) { return _pill(e.linhas === n, 'window._f2Linhas(' + n + ')', String(n)); }).join('');
         for (var i = 0; i < e.linhas; i++) {
-          eb += '<div style="margin-top:6px;"><input type="text" value="' + _safe(e.nomes[i] || '') + '" placeholder="Nome da chave ' + (i + 1) + ' (opcional)" oninput="window._f2LineName(' + i + ',this.value)" style="width:100%;max-width:300px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;"></div>';
+          // v1.2.40: PADRÃO do formulário = class="form-control" (padding .75rem 1rem,
+          // font-size 1rem) — igual aos campos de Início/Término da fase. Antes era estilo
+          // à mão (padding 7px 10px, SEM font-size → herdava menor): campo mais baixo e
+          // fonte menor que o resto do form.
+          eb += '<div style="margin-top:8px;"><input type="text" class="form-control" value="' + _safe(e.nomes[i] || '') + '" placeholder="Nome da chave ' + (i + 1) + ' (opcional)" oninput="window._f2LineName(' + i + ',this.value)" style="max-width:300px;box-sizing:border-box;"></div>';
         }
         // v4.4.73: Grande Final — só na SIMPLES com 2/4 linhas (na dupla-elim é sempre,
         // não tem toggle). ON = campeões das linhas se cruzam numa grande final (após a
@@ -613,6 +619,15 @@
     // v4.5.47: com repetição definida, o Nº de rodadas define o TÉRMINO da fase (1º + N×intervalo).
     // Só quando não dá pra derivar o fim (sem repetição/1º sorteio) cai no legado: intervalo pela janela.
     else if (!_syncEndFromSchedule()) { var d = _windowDays(); if (d) S.cfg.rodadas.drawIntervalDays = Math.max(1, Math.round(d / n)); }
+    // CANON (dono, 17/jul): N > 1 EXIGE repetição — o painel TEM que MOSTRAR de quanto em
+    // quanto tempo. Sem isso o intervalo ficava vazio (= sorteio único) e o sistema fazia 1
+    // rodada enquanto o painel dizia N: contradição invisível pro usuário, e a rodada 2 nunca
+    // sorteava (sem intervalo não há próximo slot ⇒ nextDrawAt inexistente). Fallback: divide
+    // a janela da fase; sem janela, diário (o menor passo real) — nunca vazio.
+    if (n > 1) {
+      var _iv = parseInt(S.cfg.rodadas.drawIntervalDays, 10);
+      if (!(_iv >= 1)) { var _wd = _windowDays(); S.cfg.rodadas.drawIntervalDays = (_wd && _wd >= n) ? Math.max(1, Math.floor(_wd / n)) : 1; }
+    }
     _norm(); _f2SchedRefresh(); // v4.4.71: atualiza no lugar (sem destruir o input em edição)
   };
   // Agendamento dos sorteios (modo "nº de rodadas"). Toggle "Sortear manualmente" (checked =
@@ -705,7 +720,9 @@
     var setIdle = function (id, val) { var el = document.getElementById(id); if (el && document.activeElement !== el) el.value = val; };
     setIdle('f2-sched-n', r.n || '');
     setIdle('f2-sched-iv', ivVal);
-    var x = document.getElementById('f2-sched-ivx'); if (x) x.style.display = ivVal ? 'inline' : 'none';
+    // v1.2.38: '' (não 'inline') devolve o display da classe .cancel-x-btn (inline-flex) —
+    // 'inline' descentraria o X dentro do círculo.
+    var x = document.getElementById('f2-sched-ivx'); if (x) x.style.display = ivVal ? '' : 'none';
     var note = document.getElementById('f2-sched-note'); if (note) note.textContent = _f2SchedNote(r);
   }
   // A DATA re-renderiza SÓ quando liga/desliga o modo auto (vazia↔preenchida) — aí a estrutura
@@ -729,12 +746,17 @@
     if (was !== nowSet) _rerender(); else _f2SchedRefresh();
   };
   window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _mirrorPhaseStart(); _recalcN(); _norm(); _f2SchedRefresh(); };
-  // CANON (v4.5.24): editar REPETIR (mantendo F) → recalcula as RODADAS pela janela; apagar o
-  // repetir o deixa VAZIO (sem repetição) e NÃO mexe nas rodadas — nunca volta sozinho.
+  // CANON (v4.5.24): editar REPETIR (mantendo F) → recalcula as RODADAS pela janela.
+  // CANON (dono, 17/jul): apagar o REPETIR = sorteio ÚNICO ⇒ o painel passa a mostrar
+  // "Nº de rodadas = 1". Antes deixava vazio e NÃO mexia nas rodadas → dava pra salvar
+  // "2 rodadas" + "sem repetição": o painel prometia 2 e o sistema fazia 1 (a rodada 2 nunca
+  // tinha quando sortear → nextDrawAt nem existia). Dono: "não pode o painel dizer 2 rodadas
+  // e o sistema fazer apenas uma em clara contradição" / "isso para que o usuário entenda o
+  // que vai acontecer". A config agora é sempre COERENTE e VISÍVEL.
   window._f2SchedInterval = function (v) {
     if (!S) return;
     var iv = parseInt(v, 10);
-    if (!(iv >= 1)) { S.cfg.rodadas.drawIntervalDays = null; _norm(); _f2SchedRefresh(); return; } // vazio → mantém rodadas
+    if (!(iv >= 1)) { S.cfg.rodadas.drawIntervalDays = null; S.cfg.rodadas.n = 1; _norm(); _f2SchedRefresh(); return; } // vazio = sorteio único ⇒ 1 rodada (mostrado)
     S.cfg.rodadas.drawIntervalDays = iv;
     var _n = _strictNFromWindow(iv); if (_n != null) S.cfg.rodadas.n = Math.max(1, _n); // recalcula rodadas (estrito = runtime)
     _norm(); _f2SchedRefresh();

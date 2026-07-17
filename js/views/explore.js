@@ -139,11 +139,16 @@ function _nameLines(raw) {
 }
 
 // Builds the 2-line name HTML block used inside all person cards.
+// CÂNONE fit-name-to-box (jul/2026) DENTRO da escala por área: o nome vive num
+// box de altura FIXA em --sp-u (escala por área, [[project_web_area_scaling_canon]]);
+// a fonte encolhe (rem) pra caber nome longo em vez de ser cortada com "…".
+// Ver window._fitNames (store.js). Marcado com `.sp-name-fit`.
 function _nameHtml(line1, line2) {
-  var s1 = 'font-weight:700;color:var(--text-bright);font-size:0.82rem;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-  var s2 = 'font-weight:600;color:var(--text-bright);font-size:0.78rem;line-height:1.15;opacity:0.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-  return '<div style="' + s1 + '">' + window._safeHtml(line1) + '</div>' +
-    (line2 ? '<div style="' + s2 + '">' + window._safeHtml(line2) + '</div>' : '');
+  var inner = '<div style="font-weight:700;line-height:1.2;">' + window._safeHtml(line1) + '</div>' +
+    (line2 ? '<div style="font-weight:600;line-height:1.15;opacity:0.82;">' + window._safeHtml(line2) + '</div>' : '');
+  return '<div style="height:calc(var(--sp-u) * 2.15);overflow:hidden;display:flex;flex-direction:column;justify-content:center;">' +
+    '<div class="sp-name-fit" data-maxrem="0.82" data-minrem="0.55" style="color:var(--text-bright);font-size:0.82rem;width:100%;">' + inner + '</div>' +
+  '</div>';
 }
 
 // v1.3.25-beta: normaliza cidade pra comparar — strip acentos via NFD
@@ -498,6 +503,10 @@ window._exploreFilterAllSections = function () {
   // v3.0.97: não pula a tela / a barra sticky não sai do lugar quando o filtro esvazia.
   // v3.1.41: com BUSCA ATIVA, leva o 1º resultado pra logo abaixo da barra (sem tela preta).
   try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(null, !!q); } catch (e) {}
+  // CÂNONE fit-name-to-box: ajusta a fonte dos nomes ao box fixo dos cards. Roda
+  // após TODO render de seção de pessoas e após cada mudança de visibilidade do
+  // filtro — cards que só agora ganharam dimensão (deixaram de ser display:none) fitam.
+  if (typeof window._fitNames === 'function') { try { window._fitNames(document); } catch (e) {} }
 };
 
 // v3.0.x: onChange da barra canônica. Mapeia o sort canônico (name/order × asc/
@@ -1536,7 +1545,7 @@ function _mountProfileSheet(innerHtml) {
   var panel = document.createElement('div');
   panel.id = 'user-profile-sheet';
   panel.setAttribute('onclick', 'event.stopPropagation()');
-  panel.style.cssText = 'background:var(--bg-card);border-radius:20px 20px 0 0;padding:0 0 36px;width:100%;max-width:480px;box-shadow:0 -4px 40px rgba(0,0,0,0.4);transform:translateY(100%);transition:transform 0.28s cubic-bezier(0.32,0.72,0,1);overflow-y:auto;max-height:90vh;';
+  panel.style.cssText = 'background:var(--bg-card);border-radius:20px 20px 0 0;padding:0 0 36px;width:100%;max-width:480px;box-shadow:0 -4px 40px rgba(0,0,0,0.4);transform:translateY(100%);transition:transform 0.28s cubic-bezier(0.32,0.72,0,1);overflow-y:auto;max-height:90%;';
   var backRow =
     '<div style="display:flex;align-items:center;padding:14px 20px 0;margin-bottom:6px;">' +
       '<button onclick="window._closeUserProfileSheet()" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.08);border:none;border-radius:20px;padding:7px 16px;color:var(--text-muted,#94a3b8);font-size:0.85rem;font-weight:600;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.13)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.08)\'">' +
