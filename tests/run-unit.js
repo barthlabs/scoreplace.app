@@ -85,6 +85,8 @@ const SUITES = [
   'tests/late-dupla-tier2.test.js',
   // Gap (dono, 17/jul): dupla FORMADA na lista de espera entra na Eliminatória Simples também.
   'tests/late-dupla-single-elim.test.js',
+  // Gap (dono, 17/jul, screenshot): dupla ímpar no repGame ("VS A definir") recebe a dupla tardia.
+  'tests/late-dupla-repgame-fill.test.js',
   'tests/phase-repechage-lines.test.js',
   'tests/reset-tournament.test.js',
   'tests/dupla-elim-render.test.js',

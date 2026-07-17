@@ -678,11 +678,35 @@ window._integrateLateDuplas = function (t) {
   var satTeam = null;
   for (var pi = 0; pi < parts.length && !satTeam; pi++) { if (_isPair(parts[pi]) && !inRep[_nm(parts[pi])]) satTeam = parts[pi]; }
 
+  // v1.2.57 (dono 17/jul): a dupla ÍMPAR normalmente está DENTRO de um repGame esperando
+  // adversário — "JOGO N: Kelly/Rodrigo VS A definir" (isPhaseRepGame, um lado real + outro
+  // TBD/awaitsBestLoser). O loop acima NÃO a acha (ela está em inRep). Detecta aqui: a dupla
+  // real vira o PAR da tardia e o repGame é REMOVIDO (ela passa a jogar um repR1 real vs a
+  // tardia). A repescagem/pow2 é recomputada com o nº novo (_buildRepechageDoubleElim),
+  // honrando a resolução do organizador. Só se o repGame ainda NÃO foi jogado.
+  var satRepGame = null;
+  var _slotEmpty = function (v) { return !v || v === 'TBD' || v === 'BYE (Avança Direto)'; };
+  if (!satTeam) {
+    for (var rgi = 0; rgi < repR1.length && !satRepGame; rgi++) {
+      var _rg = repR1[rgi];
+      if (!_rg || !_rg.isPhaseRepGame || _rg.winner) continue;
+      var _p1e = _slotEmpty(_rg.p1), _p2e = _slotEmpty(_rg.p2);
+      if (_p1e && _p2e) continue; // ambos vazios: não há dupla real pra puxar
+      if (_p1e || _p2e || _rg.awaitsBestLoser) {
+        satTeam = _p1e ? (_rg.team2Obj || { displayName: _rg.p2, name: _rg.p2 })
+                       : (_rg.team1Obj || { displayName: _rg.p1, name: _rg.p1 });
+        satRepGame = _rg;
+      }
+    }
+  }
+  // repR1 usado no rebuild EXCLUI o repGame puxado (ela vira um repR1 real, sem duplicar).
+  var repR1Base = satRepGame ? repR1.filter(function (m) { return m !== satRepGame; }) : repR1;
+
   // Pool não-pareado = [satTeam?] + duplas tardias. Forma jogos 2-a-2; SOBRA de 1 dupla nova aguarda.
   var unpaired = (satTeam ? [satTeam] : []).concat(formed);
   var idp = 'p0-lj-' + Date.now();
   var newGames = [], usedNames = {};
-  var base = repR1.length;
+  var base = repR1Base.length;
   for (var i = 0; i + 1 < unpaired.length; i += 2) {
     var a = unpaired[i], b = unpaired[i + 1];
     var gnum = base + newGames.length;
@@ -708,8 +732,9 @@ window._integrateLateDuplas = function (t) {
     if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(_isPair(p) && p._lateJoin && usedNames[_nm(p)]); });
   });
 
-  // Conjunto repR1 final = antigos (com resultados) + novos. Downstream é reconstruído do zero.
-  var allRep = repR1.concat(newGames);
+  // Conjunto repR1 final = antigos (com resultados, MENOS o repGame puxado) + novos.
+  // Downstream é reconstruído do zero.
+  var allRep = repR1Base.concat(newGames);
   t.matches = allRep.slice();
   if (t.thirdPlaceMatch) delete t.thirdPlaceMatch;
 
