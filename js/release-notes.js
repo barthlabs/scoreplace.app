@@ -11,6 +11,15 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">👥 v1.2.44 — Organizador inscrito volta a aparecer entre os inscritos <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👥 A lista de inscritos mostra todo mundo:</b> quando o organizador se inscrevia no próprio torneio, o card dele sumia da lista — o topo dizia "14 inscritos" e apareciam 13, enquanto o botão dele já dizia "Desinscrever-se". Agora quem está inscrito aparece, sempre: organizador e co-organizador inclusive. <b>Organizar não desinscreve ninguém</b> — a lista mostra exatamente quem está inscrito.</li>' +
+        '<li><b>🔐 Quem é quem não depende mais de e-mail nem de nome:</b> o app identificava participante e organizador comparando e-mail ou nome. Isso errava a pessoa quando dois inscritos dividem o mesmo e-mail (casal, família), quando alguém trocou de e-mail ou refez a conta, ou quando dois jogadores têm nomes iguais — a ponto de um inscrito comum poder aparecer como organizador. Cada pessoa com conta agora é reconhecida pela conta dela, e só por ela.</li>' +
+        '<li><b>✅ Botão "Inscrever-se / Desinscrever-se" confiável:</b> pela mesma razão, o botão podia dizer que você estava inscrito num torneio de um homônimo — e a desinscrição saía por esse mesmo caminho. Corrigido.</li>' +
+        '<li><b>🙋 Jogador convidado (sem conta) segue pelo nome:</b> quem o organizador cadastra na mão, sem conta no app, continua sendo identificado pelo nome digitado — como sempre foi.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #fb923c;border-radius:12px;padding:14px 16px;background:rgba(251,146,60,0.08);">' +
       '<div style="font-weight:800; color:#fb923c; font-size:1rem; margin-bottom:8px;">⏱️ v1.2.37 — O relógio e o número do jogo agora falam a verdade <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
