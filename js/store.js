@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.43';
+window.SCOREPLACE_VERSION = '1.2.44';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -7510,51 +7510,33 @@ window._tournamentDateRange = function (t) {
   return { start: startStr, end: endStr };
 };
 
-// ─── Competitors helper: filter out non-competing organizers from participants ─
-// Returns an array of participants excluding the organizer/co-hosts who didn't
-// explicitly enroll (selfEnrolled flag). Works for both old and new tournaments.
+// ─── INSCRITOS = participants[]. Ponto. ───────────────────────────────────────
+// CÂNONE (dono, jul/2026): a inscrição É a entrada em participants[]. Quem está lá
+// APARECE na lista e compete — inclusive organizador e co-organizadores (organizar
+// não desinscreve ninguém). Quem NÃO está lá não aparece. A tela mostra o BANCO.
+//
+// Identidade é UID, sempre — nome/e-mail/telefone NUNCA identificam quem tem conta.
+// (Fictício sem conta é a única exceção: o nome digitado é a identidade que ele tem —
+// e ele nunca é organizador, então nem entra nesta conta.) Ver
+// [[project_uid_identity_canon_locked]].
+//
+// O QUE FOI REMOVIDO AQUI (v1.2.44) e por quê: existia um filtro que excluía
+// "organizador/co-host que não se auto-inscreveu", identificando-os por
+// `organizerEmail`, `organizerName` e `coHost.email` — os três proibidos pelo cânone.
+// Ele só poupava quem tivesse a flag `selfEnrolled` na entrada; quando essa flag não
+// está na entrada (o doc guarda `{uid, enrollSeq}` — o strip do ITEM 3 e os gravadores
+// novos não a repõem), o organizador INSCRITO era derrubado pelo NOME: o cabeçalho
+// contava 14 (lê participants[] cru) e a lista renderizava 13 ("Duplas Mistas
+// Sorteadas", staging, jul/2026). O botão dizia "Desinscrever-se" — porque o botão lê
+// participants[] por uid, ou seja, a porta CERTA já discordava desta.
+// Varredura em prod+staging antes de remover: ZERO entradas fantasma de organizador —
+// toda entrada de organizador em participants[] era inscrição real (a criação começa
+// com `participants: []`, ninguém é auto-inserido). O filtro não protegia nada real e
+// custava um inscrito de verdade. Travado por tests/uid-poison-inscritos.test.js.
 window._getCompetitors = function(t) {
   if (!t || !t.participants) return [];
-  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-  var orgEmail = (t.organizerEmail || '').toLowerCase();
-  var orgName = (t.organizerName || '').toLowerCase();
-  // v2.4.83: só co-hosts ATIVOS deixam de ser competidores. Um convite de
-  // co-organização PENDENTE não muda o status do participante — ele continua
-  // inscrito (e competindo) até aceitar. Antes, qualquer co-host (mesmo pendente)
-  // era excluído na hora do convite, fazendo o inscrito "sumir" da lista assim
-  // que era arrastado pra promover — e impedindo a tag "Aguardando aceite".
-  var coHostEmails = {};
-  if (Array.isArray(t.coHosts)) {
-    t.coHosts.forEach(function(ch) { if (ch.email && ch.status === 'active') coHostEmails[ch.email.toLowerCase()] = true; });
-  }
-  return parts.filter(function(p) {
-    if (p && p.selfEnrolled) return true; // explicitly enrolled — always keep
-    var email = '', name = '';
-    if (typeof p === 'string') {
-      name = p.toLowerCase();
-    } else if (p) {
-      email = (p.email || '').toLowerCase();
-      name = (p.displayName || p.name || '').toLowerCase();
-    }
-    // Times/duplas são SEMPRE competidores reais — nunca excluir por match com
-    // organizador/co-host. Uma dupla que inclui o organizador (ex: "Kelly /
-    // Rodrigo Barth", onde Rodrigo é o org) é uma equipe que joga e conta como
-    // competidor — caso contrário o programa some com 1 time inteiro e mostra
-    // "2 inscritos / 1 time" quando são 4 inscritos / 2 times.
-    var isTeam = false;
-    if (p && typeof p === 'object') {
-      if (Array.isArray(p.participants) && p.participants.length > 1) isTeam = true;
-      if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) isTeam = true; // uid-first: dupla = 2 slots ocupados (uid OU nome)
-    }
-    if (name.indexOf(' / ') !== -1) isTeam = true;
-    if (isTeam) return true;
-    // Exclude organizer who didn't self-enroll (apenas entradas SOLO)
-    if (orgEmail && email && email === orgEmail) return false;
-    if (!email && orgName && name && name === orgName) return false;
-    // Exclude co-hosts who didn't self-enroll
-    if (email && coHostEmails[email]) return false;
-    return true;
-  });
+  // Cópia (o filter de antes também devolvia array novo — callers ordenam este retorno).
+  return Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants);
 };
 
 // v0.17.42: updateViewModeVisibility removido junto com o botão Visão.

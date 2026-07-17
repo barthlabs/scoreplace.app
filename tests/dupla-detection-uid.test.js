@@ -45,13 +45,19 @@ var comp = W._getCompetitors(t);
 eq(comp.length, 1, 'a dupla só-uid (membro=org) CONTINUA competidor — não some da lista');
 ok(comp[0] === duplaOrgUidOnly, 'é exatamente a dupla mantida');
 
-// Sanidade: um SOLO que é o organizador (sem auto-inscrição) DEVE ser excluído —
-// não pode virar falso-positivo por causa do uid-first.
+// v1.2.44 — ESTE ASSERT FOI INVERTIDO DE PROPÓSITO. Ele cobrava "org SOLO sem
+// auto-inscrição segue excluído (esperado 0)", ou seja, exigia que o programa
+// identificasse o organizador pelo E-MAIL da entrada e o tirasse da lista. Isso é o
+// oposto do cânone (dono, jul/2026): identidade é uid — nunca nome/e-mail/telefone — e
+// INSCRITO = está em participants[]; quem está lá aparece, organizador inclusive. Era
+// essa regra que sumia com o organizador inscrito ("Duplas Mistas Sorteadas", staging:
+// cabeçalho 14, lista 13). Manter o assert antigo era manter o bug travado por teste.
+// Ver tests/uid-poison-inscritos.test.js / [[project_uid_identity_canon_locked]].
 var t2 = {
   organizerEmail: 'org@x.com',
   participants: [{ uid: 'uOrg', email: 'org@x.com', displayName: 'Org Solo' }]
 };
-eq(W._getCompetitors(t2).length, 0, 'org SOLO sem auto-inscrição segue excluído (sem regressão)');
+eq(W._getCompetitors(t2).length, 1, 'org SOLO que está em participants[] APARECE (inscrito é quem está no banco)');
 
 // Sanidade: dupla clássica (nome + uid) continua mantida por AMBAS as detecções.
 var duplaClassica = { p1Uid: 'uA', p1Name: 'Ana', p2Uid: 'uB', p2Name: 'Bia', displayName: 'Ana / Bia' };
