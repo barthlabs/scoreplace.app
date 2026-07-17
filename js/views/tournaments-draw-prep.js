@@ -424,6 +424,7 @@ window._showRemainderPanel = function(tId, info, t) {
 
     // Store info globally so onclick handlers can access it without JSON in attributes
     window._remainderInfo = info;
+    window._remainderSel = null; // v1.2.50: painel abre SEM opção escolhida (select→confirm)
 
     // v1.2.48: opção "Flexibilizar equilíbrio" — só no sorteio EQUILIBRADO de duplas quando
     // a sobra de UM gênero permite formar dupla(s) mesmo-gênero. Em vez de deixar gente de
@@ -444,11 +445,11 @@ window._showRemainderPanel = function(tId, info, t) {
                 ' — ' + _playNow + ' jogam em vez de ficar de fora. ' + _leftWord +
                 '; a potência de 2 é resolvida na próxima tela.';
             _flexBtn =
-                '<button onclick="window._applyFlexibilizeBalance(\'' + tIdSafe + '\')" style="background:rgba(34,197,94,0.10);border:2px solid rgba(34,197,94,0.35);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:#e2e8f0;transition:all 0.2s;display:flex;align-items:center;gap:12px;" onmouseover="this.style.borderColor=\'rgba(34,197,94,0.6)\';this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 20px rgba(34,197,94,0.15)\'" onmouseout="this.style.borderColor=\'rgba(34,197,94,0.35)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
+                '<button type="button" class="rem-opt" data-opt="flex" onclick="window._selectRemainderOption(\'flex\')" style="border-color:rgba(34,197,94,0.35);">' +
                     '<span style="font-size:1.3rem;flex-shrink:0;">⚖️</span>' +
                     '<div>' +
                         '<div style="font-weight:800;font-size:0.88rem;color:#4ade80;">Flexibilizar equilíbrio</div>' +
-                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.5);margin-top:2px;line-height:1.3;">' + _flexDesc + '</div>' +
+                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:2px;line-height:1.3;">' + _flexDesc + '</div>' +
                     '</div>' +
                 '</button>';
         }
@@ -462,7 +463,12 @@ window._showRemainderPanel = function(tId, info, t) {
     document.body.style.overflow = 'hidden';
 
     overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:28px;border:1px solid rgba(139,92,246,0.3);box-shadow:0 30px 100px rgba(0,0,0,0.7),0 0 60px rgba(139,92,246,0.1);overflow:hidden;animation:modalFadeIn 0.3s cubic-bezier(0.16,1,0.3,1);display:flex;flex-direction:column;max-height:94svh;">' +
-        '<style>@keyframes modalFadeIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}</style>' +
+        '<style>@keyframes modalFadeIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}' +
+            '#remainder-resolution-panel .rem-opt{width:100%;font:inherit;background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.15);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:#e2e8f0;transition:transform .15s,box-shadow .15s,background .15s,border-color .15s;display:flex;align-items:center;gap:12px;}' +
+            '#remainder-resolution-panel .rem-opt:hover{transform:translateY(-1px);}' +
+            '#remainder-resolution-panel .rem-opt.sel{background:rgba(139,92,246,0.16);border-color:#a78bfa !important;box-shadow:0 0 0 2px #a78bfa,0 6px 22px rgba(139,92,246,0.28);}' +
+            '#remainder-confirm-btn:disabled{opacity:0.45;cursor:not-allowed;}' +
+        '</style>' +
         // Sticky top bar with cancel
         '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#4c1d95 0%,#6d28d9 50%,#7c3aed 100%);padding:10px 1.25rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:10px;">' +
@@ -499,7 +505,7 @@ window._showRemainderPanel = function(tId, info, t) {
             // v1.2.48: toggle do MÉTODO DO CORTE (quem sai pra fechar a chave). Texto claro:
             // "Corte: Sorteio Geral" (aleatório entre todos) ↔ "Corte: Cronológico" (os
             // últimos a se inscrever saem primeiro). Vale pra Lista de Espera e Exclusão.
-            '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);margin-bottom:9px;">' +
+            '<div id="remainder-cut-toggle-wrap" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);margin-bottom:9px;transition:opacity .15s;opacity:0.4;pointer-events:none;">' +
                 '<div style="flex:1;min-width:0;">' +
                     '<div id="remainder-toggle-title" style="font-weight:800;color:#ede9fe;font-size:0.82rem;">Corte: Sorteio Geral</div>' +
                     '<div id="remainder-toggle-desc" style="font-size:0.7rem;color:#c4b5fd;margin-top:2px;line-height:1.35;">Quem sai é sorteado aleatoriamente entre todos os inscritos.</div>' +
@@ -510,35 +516,81 @@ window._showRemainderPanel = function(tId, info, t) {
                 // v1.2.48: Flexibilizar equilíbrio (só aparece no equilibrado com sobra de gênero)
                 _flexBtn +
                 // Reabrir Inscrições
-                '<button onclick="document.getElementById(\'remainder-resolution-panel\').remove();document.body.style.overflow=\'\';window._showReopenPanel(\'' + tIdSafe + '\',window._remainderInfo)" style="background:rgba(59,130,246,0.08);border:2px solid rgba(59,130,246,0.25);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:#e2e8f0;transition:all 0.2s;display:flex;align-items:center;gap:12px;" onmouseover="this.style.borderColor=\'rgba(59,130,246,0.5)\';this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 20px rgba(59,130,246,0.15)\'" onmouseout="this.style.borderColor=\'rgba(59,130,246,0.25)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
+                '<button type="button" class="rem-opt" data-opt="reopen" onclick="window._selectRemainderOption(\'reopen\')" style="border-color:rgba(59,130,246,0.3);">' +
                     '<span style="font-size:1.3rem;flex-shrink:0;">↩️</span>' +
                     '<div>' +
                         '<div style="font-weight:800;font-size:0.88rem;color:#60a5fa;">' + _t('predraw.p2PollReopenTitle') + '</div>' +
-                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.5);margin-top:2px;line-height:1.3;">' + _t('predraw.reopenRemainderDesc', {label: (remCount > 1 ? _t('predraw.remainderTeamMany') : _t('predraw.remainderTeamOne'))}) + '</div>' +
+                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:2px;line-height:1.3;">' + _t('predraw.reopenRemainderDesc', {label: (remCount > 1 ? _t('predraw.remainderTeamMany') : _t('predraw.remainderTeamOne'))}) + '</div>' +
                     '</div>' +
                 '</button>' +
-                // Lista de Espera (reads toggle for method)
-                '<button onclick="window._applyRemainderAction(\'' + tIdSafe + '\',\'standby\')" style="background:rgba(168,85,247,0.08);border:2px solid rgba(168,85,247,0.25);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:#e2e8f0;transition:all 0.2s;display:flex;align-items:center;gap:12px;" onmouseover="this.style.borderColor=\'rgba(168,85,247,0.5)\';this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 20px rgba(168,85,247,0.15)\'" onmouseout="this.style.borderColor=\'rgba(168,85,247,0.25)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
+                // Lista de Espera (usa o toggle do corte)
+                '<button type="button" class="rem-opt" data-opt="standby" onclick="window._selectRemainderOption(\'standby\')" style="border-color:rgba(168,85,247,0.3);">' +
                     '<span style="font-size:1.3rem;flex-shrink:0;">⏱️</span>' +
                     '<div>' +
                         '<div style="font-weight:800;font-size:0.88rem;color:#c084fc;">' + _t('predraw.waitlistTitle') + '</div>' +
-                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.5);margin-top:2px;line-height:1.3;">' + _t('predraw.standbyRemainderDesc', {label: remLabel}) + '</div>' +
+                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:2px;line-height:1.3;">' + _t('predraw.standbyRemainderDesc', {label: remLabel}) + '</div>' +
                     '</div>' +
                 '</button>' +
-                // Exclusão (reads toggle for method)
-                '<button onclick="window._applyRemainderAction(\'' + tIdSafe + '\',\'exclusion\')" style="background:rgba(239,68,68,0.08);border:2px solid rgba(239,68,68,0.25);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:#e2e8f0;transition:all 0.2s;display:flex;align-items:center;gap:12px;" onmouseover="this.style.borderColor=\'rgba(239,68,68,0.5)\';this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 20px rgba(239,68,68,0.15)\'" onmouseout="this.style.borderColor=\'rgba(239,68,68,0.25)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
+                // Exclusão (usa o toggle do corte)
+                '<button type="button" class="rem-opt" data-opt="exclusion" onclick="window._selectRemainderOption(\'exclusion\')" style="border-color:rgba(239,68,68,0.3);">' +
                     '<span style="font-size:1.3rem;flex-shrink:0;">🚫</span>' +
                     '<div>' +
                         '<div style="font-weight:800;font-size:0.88rem;color:#f87171;">' + _t('predraw.exclusionTitle') + '</div>' +
-                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.5);margin-top:2px;line-height:1.3;">' + _t('predraw.exclusionRemainderDesc', {label: remLabel}) + '</div>' +
+                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:2px;line-height:1.3;">' + _t('predraw.exclusionRemainderDesc', {label: remLabel}) + '</div>' +
                     '</div>' +
                 '</button>' +
             '</div>' +
         '</div>' +
         '</div>' +
+        // v1.2.50: rodapé fixo — Confirmar. As opções acima só SELECIONAM (destacam +
+        // deixam ler); a decisão só executa aqui. Pedido do dono: "clicar na decisão e
+        // confirmar pra poder ler como cada decisão se aplica."
+        '<div style="flex-shrink:0;background:var(--bg-card,#1e293b);border-top:1px solid rgba(255,255,255,0.08);padding:11px 1.25rem;">' +
+            '<button type="button" id="remainder-confirm-btn" disabled onclick="window._confirmRemainderSelection(\'' + tIdSafe + '\')" style="width:100%;padding:12px;border-radius:12px;border:none;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;">Selecione uma opção acima</button>' +
+        '</div>' +
     '</div>';
 
     document.body.appendChild(overlay);
+};
+
+// v1.2.50: SELECIONAR uma decisão do painel do resto (destaca + habilita Confirmar).
+// Não executa nada — o dono pede clicar a decisão e LER como ela se aplica antes de
+// confirmar. O toggle do corte (sorteio/cronológico) só faz sentido pra Lista de Espera
+// e Exclusão, então acende só nessas; nas outras fica apagado.
+window._selectRemainderOption = function(key) {
+    window._remainderSel = key;
+    var panel = document.getElementById('remainder-resolution-panel');
+    if (!panel) return;
+    var labels = { flex: 'Flexibilizar equilíbrio', reopen: 'Reabrir inscrições', standby: 'Lista de espera', exclusion: 'Exclusão' };
+    var opts = panel.querySelectorAll('[data-opt]');
+    for (var i = 0; i < opts.length; i++) {
+        if (opts[i].getAttribute('data-opt') === key) opts[i].classList.add('sel');
+        else opts[i].classList.remove('sel');
+    }
+    var btn = document.getElementById('remainder-confirm-btn');
+    if (btn) { btn.disabled = false; btn.textContent = 'Confirmar · ' + (labels[key] || ''); }
+    var cut = document.getElementById('remainder-cut-toggle-wrap');
+    if (cut) {
+        var usaCorte = (key === 'standby' || key === 'exclusion');
+        cut.style.opacity = usaCorte ? '1' : '0.4';
+        cut.style.pointerEvents = usaCorte ? '' : 'none';
+    }
+};
+
+// v1.2.50: EXECUTA a decisão selecionada (o Confirmar). Despacha pra ação que antes rodava
+// direto no clique de cada card.
+window._confirmRemainderSelection = function(tId) {
+    var key = window._remainderSel;
+    if (!key) return;
+    if (key === 'flex') { window._applyFlexibilizeBalance(tId); return; }
+    if (key === 'reopen') {
+        var p = document.getElementById('remainder-resolution-panel'); if (p) p.remove();
+        document.body.style.overflow = '';
+        window._showReopenPanel(tId, window._remainderInfo);
+        return;
+    }
+    // standby | exclusion → _applyRemainderAction lê o toggle do corte (sorteio/cronológico)
+    window._applyRemainderAction(tId, key);
 };
 
 // v1.2.48: "Flexibilizar equilíbrio" — forma TODAS as duplas possíveis (o motor equilibrado
