@@ -161,7 +161,9 @@
     // atualiza os valores derivados sem reconstruir os inputs (preserva a digitação nativa).
     var ivInput = '<span style="display:inline-flex;align-items:center;gap:6px;">' +
       '<input id="f2-sched-iv" type="number" min="1" max="60" value="' + ivVal + '" placeholder="—" onchange="window._f2SchedInterval(this.value)" style="' + inp + 'width:90px;text-align:center;">' +
-      '<button type="button" id="f2-sched-ivx" title="Sem repetição" onclick="window._f2SchedInterval(\'\')" style="background:none;border:none;color:#f87171;font-size:1.05rem;cursor:pointer;line-height:1;padding:2px 5px;display:' + (ivVal ? 'inline' : 'none') + ';">✕</button>' +
+      // v1.2.38: usa o ✕ CANÔNICO (.cancel-x-btn — círculo vermelho, borda branca, X branco).
+      // Era um "✕ solto colorido", que o cânone proíbe explicitamente (components.css:555).
+      '<button type="button" id="f2-sched-ivx" class="cancel-x-btn" title="Sem repetição" onclick="window._f2SchedInterval(\'\')" style="--cx-size:20px;' + (ivVal ? '' : 'display:none;') + '">✕</button>' +
     '</span>';
     var row2 = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;">' +
       fld('Repetir a cada (dias)', ivInput) +
@@ -705,7 +707,9 @@
     var setIdle = function (id, val) { var el = document.getElementById(id); if (el && document.activeElement !== el) el.value = val; };
     setIdle('f2-sched-n', r.n || '');
     setIdle('f2-sched-iv', ivVal);
-    var x = document.getElementById('f2-sched-ivx'); if (x) x.style.display = ivVal ? 'inline' : 'none';
+    // v1.2.38: '' (não 'inline') devolve o display da classe .cancel-x-btn (inline-flex) —
+    // 'inline' descentraria o X dentro do círculo.
+    var x = document.getElementById('f2-sched-ivx'); if (x) x.style.display = ivVal ? '' : 'none';
     var note = document.getElementById('f2-sched-note'); if (note) note.textContent = _f2SchedNote(r);
   }
   // A DATA re-renderiza SÓ quando liga/desliga o modo auto (vazia↔preenchida) — aí a estrutura
