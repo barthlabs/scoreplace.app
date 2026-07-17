@@ -1650,15 +1650,15 @@ function renderDashboard(container) {
       else if (faseLower.indexOf('final') !== -1) faseColor = '#fbbf24'; // ouro só pra Final real
 
       // matchLabel — JOGO N GLOBAL (fonte única _assignGlobalGameNumbers, igual ao bracket).
-      // Rei/Rainha segue pelo _monarchBoxLabel (numeração por grupo → global) mais abaixo.
-      var matchLabel = (item.m && !item.m.isMonarch && item.m._gameNum != null)
+      // v1.2.37: Rei/Rainha NÃO é mais exceção. Antes o `!isMonarch` mandava o monarch pro
+      // `m.label` (que em Rei/Rainha é "Jogo 1/2/3" POR GRUPO) e um 2º numerador só dele
+      // (_monarchGlobalJogoNum) — que espelhava um bracket ANTIGO ("grupo do usuário por
+      // último" → Jogo 73) e divergiu do atual (numera na ordem dos grupos → Jogo 19).
+      // Fonte única = m._gameNum, carimbado acima. Proibido 2º contador.
+      var matchLabel = (item.m && item.m._gameNum != null)
         ? ('Jogo ' + item.m._gameNum)
         : (item.m.label || 'JOGO 1');
-      // v4.0.2: em Rei/Rainha o m.label é "Jogo N" POR GRUPO (sempre Jogo 1/2/3).
-      // O número GLOBAL que o usuário vê no bracket (ex.: Jogo 73) vem do helper
-      // canônico — outros grupos contam primeiro, o grupo do usuário vem depois.
-      var _gJogoNum = (item.m && item.m.isMonarch && tRef && typeof window._monarchGlobalJogoNum === 'function')
-        ? window._monarchGlobalJogoNum(tRef, item.m, _isMe) : null;
+      var _gJogoNum = (item.m && item.m.isMonarch && item.m._gameNum != null) ? item.m._gameNum : null;
       var _monarchBoxLabel = (_gJogoNum != null) ? ('Jogo ' + _gJogoNum) : null;
 
       // Foto real do jogador: tenta _playerPhotoCache, depois perfil do usuário
@@ -1898,8 +1898,10 @@ function renderDashboard(container) {
       var _metaStr = _meta.join(' · ');
       // v4.1.20: "JOGO N" GLOBAL (fonte única). Antes parseava _ngM.label — que muitas
       // vezes não traz número → caía em "Jogo" pelado (bug reportado na dashboard).
+      // v1.2.37: Rei/Rainha NÃO é exceção — o `!isMonarch` daqui era o bug do "JOGO 73"
+      // (caía no parse do m.label, que em Rei/Rainha é o nº POR GRUPO/legado). Fonte única.
       var _boxU;
-      if (_ngM && !_ngM.isMonarch && _ngM._gameNum != null) {
+      if (_ngM && _ngM._gameNum != null) {
         _boxU = 'Jogo ' + _ngM._gameNum;
       } else {
         var _jgU = String(_ngM.label || '').match(/Jogo\s*\d+/i);
@@ -1966,7 +1968,8 @@ function renderDashboard(container) {
         }
 
         // mesmo estilo de coluna que _miniBracketCard — JOGO N GLOBAL (fonte única).
-        var matchLabel2 = (m2 && !m2.isMonarch && m2._gameNum != null)
+        // v1.2.37: sem exceção pra Rei/Rainha (ver matchLabel acima).
+        var matchLabel2 = (m2 && m2._gameNum != null)
           ? ('Jogo ' + m2._gameNum)
           : (m2.label || 'JOGO 1');
         var rowStyle2 = 'display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;margin-bottom:4px;';
@@ -2005,9 +2008,9 @@ function renderDashboard(container) {
         // v2.3.63: no header de cada box mostra só "JOGO N" (o grupo+torneio já
         // aparece no cabeçalho compartilhado). Fallback pro label completo
         // quando não há "jogo N" (ex.: eliminatórias "Final").
-        // v4.0.2: Rei/Rainha usa o número GLOBAL (idem card "Próximo Jogo").
-        var _gJogoNum2 = (m2 && m2.isMonarch && tRef2 && typeof window._monarchGlobalJogoNum === 'function')
-          ? window._monarchGlobalJogoNum(tRef2, m2, _isMe) : null;
+        // v1.2.37: Rei/Rainha usa o número GLOBAL da FONTE ÚNICA (m._gameNum), igual ao
+        // bracket. Antes vinha do _monarchGlobalJogoNum (2º numerador, já removido).
+        var _gJogoNum2 = (m2 && m2.isMonarch && m2._gameNum != null) ? m2._gameNum : null;
         var _boxLabel = (_gJogoNum2 != null) ? ('Jogo ' + _gJogoNum2) : (_fp2.jogo || matchLabel2);
         var _body = _posBadge +
           '<div onclick="window.location.hash=\'#bracket/' + _esc2(item.tId) + '\'" style="cursor:pointer;background:var(--bg-card);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' +

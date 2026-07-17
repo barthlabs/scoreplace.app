@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.36';
+window.SCOREPLACE_VERSION = '1.2.37';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -393,47 +393,12 @@ window._formatLabel = function (t) {
   };
 })();
 
-// ─── Número GLOBAL do "Jogo N" em Rei/Rainha-Liga (v4.0.2) ───────────────────
-// Espelha EXATAMENTE a numeração do bracket (bracket.js, caminho monarch-Liga):
-// na rodada, os jogos dos OUTROS grupos são contados primeiro e o grupo do
-// usuário recebe os números seguintes (por isso o 1º jogo do seu grupo pode ser
-// "Jogo 73"). Offset pelas rodadas anteriores (round.matches sem sit-outs).
-// `isMe(name)` identifica o usuário logado entre os players individuais do grupo.
-// Verificado contra dados reais do Confra (25 grupos/75 jogos → grupo do dono = 73/74/75).
-window._monarchGlobalJogoNum = function (t, m, isMe) {
-  try {
-    if (!t || !m || !m.id || typeof isMe !== 'function') return null;
-    var rounds = t.rounds || [];
-    var ri = -1, roundGroups = null;
-    for (var i = 0; i < rounds.length && ri < 0; i++) {
-      var mg = (rounds[i] && rounds[i].monarchGroups) || [];
-      for (var gi = 0; gi < mg.length && ri < 0; gi++) {
-        var ms = (mg[gi] && mg[gi].matches) || [];
-        for (var k = 0; k < ms.length; k++) { if (ms[k] && ms[k].id === m.id) { ri = i; roundGroups = mg; break; } }
-      }
-    }
-    if (ri < 0 || !roundGroups) return null;
-    var prev = 0;
-    for (var pr = 0; pr < ri; pr++) {
-      var pm = (rounds[pr] && rounds[pr].matches) || [];
-      prev += pm.filter(function (x) { return x && !x.isSitOut; }).length;
-    }
-    var hasMe = function (g) { return ((g.players) || []).some(function (p) { return isMe(p); }); };
-    var myG = [], otherG = [];
-    roundGroups.forEach(function (g) { (hasMe(g) ? myG : otherG).push(g); });
-    if (!myG.length) {
-      var n0 = prev;
-      for (var a0 = 0; a0 < roundGroups.length; a0++) { var ms0 = (roundGroups[a0].matches) || []; for (var b0 = 0; b0 < ms0.length; b0++) { n0++; if (ms0[b0].id === m.id) return n0; } }
-      return null;
-    }
-    var otherCount = 0; otherG.forEach(function (g) { otherCount += ((g.matches) || []).length; });
-    var n = prev + otherCount;
-    for (var a = 0; a < myG.length; a++) { var ms = (myG[a].matches) || []; for (var b = 0; b < ms.length; b++) { n++; if (ms[b].id === m.id) return n; } }
-    n = prev;
-    for (var a2 = 0; a2 < otherG.length; a2++) { var ms2 = (otherG[a2].matches) || []; for (var b2 = 0; b2 < ms2.length; b2++) { n++; if (ms2[b2].id === m.id) return n; } }
-    return null;
-  } catch (e) { return null; }
-};
+// ─── (REMOVIDO v1.2.37) _monarchGlobalJogoNum ───────────────────────────────
+// Era um 2º numerador SÓ pra Rei/Rainha, usado apenas pela dashboard. Espelhava um
+// bracket ANTIGO ("grupo do usuário por último" → Jogo 73) e divergiu do atual, que
+// numera na ordem dos grupos (→ Jogo 19): a dashboard dizia 73, a chave dizia 19.
+// FONTE ÚNICA é window._assignGlobalGameNumbers → m._gameNum (bracket.js). Proibido
+// 2º contador. Ver project_game_numbering_canonical.
 
 // ─── Haptic feedback CANÔNICO (v4.0.0) ───────────────────────────────────────
 // Retorno tátil de "apertar botão" em TODO o app — botões, toggles, checkboxes.
