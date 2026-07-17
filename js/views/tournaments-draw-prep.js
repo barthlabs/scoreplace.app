@@ -2523,7 +2523,9 @@ window._castPollVote = function(tId, pollId, optionKey) {
             window._participantUids(p).indexOf(user.uid) !== -1) return true;
         return (p.uid && user.uid && p.uid === user.uid) || (p.email && p.email === userEmail) || (p.displayName && p.displayName === (user.displayName || ''));
     });
-    var isOrganizer = (userEmail === t.organizerEmail);
+    // v1.2.44: organizador é UID (creatorUid/co-host ativo) — era `userEmail === t.organizerEmail`,
+    // e-mail puro, sem nem olhar uid. Cânone: quem tem conta é uid e mais nada.
+    var isOrganizer = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
     if (!isParticipant && !isOrganizer) {
         if (typeof showNotification === 'function') showNotification(_t('draw.pollNotAllowed'), _t('draw.pollNotAllowedMsg'), 'warning');
         return;

@@ -4102,7 +4102,8 @@ window._canCreateTournament = function() {
   if (!user) return false;
   var active = window.AppStore.tournaments.filter(function(t) {
     // v2.8.79: uid-primário (criador por uid; organizerEmail como fallback)
-    var mine = (user.uid && t.creatorUid === user.uid) || (user.email && t.organizerEmail === user.email);
+    // v1.2.44: só uid (ver AppStore.isOrganizer — e-mail não identifica ninguém).
+    var mine = !!(user.uid && t.creatorUid === user.uid);
     return mine && t.status !== 'finished' && t.status !== 'cancelled';
   });
   return active.length < window.PLAN_LIMITS.FREE_MAX_TOURNAMENTS;
@@ -6728,22 +6729,22 @@ window.AppStore = {
   // já mostravam o mesmo conteúdo, só os botões de admin variavam, e isso
   // já era checado por isOrganizer(t) per-torneio.
 
+  // v1.2.44 — SÓ UID. O organizador é `creatorUid`; o co-host é `ch.uid`. O fallback por
+  // `organizerEmail === email` / `ch.email === email` saiu: e-mail não identifica ninguém
+  // (cânone do dono), e quem segura uma string de e-mail igual ganhava as ferramentas do
+  // organizador. Ele existia "pra torneio antigo sem creatorUid" — medido em prod+staging
+  // (jul/2026): ZERO torneios reais sem creatorUid, e todo creatorUid resolve em users/ e
+  // bate com o dono do e-mail. Ou seja: não salvava ninguém.
+  // Conta recriada (uid novo) se resolve pelo remap/merge — não por porta de e-mail aqui.
+  // Ver [[project_uid_identity_canon_locked]] / [[project_account_merge_email]].
   isOrganizer(tournament) {
     if (!this.currentUser) return false;
-    var email = this.currentUser.email;
     var uid = this.currentUser.uid;
-    // v2.8.79: uid é identidade primária. Criador por uid OU organizerEmail.
-    if (uid && tournament.creatorUid && tournament.creatorUid === uid) return true;
-    if (email && tournament.organizerEmail === email) return true;
+    if (!uid || !tournament) return false;
+    if (tournament.creatorUid && tournament.creatorUid === uid) return true;
     if (Array.isArray(tournament.coHosts)) {
       return tournament.coHosts.some(function(ch) {
-        if (!ch || ch.status !== 'active') return false;
-        // Co-host casa por UID (primário) OU email (fallback, ambos não-vazios).
-        // ANTES casava só `ch.email === email`: co-host com email '' (ex.: conta
-        // por telefone) nunca virava organizador — sumiam Análise/Enquete/etc.
-        if (uid && ch.uid && ch.uid === uid) return true;
-        if (email && ch.email && ch.email === email) return true;
-        return false;
+        return !!(ch && ch.status === 'active' && ch.uid && ch.uid === uid);
       });
     }
     return false;
@@ -6777,10 +6778,9 @@ window.AppStore = {
     if (!this.currentUser) return [];
     var uid = this.currentUser.uid;
     var email = this.currentUser.email;
+    // v1.2.44: só uid (o fallback por organizerEmail saiu — ver AppStore.isOrganizer).
     return this.tournaments.filter(function(t) {
-      if (uid && t.creatorUid === uid) return true;
-      // Fallback: organizerEmail para torneios antigos sem creatorUid
-      return email && t.organizerEmail === email;
+      return !!(uid && t.creatorUid === uid);
     });
   },
 
@@ -6903,8 +6903,9 @@ window.AppStore = {
     var email = this.currentUser.email;
     var uid = this.currentUser.uid;
     // v2.8.79: uid-primário (criador por uid; organizerEmail como fallback)
+    // v1.2.44: só uid (ver AppStore.isOrganizer).
     return this.tournaments.some(function(t) {
-      return (uid && t.creatorUid === uid) || (email && t.organizerEmail === email);
+      return !!(uid && t.creatorUid === uid);
     });
   }
 };
@@ -7092,37 +7093,48 @@ window._teamNameBreakHtml = function(name, tournament) {
 //  • object { uid, email, displayName, ... } → top-level fields
 //  • object { ..., participants: [ m1, m2 ] }→ team — recurse into each member
 //  • object whose displayName/name contains " / " → treat label as team string
+// "Esta pessoa É esta inscrição?" — porta gêmea de _getCompetitors (o botão
+// Inscrever-se/Desinscrever-se e a desinscrição passam por aqui).
+//
+// CÂNONE (dono, jul/2026): quem tem conta é identificado por UID e mais nada. Um slot/entrada
+// que TEM uid casa SÓ por uid — o nome e o e-mail gravados ali são rótulo velho (o strip não
+// os repõe, e-mail muda, conta é recriada, nome colide). Fictício (SEM uid) casa pelo NOME
+// digitado: é a única identidade que ele tem. E-mail NUNCA identifica ninguém.
+//
+// v1.2.44 — removidos os fallbacks por e-mail (`m.email`, `p1Email`, `p2Email`) e por nome
+// de quem TEM uid. Eles davam match em pessoa ERRADA: e-mail repetido (família, conta
+// recriada, contas mescladas) ou homônimo respondiam "você está inscrito" pra quem não está
+// — e a desinscrição sai pela mesma porta. Medido em prod+staging antes de remover: UMA única
+// entrada sem uid carrega e-mail (torneio já encerrado); todas as outras sem uid são
+// fictícios só-nome, que o cânone manda casar por nome mesmo. Travado por
+// tests/uid-poison-inscritos.test.js. Ver [[project_uid_identity_canon_locked]].
 window._userMatchesParticipant = function(user, p) {
   if (!user || !p) return false;
-  var ue = (user.email || '').toLowerCase();
   var un = user.displayName || '';
   var uu = user.uid || '';
+  // Uma PESSOA (entrada solo, membro de dupla ou sub-participante).
   function matchMember(m) {
     if (!m) return false;
-    if (typeof m === 'string') {
-      var s = m.trim();
-      return (ue && s.toLowerCase() === ue) || (un && s === un);
-    }
-    if (uu && m.uid && m.uid === uu) return true;
-    if (ue && m.email && m.email.toLowerCase() === ue) return true;
-    if (un && m.displayName && m.displayName === un) return true;
-    if (un && m.name && m.name === un) return true;
+    if (typeof m === 'string') return !!(un && m.trim() === un);   // fictício legado: nome é a identidade
+    if (m.uid) return !!(uu && m.uid === uu);                      // tem conta → SÓ uid, nunca nome/e-mail
+    return !!(un && ((m.displayName && m.displayName === un) || (m.name && m.name === un))); // fictício
+  }
+  // String legada "A / B": sem slots, o nome é a única identidade que existe.
+  if (typeof p === 'string') {
+    return p.split(' / ').map(function(s) { return s.trim(); }).filter(Boolean).some(matchMember);
+  }
+  // DUPLA por ESTRUTURA (slots p1/p2) — 2 pessoas, cada uma com a SUA identidade.
+  // O rótulo "A / B" (displayName) é TIPOGRAFIA, não identidade: quando há slots, eles mandam
+  // e o label NÃO é fatiado. Ver [[project_dupla_entry_structural_not_slash]].
+  if (p.p1Uid || p.p2Uid || p.p1Name || p.p2Name) {
+    if (matchMember({ uid: p.p1Uid, name: p.p1Name })) return true;
+    if (matchMember({ uid: p.p2Uid, name: p.p2Name })) return true;
     return false;
   }
-  if (typeof p === 'string') {
-    var parts = p.split(' / ').map(function(s) { return s.trim(); }).filter(Boolean);
-    return parts.some(matchMember);
-  }
   if (matchMember(p)) return true;
-  // v2.7.91: dupla formada pelo aceite grava p1Name/p2Name/p1Uid/p2Uid com displayName
-  // = só o nome do p1 (ex.: "Kelly Barth"). Sem checar esses campos, o p2 (ex.: Rodrigo)
-  // não era reconhecido como inscrito → botão "Inscrever-se" reaparecia → inscrição em
-  // DOBRO. Esta é a RAIZ da duplicata, não só um sintoma de render.
-  if (uu && ((p.p1Uid && p.p1Uid === uu) || (p.p2Uid && p.p2Uid === uu))) return true;
-  if (un && ((p.p1Name && p.p1Name === un) || (p.p2Name && p.p2Name === un))) return true;
-  if (ue && ((p.p1Email && p.p1Email.toLowerCase() === ue) || (p.p2Email && p.p2Email.toLowerCase() === ue))) return true;
   if (Array.isArray(p.participants) && p.participants.some(matchMember)) return true;
-  var label = p.displayName || p.name || '';
+  // Sem slots e sem sub-array: dupla de fictícios guardada só como rótulo "A / B" (legado).
+  var label = p.uid ? '' : (p.displayName || p.name || '');
   if (label && label.indexOf(' / ') !== -1) {
     return label.split(' / ').map(function(s) { return s.trim(); }).filter(Boolean).some(matchMember);
   }

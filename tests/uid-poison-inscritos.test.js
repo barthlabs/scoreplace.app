@@ -151,6 +151,72 @@ console.log('\n"Estou inscrito?" responde por uid:');
     W._isUserEnrolledInTournament({ uid: 'uid_estranho', displayName: POISON_NAME, email: POISON_EMAIL }, t) === false);
 }
 
+// ── 6b · A porta gêmea: _userMatchesParticipant (botão + desinscrição) ───────
+// Casar por e-mail/nome aqui responde "você está inscrito" pra quem NÃO está — e a
+// desinscrição sai por esta mesma porta (desinscreveria a pessoa errada).
+console.log('\n"Esta pessoa é esta inscrição?" — só uid decide (quem tem conta):');
+{
+  const M = W._userMatchesParticipant;
+  const eu = { uid: ORG, displayName: POISON_NAME, email: POISON_EMAIL };
+  const outro = { uid: 'uid_outro', displayName: POISON_NAME, email: POISON_EMAIL };
+
+  ok('minha entrada (uid) casa comigo', M(eu, { uid: ORG }) === true);
+  ok('entrada de OUTRO uid não casa comigo, mesmo com nome+e-mail idênticos',
+    M(eu, { uid: 'uid_p1' }) === false);
+  ok('e-mail gravado igual ao meu NÃO me identifica (entrada tem uid de outro)',
+    M(eu, { uid: 'uid_p1', email: POISON_EMAIL }) === false);
+  ok('nome gravado igual ao meu NÃO me identifica (entrada tem uid de outro)',
+    M(eu, { uid: 'uid_p1', displayName: POISON_NAME, name: POISON_NAME }) === false);
+
+  // Dupla por slots: cada slot é uma pessoa; o rótulo "A / B" é tipografia.
+  ok('dupla: casa pelo uid do MEU slot (p2)', M(eu, { p1Uid: 'uid_p1', p2Uid: ORG }) === true);
+  ok('dupla de outros não casa comigo (nomes/rótulo colidem)',
+    M(eu, { p1Uid: 'uid_p1', p2Uid: 'uid_p2', displayName: POISON_NAME + ' / ' + POISON_NAME }) === false);
+  ok('dupla: p2Email igual ao meu NÃO me inscreve',
+    M(eu, { p1Uid: 'uid_p1', p2Uid: 'uid_p2', p2Email: POISON_EMAIL }) === false);
+
+  // Exceção do cânone: fictício sem conta — nome digitado É a identidade.
+  const fict = { name: 'Convidado da Quadra', displayName: 'Convidado da Quadra' };
+  ok('fictício casa pelo nome digitado', M({ uid: 'uid_x', displayName: 'Convidado da Quadra' }, fict) === true);
+  ok('fictício: nome diferente não casa', M(eu, fict) === false);
+  ok('dupla de fictícios (rótulo legado "A / B") casa pelo nome',
+    M({ uid: 'uid_x', displayName: 'Mari' }, { displayName: 'Mari / Flavia', name: 'Mari / Flavia' }) === true);
+
+  // Fim a fim: o botão. Era o outro lado do sintoma (botão dizia Desinscrever-se).
+  const t = makeT();
+  ok('botão: inscrito por uid → "Desinscrever-se"',
+    W._isUserEnrolledInTournament(eu, t) === true);
+  ok('botão: não-inscrito com nome+e-mail idênticos → "Inscrever-se"',
+    W._isUserEnrolledInTournament(outro, t) === false);
+}
+
+// ── 6c · "Sou o organizador?" é AUTORIZAÇÃO — e também é só uid ──────────────
+// Aqui o veneno vale dinheiro: quem segurasse uma string de e-mail igual à `organizerEmail`
+// ganhava as ferramentas do organizador (sortear, encerrar, apagar).
+console.log('\n"Sou o organizador?" — só uid decide:');
+{
+  const t = makeT();
+  const A = W.AppStore;
+  const withUser = (u, fn) => { const old = A.currentUser; A.currentUser = u; try { return fn(); } finally { A.currentUser = old; } };
+
+  ok('criador (creatorUid) é organizador',
+    withUser({ uid: ORG, email: POISON_EMAIL, displayName: POISON_NAME }, () => A.isOrganizer(t)) === true);
+  ok('IMPOSTOR com o e-mail do organizador NÃO é organizador',
+    withUser({ uid: 'uid_impostor', email: POISON_EMAIL, displayName: POISON_NAME }, () => A.isOrganizer(t)) === false);
+  ok('co-organizador ativo (por uid) é organizador',
+    withUser({ uid: COHOST, email: 'outro@x.com', displayName: POISON_NAME }, () => A.isOrganizer(t)) === true);
+  ok('IMPOSTOR com o e-mail do co-organizador NÃO é organizador',
+    withUser({ uid: 'uid_impostor2', email: POISON_EMAIL, displayName: POISON_NAME }, () => A.isOrganizer(t)) === false);
+  ok('inscrito comum não é organizador',
+    withUser({ uid: 'uid_p1', email: POISON_EMAIL, displayName: POISON_NAME }, () => A.isOrganizer(t)) === false);
+
+  // co-host PENDENTE não manda (regra de negócio preservada — só o status muda, não a identidade)
+  const t2 = makeT();
+  t2.coHosts = [{ uid: COHOST, email: POISON_EMAIL, status: 'pending' }];
+  ok('co-organizador PENDENTE ainda não é organizador',
+    withUser({ uid: COHOST, email: POISON_EMAIL }, () => A.isOrganizer(t2)) === false);
+}
+
 // ── 7 · Número de inscrição é por uid ────────────────────────────────────────
 console.log('\nNº de inscrição por uid (nomes colidem):');
 {
