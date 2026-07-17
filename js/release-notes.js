@@ -11,6 +11,14 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #fb923c;border-radius:12px;padding:14px 16px;background:rgba(251,146,60,0.08);">' +
+      '<div style="font-weight:800; color:#fb923c; font-size:1rem; margin-bottom:8px;">⏱️ v1.2.37 — O relógio e o número do jogo agora falam a verdade <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎲 Regressiva pro sorteio:</b> na Liga/Pontos Corridos, antes do 1º sorteio o relógio agora conta pro <b>sorteio</b> — e diz "Próximo sorteio", não "Início da Temporada" quando a temporada já começou. Antes ele podia mostrar "Fim do torneio" mesmo faltando o sorteio.</li>' +
+        '<li><b>▶️ Rodada em andamento não some mais:</b> com um jogo rolando, o box mostra a rodada e o tempo — a regressiva de fim de torneio não esconde mais isso.</li>' +
+        '<li><b>👑 "Jogo N" bate com a chave:</b> no Rei/Rainha, o card "Próximo Jogo" da tela inicial mostrava um número diferente do que aparecia no chaveamento (ex.: 73 em vez de 19). Agora os dois vêm da mesma fonte e sempre coincidem.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #58a6ff;border-radius:12px;padding:14px 16px;background:rgba(88,166,255,0.08);">' +
       '<div style="font-weight:800; color:#58a6ff; font-size:1rem; margin-bottom:8px;">↺ v1.2.34 — Voltar pro padrão sugerido com um clique <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
