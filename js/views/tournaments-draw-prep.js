@@ -469,16 +469,21 @@ window._showRemainderPanel = function(tId, info, t) {
             '#remainder-resolution-panel .rem-opt.sel{background:rgba(139,92,246,0.16);border-color:#a78bfa !important;box-shadow:0 0 0 2px #a78bfa,0 6px 22px rgba(139,92,246,0.28);}' +
             '#remainder-confirm-btn:disabled{opacity:0.45;cursor:not-allowed;}' +
         '</style>' +
-        // Sticky top bar with cancel
-        '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#4c1d95 0%,#6d28d9 50%,#7c3aed 100%);padding:10px 1.25rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
+        // Sticky top bar — título em cima (sem cortar), ações numa linha ABAIXO.
+        // v1.2.51: os botões NÃO podem truncar a descrição; ficam embaixo dela. Padrão
+        // canônico mantido: Cancelar (vermelho) à esquerda, Confirmar (verde) à direita.
+        '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#4c1d95 0%,#6d28d9 50%,#7c3aed 100%);padding:10px 1.25rem;display:flex;flex-direction:column;gap:9px;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:10px;">' +
-                '<span style="font-size:1.3rem;">👥</span>' +
+                '<span style="font-size:1.3rem;flex-shrink:0;">👥</span>' +
                 '<div>' +
                     '<h3 style="margin:0;color:#ede9fe;font-size:1rem;font-weight:900;letter-spacing:-0.02em;">' + (_manualPair ? 'Participantes sem dupla' : _t('predraw.remainderTitle')) + '</h3>' +
                     '<p style="margin:2px 0 0;color:#c4b5fd;font-size:0.72rem;">' + (_manualPair ? (remCount + ' sem dupla · ' + teamsFormed + ' equipe' + (teamsFormed > 1 ? 's' : '') + ' formada' + (teamsFormed > 1 ? 's' : '')) : _t('predraw.remainderSubtitle', {label: remLabel, p: (remCount > 1 ? 'm' : '')})) + '</p>' +
                 '</div>' +
             '</div>' +
-            '<button onclick="window._cancelRemainderPanel(\'' + tIdSafe + '\')" style="background:rgba(0,0,0,0.25);color:#ede9fe;border:2px solid rgba(237,233,254,0.3);padding:6px 16px;border-radius:10px;font-weight:700;font-size:0.8rem;cursor:pointer;transition:all 0.2s;white-space:nowrap;flex-shrink:0;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\';this.style.borderColor=\'rgba(237,233,254,0.5)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\';this.style.borderColor=\'rgba(237,233,254,0.3)\'">' + _t('predraw.cancelBtn') + '</button>' +
+            '<div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">' +
+                '<button type="button" onclick="window._cancelRemainderPanel(\'' + tIdSafe + '\')" style="background:#dc2626;color:#fff;border:none;padding:8px 18px;border-radius:10px;font-weight:700;font-size:0.82rem;cursor:pointer;white-space:nowrap;">✕ ' + _t('predraw.cancelBtn') + '</button>' +
+                '<button type="button" id="remainder-confirm-btn" disabled onclick="window._confirmRemainderSelection(\'' + tIdSafe + '\')" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;padding:8px 20px;border-radius:10px;font-weight:800;font-size:0.82rem;cursor:pointer;white-space:nowrap;">Confirmar</button>' +
+            '</div>' +
         '</div>' +
         // Scrollable content
         '<div style="overflow-y:auto;flex:1;">' +
@@ -542,12 +547,6 @@ window._showRemainderPanel = function(tId, info, t) {
             '</div>' +
         '</div>' +
         '</div>' +
-        // v1.2.50: rodapé fixo — Confirmar. As opções acima só SELECIONAM (destacam +
-        // deixam ler); a decisão só executa aqui. Pedido do dono: "clicar na decisão e
-        // confirmar pra poder ler como cada decisão se aplica."
-        '<div style="flex-shrink:0;background:var(--bg-card,#1e293b);border-top:1px solid rgba(255,255,255,0.08);padding:11px 1.25rem;">' +
-            '<button type="button" id="remainder-confirm-btn" disabled onclick="window._confirmRemainderSelection(\'' + tIdSafe + '\')" style="width:100%;padding:12px;border-radius:12px;border:none;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;">Selecione uma opção acima</button>' +
-        '</div>' +
     '</div>';
 
     document.body.appendChild(overlay);
@@ -561,14 +560,14 @@ window._selectRemainderOption = function(key) {
     window._remainderSel = key;
     var panel = document.getElementById('remainder-resolution-panel');
     if (!panel) return;
-    var labels = { flex: 'Flexibilizar equilíbrio', reopen: 'Reabrir inscrições', standby: 'Lista de espera', exclusion: 'Exclusão' };
     var opts = panel.querySelectorAll('[data-opt]');
     for (var i = 0; i < opts.length; i++) {
         if (opts[i].getAttribute('data-opt') === key) opts[i].classList.add('sel');
         else opts[i].classList.remove('sel');
     }
+    // Habilita o Confirmar (verde, topo). A opção escolhida já fica destacada com o anel roxo.
     var btn = document.getElementById('remainder-confirm-btn');
-    if (btn) { btn.disabled = false; btn.textContent = 'Confirmar · ' + (labels[key] || ''); }
+    if (btn) btn.disabled = false;
     var cut = document.getElementById('remainder-cut-toggle-wrap');
     if (cut) {
         var usaCorte = (key === 'standby' || key === 'exclusion');
