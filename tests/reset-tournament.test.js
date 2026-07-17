@@ -84,5 +84,38 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
   ok(!t.phases[1].bracketResolution, 'bracketResolution da fase 2 limpo (painel reabre no re-avanço)');
 })();
 
+// ── v1.2.45: RESETAR desfaz a dupla SORTEADA mesmo com entrada só-uid ────────
+// Bug real ("Duplas Mistas Sorteadas", staging): o reset lia o rótulo da dupla de
+// `p.displayName || p.name` — campos que o strip do ITEM 3 APAGA de quem tem perfil.
+// Sem rótulo, `teamOrigins[nm]` (chaveado por NOME) nunca casava e as duplas do sorteio
+// SOBREVIVIAM ao reset. E o split não devolvia o nº de inscrição de cada um.
+// FALHA no código anterior; passa neste.
+(function () {
+  W._displayNameForUid = function (u, fb) { return ({ uA: 'Ana', uB: 'Bia' })[u] || fb || ''; };
+  W._nameForUid = function (u) { return ({ uA: 'Ana', uB: 'Bia' })[u] || ''; };
+  // _pName real (store.js) não carrega aqui; espelha o essencial: rótulo pelos uids.
+  W._pName = function (p, fb) {
+    if (!p || typeof p !== 'object') return fb || '';
+    if (p.p1Uid || p.p2Uid) return [W._nameForUid(p.p1Uid), W._nameForUid(p.p2Uid)].filter(Boolean).join(' / ');
+    return W._nameForUid(p.uid) || p.displayName || p.name || fb || '';
+  };
+  var t = {
+    id: 'T2', status: 'active', participants: [
+      // ☠️ dupla SÓ-UID: sem name/displayName (é o que o banco guarda hoje)
+      { p1Uid: 'uA', p2Uid: 'uB', p1Seq: 3, p2Seq: 1 },
+    ],
+    teamOrigins: { 'Ana / Bia': 'sorteada' },
+    matches: [], rounds: [], groups: [], phases: [{}],
+  };
+  W._clearTournamentDraw(t);
+  var solos = (t.participants || []).filter(function (p) { return p && !p.p1Uid && !p.p2Uid; });
+  ok(solos.length === 2, 'Resetar DESFAZ a dupla sorteada mesmo sem nome gravado (só uid) [' + JSON.stringify(t.participants) + ']');
+  var ana = solos.find(function (p) { return p.uid === 'uA'; });
+  var bia = solos.find(function (p) { return p.uid === 'uB'; });
+  ok(!!ana && ana.enrollSeq === 3, 'Ana volta com o SEU nº de inscrição (3) [' + (ana && ana.enrollSeq) + ']');
+  ok(!!bia && bia.enrollSeq === 1, 'Bia volta com o SEU nº de inscrição (1) [' + (bia && bia.enrollSeq) + ']');
+  ok(!t.teamOrigins || t.teamOrigins['Ana / Bia'] === undefined, 'teamOrigins da dupla sorteada é limpo');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' reset-tournament: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

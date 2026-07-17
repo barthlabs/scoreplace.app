@@ -67,7 +67,16 @@ window._clearTournamentDraw = function (t) {
     if (_wait.length) _arr = _arr.concat(_wait);
     var _out = [];
     _arr.forEach(function (p) {
-      var nm = (p && typeof p === 'object') ? (p.displayName || p.name || '') : String(p || '');
+      // v1.2.45: o rótulo da dupla resolve AO VIVO (_pName monta "A / B" pelos uids).
+      // Antes lia só `p.displayName || p.name` — e o strip do ITEM 3 APAGA esses campos
+      // de quem tem perfil, então `nm` vinha VAZIO, `_origins[nm]` nunca casava e o
+      // Resetar NÃO desfazia as duplas sorteadas (bug real, "Duplas Mistas Sorteadas").
+      // O nome gravado fica de fallback (guest/dupla legada). Isto é remendo: teamOrigins
+      // é chaveado por NOME, o que o cânone de identidade proíbe — a chave certa é o par
+      // de uids. Ver [[project_uid_identity_canon_locked]].
+      var nm = (p && typeof p === 'object')
+        ? ((window._pName ? window._pName(p, '') : '') || p.displayName || p.name || '')
+        : String(p || '');
       var isTeam = (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) || (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) || (nm.indexOf(' / ') !== -1);
       if (nm && _origins[nm] === 'sorteada' && isTeam) {
         if (Array.isArray(p.participants) && p.participants.length) {
@@ -76,8 +85,11 @@ window._clearTournamentDraw = function (t) {
           // FASE 2: nome do membro resolve pelo uid (perfil ao vivo); nome gravado só fallback (guest/cache frio)
           var _dnA = window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '');
           var _dnB = window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '');
-          _out.push({ name: _dnA, displayName: _dnA, uid: p.p1Uid, email: p.p1Email, photoURL: p.p1Photo });
-          _out.push({ name: _dnB, displayName: _dnB, uid: p.p2Uid, email: p.p2Email, photoURL: p.p2Photo });
+          // v1.2.45: devolve o nº de inscrição de CADA um (p1Seq→enrollSeq). O número é da
+          // PESSOA e desfazer dupla não pode mexer nele — sem isto o reset renumerava todo
+          // mundo. Ver tests/enroll-number-canon.test.js.
+          _out.push({ name: _dnA, displayName: _dnA, uid: p.p1Uid, email: p.p1Email, photoURL: p.p1Photo, enrollSeq: (p.p1Seq != null ? p.p1Seq : undefined) });
+          _out.push({ name: _dnB, displayName: _dnB, uid: p.p2Uid, email: p.p2Email, photoURL: p.p2Photo, enrollSeq: (p.p2Seq != null ? p.p2Seq : undefined) });
         } else {
           nm.split('/').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (x) { _out.push({ name: x, displayName: x }); });
         }
