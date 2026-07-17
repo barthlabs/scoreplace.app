@@ -619,6 +619,15 @@
     // v4.5.47: com repetição definida, o Nº de rodadas define o TÉRMINO da fase (1º + N×intervalo).
     // Só quando não dá pra derivar o fim (sem repetição/1º sorteio) cai no legado: intervalo pela janela.
     else if (!_syncEndFromSchedule()) { var d = _windowDays(); if (d) S.cfg.rodadas.drawIntervalDays = Math.max(1, Math.round(d / n)); }
+    // CANON (dono, 17/jul): N > 1 EXIGE repetição — o painel TEM que MOSTRAR de quanto em
+    // quanto tempo. Sem isso o intervalo ficava vazio (= sorteio único) e o sistema fazia 1
+    // rodada enquanto o painel dizia N: contradição invisível pro usuário, e a rodada 2 nunca
+    // sorteava (sem intervalo não há próximo slot ⇒ nextDrawAt inexistente). Fallback: divide
+    // a janela da fase; sem janela, diário (o menor passo real) — nunca vazio.
+    if (n > 1) {
+      var _iv = parseInt(S.cfg.rodadas.drawIntervalDays, 10);
+      if (!(_iv >= 1)) { var _wd = _windowDays(); S.cfg.rodadas.drawIntervalDays = (_wd && _wd >= n) ? Math.max(1, Math.floor(_wd / n)) : 1; }
+    }
     _norm(); _f2SchedRefresh(); // v4.4.71: atualiza no lugar (sem destruir o input em edição)
   };
   // Agendamento dos sorteios (modo "nº de rodadas"). Toggle "Sortear manualmente" (checked =
@@ -737,12 +746,17 @@
     if (was !== nowSet) _rerender(); else _f2SchedRefresh();
   };
   window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _mirrorPhaseStart(); _recalcN(); _norm(); _f2SchedRefresh(); };
-  // CANON (v4.5.24): editar REPETIR (mantendo F) → recalcula as RODADAS pela janela; apagar o
-  // repetir o deixa VAZIO (sem repetição) e NÃO mexe nas rodadas — nunca volta sozinho.
+  // CANON (v4.5.24): editar REPETIR (mantendo F) → recalcula as RODADAS pela janela.
+  // CANON (dono, 17/jul): apagar o REPETIR = sorteio ÚNICO ⇒ o painel passa a mostrar
+  // "Nº de rodadas = 1". Antes deixava vazio e NÃO mexia nas rodadas → dava pra salvar
+  // "2 rodadas" + "sem repetição": o painel prometia 2 e o sistema fazia 1 (a rodada 2 nunca
+  // tinha quando sortear → nextDrawAt nem existia). Dono: "não pode o painel dizer 2 rodadas
+  // e o sistema fazer apenas uma em clara contradição" / "isso para que o usuário entenda o
+  // que vai acontecer". A config agora é sempre COERENTE e VISÍVEL.
   window._f2SchedInterval = function (v) {
     if (!S) return;
     var iv = parseInt(v, 10);
-    if (!(iv >= 1)) { S.cfg.rodadas.drawIntervalDays = null; _norm(); _f2SchedRefresh(); return; } // vazio → mantém rodadas
+    if (!(iv >= 1)) { S.cfg.rodadas.drawIntervalDays = null; S.cfg.rodadas.n = 1; _norm(); _f2SchedRefresh(); return; } // vazio = sorteio único ⇒ 1 rodada (mostrado)
     S.cfg.rodadas.drawIntervalDays = iv;
     var _n = _strictNFromWindow(iv); if (_n != null) S.cfg.rodadas.n = Math.max(1, _n); // recalcula rodadas (estrito = runtime)
     _norm(); _f2SchedRefresh();

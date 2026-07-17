@@ -79,6 +79,7 @@ const SUITES = [
   'tests/groups-render.test.js',
   'tests/liga-render.test.js',
   'tests/liga-countdown.test.js',
+  'tests/sched-config-coherent.test.js',
   'tests/swiss-render.test.js',
   'tests/match-roster-uid.test.js',
   'tests/fairness-uid-identity.test.js',
