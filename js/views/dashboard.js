@@ -802,48 +802,29 @@ function renderDashboard(container) {
 
               // Liga: um único countdown excludente (início → próximo sorteio → fim da temporada)
               if (_isLiga) {
-                var _ligaEv = null;
-                // 1. Não começou → countdown para início
-                if (t.startDate && !sorteioRealizado) {
-                  var _sd = new Date(t.startDate).getTime();
-                  if (!isNaN(_sd) && _sd > _now) _ligaEv = { ts: _sd, label: _t('tourn.ligaStart'), icon: '🏁', color: '#10b981' };
-                }
-                // Fim do torneio: endDate ou fim da temporada; multi-fase = fim da última fase.
-                var _tEndTsD = null;
-                if (t.endDate) { var _edD = new Date(String(t.endDate).indexOf('T') > -1 ? t.endDate : (t.endDate + 'T23:59:59')).getTime(); if (!isNaN(_edD)) _tEndTsD = _edD; }
-                if (_tEndTsD == null) { var _smD = t.ligaSeasonMonths || t.rankingSeasonMonths; if (_smD && t.startDate) { var _ssdD = new Date(t.startDate); if (!isNaN(_ssdD.getTime())) { var _seD = new Date(_ssdD); _seD.setMonth(_seD.getMonth() + parseInt(_smD)); _tEndTsD = _seD.getTime(); } } }
-                if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._tournamentScheduledWindow === 'function') { var _wD = window._tournamentScheduledWindow(t); if (_wD && _wD.endMs) _tEndTsD = _wD.endMs; }
-                var _H48D = 48 * 60 * 60 * 1000;
-                // toggle Liga "Ativado/Desativado" SEMPRE à direita (independente de countdown).
+                // v4.x: FONTE ÚNICA da decisão dos estados — window._ligaCountdownEvent
+                // (tournaments-utils.js), a MESMA do detalhe (tournaments.js). Aqui só se
+                // renderiza + o toggle Liga (sempre à direita, independente do countdown).
+                var _ce = (typeof window._ligaCountdownEvent === 'function') ? window._ligaCountdownEvent(t) : null;
                 var _ligaToggleDash = (typeof window._buildLigaActiveToggleHtml === 'function')
                   ? window._buildLigaActiveToggleHtml(t)
                   : '';
                 var _toggleRowDash = _ligaToggleDash
                   ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _ligaToggleDash + '</div>'
                   : '';
-                // 2. Começou + sorteio agendado de verdade → próximo sorteio (fonte única —
-                // fase única E multi-fase fase 0 Liga auto-draw).
-                if (!_ligaEv && sorteioRealizado && typeof window._ligaNextDrawEventTs === 'function') {
-                  var _ndTsD = window._ligaNextDrawEventTs(t);
-                  if (_ndTsD && _ndTsD > _now && (_tEndTsD == null || _ndTsD <= _tEndTsD)) _ligaEv = { ts: _ndTsD, label: _t('tourn.nextDraw'), icon: '🎲', color: '#fb923c' };
-                }
-                // 3. Sem sorteio por vir → fim do torneio SÓ nas últimas 48h.
-                if (!_ligaEv && _tEndTsD != null && _tEndTsD > _now && (_tEndTsD - _now) <= _H48D) {
-                  _ligaEv = { ts: _tEndTsD, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' };
-                }
                 var _cm = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
                 var _rbCt = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
                 var _ctColor = _rbCt.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
-                // 4. Começou, sem sorteio agendado e fora das 48h finais → RODADA EM ANDAMENTO
-                // (fonte única _ligaRoundInProgressRow — decorrido da rodada atual, tick automático).
-                if (!_ligaEv && sorteioRealizado && typeof window._ligaRoundInProgressRow === 'function') {
+                // Rodada em andamento (sem regressiva) → box próprio + toggle.
+                if (_ce && _ce.kind === 'round-in-progress' && typeof window._ligaRoundInProgressRow === 'function') {
                   var _ripStandaloneD = window._ligaRoundInProgressRow(t, _ctColor);
                   if (_ripStandaloneD) {
                     return _toggleRowDash +
                       '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _ripStandaloneD + '</div>';
                   }
                 }
-                if (!_ligaEv) return _toggleRowDash; // sem countdown → só o toggle (direita)
+                if (!_ce) return _toggleRowDash; // sem countdown → só o toggle (direita)
+                var _ligaEv = { ts: _ce.ts, label: _t(_ce.labelKey), icon: _ce.icon, color: _ce.color };
                 var _ct = window._formatCountdown ? window._formatCountdown(_ligaEv.ts - _now) : '';
                 var _rgb = _cm[_ligaEv.color] || '139,92,246';
                 // v4.4.x: 2ª linha "Rodada em andamento" (tempo decorrido da rodada) sempre que

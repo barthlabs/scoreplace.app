@@ -2656,62 +2656,21 @@ function renderTournaments(container, tournamentId = null) {
 
               // Liga: um único countdown excludente (início → próximo sorteio → fim da temporada)
               if (_isLiga) {
-                var _ligaEvent = null;
-                // 1. Torneio ainda não começou? → countdown para início
-                if (t.startDate && !sorteioRealizado) {
-                  var _sd = new Date(t.startDate).getTime();
-                  if (!isNaN(_sd) && _sd > _now) _ligaEvent = { ts: _sd, label: _t('tourn.ligaStart'), icon: '🏁', color: '#10b981' };
-                }
-                // Fim do torneio: endDate (limite real, ex. "13/06 19:59") ou,
-                // na ausência dela, o fim da temporada (ligaSeasonMonths).
-                var _tEndTs = null;
-                if (t.endDate) {
-                  var _edStr = String(t.endDate).indexOf('T') > -1 ? t.endDate : (t.endDate + 'T23:59:59');
-                  var _edMs = new Date(_edStr).getTime();
-                  if (!isNaN(_edMs)) _tEndTs = _edMs;
-                }
-                if (_tEndTs == null) {
-                  var _smEnd = t.ligaSeasonMonths || t.rankingSeasonMonths;
-                  if (_smEnd && t.startDate) {
-                    var _ssdEnd = new Date(t.startDate);
-                    if (!isNaN(_ssdEnd.getTime())) {
-                      var _seEnd = new Date(_ssdEnd);
-                      _seEnd.setMonth(_seEnd.getMonth() + parseInt(_smEnd));
-                      _tEndTs = _seEnd.getTime();
-                    }
-                  }
-                }
-                // v2.7.14: multi-fase → fim do torneio = fim da ÚLTIMA fase (janela
-                // programada), não t.endDate (que é a fase ATUAL). Ex.: Confra acaba
-                // 12/11 (fim da fase 1), não 19/06 (fim da fase 0).
-                if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._tournamentScheduledWindow === 'function') {
-                  var _winEnd = window._tournamentScheduledWindow(t);
-                  if (_winEnd && _winEnd.endMs) _tEndTs = _winEnd.endMs;
-                }
-                // 2. Já começou e HÁ sorteio agendado de verdade? → countdown para o próximo
-                // sorteio. Fonte única _ligaNextDrawEventTs cobre fase única E multi-fase (fase
-                // 0 Liga auto-draw) — antes o multi-fase era pulado, escondendo o relógio.
-                var _H48 = 48 * 60 * 60 * 1000;
-                if (!_ligaEvent && sorteioRealizado && typeof window._ligaNextDrawEventTs === 'function') {
-                  var _ndTs = window._ligaNextDrawEventTs(t);
-                  if (_ndTs && _ndTs > _now && (_tEndTs == null || _ndTs <= _tEndTs)) {
-                    _ligaEvent = { ts: _ndTs, label: _t('tourn.nextDraw'), icon: '🎲', color: '#fb923c' };
-                  }
-                }
-                // 3. Sem sorteio por vir → fim do torneio SÓ nas últimas 48h.
-                if (!_ligaEvent && _tEndTs != null && _tEndTs > _now && (_tEndTs - _now) <= _H48) {
-                  _ligaEvent = { ts: _tEndTs, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' };
-                }
-                // 4. Começou, sem sorteio agendado e fora das 48h finais → RODADA EM ANDAMENTO
-                // (fonte única _ligaRoundInProgressRow — decorrido da rodada atual, tick automático).
-                if (!_ligaEvent && sorteioRealizado && typeof window._ligaRoundInProgressRow === 'function') {
+                // v4.x: FONTE ÚNICA da decisão dos estados — window._ligaCountdownEvent
+                // (tournaments-utils.js). Antes a lógica vivia duplicada aqui e no dashboard.js,
+                // sem teste → vivia regredindo. Aqui só se RENDERIZA o que o helper decidiu.
+                var _ce = (typeof window._ligaCountdownEvent === 'function') ? window._ligaCountdownEvent(t) : null;
+                // Rodada em andamento (sem regressiva) → box próprio.
+                if (_ce && _ce.kind === 'round-in-progress') {
                   var _rbEl = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
-                  var _ripStandalone = window._ligaRoundInProgressRow(t, _rbEl.fg);
+                  var _ripStandalone = (typeof window._ligaRoundInProgressRow === 'function') ? window._ligaRoundInProgressRow(t, _rbEl.fg) : '';
                   if (_ripStandalone) {
                     return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbEl.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _ripStandalone + '</div>';
                   }
+                  return '';
                 }
-                if (!_ligaEvent) return '';
+                if (!_ce) return '';
+                var _ligaEvent = { ts: _ce.ts, label: _t(_ce.labelKey), icon: _ce.icon, color: _ce.color };
                 var _countdownText = window._formatCountdown ? window._formatCountdown(_ligaEvent.ts - _now) : '';
                 var _colorMap = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
                 var _rgb = _colorMap[_ligaEvent.color] || '139,92,246';

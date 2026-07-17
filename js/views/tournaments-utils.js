@@ -1641,6 +1641,60 @@ window._ligaRoundInProgressRow = function (t, color, opts) {
         '<span data-elapsed-since="' + _since + '" style="' + _valStyle + '">' + _txt + '</span>';
 };
 
+// v4.x: FONTE ÚNICA da decisão do COUNTDOWN da Liga (o box "Início da temporada / Próximo
+// sorteio / Rodada em andamento / Fim do torneio"). Detalhe (tournaments.js) e card
+// (dashboard.js) chamam DAQUI e só renderizam — a lógica de estados vive num lugar só, com
+// teste, pra parar de regredir. Retorna { ts, labelKey, icon, color, kind } ou null.
+//   kind: 'season-start' | 'next-draw' | 'tournament-end' | 'round-in-progress'.
+//   'round-in-progress' vem com ts=null (box próprio, decorrido da rodada). No 'next-draw' o
+//   chamador ainda desenha a 2ª linha "Rodada em andamento".
+// ESTADOS (na ordem de prioridade — o dono definiu):
+//   1) ANTES do 1º sorteio → regressiva "Início da temporada" pro 1º evento futuro:
+//      startDate se futuro; senão o 1º sorteio agendado (drawFirstDate) — cobre auto E manual,
+//      e o caso em que o startDate já passou mas o sorteio ainda não (bug do print).
+//   2) sorteado + próximo sorteio AUTO agendado (≤ fim) → "Próximo sorteio".
+//   3) sorteado + rodada ATIVA (ainda não encerrada) → "Rodada em andamento" — PRIORIDADE
+//      sobre o "Fim do torneio": um jogo rolando NUNCA fica escondido pela regressiva de fim.
+//   4) "Fim do torneio" só nas últimas 48h (multi-fase = fim da ÚLTIMA fase).
+//   5) sorteado, fora das 48h, sem sorteio por vir → "Rodada em andamento" (mesmo encerrada).
+window._ligaCountdownEvent = function (t) {
+    if (!t) return null;
+    var now = Date.now();
+    var drew = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
+    // 1) Antes do 1º sorteio → início da temporada (startDate futuro OU 1º sorteio agendado).
+    if (!drew) {
+        if (t.startDate) { var _sd = new Date(t.startDate).getTime(); if (!isNaN(_sd) && _sd > now) return { ts: _sd, labelKey: 'tourn.ligaStart', icon: '🏁', color: '#10b981', kind: 'season-start' }; }
+        if (t.drawManual !== true || t.drawFirstDate) {
+            if (t.drawFirstDate) {
+                var _fdStr = String(t.drawFirstDate).indexOf('T') > -1 ? t.drawFirstDate : (t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00'));
+                var _fd = new Date(_fdStr).getTime();
+                if (!isNaN(_fd) && _fd > now) return { ts: _fd, labelKey: 'tourn.ligaStart', icon: '🏁', color: '#10b981', kind: 'season-start' };
+            }
+        }
+    }
+    // Fim (ms): endDate ou temporada; multi-fase = fim da ÚLTIMA fase (janela programada).
+    var tEnd = null;
+    if (t.endDate) { var _ed = new Date(String(t.endDate).indexOf('T') > -1 ? t.endDate : (t.endDate + 'T23:59:59')).getTime(); if (!isNaN(_ed)) tEnd = _ed; }
+    if (tEnd == null) { var _sm = t.ligaSeasonMonths || t.rankingSeasonMonths; if (_sm && t.startDate) { var _ss = new Date(t.startDate); if (!isNaN(_ss.getTime())) { var _se = new Date(_ss); _se.setMonth(_se.getMonth() + parseInt(_sm)); tEnd = _se.getTime(); } } }
+    if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._tournamentScheduledWindow === 'function') { var _w = window._tournamentScheduledWindow(t); if (_w && _w.endMs) tEnd = _w.endMs; }
+    // 2) Sorteado + próximo sorteio AUTO agendado (≤ fim) → próximo sorteio.
+    if (drew && typeof window._ligaNextDrawEventTs === 'function') {
+        var _nd = window._ligaNextDrawEventTs(t);
+        if (_nd && _nd > now && (tEnd == null || _nd <= tEnd)) return { ts: _nd, labelKey: 'tourn.nextDraw', icon: '🎲', color: '#fb923c', kind: 'next-draw' };
+    }
+    // 3) Sorteado + rodada ATIVA (não encerrada) → rodada em andamento (PRIORIDADE sobre o fim).
+    if (drew && typeof window._ligaCurrentRoundStartTs === 'function') {
+        var _rs = window._ligaCurrentRoundStartTs(t);
+        var _reEnd = (typeof window._ligaCurrentRoundEndTs === 'function') ? window._ligaCurrentRoundEndTs(t) : null;
+        if (_rs && _reEnd == null) return { ts: null, labelKey: null, icon: null, color: null, kind: 'round-in-progress' };
+    }
+    // 4) Fim do torneio SÓ nas últimas 48h.
+    if (tEnd != null && tEnd > now && (tEnd - now) <= 48 * 3600000) return { ts: tEnd, labelKey: 'event.tournamentEnd', icon: '🏆', color: '#8b5cf6', kind: 'tournament-end' };
+    // 5) Sorteado, fora das 48h, sem sorteio por vir → rodada em andamento (mesmo encerrada).
+    if (drew && typeof window._ligaRoundInProgressRow === 'function') return { ts: null, labelKey: null, icon: null, color: null, kind: 'round-in-progress' };
+    return null;
+};
+
 // Navigate to tournament detail and scroll to highlight the enrolled participant
 window._scrollToParticipant = function(tId, participantName) {
     // Guard: participantName pode ser null para inscritos sem nome (phone-only)
