@@ -481,7 +481,7 @@ window._showRemainderPanel = function(tId, info, t) {
                 '</div>' +
             '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">' +
-                '<button type="button" onclick="window._cancelRemainderPanel(\'' + tIdSafe + '\')" style="background:#dc2626;color:#fff;border:none;padding:8px 18px;border-radius:10px;font-weight:700;font-size:0.82rem;cursor:pointer;white-space:nowrap;">✕ ' + _t('predraw.cancelBtn') + '</button>' +
+                '<button type="button" onclick="window._cancelRemainderPanel(\'' + tIdSafe + '\')" style="background:#dc2626;color:#fff;border:none;padding:8px 18px;border-radius:10px;font-weight:700;font-size:0.82rem;cursor:pointer;white-space:nowrap;">' + _t('predraw.cancelBtn').replace(/^[✕✖x]\s*/i, '') + '</button>' +
                 '<button type="button" id="remainder-confirm-btn" disabled onclick="window._confirmRemainderSelection(\'' + tIdSafe + '\')" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;padding:8px 20px;border-radius:10px;font-weight:800;font-size:0.82rem;cursor:pointer;white-space:nowrap;">Confirmar</button>' +
             '</div>' +
         '</div>' +
