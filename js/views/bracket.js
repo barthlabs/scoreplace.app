@@ -845,9 +845,21 @@ window._formLateJoinDupla = function (tId, src, tgt) {
   if (!a || !b) { if (a) { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; t.standbyParticipants.push(a); } if (b) { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; t.standbyParticipants.push(b); } return; }
   var an = (window._pName ? window._pName(a, '') : (a.displayName || a.name || '')), bn = (window._pName ? window._pName(b, '') : (b.displayName || b.name || ''));
   if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+  // v1.2.45: CARREGA o nº de inscrição de cada um pra dentro da dupla (p1Seq/p2Seq).
+  // CÂNONE (dono): o número é da PESSOA e a acompanha SEMPRE — formar dupla (manual ou
+  // sorteio) e desfazer NÃO mexem nele; só a saída de um inscrito renumera (aí o 3º vira
+  // 2º). Sem isto, o seq sumia aqui, `_ensureEnrollSeqs` inventava um novo na hora de
+  // renderizar, e o "Desfazer dupla" devolvia fielmente esse número INVENTADO — foi assim
+  // que uma simulação desfeita embaralhou os 20 números do "Duplas Mistas Sorteadas".
+  // Os outros dois caminhos de formação (_formDuplaByUids e o merge do sorteio) já
+  // preservam desde a v2.7.97; este era o que faltava.
+  if (window._ensureEnrollSeqs) window._ensureEnrollSeqs(t);
+  var _sqA = (typeof a === 'object' && a && a.enrollSeq != null) ? a.enrollSeq : null;
+  var _sqB = (typeof b === 'object' && b && b.enrollSeq != null) ? b.enrollSeq : null;
   t.standbyParticipants.push({
     p1Name: an, p1Uid: (typeof a === 'object' ? (a.uid || '') : ''),
     p2Name: bn, p2Uid: (typeof b === 'object' ? (b.uid || '') : ''),
+    p1Seq: _sqA, p2Seq: _sqB,
     displayName: an + ' / ' + bn, name: an + ' / ' + bn, _lateJoin: true
   });
   t.updatedAt = new Date().toISOString();

@@ -66,6 +66,8 @@ const SUITES = [
   // Mesmo veneno, porta dos INSCRITOS (store.js — o uid-poison só carrega js/views/*).
   // Identificar inscrito por nome/e-mail (era o caso do organizador) fica VERMELHO aqui.
   'tests/uid-poison-inscritos.test.js',
+  // Nº de inscrição é da PESSOA: formar/desfazer dupla NÃO mexe; só a saída renumera.
+  'tests/enroll-number-canon.test.js',
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
