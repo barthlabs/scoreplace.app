@@ -83,6 +83,8 @@ const SUITES = [
   'tests/phase0-swiss-elim.test.js',
   'tests/dupla-repechage-full.test.js',
   'tests/late-dupla-tier2.test.js',
+  // Gap (dono, 17/jul): dupla FORMADA na lista de espera entra na Eliminatória Simples também.
+  'tests/late-dupla-single-elim.test.js',
   'tests/phase-repechage-lines.test.js',
   'tests/reset-tournament.test.js',
   'tests/dupla-elim-render.test.js',

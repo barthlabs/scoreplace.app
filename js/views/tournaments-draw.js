@@ -777,8 +777,11 @@ window._createExtraGamesFromWaitlist = function(t) {
   var _wl = Array.isArray(t.waitlist) ? t.waitlist : [];
   var seen = {}; var pool = [];
   _sp.concat(_wl).forEach(function(p){ var n = _name(p); if (n && !seen[n]) { seen[n] = true; pool.push(p); } });
-  // só indivíduos (duplas já formadas ficam de fora).
-  pool = pool.filter(function(p){ return _name(p).indexOf(' / ') === -1; });
+  // v1.2.56: duplas JÁ FORMADAS (nome "A / B") TAMBÉM entram na Eliminatória Simples — mesmo
+  // princípio da chave superior do Dupla Elim (dono, 17/jul): a dupla tardia entra na R1,
+  // vencedor avança, derrotado eliminado. Antes eram descartadas aqui ("só indivíduos"),
+  // deixando o single-elim sem integração de duplas tardias. O split duplas-prontas × avulsos
+  // acontece abaixo (após o filtro de presença). Ver [[project_late_enrollment_elimination]].
   // v3.1.22: regra canônica — MESMO DIA conta presença (só check-in, não-ausentes);
   // multi-dia ignora presença. v2.2.39: ausentes nunca entram. Sem helper → mesmo-dia.
   if ((typeof window._tournamentIsSameDay !== 'function') || window._tournamentIsSameDay(t)) {
@@ -788,62 +791,44 @@ window._createExtraGamesFromWaitlist = function(t) {
   // v4.1.37: respeitar o teamSize. Torneio de DUPLAS (teamSize>1 ou modo time/misto)
   // agrupa 4 solos tardios → 2 duplas formadas → 1 jogo. Torneio INDIVIDUAL (teamSize
   // 1) pareia 2 solos tardios → 1 jogo solo-vs-solo (NUNCA formar dupla numa chave
-  // individual — decisão do dono 1-jul). O mínimo do pool muda: 4 (duplas) vs 2 (indiv).
+  // individual — decisão do dono 1-jul). O mínimo do pool de AVULSOS muda: 4 (duplas) vs 2 (indiv).
   var _teamSize = parseInt(t.teamSize) || 1;
   var _isTeams = _teamSize > 1 || window._isTeamEnrollMode(t.enrollmentMode);
   var _minPool = _isTeams ? 4 : 2;
-  if (pool.length < _minPool) return 0;
-  // v3.1.22: sorteia a ordem do pareamento dos entrantes (os jogos já criados ficam
-  // inalterados). _plainShuffle é global (bracket-logic.js); fallback inline.
-  if (typeof window._plainShuffle === 'function') { pool = window._plainShuffle(pool); }
-  else { for (var _i = pool.length - 1; _i > 0; _i--) { var _j = Math.floor(Math.random() * (_i + 1)); var _tmp = pool[_i]; pool[_i] = pool[_j]; pool[_j] = _tmp; } }
+  // v1.2.56: separa duplas pré-formadas (par ESTRUTURAL — nunca includes('/'),
+  // [[project_dupla_entry_structural_not_slash]]) dos avulsos. Só num torneio de duplas
+  // uma dupla pronta é um LADO direto; num individual não existe dupla tardia.
+  var _isPairEntry = function(p){ return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
+  var preDuplas = _isTeams ? pool.filter(_isPairEntry) : [];
+  var solos = pool.filter(function(p){ return !(_isTeams && _isPairEntry(p)); });
+  // nada a fazer? (sem PAR de duplas prontas E sem GRUPO de avulsos suficiente)
+  if (preDuplas.length < 2 && solos.length < _minPool) return 0;
+  // v3.1.22: sorteia a ordem do pareamento (os jogos já criados ficam inalterados).
+  var _shuf = function(arr){
+    if (typeof window._plainShuffle === 'function') return window._plainShuffle(arr);
+    for (var _i = arr.length - 1; _i > 0; _i--) { var _j = Math.floor(Math.random() * (_i + 1)); var _tmp = arr[_i]; arr[_i] = arr[_j]; arr[_j] = _tmp; }
+    return arr;
+  };
+  preDuplas = _shuf(preDuplas); solos = _shuf(solos);
 
   if (!Array.isArray(t.participants)) t.participants = [];
   if (!t.teamOrigins) t.teamOrigins = {};
   var ts = Date.now();
   var created = 0;
   var _rm = function(used, arr){ return Array.isArray(arr) ? arr.filter(function(p){ return used.indexOf(_name(p)) === -1; }) : arr; };
-  while (pool.length >= _minPool) {
-    var n1, n2, used, _lateU1 = [], _lateU2 = [];
-    var _pu = function(x){ return (typeof window._participantUids === 'function') ? window._participantUids(x) : []; };
-    if (_isTeams) {
-      var four = pool.splice(0, 4);
-      var formed = window._formDoublesTeams(four, 2, t.teamOrigins);
-      var teams = (formed.participants || []).filter(function(x){ return x && (x.displayName || x.name || '').indexOf(' / ') !== -1; });
-      if (teams.length < 2) break;
-      var t1 = teams[0], t2 = teams[1];
-      n1 = t1.displayName || t1.name; n2 = t2.displayName || t2.name;
-      _lateU1 = _pu(t1); _lateU2 = _pu(t2);
-      // tardios viram INSCRITOS (duplas) — para aparecer na lista, marcar presença/W.O.
-      [t1, t2].forEach(function(tm){
-        var nm = tm.displayName || tm.name;
-        var exists = t.participants.some(function(p){ var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); return n === nm; });
-        if (!exists) t.participants.push(tm);
-        t.teamOrigins[nm] = 'formada';
-      });
-      used = four.map(_name);
-    } else {
-      // INDIVIDUAL: 2 solos tardios → 1 jogo solo-vs-solo (sem formar dupla).
-      var two = pool.splice(0, 2);
-      var s1 = two[0], s2 = two[1];
-      n1 = _name(s1); n2 = _name(s2);
-      _lateU1 = _pu(s1); _lateU2 = _pu(s2);
-      [s1, s2].forEach(function(sp){
-        var nm = _name(sp);
-        var exists = t.participants.some(function(p){ var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); return n === nm; });
-        if (!exists) t.participants.push(sp);
-      });
-      used = two.map(_name);
-    }
-    t.standbyParticipants = _rm(used, t.standbyParticipants);
-    t.waitlist = _rm(used, t.waitlist);
+  var _pu = function(x){ return (typeof window._participantUids === 'function') ? window._participantUids(x) : []; };
+  var _addPart = function(entry, nm){
+    var exists = t.participants.some(function(p){ var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); return n === nm; });
+    if (!exists) t.participants.push(entry);
+  };
+  var _pushExtraGame = function(n1, n2, u1, u2){
     // novo JOGO da rodada 1 (cor roxa via isExtra) — mesma apresentação dos demais
     t.matches.push({
       id: 'xr1-' + t.id + '-' + ts + '-' + created,
       round: 1, p1: n1, p2: n2, winner: null, isExtra: true,
       // v4.5.71: identidade por uid nos slots (jogo tardio).
-      p1Uid: (_lateU1.length === 1 ? _lateU1[0] : null), team1Uids: _lateU1,
-      p2Uid: (_lateU2.length === 1 ? _lateU2[0] : null), team2Uids: _lateU2,
+      p1Uid: (u1.length === 1 ? u1[0] : null), team1Uids: u1,
+      p2Uid: (u2.length === 1 ? u2[0] : null), team2Uids: u2,
       // v4.1.36: carimbar fase+chave — o renderer canônico (_renderPhaseBracket →
       // colsFor) filtra por m.bracket==='main' E o numerador global por phaseIndex.
       // Sem isso, jogos tardios ficam invisíveis (sem card, sem "Jogo N").
@@ -854,6 +839,47 @@ window._createExtraGamesFromWaitlist = function(t) {
       window.AppStore.logAction(t.id, 'Tardios na chave (rodada 1): ' + n1 + ' vs ' + n2);
     }
     created++;
+  };
+
+  // (1) DUPLAS já formadas: cada dupla é um LADO; pareia 2 a 2 → 1 jogo. Sobra de 1 aguarda
+  // (mesmo comportamento do Tier 1 do Dupla Elim: "1 dupla sem par → aguarda").
+  while (preDuplas.length >= 2) {
+    var da = preDuplas.shift(), db = preDuplas.shift();
+    var dn1 = da.displayName || da.name, dn2 = db.displayName || db.name;
+    _addPart(da, dn1); t.teamOrigins[dn1] = 'formada';
+    _addPart(db, dn2); t.teamOrigins[dn2] = 'formada';
+    var usedD = [dn1, dn2];
+    t.standbyParticipants = _rm(usedD, t.standbyParticipants);
+    t.waitlist = _rm(usedD, t.waitlist);
+    _pushExtraGame(dn1, dn2, _pu(da), _pu(db));
+  }
+
+  // (2) AVULSOS: torneio de duplas agrupa 4→2 duplas → 1 jogo; individual pareia 2→1 jogo.
+  while (solos.length >= _minPool) {
+    var n1, n2, used, u1 = [], u2 = [];
+    if (_isTeams) {
+      var four = solos.splice(0, 4);
+      var formed = window._formDoublesTeams(four, 2, t.teamOrigins);
+      var teams = (formed.participants || []).filter(function(x){ return x && (x.displayName || x.name || '').indexOf(' / ') !== -1; });
+      if (teams.length < 2) break;
+      var tm1 = teams[0], tm2 = teams[1];
+      n1 = tm1.displayName || tm1.name; n2 = tm2.displayName || tm2.name;
+      u1 = _pu(tm1); u2 = _pu(tm2);
+      // tardios viram INSCRITOS (duplas) — para aparecer na lista, marcar presença/W.O.
+      [tm1, tm2].forEach(function(tm){ var nm = tm.displayName || tm.name; _addPart(tm, nm); t.teamOrigins[nm] = 'formada'; });
+      used = four.map(_name);
+    } else {
+      // INDIVIDUAL: 2 solos tardios → 1 jogo solo-vs-solo (sem formar dupla).
+      var two = solos.splice(0, 2);
+      var s1 = two[0], s2 = two[1];
+      n1 = _name(s1); n2 = _name(s2);
+      u1 = _pu(s1); u2 = _pu(s2);
+      [s1, s2].forEach(function(sp){ _addPart(sp, _name(sp)); });
+      used = two.map(_name);
+    }
+    t.standbyParticipants = _rm(used, t.standbyParticipants);
+    t.waitlist = _rm(used, t.waitlist);
+    _pushExtraGame(n1, n2, u1, u2);
   }
   if (created > 0) {
     window._rebuildIntegratedBracket(t);
