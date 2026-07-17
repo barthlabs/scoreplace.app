@@ -31,11 +31,16 @@ function iso(ms) { var d = new Date(ms), p = function (n) { return String(n).pad
 
 ok(typeof W._ligaCountdownEvent === 'function', '_ligaCountdownEvent existe');
 
+// ── PRINCÍPIO (dono, jul/2026): "Próximo sorteio" SE E SOMENTE SE o sorteio VAI acontecer.
+// A fonte da verdade é a MESMA math do servidor (_nextOwedDrawMs → nextDrawAt → o cron do
+// autoDraw). O relógio NUNCA re-deriva a data por conta própria. Dono: "não é para corrigir o
+// exemplo. é para corrigir o código para que apresente o que deve conforme a situação".
+
 // ── [BUG-A] Antes do 1º sorteio: startDate passou, 1º sorteio no futuro, fim ≤48h ──
-// Espelha tour_1783113349754: Liga multi-fase, rounds=0, drawManual=true (planejado).
+// AUTO (drawManual:false + intervalo) ⇒ o sorteio VAI acontecer ⇒ tem que prometer.
 (function () {
   const t = {
-    id: 'a', format: 'Liga', drawManual: true,
+    id: 'a', format: 'Liga', drawManual: false, drawIntervalDays: 1,
     drawFirstDate: iso(now + 6 * HOUR),        // 1º sorteio daqui ~6h (ISO com T)
     startDate: iso(now - 3 * HOUR),            // início já passou
     endDate: iso(now + 44 * HOUR),             // fim dentro das 48h (o "1d 23h" do print)
@@ -53,6 +58,51 @@ ok(typeof W._ligaCountdownEvent === 'function', '_ligaCountdownEvent existe');
   // 'first-draw' ≠ 'next-draw': sem rodada sorteada, o chamador não pode desenhar a linha
   // "Rodada em andamento" (o _ligaRoundInProgressRow cai no fallback do startDate e inventa).
   ok(e && e.kind !== 'next-draw', '[BUG-A2] kind first-draw (não next-draw) → sem linha de rodada fantasma');
+})();
+
+// ── [MENTIRA-1] MANUAL: nada dispara sozinho ⇒ NUNCA prometer "Próximo sorteio" ──────────
+// Dono: torneio manual mostrava "Próximo sorteio 4h" pra um sorteio que jamais ia disparar.
+(function () {
+  const t = {
+    id: 'man', format: 'Liga', drawManual: true, drawIntervalDays: 1,
+    drawFirstDate: iso(now + 6 * HOUR), startDate: iso(now - 3 * HOUR), endDate: iso(now + 20 * D),
+    phases: [{ formatCode: 'liga', rounds: 3 }], rounds: [],
+  };
+  const e = W._ligaCountdownEvent(t);
+  ok(!e || (e.kind !== 'first-draw' && e.kind !== 'next-draw'),
+    '[MENTIRA-1] MANUAL não promete sorteio (nada dispara sozinho) — got ' + (e && e.kind));
+})();
+
+// ── [MENTIRA-2] Data do 1º sorteio no PASSADO, SEM intervalo (não repete) e JÁ disparou ──
+// Caso real do Confra/staging: mostrava "Próximo sorteio 23h49m" sem existir próximo sorteio.
+// `_calcNextDrawDate` fazia aritmética cega (1ª data + 1 dia); a math do servidor sabe que
+// intervalo vazio = sorteio ÚNICO e que ele já foi (lastAutoDrawAt >= 1º sorteio) → null.
+(function () {
+  const t = {
+    id: 'conf', format: 'Liga', drawManual: false,
+    drawFirstDate: iso(now - 4 * HOUR).slice(0, 10), drawFirstTime: '00:01',
+    drawIntervalDays: null,                       // sem repetição = sorteio único
+    lastAutoDrawAt: iso(now - 3 * HOUR),          // e ele JÁ disparou
+    startDate: iso(now - 4 * HOUR), endDate: iso(now + 14 * D), status: 'open',
+    phases: [{ formatCode: 'liga', rounds: 1 }, { formatCode: 'elim_simples', rounds: 1 }], rounds: [],
+  };
+  ok(W._ligaNextDrawEventTs(t) == null, '[MENTIRA-2] sorteio único já disparado → _ligaNextDrawEventTs null');
+  const e = W._ligaCountdownEvent(t);
+  ok(!e || (e.kind !== 'first-draw' && e.kind !== 'next-draw'),
+    '[MENTIRA-2] data passada + sem repetição + já disparou → NÃO promete sorteio — got ' + (e && e.kind));
+})();
+
+// ── [FONTE-ÚNICA] o relógio só promete o que o SERVIDOR vai disparar ────────────────────
+// Se _ligaNextDrawEventTs divergir de _nextOwedDrawMs (a math do cron), o relógio volta a mentir.
+(function () {
+  const t = {
+    id: 'src', format: 'Liga', drawManual: false, drawIntervalDays: 1,
+    drawFirstDate: iso(now + 5 * HOUR), startDate: iso(now - D), endDate: iso(now + 30 * D),
+    phases: [{ formatCode: 'liga', rounds: 5 }], rounds: [],
+  };
+  const owed = W._nextOwedDrawMs ? W._nextOwedDrawMs(t) : null;
+  ok(owed != null, '[FONTE-ÚNICA] _nextOwedDrawMs (math do servidor) devolve o slot');
+  ok(W._ligaNextDrawEventTs(t) === owed, '[FONTE-ÚNICA] o relógio usa EXATAMENTE o slot do servidor — got ' + W._ligaNextDrawEventTs(t) + ' vs ' + owed);
 })();
 
 // ── [A2] startDate no futuro → conta pro startDate (comportamento de fase única preservado) ──

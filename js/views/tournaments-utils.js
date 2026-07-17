@@ -1541,22 +1541,28 @@ window._suppressAutoDrawForPhases = function(t) {
 // Liga). Assim o relógio nunca mostra "próximo sorteio" pra um sorteio que jamais vai
 // disparar, nem esconde o countdown só porque o torneio é multi-fase.
 window._ligaNextDrawEventTs = function (t) {
-    if (!t || t.drawManual || !t.drawFirstDate) return null;
-    // Fase atual não auto-sorteia (cap atingido / fase-chave sem cadência incremental)?
-    if (typeof window._suppressAutoDrawForPhases === 'function' && window._suppressAutoDrawForPhases(t)) {
-        if (!(typeof window._isIncrementalLigaPhase === 'function' && window._isIncrementalLigaPhase(t))) return null;
-    }
-    // Fase única: respeita o total de rodadas planejadas (sem cap de fase).
+    if (!t) return null;
+    // v1.2.42 — FONTE ÚNICA: a MESMA matemática que o SERVIDOR usa pra decidir se/quando
+    // sortear (`_nextOwedDrawMs` → `nextDrawAt`, o campo que o cron do autoDraw consulta em
+    // `where('nextDrawAt','<=',now)`). O relógio promete "Próximo sorteio" SE E SOMENTE SE o
+    // sorteio VAI acontecer.
+    // Antes usava `_calcNextDrawDate`, que é só ARITMÉTICA DE DATA (1º sorteio + N×intervalo)
+    // e não sabe de `drawManual`, `lastAutoDrawAt`, "sem repetição" (intervalo vazio = sorteio
+    // ÚNICO), `status:'finished'` nem do cap de fase. Resultado: prometia sorteio que nunca
+    // vinha — torneio MANUAL, torneio RESETADO (o reset seta drawManual=true), e data de
+    // sorteio no PASSADO sem intervalo (já disparou, não repete). Duas noções de "próximo
+    // sorteio" = drift garantido; agora é uma só, e é a do servidor.
+    // Cap de FASE ÚNICA por rodadas planejadas fica aqui de propósito: `_nextOwedDrawMs` só
+    // capa por fase (`_suppressAutoDrawForPhases` é no-op em fase única) e por fim de temporada.
     var _mp = !!(typeof window._isMultiPhase === 'function' && window._isMultiPhase(t));
     if (!_mp && typeof window._ligaTournamentProgress === 'function') {
         var _lp = window._ligaTournamentProgress(t);
         if (_lp && _lp.roundsPlanned && _lp.currentRoundNum >= _lp.roundsPlanned) return null;
     }
-    if (typeof window._calcNextDrawDate !== 'function') return null;
-    var _nd = window._calcNextDrawDate(t);
-    if (!_nd) return null;
-    var _ts = _nd.getTime();
-    if (isNaN(_ts) || _ts <= Date.now()) return null;
+    if (typeof window._nextOwedDrawMs !== 'function') return null;
+    var _ts = window._nextOwedDrawMs(t);
+    // Slot DEVIDO (<= agora) não é "próximo": o cron dispara em ≤1min — não há o que contar.
+    if (_ts == null || isNaN(_ts) || _ts <= Date.now()) return null;
     return _ts;
 };
 
@@ -1671,11 +1677,12 @@ window._ligaCountdownEvent = function (t) {
     //    cai no fallback do startDate e inventaria uma rodada que não existe).
     if (!drew) {
         if (t.startDate) { var _sd = new Date(t.startDate).getTime(); if (!isNaN(_sd) && _sd > now) return { ts: _sd, labelKey: 'tourn.ligaStart', icon: '🏁', color: '#10b981', kind: 'season-start' }; }
-        if (t.drawFirstDate) {
-            var _fdStr = String(t.drawFirstDate).indexOf('T') > -1 ? t.drawFirstDate : (t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00'));
-            var _fd = new Date(_fdStr).getTime();
-            if (!isNaN(_fd) && _fd > now) return { ts: _fd, labelKey: 'tourn.nextDraw', icon: '🎲', color: '#fb923c', kind: 'first-draw' };
-        }
+        // v1.2.42: o 1º sorteio só é PROMETIDO se ele VAI acontecer — mesma math do servidor
+        // (_ligaNextDrawEventTs → _nextOwedDrawMs → o que o cron do autoDraw dispara). Antes
+        // lia drawFirstDate cru e prometia "Próximo sorteio" até em torneio MANUAL, onde nada
+        // dispara sozinho (o organizador é quem sorteia).
+        var _fd = (typeof window._ligaNextDrawEventTs === 'function') ? window._ligaNextDrawEventTs(t) : null;
+        if (_fd) return { ts: _fd, labelKey: 'tourn.nextDraw', icon: '🎲', color: '#fb923c', kind: 'first-draw' };
     }
     // Fim (ms): endDate ou temporada; multi-fase = fim da ÚLTIMA fase (janela programada).
     var tEnd = null;
