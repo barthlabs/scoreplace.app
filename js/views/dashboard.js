@@ -830,7 +830,7 @@ function renderDashboard(container) {
                 // v4.4.x: 2ª linha "Rodada em andamento" (tempo decorrido da rodada) sempre que
                 // o box for o de "Próximo sorteio". Tick automático via data-elapsed-since.
                 var _roundLineD = '';
-                if (_ligaEv.label === _t('tourn.nextDraw') && typeof window._ligaRoundInProgressRow === 'function') {
+                if (_ce.kind === 'next-draw' && typeof window._ligaRoundInProgressRow === 'function') {
                   var _ripRowD = window._ligaRoundInProgressRow(t, _ctColor, { iconSize: '1.1rem', labelSize: '0.8rem', valueSize: '1.05rem' });
                   if (_ripRowD) {
                     _roundLineD = '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(' + _rgb + ',0.3);">' + _ripRowD + '</div>';

@@ -44,8 +44,15 @@ ok(typeof W._ligaCountdownEvent === 'function', '_ligaCountdownEvent existe');
     rounds: [],
   };
   const e = W._ligaCountdownEvent(t);
-  ok(e && e.kind === 'season-start', '[BUG-A] antes do 1º sorteio → season-start (não tournament-end) — got ' + (e && e.kind));
+  ok(e && e.kind === 'first-draw', '[BUG-A] antes do 1º sorteio → first-draw (não tournament-end) — got ' + (e && e.kind));
   ok(e && Math.abs(e.ts - (now + 6 * HOUR)) < 2 * HOUR, '[BUG-A] regressiva mira o 1º sorteio (~+6h) — got ' + (e && iso(e.ts)));
+  // [BUG-A2] O RÓTULO tem que dizer a verdade: startDate já passou ⇒ a temporada JÁ começou,
+  // então NUNCA rotular de "Início da Temporada" (mentira reportada pelo dono, 17/jul).
+  ok(e && e.labelKey === 'tourn.nextDraw', '[BUG-A2] rótulo = "Próximo sorteio" (o evento é o SORTEIO) — got ' + (e && e.labelKey));
+  ok(e && e.labelKey !== 'tourn.ligaStart', '[BUG-A2] NUNCA "Início da Temporada" com startDate já passado');
+  // 'first-draw' ≠ 'next-draw': sem rodada sorteada, o chamador não pode desenhar a linha
+  // "Rodada em andamento" (o _ligaRoundInProgressRow cai no fallback do startDate e inventa).
+  ok(e && e.kind !== 'next-draw', '[BUG-A2] kind first-draw (não next-draw) → sem linha de rodada fantasma');
 })();
 
 // ── [A2] startDate no futuro → conta pro startDate (comportamento de fase única preservado) ──

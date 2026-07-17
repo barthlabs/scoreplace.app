@@ -1661,15 +1661,20 @@ window._ligaCountdownEvent = function (t) {
     if (!t) return null;
     var now = Date.now();
     var drew = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-    // 1) Antes do 1º sorteio → início da temporada (startDate futuro OU 1º sorteio agendado).
+    // 1) Antes do 1º sorteio. DOIS casos, e o rótulo TEM que dizer a verdade:
+    //    a) startDate no FUTURO → a temporada ainda não começou → "Início da Temporada".
+    //    b) startDate JÁ PASSOU (temporada em curso) mas o 1º sorteio ainda não rolou → o que
+    //       falta é o SORTEIO → "Próximo sorteio" (🎲). Rotular isto de "Início da Temporada"
+    //       é mentira — a temporada já começou (bug reportado pelo dono, 17/jul).
+    //    kind 'first-draw' ≠ 'next-draw' de propósito: aqui NÃO há rodada rolando, então o
+    //    chamador não pode desenhar a linha "Rodada em andamento" (o _ligaRoundInProgressRow
+    //    cai no fallback do startDate e inventaria uma rodada que não existe).
     if (!drew) {
         if (t.startDate) { var _sd = new Date(t.startDate).getTime(); if (!isNaN(_sd) && _sd > now) return { ts: _sd, labelKey: 'tourn.ligaStart', icon: '🏁', color: '#10b981', kind: 'season-start' }; }
-        if (t.drawManual !== true || t.drawFirstDate) {
-            if (t.drawFirstDate) {
-                var _fdStr = String(t.drawFirstDate).indexOf('T') > -1 ? t.drawFirstDate : (t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00'));
-                var _fd = new Date(_fdStr).getTime();
-                if (!isNaN(_fd) && _fd > now) return { ts: _fd, labelKey: 'tourn.ligaStart', icon: '🏁', color: '#10b981', kind: 'season-start' };
-            }
+        if (t.drawFirstDate) {
+            var _fdStr = String(t.drawFirstDate).indexOf('T') > -1 ? t.drawFirstDate : (t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00'));
+            var _fd = new Date(_fdStr).getTime();
+            if (!isNaN(_fd) && _fd > now) return { ts: _fd, labelKey: 'tourn.nextDraw', icon: '🎲', color: '#fb923c', kind: 'first-draw' };
         }
     }
     // Fim (ms): endDate ou temporada; multi-fase = fim da ÚLTIMA fase (janela programada).

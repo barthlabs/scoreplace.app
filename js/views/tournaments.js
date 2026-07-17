@@ -2683,7 +2683,7 @@ function renderTournaments(container, tournamentId = null) {
                 // v4.4.x: 2ª linha "Rodada em andamento" com o tempo DECORRIDO da rodada atual —
                 // sempre que o box for o de "Próximo sorteio". Tick automático via data-elapsed-since.
                 var _roundLine = '';
-                if (_ligaEvent.label === _t('tourn.nextDraw') && typeof window._ligaRoundInProgressRow === 'function') {
+                if (_ce.kind === 'next-draw' && typeof window._ligaRoundInProgressRow === 'function') {
                   var _ripRow = window._ligaRoundInProgressRow(t, _ctColor, { iconSize: '1.2rem', labelSize: '0.9rem', valueSize: '1.25rem' });
                   if (_ripRow) {
                     _roundLine = '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(' + _rgb + ',0.3);">' + _ripRow + '</div>';
