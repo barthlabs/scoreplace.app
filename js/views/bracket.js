@@ -210,6 +210,19 @@ function renderBracket(container, tournamentId, isInline) {
     }
   }
 
+  // v1.2.58: DUPLA formada na espera entra NO LUGAR DO REPESCADO na chave PLAYIN (Elim
+  // Simples/Dupla Elim): preenche o slot repFill da ímpar (JOGO N "VS A definir"), some 1
+  // repescado. Reusa a mecânica repFill — sem reconstruir. Ver project_late_dupla_fills_awaiting_slot.
+  if (isOrg && typeof window._fillRepFillWithLateDuplas === 'function') {
+    try {
+      var _nRF = window._fillRepFillWithLateDuplas(t);
+      if (_nRF > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        window.FirestoreDB.saveTournament(t);
+        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nRF + ' dupla(s) na chave', 'Entrou no lugar do repescado — a chave recalculou os repescados.', 'success');
+      }
+    } catch (e) {}
+  }
+
   // v2.1.26: tardios entram NA chave — SÓ o organizador dispara (escrita de
   // matches/participants só passa nas rules como admin). Auto ao abrir o bracket.
   if (isOrg && typeof window._createExtraGamesFromWaitlist === 'function') {

@@ -87,6 +87,8 @@ const SUITES = [
   'tests/late-dupla-single-elim.test.js',
   // Gap (dono, 17/jul, screenshot): dupla ímpar no repGame ("VS A definir") recebe a dupla tardia.
   'tests/late-dupla-repgame-fill.test.js',
+  // Gap (dono, 17/jul, torneio REAL): dupla formada entra no lugar do repescado (chave playin).
+  'tests/late-dupla-repfill-playin.test.js',
   'tests/phase-repechage-lines.test.js',
   'tests/reset-tournament.test.js',
   'tests/dupla-elim-render.test.js',

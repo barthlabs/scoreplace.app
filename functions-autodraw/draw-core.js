@@ -464,7 +464,10 @@ function integrateLateEntries(t, opts) {
   // Nome vivo por uid antes de formar duplas/rótulos (storage é só-uid; o motor lê nome).
   if (typeof win._rehydrateEntryNames === 'function') win._rehydrateEntryNames(t);
 
-  let extra = 0, duplas = 0, duplasTier = 0, dissolved = 0, monarch = 0;
+  let extra = 0, duplas = 0, duplasTier = 0, dissolved = 0, monarch = 0, repfill = 0;
+  // v1.2.58: dupla formada entra no lugar do repescado (chave PLAYIN) — precede o createExtra
+  // (que é do outro formato de chave). Reusa repFill/_resolveRepFills.
+  try { repfill = win._fillRepFillWithLateDuplas(t) || 0; } catch (e) { win._error && win._error('[integrateLate] repfill:', e); }
   try { extra = win._createExtraGamesFromWaitlist(t) || 0; } catch (e) { win._error && win._error('[integrateLate] extra:', e); }
   try {
     const nLJ = win._integrateLateDuplas(t) || 0;
@@ -473,12 +476,12 @@ function integrateLateEntries(t, opts) {
   } catch (e) { win._error && win._error('[integrateLate] duplas:', e); }
   try { monarch = win._expandMonarchFromWaitlist(t) || 0; } catch (e) { win._error && win._error('[integrateLate] monarch:', e); }
 
-  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0);
+  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0);
   if (changed) {
     try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e) {}
     t.updatedAt = new Date().toISOString();
   }
-  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch };
+  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill };
 }
 
 module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, _window: g.window };

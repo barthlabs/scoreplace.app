@@ -913,6 +913,77 @@ window._createExtraGamesFromWaitlist = function(t) {
   return created;
 };
 
+// v1.2.58 (dono 17/jul, com screenshot real tour_1783511910924): DUPLA formada na lista de
+// espera ENTRA NO LUGAR DO REPESCADO na chave PLAYIN (Elim Simples ou Dupla Elim). A dupla
+// ímpar espera um repescado num slot `repFill` — "JOGO N: Kelly/Rodrigo VS A definir". Quando
+// uma dupla é formada na espera, ela PREENCHE esse slot (Kelly/Rodrigo vs dupla-nova) e aquele
+// `repFill` é REMOVIDO → 1 repescado a menos. O downstream já está TODO fiado (nextMatchId),
+// então NÃO precisa reconstruir nada: some 1 repescado, os vencedores + os melhores derrotados
+// restantes fecham a pow2 sozinhos (via `_resolveRepFills`, a mecânica que já existe). Prioriza
+// o slot do repGame (a ímpar esperando) e o MAIOR rank (troca o repescado mais fraco). O jogo da
+// ímpar deixa de ser `isPhaseRepGame` → vira confronto real (seu perdedor volta a poder repescar
+// entre os melhores). Ver [[project_late_dupla_fills_awaiting_slot]]. Retorna nº de duplas integradas.
+window._fillRepFillWithLateDuplas = function (t) {
+  if (!t) return 0;
+  if ((window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) !== 'expand') return 0;
+  if (typeof window._lateEnrollR2Started === 'function' && window._lateEnrollR2Started(t)) return 0;
+  var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
+  var _isPair = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
+  var _nm = function (p) { return window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || ''; };
+  var _pu = function (x) { return (typeof window._participantUids === 'function') ? window._participantUids(x) : []; };
+
+  // duplas JÁ formadas na espera (par estrutural + _lateJoin) — [[project_dupla_entry_structural_not_slash]]
+  var formed = [];
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (Array.isArray(t[k])) t[k].forEach(function (p) { if (_isPair(p) && p._lateJoin) formed.push(p); });
+  });
+  if (!formed.length) return 0;
+
+  // slots repFill ABERTOS (o alvo ainda TBD/vazio). Prioriza repGame (a ímpar esperando) e MAIOR rank.
+  var openSlots = [];
+  all.forEach(function (m) {
+    if (!m || !Array.isArray(m.repFill) || !m.repFill.length) return;
+    m.repFill.forEach(function (rf) {
+      if (!rf || !rf.slot) return;
+      var v = m[rf.slot];
+      if (!v || v === 'TBD') openSlots.push({ m: m, rf: rf });
+    });
+  });
+  if (!openSlots.length) return 0;
+  openSlots.sort(function (a, b) {
+    return ((b.m.isPhaseRepGame ? 1 : 0) - (a.m.isPhaseRepGame ? 1 : 0)) || ((b.rf.rank || 0) - (a.rf.rank || 0));
+  });
+
+  if (!Array.isArray(t.participants)) t.participants = [];
+  if (!t.teamOrigins) t.teamOrigins = {};
+  var integrated = 0, usedNames = {};
+  for (var i = 0; i < formed.length && openSlots.length; i++) {
+    var d = formed[i], slot = openSlots.shift();
+    var m = slot.m, rf = slot.rf, uids = _pu(d), nm = _nm(d);
+    m[rf.slot] = nm;
+    if (rf.slot === 'p1') { m.team1Obj = d; m.team1Uids = uids; m.p1Uid = (uids.length === 1 ? uids[0] : null); }
+    else { m.team2Obj = d; m.team2Uids = uids; m.p2Uid = (uids.length === 1 ? uids[0] : null); }
+    // aquele repescado não é mais necessário — a dupla nova tomou o lugar (recalcula pow2 sozinho)
+    m.repFill = m.repFill.filter(function (x) { return x !== rf; });
+    // sem mais repFill pendente nesse jogo, a ímpar deixa de "esperar repescado": vira jogo REAL.
+    if (m.isPhaseRepGame && !(Array.isArray(m.repFill) && m.repFill.length)) delete m.isPhaseRepGame;
+    var clone = Object.assign({}, d); delete clone._lateJoin;
+    t.participants.push(clone); t.teamOrigins[nm] = 'formada';
+    usedNames[nm] = 1; integrated++;
+  }
+  if (!integrated) return 0;
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(_isPair(p) && p._lateJoin && usedNames[_nm(p)]); });
+  });
+  // se a R1 já fechou, resolve os repescados restantes na hora (idempotente).
+  if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }
+  if (typeof window._computeMemberUids === 'function') { try { window._computeMemberUids(t); } catch (e) {} }
+  if (window.AppStore && typeof window.AppStore.logAction === 'function') {
+    window.AppStore.logAction(t.id, integrated + ' dupla(s) tardia(s) → entrou no lugar do repescado (chave playin)');
+  }
+  return integrated;
+};
+
 // Reconstrói R2+ a partir da R1 (originais + tardios), preservando os resultados
 // de R1. R2 = próxima potência de 2 dos vencedores de R1; a sobra vira repescagem
 // (os melhores derrotados preenchem os slots awaitsBestLoser quando a R1 acaba,
