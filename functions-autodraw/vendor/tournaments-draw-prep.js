@@ -1257,7 +1257,13 @@ window.showUnifiedResolutionPanel = function(tId) {
             // Top row: Recomendado badge (left) + Exclude ✕ (right)
             var topRow = '<div style="display:flex;justify-content:space-between;align-items:center;min-height:22px;">';
             topRow += isBest ? '<span style="background:rgba(34,197,94,0.2);color:#4ade80;padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:800;text-transform:uppercase;">' + _t('predraw.nashRecommended') + '</span>' : '<span></span>';
-            topRow += canExclude ? '<span style="width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.25);color:#94a3b8;font-size:0.7rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all 0.2s;" title="' + _t('predraw.excludeOptionTitle') + '" onclick="event.stopPropagation();window._excludeUnifiedOption(\'' + o.key + '\')" onmouseover="this.style.background=\'rgba(239,68,68,0.3)\';this.style.color=\'#fca5a5\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\';this.style.color=\'#94a3b8\'">✕</span>' : '';
+            // v1.2.41: ✕ CANÔNICO (.cancel-x-btn) num <span>, NÃO <button> — o CARD da opção
+            // (html += '<button id="unif-opt-...') já é um <button>, e <button> dentro de
+            // <button> é HTML INVÁLIDO: o parser fecha o de fora ao ver o de dentro e o resto
+            // do card VAZA pra fora (painel explodido — bug real da v1.2.39, no fluxo de
+            // sorteio). O <span> original era deliberado. A classe é só CSS: o visual é o
+            // mesmo. role/tabindex mantêm a semântica de botão pra acessibilidade.
+            topRow += canExclude ? '<span class="cancel-x-btn" role="button" tabindex="0" style="--cx-size:22px;" title="' + _t('predraw.excludeOptionTitle') + '" onclick="event.stopPropagation();window._excludeUnifiedOption(\'' + o.key + '\')">✕</span>' : '';
             topRow += '</div>';
 
             // v4.0.52: estimativa de tempo POR opção (dinâmica, dados do torneio + local)
@@ -2517,7 +2523,9 @@ window._castPollVote = function(tId, pollId, optionKey) {
             window._participantUids(p).indexOf(user.uid) !== -1) return true;
         return (p.uid && user.uid && p.uid === user.uid) || (p.email && p.email === userEmail) || (p.displayName && p.displayName === (user.displayName || ''));
     });
-    var isOrganizer = (userEmail === t.organizerEmail);
+    // v1.2.44: organizador é UID (creatorUid/co-host ativo) — era `userEmail === t.organizerEmail`,
+    // e-mail puro, sem nem olhar uid. Cânone: quem tem conta é uid e mais nada.
+    var isOrganizer = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
     if (!isParticipant && !isOrganizer) {
         if (typeof showNotification === 'function') showNotification(_t('draw.pollNotAllowed'), _t('draw.pollNotAllowedMsg'), 'warning');
         return;
