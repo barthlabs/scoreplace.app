@@ -108,6 +108,8 @@ const SUITES = [
   'functions-autodraw/test-draw.js',
   'functions-autodraw/test-groupsby.js',
   'functions/test-match-roster.js',
+  // Inscrição/desinscrição no servidor (CF) — espelha a transação do cliente.
+  'functions/test-enroll-core.js',
 ];
 
 let failed = [];

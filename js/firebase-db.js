@@ -386,7 +386,57 @@ window.FirestoreDB = {
 
   // Atomic enrollment — uses Firestore transaction to prevent race conditions
   // where concurrent enrollments overwrite each other's participants array
+  // Fala o protocolo callable NA MÃO (POST {data} → {result}|{error}), igual
+  // window._callDrawRound. NÃO usa httpsCallable de propósito: com o usuário
+  // LOGADO o SDK compat tenta montar o token FCM antes de enviar e a promise
+  // REJEITA sem a requisição sair ("Messaging: …") — a CF nem é tocada. Ver
+  // js/views/tournaments-draw.js (_callDrawRound) e v1.3.86.
+  async _callFn(name, payload) {
+    var fb = window.firebase;
+    var user = fb && fb.auth && fb.auth().currentUser;
+    if (!user) throw Object.assign(new Error('login necessário'), { code: 'functions/unauthenticated' });
+    var pid = '';
+    try { pid = fb.app().options.projectId; } catch (e) {}
+    if (!pid) throw Object.assign(new Error('App não inicializado'), { code: 'functions/internal' });
+    var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + name;
+    var tok = await user.getIdToken();
+    var r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+      body: JSON.stringify({ data: payload })
+    });
+    var j = await r.json().catch(function () { return {}; });
+    if (j && j.error) {
+      var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
+      throw Object.assign(new Error(j.error.message || 'Falha'), { code: 'functions/' + (st || 'internal') });
+    }
+    if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { code: 'functions/internal' });
+    return (j && j.result) || {};
+  },
+
+  // Inscrição via Cloud Function (Admin SDK, servidor) com FALLBACK pra transação
+  // do cliente. A CF não passa pela fila IndexedDB quebrada do SDK 10.8.1 (bug
+  // fatal no iOS Safari que fazia a inscrição falhar) nem pelas rules. O fallback
+  // preserva o comportamento anterior se a CF estiver fora — e é IDEMPOTENTE:
+  // se a CF gravou mas a resposta se perdeu, a transação relê e o "já inscrito"
+  // pega (sem duplicar). Ver [[project_firestore_assertion_bug]].
   async enrollParticipant(tournamentId, participantObj, extraUpdates) {
+    try {
+      return await this._callFn('enrollParticipant', {
+        tournamentId: String(tournamentId),
+        participantObj: participantObj,
+        extraUpdates: extraUpdates || null
+      });
+    } catch (e) {
+      if (window._warn) window._warn('[enrollParticipant] CF falhou (' + ((e && e.code) || e) + ') — fallback pra transação cliente');
+      if (typeof window._captureException === 'function') {
+        window._captureException(e, { area: 'enrollParticipant-cf-fallback', tournamentId: String(tournamentId), code: e && e.code });
+      }
+      return this._enrollParticipantTx(tournamentId, participantObj, extraUpdates);
+    }
+  },
+
+  async _enrollParticipantTx(tournamentId, participantObj, extraUpdates) {
     if (!this.db) throw new Error('Firestore not initialized');
     // Guard: rejeitar participante completamente sem identificador.
     // Evita objetos fantasmas {name:null,email:null,displayName:null} causados
@@ -528,6 +578,21 @@ window.FirestoreDB = {
   // v1.2.2: assinatura UID ONLY — userEmail/userDisplayName saíram porque a identidade é o
   // uid; parâmetro que ninguém lê é convite pra alguém "usar como fallback" de novo.
   async deenrollParticipant(tournamentId, userUid) {
+    try {
+      return await this._callFn('deenrollParticipant', {
+        tournamentId: String(tournamentId),
+        userUid: String(userUid || '')
+      });
+    } catch (e) {
+      if (window._warn) window._warn('[deenrollParticipant] CF falhou (' + ((e && e.code) || e) + ') — fallback pra transação cliente');
+      if (typeof window._captureException === 'function') {
+        window._captureException(e, { area: 'deenrollParticipant-cf-fallback', tournamentId: String(tournamentId), code: e && e.code });
+      }
+      return this._deenrollParticipantTx(tournamentId, userUid);
+    }
+  },
+
+  async _deenrollParticipantTx(tournamentId, userUid) {
     if (!this.db) throw new Error('Firestore not initialized');
     var docRef = this.db.collection('tournaments').doc(String(tournamentId));
     var self = this;

@@ -31,6 +31,7 @@ const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const _mergeRules = require("./merge-rules");
 const _uidSweep = require("./uid-sweep");
+const _enrollCore = require("./enroll-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -1837,6 +1838,94 @@ exports.setParticipantsProfile = onCall(
 // veio do próprio letzplay, não há como divergir dele. O HISTÓRICO é a exceção: só
 // substitui se trouxer MAIS jogos (um scan antigo nunca apaga um self-import mais novo).
 //
+// ─── enrollParticipant / deenrollParticipant (inscrição no SERVIDOR) ─────────
+// Portam as transações de js/firebase-db.js pro Admin SDK. Motivação: o SDK
+// Firestore 10.8.1 do browser tem um bug FATAL de persistência (INTERNAL
+// ASSERTION FAILED: Unexpected state) que mata a AsyncQueue no iOS Safari — daí
+// a runTransaction do cliente estoura e a inscrição/desinscrição falha (rollback
+// + "Erro"). Aqui a escrita não passa pela fila IndexedDB nem pelas rules. E um
+// bug de inscrição vira `firebase deploy` de minutos, não release nativo de dias.
+// Lógica pura vive em ./enroll-core.js (espelha o cliente). Ver
+// [[project_firestore_assertion_bug]] / [[project_result_launch_cf_evaluation]].
+// Deploy:  firebase deploy --only functions:enrollParticipant,functions:deenrollParticipant
+exports.enrollParticipant = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const participantObj = request.data && request.data.participantObj;
+    const extraUpdates = (request.data && request.data.extraUpdates) || null;
+    if (!tournamentId || !participantObj || typeof participantObj !== "object") {
+      throw new HttpsError("invalid-argument", "tournamentId e participantObj são obrigatórios");
+    }
+    // Espelha o guard do cliente: recusa objeto sem NENHUM identificador.
+    const hasId = !!(participantObj.uid || participantObj.email ||
+      participantObj.displayName || participantObj.name || participantObj.phone);
+    if (!hasId) throw new HttpsError("invalid-argument", "participantObj sem identificador válido");
+
+    const db = admin.firestore();
+    const docRef = db.collection("tournaments").doc(tournamentId);
+    const nowMs = Date.now();
+    const out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const r = _enrollCore.computeEnroll(snap.data(), participantObj, extraUpdates, nowMs);
+      if (r.updateData) tx.update(docRef, r.updateData);
+      return r;
+    });
+
+    if (out.outcome === "capacityFull") return { capacityFull: true, participants: out.participants };
+    if (out.outcome === "already") return { alreadyEnrolled: true, participants: out.participants };
+    if (out.outcome === "closed") return { alreadyEnrolled: false, enrollmentClosed: true, participants: out.participants };
+    return {
+      alreadyEnrolled: false,
+      participants: out.participants,
+      autoCloseTriggered: !!out.autoClose,
+      reachedCapacityDraw: !!out.reachedDraw
+    };
+  }
+);
+
+exports.deenrollParticipant = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const userUid = String((request.data && request.data.userUid) || "");
+    if (!tournamentId || !userUid) {
+      throw new HttpsError("invalid-argument", "tournamentId e userUid são obrigatórios");
+    }
+
+    const db = admin.firestore();
+    const docRef = db.collection("tournaments").doc(tournamentId);
+    const out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = snap.data();
+      // Permissão: cada um sai de si mesmo; o organizador/co-host tira qualquer um.
+      const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
+      const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
+        (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
+        (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
+        (callerEmail && adminEmails.indexOf(callerEmail) !== -1);
+      if (userUid !== callerUid && !isOrg) {
+        throw new HttpsError("permission-denied", "só a própria pessoa ou o organizador podem desinscrever");
+      }
+      const r = _enrollCore.computeDeenroll(t, userUid);
+      if (r.updateData) tx.update(docRef, r.updateData);
+      return r;
+    });
+
+    if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
+    return { notFound: false, participants: out.participants };
+  }
+);
+
 // O servidor RELÊ letzplayScans/{uid} — não confia em payload do cliente (qualquer authed
 // escreve nessa coleção; sem reler, dava pra forjar o nível de terceiros via esta função).
 // Deploy:  firebase deploy --only functions:applyLetzplayScans
