@@ -44,6 +44,24 @@ ok(repFillTotalAfter === repFillTotalBefore - 1, 'total de repescados recalculad
 ok((t.participants || []).some(p => (p.displayName || p.name) === 'tonho / Leila'), 'dupla virou inscrita');
 ok(!(t.standbyParticipants || []).length, 'saiu da lista de espera');
 
+// ── 2º par (dono 17/jul): NÃO há mais repGame aberto → cria um jogo NOVO na R0 (não vai
+//    direto pra rodada seguinte como bye). O repescado de MAIOR rank migra pra completá-lo.
+const r0Before = W._collectAllMatches(t).filter(m => m && m.round === 0).length;
+const directBefore = W._collectAllMatches(t).filter(m => m && m.round >= 1).reduce((n, m) => n + ((m.repFill || []).filter(rf => rf && rf.slot && (m[rf.slot] === 'TBD' || !m[rf.slot])).length), 0);
+t.standbyParticipants = [{ p1Name: 'Jogador 01', p1Uid: 'j01', p2Name: 'Jogador 02', p2Uid: 'j02', displayName: 'Jogador 01 / Jogador 02', _lateJoin: true }];
+const ret2 = W._fillRepFillWithLateDuplas(t);
+ok(ret2 === 1, '2º par integrado (got ' + ret2 + ')');
+const r0After = W._collectAllMatches(t).filter(m => m && m.round === 0);
+ok(r0After.length === r0Before + 1, 'criou 1 jogo NOVO na 1ª rodada (R0): ' + r0Before + '→' + r0After.length);
+const jgame = r0After.find(m => (m.p1 === 'Jogador 01 / Jogador 02' || m.p2 === 'Jogador 01 / Jogador 02'));
+ok(!!jgame, 'o par novo está num jogo da R0 (não pulou pra rodada seguinte)');
+ok(jgame && jgame.round === 0, 'o jogo novo é round 0 (mesma 1ª rodada, não a seguinte)');
+ok(jgame && jgame.nextMatchId, 'o vencedor do jogo novo alimenta a rodada seguinte (nextMatchId setado)');
+ok(jgame && Array.isArray(jgame.repFill) && jgame.repFill.length === 1, 'o jogo novo aguarda 1 repescado (ou outra dupla) no p2');
+ok(!W._collectAllMatches(t).some(m => m.round >= 1 && (m.p1 === 'Jogador 01 / Jogador 02' || m.p2 === 'Jogador 01 / Jogador 02')), 'o par novo NÃO foi posto direto num jogo da rodada seguinte (não é bye)');
+const directAfter = W._collectAllMatches(t).filter(m => m && m.round >= 1).reduce((n, m) => n + ((m.repFill || []).filter(rf => rf && rf.slot && (m[rf.slot] === 'TBD' || !m[rf.slot])).length), 0);
+ok(directAfter === directBefore - 1, 'os melhores repescados seguem na rodada seguinte; 1 (o pior) migrou pra cá: ' + directBefore + '→' + directAfter);
+
 // playout completo: 5 vencedores da R0 + 3 melhores derrotados → 8 na R1 → resolve num campeão.
 const isEmpty = (v) => !v || v === 'TBD' || v === BYE;
 const playable = () => W._collectAllMatches(t).filter(m => m && !m.winner && !isEmpty(m.p1) && !isEmpty(m.p2));

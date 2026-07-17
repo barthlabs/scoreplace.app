@@ -939,38 +939,63 @@ window._fillRepFillWithLateDuplas = function (t) {
   });
   if (!formed.length) return 0;
 
-  // slots repFill ABERTOS (o alvo ainda TBD/vazio). Prioriza repGame (a ímpar esperando) e MAIOR rank.
-  var openSlots = [];
-  all.forEach(function (m) {
-    if (!m || !Array.isArray(m.repFill) || !m.repFill.length) return;
-    m.repFill.forEach(function (rf) {
-      if (!rf || !rf.slot) return;
-      var v = m[rf.slot];
-      if (!v || v === 'TBD') openSlots.push({ m: m, rf: rf });
-    });
-  });
-  if (!openSlots.length) return 0;
-  openSlots.sort(function (a, b) {
-    return ((b.m.isPhaseRepGame ? 1 : 0) - (a.m.isPhaseRepGame ? 1 : 0)) || ((b.rf.rank || 0) - (a.rf.rank || 0));
-  });
+  var _cpi = (t.currentPhaseIndex || 0);
+  var _empty = function (v) { return !v || v === 'TBD'; };
+  var _setSide = function (m, s, d) {
+    var uids = _pu(d);
+    m[s] = _nm(d);
+    if (s === 'p1') { m.team1Obj = d; m.team1Uids = uids; m.p1Uid = (uids.length === 1 ? uids[0] : null); }
+    else { m.team2Obj = d; m.team2Uids = uids; m.p2Uid = (uids.length === 1 ? uids[0] : null); }
+  };
 
   if (!Array.isArray(t.participants)) t.participants = [];
   if (!t.teamOrigins) t.teamOrigins = {};
-  var integrated = 0, usedNames = {};
-  for (var i = 0; i < formed.length && openSlots.length; i++) {
-    var d = formed[i], slot = openSlots.shift();
-    var m = slot.m, rf = slot.rf, uids = _pu(d), nm = _nm(d);
-    m[rf.slot] = nm;
-    if (rf.slot === 'p1') { m.team1Obj = d; m.team1Uids = uids; m.p1Uid = (uids.length === 1 ? uids[0] : null); }
-    else { m.team2Obj = d; m.team2Uids = uids; m.p2Uid = (uids.length === 1 ? uids[0] : null); }
-    // aquele repescado não é mais necessário — a dupla nova tomou o lugar (recalcula pow2 sozinho)
-    m.repFill = m.repFill.filter(function (x) { return x !== rf; });
-    // sem mais repFill pendente nesse jogo, a ímpar deixa de "esperar repescado": vira jogo REAL.
-    if (m.isPhaseRepGame && !(Array.isArray(m.repFill) && m.repFill.length)) delete m.isPhaseRepGame;
+  var integrated = 0, usedNames = {}, ts = Date.now();
+
+  formed.forEach(function (d) {
+    var cur = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
+    // (A) COMPLETA um jogo da 1ª rodada (R0) que está SEM ADVERSÁRIO: um repGame (a ímpar) ou um
+    //     jogo novo aberto por um par anterior. A dupla toma o slot (que aguardava um repescado).
+    var openRep = null;
+    cur.forEach(function (m) {
+      if (openRep || !m || m.round !== 0 || !m.isPhaseRepGame || !Array.isArray(m.repFill) || !m.repFill.length) return;
+      var rf = null; m.repFill.forEach(function (x) { if (!rf && x && x.slot && _empty(m[x.slot])) rf = x; });
+      if (rf) openRep = { m: m, rf: rf };
+    });
+    if (openRep) {
+      _setSide(openRep.m, openRep.rf.slot, d);
+      openRep.m.repFill = openRep.m.repFill.filter(function (x) { return x !== openRep.rf; });
+      // sem mais repFill: a ímpar deixa de "esperar" — vira jogo REAL da R0 (perdedor pode repescar).
+      if (!(Array.isArray(openRep.m.repFill) && openRep.m.repFill.length)) { delete openRep.m.isPhaseRepGame; openRep.m.isPhaseRepR1 = true; }
+    } else {
+      // (B) NÃO há jogo sem adversário → cria um jogo NOVO na R0 (dupla vs A definir). O repescado
+      //     de MENOR prioridade (maior rank) migra da rodada seguinte pra completar ESTE jogo (mesma
+      //     rodada); o vencedor deste jogo passa a alimentar o slot que o repescado ocupava. NÃO é
+      //     play-in: é um confronto normal que um repescado completa por falta de adversário.
+      var steal = null;
+      cur.forEach(function (m) {
+        if (!m || m.round < 1 || !Array.isArray(m.repFill) || !m.repFill.length) return;
+        m.repFill.forEach(function (rf) {
+          if (!rf || !rf.slot || !_empty(m[rf.slot])) return;
+          if (!steal || (rf.rank || 0) > (steal.rf.rank || 0)) steal = { m: m, rf: rf };
+        });
+      });
+      if (!steal) return; // chave cheia (sem repescado pra migrar) → aguarda
+      var newG = {
+        id: 'p0-lj-' + ts + '-' + integrated, round: 0, bracket: 'main', phaseIndex: _cpi,
+        isPhaseRepGame: true, p1: null, p2: 'TBD', winner: null,
+        nextMatchId: steal.m.id, nextSlot: steal.rf.slot,
+        repFill: [{ slot: 'p2', srcBracket: steal.rf.srcBracket || 'main', srcRound: (steal.rf.srcRound != null ? steal.rf.srcRound : 0), rank: steal.rf.rank, tagRep: true }]
+      };
+      _setSide(newG, 'p1', d);
+      steal.m.repFill = steal.m.repFill.filter(function (x) { return x !== steal.rf; }); // agora vem do vencedor do jogo novo
+      if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'main', round: 0, matches: [newG] }); } catch (e) { t.matches.push(newG); } }
+      else { t.matches.push(newG); }
+    }
     var clone = Object.assign({}, d); delete clone._lateJoin;
-    t.participants.push(clone); t.teamOrigins[nm] = 'formada';
-    usedNames[nm] = 1; integrated++;
-  }
+    t.participants.push(clone); t.teamOrigins[_nm(d)] = 'formada';
+    usedNames[_nm(d)] = 1; integrated++;
+  });
   if (!integrated) return 0;
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
     if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(_isPair(p) && p._lateJoin && usedNames[_nm(p)]); });
