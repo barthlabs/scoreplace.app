@@ -223,7 +223,7 @@
     // cabeçalho do painel invadia a área do relógio. max-height desconta os insets + o
     // padding, então o painel nunca sobe atrás da status bar nem vaza embaixo.
     o.style.cssText = 'position:fixed;inset:0;z-index:100040;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:calc(env(safe-area-inset-top,0px) + 12px) 12px calc(env(safe-area-inset-bottom,0px) + 12px);';
-    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:calc(100vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 24px);overflow:auto;border-radius:16px;border:1px solid rgba(99,102,241,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
+    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:calc(100% - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 24px);overflow:auto;border-radius:16px;border:1px solid rgba(99,102,241,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
     o.addEventListener('click', function (e) { if (e.target === o) o.remove(); });
     document.body.appendChild(o);
     return o;
@@ -885,6 +885,9 @@
   // wa.me precisa de dígitos com DDI sem '+'. Telefone canônico já vem com DDI
   // (>=12 díg); legado (~11) → prefixa o país (phoneCountry ou 55). <10 = sem número.
   function _opPhoneFull(profile) {
+    // v1.2.9: respeita o toggle "WhatsApp" de quem VAI RECEBER (default ON quando
+    // há telefone). Desligado → sem wa.me, o organizador fala por outro canal.
+    if (profile && profile.notifyWhatsApp === false) return '';
     var d = (profile && profile.phone) ? String(profile.phone).replace(/\D/g, '') : '';
     if (d.length < 10) return '';
     if (d.length >= 12) return d;

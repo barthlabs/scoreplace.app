@@ -8,10 +8,11 @@
  * They are NOT touched by deploys from here — always use
  * `firebase deploy --only functions:NAME` to target specific functions.
  *
- * The WhatsApp queue function (processWhatsAppQueue) is preserved in
- * index.js.with-whatsapp.backup for when the WHATSAPP_TOKEN /
- * WHATSAPP_PHONE_ID secrets are configured and the integration is ready
- * to deploy.
+ * v1.2.9: a integração de WhatsApp foi REMOVIDA por inteiro (Evolution API e
+ * Meta Cloud API). O número foi banido, a apelação negada e o portfólio Meta
+ * está morto — não volta. O que restou de WhatsApp no produto não passa por
+ * aqui: é 100% cliente (link wa.me pra abrir conversa e o grupo criado pelo
+ * próprio usuário, js/views/wa-group.js). Ver project_whatsapp_meta_2fa_block.
  *
  * Scheduled jobs currently deployed from here:
  *
@@ -45,9 +46,9 @@ const APP_ORIGINS = [
 ];
 
 // ── KILL-SWITCH DE NOTIFICAÇÕES NO STAGING ───────────────────────────────────
-// O staging compartilha os MESMOS backends de prod (Evolution/WhatsApp, FCM, SMTP
+// O staging compartilha os MESMOS backends de prod (FCM, SMTP
 // Brevo via extensão). Pra simular torneios com os inscritos REAIS sem disparar
-// nada pra eles, TODA entrega externa (WhatsApp, e-mail, push) vira no-op quando
+// nada pra eles, TODA entrega externa (e-mail, push) vira no-op quando
 // rodando no projeto de staging. Em prod IS_STAGING é false → comportamento
 // idêntico ao de sempre. As notificações in-app (docs em users/{uid}/notifications)
 // continuam sendo criadas — visíveis na UI do staging, mas sem entrega externa.
@@ -391,38 +392,6 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   if (upd.phoneNumber) { profUpd.phone = upd.phoneNumber; profUpd.phoneCountry = profUpd.phoneCountry || "55"; }
   await db.collection("users").doc(keepU.uid).set(profUpd, { merge: true }).catch(() => {});
 
-  // 5) v1.2.9 — CREDENCIAL ÓRFÃ: registra o redirect de login.
-  //
-  // O passo 3 só move a credencial do absorvido quando o sobrevivente NÃO tinha aquele tipo.
-  // Quando os DOIS têm (duas contas Google, p.ex.), o e-mail do absorvido não vai pra lugar
-  // nenhum: a conta Auth dele acabou de ser apagada e o Firebase não põe dois provedores do
-  // mesmo tipo na mesma conta. Resultado: a pessoa clica "Entrar com Google", escolhe aquele
-  // e-mail, o Google autentica, o Firebase não acha ninguém e **cria uma conta nova e vazia**
-  // — uma duplicata, pior que antes. É o caso do Eduardo Mange (dudumange@gmail.com +
-  // eduardo@mange.adv.br, ambas google.com).
-  //
-  // Este doc é o que o resolveLoginRedirect usa pra mandar a pessoa pra conta certa.
-  // Só o Admin SDK escreve (rules: deny-all) — é PROVA, e o merge é o único momento que sabe,
-  // com autoridade, que aquele identificador era daquela pessoa. Não dá pra derivar isso de
-  // `linkedEmails`/`email` do perfil: o cliente escreve esses campos, então alguém poderia
-  // reivindicar o e-mail de outro e capturar o login dele.
-  // Ver [[project_privileged_fields_never_client_writable]].
-  const _orphans = [];
-  if (dropEmail && !upd.email) _orphans.push(String(dropEmail).toLowerCase());
-  if (dropPhone && !upd.phoneNumber) _orphans.push(String(dropPhone));
-  for (const key of _orphans) {
-    try {
-      await db.collection("loginRedirects").doc(key).set({
-        ownerUid: keepU.uid,
-        fromUid: dropU.uid,
-        at: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      console.log(`[merge] credencial órfã "${key}" → redirect pra ${keepU.uid}`);
-    } catch (e) {
-      console.error("[merge] loginRedirects falhou pra " + key + ":", e.code || e.message);
-    }
-  }
-
   return { survivorUid: keepU.uid, droppedUid: dropU.uid, already: false };
 }
 
@@ -735,73 +704,6 @@ exports.flushNotifEmailDigest = onSchedule(
   }
 );
 
-// ─── Digest de WhatsApp (v1.16) ──────────────────────────────────────────────
-// Notificações com política 'agrupado' no catálogo (ex.: inscrições de terceiros)
-// vão pra `whatsapp_digest_queue` (via FirestoreDB.queueWhatsAppDigest, flushAtMs =
-// now + 1h). Esta função junta TODOS os itens pendentes do mesmo telefone numa
-// ÚNICA mensagem e enfileira em `whatsapp_queue` (o processWhatsAppQueue envia).
-// Reduz volume/custo do WhatsApp oficial. Espelha flushNotifEmailDigest.
-exports.flushWhatsAppDigest = onSchedule(
-  {
-    schedule: "every 15 minutes",
-    timeZone: "America/Sao_Paulo",
-    region: "us-central1",
-  },
-  async () => {
-    const db = admin.firestore();
-    const now = Date.now();
-    const dueSnap = await db.collection("whatsapp_digest_queue").where("flushAtMs", "<=", now).get();
-    if (dueSnap.empty) {
-      console.log("[flushWhatsAppDigest] nada vencido");
-      return;
-    }
-    const duePhones = new Set();
-    dueSnap.forEach((d) => { const p = d.data().phone; if (p) duePhones.add(p); });
-
-    let sent = 0;
-    for (const phone of duePhones) {
-      // Consolida TODOS os itens pendentes desse telefone (vencidos ou não).
-      const allSnap = await db.collection("whatsapp_digest_queue").where("phone", "==", phone).get();
-      const items = [];
-      allSnap.forEach((d) => items.push(Object.assign({ _id: d.id }, d.data())));
-      if (items.length === 0) continue;
-      items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-      try {
-        // v1.1.30: vira o template sp_inscricoes_resumo. Parâmetro de template NÃO
-        // aceita \n (a Meta rejeita o envio), então as linhas são juntadas com ", "
-        // — e não com quebra de linha como era no texto livre do Evolution.
-        const resumo = items
-          .map((it) => String(it.line || "").replace(/^[🔴🟠🟢]\s*/, "").replace(/\s+/g, " ").trim())
-          .filter(Boolean)
-          .join(", ");
-        const nome = String(items[0].toName || "").trim() || "jogador";
-        const torneio = String(items[0].tournamentName || "").trim() || "seu torneio";
-        const urls = [...new Set(items.map((it) => it.tournamentUrl).filter(Boolean))];
-        let suffix = "#dashboard";
-        if (urls.length === 1) { const i = urls[0].indexOf("#"); if (i !== -1) suffix = urls[0].slice(i); }
-        await db.collection("whatsapp_queue").add({
-          template: "sp_inscricoes_resumo",
-          urlSuffix: suffix,
-          recipients: [{ phone: phone, params: [nome, torneio, resumo.slice(0, 900) || "veja no app"] }],
-          createdAt: new Date().toISOString(),
-          status: "pending",
-        });
-        // Limpa os itens consolidados.
-        let batch = db.batch();
-        let n = 0;
-        for (const it of items) {
-          batch.delete(db.collection("whatsapp_digest_queue").doc(it._id));
-          if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); }
-        }
-        if (n % 400 !== 0) await batch.commit();
-        sent++;
-      } catch (err) {
-        console.error("[flushWhatsAppDigest] falha pra", phone, err);
-      }
-    }
-    console.log("[flushWhatsAppDigest] digests:", sent, "| telefones vencidos:", duePhones.size);
-  }
-);
 
 // ─── Scheduled cleanup: old casual matches ───────────────────────────────────
 // Finished casual match docs live in the top-level `casualMatches` collection.
@@ -2031,7 +1933,7 @@ exports.applyLetzplayScans = onCall(
 // Agora o cliente faz UMA chamada e o servidor entrega a todos de forma
 // confiável e rápida, independente da página ficar aberta. Espelha exatamente
 // _sendUserNotification + _dispatchChannels do cliente (plataforma + fila de
-// e-mail digest + fila de WhatsApp).
+// e-mail digest).
 exports.sendOrgCommunication = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 120, cors: APP_ORIGINS },
   async (request) => {
@@ -2120,16 +2022,14 @@ exports.sendOrgCommunication = onCall(
     }
 
     const emails = [];
-    const phones = [];
-    const waRecipients = []; // v1.1.30: {phone,name} — template do Cloud API é personalizado
     let platformWritten = 0;
     const skipped = [];
     // v2.4.63: manifesto por destinatário pro painel de controle de comunicados.
-    // Cada item: { uid, name, notifDocId, platform, email, whatsapp, phone }.
-    // "platform/email/whatsapp" = canal foi DISPARADO pra essa pessoa. A leitura
-    // (abriu) e a entrega de WhatsApp são computadas on-demand em
-    // getCommunicationStats (lê a notif + o doc da fila), então o manifesto é
-    // imutável — só registra o que foi enviado e por onde.
+    // Cada item: { uid, name, notifDocId, platform, email }.
+    // "platform/email" = canal foi DISPARADO pra essa pessoa. A leitura (abriu) é
+    // computada on-demand em getCommunicationStats (lê a notif), então o manifesto
+    // é imutável — só registra o que foi enviado e por onde.
+    // v1.2.9: o canal WhatsApp saiu — ver project_whatsapp_meta_2fa_block.
     const recipientDetails = [];
 
     // Resolve UID por email quando o inscrito não tem uid no objeto.
@@ -2163,8 +2063,6 @@ exports.sendOrgCommunication = onCall(
             notifDocId: "",
             platform: false,
             email: false,
-            whatsapp: false,
-            phone: "",
           };
 
           // Notificação na plataforma (idempotente via doc ID determinístico).
@@ -2186,22 +2084,11 @@ exports.sendOrgCommunication = onCall(
             detail.platform = true;
             detail.notifDocId = notifId;
           }
-          // Canais externos: e-mail (digest) e WhatsApp (fila).
+          // Canal externo: e-mail (digest).
           // v2.4.86: guarda o endereço de e-mail no manifesto pra o painel
           // poder casar com bounces (delivery.state==='ERROR' na coleção `mail`)
           // e rebaixar o ✓✓ presumido só quando há negativa real de entrega.
           if (profile.notifyEmail !== false && profile.email) { emails.push(profile.email); detail.email = true; detail.emailAddr = String(profile.email).toLowerCase(); }
-          if (profile.notifyWhatsApp === true && profile.phone) {
-            phones.push(profile.phone);
-            // v1.1.30: o Cloud API manda TEMPLATE personalizado ({{1}} = primeiro
-            // nome de quem recebe), então o telefone sozinho não basta.
-            waRecipients.push({
-              phone: String(profile.phone),
-              name: String(profile.displayName || profile.name || "").trim().split(/\s+/)[0] || "",
-            });
-            detail.whatsapp = true;
-            detail.phone = String(profile.phone);
-          }
           recipientDetails.push(detail);
         } catch (e) {
           skipped.push({ uid: r.uid || "", reason: "error:" + (e && e.message || e) });
@@ -2231,30 +2118,10 @@ exports.sendOrgCommunication = onCall(
       if (n % 400 !== 0) await batch.commit();
     }
 
-    // ── Fila de WhatsApp (processada por processWhatsAppQueue) ──
-    let whatsappQueueId = "";
-    if (waRecipients.length) {
-      // v1.1.30: comunicado vai pelo template sp_comunicado_torneio (o Cloud API não
-      // manda texto livre business-initiated). {{1}} nome, {{2}} torneio, {{3}} a
-      // mensagem do organizador — texto humano, então passa pelo sanitizador (a Meta
-      // rejeita \n / 4+ espaços em parâmetro). Ver project_whatsapp_meta_2fa_block.
-      const _p = (v) => {
-        let s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
-        if (s.length > 1024) s = s.slice(0, 1021) + "...";
-        return s || "-";
-      };
-      const waRef = await db.collection("whatsapp_queue").add({
-        template: "sp_comunicado_torneio",
-        urlSuffix: "#tournaments/" + tournamentId,
-        recipients: waRecipients.map((r) => ({
-          phone: r.phone,
-          params: [_p(r.name || "jogador"), _p(t.name || "seu torneio"), _p(rawMessage || fullMsg)],
-        })),
-        createdAt: new Date().toISOString(),
-        status: "pending",
-      });
-      whatsappQueueId = waRef.id;
-    }
+    // v1.2.9: a fila de WhatsApp saiu (número banido, portfólio Meta morto — ver
+    // project_whatsapp_meta_2fa_block). O comunicado do organizador vai por
+    // notificação in-app + e-mail. Sem canal, enfileirar só acumulava doc com
+    // status:failed e mentia no painel ("enviado por WhatsApp").
 
     // ── Manifesto do comunicado (pro painel de controle do organizador) ──
     const commRef = await db.collection("tournaments").doc(tournamentId)
@@ -2268,21 +2135,19 @@ exports.sendOrgCommunication = onCall(
         sentAtMs: Date.now(),
         totalRecipients: recipientDetails.length,
         skippedCount: skipped.length,
-        whatsappQueueId: whatsappQueueId,
         counts: {
           platformSent: recipientDetails.filter((d) => d.platform).length,
           emailSent: emails.length,
-          whatsappSent: phones.length,
         },
         recipients: recipientDetails,
       });
 
     console.log("[sendOrgCommunication] torneio", tournamentId, "| comm", commRef.id,
-      "| plataforma:", platformWritten, "| emails:", emails.length, "| whatsapp:", phones.length,
+      "| plataforma:", platformWritten, "| emails:", emails.length,
       "| pulados:", skipped.length);
     return {
       ok: true, commId: commRef.id,
-      platform: platformWritten, emails: emails.length, phones: phones.length, skipped: skipped.length,
+      platform: platformWritten, emails: emails.length, phones: 0, skipped: skipped.length,
     };
   }
 );
@@ -2291,8 +2156,10 @@ exports.sendOrgCommunication = onCall(
 // v2.4.63: computa on-demand a partir do manifesto imutável em
 // tournaments/{tId}/communications/{commId}:
 //   • plataforma: lê a notificação de cada destinatário → read? = "abriu".
-//   • whatsapp: lê o doc da fila (whatsappQueueId) → deliveries[] por telefone.
 //   • email: só "enviado" (entrega/abertura por e-mail não é rastreada nesta v1).
+// v1.2.9: a perna de WhatsApp saiu. Comunicados ANTIGOS (pré-1.2.9) ainda têm
+// whatsappQueueId/counts.whatsappSent no manifesto — o painel os lê como 0, que é
+// a verdade: sem canal, nada foi entregue.
 exports.getCommunicationStats = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 120, cors: APP_ORIGINS },
   async (request) => {
@@ -2324,18 +2191,6 @@ exports.getCommunicationStats = onCall(
     const comm = cSnap.data();
     const recips = Array.isArray(comm.recipients) ? comm.recipients : [];
 
-    // Entrega de WhatsApp: phone → ok, a partir do doc da fila.
-    const waDelivered = {};
-    if (comm.whatsappQueueId) {
-      try {
-        const waSnap = await db.collection("whatsapp_queue").doc(comm.whatsappQueueId).get();
-        if (waSnap.exists) {
-          const dels = waSnap.data().deliveries || [];
-          dels.forEach((d) => { if (d && d.phone) waDelivered[String(d.phone).replace(/\D/g, "")] = !!d.ok; });
-        }
-      } catch (e) { /* fila pode ter sido limpa após 30d */ }
-    }
-
     // ── Entrega de E-MAIL (v2.4.86): presumimos ENTREGUE (✓✓) quando NÃO há
     // negativa. A negativa = doc na coleção `mail` (extension firestore-send-
     // email) com delivery.state==='ERROR' (e-mail inexistente, caixa cheia,
@@ -2361,7 +2216,7 @@ exports.getCommunicationStats = onCall(
 
     // "Abriu" na plataforma: lê a notificação de cada destinatário (chunks de 20).
     const out = [];
-    let platformOpened = 0; let whatsappDelivered = 0;
+    let platformOpened = 0;
     let emailDelivered = 0; let emailBounced = 0;
     const CHUNK = 20;
     for (let i = 0; i < recips.length; i += CHUNK) {
@@ -2376,9 +2231,6 @@ exports.getCommunicationStats = onCall(
           } catch (e) { /* notif pode ter sido limpa */ }
         }
         if (opened) platformOpened++;
-        const phoneKey = r.phone ? String(r.phone).replace(/\D/g, "") : "";
-        const waOk = r.whatsapp && phoneKey ? (waDelivered[phoneKey] === true) : false;
-        if (waOk) whatsappDelivered++;
 
         // E-mail: presume entregue; só rebaixa se o endereço bateu num bounce.
         let emBounced = false;
@@ -2401,7 +2253,6 @@ exports.getCommunicationStats = onCall(
           uid: r.uid, name: r.name || "", isOrganizer: !!r.isOrganizer,
           platform: !!r.platform, platformOpened: opened,
           email: !!r.email, emailDelivered: emDelivered, emailBounced: emBounced,
-          whatsapp: !!r.whatsapp, whatsappDelivered: waOk,
         });
       }));
     }
@@ -2423,8 +2274,6 @@ exports.getCommunicationStats = onCall(
         emailSent: (comm.counts && comm.counts.emailSent) || 0,
         emailDelivered: emailDelivered,
         emailBounced: emailBounced,
-        whatsappSent: (comm.counts && comm.counts.whatsappSent) || 0,
-        whatsappDelivered: whatsappDelivered,
       },
       recipients: out,
     };
@@ -2469,7 +2318,6 @@ exports.listCommunications = onCall(
         counts: {
           platformSent: (c.counts && c.counts.platformSent) || 0,
           emailSent: (c.counts && c.counts.emailSent) || 0,
-          whatsappSent: (c.counts && c.counts.whatsappSent) || 0,
         },
       });
     });
@@ -2477,38 +2325,6 @@ exports.listCommunications = onCall(
   }
 );
 
-// ─── WhatsApp via Evolution API (self-hosted no Railway) ────────────────────
-// v1.3.37-beta: Cloud Function que consome `whatsapp_queue/{id}` (Firestore
-// trigger onCreate) e POSTa pra Evolution API (https://docs.evolution-api.com).
-// Evolution roda em Railway com WhatsApp Business pareado via QR Code num
-// número eSIM Vivo dedicado. Custo total: ~R$20/mês (eSIM) + R$0-5/mês
-// (Railway free tier).
-//
-// PRÉ-REQUISITOS pra ativar (one-time, fora do código):
-//   1. Deploy Evolution API no Railway — ver infra/whatsapp/README.md
-//   2. Parear instância via QR Code com o WhatsApp Business do eSIM
-//   3. Configurar 3 secrets:
-//        firebase functions:secrets:set EVOLUTION_API_URL
-//        firebase functions:secrets:set EVOLUTION_API_KEY
-//        firebase functions:secrets:set EVOLUTION_INSTANCE
-//   4. Deploy:  firebase deploy --only functions:processWhatsAppQueue
-//
-// Schema do doc em whatsapp_queue/{id} (criado por FirestoreDB.queueWhatsApp):
-//   {
-//     phones: ['5511999998888', ...],   // E.164 sem '+' nem espaços
-//     message: 'texto da mensagem',
-//     createdAt: ISO string,
-//     status: 'pending' | 'sent' | 'partial' | 'failed',
-//     // Atualizado pela função:
-//     processedAt?: ISO string,
-//     attempts?: number,
-//     lastError?: string,
-//     deliveries?: { phone, ok, messageId?, error? }[]
-//   }
-
-const EVOLUTION_API_URL = defineSecret("EVOLUTION_API_URL");
-const EVOLUTION_API_KEY = defineSecret("EVOLUTION_API_KEY");
-const EVOLUTION_INSTANCE = defineSecret("EVOLUTION_INSTANCE");
 // v2.6.x: API key de SERVIDOR (restrita à Identity Toolkit API, SEM restrição de
 // referer/IP) usada pra verificar senha server-side via accounts:signInWithPassword.
 // A web key tem restrição de referer e dá 403 quando chamada do servidor. Criar:
@@ -2517,298 +2333,10 @@ const EVOLUTION_INSTANCE = defineSecret("EVOLUTION_INSTANCE");
 // e setar: firebase functions:secrets:set SIGNIN_API_KEY
 const SIGNIN_API_KEY = defineSecret("SIGNIN_API_KEY");
 
-// ─── WhatsApp Magic Link ──────────────────────────────────────────────────────
-// v1.3.83-beta: quando o usuário entra com telefone, o frontend também chama
-// esta função em paralelo com o Firebase SMS. Se o número estiver cadastrado
-// no WhatsApp, o usuário recebe um link direto que loga sem precisar digitar o
-// código SMS — usa signInWithCustomToken no cliente.
-//
-// Fluxo:
-//   1. Verifica se o número existe no Firebase Auth (getUserByPhoneNumber).
-//   2. Gera um custom token via Admin SDK (admin.auth().createCustomToken(uid)).
-//   3. Armazena wrapper em magicLinks/{token} com type='customToken'.
-//   4. Envia mensagem WhatsApp com link scoreplace.app/?wt=TOKEN.
-//   5. Se usuário não existe ainda (primeiro login) → retorna ok:false silencioso.
-//      SMS continua sendo o caminho principal nesse caso.
-//
-// O cliente detecta ?wt=TOKEN em auth.js, busca o Firestore, chama
-// signInWithCustomToken — login direto, zero digitação.
-//
-// Deploy: firebase deploy --only functions:sendWhatsAppMagicLink
-exports.sendWhatsAppMagicLink = onCall(
-  {
-    region: "us-central1",
-    memory: "256MiB",
-    timeoutSeconds: 30,
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
-  },
-  async (request) => {
-    const rawPhone = (request.data && request.data.phone || "").trim();
-    const phone = _normalizePhoneE164(rawPhone);
-    if (!phone) {
-      // Número inválido — silencioso, SMS continua.
-      return { ok: false, reason: "invalid-phone" };
-    }
 
-    // Busca conta existente ou cria nova — o link funciona pra novos usuários também.
-    // Seguro: o link WhatsApp vai pro dono do número; quem recebe no WhatsApp é quem
-    // tem o telefone, independente de já ter conta ou não.
-    let userRecord;
-    try {
-      userRecord = await admin.auth().getUserByPhoneNumber("+" + phone);
-    } catch (err) {
-      if (err.code === "auth/user-not-found") {
-        // Novo usuário — cria conta Firebase Auth com o número para poder gerar custom token.
-        // O SMS do OTP já passou pelo reCAPTCHA do Firebase, então o número é válido.
-        try {
-          userRecord = await admin.auth().createUser({ phoneNumber: "+" + phone });
-          console.log("[sendWhatsAppMagicLink] new user created for phone:", phone, "uid:", userRecord.uid);
-        } catch (createErr) {
-          console.error("[sendWhatsAppMagicLink] createUser failed:", createErr.code || createErr.message);
-          return { ok: false, reason: "create-user-error" };
-        }
-      } else {
-        console.error("[sendWhatsAppMagicLink] getUserByPhoneNumber failed:", err.code || err.message);
-        return { ok: false, reason: "lookup-error" };
-      }
-    }
-
-    // Gera custom token com validade de 1h (Firebase default é 1h pra custom tokens).
-    let customToken;
-    try {
-      customToken = await admin.auth().createCustomToken(userRecord.uid, {
-        source: "whatsapp_magic_link",
-      });
-    } catch (err) {
-      console.error("[sendWhatsAppMagicLink] createCustomToken failed:", err.code || err.message);
-      return { ok: false, reason: "token-error" };
-    }
-
-    // Armazena wrapper no mesmo schema que o email magic link usa.
-    const crypto = require("crypto");
-    const token = crypto.randomBytes(18).toString("base64url");
-    try {
-      await admin.firestore().collection("magicLinks").doc(token).set({
-        type: "customToken",
-        customToken: customToken,
-        uid: userRecord.uid,
-        phone: phone,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1h
-      });
-    } catch (err) {
-      console.error("[sendWhatsAppMagicLink] Firestore write failed:", err.code || err.message);
-      return { ok: false, reason: "store-error" };
-    }
-
-    const wrapperUrl = "https://scoreplace.app/?wt=" + encodeURIComponent(token);
-
-    // Nome de exibição para personalizar a mensagem.
-    const displayName = (userRecord.displayName || "").trim();
-    const firstName = displayName ? displayName.split(/[\s.]+/)[0] : "";
-    const greeting = firstName ? "Olá, " + firstName + "!" : "Olá!";
-
-    const message =
-      "🎾 " + greeting + "\n\n" +
-      "Acesse o *scoreplace.app* pelo link abaixo — sem digitar nenhum código:\n\n" +
-      wrapperUrl + "\n\n" +
-      "_O link expira em 1 hora. Se não pediu, ignore._";
-
-    // Envia direto pela Evolution API (não usa a fila — link de login é time-sensitive).
-    let apiUrl, apiKey, instance;
-    try {
-      apiUrl = EVOLUTION_API_URL.value();
-      apiKey = EVOLUTION_API_KEY.value();
-      instance = EVOLUTION_INSTANCE.value();
-    } catch (err) {
-      console.error("[sendWhatsAppMagicLink] secrets unavailable:", err.message);
-      return { ok: false, reason: "secrets-missing" };
-    }
-
-    const result = await _sendWhatsAppText(apiUrl, apiKey, instance, phone, message);
-    if (!result.ok) {
-      console.warn("[sendWhatsAppMagicLink] WA send failed for", phone, ":", result.error);
-      // Não joga erro — SMS já foi enviado, isto é bônus best-effort.
-      return { ok: false, reason: "wa-send-failed", error: result.error };
-    }
-
-    console.log("[sendWhatsAppMagicLink] sent to", phone, "uid:", userRecord.uid);
-    return { ok: true };
-  }
-);
-
-// ─── WhatsApp Cloud API oficial (Meta) — login por CÓDIGO de 6 dígitos (v1.1.15) ─
-// Migração do Evolution (morto) pro Cloud API oficial. No login por celular, SMS
-// (Firebase, código opaco) e WhatsApp (código NOSSO) são enviados ao mesmo tempo;
-// o campo de código aceita QUALQUER um dos dois — o cliente tenta o confirm do
-// Firebase primeiro, e se não bater cai em verifyWhatsAppLoginCode.
-// GATE: o template `scoreplace_login_code` (AUTHENTICATION) só passa a existir quando
-// a verificação da empresa da Meta aprovar. Até lá, sendWhatsAppLoginCode devolve
-// {ok:false} e o app degrada limpo (SMS/e-mail seguem). IDs canônicos + estado na
-// memória project_whatsapp_meta_2fa_block.
-// ⚠️ Payload do template AUTH (COPY_CODE) NÃO foi testável até o template existir —
-// validar o envio de verdade no 1º deploy pós-aprovação.
-const WHATSAPP_CLOUD_TOKEN = defineSecret("WHATSAPP_CLOUD_API_TOKEN");
-const WA_CLOUD_API = "https://graph.facebook.com/v22.0";
-const WA_CLOUD_PHONE_ID = "1318311631355405";      // Phone Number ID Barthlabs (não é segredo)
-const WA_LOGIN_TEMPLATE = "scoreplace_login_code"; // template AUTHENTICATION, OTP COPY_CODE
-const WA_LOGIN_TEMPLATE_LANG = "pt_BR";
-
-// Envia uma NOTIFICAÇÃO via template UTILITY do Cloud API (não-auth).
-// v1.1.30 — substitui o _sendWhatsAppText do Evolution: o Cloud API não manda
-// texto livre business-initiated, só template aprovado. `params` são os {{n}} do
-// corpo ({{1}} = nome de quem recebe) e `urlSuffix` é o sufixo do botão (a base
-// https://scoreplace.app/ é fixa no template). Ver project_whatsapp_meta_2fa_block.
-async function _sendWhatsAppTemplateMsg(token, phone, templateName, params, urlSuffix) {
-  if (IS_STAGING) { console.log("[staging] WA Cloud template suprimido →", String(phone)); return { ok: true, suppressed: true }; }
-  const to = String(phone || "").replace(/[^\d]/g, "");
-  const components = [];
-  if (Array.isArray(params) && params.length) {
-    components.push({ type: "body", parameters: params.map((p) => ({ type: "text", text: String(p) })) });
-  }
-  // Botão URL dinâmico: index 0, sub_type "url" — o parâmetro é só o SUFIXO.
-  components.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: String(urlSuffix || "#dashboard") }] });
-  const body = {
-    messaging_product: "whatsapp",
-    to: to,
-    type: "template",
-    template: { name: templateName, language: { code: WA_LOGIN_TEMPLATE_LANG }, components: components },
-  };
-  let resp;
-  try {
-    resp = await fetch(WA_CLOUD_API + "/" + WA_CLOUD_PHONE_ID + "/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
-      body: JSON.stringify(body),
-    });
-  } catch (e) {
-    return { ok: false, error: "fetch failed: " + (e.message || String(e)) };
-  }
-  let data = null;
-  try { data = await resp.json(); } catch (e) { /* body não-json */ }
-  if (!resp.ok) {
-    return { ok: false, error: "HTTP " + resp.status + ": " + (data && data.error ? JSON.stringify(data.error) : resp.statusText) };
-  }
-  const messageId = data && data.messages && data.messages[0] && data.messages[0].id;
-  return { ok: true, messageId: messageId };
-}
-
-// Envia um código de autenticação via template do Cloud API. {ok} ou {ok:false,error}.
-async function _sendWhatsAppAuthCode(token, phone, code) {
-  if (IS_STAGING) { console.log("[staging] WA Cloud auth code suprimido →", String(phone)); return { ok: true, suppressed: true }; }
-  const to = String(phone || "").replace(/[^\d]/g, "");
-  const url = WA_CLOUD_API + "/" + WA_CLOUD_PHONE_ID + "/messages";
-  const body = {
-    messaging_product: "whatsapp",
-    to: to,
-    type: "template",
-    template: {
-      name: WA_LOGIN_TEMPLATE,
-      language: { code: WA_LOGIN_TEMPLATE_LANG },
-      components: [
-        { type: "body", parameters: [{ type: "text", text: code }] },
-        // Botão OTP (COPY_CODE) — o parâmetro leva o mesmo código pro "copiar código".
-        { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] },
-      ],
-    },
-  };
-  let resp;
-  try {
-    resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
-      body: JSON.stringify(body),
-    });
-  } catch (e) {
-    return { ok: false, error: "fetch failed: " + (e.message || String(e)) };
-  }
-  let data = null;
-  try { data = await resp.json(); } catch (e) { /* body não-json */ }
-  if (!resp.ok) {
-    return { ok: false, error: "HTTP " + resp.status + ": " + (data && data.error ? JSON.stringify(data.error) : resp.statusText) };
-  }
-  const messageId = data && data.messages && data.messages[0] && data.messages[0].id;
-  return { ok: true, messageId: messageId };
-}
-
-// Gera código de 6 dígitos, guarda em whatsappLoginCodes/{phone} e manda via Cloud API.
-// Chamado em paralelo com o SMS do Firebase no login por celular. Best-effort.
-exports.sendWhatsAppLoginCode = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, secrets: [WHATSAPP_CLOUD_TOKEN] },
-  async (request) => {
-    const phone = _normalizePhoneE164((request.data && request.data.phone) || "");
-    if (!phone) return { ok: false, reason: "invalid-phone" };
-
-    // Acha ou cria a conta do telefone (o código loga essa conta via custom token).
-    let userRecord;
-    try {
-      userRecord = await admin.auth().getUserByPhoneNumber("+" + phone);
-    } catch (err) {
-      if (err.code === "auth/user-not-found") {
-        try { userRecord = await admin.auth().createUser({ phoneNumber: "+" + phone }); }
-        catch (e) { console.error("[sendWhatsAppLoginCode] createUser falhou:", e.code || e.message); return { ok: false, reason: "create-user-error" }; }
-      } else {
-        console.error("[sendWhatsAppLoginCode] lookup falhou:", err.code || err.message);
-        return { ok: false, reason: "lookup-error" };
-      }
-    }
-
-    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
-    try {
-      await admin.firestore().collection("whatsappLoginCodes").doc(phone).set({
-        code: code, uid: userRecord.uid, phone: phone, attempts: 0,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 min
-      });
-    } catch (e) {
-      console.error("[sendWhatsAppLoginCode] Firestore write falhou:", e.code || e.message);
-      return { ok: false, reason: "store-error" };
-    }
-
-    let token;
-    try { token = WHATSAPP_CLOUD_TOKEN.value(); } catch (e) { return { ok: false, reason: "secret-missing" }; }
-    const result = await _sendWhatsAppAuthCode(token, phone, code);
-    if (!result.ok) {
-      console.warn("[sendWhatsAppLoginCode] envio falhou pra", phone, ":", result.error);
-      return { ok: false, reason: "wa-send-failed", error: result.error };
-    }
-    console.log("[sendWhatsAppLoginCode] código enviado pra", phone, "uid:", userRecord.uid);
-    return { ok: true };
-  }
-);
-
-// Confere o código digitado contra whatsappLoginCodes/{phone}. Se bater (não expirou /
-// sob limite), devolve custom token pro cliente fazer signInWithCustomToken.
-exports.verifyWhatsAppLoginCode = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30 },
-  async (request) => {
-    const phone = _normalizePhoneE164((request.data && request.data.phone) || "");
-    const code = String((request.data && request.data.code) || "").replace(/[^\d]/g, "");
-    if (!phone || code.length !== 6) return { ok: false, reason: "invalid-input" };
-
-    const ref = admin.firestore().collection("whatsappLoginCodes").doc(phone);
-    const snap = await ref.get();
-    if (!snap.exists) return { ok: false, reason: "no-code" };
-    const d = snap.data();
-    const expMs = d.expiresAt && d.expiresAt.toMillis ? d.expiresAt.toMillis() : (d.expiresAt ? new Date(d.expiresAt).getTime() : 0);
-    if (!expMs || expMs < Date.now()) { try { await ref.delete(); } catch (_e) {} return { ok: false, reason: "expired" }; }
-    if ((d.attempts || 0) >= 5) { try { await ref.delete(); } catch (_e) {} return { ok: false, reason: "too-many-attempts" }; }
-    if (String(d.code) !== code) {
-      try { await ref.update({ attempts: (d.attempts || 0) + 1 }); } catch (_e) {}
-      return { ok: false, reason: "wrong-code" };
-    }
-    try { await ref.delete(); } catch (_e) {} // consome o código
-    let customToken;
-    try { customToken = await admin.auth().createCustomToken(d.uid, { source: "whatsapp_login_code" }); }
-    catch (e) { console.error("[verifyWhatsAppLoginCode] createCustomToken falhou:", e.code || e.message); return { ok: false, reason: "token-error" }; }
-    console.log("[verifyWhatsAppLoginCode] OK pra", phone, "uid:", d.uid);
-    return { ok: true, customToken: customToken };
-  }
-);
-
-// Sanitiza telefone pra E.164 sem '+' (formato Evolution API espera).
-// Aceita "+55 11 99999-8888", "55 11 99999-8888", "11 99999-8888",
-// "(11) 99999-8888". Sempre normaliza pra "5511999998888".
+// Sanitiza telefone pra E.164 sem '+'. Aceita "+55 11 99999-8888",
+// "55 11 99999-8888", "11 99999-8888", "(11) 99999-8888". Sempre normaliza
+// pra "5511999998888". Usado pelo login/verificação por celular (SMS).
 function _normalizePhoneE164(raw) {
   if (!raw) return null;
   const digits = String(raw).replace(/\D/g, "");
@@ -2863,67 +2391,20 @@ function _hasPasswordProvider(userRecord) {
     userRecord.providerData.some((p) => p && p.providerId === "password"));
 }
 
-// Send single WhatsApp text via Evolution. Retorna { ok, messageId?, error? }.
-async function _sendWhatsAppText(apiUrl, apiKey, instance, phone, text) {
-  if (IS_STAGING) { console.log("[staging] WhatsApp suprimido →", String(phone)); return { ok: true, messageId: null, suppressed: true }; }
-  const url = apiUrl.replace(/\/+$/, "") + "/message/sendText/" + encodeURIComponent(instance);
-  // v2.4.37: Evolution/Baileys quer o número SÓ EM DÍGITOS (country code + DDD +
-  // número), sem "+". A ficha guarda em E.164 ("+5511..."), então normaliza aqui.
-  // (O único envio que já funcionou tinha "5511..." sem "+"; os 200+ que falharam
-  // vinham com "+5511...".)
-  const num = String(phone || "").replace(/[^\d]/g, "");
-  const body = {
-    number: num,
-    text: text,
-    // Evolution-specific options:
-    delay: 1200, // ms entre msgs (parece + humano, evita ban)
-    // v3.0.x: SEM preview de link — o card de pré-visualização do scoreplace.app vinha
-    // como um BOX VAZIO grande e feio em cima da mensagem (sem og:image). Desligar deixa
-    // a notificação enxuta; o link continua clicável no texto ("👉 Ver torneio: …").
-    linkPreview: false,
-  };
-  let resp;
-  try {
-    resp = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": apiKey,
-      },
-      body: JSON.stringify(body),
-      // Cloud Functions timeout é 60s — fetch sem timeout pode travar a função.
-      // node-fetch v2 não tem timeout nativo; usar AbortController.
-    });
-  } catch (e) {
-    return { ok: false, error: "fetch failed: " + (e.message || String(e)) };
-  }
-  let data = null;
-  try { data = await resp.json(); } catch (e) { /* body não-json */ }
-  if (!resp.ok) {
-    return {
-      ok: false,
-      error: "HTTP " + resp.status + ": " + (data && data.message ? JSON.stringify(data.message) : resp.statusText),
-    };
-  }
-  // Resposta sucesso típica: { key: { id: "..." }, ... }
-  const messageId = data && data.key && data.key.id ? data.key.id : null;
-  return { ok: true, messageId: messageId };
-}
 
 // ─── Autenticação por celular no gate de verificação (v2.4.24) ───────────────
 // Alternativa pro usuário cujo e-mail de confirmação não chega (ex.: UOL filtra
 // e-mail transacional). Em vez de depender do link no e-mail, a pessoa confirma
-// a conta provando que controla um telefone. Dois canais, espelhando o login
-// por celular antigo:
+// a conta provando que controla um telefone, via SMS:
 //   • SMS  → Firebase linkWithPhoneNumber (código do Firebase, digitado no app).
 //            O cliente faz o confirm() e depois chama verifyPhoneGate({afterPhoneLink:true}).
-//   • WhatsApp → sendPhoneVerifyWhatsApp manda um código NOSSO de 6 dígitos +
-//            um botão (?gv=TOKEN) que autentica com 1 clique, sem digitar nada.
-// Qualquer caminho marca emailVerified=true (server-side, só Admin pode) e salva
+// v1.2.9: o canal WhatsApp (código próprio + botão ?gv=) saiu — ver
+// project_whatsapp_meta_2fa_block. Sobrou o SMS.
+// O caminho marca emailVerified=true (server-side, só Admin pode) e salva
 // o telefone no perfil. O telefone é a prova de identidade — não há e-mail no loop.
 
 // Aplica a verificação: marca o e-mail como confirmado no Auth e grava o
-// telefone (E.164 com '+') no perfil. Chamado pelos 3 caminhos abaixo.
+// telefone (E.164 com '+') no perfil.
 async function _applyGateVerification(uid, phoneE164) {
   await admin.auth().updateUser(uid, { emailVerified: true });
   const update = { emailVerified: true, updatedAt: new Date().toISOString() };
@@ -2931,75 +2412,11 @@ async function _applyGateVerification(uid, phoneE164) {
   await admin.firestore().collection("users").doc(uid).set(update, { merge: true });
 }
 
-// Manda o código + botão pelo WhatsApp. Requer usuário logado (o gate só aparece
-// pra quem já está autenticado, só falta confirmar o e-mail).
-exports.sendPhoneVerifyWhatsApp = onCall(
-  {
-    region: "us-central1",
-    memory: "256MiB",
-    timeoutSeconds: 30,
-    cors: APP_ORIGINS,
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
-  },
-  async (request) => {
-    const uid = request.auth && request.auth.uid;
-    if (!uid) throw new HttpsError("unauthenticated", "login necessário");
-    const phone = _normalizePhoneE164((request.data && request.data.phone) || "");
-    if (!phone) return { ok: false, reason: "invalid-phone" };
 
-    const crypto = require("crypto");
-    const otp = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
-    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
-    const token = crypto.randomBytes(18).toString("base64url");
-    const phoneE164 = "+" + phone;
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
-    const db = admin.firestore();
-    try {
-      await db.collection("gateVerifications").doc(uid).set({
-        uid, phone: phoneE164, otpHash, token, attempts: 0,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt,
-      });
-      await db.collection("gateTokens").doc(token).set({
-        uid, phone: phoneE164, expiresAt,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    } catch (err) {
-      console.error("[sendPhoneVerifyWhatsApp] store failed:", err.code || err.message);
-      return { ok: false, reason: "store-error" };
-    }
-
-    const wrapperUrl = "https://scoreplace.app/?gv=" + encodeURIComponent(token);
-    const message =
-      "🎾 *scoreplace.app*\n\n" +
-      "Seu código de confirmação: *" + otp + "*\n\n" +
-      "Digite ele no app — ou toque no link abaixo pra confirmar e entrar direto, sem digitar nada:\n\n" +
-      wrapperUrl + "\n\n" +
-      "_O código expira em 15 minutos. Se não foi você, ignore._";
-
-    let apiUrl, apiKey, instance;
-    try {
-      apiUrl = EVOLUTION_API_URL.value();
-      apiKey = EVOLUTION_API_KEY.value();
-      instance = EVOLUTION_INSTANCE.value();
-    } catch (err) {
-      console.error("[sendPhoneVerifyWhatsApp] secrets unavailable:", err.message);
-      return { ok: false, reason: "secrets-missing" };
-    }
-    const result = await _sendWhatsAppText(apiUrl, apiKey, instance, phone, message);
-    if (!result.ok) {
-      console.warn("[sendPhoneVerifyWhatsApp] WA send failed for", phone, ":", result.error);
-      return { ok: false, reason: "wa-send-failed", error: result.error };
-    }
-    console.log("[sendPhoneVerifyWhatsApp] sent to", phone, "uid:", uid);
-    return { ok: true };
-  }
-);
-
-// Verifica o código digitado no app. Dois modos:
-//   • { afterPhoneLink:true } → o SMS do Firebase já foi confirmado no cliente
-//     (linkWithPhoneNumber.confirm). Só confirmamos que o provider phone está
-//     vinculado e marcamos o e-mail.
-//   • { code:"123456" }       → código NOSSO que foi pelo WhatsApp.
+// Verifica o vínculo do telefone: { afterPhoneLink:true } → o SMS do Firebase já
+// foi confirmado no cliente (linkWithPhoneNumber.confirm). Só confirmamos que o
+// provider phone está vinculado e marcamos o e-mail.
+// v1.2.9: o modo { code } (código que ia pelo WhatsApp) saiu com o canal.
 exports.verifyPhoneGate = onCall(
   {
     region: "us-central1",
@@ -3013,72 +2430,18 @@ exports.verifyPhoneGate = onCall(
     const db = admin.firestore();
     const data = request.data || {};
 
-    if (data.afterPhoneLink) {
-      const u = await admin.auth().getUser(uid);
-      const hasPhone = !!u.phoneNumber ||
-        (u.providerData || []).some((p) => p && p.providerId === "phone");
-      if (!hasPhone) return { ok: false, reason: "phone-not-linked" };
-      await _applyGateVerification(uid, u.phoneNumber || null);
-      await db.collection("gateVerifications").doc(uid).delete().catch(() => {});
-      return { ok: true };
-    }
-
-    const code = String(data.code || "").trim();
-    if (!/^\d{6}$/.test(code)) return { ok: false, reason: "bad-code" };
-    const ref = db.collection("gateVerifications").doc(uid);
-    const snap = await ref.get();
-    if (!snap.exists) return { ok: false, reason: "no-pending" };
-    const v = snap.data();
-    const exp = v.expiresAt && v.expiresAt.toDate ? v.expiresAt.toDate() : v.expiresAt;
-    if (exp && new Date(exp) < new Date()) return { ok: false, reason: "expired" };
-    if ((v.attempts || 0) >= 6) return { ok: false, reason: "too-many" };
-    const crypto = require("crypto");
-    const hash = crypto.createHash("sha256").update(code).digest("hex");
-    if (hash !== v.otpHash) {
-      await ref.update({ attempts: (v.attempts || 0) + 1 }).catch(() => {});
-      return { ok: false, reason: "wrong-code" };
-    }
-    await _applyGateVerification(uid, v.phone || null);
-    await ref.delete().catch(() => {});
-    if (v.token) await db.collection("gateTokens").doc(v.token).delete().catch(() => {});
-    console.log("[verifyPhoneGate] code OK, verified uid:", uid);
+    if (!data.afterPhoneLink) return { ok: false, reason: "no-phone-link" };
+    const u = await admin.auth().getUser(uid);
+    const hasPhone = !!u.phoneNumber ||
+      (u.providerData || []).some((p) => p && p.providerId === "phone");
+    if (!hasPhone) return { ok: false, reason: "phone-not-linked" };
+    await _applyGateVerification(uid, u.phoneNumber || null);
+    await db.collection("gateVerifications").doc(uid).delete().catch(() => {});
+    console.log("[verifyPhoneGate] SMS OK, verified uid:", uid);
     return { ok: true };
   }
 );
 
-// Resolve o botão do WhatsApp (?gv=TOKEN). NÃO requer auth — o token é o segredo
-// (vai só pro dono do telefone). Marca o e-mail verificado e devolve um custom
-// token pra logar a pessoa direto, sem digitar nada.
-exports.verifyPhoneGateToken = onCall(
-  {
-    region: "us-central1",
-    memory: "256MiB",
-    timeoutSeconds: 30,
-    cors: APP_ORIGINS,
-  },
-  async (request) => {
-    const token = String((request.data && request.data.token) || "").trim();
-    if (!token) return { ok: false, reason: "no-token" };
-    const db = admin.firestore();
-    const ref = db.collection("gateTokens").doc(token);
-    const snap = await ref.get();
-    if (!snap.exists) return { ok: false, reason: "invalid-token" };
-    const t = snap.data();
-    const exp = t.expiresAt && t.expiresAt.toDate ? t.expiresAt.toDate() : t.expiresAt;
-    if (exp && new Date(exp) < new Date()) return { ok: false, reason: "expired" };
-    await _applyGateVerification(t.uid, t.phone || null);
-    let customToken = null;
-    try {
-      customToken = await admin.auth().createCustomToken(t.uid, { source: "phone_gate" });
-    } catch (err) {
-      console.error("[verifyPhoneGateToken] createCustomToken failed:", err.code || err.message);
-    }
-    await ref.delete().catch(() => {});
-    await db.collection("gateVerifications").doc(t.uid).delete().catch(() => {});
-    console.log("[verifyPhoneGateToken] token OK, verified uid:", t.uid);
-    return { ok: true, customToken };
-  }
-);
 
 // ─── Redefinir senha por celular (v2.4.97) ───────────────────────────────────
 // Alternativa ao link no e-mail pra quem NÃO consegue receber o e-mail de reset
@@ -3089,11 +2452,10 @@ exports.verifyPhoneGateToken = onCall(
 // (Auth phoneNumber OU users/{uid}.phone). Se o celular digitado não confere,
 // ou a conta não tem celular cadastrado, NÃO enviamos nada — caso contrário
 // qualquer um que soubesse o e-mail + tivesse um celular poderia sequestrar a
-// conta. Dois canais, espelhando o gate de verificação:
-//   • WhatsApp → código NOSSO de 6 dígitos + botão (?pr=TOKEN) de 1 toque.
-//   • SMS      → Firebase signInWithPhoneNumber no cliente (prova via idToken).
-// Verificado qualquer caminho: marca emailVerified=true e devolve um custom
-// token da conta do e-mail pra logar e gravar a nova senha (updatePassword).
+// conta. Canal: SMS → Firebase signInWithPhoneNumber no cliente (prova via
+// idToken). v1.2.9: o canal WhatsApp saiu — ver project_whatsapp_meta_2fa_block.
+// Verificado, marca emailVerified=true e devolve um custom token da conta do
+// e-mail pra logar e gravar a nova senha (updatePassword).
 
 // Compara dois telefones ignorando DDI/+/formatação: bate se os últimos 10-11
 // dígitos (DDD+número) forem iguais.
@@ -3120,13 +2482,18 @@ async function _registeredPhoneFor(uid, userRecord) {
   return (userRecord && userRecord.phoneNumber) || null;
 }
 
+// v1.2.9: o canal WhatsApp saiu (número banido, portfólio Meta morto — ver
+// project_whatsapp_meta_2fa_block). Esta função NÃO envia mais nada: ela valida
+// que o celular digitado é mesmo o da conta e grava o PENDENTE. Quem entrega o
+// código é o SMS do Firebase, disparado no cliente (signInWithPhoneNumber), e a
+// prova volta como idToken pra verifyPasswordResetPhone. O pendente continua
+// obrigatório — sem ele o verify devolve "no-pending" e o reset por SMS morre.
 exports.sendPasswordResetPhone = onCall(
   {
     region: "us-central1",
     memory: "256MiB",
     timeoutSeconds: 30,
     cors: APP_ORIGINS,
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
   },
   async (request) => {
     const data = request.data || {};
@@ -3146,60 +2513,29 @@ exports.sendPasswordResetPhone = onCall(
     if (!registered) return { ok: false, reason: "no-phone" };
     if (!_phoneDigitsMatch(registered, phoneDigits)) return { ok: false, reason: "phone-mismatch" };
 
-    const crypto = require("crypto");
-    const otp = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
-    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
-    const token = crypto.randomBytes(18).toString("base64url");
     const phoneE164 = "+" + phoneDigits;
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
     const db = admin.firestore();
     try {
       await db.collection("passwordResetPhone").doc(userRecord.uid).set({
-        uid: userRecord.uid, email, phone: phoneE164, otpHash, token, attempts: 0,
+        uid: userRecord.uid, email, phone: phoneE164, attempts: 0,
         createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt,
-      });
-      await db.collection("passwordResetTokens").doc(token).set({
-        uid: userRecord.uid, email, phone: phoneE164, expiresAt,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } catch (err) {
       console.error("[sendPasswordResetPhone] store failed:", err.code || err.message);
       return { ok: false, reason: "store-error" };
     }
 
-    const wrapperUrl = "https://scoreplace.app/?pr=" + encodeURIComponent(token);
-    const message =
-      "🎾 *scoreplace.app*\n\n" +
-      "Você pediu pra redefinir sua senha.\n\n" +
-      "Seu código: *" + otp + "*\n\n" +
-      "Digite ele no app — ou toque no link abaixo pra redefinir e entrar direto:\n\n" +
-      wrapperUrl + "\n\n" +
-      "_O código expira em 15 minutos. Se não foi você, ignore._";
-
-    let apiUrl, apiKey, instance;
-    try {
-      apiUrl = EVOLUTION_API_URL.value();
-      apiKey = EVOLUTION_API_KEY.value();
-      instance = EVOLUTION_INSTANCE.value();
-    } catch (err) {
-      console.error("[sendPasswordResetPhone] secrets unavailable:", err.message);
-      return { ok: false, reason: "secrets-missing" };
-    }
-    const result = await _sendWhatsAppText(apiUrl, apiKey, instance, phoneDigits, message);
-    if (!result.ok) {
-      console.warn("[sendPasswordResetPhone] WA send failed for", phoneDigits, ":", result.error);
-      // Mesmo se o WhatsApp falhar, o SMS (Firebase, no cliente) pode ter ido.
-      // Devolve ok:true pra não bloquear — o pendente já está gravado.
-      return { ok: true, waFailed: true };
-    }
-    console.log("[sendPasswordResetPhone] sent to", phoneDigits, "uid:", userRecord.uid);
+    console.log("[sendPasswordResetPhone] pendente gravado pra", phoneDigits, "uid:", userRecord.uid, "— entrega via SMS no cliente");
     return { ok: true };
   }
 );
 
 // Marca a verificação como aprovada e devolve um custom token da conta do
-// e-mail. Compartilhado pelos dois caminhos (código digitado / botão do WA).
-async function _approvePasswordResetPhone(uid, phoneE164, token) {
+// e-mail. v1.2.9: o param `token` (doc em passwordResetTokens, consumido pelo
+// botão ?pr= do WhatsApp) saiu junto com o canal WhatsApp — sobrou o caminho do
+// SMS, que não usa token intermediário.
+async function _approvePasswordResetPhone(uid, phoneE164) {
   const db = admin.firestore();
   // v2.5.x: se a conta de celular ainda não tem e-mail (OTP legado), cria o
   // e-mail sintético AGORA — sem um e-mail atrelado, o updatePassword do cliente
@@ -3223,15 +2559,14 @@ async function _approvePasswordResetPhone(uid, phoneE164, token) {
     console.error("[pwResetPhone] createCustomToken failed:", err.code || err.message);
   }
   await db.collection("passwordResetPhone").doc(uid).delete().catch(() => {});
-  if (token) await db.collection("passwordResetTokens").doc(token).delete().catch(() => {});
   return customToken;
 }
 
-// Verifica o código digitado no app. Aceita:
-//   • { email, code:"123456" } → código NOSSO que foi pelo WhatsApp.
-//   • { email, idToken }       → prova do SMS do Firebase (idToken da sessão
-//     de telefone criada por signInWithPhoneNumber). Confere se o phone_number
-//     do token bate com o pendente.
+// Verifica a prova do SMS do Firebase: { email, idToken } — idToken da sessão de
+// telefone criada por signInWithPhoneNumber no cliente. Confere se o phone_number
+// do token bate com o pendente gravado por sendPasswordResetPhone.
+// v1.2.9: o caminho { email, code } (código de 6 dígitos que ia pelo WhatsApp)
+// saiu — sem canal WhatsApp, ninguém nunca recebia esse código.
 exports.verifyPasswordResetPhone = onCall(
   {
     region: "us-central1",
@@ -3259,40 +2594,30 @@ exports.verifyPasswordResetPhone = onCall(
     const exp = v.expiresAt && v.expiresAt.toDate ? v.expiresAt.toDate() : v.expiresAt;
     if (exp && new Date(exp) < new Date()) { await ref.delete().catch(() => {}); return { ok: false, reason: "expired" }; }
 
-    if (data.idToken) {
-      let decoded;
-      try {
-        decoded = await admin.auth().verifyIdToken(String(data.idToken));
-      } catch (e) {
-        return { ok: false, reason: "bad-idtoken" };
-      }
-      const tokenPhone = decoded && decoded.phone_number;
-      if (!tokenPhone || !_phoneDigitsMatch(tokenPhone, v.phone)) {
-        return { ok: false, reason: "sms-mismatch" };
-      }
-      const ct = await _approvePasswordResetPhone(uid, v.phone || null, v.token);
-      console.log("[verifyPasswordResetPhone] SMS ok, uid:", uid);
-      return { ok: true, customToken: ct, email };
+    if (!data.idToken) return { ok: false, reason: "no-idtoken" };
+    let decoded;
+    try {
+      decoded = await admin.auth().verifyIdToken(String(data.idToken));
+    } catch (e) {
+      return { ok: false, reason: "bad-idtoken" };
     }
-
-    const code = String(data.code || "").trim();
-    if (!/^\d{6}$/.test(code)) return { ok: false, reason: "bad-code" };
-    if ((v.attempts || 0) >= 6) return { ok: false, reason: "too-many" };
-    const crypto = require("crypto");
-    const hash = crypto.createHash("sha256").update(code).digest("hex");
-    if (hash !== v.otpHash) {
-      await ref.update({ attempts: (v.attempts || 0) + 1 }).catch(() => {});
-      return { ok: false, reason: "wrong-code" };
+    const tokenPhone = decoded && decoded.phone_number;
+    if (!tokenPhone || !_phoneDigitsMatch(tokenPhone, v.phone)) {
+      return { ok: false, reason: "sms-mismatch" };
     }
-    const ct = await _approvePasswordResetPhone(uid, v.phone || null, v.token);
-    console.log("[verifyPasswordResetPhone] code ok, uid:", uid);
+    const ct = await _approvePasswordResetPhone(uid, v.phone || null);
+    console.log("[verifyPasswordResetPhone] SMS ok, uid:", uid);
     return { ok: true, customToken: ct, email };
   }
 );
 
-// Resolve o botão do WhatsApp (?pr=TOKEN). NÃO requer auth — o token é o segredo
-// (vai só pro dono do telefone cadastrado). Devolve custom token pra logar e
-// definir a nova senha no app.
+// ⚠️ NOME ENGANOSO (legado): apesar do "Phone", esta função é o backend do link
+// `?pr=TOKEN` que vai POR E-MAIL. Ela nasceu na v2.4.97 pro botão do WhatsApp, mas
+// a v2.6.x fez o e-mail de "Esqueci minha senha" usar o MESMO wrapper — o `?pr=` é
+// o link canônico do reset por e-mail (wrapper em vez do oobCode cru do Firebase,
+// que os scanners anti-phishing consumiam antes do clique → "link expirado").
+// Emissores VIVOS do token: sendPasswordReset (e-mail) e dispatchAccountRecovery
+// (e-mail). NÃO remover junto com o WhatsApp: derruba o reset de senha por e-mail.
 exports.verifyPasswordResetPhoneToken = onCall(
   {
     region: "us-central1",
@@ -3310,11 +2635,15 @@ exports.verifyPasswordResetPhoneToken = onCall(
     const t = snap.data();
     const exp = t.expiresAt && t.expiresAt.toDate ? t.expiresAt.toDate() : t.expiresAt;
     if (exp && new Date(exp) < new Date()) { await ref.delete().catch(() => {}); return { ok: false, reason: "expired" }; }
-    const ct = await _approvePasswordResetPhone(t.uid, t.phone || null, token);
+    const ct = await _approvePasswordResetPhone(t.uid, t.phone || null);
+    // v1.2.9: _approvePasswordResetPhone não apaga mais o token (o param saiu com o
+    // canal WhatsApp) — quem consome apaga. Uso único preservado.
+    await ref.delete().catch(() => {});
     console.log("[verifyPasswordResetPhoneToken] token ok, uid:", t.uid);
     return { ok: true, customToken: ct, email: t.email };
   }
 );
+
 
 // ─── Login unificado (v2.5.x): checkAccount / registerPhonePassword / ─────────
 // dispatchAccountRecovery. Backend do campo único (e-mail OU celular) + senha.
@@ -3568,12 +2897,11 @@ exports.phonePasswordLogin = onCall(
   }
 );
 
-// Recuperação automática (senha errada/ausente): dispara WhatsApp + e-mail nos
-// canais que a conta tem, com cooldown de 10 min/conta. SMS não é server-side.
+// Recuperação automática (senha errada/ausente): dispara o e-mail de redefinição,
+// com cooldown de 10 min/conta. v1.2.9: a perna de WhatsApp saiu (canal morto).
 exports.dispatchAccountRecovery = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 45,
-    cors: APP_ORIGINS,
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE] },
+    cors: APP_ORIGINS },
   async (request) => {
     const identifier = String((request.data && request.data.identifier) || "").trim();
     if (!identifier) throw new HttpsError("invalid-argument", "identifier vazio");
@@ -3589,8 +2917,14 @@ exports.dispatchAccountRecovery = onCall(
     const tSnap = await throttleRef.get().catch(() => null);
     const last = (tSnap && tSnap.exists && tSnap.data().lastSentAt) || 0;
     if (last && (Date.now() - last) < 10 * 60 * 1000) {
+      // v1.2.10: `phone` SEMPRE null — esta função não tem canal de celular (a perna
+      // era 100% WhatsApp e saiu na v1.2.9; ver comentário na perna de e-mail abaixo).
+      // O caminho normal já devolve phone:null via `out`; só o throttled continuava
+      // mandando o número mascarado, e o cliente renderiza isso como "enviamos por
+      // SMS (••) •••••-••11". Ou seja: quem tocasse 2x em 10 min — justo quem não
+      // recebeu o e-mail — ficava esperando um SMS que nunca foi enviado.
       return { ok: true, throttled: true,
-        channels: { email: realEmail ? _maskEmail(realEmail) : null, phone: phone ? _maskPhone(phone) : null } };
+        channels: { email: realEmail ? _maskEmail(realEmail) : null, phone: null } };
     }
 
     const out = { email: null, phone: null };
@@ -3617,41 +2951,12 @@ exports.dispatchAccountRecovery = onCall(
       } catch (e) { console.warn("[dispatchAccountRecovery] email leg:", e.message || e); }
     }
 
-    // Canal WhatsApp (só com telefone) — mesma mecânica do sendPasswordResetPhone.
-    if (phone) {
-      try {
-        const phoneDigits = _normalizePhoneE164(phone);
-        const crypto = require("crypto");
-        const otp = String(Math.floor(100000 + Math.random() * 900000));
-        const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
-        const token = crypto.randomBytes(18).toString("base64url");
-        const phoneE164 = "+" + phoneDigits;
-        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-        const emailForReset = realEmail || _syntheticEmailForPhone(phoneDigits);
-        await db.collection("passwordResetPhone").doc(ur.uid).set({
-          uid: ur.uid, email: emailForReset, phone: phoneE164, otpHash, token, attempts: 0,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt,
-        });
-        await db.collection("passwordResetTokens").doc(token).set({
-          uid: ur.uid, email: emailForReset, phone: phoneE164, expiresAt,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        const wrapperUrl = "https://scoreplace.app/?pr=" + encodeURIComponent(token);
-        const message =
-          "🎾 *scoreplace.app*\n\n" +
-          "Tentaram entrar e a senha não bateu.\n\n" +
-          "Código pra redefinir: *" + otp + "*\n\n" +
-          "Digite no app — ou toque pra redefinir e entrar direto:\n\n" +
-          wrapperUrl + "\n\n" +
-          "_Expira em 15 minutos. Se não foi você, ignore._";
-        const apiUrl = EVOLUTION_API_URL.value();
-        const apiKey = EVOLUTION_API_KEY.value();
-        const instance = EVOLUTION_INSTANCE.value();
-        const r = await _sendWhatsAppText(apiUrl, apiKey, instance, phoneDigits, message);
-        if (r.ok) out.phone = _maskPhone(phone);
-        else console.warn("[dispatchAccountRecovery] WA failed:", r.error);
-      } catch (e) { console.warn("[dispatchAccountRecovery] phone leg:", e.message || e); }
-    }
+    // v1.2.9: a perna do CELULAR saiu junto com o WhatsApp (número banido, portfólio
+    // Meta morto — ver project_whatsapp_meta_2fa_block). Ela era 100% WhatsApp: só
+    // marcava out.phone se o envio desse certo, e este fluxo não tem perna de SMS,
+    // então sem o canal ela gravava um pendente que ninguém consumia e não entregava
+    // nada. A recuperação segue pelo e-mail. Quem só tem celular usa "Esqueci minha
+    // senha" → sendPasswordResetPhone (pendente) + SMS do Firebase no cliente.
 
     await throttleRef.set({ lastSentAt: Date.now() }, { merge: true }).catch(() => {});
     return { ok: true, channels: out };
@@ -3706,6 +3011,7 @@ exports.resolveMergedLogin = onCall(
     return { merged: true, survivorUid: target, customToken };
   }
 );
+
 
 // v1.2.9 — LOGIN COM A CREDENCIAL DA CONTA ABSORVIDA.
 //
@@ -3785,752 +3091,6 @@ exports.resolveLoginRedirect = onCall(
 
     console.log(`[resolveLoginRedirect] ${uid} (conta vazia) → ${target} via ${keys.join("|")}`);
     return { redirected: true, survivorUid: target, customToken };
-  }
-);
-
-// v2.5.x: confirmação de posse de celular no PERFIL via WhatsApp (além do SMS
-// nativo do Firebase). Manda um CÓDIGO nosso (não um link, que trocaria a
-// sessão) — a pessoa digita no mesmo campo do OTP. verify devolve um custom
-// token da conta do telefone, que vira a PROVA pro merge (proofIdToken).
-exports.sendPhoneOwnershipWhatsApp = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
-    cors: APP_ORIGINS,
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE] },
-  async (request) => {
-    if (!request.auth || !request.auth.uid) throw new HttpsError("unauthenticated", "login obrigatório");
-    const phone = _normalizePhoneE164(request.data && request.data.phone);
-    if (!phone) return { ok: false, reason: "bad-phone" };
-    let uid;
-    try { uid = (await admin.auth().getUserByPhoneNumber("+" + phone)).uid; }
-    catch (e) { try { uid = (await admin.auth().createUser({ phoneNumber: "+" + phone })).uid; } catch (e2) { return { ok: false, reason: "auth-error" }; } }
-    const crypto = require("crypto");
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
-    const db = admin.firestore();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    await db.collection("phoneOwnership").doc(uid).set({
-      uid, phone: "+" + phone, codeHash, attempts: 0,
-      expiresAt, createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    // v2.6.x: link de 1 toque (`?pv=TOKEN`) além do código. Quem abre no celular já
-    // logado confirma direto, sem digitar. Token só resolve com a sessão principal
-    // ativa (o cliente usa pra provar posse e vincular/unir).
-    const pvToken = crypto.randomBytes(18).toString("base64url");
-    await db.collection("phoneOwnershipTokens").doc(pvToken).set({
-      uid, phone: "+" + phone, expiresAt, createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    const pvUrl = "https://scoreplace.app/?pv=" + encodeURIComponent(pvToken);
-    const msg = "🎾 *scoreplace.app*\n\nConfirme este celular no seu perfil:\n\n👉 " + pvUrl + "\n\nOu digite o código no app: *" + code + "*\n\n_Expira em 10 minutos. Se não foi você, ignore._";
-    try {
-      const r = await _sendWhatsAppText(EVOLUTION_API_URL.value(), EVOLUTION_API_KEY.value(), EVOLUTION_INSTANCE.value(), phone, msg);
-      return { ok: !!r.ok };
-    } catch (e) { return { ok: false, reason: "wa-error" }; }
-  }
-);
-
-// v2.6.x: troca o token do link `?pv=` por um custom token do número (conta de
-// telefone). O cliente, JÁ LOGADO na conta principal, usa esse token pra provar
-// posse (instância secundária) e vincular/unir via mergePhoneAccount.
-exports.verifyPhoneOwnershipToken = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
-    cors: APP_ORIGINS },
-  async (request) => {
-    const token = String((request.data && request.data.token) || "").trim();
-    if (!token) return { ok: false, reason: "no-token" };
-    const db = admin.firestore();
-    const ref = db.collection("phoneOwnershipTokens").doc(token);
-    const snap = await ref.get();
-    if (!snap.exists) return { ok: false, reason: "invalid" };
-    const v = snap.data();
-    const exp = v.expiresAt && v.expiresAt.toDate ? v.expiresAt.toDate() : v.expiresAt;
-    if (exp && new Date(exp) < new Date()) { await ref.delete().catch(() => {}); return { ok: false, reason: "expired" }; }
-    let customToken;
-    try { customToken = await admin.auth().createCustomToken(v.uid, { source: "phone_ownership_token" }); }
-    catch (e) { return { ok: false, reason: "token-error" }; }
-    await ref.delete().catch(() => {});
-    return { ok: true, customToken: customToken, phone: v.phone };
-  }
-);
-
-exports.verifyPhoneOwnershipWhatsApp = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
-    cors: APP_ORIGINS },
-  async (request) => {
-    if (!request.auth || !request.auth.uid) throw new HttpsError("unauthenticated", "login obrigatório");
-    const phone = _normalizePhoneE164(request.data && request.data.phone);
-    const code = String((request.data && request.data.code) || "").trim();
-    if (!phone || !/^\d{6}$/.test(code)) return { ok: false, reason: "bad-input" };
-    let uid;
-    try { uid = (await admin.auth().getUserByPhoneNumber("+" + phone)).uid; } catch (e) { return { ok: false, reason: "no-account" }; }
-    const db = admin.firestore(); const ref = db.collection("phoneOwnership").doc(uid);
-    const snap = await ref.get();
-    if (!snap.exists) return { ok: false, reason: "no-pending" };
-    const v = snap.data();
-    const exp = v.expiresAt && v.expiresAt.toDate ? v.expiresAt.toDate() : v.expiresAt;
-    if (exp && new Date(exp) < new Date()) { await ref.delete().catch(() => {}); return { ok: false, reason: "expired" }; }
-    if ((v.attempts || 0) >= 6) return { ok: false, reason: "too-many" };
-    const crypto = require("crypto");
-    if (crypto.createHash("sha256").update(code).digest("hex") !== v.codeHash) {
-      await ref.update({ attempts: (v.attempts || 0) + 1 }).catch(() => {});
-      return { ok: false, reason: "wrong-code" };
-    }
-    await ref.delete().catch(() => {});
-    let customToken;
-    try { customToken = await admin.auth().createCustomToken(uid, { source: "phone_ownership_wa" }); }
-    catch (e) { return { ok: false, reason: "token-error" }; }
-    return { ok: true, customToken: customToken };
-  }
-);
-
-exports.processWhatsAppQueue = onDocumentCreated(
-  {
-    document: "whatsapp_queue/{queueId}",
-    region: "us-central1",
-    timeoutSeconds: 60,
-    memory: "256MiB",
-    secrets: [WHATSAPP_CLOUD_TOKEN],
-    retryConfig: { retryCount: 2 }, // Firebase auto-retries 2x em caso de unhandled error
-  },
-  async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    if (IS_STAGING) { try { await snap.ref.update({ status: "suppressed_staging", processedAt: new Date().toISOString() }); } catch (_e) {} return; }
-    const data = snap.data();
-    // v1.1.30 — shape novo: { template, recipients:[{phone,params}], urlSuffix }.
-    // O shape antigo ({phones,message}) era texto livre do Evolution e NÃO tem como
-    // ser enviado pelo Cloud API (só template aprovado) → falha explícita, não silenciosa.
-    if (!data || !data.template || !Array.isArray(data.recipients) || data.recipients.length === 0) {
-      const legacy = data && data.message ? " (doc legado com texto livre — Evolution)" : "";
-      console.warn("[processWhatsAppQueue] doc inválido — skip:", event.params.queueId, legacy);
-      await snap.ref.update({
-        status: "failed",
-        lastError: "missing template/recipients[]" + legacy,
-        processedAt: new Date().toISOString(),
-      });
-      return;
-    }
-    // Idempotência: se já processado (retry do trigger), skip
-    if (data.status === "sent" || data.status === "partial") return;
-
-    let token;
-    try { token = WHATSAPP_CLOUD_TOKEN.value(); } catch (e) { token = null; }
-    if (!token) {
-      console.error("[processWhatsAppQueue] WHATSAPP_CLOUD_API_TOKEN ausente");
-      await snap.ref.update({
-        status: "failed",
-        lastError: "WHATSAPP_CLOUD_API_TOKEN not configured",
-        processedAt: new Date().toISOString(),
-      });
-      return;
-    }
-
-    const deliveries = [];
-    for (const r of data.recipients) {
-      const phone = _normalizePhoneE164(r && r.phone);
-      if (!phone) {
-        deliveries.push({ phone: String((r && r.phone) || ""), ok: false, error: "invalid phone format" });
-        continue;
-      }
-      const result = await _sendWhatsAppTemplateMsg(token, phone, data.template, r.params || [], data.urlSuffix);
-      // Omitir campos undefined — Firestore rejeita undefined como valor
-      const delivery = { phone: phone, ok: result.ok };
-      if (result.messageId !== undefined) delivery.messageId = result.messageId;
-      if (result.error !== undefined) delivery.error = result.error;
-      deliveries.push(delivery);
-      if (data.recipients.length > 1) await new Promise((r2) => setTimeout(r2, 200));
-    }
-
-    const okCount = deliveries.filter((d) => d.ok).length;
-    const totalCount = deliveries.length;
-    const status = okCount === totalCount ? "sent" : (okCount === 0 ? "failed" : "partial");
-    const attempts = (data.attempts || 0) + 1;
-
-    await snap.ref.update({
-      status: status,
-      attempts: attempts,
-      processedAt: new Date().toISOString(),
-      deliveries: deliveries,
-      lastError: status === "failed" ? (deliveries[0] && deliveries[0].error) || "unknown" : admin.firestore.FieldValue.delete(),
-    });
-
-    console.log(`[processWhatsAppQueue] ${event.params.queueId}: ${okCount}/${totalCount} entregues`);
-  }
-);
-
-// ─── Scheduled cleanup: WhatsApp queue antigos ────────────────────────────
-// Roda diariamente 03:45 BRT, deleta docs `sent`/`failed` com mais de 30 dias.
-// `pending` não toca — pode estar em retry.
-exports.cleanupOldWhatsAppQueue = onSchedule(
-  {
-    schedule: "every day 03:45",
-    timeZone: "America/Sao_Paulo",
-    region: "us-central1",
-  },
-  async () => {
-    const db = admin.firestore();
-    const threshold = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const query = db.collection("whatsapp_queue")
-      .where("status", "in", ["sent", "failed"])
-      .where("processedAt", "<", threshold);
-    const deleted = await _batchDeleteQuery(query);
-    console.log(`[cleanupOldWhatsAppQueue] deleted ${deleted} docs (threshold: ${threshold})`);
-  }
-);
-
-// ═══ Auto-heal da conexão WhatsApp (Evolution/Baileys no Railway) ════════════
-// v2.4.65: a conexão Baileys trava periodicamente — reporta state=open mas todo
-// send falha com 500 "Connection Closed". O ÚNICO fix é reiniciar o container do
-// Railway (restart/logout/delete via Evolution API não revivem). Aqui:
-//   • whatsappHealthGuard (a cada 10 min): sonda o socket VIVO via
-//     /chat/whatsappNumbers (não envia msg). Se travado e fora da janela de
-//     cooldown → restart da instância via Evolution (/instance/restart). Marca aviso pendente.
-//     Quando volta a ficar saudável após um restart → manda o aviso (WhatsApp+email).
-//   • whatsappNightlyRestart (04:30 BRT): restart preventivo diário da instância.
-// v3.1.45: migrado do Railway pro VPS (Hetzner) — auto-heal via restart nativo do
-// Evolution, sem IDs nem token do Railway.
-
-const GUARD_DOC = "system/whatsappGuard";
-const RESTART_COOLDOWN_MS = 20 * 60 * 1000; // não reinicia 2x em < 20 min
-
-// Sonda não-intrusiva: usa o socket vivo, não envia mensagem. true = saudável.
-async function _probeWhatsAppHealth(apiUrl, apiKey, instance) {
-  const url = apiUrl.replace(/\/+$/, "") + "/chat/whatsappNumbers/" + encodeURIComponent(instance);
-  try {
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "apikey": apiKey },
-      body: JSON.stringify({ numbers: ["5511916936454"] }),
-    });
-    if (!resp.ok) return { healthy: false, detail: "HTTP " + resp.status };
-    const data = await resp.json().catch(() => null);
-    // Resposta saudável é um array (lista de números checados).
-    if (Array.isArray(data)) return { healthy: true };
-    return { healthy: false, detail: "resposta inesperada" };
-  } catch (e) {
-    return { healthy: false, detail: "fetch: " + (e.message || String(e)) };
-  }
-}
-
-// v3.1.45: migrado do Railway pro VPS (Hetzner). Auto-heal agora usa o restart
-// NATIVO do Evolution (POST /instance/restart/{instance}) — reinicia só a conexão
-// Baileys da instância, sem reboot de VM nem token externo. A sessão vive no
-// Postgres do VPS, então reconecta sem re-parear QR. Ver memória project_whatsapp_vps_migration.
-async function _evolutionRestart(apiUrl, apiKey, instance) {
-  try {
-    const resp = await fetch(String(apiUrl).replace(/\/+$/, "") + "/instance/restart/" + encodeURIComponent(instance), {
-      method: "POST",
-      headers: { "apikey": apiKey, "Content-Type": "application/json" },
-    });
-    const data = await resp.json().catch(() => null);
-    if (!resp.ok) {
-      return { ok: false, error: "Evolution HTTP " + resp.status + ": " + JSON.stringify((data && (data.message || data.error)) || resp.statusText) };
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: "fetch: " + (e.message || String(e)) };
-  }
-}
-
-// Enfileira aviso ao dev sobre uma auto-recuperação.
-// v1.1.30: o trecho de WhatsApp saiu — enfileirava texto livre no shape antigo
-// (que o processWhatsAppQueue do Cloud API rejeita) e no número BANIDO
-// 5511916936454. Dead code de qualquer jeito: só era chamado pelo
-// whatsappHealthGuard, deletado com o Evolution/VPS. O e-mail abaixo basta.
-async function _notifyDevRecovery(db, title, body) {
-  try {
-    await _enqueueMail(db, {
-      to: ["scoreplace.app@gmail.com"],
-      replyTo: "scoreplace.app@gmail.com",
-      message: { subject: "scoreplace — " + title, text: body, html: "<p>" + body.replace(/\n/g, "<br>") + "</p>" },
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  } catch (e) { /* ignore */ }
-}
-
-/* DESATIVADO 2026-07-12 — Evolution/VPS Hetzner removido; número banido; migração pro Meta Cloud API
-   (Meta hospeda, não precisa de restart de VPS). As duas funções abaixo (whatsappHealthGuard a cada
-   10 min + whatsappNightlyRestart 04:30) só batiam no /instance/restart do Evolution morto e emailavam
-   o dev a cada falha. DELETADAS do Firebase (functions:delete) e comentadas aqui pra não ressuscitarem
-   num deploy futuro. Reimplementar monitoramento SÓ quando o Meta Cloud API estiver no ar (mecanismo
-   diferente — sem restart de servidor). Ver memória project_whatsapp_meta_2fa_block.
-exports.whatsappHealthGuard = onSchedule(
-  {
-    schedule: "every 10 minutes",
-    timeZone: "America/Sao_Paulo",
-    region: "us-central1",
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
-  },
-  async () => {
-    const db = admin.firestore();
-    const guardRef = db.doc(GUARD_DOC);
-    const apiUrl = EVOLUTION_API_URL.value();
-    const apiKey = EVOLUTION_API_KEY.value();
-    const instance = EVOLUTION_INSTANCE.value();
-    if (!apiUrl || !apiKey || !instance) { console.error("[whatsappHealthGuard] secrets Evolution ausentes"); return; }
-
-    const probe = await _probeWhatsAppHealth(apiUrl, apiKey, instance);
-    const nowMs = Date.now();
-    const guardSnap = await guardRef.get();
-    const guard = guardSnap.exists ? guardSnap.data() : {};
-
-    if (probe.healthy) {
-      // Se acabamos de recuperar de um restart, avisa o dev (agora que dá pra enviar).
-      const upd = { lastHealthyAt: new Date().toISOString(), lastHealthyAtMs: nowMs };
-      if (guard.pendingRecoveryNotice) {
-        await _notifyDevRecovery(db, "WhatsApp recuperado automaticamente",
-          "A conexão do WhatsApp tinha caído (\"Connection Closed\") e foi reiniciada automaticamente. Já está entregando de novo.");
-        upd.pendingRecoveryNotice = false;
-        upd.lastRecoveryNoticeAt = new Date().toISOString();
-      }
-      await guardRef.set(upd, { merge: true });
-      console.log("[whatsappHealthGuard] saudável");
-      return;
-    }
-
-    // Travado. Respeita cooldown pra não reiniciar enquanto o container ainda sobe.
-    const sinceLast = guard.lastRestartAtMs ? (nowMs - guard.lastRestartAtMs) : Infinity;
-    if (sinceLast < RESTART_COOLDOWN_MS) {
-      console.warn("[whatsappHealthGuard] travado (" + probe.detail + ") mas em cooldown (" + Math.round(sinceLast / 60000) + " min) — aguardando subir");
-      return;
-    }
-    console.warn("[whatsappHealthGuard] travado (" + probe.detail + ") → reiniciando a conexão do Evolution");
-    const r = await _evolutionRestart(apiUrl, apiKey, instance);
-    await guardRef.set({
-      lastRestartAt: new Date().toISOString(),
-      lastRestartAtMs: nowMs,
-      lastRestartReason: "auto: " + (probe.detail || "unhealthy"),
-      lastRestartOk: r.ok,
-      lastRestartError: r.ok ? admin.firestore.FieldValue.delete() : (r.error || "?"),
-      restartCount: (guard.restartCount || 0) + 1,
-      pendingRecoveryNotice: r.ok ? true : (guard.pendingRecoveryNotice || false),
-    }, { merge: true });
-
-    if (!r.ok) {
-      // Restart falhou (token inválido?). Avisa o dev por e-mail (WhatsApp está fora).
-      await _notifyDevRecovery(db, "Falha ao reiniciar WhatsApp automaticamente",
-        "Detectei o WhatsApp travado mas o restart automático (Evolution/VPS) falhou: " + r.error + ". Precisa reiniciar manualmente.");
-      console.error("[whatsappHealthGuard] restart falhou:", r.error);
-    } else {
-      console.log("[whatsappHealthGuard] restart do Evolution disparado com sucesso");
-    }
-  }
-);
-
-exports.whatsappNightlyRestart = onSchedule(
-  {
-    schedule: "every day 04:30",
-    timeZone: "America/Sao_Paulo",
-    region: "us-central1",
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
-  },
-  async () => {
-    const db = admin.firestore();
-    const apiUrl = EVOLUTION_API_URL.value();
-    const apiKey = EVOLUTION_API_KEY.value();
-    const instance = EVOLUTION_INSTANCE.value();
-    if (!apiUrl || !apiKey || !instance) { console.error("[whatsappNightlyRestart] secrets Evolution ausentes"); return; }
-    const r = await _evolutionRestart(apiUrl, apiKey, instance);
-    await db.doc(GUARD_DOC).set({
-      lastRestartAt: new Date().toISOString(),
-      lastRestartAtMs: Date.now(),
-      lastRestartReason: "preventivo noturno",
-      lastRestartOk: r.ok,
-      restartCount: admin.firestore.FieldValue.increment(1),
-    }, { merge: true });
-    console.log("[whatsappNightlyRestart] restart preventivo:", r.ok ? "ok" : ("falhou: " + r.error));
-  }
-);
-*/
-
-// ─── notifyLeagueRoundWhatsApp ─────────────────────────────────────────────
-// Chamada pelo cliente após sortear nova rodada da Liga/Suíço.
-// Para cada partida da rodada, busca o telefone de cada jogador no Firestore,
-// cria um grupo no WhatsApp com eles via Evolution API e envia uma mensagem
-// informando que precisam combinar o jogo e lançar o resultado antes do
-// próximo sorteio agendado.
-//
-// Input: {
-//   tournamentId: string,
-//   roundIndex: number,       // índice do round em t.rounds (0-based)
-//   nextDrawDateStr: string,  // "DD/MM/YYYY às HH:MM" ou "Não agendado"
-// }
-// Output: { ok: true, groups: [{match, created, groupJid, error?}] }
-// Núcleo compartilhado: cria 1 grupo de WhatsApp por unidade da rodada (partida
-// na Liga; grupo de 4 no Rei/Rainha). Usado pelo onCall `notifyLeagueRoundWhatsApp`
-// (disparado pelo cliente no sorteio manual/publish) E pelo trigger de fila
-// `processRoundWhatsappGroups` (disparado pelo autoDraw, que roda noutro codebase
-// sem acesso a esta callable nem aos segredos do Evolution). db/secrets por parâmetro.
-async function createRoundWhatsappGroups(db, apiUrl, apiKey, instance, opts) {
-    const { tournamentId, roundIndex, nextDrawDateStr } = opts || {};
-    if (!tournamentId) return { ok: false, reason: "missing-tournament-id" };
-
-    // ── 1. Fetch tournament ──────────────────────────────────────────
-    let t;
-    try {
-      const snap = await db.collection("tournaments").doc(String(tournamentId)).get();
-      if (!snap.exists) return { ok: false, reason: "tournament-not-found" };
-      t = snap.data();
-    } catch (e) {
-      console.error("[notifyLeagueRoundWhatsApp] fetch tournament failed:", e.message);
-      return { ok: false, reason: "firestore-error" };
-    }
-
-    // ── 2. Get the round ────────────────────────────────────────────
-    const rounds = t.rounds || [];
-    const ri = (typeof roundIndex === "number") ? roundIndex : rounds.length - 1;
-    const round = rounds[ri];
-    if (!round) return { ok: false, reason: "round-not-found" };
-
-    // ── 2a. Nomes VIVOS por uid (v4.5.73) ────────────────────────────
-    // O label/mensagem do grupo mostra o nome resolvido pela CONTA (uid do slot),
-    // não o nome gravado em m.p1/team1 (que pode estar velho — o motor grava a
-    // partir de p.displayName). Só cai no nome gravado quando o slot não tem uid
-    // (guest sem conta). Espelha window._slotUids. A resolução de TELEFONE segue
-    // por nome gravado (participantMap) — não é display, e o nome bate com o slot.
-    const _slotUidsOf = (m, side) => {
-      if (!m) return [];
-      const arr = side === "p1" ? m.team1Uids : m.team2Uids;
-      if (Array.isArray(arr) && arr.length) return arr.filter(Boolean).map(String);
-      const single = side === "p1" ? m.p1Uid : m.p2Uid;
-      if (single) return [String(single)];
-      return [];
-    };
-    const _monarchGroupsForNames = Array.isArray(round.monarchGroups) ? round.monarchGroups : [];
-    const _roundUids = new Set();
-    const _collectUids = (arr) => {
-      (arr || []).forEach((m) => { if (!m) return; _slotUidsOf(m, "p1").forEach((u) => _roundUids.add(u)); _slotUidsOf(m, "p2").forEach((u) => _roundUids.add(u)); });
-    };
-    if (_monarchGroupsForNames.length) _monarchGroupsForNames.forEach((g) => _collectUids(g && g.matches));
-    else _collectUids(round.matches);
-    const _nameByUid = {};
-    try {
-      const _l = Array.from(_roundUids);
-      for (let i = 0; i < _l.length; i += 100) {
-        const refs = _l.slice(i, i + 100).map((u) => db.collection("users").doc(u));
-        const docs = await db.getAll(...refs);
-        docs.forEach((d) => { if (d.exists) { const dd = d.data() || {}; const dn = String(dd.displayName || dd.name || "").trim(); if (dn) _nameByUid[d.id] = dn; } });
-      }
-    } catch (e) { console.warn("[notifyLeagueRoundWhatsApp] live-names fetch falhou:", e.message); }
-    // Nome exibido de um lado: nomes vivos dos uids do slot (dupla junta com " / ");
-    // fallback pro nome gravado só quando não há uid (guest). Nunca vazio.
-    const _sideDisp = (m, side, storedStr) => {
-      const ns = _slotUidsOf(m, side).map((u) => _nameByUid[u]).filter(Boolean);
-      return ns.length ? ns.join(" / ") : (storedStr || "?");
-    };
-
-    // ── 2b. Normaliza a rodada em "unidades" de grupo de WhatsApp ────
-    // Liga/Suíço: 1 unidade por PARTIDA (dupla ou individual).
-    // Rei/Rainha: 1 unidade por GRUPO de 4 (eles jogam 3 jogos com parceiros
-    // rotativos e precisam se combinar entre si) — NUNCA 1 por jogo, senão
-    // criaria 3 grupos redundantes com as mesmas 4 pessoas.
-    const monarchGroups = Array.isArray(round.monarchGroups) ? round.monarchGroups : [];
-    const isMonarchRound = monarchGroups.length > 0;
-    let units;
-    if (isMonarchRound) {
-      units = monarchGroups
-        .filter((g) => g && Array.isArray(g.players) && g.players.length >= 2)
-        .map((g) => ({
-          kind: "monarch",
-          group: g,
-          players: g.players.slice(),
-          subjectLabel: g.name || "Grupo",
-        }));
-      if (units.length === 0) return { ok: false, reason: "no-groups" };
-    } else {
-      if (!Array.isArray(round.matches)) return { ok: false, reason: "round-not-found" };
-      const realMatches = round.matches.filter((m) => !m.isSitOut && !m.isBye);
-      if (realMatches.length === 0) return { ok: false, reason: "no-matches" };
-      units = realMatches.map((m) => {
-        let playerNames = [];
-        if (Array.isArray(m.team1) && m.team1.length > 0) {
-          playerNames = [...m.team1, ...(m.team2 || [])];
-        } else {
-          if (m.p1) playerNames.push(m.p1);
-          if (m.p2) playerNames.push(m.p2);
-        }
-        // v4.5.73: label pela CONTA (uid do slot); nome gravado só como fallback.
-        const matchLabel = Array.isArray(m.team1)
-          ? `${_sideDisp(m, "p1", (m.team1 || []).join(" / "))} vs ${_sideDisp(m, "p2", (m.team2 || []).join(" / "))}`
-          : `${_sideDisp(m, "p1", m.p1)} vs ${_sideDisp(m, "p2", m.p2)}`;
-        return { kind: "match", match: m, players: playerNames, subjectLabel: matchLabel };
-      });
-    }
-
-    // ── 3. Build phone lookup from participants + users collection ───
-    // participants[] can have: { displayName, name, uid, email, phone }
-    const participants = Array.isArray(t.participants)
-      ? t.participants
-      : Object.values(t.participants || {});
-
-    // Map: normalizedName → { uid, email, phone }
-    // For doubles teams ("Alice/Bob"), we add entries for:
-    //  1. The full team name ("alice/bob") → primary registrant's uid/email/phone
-    //  2. Each nested member in p.participants[] → their own uid/email/phone (best path)
-    //  3. Each slash-split individual ("alice", "bob") → fallback to team entry
-    // This ensures resolvePhone works for all 4 players in a doubles match.
-    const participantMap = {};
-    const normalize = (s) => String(s || "").trim().toLowerCase();
-    participants.forEach((p) => {
-      if (!p || typeof p !== "object") return;
-      const fullName = normalize(p.displayName || p.name || "");
-      const teamEntry = {
-        uid: p.uid || null,
-        email: p.email || null,
-        phone: p.phone || null,
-      };
-      if (fullName) participantMap[fullName] = teamEntry;
-
-      // Path 1: nested participants[] — each member has their own uid (doubles teams with full data)
-      if (Array.isArray(p.participants)) {
-        p.participants.forEach((member) => {
-          if (!member || typeof member !== "object") return;
-          const mName = normalize(member.displayName || member.name || "");
-          if (mName && !participantMap[mName]) {
-            participantMap[mName] = {
-              uid: member.uid || null,
-              email: member.email || null,
-              phone: member.phone || null,
-            };
-          }
-        });
-      }
-
-      // Path 2: slash-split fallback — "alice/bob" → also map "alice" and "bob"
-      // Points to the team entry (uid = primary registrant); at minimum, the primary's
-      // phone will be found. If the partner has their own nested entry (path 1), that
-      // was already added above and won't be overwritten here (check `!participantMap[m]`).
-      if (fullName && fullName.includes("/")) {
-        fullName.split("/").map((s) => s.trim()).filter(Boolean).forEach((m) => {
-          const mKey = normalize(m);
-          if (mKey && !participantMap[mKey]) {
-            participantMap[mKey] = teamEntry;
-          }
-        });
-      }
-    });
-
-    // Resolve phone for a player name: first from participants map, then
-    // from users collection (by uid or by email_lower).
-    // v2.4.3: respeita a privacidade — usuário com omitPhone===true NÃO entra no
-    // grupo de WhatsApp (grupo revelaria o número aos demais). Retorna null → ele
-    // fica de fora do grupo, mas segue avisado por notificação 1:1 + plataforma/email.
-    // Ordem uid-first (autoridade) pra checar omitPhone antes do phone informal.
-    async function resolvePhone(playerName) {
-      const key = normalize(playerName);
-      const entry = participantMap[key];
-      if (!entry) return null;
-      // 1. uid → perfil (fonte da verdade; checa omitPhone)
-      if (entry.uid) {
-        try {
-          const userDoc = await db.collection("users").doc(entry.uid).get();
-          if (userDoc.exists) {
-            const d = userDoc.data() || {};
-            if (d.omitPhone === true) return null; // privacidade: fora do grupo
-            if (d.phone) return _normalizePhone(d.phone);
-          }
-        } catch (_) {}
-      }
-      // 2. phone direto no participante (informal, sem conta — omitPhone não se aplica)
-      if (entry.phone) return _normalizePhone(entry.phone);
-      // 3. email_lower → perfil (checa omitPhone)
-      if (entry.email) {
-        try {
-          const emailLower = String(entry.email).toLowerCase().trim();
-          const q = await db.collection("users")
-            .where("email_lower", "==", emailLower).limit(1).get();
-          if (!q.empty) {
-            const d = q.docs[0].data() || {};
-            if (d.omitPhone === true) return null; // privacidade: fora do grupo
-            if (d.phone) return _normalizePhone(d.phone);
-          }
-        } catch (_) {}
-      }
-      return null;
-    }
-
-    const tournamentName = t.name || "Liga";
-    const roundNumber = ri + 1;
-    const tId = String(tournamentId);
-
-    // ── 4. For each unit (partida da Liga ou grupo do Rei/Rainha):
-    //        create WA group + send message ───────────────────────────
-    const results = [];
-    for (const unit of units) {
-      const playerNames = unit.players;
-      // For doubles: expand "Alice/Bob" → ["Alice/Bob", "Alice", "Bob"]
-      // We include both the full team name AND individual members so that resolvePhone
-      // can match via the team-key fallback AND via individual participant entries.
-      const expandedNames = [];
-      playerNames.forEach((n) => {
-        const teamName = String(n).trim();
-        if (!teamName) return;
-        expandedNames.push(teamName); // full name (e.g. "Alice/Bob") — covers slash-map fallback
-        if (teamName.includes("/")) {
-          // Also add individual members so their own uid/phone can be found
-          teamName.split("/").map((s) => s.trim()).filter(Boolean).forEach((m) => {
-            if (m && m !== teamName) expandedNames.push(m);
-          });
-        }
-      });
-
-      // Resolve phones (in parallel) — deduplicate so same phone isn't added twice
-      // (e.g. "Alice/Bob" and "Alice" both resolving to Alice's phone)
-      const phoneResults = await Promise.all(expandedNames.map(resolvePhone));
-      const phones = [...new Set(phoneResults.filter(Boolean))];
-
-      const matchLabel = unit.subjectLabel;
-      if (phones.length < 2) {
-        console.log(`[notifyLeagueRoundWhatsApp] ${unit.kind} "${matchLabel}": only ${phones.length} phone(s) found — skipping group creation`);
-        results.push({ match: matchLabel, created: false, reason: "insufficient-phones" });
-        continue;
-      }
-
-      // Group subject — max 100 chars for WA
-      const subject = `${tournamentName} R${roundNumber}: ${matchLabel}`.substring(0, 100);
-
-      // Message body
-      const nextDrawLabel = nextDrawDateStr || "Não agendado";
-      const link = `https://scoreplace.app/#bracket/${tId}`;
-      let message;
-      if (unit.kind === "monarch") {
-        // Rei/Rainha: lista os 3 jogos do grupo (parceiros rotativos) que as 4
-        // pessoas precisam combinar entre si.
-        const games = (unit.group.matches || [])
-          .filter((m) => m && !m.isSitOut && !m.isBye)
-          .map((m, gi) => `${gi + 1}) ${_sideDisp(m, "p1", m.p1)} vs ${_sideDisp(m, "p2", m.p2)}`)
-          .join("\n");
-        message =
-          `🎾 *${tournamentName} — Rodada ${roundNumber}*\n\n` +
-          `Olá! Vocês foram sorteados no mesmo grupo do Rei/Rainha da Praia.\n` +
-          `Joguem os jogos abaixo (parceiros trocam a cada jogo):\n\n` +
-          `${games}\n\n` +
-          `⏰ *Prazo:* Lancem os resultados antes do próximo sorteio:\n` +
-          `📅 *Próximo sorteio:* ${nextDrawLabel}\n\n` +
-          `Combinem os horários aqui no grupo e registrem os placares no app:\n${link}`;
-      } else {
-        message =
-          `🎾 *${tournamentName} — Rodada ${roundNumber}*\n\n` +
-          `Olá! Vocês foram sorteados para jogar juntos nesta rodada.\n\n` +
-          `📋 *Partida:* ${matchLabel}\n` +
-          `⏰ *Prazo:* Lancem o resultado antes do próximo sorteio:\n` +
-          `📅 *Próximo sorteio:* ${nextDrawLabel}\n\n` +
-          `Combinem o horário aqui no grupo e registrem o placar no app:\n${link}`;
-      }
-
-      // ── Create group ────────────────────────────────────────────────
-      let groupJid = null;
-      try {
-        const createUrl = apiUrl.replace(/\/+$/, "") + "/group/create/" + encodeURIComponent(instance);
-        // Evolution API expects participants as "55XXXXXXXXXXX" (no @s.whatsapp.net for creation)
-        const participantsList = phones.map((p) => p.replace(/[^0-9]/g, ""));
-        const createResp = await fetch(createUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": apiKey,
-          },
-          body: JSON.stringify({
-            subject: subject,
-            description: `Partida da ${tournamentName}. Combinem e lancem o resultado antes de ${nextDrawLabel}.`,
-            participants: participantsList,
-          }),
-        });
-        const createData = await createResp.json().catch(() => null);
-        if (!createResp.ok) {
-          const errMsg = (createData && createData.message) ? JSON.stringify(createData.message) : createResp.statusText;
-          console.error(`[notifyLeagueRoundWhatsApp] group create failed for "${matchLabel}": HTTP ${createResp.status} — ${errMsg}`);
-          results.push({ match: matchLabel, created: false, reason: `group-create-failed: ${createResp.status}` });
-          continue;
-        }
-        // Extract group JID — Evolution returns different shapes depending on version
-        groupJid =
-          (createData && createData._serialized) ||
-          (createData && createData.id && createData.id._serialized) ||
-          (createData && createData.id && typeof createData.id === "string" ? createData.id : null) ||
-          null;
-        if (!groupJid && createData) {
-          // Try to find any key containing "@g.us"
-          const raw = JSON.stringify(createData);
-          const m = raw.match(/"([0-9\-]+@g\.us)"/);
-          if (m) groupJid = m[1];
-        }
-        console.log(`[notifyLeagueRoundWhatsApp] group created for "${matchLabel}": jid=${groupJid}`);
-      } catch (e) {
-        console.error(`[notifyLeagueRoundWhatsApp] group create exception for "${matchLabel}":`, e.message);
-        results.push({ match: matchLabel, created: false, reason: `group-create-exception: ${e.message}` });
-        continue;
-      }
-
-      if (!groupJid) {
-        results.push({ match: matchLabel, created: true, groupJid: null, reason: "group-jid-not-found-in-response" });
-        continue;
-      }
-
-      // Small delay before sending message
-      await new Promise((r) => setTimeout(r, 1500));
-
-      // ── Send message to the group ───────────────────────────────────
-      const msgResult = await _sendWhatsAppText(apiUrl, apiKey, instance, groupJid, message);
-      console.log(`[notifyLeagueRoundWhatsApp] message to group ${groupJid}:`, msgResult.ok ? "ok" : msgResult.error);
-      results.push({ match: matchLabel, created: true, groupJid, messageSent: msgResult.ok, messageError: msgResult.error });
-
-      // Small delay between groups to avoid rate limiting
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-
-    const created = results.filter((r) => r.created).length;
-    console.log(`[notifyLeagueRoundWhatsApp] tournament ${tId} round ${roundNumber}: ${created}/${units.length} groups created`);
-    return { ok: true, groups: results };
-}
-
-exports.notifyLeagueRoundWhatsApp = onCall(
-  {
-    region: "us-central1",
-    timeoutSeconds: 120,
-    memory: "256MiB",
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
-  },
-  async (request) => {
-    if (IS_STAGING) { console.log("[staging] notifyLeagueRoundWhatsApp suprimido (sem criação de grupo)"); return { ok: true, suppressed: true, groups: [] }; }
-    return await createRoundWhatsappGroups(
-      admin.firestore(),
-      EVOLUTION_API_URL.value(), EVOLUTION_API_KEY.value(), EVOLUTION_INSTANCE.value(),
-      request.data || {}
-    );
-  }
-);
-
-// ─── processRoundWhatsappGroups ─────────────────────────────────────────────
-// Trigger de fila: o autoDraw (codebase functions-autodraw, sem acesso à callable
-// notifyLeagueRoundWhatsApp nem aos segredos do Evolution) enfileira
-// `whatsapp_round_queue/{id}` = {tournamentId, roundIndex, nextDrawDateStr} após
-// sortear uma rodada da Liga/Rei-Rainha. Aqui (codebase default, COM os segredos)
-// criamos os grupos e apagamos o doc. Espelha o padrão de processWhatsAppQueue.
-exports.processRoundWhatsappGroups = onDocumentCreated(
-  {
-    document: "whatsapp_round_queue/{queueId}",
-    region: "us-central1",
-    timeoutSeconds: 120,
-    memory: "256MiB",
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
-  },
-  async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const data = snap.data() || {};
-    if (IS_STAGING) { console.log("[staging] processRoundWhatsappGroups suprimido"); try { await snap.ref.delete(); } catch (_) {} return; }
-    try {
-      const res = await createRoundWhatsappGroups(
-        admin.firestore(),
-        EVOLUTION_API_URL.value(), EVOLUTION_API_KEY.value(), EVOLUTION_INSTANCE.value(),
-        { tournamentId: data.tournamentId, roundIndex: data.roundIndex, nextDrawDateStr: data.nextDrawDateStr }
-      );
-      const _n = (res && res.groups) ? res.groups.filter((g) => g.created).length : 0;
-      console.log(`[processRoundWhatsappGroups] ${event.params.queueId}:`, (res && res.ok) ? `${_n} grupo(s) criado(s)` : ((res && res.reason) || "sem resultado"));
-    } catch (e) {
-      console.error(`[processRoundWhatsappGroups] erro ${event.params.queueId}:`, e.message);
-    }
-    try { await snap.ref.delete(); } catch (_) {}
   }
 );
 
@@ -6193,7 +4753,7 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
 // e NUNCA lê o nome gravado no inscrito/match — então reescrever nomes velhos nos
 // torneios virou trabalho morto (espelha a remoção de _autoFixStaleNames/_propagateNameChange
 // no cliente, v4.5.72). O texto das notificações de sorteio passou a resolver o nome pelo
-// uid do slot no momento do envio (functions-autodraw + createRoundWhatsappGroups).
+// uid do slot no momento do envio (functions-autodraw).
 
 // ─── scheduledAutoMergeCleanup (diário 04:45 BRT) ─────────────────────────
 // Varre toda a coleção users em busca de phones E emails duplicados e mescla

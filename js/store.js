@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.9';
+window.SCOREPLACE_VERSION = '1.2.32';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -925,10 +925,9 @@ window._matchHasRealPlay = function (m) {
 };
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
-// v1.3: número trocado pro NOVO barthlabs (+55 11 98772-6873), WhatsApp Business
+// v1.2.30: número trocado pro NOVO barthlabs (+55 11 98772-6873), WhatsApp Business
 // orgânico apenas. Histórico dos números queimados: o barthlabs original
-// (+55 11 96658-1959) teve o WhatsApp Business banido pela Meta em 14/jul (template
-// recategorizado UTILITY→MARKETING, conta derrubada, apelação negada); o stopgap
+// (+55 11 96658-1959) teve o WhatsApp Business banido pela Meta em 14/jul; o stopgap
 // pessoal (+55 11 99723-7733, conta TIM) também foi bloqueado. Uso MANUAL (a pessoa
 // escreve, um humano responde) — não é automação, então não é o que a Meta pune.
 // Ver [[project_whatsapp_meta_2fa_block]].
@@ -2685,6 +2684,108 @@ window._firstNameOnly = function(name) {
   return first || s;
 };
 
+// ───────────────────────────────────────────────────────────────────────────
+// CÂNONE fit-name-to-box (jul/2026) — DENTRO da escala por área.
+// [[project_name_fit_box_canonical]] × [[project_web_area_scaling_canon]].
+//
+// Regra do dono: nome de perfil vive num BOX INVISÍVEL de tamanho FIXO (mesmo
+// pra todo usuário); a fonte é a variável — nome LONGO encolhe pra caber, nome
+// CURTO pode ficar maior, dupla pode quebrar linha. Vale em TODA tela.
+//
+// COMO CASA COM A ESCALA POR ÁREA: o "teto" e o "piso" da fonte são em REM
+// (= var(--sp-u)), então herdam o cânone — crescem com a área (root font-size
+// fluido no mobile + `zoom` no body no desktop). O fit só ENCOLHE, por
+// comprimento do nome, DENTRO desse envelope já escalado. Nada de px fixo (o
+// cânone proíbe "font-size fixo" como caminho alternativo). Iterar em rem
+// também evita a ambiguidade de `zoom` × getComputedStyle: a comparação usa
+// scrollWidth/clientWidth (px de layout), e a fonte é declarada em rem.
+//
+// Uso: o elemento do NOME leva `.sp-name-fit` + `data-maxrem`/`data-minrem`
+// (múltiplos de rem/--sp-u). Seu PARENT é o box de tamanho FIXO — altura em
+// rem/--sp-u + overflow:hidden — pra o box TAMBÉM escalar por área.
+//
+// EXCEÇÃO: o RELÓGIO não usa isto — lá o nome já é só o 1º nome
+// (_watchShortNames em bracket-ui.js) por causa da tela minúscula.
+(function() {
+  var _ro = null;
+
+  // Ajusta UM elemento `.sp-name-fit` ao box pai. false = box sem dimensão.
+  function _fitOne(el) {
+    if (!el) return true;
+    var box = el.parentElement;
+    if (!box) return true;
+    var bw = box.clientWidth, bh = box.clientHeight;
+    if (!bw || !bh) return false; // layout pendente
+    var maxR = parseFloat(el.getAttribute('data-maxrem')) || 1.5;
+    var minR = parseFloat(el.getAttribute('data-minrem')) || 0.7;
+    if (minR > maxR) minR = maxR;
+    var fs = maxR;
+    el.style.fontSize = fs + 'rem';
+    var guard = 0;
+    // passo 0.03rem (~0.5px a 16px) com +1px de folga sub-pixel.
+    while (guard++ < 200 && (el.scrollWidth > bw + 1 || el.scrollHeight > bh + 1) && fs > minR) {
+      fs = Math.max(minR, fs - 0.03);
+      el.style.fontSize = fs + 'rem';
+    }
+    el.setAttribute('data-fitted', '1');
+    el.setAttribute('data-fitw', bw);
+    el.setAttribute('data-fith', bh);
+    if (_ro) { try { _ro.observe(box); } catch (e) {} }
+    return true;
+  }
+  window._fitNameToBox = _fitOne;
+
+  // Varre `root` (default document) por `.sp-name-fit` ainda não ajustados.
+  // Re-tenta por setTimeout enquanto algum box não tem dimensão.
+  window._fitNames = function(root, retry) {
+    try {
+      var scope = (root && root.querySelectorAll) ? root : document;
+      var els = scope.querySelectorAll('.sp-name-fit:not([data-fitted])');
+      var pending = false;
+      Array.prototype.forEach.call(els, function(el) {
+        if (!_fitOne(el)) pending = true;
+      });
+      if (pending && (retry || 0) < 12) {
+        setTimeout(function() { window._fitNames(root, (retry || 0) + 1); }, 60);
+      }
+    } catch (e) {}
+  };
+
+  // ResizeObserver: box mudou de tamanho (rotação, re-layout, expandir/colapsar,
+  // MUDANÇA DE ZOOM da escala por área) → re-ajusta. Só em mudança real (>2px)
+  // pra não oscilar. Box é fixo por construção → sem loop de feedback.
+  if (typeof ResizeObserver !== 'undefined') {
+    _ro = new ResizeObserver(function(entries) {
+      entries.forEach(function(entry) {
+        var box = entry.target;
+        var el = box.querySelector(':scope > .sp-name-fit');
+        if (!el) { try { _ro.unobserve(box); } catch (e) {} return; }
+        var bw = box.clientWidth, bh = box.clientHeight;
+        if (!bw || !bh) return;
+        var pw = parseFloat(el.getAttribute('data-fitw')) || 0;
+        var ph = parseFloat(el.getAttribute('data-fith')) || 0;
+        if (Math.abs(bw - pw) < 2 && Math.abs(bh - ph) < 2) return;
+        el.removeAttribute('data-fitted');
+        _fitOne(el);
+      });
+    });
+  }
+
+  // Fallback pra ResizeObserver: re-ajusta tudo em resize de janela (debounced).
+  // Cobre a mudança do `zoom` por área quando a largura da viewport muda.
+  var _rt = null;
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('resize', function() {
+      if (_rt) clearTimeout(_rt);
+      _rt = setTimeout(function() {
+        var els = document.querySelectorAll('.sp-name-fit[data-fitted]');
+        Array.prototype.forEach.call(els, function(el) { el.removeAttribute('data-fitted'); });
+        window._fitNames(document, 0);
+      }, 150);
+    });
+  }
+})();
+
 // v2.4.23: saudação concordante com o gênero do perfil.
 // PT: "Bem-vinda" pra gênero feminino, "Bem-vindo" pra masculino/desconhecido.
 // EN: sempre "Welcome" (sem flexão). Usada nas chaves i18n via {greeting}.
@@ -3926,7 +4027,7 @@ window._inscritosFilterBar = function (opts) {
         // vazando o fundo entre o cabeçalho e a barra. -1px sobrepõe; como a topbar tem
         // z-index maior e mesma cor, o overlap é invisível. `padding-top:2px` extra de
         // folga: a barra cobre qualquer rounding antialiased acima dos controles.
-        wrapStyle = ' style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:30;background:var(--bg-darker,#111114);margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);margin-bottom:6px;padding:9px 10px 7px;box-sizing:border-box;"';
+        wrapStyle = ' style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:30;background:var(--bg-darker,#111114);margin-left:0;margin-right:0;margin-bottom:6px;padding:9px 10px 7px;box-sizing:border-box;"';
     }
     return '<div id="fbwrap-' + key + '"' + wrapStyle + '>' + window._fbInner(key) + '</div>';
 };
@@ -4218,9 +4319,9 @@ window._showUpgradeModal = function(reason) {
 
   modal = document.createElement('div');
   modal.id = 'modal-upgrade';
-  modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:100000;';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:100000;';
   modal.innerHTML =
-    '<div style="background:var(--surface-color);border:1px solid var(--border-color);border-radius:20px;max-width:380px;width:92%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+    '<div style="background:var(--surface-color);border:1px solid var(--border-color);border-radius:20px;max-width:380px;width:92%;max-height:90%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
       '<div style="background:linear-gradient(135deg,#3b82f6,#6366f1);padding:1.2rem;text-align:center;flex-shrink:0;">' +
         '<div style="font-size:2rem;margin-bottom:0.3rem;">🚀</div>' +
         '<div style="font-size:1.2rem;font-weight:800;color:#fff;">scoreplace Pro</div>' +
@@ -4318,16 +4419,6 @@ window._safeHtml = function(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 };
 
-// Sanitiza um parâmetro de template do WhatsApp Cloud API.
-// A Meta REJEITA o envio se o valor tiver quebra de linha, tab ou 4+ espaços
-// seguidos, e corta em 1024 chars. Nossas mensagens vêm de texto livre (nome de
-// torneio, comentário do organizador), então tudo passa por aqui antes de virar
-// {{n}}. Ver memória `project_whatsapp_meta_2fa_block`.
-window._waParam = function(v) {
-  var s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
-  if (s.length > 1024) s = s.slice(0, 1021) + '...';
-  return s || '-'; // parâmetro vazio também é rejeitado pela Meta
-};
 
 // ── Loader GLOBAL (v4.0.88) — "enquanto não entregar a informação, carregando… sempre" ──
 // Padrão canônico do app: TODA ação que processa antes de entregar uma tela deve chamar
@@ -4966,93 +5057,164 @@ window._applyThemeIcon = function(theme) {
   } catch (e) {}
 })();
 
-// ─── Favoritos (localStorage) ────────────────────────────────────────────────
-// Favoritos — v2.6.50: re-chaveado por UID (identidade estável). Antes a chave era
-// só `scoreplace_favorites_<email>`; como o email NÃO é estável (zerado p/ contas
-// sintéticas em auth.js, ausente em re-render pré-auth, mudável), a chave trocava e
-// o favorito "sumia". Agora: leitura em UNIÃO de [uid-key, email-key, legado] —
-// acha o favorito independente de qual identidade está presente; escrita nas chaves
-// de identidade (uid + email) — migra sozinho e remoção fica consistente.
-window._favReadKeys = function() {
+// ─── Favoritos e Ocultados — VIVEM NA CONTA (users/{uid}) ────────────────────
+// v1.2.11 — POR QUE ISTO MUDOU DE CASA (não devolver pro localStorage):
+// Os dois moravam SÓ no localStorage, chaveados por uid/email. Isso nunca ia
+// funcionar por dois motivos independentes:
+//   1. O iOS Safari/PWA ZERA o localStorage periodicamente (ITP) — está escrito no
+//      comentário do beta-cleanup logo acima. O usuário favoritava, o iOS limpava, e
+//      o favorito "sumia sozinho". Nenhum esquema de chave resolve isso.
+//   2. Preferência de CONTA não pode morar no DEVICE: entrar pelo celular e pelo
+//      desktop dava listas diferentes, e trocar de aparelho zerava tudo.
+// Agora a VERDADE é users/{uid}.favorites / .hiddenTournaments. O localStorage
+// continua, mas rebaixado a ESPELHO: serve pra primeira pintura (antes do perfil
+// carregar) e pro offline — nunca é fonte quando há perfil carregado.
+//
+// Escrita: arrayUnion/arrayRemove no doc do usuário — NUNCA um set do array inteiro.
+// É o mesmo padrão dos `friends` (ver saveUserProfileToFirestore, que de propósito
+// NÃO inclui friends no payload): dois devices mexendo na lista não se atropelam, e
+// um save concorrente não apaga o que o outro acabou de pôr.
+// As rules já permitem (dono escreve tudo menos os campos privilegiados).
+
+// Espelho local — só pra 1ª pintura/offline. Chaves por identidade (uid+email) porque
+// o email não é estável; a união na leitura acha a lista em qualquer uma delas.
+function _prefKeys(kind) {
   var cu = window.AppStore && window.AppStore.currentUser;
   var keys = [];
-  if (cu && cu.uid) keys.push('scoreplace_favorites_uid_' + cu.uid);
-  if (cu && cu.email) keys.push('scoreplace_favorites_' + cu.email);
-  if (keys.length === 0) keys.push('scoreplace_favorites'); // deslogado / pré-auth
+  if (cu && cu.uid) keys.push('scoreplace_' + kind + '_uid_' + cu.uid);
+  if (cu && cu.email) keys.push('scoreplace_' + kind + '_' + cu.email);
+  if (keys.length === 0) keys.push('scoreplace_' + kind);
   return keys;
-};
-window._favWriteKeys = function() {
-  // mesmas chaves da leitura (de identidade quando logado) — escreve a lista
-  // unificada em todas, então a remoção "pega" em qualquer caminho.
-  return window._favReadKeys();
-};
-
-window._getFavorites = function() {
+}
+function _mirrorRead(kind) {
+  var set = {};
   try {
-    var set = {};
-    window._favReadKeys().forEach(function(k) {
-      try { var raw = localStorage.getItem(k); if (raw) JSON.parse(raw).forEach(function(id){ set[String(id)] = 1; }); } catch (e) {}
+    _prefKeys(kind).forEach(function (k) {
+      try { var raw = localStorage.getItem(k); if (raw) JSON.parse(raw).forEach(function (id) { set[String(id)] = 1; }); } catch (e) {}
     });
-    return Object.keys(set);
-  } catch (e) { return []; }
+  } catch (e) {}
+  return Object.keys(set);
+}
+function _mirrorWrite(kind, list) {
+  var payload = JSON.stringify(list || []);
+  try { _prefKeys(kind).forEach(function (k) { try { localStorage.setItem(k, payload); } catch (e) {} }); } catch (e) {}
+}
+// Lista efetiva: a CONTA manda. Sem perfil carregado (pré-auth/offline) cai no espelho.
+// Nunca UNIR conta+espelho: o espelho de um device fica com o item que a pessoa tirou
+// noutro, e a união o ressuscitaria — "desfavoritei e voltou".
+function _prefList(kind, field) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (cu && Array.isArray(cu[field])) return cu[field].map(String);
+  return _mirrorRead(kind);
+}
+// Persiste UM item na conta. Otimista: quem chama já mexeu na lista local.
+function _prefPersist(field, id, add) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid) return Promise.resolve(false);   // deslogado → só espelho
+  var db = window.FirestoreDB && (window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
+  if (!db) return Promise.resolve(false);
+  try {
+    var fv = firebase.firestore.FieldValue;
+    var patch = {};
+    patch[field] = add ? fv.arrayUnion(String(id)) : fv.arrayRemove(String(id));
+    return db.collection('users').doc(cu.uid).set(patch, { merge: true }).then(function () { return true; });
+  } catch (e) { return Promise.reject(e); }
+}
+// Migração 1x POR DEVICE: sobe o que já existia no localStorage pra conta. Guardada por
+// flag porque sem ela o espelho de um device reintroduziria, a cada login, o item que a
+// pessoa removeu noutro. Depois disso o espelho é só escrita.
+window._migrateLocalPrefsToAccount = function () {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid) return;
+  var FLAG = 'scoreplace_prefs_migrated_v1_' + cu.uid;
+  try { if (localStorage.getItem(FLAG)) { _syncMirrors(); return; } } catch (e) {}
+  var jobs = [];
+  [['favorites', 'favorites'], ['hidden', 'hiddenTournaments']].forEach(function (pair) {
+    var local = _mirrorRead(pair[0]);
+    var remote = Array.isArray(cu[pair[1]]) ? cu[pair[1]].map(String) : [];
+    local.forEach(function (id) {
+      if (remote.indexOf(String(id)) === -1) {
+        if (!Array.isArray(cu[pair[1]])) cu[pair[1]] = remote;
+        cu[pair[1]].push(String(id));
+        jobs.push(_prefPersist(pair[1], id, true));
+      }
+    });
+  });
+  Promise.all(jobs).then(function () {
+    try { localStorage.setItem(FLAG, '1'); } catch (e) {}
+    _syncMirrors();
+  }).catch(function (e) { try { console.warn('[prefs] migração falhou:', e); } catch (_e) {} });
 };
+// Espelho := conta (não o contrário).
+function _syncMirrors() {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu) return;
+  if (Array.isArray(cu.favorites)) _mirrorWrite('favorites', cu.favorites);
+  if (Array.isArray(cu.hiddenTournaments)) _mirrorWrite('hidden', cu.hiddenTournaments);
+}
+window._syncPrefMirrors = _syncMirrors;
 
-window._isFavorite = function(tId) {
-  var favs = window._getFavorites();
-  return favs.indexOf(String(tId)) !== -1;
-};
+window._getFavorites = function () { return _prefList('favorites', 'favorites'); };
+window._isFavorite = function (tId) { return window._getFavorites().indexOf(String(tId)) !== -1; };
 
-window._toggleFavorite = function(tId, event) {
+window._toggleFavorite = function (tId, event) {
   if (event) { event.stopPropagation(); event.preventDefault(); }
-  var favs = window._getFavorites();
   var id = String(tId);
-  var idx = favs.indexOf(id);
-  var nowFav = (idx === -1);
-  if (nowFav) { favs.push(id); } else { favs.splice(idx, 1); }
-  var payload = JSON.stringify(favs);
-  window._favWriteKeys().forEach(function(k) { try { localStorage.setItem(k, payload); } catch (e) {} });
-  // Update heart icons on the page
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var list = window._getFavorites();
+  var nowFav = list.indexOf(id) === -1;
+  var next = nowFav ? list.concat([id]) : list.filter(function (x) { return x !== id; });
+  if (cu) cu.favorites = next;
+  _mirrorWrite('favorites', next);
+  _paintStars(id, nowFav);
+  _prefPersist('favorites', id, nowFav).catch(function (err) {
+    // Reverte: sem isto a estrela mente (fica cheia e o servidor não sabe).
+    var back = nowFav ? next.filter(function (x) { return x !== id; }) : next.concat([id]);
+    if (cu) cu.favorites = back;
+    _mirrorWrite('favorites', back);
+    _paintStars(id, !nowFav);
+    if (typeof showNotification === 'function') {
+      showNotification('⚠️ Não salvou', 'O favorito não foi registrado na sua conta (' + ((err && (err.code || err.message)) || 'tente de novo') + ').', 'error');
+    }
+    try { console.error('[favoritos] rejeitado:', err); } catch (e) {}
+  });
+};
+
+function _paintStars(id, nowFav) {
   var stars = document.querySelectorAll('[data-fav-id="' + id + '"]');
-  stars.forEach(function(el) {
+  stars.forEach(function (el) {
     // v2.8.5: favoritado = emoji ❤️ (volume nativo); não-favoritado = ♡ (contorno).
-    // Antes o clique sobrescrevia com ♥ (texto), revertendo o emoji do render inicial.
     el.textContent = nowFav ? '❤️' : '♡';
     el.title = nowFav ? 'Remover dos favoritos' : 'Adicionar aos favoritos';
     el.style.color = nowFav ? '#f43f5e' : 'rgba(255,255,255,0.4)';
   });
-};
+}
 
 // v2.8.40: torneios OCULTADOS pelo usuário — somem da lista normal e vão pra uma
-// seção "Torneios ocultados" no fim da dashboard. Mesmo esquema de chaves dos
-// favoritos (uid + email, união na leitura), pra sobreviver a troca de identidade.
-// Só faz sentido pra torneios em que o usuário NÃO está inscrito (o botão só
-// aparece neles). Toggle re-renderiza a dashboard (o card muda de seção).
-window._hiddenReadKeys = function() {
-  var cu = window.AppStore && window.AppStore.currentUser;
-  var keys = [];
-  if (cu && cu.uid) keys.push('scoreplace_hidden_uid_' + cu.uid);
-  if (cu && cu.email) keys.push('scoreplace_hidden_' + cu.email);
-  if (keys.length === 0) keys.push('scoreplace_hidden');
-  return keys;
-};
-window._getHidden = function() {
-  try {
-    var set = {};
-    window._hiddenReadKeys().forEach(function(k) {
-      try { var raw = localStorage.getItem(k); if (raw) JSON.parse(raw).forEach(function(id){ set[String(id)] = 1; }); } catch (e) {}
-    });
-    return Object.keys(set);
-  } catch (e) { return []; }
-};
-window._isHidden = function(tId) { return window._getHidden().indexOf(String(tId)) !== -1; };
-window._toggleHidden = function(tId, event) {
+// seção "Torneios ocultados" no fim da dashboard. Só faz sentido pra torneios em que
+// o usuário NÃO está inscrito (o botão só aparece neles).
+window._getHidden = function () { return _prefList('hidden', 'hiddenTournaments'); };
+window._isHidden = function (tId) { return window._getHidden().indexOf(String(tId)) !== -1; };
+
+window._toggleHidden = function (tId, event) {
   if (event) { event.stopPropagation(); event.preventDefault(); }
-  var list = window._getHidden();
   var id = String(tId);
-  var idx = list.indexOf(id);
-  if (idx === -1) list.push(id); else list.splice(idx, 1);
-  var payload = JSON.stringify(list);
-  window._hiddenReadKeys().forEach(function(k) { try { localStorage.setItem(k, payload); } catch (e) {} });
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var list = window._getHidden();
+  var nowHidden = list.indexOf(id) === -1;
+  var next = nowHidden ? list.concat([id]) : list.filter(function (x) { return x !== id; });
+  if (cu) cu.hiddenTournaments = next;
+  _mirrorWrite('hidden', next);
+  _prefPersist('hiddenTournaments', id, nowHidden).catch(function (err) {
+    var back = nowHidden ? next.filter(function (x) { return x !== id; }) : next.concat([id]);
+    if (cu) cu.hiddenTournaments = back;
+    _mirrorWrite('hidden', back);
+    if (typeof showNotification === 'function') {
+      showNotification('⚠️ Não salvou', 'Não foi possível registrar na sua conta (' + ((err && (err.code || err.message)) || 'tente de novo') + ').', 'error');
+    }
+    try { console.error('[ocultados] rejeitado:', err); } catch (e) {}
+    if (typeof window._dashRerender === 'function') window._dashRerender({ compact: true });
+  });
   // v4.0.62: ocultar/desocultar → re-render COMPACTO (junta o conteúdo, sem o
   // spacer de keep-room que deixava "tela preta" até a seção de ocultados).
   if (typeof window._dashRerender === 'function') { window._dashRerender({ compact: true }); return; }
@@ -6332,6 +6494,11 @@ window.AppStore = {
         }
         if (profile.gender) this.currentUser.gender = profile.gender;
         if (profile.preferredSports) this.currentUser.preferredSports = profile.preferredSports;
+        // v1.2.11: favoritos e ocultados VÊM DA CONTA (users/{uid}), não do device.
+        // Arrays: usar !== undefined (lista VAZIA é um valor legítimo — "desfavoritei
+        // tudo" — e com truthy-check o [] seria ignorado e a lista velha ressuscitaria).
+        if (Array.isArray(profile.favorites)) this.currentUser.favorites = profile.favorites.map(String);
+        if (Array.isArray(profile.hiddenTournaments)) this.currentUser.hiddenTournaments = profile.hiddenTournaments.map(String);
         if (profile.defaultCategory) this.currentUser.defaultCategory = profile.defaultCategory;
         // v1.3.6-beta: skillBySport — habilidade por modalidade
         if (profile.skillBySport && typeof profile.skillBySport === 'object') {
@@ -6371,13 +6538,6 @@ window.AppStore = {
         // check-in choices survive app restarts.
         // v1.9.63: preferências de tamanho do placar ao vivo (sliders).
         if (profile.liveScorePrefs && typeof profile.liveScorePrefs === 'object') this.currentUser.liveScorePrefs = profile.liveScorePrefs;
-        // Partida casual: última modalidade + dupla/individual (casualLast) e config
-        // de placar por esporte (casualPrefs). Moravam SÓ no localStorage — que o iOS
-        // limpa periodicamente — então a escolha do usuário sumia e a partida voltava
-        // pro primeiro esporte preferido do perfil (ex: Pickleball). O perfil é a fonte
-        // de verdade; o localStorage segue como cache instantâneo. Espelha liveScorePrefs.
-        if (profile.casualLast && typeof profile.casualLast === 'object') this.currentUser.casualLast = profile.casualLast;
-        if (profile.casualPrefs && typeof profile.casualPrefs === 'object') this.currentUser.casualPrefs = profile.casualPrefs;
         if (profile.presenceVisibility) this.currentUser.presenceVisibility = profile.presenceVisibility;
         if (profile.presenceMuteDays !== undefined) this.currentUser.presenceMuteDays = profile.presenceMuteDays;
         if (profile.presenceMuteUntil !== undefined) this.currentUser.presenceMuteUntil = profile.presenceMuteUntil;
@@ -6431,6 +6591,11 @@ window.AppStore = {
         if (profile.acceptedTermsAt) this.currentUser.acceptedTermsAt = profile.acceptedTermsAt;
         if (profile.acceptedTermsVersion) this.currentUser.acceptedTermsVersion = profile.acceptedTermsVersion;
       }
+      // v1.2.11: favoritos/ocultados que ficaram no localStorage deste device sobem
+      // pra conta (1x por device, com flag). Depois disto o espelho local é só
+      // escrita — a conta manda. Roda logo após o merge do perfil, quando
+      // currentUser.favorites/.hiddenTournaments já refletem o servidor.
+      try { if (typeof window._migrateLocalPrefsToAccount === 'function') window._migrateLocalPrefsToAccount(); } catch (e) {}
       // v0.17.6: self-heal de cu.friends — roda em background após profile
       // load. Resolve emails legados pra uid, dropa órfãos e dedup. Persiste
       // a lista limpa no Firestore. Atende pedido do usuário pra prevenir

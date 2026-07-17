@@ -150,7 +150,7 @@ function setupCreateTournamentModal() {
   if (!document.getElementById('modal-create-tournament')) {
     const modalHtml = `
       <div class="modal-overlay" id="modal-create-tournament">
-        <div class="modal" style="max-width: 800px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; max-height: 90vh; overflow-y: auto; overflow-x: hidden;">
+        <div class="modal" style="max-width: 800px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; max-height: 90%; overflow-y: auto; overflow-x: hidden;">
           <!-- Back header placeholder — populated by _renderBackHeader + action buttons in setupCreateTournamentModal -->
           <div id="create-tournament-header-host"></div>
           <h2 id="create-modal-title" style="display:none;">${_t('create.modalTitle')}</h2>
@@ -5940,9 +5940,9 @@ window._openGSMConfig = function(targetPhase) {
 
   var overlay = document.createElement('div');
   overlay.id = 'gsm-config-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:100000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:100000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;';
 
-  overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:600px;border-radius:20px;border:1px solid rgba(168,85,247,0.25);box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden;margin:auto 0;max-height:90vh;display:flex;flex-direction:column;">' +
+  overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:600px;border-radius:20px;border:1px solid rgba(168,85,247,0.25);box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden;margin:auto 0;max-height:90%;display:flex;flex-direction:column;">' +
     '<div style="background:linear-gradient(135deg,#6d28d9 0%,#a855f7 100%);padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">' +
       '<h3 style="margin:0;color:#f5f3ff;font-size:1.1rem;font-weight:800;">⚙️ Personalizado</h3>' +
       '<div style="display:flex;gap:8px;">' +
@@ -7105,7 +7105,7 @@ window._showTiebreakInfo = function(criterion) {
   const overlay = document.createElement('div');
   overlay.id = 'tiebreak-info-overlay';
   overlay.style.cssText =
-    'position:fixed;top:0;left:0;width:100vw;height:100vh;' +
+    'position:fixed;top:0;left:0;width:100%;height:100%;' +
     'background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);' +
     'display:flex;align-items:flex-start;justify-content:center;' +
     'z-index:100020;padding:5vh 1rem;overflow-y:auto;';

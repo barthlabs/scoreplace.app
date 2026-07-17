@@ -504,7 +504,7 @@
     // Barra de filtro trava logo abaixo do cabeçalho (padrão sticky canônico:
     // topbar + dropdown do hamburger + back-header). Full-bleed com fundo darker.
     var filterBar = '' +
-      '<div style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:5;background:var(--bg-darker,#171a2b);margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));">' +
+      '<div style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:5;background:var(--bg-darker,#171a2b);margin-left:0;margin-right:0;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));">' +
         '<div style="max-width:1080px;margin:0 auto;padding:10px 14px 8px;">' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' +
             _srcPill('all', 'Todos', 'all', true) +

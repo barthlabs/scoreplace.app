@@ -3294,7 +3294,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
           <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
           ${readyBadge}
         </div>
-        <div id="header-btns-${m.id}" style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;">${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}</div>
+        <div id="header-btns-${m.id}" class="btn-row" style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;">${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}</div>
       </div>`;
   }
 
@@ -3331,7 +3331,7 @@ function _cardFooterChips(t, m) {
   var sch = (typeof window._schCardChip === 'function') ? window._schCardChip(t, m) : '';
   var wa = (typeof window._waGrpCardChip === 'function') ? window._waGrpCardChip(t, m) : '';
   if (!sch && !wa) return '';
-  return '<div style="display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + sch + wa + '</div>';
+  return '<div class="btn-row" style="display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + sch + wa + '</div>';
 }
 // v2.3.46: exposto pra que _saveResultInline possa re-renderizar UM card
 // individual in-place (sem re-render do bracket inteiro), preservando scroll,
@@ -3497,7 +3497,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // com o render de grupo Rei/Rainha da rota Liga (t.rounds[].monarchGroups).
     var _grpArrived = window._monGroupArrivedBtn(t, matches, groupDone);
     html += '<div data-group-box="1" style="scroll-margin-top:120px;background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : '#fbbf24') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
-      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
+      '<div class="btn-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
         '<h3 style="margin:0;font-size:1.1rem;color:var(--text-bright);flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
         (statusBadge || '') + _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
       '</div>' +
@@ -4482,7 +4482,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') +
                 _monarchBadge +
               '</div>' +
-              (_rightCtrl ? '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">' + _rightCtrl + '</span>' : '') +
+              (_rightCtrl ? '<span class="btn-row" style="margin-left:auto;display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">' + _rightCtrl + '</span>' : '') +
             '</div>' +
             // Linha "Jogadores: …" REMOVIDA (pedido do dono — redundante: a classificação
             // do grupo já lista os 4). O ausente de W.O. segue sinalizado na linha de

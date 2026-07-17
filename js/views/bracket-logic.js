@@ -2683,7 +2683,6 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
     freshT.history.push({ date: new Date().toISOString(), message: _closeLogMsg });
   });
   // Notify Liga round via WhatsApp (fire-and-forget, only for Liga/Suíço formats)
-  _notifyLigaRoundWhatsApp(t, t.rounds ? t.rounds.length - 1 : 0);
   if (typeof window._rerenderBracket === 'function') {
     // v0.17.27: passa anchorMatchId quando vem de auto-close (após approve/save)
     // pra preservar scroll. Quando vem do botão "Encerrar Rodada" manual,
@@ -4147,7 +4146,6 @@ window._publishPendingDraw = async function (tId) {
   // Agora SIM dispara as notificações (idênticas ao sorteio normal).
   var roundIndex = (typeof pd.roundIndex === 'number') ? pd.roundIndex : (t.rounds.length - 1);
   try { if (window._notifyDrawPersonalized) window._notifyDrawPersonalized(t, t.id, { type: pd.firstDraw ? 'draw' : 'new_round', roundIndex: roundIndex }); } catch (e) {}
-  try { _notifyLigaRoundWhatsApp(t, roundIndex); } catch (e) {}
   if (typeof window.showNotification === 'function') window.showNotification('🚀 Sorteio publicado!', 'A chave e as notificações foram liberadas para os participantes.', 'success');
   try {
     var _vc = document.getElementById('view-container');
@@ -4288,7 +4286,6 @@ async function _fireLigaAutoDraw(t, scheduledTime) {
   }
 
   // Notify Liga round via WhatsApp (fire-and-forget)
-  _notifyLigaRoundWhatsApp(t, t.rounds ? t.rounds.length - 1 : 0);
 
   // Auto-refresh whatever view the user is currently looking at so the draw
   // appears without a manual reload.
@@ -4318,44 +4315,4 @@ async function _fireLigaAutoDraw(t, scheduledTime) {
   }
 }
 
-// ─── Liga round WhatsApp group notification ───────────────────────────────────
-// Fire-and-forget: called after any Liga/Suíço round draw (manual or auto).
-// Creates a WhatsApp group for each match pairing and sends a message with the
-// match details and deadline (next draw date).
-function _notifyLigaRoundWhatsApp(t, roundIndex) {
-  // Only Liga/Suíço formats
-  if (!t || !t.id) return;
-  if (typeof window._isLigaFormat === 'function' && !window._isLigaFormat(t)) return;
-  // Firebase functions must be available
-  if (typeof firebase === 'undefined' || typeof firebase.functions !== 'function') return;
-  // Compute next draw date string
-  var nextDrawDateStr = 'Não agendado';
-  if (typeof window._calcNextDrawDate === 'function') {
-    var nd = window._calcNextDrawDate(t);
-    if (nd) {
-      try {
-        nextDrawDateStr = nd.toLocaleDateString('pt-BR') + ' às ' + nd.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      } catch (e) { /* keep default */ }
-    }
-  }
-  var idx = (typeof roundIndex === 'number') ? roundIndex : ((t.rounds ? t.rounds.length - 1 : 0));
-  // Call Cloud Function (non-blocking — errors only in console)
-  try {
-    var fn = firebase.functions().httpsCallable('notifyLeagueRoundWhatsApp');
-    fn({ tournamentId: String(t.id), roundIndex: idx, nextDrawDateStr: nextDrawDateStr })
-      .then(function(result) {
-        var res = result && result.data;
-        if (res && res.ok) {
-          var created = (res.groups || []).filter(function(g) { return g.created; }).length;
-          if (created > 0 && typeof window.showNotification === 'function') {
-            window.showNotification('💬 WhatsApp', created + ' grupo(s) de partida criado(s) no WhatsApp', 'success');
-          }
-        }
-      })
-      .catch(function(e) {
-        window._warn('[notifyLigaRoundWhatsApp] cloud function error:', e && e.message);
-      });
-  } catch (e) {
-    window._warn('[notifyLigaRoundWhatsApp] init error:', e && e.message);
-  }
-}
+

@@ -450,6 +450,11 @@ a:hover {
  * O zoom do placar ao vivo / da chave é um sistema SEPARADO, em cima disto.
  * O fix de auto-zoom do iOS (inputs em 16px) fica intacto — não usa rem. */
 html {
+  /* Escala MOBILE do texto (13→17px por 3.74vw, cap 17px) × slider --ui-scale.
+     A escala por ÁREA em telas grandes (>1400px) é feita pelo `zoom` no body
+     (index.html) — que cresce TUDO junto (px+rem+boxes+modais), não só a fonte.
+     Por isso este `font-size` NÃO estende o cap: evitar escalar a fonte em DOBRO
+     sob o zoom. Ver memória project_web_area_scaling_canon. */
   font-size: calc(clamp(13px, 3.74vw, 17px) * var(--ui-scale, 1));
 }
 
@@ -966,3 +971,4 @@ body, .topbar, .card {
 [data-theme="light"] [style*=" color: rgb(148, 163, 184)"] {
   color: #64748b !important;
 }
+

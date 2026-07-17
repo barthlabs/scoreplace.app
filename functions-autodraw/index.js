@@ -430,23 +430,11 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
           }
         }
 
-        // v3.0.x: enfileira criação de grupos de WhatsApp da rodada. O autoDraw
-        // roda neste codebase (sem a callable notifyLeagueRoundWhatsApp nem os
-        // segredos do Evolution); o trigger processRoundWhatsappGroups (codebase
-        // default) consome a fila e cria os grupos (1 por partida na Liga; 1 por
-        // grupo de 4 no Rei/Rainha). Antes só o sorteio MANUAL/publish do cliente
-        // chamava a callable — auto-sorteio ficava sem grupo de WhatsApp.
-        try {
-          await db.collection('whatsapp_round_queue').add({
-            tournamentId: tId,
-            roundIndex: res.roundIndex,
-            nextDrawDateStr: deadlineLabel || 'Não agendado',
-            source: 'autoDraw',
-            createdAt: now.toISOString(),
-          });
-        } catch (e) {
-          console.warn(`[auto-draw] enfileirar grupos WhatsApp falhou para ${tId}:`, e.message);
-        }
+        // v1.2.9: o enfileiramento de grupos de WhatsApp da rodada saiu. Os grupos
+        // automáticos dependiam do Evolution/Groups API — número banido, apelação
+        // negada, portfólio Meta morto. O grupo agora é criado pelo PRÓPRIO usuário
+        // no WhatsApp dele e colado no app (js/views/wa-group.js), sem API nenhuma.
+        // Ver project_whatsapp_meta_2fa_block.
       } catch (err) {
         // Falha no sorteio NUNCA escreve dados parciais/errados — apenas loga e
         // deixa o cliente (organizador) sortear. Defense-in-depth.

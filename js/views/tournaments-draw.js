@@ -1018,7 +1018,7 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
         '</div>' +
         (window._gdCtx.rows.length > 0
           ? '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Inscritos sem gênero (' + window._gdCtx.rows.length + ')</div>' +
-            '<div style="display:flex;flex-direction:column;gap:6px;max-height:34vh;overflow-y:auto;">' + rowsHtml + '</div>'
+            '<div style="display:flex;flex-direction:column;gap:6px;max-height:34%;overflow-y:auto;">' + rowsHtml + '</div>'
           : '<div style="font-size:0.8rem;color:var(--text-muted,#94a3b8);">Todos os inscritos já têm gênero definido. ✓</div>') +
       '</div>' +
     '</div>';
@@ -1086,7 +1086,7 @@ window.showFinalReviewPanel = function (tId) {
 
     const overlay = document.createElement('div');
     overlay.id = 'final-review-panel';
-    overlay.style.cssText = 'position:fixed;inset:0;width:100vw;min-height:100vh;min-height:100dvh;background:rgba(0,0,0,0.96);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:0.75rem;overflow:hidden;';
+    overlay.style.cssText = 'position:fixed;inset:0;width:100%;min-height:100%;min-height:100%;background:rgba(0,0,0,0.96);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:0.75rem;overflow:hidden;';
     document.body.style.overflow = 'hidden';
 
     const tIdSafe = String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -1586,7 +1586,6 @@ window.generateDrawFunction = function (tId) {
             window._lastActiveTournamentId = tId;
             // "Sorteando…" fica até persistir + navegar; toast só depois da chave na tela (pedido do dono).
             _commitInitialDraw(tId, t, _preDraw).then(function () {
-                if (typeof _notifyLigaRoundWhatsApp === 'function') _notifyLigaRoundWhatsApp(t, 0);
                 window.location.hash = '#bracket/' + tId;
                 setTimeout(function () {
                     if (window._sound) window._sound('sino');
@@ -1747,9 +1746,6 @@ window.generateDrawFunction = function (tId) {
             window._notifyDrawPersonalized(t, tId);
         }
         _commitInitialDraw(tId, t, _preDraw).then(function() {
-            if (typeof _notifyLigaRoundWhatsApp === 'function') {
-                _notifyLigaRoundWhatsApp(t, 0);
-            }
             window.location.hash = '#bracket/' + tId;
         });
         return;

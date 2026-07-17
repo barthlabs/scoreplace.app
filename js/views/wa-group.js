@@ -16,8 +16,14 @@
 //               faz sentido "só admin escreve".
 //
 // CONSEQUÊNCIAS DE DESENHO — não "otimizar" isso sem entender:
-//  · NÃO expomos telefone de ninguém. O link de convite tornou desnecessário, e
-//    é isso que mantém a feature fora de LGPD/consentimento/toggle de perfil.
+//  · NÃO expomos telefone de ninguém. O link de convite tornou isso desnecessário,
+//    e é isso que mantém a feature fora de LGPD/consentimento.
+//  · v1.2.9 — CORREÇÃO da linha acima: ela dizia "fora de ... toggle de perfil".
+//    Não vale mais. O toggle `notifyWhatsApp` PASSA a valer aqui, e o motivo NÃO é
+//    LGPD (segue sem telefone exposto): é que quem desliga não quer WhatsApp, ponto
+//    — nem pra ser chamado, nem pra ser posto em grupo. Ele fica no e-mail + na
+//    notificação da plataforma/celular. Vale igual pra ORGANIZADOR e PARTICIPANTE.
+//    Gate de fonte única: _waAllowed(cu). Ver [[project_whatsapp_meta_2fa_block]].
 //  · NÃO existe API, WABA, portfólio, token nem selo verde no caminho. O
 //    transporte é o WhatsApp do PRÓPRIO usuário (mesma filosofia do "copiar
 //    convite" e do e-mail que sai do usuário). Zero custo, zero risco de ban.
@@ -91,6 +97,17 @@
   function _isOrg(t, cu) {
     return !!(typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, cu));
   }
+  // v1.2.9: o toggle "WhatsApp" do perfil (notifyWhatsApp) vale pra ORGANIZADOR e
+  // PARTICIPANTE por igual: ligado = pode ser contatado E incluído em grupo por
+  // WhatsApp; desligado = fica no e-mail + notificação da plataforma/celular.
+  // Desligado, nenhum chip de grupo aparece — nem criar, nem entrar. Não adianta
+  // esconder só o "entrar": quem não quer WhatsApp também não hospeda grupo.
+  // Default ON (!== false) pra ninguém perder a feature sem ter escolhido.
+  // Gate de FONTE ÚNICA — todos os chips passam por aqui. Ver
+  // project_whatsapp_meta_2fa_block.
+  function _waAllowed(cu) {
+    return !!cu && cu.notifyWhatsApp !== false;
+  }
   function _isEnrolled(t, cu) {
     return !!(typeof window._isUserEnrolledInTournament === 'function' && window._isUserEnrolledInTournament(cu, t));
   }
@@ -145,14 +162,19 @@
   }
 
   // ─── chips ────────────────────────────────────────────────────────────────────
+  // Label em DUAS LINHAS (<br>) de propósito: botão de 2 palavras numa linha só fica
+  // largo e é o primeiro a ser empurrado pra linha de baixo, sozinho. Quebrado, ele
+  // fica estreito e cabe junto dos outros. Mesmo shape do irmão "📅 Combinar<br>jogos"
+  // (padding 4px 9px + line-height 1.05 + centro) pra os dois ficarem gêmeos.
   function _btn(label, onclick, extra) {
     return '<button type="button" class="btn btn-micro btn-shine hover-lift" onclick="' + onclick + '" ' +
-      'style="background:' + WA_GREEN + ';color:#fff;font-size:0.72rem;font-weight:800;' + (extra || '') + '">' +
+      'style="background:' + WA_GREEN + ';color:#fff;font-size:0.72rem;font-weight:800;' +
+      'padding:4px 9px;line-height:1.05;text-align:center;' + (extra || '') + '">' +
       _icon() + label + '</button>';
   }
   function _editBtn(onclick, title) {
     return '<button type="button" class="btn btn-micro hover-lift" title="' + title + '" onclick="' + onclick + '" ' +
-      'style="background:rgba(255,255,255,0.08);color:var(--text-muted);font-size:0.72rem;font-weight:800;padding:4px 8px;">✎</button>';
+      'style="background:rgba(255,255,255,0.08);color:var(--text-muted);font-size:0.72rem;font-weight:800;padding:4px 5px;">✎</button>';
   }
 
   // Chip do JOGO. Regra de exibição idêntica ao irmão (_schCardChip): só jogador do
@@ -160,18 +182,19 @@
   // mesmo fora da rodada atual — quem já tem grupo continua achando ele.
   function _matchChip(t, m, groupMode) {
     var cu = _cu(); if (!cu || !cu.uid) return '';
+    if (!_waAllowed(cu)) return '';
     if (!window._schUserIsPlayer(t, m, cu)) return '';
     var args = '\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\',' + (groupMode ? '1' : '0');
     var open = 'event.stopPropagation(); window._waGrpOpen(' + args + ')';
     if (m.waGroup && m.waGroup.link) {
       // "Abrir grupo" é VERBO — clicar faz o que diz (abre o WhatsApp), sem tela
       // intermediária. O ✎ ao lado é a saída pra trocar o link (grupo refeito).
-      return '<span style="display:inline-flex;align-items:stretch;gap:3px;">' +
-        _btn('Abrir grupo', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')') +
+      return '<span style="display:inline-flex;align-items:stretch;align-self:stretch;gap:2px;min-width:0;">' +
+        _btn('Abrir<br>grupo', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')') +
         _editBtn(open, 'Trocar o link do grupo') + '</span>';
     }
     if (!window._schIsCurrentRoundMatch(t, m)) return '';
-    return _btn('Criar grupo', open);
+    return _btn('Criar<br>grupo', open);
   }
 
   window._waGrpCardChip = function (t, m) {
@@ -200,9 +223,10 @@
   window._waGrpTournamentOrgChip = function (t) {
     try {
       var cu = _cu(); if (!t || !cu || !cu.uid) return '';
+      if (!_waAllowed(cu)) return '';
       if (!_isOrg(t, cu)) return '';
       var open = 'event.stopPropagation(); window._waGrpOpenTournament(\'' + _attr(t.id) + '\')';
-      return _btn((t.waGroup && t.waGroup.link) ? 'Grupo do torneio' : 'Criar grupo do torneio', open);
+      return _btn((t.waGroup && t.waGroup.link) ? 'Grupo do<br>torneio' : 'Criar grupo<br>do torneio', open);
     } catch (e) { return ''; }
   };
 
@@ -211,9 +235,10 @@
   window._waGrpTournamentJoinChip = function (t) {
     try {
       var cu = _cu(); if (!t || !cu || !cu.uid) return '';
+      if (!_waAllowed(cu)) return '';
       if (!t.waGroup || !t.waGroup.link) return '';
       if (!_isEnrolled(t, cu) && !_isOrg(t, cu)) return '';
-      return _btn('Entrar no grupo', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'\')');
+      return _btn('Entrar no<br>grupo', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'\')');
     } catch (e) { return ''; }
   };
 
@@ -234,7 +259,7 @@
     var o = document.createElement('div');
     o.id = OVERLAY_ID;
     o.style.cssText = 'position:fixed;inset:0;z-index:100040;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:1rem;';
-    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:90vh;overflow:auto;border-radius:16px;border:1px solid rgba(37,211,102,0.35);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
+    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:90%;overflow:auto;border-radius:16px;border:1px solid rgba(37,211,102,0.35);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
     o.addEventListener('click', function (e) { if (e.target === o) o.remove(); });
     document.body.appendChild(o);
     return o;
@@ -314,16 +339,18 @@
       body += '<details><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;padding:6px 2px;">Trocar o link (o grupo foi refeito)</summary>';
     } else {
       body += _step(1, 'Criar o grupo (vazio) no WhatsApp',
-        '<div style="background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:8px;padding:9px 10px;font-size:0.8rem;font-weight:600;color:var(--text-bright);word-break:break-word;">' + _esc(gname) + '</div>' +
-        '<button type="button" class="btn hover-lift btn-shine" onclick="window._waGrpCopyAndOpen(' + idArgs + ')" style="background:' + WA_GREEN + ';color:#fff;width:100%;justify-content:center;margin-top:8px;">' + _icon() + 'Copiar nome e abrir WhatsApp ↗</button>',
-        'No WhatsApp: <b style="color:var(--text-bright);">Novo grupo → pule a escolha de participantes</b> → cole o nome. Não precisa salvar contato de ninguém.');
+        '<input type="text" id="wa-grp-name" readonly value="' + _esc(gname).replace(/"/g, '&quot;') + '" ' +
+        'style="width:100%;box-sizing:border-box;min-width:0;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);' +
+        'border-radius:8px;padding:9px 10px;font-size:0.8rem;font-weight:600;color:var(--text-bright);">' +
+        '<button type="button" class="btn hover-lift btn-shine" onclick="window._waGrpCopyName(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ')" style="background:' + WA_GREEN + ';color:#fff;width:100%;justify-content:center;margin-top:8px;">' + _icon() + 'Copiar nome e abrir WhatsApp\u2197</button>',
+        'Agora abra o WhatsApp: <b style="color:var(--text-bright);">Novo grupo → pule a escolha de participantes</b> → cole o nome. Não precisa salvar contato de ninguém.');
       if (isT) body += _permsHtml();
     }
 
     body += _step(wg && wg.link ? '✎' : (isT ? 3 : 2), 'Colar o link do convite',
       '<input type="text" id="wa-grp-link" placeholder="https://chat.whatsapp.com/..." ' +
         'style="width:100%;box-sizing:border-box;min-width:0;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);color:var(--text-bright);border-radius:8px;padding:9px 10px;font-size:0.82rem;">' +
-      '<button type="button" class="btn hover-lift" onclick="window._waGrpSaveLink(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ')" style="background:#4f46e5;color:#fff;width:100%;justify-content:center;margin-top:8px;">Salvar link do grupo</button>',
+      '<button type="button" class="btn hover-lift" onclick="window._waGrpSaveLink(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ', this)" style="background:#4f46e5;color:#fff;width:100%;justify-content:center;margin-top:8px;">Salvar link do grupo</button>',
       'No grupo: <b style="color:var(--text-bright);">Convidar via link → Copiar</b>. A partir daí ' +
       (isT ? 'os inscritos só clicam em "Entrar no grupo"' : 'os outros só clicam em "Abrir grupo"') + ' — ninguém mais monta nada.');
 
@@ -333,7 +360,7 @@
       // grupo apagado no WhatsApp — o link fica órfão e não temos como detectar
       // isso sozinhos (o WhatsApp não devolve status pra nós).
       body += '<div style="border-top:1px solid var(--border-color);margin-top:6px;padding-top:10px;">' +
-        '<button type="button" class="btn hover-lift" onclick="window._waGrpDeleteLink(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ')" ' +
+        '<button type="button" class="btn hover-lift" onclick="window._waGrpDeleteLink(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ', this)" ' +
         'style="background:rgba(239,68,68,0.14);border:1px solid rgba(239,68,68,0.45);color:#f87171;width:100%;justify-content:center;">🗑️ Apagar o link</button>' +
         '<div style="font-size:0.66rem;color:var(--text-muted);line-height:1.5;margin-top:6px;">Tira o link sem pôr outro no lugar — some o botão ' +
         (isT ? '"Entrar no grupo"' : '"Abrir grupo"') + ' e volta o "Criar grupo", como era antes. Use quando o grupo foi apagado no WhatsApp.</div>' +
@@ -358,18 +385,95 @@
   window._waGrpOpen = function (tId, matchId, groupMode) { _open(tId, matchId, groupMode); };
   window._waGrpOpenTournament = function (tId) { _open(tId, '', false); };
 
-  window._waGrpCopyAndOpen = function (tId, matchId) {
-    var ctx = _ctx(tId, matchId); if (!ctx) return;
-    var name = _groupName(ctx);
-    // O clipboard é assíncrono, mas o WhatsApp PRECISA abrir dentro do gesto de
-    // clique (iOS Safari suprime a navegação fora dele) — mesma regra do
-    // _contactOrganizerDirect. Por isso: copia sem await e abre já.
-    try { if (navigator.clipboard) navigator.clipboard.writeText(name); } catch (e) {}
-    _openExt('https://wa.me/');
-    _notify('Nome copiado', 'Crie o grupo vazio, cole o nome e volte com o link.', 'success');
+  // SÓ copia o nome. NÃO tenta abrir o WhatsApp.
+  // Isto já foi `_openExt('https://wa.me/')` e era um BUG: wa.me exige um número de
+  // destino, e sem ele o iOS responde "Não foi possível abrir este link" — no meio
+  // de um fluxo em que a pessoa nem quer falar com ninguém, quer CRIAR um grupo.
+  // Não existe deep link pra "novo grupo" (nem wa.me, nem whatsapp://) — a Meta não
+  // expõe isso. Então o botão faz o que sabe fazer e o texto diz o resto.
+  // ABRIR O WHATSAPP — o esquema importa, e a diferenca e DOCUMENTADA:
+  //   · `whatsapp://` (esquema customizado) -> abre o WhatsApp BUSINESS por padrao.
+  //     Testado no aparelho do dono (jul/2026): abriu o Business, que ele nem usa.
+  //     NAO e aleatorio nem depende de qual app a pessoa usa — e o default do iOS.
+  //   · `https://api.whatsapp.com/...` (Universal Link) -> abre o WhatsApp PESSOAL.
+  //   · `https://wa.me/` -> mesma familia, MAS exige numero de destino; sem ele o iOS
+  //     responde "Nao foi possivel abrir este link" (foi o 1o bug desta feature).
+  // Por isso: universal link + `send?text=` (o text dispensa o numero e cai na lista de
+  // contatos). Nao existe deep link pra "criar grupo" em nenhum dos dois — o maximo e
+  // abrir o app CERTO com o nome ja no clipboard.
+  function _openWhatsAppApp() {
+    // SEM parametro. Cada peca aqui foi paga com um teste no aparelho do dono:
+    //   · `?text=...`  -> abre o app CERTO, mas cai em "enviar pra quem?" (o text
+    //                     dispara o fluxo de ENVIO). Sem ele, so abre o app.
+    //   · `whatsapp://`-> esquema customizado: o iOS entrega pro BUSINESS por padrao.
+    //   · `wa.me/`     -> deu "Nao foi possivel abrir este link".
+    // Resta `https://api.whatsapp.com/` puro: universal link (=> WhatsApp PESSOAL,
+    // e o default documentado) e sem params (=> nao pede pra enviar nada).
+    // Deep link pra "criar grupo" NAO existe — o maximo e abrir o app com o nome ja
+    // no clipboard. Nao inventar um; ja custou 3 tentativas.
+    try { window.location.href = 'https://api.whatsapp.com/'; } catch (e) {}
+  }
+
+  window._waGrpCopyName = function (tId, matchId, groupMode) {
+    var ctx = _ctx(tId, matchId, groupMode); if (!ctx) return;
+    var el = document.getElementById('wa-grp-name');
+    var name = (el && el.value) ? el.value : _groupName(ctx);
+
+    var okThenOpen = function () {
+      _notify('Nome copiado', 'Novo grupo -> pule os participantes -> cole o nome.', 'success');
+      // So abre DEPOIS de copiar: abrir sem o nome no clipboard nao serve pra nada.
+      _openWhatsAppApp();
+    };
+    // Ultima saida quando a copia falha: seleciona pra pessoa usar o "Copiar" do
+    // celular. NAO roda no caminho feliz — rodar sempre era o que abria o teclado e
+    // deixava o texto marcado (parecia que o botao so selecionava).
+    var selectForManual = function () {
+      if (!el) { _notify('Copie o nome', name, 'info'); return; }
+      try {
+        var wasRO = el.readOnly;
+        el.readOnly = false;
+        el.focus({ preventScroll: true });
+        el.select();
+        el.setSelectionRange(0, String(name).length);
+        var selOk = (el.selectionEnd - el.selectionStart) === String(name).length;
+        var ok = false;
+        // execCommand SO conta com selecao real: sem o gate ele devolve TRUE com
+        // selecao vazia e o app cantava "copiado" com a colagem vindo vazia.
+        try { ok = selOk && !!document.execCommand('copy'); } catch (e) { ok = false; }
+        el.readOnly = wasRO;
+        if (ok) { okThenOpen(); return; }
+      } catch (e) {}
+      _notify('Toque em "Copiar"', 'O nome esta selecionado ai em cima — use o menu do celular.', 'warning');
+    };
+
+    // ORDEM: clipboard moderno PRIMEIRO (unico confiavel no iOS 13.4+). Antes o
+    // execCommand vinha na frente e dava return no TRUE mentiroso dele.
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(name).then(okThenOpen).catch(selectForManual);
+    } else {
+      selectForManual();
+    }
   };
 
-  window._waGrpSaveLink = function (tId, matchId, groupMode) {
+  // Botao cinza + spinner enquanto grava — helper CANONICO do app (_spinButton, o
+  // mesmo do Sortear/Inscrever). No SUCESSO o overlay fecha e o botao some junto; no
+  // ERRO precisa soltar, senao a pessoa nao consegue tentar de novo (o _spinButton
+  // reverte sozinho, mas so em 8s — uma eternidade olhando pra tela).
+  function _spin(btn, label) {
+    if (!btn || typeof window._spinButton !== 'function') return function () {};
+    var original = btn.innerHTML, f = btn.style.filter, c = btn.style.cursor, o = btn.style.opacity;
+    window._spinButton(btn, label);
+    return function () {
+      try {
+        if (!document.body.contains(btn)) return;
+        btn.innerHTML = original; btn.disabled = false;
+        btn.style.filter = f; btn.style.cursor = c; btn.style.opacity = o;
+        btn.removeAttribute('data-spinning');
+      } catch (e) {}
+    };
+  }
+
+  window._waGrpSaveLink = function (tId, matchId, groupMode, btn) {
     var ctx = _ctx(tId, matchId, groupMode); if (!ctx) return;
     var cu = _cu();
     if (!cu || !cu.uid) { _notify('Entre pra salvar', '', 'warning'); return; }
@@ -387,6 +491,7 @@
       if (!window.confirm((prev.byName || 'Outra pessoa') + ' já criou um grupo aqui. Substituir pelo seu link?')) return;
     }
 
+    var release = _spin(btn, 'Salvando…');
     ctx.target.waGroup = { link: link, byUid: cu.uid, byName: (cu.displayName || cu.name || ''), at: Date.now() };
     if (ctx.groupMode) _mirror(ctx);
 
@@ -399,6 +504,7 @@
       else if (typeof window._softRefreshView === 'function') window._softRefreshView();
     }).catch(function (err) {
       // Reverte o otimista — mesmo padrão do _saveSchedule.
+      release();
       ctx.target.waGroup = prev;
       if (ctx.groupMode) _mirror(ctx);
       var msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
@@ -410,7 +516,7 @@
   // Apaga o link — volta ao estado "sem grupo". Mesmo gate de quem pode criar
   // (jogador do confronto / organizador do torneio) e mesmo padrão otimista +
   // revert do save.
-  window._waGrpDeleteLink = function (tId, matchId, groupMode) {
+  window._waGrpDeleteLink = function (tId, matchId, groupMode, btn) {
     var ctx = _ctx(tId, matchId, groupMode); if (!ctx) return;
     var cu = _cu();
     if (!cu || !cu.uid || !_canManage(ctx, cu)) { _notify('Sem permissão', '', 'warning'); return; }
@@ -418,6 +524,7 @@
     if (!prev || !prev.link) { window._waGrpClose(); return; }
     if (!window.confirm('Apagar o link do grupo? O botão some pra todo mundo e volta o "Criar grupo".')) return;
 
+    var releaseD = _spin(btn, 'Apagando…');
     delete ctx.target.waGroup;
     if (ctx.groupMode) _mirror(ctx);
 
@@ -427,6 +534,7 @@
       if (typeof window._rerenderBracket === 'function' && ctx.scope === 'match') window._rerenderBracket(ctx.t.id);
       else if (typeof window._softRefreshView === 'function') window._softRefreshView();
     }).catch(function (err) {
+      releaseD();
       ctx.target.waGroup = prev;
       if (ctx.groupMode) _mirror(ctx);
       var msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';

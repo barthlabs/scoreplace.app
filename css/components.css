@@ -201,7 +201,7 @@ body.hamburger-open .topbar {
      Notif, Convidar, Pro, Apoie, Avatar, Logout, Tema, Idioma…).
      Bug reportado: "menu não scrola". Sem isso, itens do final ficavam
      inacessíveis. -60px = altura da topbar fixa acima. */
-  max-height: calc(100vh - 60px);
+  max-height: calc(100% - 60px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -286,6 +286,34 @@ body.hamburger-open .topbar {
 /* ==== BOTOES — Sistema Padronizado v0.3.3 ==== */
 
 /* --- Base --- */
+/* REGRA DO DONO (v1.2.11): numa linha de botões, se UM botão quebra em 2 linhas,
+   os de 1 linha acompanham a ALTURA dele — nada de botão baixinho ao lado de
+   botão alto. Marque a linha com class="btn-row".
+   Por que no filho e não em `align-items:stretch` no container: as linhas do app
+   misturam botões com <h3>/badges, e esticar o título mudaria o layout. Aqui só
+   os .btn esticam; o resto mantém o alinhamento do container.
+   O !important vence o align-self implícito herdado do align-items inline. */
+.btn-row > .btn { align-self: stretch !important; }
+/* E os botoes ENCOLHEM em vez de a linha quebrar. O `.btn` global tem
+   white-space:nowrap, entao ele nao cede largura: quando a soma passa do container o
+   ultimo botao cai sozinho pra linha de baixo — foi o que aconteceu com o "Abrir
+   grupo" no chaveamento. Raspar pixel (gap/padding) so adia: em tela menor, ou com o
+   tamanho de texto do iOS aumentado, estoura de novo. Aqui o texto quebra DENTRO do
+   proprio botao (que ja e o caso do "Combinar jogos") e a linha se mantem inteira em
+   qualquer largura. min-width:0 e o que permite o encolhimento — sem ele o item de
+   flex/grid nao passa do min-content. E flex-shrink:1 !important porque alguns botoes
+   (ex.: "Cheguei", em bracket.js) trazem flex-shrink:0 INLINE — inline vence classe, e
+   um so botao que nao cede ja empurra o vizinho pra linha de baixo. Dentro de uma
+   .btn-row ceder largura e a regra. */
+.btn-row .btn { white-space: normal; min-width: 0; flex-shrink: 1 !important; }
+.btn-row > * { min-width: 0; }
+/* E NAO quebrar a linha. Detalhe nao-obvio do flexbox: com flex-wrap:wrap o navegador
+   PREFERE quebrar a encolher — so espreme quando um item sozinho nao cabe. Ou seja,
+   enquanto houver `wrap` o encolhimento acima nunca entra em acao e o ultimo botao cai
+   pra linha de baixo. Com nowrap + min-width:0 + white-space:normal os botoes cedem
+   largura (o texto quebra dentro deles) e a linha se mantem inteira. */
+.btn-row { flex-wrap: nowrap !important; }
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -859,12 +887,30 @@ body.sp-drag-compact .sp-dnd-host .participant-card::before {
   }
 }
 
+/* v1.2.26: em tela grande os cards de torneio ficam em 2 colunas (não 3) —
+   com o container agora ocupando até 2040px, 2 colunas dão cards maiores e mais
+   legíveis, aproveitando a área sem espremer 3 por linha. Pedido do dono. */
 @media (min-width: 1200px) {
   .cards-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 2rem;
   }
+}
+
+/* v1.2.28: fim dos ESPAÇOS PRETOS VAZIOS na dashboard. Os slots de widget
+   (movimento nos locais, partida casual ativa, presença ativa) têm margin-bottom
+   no wrapper e ficam VAZIOS na maior parte do tempo (sem casual/presença/movimento)
+   → reservavam espaço morto escuro. `:empty` zera a margem/altura quando não há
+   conteúdo; quando o widget hidrata, a margem volta sozinha. Regra única, canônica —
+   qualquer slot novo que também possa ficar vazio deve entrar aqui. */
+#dashboard-presences-widget:empty,
+#dashboard-casual-link-widget:empty,
+#dashboard-myactive-widget:empty,
+#dash-profile-nudge-slot:empty {
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 0 !important;
 }
 
 /* ==== MODALS ==== */
@@ -895,7 +941,7 @@ body.sp-drag-compact .sp-dnd-host .participant-card::before {
   border-radius: var(--radius-lg);
   width: 90%;
   max-width: 600px;
-  max-height: 90vh;
+  max-height: 90%;
   overflow-y: auto;
   overflow-x: hidden;
   transform: scale(0.95);
@@ -973,7 +1019,7 @@ body {
   .modal {
     width: 100%;
     max-width: 100%;
-    max-height: 100vh;
+    max-height: 100%;
     border-radius: 12px 12px 0 0;
     transform: translateY(100%);
   }
@@ -1630,4 +1676,16 @@ body.sp-scroll-locked {
 html, body,
 .modal-overlay, .modal, .modal-content, .bottom-sheet {
   overscroll-behavior: contain;
+}
+
+/* Análise de Inscritos — rótulo do botão de categoria por largura. Em tela estreita
+   as 2 colunas de gênero têm ~50% cada, e "➕ Criar categoria" não cabe: era ele que
+   empurrava a coluna Masculino pra fora da tela. As duas versões vão no DOM e o CSS
+   escolhe — nada de medir largura em JS (o relatório re-renderiza sozinho e a medida
+   ficaria defasada). Ver createBtn em tournaments-enrollment-report.js. */
+.er-lbl-short { display: inline; }
+.er-lbl-full { display: none; }
+@media (min-width: 520px) {
+  .er-lbl-short { display: none; }
+  .er-lbl-full { display: inline; }
 }
