@@ -74,6 +74,8 @@ const SUITES = [
   'tests/flexibilize-remainder.test.js',
   // Flexibilizar como DECISÃO replicada na CF (_applyDrawDecisions forma as duplas do zero).
   'tests/flexibilize-decision-cf.test.js',
+  // Nome da dupla tardia vem do uid ao vivo (nunca a string "undefined").
+  'tests/late-join-name-uid.test.js',
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',

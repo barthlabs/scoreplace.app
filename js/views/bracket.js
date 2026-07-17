@@ -797,8 +797,20 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   }).join('');
 
   // Cards DUPLA FORMADA (teal) — 2 pessoas + Desfazer.
+  // v1.2.55: nome de CADA membro pelo SEU uid (cânone: identidade é uid; nome vem do perfil
+  // AO VIVO). O `pXName` guardado é APENAS fallback do guest sem conta (ex.: tonho). Antes o
+  // card fazia String(p.p2Name) cru → quando a entrada TEM uid o nome é stripado no save, então
+  // p2Name vinha undefined e virava a string "undefined" (Leila, com uid, aparecia assim).
+  var _ljMemberName = function (uid, stored) {
+    var s = (stored == null) ? '' : String(stored);
+    if (typeof window._displayNameForUid === 'function') {
+      var r = window._displayNameForUid(uid || '', s);
+      if (r) return String(r).trim();
+    }
+    return s.trim();
+  };
   var duplasHtml = _duplas.map(function (p) {
-    var m1 = String(p.p1Name).trim(), m2 = String(p.p2Name).trim();
+    var m1 = _ljMemberName(p.p1Uid, p.p1Name), m2 = _ljMemberName(p.p2Uid, p.p2Name);
     var desfazer = isOrg
       ? '<button type="button" class="btn btn-danger btn-micro" onclick="event.stopPropagation();window._splitLateDupla(\'' + tIdSafe + '\',\'' + _sa(_nm(p)) + '\')" style="min-height:0;height:26px;padding:0 10px;font-size:0.68rem;font-weight:800;white-space:nowrap;">↩️ Desfazer</button>'
       : '';
@@ -843,7 +855,11 @@ window._formLateJoinDupla = function (tId, src, tgt) {
   };
   var a = _pull(src), b = _pull(tgt);
   if (!a || !b) { if (a) { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; t.standbyParticipants.push(a); } if (b) { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; t.standbyParticipants.push(b); } return; }
-  var an = (window._pName ? window._pName(a, '') : (a.displayName || a.name || '')), bn = (window._pName ? window._pName(b, '') : (b.displayName || b.name || ''));
+  // v1.2.55: nunca gravar undefined em pXName. Com uid o nome é stripado no save e resolvido
+  // do perfil ao vivo no render (_ljMemberName). Sem uid (guest, ex.: tonho) o nome É a
+  // identidade → guarda. `|| ''` evita o "undefined" que aparecia quando o cache estava frio.
+  var an = ((window._pName ? window._pName(a, '') : (a.displayName || a.name || '')) || (typeof a === 'object' ? (a.displayName || a.name) : a) || '');
+  var bn = ((window._pName ? window._pName(b, '') : (b.displayName || b.name || '')) || (typeof b === 'object' ? (b.displayName || b.name) : b) || '');
   if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
   // v1.2.45: CARREGA o nº de inscrição de cada um pra dentro da dupla (p1Seq/p2Seq).
   // CÂNONE (dono): o número é da PESSOA e a acompanha SEMPRE — formar dupla (manual ou
