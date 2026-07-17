@@ -529,10 +529,16 @@ window._countCompetitors = function(t) {
     var addTeam = function(label) { var k = String(label == null ? '' : label).trim().toLowerCase(); if (k && !seenTeam[k]) { seenTeam[k] = 1; teams++; return true; } return false; };
     var tally = function(arr) {
         (Array.isArray(arr) ? arr : (arr ? Object.values(arr) : [])).forEach(function(p) {
+            // v1.2.60: chave do TIME por uids — o nome é stripado no save de entrada com uid
+            // ([[project_uid_identity_canon_locked]]), então `displayName`/`p1Name` vinham VAZIOS
+            // e `addTeam('')` PULAVA a dupla → contava só as duplas com nome (bug real 8/4 vs 26/13).
+            var _tUids = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
+            var _tKey = _tUids.length ? ('t:' + _tUids.slice().sort().join('|')) : null;
             if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
-                if (addTeam(p.displayName || p.name)) p.participants.forEach(function(s) { addP(s, s && (s.displayName || s.name)); });
-            } else if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
-                if (addTeam(p.displayName || (p.p1Name + ' / ' + p.p2Name))) { addP({ uid: p.p1Uid, email: p.p1Email }, p.p1Name); addP({ uid: p.p2Uid, email: p.p2Email }, p.p2Name); }
+                if (addTeam(_tKey || p.displayName || p.name)) p.participants.forEach(function(s) { addP(s, s && (s.displayName || s.name)); });
+            } else if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+                // ESTRUTURAL (uid OU nome) — [[project_dupla_entry_structural_not_slash]]. Antes exigia p1Name&&p2Name.
+                if (addTeam(_tKey || p.displayName || ((p.p1Name || '') + ' / ' + (p.p2Name || '')))) { addP({ uid: p.p1Uid, email: p.p1Email }, p.p1Name); addP({ uid: p.p2Uid, email: p.p2Email }, p.p2Name); }
             } else {
                 var s = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '');
                 if (s && s.indexOf('/') !== -1) {

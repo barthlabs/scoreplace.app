@@ -89,6 +89,8 @@ const SUITES = [
   'tests/late-dupla-repgame-fill.test.js',
   // Gap (dono, 17/jul, torneio REAL): dupla formada entra no lugar do repescado (chave playin).
   'tests/late-dupla-repfill-playin.test.js',
+  // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
+  'tests/count-competitors.test.js',
   'tests/phase-repechage-lines.test.js',
   'tests/reset-tournament.test.js',
   'tests/dupla-elim-render.test.js',
