@@ -2,6 +2,7 @@
   "appId": "app.scoreplace",
   "appName": "scoreplace",
   "webDir": "www",
+  "zoomEnabled": true,
   "server": {
     "hostname": "scoreplace.app",
     "iosScheme": "https",
