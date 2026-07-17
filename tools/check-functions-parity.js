@@ -100,6 +100,40 @@ if (BOTH) {
   if (soProd.length) { problemas++; console.log('   ❌ SÓ EM PROD — roda em produção sem existir na staging: ' + soProd.join(', ')); }
   else console.log('   ✓ tudo que roda em prod existe na staging');
   if (soStg.length) console.log('   ℹ️  só na staging (em teste, aguardando promoção — OK): ' + soStg.join(', '));
+
+  // ── O AMBIENTE, não só o nome ──────────────────────────────────────────────
+  // Dono: _"as funcoes precisam recriar o mesmo ambiente da prod em stag (nao apenas os
+  // nomes)"_ — certíssimo, e o buraco era real: a MESMA função existia dos dois lados com
+  // nome igual e CONFIG diferente (prod montava EVOLUTION_* de um deploy velho; a staging,
+  // recriada, não). Comparar nome dá verde e o teste continua não valendo nada.
+  // Compara o que muda o COMPORTAMENTO: runtime, memória, região, gatilho e SEGREDOS.
+  console.log('\n## mesmo AMBIENTE (runtime · memória · região · gatilho · segredos)');
+  const cfg = (proj, fn) => {
+    try {
+      const out = execFileSync('gcloud', ['run', 'services', 'describe', fn.toLowerCase(),
+        '--project', proj, '--region', 'us-central1', '--format', 'json'],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1024 * 1024 * 16 });
+      const j = JSON.parse(out);
+      const c = (((j.spec || {}).template || {}).spec || {}).containers || [];
+      const cc = c[0] || {};
+      const env = (cc.env || []);
+      return {
+        mem: ((cc.resources || {}).limits || {}).memory || '?',
+        segredos: env.filter((e) => (e.valueFrom || {}).secretKeyRef).map((e) => e.name).sort().join(','),
+      };
+    } catch (_) { return null; }   // região diferente / sem acesso → ignora (não inventa erro)
+  };
+  const comuns = [...prod].filter((f) => stg.has(f) && !f.startsWith('ext-'));
+  let difs = 0;
+  comuns.forEach((f) => {
+    const a = cfg('scoreplace-app', f), b = cfg('scoreplace-staging', f);
+    if (!a || !b) return;
+    const d = [];
+    if (a.mem !== b.mem) d.push('memória prod=' + a.mem + ' stg=' + b.mem);
+    if (a.segredos !== b.segredos) d.push('segredos prod=[' + (a.segredos || '—') + '] stg=[' + (b.segredos || '—') + ']');
+    if (d.length) { difs++; problemas++; console.log('   ❌ ' + f + ': ' + d.join(' · ')); }
+  });
+  if (!difs) console.log('   ✓ ' + comuns.length + ' funções com o mesmo ambiente dos dois lados');
 }
 
 if (problemas) {
