@@ -89,6 +89,21 @@ function setupCreateTournamentModal() {
   };
   // — Bloco 3: Pontuação Avançada (GSM) da Fase 1. idx 0 = IDs sem sufixo (save/load/motor
   //   intactos). Construtor de fases 2+ removido (Camada 2) — só existe a Fase 1. —
+  // Fonte ÚNICA dos valores/estados SUGERIDOS da Pontuação Avançada. O render (`row`) e o
+  // reset (`_resetAdvScoring`) leem daqui — sem drift. `_applyLive` é o default do toggle
+  // "Aplicar pontos de placar ao vivo".
+  var _ADV_SCORING_DEFAULTS = {
+    participation:  { value: 150,  enabled: true },
+    match_won:      { value: 150,  enabled: true },
+    game_won:       { value: 50,   enabled: true },
+    game_lost:      { value: -20,  enabled: true },
+    tiebreak_point: { value: 2,    enabled: true },
+    wo_penalty:     { value: -100, enabled: true },
+    killing_point:  { value: 10,   enabled: false },
+    point_scored:   { value: 1,    enabled: false },
+    _applyLive: true
+  };
+  window._ADV_SCORING_DEFAULTS = _ADV_SCORING_DEFAULTS;
   window._advScoringHtml = function(idx, initialDisplay, advData) {
     var T = window._t || function(k){ return k; };
     var s = idx === 0 ? '' : ('-' + idx);
@@ -97,6 +112,9 @@ function setupCreateTournamentModal() {
     var enabledOn = !!(advData && advData.enabled);
     var applyLiveOn = !advData || advData.applyLiveScoring !== false;
     function row(key, label, desc, val, checked) {
+      // Default canônico do mapa (fonte única); o arg literal só serve de fallback.
+      var _d = _ADV_SCORING_DEFAULTS[key];
+      if (_d) { val = _d.value; checked = _d.enabled; }
       if (cats && cats[key]) { checked = !!cats[key].enabled; val = (cats[key].value != null ? cats[key].value : val); }
       return '<div class="adv-row" data-adv-key="' + key + '" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">'
         + '<label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" class="adv-enabled"' + (checked ? ' checked' : '') + '><span class="toggle-slider"></span></label>'
@@ -110,6 +128,7 @@ function setupCreateTournamentModal() {
     h += '<label class="toggle-switch toggle-sm"><input type="checkbox" id="adv-scoring-enabled' + s + '"' + (enabledOn ? ' checked' : '') + ' onchange="window._onAdvScoringToggle(' + idx + ')"><span class="toggle-slider"></span></label>';
     h += '</div>';
     h += '<div id="adv-scoring-body' + s + '" style="display:' + (enabledOn ? 'block' : 'none') + '; margin-top:12px;">';
+    h += '<div style="display:flex; justify-content:flex-end; margin-bottom:8px;"><button type="button" onclick="window._resetAdvScoring(' + idx + ')" style="padding:5px 12px; border-radius:8px; border:1px solid rgba(251,191,36,0.35); background:rgba(251,191,36,0.1); color:#fbbf24; font-size:0.74rem; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:5px;">↺ ' + T('create.advResetBtn') + '</button></div>';
     h += '<p style="font-size:0.7rem; color:#10b981; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px;">' + T('create.advScoringGroupA') + '</p>';
     h += '<div style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px;">';
     h += row('participation', 'create.advParticipation', 'create.advParticipationDesc', '150', true);
@@ -146,6 +165,23 @@ function setupCreateTournamentModal() {
     });
     var apply = document.getElementById('adv-apply-live' + s);
     return { enabled: !!enEl.checked, categories: catsObj, applyLiveScoring: apply ? !!apply.checked : true };
+  };
+  // Restaura os VALORES/estados sugeridos da Pontuação Avançada (sem mexer no toggle mestre
+  // "Sistema de Pontos Avançado" — isso é a escolha de usar ou não o sistema).
+  window._resetAdvScoring = function(idx) {
+    var T = window._t || function(k){ return k; };
+    var s = idx === 0 ? '' : ('-' + idx);
+    var body = document.getElementById('adv-scoring-body' + s);
+    if (!body) return;
+    Array.prototype.forEach.call(body.querySelectorAll('.adv-row'), function(rw){
+      var key = rw.dataset.advKey; var d = _ADV_SCORING_DEFAULTS[key]; if (!d) return;
+      var en = rw.querySelector('.adv-enabled'); var val = rw.querySelector('.adv-value');
+      if (en) en.checked = !!d.enabled;
+      if (val) val.value = d.value;
+    });
+    var apply = document.getElementById('adv-apply-live' + s);
+    if (apply) apply.checked = _ADV_SCORING_DEFAULTS._applyLive !== false;
+    if (window.showNotification) window.showNotification('💯 ' + T('create.advResetBtn'), T('create.advResetToast'), 'success');
   };
   if (!document.getElementById('modal-create-tournament')) {
     const modalHtml = `
@@ -918,7 +954,8 @@ function setupCreateTournamentModal() {
               <!-- Critérios de Desempate -->
               <div id="tiebreaker-section" style="background: rgba(88,166,255,0.06); border: 1px solid rgba(88,166,255,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.5rem; font-size: 0.8rem; color: #58a6ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.tiebreakerSection')}</p>
-                <small class="text-muted" style="display:block;margin-bottom:0.75rem;">${_t('create.tiebreakerDesc')}</small>
+                <small class="text-muted" style="display:block;margin-bottom:0.5rem;">${_t('create.tiebreakerDesc')}</small>
+                <div style="display:flex;justify-content:flex-end;margin-bottom:0.6rem;"><button type="button" onclick="window._resetTiebreakers()" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(88,166,255,0.35);background:rgba(88,166,255,0.1);color:#58a6ff;font-size:0.74rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">↺ ${_t('create.tbResetBtn')}</button></div>
                 <ul id="tiebreaker-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">
                   <li draggable="true" data-tb="pontos_avancados" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 💯 ${_t('create.tbAdvancedPoints')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbAdvancedPointsNote')}</small><span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('pontos_avancados')" style="cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
                   <li draggable="true" data-tb="confronto_direto" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbHeadToHeadTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 🆚 ${_t('create.tbHeadToHead')}<span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
@@ -1051,6 +1088,29 @@ function setupCreateTournamentModal() {
           if (key === 'antiguidade' || key === 'juventude') window._tbNormalizeAge(key);
         }
         window._tbUpdateRowControls(li);
+      };
+
+      // Arranjo SUGERIDO dos critérios (ordem ativa + excluídos). Fonte única do reset.
+      // Bate com a ordem inicial dos <li> no HTML da seção de desempate.
+      var _TB_DEFAULT_ACTIVE = ['pontos_avancados', 'confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
+      var _TB_DEFAULT_EXCLUDED = ['juventude'];
+      // Restaura os critérios de desempate pra ordem + divisão (ativo/excluído) sugeridas.
+      // Reusa os <li> existentes (appendChild move o nó; iterar na ordem default reordena).
+      window._resetTiebreakers = function() {
+        var T = window._t || function(k){ return k; };
+        var active = document.getElementById('tiebreaker-list');
+        var excluded = document.getElementById('tiebreaker-excluded-list');
+        if (!active || !excluded) return;
+        var _find = function(key) { return document.querySelector('#tiebreaker-list li[data-tb="' + key + '"], #tiebreaker-excluded-list li[data-tb="' + key + '"]'); };
+        _TB_DEFAULT_ACTIVE.forEach(function(key) {
+          var li = _find(key);
+          if (li) { active.appendChild(li); if (window._tbUpdateRowControls) window._tbUpdateRowControls(li); }
+        });
+        _TB_DEFAULT_EXCLUDED.forEach(function(key) {
+          var li = _find(key);
+          if (li) { excluded.appendChild(li); if (window._tbUpdateRowControls) window._tbUpdateRowControls(li); }
+        });
+        if (window.showNotification) window.showNotification('🎯 ' + T('create.tbResetBtn'), T('create.tbResetToast'), 'success');
       };
 
       let dragItem = null;
