@@ -457,6 +457,21 @@
       applied.push({ step: 'odd', mode: d.odd, msg: ro.actionMsg });
     }
 
+    // 6.5 FLEXIBILIZAR EQUILÍBRIO (decisão do organizador) — forma as duplas ANTES do resto.
+    // CÂNONE (dono, jul/2026): flexibilizar persegue a regra ao MÁXIMO (mistas primeiro) e
+    // quebra o MÍNIMO (só o excedente de um gênero vira dupla mesmo-gênero) — NÃO é sorteio
+    // livre. _formDoublesTeams equilibrado já faz exatamente isso. Formar aqui, no servidor,
+    // faz o resto ser só os avulsos (não a sobra pow2 — _applyRemainderRemoval lê _flexibilized)
+    // e a pow2 fica pra tela seguinte. Substitui o forming client-side. Ver
+    // [[project_canon_runs_on_server]] / [[project_enroll_number_chronological_no_gaps]].
+    if (d.flexibilize && typeof window._formDoublesTeams === 'function') {
+      if (!t.teamOrigins) t.teamOrigins = {};
+      var _ff = window._formDoublesTeams(t.participants, 2, t.teamOrigins, 'equilibrado');
+      t.participants = _ff.participants;
+      t._flexibilized = true;
+      applied.push({ step: 'flexibilize', formed: _ff.newTeamsCount, sameGender: _ff.allMaleCount, leftover: _ff.leftoverCount });
+    }
+
     // 7. RESTO
     if (d.remainder && d.remainder.mode) {
       var rr = window._applyRemainderRemoval(t, d.remainder.mode, d.remainder.method || 'random');

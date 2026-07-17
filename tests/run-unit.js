@@ -72,6 +72,8 @@ const SUITES = [
   'tests/flexibilize-balance.test.js',
   // Flexibilizado não mira pow2: o resto vira só o avulso (3→1); pow2 é a próxima tela.
   'tests/flexibilize-remainder.test.js',
+  // Flexibilizar como DECISÃO replicada na CF (_applyDrawDecisions forma as duplas do zero).
+  'tests/flexibilize-decision-cf.test.js',
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',

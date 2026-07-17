@@ -32,6 +32,9 @@ window._clearDrawRuntimeFlags = function (t) {
     // Sorteio de Vagas + snapshots + flags internos do motor
     'drawSelectionDone', 'waitlistOrder', 'preDrawEnrollees', 'pendingDraw',
     '_drawBalanceMode', '_canonicalDraw', '_cleanupApplied', '_skipCatValidation',
+    // v1.2.53: "Flexibilizar equilíbrio" formou as duplas mesmo-gênero → o resto vira só
+    // os avulsos (não a sobra pow2). Cancelar/resetar volta ao estado sem-flexibilizar.
+    '_flexibilized',
     // pacote de decisões do pré-sorteio (vai pra CF na chamada; cancelar zera junto)
     '_drawDecisions',
     // estado de PLAY derivado do sorteio (standings/eliminação/W.O./substituição)
@@ -67,7 +70,16 @@ window._clearTournamentDraw = function (t) {
     if (_wait.length) _arr = _arr.concat(_wait);
     var _out = [];
     _arr.forEach(function (p) {
-      var nm = (p && typeof p === 'object') ? (p.displayName || p.name || '') : String(p || '');
+      // v1.2.45: o rótulo da dupla resolve AO VIVO (_pName monta "A / B" pelos uids).
+      // Antes lia só `p.displayName || p.name` — e o strip do ITEM 3 APAGA esses campos
+      // de quem tem perfil, então `nm` vinha VAZIO, `_origins[nm]` nunca casava e o
+      // Resetar NÃO desfazia as duplas sorteadas (bug real, "Duplas Mistas Sorteadas").
+      // O nome gravado fica de fallback (guest/dupla legada). Isto é remendo: teamOrigins
+      // é chaveado por NOME, o que o cânone de identidade proíbe — a chave certa é o par
+      // de uids. Ver [[project_uid_identity_canon_locked]].
+      var nm = (p && typeof p === 'object')
+        ? ((window._pName ? window._pName(p, '') : '') || p.displayName || p.name || '')
+        : String(p || '');
       var isTeam = (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) || (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) || (nm.indexOf(' / ') !== -1);
       if (nm && _origins[nm] === 'sorteada' && isTeam) {
         if (Array.isArray(p.participants) && p.participants.length) {
@@ -76,8 +88,11 @@ window._clearTournamentDraw = function (t) {
           // FASE 2: nome do membro resolve pelo uid (perfil ao vivo); nome gravado só fallback (guest/cache frio)
           var _dnA = window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '');
           var _dnB = window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '');
-          _out.push({ name: _dnA, displayName: _dnA, uid: p.p1Uid, email: p.p1Email, photoURL: p.p1Photo });
-          _out.push({ name: _dnB, displayName: _dnB, uid: p.p2Uid, email: p.p2Email, photoURL: p.p2Photo });
+          // v1.2.45: devolve o nº de inscrição de CADA um (p1Seq→enrollSeq). O número é da
+          // PESSOA e desfazer dupla não pode mexer nele — sem isto o reset renumerava todo
+          // mundo. Ver tests/enroll-number-canon.test.js.
+          _out.push({ name: _dnA, displayName: _dnA, uid: p.p1Uid, email: p.p1Email, photoURL: p.p1Photo, enrollSeq: (p.p1Seq != null ? p.p1Seq : undefined) });
+          _out.push({ name: _dnB, displayName: _dnB, uid: p.p2Uid, email: p.p2Email, photoURL: p.p2Photo, enrollSeq: (p.p2Seq != null ? p.p2Seq : undefined) });
         } else {
           nm.split('/').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (x) { _out.push({ name: x, displayName: x }); });
         }
@@ -402,6 +417,30 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
 }
 // v2.1.22: exposto pra reuso (jogos extras de tardios em torneios "expand").
 window._formDoublesTeams = _formDoublesTeams;
+
+// v1.2.48: PREVIEW dos pares que o sorteio EQUILIBRADO formaria a partir dos avulsos,
+// SEM formar nada — mesma lógica de _formDoublesTeams (mistas primeiro; depois mesmo-gênero
+// da sobra). Alimenta a opção "Flexibilizar equilíbrio" no painel do resto: em vez de
+// deixar N pessoas de fora pra bater potência de 2, forma a(s) dupla(s) mesmo-gênero da
+// sobra (inclusão acima de pow2 — ver [[project_inclusion_philosophy_canon]]) e resolve a
+// pow2 depois. `_isMale` idêntico ao da formação: gênero !== 'masculino' conta como não-homem.
+window._equilibradoPairPreview = function(individuals) {
+  var men = 0, nonMale = 0;
+  (individuals || []).forEach(function(p){
+    if (p && typeof p === 'object' && p.gender === 'masculino') men++; else nonMale++;
+  });
+  var mixed = Math.min(men, nonMale);
+  var remMen = men - mixed, remNon = nonMale - mixed;
+  var malePairs = Math.floor(remMen / 2);
+  var femalePairs = Math.floor(remNon / 2);
+  return {
+    men: men, nonMale: nonMale,
+    mixedPairs: mixed, malePairs: malePairs, femalePairs: femalePairs,
+    sameGenderPairs: malePairs + femalePairs,
+    maxTeams: mixed + malePairs + femalePairs,
+    leftover: (remMen % 2) + (remNon % 2) // 0 ou 1 (só um gênero sobra ímpar)
+  };
+};
 
 // v2.2.46: separação por origem da dupla no modo MISTO.
 // Quando t.mixedPairingSeparated está ligado, duplas formadas manualmente e

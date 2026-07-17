@@ -618,6 +618,11 @@ window._applyFlexibilizeBalance = function(tId) {
     // e a remoção passam a tratar só os avulsos (resto real), sem mirar pow2. Limpo no cancelar/
     // resetar (_clearDrawRuntimeFlags). A pow2 dos N times vem na próxima tela.
     t._flexibilized = true;
+    // v1.2.54 (Fase 1 — cânone roda no servidor): registra "flexibilizar" como DECISÃO no
+    // pacote, pra a CF drawRound REPLICAR a formação (mistas primeiro, mínimo mesmo-gênero) em
+    // vez de herdar as duplas mutadas aqui. O forming acima segue como PREVIEW transiente do
+    // painel; a CF é a autoridade. Ver [[project_canon_runs_on_server]].
+    t._drawDecisions = Object.assign({}, t._drawDecisions, { flexibilize: true, balanceMode: 'equilibrado' });
     if (window.AppStore && typeof window.AppStore.logAction === 'function') {
         window.AppStore.logAction(tId, 'Equilíbrio flexibilizado: ' + res.newTeamsCount + ' dupla(s) formada(s)' +
             (res.allMaleCount ? ' (' + res.allMaleCount + ' 100% masc.)' : '') +

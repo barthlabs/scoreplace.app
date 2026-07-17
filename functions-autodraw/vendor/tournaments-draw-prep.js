@@ -413,8 +413,12 @@ window._showRemainderPanel = function(tId, info, t) {
     // os AVULSOS que ficaram SEM DUPLA. Mostra as EQUIPES FORMADAS reais (não recompõe pow2)
     // e X "sem dupla". Formação por SORTEIO segue a lógica antiga (pow2 do pool).
     var _manualPair = (typeof window._isManualPairing === 'function') && _tObj && window._isManualPairing(_tObj);
-    var teamsFormed = _manualPair ? (info.preFormedTeams || 0) : _targetTeams;
-    var remCount = _manualPair ? (info.remainder || 0) : (_totalPlayers - (_targetTeams * _ts));
+    // v1.2.53: flexibilizado (duplas mesmo-gênero já formadas) mostra o estado REAL — times
+    // formados + o(s) avulso(s) que sobrou(aram) — igual às duplas manuais. NÃO recompõe pow2
+    // aqui (a pow2 é a próxima tela). Sem flexibilizar, o sorteio segue o cálculo legado.
+    var _formedView = _manualPair || !!(_tObj && _tObj._flexibilized);
+    var teamsFormed = _formedView ? (info.preFormedTeams || 0) : _targetTeams;
+    var remCount = _formedView ? (info.individuals || info.remainder || 0) : (_totalPlayers - (_targetTeams * _ts));
     // Rótulos: dupla formada usa "sem dupla" / "equipes formadas"; sorteio mantém o legado.
     var _lblTeamsFormed = _manualPair ? 'equipes formadas' : _t('predraw.teamsFormed');
     var _lblRemainder = _manualPair ? 'sem dupla' : _t('predraw.remainderLabel');
@@ -424,6 +428,36 @@ window._showRemainderPanel = function(tId, info, t) {
 
     // Store info globally so onclick handlers can access it without JSON in attributes
     window._remainderInfo = info;
+    window._remainderSel = null; // v1.2.50: painel abre SEM opção escolhida (select→confirm)
+
+    // v1.2.48: opção "Flexibilizar equilíbrio" — só no sorteio EQUILIBRADO de duplas quando
+    // a sobra de UM gênero permite formar dupla(s) mesmo-gênero. Em vez de deixar gente de
+    // fora pra bater potência de 2, forma essas duplas (inclusão acima de pow2) e a pow2 se
+    // resolve na tela seguinte. Ver [[project_inclusion_philosophy_canon]].
+    var _flexBtn = '';
+    if (!_manualPair && _ts === 2) {
+        var _indivs = _arr.filter(function(p){ return !window._entryTeamMembers(p); });
+        var _bal = (_tObj && _tObj._drawBalanceMode === 'equilibrado') ||
+                   (_tObj && _tObj._drawBalanceMode == null && _tObj.equilibrado !== false);
+        var _prev = (typeof window._equilibradoPairPreview === 'function') ? window._equilibradoPairPreview(_indivs) : null;
+        if (_bal && _prev && _prev.mixedPairs > 0 && _prev.sameGenderPairs > 0) {
+            var _sg = _prev.sameGenderPairs;
+            var _genderWord = _prev.femalePairs >= _prev.malePairs ? 'mulheres' : 'homens';
+            var _playNow = _sg * 2;
+            var _leftWord = _prev.leftover === 1 ? '1 pessoa fica como resto' : 'ninguém fica de fora';
+            var _flexDesc = 'Forma ' + _sg + ' dupla' + (_sg > 1 ? 's' : '') + ' só de ' + _genderWord +
+                ' — ' + _playNow + ' jogam em vez de ficar de fora. ' + _leftWord +
+                '; a potência de 2 é resolvida na próxima tela.';
+            _flexBtn =
+                '<button type="button" class="rem-opt" data-opt="flex" onclick="window._selectRemainderOption(\'flex\')" style="border-color:rgba(34,197,94,0.35);">' +
+                    '<span style="font-size:1.3rem;flex-shrink:0;">⚖️</span>' +
+                    '<div>' +
+                        '<div style="font-weight:800;font-size:0.88rem;color:#4ade80;">Flexibilizar equilíbrio</div>' +
+                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:2px;line-height:1.3;">' + _flexDesc + '</div>' +
+                    '</div>' +
+                '</button>';
+        }
+    }
 
     var overlay = document.createElement('div');
     overlay.id = 'remainder-resolution-panel';
@@ -433,17 +467,27 @@ window._showRemainderPanel = function(tId, info, t) {
     document.body.style.overflow = 'hidden';
 
     overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:28px;border:1px solid rgba(139,92,246,0.3);box-shadow:0 30px 100px rgba(0,0,0,0.7),0 0 60px rgba(139,92,246,0.1);overflow:hidden;animation:modalFadeIn 0.3s cubic-bezier(0.16,1,0.3,1);display:flex;flex-direction:column;max-height:94svh;">' +
-        '<style>@keyframes modalFadeIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}</style>' +
-        // Sticky top bar with cancel
-        '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#4c1d95 0%,#6d28d9 50%,#7c3aed 100%);padding:10px 1.25rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
+        '<style>@keyframes modalFadeIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}' +
+            '#remainder-resolution-panel .rem-opt{width:100%;font:inherit;background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.15);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:#e2e8f0;transition:transform .15s,box-shadow .15s,background .15s,border-color .15s;display:flex;align-items:center;gap:12px;}' +
+            '#remainder-resolution-panel .rem-opt:hover{transform:translateY(-1px);}' +
+            '#remainder-resolution-panel .rem-opt.sel{background:rgba(139,92,246,0.16);border-color:#a78bfa !important;box-shadow:0 0 0 2px #a78bfa,0 6px 22px rgba(139,92,246,0.28);}' +
+            '#remainder-confirm-btn:disabled{opacity:0.45;cursor:not-allowed;}' +
+        '</style>' +
+        // Sticky top bar — título em cima (sem cortar), ações numa linha ABAIXO.
+        // v1.2.51: os botões NÃO podem truncar a descrição; ficam embaixo dela. Padrão
+        // canônico mantido: Cancelar (vermelho) à esquerda, Confirmar (verde) à direita.
+        '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#4c1d95 0%,#6d28d9 50%,#7c3aed 100%);padding:10px 1.25rem;display:flex;flex-direction:column;gap:9px;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:10px;">' +
-                '<span style="font-size:1.3rem;">👥</span>' +
+                '<span style="font-size:1.3rem;flex-shrink:0;">👥</span>' +
                 '<div>' +
                     '<h3 style="margin:0;color:#ede9fe;font-size:1rem;font-weight:900;letter-spacing:-0.02em;">' + (_manualPair ? 'Participantes sem dupla' : _t('predraw.remainderTitle')) + '</h3>' +
                     '<p style="margin:2px 0 0;color:#c4b5fd;font-size:0.72rem;">' + (_manualPair ? (remCount + ' sem dupla · ' + teamsFormed + ' equipe' + (teamsFormed > 1 ? 's' : '') + ' formada' + (teamsFormed > 1 ? 's' : '')) : _t('predraw.remainderSubtitle', {label: remLabel, p: (remCount > 1 ? 'm' : '')})) + '</p>' +
                 '</div>' +
             '</div>' +
-            '<button onclick="window._cancelRemainderPanel(\'' + tIdSafe + '\')" style="background:rgba(0,0,0,0.25);color:#ede9fe;border:2px solid rgba(237,233,254,0.3);padding:6px 16px;border-radius:10px;font-weight:700;font-size:0.8rem;cursor:pointer;transition:all 0.2s;white-space:nowrap;flex-shrink:0;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\';this.style.borderColor=\'rgba(237,233,254,0.5)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\';this.style.borderColor=\'rgba(237,233,254,0.3)\'">' + _t('predraw.cancelBtn') + '</button>' +
+            '<div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">' +
+                '<button type="button" onclick="window._cancelRemainderPanel(\'' + tIdSafe + '\')" style="background:#dc2626;color:#fff;border:none;padding:8px 18px;border-radius:10px;font-weight:700;font-size:0.82rem;cursor:pointer;white-space:nowrap;">' + _t('predraw.cancelBtn').replace(/^[✕✖x]\s*/i, '') + '</button>' +
+                '<button type="button" id="remainder-confirm-btn" disabled onclick="window._confirmRemainderSelection(\'' + tIdSafe + '\')" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;padding:8px 20px;border-radius:10px;font-weight:800;font-size:0.82rem;cursor:pointer;white-space:nowrap;">Confirmar</button>' +
+            '</div>' +
         '</div>' +
         // Scrollable content
         '<div style="overflow-y:auto;flex:1;">' +
@@ -467,37 +511,41 @@ window._showRemainderPanel = function(tId, info, t) {
         // Options
         '<div style="padding:0.85rem 1.25rem 1.1rem;">' +
             '<h4 style="margin:0 0 0.5rem;color:#94a3b8;font-size:0.68rem;text-transform:uppercase;letter-spacing:1.8px;font-weight:700;">' + _lblWhatToDo + '</h4>' +
-            // Sorteio Geral toggle (default ON = random; OFF = last)
-            '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);margin-bottom:9px;">' +
+            // v1.2.48: toggle do MÉTODO DO CORTE (quem sai pra fechar a chave). Texto claro:
+            // "Corte: Sorteio Geral" (aleatório entre todos) ↔ "Corte: Cronológico" (os
+            // últimos a se inscrever saem primeiro). Vale pra Lista de Espera e Exclusão.
+            '<div id="remainder-cut-toggle-wrap" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);margin-bottom:9px;transition:opacity .15s;opacity:0.4;pointer-events:none;">' +
                 '<div style="flex:1;min-width:0;">' +
-                    '<div style="font-weight:800;color:#ede9fe;font-size:0.82rem;">' + _t('predraw.randomToggleLabel') + '</div>' +
-                    '<div id="remainder-toggle-desc" style="font-size:0.7rem;color:#c4b5fd;margin-top:2px;line-height:1.35;">' + _t('predraw.randomToggleOn') + '</div>' +
+                    '<div id="remainder-toggle-title" style="font-weight:800;color:#ede9fe;font-size:0.82rem;">Corte: Sorteio Geral</div>' +
+                    '<div id="remainder-toggle-desc" style="font-size:0.7rem;color:#c4b5fd;margin-top:2px;line-height:1.35;">Quem sai é sorteado aleatoriamente entre todos os inscritos.</div>' +
                 '</div>' +
-                '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox" id="remainder-random-toggle" checked onchange="var d=document.getElementById(\'remainder-toggle-desc\');if(d)d.textContent=this.checked?window._t(\'predraw.randomToggleOn\'):window._t(\'predraw.randomToggleOff\');"><span class="toggle-slider"></span></label>' +
+                '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox" id="remainder-random-toggle" checked onchange="var ti=document.getElementById(\'remainder-toggle-title\');var d=document.getElementById(\'remainder-toggle-desc\');if(ti)ti.textContent=this.checked?\'Corte: Sorteio Geral\':\'Corte: Cronológico\';if(d)d.textContent=this.checked?\'Quem sai é sorteado aleatoriamente entre todos os inscritos.\':\'Os últimos a se inscrever saem primeiro.\';"><span class="toggle-slider"></span></label>' +
             '</div>' +
             '<div style="display:flex;flex-direction:column;gap:8px;">' +
+                // v1.2.48: Flexibilizar equilíbrio (só aparece no equilibrado com sobra de gênero)
+                _flexBtn +
                 // Reabrir Inscrições
-                '<button onclick="document.getElementById(\'remainder-resolution-panel\').remove();document.body.style.overflow=\'\';window._showReopenPanel(\'' + tIdSafe + '\',window._remainderInfo)" style="background:rgba(59,130,246,0.08);border:2px solid rgba(59,130,246,0.25);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:#e2e8f0;transition:all 0.2s;display:flex;align-items:center;gap:12px;" onmouseover="this.style.borderColor=\'rgba(59,130,246,0.5)\';this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 20px rgba(59,130,246,0.15)\'" onmouseout="this.style.borderColor=\'rgba(59,130,246,0.25)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
+                '<button type="button" class="rem-opt" data-opt="reopen" onclick="window._selectRemainderOption(\'reopen\')" style="border-color:rgba(59,130,246,0.3);">' +
                     '<span style="font-size:1.3rem;flex-shrink:0;">↩️</span>' +
                     '<div>' +
                         '<div style="font-weight:800;font-size:0.88rem;color:#60a5fa;">' + _t('predraw.p2PollReopenTitle') + '</div>' +
-                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.5);margin-top:2px;line-height:1.3;">' + _t('predraw.reopenRemainderDesc', {label: (remCount > 1 ? _t('predraw.remainderTeamMany') : _t('predraw.remainderTeamOne'))}) + '</div>' +
+                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:2px;line-height:1.3;">' + _t('predraw.reopenRemainderDesc', {label: (remCount > 1 ? _t('predraw.remainderTeamMany') : _t('predraw.remainderTeamOne'))}) + '</div>' +
                     '</div>' +
                 '</button>' +
-                // Lista de Espera (reads toggle for method)
-                '<button onclick="window._applyRemainderAction(\'' + tIdSafe + '\',\'standby\')" style="background:rgba(168,85,247,0.08);border:2px solid rgba(168,85,247,0.25);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:#e2e8f0;transition:all 0.2s;display:flex;align-items:center;gap:12px;" onmouseover="this.style.borderColor=\'rgba(168,85,247,0.5)\';this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 20px rgba(168,85,247,0.15)\'" onmouseout="this.style.borderColor=\'rgba(168,85,247,0.25)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
+                // Lista de Espera (usa o toggle do corte)
+                '<button type="button" class="rem-opt" data-opt="standby" onclick="window._selectRemainderOption(\'standby\')" style="border-color:rgba(168,85,247,0.3);">' +
                     '<span style="font-size:1.3rem;flex-shrink:0;">⏱️</span>' +
                     '<div>' +
                         '<div style="font-weight:800;font-size:0.88rem;color:#c084fc;">' + _t('predraw.waitlistTitle') + '</div>' +
-                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.5);margin-top:2px;line-height:1.3;">' + _t('predraw.standbyRemainderDesc', {label: remLabel}) + '</div>' +
+                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:2px;line-height:1.3;">' + _t('predraw.standbyRemainderDesc', {label: remLabel}) + '</div>' +
                     '</div>' +
                 '</button>' +
-                // Exclusão (reads toggle for method)
-                '<button onclick="window._applyRemainderAction(\'' + tIdSafe + '\',\'exclusion\')" style="background:rgba(239,68,68,0.08);border:2px solid rgba(239,68,68,0.25);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:#e2e8f0;transition:all 0.2s;display:flex;align-items:center;gap:12px;" onmouseover="this.style.borderColor=\'rgba(239,68,68,0.5)\';this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 20px rgba(239,68,68,0.15)\'" onmouseout="this.style.borderColor=\'rgba(239,68,68,0.25)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
+                // Exclusão (usa o toggle do corte)
+                '<button type="button" class="rem-opt" data-opt="exclusion" onclick="window._selectRemainderOption(\'exclusion\')" style="border-color:rgba(239,68,68,0.3);">' +
                     '<span style="font-size:1.3rem;flex-shrink:0;">🚫</span>' +
                     '<div>' +
                         '<div style="font-weight:800;font-size:0.88rem;color:#f87171;">' + _t('predraw.exclusionTitle') + '</div>' +
-                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.5);margin-top:2px;line-height:1.3;">' + _t('predraw.exclusionRemainderDesc', {label: remLabel}) + '</div>' +
+                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:2px;line-height:1.3;">' + _t('predraw.exclusionRemainderDesc', {label: remLabel}) + '</div>' +
                     '</div>' +
                 '</button>' +
             '</div>' +
@@ -506,6 +554,84 @@ window._showRemainderPanel = function(tId, info, t) {
     '</div>';
 
     document.body.appendChild(overlay);
+};
+
+// v1.2.50: SELECIONAR uma decisão do painel do resto (destaca + habilita Confirmar).
+// Não executa nada — o dono pede clicar a decisão e LER como ela se aplica antes de
+// confirmar. O toggle do corte (sorteio/cronológico) só faz sentido pra Lista de Espera
+// e Exclusão, então acende só nessas; nas outras fica apagado.
+window._selectRemainderOption = function(key) {
+    window._remainderSel = key;
+    var panel = document.getElementById('remainder-resolution-panel');
+    if (!panel) return;
+    var opts = panel.querySelectorAll('[data-opt]');
+    for (var i = 0; i < opts.length; i++) {
+        if (opts[i].getAttribute('data-opt') === key) opts[i].classList.add('sel');
+        else opts[i].classList.remove('sel');
+    }
+    // Habilita o Confirmar (verde, topo). A opção escolhida já fica destacada com o anel roxo.
+    var btn = document.getElementById('remainder-confirm-btn');
+    if (btn) btn.disabled = false;
+    var cut = document.getElementById('remainder-cut-toggle-wrap');
+    if (cut) {
+        var usaCorte = (key === 'standby' || key === 'exclusion');
+        cut.style.opacity = usaCorte ? '1' : '0.4';
+        cut.style.pointerEvents = usaCorte ? '' : 'none';
+    }
+};
+
+// v1.2.50: EXECUTA a decisão selecionada (o Confirmar). Despacha pra ação que antes rodava
+// direto no clique de cada card.
+window._confirmRemainderSelection = function(tId) {
+    var key = window._remainderSel;
+    if (!key) return;
+    if (key === 'flex') { window._applyFlexibilizeBalance(tId); return; }
+    if (key === 'reopen') {
+        var p = document.getElementById('remainder-resolution-panel'); if (p) p.remove();
+        document.body.style.overflow = '';
+        window._showReopenPanel(tId, window._remainderInfo);
+        return;
+    }
+    // standby | exclusion → _applyRemainderAction lê o toggle do corte (sorteio/cronológico)
+    window._applyRemainderAction(tId, key);
+};
+
+// v1.2.48: "Flexibilizar equilíbrio" — forma TODAS as duplas possíveis (o motor equilibrado
+// já faz as mistas e depois as mesmo-gênero da sobra), reduzindo o resto ao mínimo (0–1). Em
+// vez de deixar gente de fora pra bater potência de 2, inclui todo mundo que dá pra emparelhar
+// e deixa a pow2 pra próxima tela ([[project_inclusion_philosophy_canon]]). Re-entra na cadeia:
+// se sobrou 1 pessoa, o painel do resto reaparece só pra ela (sem a opção de flexibilizar, já
+// que 1 não forma dupla); depois os N times (≠ pow2) caem no painel de pow2 — reusa o motor
+// que já existe pra N times formados. Snapshot em _drawPrepSnapshots (tournaments.js) garante
+// que Cancelar reverte esta formação.
+window._applyFlexibilizeBalance = function(tId) {
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    var panel = document.getElementById('remainder-resolution-panel');
+    if (panel) panel.remove();
+    document.body.style.overflow = '';
+    if (typeof window._formDoublesTeams !== 'function') { window.showUnifiedResolutionPanel(String(tId)); return; }
+    if (!t.teamOrigins) t.teamOrigins = {};
+    var res = window._formDoublesTeams(t.participants || [], 2, t.teamOrigins, 'equilibrado');
+    t.participants = res.participants;
+    // v1.2.53: marca que as duplas (incl. mesmo-gênero) já foram formadas → o painel do resto
+    // e a remoção passam a tratar só os avulsos (resto real), sem mirar pow2. Limpo no cancelar/
+    // resetar (_clearDrawRuntimeFlags). A pow2 dos N times vem na próxima tela.
+    t._flexibilized = true;
+    // v1.2.54 (Fase 1 — cânone roda no servidor): registra "flexibilizar" como DECISÃO no
+    // pacote, pra a CF drawRound REPLICAR a formação (mistas primeiro, mínimo mesmo-gênero) em
+    // vez de herdar as duplas mutadas aqui. O forming acima segue como PREVIEW transiente do
+    // painel; a CF é a autoridade. Ver [[project_canon_runs_on_server]].
+    t._drawDecisions = Object.assign({}, t._drawDecisions, { flexibilize: true, balanceMode: 'equilibrado' });
+    if (window.AppStore && typeof window.AppStore.logAction === 'function') {
+        window.AppStore.logAction(tId, 'Equilíbrio flexibilizado: ' + res.newTeamsCount + ' dupla(s) formada(s)' +
+            (res.allMaleCount ? ' (' + res.allMaleCount + ' 100% masc.)' : '') +
+            (res.leftoverCount ? ', ' + res.leftoverCount + ' sem dupla' : ''));
+    }
+    if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+    }
+    window.showUnifiedResolutionPanel(String(tId));
 };
 
 // v4.0.98 — CANCEL CANÔNICO da cadeia de resolução do sorteio. Pedido do dono:
