@@ -11,6 +11,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #58a6ff;border-radius:12px;padding:14px 16px;background:rgba(88,166,255,0.08);">' +
+      '<div style="font-weight:800; color:#58a6ff; font-size:1rem; margin-bottom:8px;">↺ v1.2.34 — Voltar pro padrão sugerido com um clique <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>↺ Restaurar sugestão (Pontos Avançados):</b> na criação/edição do torneio, um botão volta todos os valores e chaves da pontuação (participação, vitória, games, tie-break, W.O., etc.) pros números sugeridos pelo app — sem precisar ajustar campo por campo.</li>' +
+        '<li><b>↺ Restaurar padrão (Critérios de Desempate):</b> outro botão devolve os critérios e a ordem deles pro arranjo sugerido, incluindo o que fica em "não considerados". Mexeu demais e quer recomeçar? Um clique resolve.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
       '<div style="font-weight:800; color:#818cf8; font-size:1rem; margin-bottom:8px;">📞 v1.2.30 — Novo canal do desenvolvedor <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(16 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
