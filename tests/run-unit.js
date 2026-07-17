@@ -68,6 +68,8 @@ const SUITES = [
   'tests/uid-poison-inscritos.test.js',
   // Nº de inscrição é da PESSOA: formar/desfazer dupla NÃO mexe; só a saída renumera.
   'tests/enroll-number-canon.test.js',
+  // Flexibilizar equilíbrio: forma duplas mesmo-gênero da sobra em vez de deixar gente de fora.
+  'tests/flexibilize-balance.test.js',
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',

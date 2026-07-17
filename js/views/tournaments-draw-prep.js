@@ -425,6 +425,35 @@ window._showRemainderPanel = function(tId, info, t) {
     // Store info globally so onclick handlers can access it without JSON in attributes
     window._remainderInfo = info;
 
+    // v1.2.48: opção "Flexibilizar equilíbrio" — só no sorteio EQUILIBRADO de duplas quando
+    // a sobra de UM gênero permite formar dupla(s) mesmo-gênero. Em vez de deixar gente de
+    // fora pra bater potência de 2, forma essas duplas (inclusão acima de pow2) e a pow2 se
+    // resolve na tela seguinte. Ver [[project_inclusion_philosophy_canon]].
+    var _flexBtn = '';
+    if (!_manualPair && _ts === 2) {
+        var _indivs = _arr.filter(function(p){ return !window._entryTeamMembers(p); });
+        var _bal = (_tObj && _tObj._drawBalanceMode === 'equilibrado') ||
+                   (_tObj && _tObj._drawBalanceMode == null && _tObj.equilibrado !== false);
+        var _prev = (typeof window._equilibradoPairPreview === 'function') ? window._equilibradoPairPreview(_indivs) : null;
+        if (_bal && _prev && _prev.mixedPairs > 0 && _prev.sameGenderPairs > 0) {
+            var _sg = _prev.sameGenderPairs;
+            var _genderWord = _prev.femalePairs >= _prev.malePairs ? 'mulheres' : 'homens';
+            var _playNow = _sg * 2;
+            var _leftWord = _prev.leftover === 1 ? '1 pessoa fica como resto' : 'ninguém fica de fora';
+            var _flexDesc = 'Forma ' + _sg + ' dupla' + (_sg > 1 ? 's' : '') + ' só de ' + _genderWord +
+                ' — ' + _playNow + ' jogam em vez de ficar de fora. ' + _leftWord +
+                '; a potência de 2 é resolvida na próxima tela.';
+            _flexBtn =
+                '<button onclick="window._applyFlexibilizeBalance(\'' + tIdSafe + '\')" style="background:rgba(34,197,94,0.10);border:2px solid rgba(34,197,94,0.35);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:#e2e8f0;transition:all 0.2s;display:flex;align-items:center;gap:12px;" onmouseover="this.style.borderColor=\'rgba(34,197,94,0.6)\';this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 20px rgba(34,197,94,0.15)\'" onmouseout="this.style.borderColor=\'rgba(34,197,94,0.35)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
+                    '<span style="font-size:1.3rem;flex-shrink:0;">⚖️</span>' +
+                    '<div>' +
+                        '<div style="font-weight:800;font-size:0.88rem;color:#4ade80;">Flexibilizar equilíbrio</div>' +
+                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.5);margin-top:2px;line-height:1.3;">' + _flexDesc + '</div>' +
+                    '</div>' +
+                '</button>';
+        }
+    }
+
     var overlay = document.createElement('div');
     overlay.id = 'remainder-resolution-panel';
     // Use svh (small viewport height) so iOS Safari's dynamic address bar
@@ -476,6 +505,8 @@ window._showRemainderPanel = function(tId, info, t) {
                 '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox" id="remainder-random-toggle" checked onchange="var d=document.getElementById(\'remainder-toggle-desc\');if(d)d.textContent=this.checked?window._t(\'predraw.randomToggleOn\'):window._t(\'predraw.randomToggleOff\');"><span class="toggle-slider"></span></label>' +
             '</div>' +
             '<div style="display:flex;flex-direction:column;gap:8px;">' +
+                // v1.2.48: Flexibilizar equilíbrio (só aparece no equilibrado com sobra de gênero)
+                _flexBtn +
                 // Reabrir Inscrições
                 '<button onclick="document.getElementById(\'remainder-resolution-panel\').remove();document.body.style.overflow=\'\';window._showReopenPanel(\'' + tIdSafe + '\',window._remainderInfo)" style="background:rgba(59,130,246,0.08);border:2px solid rgba(59,130,246,0.25);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:#e2e8f0;transition:all 0.2s;display:flex;align-items:center;gap:12px;" onmouseover="this.style.borderColor=\'rgba(59,130,246,0.5)\';this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 20px rgba(59,130,246,0.15)\'" onmouseout="this.style.borderColor=\'rgba(59,130,246,0.25)\';this.style.transform=\'\';this.style.boxShadow=\'\'">' +
                     '<span style="font-size:1.3rem;flex-shrink:0;">↩️</span>' +
@@ -506,6 +537,35 @@ window._showRemainderPanel = function(tId, info, t) {
     '</div>';
 
     document.body.appendChild(overlay);
+};
+
+// v1.2.48: "Flexibilizar equilíbrio" — forma TODAS as duplas possíveis (o motor equilibrado
+// já faz as mistas e depois as mesmo-gênero da sobra), reduzindo o resto ao mínimo (0–1). Em
+// vez de deixar gente de fora pra bater potência de 2, inclui todo mundo que dá pra emparelhar
+// e deixa a pow2 pra próxima tela ([[project_inclusion_philosophy_canon]]). Re-entra na cadeia:
+// se sobrou 1 pessoa, o painel do resto reaparece só pra ela (sem a opção de flexibilizar, já
+// que 1 não forma dupla); depois os N times (≠ pow2) caem no painel de pow2 — reusa o motor
+// que já existe pra N times formados. Snapshot em _drawPrepSnapshots (tournaments.js) garante
+// que Cancelar reverte esta formação.
+window._applyFlexibilizeBalance = function(tId) {
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    var panel = document.getElementById('remainder-resolution-panel');
+    if (panel) panel.remove();
+    document.body.style.overflow = '';
+    if (typeof window._formDoublesTeams !== 'function') { window.showUnifiedResolutionPanel(String(tId)); return; }
+    if (!t.teamOrigins) t.teamOrigins = {};
+    var res = window._formDoublesTeams(t.participants || [], 2, t.teamOrigins, 'equilibrado');
+    t.participants = res.participants;
+    if (window.AppStore && typeof window.AppStore.logAction === 'function') {
+        window.AppStore.logAction(tId, 'Equilíbrio flexibilizado: ' + res.newTeamsCount + ' dupla(s) formada(s)' +
+            (res.allMaleCount ? ' (' + res.allMaleCount + ' 100% masc.)' : '') +
+            (res.leftoverCount ? ', ' + res.leftoverCount + ' sem dupla' : ''));
+    }
+    if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+    }
+    window.showUnifiedResolutionPanel(String(tId));
 };
 
 // v4.0.98 — CANCEL CANÔNICO da cadeia de resolução do sorteio. Pedido do dono:

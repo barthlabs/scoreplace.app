@@ -415,6 +415,30 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
 // v2.1.22: exposto pra reuso (jogos extras de tardios em torneios "expand").
 window._formDoublesTeams = _formDoublesTeams;
 
+// v1.2.48: PREVIEW dos pares que o sorteio EQUILIBRADO formaria a partir dos avulsos,
+// SEM formar nada — mesma lógica de _formDoublesTeams (mistas primeiro; depois mesmo-gênero
+// da sobra). Alimenta a opção "Flexibilizar equilíbrio" no painel do resto: em vez de
+// deixar N pessoas de fora pra bater potência de 2, forma a(s) dupla(s) mesmo-gênero da
+// sobra (inclusão acima de pow2 — ver [[project_inclusion_philosophy_canon]]) e resolve a
+// pow2 depois. `_isMale` idêntico ao da formação: gênero !== 'masculino' conta como não-homem.
+window._equilibradoPairPreview = function(individuals) {
+  var men = 0, nonMale = 0;
+  (individuals || []).forEach(function(p){
+    if (p && typeof p === 'object' && p.gender === 'masculino') men++; else nonMale++;
+  });
+  var mixed = Math.min(men, nonMale);
+  var remMen = men - mixed, remNon = nonMale - mixed;
+  var malePairs = Math.floor(remMen / 2);
+  var femalePairs = Math.floor(remNon / 2);
+  return {
+    men: men, nonMale: nonMale,
+    mixedPairs: mixed, malePairs: malePairs, femalePairs: femalePairs,
+    sameGenderPairs: malePairs + femalePairs,
+    maxTeams: mixed + malePairs + femalePairs,
+    leftover: (remMen % 2) + (remNon % 2) // 0 ou 1 (só um gênero sobra ímpar)
+  };
+};
+
 // v2.2.46: separação por origem da dupla no modo MISTO.
 // Quando t.mixedPairingSeparated está ligado, duplas formadas manualmente e
 // duplas sorteadas viram CATEGORIAS distintas — o pipeline de chaveamento por
