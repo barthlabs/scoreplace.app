@@ -131,16 +131,78 @@ window._applyWoSubsToTournament = function(t) {
   const woScope = t.woScope || 'individual';
   let subCount = 0;
   const subDetails = [];
+  const subChoicePending = [];
+
+  // ── REGRA DE CATEGORIA ────────────────────────────────────────────────────────
+  // Dono: "só entra automático no caso do substituído e do suplente [atenderem à mesma
+  // regra da categoria]. Deixa o organizador escolher no caso de quebrar a regra da
+  // categoria." E: "a regra de gênero aqui é um exemplo, mas deve funcionar sempre que o
+  // suplente não atende a regra da categoria — pode ser idade ou habilidade [ou
+  // personalizada]." Ou seja: NÃO é sobre gênero — é sobre CATEGORIA, qualquer que seja.
+  //
+  // O app já classifica cada pessoa em categorias (p.categories[] — gênero/idade/skill/
+  // custom, montadas no _autoAssignCategories) e já tem `_participantInCategory`. A regra
+  // é: o suplente entra automático SÓ se pertence à(s) MESMA(S) categoria(s) do ausente.
+  // Se o torneio não tem categorias (chave única), qualquer suplente serve (FIFO).
+  // Categorias lidas por UID — acha o objeto-pessoa que carrega o uid. Antes a escolha era
+  // FIFO puro e podia meter alguém de outra categoria sem perguntar.
+  // Ver [[project_wo_individual_substitution_rule]] / [[project_uncategorized_weakest_category]].
+  const _tournHasCats = (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 0) ||
+    (Array.isArray(t.genderCategories) && t.genderCategories.length > 0) ||
+    (Array.isArray(t.ageCategories) && t.ageCategories.length > 0) ||
+    (Array.isArray(t.skillCategories) && t.skillCategories.length > 0) ||
+    (Array.isArray(t.customCategories) && t.customCategories.length > 0);
+  const _personByUid = (uid) => {
+    if (!uid) return null;
+    const pools = [t.participants, t.standbyParticipants, t.waitlist];
+    for (const arr of pools) {
+      if (!Array.isArray(arr)) continue;
+      for (const p of arr) {
+        if (!p || typeof p !== 'object') continue;
+        const uids = (typeof window._participantUids === 'function') ? window._participantUids(p) : (p.uid ? [p.uid] : []);
+        if (uids.indexOf(uid) !== -1) {
+          // numa dupla, a categoria é do MEMBRO (o slot) — devolve um "sub-perfil" com o
+          // gênero certo do membro, mantendo as demais categorias da entrada.
+          const base = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(p) : [];
+          const memberGender = p.p1Uid === uid ? p.p1Gender : (p.p2Uid === uid ? p.p2Gender : p.gender);
+          return { entry: p, categories: base, gender: memberGender };
+        }
+      }
+    }
+    return null;
+  };
+  // "o suplente atende à categoria do ausente?" — mesmas categorias declaradas. Sem
+  // categorias no torneio → sempre atende. Gênero do MEMBRO entra na comparação (dupla mista).
+  const _canonG = (g) => (typeof window._canonGender === 'function') ? window._canonGender(g) : 'none';
+  const _subMeetsCategory = (absentUid, subUid) => {
+    if (!_tournHasCats) return true;
+    const A = _personByUid(absentUid), S = _personByUid(subUid);
+    if (!A || !S) return true; // sem dado de categoria → não bloqueia (evita travar por falta de perfil)
+    // categorias declaradas: o suplente tem que cobrir TODAS as do ausente
+    const ac = (A.categories || []), sc = (S.categories || []);
+    if (ac.length && !ac.every((c) => sc.indexOf(c) !== -1)) return false;
+    // gênero do membro (dupla mista): se o ausente tem gênero definido, o sub tem que bater
+    const ag = _canonG(A.gender), sg = _canonG(S.gender);
+    if ((ag === 'Fem' || ag === 'Masc') && (sg === 'Fem' || sg === 'Masc') && ag !== sg) return false;
+    return true;
+  };
+  const _subUid = (o) => { const u = (o && o.p && typeof o.p === 'object') ? window._participantUids(o.p) : []; return u[0] || ''; };
 
   // Iterate absents — try to substitute each. Pode ter múltiplos absents pendentes.
   // t.absent agora é chaveado por uid (uid-first); traduz cada chave de volta pro
   // NOME pra cruzar com os slots da chave (m.p1/m.p2 são nomes). Chave legada que
   // já é nome (sem uid correspondente) resolve pra '' → cai no próprio k.
-  const absentNames = Object.keys(t.absent).map(function(k){ return window._memberNameByUid(t, k) || k; });
-  for (const absentName of absentNames) {
+  const absentUidKeys = Object.keys(t.absent);
+  const absentNames = absentUidKeys.map(function(k){ return window._memberNameByUid(t, k) || k; });
+  for (let _ai = 0; _ai < absentNames.length; _ai++) {
+    const absentName = absentNames[_ai];
+    const absentUid = absentUidKeys[_ai];
     if (presentList.length === 0) break;
 
-    // Find match where absent is still in p1/p2 (not yet substituted)
+    // Find match where absent is still in p1/p2 (not yet substituted). POR UID: casa o
+    // uid do ausente contra os uids do SLOT (_slotUids). Nome só quando o slot não tem uid
+    // (guest/legado). Antes era `members.indexOf(absentName)` com split('/') — quebrava em
+    // homônimo, rename e na forma real do doc (slot só-uid). [[project_uid_identity_canon_locked]]
     let foundMatch = null, foundSlot = null, foundIdx = -1;
     for (let i = 0; i < allMatches.length; i++) {
       const m = allMatches[i];
@@ -148,71 +210,136 @@ window._applyWoSubsToTournament = function(t) {
       for (const slot of ['p1', 'p2']) {
         const entry = m[slot];
         if (!entry || entry === 'TBD' || entry === 'BYE') continue;
-        const members = entry.includes('/') ? entry.split('/').map(n => n.trim()).filter(n => n) : [entry];
-        if (members.indexOf(absentName) !== -1) {
-          foundMatch = m; foundSlot = slot; foundIdx = i;
-          break;
-        }
+        const slotUids = (typeof window._slotUids === 'function') ? window._slotUids(m, slot).filter(Boolean) : [];
+        let hit;
+        if (slotUids.length && absentUid) hit = slotUids.indexOf(absentUid) !== -1;
+        else { const members = entry.includes('/') ? entry.split('/').map(n => n.trim()).filter(n => n) : [entry]; hit = members.indexOf(absentName) !== -1; }
+        if (hit) { foundMatch = m; foundSlot = slot; foundIdx = i; break; }
       }
       if (foundMatch) break;
     }
 
     if (!foundMatch) continue; // absent já substituído ou não está em match ativo
 
-    // Pick first Presente from FIFO pool
-    const sub = presentList.shift();
+    // Escolhe o suplente. Fora de misto obrigatório: FIFO (primeiro presente). Em misto
+    // obrigatório: só AUTOMÁTICO se houver suplente do MESMO gênero do ausente (FIFO entre
+    // eles). Se só há de gênero diferente, NÃO substitui automático — registra a pendência
+    // pro organizador escolher (aceitar a quebra ou dar W.O. ao time). Gênero por UID.
+    let subIdx = 0;
+    const _override = t._woSubOverride && t._woSubOverride[absentUid];
+    if (_override) {
+      // O organizador ACEITOU explicitamente este suplente (quebra da categoria) — sem filtro.
+      const _oi = presentList.findIndex((o) => _subUid(o) === _override);
+      subIdx = _oi === -1 ? 0 : _oi;
+    } else if (_tournHasCats) {
+      // Automático SÓ com suplente que atende a categoria do ausente (gênero/idade/skill/
+      // custom). FIFO ENTRE os que atendem.
+      subIdx = presentList.findIndex((o) => _subMeetsCategory(absentUid, _subUid(o)));
+      if (subIdx === -1) {
+        // Nenhum suplente presente atende a categoria → decisão é do organizador.
+        const _acats = (_personByUid(absentUid) || {}).categories || [];
+        subChoicePending.push({
+          absentUid: absentUid, absentName: absentName, absentCategories: _acats,
+          matchId: foundMatch.id, matchNum: foundIdx + 1,
+          options: presentList.map((o) => { const su = _subUid(o); const sp = _personByUid(su) || {}; return { uid: su, name: o.name, categories: sp.categories || [], gender: sp.gender || '' }; })
+        });
+        continue; // ausente segue marcado; o organizador resolve via _woResolveSubChoice
+      }
+    }
+    // Pick from pool (respeitando gênero em misto obrigatório; FIFO caso contrário)
+    const sub = presentList.splice(subIdx, 1)[0];
     const subName = sub.name;
+    const subUid = _subUid(sub);
     const oldEntry = foundMatch[foundSlot];
-    const isTeam = oldEntry.includes('/');
+    const _uidsKey = foundSlot === 'p1' ? 'team1Uids' : 'team2Uids';
+    const oldUids = Array.isArray(foundMatch[_uidsKey]) ? foundMatch[_uidsKey].slice() : [];
+    // IDENTIDADE do slot = os uids (team*Uids). Troca o uid do AUSENTE pelo do SUPLENTE — é
+    // isto que o resto do app lê (resultado/standings/próximo W.O.). O display (m.p1) é
+    // recomposto por uid via _resolveSideLive. Se o slot não tem uid (guest), cai no nome.
+    let newUids = null;
+    if (subUid && oldUids.length) {
+      newUids = oldUids.map(u => (u === absentUid ? subUid : u));
+    }
+    const _displayOf = (uids, fallbackStr) => {
+      if (uids && uids.length && typeof window._displayNameForUid === 'function') {
+        const ns = uids.map(u => window._displayNameForUid(u, '')).filter(Boolean);
+        if (ns.length === uids.length) return ns.join(' / ');
+      }
+      return fallbackStr;
+    };
+    const isTeam = oldUids.length > 1 || oldEntry.includes('/');
     let newEntry;
-    if (isTeam && woScope === 'individual') {
+    if (newUids) {
+      newEntry = _displayOf(newUids, subName);
+    } else if (isTeam && woScope === 'individual') {
+      // guest/legado sem uid: reconstrói por nome (é a identidade que há)
       const sep = oldEntry.includes(' / ') ? ' / ' : '/';
-      const members = oldEntry.split(sep).map(n => n.trim());
-      const newMembers = members.map(n => n === absentName ? subName : n);
-      newEntry = newMembers.join(' / ');
+      newEntry = oldEntry.split(sep).map(n => n.trim()).map(n => n === absentName ? subName : n).join(' / ');
     } else {
       newEntry = subName;
     }
-    const partner = isTeam ? oldEntry.split('/').map(n => n.trim()).find(n => n !== absentName) : null;
-
-    // Update this match slot + propagate across all match refs (Liga/Suíço/Grupos)
-    foundMatch[foundSlot] = newEntry;
-    allMatches.forEach(m => {
-      if (!m) return;
-      if (m.p1 === oldEntry) m.p1 = newEntry;
-      if (m.p2 === oldEntry) m.p2 = newEntry;
-      if (Array.isArray(m.team1)) {
-        const ti = m.team1.indexOf(absentName);
-        if (ti !== -1) m.team1[ti] = subName;
-      }
-      if (Array.isArray(m.team2)) {
-        const ti2 = m.team2.indexOf(absentName);
-        if (ti2 !== -1) m.team2[ti2] = subName;
-      }
-    });
-
-    // Update participants entry (team string)
-    const partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-    const pIdx = partsArr.findIndex(p => _getName(p) === oldEntry);
-    if (pIdx !== -1) {
-      if (typeof partsArr[pIdx] === 'string') partsArr[pIdx] = newEntry;
-      else { partsArr[pIdx].displayName = newEntry; partsArr[pIdx].name = newEntry; }
+    // parceiro (o outro slot) — por uid quando há
+    let partner = null;
+    if (newUids && oldUids.length > 1) {
+      const pu = oldUids.find(u => u !== absentUid);
+      partner = pu ? (window._displayNameForUid ? window._displayNameForUid(pu, '') : '') : null;
+    } else if (isTeam) {
+      partner = oldEntry.split('/').map(n => n.trim()).find(n => n !== absentName) || null;
     }
 
-    // Push sub as solo entry if not already in participants
-    const _hasSubEntry = partsArr.some(p => _getName(p) === subName);
-    if (!_hasSubEntry) {
-      partsArr.push(typeof sub.p === 'string' ? subName : sub.p);
+    // Aplica no slot achado + propaga em TODAS as refs (Liga/Suíço/Grupos usam o mesmo
+    // match em vários lugares). Casa por UID do slot; nome só no fallback guest/legado.
+    const _applyToSlot = (m, side) => {
+      const su = (typeof window._slotUids === 'function') ? window._slotUids(m, side).filter(Boolean) : [];
+      if (su.length && absentUid && subUid && su.indexOf(absentUid) !== -1) {
+        const nu = su.map(u => (u === absentUid ? subUid : u));
+        // escreve a identidade canônica: team*Uids sempre; p*Uid quando 1v1 (1 uid). É o
+        // que _resolveSideLive/standings leem — sem isto, o slot 1v1 (só p1Uid) mostrava o
+        // nome novo mas mantinha o uid do AUSENTE, quebrando identidade depois.
+        if (typeof window._setSlot === 'function') window._setSlot(m, side, nu, null);
+        else { const k = side === 'p1' ? 'team1Uids' : 'team2Uids'; m[k] = nu; m[side === 'p1' ? 'p1Uid' : 'p2Uid'] = nu.length === 1 ? nu[0] : null; }
+        m[side] = _displayOf(nu, newEntry);
+        return true;
+      }
+      if (!su.length && m[side] === oldEntry) { m[side] = newEntry; return true; } // guest/legado
+      return false;
+    };
+    allMatches.forEach(m => {
+      if (!m) return;
+      _applyToSlot(m, 'p1'); _applyToSlot(m, 'p2');
+      // team1/team2 (arrays de nome, Rei/Rainha) — troca o nome do ausente pelo do sub
+      if (Array.isArray(m.team1)) { const ti = m.team1.indexOf(absentName); if (ti !== -1) m.team1[ti] = subName; }
+      if (Array.isArray(m.team2)) { const ti2 = m.team2.indexOf(absentName); if (ti2 !== -1) m.team2[ti2] = subName; }
+    });
+
+    // Atualiza a ENTRADA da dupla nos participantes — por UID quando há (troca o slot
+    // p1Uid/p2Uid do ausente pelo do suplente). Nome só no fallback guest/legado.
+    const partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    let pIdx = -1;
+    if (absentUid) {
+      pIdx = partsArr.findIndex(p => p && typeof p === 'object' &&
+        (typeof window._participantUids === 'function' ? window._participantUids(p) : (p.uid ? [p.uid] : [])).indexOf(absentUid) !== -1);
+    }
+    if (pIdx === -1) pIdx = partsArr.findIndex(p => _getName(p) === oldEntry);
+    if (pIdx !== -1) {
+      const ent = partsArr[pIdx];
+      if (typeof ent === 'string') partsArr[pIdx] = newEntry;
+      else if (subUid && (ent.p1Uid === absentUid || ent.p2Uid === absentUid)) {
+        // dupla: troca o uid do membro ausente pelo do suplente; limpa o nome cacheado do slot
+        if (ent.p1Uid === absentUid) { ent.p1Uid = subUid; if (ent.p1Name) ent.p1Name = subName; }
+        if (ent.p2Uid === absentUid) { ent.p2Uid = subUid; if (ent.p2Name) ent.p2Name = subName; }
+        ent.displayName = newEntry; ent.name = newEntry;
+      } else { ent.displayName = newEntry; ent.name = newEntry; }
     }
     t.participants = partsArr;
 
-    // Remove sub from waitlists
-    if (Array.isArray(t.standbyParticipants)) {
-      t.standbyParticipants = t.standbyParticipants.filter(p => _getName(p) !== subName);
-    }
-    if (Array.isArray(t.waitlist)) {
-      t.waitlist = t.waitlist.filter(p => _getName(p) !== subName);
-    }
+    // Remove o suplente das listas de espera — por UID (dedup homônimo). Nome só p/ guest.
+    const _notSub = (p) => {
+      const u = (typeof window._participantUids === 'function') ? window._participantUids(p) : (p && p.uid ? [p.uid] : []);
+      return (subUid && u.length) ? u.indexOf(subUid) === -1 : _getName(p) !== subName;
+    };
+    if (Array.isArray(t.standbyParticipants)) t.standbyParticipants = t.standbyParticipants.filter(_notSub);
+    if (Array.isArray(t.waitlist)) t.waitlist = t.waitlist.filter(_notSub);
 
     // Mark sub as Presente (use timestamp pra preservar FIFO em subs subsequentes).
     // uid-first via o objeto do substituto (sub.p tem uid).
@@ -233,15 +360,48 @@ window._applyWoSubsToTournament = function(t) {
     t.history.push({ date: new Date().toISOString(), message: `Substituição W.O. (auto): ${absentName} → ${subName}${partner ? ' (parceiro: ' + partner + ')' : ''} — Jogo ${foundIdx + 1}` });
   }
 
+  // Pendências de escolha de gênero (misto obrigatório, só suplente de outro gênero):
+  // ficam no doc pro organizador resolver. Dedup por absentUid (re-rodadas idempotentes).
+  if (subChoicePending.length) {
+    if (!Array.isArray(t.woSubChoices)) t.woSubChoices = [];
+    subChoicePending.forEach((gc) => {
+      if (!t.woSubChoices.some((x) => x.absentUid === gc.absentUid && !x.resolved)) t.woSubChoices.push(gc);
+    });
+  }
+
   try {
     window._lastProcessSubs = {
       version: window.SCOREPLACE_VERSION, at: new Date().toISOString(),
-      outcome: subCount > 0 ? 'sub-done' : 'no-sub-needed',
-      subCount, subDetails, standbyPoolCount: standbyPool.length, presentCount: presentList.length + subCount
+      outcome: subCount > 0 ? 'sub-done' : (subChoicePending.length ? 'gender-choice-pending' : 'no-sub-needed'),
+      subCount, subDetails, subChoicePending: subChoicePending.length,
+      standbyPoolCount: standbyPool.length, presentCount: presentList.length + subCount
     };
   } catch (_e) {}
 
-  return { ok: subCount > 0, subCount, subDetails };
+  return { ok: subCount > 0, subCount, subDetails, subChoicePending: subChoicePending };
+};
+
+// Aplica a escolha do organizador quando o único suplente presente quebra o misto
+// obrigatório: ele ACEITA um suplente de gênero diferente (subUid) pra vaga do ausente
+// (absentUid), OU não faz nada e o time toma W.O. no fluxo normal. Só o organizador chama.
+// Alvo e substituto SEMPRE por uid — o nome é resolvido pro display na hora de escrever o slot.
+window._woResolveSubChoice = function (tId, absentUid, subUid) {
+  const t = window._findTournamentById(tId);
+  if (!t) return { ok: false, reason: 'no-tournament' };
+  // marca o suplente escolhido como presente (por uid) e força a substituição normal,
+  // agora sem o filtro de gênero (o organizador já aceitou a quebra pra ESTE substituto).
+  const pool = (typeof window._getStandbyPool === 'function') ? window._getStandbyPool(t) : [];
+  const subObj = pool.find((p) => (typeof window._participantUids === 'function' ? window._participantUids(p) : (p.uid ? [p.uid] : [])).indexOf(subUid) !== -1);
+  if (!subObj) return { ok: false, reason: 'sub-not-found' };
+  if (!t.checkedIn) t.checkedIn = {};
+  window._idMapSet(t, t.checkedIn, subObj, Date.now());
+  // resolve a pendência e roda a substituição pulando a regra de gênero (aceite explícito)
+  if (Array.isArray(t.woSubChoices)) t.woSubChoices.forEach((x) => { if (x.absentUid === absentUid) x.resolved = true; });
+  t._woSubOverride = t._woSubOverride || {};
+  t._woSubOverride[absentUid] = subUid;
+  const r = window._applyWoSubsToTournament(t);
+  delete t._woSubOverride;
+  return r;
 };
 
 // ─── MOTOR ÚNICO DE W.O. (canônico, v4.0.114) ──────────────────────────────────
@@ -359,9 +519,17 @@ window._applyWO = function (t, opts) {
   const pool = (typeof window._getStandbyPool === 'function') ? window._getStandbyPool(t) : [];
   const _isPresent = p => { const ci = window._idMapGet(t, t.checkedIn, p); return typeof ci === 'number' ? ci > 0 : !!ci; };
   const presentInPool = pool.filter(_isPresent);
-  if (woScope === 'individual' && pool.length && presentInPool.length && typeof window._processWoSubstitutions === 'function') {
+  // _forceNoSub: o organizador escolheu "W.O. ao time" no diálogo de categoria — pula a
+  // tentativa de substituição e escala direto (o adversário vence).
+  if (woScope === 'individual' && !opts._forceNoSub && pool.length && presentInPool.length && typeof window._processWoSubstitutions === 'function') {
     const r = window._applyWoSubsToTournament(t);
     if (r && r.subCount > 0) return { ok: true, outcome: 'subbed', subCount: r.subCount, subDetails: r.subDetails || [] };
+    // Há suplente presente, mas NENHUM atende a categoria do ausente → NÃO escala pra W.O.
+    // do time: a decisão é do organizador (aceitar a quebra ou o próximo que atenda).
+    // Fica registrado em t.woSubChoices; a UI (_woShowSubChoiceDialog) resolve.
+    if (r && Array.isArray(r.subChoicePending) && r.subChoicePending.length) {
+      return { ok: true, outcome: 'needsSubChoice', subChoicePending: r.subChoicePending };
+    }
   }
 
   // 2) sem substituto presente com lista NÃO-vazia → aguarda (só se pedido)
@@ -384,16 +552,52 @@ window._applyWO = function (t, opts) {
     // adversário TBD/BYE → não aplica (evita winner='TBD' propagando)
     if (!oppName || oppName === 'TBD' || oppName === 'BYE') { waitedTBD = true; continue; }
     const entryStr = m[slot] || '';
-    const isTeamEntry = entryStr.includes('/');
-    const members = isTeamEntry ? entryStr.split(/\s*\/\s*/).map(n => n.trim()) : [entryStr];
-    const isIndividualWO = woScope === 'individual' && isTeamEntry && members.indexOf(absentName) !== -1 && entryStr !== absentName;
+    // ── É W.O. INDIVIDUAL (uma PESSOA da dupla) ou do LADO inteiro? — POR UID ──────
+    // v1.2.33: isto decidia por NOME — `entryStr.includes('/')` + `split('/')` +
+    // `members.indexOf(absentName)`. Errado por dois motivos: (1) a barra é TIPOGRAFIA,
+    // não separador — o lado é 2 SLOTS com 2 uid ([[project_uid_identity_canon_locked]]);
+    // (2) casar por nome só acerta quando o rótulo do slot bate exatamente com o
+    // displayName vivo — homônimo, rename ou nome resolvido diferente caíam no `else` e
+    // viravam W.O. de TIME, calados, contra o toggle individual.
+    // Agora: o lado é uma dupla se os SLOTS têm 2+ uid; e é individual se o ausente é UM
+    // desses uids. Nome só entra quando não há uid nenhum (guest/fictício — a exceção).
+    const slotUids = (typeof window._slotUids === 'function') ? window._slotUids(m, slot).filter(Boolean) : [];
+    let isTeamEntry, members, isIndividualWO;
+    if (slotUids.length) {
+      isTeamEntry = slotUids.length > 1;
+      members = slotUids;
+      isIndividualWO = woScope === 'individual' && isTeamEntry &&
+        absentUids.length > 0 && slotUids.some(u => absentUids.indexOf(u) !== -1) &&
+        !slotUids.every(u => absentUids.indexOf(u) !== -1); // o lado TODO ausente = W.O. do lado
+    } else {
+      // Sem uid no slot: guest/fictício/legado — o nome é a única identidade que existe.
+      isTeamEntry = entryStr.includes('/');
+      members = isTeamEntry ? entryStr.split(/\s*\/\s*/).map(n => n.trim()) : [entryStr];
+      isIndividualWO = woScope === 'individual' && isTeamEntry && members.indexOf(absentName) !== -1 && entryStr !== absentName;
+    }
     // W.O. individual de dupla sem substituto → parceiro vai pra lista de espera
     if (isIndividualWO) {
-      const partner = members.find(n => n !== absentName);
-      if (partner) {
-        if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
-        if (!t.standbyParticipants.some(p => _getName(p) === partner)) t.standbyParticipants.push(partner);
-        partnerToWaitlist = partner;
+      // O PARCEIRO é o outro SLOT (uid), não "o outro nome depois da barra".
+      let partner = null;
+      if (slotUids.length) {
+        const pUid = slotUids.find(u => absentUids.indexOf(u) === -1);
+        if (pUid) {
+          const _parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+          // a entrada do parceiro (a dupla) já está fora do elenco; guarda a PESSOA por uid
+          partner = (typeof window._displayNameForUid === 'function') ? window._displayNameForUid(pUid, '') : '';
+          if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+          const _has = t.standbyParticipants.some(p => (typeof window._participantUids === 'function')
+            ? window._participantUids(p).indexOf(pUid) !== -1 : _getName(p) === partner);
+          if (!_has) t.standbyParticipants.push({ uid: pUid, displayName: partner || undefined });
+          partnerToWaitlist = partner || pUid;
+        }
+      } else {
+        partner = members.find(n => n !== absentName);
+        if (partner) {
+          if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+          if (!t.standbyParticipants.some(p => _getName(p) === partner)) t.standbyParticipants.push(partner);
+          partnerToWaitlist = partner;
+        }
       }
     }
     // 'W.O.' no lado AUSENTE (perdedor); vencedor = oponente
@@ -773,28 +977,12 @@ window._showAbsenteeResolutionDialog = function (tId, present, absentees, procee
 window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
   const t = window._findTournamentById(tId);
   if (!t) return;
-  // Núcleo PURO da chamada pré-sorteio (transaction-safe): particiona presentes×
-  // ausentes pelo check-in do `tt` passado, move ausentes p/ espera|desclassificados
-  // (dedup por nome) e seta participants=presentes. Idempotente (2ª passada: todos os
-  // participantes restantes já são presentes → ninguém a mover). Reusável no portão.
-  var _applyRoll = function (tt) {
-    if (!tt.checkedIn) tt.checkedIn = {};
-    if (!tt.absent) tt.absent = {};
-    var _pp = Array.isArray(tt.participants) ? tt.participants : Object.values(tt.participants || {});
-    var pres = [], abs = [];
-    _pp.forEach(function (p) { if (window._idMapHas(tt, tt.checkedIn, p)) pres.push(p); else abs.push(p); });
-    var bucket = (mode === 'waitlist') ? 'waitlist' : 'disqualified';
-    if (!Array.isArray(tt[bucket])) tt[bucket] = [];
-    abs.forEach(function (p) {
-      var en = window._pName(p);
-      if (!tt[bucket].some(function (w) { return window._pName(w) === en; })) tt[bucket].push(p);
-      // Estado neutro (pode ser chamado depois p/ substituir W.O.)
-      window._idMapDel(tt, tt.checkedIn, p);
-      window._idMapDel(tt, tt.absent, p);
-    });
-    tt.participants = pres;
-    return { present: pres, absent: abs };
-  };
+  // Núcleo PURO da chamada pré-sorteio: EXTRAÍDO pra draw-decisions.js
+  // (window._applyPresenceRoll) — a CF `drawRound` aplica a MESMA função sobre o doc
+  // fresco quando o pacote de decisões traz `absentees`. Aqui era uma closure local:
+  // o servidor não conseguia chamá-la e teria que reimplementar a partição (2ª versão
+  // do código = o bug que a canonização mata). Ver docs/sorteio-ciclo-decisoes.md.
+  var _applyRoll = function (tt) { return window._applyPresenceRoll(tt, mode); };
   var _rc = _applyRoll(t); // local otimista + arrays pra UI/log
   var present = _rc.present, absentees = _rc.absent;
 

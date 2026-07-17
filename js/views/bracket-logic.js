@@ -3865,28 +3865,11 @@ window._phaseGenNextLeagueRound = _phaseGenNextLeagueRound;
 // poller do cliente (_checkLigaAutoDraws). Idempotência via phaseLeagueState[cur].
 // lastAutoDrawAt = o slot disparado (mesma dedup do Fase-0 lastAutoDrawAt). A Cloud
 // Function tem o equivalente server-side em functions-autodraw/index.js.
-async function _firePhaseLigaAutoDrawIfDue(t, nowMs) {
-  if (typeof window._nextOwedDrawMs !== 'function') return;
-  var owed = window._nextOwedDrawMs(t, nowMs);
-  if (typeof owed !== 'number' || owed > nowMs) return; // sem slot devido agora
-  var cur = t.currentPhaseIndex || 0;
-  var ok = window._phaseGenNextLeagueRound(t, cur);
-  if (!ok) return;
-  t.phaseRounds[cur].lastAutoDrawAt = owed; // dedup do slot (por fase, mesma ideia do Fase-0 t.lastAutoDrawAt)
-  t.updatedAt = new Date().toISOString();
-  var newRound = ((t.phaseRounds[cur] && t.phaseRounds[cur].rounds) || [])
-    .reduce(function (mx, r) { return Math.max(mx, (r && r.round) || 1); }, 0);
-  if (window.AppStore && window.AppStore.logAction) window.AppStore.logAction(t.id, 'Liga (fase ' + (cur + 1) + '): rodada ' + newRound + ' sorteada automaticamente');
-  try { await window.AppStore.syncImmediate(t.id); } catch (e) { window._warn('[auto-draw phase] save failed', e); }
-  if (typeof window._notifyDrawPersonalized === 'function') {
-    try { window._notifyDrawPersonalized(t, t.id, { type: 'new_round', phaseIndex: cur }); } catch (e) {}
-  }
-  try {
-    var _h = (window.location && window.location.hash) || '';
-    if (_h.indexOf('#bracket/' + t.id) === 0 && typeof window._rerenderBracket === 'function') window._rerenderBracket(t.id);
-    else if (_h.indexOf('#tournaments/' + t.id) === 0 && typeof window.renderTournaments === 'function') window.renderTournaments(document.getElementById('view-container'), t.id);
-  } catch (e) {}
-}
+// v1.2.11: _firePhaseLigaAutoDrawIfDue REMOVIDA — o sorteio agendado da Liga é do SERVIDOR.
+// Ficou com ZERO chamadas quando _checkLigaAutoDraws parou de sortear (fim da corrida
+// cliente×CF). Apagada em vez de mantida dormente: uma função de sorteio viva no
+// cliente é a corrida a uma linha de voltar. Quem sorteia: functions-autodraw
+// (autoDraw, cron 1min) via draw-core.generateLigaRound — o MESMO motor, vendored.
 
 // ─── v2.3.8: self-heal de rodadas geradas ANTES da hora ─────────────────────
 // O bug pré-v2.3.7 fazia COMPLETAR a rodada gerar a SEGUINTE imediatamente,
@@ -3968,29 +3951,21 @@ window._checkLigaAutoDraws = async function() {
     // v3.1.14 (brick 4 etapa 4): Liga incremental de FASE POSTERIOR tem agenda PRÓPRIA
     // por fase. Num multi-fase t.format NÃO é 'Liga', então o filtro _isLigaFormat abaixo
     // pularia — trata ANTES, à parte. Só o organizador dispara (evita corrida entre abas).
+    // v1.2.11 — O SORTEIO AGENDADO É DO SERVIDOR (fim da corrida). O cliente NÃO
+    // sorteia mais a Liga de fase: quem faz é a CF autoDraw (cron 1min), que trata
+    // este mesmo caminho (functions-autodraw/index.js — _isIncrementalLigaPhase).
+    // Ver o comentário do sorteio single-phase abaixo pro porquê.
     if (window._isIncrementalLigaPhase && window._isIncrementalLigaPhase(t)) {
-      if (window.AppStore.isOrganizer(t) && !t.stagedDraw) {
-        try { await _firePhaseLigaAutoDrawIfDue(t, now.getTime()); }
-        catch (e) { window._warn('[auto-draw phase] failed ' + t.id, e); }
-      }
       continue;
     }
 
     // Only Liga tournaments
     if (!(window._isLigaFormat && window._isLigaFormat(t))) continue;
 
-    // Only the organizer (or an active co-host) fires the draw — avoids
-    // multiple participant browsers racing on the same tournament.
-    // v2.8.79: uid-primário via helper canônico (cobre co-host com email '').
+    // Só o organizador chegava aqui (participante nunca sorteia). Mantido: a
+    // auto-cura abaixo mexe no doc e só o organizador tem permissão de gravar.
     var _isOrg = window.AppStore.isOrganizer(t);
     if (!_isOrg) continue;
-
-    // Must be auto-scheduled with a first date
-    if (t.drawManual) continue;
-    if (!t.drawFirstDate) continue;
-    // v2.3.96: rede de segurança — sorteio em revisão é tratado SÓ pelo servidor
-    // (autoDraw escreve em pendingDraw). O cliente nunca publica um sorteio staged.
-    if (t.stagedDraw) continue;
 
     // Skip finished
     if (t.status === 'finished') continue;
@@ -4014,48 +3989,31 @@ window._checkLigaAutoDraws = async function() {
       } catch (e) {}
     }
 
-    // v3.x: construtor de fases — não auto-sortear além do fim da fase
-    // classificatória nem em fase de chave (avanço de fase é manual). Single-phase
-    // → false (sem efeito). Helper self-contained em tournaments-utils (vendored).
-    if (window._suppressAutoDrawForPhases && window._suppressAutoDrawForPhases(t)) continue;
-
-    // Stop if the league season has ended (endDate ou ligaSeasonMonths).
-    // v2.4.75: usa o helper canônico (BRT, respeita hora explícita no endDate).
-    // O check antigo `new Date(t.endDate + 'T23:59:59')` quebrava quando endDate
-    // já tinha hora (ex: '2026-06-13T19:59' → '...T19:59T23:59:59' = data inválida
-    // → isNaN → check ANULADO → o browser do organizador sorteava depois do fim).
-    // Bug "Teste de Liga": rodada extra no dia seguinte às 20h.
-    var _seasonEndMs = (typeof window._ligaSeasonEndMs === 'function') ? window._ligaSeasonEndMs(t) : null;
-    if (_seasonEndMs != null && now.getTime() > _seasonEndMs) continue;
-
-    var firstDrawStr = t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00');
-    var firstDraw = new Date(firstDrawStr);
-    if (isNaN(firstDraw.getTime())) continue;
-
-    // Not yet time for the first draw
-    if (firstDraw > now) continue;
-
-    // Compute the most recent scheduled draw that is ≤ now
-    var intervalDays = parseInt(t.drawIntervalDays) || 7;
-    if (intervalDays < 1) intervalDays = 1;
-    var intervalMs = intervalDays * 86400000;
-    var elapsed = now.getTime() - firstDraw.getTime();
-    var intervals = Math.floor(elapsed / intervalMs);
-    var mostRecentScheduled = new Date(firstDraw.getTime() + intervals * intervalMs);
-
-    // v2.4.75: defensivo — não disparar um sorteio cujo horário AGENDADO já é
-    // depois do fim do torneio (cobre o caso de now < fim mas o slot > fim).
-    if (_seasonEndMs != null && mostRecentScheduled.getTime() > _seasonEndMs) continue;
-
-    // Skip if we already fired for this scheduled time
-    var lastFired = t.lastAutoDrawAt ? new Date(t.lastAutoDrawAt) : null;
-    if (lastFired && !isNaN(lastFired.getTime()) && lastFired >= mostRecentScheduled) continue;
-
-    try {
-      await _fireLigaAutoDraw(t, mostRecentScheduled);
-    } catch (e) {
-      window._warn('[auto-draw] failed for tournament ' + t.id, e);
-    }
+    // ── v1.2.11: O SORTEIO AGENDADO DA LIGA É DO SERVIDOR — FIM DA CORRIDA ──────
+    // Decisão do dono (jul/2026): "os cânones rodam em CF, disparados pelo app —
+    // assim evita cada usuário rodar uma função diferente com app desatualizado".
+    //
+    // O QUE HAVIA AQUI: este poller computava o slot agendado e chamava
+    // _fireLigaAutoDraw → _generateNextRound LOCALMENTE. A CF autoDraw (cron 1min)
+    // fazia o MESMO, e os dois disputavam o gate `lastAutoDrawAt` — QUEM DISPARASSE
+    // PRIMEIRO VENCIA. Com o app nas lojas, um binário de meses atrás no aparelho do
+    // organizador podia ganhar a corrida e gerar a rodada pelo ALGORITMO VELHO.
+    // Os dois lados estavam "certos", mas eram VERSÕES diferentes — o bug que a
+    // canonização existe pra matar.
+    //
+    // AGORA: só a CF sorteia (functions-autodraw/index.js `autoDraw`, onSchedule
+    // every 1 minutes). Ela cobre os DOIS caminhos — Liga single-phase e Liga
+    // incremental de fase (_isIncrementalLigaPhase) — e roda o MESMO motor via
+    // draw-core/vendor. Uma versão só, sempre a atual. Custo: até ~60s de espera
+    // numa rodada AGENDADA (não é interativa — o slot é 19:00, sair 19:00:40 é igual).
+    //
+    // O que ficou no cliente de propósito: a AUTO-CURA acima (dados legados) — não é
+    // sorteio; e o sorteio MANUAL (t.drawManual), que é o organizador clicando.
+    // Ver [[project_draw_canonization_cf]] / [[project_autodraw_server_parity]].
+    //
+    // A dependência do gate/temporada/agenda vive agora SÓ no servidor (index.js
+    // espelha _ligaSeasonEndMs/_suppressAutoDrawForPhases/lastAutoDrawAt via vendor).
+    continue;
   }
 };
 
@@ -4183,136 +4141,10 @@ window._isLigaAutoDraw = function (t) {
   return !!(t && (window._isLigaFormat && window._isLigaFormat(t)) && t.drawManual !== true && t.drawFirstDate);
 };
 
-async function _fireLigaAutoDraw(t, scheduledTime) {
-  // First guard — the upstream _checkLigaAutoDraws already checks deleted
-  // ids, but this function is also called directly from "generate round
-  // now" paths; keep the belt-and-suspenders check.
-  var _del = (window.AppStore._deletedTournamentIds || []).map(String);
-  if (_del.indexOf(String(t.id)) !== -1) return;
-
-  var hasExistingDraw = (Array.isArray(t.rounds) && t.rounds.length > 0);
-  var allParts = Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants || {});
-
-  // Need at least 2 active participants to draw
-  var activeParts = allParts.filter(function(p) {
-    if (typeof p !== 'object' || !p) return true;
-    return p.ligaActive !== false;
-  });
-  if (activeParts.length < 2) {
-    window._log('[auto-draw] Skipping tournament ' + t.id + ': fewer than 2 active participants');
-    return;
-  }
-
-  if (!hasExistingDraw) {
-    // First draw: shuffle participants, seed standings with ALL participants
-    // (inactive still appear in standings — they just sit out until reactivated)
-    for (var si = allParts.length - 1; si > 0; si--) {
-      var sj = Math.floor(Math.random() * (si + 1));
-      var tmp = allParts[si]; allParts[si] = allParts[sj]; allParts[sj] = tmp;
-    }
-
-    t.standings = allParts.map(function(p) {
-      var name = typeof p === 'string' ? p : (p.displayName || p.name || '');
-      var entry = { name: name, points: 0, wins: 0, losses: 0, pointsDiff: 0, played: 0 };
-      if (typeof p === 'object' && p && typeof window._getParticipantCategories === 'function') {
-        var pcs = window._getParticipantCategories(p);
-        if (pcs && pcs.length > 0) { entry.category = pcs[0]; entry.categories = pcs; }
-      }
-      return entry;
-    });
-    t.rounds = [];
-    t.status = 'active';
-    t.drawVisibility = t.drawVisibility || 'public';
-
-    _generateNextRound(t);
-
-    var firstRound = t.rounds[t.rounds.length - 1];
-    var firstMatchCount = (firstRound && firstRound.matches || []).filter(function(m) { return !m.isSitOut; }).length;
-
-    window.AppStore.logAction(t.id, 'Sorteio automático realizado — Rodada 1 gerada com ' + firstMatchCount + ' partida(s)');
-
-    if (typeof window._notifyTournamentParticipants === 'function') {
-      var _tFn1 = window._t || function(k, v) { return v && v.name ? v.name : k; };
-      window._notifyTournamentParticipants(t, {
-        type: 'draw',
-        level: 'important',
-        title: _tFn1('tdraw.round1NotifTitle', { name: t.name || 'Torneio' }) || ((t.name || 'Torneio') + ' — Rodada 1'),
-        message: _tFn1('tdraw.round1NotifMsg', { count: firstMatchCount }) || ('Sorteio automático: ' + firstMatchCount + ' partida(s) geradas.'),
-        tournamentId: t.id
-      });
-    }
-  } else {
-    // Subsequent draw — generate next round from current standings.
-    // Auto-approve any pending results before drawing — if no one approved/contested
-    // before the new round, system considers them approved (v0.17.27).
-    if (typeof window._autoApprovePendingResults === 'function') {
-      window._autoApprovePendingResults(t);
-    }
-    // _generateNextRound handles active-player filtering and sit-outs internally.
-    _generateNextRound(t);
-
-    var newRound = t.rounds[t.rounds.length - 1];
-    var newMatchCount = (newRound && newRound.matches || []).filter(function(m) { return !m.isSitOut; }).length;
-
-    window.AppStore.logAction(t.id, 'Rodada ' + t.rounds.length + ' gerada automaticamente com ' + newMatchCount + ' partida(s)');
-
-    // Notify all participants — personalized per recipient
-    if (typeof window._notifyDrawPersonalized === 'function') {
-      window._notifyDrawPersonalized(t, t.id, { type: 'new_round', roundIndex: t.rounds.length - 1 });
-    }
-  }
-
-  t.lastAutoDrawAt = scheduledTime.toISOString();
-  t.updatedAt = new Date().toISOString();
-
-  // Second guard — after all the async heavy lifting above, the user may
-  // have deleted the tournament in the meantime. Bail before the save so
-  // we don't recreate a deleted doc via set({merge:true}).
-  var _del = (window.AppStore._deletedTournamentIds || []).map(String);
-  if (_del.indexOf(String(t.id)) !== -1) {
-    window._log('[auto-draw] Tournament ' + t.id + ' was deleted during draw — skipping save.');
-    return;
-  }
-  var _stillInStore = (window.AppStore.tournaments || []).some(function(x) { return String(x.id) === String(t.id); });
-  if (!_stillInStore) {
-    window._log('[auto-draw] Tournament ' + t.id + ' vanished from store (listener removed it) — skipping save.');
-    return;
-  }
-
-  try {
-    await window.AppStore.syncImmediate(t.id);
-  } catch (e) {
-    window._warn('[auto-draw] syncImmediate failed for tournament ' + t.id, e);
-  }
-
-  // Notify Liga round via WhatsApp (fire-and-forget)
-
-  // Auto-refresh whatever view the user is currently looking at so the draw
-  // appears without a manual reload.
-  try {
-    var _hash = (window.location && window.location.hash) || '';
-    var _container = document.getElementById('view-container');
-    if (_hash.indexOf('#tournaments/' + t.id) === 0 && typeof window.renderTournaments === 'function' && _container) {
-      window.renderTournaments(_container, t.id);
-    } else if (_hash.indexOf('#bracket/' + t.id) === 0 && typeof window._rerenderBracket === 'function') {
-      window._rerenderBracket(t.id);
-    } else if (_hash === '' || _hash === '#' || _hash.indexOf('#dashboard') === 0) {
-      if (typeof window.renderDashboard === 'function' && _container) {
-        window.renderDashboard(_container);
-      }
-    }
-  } catch (e) { /* best-effort UI refresh */ }
-
-  // Show an in-app toast for the organizer so they know the draw just happened.
-  if (typeof window.showNotification === 'function') {
-    var _toastTitle = hasExistingDraw
-      ? ('🎲 Nova rodada sorteada — ' + (t.name || 'Torneio'))
-      : ('🎲 Sorteio automático realizado — ' + (t.name || 'Torneio'));
-    var _toastMsg = hasExistingDraw
-      ? ('Rodada ' + t.rounds.length + ' gerada para a Liga.')
-      : ('Rodada 1 gerada para a Liga.');
-    window.showNotification(_toastTitle, _toastMsg, 'success');
-  }
-}
+// v1.2.11: _fireLigaAutoDraw REMOVIDA — o sorteio agendado da Liga é do SERVIDOR.
+// Ficou com ZERO chamadas quando _checkLigaAutoDraws parou de sortear (fim da corrida
+// cliente×CF). Apagada em vez de mantida dormente: uma função de sorteio viva no
+// cliente é a corrida a uma linha de voltar. Quem sorteia: functions-autodraw
+// (autoDraw, cron 1min) via draw-core.generateLigaRound — o MESMO motor, vendored.
 
 

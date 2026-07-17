@@ -62,7 +62,10 @@ sandbox._profileAvatarUrl = function (n) { return 'avatar://' + n; };
 sandbox.AppStore = sandbox.AppStore || { tournaments: [], logAction: noop, sync: noop, currentUser: null };
 
 var ROOT = path.join(__dirname, '..', 'js');
-function loadAbs(full) { vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: full }); }
+function loadAbs(full) {
+  vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: full });
+  sandbox._callDrawRound = h.drawRoundStub; // ver headless: o arquivo real sobrescreveria o stub
+}
 
 // i18n REAL — pra os nomes de rodada saírem em pt-BR ("Semifinais"/"Final"/"Quartas de Final")
 // em vez da chave crua ("bracket.semiFinal"). i18n.js define window._t + _translations;
@@ -75,7 +78,17 @@ loadAbs(path.join(ROOT, 'i18n-pt.js'));
 // tournaments (_buildPodiumHtml) → store (_renderPodiumsAndClassif) → bracket (nomes de rodada).
 loadAbs(path.join(ROOT, 'views', 'tournaments-draw.js'));
 loadAbs(path.join(ROOT, 'views', 'tournaments.js'));
+// identity-core: cânone de identidade por uid, extraído do store.js (jul/2026) — o store.js
+// não define mais _participantUids/_memberUidByName/_idMap*/_entryHasVip. Antes do store.js,
+// como no index.html.
+loadAbs(path.join(ROOT, 'views', 'identity-core.js'));
+loadAbs(path.join(ROOT, 'views', 'persist-core.js'));
 loadAbs(path.join(ROOT, 'store.js'));
+// bracket-model: schema Rei/Rainha — o PAR _foldMonarchGroups (grava só matchIds) +
+// _hydrateMonarchGroups (relê como refs). O hydrate saiu do bracket.js (v1.2.25) pra cá,
+// então sem este load o store.js/firebase-db chamariam um `undefined` guardado = no-op
+// silencioso, e o harness deixaria de exercitar a hidratação. Como no index.html.
+loadAbs(path.join(ROOT, 'views', 'bracket-model.js'));
 loadAbs(path.join(ROOT, 'views', 'bracket.js'));
 
 var E = sandbox._phasesEngine;
@@ -92,6 +105,9 @@ sandbox.AppStore.logAction = noop;
 sandbox.AppStore.getTournament = function (id) { return sandbox.AppStore.tournaments.find(function (x) { return String(x.id) === String(id); }); };
 sandbox._notifyDrawPersonalized = noop;
 sandbox._notifyTournamentParticipants = noop;
+
+// O stub da CF `drawRound` (que roda o motor REAL via draw-core) vive no headless.js —
+// base deste harness. Ver lá.
 sandbox.showAlertDialog = noop;
 sandbox.checkOddEntries = function () { return { isOdd: false }; };
 sandbox.showOddEntriesPanel = noop;

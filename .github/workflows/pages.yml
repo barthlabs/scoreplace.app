@@ -34,6 +34,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # GATE de PRODUÇÃO: a suíte unitária roda antes de publicar. Se qualquer trava falhar
+      # (fixture envenenado uid-poison, apply-wo, sorteio, etc.), o job PARA e nada vai pro
+      # ar em scoreplace.app. Rode local com `npm test`. Não depende de memória de ninguém.
+      - name: Testes unitários (gate — bloqueia o deploy se falhar)
+        run: |
+          npm ci --ignore-scripts
+          npm test
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 

@@ -441,6 +441,47 @@
     return data;
   };
 
+  // v4.4.69 FONTE ÚNICA Rei/Rainha (schema, sem gambiarra): o jogo mora UMA vez em
+  // round.matches. Os grupos guardam só `matchIds` — o Firestore NUNCA mais grava
+  // cópia do jogo (o fold em saveTournament/mutateTournament/_saveToCache remove
+  // group.matches do payload). Esta função HIDRATA a leitura: reconstrói
+  // group.matches como REFERÊNCIAS aos objetos de round.matches (o MESMO objeto,
+  // nunca cópia) — divergência é impossível por construção, sem sync perpétuo.
+  // Idempotente. MIGRA docs legados com group.matches embutido: dobra em matchIds,
+  // garante o objeto no plano (fundindo resultado se só a cópia do grupo tinha) e
+  // relinka. Roda no ingest (onSnapshot/cache), no topo do render e na transação.
+  window._hydrateMonarchGroups = function (t) {
+    if (!t || !Array.isArray(t.rounds)) return t;
+    t.rounds.forEach(function (rd) {
+      if (!rd || !Array.isArray(rd.monarchGroups) || !rd.monarchGroups.length) return;
+      if (!Array.isArray(rd.matches)) rd.matches = [];
+      var byId = {};
+      rd.matches.forEach(function (m) { if (m && m.id != null) byId[String(m.id)] = m; });
+      rd.monarchGroups.forEach(function (g) {
+        if (!g) return;
+        // (a) LEGADO: cópias embutidas sem matchIds → dobra em matchIds + migra pro plano.
+        if (!Array.isArray(g.matchIds) && Array.isArray(g.matches)) {
+          g.matchIds = [];
+          g.matches.forEach(function (gm) {
+            if (!gm || gm.id == null) return;
+            g.matchIds.push(String(gm.id));
+            var flat = byId[String(gm.id)];
+            if (!flat) { rd.matches.push(gm); byId[String(gm.id)] = gm; } // só no grupo → adota no plano
+            else if (flat !== gm && gm.winner && !flat.winner) {          // placar salvo só na cópia → funde
+              flat.winner = gm.winner; flat.scoreP1 = gm.scoreP1; flat.scoreP2 = gm.scoreP2; flat.draw = gm.draw;
+              if (!flat.startedAt) flat.startedAt = gm.startedAt; if (!flat.resultAt) flat.resultAt = gm.resultAt;
+            }
+          });
+        }
+        // (b) reconstrói group.matches como REFERÊNCIAS do plano (fonte única).
+        if (Array.isArray(g.matchIds)) {
+          g.matches = g.matchIds.map(function (id) { return byId[String(id)]; }).filter(Boolean);
+        }
+      });
+    });
+    return t;
+  };
+
   // ── Canonical write helper ────────────────────────────────────────────────
   // Append matches (and optional monarchGroups) into the correct legacy field
   // on t based on the column's phase. Generators should prefer this over

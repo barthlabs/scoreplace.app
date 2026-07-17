@@ -9,6 +9,9 @@ const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/test-utils.js',
   'tests/bracket-logic.test.js',
+  // Trava a canonização: o cliente NÃO sorteia a Liga agendada (fim da corrida
+  // cliente×CF). Se alguém religar o poller, esta suíte fica vermelha.
+  'tests/liga-autodraw-server-only.test.js',
   'tests/draw-cores.test.js',
   'tests/phase-transition-matrix.test.js',
   'tests/phase-adversarial.test.js',
@@ -58,6 +61,8 @@ const SUITES = [
   'tests/apply-result.test.js',
   'tests/apply-round-close.test.js',
   'tests/apply-wo.test.js',
+  'tests/wo-individual.test.js',
+  'tests/uid-poison.test.js',
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
