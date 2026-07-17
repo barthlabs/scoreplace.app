@@ -496,13 +496,15 @@ window._showRemainderPanel = function(tId, info, t) {
         // Options
         '<div style="padding:0.85rem 1.25rem 1.1rem;">' +
             '<h4 style="margin:0 0 0.5rem;color:#94a3b8;font-size:0.68rem;text-transform:uppercase;letter-spacing:1.8px;font-weight:700;">' + _lblWhatToDo + '</h4>' +
-            // Sorteio Geral toggle (default ON = random; OFF = last)
+            // v1.2.48: toggle do MÉTODO DO CORTE (quem sai pra fechar a chave). Texto claro:
+            // "Corte: Sorteio Geral" (aleatório entre todos) ↔ "Corte: Cronológico" (os
+            // últimos a se inscrever saem primeiro). Vale pra Lista de Espera e Exclusão.
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);margin-bottom:9px;">' +
                 '<div style="flex:1;min-width:0;">' +
-                    '<div style="font-weight:800;color:#ede9fe;font-size:0.82rem;">' + _t('predraw.randomToggleLabel') + '</div>' +
-                    '<div id="remainder-toggle-desc" style="font-size:0.7rem;color:#c4b5fd;margin-top:2px;line-height:1.35;">' + _t('predraw.randomToggleOn') + '</div>' +
+                    '<div id="remainder-toggle-title" style="font-weight:800;color:#ede9fe;font-size:0.82rem;">Corte: Sorteio Geral</div>' +
+                    '<div id="remainder-toggle-desc" style="font-size:0.7rem;color:#c4b5fd;margin-top:2px;line-height:1.35;">Quem sai é sorteado aleatoriamente entre todos os inscritos.</div>' +
                 '</div>' +
-                '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox" id="remainder-random-toggle" checked onchange="var d=document.getElementById(\'remainder-toggle-desc\');if(d)d.textContent=this.checked?window._t(\'predraw.randomToggleOn\'):window._t(\'predraw.randomToggleOff\');"><span class="toggle-slider"></span></label>' +
+                '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox" id="remainder-random-toggle" checked onchange="var ti=document.getElementById(\'remainder-toggle-title\');var d=document.getElementById(\'remainder-toggle-desc\');if(ti)ti.textContent=this.checked?\'Corte: Sorteio Geral\':\'Corte: Cronológico\';if(d)d.textContent=this.checked?\'Quem sai é sorteado aleatoriamente entre todos os inscritos.\':\'Os últimos a se inscrever saem primeiro.\';"><span class="toggle-slider"></span></label>' +
             '</div>' +
             '<div style="display:flex;flex-direction:column;gap:8px;">' +
                 // v1.2.48: Flexibilizar equilíbrio (só aparece no equilibrado com sobra de gênero)
