@@ -1306,7 +1306,7 @@ function renderDashboard(container) {
         '</div>' +
         '<div style="display:flex;gap:6px;flex-shrink:0;">' +
           '<button class="btn btn-primary btn-sm hover-lift" onclick="' + _openProfile + '" style="white-space:nowrap;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;">Completar →</button>' +
-          '<button class="btn btn-sm" onclick="window._dismissProfileNudge()" style="background:transparent;border:1px solid var(--border-color);color:var(--text-muted);font-size:0.78rem;" title="Descartar nesta sessão">✕</button>' +
+          '<button type="button" class="cancel-x-btn" onclick="window._dismissProfileNudge()" style="--cx-size:20px;" title="Descartar nesta sessão">✕</button>' +
         '</div>' +
       '</div>';
   }

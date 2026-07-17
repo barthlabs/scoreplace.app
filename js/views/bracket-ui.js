@@ -5656,7 +5656,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
                   (isWinner ? '🏆 ' : '') + 'Time ' + ps.team + ' · ' + window._safeHtml(teamLabel) +
                 '</div>' +
               '</div>' +
-              '<button onclick="document.getElementById(\'player-match-stats-modal\').remove()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:700;cursor:pointer;">✕</button>' +
+              /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="document.getElementById(\'player-match-stats-modal\').remove()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:700;cursor:pointer;">✕</button>' +
             '</div>' +
             // Serve stats grid
             (hasServeData ? (
@@ -6070,7 +6070,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '<div style="display:flex;gap:8px;width:100%;">' +
             '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="flex:1;padding:14px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Iniciar</button>' +
             '<button onclick="window._liveScoreShareCasual()" title="Compartilhar resultado" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:#25d366;color:white;box-shadow:0 4px 20px rgba(37,211,102,0.3);">📤</button>' +
-            '<button onclick="window._liveStatsClose()" title="Encerrar" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);">✕</button>' +
+            /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="window._liveStatsClose()" title="Encerrar" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);">✕</button>' +
           '</div>';
       }
 
@@ -9078,7 +9078,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     panel.innerHTML = '<div style="pointer-events:all;background:rgba(10,14,26,0.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.18);border-radius:18px 18px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);max-height:calc(100% - 10px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
         '<div style="font-size:1.1rem;font-weight:800;color:#fff;">Ajustar</div>' +
-        '<button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:1rem;cursor:pointer;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>' +
+        /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:1rem;cursor:pointer;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>' +
       '</div>' +
       row('scoreScale', 'Games', '--live-score-scale') +
       row('nameScale', 'Nomes', '--live-name-scale') +
@@ -10776,7 +10776,7 @@ window._openCasualMatch = function(restoreOpts) {
             : '<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:11px;color:white;font-weight:700;flex-shrink:0;">' + window._safeHtml(_lfi) + '</div>';
           _leftEl = '<div style="position:relative;flex-shrink:0;" title="' + window._safeHtml(_linkedFriendProfile.displayName || '') + '">' +
             _lfAvHtml +
-            '<button type="button" onmousedown="event.preventDefault()" onclick="window._casualUnlinkSlot(' + ci + ')" style="position:absolute;bottom:-3px;right:-4px;background:none;border:none;color:#ef4444;font-size:0.85rem;font-weight:900;cursor:pointer;padding:0;line-height:1;text-shadow:0 0 3px rgba(0,0,0,0.9),0 0 2px rgba(0,0,0,0.9);" title="Desvincular">✕</button>' +
+            '<button type="button" class="cancel-x-btn" onmousedown="event.preventDefault()" onclick="window._casualUnlinkSlot(' + ci + ')" style="--cx-size:16px;position:absolute;bottom:-3px;right:-4px;" title="Desvincular">✕</button>' +
             '</div>';
         } else if (_coachMode) {
           _leftEl = '<div data-drag-handle="1" style="width:22px;min-width:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:grab;color:var(--text-muted);font-size:1.1rem;line-height:1;-webkit-user-select:none;user-select:none;touch-action:none;" title="Arrastar para formar dupla">⠿</div>';

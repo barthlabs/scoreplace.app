@@ -3342,7 +3342,7 @@
       }
       var canDelete = cu && cu.uid === r.uid;
       var delBtn = canDelete
-        ? '<button title="Apagar" onclick="window._venuesDeleteReview(\'' + _safe(venue.placeId) + '\',\'' + _safe(r._id) + '\')" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem;padding:0 4px;opacity:0.5;">✕</button>'
+        ? '<button type="button" class="cancel-x-btn" title="Apagar" onclick="window._venuesDeleteReview(\'' + _safe(venue.placeId) + '\',\'' + _safe(r._id) + '\')" style="--cx-size:18px;">✕</button>'
         : '';
       // Moderação (Guideline 1.2): denunciar avaliação + bloquear autor (só em reviews de terceiros).
       var modBtns = (cu && cu.uid && r.uid && cu.uid !== r.uid)

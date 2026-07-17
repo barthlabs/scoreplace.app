@@ -1605,7 +1605,7 @@ window.renderHelpPage = function (container) {
           '<div style="font-weight:600;font-size:0.85rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(tpl.name) + '</div>' +
           '<div style="font-size:0.75rem;color:var(--text-muted);">' + window._safeHtml((window._formatLabel ? window._formatLabel(tpl) : tpl.format) || '') + '</div>' +
         '</div>' +
-        '<button class="btn btn-micro btn-danger-ghost" onclick="event.stopPropagation();window._qcDeleteTemplate(\'' + window._safeHtml(tpl._id || String(i)) + '\')" title="Apagar">✕</button>' +
+        '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window._qcDeleteTemplate(\'' + window._safeHtml(tpl._id || String(i)) + '\')" title="Apagar" style="--cx-size:20px;">✕</button>' +
       '</div>';
     });
     html += '</div>';

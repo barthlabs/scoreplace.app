@@ -2085,7 +2085,7 @@ function renderTournaments(container, tournamentId = null) {
                               <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:1rem;pointer-events:none;">🔍</span>
                               <div id="partner-chip-${t.id}" style="display:none;position:absolute;top:8px;left:8px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);border-radius:20px;padding:2px 8px 2px 6px;font-size:0.8rem;color:#a5b4fc;display:none;align-items:center;gap:5px;max-width:calc(100% - 40px);">
                                  <span id="partner-chip-name-${t.id}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-                                 <button type="button" onclick="window._partnerPickerClear('${t.id}')" style="background:none;border:none;color:#a5b4fc;cursor:pointer;font-size:0.9rem;padding:0;line-height:1;">×</button>
+                                 <button type="button" class="cancel-x-btn" title="Limpar" onclick="window._partnerPickerClear('${t.id}')" style="--cx-size:18px;">✕</button>
                               </div>
                            </div>
                            <div id="partner-dropdown-${t.id}" style="display:none;position:absolute;z-index:1000;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.4);max-height:240px;overflow-y:auto;width:min(400px,calc(90vw - 3rem));margin-top:2px;"></div>

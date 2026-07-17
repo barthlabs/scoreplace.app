@@ -6163,7 +6163,7 @@ function setupProfileModal() {
             '<label class="form-label" style="font-size:0.75rem;">📧 E-mail</label>' +
             '<div style="display:flex;gap:8px;align-items:center;">' +
               '<input type="email" id="profile-edit-email" class="form-control" placeholder="seu@email.com" autocomplete="off" style="flex:1;min-width:0;box-sizing:border-box;">' +
-              '<button type="button" onclick="window._profileCancelEmailEdit()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--text-muted);padding:6px 10px;border-radius:8px;font-size:0.82rem;cursor:pointer;white-space:nowrap;line-height:1;">✕</button>' +
+              '<button type="button" class="cancel-x-btn" title="Cancelar" onclick="window._profileCancelEmailEdit()" style="--cx-size:24px;">✕</button>' +
             '</div>' +
             // v2.5.x: e-mail exige verificação de posse (link de confirmação).
             '<div style="margin-top:6px;">' +
@@ -7510,7 +7510,7 @@ function setupProfileModal() {
       container.innerHTML = linked.map(function(em) {
         return '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);">' +
           '<span style="flex:1;font-size:0.82rem;color:var(--text-bright);">✅ ' + window._safeHtml(em) + '</span>' +
-          '<button type="button" onclick="window._profileUnlinkEmail(\'' + em.replace(/'/g,"\\'") + '\')" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:0.9rem;padding:0 2px;" title="Remover">×</button>' +
+          '<button type="button" class="cancel-x-btn" onclick="window._profileUnlinkEmail(\'' + em.replace(/'/g,"\\'") + '\')" style="--cx-size:18px;" title="Remover">✕</button>' +
         '</div>';
       }).join('');
     };
@@ -7529,7 +7529,7 @@ function setupProfileModal() {
       container.innerHTML = linked.map(function(ph) {
         return '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);">' +
           '<span style="flex:1;font-size:0.82rem;color:var(--text-bright);">✅ ' + window._safeHtml(fmt(ph)) + '</span>' +
-          '<button type="button" onclick="window._profileUnlinkPhone(\'' + ph.replace(/'/g,"\\'") + '\')" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:0.9rem;padding:0 2px;" title="Remover">×</button>' +
+          '<button type="button" class="cancel-x-btn" onclick="window._profileUnlinkPhone(\'' + ph.replace(/'/g,"\\'") + '\')" style="--cx-size:18px;" title="Remover">✕</button>' +
         '</div>';
       }).join('');
     };

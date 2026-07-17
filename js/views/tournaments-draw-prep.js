@@ -1257,7 +1257,8 @@ window.showUnifiedResolutionPanel = function(tId) {
             // Top row: Recomendado badge (left) + Exclude ✕ (right)
             var topRow = '<div style="display:flex;justify-content:space-between;align-items:center;min-height:22px;">';
             topRow += isBest ? '<span style="background:rgba(34,197,94,0.2);color:#4ade80;padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:800;text-transform:uppercase;">' + _t('predraw.nashRecommended') + '</span>' : '<span></span>';
-            topRow += canExclude ? '<span style="width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.25);color:#94a3b8;font-size:0.7rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all 0.2s;" title="' + _t('predraw.excludeOptionTitle') + '" onclick="event.stopPropagation();window._excludeUnifiedOption(\'' + o.key + '\')" onmouseover="this.style.background=\'rgba(239,68,68,0.3)\';this.style.color=\'#fca5a5\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\';this.style.color=\'#94a3b8\'">✕</span>' : '';
+            // v1.2.39: ✕ CANÔNICO (.cancel-x-btn). Era um ✕ cinza próprio com hover à mão.
+            topRow += canExclude ? '<button type="button" class="cancel-x-btn" style="--cx-size:22px;" title="' + _t('predraw.excludeOptionTitle') + '" onclick="event.stopPropagation();window._excludeUnifiedOption(\'' + o.key + '\')">✕</button>' : '';
             topRow += '</div>';
 
             // v4.0.52: estimativa de tempo POR opção (dinâmica, dados do torneio + local)

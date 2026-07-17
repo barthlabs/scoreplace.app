@@ -530,7 +530,7 @@
       var manage = canManage ? (
         '<span style="display:inline-flex;gap:4px;flex-shrink:0;">' +
           '<button type="button" title="Editar" onclick="window._schEditOption(' + oa + ')" class="btn" style="background:rgba(255,255,255,0.06);color:#cbd5e1;border:1px solid var(--border-color);border-radius:7px;padding:3px 7px;font-size:0.82rem;line-height:1;">✏️</button>' +
-          '<button type="button" title="Apagar" onclick="window._schDeleteOption(' + oa + ')" class="btn" style="background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);border-radius:7px;padding:3px 7px;font-size:0.82rem;line-height:1;">✕</button>' +
+          '<button type="button" title="Apagar" onclick="window._schDeleteOption(' + oa + ')" class="cancel-x-btn" style="--cx-size:20px;">✕</button>' +
         '</span>') : '';
 
       var rows = '';

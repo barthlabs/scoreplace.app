@@ -75,6 +75,7 @@ const SUITES = [
   'tests/dupla-elim-render.test.js',
   'tests/monarch-render.test.js',
   'tests/game-numbering.test.js',
+  'tests/cancel-x-canon.test.js',
   'tests/groups-render.test.js',
   'tests/liga-render.test.js',
   'tests/liga-countdown.test.js',
