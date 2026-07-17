@@ -413,8 +413,12 @@ window._showRemainderPanel = function(tId, info, t) {
     // os AVULSOS que ficaram SEM DUPLA. Mostra as EQUIPES FORMADAS reais (não recompõe pow2)
     // e X "sem dupla". Formação por SORTEIO segue a lógica antiga (pow2 do pool).
     var _manualPair = (typeof window._isManualPairing === 'function') && _tObj && window._isManualPairing(_tObj);
-    var teamsFormed = _manualPair ? (info.preFormedTeams || 0) : _targetTeams;
-    var remCount = _manualPair ? (info.remainder || 0) : (_totalPlayers - (_targetTeams * _ts));
+    // v1.2.53: flexibilizado (duplas mesmo-gênero já formadas) mostra o estado REAL — times
+    // formados + o(s) avulso(s) que sobrou(aram) — igual às duplas manuais. NÃO recompõe pow2
+    // aqui (a pow2 é a próxima tela). Sem flexibilizar, o sorteio segue o cálculo legado.
+    var _formedView = _manualPair || !!(_tObj && _tObj._flexibilized);
+    var teamsFormed = _formedView ? (info.preFormedTeams || 0) : _targetTeams;
+    var remCount = _formedView ? (info.individuals || info.remainder || 0) : (_totalPlayers - (_targetTeams * _ts));
     // Rótulos: dupla formada usa "sem dupla" / "equipes formadas"; sorteio mantém o legado.
     var _lblTeamsFormed = _manualPair ? 'equipes formadas' : _t('predraw.teamsFormed');
     var _lblRemainder = _manualPair ? 'sem dupla' : _t('predraw.remainderLabel');
@@ -610,6 +614,10 @@ window._applyFlexibilizeBalance = function(tId) {
     if (!t.teamOrigins) t.teamOrigins = {};
     var res = window._formDoublesTeams(t.participants || [], 2, t.teamOrigins, 'equilibrado');
     t.participants = res.participants;
+    // v1.2.53: marca que as duplas (incl. mesmo-gênero) já foram formadas → o painel do resto
+    // e a remoção passam a tratar só os avulsos (resto real), sem mirar pow2. Limpo no cancelar/
+    // resetar (_clearDrawRuntimeFlags). A pow2 dos N times vem na próxima tela.
+    t._flexibilized = true;
     if (window.AppStore && typeof window.AppStore.logAction === 'function') {
         window.AppStore.logAction(tId, 'Equilíbrio flexibilizado: ' + res.newTeamsCount + ' dupla(s) formada(s)' +
             (res.allMaleCount ? ' (' + res.allMaleCount + ' 100% masc.)' : '') +

@@ -70,6 +70,8 @@ const SUITES = [
   'tests/enroll-number-canon.test.js',
   // Flexibilizar equilíbrio: forma duplas mesmo-gênero da sobra em vez de deixar gente de fora.
   'tests/flexibilize-balance.test.js',
+  // Flexibilizado não mira pow2: o resto vira só o avulso (3→1); pow2 é a próxima tela.
+  'tests/flexibilize-remainder.test.js',
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',

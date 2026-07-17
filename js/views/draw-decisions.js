@@ -141,12 +141,16 @@
     if (window._isTeamEnrollMode(_enr) && _ts < 2) _ts = 2;
     var _playersOf = function (p) { return window._entryTeamMembers(p) ? _ts : 1; }; // time por ESTRUTURA, não por '/'
     var _manualPair = (typeof window._isManualPairing === 'function') && window._isManualPairing(t);
+    // v1.2.53: flexibilizado = as duplas (mistas + mesmo-gênero) JÁ foram formadas → o resto
+    // é só o(s) avulso(s) que sobrou(aram), NÃO a sobra pra fechar pow2. Mesmo tratamento das
+    // duplas formadas manualmente. A pow2 é resolvida na tela seguinte (pedido do dono).
+    var _formedTeams = _manualPair || !!t._flexibilized;
     var removed = [];
-    if (_manualPair) {
-      // v4.4.95: dupla FORMADA (formação manual) — os avulsos sem-dupla são INELEGÍVEIS
-      // (não têm com quem jogar). Move/exclui TODOS eles; os times formados ficam intactos
-      // (a resolução pow2 roda depois só sobre eles). NUNCA calcula excedente pow2 sobre o
-      // pool inteiro de pessoas — era isso que deixava sem-dupla pra trás.
+    if (_formedTeams) {
+      // v4.4.95: times já FORMADOS (manual ou flexibilizado) — os avulsos sem-dupla são
+      // INELEGÍVEIS (não têm com quem jogar). Move/exclui TODOS eles; os times formados ficam
+      // intactos (a resolução pow2 roda depois só sobre eles). NUNCA calcula excedente pow2
+      // sobre o pool inteiro de pessoas — era isso que deixava sem-dupla pra trás.
       var _keep = [];
       arr.forEach(function (p) { if (window._entryTeamMembers(p)) _keep.push(p); else removed.push(p); });
       arr = _keep;

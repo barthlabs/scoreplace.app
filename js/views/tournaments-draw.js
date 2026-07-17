@@ -32,6 +32,9 @@ window._clearDrawRuntimeFlags = function (t) {
     // Sorteio de Vagas + snapshots + flags internos do motor
     'drawSelectionDone', 'waitlistOrder', 'preDrawEnrollees', 'pendingDraw',
     '_drawBalanceMode', '_canonicalDraw', '_cleanupApplied', '_skipCatValidation',
+    // v1.2.53: "Flexibilizar equilíbrio" formou as duplas mesmo-gênero → o resto vira só
+    // os avulsos (não a sobra pow2). Cancelar/resetar volta ao estado sem-flexibilizar.
+    '_flexibilized',
     // pacote de decisões do pré-sorteio (vai pra CF na chamada; cancelar zera junto)
     '_drawDecisions',
     // estado de PLAY derivado do sorteio (standings/eliminação/W.O./substituição)
