@@ -131,5 +131,30 @@ console.log('\nSair um inscrito (Bia) — os de baixo SOBEM:');
   ok('Edu (era 5) vira 4', n.Edu === 4, String(n.Edu));
 }
 
+// ── inscrito TARDIO após uma saída: vai pro FIM, NUNCA preenche o vago ───────
+// O bug de prod (v1.2.46): saiu o 2º → sobra um vago no enrollSeq; um novo inscrito
+// pegava esse vago (número baixo) e o rank denso o mostrava ANTES de quem já estava —
+// Nelson entrou por último e apareceu como 14 (num vago) em vez do último número.
+// Com _ensureEnrollSeqs preenchendo lacuna isto FALHA; com max+1 (fim da fila) passa.
+console.log('\nInscrito tardio depois de uma saída — tem que ir pro FIM da fila:');
+{
+  const t = novo();
+  const _nm0 = W._nameForUid;
+  W._nameForUid = (u) => (u === 'u6' ? 'Fábio' : _nm0(u));
+  W._displayNameForUid = (u, fb) => (u === 'u6' ? 'Fábio' : (NOMES[u] || fb || ''));
+  // Bia (2) sai → enrollSeq restantes 1,3,4,5 (vago no 2). Rank denso: 1,2,3,4.
+  t.participants = t.participants.filter((p) => p.uid !== 'u2');
+  // Novo inscrito SEM enrollSeq (é o que a inscrição cria — o seq é backfilled aqui).
+  t.participants.push({ uid: 'u6' });
+  W._ensureEnrollSeqs(t);
+  const seqF = t.participants.find((p) => p.uid === 'u6').enrollSeq;
+  ok('Fábio NÃO preenche o vago (não recebe enrollSeq 2)', seqF !== 2, 'enrollSeq=' + String(seqF));
+  const m = W._buildEnrollOrderMap(t);
+  ok('Fábio (último a entrar) mostra o ÚLTIMO número (5)', W._enrollNumber(m, { uid: 'u6' }) === 5, String(W._enrollNumber(m, { uid: 'u6' })));
+  const n = {}; ['u1', 'u3', 'u4', 'u5'].forEach((u) => { n[NOMES[u]] = W._enrollNumber(m, { uid: u }); });
+  ok('quem ficou segue denso 1..4', JSON.stringify(n) === JSON.stringify({ Ana: 1, Caio: 2, Duda: 3, Edu: 4 }), JSON.stringify(n));
+  W._nameForUid = _nm0;
+}
+
 console.log('\n' + (fail ? '✗ ' : '✓ ') + pass + ' passaram · ' + fail + ' falharam\n');
 process.exit(fail ? 1 : 0);

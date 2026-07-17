@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.2.46';
+window.SCOREPLACE_VERSION = '1.2.47';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -7150,16 +7150,20 @@ window._isUserEnrolledInTournament = function(user, tournament) {
 // v2.7.97: NÚMERO DE INSCRIÇÃO POR PESSOA. Antes a dupla compartilhava UM número e a
 // contagem somava 1 pela dupla ("12 em vez de 13"). Agora CADA pessoa tem o SEU número:
 // solo → p.enrollSeq; dupla → p.p1Seq (membro esquerdo) e p.p2Seq (membro direito).
-// _ensureEnrollSeqs atribui seqs faltantes (legado/novos inscritos) preenchendo lacunas
-// SEM colidir com os já guardados (o form guarda os originais → ficam estáveis).
+// v1.2.46 CÂNONE (dono): o número é CRONOLÓGICO e a fila NÃO tem lacuna. Quem não tem
+// número entra no FIM da fila (max+1) — NUNCA preenche um vago deixado por quem saiu.
+// Fechar a lacuna é papel do rank denso (_buildEnrollOrderMap): remover o 2º faz o 3º
+// virar 2º. Se preenchêssemos o vago AQUI, um inscrito TARDIO pegava um número baixo e
+// o rank o jogava pra FRENTE de quem entrou antes — foi o bug real (Nelson entrou por
+// último e apareceu como 14, num vago, em vez de 20). max+1 sobre TODOS os seqs já
+// guardados nunca colide (os do form ficam estáveis).
 window._ensureEnrollSeqs = function(t) {
   if (!t) return;
   var arr = Array.isArray(t.participants) ? t.participants : [];
-  var used = {};
-  function mark(s){ if (s != null && !isNaN(s)) used[s] = 1; }
-  arr.forEach(function(p){ if (p && typeof p === 'object') { mark(p.enrollSeq); mark(p.p1Seq); mark(p.p2Seq); } });
-  var nf = 1;
-  function alloc(){ while (used[nf]) nf++; used[nf] = 1; return nf; }
+  var maxSeq = 0;
+  arr.forEach(function(p){ if (p && typeof p === 'object') [p.enrollSeq, p.p1Seq, p.p2Seq].forEach(function(s){ if (s != null && !isNaN(s) && s > maxSeq) maxSeq = s; }); });
+  var nf = maxSeq;
+  function alloc(){ nf += 1; return nf; }
   arr.forEach(function(p){
     if (!p || typeof p !== 'object') return; // string legada: tratada on-the-fly no map
     // v4.5.95: dupla por ESTRUTURA = (p1Uid|p1Name) && (p2Uid|p2Name). Antes exigia
