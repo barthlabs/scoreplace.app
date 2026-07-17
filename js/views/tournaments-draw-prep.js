@@ -1257,8 +1257,13 @@ window.showUnifiedResolutionPanel = function(tId) {
             // Top row: Recomendado badge (left) + Exclude ✕ (right)
             var topRow = '<div style="display:flex;justify-content:space-between;align-items:center;min-height:22px;">';
             topRow += isBest ? '<span style="background:rgba(34,197,94,0.2);color:#4ade80;padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:800;text-transform:uppercase;">' + _t('predraw.nashRecommended') + '</span>' : '<span></span>';
-            // v1.2.39: ✕ CANÔNICO (.cancel-x-btn). Era um ✕ cinza próprio com hover à mão.
-            topRow += canExclude ? '<button type="button" class="cancel-x-btn" style="--cx-size:22px;" title="' + _t('predraw.excludeOptionTitle') + '" onclick="event.stopPropagation();window._excludeUnifiedOption(\'' + o.key + '\')">✕</button>' : '';
+            // v1.2.41: ✕ CANÔNICO (.cancel-x-btn) num <span>, NÃO <button> — o CARD da opção
+            // (html += '<button id="unif-opt-...') já é um <button>, e <button> dentro de
+            // <button> é HTML INVÁLIDO: o parser fecha o de fora ao ver o de dentro e o resto
+            // do card VAZA pra fora (painel explodido — bug real da v1.2.39, no fluxo de
+            // sorteio). O <span> original era deliberado. A classe é só CSS: o visual é o
+            // mesmo. role/tabindex mantêm a semântica de botão pra acessibilidade.
+            topRow += canExclude ? '<span class="cancel-x-btn" role="button" tabindex="0" style="--cx-size:22px;" title="' + _t('predraw.excludeOptionTitle') + '" onclick="event.stopPropagation();window._excludeUnifiedOption(\'' + o.key + '\')">✕</span>' : '';
             topRow += '</div>';
 
             // v4.0.52: estimativa de tempo POR opção (dinâmica, dados do torneio + local)

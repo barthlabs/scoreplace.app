@@ -74,5 +74,20 @@ ok(/border-radius:\s*50%/.test(css), '[CANON] .cancel-x-btn é CÍRCULO (border-
 const store = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8');
 ok(/window\._cancelXBtn\s*=/.test(store), '[CANON] o helper window._cancelXBtn existe');
 
+// ── [NESTED-BUTTON] regressão REAL da v1.2.39 (painel de resolução explodido) ──────────
+// O card de opção do painel unificado É um <button> ('<button id="unif-opt-...'). Ao aplicar
+// o cânone eu troquei o ✕ de <span> pra <button> → <button> DENTRO de <button> é HTML
+// INVÁLIDO: o parser fecha o de fora e o conteúdo do card (rótulo, Nash, estimativa) VAZA
+// pra fora. Provado no browser: com <button> aninhado, 3 nós vazam e o rótulo sai do card;
+// com <span>, 0 vazam. O <span> original era DELIBERADO.
+// REGRA: dentro de um elemento clicável que já é <button>/<a>, o ✕ canônico vai num <span
+// class="cancel-x-btn" role="button"> — a classe é só CSS, o visual é idêntico.
+const drawPrep = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw-prep.js'), 'utf8');
+const excludeX = (drawPrep.match(/topRow \+= canExclude \?[^\n]*/) || [''])[0];
+ok(excludeX.indexOf('cancel-x-btn') !== -1, '[NESTED-BUTTON] o ✕ de excluir opção usa o cânone');
+ok(excludeX.indexOf('<button') === -1,
+  '[NESTED-BUTTON] o ✕ de excluir opção NÃO pode ser <button> — o card da opção já é <button> (aninhar explode o painel)');
+ok(/<span class="cancel-x-btn"/.test(excludeX), '[NESTED-BUTTON] usa <span class="cancel-x-btn"> (visual idêntico, HTML válido)');
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' cancel-x-canon: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
