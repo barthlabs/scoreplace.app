@@ -446,4 +446,39 @@ function drawInitial(t, opts) {
   return { ok: true, native: false, format: t.format, matchCount: (t.matches || []).length, allMaleCount: _allMale, decisions: _decisions };
 }
 
-module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, _window: g.window };
+// v1.2.57: INTEGRAÇÃO DE TARDIOS no SERVIDOR (cânone-no-servidor, dono 17/jul). Roda as MESMAS
+// funções vendoradas que o cliente rodava em bracket.js ao abrir o bracket (isOrg):
+//   • _createExtraGamesFromWaitlist  → Eliminatória Simples (avulsos + DUPLAS já formadas, v1.2.56)
+//   • _integrateLateDuplas           → Dupla Eliminatória (Tier 1/2; Tier 3 → _dissolveLateDuplas)
+//   • _expandMonarchFromWaitlist     → Rei/Rainha (novos grupos)
+// São MUTUAMENTE EXCLUSIVAS por guarda de formato — no máximo uma age. O cliente só DISPARA;
+// a mutação + persistência vivem aqui (project_canon_runs_on_server). NÃO faz o commit — quem
+// chama (a CF) persiste via _applyWriteBoundary/tx.set. Idempotente: sem tardio a integrar,
+// tudo volta 0 e `changed=false` (a CF não grava). PRÉ-CONDIÇÃO: já tem chave (hasDrawnBracket).
+function integrateLateEntries(t, opts) {
+  opts = opts || {};
+  const win = g.window;
+  if (!t) return { ok: false, reason: 'no-tournament' };
+  if (!hasDrawnBracket(t)) return { ok: false, reason: 'no-bracket' }; // sorteio ainda não feito
+
+  // Nome vivo por uid antes de formar duplas/rótulos (storage é só-uid; o motor lê nome).
+  if (typeof win._rehydrateEntryNames === 'function') win._rehydrateEntryNames(t);
+
+  let extra = 0, duplas = 0, duplasTier = 0, dissolved = 0, monarch = 0;
+  try { extra = win._createExtraGamesFromWaitlist(t) || 0; } catch (e) { win._error && win._error('[integrateLate] extra:', e); }
+  try {
+    const nLJ = win._integrateLateDuplas(t) || 0;
+    if (nLJ > 0) { duplas = nLJ; duplasTier = win._lastIntegrateTier || 1; }
+    else if (nLJ === -3 && typeof win._dissolveLateDuplas === 'function') { dissolved = win._dissolveLateDuplas(t) || 0; }
+  } catch (e) { win._error && win._error('[integrateLate] duplas:', e); }
+  try { monarch = win._expandMonarchFromWaitlist(t) || 0; } catch (e) { win._error && win._error('[integrateLate] monarch:', e); }
+
+  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0);
+  if (changed) {
+    try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e) {}
+    t.updatedAt = new Date().toISOString();
+  }
+  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch };
+}
+
+module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, _window: g.window };

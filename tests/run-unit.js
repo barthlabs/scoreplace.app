@@ -117,6 +117,8 @@ const SUITES = [
   'js/views/phase-brick4.test.js',
   'functions-autodraw/test-draw.js',
   'functions-autodraw/test-groupsby.js',
+  // Integração de tardios no servidor (draw-core.integrateLateEntries) — v1.2.57.
+  'functions-autodraw/test-integrate-late.js',
   'functions/test-match-roster.js',
   // Inscrição/desinscrição no servidor (CF) — espelha a transação do cliente.
   'functions/test-enroll-core.js',

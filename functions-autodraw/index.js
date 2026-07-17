@@ -12,6 +12,7 @@ const { getMessaging } = require('firebase-admin/messaging');
 // (sendPushNotification continua funcionando); autoDraw apenas pula.
 let generateLigaRound = null;
 let drawInitial = null;   // v1.2.25: motor do SORTEIO INICIAL (Etapa 3 · fase A) — usado pela drawRound
+let integrateLateFn = null; // v1.2.57: integração de tardios no servidor — usado pela integrateLateEntries
 let canRecompile = null;
 let hasDrawnBracket = null;  // régua de 'já tem chave' — a MESMA do cliente (matches/rounds/groups)
 let drawWindow = null; // window do shim Node — expõe _calcNextDrawDate (prazo p/ lançar resultado)
@@ -19,6 +20,7 @@ try {
   const _dc = require('./draw-core.js');
   generateLigaRound = _dc.generateLigaRound;
   drawInitial = _dc.drawInitial;
+  integrateLateFn = _dc.integrateLateEntries;
   canRecompile = _dc.canRecompile;
   hasDrawnBracket = _dc.hasDrawnBracket;
   drawWindow = _dc._window;
@@ -28,7 +30,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '1.2.33';
+const CF_VERSION = '1.2.57';
 
 initializeApp();
 const db = getFirestore();
@@ -353,6 +355,64 @@ exports.drawRound = onCall(async (request) => {
 
   console.log(`drawRound: ${tId} sorteado por ${uid} — ${out.format}, ${out.matchCount} jogo(s)` +
     (out.redraw ? ' [re-sorteio]' : ' [1º sorteio]'));
+  return out;
+});
+
+// ─── Integração de TARDIOS no servidor (v1.2.57) ────────────────────────────
+// O organizador DISPARA ao abrir o bracket; a mutação (tardios entram na chave) + a
+// persistência rodam AQUI, com as mesmas funções vendoradas que o cliente rodava. Espelha a
+// estrutura da drawRound: authz (uid + admin), transação sobre o doc FRESCO, motor canônico,
+// _applyWriteBoundary + tx.set (clobber-free). `changed=false` → NÃO grava (idempotente).
+// Ver project_canon_runs_on_server / project_late_enrollment_elimination.
+exports.integrateLateEntries = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const email = request.auth && request.auth.token && request.auth.token.email;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!tId) throw new HttpsError('invalid-argument', 'tournamentId é obrigatório.');
+
+  if (typeof integrateLateFn !== 'function' || !drawWindow) {
+    throw _drawFail('internal', 'Motor de integração indisponível no servidor.', { tId });
+  }
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid, email)) {
+    throw _drawFail('permission-denied', 'Só o organizador ou um co-organizador integra tardios.', { tId, uid });
+  }
+  await _preloadDrawNames(pre.data()); // nome vivo por uid antes de formar duplas/rótulos
+
+  let out;
+  try {
+    out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const t = snap.data(); t.id = tId;
+      if (!_isTournamentAdmin(t, uid, email)) {
+        throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      }
+      // Rei/Rainha: o doc fresco traz grupos só com matchIds — hidrata ANTES do motor.
+      try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+
+      const res = integrateLateFn(t, {});
+      if (!res || !res.ok) {
+        throw _drawFail('failed-precondition', (res && res.reason) || 'integrate-failed', { tId, format: t.format });
+      }
+      if (!res.changed) return { ok: true, changed: false }; // nada a integrar → não grava
+      const b = _applyWriteBoundary(t);
+      tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+      return { ok: true, changed: true, extra: res.extra, duplas: res.duplas, duplasTier: res.duplasTier,
+               dissolved: res.dissolved, monarch: res.monarch, tournament: b.clean };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error(`integrateLateEntries EXPLODIU no torneio ${tId} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha na integração de tardios: ' + String((e && e.message) || e).slice(0, 300));
+  }
+
+  console.log(`integrateLateEntries v${CF_VERSION}: ${tId} por ${uid} — changed=${out.changed}` +
+    (out.changed ? ` extra=${out.extra||0} duplas=${out.duplas||0}(tier${out.duplasTier||0}) dissolved=${out.dissolved||0} monarch=${out.monarch||0}` : ''));
   return out;
 });
 
