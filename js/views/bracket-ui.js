@@ -8464,6 +8464,20 @@ window._openLiveScoring = function(tId, matchId, opts) {
         if (state.isFinished && !_resultSaved) {
           try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
         }
+        // v1.3.x: registra o jogo que ACABOU no histórico da sessão ANTES de
+        // re-sortear (a mesma coisa que _doRestartNow e _liveScoreGoToSetup já
+        // fazem). Sem isto, o "re-sortear" vindo do RELÓGIO (que cai aqui, e não
+        // nos fluxos do celular) nunca acumulava pares jogados → _rrSuggestNow
+        // travava em 1 par e a sugestão "👑 Rei/Rainha" jamais aparecia no
+        // relógio (bug reportado: 3º jogo mostrava re-sortear normal). Usa os
+        // times ATUAIS, antes do shuffle abaixo mutar p1Players/p2Players.
+        if (isCasual && isDoubles && state.isFinished && state.winner != null) {
+          _sessionGameHistory.push({
+            p1: p1Players.slice(),
+            p2: p2Players.slice(),
+            winner: state.winner || 0
+          });
+        }
         // v1.3.56-beta: se o overlay foi aberto sobre uma partida já finalizada
         // (viewOnly — histórico), desvincula o novo jogo do doc antigo ANTES de
         // resetar o estado. Sem isso, _closeLiveScoring chama cancelCasualMatch

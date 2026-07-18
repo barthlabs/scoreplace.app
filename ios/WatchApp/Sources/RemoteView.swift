@@ -246,7 +246,10 @@ struct RemoteView: View {
             .font(.system(size: nameFontSize, weight: .semibold))
             .foregroundColor(color)
             .lineLimit(1)
-            .minimumScaleFactor(0.5)
+            // Nome NUNCA trunca (regra do dono): a fonte encolhe-pra-caber num box
+            // fixo. Piso baixo o bastante pra qualquer primeiro nome realista caber
+            // na metade da tela; abaixo dele o SwiftUI cortaria com "…".
+            .minimumScaleFactor(0.3)
         let ball = Circle().fill(Color.spBall).frame(width: sz(11), height: sz(11))
         return HStack(spacing: sz(3)) {
             if isLeft {
@@ -296,7 +299,7 @@ struct RemoteView: View {
                 Text(state.serverName.isEmpty ? "Sacador" : state.serverName)
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+                    .minimumScaleFactor(0.4)   // nome nunca trunca — encolhe-pra-caber
             }
             .foregroundColor(Color(hex: 0xF5D5A5))
             .frame(maxWidth: .infinity)
@@ -320,7 +323,7 @@ struct RemoteView: View {
                 Text(slot.name)
                     .font(.system(size: sz(23), weight: isSel ? .bold : .medium))
                     .foregroundColor(TeamPalette.of(slot.team).point)
-                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .lineLimit(1).minimumScaleFactor(0.4)   // nome nunca trunca
                 Spacer()
             }
             .padding(.vertical, sz(3)).padding(.horizontal, sz(6))
@@ -411,7 +414,7 @@ struct RemoteView: View {
                 Text(name)
                     .font(.system(size: sz(23), weight: isSel ? .bold : .medium))
                     .foregroundColor(TeamPalette.of(team).point)   // cor FORTE do time (= nº 30-40 do placar)
-                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .lineLimit(1).minimumScaleFactor(0.4)   // nome nunca trunca
                 Spacer()
             }
             .padding(.vertical, sz(3)).padding(.horizontal, sz(6))
@@ -628,7 +631,7 @@ struct RemoteView: View {
                                     Text(n)
                                         .font(.system(size: sz(20), weight: .bold))
                                         .foregroundColor(pal.point)
-                                        .lineLimit(1).minimumScaleFactor(0.5)
+                                        .lineLimit(1).minimumScaleFactor(0.4)   // nome nunca trunca
                                 }
                             } else {
                                 Text("Empate").font(.system(size: sz(18), weight: .semibold)).foregroundColor(.spMeta)
@@ -700,7 +703,7 @@ struct RemoteView: View {
                         .font(.system(size: 12))
                     Text(p.name)
                         .font(.system(size: 13, weight: p.wins == 3 ? .bold : .regular))
-                        .lineLimit(1).minimumScaleFactor(0.6)
+                        .lineLimit(1).minimumScaleFactor(0.4)   // nome nunca trunca
                     Spacer()
                     Text("\(p.wins)V")
                         .font(.system(size: 12, weight: .semibold))

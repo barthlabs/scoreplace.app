@@ -83,7 +83,12 @@
     return re === 'players' || re === 'all';
   }
   window._woClaimEnabled = function (t) {
-    return !!t && window._woIsMultiDay(t) && _playersEnter(t);
+    // CANÔNICO (18-jul-2026): W.O. NÃO depende de multi-dia. Lesão/abandono pode ocorrer
+    // em QUALQUER jogo — 1ª rodada, final, 3º lugar — inclusive em torneio de 1 dia. Este
+    // helper significa "participante pode ACUSAR" = resultEntry inclui players/all. O
+    // organizador declara SEMPRE (gate por papel dentro de _woClaimChip). Ver
+    // [[feedback_behavior_is_pure_function_of_config]]. (_woIsMultiDay ficou sem uso.)
+    return !!t && _playersEnter(t);
   };
 
   // Partida de MATA-MATA (escopo por jogo). Grupos/Liga/Rei-Rainha são por GRUPO
@@ -207,12 +212,17 @@
   // ─── chip / botão no card ou cabeçalho do grupo ────────────────────────────────
   window._woClaimChip = function (t, ctx) {
     try {
-      if (!t || !ctx || !window._woClaimEnabled(t)) return '';
+      if (!t || !ctx) return '';
       _ctxReg[_ctxKey(ctx)] = ctx; // registra ctx fresco p/ o overlay de declarar
       var rc = _resolveCtx(t, ctx); if (!rc) return '';
       var cu = _cu(); if (!cu || !cu.uid) return '';
       var iAmPlayer = _allCtxUids(t, rc).indexOf(cu.uid) !== -1;
       var canMng = _canManage(t);
+      // CANÔNICO: organizador/co-host declara W.O. SEMPRE (qualquer jogo não decidido, em
+      // qualquer torneio, 1 dia ou multi-dia); participante só ACUSA quando resultEntry
+      // inclui players/all. Sem gate de multi-dia. Ver [[feedback_behavior_is_pure_function_of_config]].
+      var _canAccuse = iAmPlayer && _playersEnter(t);
+      if (!canMng && !_canAccuse) return '';
       var claim = _activeClaimFor(t, ctx);
       var open = 'event.stopPropagation(); window._woOpenClaim(\'' + _attr(t.id) + '\',\'' + _attr(_ctxKey(ctx)) + '\')';
       // v4.1.19: variante COMPACTA pro header do card (canônica) — botão "W.O." pequeno à
