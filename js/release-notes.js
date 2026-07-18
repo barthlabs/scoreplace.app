@@ -12,9 +12,9 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #60a5fa;border-radius:12px;padding:14px 16px;background:rgba(96,165,250,0.08);">' +
-      '<div style="font-weight:800; color:#93c5fd; font-size:1rem; margin-bottom:8px;">⏱️ v1.3.3 — Previsão de duração logo abaixo da regressiva <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#93c5fd; font-size:1rem; margin-bottom:8px;">⏱️ v1.3.4 — Estimativa de duração logo abaixo da regressiva <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>⏱️ Quanto tempo o torneio deve durar:</b> logo abaixo da contagem regressiva — na tela inicial e na página do torneio — aparece a <b>previsão de duração</b> pro número atual de inscritos, com o total de jogos previsto. Ex.: "Previsão de duração (21 inscritos / 20 jogos) 4 horas". Aparece mesmo quando o torneio já tem hora de término definida (ajuda a comparar o previsto com o planejado). Some sozinha só em Pontos Corridos/temporada ou com menos de 2 inscritos.</li>' +
+        '<li><b>⏱️ Quanto tempo o torneio deve durar:</b> logo abaixo da contagem regressiva — na tela inicial e na página do torneio — aparece a <b>estimativa de duração</b> pro número atual de inscritos, com o total de jogos previsto e a duração em <b>dias · horas · min</b>. Ex.: "(21 participantes / 20 jogos) — 00:04:30". Aparece mesmo quando o torneio já tem hora de término definida (ajuda a comparar o previsto com o planejado). Some sozinha só em Pontos Corridos/temporada ou com menos de 2 inscritos.</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #25D366;border-radius:12px;padding:14px 16px;background:rgba(37,211,102,0.08);">' +
