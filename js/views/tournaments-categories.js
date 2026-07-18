@@ -572,8 +572,11 @@ window._buildCategoryCountHtml = function(t) {
 
 // Estimated tournament duration
 window._buildTimeEstimation = function(t, opts) {
-  // Só mostra se NÃO tem data/hora de fim
-  if (t.endDate) return '';
+  // A CAIXA completa só aparece sem data/hora de fim (se há endDate, o término já
+  // é conhecido — estimar seria redundante). Mas o modo {dataOnly} (linha compacta
+  // "Previsão de duração" abaixo da regressiva) IGNORA esse gate: a previsão pelos
+  // inscritos é útil mesmo com endDate definido (ex.: bater o real com o planejado).
+  if (t.endDate && !(opts && opts.dataOnly)) return '';
   // v0.16.82: Liga não tem duração estimada — formato é uma "temporada
   // contínua" com sorteios automáticos a cada N dias, não um evento de
   // duração fixa. Mostrar simulação de partidas é enganoso. Pedido do
