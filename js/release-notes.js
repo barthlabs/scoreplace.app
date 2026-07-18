@@ -11,6 +11,12 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #25D366;border-radius:12px;padding:14px 16px;background:rgba(37,211,102,0.08);">' +
+      '<div style="font-weight:800; color:#25D366; font-size:1rem; margin-bottom:8px;">💬 v1.3.1 — Entrar no grupo do WhatsApp bem na sua frente <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>💬 "Entrar no grupo" ao lado de "Desinscrever-se":</b> quando o torneio já tem grupo do WhatsApp, o botão de entrar aparece logo à esquerda do "Desinscrever-se" — tanto na tela inicial quanto na página do torneio. Fica na cara de quem está inscrito, sem precisar caçar o link.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">👥 v1.2.44 — Organizador inscrito volta a aparecer entre os inscritos <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

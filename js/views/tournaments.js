@@ -2144,7 +2144,10 @@ function renderTournaments(container, tournamentId = null) {
              <div style="font-size: 0.6rem; font-weight: 800; color: #fbbf24; background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.4px;">⏳ ${_t('enroll.onWaitlist') || 'Lista de espera'}</div>
              <button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._leaveStandby('${t.id}')">🛑 ${_t('enroll.leaveWaitlist') || 'Sair da lista de espera'}</button>
           ` : (isParticipating && isAberto) ? `
-             <button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button>
+             <div style="display:flex;align-items:stretch;justify-content:flex-end;gap:6px;flex-wrap:wrap;">
+               ${(typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
+               <button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button>
+             </div>
           ` : (isAberto && !_profileReady && window.AppStore.currentUser) ? `
              <button class="btn btn-sm" disabled style="opacity:0.45;cursor:not-allowed;padding:6px 12px;font-size:0.78rem;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:8px;color:var(--text-muted);">⏳ Carregando…</button>
           ` : (isAberto ? `
@@ -2621,11 +2624,12 @@ function renderTournaments(container, tournamentId = null) {
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._shareTournament('${t.id}');">📋 Compartilhar</button>
-              ${/* Grupo do torneio no WhatsApp: "Entrar no grupo" é ação de PARTICIPANTE (fica
-                    aqui, junto de Convidar/Compartilhar), enquanto CRIAR/trocar o link é ação de
-                    ORGANIZADOR (fica nas Ferramentas). O próprio chip decide o que mostrar: só
-                    aparece pra INSCRITO (ou org) e só quando o grupo existe. */ ''}
-              ${(typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
+              ${/* Grupo do torneio no WhatsApp: pro PARTICIPANTE, "Entrar no grupo" mora à
+                    esquerda de "Desinscrever-se" (bem na cara — ver bloco enrollBtnHtml). Aqui
+                    fica só o caso do ORGANIZADOR que NÃO joga, pra ele também alcançar o grupo
+                    de um clique sem depender das Ferramentas. CRIAR/trocar o link segue nas
+                    Ferramentas do Organizador. */ ''}
+              ${(isOrg && !isParticipating && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
               ${(!isFinished && t.startDate) ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tournamentAddToCalendar('${t.id}');">📅 Adicionar à agenda</button>` : ''}
             </div>` : ''}
 
