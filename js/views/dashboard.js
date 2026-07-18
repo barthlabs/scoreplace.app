@@ -878,6 +878,8 @@ function renderDashboard(container) {
               '</div>';
             })()}
 
+            ${(typeof window._buildDurationForecast === 'function') ? window._buildDurationForecast(t) : ''}
+
             ${(() => {
               // v2.1.52: box de progresso COMPLETO (mesmo do card de detalhes) no
               // lugar do pill simples de "tempo decorrido".

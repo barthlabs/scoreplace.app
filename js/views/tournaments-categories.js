@@ -571,7 +571,7 @@ window._buildCategoryCountHtml = function(t) {
 };
 
 // Estimated tournament duration
-window._buildTimeEstimation = function(t) {
+window._buildTimeEstimation = function(t, opts) {
   // Só mostra se NÃO tem data/hora de fim
   if (t.endDate) return '';
   // v0.16.82: Liga não tem duração estimada — formato é uma "temporada
@@ -726,6 +726,15 @@ window._buildTimeEstimation = function(t) {
     }
   });
 
+  // v1.3.2: modo "dataOnly" — devolve só os números do cenário REAL (nº atual de
+  // inscritos), sem HTML, pra alimentar a linha compacta _buildDurationForecast
+  // logo abaixo da regressiva. FONTE ÚNICA das fórmulas — não duplicar noutro lugar.
+  if (opts && opts.dataOnly) {
+    if (unitCount < 2) return null;
+    return { realCount: realCount, unitCount: unitCount, format: format,
+             matches: calcMatches(unitCount, format), minutes: estimateDuration(unitCount, format) };
+  }
+
   // Verificar se formato é Liga com muitos jogadores (seria longo demais)
   var isLiga = window._isLigaFormat && window._isLigaFormat(t);
   if (isLiga && unitCount > 20) {
@@ -803,6 +812,36 @@ window._buildTimeEstimation = function(t) {
   html += '</div>';
   html += '</div>';
   return html;
+};
+
+// v1.3.2: linha compacta "Previsão de duração (X inscritos / Y jogos) Z horas,
+// W min" — vai LOGO ABAIXO da regressiva na dashboard e no detalhe. Mostra só o
+// cenário REAL (nº atual de inscritos), sem as simulações 8/16/32/64 da caixa
+// completa. Reaproveita _buildTimeEstimation(t,{dataOnly}) como fonte única das
+// fórmulas. Auto-oculta: Liga / endDate definido / menos de 2 unidades.
+window._buildDurationForecast = function(t) {
+  try {
+    var d = (typeof window._buildTimeEstimation === 'function')
+      ? window._buildTimeEstimation(t, { dataOnly: true })
+      : null;
+    if (!d || !(d.minutes > 0)) return '';
+    var min = d.minutes;
+    var h = Math.floor(min / 60), m = Math.round(min % 60);
+    var durParts = [];
+    if (h > 0) durParts.push(h + (h === 1 ? ' hora' : ' horas'));
+    if (m > 0) durParts.push(m + ' min');
+    var durTxt = durParts.length ? durParts.join(', ') : '—';
+    var jogosLbl = d.matches + (d.matches === 1 ? ' jogo' : ' jogos');
+    var inscrLbl = d.realCount + (d.realCount === 1 ? ' inscrito' : ' inscritos');
+    var rb = (typeof window._photoReadBox === 'function')
+      ? window._photoReadBox()
+      : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
+    return '<div style="margin-top:6px;display:flex;align-items:center;gap:8px;padding:8px 14px;background:' + rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid ' + rb.border + ';border-radius:12px;flex-wrap:wrap;">' +
+      '<span style="font-size:1.05rem;flex-shrink:0;">⏱️</span>' +
+      '<span style="font-size:0.8rem;font-weight:700;color:' + rb.fg + ' !important;">Previsão de duração <span style="opacity:0.78;font-weight:600;">(' + inscrLbl + ' / ' + jogosLbl + ')</span></span>' +
+      '<span style="margin-left:auto;font-size:0.95rem;font-weight:900;color:' + rb.fg + ' !important;white-space:nowrap;">' + durTxt + '</span>' +
+    '</div>';
+  } catch (e) { return ''; }
 };
 
 // Open category manager modal
