@@ -1660,6 +1660,9 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   else if (_isStandbyEntry) cardStyle = 'background: linear-gradient(135deg, rgba(146,64,14,0.55) 0%, rgba(245,158,11,0.42) 100%); border: 2px solid rgba(251,191,36,0.55);';
   else if (isTeam) cardStyle = 'background: linear-gradient(135deg, rgba(15, 118, 110, 0.6) 0%, rgba(20, 184, 166, 0.6) 100%); border: 1px solid rgba(20, 184, 166, 0.5);';
   else cardStyle = 'background: linear-gradient(135deg, rgba(67, 56, 202, 0.6) 0%, rgba(99, 102, 241, 0.6) 100%); border: 1px solid rgba(99, 102, 241, 0.5);';
+  // v1.3.36: modo PAREAMENTO TARDIO (lista de espera pós-sorteio, _renderLateJoinPairing) —
+  // âmbar de propósito (janela de formar dupla na R1). Card canônico, só muda a pele + o arraste.
+  if (ctx.lateJoin) cardStyle = 'background:linear-gradient(135deg,rgba(180,120,20,0.32),rgba(245,158,11,0.26));border:1px solid rgba(245,158,11,0.5);' + (ctx.lateJoin.canPair ? 'cursor:grab;-webkit-user-select:none;user-select:none;' : '');
 
   var _FONT = window._INSCRITO_NAME_FONT_PX || 17;
   var pNameHtml = '';
@@ -1714,6 +1717,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   }
   var _standbyBadge = _isStandbyEntry ? '<span style="background:linear-gradient(135deg,#92400e,#f59e0b);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;">🕐 Lista de Espera</span>' : '';
   var typeText = _isStandbyEntry ? _standbyBadge : teamLabel;
+  if (ctx.lateJoin && !isTeam) typeText = '<span style="font-size:0.62rem;color:rgba(255,255,255,0.5);">' + (ctx.lateJoin.canPair ? 'Segure e arraste sobre outro card para formar dupla' : 'Sem dupla') + '</span>';
 
   var _nmSkillCats = t.skillCategories || [];
   var _nmSkillHtml = '';
@@ -1740,6 +1744,13 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
         _splitBtn = '<button class="btn btn-micro" title="' + _T('participants.splitTeam') + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✂️</button>';
       }
     }
+  }
+  // v1.3.36: pareamento tardio → arraste pointer-drag (data-lj-*), NÃO HTML5 DnD (trava no
+  // touch). VIP/✂️/🗑️ já saem sozinhos (drawDone=true). Mantém o handler exato do painel.
+  if (ctx.lateJoin) {
+    dragProps = ctx.lateJoin.canPair
+      ? ('data-lj-card="1" data-lj-key="' + window._safeHtml(String((p && typeof p === 'object' && p.uid) || pName)) + '" data-lj-tid="' + window._safeHtml(t.id) + '" data-lj-name="' + window._safeHtml(pName) + '"')
+      : '';
   }
 
   var _gPart = (typeof p === 'object' && p !== null) ? p : (_nameToParticipant && _nameToParticipant[pName]);

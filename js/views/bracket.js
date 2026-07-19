@@ -796,19 +796,27 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   // arraste — assim a lista continua rolando com o toque normal. O toggle de presença
   // (label/input) e botões nunca iniciam o arraste (ver _ljIsInteractive). Sem ícone de
   // alça — o card inteiro é a alça. Os dados do arraste (tId/name) vão no PRÓPRIO card.
-  var solosHtml = _solos.map(function (p) {
-    var nm = _nm(p);
-    var uid = (typeof p === 'object' ? (p.uid || '') : '');
-    var keyAttr = _safeHtml(uid || nm);
-    var badge = (window._enrollNumberBadge && window._enrollNumber && window._buildEnrollOrderMap)
-      ? window._enrollNumberBadge(window._enrollNumber(window._buildEnrollOrderMap(t), p)) : '';
-    var pairAttr = _canPair ? ' data-lj-tid="' + _safeHtml(t.id) + '" data-lj-name="' + _safeHtml(nm) + '"' : '';
-    return '<div data-lj-card="1" data-lj-key="' + keyAttr + '"' + pairAttr + ' style="' + (_canPair ? 'cursor:grab;-webkit-user-select:none;user-select:none;' : '') + 'background:linear-gradient(135deg,rgba(180,120,20,0.32),rgba(245,158,11,0.26));border:1px solid rgba(245,158,11,0.5);border-radius:12px;padding:12px;position:relative;overflow:hidden;">'
-      + badge
-      + '<div style="position:relative;z-index:1;min-width:0;">' + _memberBlock(nm, p)
-      + '<div style="font-size:0.62rem;color:rgba(255,255,255,0.5);margin-top:5px;">' + (_canPair ? 'Segure e arraste sobre outro card para formar dupla' : 'Sem dupla') + '</div></div>'
-      + '</div>';
-  }).join('');
+  // v1.3.36: card SOLO renderizado pela FONTE ÚNICA window._inscritoIndividualCard (modo
+  // lateJoin: âmbar + arraste data-lj-* + toggle Presente/Ausente). Zero pirata: o mesmo card
+  // do #participants/detalhe, só com a pele/arraste do pareamento tardio via ctx.
+  var _ljOrderMap = (typeof window._buildEnrollOrderMap === 'function') ? window._buildEnrollOrderMap(t) : {};
+  var _ljPresence = function (pp) {
+    var nmp = _nm(pp);
+    var mc = window._idMapHas ? window._idMapHas(t, ci, (pp && typeof pp === 'object' && pp.uid) ? { uid: pp.uid } : nmp) : false;
+    var uidp = String((pp && typeof pp === 'object' && pp.uid) || '').replace(/'/g, "\\'");
+    var row = '<span style="font-size:0.74rem;font-weight:800;color:' + (mc ? '#4ade80' : '#f87171') + ';white-space:nowrap;">' + (mc ? 'Presente' : 'Ausente') + '</span>'
+      + '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmp) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label>';
+    return { skip: false, styleExtra: '', rowHtml: row };
+  };
+  var solosHtml = (typeof window._inscritoIndividualCard === 'function')
+    ? _solos.map(function (p, i) {
+        return window._inscritoIndividualCard(t, p, i, {
+          isOrg: isOrg, drawDone: true, canRollCall: false, postDrawPresence: false,
+          lateJoin: { canPair: _canPair }, enrollOrderMap: _ljOrderMap,
+          nameToParticipant: {}, waitSet: {}, cardPresence: _ljPresence
+        });
+      }).join('')
+    : '';
 
   // Cards DUPLA FORMADA (teal) — 2 pessoas + Desfazer.
   // v1.2.55: nome de CADA membro pelo SEU uid (cânone: identidade é uid; nome vem do perfil
