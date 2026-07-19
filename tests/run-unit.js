@@ -96,6 +96,12 @@ const SUITES = [
   // Sandbox — criação do clone: _openOrCreateSandbox clona o estado atual (deep-copy), privado +
   // notif mudas + isSandbox, dev-only, sem tocar no original; 2ª chamada abre o mesmo SB.
   'tests/sandbox-create.test.js',
+  // Sandbox — espelho one-way no cliente: a MESMA AppStore.mutate roda o MESMO mutator no SB.
+  // Guardas: só dev, mão única (nada volta), só enquanto o SB não foi sorteado.
+  'tests/sandbox-mirror-mutate.test.js',
+  // Sandbox — Resetar re-sincroniza com o original AGORA (dropa adições de teste), preservando
+  // a identidade/isolamento do SB. "SB tal qual o original no momento do reset."
+  'tests/sandbox-reset-resync.test.js',
   // Convite pro grupo de WhatsApp (org notifica inscritos c/ o link): type wa_group fundamental
   // + CTA _notifCta abre o link do grupo. Sem o caso, cairia no "Ver torneio" genérico.
   'tests/wa-group-notify.test.js',

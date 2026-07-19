@@ -1886,6 +1886,38 @@ exports.setParticipantsProfile = onCall(
 // bug de inscrição vira `firebase deploy` de minutos, não release nativo de dias.
 // Lógica pura vive em ./enroll-core.js (espelha o cliente). Ver
 // [[project_firestore_assertion_bug]] / [[project_result_launch_cf_evaluation]].
+// ── Sandbox (SB): replicação one-way original→SB via a MESMA CF + o MESMO core ──────
+// Sem CF de espelho separada (código paralelo = divergência = o teste não vale). Depois
+// que a enrollParticipant/deenrollParticipant aplica a operação no original, ELA MESMA roda
+// o MESMO computeEnroll/computeDeenroll no doc do SB (se existir e ainda NÃO sorteado —
+// depois do sorteio o teste do dev é protegido; ele usa "Resetar" pra re-sincronizar).
+// Mão única: o SB não tem SB-filho, então a query nunca acha nada partindo de um SB.
+// Best-effort: erro aqui NUNCA derruba a operação real (já commitada no original).
+// Ver [[project_sandbox_tournament]].
+async function _replicateRosterToSandbox(db, origId, computeFn) {
+  try {
+    const q = await db.collection("tournaments")
+      .where("sandboxOf", "==", String(origId))
+      .where("isSandbox", "==", true).limit(5).get();
+    if (q.empty) return;
+    for (const sbDoc of q.docs) {
+      try {
+        await db.runTransaction(async (tx) => {
+          const snap = await tx.get(sbDoc.ref);
+          if (!snap.exists) return;
+          const sb = snap.data();
+          const drawn = (Array.isArray(sb.matches) && sb.matches.length > 0) ||
+            (Array.isArray(sb.rounds) && sb.rounds.length > 0) ||
+            (Array.isArray(sb.groups) && sb.groups.length > 0);
+          if (drawn) return; // protege o teste do dev
+          const r = computeFn(sb);
+          if (r && r.updateData) tx.update(sbDoc.ref, r.updateData);
+        });
+      } catch (e) { console.error("replicateRosterToSandbox SB", sbDoc.id, e && e.message); }
+    }
+  } catch (e) { console.error("replicateRosterToSandbox query", e && e.message); }
+}
+
 // Deploy:  firebase deploy --only functions:enrollParticipant,functions:deenrollParticipant
 exports.enrollParticipant = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
@@ -1913,6 +1945,11 @@ exports.enrollParticipant = onCall(
       const r = _enrollCore.computeEnroll(snap.data(), participantObj, extraUpdates, nowMs);
       if (r.updateData) tx.update(docRef, r.updateData);
       return r;
+    });
+
+    // Sandbox: a MESMA CF replica a inscrição no SB via o MESMO core (best-effort).
+    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+      return _enrollCore.computeEnroll(sbData, participantObj, extraUpdates, nowMs);
     });
 
     if (out.outcome === "capacityFull") return { capacityFull: true, participants: out.participants };
@@ -1958,6 +1995,11 @@ exports.deenrollParticipant = onCall(
       const r = _enrollCore.computeDeenroll(t, userUid);
       if (r.updateData) tx.update(docRef, r.updateData);
       return r;
+    });
+
+    // Sandbox: a MESMA CF replica a desinscrição no SB via o MESMO core (best-effort).
+    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+      return _enrollCore.computeDeenroll(sbData, userUid);
     });
 
     if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
@@ -2081,6 +2123,11 @@ exports.sendOrgCommunication = onCall(
     const tSnap = await db.collection("tournaments").doc(tournamentId).get();
     if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = tSnap.data();
+
+    // Sandbox/killswitch: torneio com notificações mudas não dispara comunicado.
+    if (t && (t.isSandbox === true || t.notificationsMuted === true)) {
+      return { ok: true, muted: true, sent: 0 };
+    }
 
     // Autorização: só organizador / co-organizador.
     const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];

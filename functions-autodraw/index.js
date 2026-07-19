@@ -691,8 +691,12 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
             (deadlineLabel ? '\n⏰ Lance os resultados até ' + deadlineLabel : '');
         };
 
+        // Sandbox/killswitch: o SB SORTEIA na mesma CF (fidelidade), mas NÃO notifica.
+        const _sbMuteAuto = (t.isSandbox === true || t.notificationsMuted === true);
+        if (_sbMuteAuto) console.log(`Auto-draw: ${tId} é sandbox/mudo — sorteio feito, notificações suprimidas`);
         const notifiedUids = new Set();
         for (const p of activePlayers) {
+          if (_sbMuteAuto) break;
           const uids = [];
           [p.uid, p.p1Uid, p.p2Uid].forEach(u => { if (u) uids.push(String(u)); });
           if (Array.isArray(p.participants)) {
@@ -805,8 +809,11 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
       _sideDisplayName(pm.p2Uids, _nameByUid, pm.p2)).join('\n\n');
     return '🔄 Nova rodada no torneio ' + (t.name || '') + '!\n\n' + gamesText + (t.venue ? '\n\n📍 ' + t.venue : '');
   };
+  // Sandbox/killswitch: SB sorteia na mesma CF, mas não notifica.
+  const _sbMuteAuto = (t.isSandbox === true || t.notificationsMuted === true);
   const notified = new Set();
   for (const p of pool) {
+    if (_sbMuteAuto) break;
     const uids = [];
     [p && p.uid, p && p.p1Uid, p && p.p2Uid].forEach(u => { if (u) uids.push(String(u)); });
     const message = buildMsg(new Set(uids)) || 'Nova rodada sorteada! Confira seus jogos.';

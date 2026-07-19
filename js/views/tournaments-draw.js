@@ -182,16 +182,24 @@ window._resetTournamentToEnrollment = function (tId) {
   };
   if (typeof showAlertDialog !== 'function') return;
   var _wasAuto = (t.drawManual !== true && t.drawFirstDate);
-  showAlertDialog('🔄 Resetar para inscrições?',
-    'Isto apaga TODO o sorteio, rodadas e fases e volta o torneio para "inscrições abertas". Os <strong>' + n + '</strong> inscritos são MANTIDOS.' + (_wasAuto ? ' O sorteio automático <strong>continua ligado</strong>; como a data programada já passou, ele é <strong>reagendado pra amanhã</strong> (ajuste no Editar) — ou use <strong>Sortear (manual)</strong> agora.' : '') + ' Não dá pra desfazer.',
+  var _isSB = (window._isSandboxTournament && window._isSandboxTournament(t));
+  showAlertDialog(_isSB ? '🔄 Resetar o Sandbox?' : '🔄 Resetar para inscrições?',
+    _isSB
+      ? 'Isto <strong>re-sincroniza o Sandbox com o estado ATUAL do original</strong> e apaga o sorteio/resultados. Some tudo que você adicionou no teste (duplas formadas, +participante, placeholders). Não dá pra desfazer.'
+      : ('Isto apaga TODO o sorteio, rodadas e fases e volta o torneio para "inscrições abertas". Os <strong>' + n + '</strong> inscritos são MANTIDOS.' + (_wasAuto ? ' O sorteio automático <strong>continua ligado</strong>; como a data programada já passou, ele é <strong>reagendado pra amanhã</strong> (ajuste no Editar) — ou use <strong>Sortear (manual)</strong> agora.' : '') + ' Não dá pra desfazer.'),
     function () {
       var done = function () {
-        if (typeof showNotification === 'function') showNotification('Torneio resetado', 'Voltou para inscrições abertas — ' + n + ' inscritos mantidos.' + (_wasAuto ? ' Sorteio automático reagendado pra amanhã.' : ''), 'success');
+        if (typeof showNotification === 'function') showNotification(_isSB ? '🔄 Sandbox resetado' : 'Torneio resetado', _isSB ? 'Re-sincronizado com o estado atual do original; sorteio/testes apagados.' : ('Voltou para inscrições abertas — ' + n + ' inscritos mantidos.' + (_wasAuto ? ' Sorteio automático reagendado pra amanhã.' : '')), 'success');
         _refresh();
       };
       // Blindagem v4.0.119: reset ATÔMICO pelo portão AppStore.mutate. _clearTournamentDraw
       // já é uma mutação PURA (muta o t passado, sem save) → aplica no doc fresco.
       window.AppStore.mutate(tId, function (ft) {
+        // Sandbox: re-sincroniza o roster do original AGORA (dropa adições de teste) ANTES
+        // de limpar o sorteio — "SB tal qual o original no momento do reset".
+        if (ft.isSandbox === true && typeof window._resyncSandboxRoster === 'function') {
+          window._resyncSandboxRoster(ft);
+        }
         window._clearTournamentDraw(ft);
         ft.status = 'open';
         // v2.8.4: mantém como auto-draw (drawManual continua false); se a data programada

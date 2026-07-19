@@ -839,6 +839,34 @@ window._findSandboxOf = function (origId) {
   }
   return null;
 };
+// Re-sincroniza o SB com o estado ATUAL do original (usado no "Resetar" do SB): re-clona
+// o original AGORA, dropando qualquer adição de teste (dupla formada, +participante,
+// placeholder) — e PRESERVA a identidade/isolamento do SB. Muta `ft` no lugar (chamado
+// dentro de um AppStore.mutate; o persist é `set`, então dropar chaves realmente remove).
+// O sorteio re-clonado é limpo por _clearTournamentDraw logo depois. Ver project_sandbox_tournament.
+window._resyncSandboxRoster = function (ft) {
+  try {
+    if (!ft || ft.isSandbox !== true || !ft.sandboxOf) return;
+    var orig = (typeof window._findTournamentById === 'function') ? window._findTournamentById(ft.sandboxOf) : null;
+    if (!orig) return;
+    var keep = {
+      id: ft.id, name: ft.name, isSandbox: true, sandboxOf: ft.sandboxOf,
+      notificationsMuted: true, isPublic: false,
+      sandboxOwnerUid: ft.sandboxOwnerUid, creatorUid: ft.creatorUid,
+      organizerEmail: ft.organizerEmail, organizerName: ft.organizerName,
+      createdAt: ft.createdAt
+    };
+    var fresh;
+    try { fresh = JSON.parse(JSON.stringify(orig)); } catch (e) { return; }
+    Object.keys(ft).forEach(function (k) { delete ft[k]; });        // limpa o estado de teste
+    Object.keys(fresh).forEach(function (k) { ft[k] = fresh[k]; }); // re-clona o original agora
+    Object.keys(keep).forEach(function (k) { if (keep[k] !== undefined) ft[k] = keep[k]; });
+    delete ft.sandboxId;
+    ft.sandboxSyncedAt = Date.now();
+    if (!Array.isArray(ft.memberUids)) ft.memberUids = [];
+    if (ft.sandboxOwnerUid && ft.memberUids.indexOf(ft.sandboxOwnerUid) === -1) ft.memberUids.push(ft.sandboxOwnerUid);
+  } catch (e) { if (window._error) window._error('resyncSandboxRoster', e); }
+};
 
 // Flag ligada pro usuário atual? Use em qualquer gate:
 //   if (window._flag('safe-area')) { ...novo caminho... } else { ...atual... }
@@ -5514,13 +5542,36 @@ window.AppStore = {
   async mutate(tournamentId, mutatorFn, logMessage) {
     var _t = this.tournaments.find(function (tour) { return String(tour.id) === String(tournamentId); });
     if (_t) { try { mutatorFn(_t); } catch (e) { window._error('mutate: mutator local falhou', e); } }
-    return this.commitTournamentTx(tournamentId, function (freshT) {
+    var _r = await this.commitTournamentTx(tournamentId, function (freshT) {
       mutatorFn(freshT);
       if (logMessage) {
         if (!Array.isArray(freshT.history)) freshT.history = [];
         freshT.history.push({ date: new Date().toISOString(), message: logMessage });
       }
     });
+    // ── Sandbox (SB): replicação one-way original→SB — MESMA função, MESMO mutator ──
+    // Sem código paralelo: o mesmíssimo mutatorFn que mudou o original roda também no
+    // doc do SB. Só dispara quando: (a) quem age é o dev (só ele tem o SB carregado e
+    // permissão de escrever); (b) este torneio NÃO é sandbox (mão única — nada do SB
+    // volta pro original); (c) existe um SB filho; (d) o SB ainda NÃO foi sorteado
+    // (protege o teste do dev de ser sobrescrito por mudança do original — depois disso
+    // o dev usa "Resetar" pra re-sincronizar). Best-effort: erro aqui NUNCA derruba o
+    // save do original. Ver project_sandbox_tournament.
+    try {
+      if (_t && _t.isSandbox !== true &&
+          window._isTestIdentity && window._isTestIdentity() &&
+          typeof window._findSandboxOf === 'function') {
+        var _sb = window._findSandboxOf(tournamentId);
+        var _sbDrawn = _sb && ((Array.isArray(_sb.matches) && _sb.matches.length > 0) ||
+          (Array.isArray(_sb.rounds) && _sb.rounds.length > 0) ||
+          (Array.isArray(_sb.groups) && _sb.groups.length > 0));
+        if (_sb && !_sbDrawn) {
+          try { mutatorFn(_sb); } catch (e) {}   // estado local imediato do SB
+          await this.commitTournamentTx(_sb.id, function (freshSB) { mutatorFn(freshSB); });
+        }
+      }
+    } catch (e) { if (window._error) window._error('sandbox replicate (mutate)', e); }
+    return _r;
   },
 
   // Persiste um RESULTADO de partida (caminho não-deferido de _saveResultInline)
