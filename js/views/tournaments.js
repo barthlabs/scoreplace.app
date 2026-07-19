@@ -2482,16 +2482,17 @@ function renderTournaments(container, tournamentId = null) {
                    </div>
                  `;
                 } else {
-                    // Antes do sorteio — Inscritos disponível pra fazer a CHAMADA
-                    // (marcar presença) antes de sortear. v2.1.86: o organizador
-                    // acessa a lista, marca quem está presente e decide o que
-                    // fazer com os ausentes (desclassificar ou lista de espera).
+                    // v1.3.16 (dono): a CHAMADA acontece DIRETO no detalhe — a lista de inscritos
+                    // inline (individual: lista de check-in; duplas: seção canônica com o factory
+                    // _rollCallPresenceCtx) já tem o toggle Presente/Ausente + W.O. por pessoa e a
+                    // contagem que trava abaixo do cabeçalho. O botão "Inscritos / Chamada" (→
+                    // #participants) foi removido: era página duplicada. Fica só Regras.
+                    // (O participante não-org segue com a tela de inscritos dele, inalterada.)
                     actionsHtml = `
                    ${inviteModalHtml}
                    ${teamEnrollModalHtml}
-                   <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:1rem;">
+                   <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:1rem;">
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window.location.hash='#rules/${t.id}'">📋 Regras</button>
-                     <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window.location.hash='#participants/${t.id}'">👥 Inscritos / Chamada</button>
                    </div>
                    ${autoDrawCountdownHtml ? `<div style="margin-top:1rem;text-align:center;">${autoDrawCountdownHtml}</div>` : ''}
                  `;
@@ -3254,6 +3255,11 @@ function renderTournaments(container, tournamentId = null) {
 
             // Check-in habilitado: sorteio feito E torneio iniciado (botão "Iniciar Torneio")
             const canCheckIn = drawDone && !!t.tournamentStarted;
+            // v1.3.16 (dono): CHAMADA pré-sorteio DIRETO no detalhe (org) — a barra de contagem
+            // (presentes/ausentes) que trava abaixo do cabeçalho e o filtro aparecem também antes
+            // do sorteio, não só depois de iniciar. Elimina a página duplicada #participants.
+            const _rcActiveD = isOrg && !drawDone;
+            const _rollCallBarOn = canCheckIn || _rcActiveD;
 
             // Count check-in stats
             let totalIndividuals = 0;
@@ -3289,7 +3295,11 @@ function renderTournaments(container, tournamentId = null) {
 
             // ── Check-in mode: show each individual with checkbox ──
             let cardsStr = '';
-            if (canCheckIn) {
+            if (canCheckIn || _rcActiveD) {
+                // v1.3.16 (dono): CHAMADA pré-sorteio no detalhe → o org usa a lista de check-in
+                // (com toggle Presente/Ausente + W.O. + filtro) também ANTES do sorteio, não só
+                // depois de iniciar. Duplas usam _dsec (isDoubles) mais abaixo, então este ramo
+                // (cardsStr) só vale pro INDIVIDUAL — a dupla nunca cai aqui.
                 // Flatten all participants to individual names
                 // v0.17.35: jogadores em t.woHistory pulam aqui — só aparecem
                 // como cards solo via loop abaixo. Evita aparecer 2x.
@@ -3675,7 +3685,7 @@ function renderTournaments(container, tournamentId = null) {
             // Filter buttons + progress (only when check-in is active)
             const absentCount = totalIndividuals - checkedCount;
             const pctPresent = totalIndividuals > 0 ? Math.round(checkedCount / totalIndividuals * 100) : 0;
-            const checkInControls = canCheckIn ? `
+            const checkInControls = _rollCallBarOn ? `
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap;">
                     <button onclick="window._setCheckInFilter('${t.id}', 'all')" style="padding:6px 16px;border-radius:20px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid ${currentFilter === 'all' ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.1)'};background:${currentFilter === 'all' ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.05)'};color:${currentFilter === 'all' ? '#a5b4fc' : 'var(--text-muted)'};">Todos (${totalIndividuals})</button>
                     <button onclick="window._setCheckInFilter('${t.id}', 'present')" style="padding:6px 16px;border-radius:20px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid ${currentFilter === 'present' ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.1)'};background:${currentFilter === 'present' ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.05)'};color:${currentFilter === 'present' ? '#4ade80' : 'var(--text-muted)'};">Presentes (${checkedCount})</button>
@@ -3688,7 +3698,7 @@ function renderTournaments(container, tournamentId = null) {
                 </div>
             ` : '';
 
-            const gridStyle = canCheckIn
+            const gridStyle = (canCheckIn || _rcActiveD)
                 ? 'display:flex;flex-direction:column;gap:6px;'
                 : 'display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:1rem;';
 
@@ -3723,16 +3733,27 @@ function renderTournaments(container, tournamentId = null) {
             // v4.5.74: EXTRAÍDA p/ window._buildDoublesInscritosSection (single source of
             // truth) — a MESMA seção é usada na CHAMADA (#participants) com o toggle
             // Presente injetado via ctx.cardPresence. Ver [[project_two_participant_card_renderers]].
+            // v1.3.16 (dono): a CHAMADA (roll-call) de DUPLAS aparece DIRETO no detalhe —
+            // toggle Presente/Ausente + W.O. por membro/time, igual ao #participants. Reusa o
+            // factory canônico _rollCallPresenceCtx (nada de duplicar 100 linhas). Só pré-sorteio
+            // (a seção de duplas já só existe antes do sorteio). _rcActiveD definido no topo.
+            var _rcPresCtx = (typeof window._rollCallPresenceCtx === 'function' && _rcActiveD)
+              ? window._rollCallPresenceCtx(t, { isOrg: isOrg, active: _rcActiveD, postDraw: false, woScope: t.woScope })
+              : {};
             var _dsec = (typeof window._buildDoublesInscritosSection === 'function')
               ? window._buildDoublesInscritosSection(t, {
                   isOrg: isOrg, drawDone: drawDone,
                   orgUids: _orgUidsShared, orgEmails: _orgEmailsShared,
                   peopleCount: individualCountParts, hasTournCats: _hasTournCats,
-                  chrome: true
+                  chrome: true,
+                  cardPresence: _rcPresCtx.cardPresence,
+                  memberPresence: _rcPresCtx.memberPresence
                 })
               : null;
             if (_dsec && _dsec.isDoubles) {
-              participantsHtml = _dsec.html;
+              // v1.3.16: barra de contagem (presentes/ausentes · %) que trava abaixo do
+              // cabeçalho também na CHAMADA de duplas — antes só no branch individual.
+              participantsHtml = checkInControls + _dsec.html;
             } else {
               // Modo normal (individual ou duplas pós-sorteio)
               // v3.1.47: barra de inscrito CANÔNICA (preset window._inscritosBar — o MESMO

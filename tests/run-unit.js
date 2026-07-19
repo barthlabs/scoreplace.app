@@ -76,6 +76,9 @@ const SUITES = [
   // Write do check-in é uid-only: marcar homônimo presente COM o uid grava a chave certa (uR2);
   // sem uid o nome cai no 1º homônimo (uR1) e marca a pessoa errada. Trava o toggle por uid.
   'tests/checkin-toggle-uid.test.js',
+  // Chamada de DUPLAS aparece direto no detalhe: _buildDoublesInscritosSection só mostra os
+  // toggles quando recebe o factory _rollCallPresenceCtx (reusado nas 2 telas). Sem ele, sem toggle.
+  'tests/detail-doubles-rollcall.test.js',
   'tests/uid-poison.test.js',
   // Mesmo veneno, porta dos INSCRITOS (store.js — o uid-poison só carrega js/views/*).
   // Identificar inscrito por nome/e-mail (era o caso do organizador) fica VERMELHO aqui.

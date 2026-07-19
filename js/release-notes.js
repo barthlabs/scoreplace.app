@@ -11,6 +11,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">📋 v1.3.16 — Chamada direto na tela do torneio <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👥 Fim da página duplicada:</b> pro organizador, a chamada (marcar Presente/Ausente + W.O.) agora acontece <b>direto na tela do torneio</b> — em torneios individuais e de duplas. Cada inscrito tem o toggle e o W.O. no próprio card, e a contagem de presentes/ausentes fica presa no topo da lista. O botão "Inscritos / Chamada" saiu (era uma segunda tela pro mesmo trabalho).</li>' +
+        '<li style="color:var(--text-muted);">A tela de inscritos do participante continua igual.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #94a3b8;border-radius:12px;padding:14px 16px;background:rgba(148,163,184,0.08);">' +
       '<div style="font-weight:800; color:#cbd5e1; font-size:1rem; margin-bottom:8px;">🧹 v1.3.15 — Detalhe do torneio mais limpo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

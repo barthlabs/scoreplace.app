@@ -1225,6 +1225,103 @@ window._setCheckInFilter = function (tId, filter) {
   _reRenderParticipants();
 };
 
+// Factory CANÔNICO dos callbacks de presença da CHAMADA (roll-call) — v1.3.16. Extraído de
+// renderParticipants pra ser reusado TAMBÉM no DETALHE do torneio (tournaments.js) sem duplicar
+// a lógica. Retorna {cardPresence, memberPresence} pra passar como ctx ao
+// _buildDoublesInscritosSection (seção canônica de duplas). Assim a CHAMADA de duplas aparece
+// igual no detalhe e no #participants. `active` = chamada pré-sorteio (org marca presença);
+// `postDraw` = pós-sorteio antes de iniciar (mostra estado, W.O. individual). uid only: os toggles
+// passam o uid da pessoa; a presença é lida por _idMapHas (uid-first). Ver
+// [[project_two_participant_card_renderers]] e [[project_id_maps_uid_keyed]].
+window._rollCallPresenceCtx = function (t, opts) {
+  opts = opts || {};
+  var isOrg = !!opts.isOrg;
+  var active = !!opts.active;       // canRollCall (chamada pré-sorteio)
+  var postDraw = !!opts.postDraw;   // postDrawPresence (pós-sorteio, antes de iniciar)
+  var woScope = ((opts.woScope || t.woScope || 'individual') === 'individual') ? 'individual' : 'team';
+  var ci = t.checkedIn || {}, ab = t.absent || {};
+  var _pres = function (who) { return !!window._idMapHas(t, ci, who) && !window._idMapHas(t, ab, who); };
+  var _abs = function (who) { return !!window._idMapHas(t, ab, who); };
+  var _grn = 'background:linear-gradient(135deg,rgba(16,185,129,0.5),rgba(5,150,105,0.6)) !important;border:2px solid rgba(16,185,129,0.85) !important;box-shadow:0 0 0 1px rgba(16,185,129,0.4),0 4px 12px rgba(0,0,0,0.14);';
+  var _red = 'background:linear-gradient(135deg,rgba(239,68,68,0.45),rgba(220,38,38,0.58)) !important;border:2px solid rgba(239,68,68,0.8) !important;box-shadow:0 0 0 1px rgba(239,68,68,0.35),0 4px 12px rgba(0,0,0,0.14);';
+  var _cf = function () { return window._checkInFilter || 'all'; };
+  return {
+    cardPresence: function (p) {
+      if (!(active || postDraw)) return { skip: false, styleExtra: '', rowHtml: '' };
+      var currentFilter = _cf();
+      var _pairKeys = null;
+      if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) _pairKeys = [(p.p1Uid || String(p.p1Name || '').trim()), (p.p2Uid || String(p.p2Name || '').trim())];
+      else { var _nmC = (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || ''); if (_nmC.indexOf('/') !== -1) { var _pp = _nmC.split('/').map(function (s) { return s.trim(); }).filter(Boolean); if (_pp.length >= 2) _pairKeys = _pp; } }
+      if (_pairKeys) {
+        var _q1 = _pres(_pairKeys[0]), _z1 = !_q1 && _abs(_pairKeys[0]);
+        var _q2 = _pres(_pairKeys[1]), _z2 = !_q2 && _abs(_pairKeys[1]);
+        var _both = _q1 && _q2, _anyAbs = _z1 || _z2;
+        if (currentFilter === 'present' && !_both) return { skip: true };
+        if (currentFilter === 'absent' && !_anyAbs) return { skip: true };
+        if (currentFilter === 'pending' && (_both || _anyAbs)) return { skip: true };
+        var _teamRow = '';
+        if (active && isOrg && woScope === 'team') {
+          var _tEntry = window._pName(p);
+          var _tAbs = _anyAbs || _abs(_tEntry);
+          var _tE = String(_tEntry).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "');", !_tAbs, { label: _tAbs ? 'Reverter' : 'W.O. do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
+        }
+        return { skip: false, styleExtra: _both ? _grn : (_anyAbs ? _red : ''), rowHtml: _teamRow };
+      }
+      // SOLO
+      var entry = window._pName(p);
+      var mc = _pres(entry);
+      var abs = !mc && _abs(entry);
+      var pend = !mc && !abs;
+      if (currentFilter === 'present' && !mc) return { skip: true };
+      if (currentFilter === 'absent' && !abs) return { skip: true };
+      if (currentFilter === 'pending' && !pend) return { skip: true };
+      var styleExtra = mc ? _grn : (abs ? _red : '');
+      var rowHtml = '';
+      if (active) {
+        var _rcEntry = entry.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        var label = mc ? 'Presente' : 'Ausente';
+        var color = mc ? '#4ade80' : '#f87171';
+        var wo = (!mc && isOrg)
+          ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
+          : '';
+        rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>' +
+          '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\', \'' + String((p && p.uid) || '').replace(/'/g, "\\'") + '\');"><span class="toggle-slider"></span></label>' + wo;
+      } else {
+        var l2 = mc ? 'Presente' : 'Ausente';
+        var c2 = mc ? '#4ade80' : '#f87171';
+        var ic = mc ? '✅' : '🚫';
+        rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + c2 + ';white-space:nowrap;">' + ic + ' ' + l2 + '</span>';
+      }
+      return { skip: false, styleExtra: styleExtra, rowHtml: rowHtml };
+    },
+    memberPresence: function (member, right) {
+      if (!(active || postDraw)) return { html: '' };
+      var keyName = (member && member.guest) ? String(member.guest).trim()
+        : (window._displayName ? window._displayName(member && member.uid, member && member.guest) : '');
+      if (!keyName) return { html: '' };
+      var _mWho = (member && member.uid) ? { uid: member.uid, displayName: keyName } : keyName;
+      var _mUidEsc = String((member && member.uid) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var mc = _pres(_mWho);
+      var abs = !mc && _abs(_mWho);
+      var label = mc ? 'Presente' : 'Ausente';
+      var color = mc ? '#4ade80' : '#f87171';
+      if (!active) {
+        var ic = mc ? '✅' : '🚫';
+        return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + ic + ' ' + label + '</span></div>' };
+      }
+      var _e = keyName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var wo = (!mc && isOrg && woScope === 'individual')
+        ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
+        : '';
+      var word = '<span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>';
+      var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\', \'' + _mUidEsc + '\');"><span class="toggle-slider"></span></label>';
+      var inner = right ? (wo + toggle + word) : (word + toggle + wo);
+      return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;' + (right ? 'justify-content:flex-end;' : '') + '" onclick="event.stopPropagation();">' + inner + '</div>' };
+    }
+  };
+};
+
 // v2.6.108: tela de Inscritos usa a BARRA CANÔNICA (window._inscritosFilterBar) —
 // mesma da Análise: busca + Ordenar (Inscrição ↑↓ / Nome A→Z/Z→A) + Gênero + Habilidade.
 // Tudo DOM (sem re-render → não perde foco): busca/gênero/habilidade escondem cards;
@@ -2268,91 +2365,20 @@ function renderParticipants(container, tournamentId) {
     // toggles); 'team'/'time' → UM W.O. do time (falta 1 → time inteiro leva W.O.).
     // Ver [[project_wo_scope_individual_vs_team]].
     var woScopeP = (t.woScope || 'individual') === 'individual' ? 'individual' : 'team';
+    // v1.3.16: callbacks de presença da CHAMADA agora vêm do factory CANÔNICO
+    // window._rollCallPresenceCtx (definido acima) — a MESMA lógica reusada no detalhe do
+    // torneio (tournaments.js). Antes vivia inline aqui (duplicada). woScopeP/canRollCall/
+    // postDrawPresence viram os params active/postDraw/woScope. Ver [[project_two_participant_card_renderers]].
+    var _rcCtxP = (typeof window._rollCallPresenceCtx === 'function')
+      ? window._rollCallPresenceCtx(t, { isOrg: isOrg, active: canRollCall, postDraw: postDrawPresence, woScope: woScopeP })
+      : {};
     var _dsecP = (typeof window._buildDoublesInscritosSection === 'function')
       ? window._buildDoublesInscritosSection(t, {
           isOrg: isOrg, drawDone: drawDone,
           orgUids: _orgUidsP, orgEmails: _orgEmailsP, hasTournCats: _hasTournCatsP,
           chrome: false,
-          cardPresence: function (p) {
-            if (!(canRollCall || postDrawPresence)) return { skip: false, styleExtra: '', rowHtml: '' };
-            var _grn = 'background:linear-gradient(135deg,rgba(16,185,129,0.5),rgba(5,150,105,0.6)) !important;border:2px solid rgba(16,185,129,0.85) !important;box-shadow:0 0 0 1px rgba(16,185,129,0.4),0 4px 12px rgba(0,0,0,0.14);';
-            var _red = 'background:linear-gradient(135deg,rgba(239,68,68,0.45),rgba(220,38,38,0.58)) !important;border:2px solid rgba(239,68,68,0.8) !important;box-shadow:0 0 0 1px rgba(239,68,68,0.35),0 4px 12px rgba(0,0,0,0.14);';
-            // v4.5.75: DUPLA formada → estado do CARD deriva dos DOIS membros (verde só se
-            // ambos presentes, vermelho se algum ausente); cada membro tem o SEU toggle
-            // (ctx.memberPresence), então SEM linha de presença por entrada (rowHtml='').
-            var _pairKeys = null;
-            if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) _pairKeys = [(p.p1Uid || String(p.p1Name || '').trim()), (p.p2Uid || String(p.p2Name || '').trim())]; // v4.5.86: uid OU nome; presença é uid-keyed (_idMapHas resolve o uid direto)
-            else { var _nmC = (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || ''); if (_nmC.indexOf('/') !== -1) { var _pp = _nmC.split('/').map(function (s) { return s.trim(); }).filter(Boolean); if (_pp.length >= 2) _pairKeys = _pp; } }
-            if (_pairKeys) {
-              var _q1 = _entryPresent(_pairKeys[0]), _z1 = !_q1 && _entryAbsent(_pairKeys[0]);
-              var _q2 = _entryPresent(_pairKeys[1]), _z2 = !_q2 && _entryAbsent(_pairKeys[1]);
-              var _both = _q1 && _q2, _anyAbs = _z1 || _z2;
-              if (currentFilter === 'present' && !_both) return { skip: true };
-              if (currentFilter === 'absent' && !_anyAbs) return { skip: true };
-              if (currentFilter === 'pending' && (_both || _anyAbs)) return { skip: true };
-              // Escopo TIME → um W.O. do time (na base do card); escopo individual → cada
-              // membro tem o seu W.O. (via memberPresence), então rowHtml fica vazio.
-              var _teamRow = '';
-              if (canRollCall && isOrg && woScopeP === 'team') {
-                var _tEntry = window._pName(p);
-                var _tAbs = _anyAbs || _entryAbsent(_tEntry);
-                var _tE = String(_tEntry).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "');", !_tAbs, { label: _tAbs ? 'Reverter' : 'W.O. do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
-              }
-              return { skip: false, styleExtra: _both ? _grn : (_anyAbs ? _red : ''), rowHtml: _teamRow };
-            }
-            // SOLO
-            var entry = window._pName(p);
-            var mc = _entryPresent(entry);
-            var abs = !mc && _entryAbsent(entry);
-            var pend = !mc && !abs;
-            if (currentFilter === 'present' && !mc) return { skip: true };
-            if (currentFilter === 'absent' && !abs) return { skip: true };
-            if (currentFilter === 'pending' && !pend) return { skip: true };
-            var styleExtra = mc ? _grn : (abs ? _red : '');
-            var rowHtml = '';
-            if (canRollCall) {
-              var _rcEntry = entry.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-              var label = mc ? 'Presente' : 'Ausente';
-              var color = mc ? '#4ade80' : '#f87171';
-              var wo = (!mc && isOrg)
-                ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
-                : '';
-              rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>' +
-                '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\', \'' + String((p && p.uid) || '').replace(/'/g, "\\'") + '\');"><span class="toggle-slider"></span></label>' + wo;
-            } else {
-              var l2 = mc ? 'Presente' : 'Ausente';
-              var c2 = mc ? '#4ade80' : '#f87171';
-              var ic = mc ? '✅' : '🚫';
-              rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + c2 + ';white-space:nowrap;">' + ic + ' ' + l2 + '</span>';
-            }
-            return { skip: false, styleExtra: styleExtra, rowHtml: rowHtml };
-          },
-          // v4.5.75: presença POR MEMBRO da dupla — um toggle por jogador, no bloco dele.
-          memberPresence: function (member, right) {
-            if (!(canRollCall || postDrawPresence)) return { html: '' };
-            var keyName = (member && member.guest) ? String(member.guest).trim()
-              : (window._displayName ? window._displayName(member && member.uid, member && member.guest) : '');
-            if (!keyName) return { html: '' };
-            var _mWho = (member && member.uid) ? { uid: member.uid, displayName: keyName } : keyName;
-            var _mUidEsc = String((member && member.uid) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            var mc = _entryPresent(_mWho);
-            var abs = !mc && _entryAbsent(_mWho);
-            var label = mc ? 'Presente' : 'Ausente';
-            var color = mc ? '#4ade80' : '#f87171';
-            if (!canRollCall) {
-              var ic = mc ? '✅' : '🚫';
-              return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + ic + ' ' + label + '</span></div>' };
-            }
-            var _e = keyName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            var wo = (!mc && isOrg && woScopeP === 'individual')
-              ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
-              : '';
-            var word = '<span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>';
-            var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\', \'' + _mUidEsc + '\');"><span class="toggle-slider"></span></label>';
-            var inner = right ? (wo + toggle + word) : (word + toggle + wo);
-            return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;' + (right ? 'justify-content:flex-end;' : '') + '" onclick="event.stopPropagation();">' + inner + '</div>' };
-          }
+          cardPresence: _rcCtxP.cardPresence,
+          memberPresence: _rcCtxP.memberPresence
         })
       : null;
     if (_dsecP && _dsecP.isDoubles) {
