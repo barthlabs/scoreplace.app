@@ -29,11 +29,14 @@ window.FirestoreDB = {
       // tudo). .catch degrada gracioso: navegador sem suporte / aba privada / persistência
       // já ativa (outra aba pegou) → app segue sem a fila durável.
       // v4.0.23: REMOVIDO synchronizeTabs:true. A persistência IndexedDB MULTI-ABA do SDK
-      // 10.8.1 é o gatilho nº1 do bug interno "INTERNAL ASSERTION FAILED: Unexpected state"
-      // (Sentry SCOREPLACE-WEB-67): abas concorrentes corrompem o IndexedDB compartilhado →
+      // 10.8.1 era o gatilho nº1 do bug interno "INTERNAL ASSERTION FAILED: Unexpected state"
+      // (Sentry SCOREPLACE-WEB-66/67): abas concorrentes corrompem o IndexedDB compartilhado →
       // a AsyncQueue do Firestore "falha" → TODA chamada seguinte morre em cascata. Aba
       // única é o caminho estável; a 2ª aba simplesmente cai no .catch (sem fila durável,
       // mas sem corromper). Recuperação adicional: auto-reload guardado em sentry-init.js.
+      // v1.3.27: FIX RAIZ — SDK subido 10.8.1 → 10.14.1 (as correções internas de
+      // "Unexpected state" entraram em 10.12+). synchronizeTabs segue removido e o
+      // auto-reload segue ativo como cinto-e-suspensório enquanto se confirma no Sentry.
       try {
         this.db.enablePersistence().then(function () {
           if (window._log) window._log('[FirestoreDB] persistência offline ATIVA — saves sobrevivem a fechar o app');

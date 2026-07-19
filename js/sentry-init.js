@@ -61,14 +61,15 @@
   // Sem DSN — sai limpo. Os no-ops acima já estão ativos.
   if (!DSN) return;
 
-  // ── 2b. Recuperação do bug FATAL do Firestore (SDK 10.8.1) ─────────────────
+  // ── 2b. Recuperação do bug FATAL do Firestore (SDK <10.12) ─────────────────
   // "INTERNAL ASSERTION FAILED: Unexpected state": a AsyncQueue do Firestore "falha" e
-  // NÃO se recupera — TODA chamada seguinte morre em cascata (Sentry SCOREPLACE-WEB-67).
+  // NÃO se recupera — TODA chamada seguinte morre em cascata (Sentry SCOREPLACE-WEB-66/67).
   // Único conserto em runtime é recarregar a página. Aqui: detecta o erro e faz UM reload
   // GUARDADO — só quando _isSafeToReload() (nunca no meio de um placar ao vivo) e no máximo
   // 1x por sessão. Se nunca for seguro em ~60s, desiste sem recarregar (não interrompe).
-  // Causa-raiz atacada em paralelo: synchronizeTabs removido (firebase-db.js). Fix
-  // definitivo = subir o SDK.
+  // v1.3.27: FIX RAIZ aplicado — SDK subido 10.8.1 → 10.14.1 (as correções de "Unexpected
+  // state" entraram em 10.12+). Este auto-reload guardado + synchronizeTabs removido
+  // (firebase-db.js) seguem como rede de segurança enquanto se confirma no Sentry.
   var _fsRecovering = false;
   function _fsFatal(s) { return /INTERNAL ASSERTION FAILED|Unexpected state/i.test(String(s || '')); }
   function _maybeRecoverFirestore(text) {
