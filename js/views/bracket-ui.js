@@ -1118,16 +1118,18 @@ window._showAllHiddenSwissPast = function (tId) {
   _rerenderBracket(tId);
 };
 
-// CANÔNICO (dono, 18-jul): um set foi decidido por TIE-BREAK sse o placar de GAMES difere por
-// EXATAMENTE 1 e o perdedor tem >= (gamesPerSet - 1). Cobre TB em QUALQUER empate a partir de
-// (gamesPerSet-1): 5-5→6-5, 6-6→7-6, 7-7→8-7 (Beach Tennis decide em quadra). O placar digitado
-// é o FINAL (não soma +1). FONTE ÚNICA do gate de TB no lançamento manual (revelar + salvar) —
-// antes cada ponto usava `=== gamesPerSet-1` (só 6-5) e o 7-6/8-7 não abria os campos.
+// CANÔNICO (dono, 18/19-jul): o TIE-BREAK acontece no empate GATILHO configurado pelo organizador
+// (o campo "games por set", `gamesPerSet`): um set de N games vai a N-N e joga o TB → placar FINAL
+// (N+1, N). Ou seja gamesPerSet 6 → TB no 6-6 → final 7-6; gamesPerSet 5 → 5-5 → 6-5 (bate com o
+// padrão ITF do Beach Tennis, project_sport_rules_canonical). Um set foi decidido no TB sse o placar
+// difere por 1 E o PERDEDOR tem EXATAMENTE gamesPerSet (o vencedor gamesPerSet+1). RESPEITA a config
+// (não é "qualquer empate"). O placar digitado é o FINAL (sem somar +1). FONTE ÚNICA revelar+salvar.
+// (Antes o código usava gamesPerSet-1 → revelava no 6-5 e o 7-6 real não abria os campos — off-by-one.)
 window._isTiebreakSetScore = function (g1, g2, gamesPerSet) {
   g1 = parseInt(g1); g2 = parseInt(g2);
   if (isNaN(g1) || isNaN(g2)) return false;
   var gp = parseInt(gamesPerSet) || 6;
-  return Math.abs(g1 - g2) === 1 && Math.min(g1, g2) >= (gp - 1);
+  return Math.abs(g1 - g2) === 1 && Math.min(g1, g2) === gp;
 };
 
 window._highlightWinner = function (matchId) {
@@ -1156,8 +1158,9 @@ window._highlightWinner = function (matchId) {
               var _tsc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(_tour, _matches[mi]) : _tour.scoring;
               if (_tsc && _tsc.tiebreakEnabled !== false &&
                   (_tsc.type === 'sets' || _tsc.gamesPerSet)) {
-                // Tiebreak triggers at (gamesPerSet - 1) — e.g. 5-5 in a 6-game set
-                _trigger = (parseInt(_tsc.gamesPerSet) || 6) - 1;
+                // _trigger = games do PERDEDOR no TB (= gamesPerSet configurado). O TB acontece
+                // no empate gamesPerSet×gamesPerSet → final (gamesPerSet+1, gamesPerSet). gp6 → 7-6.
+                _trigger = (parseInt(_tsc.gamesPerSet) || 6);
               }
               break;
             }
@@ -1171,9 +1174,9 @@ window._highlightWinner = function (matchId) {
     // em alguns casos por race do dataset.tbShown vs reflow. Agora: simples —
     // se trigger hit, mostra E marca data-tb-shown. Se data-tb-shown='1', fica.
     // Reset só quando card re-renderiza (input novo, sem o data attribute).
-    // _trigger = gamesPerSet-1 → passa gamesPerSet (=_trigger+1) ao gate canônico. Revela os
-    // campos de TB em 6-5/7-6/8-7 (qualquer empate ≥ gamesPerSet-1), não só no 6-5.
-    var triggerHit = _trigger !== null && window._isTiebreakSetScore(s1, s2, _trigger + 1);
+    // _trigger = gamesPerSet configurado pelo dono → revela os campos de TB SÓ no placar do
+    // gatilho: gp6 → 7-6, gp5 → 6-5 (nunca 6-5 num set de 6, nem 8-7 — o set fecha no gatilho).
+    var triggerHit = _trigger !== null && window._isTiebreakSetScore(s1, s2, _trigger);
     var alreadyShown = tb1El.getAttribute('data-tb-shown') === '1';
     if (triggerHit || alreadyShown) {
       tb1El.style.display = 'inline-block';
@@ -1599,15 +1602,15 @@ window._saveResultInline = function (tId, matchId) {
   const useSets = _isc && _isc.type === 'sets';
   const isFixedSet = useSets && _isc.fixedSet;
   const tbEnabled = useSets && _isc.tiebreakEnabled !== false;
-  // Tiebreak triggers at (gamesPerSet - 1) — e.g. 5-5 in a 6-game set (final 6-5)
-  const tbTrigger = tbEnabled ? ((parseInt(_isc.gamesPerSet) || 6) - 1) : null;
+  // TB no empate gamesPerSet×gamesPerSet → placar final (gamesPerSet+1, gamesPerSet). tbTrigger =
+  // games do PERDEDOR no TB (= gamesPerSet); vencedor = tbTrigger+1. Ex.: gp6 → final 7-6.
+  const tbTrigger = tbEnabled ? (parseInt(_isc.gamesPerSet) || 6) : null;
 
-  // Tiebreak mode: a trigger+1 / trigger score (e.g. 7-6) implies the set was
-  // decided on a tie-break. The winner of the set is already known from s1/s2;
-  // we only ask for the tie-break points.
+  // Tiebreak mode: o placar final (gamesPerSet+1, gamesPerSet), ex.: 7-6, implica que o set foi
+  // decidido no tie-break. O vencedor já é conhecido por s1/s2; só pedimos os pontos do TB.
   var tbP1 = NaN, tbP2 = NaN;
   var isTiebreakEntry = false;
-  if (tbEnabled && window._isTiebreakSetScore(s1, s2, tbTrigger + 1)) {
+  if (tbEnabled && window._isTiebreakSetScore(s1, s2, tbTrigger)) {
     var tb1El = document.getElementById('tb1-' + matchId);
     var tb2El = document.getElementById('tb2-' + matchId);
     tbP1 = tb1El ? parseInt(tb1El.value) : NaN;

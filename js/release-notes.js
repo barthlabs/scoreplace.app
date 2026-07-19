@@ -12,9 +12,9 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #a855f7;border-radius:12px;padding:14px 16px;background:rgba(168,85,247,0.08);">' +
-      '<div style="font-weight:800; color:#c084fc; font-size:1rem; margin-bottom:8px;">🎾 v1.3.12 — Tie-break: os campos de pontos aparecem em qualquer empate <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#c084fc; font-size:1rem; margin-bottom:8px;">🎾 v1.3.13 — Tie-break respeita a configuração do torneio <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>🎾 Pontos do tie-break, sempre:</b> ao lançar um set decidido no tie-break, os campos pra digitar os pontos do TB só apareciam no <b>6-5</b>. Agora aparecem em <b>qualquer</b> placar de tie-break — <b>6-5</b> (TB no 5-5), <b>7-6</b> (TB no 6-6) e <b>8-7</b> (TB no 7-7) — e são salvos junto. Você digita o placar final de games e preenche os pontos do TB.</li>' +
+        '<li><b>🎾 Os campos do tie-break aparecem no placar certo:</b> quem manda no gatilho é a <b>configuração de pontuação do torneio</b> (games por set). Num set de <b>6 games</b>, o tie-break é no <b>6-6</b> → placar final <b>7-6</b> — é aí que os campos de pontos do TB aparecem. Num set de <b>5 games</b>, é no <b>5-5</b> → <b>6-5</b>. Nada de abrir o TB num 6-5 quando o set é de 6 games. Você digita o placar final de games e preenche os pontos do tie-break.</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.08);">' +
