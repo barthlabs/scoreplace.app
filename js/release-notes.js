@@ -11,6 +11,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #25D366;border-radius:12px;padding:14px 16px;background:rgba(37,211,102,0.08);">' +
+      '<div style="font-weight:800; color:#4ade80; font-size:1rem; margin-bottom:8px;">📧 v1.3.28 — O e-mail do grupo (e dos avisos) agora chega de verdade <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>✉️ Link do grupo por e-mail, funcionando:</b> o e-mail com o link do grupo do WhatsApp — e os avisos do torneio (sorteio, nova rodada, etc.) — agora são <b>realmente enviados</b> aos inscritos. Um problema silencioso deixava esses e-mails sem sair; corrigido. Cada um recebe o botão <b>"Entrar no grupo"</b> direto no e-mail.</li>' +
+        '<li><b>📮 Chega em todos os seus e-mails:</b> se você vinculou mais de um e-mail à sua conta, o aviso vai pra <b>todos</b> eles — não só o principal.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.08);">' +
       '<div style="font-weight:800; color:#fbbf24; font-size:1rem; margin-bottom:8px;">⏰ v1.3.25 — Lembrete do torneio que sempre chega <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

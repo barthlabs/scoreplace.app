@@ -229,7 +229,22 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         }
         // Email dispatch — writes to 'mail' Firestore collection, processed by
         // the "Trigger Email from Firestore" extension.
-        var email = (!_skipEmail && profile.notifyEmail !== false && profile.email) ? profile.email : null;
+        // v1.3.28: resolve TODOS os e-mails do usuário — principal (`email`) MAIS os
+        // vinculados por união de contas (`linkedEmails[]`, verificados) — respeitando
+        // o opt-out `notifyEmail`. A pessoa pode ler qualquer um, então TODOS recebem.
+        // ⚠️ A resolução é INDEPENDENTE do `_skipEmail`: o skip só gateia o DISPATCH
+        // individual abaixo; o RETORNO precisa dos e-mails pra que o lote em
+        // _notifyTournamentParticipants monte `allEmails`. Antes (regressão v2.4.82) o
+        // `!_skipEmail` anulava `email` no caminho skip → allEmails saía VAZIO → e-mail
+        // de torneio (grupo WhatsApp, sorteio, rodada…) NUNCA disparava.
+        var _optedIn = (profile.notifyEmail !== false);
+        var _seenEm = {}, emails = [];
+        var _pushEm = function(e) { var k = String(e == null ? '' : e).trim().toLowerCase(); if (k && !_seenEm[k]) { _seenEm[k] = true; emails.push(k); } };
+        if (_optedIn) {
+            _pushEm(profile.email);
+            if (Array.isArray(profile.linkedEmails)) profile.linkedEmails.forEach(_pushEm);
+        }
+        var email = emails.length ? emails[0] : null;
         // v1.2.9: a resolução de telefone saiu — não há canal de WhatsApp pra onde
         // mandar (número banido, portfólio Meta morto). Ver project_whatsapp_meta_2fa_block.
 
@@ -239,7 +254,7 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         // WhatsApp ("Olá, Rodrigo."). Primeiro nome só: o template é curto e
         // "Olá, Rodrigo" lê melhor que "Olá, Rodrigo Barth".
         var _toName = String(profile.displayName || '').trim().split(/\s+/)[0] || '';
-        if (email && typeof window._dispatchChannels === 'function') {
+        if (!_skipEmail && emails.length && typeof window._dispatchChannels === 'function') {
             var tUrl = notifData.tournamentId ? 'https://scoreplace.app/#tournaments/' + notifData.tournamentId : 'https://scoreplace.app';
             // v1.8.1-beta: pass ALL notifData fields so rich email templates
             // can access player1/player2/score1/score2/matchLines/playerMatch etc.
@@ -249,13 +264,13 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
             _tplData.subject = 'scoreplace.app — ' + (notifData.tournamentName || 'Notificação');
             if (!_tplData.message) _tplData.message = '';
             window._dispatchChannels(
-                { emails: email ? [email] : [] },
+                { emails: emails.slice() },
                 notifData.type || 'info',
                 _tplData
             );
         }
 
-        return { email: email, name: _toName };
+        return { email: email, emails: emails, name: _toName };
     } catch(e) {
         window._warn('_sendUserNotification error:', e);
         return null;
@@ -326,14 +341,23 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
             }
             if (uid) {
                 var result = await window._sendUserNotification(uid, nd, true); // skip individual dispatch; batch below
-                if (result && result.email) allEmails.push(result.email);
+                // v1.3.28: coleta TODOS os e-mails do usuário (principal + linkedEmails)
+                // pro lote — não só o principal.
+                if (result && Array.isArray(result.emails)) result.emails.forEach(function(e){ allEmails.push(e); });
+            } else if (r.email) {
+                // Participante informal (sem conta): sem perfil pra ler linkedEmails/opt-out,
+                // mas o e-mail do próprio participante é destinatário válido.
+                allEmails.push(r.email);
             }
         } catch(e) { window._warn('Notify participant error:', e); }
     }
 
-    // Auto-dispatch email channel
-    var channelResult = { emails: allEmails };
-    if (allEmails.length > 0 && typeof window._dispatchChannels === 'function') {
+    // Auto-dispatch email channel — dedup case-insensitive (dois participantes podem
+    // compartilhar um e-mail; o mesmo linkedEmail pode reaparecer em outro perfil).
+    var _seenAll = {}, _emailsDedup = [];
+    allEmails.forEach(function(e){ var k = String(e == null ? '' : e).trim().toLowerCase(); if (k && !_seenAll[k]) { _seenAll[k] = true; _emailsDedup.push(k); } });
+    var channelResult = { emails: _emailsDedup };
+    if (_emailsDedup.length > 0 && typeof window._dispatchChannels === 'function') {
         var tUrl = 'https://scoreplace.app/#tournaments/' + String(t.id);
         // v1.8.1-beta: pass all nd fields so rich email templates receive full payload
         var _tplData = Object.assign({}, nd);
