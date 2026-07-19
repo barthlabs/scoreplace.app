@@ -344,49 +344,19 @@ window._propagateMatchUpdate = _propagateMatchUpdate;
 
 // Retorna 1 ou 2 se user está num dos lados do match; 0 se em nenhum.
 // Compara por uid (preferido), email e displayName.
+// CANÔNICO (dono, 18/jul: "uid e nada mais sempre. nem nome, nem email, nem celular"):
+// de que lado do jogo o `user` está? SÓ pelo UID do SLOT — window._slotUids lê a identidade
+// estrutural do slot (team*Uids → p*Uid → team*Obj/_participantUids), a MESMA que o W.O. e o
+// avanço usam. Nenhum casamento por nome/e-mail/substring: a barra do nome é tipografia, o
+// displayName pode ter mudado, e homônimos colidiam. Sem uid no user → 0 (guest/informal não
+// loga; não é "o usuário atual"). Cobre 1v1, dupla e Rei/Rainha (todos carregam uid no slot).
+// Ver [[project_uid_identity_canon_locked]] / [[project_match_slot_uid_identity]].
 function _userTeamInMatch(t, m, user) {
-  if (!t || !m || !user) return 0;
-  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  // Busca o participant pelo nome completo do lado (p1 ou p2 do match).
-  // Para duplas, o participant é salvo com o nome completo do time ("Kelly / Rodrigo Barth"),
-  // idêntico ao p1/p2. Verificamos uid e email. Fallback: displayName do usuário
-  // aparece em algum trecho do nome do lado (para nomes individuais dentro de dupla).
-  var checkSide = function(sideStr) {
-    if (!sideStr || sideStr === 'TBD' || sideStr === 'BYE') return false;
-    var pp = null;
-    for (var j = 0; j < parts.length; j++) {
-      var p = parts[j];
-      var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-      // v4.0.76: casa também pelo nome canônico da entrada ("p1 / p2" — _entryDisplayName).
-      // O lado da partida de dupla é "A / B", mas o displayName da entrada pode ser só o p1;
-      // sem isto a entrada não era achada e caía no fallback de substring (nome, não uid).
-      var pCanon = (typeof window._entryDisplayName === 'function') ? window._entryDisplayName(p) : pName;
-      if (pName === sideStr || pCanon === sideStr) { pp = p; break; }
-    }
-    if (pp && typeof pp === 'object') {
-      if (user.uid && pp.uid && pp.uid === user.uid) return true;
-      // Duplas: verificar p1Uid e p2Uid individualmente
-      if (user.uid && pp.p1Uid && pp.p1Uid === user.uid) return true;
-      if (user.uid && pp.p2Uid && pp.p2Uid === user.uid) return true;
-      if (user.email && pp.email && pp.email === user.email) return true;
-      if (user.email && pp.email_lower && pp.email_lower === (user.email || '').toLowerCase()) return true;
-    }
-    // Fallback: nome do usuário aparece no nome do lado (ex: "Rodrigo Barth" em "Kelly / Rodrigo Barth")
-    if (user.displayName) {
-      var uDN = user.displayName;
-      if (sideStr === uDN || sideStr.indexOf(uDN) !== -1) return true;
-    }
-    return false;
-  };
-  if (m.isMonarch) {
-    // v4.0.77: Rei/Rainha — cada membro do time é um INDIVÍDUO (parceiro rotativo). Resolve
-    // por UID via checkSide (acha o participante pelo nome → checa p.uid/p1Uid/p2Uid), não
-    // por displayName/email solto. Cobre o 3º modo de fase de dupla junto com formada/sorteada.
-    if (Array.isArray(m.team1) && m.team1.some(function(nm) { return checkSide(nm); })) return 1;
-    if (Array.isArray(m.team2) && m.team2.some(function(nm) { return checkSide(nm); })) return 2;
-  }
-  if (checkSide(m.p1)) return 1;
-  if (checkSide(m.p2)) return 2;
+  if (!m || !user || !user.uid) return 0;
+  var uid = user.uid;
+  var _su = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };
+  if (_su(m, 'p1').indexOf(uid) !== -1) return 1;
+  if (_su(m, 'p2').indexOf(uid) !== -1) return 2;
   return 0;
 }
 
@@ -433,16 +403,13 @@ function _resultNeedsApproval(t, m, user) {
   if (_isUserOrgOrCoHost(t, user)) return false;
   var userSide = _userTeamInMatch(t, m, user);
   if (userSide === 0) return false;
-  var opposingSideStr = userSide === 1 ? m.p2 : m.p1;
+  var oppSide = userSide === 1 ? 'p2' : 'p1';
+  var opposingSideStr = m[oppSide];
   if (!opposingSideStr || opposingSideStr === 'TBD' || opposingSideStr === 'BYE') return false;
-  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  var opp = parts.find(function(p) {
-    return (typeof p === 'object') && ((p.displayName || p.name || '') === opposingSideStr);
-  });
-  // Verifica p1Uid E p2Uid — duplas têm ambos
-  if (!opp || typeof opp !== 'object') return false;
-  var _allUids = typeof window._participantUids === 'function' ? window._participantUids : function(p) { return p && p.uid ? [p.uid] : []; };
-  return _allUids(opp).length > 0;
+  // Adversário tem gente com conta (uid) pra aprovar? — UID direto do slot, nunca casando
+  // nome. Sem uid no lado adversário (guest/informal) → auto-aprova (não há quem aprove).
+  var _su = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };
+  return _su(m, oppSide).length > 0;
 }
 
 // Notifica o time adversário (cada player com uid) + organizador
@@ -474,54 +441,22 @@ function _notifyPendingApproval(t, m, proposerName) {
     level: 'fundamental',
     timestamp: Date.now()
   };
-  // Descobre o lado do proposer e notifica o lado adversário pelo nome completo do time.
-  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  function _findPartBySide(sideStr) {
-    return parts.find(function(p) {
-      return typeof p === 'object' && (p.displayName || p.name || '') === sideStr;
-    }) || null;
-  }
-  var proposerSide = 0;
-  if (pr.proposedBy || pr.proposedByEmail) {
-    proposerSide = _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail });
-  }
+  // Lado do proponente E adversário — SÓ pelo UID do slot (nunca casando nome). Notifica
+  // TODOS os uids do lado adversário; o proponente é pulado. Ver [[project_uid_identity_canon_locked]].
+  var _su = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };
+  var u1 = _su(m, 'p1'), u2 = _su(m, 'p2');
+  var proposerSide = pr.proposedBy ? (u1.indexOf(pr.proposedBy) !== -1 ? 1 : u2.indexOf(pr.proposedBy) !== -1 ? 2 : 0) : 0;
+  var oppUids = proposerSide === 1 ? u2 : proposerSide === 2 ? u1 : [];
   var skipUids = {};
-  var _allUids = typeof window._participantUids === 'function' ? window._participantUids : function(p) { return p && p.uid ? [p.uid] : []; };
-  var proposerSideStr = proposerSide === 1 ? m.p1 : proposerSide === 2 ? m.p2 : null;
-  if (proposerSideStr) {
-    var proposerPart = _findPartBySide(proposerSideStr);
-    _allUids(proposerPart).forEach(function(u) { skipUids[u] = true; });
-  } else {
-    if (pr.proposedBy) skipUids[pr.proposedBy] = true;
-  }
-  // Notifica TODOS os UIDs do lado adversário (p1Uid + p2Uid de duplas)
-  var opposingSideStr = proposerSide === 1 ? m.p2 : m.p1;
-  if (opposingSideStr && opposingSideStr !== 'TBD' && opposingSideStr !== 'BYE') {
-    var oppPart = _findPartBySide(opposingSideStr);
-    _allUids(oppPart).forEach(function(u) {
-      if (!skipUids[u]) {
-        window._sendUserNotification(u, notifData);
-        skipUids[u] = true;
-      }
-    });
-  }
-  // Also notify organizer if not proposer and not already notified
-  // First try by uid (works even when org isn't a participant — e.g. phone-only)
+  (proposerSide === 1 ? u1 : proposerSide === 2 ? u2 : (pr.proposedBy ? [pr.proposedBy] : [])).forEach(function(u) { if (u) skipUids[u] = true; });
+  oppUids.forEach(function(u) {
+    if (u && !skipUids[u]) { window._sendUserNotification(u, notifData); skipUids[u] = true; }
+  });
+  // Organizador + co-organizadores ativos — SÓ por uid (creatorUid / coHosts[].uid).
   var orgUid = t.creatorUid;
-  if (orgUid && !skipUids[orgUid]) {
-    window._sendUserNotification(orgUid, notifData);
-    skipUids[orgUid] = true;
-  } else {
-    // Fallback: acha o organizador entre os participantes. v2.8.80: uid (creatorUid) primeiro, email fallback.
-    var orgEmail = t.organizerEmail || t.creatorEmail;
-    if (orgEmail || t.creatorUid) {
-      var orgPart = parts.find(function(p) {
-        return typeof p === 'object' && ((t.creatorUid && p.uid === t.creatorUid) || (orgEmail && p.email === orgEmail));
-      });
-      if (orgPart && orgPart.uid && !skipUids[orgPart.uid]) {
-        window._sendUserNotification(orgPart.uid, notifData);
-      }
-    }
+  if (orgUid && !skipUids[orgUid]) { window._sendUserNotification(orgUid, notifData); skipUids[orgUid] = true; }
+  if (Array.isArray(t.coHosts)) {
+    t.coHosts.forEach(function(ch) { if (ch && ch.status === 'active' && ch.uid && !skipUids[ch.uid]) { window._sendUserNotification(ch.uid, notifData); skipUids[ch.uid] = true; } });
   }
 }
 
@@ -1698,6 +1633,22 @@ window._saveResultInline = function (tId, matchId) {
   // recebe notificação pra aprovar.
   var _curUser = window.AppStore && window.AppStore.currentUser;
   if (_curUser && _resultNeedsApproval(t, m, _curUser)) {
+    // TRAVA DE LÓGICA (item 3, incidente 18/jul): quando um lado já lançou (pendingResult
+    // não-disputado), o input do OUTRO lado fica travado — o 2º lançamento NÃO sobrescreve a
+    // proposta; o adversário confirma/edita/contesta. Antes o lock era só de RENDER, então um
+    // 2º _saveResultInline do lado oposto (view stale / mini-card) clobberava o pendingResult.
+    // Lado resolvido SÓ por uid (_userTeamInMatch). Mesmo lado (proponente relançando a própria
+    // proposta antes do adversário agir) segue permitido. [[project_uid_identity_canon_locked]]
+    var _existing = m.pendingResult;
+    if (_existing && !_existing.disputed) {
+      var _mySide = _userTeamInMatch(t, m, _curUser);
+      var _propSide = _existing.proposedBy ? _userTeamInMatch(t, m, { uid: _existing.proposedBy }) : 0;
+      if (_mySide > 0 && _propSide > 0 && _mySide !== _propSide) {
+        showNotification('Já tem placar pra aprovar', 'O outro time já lançou. Use Confirmar, Editar ou Contestar.', 'info');
+        _rerenderBracket(tId, matchId); // restaura o estado travado (Confirmar/Editar/Contestar)
+        return;
+      }
+    }
     var _proposedWinner;
     var _proposedDraw = false;
     if (s1 === s2 && allowDraw) {
@@ -2163,19 +2114,11 @@ window._approveResult = function(tId, matchId) {
       level: 'fundamental',
       timestamp: Date.now()
     };
-    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-    var _allUids = typeof window._participantUids === 'function' ? window._participantUids : function(p) { return p && p.uid ? [p.uid] : []; };
+    // Notifica os dois lados — SÓ pelos UIDs do slot (nunca casando nome). [[project_uid_identity_canon_locked]]
+    var _su = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };
     var notifSeen = {};
-    [m.p1, m.p2].forEach(function(side) {
-      if (!side || side === 'TBD' || side === 'BYE') return;
-      // Busca o participante pelo nome completo do lado (funciona para duplas)
-      var p = parts.find(function(pp) {
-        return typeof pp === 'object' && (pp.displayName || pp.name || '') === side;
-      });
-      // Notifica todos os UIDs (p1Uid + p2Uid para duplas)
-      _allUids(p).forEach(function(u) {
-        if (u && !notifSeen[u]) { notifSeen[u] = true; window._sendUserNotification(u, notifData); }
-      });
+    _su(m, 'p1').concat(_su(m, 'p2')).forEach(function(u) {
+      if (u && !notifSeen[u]) { notifSeen[u] = true; window._sendUserNotification(u, notifData); }
     });
   }
 

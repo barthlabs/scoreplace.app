@@ -3132,29 +3132,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     }
     // Se é o proponente atual (mesmo sendo org): aguardando — sem botões
   }
-  // v3.0.77 (Parte 8 uid): uid-first via _userTeamInMatch (resolve o objeto do
-  // participante e checa uid/p1Uid/p2Uid) — pega o p2 de dupla cujo displayName
-  // é só o nome do p1. Fallback nome/email mantido pra legado/informal.
-  const _isMyMatch = !!(_cu && !isByeMatch && (
-    (typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, _cu) > 0) ||
-    (function() {
-      var sides = [m.p1 || '', m.p2 || ''];
-      for (var si = 0; si < sides.length; si++) {
-        var s = sides[si];
-        if (!s || s === 'TBD' || s === 'BYE') continue;
-        if (_cuName && (s === _cuName || s.indexOf(_cuName) !== -1)) return true;
-        if (_cuEmail && s === _cuEmail) return true;
-        if (s.indexOf('/') !== -1) {
-          var members = s.split('/').map(function(n) { return n.trim(); });
-          for (var mi = 0; mi < members.length; mi++) {
-            if (_cuName && members[mi] === _cuName) return true;
-            if (_cuEmail && members[mi] === _cuEmail) return true;
-          }
-        }
-      }
-      return false;
-    })()
-  ));
+  // CANÔNICO (dono, 18/jul): "é o meu jogo?" — SÓ pelo UID do slot (_userTeamInMatch →
+  // _slotUids). Sem fallback de nome/e-mail/substring: casar nome mostrava o input de placar
+  // pro jogador errado (homônimo / "X" dentro de "X / Y"). [[project_uid_identity_canon_locked]]
+  const _isMyMatch = !!(_cu && !isByeMatch &&
+    typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, _cu) > 0);
 
   // Card border color based on check-in readiness
   let cardBorder = isDecided ? 'rgba(16,185,129,0.2)' : hasTBD ? 'rgba(255,255,255,0.05)' : 'var(--border-color)';
@@ -4574,23 +4556,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         const _cuEmail = _cu ? (_cu.email || '') : '';
         const _matchHasMe = (m) => {
           if (!_cu) return false;
-          // v3.0.77 (Parte 8 uid): uid-first via _userTeamInMatch; fallback nome/email.
-          if (typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, _cu) > 0) return true;
-          const sides = [m.p1 || '', m.p2 || ''];
-          for (let si = 0; si < sides.length; si++) {
-            const s = sides[si];
-            if (!s || s === 'TBD' || s === 'BYE') continue;
-            if (_cuName && (s === _cuName || s.indexOf(_cuName) !== -1)) return true;
-            if (_cuEmail && s === _cuEmail) return true;
-            if (s.indexOf('/') !== -1) {
-              const members = s.split('/').map(n => n.trim());
-              for (let mi = 0; mi < members.length; mi++) {
-                if (_cuName && members[mi] === _cuName) return true;
-                if (_cuEmail && members[mi] === _cuEmail) return true;
-              }
-            }
-          }
-          return false;
+          // CANÔNICO (dono, 18/jul): "é o meu jogo?" SÓ pelo UID do slot (_userTeamInMatch →
+          // _slotUids). Sem fallback nome/e-mail/substring. [[project_uid_identity_canon_locked]]
+          return typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, _cu) > 0;
         };
         // v0.17.29: usuário fora da rodada (desativado/sem grupo) → todos
         // os jogos vão pra ligaOtherMatchesHtml (collapsed). Standings ficam

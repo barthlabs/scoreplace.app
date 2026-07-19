@@ -11,6 +11,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #818cf8;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">✅ v1.3.10 — Aprovar placar volta a funcionar (duplas) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>✅ "Confirmar" confirma de novo:</b> quando um time lançava o placar, o adversário (em duplas) às vezes não conseguia <b>Confirmar/Contestar</b> — o app não reconhecia de que lado a pessoa estava. Corrigido: agora o reconhecimento é <b>pela conta (login) de cada jogador</b>, então cada um dos quatro é identificado certo, mesmo com nomes parecidos ou dupla renomeada.</li>' +
+        '<li><b>🔒 Um placar por vez:</b> depois que um lado lança, o campo de placar do <b>outro lado trava</b> — ele só <b>Confirma, Edita ou Contesta</b>, sem lançar um placar concorrente por cima. Fim do vai-e-volta que deixava o jogo preso.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🔢 v1.3.9 — A primeira rodada é sempre R1 (nunca R0) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
