@@ -3911,6 +3911,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     serveOrder: [],      // [{team:1|2, name:'Ana'}, ...] rotation cycle (2 for singles, 4 for doubles)
     serveSkipped: false, // user chose to skip serve tracking
     servePending: false, // true when waiting for user to pick a server
+    secondServerPicked: false, // Tela 2 (duplas): 2º sacador (do outro time) já foi escolhido?
     totalGamesPlayed: 0, // total games completed (for serve rotation)
     gameLog: [],         // [{winner:1|2, serverName, serverTeam}] per completed normal game
     pointLog: []         // [{team:1|2, endSet:bool}] every point scored, set boundaries marked
@@ -3946,6 +3947,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (_ils.totalGamesPlayed) state.totalGamesPlayed = _ils.totalGamesPlayed;
     if (_ils.tieRule) state.tieRule = _ils.tieRule;
     if (Array.isArray(_ils.serveOrder) && _ils.serveOrder.length) state.serveOrder = _ils.serveOrder;
+    if (state.serveOrder.length > 0) state.secondServerPicked = true; // partida retomada → não re-perguntar
     state.serveSkipped = !!_ils.serveSkipped;
     if (Array.isArray(_ils.gameLog)) state.gameLog = _ils.gameLog.slice();
     if (Array.isArray(_ils.pointLog)) state.pointLog = _ils.pointLog.slice();
@@ -3987,7 +3989,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
             state.tieRulePending = !!remote.tieRulePending;
             state.totalGamesPlayed = remote.totalGamesPlayed || 0;
             state.tieRule = remote.tieRule || state.tieRule;
-            if (Array.isArray(remote.serveOrder) && remote.serveOrder.length > 0) state.serveOrder = remote.serveOrder;
+            if (Array.isArray(remote.serveOrder) && remote.serveOrder.length > 0) { state.serveOrder = remote.serveOrder; state.secondServerPicked = true; }
             state.serveSkipped = !!remote.serveSkipped;
             if (Array.isArray(remote.gameLog)) state.gameLog = remote.gameLog.slice();
             if (Array.isArray(remote.pointLog)) state.pointLog = remote.pointLog.slice();
@@ -5083,6 +5085,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Serve picker overlay no longer used — serve is set inline via draggable ball
   function _needsServePick() {
+    if (state.serveSkipped) return false;
+    if (state.isFinished || state.tieRulePending) return false;
+    // Tela 1: antes do 1º game e nenhum sacador escolhido.
+    if (state.totalGamesPlayed === 0 && state.serveOrder.length === 0) return true;
+    // Tela 2 (só duplas): entre o 1º e o 2º game, 2º sacador (do outro time) ainda não escolhido.
+    if (isDoubles && state.totalGamesPlayed === 1 && state.serveOrder.length >= 2 && !state.secondServerPicked) return true;
     return false;
   }
 
@@ -5180,42 +5188,93 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var _serveDragIdx = null;
   var _serveDragGhost = null;
 
+  // v1.3.11 (dono, 18-jul): tela de SACADOR por CLIQUE (não arrastar), em 2 estágios.
+  //   Tela 1 (antes do 1º game): escolher o 1º sacador entre TODOS. Botão verde "Iniciar".
+  //   Tela 2 (duplas, entre o 1º e o 2º game): escolher o 2º sacador SÓ do outro time. "Confirmar".
+  //   Clique num nome → box em volta + bolinha da modalidade à esquerda do nome. 1º pré-selecionado.
+  //   Fechar (esq) = pula o rastreio de saque. Layout scroll-safe (nada corta; ver mock).
+  var _pickerSel = null; // { team, idx } — jogador selecionado
+
+  function _serveStage() { return (state.totalGamesPlayed === 0) ? 1 : 2; }
+
+  function _servePickerPlayers(stage) {
+    var out = [];
+    if (stage === 2 && state.serveOrder.length >= 2) {
+      var t2 = state.serveOrder[1].team; // o time que saca no 2º game
+      var arr = t2 === 1 ? p1Players : p2Players;
+      for (var i = 0; i < arr.length; i++) out.push({ team: t2, idx: i, name: arr[i] });
+    } else {
+      for (var a = 0; a < p1Players.length; a++) out.push({ team: 1, idx: a, name: p1Players[a] });
+      for (var b = 0; b < p2Players.length; b++) out.push({ team: 2, idx: b, name: p2Players[b] });
+    }
+    return out;
+  }
+
   function _showServePickerOverlay() {
     var container = document.getElementById('live-score-content');
     if (!container) return;
+    var stage = _serveStage();
+    var players = _servePickerPlayers(stage);
+    if (!players.length) return;
+    // pré-seleção: mantém a atual se ainda válida; senão o 1º da lista (já vem escolhido).
+    var _valid = _pickerSel && players.some(function (p) { return p.team === _pickerSel.team && p.idx === _pickerSel.idx; });
+    if (!_valid) _pickerSel = { team: players[0].team, idx: players[0].idx };
 
-    // Enforce alternation
-    _rebuildProposedOrder();
+    var title = stage === 1 ? 'Quem saca primeiro?' : 'Quem saca no 2º game?';
+    var confirmLabel = stage === 1 ? 'Iniciar' : 'Confirmar';
 
-    // Build 4 cards in serve order
-    var cardsHtml = '';
-    for (var i = 0; i < _proposedOrder.length; i++) {
-      var p = _proposedOrder[i];
+    var cardsHtml = players.map(function (p) {
+      var sel = (_pickerSel.team === p.team && _pickerSel.idx === p.idx);
       var clr = p.team === 1 ? '#3b82f6' : '#ef4444';
-      var bgClr = p.team === 1 ? 'rgba(59,130,246,0.08)' : 'rgba(239,68,68,0.08)';
-      var bdrClr = p.team === 1 ? 'rgba(59,130,246,0.30)' : 'rgba(239,68,68,0.30)';
-      cardsHtml +=
-        '<div class="serve-card" draggable="true" data-serve-idx="' + i + '" style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:12px;border:1px solid ' + bdrClr + ';background:' + bgClr + ';cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,box-shadow 0.15s;">' +
-          '<div style="color:var(--text-muted);font-size:0.85rem;flex-shrink:0;opacity:0.4;">☰</div>' +
-          '<div style="width:24px;height:24px;border-radius:50%;background:' + clr + ';color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:800;flex-shrink:0;">' + (i + 1) + '</div>' +
-          _liveAvatarHtml(p.name, 32) +
-          '<div style="flex:1;min-width:0;font-size:0.95rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(p.name) + '</div>' +
-        '</div>';
-    }
+      var bg = sel ? (p.team === 1 ? 'rgba(59,130,246,0.16)' : 'rgba(239,68,68,0.16)') : 'rgba(255,255,255,0.03)';
+      var bd = sel ? clr : 'rgba(255,255,255,0.10)';
+      var ball = sel ? '<span style="font-size:1.15rem;line-height:1;flex-shrink:0;">' + _sportBall + '</span>' : '';
+      return '<button type="button" onclick="window._liveServeSelect(' + p.team + ',' + p.idx + ')" ' +
+        'style="box-sizing:border-box;width:100%;max-width:360px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:12px;cursor:pointer;text-align:left;' +
+        'border:2px solid ' + bd + ';background:' + bg + ';transition:background 0.12s,border-color 0.12s;">' +
+          _liveAvatarHtml(p.name, 34) + ball +
+          '<span style="flex:1;min-width:0;font-size:1rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(p.name) + '</span>' +
+        '</button>';
+    }).join('');
 
+    // Layout scroll-safe: barra FIXA (Fechar esq · título · Iniciar/Confirmar dir) + lista ROLÁVEL.
     container.innerHTML =
-      '<div style="display:flex;flex-direction:column;align-items:center;height:100%;padding:1rem 1.5rem 1.5rem;gap:1rem;">' +
-        // Action buttons pinned at the top of the page.
-        '<div style="display:flex;gap:12px;flex-shrink:0;">' +
-          '<button onclick="window._liveConfirmServeOrder()" style="padding:14px 32px;border-radius:12px;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:0.95rem;font-weight:700;box-shadow:0 2px 12px rgba(16,185,129,0.3);">Iniciar Partida</button>' +
-          '<button onclick="window._liveSkipServe()" style="padding:14px 20px;border-radius:12px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.85rem;font-weight:600;">Pular</button>' +
+      '<div style="height:100%;display:flex;flex-direction:column;align-items:stretch;">' +
+        '<div style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 12px;background:#0a0e1a;border-bottom:1px solid rgba(255,255,255,0.05);">' +
+          '<button onclick="window._liveSkipServe()" style="flex-shrink:0;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.82rem;font-weight:600;">Fechar</button>' +
+          '<div style="flex:1;min-width:0;text-align:center;font-size:0.9rem;font-weight:800;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>' +
+          '<button onclick="window._liveServeConfirm()" style="flex-shrink:0;padding:10px 20px;border-radius:10px;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:0.9rem;font-weight:800;box-shadow:0 2px 12px rgba(16,185,129,0.3);">' + confirmLabel + '</button>' +
         '</div>' +
-        '<div style="font-size:1.1rem;font-weight:800;color:var(--text-bright);">Ordem de Saque</div>' +
-        '<div id="serve-order-list" style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:360px;">' + cardsHtml + '</div>' +
+        '<div id="serve-order-list" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;padding:14px 1rem calc(14px + env(safe-area-inset-bottom, 0px));">' + cardsHtml + '</div>' +
       '</div>';
-
-    setTimeout(function() { _setupServeDragDrop(); }, 30);
   }
+
+  // clique num nome → seleciona (box + bolinha) e re-renderiza a tela.
+  window._liveServeSelect = function (team, idx) {
+    _pickerSel = { team: team, idx: idx };
+    _showServePickerOverlay();
+  };
+
+  // Iniciar (tela 1) / Confirmar (tela 2) → aplica o sacador escolhido via _liveSetServer
+  // (constrói/atualiza a serveOrder e re-renderiza; a tela some porque _needsServePick vira false).
+  window._liveServeConfirm = function () {
+    if (!_pickerSel) return;
+    var sel = _pickerSel;
+    if (!isDoubles) {
+      // SIMPLES: 1º sacador escolhido; o 2º é o outro jogador. serveOrder = 2 entradas (não 4 —
+      // _liveSetServer é feito p/ duplas e criaria jogadores-fantasma). Sem Tela 2 (só 2 pessoas).
+      var otherTeam = sel.team === 1 ? 2 : 1;
+      var srvName = (sel.team === 1 ? p1Players : p2Players)[sel.idx] || '';
+      var otherName = (otherTeam === 1 ? p1Players : p2Players)[0] || '';
+      state.serveOrder = [{ team: sel.team, name: srvName, pIdx: 0 }, { team: otherTeam, name: otherName, pIdx: 0 }];
+      state.secondServerPicked = true;
+      _render();
+      _watchNotify();
+      return;
+    }
+    if (state.totalGamesPlayed === 1) state.secondServerPicked = true;
+    _liveSetServer(sel.team, sel.idx);
+  };
 
   function _setupServeDragDrop() {
     var cards = document.querySelectorAll('[data-serve-idx]');
@@ -5326,10 +5385,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _watchNotify(); // relógio começa sem rastrear sacador
   };
 
-  // Auto-confirm serve order from proposed order (no separate picker screen)
-  if (state.serveOrder.length === 0 && !state.serveSkipped && _proposedOrder.length >= serveSlots) {
-    state.serveOrder = _proposedOrder.map(function(p) { return { team: p.team, name: p.name, pIdx: p.pIdx }; });
-  }
+  // v1.3.11: NÃO auto-preenche a ordem de saque — a Tela 1 (escolher o 1º sacador) é
+  // obrigatória em partida nova (dono, 18-jul). serveOrder vazio → _needsServePick() dispara
+  // a tela. Retomada/sync já traz serveOrder e não re-pergunta (ver blocos acima).
 
   // Set 1st server by dragging ball to a player name (inline, on the live scoring screen)
   // Before game 1: any player can be set as 1st server → auto-sets 3rd (teammate)
@@ -7185,6 +7243,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     state.tieRule = remote.tieRule || state.tieRule;
     if (Array.isArray(remote.serveOrder) && remote.serveOrder.length > 0) {
       state.serveOrder = remote.serveOrder;
+      state.secondServerPicked = true;
     }
     state.serveSkipped = !!remote.serveSkipped;
     if (Array.isArray(remote.gameLog)) state.gameLog = remote.gameLog.slice();
@@ -7897,9 +7956,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       if (_pi < p1Players.length) _proposedOrder.push({ team: 1, name: p1Players[_pi], pIdx: _pi });
       if (_pi < p2Players.length) _proposedOrder.push({ team: 2, name: p2Players[_pi], pIdx: _pi });
     }
-    if (!state.serveSkipped && _proposedOrder.length >= serveSlots) {
-      state.serveOrder = _proposedOrder.map(function(p) { return { team: p.team, name: p.name, pIdx: p.pIdx }; });
-    }
+    // v1.3.11: partida nova/reiniciada → zera a ordem de saque pra a Tela 1 (escolher o 1º
+    // sacador) reaparecer. Antes auto-preenchia com a ordem padrão, pulando a tela.
+    state.serveOrder = [];
+    state.secondServerPicked = false;
   }
 
   // Reset handler: zero all points, restart from scratch — always available
@@ -7919,6 +7979,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         state.serveOrder = [];
         state.serveSkipped = false;
         state.servePending = false;
+        state.secondServerPicked = false;
         state.gameLog = [];
         state.pointLog = [];
         // Reset tieRule to original value from scoring config
@@ -8463,6 +8524,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         state.serveOrder = [];
         state.serveSkipped = false;
         state.servePending = false;
+        state.secondServerPicked = false;
         state.gameLog = [];
         state.pointLog = [];
         state.tieRule = sc.tieRule || null;

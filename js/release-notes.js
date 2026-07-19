@@ -11,6 +11,14 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.08);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">📡 v1.3.11 — Placar ao vivo: escolher o sacador ficou simples <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎾 1º sacador com um toque:</b> ao iniciar o placar ao vivo, você escolhe quem saca primeiro <b>tocando no nome</b> (ele ganha uma borda e a bolinha da modalidade ao lado). <b>Iniciar</b> (verde, à direita) começa a partida com esse sacador; <b>Fechar</b> (à esquerda) começa sem rastrear saque.</li>' +
+        '<li><b>🔁 2º sacador entre o 1º e o 2º game:</b> nas duplas, ao terminar o 1º game aparece uma tela igual, só com os <b>dois jogadores do outro time</b>, pra você indicar quem saca o 2º game e tocar em <b>Confirmar</b>.</li>' +
+        '<li><b>📱 Cabe em qualquer tela:</b> os botões ficam fixos no topo e a lista rola quando precisa — nada de jogador ou botão cortado fora da tela em celular menor.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #818cf8;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">✅ v1.3.10 — Aprovar placar volta a funcionar (duplas) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
