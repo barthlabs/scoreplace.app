@@ -209,6 +209,43 @@
     return all.filter(function (u) { return u !== c.byUid && absent.indexOf(u) === -1; });
   }
 
+  // ─── negociação do DESFECHO (Stage 2 — project_wo_outcome_negotiation_canon) ────
+  // Detector PURO (não muta): o desfecho de um claim só é NEGOCIADO quando é W.O.
+  // INDIVIDUAL de dupla numa ELIMINATÓRIA — o parceiro SEGUE, então há escolha real
+  // (avança / suplente / Jogador X). Devolve {partnerUid, absentUids, oppUids, oppName,
+  // matchId}. null = não negocia (time / 1×1 / Liga / grupo / adversário TBD / sem uid)
+  // → aplica direto na confirmação, como antes. Espelha a detecção do motor (_applyWO
+  // `_cIndiv`) sem efeito colateral — serve pra escolher o fluxo E achar os atores.
+  // Slot SEMPRE por uid ([[project_match_slot_uid_identity]]); a barra do nome é
+  // tipografia, nunca separador ([[project_uid_identity_canon_locked]]).
+  function _outcomeCtx(t, c) {
+    try {
+      if (!t || !c || c.scope !== 'match') return null;
+      if (_isLiga(t) || _isMonarchFmt(t)) return null;
+      if ((t.woScope || 'individual') !== 'individual') return null;
+      var m = _findMatchById(t, c.matchId);
+      if (!m || m.winner || m.isBye || m.isSitOut) return null;
+      var absent = (c.absentUids || []).filter(Boolean);
+      if (!absent.length) return null;              // sem uid do ausente → fallback nome, não negocia
+      var side = null;
+      ['p1', 'p2'].forEach(function (s) {
+        var su = (typeof window._slotUids === 'function') ? window._slotUids(m, s).filter(Boolean) : [];
+        if (su.length && su.some(function (u) { return absent.indexOf(u) !== -1; })) side = s;
+      });
+      if (!side) return null;
+      var su = window._slotUids(m, side).filter(Boolean);
+      if (su.length < 2) return null;               // não é dupla → sem parceiro → adversário avança direto
+      if (su.every(function (u) { return absent.indexOf(u) !== -1; })) return null; // lado TODO ausente = W.O. de time
+      var partnerUid = su.find(function (u) { return absent.indexOf(u) === -1; }) || null;
+      if (!partnerUid) return null;
+      var oppSide = side === 'p1' ? 'p2' : 'p1';
+      var oppName = m[oppSide] || '';
+      if (!oppName || oppName === 'TBD' || oppName === 'BYE') return null; // adversário indefinido → não negocia
+      var oppUids = (typeof window._slotUids === 'function') ? window._slotUids(m, oppSide).filter(Boolean) : [];
+      return { partnerUid: partnerUid, absentUids: absent, oppUids: oppUids, oppName: oppName, matchId: m.id };
+    } catch (e) { return null; }
+  }
+
   // ─── chip / botão no card ou cabeçalho do grupo ────────────────────────────────
   window._woClaimChip = function (t, ctx) {
     try {
@@ -233,6 +270,7 @@
       if (claim) {
         var label, bg, col, bd;
         if (claim.status === 'disputed') { label = _cpt ? '⚠️ Contestado' : '⚠️ W.O. contestado'; bg = 'rgba(239,68,68,0.14)'; col = '#f87171'; bd = 'rgba(239,68,68,0.45)'; }
+        else if (claim.outcomeStage && claim.outcomeStage !== 'resolved') { label = _cpt ? '⏳ Desfecho' : '⏳ Definindo desfecho'; bg = 'rgba(99,102,241,0.14)'; col = '#a5b4fc'; bd = 'rgba(99,102,241,0.45)'; }
         else { label = _cpt ? '⏳ Apontado' : '⏳ Falta apontada'; bg = 'rgba(251,191,36,0.14)'; col = '#fbbf24'; bd = 'rgba(251,191,36,0.45)'; }
         return '<button type="button" class="btn ' + _sz + ' hover-lift" onclick="' + open + '" style="display:inline-flex;align-items:center;gap:5px;background:' + bg + ';border:1px solid ' + bd + ';color:' + col + ';font-weight:800;font-size:' + _fs + ';border-radius:8px;padding:' + (_cpt ? '3px 8px' : '4px 10px') + ';flex-shrink:0;">' + label + '</button>';
       }
@@ -288,6 +326,47 @@
       var iAmOrg = _isOrg(t);
       var iAmDeclarer = uid === claim.byUid;
       var absDisp = _esc(claim.absentName);
+
+      // ── Stage 2: negociação do desfecho (project_wo_outcome_negotiation_canon) ──
+      // A falta já foi confirmada; falta escolher COMO o jogo continua. O parceiro que
+      // ficou PROPÕE; o adversário aceita/rejeita; sem acordo o organizador decide.
+      if (claim.outcomeStage && claim.outcomeStage !== 'resolved') {
+        var _pUid = claim.outcomePartnerUid;
+        var _oppUids = claim.outcomeOppUids || [];
+        var iAmPartner = uid && uid === _pUid;
+        var iAmOpp = uid && _oppUids.indexOf(uid) !== -1;
+        var _pNm = (_pUid && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(_pUid, '') : '';
+        var _choiceLbl = function (ch) { return ch === 'advance' ? 'Desclassificar (adversário avança)' : ch === 'waitlistSub' ? 'Puxar suplente da lista de espera' : ch === 'ghost' ? 'Jogador X (o parceiro segue)' : String(ch || ''); };
+        var _proposeBtn = '<button type="button" onclick="window._woOutcomeOverlay(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\',null,\'propose\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">Propor desfecho</button>';
+        var _orgDecideBtn = '<button type="button" onclick="window._woOutcomeOverlay(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\',null,\'org\')" class="btn" style="flex:1;background:rgba(99,102,241,0.14);color:#a5b4fc;border:1px solid rgba(99,102,241,0.5);font-weight:800;border-radius:10px;padding:10px;">Decidir o desfecho (org.)</button>';
+        var nInfo = '<div style="font-weight:800;font-size:1.0rem;color:var(--text-bright);">🚫 ' + absDisp + ' <span style="color:var(--text-muted);font-weight:600;">faltou</span> · <span style="color:#34d399;font-weight:700;font-size:0.82rem;">falta confirmada</span></div>';
+        var nAct = '';
+        if (claim.outcomeStage === 'awaiting-proposal') {
+          nInfo += '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">' + (iAmPartner ? 'Você ficou no jogo — proponha como ele continua.' : (_pNm ? _esc(_pNm) + ' vai propor o desfecho.' : 'O parceiro que ficou vai propor o desfecho.')) + '</div>';
+          var _row = (iAmPartner ? _proposeBtn : '') + (iAmOrg ? _orgDecideBtn : '');
+          nAct = _row ? '<div style="display:flex;gap:8px;margin-top:14px;">' + _row + '</div>'
+            : '<div style="margin-top:12px;font-size:0.82rem;color:var(--text-muted);text-align:center;">Aguardando ' + (_pNm ? _esc(_pNm) : 'o parceiro') + ' propor o desfecho…</div>';
+        } else if (claim.outcomeStage === 'proposed') {
+          var _prop = claim.outcomeProposal || {};
+          nInfo += '<div style="margin-top:12px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.35);border-radius:12px;padding:11px 13px;"><div style="font-size:0.72rem;color:var(--text-muted);">Proposta</div><div style="font-weight:800;color:var(--text-bright);margin-top:2px;">' + _esc(_choiceLbl(_prop.choice)) + '</div></div>';
+          if (iAmOpp) {
+            nAct = '<div style="display:flex;gap:8px;margin-top:14px;">' +
+              '<button type="button" onclick="window._woRejectOutcome(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:800;border-radius:10px;padding:10px;">❌ Rejeitar</button>' +
+              '<button type="button" onclick="window._woAcceptOutcome(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">✅ Aceitar</button>' +
+            '</div>';
+          } else {
+            nAct = '<div style="margin-top:12px;font-size:0.82rem;color:var(--text-muted);text-align:center;">Aguardando o adversário aceitar…</div>';
+          }
+          if (iAmOrg && !iAmOpp) nAct += '<div style="display:flex;gap:8px;margin-top:8px;">' + _orgDecideBtn + '</div>';
+        } else if (claim.outcomeStage === 'escalated') {
+          nInfo += '<div style="margin-top:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:12px;padding:12px;text-align:center;"><div style="font-weight:900;color:#f87171;">⚖️ Sem acordo</div><div style="font-size:0.82rem;color:var(--text-bright);margin-top:3px;">O organizador decide o desfecho.</div></div>';
+          nAct = iAmOrg ? '<div style="display:flex;gap:8px;margin-top:14px;">' + _orgDecideBtn + '</div>'
+            : '<div style="margin-top:12px;font-size:0.82rem;color:var(--text-muted);text-align:center;">O organizador vai decidir o desfecho…</div>';
+        }
+        _overlay(_header('Desfecho do W.O.') + '<div style="padding:1.1rem;">' + nInfo + nAct + '</div>');
+        return;
+      }
+
       var byDisp = _esc(claim.byName || _voterName(t, claim.byUid) || 'Alguém');
       var info = '<div style="font-weight:800;font-size:1.0rem;color:var(--text-bright);">🚫 ' + absDisp + ' <span style="color:var(--text-muted);font-weight:600;">faltou</span></div>' +
         '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:3px;">Apontado por ' + byDisp + (rc.scope === 'group' ? ' · grupo ' + _esc(rc.groupName || '') : '') + '. O W.O. só vale quando o outro lado confirma.</div>';
@@ -427,6 +506,26 @@
     }, 'Registrando o apontamento…');
   };
 
+  // Stage 2: um PARTICIPANTE confirmou a falta → NÃO decide o jogo. Entra em
+  // 'awaiting-proposal': o parceiro que ficou (_pUid) propõe o desfecho, o adversário
+  // (_oppUids) aceita/rejeita. A ausência só é marcada quando o desfecho é aplicado.
+  function _woEnterNegotiation(tId, claimId, confirmerUid, nctx) {
+    var t = _findT(tId); if (!t) return;
+    var c = _claimById(t, claimId); if (!c) return;
+    var data = _notifData(t, '🤝 Proponha o desfecho', 'A falta de "' + c.absentName + '" foi confirmada em "' + (t.name || '') + '". Escolha como o seu jogo continua — o adversário confirma.');
+    _commit(tId, function (ft) {
+      var c2 = _claimById(ft, claimId); if (!c2 || c2.status !== 'pending' || c2.outcomeStage) return false; // idempotente
+      c2.confirms = c2.confirms || {}; if (confirmerUid) c2.confirms[confirmerUid] = true;
+      c2.factConfirmed = true;
+      c2.outcomeStage = 'awaiting-proposal';
+      c2.outcomePartnerUid = nctx.partnerUid;
+      c2.outcomeOppUids = nctx.oppUids || [];
+    }, function () {
+      _notify(t, [nctx.partnerUid], data);
+      window._woOpenClaim(tId, _ctxKey(_ctxFromClaim(c)));
+    }, 'Confirmando a falta…');
+  }
+
   window._woConfirm = function (tId, claimId) {
     var t = _findT(tId); if (!t) return;
     var c = _claimById(t, claimId); if (!c || c.status !== 'pending') return;
@@ -434,6 +533,15 @@
     var cu = _cu(); if (!cu || !cu.uid) return;
     var canConfirm = _confirmerUids(t, rc, c).indexOf(cu.uid) !== -1 || _isOrg(t);
     if (!canConfirm) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o outro lado (ou o organizador) confirma.', 'warning'); return; }
+    // Stage 2 (project_wo_outcome_negotiation_canon): confirmar a FALTA não decide mais o
+    // jogo sozinho em W.O. INDIVIDUAL de dupla — o desfecho é negociado. Só quando quem
+    // confirma é um PARTICIPANTE; o organizador confirmando cai direto no fluxo de
+    // resolução dele (Stage 1: overlay das opções). Sem negociação (time / 1×1 / Liga /
+    // adversário TBD) = aplica direto na confirmação, como antes.
+    var nctx = _outcomeCtx(t, c);
+    var iAmPlayer = _allCtxUids(t, rc).indexOf(cu.uid) !== -1;
+    if (nctx && iAmPlayer) { _woEnterNegotiation(tId, claimId, cu.uid, nctx); return; }
+    if (nctx && _isOrg(t)) { _applyClaimViaGate(tId, claimId, cu.uid, true); return; }
     _applyClaimViaGate(tId, claimId, cu.uid, false);
   };
 
@@ -665,36 +773,51 @@
   // project_wo_outcome_negotiation_canon. Só eliminatória INDIVIDUAL (o motor devolve
   // needsOutcomeChoice). 3 opções: suplente da espera (se houver presente) · Jogador X
   // (parceiro segue) · desclassificar (adversário avança). Convidar-folga = Stage 2.
-  window._woOutcomeOverlay = function (tId, claimId, ctx) {
+  // mode: 'org' (default) = o organizador escolhe e APLICA na hora (_woChooseOutcome);
+  //       'propose' = o PARCEIRO que ficou PROPÕE (_woProposeOutcome), sem aplicar.
+  window._woOutcomeOverlay = function (tId, claimId, ctx, mode) {
     var t = _findT(tId); if (!t) return;
     var c = _claimById(t, claimId); if (!c) return;
-    if (!_canManage(t)) return;
+    mode = mode || 'org';
+    var cu = _cu();
+    if (mode === 'propose') {
+      if (!(cu && cu.uid && cu.uid === c.outcomePartnerUid) && !_canManage(t)) return;
+    } else if (!_canManage(t)) { return; }
     ctx = ctx || {};
-    var partnerName = (ctx.partnerUid && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(ctx.partnerUid, '') : '';
+    // ctx pode vir vazio (aberto pelo card) — completa pelo claim / re-derivação pura.
+    var _octx = (ctx.partnerUid || ctx.oppName) ? ctx : (_outcomeCtx(t, c) || ctx);
+    var _pUid = _octx.partnerUid || c.outcomePartnerUid || null;
+    var partnerName = (_pUid && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(_pUid, '') : '';
     var absDisp = _esc(c.absentName || ctx.absentName || 'ausente');
-    var oppDisp = _esc(ctx.oppName || '');
+    var oppDisp = _esc(_octx.oppName || '');
     var pool = (typeof window._getStandbyPool === 'function') ? (window._getStandbyPool(t) || []) : [];
     var hasPresentSub = pool.some(function (p) {
       var ci = (typeof window._idMapGet === 'function') ? window._idMapGet(t, t.checkedIn || {}, p) : null;
       return typeof ci === 'number' ? ci > 0 : !!ci;
     });
+    var _handler = mode === 'propose' ? 'window._woProposeOutcome' : 'window._woChooseOutcome';
     var _btn = function (choice, bg, col, bd, label, sub) {
-      return '<button type="button" onclick="window._woChooseOutcome(\'' + _attr(t.id) + '\',\'' + _attr(claimId) + '\',\'' + choice + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:10px;background:' + bg + ';border:1px solid ' + bd + ';color:' + col + ';font-weight:800;border-radius:12px;padding:12px 14px;">' + label +
+      return '<button type="button" onclick="' + _handler + '(\'' + _attr(t.id) + '\',\'' + _attr(claimId) + '\',\'' + choice + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:10px;background:' + bg + ';border:1px solid ' + bd + ';color:' + col + ';font-weight:800;border-radius:12px;padding:12px 14px;">' + label +
         '<div style="font-weight:600;font-size:0.72rem;color:var(--text-muted);margin-top:3px;">' + sub + '</div></button>';
     };
+    var _lead = mode === 'propose'
+      ? 'Você ficou no jogo — proponha como ele continua. O adversário aceita, ou o organizador decide.'
+      : 'Como resolver o jogo' + (partnerName ? ' de <b style="color:#fbbf24;">' + _esc(partnerName) + '</b>' : '') + '?';
     var body = '<div style="padding:1.1rem;">' +
       '<div style="font-weight:800;font-size:1.0rem;color:var(--text-bright);">🚫 ' + absDisp + ' <span style="color:var(--text-muted);font-weight:600;">faltou</span></div>' +
-      '<div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 14px;">Como resolver o jogo' + (partnerName ? ' de <b style="color:#fbbf24;">' + _esc(partnerName) + '</b>' : '') + '?</div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 14px;">' + _lead + '</div>' +
       (hasPresentSub ? _btn('waitlistSub', 'rgba(16,185,129,0.10)', '#34d399', 'rgba(16,185,129,0.45)', '🔁 Puxar suplente da lista de espera', 'O próximo da fila (presente) assume, respeitando a regra do torneio.') : '') +
       _btn('ghost', 'rgba(99,102,241,0.10)', '#a5b4fc', 'rgba(99,102,241,0.45)', '👤 Jogador X (o parceiro segue)', (partnerName ? _esc(partnerName) : 'O parceiro') + ' continua no torneio com um jogador placeholder.') +
       _btn('advance', 'rgba(239,68,68,0.10)', '#f87171', 'rgba(239,68,68,0.45)', '🏳️ Desclassificar — adversário avança', (oppDisp ? oppDisp + ' avança' : 'O adversário avança') + ' por W.O.') +
       '<div style="font-size:0.66rem;color:var(--text-muted);text-align:center;margin-top:2px;">Convidar folga da rodada: em breve.</div>' +
     '</div>';
-    _overlay(_header('Como resolver o W.O.?') + body);
+    _overlay(_header(mode === 'propose' ? 'Proponha o desfecho' : 'Como resolver o W.O.?') + body);
   };
 
-  window._woChooseOutcome = function (tId, claimId, choice) {
-    var t = _findT(tId); if (!t || !_canManage(t)) return;
+  // núcleo compartilhado: aplica o desfecho escolhido (organizador OU adversário que
+  // aceitou a proposta) atomicamente pelo portão. Sem gate próprio — cada chamador valida.
+  function _applyOutcome(tId, claimId, choice) {
+    var t = _findT(tId); if (!t) return;
     var c = _claimById(t, claimId); if (!c) return;
     var applied;
     _commit(tId, function (ft) {
@@ -704,16 +827,71 @@
       var ap = _applyClaim(ft, c2, rc2, { outcomeChoice: choice });
       if (applied === undefined) applied = ap;
       if (!ap.ok) return false;
-      c2.status = 'applied'; c2.resolvedAt = new Date().toISOString();
+      c2.status = 'applied'; c2.resolvedAt = new Date().toISOString(); c2.outcomeStage = 'resolved';
     }, function (okSave) {
       window._woCloseOverlay();
       if (okSave && applied && applied.ok) {
         if (applied.needsSubChoice && _canManage(t)) { if (typeof window._woShowSubChoiceDialog === 'function') window._woShowSubChoiceDialog(String(t.id)); return; }
-        _notify(t, c.absentUids, _notifData(t, '🚫 W.O. resolvido', (applied.note || '') + ' — ' + (t.name || '')));
+        if (applied.needsSubChoice) { if (typeof showNotification === 'function') showNotification('⏳ Aguardando o organizador', 'Nenhum suplente presente atende a categoria — o organizador vai definir.', 'info'); return; }
+        var aud = (c.absentUids || []).concat(c.outcomePartnerUid ? [c.outcomePartnerUid] : []).concat(c.outcomeOppUids || []);
+        _notify(t, aud, _notifData(t, '🚫 W.O. resolvido', (applied.note || '') + ' — ' + (t.name || '')));
         if (typeof showNotification === 'function') showNotification('✅ W.O. resolvido', applied.note || '', 'success');
       } else if (typeof showNotification === 'function') {
         showNotification('Não aplicou', (applied && applied.reason) || 'Tente de novo.', 'warning');
       }
     }, 'Aplicando o desfecho…');
+  }
+
+  window._woChooseOutcome = function (tId, claimId, choice) {
+    var t = _findT(tId); if (!t || !_canManage(t)) return;
+    _applyOutcome(tId, claimId, choice);
+  };
+
+  // Stage 2 — o PARCEIRO que ficou propõe o desfecho (via overlay em modo 'propose').
+  window._woProposeOutcome = function (tId, claimId, choice) {
+    var t = _findT(tId); if (!t) return;
+    var c = _claimById(t, claimId); if (!c) return;
+    var cu = _cu(); if (!cu || !cu.uid) return;
+    if (cu.uid !== c.outcomePartnerUid && !_canManage(t)) { if (typeof showNotification === 'function') showNotification('Só o parceiro propõe', 'Quem ficou no jogo escolhe como ele continua.', 'warning'); return; }
+    var data = _notifData(t, '🤝 Desfecho proposto', 'Uma forma de resolver a falta de "' + c.absentName + '" em "' + (t.name || '') + '" foi proposta. Aceite ou rejeite.');
+    _commit(tId, function (ft) {
+      var c2 = _claimById(ft, claimId); if (!c2 || c2.outcomeStage !== 'awaiting-proposal') return false;
+      c2.outcomeProposal = { choice: choice, byUid: cu.uid, at: new Date().toISOString() };
+      c2.outcomeStage = 'proposed';
+    }, function () {
+      _notify(t, c.outcomeOppUids || [], data);
+      window._woCloseOverlay();
+      window._woOpenClaim(tId, _ctxKey(_ctxFromClaim(c)));
+    }, 'Registrando a proposta…');
+  };
+
+  // Stage 2 — o ADVERSÁRIO aceita a proposta → aplica o desfecho.
+  window._woAcceptOutcome = function (tId, claimId) {
+    var t = _findT(tId); if (!t) return;
+    var c = _claimById(t, claimId); if (!c || c.outcomeStage !== 'proposed') return;
+    var cu = _cu(); if (!cu || !cu.uid) return;
+    var isOpp = (c.outcomeOppUids || []).indexOf(cu.uid) !== -1;
+    if (!isOpp && !_canManage(t)) { if (typeof showNotification === 'function') showNotification('Só o adversário aceita', 'Quem enfrenta a dupla aceita ou rejeita a proposta.', 'warning'); return; }
+    var choice = c.outcomeProposal && c.outcomeProposal.choice; if (!choice) return;
+    _applyOutcome(tId, claimId, choice);
+  };
+
+  // Stage 2 — o ADVERSÁRIO rejeita → sem acordo, escala pro organizador decidir.
+  window._woRejectOutcome = function (tId, claimId) {
+    var t = _findT(tId); if (!t) return;
+    var c = _claimById(t, claimId); if (!c || c.outcomeStage !== 'proposed') return;
+    var cu = _cu(); if (!cu || !cu.uid) return;
+    var isOpp = (c.outcomeOppUids || []).indexOf(cu.uid) !== -1;
+    if (!isOpp && !_canManage(t)) { if (typeof showNotification === 'function') showNotification('Só o adversário', 'Quem enfrenta a dupla aceita ou rejeita a proposta.', 'warning'); return; }
+    var data = _notifData(t, '⚖️ Desfecho do W.O. sem acordo', 'O adversário rejeitou a proposta pra falta de "' + c.absentName + '" em "' + (t.name || '') + '". Você decide o desfecho.');
+    _commit(tId, function (ft) {
+      var c2 = _claimById(ft, claimId); if (!c2 || c2.outcomeStage !== 'proposed') return false;
+      c2.outcomeStage = 'escalated'; c2.outcomeRejectedByUid = cu.uid;
+    }, function () {
+      if (typeof window._notifyOrgAndCoHosts === 'function') window._notifyOrgAndCoHosts(t, data);
+      else _notify(t, t.creatorUid ? [t.creatorUid] : [], data);
+      window._woCloseOverlay();
+      window._woOpenClaim(tId, _ctxKey(_ctxFromClaim(c)));
+    }, 'Registrando a rejeição…');
   };
 })();

@@ -11,6 +11,12 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #f87171;border-radius:12px;padding:14px 16px;background:rgba(239,68,68,0.08);">' +
+      '<div style="font-weight:800; color:#fca5a5; font-size:1rem; margin-bottom:8px;">🚫 v1.3.7 — Faltou alguém da dupla? O desfecho é combinado <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🤝 Desfecho do W.O. negociado entre os times:</b> nas eliminatórias com placar lançado pelos jogadores, quando <b>um jogador de uma dupla</b> não pôde vir (e o parceiro segue no jogo), o desfecho deixa de ser decidido no automático. Depois que o outro time <b>confirma a falta</b>, <b>quem ficou no jogo propõe</b> como ele continua — <b>puxar um suplente</b> da lista de espera, seguir com um <b>"Jogador X"</b> no lugar do ausente, ou <b>desclassificar</b> (o adversário avança). O time adversário <b>aceita ou rejeita</b>. Não chegando a um acordo, o <b>organizador decide</b>. O organizador também pode resolver a qualquer momento.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #60a5fa;border-radius:12px;padding:14px 16px;background:rgba(96,165,250,0.08);">' +
       '<div style="font-weight:800; color:#93c5fd; font-size:1rem; margin-bottom:8px;">⏱️ v1.3.4 — Estimativa de duração logo abaixo da regressiva <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
