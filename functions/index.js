@@ -1886,37 +1886,11 @@ exports.setParticipantsProfile = onCall(
 // bug de inscrição vira `firebase deploy` de minutos, não release nativo de dias.
 // Lógica pura vive em ./enroll-core.js (espelha o cliente). Ver
 // [[project_firestore_assertion_bug]] / [[project_result_launch_cf_evaluation]].
-// ── Sandbox (SB): replicação one-way original→SB via a MESMA CF + o MESMO core ──────
-// Sem CF de espelho separada (código paralelo = divergência = o teste não vale). Depois
-// que a enrollParticipant/deenrollParticipant aplica a operação no original, ELA MESMA roda
-// o MESMO computeEnroll/computeDeenroll no doc do SB (se existir e ainda NÃO sorteado —
-// depois do sorteio o teste do dev é protegido; ele usa "Resetar" pra re-sincronizar).
-// Mão única: o SB não tem SB-filho, então a query nunca acha nada partindo de um SB.
-// Best-effort: erro aqui NUNCA derruba a operação real (já commitada no original).
-// Ver [[project_sandbox_tournament]].
-async function _replicateRosterToSandbox(db, origId, computeFn) {
-  try {
-    const q = await db.collection("tournaments")
-      .where("sandboxOf", "==", String(origId))
-      .where("isSandbox", "==", true).limit(5).get();
-    if (q.empty) return;
-    for (const sbDoc of q.docs) {
-      try {
-        await db.runTransaction(async (tx) => {
-          const snap = await tx.get(sbDoc.ref);
-          if (!snap.exists) return;
-          const sb = snap.data();
-          const drawn = (Array.isArray(sb.matches) && sb.matches.length > 0) ||
-            (Array.isArray(sb.rounds) && sb.rounds.length > 0) ||
-            (Array.isArray(sb.groups) && sb.groups.length > 0);
-          if (drawn) return; // protege o teste do dev
-          const r = computeFn(sb);
-          if (r && r.updateData) tx.update(sbDoc.ref, r.updateData);
-        });
-      } catch (e) { console.error("replicateRosterToSandbox SB", sbDoc.id, e && e.message); }
-    }
-  } catch (e) { console.error("replicateRosterToSandbox query", e && e.message); }
-}
+// Sandbox (SB): replicação one-way original→SB via a MESMA CF + o MESMO core. A lógica
+// vive em ./sandbox-replicate.js (módulo isolado só pra ser testável contra o emulador —
+// o código que roda é ESTE, não uma cópia). enrollParticipant/deenrollParticipant, depois
+// de aplicar no original, rodam o MESMO computeEnroll/computeDeenroll no doc do SB.
+const { replicateRosterToSandbox: _replicateRosterToSandbox } = require("./sandbox-replicate");
 
 // Deploy:  firebase deploy --only functions:enrollParticipant,functions:deenrollParticipant
 exports.enrollParticipant = onCall(
