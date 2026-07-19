@@ -713,14 +713,19 @@ window._inscritoActionRow = function (typeText, presenceGroupHtml, delBtnHtml) {
   return (typeLine || actionLine) ? '<div style="margin-top:6px;">' + typeLine + actionLine + '</div>' : '';
 };
 
-window._toggleCheckIn = function (tId, playerName) {
+window._toggleCheckIn = function (tId, playerName, uid) {
   const t = window._findTournamentById(tId);
   if (!t) return;
   const user = window.AppStore && window.AppStore.currentUser;
+  // uid only (dono, 18-jul): quando o render passa o uid, a presença é gravada/lida pela
+  // chave-UID — homônimos não colidem mais. Sem uid (guest sem conta), cai no nome (exceção
+  // canônica). _who é o objeto {uid} que _idMap* usa pra chavear por uid. playerName segue
+  // só pro display/self-presence/notificação.
+  const _who = uid ? { uid: uid, displayName: playerName } : playerName;
 
   // 1) Autoridade (org/co-org/árbitro): controla a presença de todos.
   if (window._canManagePresence && window._canManagePresence(t, user)) {
-    return window._applyCheckInToggle(tId, playerName);
+    return window._applyCheckInToggle(tId, playerName, uid);
   }
 
   // 2) Auto-presença do próprio jogador (só em torneios com placar pelos
@@ -733,10 +738,10 @@ window._toggleCheckIn = function (tId, playerName) {
     }
     return;
   }
-  const _wasIn = window._idMapHas(t, t.checkedIn, playerName);
+  const _wasIn = window._idMapHas(t, t.checkedIn, _who);
   if (_wasIn) {
     // Retirar a própria presença é livre (você pode dizer que saiu).
-    return window._applyCheckInToggle(tId, playerName);
+    return window._applyCheckInToggle(tId, playerName, uid);
   }
   // Marcar a própria presença → confirma pelo GPS que está no local.
   if (typeof showNotification === 'function') {
@@ -749,20 +754,23 @@ window._toggleCheckIn = function (tId, playerName) {
       }
       return;
     }
-    window._applyCheckInToggle(tId, playerName);
+    window._applyCheckInToggle(tId, playerName, uid);
   });
 };
 
-window._applyCheckInToggle = function (tId, playerName) {
+window._applyCheckInToggle = function (tId, playerName, uid) {
   const t = window._findTournamentById(tId);
   if (!t) return;
   if (!t.checkedIn) t.checkedIn = {};
   if (!t.absent) t.absent = {};
-  const wasCheckedIn = window._idMapHas(t, t.checkedIn, playerName);
+  // uid only: chaveia a presença pelo uid quando o render o forneceu (homônimo não colide);
+  // guest sem conta cai no nome. Ver _toggleCheckIn.
+  const _who = uid ? { uid: uid, displayName: playerName } : playerName;
+  const wasCheckedIn = window._idMapHas(t, t.checkedIn, _who);
 
   // Guard v2.2.8: jogadores na lista de espera por ausência devem ser reativados
   // via botão "Reverter" — toggle fica desabilitado na UI, isso é um safety net.
-  if (!wasCheckedIn && window._idMapHas(t, t.absent, playerName)) {
+  if (!wasCheckedIn && window._idMapHas(t, t.absent, _who)) {
     const _pnFor = p => (typeof p === 'string' ? p : (p && (p.displayName || p.name || p.email || '')));
     const _inStandby = (Array.isArray(t.standbyParticipants) &&
       t.standbyParticipants.some(p => _pnFor(p) === playerName)) ||
@@ -786,12 +794,12 @@ window._applyCheckInToggle = function (tId, playerName) {
   window.AppStore.mutate(tId, function (ft) {
     if (!ft.checkedIn) ft.checkedIn = {};
     if (!ft.absent) ft.absent = {};
-    const _was = window._idMapHas(ft, ft.checkedIn, playerName);
+    const _was = window._idMapHas(ft, ft.checkedIn, _who);
     if (_was) {
-      window._idMapDel(ft, ft.checkedIn, playerName);
+      window._idMapDel(ft, ft.checkedIn, _who);
     } else {
-      window._idMapSet(ft, ft.checkedIn, playerName, Date.now());
-      window._idMapDel(ft, ft.absent, playerName);
+      window._idMapSet(ft, ft.checkedIn, _who, Date.now());
+      window._idMapDel(ft, ft.absent, _who);
       const r = window._applyWoSubsToTournament(ft); // núcleo puro, sem save
       if (_subResult === undefined) _subResult = r;
     }
@@ -1602,21 +1610,22 @@ function renderParticipants(container, tournamentId) {
   // de inscritos. Detecção é por ENTRY (nome direto) OU, sendo dupla "A / B",
   // por todos os membros — cobre duplas formadas no sorteio a partir de
   // indivíduos (o check-in foi feito nos nomes individuais).
-  const _entryPresent = (name) => {
-    if (!name) return false;
-    if (window._idMapHas(t, absent, name)) return false;
-    if (window._idMapHas(t, checkedIn, name)) return true;
-    if (name.indexOf('/') !== -1) {
-      const ms = name.split('/').map(s => s.trim()).filter(Boolean);
+  // Aceita OBJETO {uid} (chaveia por uid — homônimo não colide) OU string nome (guest/dupla "A / B").
+  const _entryPresent = (who) => {
+    if (!who) return false;
+    if (window._idMapHas(t, absent, who)) return false;
+    if (window._idMapHas(t, checkedIn, who)) return true;
+    if (typeof who === 'string' && who.indexOf('/') !== -1) {
+      const ms = who.split('/').map(s => s.trim()).filter(Boolean);
       if (ms.length >= 2 && ms.every(m => window._idMapHas(t, checkedIn, m))) return true;
     }
     return false;
   };
-  const _entryAbsent = (name) => {
-    if (!name) return false;
-    if (window._idMapHas(t, absent, name)) return true;
-    if (name.indexOf('/') !== -1) {
-      const ms = name.split('/').map(s => s.trim()).filter(Boolean);
+  const _entryAbsent = (who) => {
+    if (!who) return false;
+    if (window._idMapHas(t, absent, who)) return true;
+    if (typeof who === 'string' && who.indexOf('/') !== -1) {
+      const ms = who.split('/').map(s => s.trim()).filter(Boolean);
       if (ms.length >= 2 && ms.some(m => window._idMapHas(t, absent, m))) return true;
     }
     return false;
@@ -2059,7 +2068,7 @@ function renderParticipants(container, tournamentId) {
       // v2.2.8: standby players marcados como ausentes ficam com toggle desabilitado — usar "Reverter"
       const isAbsentStandby = isStandby && isAbsent;
       // v2.7.42: switch e palavra SEPARADOS (pra montar "Ausente [toggle] W.O." numa linha).
-      const _toggleSwitch = `<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAbsentStandby ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} ${isAbsentStandby ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${tId}', '${safeName}');"`}><span class="toggle-slider"></span></label>`;
+      const _toggleSwitch = `<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAbsentStandby ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} ${isAbsentStandby ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${tId}', '${safeName}', '${String(ind.uid || '').replace(/'/g, "\\'")}');"`}><span class="toggle-slider"></span></label>`;
       const _presenceWord = `<span style="font-size:0.68rem;font-weight:700;color:${mc ? '#4ade80' : '#94a3b8'};white-space:nowrap;">${mc ? 'Presente' : 'Ausente'}</span>`;
 
       // W.O. button — marca W.O. / reverte W.O.
@@ -2310,7 +2319,7 @@ function renderParticipants(container, tournamentId) {
                 ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
                 : '';
               rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>' +
-                '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\');"><span class="toggle-slider"></span></label>' + wo;
+                '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\', \'' + String((p && p.uid) || '').replace(/'/g, "\\'") + '\');"><span class="toggle-slider"></span></label>' + wo;
             } else {
               var l2 = mc ? 'Presente' : 'Ausente';
               var c2 = mc ? '#4ade80' : '#f87171';
@@ -2325,8 +2334,10 @@ function renderParticipants(container, tournamentId) {
             var keyName = (member && member.guest) ? String(member.guest).trim()
               : (window._displayName ? window._displayName(member && member.uid, member && member.guest) : '');
             if (!keyName) return { html: '' };
-            var mc = _entryPresent(keyName);
-            var abs = !mc && _entryAbsent(keyName);
+            var _mWho = (member && member.uid) ? { uid: member.uid, displayName: keyName } : keyName;
+            var _mUidEsc = String((member && member.uid) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            var mc = _entryPresent(_mWho);
+            var abs = !mc && _entryAbsent(_mWho);
             var label = mc ? 'Presente' : 'Ausente';
             var color = mc ? '#4ade80' : '#f87171';
             if (!canRollCall) {
@@ -2338,7 +2349,7 @@ function renderParticipants(container, tournamentId) {
               ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
               : '';
             var word = '<span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>';
-            var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\');"><span class="toggle-slider"></span></label>';
+            var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\', \'' + _mUidEsc + '\');"><span class="toggle-slider"></span></label>';
             var inner = right ? (wo + toggle + word) : (word + toggle + wo);
             return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;' + (right ? 'justify-content:flex-end;' : '') + '" onclick="event.stopPropagation();">' + inner + '</div>' };
           }
@@ -2377,8 +2388,12 @@ function renderParticipants(container, tournamentId) {
       // v2.1.86/v2.2.40: estado da CHAMADA (por entry) + filtro presente/ausente/aguardando.
       // Vale na chamada pré-sorteio (interativa) e pós-sorteio antes de iniciar (leitura).
       const _showPres = canRollCall || postDrawPresence;
-      const rcMc = _showPres && _entryPresent(window._pName(p)); // v3.0.x: nome canônico (dupla="A / B") pro check de presença
-      const rcAbs = _showPres && !rcMc && _entryAbsent(window._pName(p));
+      // uid only: solo com conta → objeto {uid} (homônimo não colide); dupla ("A / B") cai no
+      // nome canônico e usa o split '/' em _entryPresent. p.uid é falsy pra dupla (tem p1Uid/p2Uid).
+      const _rcWho = (p && typeof p === 'object' && p.uid) ? { uid: p.uid, displayName: window._pName(p) } : window._pName(p);
+      const _rcUid = String((p && typeof p === 'object' && p.uid) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const rcMc = _showPres && _entryPresent(_rcWho);
+      const rcAbs = _showPres && !rcMc && _entryAbsent(_rcWho);
       const rcPend = _showPres && !rcMc && !rcAbs;
       if (_showPres) {
         if (currentFilter === 'present' && !rcMc) return '';
@@ -2520,7 +2535,7 @@ function renderParticipants(container, tournamentId) {
           : '';
         // Ordem canônica: palavra (Presente/Ausente) + toggle + W.O. O 🗑️ é
         // anexado depois (em _inscritoActionRow) → palavra, toggle, W.O., 🗑️.
-        _presenceGroup = `<span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}');"><span class="toggle-slider"></span></label>${_rcWoBtn}`;
+        _presenceGroup = `<span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}', '${_rcUid}');"><span class="toggle-slider"></span></label>${_rcWoBtn}`;
       } else if (postDrawPresence) {
         // v2.2.40: pós-sorteio (antes de iniciar) — presença em modo somente leitura.
         const _rcLabel = rcMc ? 'Presente' : 'Ausente';

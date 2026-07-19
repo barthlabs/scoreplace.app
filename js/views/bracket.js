@@ -785,7 +785,7 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var safeName = _sa(nm);
     return '<div style="display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 42%;">'
       + '<div style="display:flex;align-items:center;gap:7px;min-width:0;"><img src="' + _safeHtml(ph.url) + '" onerror="this.onerror=null;this.src=\'' + ph.fb + '\'" data-player-name="' + _safeHtml(nm) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:' + _nameFs + 'px;color:var(--text-bright);line-height:1.18;word-break:break-word;min-width:0;">' + _safeHtml(nm) + '</span></div>'
-      + '<div style="display:flex;align-items:center;gap:6px;"><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + safeName + '\');"><span class="toggle-slider"></span></label><span style="font-size:0.62rem;font-weight:700;color:' + (mc ? '#4ade80' : '#64748b') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span></div>'
+      + '<div style="display:flex;align-items:center;gap:6px;"><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + safeName + '\',\'' + String((pObj && pObj.uid) || '').replace(/'/g, "\\'") + '\');"><span class="toggle-slider"></span></label><span style="font-size:0.62rem;font-weight:700;color:' + (mc ? '#4ade80' : '#64748b') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span></div>'
       + '</div>';
   };
 
@@ -1125,7 +1125,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       <div ${_phDragAttrs}style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)'};border-radius:10px;border-left:4px solid ${isNext ? '#f59e0b' : 'rgba(255,255,255,0.08)'};${dimAbsent ? 'opacity:0.5;' : ''}${_phDragAttrs ? 'cursor:grab;touch-action:none;' : ''}">
         <div style="width:26px;height:26px;border-radius:50%;background:${isNext ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.08)'};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;color:${isNext ? '#000' : '#94a3b8'};flex-shrink:0;">${i + 1}</div>
         <span style="font-weight:600;font-size:0.88rem;color:${isNext ? '#fbbf24' : '#94a3b8'};flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">${name}${isNext && _policy === 'locked' ? ' <span style="font-size:0.62rem;font-weight:700;color:#fbbf24;background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>' : ''}</span>
-        <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAb ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}"><input type="checkbox" ${mc ? 'checked' : ''} ${isAb ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${_tIdSafe}', '${safeName}');"`}><span class="toggle-slider"></span></label>
+        <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAb ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}"><input type="checkbox" ${mc ? 'checked' : ''} ${isAb ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${_tIdSafe}', '${safeName}', '${String(_pUid).replace(/'/g, "\\'")}');"`}><span class="toggle-slider"></span></label>
         <span style="font-size:0.65rem;font-weight:700;color:${statusColor};white-space:nowrap;">${statusLabel}</span>
         ${window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${_tIdSafe}', '${safeName}')`, !isAb, { label: isAb ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem' })}
       </div>`;
@@ -3182,7 +3182,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     // Rei/Rainha suprime o botão por-jogo (_suppressMatchArrivedBtn): a presença é do jogador
     // no LOCAL, não de cada partida → 1 "Cheguei" só no header do grupo.
     if (!_meHere && !window._suppressMatchArrivedBtn) {
-      _arrivedBtn = `<button class="btn btn-amber btn-micro" onclick="event.stopPropagation(); window._toggleCheckIn('${_esc(tId)}','${_esc(_cuName)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.arrivedTip') || 'Marcar que você chegou no local (confirma pelo GPS)'}">📍 ${_t('bracket.arrived') || 'Cheguei'}</button>`;
+      _arrivedBtn = `<button class="btn btn-amber btn-micro" onclick="event.stopPropagation(); window._toggleCheckIn('${_esc(tId)}','${_esc(_cuName)}','${_esc((_cu && _cu.uid) || '')}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.arrivedTip') || 'Marcar que você chegou no local (confirma pelo GPS)'}">📍 ${_t('bracket.arrived') || 'Cheguei'}</button>`;
     }
   }
 
@@ -3360,7 +3360,8 @@ window._monGroupArrivedBtn = function (t, matches, groupDone) {
   var _meHereMon = (typeof window._idMapHas === 'function') ? window._idMapHas(t, t.checkedIn, _cuMonName) : false;
   var _tIdEsc = String(t.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var _cuEsc = String(_cuMonName).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  var _onc = 'event.stopPropagation(); window._toggleCheckIn(\'' + _tIdEsc + '\',\'' + _cuEsc + '\')';
+  var _cuUidEsc = String((_cuMon && _cuMon.uid) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var _onc = 'event.stopPropagation(); window._toggleCheckIn(\'' + _tIdEsc + '\',\'' + _cuEsc + '\',\'' + _cuUidEsc + '\')';
   // Cores (pedido do dono): Cheguei = ÂMBAR (ação pendente); marcado = Presente VERDE.
   return _meHereMon
     ? '<button class="btn btn-success btn-micro" onclick="' + _onc + '" style="flex-shrink:0;font-size:0.72rem;" title="Você está presente — clique para sair">📍 Presente</button>'

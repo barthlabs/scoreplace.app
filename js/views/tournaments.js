@@ -3294,15 +3294,26 @@ function renderTournaments(container, tournamentId = null) {
                 const allIndividuals = [];
                 parts.forEach((p, idx) => {
                     const pName = typeof p === 'string' ? p : (window._pName(p) || 'Participante ' + (idx + 1));
+                    // uid only: cada indivíduo carrega o uid da PESSOA (solo = p.uid; membro de dupla
+                    // = casa o nome com p1Name/p2Name → p1Uid/p2Uid; fallback _memberUidByName). O
+                    // READ de presença e o toggle passam a chavear por uid — homônimos não colidem.
+                    const _uidForMember = (memberName) => {
+                        if (p && typeof p === 'object') {
+                            if (p.p1Name === memberName && p.p1Uid) return p.p1Uid;
+                            if (p.p2Name === memberName && p.p2Uid) return p.p2Uid;
+                            if (!p.p1Name && !p.p2Name && p.uid) return p.uid;
+                        }
+                        return (typeof window._memberUidByName === 'function') ? window._memberUidByName(t, memberName) : '';
+                    };
                     if (pName.includes('/')) {
                         // Find which team this person belongs to
                         pName.split('/').map(n => n.trim()).filter(n => n).forEach(n => {
                             if (window._woHistHas(t, n)) return; // skip W.O.'d member (uid-first)
-                            allIndividuals.push({ name: n, teamName: pName, teamIdx: idx });
+                            allIndividuals.push({ name: n, uid: _uidForMember(n), teamName: pName, teamIdx: idx });
                         });
                     } else {
                         if (window._woHistHas(t, pName)) return;
-                        allIndividuals.push({ name: pName, teamName: null, teamIdx: idx });
+                        allIndividuals.push({ name: pName, uid: (p && typeof p === 'object' ? (p.uid || _uidForMember(pName)) : _uidForMember(pName)), teamName: null, teamIdx: idx });
                     }
                 });
                 // v0.17.34: W.O.'d orphans (out of team, displayed solo with note)
@@ -3320,7 +3331,7 @@ function renderTournaments(container, tournamentId = null) {
 
                 // Sort: apply user preference, then unchecked first
                 allIndividuals.sort((a, b) => {
-                    const ac = window._idMapHas(t, checkedIn, a.name), bc = window._idMapHas(t, checkedIn, b.name);
+                    const ac = window._idMapHas(t, checkedIn, a), bc = window._idMapHas(t, checkedIn, b);
                     if (ac !== bc) return ac ? 1 : -1; // unchecked first
                     if (_enrollSort === 'alpha_asc') return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
                     if (_enrollSort === 'alpha_desc') return b.name.localeCompare(a.name, 'pt-BR', { sensitivity: 'base' });
@@ -3329,7 +3340,8 @@ function renderTournaments(container, tournamentId = null) {
                 });
 
                 cardsStr = allIndividuals.map((ind, i) => {
-                    const mc = window._idMapHas(t, checkedIn, ind.name);
+                    const mc = window._idMapHas(t, checkedIn, ind);
+                    const _ciUid = String(ind.uid || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
                     // Filter
                     if (currentFilter === 'present' && !mc) return '';
@@ -3380,8 +3392,8 @@ function renderTournaments(container, tournamentId = null) {
                         </div>`;
                     }
                     return `
-                      <div data-merge-name="${window._safeHtml(ind.name)}" ${_ciMergeDrag} style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:${mc ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.03)'};border:1px solid ${mc ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.06)'};${isVipCI ? 'border-left:3px solid #fbbf24;' : ''}transition:all 0.2s;cursor:pointer;" onclick="window._toggleCheckIn('${t.id}', '${_ciSafeName}')">
-                          <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_ciSafeName}');"><span class="toggle-slider"></span></label>
+                      <div data-merge-name="${window._safeHtml(ind.name)}" ${_ciMergeDrag} style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:${mc ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.03)'};border:1px solid ${mc ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.06)'};${isVipCI ? 'border-left:3px solid #fbbf24;' : ''}transition:all 0.2s;cursor:pointer;" onclick="window._toggleCheckIn('${t.id}', '${_ciSafeName}', '${_ciUid}')">
+                          <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_ciSafeName}', '${_ciUid}');"><span class="toggle-slider"></span></label>
                           <img src="${_ciAvatar}" onerror="this.onerror=null;this.src='${_ciFallback}'" data-player-name="${window._safeHtml(ind.name)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.4)' : 'rgba(255,255,255,0.1)'};" />
                           <div style="flex:1;overflow:hidden;">
                               <div style="font-weight:600;font-size:0.92rem;color:${mc ? '#4ade80' : 'var(--text-bright)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${mc ? 'text-decoration:line-through;text-decoration-color:rgba(74,222,128,0.3);' : ''}">${window._safeHtml(ind.name)}${_ciCrownInline}${vipTagCI}${_ciPendBadge}</div>

@@ -11,6 +11,12 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #22d3ee;border-radius:12px;padding:14px 16px;background:rgba(34,211,238,0.08);">' +
+      '<div style="font-weight:800; color:#67e8f9; font-size:1rem; margin-bottom:8px;">✅ v1.3.14 — Presença marca a pessoa certa (por identidade, não por nome) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👥 Dois jogadores com o mesmo nome não se confundem mais:</b> ao marcar <b>Presente</b> (na chave, na lista de espera e na lista de inscritos), a presença agora é registrada pela <b>identidade</b> de cada pessoa — nunca pelo nome. Antes, com dois homônimos, marcar um podia marcar o outro. Corrigido em todas as telas de check-in.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #a855f7;border-radius:12px;padding:14px 16px;background:rgba(168,85,247,0.08);">' +
       '<div style="font-weight:800; color:#c084fc; font-size:1rem; margin-bottom:8px;">🎾 v1.3.13 — Tie-break respeita a configuração do torneio <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

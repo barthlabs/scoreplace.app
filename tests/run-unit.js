@@ -73,6 +73,9 @@ const SUITES = [
   // Lista de espera present-first é uid-only: homônimo presente (uR2) vem antes; sort por-nome
   // casaria o 1º homônimo (uR1) e erraria. Trava o cânone "uid only" do painel de check-in.
   'tests/waitlist-present-first-uid.test.js',
+  // Write do check-in é uid-only: marcar homônimo presente COM o uid grava a chave certa (uR2);
+  // sem uid o nome cai no 1º homônimo (uR1) e marca a pessoa errada. Trava o toggle por uid.
+  'tests/checkin-toggle-uid.test.js',
   'tests/uid-poison.test.js',
   // Mesmo veneno, porta dos INSCRITOS (store.js — o uid-poison só carrega js/views/*).
   // Identificar inscrito por nome/e-mail (era o caso do organizador) fica VERMELHO aqui.
