@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.30';
+window.SCOREPLACE_VERSION = '1.3.31';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -986,6 +986,50 @@ window._flag = function (name) {
     };
     if (document.body) inject();
     else document.addEventListener('DOMContentLoaded', inject);
+  } catch (e) {}
+})();
+
+// ─── Tarja SANDBOX (como era o staging, mas por TORNEIO) ─────────────────────
+// Barra VERMELHA fixa de fora a fora no rodapé, sempre visível ENQUANTO se está
+// atuando num torneio sandbox (detalhe/bracket/chamada/etc.). O SB roda EM
+// PRODUÇÃO — então o sinal não pode ser por hostname (como o staging morto), tem
+// que ser pela rota: se o torneio em tela é isSandbox, mostra. Some fora do SB.
+// pointer-events:none = não bloqueia clique. Ver project_sandbox_tournament.
+(function () {
+  try {
+    var BANNER_ID = 'sp-sandbox-banner';
+    var ensure = function () {
+      var el = document.getElementById(BANNER_ID);
+      if (!el) {
+        el = document.createElement('div');
+        el.id = BANNER_ID;
+        el.textContent = '🧪 SANDBOX — TORNEIO DE TESTE · não afeta a produção';
+        el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;width:100%;box-sizing:border-box;' +
+          'z-index:2147483646;background:#b91c1c;color:#fff;text-align:center;' +
+          'font:800 12px/1.25 -apple-system,BlinkMacSystemFont,sans-serif;letter-spacing:1.2px;' +
+          'padding:6px 10px;pointer-events:none;box-shadow:0 -2px 10px rgba(0,0,0,0.45);' +
+          'display:none;';
+        (document.body || document.documentElement).appendChild(el);
+      }
+      return el;
+    };
+    var onSandboxRoute = function () {
+      var h = (window.location.hash || '').replace(/^#/, '');
+      var m = h.match(/^(tournaments|bracket|pre-draw|participants|rules|analise|categorias)\/([^/?#]+)/);
+      if (!m) return false;
+      var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(m[2]) : null;
+      return !!(t && t.isSandbox === true);
+    };
+    var refresh = function () { try { ensure().style.display = onSandboxRoute() ? 'block' : 'none'; } catch (e) {} };
+    window._updateSandboxBanner = refresh;
+    window.addEventListener('hashchange', function () {
+      refresh();
+      // o torneio pode carregar async (Firestore) → re-checa algumas vezes após a troca de rota
+      var n = 0, iv = setInterval(function () { refresh(); if (++n >= 6) clearInterval(iv); }, 500);
+    });
+    if (document.body) refresh(); else document.addEventListener('DOMContentLoaded', refresh);
+    // rede de segurança barata: cobre load async do roster e o resync do SB
+    setInterval(refresh, 1500);
   } catch (e) {}
 })();
 
