@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.31';
+window.SCOREPLACE_VERSION = '1.3.32';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -864,28 +864,59 @@ window._sbCollectRealEnrollees = function (t) {
 };
 
 // Reconstrói o roster do SB como INSCRIÇÃO LIMPA: cada inscrito reduzido só aos campos de
-// inscrição (identidade + perfil + número de inscrição), SEM presença/W.O./jogo/formação de
-// dupla/sorteio, e ORDENADO por enrollSeq (a ORDEM REAL em que se inscreveram no original).
-// O enrollSeq de origem é PRESERVADO (o número exibido é o rank denso via _buildEnrollOrderMap).
-window._sbRebuildCleanRoster = function (list) {
-  var ALLOW = ['uid', 'name', 'displayName', 'email', 'photoURL', 'gender', 'birthDate',
+// inscrição (identidade + perfil + número de inscrição), SEM presença/W.O./jogo/sorteio, e
+// ORDENADO por enrollSeq (a ORDEM REAL em que se inscreveram no original). enrollSeq de
+// origem PRESERVADO (o número exibido é o rank denso via _buildEnrollOrderMap).
+//
+// `isTeamEnroll` = o torneio inscreve como DUPLA FIXA (enrollmentMode teams/time/misto —
+// ex: Casais). Se SIM, as duplas são a UNIDADE de inscrição → preserva os pares. Se NÃO
+// (inscrição individual + duplas formadas por SORTEIO — ex: Duplas Mistas), QUALQUER dupla
+// formada é artefato de sorteio/teste → DESMONTA de volta pras pessoas (o dono: "não tinha
+// nenhuma equipe no original, tudo foi sorteado, por que mantém 2 equipes?"). Cada membro
+// vira inscrito individual com o SEU uid/nome/enrollSeq (p1Seq/p2Seq). Ver
+// project_dupla_entry_structural_not_slash, project_enrollmode_teams_vs_time_drift.
+window._sbRebuildCleanRoster = function (list, isTeamEnroll) {
+  var ALLOW_I = ['uid', 'name', 'displayName', 'email', 'photoURL', 'gender', 'birthDate',
     'skillBySport', 'categories', 'category', 'defaultCategory', 'categorySource',
-    'wasUncategorized', 'selfEnrolled', 'addedAt', 'enrollSeq',
-    'p1Uid', 'p1Name', 'p1Email', 'p1Photo', 'p1Seq', 'p1Gender', 'p1BirthDate',
-    'p2Uid', 'p2Name', 'p2Email', 'p2Photo', 'p2Seq', 'p2Gender', 'p2BirthDate'];
+    'wasUncategorized', 'selfEnrolled', 'addedAt', 'enrollSeq'];
+  var ALLOW_P = ALLOW_I.concat(['p1Uid', 'p1Name', 'p1Email', 'p1Photo', 'p1Seq', 'p1Gender', 'p1BirthDate',
+    'p2Uid', 'p2Name', 'p2Email', 'p2Photo', 'p2Seq', 'p2Gender', 'p2BirthDate']);
+  var isPair = function (p) { return !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)); };
+  var member = function (p, n) {
+    var g = function (suf) { return p['p' + n + suf]; };
+    var o = { uid: g('Uid'), name: g('Name'), displayName: g('Name'), email: g('Email'),
+      photoURL: g('Photo'), gender: g('Gender'), birthDate: g('BirthDate'), enrollSeq: g('Seq') };
+    Object.keys(o).forEach(function (k) { if (o[k] === undefined || o[k] === null) delete o[k]; });
+    return o;
+  };
+  // 1) inscrição individual desmonta as duplas formadas em pessoas
+  var expanded = [];
+  (list || []).forEach(function (p) {
+    if (isPair(p) && !isTeamEnroll) { expanded.push(member(p, 1)); expanded.push(member(p, 2)); }
+    else expanded.push(p);
+  });
+  // 2) dedup por uid (indiv) / par
+  var seen = {}, dedup = [];
+  expanded.forEach(function (p) {
+    var key = isPair(p)
+      ? ('pair:' + [String(p.p1Uid || p.p1Name), String(p.p2Uid || p.p2Name)].sort().join('|').toLowerCase())
+      : (p.uid ? 'u:' + String(p.uid).toLowerCase() : (p.name ? 'n:' + String(p.name).trim().toLowerCase() : null));
+    if (!key) { dedup.push(p); return; }
+    if (seen[key]) return; seen[key] = 1; dedup.push(p);
+  });
+  // 3) ordena por enrollSeq + limpa (whitelist)
   var seqOf = function (p) {
-    var s = (p.enrollSeq != null) ? p.enrollSeq
-      : (p.p1Seq != null ? p.p1Seq : (p.p2Seq != null ? p.p2Seq : null));
+    var s = (p.enrollSeq != null) ? p.enrollSeq : (p.p1Seq != null ? p.p1Seq : (p.p2Seq != null ? p.p2Seq : null));
     return (s == null || isNaN(s)) ? null : Number(s);
   };
-  return (list || []).map(function (p, i) { return { p: p, i: i, seq: seqOf(p) }; })
+  return dedup.map(function (p, i) { return { p: p, i: i, seq: seqOf(p) }; })
     .sort(function (a, b) {
       var sa = a.seq == null ? Infinity : a.seq, sb = b.seq == null ? Infinity : b.seq;
       return sa !== sb ? sa - sb : a.i - b.i;
     })
     .map(function (o) {
-      var c = {};
-      ALLOW.forEach(function (k) { if (o.p[k] !== undefined) c[k] = o.p[k]; });
+      var allow = isPair(o.p) ? ALLOW_P : ALLOW_I, c = {};
+      allow.forEach(function (k) { if (o.p[k] !== undefined) c[k] = o.p[k]; });
       return c;
     });
 };
@@ -930,7 +961,10 @@ window._resyncSandboxRoster = function (ft) {
     var origReal = window._sbCollectRealEnrollees(fresh);
     var useOrig = (orig.status !== 'finished') && origReal.length > 0;
     var chosen = useOrig ? origReal : (sbReal.length ? sbReal : origReal);
-    ft.participants = window._sbRebuildCleanRoster(chosen);
+    // enrollMode do original decide se DUPLA é unidade de inscrição (Casais=teams → mantém)
+    // ou artefato de sorteio/teste (Duplas Mistas=individual → desmonta pra pessoas).
+    var isTeamEnroll = (typeof window._isTeamEnrollMode === 'function') && window._isTeamEnrollMode(ft.enrollmentMode);
+    ft.participants = window._sbRebuildCleanRoster(chosen, isTeamEnroll);
     ft.waitlist = [];
     ft.standbyParticipants = [];
     ft.monarchWaitlist = {};

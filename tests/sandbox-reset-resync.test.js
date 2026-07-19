@@ -52,37 +52,56 @@ ok(orig.participants.length === 3 && orig.creatorUid === 'uORG' && orig.isPublic
 //    puxava esse lixo e destruía os inscritos reais do SB. NOVO: mantém os reais do SB,
 //    LIMPOS e em ORDEM de enrollSeq, dropando o placeholder-fantasma sem uid. ───────────
 var origFin = { id: 'FIN', name: 'Duplas Mistas', isPublic: true, creatorUid: 'uORG',
-  format: 'Eliminatórias Simples', status: 'finished',
+  format: 'Eliminatórias Simples', status: 'finished', enrollmentMode: 'individual', teamSize: 2,
   // participants degradados: slots de chave, sem uid nem enrollSeq
   participants: [{ p1Name: 'X', p2Name: 'Y' }, { p1Name: 'Z', p2Name: 'W' }],
-  matches: [{ id: 'm1' }, { id: 'm2' }], memberUids: ['uORG', 'uA', 'uB', 'uC'] };
-// SB capturou os 3 reais (enrollSeq FORA de ordem) + 1 fantasma sem uid (adição de teste).
+  matches: [{ id: 'm1' }, { id: 'm2' }], memberUids: ['uORG', 'uA', 'uB', 'uC', 'uD'] };
+// SB capturou os reais (enrollSeq FORA de ordem) + 1 fantasma sem uid + 1 DUPLA FORMADA de
+// teste (uA/uD) — que num torneio de inscrição INDIVIDUAL não deveria existir.
 var sbFin = { id: 'FIN_SB', name: '(SB) Duplas Mistas', isSandbox: true, sandboxOf: 'FIN',
   notificationsMuted: true, isPublic: false, sandboxOwnerUid: 'uDEV', creatorUid: 'uDEV',
-  organizerEmail: 'dev@x.com', createdAt: 't0',
+  organizerEmail: 'dev@x.com', createdAt: 't0', enrollmentMode: 'individual', teamSize: 2,
   participants: [
     { uid: 'uC', displayName: 'Ced', enrollSeq: 20, checkedIn: true, matchNum: 3 },
-    { uid: 'uA', displayName: 'Ana', enrollSeq: 2 },
+    { p1Uid: 'uA', p1Name: 'Ana', p1Seq: 2, p2Uid: 'uD', p2Name: 'Duda', p2Seq: 5 }, // dupla de teste
     { displayName: 'Fantasma', enrollSeq: 9 },              // sem uid = placeholder de teste
     { uid: 'uB', displayName: 'Bia', enrollSeq: 7, isStandby: true }
   ],
-  matches: [{ id: 'mX' }], status: 'finished' };
+  matches: [{ id: 'mX' }], status: 'finished', teamOrigins: { 'Ana / Duda': 'manual' } };
 W.AppStore.tournaments = [origFin, sbFin];
 
 W._resyncSandboxRoster(sbFin);
 
 var finUids = (sbFin.participants || []).map(function (p) { return p.uid; });
-ok(sbFin.participants.length === 3, 'encerrado: mantém os 3 inscritos REAIS do SB (não os slots degradados)');
-ok(finUids.indexOf('uA') !== -1 && finUids.indexOf('uB') !== -1 && finUids.indexOf('uC') !== -1, 'encerrado: os 3 reais preservados');
+ok(sbFin.participants.length === 4, 'encerrado+individual: dupla de teste DESMONTADA → 4 pessoas (Ana,Duda,Bia,Ced)');
+ok(sbFin.participants.every(function (p) { return !(p.p1Name || p.p1Uid); }), 'encerrado+individual: NENHUMA equipe (tudo é individual)');
+['uA', 'uB', 'uC', 'uD'].forEach(function (u) { ok(finUids.indexOf(u) !== -1, 'encerrado: pessoa ' + u + ' presente'); });
 ok(sbFin.participants.every(function (p) { return !!p.uid; }), 'encerrado: fantasma sem uid dropado');
-// ordem = enrollSeq crescente (2, 7, 20) → Ana, Bia, Ced
-ok(sbFin.participants[0].uid === 'uA' && sbFin.participants[1].uid === 'uB' && sbFin.participants[2].uid === 'uC', 'encerrado: ordenado por enrollSeq (ordem de inscrição real)');
-// estado de teste (presença/jogo) LIMPO nos cards do roster
+// ordem = enrollSeq crescente: Ana(2), Duda(5), Bia(7), Ced(20)
+ok(sbFin.participants.map(function (p) { return p.uid; }).join(',') === 'uA,uD,uB,uC', 'encerrado: ordenado por enrollSeq (ordem de inscrição real)');
 ok(sbFin.participants.every(function (p) { return p.checkedIn === undefined && p.matchNum === undefined && p.isStandby === undefined; }), 'encerrado: roster limpo (sem presença/jogo/standby)');
 ok(sbFin.participants[0].enrollSeq === 2, 'encerrado: enrollSeq de ORIGEM preservado (não renumerou)');
-// identidade do SB preservada; original degradado intocado.
 ok(sbFin.id === 'FIN_SB' && sbFin.isSandbox === true && sbFin.sandboxOf === 'FIN', 'encerrado: identidade do SB preservada');
 ok(origFin.participants.length === 2 && origFin.status === 'finished', 'encerrado: original intocado');
+
+// ── Torneio de DUPLAS FIXAS (Casais, enrollmentMode='teams'): a dupla É a unidade de
+//    inscrição → o reset PRESERVA os pares (não desmonta como no individual). ───────────
+var origTeam = { id: 'CAS', name: 'Casais', isPublic: true, creatorUid: 'uORG',
+  format: 'Eliminatórias Simples', status: 'open', enrollmentMode: 'teams', teamSize: 2,
+  participants: [
+    { p1Uid: 'uP1', p1Name: 'Pedro', p1Seq: 1, p2Uid: 'uP2', p2Name: 'Paula', p2Seq: 2 },
+    { uid: 'uSolo', displayName: 'Solo', enrollSeq: 3 } // solo esperando parceiro — legítimo
+  ], memberUids: ['uORG', 'uP1', 'uP2', 'uSolo'] };
+var sbTeam = { id: 'CAS_SB', name: '(SB) Casais', isSandbox: true, sandboxOf: 'CAS',
+  notificationsMuted: true, isPublic: false, sandboxOwnerUid: 'uDEV', creatorUid: 'uDEV',
+  organizerEmail: 'dev@x.com', createdAt: 't0', enrollmentMode: 'teams', teamSize: 2,
+  participants: [], status: 'active', matches: [{ id: 'mT' }] };
+W.AppStore.tournaments = [origTeam, sbTeam];
+W._resyncSandboxRoster(sbTeam);
+var pairKept = (sbTeam.participants || []).some(function (p) { return p.p1Uid === 'uP1' && p.p2Uid === 'uP2'; });
+ok(pairKept, 'casais (teams): dupla FIXA preservada como par (não desmontou)');
+ok((sbTeam.participants || []).some(function (p) { return p.uid === 'uSolo'; }), 'casais: solo esperando parceiro preservado');
+ok(sbTeam.participants.length === 2, 'casais: 2 entradas (1 dupla + 1 solo)');
 
 console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
 if (fail > 0) { console.error('❌ sandbox-reset-resync FALHOU'); process.exit(1); }

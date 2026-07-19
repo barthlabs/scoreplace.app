@@ -716,6 +716,7 @@ function renderDashboard(container) {
                <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(251,191,36,0.95)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
              </div>
           ` : ''}
+          ${t.isSandbox ? `<div style="background:#b91c1c;color:#fff;text-align:center;font:800 11px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;letter-spacing:1.5px;padding:5px 8px;">🧪 SANDBOX · TORNEIO DE TESTE</div>` : ''}
           <div class="card-body p-4" style="${_photoPanelD}${isOrg ? 'padding-bottom: 38px;' : ''}">
 
             <!-- Top Row: Icon/Modality | Status (same line, consistent with detail page) -->
@@ -2490,6 +2491,7 @@ function renderDashboard(container) {
             '</div>' +
           '</div>' +
           '<div class="compact-badges" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
+            (t.isSandbox ? '<span style="font-size:0.62rem;font-weight:700;padding:2px 6px;border-radius:5px;background:#b91c1c;color:#fff;letter-spacing:0.5px;white-space:nowrap;">🧪 SB</span>' : '') +
             '<span style="font-size:0.7rem;color:var(--text-muted);">👤 ' + pCount + '</span>' +
             (hasDraw && !isFinished ? '<span style="font-size:0.7rem;color:' + (prog.pct === 100 ? '#10b981' : '#f59e0b') + ';">' + prog.pct + '%</span>' : '') +
             '<span style="font-size:0.68rem;font-weight:600;padding:3px 8px;border-radius:6px;background:rgba(' + statusBadgeBgRgb + ',0.15);color:' + statusColor + ';white-space:nowrap;">' + statusText + '</span>' +
