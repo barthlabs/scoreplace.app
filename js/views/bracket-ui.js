@@ -1118,6 +1118,18 @@ window._showAllHiddenSwissPast = function (tId) {
   _rerenderBracket(tId);
 };
 
+// CANÔNICO (dono, 18-jul): um set foi decidido por TIE-BREAK sse o placar de GAMES difere por
+// EXATAMENTE 1 e o perdedor tem >= (gamesPerSet - 1). Cobre TB em QUALQUER empate a partir de
+// (gamesPerSet-1): 5-5→6-5, 6-6→7-6, 7-7→8-7 (Beach Tennis decide em quadra). O placar digitado
+// é o FINAL (não soma +1). FONTE ÚNICA do gate de TB no lançamento manual (revelar + salvar) —
+// antes cada ponto usava `=== gamesPerSet-1` (só 6-5) e o 7-6/8-7 não abria os campos.
+window._isTiebreakSetScore = function (g1, g2, gamesPerSet) {
+  g1 = parseInt(g1); g2 = parseInt(g2);
+  if (isNaN(g1) || isNaN(g2)) return false;
+  var gp = parseInt(gamesPerSet) || 6;
+  return Math.abs(g1 - g2) === 1 && Math.min(g1, g2) >= (gp - 1);
+};
+
 window._highlightWinner = function (matchId) {
   const s1El = document.getElementById(`s1-${matchId}`);
   const s2El = document.getElementById(`s2-${matchId}`);
@@ -1159,10 +1171,9 @@ window._highlightWinner = function (matchId) {
     // em alguns casos por race do dataset.tbShown vs reflow. Agora: simples —
     // se trigger hit, mostra E marca data-tb-shown. Se data-tb-shown='1', fica.
     // Reset só quando card re-renderiza (input novo, sem o data attribute).
-    var triggerHit = _trigger !== null && (
-      (s1 === _trigger + 1 && s2 === _trigger) ||
-      (s1 === _trigger && s2 === _trigger + 1)
-    );
+    // _trigger = gamesPerSet-1 → passa gamesPerSet (=_trigger+1) ao gate canônico. Revela os
+    // campos de TB em 6-5/7-6/8-7 (qualquer empate ≥ gamesPerSet-1), não só no 6-5.
+    var triggerHit = _trigger !== null && window._isTiebreakSetScore(s1, s2, _trigger + 1);
     var alreadyShown = tb1El.getAttribute('data-tb-shown') === '1';
     if (triggerHit || alreadyShown) {
       tb1El.style.display = 'inline-block';
@@ -1229,17 +1240,12 @@ window._saveSetResult = function(tId, matchId) {
 
       const setData = { gamesP1: g1, gamesP2: g2 };
 
-      // Tiebreak triggers at (gamesPerSet - 1) — e.g. 5-5 in a 6-game set
-      var _tbAt = sc.gamesPerSet - 1;
-      if (g1 === _tbAt && g2 === _tbAt) {
+      // TB canônico: placar FINAL digitado (6-5/7-6/8-7) — difere por 1 e perdedor ≥ gamesPerSet-1.
+      // Registra os pontos do TB SEM somar +1 (o games digitado já é o final). window._isTiebreakSetScore.
+      if (window._isTiebreakSetScore(g1, g2, sc.gamesPerSet)) {
         const tbP1 = parseInt(document.getElementById('tb-p1')?.value) || 0;
         const tbP2 = parseInt(document.getElementById('tb-p2')?.value) || 0;
-        setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
-        var tbMargin = (sc.tiebreakMargin || 2);
-        var tbTarget = (sc.tiebreakPoints || 7);
-        var tbComplete = (tbP1 >= tbTarget || tbP2 >= tbTarget) && Math.abs(tbP1 - tbP2) >= tbMargin;
-        if (tbComplete && tbP1 > tbP2) { setData.gamesP1 = g1 + 1; }
-        else if (tbComplete && tbP2 > tbP1) { setData.gamesP2 = g2 + 1; }
+        if (tbP1 || tbP2) setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
       }
 
       sets.push(setData);
@@ -1601,10 +1607,7 @@ window._saveResultInline = function (tId, matchId) {
   // we only ask for the tie-break points.
   var tbP1 = NaN, tbP2 = NaN;
   var isTiebreakEntry = false;
-  if (tbEnabled && (
-    (s1 === tbTrigger + 1 && s2 === tbTrigger) ||
-    (s1 === tbTrigger && s2 === tbTrigger + 1)
-  )) {
+  if (tbEnabled && window._isTiebreakSetScore(s1, s2, tbTrigger + 1)) {
     var tb1El = document.getElementById('tb1-' + matchId);
     var tb2El = document.getElementById('tb2-' + matchId);
     tbP1 = tb1El ? parseInt(tb1El.value) : NaN;
