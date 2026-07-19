@@ -571,9 +571,12 @@ window._buildCategoryCountHtml = function(t) {
 };
 
 // Estimated tournament duration
-window._buildTimeEstimation = function(t) {
-  // Só mostra se NÃO tem data/hora de fim
-  if (t.endDate) return '';
+window._buildTimeEstimation = function(t, opts) {
+  // A CAIXA completa só aparece sem data/hora de fim (se há endDate, o término já
+  // é conhecido — estimar seria redundante). Mas o modo {dataOnly} (linha compacta
+  // "Previsão de duração" abaixo da regressiva) IGNORA esse gate: a previsão pelos
+  // inscritos é útil mesmo com endDate definido (ex.: bater o real com o planejado).
+  if (t.endDate && !(opts && opts.dataOnly)) return '';
   // v0.16.82: Liga não tem duração estimada — formato é uma "temporada
   // contínua" com sorteios automáticos a cada N dias, não um evento de
   // duração fixa. Mostrar simulação de partidas é enganoso. Pedido do
@@ -726,6 +729,15 @@ window._buildTimeEstimation = function(t) {
     }
   });
 
+  // v1.3.2: modo "dataOnly" — devolve só os números do cenário REAL (nº atual de
+  // inscritos), sem HTML, pra alimentar a linha compacta _buildDurationForecast
+  // logo abaixo da regressiva. FONTE ÚNICA das fórmulas — não duplicar noutro lugar.
+  if (opts && opts.dataOnly) {
+    if (unitCount < 2) return null;
+    return { realCount: realCount, unitCount: unitCount, format: format,
+             matches: calcMatches(unitCount, format), minutes: estimateDuration(unitCount, format) };
+  }
+
   // Verificar se formato é Liga com muitos jogadores (seria longo demais)
   var isLiga = window._isLigaFormat && window._isLigaFormat(t);
   if (isLiga && unitCount > 20) {
@@ -803,6 +815,56 @@ window._buildTimeEstimation = function(t) {
   html += '</div>';
   html += '</div>';
   return html;
+};
+
+// v1.3.2: caixa "Estimativa de duração" — LOGO ABAIXO da regressiva na dashboard
+// e no detalhe. Layout (v1.3.4): título na 1ª linha; na 2ª, "(X participantes /
+// Y jogos)" à esquerda e a duração em DD:HH:MM à direita. Mostra só o cenário
+// REAL (nº atual de inscritos), sem as simulações 8/16/32/64 da caixa completa.
+// Reaproveita _buildTimeEstimation(t,{dataOnly}) como fonte única das fórmulas.
+// Auto-oculta: Liga / menos de 2 unidades (endDate NÃO oculta — ver dataOnly).
+window._buildDurationForecast = function(t) {
+  try {
+    var d = (typeof window._buildTimeEstimation === 'function')
+      ? window._buildTimeEstimation(t, { dataOnly: true })
+      : null;
+    if (!d || !(d.minutes > 0)) return '';
+    var min = d.minutes;
+    // Duração em DD:HH:MM (dias:horas:minutos), zero-padded.
+    function _p2(x) { return (x < 10 ? '0' : '') + x; }
+    var dd = Math.floor(min / 1440);
+    var hh = Math.floor((min % 1440) / 60);
+    var mm = Math.round(min % 60);
+    var jogosLbl = d.matches + (d.matches === 1 ? ' jogo' : ' jogos');
+    var partsLbl = d.realCount + (d.realCount === 1 ? ' participante' : ' participantes');
+    var rb = (typeof window._photoReadBox === 'function')
+      ? window._photoReadBox()
+      : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
+    // Segmento DD/HH/MM: rótulo menor em cima (dias/horas/min), número maior embaixo.
+    var _seg = function(lbl, val) {
+      return '<div style="display:flex;flex-direction:column;align-items:center;line-height:1.05;">' +
+        '<span style="font-size:0.55rem;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;opacity:0.62;color:' + rb.fg + ' !important;">' + lbl + '</span>' +
+        '<span style="font-size:1.2rem;font-weight:900;color:' + rb.fg + ' !important;font-variant-numeric:tabular-nums;">' + _p2(val) + '</span>' +
+      '</div>';
+    };
+    var _colon = '<span style="font-size:1.2rem;font-weight:900;opacity:0.4;color:' + rb.fg + ' !important;">:</span>';
+    // Título + "(participantes/jogos)" empilhados e colados à esquerda; bloco de
+    // tempo DD:HH:MM centralizado ocupando as 2 linhas à direita.
+    return '<div style="margin-top:6px;padding:8px 14px;background:' + rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid ' + rb.border + ';border-radius:12px;">' +
+      '<div style="display:flex;align-items:center;gap:12px;">' +
+        '<div style="display:flex;flex-direction:column;min-width:0;">' +
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<span style="font-size:1.1rem;flex-shrink:0;">⏱️</span>' +
+            '<span style="font-size:0.95rem;font-weight:800;color:' + rb.fg + ' !important;">Estimativa de duração</span>' +
+          '</div>' +
+          '<span style="font-size:0.72rem;font-weight:600;opacity:0.82;color:' + rb.fg + ' !important;">(' + partsLbl + ' / ' + jogosLbl + ')</span>' +
+        '</div>' +
+        '<div style="margin-left:auto;display:flex;align-items:flex-end;gap:6px;flex-shrink:0;">' +
+          _seg('dias', dd) + _colon + _seg('horas', hh) + _colon + _seg('min', mm) +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  } catch (e) { return ''; }
 };
 
 // Open category manager modal

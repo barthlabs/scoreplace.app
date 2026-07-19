@@ -48,6 +48,9 @@ const SUITES = [
   'tests/letzplay-eta.test.js',
   'tests/letzplay-scan-order.test.js',
   'tests/phase0-elim.test.js',
+  // Item 10: TODO slot do sorteio carrega uid EXPLÍCITO (team*Uids/p*Uid) — R1 inclusive.
+  // Antes a R1 saía só com team1Obj (undefined uid). Roda o motor REAL (draw-core → storePhase).
+  'tests/slot-uid-on-draw.test.js',
   'tests/phase0-monarch.test.js',
   'tests/phase0-monarch-duplas.test.js',
   'tests/phase-complete-tagged.test.js',

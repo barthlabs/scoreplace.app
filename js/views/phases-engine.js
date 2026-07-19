@@ -1566,7 +1566,24 @@
       return { ok: true, matches: [], built: built, incrementalLeague: true, phaseIndex: idx };
     }
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
-    built.matches.forEach(function (m) { m.phaseIndex = idx; if (m.category === undefined) m.category = null; });
+    built.matches.forEach(function (m) {
+      m.phaseIndex = idx; if (m.category === undefined) m.category = null;
+      // v1.3.18 — CÂNONE DO SLOT (item 10 do dono): TODO slot que o gerador cria carrega o UID
+      // EXPLÍCITO (team*Uids/p*Uid), não só o team*Obj/nome — R1 inclusive. Deriva do objeto do
+      // slot via _slotUids (uid-first); guest sem conta (uids vazio) mantém só o nome (exceção
+      // legítima). Idempotente (pula slots que já têm uid). Antes: a R1 saía só com team1Obj →
+      // o slot NÃO se descrevia por uid; rename do perfil dependia de resolver pelo objeto.
+      if (typeof window !== 'undefined' && typeof window._slotUids === 'function') {
+        if (!(Array.isArray(m.team1Uids) && m.team1Uids.length)) {
+          var _u1 = window._slotUids(m, 'p1') || [];
+          if (_u1.length) { m.team1Uids = _u1; m.p1Uid = (_u1.length === 1 ? _u1[0] : null); }
+        }
+        if (!(Array.isArray(m.team2Uids) && m.team2Uids.length)) {
+          var _u2 = window._slotUids(m, 'p2') || [];
+          if (_u2.length) { m.team2Uids = _u2; m.p2Uid = (_u2.length === 1 ? _u2[0] : null); }
+        }
+      }
+    });
     t.matches = (t.matches || []).concat(built.matches);
     // v2.7.25: resolução 'standby' → os cortados vão pra lista de espera (reusa a
     // infra existente: aparecem no painel de Lista de Espera + servem pra W.O.).
