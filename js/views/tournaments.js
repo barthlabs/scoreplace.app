@@ -172,23 +172,23 @@ window._buildDoublesInscritosSection = function (t, ctx) {
       : (window._enrollNumber ? (parseInt(window._enrollNumber(_enrollOrderMapD, p), 10) || 0) : 0);
     var _dpInactive = (t.allowSelfDeactivation !== false && typeof p === 'object' && p && p.ligaActive === false) ? '1' : '0';
     var _presStyle = (_prs && _prs.styleExtra) ? _prs.styleExtra : '';
-    // rowHtml na base do card: SOLO → toggle único; DUPLA escopo TIME → um W.O. do
-    // time. DUPLA escopo INDIVIDUAL → rowHtml vazio (cada membro tem seu toggle+W.O.
-    // no bloco dele, via ctx.memberPresence acima).
-    var _presRow = (_prs && _prs.rowHtml)
-      ? '<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-top:2px;" onclick="event.stopPropagation();">' + _prs.rowHtml + '</div>'
-      : '';
+    // rowHtml: SOLO → toggle único; DUPLA escopo TIME → um W.O. do time. DUPLA escopo
+    // INDIVIDUAL → vazio (cada membro tem seu toggle+W.O. no bloco dele, via memberPresence).
+    // v1.3.20 (dono): "Ausente/W.O." vai na MESMA linha das ações (à direita do ✕ excluir),
+    // não numa linha nova — economiza 1 linha por card. Canônico (_duplaCard serve as 2 telas).
+    var _presInline = (_prs && _prs.rowHtml) ? _prs.rowHtml : '';
     return '<div class="participant-card" data-part-card="1" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-inactive="' + _dpInactive + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(_resolvedCardName || nm) + '" ' + dragAttrs +
       ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + _presStyle + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
       _enrollBadge + _wmL + _wmR +
       (function () {
-        var _actions = (desfazerBtn || _delBtnDupla)
-          ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' + desfazerBtn + _delBtnDupla + '</div>'
+        // ✕ (desfazer/excluir) + presença (Ausente/toggle/W.O.) juntos, à direita, na MESMA linha.
+        var _actions = (desfazerBtn || _delBtnDupla || _presInline)
+          ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;" onclick="event.stopPropagation();">' + desfazerBtn + _delBtnDupla + _presInline + '</div>'
           : '';
         var _labelRow = _actions
-          ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' + (labelHtml || '<span></span>') + _actions + '</div>'
+          ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">' + (labelHtml || '<span></span>') + _actions + '</div>'
           : labelHtml;
-        var _inner = _body + _labelRow + _presRow;
+        var _inner = _body + _labelRow;
         return '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' + _inner + '</div>';
       })() +
       '</div>';
