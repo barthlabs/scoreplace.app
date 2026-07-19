@@ -174,6 +174,9 @@ const SUITES = [
   'functions/test-match-roster.js',
   // Inscrição/desinscrição no servidor (CF) — espelha a transação do cliente.
   'functions/test-enroll-core.js',
+  // Item 7: janelas do lembrete de torneio (7d/2d/0d) ESPELHAM o cliente; data-only BRT.
+  // Se o servidor contar em UTC ou disparar em dia errado, sai fora. (Entrega = emulador.)
+  'functions/test-reminder-core.js',
 ];
 
 let failed = [];

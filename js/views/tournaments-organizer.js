@@ -480,6 +480,13 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
  * Should be called on app load / periodically.
  */
 window._checkTournamentReminders = async function() {
+    // Item 7 (jul/2026): o lembrete de torneio agora sai por uma CF AGENDADA CONFIÁVEL
+    // (sendTournamentReminders) — server-side, dedup por torneio, entrega mesmo quem não
+    // abre o app. Este caminho de cliente (só rodava no login, dedup por localStorage por-
+    // dispositivo → gente ficava sem aviso) foi APOSENTADO pra não duplicar o envio. Vive
+    // como no-op só pra não quebrar os call sites. Ver project_tournament_reminder_cf.
+    return;
+    // eslint-disable-next-line no-unreachable
     if (!window.AppStore || !window.AppStore.currentUser || !window.FirestoreDB) return;
     var cu = window.AppStore.currentUser;
     var today = new Date();

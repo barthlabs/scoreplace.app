@@ -1054,6 +1054,24 @@ exports.backupFirestore = onSchedule(
   }
 );
 
+// ─── Lembrete de torneio CONFIÁVEL (item 7) ─────────────────────────────────
+// ANTES o lembrete (7d/2d/dia) só saía quando ALGUÉM abria o app (_checkTournamentReminders
+// no cliente, dedup por localStorage por-dispositivo). Quem não abria no dia certo NUNCA
+// recebia — gente ficou sem aviso do torneio real. Agora uma CF AGENDADA roda todo dia e
+// entrega server-side, com dedup POR TORNEIO (t.remindersSent.rNd) e idempotência por notif
+// doc determinístico. Espelha EXATAMENTE as janelas/níveis do cliente (reminder-core.js, o
+// mesmo módulo, testado). Respeita notifyLevel/notifyPlatform/notifyEmail de cada um e o
+// killswitch do Sandbox (isSandbox/notificationsMuted). E-mail via a MESMA fila digest do
+// comunicado do organizador (notif_email_queue → flushNotifEmailDigest). Ver
+// [[project_tournament_reminder_cf]]. O cliente deixa de disparar (fim do envio duplo).
+// Deploy:  firebase deploy --only functions:sendTournamentReminders
+const { runTournamentReminders: _runTournamentReminders } = require("./reminder-run");
+exports.sendTournamentReminders = onSchedule(
+  { schedule: "every day 09:00", timeZone: "America/Sao_Paulo", region: "us-central1",
+    timeoutSeconds: 300, memory: "256MiB" },
+  async () => { await _runTournamentReminders(admin.firestore(), Date.now()); }
+);
+
 // ─── Magic Link via Custom Email (firestore-send-email extension) ────────────
 // v1.0.20-beta: substituí firebase.auth().sendSignInLinkToEmail() (que envia
 // email feio do firebaseapp.com sem botão estilizado, parando no spam) por
