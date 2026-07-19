@@ -3249,7 +3249,9 @@ function renderTournaments(container, tournamentId = null) {
 
             // Check-in state
             if (!t.checkedIn) t.checkedIn = {};
+            if (!t.checkedInConfirmed) t.checkedInConfirmed = {};
             const checkedIn = t.checkedIn;
+            const checkedInConf = t.checkedInConfirmed;
             const hasMatches = (t.matches && t.matches.length > 0) || (t.rounds && t.rounds.length > 0) || (t.groups && t.groups.length > 0);
             const drawDone = hasMatches || t.status === 'started' || t.status === 'in_progress';
 
@@ -3261,19 +3263,23 @@ function renderTournaments(container, tournamentId = null) {
             const _rcActiveD = isOrg && !drawDone;
             const _rollCallBarOn = canCheckIn || _rcActiveD;
 
-            // Count check-in stats
+            // Count check-in stats. Verde (checkedIn) = presente; azul (checkedInConfirmed) =
+            // confirmado remoto, NÃO é presente (só avisa); vermelho (absent) = fora.
             let totalIndividuals = 0;
-            let checkedCount = 0;
+            let checkedCount = 0;      // verde (presente)
+            let confirmedCount = 0;    // azul (confirmado, não-presente)
+            let absentPeople = 0;      // vermelho
+            const _tallyPresence = (nm) => {
+                if (!nm) return;
+                totalIndividuals++;
+                if (window._idMapHas(t, checkedIn, nm)) checkedCount++;
+                else if (window._idMapHas(t, checkedInConf, nm)) confirmedCount++;
+                else if (window._idMapHas(t, t.absent || {}, nm)) absentPeople++;
+            };
             parts.forEach(p => {
                 const pName = window._pName(p);
-                if (pName.includes('/')) {
-                    pName.split('/').forEach(n => {
-                        const nm = n.trim();
-                        if (nm) { totalIndividuals++; if (window._idMapHas(t, checkedIn, nm)) checkedCount++; }
-                    });
-                } else {
-                    if (pName) { totalIndividuals++; if (window._idMapHas(t, checkedIn, pName)) checkedCount++; }
-                }
+                if (pName.includes('/')) pName.split('/').forEach(n => _tallyPresence(n.trim()));
+                else _tallyPresence(pName);
             });
 
             // Current filter state
@@ -3353,12 +3359,14 @@ function renderTournaments(container, tournamentId = null) {
                 });
 
                 cardsStr = allIndividuals.map((ind, i) => {
-                    const mc = window._idMapHas(t, checkedIn, ind);
+                    const mc = window._idMapHas(t, checkedIn, ind);            // verde (presente)
+                    const _ciBlue = !mc && window._idMapHas(t, checkedInConf, ind); // azul (confirmado)
                     const _ciUid = String(ind.uid || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
-                    // Filter
+                    // Filter (present=verde, confirmed=azul, absent=nem verde nem azul)
                     if (currentFilter === 'present' && !mc) return '';
-                    if (currentFilter === 'absent' && mc) return '';
+                    if (currentFilter === 'confirmed' && !_ciBlue) return '';
+                    if (currentFilter === 'absent' && (mc || _ciBlue)) return '';
 
                     // v0.17.34: W.O. orphan branch
                     const _isWOOrphanCI = !!ind.isWOOrphan;
@@ -3404,15 +3412,21 @@ function renderTournaments(container, tournamentId = null) {
                             <div style="font-size:0.7rem;font-weight:800;padding:2px 8px;border-radius:8px;background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);">W.O.</div>
                         </div>`;
                     }
+                    const _ciBgC = mc ? 'rgba(16,185,129,0.12)' : (_ciBlue ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.03)');
+                    const _ciBdC = mc ? 'rgba(16,185,129,0.3)' : (_ciBlue ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.06)');
+                    const _ciAvC = mc ? 'rgba(16,185,129,0.4)' : (_ciBlue ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.1)');
+                    const _ciNmC = mc ? '#4ade80' : (_ciBlue ? '#60a5fa' : 'var(--text-bright)');
+                    const _ciBadgeS = mc ? 'background:rgba(16,185,129,0.15);color:#4ade80;' : (_ciBlue ? 'background:rgba(59,130,246,0.15);color:#60a5fa;' : 'background:rgba(239,68,68,0.12);color:#f87171;');
+                    const _ciBadgeT = mc ? 'Presente' : (_ciBlue ? 'Confirmado' : 'Ausente');
                     return `
-                      <div data-merge-name="${window._safeHtml(ind.name)}" ${_ciMergeDrag} style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:${mc ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.03)'};border:1px solid ${mc ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.06)'};${isVipCI ? 'border-left:3px solid #fbbf24;' : ''}transition:all 0.2s;cursor:pointer;" onclick="window._toggleCheckIn('${t.id}', '${_ciSafeName}', '${_ciUid}')">
-                          <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_ciSafeName}', '${_ciUid}');"><span class="toggle-slider"></span></label>
-                          <img src="${_ciAvatar}" onerror="this.onerror=null;this.src='${_ciFallback}'" data-player-name="${window._safeHtml(ind.name)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.4)' : 'rgba(255,255,255,0.1)'};" />
+                      <div data-merge-name="${window._safeHtml(ind.name)}" ${_ciMergeDrag} style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:${_ciBgC};border:1px solid ${_ciBdC};${isVipCI ? 'border-left:3px solid #fbbf24;' : ''}transition:all 0.2s;cursor:pointer;" onclick="window._toggleCheckIn('${t.id}', '${_ciSafeName}', '${_ciUid}')">
+                          <label class="toggle-switch toggle-sm" style="--toggle-on-bg:${_ciBlue ? '#3b82f6' : '#10b981'};--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:${_ciBlue ? '#3b82f6' : '#10b981'};" onclick="event.stopPropagation();"><input type="checkbox" ${(mc || _ciBlue) ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_ciSafeName}', '${_ciUid}');"><span class="toggle-slider"></span></label>
+                          <img src="${_ciAvatar}" onerror="this.onerror=null;this.src='${_ciFallback}'" data-player-name="${window._safeHtml(ind.name)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${_ciAvC};" />
                           <div style="flex:1;overflow:hidden;">
-                              <div style="font-weight:600;font-size:0.92rem;color:${mc ? '#4ade80' : 'var(--text-bright)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${mc ? 'text-decoration:line-through;text-decoration-color:rgba(74,222,128,0.3);' : ''}">${window._safeHtml(ind.name)}${_ciCrownInline}${vipTagCI}${_ciPendBadge}</div>
+                              <div style="font-weight:600;font-size:0.92rem;color:${_ciNmC};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${mc ? 'text-decoration:line-through;text-decoration-color:rgba(74,222,128,0.3);' : ''}">${window._safeHtml(ind.name)}${_ciCrownInline}${vipTagCI}${_ciPendBadge}</div>
                               ${teamLabel ? `<div style="font-size:0.7rem;color:var(--text-muted);opacity:0.5;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${window._safeHtml(teamLabel)}</div>` : ''}
                           </div>
-                          <div style="font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:8px;${mc ? 'background:rgba(16,185,129,0.15);color:#4ade80;' : 'background:rgba(239,68,68,0.12);color:#f87171;'}">${mc ? 'Presente' : 'Ausente'}</div>
+                          <div style="font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:8px;${_ciBadgeS}">${_ciBadgeT}</div>
                       </div>`;
                 }).join('');
             } else {
@@ -3682,19 +3696,21 @@ function renderTournaments(container, tournamentId = null) {
                 }).join('');
             }
 
-            // Filter buttons + progress (only when check-in is active)
-            const absentCount = totalIndividuals - checkedCount;
+            // Filter buttons + progress. Ausentes = quem NÃO é verde nem azul (pendente + fora);
+            // % conta SÓ o verde (presente de verdade). Confirmados (azul) fica numa pílula à parte.
+            const absentCount = Math.max(0, totalIndividuals - checkedCount - confirmedCount);
             const pctPresent = totalIndividuals > 0 ? Math.round(checkedCount / totalIndividuals * 100) : 0;
+            const _ciPill = (key, label, n, onc, offc, active) =>
+              `<button onclick="window._setCheckInFilter('${t.id}', '${key}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:20px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid ${active ? onc + '80' : 'rgba(255,255,255,0.1)'};background:${active ? onc + '33' : 'rgba(255,255,255,0.05)'};color:${active ? offc : 'var(--text-muted)'};">${key === 'all' ? '' : `<span style="width:8px;height:8px;border-radius:50%;background:${onc};flex-shrink:0;"></span>`}${label} (${n})</button>`;
             const checkInControls = _rollCallBarOn ? `
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap;">
-                    <button onclick="window._setCheckInFilter('${t.id}', 'all')" style="padding:6px 16px;border-radius:20px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid ${currentFilter === 'all' ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.1)'};background:${currentFilter === 'all' ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.05)'};color:${currentFilter === 'all' ? '#a5b4fc' : 'var(--text-muted)'};">Todos (${totalIndividuals})</button>
-                    <button onclick="window._setCheckInFilter('${t.id}', 'present')" style="padding:6px 16px;border-radius:20px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid ${currentFilter === 'present' ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.1)'};background:${currentFilter === 'present' ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.05)'};color:${currentFilter === 'present' ? '#4ade80' : 'var(--text-muted)'};">Presentes (${checkedCount})</button>
-                    <button onclick="window._setCheckInFilter('${t.id}', 'absent')" style="padding:6px 16px;border-radius:20px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid ${currentFilter === 'absent' ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.1)'};background:${currentFilter === 'absent' ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)'};color:${currentFilter === 'absent' ? '#f87171' : 'var(--text-muted)'};">Ausentes (${absentCount})</button>
-                    <div style="flex:1;min-width:80px;background:rgba(255,255,255,0.06);border-radius:6px;height:8px;">
-                        <div style="width:${pctPresent}%;height:100%;background:linear-gradient(90deg,#10b981,#4ade80);border-radius:6px;transition:width 0.3s;"></div>
-                    </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;flex-wrap:wrap;">
+                    ${_ciPill('all', 'Todos', totalIndividuals, '#6366f1', '#a5b4fc', currentFilter === 'all')}
+                    ${_ciPill('present', 'Presentes', checkedCount, '#10b981', '#4ade80', currentFilter === 'present')}
+                    ${_ciPill('confirmed', 'Confirmados', confirmedCount, '#3b82f6', '#60a5fa', currentFilter === 'confirmed')}
+                    ${_ciPill('absent', 'Ausentes', absentCount, '#ef4444', '#f87171', currentFilter === 'absent')}
+                    <div style="flex:1;min-width:70px;background:rgba(255,255,255,0.06);border-radius:6px;height:8px;"><div style="width:${pctPresent}%;height:100%;background:linear-gradient(90deg,#10b981,#4ade80);border-radius:6px;transition:width 0.3s;"></div></div>
                     <span style="font-size:0.8rem;color:#94a3b8;font-weight:700;">${pctPresent}%</span>
-                    ${checkedCount > 0 ? `<button onclick="window._resetCheckIn('${t.id}')" style="background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.2);padding:4px 12px;border-radius:8px;font-size:0.75rem;font-weight:600;cursor:pointer;">Limpar</button>` : ''}
+                    ${(checkedCount > 0 || confirmedCount > 0) ? `<button onclick="window._resetCheckIn('${t.id}')" style="background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.2);padding:4px 12px;border-radius:8px;font-size:0.75rem;font-weight:600;cursor:pointer;">Limpar</button>` : ''}
                 </div>
             ` : '';
 

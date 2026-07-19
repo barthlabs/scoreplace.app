@@ -728,33 +728,54 @@ window._toggleCheckIn = function (tId, playerName, uid) {
     return window._applyCheckInToggle(tId, playerName, uid);
   }
 
-  // 2) Auto-presença do próprio jogador (só em torneios com placar pelos
-  //    participantes e quando o nome é o do próprio usuário).
-  const _canSelf = window._participantsSelfPresence && window._participantsSelfPresence(t) &&
-    window._isMyOwnPlayerName && window._isMyOwnPlayerName(t, playerName, user);
+  // 2) Autopresença do PRÓPRIO participante (dono, jul/2026): disponível a QUALQUER inscrito —
+  //    NÃO só nos torneios em que o participante lança o placar. Precisa ser o próprio nome.
+  //    Verde = GPS confirma no local; azul = confirma fora do local (não bloqueia mais). Ver
+  //    _applySelfPresence.
+  const _canSelf = window._isMyOwnPlayerName && window._isMyOwnPlayerName(t, playerName, user);
   if (!_canSelf) {
     if (typeof showNotification === 'function') {
-      showNotification('Presença', 'Apenas o organizador ou o árbitro pode marcar a presença.', 'info');
+      showNotification('Presença', 'Só o organizador ou o árbitro pode marcar a presença de outra pessoa.', 'info');
     }
     return;
   }
-  const _wasIn = window._idMapHas(t, t.checkedIn, _who);
-  if (_wasIn) {
-    // Retirar a própria presença é livre (você pode dizer que saiu).
-    return window._applyCheckInToggle(tId, playerName, uid);
+  return window._applySelfPresence(tId, playerName, uid);
+};
+
+// Autopresença do PRÓPRIO participante — VERDE (presente, GPS no local) vs AZUL (confirmado,
+// fora do local). Tocar de novo quando já verde/azul = SAIR. Só o VERDE (checkedIn) conta como
+// presença; o AZUL (checkedInConfirmed) é um aviso "eu venho" que NÃO entra na % nem no sorteio.
+window._applySelfPresence = function (tId, playerName, uid) {
+  const t = window._findTournamentById(tId);
+  if (!t) return;
+  const _who = uid ? { uid: uid, displayName: playerName } : playerName;
+  const isGreen = window._idMapHas(t, t.checkedIn || {}, _who);
+  const isBlue = window._idMapHas(t, t.checkedInConfirmed || {}, _who);
+  if (isGreen || isBlue) {
+    // Já marcado → tocar de novo = sair (remove verde E azul).
+    window.AppStore.mutate(tId, function (ft) {
+      ft.checkedIn = ft.checkedIn || {}; ft.checkedInConfirmed = ft.checkedInConfirmed || {};
+      window._idMapDel(ft, ft.checkedIn, _who);
+      window._idMapDel(ft, ft.checkedInConfirmed, _who);
+    });
+    _reRenderParticipants();
+    return;
   }
-  // Marcar a própria presença → confirma pelo GPS que está no local.
   if (typeof showNotification === 'function') {
-    showNotification('📍 Verificando local…', 'Confirmando pelo GPS que você está no local.', 'info');
+    showNotification('📍 Verificando local…', 'Confirmando pelo GPS se você está no local.', 'info');
   }
   window._isUserAtTournamentVenue(t).then(function (atVenue) {
-    if (!atVenue) {
-      if (typeof showNotification === 'function') {
-        showNotification('📍 Fora do local', 'Ative o GPS e esteja no local do torneio pra marcar sua presença.', 'warning');
-      }
-      return;
+    window.AppStore.mutate(tId, function (ft) {
+      ft.checkedIn = ft.checkedIn || {}; ft.absent = ft.absent || {}; ft.checkedInConfirmed = ft.checkedInConfirmed || {};
+      window._idMapDel(ft, ft.absent, _who);
+      if (atVenue) { window._idMapSet(ft, ft.checkedIn, _who, Date.now()); window._idMapDel(ft, ft.checkedInConfirmed, _who); }
+      else { window._idMapSet(ft, ft.checkedInConfirmed, _who, Date.now()); window._idMapDel(ft, ft.checkedIn, _who); }
+    });
+    if (typeof showNotification === 'function') {
+      if (atVenue) showNotification('✅ Presente', 'O GPS confirmou você no local do torneio.', 'success');
+      else showNotification('🔵 Presença confirmada', 'Você confirmou que vem. Ao chegar no local, vira "Presente" automaticamente.', 'info');
     }
-    window._applyCheckInToggle(tId, playerName, uid);
+    _reRenderParticipants();
   });
 };
 
@@ -794,12 +815,16 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   window.AppStore.mutate(tId, function (ft) {
     if (!ft.checkedIn) ft.checkedIn = {};
     if (!ft.absent) ft.absent = {};
+    if (!ft.checkedInConfirmed) ft.checkedInConfirmed = {};
     const _was = window._idMapHas(ft, ft.checkedIn, _who);
     if (_was) {
       window._idMapDel(ft, ft.checkedIn, _who);
     } else {
       window._idMapSet(ft, ft.checkedIn, _who, Date.now());
       window._idMapDel(ft, ft.absent, _who);
+      // v1.3.19: marcar PRESENTE (verde) tira o "Confirmado" (azul) — o organizador confirma
+      // que a pessoa está no local, então o aviso remoto some.
+      window._idMapDel(ft, ft.checkedInConfirmed, _who);
       const r = window._applyWoSubsToTournament(ft); // núcleo puro, sem save
       if (_subResult === undefined) _subResult = r;
     }
@@ -932,7 +957,7 @@ window._applyAbsenceToggle = function (t, playerName) {
 window._resetCheckIn = function (tId) {
   const t = window._findTournamentById(tId);
   if (!t) return;
-  window.AppStore.mutate(tId, function (ft) { ft.checkedIn = {}; ft.absent = {}; });
+  window.AppStore.mutate(tId, function (ft) { ft.checkedIn = {}; ft.absent = {}; ft.checkedInConfirmed = {}; });
   _reRenderParticipants();
   if (typeof showNotification === 'function') showNotification(_t('participants.resetCheckin'), _t('participants.resetCheckinMsg'), 'info');
 };
@@ -1239,11 +1264,14 @@ window._rollCallPresenceCtx = function (t, opts) {
   var active = !!opts.active;       // canRollCall (chamada pré-sorteio)
   var postDraw = !!opts.postDraw;   // postDrawPresence (pós-sorteio, antes de iniciar)
   var woScope = ((opts.woScope || t.woScope || 'individual') === 'individual') ? 'individual' : 'team';
-  var ci = t.checkedIn || {}, ab = t.absent || {};
+  var ci = t.checkedIn || {}, ab = t.absent || {}, conf = t.checkedInConfirmed || {};
   var _pres = function (who) { return !!window._idMapHas(t, ci, who) && !window._idMapHas(t, ab, who); };
   var _abs = function (who) { return !!window._idMapHas(t, ab, who); };
+  // v1.3.19: AZUL = confirmado remoto (checkedInConfirmed) e NÃO presente (verde vence).
+  var _conf = function (who) { return !!window._idMapHas(t, conf, who) && !window._idMapHas(t, ci, who); };
   var _grn = 'background:linear-gradient(135deg,rgba(16,185,129,0.5),rgba(5,150,105,0.6)) !important;border:2px solid rgba(16,185,129,0.85) !important;box-shadow:0 0 0 1px rgba(16,185,129,0.4),0 4px 12px rgba(0,0,0,0.14);';
   var _red = 'background:linear-gradient(135deg,rgba(239,68,68,0.45),rgba(220,38,38,0.58)) !important;border:2px solid rgba(239,68,68,0.8) !important;box-shadow:0 0 0 1px rgba(239,68,68,0.35),0 4px 12px rgba(0,0,0,0.14);';
+  var _blu = 'background:linear-gradient(135deg,rgba(59,130,246,0.42),rgba(37,99,235,0.55)) !important;border:2px solid rgba(59,130,246,0.8) !important;box-shadow:0 0 0 1px rgba(59,130,246,0.35),0 4px 12px rgba(0,0,0,0.14);';
   var _cf = function () { return window._checkInFilter || 'all'; };
   return {
     cardPresence: function (p) {
@@ -1271,26 +1299,30 @@ window._rollCallPresenceCtx = function (t, opts) {
       // SOLO
       var entry = window._pName(p);
       var mc = _pres(entry);
-      var abs = !mc && _abs(entry);
-      var pend = !mc && !abs;
+      var blu = !mc && _conf(entry);
+      var abs = !mc && !blu && _abs(entry);
+      var pend = !mc && !blu && !abs;
       if (currentFilter === 'present' && !mc) return { skip: true };
-      if (currentFilter === 'absent' && !abs) return { skip: true };
+      if (currentFilter === 'confirmed' && !blu) return { skip: true };
+      if (currentFilter === 'absent' && !(abs || pend)) return { skip: true };
       if (currentFilter === 'pending' && !pend) return { skip: true };
-      var styleExtra = mc ? _grn : (abs ? _red : '');
+      var styleExtra = mc ? _grn : (blu ? _blu : (abs ? _red : ''));
       var rowHtml = '';
+      var _puid = String((p && p.uid) || '').replace(/'/g, "\\'");
       if (active) {
         var _rcEntry = entry.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        var label = mc ? 'Presente' : 'Ausente';
-        var color = mc ? '#4ade80' : '#f87171';
-        var wo = (!mc && isOrg)
+        var label = mc ? 'Presente' : (blu ? 'Confirmado' : 'Ausente');
+        var color = mc ? '#4ade80' : (blu ? '#60a5fa' : '#f87171');
+        var _onc = blu ? '#3b82f6' : '#10b981';
+        var wo = (!mc && !blu && isOrg)
           ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
           : '';
         rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>' +
-          '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\', \'' + String((p && p.uid) || '').replace(/'/g, "\\'") + '\');"><span class="toggle-slider"></span></label>' + wo;
+          '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _onc + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _onc + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\', \'' + _puid + '\');"><span class="toggle-slider"></span></label>' + wo;
       } else {
-        var l2 = mc ? 'Presente' : 'Ausente';
-        var c2 = mc ? '#4ade80' : '#f87171';
-        var ic = mc ? '✅' : '🚫';
+        var l2 = mc ? 'Presente' : (blu ? 'Confirmado' : 'Ausente');
+        var c2 = mc ? '#4ade80' : (blu ? '#60a5fa' : '#f87171');
+        var ic = mc ? '✅' : (blu ? '🔵' : '🚫');
         rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + c2 + ';white-space:nowrap;">' + ic + ' ' + l2 + '</span>';
       }
       return { skip: false, styleExtra: styleExtra, rowHtml: rowHtml };
@@ -1303,19 +1335,21 @@ window._rollCallPresenceCtx = function (t, opts) {
       var _mWho = (member && member.uid) ? { uid: member.uid, displayName: keyName } : keyName;
       var _mUidEsc = String((member && member.uid) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var mc = _pres(_mWho);
-      var abs = !mc && _abs(_mWho);
-      var label = mc ? 'Presente' : 'Ausente';
-      var color = mc ? '#4ade80' : '#f87171';
+      var blu = !mc && _conf(_mWho);
+      var abs = !mc && !blu && _abs(_mWho);
+      var label = mc ? 'Presente' : (blu ? 'Confirmado' : 'Ausente');
+      var color = mc ? '#4ade80' : (blu ? '#60a5fa' : '#f87171');
       if (!active) {
-        var ic = mc ? '✅' : '🚫';
+        var ic = mc ? '✅' : (blu ? '🔵' : '🚫');
         return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + ic + ' ' + label + '</span></div>' };
       }
       var _e = keyName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      var wo = (!mc && isOrg && woScope === 'individual')
+      var _oncM = blu ? '#3b82f6' : '#10b981';
+      var wo = (!mc && !blu && isOrg && woScope === 'individual')
         ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
         : '';
       var word = '<span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>';
-      var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\', \'' + _mUidEsc + '\');"><span class="toggle-slider"></span></label>';
+      var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _oncM + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _oncM + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\', \'' + _mUidEsc + '\');"><span class="toggle-slider"></span></label>';
       var inner = right ? (wo + toggle + word) : (word + toggle + wo);
       return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;' + (right ? 'justify-content:flex-end;' : '') + '" onclick="event.stopPropagation();">' + inner + '</div>' };
     }

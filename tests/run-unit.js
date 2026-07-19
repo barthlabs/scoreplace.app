@@ -82,6 +82,8 @@ const SUITES = [
   // Chamada de DUPLAS aparece direto no detalhe: _buildDoublesInscritosSection só mostra os
   // toggles quando recebe o factory _rollCallPresenceCtx (reusado nas 2 telas). Sem ele, sem toggle.
   'tests/detail-doubles-rollcall.test.js',
+  // Presença verde (presente) vs azul (confirmado remoto, NÃO presente); verde vence azul.
+  'tests/presence-green-blue.test.js',
   // Convite pro grupo de WhatsApp (org notifica inscritos c/ o link): type wa_group fundamental
   // + CTA _notifCta abre o link do grupo. Sem o caso, cairia no "Ver torneio" genérico.
   'tests/wa-group-notify.test.js',
