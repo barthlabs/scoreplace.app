@@ -11,6 +11,14 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.08);">' +
+      '<div style="font-weight:800; color:#4ade80; font-size:1rem; margin-bottom:8px;">📍 v1.3.23 — Você mesmo marca sua presença <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🟢 Presente (verde) x 🔵 Confirmado (azul):</b> na tela do torneio, cada inscrito tem um toggle "Sua presença". Se o GPS confirmar que você está no local, fica <b>verde (presente)</b>; se não, fica <b>azul (confirmado)</b> — um "eu venho". Só o verde entra na contagem de presentes.</li>' +
+        '<li><b>✅ Chegou no local, virou presente sozinho:</b> se você já fez check-in no local do torneio (na presença de local) dentro de 2h antes até o fim, o app te marca <b>presente</b> automaticamente — sem precisar tocar em nada.</li>' +
+        '<li><b>🧭 Contagem sempre à vista:</b> na chamada do organizador, a barra Todos/Presentes/Confirmados/Ausentes agora fica <b>presa logo abaixo do filtro/busca</b>, sempre visível enquanto você rola a lista.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.08);">' +
       '<div style="font-weight:800; color:#fbbf24; font-size:1rem; margin-bottom:8px;">🔒 v1.3.18 — Nome no torneio não quebra mais se você trocar no perfil <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

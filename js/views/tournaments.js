@@ -22,6 +22,10 @@ window._buildDoublesInscritosSection = function (t, ctx) {
   var individualCountParts = (ctx.peopleCount != null) ? ctx.peopleCount : '';
   var _hasTournCats = !!ctx.hasTournCats;
   var _chrome = !!ctx.chrome;
+  // v1.3.23: barra de contagem (Todos/Presentes/Confirmados/Ausentes) entra LOGO ABAIXO
+  // da barra de filtro/busca (mesma ordem do branch individual) — filtro no topo, contagem
+  // travada embaixo dela. Antes vinha prefixada ANTES da seção (ordem invertida).
+  var _countBar = ctx.countBarHtml || '';
   var _cardPres = (typeof ctx.cardPresence === 'function') ? ctx.cardPresence : null;
 
   // v4.5.51: detecção ROBUSTA de torneio de duplas (verdade ESTRUTURAL).
@@ -245,7 +249,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
   var _headerHtml = _chrome
     ? ('<h3 style="margin-bottom:1.2rem;font-size:1.1rem;color:var(--text-bright);border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
         '👥 Inscritos <span style="font-size:0.8rem;background:rgba(255,255,255,0.1);padding:3px 10px;border-radius:12px;font-weight:600;margin-left:5px;color:var(--text-muted);">' + individualCountParts + '</span>' +
-      '</h3>' + _doublesFilterBar)
+      '</h3>' + _doublesFilterBar + _countBar)
     : '';
   var _catMgrHtml = (_chrome && _hasTournCats && isOrg) ? ('<div id="inline-cat-mgr-' + t.id + '"></div>') : '';
 
@@ -1038,6 +1042,141 @@ window._coHostActionFromLink = async function(act, tId, inviteType) {
     else { if (typeof window._rejectHostInvite === 'function') window._rejectHostInvite(String(tId), inviteType); }
     window.location.hash = '#tournaments/' + tId;
 };
+
+// Card de autopresença do PRÓPRIO participante no detalhe do torneio (dono, jul/2026).
+// Ponto de entrada pré/pós-sorteio: o inscrito comum liga o toggle → _applySelfPresence
+// resolve pelo GPS (verde=no local / azul=confirmado remoto). Autoridade (org/co-org/
+// árbitro) NÃO vê este card — marca todo mundo pela chamada. uid é a chave (dupla: cada
+// membro marca a si mesmo pelo próprio uid).
+window._myPresenceCard = function (t) {
+  try {
+    var AS = window.AppStore; var cu = AS && AS.currentUser;
+    if (!cu || !cu.uid || !t) return '';
+    if (t.status === 'finished' || t._finished) return '';
+    var enrolled = (typeof window._isUserEnrolledInTournament === 'function') &&
+      window._isUserEnrolledInTournament(cu, t);
+    if (!enrolled) return '';
+    // Autoridade marca pela chamada — não duplica com o card do participante.
+    if (typeof window._canManagePresence === 'function' && window._canManagePresence(t, cu)) return '';
+    if (typeof window._idMapHas !== 'function') return '';
+    var _who = { uid: cu.uid, displayName: cu.displayName || '' };
+    var green = window._idMapHas(t, t.checkedIn || {}, _who) && !window._idMapHas(t, t.absent || {}, _who);
+    var blue = !green && window._idMapHas(t, t.checkedInConfirmed || {}, _who);
+    var absent = !green && !blue && window._idMapHas(t, t.absent || {}, _who);
+    var nmEsc = String(cu.displayName || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var uidEsc = String(cu.uid).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var tidEsc = String(t.id).replace(/'/g, "\\'");
+    var stateLabel, stateColor, toggleOn, onBg;
+    if (green) { stateLabel = 'Presente · GPS confirmou você no local'; stateColor = '#4ade80'; toggleOn = true; onBg = '#10b981'; }
+    else if (blue) { stateLabel = 'Confirmado · você avisou que vem'; stateColor = '#60a5fa'; toggleOn = true; onBg = '#3b82f6'; }
+    else if (absent) { stateLabel = 'Marcado como ausente pelo organizador'; stateColor = '#f87171'; toggleOn = false; onBg = '#10b981'; }
+    else { stateLabel = 'Você ainda não marcou presença'; stateColor = '#94a3b8'; toggleOn = false; onBg = '#10b981'; }
+    return '' +
+    '<div style="margin-top:1rem;padding:14px 16px;border-radius:14px;background:rgba(30,41,59,0.55);border:1px solid rgba(148,163,184,0.22);">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
+        '<div style="min-width:0;flex:1;">' +
+          '<div style="font-size:0.9rem;font-weight:800;color:var(--text-bright,#f1f5f9);">📍 Sua presença</div>' +
+          '<div style="font-size:0.76rem;font-weight:700;color:' + stateColor + ';margin-top:3px;">' + stateLabel + '</div>' +
+        '</div>' +
+        '<label class="toggle-switch" style="--toggle-on-bg:' + onBg + ';flex-shrink:0;margin:0;">' +
+          '<input type="checkbox" ' + (toggleOn ? 'checked' : '') + ' onclick="event.stopPropagation(); window._applySelfPresence(\'' + tidEsc + '\',\'' + nmEsc + '\',\'' + uidEsc + '\');">' +
+          '<span class="toggle-slider"></span>' +
+        '</label>' +
+      '</div>' +
+      '<div style="font-size:0.64rem;color:var(--text-muted,#94a3b8);margin-top:9px;line-height:1.55;">' +
+        'Ative pra avisar que você vem. Se o GPS confirmar que você está no local, fica ' +
+        '<b style="color:#4ade80;">verde (presente)</b>; se não, fica <b style="color:#60a5fa;">azul (confirmado)</b>. ' +
+        'Ao chegar no local do torneio, vira presente sozinho.' +
+      '</div>' +
+    '</div>';
+  } catch (e) { return ''; }
+};
+
+// Autopresença do participante a partir da presença de LOCAL (dono, jul/2026).
+// Se o inscrito JÁ confirmou check-in no local do torneio (presença de local, não um
+// plano futuro) e agora está na janela [início−2h, fim], marca PRESENTE (verde) sozinho.
+// Regras: (a) self-only — lê só a própria presença (loadMyActive); (b) NUNCA dispara GPS
+// silencioso — usa a presença que a pessoa já confirmou; (c) respeita o organizador — se
+// marcou ausente, não sobrepõe; (d) só sobe pra verde, nunca remove. Substitui a antiga
+// suposição genérica "2h antes = veio" por evidência real de estar no local.
+window._autoPresenceFromVenue = function (t) {
+  try {
+    var AS = window.AppStore; var cu = AS && AS.currentUser;
+    if (!cu || !cu.uid || !t || !t.id) return;
+    if (t.status === 'finished' || t._finished) return;
+    if (!window.PresenceDB || typeof window.PresenceDB.loadMyActive !== 'function') return;
+    if (typeof window._idMapHas !== 'function' || typeof window._idMapSet !== 'function') return;
+    if (typeof window._isUserEnrolledInTournament !== 'function' ||
+        !window._isUserEnrolledInTournament(cu, t)) return;
+    var tStart = Date.parse(t.startDate);
+    if (isNaN(tStart)) return;
+    var tEnd = Date.parse(t.endDate);
+    if (isNaN(tEnd)) tEnd = tStart + 12 * 3600 * 1000;
+    var now = Date.now();
+    if (now < tStart - 2 * 3600 * 1000 || now > tEnd) return;
+    var _who = { uid: cu.uid, displayName: cu.displayName || '' };
+    if (window._idMapHas(t, t.checkedIn || {}, _who)) return;   // já verde
+    if (window._idMapHas(t, t.absent || {}, _who)) return;      // org marcou ausente → respeita
+    window._autoPresChk = window._autoPresChk || {};
+    if (now - (window._autoPresChk[t.id] || 0) < 90000) return; // throttle: 1 leitura/90s por torneio
+    window._autoPresChk[t.id] = now;
+    var tPid = t.venuePlaceId || '';
+    var tLat = (t.venueLat != null) ? Number(t.venueLat) : NaN;
+    var tLon = (t.venueLon != null) ? Number(t.venueLon) : NaN;
+    var _near = function (aLat, aLon, bLat, bLon) {
+      if (isNaN(aLat) || isNaN(aLon) || isNaN(bLat) || isNaN(bLon)) return false;
+      var toRad = function (d) { return d * Math.PI / 180; };
+      var dLat = toRad(bLat - aLat), dLon = toRad(bLon - aLon);
+      var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) <= 300;
+    };
+    window.PresenceDB.loadMyActive(cu.uid).then(function (list) {
+      if (!Array.isArray(list) || !list.length) return;
+      var hit = list.some(function (d) {
+        if (!d || d.type !== 'checkin') return false;          // check-in real (está lá), não plano
+        if (d.startsAt && d.startsAt > now) return false;      // já iniciou
+        var samePlace = (tPid && d.placeId && String(d.placeId) === String(tPid)) ||
+          _near(Number(d.venueLat), Number(d.venueLon), tLat, tLon);
+        return samePlace;
+      });
+      if (!hit) return;
+      var ft0 = window._findTournamentById(t.id); if (!ft0) return;
+      if (window._idMapHas(ft0, ft0.checkedIn || {}, _who)) return;
+      if (window._idMapHas(ft0, ft0.absent || {}, _who)) return;
+      window.AppStore.mutate(t.id, function (ft) {
+        ft.checkedIn = ft.checkedIn || {}; ft.checkedInConfirmed = ft.checkedInConfirmed || {};
+        window._idMapSet(ft, ft.checkedIn, _who, Date.now());
+        window._idMapDel(ft, ft.checkedInConfirmed, _who);
+      });
+      if (typeof showNotification === 'function') {
+        showNotification('✅ Presente', 'Você está no local do torneio — presença confirmada automaticamente.', 'success');
+      }
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    });
+  } catch (e) {}
+};
+
+// Mede a altura da barra de filtro/busca dos inscritos (#fbwrap-inscritos) e publica em
+// --inscritos-fbar-h. A barra de contagem (Todos/Presentes/Confirmados/Ausentes) usa esse
+// valor no seu `top` sticky pra grudar EXATAMENTE abaixo da barra de filtro (sem vão, sem
+// sobreposição). Sem a barra de filtro na tela, o valor é 0 e a contagem gruda no cabeçalho.
+window._measureInscritosStickyBars = function () {
+  try {
+    var fb = document.getElementById('fbwrap-inscritos');
+    var h = fb ? Math.floor(fb.getBoundingClientRect().height) : 0;
+    document.documentElement.style.setProperty('--inscritos-fbar-h', h + 'px');
+  } catch (e) {}
+};
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function' && !window._inscritosStickyResizeBound) {
+  window._inscritosStickyResizeBound = true;
+  window.addEventListener('resize', function () {
+    if (window._inscritosStickyRT) clearTimeout(window._inscritosStickyRT);
+    window._inscritosStickyRT = setTimeout(function () {
+      if (typeof window._measureInscritosStickyBars === 'function') window._measureInscritosStickyBars();
+    }, 120);
+  });
+}
 
 function renderTournaments(container, tournamentId = null) {
     if (!window.AppStore) return;
@@ -2883,6 +3022,10 @@ function renderTournaments(container, tournamentId = null) {
                   Ferramentas do Organizador. */ ''}
             ${(tournamentId && typeof window._renderTournamentProgress === 'function') ? window._renderTournamentProgress(t) : ''}
 
+            ${/* Autopresença do participante (jul/2026): card com toggle verde/azul,
+                  só pra inscrito comum (autoridade marca pela chamada). */ ''}
+            ${(tournamentId && typeof window._myPresenceCard === 'function') ? window._myPresenceCard(t) : ''}
+
             ${/* v2.1.13: ações gerais (Regras/Inscritos/Imprimir/CSV/Modo TV + pódio
                   quando encerrado) movidas pra DEPOIS das Ferramentas do Organizador,
                   ficando no pé do card. */ ''}
@@ -3702,8 +3845,12 @@ function renderTournaments(container, tournamentId = null) {
             const pctPresent = totalIndividuals > 0 ? Math.round(checkedCount / totalIndividuals * 100) : 0;
             const _ciPill = (key, label, n, onc, offc, active) =>
               `<button onclick="window._setCheckInFilter('${t.id}', '${key}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:20px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid ${active ? onc + '80' : 'rgba(255,255,255,0.1)'};background:${active ? onc + '33' : 'rgba(255,255,255,0.05)'};color:${active ? offc : 'var(--text-muted)'};">${key === 'all' ? '' : `<span style="width:8px;height:8px;border-radius:50%;background:${onc};flex-shrink:0;"></span>`}${label} (${n})</button>`;
+            // v1.3.23: barra de contagem STICKY logo abaixo da barra de filtro/busca. Trava
+            // no cabeçalho (topbar+dropdown+back-header + altura da barra de filtro, medida em
+            // --inscritos-fbar-h por window._measureInscritosStickyBars). z-index 29 fica ABAIXO
+            // da barra de filtro (30); o -2px sobrepõe o seam subpixel (mesma cor de fundo).
             const checkInControls = _rollCallBarOn ? `
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;flex-wrap:wrap;">
+                <div style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--inscritos-fbar-h,0px) - 2px);z-index:29;background:var(--bg-darker,#111114);padding:8px 10px;margin-bottom:1rem;box-sizing:border-box;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     ${_ciPill('all', 'Todos', totalIndividuals, '#6366f1', '#a5b4fc', currentFilter === 'all')}
                     ${_ciPill('present', 'Presentes', checkedCount, '#10b981', '#4ade80', currentFilter === 'present')}
                     ${_ciPill('confirmed', 'Confirmados', confirmedCount, '#3b82f6', '#60a5fa', currentFilter === 'confirmed')}
@@ -3762,14 +3909,15 @@ function renderTournaments(container, tournamentId = null) {
                   orgUids: _orgUidsShared, orgEmails: _orgEmailsShared,
                   peopleCount: individualCountParts, hasTournCats: _hasTournCats,
                   chrome: true,
+                  countBarHtml: checkInControls,
                   cardPresence: _rcPresCtx.cardPresence,
                   memberPresence: _rcPresCtx.memberPresence
                 })
               : null;
             if (_dsec && _dsec.isDoubles) {
-              // v1.3.16: barra de contagem (presentes/ausentes · %) que trava abaixo do
-              // cabeçalho também na CHAMADA de duplas — antes só no branch individual.
-              participantsHtml = checkInControls + _dsec.html;
+              // v1.3.23: a barra de contagem já entra DENTRO da seção (logo abaixo da barra de
+              // filtro/busca, via countBarHtml) — não prefixa mais antes da seção.
+              participantsHtml = _dsec.html;
             } else {
               // Modo normal (individual ou duplas pós-sorteio)
               // v3.1.47: barra de inscrito CANÔNICA (preset window._inscritosBar — o MESMO
@@ -3784,10 +3932,11 @@ function renderTournaments(container, tournamentId = null) {
                    <h3 style="margin-bottom: 1.5rem; font-size: 1.3rem; color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; flex-wrap:wrap;">
                       👥 Inscritos Confirmados <span style="font-size: 0.8rem; background: rgba(255,255,255,0.1); padding: 3px 10px; border-radius: 12px; font-weight: 600; margin-left: 5px; color: var(--text-muted);">${individualCountParts}</span>
                    </h3>
-                   ${checkInControls}
                    ${isOrg && drawDone ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.6;margin-bottom:8px;font-style:italic;">💡 Segure e arraste um nome sobre outro para mesclar participantes duplicados</div>' : ''}
                    ${(window.AppStore.isCreator(t) && drawDone) ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.22);border-radius:8px;padding:6px 10px;">👑 <b>Compartilhar a organização:</b> arraste um inscrito até a <b>estrela do organizador</b> (no card da ORGANIZAÇÃO) — ela brilha quando você começa a arrastar. No celular, <b>toque na estrela do organizador</b> e escolha quem promover. Funciona durante o torneio também.</div>' : ''}
+                   ${/* v1.3.23: barra de filtro/busca no TOPO, barra de contagem STICKY logo abaixo. */ ''}
                    ${_inscritosFilterBarHtml}
+                   ${checkInControls}
                    <div data-merge-container="${t.id}" class="sp-dnd-host" style="${gridStyle}">
                       ${cardsStr}
                    </div>
@@ -3904,6 +4053,13 @@ function renderTournaments(container, tournamentId = null) {
   `;
     container.innerHTML = html;
 
+    // v1.3.23: mede a barra de filtro/busca pra travar a barra de contagem logo abaixo dela.
+    if (typeof window._measureInscritosStickyBars === 'function') {
+        window._measureInscritosStickyBars();
+        // 2ª medida no próximo frame — layout/fontes podem mudar a altura após o 1º paint.
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(window._measureInscritosStickyBars);
+    }
+
     // v3.0.x: aplica a barra de filtro/busca CANÔNICA dos inscritos (sort/gênero/
     // habilidade/busca) após o render — idêntico ao #participants. Ordena a grade
     // pela ordem padrão (name-asc) e respeita filtros ativos persistidos.
@@ -3969,6 +4125,12 @@ function renderTournaments(container, tournamentId = null) {
         if (_nt && typeof window._syncTournamentPresencePlan === 'function') {
             var _cuSync = window.AppStore && window.AppStore.currentUser;
             if (_cuSync && _cuSync.uid) { try { window._syncTournamentPresencePlan(_nt, _cuSync); } catch (_sp) {} }
+        }
+        // Autopresença (jul/2026): se o participante já confirmou check-in NO LOCAL do
+        // torneio (via presença de local) dentro de [início−2h, fim], vira PRESENTE (verde)
+        // sozinho. Lê a presença já confirmada — NÃO dispara GPS silencioso.
+        if (_nt && typeof window._autoPresenceFromVenue === 'function') {
+            try { window._autoPresenceFromVenue(_nt); } catch (_ap) {}
         }
     }
 

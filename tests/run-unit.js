@@ -84,6 +84,12 @@ const SUITES = [
   'tests/detail-doubles-rollcall.test.js',
   // Presença verde (presente) vs azul (confirmado remoto, NÃO presente); verde vence azul.
   'tests/presence-green-blue.test.js',
+  // Card de autopresença do participante no detalhe: inscrito comum vê o toggle (→ _applySelfPresence);
+  // autoridade não (marca pela chamada). No código velho o participante não tinha entry point pré-sorteio.
+  'tests/my-presence-card.test.js',
+  // Autopresença via presença de LOCAL: check-in confirmado no local do torneio, na janela
+  // [início−2h, fim] → vira PRESENTE (verde) sozinho. Sem GPS silencioso; respeita "ausente" do org.
+  'tests/auto-presence-venue.test.js',
   // Convite pro grupo de WhatsApp (org notifica inscritos c/ o link): type wa_group fundamental
   // + CTA _notifCta abre o link do grupo. Sem o caso, cairia no "Ver torneio" genérico.
   'tests/wa-group-notify.test.js',
