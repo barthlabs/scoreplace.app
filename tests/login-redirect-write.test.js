@@ -23,6 +23,8 @@ console.log('──── login-redirect-write ────');
 ok(src.indexOf('async function _recordLoginRedirects') !== -1, 'helper _recordLoginRedirects existe');
 ok(/_mergeAccountsKeepOlder[\s\S]*?_recordLoginRedirects\(/.test(src), 'motor _mergeAccountsKeepOlder chama _recordLoginRedirects');
 ok(/mergePhoneAccount[\s\S]*?_recordLoginRedirects\(/.test(src), 'mergePhoneAccount chama _recordLoginRedirects');
+// _executeMerge = denominador comum (cobre o SCAN automático: _scanAndMergeByField / autoMergeOnProfileUpdate).
+ok(/async function _executeMerge[\s\S]*?_recordLoginRedirects\(/.test(src), '_executeMerge chama _recordLoginRedirects (cobre merges de scan/auto)');
 ok(src.indexOf('collection("loginRedirects").doc(') !== -1 && /\.set\(\s*\{ ownerUid/.test(src), 'grava loginRedirects/{k} → { ownerUid }');
 
 // (b) FUNCIONAL: extrai os 2 helpers do source e roda a escrita contra um db falso.

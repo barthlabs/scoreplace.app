@@ -295,6 +295,15 @@ async function _executeMerge(db, keepDoc, dropDoc) {
     { merge: true }
   );
 
+  // v1.3.18: loginRedirects — cobre TODO caminho de fusão que passa por aqui (inclui o SCAN
+  // automático: _scanAndMergeByField / autoMergeOnProfileUpdate), não só os merges interativos.
+  // Credenciais REAIS do drop vêm do Auth (e-mail/telefone E.164 = o que a resolveLoginRedirect
+  // lê do token); se o Auth já sumiu, cai nos campos do perfil. Idempotente (item 9).
+  let _drEmail = null, _drPhone = null;
+  try { const _da = await admin.auth().getUser(dropUid); _drEmail = _da.email || null; _drPhone = _da.phoneNumber || null; }
+  catch (e) { _drEmail = dropData.email || null; _drPhone = dropData.phone || null; }
+  await _recordLoginRedirects(db, keepUid, _drEmail, _drPhone);
+
   console.log(`[_executeMerge] Done: tourFixed=${tourFixed} casualFixed=${casualFixed}`);
   return { tourFixed, casualFixed };
 }
