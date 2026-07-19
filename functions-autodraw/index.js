@@ -13,6 +13,7 @@ const { getMessaging } = require('firebase-admin/messaging');
 let generateLigaRound = null;
 let drawInitial = null;   // v1.2.25: motor do SORTEIO INICIAL (Etapa 3 · fase A) — usado pela drawRound
 let integrateLateFn = null; // v1.2.57: integração de tardios no servidor — usado pela integrateLateEntries
+let closeRoundFn = null;    // fecho de rodada no servidor (Suíço-pow2 Opção B) — usado pela closeRound
 let canRecompile = null;
 let hasDrawnBracket = null;  // régua de 'já tem chave' — a MESMA do cliente (matches/rounds/groups)
 let drawWindow = null; // window do shim Node — expõe _calcNextDrawDate (prazo p/ lançar resultado)
@@ -21,6 +22,7 @@ try {
   generateLigaRound = _dc.generateLigaRound;
   drawInitial = _dc.drawInitial;
   integrateLateFn = _dc.integrateLateEntries;
+  closeRoundFn = _dc.closeRoundCore;
   canRecompile = _dc.canRecompile;
   hasDrawnBracket = _dc.hasDrawnBracket;
   drawWindow = _dc._window;
@@ -169,6 +171,23 @@ function _isTournamentAdmin(t, uid, email) {
   // (4) recovery — adminEmails vazio/ausente → organizerEmail (bug v1.6.66 apagava o campo).
   if (mail && !hasAdminEmails && typeof t.organizerEmail === 'string'
       && t.organizerEmail.toLowerCase() === mail) return true;
+  return false;
+}
+
+// Espelha isTournamentParticipant das firestore.rules: memberUids primeiro (uid é a identidade
+// primária), memberEmails só como FALLBACK quando memberUids está vazio (docs legados). Usado
+// só pela closeRound — o fecho de rodada é disparado por quem salva o ÚLTIMO placar, que num
+// resultEntry='players' é um PARTICIPANTE, não só admin. Seguro pq a CF computa o passo
+// DETERMINÍSTICO do doc fresco (o caller só dispara o passo canônico). Ver project_uid_primary_identity.
+function _isTournamentParticipant(t, uid, email) {
+  if (!t || !uid) return false;
+  if (Array.isArray(t.memberUids) && t.memberUids.length > 0) {
+    return t.memberUids.indexOf(uid) !== -1;
+  }
+  const mail = String(email || '').toLowerCase();
+  if (mail && Array.isArray(t.memberEmails)) {
+    return t.memberEmails.some(function (e) { return String(e || '').toLowerCase() === mail; });
+  }
   return false;
 }
 
@@ -413,6 +432,70 @@ exports.integrateLateEntries = onCall(async (request) => {
 
   console.log(`integrateLateEntries v${CF_VERSION}: ${tId} por ${uid} — changed=${out.changed}` +
     (out.changed ? ` extra=${out.extra||0} duplas=${out.duplas||0}(tier${out.duplasTier||0}) dissolved=${out.dissolved||0} monarch=${out.monarch||0}` : ''));
+  return out;
+});
+
+// ─── FECHO de rodada no servidor (Suíço-pow2, Opção B) ──────────────────────
+// O cliente DISPARA ao salvar o último placar da rodada; a mutação (gera a próxima rodada
+// Suíço / marca a classificatória completa) + a persistência rodam AQUI, com as MESMAS funções
+// vendoradas que o cliente rodava. Espelha drawRound/integrateLateEntries (authz + txn sobre o
+// doc FRESCO + closeRoundCore + _applyWriteBoundary + tx.set clobber-free). Guards de
+// concorrência (stale-round/already-closed/round-incomplete) → NÃO grava, devolve o motivo
+// (outro fechou primeiro / echo). AUTHZ = PARTICIPANTE (o fecho é disparado por quem salva o
+// placar, num resultEntry='players' pode ser participante) — difere do drawRound (admin-only).
+// Ver project_draw_canonization_cf_phase23_deferred / project_concurrency_safe_saves.
+exports.closeRound = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const email = request.auth && request.auth.token && request.auth.token.email;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!tId) throw new HttpsError('invalid-argument', 'tournamentId é obrigatório.');
+  const roundIdx = parseInt((request.data && request.data.roundIdx), 10);
+  if (isNaN(roundIdx) || roundIdx < 0) throw new HttpsError('invalid-argument', 'roundIdx é obrigatório.');
+  const resultCtx = (request.data && request.data.resultCtx) || null;
+
+  if (typeof closeRoundFn !== 'function' || !drawWindow) {
+    throw _drawFail('internal', 'Motor de fecho de rodada indisponível no servidor.', { tId });
+  }
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentParticipant(pre.data(), uid, email) && !_isTournamentAdmin(pre.data(), uid, email)) {
+    throw _drawFail('permission-denied', 'Só um participante ou o organizador fecha a rodada.', { tId, uid, email: email || '(sem email)' });
+  }
+  await _preloadDrawNames(pre.data()); // nome vivo por uid (o motor gera a próxima rodada e lê nomes)
+
+  let out;
+  try {
+    out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const t = snap.data(); t.id = tId;
+      // Re-checa authz sobre o doc FRESCO (acesso pode ter mudado entre o read de fora e a txn).
+      if (!_isTournamentParticipant(t, uid, email) && !_isTournamentAdmin(t, uid, email)) {
+        throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      }
+      try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+
+      const res = closeRoundFn(t, roundIdx, resultCtx);
+      if (!res || !res.ok) {
+        // stale-round/already-closed/round-incomplete = idempotência/concorrência: NÃO grava
+        // (outro fechou primeiro, ou a rodada não fechou de fato). O cliente reconcilia pelo listener.
+        return { ok: false, reason: (res && res.reason) || 'close-failed' };
+      }
+      const b = _applyWriteBoundary(t);
+      tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+      return { ok: true, branch: res.branch, tournament: b.clean };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error(`closeRound EXPLODIU no torneio ${tId} r${roundIdx} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha no fecho de rodada: ' + String((e && e.message) || e).slice(0, 300));
+  }
+
+  console.log(`closeRound v${CF_VERSION}: ${tId} r${roundIdx} por ${uid} — ` +
+    (out.ok ? 'branch=' + out.branch : 'noop(' + out.reason + ')'));
   return out;
 });
 

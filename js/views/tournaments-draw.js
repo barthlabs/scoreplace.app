@@ -426,6 +426,59 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
 // v2.1.22: exposto pra reuso (jogos extras de tardios em torneios "expand").
 window._formDoublesTeams = _formDoublesTeams;
 
+// ── Suíço como RESOLUÇÃO de pow2 (Opção B — 2 fases, canonizado na CF) ───────────────────
+// Monta a classificatória Suíço (fase 0, K rodadas) + a eliminatória original (fase 1,
+// puxando o top-lo = maior pow2 ≤ N da classificação) e GERA a 1ª rodada Suíço. PURA: muta
+// t, SEM DOM/toast/commit — o cliente (generateDrawFunction) e o servidor
+// (draw-core.drawInitial) rodam ESTA função, nunca duas versões (anti-drift; vendorada).
+// Pressupõe t.participants já com as entradas finais (duplas já formadas por _formDoublesTeams;
+// entram COMO ESTÃO — o Suíço não re-pareia). Ver project_draw_canonization_cf_phase23_deferred.
+window._buildSwissClassifDraw = function (t) {
+    var participants = Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants || {});
+    var _swissNames = participants.map(function (p) {
+        return (typeof window._entryDisplayName === 'function')
+            ? window._entryDisplayName(p)
+            : (typeof p === 'string' ? p : (p.displayName || p.name || ''));
+    });
+    for (var _si = _swissNames.length - 1; _si > 0; _si--) {
+        var _sj = Math.floor(Math.random() * (_si + 1));
+        var _stmp = _swissNames[_si]; _swissNames[_si] = _swissNames[_sj]; _swissNames[_sj] = _stmp;
+    }
+    var _swCount = _swissNames.length;
+    var _swLo = 1;
+    while (_swLo * 2 <= _swCount) _swLo *= 2;          // pow2 inferior = nº de classificados
+    var _swRounds = (t.swissRounds && t.swissRounds >= 1) ? t.swissRounds : Math.max(2, Math.ceil(Math.log2(_swCount)));
+    var _origFormat = t.format || 'Eliminatórias Simples';
+    t.phases = [
+        { name: (window._t ? window._t('predraw.optSwissTitle') : 'Classificatória'), formatCode: 'liga', format: 'Suíço', rounds: _swRounds, source: { type: 'enrollment' } },
+        { name: _origFormat, format: _origFormat, source: { type: 'previous_phase', mapping: [{ dest: 'main', rankFrom: 1, rankTo: _swLo }] }, fixedPairs: false }
+    ];
+    t.currentPhaseIndex = 0;
+    // fase 0 Suíço sinalizada por currentStage/classifyFormat:'swiss' (render da classificação +
+    // PAREAMENTO INDIVIDUAL no _generateNextRound). t.format FICA o original (a eliminatória) —
+    // virar 'Liga' dispararia o modo Liga=duplas-rotativas (Rei/Rainha) em vez do Suíço.
+    t.classifyFormat = 'swiss';
+    t.currentStage = 'swiss';
+    // Zera o gatilho da transição LEGADA (exigia p2Resolution==='swiss' && currentStage==='swiss').
+    t.p2Resolution = null;
+    t.p2TargetCount = null;
+    t.swissRounds = _swRounds;
+    t.standings = _swissNames.map(function (name) {
+        return { name: name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0 };
+    });
+    t.checkedIn = {};                  // v4.1.30: o sorteio LIMPA a presença (auto-consistente
+    t.absent = {};                     // p/ ambos os callers — o cliente já limpa antes, no-op)
+    t.rounds = [];
+    t.status = 'active';
+    window._generateNextRound(t);      // 1ª rodada Suíço (storage nativo t.rounds)
+    var _r1 = (t.rounds[0] && t.rounds[0].matches) || [];
+    return {
+        swissRounds: _swRounds, lo: _swLo, origFormat: _origFormat,
+        roundMatches: _r1.filter(function (m) { return !m.isSitOut; }).length,
+        sitOuts: _r1.filter(function (m) { return m.isSitOut; }).length
+    };
+};
+
 // v1.2.48: PREVIEW dos pares que o sorteio EQUILIBRADO formaria a partir dos avulsos,
 // SEM formar nada — mesma lógica de _formDoublesTeams (mistas primeiro; depois mesmo-gênero
 // da sobra). Alimenta a opção "Flexibilizar equilíbrio" no painel do resto: em vez de
@@ -1562,6 +1615,35 @@ window._callDrawRound = function (payload) {
     });
 };
 
+// Espelha _callDrawRound (mesmo transporte callable via fetch direto) pro FECHO de rodada Suíço
+// na CF `closeRound`. Ver project_draw_canonization_cf_phase23_deferred.
+window._callCloseRound = function (payload) {
+    var fb = window.firebase;
+    var user = fb && fb.auth && fb.auth().currentUser;
+    if (!user) return Promise.reject(Object.assign(new Error('Entre na sua conta.'), { code: 'functions/unauthenticated' }));
+    var pid = '';
+    try { pid = fb.app().options.projectId; } catch (e) {}
+    if (!pid) return Promise.reject(Object.assign(new Error('App não inicializado.'), { code: 'functions/internal' }));
+    var url = 'https://us-central1-' + pid + '.cloudfunctions.net/closeRound';
+    return user.getIdToken().then(function (tok) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+            body: JSON.stringify({ data: payload })
+        });
+    }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+            if (j && j.error) {
+                var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
+                throw Object.assign(new Error(j.error.message || 'Falha no fecho de rodada'),
+                    { code: 'functions/' + (st || 'internal') });
+            }
+            if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { code: 'functions/internal' });
+            return { data: (j && j.result) || {} };
+        });
+    });
+};
+
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
@@ -1778,9 +1860,11 @@ window.generateDrawFunction = function (tId) {
     // (contrato project_unify_initial_phase_canonical — fim do caminho não-canônico da fase 0.)
     // CANONIZAÇÃO (Fase A): play-in agora roda pelo MOTOR (`_buildPhase0Cfg` passa
     // bracketResolution='playin' → generatePhase → genTierBracket resolution='playin',
-    // com isPhaseRepR1 + _resolveRepFills no _advanceWinner). Só 'swiss' segue no ramo
-    // próprio (round-gen incremental = vendor/cron, canonizado por último).
-    if (t.p2Resolution !== 'swiss') {
+    // com isPhaseRepR1 + _resolveRepFills no _advanceWinner).
+    // v1.3.x: o Suíço-pow2 TAMBÉM vai pela CF (project_draw_canonization_cf_phase23_deferred) —
+    // o guard `!== 'swiss'` e o ramo local saíram; o bloco abaixo roda pra TODO formato. A CF
+    // (draw-core → _buildSwissClassifDraw, vendorado) monta a classificatória Suíço + gera a 1ª rodada.
+    {
         // ── MOTOR NO SERVIDOR (Etapa 3 · fase B) ────────────────────────────────────────
         // O app PEDE, a CF `drawRound` SORTEIA e GRAVA. Assim todo mundo sorteia com a MESMA
         // versão do motor — app/binário de loja desatualizado não sorteia mais diferente
@@ -1850,116 +1934,10 @@ window.generateDrawFunction = function (tId) {
         });
         return;
     }
-    // ── Rei/Rainha e Fase de Grupos NÃO têm branch por formato aqui: são desenhados pelo
-    // MOTOR CANÔNICO acima (generatePhase). Rei/Rainha é MODO de sorteio (drawMode), não
-    // formato; Grupos+Elim é PILHA DE FASES (grupos → eliminatória), não um formato. Os
-    // branches inline por t.format foram removidos (contrato project_unify_initial_phase_canonical).
-    // Abaixo segue só o caminho de p2Resolution: Suíço-classificatório e Play-in (eliminatória).
-
-    let participants = Array.isArray(t.participants) ? [...t.participants] : Object.values(t.participants || {});
-
-    // --- ETAPA 1: Formação de Times (quando teamSize > 1) ---
-    let teamSize = parseInt(t.teamSize) || 1;
-    // Fallback: se modo de inscrição é time/misto mas teamSize ficou 1, forçar mínimo 2
-    const enrMode = t.enrollmentMode || t.enrollment || 'individual';
-    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) {
-        teamSize = 2;
-    }
-    if (teamSize > 1) {
-        // v1.9.85: times como OBJETOS preservando uid/email (helper compartilhado).
-        if (!t.teamOrigins) t.teamOrigins = {};
-        const _formed = _formDoublesTeams(participants, teamSize, t.teamOrigins, t._drawBalanceMode);
-        participants = _formed.participants;
-        t.participants = participants;
-        if (_formed.newTeamsCount > 0) {
-            window.AppStore.logAction(tId, `Sorteio de times: ${_formed.newTeamsCount} time(s) de ${teamSize} formado(s) ${t._drawBalanceMode === 'equilibrado' ? 'em modo equilibrado' : 'aleatoriamente'}`);
-        }
-        // v2.1.20: aviso melhor-esforço quando o equilibrado não conseguiu evitar
-        // todas as duplas 100% masculinas (faltaram mulheres/não-homens).
-        if (t._drawBalanceMode === 'equilibrado' && _formed.allMaleCount > 0 && typeof showNotification !== 'undefined') {
-            showNotification('⚖️ Sorteio equilibrado', _formed.allMaleCount + ' dupla(s) ficaram 100% masculinas — não havia mulheres suficientes pra cobrir todas.', 'warning');
-        }
-        if (_formed.leftoverCount > 0) {
-            window.AppStore.logAction(tId, `${_formed.leftoverCount} jogador(es) sem time completo (sobra)`);
-        }
-    }
-
-    // v2.2.46: modo misto com "separar por origem" → duplas formadas e sorteadas
-    // viram categorias distintas (brackets separados). Aplica-se a eliminatória
-    // (simples/dupla) e suíço; grupos/liga seguem regra antiga (sem separação).
-    if (t.mixedPairingSeparated && enrMode === 'misto' && teamSize === 2 && typeof window._applyMixedOriginCategories === 'function') {
-        window._applyMixedOriginCategories(t, participants);
-    }
-
-    // 1. Shuffling agora é feito por categoria dentro do loop de geração de matches
-
-    // 2. Suíço para pow2 = CONSTRUTOR DE FASES CANÔNICO (project_gold_silver_format).
-    // Escolher "Suíço" como resolução NÃO usa mais um estágio swiss ad-hoc (o antigo
-    // currentStage:'swiss'/p2Resolution:'swiss' + transição swiss→elim fora do motor —
-    // ELIMINADO). Em vez disso, monta 2 FASES: fase 0 = Suíço classificatória, fase 1 =
-    // a eliminatória original (puxando o top-N=pow2 inferior da classificação). O motor
-    // multifase resolve tudo (progresso, conclusão, avanço via "Avançar", geração das
-    // quartas). A geração da rodada Suíço (_generateNextRound) é a MESMA — o pareamento
-    // Suíço segue por classifyFormat:'swiss' (config do Suíço, NÃO é legado). O que some é
-    // só o gatilho da transição legada (isSwissClassification = p2Resolution && currentStage).
-    if (t.p2Resolution === 'swiss') {
-        var _swissNames = participants.map(function(p) {
-            return (typeof window._entryDisplayName === 'function')
-                ? window._entryDisplayName(p)
-                : (typeof p === 'string' ? p : (p.displayName || p.name || ''));
-        });
-        for (var _si = _swissNames.length - 1; _si > 0; _si--) {
-            var _sj = Math.floor(Math.random() * (_si + 1));
-            var _stmp = _swissNames[_si]; _swissNames[_si] = _swissNames[_sj]; _swissNames[_sj] = _stmp;
-        }
-        var _swCount = _swissNames.length;
-        var _swLo = 1;
-        while (_swLo * 2 <= _swCount) _swLo *= 2;          // pow2 inferior = nº de classificados
-        var _swRounds = (t.swissRounds && t.swissRounds >= 1) ? t.swissRounds : Math.max(2, Math.ceil(Math.log2(_swCount)));
-
-        // A eliminatória original (t.format) vira a FASE 1. Duplas pré-formadas / individuais
-        // entram COMO ESTÃO (fixedPairs:false — não re-parear; o Suíço já jogou com essas
-        // entradas). O nome/scoring/W.O./resultEntry da elim são herdados via os resolvers
-        // _effective* (fallback top-level) — o cfg da fase 1 fica mínimo.
-        var _origFormat = t.format || 'Eliminatórias Simples';
-        t.phases = [
-            { name: (window._t ? window._t('predraw.optSwissTitle') : 'Classificatória'), formatCode: 'liga', format: 'Suíço', rounds: _swRounds, source: { type: 'enrollment' } },
-            { name: _origFormat, format: _origFormat, source: { type: 'previous_phase', mapping: [{ dest: 'main', rankFrom: 1, rankTo: _swLo }] }, fixedPairs: false }
-        ];
-        t.currentPhaseIndex = 0;
-        // t.format FICA como o formato original (a eliminatória) — a fase 0 Suíço é
-        // sinalizada por currentStage/classifyFormat:'swiss' (render da classificação +
-        // PAREAMENTO INDIVIDUAL no _generateNextRound). NÃO virar 'Liga': `_isLigaFormat`
-        // true dispararia o modo Liga=duplas-rotativas (Rei/Rainha) em vez do Suíço.
-        t.classifyFormat = 'swiss';   // pareamento Suíço individual + render da classificação
-        t.currentStage = 'swiss';     // render da classificação Suíço na fase 0
-        // Mata SÓ o gatilho da transição LEGADA (swiss→elim fora do motor): ele exige
-        // p2Resolution === 'swiss' && currentStage === 'swiss'. Zerando p2Resolution, a
-        // transição legada nunca dispara — quem avança é o motor multifase (Avançar).
-        t.p2Resolution = null;
-        t.p2TargetCount = null;
-        t.swissRounds = _swRounds;
-
-        t.standings = _swissNames.map(function(name) {
-            return { name: name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0 };
-        });
-        t.rounds = [];
-        t.status = 'active';
-        _generateNextRound(t);        // 1ª rodada Suíço (storage nativo t.rounds)
-
-        var _swRoundMatches = (t.rounds[0] && t.rounds[0].matches || []).filter(function(m) { return !m.isSitOut; }).length;
-        if (document.getElementById('final-review-panel')) document.getElementById('final-review-panel').remove(); document.body.style.overflow = '';
-        if (window._sound) window._sound('sino');
-        showNotification(_t('tdraw.swissStarted'), _t('tdraw.swissStartedMsg', { rounds: _swRounds, n: _swRoundMatches, lo: _swLo, format: _origFormat }), 'success');
-        if (typeof window._notifyDrawPersonalized === 'function') {
-            window._notifyDrawPersonalized(t, tId);
-        }
-        _commitInitialDraw(tId, t, _preDraw).then(function() {
-            window.location.hash = '#bracket/' + tId;
-        });
-        return;
-    }
-
+    // Suíço-pow2: removido o ramo local — a resolução 'swiss' flui pela CF drawRound (bloco
+    // acima), igual a todo formato. O motor (draw-core → _buildSwissClassifDraw, vendorado)
+    // monta a classificatória Suíço + gera a 1ª rodada; o toast do Suíço vem via a resposta
+    // da CF (d.native/matchCount). Ver project_draw_canonization_cf_phase23_deferred.
 };
 
 // Build nextMatchId links for single elim bracket

@@ -65,6 +65,7 @@ var ROOT = path.join(__dirname, '..', 'js');
 function loadAbs(full) {
   vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: full });
   sandbox._callDrawRound = h.drawRoundStub; // ver headless: o arquivo real sobrescreveria o stub
+  sandbox._callCloseRound = h.closeRoundStub; // idem pro fecho de rodada Suíço (CF closeRound)
 }
 
 // i18n REAL — pra os nomes de rodada saírem em pt-BR ("Semifinais"/"Final"/"Quartas de Final")

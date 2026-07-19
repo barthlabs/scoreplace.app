@@ -142,6 +142,9 @@ require('./vendor/tournaments-draw-prep.js');
 // _applyDrawDecisions + os núcleos PUROS extraídos dos handlers de painel. É o que permite
 // o servidor APLICAR a decisão do organizador ao elenco com a MESMA função do cliente.
 require('./vendor/draw-decisions.js');
+// _applyResultToTournament (fecho de rodada no servidor re-aplica o placar DEFERIDO que fechou
+// a rodada). DOM só em funções que o servidor não chama (live-scoring/TV) — no load é limpo.
+require('./vendor/bracket-ui.js');
 
 // Sanity: o dispatcher precisa ter sido exposto (v2.3.91+ do cliente).
 if (typeof g.window._generateNextRound !== 'function') {
@@ -369,9 +372,8 @@ function drawInitial(t, opts) {
     _decisions = win._applyDrawDecisions(t, opts.decisions).applied;
   }
 
-  // Suíço-classificatório tem ramo próprio no cliente (round-gen incremental) — ainda
-  // não canonizado. Não fingir que sabe: devolve e o cliente sorteia.
-  if (t.p2Resolution === 'swiss') return { ok: false, reason: 'swiss-not-canonical' };
+  // Suíço-pow2 (Opção B): NÃO recusa mais — é tratado ABAIXO, depois da formação de duplas
+  // (as duplas entram COMO ESTÃO no Suíço). Ver project_draw_canonization_cf_phase23_deferred.
 
   const _E0 = win._phasesEngine;
   const _cfg0 = win._buildPhase0Cfg(t);
@@ -397,6 +399,16 @@ function drawInitial(t, opts) {
     if (t.mixedPairingSeparated && _enr0 === 'misto' && _ts0 === 2 && typeof win._applyMixedOriginCategories === 'function') {
       win._applyMixedOriginCategories(t, t.participants);
     }
+  }
+
+  // ── Suíço como RESOLUÇÃO de pow2 (Opção B, canonizado): monta a classificatória Suíço
+  // (fase 0) + a eliminatória (fase 1) e gera a 1ª rodada, com a MESMA função vendorada que
+  // o cliente roda. DEPOIS da formação de duplas (entram COMO ESTÃO), ANTES do reset/
+  // generatePhase da fase 0 (caminho NÃO-Suíço). Ver project_draw_canonization_cf_phase23_deferred.
+  if (t.p2Resolution === 'swiss') {
+    if (typeof win._buildSwissClassifDraw !== 'function') return { ok: false, reason: 'swiss-builder-missing' };
+    const _sw = win._buildSwissClassifDraw(t);
+    return { ok: true, format: t.format, native: true, matchCount: _sw.roundMatches, sitOuts: _sw.sitOuts, allMaleCount: _allMale };
   }
 
   // Reset do storage stale da fase 0 (generatePhase/storePhase reescrevem).
@@ -484,4 +496,37 @@ function integrateLateEntries(t, opts) {
   return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill };
 }
 
-module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, _window: g.window };
+// ── FECHO de rodada no servidor (Opção B do Suíço-pow2) ─────────────────────────────
+// Roda o MESMO fecho que _doCloseRound faz no cliente, mas PURO: re-aplica o placar DEFERIDO
+// que fechou a rodada (resultCtx — não persistido no cliente pra evitar o clobber-race) e fecha
+// a rodada via a mutação canônica vendorada _applyRoundCloseToTournament (gera a próxima rodada
+// Suíço, marca 'phaseComplete' quando a classificatória acaba, ou 'transition'/'pureSwissFinish'/
+// 'ligaScheduled'). NÃO faz o commit — quem chama (a CF closeRound) persiste com o boundary.
+// Guards de concorrência/idempotência espelham _doCloseRound (só a rodada mais recente e não
+// fechada). Ver project_draw_canonization_cf_phase23_deferred / project_concurrency_safe_saves.
+function closeRoundCore(t, roundIdx, resultCtx) {
+  const win = g.window;
+  if (!t) return { ok: false, reason: 'no-tournament' };
+  const rounds = Array.isArray(t.rounds) ? t.rounds : [];
+  const round = rounds[roundIdx];
+  if (!round) return { ok: false, reason: 'no-round' };
+  // Re-aplica o placar DEFERIDO do último jogo (o que disparou o auto-close) ANTES de fechar —
+  // senão o fresco não tem o vencedor e a rodada parece incompleta.
+  if (resultCtx && resultCtx.matchId && typeof win._applyResultToTournament === 'function') {
+    win._applyResultToTournament(t, resultCtx.matchId, resultCtx.payload || {});
+  }
+  // Só fecha a rodada MAIS RECENTE e ainda não fechada — uma chamada stale (echo/retry/corrida)
+  // não avança a geração nem transiciona (mesmo guard de _doCloseRound).
+  if (roundIdx !== rounds.length - 1) return { ok: false, reason: 'stale-round' };
+  if (round.status === 'complete') return { ok: false, reason: 'already-closed' };
+  const unfinished = (round.matches || []).filter(function (m) { return !m.winner && !m.isBye && !m.isSitOut; });
+  if (unfinished.length > 0) return { ok: false, reason: 'round-incomplete', unfinished: unfinished.length };
+  // Decide + executa (a mutação PURA canônica, vendorada e já testada em apply-round-close).
+  const branch = win._applyRoundCloseToTournament(t, roundIdx);
+  if (branch === 'transition' && typeof win._applySwissEliminationTransition === 'function') {
+    win._applySwissEliminationTransition(t, roundIdx);
+  }
+  return { ok: true, branch: branch };
+}
+
+module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, closeRoundCore, _window: g.window };

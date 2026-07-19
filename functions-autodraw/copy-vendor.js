@@ -26,6 +26,7 @@ const FILES = [
   'format2.js',                // FORMAT2.normalize/compileToPhases — CONFIGURADOR canônico (fmt2 → phases)
   'bracket-model.js',          // _appendCanonicalColumn
   'bracket-logic.js',          // _computeStandings, _generateNextRound, geradores Rei/Rainha + padrão + round-robin
+  'bracket-ui.js',             // _applyResultToTournament (fecho de rodada re-aplica o placar deferido) — DOM só em funções que o servidor não chama
   'phases-engine.js',          // _phasesEngine.generatePhase — motor multi-fase (lógica pura)
   'phase-generators.js',       // _phaseGen — geradores de fase (depende de phases-engine)
   // _buildPhase0Cfg/_buildPhase0Pool/_formDoublesTeams/_buildDoubleElimBracket/

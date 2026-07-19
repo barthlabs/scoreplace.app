@@ -84,6 +84,32 @@ function _drawRoundStub(payload) {
     catch(cb2) { if (err) cb2(err); return null; },
   };
 }
+// FECHO de rodada Suíço: o cliente (_doCloseRound) chama window._callCloseRound → CF closeRound.
+// O stub roda o MESMO núcleo do servidor (draw-core.closeRoundCore) sobre o `t` do harness.
+function _closeRoundStub(payload) {
+  let val = null, err = null;
+  try {
+    if (!_drawCore) throw new Error('draw-core indisponível no harness');
+    const tId = String((payload && payload.tournamentId) || '');
+    let t = null;
+    if (typeof sandbox._findTournamentById === 'function') t = sandbox._findTournamentById(tId);
+    if (!t) {
+      const list = (sandbox.AppStore && Array.isArray(sandbox.AppStore.tournaments)) ? sandbox.AppStore.tournaments : [];
+      t = list.find((x) => String(x.id) === tId);
+    }
+    if (!t) throw new Error('not-found');
+    const res = _drawCore.closeRoundCore(t, payload && payload.roundIdx, (payload && payload.resultCtx) || null);
+    if (!res || !res.ok) { val = { data: { ok: false, reason: (res && res.reason) || 'close-failed' } }; }
+    else { val = { data: { ok: true, branch: res.branch, tournament: JSON.parse(JSON.stringify(t)) } }; }
+  } catch (e) { err = e; }
+  return {
+    then(cb) {
+      if (!err) { try { cb(val); } catch (e3) { err = e3; } }
+      return { catch(cb2) { if (err) cb2(err); return null; } };
+    },
+    catch(cb2) { if (err) cb2(err); return null; },
+  };
+}
 sandbox.firebase = {
   functions: () => ({ httpsCallable: () => (() => Promise.resolve({ data: {} })) }),
   firestore: () => ({}),
@@ -93,6 +119,7 @@ sandbox.firebase = {
 // é ELE que o teste tem de stubar, senão exercitaria um caminho que não existe mais.
 // tournaments-draw.js define o real no load; sobrescrevemos DEPOIS (ver render-harness).
 sandbox._callDrawRound = _drawRoundStub;
+sandbox._callCloseRound = _closeRoundStub;
 let _ls = {};
 sandbox.localStorage = {
   getItem: (k) => (k in _ls ? _ls[k] : null),
@@ -107,9 +134,11 @@ const VIEWS = path.join(__dirname, '..', 'js', 'views');
 function load(rel) {
   const full = path.join(VIEWS, rel);
   vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: full });
-  // tournaments-draw.js define o _callDrawRound REAL (fetch pra CF) no load — no teste não
-  // há rede nem Firebase. Reaplica o stub DEPOIS de cada arquivo pra o real nunca vencer.
+  // tournaments-draw.js define o _callDrawRound/_callCloseRound REAIS (fetch pra CF) no load —
+  // no teste não há rede nem Firebase. Reaplica os stubs DEPOIS de cada arquivo pra os reais
+  // nunca vencerem.
   sandbox._callDrawRound = _drawRoundStub;
+  sandbox._callCloseRound = _closeRoundStub;
 }
 
 // Ordem importa (mesma do index.html / draw-core.js): utils → categorias → model → logic
@@ -120,4 +149,4 @@ load('bracket-model.js');           // _appendCanonicalColumn
 load('bracket-logic.js');           // _computeStandings, _advanceWinner, _findMatch, _maybeFinish*, _generateNextRound
 load('phases-engine.js');           // window._phasesEngine: buildEntrantsByDest, materializeNextPhase, bracketPhaseGroups…
 
-module.exports = { window: sandbox, sandbox, load, E: sandbox._phasesEngine, drawRoundStub: _drawRoundStub };
+module.exports = { window: sandbox, sandbox, load, E: sandbox._phasesEngine, drawRoundStub: _drawRoundStub, closeRoundStub: _closeRoundStub };

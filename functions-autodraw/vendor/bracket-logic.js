@@ -1032,6 +1032,10 @@ function _getChampion(t, activeRounds) {
 }
 
 // ─── Find match anywhere ──────────────────────────────────────────────────────
+// Exposto pro window explicitamente: no browser _findMatch já é global (script top-level),
+// mas via require() do vendor (draw-core) top-level vira LOCAL — bracket-ui._applyResultToTournament
+// chama window._findMatch. Ver project_draw_canonization_cf_phase23_deferred.
+window._findMatch = _findMatch;
 function _findMatch(t, matchId) {
   // Use canonical collector: covers all 7 storage shapes
   // (t.matches, t.thirdPlaceMatch, t.rounds[].matches, t.groups[].matches,
@@ -2487,9 +2491,18 @@ window._applyRoundCloseToTournament = function (t, roundIdx) {
   var isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
   var maxRounds = t.swissRounds || 99;
   var isSwissClassification = t.p2Resolution === 'swiss' && t.currentStage === 'swiss';
+  // Suíço-2-FASES (classificatória do construtor de fases, via _buildSwissClassifDraw): o
+  // avanço pra eliminatória (fase 1) é do motor MULTIFASE (advanceMultiPhase → materializeNextPhase),
+  // NÃO o finish/transition legado. Sem este guard, no maxRounds caía em 'pureSwissFinish' e
+  // ENCERRAVA o torneio antes de avançar (p2Resolution=null ⇒ isSwissClassification=false).
+  // Ver project_draw_canonization_cf_phase23_deferred.
+  var _curIdxRC = t.currentPhaseIndex || 0;
+  var isMultiPhaseSwiss = (t.classifyFormat === 'swiss' || t.currentStage === 'swiss')
+    && Array.isArray(t.phases) && t.phases.length > _curIdxRC + 1;
 
   if (isSuico && t.rounds.length >= maxRounds) {
-    if (isSwissClassification && t.p2TargetCount) return 'transition'; // #3 (generateDrawFunction)
+    if (isMultiPhaseSwiss) return 'phaseComplete';                     // classificatória completa → Avançar (multifase)
+    if (isSwissClassification && t.p2TargetCount) return 'transition'; // #3 (generateDrawFunction, legado)
     t.status = 'finished';
     return 'pureSwissFinish';
   }
@@ -2584,6 +2597,38 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
   if (roundIdx !== (t.rounds || []).length - 1) return;
   if (t.rounds[roundIdx] && t.rounds[roundIdx].status === 'complete') return;
 
+  // isMultiPhaseSwiss: classificatória Suíço do construtor de fases (fase 0 de N). O FECHO
+  // (gera a próxima rodada / marca a classificatória completa) roda na CF closeRound sobre o
+  // doc FRESCO — NÃO fazemos a mutação otimista local (marcaria complete/geraria a próxima e
+  // DIVERGIRIA do fresco; o closeRoundCore veria 'already-closed'). A CF é a autoridade; a
+  // resposta substitui `t` e o .then renderiza. Sem fallback (a CF é a única versão do motor).
+  // Se _callCloseRound faltar (cliente velho), cai no caminho local abaixo (com o pré-fix).
+  // Ver project_draw_canonization_cf_phase23_deferred.
+  var _curIdxDC = t.currentPhaseIndex || 0;
+  var isMultiPhaseSwiss = (t.classifyFormat === 'swiss' || t.currentStage === 'swiss')
+    && Array.isArray(t.phases) && t.phases.length > _curIdxDC + 1;
+  if (isMultiPhaseSwiss && typeof window._callCloseRound === 'function') {
+    window.AppStore.logAction(tId, `Rodada ${roundIdx + 1} encerrada`);
+    window._callCloseRound({ tournamentId: String(tId), roundIdx: roundIdx, resultCtx: resultCtx || null })
+      .then(function (_res) {
+        var d = (_res && _res.data) || {};
+        if (d.ok && d.tournament) {
+          // Estado AUTORITATIVO do servidor no `t` local (in-place: preserva refs de outras views).
+          Object.keys(t).forEach(function (k) { delete t[k]; });
+          Object.keys(d.tournament).forEach(function (k) { t[k] = d.tournament[k]; });
+          if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(t); } catch (_e) {} }
+          try { window.AppStore._saveToCache(); } catch (_e) {}
+        }
+        // noop (d.ok===false: outro fechou primeiro / rodada não fechou) → o listener reconcilia.
+        if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId, anchorMatchId);
+      })
+      .catch(function (err) {
+        window._lastSaveError = { tournamentId: tId, area: 'closeRound', code: (err && err.code) || '', message: (err && err.message) || String(err) };
+        if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId, anchorMatchId);
+      });
+    return;
+  }
+
   t.rounds[roundIdx].status = 'complete';
   // v2.3.17: marca a conclusão da rodada (último ponto/jogo lançado) — usado
   // como "Final real" na barra de progresso da rodada.
@@ -2593,10 +2638,18 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
   const isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
   const maxRounds = t.swissRounds || 99;
   const isSwissClassification = t.p2Resolution === 'swiss' && t.currentStage === 'swiss';
+  // isMultiPhaseSwiss já declarado no topo (o Suíço-2-fases retorna cedo pela CF; este ramo
+  // local só é alcançado se _callCloseRound faltar — fallback com o pré-fix). No maxRounds NÃO
+  // encerra: o avanço pra elim é do motor MULTIFASE ("Avançar"). Espelha _applyRoundCloseToTournament.
 
   if (isSuico && t.rounds.length >= maxRounds) {
     // Swiss-as-classification: transition to elimination phase
-    if (isSwissClassification && t.p2TargetCount) {
+    if (isMultiPhaseSwiss) {
+      // Classificatória Suíço (fase 0) completa — NÃO encerra. Notifica e cai pro commit+render
+      // abaixo, que persiste via _applyRoundCloseToTournament ('phaseComplete') e mostra "Avançar".
+      showNotification(_t('bui.swissClassifDone') || 'Classificatória concluída',
+        _t('bui.swissClassifDoneMsg') || 'Todos jogaram — avance para a eliminatória quando quiser.', 'success');
+    } else if (isSwissClassification && t.p2TargetCount) {
       var _targetCount = t.p2TargetCount;
       // Mutação LOCAL otimista (UI + notificações imediatas).
       window._applySwissEliminationTransition(t, roundIdx);
@@ -2624,19 +2677,19 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
         });
       }
       return;
-    }
-
-    // Pure Swiss: just finish
-    t.status = 'finished';
-    showNotification(_t('bui.swissFinishedRounds'), _t('bui.swissFinishedRoundsMsg', { n: maxRounds }), 'success');
-    // Notify all participants about Swiss tournament finish
-    if (!t.finishNotifiedAt && typeof window._notifyTournamentParticipants === 'function') {
-      t.finishNotifiedAt = new Date().toISOString();
-      window._notifyTournamentParticipants(t, {
-        type: 'tournament_finished',
-        message: _t('notif.tournamentFinished').replace('{name}', t.name || 'Torneio'),
-        level: 'important'
-      });
+    } else {
+      // Pure Swiss (single-phase): just finish
+      t.status = 'finished';
+      showNotification(_t('bui.swissFinishedRounds'), _t('bui.swissFinishedRoundsMsg', { n: maxRounds }), 'success');
+      // Notify all participants about Swiss tournament finish
+      if (!t.finishNotifiedAt && typeof window._notifyTournamentParticipants === 'function') {
+        t.finishNotifiedAt = new Date().toISOString();
+        window._notifyTournamentParticipants(t, {
+          type: 'tournament_finished',
+          message: _t('notif.tournamentFinished').replace('{name}', t.name || 'Torneio'),
+          level: 'important'
+        });
+      }
     }
   } else {
     // v2.3.7 FIX (bug reportado): Liga com sorteio AGENDADO NÃO gera a próxima

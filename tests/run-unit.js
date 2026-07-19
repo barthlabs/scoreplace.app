@@ -124,6 +124,8 @@ const SUITES = [
   'tests/liga-wo-invite.test.js',
   'tests/swiss-to-elim-transition.test.js',
   'tests/phase0-swiss-elim.test.js',
+  'tests/swiss-draw-via-cf.test.js',
+  'tests/swiss-close-via-cf.test.js',
   'tests/dupla-repechage-full.test.js',
   'tests/late-dupla-tier2.test.js',
   // Gap (dono, 17/jul): dupla FORMADA na lista de espera entra na Eliminatória Simples também.

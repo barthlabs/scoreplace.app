@@ -122,11 +122,44 @@ console.log('══════════════════════�
   ok('chave já existe → recusa (already-drawn)', r.ok === false && r.reason === 'already-drawn', JSON.stringify(r));
 })();
 
-// Suíço-classificatório ainda não é canônico — não fingir que sabe.
+// ── Suíço como RESOLUÇÃO de pow2 (Opção B: 2 fases, mas via CF) ──────────────────────
+// ÂNCORA (vermelha até o drawInitial canonizar o Suíço; ver project_draw_canonization_cf
+// _phase23_deferred): a resolução 'swiss' NÃO é "vira o torneio em Suíço" — são K rodadas
+// Suíço classificatórias que reduzem o elenco a uma potência de 2 e entregam pra chave.
+// Modelo (espelha o ramo client-side legado tournaments-draw.js): monta 2 FASES —
+// fase 0 = Suíço classificatória (K rodadas), fase 1 = a eliminatória original puxando o
+// top-lo (maior pow2 ≤ N) da classificação. HOJE isso roda 100% no cliente (drawInitial
+// recusa 'swiss-not-canonical'); a canonização move pra CF. REPRODUZ A FALHA: falha
+// enquanto drawInitial recusa, passa quando ele monta as fases + gera a rodada 1.
 (function () {
-  const t = mkT('sw', { format: 'Eliminatórias Simples', p2Resolution: 'swiss' }, 8);
+  const N = 12;                    // não-pow2 → lo=8, K=ceil(log2(12))=4
+  const lo = 8, half = Math.floor(N / 2);
+  const t = mkT('sw', { format: 'Eliminatórias Simples', p2Resolution: 'swiss' }, N);
   const r = core.drawInitial(t);
-  ok('p2Resolution=swiss → recusa (swiss-not-canonical)', r.ok === false && r.reason === 'swiss-not-canonical', JSON.stringify(r));
+  ok('Suíço-pow2 → servidor sorteia (não recusa)', r.ok === true, JSON.stringify(r).slice(0, 120));
+  const phases = Array.isArray(t.phases) ? t.phases : [];
+  const p0 = phases[0] || {}, p1 = phases[1] || {};
+  ok('Suíço-pow2 → 2 fases (classificatória + elim)', phases.length === 2, 'phases=' + phases.length);
+  ok('Suíço-pow2 → fase 0 é Suíço (formatCode liga, format Suíço)',
+    p0.formatCode === 'liga' && /su[ií]ç?o|swiss/i.test(String(p0.format)),
+    JSON.stringify({ fc: p0.formatCode, f: p0.format }));
+  ok('Suíço-pow2 → fase 0 com K≥2 rodadas', (parseInt(p0.rounds, 10) || 0) >= 2, 'rounds=' + p0.rounds);
+  ok('Suíço-pow2 → fase 1 puxa top-lo (rankTo=' + lo + ')',
+    !!(p1.source && p1.source.type === 'previous_phase' && p1.source.mapping &&
+       p1.source.mapping[0] && p1.source.mapping[0].rankTo === lo),
+    JSON.stringify(p1.source));
+  ok('Suíço-pow2 → currentPhaseIndex=0', t.currentPhaseIndex === 0, 'idx=' + t.currentPhaseIndex);
+  ok('Suíço-pow2 → classifyFormat=swiss', t.classifyFormat === 'swiss', String(t.classifyFormat));
+  ok('Suíço-pow2 → standings com N entradas', Array.isArray(t.standings) && t.standings.length === N,
+    'standings=' + (t.standings && t.standings.length));
+  ok('Suíço-pow2 → rodada 1 gerada (storage nativo t.rounds)', Array.isArray(t.rounds) && t.rounds.length === 1,
+    'rounds=' + (t.rounds && t.rounds.length));
+  const r1 = (t.rounds && t.rounds[0] && t.rounds[0].matches) || [];
+  const r1real = r1.filter(function (m) { return !m.isSitOut && !m.isBye; });
+  ok('Suíço-pow2 → R1 pareia todos (~floor(N/2)=' + half + ' jogos)', r1real.length === half, 'jogos=' + r1real.length);
+  ok('Suíço-pow2 → status active', t.status === 'active', String(t.status));
+  ok('Suíço-pow2 → p2Resolution limpo (gatilho legado morto)', t.p2Resolution == null, String(t.p2Resolution));
+  ok('Suíço-pow2 → presença limpa', !!(t.checkedIn && Object.keys(t.checkedIn).length === 0));
 })();
 
 // O sorteio LIMPA a presença (v4.1.30).
