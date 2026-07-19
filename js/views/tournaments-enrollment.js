@@ -270,6 +270,7 @@ window._phaseLateEnrollControlHtml = function (t) {
 // usada por criar/sincronizar — garante consistência.
 window._computeTournamentPlanWindow = function(t) {
   if (!t || !window.PresenceDB) return null;
+  if (t.status === 'finished') return null;                                  // encerrado: acabou, não planeja ida
   if (window._isSandboxTournament && window._isSandboxTournament(t)) return null; // SB não vaza presença (isolamento)
   if (window._isLigaFormat && window._isLigaFormat(t)) return null;          // temporada contínua
   if (!t.startDate || String(t.startDate).indexOf('T') === -1) return null;  // exige hora
