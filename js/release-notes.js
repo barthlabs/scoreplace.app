@@ -18,6 +18,12 @@ window._RELEASE_NOTES_HTML = (function () {
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #25D366;border-radius:12px;padding:14px 16px;background:rgba(37,211,102,0.08);">' +
+      '<div style="font-weight:800; color:#4ade80; font-size:1rem; margin-bottom:8px;">✅ v1.3.21 — Confirmação de quando você notificou o grupo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔔 "Última notificação" no card do grupo:</b> logo abaixo de "Notificar participantes" aparece <b>quando</b> foi o último envio do link (e quantos envios). E o histórico completo (data, hora e quem enviou) fica no botão <b>Comunicar inscritos</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #25D366;border-radius:12px;padding:14px 16px;background:rgba(37,211,102,0.08);">' +
       '<div style="font-weight:800; color:#4ade80; font-size:1rem; margin-bottom:8px;">💬 v1.3.17 — Chamar os inscritos pro grupo do WhatsApp <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🔔 Notificar participantes:</b> no card "Grupo do torneio", o organizador tem um botão que <b>manda o link do grupo pra todos os inscritos</b> — no app, por e-mail e por notificação no celular. Cada um recebe um botão <b>"Entrar no grupo"</b> que abre o WhatsApp direto.</li>' +

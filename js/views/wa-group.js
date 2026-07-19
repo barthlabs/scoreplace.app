@@ -79,6 +79,10 @@
   // no render, não no load — não depende da ordem dos <script>. `.btn` já alinha
   // ícone+texto sozinho (inline-flex + gap), então não precisa de style extra.
   function _icon() { return window._WA_ICON_SVG || ''; }
+  // Data/hora curta pra "Última notificação" (dd/mm às HH:MM).
+  function _fmtNotifiedAt(ms) {
+    try { var d = new Date(ms); return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; }
+  }
 
   function _openExt(url) {
     if (typeof window._openExternalUrl === 'function') window._openExternalUrl(url);
@@ -338,7 +342,11 @@
         // notificação nativa). Já dispara sozinho ao SALVAR o link; este botão é o reenvio
         // manual (ex.: inscritos que entraram depois). Só no torneio (o modal já é org-only).
         (isT ? '<button type="button" class="btn hover-lift" onclick="window._waGrpNotifyParticipants(' + idArgs + ', this)" style="background:rgba(37,211,102,0.14);border:1px solid rgba(37,211,102,0.5);color:#25D366;width:100%;justify-content:center;margin-top:8px;font-weight:700;">🔔 Notificar participantes</button>' +
-          '<div style="font-size:0.64rem;color:var(--text-muted);line-height:1.5;margin-top:6px;">Envia o link do grupo pra todos os inscritos — no app, por e-mail e por notificação. Já acontece sozinho quando você salva o link.</div>' : '') +
+          // v1.3.21: confirmação visual — quando foi a última notificação (+ nº de envios).
+          (wg.notifiedAt
+            ? '<div style="font-size:0.66rem;color:#34d399;font-weight:700;margin-top:7px;display:flex;align-items:center;gap:5px;justify-content:center;"><span>✅</span> Última notificação: ' + _fmtNotifiedAt(wg.notifiedAt) + ((wg.notifyCount > 1) ? ' · ' + wg.notifyCount + ' envios' : '') + '</div>'
+            : '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:7px;text-align:center;">Ainda não notificado.</div>') +
+          '<div style="font-size:0.64rem;color:var(--text-muted);line-height:1.5;margin-top:6px;">Envia o link do grupo pra todos os inscritos — no app, por e-mail e por notificação. Já acontece sozinho quando você salva o link. O histórico fica em <b style="color:var(--text-bright);">Comunicar inscritos</b>.</div>' : '') +
         '</div>';
       if (isT) body += _permsHtml();
       body += '<details><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;padding:6px 2px;">Trocar o link (o grupo foi refeito)</summary>';
@@ -567,6 +575,22 @@
   // que a gente não tem). No jogo, uids via _schMatchUids → _participantUids, então
   // cada pessoa da dupla é avisada individualmente. No torneio, o helper canônico
   // que já respeita as preferências de cada inscrito.
+  // v1.3.21: registra o ENVIO da notificação do grupo no próprio waGroup (notifiedAt +
+  // notifyCount + notifyLog[]) e persiste — vira a confirmação visual ("Última notificação")
+  // no card do grupo E o relatório na página de Comunicados. Guarda os 20 últimos.
+  function _stampGroupNotify(ctx) {
+    var wg = ctx.target && ctx.target.waGroup;
+    if (!wg) return;
+    var cu = _cu(); var now = Date.now();
+    wg.notifiedAt = now;
+    wg.notifyCount = (wg.notifyCount || 0) + 1;
+    if (!Array.isArray(wg.notifyLog)) wg.notifyLog = [];
+    wg.notifyLog.unshift({ at: now, byUid: (cu && cu.uid) || '', byName: (cu && (cu.displayName || cu.name)) || '' });
+    if (wg.notifyLog.length > 20) wg.notifyLog = wg.notifyLog.slice(0, 20);
+    if (ctx.groupMode) _mirror(ctx);
+    try { _save(ctx.t).catch(function () {}); } catch (e) {}
+  }
+
   function _notifyOthers(ctx) {
     var cu = _cu(); var mine = (cu && cu.uid) || '';
     var who = (cu && (cu.displayName || cu.name)) || 'Alguém';
@@ -580,6 +604,7 @@
         waGroupLink: _wlink,
         level: 'fundamental', timestamp: Date.now()
       }, cu && cu.email);
+      _stampGroupNotify(ctx);
       return;
     }
     if (typeof window._sendUserNotification !== 'function') return;
@@ -594,5 +619,6 @@
     (window._schMatchUids(ctx.t, m) || []).forEach(function (u) {
       if (u && u !== mine) window._sendUserNotification(u, data);
     });
+    _stampGroupNotify(ctx);
   }
 })();
