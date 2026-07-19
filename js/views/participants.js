@@ -1624,6 +1624,151 @@ window._declareAbsent = function (tId, playerName) {
   }, null, { type: 'warning', confirmText: confirmBtn, cancelText: _t('btn.waitMore') });
 };
 
+// ─── CARD DE INSCRITO INDIVIDUAL — FONTE ÚNICA (v1.3.35) ─────────────────────
+// O CANÔNICO extraído do renderParticipants pra virar chamável pelas DUAS telas
+// (#participants E detalhe do torneio), matando a divergência que fazia o SB testar
+// um caminho e a produção outro (dono: "não tem que ter outra opção; a pirata morre").
+// Presença (Presente/Ausente·toggle·W.O. + fundo verde/vermelho) vem do MESMO factory
+// _rollCallPresenceCtx via ctx.cardPresence — caminho único até na presença.
+// ctx = { isOrg, drawDone, canRollCall, postDrawPresence, enrollOrderMap, nameToParticipant,
+//         waitSet, cardPresence }. Ver [[project_two_participant_card_renderers]],
+// [[project_inscrito_card_canonical]], [[feedback_unify_dual_entry_points]].
+window._inscritoIndividualCard = function (t, p, idx, ctx) {
+  ctx = ctx || {};
+  var isOrg = !!ctx.isOrg, drawDone = !!ctx.drawDone;
+  var canRollCall = !!ctx.canRollCall, postDrawPresence = !!ctx.postDrawPresence;
+  var _nameToParticipant = ctx.nameToParticipant || {};
+  var _enrollOrderMap = ctx.enrollOrderMap || {};
+  var _gridWaitSet = ctx.waitSet || {};
+  var _T = window._t || function (k) { return k; };
+  var pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _T('participants.participant', { n: idx + 1 }));
+  var isTeam = !!window._entryTeamMembers(p);
+  var _isOrgP = (typeof window._isOrgPlayer === 'function') && window._isOrgPlayer(t, pName, p);
+  var _orgStar = _isOrgP ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.95rem;line-height:1;">⭐</span>' : '';
+
+  // Presença via factory compartilhado (rowHtml = Presente/Ausente·toggle·W.O.; styleExtra
+  // = fundo verde/vermelho; skip = filtro presente/ausente/aguardando). Caminho ÚNICO.
+  var _pr = (typeof ctx.cardPresence === 'function') ? ctx.cardPresence(p) : null;
+  if (_pr && _pr.skip) return '';
+  var _presenceGroup = _pr ? (_pr.rowHtml || '') : '';
+  var _rcCardExtra = _pr ? (_pr.styleExtra || '') : '';
+
+  var _isStandbyEntry = !!(p && typeof p === 'object' && p._isStandbyEntry) || !!_gridWaitSet[(pName || '').toLowerCase().trim()];
+  var isVip = window._entryHasVip(t, p || pName);
+  var cardStyle = '';
+  if (isVip) cardStyle = 'background: linear-gradient(135deg, rgba(161,98,7,0.5) 0%, rgba(234,179,8,0.35) 100%); border: 2px solid rgba(251,191,36,0.7); box-shadow: 0 0 12px rgba(251,191,36,0.15);';
+  else if (_isStandbyEntry) cardStyle = 'background: linear-gradient(135deg, rgba(146,64,14,0.55) 0%, rgba(245,158,11,0.42) 100%); border: 2px solid rgba(251,191,36,0.55);';
+  else if (isTeam) cardStyle = 'background: linear-gradient(135deg, rgba(15, 118, 110, 0.6) 0%, rgba(20, 184, 166, 0.6) 100%); border: 1px solid rgba(20, 184, 166, 0.5);';
+  else cardStyle = 'background: linear-gradient(135deg, rgba(67, 56, 202, 0.6) 0%, rgba(99, 102, 241, 0.6) 100%); border: 1px solid rgba(99, 102, 241, 0.5);';
+
+  var _FONT = window._INSCRITO_NAME_FONT_PX || 17;
+  var pNameHtml = '';
+  if (isTeam) {
+    pNameHtml = pName.split('/').map(function (n) {
+      var _nm = n.trim();
+      var _nmSafe = _nm.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var _mSeed = encodeURIComponent(_nm);
+      var _mCached = (window._playerPhotoCache && window._playerPhotoCache[_nm.toLowerCase()] && window._playerPhotoCache[_nm.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_nm.toLowerCase()] : '';
+      var _mInitials = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _mSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+      var _mPhoto = _mCached || _mInitials;
+      var _mErr = 'onerror="this.onerror=null;this.src=\'' + _mInitials + '\'"';
+      var _nmH = window._safeHtml(_nm);
+      var _mPart = _nameToParticipant && _nameToParticipant[_nm];
+      var _mUid = '';
+      if (_mPart && typeof _mPart === 'object') {
+        if (_mPart.p1Name && _nm === String(_mPart.p1Name).trim()) _mUid = _mPart.p1Uid || '';
+        else if (_mPart.p2Name && _nm === String(_mPart.p2Name).trim()) _mUid = _mPart.p2Uid || '';
+        else _mUid = _mPart.uid || '';
+      }
+      var _mUidJs = _mUid ? (',{uid:\'' + _mUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
+      var _mDisp = _mUid ? window._safeHtml(window._displayName(_mUid, _nm)) : _nmH;
+      var _mUidAttr = _mUid ? ' data-uid-name="' + window._safeHtml(_mUid) + '"' : '';
+      var _editAttr = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _nmSafe + '\'' + _mUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _nmSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _nmH + '"';
+      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;"><img src="' + _mPhoto + '" ' + _mErr + ' data-player-name="' + _nmH + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span' + _mUidAttr + ' ' + _editAttr + '>' + _mDisp + '</span></div>';
+    }).join('') + (_orgStar ? '<div style="margin-top:2px;">' + _orgStar + '</div>' : '');
+  } else {
+    var _pSafe = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var _pSeedN = encodeURIComponent(pName);
+    var _pCachedN = (window._playerPhotoCache && window._playerPhotoCache[pName.toLowerCase()] && window._playerPhotoCache[pName.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[pName.toLowerCase()] : '';
+    var _pInitialsN = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _pSeedN + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+    var _pPhotoN = _pCachedN || _pInitialsN;
+    var _pErrN = 'onerror="this.onerror=null;this.src=\'' + _pInitialsN + '\'"';
+    var _pNameH = window._safeHtml(pName);
+    var _pPart = _nameToParticipant && _nameToParticipant[pName];
+    var _pUid = (_pPart && typeof _pPart === 'object') ? (_pPart.uid || '') : '';
+    var _pUidJs = _pUid ? (',{uid:\'' + _pUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
+    var _pDisp = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : _pNameH;
+    var _pUidAttr = _pUid ? ' data-uid-name="' + window._safeHtml(_pUid) + '"' : '';
+    var _editAttrN = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _pSafe + '\'' + _pUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _pSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _pNameH + '"';
+    pNameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="' + _pPhotoN + '" ' + _pErrN + ' data-player-name="' + _pNameH + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span' + _pUidAttr + ' ' + _editAttrN + '>' + _pDisp + '</span>' + _orgStar + '</div>';
+  }
+
+  var safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var teamOrigins = t.teamOrigins || {};
+  var teamLabel = _T('participants.teamIndividual');
+  if (isTeam) {
+    var origin = teamOrigins[pName];
+    if (origin === 'inscrita') teamLabel = _T('tourn.teamEnrolled');
+    else if (origin === 'sorteada') teamLabel = _T('tourn.teamDrawn');
+    else teamLabel = _T('tourn.teamFormed');
+  }
+  var _standbyBadge = _isStandbyEntry ? '<span style="background:linear-gradient(135deg,#92400e,#f59e0b);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;">🕐 Lista de Espera</span>' : '';
+  var typeText = _isStandbyEntry ? _standbyBadge : teamLabel;
+
+  var _nmSkillCats = t.skillCategories || [];
+  var _nmSkillHtml = '';
+  if (_nmSkillCats.length > 0) {
+    var _nmCatStr = (typeof p === 'object' && p !== null) ? (p.category || '') : '';
+    var _nmCurrentSkill = '';
+    for (var _si = 0; _si < _nmSkillCats.length; _si++) { var _sk = _nmSkillCats[_si]; if (_nmCatStr === _sk || _nmCatStr.endsWith(' ' + _sk)) { _nmCurrentSkill = _sk; break; } }
+    if (isOrg && !_isStandbyEntry) {
+      var _nmOpts = _nmSkillCats.map(function (sk) { return '<option value="' + sk + '" ' + (_nmCurrentSkill === sk ? 'selected' : '') + '>' + sk + '</option>'; }).join('');
+      _nmSkillHtml = '<select onchange="event.stopPropagation();window._setParticipantSkillCategory(\'' + t.id + '\',\'' + safeP + '\',this.value)" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:4px;"><option value="" ' + (!_nmCurrentSkill ? 'selected' : '') + '>— nível</option>' + _nmOpts + '</select>';
+    }
+  }
+
+  var dragProps = '', _vipBtn = '', _delBtn = '', _splitBtn = '', undoMergeBtn = '';
+  if (isOrg && p && typeof p === 'object' && p._mergedFrom) {
+    undoMergeBtn = '<button class="btn btn-micro" title="Desfazer mesclagem" style="background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px dashed rgba(251,191,36,0.5);" onmouseover="this.style.transform=\'scale(1.1)\'" onmouseout="this.style.transform=\'none\'" onclick="event.stopPropagation(); window._undoMergeParticipant(\'' + t.id + '\', \'' + safeP + '\');">↩️</button>';
+  }
+  if (isOrg && !_isStandbyEntry) {
+    dragProps = 'draggable="true" ondragstart="window.handleDragStart(event, ' + idx + ', \'' + t.id + '\')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ' + idx + ')"';
+    if (!drawDone) {
+      _vipBtn = '<button class="btn btn-micro" title="' + (isVip ? _T('tourn.removeVip') : _T('tourn.markVip')) + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ' + (isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)') + '; color: ' + (isVip ? '#fbbf24' : '#a3842a') + '; border: 1px ' + (isVip ? 'solid' : 'dashed') + ' ' + (isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)') + ';" onclick="event.stopPropagation(); window._toggleVip(\'' + t.id + '\', \'' + safeP + '\');">💎 VIP</button>';
+      _delBtn = '<button type="button" class="cancel-x-btn" title="' + _T('btn.remove') + '" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✕</button>';
+      if (window._entryTeamMembers(p)) {
+        _splitBtn = '<button class="btn btn-micro" title="' + _T('participants.splitTeam') + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✂️</button>';
+      }
+    }
+  }
+
+  var _gPart = (typeof p === 'object' && p !== null) ? p : (_nameToParticipant && _nameToParticipant[pName]);
+  var _fGender = (typeof window._canonGender === 'function') ? window._canonGender(_gPart && _gPart.gender) : 'none';
+  var _fSkill = 'none';
+  var _fSkillCats = t.skillCategories || [];
+  var _fCatStr = (_gPart && typeof _gPart === 'object') ? (_gPart.category || '') : '';
+  for (var _fi = 0; _fi < _fSkillCats.length; _fi++) { if (_fCatStr === _fSkillCats[_fi] || _fCatStr.endsWith(' ' + _fSkillCats[_fi])) { _fSkill = _fSkillCats[_fi]; break; } }
+  var _fEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _gPart || pName) : '';
+  var _fOrder = (_fEnrollNum !== '' && _fEnrollNum != null) ? (_fEnrollNum - 1) : idx;
+  var _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
+  var _fInactive = (t.allowSelfDeactivation !== false && _gPart && _gPart.ligaActive === false) ? '1' : '0';
+  var _metaSlots = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, pName, isTeam, t, isOrg, { inline: true }) : '';
+  var _wmNum = (function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_n, 'right') : ''; })();
+
+  return '' +
+    '<div class="participant-card" data-part-card="1" data-part-org="' + (_isOrgP ? '1' : '0') + '" data-part-vip="' + (isVip ? '1' : '0') + '" data-part-standby="' + (_isStandbyEntry ? '1' : '0') + '" data-part-name="' + _fNameAttr + '" data-part-inactive="' + _fInactive + '" data-part-gender="' + _fGender + '" data-part-skill="' + String(_fSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _fOrder + '" ' + dragProps + ' style="' + cardStyle + ' border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (isOrg ? 'cursor:grab;' : '') + _rcCardExtra + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
+      _wmNum +
+      '<div style="position:relative;z-index:1;">' +
+        pNameHtml +
+        '<div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+          '<div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">' + _vipBtn + _metaSlots + _nmSkillHtml + '</div>' +
+          ((_splitBtn || undoMergeBtn) ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">' + _splitBtn + undoMergeBtn + '</div>' : '') +
+        '</div>' +
+        window._inscritoActionRow(typeText, _presenceGroup, _delBtn) +
+      '</div>' +
+    '</div>';
+};
+
 function renderParticipants(container, tournamentId) {
   if (window._autoKeepScroll) window._autoKeepScroll(); // v2.8.82: re-render por ação não pula scroll
   const tId = tournamentId;
@@ -2438,213 +2583,13 @@ function renderParticipants(container, tournamentId) {
     // mutar o objeto de parts; o card consulta este set.
     const _gridWaitSet = (typeof window._waitlistNameSet === 'function') ? window._waitlistNameSet(t) : {};
 
-    cardsStr = _gridParts.map((p, idx) => {
-      const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _t('participants.participant', {n: idx + 1}));
-      const isTeam = !!window._entryTeamMembers(p); // v3.0.x: time por estrutura (slots), não por '/'
-      // v2.7.37: estrela do organizador (sempre visível) + pin no topo (data-part-org).
-      const _isOrgP = (typeof window._isOrgPlayer === 'function') && window._isOrgPlayer(t, pName, p);
-      const _orgStar = _isOrgP ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.95rem;line-height:1;">⭐</span>' : '';
-
-      // v2.1.86/v2.2.40: estado da CHAMADA (por entry) + filtro presente/ausente/aguardando.
-      // Vale na chamada pré-sorteio (interativa) e pós-sorteio antes de iniciar (leitura).
-      const _showPres = canRollCall || postDrawPresence;
-      // uid only: solo com conta → objeto {uid} (homônimo não colide); dupla ("A / B") cai no
-      // nome canônico e usa o split '/' em _entryPresent. p.uid é falsy pra dupla (tem p1Uid/p2Uid).
-      const _rcWho = (p && typeof p === 'object' && p.uid) ? { uid: p.uid, displayName: window._pName(p) } : window._pName(p);
-      const _rcUid = String((p && typeof p === 'object' && p.uid) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      const rcMc = _showPres && _entryPresent(_rcWho);
-      const rcAbs = _showPres && !rcMc && _entryAbsent(_rcWho);
-      const rcPend = _showPres && !rcMc && !rcAbs;
-      if (_showPres) {
-        if (currentFilter === 'present' && !rcMc) return '';
-        if (currentFilter === 'absent' && !rcAbs) return '';
-        if (currentFilter === 'pending' && !rcPend) return '';
-      }
-
-      const _isStandbyEntry = !!(p && typeof p === 'object' && p._isStandbyEntry) || !!_gridWaitSet[(pName || '').toLowerCase().trim()];
-      const isVipEarly = window._entryHasVip(t, p || pName);
-      let cardStyle = '';
-      if (isVipEarly) {
-        cardStyle = 'background: linear-gradient(135deg, rgba(161,98,7,0.5) 0%, rgba(234,179,8,0.35) 100%); border: 2px solid rgba(251,191,36,0.7); box-shadow: 0 0 12px rgba(251,191,36,0.15);';
-      } else if (_isStandbyEntry) {
-        cardStyle = 'background: linear-gradient(135deg, rgba(146,64,14,0.55) 0%, rgba(245,158,11,0.42) 100%); border: 2px solid rgba(251,191,36,0.55);';
-      } else if (isTeam) {
-        cardStyle = 'background: linear-gradient(135deg, rgba(15, 118, 110, 0.6) 0%, rgba(20, 184, 166, 0.6) 100%); border: 1px solid rgba(20, 184, 166, 0.5);';
-      } else {
-        cardStyle = 'background: linear-gradient(135deg, rgba(67, 56, 202, 0.6) 0%, rgba(99, 102, 241, 0.6) 100%); border: 1px solid rgba(99, 102, 241, 0.5);';
-      }
-
-      let pNameHtml = '';
-      if (isTeam) {
-        pNameHtml = pName.split('/').map((n, i) => {
-          const _nm = n.trim();
-          const _nmSafe = _nm.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          const _mSeed = encodeURIComponent(_nm);
-          const _mCached = (window._playerPhotoCache && window._playerPhotoCache[_nm.toLowerCase()] && window._playerPhotoCache[_nm.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_nm.toLowerCase()] : '';
-          const _mInitials = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _mSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-          const _mPhoto = _mCached || _mInitials;
-          const _mErr = `onerror="this.onerror=null;this.src='${_mInitials}'"`;
-          const _nmH = window._safeHtml(_nm);
-          const _mPart = _nameToParticipant && _nameToParticipant[_nm];
-          // v4.5.64: uid ESTRUTURAL do slot (p1Uid/p2Uid) — não o .uid do capitão.
-          let _mUid = '';
-          if (_mPart && typeof _mPart === 'object') {
-            if (_mPart.p1Name && _nm === String(_mPart.p1Name).trim()) _mUid = _mPart.p1Uid || '';
-            else if (_mPart.p2Name && _nm === String(_mPart.p2Name).trim()) _mUid = _mPart.p2Uid || '';
-            else _mUid = _mPart.uid || '';
-          }
-          const _mUidJs = _mUid ? (',{uid:\'' + _mUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
-          const _mDisp = _mUid ? window._safeHtml(window._displayName(_mUid, _nm)) : _nmH;
-          const _mUidAttr = _mUid ? ` data-uid-name="${window._safeHtml(_mUid)}"` : '';
-          const _editAttr = isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${t.id}','${_nmSafe}')" title="Clique para editar" style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text;"` : `style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_nmSafe}'${_mUidJs});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_nmSafe}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${_nmH}"`;
-          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;"><img src="${_mPhoto}" ${_mErr} data-player-name="${_nmH}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span${_mUidAttr} ${_editAttr}>${_mDisp}</span></div>`;
-        }).join('') + (_orgStar ? `<div style="margin-top:2px;">${_orgStar}</div>` : '');
-      } else {
-        const _pSafe = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        const _pSeedN = encodeURIComponent(pName);
-        const _pCachedN = (window._playerPhotoCache && window._playerPhotoCache[pName.toLowerCase()] && window._playerPhotoCache[pName.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[pName.toLowerCase()] : '';
-        const _pInitialsN = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _pSeedN + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-        const _pPhotoN = _pCachedN || _pInitialsN;
-        const _pErrN = `onerror="this.onerror=null;this.src='${_pInitialsN}'"`;
-        const _pNameH = window._safeHtml(pName);
-        const _pPart = _nameToParticipant && _nameToParticipant[pName];
-        const _pUid  = (_pPart && typeof _pPart === 'object') ? (_pPart.uid || '') : '';
-        const _pUidJs = _pUid ? (',{uid:\'' + _pUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
-        const _pDisp = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : _pNameH;
-        const _pUidAttr = _pUid ? ` data-uid-name="${window._safeHtml(_pUid)}"` : '';
-        const _editAttrN = isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${t.id}','${_pSafe}')" title="Clique para editar" style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:text;"` : `style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_pSafe}'${_pUidJs});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_pSafe}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${_pNameH}"`;
-        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="${_pPhotoN}" ${_pErrN} data-player-name="${_pNameH}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span${_pUidAttr} ${_editAttrN}>${_pDisp}</span>${_orgStar}</div>`;
-      }
-
-      const safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      const isVip = window._entryHasVip(t, p || pName);
-      const vipBadge = isVip ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;margin-left:4px;">💎 VIP</span>' : '';
-
-      // Label de tipo: origem da equipe
-      const teamOrigins = t.teamOrigins || {};
-      let teamLabel = _t('participants.teamIndividual');
-      if (isTeam) {
-          const origin = teamOrigins[pName];
-          if (origin === 'inscrita') teamLabel = _t('tourn.teamEnrolled');
-          else if (origin === 'sorteada') teamLabel = _t('tourn.teamDrawn');
-          else if (origin === 'formada') teamLabel = _t('tourn.teamFormed');
-          else teamLabel = _t('tourn.teamFormed');
-      }
-      const _standbyBadge = _isStandbyEntry ? '<span style="background:linear-gradient(135deg,#92400e,#f59e0b);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;">🕐 Lista de Espera</span>' : '';
-      // v2.7.73: SEM tag VIP redundante — o card dourado + o botão VIP ativo já indicam.
-      const typeText = _isStandbyEntry ? _standbyBadge : teamLabel;
-
-      // Skill category badge/dropdown for normal (grid) mode
-      const _nmSkillCats = t.skillCategories || [];
-      let _nmSkillHtml = '';
-      if (_nmSkillCats.length > 0) {
-        const _nmCatStr = (typeof p === 'object' && p !== null) ? (p.category || '') : '';
-        let _nmCurrentSkill = '';
-        for (let _si = 0; _si < _nmSkillCats.length; _si++) {
-          const _sk = _nmSkillCats[_si];
-          if (_nmCatStr === _sk || _nmCatStr.endsWith(' ' + _sk)) { _nmCurrentSkill = _sk; break; }
-        }
-        if (isOrg && !_isStandbyEntry) {
-          // v2.3.50: dropdown de atribuição de nível pelo organizador. Pra
-          // não-organizador o nível já aparece no badge de meta (gênero ·
-          // categoria · idade) abaixo do nome — não duplica aqui.
-          const _nmOpts = _nmSkillCats.map(sk => `<option value="${sk}" ${_nmCurrentSkill === sk ? 'selected' : ''}>${sk}</option>`).join('');
-          _nmSkillHtml = `<select onchange="event.stopPropagation();window._setParticipantSkillCategory('${t.id}','${safeP}',this.value)" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:4px;"><option value="" ${!_nmCurrentSkill ? 'selected' : ''}>— nível</option>${_nmOpts}</select>`;
-        }
-      }
-
-      let dragProps = '';
-      // v2.7.72: botões expostos (VIP à esquerda com a meta; split/undo/excluir à
-      // direita) pra montar a LINHA COMBINADA igual ao card pós-sorteio (canônico).
-      let _vipBtn = '', _delBtn = '', _splitBtn = '';
-      // v2.0.0: botão "Desfazer mesclagem" — aparece quando o card resultou de
-      // uma mesclagem (p._mergedFrom), em qualquer estado do torneio.
-      let undoMergeBtn = '';
-      if (isOrg && p && typeof p === 'object' && p._mergedFrom) {
-        undoMergeBtn = `<button class="btn btn-micro" title="Desfazer mesclagem" style="background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px dashed rgba(251,191,36,0.5);" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window._undoMergeParticipant('${t.id}', '${safeP}');">↩️</button>`;
-      }
-      if (isOrg && !_isStandbyEntry) {
-        // v2.0.0: drag habilitado pro organizador também — a MESCLAGEM funciona
-        // enquanto a grade estiver visível (inclui o estado "sorteado, antes de
-        // iniciar"). Formar equipe / VIP / remover continuam só pré-sorteio.
-        dragProps = `draggable="true" ondragstart="window.handleDragStart(event, ${idx}, '${t.id}')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ${idx})"`;
-        if (!drawDone) {
-          _vipBtn = `<button class="btn btn-micro" title="${isVip ? _t('tourn.removeVip') : _t('tourn.markVip')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ${isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)'}; color: ${isVip ? '#fbbf24' : '#a3842a'}; border: 1px ${isVip ? 'solid' : 'dashed'} ${isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)'};" onclick="event.stopPropagation(); window._toggleVip('${t.id}', '${safeP}');">💎 VIP</button>`;
-          _delBtn = `<button type="button" class="cancel-x-btn" title="${_t('btn.remove')}" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">✕</button>`;
-          if (window._entryTeamMembers(p)) { // v3.0.x: botão dividir só pra dupla (estrutura), não por '/'
-            _splitBtn = `<button class="btn btn-micro" title="${_t('participants.splitTeam')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', '${safeP}');">✂️</button>`;
-          }
-        }
-      }
-
-      // v2.1.86: linha de presença da CHAMADA pré-sorteio (só organizador, antes do sorteio).
-      // Reusa _toggleCheckIn / _markAbsent, que já gravam em t.checkedIn / t.absent
-      // pela chave do entry (time "A / B" ou individual). Pré-sorteio não há matches,
-      // então _processWoSubstitutions é no-op e _markAbsent só alterna o flag.
-      // v3.0.x: chamada CANÔNICA no card individual — na MESMA linha do tipo de
-      // inscrição ("Inscrição Individual"), alinhada à DIREITA: PALAVRA + toggle +
-      // W.O. + remover. Economiza uma linha por jogador. Estado binário: Presente
-      // (toggle ligado) ou Ausente (desligado).
-      let _presenceGroup = '';
-      if (canRollCall) {
-        const _rcEntry = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        const _rcLabel = rcMc ? 'Presente' : 'Ausente';
-        const _rcColor = rcMc ? '#4ade80' : '#f87171';
-        const _rcWoBtn = (!rcMc && isOrg)
-          ? window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${t.id}', '${_rcEntry}');`, !rcAbs, { label: rcAbs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
-          : '';
-        // Ordem canônica: palavra (Presente/Ausente) + toggle + W.O. O 🗑️ é
-        // anexado depois (em _inscritoActionRow) → palavra, toggle, W.O., 🗑️.
-        _presenceGroup = `<span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}', '${_rcUid}');"><span class="toggle-slider"></span></label>${_rcWoBtn}`;
-      } else if (postDrawPresence) {
-        // v2.2.40: pós-sorteio (antes de iniciar) — presença em modo somente leitura.
-        const _rcLabel = rcMc ? 'Presente' : 'Ausente';
-        const _rcColor = rcMc ? '#4ade80' : '#f87171';
-        const _rcIcon = rcMc ? '✅' : '🚫';
-        _presenceGroup = `<span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcIcon} ${_rcLabel}</span>`;
-      }
-      // v3.0.x: card INTEIRO verde quando Presente, vermelho quando W.O./Ausente
-      // (não só a borda). Append no fim do style → sobrepõe o background do cardStyle.
-      const _rcCardExtra = (canRollCall || postDrawPresence)
-        ? (rcMc ? 'background:linear-gradient(135deg,rgba(16,185,129,0.5),rgba(5,150,105,0.6)) !important;border:2px solid rgba(16,185,129,0.85) !important;box-shadow:0 0 0 1px rgba(16,185,129,0.4),0 4px 12px rgba(0,0,0,0.14);'
-          : rcAbs ? 'background:linear-gradient(135deg,rgba(239,68,68,0.45),rgba(220,38,38,0.58)) !important;border:2px solid rgba(239,68,68,0.8) !important;box-shadow:0 0 0 1px rgba(239,68,68,0.35),0 4px 12px rgba(0,0,0,0.14);'
-          : '')
-        : '';
-
-      const bgNum = isVip ? '⭐' : idx + 1;
-      // v2.7.27: data-attrs canônicos p/ a barra de filtro/sort (_inscritosFilterBar
-      // + _partApplyFilter) funcionar TAMBÉM na grade — antes só a lista compacta os
-      // tinha. Espelha a lógica de _canonGender/skill/_partEnrollIdx da lista.
-      const _gPart = (typeof p === 'object' && p !== null) ? p : (_nameToParticipant && _nameToParticipant[pName]);
-      const _fGender = (typeof window._canonGender === 'function') ? window._canonGender(_gPart && _gPart.gender) : 'none';
-      let _fSkill = 'none';
-      const _fSkillCats = t.skillCategories || [];
-      const _fCatStr = (_gPart && typeof _gPart === 'object') ? (_gPart.category || '') : '';
-      for (let _fi = 0; _fi < _fSkillCats.length; _fi++) { if (_fCatStr === _fSkillCats[_fi] || _fCatStr.endsWith(' ' + _fSkillCats[_fi])) { _fSkill = _fSkillCats[_fi]; break; } }
-      const _fKey = (pName || '').toLowerCase().trim();
-      const _fEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _gPart || pName) : '';
-      const _fOrder = (_fEnrollNum !== '' && _fEnrollNum != null) ? (_fEnrollNum - 1) : idx;
-      const _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
-      // v4.4.64: inativo (Liga com auto-desativação) → data-part-inactive p/ o sort ativos/inativos
-      // funcionar TAMBÉM neste renderer (antes só a lista compacta 1937 tinha o attr).
-      const _fInactive = (t.allowSelfDeactivation !== false && _gPart && _gPart.ligaActive === false) ? '1' : '0';
-      return `
-        <div class="participant-card" data-part-card="1" data-part-org="${_isOrgP ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="${_isStandbyEntry ? '1' : '0'}" data-part-name="${_fNameAttr}" data-part-inactive="${_fInactive}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
-            ${(function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_n, 'right') : ''; })()}
-            <div style="position:relative;z-index:1;">
-                <!-- HEADER: avatar + nome + estrela (igual ao card pós-sorteio) -->
-                ${pNameHtml}
-                <!-- LINHA COMBINADA (canônica): VIP + meta + nível (esquerda) | split/desfazer/excluir (direita) -->
-                <div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_vipBtn}${_metaSlotsFor(p, pName, isTeam, { inline: true })}${_nmSkillHtml}</div>
-                    ${(_splitBtn || undoMergeBtn) ? `<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">${_splitBtn}${undoMergeBtn}</div>` : ''}
-                </div>
-                <!-- CARD CANÔNICO: tipo de inscrição na linha 1; ação (Presente/
-                     Ausente · toggle · W.O. · 🗑️) na linha de baixo, à direita. -->
-                ${window._inscritoActionRow(typeText, _presenceGroup, _delBtn)}
-            </div>
-        </div>`;
-    }).join('');
+    var _icPresCtx = (typeof window._rollCallPresenceCtx === 'function' && (canRollCall || postDrawPresence))
+      ? window._rollCallPresenceCtx(t, { isOrg: isOrg, active: canRollCall, postDraw: postDrawPresence, woScope: t.woScope })
+      : null;
+    // v1.3.35: CARD ÚNICO — o #participants passa a renderizar o inscrito individual pela
+    // MESMA função que o detalhe usa (window._inscritoIndividualCard). Zero código duplicado.
+    var _icCtx = { isOrg: isOrg, drawDone: drawDone, canRollCall: canRollCall, postDrawPresence: postDrawPresence, enrollOrderMap: _enrollOrderMap, nameToParticipant: _nameToParticipant, waitSet: _gridWaitSet, cardPresence: _icPresCtx ? _icPresCtx.cardPresence : null };
+    cardsStr = _gridParts.map((p, idx) => window._inscritoIndividualCard(t, p, idx, _icCtx)).join('');
     }
   }
 
