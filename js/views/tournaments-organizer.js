@@ -125,10 +125,11 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     // próprio uid em casos edge (auto-friendship via bugs históricos ou
     // email que resolve pra si mesmo). Notif pra si mesmo é sempre noise —
     // user já sabe o que acabou de fazer (toast no momento da ação cobre).
-    // Nenhum call site legítimo notifica a si mesmo: todos visam organizador,
-    // amigo, participante, oponente, etc.
+    // v1.3.22: EXCEÇÃO — notifData._allowSelf=true permite notificar quem disparou
+    // (ex.: o organizador quer receber o convite do grupo do WhatsApp "pra monitorar",
+    // igual ao comunicado do org via CF). Fora isso, self continua sendo suprimido.
     var _cu = window.AppStore && window.AppStore.currentUser;
-    if (_cu && _cu.uid && uid === _cu.uid) {
+    if (_cu && _cu.uid && uid === _cu.uid && !(notifData && notifData._allowSelf)) {
         return;
     }
     try {
@@ -157,7 +158,7 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
             // qualquer override do caller pra evitar spoofing.
             var _notifPayload = {};
             Object.keys(notifData).forEach(function(k) {
-                if (k === 'level') return; // local-only filter
+                if (k === 'level' || k === '_allowSelf') return; // flags locais — não gravar
                 var v = notifData[k];
                 if (v === undefined) return; // Firestore reject
                 _notifPayload[k] = v;

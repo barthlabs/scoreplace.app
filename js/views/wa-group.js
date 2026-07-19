@@ -597,13 +597,16 @@
     var _wlink = (ctx.target && ctx.target.waGroup && ctx.target.waGroup.link) || '';
     if (ctx.scope === 'tournament') {
       if (typeof window._notifyTournamentParticipants !== 'function') return;
+      // v1.3.22 (dono): o convite do grupo TAMBÉM dispara pro ORGANIZADOR (igual o comunicado
+      // do org "pra monitorar"). Sem excludeEmail (org entra na lista) + _allowSelf pra furar o
+      // self-guard do _sendUserNotification. Assim ele recebe o link no app/e-mail/notificação.
       window._notifyTournamentParticipants(ctx.t, {
         type: 'wa_group', tournamentId: String(ctx.t.id), tournamentName: ctx.t.name || '',
         title: 'Grupo oficial do torneio no WhatsApp',
         message: who + ' convidou você pro grupo oficial de comunicações do torneio "' + (ctx.t.name || '') + '". Toque em "Entrar no grupo".',
-        waGroupLink: _wlink,
+        waGroupLink: _wlink, _allowSelf: true,
         level: 'fundamental', timestamp: Date.now()
-      }, cu && cu.email);
+      });
       _stampGroupNotify(ctx);
       return;
     }
