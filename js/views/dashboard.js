@@ -1464,7 +1464,7 @@ function renderDashboard(container) {
         var _phaseLabel = '';
         if (m.label) _phaseLabel = String(m.label);
         else if (m.roundLabel) _phaseLabel = String(m.roundLabel);
-        else if (m.round != null) _phaseLabel = 'Rodada ' + m.round;
+        else if (m.round != null) _phaseLabel = 'Rodada ' + window._matchRoundDisplayNum(t, m); // 1-based, nunca R0
         var _formatLabel = m.isMonarch ? 'Rei/Rainha' : ((window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '');
         if (t.format === 'Liga' && t.ligaRoundFormat === 'rei_rainha' && m.isMonarch) _formatLabel = 'Pontos Corridos · Rei/Rainha';
         var _subLine = [_formatLabel, _phaseLabel].filter(Boolean).join(' · ');
@@ -1581,7 +1581,7 @@ function renderDashboard(container) {
       if (_isLiga || _isSwiss || (m && m.isMonarch)) {
         if (m && m.label) return String(m.label);
         if (m && m.roundLabel) return String(m.roundLabel);
-        if (m && m.round != null) return 'Rodada ' + m.round;
+        if (m && m.round != null) return 'Rodada ' + window._matchRoundDisplayNum(t, m); // 1-based, nunca R0
         return '';
       }
       // Conta partidas totais do torneio (excluindo BYE/TBD) para estimar total de times
@@ -1592,16 +1592,20 @@ function renderDashboard(container) {
       // v2.4.40: o TOTAL de rodadas vem do TAMANHO do bracket (nº de inscritos),
       // não do round máximo já gerado. Antes, um bracket só com R1 tinha maxRound=1
       // → fromEnd=0 → TODO jogo virava "Final" (bug do torneio da Vivi Hirata).
-      var maxRound = 0;
-      realMatches.forEach(function(mm) { if ((mm.round || 0) > maxRound) maxRound = mm.round || 0; });
+      // v1.3.9: nº de rodadas POSICIONAL (contagem de rodadas distintas do bracket do jogo),
+      // não o maxRound CRU — a repescagem/play-in usa round 0, então maxRound subestimava o
+      // total e o round cru gerava "Rodada 0"/"(R0)". curRound e totalRounds agora 1-based.
+      var _bkR = m.bracket || 'main';
+      var _rsetU = {};
+      realMatches.forEach(function(mm) { if (mm && (mm.bracket || 'main') === _bkR && typeof mm.round === 'number') _rsetU[mm.round] = 1; });
       var _parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
       var _entries = _parts.length;
-      var totalRounds = maxRound;
+      var totalRounds = Object.keys(_rsetU).length;
       if (_entries >= 2) {
         var _byEntries = Math.ceil(Math.log2(_entries)); // bracket de N → log2(N) rodadas
         if (_byEntries > totalRounds) totalRounds = _byEntries;
       }
-      var curRound = m.round || 0;
+      var curRound = window._matchRoundDisplayNum(t, m); // 1-based (posição), nunca 0
       // fromEnd: 0 = final, 1 = semi, 2 = quartas, 3 = oitavas
       var fromEnd = totalRounds - curRound;
       var phaseStr = '';
@@ -1887,7 +1891,7 @@ function renderDashboard(container) {
       // meta: Rodada X · Fase Y (multi-fase) · Linha (Ouro/Prata) — coroa se Rei/Rainha
       var _meta = [];
       var _rdM = String(_ngM.label || '').match(/R(?:odada)?\s*(\d+)/i);
-      var _rnum = _rdM ? Number(_rdM[1]) : ((_ngM.round != null && !isNaN(Number(_ngM.round))) ? Number(_ngM.round) : null);
+      var _rnum = _rdM ? Number(_rdM[1]) : ((_ngM.round != null && !isNaN(Number(_ngM.round))) ? window._matchRoundDisplayNum(_ngT || t, _ngM) : null); // 1-based, nunca R0
       if (_rnum != null) _meta.push('Rodada ' + _rnum);
       if (_ngT && window._isMultiPhase && window._isMultiPhase(_ngT) && _ngM.phaseIndex != null) {
         var _phN = (_ngT.phases && _ngT.phases[_ngM.phaseIndex] && _ngT.phases[_ngM.phaseIndex].name) || ('Fase ' + ((Number(_ngM.phaseIndex) || 0) + 1));

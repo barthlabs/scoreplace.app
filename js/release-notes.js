@@ -11,6 +11,12 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🔢 v1.3.9 — A primeira rodada é sempre R1 (nunca R0) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔢 Fim do "Rodada 0":</b> em torneios com <b>repescagem</b>, a primeira rodada aparecia como "Rodada 0" em alguns cards (tela inicial). Agora a contagem começa sempre em <b>R1</b> — a primeira rodada é R1 (seja ela oitavas, quartas ou semi), a próxima R2, e assim por diante.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fcd34d; font-size:1rem; margin-bottom:8px;">📝 v1.3.8 — Inscrições da fase não fecham por surpresa + controle ao vivo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
