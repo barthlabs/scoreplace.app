@@ -1789,6 +1789,7 @@ window._translations['pt'] = {
   'create.lateEnrollExpandDesc': 'Quando suplentes acumularem o suficiente para um novo confronto, ele é criado automaticamente e os participantes entram no torneio. (Requer Fechadas desligado.)',
   'create.lateEnrollExpandOnDesc': 'Quando suplentes acumularem o suficiente para um novo confronto, ele é criado automaticamente e os participantes entram no torneio.',
   'create.lateEnrollExpandOffDesc': 'Suplentes só entram em quadra quando alguém desistir. Não serão criados novos confrontos automaticamente.',
+  'create.lateEnrollInheritHint': 'Por padrão, segue a inscrição da fase inicial — toque para a eliminatória ter regra própria.',
   'create.lateEnrollExpandDisabledDesc': 'Indisponível enquanto "Fechadas" estiver ligado — não há suplentes para formar novos confrontos.',
   'create.lateEnrollExpandGruposOnDesc': 'Quando uma dupla completa se forma na lista de espera, ela é sorteada para um grupo com menos participantes — e as chaves e a tabela daquele grupo são refeitas para incluí-la.',
   'create.lateEnrollExpandGruposOffDesc': 'Suplentes só entram em quadra quando alguém desistir. Nenhuma equipe nova será encaixada nos grupos automaticamente.',

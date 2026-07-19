@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.7';
+window.SCOREPLACE_VERSION = '1.3.8';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)

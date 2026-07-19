@@ -1777,6 +1777,7 @@ window._translations['en'] = {
   'create.lateEnrollExpandDesc': 'When enough substitutes accumulate to form a new matchup, it is created automatically and the participants join the tournament. (Requires Closed off.)',
   'create.lateEnrollExpandOnDesc': 'When enough substitutes accumulate to form a new matchup, it is created automatically and the participants join the tournament.',
   'create.lateEnrollExpandOffDesc': 'Substitutes only play when someone drops out. No new matchups will be created automatically.',
+  'create.lateEnrollInheritHint': 'By default, follows the initial phase\'s registration — tap to give the elimination its own rule.',
   'create.lateEnrollExpandDisabledDesc': 'Unavailable while "Closed" is on — there are no substitutes to form new matchups.',
   'create.lateEnrollExpandGruposOnDesc': 'When a full pair forms in the waitlist, it is drawn into a group with fewer participants — and that group\'s bracket and table are rebuilt to include it.',
   'create.lateEnrollExpandGruposOffDesc': 'Substitutes only play when someone drops out. No new team will be slotted into the groups automatically.',

@@ -95,7 +95,11 @@
   //   conf  : ligado = Novos Confrontos (➕) · desligado = Suplentes Apenas (🪑)  [só aparece quando aberta]
   function _lateEnrollElimBlock(e) {
     var T = window._t || function (k) { return k; };
-    var v = (['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) >= 0) ? e.lateEnrollment : 'closed';
+    // 'inherit' (default) = a elim SEGUE a inscrição da fase inicial (#late-enrollment do form).
+    // Exibe o valor herdado + aviso; tocar num toggle grava um valor EXPLÍCITO (regra própria).
+    var _explicit = ['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) >= 0;
+    var _inh = (function () { var el = document.getElementById('late-enrollment'); var val = el && el.value; return (['closed', 'standby', 'expand'].indexOf(val) >= 0) ? val : 'expand'; })();
+    var v = _explicit ? e.lateEnrollment : _inh;
     var isClosed = v === 'closed', isExpand = v === 'expand';
     var onRow = 'border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);';
     var offRow = 'border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);';
@@ -116,9 +120,10 @@
       T(isExpand ? 'create.lateEnrollExpand' : 'create.lateEnrollSuplentesOnly'),
       T(isExpand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc'),
       _tg(isExpand, 'window._f2ElimLateConf(this.checked)')) + '</div>');
+    var inheritHint = _explicit ? '' : ('<div style="font-size:0.72rem;color:#93c5fd;margin:0 0 8px;display:flex;align-items:flex-start;gap:5px;line-height:1.4;"><span>🔗</span><span>' + T('create.lateEnrollInheritHint') + '</span></div>');
     return '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:12px;padding:1rem;margin-top:14px;">' +
       '<p style="margin:0 0 0.75rem;font-size:0.8rem;color:#fbbf24;font-weight:600;text-transform:uppercase;letter-spacing:1px;">⏱️ ' + T('create.lateEnrollSection') + '</p>' +
-      masterRow + confRow + '</div>';
+      inheritHint + masterRow + confRow + '</div>';
   }
   // Janela da fase em dias: (término − 1º sorteio). Base da via de mão dupla rodadas↔repetir.
   // v4.4.62: CONSIDERA O HORÁRIO de cada campo (não meia-noite). 1º sorteio = data+hora do

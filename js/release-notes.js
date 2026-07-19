@@ -11,6 +11,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
+      '<div style="font-weight:800; color:#fcd34d; font-size:1rem; margin-bottom:8px;">📝 v1.3.8 — Inscrições da fase não fecham por surpresa + controle ao vivo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>✅ A eliminatória segue a inscrição que você abriu:</b> se você deixou as inscrições <b>abertas</b> (suplentes ou novos confrontos) na fase inicial, a <b>eliminatória agora herda</b> essa regra por padrão — em vez de fechar sozinha e recusar quem tentava se inscrever. Quer que a eliminatória tenha regra <b>própria</b>? É só ajustar no painel dela, como antes.</li>' +
+        '<li><b>⏱️ Abrir/fechar a inscrição da fase <b>ao vivo</b>:</b> nas Ferramentas do Organizador, com o torneio já em andamento, apareceu um controle <b>Fechadas · Suplentes · Novos Confrontos</b> pra você mudar a inscrição da fase atual <b>a qualquer momento</b> — inclusive reabrir uma fase que estava fechada.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #f87171;border-radius:12px;padding:14px 16px;background:rgba(239,68,68,0.08);">' +
       '<div style="font-weight:800; color:#fca5a5; font-size:1rem; margin-bottom:8px;">🚫 v1.3.7 — Faltou alguém da dupla? O desfecho é combinado <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
