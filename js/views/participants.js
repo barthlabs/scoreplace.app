@@ -510,6 +510,29 @@ window._applyWO = function (t, opts) {
     }
   }
 
+  // ── DESFECHO oferecido a quem decreta (Stage 1 — W.O. individual de eliminatória) ──
+  // Regra do dono (18-jul-2026, ver project_wo_outcome_negotiation_canon): em vez de o motor
+  // decidir o desfecho sozinho (substituir/avançar), quando `opts.offerOutcomeChoice` está
+  // setado devolvemos 'needsOutcomeChoice' com o contexto — a UI abre o overlay das opções
+  // (avançar/desclassificar · suplente da espera · convidar folga · Jogador X). SÓ eliminatória
+  // INDIVIDUAL; time/Liga/monarch seguem o fluxo próprio. ADITIVO: sem a flag, nada muda.
+  if (opts.offerOutcomeChoice && !opts.outcomeChoice && !_isLigaFmt && !_isMonarch && _preMatch) {
+    const _cslot = _absentInSlot(_preMatch, 'p1') ? 'p1' : 'p2';
+    const _csu = (typeof window._slotUids === 'function') ? window._slotUids(_preMatch, _cslot).filter(Boolean) : [];
+    const _cEntry = String(_preMatch[_cslot] || '');
+    const _cIsTeam = _csu.length ? _csu.length > 1 : _cEntry.includes('/');
+    const _cIndiv = woScope === 'individual' && _cIsTeam && (_csu.length
+      ? (absentUids.length && _csu.some(u => absentUids.indexOf(u) !== -1) && !_csu.every(u => absentUids.indexOf(u) !== -1))
+      : (_cEntry.split(/\s*\/\s*/).map(n => n.trim()).indexOf(absentName) !== -1 && _cEntry !== absentName));
+    if (_cIndiv) {
+      const _partnerUid = _csu.length ? (_csu.find(u => absentUids.indexOf(u) === -1) || null) : null;
+      const _coppSide = _cslot === 'p1' ? 'p2' : 'p1';
+      return { ok: true, outcome: 'needsOutcomeChoice', absentName: absentName, absentUids: absentUids,
+        matchId: _preMatch.id, matchNum: _friendlyOf(_preAll, _preMatch), partnerUid: _partnerUid,
+        oppName: _preMatch[_coppSide] || '', scope: scope };
+    }
+  }
+
   // 1) tenta substituto da lista de espera (só se houver alguém PRESENTE na fila).
   // v4.1.38: substituição SÓ no escopo INDIVIDUAL. No escopo TIME (woScope==='team')
   // a regra do dono é: faltou 1 → o TIME INTEIRO leva W.O. (adversário vence), NUNCA
@@ -519,9 +542,12 @@ window._applyWO = function (t, opts) {
   const pool = (typeof window._getStandbyPool === 'function') ? window._getStandbyPool(t) : [];
   const _isPresent = p => { const ci = window._idMapGet(t, t.checkedIn, p); return typeof ci === 'number' ? ci > 0 : !!ci; };
   const presentInPool = pool.filter(_isPresent);
-  // _forceNoSub: o organizador escolheu "W.O. ao time" no diálogo de categoria — pula a
-  // tentativa de substituição e escala direto (o adversário vence).
-  if (woScope === 'individual' && !opts._forceNoSub && pool.length && presentInPool.length && typeof window._processWoSubstitutions === 'function') {
+  // outcomeChoice (Stage 1 — project_wo_outcome_negotiation_canon): 'advance' | 'waitlistSub'
+  // | 'ghost'. null = fluxo legado (consenso de participante / chamadas antigas) → inalterado.
+  const _choice = opts.outcomeChoice || null;
+  // _forceNoSub: "W.O. ao time" no diálogo de categoria — pula a substituição e escala.
+  // 'advance'/'ghost' também pulam a substituição automática (o desfecho já foi escolhido).
+  if (woScope === 'individual' && !opts._forceNoSub && _choice !== 'advance' && _choice !== 'ghost' && pool.length && presentInPool.length && typeof window._processWoSubstitutions === 'function') {
     const r = window._applyWoSubsToTournament(t);
     if (r && r.subCount > 0) return { ok: true, outcome: 'subbed', subCount: r.subCount, subDetails: r.subDetails || [] };
     // Há suplente presente, mas NENHUM atende a categoria do ausente → NÃO escala pra W.O.
@@ -544,7 +570,7 @@ window._applyWO = function (t, opts) {
     .filter(m => m && !m.winner && (_absentInSlot(m, 'p1') || _absentInSlot(m, 'p2')));
   if (!pending.length) return { ok: false, outcome: 'noMatch', reason: 'jogo do ausente não encontrado', absentMarked: true };
 
-  let applied = 0, winner = null, matchNum = null, partnerToWaitlist = null, waitedTBD = false, anyKO = false;
+  let applied = 0, winner = null, matchNum = null, partnerToWaitlist = null, waitedTBD = false, anyKO = false, ghostApplied = 0;
   for (const m of pending) {
     const slot = _absentInSlot(m, 'p1') ? 'p1' : 'p2';
     const oppSide = slot === 'p1' ? 'p2' : 'p1';
@@ -574,6 +600,26 @@ window._applyWO = function (t, opts) {
       isTeamEntry = entryStr.includes('/');
       members = isTeamEntry ? entryStr.split(/\s*\/\s*/).map(n => n.trim()) : [entryStr];
       isIndividualWO = woScope === 'individual' && isTeamEntry && members.indexOf(absentName) !== -1 && entryStr !== absentName;
+    }
+    // ── Jogador X (ghost): o parceiro que ficou SEGUE com um placeholder; o jogo NÃO é
+    //    decidido e o adversário NÃO avança. Só W.O. INDIVIDUAL. Reconstitui o slot por uid
+    //    (parceiro + ghost). Ver project_wo_outcome_negotiation_canon.
+    if (isIndividualWO && _choice === 'ghost') {
+      const _pUid = slotUids.length ? slotUids.find(u => absentUids.indexOf(u) === -1) : null;
+      const _pName = (_pUid && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(_pUid, '') : (members.find(n => n !== absentName) || '');
+      const _ghostUid = 'ghostwo_' + Date.now() + '_' + Math.floor(Math.random() * 1e4);
+      if (!Array.isArray(t.woGhosts)) t.woGhosts = [];
+      t.woGhosts.push({ uid: _ghostUid, name: 'Jogador X', replacedUid: (absentUids[0] || null), replacedName: absentName, matchId: m.id, at: Date.now() });
+      const _label = _pName ? (_pName + ' / Jogador X') : 'Jogador X';
+      const _newObj = { p1Uid: _pUid || null, p2Uid: _ghostUid, p1Name: _pName || '', p2Name: 'Jogador X',
+        displayName: _label, name: _label,
+        participants: [{ uid: (_pUid || undefined), displayName: (_pName || undefined), name: (_pName || undefined) },
+                       { uid: _ghostUid, displayName: 'Jogador X', name: 'Jogador X', isGhost: true }] };
+      if (typeof window._setSlot === 'function') window._setSlot(m, slot, [_pUid, _ghostUid].filter(Boolean), _newObj);
+      m[slot] = _label;
+      ghostApplied++;
+      _log(`W.O. individual: ${absentName} → Jogador X; ${_pName || 'parceiro'} segue no Jogo ${_friendlyOf(all, m)}.`);
+      continue;
     }
     // W.O. individual de dupla sem substituto → parceiro vai pra lista de espera
     if (isIndividualWO) {
@@ -618,6 +664,11 @@ window._applyWO = function (t, opts) {
       }
     }
     applied++; winner = oppName; matchNum = _friendlyOf(all, m);
+  }
+
+  // Jogador X aplicado (parceiro segue no jogo): não decidiu, ninguém avançou.
+  if (ghostApplied > 0 && applied === 0) {
+    return { ok: true, outcome: 'ghostApplied', ghostApplied: ghostApplied, absentName: absentName };
   }
 
   if (applied === 0) {

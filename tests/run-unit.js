@@ -63,6 +63,7 @@ const SUITES = [
   'tests/apply-wo.test.js',
   'tests/wo-individual.test.js',
   'tests/wo-availability-canonical.test.js',
+  'tests/wo-outcome-wiring.test.js',
   'tests/uid-poison.test.js',
   // Mesmo veneno, porta dos INSCRITOS (store.js — o uid-poison só carrega js/views/*).
   // Identificar inscrito por nome/e-mail (era o caso do organizador) fica VERMELHO aqui.

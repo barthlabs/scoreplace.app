@@ -200,6 +200,54 @@ function register(t) { W.AppStore.tournaments = [t]; return t; }
   ok(!gm[2].winner, 'grupos-claim: jogo B×C (sem ausente) intocado');
 })();
 
+// ── STAGE 1: DESFECHO oferecido a quem decreta (project_wo_outcome_negotiation_canon) ──
+// Reproduz o furo: o motor decidia sozinho. Agora offerOutcomeChoice devolve a escolha, e
+// outcomeChoice executa o desfecho (ghost = parceiro segue; advance = adversário vence).
+W._displayNameForUid = (u, d) => ({ ua: 'A', ub: 'B', uc: 'C', ud: 'D' }[u] || d || '');
+function mkDoubles(id) {
+  return register({
+    id: id, format: 'Eliminatórias Simples', woScope: 'individual',
+    participants: [{ displayName: 'A', uid: 'ua' }, { displayName: 'B', uid: 'ub' }, { displayName: 'C', uid: 'uc' }, { displayName: 'D', uid: 'ud' }],
+    standbyParticipants: [], checkedIn: {}, absent: {},
+    matches: [{ id: 'm1', p1: 'A / B', p2: 'C / D', team1Uids: ['ua', 'ub'], team2Uids: ['uc', 'ud'], winner: null, nextMatchId: null }],
+  });
+}
+// (a) offerOutcomeChoice → devolve needsOutcomeChoice SEM decidir o jogo
+(function () {
+  const t = mkDoubles('so1');
+  const r = W._applyWO(t, { absentName: 'A', absentUids: ['ua'], scope: 'match', woScope: 'individual', offerOutcomeChoice: true });
+  eq(r.outcome, 'needsOutcomeChoice', 'oferece: outcome needsOutcomeChoice');
+  eq(r.partnerUid, 'ub', 'oferece: parceiro é ub');
+  eq(r.oppName, 'C / D', 'oferece: adversário C / D');
+  ok(!t.matches[0].winner, 'oferece: jogo NÃO foi decidido');
+  ok(!(t.standbyParticipants || []).length, 'oferece: ninguém foi pra espera ainda');
+})();
+// (b) ghost (Jogador X) → parceiro segue, jogo não decide, adversário não avança
+(function () {
+  const t = mkDoubles('so2');
+  const r = W._applyWO(t, { absentName: 'A', absentUids: ['ua'], scope: 'match', woScope: 'individual', outcomeChoice: 'ghost' });
+  eq(r.outcome, 'ghostApplied', 'ghost: outcome ghostApplied');
+  ok(!t.matches[0].winner, 'ghost: jogo NÃO decidido');
+  ok(!t.matches[0].wo, 'ghost: NÃO marca W.O.');
+  ok(Array.isArray(t.woGhosts) && t.woGhosts.length === 1, 'ghost: 1 ghost registrado');
+  ok((t.matches[0].team1Uids || []).indexOf('ub') !== -1, 'ghost: parceiro ub segue no slot');
+  ok((t.matches[0].team1Uids || []).some(x => /^ghostwo_/.test(x)), 'ghost: placeholder Jogador X no slot');
+  ok(!(t.standbyParticipants || []).length, 'ghost: parceiro NÃO foi pra lista de espera');
+  ok(/Jogador X/.test(t.matches[0].p1), 'ghost: rótulo mostra Jogador X');
+})();
+// (c) advance → adversário vence, MESMO com suplente presente (pula a substituição)
+(function () {
+  const t = mkDoubles('so3');
+  t.participants.push({ displayName: 'Sub', uid: 'us' });
+  t.standbyParticipants = [{ displayName: 'Sub', uid: 'us' }];
+  t.checkedIn = { 'Sub': Date.now() };
+  const r = W._applyWO(t, { absentName: 'A', absentUids: ['ua'], scope: 'match', woScope: 'individual', outcomeChoice: 'advance' });
+  eq(r.outcome, 'woApplied', 'advance: outcome woApplied');
+  eq(t.matches[0].winner, 'C / D', 'advance: adversário vence');
+  ok(t.matches[0].wo, 'advance: m.wo=true');
+  ok(!(t.matches[0].team1Uids || []).some(x => /^ghostwo_/.test(x)), 'advance: não virou ghost');
+})();
+
 console.log(`  ${pass} asserts OK, ${fail} falhas`);
 if (fail > 0) { console.error('❌ apply-wo FALHOU'); process.exit(1); }
 console.log('✅ apply-wo: OK');

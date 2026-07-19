@@ -519,18 +519,33 @@
       var c2 = _claimById(ft, claimId); if (!c2) return false;
       if (orgResolve) { if (c2.status !== 'pending' && c2.status !== 'disputed') return false; }
       else if (c2.status !== 'pending') return false; // idempotência (já resolvido)
+      var _prevStatus = c2.status;
       if (confirmerUid) { c2.confirms = c2.confirms || {}; c2.confirms[confirmerUid] = true; }
       c2.status = 'applied'; c2.resolvedAt = new Date().toISOString();
       if (ligaGroup) return; // aplicação real via _ligaPickFill (interativo, no onDone)
       var rc2 = _resolveCtx(ft, _ctxFromClaim(c2)); if (!rc2) { if (applied === undefined) applied = { ok: false, reason: 'contexto perdido' }; return false; }
-      var ap = _applyClaim(ft, c2, rc2);
+      var ap = _applyClaim(ft, c2, rc2, orgResolve ? { offerOutcomeChoice: true } : {});
       if (applied === undefined) applied = ap;
+      if (ap.ok && ap.needsOutcomeChoice) {
+        // Stage 1 (project_wo_outcome_negotiation_canon): desfecho a escolher — NÃO
+        // persiste (nem 'applied' nem ausência). O organizador escolhe no overlay (abre
+        // no onDone) e a escolha re-aplica de verdade. Aborta a txn mantendo o claim.
+        c2.status = _prevStatus; c2.resolvedAt = null;
+        if (confirmerUid) { try { delete c2.confirms[confirmerUid]; } catch (e) {} }
+        return false;
+      }
       if (!ap.ok) { c2.status = orgResolve ? c2.status : 'pending'; if (confirmerUid) { try { delete c2.confirms[confirmerUid]; } catch (e) {} } return false; }
     }, function () {
       if (ligaGroup) {
         _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '".'));
         window._woCloseOverlay();
         if (typeof window._ligaPickFill === 'function') window._ligaPickFill(String(t.id), c.roundIndex, c.groupName, c.absentName);
+        return;
+      }
+      if (applied && applied.needsOutcomeChoice) {
+        // Stage 1: eliminatória individual — o organizador escolhe o desfecho.
+        window._woCloseOverlay();
+        if (typeof window._woOutcomeOverlay === 'function') window._woOutcomeOverlay(String(t.id), claimId, applied);
         return;
       }
       if (applied && applied.ok) {
@@ -607,12 +622,16 @@
   };
 
   // ─── APLICAÇÃO do W.O. — funil no motor único _applyWO (participants.js) ────────
-  function _applyClaim(t, c, rc) {
+  function _applyClaim(t, c, rc, xopts) {
+    xopts = xopts || {};
     try {
       // Motor ÚNICO de W.O. (participants.js) — funil canônico. O claim é o
       // gatilho fino: já validou permissão/consenso; aqui só aplica. Sem lista
       // não-vazia + ninguém presente, o claim ESCALA (o consenso já resolveu que
       // faltou) — por isso noSubBehavior:'escalate' (o organizador usa 'wait').
+      // Stage 1 (project_wo_outcome_negotiation_canon): offerOutcomeChoice faz o
+      // motor devolver 'needsOutcomeChoice' (o organizador escolhe o desfecho);
+      // outcomeChoice executa a escolha (advance / waitlistSub / ghost).
       if (typeof window._applyWO !== 'function') return { ok: false, reason: 'motor de W.O. indisponível' };
       var r = window._applyWO(t, {
         absentName: c.absentName,
@@ -621,19 +640,80 @@
         matches: rc.matches,
         roundIndex: c.roundIndex,
         groupName: c.groupName,
-        noSubBehavior: 'escalate'
+        noSubBehavior: 'escalate',
+        offerOutcomeChoice: !!xopts.offerOutcomeChoice,
+        outcomeChoice: xopts.outcomeChoice || null
       });
       if (!r || !r.ok) return { ok: false, reason: (r && r.reason) || 'não aplicou' };
       var note = r.outcome === 'ligaDelegated' ? (r.note || 'Escolha o substituto (folga / Jogador X).')
         : r.outcome === 'subbed' ? 'Substituto da lista de espera entrou no lugar.'
         : r.outcome === 'needsSubChoice' ? 'Nenhum suplente presente atende a categoria — escolha o substituto.'
+        : r.outcome === 'ghostApplied' ? 'Jogador X entrou — o parceiro segue no jogo.'
         : r.outcome === 'woApplied' ? 'Adversário venceu por W.O.'
         : r.outcome === 'waitedTBD' ? 'Ausência registrada — adversário ainda não definido.'
         : '';
-      return { ok: true, note: note, needsSubChoice: r.outcome === 'needsSubChoice' };
+      return { ok: true, outcome: r.outcome, note: note, needsSubChoice: r.outcome === 'needsSubChoice',
+        needsOutcomeChoice: r.outcome === 'needsOutcomeChoice',
+        partnerUid: r.partnerUid, oppName: r.oppName, matchId: r.matchId, matchNum: r.matchNum };
     } catch (e) {
       try { console.error('[wo-claim] apply falhou:', e); } catch (_e) {}
       return { ok: false, reason: (e && e.message) || 'erro ao aplicar' };
     }
   }
+
+  // ─── DESFECHO do W.O. (Stage 1) — o organizador escolhe como resolver o jogo ─────
+  // project_wo_outcome_negotiation_canon. Só eliminatória INDIVIDUAL (o motor devolve
+  // needsOutcomeChoice). 3 opções: suplente da espera (se houver presente) · Jogador X
+  // (parceiro segue) · desclassificar (adversário avança). Convidar-folga = Stage 2.
+  window._woOutcomeOverlay = function (tId, claimId, ctx) {
+    var t = _findT(tId); if (!t) return;
+    var c = _claimById(t, claimId); if (!c) return;
+    if (!_canManage(t)) return;
+    ctx = ctx || {};
+    var partnerName = (ctx.partnerUid && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(ctx.partnerUid, '') : '';
+    var absDisp = _esc(c.absentName || ctx.absentName || 'ausente');
+    var oppDisp = _esc(ctx.oppName || '');
+    var pool = (typeof window._getStandbyPool === 'function') ? (window._getStandbyPool(t) || []) : [];
+    var hasPresentSub = pool.some(function (p) {
+      var ci = (typeof window._idMapGet === 'function') ? window._idMapGet(t, t.checkedIn || {}, p) : null;
+      return typeof ci === 'number' ? ci > 0 : !!ci;
+    });
+    var _btn = function (choice, bg, col, bd, label, sub) {
+      return '<button type="button" onclick="window._woChooseOutcome(\'' + _attr(t.id) + '\',\'' + _attr(claimId) + '\',\'' + choice + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:10px;background:' + bg + ';border:1px solid ' + bd + ';color:' + col + ';font-weight:800;border-radius:12px;padding:12px 14px;">' + label +
+        '<div style="font-weight:600;font-size:0.72rem;color:var(--text-muted);margin-top:3px;">' + sub + '</div></button>';
+    };
+    var body = '<div style="padding:1.1rem;">' +
+      '<div style="font-weight:800;font-size:1.0rem;color:var(--text-bright);">🚫 ' + absDisp + ' <span style="color:var(--text-muted);font-weight:600;">faltou</span></div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 14px;">Como resolver o jogo' + (partnerName ? ' de <b style="color:#fbbf24;">' + _esc(partnerName) + '</b>' : '') + '?</div>' +
+      (hasPresentSub ? _btn('waitlistSub', 'rgba(16,185,129,0.10)', '#34d399', 'rgba(16,185,129,0.45)', '🔁 Puxar suplente da lista de espera', 'O próximo da fila (presente) assume, respeitando a regra do torneio.') : '') +
+      _btn('ghost', 'rgba(99,102,241,0.10)', '#a5b4fc', 'rgba(99,102,241,0.45)', '👤 Jogador X (o parceiro segue)', (partnerName ? _esc(partnerName) : 'O parceiro') + ' continua no torneio com um jogador placeholder.') +
+      _btn('advance', 'rgba(239,68,68,0.10)', '#f87171', 'rgba(239,68,68,0.45)', '🏳️ Desclassificar — adversário avança', (oppDisp ? oppDisp + ' avança' : 'O adversário avança') + ' por W.O.') +
+      '<div style="font-size:0.66rem;color:var(--text-muted);text-align:center;margin-top:2px;">Convidar folga da rodada: em breve.</div>' +
+    '</div>';
+    _overlay(_header('Como resolver o W.O.?') + body);
+  };
+
+  window._woChooseOutcome = function (tId, claimId, choice) {
+    var t = _findT(tId); if (!t || !_canManage(t)) return;
+    var c = _claimById(t, claimId); if (!c) return;
+    var applied;
+    _commit(tId, function (ft) {
+      var c2 = _claimById(ft, claimId); if (!c2) return false;
+      if (c2.status === 'applied' || c2.status === 'cancelled') return false;
+      var rc2 = _resolveCtx(ft, _ctxFromClaim(c2)); if (!rc2) return false;
+      var ap = _applyClaim(ft, c2, rc2, { outcomeChoice: choice });
+      if (applied === undefined) applied = ap;
+      if (!ap.ok) return false;
+      c2.status = 'applied'; c2.resolvedAt = new Date().toISOString();
+    }, function (okSave) {
+      window._woCloseOverlay();
+      if (okSave && applied && applied.ok) {
+        if (applied.needsSubChoice && _canManage(t)) { if (typeof window._woShowSubChoiceDialog === 'function') window._woShowSubChoiceDialog(String(t.id)); return; }
+        _notify(t, c.absentUids, _notifData(t, '🚫 W.O. resolvido', (applied.note || '') + ' — ' + (t.name || '')));
+        if (typeof showNotification === 'function') showNotification('✅ W.O. resolvido', applied.note || '', 'success');
+      } else if (typeof showNotification === 'function') {
+        showNotification('Não aplicou', (applied && applied.reason) || 'Tente de novo.', 'warning');
+      }
+    }, 'Aplicando o desfecho…');
+  };
 })();
