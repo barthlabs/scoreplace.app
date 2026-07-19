@@ -842,6 +842,8 @@ function _buildMatchPlayersList(t, m) {
 // Inline scoring has no pointLog/gameLog, so only games/sets aggregate —
 // point-level analytics (holds, breaks, deuce, streaks) stay zero here.
 function _persistInlineTournamentMatchRecord(t, m, s1, s2, tbP1, tbP2, isTiebreakEntry, useSets) {
+  // Sandbox: resultados do SB NÃO vazam pro matchHistory (nem stats, nem troféus).
+  if (window._isSandboxTournament && window._isSandboxTournament(t)) return;
   if (!window.FirestoreDB || !window.FirestoreDB.saveUserMatchRecords) return;
   var pl = _buildMatchPlayersList(t, m);
   if (!pl) return;
@@ -890,6 +892,8 @@ function _persistInlineTournamentMatchRecord(t, m, s1, s2, tbP1, tbP2, isTiebrea
 // GSM (set-by-set) variant used by _saveSetResult. m.sets already holds the
 // full per-set data so the record is richer than the inline path.
 function _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGamesP1, totalGamesP2) {
+  // Sandbox: resultados do SB NÃO vazam pro matchHistory (nem stats, nem troféus).
+  if (window._isSandboxTournament && window._isSandboxTournament(t)) return;
   if (!window.FirestoreDB || !window.FirestoreDB.saveUserMatchRecords) return;
   var pl = _buildMatchPlayersList(t, m);
   if (!pl) return;

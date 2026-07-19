@@ -90,6 +90,12 @@ const SUITES = [
   // Autopresença via presença de LOCAL: check-in confirmado no local do torneio, na janela
   // [início−2h, fim] → vira PRESENTE (verde) sozinho. Sem GPS silencioso; respeita "ausente" do org.
   'tests/auto-presence-venue.test.js',
+  // Sandbox (SB) do dev — rede de isolamento: notif mudas, stats/resultados não vazam, invisível
+  // pra não-dev. Trava _statsEligibleTournaments + getVisibleTournaments/getMyParticipations.
+  'tests/sandbox-isolation.test.js',
+  // Sandbox — criação do clone: _openOrCreateSandbox clona o estado atual (deep-copy), privado +
+  // notif mudas + isSandbox, dev-only, sem tocar no original; 2ª chamada abre o mesmo SB.
+  'tests/sandbox-create.test.js',
   // Convite pro grupo de WhatsApp (org notifica inscritos c/ o link): type wa_group fundamental
   // + CTA _notifCta abre o link do grupo. Sem o caso, cairia no "Ver torneio" genérico.
   'tests/wa-group-notify.test.js',

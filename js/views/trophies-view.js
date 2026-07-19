@@ -598,7 +598,7 @@
 
   // ─── Ação: vai para torneios abertos ou abre criação com dica ────────────────
   window._trophyGoToTournament = function() {
-    var all = ((window.AppStore && window.AppStore.tournaments) || [])
+    var all = (window._statsEligibleTournaments ? window._statsEligibleTournaments() : ((window.AppStore && window.AppStore.tournaments) || []))
       .concat((window.AppStore && window.AppStore.publicDiscovery) || []);
 
     var hasOpen = all.some(function(t) {

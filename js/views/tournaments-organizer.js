@@ -1,5 +1,50 @@
 // ── Organizer Actions & Notifications ──
 // Clone tournament — creates a new tournament based on an existing one
+// ─── Sandbox (SB) do desenvolvedor ──────────────────────────────────────────
+// Cria (ou abre) um clone PRIVADO do torneio que roda EXATAMENTE o mesmo código do
+// original — as mesmas Cloud Functions (drawRound, integrateLateEntries, enroll/deenroll,
+// autoDraw). O SB começa como cópia PROFUNDA do estado atual do original + as flags de
+// isolamento. Depois um trigger de CF (Etapa 3) espelha o roster do original → SB. As
+// ÚNICAS diferenças: notificações mudas, stats/resultados não vazam, invisível pra não-dev.
+// Só o dev (_isTestIdentity) enxerga/usa. Ver memória project_sandbox_tournament.
+window._openOrCreateSandbox = function(origId) {
+    if (!(window._isTestIdentity && window._isTestIdentity())) return; // só o dev
+    var orig = window._findTournamentById ? window._findTournamentById(origId) : null;
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!orig || !cu || !cu.uid) return;
+    if (window._isSandboxTournament && window._isSandboxTournament(orig)) {
+        // já é um SB — não cria SB de SB; só abre.
+        window.location.hash = '#tournaments/' + orig.id; return;
+    }
+    // Já existe um SB deste original? Abre.
+    var existing = window._findSandboxOf ? window._findSandboxOf(origId) : null;
+    if (existing) { window.location.hash = '#tournaments/' + existing.id; return; }
+    // Clona o estado ATUAL (deep copy) → SB.
+    var clone;
+    try { clone = JSON.parse(JSON.stringify(orig)); } catch (e) { clone = Object.assign({}, orig); }
+    var sbId = 'tour_' + Date.now() + '_sb';
+    clone.id = sbId;
+    clone.name = '(SB) ' + String(orig.name || 'Torneio');
+    clone.isSandbox = true;
+    clone.sandboxOf = String(origId);
+    clone.notificationsMuted = true;   // killswitch — rede de segurança
+    clone.isPublic = false;            // privado
+    clone.sandboxOwnerUid = cu.uid;
+    clone.creatorUid = cu.uid;         // dev = admin do SB (autoriza drawRound/reset)
+    clone.organizerEmail = cu.email || '';
+    clone.organizerName = cu.displayName || '';
+    clone.createdAt = new Date().toISOString();
+    clone.sandboxSyncedAt = Date.now();
+    delete clone.sandboxId;            // SB não tem SB próprio
+    if (!Array.isArray(clone.memberUids)) clone.memberUids = [];
+    if (clone.memberUids.indexOf(cu.uid) === -1) clone.memberUids.push(cu.uid);
+    window.AppStore.addTournament(clone);
+    if (typeof showNotification === 'function') {
+        showNotification('🧪 Sandbox criado', '"' + clone.name + '" — privado, notificações mudas, espelha o original.', 'success');
+    }
+    setTimeout(function() { window.location.hash = '#tournaments/' + sbId; }, 400);
+};
+
 window._cloneTournament = function(tournamentId) {
     var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });
     if (!t || !window.AppStore.currentUser) return;
@@ -113,6 +158,13 @@ function _notifDedupCheck(uid, type, tId, matchId) {
 // WhatsApp pra pular — `skipWhatsApp` virou no-op e só a cópia por e-mail importa.
 window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     if (!window.FirestoreDB || !window.FirestoreDB.db || !uid) return;
+    // Sandbox/killswitch: se a notif é de um torneio com notificações mudas, não dispara.
+    // Resolve o torneio pelo id do payload (o SB está carregado quando a ação parte dele).
+    if (notifData && notifData.tournamentId && typeof window._findTournamentById === 'function'
+        && window._tournamentNotificationsMuted) {
+        var _tMute = window._findTournamentById(notifData.tournamentId);
+        if (_tMute && window._tournamentNotificationsMuted(_tMute)) return;
+    }
     var _skipOpt = (_skipDispatch && typeof _skipDispatch === 'object') ? _skipDispatch : null;
     var _skipAll = (_skipDispatch === true);
     var _skipEmail = _skipAll || !!(_skipOpt && _skipOpt.skipEmail);
@@ -219,6 +271,9 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
 window._notifyTournamentParticipants = async function(tournament, notifData, excludeEmail) {
     if (!window.FirestoreDB || !window.FirestoreDB.db) return;
     var t = tournament;
+    // Sandbox/killswitch: torneio com notificações mudas NÃO dispara nada (nem app,
+    // nem e-mail). Ver _tournamentNotificationsMuted. É a rede de segurança do SB.
+    if (window._tournamentNotificationsMuted && window._tournamentNotificationsMuted(t)) return;
     var parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
 
     // Build list of {uid, email} from participants — prefer uid directly from participant object

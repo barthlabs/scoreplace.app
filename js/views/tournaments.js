@@ -3010,12 +3010,18 @@ function renderTournaments(container, tournamentId = null) {
                       _renderPlayoffSection) deletado de vez — confirmado que nenhum
                       torneio no banco usava. A fase final da Liga agora é uma fase do
                       construtor de fases (t.phases[]), adicionada em sequência à Liga. */ ''}
-                ${(window.AppStore.isCreator(t) && hasDraw) ? `<button class="btn btn-tool-amber hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window._resetTournamentToEnrollment('${t.id}')" title="Apaga sorteio, rodadas e fases; mantém os inscritos">🔄 Resetar (manter inscritos)</button>` : ''}
-                ${(hasDraw && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-purple hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window._devSimulateCurrentPhase('${t.id}')" title="DEV (só você): simula os resultados da fase atual com horários reais">🎲 Simular fase (dev)</button>` : ''}
+                ${/* Reset + Simular fase: SÓ no SB e só pro dev (some dos torneios normais). */ ''}
+                ${(window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity() && hasDraw) ? `<button class="btn btn-tool-amber hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window._resetTournamentToEnrollment('${t.id}')" title="SB: re-sincroniza o roster do original agora e apaga sorteio/resultados/adições de teste">🔄 Resetar (manter inscritos)</button>` : ''}
+                ${(window._isSandboxTournament && window._isSandboxTournament(t) && hasDraw && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-purple hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window._devSimulateCurrentPhase('${t.id}')" title="SB (só você): simula os resultados da fase atual com horários reais">🎲 Simular fase (dev)</button>` : ''}
                 ${window.AppStore.isCreator(t) ? `<button class="btn btn-danger hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window.deleteTournamentFunction('${t.id}')">🗑️ ${_t('enroll.deleteTournament') || 'Apagar Torneio'}</button>` : ''}
               </div>
             </div>`;
             })() : ''}
+
+            ${/* Sandbox (só o dev): FORA do bloco de organizador — o dev cria/abre o SB de
+                  QUALQUER torneio que enxerga, mesmo sem ser o organizador. Não aparece no
+                  próprio SB. */ ''}
+            ${(tournamentId && typeof window._isTestIdentity === 'function' && window._isTestIdentity() && !(window._isSandboxTournament && window._isSandboxTournament(t))) ? `<div style="margin-top:10px;"><button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._openOrCreateSandbox('${t.id}')" title="DEV (só você): clona este torneio num Sandbox PRIVADO que espelha o original e roda as mesmas Cloud Functions — sem notificações nem stats">🧪 ${(window._findSandboxOf && window._findSandboxOf(t.id)) ? 'Abrir' : 'Criar'} Sandbox</button></div>` : ''}
 
             ${/* v2.1.51: box de progresso movido pra logo acima do badge
                   "Torneio em andamento" (topo do actionsHtml), abaixo das

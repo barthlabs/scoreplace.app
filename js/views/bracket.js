@@ -292,8 +292,9 @@ function renderBracket(container, tournamentId, isInline) {
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift" onclick="window._exportTournamentCSV('${_tIdSafe}')">📊 CSV</button>` : '<span></span>'}
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._tvMode('${_tIdSafe}')">📺 Modo TV</button>` : '<span></span>'}
       ${isOrg && !hasContent ? `<button class="btn btn-primary btn-sm hover-lift" style="grid-column:span 2;" onclick="window.generateDrawFunction('${_tIdSafe}')">🎲 Realizar Sorteio</button>` : ''}
-      ${(isOrg && hasContent && window.AppStore.isCreator && window.AppStore.isCreator(t)) ? `<button class="btn btn-warning btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._resetTournamentToEnrollment('${_tIdSafe}')" title="Apaga sorteio, rodadas e fases; mantém os inscritos">🔄 Resetar (manter inscritos)</button>` : ''}
-      ${(hasContent && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-purple btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._devSimulateCurrentPhase('${_tIdSafe}')" title="DEV (só você): simula os resultados da fase atual com horários reais">🎲 Simular fase (dev)</button>` : ''}
+      ${/* Reset + Simular fase: SÓ no SB e só pro dev (removidos dos torneios normais). */ ''}
+      ${(hasContent && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-warning btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._resetTournamentToEnrollment('${_tIdSafe}')" title="SB: re-sincroniza o roster do original agora e apaga sorteio/resultados/adições de teste">🔄 Resetar (manter inscritos)</button>` : ''}
+      ${(hasContent && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-purple btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._devSimulateCurrentPhase('${_tIdSafe}')" title="SB (só você): simula os resultados da fase atual com horários reais">🎲 Simular fase (dev)</button>` : ''}
     </div>
     <style>
       @media (min-width: 768px) {

@@ -810,6 +810,36 @@ window._isTestIdentity = function () {
   } catch (e) { return false; }
 };
 
+// ─── Sandbox (SB) do desenvolvedor ──────────────────────────────────────────
+// Torneio-espelho PRIVADO que roda EXATAMENTE o mesmo código do original (as mesmas
+// Cloud Functions: drawRound, integrateLateEntries, enroll/deenroll, autoDraw) — é o
+// único jeito de testar de verdade. As ÚNICAS diferenças: (1) notificações mudas,
+// (2) stats/resultados NÃO vazam pra lugar nenhum (matchHistory/troféus/pills),
+// (3) invisível pra não-dev. `sandboxOf` aponta pro original; no original, `sandboxId`
+// aponta de volta. Ver memória project_sandbox_tournament.
+window._isSandboxTournament = function (t) { return !!(t && t.isSandbox === true); };
+// Notificações silenciadas? Sandbox OU killswitch explícito por torneio (t.notificationsMuted).
+window._tournamentNotificationsMuted = function (t) {
+  return !!(t && (t.notificationsMuted === true || t.isSandbox === true));
+};
+// Lista de torneios elegível pra STATS GLOBAIS (perfil, troféus, pills, confrontos):
+// exclui os sandboxes — resultados do SB não vazam pra agregação nenhuma. Recebe a
+// lista base (default = AppStore.tournaments).
+window._statsEligibleTournaments = function (list) {
+  var base = Array.isArray(list) ? list : ((window.AppStore && window.AppStore.tournaments) || []);
+  return base.filter(function (t) { return !(t && t.isSandbox === true); });
+};
+// Acha o SB de um torneio original (por sandboxOf) na lista local. null se não há.
+// (O link mora no SB, não no original — o dev pode não ter permissão de escrever o original.)
+window._findSandboxOf = function (origId) {
+  var list = (window.AppStore && window.AppStore.tournaments) || [];
+  for (var i = 0; i < list.length; i++) {
+    var t = list[i];
+    if (t && t.isSandbox === true && String(t.sandboxOf) === String(origId)) return t;
+  }
+  return null;
+};
+
 // Flag ligada pro usuário atual? Use em qualquer gate:
 //   if (window._flag('safe-area')) { ...novo caminho... } else { ...atual... }
 window._flag = function (name) {
@@ -6761,7 +6791,11 @@ window.AppStore = {
   getVisibleTournaments() {
     var invitedIds = this._invitedTournamentIds || [];
     var cu = window.AppStore.currentUser;
+    var _devSees = !!(window._isTestIdentity && window._isTestIdentity());
     return this.tournaments.filter(function(t) {
+      // Sandbox: invisível pra QUALQUER um que não seja o dev — mesmo tendo os
+      // participantes reais espelhados no memberUids. Só o dev enxerga o SB.
+      if (t.isSandbox && !_devSees) return false;
       if (t.isPublic) return true;
       if (invitedIds.indexOf(String(t.id)) !== -1) return true;
       if (!cu || !cu.uid) return false;
@@ -6801,7 +6835,10 @@ window.AppStore = {
         return false;
       });
     };
+    var _devSeesP = !!(window._isTestIdentity && window._isTestIdentity());
     return this.tournaments.filter(function(t) {
+      // Sandbox: participante real espelhado no SB NÃO vê o SB em "Participando".
+      if (t.isSandbox && !_devSeesP) return false;
       // v2.2.45 FIX: memberUids[] inclui creatorUid + uids de co-hosts SÓ pra
       // read-access nas regras do Firestore — NÃO é prova de inscrição. Antes,
       // o organizador caía aqui e o próprio torneio aparecia em "Participando"
