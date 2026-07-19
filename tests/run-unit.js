@@ -127,6 +127,9 @@ const SUITES = [
   'tests/delete-account-dupla-orphan.test.js',
   'tests/merge-federated-wins.test.js',
   'tests/login-redirect.test.js',
+  // Item 9: a FUSÃO agora POPULA loginRedirects (antes só a resolveLoginRedirect lia → redirect
+  // nunca disparava). Chave = e-mail minúsculo / telefone E.164, igual ao que o reader lê.
+  'tests/login-redirect-write.test.js',
   'tests/uid-sweep.test.js',
   'tests/reset-phone-reachable.test.js',
   'tests/delete-account-canon.test.js',

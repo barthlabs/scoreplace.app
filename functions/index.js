@@ -304,6 +304,31 @@ function _isSyntheticAuthEmail(email) {
   return /@phone\.scoreplace\.app$/i.test(String(email || ""));
 }
 
+// v1.3.18 — POPULA `loginRedirects` na fusão. Furo do item 9: a resolveLoginRedirect LIA essa
+// coleção mas NADA a escrevia → o redirect nunca disparava (feature morta). Aqui gravamos
+// {e-mail | telefone do DROP} → uid do sobrevivente. Motivo: numa fusão do MESMO provedor (duas
+// Google), o provedor da conta absorvida não migra; logar com aquele e-mail cria uma conta VAZIA,
+// e a resolveLoginRedirect precisa deste mapa pra jogar a sessão na conta certa.
+// SEGURANÇA: só o Admin SDK escreve (rules deny-all — [[project_privileged_fields_never_client_writable]]).
+// Chave = e-mail MINÚSCULO / telefone E.164, EXATAMENTE como a resolveLoginRedirect lê do token
+// verificado (tok.email.toLowerCase() / tok.phone_number). Idempotente (merge:true). Ignora
+// e-mail sintético (@phone.scoreplace.app) — não é login real. Escrever pra credencial que FOI
+// transferida ao keep é inócuo: logar com ela cai numa conta COM perfil → resolveLoginRedirect
+// devolve has_profile (nunca redireciona quem já tem perfil).
+async function _recordLoginRedirects(db, ownerUid, dropEmail, dropPhone) {
+  if (!ownerUid) return;
+  const keys = [];
+  if (dropEmail && !_isSyntheticAuthEmail(dropEmail)) keys.push(String(dropEmail).toLowerCase());
+  if (dropPhone) keys.push(String(dropPhone));
+  for (const k of keys) {
+    try {
+      await db.collection("loginRedirects").doc(k).set(
+        { ownerUid: ownerUid, at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      console.log(`[loginRedirects] ${k} → ${ownerUid}`);
+    } catch (e) { console.error("[loginRedirects] write falhou:", k, e.code || e.message); }
+  }
+}
+
 /**
  * MOTOR ÚNICO de fusão bidirecional.
  *
@@ -392,6 +417,11 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   if (upd.email) profUpd.email = upd.email;
   if (upd.phoneNumber) { profUpd.phone = upd.phoneNumber; profUpd.phoneCountry = profUpd.phoneCountry || "55"; }
   await db.collection("users").doc(keepU.uid).set(profUpd, { merge: true }).catch(() => {});
+
+  // 5) loginRedirects: futuro login com a credencial do DROP → cai no keep. Essencial na fusão
+  //    do MESMO provedor (2 Google): o provider não migra, logar com aquele e-mail cria conta
+  //    vazia, e a resolveLoginRedirect usa este mapa pra corrigir. Ver _recordLoginRedirects.
+  await _recordLoginRedirects(db, keepU.uid, dropEmail, dropPhone);
 
   return { survivorUid: keepU.uid, droppedUid: dropU.uid, already: false };
 }
@@ -4534,6 +4564,8 @@ exports.mergePhoneAccount = onCall(
         mergedInto: callerUid,
         mergedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+      // loginRedirects: logar depois com a credencial da conta antiga cai no caller (item 9).
+      await _recordLoginRedirects(db, callerUid, _oldAuth && _oldAuth.email, _oldAuth && _oldAuth.phoneNumber);
     }
 
     console.log(`[mergePhoneAccount] ${dryRun ? "DRY-RUN " : ""}DONE ` + JSON.stringify(report));
