@@ -11,6 +11,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #94a3b8;border-radius:12px;padding:14px 16px;background:rgba(148,163,184,0.08);">' +
+      '<div style="font-weight:800; color:#cbd5e1; font-size:1rem; margin-bottom:8px;">🧹 v1.3.15 — Detalhe do torneio mais limpo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⏱️ Duração estimada sem repetição:</b> a tabela de simulações (8/16/32/64 inscritos) saiu do detalhe — ela é planejamento e fica na tela de <b>edição</b>. No detalhe fica só a <b>Estimativa de duração real</b> (com o número atual de inscritos), abaixo da contagem regressiva.</li>' +
+        '<li><b>📋 Chamada mais direta:</b> o box "Chamada antes do sorteio" saiu — o sorteio já tem seu botão próprio (🎲 Sortear), que decide o que fazer com os ausentes. A contagem de presentes/ausentes continua no topo da lista.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #22d3ee;border-radius:12px;padding:14px 16px;background:rgba(34,211,238,0.08);">' +
       '<div style="font-weight:800; color:#67e8f9; font-size:1rem; margin-bottom:8px;">✅ v1.3.14 — Presença marca a pessoa certa (por identidade, não por nome) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

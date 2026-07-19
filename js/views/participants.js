@@ -2619,20 +2619,12 @@ function renderParticipants(container, tournamentId) {
     ? _rollCallBar(rcTotal, rcPresent, rcAbsent, rcPending)
     : (postDrawPresence ? _rollCallBar(totalIndividuals, checkedCount, absentConfirmedCount, totalIndividuals - checkedCount - absentConfirmedCount) : '');
 
-  // ── Banner da CHAMADA pré-sorteio: instrução + "Sortear entre os presentes" ──
-  const rollCallBanner = (canRollCall && parts.length > 0) ? `
-    <div style="margin-bottom:1.25rem;padding:16px 18px;background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(79,70,229,0.1));border:2px solid rgba(99,102,241,0.4);border-radius:16px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-            <span style="font-size:1.3rem;">📋</span>
-            <span style="font-size:1rem;font-weight:800;color:var(--text-bright);">Chamada antes do sorteio</span>
-        </div>
-        <p style="color:#94a3b8;font-size:0.83rem;line-height:1.5;margin:0 0 12px;">
-            Marque quem está <b style="color:#4ade80;">presente</b>. Ao sortear, você decide o que fazer com os ausentes — <b style="color:#fbbf24;">enviar à lista de espera</b> ou <b style="color:#f87171;">desclassificar</b> — e o sorteio roda só entre os presentes.
-        </p>
-        <button class="btn btn-cta hover-lift" onclick="event.stopPropagation(); window._drawPresentOnly('${tId}')" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;padding:13px;border-radius:12px;border:none;font-size:0.95rem;">
-            🎲 Sortear entre os presentes (${rcPresent})
-        </button>
-    </div>` : '';
+  // v1.3.15 (dono): box "Chamada antes do sorteio" + "Sortear entre os presentes" REMOVIDO —
+  // o sorteio tem tela própria no fluxo (org sorteia pelo botão "🎲 Sortear" das ferramentas,
+  // que já resolve presentes/ausentes via _handleSortearClick). A contagem que trava abaixo do
+  // cabeçalho (_rollCallBar → rollCallControls, belowHtml) permanece. `_drawPresentOnly` segue
+  // existindo pra quem chamar direto, só não há mais este botão.
+  const rollCallBanner = '';
 
   // ── "Iniciar Torneio" banner (after draw, before start) ──
   const startBanner = (isOrg && drawDone && !t.tournamentStarted && !(window._hasAnyMatchResult && window._hasAnyMatchResult(t))) ? `

@@ -2657,7 +2657,10 @@ function renderTournaments(container, tournamentId = null) {
               var _toggleWrapped = ligaActiveToggleHtml ? '<div style="margin-left:auto;">' + ligaActiveToggleHtml + '</div>' : '';
               return `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;" onclick="event.stopPropagation();">${_updatedHtml}${_toggleWrapped}</div>`;
             })()}
-            ${(typeof window._buildTimeEstimation === 'function') ? window._buildTimeEstimation(t) : ''}
+            ${/* v1.3.15 (dono): tabela "DURAÇÃO ESTIMADA" (8/16/32/64 simulações) REMOVIDA do detalhe —
+                 ela é planejamento e vive só na tela de EDIÇÃO (_buildPhaseEstimate por fase). Aqui no
+                 detalhe fica só a "Estimativa de duração" REAL (_buildDurationForecast, abaixo da regressiva).
+                 _buildTimeEstimation segue existindo (usado por _buildDurationForecast com {dataOnly:true}). */''}
 
             ${(() => {
               if (isFinished) return '';
