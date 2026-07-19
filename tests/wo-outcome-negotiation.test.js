@@ -180,6 +180,9 @@ ok(typeof W._woRejectOutcome === 'function', '_woRejectOutcome existe');
   as('ub'); lastOverlay = ''; W._woOutcomeOverlay('r1', 'wo1', null, 'propose');
   ok(/_woProposeOutcome\(/.test(lastOverlay), 'render: overlay propose usa _woProposeOutcome');
   ok(/'advance'/.test(lastOverlay) && /'ghost'/.test(lastOverlay), 'render: overlay propose lista as opções');
+  // Canon (dono, jul/2026): ELIMINATÓRIA não tem folga/sit-out — só lista de espera. O overlay da
+  // CHAVE NUNCA oferece "convidar folga". Trava project_sitout_vs_waitlist_canon.
+  ok(!/folga/i.test(lastOverlay), 'render: overlay da elim NÃO menciona folga (elim = só lista de espera)');
   // propõe → proposed → adversário vê Aceitar/Rejeitar
   W._woProposeOutcome('r1', 'wo1', 'ghost'); await tick();
   as('uc'); lastOverlay = ''; W._woOpenClaim('r1', ctxKey);

@@ -809,8 +809,11 @@
       (hasPresentSub ? _btn('waitlistSub', 'rgba(16,185,129,0.10)', '#34d399', 'rgba(16,185,129,0.45)', '🔁 Puxar suplente da lista de espera', 'O próximo da fila (presente) assume, respeitando a regra do torneio.') : '') +
       _btn('ghost', 'rgba(99,102,241,0.10)', '#a5b4fc', 'rgba(99,102,241,0.45)', '👤 Jogador X (o parceiro segue)', (partnerName ? _esc(partnerName) : 'O parceiro') + ' continua no torneio com um jogador placeholder.') +
       _btn('advance', 'rgba(239,68,68,0.10)', '#f87171', 'rgba(239,68,68,0.45)', '🏳️ Desclassificar — adversário avança', (oppDisp ? oppDisp + ' avança' : 'O adversário avança') + ' por W.O.') +
-      '<div style="font-size:0.66rem;color:var(--text-muted);text-align:center;margin-top:2px;">Convidar folga da rodada: em breve.</div>' +
-    '</div>';
+      // Canon (dono, jul/2026): ELIMINATÓRIA não tem folga/sit-out — só lista de espera. Sit-out
+      // existe só em formato que SORTEIA a rodada (Liga/Suíço/Rei-Rainha) e na elim que ABRE com
+      // rodada Rei/Rainha (tratado no caminho de round-drawing, não neste overlay de chave). Então
+      // aqui o desfecho é só suplente / Jogador X / desclassificar — nunca "convidar folga".
+      '</div>';
     _overlay(_header(mode === 'propose' ? 'Proponha o desfecho' : 'Como resolver o W.O.?') + body);
   };
 
