@@ -47,6 +47,43 @@ ok(sb.memberUids.indexOf('uDEV') !== -1, 'dev no memberUids');
 // original NÃO tocado.
 ok(orig.participants.length === 3 && orig.creatorUid === 'uORG' && orig.isPublic === true, 'original intocado');
 
+// ── Original ENCERRADO/degradado: participants[] virou slots de chave SEM uid (é o que
+//    acontece de verdade num torneio finalizado — "Duplas Mistas Sorteadas"). O reset velho
+//    puxava esse lixo e destruía os inscritos reais do SB. NOVO: mantém os reais do SB,
+//    LIMPOS e em ORDEM de enrollSeq, dropando o placeholder-fantasma sem uid. ───────────
+var origFin = { id: 'FIN', name: 'Duplas Mistas', isPublic: true, creatorUid: 'uORG',
+  format: 'Eliminatórias Simples', status: 'finished',
+  // participants degradados: slots de chave, sem uid nem enrollSeq
+  participants: [{ p1Name: 'X', p2Name: 'Y' }, { p1Name: 'Z', p2Name: 'W' }],
+  matches: [{ id: 'm1' }, { id: 'm2' }], memberUids: ['uORG', 'uA', 'uB', 'uC'] };
+// SB capturou os 3 reais (enrollSeq FORA de ordem) + 1 fantasma sem uid (adição de teste).
+var sbFin = { id: 'FIN_SB', name: '(SB) Duplas Mistas', isSandbox: true, sandboxOf: 'FIN',
+  notificationsMuted: true, isPublic: false, sandboxOwnerUid: 'uDEV', creatorUid: 'uDEV',
+  organizerEmail: 'dev@x.com', createdAt: 't0',
+  participants: [
+    { uid: 'uC', displayName: 'Ced', enrollSeq: 20, checkedIn: true, matchNum: 3 },
+    { uid: 'uA', displayName: 'Ana', enrollSeq: 2 },
+    { displayName: 'Fantasma', enrollSeq: 9 },              // sem uid = placeholder de teste
+    { uid: 'uB', displayName: 'Bia', enrollSeq: 7, isStandby: true }
+  ],
+  matches: [{ id: 'mX' }], status: 'finished' };
+W.AppStore.tournaments = [origFin, sbFin];
+
+W._resyncSandboxRoster(sbFin);
+
+var finUids = (sbFin.participants || []).map(function (p) { return p.uid; });
+ok(sbFin.participants.length === 3, 'encerrado: mantém os 3 inscritos REAIS do SB (não os slots degradados)');
+ok(finUids.indexOf('uA') !== -1 && finUids.indexOf('uB') !== -1 && finUids.indexOf('uC') !== -1, 'encerrado: os 3 reais preservados');
+ok(sbFin.participants.every(function (p) { return !!p.uid; }), 'encerrado: fantasma sem uid dropado');
+// ordem = enrollSeq crescente (2, 7, 20) → Ana, Bia, Ced
+ok(sbFin.participants[0].uid === 'uA' && sbFin.participants[1].uid === 'uB' && sbFin.participants[2].uid === 'uC', 'encerrado: ordenado por enrollSeq (ordem de inscrição real)');
+// estado de teste (presença/jogo) LIMPO nos cards do roster
+ok(sbFin.participants.every(function (p) { return p.checkedIn === undefined && p.matchNum === undefined && p.isStandby === undefined; }), 'encerrado: roster limpo (sem presença/jogo/standby)');
+ok(sbFin.participants[0].enrollSeq === 2, 'encerrado: enrollSeq de ORIGEM preservado (não renumerou)');
+// identidade do SB preservada; original degradado intocado.
+ok(sbFin.id === 'FIN_SB' && sbFin.isSandbox === true && sbFin.sandboxOf === 'FIN', 'encerrado: identidade do SB preservada');
+ok(origFin.participants.length === 2 && origFin.status === 'finished', 'encerrado: original intocado');
+
 console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
 if (fail > 0) { console.error('❌ sandbox-reset-resync FALHOU'); process.exit(1); }
 console.log('✅ sandbox-reset-resync: OK');

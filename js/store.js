@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.29';
+window.SCOREPLACE_VERSION = '1.3.30';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -839,16 +839,78 @@ window._findSandboxOf = function (origId) {
   }
   return null;
 };
-// Re-sincroniza o SB com o estado ATUAL do original (usado no "Resetar" do SB): re-clona
-// o original AGORA, dropando qualquer adição de teste (dupla formada, +participante,
-// placeholder) — e PRESERVA a identidade/isolamento do SB. Muta `ft` no lugar (chamado
-// dentro de um AppStore.mutate; o persist é `set`, então dropar chaves realmente remove).
-// O sorteio re-clonado é limpo por _clearTournamentDraw logo depois. Ver project_sandbox_tournament.
+// Coleta os inscritos REAIS (pessoas de verdade) de um torneio: individual com uid, ou
+// dupla com (p1Uid|p1Name)&&(p2Uid|p2Name). Varre participants + waitlist + standby, dedup
+// por uid/par. DESCARTA placeholders sem uid (adições de teste "fantasma" — foi de onde
+// veio o "27º" num torneio de 26). Ver project_sandbox_tournament, project_count_people_not_entries.
+window._sbCollectRealEnrollees = function (t) {
+  var out = [], seen = {};
+  if (!t) return out;
+  [t.participants, t.waitlist, t.standbyParticipants].forEach(function (arr) {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function (p) {
+      if (!p || typeof p !== 'object') return;
+      var isPair = (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name);
+      var isIndiv = !!p.uid;
+      if (!isPair && !isIndiv) return; // sem uid e sem par = placeholder de teste → fora
+      var key = isPair
+        ? ('pair:' + [String(p.p1Uid || p.p1Name), String(p.p2Uid || p.p2Name)].sort().join('|').toLowerCase())
+        : ('u:' + String(p.uid).toLowerCase());
+      if (seen[key]) return; seen[key] = 1;
+      out.push(p);
+    });
+  });
+  return out;
+};
+
+// Reconstrói o roster do SB como INSCRIÇÃO LIMPA: cada inscrito reduzido só aos campos de
+// inscrição (identidade + perfil + número de inscrição), SEM presença/W.O./jogo/formação de
+// dupla/sorteio, e ORDENADO por enrollSeq (a ORDEM REAL em que se inscreveram no original).
+// O enrollSeq de origem é PRESERVADO (o número exibido é o rank denso via _buildEnrollOrderMap).
+window._sbRebuildCleanRoster = function (list) {
+  var ALLOW = ['uid', 'name', 'displayName', 'email', 'photoURL', 'gender', 'birthDate',
+    'skillBySport', 'categories', 'category', 'defaultCategory', 'categorySource',
+    'wasUncategorized', 'selfEnrolled', 'addedAt', 'enrollSeq',
+    'p1Uid', 'p1Name', 'p1Email', 'p1Photo', 'p1Seq', 'p1Gender', 'p1BirthDate',
+    'p2Uid', 'p2Name', 'p2Email', 'p2Photo', 'p2Seq', 'p2Gender', 'p2BirthDate'];
+  var seqOf = function (p) {
+    var s = (p.enrollSeq != null) ? p.enrollSeq
+      : (p.p1Seq != null ? p.p1Seq : (p.p2Seq != null ? p.p2Seq : null));
+    return (s == null || isNaN(s)) ? null : Number(s);
+  };
+  return (list || []).map(function (p, i) { return { p: p, i: i, seq: seqOf(p) }; })
+    .sort(function (a, b) {
+      var sa = a.seq == null ? Infinity : a.seq, sb = b.seq == null ? Infinity : b.seq;
+      return sa !== sb ? sa - sb : a.i - b.i;
+    })
+    .map(function (o) {
+      var c = {};
+      ALLOW.forEach(function (k) { if (o.p[k] !== undefined) c[k] = o.p[k]; });
+      return c;
+    });
+};
+
+// Re-sincroniza o SB com o original no "Resetar": re-clona a CONFIG do original AGORA
+// e reconstrói o ROSTER como inscrição limpa dos inscritos REAIS, na ordem de enrollSeq —
+// PRESERVANDO a identidade/isolamento do SB. Muta `ft` no lugar (chamado dentro de um
+// AppStore.mutate; o persist é `set`, então dropar chaves realmente remove). O sorteio/
+// presença/W.O. re-clonados são limpos por _clearTournamentDraw logo depois.
+//
+// ROSTER FIEL (a razão do SB existir — senão "não simula porra nenhuma do que acontece na
+// produção"): puxa os inscritos ATUAIS do original quando ele está VIVO (não encerrado) —
+// é o modelo "torneio futuro com mais inscritos entra no reset". Se o original está
+// ENCERRADO/degradado (participants[] virou slots de chave sem uid), mantém os inscritos
+// reais que o SB já capturou — NUNCA perde ninguém. Ver project_sandbox_tournament.
 window._resyncSandboxRoster = function (ft) {
   try {
     if (!ft || ft.isSandbox !== true || !ft.sandboxOf) return;
     var orig = (typeof window._findTournamentById === 'function') ? window._findTournamentById(ft.sandboxOf) : null;
     if (!orig) return;
+
+    // Captura os inscritos REAIS que o SB já tem — ANTES do wipe. Rede de segurança pro
+    // original degradado (encerrado), cujos 26 limpos só sobrevivem aqui.
+    var sbReal = window._sbCollectRealEnrollees(ft);
+
     var keep = {
       id: ft.id, name: ft.name, isSandbox: true, sandboxOf: ft.sandboxOf,
       notificationsMuted: true, isPublic: false,
@@ -859,12 +921,29 @@ window._resyncSandboxRoster = function (ft) {
     var fresh;
     try { fresh = JSON.parse(JSON.stringify(orig)); } catch (e) { return; }
     Object.keys(ft).forEach(function (k) { delete ft[k]; });        // limpa o estado de teste
-    Object.keys(fresh).forEach(function (k) { ft[k] = fresh[k]; }); // re-clona o original agora
+    Object.keys(fresh).forEach(function (k) { ft[k] = fresh[k]; }); // re-clona a config do original
     Object.keys(keep).forEach(function (k) { if (keep[k] !== undefined) ft[k] = keep[k]; });
     delete ft.sandboxId;
     ft.sandboxSyncedAt = Date.now();
-    if (!Array.isArray(ft.memberUids)) ft.memberUids = [];
-    if (ft.sandboxOwnerUid && ft.memberUids.indexOf(ft.sandboxOwnerUid) === -1) ft.memberUids.push(ft.sandboxOwnerUid);
+
+    // Roster fiel: original vivo → puxa o dele; encerrado/degradado → mantém o do SB.
+    var origReal = window._sbCollectRealEnrollees(fresh);
+    var useOrig = (orig.status !== 'finished') && origReal.length > 0;
+    var chosen = useOrig ? origReal : (sbReal.length ? sbReal : origReal);
+    ft.participants = window._sbRebuildCleanRoster(chosen);
+    ft.waitlist = [];
+    ft.standbyParticipants = [];
+    ft.monarchWaitlist = {};
+    if (typeof window._ensureEnrollSeqs === 'function') window._ensureEnrollSeqs(ft);
+
+    // memberUids = donos do SB + uids do roster (recomputado do zero, sem herdar o do original).
+    var mu = {};
+    if (ft.sandboxOwnerUid) mu[ft.sandboxOwnerUid] = 1;
+    if (ft.creatorUid) mu[ft.creatorUid] = 1;
+    ft.participants.forEach(function (p) {
+      [p.uid, p.p1Uid, p.p2Uid].forEach(function (u) { if (u) mu[u] = 1; });
+    });
+    ft.memberUids = Object.keys(mu);
   } catch (e) { if (window._error) window._error('resyncSandboxRoster', e); }
 };
 
