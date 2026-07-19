@@ -270,6 +270,7 @@ window._phaseLateEnrollControlHtml = function (t) {
 // usada por criar/sincronizar — garante consistência.
 window._computeTournamentPlanWindow = function(t) {
   if (!t || !window.PresenceDB) return null;
+  if (window._isSandboxTournament && window._isSandboxTournament(t)) return null; // SB não vaza presença (isolamento)
   if (window._isLigaFormat && window._isLigaFormat(t)) return null;          // temporada contínua
   if (!t.startDate || String(t.startDate).indexOf('T') === -1) return null;  // exige hora
   var startsAt = new Date(t.startDate).getTime();
@@ -294,6 +295,11 @@ window._computeTournamentPlanWindow = function(t) {
   if (!endsAt) endsAt = startsAt + 3 * 3600000;
   var MAX = 12 * 3600000;
   if (endsAt - startsAt > MAX) endsAt = startsAt + MAX;                       // cap 1 sessão
+  // v1.3.33: sessão INTEIRA no passado → sem "ida planejada". Torneio de data passada
+  // (ex: encerrado/resetado com startDate antigo) criava um plano que NUNCA fica ativo
+  // (loadMyActive filtra passado) → _findTournamentPresencePlan não achava → recriava +
+  // re-toastava "🗓️ Ida planejada" a CADA abertura do torneio. Guard mata o loop.
+  if (endsAt && endsAt < Date.now()) return null;
   var sport = window.PresenceDB.normalizeSport(t.sport || '');
   var w = { startsAt: startsAt, endsAt: endsAt, placeId: placeId, venueName: venueName, sports: sport ? [sport] : [] };
   if (t.venueLat) { var la = parseFloat(t.venueLat); if (!isNaN(la)) w.venueLat = la; }
