@@ -334,6 +334,11 @@
         '<div style="font-size:0.68rem;color:var(--text-muted);">Criado por <b style="color:var(--text-bright);">' + _esc(wg.byName || 'um jogador') + '</b>. ' +
           (isT ? 'Todos os inscritos entram pelo mesmo link.' : 'Todos deste jogo entram pelo mesmo link.') + '</div>' +
         '<button type="button" class="btn hover-lift btn-shine" onclick="window._waGrpOpenLink(' + idArgs + ')" style="background:' + WA_GREEN + ';color:#fff;width:100%;justify-content:center;margin-top:10px;">' + _icon() + 'Abrir grupo no WhatsApp ↗</button>' +
+        // v1.3.17: organizador reenvia o link do grupo pra TODOS os inscritos (app + e-mail +
+        // notificação nativa). Já dispara sozinho ao SALVAR o link; este botão é o reenvio
+        // manual (ex.: inscritos que entraram depois). Só no torneio (o modal já é org-only).
+        (isT ? '<button type="button" class="btn hover-lift" onclick="window._waGrpNotifyParticipants(' + idArgs + ', this)" style="background:rgba(37,211,102,0.14);border:1px solid rgba(37,211,102,0.5);color:#25D366;width:100%;justify-content:center;margin-top:8px;font-weight:700;">🔔 Notificar participantes</button>' +
+          '<div style="font-size:0.64rem;color:var(--text-muted);line-height:1.5;margin-top:6px;">Envia o link do grupo pra todos os inscritos — no app, por e-mail e por notificação. Já acontece sozinho quando você salva o link.</div>' : '') +
         '</div>';
       if (isT) body += _permsHtml();
       body += '<details><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;padding:6px 2px;">Trocar o link (o grupo foi refeito)</summary>';
@@ -513,6 +518,21 @@
     });
   };
 
+  // v1.3.17: reenvio MANUAL do convite do grupo pra todos os inscritos (só torneio, org).
+  // Mesma notificação que dispara sozinho ao salvar (_notifyOthers): app + e-mail + nativa,
+  // com o link do grupo. Útil pra inscritos que entraram depois de o link ter sido salvo.
+  window._waGrpNotifyParticipants = function (tId, matchId, btn) {
+    var ctx = _ctx(tId, '', 0); if (!ctx || ctx.scope !== 'tournament') return;
+    var cu = _cu();
+    if (!cu || !cu.uid || !_canManage(ctx, cu)) { _notify('Sem permissão', 'Só o organizador notifica os inscritos.', 'warning'); return; }
+    var wg = ctx.target.waGroup;
+    if (!wg || !wg.link) { _notify('Sem grupo', 'Salve o link do grupo primeiro.', 'warning'); return; }
+    var release = _spin(btn, 'Notificando…');
+    try { _notifyOthers(ctx); } catch (e) { try { console.error('[wa-group] notify participantes:', e); } catch (_e) {} }
+    if (typeof release === 'function') release();
+    _notify('✅ Participantes notificados', 'Os inscritos receberam o link do grupo — no app, por e-mail e por notificação.', 'success');
+  };
+
   // Apaga o link — volta ao estado "sem grupo". Mesmo gate de quem pode criar
   // (jogador do confronto / organizador do torneio) e mesmo padrão otimista +
   // revert do save.
@@ -550,12 +570,14 @@
   function _notifyOthers(ctx) {
     var cu = _cu(); var mine = (cu && cu.uid) || '';
     var who = (cu && (cu.displayName || cu.name)) || 'Alguém';
+    var _wlink = (ctx.target && ctx.target.waGroup && ctx.target.waGroup.link) || '';
     if (ctx.scope === 'tournament') {
       if (typeof window._notifyTournamentParticipants !== 'function') return;
       window._notifyTournamentParticipants(ctx.t, {
         type: 'wa_group', tournamentId: String(ctx.t.id), tournamentName: ctx.t.name || '',
-        title: 'Grupo do torneio no WhatsApp',
-        message: who + ' criou o grupo do WhatsApp de "' + (ctx.t.name || '') + '". Entre pelo link no app.',
+        title: 'Grupo oficial do torneio no WhatsApp',
+        message: who + ' convidou você pro grupo oficial de comunicações do torneio "' + (ctx.t.name || '') + '". Toque em "Entrar no grupo".',
+        waGroupLink: _wlink,
         level: 'fundamental', timestamp: Date.now()
       }, cu && cu.email);
       return;
@@ -564,8 +586,9 @@
     var m = ctx.m;
     var data = {
       type: 'wa_group', tournamentId: String(ctx.t.id), tournamentName: ctx.t.name || '', matchId: m.id,
-      title: 'Grupo do jogo criado',
-      message: who + ' criou o grupo do WhatsApp de "' + (m.p1 || '') + ' vs ' + (m.p2 || '') + '". Entre pelo link no app.',
+      title: 'Grupo do jogo no WhatsApp',
+      message: who + ' criou o grupo do WhatsApp de "' + (m.p1 || '') + ' vs ' + (m.p2 || '') + '". Toque em "Entrar no grupo".',
+      waGroupLink: _wlink,
       level: 'fundamental', timestamp: Date.now()
     };
     (window._schMatchUids(ctx.t, m) || []).forEach(function (u) {

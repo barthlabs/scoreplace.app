@@ -100,6 +100,15 @@ function renderNotifications(container) {
           '<button class="btn btn-sm" style="background: var(--danger-color); color:#fff; border:none; padding:6px 16px; font-size:0.78rem; font-weight:700;" onclick="event.stopPropagation(); if(window._cancelPairRequest)window._cancelPairRequest(\'' + safeTournamentId + '\',\'' + safePairReq + '\'); _markNotifRead(\'' + safeNotifId + '\'); window.location.hash=\'#tournaments/' + safeTournamentId + '\';">❌ Recusar</button>' +
           '<button class="btn btn-sm" style="background:#10b981; color:#fff; border:none; padding:6px 16px; font-size:0.78rem; font-weight:700;" onclick="event.stopPropagation(); if(window._acceptPairRequest)window._acceptPairRequest(\'' + safeTournamentId + '\',\'' + safePairReq + '\'); _markNotifRead(\'' + safeNotifId + '\'); window.location.hash=\'#tournaments/' + safeTournamentId + '\';">✅ Aceitar</button>' +
         '</div>';
+      } else if (n.type === 'wa_group' && n.waGroupLink) {
+        // v1.3.17: convite pro grupo oficial de WhatsApp — botão VERDE abre o link direto
+        // (window.open), + "Ver torneio" secundário. Link do organizador (confiável); escapa
+        // aspas/barras/aspas-duplas pro contexto onclick.
+        var safeWaLink = String(n.waGroupLink).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, '');
+        actionHtml = '<div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap:wrap;">' +
+          '<button class="btn btn-sm" style="background:#25D366; color:#fff; border:none; padding:6px 16px; font-size:0.78rem; font-weight:700;" onclick="event.stopPropagation(); window.open(\'' + safeWaLink + '\',\'_blank\'); _markNotifRead(\'' + safeNotifId + '\')">💬 Entrar no grupo</button>' +
+          (n.tournamentId ? '<button class="btn btn-sm" style="background: var(--primary-color); color: #fff; border: none; padding: 6px 14px; font-size: 0.78rem; font-weight: 600;" onclick="event.stopPropagation(); window.location.hash=\'#tournaments/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">' + (_t('notif.viewTournament') || 'Ver torneio') + '</button>' : '') +
+        '</div>';
       } else if (n.tournamentId && n.type !== 'tournament_deleted') {
         // For draw/result/new_round: navigate to bracket; for others: tournament detail
         var _navTarget = (n.type === 'draw' || n.type === 'new_round' || n.type === 'result' || n.type === 'tournament_finished') ? '#bracket/' : '#tournaments/';

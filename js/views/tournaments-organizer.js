@@ -322,6 +322,7 @@ window._notifCta = function(type, td) {
   if (['cohost_invite','host_transfer_invite'].indexOf(t) !== -1 && tUrl) return { label: 'Responder', url: tUrl };
   if ((t === 'presence_plan' || t === 'presence_checkin') && td.placeId) return { label: 'Ver local', url: base + '/#venues/' + td.placeId };
   if ((t === 'casual_invite' || t === 'casual_link_accepted' || t === 'casual_link_rejected' || t === 'casual_link_request') && td.roomCode) return { label: 'Ver partida', url: base + '/#casual/' + String(td.roomCode).toUpperCase() };
+  if (t === 'wa_group' && td.waGroupLink) return { label: '💬 Entrar no grupo', url: String(td.waGroupLink) };
   if (t === 'friend_request') return { label: 'Responder', url: base + '/#notifications' };
   if (t === 'poll' && tUrl) return { label: '📊 Responder enquete', url: tUrl };
   if (t === 'schedule' && tId) return { label: '📅 Combinar jogo', url: base + '/#bracket/' + tId };

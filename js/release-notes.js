@@ -11,6 +11,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #25D366;border-radius:12px;padding:14px 16px;background:rgba(37,211,102,0.08);">' +
+      '<div style="font-weight:800; color:#4ade80; font-size:1rem; margin-bottom:8px;">💬 v1.3.17 — Chamar os inscritos pro grupo do WhatsApp <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔔 Notificar participantes:</b> no card "Grupo do torneio", o organizador tem um botão que <b>manda o link do grupo pra todos os inscritos</b> — no app, por e-mail e por notificação no celular. Cada um recebe um botão <b>"Entrar no grupo"</b> que abre o WhatsApp direto.</li>' +
+        '<li><b>⚡ Automático ao salvar:</b> quando o organizador salva o link do grupo, todos os inscritos já são avisados na hora. O botão serve pra reenviar (ex.: pra quem se inscreveu depois).</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">📋 v1.3.16 — Chamada direto na tela do torneio <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
