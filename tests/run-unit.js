@@ -70,6 +70,9 @@ const SUITES = [
   'tests/round-display-no-r0.test.js',
   'tests/result-approval-uid.test.js',
   'tests/tiebreak-set-score.test.js',
+  // Lista de espera present-first é uid-only: homônimo presente (uR2) vem antes; sort por-nome
+  // casaria o 1º homônimo (uR1) e erraria. Trava o cânone "uid only" do painel de check-in.
+  'tests/waitlist-present-first-uid.test.js',
   'tests/uid-poison.test.js',
   // Mesmo veneno, porta dos INSCRITOS (store.js — o uid-poison só carrega js/views/*).
   // Identificar inscrito por nome/e-mail (era o caso do organizador) fica VERMELHO aqui.
