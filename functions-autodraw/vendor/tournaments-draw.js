@@ -1147,12 +1147,20 @@ window._rebuildIntegratedBracket = function(t) {
   var r1 = t.matches.filter(function(m){ return m && m.round === firstRound; });
   var R1count = r1.length;
   if (R1count < 2) return false;
-  var r2Target = 1; while (r2Target < R1count) r2Target *= 2;
-  var repechage = r2Target - R1count;
-
-  // elegibilidade de repescagem (loser de qualquer jogo de R1) + limpa wiring
+  // v1.3.69: repescagem MÍNIMA — a R2 = vencedores de R1 + SÓ os best-losers necessários pra
+  // fechar em nº PAR (não a próxima potência de 2). Regra do dono: "o melhor repescado passa
+  // DIRETO pra R2; o 2º faz a repescagem no jogo tardio (a definir)". Antes r2Target = próxima
+  // pow2 → reintroduzia TODOS os derrotados (over-repescagem: ninguém eliminava na R1). Agora
+  // as rodadas seguintes ganham BYE canônico (p2='BYE') quando o nº de vencedores é ímpar.
+  var r2Slots = R1count + (R1count % 2);   // 5 vencedores → 6 (par mínimo)
+  var repechage = r2Slots - R1count;       // best-losers DIRETOS pra R2: 5 → 1
+  // elegibilidade de repescagem: SÓ os jogos R1 SEM repFill (os reais) — seus derrotados formam
+  // o pool de repescados. O jogo tardio (com repFill = "a definir") é a própria repescagem-playin,
+  // não fonte de repescado. limpa wiring.
   r1.forEach(function(m){
-    if (repechage > 0) m.isRepechageR1 = true; else { delete m.isRepechageR1; }
+    var _isLatePlayin = !!(m.repFill && m.repFill.length);
+    if (!_isLatePlayin && (repechage > 0 || r1.some(function(x){ return x.repFill && x.repFill.length; }))) m.isRepechageR1 = true;
+    else delete m.isRepechageR1;
     delete m.nextMatchId; delete m.nextSlot;
   });
   // remove as rodadas SEGUINTES e 3º lugar (serão reconstruídos); mantém a 1ª rodada intacta
@@ -1165,7 +1173,7 @@ window._rebuildIntegratedBracket = function(t) {
   r1.forEach(function(m){ slots.push({ type: 'r1winner', fromMatch: m.id }); });
   for (var b = 0; b < repechage; b++) slots.push({ type: 'bestloser' });
 
-  var r2games = r2Target / 2;
+  var r2games = slots.length / 2;
   var r2Matches = [];
   for (var g = 0; g < r2games; g++) {
     var s1 = slots[g * 2], s2 = slots[g * 2 + 1];
@@ -1178,13 +1186,16 @@ window._rebuildIntegratedBracket = function(t) {
     if (s1 && s1.type === 'r1winner') { var src = r1.find(function(x){ return x.id === s1.fromMatch; }); if (src) { src.nextMatchId = r2m.id; src.nextSlot = 'p1'; } }
     if (s2 && s2.type === 'r1winner') { var src2 = r1.find(function(x){ return x.id === s2.fromMatch; }); if (src2) { src2.nextMatchId = r2m.id; src2.nextSlot = 'p2'; } }
   }
-  // R3+ (TBD, alimentados pelos vencedores de R2)
-  var prev = r2Matches, roundNum = firstRound + 2, cur = r2games;
-  while (cur > 1) {
-    var nextCount = Math.floor(cur / 2), nextRound = [];
-    for (var n = 0; n < nextCount; n++) { var nm = { id: 'ir' + roundNum + '-' + ts + '-' + (mc++), round: roundNum, p1: 'TBD', p2: 'TBD', winner: null }; t.matches.push(nm); nextRound.push(nm); }
-    for (var l = 0; l < prev.length; l++) { var tgt = Math.floor(l / 2), sl = (l % 2 === 0) ? 'p1' : 'p2'; if (tgt < nextRound.length) { prev[l].nextMatchId = nextRound[tgt].id; prev[l].nextSlot = sl; } }
-    prev = nextRound; cur = nextCount; roundNum++;
+  // R3+ (TBD, alimentados pelos vencedores da rodada anterior). v1.3.69: com repescagem mínima a
+  // rodada pode ter nº ÍMPAR de vencedores → o último recebe BYE (p2='BYE', _autoResolveBye do
+  // fluxo normal auto-avança). ceil pra criar o jogo do BYE; ímpar → o último jogo fica só com p1.
+  var prev = r2Matches, roundNum = firstRound + 2;
+  while (prev.length > 1) {
+    var _n = prev.length, _games = Math.ceil(_n / 2), nextRound = [];
+    for (var n = 0; n < _games; n++) { var nm = { id: 'ir' + roundNum + '-' + ts + '-' + (mc++), round: roundNum, p1: 'TBD', p2: 'TBD', winner: null }; t.matches.push(nm); nextRound.push(nm); }
+    for (var l = 0; l < _n; l++) { var tgt = Math.floor(l / 2), sl = (l % 2 === 0) ? 'p1' : 'p2'; prev[l].nextMatchId = nextRound[tgt].id; prev[l].nextSlot = sl; }
+    if (_n % 2 === 1) { var _byeM = nextRound[_games - 1]; _byeM.p2 = 'BYE'; _byeM.isBye = true; } // vencedor ímpar folga
+    prev = nextRound; roundNum++;
   }
 
   if (repechage > 0) {
