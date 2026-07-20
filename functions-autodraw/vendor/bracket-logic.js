@@ -1722,18 +1722,29 @@ function _updateProgressiveClassification(t) {
   var placed = {}; // name -> true: already assigned a definitive position
 
   // Record 3rd place match winner/loser up-front so semi/earlier rounds skip them.
-  if (t.thirdPlaceMatch && t.thirdPlaceMatch.winner) {
-    placed[t.thirdPlaceMatch.winner] = true;
-    var _tp_loser = t.thirdPlaceMatch.winner === t.thirdPlaceMatch.p1 ? t.thirdPlaceMatch.p2 : t.thirdPlaceMatch.p1;
+  if (_thirdM && _thirdM.winner) {
+    placed[_thirdM.winner] = true;
+    var _tp_loser = _thirdM.winner === _thirdM.p1 ? _thirdM.p2 : _thirdM.p1;
     if (_tp_loser && _tp_loser !== 'TBD') placed[_tp_loser] = true;
   }
 
+  // v1.3.79: POSIÇÃO por CONTADOR CORRIDO (posições reais, sem buraco), NÃO 2^roundFromEnd+1.
+  // A fórmula pow2 (perdedor da rodada X → posição 2^X+1) só bate quando a chave é potência de 2
+  // cheia. Na fórmula MÍNIMA (⌈E/2⌉, ex. 9 equipes) o perdedor da 1ª rodada caía em 2³+1=9 pulando
+  // 7 e 8 → "9 equipes com pior lugar 11º". Agora: 1,2 = final; 3,4 = 3º lugar (se houver); daí cada
+  // grupo de rodada (do fim pro começo) pega as próximas posições livres, sem gap. Ver [[project_podium_classif_canonical]].
+  // v1.3.79: 3º lugar pode vir do t.thirdPlaceMatch separado (legado) OU do match isThirdPlace
+  // canônico dentro de t.matches (fórmula mínima). Trata os dois igual. Ver [[project_third_place_always]].
+  var _thirdM = t.thirdPlaceMatch || allMatches.find(function(m){ return m && m.isThirdPlace; });
+  var _runPos = _thirdM ? 5 : 3;
   var reverseOrder = rounds.slice().reverse(); // [final, semi, qf, ..., r1]
   reverseOrder.forEach(function(roundNum) {
     var originalIdx = rounds.indexOf(roundNum);
     var roundFromEnd = totalRounds - 1 - originalIdx;
     var matchesInRound = allMatches.filter(function(m) {
-      return m.round === roundNum && m.bracket !== 'lower' && m.bracket !== 'grand';
+      // isThirdPlace tem round=final mas é jogo de COLOCAÇÃO, não degrau da escada — nunca conta
+      // como perdedor de rodada (senão vira 1º/2º junto com a final). 3º/4º saem dele no fim.
+      return m.round === roundNum && m.bracket !== 'lower' && m.bracket !== 'grand' && !m.isThirdPlace;
     });
 
     if (roundFromEnd === 0) {
@@ -1755,7 +1766,7 @@ function _updateProgressiveClassification(t) {
       // jogo de 3º existia mas estava SEM resultado os perdedores de semi eram ranqueados
       // 3º/4º por desempate — exatamente o que o organizador apontou que está errado.
       // Só ranqueia por desempate quando NÃO há jogo de 3º lugar (formatos legados).
-      if (!t.thirdPlaceMatch) {
+      if (!_thirdM) {
         var semiLosers = [];
         matchesInRound.forEach(function(m) {
           if (!m.winner || m.winner === 'draw' || m.isBye) return;
@@ -1767,13 +1778,15 @@ function _updateProgressiveClassification(t) {
           semiLosers.push({ name: stats.loser, stats: stats, history: history });
         });
         if (semiLosers.length > 0) {
-          positionGroups.push({ posStart: 3, losers: semiLosers });
+          positionGroups.push({ posStart: _runPos, losers: semiLosers });
           semiLosers.forEach(function(e) { placed[e.name] = true; });
+          _runPos += semiLosers.length;
         }
       }
     } else {
-      // Collect all losers in this round for tiebreaking
-      var posStart = Math.pow(2, roundFromEnd) + 1;
+      // Collect all losers in this round for tiebreaking.
+      // v1.3.79: posStart = próxima posição livre (contador corrido), NÃO 2^roundFromEnd+1 (pow2).
+      var posStart = _runPos;
       // v3.1.29: DEDUP por nome dentro do round. Na resolução PLAY-IN/REPESCAGEM, o
       // round 0 tem o jogo normal (isPhaseRepR1) E o jogo de repescagem (isPhaseRepGame).
       // Um derrotado da R1 que é repescado pra disputar a repescagem e PERDE de novo
@@ -1795,6 +1808,7 @@ function _updateProgressiveClassification(t) {
       if (losers.length > 0) {
         positionGroups.push({ posStart: posStart, losers: losers });
         losers.forEach(function(e) { placed[e.name] = true; });
+        _runPos += losers.length;
       }
     }
   });
@@ -1825,10 +1839,12 @@ function _updateProgressiveClassification(t) {
 
   // Handle 3rd place match result (applied LAST so it wins over any
   // contradictory entry a pathological dataset could produce).
-  if (t.thirdPlaceMatch && t.thirdPlaceMatch.winner) {
-    t.classification[t.thirdPlaceMatch.winner] = 3;
-    var tp_loser = t.thirdPlaceMatch.winner === t.thirdPlaceMatch.p1 ? t.thirdPlaceMatch.p2 : t.thirdPlaceMatch.p1;
-    if (tp_loser && tp_loser !== 'TBD') t.classification[tp_loser] = 4;
+  if (_thirdM && _thirdM.winner) {
+    t.classification[_thirdM.winner] = 3;
+    var tp_loser = _thirdM.winner === _thirdM.p1 ? _thirdM.p2 : _thirdM.p1;
+    // v1.3.79: só há 4º lugar se o perdedor for OUTRA equipe. Em N pequeno (ex. N=3) o jogo de 3º
+    // pode ser degenerado (mesma equipe repescada nos dois lados) → 4º não existe, não abrir buraco.
+    if (tp_loser && tp_loser !== 'TBD' && tp_loser !== _thirdM.winner) t.classification[tp_loser] = 4;
   }
 
   // v1.0.89-beta: incluir times cortados na fase Suíça na classificação final.
