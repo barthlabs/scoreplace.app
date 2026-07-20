@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.42';
+window.SCOREPLACE_VERSION = '1.3.43';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1630,7 +1630,17 @@ window._softRefreshView = function() {
                   // modal antes da pessoa escolher → "fica processando e não
                   // inscreve". Mesma classe de bug da v0.15.89/v1.0.62/casual overlay.
                   document.querySelector('[id^="modal-category-enroll-"]') ||
-                  document.getElementById('modal-birthdate-enroll');
+                  document.getElementById('modal-birthdate-enroll') ||
+                  // v1.3.43: DIÁLOGOS DO FLUXO DE SORTEIO. O log (debugDrawLogs) provou o bug:
+                  // trace parava em `genderDialog:shown` e o dono via "o diálogo equilibrado não
+                  // apareceu" — o appendChild rodava, mas o onSnapshot da gravação da chamada de
+                  // presença disparava _softRefreshView → initRouter → _dismissAllOverlays e varria
+                  // o diálogo ANTES de aparecer. Mesma classe da v0.15.89 (painel de resolução).
+                  // Sem estes, o sorteio morre no diálogo de gênero/presença e nunca chama a CF.
+                  document.getElementById('gender-draw-overlay') ||
+                  document.getElementById('presence-draw-choice') ||
+                  document.getElementById('absentee-resolution-dialog') ||
+                  document.getElementById('final-review-panel');
   var active = document.activeElement;
   var isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT' || active.isContentEditable);
   // v2.8.51: NÃO re-renderiza durante um arraste em andamento (body.sp-drag-compact).
@@ -2178,8 +2188,14 @@ window._dismissAllOverlays = function(opts) {
     'casual-match-overlay',   // lobby/join de partida casual — idem
     'player-profile-overlay', // perfil de jogador — escondido (display:none)
                               // quando stats está aberto, restaurado no Voltar
-    'flyer-print-overlay'     // diálogo de imprimir convite — fecha sozinho
+    'flyer-print-overlay',    // diálogo de imprimir convite — fecha sozinho
                               // (Cancelar/backdrop gravam as prefs e removem)
+    // v1.3.43: diálogos do FLUXO DE SORTEIO — ciclo de vida próprio (Confirmar/
+    // Cancelar removem sozinho). Bug provado via debugDrawLogs: o sweep varria o
+    // diálogo equilibrado/livre antes de aparecer → sorteio morria sem chamar a CF.
+    'gender-draw-overlay',    // escolha equilibrado/livre + gênero
+    'presence-draw-choice',   // sortear com todos / só entre presentes
+    'absentee-resolution-dialog' // destino dos ausentes (espera/desclassificar)
   ];
   ALWAYS_KEEP.forEach(function(id) {
     if (keep.indexOf(id) === -1) keep.push(id);
