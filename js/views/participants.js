@@ -1808,7 +1808,15 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   var _enrollOrderMap = ctx.enrollOrderMap || {};
   var _gridWaitSet = ctx.waitSet || {};
   var _T = window._t || function (k) { return k; };
-  var pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _T('participants.participant', { n: idx + 1 }));
+  // v1.3.67: resolve o nome pelo UID ANTES do fallback "Participante N"/email. Entrada só-uid
+  // (nome stripado no save — cânone: identidade é uid) caía direto no "Participante N" e o card
+  // (e o data-lj-name do drag de formar dupla) mostrava "Participante 2" no lugar do nome real.
+  // Ver [[project_uid_identity_canon_locked]].
+  var _pUidN = (p && typeof p === 'object') ? (p.uid || '') : '';
+  var pName = (typeof p === 'string') ? p
+    : (p.displayName || p.name
+       || (_pUidN && typeof window._displayNameForUid === 'function' ? window._displayNameForUid(_pUidN, '') : '')
+       || p.email || _T('participants.participant', { n: idx + 1 }));
   var isTeam = !!window._entryTeamMembers(p);
   var _isOrgP = (typeof window._isOrgPlayer === 'function') && window._isOrgPlayer(t, pName, p);
   var _orgStar = _isOrgP ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.95rem;line-height:1;">⭐</span>' : '';

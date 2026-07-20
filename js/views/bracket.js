@@ -977,7 +977,12 @@ window._formLateJoinDupla = function (tId, src, tgt) {
   function _ljClearPending() { if (_ljPending && _ljPending.timer) clearTimeout(_ljPending.timer); _ljPending = null; }
   function _ljBegin(card, pt) {
     var key = card.getAttribute('data-lj-key');
-    var nm = card.getAttribute('data-lj-name') || key;
+    // v1.3.67: resolve o nome AO VIVO pelo uid (data-lj-key = uid nas entradas com conta) —
+    // se o cache do perfil estava frio no render, data-lj-name virou "Participante N" e o
+    // clone arrastado mostrava isso em vez do nome. Guest: key = nome, _displayNameForUid não
+    // resolve → cai no data-lj-name. Ver [[project_uid_identity_canon_locked]].
+    var _liveNm = (key && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(key, '') : '';
+    var nm = _liveNm || card.getAttribute('data-lj-name') || key;
     var clone = document.createElement('div');
     clone.textContent = '👤 ' + nm;
     clone.style.cssText = 'position:fixed;z-index:100060;pointer-events:none;background:#f59e0b;color:#111;font-weight:800;font-size:0.8rem;padding:6px 12px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);transform:translate(-50%,-160%);left:' + pt.clientX + 'px;top:' + pt.clientY + 'px;';
