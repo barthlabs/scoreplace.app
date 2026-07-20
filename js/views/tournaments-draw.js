@@ -2063,6 +2063,11 @@ window.generateDrawFunction = function (tId) {
         // (o alvo é a potência de 2, já atingida). Ver docs/sorteio-ciclo-decisoes.md.
         var _decisions = t._drawDecisions || null;
         if (window._dtrace) window._dtrace('cf:send', { redraw: !!_redraw, decisions: _decisions });
+        // v1.3.91 (dono): "Sorteando…" com a bola girando DURANTE o round-trip da CF. Os painéis
+        // (sem-dupla/gênero/numérica) escondem o loader do _startDraw quando abrem — então aqui, no
+        // último passo (a chamada da CF que pode DEMORAR), re-mostra a tela pra NÃO parecer travado.
+        // Some sozinho no hashchange do #bracket (sucesso) ou no _hideLoading do catch (erro).
+        if (typeof window._showLoading === 'function') window._showLoading('🎾 Sorteando…');
         window._callDrawRound({ tournamentId: String(tId), allowRedraw: _redraw, decisions: _decisions }).then(function (_res) {
             if (window._dtrace) window._dtrace('cf:ok', { matchCount: (_res && _res.data && _res.data.matchCount) });
             var d = (_res && _res.data) || {};

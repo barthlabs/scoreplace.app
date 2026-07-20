@@ -1607,6 +1607,13 @@ function renderTournaments(container, tournamentId = null) {
                 }
                 return; // mantém o diálogo aberto pra ajustar a escolha
             }
+            // v1.3.91 (dono, "sorteou entre todos apesar de escolher só entre os presentes"): grava a
+            // DECISÃO scope:'present' no pacote da CF. Antes o present-only vivia SÓ do move client-side +
+            // persist — a CF não sabia que era present-only, então se o move não propagasse a tempo (ou o
+            // onSnapshot devolvesse os ausentes), a CF sorteava TODOS. Agora a CF RE-aplica present-only no
+            // doc fresco (_applyDrawDecisions → _moveAbsentToWaitlistForPresentDraw, já vendorado) usando o
+            // checkedIn persistido → autoridade no servidor, o move client-side vira só feedback imediato.
+            tt._drawDecisions = Object.assign({}, tt._drawDecisions, { scope: 'present' });
             var moved = window._moveAbsentToWaitlistForPresentDraw(tt);
             close();
             var proceed = function() {
