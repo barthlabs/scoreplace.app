@@ -437,8 +437,11 @@ function drawInitial(t, opts) {
   t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
   t.currentPhaseIndex = 0; delete t._phaseMaterialized;
   if (!t.drawVisibility) t.drawVisibility = 'public';
-  // v4.1.30: o SORTEIO LIMPA a presença — "acabou de sortear, ninguém está presente".
-  t.checkedIn = {}; t.absent = {};
+  // v1.3.73: o SORTEIO limpa a presença de quem ENTROU na chave, mas PRESERVA a de quem foi pro
+  // resto/lista de espera (estava presente antes → continua presente, primeiro na fila). Regra do
+  // dono. Fonte única vendorada (win._clearPresenceKeepWaitlist); fallback = clear total.
+  if (typeof win._clearPresenceKeepWaitlist === 'function') win._clearPresenceKeepWaitlist(t);
+  else { t.checkedIn = {}; t.absent = {}; }
 
   const _pool0 = win._buildPhase0Pool(t, _isMon0, _ts0);
   const _built0 = _E0.generatePhase(_pool0, _cfg0, {

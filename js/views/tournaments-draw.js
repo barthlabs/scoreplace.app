@@ -2,6 +2,29 @@
 (function() {
 var _t = window._t || function(k) { return k; };
 
+// v1.3.73: o SORTEIO limpa a presença de quem ENTROU na chave (acabou de sortear), MAS PRESERVA
+// a de quem foi pro RESTO/LISTA DE ESPERA — estava presente ANTES do sorteio, continua presente
+// (e por isso aparece PRIMEIRO na fila de espera, pronto pra ser chamado num W.O./desistência).
+// Regra do dono. Fonte única chamada pelo motor (draw-core/CF) e pelo builder Suíço.
+// Ver [[project_ready_to_call_queue]] / [[project_presence_explicit_only]].
+function _clearPresenceKeepWaitlist(t) {
+  if (!t) return;
+  var _oldCI = t.checkedIn || {};
+  var _keepCI = {};
+  var _sbwl = (Array.isArray(t.standbyParticipants) ? t.standbyParticipants : []).concat(Array.isArray(t.waitlist) ? t.waitlist : []);
+  _sbwl.forEach(function (p) {
+    var _keys = [];
+    var _u = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
+    if (_u) _u.forEach(function (u) { if (u) _keys.push(u); });
+    if (typeof p === 'string') { if (p) _keys.push(p); }
+    else if (p) { ['p1Name', 'p2Name', 'displayName', 'name'].forEach(function (f) { if (p[f]) _keys.push(p[f]); }); }
+    _keys.forEach(function (k) { if (_oldCI[k] != null) _keepCI[k] = _oldCI[k]; });
+  });
+  t.checkedIn = _keepCI;
+  t.absent = {};
+}
+window._clearPresenceKeepWaitlist = _clearPresenceKeepWaitlist;
+
 // v4.0.86 — FONTE ÚNICA dos flags RUNTIME de sorteio/jogo. Princípio do dono:
 // "resetar o status do torneio deveria resetar tudo menos os inscritos e duplas
 // formadas que não por sorteio". Estes campos são TODOS derivados de sorteio/jogo
@@ -466,8 +489,7 @@ window._buildSwissClassifDraw = function (t) {
     t.standings = _swissNames.map(function (name) {
         return { name: name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0 };
     });
-    t.checkedIn = {};                  // v4.1.30: o sorteio LIMPA a presença (auto-consistente
-    t.absent = {};                     // p/ ambos os callers — o cliente já limpa antes, no-op)
+    _clearPresenceKeepWaitlist(t);     // v1.3.73: limpa presença de quem entrou; PRESERVA do resto/espera
     t.rounds = [];
     t.status = 'active';
     window._generateNextRound(t);      // 1ª rodada Suíço (storage nativo t.rounds)
