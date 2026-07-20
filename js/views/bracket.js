@@ -936,9 +936,22 @@ window._formLateJoinDupla = function (tId, src, tgt) {
     p1Seq: _sqA, p2Seq: _sqB,
     displayName: an + ' / ' + bn, name: an + ' / ' + bn, _lateJoin: true
   });
+  // v1.3.68: formar dupla pra NOVO CONFRONTO já MARCA PRESENÇA dos dois membros — senão o
+  // filtro de presença de _createExtraGamesFromWaitlist (mesmo-dia exige check-in) barrava a
+  // dupla e a chave não abria (o dono formou sem estarem presentes e ficou sem entender por quê).
+  // Formar a dupla na seção "Formar novas duplas" É o ato de colocá-los em jogo → presentes.
+  // Marca por uid (conta) ou por nome (guest), espelhando as chaves que _idMapHas lê.
+  if (!t.checkedIn || typeof t.checkedIn !== 'object') t.checkedIn = {};
+  var _nowTs = Date.now();
+  [a, b].forEach(function (m) {
+    var _mUid = (m && typeof m === 'object') ? (m.uid || '') : '';
+    var _mName = (typeof m === 'string') ? m : (m && (m.displayName || m.name)) || '';
+    var _mKey = _mUid || _mName;
+    if (_mKey) { t.checkedIn[_mKey] = _nowTs; if (t.absent && t.absent[_mKey] != null) delete t.absent[_mKey]; }
+  });
   t.updatedAt = new Date().toISOString();
   window.FirestoreDB.saveTournament(t).then(function () {
-    if (typeof showNotification !== 'undefined') showNotification('🤝 Dupla formada', an + ' / ' + bn, 'success');
+    if (typeof showNotification !== 'undefined') showNotification('🤝 Dupla formada · presença marcada', an + ' / ' + bn + ' entraram na chave.', 'success');
     if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
   });
 };
