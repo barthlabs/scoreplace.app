@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.92';
+window.SCOREPLACE_VERSION = '1.3.93';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1572,6 +1572,23 @@ window._participantsViewSig = function (t) {
     (Array.isArray(t.waitlist) ? t.waitlist.length : 0) + '|' +
     _k(t.checkedIn) + '|' + _k(t.absent) + '|' + _k(t.checkedInConfirmed) + '|' + (t.status || '');
 };
+// v1.3.93 (dono, "continua sorteando entre todos — sem gambiarra"): as DECISÕES do pré-sorteio
+// (scope presentes/todos, sem-dupla, pow2, flexibilizar, resto) vivem num MAPA POR TID — NÃO no
+// objeto do torneio. Por quê: o objeto é TROCADO pelo onSnapshot a CADA write (o persist do move
+// da chamada dispara um snapshot → AppStore.tournaments recebe um objeto NOVO sem `_drawDecisions`)
+// → a decisão SUMIA antes de chegar na CF, e o sorteio saía "entre todos". No mapa por tId a decisão
+// SOBREVIVE a qualquer troca de objeto. Limpo no reset/cancel/commit do sorteio. Fonte ÚNICA.
+window._drawDecisionsByTid = window._drawDecisionsByTid || {};
+window._setDrawDecision = function (tId, patch) {
+  var k = String(tId);
+  window._drawDecisionsByTid[k] = Object.assign({}, window._drawDecisionsByTid[k], patch || {});
+  return window._drawDecisionsByTid[k];
+};
+window._getDrawDecisions = function (tId) {
+  var d = window._drawDecisionsByTid[String(tId)];
+  return (d && Object.keys(d).length) ? d : null;
+};
+window._clearDrawDecisions = function (tId) { try { delete window._drawDecisionsByTid[String(tId)]; } catch (e) {} };
 window._softRefreshView = function() {
   // 0. If bracket just re-rendered locally, skip to avoid double-render + scroll jump
   if (window._suppressSoftRefresh) return;

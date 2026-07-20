@@ -1613,7 +1613,7 @@ function renderTournaments(container, tournamentId = null) {
             // onSnapshot devolvesse os ausentes), a CF sorteava TODOS. Agora a CF RE-aplica present-only no
             // doc fresco (_applyDrawDecisions → _moveAbsentToWaitlistForPresentDraw, já vendorado) usando o
             // checkedIn persistido → autoridade no servidor, o move client-side vira só feedback imediato.
-            tt._drawDecisions = Object.assign({}, tt._drawDecisions, { scope: 'present' });
+            window._setDrawDecision(tId, { scope: 'present' }); // v1.3.93: mapa por tId (sobrevive ao onSnapshot do persist do move) → a CF SEMPRE recebe scope:'present'
             var moved = window._moveAbsentToWaitlistForPresentDraw(tt);
             close();
             var proceed = function() {
@@ -1639,6 +1639,9 @@ function renderTournaments(container, tournamentId = null) {
     // mostrados na 1ª passada. Sem isso, o diálogo aparecia 2× (Sortear + confirmar espera).
     window._handleSortearClick = function (tId, isAberto, skipGates) {
         window._lastActiveTournamentId = tId;
+        // v1.3.93: um NOVO Sortear (não re-entrada de painel) começa com decisões LIMPAS — senão
+        // um scope='present'/solo/p2 de uma tentativa anterior (cancelada) contaminaria esta.
+        if (!skipGates && window._clearDrawDecisions) window._clearDrawDecisions(tId);
         if (window._dtrace) window._dtrace('handleSortear', { skipGates: !!skipGates, isAberto: !!isAberto });
         var _startDraw = function() {
             if (window._dtrace) window._dtrace('startDraw');

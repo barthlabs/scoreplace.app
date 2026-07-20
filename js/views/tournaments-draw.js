@@ -2061,7 +2061,9 @@ window.generateDrawFunction = function (tId) {
         // resolvido (e "remover o último" não tem alvo: cortaria OUTRA pessoa). Os que vão
         // aqui são todos re-aplicáveis sem efeito: sem-dupla (não há mais avulso), pow2 e resto
         // (o alvo é a potência de 2, já atingida). Ver docs/sorteio-ciclo-decisoes.md.
-        var _decisions = t._drawDecisions || null;
+        // v1.3.93: decisões vêm do MAPA POR TID (sobrevive à troca de objeto do onSnapshot) —
+        // fallback pro campo legado t._drawDecisions se algum site antigo ainda escreveu nele.
+        var _decisions = (typeof window._getDrawDecisions === 'function' ? window._getDrawDecisions(tId) : null) || t._drawDecisions || null;
         if (window._dtrace) window._dtrace('cf:send', { redraw: !!_redraw, decisions: _decisions });
         // v1.3.91 (dono): "Sorteando…" com a bola girando DURANTE o round-trip da CF. Os painéis
         // (sem-dupla/gênero/numérica) escondem o loader do _startDraw quando abrem — então aqui, no
@@ -2080,6 +2082,7 @@ window.generateDrawFunction = function (tId) {
             if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(t); } catch (_eH) {} }
             try { window.AppStore._saveToCache(); } catch (_eC) {}
             if (document.getElementById('final-review-panel')) { document.getElementById('final-review-panel').remove(); document.body.style.overflow = ''; }
+            if (window._clearDrawDecisions) window._clearDrawDecisions(tId); // v1.3.93: sorteio efetivou → zera o pacote de decisões (próximo sorteio começa limpo)
             window._lastActiveTournamentId = tId;
             // Toast do equilíbrio: o motor é do servidor, mas quem AVISA é a UI.
             if (d.allMaleCount > 0 && typeof showNotification !== 'undefined') {

@@ -622,7 +622,7 @@ window._applyFlexibilizeBalance = function(tId) {
     // pacote, pra a CF drawRound REPLICAR a formação (mistas primeiro, mínimo mesmo-gênero) em
     // vez de herdar as duplas mutadas aqui. O forming acima segue como PREVIEW transiente do
     // painel; a CF é a autoridade. Ver [[project_canon_runs_on_server]].
-    t._drawDecisions = Object.assign({}, t._drawDecisions, { flexibilize: true, balanceMode: 'equilibrado' });
+    window._setDrawDecision(t.id, { flexibilize: true, balanceMode: 'equilibrado' }); // v1.3.93: mapa por tId
     if (window.AppStore && typeof window.AppStore.logAction === 'function') {
         window.AppStore.logAction(tId, 'Equilíbrio flexibilizado: ' + res.newTeamsCount + ' dupla(s) formada(s)' +
             (res.allMaleCount ? ' (' + res.allMaleCount + ' 100% masc.)' : '') +
@@ -642,6 +642,7 @@ window._applyFlexibilizeBalance = function(tId) {
 // o detalhe. Restaura o status anterior antes de limpar (o helper zera _previousStatus).
 window._cancelDrawResolution = function(tId) {
     if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); // limpa _drawingTid antes do re-render → botão volta a "Sortear"
+    if (window._clearDrawDecisions) window._clearDrawDecisions(tId); // v1.3.93: cancelar zera o pacote de decisões do mapa
     var t = window._findTournamentById(tId);
     if (t) {
         // v4.5.6: cancelar ANTES do sorteio efetivo RESETA todas as decisões — restaura o
@@ -763,7 +764,7 @@ window._executeRemoval = function(tId, mode, method) {
     var removed = _res.removed;
     var removeCount = removed.length;
     // Pacote pra CF: a ESCOLHA (modo + método), nunca o elenco resultante.
-    t._drawDecisions = Object.assign({}, t._drawDecisions, { remainder: { mode: mode, method: method } });
+    window._setDrawDecision(t.id, { remainder: { mode: mode, method: method } }); // v1.3.93: mapa por tId
 
     // Log to history so it appears in the final-review panel
     var removedNames = _res.removedNames;
@@ -1813,7 +1814,7 @@ window._soloResolveWaitlist = function (tId, isAberto) {
     // o elenco reduzido). project_concurrency_safe_saves fica pro caminho de W.O., não aqui.
     var t = window._findTournamentById(tId);
     if (t) {
-        t._drawDecisions = Object.assign({}, t._drawDecisions, { solo: 'waitlist' }); // pacote pra CF
+        window._setDrawDecision(t.id, { solo: 'waitlist' }); // pacote pra CF (v1.3.93: mapa por tId)
         var moved = window._soloMoveOut(t, true);
         if (moved > 0) {
             try { window.AppStore.logAction(tId, moved + ' participante(s) sem dupla enviado(s) para a lista de espera'); } catch (_e) {}
@@ -1832,7 +1833,7 @@ window._soloResolveExclude = function (tId, isAberto) {
     var _count = solos.length;
     showConfirmDialog('Excluir do torneio?', names.join(', '), function () {
         // Move só no doc LOCAL (draw-time) — mesma razão do waitlist acima.
-        t._drawDecisions = Object.assign({}, t._drawDecisions, { solo: 'exclude' }); // pacote pra CF
+        window._setDrawDecision(t.id, { solo: 'exclude' }); // pacote pra CF (v1.3.93: mapa por tId)
         window._soloMoveOut(t, false);
         try { window.AppStore.logAction(tId, _count + ' participante(s) sem dupla excluído(s) do sorteio'); } catch (_e) {}
         window._soloContinueDraw(tId, isAberto);
@@ -3158,7 +3159,7 @@ window._handleP2Option = function (tId, option) {
                 // A conta (splice dos últimos N até a pot-2 inferior) é núcleo PURO em
                 // draw-decisions.js — a MESMA que a CF roda. O confirm acima continua UI.
                 var _rx = window._applyP2Resolution(t, 'exclusion', {});
-                t._drawDecisions = Object.assign({}, t._drawDecisions, { p2: { option: 'exclusion' } });
+                window._setDrawDecision(t.id, { p2: { option: 'exclusion' } }); // v1.3.93: mapa por tId
                 window.AppStore.logAction(tId, _rx.actionMsg);
                 // v4.5.7: SEM sync() antes do sorteio (clobberava a chave → sorteio-fantasma).
                 // A exclusão persiste no delta do _commitInitialDraw (preDraw usa o elenco
@@ -3811,7 +3812,7 @@ window._confirmP2Resolution = function (tId, option) {
     });
     var actionMsg = _r.actionMsg;
     // O pacote que a CF vai aplicar (o cliente NÃO é a fonte da verdade do elenco):
-    t._drawDecisions = Object.assign({}, t._drawDecisions, {
+    window._setDrawDecision(t.id, { // v1.3.93: mapa por tId (sobrevive ao onSnapshot)
         p2: { option: option, pick: _pickRadio ? _pickRadio.value : 'last',
               mode: _modeRadio ? _modeRadio.value : 'teams',
               swissRounds: window._swissSelectedRounds || null }
