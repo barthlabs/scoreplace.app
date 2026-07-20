@@ -141,6 +141,8 @@ const SUITES = [
   // v1.3.87: 2 duplas pré-formadas ausentes→presentes (uma de cada vez) → a 2ª PREENCHE o "a definir"
   // da 1ª (não abre jogo novo). Reproduz o bug do SB Casais (só _lateJoin entrava).
   'tests/late-dupla-fills-adefinir-separate.test.js',
+  // v1.3.88: SWEEP — todo formato × config × N pelo motor canônico (draw-core), joga a chave inteira.
+  'tests/draw-sweep-all-formats.test.js',
   // Gap (dono, 17/jul, screenshot): dupla ímpar no repGame ("VS A definir") recebe a dupla tardia.
   'tests/late-dupla-repgame-fill.test.js',
   // Gap (dono, 17/jul, torneio REAL): dupla formada entra no lugar do repescado (chave playin).

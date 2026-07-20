@@ -719,7 +719,13 @@
 
     var nGroups = parseInt(phaseCfg && phaseCfg.gruposCount, 10) || 4;
     if (nGroups < 1) nGroups = 1;
-    if (nGroups > pool.length) nGroups = pool.length;
+    // v1.3.88: NUNCA mais grupos que floor(N/2) — senão sobra grupo de 1 time (0 jogos → storePhase
+    // 'no-entrants' → "diz que sorteou mas não mostra chave"). O bug apareceu no sweep com o default
+    // gruposCount=4 e N pequeno (N=4 → 4 grupos de 1). Clampar a ≥2 times/grupo também mata os casos
+    // degenerados (N=5,6,7 faziam grupos de 1 com o default). Cada grupo fica com ≥2 (o resto sobra
+    // no maior). Não afeta config válida (4 grupos p/ 8 times = floor(8/2)=4 → inalterado).
+    var _maxGroups = Math.max(1, Math.floor(pool.length / 2));
+    if (nGroups > _maxGroups) nGroups = _maxGroups;
 
     var groups = [];
     for (var gi = 0; gi < nGroups; gi++) groups.push({ name: 'Grupo ' + String.fromCharCode(65 + gi), groupIdx: gi, players: [], matches: [] });
