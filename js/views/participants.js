@@ -26,6 +26,25 @@ function _reRenderParticipants() {
   }
 }
 
+// v1.3.80: re-render ESTÁVEL da tela de inscritos — MESMO caminho robusto do card estático (in-place),
+// pros casos em que o in-place não se aplica (painel de check-in pós-sorteio, cujos cards não têm
+// data-card-key). Preserva o scroll E suprime o eco do onSnapshot (o próprio write echoa → re-render
+// com dado stale → "presente vira ausente, tem que clicar 3x" + pulinho). É a ÚNICA saída de re-render
+// que os handlers de presença usam, pra que TODO caminho (individual, dupla, W.O. indiv/time) seja
+// robusto igual. Dono (20/jul): "o caminho deve ser um só, robusto".
+function _reRenderParticipantsStable() {
+  var _y = 0;
+  try { _y = window.scrollY || window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0; } catch (_e) {}
+  window._suppressSoftRefresh = true;
+  clearTimeout(window._presenceRefreshRelease);
+  window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
+  _reRenderParticipants();
+  var _restore = function () { try { window.scrollTo(0, _y); } catch (_e) {} };
+  _restore();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { _restore(); requestAnimationFrame(_restore); });
+}
+window._reRenderParticipantsStable = _reRenderParticipantsStable;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // v1.0.87-beta: REDE DE SEGURANÇA — _processWoSubstitutions
 // User: 'continua falhando em algum ponto. tem gente presente na lista de espera,
@@ -761,7 +780,7 @@ window._applySelfPresence = function (tId, playerName, uid) {
       window._idMapDel(ft, ft.checkedIn, _who);
       window._idMapDel(ft, ft.checkedInConfirmed, _who);
     });
-    _reRenderParticipants();
+    _reRenderParticipantsStable();
     return;
   }
   if (typeof showNotification === 'function') {
@@ -778,7 +797,7 @@ window._applySelfPresence = function (tId, playerName, uid) {
       if (atVenue) showNotification('✅ Presente', 'O GPS confirmou você no local do torneio.', 'success');
       else showNotification('🔵 Presença confirmada', 'Você confirmou que vem. Ao chegar no local, vira "Presente" automaticamente.', 'info');
     }
-    _reRenderParticipants();
+    _reRenderParticipantsStable();
   });
 };
 
@@ -975,7 +994,9 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
     clearTimeout(window._presenceRefreshRelease);
     window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
   } else {
-    _reRenderParticipants();
+    // in-place não se aplica (ex.: painel de check-in pós-sorteio) → re-render ESTÁVEL:
+    // preserva scroll + suprime o eco do onSnapshot (mesmo robustez do card estático).
+    _reRenderParticipantsStable();
   }
 };
 
@@ -1003,7 +1024,7 @@ window._markAbsent = function (tId, playerName) {
   }
   // mutação (toggle ausência / revert de W.O.) ATÔMICA pelo portão AppStore.mutate
   window.AppStore.mutate(tId, function (ft) { window._applyAbsenceToggle(ft, playerName); });
-  _reRenderParticipants();
+  _reRenderParticipantsStable();
 };
 
 // Mutação PURA de ausência (marcar/reverter W.O.) — muta só o `t` passado, sem
