@@ -782,6 +782,49 @@ window._applySelfPresence = function (tId, playerName, uid) {
   });
 };
 
+// v1.3.46: atualiza a presença de UM card NO LUGAR (sem re-render da lista) → os cards ficam
+// ESTÁTICOS ao marcar presença pré-sorteio (dono: "pulavam e voltavam"). Reconstrói só o card
+// tocado via a FONTE ÚNICA _inscritoIndividualCard, com o ctx do último render. Retorna true se
+// atualizou; false (→ fallback pro re-render completo) quando não dá: ctx ausente, card não
+// achado, filtro muda a visibilidade, ou modo lista-de-espera (lateJoin) que DEVE reordenar.
+window._updateCardPresenceInPlace = function (tId, uid, playerName) {
+  try {
+    var t = window._findTournamentById(tId); if (!t) return false;
+    var stash = window._lastInscritoCardCtx;
+    if (!stash || String(stash.tId) !== String(tId) || !stash.ctx) return false;
+    var ctx = stash.ctx;
+    if (ctx.lateJoin) return false;                            // espera reordena → re-render
+    if (typeof ctx.cardPresence !== 'function') return false;  // sem presença → nada a fazer
+    var key = String(uid || playerName || '');
+    var _kEsc = (window.CSS && CSS.escape) ? CSS.escape(key) : key.replace(/["\\]/g, '\\$&');
+    var card = document.querySelector('.participant-card[data-card-key="' + _kEsc + '"]');
+    if (!card) return false;
+    var parts = Array.isArray(t.participants) ? t.participants : [];
+    var idx = parseInt(card.getAttribute('data-card-idx') || '', 10); if (isNaN(idx)) idx = 0;
+    var p = null;
+    for (var i = 0; i < parts.length; i++) {
+      var pp = parts[i]; if (!pp) continue;
+      if (uid && typeof pp === 'object' && pp.uid === uid) { p = pp; break; }
+      var nm = (typeof pp === 'string') ? pp : (pp.displayName || pp.name || pp.email || '');
+      if (!uid && nm === playerName) { p = pp; break; }
+    }
+    if (!p) return false;
+    var pr = ctx.cardPresence(p);
+    if (pr && pr.skip) return false;                           // filtro esconde/mostra → re-render
+    var html = window._inscritoIndividualCard(t, p, idx, ctx);
+    if (!html) return false;
+    var tmp = document.createElement('div'); tmp.innerHTML = html;
+    var fresh = tmp.firstElementChild; if (!fresh) return false;
+    card.replaceWith(fresh);                                   // só ESTE card; os demais intactos
+    if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(fresh); } catch (_e) {} }
+    try {
+      var imgs = fresh.querySelectorAll('img[data-player-name]');
+      imgs.forEach(function (img) { var n = (img.getAttribute('data-player-name') || '').toLowerCase(); var real = window._playerPhotoCache && window._playerPhotoCache[n]; if (real && real.indexOf('dicebear.com') === -1) img.src = real; });
+    } catch (_e) {}
+    return true;
+  } catch (_e) { return false; }
+};
+
 window._applyCheckInToggle = function (tId, playerName, uid) {
   const t = window._findTournamentById(tId);
   if (!t) return;
@@ -832,7 +875,8 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
       if (_subResult === undefined) _subResult = r;
     }
   });
-  if (_subResult && _subResult.ok && _subResult.subCount > 0) {
+  var _woSub = !!(_subResult && _subResult.ok && _subResult.subCount > 0);
+  if (_woSub) {
     _subResult.subDetails.forEach(d => {
       if (typeof showNotification === 'function') {
         showNotification('✅ Substituição W.O.',
@@ -841,7 +885,18 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
       }
     });
   }
-  _reRenderParticipants();
+  // v1.3.46: card ESTÁTICO — atualiza só o card tocado no lugar (sem re-render da lista) e
+  // suprime o eco do onSnapshot (o próprio write), que re-renderizava e fazia os cards "pular e
+  // voltar" (dono: "o certo é ficarem estáticos"). Se houve substituição de W.O. (muda a chave)
+  // ou o in-place não deu, cai no re-render completo (correto).
+  var _inPlace = !_woSub && window._updateCardPresenceInPlace(tId, uid, playerName);
+  if (_inPlace) {
+    window._suppressSoftRefresh = true;
+    clearTimeout(window._presenceRefreshRelease);
+    window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
+  } else {
+    _reRenderParticipants();
+  }
 };
 
 window._markAbsent = function (tId, playerName) {
@@ -1648,6 +1703,11 @@ window._declareAbsent = function (tId, playerName) {
 // [[project_inscrito_card_canonical]], [[feedback_unify_dual_entry_points]].
 window._inscritoIndividualCard = function (t, p, idx, ctx) {
   ctx = ctx || {};
+  // v1.3.46: guarda o ctx do último render dos cards de inscrito → o toggle de presença
+  // reconstrói SÓ o card tocado no lugar (window._updateCardPresenceInPlace), sem re-render
+  // da lista (que fazia os cards "pularem e voltarem" — dono). Todos os cards de UM render
+  // compartilham o MESMO ctx, então guardar em toda chamada é idempotente.
+  try { window._lastInscritoCardCtx = { tId: (t && t.id), ctx: ctx }; } catch (_eStash) {}
   var isOrg = !!ctx.isOrg, drawDone = !!ctx.drawDone;
   var canRollCall = !!ctx.canRollCall, postDrawPresence = !!ctx.postDrawPresence;
   var _nameToParticipant = ctx.nameToParticipant || {};
@@ -1792,7 +1852,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   var _wmNum = (function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_n, 'right') : ''; })();
 
   return '' +
-    '<div class="participant-card" data-part-card="1" data-part-org="' + (_isOrgP ? '1' : '0') + '" data-part-vip="' + (isVip ? '1' : '0') + '" data-part-standby="' + (_isStandbyEntry ? '1' : '0') + '" data-part-name="' + _fNameAttr + '" data-participant-name="' + window._safeHtml(_dragName) + '" data-part-inactive="' + _fInactive + '" data-part-gender="' + _fGender + '" data-part-skill="' + String(_fSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _fOrder + '" ' + dragProps + ' style="' + cardStyle + ' border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (isOrg ? 'cursor:grab;' : '') + _rcCardExtra + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
+    '<div class="participant-card" data-part-card="1" data-part-org="' + (_isOrgP ? '1' : '0') + '" data-part-vip="' + (isVip ? '1' : '0') + '" data-part-standby="' + (_isStandbyEntry ? '1' : '0') + '" data-part-name="' + _fNameAttr + '" data-participant-name="' + window._safeHtml(_dragName) + '" data-card-key="' + window._safeHtml(String((typeof p === 'object' && p && p.uid) ? p.uid : pName)) + '" data-card-idx="' + idx + '" data-part-inactive="' + _fInactive + '" data-part-gender="' + _fGender + '" data-part-skill="' + String(_fSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _fOrder + '" ' + dragProps + ' style="' + cardStyle + ' border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (isOrg ? 'cursor:grab;' : '') + _rcCardExtra + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
       _wmNum +
       '<div style="position:relative;z-index:1;">' +
         pNameHtml +
