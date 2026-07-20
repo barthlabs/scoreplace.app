@@ -13,57 +13,17 @@ var _t = window._t || function(k) { return k; };
 //         cardPresence(p) -> {skip,styleExtra,rowHtml} }
 // retorna { isDoubles, html } — isDoubles=false quando NÃO é duplas-pré-sorteio
 // (o chamador cai no modo normal).
-window._buildDoublesInscritosSection = function (t, ctx) {
+// v1.3.37: CARD DE DUPLA — FONTE ÚNICA window._duplaCard (chamável pelas 3 telas:
+// #participants, detalhe, painel de pareamento tardio). Deps de closure viram locais de ctx;
+// corpo idêntico. Desfazer parametrizado (ctx.splitDupla) p/ o tardio usar _splitLateDupla.
+window._duplaCard = function (t, p, draggable, ctx) {
   ctx = ctx || {};
-  var isOrg = !!ctx.isOrg;
-  var drawDone = !!ctx.drawDone;
-  var _orgUidsShared = ctx.orgUids || {};
-  var _orgEmailsShared = ctx.orgEmails || {};
-  var individualCountParts = (ctx.peopleCount != null) ? ctx.peopleCount : '';
-  var _hasTournCats = !!ctx.hasTournCats;
-  var _chrome = !!ctx.chrome;
-  // v1.3.23: barra de contagem (Todos/Presentes/Confirmados/Ausentes) entra LOGO ABAIXO
-  // da barra de filtro/busca (mesma ordem do branch individual) — filtro no topo, contagem
-  // travada embaixo dela. Antes vinha prefixada ANTES da seção (ordem invertida).
-  var _countBar = ctx.countBarHtml || '';
+  var isOrg = !!ctx.isOrg, drawDone = !!ctx.drawDone;
+  var _orgUidsShared = ctx.orgUids || {}, _orgEmailsShared = ctx.orgEmails || {};
   var _cardPres = (typeof ctx.cardPresence === 'function') ? ctx.cardPresence : null;
-
-  // v4.5.51: detecção ROBUSTA de torneio de duplas (verdade ESTRUTURAL).
-  var _isDoublesTournament = parseInt(t.teamSize || 2) === 2 && (
-    window._isTeamEnrollMode(t.enrollmentMode) ||
-    (Array.isArray(t.participants) && t.participants.some(function (_pp) {
-      return _pp && typeof _pp === 'object' && (_pp.p1Uid || _pp.p1Name) && (_pp.p2Uid || _pp.p2Name);
-    }))
-  );
-  if (!(_isDoublesTournament && !drawDone)) return { isDoubles: false, html: '' };
-
-  var _allParts = Array.isArray(t.participants) ? t.participants : [];
-  function _isPairEntry(p) {
-    if (typeof p !== 'object' || !p) return false;
-    if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) return true;
-    var n = p.displayName || p.name || '';
-    return n.indexOf('/') !== -1;
-  }
-  var _pairedParticipants = _allParts.filter(_isPairEntry);
-  var _enrollOrderMapD = window._buildEnrollOrderMap(t);
-  var _pairedMemberKeys = {};
-  _pairedParticipants.forEach(function (pp) {
-    if (pp.p1Uid) _pairedMemberKeys['u:' + pp.p1Uid] = 1;
-    else if (pp.p1Name) _pairedMemberKeys['n:' + String(pp.p1Name).trim().toLowerCase()] = 1;
-    if (pp.p2Uid) _pairedMemberKeys['u:' + pp.p2Uid] = 1;
-    else if (pp.p2Name) _pairedMemberKeys['n:' + String(pp.p2Name).trim().toLowerCase()] = 1;
-  });
-  var _soloParticipants = _allParts.filter(function (p) {
-    if (_isPairEntry(p)) return false;
-    var u = typeof p === 'object' ? (p.uid || '') : '';
-    if (u) return !_pairedMemberKeys['u:' + u];
-    var n = (typeof p === 'string' ? p : (p.displayName || p.name || '')).trim().toLowerCase();
-    return !(n && _pairedMemberKeys['n:' + n]);
-  });
-
+  var _enrollOrderMapD = ctx.enrollOrderMap || (typeof window._buildEnrollOrderMap === 'function' ? window._buildEnrollOrderMap(t) : {});
   function _safeAttr(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
-
-  function _duplaCard(p, draggable, tIdStr) {
+  var tIdStr = String((t && t.id) || '');
     // Presença (só na chamada): estilo verde/vermelho + linha do toggle; pode PULAR
     // o card (filtro presente/ausente/aguardando).
     var _prs = _cardPres ? _cardPres(p) : null;
@@ -115,8 +75,11 @@ window._buildDoublesInscritosSection = function (t, ctx) {
     var _m1Id = (p && (p.p1Uid || p.p1Name)) || '';
     var _m2Id = (p && (p.p2Uid || p.p2Name)) || '';
     var _entryName = (members && members.length) ? members.join(' / ') : nm; // só p/ o botão Remover (solo)
+    var _splitCall = (ctx && typeof ctx.splitDupla === 'function')
+      ? ctx.splitDupla(_safeAttr(tIdStr), _safeAttr(_m1Id), _safeAttr(_m2Id), _safeAttr(_entryName))
+      : ('window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_m1Id) + '\',\'' + _safeAttr(_m2Id) + '\')');
     var desfazerBtn = (!draggable && isOrg)
-      ? '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_m1Id) + '\',\'' + _safeAttr(_m2Id) + '\')" title="Desfazer dupla" style="--cx-size:24px;">✕</button>'
+      ? '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();' + _splitCall + '" title="Desfazer dupla" style="--cx-size:24px;">✕</button>'
       : '';
     var _delBtnDupla = (isOrg && !drawDone && draggable)
       ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_entryName) + '\')" style="--cx-size:24px;">✕</button>'
@@ -196,7 +159,60 @@ window._buildDoublesInscritosSection = function (t, ctx) {
         return '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' + _inner + '</div>';
       })() +
       '</div>';
+};
+
+window._buildDoublesInscritosSection = function (t, ctx) {
+  ctx = ctx || {};
+  var isOrg = !!ctx.isOrg;
+  var drawDone = !!ctx.drawDone;
+  var _orgUidsShared = ctx.orgUids || {};
+  var _orgEmailsShared = ctx.orgEmails || {};
+  var individualCountParts = (ctx.peopleCount != null) ? ctx.peopleCount : '';
+  var _hasTournCats = !!ctx.hasTournCats;
+  var _chrome = !!ctx.chrome;
+  // v1.3.23: barra de contagem (Todos/Presentes/Confirmados/Ausentes) entra LOGO ABAIXO
+  // da barra de filtro/busca (mesma ordem do branch individual) — filtro no topo, contagem
+  // travada embaixo dela. Antes vinha prefixada ANTES da seção (ordem invertida).
+  var _countBar = ctx.countBarHtml || '';
+  var _cardPres = (typeof ctx.cardPresence === 'function') ? ctx.cardPresence : null;
+
+  // v4.5.51: detecção ROBUSTA de torneio de duplas (verdade ESTRUTURAL).
+  var _isDoublesTournament = parseInt(t.teamSize || 2) === 2 && (
+    window._isTeamEnrollMode(t.enrollmentMode) ||
+    (Array.isArray(t.participants) && t.participants.some(function (_pp) {
+      return _pp && typeof _pp === 'object' && (_pp.p1Uid || _pp.p1Name) && (_pp.p2Uid || _pp.p2Name);
+    }))
+  );
+  if (!(_isDoublesTournament && !drawDone)) return { isDoubles: false, html: '' };
+
+  var _allParts = Array.isArray(t.participants) ? t.participants : [];
+  function _isPairEntry(p) {
+    if (typeof p !== 'object' || !p) return false;
+    if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) return true;
+    var n = p.displayName || p.name || '';
+    return n.indexOf('/') !== -1;
   }
+  var _pairedParticipants = _allParts.filter(_isPairEntry);
+  var _enrollOrderMapD = window._buildEnrollOrderMap(t);
+  var _pairedMemberKeys = {};
+  _pairedParticipants.forEach(function (pp) {
+    if (pp.p1Uid) _pairedMemberKeys['u:' + pp.p1Uid] = 1;
+    else if (pp.p1Name) _pairedMemberKeys['n:' + String(pp.p1Name).trim().toLowerCase()] = 1;
+    if (pp.p2Uid) _pairedMemberKeys['u:' + pp.p2Uid] = 1;
+    else if (pp.p2Name) _pairedMemberKeys['n:' + String(pp.p2Name).trim().toLowerCase()] = 1;
+  });
+  var _soloParticipants = _allParts.filter(function (p) {
+    if (_isPairEntry(p)) return false;
+    var u = typeof p === 'object' ? (p.uid || '') : '';
+    if (u) return !_pairedMemberKeys['u:' + u];
+    var n = (typeof p === 'string' ? p : (p.displayName || p.name || '')).trim().toLowerCase();
+    return !(n && _pairedMemberKeys['n:' + n]);
+  });
+
+  function _safeAttr(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+  // v1.3.37: card de dupla via FONTE ÚNICA window._duplaCard (extraído). ctx com as deps.
+  var _dctx = { isOrg: isOrg, drawDone: drawDone, orgUids: _orgUidsShared, orgEmails: _orgEmailsShared, cardPresence: _cardPres, memberPresence: ctx.memberPresence, enrollOrderMap: _enrollOrderMapD };
 
   // Convites pendentes → card de dupla PENDENTE (âmbar) na seção "Sem dupla".
   var _cuUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
@@ -262,7 +278,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
               '<span style="font-size:0.75rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;">🙋 Sem dupla (' + _semDuplaTotal + ')</span>' +
               '<span style="font-size:0.65rem;color:var(--text-muted);">' + ((isOrg || t.manualPairing === 'open') ? '— Arraste um card sobre outro para formar a dupla' : '— As duplas são formadas pelo organizador') + '</span>' +
             '</div>' +
-            (_soloAvailable.length > 0 ? ('<div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">' + _soloAvailable.map(function (p) { return _duplaCard(p, true, String(t.id)); }).join('') + '</div>') : '') +
+            (_soloAvailable.length > 0 ? ('<div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">' + _soloAvailable.map(function (p) { return window._duplaCard(t, p, true, _dctx); }).join('') + '</div>') : '') +
             _pendingCardsHtml +
           '</div>')
         : '<div style="margin-bottom:1rem;padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);font-size:0.82rem;color:#34d399;text-align:center;">✅ Todos com dupla formada</div>') +
@@ -270,7 +286,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
         ? ('<div>' +
             '<div style="font-size:0.75rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas formadas (' + _pairedParticipants.length + ')</div>' +
             '<div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">' +
-              _pairedParticipants.map(function (p) { return _duplaCard(p, false, String(t.id)); }).join('') +
+              _pairedParticipants.map(function (p) { return window._duplaCard(t, p, false, _dctx); }).join('') +
             '</div>' +
           '</div>')
         : '') +

@@ -831,16 +831,22 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     }
     return s.trim();
   };
-  var duplasHtml = _duplas.map(function (p) {
-    var m1 = _ljMemberName(p.p1Uid, p.p1Name), m2 = _ljMemberName(p.p2Uid, p.p2Name);
-    var desfazer = isOrg
-      ? '<button type="button" class="btn btn-danger btn-micro" onclick="event.stopPropagation();window._splitLateDupla(\'' + tIdSafe + '\',\'' + _sa(_nm(p)) + '\')" style="min-height:0;height:26px;padding:0 10px;font-size:0.68rem;font-weight:800;white-space:nowrap;">↩️ Desfazer</button>'
-      : '';
-    return '<div style="background:linear-gradient(135deg,rgba(15,118,110,0.5),rgba(20,184,166,0.42));border:1px solid rgba(20,184,166,0.5);border-radius:12px;padding:12px;">'
-      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memberBlock(m1, { displayName: m1, name: m1, uid: p.p1Uid }) + _memberBlock(m2, { displayName: m2, name: m2, uid: p.p2Uid }) + '</div>'
-      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;"><span style="font-size:0.65rem;color:#34d399;">✅ Dupla formada</span>' + desfazer + '</div>'
-      + '</div>';
-  }).join('');
+  // v1.3.37: card de DUPLA formada renderizado pela FONTE ÚNICA window._duplaCard (o mesmo
+  // do #participants/detalhe), modo formado (draggable=false). Presença por membro e o
+  // Desfazer (via _splitLateDupla) injetados por ctx. Zero pirata: _memberBlock/_ljMemberName
+  // inline aposentados.
+  var _ljMemberPres = function (mm, right) {
+    var nmm = (typeof window._displayName === 'function') ? window._displayName(mm.uid, mm.guest) : (mm.guest || mm.uid || '');
+    var mc = window._idMapHas ? window._idMapHas(t, ci, mm.uid ? { uid: mm.uid } : nmm) : false;
+    var uidp = String(mm.uid || '').replace(/'/g, "\\'");
+    var html = '<div style="display:flex;align-items:center;gap:6px;' + (right ? 'justify-content:flex-end;' : '') + '"><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmm) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label><span style="font-size:0.62rem;font-weight:700;color:' + (mc ? '#4ade80' : '#64748b') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span></div>';
+    return { html: html };
+  };
+  var _ljSplit = function (tid, m1id, m2id, name) { return 'window._splitLateDupla(\'' + tid + '\',\'' + name + '\')'; };
+  var _ljDctx = { isOrg: isOrg, drawDone: true, orgUids: {}, orgEmails: {}, cardPresence: null, memberPresence: _ljMemberPres, enrollOrderMap: _ljOrderMap, splitDupla: _ljSplit };
+  var duplasHtml = (typeof window._duplaCard === 'function')
+    ? _duplas.map(function (p) { return window._duplaCard(t, p, false, _ljDctx); }).join('')
+    : '';
 
   var _readyMsg = (_duplas.length >= 1)
     ? '<div style="font-size:0.72rem;color:#2dd4bf;font-weight:700;margin-top:2px;">✔️ ' + _duplas.length + ' dupla(s) formada(s) na lista de espera.</div>'
