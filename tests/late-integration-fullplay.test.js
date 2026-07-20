@@ -89,14 +89,17 @@ const deadTBD = t.matches.filter(m => m.round < 3 && (m.p1 === 'TBD' || m.p2 ===
 ok(deadTBD.length === 0, 'nenhuma vaga MORTA (TBD sem preencher) antes da final (got ' + deadTBD.length + ')');
 const finalM = t.matches.find(m => m.round === 3);
 ok(finalM && finalM.winner, 'FINAL tem campeão (got ' + (finalM && finalM.winner) + ')');
-const byeM = t.matches.find(m => m.p2 === BYE || m.p1 === BYE || m.isBye);
-ok(byeM && byeM.winner, 'jogo com BYE resolveu (vencedor ímpar avançou)');
-// 3º lugar: EXISTE e recebe o(s) perdedor(es) de semi disponível(is). Na topologia mínima uma
-// das semis é BYE → só 1 perdedor real (o outro slot fica "a definir"). Não é chave morta: o
-// campeão e o vice estão definidos. Exigimos que o 3º lugar tenha AO MENOS 1 contestante real.
+// v1.3.71: SEM BYE em lugar nenhum — rodada ímpar puxa repescado (todos jogam), regra do dono.
+const anyBye = t.matches.some(m => m.p1 === BYE || m.p2 === BYE || m.isBye);
+ok(!anyBye, 'nenhum BYE na chave (rodada ímpar puxa repescado, não folga)');
+// semifinais (penúltima rodada) = 2 jogos REAIS (3 vencedores + 1 repescado).
+const semis = t.matches.filter(m => m.round === 2);
+ok(semis.length === 2, 'semifinais = 2 jogos (got ' + semis.length + ')');
+ok(semis.every(m => m.winner), 'ambas as semifinais foram jogadas (2 perdedores reais)');
+// 3º lugar: 2 contestantes reais (os 2 perdedores de semi) e RESOLVIDO.
 const _3rd = t.thirdPlaceMatch;
-const _3rdReal = _3rd && ((_3rd.p1 && _3rd.p1 !== 'TBD') || (_3rd.p2 && _3rd.p2 !== 'TBD'));
-ok(_3rdReal, '3º lugar tem ao menos o perdedor de semifinal (got p1=' + (_3rd && _3rd.p1) + ' p2=' + (_3rd && _3rd.p2) + ')');
+ok(_3rd && _3rd.p1 && _3rd.p1 !== 'TBD' && _3rd.p2 && _3rd.p2 !== 'TBD', '3º lugar tem 2 contestantes reais (got p1=' + (_3rd && _3rd.p1) + ' p2=' + (_3rd && _3rd.p2) + ')');
+ok(_3rd && _3rd.winner, '3º lugar foi disputado e resolvido');
 
 // ── Cenário 2: dupla tardia SEM presença → NÃO integra ──
 console.log('== dupla tardia SEM presença ==');

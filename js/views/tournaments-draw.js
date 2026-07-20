@@ -1191,14 +1191,17 @@ window._rebuildIntegratedBracket = function(t) {
     if (s2 && s2.type === 'r1winner') { var src2 = r1.find(function(x){ return x.id === s2.fromMatch; }); if (src2) { src2.nextMatchId = r2m.id; src2.nextSlot = 'p2'; } }
   }
   // R3+ (TBD, alimentados pelos vencedores da rodada anterior). v1.3.69: com repescagem mínima a
-  // rodada pode ter nº ÍMPAR de vencedores → o último recebe BYE (p2='BYE', _autoResolveBye do
-  // fluxo normal auto-avança). ceil pra criar o jogo do BYE; ímpar → o último jogo fica só com p1.
+  // rodada com nº ÍMPAR de vencedores → NÃO dá BYE: puxa 1 REPESCADO (melhor derrotado da
+  // rodada-fonte) pra fechar em nº par. Regra do dono (20/jul): "todos jogam, repescagem acima
+  // de folga" — 3 vencedores + 1 repescado = 4 → 2 semifinais REAIS (e o 3º lugar ganha 2
+  // perdedores de semi de verdade). O slot é repFill sourced na rodada anterior; resolveRepFills
+  // preenche quando ela fecha. Ver [[project_inclusion_philosophy_canon]].
   var prev = r2Matches, roundNum = firstRound + 2;
   while (prev.length > 1) {
-    var _n = prev.length, _games = Math.ceil(_n / 2), nextRound = [];
+    var _n = prev.length, _srcRound = roundNum - 1, _games = Math.ceil(_n / 2), nextRound = [];
     for (var n = 0; n < _games; n++) { var nm = { id: 'ir' + roundNum + '-' + ts + '-' + (mc++), round: roundNum, p1: 'TBD', p2: 'TBD', winner: null }; t.matches.push(nm); nextRound.push(nm); }
     for (var l = 0; l < _n; l++) { var tgt = Math.floor(l / 2), sl = (l % 2 === 0) ? 'p1' : 'p2'; prev[l].nextMatchId = nextRound[tgt].id; prev[l].nextSlot = sl; }
-    if (_n % 2 === 1) { var _byeM = nextRound[_games - 1]; _byeM.p2 = _t('bui.byeLabel'); _byeM.isBye = true; } // vencedor ímpar folga (BYE canônico, _autoResolveBye auto-avança)
+    if (_n % 2 === 1) { var _repM = nextRound[_games - 1]; _repM.repFill = (Array.isArray(_repM.repFill) ? _repM.repFill : []).concat([{ slot: 'p2', srcBracket: 'main', srcRound: _srcRound, rank: 0, tagRep: true }]); _repM.isRepechageSlot = true; }
     prev = nextRound; roundNum++;
   }
 
