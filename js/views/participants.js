@@ -1697,8 +1697,12 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     var _pPhotoN = _pCachedN || _pInitialsN;
     var _pErrN = 'onerror="this.onerror=null;this.src=\'' + _pInitialsN + '\'"';
     var _pNameH = window._safeHtml(pName);
+    // v1.3.38: uid vem DIRETO de p (fonte da verdade). Antes buscava _nameToParticipant[pName],
+    // mas com displayName/name stripados (contas com uid) pName cai pro EMAIL e o mapa é chaveado
+    // pelo NOME resolvido → lookup falha → _pUid vazio → nome preso no email/"Participante N" e SEM
+    // data-uid-name (não re-hidrata). p.uid resolve sempre; mapa só fallback p/ p string.
     var _pPart = _nameToParticipant && _nameToParticipant[pName];
-    var _pUid = (_pPart && typeof _pPart === 'object') ? (_pPart.uid || '') : '';
+    var _pUid = (typeof p === 'object' && p && p.uid) ? p.uid : ((_pPart && typeof _pPart === 'object') ? (_pPart.uid || '') : '');
     var _pUidJs = _pUid ? (',{uid:\'' + _pUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
     var _pDisp = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : _pNameH;
     var _pUidAttr = _pUid ? ' data-uid-name="' + window._safeHtml(_pUid) + '"' : '';
