@@ -900,8 +900,12 @@ window._createExtraGamesFromWaitlist = function(t) {
   var _isPairEntry = function(p){ return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
   var preDuplas = _isTeams ? pool.filter(_isPairEntry) : [];
   var solos = pool.filter(function(p){ return !(_isTeams && _isPairEntry(p)); });
-  // nada a fazer? (sem PAR de duplas prontas E sem GRUPO de avulsos suficiente)
-  if (preDuplas.length < 2 && solos.length < _minPool) return 0;
+  // nada a fazer? v1.3.59: 1 time/solo tardio ISOLADO TAMBÉM integra (entra vs "a definir" —
+  // repescagem, com recálculo de pow2). Antes exigia PAR de duplas (>=2) ou GRUPO de avulsos
+  // (>=_minPool) e a dupla única formada pelo dono ia parar em "Duplas formadas" sem entrar na
+  // chave. Time mode: 1 dupla pronta OU avulsos suficientes. Individual: 1 solo basta.
+  var _somethingToDo = _isTeams ? (preDuplas.length >= 1 || solos.length >= _minPool) : (solos.length >= 1);
+  if (!_somethingToDo) return 0;
   // v3.1.22: sorteia a ordem do pareamento (os jogos já criados ficam inalterados).
   var _shuf = function(arr){
     if (typeof window._plainShuffle === 'function') return window._plainShuffle(arr);
@@ -979,6 +983,28 @@ window._createExtraGamesFromWaitlist = function(t) {
     t.standbyParticipants = _rm(used, t.standbyParticipants);
     t.waitlist = _rm(used, t.waitlist);
     _pushExtraGame(n1, n2, u1, u2);
+  }
+  // v1.3.59: SOBRA de 1 time tardio (sem par) → entra SOZINHO vs "a definir" (repescagem).
+  // Jogo novo na 1ª rodada com repFill no p2; _rebuildIntegratedBracket re-resolve o pow2 e um
+  // best-loser completa o "a definir" via _resolveRepFills. Enquanto a 2ª rodada não começou
+  // (guard no topo). Pedido do dono: "1 time novo já entra na R1 vs a definir + recalcula pow2".
+  var _lastSolo = null;
+  if (_isTeams && preDuplas.length === 1) _lastSolo = preDuplas.shift();
+  else if (!_isTeams && solos.length === 1) _lastSolo = solos.shift();
+  if (_lastSolo) {
+    var _ln = _name(_lastSolo), _lu = _pu(_lastSolo);
+    _addPart(_lastSolo, _ln); if (_isTeams) t.teamOrigins[_ln] = 'formada';
+    t.standbyParticipants = _rm([_ln], t.standbyParticipants);
+    t.waitlist = _rm([_ln], t.waitlist);
+    t.matches.push({
+      id: 'xr1-' + t.id + '-' + ts + '-' + created, round: _firstRound,
+      p1: _ln, p2: 'TBD', winner: null, isExtra: true, isPhaseRepGame: true, isPhaseRepR1: true,
+      repFill: [{ slot: 'p2', rank: 9999 }],
+      p1Uid: (_lu.length === 1 ? _lu[0] : null), team1Uids: _lu, p2Uid: null, team2Uids: [],
+      phaseIndex: (t.currentPhaseIndex || 0), bracket: 'main', createdAt: new Date().toISOString()
+    });
+    if (window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(t.id, 'Tardio na chave (vs a definir): ' + _ln);
+    created++;
   }
   if (created > 0) {
     window._rebuildIntegratedBracket(t);
