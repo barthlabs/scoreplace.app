@@ -2337,6 +2337,14 @@ function _maybeGenerate3rdPlace(t) {
 
   const allMatches = t.matches || [];
 
+  // v1.3.74: se JÁ existe o 3º lugar CANÔNICO (match isThirdPlace em t.matches — forma do
+  // sorteio inicial/genTierBracket e da integração tardia unificada), NÃO cria um
+  // t.thirdPlaceMatch separado (seria 2ª representação → render duplicado/perdido). Uma só.
+  if (allMatches.some(function (m) { return m && m.isThirdPlace; })) {
+    if (t.thirdPlaceMatch) delete t.thirdPlaceMatch; // limpa resíduo da representação antiga
+    return;
+  }
+
   // Identificar a rodada da semifinal (penúltima rodada do bracket)
   const allRounds = {};
   allMatches.filter(m => m.bracket !== 'lower' && m.bracket !== 'grand').forEach(m => {

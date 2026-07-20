@@ -1229,6 +1229,7 @@ window._rebuildIntegratedBracket = function(t) {
   // perdedores de semi de verdade). O slot é repFill sourced na rodada anterior; resolveRepFills
   // preenche quando ela fecha. Ver [[project_inclusion_philosophy_canon]].
   var prev = r2Matches, roundNum = firstRound + 2;
+  var _semisRound = (r2Matches.length === 2) ? r2Matches : null, _finalMatch = null;
   while (prev.length > 1) {
     var _n = prev.length, _srcRound = roundNum - 1, _games = Math.ceil(_n / 2), nextRound = [];
     for (var n = 0; n < _games; n++) { var nm = { id: 'ir' + roundNum + '-' + ts + '-' + (mc++), round: roundNum, p1: 'TBD', p2: 'TBD', winner: null }; t.matches.push(nm); nextRound.push(nm); }
@@ -1238,7 +1239,20 @@ window._rebuildIntegratedBracket = function(t) {
       if (_useByes) { _repM.p2 = _t('bui.byeLabel'); _repM.isBye = true; }  // folga (bye mode)
       else { _repM.repFill = (Array.isArray(_repM.repFill) ? _repM.repFill : []).concat([{ slot: 'p2', srcBracket: 'main', srcRound: _srcRound, rank: 0, tagRep: true }]); _repM.isRepechageSlot = true; }  // repescado (default)
     }
+    if (nextRound.length === 1) { _semisRound = prev; _finalMatch = nextRound[0]; }  // capturou semis (2 jogos) + final
     prev = nextRound; roundNum++;
+  }
+  // v1.3.74: 3º lugar CANÔNICO — MESMA forma do sorteio inicial (genTierBracket/_addTierThird):
+  // match isThirdPlace DENTRO de t.matches, ligado pelos loserNextMatchId das 2 semis (enche
+  // sozinho via _advanceWinner quando as semis fecham). Antes usava _maybeGenerate3rdPlace, que
+  // criava um t.thirdPlaceMatch SEPARADO → 2 representações do 3º lugar (a do sorteio inicial vs
+  // a da integração tardia) e o render se perdia. UMA representação agora. Ver [[project_third_place_always]].
+  if (t.thirdPlaceMatch) delete t.thirdPlaceMatch;
+  if (_semisRound && _semisRound.length === 2 && _finalMatch) {
+    var _third = { id: 'i3rd-' + ts + '-' + (mc++), round: _finalMatch.round, bracket: 'main', isThirdPlace: true, p1: 'TBD', p2: 'TBD', winner: null, phaseIndex: (t.currentPhaseIndex || 0) };
+    t.matches.push(_third);
+    _semisRound[0].loserNextMatchId = _third.id; _semisRound[0].loserNextSlot = 'p1';
+    _semisRound[1].loserNextMatchId = _third.id; _semisRound[1].loserNextSlot = 'p2';
   }
 
   if (repechage > 0) {
@@ -1275,11 +1289,9 @@ window._rebuildIntegratedBracket = function(t) {
     if (m.phaseIndex == null) m.phaseIndex = _cpi;
     if (m.bracket == null) m.bracket = 'main';
   });
-  // v1.3.62: recria o jogo de 3º lugar — a reconstrução das rodadas apaga t.thirdPlaceMatch
-  // (linha ~1160), então sem isto a chave integrada ficava SEM 3º/4º lugar. Fonte única: o
-  // mesmo _maybeGenerate3rdPlace do fluxo normal (cria TBD via _appendCanonicalColumn, pula
-  // Dupla Elim, preenche pelos perdedores das semis). Ver [[project_third_place_always]].
-  if (typeof window._maybeGenerate3rdPlace === 'function') { try { window._maybeGenerate3rdPlace(t); } catch (e) {} }
+  // v1.3.74: o 3º lugar já foi criado acima na forma CANÔNICA (isThirdPlace + loserNextMatchId),
+  // igual ao sorteio inicial — não chama mais _maybeGenerate3rdPlace (que criava t.thirdPlaceMatch
+  // separado = 2ª representação). Ver [[project_third_place_always]].
   if (typeof _maybeFinishElimination === 'function') _maybeFinishElimination(t);
   return true;
 };

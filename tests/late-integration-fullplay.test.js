@@ -64,9 +64,11 @@ function runMode(label, resolution, expectByes) {
   t.standbyParticipants.push({ p1Name: 'L1', p1Uid: '', p2Name: 'L2', p2Uid: '', displayName: 'L1 / L2', name: 'L1 / L2', _lateJoin: true });
   ok(W._createExtraGamesFromWaitlist(t) === 1, label + ': integrou a dupla tardia');
 
-  const rc = {}; t.matches.forEach(m => rc[m.round] = (rc[m.round] || 0) + 1);
+  const rc = {}; t.matches.filter(m => !m.isThirdPlace).forEach(m => rc[m.round] = (rc[m.round] || 0) + 1);
   ok(rc[0] === 5 && rc[1] === 3 && rc[2] === 2 && rc[3] === 1, label + ': topologia R0:5 R1:3 semis:2 final:1 (got ' + JSON.stringify(rc) + ')');
-  ok(!!t.thirdPlaceMatch, label + ': 3º lugar criado');
+  const _third0 = t.matches.filter(m => m && m.isThirdPlace);
+  ok(_third0.length === 1, label + ': 3º lugar CANÔNICO (1 match isThirdPlace em t.matches, got ' + _third0.length + ')');
+  ok(!t.thirdPlaceMatch, label + ': SEM t.thirdPlaceMatch separado (uma representação só)');
 
   const guardUsed = simulate(t);
   ok(guardUsed < 500, label + ': playout sem loop infinito');
@@ -86,10 +88,10 @@ function runMode(label, resolution, expectByes) {
 
 // ── Modo REPESCAGEM (default): sem BYE, semis reais, 3º lugar com 2 perdedores ──
 const tR = runMode('REPESCAGEM (default)', undefined, false);
-const semisR = tR.matches.filter(m => m.round === 2);
-ok(semisR.every(m => m.winner), 'repescagem: ambas semifinais jogadas (2 perdedores reais)');
-const _3rdR = tR.thirdPlaceMatch;
-ok(_3rdR && _3rdR.p1 !== 'TBD' && _3rdR.p2 && _3rdR.p2 !== 'TBD' && _3rdR.winner, 'repescagem: 3º lugar com 2 contestantes reais e resolvido');
+const semisR = tR.matches.filter(m => m.round === 2 && !m.isThirdPlace);
+ok(semisR.length === 2 && semisR.every(m => m.winner), 'repescagem: 2 semifinais REAIS jogadas (2 perdedores reais)');
+const _3rdR = tR.matches.find(m => m.isThirdPlace);
+ok(_3rdR && _3rdR.p1 !== 'TBD' && _3rdR.p2 && _3rdR.p2 !== 'TBD' && _3rdR.winner, 'repescagem: 3º lugar (isThirdPlace) com 2 contestantes reais e resolvido');
 
 // ── Modo BYE (escolha do organizador): folgas onde ímpar, chave também FECHA ──
 runMode('BYE (escolha do organizador)', 'bye', true);
