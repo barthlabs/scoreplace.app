@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.80';
+window.SCOREPLACE_VERSION = '1.3.81';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1612,6 +1612,35 @@ window._softRefreshView = function() {
             (Array.isArray(_tdetail.participants) ? _tdetail.participants.length : 0) + ':' + (_tdetail.status || '');
           if (_tsig === window._tdetailSig) return; // nada mudou → sem re-render (sem pisca)
           window._tdetailSig = _tsig;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // v1.3.81: a tela de INSCRITOS (#participants/:id) NÃO tinha gate de assinatura → re-renderizava
+  // a CADA snapshot do Firestore (eco do próprio auto-save de presença, presença de outro device,
+  // poller/widget) mesmo sem nada relevante mudar → "pulinho sem clicar em nada" (dono, SB Casais).
+  // Gate por assinatura incluindo PRESENÇA (checkedIn/absent) + espera: só re-renderiza quando algo
+  // que a tela mostra muda de verdade. A ação PRÓPRIA do usuário já passa por _suppressSoftRefresh
+  // (retorna lá em cima), então este gate não atrapalha o toggle local — só mata o eco espúrio.
+  if (_currentView === 'participants') {
+    try {
+      var _pid = (window.location.hash || '').split('/')[1];
+      if (_pid) {
+        var _ppool = ((window.AppStore && window.AppStore.tournaments) || []).concat((window.AppStore && window.AppStore.publicDiscovery) || []);
+        var _pt = _ppool.find(function(x){ return x && String(x.id) === String(_pid); });
+        if (_pt) {
+          var _ciN = _pt.checkedIn ? Object.keys(_pt.checkedIn).length : 0;
+          var _abN = _pt.absent ? Object.keys(_pt.absent).length : 0;
+          var _cfN = _pt.checkedInConfirmed ? Object.keys(_pt.checkedInConfirmed).length : 0;
+          var _psig = String(_pt.id) + ':' + (_pt.updatedAt || '') + ':' +
+            (Array.isArray(_pt.matches) ? _pt.matches.length : 0) + ':' +
+            (Array.isArray(_pt.participants) ? _pt.participants.length : 0) + ':' +
+            (Array.isArray(_pt.standbyParticipants) ? _pt.standbyParticipants.length : 0) + ':' +
+            (Array.isArray(_pt.waitlist) ? _pt.waitlist.length : 0) + ':' +
+            _ciN + ':' + _abN + ':' + _cfN + ':' + (_pt.status || '');
+          if (_psig === window._pdetailSig) return; // nada relevante mudou → sem re-render (sem pulinho)
+          window._pdetailSig = _psig;
         }
       }
     } catch (e) {}

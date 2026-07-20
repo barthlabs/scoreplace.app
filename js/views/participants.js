@@ -35,13 +35,24 @@ function _reRenderParticipants() {
 function _reRenderParticipantsStable() {
   var _y = 0;
   try { _y = window.scrollY || window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0; } catch (_e) {}
+  // TRAVA DE ALTURA (mesma técnica do _rerenderBracket): `renderParticipants` faz
+  // container.innerHTML = '' antes de repintar → o documento COLAPSA por 1 frame → o browser
+  // clampa o scroll pra cima → o restore traz de volta = "sobe uma linha e desce rapidinho".
+  // Segurar a altura atual do container durante o rebuild impede o colapso → zero pulinho.
+  var _container = document.getElementById('view-container');
+  var _lockH = 0;
+  try { if (_container) _lockH = _container.offsetHeight; } catch (_e) {}
+  if (_container && _lockH) { try { _container.style.minHeight = _lockH + 'px'; } catch (_e) {} }
   window._suppressSoftRefresh = true;
   clearTimeout(window._presenceRefreshRelease);
   window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
   _reRenderParticipants();
   var _restore = function () { try { window.scrollTo(0, _y); } catch (_e) {} };
   _restore();
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { _restore(); requestAnimationFrame(_restore); });
+  var _unlock = function () { try { var c = document.getElementById('view-container'); if (c) c.style.minHeight = ''; } catch (_e) {} };
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function () { _restore(); requestAnimationFrame(function () { _restore(); _unlock(); }); });
+  } else { _unlock(); }
 }
 window._reRenderParticipantsStable = _reRenderParticipantsStable;
 
