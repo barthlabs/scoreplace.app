@@ -879,12 +879,29 @@ window._createExtraGamesFromWaitlist = function(t) {
     // um todo — mas o par não tem uid único e a presença é gravada por uid de MEMBRO → o par
     // nunca "batia" e a dupla tardia era filtrada fora (nunca integrava). Ver [[project_id_maps_uid_keyed]].
     pool = pool.filter(function (p) {
-      // presente por NOME (par marcado como um todo — legado) OU por UID (todos os membros
-      // presentes — caso CF/só-uid, em que o par não tem uid único e a presença é por membro).
-      var _byName = window._idMapHas(t, _ci, p) && !window._idMapHas(t, _ab, p);
-      if (_byName) return true;
+      // (1) presente por NOME do par inteiro (par marcado como um todo — legado).
+      var _byWhole = window._idMapHas(t, _ci, p) && !window._idMapHas(t, _ab, p);
+      if (_byWhole) return true;
+      // (2) TODOS os membros presentes por UID (caso conta: presença gravada por uid de membro).
       var _uids = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
-      return !!(_uids && _uids.length) && _uids.every(function (u) { return window._idMapHas(t, _ci, { uid: u }) && !window._idMapHas(t, _ab, { uid: u }); });
+      if (_uids && _uids.length && _uids.every(function (u) { return window._idMapHas(t, _ci, { uid: u }) && !window._idMapHas(t, _ab, { uid: u }); })) return true;
+      // (3) v1.3.61: TODOS os membros presentes pelo NOME individual (par de GUESTS sem uid —
+      // ex.: "Jogador 01"/"Jogador 02" fictícios: a presença é gravada por nome de membro, o par
+      // não tem uid nenhum e o nome combinado "A / B" não está em checkedIn). Sem esta via o par
+      // formado de guests nunca "batia" presença e a dupla tardia não integrava. Ver [[project_orphan_uid_entries]].
+      var _members = [];
+      if (p && typeof p === 'object') {
+        if (p.p1Name || p.p1Uid) _members.push({ uid: p.p1Uid || '', name: p.p1Name || '' });
+        if (p.p2Name || p.p2Uid) _members.push({ uid: p.p2Uid || '', name: p.p2Name || '' });
+        if (!_members.length && Array.isArray(p.participants)) p.participants.forEach(function (m) { _members.push({ uid: (m && m.uid) || '', name: (m && (m.displayName || m.name)) || '' }); });
+      }
+      if (_members.length) {
+        return _members.every(function (m) {
+          var key = m.uid ? { uid: m.uid } : m.name;
+          return key && window._idMapHas(t, _ci, key) && !window._idMapHas(t, _ab, key);
+        });
+      }
+      return false;
     });
   }
   // v4.1.37: respeitar o teamSize. Torneio de DUPLAS (teamSize>1 ou modo time/misto)
