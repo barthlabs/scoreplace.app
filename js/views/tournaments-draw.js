@@ -1075,10 +1075,27 @@ window._fillRepFillWithLateDuplas = function (t) {
   var _nm = function (p) { return window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || ''; };
   var _pu = function (x) { return (typeof window._participantUids === 'function') ? window._participantUids(x) : []; };
 
-  // duplas JÁ formadas na espera (par estrutural + _lateJoin) — [[project_dupla_entry_structural_not_slash]]
+  // v1.3.87 (dono, SB Casais): PRESENÇA de par na espera — mesma regra do _createExtraGamesFromWaitlist
+  // (mesmo-dia conta check-in por uid/nome de MEMBRO; multi-dia ignora). Sem isto, duplas PRÉ-FORMADAS
+  // que estavam AUSENTES (mandadas à espera pelo sorteio "só presentes") e voltaram PRESENTES não
+  // batiam — só `_lateJoin` (duplas formadas TARDE) entrava. Resultado: cada uma abria um jogo novo
+  // "vs a definir" em vez de PREENCHER o "a definir" existente. Ver [[project_late_dupla_fills_awaiting_slot]].
+  var _pairPresent = function (p) {
+    if ((typeof window._tournamentIsSameDay === 'function') && !window._tournamentIsSameDay(t)) return true; // multi-dia ignora presença
+    var _ci = t.checkedIn || {}, _ab = t.absent || {};
+    if (window._idMapHas(t, _ci, p) && !window._idMapHas(t, _ab, p)) return true; // par marcado como um todo (legado)
+    var _uids = _pu(p);
+    if (_uids && _uids.length && _uids.every(function (u) { return window._idMapHas(t, _ci, { uid: u }) && !window._idMapHas(t, _ab, { uid: u }); })) return true;
+    var _mem = [];
+    if (p.p1Name || p.p1Uid) _mem.push(p.p1Uid ? { uid: p.p1Uid } : p.p1Name);
+    if (p.p2Name || p.p2Uid) _mem.push(p.p2Uid ? { uid: p.p2Uid } : p.p2Name);
+    return _mem.length > 0 && _mem.every(function (k2) { return window._idMapHas(t, _ci, k2) && !window._idMapHas(t, _ab, k2); });
+  };
+  // duplas na espera prontas pra entrar: formadas TARDE (_lateJoin, já auto-presentes) OU pré-formadas
+  // PRESENTES. Estrutural (nunca includes('/')) — [[project_dupla_entry_structural_not_slash]].
   var formed = [];
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
-    if (Array.isArray(t[k])) t[k].forEach(function (p) { if (_isPair(p) && p._lateJoin) formed.push(p); });
+    if (Array.isArray(t[k])) t[k].forEach(function (p) { if (_isPair(p) && (p._lateJoin || _pairPresent(p))) formed.push(p); });
   });
   if (!formed.length) return 0;
 
@@ -1140,8 +1157,11 @@ window._fillRepFillWithLateDuplas = function (t) {
     usedNames[_nm(d)] = 1; integrated++;
   });
   if (!integrated) return 0;
+  // v1.3.87: remove QUALQUER par integrado (não só `_lateJoin`) — senão a dupla pré-formada que
+  // acabou de preencher o slot fica na espera e o _createExtraGamesFromWaitlist a re-processa (jogo
+  // duplicado). O critério é usedNames (quem realmente entrou nesta passada).
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
-    if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(_isPair(p) && p._lateJoin && usedNames[_nm(p)]); });
+    if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(_isPair(p) && usedNames[_nm(p)]); });
   });
   // se a R1 já fechou, resolve os repescados restantes na hora (idempotente).
   if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }

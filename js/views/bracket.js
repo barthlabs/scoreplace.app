@@ -221,55 +221,16 @@ function renderBracket(container, tournamentId, isInline) {
     }
   }
 
-  // v1.3.76: REVERTIDO o CF-only trigger da v1.3.75 — quebrou a integração (round-trip CF async
-  // não verificável headless; síncrono client-side funcionava). O MOTOR continua unificado (3º
-  // lugar canônico, mesmo código vendorado que a CF roda). Estas funções rodam client-side no
-  // render do org e SALVAM (org passa nas rules). O CF-only (window._triggerLateIntegration /
-  // _callIntegrateLate) fica DEFINIDO pra reativar quando der pra testar o fluxo logado end-to-end.
-  // Ver [[feedback_draw_is_cf_only]] / [[feedback_no_regressions]].
-  if (isOrg && typeof window._fillRepFillWithLateDuplas === 'function') {
-    try {
-      var _nRF = window._fillRepFillWithLateDuplas(t);
-      if (_nRF > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t);
-        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nRF + ' dupla(s) na chave', 'Entrou no lugar do repescado — a chave recalculou os repescados.', 'success');
-      }
-    } catch (e) {}
-  }
-  if (isOrg && typeof window._createExtraGamesFromWaitlist === 'function') {
-    try {
-      var _nExtra = window._createExtraGamesFromWaitlist(t);
-      if (_nExtra > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t);
-        if (typeof showNotification !== 'undefined') showNotification('⚡ ' + (_nExtra * 2) + ' tardios na chave', _nExtra + ' jogo(s) novo(s) na rodada 1 — chave redesenhada.', 'info');
-      }
-    } catch (e) {}
-  }
-  if (isOrg && typeof window._integrateLateDuplas === 'function') {
-    try {
-      var _nLJ = window._integrateLateDuplas(t);
-      if (_nLJ > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t);
-        var _ljTier = window._lastIntegrateTier || 1;
-        var _ljMsg = (_ljTier === 2)
-          ? 'Entraram na R1 da chave inferior (vencedor segue no lower, derrotado eliminado).'
-          : 'Entraram na R1 da chave superior (vencedor sobe, derrotado cai pro lower).';
-        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nLJ + ' dupla(s) na chave', _ljMsg, 'success');
-      } else if (_nLJ === -3 && typeof window._dissolveLateDuplas === 'function') {
-        var _nd = window._dissolveLateDuplas(t);
-        if (_nd > 0 && window.FirestoreDB) { window.FirestoreDB.saveTournament(t);
-          if (typeof showNotification !== 'undefined') showNotification('👤 Suplentes individuais', 'O torneio já avançou na chave inferior — as duplas em espera viraram suplentes individuais.', 'info'); }
-      }
-    } catch (e) {}
-  }
-  if (isOrg && typeof window._expandMonarchFromWaitlist === 'function') {
-    try {
-      var _nRR = window._expandMonarchFromWaitlist(t);
-      if (_nRR > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t);
-        if (typeof showNotification !== 'undefined') showNotification('⚡ ' + _nRR + ' novo(s) grupo(s)', 'Novos confrontos formados da lista de espera.', 'info');
-      }
-    } catch (e) {}
+  // v1.3.87 (dono, SANDBOX): a INTEGRAÇÃO TARDIA passa a rodar SÓ na CF (integrateLateEntries),
+  // como o sorteio inicial (drawRound). O cliente NÃO computa mais a chave — só DISPARA e o
+  // onSnapshot re-renderiza. Isto MATA o 2º caminho (client-side) que se comportava diferente do
+  // sorteio inicial ("um foi pela CF, o outro não"): o mesmo motor vendorado, um caminho só. As
+  // funções _fillRepFillWithLateDuplas / _createExtraGamesFromWaitlist / _integrateLateDuplas /
+  // _expandMonarchFromWaitlist continuam DEFINIDAS só porque a CF as roda via vendor/ — o cliente
+  // nunca mais as chama. Regra do dono: "no cliente só o disparo do sorteio e as respostas às
+  // perguntas que vão pra CF". Ver [[feedback_draw_is_cf_only]] / [[project_autodraw_server_parity]].
+  if (isOrg && typeof window._triggerLateIntegration === 'function') {
+    try { window._triggerLateIntegration(t); } catch (e) {}
   }
   const canEnterResult = isOrg || window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee');
   const isLiga = window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');

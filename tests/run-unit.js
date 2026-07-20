@@ -138,6 +138,9 @@ const SUITES = [
   'tests/draw-preserve-waitlist-presence.test.js',
   // v1.3.82: overlay de presença pendente sobrevive a snapshot stale do Firestore (aparece/apaga).
   'tests/pending-presence-overlay.test.js',
+  // v1.3.87: 2 duplas pré-formadas ausentes→presentes (uma de cada vez) → a 2ª PREENCHE o "a definir"
+  // da 1ª (não abre jogo novo). Reproduz o bug do SB Casais (só _lateJoin entrava).
+  'tests/late-dupla-fills-adefinir-separate.test.js',
   // Gap (dono, 17/jul, screenshot): dupla ímpar no repGame ("VS A definir") recebe a dupla tardia.
   'tests/late-dupla-repgame-fill.test.js',
   // Gap (dono, 17/jul, torneio REAL): dupla formada entra no lugar do repescado (chave playin).
