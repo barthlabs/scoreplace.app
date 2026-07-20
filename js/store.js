@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.85';
+window.SCOREPLACE_VERSION = '1.3.86';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1668,6 +1668,16 @@ window._softRefreshView = function() {
                   document.getElementById('vagas-draw-panel') ||
                   document.getElementById('removal-subchoice-panel') ||
                   document.getElementById('incomplete-teams-panel') ||
+                  // v1.3.86: DIÁLOGOS DO SORTEIO que faltavam na safe-list. O caminho "só entre os
+                  // presentes" PERSISTE o move de ausentes→espera (AppStore.mutate) → o onSnapshot
+                  // ecoa → _softRefreshView → initRouter → varria o painel de SEM-DUPLA que acabou
+                  // de abrir ("piscou uma tela e sorteou sem perguntar"). O caminho "todos" não
+                  // persiste, então não varria → fluxo INCONSISTENTE (dono: "cada hora é diferente").
+                  // Mesma classe da v0.15.89/v1.3.43. Ver [[project_overlay_softrefresh_detection]].
+                  document.getElementById('solo-resolution-panel') ||
+                  document.getElementById('solo-manual-pair-panel') ||
+                  document.getElementById('reopen-panel') ||
+                  document.getElementById('p2-resolution-panel') ||
                   document.getElementById('flyer-print-overlay') ||
                   // v1.1.18: busca/import do letzplay (bolinha + barra). A busca do
                   // organizador dura MINUTOS; sem isto, um snapshot do Firestore no meio
