@@ -3567,9 +3567,12 @@ function renderTournaments(container, tournamentId = null) {
             // v1.3.53: barra pela FONTE ÚNICA (conta por UID + id="rollcall-bar" p/ refresh in-place).
             const checkInControls = _rollCallBarOn ? window._detailCheckInBarHtml(t.id) : '';
 
+            // v1.3.54: em telas largas, APROVEITA A ÁREA — grid responsivo (até 3-4 colunas de
+            // cards), 1 coluna no mobile (min(100%,…) evita overflow). Vale pro check-in também
+            // (antes era coluna única). Ver [[feedback_maximize_screen_area_all_devices]].
             const gridStyle = (canCheckIn || _rcActiveD)
-                ? 'display:flex;flex-direction:column;gap:6px;'
-                : 'display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:1rem;';
+                ? 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 430px), 1fr));gap:8px;align-items:start;'
+                : 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 240px), 1fr));gap:1rem;';
 
             var _sortAlphaAsc = _enrollSort === 'alpha_asc';
             var _sortAlphaDesc = _enrollSort === 'alpha_desc';
