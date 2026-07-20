@@ -1953,11 +1953,18 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       _wmNum +
       '<div style="position:relative;z-index:1;">' +
         pNameHtml +
-        '<div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
-          '<div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">' + _vipBtn + _metaSlots + _nmSkillHtml + '</div>' +
-          ((_splitBtn || undoMergeBtn) ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">' + _splitBtn + undoMergeBtn + '</div>' : '') +
+        '<div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;' + (ctx.lateJoin ? 'justify-content:space-between;' : '') + '">' +
+          '<div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;' + (ctx.lateJoin ? 'flex:1 1 auto;' : '') + '" onclick="event.stopPropagation();">' + _vipBtn + _metaSlots + _nmSkillHtml + '</div>' +
+          // v1.3.55: no pareamento tardio ("Sem dupla") a AÇÃO (Presente/Ausente·toggle·W.O.·✕)
+          // vem na MESMA linha das categorias (economiza 1 linha) — o hint "arraste…" fica sozinho
+          // abaixo. Fora do lateJoin, a ação segue no _inscritoActionRow (tipo+ação mesma linha).
+          (ctx.lateJoin
+            ? ('<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;" onclick="event.stopPropagation();">' + _presenceGroup + _delBtn + '</div>')
+            : ((_splitBtn || undoMergeBtn) ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">' + _splitBtn + undoMergeBtn + '</div>' : '')) +
         '</div>' +
-        window._inscritoActionRow(typeText, _presenceGroup, _delBtn) +
+        (ctx.lateJoin
+          ? (typeText ? '<div style="margin-top:5px;">' + typeText + '</div>' : '')
+          : window._inscritoActionRow(typeText, _presenceGroup, _delBtn)) +
       '</div>' +
     '</div>';
 };

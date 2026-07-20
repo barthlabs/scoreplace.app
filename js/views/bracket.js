@@ -814,10 +814,17 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   var _ljOrderMap = (typeof window._buildEnrollOrderMap === 'function') ? window._buildEnrollOrderMap(t) : {};
   var _ljPresence = function (pp) {
     var nmp = _nm(pp);
-    var mc = window._idMapHas ? window._idMapHas(t, ci, (pp && typeof pp === 'object' && pp.uid) ? { uid: pp.uid } : nmp) : false;
+    var _who = (pp && typeof pp === 'object' && pp.uid) ? { uid: pp.uid } : nmp;
+    var mc = window._idMapHas ? window._idMapHas(t, ci, _who) : false;
+    var _abs = window._idMapHas ? window._idMapHas(t, t.absent || {}, _who) : false;
     var uidp = String((pp && typeof pp === 'object' && pp.uid) || '').replace(/'/g, "\\'");
+    // v1.3.55: W.O. no card "Sem dupla" (faltava). Só pro organizador; vira Reverter se ausente.
+    var wo = (isOrg && typeof window._woBtnHtml === 'function')
+      ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + tIdSafe + "', '" + _sa(nmp) + "');", !_abs, { label: _abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
+      : '';
     var row = '<span style="font-size:0.74rem;font-weight:800;color:' + (mc ? '#4ade80' : '#f87171') + ';white-space:nowrap;">' + (mc ? 'Presente' : 'Ausente') + '</span>'
-      + '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmp) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label>';
+      + '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmp) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label>'
+      + wo;
     return { skip: false, styleExtra: '', rowHtml: row };
   };
   var solosHtml = (typeof window._inscritoIndividualCard === 'function')
