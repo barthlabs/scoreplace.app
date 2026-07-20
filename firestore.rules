@@ -158,6 +158,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // DEBUG (v1.3.42, TEMPORÁRIO): log do fluxo de sorteio, gravado pelo cliente, pra o
+    // desenvolvedor LER direto no Firestore (sem depender de print de tela). Doc por uid.
+    // Remover quando o bug do fluxo de sorteio estiver fechado.
+    match /debugDrawLogs/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
     match /tournaments/{tournamentId} {
       // Anonymous users: only public tournaments. Authenticated users may
       // read any tournament (needed for invite links and enroll/deenroll

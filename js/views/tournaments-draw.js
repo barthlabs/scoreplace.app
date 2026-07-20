@@ -1272,6 +1272,7 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
       '</div>' +
     '</div>';
     document.body.appendChild(ov);
+    if (window._dtrace) window._dtrace('genderDialog:shown', { noGender: (window._gdCtx && window._gdCtx.rows || []).length, mode: (window._gdCtx && window._gdCtx.mode) });
   }; // fim _build
   // Carrega os perfis (gênero) antes de montar — fallback síncrono se indisponível.
   if (typeof window._loadParticipantProfilesByName === 'function') {
@@ -1323,6 +1324,7 @@ window._gdConfirm = function(){
   }
   var o = document.getElementById('gender-draw-overlay'); if (o) o.remove();
   window._gdCtx = null;
+  if (window._dtrace) window._dtrace('genderConfirm', { mode: ctx.mode });
   if (typeof ctx.onProceed === 'function') ctx.onProceed();
 };
 
@@ -1646,7 +1648,8 @@ window._callCloseRound = function (payload) {
 
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
-    if (!t) return;
+    if (!t) { if (window._dtrace) window._dtrace('generateDraw:NO-TOURNAMENT', { tId: String(tId) }); return; }
+    if (window._dtrace) window._dtrace('generateDraw', { fmt: t.format, parts: (t.participants || []).length });
     // v1.3.40: PRÉ-CARREGA os perfis por uid ANTES do sorteio — gênero/skill/idade/nome
     // resolvem pelo PERFIL (users/{uid}), não pelo snapshot gravado no inscrito. Sem isto,
     // um roster que grava só-uid não balanceia duplas mistas (gênero vinha vazio). Carrega só
@@ -1908,7 +1911,9 @@ window.generateDrawFunction = function (tId) {
         // aqui são todos re-aplicáveis sem efeito: sem-dupla (não há mais avulso), pow2 e resto
         // (o alvo é a potência de 2, já atingida). Ver docs/sorteio-ciclo-decisoes.md.
         var _decisions = t._drawDecisions || null;
+        if (window._dtrace) window._dtrace('cf:send', { redraw: !!_redraw, decisions: _decisions });
         window._callDrawRound({ tournamentId: String(tId), allowRedraw: _redraw, decisions: _decisions }).then(function (_res) {
+            if (window._dtrace) window._dtrace('cf:ok', { matchCount: (_res && _res.data && _res.data.matchCount) });
             var d = (_res && _res.data) || {};
             if (!d.ok || !d.tournament) throw new Error('resposta inválida do servidor');
             // Estado AUTORITATIVO do servidor no `t` local. Mutação in-place: preserva as
@@ -1933,6 +1938,7 @@ window.generateDrawFunction = function (tId) {
                 if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
             }, 140);
         }).catch(function (err) {
+            if (window._dtrace) window._dtrace('cf:ERR', { code: (err && err.code) || '', msg: String(err && err.message || err).slice(0, 120) });
             // O loader NÃO some sozinho aqui: ele só cai no hashchange do #bracket (que não
             // vai acontecer) ou no backstop de 15s. Sem esconder na mão, o toast de erro nasce
             // ATRÁS do overlay e o usuário fica 15s olhando "Sorteando…" sem conseguir ler o

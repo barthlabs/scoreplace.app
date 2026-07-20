@@ -1091,7 +1091,9 @@ window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
         ? window.AppStore.syncImmediate(tId)
         : (window.FirestoreDB ? window.FirestoreDB.saveTournament(t) : Promise.resolve()));
 
+  if (window._dtrace) window._dtrace('roll:save', { mode: mode, present: present.length, absent: absentees.length });
   Promise.resolve(savePromise).then(function () {
+    if (window._dtrace) window._dtrace('roll:saved-ok');
     if (typeof showNotification === 'function') {
       showNotification('✅ Chamada concluída',
         present.length + ' no sorteio · ' + absentees.length +
@@ -1099,6 +1101,7 @@ window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
     }
     if (typeof proceed === 'function') proceed();
   }).catch(function (e) {
+    if (window._dtrace) window._dtrace('roll:saved-ERR', { msg: String(e && e.message || e).slice(0, 120) });
     if (window._warn) window._warn('[rollcall] save failed:', e);
     if (typeof proceed === 'function') proceed();
   });

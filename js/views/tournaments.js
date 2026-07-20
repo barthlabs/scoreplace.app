@@ -1525,7 +1525,9 @@ function renderTournaments(container, tournamentId = null) {
     // mostrados na 1ª passada. Sem isso, o diálogo aparecia 2× (Sortear + confirmar espera).
     window._handleSortearClick = function (tId, isAberto, skipGates) {
         window._lastActiveTournamentId = tId;
+        if (window._dtrace) window._dtrace('handleSortear', { skipGates: !!skipGates, isAberto: !!isAberto });
         var _startDraw = function() {
+            if (window._dtrace) window._dtrace('startDraw');
             // v4.0.88: "carregando…" enquanto o sorteio processa (save async + diagnóstico)
             // até a tela de resultado (sem-dupla / resto / pow2 / chave) chegar. Some sozinho
             // via MutationObserver/hashchange (ver _showLoading no store.js).
@@ -1596,10 +1598,16 @@ function renderTournaments(container, tournamentId = null) {
                 showNotification('⚠️ ' + absentMovedCount + ' participante(s) ausente(s)', 'Removido(s) do sorteio e enviado(s) para lista de espera.', 'warning');
             }
             var _continueDraw = function() {
-                if (typeof window.showUnifiedResolutionPanel === 'function') {
-                    window.showUnifiedResolutionPanel(tId);
-                } else if (typeof window.showFinalReviewPanel === 'function') {
-                    window.showFinalReviewPanel(tId);
+                if (window._dtrace) window._dtrace('continueDraw');
+                try {
+                    if (typeof window.showUnifiedResolutionPanel === 'function') {
+                        window.showUnifiedResolutionPanel(tId);
+                    } else if (typeof window.showFinalReviewPanel === 'function') {
+                        window.showFinalReviewPanel(tId);
+                    } else if (window._dtrace) { window._dtrace('continueDraw:NO-PANEL-FN'); }
+                } catch (_eCont) {
+                    if (window._dtrace) window._dtrace('continueDraw:THREW', { msg: String(_eCont && _eCont.message || _eCont) });
+                    throw _eCont;
                 }
             };
             // Se ausentes foram movidos, persistir no Firestore ANTES de abrir o painel.
@@ -1639,9 +1647,11 @@ function renderTournaments(container, tournamentId = null) {
         // inscrições e realizar sorteio antecipado (cancelar/confirmar)". Só status=='closed'
         // (inscrições já encerradas pelo organizador) pula direto pro sorteio.
         var _inscricoesAbertas = !!(_tSort && (_tSort.status !== 'closed' || _tSort._autoClosedByDeadline));
+        if (window._dtrace) window._dtrace('gate', { skipGates: !!skipGates, abertas: !!_inscricoesAbertas, lateMode: !!_lateMode });
         if (!skipGates && _inscricoesAbertas && _lateMode) {
             // v2.2.39: inscrições seguem abertas após o sorteio — perguntar se
             // sorteia com todos (antes da chamada) ou só entre os presentes.
+            if (window._dtrace) window._dtrace('gate:presenceChoice');
             window._showPresenceDrawChoice(tId, _startDraw);
         } else if (!skipGates && _inscricoesAbertas) {
             showConfirmDialog(

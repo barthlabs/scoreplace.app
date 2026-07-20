@@ -1,4 +1,63 @@
-window.SCOREPLACE_VERSION = '1.3.41';
+window.SCOREPLACE_VERSION = '1.3.42';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
+// O motor da CF já foi provado (drawInitial gera chave no roster real do SB), mas o
+// FLUXO DO CLIENT morre ANTES de chamar a CF em alguns casos e não dá pra ver o
+// runtime do navegador do dono. Cada etapa chama window._dtrace(stage) e um selo fixo
+// no canto mostra a ÚLTIMA etapa alcançada + a versão. Um print diz o passo exato onde
+// morre. Padrão "loud failure" (mesmo espírito do diagnóstico do painel v0.15.86).
+// Remover quando o bug do fluxo estiver fechado.
+window._drawTrace = [];
+window._dtrace = function (stage, extra) {
+  try {
+    var e = { stage: String(stage || ''), at: Date.now(), extra: (extra == null ? null : extra) };
+    window._drawTrace.push(e);
+    if (window._drawTrace.length > 60) window._drawTrace.shift();
+    if (typeof document === 'undefined' || !document.body) return;
+    var b = document.getElementById('sp-draw-trace');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'sp-draw-trace';
+      b.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:2147483647;background:rgba(0,0,0,0.88);color:#4 ade80;font:11px/1.35 ui-monospace,Menlo,monospace;padding:6px 9px;border-radius:7px;max-width:94vw;white-space:pre-wrap;pointer-events:auto;border:1px solid rgba(74,222,128,0.4);'.replace('#4 ade80', '#4ade80');
+      b.title = 'Rastro do sorteio (diagnóstico) — toque pra copiar';
+      b.addEventListener('click', function () {
+        try {
+          var txt = 'DRAW TRACE v' + window.SCOREPLACE_VERSION + '\n' + window._drawTrace.map(function (x) {
+            return x.stage + (x.extra ? ' ' + JSON.stringify(x.extra) : '');
+          }).join('\n');
+          if (navigator.clipboard) navigator.clipboard.writeText(txt);
+        } catch (_e) {}
+      });
+      document.body.appendChild(b);
+    }
+    var last = window._drawTrace.slice(-4).map(function (x) {
+      return '• ' + x.stage + (x.extra ? ' ' + JSON.stringify(x.extra).slice(0, 90) : '');
+    }).join('\n');
+    b.textContent = 'SORTEIO v' + window.SCOREPLACE_VERSION + '\n' + last;
+    var isErr = /THREW|err|fail|denied/i.test(String(stage));
+    b.style.color = isErr ? '#f87171' : '#4ade80';
+    b.style.borderColor = isErr ? 'rgba(248,113,113,0.6)' : 'rgba(74,222,128,0.4)';
+  } catch (_e) {}
+  // Persiste o rastro no Firestore (debugDrawLogs/{uid}) pro dev LER direto — sem print.
+  // Fire-and-forget; sobrescreve o doc do uid a cada evento com o rastro COMPLETO da sessão.
+  // Se a gravação FALHAR (ex.: permissão), o doc não aparece — isso por si só é diagnóstico
+  // (writes do usuário no torneio estariam falhando). Ver [[project_expand_mode_double_presence_dialog]].
+  try {
+    var _fb = window.firebase;
+    var _db = window.FirestoreDB && window.FirestoreDB.db;
+    var _u = _fb && _fb.auth && _fb.auth().currentUser;
+    if (_db && _u) {
+      _db.collection('debugDrawLogs').doc(_u.uid).set({
+        uid: _u.uid,
+        email: (_u.email || ''),
+        version: window.SCOREPLACE_VERSION,
+        updatedAt: new Date().toISOString(),
+        trace: window._drawTrace.map(function (x) { return x.stage + (x.extra ? ' ' + JSON.stringify(x.extra) : ''); })
+      }).catch(function () {});
+    }
+  } catch (_e3) {}
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
