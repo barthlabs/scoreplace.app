@@ -111,5 +111,24 @@ ok(W._createExtraGamesFromWaitlist(t3) === 1, 'dupla por UID presente integra');
 simulate(t3);
 ok(t3.matches.find(m => m.round === 3)?.winner, 'UID: final tem campeão');
 
+// ── 2ª DUPLA PREENCHE O "A DEFINIR" da 1ª (gap que quebrou no SB, dono 20/jul) ──
+// 1ª dupla tardia cria "dupla vs a-definir" (repFill). A 2ª dupla presente PREENCHE esse slot via
+// _fillRepFillWithLateDuplas — NÃO cria outro jogo. Ambas entram; a chave fecha. Antes o teste só
+// cobria _createExtraGamesFromWaitlist e esse caminho passava sem gate.
+console.log('== 2ª dupla preenche o "a definir" ==');
+const t4 = build8();
+t4.checkedIn['L1'] = 1; t4.checkedIn['L2'] = 1; t4.checkedIn['P1'] = 1; t4.checkedIn['I1'] = 1;
+t4.standbyParticipants.push({ p1Name: 'L1', p2Name: 'L2', p1Uid: '', p2Uid: '', displayName: 'L1 / L2', name: 'L1 / L2', _lateJoin: true });
+ok(W._createExtraGamesFromWaitlist(t4) === 1, '1ª dupla cria o jogo "dupla vs a-definir"');
+const _ad = t4.matches.find(m => m.round === 0 && m.repFill && m.repFill.length);
+ok(!!_ad, 'existe o slot "a definir" (repFill) esperando');
+t4.standbyParticipants.push({ p1Name: 'P1', p2Name: 'I1', p1Uid: '', p2Uid: '', displayName: 'Pedro / Iliane', name: 'Pedro / Iliane', _lateJoin: true });
+ok(W._fillRepFillWithLateDuplas(t4) === 1, '2ª dupla PREENCHE o "a definir" (_fillRepFillWithLateDuplas=1)');
+const _filled = t4.matches.find(m => (m.p1 === 'L1 / L2' || m.p2 === 'L1 / L2'));
+ok(_filled && !(_filled.repFill && _filled.repFill.length) && _filled.p1 !== 'TBD' && _filled.p2 !== 'TBD', 'o "a definir" da 1ª dupla foi PREENCHIDO (jogo real: sem repFill, sem TBD, com adversário)');
+simulate(t4);
+ok(allOf(t4).find(m => m.round === Math.max.apply(null, allOf(t4).map(x => x.round)) && !m.isThirdPlace)?.winner, '2ª-dupla: chave fecha num campeão');
+ok(allOf(t4).filter(m => m && !m.winner && m.p1 && m.p2 && m.p1 !== 'TBD' && m.p2 !== 'TBD' && m.p1 !== BYE && m.p2 !== BYE).length === 0, '2ª-dupla: nenhum jogo travado');
+
 console.log('\n' + (fail === 0 ? '✅ late-integration-fullplay: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fail > 0) process.exit(1);

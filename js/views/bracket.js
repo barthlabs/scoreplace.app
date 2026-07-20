@@ -221,14 +221,55 @@ function renderBracket(container, tournamentId, isInline) {
     }
   }
 
-  // v1.3.75: INTEGRAÇÃO TARDIA = CF-ONLY. O cliente NÃO computa mais a chave aqui (era
-  // _fillRepFillWithLateDuplas / _createExtraGamesFromWaitlist / _integrateLateDuplas /
-  // _expandMonarchFromWaitlist rodando client-side no render). Agora só DISPARA a CF
-  // integrateLateEntries (via _triggerLateIntegration, com guard anti-spam); a CF roda o motor
-  // na transação e persiste → onSnapshot re-renderiza com a chave nova. Regra do dono: "nada de
-  // cálculo de chave no client-side". Ver [[feedback_draw_is_cf_only]] / [[project_enroll_deenroll_in_cf]].
-  if (isOrg && typeof window._triggerLateIntegration === 'function') {
-    try { window._triggerLateIntegration(t); } catch (e) {}
+  // v1.3.76: REVERTIDO o CF-only trigger da v1.3.75 — quebrou a integração (round-trip CF async
+  // não verificável headless; síncrono client-side funcionava). O MOTOR continua unificado (3º
+  // lugar canônico, mesmo código vendorado que a CF roda). Estas funções rodam client-side no
+  // render do org e SALVAM (org passa nas rules). O CF-only (window._triggerLateIntegration /
+  // _callIntegrateLate) fica DEFINIDO pra reativar quando der pra testar o fluxo logado end-to-end.
+  // Ver [[feedback_draw_is_cf_only]] / [[feedback_no_regressions]].
+  if (isOrg && typeof window._fillRepFillWithLateDuplas === 'function') {
+    try {
+      var _nRF = window._fillRepFillWithLateDuplas(t);
+      if (_nRF > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        window.FirestoreDB.saveTournament(t);
+        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nRF + ' dupla(s) na chave', 'Entrou no lugar do repescado — a chave recalculou os repescados.', 'success');
+      }
+    } catch (e) {}
+  }
+  if (isOrg && typeof window._createExtraGamesFromWaitlist === 'function') {
+    try {
+      var _nExtra = window._createExtraGamesFromWaitlist(t);
+      if (_nExtra > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        window.FirestoreDB.saveTournament(t);
+        if (typeof showNotification !== 'undefined') showNotification('⚡ ' + (_nExtra * 2) + ' tardios na chave', _nExtra + ' jogo(s) novo(s) na rodada 1 — chave redesenhada.', 'info');
+      }
+    } catch (e) {}
+  }
+  if (isOrg && typeof window._integrateLateDuplas === 'function') {
+    try {
+      var _nLJ = window._integrateLateDuplas(t);
+      if (_nLJ > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        window.FirestoreDB.saveTournament(t);
+        var _ljTier = window._lastIntegrateTier || 1;
+        var _ljMsg = (_ljTier === 2)
+          ? 'Entraram na R1 da chave inferior (vencedor segue no lower, derrotado eliminado).'
+          : 'Entraram na R1 da chave superior (vencedor sobe, derrotado cai pro lower).';
+        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nLJ + ' dupla(s) na chave', _ljMsg, 'success');
+      } else if (_nLJ === -3 && typeof window._dissolveLateDuplas === 'function') {
+        var _nd = window._dissolveLateDuplas(t);
+        if (_nd > 0 && window.FirestoreDB) { window.FirestoreDB.saveTournament(t);
+          if (typeof showNotification !== 'undefined') showNotification('👤 Suplentes individuais', 'O torneio já avançou na chave inferior — as duplas em espera viraram suplentes individuais.', 'info'); }
+      }
+    } catch (e) {}
+  }
+  if (isOrg && typeof window._expandMonarchFromWaitlist === 'function') {
+    try {
+      var _nRR = window._expandMonarchFromWaitlist(t);
+      if (_nRR > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        window.FirestoreDB.saveTournament(t);
+        if (typeof showNotification !== 'undefined') showNotification('⚡ ' + _nRR + ' novo(s) grupo(s)', 'Novos confrontos formados da lista de espera.', 'info');
+      }
+    } catch (e) {}
   }
   const canEnterResult = isOrg || window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee');
   const isLiga = window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
@@ -818,7 +859,8 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var nmm = (typeof window._displayName === 'function') ? window._displayName(mm.uid, mm.guest) : (mm.guest || mm.uid || '');
     var mc = window._idMapHas ? window._idMapHas(t, ci, mm.uid ? { uid: mm.uid } : nmm) : false;
     var uidp = String(mm.uid || '').replace(/'/g, "\\'");
-    var html = '<div style="display:flex;align-items:center;gap:6px;' + (right ? 'justify-content:flex-end;' : '') + '"><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmm) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label><span style="font-size:0.62rem;font-weight:700;color:' + (mc ? '#4ade80' : '#64748b') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span></div>';
+    // v1.3.76: toggle À DIREITA da palavra Presente/Ausente (pedido do dono) — span antes, label depois.
+    var html = '<div style="display:flex;align-items:center;gap:6px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.62rem;font-weight:700;color:' + (mc ? '#4ade80' : '#64748b') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmm) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label></div>';
     return { html: html };
   };
   var _ljSplit = function (tid, m1id, m2id, name) { return 'window._splitLateDupla(\'' + tid + '\',\'' + name + '\')'; };
@@ -901,8 +943,7 @@ window._formLateJoinDupla = function (tId, src, tgt) {
   t.updatedAt = new Date().toISOString();
   window.FirestoreDB.saveTournament(t).then(function () {
     if (typeof showNotification !== 'undefined') showNotification('🤝 Dupla formada · presença marcada', an + ' / ' + bn + ' entraram na chave.', 'success');
-    // v1.3.75: CF-only — dispara a CF que integra a dupla na chave (force: acabou de mudar o estado).
-    if (typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
+    // v1.3.76: re-render dispara a integração client-side (revertido o CF-only da v1.3.75 que quebrou).
     if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
   });
 };
