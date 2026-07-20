@@ -795,6 +795,18 @@ window._updateCardPresenceInPlace = function (tId, uid, playerName) {
     var ctx = stash.ctx;
     if (ctx.lateJoin) return false;                            // espera reordena → re-render
     if (typeof ctx.cardPresence !== 'function') return false;  // sem presença → nada a fazer
+    // v1.3.47: RECONSTRÓI a presença contra o `t` ATUAL (o snapshot troca o objeto de torneio;
+    // o cardPresence do ctx guardado fechava sobre o `t` órfão → só a 1ª presença "pegava").
+    if (typeof window._rollCallPresenceCtx === 'function' && window._lastRcOpts) {
+      try {
+        var _rc = window._rollCallPresenceCtx(t, window._lastRcOpts);
+        var _merged = {};
+        for (var _k in ctx) { if (Object.prototype.hasOwnProperty.call(ctx, _k)) _merged[_k] = ctx[_k]; }
+        _merged.cardPresence = _rc.cardPresence;
+        _merged.memberPresence = _rc.memberPresence;
+        ctx = _merged;
+      } catch (_eRc) {}
+    }
     var key = String(uid || playerName || '');
     var _kEsc = (window.CSS && CSS.escape) ? CSS.escape(key) : key.replace(/["\\]/g, '\\$&');
     var card = document.querySelector('.participant-card[data-card-key="' + _kEsc + '"]');
@@ -1328,6 +1340,10 @@ window._setCheckInFilter = function (tId, filter) {
 // [[project_two_participant_card_renderers]] e [[project_id_maps_uid_keyed]].
 window._rollCallPresenceCtx = function (t, opts) {
   opts = opts || {};
+  // v1.3.47: guarda os OPTS do último ctx de chamada → o update in-place (após o snapshot
+  // TROCAR o objeto de torneio em store.tournaments) reconstrói a presença contra o `t` ATUAL,
+  // não contra o `t` órfão capturado no build. Sem isto, só a 1ª presença "pegava".
+  try { window._lastRcOpts = opts; } catch (_eO) {}
   var isOrg = !!opts.isOrg;
   var active = !!opts.active;       // canRollCall (chamada pré-sorteio)
   var postDraw = !!opts.postDraw;   // postDrawPresence (pós-sorteio, antes de iniciar)
