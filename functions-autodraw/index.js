@@ -83,9 +83,36 @@ async function _preloadDrawNames(t) {
       if (Array.isArray(p.participants)) p.participants.forEach(sp => { if (sp && sp.uid) uids.add(String(sp.uid)); });
     });
     if (!uids.size) return;
-    const { nameByUid } = await _loadLiveNames(uids);
+    const { profByUid, nameByUid } = await _loadLiveNames(uids);
     drawWindow._profileNameByUid = nameByUid || {};
+    drawWindow._profByUid = profByUid || {}; // v1.3.52: perfil COMPLETO por uid p/ enriquecer
   } catch (e) { /* best-effort; motor cai no nome gravado legado */ }
+}
+
+// v1.3.52: resolve o perfil POR UID e ESCREVE nos participantes em memória (gênero/skill/idade/
+// email/phone/defaultCategory) ANTES do motor e das notificações. Assim o inscrito grava SÓ uid;
+// a CF re-resolve tudo aqui (o vendor lê p.gender/p.email etc., que passam a vir do perfil vivo).
+// Idempotente. Usa drawWindow._profByUid populado por _preloadDrawNames. Ver [[project_autodraw_server_parity]].
+function _enrichParticipantsFromProfiles(t) {
+  try {
+    const prof = (drawWindow && drawWindow._profByUid) || {};
+    if (!Object.keys(prof).length) return;
+    const _one = (p) => {
+      if (!p || typeof p !== 'object') return;
+      const d = p.uid && prof[p.uid];
+      if (d) {
+        if (d.gender) p.gender = d.gender;
+        if (d.skillBySport && typeof d.skillBySport === 'object') p.skillBySport = d.skillBySport;
+        if (d.birthDate) p.birthDate = d.birthDate;
+        if (d.defaultCategory) p.defaultCategory = d.defaultCategory;
+        if (d.email) p.email = d.email;
+        if (d.phone) p.phone = d.phone;
+      }
+      const d1 = p.p1Uid && prof[p.p1Uid]; if (d1 && d1.gender) p.p1Gender = d1.gender;
+      const d2 = p.p2Uid && prof[p.p2Uid]; if (d2 && d2.gender) p.p2Gender = d2.gender;
+    };
+    ['participants', 'standbyParticipants', 'waitlist'].forEach((k) => { if (Array.isArray(t[k])) t[k].forEach(_one); });
+  } catch (e) { /* best-effort */ }
 }
 
 // Nome exibido de um lado da partida: nomes VIVOS dos uids do slot (dupla junta com
@@ -305,6 +332,7 @@ exports.drawRound = onCall(async (request) => {
     if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
     const t = snap.data();
     t.id = tId;
+    _enrichParticipantsFromProfiles(t); // v1.3.52: gênero/skill/etc. por uid (inscrito grava só uid)
 
     // Re-checa authz sobre o doc FRESCO: entre o read de fora e a transação o organizador
     // pode ter perdido o acesso (transferência de organização / co-host removido).
@@ -621,6 +649,7 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
         // equilíbrio, categorias, folgas justas, desempate). Muta `t` in-place.
         t.id = tId;
         await _preloadDrawNames(t); // v4.5.85: nomes vivos por uid antes do motor
+        _enrichParticipantsFromProfiles(t); // v1.3.52: gênero/skill/email por uid
         const res = generateLigaRound(t, mostRecentScheduled);
         if (!res.ok) {
           console.log(`Auto-draw: skip ${tId} (${res.reason})`);
@@ -842,6 +871,7 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
   if (typeof owed !== 'number' || owed > nowMs) return; // sem slot devido agora
   const cur = t.currentPhaseIndex || 0;
   await _preloadDrawNames(t); // v4.5.85: nomes vivos por uid antes do motor de fase
+  _enrichParticipantsFromProfiles(t); // v1.3.52: gênero/skill/email por uid
   if (typeof drawWindow._rehydrateEntryNames === 'function') drawWindow._rehydrateEntryNames(t);
   const ok = drawWindow._phaseGenNextLeagueRound(t, cur);
   if (!ok) { console.log(`Auto-draw phase: skip ${tId} (gen falhou / jogadores insuficientes)`); return; }

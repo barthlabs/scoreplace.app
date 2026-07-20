@@ -30,13 +30,21 @@ ok(typeof W._stripStoredNamesForUidEntries === 'function', '_stripStoredNamesFor
   W._profileNameByUid[u] = n; W._userProfileCache[u] = { displayName: n };
 });
 
-// solo COM conta → nome sai, uid fica
-var soloAcc = { uid: 'uA', name: 'Ana', displayName: 'Ana', email: 'a@x.com' };
+// solo COM conta → PERFIL sai (nome/email/gênero...), uid + campos do TORNEIO ficam.
+// v1.3.52 (dono: "grava SÓ o uid; nome, email, celular, tudo vem do perfil pelo uid"):
+// o strip remove TODO campo de perfil das entradas com uid — resolvidos por uid no display
+// (cliente) e no sorteio/notificação (CF _enrichParticipantsFromProfiles).
+var soloAcc = { uid: 'uA', name: 'Ana', displayName: 'Ana', email: 'a@x.com', gender: 'feminino',
+                phone: '+5511999', birthDate: '1990-01-01', skillBySport: { tenis: 'B' }, defaultCategory: 'B', photoURL: 'http://x',
+                enrollSeq: 5, category: 'Fem B', categories: ['Fem B'], categorySource: 'inscricao', ligaActive: true, selfEnrolled: true };
 var sA = W._stripStoredNamesForUidEntries([soloAcc])[0];
 ok(sA.uid === 'uA', 'solo conta: uid preservado');
 ok(!has(sA, 'name') && !has(sA, 'displayName'), 'solo conta: name/displayName REMOVIDOS');
-ok(sA.email === 'a@x.com', 'solo conta: outros campos intactos');
-ok(has(soloAcc, 'displayName'), 'NÃO muta o objeto de entrada (cópia)');
+ok(!has(sA, 'email') && !has(sA, 'gender') && !has(sA, 'phone') && !has(sA, 'birthDate') && !has(sA, 'skillBySport') && !has(sA, 'defaultCategory') && !has(sA, 'photoURL'),
+   'solo conta: PERFIL (email/gênero/celular/idade/skill/foto) REMOVIDO — resolve por uid (v1.3.52)');
+ok(sA.enrollSeq === 5 && sA.category === 'Fem B' && Array.isArray(sA.categories) && sA.categorySource === 'inscricao' && sA.ligaActive === true && sA.selfEnrolled === true,
+   'solo conta: campos do TORNEIO preservados (enrollSeq/category/categories/categorySource/ligaActive/selfEnrolled)');
+ok(has(soloAcc, 'displayName') && has(soloAcc, 'email'), 'NÃO muta o objeto de entrada (cópia)');
 
 // solo SEM conta (guest) → nome MANTIDO
 var guest = { name: 'Zé Visitante', displayName: 'Zé Visitante' };

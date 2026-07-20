@@ -37,6 +37,28 @@ g.window._error = function () { console.error.apply(console, arguments); };
 g.window._profileNameByUid = g.window._profileNameByUid || {};
 g.window._nameForUid = function (uid) { return (uid && g.window._profileNameByUid[uid]) || ''; };
 
+// ── v1.3.52: resolvedores de PERFIL por participante NO SERVIDOR ────────────────────
+// O vendor (tournaments-draw/-prep/-categories) chama window._pGender/_pSkillMap/_pBirth/
+// _pDefaultCat/_canonGender (migração uid-first do cliente). No servidor NÃO há
+// _userProfileCache: o index.js (_enrichParticipantsFromProfiles) já resolveu gênero/skill/
+// idade/categoria POR UID e ESCREVEU em p.* ANTES do motor. Então aqui os _p* leem p.* (já
+// resolvido). Sem estes, o vendor sincronizado chamaria _pGender indefinido → o sorteio de
+// duplas mistas crasharia. Ver [[project_autodraw_server_parity]] / [[project_id_maps_uid_keyed]].
+g.window._pGender = function (p) { return (p && typeof p === 'object' && p.gender) || ''; };
+g.window._pSkillMap = function (p) { return (p && typeof p === 'object' && p.skillBySport) || null; };
+g.window._pBirth = function (p) { return (p && typeof p === 'object' && p.birthDate) || ''; };
+g.window._pDefaultCat = function (p) { return (p && typeof p === 'object' && p.defaultCategory) || ''; };
+g.window._genderForUid = function () { return ''; };
+g.window._skillMapForUid = function () { return null; };
+g.window._birthForUid = function () { return ''; };
+g.window._defaultCatForUid = function () { return ''; };
+g.window._canonGender = function (gRaw) {
+  var s = String(gRaw == null ? '' : gRaw).toLowerCase().trim();
+  if (s.indexOf('masc') !== -1 || s === 'm' || s === 'male') return 'masculino';
+  if (s.indexOf('fem') !== -1 || s === 'f' || s === 'female') return 'feminino';
+  return '';
+};
+
 // ── v1.2.2: PARIDADE com store.js — _displayNameForUid/_entryDisplayName/_pName ───
 // O vendor CHAMA os três (bracket-logic L640/3323/3430/3433/3630, tournaments-categories
 // L720), mas o shim não os definia → cada call site caía no seu fallback INLINE, e vários

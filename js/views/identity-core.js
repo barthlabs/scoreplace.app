@@ -246,22 +246,29 @@ function _stripUidEntryNames(p) {
   var _resolves = function (u) {
     return !!(u && typeof window._nameForUid === 'function' && window._nameForUid(u));
   };
+  // v1.3.52 (dono: "grava SÓ o uid; nome, email, celular, tudo vem do perfil pelo uid"): remove
+  // os campos de PERFIL das entradas com uid — são resolvidos por uid no display (cliente) E no
+  // sorteio/notificação (CF _enrichParticipantsFromProfiles, deployada). NÃO se toca: uid,
+  // enrollSeq, category/categories/categorySource (atribuição do TORNEIO, não perfil),
+  // ligaActive, selfEnrolled, addedAt, p1Uid/p2Uid. Guest sem uid = intacto (nome é a identidade).
+  var _PROFILE_FIELDS = ['email', 'phone', 'gender', 'birthDate', 'skillBySport', 'defaultCategory', 'photoURL'];
+  var _delProfile = function (o) { _PROFILE_FIELDS.forEach(function (f) { if (Object.prototype.hasOwnProperty.call(o, f)) delete o[f]; }); };
   var isPair = !!(q.p1Uid || q.p2Uid || q.p1Name || q.p2Name);
   if (isPair) {
-    if (_resolves(q.p1Uid)) delete q.p1Name;   // membro 1 tem perfil → nome vem de lá
-    if (_resolves(q.p2Uid)) delete q.p2Name;   // membro 2 tem perfil → idem
+    if (_resolves(q.p1Uid)) { delete q.p1Name; delete q.p1Gender; }   // membro 1 tem perfil → vem de lá
+    if (_resolves(q.p2Uid)) { delete q.p2Name; delete q.p2Gender; }   // membro 2 tem perfil → idem
     // name/displayName da dupla é o teamString derivado ("A / B") → o display reconstrói
     // via _entryDisplayName (p1Uid vivo / p2Uid vivo / p*Name só do guest). Remove sempre
     // que ao menos um membro tem perfil (o outro, se guest/órfão, resolve pelo p*Name mantido).
-    if (_resolves(q.p1Uid) || _resolves(q.p2Uid)) { delete q.name; delete q.displayName; }
+    if (_resolves(q.p1Uid) || _resolves(q.p2Uid)) { delete q.name; delete q.displayName; _delProfile(q); }
   } else if (_resolves(q.uid)) {               // solo com perfil
-    delete q.name; delete q.displayName;
+    delete q.name; delete q.displayName; _delProfile(q);
   }
   if (Array.isArray(q.participants)) {
     q.participants = q.participants.map(function (s) {
       if (s && typeof s === 'object' && _resolves(s.uid)) {
         var r = {}; for (var kk in s) { if (Object.prototype.hasOwnProperty.call(s, kk)) r[kk] = s[kk]; }
-        delete r.name; delete r.displayName; return r;
+        delete r.name; delete r.displayName; _delProfile(r); return r;
       }
       return s;
     });

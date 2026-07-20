@@ -397,7 +397,7 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
     // Homens que sobram formam duplas masculinas (inevitável se faltarem
     // não-homens). individuals já está embaralhado, então os pools preservam
     // a aleatoriedade.
-    var _isMale = function(p) { return (p && p.gender) === 'masculino'; };
+    var _isMale = function(p) { return window._pGender(p) === 'masculino'; }; // v1.3.39: gênero perfil-first
     var men = [], nonMale = [];
     individuals.forEach(function(p) { (_isMale(p) ? men : nonMale).push(p); });
     individuals = [];
@@ -488,7 +488,7 @@ window._buildSwissClassifDraw = function (t) {
 window._equilibradoPairPreview = function(individuals) {
   var men = 0, nonMale = 0;
   (individuals || []).forEach(function(p){
-    if (p && typeof p === 'object' && p.gender === 'masculino') men++; else nonMale++;
+    if (p && typeof p === 'object' && window._pGender(p) === 'masculino') men++; else nonMale++; // v1.3.39: perfil-first
   });
   var mixed = Math.min(men, nonMale);
   var remMen = men - mixed, remNon = nonMale - mixed;
@@ -560,8 +560,8 @@ window._buildPhase0Pool = function (t, isMon, ts) {
       if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
         p.participants.forEach(function (s) { var nm = (s && (s.displayName || s.name)) || String(s || ''); pool.push((s && typeof s === 'object') ? Object.assign({ displayName: nm }, s) : { displayName: nm }); });
       } else if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
-        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '')), uid: p.p1Uid || null, name: p.p1Name || null, gender: p.p1Gender || p.gender });
-        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '')), uid: p.p2Uid || null, name: p.p2Name || null, gender: p.p2Gender || p.gender });
+        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '')), uid: p.p1Uid || null, name: p.p1Name || null, gender: p.p1Gender || (p.p1Uid && window._genderForUid(p.p1Uid)) || p.gender });
+        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '')), uid: p.p2Uid || null, name: p.p2Name || null, gender: p.p2Gender || (p.p2Uid && window._genderForUid(p.p2Uid)) || p.gender });
       } else {
         var nm = _pName(p); pool.push((typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm });
       }
@@ -1217,7 +1217,7 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
 
   var _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
   var _pName = function(p){ return (typeof p === 'string') ? p : (p.displayName || p.name || p.email || '?'); };
-  var _hasGender = function(p){ return typeof p === 'object' && p.gender && String(p.gender).trim(); };
+  var _hasGender = function(p){ var g = window._pGender(p); return typeof p === 'object' && !!g && !!String(g).trim(); }; // v1.3.39: perfil-first
   // v3.0.x: o gênero AUTORITATIVO é o do PERFIL. Carrega os perfis dos
   // participantes e (a) enriquece o snapshot com o gênero do perfil, (b) a lista
   // "sem gênero" passa a refletir o PERFIL — quem já tem gênero no perfil NÃO
@@ -1272,6 +1272,7 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
       '</div>' +
     '</div>';
     document.body.appendChild(ov);
+    if (window._dtrace) window._dtrace('genderDialog:shown', { noGender: (window._gdCtx && window._gdCtx.rows || []).length, mode: (window._gdCtx && window._gdCtx.mode) });
   }; // fim _build
   // Carrega os perfis (gênero) antes de montar — fallback síncrono se indisponível.
   if (typeof window._loadParticipantProfilesByName === 'function') {
@@ -1323,6 +1324,7 @@ window._gdConfirm = function(){
   }
   var o = document.getElementById('gender-draw-overlay'); if (o) o.remove();
   window._gdCtx = null;
+  if (window._dtrace) window._dtrace('genderConfirm', { mode: ctx.mode });
   if (typeof ctx.onProceed === 'function') ctx.onProceed();
 };
 
@@ -1646,7 +1648,28 @@ window._callCloseRound = function (payload) {
 
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
-    if (!t) return;
+    if (!t) { if (window._dtrace) window._dtrace('generateDraw:NO-TOURNAMENT', { tId: String(tId) }); return; }
+    if (window._dtrace) window._dtrace('generateDraw', { fmt: t.format, parts: (t.participants || []).length });
+    // v1.3.40: PRÉ-CARREGA os perfis por uid ANTES do sorteio — gênero/skill/idade/nome
+    // resolvem pelo PERFIL (users/{uid}), não pelo snapshot gravado no inscrito. Sem isto,
+    // um roster que grava só-uid não balanceia duplas mistas (gênero vinha vazio). Carrega só
+    // uids ainda NÃO cacheados; após a carga re-chama a si mesma (o cache fica quente → 2ª
+    // passada não recarrega → sem recursão). _preloadUserProfiles cacheia até doc inexistente.
+    if (typeof window._preloadUserProfiles === 'function' && window._userProfileCache &&
+        window.FirestoreDB && window.FirestoreDB.db) {
+        var _drawUids = [];
+        (Array.isArray(t.participants) ? t.participants : []).forEach(function (p) {
+            if (p && typeof p === 'object') [p.uid, p.p1Uid, p.p2Uid].forEach(function (u) {
+                if (u && typeof u === 'string' && u.indexOf(' ') === -1 && !window._userProfileCache[u]) _drawUids.push(u);
+            });
+        });
+        if (_drawUids.length) {
+            window._preloadUserProfiles(_drawUids)
+                .then(function () { window.generateDrawFunction(tId); })
+                .catch(function () { window.generateDrawFunction(tId); });
+            return;
+        }
+    }
     // v4.5.85 (ITEM 3 · Fase 4): rehidrata o nome das entradas (perfil vivo por uid) antes do
     // sorteio inicial — storage só-uid, motor lê nome. Transiente (o save re-sanitiza).
     if (typeof window._rehydrateEntryNames === 'function') window._rehydrateEntryNames(t);
@@ -1888,7 +1911,9 @@ window.generateDrawFunction = function (tId) {
         // aqui são todos re-aplicáveis sem efeito: sem-dupla (não há mais avulso), pow2 e resto
         // (o alvo é a potência de 2, já atingida). Ver docs/sorteio-ciclo-decisoes.md.
         var _decisions = t._drawDecisions || null;
+        if (window._dtrace) window._dtrace('cf:send', { redraw: !!_redraw, decisions: _decisions });
         window._callDrawRound({ tournamentId: String(tId), allowRedraw: _redraw, decisions: _decisions }).then(function (_res) {
+            if (window._dtrace) window._dtrace('cf:ok', { matchCount: (_res && _res.data && _res.data.matchCount) });
             var d = (_res && _res.data) || {};
             if (!d.ok || !d.tournament) throw new Error('resposta inválida do servidor');
             // Estado AUTORITATIVO do servidor no `t` local. Mutação in-place: preserva as
@@ -1913,6 +1938,7 @@ window.generateDrawFunction = function (tId) {
                 if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
             }, 140);
         }).catch(function (err) {
+            if (window._dtrace) window._dtrace('cf:ERR', { code: (err && err.code) || '', msg: String(err && err.message || err).slice(0, 120) });
             // O loader NÃO some sozinho aqui: ele só cai no hashchange do #bracket (que não
             // vai acontecer) ou no backstop de 15s. Sem esconder na mão, o toast de erro nasce
             // ATRÁS do overlay e o usuário fica 15s olhando "Sorteando…" sem conseguir ler o

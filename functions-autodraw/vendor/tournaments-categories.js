@@ -187,12 +187,14 @@ window._categoryMissingFields = function(p, t) {
     // Habilidade do participante (por modalidade, com fallback legado defaultCategory)
     var tSport = t.sport ? String(t.sport).trim() : null;
     var hasSkill = false;
-    if (p.skillBySport && typeof p.skillBySport === 'object' && tSport && p.skillBySport[tSport]) hasSkill = true;
-    if (!hasSkill && p.defaultCategory) hasSkill = true;
+    // v1.3.39: gênero/skill/idade resolvidos PELO PERFIL (uid), fallback pro gravado.
+    var _smA = window._pSkillMap(p);
+    if (_smA && tSport && _smA[tSport]) hasSkill = true;
+    if (!hasSkill && window._pDefaultCat(p)) hasSkill = true;
 
-    if (res.usesGender && !p.gender) res.missing.push('gênero');
+    if (res.usesGender && !window._pGender(p)) res.missing.push('gênero');
     if (res.usesSkill && !hasSkill) res.missing.push('habilidade');
-    if (res.usesAge && !p.birthDate) res.missing.push('data de nascimento');
+    if (res.usesAge && !window._pBirth(p)) res.missing.push('data de nascimento');
     return res;
 };
 
@@ -1014,9 +1016,10 @@ window.renderCategoryManagerPage = function(container, tId) {
             var diagRows = uncategorized.map(function(u) {
                 var p = u.p;
                 if (!p || typeof p !== 'object') return '';
-                var g = p.gender || '—';
-                var skill = (p.skillBySport && tSportForDiag && p.skillBySport[tSportForDiag]) || p.defaultCategory || '—';
-                var bd = p.birthDate || '—';
+                var g = window._pGender(p) || '—';
+                var _smDiag = window._pSkillMap(p);
+                var skill = (_smDiag && tSportForDiag && _smDiag[tSportForDiag]) || window._pDefaultCat(p) || '—';
+                var bd = window._pBirth(p) || '—';
                 var uid = p.uid ? p.uid.substring(0, 6) + '…' : '(sem uid)';
                 return '<tr style="font-size:0.72rem;border-bottom:1px solid rgba(255,255,255,0.06);">' +
                     '<td style="padding:3px 6px;color:var(--text-bright);">' + window._safeHtml(u.name || '?') + '</td>' +
@@ -2500,7 +2503,7 @@ function _eligibleCatsForParticipant(p, allCats, tSport) {
     var genderPrefixMap = { fem: 'fem', masc: 'masc', misto_aleatorio: 'misto aleat.', misto_obrigatorio: 'misto obrig.' };
 
     // ── 1. Gênero ─────────────────────────────────────────────────────────────
-    var pGender = p.gender || '';
+    var pGender = window._pGender(p) || ''; // v1.3.39: perfil-first (uid), fallback gravado
     if (pGender && typeof window._userGenderToCatCodes === 'function') {
         var validGenderCodes = window._userGenderToCatCodes(pGender);
         if (validGenderCodes && validGenderCodes.length > 0) {
@@ -2517,7 +2520,7 @@ function _eligibleCatsForParticipant(p, allCats, tSport) {
     if (eligible.length === 1) return eligible;
 
     // ── 2. Idade ──────────────────────────────────────────────────────────────
-    var birthDate = p.birthDate || '';
+    var birthDate = window._pBirth(p) || ''; // v1.3.39: perfil-first (uid), fallback gravado
     if (birthDate) {
         var bd = new Date(birthDate);
         if (!isNaN(bd.getTime())) {
@@ -2549,12 +2552,13 @@ function _eligibleCatsForParticipant(p, allCats, tSport) {
 
     // ── 3. Habilidade ─────────────────────────────────────────────────────────
     var profileSkill = null;
-    if (p.skillBySport && typeof p.skillBySport === 'object' && tSport) {
-        var raw = p.skillBySport[tSport];
+    var _smB = window._pSkillMap(p); // v1.3.39: perfil-first (uid), fallback gravado
+    if (_smB && tSport) {
+        var raw = _smB[tSport];
         if (raw) profileSkill = String(raw).trim().toUpperCase();
     }
-    if (!profileSkill && p.defaultCategory) {
-        profileSkill = String(p.defaultCategory).trim().toUpperCase();
+    if (!profileSkill && window._pDefaultCat(p)) {
+        profileSkill = String(window._pDefaultCat(p)).trim().toUpperCase();
     }
     if (profileSkill) {
         var skillFiltered = eligible.filter(function(cat) {
@@ -2596,7 +2600,7 @@ window._autoAssignCategories = function(tId, _preloadedT) {
         var hasValidCat = existingCats.some(function(c) { return allCats.indexOf(c) !== -1; });
         if (hasValidCat) return;
 
-        var hasAnyProfileData = p.gender || p.birthDate || p.skillBySport || p.defaultCategory;
+        var hasAnyProfileData = window._pGender(p) || window._pBirth(p) || window._pSkillMap(p) || window._pDefaultCat(p);
         if (!hasAnyProfileData) return;
 
         var eligible = _eligibleCatsForParticipant(p, allCats, tSport);
@@ -2657,11 +2661,12 @@ window._autoAssignCategoriesAsync = async function(tId) {
         var hasValidCat = existingCats.some(function(c) { return allCats.indexOf(c) !== -1; });
         if (hasValidCat) return false;
         // skillBySport with all-null values (sport selected but skill not set) counts as missing
-        var hasMeaningfulSkill = p.skillBySport && typeof p.skillBySport === 'object' &&
-            Object.keys(p.skillBySport).some(function(k) { return !!p.skillBySport[k]; });
+        var _smMean = window._pSkillMap(p);
+        var hasMeaningfulSkill = _smMean && typeof _smMean === 'object' &&
+            Object.keys(_smMean).some(function(k) { return !!_smMean[k]; });
         // Missing gender when tournament has gender categories also requires enrichment
-        var missingGender = !p.gender && (t.genderCategories || []).length > 0;
-        return !(p.birthDate || hasMeaningfulSkill || p.defaultCategory) || missingGender;
+        var missingGender = !window._pGender(p) && (t.genderCategories || []).length > 0;
+        return !(window._pBirth(p) || hasMeaningfulSkill || window._pDefaultCat(p)) || missingGender;
     }
 
     // Participants with uid — load by uid
@@ -2670,8 +2675,9 @@ window._autoAssignCategoriesAsync = async function(tId) {
     var toLoadByEmail = parts.filter(function(p) { return _needsEnrichment(p) && !p.uid && p.email; });
 
     function _hasMeaningfulSkill(participant) {
-        return participant.skillBySport && typeof participant.skillBySport === 'object' &&
-            Object.keys(participant.skillBySport).some(function(k) { return !!participant.skillBySport[k]; });
+        var _smP = window._pSkillMap(participant); // v1.3.39: skill perfil-first
+        return _smP && typeof _smP === 'object' &&
+            Object.keys(_smP).some(function(k) { return !!_smP[k]; });
     }
 
     // Enrich by uid

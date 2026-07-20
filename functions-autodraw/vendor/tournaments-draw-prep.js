@@ -1031,7 +1031,8 @@ window._phasePromoteSkip = function(tId) {
 
 window.showUnifiedResolutionPanel = function(tId) {
     const t = window._findTournamentById(tId);
-    if (!t) return;
+    if (!t) { if (window._dtrace) window._dtrace('resolutionPanel:NO-TOURNAMENT'); return; }
+    if (window._dtrace) window._dtrace('resolutionPanel:enter', { fmt: t.format, parts: (t.participants || []).length, phaseCtx: !!t._phaseResInfo });
 
     // v4.x: transição de FASE (construtor) vs. resolução de INSCRIÇÃO. Quando há
     // _phaseResInfo, o `info` vem das linhas da próxima fase (via _phaseResToInfo) e
@@ -1073,9 +1074,11 @@ window.showUnifiedResolutionPanel = function(tId) {
         }
 
         info = window._diagnoseAll(t);
+        if (window._dtrace) window._dtrace('resolutionPanel:diag', { hasIssues: !!info.hasIssues, isPow2: !!info.isPowerOf2, isOdd: !!info.isOdd, remainder: info.remainder, incompl: (info.incompleteTeams || []).length });
 
         // If no issues, proceed directly to actual draw (skip Final Review step)
         if (!info.hasIssues) {
+            if (window._dtrace) window._dtrace('resolutionPanel:noIssues→draw');
             // Auto-restore enrollment
             if (t._suspendedByPanel) {
                 t.status = t._previousStatus || 'open';
