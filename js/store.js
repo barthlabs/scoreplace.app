@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.88';
+window.SCOREPLACE_VERSION = '1.3.89';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -5885,20 +5885,38 @@ window.AppStore = {
       return false;
     }
     var _t = this.tournaments.find(function (tour) { return String(tour.id) === String(tournamentId); });
-    try {
-      await window.FirestoreDB.mutateTournament(tournamentId, function (freshT) {
-        // O mutator pode ABORTAR retornando `false` (ex.: guarda de idempotência —
-        // outro caminho já aplicou a mudança no fresco). Nesse caso NÃO gravamos
-        // (mutateTournament vê o `false` e não faz o set). Propagamos o `false`
-        // pra frente pra não tocar updatedAt de um doc que não vamos escrever.
-        if (mutatorFn(freshT) === false) return false;
-        freshT.updatedAt = new Date().toISOString();
-      });
-      if (_t) _t.updatedAt = new Date().toISOString();
-      this._saveToCache();
-      return true;
-    } catch (err) {
-      window._error('commitTournamentTx: FALHOU ao salvar ' + tournamentId, err);
+    // v1.3.89: RETRY com backoff em conflito TRANSIENTE (defesa além da fila do mutate — cobre
+    // conflito de OUTRO device/CF gravando o mesmo doc). Códigos re-tentáveis: aborted (conflito de
+    // transação), failed-precondition (versão stale), unavailable, deadline-exceeded. Erro real
+    // (permission-denied, etc.) NÃO re-tenta — mostra o toast na hora.
+    var _RETRYABLE = { 'aborted': 1, 'failed-precondition': 1, 'unavailable': 1, 'deadline-exceeded': 1, 'cancelled': 1 };
+    var _sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    var _attempt = 0, _lastErr = null;
+    while (_attempt < 5) {
+      try {
+        await window.FirestoreDB.mutateTournament(tournamentId, function (freshT) {
+          // O mutator pode ABORTAR retornando `false` (ex.: guarda de idempotência —
+          // outro caminho já aplicou a mudança no fresco). Nesse caso NÃO gravamos
+          // (mutateTournament vê o `false` e não faz o set). Propagamos o `false`
+          // pra frente pra não tocar updatedAt de um doc que não vamos escrever.
+          if (mutatorFn(freshT) === false) return false;
+          freshT.updatedAt = new Date().toISOString();
+        });
+        if (_t) _t.updatedAt = new Date().toISOString();
+        this._saveToCache();
+        return true;
+      } catch (_e) {
+        _lastErr = _e;
+        var _c = (_e && _e.code) || '';
+        var _cc = String(_c).replace(/^functions\//, '').toLowerCase();
+        if (!_RETRYABLE[_cc] || _attempt >= 4) break;   // não-transiente ou última tentativa → cai no handler
+        _attempt++;
+        await _sleep(120 * _attempt + Math.floor((_attempt * 37) % 90)); // backoff crescente + jitter leve
+      }
+    }
+    {
+      var err = _lastErr;
+      window._error('commitTournamentTx: FALHOU ao salvar ' + tournamentId + ' (após ' + (_attempt + 1) + ' tentativa(s))', err);
       if (typeof window._captureException === 'function') {
         window._captureException(err, { area: 'commitTournamentTx', tournamentId: tournamentId, code: err && err.code });
       }
@@ -5930,13 +5948,27 @@ window.AppStore = {
   async mutate(tournamentId, mutatorFn, logMessage) {
     var _t = this.tournaments.find(function (tour) { return String(tour.id) === String(tournamentId); });
     if (_t) { try { mutatorFn(_t); } catch (e) { window._error('mutate: mutator local falhou', e); } }
-    var _r = await this.commitTournamentTx(tournamentId, function (freshT) {
-      mutatorFn(freshT);
-      if (logMessage) {
-        if (!Array.isArray(freshT.history)) freshT.history = [];
-        freshT.history.push({ date: new Date().toISOString(), message: logMessage });
-      }
-    });
+    // v1.3.89: SERIALIZA a persistência por TORNEIO. Marcar VÁRIOS presentes numa leva (dia do
+    // torneio) disparava N transações CONCORRENTES no MESMO doc → conflito → os retries internos
+    // esgotam → "[failed-precondition] the stored version não bate com a base version" (o toast
+    // "Erro ao Salvar"). O estado local já foi aplicado acima (UI instantânea); aqui a GRAVAÇÃO vai
+    // em FILA por tId — cada transação lê o resultado da anterior → ZERO conflito. Erro numa não
+    // trava as próximas (a fila nunca fica rejeitada). Ver [[project_concurrency_safe_saves]].
+    var _self = this; var _qId = String(tournamentId);
+    _self._txQueue = _self._txQueue || {};
+    var _doTx = function () {
+      return _self.commitTournamentTx(_qId, function (freshT) {
+        mutatorFn(freshT);
+        if (logMessage) {
+          if (!Array.isArray(freshT.history)) freshT.history = [];
+          freshT.history.push({ date: new Date().toISOString(), message: logMessage });
+        }
+      });
+    };
+    var _prev = _self._txQueue[_qId] || Promise.resolve();
+    var _chain = _prev.then(_doTx, _doTx); // roda DEPOIS da anterior (resolva ou rejeite)
+    _self._txQueue[_qId] = _chain.catch(function () {}); // a fila nunca propaga rejeição
+    var _r = await _chain;
     // ── Sandbox (SB): replicação one-way original→SB — MESMA função, MESMO mutator ──
     // Sem código paralelo: o mesmíssimo mutatorFn que mudou o original roda também no
     // doc do SB. Só dispara quando: (a) quem age é o dev (só ele tem o SB carregado e
