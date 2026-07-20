@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.84';
+window.SCOREPLACE_VERSION = '1.3.85';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.

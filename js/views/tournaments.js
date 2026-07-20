@@ -1523,7 +1523,8 @@ function renderTournaments(container, tournamentId = null) {
     // v2.2.39: diálogo de escolha do modo de sorteio quando as inscrições
     // seguem ABERTAS após o sorteio. Organizador escolhe entre sortear com
     // todos (antes da chamada) ou garantir o sorteio só entre os presentes.
-    window._showPresenceDrawChoice = function(tId, startDraw) {
+    window._showPresenceDrawChoice = function(tId, startDraw, opts) {
+        opts = opts || {};
         var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
         if (!t) return;
         // v2.8.4: Liga/Pontos Corridos NÃO tem chamada/presença — é multi-dia, normalmente
@@ -1560,18 +1561,21 @@ function renderTournaments(container, tournamentId = null) {
                 '<button id="pdc-cancel" style="flex:1;padding:12px;border-radius:12px;border:1px solid var(--border-color);background:transparent;color:var(--text-muted);font-weight:700;font-size:0.92rem;cursor:pointer;">Cancelar</button>' +
                 '<button id="pdc-confirm" style="flex:2;padding:12px;border-radius:12px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,0.35);">✓ Confirmar</button>' +
               '</div>' +
-              '<div style="padding:0.25rem 1.25rem 0.5rem;color:var(--text-muted);font-size:0.88rem;line-height:1.5;">As inscrições continuarão <b>abertas</b> após o sorteio. Escolha como montar a chave:</div>' +
+              '<div style="padding:0.25rem 1.25rem 0.5rem;color:var(--text-muted);font-size:0.88rem;line-height:1.5;">' + (opts.lateMode ? 'As inscrições continuarão <b>abertas</b> após o sorteio. ' : (opts.closeOnDraw ? 'As inscrições serão <b>encerradas</b> com o sorteio. ' : '')) + 'Escolha como montar a chave:</div>' +
               '<div style="padding:0.25rem 1.25rem 1.25rem;display:flex;flex-direction:column;gap:10px;">' +
                 '<button id="pdc-opt-all" data-mode="all" style="' + _optStyle(true) + '">' +
                   _radio(true) + '🎲 Sortear com todos<br><span style="font-weight:400;font-size:0.82rem;color:var(--text-muted);">Inclui todos os inscritos, presentes ou não (antes da chamada).</span>' +
                 '</button>' +
                 '<button id="pdc-opt-present" data-mode="present" style="' + _optStyle(false) + '">' +
-                  _radio(false) + '✅ Só entre os presentes<br><span style="font-weight:400;font-size:0.82rem;color:var(--text-muted);">Ausentes vão para a lista de espera; entram depois quando 4 presentes se acumularem.</span>' +
+                  _radio(false) + '✅ Só entre os presentes<br><span style="font-weight:400;font-size:0.82rem;color:var(--text-muted);">Ausentes vão para a lista de espera (podem substituir W.O. ou entrar depois).</span>' +
                 '</button>' +
               '</div>' +
             '</div>';
         document.body.appendChild(dialog);
-        var close = function() { dialog.remove(); };
+        var close = function() { dialog.remove(); }; // confirmar fecha e SEGUE o sorteio (botão fica "Sorteando…")
+        // v1.3.85: CANCELAR restaura o botão "Sortear" (tira o cinza "Sorteando…"). Agora que a
+        // presença é a 1ª pergunta de TODO presencial, cancelar aqui é o caminho comum de desistir.
+        var _cancelClose = function() { dialog.remove(); if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); };
         var _pdcMode = 'all';
         var _optAll = dialog.querySelector('#pdc-opt-all');
         var _optPresent = dialog.querySelector('#pdc-opt-present');
@@ -1579,11 +1583,11 @@ function renderTournaments(container, tournamentId = null) {
             _optAll.setAttribute('style', _optStyle(_pdcMode === 'all'));
             _optAll.innerHTML = _radio(_pdcMode === 'all') + '🎲 Sortear com todos<br><span style="font-weight:400;font-size:0.82rem;color:var(--text-muted);">Inclui todos os inscritos, presentes ou não (antes da chamada).</span>';
             _optPresent.setAttribute('style', _optStyle(_pdcMode === 'present'));
-            _optPresent.innerHTML = _radio(_pdcMode === 'present') + '✅ Só entre os presentes<br><span style="font-weight:400;font-size:0.82rem;color:var(--text-muted);">Ausentes vão para a lista de espera; entram depois quando 4 presentes se acumularem.</span>';
+            _optPresent.innerHTML = _radio(_pdcMode === 'present') + '✅ Só entre os presentes<br><span style="font-weight:400;font-size:0.82rem;color:var(--text-muted);">Ausentes vão para a lista de espera (podem substituir W.O. ou entrar depois).</span>';
         };
         _optAll.addEventListener('click', function() { _pdcMode = 'all'; _paintOpts(); });
         _optPresent.addEventListener('click', function() { _pdcMode = 'present'; _paintOpts(); });
-        dialog.querySelector('#pdc-cancel').addEventListener('click', close);
+        dialog.querySelector('#pdc-cancel').addEventListener('click', _cancelClose);
         dialog.querySelector('#pdc-confirm').addEventListener('click', function() {
             if (_pdcMode === 'all') {
                 close();
@@ -1750,13 +1754,34 @@ function renderTournaments(container, tournamentId = null) {
         // inscrições e realizar sorteio antecipado (cancelar/confirmar)". Só status=='closed'
         // (inscrições já encerradas pelo organizador) pula direto pro sorteio.
         var _inscricoesAbertas = !!(_tSort && (_tSort.status !== 'closed' || _tSort._autoClosedByDeadline));
-        if (window._dtrace) window._dtrace('gate', { skipGates: !!skipGates, abertas: !!_inscricoesAbertas, lateMode: !!_lateMode });
-        if (!skipGates && _inscricoesAbertas && _lateMode) {
-            // v2.2.39: inscrições seguem abertas após o sorteio — perguntar se
-            // sorteia com todos (antes da chamada) ou só entre os presentes.
+        var _isLigaSort = !!(window._isLigaFormat && _tSort && window._isLigaFormat(_tSort));
+        if (window._dtrace) window._dtrace('gate', { skipGates: !!skipGates, abertas: !!_inscricoesAbertas, lateMode: !!_lateMode, liga: !!_isLigaSort });
+        // v1.3.85 (dono): a pergunta "sortear entre os PRESENTES ou entre TODOS" é a PRIMEIRA do
+        // fluxo canônico de QUALQUER torneio PRESENCIAL (não-Liga), independente de lateMode. Num
+        // torneio de 1 dia, incluir ausentes na chave frequentemente INVIABILIZA o torneio (vira
+        // W.O.) — por isso a escolha vem ANTES de sem-dupla/gênero/numérica. Se as inscrições estão
+        // abertas e NÃO é lateMode, confirmar a presença ENCERRA as inscrições (absorve o antigo
+        // confirm "Encerrar Inscrições?"). Liga (multi-dia, sem chamada) e re-entrada (skipGates)
+        // pulam. Ver [[project_presence_draw_choice]], ciclo canônico em docs/sorteio-ciclo-decisoes.md.
+        if (!skipGates && !_isLigaSort) {
             if (window._dtrace) window._dtrace('gate:presenceChoice');
-            window._showPresenceDrawChoice(tId, _startDraw);
-        } else if (!skipGates && _inscricoesAbertas) {
+            var _closeOnDraw = _inscricoesAbertas && !_lateMode;
+            var _afterPresence = function () {
+                if (!_closeOnDraw) { _startDraw(); return; }
+                var tc = window._findTournamentById(tId);
+                if (!tc) { _startDraw(); return; }
+                tc.status = 'closed';
+                tc._reopenIfDrawCancelled = true; // reabre se cancelar antes de sortear
+                if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+                    window.FirestoreDB.saveTournament(tc).then(_startDraw).catch(function () { try { window.AppStore.sync(); } catch (_e) {} _startDraw(); });
+                } else { try { window.AppStore.sync(); } catch (_e) {} _startDraw(); }
+            };
+            window._showPresenceDrawChoice(tId, _afterPresence, { lateMode: _lateMode, closeOnDraw: _closeOnDraw, enrollmentClosed: !_inscricoesAbertas });
+            return;
+        }
+        // Liga (ou re-entrada skipGates): sem escolha de presença. Liga aberta ainda pergunta
+        // "encerrar inscrições?" (comportamento antigo preservado).
+        if (!skipGates && _inscricoesAbertas) {
             showConfirmDialog(
                 _t('org.closeRegConfirmTitle'),
                 _t('org.closeRegConfirmMsg'),
@@ -1764,9 +1789,6 @@ function renderTournaments(container, tournamentId = null) {
                     const t = window._findTournamentById(tId);
                     if (t) {
                         t.status = 'closed';
-                        // config "Fechadas": fecha as inscrições ENQUANTO decide o sorteio,
-                        // mas marca pra REABRIR se o organizador cancelar sem sortear
-                        // (_cancelDrawResolution reabre; _commitInitialDraw limpa ao sortear).
                         t._reopenIfDrawCancelled = true;
                         if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
                             window.FirestoreDB.saveTournament(t).then(function() {
@@ -1781,8 +1803,6 @@ function renderTournaments(container, tournamentId = null) {
                         }
                     }
                 },
-                // "Manter Aberto" (cancelar o confirm): restaura o botão Sortear (tira o
-                // cinza "Sorteando…") — não há painel de solução por vir.
                 function() { if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); },
                 { type: 'warning', confirmText: _t('btn.finishAndDraw'), cancelText: _t('btn.keepOpen') }
             );
