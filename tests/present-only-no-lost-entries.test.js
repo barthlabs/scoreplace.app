@@ -54,5 +54,20 @@ t2.checkedIn.a1 = 1; t2.checkedIn.b1 = 1; // dupla1 presente; dupla2 sem marca; 
 var mv2 = W._moveAbsentToWaitlistForPresentDraw(t2);
 ok(mv2 === 2 && t2.participants.length === 1 && t2.waitlist.length === 2, 'duplas só-uid: 1 presente fica, 2 vão pra espera, total preservado (parts=' + t2.participants.length + ' wl=' + t2.waitlist.length + ')');
 
+// ── DUPLA ausente vai pra espera COMO DUPLA FORMADA (dono: "pra entrar caso cheguem") ──
+// a) dupla 100% ausente; b) dupla MISTA (1 presente, 1 ausente) — NENHUMA pode ser dividida.
+function isPair(p) { return !!(p && p.p1Uid && p.p2Uid); }
+var t3 = { id: 'T3', checkedIn: {}, absent: {}, waitlist: [], participants: [
+  { p1Uid: 'a1', p2Uid: 'b1' }, // presente
+  { p1Uid: 'a2', p2Uid: 'b2' }, // 100% ausente
+  { p1Uid: 'a3', p2Uid: 'b3' }  // MISTA: a3 presente, b3 ausente
+] };
+t3.checkedIn.a1 = 1; t3.checkedIn.b1 = 1; t3.checkedIn.a3 = 1; // dupla3 só a3
+W._moveAbsentToWaitlistForPresentDraw(t3);
+ok(t3.participants.length === 1 && isPair(t3.participants[0]), 'só a dupla presente fica na chave (dupla, não solo)');
+ok(t3.waitlist.length === 2, '2 duplas na espera (a ausente + a mista)');
+ok(t3.waitlist.every(isPair), 'AMBAS na espera continuam DUPLA FORMADA (p1Uid+p2Uid) — nenhuma dividida em solo');
+ok(t3.waitlist.some(function (p) { return p.p1Uid === 'a3' && p.p2Uid === 'b3'; }), 'a dupla MISTA (1 presente/1 ausente) foi INTEIRA pra espera (o presente espera o parceiro)');
+
 console.log('\n' + (fail === 0 ? '✅ present-only-no-lost-entries: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fail > 0) process.exit(1);
