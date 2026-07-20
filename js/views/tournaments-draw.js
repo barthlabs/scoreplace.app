@@ -1647,6 +1647,26 @@ window._callCloseRound = function (payload) {
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
+    // v1.3.40: PRÉ-CARREGA os perfis por uid ANTES do sorteio — gênero/skill/idade/nome
+    // resolvem pelo PERFIL (users/{uid}), não pelo snapshot gravado no inscrito. Sem isto,
+    // um roster que grava só-uid não balanceia duplas mistas (gênero vinha vazio). Carrega só
+    // uids ainda NÃO cacheados; após a carga re-chama a si mesma (o cache fica quente → 2ª
+    // passada não recarrega → sem recursão). _preloadUserProfiles cacheia até doc inexistente.
+    if (typeof window._preloadUserProfiles === 'function' && window._userProfileCache &&
+        window.FirestoreDB && window.FirestoreDB.db) {
+        var _drawUids = [];
+        (Array.isArray(t.participants) ? t.participants : []).forEach(function (p) {
+            if (p && typeof p === 'object') [p.uid, p.p1Uid, p.p2Uid].forEach(function (u) {
+                if (u && typeof u === 'string' && u.indexOf(' ') === -1 && !window._userProfileCache[u]) _drawUids.push(u);
+            });
+        });
+        if (_drawUids.length) {
+            window._preloadUserProfiles(_drawUids)
+                .then(function () { window.generateDrawFunction(tId); })
+                .catch(function () { window.generateDrawFunction(tId); });
+            return;
+        }
+    }
     // v4.5.85 (ITEM 3 · Fase 4): rehidrata o nome das entradas (perfil vivo por uid) antes do
     // sorteio inicial — storage só-uid, motor lê nome. Transiente (o save re-sanitiza).
     if (typeof window._rehydrateEntryNames === 'function') window._rehydrateEntryNames(t);

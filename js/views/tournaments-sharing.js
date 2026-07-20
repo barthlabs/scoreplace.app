@@ -1035,8 +1035,8 @@ function _resolveCompetitorRows(t) {
     return {
       name: name,
       category: cats,
-      gender: p.gender || '',
-      skill: p.defaultCategory || '',
+      gender: (window._pGender ? window._pGender(p) : p.gender) || '',
+      skill: (window._pDefaultCat ? window._pDefaultCat(p) : p.defaultCategory) || '',
       email: p.email || '',
     };
   }).sort(function(a, b) { return String(a.name).localeCompare(String(b.name), 'pt-BR'); });
