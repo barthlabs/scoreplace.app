@@ -2376,6 +2376,9 @@ function _maybeGenerate3rdPlace(t) {
   t.thirdPlaceMatch.p1 = losers.length >= 1 ? losers[0] : 'TBD';
   t.thirdPlaceMatch.p2 = losers.length >= 2 ? losers[1] : 'TBD';
 }
+// v1.3.62: expõe pro rebuild de chave integrada (tardios) recriar o 3º lugar, que é
+// apagado ao reconstruir as rodadas. Fonte única — mesma lógica do fluxo normal.
+window._maybeGenerate3rdPlace = _maybeGenerate3rdPlace;
 
 // ─── Close round + generate next ─────────────────────────────────────────────
 // v0.17.27: auto-approve pending results scattered no bracket. Pedido do

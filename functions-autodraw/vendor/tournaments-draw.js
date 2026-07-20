@@ -1218,6 +1218,11 @@ window._rebuildIntegratedBracket = function(t) {
     if (m.phaseIndex == null) m.phaseIndex = _cpi;
     if (m.bracket == null) m.bracket = 'main';
   });
+  // v1.3.62: recria o jogo de 3º lugar — a reconstrução das rodadas apaga t.thirdPlaceMatch
+  // (linha ~1160), então sem isto a chave integrada ficava SEM 3º/4º lugar. Fonte única: o
+  // mesmo _maybeGenerate3rdPlace do fluxo normal (cria TBD via _appendCanonicalColumn, pula
+  // Dupla Elim, preenche pelos perdedores das semis). Ver [[project_third_place_always]].
+  if (typeof window._maybeGenerate3rdPlace === 'function') { try { window._maybeGenerate3rdPlace(t); } catch (e) {} }
   if (typeof _maybeFinishElimination === 'function') _maybeFinishElimination(t);
   return true;
 };
