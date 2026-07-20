@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.47';
+window.SCOREPLACE_VERSION = '1.3.48';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -240,13 +240,26 @@ window._hydrateUidNames = function (root) {
     // sem uid (sem span) mantém o nome gravado. Identidade = uid, nome sempre do perfil vivo.
     try {
       var _cards = root.querySelectorAll('.participant-card[data-participant-name]');
+      var _anyRenamed = false;
       _cards.forEach(function (card) {
         var _spans = card.querySelectorAll('[data-uid-name]');
         if (!_spans.length) return;
         var _names = [];
         _spans.forEach(function (s) { var t = (s.textContent || '').trim(); if (t) _names.push(t); });
-        if (_names.length) card.setAttribute('data-participant-name', _names.join(' / '));
+        if (!_names.length) return;
+        var _joined = _names.join(' / ');
+        card.setAttribute('data-participant-name', _joined);
+        // v1.3.48: a CHAVE DE ORDENAÇÃO/BUSCA (data-part-name) também vem do nome VIVO por uid.
+        // O inscrito grava só uid (nome stripado) → no render `pName` cai pro EMAIL e a lista
+        // ordenava/buscava por email (Angelica Reck sob "m" de mangelica@...). Re-hidrata pro
+        // nome real (minúsculo) quando o perfil chega. Ver [[project_uid_identity_canon_locked]].
+        var _low = _joined.toLowerCase();
+        if (card.getAttribute('data-part-name') !== _low) { card.setAttribute('data-part-name', _low); _anyRenamed = true; }
       });
+      // Nome(s) mudaram → reordena a lista (a ordenação alfabética usa data-part-name). Só
+      // dispara se houve mudança real → não reordena à toa. _partApplyFilter é no-op fora da
+      // tela de inscritos (sem [data-part-card]).
+      if (_anyRenamed && typeof window._partApplyFilter === 'function') { try { window._partApplyFilter(); } catch (_eS) {} }
     } catch (_e) {}
   });
 };

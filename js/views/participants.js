@@ -1854,15 +1854,18 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   for (var _fi = 0; _fi < _fSkillCats.length; _fi++) { if (_fCatStr === _fSkillCats[_fi] || _fCatStr.endsWith(' ' + _fSkillCats[_fi])) { _fSkill = _fSkillCats[_fi]; break; } }
   var _fEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _gPart || pName) : '';
   var _fOrder = (_fEnrollNum !== '' && _fEnrollNum != null) ? (_fEnrollNum - 1) : idx;
-  var _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
-  // v1.3.45: data-participant-name = nome de EXIBIÇÃO (não minúsculo). O CSS do modo compacto
-  // de arraste (body.sp-drag-compact .participant-card::before) le ESTE atributo pra mostrar
-  // só o nome ao arrastar. A extração canônica (v1.3.35) dropou este atributo → nome sumia no
-  // arraste (impossível escolher o par da dupla manual). Regressão fechada. Ver components.css.
+  // v1.3.45/48: _dragName = nome de EXIBIÇÃO resolvido POR UID (perfil vivo). Usado em:
+  // (a) data-participant-name — o CSS do modo compacto de arraste
+  // (body.sp-drag-compact .participant-card::before) le ESTE atributo pra mostrar só o nome ao
+  // arrastar (a extração v1.3.35 tinha dropado → nome sumia); (b) data-part-name — a CHAVE de
+  // ORDENAÇÃO/BUSCA. Como o inscrito grava SÓ uid (nome stripado, canon), `pName` cai pro EMAIL
+  // → ordenar/buscar por pName ordenava por email (Angelica Reck sob "m" de mangelica@...).
+  // Ambos são RE-HIDRATADOS por uid em _hydrateUidNames (+ re-sort) quando o perfil chega.
   var _dragName = isTeam ? pName : (function () {
     var _u = (typeof p === 'object' && p && p.uid) ? p.uid : '';
     return (_u && typeof window._displayName === 'function') ? window._displayName(_u, pName) : pName;
   })();
+  var _fNameAttr = (_dragName || pName || '').toLowerCase().replace(/"/g, '&quot;');
   var _fInactive = (t.allowSelfDeactivation !== false && _gPart && _gPart.ligaActive === false) ? '1' : '0';
   var _metaSlots = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, pName, isTeam, t, isOrg, { inline: true }) : '';
   var _wmNum = (function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_n, 'right') : ''; })();
