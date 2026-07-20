@@ -205,7 +205,18 @@ function renderBracket(container, tournamentId, isInline) {
   if (isOrg) {
     var _healedPrem = (typeof window._healPrematureLigaRounds === 'function') && window._healPrematureLigaRounds(t);
     var _healedSit = (typeof window._healSitOutWinners === 'function') && window._healSitOutWinners(t);
-    if ((_healedPrem || _healedSit) && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+    // v1.3.62: heal do 3º lugar em Elim Simples — a chave integrada de tardios (v1.3.61) apagou
+    // t.thirdPlaceMatch ao reconstruir e a recriação só rodava ao lançar resultado. Aqui recria
+    // ao ABRIR o bracket (idempotente: _maybeGenerate3rdPlace só cria se faltar). SÓ elim simples
+    // — em Liga/Suíço/Grupos a função criaria 3º lugar bogus (penúltima rodada ≠ semifinal).
+    var _healed3rd = false;
+    var _isElimSimples = (t.format === 'Eliminatórias Simples' || t.format === 'Eliminatória Simples');
+    if (_isElimSimples && typeof window._maybeGenerate3rdPlace === 'function') {
+      var _had3rd = !!t.thirdPlaceMatch;
+      try { window._maybeGenerate3rdPlace(t); } catch (e) {}
+      _healed3rd = (!_had3rd && !!t.thirdPlaceMatch);
+    }
+    if ((_healedPrem || _healedSit || _healed3rd) && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
       try { window.FirestoreDB.saveTournament(t); } catch (e) {}
     }
   }
