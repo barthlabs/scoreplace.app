@@ -867,6 +867,45 @@ window._updateCardPresenceInPlace = function (tId, uid, playerName) {
   } catch (_e) { return false; }
 };
 
+// v1.3.83: atualiza no LUGAR o card do PAINEL de check-in pós-sorteio (grade rica per-person, que
+// NÃO passa por _inscritoIndividualCard). Reconstrói SÓ o card tocado via o builder stashado no
+// render (_lastPanelCardCtx) — preserva a FOTO (o builder lê _playerPhotoCache, não re-hidrata do
+// zero → fim da "bola bege") e não faz full re-render (fim do pulinho). Guard de staleness: o
+// builder fecha sobre o `t` do render; se um snapshot trocou o objeto (tRef !== t atual), o builder
+// ficou órfão e não veria a mutação → retorna false (cai no re-render, que refaz o stash). Dono
+// (SB Casais): "fotos somem, vira bola bege, e continua o pulinho — o caminho tem que ser um só".
+window._updatePanelCardInPlace = function (tId, uid, playerName) {
+  try {
+    var stash = window._lastPanelCardCtx;
+    if (!stash || String(stash.tId) !== String(tId) || typeof stash.build !== 'function' || !Array.isArray(stash.list)) return false;
+    var t = window._findTournamentById(tId); if (!t) return false;
+    if (stash.tRef && stash.tRef !== t) return false;                     // objeto trocado por snapshot → re-render
+    if ((window._checkInFilter || 'all') !== stash.filter) return false;  // filtro mudou → visibilidade muda → re-render
+    var ind = null;
+    for (var i = 0; i < stash.list.length; i++) {
+      var it = stash.list[i]; if (!it) continue;
+      if (uid && String(it.uid || '') === String(uid)) { ind = it; break; }
+      if (!ind && playerName && String(it.name || '') === String(playerName)) ind = it;
+    }
+    if (!ind) return false;
+    var html = stash.build(ind);
+    if (!html || !String(html).trim()) return false;                      // filtro escondeu este card → re-render
+    var keyStr = String(ind.uid || ind.name || '');
+    var _kEsc = (window.CSS && CSS.escape) ? CSS.escape(keyStr) : keyStr.replace(/["\\]/g, '\\$&');
+    var card = document.querySelector('.participant-card[data-panel-card="1"][data-card-key="' + _kEsc + '"]');
+    if (!card) return false;
+    var tmp = document.createElement('div'); tmp.innerHTML = String(html).trim();
+    var fresh = tmp.firstElementChild; if (!fresh) return false;
+    card.replaceWith(fresh);                                              // só ESTE card; os demais intactos → sem pulinho
+    try {
+      var imgs = fresh.querySelectorAll('img[data-player-name]');
+      imgs.forEach(function (img) { var n = (img.getAttribute('data-player-name') || '').toLowerCase(); var real = window._playerPhotoCache && window._playerPhotoCache[n]; if (real && real.indexOf('dicebear.com') === -1) img.src = real; });
+    } catch (_e) {}
+    if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(fresh); } catch (_e) {} }
+    return true;
+  } catch (_e) { return false; }
+};
+
 // v1.3.48: FONTE ÚNICA do expansor pessoa→uid (identidade). Reusado pela contagem no render
 // E pela barra de chamada in-place. A presença é gravada por uid; casar por nome (que cai pro
 // email quando o inscrito grava só uid) NÃO bate. Ver [[project_id_maps_uid_keyed]].
@@ -996,7 +1035,9 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   // suprime o eco do onSnapshot (o próprio write), que re-renderizava e fazia os cards "pular e
   // voltar" (dono: "o certo é ficarem estáticos"). Se houve substituição de W.O. (muda a chave)
   // ou o in-place não deu, cai no re-render completo (correto).
-  var _inPlace = !_woSub && window._updateCardPresenceInPlace(tId, uid, playerName);
+  // v1.3.83: tenta o card de INSCRITO in-place; se não for esse renderer (painel de check-in
+  // pós-sorteio), tenta o card do PAINEL in-place. Só cai no re-render completo se nenhum aplicar.
+  var _inPlace = !_woSub && (window._updateCardPresenceInPlace(tId, uid, playerName) || window._updatePanelCardInPlace(tId, uid, playerName));
   if (_inPlace) {
     // atualiza a BARRA de chamada (Presentes/Ausentes/%) — recomputa por UID a partir do `t`
     // fresco, sem re-render da lista. Sem isto o card fica estático mas o contador não mexia.
@@ -2513,7 +2554,10 @@ function renderParticipants(container, tournamentId) {
     } catch (_e) {}
 
     // v2.1.3: _nameToParticipant agora é definido no escopo da função (acima).
-    cardsStr = _dedupedIndividuals.map((ind) => {
+    // v1.3.83: builder NOMEADO (era map inline) pra o toggle de presença reconstruir SÓ o card
+    // tocado no lugar (in-place) — sem full re-render. Fim do pulinho + da foto virando bola bege
+    // (o rebuild usa o cache _playerPhotoCache, não re-hidrata do zero). Ver _updatePanelCardInPlace.
+    const _panelCardBuild = (ind) => {
       const mc = window._idMapHas(t, checkedIn, ind.name);
       // v0.17.34: W.O. orphan = jogador que teve W.O. decretado e foi
       // substituído. Foi removido do time, agora é solo com nota.
@@ -2787,7 +2831,7 @@ function renderParticipants(container, tournamentId) {
       const _riNum = (typeof _ciOrder === 'number' && _ciOrder !== 9999) ? (_ciOrder + 1) : '';
       const _riWoBadge = isWOOrphan ? '<div style="font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:8px;background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.35);">W.O.</div>' : woBadge;
       return `
-        <div class="participant-card" data-part-card="1" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-standby="${isStandby ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
+        <div class="participant-card" data-part-card="1" data-panel-card="1" data-card-key="${String(ind.uid || ind.name || '').replace(/"/g, '&quot;')}" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-standby="${isStandby ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
             ${(typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_riNum, 'right') : ''}
             <div style="position:relative;z-index:1;">
                 <!-- HEADER: avatar + nome + estrela (Jogo N foi pro match strip, na linha do 2º time) -->
@@ -2803,7 +2847,11 @@ function renderParticipants(container, tournamentId) {
                 ${_matchStrip}
             </div>
         </div>`;
-    }).join('');
+    };
+    cardsStr = _dedupedIndividuals.map(_panelCardBuild).join('');
+    // v1.3.83: stash do builder + lista → o toggle reconstrói SÓ o card tocado (in-place),
+    // sem full re-render (fim do pulinho + foto→bola bege). Ver _updatePanelCardInPlace.
+    try { window._lastPanelCardCtx = { tId: t.id, tRef: t, build: _panelCardBuild, list: _dedupedIndividuals.slice(), filter: (window._checkInFilter || 'all') }; } catch (_ePc) {}
 
   } else {
     // v4.5.74: torneio de DUPLAS pré-sorteio → SEÇÃO CANÔNICA (Sem dupla / Duplas
