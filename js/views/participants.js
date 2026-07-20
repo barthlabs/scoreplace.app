@@ -1035,9 +1035,14 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   // suprime o eco do onSnapshot (o próprio write), que re-renderizava e fazia os cards "pular e
   // voltar" (dono: "o certo é ficarem estáticos"). Se houve substituição de W.O. (muda a chave)
   // ou o in-place não deu, cai no re-render completo (correto).
-  // v1.3.83: tenta o card de INSCRITO in-place; se não for esse renderer (painel de check-in
-  // pós-sorteio), tenta o card do PAINEL in-place. Só cai no re-render completo se nenhum aplicar.
-  var _inPlace = !_woSub && (window._updateCardPresenceInPlace(tId, uid, playerName) || window._updatePanelCardInPlace(tId, uid, playerName));
+  // v1.3.83/84: tenta atualizar SÓ o card tocado no lugar, em QUALQUER um dos 3 renderers de card
+  // de presença — inscrito (grade), painel pós-sorteio (per-person), e DUPLA (chamada pré-sorteio,
+  // o caso do SB Casais). Só cai no re-render completo se nenhum aplicar. Um caminho robusto.
+  var _inPlace = !_woSub && (
+    window._updateCardPresenceInPlace(tId, uid, playerName) ||
+    (typeof window._updatePanelCardInPlace === 'function' && window._updatePanelCardInPlace(tId, uid, playerName)) ||
+    (typeof window._updateDuplaCardInPlace === 'function' && window._updateDuplaCardInPlace(tId, uid, playerName))
+  );
   if (_inPlace) {
     // atualiza a BARRA de chamada (Presentes/Ausentes/%) — recomputa por UID a partir do `t`
     // fresco, sem re-render da lista. Sem isto o card fica estático mas o contador não mexia.

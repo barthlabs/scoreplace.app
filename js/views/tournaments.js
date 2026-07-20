@@ -16,6 +16,13 @@ var _t = window._t || function(k) { return k; };
 // v1.3.37: CARD DE DUPLA — FONTE ÚNICA window._duplaCard (chamável pelas 3 telas:
 // #participants, detalhe, painel de pareamento tardio). Deps de closure viram locais de ctx;
 // corpo idêntico. Desfazer parametrizado (ctx.splitDupla) p/ o tardio usar _splitLateDupla.
+// v1.3.84: chave ESTÁVEL da entrada (dupla ou solo) pra achar o card no DOM no update in-place.
+window._duplaEntryKey = function (p) {
+  if (!p) return '';
+  if (typeof p === 'string') return 'nm:' + p;
+  if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) return 'pair:' + (p.p1Uid || p.p1Name) + '~' + (p.p2Uid || p.p2Name);
+  return 'solo:' + (p.uid || p.name || p.displayName || '');
+};
 window._duplaCard = function (t, p, draggable, ctx) {
   ctx = ctx || {};
   var isOrg = !!ctx.isOrg, drawDone = !!ctx.drawDone;
@@ -144,7 +151,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
     // v1.3.20 (dono): "Ausente/W.O." vai na MESMA linha das ações (à direita do ✕ excluir),
     // não numa linha nova — economiza 1 linha por card. Canônico (_duplaCard serve as 2 telas).
     var _presInline = (_prs && _prs.rowHtml) ? _prs.rowHtml : '';
-    return '<div class="participant-card" data-part-card="1" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-inactive="' + _dpInactive + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(_resolvedCardName || nm) + '" ' + dragAttrs +
+    return '<div class="participant-card" data-part-card="1" data-dupla-card="1" data-card-key="' + window._safeHtml(window._duplaEntryKey(p)) + '" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-inactive="' + _dpInactive + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(_resolvedCardName || nm) + '" ' + dragAttrs +
       ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + _presStyle + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
       _enrollBadge + _wmL + _wmR +
       (function () {
@@ -293,7 +300,64 @@ window._buildDoublesInscritosSection = function (t, ctx) {
       _catMgrHtml +
     '</div>';
 
+  // v1.3.84: stash pra atualizar SÓ um card de dupla no lugar no toggle de presença (sem full
+  // re-render → sem pulinho, sem foto→bola bege). entries guarda o draggable de cada card.
+  try {
+    var _dcEntries = [];
+    _soloAvailable.forEach(function (p) { _dcEntries.push({ p: p, draggable: true }); });
+    _pairedParticipants.forEach(function (p) { _dcEntries.push({ p: p, draggable: false }); });
+    window._lastDuplaCardCtx = { tId: t.id, tRef: t, dctx: _dctx, entries: _dcEntries, filter: (window._checkInFilter || 'all') };
+  } catch (_eDc) {}
+
   return { isDoubles: true, html: html };
+};
+
+// v1.3.84: atualiza no LUGAR o card de DUPLA (renderer _duplaCard, usado na CHAMADA pré-sorteio de
+// torneio de duplas — o caso do SB Casais). Reconstrói SÓ o card cuja entrada contém o jogador
+// tocado — preserva a foto (o build lê _playerPhotoCache) e não faz full re-render (fim do pulinho +
+// bola bege). Reconstrói o cardPresence contra o `t` ATUAL (o stashado fecha sobre o t do render).
+// Guard de staleness: objeto trocado por snapshot (tRef !== t) ou filtro mudou → false (re-render).
+window._updateDuplaCardInPlace = function (tId, uid, playerName) {
+  try {
+    var stash = window._lastDuplaCardCtx;
+    if (!stash || String(stash.tId) !== String(tId) || !Array.isArray(stash.entries)) return false;
+    var t = window._findTournamentById(tId); if (!t) return false;
+    if (stash.tRef && stash.tRef !== t) return false;
+    if ((window._checkInFilter || 'all') !== stash.filter) return false;
+    // acha a entrada que CONTÉM o jogador tocado (por uid ou nome)
+    var match = null;
+    for (var i = 0; i < stash.entries.length; i++) {
+      var e = stash.entries[i]; if (!e || !e.p) continue;
+      var whos = (typeof window._expandParticipantWho === 'function') ? window._expandParticipantWho(e.p) : [];
+      for (var j = 0; j < whos.length; j++) {
+        var w = whos[j] || {};
+        if (uid && String(w.uid || '') === String(uid)) { match = e; break; }
+        if (!match && playerName && String(w.name || '') === String(playerName)) match = e;
+      }
+      if (match) break;
+    }
+    if (!match) return false;
+    // reconstrói a presença contra o t ATUAL (o dctx stashado fecha sobre o t do render)
+    var dctx = stash.dctx || {};
+    if (typeof window._rollCallPresenceCtx === 'function' && window._lastRcOpts) {
+      try { var rc = window._rollCallPresenceCtx(t, window._lastRcOpts); dctx = Object.assign({}, dctx, { cardPresence: rc.cardPresence, memberPresence: rc.memberPresence }); } catch (_eRc) {}
+    }
+    var html = window._duplaCard(t, match.p, match.draggable, dctx);
+    if (!html || !String(html).trim()) return false;   // filtro escondeu → re-render
+    var keyStr = window._duplaEntryKey(match.p);
+    var _kEsc = (window.CSS && CSS.escape) ? CSS.escape(keyStr) : keyStr.replace(/["\\]/g, '\\$&');
+    var card = document.querySelector('.participant-card[data-dupla-card="1"][data-card-key="' + _kEsc + '"]');
+    if (!card) return false;
+    var tmp = document.createElement('div'); tmp.innerHTML = String(html).trim();
+    var fresh = tmp.firstElementChild; if (!fresh) return false;
+    card.replaceWith(fresh);
+    try {
+      var imgs = fresh.querySelectorAll('img[data-player-name]');
+      imgs.forEach(function (img) { var n = (img.getAttribute('data-player-name') || '').toLowerCase(); var real = window._playerPhotoCache && window._playerPhotoCache[n]; if (real && real.indexOf('dicebear.com') === -1) img.src = real; });
+    } catch (_e) {}
+    if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(fresh); } catch (_e) {} }
+    return true;
+  } catch (_e) { return false; }
 };
 
 // v4.0.90 — CORE de placeholders no TOP-LEVEL (carrega sempre, não no lazy-init de
