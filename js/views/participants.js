@@ -1002,7 +1002,14 @@ window._drawPresentOnly = function (tId) {
       if (!lateMode && t2.status !== 'closed' && t2.status !== 'finished') t2.status = 'closed';
     }
     if (typeof window._handleSortearClick === 'function') {
-      window._handleSortearClick(tId, false);
+      // skipGates=TRUE: a presença JÁ foi resolvida aqui (_drawPresentOnly + diálogo de
+      // ausentes). Sem isto, em torneio 'expand'/'standby' (inscrições seguem abertas) o
+      // status fica 'open' e _handleSortearClick reabre _showPresenceDrawChoice — um 2º
+      // diálogo de presença REDUNDANTE. O usuário cancelava esse 2º diálogo achando que
+      // era loop → o sorteio nunca chegava em _startDraw (sem tela equilibrado/livre nem
+      // pow2, sem chaves), mesmo com o toast "Chamada concluída" já exibido. Pular o gate
+      // leva direto pro _startDraw (painéis + sorteio).
+      window._handleSortearClick(tId, false, true);
     } else if (typeof window.showUnifiedResolutionPanel === 'function') {
       window.showUnifiedResolutionPanel(tId);
     }
