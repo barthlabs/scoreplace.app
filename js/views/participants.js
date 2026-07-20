@@ -47,6 +47,12 @@ function _reRenderParticipantsStable() {
   clearTimeout(window._presenceRefreshRelease);
   window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
   _reRenderParticipants();
+  // v1.3.92: acabou de re-renderizar com o estado atual → adianta a assinatura pro eco tardio do
+  // snapshot ver "igual" e NÃO re-renderizar de novo (o pulinho que sobrava no fallback).
+  try {
+    var _tSig = window._findTournamentById && window._findTournamentById((window.location.hash || '').split('/')[1]);
+    if (_tSig && window._participantsViewSig) window._pdetailSig = window._participantsViewSig(_tSig);
+  } catch (_eSig) {}
   var _restore = function () { try { window.scrollTo(0, _y); } catch (_e) {} };
   _restore();
   var _unlock = function () { try { var c = document.getElementById('view-container'); if (c) c.style.minHeight = ''; } catch (_e) {} };
@@ -1060,6 +1066,10 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
     window._suppressSoftRefresh = true;
     clearTimeout(window._presenceRefreshRelease);
     window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
+    // v1.3.92: o card já foi atualizado in-place → adianta a assinatura da tela pro estado ATUAL, pra
+    // o ECO tardio do snapshot (depois do suppress) ver "igual" e NÃO re-renderizar a lista (o pulinho
+    // que sobrava). O gate de _softRefreshView compara com _pdetailSig; setando aqui, ele pula.
+    try { if (window._participantsViewSig) window._pdetailSig = window._participantsViewSig(t); } catch (_eSig) {}
   } else {
     // in-place não se aplica (ex.: painel de check-in pós-sorteio) → re-render ESTÁVEL:
     // preserva scroll + suprime o eco do onSnapshot (mesmo robustez do card estático).

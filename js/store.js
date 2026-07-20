@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.91';
+window.SCOREPLACE_VERSION = '1.3.92';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1556,6 +1556,22 @@ setInterval(function() {
 // ─── Soft refresh: re-render current view without disrupting UX ────────────
 // Called by real-time Firestore listener when remote data changes.
 // Preserves: scroll position, open modals, focus state, form inputs.
+// v1.3.92: assinatura da tela de INSCRITOS (#participants) SEM updatedAt. O updatedAt muda a cada
+// write (e o timestamp do SERVIDOR ≠ do cliente), então usá-lo no gate fazia o eco do snapshot
+// SEMPRE diferir → re-render → PULINHO, mesmo o toggle já tendo atualizado o card in-place. Aqui a
+// assinatura é o CONTEÚDO que a tela mostra: presença (chaves ordenadas, pega até troca sem mudar o
+// total), elenco, espera, status. Após o toggle in-place, participants.js seta window._pdetailSig =
+// _participantsViewSig(t) → o eco vê "igual" e NÃO re-renderiza. Fonte única (gate + pós-toggle).
+window._participantsViewSig = function (t) {
+  if (!t) return '';
+  var _k = function (m) { return m ? Object.keys(m).sort().join(',') : ''; };
+  return String(t.id) + '|' +
+    (Array.isArray(t.matches) ? t.matches.length : 0) + '|' +
+    (Array.isArray(t.participants) ? t.participants.length : 0) + '|' +
+    (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.length : 0) + '|' +
+    (Array.isArray(t.waitlist) ? t.waitlist.length : 0) + '|' +
+    _k(t.checkedIn) + '|' + _k(t.absent) + '|' + _k(t.checkedInConfirmed) + '|' + (t.status || '');
+};
 window._softRefreshView = function() {
   // 0. If bracket just re-rendered locally, skip to avoid double-render + scroll jump
   if (window._suppressSoftRefresh) return;
@@ -1630,15 +1646,7 @@ window._softRefreshView = function() {
         var _ppool = ((window.AppStore && window.AppStore.tournaments) || []).concat((window.AppStore && window.AppStore.publicDiscovery) || []);
         var _pt = _ppool.find(function(x){ return x && String(x.id) === String(_pid); });
         if (_pt) {
-          var _ciN = _pt.checkedIn ? Object.keys(_pt.checkedIn).length : 0;
-          var _abN = _pt.absent ? Object.keys(_pt.absent).length : 0;
-          var _cfN = _pt.checkedInConfirmed ? Object.keys(_pt.checkedInConfirmed).length : 0;
-          var _psig = String(_pt.id) + ':' + (_pt.updatedAt || '') + ':' +
-            (Array.isArray(_pt.matches) ? _pt.matches.length : 0) + ':' +
-            (Array.isArray(_pt.participants) ? _pt.participants.length : 0) + ':' +
-            (Array.isArray(_pt.standbyParticipants) ? _pt.standbyParticipants.length : 0) + ':' +
-            (Array.isArray(_pt.waitlist) ? _pt.waitlist.length : 0) + ':' +
-            _ciN + ':' + _abN + ':' + _cfN + ':' + (_pt.status || '');
+          var _psig = window._participantsViewSig(_pt);
           if (_psig === window._pdetailSig) return; // nada relevante mudou → sem re-render (sem pulinho)
           window._pdetailSig = _psig;
         }
