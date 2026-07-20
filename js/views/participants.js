@@ -2039,10 +2039,16 @@ function renderParticipants(container, tournamentId) {
   }
   // v2.4.70: hidrata os badges de meta (gênero/nível/idade) pra TODOS os inscritos,
   // não só o organizador — as categorias são informação pública da chave.
-  if (typeof window._loadParticipantProfilesByName === 'function') {
-    window._loadParticipantProfilesByName(parts).then(function () {
-      if (typeof window._patchProfileMetaSlots === 'function') window._patchProfileMetaSlots(container, t);
-    }).catch(function () {});
+  // v1.3.50: garante o perfil POR UID (gênero/skill/idade em _userProfileCache) ANTES do patch —
+  // o loader por-nome pulava as entradas só-uid (nome vazio) → gênero/categoria sumiam. Espera
+  // os dois (nome + uid) e então aplica os badges (o patch resolve por uid primeiro).
+  if (typeof window._patchProfileMetaSlots === 'function') {
+    var _mUids = [];
+    parts.forEach(function (p) { if (typeof window._participantUids === 'function') (window._participantUids(p) || []).forEach(function (u) { if (u) _mUids.push(u); }); });
+    var _patch = function () { try { window._patchProfileMetaSlots(container, t); } catch (e) {} };
+    var _pName = (typeof window._loadParticipantProfilesByName === 'function') ? window._loadParticipantProfilesByName(parts) : Promise.resolve();
+    var _pUid = (_mUids.length && typeof window._preloadUserProfiles === 'function') ? window._preloadUserProfiles(_mUids) : Promise.resolve();
+    Promise.all([Promise.resolve(_pName), Promise.resolve(_pUid)]).then(_patch).catch(_patch);
   }
 
   // ── Check-in logic ──

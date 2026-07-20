@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.49';
+window.SCOREPLACE_VERSION = '1.3.50';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -4828,12 +4828,18 @@ window._profileMetaSlots = function(p, pName, isTeam, t, isOrg, opts) {
   var members = isTeam ? String(pName).split('/').map(function(n) { return n.trim(); }).filter(Boolean) : [pName];
   return members.map(function(mn, mi) {
     var lc = String(mn).toLowerCase();
-    var fbGender = (!isTeam && p && typeof p === 'object') ? (p.gender || '') : '';
+    // v1.3.50: uid do membro → o patch resolve gênero/skill/idade PELO PERFIL (uid), não pelo
+    // campo gravado (vazio quando o inscrito grava só uid → gênero/categoria sumiam no card).
+    var _pmUid = '';
+    if (!isTeam && p && typeof p === 'object') _pmUid = p.uid || '';
+    else if (isTeam && p && typeof p === 'object') _pmUid = (mi === 0) ? (p.p1Uid || '') : (mi === 1 ? (p.p2Uid || '') : '');
+    // Gênero inicial resolve por uid (perfil-first) — aparece já no 1º paint se o cache está quente.
+    var fbGender = (!isTeam && p && typeof p === 'object') ? ((window._pGender && window._pGender(p)) || p.gender || '') : '';
     var fbCat = (!isTeam && p && typeof p === 'object') ? (p.category || '') : '';
     var prefixName = isTeam ? String(mn).split(' ')[0] : '';
     var initial = window._profileMetaBadgesHtml(fbGender, window._profileMetaExtractSkill(fbCat, t), '', prefixName, t);
     var _mt = _inline ? '0' : (mi === 0 ? '5px' : '3px');
-    return '<div class="participant-meta" data-pmeta-name="' + _attrEscMeta(lc) + '" data-pmeta-gender="' + _attrEscMeta(fbGender) + '" data-pmeta-cat="' + _attrEscMeta(fbCat) + '" data-pmeta-prefix="' + _attrEscMeta(prefixName) + '" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:' + _mt + ';">' + initial + '</div>';
+    return '<div class="participant-meta" data-pmeta-name="' + _attrEscMeta(lc) + '" data-pmeta-uid="' + _attrEscMeta(_pmUid) + '" data-pmeta-gender="' + _attrEscMeta(fbGender) + '" data-pmeta-cat="' + _attrEscMeta(fbCat) + '" data-pmeta-prefix="' + _attrEscMeta(prefixName) + '" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:' + _mt + ';">' + initial + '</div>';
   }).join('');
 };
 
@@ -4883,7 +4889,13 @@ window._patchProfileMetaSlots = function(container, t) {
   var touchedFilter = false;
   slots.forEach(function(slot) {
     var nm = slot.getAttribute('data-pmeta-name') || '';
-    var prof = (window._partProfileByName && window._partProfileByName[nm]) || null;
+    // v1.3.50: PERFIL POR UID primeiro (identidade). O inscrito grava só uid → o nome cai pro
+    // email e o loader por-nome nem carregava (pulava nome vazio) → gênero/categoria sumiam.
+    // _userProfileCache[uid] já vem quente (_preloadUserProfiles no render) com gender/
+    // skillBySport/birthDate. Fallback pro cache por-nome (guest sem uid).
+    var _uidA = slot.getAttribute('data-pmeta-uid') || '';
+    var prof = (_uidA && window._userProfileCache && window._userProfileCache[_uidA]) ||
+               (window._partProfileByName && window._partProfileByName[nm]) || null;
     var fbGender = slot.getAttribute('data-pmeta-gender') || '';
     var fbCat = slot.getAttribute('data-pmeta-cat') || '';
     var prefixName = slot.getAttribute('data-pmeta-prefix') || '';
