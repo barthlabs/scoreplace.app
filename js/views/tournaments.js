@@ -1194,6 +1194,45 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
   });
 }
 
+// v1.3.53: barra de chamada do DETALHE (Todos/Presentes/Confirmados/Ausentes + Limpar,
+// sticky) — FONTE ÚNICA, conta POR UID (não por nome/email) e com id="rollcall-bar" pra ser
+// refrescada IN-PLACE ao marcar presença (sem re-render → sem flicker). Antes o detalhe tinha
+// barra própria contando por nome (`_idMapHas(t, checkedIn, nm)`) → quebrava pra inscrito só-uid
+// ("Presentes (4)" com 16) e não atualizava no toggle (id não batia). Ver [[project_id_maps_uid_keyed]].
+window._detailCheckInBarHtml = function (tId) {
+  var t = window._findTournamentById(tId); if (!t) return '';
+  var checkedIn = t.checkedIn || {}, checkedInConf = t.checkedInConfirmed || {}, absent = t.absent || {};
+  var parts = Array.isArray(t.participants) ? t.participants : [];
+  var seen = {}, total = 0, present = 0, confirmed = 0;
+  parts.forEach(function (p) {
+    var whos = (typeof window._expandParticipantWho === 'function') ? window._expandParticipantWho(p) : [{ uid: '', name: window._pName(p) }];
+    (whos || []).forEach(function (w) {
+      var k = ((w.uid || w.name) || '').toLowerCase(); if (!k || seen[k]) return; seen[k] = 1;
+      var who = w.uid ? { uid: w.uid, displayName: w.name } : w.name;
+      total++;
+      if (window._idMapHas(t, checkedIn, who)) present++;
+      else if (window._idMapHas(t, checkedInConf, who)) confirmed++;
+    });
+  });
+  var absentCount = Math.max(0, total - present - confirmed);
+  var pct = total > 0 ? Math.round(present / total * 100) : 0;
+  var cf = window._checkInFilter || 'all';
+  var tIdS = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var pill = function (key, label, n, onc, offc) {
+    var a = (cf === key);
+    return '<button onclick="window._setCheckInFilter(\'' + tIdS + '\', \'' + key + '\')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:20px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid ' + (a ? onc + '80' : 'rgba(255,255,255,0.1)') + ';background:' + (a ? onc + '33' : 'rgba(255,255,255,0.05)') + ';color:' + (a ? offc : 'var(--text-muted)') + ';">' + (key === 'all' ? '' : '<span style="width:8px;height:8px;border-radius:50%;background:' + onc + ';flex-shrink:0;"></span>') + label + ' (' + n + ')</button>';
+  };
+  return '<div id="rollcall-bar" data-rc-mode="detail" style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--inscritos-fbar-h,0px) - 2px);z-index:29;background:var(--bg-darker,#111114);padding:8px 10px;margin-bottom:1rem;box-sizing:border-box;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+    + pill('all', 'Todos', total, '#6366f1', '#a5b4fc')
+    + pill('present', 'Presentes', present, '#10b981', '#4ade80')
+    + pill('confirmed', 'Confirmados', confirmed, '#3b82f6', '#60a5fa')
+    + pill('absent', 'Ausentes', absentCount, '#ef4444', '#f87171')
+    + '<div style="flex:1;min-width:70px;background:rgba(255,255,255,0.06);border-radius:6px;height:8px;"><div style="width:' + pct + '%;height:100%;background:linear-gradient(90deg,#10b981,#4ade80);border-radius:6px;transition:width 0.3s;"></div></div>'
+    + '<span style="font-size:0.8rem;color:#94a3b8;font-weight:700;">' + pct + '%</span>'
+    + ((present > 0 || confirmed > 0) ? '<button onclick="window._resetCheckIn(\'' + tIdS + '\')" style="background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.2);padding:4px 12px;border-radius:8px;font-size:0.75rem;font-weight:600;cursor:pointer;">Limpar</button>' : '')
+    + '</div>';
+};
+
 function renderTournaments(container, tournamentId = null) {
     if (!window.AppStore) return;
     if (window._autoKeepScroll) window._autoKeepScroll(); // v2.8.82: re-render por ação não pula scroll
@@ -3525,17 +3564,8 @@ function renderTournaments(container, tournamentId = null) {
             // no cabeçalho (topbar+dropdown+back-header + altura da barra de filtro, medida em
             // --inscritos-fbar-h por window._measureInscritosStickyBars). z-index 29 fica ABAIXO
             // da barra de filtro (30); o -2px sobrepõe o seam subpixel (mesma cor de fundo).
-            const checkInControls = _rollCallBarOn ? `
-                <div style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--inscritos-fbar-h,0px) - 2px);z-index:29;background:var(--bg-darker,#111114);padding:8px 10px;margin-bottom:1rem;box-sizing:border-box;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                    ${_ciPill('all', 'Todos', totalIndividuals, '#6366f1', '#a5b4fc', currentFilter === 'all')}
-                    ${_ciPill('present', 'Presentes', checkedCount, '#10b981', '#4ade80', currentFilter === 'present')}
-                    ${_ciPill('confirmed', 'Confirmados', confirmedCount, '#3b82f6', '#60a5fa', currentFilter === 'confirmed')}
-                    ${_ciPill('absent', 'Ausentes', absentCount, '#ef4444', '#f87171', currentFilter === 'absent')}
-                    <div style="flex:1;min-width:70px;background:rgba(255,255,255,0.06);border-radius:6px;height:8px;"><div style="width:${pctPresent}%;height:100%;background:linear-gradient(90deg,#10b981,#4ade80);border-radius:6px;transition:width 0.3s;"></div></div>
-                    <span style="font-size:0.8rem;color:#94a3b8;font-weight:700;">${pctPresent}%</span>
-                    ${(checkedCount > 0 || confirmedCount > 0) ? `<button onclick="window._resetCheckIn('${t.id}')" style="background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.2);padding:4px 12px;border-radius:8px;font-size:0.75rem;font-weight:600;cursor:pointer;">Limpar</button>` : ''}
-                </div>
-            ` : '';
+            // v1.3.53: barra pela FONTE ÚNICA (conta por UID + id="rollcall-bar" p/ refresh in-place).
+            const checkInControls = _rollCallBarOn ? window._detailCheckInBarHtml(t.id) : '';
 
             const gridStyle = (canCheckIn || _rcActiveD)
                 ? 'display:flex;flex-direction:column;gap:6px;'

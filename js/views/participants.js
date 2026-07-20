@@ -962,8 +962,13 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
     // fresco, sem re-render da lista. Sem isto o card fica estático mas o contador não mexia.
     try {
       var _bar = document.getElementById('rollcall-bar');
-      if (_bar && typeof window._rollCallBarHtml === 'function') {
-        _bar.outerHTML = window._rollCallBarHtml(tId, _bar.getAttribute('data-rc-mode') || 'rollcall');
+      if (_bar) {
+        var _mode = _bar.getAttribute('data-rc-mode') || 'rollcall';
+        if (_mode === 'detail' && typeof window._detailCheckInBarHtml === 'function') {
+          _bar.outerHTML = window._detailCheckInBarHtml(tId);           // barra do detalhe
+        } else if (typeof window._rollCallBarHtml === 'function') {
+          _bar.outerHTML = window._rollCallBarHtml(tId, _mode);         // barra do #participants
+        }
       }
     } catch (_eBar) {}
     window._suppressSoftRefresh = true;
