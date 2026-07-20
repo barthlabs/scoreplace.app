@@ -3571,7 +3571,7 @@ function renderTournaments(container, tournamentId = null) {
             // cards), 1 coluna no mobile (min(100%,…) evita overflow). Vale pro check-in também
             // (antes era coluna única). Ver [[feedback_maximize_screen_area_all_devices]].
             const gridStyle = (canCheckIn || _rcActiveD)
-                ? 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 450px), 1fr));gap:8px;align-items:start;'
+                ? 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 320px), 1fr));gap:8px;align-items:start;'
                 : 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr));gap:1rem;';
 
             var _sortAlphaAsc = _enrollSort === 'alpha_asc';
