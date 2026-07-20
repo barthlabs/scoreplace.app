@@ -136,6 +136,8 @@ const SUITES = [
   'tests/bye-elim-formula.test.js',
   'tests/late-integration-fullplay.test.js',
   'tests/draw-preserve-waitlist-presence.test.js',
+  // v1.3.82: overlay de presença pendente sobrevive a snapshot stale do Firestore (aparece/apaga).
+  'tests/pending-presence-overlay.test.js',
   // Gap (dono, 17/jul, screenshot): dupla ímpar no repGame ("VS A definir") recebe a dupla tardia.
   'tests/late-dupla-repgame-fill.test.js',
   // Gap (dono, 17/jul, torneio REAL): dupla formada entra no lugar do repescado (chave playin).

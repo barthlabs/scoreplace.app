@@ -982,6 +982,16 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
       }
     });
   }
+  // v1.3.82: registra a INTENÇÃO otimista (present/absent/none) deste jogador pra ela SOBREVIVER
+  // a snapshots stale do Firestore (o listener troca o objeto inteiro) até o write confirmar —
+  // fim do "clica, aparece, apaga". Por-jogador, não reverte presença de outro organizador.
+  try {
+    if (typeof window._stampPresenceIntent === 'function') {
+      var _fp = window._idMapHas(t, t.checkedIn || {}, _who);
+      var _fa = window._idMapHas(t, t.absent || {}, _who);
+      window._stampPresenceIntent(tId, _who, _fp ? 'present' : (_fa ? 'absent' : 'none'));
+    }
+  } catch (_eStamp) {}
   // v1.3.46: card ESTÁTICO — atualiza só o card tocado no lugar (sem re-render da lista) e
   // suprime o eco do onSnapshot (o próprio write), que re-renderizava e fazia os cards "pular e
   // voltar" (dono: "o certo é ficarem estáticos"). Se houve substituição de W.O. (muda a chave)
@@ -1035,6 +1045,14 @@ window._markAbsent = function (tId, playerName) {
   }
   // mutação (toggle ausência / revert de W.O.) ATÔMICA pelo portão AppStore.mutate
   window.AppStore.mutate(tId, function (ft) { window._applyAbsenceToggle(ft, playerName); });
+  // v1.3.82: intenção otimista sobrevive a snapshot stale (aparece/apaga). W.O. usa o NOME.
+  try {
+    if (typeof window._stampPresenceIntent === 'function') {
+      var _ma = window._idMapHas(t, t.absent || {}, playerName);
+      var _mp = window._idMapHas(t, t.checkedIn || {}, playerName);
+      window._stampPresenceIntent(tId, playerName, _ma ? 'absent' : (_mp ? 'present' : 'none'));
+    }
+  } catch (_eStamp) {}
   _reRenderParticipantsStable();
 };
 

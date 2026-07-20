@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.81';
+window.SCOREPLACE_VERSION = '1.3.82';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1819,6 +1819,54 @@ window._softRefreshView = function() {
     if (_vcSoft) _vcSoft.style.minHeight = _vcSoftMinH;
     window._isSoftRefresh = false;
   });
+};
+
+// ─── Camada de PRESENÇA PENDENTE (v1.3.82) ──────────────────────────────────
+// O listener faz `store.tournaments = [docs frescos]` a cada snapshot (substitui o objeto
+// inteiro). Isso JOGA FORA a presença otimista que o organizador acabou de marcar quando um
+// snapshot STALE (pré-write, o próprio eco ou de outro device) chega antes do write landar →
+// "clica, nada acontece, aparece, apaga" (dono, SB Casais). Solução: guardar a INTENÇÃO por
+// jogador (present/absent/none) num mapa que SOBREVIVE à troca do objeto, e reaplicá-la sobre o
+// doc fresco até ele confirmar (o fresco já reflete a intenção) ou expirar (~15s). Por-jogador
+// (não o mapa inteiro) → não reverte presença que OUTRO organizador marcou. Caminho único: vale
+// pra individual, dupla, autopresença e W.O. — todos passam por aqui na reconciliação.
+window._pendingPresence = window._pendingPresence || {};
+// state: 'present' | 'absent' | 'none'
+window._stampPresenceIntent = function (tId, who, state) {
+  try {
+    if (!tId || who == null) return;
+    var m = window._pendingPresence[String(tId)] = window._pendingPresence[String(tId)] || {};
+    var k = (who && typeof who === 'object' && who.uid) ? ('uid:' + who.uid) : ('nm:' + String(who));
+    m[k] = { who: who, state: state, at: Date.now() };
+  } catch (_e) {}
+};
+window._reapplyPendingPresence = function (tournaments) {
+  try {
+    if (!window._pendingPresence || typeof window._idMapHas !== 'function') return;
+    var now = Date.now();
+    Object.keys(window._pendingPresence).forEach(function (tId) {
+      var intents = window._pendingPresence[tId];
+      if (!intents) { delete window._pendingPresence[tId]; return; }
+      var t = tournaments.find(function (x) { return x && String(x.id) === String(tId); });
+      if (!t) { delete window._pendingPresence[tId]; return; }
+      t.checkedIn = t.checkedIn || {}; t.absent = t.absent || {}; t.checkedInConfirmed = t.checkedInConfirmed || {};
+      Object.keys(intents).forEach(function (k) {
+        var it = intents[k];
+        if (!it || (now - it.at) > 15000) { delete intents[k]; return; } // expira
+        var freshPresent = window._idMapHas(t, t.checkedIn, it.who);
+        var freshAbsent = window._idMapHas(t, t.absent, it.who);
+        var wantPresent = (it.state === 'present');
+        var wantAbsent = (it.state === 'absent');
+        // doc fresco JÁ reflete a intenção → o write landou → dropa o pendente
+        if (freshPresent === wantPresent && freshAbsent === wantAbsent) { delete intents[k]; return; }
+        // senão o snapshot é stale → força a intenção SÓ deste jogador (preserva os demais)
+        if (it.state === 'present') { window._idMapSet(t, t.checkedIn, it.who, now); window._idMapDel(t, t.absent, it.who); window._idMapDel(t, t.checkedInConfirmed, it.who); }
+        else if (it.state === 'absent') { window._idMapSet(t, t.absent, it.who, now); window._idMapDel(t, t.checkedIn, it.who); }
+        else { window._idMapDel(t, t.checkedIn, it.who); window._idMapDel(t, t.absent, it.who); }
+      });
+      if (!Object.keys(intents).length) delete window._pendingPresence[tId];
+    });
+  } catch (_e) { if (window._error) window._error('reapplyPendingPresence', _e); }
 };
 
 // ─── Topbar progressive compaction ─────────────────────────────────────────
@@ -6176,6 +6224,10 @@ window.AppStore = {
           }
         });
         store.tournaments = tournaments;
+        // v1.3.82: reaplica a presença otimista pendente sobre os docs frescos ANTES de qualquer
+        // render/cache — senão um snapshot stale (pré-write) reverte o que o org acabou de marcar
+        // ("aparece/apaga"). Cada intenção some sozinha quando o doc fresco confirma ou em ~15s.
+        if (typeof window._reapplyPendingPresence === 'function') window._reapplyPendingPresence(tournaments);
         store._saveToCache(); // cache enxuto (matchIds) — foldado dentro do _saveToCache
         // v4.4.69 Rei/Rainha: reidrata group.matches como refs de round.matches (fonte
         // única) DEPOIS de cachear — todo consumidor em memória vê os grupos montados.
