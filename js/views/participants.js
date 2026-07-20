@@ -837,6 +837,61 @@ window._updateCardPresenceInPlace = function (tId, uid, playerName) {
   } catch (_e) { return false; }
 };
 
+// v1.3.48: FONTE ÚNICA do expansor pessoa→uid (identidade). Reusado pela contagem no render
+// E pela barra de chamada in-place. A presença é gravada por uid; casar por nome (que cai pro
+// email quando o inscrito grava só uid) NÃO bate. Ver [[project_id_maps_uid_keyed]].
+window._expandParticipantWho = function (p) {
+  if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+    return [
+      { uid: p.p1Uid || '', name: ((window._displayName && window._displayName(p.p1Uid || '', p.p1Name || '')) || p.p1Name || '') },
+      { uid: p.p2Uid || '', name: ((window._displayName && window._displayName(p.p2Uid || '', p.p2Name || '')) || p.p2Name || '') }
+    ];
+  }
+  if (p && typeof p === 'object' && p.uid) return [{ uid: p.uid, name: window._pName(p) }];
+  var n = window._pName(p);
+  if (n && n.indexOf('/') !== -1) return n.split('/').map(function (s) { return s.trim(); }).filter(Boolean).map(function (s) { return { uid: '', name: s }; });
+  return n ? [{ uid: '', name: n }] : [];
+};
+
+// v1.3.48: barra de chamada (Presentes/Ausentes/Aguardando + %) recomputada POR UID a partir do
+// `t` fresco. FONTE ÚNICA usada no render E no update in-place (o card estático não re-renderiza
+// a lista, então a barra é atualizada separadamente). mode: 'rollcall' (parts) | 'postdraw'
+// (parts + lista de espera) | 'checkin'. Casa presença por uid (não por nome/email).
+window._rollCallBarHtml = function (tId, mode) {
+  var t = window._findTournamentById(tId); if (!t) return '';
+  var checkedIn = t.checkedIn || {}, absent = t.absent || {};
+  var seen = {}, total = 0, present = 0, abs = 0;
+  var _add = function (arr) {
+    (arr || []).forEach(function (p) {
+      (window._expandParticipantWho(p) || []).forEach(function (w) {
+        var k = ((w.uid || w.name) || '').toLowerCase(); if (!k || seen[k]) return; seen[k] = 1;
+        var who = w.uid ? { uid: w.uid, displayName: w.name } : w.name;
+        var isAbs = window._idMapHas(t, absent, who);
+        var isPres = !isAbs && window._idMapHas(t, checkedIn, who);
+        total++; if (isPres) present++; else if (isAbs) abs++;
+      });
+    });
+  };
+  _add(Array.isArray(t.participants) ? t.participants : []);
+  if (mode === 'postdraw') { _add((typeof window._getWaitlist === 'function') ? window._getWaitlist(t) : (t.standbyParticipants || [])); }
+  var pending = total - present - abs;
+  var pct = total > 0 ? Math.round(present / total * 100) : 0;
+  var cf = window._checkInFilter || 'all';
+  var tIdS = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var dot = function (key, dotC, bg, bd, fg, count, label) {
+    var a = (cf === key);
+    return '<button type="button" class="btn" title="' + label + ' (' + count + ')" onclick="event.stopPropagation();window._setCheckInFilter(\'' + tIdS + '\',\'' + key + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:0.8rem;font-weight:800;cursor:pointer;line-height:1;flex-shrink:0;background:' + (a ? bg : 'rgba(255,255,255,0.04)') + ';border:1px solid ' + (a ? bd : 'rgba(255,255,255,0.12)') + ';color:' + (a ? fg : 'var(--text-main)') + ';"><span style="width:9px;height:9px;border-radius:50%;background:' + dotC + ';flex-shrink:0;display:inline-block;"></span>' + count + '</button>';
+  };
+  return '<div id="rollcall-bar" data-rc-mode="' + (mode || 'rollcall') + '" style="display:flex;align-items:center;gap:6px;margin-top:8px;margin-bottom:4px;flex-wrap:wrap;">'
+    + dot('all', '#60a5fa', 'rgba(96,165,250,0.22)', 'rgba(96,165,250,0.6)', '#93c5fd', total, 'Todos')
+    + dot('present', '#10b981', 'rgba(16,185,129,0.22)', 'rgba(16,185,129,0.6)', '#4ade80', present, 'Presentes')
+    + dot('pending', '#a78bfa', 'rgba(167,139,250,0.22)', 'rgba(167,139,250,0.6)', '#c4b5fd', pending, 'Aguardando')
+    + dot('absent', '#ef4444', 'rgba(239,68,68,0.22)', 'rgba(239,68,68,0.6)', '#f87171', abs, 'W.O.')
+    + '<div title="' + present + ' de ' + total + ' presentes" style="flex:1;min-width:50px;height:9px;border-radius:6px;overflow:hidden;display:flex;background:rgba(167,139,250,0.35);"><div style="width:' + pct + '%;background:linear-gradient(90deg,#10b981,#4ade80);transition:width 0.3s;"></div></div>'
+    + '<span style="font-size:0.76rem;color:#94a3b8;font-weight:700;white-space:nowrap;flex-shrink:0;">' + present + '/' + total + ' · ' + pct + '%</span>'
+    + '</div>';
+};
+
 window._applyCheckInToggle = function (tId, playerName, uid) {
   const t = window._findTournamentById(tId);
   if (!t) return;
@@ -903,6 +958,14 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   // ou o in-place não deu, cai no re-render completo (correto).
   var _inPlace = !_woSub && window._updateCardPresenceInPlace(tId, uid, playerName);
   if (_inPlace) {
+    // atualiza a BARRA de chamada (Presentes/Ausentes/%) — recomputa por UID a partir do `t`
+    // fresco, sem re-render da lista. Sem isto o card fica estático mas o contador não mexia.
+    try {
+      var _bar = document.getElementById('rollcall-bar');
+      if (_bar && typeof window._rollCallBarHtml === 'function') {
+        _bar.outerHTML = window._rollCallBarHtml(tId, _bar.getAttribute('data-rc-mode') || 'rollcall');
+      }
+    } catch (_eBar) {}
     window._suppressSoftRefresh = true;
     clearTimeout(window._presenceRefreshRelease);
     window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
@@ -1941,6 +2004,15 @@ function renderParticipants(container, tournamentId) {
     if (n && n.indexOf('/') !== -1) return n.split('/').map(s => s.trim()).filter(Boolean);
     return n ? [n] : [];
   };
+  // v1.3.48: expande a PESSOA com o UID (identidade). A presença é gravada por uid; contar/
+  // casar por NOME (que cai pro email quando o inscrito grava só uid) NÃO bate → o count ficava
+  // errado ("Presentes (4)" com 16 gravados). `who` = {uid, name} → _idMapHas resolve por uid;
+  // guest sem uid cai no nome. Ver [[project_id_maps_uid_keyed]] / [[project_uid_identity_canon_locked]].
+  // Delega à FONTE ÚNICA global (evita drift entre a contagem do render e a barra in-place).
+  const _expandMemberWho = window._expandParticipantWho;
+  // `who` pronto pro _idMap*/_entryPresent: objeto {uid,displayName} quando há uid; senão o nome.
+  const _whoOf = (w) => (w && w.uid) ? { uid: w.uid, displayName: w.name } : (w ? w.name : '');
+  const _whoKey = (w) => ((w && (w.uid || w.name)) || '').toLowerCase();
   let individualCount = 0;
   parts.forEach(p => { individualCount += _expandMemberNames(p).length; });
 
@@ -2047,12 +2119,13 @@ function renderParticipants(container, tournamentId) {
   const _countedNames = {};
   const countIndividuals = (arr) => {
     arr.forEach(p => {
-      _expandMemberNames(p).forEach(nm => {
-        const k = nm.toLowerCase();
-        if (_countedNames[k]) return;
+      _expandMemberWho(p).forEach(w => {
+        const k = _whoKey(w);
+        if (!k || _countedNames[k]) return;
         _countedNames[k] = 1;
         totalIndividuals++;
-        if (window._idMapHas(t, checkedIn, nm)) checkedCount++; else if (window._idMapHas(t, absent, nm)) absentConfirmedCount++;
+        const who = _whoOf(w); // uid-first: a presença é gravada por uid
+        if (window._idMapHas(t, checkedIn, who)) checkedCount++; else if (window._idMapHas(t, absent, who)) absentConfirmedCount++;
       });
     });
   };
@@ -2065,13 +2138,14 @@ function renderParticipants(container, tournamentId) {
   if (canRollCall || postDrawPresence) {
     const _seenRc = {};
     parts.forEach(p => {
-      _expandMemberNames(p).forEach(nm => {
-        const k = nm.toLowerCase().trim();
+      _expandMemberWho(p).forEach(w => {
+        const k = _whoKey(w);
         if (!k || _seenRc[k]) return;
         _seenRc[k] = 1;
         rcTotal++;
-        if (_entryPresent(nm)) rcPresent++;
-        else if (_entryAbsent(nm)) rcAbsent++;
+        const who = _whoOf(w); // uid-first
+        if (_entryPresent(who)) rcPresent++;
+        else if (_entryAbsent(who)) rcAbsent++;
       });
     });
   }
@@ -2731,13 +2805,12 @@ function renderParticipants(container, tournamentId) {
       + '<span style="font-size:0.76rem;color:#94a3b8;font-weight:700;white-space:nowrap;flex-shrink:0;">' + present + '/' + total + ' · ' + pct + '%</span>'
     + '</div>';
   }
-  const checkInControls = canCheckIn ? _rollCallBar(totalIndividuals, checkedCount, absentConfirmedCount, pendingCount) : '';
-  // v4.5.78: roll-call SEMPRE conta por PESSOA (dupla = 2) — pré-sorteio (rcTotal) e
-  // pós-sorteio (totalIndividuals). A presença é por jogador (toggle por membro), então
-  // a barra reflete gente, não entradas. Ver [[project_count_people_not_entries]].
+  // v1.3.48: barra pela FONTE ÚNICA global (window._rollCallBarHtml) — reconta por UID e é a
+  // MESMA usada no refresh in-place ao marcar presença (card estático não re-renderiza a lista).
+  const checkInControls = canCheckIn ? window._rollCallBarHtml(tId, drawDone ? 'postdraw' : 'checkin') : '';
   const rollCallControls = canRollCall
-    ? _rollCallBar(rcTotal, rcPresent, rcAbsent, rcPending)
-    : (postDrawPresence ? _rollCallBar(totalIndividuals, checkedCount, absentConfirmedCount, totalIndividuals - checkedCount - absentConfirmedCount) : '');
+    ? window._rollCallBarHtml(tId, 'rollcall')
+    : (postDrawPresence ? window._rollCallBarHtml(tId, 'postdraw') : '');
 
   // v1.3.15 (dono): box "Chamada antes do sorteio" + "Sortear entre os presentes" REMOVIDO —
   // o sorteio tem tela própria no fluxo (org sorteia pelo botão "🎲 Sortear" das ferramentas,
