@@ -1029,6 +1029,71 @@ window._phasePromoteSkip = function(tId) {
     if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
 };
 
+// v1.3.60: painel de "Novos Confrontos" — só Eliminatória Simples com pow2 LIMPA e
+// inscrições ABERTAS (expand). Os tardios que entrarem depois do sorteio desbalanceiam a
+// chave; o organizador fixa AQUI a solução ANTES do sorteio. O motor de integração tardia
+// (_createExtraGamesFromWaitlist/_rebuildIntegratedBracket) só implementa REPESCAGEM — então
+// as duas escolhas honestas são: repescagem (expand) ou lista de espera/suplentes (standby).
+// Não inventa opção que o motor não honra. Ver [[project_late_enrollment_elimination]].
+window._showLateConfrontosPanel = function(tId) {
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    var existing = document.getElementById('unified-resolution-panel');
+    if (existing) existing.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'unified-resolution-panel';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    document.body.style.overflow = 'hidden';
+    var _proceedDraw = function() {
+        // restaura inscrição (suspensa ao abrir o painel) e dispara o sorteio
+        if (t._suspendedByPanel) {
+            t.status = t._previousStatus || 'open';
+            delete t._suspendedByPanel; delete t._previousStatus;
+        }
+        try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+        overlay.remove(); document.body.style.overflow = '';
+        if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId);
+        else if (typeof window.showFinalReviewPanel === 'function') window.showFinalReviewPanel(tId);
+    };
+    window._lateConfrontosPick = function(mode) {
+        t._lateResolutionAck = mode;
+        if (mode === 'standby') {
+            // novos times viram SUPLENTES (não entram na chave). Seta na fase atual + no topo.
+            var ph = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
+            if (ph) ph.lateEnrollment = 'standby';
+            t.lateEnrollment = 'standby';
+        }
+        // 'repescagem' → mantém expand (comportamento default do motor)
+        _proceedDraw();
+    };
+    window._lateConfrontosCancel = function() {
+        // desiste do sorteio: restaura o status original da inscrição
+        if (t._suspendedByPanel) {
+            t.status = t._previousStatus || 'open';
+            delete t._suspendedByPanel; delete t._previousStatus;
+            try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+        }
+        overlay.remove(); document.body.style.overflow = '';
+    };
+    overlay.innerHTML =
+      '<div style="background:#0f1729;border:1px solid #1e293b;border-radius:16px;max-width:560px;width:100%;max-height:92%;overflow-y:auto;padding:1.5rem;">' +
+        '<div style="font-size:1.15rem;font-weight:800;color:#f1f5f9;margin-bottom:6px;">🔓 Inscrições abertas — novos confrontos</div>' +
+        '<div style="font-size:0.9rem;color:#94a3b8;line-height:1.5;margin-bottom:1.1rem;">A chave está equilibrada agora, mas as inscrições continuam abertas. ' +
+          'Quando um novo time entrar <b>depois do sorteio</b>, ele desbalanceia a chave. Escolha desde já como o sistema resolve:</div>' +
+        '<button onclick="window._lateConfrontosPick(\'repescagem\')" style="display:block;width:100%;text-align:left;background:linear-gradient(135deg,#16a34a,#15803d);border:none;border-radius:12px;padding:14px 16px;margin-bottom:10px;color:#fff;cursor:pointer;">' +
+          '<div style="font-weight:800;font-size:0.98rem;">🔁 Repescagem <span style="opacity:0.85;font-weight:600;">(recomendado)</span></div>' +
+          '<div style="font-size:0.82rem;opacity:0.92;margin-top:3px;line-height:1.4;">O novo time entra na 1ª rodada contra o <b>derrotado mais bem colocado</b> (a definir). A chave recalcula a potência de 2 automaticamente.</div>' +
+        '</button>' +
+        '<button onclick="window._lateConfrontosPick(\'standby\')" style="display:block;width:100%;text-align:left;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px 16px;margin-bottom:14px;color:#e2e8f0;cursor:pointer;">' +
+          '<div style="font-weight:800;font-size:0.98rem;">📋 Lista de espera (suplentes)</div>' +
+          '<div style="font-size:0.82rem;opacity:0.85;margin-top:3px;line-height:1.4;">Novos times NÃO entram na chave — ficam como suplentes e só assumem numa desistência/W.O.</div>' +
+        '</button>' +
+        '<div style="text-align:right;"><button onclick="window._lateConfrontosCancel()" style="background:none;border:none;color:#94a3b8;font-size:0.88rem;cursor:pointer;padding:6px 4px;">Cancelar</button></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    if (window._dtrace) window._dtrace('lateConfrontosPanel:shown', { le: (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) });
+};
+
 window.showUnifiedResolutionPanel = function(tId) {
     const t = window._findTournamentById(tId);
     if (!t) { if (window._dtrace) window._dtrace('resolutionPanel:NO-TOURNAMENT'); return; }
@@ -1079,6 +1144,17 @@ window.showUnifiedResolutionPanel = function(tId) {
         // If no issues, proceed directly to actual draw (skip Final Review step)
         if (!info.hasIssues) {
             if (window._dtrace) window._dtrace('resolutionPanel:noIssues→draw');
+            // v1.3.60: pow2 LIMPA mas INSCRIÇÕES ABERTAS (expand) → os novos confrontos que
+            // entrarem DEPOIS do sorteio vão DESBALANCEAR a chave. Apresenta o painel pra o
+            // organizador FIXAR a solução antes do sorteio (repescagem = novo time entra vs
+            // derrotado mais bem colocado; OU lista de espera = suplentes, não entra na chave).
+            // Só Eliminatória Simples (único formato onde a integração tardia recalcula pow2).
+            var _leChk = (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment);
+            var _isElimFmt = t.format === 'Eliminatórias Simples' || t.format === 'Eliminatória Simples';
+            if (_isElimFmt && _leChk === 'expand' && !t._lateResolutionAck && typeof window._showLateConfrontosPanel === 'function') {
+                window._showLateConfrontosPanel(tId);
+                return;
+            }
             // Auto-restore enrollment
             if (t._suspendedByPanel) {
                 t.status = t._previousStatus || 'open';
