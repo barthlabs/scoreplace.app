@@ -57,7 +57,7 @@ const R1 = (t) => (t.matches || []).filter((m) => m && m.round === 1);
   ok('jogo novo tem as 2 duplas tardias', newG);
   const inParts = (dn) => (t.participants || []).some((p) => (p && (p.displayName || p.name)) === dn);
   ok('duplas viraram inscritas', inParts('LA / LB') && inParts('LC / LD'));
-  ok('repescagem ligada (3 jogos R1)', t.hasRepechage === true, t.hasRepechage);
+  ok('repescagem presente (repFill — fórmula única)', (t.matches || []).some(function (m) { return m.repFill && m.repFill.length; }), true);
 })();
 
 // ── idempotente: sem tardio → changed=false (a CF não grava) ─────────────────

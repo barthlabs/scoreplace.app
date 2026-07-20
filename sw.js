@@ -64,7 +64,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v1.3.76';
+var CACHE_NAME = 'scoreplace-v1.3.77';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do

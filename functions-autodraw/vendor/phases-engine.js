@@ -291,6 +291,47 @@
   //   'exclusion': corta os piores colocados até a potência ABAIXO → chave limpa.
   //   'playin': classificatória (round 0) entre os últimos → reduz pra potência abaixo;
   //             os melhores entram direto, os vencedores do play-in completam a chave.
+  // v1.3.77: ÁRVORE MÍNIMA de eliminação a partir dos jogos da 1ª rodada (FONTE ÚNICA usada pelo
+  // sorteio inicial playin E pela integração tardia). Regra do dono (matemática): NUNCA manda
+  // repescado pra rodada seguinte enquanto há "a definir" na rodada; arredonda pra PAR puxando o
+  // melhor derrotado (repFill srcRound = rodada-fonte) OU dando folga (useByes). O 3º lugar é
+  // canônico: match isThirdPlace ligado pelos loserNextMatchId das 2 semis. Não força potência de 2.
+  // `firstRound` = matches da 1ª rodada (round 0), cada um produz 1 vencedor. Muta `matches`.
+  function _buildMinimalTree(matches, firstRound, mkId, bracketKey, tierThird, useByes, rankBySrc, firstRoundNum) {
+    var byeLabel = (typeof _t === 'function') ? _t('bui.byeLabel') : 'BYE (Avança Direto)';
+    // rankBySrc[srcRound] = quantos repescados JÁ saíram dos derrotados daquela rodada (o próximo
+    // pega o rank seguinte = 2º/3º melhor). Seed: o jogo do satout já usou o rank 0 da sua rodada.
+    // firstRoundNum = nº da 1ª rodada (0 no sorteio inicial; pode ser >0 na integração tardia legada).
+    rankBySrc = rankBySrc || {};
+    firstRoundNum = firstRoundNum || 0;
+    var prev = firstRound, roundNum = firstRoundNum + 1;
+    var semisRound = (firstRound.length === 2) ? firstRound : null, finalMatch = null;
+    while (prev.length > 1) {
+      var _n = prev.length, _srcRound = roundNum - 1, _games = Math.ceil(_n / 2), next = [];
+      for (var i = 0; i < _games; i++) { var nm = { id: mkId(), round: roundNum, bracket: bracketKey, p1: 'TBD', p2: 'TBD', winner: null }; matches.push(nm); next.push(nm); }
+      for (var l = 0; l < _n; l++) { prev[l].nextMatchId = next[Math.floor(l / 2)].id; prev[l].nextSlot = (l % 2 === 0) ? 'p1' : 'p2'; }
+      if (_n % 2 === 1) {
+        var repM = next[_games - 1];
+        if (useByes) { repM.p2 = byeLabel; repM.isBye = true; }
+        else {
+          var _rk = (rankBySrc[_srcRound] || 0); rankBySrc[_srcRound] = _rk + 1; // rank incremental por rodada-fonte
+          repM.repFill = (Array.isArray(repM.repFill) ? repM.repFill : []).concat([{ slot: 'p2', srcBracket: bracketKey, srcRound: _srcRound, rank: _rk, tagRep: true }]);
+          repM.isRepechageSlot = true;
+        }
+      }
+      if (next.length === 1) { semisRound = prev; finalMatch = next[0]; }
+      prev = next; roundNum++;
+    }
+    if (tierThird && semisRound && semisRound.length === 2 && finalMatch) {
+      var third = { id: mkId(), round: finalMatch.round, bracket: bracketKey, isThirdPlace: true, p1: 'TBD', p2: 'TBD', winner: null };
+      matches.push(third);
+      semisRound[0].loserNextMatchId = third.id; semisRound[0].loserNextSlot = 'p1';
+      semisRound[1].loserNextMatchId = third.id; semisRound[1].loserNextSlot = 'p2';
+    }
+    return { finalId: prev[0] ? prev[0].id : null, totalRounds: roundNum - 1 };
+  }
+  if (typeof window !== 'undefined') window._buildMinimalElimTree = _buildMinimalTree;
+
   function genTierBracket(teams, bracketKey, idPrefix, resolution, tierThird, seedMode) {
     teams = teams || [];
     resolution = resolution || 'bye';
@@ -344,66 +385,35 @@
     // pra fazer DEPOIS da R1 → as vagas nascem como repFill (vaga de repescagem) e são
     // preenchidas por window._resolveRepFills quando a R1 fecha (no _advanceWinner).
     if (!isPow2 && resolution === 'playin') {
-      var T = lo;
+      // v1.3.77: repescagem MÍNIMA (regra do dono). O satout (a ímpar) joga contra UM repescado
+      // (melhor derrotado da 1ª rodada) — NÃO manda repescados diretos pra rodada seguinte. Os
+      // g vencedores + o vencedor do jogo do satout vão à árvore MÍNIMA (_buildMinimalTree):
+      // 11 equipes → R0:6 (5 reais + jogo do satout), R1:3, semis:2 (3 venc + 1 repescado), final.
+      // Antes fazia pow2 (T=lo, repescados diretos) → over-repescagem + conflito com o tardio.
       var g = Math.floor(n / 2);
-      var hasSat = (n - 2 * g) === 1;
+      var hasSat = (n % 2) === 1;
       var satTeam = hasSat ? teams[n - 1] : null;                 // pior semente fica de fora
       var playing = hasSat ? teams.slice(0, n - 1) : teams.slice();
-      var repSpots = T - g;                                       // vagas vindas de perdedores/satout
-      var repGames = hasSat ? 1 : 0;                              // 1 jogo de repescagem (loser × satout)
-      var directSpots = repSpots - repGames;                      // melhores perdedores entram direto
-      // R1: g jogos, semente 1×2g, 2×(2g-1)…
-      var r1 = [];
+      var firstRound = [];
+      // 1ª rodada: g jogos reais (round 0), semente 1×2g, 2×(2g-1)…
       for (var gi = 0; gi < g; gi++) {
         var ra = playing[gi], rb = playing[playing.length - 1 - gi];
         var rm = { id: mkId(), round: 0, bracket: bracketKey, isPhaseRepR1: true,
           p1: ra.displayName, p2: rb.displayName, team1Obj: ra, team2Obj: rb,
           p1Seed: gi, p2Seed: (playing.length - 1 - gi), winner: null };
-        r1.push(rm); matches.push(rm);
+        firstRound.push(rm); matches.push(rm);
       }
-      // jogo de repescagem (se há satout): satout × (perdedor de rank directSpots), p2 preenchido depois.
-      // MECANISMO CANÔNICO ÚNICO: vaga de repescagem = descritor repFill (mesmo do dupla-elim),
-      // resolvido por _resolveRepFills quando a rodada-fonte fecha. Ver feedback_resolution_one_logic.
-      var repGame = null;
-      if (repGames === 1) {
-        repGame = { id: mkId(), round: 0, bracket: bracketKey, isPhaseRepGame: true,
+      // jogo do satout: satout × MELHOR derrotado da 1ª rodada (repFill srcRound 0, rank 0). UM repescado.
+      var _rankSeed = {};
+      if (hasSat) {
+        var repGame = { id: mkId(), round: 0, bracket: bracketKey, isPhaseRepGame: true,
           p1: satTeam.displayName, team1Obj: satTeam, p2: 'TBD', winner: null,
-          repFill: [{ slot: 'p2', srcBracket: bracketKey, srcRound: 0, rank: directSpots, tagRep: true }] };
-        matches.push(repGame);
+          repFill: [{ slot: 'p2', srcBracket: bracketKey, srcRound: 0, rank: 0, tagRep: true }] };
+        matches.push(repGame); firstRound.push(repGame);
+        _rankSeed[0] = 1; // o satout já consumiu o rank 0 dos derrotados da round 0
       }
-      // entrantes da chave de T (semente 0..T-1): 0..g-1 vencedores R1; depois repescados.
-      var entrants = [];
-      for (var ei = 0; ei < g; ei++) entrants.push({ fromR1: r1[ei] });
-      for (var di = 0; di < directSpots; di++) entrants.push({ repDirect: di });   // di-ésimo melhor perdedor
-      if (repGame) entrants.push({ fromRepGame: repGame });
-      // chave de T single-elim (semente 1×T, 2×(T-1)…) → repescados (sementes baixas) pegam os melhores
-      function _wireEntrant(ent, slot, mGame) {
-        if (!ent) return;
-        if (ent.fromR1) { ent.fromR1.nextMatchId = mGame.id; ent.fromR1.nextSlot = slot; }
-        else if (ent.fromRepGame) { ent.fromRepGame.nextMatchId = mGame.id; ent.fromRepGame.nextSlot = slot; }
-        else if (ent.repDirect != null) { (mGame.repFill = mGame.repFill || []).push({ slot: slot, srcBracket: bracketKey, srcRound: 0, rank: ent.repDirect, tagRep: true }); }
-      }
-      var totalRoundsR = Math.round(Math.log(T) / Math.log(2));
-      var roundsMapR = {}; var rr1 = [];
-      // v2.8.17: pareamento ADJACENTE — oitavas[k] = entrants[2k] × entrants[2k+1].
-      // entrants = [vencedores da R1 em ordem de jogo … depois os melhores perdedores],
-      // então dá JOGO13 = V(jogo1)×V(jogo2), JOGO14 = V(jogo3)×V(jogo4)… e, quando os
-      // vencedores acabam, os repescados se enfrentam (melhor×2º melhor, 3º×4º).
-      // (Antes era semente 1×T = V1 × último repescado.)
-      for (var pj = 0; pj < T / 2; pj++) {
-        var em = { id: mkId(), round: 1, bracket: bracketKey, p1: 'TBD', p2: 'TBD', winner: null };
-        _wireEntrant(entrants[2 * pj], 'p1', em);
-        _wireEntrant(entrants[2 * pj + 1], 'p2', em);
-        rr1.push(em); matches.push(em);
-      }
-      roundsMapR[1] = rr1;
-      for (var rr = 2; rr <= totalRoundsR; rr++) {
-        var prevR = roundsMapR[rr - 1]; var cntR = prevR.length / 2; roundsMapR[rr] = [];
-        for (var jj = 0; jj < cntR; jj++) { var mmR = { id: mkId(), round: rr, bracket: bracketKey, p1: 'TBD', p2: 'TBD', winner: null }; roundsMapR[rr].push(mmR); matches.push(mmR); }
-        prevR.forEach(function (pmR, idx) { var nmR = roundsMapR[rr][Math.floor(idx / 2)]; pmR.nextMatchId = nmR.id; pmR.nextSlot = (idx % 2 === 0) ? 'p1' : 'p2'; });
-      }
-      _addTierThird(roundsMapR, totalRoundsR);
-      return { matches: matches, finalMatchId: roundsMapR[totalRoundsR][0].id, soleWinner: null, totalRounds: totalRoundsR, waitlist: [] };
+      var _mt = _buildMinimalTree(matches, firstRound, mkId, bracketKey, tierThird, false, _rankSeed);
+      return { matches: matches, finalMatchId: _mt.finalId, soleWinner: null, totalRounds: _mt.totalRounds, waitlist: [] };
     }
 
     var slots = teams.map(function (tm) { return { team: tm }; });

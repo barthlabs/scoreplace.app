@@ -62,7 +62,7 @@ const hasDupla = (t, arr, dn) => arr.some((p) => (p && (p.displayName || p.name)
   // 3 jogos de R1 → r2Target=4 → repescagem=1: a chave é reconstruída com R2 + slot awaitsBestLoser
   const r2 = t.matches.filter((m) => m && m.round === 2);
   ok(r2.length >= 1, 'R2 reconstruída (got ' + r2.length + ' jogos)');
-  ok(t.hasRepechage === true, 'repescagem ligada (3 jogos R1 não é potência de 2)');
+  ok(t.matches.some(function (m) { return m.repFill && m.repFill.length; }), 'repescagem presente (repFill — fórmula única _buildMinimalElimTree)');
 
   // playout completo: chave reconstruída (3 jogos R1 + repescagem) resolve num campeão,
   // sem jogo travado nem vaga morta.

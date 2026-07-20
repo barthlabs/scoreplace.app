@@ -1038,11 +1038,10 @@ window._createExtraGamesFromWaitlist = function(t) {
     t.matches.push({
       id: 'xr1-' + t.id + '-' + ts + '-' + created, round: _firstRound,
       p1: _ln, p2: 'TBD', winner: null, isExtra: true, isPhaseRepGame: true, isPhaseRepR1: true,
-      // v1.3.70: repFill COMPLETO — sem srcBracket/srcRound o resolveRepFills não achava os
-      // derrotados-fonte e o "a definir" NUNCA preenchia (chave morta desde a 1.3.59, pego pelo
-      // teste de play-through). rank:1 = 2º melhor derrotado (o MELHOR vai DIRETO pra R2 via
-      // awaitsBestLoser); fonte = os jogos REAIS da 1ª rodada. tagRep = promoção (repescagem).
-      repFill: [{ slot: 'p2', srcBracket: 'main', srcRound: _firstRound, rank: 1, tagRep: true }],
+      // v1.3.77: o jogo tardio É o "jogo do satout" da fórmula única — pega o MELHOR derrotado
+      // da 1ª rodada (rank 0). A árvore (_buildMinimalElimTree) semeia rankBySrc pra o próximo
+      // repescado da MESMA rodada pegar o rank seguinte. Fonte = jogos reais da 1ª rodada.
+      repFill: [{ slot: 'p2', srcBracket: 'main', srcRound: _firstRound, rank: 0, tagRep: true }],
       p1Uid: (_lu.length === 1 ? _lu[0] : null), team1Uids: _lu, p2Uid: null, team2Uids: [],
       phaseIndex: (t.currentPhaseIndex || 0), bracket: 'main', createdAt: new Date().toISOString()
     });
@@ -1173,112 +1172,39 @@ window._rebuildIntegratedBracket = function(t) {
   var r1 = t.matches.filter(function(m){ return m && m.round === firstRound; });
   var R1count = r1.length;
   if (R1count < 2) return false;
-  // v1.3.69: repescagem MÍNIMA — a R2 = vencedores de R1 + SÓ os best-losers necessários pra
-  // fechar em nº PAR (não a próxima potência de 2). Regra do dono: "o melhor repescado passa
-  // DIRETO pra R2; o 2º faz a repescagem no jogo tardio (a definir)". Antes r2Target = próxima
-  // pow2 → reintroduzia TODOS os derrotados (over-repescagem: ninguém eliminava na R1). Agora
-  // as rodadas seguintes ganham BYE canônico (p2='BYE') quando o nº de vencedores é ímpar.
-  // v1.3.72: ESCOLHA do organizador aplicada SEMPRE (regra do dono). Nº ímpar de vencedores
-  // fecha em par por REPESCAGEM (puxa best-loser — default, inclusão) OU por BYE (folga), conforme
-  // t.p2Resolution ('bye' = folga; qualquer outro/ausente = repescagem). A entrada tardia (jogo com
-  // repFill = "a definir") permanece qualifier em ambos os modos — preserva os jogos já sorteados.
+  // v1.3.77: FONTE ÚNICA — a integração tardia reconstrói a árvore com a MESMA fórmula do sorteio
+  // inicial: window._buildMinimalElimTree (phases-engine). Regra do dono ("sempre a mesma fórmula
+  // matemática"): ⌈E/2⌉ jogos por rodada; o ímpar fecha puxando o melhor derrotado AINDA NÃO
+  // repescado da rodada-fonte (rank incremental); 3º lugar canônico (isThirdPlace + loserNext).
+  // Antes tinha um downstream DUPLICADO (awaitsBestLoser/repechageConfig) que divergia do inicial
+  // (pow2 vs mínimo) → conflito e corrupção quando um rodava sobre o outro. Escolha bye×repescagem
+  // via t.p2Resolution. O jogo tardio (repFill = "a definir") É o "jogo do satout" (rank 0).
   var _useByes = (t.p2Resolution === 'bye');
-  var _pad = R1count % 2;                          // 1 se ímpar
-  var r2Slots = R1count + _pad;                    // 5 → 6 (par)
-  var repechage = _useByes ? 0 : _pad;             // best-losers DIRETOS pra R2 (só repescagem)
-  var byePad = _useByes ? _pad : 0;                // folgas diretas pra R2 (só bye)
-  // elegibilidade de repescagem: SÓ os jogos R1 SEM repFill (os reais) — seus derrotados formam
-  // o pool de repescados. O jogo tardio (com repFill = "a definir") é a própria repescagem-playin,
-  // não fonte de repescado. limpa wiring.
-  r1.forEach(function(m){
-    var _isLatePlayin = !!(m.repFill && m.repFill.length);
-    if (!_useByes && !_isLatePlayin && (repechage > 0 || r1.some(function(x){ return x.repFill && x.repFill.length; }))) m.isRepechageR1 = true;
-    else delete m.isRepechageR1;
-    delete m.nextMatchId; delete m.nextSlot;
-  });
+  r1.forEach(function(m){ delete m.nextMatchId; delete m.nextSlot; delete m.isRepechageR1; });
   // remove as rodadas SEGUINTES e 3º lugar (serão reconstruídos); mantém a 1ª rodada intacta
   t.matches = t.matches.filter(function(m){ return m && m.round === firstRound; });
   if (t.thirdPlaceMatch) delete t.thirdPlaceMatch;
 
   var ts = Date.now(), mc = 0;
-  // slots de R2: vencedores de R1 (na ordem) + bestloser (repescagem) OU bye (folga)
-  var slots = [];
-  r1.forEach(function(m){ slots.push({ type: 'r1winner', fromMatch: m.id }); });
-  for (var b = 0; b < repechage; b++) slots.push({ type: 'bestloser' });
-  for (var by = 0; by < byePad; by++) slots.push({ type: 'bye' });
+  var _mkId = function(){ return 'ir-' + ts + '-' + (mc++); };
+  // cada jogo tardio (repGame com repFill = "a definir") já consumiu o rank 0 dos derrotados da
+  // sua rodada → o próximo repescado da MESMA rodada pega o rank seguinte (evita 2 no mesmo derrotado).
+  var _rankSeed = {};
+  var _lateGames = r1.filter(function(m){ return m.repFill && m.repFill.length; }).length;
+  if (_lateGames > 0) _rankSeed[firstRound] = _lateGames;
+  if (typeof window._buildMinimalElimTree === 'function') {
+    window._buildMinimalElimTree(t.matches, r1, _mkId, 'main', true, _useByes, _rankSeed, firstRound);
+  } else { return false; }
+  t.repechageConfig = null; t.hasRepechage = false; // fórmula única usa repFill/_resolveRepFills
 
-  var r2games = slots.length / 2;
-  var r2Matches = [];
-  for (var g = 0; g < r2games; g++) {
-    var s1 = slots[g * 2], s2 = slots[g * 2 + 1];
-    var r2m = { id: 'ir2-' + ts + '-' + (mc++), round: firstRound + 1, p1: 'TBD', p2: 'TBD', winner: null };
-    var bl = [];
-    if (s1 && s1.type === 'bestloser') bl.push('p1');
-    if (s2 && s2.type === 'bestloser') bl.push('p2');
-    if (bl.length) { r2m.awaitsBestLoser = bl.join(','); r2m.isRepechageSlot = true; }
-    if (s1 && s1.type === 'bye') { r2m.p1 = _t('bui.byeLabel'); r2m.isBye = true; }
-    if (s2 && s2.type === 'bye') { r2m.p2 = _t('bui.byeLabel'); r2m.isBye = true; }
-    t.matches.push(r2m); r2Matches.push(r2m);
-    if (s1 && s1.type === 'r1winner') { var src = r1.find(function(x){ return x.id === s1.fromMatch; }); if (src) { src.nextMatchId = r2m.id; src.nextSlot = 'p1'; } }
-    if (s2 && s2.type === 'r1winner') { var src2 = r1.find(function(x){ return x.id === s2.fromMatch; }); if (src2) { src2.nextMatchId = r2m.id; src2.nextSlot = 'p2'; } }
-  }
-  // R3+ (TBD, alimentados pelos vencedores da rodada anterior). v1.3.69: com repescagem mínima a
-  // rodada com nº ÍMPAR de vencedores → NÃO dá BYE: puxa 1 REPESCADO (melhor derrotado da
-  // rodada-fonte) pra fechar em nº par. Regra do dono (20/jul): "todos jogam, repescagem acima
-  // de folga" — 3 vencedores + 1 repescado = 4 → 2 semifinais REAIS (e o 3º lugar ganha 2
-  // perdedores de semi de verdade). O slot é repFill sourced na rodada anterior; resolveRepFills
-  // preenche quando ela fecha. Ver [[project_inclusion_philosophy_canon]].
-  var prev = r2Matches, roundNum = firstRound + 2;
-  var _semisRound = (r2Matches.length === 2) ? r2Matches : null, _finalMatch = null;
-  while (prev.length > 1) {
-    var _n = prev.length, _srcRound = roundNum - 1, _games = Math.ceil(_n / 2), nextRound = [];
-    for (var n = 0; n < _games; n++) { var nm = { id: 'ir' + roundNum + '-' + ts + '-' + (mc++), round: roundNum, p1: 'TBD', p2: 'TBD', winner: null }; t.matches.push(nm); nextRound.push(nm); }
-    for (var l = 0; l < _n; l++) { var tgt = Math.floor(l / 2), sl = (l % 2 === 0) ? 'p1' : 'p2'; prev[l].nextMatchId = nextRound[tgt].id; prev[l].nextSlot = sl; }
-    if (_n % 2 === 1) {
-      var _repM = nextRound[_games - 1];
-      if (_useByes) { _repM.p2 = _t('bui.byeLabel'); _repM.isBye = true; }  // folga (bye mode)
-      else { _repM.repFill = (Array.isArray(_repM.repFill) ? _repM.repFill : []).concat([{ slot: 'p2', srcBracket: 'main', srcRound: _srcRound, rank: 0, tagRep: true }]); _repM.isRepechageSlot = true; }  // repescado (default)
-    }
-    if (nextRound.length === 1) { _semisRound = prev; _finalMatch = nextRound[0]; }  // capturou semis (2 jogos) + final
-    prev = nextRound; roundNum++;
-  }
-  // v1.3.74: 3º lugar CANÔNICO — MESMA forma do sorteio inicial (genTierBracket/_addTierThird):
-  // match isThirdPlace DENTRO de t.matches, ligado pelos loserNextMatchId das 2 semis (enche
-  // sozinho via _advanceWinner quando as semis fecham). Antes usava _maybeGenerate3rdPlace, que
-  // criava um t.thirdPlaceMatch SEPARADO → 2 representações do 3º lugar (a do sorteio inicial vs
-  // a da integração tardia) e o render se perdia. UMA representação agora. Ver [[project_third_place_always]].
-  if (t.thirdPlaceMatch) delete t.thirdPlaceMatch;
-  if (_semisRound && _semisRound.length === 2 && _finalMatch) {
-    var _third = { id: 'i3rd-' + ts + '-' + (mc++), round: _finalMatch.round, bracket: 'main', isThirdPlace: true, p1: 'TBD', p2: 'TBD', winner: null, phaseIndex: (t.currentPhaseIndex || 0) };
-    t.matches.push(_third);
-    _semisRound[0].loserNextMatchId = _third.id; _semisRound[0].loserNextSlot = 'p1';
-    _semisRound[1].loserNextMatchId = _third.id; _semisRound[1].loserNextSlot = 'p2';
-  }
-
-  if (repechage > 0) {
-    t.repechageConfig = {
-      // v1.3.70: SÓ os jogos REAIS da 1ª rodada (sem repFill) — o jogo tardio/playin não é fonte
-      // de repescado e, sendo o ÚLTIMO a fechar (não é isRepechageR1), travava o _assignRepechageLosers
-      // (esperava allDone incluindo ele). Sem ele, assign dispara quando os reais fecham.
-      r1MatchIds: r1.filter(function(m){ return !(m.repFill && m.repFill.length); }).map(function(m){ return m.id; }),
-      repMatchIds: [], repParticipants: 0,
-      bestLoserCount: repechage,
-      bestLoserR2Ids: r2Matches.filter(function(m){ return m.awaitsBestLoser; }).map(function(m){ return m.id; }),
-      eliminatedCount: R1count - repechage, spotsFromRepechage: repechage, category: ''
-    };
-    t.hasRepechage = true;
-  } else { t.repechageConfig = null; t.hasRepechage = false; }
-
-  // propaga os vencedores de R1 já decididos pra R2
+  // propaga vencedores de R1 já decididos + resolve repFills cujas fontes já fecharam
   r1.forEach(function(m){
     if (m.winner && m.nextMatchId) {
       var nx = t.matches.find(function(x){ return x.id === m.nextMatchId; });
       if (nx) { if (m.nextSlot === 'p2') nx.p2 = m.winner; else nx.p1 = m.winner; if (typeof _autoResolveBye === 'function') _autoResolveBye(t, nx); }
     }
   });
-  // se a R1 inteira já está decidida e há repescagem, preenche os melhores derrotados
-  var allR1Done = r1.every(function(m){ return !!m.winner; });
-  if (allR1Done && repechage > 0 && typeof _assignRepechageLosers === 'function') _assignRepechageLosers(t);
+  if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }
   // v4.1.36: carimbar TODA a chave reconstruída com fase+chave. O renderer canônico
   // (_renderPhaseBracket → colsFor) só pega matches com m.bracket==='main' e o
   // numerador global só numera os da fase atual — os R2/R3 recriados aqui (e a R1

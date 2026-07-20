@@ -21,11 +21,13 @@ function pool(n, pfx) { var a = []; for (var i = 1; i <= n; i++) a.push({ displa
   var oitavas = ms.filter(function (m) { return m.round === 1; });
   ok(r1.length === 12, '25/playin: 12 jogos de R1 (floor(25/2)) [' + r1.length + ']');
   ok(repGame.length === 1, '25/playin: 1 jogo de repescagem (sobra × 4º melhor derrotado) [' + repGame.length + ']');
-  ok(oitavas.length === 8, '25/playin: 8 oitavas (chave de 16) [' + oitavas.length + ']');
+  // v1.3.77: FÓRMULA MÍNIMA (⌈E/2⌉ por rodada). 13 vencedores da 1ª rodada (12 reais + jogo do
+  // satout) → 7 jogos na rodada seguinte (não 8/pow2). 1 repescado na R1 (13 ímpar; o satout já
+  // pegou o rank 0, este pega o rank 1). NÃO reintroduz todos os derrotados. Ver feedback_draw_is_cf_only.
+  ok(oitavas.length === 7, '25/playin: 7 jogos na 2ª rodada (⌈13/2⌉, mínimo) [' + oitavas.length + ']');
   ok(!ms.some(function (m) { return m.isBye; }), '25/playin: ZERO BYE (é repescagem, não bye)');
-  // 3 melhores derrotados entram DIRETO (repFill nas oitavas) + a repescagem preenche a 4ª vaga
   var repFillSlots = oitavas.reduce(function (a, m) { return a + ((m.repFill && m.repFill.length) || 0); }, 0);
-  ok(repFillSlots === 3, '25/playin: 3 vagas diretas de repescagem (melhores derrotados) [' + repFillSlots + ']');
+  ok(repFillSlots === 1, '25/playin: 1 repescado na 2ª rodada (13 ímpar → 1 vaga) [' + repFillSlots + ']');
 })();
 
 // ── 2. CONTRAPROVA: genTierBracket(25, 'bye') → gera BYEs (9 jogos reais de 16 slots) ──
