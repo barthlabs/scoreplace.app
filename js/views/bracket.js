@@ -770,6 +770,18 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   var _solos = _merged.filter(function (p) { return !_isPair(p) && _nm(p).indexOf('/') === -1 && !(p && Array.isArray(p.participants) && p.participants.length); });
   var _duplas = _merged.filter(_isPair);
   if (!_solos.length && !_duplas.length) return '';
+  // v1.3.44: PRESENTE SOBE — quem recebe presença sobe pro topo da fila "Sem dupla", na
+  // ORDEM em que recebeu (timestamp de check-in ascendente); ausentes ficam abaixo na ordem
+  // original. Pedido do dono: "o primeiro a receber presença vai pra primeiro, o 2º pra 2º".
+  // Mesma regra do _renderStandbyPanel (modo 'present'). O re-render no toggle já reordena.
+  var _ciTs = function (p) { return (typeof window._idMapGet === 'function') ? (window._idMapGet(t, t.checkedIn || {}, p) || 0) : 0; };
+  _solos.sort(function (a, b) {
+    var tsa = _ciTs(a), tsb = _ciTs(b);
+    if (tsa && tsb) return tsa - tsb; // ambos presentes → quem marcou antes vem antes
+    if (tsa) return -1;               // só a presente → a sobe
+    if (tsb) return 1;                // só b presente → b sobe
+    return 0;                         // nenhum presente → mantém a ordem original
+  });
   var _canPair = isOrg || (t && t.manualPairing === 'open');
   var ci = t.checkedIn || {};
   var _nameFs = (window._INSCRITO_NAME_FONT_PX || 17);
