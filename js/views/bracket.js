@@ -874,8 +874,8 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   return '<div id="late-join-pairing-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.25);border-radius:16px;padding:1.5rem;">'
     + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;"><span style="font-size:1.3rem;">🤝</span><h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Formar novas duplas</h3><span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">inscrições abertas · R1</span></div>'
     + '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:1rem;">Arraste um card sobre outro para formar uma dupla (no celular, segure e arraste). Enquanto a 2ª rodada do upper não começou, cada dupla nova entra na <b>R1 da chave superior</b> (vencedor sobe, derrotado cai pro lower).</div>'
-    + (solosHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#f59e0b;margin-bottom:6px;">Sem dupla</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:1.1rem;">' + solosHtml + '</div>' : '')
-    + (duplasHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#2dd4bf;margin-bottom:6px;">Duplas formadas</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;">' + duplasHtml + '</div>' : '')
+    + (solosHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#f59e0b;margin-bottom:6px;">Sem dupla</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,450px),1fr));gap:10px;margin-bottom:1.1rem;align-items:start;">' + solosHtml + '</div>' : '')
+    + (duplasHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#2dd4bf;margin-bottom:6px;">Duplas formadas</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,460px),1fr));gap:10px;align-items:start;">' + duplasHtml + '</div>' : '')
     + _readyMsg
     + '</div>';
 };
