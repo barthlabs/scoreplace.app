@@ -1035,12 +1035,13 @@ window._createExtraGamesFromWaitlist = function(t) {
     _addPart(_lastSolo, _ln); if (_isTeams) t.teamOrigins[_ln] = 'formada';
     t.standbyParticipants = _rm([_ln], t.standbyParticipants);
     t.waitlist = _rm([_ln], t.waitlist);
+    // v1.3.78: a ENTRADA tardia é sempre um qualifier — o novo time joga o MELHOR derrotado da 1ª
+    // rodada (repFill rank 0), nos DOIS modos. Só o DOWNSTREAM honra a escolha (repescagem = árvore
+    // mínima; bye = pow2 com folgas). Assim o recém-chegado sempre ENTRA jogando (justo), e a chave
+    // resolve o resto pela fórmula escolhida. Fonte = jogos reais da 1ª rodada.
     t.matches.push({
       id: 'xr1-' + t.id + '-' + ts + '-' + created, round: _firstRound,
       p1: _ln, p2: 'TBD', winner: null, isExtra: true, isPhaseRepGame: true, isPhaseRepR1: true,
-      // v1.3.77: o jogo tardio É o "jogo do satout" da fórmula única — pega o MELHOR derrotado
-      // da 1ª rodada (rank 0). A árvore (_buildMinimalElimTree) semeia rankBySrc pra o próximo
-      // repescado da MESMA rodada pegar o rank seguinte. Fonte = jogos reais da 1ª rodada.
       repFill: [{ slot: 'p2', srcBracket: 'main', srcRound: _firstRound, rank: 0, tagRep: true }],
       p1Uid: (_lu.length === 1 ? _lu[0] : null), team1Uids: _lu, p2Uid: null, team2Uids: [],
       phaseIndex: (t.currentPhaseIndex || 0), bracket: 'main', createdAt: new Date().toISOString()
@@ -1192,8 +1193,11 @@ window._rebuildIntegratedBracket = function(t) {
   var _rankSeed = {};
   var _lateGames = r1.filter(function(m){ return m.repFill && m.repFill.length; }).length;
   if (_lateGames > 0) _rankSeed[firstRound] = _lateGames;
-  if (typeof window._buildMinimalElimTree === 'function') {
-    window._buildMinimalElimTree(t.matches, r1, _mkId, 'main', true, _useByes, _rankSeed, firstRound);
+  if (_useByes && typeof window._buildByeElimTree === 'function') {
+    // BYE tem fórmula PRÓPRIA (pow2 + folgas pros melhores) — não é "mínimo com bye".
+    window._buildByeElimTree(t.matches, r1, _mkId, 'main', true, firstRound);
+  } else if (typeof window._buildMinimalElimTree === 'function') {
+    window._buildMinimalElimTree(t.matches, r1, _mkId, 'main', true, false, _rankSeed, firstRound);
   } else { return false; }
   t.repechageConfig = null; t.hasRepechage = false; // fórmula única usa repFill/_resolveRepFills
 

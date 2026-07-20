@@ -133,6 +133,7 @@ const SUITES = [
   // real (_advanceWinner) e exige que FECHE num campeão — pega BYE travado, repescado não-atribuído,
   // 3º lugar apagado, presença. É o gate que faltava (os testes antigos "jogavam" sem _advanceWinner).
   'tests/minimal-elim-formula.test.js',
+  'tests/bye-elim-formula.test.js',
   'tests/late-integration-fullplay.test.js',
   'tests/draw-preserve-waitlist-presence.test.js',
   // Gap (dono, 17/jul, screenshot): dupla ímpar no repGame ("VS A definir") recebe a dupla tardia.

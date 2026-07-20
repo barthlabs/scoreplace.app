@@ -57,7 +57,7 @@ function simulate(t) {
 }
 
 // Roda o cenário base num modo e valida os INVARIANTES universais (a chave FECHA).
-function runMode(label, resolution, expectByes) {
+function runMode(label, resolution, expectByes, expRounds) {
   console.log('\n== ' + label + ' ==');
   const t = build8(resolution);
   t.checkedIn['L1'] = 1; t.checkedIn['L2'] = 1;
@@ -65,7 +65,8 @@ function runMode(label, resolution, expectByes) {
   ok(W._createExtraGamesFromWaitlist(t) === 1, label + ': integrou a dupla tardia');
 
   const rc = {}; t.matches.filter(m => !m.isThirdPlace).forEach(m => rc[m.round] = (rc[m.round] || 0) + 1);
-  ok(rc[0] === 5 && rc[1] === 3 && rc[2] === 2 && rc[3] === 1, label + ': topologia R0:5 R1:3 semis:2 final:1 (got ' + JSON.stringify(rc) + ')');
+  // topologia por MODO: repescagem = mínima ⌈E/2⌉ (5→3→2→1); bye = pow2 (5 venc → chave de 8: 4→2→1).
+  ok(JSON.stringify(rc) === JSON.stringify(expRounds), label + ': topologia ' + JSON.stringify(expRounds) + ' (got ' + JSON.stringify(rc) + ')');
   const _third0 = t.matches.filter(m => m && m.isThirdPlace);
   ok(_third0.length === 1, label + ': 3º lugar CANÔNICO (1 match isThirdPlace em t.matches, got ' + _third0.length + ')');
   ok(!t.thirdPlaceMatch, label + ': SEM t.thirdPlaceMatch separado (uma representação só)');
@@ -74,11 +75,12 @@ function runMode(label, resolution, expectByes) {
   ok(guardUsed < 500, label + ': playout sem loop infinito');
 
   const after = allOf(t);
+  const maxR = Math.max.apply(null, after.map(m => m.round));
   const stuck = after.filter(m => m && !m.winner && m.p1 && m.p2 && m.p1 !== 'TBD' && m.p2 !== 'TBD' && m.p1 !== BYE && m.p2 !== BYE);
   ok(stuck.length === 0, label + ': nenhum jogo travado no fim (got ' + stuck.length + ')');
-  const deadTBD = t.matches.filter(m => m.round < 3 && (m.p1 === 'TBD' || m.p2 === 'TBD') && !m.winner);
+  const deadTBD = t.matches.filter(m => !m.isThirdPlace && m.round < maxR && (m.p1 === 'TBD' || m.p2 === 'TBD') && !m.winner);
   ok(deadTBD.length === 0, label + ': nenhuma vaga MORTA antes da final (got ' + deadTBD.length + ')');
-  const finalM = t.matches.find(m => m.round === 3);
+  const finalM = t.matches.find(m => m.round === maxR && !m.isThirdPlace);
   ok(finalM && finalM.winner, label + ': FINAL tem campeão');
 
   const anyBye = t.matches.some(m => m.p1 === BYE || m.p2 === BYE || m.isBye);
@@ -87,14 +89,14 @@ function runMode(label, resolution, expectByes) {
 }
 
 // ── Modo REPESCAGEM (default): sem BYE, semis reais, 3º lugar com 2 perdedores ──
-const tR = runMode('REPESCAGEM (default)', undefined, false);
+const tR = runMode('REPESCAGEM (default)', undefined, false, { 0: 5, 1: 3, 2: 2, 3: 1 });
 const semisR = tR.matches.filter(m => m.round === 2 && !m.isThirdPlace);
 ok(semisR.length === 2 && semisR.every(m => m.winner), 'repescagem: 2 semifinais REAIS jogadas (2 perdedores reais)');
 const _3rdR = tR.matches.find(m => m.isThirdPlace);
 ok(_3rdR && _3rdR.p1 !== 'TBD' && _3rdR.p2 && _3rdR.p2 !== 'TBD' && _3rdR.winner, 'repescagem: 3º lugar (isThirdPlace) com 2 contestantes reais e resolvido');
 
 // ── Modo BYE (escolha do organizador): folgas onde ímpar, chave também FECHA ──
-runMode('BYE (escolha do organizador)', 'bye', true);
+runMode('BYE (escolha do organizador)', 'bye', true, { 0: 5, 1: 4, 2: 2, 3: 1 });
 
 // ── Presença: dupla SEM check-in NÃO integra ──
 console.log('\n== presença ==');

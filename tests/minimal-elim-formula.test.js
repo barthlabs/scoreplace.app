@@ -53,8 +53,13 @@ function check(N) {
   ok(third && third.winner, 'N=' + N + ': 3º lugar disputado e resolvido');
 }
 
-console.log('── fórmula única, N = 5..25 ──');
-for (let N = 5; N <= 25; N++) check(N);
+// v1.3.78: range EXAUSTIVO 3..300 (dono: "que número podemos parar pra ter certeza"). A recorrência
+// ⌈E/2⌉ é auto-similar (~log₂N rodadas); 3..300 cobre 8+ rodadas e TODAS as fronteiras de pow2
+// (4,8,16,32,64,128,256) + os ímpares/pares e os N com MÚLTIPLOS repescados da mesma rodada. Se
+// passa aqui, passa pra qualquer N. O playout com o motor real prova que sempre HÁ derrotados
+// suficientes pra cada repescado (senão sobraria vaga morta = falha).
+console.log('── fórmula única, N = 3..300 ──');
+for (let N = 3; N <= 300; N++) check(N);
 
 console.log('\n' + (fail === 0 ? '✅ minimal-elim-formula: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fail > 0) process.exit(1);

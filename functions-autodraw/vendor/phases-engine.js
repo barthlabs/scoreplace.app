@@ -332,6 +332,43 @@
   }
   if (typeof window !== 'undefined') window._buildMinimalElimTree = _buildMinimalTree;
 
+  // v1.3.78: FÓRMULA DO BYE (própria, diferente da repescagem). A partir de W vencedores da 1ª
+  // rodada: arredonda pra próxima POTÊNCIA DE 2 (T); as (T−W) FOLGAS vão pros MELHORES colocados
+  // (semente 1×T → o topo pega o slot alto vazio = BYE). Chave pow2 limpa daí pra frente; semis
+  // REAIS (2 jogos) → 3º lugar com 2 perdedores. Mesma fórmula do sorteio inicial bye (genTierBracket).
+  function _buildByeTree(matches, firstRound, mkId, bracketKey, tierThird, firstRoundNum) {
+    var byeLabel = (typeof _t === 'function') ? _t('bui.byeLabel') : 'BYE (Avança Direto)';
+    firstRoundNum = firstRoundNum || 0;
+    var W = firstRound.length;
+    var pow = 1; while (pow < W) pow *= 2;   // próxima potência de 2 >= W
+    var roundNum = firstRoundNum + 1;
+    var r2 = [];
+    for (var j = 0; j < pow / 2; j++) {
+      var s1 = j, s2 = pow - 1 - j;           // semente 1×T: topo × base (base vazia = BYE)
+      var m = { id: mkId(), round: roundNum, bracket: bracketKey, p1: 'TBD', p2: 'TBD', winner: null };
+      if (s1 < W) { firstRound[s1].nextMatchId = m.id; firstRound[s1].nextSlot = 'p1'; } else { m.p1 = byeLabel; m.isBye = true; }
+      if (s2 < W) { firstRound[s2].nextMatchId = m.id; firstRound[s2].nextSlot = 'p2'; } else { m.p2 = byeLabel; m.isBye = true; }
+      matches.push(m); r2.push(m);
+    }
+    var prev = r2; roundNum++;
+    var semisRound = (r2.length === 2) ? r2 : null, finalMatch = null;
+    while (prev.length > 1) {
+      var games = prev.length / 2, next = [];
+      for (var i = 0; i < games; i++) { var nm = { id: mkId(), round: roundNum, bracket: bracketKey, p1: 'TBD', p2: 'TBD', winner: null }; matches.push(nm); next.push(nm); }
+      for (var l = 0; l < prev.length; l++) { prev[l].nextMatchId = next[Math.floor(l / 2)].id; prev[l].nextSlot = (l % 2 === 0) ? 'p1' : 'p2'; }
+      if (next.length === 1) { semisRound = prev; finalMatch = next[0]; }
+      prev = next; roundNum++;
+    }
+    if (tierThird && semisRound && semisRound.length === 2 && finalMatch) {
+      var third = { id: mkId(), round: finalMatch.round, bracket: bracketKey, isThirdPlace: true, p1: 'TBD', p2: 'TBD', winner: null };
+      matches.push(third);
+      semisRound[0].loserNextMatchId = third.id; semisRound[0].loserNextSlot = 'p1';
+      semisRound[1].loserNextMatchId = third.id; semisRound[1].loserNextSlot = 'p2';
+    }
+    return { finalId: prev[0] ? prev[0].id : null, totalRounds: roundNum - 1 - firstRoundNum };
+  }
+  if (typeof window !== 'undefined') window._buildByeElimTree = _buildByeTree;
+
   function genTierBracket(teams, bracketKey, idPrefix, resolution, tierThird, seedMode) {
     teams = teams || [];
     resolution = resolution || 'bye';
