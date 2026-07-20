@@ -1016,7 +1016,11 @@ window._createExtraGamesFromWaitlist = function(t) {
     t.matches.push({
       id: 'xr1-' + t.id + '-' + ts + '-' + created, round: _firstRound,
       p1: _ln, p2: 'TBD', winner: null, isExtra: true, isPhaseRepGame: true, isPhaseRepR1: true,
-      repFill: [{ slot: 'p2', rank: 9999 }],
+      // v1.3.70: repFill COMPLETO — sem srcBracket/srcRound o resolveRepFills não achava os
+      // derrotados-fonte e o "a definir" NUNCA preenchia (chave morta desde a 1.3.59, pego pelo
+      // teste de play-through). rank:1 = 2º melhor derrotado (o MELHOR vai DIRETO pra R2 via
+      // awaitsBestLoser); fonte = os jogos REAIS da 1ª rodada. tagRep = promoção (repescagem).
+      repFill: [{ slot: 'p2', srcBracket: 'main', srcRound: _firstRound, rank: 1, tagRep: true }],
       p1Uid: (_lu.length === 1 ? _lu[0] : null), team1Uids: _lu, p2Uid: null, team2Uids: [],
       phaseIndex: (t.currentPhaseIndex || 0), bracket: 'main', createdAt: new Date().toISOString()
     });
@@ -1194,13 +1198,16 @@ window._rebuildIntegratedBracket = function(t) {
     var _n = prev.length, _games = Math.ceil(_n / 2), nextRound = [];
     for (var n = 0; n < _games; n++) { var nm = { id: 'ir' + roundNum + '-' + ts + '-' + (mc++), round: roundNum, p1: 'TBD', p2: 'TBD', winner: null }; t.matches.push(nm); nextRound.push(nm); }
     for (var l = 0; l < _n; l++) { var tgt = Math.floor(l / 2), sl = (l % 2 === 0) ? 'p1' : 'p2'; prev[l].nextMatchId = nextRound[tgt].id; prev[l].nextSlot = sl; }
-    if (_n % 2 === 1) { var _byeM = nextRound[_games - 1]; _byeM.p2 = 'BYE'; _byeM.isBye = true; } // vencedor ímpar folga
+    if (_n % 2 === 1) { var _byeM = nextRound[_games - 1]; _byeM.p2 = _t('bui.byeLabel'); _byeM.isBye = true; } // vencedor ímpar folga (BYE canônico, _autoResolveBye auto-avança)
     prev = nextRound; roundNum++;
   }
 
   if (repechage > 0) {
     t.repechageConfig = {
-      r1MatchIds: r1.map(function(m){ return m.id; }),
+      // v1.3.70: SÓ os jogos REAIS da 1ª rodada (sem repFill) — o jogo tardio/playin não é fonte
+      // de repescado e, sendo o ÚLTIMO a fechar (não é isRepechageR1), travava o _assignRepechageLosers
+      // (esperava allDone incluindo ele). Sem ele, assign dispara quando os reais fecham.
+      r1MatchIds: r1.filter(function(m){ return !(m.repFill && m.repFill.length); }).map(function(m){ return m.id; }),
       repMatchIds: [], repParticipants: 0,
       bestLoserCount: repechage,
       bestLoserR2Ids: r2Matches.filter(function(m){ return m.awaitsBestLoser; }).map(function(m){ return m.id; }),

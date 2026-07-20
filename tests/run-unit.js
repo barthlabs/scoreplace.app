@@ -129,6 +129,10 @@ const SUITES = [
   'tests/late-dupla-tier2.test.js',
   // Gap (dono, 17/jul): dupla FORMADA na lista de espera entra na Eliminatória Simples também.
   'tests/late-dupla-single-elim.test.js',
+  // PLAY-THROUGH completo da integração tardia (dono, 20/jul): joga a chave INTEIRA com o motor
+  // real (_advanceWinner) e exige que FECHE num campeão — pega BYE travado, repescado não-atribuído,
+  // 3º lugar apagado, presença. É o gate que faltava (os testes antigos "jogavam" sem _advanceWinner).
+  'tests/late-integration-fullplay.test.js',
   // Gap (dono, 17/jul, screenshot): dupla ímpar no repGame ("VS A definir") recebe a dupla tardia.
   'tests/late-dupla-repgame-fill.test.js',
   // Gap (dono, 17/jul, torneio REAL): dupla formada entra no lugar do repescado (chave playin).
