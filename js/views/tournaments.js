@@ -127,7 +127,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
     // card encolhido ficava SEM NOME. _pName resolve ao vivo (solo → nome; dupla → "A / B").
     var _resolvedCardName = (typeof window._pName === 'function') ? (window._pName(p) || nm) : (members ? members.join(' / ') : nm);
     var _dpNameAttr = (members ? members.join(' ') : (_resolvedCardName || nm)).toLowerCase().replace(/"/g, '&quot;');
-    var _dpGender = members ? 'none' : ((typeof window._canonGender === 'function') ? window._canonGender(typeof p === 'object' && p ? p.gender : '') : 'none');
+    var _dpGender = members ? 'none' : ((typeof window._canonGender === 'function') ? window._canonGender(window._pGender ? window._pGender(p) : (typeof p === 'object' && p ? p.gender : '')) : 'none');
     var _dpSkill = 'none';
     if (!members) {
       var _dpCats = t.skillCategories || [];

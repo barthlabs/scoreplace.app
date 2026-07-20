@@ -397,7 +397,7 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
     // Homens que sobram formam duplas masculinas (inevitável se faltarem
     // não-homens). individuals já está embaralhado, então os pools preservam
     // a aleatoriedade.
-    var _isMale = function(p) { return (p && p.gender) === 'masculino'; };
+    var _isMale = function(p) { return window._pGender(p) === 'masculino'; }; // v1.3.39: gênero perfil-first
     var men = [], nonMale = [];
     individuals.forEach(function(p) { (_isMale(p) ? men : nonMale).push(p); });
     individuals = [];
@@ -488,7 +488,7 @@ window._buildSwissClassifDraw = function (t) {
 window._equilibradoPairPreview = function(individuals) {
   var men = 0, nonMale = 0;
   (individuals || []).forEach(function(p){
-    if (p && typeof p === 'object' && p.gender === 'masculino') men++; else nonMale++;
+    if (p && typeof p === 'object' && window._pGender(p) === 'masculino') men++; else nonMale++; // v1.3.39: perfil-first
   });
   var mixed = Math.min(men, nonMale);
   var remMen = men - mixed, remNon = nonMale - mixed;
@@ -560,8 +560,8 @@ window._buildPhase0Pool = function (t, isMon, ts) {
       if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
         p.participants.forEach(function (s) { var nm = (s && (s.displayName || s.name)) || String(s || ''); pool.push((s && typeof s === 'object') ? Object.assign({ displayName: nm }, s) : { displayName: nm }); });
       } else if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
-        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '')), uid: p.p1Uid || null, name: p.p1Name || null, gender: p.p1Gender || p.gender });
-        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '')), uid: p.p2Uid || null, name: p.p2Name || null, gender: p.p2Gender || p.gender });
+        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '')), uid: p.p1Uid || null, name: p.p1Name || null, gender: p.p1Gender || (p.p1Uid && window._genderForUid(p.p1Uid)) || p.gender });
+        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '')), uid: p.p2Uid || null, name: p.p2Name || null, gender: p.p2Gender || (p.p2Uid && window._genderForUid(p.p2Uid)) || p.gender });
       } else {
         var nm = _pName(p); pool.push((typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm });
       }
@@ -1217,7 +1217,7 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
 
   var _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
   var _pName = function(p){ return (typeof p === 'string') ? p : (p.displayName || p.name || p.email || '?'); };
-  var _hasGender = function(p){ return typeof p === 'object' && p.gender && String(p.gender).trim(); };
+  var _hasGender = function(p){ var g = window._pGender(p); return typeof p === 'object' && !!g && !!String(g).trim(); }; // v1.3.39: perfil-first
   // v3.0.x: o gênero AUTORITATIVO é o do PERFIL. Carrega os perfis dos
   // participantes e (a) enriquece o snapshot com o gênero do perfil, (b) a lista
   // "sem gênero" passa a refletir o PERFIL — quem já tem gênero no perfil NÃO

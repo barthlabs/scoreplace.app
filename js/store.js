@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.38';
+window.SCOREPLACE_VERSION = '1.3.39';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -105,7 +105,14 @@ window._preloadUserProfiles = function (uids) {
         displayName: d.displayName || d.name || '',
         email: d.email || '',
         phone: d.phone || '',
-        photoURL: d.photoURL || ''
+        photoURL: d.photoURL || '',
+        // v1.3.39: gênero/skill/idade/categoria-padrão do PERFIL — pra o app resolver
+        // esses campos pelo uid (sorteio, categorias, badges) em vez do snapshot gravado
+        // no inscrito. Parte do sweep "gravar só uid; resolver o resto pelo uid".
+        gender: d.gender || '',
+        skillBySport: (d.skillBySport && typeof d.skillBySport === 'object') ? d.skillBySport : null,
+        birthDate: d.birthDate || '',
+        defaultCategory: d.defaultCategory || ''
       };
     }).catch(function () {}).then(function () { delete window._userProfilePending[uid]; });
     window._userProfilePending[uid] = pr;
@@ -124,6 +131,18 @@ window._nameForUid = function (uid) {
 };
 window._emailForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.email) || ''; };
 window._phoneForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.phone) || ''; };
+window._genderForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.gender) || ''; };
+window._birthForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.birthDate) || ''; };
+window._skillMapForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.skillBySport) || null; };
+window._defaultCatForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.defaultCategory) || ''; };
+// v1.3.39: resolvedores PERFIL-FIRST por participante — o app lê gênero/idade/skill/
+// categoria-padrão pelo UID (perfil), FALLBACK pro campo gravado só enquanto a migração
+// "gravar só uid" não termina. Swap 1:1 nos leitores: p.gender→_pGender(p), etc. Meta:
+// parar de depender do snapshot gravado no inscrito. Ver project_uid_identity_canon_locked.
+window._pGender = function (p) { if (!p || typeof p !== 'object') return ''; return (p.uid && window._genderForUid(p.uid)) || p.gender || ''; };
+window._pBirth = function (p) { if (!p || typeof p !== 'object') return ''; return (p.uid && window._birthForUid(p.uid)) || p.birthDate || ''; };
+window._pSkillMap = function (p) { if (!p || typeof p !== 'object') return null; return (p.uid && window._skillMapForUid(p.uid)) || (p.skillBySport && typeof p.skillBySport === 'object' ? p.skillBySport : null); };
+window._pDefaultCat = function (p) { if (!p || typeof p !== 'object') return ''; return (p.uid && window._defaultCatForUid(p.uid)) || p.defaultCategory || ''; };
 // v4.5.63: SEM fallback pra nome gravado. Quem tem uid → SÓ o nome vivo do perfil
 // (users/{uid}); vazio até o perfil carregar (a UI mostra "…" via CSS `[data-uid-name]:empty`
 // e re-renderiza quando chega — os perfis são PRÉ-REQUISITO do render, carregados junto

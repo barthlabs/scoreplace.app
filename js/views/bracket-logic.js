@@ -574,7 +574,7 @@ window._tbBirthByName = function(t) {
     if (!p || typeof p !== 'object') return;
     var nm = p.displayName || p.name || '';
     var times = [];
-    var own = _tbParseBirth(p.birthDate);
+    var own = _tbParseBirth(window._pBirth ? window._pBirth(p) : p.birthDate); // v1.3.39: idade perfil-first
     if (own != null) times.push(own);
     if (Array.isArray(p.participants)) {
       p.participants.forEach(function(sub) {

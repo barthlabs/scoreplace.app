@@ -1758,7 +1758,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   }
 
   var _gPart = (typeof p === 'object' && p !== null) ? p : (_nameToParticipant && _nameToParticipant[pName]);
-  var _fGender = (typeof window._canonGender === 'function') ? window._canonGender(_gPart && _gPart.gender) : 'none';
+  var _fGender = (typeof window._canonGender === 'function') ? window._canonGender(window._pGender(_gPart)) : 'none'; // v1.3.39: perfil-first
   var _fSkill = 'none';
   var _fSkillCats = t.skillCategories || [];
   var _fCatStr = (_gPart && typeof _gPart === 'object') ? (_gPart.category || '') : '';
@@ -2495,7 +2495,7 @@ function renderParticipants(container, tournamentId) {
 
       const _ciPart = _nameToParticipant[ind.name];
       const _ciInactive = (t.allowSelfDeactivation !== false && _ciPart && _ciPart.ligaActive === false) ? '1' : '0';
-      const _ciGender = (typeof window._canonGender === 'function') ? window._canonGender(_ciPart && _ciPart.gender) : 'none';
+      const _ciGender = (typeof window._canonGender === 'function') ? window._canonGender(window._pGender(_ciPart)) : 'none'; // v1.3.39: perfil-first
       const _ciSkillVal = _ciCurrentSkill || 'none';
       const _ciEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _ciPart || (ind && ind.name) || '') : '';
       const _ciOrder = (_ciEnrollNum !== '' && _ciEnrollNum != null) ? (_ciEnrollNum - 1) : 9999;
