@@ -1156,14 +1156,21 @@ window._rebuildIntegratedBracket = function(t) {
   // DIRETO pra R2; o 2º faz a repescagem no jogo tardio (a definir)". Antes r2Target = próxima
   // pow2 → reintroduzia TODOS os derrotados (over-repescagem: ninguém eliminava na R1). Agora
   // as rodadas seguintes ganham BYE canônico (p2='BYE') quando o nº de vencedores é ímpar.
-  var r2Slots = R1count + (R1count % 2);   // 5 vencedores → 6 (par mínimo)
-  var repechage = r2Slots - R1count;       // best-losers DIRETOS pra R2: 5 → 1
+  // v1.3.72: ESCOLHA do organizador aplicada SEMPRE (regra do dono). Nº ímpar de vencedores
+  // fecha em par por REPESCAGEM (puxa best-loser — default, inclusão) OU por BYE (folga), conforme
+  // t.p2Resolution ('bye' = folga; qualquer outro/ausente = repescagem). A entrada tardia (jogo com
+  // repFill = "a definir") permanece qualifier em ambos os modos — preserva os jogos já sorteados.
+  var _useByes = (t.p2Resolution === 'bye');
+  var _pad = R1count % 2;                          // 1 se ímpar
+  var r2Slots = R1count + _pad;                    // 5 → 6 (par)
+  var repechage = _useByes ? 0 : _pad;             // best-losers DIRETOS pra R2 (só repescagem)
+  var byePad = _useByes ? _pad : 0;                // folgas diretas pra R2 (só bye)
   // elegibilidade de repescagem: SÓ os jogos R1 SEM repFill (os reais) — seus derrotados formam
   // o pool de repescados. O jogo tardio (com repFill = "a definir") é a própria repescagem-playin,
   // não fonte de repescado. limpa wiring.
   r1.forEach(function(m){
     var _isLatePlayin = !!(m.repFill && m.repFill.length);
-    if (!_isLatePlayin && (repechage > 0 || r1.some(function(x){ return x.repFill && x.repFill.length; }))) m.isRepechageR1 = true;
+    if (!_useByes && !_isLatePlayin && (repechage > 0 || r1.some(function(x){ return x.repFill && x.repFill.length; }))) m.isRepechageR1 = true;
     else delete m.isRepechageR1;
     delete m.nextMatchId; delete m.nextSlot;
   });
@@ -1172,10 +1179,11 @@ window._rebuildIntegratedBracket = function(t) {
   if (t.thirdPlaceMatch) delete t.thirdPlaceMatch;
 
   var ts = Date.now(), mc = 0;
-  // slots de R2: vencedores de R1 (na ordem) + bestloser (repescagem)
+  // slots de R2: vencedores de R1 (na ordem) + bestloser (repescagem) OU bye (folga)
   var slots = [];
   r1.forEach(function(m){ slots.push({ type: 'r1winner', fromMatch: m.id }); });
   for (var b = 0; b < repechage; b++) slots.push({ type: 'bestloser' });
+  for (var by = 0; by < byePad; by++) slots.push({ type: 'bye' });
 
   var r2games = slots.length / 2;
   var r2Matches = [];
@@ -1186,6 +1194,8 @@ window._rebuildIntegratedBracket = function(t) {
     if (s1 && s1.type === 'bestloser') bl.push('p1');
     if (s2 && s2.type === 'bestloser') bl.push('p2');
     if (bl.length) { r2m.awaitsBestLoser = bl.join(','); r2m.isRepechageSlot = true; }
+    if (s1 && s1.type === 'bye') { r2m.p1 = _t('bui.byeLabel'); r2m.isBye = true; }
+    if (s2 && s2.type === 'bye') { r2m.p2 = _t('bui.byeLabel'); r2m.isBye = true; }
     t.matches.push(r2m); r2Matches.push(r2m);
     if (s1 && s1.type === 'r1winner') { var src = r1.find(function(x){ return x.id === s1.fromMatch; }); if (src) { src.nextMatchId = r2m.id; src.nextSlot = 'p1'; } }
     if (s2 && s2.type === 'r1winner') { var src2 = r1.find(function(x){ return x.id === s2.fromMatch; }); if (src2) { src2.nextMatchId = r2m.id; src2.nextSlot = 'p2'; } }
@@ -1201,7 +1211,11 @@ window._rebuildIntegratedBracket = function(t) {
     var _n = prev.length, _srcRound = roundNum - 1, _games = Math.ceil(_n / 2), nextRound = [];
     for (var n = 0; n < _games; n++) { var nm = { id: 'ir' + roundNum + '-' + ts + '-' + (mc++), round: roundNum, p1: 'TBD', p2: 'TBD', winner: null }; t.matches.push(nm); nextRound.push(nm); }
     for (var l = 0; l < _n; l++) { var tgt = Math.floor(l / 2), sl = (l % 2 === 0) ? 'p1' : 'p2'; prev[l].nextMatchId = nextRound[tgt].id; prev[l].nextSlot = sl; }
-    if (_n % 2 === 1) { var _repM = nextRound[_games - 1]; _repM.repFill = (Array.isArray(_repM.repFill) ? _repM.repFill : []).concat([{ slot: 'p2', srcBracket: 'main', srcRound: _srcRound, rank: 0, tagRep: true }]); _repM.isRepechageSlot = true; }
+    if (_n % 2 === 1) {
+      var _repM = nextRound[_games - 1];
+      if (_useByes) { _repM.p2 = _t('bui.byeLabel'); _repM.isBye = true; }  // folga (bye mode)
+      else { _repM.repFill = (Array.isArray(_repM.repFill) ? _repM.repFill : []).concat([{ slot: 'p2', srcBracket: 'main', srcRound: _srcRound, rank: 0, tagRep: true }]); _repM.isRepechageSlot = true; }  // repescado (default)
+    }
     prev = nextRound; roundNum++;
   }
 
