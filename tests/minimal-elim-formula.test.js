@@ -51,6 +51,15 @@ function check(N) {
   ok(dead.length === 0, 'N=' + N + ': playout sem vaga morta (TBD) antes da final');
   ok(champ && champ.winner, 'N=' + N + ': chave FECHA num campeão');
   ok(third && third.winner, 'N=' + N + ': 3º lugar disputado e resolvido');
+
+  // v1.3.79: CLASSIFICAÇÃO SEM BURACO — N equipes → posições exatas 1..N. Bug do dono (SB, 9 equipes
+  // exibindo pior lugar 11º): posStart usava 2^roundFromEnd+1 (pow2) em vez de contador corrido, então
+  // perdedor da 1ª rodada caía em 9 pulando 7 e 8. _advanceWinner já rodou _updateProgressiveClassification.
+  const cls = t.classification || {};
+  const positions = Object.keys(cls).map(k => cls[k]).sort((a, b) => a - b);
+  ok(positions.length === N, 'N=' + N + ': classificação tem as ' + N + ' equipes (got ' + positions.length + ')');
+  ok(new Set(positions).size === positions.length, 'N=' + N + ': posições SEM duplicata');
+  ok(positions[0] === 1 && positions[positions.length - 1] === N, 'N=' + N + ': posições de 1 a ' + N + ' sem buraco (got ' + positions[0] + '..' + positions[positions.length - 1] + ')');
 }
 
 // v1.3.78: range EXAUSTIVO 3..300 (dono: "que número podemos parar pra ter certeza"). A recorrência

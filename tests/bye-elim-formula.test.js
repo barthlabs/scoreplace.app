@@ -41,6 +41,18 @@ function check(N) {
   // ex. N=3: T1 vs BYE) → só 1 perdedor de semi real (inerente). Exige ≥1 contestante real.
   const _3rdReal = third && ((third.p1 && third.p1 !== 'TBD') || (third.p2 && third.p2 !== 'TBD'));
   ok(_3rdReal, 'N=' + N + ' bye: 3º lugar com perdedor(es) de semi (2 se semis reais; 1 se semi-BYE)');
+
+  // v1.3.79: CLASSIFICAÇÃO SEM BURACO também no modo BYE — N equipes REAIS → posições 1..N (o BYE
+  // não é equipe). Contador corrido cobre pow2 cheio E pow2 com folgas. Exceção INERENTE: quando uma
+  // SEMIFINAL é BYE (N pequeno perto de pow2), o jogo de 3º fica com um lado TBD permanente (o BYE não
+  // gera derrotado) → 1 equipe (o outro semifinalista) fica sem colocação até esse jogo resolver. Nesse
+  // caso exigimos apenas contíguo 1..k sem buraco, com no máx. 1 equipe pendente (a presa na semi-BYE).
+  const cls = t.classification || {};
+  const positions = Object.keys(cls).filter(k => k && k !== BYE && k !== 'TBD').map(k => cls[k]).sort((a, b) => a - b);
+  const semiBye = third && !third.winner && (third.p1 === 'TBD' || third.p2 === 'TBD');
+  ok(new Set(positions).size === positions.length, 'N=' + N + ' bye: posições SEM duplicata');
+  ok(positions.length && positions[0] === 1 && positions[positions.length - 1] === positions.length, 'N=' + N + ' bye: posições contíguas 1..k sem buraco (got ' + positions[0] + '..' + positions[positions.length - 1] + ', k=' + positions.length + ')');
+  ok(positions.length === N || (semiBye && positions.length === N - 1), 'N=' + N + ' bye: ' + N + ' equipes colocadas (ou ' + (N - 1) + ' se semi-BYE deixa 1 no 3º pendente) — got ' + positions.length);
 }
 
 console.log('── fórmula do BYE, N = 3..130 ──');
