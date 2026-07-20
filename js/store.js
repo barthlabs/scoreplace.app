@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.44';
+window.SCOREPLACE_VERSION = '1.3.45';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -232,6 +232,22 @@ window._hydrateUidNames = function (root) {
       var nm = window._nameForUid(u);
       if (nm) e.textContent = nm;
     });
+    // v1.3.45: atualiza o LABEL DE ARRASTE (data-participant-name) dos cards de inscrito com o
+    // nome VIVO resolvido por uid. O CSS do modo compacto (body.sp-drag-compact
+    // .participant-card::before) lê esse atributo — se ficasse só o valor do render, mostraria
+    // email/fallback congelado quando o perfil resolve async (regressão no arraste da dupla
+    // manual). Reconstrói pelos spans [data-uid-name] JÁ hidratados (dupla = "A / B"); guest
+    // sem uid (sem span) mantém o nome gravado. Identidade = uid, nome sempre do perfil vivo.
+    try {
+      var _cards = root.querySelectorAll('.participant-card[data-participant-name]');
+      _cards.forEach(function (card) {
+        var _spans = card.querySelectorAll('[data-uid-name]');
+        if (!_spans.length) return;
+        var _names = [];
+        _spans.forEach(function (s) { var t = (s.textContent || '').trim(); if (t) _names.push(t); });
+        if (_names.length) card.setAttribute('data-participant-name', _names.join(' / '));
+      });
+    } catch (_e) {}
   });
 };
 

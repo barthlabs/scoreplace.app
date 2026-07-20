@@ -702,15 +702,18 @@ window._applyWO = function (t, opts) {
 // Pôr a ação numa linha própria evita cobrir o nº de inscrição (marca d'água) e
 // o texto do tipo. presenceGroupHtml DEVE vir na ordem: palavra + toggle + W.O.
 // (o 🗑️ é passado à parte, em delBtnHtml, e fica sempre por último/à direita).
+// v1.3.45: tipo (ex.: "Inscrição Individual") e ações (Presente/Ausente·toggle·W.O.·✕) na
+// MESMA linha — tipo à esquerda, ações à direita (space-between). Economiza 1 linha por card
+// (pedido do dono, recorrente). Degrada com graça: se não couber, a barra de ações quebra pra
+// baixo (flex-wrap). CANÔNICO — as DUAS telas (participants + detalhe) passam por aqui.
 window._inscritoActionRow = function (typeText, presenceGroupHtml, delBtnHtml) {
   var action = (presenceGroupHtml || '') + (delBtnHtml || '');
-  var typeLine = typeText
-    ? '<div style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + typeText + '</div>'
+  if (!typeText && !action) return '';
+  var typeSpan = '<div style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto;">' + (typeText || '') + '</div>';
+  var actionSpan = action
+    ? '<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;flex-shrink:0;flex-wrap:wrap;" onclick="event.stopPropagation();">' + action + '</div>'
     : '';
-  var actionLine = action
-    ? '<div style="display:flex;align-items:center;gap:6px;margin-top:5px;justify-content:flex-end;" onclick="event.stopPropagation();">' + action + '</div>'
-    : '';
-  return (typeLine || actionLine) ? '<div style="margin-top:6px;">' + typeLine + actionLine + '</div>' : '';
+  return '<div style="margin-top:6px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;">' + typeSpan + actionSpan + '</div>';
 };
 
 window._toggleCheckIn = function (tId, playerName, uid) {
@@ -1776,12 +1779,20 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   var _fEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _gPart || pName) : '';
   var _fOrder = (_fEnrollNum !== '' && _fEnrollNum != null) ? (_fEnrollNum - 1) : idx;
   var _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
+  // v1.3.45: data-participant-name = nome de EXIBIÇÃO (não minúsculo). O CSS do modo compacto
+  // de arraste (body.sp-drag-compact .participant-card::before) le ESTE atributo pra mostrar
+  // só o nome ao arrastar. A extração canônica (v1.3.35) dropou este atributo → nome sumia no
+  // arraste (impossível escolher o par da dupla manual). Regressão fechada. Ver components.css.
+  var _dragName = isTeam ? pName : (function () {
+    var _u = (typeof p === 'object' && p && p.uid) ? p.uid : '';
+    return (_u && typeof window._displayName === 'function') ? window._displayName(_u, pName) : pName;
+  })();
   var _fInactive = (t.allowSelfDeactivation !== false && _gPart && _gPart.ligaActive === false) ? '1' : '0';
   var _metaSlots = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, pName, isTeam, t, isOrg, { inline: true }) : '';
   var _wmNum = (function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_n, 'right') : ''; })();
 
   return '' +
-    '<div class="participant-card" data-part-card="1" data-part-org="' + (_isOrgP ? '1' : '0') + '" data-part-vip="' + (isVip ? '1' : '0') + '" data-part-standby="' + (_isStandbyEntry ? '1' : '0') + '" data-part-name="' + _fNameAttr + '" data-part-inactive="' + _fInactive + '" data-part-gender="' + _fGender + '" data-part-skill="' + String(_fSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _fOrder + '" ' + dragProps + ' style="' + cardStyle + ' border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (isOrg ? 'cursor:grab;' : '') + _rcCardExtra + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
+    '<div class="participant-card" data-part-card="1" data-part-org="' + (_isOrgP ? '1' : '0') + '" data-part-vip="' + (isVip ? '1' : '0') + '" data-part-standby="' + (_isStandbyEntry ? '1' : '0') + '" data-part-name="' + _fNameAttr + '" data-participant-name="' + window._safeHtml(_dragName) + '" data-part-inactive="' + _fInactive + '" data-part-gender="' + _fGender + '" data-part-skill="' + String(_fSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _fOrder + '" ' + dragProps + ' style="' + cardStyle + ' border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (isOrg ? 'cursor:grab;' : '') + _rcCardExtra + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
       _wmNum +
       '<div style="position:relative;z-index:1;">' +
         pNameHtml +
