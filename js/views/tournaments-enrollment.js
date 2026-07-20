@@ -190,79 +190,9 @@ function _allowsLateEnrollment(t) {
   return le === 'standby' || le === 'expand';
 }
 
-// ── Controle AO VIVO da inscrição da FASE corrente (project_late_enrollment_per_phase +
-// incidente 18/jul). O organizador abre/fecha a inscrição da fase EM ANDAMENTO a qualquer
-// momento — inclusive DESTRAVAR uma eliminatória que ficou 'closed' e negava inscrição. Grava
-// no phase corrente (o que o guard lê via _effectiveLateEnrollment) E espelha em
-// t.lateEnrollment → reconcilia "top vs fase" (canônico por config). Editável durante a fase
-// (não travado no início). ──
-function _isTournamentOrg(t) {
-  return !!(window.AppStore && ((window.AppStore.isOrganizer && window.AppStore.isOrganizer(t)) || (window.AppStore.isCreator && window.AppStore.isCreator(t))));
-}
-window._setPhaseLateEnrollment = function (tId, value) {
-  if (['closed', 'standby', 'expand'].indexOf(value) === -1) return;
-  var t = window._findTournamentById ? window._findTournamentById(tId) : null;
-  if (!t) return;
-  if (!_isTournamentOrg(t)) {
-    if (typeof showNotification === 'function') showNotification('Só o organizador', 'Só o organizador muda a inscrição da fase.', 'warning');
-    return;
-  }
-  var cur = (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) || 'closed';
-  if (cur === value) return; // idempotente
-  if (!(window.AppStore && typeof window.AppStore.mutate === 'function')) return;
-  if (typeof window._showLoading === 'function') window._showLoading('Atualizando inscrições da fase…');
-  window.AppStore.mutate(String(tId), function (ft) {
-    var cpi = ft.currentPhaseIndex || 0;
-    if (Array.isArray(ft.phases) && ft.phases[cpi]) ft.phases[cpi].lateEnrollment = value;
-    ft.lateEnrollment = value; // espelho top-level (reconcilia top vs fase)
-    if (!Array.isArray(ft.history)) ft.history = [];
-    ft.history.push({ date: new Date().toISOString(), message: 'Inscrições da fase alteradas para: ' + value });
-  }).then(function () {
-    if (typeof window._hideLoading === 'function') window._hideLoading();
-    if (window.AppStore && window.AppStore.logAction) window.AppStore.logAction(tId, 'Inscrições da fase: ' + value);
-    if (typeof showNotification === 'function') {
-      var lbl = value === 'closed' ? 'Fechadas' : (value === 'standby' ? 'Suplentes apenas' : 'Novos confrontos');
-      showNotification('Inscrições da fase', lbl + '.', 'success');
-    }
-    var container = document.getElementById('view-container');
-    if (container && typeof renderTournaments === 'function') renderTournaments(container, String(tId));
-    else if (typeof window._softRefreshView === 'function') window._softRefreshView();
-  }).catch(function (err) {
-    if (typeof window._hideLoading === 'function') window._hideLoading();
-    if (typeof showNotification === 'function') showNotification('Não salvou', (err && err.message) || 'Tente de novo.', 'error');
-  });
-};
-
-// Controle segmentado (org) da inscrição da fase corrente — 3 opções, destacando o efetivo
-// atual. Aparece PÓS-SORTEIO em torneio não encerrado (pré-sorteio usa "Encerrar Inscrições").
-// Liga gerencia inscrição própria (ligaOpenEnrollment) → não usa este controle. String pura
-// (testável); é embutido nas Ferramentas do Organizador (bloco de largura total no flex-wrap).
-window._phaseLateEnrollControlHtml = function (t) {
-  try {
-    if (!t || !_isTournamentOrg(t)) return '';
-    if (window._isLigaFormat && window._isLigaFormat(t)) return '';
-    var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-    if (!hasDraw || t.status === 'finished') return '';
-    var cur = (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) || 'closed';
-    if (['closed', 'standby', 'expand'].indexOf(cur) === -1) cur = 'closed';
-    var T = window._t || function (k) { return k; };
-    var opts = [
-      { v: 'closed', ic: '🚫', lb: T('create.lateEnrollClosed') },
-      { v: 'standby', ic: '🪑', lb: T('create.lateEnrollSuplentesOnly') },
-      { v: 'expand', ic: '➕', lb: T('create.lateEnrollExpand') }
-    ];
-    var btns = opts.map(function (o) {
-      var on = o.v === cur;
-      return '<button type="button" onclick="event.stopPropagation(); window._setPhaseLateEnrollment(\'' + String(t.id) + '\',\'' + o.v + '\')" ' +
-        'style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 6px;border-radius:9px;cursor:pointer;font-size:0.72rem;font-weight:700;' +
-        (on ? 'background:linear-gradient(135deg,#f59e0b,#d97706);color:#1a1300;border:1px solid #f59e0b;' : 'background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid rgba(255,255,255,0.1);') + '">' +
-        '<span style="font-size:0.95rem;">' + o.ic + '</span><span style="text-align:center;line-height:1.15;">' + o.lb + '</span></button>';
-    }).join('');
-    return '<div data-phase-late-enroll style="flex-basis:100%;width:100%;box-sizing:border-box;margin-top:2px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.18);border-radius:12px;padding:10px 12px;">' +
-      '<div style="font-size:0.7rem;color:#fbbf24;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:7px;">⏱️ ' + T('create.lateEnrollSection') + '</div>' +
-      '<div style="display:flex;gap:6px;">' + btns + '</div></div>';
-  } catch (e) { return ''; }
-};
+// v1.3.66: _setPhaseLateEnrollment + _phaseLateEnrollControlHtml + _isTournamentOrg REMOVIDOS
+// (controle "INSCRIÇÕES DURANTE A FASE" saiu das Ferramentas do Organizador — não foi pedido).
+// A config de novos confrontos vive na criação/edição do torneio e no painel do sorteio.
 
 // v2.1.66/67: plano de presença ("Planejar ida") vinculado ao torneio.
 // Calcula a janela desejada (início + duração estimada do torneio) a partir do

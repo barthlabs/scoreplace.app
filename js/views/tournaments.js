@@ -3058,11 +3058,11 @@ function renderTournaments(container, tournamentId = null) {
                       (_schCardChip / _schGroupChip no bracket). Ver pedido do dono. */ ''}
                 ${_arbitrosBtn}
                 ${toggleRegBtn}
-                ${/* v1.3.65: "INSCRIÇÕES DURANTE A FASE" (Fechadas/Suplentes Apenas/Novos Confrontos)
-                      REMOVIDO das Ferramentas do Organizador — não foi pedido e não serve ali (a
-                      escolha de novos confrontos já é feita no sorteio, e a config vem da criação/
-                      edição do torneio). Pedido do dono. _phaseLateEnrollControlHtml continua
-                      existindo, só não é mais renderizado aqui. */ ''}
+                ${/* v1.3.65/66: "INSCRIÇÕES DURANTE A FASE" (Fechadas/Suplentes Apenas/Novos
+                      Confrontos) REMOVIDO das Ferramentas do Organizador — não foi pedido e não
+                      serve ali (a escolha de novos confrontos já é feita no sorteio, e a config vem
+                      da criação/edição do torneio). Funções _phaseLateEnrollControlHtml +
+                      _setPhaseLateEnrollment DELETADAS (v1.3.66). Pedido do dono. */ ''}
                 ${sortearBtn}
                 ${sortearAberto}
                 ${/* v4.4.50: "Avançar de fase" também nas Ferramentas do Organizador — mesma

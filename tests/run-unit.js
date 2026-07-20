@@ -69,7 +69,6 @@ const SUITES = [
   'tests/wo-outcome-wiring.test.js',
   'tests/wo-outcome-negotiation.test.js',
   'tests/late-enroll-inherit.test.js',
-  'tests/late-enroll-live-control.test.js',
   'tests/round-display-no-r0.test.js',
   'tests/result-approval-uid.test.js',
   'tests/tiebreak-set-score.test.js',
