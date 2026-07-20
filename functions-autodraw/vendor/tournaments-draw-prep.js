@@ -1062,8 +1062,12 @@ window._showLateConfrontosPanel = function(tId) {
             var ph = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
             if (ph) ph.lateEnrollment = 'standby';
             t.lateEnrollment = 'standby';
+        } else {
+            // v1.3.72: grava a ESCOLHA de resolução de rodada ímpar, aplicada SEMPRE pelo motor
+            // (_rebuildIntegratedBracket lê t.p2Resolution). bye = folga; repescagem = puxa o
+            // melhor derrotado (default, inclusão). Ver [[project_inclusion_philosophy_canon]].
+            t.p2Resolution = (mode === 'bye') ? 'bye' : 'playin';
         }
-        // 'repescagem' → mantém expand (comportamento default do motor)
         _proceedDraw();
     };
     window._lateConfrontosCancel = function() {
@@ -1082,7 +1086,11 @@ window._showLateConfrontosPanel = function(tId) {
           'Quando um novo time entrar <b>depois do sorteio</b>, ele desbalanceia a chave. Escolha desde já como o sistema resolve:</div>' +
         '<button onclick="window._lateConfrontosPick(\'repescagem\')" style="display:block;width:100%;text-align:left;background:linear-gradient(135deg,#16a34a,#15803d);border:none;border-radius:12px;padding:14px 16px;margin-bottom:10px;color:#fff;cursor:pointer;">' +
           '<div style="font-weight:800;font-size:0.98rem;">🔁 Repescagem <span style="opacity:0.85;font-weight:600;">(recomendado)</span></div>' +
-          '<div style="font-size:0.82rem;opacity:0.92;margin-top:3px;line-height:1.4;">O novo time entra na 1ª rodada contra o <b>derrotado mais bem colocado</b> (a definir). A chave recalcula a potência de 2 automaticamente.</div>' +
+          '<div style="font-size:0.82rem;opacity:0.92;margin-top:3px;line-height:1.4;">O novo time entra na 1ª rodada contra o <b>derrotado mais bem colocado</b>. Quando uma rodada fica ímpar, puxa outro repescado — <b>todos jogam</b>, sem folga.</div>' +
+        '</button>' +
+        '<button onclick="window._lateConfrontosPick(\'bye\')" style="display:block;width:100%;text-align:left;background:#1e293b;border:1px solid #475569;border-radius:12px;padding:14px 16px;margin-bottom:10px;color:#e2e8f0;cursor:pointer;">' +
+          '<div style="font-weight:800;font-size:0.98rem;">⏭️ BYE (folga)</div>' +
+          '<div style="font-size:0.82rem;opacity:0.85;margin-top:3px;line-height:1.4;">Quando uma rodada fica ímpar, o melhor colocado <b>folga</b> (avança sem jogar) em vez de puxar repescado. Aplicado sempre.</div>' +
         '</button>' +
         '<button onclick="window._lateConfrontosPick(\'standby\')" style="display:block;width:100%;text-align:left;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px 16px;margin-bottom:14px;color:#e2e8f0;cursor:pointer;">' +
           '<div style="font-weight:800;font-size:0.98rem;">📋 Lista de espera (suplentes)</div>' +
@@ -1732,7 +1740,19 @@ window.showUnifiedResolutionPanel = function(tId) {
 // sorteio com os solos e escolhe: Ajuste manual (formar duplas na mão) · Lista
 // de espera · Exclusão. Cancelar aborta. Injetado em _handleSortearClick.
 // ════════════════════════════════════════════════════════════════════════════
-window._soloNameOf = function (p) { return (typeof p === 'string') ? p : (p && (p.displayName || p.name) || ''); };
+window._soloNameOf = function (p) {
+    if (typeof p === 'string') return p;
+    if (!p) return '';
+    // v1.3.90: nome VIVO por qualquer forma — o painel de sem-dupla mostrava PILL VAZIA porque lia
+    // só displayName||name (vazio pra entrada só-uid OU meia-dupla {p1Name:'X'}). Resolve via _pName
+    // canônico (uid→perfil ao vivo), depois p1Name/p2Name/displayName, e por fim o uid.
+    var n = (typeof window._pName === 'function') ? window._pName(p, '') : '';
+    if (n) return n;
+    n = p.displayName || p.name || p.p1Name || p.p2Name || '';
+    if (n) return n;
+    if (p.uid && typeof window._displayNameForUid === 'function') return window._displayNameForUid(p.uid, '') || '';
+    return '';
+};
 // Sem-dupla = entrada que NÃO é time. É ESTRUTURA — nome não entra nesta pergunta.
 // O `n &&` que existia aqui era um guard por NOME e tornava esta função um NO-OP na forma
 // REAL do doc: `_stripUidEntryNames` não grava nome de quem tem perfil vivo, então a

@@ -1740,7 +1740,19 @@ window.showUnifiedResolutionPanel = function(tId) {
 // sorteio com os solos e escolhe: Ajuste manual (formar duplas na mão) · Lista
 // de espera · Exclusão. Cancelar aborta. Injetado em _handleSortearClick.
 // ════════════════════════════════════════════════════════════════════════════
-window._soloNameOf = function (p) { return (typeof p === 'string') ? p : (p && (p.displayName || p.name) || ''); };
+window._soloNameOf = function (p) {
+    if (typeof p === 'string') return p;
+    if (!p) return '';
+    // v1.3.90: nome VIVO por qualquer forma — o painel de sem-dupla mostrava PILL VAZIA porque lia
+    // só displayName||name (vazio pra entrada só-uid OU meia-dupla {p1Name:'X'}). Resolve via _pName
+    // canônico (uid→perfil ao vivo), depois p1Name/p2Name/displayName, e por fim o uid.
+    var n = (typeof window._pName === 'function') ? window._pName(p, '') : '';
+    if (n) return n;
+    n = p.displayName || p.name || p.p1Name || p.p2Name || '';
+    if (n) return n;
+    if (p.uid && typeof window._displayNameForUid === 'function') return window._displayNameForUid(p.uid, '') || '';
+    return '';
+};
 // Sem-dupla = entrada que NÃO é time. É ESTRUTURA — nome não entra nesta pergunta.
 // O `n &&` que existia aqui era um guard por NOME e tornava esta função um NO-OP na forma
 // REAL do doc: `_stripUidEntryNames` não grava nome de quem tem perfil vivo, então a

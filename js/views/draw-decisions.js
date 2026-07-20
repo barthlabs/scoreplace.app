@@ -23,7 +23,15 @@
 (function () {
 
   var _nameOf = function (p) {
-    return (typeof p === 'string') ? p : (p && (p.displayName || p.name) || '');
+    if (typeof p === 'string') return p;
+    if (!p) return '';
+    if (p.displayName || p.name) return p.displayName || p.name;
+    // v1.3.90: meia-dupla FICTÍCIA {p1Name:'X'} (nome em p1Name, SEM displayName nem uid) — usa o
+    // rótulo p1Name/p2Name pra a chave de identidade (_entryIdKey) NÃO sair VAZIA. Chave vazia
+    // colidia: o guard `if(k)` não a movia → entrada não saía de participants mas ia pra espera →
+    // DUPLICADA → ausente entrava na chave (bug do dono). uids têm precedência via _uidsOf acima.
+    var a = p.p1Name || '', b = p.p2Name || '';
+    return (a && b) ? (a + ' / ' + b) : (a || b || '');
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -392,12 +400,18 @@
       // real do doc (só uid) isso era um NO-OP silencioso: ninguém saía do elenco.
       var notPresent = parts.filter(function(p) { return !window._isParticipantPresent(t, p); });
       if (notPresent.length === 0) return 0;
-      var moveSet = {};
-      notPresent.forEach(function(p) { var k = window._entryIdKey(p); if (k) moveSet[k] = true; });
-      t.participants = parts.filter(function(p) { return !moveSet[window._entryIdKey(p)]; });
+      // v1.3.90: remove por REFERÊNCIA (Set de objetos), NÃO por _entryIdKey string. Entrada sem
+      // uid nem displayName ({p1Name:'X'} meia-dupla) dava chave '' → o guard `if(k)` não a punha
+      // no moveSet → NÃO saía de participants MAS ia pra espera → DUPLICADA → ausente na chave +
+      // "outros sumiram". Por referência cada not-present sai E entra na espera exatamente 1×.
+      var moveRefs = (typeof Set === 'function') ? new Set(notPresent) : null;
+      t.participants = moveRefs
+          ? parts.filter(function(p) { return !moveRefs.has(p); })
+          : parts.filter(function(p) { return notPresent.indexOf(p) === -1; });
       if (!Array.isArray(t.waitlist)) t.waitlist = [];
       notPresent.forEach(function(p) {
-          if (!t.waitlist.some(function(w) { return _sameEntry(w, p); })) t.waitlist.push(p);
+          // dedup por REFERÊNCIA também (fictício de chave vazia: _sameEntry sempre falso → duplicava)
+          if (!t.waitlist.some(function(w) { return w === p || _sameEntry(w, p); })) t.waitlist.push(p);
       });
       return notPresent.length;
   };
