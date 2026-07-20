@@ -221,65 +221,14 @@ function renderBracket(container, tournamentId, isInline) {
     }
   }
 
-  // v1.2.58: DUPLA formada na espera entra NO LUGAR DO REPESCADO na chave PLAYIN (Elim
-  // Simples/Dupla Elim): preenche o slot repFill da ímpar (JOGO N "VS A definir"), some 1
-  // repescado. Reusa a mecânica repFill — sem reconstruir. Ver project_late_dupla_fills_awaiting_slot.
-  if (isOrg && typeof window._fillRepFillWithLateDuplas === 'function') {
-    try {
-      var _nRF = window._fillRepFillWithLateDuplas(t);
-      if (_nRF > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t);
-        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nRF + ' dupla(s) na chave', 'Entrou no lugar do repescado — a chave recalculou os repescados.', 'success');
-      }
-    } catch (e) {}
-  }
-
-  // v2.1.26: tardios entram NA chave — SÓ o organizador dispara (escrita de
-  // matches/participants só passa nas rules como admin). Auto ao abrir o bracket.
-  if (isOrg && typeof window._createExtraGamesFromWaitlist === 'function') {
-    try {
-      var _nExtra = window._createExtraGamesFromWaitlist(t); // já integra na chave + rebuild
-      if (_nExtra > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t);
-        if (typeof showNotification !== 'undefined') showNotification('⚡ ' + (_nExtra * 2) + ' tardios na chave', _nExtra + ' jogo(s) novo(s) na rodada 1 — chave redesenhada.', 'info');
-      }
-    } catch (e) {}
-  }
-
-  // INCREMENT 2: duplas formadas na lista de espera (Dupla Eliminatória) entram na chave, por
-  // progressão do torneio — Tier 1 (R2 upper não começou) → R1 do upper; Tier 2 (R2 upper já
-  // começou) → R1 da chave inferior; Tier 3 (R2 lower já começou) → suplentes individuais.
-  // Ver _integrateLateDuplas / project_dupla_elim_repechage.
-  if (isOrg && typeof window._integrateLateDuplas === 'function') {
-    try {
-      var _nLJ = window._integrateLateDuplas(t);
-      if (_nLJ > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t);
-        var _ljTier = window._lastIntegrateTier || 1;
-        var _ljMsg = (_ljTier === 2)
-          ? 'Entraram na R1 da chave inferior (vencedor segue no lower, derrotado eliminado).'
-          : 'Entraram na R1 da chave superior (vencedor sobe, derrotado cai pro lower).';
-        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nLJ + ' dupla(s) na chave', _ljMsg, 'success');
-      } else if (_nLJ === -3 && typeof window._dissolveLateDuplas === 'function') {
-        // Tier 3: R2 do lower já começou → duplas viram suplentes individuais.
-        var _nd = window._dissolveLateDuplas(t);
-        if (_nd > 0 && window.FirestoreDB) { window.FirestoreDB.saveTournament(t);
-          if (typeof showNotification !== 'undefined') showNotification('👤 Suplentes individuais', 'O torneio já avançou na chave inferior — as duplas em espera viraram suplentes individuais.', 'info'); }
-      }
-    } catch (e) {}
-  }
-
-  // v3.1.22: Rei/Rainha — novos GRUPOS a partir da lista de espera (Inscrições durante
-  // a fase, "Novos Confrontos"). Regra canônica: só quando expand, mesmo-dia conta
-  // presença, sorteia o pareamento. Idempotente (forma 0 em regime → sem loop/save).
-  if (isOrg && typeof window._expandMonarchFromWaitlist === 'function') {
-    try {
-      var _nRR = window._expandMonarchFromWaitlist(t);
-      if (_nRR > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t);
-        if (typeof showNotification !== 'undefined') showNotification('⚡ ' + _nRR + ' novo(s) grupo(s)', 'Novos confrontos formados da lista de espera.', 'info');
-      }
-    } catch (e) {}
+  // v1.3.75: INTEGRAÇÃO TARDIA = CF-ONLY. O cliente NÃO computa mais a chave aqui (era
+  // _fillRepFillWithLateDuplas / _createExtraGamesFromWaitlist / _integrateLateDuplas /
+  // _expandMonarchFromWaitlist rodando client-side no render). Agora só DISPARA a CF
+  // integrateLateEntries (via _triggerLateIntegration, com guard anti-spam); a CF roda o motor
+  // na transação e persiste → onSnapshot re-renderiza com a chave nova. Regra do dono: "nada de
+  // cálculo de chave no client-side". Ver [[feedback_draw_is_cf_only]] / [[project_enroll_deenroll_in_cf]].
+  if (isOrg && typeof window._triggerLateIntegration === 'function') {
+    try { window._triggerLateIntegration(t); } catch (e) {}
   }
   const canEnterResult = isOrg || window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee');
   const isLiga = window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
@@ -952,6 +901,8 @@ window._formLateJoinDupla = function (tId, src, tgt) {
   t.updatedAt = new Date().toISOString();
   window.FirestoreDB.saveTournament(t).then(function () {
     if (typeof showNotification !== 'undefined') showNotification('🤝 Dupla formada · presença marcada', an + ' / ' + bn + ' entraram na chave.', 'success');
+    // v1.3.75: CF-only — dispara a CF que integra a dupla na chave (force: acabou de mudar o estado).
+    if (typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
     if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
   });
 };

@@ -1782,6 +1782,71 @@ window._callCloseRound = function (payload) {
     });
 };
 
+// v1.3.75: CF-only da INTEGRAÇÃO TARDIA — o cliente só DISPARA; a CF `integrateLateEntries`
+// roda o motor (createExtraGames/rebuild/repFill/monarch) na transação e persiste. Espelha
+// _callDrawRound/_callCloseRound (mesmo transporte callable via fetch). Retorna {changed,...}.
+// Regra do dono: "nada de cálculo de chave no client-side". Ver [[feedback_draw_is_cf_only]].
+window._callIntegrateLate = function (payload) {
+    var fb = window.firebase;
+    var user = fb && fb.auth && fb.auth().currentUser;
+    if (!user) return Promise.reject(Object.assign(new Error('Entre na sua conta.'), { code: 'functions/unauthenticated' }));
+    var pid = '';
+    try { pid = fb.app().options.projectId; } catch (e) {}
+    if (!pid) return Promise.reject(Object.assign(new Error('App não inicializado.'), { code: 'functions/internal' }));
+    var url = 'https://us-central1-' + pid + '.cloudfunctions.net/integrateLateEntries';
+    return user.getIdToken().then(function (tok) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+            body: JSON.stringify({ data: payload })
+        });
+    }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+            if (j && j.error) {
+                var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
+                throw Object.assign(new Error(j.error.message || 'Falha na integração'), { code: 'functions/' + (st || 'internal') });
+            }
+            if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { code: 'functions/internal' });
+            return { data: (j && j.result) || {} };
+        });
+    });
+};
+
+// v1.3.75: DISPARO da integração tardia (CF-only). O cliente NÃO computa a chave — só chama a CF
+// quando há algo na lista de espera, com guard anti-spam (in-flight + assinatura do estado). A CF
+// integra na transação e persiste; o onSnapshot re-renderiza. Idempotente: changed=false não
+// re-dispara o mesmo estado. Ver [[feedback_draw_is_cf_only]].
+window._lateIntegrateInflight = window._lateIntegrateInflight || {};
+window._lateIntegrateLastSig = window._lateIntegrateLastSig || {};
+window._triggerLateIntegration = function (t, opts) {
+    opts = opts || {};
+    if (!t || !t.id) return;
+    var tId = String(t.id);
+    if (window._lateIntegrateInflight[tId]) return;
+    // só dispara quando há gente na espera (senão não há o que integrar)
+    var wl = (typeof window._getWaitlist === 'function') ? window._getWaitlist(t)
+        : (t.standbyParticipants || []).concat(t.waitlist || []);
+    if (!wl || !wl.length) return;
+    // assinatura do estado (espera + presença) → não re-dispara o MESMO estado (evita loop/spam)
+    var _nm = function (p) { return (typeof p === 'string') ? p : (p && (p.displayName || p.name || p.uid)) || ''; };
+    var sig = wl.map(_nm).sort().join('|') + '#' + Object.keys(t.checkedIn || {}).sort().join(',');
+    if (!opts.force && window._lateIntegrateLastSig[tId] === sig) return;
+    window._lateIntegrateInflight[tId] = true;
+    window._callIntegrateLate({ tournamentId: tId }).then(function (res) {
+        window._lateIntegrateInflight[tId] = false;
+        window._lateIntegrateLastSig[tId] = sig;
+        var d = (res && res.data) || {};
+        if (d.changed && typeof showNotification !== 'undefined') {
+            var _n2 = (d.extra || 0) + (d.duplas || 0) + (d.monarch || 0);
+            showNotification('⚡ Tardios na chave', (_n2 ? (_n2 + ' confronto(s) novo(s) — ') : '') + 'chave recalculada pela CF.', 'info');
+        }
+        // a CF persistiu → o onSnapshot re-renderiza sozinho com a chave nova.
+    }).catch(function (e) {
+        window._lateIntegrateInflight[tId] = false;
+        if (window._dtrace) window._dtrace('integrateLate:ERR', { code: e && e.code, msg: e && e.message });
+    });
+};
+
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) { if (window._dtrace) window._dtrace('generateDraw:NO-TOURNAMENT', { tId: String(tId) }); return; }
