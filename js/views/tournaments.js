@@ -3058,10 +3058,11 @@ function renderTournaments(container, tournamentId = null) {
                       (_schCardChip / _schGroupChip no bracket). Ver pedido do dono. */ ''}
                 ${_arbitrosBtn}
                 ${toggleRegBtn}
-                ${/* Inscrições da FASE em andamento (editável ao vivo) — abre/fecha a inscrição da
-                      fase atual, inclusive destravar uma elim que ficou 'closed'. Bloco de largura
-                      total no flex-wrap. project_late_enrollment_per_phase (incidente 18/jul). */ ''}
-                ${(typeof window._phaseLateEnrollControlHtml === 'function') ? window._phaseLateEnrollControlHtml(t) : ''}
+                ${/* v1.3.65: "INSCRIÇÕES DURANTE A FASE" (Fechadas/Suplentes Apenas/Novos Confrontos)
+                      REMOVIDO das Ferramentas do Organizador — não foi pedido e não serve ali (a
+                      escolha de novos confrontos já é feita no sorteio, e a config vem da criação/
+                      edição do torneio). Pedido do dono. _phaseLateEnrollControlHtml continua
+                      existindo, só não é mais renderizado aqui. */ ''}
                 ${sortearBtn}
                 ${sortearAberto}
                 ${/* v4.4.50: "Avançar de fase" também nas Ferramentas do Organizador — mesma
