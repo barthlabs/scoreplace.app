@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.63';
+window.SCOREPLACE_VERSION = '1.3.64';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1404,9 +1404,18 @@ window._devWhatsAppBtnHtml = function (opts) {
     var p2 = ('serviceWorker' in navigator) ? navigator.serviceWorker.getRegistrations().then(function(regs) {
       return Promise.all(regs.map(function(r) { return r.unregister(); }));
     }) : Promise.resolve();
+    // v1.3.64: CRÍTICO — o GitHub Pages serve index.html com `cache-control: max-age=600`
+    // (10min, e NÃO dá pra mudar header no Pages). Após unregister do SW, `location.reload()`
+    // é SOFT → serve o index.html do cache HTTP (cache-busters ?v= VELHOS → JS velho → trava
+    // na versão anterior; só hard-refresh resolvia). Fix: revalidar o documento com
+    // `cache:'reload'` ANTES do reload — isso baixa o HTML fresco E atualiza a entrada do
+    // cache HTTP, então o reload subsequente já pega os cache-busters novos. Funciona pra
+    // TODO usuário (não depende do SW novo). Ver [[project_pwa_auto_update]].
+    var p3 = Promise.resolve();
+    try { p3 = fetch(window.location.pathname, { cache: 'reload' }).catch(function() {}); } catch (e) {}
     // Marca o guard ANTES do reload pra o handler de controllerchange (index.html)
     // não disparar um segundo reload durante o churn de unregister/re-register.
-    Promise.all([p1, p2]).then(function() { window._swReloading = true; window.location.reload(); });
+    Promise.all([p1, p2, p3]).then(function() { window._swReloading = true; window.location.reload(); });
   };
 
   // Busca store.js sem cache e compara a versão. Throttle de 60s salvo force.

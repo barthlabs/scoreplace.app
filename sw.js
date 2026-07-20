@@ -64,7 +64,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v1.3.63';
+var CACHE_NAME = 'scoreplace-v1.3.64';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do
@@ -207,8 +207,15 @@ self.addEventListener('fetch', function(event) {
 
   // For same-origin static assets: network-first (always try fresh, fallback to cache)
   if (url.indexOf(self.location.origin) === 0) {
+    // v1.3.64: requisição de NAVEGAÇÃO (documento HTML) força bypass do cache HTTP via
+    // cache:'reload'. O index.html do GitHub Pages vem com max-age=600 (10min) e SEM
+    // cache-buster no próprio HTML → sem isto o SW servia HTML velho por até 10min (JS
+    // travado na versão anterior). Assets estáticos têm ?v= único, então não precisam.
+    // Ver [[project_pwa_auto_update]].
+    var _isNav = (event.request.mode === 'navigate');
+    var _fetchReq = _isNav ? new Request(event.request.url, { cache: 'reload', credentials: 'same-origin', redirect: 'follow' }) : event.request;
     event.respondWith(
-      fetch(event.request).then(function(response) {
+      fetch(_fetchReq).then(function(response) {
         if (response && response.status === 200) {
           var clone = response.clone();
           caches.open(CACHE_NAME).then(function(cache) {
