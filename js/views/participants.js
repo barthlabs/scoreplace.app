@@ -1557,7 +1557,17 @@ window._partApplyFilter = function () {
     // v2.7.53: LISTA DE ESPERA NÃO é mais fixada no rodapé — ela entra na ordem
     // normal (alfabética/cronológica) junto com os demais inscritos, só em âmbar.
     if (sort === 'name-asc' || sort === 'name-desc') {
-      var r = (a.getAttribute('data-part-name') || '').localeCompare(b.getAttribute('data-part-name') || '', 'pt-BR', { sensitivity: 'base' });
+      // v1.3.51 (CANON do dono): a chave de ordem PUXA O NOME PELO UID. Só cai pro nome
+      // gravado quando NÃO há uid (jogador fictício/guest). Nunca ordena por email — o email
+      // no lugar do nome era sinal de que a resolução por uid não estava sendo aplicada no
+      // sort. Resolvido AQUI (no comparador) → robusto a timing; quando o perfil carrega,
+      // _hydrateUidNames re-dispara _partApplyFilter e reordena. Ver [[project_uid_identity_canon_locked]].
+      var _sn = function (el) {
+        var u = el.getAttribute('data-part-uid') || '';
+        var byUid = (u && typeof window._nameForUid === 'function') ? window._nameForUid(u) : '';
+        return (byUid || el.getAttribute('data-part-name') || '').toLowerCase();
+      };
+      var r = _sn(a).localeCompare(_sn(b), 'pt-BR', { sensitivity: 'base' });
       return sort === 'name-desc' ? -r : r;
     }
     // v4.4.65: ativo/inativo virou FILTRO (acima), não sort — sort era imperceptível.
@@ -1934,7 +1944,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   var _wmNum = (function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_n, 'right') : ''; })();
 
   return '' +
-    '<div class="participant-card" data-part-card="1" data-part-org="' + (_isOrgP ? '1' : '0') + '" data-part-vip="' + (isVip ? '1' : '0') + '" data-part-standby="' + (_isStandbyEntry ? '1' : '0') + '" data-part-name="' + _fNameAttr + '" data-participant-name="' + window._safeHtml(_dragName) + '" data-card-key="' + window._safeHtml(String((typeof p === 'object' && p && p.uid) ? p.uid : pName)) + '" data-card-idx="' + idx + '" data-part-inactive="' + _fInactive + '" data-part-gender="' + _fGender + '" data-part-skill="' + String(_fSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _fOrder + '" ' + dragProps + ' style="' + cardStyle + ' border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (isOrg ? 'cursor:grab;' : '') + _rcCardExtra + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
+    '<div class="participant-card" data-part-card="1" data-part-org="' + (_isOrgP ? '1' : '0') + '" data-part-vip="' + (isVip ? '1' : '0') + '" data-part-standby="' + (_isStandbyEntry ? '1' : '0') + '" data-part-name="' + _fNameAttr + '" data-participant-name="' + window._safeHtml(_dragName) + '" data-card-key="' + window._safeHtml(String((typeof p === 'object' && p && p.uid) ? p.uid : pName)) + '" data-card-idx="' + idx + '" data-part-uid="' + window._safeHtml(String((typeof p === 'object' && p && p.uid && !isTeam) ? p.uid : '')) + '" data-part-inactive="' + _fInactive + '" data-part-gender="' + _fGender + '" data-part-skill="' + String(_fSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _fOrder + '" ' + dragProps + ' style="' + cardStyle + ' border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (isOrg ? 'cursor:grab;' : '') + _rcCardExtra + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
       _wmNum +
       '<div style="position:relative;z-index:1;">' +
         pNameHtml +
