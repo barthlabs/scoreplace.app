@@ -853,6 +853,9 @@ window._createExtraGamesFromWaitlist = function(t) {
   if (fmt !== 'Eliminatórias Simples' && fmt !== 'Eliminatória Simples') return 0;
   if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-categoria: fora do escopo por ora
   if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio já feito
+  // v1.3.57: 1ª rodada = MENOR round (CF numera round 0; legado round 1). Jogos tardios entram
+  // NESTA rodada; _rebuildIntegratedBracket re-resolve o pow2 a partir dela.
+  var _firstRound = Math.min.apply(null, t.matches.map(function (m) { return (m && typeof m.round === 'number') ? m.round : 1; }));
   // trava: se a 2ª RODADA da fase já começou a ser jogada, a qualificação fechou (não cresce
   // mais). v4.5.16: usa a regra canônica window._lateEnrollR2Started — "R2" = 2ª rodada DISTINTA
   // (não `round===2` literal, que quebrava com play-in/repescagem onde a 2ª rodada é round=1).
@@ -872,7 +875,17 @@ window._createExtraGamesFromWaitlist = function(t) {
   // multi-dia ignora presença. v2.2.39: ausentes nunca entram. Sem helper → mesmo-dia.
   if ((typeof window._tournamentIsSameDay !== 'function') || window._tournamentIsSameDay(t)) {
     var _ci = t.checkedIn || {}, _ab = t.absent || {};
-    pool = pool.filter(function(p){ return window._idMapHas(t, _ci, p) && !window._idMapHas(t, _ab, p); });
+    // v1.3.57: presença de PAR = TODOS os membros presentes (por uid). Antes checava o par como
+    // um todo — mas o par não tem uid único e a presença é gravada por uid de MEMBRO → o par
+    // nunca "batia" e a dupla tardia era filtrada fora (nunca integrava). Ver [[project_id_maps_uid_keyed]].
+    pool = pool.filter(function (p) {
+      // presente por NOME (par marcado como um todo — legado) OU por UID (todos os membros
+      // presentes — caso CF/só-uid, em que o par não tem uid único e a presença é por membro).
+      var _byName = window._idMapHas(t, _ci, p) && !window._idMapHas(t, _ab, p);
+      if (_byName) return true;
+      var _uids = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
+      return !!(_uids && _uids.length) && _uids.every(function (u) { return window._idMapHas(t, _ci, { uid: u }) && !window._idMapHas(t, _ab, { uid: u }); });
+    });
   }
   // v4.1.37: respeitar o teamSize. Torneio de DUPLAS (teamSize>1 ou modo time/misto)
   // agrupa 4 solos tardios → 2 duplas formadas → 1 jogo. Torneio INDIVIDUAL (teamSize
@@ -911,7 +924,7 @@ window._createExtraGamesFromWaitlist = function(t) {
     // novo JOGO da rodada 1 (cor roxa via isExtra) — mesma apresentação dos demais
     t.matches.push({
       id: 'xr1-' + t.id + '-' + ts + '-' + created,
-      round: 1, p1: n1, p2: n2, winner: null, isExtra: true,
+      round: _firstRound, p1: n1, p2: n2, winner: null, isExtra: true,
       // v4.5.71: identidade por uid nos slots (jogo tardio).
       p1Uid: (u1.length === 1 ? u1[0] : null), team1Uids: u1,
       p2Uid: (u2.length === 1 ? u2[0] : null), team2Uids: u2,
@@ -1079,10 +1092,16 @@ window._rebuildIntegratedBracket = function(t) {
   if (!t || !Array.isArray(t.matches)) return false;
   var fmt = t.format || '';
   if (fmt !== 'Eliminatórias Simples' && fmt !== 'Eliminatória Simples') return false;
-  // não reconstrói se a R2+ já tem resultado (qualificação travada)
-  var r2HasResult = t.matches.some(function(m){ return m && m.round >= 2 && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length)); });
+  // v1.3.57: ROUND-AGNOSTIC — a 1ª rodada é o MENOR round das matches. O sorteio da CF numera a
+  // 1ª rodada como round 0; o legado assumia round 1 e pegava a rodada errada (semis) → chave
+  // reconstruída torta. firstRound=1 pros brackets legados (backward-compat). Ver [[project_late_enrollment_elimination]].
+  var _rnums = t.matches.map(function(m){ return (m && typeof m.round === 'number') ? m.round : null; }).filter(function(r){ return r != null; });
+  if (!_rnums.length) return false;
+  var firstRound = Math.min.apply(null, _rnums);
+  // não reconstrói se a rodada SEGUINTE já tem resultado (qualificação travada)
+  var r2HasResult = t.matches.some(function(m){ return m && m.round > firstRound && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length)); });
   if (r2HasResult) return false;
-  var r1 = t.matches.filter(function(m){ return m && m.round === 1; });
+  var r1 = t.matches.filter(function(m){ return m && m.round === firstRound; });
   var R1count = r1.length;
   if (R1count < 2) return false;
   var r2Target = 1; while (r2Target < R1count) r2Target *= 2;
@@ -1093,8 +1112,8 @@ window._rebuildIntegratedBracket = function(t) {
     if (repechage > 0) m.isRepechageR1 = true; else { delete m.isRepechageR1; }
     delete m.nextMatchId; delete m.nextSlot;
   });
-  // remove R2+ e 3º lugar (serão reconstruídos)
-  t.matches = t.matches.filter(function(m){ return m && m.round === 1; });
+  // remove as rodadas SEGUINTES e 3º lugar (serão reconstruídos); mantém a 1ª rodada intacta
+  t.matches = t.matches.filter(function(m){ return m && m.round === firstRound; });
   if (t.thirdPlaceMatch) delete t.thirdPlaceMatch;
 
   var ts = Date.now(), mc = 0;
@@ -1107,7 +1126,7 @@ window._rebuildIntegratedBracket = function(t) {
   var r2Matches = [];
   for (var g = 0; g < r2games; g++) {
     var s1 = slots[g * 2], s2 = slots[g * 2 + 1];
-    var r2m = { id: 'ir2-' + ts + '-' + (mc++), round: 2, p1: 'TBD', p2: 'TBD', winner: null };
+    var r2m = { id: 'ir2-' + ts + '-' + (mc++), round: firstRound + 1, p1: 'TBD', p2: 'TBD', winner: null };
     var bl = [];
     if (s1 && s1.type === 'bestloser') bl.push('p1');
     if (s2 && s2.type === 'bestloser') bl.push('p2');
@@ -1117,7 +1136,7 @@ window._rebuildIntegratedBracket = function(t) {
     if (s2 && s2.type === 'r1winner') { var src2 = r1.find(function(x){ return x.id === s2.fromMatch; }); if (src2) { src2.nextMatchId = r2m.id; src2.nextSlot = 'p2'; } }
   }
   // R3+ (TBD, alimentados pelos vencedores de R2)
-  var prev = r2Matches, roundNum = 3, cur = r2games;
+  var prev = r2Matches, roundNum = firstRound + 2, cur = r2games;
   while (cur > 1) {
     var nextCount = Math.floor(cur / 2), nextRound = [];
     for (var n = 0; n < nextCount; n++) { var nm = { id: 'ir' + roundNum + '-' + ts + '-' + (mc++), round: roundNum, p1: 'TBD', p2: 'TBD', winner: null }; t.matches.push(nm); nextRound.push(nm); }
