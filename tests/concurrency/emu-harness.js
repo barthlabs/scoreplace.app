@@ -28,13 +28,19 @@ const path = require('path');
 const EMU_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
 const PROJECT_ID = process.env.GCLOUD_PROJECT || 'demo-scoreplace';
 const DB_FILE = path.join(__dirname, '..', '..', 'js', 'firebase-db.js');
+const VIEWS = path.join(__dirname, '..', '..', 'js', 'views');
 
 // Carrega firebase-db.js no REALM PRINCIPAL via `new Function` (não `vm`): assim
 // os literais {}/[] criados dentro usam os intrínsecos do host, e o SDK Firebase
 // aceita os objetos (o vm criaria objetos de outra realm → "custom Object object").
 // firebase-db.js referencia só `window` e `firebase` como globais livres.
+// Prepend dos CÂNONES que firebase-db.js delega (window._cleanUndefined/_computeMemberUids em
+// persist-core; _participantUids/_entryTeamMembers em identity-core) — extraídos pra esses arquivos,
+// senão _cleanUndefined cai no fallback e o save grava null. Mesma ordem do app (index.html).
+const _coreCode = fs.readFileSync(path.join(VIEWS, 'identity-core.js'), 'utf8') + '\n' +
+  fs.readFileSync(path.join(VIEWS, 'persist-core.js'), 'utf8') + '\n';
 const _dbFactory = new Function('window', 'firebase',
-  fs.readFileSync(DB_FILE, 'utf8') + '\n;return window.FirestoreDB;');
+  _coreCode + fs.readFileSync(DB_FILE, 'utf8') + '\n;return window.FirestoreDB;');
 
 // ── App DEFAULT único, apontado pro emulador (uma vez por processo) ──────────
 const firebase = require('firebase/compat/app');
