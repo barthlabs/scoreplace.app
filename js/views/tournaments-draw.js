@@ -2903,7 +2903,7 @@ window._showDropChoiceOverlay = function(opts) {
         : '';
     // v2.7.76: Cancelar logo ABAIXO dos 2 botões (agrupado com eles), com cara de
     // botão (fundo sólido + volume), e as notas explicativas vão pro rodapé.
-    var btnCancel = '<button id="dc-cancel" style="width:100%;margin-top:10px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);border-radius:10px;padding:12px 10px;font-weight:800;font-size:0.9rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 2px 6px rgba(0,0,0,0.25);">Cancelar</button>';
+    var btnCancel = '<button id="dc-cancel" style="width:100%;margin-top:10px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);color:#ef4444;border-radius:10px;padding:12px 10px;font-weight:800;font-size:0.9rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 2px 6px rgba(0,0,0,0.25);">Cancelar</button>';
     ov.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:20px;max-width:400px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.4);">' +
         '<div style="font-weight:800;color:var(--text-bright);font-size:1rem;margin-bottom:4px;">' + esc(opts.sourceName) + ' &rarr; ' + esc(opts.targetName) + '</div>' +
         '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">O que você quer fazer com esses dois?</div>' +

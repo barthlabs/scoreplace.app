@@ -521,7 +521,7 @@
         }
         return '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.4);border-radius:11px;padding:11px 12px;margin-bottom:9px;">' + ed +
           '<div style="display:flex;gap:8px;">' +
-            '<button type="button" onclick="window._schCancelEdit(' + oa + ')" class="btn" style="flex:1;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:9px;padding:8px;font-size:0.8rem;">Cancelar</button>' +
+            '<button type="button" onclick="window._schCancelEdit(' + oa + ')" class="btn" style="flex:1;background:rgba(239,68,68,0.10);color:#ef4444;border:1px solid rgba(239,68,68,0.45);font-weight:700;border-radius:9px;padding:8px;font-size:0.8rem;">Cancelar</button>' +
             '<button type="button" onclick="window._schSaveEdit(' + oa + ')" class="btn" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;font-weight:800;border-radius:9px;padding:8px;font-size:0.8rem;">Salvar</button>' +
           '</div></div>';
       }

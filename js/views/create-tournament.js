@@ -6020,7 +6020,7 @@ window._openGSMConfig = function(targetPhase) {
     '<div style="background:linear-gradient(135deg,#6d28d9 0%,#a855f7 100%);padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">' +
       '<h3 style="margin:0;color:#f5f3ff;font-size:1.1rem;font-weight:800;">⚙️ Personalizado</h3>' +
       '<div style="display:flex;gap:8px;">' +
-        '<button type="button" onclick="window._gsmConfigTargetPhase=null;document.getElementById(\'gsm-config-overlay\').remove();" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#f5f3ff;border:1px solid rgba(255,255,255,0.25);">Cancelar</button>' +
+        '<button type="button" onclick="window._gsmConfigTargetPhase=null;document.getElementById(\'gsm-config-overlay\').remove();" class="btn btn-sm" style="background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;border:1px solid rgba(239,68,68,0.45);">Cancelar</button>' +
         '<button type="button" onclick="window._gsmSaveConfig();" class="btn btn-sm" style="background:#fff;color:#6d28d9;font-weight:700;border:none;">Aplicar</button>' +
       '</div>' +
     '</div>' +

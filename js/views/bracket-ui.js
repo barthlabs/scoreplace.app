@@ -9822,7 +9822,7 @@ window._openScanQR = function() {
         '<div style="font-size:1.1rem;font-weight:800;color:#fff;margin-bottom:14px;text-align:center;">Digite o código da sala</div>' +
         '<input type="text" id="scan-qr-code-input" placeholder="Ex: ABC123" maxlength="8" style="width:100%;box-sizing:border-box;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,0.06);border:2px solid rgba(168,85,247,0.3);color:#fff;font-size:1.3rem;font-weight:800;letter-spacing:4px;text-align:center;text-transform:uppercase;outline:none;font-family:monospace;margin-bottom:14px;" onfocus="this.style.borderColor=\'rgba(168,85,247,0.7)\'" onblur="this.style.borderColor=\'rgba(168,85,247,0.3)\'" />' +
         '<div style="display:flex;gap:8px;">' +
-          '<button id="scan-qr-manual-cancel-btn" style="flex:1;padding:14px;border-radius:12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;font-size:0.95rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
+          '<button id="scan-qr-manual-cancel-btn" style="flex:1;padding:14px;border-radius:12px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);color:#ef4444;font-size:0.95rem;font-weight:700;cursor:pointer;">Cancelar</button>' +
           '<button id="scan-qr-go-btn" style="flex:1;padding:14px;border-radius:12px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;color:white;font-size:0.95rem;font-weight:700;cursor:pointer;">Entrar</button>' +
         '</div>' +
       '</div>' +
@@ -11730,7 +11730,7 @@ window._openCasualMatch = function(restoreOpts) {
       '<div style="background:var(--bg-darker,#0f172a);border-radius:18px;padding:22px;max-width:340px;width:100%;">' +
         '<div style="font-size:1.05rem;font-weight:800;color:#fff;margin-bottom:14px;text-align:center;">Gênero do jogador</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">' + btnsHtml + '</div>' +
-        '<button id="_gender-picker-cancel" style="width:100%;padding:12px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-size:0.88rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
+        '<button id="_gender-picker-cancel" style="width:100%;padding:12px;border-radius:10px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);color:#ef4444;font-size:0.88rem;font-weight:700;cursor:pointer;">Cancelar</button>' +
       '</div>';
     document.body.appendChild(ov);
     function _close() { try { ov.remove(); } catch(e) {} }

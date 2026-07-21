@@ -1471,7 +1471,7 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
           '<button type="button" class="cancel-x-btn" title="Limpar" onclick="window._apClear()" style="--cx-size:18px;">✕</button>' +
         '</div>' +
         '<div style="display:flex;gap:8px;margin-top:14px;">' +
-          '<button onclick="document.getElementById(\'add-participant-overlay\').remove()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
+          '<button onclick="document.getElementById(\'add-participant-overlay\').remove()" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
           '<button id="ap-confirm" onclick="window._apConfirm()" disabled style="flex:2;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff;font-weight:700;font-size:0.88rem;cursor:not-allowed;opacity:0.4;transition:opacity 0.2s;">Adicionar</button>' +
         '</div>' +
       '</div>' +

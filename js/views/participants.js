@@ -1341,7 +1341,7 @@ window._showAbsenteeResolutionDialog = function (tId, present, absentees, procee
       '<div style="padding:0 1.25rem 1.25rem;display:flex;flex-direction:column;gap:8px;">' +
         '<button id="absres-waitlist" class="btn hover-lift" style="background:rgba(251,191,36,0.18);color:#fbbf24;border:1px solid rgba(251,191,36,0.5);font-weight:800;padding:11px;border-radius:10px;">🕐 Enviar à Lista de Espera</button>' +
         '<button id="absres-dq" class="btn hover-lift" style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.5);font-weight:800;padding:11px;border-radius:10px;">🚫 Desclassificar</button>' +
-        '<button id="absres-cancel" class="btn" style="background:rgba(255,255,255,0.08);color:var(--text-muted);border:1px solid var(--border-color);padding:10px;border-radius:10px;">Cancelar</button>' +
+        '<button id="absres-cancel" class="btn" style="background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;border:1px solid rgba(239,68,68,0.45);padding:10px;border-radius:10px;">Cancelar</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(dialog);
