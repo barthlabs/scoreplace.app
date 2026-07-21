@@ -493,7 +493,12 @@ window._getTournamentProgress = function(t) {
     // Final loser, não tem match dedicado de 3º lugar. Antes esse placeholder
     // inflava o total e gerava progresso "13/14" quando deveria ser "13/14"
     // ou "14/14" sem placeholder.
-    if (!t.thirdPlaceMatch) {
+    // v1.3.132: NÃO adiciona placeholder se JÁ existe o 3º lugar CANÔNICO (match isThirdPlace
+    // em t.matches — forma criada pelo motor de fases). Antes o guard só olhava t.thirdPlaceMatch
+    // (legado); com o 3º lugar isThirdPlace já JOGADO entre os reais, o placeholder fantasma
+    // inflava o total → travava em "13/14 (93%)" pra sempre. Uma fonte só de "existe 3º lugar?".
+    var _hasRealThird = allMatches.some(function(m) { return m && m.isThirdPlace; });
+    if (!t.thirdPlaceMatch && !_hasRealThird) {
         var _fmt = (t.format || '').toLowerCase();
         var _isElim = _fmt.indexOf('eliminat') === 0;
         var _isDuplaElim = _fmt.indexOf('dupla') !== -1;

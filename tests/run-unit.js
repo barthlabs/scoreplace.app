@@ -162,6 +162,7 @@ const SUITES = [
   // TIE-BREAK configurável por torneio (5-5 vs 6-6) — gatilho por regra/esporte. v1.3.x.
   'tests/tiebreak-trigger.test.js',
   'tests/tiebreak-display-persist.test.js',
+  'tests/progress-third-place-nodouble.test.js',
   // Melhor derrotado pega a vaga com MENOS jogos (repescagem 1 linha) — regra do dono. v1.3.x.
   'tests/repechage-best-loser-advancement.test.js',
   // v1.3.89: SWEEP W.O. + integração tardia (motor _applyWO real + CF integrateLateEntries), joga até fechar.
