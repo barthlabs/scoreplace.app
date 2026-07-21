@@ -129,6 +129,27 @@ console.log('\n── guard: com resultado, NÃO re-sorteia ──');
   ok(still, 'guard resultado :: resultado preservado');
 })();
 
+// ── REGRESSÃO (bug do dono no SB): "Duplas Mistas SORTEADAS" — roster de INDIVÍDUOS, chave de
+// DUPLAS ("A / B"). A detecção de órfão NÃO pode achar que cada indivíduo (cujo nome não é rótulo
+// de dupla) está fora da chave e RE-SORTEAR, embaralhando as duplas (parceiro em branco). Só dupla
+// FORMADA À MÃO (teamOrigins==='formada') conta como órfão. ──
+console.log('\n── regressão: sorteadas (roster=indivíduos, chave=duplas) NÃO re-sorteia ──');
+(function () {
+  const inds = []; for (let i = 1; i <= 8; i++) inds.push({ uid: 'u' + i, displayName: 'P' + i, name: 'P' + i, ligaActive: true });
+  const t = {
+    id: 'SORTEADAS', sport: 'Beach Tennis', format: 'Eliminatórias Simples', teamSize: 2, enrollmentMode: 'individual',
+    participants: inds, combinedCategories: [], currentPhaseIndex: 0, checkedIn: {}, absent: {}, standbyParticipants: [], waitlist: [],
+    teamOrigins: {}, lateEnrollment: 'expand', newMatchups: true,
+    matches: [{ id: 'm1', round: 1, p1: 'P1 / P2', p2: 'P3 / P4' }, { id: 'm2', round: 1, p1: 'P5 / P6', p2: 'P7 / P8' }],
+  };
+  inds.forEach((p) => { t.checkedIn[p.uid] = 1; });   // todos presentes (pior caso: todo indivíduo "órfão")
+  W.AppStore.tournaments = [t];
+  const before = JSON.stringify(t.matches);
+  const r = dc.integrateLateEntries(t, {});
+  ok(!(r && r.redrawn), 'sorteadas :: NÃO re-sorteia (redrawn falsy) [' + JSON.stringify(r) + ']');
+  ok(JSON.stringify(t.matches) === before, 'sorteadas :: chave INTACTA — duplas não embaralhadas, sem parceiro em branco');
+})();
+
 console.log('\n' + (fail === 0 ? '✅ form-pair-integration: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fails.length) { console.error('\nFALHAS (' + fails.length + '):'); fails.forEach((f) => console.error('  ✗ ' + f)); }
 process.exit(fail > 0 ? 1 : 0);

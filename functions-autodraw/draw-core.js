@@ -574,13 +574,18 @@ function integrateLateEntries(t, opts) {
           });
         }
         // ÓRFÃOS DE ROSTER: inscrito que JÁ está em `t.participants` mas ficou FORA da chave — o caso
-        // da DUPLA FORMADA depois do sorteio (funde 2 solos em participants, sem passar pela espera).
-        // Vale pra TODO formato INCLUSIVE Elim Simples: o append cirúrgico só lê a WAITLIST e não
-        // enxerga quem está em participants. Sem resultado → re-sortear inclui a dupla (já no roster).
+        // da DUPLA FORMADA À MÃO depois do sorteio (funde 2 solos em participants, sem passar pela
+        // espera). Vale pra TODO formato INCLUSIVE Elim Simples (o append cirúrgico só lê a WAITLIST).
+        // ⚠️ SÓ conta dupla com teamOrigins==='formada'. Sem esse gate, em formatos onde o ROSTER é de
+        // INDIVÍDUOS e a chave é de DUPLAS SORTEADAS (Duplas Mistas Sorteadas, Rei/Rainha,
+        // sorteio_rodada), cada indivíduo — cujo nome não é rótulo de dupla na chave — seria "órfão" e
+        // dispararia um RE-SORTEIO espúrio que EMBARALHA as duplas (parceiro em branco). Bug pego pelo
+        // dono no SB. [[project_formed_pair_roster_orphan]]
         const _brk = bracketLabels(t);
         const _lbl = function (p) { return (p && (p.displayName || p.name)) || (typeof p === 'string' ? p : ''); };
         const orphans = (Array.isArray(t.participants) ? t.participants : []).filter(function (p) {
-          const l = _lbl(p); return l && !_brk.has(l) && _present(p);
+          const l = _lbl(p); if (!l || _brk.has(l) || !_present(p)) return false;
+          return !!(t.teamOrigins && t.teamOrigins[l] === 'formada');
         });
         if (late.length || orphans.length) {
           if (!Array.isArray(t.participants)) t.participants = [];
