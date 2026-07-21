@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.135';
+window.SCOREPLACE_VERSION = '1.3.136';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -3580,28 +3580,52 @@ window._resolveSideLive = function (t, sideStr, uidHint) {
       var arr = pools[pi]; if (!Array.isArray(arr)) continue;
       for (var i = 0; i < arr.length; i++) {
         var p = arr[i]; if (!p || typeof p !== 'object') continue;
-        if (p.uid === u) return (typeof window._pName === 'function') ? window._pName(p) : (p.displayName || p.name || '');
+        // v1.3.136: MEMBRO de dupla pelo SEU slot → nome DELE, NUNCA a dupla inteira. Vem ANTES
+        // do `p.uid` top-level porque uma dupla FORMADA carrega uid = uid de UM dos membros
+        // (pair-core `uid:_u1||_u2`). Sem isto, `p.uid === u` casava a dupla e _pName devolvia
+        // "A / B" (string de 2 partes); injetada num único slot posicional no _resolveSideLive
+        // virava uma 3ª LINHA FANTASMA no card (todos os times, no cache frio). O top-level `uid`
+        // só resolve entrada INDIVIDUAL. [[project_uid_identity_canon_locked]]
         if (p.p1Uid === u) return (typeof window._nameForUid === 'function' && window._nameForUid(u)) || p.p1Name || '';
         if (p.p2Uid === u) return (typeof window._nameForUid === 'function' && window._nameForUid(u)) || p.p2Name || '';
+        var _isPairEntry = !!(p.p1Uid || p.p2Uid || (p.p1Name && p.p2Name));
+        if (p.uid === u && !_isPairEntry) return (typeof window._pName === 'function') ? window._pName(p) : (p.displayName || p.name || '');
       }
     }
     return '';
+  }
+  // v1.3.136: HEAL de rótulo órfão PERSISTIDO. No sorteio, com cache frio, m.p1 pode ter gravado
+  // "Jogador sem perfil (xxxx)" no lugar do nome (o uid não resolveu naquele instante). Se agora
+  // um uid do hint resolve pro nome REAL, troca. Só age no padrão EXATO do rótulo e só quando um
+  // nome real resolve — nunca inventa. Cura o "Camila sumiu" quando a conta dela resolve. Bug 2.
+  var _OL = window._ORPHAN_UID_LABEL || 'Jogador sem perfil';
+  var _uidList = Array.isArray(uidHint) ? uidHint.filter(Boolean) : (uidHint ? [uidHint] : []);
+  function _healOrphanPart(part) {
+    if (!part || part.indexOf(_OL) !== 0) return part;
+    var mf = part.match(/\(([^)]+)\)\s*$/); var frag = mf ? mf[1] : '';
+    if (!frag) return part;
+    for (var k = 0; k < _uidList.length; k++) {
+      if (String(_uidList[k]).slice(0, frag.length) === frag) {
+        var nm = _liveByUid(_uidList[k]);
+        if (nm && nm.indexOf(_OL) !== 0) return nm;
+      }
+    }
+    return part;
   }
   if (uidHint) {
     if (Array.isArray(uidHint)) {
       var _parts = s.split(' / ').map(function (x) { return x.trim(); }).filter(Boolean);
       var _uids = uidHint.filter(Boolean);
       // 1 uid por membro (counts batem) → resolve POSICIONAL: nome vivo por uid, fallback à
-      // parte gravada. Cobre 1v1 (conta) e dupla 100% de contas (nome vivo dos dois).
+      // parte gravada (curando rótulo órfão persistido).
       if (_parts.length > 0 && _uids.length === _parts.length) {
-        return _parts.map(function (part, i) { return _liveByUid(_uids[i]) || part; }).join(' / ');
+        return _parts.map(function (part, i) { return _liveByUid(_uids[i]) || _healOrphanPart(part); }).join(' / ');
       }
       // v4.5.98: counts NÃO batem — dupla com membro GUEST (placeholder/sem conta, sem uid).
       // O uidHint só traz os uids de CONTA (_slotUids/_participantUids filtram vazios), então
       // ele fica MENOR que o nº de membros. NUNCA dropar um membro do side: mantém a string
-      // gravada (foi resolvida no sorteio; guest não renomeia perfil). Antes o `_live.join`
-      // devolvia só os membros-conta → "Lucia" sem "Jogador 01".
-      if (_parts.length > 0) return _parts.join(' / ');
+      // gravada (guest não renomeia perfil) — mas CURA rótulo órfão persistido de um membro-conta.
+      if (_parts.length > 0) return _parts.map(_healOrphanPart).join(' / ');
     } else {
       var _one = _liveByUid(uidHint);
       if (_one) return _one;

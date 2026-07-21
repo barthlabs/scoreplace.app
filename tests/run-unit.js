@@ -119,6 +119,7 @@ const SUITES = [
   'tests/flexibilize-decision-cf.test.js',
   // Nome da dupla tardia vem do uid ao vivo (nunca a string "undefined").
   'tests/late-join-name-uid.test.js',
+  'tests/pair-side-no-third-line.test.js',
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
