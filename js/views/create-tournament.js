@@ -389,7 +389,7 @@ function setupCreateTournamentModal() {
                     <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon" id="late-closed-icon">🚫</span><div><span id="late-closed-title" style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollClosed')}</span><div class="toggle-desc" id="late-closed-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollClosedOnDesc')}</div></div></div>
                     <label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;"><input type="checkbox" id="late-toggle-closed" aria-label="Inscrições fora do prazo fechadas" checked onchange="window._syncLateEnrollment('closed')"><span class="toggle-slider"></span></label>
                   </div>
-                  <div class="toggle-row" style="display:none;padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
+                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
                     <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon" id="late-expand-icon">➕</span><div><span id="late-expand-title" style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollExpand')}</span><div class="toggle-desc" id="late-expand-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollExpandDisabledDesc')}</div></div></div>
                     <label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;"><input type="checkbox" id="late-toggle-expand" aria-label="Inscrições fora do prazo expandem lista" onchange="window._syncLateEnrollment('expand')"><span class="toggle-slider"></span></label>
                   </div>
@@ -1853,9 +1853,12 @@ function setupCreateTournamentModal() {
       var expandEffective = !closed.checked && expand.checked;
       rows[1].style.border = expandEffective ? '1px solid rgba(251,191,36,0.25)' : '1px solid rgba(255,255,255,0.08)';
       rows[1].style.background = expandEffective ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)';
-      // v2.6.52: "Novos Confrontos" some quando Fechadas (não há suplentes); aparece só quando aberta.
-      rows[1].style.display = closed.checked ? 'none' : '';
-      rows[1].style.opacity = '1';
+      // v1.3.98 (dono, "inscrições durante a fase travadas"): "Novos Confrontos" SEMPRE visível —
+      // antes sumia quando Fechadas estava ON (display:none), então o organizador via só "Fechadas"
+      // e achava que não dava pra mudar. Agora as duas opções aparecem; ligar uma desliga a outra
+      // (1 clique). Quando Fechadas está ON, esta fica dim (não-efetiva) mas VISÍVEL e clicável.
+      rows[1].style.display = '';
+      rows[1].style.opacity = closed.checked ? '0.6' : '1';
     }
     // Título + ícone canônicos acompanham a posição de cada toggle (v3.1.20).
     var mLbl = window._lateEnrollLabel('master', closed.checked);

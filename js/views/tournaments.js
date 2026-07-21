@@ -322,7 +322,13 @@ window._updateDuplaCardInPlace = function (tId, uid, playerName) {
     var stash = window._lastDuplaCardCtx;
     if (!stash || String(stash.tId) !== String(tId) || !Array.isArray(stash.entries)) return false;
     var t = window._findTournamentById(tId); if (!t) return false;
-    if (stash.tRef && stash.tRef !== t) return false;
+    // v1.3.98 (dono, "continua pulando"): o onSnapshot TROCA o objeto do torneio a CADA write. O
+    // stash guarda o objeto do último RENDER; com o fix de sig (1.3.96) o eco NÃO re-renderiza →
+    // o stash.tRef fica no objeto antigo → o 2º+ toggle batia em `stash.tRef !== t` e FALHAVA o
+    // in-place → caía no re-render (o PULO que sobrava). NÃO falhar por isso: o card é achado por
+    // data-card-key no DOM ATUAL e a presença é re-resolvida contra o `t` fresco (abaixo). Roster
+    // mudou de verdade → o gate de _tournamentDetailSig re-renderiza. Só re-referencia e segue.
+    if (stash.tRef && stash.tRef !== t) stash.tRef = t;
     if ((window._checkInFilter || 'all') !== stash.filter) return false;
     // acha a entrada que CONTÉM o jogador tocado (por uid ou nome)
     var match = null;
