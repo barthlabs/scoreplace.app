@@ -2858,7 +2858,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const t = window.AppStore ? window._findTournamentById(tId) : null;
   // v2.6.96: placar efetivo do match (fase pode ter GSM próprio — "Personalizado").
   const _msc = (t && typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : (t && t.scoring);
-  const useSets = t && _msc && _msc.type === 'sets';
+  const useSets = !!(t && window._scoringUsesSets(_msc));
   const useFixedSet = useSets && _msc.fixedSet;
 
   const isDecided = !!m.winner;
@@ -3907,7 +3907,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   const medal = i => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`;
   const posColor = i => i === 0 ? '#fbbf24' : i === 1 ? '#94a3b8' : i === 2 ? '#b45309' : 'var(--text-muted)';
 
-  const _useSetsStandings = t.scoring && t.scoring.type === 'sets';
+  const _useSetsStandings = window._scoringUsesSets(t.scoring);
   const _useAdvStandings = !!(t.advancedScoring && t.advancedScoring.enabled);
   // v0.17.74: oculta coluna E (Empates) em 2 casos cumulativos:
   // (a) scoring sets/gsm com tiebreak (impossível matematicamente); OU

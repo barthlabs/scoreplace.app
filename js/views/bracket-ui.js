@@ -1139,6 +1139,13 @@ window._isTiebreakSetScore = function (g1, g2, loserGames) {
 // curto); 'g' = TB em gp-gp → set 7-6 (padrão tênis). Override por torneio em scoring.tiebreakAt;
 // fallback por ESPORTE quando o torneio não gravou (Beach Tennis = 5-5; resto = 6-6). O que muda é
 // os GAMES DO PERDEDOR no set decidido no TB (o gatilho que _isTiebreakSetScore usa).
+// "Usa sets?" — MESMO critério do reveal do tie-break: type==='sets' OU (tiebreak ligado + games
+// por set). Sem isto, save/display gateavam só em type==='sets' → o campo do TB aparecia (reveal),
+// mas o valor NÃO era gravado nem exibido no card decidido (caía no scoreP1 cru). Fonte ÚNICA pra
+// os 3 (reveal implícito + _saveResultInline + render do card). [[project_live_scoring_canonical]]
+window._scoringUsesSets = function (sc) {
+  return !!(sc && (sc.type === 'sets' || sc.type === 'gsm' || (sc.tiebreakEnabled !== false && sc.gamesPerSet)));
+};
 window._sportTiebreakAt = function (sport) { return (sport === 'Beach Tennis') ? 'g-1' : 'g'; };
 window._tbLoserGames = function (scoring, sport) {
   var gp = parseInt(scoring && scoring.gamesPerSet) || 6;
@@ -1170,8 +1177,7 @@ window._highlightWinner = function (matchId) {
               // (não exige type==='sets'). Permite TB inputs em torneios simples
               // que tenham tiebreak configurado.
               var _tsc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(_tour, _matches[mi]) : _tour.scoring;
-              if (_tsc && _tsc.tiebreakEnabled !== false &&
-                  (_tsc.type === 'sets' || _tsc.gamesPerSet)) {
+              if (window._scoringUsesSets(_tsc) && _tsc.tiebreakEnabled !== false) {
                 // _trigger = games do PERDEDOR no set decidido no TB, conforme a regra do torneio
                 // (scoring.tiebreakAt: 'g-1'→6-5, 'g'→7-6; fallback por esporte). Ver _tbLoserGames.
                 _trigger = window._tbLoserGames(_tsc, _tour && _tour.sport);
@@ -1614,7 +1620,7 @@ window._saveResultInline = function (tId, matchId) {
   // GSM scoring compatibility: store inline scores as sets data when tournament uses GSM
   // v2.6.96: placar efetivo do match (a fase pode ter GSM próprio).
   const _isc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
-  const useSets = _isc && _isc.type === 'sets';
+  const useSets = window._scoringUsesSets(_isc);   // MESMO critério do reveal (type==='sets' OU tb+games)
   const isFixedSet = useSets && _isc.fixedSet;
   const tbEnabled = useSets && _isc.tiebreakEnabled !== false;
   // tbTrigger = games do PERDEDOR no set decidido no TB, conforme a regra do torneio
@@ -2619,7 +2625,7 @@ window._editResultInline = function(tId, matchId) {
   // If this is a GSM set match with tiebreak enabled, also render hidden TB inputs
   // pre-filled with any existing tiebreak points from the saved set.
   var _esc2 = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
-  var _useSets = _esc2 && _esc2.type === 'sets';
+  var _useSets = window._scoringUsesSets(_esc2);
   var _tbEnabled = _useSets && _esc2.tiebreakEnabled !== false;
   var _existingTb = (m.sets && m.sets[0] && m.sets[0].tiebreak) || null;
   var _tbInputStyle = 'width:40px;text-align:center;font-size:0.75rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.4);color:var(--text-bright);border-radius:5px;padding:3px 4px;';
