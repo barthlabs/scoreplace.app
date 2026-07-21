@@ -2942,62 +2942,31 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
     // v2.7.81: lógica de formar a dupla extraída — o overlay chama isto DIRETO
     // (skipConfirm) porque já é a decisão; só o caso "muda a regra" passa por confirm.
     var _doForm = function() {
-        if (_changeRule) { t.enrollmentMode = 'misto'; } // passa a permitir times pra todos
+        // CF-ONLY (regra do dono): o cliente NÃO muta roster/regra — só dispara. A CF formPair
+        // funde (computeFormPair) + aplica "muda a regra" (enrollmentMode→misto via changeRule) +
+        // marca "Já formadas" + replica pro SB, atômico; e integrateLateEntries integra na chave.
+        // Aqui só LÊ o uid de cada membro pra montar o payload. Zero splice/save local.
         var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-        var findIdx = function(uid, name) {
-            if (uid) {
-                var i = arr.findIndex(function(p) { return typeof p === 'object' && p && p.uid === uid; });
-                if (i !== -1) return i;
-            }
-            return arr.findIndex(function(p) {
-                var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-                return n === name;
-            });
+        var findEntry = function(uid, name) {
+            if (uid) { var e = arr.find(function(p) { return typeof p === 'object' && p && p.uid === uid; }); if (e) return e; }
+            return arr.find(function(p) { var n = typeof p === 'string' ? p : (p.displayName || p.name || ''); return n === name; });
         };
-        var i1 = findIdx(uid1, name1);
-        var i2 = findIdx(uid2, name2);
-        if (i1 === -1 || i2 === -1 || i1 === i2) return;
-        var p1final = arr[i1];
-        var p2final = arr[i2];
+        var p1final = findEntry(uid1, name1), p2final = findEntry(uid2, name2);
+        if (!p1final || !p2final || p1final === p2final) return;
         var fuid1 = typeof p1final === 'object' ? (p1final.uid || '') : '';
         var fuid2 = typeof p2final === 'object' ? (p2final.uid || '') : '';
-        // v2.7.97: preserva o nº de inscrição original de cada membro (p1Seq/p2Seq).
-        if (window._ensureEnrollSeqs) window._ensureEnrollSeqs(t);
-        var fseq1 = (typeof p1final === 'object' && p1final.enrollSeq != null) ? p1final.enrollSeq : null;
-        var fseq2 = (typeof p2final === 'object' && p2final.enrollSeq != null) ? p2final.enrollSeq : null;
-        var mergedEntry = {
-            displayName: newName, name: newName,
-            uid: fuid1 || fuid2 || '',
-            p1Name: name1, p1Uid: fuid1,
-            p2Name: name2, p2Uid: fuid2,
-            p1Seq: fseq1, p2Seq: fseq2,
-            ligaActive: true
-        };
-        var maxI = Math.max(i1, i2);
-        var minI = Math.min(i1, i2);
-        arr.splice(maxI, 1);
-        arr.splice(minI, 1);
-        arr.splice(minI, 0, mergedEntry);
-        t.participants = arr;
-        if (!t.teamOrigins) t.teamOrigins = {};
-        t.teamOrigins[newName] = 'formada';
-        // v4.5.94: formar dupla MANUALMENTE = regra "Já formadas". Sincroniza a config
-        // (fmt2.formacaoDupla) pra o seletor "Duplas na eliminatória" refletir a mudança —
-        // antes só mexia no enrollmentMode e o seletor continuava "Sorteadas".
-        if (typeof window._markDuplasManual === 'function') window._markDuplasManual(t);
-        // v1.3.x (roster→CF): persiste via CF formPair (concorrência-safe + replica pro Sandbox);
-        // fallback = saveTournament direto do t já mutado se a CF cair.
-        // DEPOIS de persistir: chave já sorteada → dispara integração tardia (force) pra a dupla
-        // formada entrar na chave (CF detecta órfão de roster e re-sorteia). Sem chave, não faz nada.
+        if (!(window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function')) {
+            if (typeof showNotification === 'function') showNotification('Sem conexão', 'Não foi possível formar a dupla agora — tente de novo.', 'warning');
+            return;
+        }
         var _hasBracketDF = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
-        var _integrateAfterDF = function () { if (_hasBracketDF && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} } };
-        var _persistFallbackDF = function () { var _s = window.FirestoreDB.saveTournament(t); if (_s && _s.then) _s.then(_integrateAfterDF, _integrateAfterDF); else _integrateAfterDF(); };
-        if (window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function') {
-            window.FirestoreDB.formPair(tId, { uid1: fuid1, name1: name1, uid2: fuid2, name2: name2 })
-                .then(_integrateAfterDF, _persistFallbackDF);
-        } else { _persistFallbackDF(); }
-        var container = document.getElementById('view-container');
-        if (container) renderTournaments(container, tId);
+        window.FirestoreDB.formPair(tId, { uid1: fuid1, name1: name1, uid2: fuid2, name2: name2, changeRule: !!_changeRule })
+            .then(function () {
+                if (_hasBracketDF && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
+                var container = document.getElementById('view-container');
+                if (container) renderTournaments(container, tId);
+            })
+            .catch(function (e) { if (typeof showNotification === 'function') showNotification('Não foi possível formar a dupla', (e && e.message) || '', 'warning'); });
         if (typeof showNotification === 'function') showNotification('👫 Dupla formada!', newName, 'success');
     };
     if (opts && opts.skipConfirm) { _doForm(); return; }

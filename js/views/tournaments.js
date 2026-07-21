@@ -919,40 +919,29 @@ window._scrollToBracketSection = function(tId, matchId) {
 window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
     var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
     if (!t) return;
+    // CF-ONLY (regra do dono "tudo na CF, cliente só dispara"): o cliente NÃO funde nem grava
+    // roster. A CF formPair roda computeFormPair (participants/teamOrigins/enrollSeq/memberUids/
+    // dropRequests/markDuplasManual) atômico + replica pro Sandbox; e, se a chave JÁ foi sorteada,
+    // o dispatch integrateLateEntries integra a dupla na chave (também na CF). O onSnapshot
+    // re-renderiza. Aqui só resolvemos uid (LEITURA) pra notificação — zero mutação local.
     var arr2 = Array.isArray(t.participants) ? t.participants : [];
-    var fi1 = arr2.findIndex(function(p) { return uid1 ? (typeof p === 'object' && p.uid === uid1) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name1); });
-    var fi2 = arr2.findIndex(function(p) { return uid2 ? (typeof p === 'object' && p.uid === uid2) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name2); });
-    if (fi1 === -1 || fi2 === -1 || fi1 === fi2) return;
-    var _p1 = arr2[fi1]; var _p2 = arr2[fi2];
-    var _u1 = uid1 || (typeof _p1==='object' ? (_p1.uid||'') : '');
-    var _u2 = uid2 || (typeof _p2==='object' ? (_p2.uid||'') : '');
-    // v2.7.97: preserva o nº de inscrição ORIGINAL de cada membro (p1Seq/p2Seq) =
-    // o enrollSeq que cada um tinha como solo, pra o card da dupla mostrar os dois.
-    if (window._ensureEnrollSeqs) window._ensureEnrollSeqs(t);
-    var _seq1 = (_p1 && typeof _p1==='object' && _p1.enrollSeq != null) ? _p1.enrollSeq : null;
-    var _seq2 = (_p2 && typeof _p2==='object' && _p2.enrollSeq != null) ? _p2.enrollSeq : null;
+    var _p1 = arr2.find(function(p) { return uid1 ? (typeof p === 'object' && p.uid === uid1) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name1); });
+    var _p2 = arr2.find(function(p) { return uid2 ? (typeof p === 'object' && p.uid === uid2) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name2); });
+    var _u1 = uid1 || (_p1 && typeof _p1==='object' ? (_p1.uid||'') : '');
+    var _u2 = uid2 || (_p2 && typeof _p2==='object' ? (_p2.uid||'') : '');
     var newName = name1 + ' / ' + name2;
-    var merged = { displayName: newName, name: newName, uid: _u1 || _u2 || '', p1Name: name1, p1Uid: _u1, p2Name: name2, p2Uid: _u2, p1Seq: _seq1, p2Seq: _seq2, ligaActive: true };
-    var maxI = Math.max(fi1, fi2), minI = Math.min(fi1, fi2);
-    arr2.splice(maxI, 1); arr2.splice(minI, 1); arr2.splice(minI, 0, merged);
-    t.participants = arr2;
-    if (!t.teamOrigins) t.teamOrigins = {};
-    t.teamOrigins[newName] = 'formada';
-    if (window._teamFormation && _u1 && _u2) window._teamFormation.dropRequestsInvolving(t, [_u1, _u2]);
-    // v4.5.94: dupla formada à mão → regra "Já formadas" (config + sorteio, via _isManualPairing).
-    if (typeof window._markDuplasManual === 'function') window._markDuplasManual(t);
-    t.updatedAt = new Date().toISOString();
-    // v1.3.x (roster→CF): persiste via CF formPair (concorrência-safe + replica pro Sandbox);
-    // fallback = saveTournament direto do t já mutado (mesma gravação de antes) se a CF cair.
-    // DEPOIS de persistir: se a chave JÁ foi sorteada, dispara a integração tardia (force) — a dupla
-    // formada entra na chave (a CF detecta o órfão de roster e re-sorteia). Sem chave, não faz nada.
+    if (!(window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function')) {
+        if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível formar a dupla agora — tente de novo.', 'warning');
+        return;
+    }
     var _hasBracket = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
-    var _integrateAfter = function () { if (_hasBracket && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} } };
-    var _persistFallback = function () { var _s = window.FirestoreDB.saveTournament(t); if (_s && _s.then) _s.then(_integrateAfter, _integrateAfter); else _integrateAfter(); };
-    if (window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function') {
-        window.FirestoreDB.formPair(tId, { uid1: _u1, name1: name1, uid2: _u2, name2: name2 })
-            .then(_integrateAfter, _persistFallback);
-    } else { _persistFallback(); }
+    window.FirestoreDB.formPair(tId, { uid1: _u1, name1: name1, uid2: _u2, name2: name2 })
+        .then(function () {
+            // chave já sorteada → integra na CF (integrateLateEntries detecta o órfão e re-sorteia)
+            if (_hasBracket && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
+            if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        })
+        .catch(function (e) { if (typeof showNotification !== 'undefined') showNotification('Não foi possível formar a dupla', (e && e.message) || '', 'warning'); });
     if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');
     if (_u2 && _u2 !== _u1 && typeof window._sendUserNotification === 'function') {
         var cu = window.AppStore.currentUser;
@@ -960,6 +949,66 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
     }
     if (typeof window._softRefreshView === 'function') window._softRefreshView();
 };
+// Desfazer dupla → 2 inscritos solo. ESCOPO DE MÓDULO (v1.3.x): estava dentro de
+// renderTournaments — mesmo bug que moveu _formDuplaByUids pro load (o botão "Desfazer" no
+// dashboard/participants quebrava antes de abrir o torneio). Casa a dupla pela IDENTIDADE de cada
+// membro (uid; só fictício sem conta usa nome). id1/id2 = (p1Uid||p1Name) e (p2Uid||p2Name);
+// chamada antiga só com o nome inteiro (id2 vazio) cai no match por nome. CF-ONLY: só dispara.
+window._splitDupla = function(tId, id1, id2) {
+    var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+    if (!t) return;
+    var arr = Array.isArray(t.participants) ? t.participants : [];
+    var idx;
+    if (id2 != null && String(id2) !== '') {
+        var _want = [String(id1 || ''), String(id2 || '')].filter(Boolean).sort();
+        idx = arr.findIndex(function(p) {
+            if (!p || typeof p !== 'object') return false;
+            if (!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))) return false; // só dupla
+            var _got = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort();
+            return _got.length === _want.length && _got.every(function(v, i){ return v === _want[i]; });
+        });
+    } else {
+        var teamName = id1;
+        idx = arr.findIndex(function(p) {
+            if (typeof p === 'string') return p === teamName;
+            if (!p || typeof p !== 'object') return false;
+            var _resolved = (typeof window._pName === 'function') ? window._pName(p) : '';
+            return (p.displayName || p.name || '') === teamName || _resolved === teamName;
+        });
+    }
+    if (idx === -1) return;
+    var entry = arr[idx];
+    // CF-ONLY: o cliente NÃO desfaz nem grava — só LÊ nomes/uids (pra notificar) e dispara a CF
+    // splitPair (computeSplitPair: 2 solos + enrollSeq + memberUids, atômico + replica pro SB).
+    var nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
+    var parts = nm.split(' / ');
+    var p1Name = ((entry.p1Uid && window._displayNameForUid) ? window._displayNameForUid(entry.p1Uid, entry.p1Name || parts[0]) : (entry.p1Name || parts[0] || '')).trim();
+    var p2Name = ((entry.p2Uid && window._displayNameForUid) ? window._displayNameForUid(entry.p2Uid, entry.p2Name || parts[1]) : (entry.p2Name || parts[1] || '')).trim();
+    if (!p1Name || !p2Name) return;
+    var p1Uid  = entry.p1Uid || '';
+    var p2Uid  = entry.p2Uid || '';
+    if (!(window.FirestoreDB && typeof window.FirestoreDB.splitPair === 'function')) {
+        if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível desfazer a dupla agora — tente de novo.', 'warning');
+        return;
+    }
+    var _hasBracketSplit = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
+    window.FirestoreDB.splitPair(tId, { id1: id1, id2: id2 }).then(function () {
+        try {
+            var _actorUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
+            var _msg = 'O organizador desfez a dupla "' + p1Name + ' / ' + p2Name + '" em ' + (t.name || '') + '. Você voltou para Sem Dupla.';
+            [p1Uid, p2Uid].forEach(function(uid){
+                if (uid && uid !== _actorUid && typeof window._sendUserNotification === 'function')
+                    window._sendUserNotification(uid, { type: 'enrollment_cancelled', title: '↩️ Dupla desfeita', message: _msg, tournamentId: String(t.id), tournamentName: t.name || '', level: 'important' });
+            });
+        } catch(e){}
+        if (_hasBracketSplit && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
+        if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', p1Name + ' e ' + p2Name + ' voltaram para Sem Dupla.', 'info');
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    }).catch(function (e) {
+        if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', (e && e.message) || '', 'warning');
+    });
+};
+
 // Mensagens PT pros códigos de erro da máquina de pendência.
 window._pairErrorMsg = function(code) {
     var m = {
@@ -1463,80 +1512,7 @@ function renderTournaments(container, tournamentId = null) {
     // existiam DEPOIS de abrir um torneio (eram atribuídos dentro de renderTournaments),
     // então o botão Confirmar/Cancelar no DASHBOARD quebrava. Agora estão no load.
 
-    // Desfazer dupla → 2 inscritos solo. v4.5.99: casa a dupla pela IDENTIDADE DE CADA MEMBRO
-    // (uid; só fictício sem conta usa nome) — o strip do ITEM 3 apaga name/displayName da dupla
-    // de contas, então casar pela STRING "A / B" falhava. `id1`/`id2` = (p1Uid||p1Name) e
-    // (p2Uid||p2Name). Compat: chamada antiga só com o nome inteiro (id2 vazio) cai no match por nome.
-    window._splitDupla = function(tId, id1, id2) {
-        var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
-        if (!t) return;
-        var arr = Array.isArray(t.participants) ? t.participants : [];
-
-        var idx;
-        if (id2 != null && String(id2) !== '') {
-            var _want = [String(id1 || ''), String(id2 || '')].filter(Boolean).sort();
-            idx = arr.findIndex(function(p) {
-                if (!p || typeof p !== 'object') return false;
-                if (!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))) return false; // só dupla
-                var _got = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort();
-                return _got.length === _want.length && _got.every(function(v, i){ return v === _want[i]; });
-            });
-        } else {
-            var teamName = id1;
-            idx = arr.findIndex(function(p) {
-                if (typeof p === 'string') return p === teamName;
-                if (!p || typeof p !== 'object') return false;
-                var _resolved = (typeof window._pName === 'function') ? window._pName(p) : '';
-                return (p.displayName || p.name || '') === teamName || _resolved === teamName;
-            });
-        }
-        if (idx === -1) return;
-
-        var entry = arr[idx];
-        // Extrair os dois nomes e uids armazenados na entrada — v2.7.90: p1Name/p2Name
-        // primeiro; split " / " só como fallback. Antes, dupla com displayName sem "/"
-        // (ex.: "Kelly Barth") batia em parts.length<2 e o Desfazer não fazia nada.
-        var nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
-        var parts = nm.split(' / ');
-        // FASE 2: nome do membro pelo uid (perfil ao vivo); nome gravado / split de displayName só fallback
-        var p1Name = ((entry.p1Uid && window._displayNameForUid) ? window._displayNameForUid(entry.p1Uid, entry.p1Name || parts[0]) : (entry.p1Name || parts[0] || '')).trim();
-        var p2Name = ((entry.p2Uid && window._displayNameForUid) ? window._displayNameForUid(entry.p2Uid, entry.p2Name || parts[1]) : (entry.p2Name || parts[1] || '')).trim();
-        if (!p1Name || !p2Name) return;
-        var p1Uid  = entry.p1Uid || '';
-        var p2Uid  = entry.p2Uid || '';
-
-        // Criar entradas limpas para cada membro — v2.7.97: restaura o nº de inscrição
-        // original (enrollSeq) que cada um tinha antes de formar a dupla.
-        var solo1 = p1Uid ? { displayName: p1Name, name: p1Name, uid: p1Uid, ligaActive: true, enrollSeq: (entry.p1Seq != null ? entry.p1Seq : undefined) } : p1Name;
-        var solo2 = p2Uid ? { displayName: p2Name, name: p2Name, uid: p2Uid, ligaActive: true, enrollSeq: (entry.p2Seq != null ? entry.p2Seq : undefined) } : p2Name;
-
-        arr.splice(idx, 1, solo1, solo2);
-        t.participants = arr;
-        t.updatedAt = new Date().toISOString();
-
-        // v1.3.x (roster→CF): desfaz via CF splitPair (concorrência-safe + replica pro Sandbox);
-        // fallback = saveTournament direto do t já mutado se a CF cair. As notificações/refresh
-        // rodam nos dois caminhos (_afterSplit).
-        var _afterSplit = function() {
-            // v2.8.91: notifica os DOIS envolvidos que o organizador desfez a dupla.
-            try {
-                var _actorUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
-                var _msg = 'O organizador desfez a dupla "' + p1Name + ' / ' + p2Name + '" em ' + (t.name || '') + '. Você voltou para Sem Dupla.';
-                [p1Uid, p2Uid].forEach(function(uid){
-                    if (uid && uid !== _actorUid && typeof window._sendUserNotification === 'function')
-                        window._sendUserNotification(uid, { type: 'enrollment_cancelled', title: '↩️ Dupla desfeita', message: _msg, tournamentId: String(t.id), tournamentName: t.name || '', level: 'important' });
-                });
-            } catch(e){}
-            if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', p1Name + ' e ' + p2Name + ' voltaram para Sem Dupla.', 'info');
-            if (typeof window._softRefreshView === 'function') window._softRefreshView();
-        };
-        if (window.FirestoreDB && typeof window.FirestoreDB.splitPair === 'function') {
-            window.FirestoreDB.splitPair(tId, { id1: id1, id2: id2 }).then(_afterSplit)
-                .catch(function () { window.FirestoreDB.saveTournament(t).then(_afterSplit); });
-        } else {
-            window.FirestoreDB.saveTournament(t).then(_afterSplit);
-        }
-    };
+    // _splitDupla foi movido pra ESCOPO DE MÓDULO (v1.3.x) — ver logo antes de _pairErrorMsg.
 
     // Inscrever solo em torneio de duplas (sem parceiro definido) — mantido para compat
     window._enrollSoloInDoubles = function(tId) {

@@ -2023,7 +2023,7 @@ exports.formPair = onCall(
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     const d = request.data || {};
-    const opts = { uid1: d.uid1 || "", name1: d.name1 || "", uid2: d.uid2 || "", name2: d.name2 || "" };
+    const opts = { uid1: d.uid1 || "", name1: d.name1 || "", uid2: d.uid2 || "", name2: d.name2 || "", changeRule: !!d.changeRule };
     if (!tournamentId || (!opts.uid1 && !opts.name1) || (!opts.uid2 && !opts.name2)) {
       throw new HttpsError("invalid-argument", "tournamentId e os dois membros são obrigatórios");
     }

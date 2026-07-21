@@ -155,6 +155,10 @@ const SUITES = [
   // participants (fora da espera) → ficava órfã. Fix: integrateLateEntries detecta órfão de roster
   // e re-sorteia (todo formato, incl. Elim Simples) + _triggerLateIntegration(force) + form dispara.
   'tests/form-pair-integration.test.js',
+  // E2E "TUDO NA CF": dirige as funções de CLIENTE REAIS (_formDuplaByUids/_splitDupla) pelo
+  // dispatch real → CF formPair/splitPair (pair-core) → CF integrateLateEntries (draw-core).
+  // Prova que forma/desfaz dupla entra/sai da chave SEM o cliente gravar (saveTournament=0).
+  'tests/e2e-form-pair.test.js',
   // v1.3.89: SWEEP W.O. + integração tardia (motor _applyWO real + CF integrateLateEntries), joga até fechar.
   'tests/draw-sweep-wo-late.test.js',
   'tests/present-only-no-lost-entries.test.js',

@@ -603,7 +603,8 @@ window.FirestoreDB = {
     return await this._callFn('formPair', {
       tournamentId: String(tournamentId),
       uid1: (opts && opts.uid1) || '', name1: (opts && opts.name1) || '',
-      uid2: (opts && opts.uid2) || '', name2: (opts && opts.name2) || ''
+      uid2: (opts && opts.uid2) || '', name2: (opts && opts.name2) || '',
+      changeRule: !!(opts && opts.changeRule)
     });
   },
   async splitPair(tournamentId, opts) {

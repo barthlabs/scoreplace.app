@@ -1784,10 +1784,12 @@ window._triggerLateIntegration = function (t, opts) {
     if (!t || !t.id) return;
     var tId = String(t.id);
     if (window._lateIntegrateInflight[tId]) return;
-    // só dispara quando há gente na espera (senão não há o que integrar)
+    // só dispara quando há gente na espera (senão não há o que integrar) — EXCETO com force, que é o
+    // caso da DUPLA FORMADA pós-sorteio: ela entra em participants (não na espera), então não há nada
+    // na waitlist, mas a CF ainda precisa rodar pra detectar o órfão de roster e re-sortear.
     var wl = (typeof window._getWaitlist === 'function') ? window._getWaitlist(t)
         : (t.standbyParticipants || []).concat(t.waitlist || []);
-    if (!wl || !wl.length) return;
+    if ((!wl || !wl.length) && !opts.force) return;
     // assinatura do estado (espera + presença) → não re-dispara o MESMO estado (evita loop/spam)
     var _nm = function (p) { return (typeof p === 'string') ? p : (p && (p.displayName || p.name || p.uid)) || ''; };
     var sig = wl.map(_nm).sort().join('|') + '#' + Object.keys(t.checkedIn || {}).sort().join(',');
@@ -2985,10 +2987,15 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
         if (typeof window._markDuplasManual === 'function') window._markDuplasManual(t);
         // v1.3.x (roster→CF): persiste via CF formPair (concorrência-safe + replica pro Sandbox);
         // fallback = saveTournament direto do t já mutado se a CF cair.
+        // DEPOIS de persistir: chave já sorteada → dispara integração tardia (force) pra a dupla
+        // formada entrar na chave (CF detecta órfão de roster e re-sorteia). Sem chave, não faz nada.
+        var _hasBracketDF = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
+        var _integrateAfterDF = function () { if (_hasBracketDF && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} } };
+        var _persistFallbackDF = function () { var _s = window.FirestoreDB.saveTournament(t); if (_s && _s.then) _s.then(_integrateAfterDF, _integrateAfterDF); else _integrateAfterDF(); };
         if (window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function') {
             window.FirestoreDB.formPair(tId, { uid1: fuid1, name1: name1, uid2: fuid2, name2: name2 })
-                .catch(function () { window.FirestoreDB.saveTournament(t); });
-        } else { window.FirestoreDB.saveTournament(t); }
+                .then(_integrateAfterDF, _persistFallbackDF);
+        } else { _persistFallbackDF(); }
         var container = document.getElementById('view-container');
         if (container) renderTournaments(container, tId);
         if (typeof showNotification === 'function') showNotification('👫 Dupla formada!', newName, 'success');

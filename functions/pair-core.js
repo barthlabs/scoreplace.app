@@ -88,6 +88,10 @@ function computeFormPair(data, opts) {
     teamOrigins: teamOrigins,
     memberUids: computeMemberUids(Object.assign({}, data, { participants: arr }))
   };
+  // "muda a regra": formar dupla num torneio INDIVIDUAL passa a permitir times pra todos
+  // (enrollmentMode→misto). Antes o cliente setava t.enrollmentMode direto (mutação local) —
+  // agora vem pela CF via opts.changeRule pra o roster ser 100% server-authoritative.
+  if (opts.changeRule) updateData.enrollmentMode = 'misto';
   // pairRequests só entra no update se o doc TEM a lista (senão dropRequestsInvolving devolve
   // undefined → Firestore rejeita "Cannot use undefined"). Bug pego no emulador.
   var _pr = dropRequestsInvolving(data.pairRequests, [_u1, _u2].filter(Boolean));
