@@ -850,17 +850,22 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
 // src/tgt = identidade (uid||nome) dos 2 avulsos. A CF formLatePair (functions-autodraw) tira os 2
 // da espera, forma a dupla _lateJoin, marca presença E integra na chave — ATÔMICO — e devolve o
 // doc. O cliente só dispara e REFLETE (via _applyCFTournament). Zero mutação/save local.
-window._formLateJoinDupla = function (tId, src, tgt) {
-  if (!src || !tgt || src === tgt) return;
+window._formLateJoinDupla = function (tId, src, tgt, opts) {
+  var _cards = (opts && opts.cards) || null;
+  if (!src || !tgt || src === tgt) { if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards); return; }
   if (!(window.FirestoreDB && typeof window.FirestoreDB.formLatePair === 'function')) {
+    if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards);
     if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível formar a dupla agora — tente de novo.', 'warning');
     return;
   }
   window.FirestoreDB.formLatePair(tId, { key1: src, key2: tgt }).then(function (res) {
     if (window._dtrace) window._dtrace('formLatePair:done', { v: (window.SCOREPLACE_VERSION || '?'), formed: res && res.formed, integrated: res && res.integrated && res.integrated.changed });
+    // sucesso: o re-render (via _applyCFTournament) substitui os cards → o estado "formando" some sozinho.
     if (res && res.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, res.tournament);
+    else if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards);
     if (typeof showNotification !== 'undefined') showNotification('🤝 Dupla formada', (res && res.formed ? (res.formed + ' entrou na chave.') : 'Dupla na chave.'), 'success');
   }).catch(function (e) {
+    if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards);   // erro: restaura os cards
     if (typeof showNotification !== 'undefined') showNotification('Não foi possível formar a dupla', (e && (e.message || e.code)) || '', 'warning');
   });
 };
@@ -951,6 +956,22 @@ window._formLateJoinDupla = function (tId, src, tgt) {
     if (hit && hit.key !== _ljDrag.key) { hit.card.style.outline = '3px solid #f59e0b'; hit.card.style.outlineOffset = '2px'; _ljDrag.hi = hit.card; }
     if (e.cancelable) e.preventDefault();   // só bloqueia o scroll DURANTE o arraste
   }
+  // Feedback "formando…" nos 2 cards enquanto a CF responde (dim + spinner no card-alvo).
+  function _ljMarkForming(cards) {
+    (cards || []).forEach(function (c) { if (!c) return; c.style.opacity = '0.55'; c.style.pointerEvents = 'none'; c.style.transition = 'opacity 0.15s'; });
+    var tgt = cards && cards[1];
+    if (tgt && tgt.querySelector && !tgt.querySelector('.lj-forming-badge')) {
+      try { if (window.getComputedStyle(tgt).position === 'static') tgt.style.position = 'relative'; } catch (e) {}
+      var b = document.createElement('div');
+      b.className = 'lj-forming-badge';
+      b.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(15,23,42,0.6);border-radius:inherit;z-index:6;color:#22d3ee;font-weight:800;font-size:0.8rem;pointer-events:none;';
+      b.innerHTML = '<span class="lj-spin"></span> Formando dupla…';
+      tgt.appendChild(b);
+    }
+  }
+  window._ljClearForming = function (cards) {
+    (cards || []).forEach(function (c) { if (!c) return; c.style.opacity = ''; c.style.pointerEvents = ''; var b = c.querySelector && c.querySelector('.lj-forming-badge'); if (b) b.remove(); });
+  };
   function _ljEnd(e) {
     if (_ljPending) _ljClearPending();
     if (!_ljDrag) return;
@@ -962,7 +983,10 @@ window._formLateJoinDupla = function (tId, src, tgt) {
     var pt = _ljPoint(e);
     var hit = _ljKeyAtPoint(pt.clientX, pt.clientY);
     if (!hit || hit.key === d.key) return;
-    if (typeof window._formLateJoinDupla === 'function') window._formLateJoinDupla(d.tId, d.key, hit.key);
+    // FEEDBACK IMEDIATO enquanto a CF (formLatePair) responde: marca os 2 cards como "formando…"
+    // (spinner) — antes era instantâneo (mutação local), agora tem ida à rede. Ver [[project_busy_button_canonical]].
+    _ljMarkForming([d.card, hit.card]);
+    if (typeof window._formLateJoinDupla === 'function') window._formLateJoinDupla(d.tId, d.key, hit.key, { cards: [d.card, hit.card] });
   }
   window._wireLateJoinPairDnD = function () {
     if (window._ljDndGlobalWired) return;
