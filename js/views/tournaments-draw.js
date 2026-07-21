@@ -2105,6 +2105,7 @@ window.generateDrawFunction = function (tId) {
         // último passo (a chamada da CF que pode DEMORAR), re-mostra a tela pra NÃO parecer travado.
         // Some sozinho no hashchange do #bracket (sucesso) ou no _hideLoading do catch (erro).
         if (typeof window._showLoading === 'function') window._showLoading('🎾 Sorteando…');
+        var _doDrawDispatch = function () {
         window._callDrawRound({ tournamentId: String(tId), allowRedraw: _redraw, decisions: _decisions }).then(function (_res) {
             if (window._dtrace) window._dtrace('cf:ok', { matchCount: (_res && _res.data && _res.data.matchCount) });
             var d = (_res && _res.data) || {};
@@ -2152,6 +2153,27 @@ window.generateDrawFunction = function (tId) {
                 showNotification('⚠️ Sorteio não realizado', _msg.substring(0, 200), 'error');
             }
         });
+        }; // fecha _doDrawDispatch
+        // v1.3.x (migração sorteio→CF): RESTAURA o roster ORIGINAL no doc (a partir do snapshot
+        // de draw-prep) e SÓ ENTÃO despacha. Assim a CF sorteia SEMPRE de (roster original +
+        // pacote de decisões) — neutraliza QUALQUER mutação/persistência do cliente na cadeia de
+        // resolução → resultado independente da versão do app (objetivo do #2). A restauração é
+        // async (via mutate); SEM ela (sorteio sem resolução / harness sem mutate) o despacho é
+        // SÍNCRONO — o drawRoundStub é thenable síncrono e os testes buildViaDraw dependem disso.
+        // Ver [[project_draw_client_to_cf_migration]].
+        if (_prepSnap && window.AppStore && typeof window.AppStore.mutate === 'function') {
+            Promise.resolve(window.AppStore.mutate(String(tId), function (ft) {
+                try {
+                    if (_prepSnap.participants) ft.participants = JSON.parse(JSON.stringify(_prepSnap.participants));
+                    if (_prepSnap.waitlist) ft.waitlist = JSON.parse(JSON.stringify(_prepSnap.waitlist));
+                    if (_prepSnap.standbyParticipants) ft.standbyParticipants = JSON.parse(JSON.stringify(_prepSnap.standbyParticipants));
+                    if (_prepSnap.monarchWaitlist) ft.monarchWaitlist = JSON.parse(JSON.stringify(_prepSnap.monarchWaitlist));
+                    if (_prepSnap.teamOrigins) ft.teamOrigins = JSON.parse(JSON.stringify(_prepSnap.teamOrigins));
+                } catch (_eRest) {}
+            })).then(_doDrawDispatch).catch(_doDrawDispatch);
+        } else {
+            _doDrawDispatch();
+        }
         return;
     }
     // Suíço-pow2: removido o ramo local — a resolução 'swiss' flui pela CF drawRound (bloco

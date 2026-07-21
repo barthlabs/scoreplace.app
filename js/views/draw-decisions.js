@@ -169,7 +169,10 @@
       var _totalPlayers = arr.reduce(function (s, p) { return s + _playersOf(p); }, 0);
       var _maxTeams = Math.floor(_totalPlayers / _ts);
       var _targetTeams = _maxTeams >= 1 ? 1 : 0;
-      while (_targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
+      // Guard `_targetTeams >= 1`: com roster efetivo abaixo de teamSize (_maxTeams===0),
+      // _targetTeams=0 e `0*2 <= 0` faria o `*= 2` girar pra sempre — loop infinito que
+      // TRAVA a transação da CF. Sem alvo válido, não há o que reduzir (sai com 0).
+      while (_targetTeams >= 1 && _targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
       var _playersToRemove = _totalPlayers - (_targetTeams * _ts);
       var _removedPlayers = 0;
       if (method === 'last') {
@@ -444,7 +447,14 @@
     }
 
     // 3. Auto-moves (não são escolha — são regra; o cliente roda os MESMOS em _startDraw)
-    if (typeof window._autoMoveSoloToWaitlist === 'function') {
+    // GUARD flexibilize: quando o organizador escolheu FLEXIBILIZAR (step 6.5), os avulsos
+    // são a MATÉRIA-PRIMA da formação de duplas — o auto-move NÃO pode drená-los pra espera
+    // aqui, senão flexibilize forma de um elenco vazio e a chave sai vazia. No cliente isso
+    // nunca acontecia porque o handler pré-formava as duplas ANTES do auto-move (a "carona");
+    // ao remover a carona (sorteio→CF), a ordem correta tem que viver AQUI. Sem flexibilize,
+    // os solos já vêm resolvidos por uma decisão explícita (solo:waitlist/exclude, step 2) ou
+    // são pareados pelo _formDoublesTeams do drawInitial (sorteio default, pacote null).
+    if (!d.flexibilize && typeof window._autoMoveSoloToWaitlist === 'function') {
       var aS = window._autoMoveSoloToWaitlist(t);
       if (aS > 0) applied.push({ step: 'autoSolo', moved: aS });
     }

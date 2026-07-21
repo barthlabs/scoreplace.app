@@ -1797,6 +1797,41 @@ window._triggerLateIntegration = function (t, opts) {
     });
 };
 
+// v1.3.97 (dono, "não travado, alterável durante a fase"): liga/desliga a ENTRADA TARDIA da fase
+// ATUAL AO VIVO, sem re-sortear. O default do torneio é 'closed' (o dono não escolheu isso de
+// propósito) → a integração tardia ficava bloqueada e marcar presença na dupla da espera não criava
+// confronto. Este setter é o controle do organizador que o dono pediu: pode alternar durante a fase.
+// Grava a fase corrente (multi-fase) E o top-level (fonte que _effectiveLateEnrollment lê). Ao LIGAR
+// ('expand'), dispara a integração pra quem JÁ está presente na espera (entra na hora por repescagem).
+// Ver [[project_late_enrollment_per_phase]] / [[feedback_open_by_default_consistency]].
+window._setPhaseLateEnrollment = function (tId, mode) {
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    if (mode !== 'expand' && mode !== 'closed' && mode !== 'standby') return;
+    var _done = window.AppStore.mutate(tId, function (ft) {
+        var _cp = (ft && ft.currentPhaseIndex) || 0;
+        if (Array.isArray(ft.phases) && ft.phases[_cp]) ft.phases[_cp].lateEnrollment = mode;
+        ft.lateEnrollment = mode;
+    }, 'Entrada tardia da fase: ' + (mode === 'expand' ? 'ABERTA (novos confrontos)' : mode === 'standby' ? 'suplentes apenas' : 'fechada'));
+    if (typeof showNotification === 'function') {
+        if (mode === 'expand') showNotification('➕ Entradas tardias ABERTAS', 'Marque presença de quem está na espera — entra por repescagem (vs a definir).', 'success');
+        else if (mode === 'closed') showNotification('🚫 Entradas tardias fechadas', 'A lista de espera não gera novos confrontos nesta fase.', 'info');
+        else showNotification('⏸️ Suplentes apenas', 'A espera só substitui ausentes (W.O.), sem novos confrontos.', 'info');
+    }
+    // ao ABRIR, integra quem já está presente na espera (o dono já marcou a dupla → entra agora)
+    var _fire = function () {
+        try {
+            var _ft = window._findTournamentById(tId) || t;
+            if (mode === 'expand' && typeof window._triggerLateIntegration === 'function') {
+                window._triggerLateIntegration(_ft, { force: true });
+            }
+            // re-render o painel pra refletir o novo estado do toggle
+            if (typeof window._softRefreshView === 'function') { window._suppressSoftRefresh = false; window._softRefreshView(); }
+        } catch (_e) {}
+    };
+    if (_done && typeof _done.then === 'function') _done.then(_fire, _fire); else _fire();
+};
+
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) { if (window._dtrace) window._dtrace('generateDraw:NO-TOURNAMENT', { tId: String(tId) }); return; }
@@ -2061,8 +2096,16 @@ window.generateDrawFunction = function (tId) {
         // resolvido (e "remover o último" não tem alvo: cortaria OUTRA pessoa). Os que vão
         // aqui são todos re-aplicáveis sem efeito: sem-dupla (não há mais avulso), pow2 e resto
         // (o alvo é a potência de 2, já atingida). Ver docs/sorteio-ciclo-decisoes.md.
-        var _decisions = t._drawDecisions || null;
+        // v1.3.93: decisões vêm do MAPA POR TID (sobrevive à troca de objeto do onSnapshot) —
+        // fallback pro campo legado t._drawDecisions se algum site antigo ainda escreveu nele.
+        var _decisions = (typeof window._getDrawDecisions === 'function' ? window._getDrawDecisions(tId) : null) || t._drawDecisions || null;
         if (window._dtrace) window._dtrace('cf:send', { redraw: !!_redraw, decisions: _decisions });
+        // v1.3.91 (dono): "Sorteando…" com a bola girando DURANTE o round-trip da CF. Os painéis
+        // (sem-dupla/gênero/numérica) escondem o loader do _startDraw quando abrem — então aqui, no
+        // último passo (a chamada da CF que pode DEMORAR), re-mostra a tela pra NÃO parecer travado.
+        // Some sozinho no hashchange do #bracket (sucesso) ou no _hideLoading do catch (erro).
+        if (typeof window._showLoading === 'function') window._showLoading('🎾 Sorteando…');
+        var _doDrawDispatch = function () {
         window._callDrawRound({ tournamentId: String(tId), allowRedraw: _redraw, decisions: _decisions }).then(function (_res) {
             if (window._dtrace) window._dtrace('cf:ok', { matchCount: (_res && _res.data && _res.data.matchCount) });
             var d = (_res && _res.data) || {};
@@ -2075,6 +2118,7 @@ window.generateDrawFunction = function (tId) {
             if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(t); } catch (_eH) {} }
             try { window.AppStore._saveToCache(); } catch (_eC) {}
             if (document.getElementById('final-review-panel')) { document.getElementById('final-review-panel').remove(); document.body.style.overflow = ''; }
+            if (window._clearDrawDecisions) window._clearDrawDecisions(tId); // v1.3.93: sorteio efetivou → zera o pacote de decisões (próximo sorteio começa limpo)
             window._lastActiveTournamentId = tId;
             // Toast do equilíbrio: o motor é do servidor, mas quem AVISA é a UI.
             if (d.allMaleCount > 0 && typeof showNotification !== 'undefined') {
@@ -2109,6 +2153,27 @@ window.generateDrawFunction = function (tId) {
                 showNotification('⚠️ Sorteio não realizado', _msg.substring(0, 200), 'error');
             }
         });
+        }; // fecha _doDrawDispatch
+        // v1.3.x (migração sorteio→CF): RESTAURA o roster ORIGINAL no doc (a partir do snapshot
+        // de draw-prep) e SÓ ENTÃO despacha. Assim a CF sorteia SEMPRE de (roster original +
+        // pacote de decisões) — neutraliza QUALQUER mutação/persistência do cliente na cadeia de
+        // resolução → resultado independente da versão do app (objetivo do #2). A restauração é
+        // async (via mutate); SEM ela (sorteio sem resolução / harness sem mutate) o despacho é
+        // SÍNCRONO — o drawRoundStub é thenable síncrono e os testes buildViaDraw dependem disso.
+        // Ver [[project_draw_client_to_cf_migration]].
+        if (_prepSnap && window.AppStore && typeof window.AppStore.mutate === 'function') {
+            Promise.resolve(window.AppStore.mutate(String(tId), function (ft) {
+                try {
+                    if (_prepSnap.participants) ft.participants = JSON.parse(JSON.stringify(_prepSnap.participants));
+                    if (_prepSnap.waitlist) ft.waitlist = JSON.parse(JSON.stringify(_prepSnap.waitlist));
+                    if (_prepSnap.standbyParticipants) ft.standbyParticipants = JSON.parse(JSON.stringify(_prepSnap.standbyParticipants));
+                    if (_prepSnap.monarchWaitlist) ft.monarchWaitlist = JSON.parse(JSON.stringify(_prepSnap.monarchWaitlist));
+                    if (_prepSnap.teamOrigins) ft.teamOrigins = JSON.parse(JSON.stringify(_prepSnap.teamOrigins));
+                } catch (_eRest) {}
+            })).then(_doDrawDispatch).catch(_doDrawDispatch);
+        } else {
+            _doDrawDispatch();
+        }
         return;
     }
     // Suíço-pow2: removido o ramo local — a resolução 'swiss' flui pela CF drawRound (bloco

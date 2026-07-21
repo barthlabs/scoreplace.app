@@ -187,6 +187,14 @@ const SUITES = [
   'js/views/phase-brick4.test.js',
   'functions-autodraw/test-draw.js',
   'functions-autodraw/test-groupsby.js',
+  // CF aplica o pacote de decisões do organizador ao elenco (sem-dupla, resto). v1.2.29.
+  'functions-autodraw/test-draw-decisions.js',
+  // PORTÃO da migração sorteio client→CF (item #2): pacote ≡ core puro para odd/incomplete/
+  // scope/absentees/p2 + regressão do loop infinito de _applyRemainderRemoval. v1.3.x.
+  'functions-autodraw/test-draw-decisions-parity.js',
+  // Migração client→CF: generateDrawFunction RESTAURA o roster original no doc antes de
+  // despachar → a CF sorteia de (original + pacote), neutralizando mutação do cliente. v1.3.x.
+  'tests/draw-client-restore-original.test.js',
   // Integração de tardios no servidor (draw-core.integrateLateEntries) — v1.2.57.
   'functions-autodraw/test-integrate-late.js',
   // Cenário do dono (SB Casais): dupla ausente na espera → marca presente → CF forma o

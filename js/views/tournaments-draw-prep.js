@@ -628,9 +628,10 @@ window._applyFlexibilizeBalance = function(tId) {
             (res.allMaleCount ? ' (' + res.allMaleCount + ' 100% masc.)' : '') +
             (res.leftoverCount ? ', ' + res.leftoverCount + ' sem dupla' : ''));
     }
-    if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        try { window.FirestoreDB.saveTournament(t); } catch (e) {}
-    }
+    // v1.3.x (migração→CF): a decisão `flexibilize` já viaja no pacote (setado acima); a CF
+    // FORMA as duplas sobre o roster original restaurado no despacho (guard !d.flexibilize no
+    // auto-move garante que os avulsos não são drenados antes). O forming local fica só como
+    // preview do painel seguinte; NÃO persiste (saveTournament removido).
     window.showUnifiedResolutionPanel(String(tId));
 };
 
@@ -775,23 +776,25 @@ window._executeRemoval = function(tId, mode, method) {
         window.AppStore.logAction(tId, logMsg);
     }
 
-    window.FirestoreDB.saveTournament(t).then(function() {
-        var actionLabel = mode === 'standby' ? _t('predraw.movedToWaitlist') : _t('predraw.removedLabel');
-        if (typeof showNotification !== 'undefined') {
-            showNotification(_t('draw.adjustDone'), removedNames + ' ' + actionLabel + '.', 'success');
-        }
-        // Update stat-boxes (inscritos count + waitlist) in the detail view
-        if (typeof window._updateStatBoxes === 'function') {
-            window._updateStatBoxes(t);
-        }
-        // Re-diagnose: if resolved, draw immediately; otherwise show panel again
-        var recheck = window._diagnoseAll(t);
-        if (!recheck.hasIssues && typeof window.generateDrawFunction === 'function') {
-            window.generateDrawFunction(tId);
-        } else {
-            window.showUnifiedResolutionPanel(tId);
-        }
-    });
+    // v1.3.x (migração→CF): a decisão do resto já viaja no pacote (`remainder`, setado acima);
+    // a CF aplica sobre o roster ORIGINAL restaurado no despacho. O _applyRemainderRemoval local
+    // ficou só como preview do gate/UI (re-diagnóstico) — NÃO persiste mais (saveTournament
+    // removido; o doc é restaurado ao original antes do sorteio). Corpo agora síncrono.
+    var actionLabel = mode === 'standby' ? _t('predraw.movedToWaitlist') : _t('predraw.removedLabel');
+    if (typeof showNotification !== 'undefined') {
+        showNotification(_t('draw.adjustDone'), removedNames + ' ' + actionLabel + '.', 'success');
+    }
+    // Update stat-boxes (inscritos count + waitlist) in the detail view
+    if (typeof window._updateStatBoxes === 'function') {
+        window._updateStatBoxes(t);
+    }
+    // Re-diagnose: if resolved, draw immediately; otherwise show panel again
+    var recheck = window._diagnoseAll(t);
+    if (!recheck.hasIssues && typeof window.generateDrawFunction === 'function') {
+        window.generateDrawFunction(tId);
+    } else {
+        window.showUnifiedResolutionPanel(tId);
+    }
 };
 
 // ============ UNIFIED RESOLUTION PANEL (POWER-OF-2) ============
@@ -1995,9 +1998,11 @@ window._handleIncompleteOption = function (tId, option) {
     } else if (option === 'lottery') {
         window.showLotteryIncompletePanel(tId);
     } else if (option === 'standby') {
+        // v1.3.x (migração→CF): decisão no pacote (`incomplete`); a CF honra a flag sobre o doc
+        // restaurado no despacho. Local seta a flag só como preview do gate/UI; sem persist.
+        window._setDrawDecision(tId, { incomplete: 'standby' });
         t.incompleteResolution = 'standby';
         window.AppStore.logAction(tId, 'Jogadores sem time movidos para lista de espera');
-        window.AppStore.sync();
         var el2 = document.getElementById('incomplete-teams-panel');
         if (el2) el2.remove();
         window.showPowerOf2Panel(tId);
@@ -2026,16 +2031,16 @@ window.showLotteryIncompletePanel = function (tId) {
         () => {
             // Direta
             window.AppStore.logAction(tId, 'Repescagem Direta por Sorteio selecionada');
+            window._setDrawDecision(tId, { incomplete: 'lottery_direct' }); // v1.3.x: viaja no pacote pra CF
             t.incompleteResolution = 'lottery_direct';
-            window.AppStore.sync();
             document.getElementById('incomplete-teams-panel').remove();
             window.showPowerOf2Panel(tId);
         },
         () => {
             // Mini-repescagem
             window.AppStore.logAction(tId, 'Mini-Repescagem selecionada');
+            window._setDrawDecision(tId, { incomplete: 'lottery_mini' }); // v1.3.x: viaja no pacote pra CF
             t.incompleteResolution = 'lottery_mini';
-            window.AppStore.sync();
             document.getElementById('incomplete-teams-panel').remove();
             window.showPowerOf2Panel(tId);
         },
@@ -2239,8 +2244,12 @@ window._handleOddOption = function (tId, option) {
         if (container) renderTournaments(container, tId);
     } else if (option === 'bye_odd') {
         // Núcleo puro em draw-decisions.js (o pacote leva a escolha pra CF aplicar).
+        // v1.3.x (migração→CF): a decisão VIAJA no pacote (`odd`) e a CF aplica sobre o roster
+        // original restaurado no despacho. O _applyOddResolution local fica só como preview do
+        // gate/UI (seta t.oddResolution); NÃO persiste (sync removido) — o doc é restaurado ao
+        // original antes do sorteio. Ver [[project_draw_client_to_cf_migration]].
+        window._setDrawDecision(tId, { odd: 'bye_odd' });
         window.AppStore.logAction(tId, window._applyOddResolution(t, 'bye_odd').actionMsg);
-        window.AppStore.sync();
         var el2 = document.getElementById('odd-entries-panel');
         if (el2) el2.remove();
         showNotification(_t('draw.byeRotating'), _t('draw.byeRotatingMsg', {unit: isTeam ? _t('draw.team') : _t('draw.player')}), 'success');
@@ -2251,10 +2260,12 @@ window._handleOddOption = function (tId, option) {
             _t('predraw.oddConfirmMsg', {n: (oddInfo.count - 1), unit: (isTeam ? _t('predraw.unitTeams') : _t('predraw.unitParts'))}),
             function() {
                 // Núcleo puro em draw-decisions.js — a MESMA conta que a CF roda.
+                // v1.3.x (migração→CF): a decisão viaja no pacote (`odd`); a CF exclui sobre o
+                // roster original restaurado no despacho. Local = preview do gate/UI, sem persist.
+                window._setDrawDecision(tId, { odd: 'exclusion' });
                 var _ro = window._applyOddResolution(t, 'exclusion');
                 var removedName = _ro.removedName;
                 window.AppStore.logAction(tId, _ro.actionMsg);
-                window.AppStore.sync();
                 var el3 = document.getElementById('odd-entries-panel');
                 if (el3) el3.remove();
                 showNotification(_t('draw.participantRemoved'), _t('draw.participantRemovedMsg', {name: removedName, total: oddInfo.count - 1}), 'warning');

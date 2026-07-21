@@ -1375,29 +1375,18 @@ window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
       absentees.length + (mode === 'waitlist' ? ' à lista de espera' : ' desclassificado(s)'));
   }
 
-  // BLINDAGEM (project_concurrency_safe_saves): re-aplica a chamada no doc FRESCO via
-  // portão (idempotente), em vez de syncImmediate (doc inteiro → clobbera check-in
-  // concorrente). Re-particiona pela presença fresca — mais correto sob concorrência.
-  const savePromise = (window.AppStore && typeof window.AppStore.mutate === 'function')
-    ? window.AppStore.mutate(tId, function (ft) { _applyRoll(ft); })
-    : ((window.AppStore && typeof window.AppStore.syncImmediate === 'function')
-        ? window.AppStore.syncImmediate(tId)
-        : (window.FirestoreDB ? window.FirestoreDB.saveTournament(t) : Promise.resolve()));
-
-  if (window._dtrace) window._dtrace('roll:save', { mode: mode, present: present.length, absent: absentees.length });
-  Promise.resolve(savePromise).then(function () {
-    if (window._dtrace) window._dtrace('roll:saved-ok');
-    if (typeof showNotification === 'function') {
-      showNotification('✅ Chamada concluída',
-        present.length + ' no sorteio · ' + absentees.length +
-        (mode === 'waitlist' ? ' na lista de espera' : ' desclassificado(s)'), 'success');
-    }
-    if (typeof proceed === 'function') proceed();
-  }).catch(function (e) {
-    if (window._dtrace) window._dtrace('roll:saved-ERR', { msg: String(e && e.message || e).slice(0, 120) });
-    if (window._warn) window._warn('[rollcall] save failed:', e);
-    if (typeof proceed === 'function') proceed();
-  });
+  // v1.3.x (migração→CF): NÃO persiste mais a chamada aqui. A decisão `absentees` viaja no
+  // pacote e a CF RE-aplica _applyPresenceRoll sobre o roster ORIGINAL restaurado no despacho
+  // (usando o checkedIn persistido) → autoridade no servidor, independente da versão do app.
+  // O _applyRoll(t) acima é só preview/feedback (arrays pra UI/log). Elimina o mutate do sorteio.
+  window._setDrawDecision(tId, { absentees: mode });
+  if (window._dtrace) window._dtrace('roll:decision', { mode: mode, present: present.length, absent: absentees.length });
+  if (typeof showNotification === 'function') {
+    showNotification('✅ Chamada concluída',
+      present.length + ' no sorteio · ' + absentees.length +
+      (mode === 'waitlist' ? ' na lista de espera' : ' desclassificado(s)'), 'success');
+  }
+  if (typeof proceed === 'function') proceed();
 };
 
 // ── Inline name editing for organizers ──

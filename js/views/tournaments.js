@@ -1646,15 +1646,11 @@ function renderTournaments(container, tournamentId = null) {
                 }
                 startDraw();
             };
-            // persiste ANTES de sortear — senão o onSnapshot devolve os ausentes
-            if (moved > 0 && window.AppStore && typeof window.AppStore.mutate === 'function') {
-                // BLINDAGEM (project_concurrency_safe_saves): re-aplica o move (ausentes→
-                // espera) no doc FRESCO, em vez de syncImmediate (doc inteiro → clobbera
-                // check-in/W.O. concorrente). A função de move é pura + idempotente.
-                Promise.resolve(window.AppStore.mutate(tId, function (ft) { window._moveAbsentToWaitlistForPresentDraw(ft); })).then(proceed).catch(proceed);
-            } else {
-                proceed();
-            }
+            // v1.3.x (migração→CF): NÃO persiste mais o move aqui. A decisão `scope:'present'`
+            // viaja no pacote (setado acima) e a CF RE-aplica _moveAbsentToWaitlistForPresentDraw
+            // sobre o roster ORIGINAL restaurado no despacho (usando o checkedIn persistido). O
+            // move local acima é só preview/feedback. Elimina o mutate client-side do sorteio.
+            proceed();
         });
     };
 
