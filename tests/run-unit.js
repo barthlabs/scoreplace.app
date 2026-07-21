@@ -143,6 +143,10 @@ const SUITES = [
   'tests/late-dupla-fills-adefinir-separate.test.js',
   // v1.3.88: SWEEP — todo formato × config × N pelo motor canônico (draw-core), joga a chave inteira.
   'tests/draw-sweep-all-formats.test.js',
+  // SWEEP de INTEGRAÇÃO TARDIA (formato × config × N): dupla formada de solos, dupla pré-formada
+  // ausente que chega, solo tardio → tem que entrar na chave (não ficar órfão) e jogar até campeão.
+  // Pegou o gap: Dupla Elim pow2 sem repescagem não integrava tardio (fix: re-sorteio Tier-1). v1.3.x.
+  'tests/late-integration-sweep.test.js',
   // v1.3.89: SWEEP W.O. + integração tardia (motor _applyWO real + CF integrateLateEntries), joga até fechar.
   'tests/draw-sweep-wo-late.test.js',
   'tests/present-only-no-lost-entries.test.js',

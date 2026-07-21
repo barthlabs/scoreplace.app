@@ -513,7 +513,59 @@ function integrateLateEntries(t, opts) {
   } catch (e) { win._error && win._error('[integrateLate] duplas:', e); }
   try { monarch = win._expandMonarchFromWaitlist(t) || 0; } catch (e) { win._error && win._error('[integrateLate] monarch:', e); }
 
-  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0);
+  // v1.3.x — GAP achado pelo sweep de integração tardia: DUPLA ELIMINATÓRIA em pow2 NÃO tem
+  // repescagem (repR1) → _integrateLateDuplas faz `if(!repR1.length)return 0`; e
+  // _createExtraGamesFromWaitlist/_rebuildIntegratedBracket são SÓ Eliminatória Simples. Resultado:
+  // tardio (dupla OU solo) fica ÓRFÃO na Dupla Elim. Fallback Tier-1 (NENHUM resultado lançado, então
+  // re-sortear não perde nada): move os tardios PRESENTES pra participants e RE-SORTEIA pelo MESMO
+  // motor (drawInitial) — a estrutura upper+lower+grand nasce completa com o elenco novo. Escopo
+  // estreito (só Dupla Elim + expand + sem resultado + mono-categoria) pra não tocar o que já passa.
+  // Roda mesmo que as funções acima tenham integrado ALGUNS: a coleta `late` abaixo só pega os
+  // tardios presentes que AINDA ficaram órfãos (ex.: repFill integrou 1 dupla e sobrou outra sem
+  // slot). Se `late` vier vazio (todos já entraram), o re-sorteio NÃO roda.
+  let redrawn = 0;
+  try {
+    if (/dupla elimin/i.test(t.format || '') &&
+        (win._effectiveLateEnrollment ? win._effectiveLateEnrollment(t) : t.lateEnrollment) === 'expand' &&
+        !(Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1)) {
+      const _hasResult = (t.matches || []).some(function (m) { return m && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length) || m.startedAt); });
+      if (!_hasResult) {
+        const _sameDay = (typeof win._tournamentIsSameDay !== 'function') || win._tournamentIsSameDay(t);
+        const _present = function (p) {
+          if (!_sameDay) return true; // multi-dia: presença não conta
+          const ci = t.checkedIn || {}, ab = t.absent || {};
+          const uids = (typeof win._participantUids === 'function') ? win._participantUids(p) : [];
+          if (uids.length) return uids.every(function (u) { return ci[u] && !ab[u]; });
+          const nm = (p && (p.displayName || p.name)) || '';
+          return !!(nm && ci[nm] && !ab[nm]);
+        };
+        const late = [];
+        ['standbyParticipants', 'waitlist'].forEach(function (k) {
+          if (Array.isArray(t[k])) t[k].forEach(function (p) { if (p && p._lateJoin && _present(p)) late.push(p); });
+        });
+        if (late.length) {
+          if (!Array.isArray(t.participants)) t.participants = [];
+          if (!t.teamOrigins) t.teamOrigins = {};
+          const lateKeys = {};
+          late.forEach(function (p) {
+            const nm = (p.displayName || p.name) || '';
+            const clone = Object.assign({}, p); delete clone._lateJoin;
+            t.participants.push(clone);
+            if (nm && (p.p1Uid || p.p1Name)) t.teamOrigins[nm] = 'formada';
+            if (nm) lateKeys[nm] = 1;
+          });
+          ['standbyParticipants', 'waitlist'].forEach(function (k) {
+            if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(p && p._lateJoin && lateKeys[(p.displayName || p.name) || '']); });
+          });
+          if (typeof win._clearTournamentDraw === 'function') win._clearTournamentDraw(t);
+          const _rd = drawInitial(t, {});
+          if (_rd && _rd.ok) redrawn = late.length;
+        }
+      }
+    }
+  } catch (e) { win._error && win._error('[integrateLate] duplaElimRedraw:', e); }
+
+  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0);
   if (changed) {
     try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e) {}
     t.updatedAt = new Date().toISOString();
