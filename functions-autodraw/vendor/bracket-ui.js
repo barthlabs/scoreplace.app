@@ -1129,11 +1129,21 @@ window._showAllHiddenSwissPast = function (tId) {
 // difere por 1 E o PERDEDOR tem EXATAMENTE gamesPerSet (o vencedor gamesPerSet+1). RESPEITA a config
 // (não é "qualquer empate"). O placar digitado é o FINAL (sem somar +1). FONTE ÚNICA revelar+salvar.
 // (Antes o código usava gamesPerSet-1 → revelava no 6-5 e o 7-6 real não abria os campos — off-by-one.)
-window._isTiebreakSetScore = function (g1, g2, gamesPerSet) {
+window._isTiebreakSetScore = function (g1, g2, loserGames) {
   g1 = parseInt(g1); g2 = parseInt(g2);
   if (isNaN(g1) || isNaN(g2)) return false;
-  var gp = parseInt(gamesPerSet) || 6;
-  return Math.abs(g1 - g2) === 1 && Math.min(g1, g2) === gp;
+  var lg = parseInt(loserGames) || 6;
+  return Math.abs(g1 - g2) === 1 && Math.min(g1, g2) === lg;
+};
+// Regra do TIE-BREAK do torneio (config do dono): 'g-1' = TB em (gp-1)-(gp-1) → set 6-5 (set
+// curto); 'g' = TB em gp-gp → set 7-6 (padrão tênis). Override por torneio em scoring.tiebreakAt;
+// fallback por ESPORTE quando o torneio não gravou (Beach Tennis = 5-5; resto = 6-6). O que muda é
+// os GAMES DO PERDEDOR no set decidido no TB (o gatilho que _isTiebreakSetScore usa).
+window._sportTiebreakAt = function (sport) { return (sport === 'Beach Tennis') ? 'g-1' : 'g'; };
+window._tbLoserGames = function (scoring, sport) {
+  var gp = parseInt(scoring && scoring.gamesPerSet) || 6;
+  var at = (scoring && scoring.tiebreakAt) || window._sportTiebreakAt(sport);
+  return (at === 'g-1') ? Math.max(1, gp - 1) : gp;
 };
 
 window._highlightWinner = function (matchId) {
@@ -1162,9 +1172,9 @@ window._highlightWinner = function (matchId) {
               var _tsc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(_tour, _matches[mi]) : _tour.scoring;
               if (_tsc && _tsc.tiebreakEnabled !== false &&
                   (_tsc.type === 'sets' || _tsc.gamesPerSet)) {
-                // _trigger = games do PERDEDOR no TB (= gamesPerSet configurado). O TB acontece
-                // no empate gamesPerSet×gamesPerSet → final (gamesPerSet+1, gamesPerSet). gp6 → 7-6.
-                _trigger = (parseInt(_tsc.gamesPerSet) || 6);
+                // _trigger = games do PERDEDOR no set decidido no TB, conforme a regra do torneio
+                // (scoring.tiebreakAt: 'g-1'→6-5, 'g'→7-6; fallback por esporte). Ver _tbLoserGames.
+                _trigger = window._tbLoserGames(_tsc, _tour && _tour.sport);
               }
               break;
             }
@@ -1249,7 +1259,7 @@ window._saveSetResult = function(tId, matchId) {
 
       // TB canônico: placar FINAL digitado (6-5/7-6/8-7) — difere por 1 e perdedor ≥ gamesPerSet-1.
       // Registra os pontos do TB SEM somar +1 (o games digitado já é o final). window._isTiebreakSetScore.
-      if (window._isTiebreakSetScore(g1, g2, sc.gamesPerSet)) {
+      if (window._isTiebreakSetScore(g1, g2, window._tbLoserGames(sc, t.sport))) {
         const tbP1 = parseInt(document.getElementById('tb-p1')?.value) || 0;
         const tbP2 = parseInt(document.getElementById('tb-p2')?.value) || 0;
         if (tbP1 || tbP2) setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
@@ -1606,9 +1616,9 @@ window._saveResultInline = function (tId, matchId) {
   const useSets = _isc && _isc.type === 'sets';
   const isFixedSet = useSets && _isc.fixedSet;
   const tbEnabled = useSets && _isc.tiebreakEnabled !== false;
-  // TB no empate gamesPerSet×gamesPerSet → placar final (gamesPerSet+1, gamesPerSet). tbTrigger =
-  // games do PERDEDOR no TB (= gamesPerSet); vencedor = tbTrigger+1. Ex.: gp6 → final 7-6.
-  const tbTrigger = tbEnabled ? (parseInt(_isc.gamesPerSet) || 6) : null;
+  // tbTrigger = games do PERDEDOR no set decidido no TB, conforme a regra do torneio
+  // (scoring.tiebreakAt: 'g-1' → 6-5; 'g' → 7-6; fallback por esporte). vencedor = tbTrigger+1.
+  const tbTrigger = tbEnabled ? window._tbLoserGames(_isc, t.sport) : null;
 
   // Tiebreak mode: o placar final (gamesPerSet+1, gamesPerSet), ex.: 7-6, implica que o set foi
   // decidido no tie-break. O vencedor já é conhecido por s1/s2; só pedimos os pontos do TB.

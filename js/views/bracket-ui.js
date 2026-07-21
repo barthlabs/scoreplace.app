@@ -1191,6 +1191,7 @@ window._highlightWinner = function (matchId) {
     // _trigger = gamesPerSet configurado pelo dono → revela os campos de TB SÓ no placar do
     // gatilho: gp6 → 7-6, gp5 → 6-5 (nunca 6-5 num set de 6, nem 8-7 — o set fecha no gatilho).
     var triggerHit = _trigger !== null && window._isTiebreakSetScore(s1, s2, _trigger);
+    if (window._dtrace && !isNaN(s1) && !isNaN(s2)) window._dtrace('tbReveal', { v: (window.SCOREPLACE_VERSION || '?'), s: s1 + '-' + s2, trigger: _trigger, hit: triggerHit });
     var alreadyShown = tb1El.getAttribute('data-tb-shown') === '1';
     if (triggerHit || alreadyShown) {
       tb1El.style.display = 'inline-block';

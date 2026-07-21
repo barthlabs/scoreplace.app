@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.123';
+window.SCOREPLACE_VERSION = '1.3.124';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -4138,7 +4138,11 @@ window._effectiveResultEntry = function(t, match) {
 window._effectiveScoring = function(t, match) {
     if (!t || !Array.isArray(t.phases) || !t.phases.length) return (t && t.scoring) || null;
     var ph = t.phases[(match && match.phaseIndex) || 0] || t.phases[0] || {};
-    return (ph.scoring && ph.scoring.type) ? ph.scoring : null;
+    // Fase com scoring PRÓPRIO (type) vence; senão cai pro scoring do TORNEIO. Antes retornava null
+    // → a fase virava "simples" e o card NÃO renderizava sets/tie-break mesmo o torneio sendo GSM
+    // (bug: 6-5 não abria o tie-break em torneio multi-fase). Ver [[project_live_scoring_canonical]].
+    if (ph.scoring && ph.scoring.type) return ph.scoring;
+    return (t && t.scoring) || null;
 };
 // Pontos Avançados EFETIVO por fase: lê phases[i].advancedScoring ({enabled,categories,
 // applyLiveScoring}). A fase manda — inclusive quando desliga (enabled:false).
