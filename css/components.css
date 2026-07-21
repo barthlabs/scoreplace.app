@@ -582,17 +582,19 @@ button[style*="linear-gradient"]:not(.btn):active {
   transition: transform 0.12s ease, background 0.12s ease;
   -webkit-tap-highlight-color: transparent;
 }
-/* X desenhado — barras brancas grossas (peso aumentado, v4.5.60). */
+/* X desenhado — barras brancas com traço LEVE e LIMPO (v1.3.120, cânone ajustado pelo dono: o
+   peso 0.19 deixava o ✕ pesado e prejudicava a leitura). Referência: ✕ de UI de jogo (X fino,
+   pontas arredondadas, dentro do círculo vermelho com aro branco). Thickness 0.13, ends rounded. */
 .cancel-x-btn::before,
 .cancel-x-btn::after {
   content: "";
   position: absolute;
   top: 50%;
   left: 50%;
-  width: calc(var(--cx-size) * 0.5);
-  height: calc(var(--cx-size) * 0.19);
+  width: calc(var(--cx-size) * 0.52);
+  height: calc(var(--cx-size) * 0.13);
   background: #fff;
-  border-radius: 2px;
+  border-radius: calc(var(--cx-size) * 0.075);
 }
 .cancel-x-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
 .cancel-x-btn::after  { transform: translate(-50%, -50%) rotate(-45deg); }

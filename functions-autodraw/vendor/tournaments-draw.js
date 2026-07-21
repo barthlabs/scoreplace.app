@@ -1350,7 +1350,7 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
         '<div style="font-weight:800;font-size:1rem;color:var(--text-bright,#f1f5f9);">⚖️ Sorteio de duplas</div>' +
         '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-top:3px;">Defina o gênero de quem está sem, e escolha como formar as duplas.</div>' +
         '<div style="display:flex;gap:8px;margin-top:12px;">' +
-          '<button onclick="document.getElementById(\'gender-draw-overlay\').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:none;color:var(--text-muted,#94a3b8);cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
+          '<button onclick="document.getElementById(\'gender-draw-overlay\').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
           '<button onclick="window._gdConfirm()" style="flex:2;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.88rem;cursor:pointer;">✓ Confirmar</button>' +
         '</div>' +
       '</div>' +
@@ -1777,8 +1777,25 @@ window._callIntegrateLate = function (payload) {
 // quando há algo na lista de espera, com guard anti-spam (in-flight + assinatura do estado). A CF
 // integra na transação e persiste; o onSnapshot re-renderiza. Idempotente: changed=false não
 // re-dispara o mesmo estado. Ver [[feedback_draw_is_cf_only]].
+// Espelha o doc AUTORITATIVO que uma CF (integrateLateEntries/formLatePair/splitLatePair/...)
+// devolve no AppStore local e re-renderiza AGORA — o cânone CF-only: a CF muta+persiste, o cliente
+// só REFLETE (não espera onSnapshot). Sem isto a UI ficava stale até o reload. [[project_formed_pair_roster_orphan]]
+window._applyCFTournament = function (tId, doc) {
+    if (!doc || !window.AppStore || !Array.isArray(window.AppStore.tournaments)) return;
+    try {
+        doc.id = String(tId);
+        var _list = window.AppStore.tournaments, _i = -1;
+        for (var _k = 0; _k < _list.length; _k++) { if (String(_list[_k].id) === String(tId)) { _i = _k; break; } }
+        if (_i !== -1) _list[_i] = doc; else _list.push(doc);
+        if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(doc); } catch (e) {} }
+    } catch (e) {}
+    if (typeof window._rerenderBracket === 'function') { try { window._rerenderBracket(tId); } catch (e) {} }
+    if (typeof window._softRefreshView === 'function') { window._suppressSoftRefresh = false; try { window._softRefreshView(); } catch (e) {} }
+};
+
 window._lateIntegrateInflight = window._lateIntegrateInflight || {};
 window._lateIntegrateLastSig = window._lateIntegrateLastSig || {};
+window._lateIntegratePending = window._lateIntegratePending || {};
 window._triggerLateIntegration = function (t, opts) {
     opts = opts || {};
     if (!t || !t.id) return;
@@ -1799,11 +1816,17 @@ window._triggerLateIntegration = function (t, opts) {
         window._lateIntegrateInflight[tId] = false;
         window._lateIntegrateLastSig[tId] = sig;
         var d = (res && res.data) || {};
-        if (d.changed && typeof showNotification !== 'undefined') {
-            var _n2 = (d.extra || 0) + (d.duplas || 0) + (d.monarch || 0);
-            showNotification('⚡ Tardios na chave', (_n2 ? (_n2 + ' confronto(s) novo(s) — ') : '') + 'chave recalculada pela CF.', 'info');
+        if (window._dtrace) window._dtrace('integrateLate:done', { v: (window.SCOREPLACE_VERSION || '?'), changed: d.changed, extra: d.extra, duplas: d.duplas, monarch: d.monarch, repfill: d.repfill, redrawn: d.redrawn, reason: d.reason });
+        // RAIZ da "gambiarra" (dono, console): a CF INTEGRA a dupla e PERSISTE (changed:true), mas o
+        // AppStore LOCAL nunca era atualizado com o doc que a CF devolve → a UI ficava STALE até um
+        // reload ("a dupla só entra na próxima versão"). E o Desfazer não achava a dupla porque a CF
+        // já a moveu de standby/waitlist pra participants, mas o card local (stale) ainda a mostrava
+        // na espera. Fix: ESPELHA o doc autoritativo da CF no AppStore AGORA e re-renderiza a view.
+        if (d.changed && d.tournament) window._applyCFTournament(tId, d.tournament);
+        var _novos = (d.extra || 0) + (d.duplas || 0) + (d.monarch || 0) + (d.repfill || 0);
+        if (_novos > 0 && typeof showNotification !== 'undefined') {
+            showNotification('⚡ Tardios na chave', 'A dupla entrou na chave.', 'info');
         }
-        // a CF persistiu → o onSnapshot re-renderiza sozinho com a chave nova.
     }).catch(function (e) {
         window._lateIntegrateInflight[tId] = false;
         if (window._dtrace) window._dtrace('integrateLate:ERR', { code: e && e.code, msg: e && e.message });
@@ -2903,7 +2926,7 @@ window._showDropChoiceOverlay = function(opts) {
         : '';
     // v2.7.76: Cancelar logo ABAIXO dos 2 botões (agrupado com eles), com cara de
     // botão (fundo sólido + volume), e as notas explicativas vão pro rodapé.
-    var btnCancel = '<button id="dc-cancel" style="width:100%;margin-top:10px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);border-radius:10px;padding:12px 10px;font-weight:800;font-size:0.9rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 2px 6px rgba(0,0,0,0.25);">Cancelar</button>';
+    var btnCancel = '<button id="dc-cancel" style="width:100%;margin-top:10px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);color:#ef4444;border-radius:10px;padding:12px 10px;font-weight:800;font-size:0.9rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 2px 6px rgba(0,0,0,0.25);">Cancelar</button>';
     ov.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:20px;max-width:400px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.4);">' +
         '<div style="font-weight:800;color:var(--text-bright);font-size:1rem;margin-bottom:4px;">' + esc(opts.sourceName) + ' &rarr; ' + esc(opts.targetName) + '</div>' +
         '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">O que você quer fazer com esses dois?</div>' +
