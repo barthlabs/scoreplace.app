@@ -1120,6 +1120,24 @@ function _slotObj(m, side) {
   if (!m) return null;
   return side === 'p1' ? (m.team1Obj || null) : (m.team2Obj || null);
 }
+// v1.3.136: hint POSICIONAL de uid pro _resolveSideLive — 1 slot por membro na MESMA ordem do
+// display, com vazio ('') pro membro FICTÍCIO (sem conta). Diferente de _slotUids, que filtra os
+// vazios (certo pra avanço, errado pro display): sem a posição do ficto, uma dupla ficto+conta
+// tinha contagem uid≠partes → a conta nunca resolvia pelo uid (o "Camila sumiu"). Aqui a conta
+// resolve pelo SEU uid mesmo com parceiro fictício, sem gravar nome nem pattern-match.
+// [[project_uid_identity_canon_locked]] — nome com uid nunca é gravado; resolve-se pelo uid.
+function _slotUidsPositional(m, side) {
+  if (!m) return [];
+  var obj = side === 'p1' ? m.team1Obj : m.team2Obj;
+  if (obj && typeof obj === 'object') {
+    if (obj.p1Uid || obj.p2Uid || (obj.p1Name && obj.p2Name)) return [obj.p1Uid || '', obj.p2Uid || ''];
+    if (Array.isArray(obj.participants) && obj.participants.length > 1) {
+      return obj.participants.map(function (s) { return (s && typeof s === 'object' && s.uid) || ''; });
+    }
+  }
+  return _slotUids(m, side); // 1v1 / solo / legado sem obj
+}
+window._slotUidsPositional = _slotUidsPositional;
 // Escreve a identidade num slot de destino: team*Uids sempre (forma geral),
 // p*Uid só quando 1v1 (1 uid) pra o hint de _resolveSideLive não truncar dupla.
 function _setSlot(m, side, uids, obj) {

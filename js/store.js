@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.136';
+window.SCOREPLACE_VERSION = '1.3.137';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -3594,38 +3594,27 @@ window._resolveSideLive = function (t, sideStr, uidHint) {
     }
     return '';
   }
-  // v1.3.136: HEAL de rótulo órfão PERSISTIDO. No sorteio, com cache frio, m.p1 pode ter gravado
-  // "Jogador sem perfil (xxxx)" no lugar do nome (o uid não resolveu naquele instante). Se agora
-  // um uid do hint resolve pro nome REAL, troca. Só age no padrão EXATO do rótulo e só quando um
-  // nome real resolve — nunca inventa. Cura o "Camila sumiu" quando a conta dela resolve. Bug 2.
-  var _OL = window._ORPHAN_UID_LABEL || 'Jogador sem perfil';
-  var _uidList = Array.isArray(uidHint) ? uidHint.filter(Boolean) : (uidHint ? [uidHint] : []);
-  function _healOrphanPart(part) {
-    if (!part || part.indexOf(_OL) !== 0) return part;
-    var mf = part.match(/\(([^)]+)\)\s*$/); var frag = mf ? mf[1] : '';
-    if (!frag) return part;
-    for (var k = 0; k < _uidList.length; k++) {
-      if (String(_uidList[k]).slice(0, frag.length) === frag) {
-        var nm = _liveByUid(_uidList[k]);
-        if (nm && nm.indexOf(_OL) !== 0) return nm;
-      }
-    }
-    return part;
-  }
   if (uidHint) {
     if (Array.isArray(uidHint)) {
       var _parts = s.split(' / ').map(function (x) { return x.trim(); }).filter(Boolean);
-      var _uids = uidHint.filter(Boolean);
-      // 1 uid por membro (counts batem) → resolve POSICIONAL: nome vivo por uid, fallback à
-      // parte gravada (curando rótulo órfão persistido).
-      if (_parts.length > 0 && _uids.length === _parts.length) {
-        return _parts.map(function (part, i) { return _liveByUid(_uids[i]) || _healOrphanPart(part); }).join(' / ');
+      // v1.3.136: hint POSICIONAL (1 slot por membro, vazio pro fictício) — contagem bate com as
+      // partes → resolve CADA membro pelo SEU uid; slot vazio (ficto/sem conta) mantém a parte
+      // gravada (nome fictício É a identidade dele). É o caminho canônico: a CONTA resolve pelo uid
+      // MESMO com parceiro fictício (sem gravar nome, sem pattern-match do rótulo órfão). Cura o
+      // "Camila sumiu" na raiz. [[project_uid_identity_canon_locked]] / [[project_match_slot_uid_identity]]
+      if (_parts.length > 0 && uidHint.length === _parts.length) {
+        return _parts.map(function (part, i) {
+          var u = uidHint[i];
+          return (u && _liveByUid(u)) || part;
+        }).join(' / ');
       }
-      // v4.5.98: counts NÃO batem — dupla com membro GUEST (placeholder/sem conta, sem uid).
-      // O uidHint só traz os uids de CONTA (_slotUids/_participantUids filtram vazios), então
-      // ele fica MENOR que o nº de membros. NUNCA dropar um membro do side: mantém a string
-      // gravada (guest não renomeia perfil) — mas CURA rótulo órfão persistido de um membro-conta.
-      if (_parts.length > 0) return _parts.map(_healOrphanPart).join(' / ');
+      // Fallback (hint LEGADO só-contas, sem posicional): resolve posicional se a contagem
+      // filtrada bater; senão mantém a string (nunca dropa membro).
+      var _uids = uidHint.filter(Boolean);
+      if (_parts.length > 0 && _uids.length === _parts.length) {
+        return _parts.map(function (part, i) { return _liveByUid(_uids[i]) || part; }).join(' / ');
+      }
+      if (_parts.length > 0) return _parts.join(' / ');
     } else {
       var _one = _liveByUid(uidHint);
       if (_one) return _one;
