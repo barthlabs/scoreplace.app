@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.128';
+window.SCOREPLACE_VERSION = '1.3.129';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -6335,6 +6335,22 @@ window.AppStore = {
         // render/cache — senão um snapshot stale (pré-write) reverte o que o org acabou de marcar
         // ("aparece/apaga"). Cada intenção some sozinha quando o doc fresco confirma ou em ~15s.
         if (typeof window._reapplyPendingPresence === 'function') window._reapplyPendingPresence(tournaments);
+        // DIAGNÓSTICO (dono, "24 caem pra 19 e voltam" ao marcar muitos presentes): loga a contagem
+        // de presentes/ausentes/pendentes do torneio NA TELA a cada snapshot (DEPOIS do reapply), pra
+        // ver a trajetória real da oscilação e a causa (write parcial? reapply não cobre? re-render).
+        try {
+          if (window._dtrace) {
+            var _hpP = (window.location.hash || '').replace('#', '').split('/');
+            var _vtId = (['participants', 'tournaments', 'bracket', 'analise'].indexOf(_hpP[0]) !== -1) ? _hpP[1] : null;
+            if (_vtId) {
+              var _vt = tournaments.find(function (x) { return x && String(x.id) === String(_vtId); });
+              if (_vt && _vt.checkedIn) {
+                var _pendN = (window._pendingPresence && window._pendingPresence[String(_vtId)]) ? Object.keys(window._pendingPresence[String(_vtId)]).length : 0;
+                window._dtrace('presSnap', { present: Object.keys(_vt.checkedIn).length, absent: Object.keys(_vt.absent || {}).length, pending: _pendN });
+              }
+            }
+          }
+        } catch (e) {}
         store._saveToCache(); // cache enxuto (matchIds) — foldado dentro do _saveToCache
         // v4.4.69 Rei/Rainha: reidrata group.matches como refs de round.matches (fonte
         // única) DEPOIS de cachear — todo consumidor em memória vê os grupos montados.
