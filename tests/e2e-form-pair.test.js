@@ -119,6 +119,57 @@ console.log('\n── dupla formada na LISTA DE ESPERA (_formLateJoinDupla) entr
   ok(!stillSolo, label + ' :: os 2 solos saíram da espera');
 });
 
+// ── BUG DO DONO: DUAS duplas na espera EM SEQUÊNCIA — as DUAS têm que entrar na chave (a 2ª
+// "criada em seguida" não entrava) + DESFAZER a dupla da espera tem que funcionar. ──
+console.log('\n── 2 duplas na espera em sequência + desfazer (_splitLateDupla) ──');
+(function () {
+  const t = E.createTournament(cfg('Elim Simples'), { id: 'LJ2', participants: mkPairs(8), newMatchups: true, lateEnrollment: 'expand' });
+  E.draw(t);
+  // 1ª dupla tardia
+  t.standbyParticipants.push({ uid: 'x1', displayName: 'Ana', name: 'Ana', ligaActive: true });
+  t.standbyParticipants.push({ uid: 'y1', displayName: 'Bia', name: 'Bia', ligaActive: true });
+  E.resetLateGuards();
+  W._formLateJoinDupla(t.id, 'x1', 'y1');
+  ok(labels(t).has('Ana / Bia'), '2seq :: 1ª dupla da espera entrou');
+  // 2ª dupla tardia LOGO EM SEGUIDA (o caso que falhava)
+  t.standbyParticipants.push({ uid: 'x2', displayName: 'Cid', name: 'Cid', ligaActive: true });
+  t.standbyParticipants.push({ uid: 'y2', displayName: 'Duda', name: 'Duda', ligaActive: true });
+  W._formLateJoinDupla(t.id, 'x2', 'y2');
+  ok(labels(t).has('Cid / Duda'), '2seq :: ✅ 2ª dupla (criada EM SEGUIDA) TAMBÉM entrou');
+
+  // DESFAZER a 1ª dupla (o ✕ vermelho chama _splitLateDupla com o nome da dupla)
+  if (typeof W._splitLateDupla !== 'function') { ok(false, 'desfazer :: _splitLateDupla indisponível'); return; }
+  // a dupla desfeita tem que estar na ESPERA (não integrada ainda) pra o split achar — forma uma nova
+  const t2 = E.createTournament(cfg('Elim Simples'), { id: 'LJ3', participants: mkPairs(8), newMatchups: false, lateEnrollment: 'closed' });
+  E.draw(t2);
+  t2.standbyParticipants.push({ uid: 'p1', displayName: 'Nei', name: 'Nei', ligaActive: true });
+  t2.standbyParticipants.push({ uid: 'p2', displayName: 'Sil', name: 'Sil', ligaActive: true });
+  E.resetLateGuards();
+  W._formLateJoinDupla(t2.id, 'p1', 'p2');   // gate off → fica na espera como dupla formada
+  ok(t2.standbyParticipants.some((p) => (p.displayName || p.name) === 'Nei / Sil'), 'desfazer :: dupla formada está na espera');
+  W._splitLateDupla(t2.id, 'Nei / Sil');
+  const stbNames = t2.standbyParticipants.map((p) => (p && (p.displayName || p.name)) || p);
+  ok(stbNames.indexOf('Nei / Sil') === -1, 'desfazer :: ✅ dupla sumiu da espera');
+  ok(stbNames.indexOf('Nei') !== -1 && stbNames.indexOf('Sil') !== -1, 'desfazer :: 2 solos voltaram pra espera');
+})();
+
+// ── re-enfileiramento (a corrida async real que o harness síncrono não encena): enquanto uma
+// integração está EM VOO, um 2º force NÃO pode ser descartado — fica PENDENTE e re-dispara ao fim. ──
+console.log('\n── re-enfileira integração enquanto a anterior está em voo ──');
+(function () {
+  const t = E.createTournament(cfg('Elim Simples'), { id: 'RQ', participants: mkPairs(8), newMatchups: true, lateEnrollment: 'expand' });
+  E.draw(t);
+  W._lateIntegrateInflight = {}; W._lateIntegratePending = {}; W._lateIntegrateLastSig = {};
+  W._lateIntegrateInflight[t.id] = true;    // simula a 1ª integração ainda em voo
+  W._triggerLateIntegration(t, { force: true });   // 2º force chega no meio
+  ok(W._lateIntegratePending[t.id] === true, 're-queue :: 2º force em voo fica PENDENTE (não é descartado em silêncio)');
+  W._lateIntegrateInflight[t.id] = false;   // sem force, em voo, NÃO enfileira
+  W._lateIntegratePending = {};
+  W._lateIntegrateInflight[t.id] = true;
+  W._triggerLateIntegration(t, {});         // sem force
+  ok(!W._lateIntegratePending[t.id], 're-queue :: sem force em voo NÃO enfileira (anti-spam preservado)');
+})();
+
 const r = E.results();
 console.log('\n' + (r.fail === 0 ? '✅ e2e-form-pair: OK' : '❌ ' + r.fail + ' FALHA(S)') + '  (' + r.pass + ' asserts ok)');
 if (r.fails.length) { console.error('\nFALHAS:'); r.fails.forEach((f) => console.error('  ✗ ' + f)); }

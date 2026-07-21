@@ -1779,11 +1779,18 @@ window._callIntegrateLate = function (payload) {
 // re-dispara o mesmo estado. Ver [[feedback_draw_is_cf_only]].
 window._lateIntegrateInflight = window._lateIntegrateInflight || {};
 window._lateIntegrateLastSig = window._lateIntegrateLastSig || {};
+window._lateIntegratePending = window._lateIntegratePending || {};
 window._triggerLateIntegration = function (t, opts) {
     opts = opts || {};
     if (!t || !t.id) return;
     var tId = String(t.id);
-    if (window._lateIntegrateInflight[tId]) return;
+    if (window._lateIntegrateInflight[tId]) {
+        // já rodando: se este chamado é FORCE (ação explícita: formar 2ª dupla logo após a 1ª),
+        // RE-ENFILEIRA pra rodar de novo ao terminar — senão a 2ª dupla era DESCARTADA em silêncio
+        // (bug do dono "a 2ª que criei em seguida não entrou"). Sem force, mantém o descarte (spam).
+        if (opts.force) window._lateIntegratePending[tId] = true;
+        return;
+    }
     // só dispara quando há gente na espera (senão não há o que integrar) — EXCETO com force, que é o
     // caso da DUPLA FORMADA pós-sorteio: ela entra em participants (não na espera), então não há nada
     // na waitlist, mas a CF ainda precisa rodar pra detectar o órfão de roster e re-sortear.
@@ -1795,6 +1802,13 @@ window._triggerLateIntegration = function (t, opts) {
     var sig = wl.map(_nm).sort().join('|') + '#' + Object.keys(t.checkedIn || {}).sort().join(',');
     if (!opts.force && window._lateIntegrateLastSig[tId] === sig) return;
     window._lateIntegrateInflight[tId] = true;
+    var _drainPending = function () {
+        if (window._lateIntegratePending[tId]) {
+            delete window._lateIntegratePending[tId];
+            var _ft = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : t;
+            window._triggerLateIntegration(_ft || t, { force: true });
+        }
+    };
     window._callIntegrateLate({ tournamentId: tId }).then(function (res) {
         window._lateIntegrateInflight[tId] = false;
         window._lateIntegrateLastSig[tId] = sig;
@@ -1804,9 +1818,11 @@ window._triggerLateIntegration = function (t, opts) {
             showNotification('⚡ Tardios na chave', (_n2 ? (_n2 + ' confronto(s) novo(s) — ') : '') + 'chave recalculada pela CF.', 'info');
         }
         // a CF persistiu → o onSnapshot re-renderiza sozinho com a chave nova.
+        _drainPending();
     }).catch(function (e) {
         window._lateIntegrateInflight[tId] = false;
         if (window._dtrace) window._dtrace('integrateLate:ERR', { code: e && e.code, msg: e && e.message });
+        _drainPending();
     });
 };
 

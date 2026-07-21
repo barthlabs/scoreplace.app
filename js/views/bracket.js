@@ -1043,7 +1043,10 @@ window._splitLateDupla = function (tId, duplaName) {
   t.updatedAt = new Date().toISOString();
   window.FirestoreDB.saveTournament(t).then(function () {
     if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', (e.p1Name || '') + ' e ' + (e.p2Name || '') + ' voltaram para Sem dupla.', 'info');
+    // o Desfazer é acionado na tela de INSCRITOS — atualiza ELA (não só o bracket, que não está
+    // renderizado ali). Sem isto o card continuava mostrando a dupla "formada". Bug do dono.
     if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+    if (typeof window._softRefreshView === 'function') window._softRefreshView();
   });
 };
 window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
