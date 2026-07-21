@@ -1677,6 +1677,26 @@ function renderTournaments(container, tournamentId = null) {
         // um scope='present'/solo/p2 de uma tentativa anterior (cancelada) contaminaria esta.
         if (!skipGates && window._clearDrawDecisions) window._clearDrawDecisions(tId);
         if (window._dtrace) window._dtrace('handleSortear', { skipGates: !!skipGates, isAberto: !!isAberto });
+        // v1.3.x: SNAPSHOT PRISTINO no topo — ANTES de QUALQUER gate/move. A base do Cancelar
+        // (_cancelDrawResolution) e do restore-antes-do-despacho. Antes o snapshot era tirado só
+        // em _startDraw, DEPOIS do move "só entre os presentes" (que joga ausentes p/ espera) →
+        // Cancelar restaurava o estado JÁ-MOVIDO (ausentes sumiam). Agora é pré-tudo: Cancelar
+        // volta EXATAMENTE ao estado de antes de clicar em Sortear. Só na 1ª entrada (!skipGates).
+        if (!skipGates) {
+            try {
+                var _t0 = window._findTournamentById(tId);
+                if (_t0) {
+                    window._drawPrepSnapshots = window._drawPrepSnapshots || {};
+                    window._drawPrepSnapshots[String(tId)] = JSON.parse(JSON.stringify({
+                        participants: _t0.participants || [],
+                        waitlist: _t0.waitlist || [],
+                        standbyParticipants: _t0.standbyParticipants || [],
+                        monarchWaitlist: _t0.monarchWaitlist || {},
+                        teamOrigins: _t0.teamOrigins || {}
+                    }));
+                }
+            } catch (_eSnap0) {}
+        }
         var _startDraw = function() {
             if (window._dtrace) window._dtrace('startDraw');
             // v4.0.88: "carregando…" enquanto o sorteio processa (save async + diagnóstico)
@@ -1691,7 +1711,9 @@ function renderTournaments(container, tournamentId = null) {
             // _cancelDrawResolution) → as decisões são reavaliadas do zero no próximo Sortear
             // (pedido do dono). Só na 1ª entrada: re-entradas via _soloResolved não re-snapshotam;
             // o snapshot é DESCARTADO quando o sorteio efetiva (generateDrawFunction) ou no reset.
-            if (t && !t._soloResolved) {
+            // v1.3.x: NÃO sobrescreve o snapshot pristino já tirado no topo de _handleSortearClick
+            // (senão voltaria a capturar o estado pós-move "só presentes"). Só cria se não existe.
+            if (t && !t._soloResolved && !(window._drawPrepSnapshots && window._drawPrepSnapshots[String(tId)])) {
                 try {
                     window._drawPrepSnapshots = window._drawPrepSnapshots || {};
                     window._drawPrepSnapshots[String(tId)] = JSON.parse(JSON.stringify({
