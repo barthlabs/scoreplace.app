@@ -95,6 +95,30 @@ console.log('\n── split: desfazer dupla via dispatch real ──');
   ok(E.sawSave() === 0, 'split :: cliente NÃO chamou saveTournament (tudo na CF)');
 })();
 
+// ── BUG DO DONO: DUPLA FORMADA NA LISTA DE ESPERA (_formLateJoinDupla) tem que ENTRAR na chave.
+// Esse é o caminho da tela de INSCRITOS (arrastar 1 card da espera sobre outro) — DIFERENTE do
+// _formDuplaByUids (roster). A integração dependia do re-render do bracket, que não acontece na
+// tela de inscritos → a dupla ficava na espera sem entrar na chave. Dirige a função REAL. ──
+console.log('\n── dupla formada na LISTA DE ESPERA (_formLateJoinDupla) entra na chave ──');
+['Elim Simples', 'Dupla Elim', 'Grupos', 'Suíço'].forEach((kind) => {
+  const t = E.createTournament(cfg(kind), { id: 'LJ-' + kind.replace(/\s/g, ''), participants: mkPairs(8), newMatchups: true, lateEnrollment: 'expand' });
+  const label = 'espera ' + kind;
+  E.draw(t);
+  if (typeof W._formLateJoinDupla !== 'function') { ok(false, label + ' :: _formLateJoinDupla indisponível'); return; }
+  // dois solos chegam tarde e vão pra LISTA DE ESPERA (não pro roster)
+  t.standbyParticipants.push({ uid: 'lx', displayName: 'LateX', name: 'LateX', ligaActive: true });
+  t.standbyParticipants.push({ uid: 'ly', displayName: 'LateY', name: 'LateY', ligaActive: true });
+  E.resetLateGuards();
+  const before = labels(t);
+  ok(!before.has('LateX / LateY'), label + ' :: (pré) dupla da espera não está na chave');
+  W._formLateJoinDupla(t.id, 'lx', 'ly');   // ← arrastar-e-soltar REAL da tela de inscritos
+  const after = labels(t);
+  ok(after.has('LateX / LateY'), label + ' :: ✅ dupla da ESPERA entrou na chave');
+  // saiu da espera, virou 1 dupla presente
+  const stillSolo = (t.standbyParticipants || []).some((p) => (p.displayName || p.name) === 'LateX' || (p.displayName || p.name) === 'LateY');
+  ok(!stillSolo, label + ' :: os 2 solos saíram da espera');
+});
+
 const r = E.results();
 console.log('\n' + (r.fail === 0 ? '✅ e2e-form-pair: OK' : '❌ ' + r.fail + ' FALHA(S)') + '  (' + r.pass + ' asserts ok)');
 if (r.fails.length) { console.error('\nFALHAS:'); r.fails.forEach((f) => console.error('  ✗ ' + f)); }

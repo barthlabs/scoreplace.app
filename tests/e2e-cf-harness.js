@@ -72,6 +72,10 @@ W.firebase.auth = function () { return { currentUser: { uid: 'org', getIdToken: 
 W.AppStore.currentUser = W.AppStore.currentUser || { uid: 'org', displayName: 'Org' };
 W._softRefreshView = function () {};
 W._suppressSoftRefresh = false;
+// FIDELIDADE: o dono forma a dupla na tela de INSCRITOS, onde o bracket NÃO re-renderiza. Se o
+// harness deixasse _rerenderBracket rodar (e disparar _triggerLateIntegration no render), mascararia
+// o bug — a integração TEM que vir do dispatch EXPLÍCITO do fluxo, não do render. Noop = pior caso.
+W._rerenderBracket = function () {};
 // anti-spam do _triggerLateIntegration é por assinatura; zera entre cenários
 function resetLateGuards() { W._lateIntegrateInflight = {}; W._lateIntegrateLastSig = {}; }
 

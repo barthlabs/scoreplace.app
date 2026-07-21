@@ -904,8 +904,14 @@ window._formLateJoinDupla = function (tId, src, tgt) {
   t.updatedAt = new Date().toISOString();
   window.FirestoreDB.saveTournament(t).then(function () {
     if (typeof showNotification !== 'undefined') showNotification('🤝 Dupla formada · presença marcada', an + ' / ' + bn + ' entraram na chave.', 'success');
-    // v1.3.76: re-render dispara a integração client-side (revertido o CF-only da v1.3.75 que quebrou).
+    // BUG (dono, jul/2026): a integração da dupla tardia dependia do RE-RENDER do bracket
+    // (`_rerenderBracket` → `_triggerLateIntegration` no render). Mas a dupla é formada na tela de
+    // INSCRITOS, onde o bracket NÃO re-renderiza → a integração NUNCA disparava e a dupla ficava na
+    // espera sem entrar na chave. Fix: DISPARA a CF integrateLateEntries EXPLICITAMENTE (force),
+    // independente da view. A dupla _lateJoin presente entra por repescagem. [[project_late_dupla_fills_awaiting_slot]]
+    if (typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
     if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+    if (typeof window._softRefreshView === 'function') window._softRefreshView();
   });
 };
 
