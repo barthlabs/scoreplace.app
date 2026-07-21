@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.96';
+window.SCOREPLACE_VERSION = '1.3.97';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1593,11 +1593,17 @@ window._tournamentDetailSig = function (t) {
       (m.score1 != null ? m.score1 : '') + '-' + (m.score2 != null ? m.score2 : '') + ':' +
       (m.p1 || '') + '/' + (m.p2 || '');
   }).join(',');
+  // v1.3.97: inclui o lateEnrollment EFETIVO (fase corrente sobrepõe top-level) — o toggle de
+  // "aceitar entradas tardias" muda o painel (lista ↔ pareamento) e o próprio estado do toggle, então
+  // flipá-lo TEM que re-renderizar o detalhe. Sem isto o _softRefreshView pularia (sig igual).
+  var _ph = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
+  var _le = (_ph && _ph.lateEnrollment) || t.lateEnrollment || '';
   return String(t.id) + '|' + (t.status || '') + '|' +
     (Array.isArray(t.participants) ? t.participants.length : 0) + '|' +
     (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.length : 0) + '|' +
     (Array.isArray(t.waitlist) ? t.waitlist.length : 0) + '|' +
     (t.currentStage || '') + '|' + (t.currentPhaseIndex || 0) + '|' + (t.tournamentStarted ? 1 : 0) + '|' +
+    _le + '|' +
     _k(t.checkedIn) + '|' + _k(t.absent) + '|' + _k(t.checkedInConfirmed) + '|' +
     _all.length + '|' + _mc;
 };

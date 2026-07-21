@@ -1058,13 +1058,40 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
     : (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : []);
   if (_merged.length === 0) return '';
 
+  // v1.3.97 (dono, "não travado, alterável durante a fase"): controle do organizador AO VIVO pra
+  // ligar/desligar a ENTRADA TARDIA desta fase. O default do torneio é 'closed' (o dono não escolheu
+  // de propósito) → com 'closed' a integração tardia não roda e marcar presença na espera não cria
+  // confronto. Ligado ('expand'), marcar presença de quem está na espera cria o confronto por
+  // repescagem (vs a definir). Só pro organizador; presente NOS DOIS caminhos de retorno (pareamento
+  // e lista). Ver [[project_late_enrollment_per_phase]].
+  var _lateToggleHtml = '';
+  if (isOrg) {
+    var _leCur = (typeof window._effectiveLateEnrollment === 'function') ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+    var _leOn = (_leCur === 'expand');
+    var _tIdTog = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    _lateToggleHtml =
+      '<div style="margin-bottom:0.9rem;padding:10px 12px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.22);border-radius:12px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;">' +
+        '<div style="min-width:0;flex:1;">' +
+          '<div style="font-weight:800;font-size:0.84rem;color:' + (_leOn ? '#4ade80' : 'var(--text-color)') + ';">➕ Aceitar entradas tardias nesta fase</div>' +
+          '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">' +
+            (_leOn ? 'Marque presença de quem está na espera — entra por repescagem (vs a definir).'
+                   : 'Ligado: marcar presença de quem está na espera cria um novo confronto (vs a definir).') +
+          '</div>' +
+        '</div>' +
+        '<label class="toggle-switch" style="--toggle-on-bg:#22c55e;--toggle-on-glow:rgba(34,197,94,0.3);--toggle-on-border:#22c55e;flex-shrink:0;" onclick="event.stopPropagation();">' +
+          '<input type="checkbox" ' + (_leOn ? 'checked' : '') + ' onclick="event.stopPropagation(); window._setPhaseLateEnrollment(\'' + _tIdTog + '\', this.checked ? \'expand\' : \'closed\');">' +
+          '<span class="toggle-slider"></span>' +
+        '</label>' +
+      '</div>';
+  }
+
   // v4.5.18: DUPLAS com janela de inscrição tardia ABERTA (R1) → a lista de espera vira
   // seção de PAREAMENTO (arrastar/soltar formando duplas). Fora disso, lista padrão.
   var _teamSizeSb = parseInt(t.teamSize) || 1;
   var _isDuplasSb = _teamSizeSb === 2 || (window._isTeamEnrollMode && window._isTeamEnrollMode(t.enrollmentMode));
   if (_isDuplasSb && typeof window._lateEnrollWindowOpen === 'function' && window._lateEnrollWindowOpen(t) && typeof window._renderLateJoinPairing === 'function') {
     var _ljHtml = window._renderLateJoinPairing(t, isOrg);
-    if (_ljHtml) return _ljHtml;
+    if (_ljHtml) return _lateToggleHtml + _ljHtml;
   }
 
   const getName = (p) => window._pName(p, '?');
@@ -1164,6 +1191,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
 
   return `
     <div id="standby-panel-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.2);border-radius:16px;padding:1.5rem;">
+      ${_lateToggleHtml}
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;">
         <span style="font-size:1.3rem;">📋</span>
         <h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Lista de Espera</h3>

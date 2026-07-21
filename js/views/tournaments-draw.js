@@ -1797,6 +1797,41 @@ window._triggerLateIntegration = function (t, opts) {
     });
 };
 
+// v1.3.97 (dono, "não travado, alterável durante a fase"): liga/desliga a ENTRADA TARDIA da fase
+// ATUAL AO VIVO, sem re-sortear. O default do torneio é 'closed' (o dono não escolheu isso de
+// propósito) → a integração tardia ficava bloqueada e marcar presença na dupla da espera não criava
+// confronto. Este setter é o controle do organizador que o dono pediu: pode alternar durante a fase.
+// Grava a fase corrente (multi-fase) E o top-level (fonte que _effectiveLateEnrollment lê). Ao LIGAR
+// ('expand'), dispara a integração pra quem JÁ está presente na espera (entra na hora por repescagem).
+// Ver [[project_late_enrollment_per_phase]] / [[feedback_open_by_default_consistency]].
+window._setPhaseLateEnrollment = function (tId, mode) {
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    if (mode !== 'expand' && mode !== 'closed' && mode !== 'standby') return;
+    var _done = window.AppStore.mutate(tId, function (ft) {
+        var _cp = (ft && ft.currentPhaseIndex) || 0;
+        if (Array.isArray(ft.phases) && ft.phases[_cp]) ft.phases[_cp].lateEnrollment = mode;
+        ft.lateEnrollment = mode;
+    }, 'Entrada tardia da fase: ' + (mode === 'expand' ? 'ABERTA (novos confrontos)' : mode === 'standby' ? 'suplentes apenas' : 'fechada'));
+    if (typeof showNotification === 'function') {
+        if (mode === 'expand') showNotification('➕ Entradas tardias ABERTAS', 'Marque presença de quem está na espera — entra por repescagem (vs a definir).', 'success');
+        else if (mode === 'closed') showNotification('🚫 Entradas tardias fechadas', 'A lista de espera não gera novos confrontos nesta fase.', 'info');
+        else showNotification('⏸️ Suplentes apenas', 'A espera só substitui ausentes (W.O.), sem novos confrontos.', 'info');
+    }
+    // ao ABRIR, integra quem já está presente na espera (o dono já marcou a dupla → entra agora)
+    var _fire = function () {
+        try {
+            var _ft = window._findTournamentById(tId) || t;
+            if (mode === 'expand' && typeof window._triggerLateIntegration === 'function') {
+                window._triggerLateIntegration(_ft, { force: true });
+            }
+            // re-render o painel pra refletir o novo estado do toggle
+            if (typeof window._softRefreshView === 'function') { window._suppressSoftRefresh = false; window._softRefreshView(); }
+        } catch (_e) {}
+    };
+    if (_done && typeof _done.then === 'function') _done.then(_fire, _fire); else _fire();
+};
+
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) { if (window._dtrace) window._dtrace('generateDraw:NO-TOURNAMENT', { tId: String(tId) }); return; }

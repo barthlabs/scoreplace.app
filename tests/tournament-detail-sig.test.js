@@ -67,6 +67,12 @@ t4.standbyParticipants = [];
 t4.matches.push({ id: 'm2', p1: 'E / F', p2: 'G / H', winner: null });
 ok('integração tardia muda a sig', sig(t4) !== i0, 'mudou');
 
+// 5b. Flip de lateEnrollment (toggle "aceitar entradas tardias") muda a sig → re-renderiza o painel
+const t4b = mk();
+const l0 = sig(t4b);
+t4b.lateEnrollment = 'expand';
+ok('flip lateEnrollment muda a sig', sig(t4b) !== l0, 'mudou');
+
 // 6. NÃO usa updatedAt: mudar só updatedAt NÃO muda a sig (mata o pulo do eco)
 const t5 = mk();
 const u0 = sig(t5);
