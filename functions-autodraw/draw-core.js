@@ -513,23 +513,26 @@ function integrateLateEntries(t, opts) {
   } catch (e) { win._error && win._error('[integrateLate] duplas:', e); }
   try { monarch = win._expandMonarchFromWaitlist(t) || 0; } catch (e) { win._error && win._error('[integrateLate] monarch:', e); }
 
-  // v1.3.x — GAP achado pelo sweep de integração tardia: DUPLA ELIMINATÓRIA em pow2 NÃO tem
-  // repescagem (repR1) → _integrateLateDuplas faz `if(!repR1.length)return 0`; e
-  // _createExtraGamesFromWaitlist/_rebuildIntegratedBracket são SÓ Eliminatória Simples. Resultado:
-  // tardio (dupla OU solo) fica ÓRFÃO na Dupla Elim. Fallback Tier-1 (NENHUM resultado lançado, então
-  // re-sortear não perde nada): move os tardios PRESENTES pra participants e RE-SORTEIA pelo MESMO
-  // motor (drawInitial) — a estrutura upper+lower+grand nasce completa com o elenco novo. Escopo
-  // estreito (só Dupla Elim + expand + sem resultado + mono-categoria) pra não tocar o que já passa.
+  // v1.3.x — GAP achado pelos sweeps de integração tardia: fora de Eliminatória SIMPLES (que tem o
+  // append cirúrgico de _createExtraGamesFromWaitlist), NENHUMA função integrava tardio →
+  // Dupla Elim (sem repR1), FASE DE GRUPOS, SUÍÇO, LIGA e Rei/Rainha deixavam o tardio ÓRFÃO.
+  // Fallback Tier-1 (NENHUM resultado lançado, então re-sortear não perde nada): move os tardios
+  // PRESENTES pra participants e RE-SORTEIA pelo MESMO motor (drawInitial) — a estrutura nasce
+  // completa com o elenco novo (grupos, chave, upper+lower+grand, rodadas Suíço/Liga). Vale pra
+  // TODO formato EXCETO Elim Simples (surgical) + expand/newMatchups + sem resultado + mono-categoria.
   // Roda mesmo que as funções acima tenham integrado ALGUNS: a coleta `late` abaixo só pega os
-  // tardios presentes que AINDA ficaram órfãos (ex.: repFill integrou 1 dupla e sobrou outra sem
-  // slot). Se `late` vier vazio (todos já entraram), o re-sorteio NÃO roda.
+  // tardios presentes que AINDA ficaram órfãos. Se `late` vier vazio (todos já entraram), NÃO roda.
   let redrawn = 0;
   try {
-    if (/dupla elimin/i.test(t.format || '') &&
+    if (!/elimin[áa]?t[óo]?rias?\s*simples/i.test(t.format || '') &&
         (typeof win._allowsNewMatchups === 'function' ? win._allowsNewMatchups(t)
           : ((win._effectiveLateEnrollment ? win._effectiveLateEnrollment(t) : t.lateEnrollment) === 'expand')) &&
         !(Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1)) {
-      const _hasResult = (t.matches || []).some(function (m) { return m && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length) || m.startedAt); });
+      // "tem resultado?" cobre chave (t.matches) E round-based (t.rounds[] de Liga/Suíço) — senão
+      // re-sortear destruiria rodadas jogadas. Fora do Tier-1 (algum resultado), NÃO re-sorteia.
+      const _resM = function (m) { return m && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length) || m.startedAt); };
+      const _hasResult = (t.matches || []).some(_resM) ||
+        (Array.isArray(t.rounds) && t.rounds.some(function (r) { return r && Array.isArray(r.matches) && r.matches.some(_resM); }));
       if (!_hasResult) {
         const _sameDay = (typeof win._tournamentIsSameDay !== 'function') || win._tournamentIsSameDay(t);
         const _present = function (p) {

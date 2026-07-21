@@ -147,6 +147,10 @@ const SUITES = [
   // ausente que chega, solo tardio → tem que entrar na chave (não ficar órfão) e jogar até campeão.
   // Pegou o gap: Dupla Elim pow2 sem repescagem não integrava tardio (fix: re-sorteio Tier-1). v1.3.x.
   'tests/late-integration-sweep.test.js',
+  // SWEEP FASE CLASSIFICATÓRIA → ELIM (fmt2): todo N × grupos × classificados joga a classificatória,
+  // avança (materializeNextPhase) e fecha a elim num campeão; + integração tardia na classificatória.
+  // Individual e duplas, Grupos e Suíço. Pegou o gap: tardio não integrava em grupos/Suíço (fix redraw). v1.3.x.
+  'tests/classificatory-phase-sweep.test.js',
   // v1.3.89: SWEEP W.O. + integração tardia (motor _applyWO real + CF integrateLateEntries), joga até fechar.
   'tests/draw-sweep-wo-late.test.js',
   'tests/present-only-no-lost-entries.test.js',
