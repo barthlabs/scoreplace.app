@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.134';
+window.SCOREPLACE_VERSION = '1.3.135';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -14,30 +14,38 @@ window._dtrace = function (stage, extra) {
     var e = { stage: String(stage || ''), at: Date.now(), extra: (extra == null ? null : extra) };
     window._drawTrace.push(e);
     if (window._drawTrace.length > 60) window._drawTrace.shift();
-    if (typeof document === 'undefined' || !document.body) return;
-    var b = document.getElementById('sp-draw-trace');
-    if (!b) {
-      b = document.createElement('div');
-      b.id = 'sp-draw-trace';
-      b.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:2147483647;background:rgba(0,0,0,0.88);color:#4 ade80;font:11px/1.35 ui-monospace,Menlo,monospace;padding:6px 9px;border-radius:7px;max-width:94vw;white-space:pre-wrap;pointer-events:auto;border:1px solid rgba(74,222,128,0.4);'.replace('#4 ade80', '#4ade80');
-      b.title = 'Rastro do sorteio (diagnóstico) — toque pra copiar';
-      b.addEventListener('click', function () {
-        try {
-          var txt = 'DRAW TRACE v' + window.SCOREPLACE_VERSION + '\n' + window._drawTrace.map(function (x) {
-            return x.stage + (x.extra ? ' ' + JSON.stringify(x.extra) : '');
-          }).join('\n');
-          if (navigator.clipboard) navigator.clipboard.writeText(txt);
-        } catch (_e) {}
-      });
-      document.body.appendChild(b);
+    // v1.3.135 (pedido do dono): o SELO visual só aparece em torneio SANDBOX. Fora do SB, o
+    // rastro segue em memória + Firestore (diagnóstico do dev) — só não pinta na tela do usuário.
+    if (typeof document !== 'undefined' && document.body) {
+      var _sbRoute = !!(window._isSandboxRoute && window._isSandboxRoute());
+      var b = document.getElementById('sp-draw-trace');
+      if (!_sbRoute) {
+        if (b) b.remove();
+      } else {
+        if (!b) {
+          b = document.createElement('div');
+          b.id = 'sp-draw-trace';
+          b.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:2147483647;background:rgba(0,0,0,0.88);color:#4 ade80;font:11px/1.35 ui-monospace,Menlo,monospace;padding:6px 9px;border-radius:7px;max-width:94vw;white-space:pre-wrap;pointer-events:auto;border:1px solid rgba(74,222,128,0.4);'.replace('#4 ade80', '#4ade80');
+          b.title = 'Rastro do sorteio (diagnóstico) — toque pra copiar';
+          b.addEventListener('click', function () {
+            try {
+              var txt = 'DRAW TRACE v' + window.SCOREPLACE_VERSION + '\n' + window._drawTrace.map(function (x) {
+                return x.stage + (x.extra ? ' ' + JSON.stringify(x.extra) : '');
+              }).join('\n');
+              if (navigator.clipboard) navigator.clipboard.writeText(txt);
+            } catch (_e) {}
+          });
+          document.body.appendChild(b);
+        }
+        var last = window._drawTrace.slice(-4).map(function (x) {
+          return '• ' + x.stage + (x.extra ? ' ' + JSON.stringify(x.extra).slice(0, 90) : '');
+        }).join('\n');
+        b.textContent = 'SORTEIO v' + window.SCOREPLACE_VERSION + '\n' + last;
+        var isErr = /THREW|err|fail|denied/i.test(String(stage));
+        b.style.color = isErr ? '#f87171' : '#4ade80';
+        b.style.borderColor = isErr ? 'rgba(248,113,113,0.6)' : 'rgba(74,222,128,0.4)';
+      }
     }
-    var last = window._drawTrace.slice(-4).map(function (x) {
-      return '• ' + x.stage + (x.extra ? ' ' + JSON.stringify(x.extra).slice(0, 90) : '');
-    }).join('\n');
-    b.textContent = 'SORTEIO v' + window.SCOREPLACE_VERSION + '\n' + last;
-    var isErr = /THREW|err|fail|denied/i.test(String(stage));
-    b.style.color = isErr ? '#f87171' : '#4ade80';
-    b.style.borderColor = isErr ? 'rgba(248,113,113,0.6)' : 'rgba(74,222,128,0.4)';
   } catch (_e) {}
   // Persiste o rastro no Firestore (debugDrawLogs/{uid}) pro dev LER direto — sem print.
   // Fire-and-forget; sobrescreve o doc do uid a cada evento com o rastro COMPLETO da sessão.
@@ -925,6 +933,18 @@ window._isTestIdentity = function () {
 // (3) invisível pra não-dev. `sandboxOf` aponta pro original; no original, `sandboxId`
 // aponta de volta. Ver memória project_sandbox_tournament.
 window._isSandboxTournament = function (t) { return !!(t && t.isSandbox === true); };
+// A ROTA atual está sobre um torneio SANDBOX? (detalhe/bracket/chamada/etc.). Fonte ÚNICA
+// usada pelo banner 🧪 SANDBOX e pelo selo de diagnóstico do sorteio (_dtrace) — os dois só
+// aparecem em SB. O SB roda em produção, então o sinal é pela ROTA, nunca por hostname.
+window._isSandboxRoute = function () {
+  try {
+    var h = (window.location.hash || '').replace(/^#/, '');
+    var m = h.match(/^(tournaments|bracket|pre-draw|participants|rules|analise|categorias)\/([^/?#]+)/);
+    if (!m) return false;
+    var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(m[2]) : null;
+    return !!(t && t.isSandbox === true);
+  } catch (e) { return false; }
+};
 // Notificações silenciadas? Sandbox OU killswitch explícito por torneio (t.notificationsMuted).
 window._tournamentNotificationsMuted = function (t) {
   return !!(t && (t.notificationsMuted === true || t.isSandbox === true));
@@ -1154,12 +1174,9 @@ window._flag = function (name) {
       }
       return el;
     };
+    // Fonte ÚNICA: window._isSandboxRoute (mesma usada pelo selo de diagnóstico _dtrace).
     var onSandboxRoute = function () {
-      var h = (window.location.hash || '').replace(/^#/, '');
-      var m = h.match(/^(tournaments|bracket|pre-draw|participants|rules|analise|categorias)\/([^/?#]+)/);
-      if (!m) return false;
-      var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(m[2]) : null;
-      return !!(t && t.isSandbox === true);
+      return !!(window._isSandboxRoute && window._isSandboxRoute());
     };
     var refresh = function () { try { ensure().style.display = onSandboxRoute() ? 'block' : 'none'; } catch (e) {} };
     window._updateSandboxBanner = refresh;
