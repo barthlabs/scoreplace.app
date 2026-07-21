@@ -603,6 +603,14 @@ button[style*="linear-gradient"]:not(.btn):active {
 /* Spinner do feedback "Formando dupla…" (drag-drop na lista de espera, enquanto a CF responde). */
 .lj-spin { width: 16px; height: 16px; border: 2.5px solid rgba(34,211,238,0.30); border-top-color: #22d3ee; border-radius: 50%; display: inline-block; animation: lj-spin-kf 0.7s linear infinite; }
 @keyframes lj-spin-kf { to { transform: rotate(360deg); } }
+/* Feedback "salvando presença" no card de inscrito enquanto o write confirma. A classe fica no
+   ELEMENTO do card (sobrevive ao update in-place do innerHTML) → spinner via ::after. */
+.participant-card.presence-saving { opacity: 0.75; }
+.participant-card.presence-saving::after {
+  content: ""; position: absolute; top: 8px; right: 8px; width: 16px; height: 16px; z-index: 6;
+  border: 2.5px solid rgba(148,163,184,0.30); border-top-color: #94a3b8; border-radius: 50%;
+  animation: lj-spin-kf 0.7s linear infinite; pointer-events: none;
+}
 /* Nos cards de inscrito o X fica SEMPRE na linha inferior à direita (canto inf. dir.).
    Isso é garantido IN-FLOW pelos renderers (participants.js + tournaments.js) — NÃO
    usar position:absolute aqui: no card de check-in o X divide a linha de baixo com os

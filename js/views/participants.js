@@ -752,6 +752,23 @@ window._inscritoActionRow = function (typeText, presenceGroupHtml, delBtnHtml) {
   return '<div style="margin-top:6px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;">' + typeSpan + actionSpan + '</div>';
 };
 
+// Feedback "salvando presença" no(s) card(s) do inscrito enquanto o write confirma (como o de
+// formar dupla). A classe fica no ELEMENTO do card (sobrevive ao update in-place) → spinner ::after.
+window._presenceCardBusy = function (key, on) {
+  if (!key) return;
+  try {
+    var esc = String(key).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    var cards = document.querySelectorAll('.participant-card[data-card-key="' + esc + '"]');
+    for (var i = 0; i < cards.length; i++) { if (on) cards[i].classList.add('presence-saving'); else cards[i].classList.remove('presence-saving'); }
+  } catch (e) {}
+};
+// Marca busy e limpa quando a promise do write resolve (ou já, se não for promise).
+window._presenceBusyUntil = function (key, done) {
+  window._presenceCardBusy(key, true);
+  var clear = function () { window._presenceCardBusy(key, false); };
+  if (done && typeof done.then === 'function') done.then(clear, clear); else clear();
+};
+
 window._toggleCheckIn = function (tId, playerName, uid) {
   const t = window._findTournamentById(tId);
   if (!t) return;
@@ -792,24 +809,27 @@ window._applySelfPresence = function (tId, playerName, uid) {
   const isBlue = window._idMapHas(t, t.checkedInConfirmed || {}, _who);
   if (isGreen || isBlue) {
     // Já marcado → tocar de novo = sair (remove verde E azul).
-    window.AppStore.mutate(tId, function (ft) {
+    var _mdOff = window.AppStore.mutate(tId, function (ft) {
       ft.checkedIn = ft.checkedIn || {}; ft.checkedInConfirmed = ft.checkedInConfirmed || {};
       window._idMapDel(ft, ft.checkedIn, _who);
       window._idMapDel(ft, ft.checkedInConfirmed, _who);
     });
+    window._presenceBusyUntil(uid || playerName, _mdOff);
     _reRenderParticipantsStable();
     return;
   }
   if (typeof showNotification === 'function') {
     showNotification('📍 Verificando local…', 'Confirmando pelo GPS se você está no local.', 'info');
   }
+  window._presenceCardBusy(uid || playerName, true); // spinner já durante o GPS + write
   window._isUserAtTournamentVenue(t).then(function (atVenue) {
-    window.AppStore.mutate(tId, function (ft) {
+    var _mdSelf = window.AppStore.mutate(tId, function (ft) {
       ft.checkedIn = ft.checkedIn || {}; ft.absent = ft.absent || {}; ft.checkedInConfirmed = ft.checkedInConfirmed || {};
       window._idMapDel(ft, ft.absent, _who);
       if (atVenue) { window._idMapSet(ft, ft.checkedIn, _who, Date.now()); window._idMapDel(ft, ft.checkedInConfirmed, _who); }
       else { window._idMapSet(ft, ft.checkedInConfirmed, _who, Date.now()); window._idMapDel(ft, ft.checkedIn, _who); }
     });
+    window._presenceBusyUntil(uid || playerName, _mdSelf);
     if (typeof showNotification === 'function') {
       if (atVenue) showNotification('✅ Presente', 'O GPS confirmou você no local do torneio.', 'success');
       else showNotification('🔵 Presença confirmada', 'Você confirmou que vem. Ao chegar no local, vira "Presente" automaticamente.', 'info');
@@ -1017,6 +1037,8 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
       if (_subResult === undefined) _subResult = r;
     }
   });
+  // feedback "salvando presença" no card até o write confirmar (como formar dupla).
+  window._presenceBusyUntil(uid || playerName, _mutateDone);
   var _woSub = !!(_subResult && _subResult.ok && _subResult.subCount > 0);
   if (_woSub) {
     _subResult.subDetails.forEach(d => {
