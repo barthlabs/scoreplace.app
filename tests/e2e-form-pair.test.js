@@ -165,6 +165,27 @@ console.log('\n── 2 duplas na espera em sequência + desfazer (_splitLateDup
   ok((t2.waitlist || []).some((p) => (p.displayName || p.name || p) === 'Ze') && (t2.waitlist || []).some((p) => (p.displayName || p.name || p) === 'Ana'), 'desfazer :: 2 solos voltaram pra waitlist');
 })();
 
+// ── RAIZ DA GAMBIARRA (console do dono): a CF integra a dupla e devolve o doc atualizado, mas o
+// cliente ignorava → a dupla só aparecia no RELOAD. O _triggerLateIntegration TEM que espelhar o
+// doc que a CF devolve no AppStore, na hora. ──
+console.log('\n── sync do doc que a CF devolve (dupla entra sem reload) ──');
+(function () {
+  const t = E.createTournament(cfg('Elim Simples'), { id: 'SYNC', participants: mkPairs(8), newMatchups: true, lateEnrollment: 'expand' });
+  E.draw(t);
+  const before = labels(t).has('CF Dupla / X');
+  ok(!before, 'sync :: (pré) a dupla da CF não está na chave local');
+  // simula a CF: devolve um doc onde a dupla JÁ está na chave (como integrateLateEntries faz)
+  const cfDoc = JSON.parse(JSON.stringify(t));
+  cfDoc.matches.push({ id: 'xcf', round: 1, p1: 'CF Dupla / X', p2: 'TBD', winner: null, phaseIndex: 0, bracket: 'main' });
+  const orig = W._callIntegrateLate;
+  W._callIntegrateLate = function () { return E.thenable({ data: { ok: true, changed: true, repfill: 1, tournament: cfDoc } }); };
+  W._lateIntegrateInflight = {}; W._lateIntegrateLastSig = {};
+  W._triggerLateIntegration(t, { force: true });
+  const synced = E.findDoc('SYNC');
+  ok(synced && (synced.matches || []).some((m) => m.p1 === 'CF Dupla / X'), 'sync :: ✅ AppStore espelhou o doc da CF (dupla na chave SEM reload)');
+  W._callIntegrateLate = orig;
+})();
+
 const r = E.results();
 console.log('\n' + (r.fail === 0 ? '✅ e2e-form-pair: OK' : '❌ ' + r.fail + ' FALHA(S)') + '  (' + r.pass + ' asserts ok)');
 if (r.fails.length) { console.error('\nFALHAS:'); r.fails.forEach((f) => console.error('  ✗ ' + f)); }

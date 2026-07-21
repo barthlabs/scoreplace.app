@@ -1800,13 +1800,26 @@ window._triggerLateIntegration = function (t, opts) {
         window._lateIntegrateInflight[tId] = false;
         window._lateIntegrateLastSig[tId] = sig;
         var d = (res && res.data) || {};
-        // DIAGNÓSTICO no console (não em toast — o toast alarmava sem motivo em re-runs benignos).
         if (window._dtrace) window._dtrace('integrateLate:done', { v: (window.SCOREPLACE_VERSION || '?'), changed: d.changed, extra: d.extra, duplas: d.duplas, monarch: d.monarch, repfill: d.repfill, redrawn: d.redrawn, reason: d.reason });
-        // Toast SÓ quando confronto NOVO foi criado (extra/duplas/monarch) — mudanças de repfill/
-        // rebuild não são "confronto novo" e não devem falar. Sem toast contraditório.
-        var _novos = (d.extra || 0) + (d.duplas || 0) + (d.monarch || 0);
+        // RAIZ da "gambiarra" (dono, console): a CF INTEGRA a dupla e PERSISTE (changed:true), mas o
+        // AppStore LOCAL nunca era atualizado com o doc que a CF devolve → a UI ficava STALE até um
+        // reload ("a dupla só entra na próxima versão"). E o Desfazer não achava a dupla porque a CF
+        // já a moveu de standby/waitlist pra participants, mas o card local (stale) ainda a mostrava
+        // na espera. Fix: ESPELHA o doc autoritativo da CF no AppStore AGORA e re-renderiza a view.
+        if (d.changed && d.tournament && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
+            try {
+                var _newT = d.tournament; _newT.id = tId;
+                var _list = window.AppStore.tournaments, _i = -1;
+                for (var _k = 0; _k < _list.length; _k++) { if (String(_list[_k].id) === tId) { _i = _k; break; } }
+                if (_i !== -1) _list[_i] = _newT; else _list.push(_newT);
+                if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(_newT); } catch (e) {} }
+            } catch (e) {}
+            if (typeof window._rerenderBracket === 'function') { try { window._rerenderBracket(tId); } catch (e) {} }
+            if (typeof window._softRefreshView === 'function') { window._suppressSoftRefresh = false; try { window._softRefreshView(); } catch (e) {} }
+        }
+        var _novos = (d.extra || 0) + (d.duplas || 0) + (d.monarch || 0) + (d.repfill || 0);
         if (_novos > 0 && typeof showNotification !== 'undefined') {
-            showNotification('⚡ Tardios na chave', _novos + ' confronto(s) novo(s) na chave.', 'info');
+            showNotification('⚡ Tardios na chave', 'A dupla entrou na chave.', 'info');
         }
     }).catch(function (e) {
         window._lateIntegrateInflight[tId] = false;
