@@ -159,6 +159,8 @@ const SUITES = [
   // dispatch real → CF formPair/splitPair (pair-core) → CF integrateLateEntries (draw-core).
   // Prova que forma/desfaz dupla entra/sai da chave SEM o cliente gravar (saveTournament=0).
   'tests/e2e-form-pair.test.js',
+  // TIE-BREAK configurável por torneio (5-5 vs 6-6) — gatilho por regra/esporte. v1.3.x.
+  'tests/tiebreak-trigger.test.js',
   // v1.3.89: SWEEP W.O. + integração tardia (motor _applyWO real + CF integrateLateEntries), joga até fechar.
   'tests/draw-sweep-wo-late.test.js',
   'tests/present-only-no-lost-entries.test.js',

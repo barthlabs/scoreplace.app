@@ -609,6 +609,7 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="gsm-tiebreakEnabled" value="true">
                 <input type="hidden" id="gsm-tiebreakPoints" value="7">
                 <input type="hidden" id="gsm-tiebreakMargin" value="2">
+                <input type="hidden" id="gsm-tiebreakAt" value="">
                 <input type="hidden" id="gsm-superTiebreak" value="false">
                 <input type="hidden" id="gsm-superTiebreakPoints" value="10">
                 <input type="hidden" id="gsm-countingType" value="numeric">
@@ -4592,6 +4593,7 @@ function setupCreateTournamentModal() {
       document.getElementById('gsm-tiebreakEnabled').value = t.scoring.tiebreakEnabled || false;
       document.getElementById('gsm-tiebreakPoints').value = t.scoring.tiebreakPoints || 7;
       document.getElementById('gsm-tiebreakMargin').value = t.scoring.tiebreakMargin || 2;
+      document.getElementById('gsm-tiebreakAt').value = t.scoring.tiebreakAt || '';
       document.getElementById('gsm-superTiebreak').value = t.scoring.superTiebreak || false;
       document.getElementById('gsm-superTiebreakPoints').value = t.scoring.superTiebreakPoints || 10;
       document.getElementById('gsm-countingType').value = t.scoring.countingType || 'numeric';
@@ -4815,6 +4817,8 @@ function setupCreateTournamentModal() {
       tiebreakEnabled: g('gsm-tiebreakEnabled') === 'true',
       tiebreakPoints: parseInt(g('gsm-tiebreakPoints')) || 7,
       tiebreakMargin: parseInt(g('gsm-tiebreakMargin')) || 2,
+      // regra do TB: 'g-1' (5-5→6-5) ou 'g' (6-6→7-6); vazio = default do esporte (_sportTiebreakAt)
+      tiebreakAt: g('gsm-tiebreakAt') || undefined,
       superTiebreak: g('gsm-superTiebreak') === 'true',
       superTiebreakPoints: parseInt(g('gsm-superTiebreakPoints')) || 10,
       countingType: g('gsm-countingType') || 'numeric',
@@ -6008,6 +6012,11 @@ window._openGSMConfig = function(targetPhase) {
   var advantage = _ps ? !!_ps.advantageRule : document.getElementById('gsm-advantageRule').value === 'true';
   var fixedSet = _ps ? !!_ps.fixedSet : document.getElementById('gsm-fixedSet').value === 'true';
   var fixedSetGames = _ps ? String(_ps.fixedSetGames || 6) : (document.getElementById('gsm-fixedSetGames').value || '6');
+  // Regra do tie-break (5-5 vs 6-6): valor gravado no torneio (gsm-tiebreakAt) OU default do esporte.
+  var _hTbAt = document.getElementById('gsm-tiebreakAt');
+  var _sport = (typeof window._currentSportName === 'function') ? window._currentSportName() : '';
+  var tbAt = (_hTbAt && _hTbAt.value) || ((typeof window._sportTiebreakAt === 'function') ? window._sportTiebreakAt(_sport) : 'g');
+  var _gm1 = (parseInt(gamesPerSet) || 6) - 1, _gg = (parseInt(gamesPerSet) || 6);
 
   var existing = document.getElementById('gsm-config-overlay');
   if (existing) existing.remove();
@@ -6050,12 +6059,19 @@ window._openGSMConfig = function(targetPhase) {
         // Tiebreak
         '<div id="gsm-tb-section" style="border-top:1px solid var(--border-color);padding-top:1rem;">' +
           '<div class="toggle-row" style="padding:6px 0;margin-bottom:8px;">' +
-            '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;" id="gsm-tb-label">Tie-break em ' + (parseInt(gamesPerSet) - 1) + '-' + (parseInt(gamesPerSet) - 1) + '</span></div>' +
+            '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;" id="gsm-tb-label">Tie-break em ' + (tbAt === 'g-1' ? _gm1 : _gg) + '-' + (tbAt === 'g-1' ? _gm1 : _gg) + '</span></div>' +
             '<label class="toggle-switch toggle-sm"><input type="checkbox" id="gsm-cfg-tiebreak" ' + (tbEnabled ? 'checked' : '') + ' onchange="window._gsmToggleTiebreak()"><span class="toggle-slider"></span></label>' +
           '</div>' +
           '<div id="gsm-tb-details" style="display:' + (tbEnabled ? 'flex' : 'none') + ';gap:12px;flex-wrap:wrap;padding-left:26px;">' +
             '<div><label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">Pontos</label><input type="number" id="gsm-cfg-tbPoints" class="form-control" min="5" max="15" value="' + tbPoints + '" style="font-size:0.82rem;width:70px;" oninput="window._gsmUpdateSummary()"></div>' +
             '<div><label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">Diferenca min.</label><input type="number" id="gsm-cfg-tbMargin" class="form-control" min="1" max="5" value="' + tbMargin + '" style="font-size:0.82rem;width:70px;" oninput="window._gsmUpdateSummary()"></div>' +
+            // Quando o tie-break acontece: em (g-1)-(g-1) [set curto, ex. 6-5] ou em g-g [padrão, ex. 7-6].
+            '<div style="flex:1 1 100%;"><label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:4px;">Tie-break no empate</label>' +
+              '<div id="gsm-tbat-seg" data-tbat="' + tbAt + '" style="display:flex;gap:6px;">' +
+                '<button type="button" id="gsm-tbat-g1" onclick="window._gsmSetTbAt(\'g-1\')" style="flex:1;padding:8px;border-radius:8px;font-size:0.8rem;font-weight:700;cursor:pointer;border:2px solid ' + (tbAt === 'g-1' ? '#a855f7' : 'rgba(255,255,255,0.12)') + ';background:' + (tbAt === 'g-1' ? 'rgba(168,85,247,0.18)' : 'transparent') + ';color:var(--text-bright,#f1f5f9);">' + _gm1 + '-' + _gm1 + ' <span style="font-size:0.66rem;color:var(--text-muted);">(set curto · ' + _gg + '-' + _gm1 + ')</span></button>' +
+                '<button type="button" id="gsm-tbat-g" onclick="window._gsmSetTbAt(\'g\')" style="flex:1;padding:8px;border-radius:8px;font-size:0.8rem;font-weight:700;cursor:pointer;border:2px solid ' + (tbAt === 'g' ? '#a855f7' : 'rgba(255,255,255,0.12)') + ';background:' + (tbAt === 'g' ? 'rgba(168,85,247,0.18)' : 'transparent') + ';color:var(--text-bright,#f1f5f9);">' + _gg + '-' + _gg + ' <span style="font-size:0.66rem;color:var(--text-muted);">(padrão · ' + (_gg + 1) + '-' + _gg + ')</span></button>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
         '</div>' +
         // Super tiebreak
@@ -6110,6 +6126,21 @@ window._gsmToggleTiebreak = function() {
   var checked = document.getElementById('gsm-cfg-tiebreak').checked;
   document.getElementById('gsm-tb-details').style.display = checked ? 'flex' : 'none';
   window._gsmUpdateSummary();
+};
+
+// Regra do tie-break: 'g-1' (empate em (g-1)-(g-1) → set curto, ex. 6-5) ou 'g' (empate g-g,
+// ex. 7-6). Grava no segmento (data-tbat), atualiza pills + label. _gsmSaveConfig lê e persiste.
+window._gsmSetTbAt = function(v) {
+  var seg = document.getElementById('gsm-tbat-seg'); if (!seg) return;
+  seg.dataset.tbat = v;
+  var g1 = document.getElementById('gsm-tbat-g1'), gg = document.getElementById('gsm-tbat-g');
+  if (g1) { g1.style.borderColor = (v === 'g-1') ? '#a855f7' : 'rgba(255,255,255,0.12)'; g1.style.background = (v === 'g-1') ? 'rgba(168,85,247,0.18)' : 'transparent'; }
+  if (gg) { gg.style.borderColor = (v === 'g') ? '#a855f7' : 'rgba(255,255,255,0.12)'; gg.style.background = (v === 'g') ? 'rgba(168,85,247,0.18)' : 'transparent'; }
+  var _ge = document.getElementById('gsm-cfg-gamesPerSet') || document.getElementById('gsm-gamesPerSet');
+  var g = (parseInt(_ge && _ge.value) || 6);
+  var n = (v === 'g-1') ? (g - 1) : g;
+  var lbl = document.getElementById('gsm-tb-label'); if (lbl) lbl.textContent = 'Tie-break em ' + n + '-' + n;
+  if (typeof window._gsmUpdateSummary === 'function') window._gsmUpdateSummary();
 };
 
 window._gsmToggleSuperTb = function() {
@@ -6222,6 +6253,8 @@ window._gsmSaveConfig = function() {
   document.getElementById('gsm-tiebreakEnabled').value = tbOn ? 'true' : 'false';
   document.getElementById('gsm-tiebreakPoints').value = tbPts;
   document.getElementById('gsm-tiebreakMargin').value = tbMargin;
+  var _seg = document.getElementById('gsm-tbat-seg');
+  document.getElementById('gsm-tiebreakAt').value = (_seg && _seg.dataset.tbat) || '';
   document.getElementById('gsm-superTiebreak').value = stbOn ? 'true' : 'false';
   document.getElementById('gsm-superTiebreakPoints').value = stbPts;
   document.getElementById('gsm-advantageRule').value = advantage ? 'true' : 'false';
