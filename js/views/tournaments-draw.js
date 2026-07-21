@@ -1350,7 +1350,7 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
         '<div style="font-weight:800;font-size:1rem;color:var(--text-bright,#f1f5f9);">⚖️ Sorteio de duplas</div>' +
         '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-top:3px;">Defina o gênero de quem está sem, e escolha como formar as duplas.</div>' +
         '<div style="display:flex;gap:8px;margin-top:12px;">' +
-          '<button onclick="document.getElementById(\'gender-draw-overlay\').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:none;color:var(--text-muted,#94a3b8);cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
+          '<button onclick="document.getElementById(\'gender-draw-overlay\').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
           '<button onclick="window._gdConfirm()" style="flex:2;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.88rem;cursor:pointer;">✓ Confirmar</button>' +
         '</div>' +
       '</div>' +
