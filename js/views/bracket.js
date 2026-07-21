@@ -824,7 +824,10 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var html = '<div style="display:flex;align-items:center;gap:6px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.62rem;font-weight:700;color:' + (mc ? '#4ade80' : '#64748b') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmm) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label></div>';
     return { html: html };
   };
-  var _ljSplit = function (tid, m1id, m2id, name) { return 'window._splitLateDupla(\'' + tid + '\',\'' + name + '\')'; };
+  // Desfazer: passa as 2 IDENTIDADES de membro (uid||nome-guest), NUNCA a string "A / B" — o cânone
+  // uid proíbe casar dupla por displayName (a resolução por uid diverge entre render e split → o ✕
+  // não achava a dupla e não fazia nada). Espelha o _splitDupla do roster. [[project_uid_identity_canon_locked]]
+  var _ljSplit = function (tid, m1id, m2id, name) { return 'window._splitLateDupla(\'' + tid + '\',\'' + m1id + '\',\'' + m2id + '\')'; };
   var _ljDctx = { isOrg: isOrg, drawDone: true, orgUids: {}, orgEmails: {}, cardPresence: null, memberPresence: _ljMemberPres, enrollOrderMap: _ljOrderMap, splitDupla: _ljSplit };
   var duplasHtml = (typeof window._duplaCard === 'function')
     ? _duplas.map(function (p) { return window._duplaCard(t, p, false, _ljDctx); }).join('')
@@ -903,7 +906,13 @@ window._formLateJoinDupla = function (tId, src, tgt) {
   });
   t.updatedAt = new Date().toISOString();
   window.FirestoreDB.saveTournament(t).then(function () {
-    if (typeof showNotification !== 'undefined') showNotification('🤝 Dupla formada · presença marcada', an + ' / ' + bn + ' entraram na chave.', 'success');
+    var _V = window.SCOREPLACE_VERSION || '?';
+    var _gate = (typeof window._allowsNewMatchups === 'function') ? window._allowsNewMatchups(t) : null;
+    if (window._dtrace) window._dtrace('formLateDupla', { v: _V, gate: _gate, newMatchups: t.newMatchups, lateEnroll: (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment), pair: an + '/' + bn });
+    if (typeof showNotification !== 'undefined') {
+      if (_gate) showNotification('🤝 Dupla formada · v' + _V, an + ' / ' + bn + ' — integrando na chave…', 'success');
+      else showNotification('⚠️ Dupla formada mas NÃO entra · v' + _V, '"Novos confrontos" está DESLIGADO — ligue o toggle no painel de espera pra ela entrar na chave.', 'warning');
+    }
     // BUG (dono, jul/2026): a integração da dupla tardia dependia do RE-RENDER do bracket
     // (`_rerenderBracket` → `_triggerLateIntegration` no render). Mas a dupla é formada na tela de
     // INSCRITOS, onde o bracket NÃO re-renderiza → a integração NUNCA disparava e a dupla ficava na
@@ -1027,12 +1036,31 @@ window._formLateJoinDupla = function (tId, src, tgt) {
   };
 })();
 
-window._splitLateDupla = function (tId, duplaName) {
+window._splitLateDupla = function (tId, id1, id2) {
+  var _V = window.SCOREPLACE_VERSION || '?';
   var t = window.AppStore && window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
-  if (!t || !Array.isArray(t.standbyParticipants)) return;
+  if (!t || !Array.isArray(t.standbyParticipants)) { if (typeof showNotification !== 'undefined') showNotification('⚠️ Desfazer', 'sem torneio/lista de espera · v' + _V, 'warning'); return; }
   var arr = t.standbyParticipants;
-  var idx = arr.findIndex(function (p) { return (window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || '') === duplaName && p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); });
-  if (idx === -1) return;
+  var _isDupla = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
+  var idx = -1;
+  // CASA POR IDENTIDADE DE MEMBRO (uid||nome-guest) — cânone uid, nunca pela string "A / B".
+  if (id2 != null && String(id2) !== '') {
+    var _want = [String(id1 || ''), String(id2 || '')].filter(Boolean).sort();
+    idx = arr.findIndex(function (p) {
+      if (!_isDupla(p)) return false;
+      var _got = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort();
+      return _got.length === _want.length && _got.every(function (v, i) { return v === _want[i]; });
+    });
+  }
+  // compat: chamada antiga só com o NOME inteiro da dupla (id2 vazio).
+  if (idx === -1 && (id2 == null || String(id2) === '')) {
+    idx = arr.findIndex(function (p) { return _isDupla(p) && ((window._pName ? window._pName(p, '') : (p.displayName || p.name)) === id1 || (p.displayName || p.name) === id1); });
+  }
+  if (idx === -1) {
+    if (typeof showNotification !== 'undefined') showNotification('⚠️ Desfazer não achou a dupla', '[' + id1 + '/' + (id2 || '') + '] · v' + _V, 'warning');
+    if (window._dtrace) window._dtrace('splitLate:notfound', { id1: id1, id2: id2, standby: arr.filter(_isDupla).map(function (p) { return { d: (p.displayName || p.name), u1: p.p1Uid || p.p1Name, u2: p.p2Uid || p.p2Name }; }) });
+    return;
+  }
   var e = arr[idx];
   // FASE 2: nome do membro pelo uid (perfil ao vivo); nome gravado só p/ guest sem conta
   var _dn1 = e.p1Uid ? (window._displayNameForUid ? window._displayNameForUid(e.p1Uid, e.p1Name) : (e.p1Name || e.p1Uid || '')) : null;

@@ -147,10 +147,15 @@ console.log('\n── 2 duplas na espera em sequência + desfazer (_splitLateDup
   E.resetLateGuards();
   W._formLateJoinDupla(t2.id, 'p1', 'p2');   // gate off → fica na espera como dupla formada
   ok(t2.standbyParticipants.some((p) => (p.displayName || p.name) === 'Nei / Sil'), 'desfazer :: dupla formada está na espera');
-  W._splitLateDupla(t2.id, 'Nei / Sil');
+  // o ✕ real passa as IDENTIDADES DE MEMBRO (uid), NUNCA a string "A / B" (cânone uid).
+  W._splitLateDupla(t2.id, 'p1', 'p2');
   const stbNames = t2.standbyParticipants.map((p) => (p && (p.displayName || p.name)) || p);
-  ok(stbNames.indexOf('Nei / Sil') === -1, 'desfazer :: ✅ dupla sumiu da espera');
+  ok(stbNames.indexOf('Nei / Sil') === -1, 'desfazer :: ✅ dupla sumiu da espera (casou por uid de membro)');
   ok(stbNames.indexOf('Nei') !== -1 && stbNames.indexOf('Sil') !== -1, 'desfazer :: 2 solos voltaram pra espera');
+  // compat: chamada antiga só com o nome inteiro também casa
+  W._formLateJoinDupla(t2.id, 'p1', 'p2');
+  W._splitLateDupla(t2.id, 'Nei / Sil');
+  ok(!t2.standbyParticipants.some((p) => (p.displayName || p.name) === 'Nei / Sil'), 'desfazer :: compat por nome inteiro ainda casa');
 })();
 
 // ── re-enfileiramento (a corrida async real que o harness síncrono não encena): enquanto uma
