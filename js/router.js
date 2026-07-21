@@ -266,6 +266,13 @@ function initRouter() {
       case 'tournament':
       case 'tournaments':
         if (cleanParam) {
+          // Scroll-pro-meu-jogo (CANÔNICO): captura a NAVEGAÇÃO aqui — síncrono, no momento
+          // do route, onde _isSoftRefresh é confiável. Token DURÁVEL (não é resetado em
+          // setTimeout como _inRouterRender): renderBracket roda async depois de carregar o
+          // torneio e consome quando os cards existem — timing-independente (antes só rolava
+          // com cache; sem cache o render vinha depois do reset e não rolava). Soft-refresh
+          // (onSnapshot → initRouter) NÃO seta → re-render não re-scrolla.
+          if (!window._isSoftRefresh) window._navScrollTid = String(cleanParam);
           renderTournaments(viewContainer, cleanParam);
         } else {
           window.location.replace('#dashboard');

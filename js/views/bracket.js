@@ -104,12 +104,16 @@ function renderBracket(container, tournamentId, isInline) {
   var _t = window._t || function(k) { return k; };
   const tId = tournamentId || window._lastActiveTournamentId;
   // Entrada no bracket (navegação REAL) → agenda o scroll pro próximo jogo do usuário.
-  // Consumido em _applyMyMatchesFilter quando os cards existem. O gate exclui o
-  // SOFT-REFRESH (onSnapshot → _softRefreshView → initRouter também seta
-  // _inRouterRender): sem o !_isSoftRefresh, QUALQUER clique que salvava (Cheguei,
-  // placar, W.O.) disparava snapshot → re-render → a tela PULAVA pro grupo de novo.
-  // Regra: scroll fixo e estável em re-render; auto-scroll SÓ na entrada.
-  if (window._inRouterRender && !window._isSoftRefresh) window._bracketPendingScroll = String(tId);
+  // O token _navScrollTid é setado no ROUTER, síncrono no momento da navegação, e é DURÁVEL —
+  // sobrevive ao render ASSÍNCRONO do detalhe (que carrega o torneio via await). Antes o gate
+  // era _inRouterRender, resetado em setTimeout(0): com cache o render vinha síncrono (rolava),
+  // sem cache vinha depois do reset (NÃO rolava) → o scroll inconsistente que o dono apontou.
+  // Consumido 1× aqui (casando o tId) e limpo → re-render/soft-refresh não re-scrolla. Regra:
+  // scroll fixo e estável em re-render; auto-scroll SÓ na entrada. [[feedback_rerender_keep_scroll]]
+  if (window._navScrollTid && String(window._navScrollTid) === String(tId)) {
+    window._navScrollTid = null;
+    window._bracketPendingScroll = String(tId);
+  }
 
   // v1.8.94: buscar em tournaments (membro/org) E publicDiscovery (torneios públicos)
   let t = tId && window.AppStore ? window._findTournamentById(tId) : null;
@@ -1483,12 +1487,16 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
 
   let globalMatchNum = swissPastMatchOffset;
 
-  // 3rd place match — pull from adapter's thirdplace column (falls back to t.thirdPlaceMatch)
+  // 3º lugar SEMPRE do jogo REAL: coluna 'thirdplace' do adapter → t.thirdPlaceMatch (legado)
+  // → match isThirdPlace canônico em t.matches. SEM placeholder fabricado — se não existe jogo
+  // real de 3º lugar, não há card (não se inventa um "TBD"). [[project_third_place_always]]
   const _thirdCol = unified ? unified.columns.find(c => c.phase === 'thirdplace') : null;
+  const _allMs3rd = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
   const thirdPlaceMatch = (_thirdCol && _thirdCol.matches[0])
     || t.thirdPlaceMatch
-    || { id: 'match-3rd-placeholder', p1: 'TBD', p2: 'TBD', winner: null };
-  const hasThirdPlace = activeRounds.length >= 2;
+    || _allMs3rd.find(m => m && m.isThirdPlace)
+    || null;
+  const hasThirdPlace = activeRounds.length >= 2 && !!thirdPlaceMatch;
 
   // Numbering: 3rd place = last semifinal + 1, final = 3rd place + 1
   // Count matches in all rounds EXCEPT the final round (last positive round gets its own number)
