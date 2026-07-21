@@ -189,6 +189,9 @@ const SUITES = [
   'functions-autodraw/test-groupsby.js',
   // Integração de tardios no servidor (draw-core.integrateLateEntries) — v1.2.57.
   'functions-autodraw/test-integrate-late.js',
+  // Cenário do dono (SB Casais): dupla ausente na espera → marca presente → CF forma o
+  // confronto (o bug era o CLIENTE nunca disparar a CF; o toggle in-place suprimia o gatilho).
+  'functions-autodraw/test-late-present-fills-adefinir.js',
   'functions/test-match-roster.js',
   // Inscrição/desinscrição no servidor (CF) — espelha a transação do cliente.
   'functions/test-enroll-core.js',

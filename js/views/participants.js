@@ -1000,7 +1000,7 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   // núcleo PURO _applyWoSubsToTournament (sem save próprio). `_was` recomputado
   // do doc fresco decide o toggle; o toast da sub vem da execução LOCAL.
   let _subResult;
-  window.AppStore.mutate(tId, function (ft) {
+  var _mutateDone = window.AppStore.mutate(tId, function (ft) {
     if (!ft.checkedIn) ft.checkedIn = {};
     if (!ft.absent) ft.absent = {};
     if (!ft.checkedInConfirmed) ft.checkedInConfirmed = {};
@@ -1075,6 +1075,32 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
     // preserva scroll + suprime o eco do onSnapshot (mesmo robustez do card estático).
     _reRenderParticipantsStable();
   }
+  // v1.3.95 (dono, SB Casais): marcar PRESENTE uma dupla/solo da LISTA DE ESPERA precisa disparar a
+  // INTEGRAÇÃO TARDIA (CF integrateLateEntries) — que preenche o "a definir" existente ou cria o
+  // confronto. Antes SÓ o RENDER do bracket (bracket.js:232) disparava; mas o toggle virou in-place
+  // (fix do pulinho) e SUPRIME o re-render → a dupla presente atualizava o card mas NUNCA entrava na
+  // chave. Aqui disparamos explicitamente, MAS só DEPOIS do commit (a CF lê o doc FRESCO do Firestore
+  // — disparar antes faria a CF ver a dupla ainda ausente → nada a integrar). O trigger self-guarda
+  // (só com espera, dedup por assinatura) e a CF faz TODO o trabalho — cliente só dispara.
+  // Ver [[feedback_draw_is_cf_only]] / [[project_late_dupla_fills_awaiting_slot]].
+  try {
+    var _canMng = !window._canManagePresence || window._canManagePresence(t, window.AppStore && window.AppStore.currentUser);
+    var _hasWL = (Array.isArray(t.standbyParticipants) && t.standbyParticipants.length) ||
+                 (Array.isArray(t.waitlist) && t.waitlist.length);
+    var _hasBracket = (Array.isArray(t.matches) && t.matches.length) ||
+                      (Array.isArray(t.rounds) && t.rounds.length) ||
+                      (Array.isArray(t.groups) && t.groups.length);
+    if (_canMng && _hasWL && _hasBracket && typeof window._triggerLateIntegration === 'function') {
+      var _fireLate = function () {
+        try {
+          var _ft = window._findTournamentById(tId) || t;
+          window._triggerLateIntegration(_ft, { force: true });
+        } catch (_eFire) {}
+      };
+      if (_mutateDone && typeof _mutateDone.then === 'function') _mutateDone.then(_fireLate, _fireLate);
+      else _fireLate();
+    }
+  } catch (_eLate) {}
 };
 
 window._markAbsent = function (tId, playerName) {
