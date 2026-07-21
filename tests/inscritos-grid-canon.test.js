@@ -30,6 +30,13 @@ ok('DUPLA é grid responsivo (auto-fill+minmax+min(100%)+1fr)', !!(duplaM && RES
 ok('SOLO NÃO é coluna única (flex-direction:column)', !!(soloM && soloM[1].indexOf('flex-direction:column') === -1));
 ok('DUPLA NÃO é coluna única (flex-direction:column)', !!(duplaM && duplaM[1].indexOf('flex-direction:column') === -1));
 
+// 1b. ALTURA IGUAL por linha — align-items:stretch (NÃO start/center). Dono (recorrente): "os cards
+// devem ter SEMPRE a mesma altura, não pode um mais alto que o outro".
+ok('SOLO estica pra altura igual (align-items:stretch)', !!(soloM && /align-items:\s*stretch/.test(soloM[1])), soloM && soloM[1]);
+ok('DUPLA estica pra altura igual (align-items:stretch)', !!(duplaM && /align-items:\s*stretch/.test(duplaM[1])), duplaM && duplaM[1]);
+ok('SOLO NÃO usa align-items:start/center (alturas desiguais)', !!(soloM && !/align-items:\s*(start|center|flex-start)/.test(soloM[1])));
+ok('DUPLA NÃO usa align-items:start/center (alturas desiguais)', !!(duplaM && !/align-items:\s*(start|center|flex-start)/.test(duplaM[1])));
+
 // 2. Os DOIS hosts sp-dnd-host da seção de duplas usam as constantes (não estilo inline coluna).
 const hostSolo = /class="sp-dnd-host"\s*style="'\s*\+\s*window\._INSCRITO_GRID_SOLO/.test(src);
 const hostDupla = /class="sp-dnd-host"\s*style="'\s*\+\s*window\._INSCRITO_GRID_DUPLA/.test(src);

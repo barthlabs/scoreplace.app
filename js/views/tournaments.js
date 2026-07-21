@@ -22,8 +22,11 @@ var _t = window._t || function(k) { return k; };
 // mobile; `sp-fit-name` (word-break + auto-shrink) garante que os nomes NÃO truncam ao encolher a
 // coluna. Fonte ÚNICA (usada nos dois hosts); travada por tests/inscritos-grid-canon.test.js.
 // Ver [[feedback_maximize_screen_area_all_devices]] / [[project_web_area_scaling_canon]].
-window._INSCRITO_GRID_SOLO = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr));gap:8px;align-items:start;';
-window._INSCRITO_GRID_DUPLA = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 340px), 1fr));gap:8px;align-items:start;';
+// align-items:STRETCH (não start) = todos os cards da MESMA LINHA têm a MESMA ALTURA (o card mais
+// curto estica até o mais alto da linha). Dono (recorrente): "os cards devem ter SEMPRE a mesma
+// altura, não pode um mais alto que o outro". Travado no teste junto com o grid.
+window._INSCRITO_GRID_SOLO = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr));gap:8px;align-items:stretch;';
+window._INSCRITO_GRID_DUPLA = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 340px), 1fr));gap:8px;align-items:stretch;';
 
 // v1.3.84: chave ESTÁVEL da entrada (dupla ou solo) pra achar o card no DOM no update in-place.
 window._duplaEntryKey = function (p) {
@@ -3680,9 +3683,10 @@ function renderTournaments(container, tournamentId = null) {
             // v1.3.54: em telas largas, APROVEITA A ÁREA — grid responsivo (até 3-4 colunas de
             // cards), 1 coluna no mobile (min(100%,…) evita overflow). Vale pro check-in também
             // (antes era coluna única). Ver [[feedback_maximize_screen_area_all_devices]].
+            // align-items:stretch → cards da mesma linha com a MESMA ALTURA (dono: "sempre igual").
             const gridStyle = (canCheckIn || _rcActiveD)
-                ? 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 320px), 1fr));gap:8px;align-items:start;'
-                : 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr));gap:1rem;';
+                ? 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 320px), 1fr));gap:8px;align-items:stretch;'
+                : 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr));gap:1rem;align-items:stretch;';
 
             var _sortAlphaAsc = _enrollSort === 'alpha_asc';
             var _sortAlphaDesc = _enrollSort === 'alpha_desc';
