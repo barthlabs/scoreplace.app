@@ -45,8 +45,9 @@ ok(prog.total === 13, 'total = 13 (sem placeholder fantasma de 3º lugar) — de
 ok(prog.completed === 13, 'completed = 13');
 ok(prog.pct === 100, 'pct = 100% (barra fecha) — deu ' + prog.pct);
 
-// Guarda-corpo: torneio elim SEM nenhum 3º lugar ainda (nem isThirdPlace nem thirdPlaceMatch)
-// PODE ter o placeholder (comportamento legado preservado — 3º lugar futuro entra no total).
+// SEM placeholder fantasma NUNCA: torneio elim sem match de 3º lugar conta SÓ os reais.
+// (O 3º lugar sempre-ligado é criado como match isThirdPlace real pelo motor — quando existir,
+//  é contado; não se inventa um "TBD" antecipado.)
 const t2 = {
   id: 't2', format: 'Eliminatórias Simples',
   matches: [
@@ -55,7 +56,8 @@ const t2 = {
   ]
 };
 const prog2 = W._getTournamentProgress(t2);
-ok(prog2.total === 3, 'sem 3º lugar existente: placeholder legado mantém total=3 (2 reais + 1 futuro)');
+ok(prog2.total === 2, 'sem 3º lugar existente: conta só os 2 jogos reais (zero placeholder) — deu ' + prog2.total);
+ok(prog2.completed === 2 && prog2.pct === 100, 'os 2 reais jogados → 100%');
 
 console.log('\n' + (fail === 0 ? '✅ progress-third-place-nodouble: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fails.length) { fails.forEach((f) => console.error('  ✗ ' + f)); }
