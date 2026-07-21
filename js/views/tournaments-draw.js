@@ -1784,13 +1784,7 @@ window._triggerLateIntegration = function (t, opts) {
     opts = opts || {};
     if (!t || !t.id) return;
     var tId = String(t.id);
-    if (window._lateIntegrateInflight[tId]) {
-        // já rodando: se este chamado é FORCE (ação explícita: formar 2ª dupla logo após a 1ª),
-        // RE-ENFILEIRA pra rodar de novo ao terminar — senão a 2ª dupla era DESCARTADA em silêncio
-        // (bug do dono "a 2ª que criei em seguida não entrou"). Sem force, mantém o descarte (spam).
-        if (opts.force) window._lateIntegratePending[tId] = true;
-        return;
-    }
+    if (window._lateIntegrateInflight[tId]) return;
     // só dispara quando há gente na espera (senão não há o que integrar) — EXCETO com force, que é o
     // caso da DUPLA FORMADA pós-sorteio: ela entra em participants (não na espera), então não há nada
     // na waitlist, mas a CF ainda precisa rodar pra detectar o órfão de roster e re-sortear.
@@ -1802,36 +1796,21 @@ window._triggerLateIntegration = function (t, opts) {
     var sig = wl.map(_nm).sort().join('|') + '#' + Object.keys(t.checkedIn || {}).sort().join(',');
     if (!opts.force && window._lateIntegrateLastSig[tId] === sig) return;
     window._lateIntegrateInflight[tId] = true;
-    var _drainPending = function () {
-        if (window._lateIntegratePending[tId]) {
-            delete window._lateIntegratePending[tId];
-            var _ft = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : t;
-            window._triggerLateIntegration(_ft || t, { force: true });
-        }
-    };
     window._callIntegrateLate({ tournamentId: tId }).then(function (res) {
         window._lateIntegrateInflight[tId] = false;
         window._lateIntegrateLastSig[tId] = sig;
         var d = (res && res.data) || {};
-        // DIAGNÓSTICO (dono): mostra SEMPRE o que a CF fez — se changed=false, nada entrou e o toast
-        // diz por quê (reason). Carimba a versão. Sem isto, "não entrou" era caixa-preta.
+        // DIAGNÓSTICO no console (não em toast — o toast alarmava sem motivo em re-runs benignos).
         if (window._dtrace) window._dtrace('integrateLate:done', { v: (window.SCOREPLACE_VERSION || '?'), changed: d.changed, extra: d.extra, duplas: d.duplas, monarch: d.monarch, repfill: d.repfill, redrawn: d.redrawn, reason: d.reason });
-        if (typeof showNotification !== 'undefined') {
-            if (d.changed) {
-                var _n2 = (d.extra || 0) + (d.duplas || 0) + (d.monarch || 0) + (d.repfill || 0) + (d.redrawn || 0);
-                showNotification('⚡ Tardios na chave · v' + (window.SCOREPLACE_VERSION || '?'), (_n2 ? (_n2 + ' confronto(s) novo(s) — ') : '') + 'chave recalculada pela CF.', 'info');
-            } else {
-                showNotification('⚠️ Nada entrou na chave · v' + (window.SCOREPLACE_VERSION || '?'), 'CF integrateLateEntries: changed=false' + (d.reason ? (' (' + d.reason + ')') : '') + '. Pode ser 2ª rodada já iniciada ou nada pra integrar.', 'warning');
-            }
+        // Toast SÓ quando confronto NOVO foi criado (extra/duplas/monarch) — mudanças de repfill/
+        // rebuild não são "confronto novo" e não devem falar. Sem toast contraditório.
+        var _novos = (d.extra || 0) + (d.duplas || 0) + (d.monarch || 0);
+        if (_novos > 0 && typeof showNotification !== 'undefined') {
+            showNotification('⚡ Tardios na chave', _novos + ' confronto(s) novo(s) na chave.', 'info');
         }
-        // a CF persistiu → o onSnapshot re-renderiza sozinho com a chave nova.
-        _drainPending();
     }).catch(function (e) {
-        if (window._dtrace) window._dtrace('integrateLate:done', { v: (window.SCOREPLACE_VERSION || '?'), error: (e && (e.code || e.message)) || 'erro' });
-        if (typeof showNotification !== 'undefined') showNotification('⚠️ Integração falhou · v' + (window.SCOREPLACE_VERSION || '?'), (e && (e.message || e.code)) || 'erro', 'warning');
         window._lateIntegrateInflight[tId] = false;
         if (window._dtrace) window._dtrace('integrateLate:ERR', { code: e && e.code, msg: e && e.message });
-        _drainPending();
     });
 };
 

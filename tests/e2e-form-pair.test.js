@@ -165,23 +165,6 @@ console.log('\n── 2 duplas na espera em sequência + desfazer (_splitLateDup
   ok((t2.waitlist || []).some((p) => (p.displayName || p.name || p) === 'Ze') && (t2.waitlist || []).some((p) => (p.displayName || p.name || p) === 'Ana'), 'desfazer :: 2 solos voltaram pra waitlist');
 })();
 
-// ── re-enfileiramento (a corrida async real que o harness síncrono não encena): enquanto uma
-// integração está EM VOO, um 2º force NÃO pode ser descartado — fica PENDENTE e re-dispara ao fim. ──
-console.log('\n── re-enfileira integração enquanto a anterior está em voo ──');
-(function () {
-  const t = E.createTournament(cfg('Elim Simples'), { id: 'RQ', participants: mkPairs(8), newMatchups: true, lateEnrollment: 'expand' });
-  E.draw(t);
-  W._lateIntegrateInflight = {}; W._lateIntegratePending = {}; W._lateIntegrateLastSig = {};
-  W._lateIntegrateInflight[t.id] = true;    // simula a 1ª integração ainda em voo
-  W._triggerLateIntegration(t, { force: true });   // 2º force chega no meio
-  ok(W._lateIntegratePending[t.id] === true, 're-queue :: 2º force em voo fica PENDENTE (não é descartado em silêncio)');
-  W._lateIntegrateInflight[t.id] = false;   // sem force, em voo, NÃO enfileira
-  W._lateIntegratePending = {};
-  W._lateIntegrateInflight[t.id] = true;
-  W._triggerLateIntegration(t, {});         // sem force
-  ok(!W._lateIntegratePending[t.id], 're-queue :: sem force em voo NÃO enfileira (anti-spam preservado)');
-})();
-
 const r = E.results();
 console.log('\n' + (r.fail === 0 ? '✅ e2e-form-pair: OK' : '❌ ' + r.fail + ' FALHA(S)') + '  (' + r.pass + ' asserts ok)');
 if (r.fails.length) { console.error('\nFALHAS:'); r.fails.forEach((f) => console.error('  ✗ ' + f)); }
