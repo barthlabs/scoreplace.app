@@ -735,6 +735,17 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="select-result-entry" value="organizer">
               </div>
 
+              <!-- Tie-break do set (5-5 vs 6-6) — atalho visível; escreve no mesmo gsm-tiebreakAt do
+                   painel de pontuação. Visível só em esportes com set/tie-break (via #re-tiebreak-at-block). -->
+              <div id="re-tiebreak-at-block" style="display:none; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin: 0 0 0.35rem; font-size: 0.8rem; color: #60a5fa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎾 Tie-break do set</p>
+                <p style="margin: 0 0 0.7rem; font-size: 0.78rem; color: var(--text-muted);">Em que placar o set vai pro tie-break.</p>
+                <div id="re-tbat-seg" data-tbat="" style="display:flex; gap:8px;">
+                  <button type="button" id="re-tbat-g1" onclick="window._reSetTbAt('g-1')" style="flex:1; padding:12px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; border:2px solid rgba(255,255,255,0.12); background:transparent; color:var(--text-bright,#f1f5f9);">Em 5-5 <span style="font-size:0.7rem; color:var(--text-muted); display:block; font-weight:600;">set curto · 6-5</span></button>
+                  <button type="button" id="re-tbat-g" onclick="window._reSetTbAt('g')" style="flex:1; padding:12px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; border:2px solid rgba(255,255,255,0.12); background:transparent; color:var(--text-bright,#f1f5f9);">Em 6-6 <span style="font-size:0.7rem; color:var(--text-muted); display:block; font-weight:600;">padrão · 7-6</span></button>
+                </div>
+              </div>
+
               <!-- Classificação (Personalizada × Em blocos) — logo após o Lançamento de
                    Resultados (v3.1.34). Render CANÔNICA _classifModeHtml(0), a MESMA das fases
                    extras. Visível só em Eliminatórias/Grupos (#elim-settings + visibilidade). -->
@@ -4594,6 +4605,7 @@ function setupCreateTournamentModal() {
       document.getElementById('gsm-tiebreakPoints').value = t.scoring.tiebreakPoints || 7;
       document.getElementById('gsm-tiebreakMargin').value = t.scoring.tiebreakMargin || 2;
       document.getElementById('gsm-tiebreakAt').value = t.scoring.tiebreakAt || '';
+      if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
       document.getElementById('gsm-superTiebreak').value = t.scoring.superTiebreak || false;
       document.getElementById('gsm-superTiebreakPoints').value = t.scoring.superTiebreakPoints || 10;
       document.getElementById('gsm-countingType').value = t.scoring.countingType || 'numeric';
@@ -4843,6 +4855,8 @@ function setupCreateTournamentModal() {
     set('gsm-advantageRule', s.advantageRule ? 'true' : 'false');
     set('gsm-fixedSet', s.fixedSet ? 'true' : 'false');
     set('gsm-fixedSetGames', s.fixedSetGames != null ? s.fixedSetGames : 6);
+    set('gsm-tiebreakAt', s.tiebreakAt || '');
+    if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
   };
 
   window._scoringMeaningfullyChanged = function(o, n) {
@@ -6140,7 +6154,34 @@ window._gsmSetTbAt = function(v) {
   var g = (parseInt(_ge && _ge.value) || 6);
   var n = (v === 'g-1') ? (g - 1) : g;
   var lbl = document.getElementById('gsm-tb-label'); if (lbl) lbl.textContent = 'Tie-break em ' + n + '-' + n;
+  if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
   if (typeof window._gsmUpdateSummary === 'function') window._gsmUpdateSummary();
+};
+
+// Selector de tie-break 5-5/6-6 no bloco de Lançamento de Resultados (atalho visível). Escreve no
+// MESMO hidden gsm-tiebreakAt do painel GSM → flui pro scoring no save.
+window._reHighlightTbAt = function(v) {
+  var seg = document.getElementById('re-tbat-seg'); if (seg) seg.dataset.tbat = v;
+  var g1 = document.getElementById('re-tbat-g1'), gg = document.getElementById('re-tbat-g');
+  if (g1) { g1.style.borderColor = (v === 'g-1') ? '#3b82f6' : 'rgba(255,255,255,0.12)'; g1.style.background = (v === 'g-1') ? 'rgba(59,130,246,0.18)' : 'transparent'; }
+  if (gg) { gg.style.borderColor = (v === 'g') ? '#3b82f6' : 'rgba(255,255,255,0.12)'; gg.style.background = (v === 'g') ? 'rgba(59,130,246,0.18)' : 'transparent'; }
+};
+window._reSetTbAt = function(v) {
+  var h = document.getElementById('gsm-tiebreakAt'); if (h) h.value = v;
+  window._reHighlightTbAt(v);
+};
+// Mostra o bloco só quando o esporte usa SET + TIE-BREAK; destaca a opção atual (gsm-tiebreakAt OU
+// default do esporte). Chamado no load, na troca de esporte e ao aplicar a config GSM.
+window._reSyncTbAt = function() {
+  var blk = document.getElementById('re-tiebreak-at-block'); if (!blk) return;
+  var tbEnabled = ((document.getElementById('gsm-tiebreakEnabled') || {}).value) === 'true';
+  var typeEl = document.getElementById('gsm-type');
+  var isSets = !typeEl || !typeEl.value || typeEl.value === 'sets';
+  blk.style.display = (tbEnabled && isSets) ? 'block' : 'none';
+  if (blk.style.display === 'none') return;
+  var stored = (document.getElementById('gsm-tiebreakAt') || {}).value;
+  var at = stored || ((typeof window._sportTiebreakAt === 'function') ? window._sportTiebreakAt((typeof window._currentSportName === 'function') ? window._currentSportName() : '') : 'g');
+  window._reHighlightTbAt(at);
 };
 
 window._gsmToggleSuperTb = function() {
@@ -6255,6 +6296,7 @@ window._gsmSaveConfig = function() {
   document.getElementById('gsm-tiebreakMargin').value = tbMargin;
   var _seg = document.getElementById('gsm-tbat-seg');
   document.getElementById('gsm-tiebreakAt').value = (_seg && _seg.dataset.tbat) || '';
+  if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
   document.getElementById('gsm-superTiebreak').value = stbOn ? 'true' : 'false';
   document.getElementById('gsm-superTiebreakPoints').value = stbPts;
   document.getElementById('gsm-advantageRule').value = advantage ? 'true' : 'false';
