@@ -1813,13 +1813,22 @@ window._triggerLateIntegration = function (t, opts) {
         window._lateIntegrateInflight[tId] = false;
         window._lateIntegrateLastSig[tId] = sig;
         var d = (res && res.data) || {};
-        if (d.changed && typeof showNotification !== 'undefined') {
-            var _n2 = (d.extra || 0) + (d.duplas || 0) + (d.monarch || 0);
-            showNotification('⚡ Tardios na chave', (_n2 ? (_n2 + ' confronto(s) novo(s) — ') : '') + 'chave recalculada pela CF.', 'info');
+        // DIAGNÓSTICO (dono): mostra SEMPRE o que a CF fez — se changed=false, nada entrou e o toast
+        // diz por quê (reason). Carimba a versão. Sem isto, "não entrou" era caixa-preta.
+        if (window._dtrace) window._dtrace('integrateLate:done', { v: (window.SCOREPLACE_VERSION || '?'), changed: d.changed, extra: d.extra, duplas: d.duplas, monarch: d.monarch, repfill: d.repfill, redrawn: d.redrawn, reason: d.reason });
+        if (typeof showNotification !== 'undefined') {
+            if (d.changed) {
+                var _n2 = (d.extra || 0) + (d.duplas || 0) + (d.monarch || 0) + (d.repfill || 0) + (d.redrawn || 0);
+                showNotification('⚡ Tardios na chave · v' + (window.SCOREPLACE_VERSION || '?'), (_n2 ? (_n2 + ' confronto(s) novo(s) — ') : '') + 'chave recalculada pela CF.', 'info');
+            } else {
+                showNotification('⚠️ Nada entrou na chave · v' + (window.SCOREPLACE_VERSION || '?'), 'CF integrateLateEntries: changed=false' + (d.reason ? (' (' + d.reason + ')') : '') + '. Pode ser 2ª rodada já iniciada ou nada pra integrar.', 'warning');
+            }
         }
         // a CF persistiu → o onSnapshot re-renderiza sozinho com a chave nova.
         _drainPending();
     }).catch(function (e) {
+        if (window._dtrace) window._dtrace('integrateLate:done', { v: (window.SCOREPLACE_VERSION || '?'), error: (e && (e.code || e.message)) || 'erro' });
+        if (typeof showNotification !== 'undefined') showNotification('⚠️ Integração falhou · v' + (window.SCOREPLACE_VERSION || '?'), (e && (e.message || e.code)) || 'erro', 'warning');
         window._lateIntegrateInflight[tId] = false;
         if (window._dtrace) window._dtrace('integrateLate:ERR', { code: e && e.code, msg: e && e.message });
         _drainPending();

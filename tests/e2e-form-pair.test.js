@@ -156,6 +156,13 @@ console.log('\n── 2 duplas na espera em sequência + desfazer (_splitLateDup
   W._formLateJoinDupla(t2.id, 'p1', 'p2');
   W._splitLateDupla(t2.id, 'Nei / Sil');
   ok(!t2.standbyParticipants.some((p) => (p.displayName || p.name) === 'Nei / Sil'), 'desfazer :: compat por nome inteiro ainda casa');
+  // BUG REAL DO DONO (console: standby:[]): a dupla estava em t.waitlist, não em standbyParticipants,
+  // e o split só olhava standby → não achava. Agora procura nos DOIS stores.
+  t2.standbyParticipants = [];
+  t2.waitlist = [{ p1Uid: 'w1', p1Name: 'Ze', p2Uid: 'w2', p2Name: 'Ana', displayName: 'Ze / Ana', name: 'Ze / Ana', _lateJoin: true }];
+  W._splitLateDupla(t2.id, 'w1', 'w2');
+  ok(!(t2.waitlist || []).some((p) => (p.displayName || p.name) === 'Ze / Ana'), 'desfazer :: ✅ acha e desfaz dupla que está em t.waitlist (nao so standby)');
+  ok((t2.waitlist || []).some((p) => (p.displayName || p.name || p) === 'Ze') && (t2.waitlist || []).some((p) => (p.displayName || p.name || p) === 'Ana'), 'desfazer :: 2 solos voltaram pra waitlist');
 })();
 
 // ── re-enfileiramento (a corrida async real que o harness síncrono não encena): enquanto uma

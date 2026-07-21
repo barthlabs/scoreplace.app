@@ -1039,26 +1039,23 @@ window._formLateJoinDupla = function (tId, src, tgt) {
 window._splitLateDupla = function (tId, id1, id2) {
   var _V = window.SCOREPLACE_VERSION || '?';
   var t = window.AppStore && window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
-  if (!t || !Array.isArray(t.standbyParticipants)) { if (typeof showNotification !== 'undefined') showNotification('⚠️ Desfazer', 'sem torneio/lista de espera · v' + _V, 'warning'); return; }
-  var arr = t.standbyParticipants;
+  if (!t) { if (typeof showNotification !== 'undefined') showNotification('⚠️ Desfazer', 'sem torneio · v' + _V, 'warning'); return; }
   var _isDupla = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
-  var idx = -1;
-  // CASA POR IDENTIDADE DE MEMBRO (uid||nome-guest) — cânone uid, nunca pela string "A / B".
-  if (id2 != null && String(id2) !== '') {
-    var _want = [String(id1 || ''), String(id2 || '')].filter(Boolean).sort();
-    idx = arr.findIndex(function (p) {
-      if (!_isDupla(p)) return false;
-      var _got = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort();
-      return _got.length === _want.length && _got.every(function (v, i) { return v === _want[i]; });
-    });
-  }
-  // compat: chamada antiga só com o NOME inteiro da dupla (id2 vazio).
-  if (idx === -1 && (id2 == null || String(id2) === '')) {
-    idx = arr.findIndex(function (p) { return _isDupla(p) && ((window._pName ? window._pName(p, '') : (p.displayName || p.name)) === id1 || (p.displayName || p.name) === id1); });
-  }
+  var _want = (id2 != null && String(id2) !== '') ? [String(id1 || ''), String(id2 || '')].filter(Boolean).sort() : null;
+  var _byMembers = function (p) { if (!_isDupla(p) || !_want) return false; var g = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort(); return g.length === _want.length && g.every(function (v, i) { return v === _want[i]; }); };
+  var _byName = function (p) { return _isDupla(p) && ((window._pName ? window._pName(p, '') : (p.displayName || p.name)) === id1 || (p.displayName || p.name) === id1); };
+  // Procura nos DOIS stores da espera (standbyParticipants E waitlist) — a dupla formada pode estar
+  // em qualquer um (bug do dono: standby vazio mas a dupla estava em t.waitlist → o ✕ não achava).
+  var arr = null, idx = -1;
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (idx !== -1 || !Array.isArray(t[k])) return;
+    var i = t[k].findIndex(_want ? _byMembers : _byName);
+    if (i === -1 && _want) i = t[k].findIndex(_byName); // fallback por nome dentro da mesma store
+    if (i !== -1) { arr = t[k]; idx = i; }
+  });
   if (idx === -1) {
     if (typeof showNotification !== 'undefined') showNotification('⚠️ Desfazer não achou a dupla', '[' + id1 + '/' + (id2 || '') + '] · v' + _V, 'warning');
-    if (window._dtrace) window._dtrace('splitLate:notfound', { id1: id1, id2: id2, standby: arr.filter(_isDupla).map(function (p) { return { d: (p.displayName || p.name), u1: p.p1Uid || p.p1Name, u2: p.p2Uid || p.p2Name }; }) });
+    if (window._dtrace) window._dtrace('splitLate:notfound', { id1: id1, id2: id2, standby: (t.standbyParticipants || []).filter(_isDupla).map(function (p) { return { d: (p.displayName || p.name), u1: p.p1Uid || p.p1Name, u2: p.p2Uid || p.p2Name }; }), waitlist: (t.waitlist || []).filter(_isDupla).map(function (p) { return { d: (p.displayName || p.name), u1: p.p1Uid || p.p1Name, u2: p.p2Uid || p.p2Name }; }) });
     return;
   }
   var e = arr[idx];
