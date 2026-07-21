@@ -16,6 +16,15 @@ var _t = window._t || function(k) { return k; };
 // v1.3.37: CARD DE DUPLA — FONTE ÚNICA window._duplaCard (chamável pelas 3 telas:
 // #participants, detalhe, painel de pareamento tardio). Deps de closure viram locais de ctx;
 // corpo idêntico. Desfazer parametrizado (ctx.splitDupla) p/ o tardio usar _splitLateDupla.
+// v1.3.101 (dono, CANON — "padrão em TODOS os torneios, SEMPRE, e não pode regredir"): a seção de
+// inscritos de DUPLAS ("Sem dupla" + "Duplas formadas") usa GRID RESPONSIVO — várias colunas em tela
+// larga, 1 no mobile — pra APROVEITAR A ÁREA, nunca coluna única. `min(100%, Npx)` evita overflow no
+// mobile; `sp-fit-name` (word-break + auto-shrink) garante que os nomes NÃO truncam ao encolher a
+// coluna. Fonte ÚNICA (usada nos dois hosts); travada por tests/inscritos-grid-canon.test.js.
+// Ver [[feedback_maximize_screen_area_all_devices]] / [[project_web_area_scaling_canon]].
+window._INSCRITO_GRID_SOLO = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr));gap:8px;align-items:start;';
+window._INSCRITO_GRID_DUPLA = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 340px), 1fr));gap:8px;align-items:start;';
+
 // v1.3.84: chave ESTÁVEL da entrada (dupla ou solo) pra achar o card no DOM no update in-place.
 window._duplaEntryKey = function (p) {
   if (!p) return '';
@@ -285,14 +294,14 @@ window._buildDoublesInscritosSection = function (t, ctx) {
               '<span style="font-size:0.75rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;">🙋 Sem dupla (' + _semDuplaTotal + ')</span>' +
               '<span style="font-size:0.65rem;color:var(--text-muted);">' + ((isOrg || t.manualPairing === 'open') ? '— Arraste um card sobre outro para formar a dupla' : '— As duplas são formadas pelo organizador') + '</span>' +
             '</div>' +
-            (_soloAvailable.length > 0 ? ('<div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">' + _soloAvailable.map(function (p) { return window._duplaCard(t, p, true, _dctx); }).join('') + '</div>') : '') +
+            (_soloAvailable.length > 0 ? ('<div class="sp-dnd-host" style="' + window._INSCRITO_GRID_SOLO + '">' + _soloAvailable.map(function (p) { return window._duplaCard(t, p, true, _dctx); }).join('') + '</div>') : '') +
             _pendingCardsHtml +
           '</div>')
         : '<div style="margin-bottom:1rem;padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);font-size:0.82rem;color:#34d399;text-align:center;">✅ Todos com dupla formada</div>') +
       (_pairedParticipants.length > 0
         ? ('<div>' +
             '<div style="font-size:0.75rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas formadas (' + _pairedParticipants.length + ')</div>' +
-            '<div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">' +
+            '<div class="sp-dnd-host" style="' + window._INSCRITO_GRID_DUPLA + '">' +
               _pairedParticipants.map(function (p) { return window._duplaCard(t, p, false, _dctx); }).join('') +
             '</div>' +
           '</div>')
