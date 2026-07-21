@@ -618,10 +618,21 @@ window._buildPhase0Pool = function (t, isMon, ts) {
 //         derrotado eliminado). Diferencie pelo window._lastIntegrateTier.
 //    0  = nada a fazer (sem duplas formadas, ou 1 dupla sem par disponível → aguarda)
 //   -3  = Tier 3 (R2 do lower já começou) → suplentes individuais (caller dissolve as duplas)
+// CÂNONE (dono, 21/jul): "Novos Confrontos" e "Abertas" são INDEPENDENTES. Abertas = aceitar
+// novos inscritos após o sorteio (viram suplentes na espera). Novos Confrontos = suplentes/duplas
+// formadas ENTRAM na chave na hora (novo jogo ou preenche "a definir") — vale MESMO com as
+// inscrições fechadas. Toda a integração tardia gateia por AQUI, nunca mais por lateEnrollment==='expand'.
+// Compat: torneios antigos só têm lateEnrollment; 'expand' implicava Novos Confrontos ON.
+window._allowsNewMatchups = function (t) {
+  if (!t) return false;
+  if (t.newMatchups != null) return t.newMatchups === true;
+  var le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+  return le === 'expand';
+};
+
 window._integrateLateDuplas = function (t) {
   if (!t) return 0;
-  var _le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
-  if (_le !== 'expand' && _le !== 'standby') return 0;
+  if (!window._allowsNewMatchups(t)) return 0;
   if (!/dupla/i.test(t.format || '')) return 0; // Eliminatória Simples: _createExtraGamesFromWaitlist
   if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio ainda não feito
   if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-cat: fora do escopo
@@ -870,7 +881,7 @@ window._dissolveLateDuplas = function (t) {
 
 window._createExtraGamesFromWaitlist = function(t) {
   if (!t) return 0;
-  if ((window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) !== 'expand') return 0;
+  if (!window._allowsNewMatchups(t)) return 0; // v1.3.x: gate independente (ver _allowsNewMatchups)
   var fmt = t.format || '';
   if (fmt !== 'Eliminatórias Simples' && fmt !== 'Eliminatória Simples') return 0;
   if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-categoria: fora do escopo por ora
@@ -1068,7 +1079,7 @@ window._createExtraGamesFromWaitlist = function(t) {
 // entre os melhores). Ver [[project_late_dupla_fills_awaiting_slot]]. Retorna nº de duplas integradas.
 window._fillRepFillWithLateDuplas = function (t) {
   if (!t) return 0;
-  if ((window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) !== 'expand') return 0;
+  if (!window._allowsNewMatchups(t)) return 0; // v1.3.x: gate independente (ver _allowsNewMatchups)
   if (typeof window._lateEnrollR2Started === 'function' && window._lateEnrollR2Started(t)) return 0;
   var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
   var _isPair = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
@@ -1812,6 +1823,9 @@ window._setPhaseLateEnrollment = function (tId, mode) {
         var _cp = (ft && ft.currentPhaseIndex) || 0;
         if (Array.isArray(ft.phases) && ft.phases[_cp]) ft.phases[_cp].lateEnrollment = mode;
         ft.lateEnrollment = mode;
+        // v1.3.x: mode 'expand' liga "Novos Confrontos" (integração tardia); 'standby'/'closed' desliga.
+        // (A independência total Abertas×NovosConfrontos vive na config de criar/editar via newMatchups.)
+        ft.newMatchups = (mode === 'expand');
     }, 'Entrada tardia da fase: ' + (mode === 'expand' ? 'ABERTA (novos confrontos)' : mode === 'standby' ? 'suplentes apenas' : 'fechada'));
     if (typeof showNotification === 'function') {
         if (mode === 'expand') showNotification('➕ Entradas tardias ABERTAS', 'Marque presença de quem está na espera — entra por repescagem (vs a definir).', 'success');

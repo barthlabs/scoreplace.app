@@ -384,6 +384,7 @@ function setupCreateTournamentModal() {
               <div id="late-enroll-box" style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ${_t('create.lateEnrollSection')}</p>
                 <input type="hidden" id="late-enrollment" value="closed">
+                <input type="hidden" id="new-matchups" value="false">
                 <div style="display:flex;flex-direction:column;gap:8px;" id="late-enrollment-buttons">
                   <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
                     <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon" id="late-closed-icon">🚫</span><div><span id="late-closed-title" style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollClosed')}</span><div class="toggle-desc" id="late-closed-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollClosedOnDesc')}</div></div></div>
@@ -1830,19 +1831,17 @@ function setupCreateTournamentModal() {
     var expand = document.getElementById('late-toggle-expand');
     if (!closed || !expand) return;
 
-    // Mutual exclusion: ligar um desliga o outro. Se source não foi passado
-    // (re-render programático), preserva estado atual sem alterar.
-    if (source === 'closed' && closed.checked) {
-      expand.checked = false;
-    } else if (source === 'expand' && expand.checked) {
-      closed.checked = false;
-    }
-
+    // v1.3.x (dono): "Fechadas" (Abertas) e "Novos Confrontos" são INDEPENDENTES — não há mais
+    // exclusão mútua. Fechadas = aceitar novos inscritos após o sorteio. Novos Confrontos = suplentes/
+    // duplas formadas entram na chave na hora, MESMO com as inscrições fechadas. Ver _allowsNewMatchups.
+    // lateEnrollment carrega o estado de INSCRIÇÃO (closed x open); new-matchups é o flag independente.
     var value;
     if (closed.checked) value = 'closed';
     else value = expand.checked ? 'expand' : 'standby';
     var hidden = document.getElementById('late-enrollment');
     if (hidden) hidden.value = value;
+    var nmHidden = document.getElementById('new-matchups');
+    if (nmHidden) nmHidden.value = expand.checked ? 'true' : 'false';
     // Update visual active state independently per toggle
     var rows = document.querySelectorAll('#late-enrollment-buttons .toggle-row');
     if (rows[0]) {
@@ -1850,7 +1849,7 @@ function setupCreateTournamentModal() {
       rows[0].style.background = closed.checked ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)';
     }
     if (rows[1]) {
-      var expandEffective = !closed.checked && expand.checked;
+      var expandEffective = expand.checked; // v1.3.x: independente de "Fechadas"
       rows[1].style.border = expandEffective ? '1px solid rgba(251,191,36,0.25)' : '1px solid rgba(255,255,255,0.08)';
       rows[1].style.background = expandEffective ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)';
       // v1.3.98 (dono, "inscrições durante a fase travadas"): "Novos Confrontos" SEMPRE visível —
@@ -1858,7 +1857,7 @@ function setupCreateTournamentModal() {
       // e achava que não dava pra mudar. Agora as duas opções aparecem; ligar uma desliga a outra
       // (1 clique). Quando Fechadas está ON, esta fica dim (não-efetiva) mas VISÍVEL e clicável.
       rows[1].style.display = '';
-      rows[1].style.opacity = closed.checked ? '0.6' : '1';
+      rows[1].style.opacity = '1'; // v1.3.x: sempre efetivo (independente de "Fechadas")
     }
     // Título + ícone canônicos acompanham a posição de cada toggle (v3.1.20).
     var mLbl = window._lateEnrollLabel('master', closed.checked);
@@ -1866,8 +1865,8 @@ function setupCreateTournamentModal() {
     if (closedTitle) closedTitle.textContent = mLbl.title;
     var closedIcon = document.getElementById('late-closed-icon');
     if (closedIcon) closedIcon.textContent = mLbl.icon;
-    // Segundo toggle só aparece com inscrição aberta; rótulo segue o próprio estado.
-    var cLbl = window._lateEnrollLabel('conf', (expand.checked && !closed.checked));
+    // v1.3.x: rótulo do 2º toggle segue SÓ o próprio estado (independente de "Fechadas").
+    var cLbl = window._lateEnrollLabel('conf', expand.checked);
     var expandTitle = document.getElementById('late-expand-title');
     if (expandTitle) expandTitle.textContent = cLbl.title;
     var expandIcon = document.getElementById('late-expand-icon');
@@ -4501,10 +4500,13 @@ function setupCreateTournamentModal() {
     if (typeof window._setPhaseWo === 'function') window._setPhaseWo(0, _woScope);
     // Late Enrollment (Fechadas + Novos Confrontos)
     var _lateEnroll = t.lateEnrollment || 'closed';
+    // v1.3.x: "Novos Confrontos" é INDEPENDENTE de "Fechadas". Vem de t.newMatchups; compat: torneios
+    // antigos só têm lateEnrollment ('expand' implicava Novos Confrontos ON).
+    var _newMatch = (t.newMatchups != null) ? (t.newMatchups === true) : (_lateEnroll === 'expand');
     document.getElementById('late-enrollment').value = _lateEnroll;
     document.getElementById('late-toggle-closed').checked = _lateEnroll === 'closed';
-    // Novos Confrontos: ON when mode is 'expand'. For new tournaments with Fechadas OFF, default ON.
-    document.getElementById('late-toggle-expand').checked = _lateEnroll === 'expand';
+    document.getElementById('late-toggle-expand').checked = _newMatch;
+    var _nmEl0 = document.getElementById('new-matchups'); if (_nmEl0) _nmEl0.value = _newMatch ? 'true' : 'false';
     window._syncLateEnrollment();
     // Lançamento de Resultados — v2.6.62: render canônica. Grava no hidden + re-renderiza botões.
     var _reVal = t.resultEntry || 'organizer';
@@ -5105,6 +5107,7 @@ function setupCreateTournamentModal() {
           resultEntry: resultEntryVal,
           woScope: (document.getElementById('wo-scope') || {}).value || 'individual',
           lateEnrollment: (document.getElementById('late-enrollment') || {}).value || 'closed',
+          newMatchups: ((document.getElementById('new-matchups') || {}).value === 'true'), // v1.3.x: independente de Abertas
           venue: venueVal,
           venueAccess: venueAccessVal,
           venueLat: venueLatVal,
@@ -6396,7 +6399,9 @@ window._prefillFromTemplate = function(tpl) {
   if (tpl.lateEnrollment) {
     document.getElementById('late-enrollment').value = tpl.lateEnrollment;
     document.getElementById('late-toggle-closed').checked = tpl.lateEnrollment === 'closed';
-    document.getElementById('late-toggle-expand').checked = tpl.lateEnrollment === 'expand';
+    var _tplNM = (tpl.newMatchups != null) ? (tpl.newMatchups === true) : (tpl.lateEnrollment === 'expand'); // v1.3.x independente
+    document.getElementById('late-toggle-expand').checked = _tplNM;
+    var _nmElT = document.getElementById('new-matchups'); if (_nmElT) _nmElT.value = _tplNM ? 'true' : 'false';
     if (typeof window._syncLateEnrollment === 'function') window._syncLateEnrollment();
   }
 
@@ -6882,6 +6887,7 @@ window._saveCurrentFormAsTemplate = function() {
       resultEntry: get('select-result-entry') || 'organizer',
       woScope: get('wo-scope') || 'individual',
       lateEnrollment: get('late-enrollment') || 'closed',
+      newMatchups: (get('new-matchups') === 'true'), // v1.3.x: "Novos Confrontos" independente de "Abertas"
       courtCount: parseInt(get('tourn-court-count')) || '',
       courtNames: (get('tourn-court-names') || '').trim(),
       callTime: parseInt(get('tourn-call-time')) || 0,

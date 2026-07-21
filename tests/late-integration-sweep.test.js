@@ -154,6 +154,24 @@ console.log('── SWEEP INTEGRAÇÃO TARDIA: formato × config × N ──');
   });
 });
 
+// ══ 7. INDEPENDÊNCIA "Novos Confrontos" × "Abertas" (dono, 21/jul) ══
+// newMatchups:true integra a dupla formada MESMO com inscrições fechadas (lateEnrollment:'closed').
+// Sem newMatchups (ou false), a dupla fica SUPLENTE (não entra) — os dois flags são independentes.
+console.log('\n── independência Novos Confrontos × Abertas ──');
+[['closed', true, true], ['closed', false, false], ['closed', undefined, false], ['standby', true, true], ['expand', undefined, true]].forEach(function (c) {
+  const le = c[0], nm = c[1], shouldIntegrate = c[2];
+  const t = tour('Eliminatórias Simples', { teamSize: 2, enrollmentMode: 'teams', participants: mkPairs(4), lateEnrollment: le });
+  if (nm !== undefined) t.newMatchups = nm;
+  mkPairs(4).forEach(function () {}); // noop
+  t.participants.forEach(function (p) { checkInEntry(t, p); });
+  dc.drawInitial(t, {});
+  t.standbyParticipants.push(latePairFormed('Zx', 'Zy')); checkInEntry(t, latePairFormed('Zx', 'Zy'));
+  dc.integrateLateEntries(t, {});
+  const inBr = inBracket(t, 'Zx / Zy');
+  const label = 'le=' + le + ' newMatchups=' + nm;
+  ok(inBr === shouldIntegrate, 'independência :: ' + label + ' → integra=' + shouldIntegrate + ' (got ' + inBr + ')');
+});
+
 console.log('\n' + (fail === 0 ? '✅ late-integration-sweep: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fails.length) { console.error('\nFALHAS (' + fails.length + '):'); fails.slice(0, 80).forEach((f) => console.error('  ✗ ' + f)); }
 process.exit(fail > 0 ? 1 : 0);

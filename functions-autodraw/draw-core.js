@@ -526,7 +526,8 @@ function integrateLateEntries(t, opts) {
   let redrawn = 0;
   try {
     if (/dupla elimin/i.test(t.format || '') &&
-        (win._effectiveLateEnrollment ? win._effectiveLateEnrollment(t) : t.lateEnrollment) === 'expand' &&
+        (typeof win._allowsNewMatchups === 'function' ? win._allowsNewMatchups(t)
+          : ((win._effectiveLateEnrollment ? win._effectiveLateEnrollment(t) : t.lateEnrollment) === 'expand')) &&
         !(Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1)) {
       const _hasResult = (t.matches || []).some(function (m) { return m && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length) || m.startedAt); });
       if (!_hasResult) {
