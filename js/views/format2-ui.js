@@ -385,6 +385,10 @@
       '<input type="checkbox"' + (e.ativa ? ' checked' : '') + (_elimLocked ? ' disabled' : '') + ' onchange="window._f2Elim(this.checked)">' +
       '<span class="toggle-slider"></span></label>';
     var eb = '';
+    // v1.3.99: slot do FORM (DATAS + INSCRIÇÕES durante a fase) da fase INICIAL na eliminação
+    // DIRETA. Fica FORA do wrapper de trava (igual às datas da classificatória) → editável no
+    // calor do torneio mesmo após o sorteio. Só a ESTRUTURA trava. Ver [[project_late_enrollment_default_closed_live_toggle]].
+    var _elimInitExtra = '';
     if (e.ativa) {
       if (!cfg.classifAtiva) {
         // v4.4.33: ELIMINAÇÃO DIRETA (sem classificatória) — todos os inscritos entram no bracket
@@ -519,18 +523,25 @@
       // t.lateEnrollment). Com classificatória, ELA é a inicial (tem o bloco do form via slot);
       // a eliminatória é 2ª fase e ganha o SEU próprio painel (cfg.eliminatoria.lateEnrollment),
       // que só passa a valer quando o torneio avança de fase.
-      if (!cfg.classifAtiva) eb += '<div id="f2-classif-extra" style="margin-top:12px;"></div>';
+      // v1.3.99: na eliminação DIRETA (sem classificatória) a fase inicial carrega o slot do FORM
+      // (#f2-classif-extra = DATAS + INSCRIÇÕES durante a fase). Guardo SEPARADO pra ficar FORA do
+      // wrapper de trava — igual às datas da classificatória (abaixo). Só a ESTRUTURA trava.
+      if (!cfg.classifAtiva) _elimInitExtra = '<div id="f2-classif-extra" style="margin-top:12px;"></div>';
       else eb += _lateEnrollElimBlock(e);
     }
-    var elimInner = e.ativa ? eb : '';
+    var elimInner = e.ativa ? (eb + _elimInitExtra) : '';
     // v4.4.52: fase avançou → config da eliminatória travada (cinza, sem cliques). Nota muda
     // conforme haja classificatória (avançou de fase) ou seja eliminação direta (já sorteada).
     if (_elimLocked) {
       var _elimNote = cfg.classifAtiva
         ? '🔒 <b>Fase eliminatória em andamento</b> — o torneio já avançou de fase; a configuração não pode mais ser alterada.'
-        : '🔒 <b>Eliminatória já sorteada</b> — a configuração não pode mais ser alterada.';
+        // v1.3.99 (dono): eliminação direta já sorteada → só a ESTRUTURA trava. DATAS e INSCRIÇÕES
+        // durante a fase (novos confrontos) ficam editáveis pra o organizador corrigir no calor do
+        // torneio (estender/abreviar a fase, aceitar/parar novos confrontos).
+        : '🔒 <b>Estrutura travada</b> — formato, chaves e estratégia não mudam mais (já sorteada). Você ainda pode ajustar as <b>datas</b> e as <b>inscrições durante a fase</b> abaixo.';
       elimInner = '<div style="font-size:0.76rem;color:#fde68a;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">' + _elimNote + '</div>' +
-        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + eb + '</div>';
+        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + eb + '</div>' +
+        _elimInitExtra;   // DATAS + INSCRIÇÕES FORA do lock → editáveis no calor do torneio
     }
 
     // Slot (Datas + Inscrições) dentro da CLASSIFICATÓRIA quando ela está ativa.

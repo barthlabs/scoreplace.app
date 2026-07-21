@@ -1846,7 +1846,9 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
     var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
     var tIdSafe = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var ab = isAberto ? 'true' : 'false';
-    window._soloSel = 'manual'; // pré-seleciona Ajuste manual
+    // v1.3.99: com 2+ sem par, pré-seleciona FLEXIBILIZAR (inclui mais gente) — a opção inclusiva
+    // que o dono quer por padrão; senão, Ajuste manual.
+    window._soloSel = (solos.length >= 2) ? 'flex' : 'manual';
     var chips = solos.map(function (p) {
         return '<span style="display:inline-block;background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.4);color:#fde68a;border-radius:999px;padding:5px 12px;font-size:0.82rem;font-weight:600;">' + esc(window._soloNameOf(p)) + '</span>';
     }).join(' ');
@@ -1883,6 +1885,12 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
             '<p style="margin:0 0 8px;font-size:0.85rem;color:var(--text-main,#cbd5e1);line-height:1.5;">Estes participantes <b>não formaram dupla</b>. Sem par, não entram direto no chaveamento. Selecione uma opção e confirme:</p>' +
             '<div style="display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 18px;">' + chips + '</div>' +
             '<div style="display:flex;flex-direction:column;gap:10px;">' +
+                // v1.3.99 (dono): a MESMA "Flexibilizar equilíbrio" que já existe no painel do resto —
+                // forma dupla(s) POR SORTEIO entre os sem par (mistas primeiro), incluindo mais gente
+                // em vez de deixar de fora; o que sobra (1) vai pra espera e a chave é sorteada entre
+                // TODAS as duplas. Chama a função EXISTENTE _applyFlexibilizeBalance. Só quando dá pra
+                // formar ao menos 1 dupla (2+ sem par). Ver [[project_inclusion_philosophy_canon]].
+                (solos.length >= 2 ? opt('flex', '⚖️', 'Flexibilizar equilíbrio', 'Forma dupla(s) por sorteio entre os sem par — inclui mais gente em vez de deixar de fora. Quem sobrar vai pra espera; a chave é sorteada entre todas as duplas.', '#4ade80') : '') +
                 opt('manual', '🧩', 'Ajuste manual', 'Abre a página de inscritos pra você formar as duplas arrastando um sobre o outro (vendo as duplas atuais e os sem par).', '#818cf8') +
                 opt('waitlist', '⏱️', 'Lista de espera', 'Vão pra lista de espera — não jogam a chave, mas ficam disponíveis pra substituir num W.O.', '#22d3ee') +
                 opt('exclude', '🚫', 'Excluir do sorteio', 'Removidos do torneio. Não entram na chave nem na lista de espera.', '#f87171') +
@@ -1901,7 +1909,14 @@ window._soloSelect = function (key) {
 };
 window._soloConfirm = function (tId, isAberto) {
     var key = window._soloSel || 'manual';
-    if (key === 'manual') window._soloManualPairPage(tId);
+    if (key === 'flex') {
+        // v1.3.99: chama a função EXISTENTE de flexibilizar (forma as duplas por sorteio e
+        // re-entra na cadeia — o solo que sobra vai pro painel do resto, depois pow2).
+        var a = document.getElementById('solo-resolution-panel'); if (a) a.remove();
+        document.body.style.overflow = '';
+        window._applyFlexibilizeBalance(tId);
+    }
+    else if (key === 'manual') window._soloManualPairPage(tId);
     else if (key === 'waitlist') window._soloResolveWaitlist(tId, isAberto);
     else if (key === 'exclude') window._soloResolveExclude(tId, isAberto);
 };
