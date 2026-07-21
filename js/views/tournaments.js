@@ -944,10 +944,15 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
     t.updatedAt = new Date().toISOString();
     // v1.3.x (roster→CF): persiste via CF formPair (concorrência-safe + replica pro Sandbox);
     // fallback = saveTournament direto do t já mutado (mesma gravação de antes) se a CF cair.
+    // DEPOIS de persistir: se a chave JÁ foi sorteada, dispara a integração tardia (force) — a dupla
+    // formada entra na chave (a CF detecta o órfão de roster e re-sorteia). Sem chave, não faz nada.
+    var _hasBracket = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
+    var _integrateAfter = function () { if (_hasBracket && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} } };
+    var _persistFallback = function () { var _s = window.FirestoreDB.saveTournament(t); if (_s && _s.then) _s.then(_integrateAfter, _integrateAfter); else _integrateAfter(); };
     if (window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function') {
         window.FirestoreDB.formPair(tId, { uid1: _u1, name1: name1, uid2: _u2, name2: name2 })
-            .catch(function () { window.FirestoreDB.saveTournament(t); });
-    } else { window.FirestoreDB.saveTournament(t); }
+            .then(_integrateAfter, _persistFallback);
+    } else { _persistFallback(); }
     if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');
     if (_u2 && _u2 !== _u1 && typeof window._sendUserNotification === 'function') {
         var cu = window.AppStore.currentUser;

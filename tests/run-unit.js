@@ -151,6 +151,10 @@ const SUITES = [
   // avança (materializeNextPhase) e fecha a elim num campeão; + integração tardia na classificatória.
   // Individual e duplas, Grupos e Suíço. Pegou o gap: tardio não integrava em grupos/Suíço (fix redraw). v1.3.x.
   'tests/classificatory-phase-sweep.test.js',
+  // BUG DO DONO: "formei dupla e nada dela entrar na chave". Dupla formada pós-sorteio funde em
+  // participants (fora da espera) → ficava órfã. Fix: integrateLateEntries detecta órfão de roster
+  // e re-sorteia (todo formato, incl. Elim Simples) + _triggerLateIntegration(force) + form dispara.
+  'tests/form-pair-integration.test.js',
   // v1.3.89: SWEEP W.O. + integração tardia (motor _applyWO real + CF integrateLateEntries), joga até fechar.
   'tests/draw-sweep-wo-late.test.js',
   'tests/present-only-no-lost-entries.test.js',

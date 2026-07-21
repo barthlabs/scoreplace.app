@@ -323,6 +323,27 @@ function hasDrawnBracket(t) {
     || (Array.isArray(t.groups) && t.groups.length > 0);
 }
 
+// Rótulos de TODOS os competidores REPRESENTADOS na chave desenhada (matches p1/p2 + team1/team2,
+// jogadores de grupo, rounds Suíço/Liga). Usado pra achar inscrito de `t.participants` que ficou
+// FORA da chave — o caso da dupla FORMADA depois do sorteio: ela entra em participants (não na
+// espera) e nenhuma função de integração tardia (que lê waitlist/_lateJoin) a enxergava.
+function bracketLabels(t) {
+  const win = g.window;
+  const s = new Set();
+  const add = (x) => { const l = (x && (x.displayName || x.name)) || (typeof x === 'string' ? x : ''); if (l) s.add(String(l)); };
+  try {
+    const all = (typeof win._collectAllMatches === 'function') ? (win._collectAllMatches(t) || []) : (t.matches || []);
+    all.forEach(function (m) {
+      if (!m) return;
+      add(m.p1); add(m.p2);
+      if (Array.isArray(m.team1)) m.team1.forEach(add);
+      if (Array.isArray(m.team2)) m.team2.forEach(add);
+    });
+  } catch (e) {}
+  try { (t.groups || []).forEach(function (gr) { (gr && (gr.players || gr.participants) || []).forEach(add); }); } catch (e) {}
+  return s;
+}
+
 // Recompilar o FORMATO é seguro SÓ antes de existir chave (fase 0 intocada). Depois disso o
 // doc carrega estado de fase que a recompilação atropelaria. É pergunta DIFERENTE de "já tem
 // chave?" — por isso são duas funções.
@@ -524,10 +545,10 @@ function integrateLateEntries(t, opts) {
   // tardios presentes que AINDA ficaram órfãos. Se `late` vier vazio (todos já entraram), NÃO roda.
   let redrawn = 0;
   try {
-    if (!/elimin[áa]?t[óo]?rias?\s*simples/i.test(t.format || '') &&
-        (typeof win._allowsNewMatchups === 'function' ? win._allowsNewMatchups(t)
-          : ((win._effectiveLateEnrollment ? win._effectiveLateEnrollment(t) : t.lateEnrollment) === 'expand')) &&
-        !(Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1)) {
+    const _newMatchups = (typeof win._allowsNewMatchups === 'function' ? win._allowsNewMatchups(t)
+      : ((win._effectiveLateEnrollment ? win._effectiveLateEnrollment(t) : t.lateEnrollment) === 'expand'));
+    const _multiCat = (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1);
+    if (_newMatchups && !_multiCat) {
       // "tem resultado?" cobre chave (t.matches) E round-based (t.rounds[] de Liga/Suíço) — senão
       // re-sortear destruiria rodadas jogadas. Fora do Tier-1 (algum resultado), NÃO re-sorteia.
       const _resM = function (m) { return m && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length) || m.startedAt); };
@@ -543,11 +564,25 @@ function integrateLateEntries(t, opts) {
           const nm = (p && (p.displayName || p.name)) || '';
           return !!(nm && ci[nm] && !ab[nm]);
         };
+        // ESPERA (_lateJoin presente): re-sorteia via este caminho FORA de Elim Simples — Elim Simples
+        // integra a espera pelo append cirúrgico (_createExtraGamesFromWaitlist), preservando repescagem.
+        const _isElimSimples = /elimin[áa]?t[óo]?rias?\s*simples/i.test(t.format || '');
         const late = [];
-        ['standbyParticipants', 'waitlist'].forEach(function (k) {
-          if (Array.isArray(t[k])) t[k].forEach(function (p) { if (p && p._lateJoin && _present(p)) late.push(p); });
+        if (!_isElimSimples) {
+          ['standbyParticipants', 'waitlist'].forEach(function (k) {
+            if (Array.isArray(t[k])) t[k].forEach(function (p) { if (p && p._lateJoin && _present(p)) late.push(p); });
+          });
+        }
+        // ÓRFÃOS DE ROSTER: inscrito que JÁ está em `t.participants` mas ficou FORA da chave — o caso
+        // da DUPLA FORMADA depois do sorteio (funde 2 solos em participants, sem passar pela espera).
+        // Vale pra TODO formato INCLUSIVE Elim Simples: o append cirúrgico só lê a WAITLIST e não
+        // enxerga quem está em participants. Sem resultado → re-sortear inclui a dupla (já no roster).
+        const _brk = bracketLabels(t);
+        const _lbl = function (p) { return (p && (p.displayName || p.name)) || (typeof p === 'string' ? p : ''); };
+        const orphans = (Array.isArray(t.participants) ? t.participants : []).filter(function (p) {
+          const l = _lbl(p); return l && !_brk.has(l) && _present(p);
         });
-        if (late.length) {
+        if (late.length || orphans.length) {
           if (!Array.isArray(t.participants)) t.participants = [];
           if (!t.teamOrigins) t.teamOrigins = {};
           const lateKeys = {};
@@ -563,7 +598,7 @@ function integrateLateEntries(t, opts) {
           });
           if (typeof win._clearTournamentDraw === 'function') win._clearTournamentDraw(t);
           const _rd = drawInitial(t, {});
-          if (_rd && _rd.ok) redrawn = late.length;
+          if (_rd && _rd.ok) redrawn = late.length + orphans.length;
         }
       }
     }
