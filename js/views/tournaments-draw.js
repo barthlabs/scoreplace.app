@@ -2969,7 +2969,12 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
         // (fmt2.formacaoDupla) pra o seletor "Duplas na eliminatória" refletir a mudança —
         // antes só mexia no enrollmentMode e o seletor continuava "Sorteadas".
         if (typeof window._markDuplasManual === 'function') window._markDuplasManual(t);
-        window.FirestoreDB.saveTournament(t);
+        // v1.3.x (roster→CF): persiste via CF formPair (concorrência-safe + replica pro Sandbox);
+        // fallback = saveTournament direto do t já mutado se a CF cair.
+        if (window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function') {
+            window.FirestoreDB.formPair(tId, { uid1: fuid1, name1: name1, uid2: fuid2, name2: name2 })
+                .catch(function () { window.FirestoreDB.saveTournament(t); });
+        } else { window.FirestoreDB.saveTournament(t); }
         var container = document.getElementById('view-container');
         if (container) renderTournaments(container, tId);
         if (typeof showNotification === 'function') showNotification('👫 Dupla formada!', newName, 'success');

@@ -942,7 +942,12 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
     // v4.5.94: dupla formada à mão → regra "Já formadas" (config + sorteio, via _isManualPairing).
     if (typeof window._markDuplasManual === 'function') window._markDuplasManual(t);
     t.updatedAt = new Date().toISOString();
-    window.FirestoreDB.saveTournament(t);
+    // v1.3.x (roster→CF): persiste via CF formPair (concorrência-safe + replica pro Sandbox);
+    // fallback = saveTournament direto do t já mutado (mesma gravação de antes) se a CF cair.
+    if (window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function') {
+        window.FirestoreDB.formPair(tId, { uid1: _u1, name1: name1, uid2: _u2, name2: name2 })
+            .catch(function () { window.FirestoreDB.saveTournament(t); });
+    } else { window.FirestoreDB.saveTournament(t); }
     if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');
     if (_u2 && _u2 !== _u1 && typeof window._sendUserNotification === 'function') {
         var cu = window.AppStore.currentUser;
@@ -1504,7 +1509,10 @@ function renderTournaments(container, tournamentId = null) {
         t.participants = arr;
         t.updatedAt = new Date().toISOString();
 
-        window.FirestoreDB.saveTournament(t).then(function() {
+        // v1.3.x (roster→CF): desfaz via CF splitPair (concorrência-safe + replica pro Sandbox);
+        // fallback = saveTournament direto do t já mutado se a CF cair. As notificações/refresh
+        // rodam nos dois caminhos (_afterSplit).
+        var _afterSplit = function() {
             // v2.8.91: notifica os DOIS envolvidos que o organizador desfez a dupla.
             try {
                 var _actorUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
@@ -1516,7 +1524,13 @@ function renderTournaments(container, tournamentId = null) {
             } catch(e){}
             if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', p1Name + ' e ' + p2Name + ' voltaram para Sem Dupla.', 'info');
             if (typeof window._softRefreshView === 'function') window._softRefreshView();
-        });
+        };
+        if (window.FirestoreDB && typeof window.FirestoreDB.splitPair === 'function') {
+            window.FirestoreDB.splitPair(tId, { id1: id1, id2: id2 }).then(_afterSplit)
+                .catch(function () { window.FirestoreDB.saveTournament(t).then(_afterSplit); });
+        } else {
+            window.FirestoreDB.saveTournament(t).then(_afterSplit);
+        }
     };
 
     // Inscrever solo em torneio de duplas (sem parceiro definido) — mantido para compat

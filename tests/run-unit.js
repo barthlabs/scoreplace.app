@@ -209,6 +209,9 @@ const SUITES = [
   // Botões CANCELAR do fluxo de sorteio são VERMELHOS (#dc2626), nunca transparentes. v1.3.103.
   'tests/draw-cancel-red-canon.test.js',
   'functions/test-match-roster.js',
+  // Formar/desfazer dupla manual → CF (roster→CF): lógica pura de pair-core (espelha
+  // _formDuplaByUids/_splitDupla). A replicação sandbox roda no emulador (test-pair-replicate.js). v1.3.x.
+  'functions/test-pair-core.js',
   // Inscrição/desinscrição no servidor (CF) — espelha a transação do cliente.
   'functions/test-enroll-core.js',
   // Item 7: janelas do lembrete de torneio (7d/2d/0d) ESPELHAM o cliente; data-only BRT.

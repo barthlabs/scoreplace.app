@@ -1999,6 +1999,104 @@ exports.deenrollParticipant = onCall(
   }
 );
 
+// Formar/desfazer DUPLA manual — MESMO padrão do enroll (item #2, roster→CF). A formação
+// manual gravava via saveTournament direto (NÃO concorrência-safe, NÃO replicava pro SB → o
+// Sandbox divergia do original ao formar duplas). Lógica pura em ./pair-core.js. Ver
+// [[project_draw_client_to_cf_migration]] / [[project_sandbox_tournament]].
+// Deploy:  firebase deploy --only functions:formPair,functions:splitPair
+const _pairCore = require("./pair-core");
+
+function _isTournamentOrgCaller(t, callerUid, callerEmail) {
+  const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
+  return (t.creatorUid && t.creatorUid === callerUid) ||
+    (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
+    (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
+    (callerEmail && adminEmails.indexOf(callerEmail) !== -1);
+}
+
+exports.formPair = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const d = request.data || {};
+    const opts = { uid1: d.uid1 || "", name1: d.name1 || "", uid2: d.uid2 || "", name2: d.name2 || "" };
+    if (!tournamentId || (!opts.uid1 && !opts.name1) || (!opts.uid2 && !opts.name2)) {
+      throw new HttpsError("invalid-argument", "tournamentId e os dois membros são obrigatórios");
+    }
+
+    const db = admin.firestore();
+    const docRef = db.collection("tournaments").doc(tournamentId);
+    const out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = snap.data();
+      // Permissão: o organizador/co-host forma qualquer dupla; senão, o próprio (aceite de
+      // convite) só pode formar dupla que INCLUA o seu uid.
+      const isOrg = _isTournamentOrgCaller(t, callerUid, callerEmail);
+      const involvesCaller = (opts.uid1 && opts.uid1 === callerUid) || (opts.uid2 && opts.uid2 === callerUid);
+      if (!isOrg && !involvesCaller) {
+        throw new HttpsError("permission-denied", "só o organizador ou um dos dois da dupla podem formá-la");
+      }
+      const r = _pairCore.computeFormPair(t, opts);
+      if (r.updateData) tx.update(docRef, r.updateData);
+      return r;
+    });
+
+    // Sandbox: a MESMA CF replica a formação no SB via o MESMO core (best-effort).
+    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+      return _pairCore.computeFormPair(sbData, opts);
+    });
+
+    if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
+    return { notFound: false, participants: out.participants, newName: out.newName };
+  }
+);
+
+exports.splitPair = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const d = request.data || {};
+    const opts = { id1: d.id1, id2: d.id2 };
+    if (!tournamentId || (opts.id1 == null || String(opts.id1) === "")) {
+      throw new HttpsError("invalid-argument", "tournamentId e id1 são obrigatórios");
+    }
+
+    const db = admin.firestore();
+    const docRef = db.collection("tournaments").doc(tournamentId);
+    const out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = snap.data();
+      const r = _pairCore.computeSplitPair(t, opts);
+      // Permissão: organizador/co-host desfaz qualquer dupla; senão, um MEMBRO da dupla.
+      const isOrg = _isTournamentOrgCaller(t, callerUid, callerEmail);
+      const isMember = r.outcome === "split" && (r.p1Uid === callerUid || r.p2Uid === callerUid);
+      if (!isOrg && !isMember) {
+        throw new HttpsError("permission-denied", "só o organizador ou um membro da dupla podem desfazê-la");
+      }
+      if (r.updateData) tx.update(docRef, r.updateData);
+      return r;
+    });
+
+    // Sandbox: a MESMA CF replica o desfazer no SB via o MESMO core (best-effort).
+    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+      return _pairCore.computeSplitPair(sbData, opts);
+    });
+
+    if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
+    return { notFound: false, participants: out.participants };
+  }
+);
+
 // O servidor RELÊ letzplayScans/{uid} — não confia em payload do cliente (qualquer authed
 // escreve nessa coleção; sem reler, dava pra forjar o nível de terceiros via esta função).
 // Deploy:  firebase deploy --only functions:applyLetzplayScans

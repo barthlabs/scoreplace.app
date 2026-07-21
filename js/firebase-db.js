@@ -595,6 +595,25 @@ window.FirestoreDB = {
     }
   },
 
+  // Formar/desfazer DUPLA manual via Cloud Function (Admin SDK, concorrência-safe + replica
+  // pro Sandbox). Thin wrappers: o chamador (_formDuplaByUids/_splitDupla) mantém a mutação
+  // em memória pra UI imediata e, no CATCH, faz o saveTournament DIRETO como fallback (persiste
+  // o t já mutado se a CF estiver fora). Ver pair-core.js / [[project_draw_client_to_cf_migration]].
+  async formPair(tournamentId, opts) {
+    return await this._callFn('formPair', {
+      tournamentId: String(tournamentId),
+      uid1: (opts && opts.uid1) || '', name1: (opts && opts.name1) || '',
+      uid2: (opts && opts.uid2) || '', name2: (opts && opts.name2) || ''
+    });
+  },
+  async splitPair(tournamentId, opts) {
+    return await this._callFn('splitPair', {
+      tournamentId: String(tournamentId),
+      id1: (opts && opts.id1) != null ? opts.id1 : '',
+      id2: (opts && opts.id2) != null ? opts.id2 : ''
+    });
+  },
+
   async _deenrollParticipantTx(tournamentId, userUid) {
     if (!this.db) throw new Error('Firestore not initialized');
     var docRef = this.db.collection('tournaments').doc(String(tournamentId));
