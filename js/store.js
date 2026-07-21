@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.95';
+window.SCOREPLACE_VERSION = '1.3.96';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1572,6 +1572,35 @@ window._participantsViewSig = function (t) {
     (Array.isArray(t.waitlist) ? t.waitlist.length : 0) + '|' +
     _k(t.checkedIn) + '|' + _k(t.absent) + '|' + _k(t.checkedInConfirmed) + '|' + (t.status || '');
 };
+// v1.3.96 (dono, "tela continua pulando ao colocar presenças"): assinatura do DETALHE do torneio
+// (#tournaments/:id — que renderiza o bracket + a chamada de duplas). MESMO problema do #participants:
+// o gate usava `updatedAt`, e o updatedAt LOCAL (commitTournamentTx) ≠ o do SERVIDOR que volta no
+// eco → o snapshot do próprio write de presença SEMPRE diferia → re-render → PULO, mesmo o card já
+// tendo sido atualizado in-place. A chamada de DUPLAS vive nesta view (_duplaCard em tournaments.js),
+// então o toggle de dupla caía exatamente nesse buraco. Aqui a assinatura é o CONTEÚDO que a tela
+// mostra e que muda por eco: presença (chaves ordenadas), elenco/espera, fase/status/início, e o
+// CONTEÚDO dos jogos (vencedor/placar/adversário — pra resultado lançado / "a definir" preenchido
+// AINDA re-renderizar). Determinística → o pós-toggle in-place adianta window._tdetailSig e o eco vê
+// "igual". Fonte única (gate + pós-toggle). Espelha _participantsViewSig.
+window._tournamentDetailSig = function (t) {
+  if (!t) return '';
+  var _k = function (m) { return m ? Object.keys(m).sort().join(',') : ''; };
+  var _all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t)
+    : (Array.isArray(t.matches) ? t.matches : []);
+  var _mc = _all.map(function (m) {
+    if (!m) return '';
+    return (m.id || '') + ':' + (m.winner || '') + ':' +
+      (m.score1 != null ? m.score1 : '') + '-' + (m.score2 != null ? m.score2 : '') + ':' +
+      (m.p1 || '') + '/' + (m.p2 || '');
+  }).join(',');
+  return String(t.id) + '|' + (t.status || '') + '|' +
+    (Array.isArray(t.participants) ? t.participants.length : 0) + '|' +
+    (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.length : 0) + '|' +
+    (Array.isArray(t.waitlist) ? t.waitlist.length : 0) + '|' +
+    (t.currentStage || '') + '|' + (t.currentPhaseIndex || 0) + '|' + (t.tournamentStarted ? 1 : 0) + '|' +
+    _k(t.checkedIn) + '|' + _k(t.absent) + '|' + _k(t.checkedInConfirmed) + '|' +
+    _all.length + '|' + _mc;
+};
 // v1.3.93 (dono, "continua sorteando entre todos — sem gambiarra"): as DECISÕES do pré-sorteio
 // (scope presentes/todos, sem-dupla, pow2, flexibilizar, resto) vivem num MAPA POR TID — NÃO no
 // objeto do torneio. Por quê: o objeto é TROCADO pelo onSnapshot a CADA write (o persist do move
@@ -1630,9 +1659,12 @@ window._softRefreshView = function() {
   // v3.1.40: o DETALHE do torneio (#tournaments/:id) só re-renderiza quando o torneio
   // ATUAL muda de verdade. Antes, cada snapshot do boot (cache→servidor, discovery,
   // query por email) re-pintava o detalhe inteiro via initRouter → a foto do local
-  // "piscava várias vezes". Gate por assinatura (updatedAt + matches + inscritos + status):
-  // se nada mudou, não re-renderiza. A 1ª pintura vem do router (não passa por aqui), e
-  // navegar pra outro torneio muda o id → sig diferente → re-renderiza normalmente.
+  // "piscava várias vezes". A 1ª pintura vem do router (não passa por aqui), e navegar
+  // pra outro torneio muda o id → sig diferente → re-renderiza normalmente.
+  // v1.3.96: a assinatura era `updatedAt`-based → o eco do próprio write de presença
+  // SEMPRE diferia (updatedAt local ≠ servidor) → re-render → PULO ao marcar presença de
+  // dupla (a chamada de duplas vive nesta view). Agora usa _tournamentDetailSig (conteúdo
+  // determinístico: presença + jogos + fase), adiantada no toggle in-place → o eco vê igual.
   if (_currentView === 'tournaments') {
     try {
       var _tid = (window.location.hash || '').split('/')[1];
@@ -1640,10 +1672,8 @@ window._softRefreshView = function() {
         var _pool = ((window.AppStore && window.AppStore.tournaments) || []).concat((window.AppStore && window.AppStore.publicDiscovery) || []);
         var _tdetail = _pool.find(function(x){ return x && String(x.id) === String(_tid); });
         if (_tdetail) {
-          var _tsig = String(_tdetail.id) + ':' + (_tdetail.updatedAt || '') + ':' +
-            (Array.isArray(_tdetail.matches) ? _tdetail.matches.length : 0) + ':' +
-            (Array.isArray(_tdetail.participants) ? _tdetail.participants.length : 0) + ':' + (_tdetail.status || '');
-          if (_tsig === window._tdetailSig) return; // nada mudou → sem re-render (sem pisca)
+          var _tsig = window._tournamentDetailSig(_tdetail);
+          if (_tsig === window._tdetailSig) return; // nada relevante mudou → sem re-render (sem pulinho)
           window._tdetailSig = _tsig;
         }
       }

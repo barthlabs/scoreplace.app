@@ -1069,7 +1069,12 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
     // v1.3.92: o card já foi atualizado in-place → adianta a assinatura da tela pro estado ATUAL, pra
     // o ECO tardio do snapshot (depois do suppress) ver "igual" e NÃO re-renderizar a lista (o pulinho
     // que sobrava). O gate de _softRefreshView compara com _pdetailSig; setando aqui, ele pula.
+    // v1.3.96: adianta TAMBÉM _tdetailSig — a chamada de DUPLAS (_duplaCard) vive na view de DETALHE
+    // (#tournaments/:id), cujo gate é _tournamentDetailSig. Sem isto, o toggle de dupla atualizava o
+    // card in-place mas o eco re-renderizava o detalhe inteiro (o pulo que o dono via "ao colocar
+    // presenças"). Adiantando ambas as assinaturas, o eco vê "igual" em qualquer uma das duas views.
     try { if (window._participantsViewSig) window._pdetailSig = window._participantsViewSig(t); } catch (_eSig) {}
+    try { if (window._tournamentDetailSig) window._tdetailSig = window._tournamentDetailSig(t); } catch (_eSig2) {}
   } else {
     // in-place não se aplica (ex.: painel de check-in pós-sorteio) → re-render ESTÁVEL:
     // preserva scroll + suprime o eco do onSnapshot (mesmo robustez do card estático).
@@ -1080,17 +1085,35 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   // confronto. Antes SÓ o RENDER do bracket (bracket.js:232) disparava; mas o toggle virou in-place
   // (fix do pulinho) e SUPRIME o re-render → a dupla presente atualizava o card mas NUNCA entrava na
   // chave. Aqui disparamos explicitamente, MAS só DEPOIS do commit (a CF lê o doc FRESCO do Firestore
-  // — disparar antes faria a CF ver a dupla ainda ausente → nada a integrar). O trigger self-guarda
-  // (só com espera, dedup por assinatura) e a CF faz TODO o trabalho — cliente só dispara.
-  // Ver [[feedback_draw_is_cf_only]] / [[project_late_dupla_fills_awaiting_slot]].
+  // — disparar antes faria a CF ver a dupla ainda ausente → nada a integrar). A CF faz TODO o
+  // trabalho — cliente só dispara. Ver [[feedback_draw_is_cf_only]] / [[project_late_dupla_fills_awaiting_slot]].
+  //
+  // v1.3.96 (dono, "tela continua pulando ao colocar presenças"): o disparo agora é CIRÚRGICO —
+  // SÓ quando a pessoa que acabou de ser marcada PERTENCE À LISTA DE ESPERA. Antes disparava em
+  // TODO toggle (com espera+bracket), inclusive marcando presença de quem JÁ está na chave (a
+  // chamada de rota normal): cada presença virava uma chamada de CF + eco → contribuía pro pulo.
+  // A integração tardia só faz sentido pra quem está na espera; pra esses, o re-render que MOVE a
+  // dupla pra chave é legítimo (e raro: só na 2ª marca, quando o par fica completo).
   try {
     var _canMng = !window._canManagePresence || window._canManagePresence(t, window.AppStore && window.AppStore.currentUser);
-    var _hasWL = (Array.isArray(t.standbyParticipants) && t.standbyParticipants.length) ||
-                 (Array.isArray(t.waitlist) && t.waitlist.length);
     var _hasBracket = (Array.isArray(t.matches) && t.matches.length) ||
                       (Array.isArray(t.rounds) && t.rounds.length) ||
                       (Array.isArray(t.groups) && t.groups.length);
-    if (_canMng && _hasWL && _hasBracket && typeof window._triggerLateIntegration === 'function') {
+    // a pessoa marcada está na ESPERA? (por uid de membro OU por nome) — só então integra.
+    var _wl = (typeof window._getWaitlist === 'function') ? window._getWaitlist(t)
+      : (t.standbyParticipants || []).concat(t.waitlist || []);
+    var _toggledInWaitlist = Array.isArray(_wl) && _wl.some(function (e) {
+      var _us = (typeof window._participantUids === 'function') ? window._participantUids(e) : [];
+      if (uid && _us && _us.indexOf(uid) !== -1) return true;
+      var _en = window._pName ? window._pName(e, '') : (e && (e.displayName || e.name)) || '';
+      // nome do membro (par "A / B") OU nome inteiro da entrada
+      if (playerName && _en) {
+        if (_en === playerName) return true;
+        if (_en.indexOf(' / ') !== -1 && _en.split(' / ').some(function (x) { return x.trim() === playerName; })) return true;
+      }
+      return false;
+    });
+    if (_canMng && _hasBracket && _toggledInWaitlist && typeof window._triggerLateIntegration === 'function') {
       var _fireLate = function () {
         try {
           var _ft = window._findTournamentById(tId) || t;

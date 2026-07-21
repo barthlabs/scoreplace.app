@@ -192,6 +192,9 @@ const SUITES = [
   // Cenário do dono (SB Casais): dupla ausente na espera → marca presente → CF forma o
   // confronto (o bug era o CLIENTE nunca disparar a CF; o toggle in-place suprimia o gatilho).
   'functions-autodraw/test-late-present-fills-adefinir.js',
+  // Gate do DETALHE (#tournaments/:id) não pula ao marcar presença: _tournamentDetailSig é
+  // determinística (sem updatedAt) → o eco do próprio write vê "igual". v1.3.96.
+  'tests/tournament-detail-sig.test.js',
   'functions/test-match-roster.js',
   // Inscrição/desinscrição no servidor (CF) — espelha a transação do cliente.
   'functions/test-enroll-core.js',
