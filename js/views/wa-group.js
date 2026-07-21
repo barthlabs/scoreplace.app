@@ -242,7 +242,9 @@
       if (!_waAllowed(cu)) return '';
       if (!t.waGroup || !t.waGroup.link) return '';
       if (!_isEnrolled(t, cu) && !_isOrg(t, cu)) return '';
-      return _btn('Entrar no<br>grupo', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'\')');
+      // v1.3.100 (dono): texto COMPLETO "grupo oficial do torneio"; border-radius no PADRÃO do app
+      // (.btn = 10px; o btn-micro herdado era 6px = "quadrado") e um pouco mais largo.
+      return _btn('Entrar no grupo<br>oficial do torneio', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'\')', 'border-radius:10px;min-width:118px;padding:6px 14px;');
     } catch (e) { return ''; }
   };
 
