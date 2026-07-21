@@ -57,6 +57,23 @@ W.FirestoreDB.splitPair = function (tId, opts) {
   if (r.updateData) applyUpdate(doc, r.updateData);
   return thenable({ data: { notFound: r.outcome === 'notFound' } });
 };
+// CF-only da dupla na espera: a CF lê uma CÓPIA do doc, muta+integra, e DEVOLVE o doc (o cliente
+// reflete via _applyCFTournament). NÃO muta o original — fiel à transação da CF. Retorno = shape
+// do _callFn (j.result direto): {ok, formed/split, tournament}.
+W.FirestoreDB.formLatePair = function (tId, opts) {
+  var doc = findDoc(tId); if (!doc) return thenable(null, Object.assign(new Error('not-found'), { code: 'functions/not-found' }));
+  var clone = JSON.parse(JSON.stringify(doc));
+  var res = dc.formLatePairCore(clone, { key1: opts.key1, key2: opts.key2, nowTs: 1 });
+  if (!res || !res.ok) return thenable(null, Object.assign(new Error((res && res.reason) || 'form-failed'), { code: 'functions/failed-precondition' }));
+  return thenable({ ok: true, formed: res.formed, integrated: res.integrated, tournament: clone });
+};
+W.FirestoreDB.splitLatePair = function (tId, opts) {
+  var doc = findDoc(tId); if (!doc) return thenable(null, Object.assign(new Error('not-found'), { code: 'functions/not-found' }));
+  var clone = JSON.parse(JSON.stringify(doc));
+  var res = dc.splitLatePairCore(clone, { id1: opts.id1, id2: opts.id2 });
+  if (!res || !res.ok) return thenable(null, Object.assign(new Error((res && res.reason) || 'split-failed'), { code: 'functions/failed-precondition' }));
+  return thenable({ ok: true, split: res.split, tournament: clone });
+};
 W.FirestoreDB.saveTournament = function () { _sawSaveTournament++; return thenable({}); };
 W.FirestoreDB.mutateTournament = function (tId, fn) { var doc = findDoc(tId); if (doc) fn(doc); return thenable({}); };
 // _callIntegrateLate: o dispatch real do cliente (via _triggerLateIntegration) → CF integrateLateEntries.

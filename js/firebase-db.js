@@ -614,6 +614,22 @@ window.FirestoreDB = {
       id2: (opts && opts.id2) != null ? opts.id2 : ''
     });
   },
+  // CF-only da DUPLA NA LISTA DE ESPERA: formar (funde _lateJoin + presença + integra na chave,
+  // atômico) e desfazer. A CF (functions-autodraw) devolve `tournament` pro cliente refletir sem
+  // reload. key1/key2 = uid||nome dos 2 avulsos; id1/id2 = identidade dos membros da dupla.
+  async formLatePair(tournamentId, opts) {
+    return await this._callFn('formLatePair', {
+      tournamentId: String(tournamentId),
+      key1: (opts && opts.key1) || '', key2: (opts && opts.key2) || ''
+    });
+  },
+  async splitLatePair(tournamentId, opts) {
+    return await this._callFn('splitLatePair', {
+      tournamentId: String(tournamentId),
+      id1: (opts && opts.id1) != null ? opts.id1 : '',
+      id2: (opts && opts.id2) != null ? opts.id2 : ''
+    });
+  },
 
   async _deenrollParticipantTx(tournamentId, userUid) {
     if (!this.db) throw new Error('Firestore not initialized');

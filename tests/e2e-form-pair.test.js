@@ -109,13 +109,13 @@ console.log('\n── dupla formada na LISTA DE ESPERA (_formLateJoinDupla) entr
   t.standbyParticipants.push({ uid: 'lx', displayName: 'LateX', name: 'LateX', ligaActive: true });
   t.standbyParticipants.push({ uid: 'ly', displayName: 'LateY', name: 'LateY', ligaActive: true });
   E.resetLateGuards();
-  const before = labels(t);
-  ok(!before.has('LateX / LateY'), label + ' :: (pré) dupla da espera não está na chave');
-  W._formLateJoinDupla(t.id, 'lx', 'ly');   // ← arrastar-e-soltar REAL da tela de inscritos
-  const after = labels(t);
-  ok(after.has('LateX / LateY'), label + ' :: ✅ dupla da ESPERA entrou na chave');
-  // saiu da espera, virou 1 dupla presente
-  const stillSolo = (t.standbyParticipants || []).some((p) => (p.displayName || p.name) === 'LateX' || (p.displayName || p.name) === 'LateY');
+  ok(!labels(t).has('LateX / LateY'), label + ' :: (pré) dupla da espera não está na chave');
+  E.resetSaveCounter();
+  W._formLateJoinDupla(t.id, 'lx', 'ly');   // ← CLIQUE REAL (agora CF-only: dispatch → CF → reflete)
+  const t1 = E.findDoc(t.id);               // CF-only substitui o doc no AppStore → re-buscar
+  ok(labels(t1).has('LateX / LateY'), label + ' :: ✅ dupla da ESPERA entrou na chave (via CF)');
+  ok(E.sawSave() === 0, label + ' :: cliente NÃO chamou saveTournament (tudo na CF)');
+  const stillSolo = (t1.standbyParticipants || []).some((p) => (p.displayName || p.name) === 'LateX' || (p.displayName || p.name) === 'LateY');
   ok(!stillSolo, label + ' :: os 2 solos saíram da espera');
 });
 
@@ -123,46 +123,43 @@ console.log('\n── dupla formada na LISTA DE ESPERA (_formLateJoinDupla) entr
 // "criada em seguida" não entrava) + DESFAZER a dupla da espera tem que funcionar. ──
 console.log('\n── 2 duplas na espera em sequência + desfazer (_splitLateDupla) ──');
 (function () {
-  const t = E.createTournament(cfg('Elim Simples'), { id: 'LJ2', participants: mkPairs(8), newMatchups: true, lateEnrollment: 'expand' });
-  E.draw(t);
-  // 1ª dupla tardia
-  t.standbyParticipants.push({ uid: 'x1', displayName: 'Ana', name: 'Ana', ligaActive: true });
-  t.standbyParticipants.push({ uid: 'y1', displayName: 'Bia', name: 'Bia', ligaActive: true });
+  E.createTournament(cfg('Elim Simples'), { id: 'LJ2', participants: mkPairs(8), newMatchups: true, lateEnrollment: 'expand' });
+  E.draw(E.findDoc('LJ2'));
+  // adiciona os solos SEMPRE no doc ATUAL do AppStore (CF-only substitui o doc a cada ação)
+  var d = E.findDoc('LJ2');
+  d.standbyParticipants.push({ uid: 'x1', displayName: 'Ana', name: 'Ana', ligaActive: true });
+  d.standbyParticipants.push({ uid: 'y1', displayName: 'Bia', name: 'Bia', ligaActive: true });
   E.resetLateGuards();
-  W._formLateJoinDupla(t.id, 'x1', 'y1');
-  ok(labels(t).has('Ana / Bia'), '2seq :: 1ª dupla da espera entrou');
-  // 2ª dupla tardia LOGO EM SEGUIDA (o caso que falhava)
-  t.standbyParticipants.push({ uid: 'x2', displayName: 'Cid', name: 'Cid', ligaActive: true });
-  t.standbyParticipants.push({ uid: 'y2', displayName: 'Duda', name: 'Duda', ligaActive: true });
-  W._formLateJoinDupla(t.id, 'x2', 'y2');
-  ok(labels(t).has('Cid / Duda'), '2seq :: ✅ 2ª dupla (criada EM SEGUIDA) TAMBÉM entrou');
+  W._formLateJoinDupla('LJ2', 'x1', 'y1');
+  ok(labels(E.findDoc('LJ2')).has('Ana / Bia'), '2seq :: 1ª dupla da espera entrou');
+  // 2ª dupla EM SEGUIDA — no doc atual (o caso que "não entrava")
+  d = E.findDoc('LJ2');
+  d.standbyParticipants.push({ uid: 'x2', displayName: 'Cid', name: 'Cid', ligaActive: true });
+  d.standbyParticipants.push({ uid: 'y2', displayName: 'Duda', name: 'Duda', ligaActive: true });
+  W._formLateJoinDupla('LJ2', 'x2', 'y2');
+  ok(labels(E.findDoc('LJ2')).has('Cid / Duda'), '2seq :: ✅ 2ª dupla (EM SEGUIDA) TAMBÉM entrou');
 
-  // DESFAZER a 1ª dupla (o ✕ vermelho chama _splitLateDupla com o nome da dupla)
+  // DESFAZER: gate off → a dupla FICA na espera; o ✕ desfaz (CF-only, casa por uid de membro).
   if (typeof W._splitLateDupla !== 'function') { ok(false, 'desfazer :: _splitLateDupla indisponível'); return; }
-  // a dupla desfeita tem que estar na ESPERA (não integrada ainda) pra o split achar — forma uma nova
-  const t2 = E.createTournament(cfg('Elim Simples'), { id: 'LJ3', participants: mkPairs(8), newMatchups: false, lateEnrollment: 'closed' });
-  E.draw(t2);
-  t2.standbyParticipants.push({ uid: 'p1', displayName: 'Nei', name: 'Nei', ligaActive: true });
-  t2.standbyParticipants.push({ uid: 'p2', displayName: 'Sil', name: 'Sil', ligaActive: true });
-  E.resetLateGuards();
-  W._formLateJoinDupla(t2.id, 'p1', 'p2');   // gate off → fica na espera como dupla formada
-  ok(t2.standbyParticipants.some((p) => (p.displayName || p.name) === 'Nei / Sil'), 'desfazer :: dupla formada está na espera');
-  // o ✕ real passa as IDENTIDADES DE MEMBRO (uid), NUNCA a string "A / B" (cânone uid).
-  W._splitLateDupla(t2.id, 'p1', 'p2');
-  const stbNames = t2.standbyParticipants.map((p) => (p && (p.displayName || p.name)) || p);
-  ok(stbNames.indexOf('Nei / Sil') === -1, 'desfazer :: ✅ dupla sumiu da espera (casou por uid de membro)');
-  ok(stbNames.indexOf('Nei') !== -1 && stbNames.indexOf('Sil') !== -1, 'desfazer :: 2 solos voltaram pra espera');
-  // compat: chamada antiga só com o nome inteiro também casa
-  W._formLateJoinDupla(t2.id, 'p1', 'p2');
-  W._splitLateDupla(t2.id, 'Nei / Sil');
-  ok(!t2.standbyParticipants.some((p) => (p.displayName || p.name) === 'Nei / Sil'), 'desfazer :: compat por nome inteiro ainda casa');
-  // BUG REAL DO DONO (console: standby:[]): a dupla estava em t.waitlist, não em standbyParticipants,
-  // e o split só olhava standby → não achava. Agora procura nos DOIS stores.
-  t2.standbyParticipants = [];
-  t2.waitlist = [{ p1Uid: 'w1', p1Name: 'Ze', p2Uid: 'w2', p2Name: 'Ana', displayName: 'Ze / Ana', name: 'Ze / Ana', _lateJoin: true }];
-  W._splitLateDupla(t2.id, 'w1', 'w2');
-  ok(!(t2.waitlist || []).some((p) => (p.displayName || p.name) === 'Ze / Ana'), 'desfazer :: ✅ acha e desfaz dupla que está em t.waitlist (nao so standby)');
-  ok((t2.waitlist || []).some((p) => (p.displayName || p.name || p) === 'Ze') && (t2.waitlist || []).some((p) => (p.displayName || p.name || p) === 'Ana'), 'desfazer :: 2 solos voltaram pra waitlist');
+  E.createTournament(cfg('Elim Simples'), { id: 'LJ3', participants: mkPairs(8), newMatchups: false, lateEnrollment: 'closed' });
+  E.draw(E.findDoc('LJ3'));
+  var d2 = E.findDoc('LJ3');
+  d2.standbyParticipants.push({ uid: 'p1', displayName: 'Nei', name: 'Nei', ligaActive: true });
+  d2.standbyParticipants.push({ uid: 'p2', displayName: 'Sil', name: 'Sil', ligaActive: true });
+  E.resetLateGuards(); E.resetSaveCounter();
+  W._formLateJoinDupla('LJ3', 'p1', 'p2');   // gate off → forma mas não integra (fica na espera)
+  ok(E.findDoc('LJ3').standbyParticipants.some((p) => (p.displayName || p.name) === 'Nei / Sil'), 'desfazer :: dupla formada está na espera');
+  W._splitLateDupla('LJ3', 'p1', 'p2');       // ✕ passa uid de membro (nunca "A / B")
+  var names = E.findDoc('LJ3').standbyParticipants.map((p) => (p && (p.displayName || p.name)) || p);
+  ok(names.indexOf('Nei / Sil') === -1, 'desfazer :: ✅ dupla sumiu da espera (casou por uid de membro)');
+  ok(names.indexOf('Nei') !== -1 && names.indexOf('Sil') !== -1, 'desfazer :: 2 solos voltaram pra espera');
+  ok(E.sawSave() === 0, 'desfazer :: cliente NÃO chamou saveTournament (tudo na CF)');
+  // dupla em t.waitlist (não standby) — o ✕ tem que achar nos 2 stores
+  var d3 = E.findDoc('LJ3');
+  d3.standbyParticipants = [];
+  d3.waitlist = [{ p1Uid: 'w1', p1Name: 'Ze', p2Uid: 'w2', p2Name: 'Ana', displayName: 'Ze / Ana', name: 'Ze / Ana', _lateJoin: true }];
+  W._splitLateDupla('LJ3', 'w1', 'w2');
+  ok(!(E.findDoc('LJ3').waitlist || []).some((p) => (p.displayName || p.name) === 'Ze / Ana'), 'desfazer :: ✅ desfaz dupla que está em t.waitlist (nao so standby)');
 })();
 
 // ── RAIZ DA GAMBIARRA (console do dono): a CF integra a dupla e devolve o doc atualizado, mas o

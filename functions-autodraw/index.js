@@ -13,6 +13,8 @@ const { getMessaging } = require('firebase-admin/messaging');
 let generateLigaRound = null;
 let drawInitial = null;   // v1.2.25: motor do SORTEIO INICIAL (Etapa 3 · fase A) — usado pela drawRound
 let integrateLateFn = null; // v1.2.57: integração de tardios no servidor — usado pela integrateLateEntries
+let formLatePairFn = null;  // formar dupla na espera + integrar, atômico — usado pela formLatePair
+let splitLatePairFn = null; // desfazer dupla da espera, atômico — usado pela splitLatePair
 let closeRoundFn = null;    // fecho de rodada no servidor (Suíço-pow2 Opção B) — usado pela closeRound
 let canRecompile = null;
 let hasDrawnBracket = null;  // régua de 'já tem chave' — a MESMA do cliente (matches/rounds/groups)
@@ -22,6 +24,8 @@ try {
   generateLigaRound = _dc.generateLigaRound;
   drawInitial = _dc.drawInitial;
   integrateLateFn = _dc.integrateLateEntries;
+  formLatePairFn = _dc.formLatePairCore;
+  splitLatePairFn = _dc.splitLatePairCore;
   closeRoundFn = _dc.closeRoundCore;
   canRecompile = _dc.canRecompile;
   hasDrawnBracket = _dc.hasDrawnBracket;
@@ -460,6 +464,89 @@ exports.integrateLateEntries = onCall(async (request) => {
 
   console.log(`integrateLateEntries v${CF_VERSION}: ${tId} por ${uid} — changed=${out.changed}` +
     (out.changed ? ` extra=${out.extra||0} duplas=${out.duplas||0}(tier${out.duplasTier||0}) dissolved=${out.dissolved||0} monarch=${out.monarch||0}` : ''));
+  return out;
+});
+
+// ─── FORMAR dupla na LISTA DE ESPERA + INTEGRAR, atômico (CF-only) ──────────
+// O cliente só dispara (key1/key2 = uid||nome dos 2 avulsos); a CF forma a dupla _lateJoin,
+// marca presença, integra na chave e persiste — tudo numa transação. Devolve o doc pro cliente
+// refletir SEM reload. Espelha integrateLateEntries (authz + txn + write-boundary).
+exports.formLatePair = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const email = request.auth && request.auth.token && request.auth.token.email;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const key1 = String((request.data && request.data.key1) || '').trim();
+  const key2 = String((request.data && request.data.key2) || '').trim();
+  if (!tId || !key1 || !key2) throw new HttpsError('invalid-argument', 'tournamentId, key1 e key2 são obrigatórios.');
+  if (typeof formLatePairFn !== 'function' || !drawWindow) throw _drawFail('internal', 'Motor indisponível.', { tId });
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid, email)) throw _drawFail('permission-denied', 'Só o organizador ou co-organizador forma duplas.', { tId, uid });
+  await _preloadDrawNames(pre.data());
+
+  let out;
+  try {
+    out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const t = snap.data(); t.id = tId;
+      if (!_isTournamentAdmin(t, uid, email)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      try { drawWindow._hydrateMonarchGroups(t); } catch (e) {}
+      const res = formLatePairFn(t, { key1: key1, key2: key2, nowTs: Date.now() });
+      if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'form-failed', { tId });
+      const b = _applyWriteBoundary(t);
+      tx.set(ref, b.persist);
+      return { ok: true, formed: res.formed, integrated: res.integrated, tournament: b.clean };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error(`formLatePair EXPLODIU ${tId} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha ao formar dupla: ' + String((e && e.message) || e).slice(0, 300));
+  }
+  console.log(`formLatePair v${CF_VERSION}: ${tId} por ${uid} — ${out.formed} · integrated.changed=${out.integrated && out.integrated.changed}`);
+  return out;
+});
+
+// ─── DESFAZER dupla da LISTA DE ESPERA, atômico (CF-only) ──────────────────
+exports.splitLatePair = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const email = request.auth && request.auth.token && request.auth.token.email;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const id1 = String((request.data && request.data.id1) || '').trim();
+  const id2 = (request.data && request.data.id2 != null) ? String(request.data.id2).trim() : '';
+  if (!tId || !id1) throw new HttpsError('invalid-argument', 'tournamentId e id1 são obrigatórios.');
+  if (typeof splitLatePairFn !== 'function' || !drawWindow) throw _drawFail('internal', 'Motor indisponível.', { tId });
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid, email)) throw _drawFail('permission-denied', 'Só o organizador ou co-organizador desfaz duplas.', { tId, uid });
+  await _preloadDrawNames(pre.data());
+
+  let out;
+  try {
+    out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const t = snap.data(); t.id = tId;
+      if (!_isTournamentAdmin(t, uid, email)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      try { drawWindow._hydrateMonarchGroups(t); } catch (e) {}
+      const res = splitLatePairFn(t, { id1: id1, id2: id2 });
+      if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'split-failed', { tId });
+      const b = _applyWriteBoundary(t);
+      tx.set(ref, b.persist);
+      return { ok: true, split: res.split, tournament: b.clean };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error(`splitLatePair EXPLODIU ${tId} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha ao desfazer dupla: ' + String((e && e.message) || e).slice(0, 300));
+  }
+  console.log(`splitLatePair v${CF_VERSION}: ${tId} por ${uid} — ${out.split}`);
   return out;
 });
 

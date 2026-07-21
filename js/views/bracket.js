@@ -846,81 +846,22 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     + '</div>';
 };
 
-// Formar dupla na LISTA DE ESPERA (standbyParticipants + waitlist): remove os 2 avulsos de
-// onde estiverem e empurra {p1Name,p2Name,_lateJoin} pra standbyParticipants. Chamado pelo
-// pointer-drag (_ljEnd) — não depende de HTML5 DnD.
+// Formar dupla na LISTA DE ESPERA — CF-ONLY (regra do dono "tudo na CF, cliente só dispara").
+// src/tgt = identidade (uid||nome) dos 2 avulsos. A CF formLatePair (functions-autodraw) tira os 2
+// da espera, forma a dupla _lateJoin, marca presença E integra na chave — ATÔMICO — e devolve o
+// doc. O cliente só dispara e REFLETE (via _applyCFTournament). Zero mutação/save local.
 window._formLateJoinDupla = function (tId, src, tgt) {
   if (!src || !tgt || src === tgt) return;
-  var t = window.AppStore && window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
-  if (!t) return;
-  var _keyOf = function (p) { var uid = (typeof p === 'object' ? (p.uid || '') : ''); var nm = (window._pName ? window._pName(p, '') : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '')); return uid || nm; };
-  var _pull = function (key) {
-    var stores = [t.standbyParticipants, t.waitlist];
-    for (var s = 0; s < stores.length; s++) {
-      var arr = stores[s]; if (!Array.isArray(arr)) continue;
-      for (var i = 0; i < arr.length; i++) {
-        var p = arr[i];
-        if (p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) continue;
-        if (_keyOf(p) === key) { arr.splice(i, 1); return p; }
-      }
-    }
-    return null;
-  };
-  var a = _pull(src), b = _pull(tgt);
-  if (!a || !b) { if (a) { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; t.standbyParticipants.push(a); } if (b) { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; t.standbyParticipants.push(b); } return; }
-  // v1.2.55: nunca gravar undefined em pXName. Com uid o nome é stripado no save e resolvido
-  // do perfil ao vivo no render (_ljMemberName). Sem uid (guest, ex.: tonho) o nome É a
-  // identidade → guarda. `|| ''` evita o "undefined" que aparecia quando o cache estava frio.
-  var an = ((window._pName ? window._pName(a, '') : (a.displayName || a.name || '')) || (typeof a === 'object' ? (a.displayName || a.name) : a) || '');
-  var bn = ((window._pName ? window._pName(b, '') : (b.displayName || b.name || '')) || (typeof b === 'object' ? (b.displayName || b.name) : b) || '');
-  if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
-  // v1.2.45: CARREGA o nº de inscrição de cada um pra dentro da dupla (p1Seq/p2Seq).
-  // CÂNONE (dono): o número é da PESSOA e a acompanha SEMPRE — formar dupla (manual ou
-  // sorteio) e desfazer NÃO mexem nele; só a saída de um inscrito renumera (aí o 3º vira
-  // 2º). Sem isto, o seq sumia aqui, `_ensureEnrollSeqs` inventava um novo na hora de
-  // renderizar, e o "Desfazer dupla" devolvia fielmente esse número INVENTADO — foi assim
-  // que uma simulação desfeita embaralhou os 20 números do "Duplas Mistas Sorteadas".
-  // Os outros dois caminhos de formação (_formDuplaByUids e o merge do sorteio) já
-  // preservam desde a v2.7.97; este era o que faltava.
-  if (window._ensureEnrollSeqs) window._ensureEnrollSeqs(t);
-  var _sqA = (typeof a === 'object' && a && a.enrollSeq != null) ? a.enrollSeq : null;
-  var _sqB = (typeof b === 'object' && b && b.enrollSeq != null) ? b.enrollSeq : null;
-  t.standbyParticipants.push({
-    p1Name: an, p1Uid: (typeof a === 'object' ? (a.uid || '') : ''),
-    p2Name: bn, p2Uid: (typeof b === 'object' ? (b.uid || '') : ''),
-    p1Seq: _sqA, p2Seq: _sqB,
-    displayName: an + ' / ' + bn, name: an + ' / ' + bn, _lateJoin: true
-  });
-  // v1.3.68: formar dupla pra NOVO CONFRONTO já MARCA PRESENÇA dos dois membros — senão o
-  // filtro de presença de _createExtraGamesFromWaitlist (mesmo-dia exige check-in) barrava a
-  // dupla e a chave não abria (o dono formou sem estarem presentes e ficou sem entender por quê).
-  // Formar a dupla na seção "Formar novas duplas" É o ato de colocá-los em jogo → presentes.
-  // Marca por uid (conta) ou por nome (guest), espelhando as chaves que _idMapHas lê.
-  if (!t.checkedIn || typeof t.checkedIn !== 'object') t.checkedIn = {};
-  var _nowTs = Date.now();
-  [a, b].forEach(function (m) {
-    var _mUid = (m && typeof m === 'object') ? (m.uid || '') : '';
-    var _mName = (typeof m === 'string') ? m : (m && (m.displayName || m.name)) || '';
-    var _mKey = _mUid || _mName;
-    if (_mKey) { t.checkedIn[_mKey] = _nowTs; if (t.absent && t.absent[_mKey] != null) delete t.absent[_mKey]; }
-  });
-  t.updatedAt = new Date().toISOString();
-  window.FirestoreDB.saveTournament(t).then(function () {
-    var _V = window.SCOREPLACE_VERSION || '?';
-    var _gate = (typeof window._allowsNewMatchups === 'function') ? window._allowsNewMatchups(t) : null;
-    if (window._dtrace) window._dtrace('formLateDupla', { v: _V, gate: _gate, newMatchups: t.newMatchups, lateEnroll: (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment), pair: an + '/' + bn });
-    if (typeof showNotification !== 'undefined') {
-      if (_gate) showNotification('🤝 Dupla formada · v' + _V, an + ' / ' + bn + ' — integrando na chave…', 'success');
-      else showNotification('⚠️ Dupla formada mas NÃO entra · v' + _V, '"Novos confrontos" está DESLIGADO — ligue o toggle no painel de espera pra ela entrar na chave.', 'warning');
-    }
-    // BUG (dono, jul/2026): a integração da dupla tardia dependia do RE-RENDER do bracket
-    // (`_rerenderBracket` → `_triggerLateIntegration` no render). Mas a dupla é formada na tela de
-    // INSCRITOS, onde o bracket NÃO re-renderiza → a integração NUNCA disparava e a dupla ficava na
-    // espera sem entrar na chave. Fix: DISPARA a CF integrateLateEntries EXPLICITAMENTE (force),
-    // independente da view. A dupla _lateJoin presente entra por repescagem. [[project_late_dupla_fills_awaiting_slot]]
-    if (typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
-    if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
-    if (typeof window._softRefreshView === 'function') window._softRefreshView();
+  if (!(window.FirestoreDB && typeof window.FirestoreDB.formLatePair === 'function')) {
+    if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível formar a dupla agora — tente de novo.', 'warning');
+    return;
+  }
+  window.FirestoreDB.formLatePair(tId, { key1: src, key2: tgt }).then(function (res) {
+    if (window._dtrace) window._dtrace('formLatePair:done', { v: (window.SCOREPLACE_VERSION || '?'), formed: res && res.formed, integrated: res && res.integrated && res.integrated.changed });
+    if (res && res.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, res.tournament);
+    if (typeof showNotification !== 'undefined') showNotification('🤝 Dupla formada', (res && res.formed ? (res.formed + ' entrou na chave.') : 'Dupla na chave.'), 'success');
+  }).catch(function (e) {
+    if (typeof showNotification !== 'undefined') showNotification('Não foi possível formar a dupla', (e && (e.message || e.code)) || '', 'warning');
   });
 };
 
@@ -1036,42 +977,19 @@ window._formLateJoinDupla = function (tId, src, tgt) {
   };
 })();
 
+// Desfazer dupla da LISTA DE ESPERA — CF-ONLY. id1/id2 = identidade (uid||nome) dos 2 membros. A CF
+// splitLatePair acha a dupla nos 2 stores (standby/waitlist), reparte em 2 solos e devolve o doc; o
+// cliente só dispara e REFLETE. id2 vazio = casa pelo nome inteiro (compat). Zero mutação/save local.
 window._splitLateDupla = function (tId, id1, id2) {
-  var _V = window.SCOREPLACE_VERSION || '?';
-  var t = window.AppStore && window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
-  if (!t) { if (typeof showNotification !== 'undefined') showNotification('⚠️ Desfazer', 'sem torneio · v' + _V, 'warning'); return; }
-  var _isDupla = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
-  var _want = (id2 != null && String(id2) !== '') ? [String(id1 || ''), String(id2 || '')].filter(Boolean).sort() : null;
-  var _byMembers = function (p) { if (!_isDupla(p) || !_want) return false; var g = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort(); return g.length === _want.length && g.every(function (v, i) { return v === _want[i]; }); };
-  var _byName = function (p) { return _isDupla(p) && ((window._pName ? window._pName(p, '') : (p.displayName || p.name)) === id1 || (p.displayName || p.name) === id1); };
-  // Procura nos DOIS stores da espera (standbyParticipants E waitlist) — a dupla formada pode estar
-  // em qualquer um (bug do dono: standby vazio mas a dupla estava em t.waitlist → o ✕ não achava).
-  var arr = null, idx = -1;
-  ['standbyParticipants', 'waitlist'].forEach(function (k) {
-    if (idx !== -1 || !Array.isArray(t[k])) return;
-    var i = t[k].findIndex(_want ? _byMembers : _byName);
-    if (i === -1 && _want) i = t[k].findIndex(_byName); // fallback por nome dentro da mesma store
-    if (i !== -1) { arr = t[k]; idx = i; }
-  });
-  if (idx === -1) {
-    if (typeof showNotification !== 'undefined') showNotification('⚠️ Desfazer não achou a dupla', '[' + id1 + '/' + (id2 || '') + '] · v' + _V, 'warning');
-    if (window._dtrace) window._dtrace('splitLate:notfound', { id1: id1, id2: id2, standby: (t.standbyParticipants || []).filter(_isDupla).map(function (p) { return { d: (p.displayName || p.name), u1: p.p1Uid || p.p1Name, u2: p.p2Uid || p.p2Name }; }), waitlist: (t.waitlist || []).filter(_isDupla).map(function (p) { return { d: (p.displayName || p.name), u1: p.p1Uid || p.p1Name, u2: p.p2Uid || p.p2Name }; }) });
+  if (!(window.FirestoreDB && typeof window.FirestoreDB.splitLatePair === 'function')) {
+    if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível desfazer agora — tente de novo.', 'warning');
     return;
   }
-  var e = arr[idx];
-  // FASE 2: nome do membro pelo uid (perfil ao vivo); nome gravado só p/ guest sem conta
-  var _dn1 = e.p1Uid ? (window._displayNameForUid ? window._displayNameForUid(e.p1Uid, e.p1Name) : (e.p1Name || e.p1Uid || '')) : null;
-  var _dn2 = e.p2Uid ? (window._displayNameForUid ? window._displayNameForUid(e.p2Uid, e.p2Name) : (e.p2Name || e.p2Uid || '')) : null;
-  var s1 = e.p1Uid ? { displayName: _dn1, name: _dn1, uid: e.p1Uid, _lateJoin: true } : e.p1Name;
-  var s2 = e.p2Uid ? { displayName: _dn2, name: _dn2, uid: e.p2Uid, _lateJoin: true } : e.p2Name;
-  arr.splice(idx, 1, s1, s2);
-  t.updatedAt = new Date().toISOString();
-  window.FirestoreDB.saveTournament(t).then(function () {
-    if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', (e.p1Name || '') + ' e ' + (e.p2Name || '') + ' voltaram para Sem dupla.', 'info');
-    // o Desfazer é acionado na tela de INSCRITOS — atualiza ELA (não só o bracket, que não está
-    // renderizado ali). Sem isto o card continuava mostrando a dupla "formada". Bug do dono.
-    if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
-    if (typeof window._softRefreshView === 'function') window._softRefreshView();
+  window.FirestoreDB.splitLatePair(tId, { id1: id1, id2: id2 }).then(function (res) {
+    if (res && res.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, res.tournament);
+    if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', (res && res.split ? (res.split + ' voltaram para Sem dupla.') : ''), 'info');
+  }).catch(function (e) {
+    if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', (e && (e.message || e.code)) || '', 'warning');
   });
 };
 window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {

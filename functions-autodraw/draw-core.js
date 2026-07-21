@@ -617,6 +617,87 @@ function integrateLateEntries(t, opts) {
   return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill };
 }
 
+// ── FORMAR dupla na LISTA DE ESPERA + INTEGRAR, ATÔMICO no servidor (CF-only). Espelha
+// _formLateJoinDupla (bracket.js) mas PURO: tira os 2 avulsos de standby/waitlist, empurra a dupla
+// _lateJoin, marca presença dos 2, e INTEGRA na chave (integrateLateEntries) — tudo numa passada.
+// O cliente só dispara e reflete o doc devolvido. opts: {key1, key2, nowTs}.
+function formLatePairCore(t, opts) {
+  const win = g.window;
+  if (!t) return { ok: false, reason: 'no-tournament' };
+  const key1 = String((opts && opts.key1) || ''), key2 = String((opts && opts.key2) || '');
+  const nowTs = (opts && opts.nowTs) || 1;
+  if (!key1 || !key2 || key1 === key2) return { ok: false, reason: 'bad-keys' };
+  if (typeof win._rehydrateEntryNames === 'function') { try { win._rehydrateEntryNames(t); } catch (e) {} }
+  const _keyOf = function (p) { const uid = (typeof p === 'object' ? (p.uid || '') : ''); const nm = (win._pName ? win._pName(p, '') : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '')); return uid || nm; };
+  const _pull = function (key) {
+    const stores = [t.standbyParticipants, t.waitlist];
+    for (let s = 0; s < stores.length; s++) {
+      const arr = stores[s]; if (!Array.isArray(arr)) continue;
+      for (let i = 0; i < arr.length; i++) {
+        const p = arr[i];
+        if (p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) continue; // já é dupla
+        if (_keyOf(p) === key) { arr.splice(i, 1); return p; }
+      }
+    }
+    return null;
+  };
+  const a = _pull(key1), b = _pull(key2);
+  if (!a || !b) { // rollback do que tirou
+    if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+    if (a) t.standbyParticipants.push(a);
+    if (b) t.standbyParticipants.push(b);
+    return { ok: false, reason: 'not-found' };
+  }
+  const _nm = function (p) { return ((win._pName ? win._pName(p, '') : (p && (p.displayName || p.name)) || '') || (typeof p === 'object' ? (p.displayName || p.name) : p) || ''); };
+  const an = _nm(a), bn = _nm(b);
+  if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+  if (typeof win._ensureEnrollSeqs === 'function') { try { win._ensureEnrollSeqs(t); } catch (e) {} }
+  const _sqA = (typeof a === 'object' && a && a.enrollSeq != null) ? a.enrollSeq : null;
+  const _sqB = (typeof b === 'object' && b && b.enrollSeq != null) ? b.enrollSeq : null;
+  t.standbyParticipants.push({ p1Name: an, p1Uid: (typeof a === 'object' ? (a.uid || '') : ''), p2Name: bn, p2Uid: (typeof b === 'object' ? (b.uid || '') : ''), p1Seq: _sqA, p2Seq: _sqB, displayName: an + ' / ' + bn, name: an + ' / ' + bn, _lateJoin: true });
+  if (!t.checkedIn || typeof t.checkedIn !== 'object') t.checkedIn = {};
+  [a, b].forEach(function (m) {
+    const _mUid = (m && typeof m === 'object') ? (m.uid || '') : '';
+    const _mName = (typeof m === 'string') ? m : (m && (m.displayName || m.name)) || '';
+    const _mKey = _mUid || _mName;
+    if (_mKey) { t.checkedIn[_mKey] = nowTs; if (t.absent && t.absent[_mKey] != null) delete t.absent[_mKey]; }
+  });
+  t.updatedAt = new Date().toISOString();
+  let integrated = null;
+  try { integrated = integrateLateEntries(t, {}); } catch (e) { win._error && win._error('[formLatePair] integrate:', e); }
+  return { ok: true, formed: an + ' / ' + bn, integrated: integrated };
+}
+
+// ── DESFAZER dupla da LISTA DE ESPERA, ATÔMICO (CF-only). Espelha _splitLateDupla PURO: acha a
+// dupla nos 2 stores (standby/waitlist) por identidade de MEMBRO (uid||nome) e reparte em 2 solos.
+// opts: {id1, id2}. id2 vazio = casa pelo nome inteiro (compat).
+function splitLatePairCore(t, opts) {
+  const win = g.window;
+  if (!t) return { ok: false, reason: 'no-tournament' };
+  const id1 = String((opts && opts.id1) || ''), id2 = (opts && opts.id2 != null) ? String(opts.id2) : '';
+  const _isDupla = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
+  const _want = id2 ? [id1, id2].filter(Boolean).sort() : null;
+  const _byMembers = function (p) { if (!_isDupla(p) || !_want) return false; const gg = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort(); return gg.length === _want.length && gg.every(function (v, i) { return v === _want[i]; }); };
+  const _byName = function (p) { return _isDupla(p) && ((win._pName ? win._pName(p, '') : (p.displayName || p.name)) === id1 || (p.displayName || p.name) === id1); };
+  let arr = null, idx = -1;
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (idx !== -1 || !Array.isArray(t[k])) return;
+    let i = t[k].findIndex(_want ? _byMembers : _byName);
+    if (i === -1 && _want) i = t[k].findIndex(_byName);
+    if (i !== -1) { arr = t[k]; idx = i; }
+  });
+  if (idx === -1) return { ok: false, reason: 'not-found' };
+  const e = arr[idx];
+  const _dn1 = e.p1Uid ? (win._displayNameForUid ? win._displayNameForUid(e.p1Uid, e.p1Name) : (e.p1Name || e.p1Uid || '')) : null;
+  const _dn2 = e.p2Uid ? (win._displayNameForUid ? win._displayNameForUid(e.p2Uid, e.p2Name) : (e.p2Name || e.p2Uid || '')) : null;
+  const s1 = e.p1Uid ? { displayName: _dn1, name: _dn1, uid: e.p1Uid, _lateJoin: true } : e.p1Name;
+  const s2 = e.p2Uid ? { displayName: _dn2, name: _dn2, uid: e.p2Uid, _lateJoin: true } : e.p2Name;
+  arr.splice(idx, 1, s1, s2);
+  t.updatedAt = new Date().toISOString();
+  try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e2) {}
+  return { ok: true, split: (e.p1Name || '') + ' / ' + (e.p2Name || '') };
+}
+
 // ── FECHO de rodada no servidor (Opção B do Suíço-pow2) ─────────────────────────────
 // Roda o MESMO fecho que _doCloseRound faz no cliente, mas PURO: re-aplica o placar DEFERIDO
 // que fechou a rodada (resultCtx — não persistido no cliente pra evitar o clobber-race) e fecha
@@ -650,4 +731,4 @@ function closeRoundCore(t, roundIdx, resultCtx) {
   return { ok: true, branch: branch };
 }
 
-module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, closeRoundCore, _window: g.window };
+module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, _window: g.window };

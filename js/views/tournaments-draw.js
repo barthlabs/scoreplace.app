@@ -1777,6 +1777,22 @@ window._callIntegrateLate = function (payload) {
 // quando há algo na lista de espera, com guard anti-spam (in-flight + assinatura do estado). A CF
 // integra na transação e persiste; o onSnapshot re-renderiza. Idempotente: changed=false não
 // re-dispara o mesmo estado. Ver [[feedback_draw_is_cf_only]].
+// Espelha o doc AUTORITATIVO que uma CF (integrateLateEntries/formLatePair/splitLatePair/...)
+// devolve no AppStore local e re-renderiza AGORA — o cânone CF-only: a CF muta+persiste, o cliente
+// só REFLETE (não espera onSnapshot). Sem isto a UI ficava stale até o reload. [[project_formed_pair_roster_orphan]]
+window._applyCFTournament = function (tId, doc) {
+    if (!doc || !window.AppStore || !Array.isArray(window.AppStore.tournaments)) return;
+    try {
+        doc.id = String(tId);
+        var _list = window.AppStore.tournaments, _i = -1;
+        for (var _k = 0; _k < _list.length; _k++) { if (String(_list[_k].id) === String(tId)) { _i = _k; break; } }
+        if (_i !== -1) _list[_i] = doc; else _list.push(doc);
+        if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(doc); } catch (e) {} }
+    } catch (e) {}
+    if (typeof window._rerenderBracket === 'function') { try { window._rerenderBracket(tId); } catch (e) {} }
+    if (typeof window._softRefreshView === 'function') { window._suppressSoftRefresh = false; try { window._softRefreshView(); } catch (e) {} }
+};
+
 window._lateIntegrateInflight = window._lateIntegrateInflight || {};
 window._lateIntegrateLastSig = window._lateIntegrateLastSig || {};
 window._lateIntegratePending = window._lateIntegratePending || {};
@@ -1806,17 +1822,7 @@ window._triggerLateIntegration = function (t, opts) {
         // reload ("a dupla só entra na próxima versão"). E o Desfazer não achava a dupla porque a CF
         // já a moveu de standby/waitlist pra participants, mas o card local (stale) ainda a mostrava
         // na espera. Fix: ESPELHA o doc autoritativo da CF no AppStore AGORA e re-renderiza a view.
-        if (d.changed && d.tournament && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
-            try {
-                var _newT = d.tournament; _newT.id = tId;
-                var _list = window.AppStore.tournaments, _i = -1;
-                for (var _k = 0; _k < _list.length; _k++) { if (String(_list[_k].id) === tId) { _i = _k; break; } }
-                if (_i !== -1) _list[_i] = _newT; else _list.push(_newT);
-                if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(_newT); } catch (e) {} }
-            } catch (e) {}
-            if (typeof window._rerenderBracket === 'function') { try { window._rerenderBracket(tId); } catch (e) {} }
-            if (typeof window._softRefreshView === 'function') { window._suppressSoftRefresh = false; try { window._softRefreshView(); } catch (e) {} }
-        }
+        if (d.changed && d.tournament) window._applyCFTournament(tId, d.tournament);
         var _novos = (d.extra || 0) + (d.duplas || 0) + (d.monarch || 0) + (d.repfill || 0);
         if (_novos > 0 && typeof showNotification !== 'undefined') {
             showNotification('⚡ Tardios na chave', 'A dupla entrou na chave.', 'info');
