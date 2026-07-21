@@ -2913,14 +2913,18 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       const score = playerNum === 1 ? match.scoreP1 : match.scoreP2;
       return score != null ? String(score) : '';
     }
-    // Fixed set: show the single set game count as the main score
+    // Fixed set (ex.: Beach Tennis, set único): mostra o set, MAS com o tie-break.
+    // html:true → usa o <sup> estilizado (font-size ajustável) em vez do superscript
+    // unicode minúsculo/não-dimensionável. [[project_live_scoring_canonical]]
     if (match.fixedSet || useFixedSet) {
       var s0 = match.sets[0];
       if (!s0) return '';
-      return String(playerNum === 1 ? s0.gamesP1 : s0.gamesP2);
+      return (typeof window._formatSetForPlayer === 'function')
+        ? window._formatSetForPlayer(s0, playerNum, { html: true })
+        : String(playerNum === 1 ? s0.gamesP1 : s0.gamesP2);
     }
     return match.sets.map(s => (typeof window._formatSetForPlayer === 'function')
-      ? window._formatSetForPlayer(s, playerNum, { html: false })
+      ? window._formatSetForPlayer(s, playerNum, { html: true })
       : String(playerNum === 1 ? s.gamesP1 : s.gamesP2)
     ).join(' ');
   };

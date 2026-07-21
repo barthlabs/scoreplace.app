@@ -45,11 +45,13 @@ ok(!!(m.sets && m.sets[0]), 'save: m.sets[0] gravado (branch useSets, não o els
 ok(!!(m.sets && m.sets[0] && m.sets[0].tiebreak), 'save: m.sets[0].tiebreak persistido');
 ok(m.sets && m.sets[0] && m.sets[0].tiebreak.pointsP1 === 7, 'save: TB p1 = 7');
 
-// ── 3. DISPLAY do card decidido renderiza o TB (mesma fonte que o bracket usa) ──
-const disp1 = W._formatSetForPlayer(m.sets[0], 1, { html: false });
-const disp2 = W._formatSetForPlayer(m.sets[0], 2, { html: false });
-ok(/6/.test(disp1) && /⁷/.test(disp1), 'display p1: "6" com superscript ⁷ (não "6" cru)');
-ok(/5/.test(disp2) && /⁵/.test(disp2), 'display p2: "5" com superscript ⁵');
+// ── 3. DISPLAY do card decidido usa o <sup> HTML (dimensionável), não o superscript
+//     unicode minúsculo. O card decidido chama _formatSetForPlayer com html:true. ──
+const disp1 = W._formatSetForPlayer(m.sets[0], 1, { html: true });
+const disp2 = W._formatSetForPlayer(m.sets[0], 2, { html: true });
+ok(/^6/.test(disp1) && /<sup[^>]*>\(7\)<\/sup>/.test(disp1), 'display p1: "6" + <sup>(7)</sup> (não unicode)');
+ok(/^5/.test(disp2) && /<sup[^>]*>\(5\)<\/sup>/.test(disp2), 'display p2: "5" + <sup>(5)</sup>');
+ok(/font-size/.test(disp1), 'display: <sup> tem font-size (tamanho ajustável, não glifo unicode fixo)');
 
 // ── 4. PROVA da regressão: com o gate ANTIGO (só type==='sets') o TB se perdia ──
 const tOld = makeT();
