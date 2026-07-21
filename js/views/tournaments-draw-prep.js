@@ -292,7 +292,7 @@ window._showGroupsConfigPanel = function(tId) {
             // v3.0.x: barra de botões FIXA (flex-shrink:0 → nunca é cortada por scroll),
             // Cancelar + Sortear (verde) lado a lado, logo após o box do título.
             '<div style="flex-shrink:0;display:flex;gap:10px;padding:12px 1.5rem;background:var(--bg-card,#1e293b);border-bottom:1px solid rgba(255,255,255,0.08);">' +
-                '<button onclick="window._cancelGroupsConfig(\'' + tIdSafe + '\')" style="flex:1;padding:13px;border-radius:12px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-muted,#cbd5e1);font-weight:700;font-size:0.9rem;cursor:pointer;">✕ Cancelar</button>' +
+                '<button onclick="window._cancelGroupsConfig(\'' + tIdSafe + '\')" style="flex:1;padding:13px;border-radius:12px;border:none;background:#dc2626;color:#fff;font-weight:700;font-size:0.9rem;cursor:pointer;">✕ Cancelar</button>' +
                 '<button id="grp-panel-confirm-btn" onclick="window._drawBtnBusy&&window._drawBtnBusy(this); window._grpPanelConfirm(\'' + tIdSafe + '\')" style="flex:2;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,0.35);">🎲 Sortear grupos</button>' +
             '</div>' +
             '<div style="overflow-y:auto;flex:1;padding:1.5rem;">';
@@ -998,7 +998,7 @@ window._showPhasePromotePanel = function(tId) {
             _lines.map(function(l, i){ return _lineRow(l, i); }).join('') +
             '<button onclick="window._spinButton&&window._spinButton(this,\'…\'); window._phasePromoteApply(\'' + tIdSafe + '\')" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;padding:13px 16px;border-radius:12px;font-weight:800;font-size:0.92rem;cursor:pointer;">⬆️ Promover — deixar tudo par</button>' +
             '<button onclick="window._phasePromoteSkip(\'' + tIdSafe + '\')" style="width:100%;margin-top:10px;background:rgba(255,255,255,0.06);color:var(--text-bright,#f8fafc);border:1.5px solid rgba(255,255,255,0.2);padding:12px 16px;border-radius:12px;font-weight:700;font-size:0.88rem;cursor:pointer;">Não promover — resolver com BYE/repescagem</button>' +
-            '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="width:100%;margin-top:8px;background:transparent;color:var(--text-muted,#94a3b8);border:none;padding:8px;font-size:0.8rem;cursor:pointer;">Cancelar</button>' +
+            '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="width:100%;margin-top:8px;background:#dc2626;color:#fff;border:none;padding:10px;border-radius:10px;font-weight:700;font-size:0.82rem;cursor:pointer;">✕ Cancelar</button>' +
         '</div>' +
     '</div>';
     document.body.appendChild(overlay);
@@ -1097,7 +1097,7 @@ window._showLateConfrontosPanel = function(tId) {
           '<div style="font-weight:800;font-size:0.98rem;">📋 Lista de espera (suplentes)</div>' +
           '<div style="font-size:0.82rem;opacity:0.85;margin-top:3px;line-height:1.4;">Novos times NÃO entram na chave — ficam como suplentes e só assumem numa desistência/W.O.</div>' +
         '</button>' +
-        '<div style="text-align:right;"><button onclick="window._lateConfrontosCancel()" style="background:none;border:none;color:#94a3b8;font-size:0.88rem;cursor:pointer;padding:6px 4px;">Cancelar</button></div>' +
+        '<div style="text-align:right;"><button onclick="window._lateConfrontosCancel()" style="background:#dc2626;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:0.85rem;cursor:pointer;padding:8px 16px;">✕ Cancelar</button></div>' +
       '</div>';
     document.body.appendChild(overlay);
     if (window._dtrace) window._dtrace('lateConfrontosPanel:shown', { le: (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) });
@@ -1698,7 +1698,7 @@ window.showUnifiedResolutionPanel = function(tId) {
                 '</div>' +
             '</div>' +
             '<div style="display:flex;gap:8px;">' +
-                '<button onclick="window._cancelUnifiedPanel(\'' + tIdSafe + '\')" style="flex:1;background:rgba(0,0,0,0.25);color:#fef3c7;border:2px solid rgba(254,243,199,0.3);padding:9px 14px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\'">' + _t('predraw.cancelBtn') + '</button>' +
+                '<button onclick="window._cancelUnifiedPanel(\'' + tIdSafe + '\')" style="flex:1;background:#dc2626;color:#fff;border:none;padding:9px 14px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background=\'#b91c1c\'" onmouseout="this.style.background=\'#dc2626\'">' + _t('predraw.cancelBtn') + '</button>' +
                 '<button onclick="window._spinButton&&window._spinButton(this,\'Confirmando…\'); window._handleUnifiedOption(\'' + tIdSafe + '\', window._unifiedSel)" style="flex:2;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);padding:9px 14px;border-radius:12px;font-weight:800;font-size:0.85rem;cursor:pointer;transition:all 0.2s;box-shadow:0 6px 16px rgba(34,197,94,0.35);" onmouseover="this.style.filter=\'brightness(1.1)\'" onmouseout="this.style.filter=\'\'">' + _t('predraw.confirmBtn') + '</button>' +
             '</div>' +
         '</div>' +
@@ -1877,7 +1877,7 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
             '</div>' +
             // botões ABAIXO do título, MESMA altura/largura (box-sizing + min-height + borda iguais; flex:1)
             '<div style="display:flex;gap:10px;">' +
-                '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);color:#fef3c7;border:2px solid rgba(254,243,199,0.35);border-radius:12px;font-weight:700;font-size:0.92rem;line-height:1;cursor:pointer;">' + _t('predraw.cancelBtn') + '</button>' +
+                '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:#dc2626;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:0.92rem;line-height:1;cursor:pointer;">' + _t('predraw.cancelBtn') + '</button>' +
                 '<button onclick="window._soloConfirm(\'' + tIdSafe + '\', ' + ab + ')" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);border-radius:12px;font-weight:800;font-size:0.92rem;line-height:1;cursor:pointer;box-shadow:0 6px 16px rgba(34,197,94,0.35);">' + _t('predraw.confirmBtn') + '</button>' +
             '</div>' +
         '</div>' +
@@ -3259,7 +3259,7 @@ window._showReopenPanel = function (tId, info) {
             </div>
 
             <div style="padding:1.25rem 2.5rem 1.75rem;display:flex;gap:12px;justify-content:flex-end;background:rgba(0,0,0,0.1);border-top:1px solid rgba(255,255,255,0.05);border-radius:0 0 20px 20px;">
-                <button onclick="window._cancelDrawResolution('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" style="background:transparent;color:#94a3b8;border:2px solid rgba(148,163,184,0.2);padding:10px 24px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;transition:all 0.2s;">${_t('predraw.reopenBack')}</button>
+                <button onclick="window._cancelDrawResolution('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" style="background:#dc2626;color:#fff;border:none;padding:10px 24px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#dc2626'">${_t('predraw.reopenBack')}</button>
                 <button onclick="window._confirmReopen('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${_rpHi})" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;border:none;padding:10px 28px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;box-shadow:0 4px 15px rgba(59,130,246,0.3);transition:all 0.2s;">${_t('predraw.reopenConfirm')}</button>
             </div>
         </div>

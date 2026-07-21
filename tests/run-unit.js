@@ -198,6 +198,8 @@ const SUITES = [
   // Inscritos (individual E duplas) usam GRID responsivo — várias colunas em tela larga, nunca
   // coluna única. Trava contra regressão (dono: "não pode regredir"). v1.3.101.
   'tests/inscritos-grid-canon.test.js',
+  // Botões CANCELAR do fluxo de sorteio são VERMELHOS (#dc2626), nunca transparentes. v1.3.103.
+  'tests/draw-cancel-red-canon.test.js',
   'functions/test-match-roster.js',
   // Inscrição/desinscrição no servidor (CF) — espelha a transação do cliente.
   'functions/test-enroll-core.js',

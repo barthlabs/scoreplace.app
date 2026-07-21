@@ -1576,7 +1576,7 @@ function renderTournaments(container, tournamentId = null) {
               '</div>' +
               // Cancelar / Sortear NO TOPO (padrão dos outros diálogos)
               '<div style="display:flex;gap:10px;padding:1rem 1.25rem 0.5rem;">' +
-                '<button id="pdc-cancel" style="flex:1;padding:12px;border-radius:12px;border:1px solid var(--border-color);background:transparent;color:var(--text-muted);font-weight:700;font-size:0.92rem;cursor:pointer;">Cancelar</button>' +
+                '<button id="pdc-cancel" style="flex:1;padding:12px;border-radius:12px;border:none;background:#dc2626;color:#fff;font-weight:700;font-size:0.92rem;cursor:pointer;">✕ Cancelar</button>' +
                 '<button id="pdc-confirm" style="flex:2;padding:12px;border-radius:12px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,0.35);">✓ Confirmar</button>' +
               '</div>' +
               '<div style="padding:0.25rem 1.25rem 0.5rem;color:var(--text-muted);font-size:0.88rem;line-height:1.5;">' + (opts.lateMode ? 'As inscrições continuarão <b>abertas</b> após o sorteio. ' : (opts.closeOnDraw ? 'As inscrições serão <b>encerradas</b> com o sorteio. ' : '')) + 'Escolha como montar a chave:</div>' +
@@ -1609,6 +1609,9 @@ function renderTournaments(container, tournamentId = null) {
         dialog.querySelector('#pdc-confirm').addEventListener('click', function() {
             if (_pdcMode === 'all') {
                 close();
+                // v1.3.103 (dono): loader ENTRE a tela de presença e o próximo painel — sem isto o
+                // usuário fica no limbo achando que nada acontece. Some sozinho quando o painel entra.
+                if (typeof window._showLoading === 'function') window._showLoading('Processando…');
                 startDraw();
                 return;
             }
@@ -1634,6 +1637,9 @@ function renderTournaments(container, tournamentId = null) {
             window._setDrawDecision(tId, { scope: 'present' }); // v1.3.93: mapa por tId (sobrevive ao onSnapshot do persist do move) → a CF SEMPRE recebe scope:'present'
             var moved = window._moveAbsentToWaitlistForPresentDraw(tt);
             close();
+            // v1.3.103 (dono): loader DURANTE o save async (mutate) até o próximo painel entrar —
+            // era AQUI o limbo ("parece que não vai acontecer nada"). Some sozinho quando o painel entra.
+            if (typeof window._showLoading === 'function') window._showLoading('Processando…');
             var proceed = function() {
                 if (moved > 0 && typeof showNotification !== 'undefined') {
                     showNotification('✅ Sorteio entre presentes', moved + ' ausente(s) enviado(s) para a lista de espera.', 'info');
