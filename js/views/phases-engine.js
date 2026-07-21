@@ -297,6 +297,29 @@
   // melhor derrotado (repFill srcRound = rodada-fonte) OU dando folga (useByes). O 3º lugar é
   // canônico: match isThirdPlace ligado pelos loserNextMatchId das 2 semis. Não força potência de 2.
   // `firstRound` = matches da 1ª rodada (round 0), cada um produz 1 vencedor. Muta `matches`.
+  // REGRA DO DONO: o MELHOR derrotado pega a vaga que exige MENOS jogos até a final (avança mais);
+  // repescar numa rodada mais baixa = mais jogos, então fica pros PIORES. Reordena o `rank` dos
+  // repFill de uma MESMA rodada-fonte por ALTURA da rodada de DESTINO (rodada mais alta = menos jogos
+  // = rank 0). Sem isto, o satout (rodada 0, mais jogos) pegava o rank 0 (melhor) — invertido.
+  // Ver [[project_minimal_elim_formula_canon]]. Roda no fim de _buildMinimalTree (todos os caminhos).
+  function _rankRepFillsByAdvancement(matches) {
+    var bySrc = {};
+    (matches || []).forEach(function (m) {
+      if (!m || !Array.isArray(m.repFill)) return;
+      m.repFill.forEach(function (rf) {
+        if (!rf || !rf.tagRep) return; // só vagas que REPESCAM de verdade (sobem); chave inferior não
+        var key = (rf.srcBracket || '') + '|' + rf.srcRound + '|' + (rf.cat == null ? '' : rf.cat);
+        (bySrc[key] = bySrc[key] || []).push({ m: m, rf: rf });
+      });
+    });
+    Object.keys(bySrc).forEach(function (key) {
+      var list = bySrc[key];
+      if (list.length < 2) return; // 1 vaga só → o rank já é o único
+      // rodada de destino MAIOR (menos jogos até a final) primeiro → rank 0 (melhor derrotado).
+      list.sort(function (a, b) { return (b.m.round || 0) - (a.m.round || 0); });
+      list.forEach(function (item, i) { item.rf.rank = i; });
+    });
+  }
   function _buildMinimalTree(matches, firstRound, mkId, bracketKey, tierThird, useByes, rankBySrc, firstRoundNum) {
     var byeLabel = (typeof _t === 'function') ? _t('bui.byeLabel') : 'BYE (Avança Direto)';
     // rankBySrc[srcRound] = quantos repescados JÁ saíram dos derrotados daquela rodada (o próximo
@@ -328,6 +351,8 @@
       semisRound[0].loserNextMatchId = third.id; semisRound[0].loserNextSlot = 'p1';
       semisRound[1].loserNextMatchId = third.id; semisRound[1].loserNextSlot = 'p2';
     }
+    // melhor derrotado → vaga com menos jogos até a final (regra do dono). Reordena os ranks.
+    _rankRepFillsByAdvancement(matches);
     return { finalId: prev[0] ? prev[0].id : null, totalRounds: roundNum - 1 };
   }
   if (typeof window !== 'undefined') window._buildMinimalElimTree = _buildMinimalTree;
@@ -1834,6 +1859,9 @@
     if (!t) return false;
     var all = (typeof window !== 'undefined' && window._collectAllMatches) ? window._collectAllMatches(t)
       : (typeof _collectAllMatches === 'function' ? _collectAllMatches(t) : []);
+    // Re-rankeia ANTES de escolher — melhor derrotado → vaga com menos jogos (regra do dono). Idempotente.
+    // Corrige inclusive torneios JÁ sorteados com os ranks invertidos (sem precisar re-sortear).
+    _rankRepFillsByAdvancement(all);
     var changed = false;
     all.forEach(function (m) {
       if (!m || !Array.isArray(m.repFill) || !m.repFill.length) return;
