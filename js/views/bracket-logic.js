@@ -2216,9 +2216,13 @@ window._lateEnrollR2Started = function (t) {
     .filter(function (v, i, a) { return a.indexOf(v) === i; });
   if (uniqRounds.length < 2) return false; // só existe a 1ª rodada ainda → R2 não começou
   var secondRound = uniqRounds[1];
+  // "R2 começou" = tem PLACAR LANÇADO num jogo da 2ª rodada (regra do dono). NÃO conta
+  // startedAt (só abrir o placar ao vivo, sem lançar) nem um score parcial de um lado só —
+  // senão a janela fecha ANTES de existir resultado e o +Participante fica inativo cedo demais.
+  // Placar lançado = decidido (winner, inclui 'draw') OU placar registrado nos DOIS lados.
   return main.some(function (m) {
-    return m.round >= secondRound &&
-           (m.winner || m.startedAt || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length));
+    if (m.round < secondRound) return false;
+    return m.winner != null || (m.scoreP1 != null && m.scoreP2 != null);
   });
 };
 
@@ -2229,7 +2233,7 @@ window._lateEnrollWindowOpen = function (t) {
   if (!t) return false;
   var _le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
   if (_le !== 'standby' && _le !== 'expand') return false;
-  if (t.status === 'closed') return false; // organizador fechou na mão
+  if (t.status === 'closed' || t.status === 'finished') return false; // fechado na mão / encerrado
   return !window._lateEnrollR2Started(t); // aberta enquanto a 2ª rodada não começou
 };
 

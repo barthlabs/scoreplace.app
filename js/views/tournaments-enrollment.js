@@ -185,7 +185,13 @@ function _checkEnrollmentEligibility(t, user) {
 
 // Helper: check if late enrollment to standby is allowed
 function _allowsLateEnrollment(t) {
-  // valor EFETIVO da fase corrente (per-phase sobrepõe o top-level) — cada fase gerencia a sua.
+  // v1.3.134 (regra do dono): "inscrições durante a fase" é UMA regra só — o toggle standby/expand
+  // abre a inscrição tardia e a JANELA fica aberta na R1, fechando no 1º PLACAR LANÇADO da R2.
+  // Fonte ÚNICA: _lateEnrollWindowOpen (toggle + status + janela R1→R2). Antes esta função olhava
+  // SÓ o toggle, então o add/self-enroll continuava liberado DEPOIS da R2 — dessincronizado do
+  // botão +Participante (que já usava a janela). Todos os call sites desta função rodam em contexto
+  // pós-sorteio/fechado, então a janela é o critério correto. [[project_late_enrollment_default_closed_live_toggle]]
+  if (typeof window._lateEnrollWindowOpen === 'function') return window._lateEnrollWindowOpen(t);
   var le = (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) || 'closed';
   return le === 'standby' || le === 'expand';
 }
