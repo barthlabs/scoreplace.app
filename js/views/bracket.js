@@ -1101,17 +1101,32 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
     });
   }
 
+  // v1.3.94 (dono): as DUPLAS da espera aparecem como CARDS DE DUPLA (2 membros empilhados +
+  // toggle/W.O.) LOGO ACIMA da lista; só os SOLOS (sem dupla) ficam na lista flat numerada. Reusa
+  // _duplaCard + o factory de presença _rollCallPresenceCtx (mesmo card do detalhe/chamada).
+  const _isPairWL = (p) => !!(p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
+  const _duplasWL = sorted.filter(_isPairWL);
+  const _solosWL = sorted.filter((p) => !_isPairWL(p));
+  const _rcWL = (typeof window._rollCallPresenceCtx === 'function')
+    ? window._rollCallPresenceCtx(t, { isOrg: isOrg, active: true, postDraw: true, woScope: ((t.woScope || 'individual') === 'individual' ? 'individual' : 'team') })
+    : {};
+  const _duplaCardsWL = (_duplasWL.length && typeof window._duplaCard === 'function')
+    ? '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;">' +
+        _duplasWL.map((p) => window._duplaCard(t, p, false, { isOrg: isOrg, drawDone: true, cardPresence: _rcWL.cardPresence, memberPresence: _rcWL.memberPresence })).join('') +
+      '</div>'
+    : '';
+
   // "Próximo a entrar": no modo travado é o primeiro presente (não-ausente) na
-  // ordem sorteada; no modo presença é simplesmente o topo (índice 0).
+  // ordem sorteada; no modo presença é simplesmente o topo (índice 0). Aplica à lista de SOLOS.
   let nextIdx = 0;
   if (_policy === 'locked') {
     nextIdx = -1;
-    for (let _k = 0; _k < sorted.length; _k++) {
-      if (window._idMapHas(t, ci, sorted[_k]) && !window._idMapHas(t, ab, sorted[_k])) { nextIdx = _k; break; }
+    for (let _k = 0; _k < _solosWL.length; _k++) {
+      if (window._idMapHas(t, ci, _solosWL[_k]) && !window._idMapHas(t, ab, _solosWL[_k])) { nextIdx = _k; break; }
     }
   }
 
-  const listItems = sorted.map((p, i) => {
+  const listItems = _solosWL.map((p, i) => {
     const name = getName(p);
     const safeName = name.replace(/'/g, "\\'");
     const mc = window._idMapHas(t, ci, p);
@@ -1155,6 +1170,8 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
         <span style="font-size:0.75rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;">${(function () { var n = 0; sorted.forEach(function (p) { var nm = getName(p); if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) n += 2; else if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) n += p.participants.length; else if (nm.indexOf('/') !== -1) n += nm.split('/').filter(function (x) { return x.trim(); }).length; else n += 1; }); return n; })()}
       </div>
       <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem;">${_policy === 'locked' ? '🔒 Ordem do sorteio travada — entra o próximo presente na ordem.' : '🏃 Quem fizer check-in primeiro é o próximo a entrar.'}</div>
+      ${_duplaCardsWL ? ('<div style="font-size:0.72rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas na espera (' + _duplasWL.length + ')</div>' + _duplaCardsWL) : ''}
+      ${(_duplaCardsWL && listItems) ? '<div style="font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">🙋 Sem dupla</div>' : ''}
       <div style="display:flex;flex-direction:column;gap:6px;">
         ${listItems}
       </div>
