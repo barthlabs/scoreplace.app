@@ -565,7 +565,16 @@ function integrateLateEntries(t, opts) {
   try { if (typeof win._dedupMatchesByUid === 'function') dedup = win._dedupMatchesByUid(t) || 0; }
   catch (e) { win._error && win._error('[integrateLate] dedup:', e); }
 
-  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0);
+  // v1.3.165 — RECONCILIAÇÃO FINAL: re-propaga resultados decididos pelos fios (rebuilds deixam
+  // slot TBD com fio de jogo já decidido) e a DONA ÚNICA da inferior fecha a conta. Foi a cura do
+  // doc real tour_1784727218055_sb (2ª sup e 1ª inf zeradas com 6 resultados lançados).
+  let healed = 0;
+  try { if (typeof win._repropagateDecided === 'function') healed = win._repropagateDecided(t) || 0; }
+  catch (e) { win._error && win._error('[integrateLate] repropagate:', e); }
+  try { if (typeof win._syncLowerBracket === 'function') { if (win._syncLowerBracket(t)) healed++; } }
+  catch (e) { win._error && win._error('[integrateLate] syncLower:', e); }
+
+  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0 || healed > 0);
   if (changed) {
     try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e) {}
     t.updatedAt = new Date().toISOString();

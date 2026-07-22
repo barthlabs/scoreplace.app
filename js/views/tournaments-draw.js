@@ -730,14 +730,23 @@ window._integrateLateDuplas = function (t) {
     if (_uids && _uids.length) return _uids.every(function (u) { return window._idMapHas(t, _ci, { uid: u }) && !window._idMapHas(t, _ab, { uid: u }); });
     return false;
   };
+  // v1.3.165 — "já na chave" é POR UID, nunca por rótulo. No doc real, a dupla estava na chave
+  // sob o rótulo cru "Jogador sem perfil (N618)…" enquanto o roster já tinha o nome resolvido —
+  // a comparação por nome falhava e a MESMA dupla era re-coletada como órfã (re-integração
+  // fantasma: "Luigi/Adriana nos jogos 7 e 8"). [[project_uid_identity_canon_locked]]
   var _brkLabels = {};
   t.matches.forEach(function (m) { if (m) { if (m.p1) _brkLabels[m.p1] = 1; if (m.p2) _brkLabels[m.p2] = 1; } });
+  var _brkSetD = (typeof window._bracketUidKeySet === 'function') ? window._bracketUidKeySet(t) : null;
+  var _inBracketD = function (p) {
+    if (_brkSetD && typeof window._entryInBracket === 'function' && window._entryInBracket(t, p, _brkSetD)) return true;
+    return !!_brkLabels[_nm(p)];
+  };
   var _formedNames = {}; formed.forEach(function (p) { _formedNames[_nm(p)] = 1; });
   if (Array.isArray(t.participants) && t.teamOrigins) {
     t.participants.forEach(function (p) {
       if (!_isPair(p)) return;
       var nm = _nm(p);
-      if (!nm || _brkLabels[nm] || _formedNames[nm]) return;         // já na chave ou já coletado
+      if (!nm || _inBracketD(p) || _formedNames[nm]) return;         // já na chave (POR UID) ou já coletado
       if (t.teamOrigins[nm] !== 'formada' || !_orphPresent(p)) return; // só dupla formada à mão E presente
       formed.push(p); _formedNames[nm] = 1;
     });
@@ -746,6 +755,15 @@ window._integrateLateDuplas = function (t) {
 
   // Só a estrutura de REPESCAGEM (playin) tem repR1 round 0 (todos jogam a "R1 do upper").
   // Pow2 puro (needsDoubleElim, byes na upper R1) fica pra depois.
+  // v1.3.165 — jogo TARDIO da R0 (isExtra/isPhaseRepGame, criado pelo fill/placer) É um jogo da
+  // 1ª rodada: promove a isPhaseRepR1 pra ser PRESERVADO e contado no rebuild. Antes o
+  // `t.matches = allRep.slice()` do Tier 1 o DESCARTAVA silenciosamente (dupla sumia da chave —
+  // medido no doc real). O repFill pendente (se houver) segue e resolve normalmente.
+  t.matches.forEach(function (m) {
+    if (m && m.round === 0 && m.bracket === 'upper' && !m.isPhaseRepR1 && (m.isExtra || m.isPhaseRepGame)) {
+      m.isPhaseRepR1 = true;
+    }
+  });
   var repR1 = t.matches.filter(function (m) { return m && m.round === 0 && m.isPhaseRepR1 && m.bracket === 'upper'; });
   if (!repR1.length) return 0;
 
@@ -796,9 +814,13 @@ window._integrateLateDuplas = function (t) {
     var newLow = [], usedNames2 = {};
     for (var k2 = 0; k2 + 1 < formed.length; k2 += 2) {
       var a2 = formed[k2], b2 = formed[k2 + 1];
+      var _u1a = (typeof window._participantUids === 'function') ? window._participantUids(a2) : [];
+      var _u2a = (typeof window._participantUids === 'function') ? window._participantUids(b2) : [];
       newLow.push({
         id: idp2 + '-lowR1-' + newLow.length, round: 1, bracket: 'lower',
         p1: _nm(a2), p2: _nm(b2), team1Obj: a2, team2Obj: b2,
+        team1Uids: _u1a, team2Uids: _u2a,
+        p1Uid: (_u1a.length === 1 ? _u1a[0] : null), p2Uid: (_u2a.length === 1 ? _u2a[0] : null),
         winner: null, phaseIndex: 0, category: null
       });
       usedNames2[_nm(a2)] = 1; usedNames2[_nm(b2)] = 1;
@@ -855,6 +877,8 @@ window._integrateLateDuplas = function (t) {
       });
     decided2.forEach(function (m) { if (typeof window._advanceWinner === 'function') { try { window._advanceWinner(t, m); } catch (e) {} } });
     if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }
+    // dona única da inferior reconcilia (re-materializa derrotados, fiação, sobra). v1.3.165.
+    if (typeof window._syncLowerBracket === 'function') { try { window._syncLowerBracket(t); } catch (e) {} }
 
     if (typeof window._computeMemberUids === 'function') { try { window._computeMemberUids(t); } catch (e) {} }
     if (window.AppStore && typeof window.AppStore.logAction === 'function') {
@@ -873,7 +897,9 @@ window._integrateLateDuplas = function (t) {
   var satTeam = null;
   // NÃO pegar um ÓRFÃO DE ROSTER formado como satTeam: ele já está em `formed` (entra como jogo
   // NOVO ou como a dupla ímpar/repGame). Se virasse satTeam seria pareado consigo mesmo.
-  for (var pi = 0; pi < parts.length && !satTeam; pi++) { if (_isPair(parts[pi]) && !inRep[_nm(parts[pi])] && !_formedNames[_nm(parts[pi])]) satTeam = parts[pi]; }
+  for (var pi = 0; pi < parts.length && !satTeam; pi++) {
+    if (_isPair(parts[pi]) && !inRep[_nm(parts[pi])] && !_formedNames[_nm(parts[pi])] && !_inBracketD(parts[pi])) satTeam = parts[pi];
+  }
 
   // v1.2.57 (dono 17/jul): a dupla ÍMPAR normalmente está DENTRO de um repGame esperando
   // adversário — "JOGO N: Kelly/Rodrigo VS A definir" (isPhaseRepGame, um lado real + outro
@@ -910,9 +936,16 @@ window._integrateLateDuplas = function (t) {
   for (var i = 0; i + 1 < unpaired.length; i += 2) {
     var a = unpaired[i], b = unpaired[i + 1];
     var gnum = base + newGames.length;
+    // v1.3.165 — IDENTIDADE no jogo novo (uid canon): sem team*Uids, o lado gravado com rótulo
+    // cru ("Jogador sem perfil (…)" de dupla só-com-uid) ficava INVISÍVEL pra toda checagem
+    // "já está na chave" → a mesma dupla era re-integrada na passada seguinte (doc real).
+    var _u1b = (typeof window._participantUids === 'function') ? window._participantUids(a) : [];
+    var _u2b = (typeof window._participantUids === 'function') ? window._participantUids(b) : [];
     newGames.push({
       id: idp + '-rep' + gnum, round: 0, bracket: 'upper', isPhaseRepR1: true,
       p1: _nm(a), p2: _nm(b), team1Obj: a, team2Obj: b,
+      team1Uids: _u1b, team2Uids: _u2b,
+      p1Uid: (_u1b.length === 1 ? _u1b[0] : null), p2Uid: (_u2b.length === 1 ? _u2b[0] : null),
       p1Seed: gnum * 2, p2Seed: gnum * 2 + 1, winner: null, phaseIndex: 0, category: null
     });
     usedNames[_nm(a)] = 1; usedNames[_nm(b)] = 1;
@@ -954,6 +987,10 @@ window._integrateLateDuplas = function (t) {
   // Re-propaga os vencedores JÁ decididos dos repR1 (winner→upper); _resolveRepFills fecha o resto.
   allRep.forEach(function (m) { if (m.winner && typeof window._advanceWinner === 'function') { try { window._advanceWinner(t, m); } catch (e) {} } });
   if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }
+  // dona única da inferior reconcilia (re-materializa derrotados perdidos no rebuild, fiação,
+  // sobra→repescagem). Era AQUI que a inferior "apagava": o rebuild recriava a R1 inferior vazia
+  // e ninguém devolvia os derrotados já decididos. v1.3.165, medido no doc real.
+  if (typeof window._syncLowerBracket === 'function') { try { window._syncLowerBracket(t); } catch (e) {} }
 
   if (typeof window._computeMemberUids === 'function') { try { window._computeMemberUids(t); } catch (e) {} }
   if (window.AppStore && typeof window.AppStore.logAction === 'function') {
@@ -1344,6 +1381,10 @@ window._fillRepFillWithLateDuplas = function (t) {
         var _nomeRep = ocup.nome, _objRep = ocup.obj;
         _setSide(ocup.m, ocup.slot, d);
         if (ocup.slot === 'p1') delete ocup.m.p1FromRepechage; else delete ocup.m.p2FromRepechage;
+        // t1 × t2, completo e sem vaga pendente ⇒ jogo REAL da 1ª rodada (preservado no rebuild)
+        if (!(ocup.m.repFill || []).length && ocup.m.p1 && ocup.m.p2 && ocup.m.p2 !== 'TBD') {
+          delete ocup.m.isPhaseRepGame; ocup.m.isPhaseRepR1 = true;
+        }
         var _volta = window._returnRepescadoToLower(t, _nomeRep, _objRep);
         if (typeof window._syncLowerBracket === 'function') {
           try { window._syncLowerBracket(t, { forceRebuild: _volta === 'grow' }); } catch (e) {}
@@ -3965,6 +4006,52 @@ window._canReturnRepescadoToLower = function (t, nome, entrada) {
   return tailOk ? 'grow' : false;
 };
 
+// ── RE-PROPAGAÇÃO DE DECIDIDOS (v1.3.165) ────────────────────────────────────────────────────
+// Depois de um rebuild (Tier 1, dedup, cura), os fios (nextMatchId/loserMatchId) apontam pra
+// jogos NOVOS com slots TBD — mas os resultados já lançados não voltam sozinhos: o _advanceWinner
+// só roda na hora do resultado. Esta função re-escreve vencedor/perdedor de todo jogo DECIDIDO no
+// slot VAZIO que o fio aponta. Idempotente: nunca sobrescreve slot ocupado, nunca duplica (checa
+// presença por uid no jogo-alvo), nunca re-desce promovido (o fio dele foi cortado no pull).
+// Medido no doc real: 6 resultados da 1ª sup com a 2ª sup e a 1ª inf zeradas = torneio travado.
+window._repropagateDecided = function (t) {
+  if (!t || !Array.isArray(t.matches)) return 0;
+  var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
+  var _vz = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
+  var _key = function (m, sl) {
+    var u = (sl === 'p1') ? m.team1Uids : m.team2Uids;
+    if (Array.isArray(u) && u.length) return 'u:' + u.slice().sort().join('+');
+    var rot = String((sl === 'p1' ? m.p1 : m.p2) || '').trim().toLowerCase();
+    return (!rot || rot === 'tbd') ? '' : 'n:' + rot;
+  };
+  var byId = {}; all.forEach(function (m) { if (m && m.id != null) byId[m.id] = m; });
+  var changed = 0;
+  all.slice().sort(function (a, b) { return ((a && a.round) || 0) - ((b && b.round) || 0); }).forEach(function (m) {
+    if (!m || !m.winner) return;
+    var winSl = (m.winner === m.p1) ? 'p1' : 'p2';
+    var loseSl = (winSl === 'p1') ? 'p2' : 'p1';
+    [[m.nextMatchId, m.nextSlot, winSl], [m.loserMatchId, m.loserSlot, loseSl]].forEach(function (trio) {
+      var tid = trio[0], tslot = trio[1], srcSl = trio[2];
+      if (!tid) return;
+      var tgt = byId[tid];
+      if (!tgt || tgt === m || tgt.winner) return;
+      var nome = m[srcSl];
+      if (!nome || _vz(nome)) return;
+      var k = _key(m, srcSl);
+      // já está no jogo-alvo (por uid ou rótulo)? nada a fazer
+      if (['p1', 'p2'].some(function (s) { return tgt[s] === nome || (k && _key(tgt, s) === k); })) return;
+      var s2 = (tslot && _vz(tgt[tslot])) ? tslot : null;
+      if (!s2) return;                                   // sem slot explícito vazio: não chuta
+      tgt[s2] = nome;
+      var uids = ((srcSl === 'p1') ? m.team1Uids : m.team2Uids) || [];
+      var obj = (srcSl === 'p1') ? m.team1Obj : m.team2Obj;
+      if (s2 === 'p1') { tgt.team1Uids = uids.slice(); tgt.p1Uid = (uids.length === 1 ? uids[0] : null); if (obj) tgt.team1Obj = obj; }
+      else { tgt.team2Uids = uids.slice(); tgt.p2Uid = (uids.length === 1 ? uids[0] : null); if (obj) tgt.team2Obj = obj; }
+      changed++;
+    });
+  });
+  return changed;
+};
+
 // ── IDENTIDADE NO JOGO + CONFRONTO REPETIDO POR UID (v1.3.162, bug do dono) ──────────────────
 // Dono: "marcelo x luigi esta duplicado. se enfrentam no jogo 7 e 8".
 // MEDIDO no doc real: o mesmo confronto existia duas vezes na 1ª superior — um jogo com os uids
@@ -3985,6 +4072,36 @@ window._stampMissingMatchUids = function (t) {
     var n = String(_nm(p) || '').trim(); if (!n) return;
     var u = _uids(p); if (u && u.length) porNome[n.toLowerCase()] = u;
   });
+  // v1.3.165 — HEAL do rótulo CRU "Jogador sem perfil (xxxx)": o rótulo carrega o PREFIXO do uid
+  // (4 chars). Medido no doc real tour_1784727218055_sb: rep6 gravado com esse rótulo e SEM
+  // team1Uids → nenhuma checagem "já está na chave" enxergava a dupla → re-integração fantasma
+  // (Luigi/Adriana nos jogos 7 E 8). Resolve cada prefixo contra os uids do elenco; só cura quando
+  // TODOS os prefixos do rótulo resolvem de forma ÚNICA. Também conserta o rótulo pro nome real.
+  var _byPrefix = function (pfx) {
+    var hits = [];
+    (Array.isArray(t.participants) ? t.participants : []).forEach(function (p) {
+      [p.uid, p.p1Uid, p.p2Uid].forEach(function (u) {
+        if (u && String(u).slice(0, 4) === pfx && hits.indexOf(u) < 0) hits.push(u);
+      });
+    });
+    return (hits.length === 1) ? hits[0] : null;
+  };
+  var _healRaw = function (rot) {
+    if (!/jogador sem perfil \(/i.test(rot)) return null;
+    var pfxs = [], re = /jogador sem perfil \(([^)]{1,6})\)/ig, mm;
+    while ((mm = re.exec(rot))) pfxs.push(mm[1]);
+    if (!pfxs.length) return null;
+    var uids = pfxs.map(_byPrefix);
+    if (uids.some(function (u) { return !u; })) return null;       // algum prefixo não resolve único
+    // acha a ENTRADA do elenco cujo conjunto de uids bate (dupla ou solo)
+    var alvo = null;
+    (Array.isArray(t.participants) ? t.participants : []).forEach(function (p) {
+      if (alvo) return;
+      var pu = _uids(p);
+      if (pu.length === uids.length && uids.every(function (u) { return pu.indexOf(u) >= 0; })) alvo = p;
+    });
+    return { uids: uids, entry: alvo };
+  };
   var n = 0;
   (typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : t.matches).forEach(function (m) {
     if (!m) return;
@@ -3993,7 +4110,16 @@ window._stampMissingMatchUids = function (t) {
       if (Array.isArray(m[campo]) && m[campo].length) return;      // já tem identidade
       var rot = String(m[slot] || '').trim(); if (!rot || rot === 'TBD') return;
       var u = porNome[rot.toLowerCase()];
-      if (u && u.length) { m[campo] = u.slice(); n++; }
+      if (u && u.length) { m[campo] = u.slice(); n++; return; }
+      var heal = _healRaw(rot.toLowerCase());
+      if (heal) {
+        m[campo] = heal.uids.slice(); n++;
+        if (heal.entry) {
+          var nomeReal = _nm(heal.entry);
+          if (nomeReal) m[slot] = nomeReal;                        // rótulo cru vira o nome real
+          if (slot === 'p1') m.team1Obj = m.team1Obj || heal.entry; else m.team2Obj = m.team2Obj || heal.entry;
+        }
+      }
     });
   });
   return n;
@@ -4025,14 +4151,80 @@ window._dedupMatchesByUid = function (t) {
     var manter = comPlacar[0] || l[0];
     l.forEach(function (m) { if (m !== manter) apagar[m.id] = 1; });
   });
+  // v1.3.165 — LADO repetido (não só confronto): a MESMA dupla em DOIS jogos da mesma rodada é
+  // impossível (medido no doc real: re-integração fantasma pôs Luigi/Adriana nos jogos 7 E 8).
+  // Remove o jogo FANTASMA: o `isExtra` SEM resultado cujo lado real já existe POR UID em outro
+  // jogo da mesma rodada/chave, e cujo outro lado é vaga aberta ou repescado promovido (o
+  // repescado não some: o fio de descida do jogo de origem dele segue intacto e o
+  // _syncLowerBracket o re-materializa embaixo). Jogo com placar NUNCA é apagado.
+  var porLado = {};
+  t.matches.forEach(function (m) {
+    if (!m || apagar[m.id]) return;
+    ['p1', 'p2'].forEach(function (sl) {
+      var c = _chave(m, sl);
+      if (!c || /^n:(tbd|)$/.test(c)) return;
+      var k2 = (m.bracket || '') + '|R' + m.round + '|' + c;
+      (porLado[k2] = porLado[k2] || []).push({ m: m, sl: sl });
+    });
+  });
+  Object.keys(porLado).forEach(function (k2) {
+    var l2 = porLado[k2]; if (l2.length < 2) return;
+    var vivos = l2.filter(function (x) { return !apagar[x.m.id]; });
+    if (vivos.length < 2) return;
+    vivos.forEach(function (x) {
+      if (apagar[x.m.id]) return;
+      var m = x.m;
+      if (!m.isExtra || m.winner) return;                 // só o fantasma tardio sem resultado
+      var outro = (x.sl === 'p1') ? 'p2' : 'p1';
+      var vagaAberta = !m[outro] || m[outro] === 'TBD' || (m.repFill || []).some(function (rf) { return rf && rf.slot === outro; });
+      var promovido = (outro === 'p1') ? m.p1FromRepechage : m.p2FromRepechage;
+      if (!vagaAberta && !promovido) return;              // adversário real de verdade: não é fantasma
+      // só apaga se o par sobrevive em OUTRO jogo não apagado
+      var sobrevive = l2.some(function (y) { return y.m !== m && !apagar[y.m.id]; });
+      if (sobrevive) apagar[m.id] = 1;
+    });
+  });
   var ids = Object.keys(apagar);
   if (!ids.length) return 0;
+  // v1.3.165 — a vaga que o jogo removido ALIMENTAVA não pode virar slot morto: com um jogo a
+  // menos a rodada seguinte fica ímpar, e ímpar se resolve por REPESCAGEM (melhor derrotado da
+  // rodada-fonte — cânone do dono: "7V na sup, 1 repescado"). Guarda o destino antes de filtrar.
+  var _orfaos = [];
+  t.matches.forEach(function (m) {
+    if (m && apagar[m.id] && m.nextMatchId && !apagar[m.nextMatchId]) {
+      _orfaos.push({ tgtId: m.nextMatchId, slot: m.nextSlot || null, srcBracket: m.bracket, srcRound: (typeof m.round === 'number') ? m.round : 1, cat: (m.category != null ? m.category : null) });
+    }
+  });
   t.matches = t.matches.filter(function (m) { return !(m && apagar[m.id]); });
   // quem apontava pro jogo removido perde a ligação (senão fica destino fantasma)
   t.matches.forEach(function (m) {
     if (!m) return;
     if (m.nextMatchId && apagar[m.nextMatchId]) { delete m.nextMatchId; delete m.nextSlot; }
     if (m.loserMatchId && apagar[m.loserMatchId]) { delete m.loserMatchId; delete m.loserSlot; }
+  });
+  _orfaos.forEach(function (o) {
+    var tgt = null;
+    t.matches.forEach(function (m) { if (!tgt && m && m.id === o.tgtId) tgt = m; });
+    if (!tgt || tgt.winner) return;
+    var slot = o.slot;
+    var _vz = function (v) { return !v || v === 'TBD'; };
+    var _fed2 = function (s) {
+      return t.matches.some(function (x) { return x && x !== tgt && ((x.nextMatchId === tgt.id && x.nextSlot === s) || (x.loserMatchId === tgt.id && x.loserSlot === s)); });
+    };
+    if (!slot || !_vz(tgt[slot]) || _fed2(slot)) {
+      slot = null;
+      ['p1', 'p2'].forEach(function (s) { if (!slot && _vz(tgt[s]) && !_fed2(s)) slot = s; });
+    }
+    if (!slot) return;
+    if ((tgt.repFill || []).some(function (rf) { return rf && rf.slot === slot; })) return;
+    var rank = 0;
+    t.matches.forEach(function (m) {
+      (m && m.repFill || []).forEach(function (rf) {
+        if (rf && rf.tagRep && rf.srcBracket === o.srcBracket && rf.srcRound === o.srcRound) rank++;
+      });
+    });
+    (tgt.repFill = tgt.repFill || []).push({ slot: slot, srcBracket: o.srcBracket, srcRound: o.srcRound, rank: rank, cat: o.cat, tagRep: true });
+    tgt.isRepechageSlot = true;
   });
   return ids.length;
 };
@@ -4102,7 +4294,15 @@ window._syncLowerBracket = function (t, opts) {
   var lowR = Math.min.apply(null, low.map(_r));
   var lowFirst = low.filter(function (m) { return _r(m) === lowR; });
   if (!lowFirst.length) return false;
-  var cat = (sup[0] && sup[0].category != null) ? sup[0].category : null;
+  // categoria do DOMÍNIO INFERIOR vem dos jogos da inferior (rebuilds antigos criaram lower sem
+  // category mesmo em torneio single-cat — descritor com cat da SUP nunca casava fonte nenhuma
+  // e a vaga ficava pendurada pra sempre; medido no doc real). Fallback: sup, senão null.
+  var cat = null;
+  lowFirst.forEach(function (m) { if (cat == null && m && m.category != null) cat = m.category; });
+  if (cat == null && sup[0] && sup[0].category != null) {
+    // só herda da sup se a inferior NÃO tem jogos sem categoria (senão mismatch de fonte)
+    if (lowFirst.every(function (m) { return m && m.category != null; })) cat = sup[0].category;
+  }
   var pi = (sup[0] && sup[0].phaseIndex != null) ? sup[0].phaseIndex : (t.currentPhaseIndex || 0);
 
   // identidade POR UID (rótulo só de fallback) — [[project_uid_identity_canon_locked]]
@@ -4132,7 +4332,21 @@ window._syncLowerBracket = function (t, opts) {
       if (!rf || !rf.tagRep) return;
       if (rf.srcRound !== supR) { rf.srcRound = supR; changed = true; }
       if (supBrk !== undefined && rf.srcBracket !== supBrk) { rf.srcBracket = supBrk; changed = true; }
-      if (cat != null && rf.cat == null) rf.cat = cat;
+    });
+  });
+  // SANIDADE DE CATEGORIA nos descritores pendentes (v1.3.165): se o cat do descritor não casa
+  // NENHUM jogo-fonte mas ignorando cat as fontes existem, o cat está órfão (rebuild antigo criou
+  // fontes sem category) → solta pra null, senão a vaga nunca resolve. Idempotente.
+  sup.concat(lowFirst).forEach(function (m) {
+    (m && m.repFill || []).forEach(function (rf) {
+      if (!rf || rf.cat == null) return;
+      var comCat = all.some(function (x) {
+        return x && x.bracket === rf.srcBracket && x.round === rf.srcRound && !x.isPhaseRepGame && x.category === rf.cat;
+      });
+      var semCat = all.some(function (x) {
+        return x && x.bracket === rf.srcBracket && x.round === rf.srcRound && !x.isPhaseRepGame;
+      });
+      if (!comCat && semCat) { rf.cat = null; changed = true; }
     });
   });
 
@@ -4189,7 +4403,12 @@ window._syncLowerBracket = function (t, opts) {
         _promKeys[pick.key] = 1;
         changed = true;
       });
-      if (keep.length) g.repFill = keep; else delete g.repFill;
+      if (keep.length) g.repFill = keep; else {
+        delete g.repFill;
+        // resolvido e completo ⇒ vira jogo REAL da 1ª rodada (mesma regra do fill v1.3.157):
+        // perdedor dele pode repescar, e o rebuild do Tier 1 o PRESERVA (isPhaseRepR1).
+        if (!_vazio(g.p1) && !_vazio(g.p2)) { delete g.isPhaseRepGame; g.isPhaseRepR1 = true; }
+      }
     });
   }
 
@@ -4225,6 +4444,39 @@ window._syncLowerBracket = function (t, opts) {
       g.loserMatchId = alvo.m.id; g.loserSlot = alvo.slot;
       changed = true;
     });
+  });
+
+  // ── (3a) RE-PROPAGAÇÃO GERAL (v1.3.165): resultados decididos voltam pelos fios depois de
+  // qualquer rebuild (vencedores → rodada seguinte; perdedores → inferior). Sem isto o doc real
+  // ficou com a 2ª sup e a 1ª inf zeradas apesar de 6 resultados lançados.
+  if (typeof window._repropagateDecided === 'function') {
+    try { if (window._repropagateDecided(t)) changed = true; } catch (e) {}
+  }
+
+  // ── (3b) RE-MATERIALIZAÇÃO (v1.3.165): jogo da 1ª sup JÁ DECIDIDO cujo fio aponta pra um
+  // slot VAZIO da 1ª inferior ⇒ o perdedor dele volta pro slot. É a cura da "inferior apagada":
+  // o rebuild do Tier 1 recriava a R1 inferior vazia e os derrotados já decididos se perdiam
+  // (medido no doc real tour_1784727218055_sb — 6 resultados, inferior toda TBD). Idempotente;
+  // nunca escreve sobre slot ocupado nem re-desce quem foi promovido (o fio desses foi cortado).
+  sup.forEach(function (g) {
+    if (!g || !g.winner || !g.loserMatchId) return;
+    var tgt = lowFirst.filter(function (m) { return m.id === g.loserMatchId; })[0];
+    if (!tgt || tgt.winner || !g.loserSlot || !_vazio(tgt[g.loserSlot])) return;
+    var loserSl = (g.winner === g.p1) ? 'p2' : 'p1';
+    var nomeL = g[loserSl];
+    if (!nomeL || _vazio(nomeL)) return;
+    var keyL = _sideKey(g, loserSl);
+    // já está em algum slot da 1ª inferior? então não duplica
+    var jaLa = keyL && lowFirst.some(function (m) {
+      return ['p1', 'p2'].some(function (s) { return _sideKey(m, s) === keyL; });
+    });
+    if (jaLa) return;
+    tgt[g.loserSlot] = nomeL;
+    var uidsL = ((loserSl === 'p1') ? g.team1Uids : g.team2Uids) || [];
+    var objL = (loserSl === 'p1') ? g.team1Obj : g.team2Obj;
+    if (g.loserSlot === 'p1') { tgt.team1Uids = uidsL.slice(); tgt.p1Uid = (uidsL.length === 1 ? uidsL[0] : null); if (objL) tgt.team1Obj = objL; }
+    else { tgt.team2Uids = uidsL.slice(); tgt.p2Uid = (uidsL.length === 1 ? uidsL[0] : null); if (objL) tgt.team2Obj = objL; }
+    changed = true;
   });
 
   // ── (4) TAMANHO: quem desce = 1 perdedor por jogo da 1ª sup — MENOS o jogo cujo perdedor

@@ -139,6 +139,51 @@ for (let N = 3; N <= 20; N++) {
   });
 }
 
+// ── O CASO DO DOC REAL (tour_1784727218055_sb, 22/jul): dupla tardia SÓ-COM-UID (sem nomes —
+// rótulo cru "Jogador sem perfil (…)"), nomes resolvem ENTRE as passadas, e a 2ª integração
+// re-processava a MESMA dupla (fantasma nos jogos 7 E 8) + o rebuild do Tier 1 apagava os
+// derrotados materializados da 1ª inferior. Sintético com o MESMO shape (o doc real tem dados
+// de pessoas reais — não entra no repo). [[project_uid_identity_canon_locked]]
+console.log('\n── DOC REAL (shape): tardio só-uid → nomes resolvem → 2ª integração não duplica ──');
+(function () {
+  const t = mkT(12); W.AppStore.tournaments = [t];
+  jogaPrimeiraSup(t);
+  // tardio 1 SEM nomes (uid-only)
+  const t1 = { p1Uid: 'N618xxxx', p2Uid: 'Q480yyyy', _lateJoin: true };
+  t.waitlist.push(t1); t.participants.push(Object.assign({}, t1));
+  t.checkedIn['N618xxxx'] = 1; t.checkedIn['Q480yyyy'] = 1;
+  dc.integrateLateEntries(t, {});
+  const g7a = all(t).filter(m => (m.team1Uids || []).indexOf('N618xxxx') >= 0 || (m.team2Uids || []).indexOf('N618xxxx') >= 0);
+  ok(g7a.length === 1, '[doc] tardio só-uid entra em UM jogo, com identidade por uid (got ' + g7a.length + ')');
+  // nomes resolvem entre as passadas (o que aconteceu no doc real)
+  const pt1 = t.participants[t.participants.length - 1];
+  pt1.p1Name = 'Luigi'; pt1.p2Name = 'Adriana'; pt1.displayName = 'Luigi / Adriana'; pt1.name = 'Luigi / Adriana';
+  t.teamOrigins['Luigi / Adriana'] = 'formada';
+  // tardio 2 nomeado
+  const t2 = { p1Uid: 'mm1', p1Name: 'Marcello', p2Uid: 'kf1', p2Name: 'Karla', displayName: 'Marcello / Karla', name: 'Marcello / Karla', _lateJoin: true };
+  t.waitlist.push(t2); t.participants.push(Object.assign({}, t2));
+  t.checkedIn['mm1'] = 1; t.checkedIn['kf1'] = 1;
+  dc.integrateLateEntries(t, {});
+  // a MESMA dupla nunca aparece em 2 jogos da 1ª sup (era o fantasma "jogos 7 E 8")
+  const jogosT1 = all(t).filter(m => m.bracket === 'upper' &&
+    ((m.team1Uids || []).indexOf('N618xxxx') >= 0 || (m.team2Uids || []).indexOf('N618xxxx') >= 0));
+  ok(jogosT1.length === 1, '[doc] após nomes resolverem + 2º tardio: t1 segue em UM jogo só (got ' + jogosT1.length + ')');
+  const g7 = jogosT1[0];
+  ok(g7 && ((m => (m.team1Uids || []).indexOf('mm1') >= 0 || (m.team2Uids || []).indexOf('mm1') >= 0)(g7)),
+    '[doc] jogo do tardio vira t1 × t2 (repescado dispensado)');
+  // derrotados da 1ª sup PRESERVADOS/re-materializados na 1ª inferior
+  const lowR = Math.min.apply(null, all(t).filter(m => m.bracket === 'lower').map(m => m.round));
+  const l1 = all(t).filter(m => m.bracket === 'lower' && m.round === lowR);
+  const nomesInf = []; l1.forEach(m => ['p1', 'p2'].forEach(s => { if (m[s] && !isEmpty(m[s])) nomesInf.push(m[s]); }));
+  ok(nomesInf.length >= 6, '[doc] os 6 derrotados da 1ª sup estão na 1ª inferior (got ' + nomesInf.length + ') — inferior NUNCA apaga');
+  const dupInf = nomesInf.filter((v, i) => nomesInf.indexOf(v) !== i);
+  ok(dupInf.length === 0, '[doc] ninguém duplicado na 1ª inferior (' + JSON.stringify(dupInf) + ')');
+  const err = playout(t);
+  ok(!err, '[doc] playout sem erro (' + (err || '') + ')');
+  const grand = all(t).filter(m => m.bracket === 'grand');
+  ok(grand.length >= 1 && grand[grand.length - 1].winner, '[doc] campeão coroado');
+})();
+
 console.log('\n' + (fail === 0 ? '✅ sync-lower-bracket: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fails.length) { console.error('\nFALHAS (' + fails.length + '):'); fails.slice(0, 40).forEach(f => console.error('  ✗ ' + f)); }
 process.exit(fail > 0 ? 1 : 0);
