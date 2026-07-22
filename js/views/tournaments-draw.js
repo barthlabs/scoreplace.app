@@ -1970,10 +1970,32 @@ window._applyCFTournament = function (tId, doc) {
 window._lateIntegrateInflight = window._lateIntegrateInflight || {};
 window._lateIntegrateLastSig = window._lateIntegrateLastSig || {};
 window._lateIntegratePending = window._lateIntegratePending || {};
+// v1.3.149 (dono: "presença continua pulando e regredindo depois de 24... instabilidade total"):
+// DEBOUNCE. A integração era disparada 1× POR TOGGLE de presença de quem está na espera. Marcar 24
+// pessoas = ~24 chamadas de CF, cada uma devolvendo o DOC INTEIRO que o cliente espelha
+// (_applyCFTournament) e re-renderiza. Resultado: enxurrada de docs (alguns lidos ANTES das últimas
+// marcações) + re-render em cima de re-render = cor mudando, presença sumindo e voltando.
+// Agora as marcações em rajada COALESCEM numa única chamada depois que o organizador para de mexer.
+// Quem precisa de resposta imediata (formar dupla, ligar "aceitar entradas") passa opts.immediate.
+window._lateIntegrateDebounce = window._lateIntegrateDebounce || {};
+window._LATE_INTEGRATE_DEBOUNCE_MS = 2500;
 window._triggerLateIntegration = function (t, opts) {
     opts = opts || {};
     if (!t || !t.id) return;
     var tId = String(t.id);
+    if (opts.debounce && !opts.immediate) {
+        clearTimeout(window._lateIntegrateDebounce[tId]);
+        window._lateIntegrateDebounce[tId] = setTimeout(function () {
+            window._lateIntegrateDebounce[tId] = null;
+            var _fresh = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : t;
+            var _o = {}; for (var k in opts) if (opts.hasOwnProperty(k)) _o[k] = opts[k];
+            _o.debounce = false;
+            window._triggerLateIntegration(_fresh || t, _o);
+        }, window._LATE_INTEGRATE_DEBOUNCE_MS);
+        return;
+    }
+    clearTimeout(window._lateIntegrateDebounce[tId]);
+    window._lateIntegrateDebounce[tId] = null;
     if (window._lateIntegrateInflight[tId]) return;
     // só dispara quando há gente na espera (senão não há o que integrar) — EXCETO com force, que é o
     // caso da DUPLA FORMADA pós-sorteio: ela entra em participants (não na espera), então não há nada

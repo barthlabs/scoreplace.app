@@ -1139,7 +1139,10 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
       var _fireLate = function () {
         try {
           var _ft = window._findTournamentById(tId) || t;
-          window._triggerLateIntegration(_ft, { force: true });
+          // DEBOUNCE (v1.3.149): marcar presença em rajada (chamada de 20+ pessoas) coalesce numa
+          // ÚNICA chamada de CF. Antes era 1 por toggle → enxurrada de docs + re-render = "presença
+          // pulando/regredindo, instabilidade total".
+          window._triggerLateIntegration(_ft, { force: true, debounce: true });
         } catch (_eFire) {}
       };
       if (_mutateDone && typeof _mutateDone.then === 'function') _mutateDone.then(_fireLate, _fireLate);

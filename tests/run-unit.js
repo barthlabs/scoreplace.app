@@ -198,6 +198,9 @@ const SUITES = [
   // Idempotência da integração tardia (dono: "criou 2 jogos em vez de 1"): registro POR ENTRADA
   // (t.lateIntegrated), NUNCA "nome na chave" — senão inviabilizaria a REPESCAGEM (ressalva do dono).
   'tests/late-entry-idempotent.test.js',
+  // Instabilidade da chamada (dono: "presença pulando e regredindo depois de 24"): a integração era
+  // disparada 1× por toggle → enxurrada de docs+re-render. Rajada agora coalesce numa chamada.
+  'tests/late-integration-debounce.test.js',
   // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
   'tests/count-competitors.test.js',
   'tests/phase-repechage-lines.test.js',
