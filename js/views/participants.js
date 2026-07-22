@@ -1019,16 +1019,26 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   // lost-update. Agora ambos rodam no MESMO doc fresco da transação, usando o
   // núcleo PURO _applyWoSubsToTournament (sem save próprio). `_was` recomputado
   // do doc fresco decide o toggle; o toast da sub vem da execução LOCAL.
+  // ⚠️ MUTATOR IDEMPOTENTE (v1.3.152) — CAUSA-RAIZ do "presença pulando e desmarcando sozinha".
+  // O mutator era um TOGGLE que lia o estado do doc FRESCO e INVERTIA. Mas ele roda MAIS DE UMA VEZ:
+  //   (a) AppStore.mutate aplica no objeto LOCAL e de novo no doc fresco da transação;
+  //   (b) commitTournamentTx faz RETRY (até 5×) em conflito transiente, re-executando o mutator;
+  //   (c) o próprio Firestore re-executa a função da transação em contenção.
+  // Cada re-execução INVERTIA de novo → nº PAR de aplicações = volta a DESMARCADO. Marcando 16-24
+  // pessoas em rajada a contenção sobe, os retries acontecem e presenças caem sozinhas.
+  // Agora o ALVO é decidido UMA vez (estado no clique) e o mutator SETA esse alvo absoluto —
+  // aplicar N vezes dá exatamente o mesmo resultado. Ver [[project_concurrency_safe_saves]].
+  var _wantPresent = !wasCheckedIn;
+  var _presTs = Date.now();
   let _subResult;
   var _mutateDone = window.AppStore.mutate(tId, function (ft) {
     if (!ft.checkedIn) ft.checkedIn = {};
     if (!ft.absent) ft.absent = {};
     if (!ft.checkedInConfirmed) ft.checkedInConfirmed = {};
-    const _was = window._idMapHas(ft, ft.checkedIn, _who);
-    if (_was) {
+    if (!_wantPresent) {
       window._idMapDel(ft, ft.checkedIn, _who);
     } else {
-      window._idMapSet(ft, ft.checkedIn, _who, Date.now());
+      window._idMapSet(ft, ft.checkedIn, _who, _presTs);
       window._idMapDel(ft, ft.absent, _who);
       // v1.3.19: marcar PRESENTE (verde) tira o "Confirmado" (azul) — o organizador confirma
       // que a pessoa está no local, então o aviso remoto some.

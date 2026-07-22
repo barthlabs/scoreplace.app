@@ -207,6 +207,9 @@ const SUITES = [
   // Seletor de tie-break 5-5/6-6 sumia na config (dono): _reSyncTbAt tinha lógica própria de
   // "usa sets"; tem de usar a FONTE CANÔNICA _scoringUsesSets (a mesma do placar).
   'tests/tiebreak-at-visibility.test.js',
+  // CAUSA-RAIZ do "presença pulando e desmarcando depois de ~16" (dono): o mutator era um TOGGLE e
+  // roda MAIS DE UMA VEZ (local+fresco, retry da txn) → nº par de aplicações desmarcava. Idempotente.
+  'tests/presence-mutator-idempotent.test.js',
   // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
   'tests/count-competitors.test.js',
   'tests/phase-repechage-lines.test.js',
