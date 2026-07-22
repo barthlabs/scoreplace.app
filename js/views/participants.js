@@ -1184,7 +1184,9 @@ window._markAbsent = function (tId, playerName) {
     }
   }
   // mutação (toggle ausência / revert de W.O.) ATÔMICA pelo portão AppStore.mutate
-  window.AppStore.mutate(tId, function (ft) { window._applyAbsenceToggle(ft, playerName); });
+  // alvo decidido UMA vez, do estado LOCAL no clique (o mutator pode re-executar em retry)
+  var _wantAbs = !(window._idMapHas(t, t.absent || {}, playerName) || window._woHistGet(t, playerName));
+  window.AppStore.mutate(tId, function (ft) { window._applyAbsenceToggle(ft, playerName, _wantAbs); });
   // v1.3.82: intenção otimista sobrevive a snapshot stale (aparece/apaga). W.O. usa o NOME.
   try {
     if (typeof window._stampPresenceIntent === 'function') {
@@ -1199,14 +1201,22 @@ window._markAbsent = function (tId, playerName) {
 // Mutação PURA de ausência (marcar/reverter W.O.) — muta só o `t` passado, sem
 // save (transaction-safe). Extraída de _markAbsent na blindagem (v4.0.117). A
 // trava "não reverte se já jogou" aqui é SILENCIOSA (toast no pre-check acima).
-window._applyAbsenceToggle = function (t, playerName) {
+// v1.3.154: IDEMPOTENTE. `wantAbsent` = alvo ABSOLUTO decidido pelo CHAMADOR (estado no clique).
+// Sem ele, mantém o toggle antigo (compat). Este mutator roda dentro de AppStore.mutate →
+// commitTournamentTx, que RE-EXECUTA em retry de conflito; um toggle ali se auto-inverte
+// (mesma bomba da presença na v1.3.152). A guarda "já está no alvo → no-op" torna N execuções
+// equivalentes a 1, SEM alterar a lógica de reverter W.O. Ver [[project_concurrency_safe_saves]].
+window._applyAbsenceToggle = function (t, playerName, wantAbsent) {
   if (!t.absent) t.absent = {};
   if (!t.checkedIn) t.checkedIn = {};
   // v1.0.79-beta: revert completo. Detecta orphan (W.O.'d via woHistory) e,
   // se há replacedBy, desfaz substituição: restaura time original, remove
   // substituto da chave, devolve ele à waitlist se aplicável.
   const _woMeta = window._woHistGet(t, playerName); // uid-first, nome fallback
-  if (window._idMapHas(t, t.absent, playerName) || _woMeta) {
+  var _isAbsNow = !!(window._idMapHas(t, t.absent, playerName) || _woMeta);
+  var _want = (wantAbsent === undefined || wantAbsent === null) ? !_isAbsNow : !!wantAbsent;
+  if (_want === _isAbsNow) return;   // JÁ está no alvo → no-op (idempotência)
+  if (!_want) {
     // Trava: se o jogo do W.O. já foi jogado de verdade (placar lançado / placar
     // ao vivo iniciado), não dá pra reverter — reverter zeraria um resultado real.
     if (_woMeta && _woMeta.matchNum && typeof window._matchHasRealPlay === 'function') {

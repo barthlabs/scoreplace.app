@@ -213,6 +213,9 @@ const SUITES = [
   // Dupla Elim (dono): dupla PRÉ-FORMADA na espera, ao receber presença, ia pro LIMBO — o placer
   // exigia _lateJoin (flag que só dupla formada TARDE tem). Entra na R1 da chave SUPERIOR.
   'tests/late-dupla-elim-r1-entry.test.js',
+  // TRAVA ESTRUTURAL (dono: "faça de forma robusta"): TODO mutator que roda em AppStore.mutate/
+  // commitTournamentTx é IDEMPOTENTE (N× ≡ 1×). Mutator novo nascendo como toggle fica VERMELHO.
+  'tests/mutators-idempotent-canon.test.js',
   // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
   'tests/count-competitors.test.js',
   'tests/phase-repechage-lines.test.js',
