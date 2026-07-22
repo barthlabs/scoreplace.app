@@ -151,6 +151,26 @@ for (let N = 3; N <= 20; N++) {
   });
 }
 
+// ── DESEMPATE DO REPESCADO É A ORDEM DO JOGO (v1.3.167, dono): empate total (mesmo saldo E
+// mesmos pontos) desempata pelo jogo MAIS CEDO da rodada — o que a tela mostra. Nunca o seed
+// interno (no pareamento 1×N o jogo 1 junta o 1º sorteado com o ÚLTIMO — critério invisível
+// que contradiz a leitura natural: caso Mari (jogo 1, seed 11) × Luiza (jogo 2, seed 1)).
+console.log('\n── desempate do repescado: ordem do jogo, nunca o seed interno ──');
+(function () {
+  const t = mkT(12); W.AppStore.tournaments = [t];
+  const sup0 = all(t).filter(m => m.bracket === 'upper' && m.round === 0);
+  // jogos 1 e 2 terminam 6-4 (perdedores empatados em saldo E pontos); resto 6-1
+  sup0.forEach((m, i) => { m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = (i < 2) ? 4 : 1;
+    W._advanceWinner(t, m); if (W._resolveRepFills) W._resolveRepFills(t); });
+  const perdedorJogo1 = sup0[0].p2;
+  const t1 = chegaTardio(t, 100);
+  dc.integrateLateEntries(t, {});
+  const g7 = all(t).find(m => m.bracket === 'upper' && m.round === 0 && (m.p1 === t1.displayName || m.p2 === t1.displayName));
+  const rep = g7 && (g7.p1FromRepechage ? g7.p1 : (g7.p2FromRepechage ? g7.p2 : null));
+  ok(rep === perdedorJogo1,
+    'empate total ⇒ repescado é o perdedor do JOGO MAIS CEDO (esperado ' + perdedorJogo1 + ', got ' + rep + ')');
+})();
+
 // ── O CASO DO DOC REAL (tour_1784727218055_sb, 22/jul): dupla tardia SÓ-COM-UID (sem nomes —
 // rótulo cru "Jogador sem perfil (…)"), nomes resolvem ENTRE as passadas, e a 2ª integração
 // re-processava a MESMA dupla (fantasma nos jogos 7 E 8) + o rebuild do Tier 1 apagava os

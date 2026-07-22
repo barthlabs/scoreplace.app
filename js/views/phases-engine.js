@@ -1874,17 +1874,22 @@
             x.p1 && x.p1 !== 'TBD' && x.p2 && x.p2 !== 'TBD';
         });
         if (!src.length || src.some(function (x) { return !x.winner; })) { keep.push(slot); return; }
-        var losers = src.map(function (x) {
+        var losers = src.map(function (x, xi) {
           var s1 = parseFloat(x.scoreP1) || 0, s2 = parseFloat(x.scoreP2) || 0;
           var lp1 = (x.winner !== x.p1);
           return {
             name: lp1 ? x.p1 : x.p2, obj: lp1 ? x.team1Obj : x.team2Obj,
             saldo: lp1 ? (s1 - s2) : (s2 - s1), score: lp1 ? s1 : s2,
-            seed: (lp1 ? x.p1Seed : x.p2Seed)
+            ord: xi, seed: (lp1 ? x.p1Seed : x.p2Seed)
           };
         }).filter(function (l) { return l.name && l.name !== 'BYE (Avança Direto)' && l.name !== 'TBD'; }); // BYE nunca é repescável
         losers.forEach(function (l) { if (l.seed == null) l.seed = 9999; });
-        losers.sort(function (a, b) { return (b.saldo - a.saldo) || (b.score - a.score) || (a.seed - b.seed); });
+        // v1.3.167 (dono): empate total (saldo E pontos) desempata pela ORDEM DO JOGO na rodada —
+        // o que a tela mostra ("Mari está no jogo 1, Luiza no jogo 2 ⇒ Mari na frente"). O seed
+        // interno é invisível e no pareamento 1×N contradiz a leitura natural (o jogo 1 junta o
+        // 1º sorteado com o ÚLTIMO). Critério auditável > critério interno. Seed fica de último
+        // recurso teórico.
+        losers.sort(function (a, b) { return (b.saldo - a.saldo) || (b.score - a.score) || (a.ord - b.ord) || (a.seed - b.seed); });
         var pick = losers[slot.rank];
         if (pick && pick.name) {
           m[slot.slot] = pick.name;

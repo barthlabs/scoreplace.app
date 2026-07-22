@@ -4384,9 +4384,10 @@ window._syncLowerBracket = function (t, opts) {
   });
 
   // ── (2) DEFINIÇÃO IMEDIATA: 1ª sup decidida ⇒ o "a definir" do jogo do tardio resolve JÁ
-  // (melhor derrotado: saldo desc, pontos desc, semente asc — mesmo critério do resolveRepFills).
+  // (melhor derrotado: saldo desc, pontos desc, ORDEM DO JOGO asc — mesmo critério do
+  // resolveRepFills; v1.3.167: o desempate final é o que a tela mostra, nunca o seed interno).
   if (todasDecididas) {
-    var losers = reais.map(function (x) {
+    var losers = reais.map(function (x, xi) {
       var s1 = parseFloat(x.scoreP1) || 0, s2 = parseFloat(x.scoreP2) || 0;
       var lp1 = (x.winner !== x.p1);
       return {
@@ -4394,11 +4395,11 @@ window._syncLowerBracket = function (t, opts) {
         uids: (lp1 ? x.team1Uids : x.team2Uids) || [],
         key: _sideKey(x, lp1 ? 'p1' : 'p2'),
         saldo: lp1 ? (s1 - s2) : (s2 - s1), score: lp1 ? s1 : s2,
-        seed: (lp1 ? x.p1Seed : x.p2Seed)
+        ord: xi, seed: (lp1 ? x.p1Seed : x.p2Seed)
       };
     }).filter(function (l) { return l.name && !_vazio(l.name); });
     losers.forEach(function (l) { if (l.seed == null) l.seed = 9999; });
-    losers.sort(function (a, b) { return (b.saldo - a.saldo) || (b.score - a.score) || (a.seed - b.seed); });
+    losers.sort(function (a, b) { return (b.saldo - a.saldo) || (b.score - a.score) || (a.ord - b.ord) || (a.seed - b.seed); });
     sup.forEach(function (g) {
       if (!g || !g.isExtra || g.winner || !Array.isArray(g.repFill) || !g.repFill.length) return;
       var keep = [];
