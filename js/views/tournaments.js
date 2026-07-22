@@ -168,8 +168,14 @@ window._duplaCard = function (t, p, draggable, ctx) {
       _enrollBadge + _wmL + _wmR +
       (function () {
         // ✕ (desfazer/excluir) + presença (Ausente/toggle/W.O.) juntos, à direita, na MESMA linha.
+        // v1.3.141 (dono): `margin-left:auto` mantém o grupo de ações COLADO NA DIREITA mesmo
+        // quando ele QUEBRA pra linha de baixo. Sem isso, o `justify-content:space-between` do
+        // _labelRow alinhava à ESQUERDA quando as ações eram o único item da linha nova — era o
+        // caso do card COM W.O. (não cabe ao lado de "Arraste para formar dupla"), que aparecia
+        // à esquerda enquanto o card sem W.O. ficava à direita. Ordem interna INTOCADA
+        // (✕ · palavra · toggle · W.O., com o W.O. mais à direita).
         var _actions = (desfazerBtn || _delBtnDupla || _presInline)
-          ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;" onclick="event.stopPropagation();">' + desfazerBtn + _delBtnDupla + _presInline + '</div>'
+          ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;" onclick="event.stopPropagation();">' + desfazerBtn + _delBtnDupla + _presInline + '</div>'
           : '';
         var _labelRow = _actions
           ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">' + (labelHtml || '<span></span>') + _actions + '</div>'
