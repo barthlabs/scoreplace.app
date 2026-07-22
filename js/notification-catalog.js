@@ -54,6 +54,9 @@ window.NOTIF_CATALOG = {
   'liga-sub-result':           { level: 'all',         icon: '🔁', color: 'var(--primary-color)' },
   // v2.4.41: mensagem de um inscrito/visitante pro organizador do torneio.
   'player_to_organizer':       { level: 'fundamental', icon: '💬', color: '#3b82f6' },
+  // v1.3.17: convite pro grupo oficial de WhatsApp do torneio/jogo — link direto.
+  // fundamental: todo inscrito precisa ver pra entrar no grupo de comunicações.
+  wa_group:                    { level: 'fundamental', icon: '💬', color: '#25D366' },
 
   // Organizer actions
   org_communication:           { level: 'important',   icon: '📣', color: '#f59e0b' },

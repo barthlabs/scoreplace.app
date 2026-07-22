@@ -69,6 +69,32 @@ ok(typeof W._applyRoundCloseToTournament === 'function', '_applyRoundCloseToTour
   ok(t.currentStage === 'swiss', 'NÃO transiciona currentStage aqui');
 })();
 
+// ── 2b. Suíço-2-FASES (classificatória do construtor de fases) no maxRounds → NÃO encerra:
+//    o avanço pra elim é do motor MULTIFASE (advanceMultiPhase), não o finish/transition
+//    legado. REPRODUZ O BUG: como _buildSwissClassifDraw produz p2Resolution=null, o ramo
+//    isSwissClassification é falso e caía em 'pureSwissFinish' (encerrava o torneio antes de
+//    avançar pra fase 1). Ver project_draw_canonization_cf_phase23_deferred.
+(function () {
+  const t = {
+    format: 'Eliminatórias Simples', swissRounds: 2, classifyFormat: 'swiss', currentStage: 'swiss',
+    p2Resolution: null, p2TargetCount: null, currentPhaseIndex: 0,
+    phases: [
+      { name: 'Classificatória', formatCode: 'liga', format: 'Suíço', rounds: 2, source: { type: 'enrollment' } },
+      { name: 'Elim', format: 'Eliminatórias Simples', source: { type: 'previous_phase', mapping: [{ dest: 'main', rankFrom: 1, rankTo: 8 }] } }
+    ],
+    participants: Array.from({ length: 12 }, (_, i) => ({ displayName: 'J' + i, name: 'J' + i, uid: 'u' + i })),
+    rounds: [
+      { round: 1, status: 'complete', matches: [] },
+      { round: 2, status: 'active', matches: [{ id: 'm', p1: 'J0', p2: 'J1', winner: 'J0' }] }
+    ],
+  };
+  const branch = W._applyRoundCloseToTournament(t, 1);
+  eq(branch, 'phaseComplete', 'suíço-2-fases no maxRounds → phaseComplete (NÃO pureSwissFinish)');
+  ok(t.status !== 'finished', 'NÃO encerra o torneio (avanço pra elim é do multifase)');
+  eq(t.currentPhaseIndex, 0, 'ainda na fase 0 (o Avançar é separado)');
+  eq(t.rounds[1].status, 'complete', 'rodada final marcada complete');
+})();
+
 // ── 3. Liga manual → ramo nextRound + fecha a rodada ─────────────────────────
 (function () {
   const t = {

@@ -73,8 +73,8 @@ window._openPlayerProfile = function(playerName, opts) {
     var fBtn = document.getElementById('ppo-friend-btn');
     if (fBtn) fBtn.innerHTML = friendBtnHtml;
 
-    // ── histórico compartilhado ──
-    var tournaments = window.AppStore && window.AppStore.tournaments || [];
+    // ── histórico compartilhado ── (exclui sandbox: stats do SB não vazam)
+    var tournaments = window._statsEligibleTournaments ? window._statsEligibleTournaments() : (window.AppStore && window.AppStore.tournaments || []);
     var shared = { asPartner:[], asOpponent:[] };
     var cuName  = cu && cu.displayName || '';
     var _nameIn = function(str, n) { return str && n && (str.toLowerCase() === n.toLowerCase() || str.toLowerCase().indexOf(' / ') !== -1 && str.toLowerCase().split(' / ').some(function(p){return p.trim()===n.toLowerCase().trim();})); };
@@ -351,7 +351,7 @@ window._resolvePlayerUid = function(playerName) {
         if (_eq(friends[i].displayName, playerName) && friends[i].uid) return friends[i].uid;
     }
     // Fallback: search through tournament participants for a uid match
-    var ts = (window.AppStore && Array.isArray(window.AppStore.tournaments)) ? window.AppStore.tournaments : [];
+    var ts = window._statsEligibleTournaments ? window._statsEligibleTournaments() : ((window.AppStore && Array.isArray(window.AppStore.tournaments)) ? window.AppStore.tournaments : []);
     for (var t = 0; t < ts.length; t++) {
         var ps = Array.isArray(ts[t].participants) ? ts[t].participants : [];
         for (var pi = 0; pi < ps.length; pi++) {
@@ -426,7 +426,7 @@ function _buildOrganizerAnalyticsForModal(playerName) {
     var viewingSelf = String(cu.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
     if (!viewingSelf) return '';
 
-    var tours = (window.AppStore && Array.isArray(window.AppStore.tournaments)) ? window.AppStore.tournaments : [];
+    var tours = window._statsEligibleTournaments ? window._statsEligibleTournaments() : ((window.AppStore && Array.isArray(window.AppStore.tournaments)) ? window.AppStore.tournaments : []);
     var myEmail = (cu.email || '').toLowerCase().trim();
     var myUid = cu.uid || '';
     var organizados = tours.filter(function(tr) {
@@ -535,7 +535,8 @@ function _buildOrganizerAnalyticsForModal(playerName) {
 window._showPlayerStats = function(playerName, currentTournamentId) {
     if (!playerName) return;
     var safeN = window._safeHtml(playerName);
-    var tournaments = window.AppStore.tournaments || [];
+    // Stats globais do jogador: exclui sandbox (resultados do SB não vazam).
+    var tournaments = window._statsEligibleTournaments ? window._statsEligibleTournaments() : (window.AppStore.tournaments || []);
     var stats = {
         tournamentsPlayed: 0,
         tournamentNames: [],

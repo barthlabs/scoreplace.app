@@ -833,7 +833,7 @@
     if (tb) {
       var myPts = playerNum === 1 ? tb.p1 : tb.p2;
       if (opts.html) {
-        out += '<sup style="font-size:0.55em;font-weight:600;">(' + myPts + ')</sup>';
+        out += '<sup style="font-size:0.75em;font-weight:700;">(' + myPts + ')</sup>';
       } else {
         out += '⁽' + _supDigits(myPts) + '⁾';
       }

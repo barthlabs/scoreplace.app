@@ -1,4 +1,71 @@
-window.SCOREPLACE_VERSION = '1.3';
+window.SCOREPLACE_VERSION = '1.4';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
+// O motor da CF já foi provado (drawInitial gera chave no roster real do SB), mas o
+// FLUXO DO CLIENT morre ANTES de chamar a CF em alguns casos e não dá pra ver o
+// runtime do navegador do dono. Cada etapa chama window._dtrace(stage) e um selo fixo
+// no canto mostra a ÚLTIMA etapa alcançada + a versão. Um print diz o passo exato onde
+// morre. Padrão "loud failure" (mesmo espírito do diagnóstico do painel v0.15.86).
+// Remover quando o bug do fluxo estiver fechado.
+window._drawTrace = [];
+window._dtrace = function (stage, extra) {
+  try {
+    var e = { stage: String(stage || ''), at: Date.now(), extra: (extra == null ? null : extra) };
+    window._drawTrace.push(e);
+    if (window._drawTrace.length > 60) window._drawTrace.shift();
+    // v1.3.135 (pedido do dono): o SELO visual só aparece em torneio SANDBOX. Fora do SB, o
+    // rastro segue em memória + Firestore (diagnóstico do dev) — só não pinta na tela do usuário.
+    if (typeof document !== 'undefined' && document.body) {
+      var _sbRoute = !!(window._isSandboxRoute && window._isSandboxRoute());
+      var b = document.getElementById('sp-draw-trace');
+      if (!_sbRoute) {
+        if (b) b.remove();
+      } else {
+        if (!b) {
+          b = document.createElement('div');
+          b.id = 'sp-draw-trace';
+          b.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:2147483647;background:rgba(0,0,0,0.88);color:#4 ade80;font:11px/1.35 ui-monospace,Menlo,monospace;padding:6px 9px;border-radius:7px;max-width:94vw;white-space:pre-wrap;pointer-events:auto;border:1px solid rgba(74,222,128,0.4);'.replace('#4 ade80', '#4ade80');
+          b.title = 'Rastro do sorteio (diagnóstico) — toque pra copiar';
+          b.addEventListener('click', function () {
+            try {
+              var txt = 'DRAW TRACE v' + window.SCOREPLACE_VERSION + '\n' + window._drawTrace.map(function (x) {
+                return x.stage + (x.extra ? ' ' + JSON.stringify(x.extra) : '');
+              }).join('\n');
+              if (navigator.clipboard) navigator.clipboard.writeText(txt);
+            } catch (_e) {}
+          });
+          document.body.appendChild(b);
+        }
+        var last = window._drawTrace.slice(-4).map(function (x) {
+          return '• ' + x.stage + (x.extra ? ' ' + JSON.stringify(x.extra).slice(0, 90) : '');
+        }).join('\n');
+        b.textContent = 'SORTEIO v' + window.SCOREPLACE_VERSION + '\n' + last;
+        var isErr = /THREW|err|fail|denied/i.test(String(stage));
+        b.style.color = isErr ? '#f87171' : '#4ade80';
+        b.style.borderColor = isErr ? 'rgba(248,113,113,0.6)' : 'rgba(74,222,128,0.4)';
+      }
+    }
+  } catch (_e) {}
+  // Persiste o rastro no Firestore (debugDrawLogs/{uid}) pro dev LER direto — sem print.
+  // Fire-and-forget; sobrescreve o doc do uid a cada evento com o rastro COMPLETO da sessão.
+  // Se a gravação FALHAR (ex.: permissão), o doc não aparece — isso por si só é diagnóstico
+  // (writes do usuário no torneio estariam falhando). Ver [[project_expand_mode_double_presence_dialog]].
+  try {
+    var _fb = window.firebase;
+    var _db = window.FirestoreDB && window.FirestoreDB.db;
+    var _u = _fb && _fb.auth && _fb.auth().currentUser;
+    if (_db && _u) {
+      _db.collection('debugDrawLogs').doc(_u.uid).set({
+        uid: _u.uid,
+        email: (_u.email || ''),
+        version: window.SCOREPLACE_VERSION,
+        updatedAt: new Date().toISOString(),
+        trace: window._drawTrace.map(function (x) { return x.stage + (x.extra ? ' ' + JSON.stringify(x.extra) : ''); })
+      }).catch(function () {});
+    }
+  } catch (_e3) {}
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
@@ -105,7 +172,14 @@ window._preloadUserProfiles = function (uids) {
         displayName: d.displayName || d.name || '',
         email: d.email || '',
         phone: d.phone || '',
-        photoURL: d.photoURL || ''
+        photoURL: d.photoURL || '',
+        // v1.3.39: gênero/skill/idade/categoria-padrão do PERFIL — pra o app resolver
+        // esses campos pelo uid (sorteio, categorias, badges) em vez do snapshot gravado
+        // no inscrito. Parte do sweep "gravar só uid; resolver o resto pelo uid".
+        gender: d.gender || '',
+        skillBySport: (d.skillBySport && typeof d.skillBySport === 'object') ? d.skillBySport : null,
+        birthDate: d.birthDate || '',
+        defaultCategory: d.defaultCategory || ''
       };
     }).catch(function () {}).then(function () { delete window._userProfilePending[uid]; });
     window._userProfilePending[uid] = pr;
@@ -124,6 +198,18 @@ window._nameForUid = function (uid) {
 };
 window._emailForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.email) || ''; };
 window._phoneForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.phone) || ''; };
+window._genderForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.gender) || ''; };
+window._birthForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.birthDate) || ''; };
+window._skillMapForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.skillBySport) || null; };
+window._defaultCatForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.defaultCategory) || ''; };
+// v1.3.39: resolvedores PERFIL-FIRST por participante — o app lê gênero/idade/skill/
+// categoria-padrão pelo UID (perfil), FALLBACK pro campo gravado só enquanto a migração
+// "gravar só uid" não termina. Swap 1:1 nos leitores: p.gender→_pGender(p), etc. Meta:
+// parar de depender do snapshot gravado no inscrito. Ver project_uid_identity_canon_locked.
+window._pGender = function (p) { if (!p || typeof p !== 'object') return ''; return (p.uid && window._genderForUid(p.uid)) || p.gender || ''; };
+window._pBirth = function (p) { if (!p || typeof p !== 'object') return ''; return (p.uid && window._birthForUid(p.uid)) || p.birthDate || ''; };
+window._pSkillMap = function (p) { if (!p || typeof p !== 'object') return null; return (p.uid && window._skillMapForUid(p.uid)) || (p.skillBySport && typeof p.skillBySport === 'object' ? p.skillBySport : null); };
+window._pDefaultCat = function (p) { if (!p || typeof p !== 'object') return ''; return (p.uid && window._defaultCatForUid(p.uid)) || p.defaultCategory || ''; };
 // v4.5.63: SEM fallback pra nome gravado. Quem tem uid → SÓ o nome vivo do perfil
 // (users/{uid}); vazio até o perfil carregar (a UI mostra "…" via CSS `[data-uid-name]:empty`
 // e re-renderiza quando chega — os perfis são PRÉ-REQUISITO do render, carregados junto
@@ -154,6 +240,35 @@ window._hydrateUidNames = function (root) {
       var nm = window._nameForUid(u);
       if (nm) e.textContent = nm;
     });
+    // v1.3.45: atualiza o LABEL DE ARRASTE (data-participant-name) dos cards de inscrito com o
+    // nome VIVO resolvido por uid. O CSS do modo compacto (body.sp-drag-compact
+    // .participant-card::before) lê esse atributo — se ficasse só o valor do render, mostraria
+    // email/fallback congelado quando o perfil resolve async (regressão no arraste da dupla
+    // manual). Reconstrói pelos spans [data-uid-name] JÁ hidratados (dupla = "A / B"); guest
+    // sem uid (sem span) mantém o nome gravado. Identidade = uid, nome sempre do perfil vivo.
+    try {
+      var _cards = root.querySelectorAll('.participant-card[data-participant-name]');
+      var _anyRenamed = false;
+      _cards.forEach(function (card) {
+        var _spans = card.querySelectorAll('[data-uid-name]');
+        if (!_spans.length) return;
+        var _names = [];
+        _spans.forEach(function (s) { var t = (s.textContent || '').trim(); if (t) _names.push(t); });
+        if (!_names.length) return;
+        var _joined = _names.join(' / ');
+        card.setAttribute('data-participant-name', _joined);
+        // v1.3.48: a CHAVE DE ORDENAÇÃO/BUSCA (data-part-name) também vem do nome VIVO por uid.
+        // O inscrito grava só uid (nome stripado) → no render `pName` cai pro EMAIL e a lista
+        // ordenava/buscava por email (Angelica Reck sob "m" de mangelica@...). Re-hidrata pro
+        // nome real (minúsculo) quando o perfil chega. Ver [[project_uid_identity_canon_locked]].
+        var _low = _joined.toLowerCase();
+        if (card.getAttribute('data-part-name') !== _low) { card.setAttribute('data-part-name', _low); _anyRenamed = true; }
+      });
+      // Nome(s) mudaram → reordena a lista (a ordenação alfabética usa data-part-name). Só
+      // dispara se houve mudança real → não reordena à toa. _partApplyFilter é no-op fora da
+      // tela de inscritos (sem [data-part-card]).
+      if (_anyRenamed && typeof window._partApplyFilter === 'function') { try { window._partApplyFilter(); } catch (_eS) {} }
+    } catch (_e) {}
   });
 };
 
@@ -810,6 +925,189 @@ window._isTestIdentity = function () {
   } catch (e) { return false; }
 };
 
+// ─── Sandbox (SB) do desenvolvedor ──────────────────────────────────────────
+// Torneio-espelho PRIVADO que roda EXATAMENTE o mesmo código do original (as mesmas
+// Cloud Functions: drawRound, integrateLateEntries, enroll/deenroll, autoDraw) — é o
+// único jeito de testar de verdade. As ÚNICAS diferenças: (1) notificações mudas,
+// (2) stats/resultados NÃO vazam pra lugar nenhum (matchHistory/troféus/pills),
+// (3) invisível pra não-dev. `sandboxOf` aponta pro original; no original, `sandboxId`
+// aponta de volta. Ver memória project_sandbox_tournament.
+window._isSandboxTournament = function (t) { return !!(t && t.isSandbox === true); };
+// A ROTA atual está sobre um torneio SANDBOX? (detalhe/bracket/chamada/etc.). Fonte ÚNICA
+// usada pelo banner 🧪 SANDBOX e pelo selo de diagnóstico do sorteio (_dtrace) — os dois só
+// aparecem em SB. O SB roda em produção, então o sinal é pela ROTA, nunca por hostname.
+window._isSandboxRoute = function () {
+  try {
+    var h = (window.location.hash || '').replace(/^#/, '');
+    var m = h.match(/^(tournaments|bracket|pre-draw|participants|rules|analise|categorias)\/([^/?#]+)/);
+    if (!m) return false;
+    var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(m[2]) : null;
+    return !!(t && t.isSandbox === true);
+  } catch (e) { return false; }
+};
+// Notificações silenciadas? Sandbox OU killswitch explícito por torneio (t.notificationsMuted).
+window._tournamentNotificationsMuted = function (t) {
+  return !!(t && (t.notificationsMuted === true || t.isSandbox === true));
+};
+// Lista de torneios elegível pra STATS GLOBAIS (perfil, troféus, pills, confrontos):
+// exclui os sandboxes — resultados do SB não vazam pra agregação nenhuma. Recebe a
+// lista base (default = AppStore.tournaments).
+window._statsEligibleTournaments = function (list) {
+  var base = Array.isArray(list) ? list : ((window.AppStore && window.AppStore.tournaments) || []);
+  return base.filter(function (t) { return !(t && t.isSandbox === true); });
+};
+// Acha o SB de um torneio original (por sandboxOf) na lista local. null se não há.
+// (O link mora no SB, não no original — o dev pode não ter permissão de escrever o original.)
+window._findSandboxOf = function (origId) {
+  var list = (window.AppStore && window.AppStore.tournaments) || [];
+  for (var i = 0; i < list.length; i++) {
+    var t = list[i];
+    if (t && t.isSandbox === true && String(t.sandboxOf) === String(origId)) return t;
+  }
+  return null;
+};
+// Coleta os inscritos REAIS (pessoas de verdade) de um torneio: individual com uid, ou
+// dupla com (p1Uid|p1Name)&&(p2Uid|p2Name). Varre participants + waitlist + standby, dedup
+// por uid/par. DESCARTA placeholders sem uid (adições de teste "fantasma" — foi de onde
+// veio o "27º" num torneio de 26). Ver project_sandbox_tournament, project_count_people_not_entries.
+window._sbCollectRealEnrollees = function (t) {
+  var out = [], seen = {};
+  if (!t) return out;
+  [t.participants, t.waitlist, t.standbyParticipants].forEach(function (arr) {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function (p) {
+      if (!p || typeof p !== 'object') return;
+      var isPair = (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name);
+      var isIndiv = !!p.uid;
+      if (!isPair && !isIndiv) return; // sem uid e sem par = placeholder de teste → fora
+      var key = isPair
+        ? ('pair:' + [String(p.p1Uid || p.p1Name), String(p.p2Uid || p.p2Name)].sort().join('|').toLowerCase())
+        : ('u:' + String(p.uid).toLowerCase());
+      if (seen[key]) return; seen[key] = 1;
+      out.push(p);
+    });
+  });
+  return out;
+};
+
+// Reconstrói o roster do SB como INSCRIÇÃO LIMPA: cada inscrito reduzido só aos campos de
+// inscrição (identidade + perfil + número de inscrição), SEM presença/W.O./jogo/sorteio, e
+// ORDENADO por enrollSeq (a ORDEM REAL em que se inscreveram no original). enrollSeq de
+// origem PRESERVADO (o número exibido é o rank denso via _buildEnrollOrderMap).
+//
+// `isTeamEnroll` = o torneio inscreve como DUPLA FIXA (enrollmentMode teams/time/misto —
+// ex: Casais). Se SIM, as duplas são a UNIDADE de inscrição → preserva os pares. Se NÃO
+// (inscrição individual + duplas formadas por SORTEIO — ex: Duplas Mistas), QUALQUER dupla
+// formada é artefato de sorteio/teste → DESMONTA de volta pras pessoas (o dono: "não tinha
+// nenhuma equipe no original, tudo foi sorteado, por que mantém 2 equipes?"). Cada membro
+// vira inscrito individual com o SEU uid/nome/enrollSeq (p1Seq/p2Seq). Ver
+// project_dupla_entry_structural_not_slash, project_enrollmode_teams_vs_time_drift.
+window._sbRebuildCleanRoster = function (list, isTeamEnroll) {
+  var ALLOW_I = ['uid', 'name', 'displayName', 'email', 'photoURL', 'gender', 'birthDate',
+    'skillBySport', 'categories', 'category', 'defaultCategory', 'categorySource',
+    'wasUncategorized', 'selfEnrolled', 'addedAt', 'enrollSeq'];
+  var ALLOW_P = ALLOW_I.concat(['p1Uid', 'p1Name', 'p1Email', 'p1Photo', 'p1Seq', 'p1Gender', 'p1BirthDate',
+    'p2Uid', 'p2Name', 'p2Email', 'p2Photo', 'p2Seq', 'p2Gender', 'p2BirthDate']);
+  var isPair = function (p) { return !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)); };
+  var member = function (p, n) {
+    var g = function (suf) { return p['p' + n + suf]; };
+    var o = { uid: g('Uid'), name: g('Name'), displayName: g('Name'), email: g('Email'),
+      photoURL: g('Photo'), gender: g('Gender'), birthDate: g('BirthDate'), enrollSeq: g('Seq') };
+    Object.keys(o).forEach(function (k) { if (o[k] === undefined || o[k] === null) delete o[k]; });
+    return o;
+  };
+  // 1) inscrição individual desmonta as duplas formadas em pessoas
+  var expanded = [];
+  (list || []).forEach(function (p) {
+    if (isPair(p) && !isTeamEnroll) { expanded.push(member(p, 1)); expanded.push(member(p, 2)); }
+    else expanded.push(p);
+  });
+  // 2) dedup por uid (indiv) / par
+  var seen = {}, dedup = [];
+  expanded.forEach(function (p) {
+    var key = isPair(p)
+      ? ('pair:' + [String(p.p1Uid || p.p1Name), String(p.p2Uid || p.p2Name)].sort().join('|').toLowerCase())
+      : (p.uid ? 'u:' + String(p.uid).toLowerCase() : (p.name ? 'n:' + String(p.name).trim().toLowerCase() : null));
+    if (!key) { dedup.push(p); return; }
+    if (seen[key]) return; seen[key] = 1; dedup.push(p);
+  });
+  // 3) ordena por enrollSeq + limpa (whitelist)
+  var seqOf = function (p) {
+    var s = (p.enrollSeq != null) ? p.enrollSeq : (p.p1Seq != null ? p.p1Seq : (p.p2Seq != null ? p.p2Seq : null));
+    return (s == null || isNaN(s)) ? null : Number(s);
+  };
+  return dedup.map(function (p, i) { return { p: p, i: i, seq: seqOf(p) }; })
+    .sort(function (a, b) {
+      var sa = a.seq == null ? Infinity : a.seq, sb = b.seq == null ? Infinity : b.seq;
+      return sa !== sb ? sa - sb : a.i - b.i;
+    })
+    .map(function (o) {
+      var allow = isPair(o.p) ? ALLOW_P : ALLOW_I, c = {};
+      allow.forEach(function (k) { if (o.p[k] !== undefined) c[k] = o.p[k]; });
+      return c;
+    });
+};
+
+// Re-sincroniza o SB com o original no "Resetar": re-clona a CONFIG do original AGORA
+// e reconstrói o ROSTER como inscrição limpa dos inscritos REAIS, na ordem de enrollSeq —
+// PRESERVANDO a identidade/isolamento do SB. Muta `ft` no lugar (chamado dentro de um
+// AppStore.mutate; o persist é `set`, então dropar chaves realmente remove). O sorteio/
+// presença/W.O. re-clonados são limpos por _clearTournamentDraw logo depois.
+//
+// ROSTER FIEL (a razão do SB existir — senão "não simula porra nenhuma do que acontece na
+// produção"): puxa os inscritos ATUAIS do original quando ele está VIVO (não encerrado) —
+// é o modelo "torneio futuro com mais inscritos entra no reset". Se o original está
+// ENCERRADO/degradado (participants[] virou slots de chave sem uid), mantém os inscritos
+// reais que o SB já capturou — NUNCA perde ninguém. Ver project_sandbox_tournament.
+window._resyncSandboxRoster = function (ft) {
+  try {
+    if (!ft || ft.isSandbox !== true || !ft.sandboxOf) return;
+    var orig = (typeof window._findTournamentById === 'function') ? window._findTournamentById(ft.sandboxOf) : null;
+    if (!orig) return;
+
+    // Captura os inscritos REAIS que o SB já tem — ANTES do wipe. Rede de segurança pro
+    // original degradado (encerrado), cujos 26 limpos só sobrevivem aqui.
+    var sbReal = window._sbCollectRealEnrollees(ft);
+
+    var keep = {
+      id: ft.id, name: ft.name, isSandbox: true, sandboxOf: ft.sandboxOf,
+      notificationsMuted: true, isPublic: false,
+      sandboxOwnerUid: ft.sandboxOwnerUid, creatorUid: ft.creatorUid,
+      organizerEmail: ft.organizerEmail, organizerName: ft.organizerName,
+      createdAt: ft.createdAt
+    };
+    var fresh;
+    try { fresh = JSON.parse(JSON.stringify(orig)); } catch (e) { return; }
+    Object.keys(ft).forEach(function (k) { delete ft[k]; });        // limpa o estado de teste
+    Object.keys(fresh).forEach(function (k) { ft[k] = fresh[k]; }); // re-clona a config do original
+    Object.keys(keep).forEach(function (k) { if (keep[k] !== undefined) ft[k] = keep[k]; });
+    delete ft.sandboxId;
+    ft.sandboxSyncedAt = Date.now();
+
+    // Roster fiel: original vivo → puxa o dele; encerrado/degradado → mantém o do SB.
+    var origReal = window._sbCollectRealEnrollees(fresh);
+    var useOrig = (orig.status !== 'finished') && origReal.length > 0;
+    var chosen = useOrig ? origReal : (sbReal.length ? sbReal : origReal);
+    // enrollMode do original decide se DUPLA é unidade de inscrição (Casais=teams → mantém)
+    // ou artefato de sorteio/teste (Duplas Mistas=individual → desmonta pra pessoas).
+    var isTeamEnroll = (typeof window._isTeamEnrollMode === 'function') && window._isTeamEnrollMode(ft.enrollmentMode);
+    ft.participants = window._sbRebuildCleanRoster(chosen, isTeamEnroll);
+    ft.waitlist = [];
+    ft.standbyParticipants = [];
+    ft.monarchWaitlist = {};
+    if (typeof window._ensureEnrollSeqs === 'function') window._ensureEnrollSeqs(ft);
+
+    // memberUids = donos do SB + uids do roster (recomputado do zero, sem herdar o do original).
+    var mu = {};
+    if (ft.sandboxOwnerUid) mu[ft.sandboxOwnerUid] = 1;
+    if (ft.creatorUid) mu[ft.creatorUid] = 1;
+    ft.participants.forEach(function (p) {
+      [p.uid, p.p1Uid, p.p2Uid].forEach(function (u) { if (u) mu[u] = 1; });
+    });
+    ft.memberUids = Object.keys(mu);
+  } catch (e) { if (window._error) window._error('resyncSandboxRoster', e); }
+};
+
 // Flag ligada pro usuário atual? Use em qualquer gate:
 //   if (window._flag('safe-area')) { ...novo caminho... } else { ...atual... }
 window._flag = function (name) {
@@ -849,6 +1147,47 @@ window._flag = function (name) {
     };
     if (document.body) inject();
     else document.addEventListener('DOMContentLoaded', inject);
+  } catch (e) {}
+})();
+
+// ─── Tarja SANDBOX (como era o staging, mas por TORNEIO) ─────────────────────
+// Barra VERMELHA fixa de fora a fora no rodapé, sempre visível ENQUANTO se está
+// atuando num torneio sandbox (detalhe/bracket/chamada/etc.). O SB roda EM
+// PRODUÇÃO — então o sinal não pode ser por hostname (como o staging morto), tem
+// que ser pela rota: se o torneio em tela é isSandbox, mostra. Some fora do SB.
+// pointer-events:none = não bloqueia clique. Ver project_sandbox_tournament.
+(function () {
+  try {
+    var BANNER_ID = 'sp-sandbox-banner';
+    var ensure = function () {
+      var el = document.getElementById(BANNER_ID);
+      if (!el) {
+        el = document.createElement('div');
+        el.id = BANNER_ID;
+        el.textContent = '🧪 SANDBOX — TORNEIO DE TESTE · não afeta a produção';
+        el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;width:100%;box-sizing:border-box;' +
+          'z-index:2147483646;background:#b91c1c;color:#fff;text-align:center;' +
+          'font:800 12px/1.25 -apple-system,BlinkMacSystemFont,sans-serif;letter-spacing:1.2px;' +
+          'padding:6px 10px;pointer-events:none;box-shadow:0 -2px 10px rgba(0,0,0,0.45);' +
+          'display:none;';
+        (document.body || document.documentElement).appendChild(el);
+      }
+      return el;
+    };
+    // Fonte ÚNICA: window._isSandboxRoute (mesma usada pelo selo de diagnóstico _dtrace).
+    var onSandboxRoute = function () {
+      return !!(window._isSandboxRoute && window._isSandboxRoute());
+    };
+    var refresh = function () { try { ensure().style.display = onSandboxRoute() ? 'block' : 'none'; } catch (e) {} };
+    window._updateSandboxBanner = refresh;
+    window.addEventListener('hashchange', function () {
+      refresh();
+      // o torneio pode carregar async (Firestore) → re-checa algumas vezes após a troca de rota
+      var n = 0, iv = setInterval(function () { refresh(); if (++n >= 6) clearInterval(iv); }, 500);
+    });
+    if (document.body) refresh(); else document.addEventListener('DOMContentLoaded', refresh);
+    // rede de segurança barata: cobre load async do roster e o resync do SB
+    setInterval(refresh, 1500);
   } catch (e) {}
 })();
 
@@ -1082,9 +1421,18 @@ window._devWhatsAppBtnHtml = function (opts) {
     var p2 = ('serviceWorker' in navigator) ? navigator.serviceWorker.getRegistrations().then(function(regs) {
       return Promise.all(regs.map(function(r) { return r.unregister(); }));
     }) : Promise.resolve();
+    // v1.3.64: CRÍTICO — o GitHub Pages serve index.html com `cache-control: max-age=600`
+    // (10min, e NÃO dá pra mudar header no Pages). Após unregister do SW, `location.reload()`
+    // é SOFT → serve o index.html do cache HTTP (cache-busters ?v= VELHOS → JS velho → trava
+    // na versão anterior; só hard-refresh resolvia). Fix: revalidar o documento com
+    // `cache:'reload'` ANTES do reload — isso baixa o HTML fresco E atualiza a entrada do
+    // cache HTTP, então o reload subsequente já pega os cache-busters novos. Funciona pra
+    // TODO usuário (não depende do SW novo). Ver [[project_pwa_auto_update]].
+    var p3 = Promise.resolve();
+    try { p3 = fetch(window.location.pathname, { cache: 'reload' }).catch(function() {}); } catch (e) {}
     // Marca o guard ANTES do reload pra o handler de controllerchange (index.html)
     // não disparar um segundo reload durante o churn de unregister/re-register.
-    Promise.all([p1, p2]).then(function() { window._swReloading = true; window.location.reload(); });
+    Promise.all([p1, p2, p3]).then(function() { window._swReloading = true; window.location.reload(); });
   };
 
   // Busca store.js sem cache e compara a versão. Throttle de 60s salvo force.
@@ -1225,6 +1573,74 @@ setInterval(function() {
 // ─── Soft refresh: re-render current view without disrupting UX ────────────
 // Called by real-time Firestore listener when remote data changes.
 // Preserves: scroll position, open modals, focus state, form inputs.
+// v1.3.92: assinatura da tela de INSCRITOS (#participants) SEM updatedAt. O updatedAt muda a cada
+// write (e o timestamp do SERVIDOR ≠ do cliente), então usá-lo no gate fazia o eco do snapshot
+// SEMPRE diferir → re-render → PULINHO, mesmo o toggle já tendo atualizado o card in-place. Aqui a
+// assinatura é o CONTEÚDO que a tela mostra: presença (chaves ordenadas, pega até troca sem mudar o
+// total), elenco, espera, status. Após o toggle in-place, participants.js seta window._pdetailSig =
+// _participantsViewSig(t) → o eco vê "igual" e NÃO re-renderiza. Fonte única (gate + pós-toggle).
+window._participantsViewSig = function (t) {
+  if (!t) return '';
+  var _k = function (m) { return m ? Object.keys(m).sort().join(',') : ''; };
+  return String(t.id) + '|' +
+    (Array.isArray(t.matches) ? t.matches.length : 0) + '|' +
+    (Array.isArray(t.participants) ? t.participants.length : 0) + '|' +
+    (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.length : 0) + '|' +
+    (Array.isArray(t.waitlist) ? t.waitlist.length : 0) + '|' +
+    _k(t.checkedIn) + '|' + _k(t.absent) + '|' + _k(t.checkedInConfirmed) + '|' + (t.status || '');
+};
+// v1.3.96 (dono, "tela continua pulando ao colocar presenças"): assinatura do DETALHE do torneio
+// (#tournaments/:id — que renderiza o bracket + a chamada de duplas). MESMO problema do #participants:
+// o gate usava `updatedAt`, e o updatedAt LOCAL (commitTournamentTx) ≠ o do SERVIDOR que volta no
+// eco → o snapshot do próprio write de presença SEMPRE diferia → re-render → PULO, mesmo o card já
+// tendo sido atualizado in-place. A chamada de DUPLAS vive nesta view (_duplaCard em tournaments.js),
+// então o toggle de dupla caía exatamente nesse buraco. Aqui a assinatura é o CONTEÚDO que a tela
+// mostra e que muda por eco: presença (chaves ordenadas), elenco/espera, fase/status/início, e o
+// CONTEÚDO dos jogos (vencedor/placar/adversário — pra resultado lançado / "a definir" preenchido
+// AINDA re-renderizar). Determinística → o pós-toggle in-place adianta window._tdetailSig e o eco vê
+// "igual". Fonte única (gate + pós-toggle). Espelha _participantsViewSig.
+window._tournamentDetailSig = function (t) {
+  if (!t) return '';
+  var _k = function (m) { return m ? Object.keys(m).sort().join(',') : ''; };
+  var _all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t)
+    : (Array.isArray(t.matches) ? t.matches : []);
+  var _mc = _all.map(function (m) {
+    if (!m) return '';
+    return (m.id || '') + ':' + (m.winner || '') + ':' +
+      (m.score1 != null ? m.score1 : '') + '-' + (m.score2 != null ? m.score2 : '') + ':' +
+      (m.p1 || '') + '/' + (m.p2 || '');
+  }).join(',');
+  // v1.3.97: inclui o lateEnrollment EFETIVO (fase corrente sobrepõe top-level) — o toggle de
+  // "aceitar entradas tardias" muda o painel (lista ↔ pareamento) e o próprio estado do toggle, então
+  // flipá-lo TEM que re-renderizar o detalhe. Sem isto o _softRefreshView pularia (sig igual).
+  var _ph = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
+  var _le = (_ph && _ph.lateEnrollment) || t.lateEnrollment || '';
+  return String(t.id) + '|' + (t.status || '') + '|' +
+    (Array.isArray(t.participants) ? t.participants.length : 0) + '|' +
+    (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.length : 0) + '|' +
+    (Array.isArray(t.waitlist) ? t.waitlist.length : 0) + '|' +
+    (t.currentStage || '') + '|' + (t.currentPhaseIndex || 0) + '|' + (t.tournamentStarted ? 1 : 0) + '|' +
+    _le + '|' +
+    _k(t.checkedIn) + '|' + _k(t.absent) + '|' + _k(t.checkedInConfirmed) + '|' +
+    _all.length + '|' + _mc;
+};
+// v1.3.93 (dono, "continua sorteando entre todos — sem gambiarra"): as DECISÕES do pré-sorteio
+// (scope presentes/todos, sem-dupla, pow2, flexibilizar, resto) vivem num MAPA POR TID — NÃO no
+// objeto do torneio. Por quê: o objeto é TROCADO pelo onSnapshot a CADA write (o persist do move
+// da chamada dispara um snapshot → AppStore.tournaments recebe um objeto NOVO sem `_drawDecisions`)
+// → a decisão SUMIA antes de chegar na CF, e o sorteio saía "entre todos". No mapa por tId a decisão
+// SOBREVIVE a qualquer troca de objeto. Limpo no reset/cancel/commit do sorteio. Fonte ÚNICA.
+window._drawDecisionsByTid = window._drawDecisionsByTid || {};
+window._setDrawDecision = function (tId, patch) {
+  var k = String(tId);
+  window._drawDecisionsByTid[k] = Object.assign({}, window._drawDecisionsByTid[k], patch || {});
+  return window._drawDecisionsByTid[k];
+};
+window._getDrawDecisions = function (tId) {
+  var d = window._drawDecisionsByTid[String(tId)];
+  return (d && Object.keys(d).length) ? d : null;
+};
+window._clearDrawDecisions = function (tId) { try { delete window._drawDecisionsByTid[String(tId)]; } catch (e) {} };
 window._softRefreshView = function() {
   // 0. If bracket just re-rendered locally, skip to avoid double-render + scroll jump
   if (window._suppressSoftRefresh) return;
@@ -1266,9 +1682,12 @@ window._softRefreshView = function() {
   // v3.1.40: o DETALHE do torneio (#tournaments/:id) só re-renderiza quando o torneio
   // ATUAL muda de verdade. Antes, cada snapshot do boot (cache→servidor, discovery,
   // query por email) re-pintava o detalhe inteiro via initRouter → a foto do local
-  // "piscava várias vezes". Gate por assinatura (updatedAt + matches + inscritos + status):
-  // se nada mudou, não re-renderiza. A 1ª pintura vem do router (não passa por aqui), e
-  // navegar pra outro torneio muda o id → sig diferente → re-renderiza normalmente.
+  // "piscava várias vezes". A 1ª pintura vem do router (não passa por aqui), e navegar
+  // pra outro torneio muda o id → sig diferente → re-renderiza normalmente.
+  // v1.3.96: a assinatura era `updatedAt`-based → o eco do próprio write de presença
+  // SEMPRE diferia (updatedAt local ≠ servidor) → re-render → PULO ao marcar presença de
+  // dupla (a chamada de duplas vive nesta view). Agora usa _tournamentDetailSig (conteúdo
+  // determinístico: presença + jogos + fase), adiantada no toggle in-place → o eco vê igual.
   if (_currentView === 'tournaments') {
     try {
       var _tid = (window.location.hash || '').split('/')[1];
@@ -1276,11 +1695,30 @@ window._softRefreshView = function() {
         var _pool = ((window.AppStore && window.AppStore.tournaments) || []).concat((window.AppStore && window.AppStore.publicDiscovery) || []);
         var _tdetail = _pool.find(function(x){ return x && String(x.id) === String(_tid); });
         if (_tdetail) {
-          var _tsig = String(_tdetail.id) + ':' + (_tdetail.updatedAt || '') + ':' +
-            (Array.isArray(_tdetail.matches) ? _tdetail.matches.length : 0) + ':' +
-            (Array.isArray(_tdetail.participants) ? _tdetail.participants.length : 0) + ':' + (_tdetail.status || '');
-          if (_tsig === window._tdetailSig) return; // nada mudou → sem re-render (sem pisca)
+          var _tsig = window._tournamentDetailSig(_tdetail);
+          if (_tsig === window._tdetailSig) return; // nada relevante mudou → sem re-render (sem pulinho)
           window._tdetailSig = _tsig;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // v1.3.81: a tela de INSCRITOS (#participants/:id) NÃO tinha gate de assinatura → re-renderizava
+  // a CADA snapshot do Firestore (eco do próprio auto-save de presença, presença de outro device,
+  // poller/widget) mesmo sem nada relevante mudar → "pulinho sem clicar em nada" (dono, SB Casais).
+  // Gate por assinatura incluindo PRESENÇA (checkedIn/absent) + espera: só re-renderiza quando algo
+  // que a tela mostra muda de verdade. A ação PRÓPRIA do usuário já passa por _suppressSoftRefresh
+  // (retorna lá em cima), então este gate não atrapalha o toggle local — só mata o eco espúrio.
+  if (_currentView === 'participants') {
+    try {
+      var _pid = (window.location.hash || '').split('/')[1];
+      if (_pid) {
+        var _ppool = ((window.AppStore && window.AppStore.tournaments) || []).concat((window.AppStore && window.AppStore.publicDiscovery) || []);
+        var _pt = _ppool.find(function(x){ return x && String(x.id) === String(_pid); });
+        if (_pt) {
+          var _psig = window._participantsViewSig(_pt);
+          if (_psig === window._pdetailSig) return; // nada relevante mudou → sem re-render (sem pulinho)
+          window._pdetailSig = _psig;
         }
       }
     } catch (e) {}
@@ -1308,6 +1746,16 @@ window._softRefreshView = function() {
                   document.getElementById('vagas-draw-panel') ||
                   document.getElementById('removal-subchoice-panel') ||
                   document.getElementById('incomplete-teams-panel') ||
+                  // v1.3.86: DIÁLOGOS DO SORTEIO que faltavam na safe-list. O caminho "só entre os
+                  // presentes" PERSISTE o move de ausentes→espera (AppStore.mutate) → o onSnapshot
+                  // ecoa → _softRefreshView → initRouter → varria o painel de SEM-DUPLA que acabou
+                  // de abrir ("piscou uma tela e sorteou sem perguntar"). O caminho "todos" não
+                  // persiste, então não varria → fluxo INCONSISTENTE (dono: "cada hora é diferente").
+                  // Mesma classe da v0.15.89/v1.3.43. Ver [[project_overlay_softrefresh_detection]].
+                  document.getElementById('solo-resolution-panel') ||
+                  document.getElementById('solo-manual-pair-panel') ||
+                  document.getElementById('reopen-panel') ||
+                  document.getElementById('p2-resolution-panel') ||
                   document.getElementById('flyer-print-overlay') ||
                   // v1.1.18: busca/import do letzplay (bolinha + barra). A busca do
                   // organizador dura MINUTOS; sem isto, um snapshot do Firestore no meio
@@ -1337,7 +1785,28 @@ window._softRefreshView = function() {
                   // modal antes da pessoa escolher → "fica processando e não
                   // inscreve". Mesma classe de bug da v0.15.89/v1.0.62/casual overlay.
                   document.querySelector('[id^="modal-category-enroll-"]') ||
-                  document.getElementById('modal-birthdate-enroll');
+                  document.getElementById('modal-birthdate-enroll') ||
+                  // v1.3.43: DIÁLOGOS DO FLUXO DE SORTEIO. O log (debugDrawLogs) provou o bug:
+                  // trace parava em `genderDialog:shown` e o dono via "o diálogo equilibrado não
+                  // apareceu" — o appendChild rodava, mas o onSnapshot da gravação da chamada de
+                  // presença disparava _softRefreshView → initRouter → _dismissAllOverlays e varria
+                  // o diálogo ANTES de aparecer. Mesma classe da v0.15.89 (painel de resolução).
+                  // Sem estes, o sorteio morre no diálogo de gênero/presença e nunca chama a CF.
+                  document.getElementById('gender-draw-overlay') ||
+                  document.getElementById('presence-draw-choice') ||
+                  document.getElementById('absentee-resolution-dialog') ||
+                  document.getElementById('final-review-panel') ||
+                  // v1.3.143 (dono: "em momentos do sorteio volta pra tela de detalhes mostrando os
+                  // cards cedo demais — em 2 momentos"): a TELA DE PROCESSAMENTO GLOBAL ("🎾
+                  // Sorteando…", _showLoading) faltava na safe-list. O próprio sorteio ESCREVE no doc
+                  // antes de montar a chave (salvar decisões; restaurar o roster original antes de
+                  // despachar pra CF) → cada escrita ECOA um snapshot → _softRefreshView → initRouter
+                  // → re-render do DETALHE (cards de inscritos) POR BAIXO do loader. Dava a impressão
+                  // de "voltou sozinho / não funcionou", 2× por sorteio — exatamente os 2 momentos.
+                  // Regra geral: enquanto houver tela de processamento bloqueante, NADA re-renderiza
+                  // por baixo; o refresh fica adiado (retry 500ms) e roda quando o loader sai.
+                  // Mesma classe da v0.15.89 / v1.3.43 / v1.3.86. Ver [[project_overlay_softrefresh_detection]].
+                  document.getElementById('sp-global-loading');
   var active = document.activeElement;
   var isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT' || active.isContentEditable);
   // v2.8.51: NÃO re-renderiza durante um arraste em andamento (body.sp-drag-compact).
@@ -1449,6 +1918,81 @@ window._softRefreshView = function() {
     if (_vcSoft) _vcSoft.style.minHeight = _vcSoftMinH;
     window._isSoftRefresh = false;
   });
+};
+
+// ─── Camada de PRESENÇA PENDENTE (v1.3.82) ──────────────────────────────────
+// O listener faz `store.tournaments = [docs frescos]` a cada snapshot (substitui o objeto
+// inteiro). Isso JOGA FORA a presença otimista que o organizador acabou de marcar quando um
+// snapshot STALE (pré-write, o próprio eco ou de outro device) chega antes do write landar →
+// "clica, nada acontece, aparece, apaga" (dono, SB Casais). Solução: guardar a INTENÇÃO por
+// jogador (present/absent/none) num mapa que SOBREVIVE à troca do objeto, e reaplicá-la sobre o
+// doc fresco até ele confirmar (o fresco já reflete a intenção) ou expirar (~15s). Por-jogador
+// (não o mapa inteiro) → não reverte presença que OUTRO organizador marcou. Caminho único: vale
+// pra individual, dupla, autopresença e W.O. — todos passam por aqui na reconciliação.
+window._pendingPresence = window._pendingPresence || {};
+// state: 'present' | 'absent' | 'none'
+window._stampPresenceIntent = function (tId, who, state) {
+  try {
+    if (!tId || who == null) return;
+    var m = window._pendingPresence[String(tId)] = window._pendingPresence[String(tId)] || {};
+    var k = (who && typeof who === 'object' && who.uid) ? ('uid:' + who.uid) : ('nm:' + String(who));
+    m[k] = { who: who, state: state, at: Date.now() };
+  } catch (_e) {}
+};
+// ─── Eco de CF NUNCA regride presença (v1.3.145) ────────────────────────────────────
+// Dono: "continua diminuindo os presentes depois de 24 presenças". Torneio sorteado "só entre os
+// presentes" manda todo ausente pra ESPERA; marcar presença de alguém da espera dispara a CF
+// integrateLateEntries (por design — a pessoa entra na chave). A CF devolve o DOC INTEIRO e o
+// cliente ESPELHA. Com dezenas de marcações, uma resposta cuja LEITURA no servidor aconteceu ANTES
+// das últimas marcações chega DEPOIS e sobrescreve `checkedIn` → o contador REGRIDE.
+// A camada de INTENÇÃO (_reapplyPendingPresence) não cobre: ela expira (~15s) e DESCARTA a intenção
+// assim que qualquer doc a reflete — um doc mais velho chegando depois apaga sem rede.
+// REGRA: no eco de CF, presença é UNIÃO — o que existe LOCALMENTE e falta no doc é PRESERVADO.
+// Não ressuscita quem o organizador desmarcou (desmarcar tira a chave do mapa LOCAL também, então
+// não há o que preservar). Remoção legítima do servidor continua chegando pelo LISTENER do
+// Firestore (fonte de verdade), que não passa por aqui. Ver [[project_concurrency_safe_saves]].
+window._mergePresenceNoRegress = function (prevT, freshT) {
+  var restored = 0;
+  try {
+    if (!prevT || !freshT) return 0;
+    ['checkedIn', 'absent', 'checkedInConfirmed'].forEach(function (k) {
+      var prev = prevT[k];
+      if (!prev || typeof prev !== 'object') return;
+      var fresh = freshT[k] = (freshT[k] && typeof freshT[k] === 'object') ? freshT[k] : {};
+      Object.keys(prev).forEach(function (key) {
+        if (fresh[key] == null) { fresh[key] = prev[key]; restored++; }
+      });
+    });
+  } catch (e) { if (window._error) window._error('mergePresenceNoRegress', e); }
+  return restored;
+};
+window._reapplyPendingPresence = function (tournaments) {
+  try {
+    if (!window._pendingPresence || typeof window._idMapHas !== 'function') return;
+    var now = Date.now();
+    Object.keys(window._pendingPresence).forEach(function (tId) {
+      var intents = window._pendingPresence[tId];
+      if (!intents) { delete window._pendingPresence[tId]; return; }
+      var t = tournaments.find(function (x) { return x && String(x.id) === String(tId); });
+      if (!t) { delete window._pendingPresence[tId]; return; }
+      t.checkedIn = t.checkedIn || {}; t.absent = t.absent || {}; t.checkedInConfirmed = t.checkedInConfirmed || {};
+      Object.keys(intents).forEach(function (k) {
+        var it = intents[k];
+        if (!it || (now - it.at) > 15000) { delete intents[k]; return; } // expira
+        var freshPresent = window._idMapHas(t, t.checkedIn, it.who);
+        var freshAbsent = window._idMapHas(t, t.absent, it.who);
+        var wantPresent = (it.state === 'present');
+        var wantAbsent = (it.state === 'absent');
+        // doc fresco JÁ reflete a intenção → o write landou → dropa o pendente
+        if (freshPresent === wantPresent && freshAbsent === wantAbsent) { delete intents[k]; return; }
+        // senão o snapshot é stale → força a intenção SÓ deste jogador (preserva os demais)
+        if (it.state === 'present') { window._idMapSet(t, t.checkedIn, it.who, now); window._idMapDel(t, t.absent, it.who); window._idMapDel(t, t.checkedInConfirmed, it.who); }
+        else if (it.state === 'absent') { window._idMapSet(t, t.absent, it.who, now); window._idMapDel(t, t.checkedIn, it.who); }
+        else { window._idMapDel(t, t.checkedIn, it.who); window._idMapDel(t, t.absent, it.who); }
+      });
+      if (!Object.keys(intents).length) delete window._pendingPresence[tId];
+    });
+  } catch (_e) { if (window._error) window._error('reapplyPendingPresence', _e); }
 };
 
 // ─── Topbar progressive compaction ─────────────────────────────────────────
@@ -1885,8 +2429,14 @@ window._dismissAllOverlays = function(opts) {
     'casual-match-overlay',   // lobby/join de partida casual — idem
     'player-profile-overlay', // perfil de jogador — escondido (display:none)
                               // quando stats está aberto, restaurado no Voltar
-    'flyer-print-overlay'     // diálogo de imprimir convite — fecha sozinho
+    'flyer-print-overlay',    // diálogo de imprimir convite — fecha sozinho
                               // (Cancelar/backdrop gravam as prefs e removem)
+    // v1.3.43: diálogos do FLUXO DE SORTEIO — ciclo de vida próprio (Confirmar/
+    // Cancelar removem sozinho). Bug provado via debugDrawLogs: o sweep varria o
+    // diálogo equilibrado/livre antes de aparecer → sorteio morria sem chamar a CF.
+    'gender-draw-overlay',    // escolha equilibrado/livre + gênero
+    'presence-draw-choice',   // sortear com todos / só entre presentes
+    'absentee-resolution-dialog' // destino dos ausentes (espera/desclassificar)
   ];
   ALWAYS_KEEP.forEach(function(id) {
     if (keep.indexOf(id) === -1) keep.push(id);
@@ -3068,9 +3618,16 @@ window._resolveSideLive = function (t, sideStr, uidHint) {
       var arr = pools[pi]; if (!Array.isArray(arr)) continue;
       for (var i = 0; i < arr.length; i++) {
         var p = arr[i]; if (!p || typeof p !== 'object') continue;
-        if (p.uid === u) return (typeof window._pName === 'function') ? window._pName(p) : (p.displayName || p.name || '');
+        // v1.3.136: MEMBRO de dupla pelo SEU slot → nome DELE, NUNCA a dupla inteira. Vem ANTES
+        // do `p.uid` top-level porque uma dupla FORMADA carrega uid = uid de UM dos membros
+        // (pair-core `uid:_u1||_u2`). Sem isto, `p.uid === u` casava a dupla e _pName devolvia
+        // "A / B" (string de 2 partes); injetada num único slot posicional no _resolveSideLive
+        // virava uma 3ª LINHA FANTASMA no card (todos os times, no cache frio). O top-level `uid`
+        // só resolve entrada INDIVIDUAL. [[project_uid_identity_canon_locked]]
         if (p.p1Uid === u) return (typeof window._nameForUid === 'function' && window._nameForUid(u)) || p.p1Name || '';
         if (p.p2Uid === u) return (typeof window._nameForUid === 'function' && window._nameForUid(u)) || p.p2Name || '';
+        var _isPairEntry = !!(p.p1Uid || p.p2Uid || (p.p1Name && p.p2Name));
+        if (p.uid === u && !_isPairEntry) return (typeof window._pName === 'function') ? window._pName(p) : (p.displayName || p.name || '');
       }
     }
     return '';
@@ -3078,17 +3635,23 @@ window._resolveSideLive = function (t, sideStr, uidHint) {
   if (uidHint) {
     if (Array.isArray(uidHint)) {
       var _parts = s.split(' / ').map(function (x) { return x.trim(); }).filter(Boolean);
+      // v1.3.136: hint POSICIONAL (1 slot por membro, vazio pro fictício) — contagem bate com as
+      // partes → resolve CADA membro pelo SEU uid; slot vazio (ficto/sem conta) mantém a parte
+      // gravada (nome fictício É a identidade dele). É o caminho canônico: a CONTA resolve pelo uid
+      // MESMO com parceiro fictício (sem gravar nome, sem pattern-match do rótulo órfão). Cura o
+      // "Camila sumiu" na raiz. [[project_uid_identity_canon_locked]] / [[project_match_slot_uid_identity]]
+      if (_parts.length > 0 && uidHint.length === _parts.length) {
+        return _parts.map(function (part, i) {
+          var u = uidHint[i];
+          return (u && _liveByUid(u)) || part;
+        }).join(' / ');
+      }
+      // Fallback (hint LEGADO só-contas, sem posicional): resolve posicional se a contagem
+      // filtrada bater; senão mantém a string (nunca dropa membro).
       var _uids = uidHint.filter(Boolean);
-      // 1 uid por membro (counts batem) → resolve POSICIONAL: nome vivo por uid, fallback à
-      // parte gravada. Cobre 1v1 (conta) e dupla 100% de contas (nome vivo dos dois).
       if (_parts.length > 0 && _uids.length === _parts.length) {
         return _parts.map(function (part, i) { return _liveByUid(_uids[i]) || part; }).join(' / ');
       }
-      // v4.5.98: counts NÃO batem — dupla com membro GUEST (placeholder/sem conta, sem uid).
-      // O uidHint só traz os uids de CONTA (_slotUids/_participantUids filtram vazios), então
-      // ele fica MENOR que o nº de membros. NUNCA dropar um membro do side: mantém a string
-      // gravada (foi resolvida no sorteio; guest não renomeia perfil). Antes o `_live.join`
-      // devolvia só os membros-conta → "Lucia" sem "Jogador 01".
       if (_parts.length > 0) return _parts.join(' / ');
     } else {
       var _one = _liveByUid(uidHint);
@@ -3643,7 +4206,11 @@ window._effectiveResultEntry = function(t, match) {
 window._effectiveScoring = function(t, match) {
     if (!t || !Array.isArray(t.phases) || !t.phases.length) return (t && t.scoring) || null;
     var ph = t.phases[(match && match.phaseIndex) || 0] || t.phases[0] || {};
-    return (ph.scoring && ph.scoring.type) ? ph.scoring : null;
+    // Fase com scoring PRÓPRIO (type) vence; senão cai pro scoring do TORNEIO. Antes retornava null
+    // → a fase virava "simples" e o card NÃO renderizava sets/tie-break mesmo o torneio sendo GSM
+    // (bug: 6-5 não abria o tie-break em torneio multi-fase). Ver [[project_live_scoring_canonical]].
+    if (ph.scoring && ph.scoring.type) return ph.scoring;
+    return (t && t.scoring) || null;
 };
 // Pontos Avançados EFETIVO por fase: lê phases[i].advancedScoring ({enabled,categories,
 // applyLiveScoring}). A fase manda — inclusive quando desliga (enabled:false).
@@ -4517,12 +5084,18 @@ window._profileMetaSlots = function(p, pName, isTeam, t, isOrg, opts) {
   var members = isTeam ? String(pName).split('/').map(function(n) { return n.trim(); }).filter(Boolean) : [pName];
   return members.map(function(mn, mi) {
     var lc = String(mn).toLowerCase();
-    var fbGender = (!isTeam && p && typeof p === 'object') ? (p.gender || '') : '';
+    // v1.3.50: uid do membro → o patch resolve gênero/skill/idade PELO PERFIL (uid), não pelo
+    // campo gravado (vazio quando o inscrito grava só uid → gênero/categoria sumiam no card).
+    var _pmUid = '';
+    if (!isTeam && p && typeof p === 'object') _pmUid = p.uid || '';
+    else if (isTeam && p && typeof p === 'object') _pmUid = (mi === 0) ? (p.p1Uid || '') : (mi === 1 ? (p.p2Uid || '') : '');
+    // Gênero inicial resolve por uid (perfil-first) — aparece já no 1º paint se o cache está quente.
+    var fbGender = (!isTeam && p && typeof p === 'object') ? ((window._pGender && window._pGender(p)) || p.gender || '') : '';
     var fbCat = (!isTeam && p && typeof p === 'object') ? (p.category || '') : '';
     var prefixName = isTeam ? String(mn).split(' ')[0] : '';
     var initial = window._profileMetaBadgesHtml(fbGender, window._profileMetaExtractSkill(fbCat, t), '', prefixName, t);
     var _mt = _inline ? '0' : (mi === 0 ? '5px' : '3px');
-    return '<div class="participant-meta" data-pmeta-name="' + _attrEscMeta(lc) + '" data-pmeta-gender="' + _attrEscMeta(fbGender) + '" data-pmeta-cat="' + _attrEscMeta(fbCat) + '" data-pmeta-prefix="' + _attrEscMeta(prefixName) + '" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:' + _mt + ';">' + initial + '</div>';
+    return '<div class="participant-meta" data-pmeta-name="' + _attrEscMeta(lc) + '" data-pmeta-uid="' + _attrEscMeta(_pmUid) + '" data-pmeta-gender="' + _attrEscMeta(fbGender) + '" data-pmeta-cat="' + _attrEscMeta(fbCat) + '" data-pmeta-prefix="' + _attrEscMeta(prefixName) + '" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:' + _mt + ';">' + initial + '</div>';
   }).join('');
 };
 
@@ -4572,7 +5145,13 @@ window._patchProfileMetaSlots = function(container, t) {
   var touchedFilter = false;
   slots.forEach(function(slot) {
     var nm = slot.getAttribute('data-pmeta-name') || '';
-    var prof = (window._partProfileByName && window._partProfileByName[nm]) || null;
+    // v1.3.50: PERFIL POR UID primeiro (identidade). O inscrito grava só uid → o nome cai pro
+    // email e o loader por-nome nem carregava (pulava nome vazio) → gênero/categoria sumiam.
+    // _userProfileCache[uid] já vem quente (_preloadUserProfiles no render) com gender/
+    // skillBySport/birthDate. Fallback pro cache por-nome (guest sem uid).
+    var _uidA = slot.getAttribute('data-pmeta-uid') || '';
+    var prof = (_uidA && window._userProfileCache && window._userProfileCache[_uidA]) ||
+               (window._partProfileByName && window._partProfileByName[nm]) || null;
     var fbGender = slot.getAttribute('data-pmeta-gender') || '';
     var fbCat = slot.getAttribute('data-pmeta-cat') || '';
     var prefixName = slot.getAttribute('data-pmeta-prefix') || '';
@@ -5466,20 +6045,38 @@ window.AppStore = {
       return false;
     }
     var _t = this.tournaments.find(function (tour) { return String(tour.id) === String(tournamentId); });
-    try {
-      await window.FirestoreDB.mutateTournament(tournamentId, function (freshT) {
-        // O mutator pode ABORTAR retornando `false` (ex.: guarda de idempotência —
-        // outro caminho já aplicou a mudança no fresco). Nesse caso NÃO gravamos
-        // (mutateTournament vê o `false` e não faz o set). Propagamos o `false`
-        // pra frente pra não tocar updatedAt de um doc que não vamos escrever.
-        if (mutatorFn(freshT) === false) return false;
-        freshT.updatedAt = new Date().toISOString();
-      });
-      if (_t) _t.updatedAt = new Date().toISOString();
-      this._saveToCache();
-      return true;
-    } catch (err) {
-      window._error('commitTournamentTx: FALHOU ao salvar ' + tournamentId, err);
+    // v1.3.89: RETRY com backoff em conflito TRANSIENTE (defesa além da fila do mutate — cobre
+    // conflito de OUTRO device/CF gravando o mesmo doc). Códigos re-tentáveis: aborted (conflito de
+    // transação), failed-precondition (versão stale), unavailable, deadline-exceeded. Erro real
+    // (permission-denied, etc.) NÃO re-tenta — mostra o toast na hora.
+    var _RETRYABLE = { 'aborted': 1, 'failed-precondition': 1, 'unavailable': 1, 'deadline-exceeded': 1, 'cancelled': 1 };
+    var _sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    var _attempt = 0, _lastErr = null;
+    while (_attempt < 5) {
+      try {
+        await window.FirestoreDB.mutateTournament(tournamentId, function (freshT) {
+          // O mutator pode ABORTAR retornando `false` (ex.: guarda de idempotência —
+          // outro caminho já aplicou a mudança no fresco). Nesse caso NÃO gravamos
+          // (mutateTournament vê o `false` e não faz o set). Propagamos o `false`
+          // pra frente pra não tocar updatedAt de um doc que não vamos escrever.
+          if (mutatorFn(freshT) === false) return false;
+          freshT.updatedAt = new Date().toISOString();
+        });
+        if (_t) _t.updatedAt = new Date().toISOString();
+        this._saveToCache();
+        return true;
+      } catch (_e) {
+        _lastErr = _e;
+        var _c = (_e && _e.code) || '';
+        var _cc = String(_c).replace(/^functions\//, '').toLowerCase();
+        if (!_RETRYABLE[_cc] || _attempt >= 4) break;   // não-transiente ou última tentativa → cai no handler
+        _attempt++;
+        await _sleep(120 * _attempt + Math.floor((_attempt * 37) % 90)); // backoff crescente + jitter leve
+      }
+    }
+    {
+      var err = _lastErr;
+      window._error('commitTournamentTx: FALHOU ao salvar ' + tournamentId + ' (após ' + (_attempt + 1) + ' tentativa(s))', err);
       if (typeof window._captureException === 'function') {
         window._captureException(err, { area: 'commitTournamentTx', tournamentId: tournamentId, code: err && err.code });
       }
@@ -5511,13 +6108,50 @@ window.AppStore = {
   async mutate(tournamentId, mutatorFn, logMessage) {
     var _t = this.tournaments.find(function (tour) { return String(tour.id) === String(tournamentId); });
     if (_t) { try { mutatorFn(_t); } catch (e) { window._error('mutate: mutator local falhou', e); } }
-    return this.commitTournamentTx(tournamentId, function (freshT) {
-      mutatorFn(freshT);
-      if (logMessage) {
-        if (!Array.isArray(freshT.history)) freshT.history = [];
-        freshT.history.push({ date: new Date().toISOString(), message: logMessage });
+    // v1.3.89: SERIALIZA a persistência por TORNEIO. Marcar VÁRIOS presentes numa leva (dia do
+    // torneio) disparava N transações CONCORRENTES no MESMO doc → conflito → os retries internos
+    // esgotam → "[failed-precondition] the stored version não bate com a base version" (o toast
+    // "Erro ao Salvar"). O estado local já foi aplicado acima (UI instantânea); aqui a GRAVAÇÃO vai
+    // em FILA por tId — cada transação lê o resultado da anterior → ZERO conflito. Erro numa não
+    // trava as próximas (a fila nunca fica rejeitada). Ver [[project_concurrency_safe_saves]].
+    var _self = this; var _qId = String(tournamentId);
+    _self._txQueue = _self._txQueue || {};
+    var _doTx = function () {
+      return _self.commitTournamentTx(_qId, function (freshT) {
+        mutatorFn(freshT);
+        if (logMessage) {
+          if (!Array.isArray(freshT.history)) freshT.history = [];
+          freshT.history.push({ date: new Date().toISOString(), message: logMessage });
+        }
+      });
+    };
+    var _prev = _self._txQueue[_qId] || Promise.resolve();
+    var _chain = _prev.then(_doTx, _doTx); // roda DEPOIS da anterior (resolva ou rejeite)
+    _self._txQueue[_qId] = _chain.catch(function () {}); // a fila nunca propaga rejeição
+    var _r = await _chain;
+    // ── Sandbox (SB): replicação one-way original→SB — MESMA função, MESMO mutator ──
+    // Sem código paralelo: o mesmíssimo mutatorFn que mudou o original roda também no
+    // doc do SB. Só dispara quando: (a) quem age é o dev (só ele tem o SB carregado e
+    // permissão de escrever); (b) este torneio NÃO é sandbox (mão única — nada do SB
+    // volta pro original); (c) existe um SB filho; (d) o SB ainda NÃO foi sorteado
+    // (protege o teste do dev de ser sobrescrito por mudança do original — depois disso
+    // o dev usa "Resetar" pra re-sincronizar). Best-effort: erro aqui NUNCA derruba o
+    // save do original. Ver project_sandbox_tournament.
+    try {
+      if (_t && _t.isSandbox !== true &&
+          window._isTestIdentity && window._isTestIdentity() &&
+          typeof window._findSandboxOf === 'function') {
+        var _sb = window._findSandboxOf(tournamentId);
+        var _sbDrawn = _sb && ((Array.isArray(_sb.matches) && _sb.matches.length > 0) ||
+          (Array.isArray(_sb.rounds) && _sb.rounds.length > 0) ||
+          (Array.isArray(_sb.groups) && _sb.groups.length > 0));
+        if (_sb && !_sbDrawn) {
+          try { mutatorFn(_sb); } catch (e) {}   // estado local imediato do SB
+          await this.commitTournamentTx(_sb.id, function (freshSB) { mutatorFn(freshSB); });
+        }
       }
-    });
+    } catch (e) { if (window._error) window._error('sandbox replicate (mutate)', e); }
+    return _r;
   },
 
   // Persiste um RESULTADO de partida (caminho não-deferido de _saveResultInline)
@@ -5792,6 +6426,37 @@ window.AppStore = {
           }
         });
         store.tournaments = tournaments;
+        // v1.3.82: reaplica a presença otimista pendente sobre os docs frescos ANTES de qualquer
+        // render/cache — senão um snapshot stale (pré-write) reverte o que o org acabou de marcar
+        // ("aparece/apaga"). Cada intenção some sozinha quando o doc fresco confirma ou em ~15s.
+        if (typeof window._reapplyPendingPresence === 'function') window._reapplyPendingPresence(tournaments);
+        // DIAGNÓSTICO (dono, "24 caem pra 19 e voltam" ao marcar muitos presentes): loga a contagem
+        // de presentes/ausentes/pendentes do torneio NA TELA a cada snapshot (DEPOIS do reapply), pra
+        // ver a trajetória real da oscilação e a causa (write parcial? reapply não cobre? re-render).
+        try {
+          if (window._dtrace) {
+            var _hpP = (window.location.hash || '').replace('#', '').split('/');
+            var _vtId = (['participants', 'tournaments', 'bracket', 'analise'].indexOf(_hpP[0]) !== -1) ? _hpP[1] : null;
+            if (_vtId) {
+              var _vt = tournaments.find(function (x) { return x && String(x.id) === String(_vtId); });
+              if (_vt && _vt.checkedIn) {
+                var _pendN = (window._pendingPresence && window._pendingPresence[String(_vtId)]) ? Object.keys(window._pendingPresence[String(_vtId)]).length : 0;
+                var _pn = Object.keys(_vt.checkedIn).length;
+                // v1.3.155: marca a QUEDA de forma inconfundível — quando o nº de presentes DIMINUI
+                // entre snapshots, mostra de onde veio (pendingWrites = eco do próprio device;
+                // fromCache = cache local) pra separar "outro escritor apagou" de "eco stale".
+                var _md = (snap && snap.metadata) || {};
+                if (window._lastPresSnapN != null && _pn < window._lastPresSnapN) {
+                  window._dtrace('presQUEDA', { de: window._lastPresSnapN, para: _pn,
+                    perdeu: window._lastPresSnapN - _pn, pend: _pendN,
+                    local: !!_md.hasPendingWrites, cache: !!_md.fromCache });
+                }
+                window._lastPresSnapN = _pn;
+                window._dtrace('presSnap', { present: _pn, absent: Object.keys(_vt.absent || {}).length, pending: _pendN, local: !!_md.hasPendingWrites, cache: !!_md.fromCache });
+              }
+            }
+          }
+        } catch (e) {}
         store._saveToCache(); // cache enxuto (matchIds) — foldado dentro do _saveToCache
         // v4.4.69 Rei/Rainha: reidrata group.matches como refs de round.matches (fonte
         // única) DEPOIS de cachear — todo consumidor em memória vê os grupos montados.
@@ -6788,7 +7453,11 @@ window.AppStore = {
   getVisibleTournaments() {
     var invitedIds = this._invitedTournamentIds || [];
     var cu = window.AppStore.currentUser;
+    var _devSees = !!(window._isTestIdentity && window._isTestIdentity());
     return this.tournaments.filter(function(t) {
+      // Sandbox: invisível pra QUALQUER um que não seja o dev — mesmo tendo os
+      // participantes reais espelhados no memberUids. Só o dev enxerga o SB.
+      if (t.isSandbox && !_devSees) return false;
       if (t.isPublic) return true;
       if (invitedIds.indexOf(String(t.id)) !== -1) return true;
       if (!cu || !cu.uid) return false;
@@ -6828,7 +7497,10 @@ window.AppStore = {
         return false;
       });
     };
+    var _devSeesP = !!(window._isTestIdentity && window._isTestIdentity());
     return this.tournaments.filter(function(t) {
+      // Sandbox: participante real espelhado no SB NÃO vê o SB em "Participando".
+      if (t.isSandbox && !_devSeesP) return false;
       // v2.2.45 FIX: memberUids[] inclui creatorUid + uids de co-hosts SÓ pra
       // read-access nas regras do Firestore — NÃO é prova de inscrição. Antes,
       // o organizador caía aqui e o próprio torneio aparecia em "Participando"
@@ -7293,6 +7965,66 @@ window._enrollNumberBadge = function(num, side) {
 // deve usar `window._INSCRITO_NAME_FONT_PX` no `font-size` (e no `data-fit-max` do auto-fit de 2
 // linhas). NUNCA hardcodar outro valor (0.95rem/0.92rem etc.) → é regressão. O dono canonizou 17px.
 window._INSCRITO_NAME_FONT_PX = 17;
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// CORES DE PRESENÇA — CANÔNICO (v1.3.140, dono: "isso está canonizado e precisa se manter
+// canonizado ... sempre consistente para qualquer torneio que use esses cards").
+//   • PRESENTE = tons de VERDE      • AUSENTE = tons de AZUL
+//   • DUPLA    = tom mais ESCURO    • INDIVIDUAL = tom mais CLARO
+// Antes: presente=verde e ausente=VERMELHO, com o mesmo tom pra dupla e individual — o dono
+// reportou (print) que presentes e ausentes ficavam "muito parecidos", especialmente nas duplas.
+// O AZUL era do estado "Confirmado" (confirmação remota, v1.3.19); como o azul passou a ser do
+// AUSENTE, o Confirmado migrou pra ÂMBAR (único slot livre que não colide com verde/azul).
+// "pending" (ainda não marcado) NÃO pinta o card — segue neutro/transparente, como sempre foi.
+//
+// FONTE ÚNICA: todo card de presença (individual, dupla formada, membro dentro da dupla, painel
+// pós-sorteio) DEVE pegar cor daqui — nunca hardcodar hex/rgba de presença no renderer. Card ou
+// renderer novo herda automaticamente. Ver [[project_inscrito_card_canonical]].
+// ═══════════════════════════════════════════════════════════════════════════════════
+window._PRESENCE_TONES = {
+  present: {
+    // individual = CLARO
+    solo: { bg: 'linear-gradient(135deg,rgba(52,211,153,0.42),rgba(16,185,129,0.55))', border: 'rgba(52,211,153,0.85)', glow: 'rgba(16,185,129,0.40)', text: '#4ade80', toggle: '#10b981', soft: 'rgba(16,185,129,0.12)', line: 'rgba(16,185,129,0.30)' },
+    // dupla = ESCURO
+    pair: { bg: 'linear-gradient(135deg,rgba(6,78,59,0.88),rgba(6,95,70,0.94))', border: 'rgba(16,185,129,0.70)', glow: 'rgba(16,185,129,0.30)', text: '#6ee7b7', toggle: '#10b981', soft: 'rgba(6,78,59,0.55)', line: 'rgba(16,185,129,0.28)' }
+  },
+  absent: {
+    solo: { bg: 'linear-gradient(135deg,rgba(96,165,250,0.40),rgba(59,130,246,0.52))', border: 'rgba(96,165,250,0.85)', glow: 'rgba(59,130,246,0.38)', text: '#bfdbfe', toggle: '#3b82f6', soft: 'rgba(59,130,246,0.12)', line: 'rgba(59,130,246,0.30)' },
+    pair: { bg: 'linear-gradient(135deg,rgba(23,37,84,0.90),rgba(30,58,138,0.94))', border: 'rgba(59,130,246,0.70)', glow: 'rgba(59,130,246,0.30)', text: '#93c5fd', toggle: '#3b82f6', soft: 'rgba(23,37,84,0.55)', line: 'rgba(59,130,246,0.28)' }
+  },
+  confirmed: {
+    solo: { bg: 'linear-gradient(135deg,rgba(251,191,36,0.34),rgba(245,158,11,0.46))', border: 'rgba(251,191,36,0.80)', glow: 'rgba(245,158,11,0.32)', text: '#fcd34d', toggle: '#f59e0b', soft: 'rgba(245,158,11,0.12)', line: 'rgba(245,158,11,0.30)' },
+    pair: { bg: 'linear-gradient(135deg,rgba(120,53,15,0.85),rgba(146,64,14,0.92))', border: 'rgba(245,158,11,0.70)', glow: 'rgba(245,158,11,0.28)', text: '#fcd34d', toggle: '#f59e0b', soft: 'rgba(120,53,15,0.55)', line: 'rgba(245,158,11,0.28)' }
+  },
+  // PARCIAL (v1.3.147, dono): dupla com UM presente e outro não. Antes caía no MESMO azul de
+  // "nenhum presente" — no print, Eduardo(ausente)/Ciça(PRESENTE) ficava idêntico a
+  // Kelly(ausente)/Rodrigo(ausente). ÂMBAR = "falta um". Só faz sentido no escopo 'pair' (um
+  // indivíduo nunca é "meio presente"); o 'solo' existe só por simetria da API.
+  partial: {
+    solo: { bg: 'linear-gradient(135deg,rgba(251,191,36,0.34),rgba(245,158,11,0.46))', border: 'rgba(251,191,36,0.80)', glow: 'rgba(245,158,11,0.32)', text: '#fcd34d', toggle: '#f59e0b', soft: 'rgba(245,158,11,0.12)', line: 'rgba(245,158,11,0.30)' },
+    pair: { bg: 'linear-gradient(135deg,rgba(120,53,15,0.88),rgba(180,83,9,0.92))', border: 'rgba(245,158,11,0.78)', glow: 'rgba(245,158,11,0.34)', text: '#fcd34d', toggle: '#f59e0b', soft: 'rgba(120,53,15,0.55)', line: 'rgba(245,158,11,0.30)' }
+  }
+};
+// state: 'present' | 'absent' | 'confirmed'   ·   scope: 'solo' (individual) | 'pair' (dupla)
+window._presenceTone = function (state, scope) {
+  var g = window._PRESENCE_TONES[state];
+  if (!g) return null;
+  return g[(scope === 'pair') ? 'pair' : 'solo'];
+};
+// estilo COMPLETO do card (fundo + borda + glow). '' = pendente (neutro, não pinta).
+window._presenceCardStyle = function (state, scope) {
+  var c = window._presenceTone(state, scope);
+  if (!c) return '';
+  return 'background:' + c.bg + ' !important;border:2px solid ' + c.border + ' !important;box-shadow:0 0 0 1px ' + c.glow + ',0 4px 12px rgba(0,0,0,0.14);';
+};
+window._presenceTextColor = function (state, scope) {
+  var c = window._presenceTone(state, scope);
+  return c ? c.text : 'var(--text-bright)';
+};
+window._presenceToggleColor = function (state, scope) {
+  var c = window._presenceTone(state, scope);
+  return c ? c.toggle : '#10b981';
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════════
 // CANÔNICO (v3.1.33): pódio(s) + classificação(ões) do torneio encerrado — UMA fonte só.

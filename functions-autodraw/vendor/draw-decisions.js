@@ -23,7 +23,15 @@
 (function () {
 
   var _nameOf = function (p) {
-    return (typeof p === 'string') ? p : (p && (p.displayName || p.name) || '');
+    if (typeof p === 'string') return p;
+    if (!p) return '';
+    if (p.displayName || p.name) return p.displayName || p.name;
+    // v1.3.90: meia-dupla FICTÍCIA {p1Name:'X'} (nome em p1Name, SEM displayName nem uid) — usa o
+    // rótulo p1Name/p2Name pra a chave de identidade (_entryIdKey) NÃO sair VAZIA. Chave vazia
+    // colidia: o guard `if(k)` não a movia → entrada não saía de participants mas ia pra espera →
+    // DUPLICADA → ausente entrava na chave (bug do dono). uids têm precedência via _uidsOf acima.
+    var a = p.p1Name || '', b = p.p2Name || '';
+    return (a && b) ? (a + ' / ' + b) : (a || b || '');
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -161,7 +169,10 @@
       var _totalPlayers = arr.reduce(function (s, p) { return s + _playersOf(p); }, 0);
       var _maxTeams = Math.floor(_totalPlayers / _ts);
       var _targetTeams = _maxTeams >= 1 ? 1 : 0;
-      while (_targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
+      // Guard `_targetTeams >= 1`: com roster efetivo abaixo de teamSize (_maxTeams===0),
+      // _targetTeams=0 e `0*2 <= 0` faria o `*= 2` girar pra sempre — loop infinito que
+      // TRAVA a transação da CF. Sem alvo válido, não há o que reduzir (sai com 0).
+      while (_targetTeams >= 1 && _targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
       var _playersToRemove = _totalPlayers - (_targetTeams * _ts);
       var _removedPlayers = 0;
       if (method === 'last') {
@@ -392,12 +403,18 @@
       // real do doc (só uid) isso era um NO-OP silencioso: ninguém saía do elenco.
       var notPresent = parts.filter(function(p) { return !window._isParticipantPresent(t, p); });
       if (notPresent.length === 0) return 0;
-      var moveSet = {};
-      notPresent.forEach(function(p) { var k = window._entryIdKey(p); if (k) moveSet[k] = true; });
-      t.participants = parts.filter(function(p) { return !moveSet[window._entryIdKey(p)]; });
+      // v1.3.90: remove por REFERÊNCIA (Set de objetos), NÃO por _entryIdKey string. Entrada sem
+      // uid nem displayName ({p1Name:'X'} meia-dupla) dava chave '' → o guard `if(k)` não a punha
+      // no moveSet → NÃO saía de participants MAS ia pra espera → DUPLICADA → ausente na chave +
+      // "outros sumiram". Por referência cada not-present sai E entra na espera exatamente 1×.
+      var moveRefs = (typeof Set === 'function') ? new Set(notPresent) : null;
+      t.participants = moveRefs
+          ? parts.filter(function(p) { return !moveRefs.has(p); })
+          : parts.filter(function(p) { return notPresent.indexOf(p) === -1; });
       if (!Array.isArray(t.waitlist)) t.waitlist = [];
       notPresent.forEach(function(p) {
-          if (!t.waitlist.some(function(w) { return _sameEntry(w, p); })) t.waitlist.push(p);
+          // dedup por REFERÊNCIA também (fictício de chave vazia: _sameEntry sempre falso → duplicava)
+          if (!t.waitlist.some(function(w) { return w === p || _sameEntry(w, p); })) t.waitlist.push(p);
       });
       return notPresent.length;
   };
@@ -430,11 +447,23 @@
     }
 
     // 3. Auto-moves (não são escolha — são regra; o cliente roda os MESMOS em _startDraw)
-    if (typeof window._autoMoveSoloToWaitlist === 'function') {
+    // GUARD flexibilize: quando o organizador escolheu FLEXIBILIZAR (step 6.5), os avulsos
+    // são a MATÉRIA-PRIMA da formação de duplas — o auto-move NÃO pode drená-los pra espera
+    // aqui, senão flexibilize forma de um elenco vazio e a chave sai vazia. No cliente isso
+    // nunca acontecia porque o handler pré-formava as duplas ANTES do auto-move (a "carona");
+    // ao remover a carona (sorteio→CF), a ordem correta tem que viver AQUI. Sem flexibilize,
+    // os solos já vêm resolvidos por uma decisão explícita (solo:waitlist/exclude, step 2) ou
+    // são pareados pelo _formDoublesTeams do drawInitial (sorteio default, pacote null).
+    if (!d.flexibilize && typeof window._autoMoveSoloToWaitlist === 'function') {
       var aS = window._autoMoveSoloToWaitlist(t);
       if (aS > 0) applied.push({ step: 'autoSolo', moved: aS });
     }
-    if (typeof window._autoMoveAbsentToStandby === 'function') {
+    // v1.3.158 (dono): "se quer sortear entre todos os inscritos, a presença deve ser IGNORADA e
+    // todos entram na chave". Com scope:'all' o organizador DISPENSOU a presença — nem o ausente
+    // marcado sai do elenco. Antes esta REGRA rodava sempre e sobrescrevia, calada, a escolha que
+    // ele acabara de fazer no diálogo ("sorteou só entre os presentes apesar de pedir todos").
+    // Sem escopo escolhido (pacote vazio / auto-draw), a regra antiga segue valendo.
+    if (d.scope !== 'all' && typeof window._autoMoveAbsentToStandby === 'function') {
       var aA = window._autoMoveAbsentToStandby(t);
       if (aA > 0) applied.push({ step: 'autoAbsent', moved: aA });
     }

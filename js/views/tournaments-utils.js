@@ -25,6 +25,30 @@ window._isTeamEnrollMode = window._isTeamEnrollMode || function(mode) {
     return mode === 'time' || mode === 'teams' || mode === 'misto';
 };
 
+// Nº de rodada 1-based pra EXIBIÇÃO — NUNCA R0. A primeira rodada é SEMPRE R1 (pode ser
+// oitavas/quartas/semi, mas nunca "R0"). No modelo, a repescagem/play-in usa m.round=0 (o
+// bracket 'upper' começa em round 0 = "R1 upper"), então o número CRU vira "Rodada 0"/"R0"
+// nos rótulos-satélite (dashboard, etc.). Devolve a POSIÇÃO 1-based da rodada do jogo entre
+// as rodadas DISTINTAS do SEU bracket — igual ao roundLabel do bracket (idx+1). Formatos
+// 1-based (eliminatória normal, Liga) não mudam (ordinal == round).
+// Ver [[project_round_naming]] / [[feedback_sweep_all_render_sites]].
+window._matchRoundDisplayNum = window._matchRoundDisplayNum || function(t, m) {
+    if (!m) return 1;
+    if (typeof m.roundIndex === 'number' && m.roundIndex >= 0) return m.roundIndex + 1;
+    var r = m.round;
+    if (typeof r !== 'number') return 1;
+    var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : ((t && t.matches) || []);
+    var bk = (m.bracket || 'main');
+    var seen = {};
+    for (var i = 0; i < (all ? all.length : 0); i++) {
+        var x = all[i];
+        if (x && (x.bracket || 'main') === bk && typeof x.round === 'number') seen[x.round] = 1;
+    }
+    var sorted = Object.keys(seen).map(Number).sort(function(a, b){ return a - b; });
+    var idx = sorted.indexOf(r);
+    return idx >= 0 ? (idx + 1) : Math.max(1, r); // fallback: nunca abaixo de 1
+};
+
 // ── Merge Participants: mesclar dois participantes (organizer, após sorteio) ──
 // Supports both desktop drag-and-drop AND mobile touch drag.
 // Core logic in _executeMerge(); drag/touch just determine source+target names.
@@ -464,20 +488,10 @@ window._getTournamentProgress = function(t) {
         }
         if (t.thirdPlaceMatch) allMatches.push(t.thirdPlaceMatch);
     }
-    // For elimination formats with 2+ rounds, always count 3rd place even if not yet created.
-    // v1.0.91-beta: EXCLUI Dupla Eliminatória — em DE o 3º lugar vem do Lower
-    // Final loser, não tem match dedicado de 3º lugar. Antes esse placeholder
-    // inflava o total e gerava progresso "13/14" quando deveria ser "13/14"
-    // ou "14/14" sem placeholder.
-    if (!t.thirdPlaceMatch) {
-        var _fmt = (t.format || '').toLowerCase();
-        var _isElim = _fmt.indexOf('eliminat') === 0;
-        var _isDuplaElim = _fmt.indexOf('dupla') !== -1;
-        var _hasMultipleRounds = (Array.isArray(t.matches) && t.matches.some(function(m) { return m.round >= 2; }));
-        if (_isElim && !_isDuplaElim && _hasMultipleRounds) {
-            allMatches.push({ id: 'match-3rd-placeholder', p1: 'TBD', p2: 'TBD', winner: null });
-        }
-    }
+    // v1.3.132: SEM placeholder fantasma de 3º lugar. Era resíduo da opção (já MORTA) de
+    // ligar/desligar a disputa de 3º lugar — fabricava um match "TBD" pra reservar o slot no
+    // total antes de existir. Hoje o 3º lugar é SEMPRE criado como match real (isThirdPlace,
+    // pelo motor de fases) → já é contado quando existe. Contamos SÓ jogos reais; nada de inventar.
     // Filter out BYE matches (keep TBD — they are real future matches)
     var realMatches = allMatches.filter(function(m) {
         var p1 = m.p1 || m.player1 || '';

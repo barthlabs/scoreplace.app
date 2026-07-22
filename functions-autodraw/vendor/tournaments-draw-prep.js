@@ -292,7 +292,7 @@ window._showGroupsConfigPanel = function(tId) {
             // v3.0.x: barra de botões FIXA (flex-shrink:0 → nunca é cortada por scroll),
             // Cancelar + Sortear (verde) lado a lado, logo após o box do título.
             '<div style="flex-shrink:0;display:flex;gap:10px;padding:12px 1.5rem;background:var(--bg-card,#1e293b);border-bottom:1px solid rgba(255,255,255,0.08);">' +
-                '<button onclick="window._cancelGroupsConfig(\'' + tIdSafe + '\')" style="flex:1;padding:13px;border-radius:12px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-muted,#cbd5e1);font-weight:700;font-size:0.9rem;cursor:pointer;">✕ Cancelar</button>' +
+                '<button onclick="window._cancelGroupsConfig(\'' + tIdSafe + '\')" style="flex:1;padding:13px;border-radius:12px;border:none;background:#dc2626;color:#fff;font-weight:700;font-size:0.9rem;cursor:pointer;">✕ Cancelar</button>' +
                 '<button id="grp-panel-confirm-btn" onclick="window._drawBtnBusy&&window._drawBtnBusy(this); window._grpPanelConfirm(\'' + tIdSafe + '\')" style="flex:2;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,0.35);">🎲 Sortear grupos</button>' +
             '</div>' +
             '<div style="overflow-y:auto;flex:1;padding:1.5rem;">';
@@ -622,15 +622,16 @@ window._applyFlexibilizeBalance = function(tId) {
     // pacote, pra a CF drawRound REPLICAR a formação (mistas primeiro, mínimo mesmo-gênero) em
     // vez de herdar as duplas mutadas aqui. O forming acima segue como PREVIEW transiente do
     // painel; a CF é a autoridade. Ver [[project_canon_runs_on_server]].
-    t._drawDecisions = Object.assign({}, t._drawDecisions, { flexibilize: true, balanceMode: 'equilibrado' });
+    window._setDrawDecision(t.id, { flexibilize: true, balanceMode: 'equilibrado' }); // v1.3.93: mapa por tId
     if (window.AppStore && typeof window.AppStore.logAction === 'function') {
         window.AppStore.logAction(tId, 'Equilíbrio flexibilizado: ' + res.newTeamsCount + ' dupla(s) formada(s)' +
             (res.allMaleCount ? ' (' + res.allMaleCount + ' 100% masc.)' : '') +
             (res.leftoverCount ? ', ' + res.leftoverCount + ' sem dupla' : ''));
     }
-    if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        try { window.FirestoreDB.saveTournament(t); } catch (e) {}
-    }
+    // v1.3.x (migração→CF): a decisão `flexibilize` já viaja no pacote (setado acima); a CF
+    // FORMA as duplas sobre o roster original restaurado no despacho (guard !d.flexibilize no
+    // auto-move garante que os avulsos não são drenados antes). O forming local fica só como
+    // preview do painel seguinte; NÃO persiste (saveTournament removido).
     window.showUnifiedResolutionPanel(String(tId));
 };
 
@@ -642,6 +643,7 @@ window._applyFlexibilizeBalance = function(tId) {
 // o detalhe. Restaura o status anterior antes de limpar (o helper zera _previousStatus).
 window._cancelDrawResolution = function(tId) {
     if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); // limpa _drawingTid antes do re-render → botão volta a "Sortear"
+    if (window._clearDrawDecisions) window._clearDrawDecisions(tId); // v1.3.93: cancelar zera o pacote de decisões do mapa
     var t = window._findTournamentById(tId);
     if (t) {
         // v4.5.6: cancelar ANTES do sorteio efetivo RESETA todas as decisões — restaura o
@@ -763,7 +765,7 @@ window._executeRemoval = function(tId, mode, method) {
     var removed = _res.removed;
     var removeCount = removed.length;
     // Pacote pra CF: a ESCOLHA (modo + método), nunca o elenco resultante.
-    t._drawDecisions = Object.assign({}, t._drawDecisions, { remainder: { mode: mode, method: method } });
+    window._setDrawDecision(t.id, { remainder: { mode: mode, method: method } }); // v1.3.93: mapa por tId
 
     // Log to history so it appears in the final-review panel
     var removedNames = _res.removedNames;
@@ -774,23 +776,25 @@ window._executeRemoval = function(tId, mode, method) {
         window.AppStore.logAction(tId, logMsg);
     }
 
-    window.FirestoreDB.saveTournament(t).then(function() {
-        var actionLabel = mode === 'standby' ? _t('predraw.movedToWaitlist') : _t('predraw.removedLabel');
-        if (typeof showNotification !== 'undefined') {
-            showNotification(_t('draw.adjustDone'), removedNames + ' ' + actionLabel + '.', 'success');
-        }
-        // Update stat-boxes (inscritos count + waitlist) in the detail view
-        if (typeof window._updateStatBoxes === 'function') {
-            window._updateStatBoxes(t);
-        }
-        // Re-diagnose: if resolved, draw immediately; otherwise show panel again
-        var recheck = window._diagnoseAll(t);
-        if (!recheck.hasIssues && typeof window.generateDrawFunction === 'function') {
-            window.generateDrawFunction(tId);
-        } else {
-            window.showUnifiedResolutionPanel(tId);
-        }
-    });
+    // v1.3.x (migração→CF): a decisão do resto já viaja no pacote (`remainder`, setado acima);
+    // a CF aplica sobre o roster ORIGINAL restaurado no despacho. O _applyRemainderRemoval local
+    // ficou só como preview do gate/UI (re-diagnóstico) — NÃO persiste mais (saveTournament
+    // removido; o doc é restaurado ao original antes do sorteio). Corpo agora síncrono.
+    var actionLabel = mode === 'standby' ? _t('predraw.movedToWaitlist') : _t('predraw.removedLabel');
+    if (typeof showNotification !== 'undefined') {
+        showNotification(_t('draw.adjustDone'), removedNames + ' ' + actionLabel + '.', 'success');
+    }
+    // Update stat-boxes (inscritos count + waitlist) in the detail view
+    if (typeof window._updateStatBoxes === 'function') {
+        window._updateStatBoxes(t);
+    }
+    // Re-diagnose: if resolved, draw immediately; otherwise show panel again
+    var recheck = window._diagnoseAll(t);
+    if (!recheck.hasIssues && typeof window.generateDrawFunction === 'function') {
+        window.generateDrawFunction(tId);
+    } else {
+        window.showUnifiedResolutionPanel(tId);
+    }
 };
 
 // ============ UNIFIED RESOLUTION PANEL (POWER-OF-2) ============
@@ -997,7 +1001,7 @@ window._showPhasePromotePanel = function(tId) {
             _lines.map(function(l, i){ return _lineRow(l, i); }).join('') +
             '<button onclick="window._spinButton&&window._spinButton(this,\'…\'); window._phasePromoteApply(\'' + tIdSafe + '\')" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;padding:13px 16px;border-radius:12px;font-weight:800;font-size:0.92rem;cursor:pointer;">⬆️ Promover — deixar tudo par</button>' +
             '<button onclick="window._phasePromoteSkip(\'' + tIdSafe + '\')" style="width:100%;margin-top:10px;background:rgba(255,255,255,0.06);color:var(--text-bright,#f8fafc);border:1.5px solid rgba(255,255,255,0.2);padding:12px 16px;border-radius:12px;font-weight:700;font-size:0.88rem;cursor:pointer;">Não promover — resolver com BYE/repescagem</button>' +
-            '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="width:100%;margin-top:8px;background:transparent;color:var(--text-muted,#94a3b8);border:none;padding:8px;font-size:0.8rem;cursor:pointer;">Cancelar</button>' +
+            '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="width:100%;margin-top:8px;background:#dc2626;color:#fff;border:none;padding:10px;border-radius:10px;font-weight:700;font-size:0.82rem;cursor:pointer;">✕ Cancelar</button>' +
         '</div>' +
     '</div>';
     document.body.appendChild(overlay);
@@ -1029,9 +1033,83 @@ window._phasePromoteSkip = function(tId) {
     if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
 };
 
+// v1.3.60: painel de "Novos Confrontos" — só Eliminatória Simples com pow2 LIMPA e
+// inscrições ABERTAS (expand). Os tardios que entrarem depois do sorteio desbalanceiam a
+// chave; o organizador fixa AQUI a solução ANTES do sorteio. O motor de integração tardia
+// (_createExtraGamesFromWaitlist/_rebuildIntegratedBracket) só implementa REPESCAGEM — então
+// as duas escolhas honestas são: repescagem (expand) ou lista de espera/suplentes (standby).
+// Não inventa opção que o motor não honra. Ver [[project_late_enrollment_elimination]].
+window._showLateConfrontosPanel = function(tId) {
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    var existing = document.getElementById('unified-resolution-panel');
+    if (existing) existing.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'unified-resolution-panel';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    document.body.style.overflow = 'hidden';
+    var _proceedDraw = function() {
+        // restaura inscrição (suspensa ao abrir o painel) e dispara o sorteio
+        if (t._suspendedByPanel) {
+            t.status = t._previousStatus || 'open';
+            delete t._suspendedByPanel; delete t._previousStatus;
+        }
+        try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+        overlay.remove(); document.body.style.overflow = '';
+        if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId);
+        else if (typeof window.showFinalReviewPanel === 'function') window.showFinalReviewPanel(tId);
+    };
+    window._lateConfrontosPick = function(mode) {
+        t._lateResolutionAck = mode;
+        if (mode === 'standby') {
+            // novos times viram SUPLENTES (não entram na chave). Seta na fase atual + no topo.
+            var ph = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
+            if (ph) ph.lateEnrollment = 'standby';
+            t.lateEnrollment = 'standby';
+        } else {
+            // v1.3.72: grava a ESCOLHA de resolução de rodada ímpar, aplicada SEMPRE pelo motor
+            // (_rebuildIntegratedBracket lê t.p2Resolution). bye = folga; repescagem = puxa o
+            // melhor derrotado (default, inclusão). Ver [[project_inclusion_philosophy_canon]].
+            t.p2Resolution = (mode === 'bye') ? 'bye' : 'playin';
+        }
+        _proceedDraw();
+    };
+    window._lateConfrontosCancel = function() {
+        // desiste do sorteio: restaura o status original da inscrição
+        if (t._suspendedByPanel) {
+            t.status = t._previousStatus || 'open';
+            delete t._suspendedByPanel; delete t._previousStatus;
+            try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+        }
+        overlay.remove(); document.body.style.overflow = '';
+    };
+    overlay.innerHTML =
+      '<div style="background:#0f1729;border:1px solid #1e293b;border-radius:16px;max-width:560px;width:100%;max-height:92%;overflow-y:auto;padding:1.5rem;">' +
+        '<div style="font-size:1.15rem;font-weight:800;color:#f1f5f9;margin-bottom:6px;">🔓 Inscrições abertas — novos confrontos</div>' +
+        '<div style="font-size:0.9rem;color:#94a3b8;line-height:1.5;margin-bottom:1.1rem;">A chave está equilibrada agora, mas as inscrições continuam abertas. ' +
+          'Quando um novo time entrar <b>depois do sorteio</b>, ele desbalanceia a chave. Escolha desde já como o sistema resolve:</div>' +
+        '<button onclick="window._lateConfrontosPick(\'repescagem\')" style="display:block;width:100%;text-align:left;background:linear-gradient(135deg,#16a34a,#15803d);border:none;border-radius:12px;padding:14px 16px;margin-bottom:10px;color:#fff;cursor:pointer;">' +
+          '<div style="font-weight:800;font-size:0.98rem;">🔁 Repescagem <span style="opacity:0.85;font-weight:600;">(recomendado)</span></div>' +
+          '<div style="font-size:0.82rem;opacity:0.92;margin-top:3px;line-height:1.4;">O novo time entra na 1ª rodada contra o <b>derrotado mais bem colocado</b>. Quando uma rodada fica ímpar, puxa outro repescado — <b>todos jogam</b>, sem folga.</div>' +
+        '</button>' +
+        '<button onclick="window._lateConfrontosPick(\'bye\')" style="display:block;width:100%;text-align:left;background:#1e293b;border:1px solid #475569;border-radius:12px;padding:14px 16px;margin-bottom:10px;color:#e2e8f0;cursor:pointer;">' +
+          '<div style="font-weight:800;font-size:0.98rem;">⏭️ BYE (folga)</div>' +
+          '<div style="font-size:0.82rem;opacity:0.85;margin-top:3px;line-height:1.4;">Quando uma rodada fica ímpar, o melhor colocado <b>folga</b> (avança sem jogar) em vez de puxar repescado. Aplicado sempre.</div>' +
+        '</button>' +
+        '<button onclick="window._lateConfrontosPick(\'standby\')" style="display:block;width:100%;text-align:left;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px 16px;margin-bottom:14px;color:#e2e8f0;cursor:pointer;">' +
+          '<div style="font-weight:800;font-size:0.98rem;">📋 Lista de espera (suplentes)</div>' +
+          '<div style="font-size:0.82rem;opacity:0.85;margin-top:3px;line-height:1.4;">Novos times NÃO entram na chave — ficam como suplentes e só assumem numa desistência/W.O.</div>' +
+        '</button>' +
+        '<div style="text-align:right;"><button onclick="window._lateConfrontosCancel()" style="background:#dc2626;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:0.85rem;cursor:pointer;padding:8px 16px;">✕ Cancelar</button></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    if (window._dtrace) window._dtrace('lateConfrontosPanel:shown', { le: (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) });
+};
+
 window.showUnifiedResolutionPanel = function(tId) {
     const t = window._findTournamentById(tId);
-    if (!t) return;
+    if (!t) { if (window._dtrace) window._dtrace('resolutionPanel:NO-TOURNAMENT'); return; }
+    if (window._dtrace) window._dtrace('resolutionPanel:enter', { fmt: t.format, parts: (t.participants || []).length, phaseCtx: !!t._phaseResInfo });
 
     // v4.x: transição de FASE (construtor) vs. resolução de INSCRIÇÃO. Quando há
     // _phaseResInfo, o `info` vem das linhas da próxima fase (via _phaseResToInfo) e
@@ -1073,9 +1151,22 @@ window.showUnifiedResolutionPanel = function(tId) {
         }
 
         info = window._diagnoseAll(t);
+        if (window._dtrace) window._dtrace('resolutionPanel:diag', { hasIssues: !!info.hasIssues, isPow2: !!info.isPowerOf2, isOdd: !!info.isOdd, remainder: info.remainder, incompl: (info.incompleteTeams || []).length });
 
         // If no issues, proceed directly to actual draw (skip Final Review step)
         if (!info.hasIssues) {
+            if (window._dtrace) window._dtrace('resolutionPanel:noIssues→draw');
+            // v1.3.60: pow2 LIMPA mas INSCRIÇÕES ABERTAS (expand) → os novos confrontos que
+            // entrarem DEPOIS do sorteio vão DESBALANCEAR a chave. Apresenta o painel pra o
+            // organizador FIXAR a solução antes do sorteio (repescagem = novo time entra vs
+            // derrotado mais bem colocado; OU lista de espera = suplentes, não entra na chave).
+            // Só Eliminatória Simples (único formato onde a integração tardia recalcula pow2).
+            var _leChk = (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment);
+            var _isElimFmt = t.format === 'Eliminatórias Simples' || t.format === 'Eliminatória Simples';
+            if (_isElimFmt && _leChk === 'expand' && !t._lateResolutionAck && typeof window._showLateConfrontosPanel === 'function') {
+                window._showLateConfrontosPanel(tId);
+                return;
+            }
             // Auto-restore enrollment
             if (t._suspendedByPanel) {
                 t.status = t._previousStatus || 'open';
@@ -1610,7 +1701,7 @@ window.showUnifiedResolutionPanel = function(tId) {
                 '</div>' +
             '</div>' +
             '<div style="display:flex;gap:8px;">' +
-                '<button onclick="window._cancelUnifiedPanel(\'' + tIdSafe + '\')" style="flex:1;background:rgba(0,0,0,0.25);color:#fef3c7;border:2px solid rgba(254,243,199,0.3);padding:9px 14px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\'">' + _t('predraw.cancelBtn') + '</button>' +
+                '<button onclick="window._cancelUnifiedPanel(\'' + tIdSafe + '\')" style="flex:1;background:#dc2626;color:#fff;border:none;padding:9px 14px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background=\'#b91c1c\'" onmouseout="this.style.background=\'#dc2626\'">' + _t('predraw.cancelBtn') + '</button>' +
                 '<button onclick="window._spinButton&&window._spinButton(this,\'Confirmando…\'); window._handleUnifiedOption(\'' + tIdSafe + '\', window._unifiedSel)" style="flex:2;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);padding:9px 14px;border-radius:12px;font-weight:800;font-size:0.85rem;cursor:pointer;transition:all 0.2s;box-shadow:0 6px 16px rgba(34,197,94,0.35);" onmouseover="this.style.filter=\'brightness(1.1)\'" onmouseout="this.style.filter=\'\'">' + _t('predraw.confirmBtn') + '</button>' +
             '</div>' +
         '</div>' +
@@ -1653,7 +1744,19 @@ window.showUnifiedResolutionPanel = function(tId) {
 // sorteio com os solos e escolhe: Ajuste manual (formar duplas na mão) · Lista
 // de espera · Exclusão. Cancelar aborta. Injetado em _handleSortearClick.
 // ════════════════════════════════════════════════════════════════════════════
-window._soloNameOf = function (p) { return (typeof p === 'string') ? p : (p && (p.displayName || p.name) || ''); };
+window._soloNameOf = function (p) {
+    if (typeof p === 'string') return p;
+    if (!p) return '';
+    // v1.3.90: nome VIVO por qualquer forma — o painel de sem-dupla mostrava PILL VAZIA porque lia
+    // só displayName||name (vazio pra entrada só-uid OU meia-dupla {p1Name:'X'}). Resolve via _pName
+    // canônico (uid→perfil ao vivo), depois p1Name/p2Name/displayName, e por fim o uid.
+    var n = (typeof window._pName === 'function') ? window._pName(p, '') : '';
+    if (n) return n;
+    n = p.displayName || p.name || p.p1Name || p.p2Name || '';
+    if (n) return n;
+    if (p.uid && typeof window._displayNameForUid === 'function') return window._displayNameForUid(p.uid, '') || '';
+    return '';
+};
 // Sem-dupla = entrada que NÃO é time. É ESTRUTURA — nome não entra nesta pergunta.
 // O `n &&` que existia aqui era um guard por NOME e tornava esta função um NO-OP na forma
 // REAL do doc: `_stripUidEntryNames` não grava nome de quem tem perfil vivo, então a
@@ -1714,7 +1817,7 @@ window._soloResolveWaitlist = function (tId, isAberto) {
     // o elenco reduzido). project_concurrency_safe_saves fica pro caminho de W.O., não aqui.
     var t = window._findTournamentById(tId);
     if (t) {
-        t._drawDecisions = Object.assign({}, t._drawDecisions, { solo: 'waitlist' }); // pacote pra CF
+        window._setDrawDecision(t.id, { solo: 'waitlist' }); // pacote pra CF (v1.3.93: mapa por tId)
         var moved = window._soloMoveOut(t, true);
         if (moved > 0) {
             try { window.AppStore.logAction(tId, moved + ' participante(s) sem dupla enviado(s) para a lista de espera'); } catch (_e) {}
@@ -1733,7 +1836,7 @@ window._soloResolveExclude = function (tId, isAberto) {
     var _count = solos.length;
     showConfirmDialog('Excluir do torneio?', names.join(', '), function () {
         // Move só no doc LOCAL (draw-time) — mesma razão do waitlist acima.
-        t._drawDecisions = Object.assign({}, t._drawDecisions, { solo: 'exclude' }); // pacote pra CF
+        window._setDrawDecision(t.id, { solo: 'exclude' }); // pacote pra CF (v1.3.93: mapa por tId)
         window._soloMoveOut(t, false);
         try { window.AppStore.logAction(tId, _count + ' participante(s) sem dupla excluído(s) do sorteio'); } catch (_e) {}
         window._soloContinueDraw(tId, isAberto);
@@ -1746,7 +1849,9 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
     var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
     var tIdSafe = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var ab = isAberto ? 'true' : 'false';
-    window._soloSel = 'manual'; // pré-seleciona Ajuste manual
+    // v1.3.99: com 2+ sem par, pré-seleciona FLEXIBILIZAR (inclui mais gente) — a opção inclusiva
+    // que o dono quer por padrão; senão, Ajuste manual.
+    window._soloSel = (solos.length >= 2) ? 'flex' : 'manual';
     var chips = solos.map(function (p) {
         return '<span style="display:inline-block;background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.4);color:#fde68a;border-radius:999px;padding:5px 12px;font-size:0.82rem;font-weight:600;">' + esc(window._soloNameOf(p)) + '</span>';
     }).join(' ');
@@ -1775,7 +1880,7 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
             '</div>' +
             // botões ABAIXO do título, MESMA altura/largura (box-sizing + min-height + borda iguais; flex:1)
             '<div style="display:flex;gap:10px;">' +
-                '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);color:#fef3c7;border:2px solid rgba(254,243,199,0.35);border-radius:12px;font-weight:700;font-size:0.92rem;line-height:1;cursor:pointer;">' + _t('predraw.cancelBtn') + '</button>' +
+                '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:#dc2626;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:0.92rem;line-height:1;cursor:pointer;">' + _t('predraw.cancelBtn') + '</button>' +
                 '<button onclick="window._soloConfirm(\'' + tIdSafe + '\', ' + ab + ')" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);border-radius:12px;font-weight:800;font-size:0.92rem;line-height:1;cursor:pointer;box-shadow:0 6px 16px rgba(34,197,94,0.35);">' + _t('predraw.confirmBtn') + '</button>' +
             '</div>' +
         '</div>' +
@@ -1783,6 +1888,12 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
             '<p style="margin:0 0 8px;font-size:0.85rem;color:var(--text-main,#cbd5e1);line-height:1.5;">Estes participantes <b>não formaram dupla</b>. Sem par, não entram direto no chaveamento. Selecione uma opção e confirme:</p>' +
             '<div style="display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 18px;">' + chips + '</div>' +
             '<div style="display:flex;flex-direction:column;gap:10px;">' +
+                // v1.3.99 (dono): a MESMA "Flexibilizar equilíbrio" que já existe no painel do resto —
+                // forma dupla(s) POR SORTEIO entre os sem par (mistas primeiro), incluindo mais gente
+                // em vez de deixar de fora; o que sobra (1) vai pra espera e a chave é sorteada entre
+                // TODAS as duplas. Chama a função EXISTENTE _applyFlexibilizeBalance. Só quando dá pra
+                // formar ao menos 1 dupla (2+ sem par). Ver [[project_inclusion_philosophy_canon]].
+                (solos.length >= 2 ? opt('flex', '⚖️', 'Flexibilizar equilíbrio', 'Forma dupla(s) por sorteio entre os sem par — inclui mais gente em vez de deixar de fora. Quem sobrar vai pra espera; a chave é sorteada entre todas as duplas.', '#4ade80') : '') +
                 opt('manual', '🧩', 'Ajuste manual', 'Abre a página de inscritos pra você formar as duplas arrastando um sobre o outro (vendo as duplas atuais e os sem par).', '#818cf8') +
                 opt('waitlist', '⏱️', 'Lista de espera', 'Vão pra lista de espera — não jogam a chave, mas ficam disponíveis pra substituir num W.O.', '#22d3ee') +
                 opt('exclude', '🚫', 'Excluir do sorteio', 'Removidos do torneio. Não entram na chave nem na lista de espera.', '#f87171') +
@@ -1801,7 +1912,14 @@ window._soloSelect = function (key) {
 };
 window._soloConfirm = function (tId, isAberto) {
     var key = window._soloSel || 'manual';
-    if (key === 'manual') window._soloManualPairPage(tId);
+    if (key === 'flex') {
+        // v1.3.99: chama a função EXISTENTE de flexibilizar (forma as duplas por sorteio e
+        // re-entra na cadeia — o solo que sobra vai pro painel do resto, depois pow2).
+        var a = document.getElementById('solo-resolution-panel'); if (a) a.remove();
+        document.body.style.overflow = '';
+        window._applyFlexibilizeBalance(tId);
+    }
+    else if (key === 'manual') window._soloManualPairPage(tId);
     else if (key === 'waitlist') window._soloResolveWaitlist(tId, isAberto);
     else if (key === 'exclude') window._soloResolveExclude(tId, isAberto);
 };
@@ -1880,9 +1998,11 @@ window._handleIncompleteOption = function (tId, option) {
     } else if (option === 'lottery') {
         window.showLotteryIncompletePanel(tId);
     } else if (option === 'standby') {
+        // v1.3.x (migração→CF): decisão no pacote (`incomplete`); a CF honra a flag sobre o doc
+        // restaurado no despacho. Local seta a flag só como preview do gate/UI; sem persist.
+        window._setDrawDecision(tId, { incomplete: 'standby' });
         t.incompleteResolution = 'standby';
         window.AppStore.logAction(tId, 'Jogadores sem time movidos para lista de espera');
-        window.AppStore.sync();
         var el2 = document.getElementById('incomplete-teams-panel');
         if (el2) el2.remove();
         window.showPowerOf2Panel(tId);
@@ -1911,16 +2031,16 @@ window.showLotteryIncompletePanel = function (tId) {
         () => {
             // Direta
             window.AppStore.logAction(tId, 'Repescagem Direta por Sorteio selecionada');
+            window._setDrawDecision(tId, { incomplete: 'lottery_direct' }); // v1.3.x: viaja no pacote pra CF
             t.incompleteResolution = 'lottery_direct';
-            window.AppStore.sync();
             document.getElementById('incomplete-teams-panel').remove();
             window.showPowerOf2Panel(tId);
         },
         () => {
             // Mini-repescagem
             window.AppStore.logAction(tId, 'Mini-Repescagem selecionada');
+            window._setDrawDecision(tId, { incomplete: 'lottery_mini' }); // v1.3.x: viaja no pacote pra CF
             t.incompleteResolution = 'lottery_mini';
-            window.AppStore.sync();
             document.getElementById('incomplete-teams-panel').remove();
             window.showPowerOf2Panel(tId);
         },
@@ -2124,8 +2244,12 @@ window._handleOddOption = function (tId, option) {
         if (container) renderTournaments(container, tId);
     } else if (option === 'bye_odd') {
         // Núcleo puro em draw-decisions.js (o pacote leva a escolha pra CF aplicar).
+        // v1.3.x (migração→CF): a decisão VIAJA no pacote (`odd`) e a CF aplica sobre o roster
+        // original restaurado no despacho. O _applyOddResolution local fica só como preview do
+        // gate/UI (seta t.oddResolution); NÃO persiste (sync removido) — o doc é restaurado ao
+        // original antes do sorteio. Ver [[project_draw_client_to_cf_migration]].
+        window._setDrawDecision(tId, { odd: 'bye_odd' });
         window.AppStore.logAction(tId, window._applyOddResolution(t, 'bye_odd').actionMsg);
-        window.AppStore.sync();
         var el2 = document.getElementById('odd-entries-panel');
         if (el2) el2.remove();
         showNotification(_t('draw.byeRotating'), _t('draw.byeRotatingMsg', {unit: isTeam ? _t('draw.team') : _t('draw.player')}), 'success');
@@ -2136,10 +2260,12 @@ window._handleOddOption = function (tId, option) {
             _t('predraw.oddConfirmMsg', {n: (oddInfo.count - 1), unit: (isTeam ? _t('predraw.unitTeams') : _t('predraw.unitParts'))}),
             function() {
                 // Núcleo puro em draw-decisions.js — a MESMA conta que a CF roda.
+                // v1.3.x (migração→CF): a decisão viaja no pacote (`odd`); a CF exclui sobre o
+                // roster original restaurado no despacho. Local = preview do gate/UI, sem persist.
+                window._setDrawDecision(tId, { odd: 'exclusion' });
                 var _ro = window._applyOddResolution(t, 'exclusion');
                 var removedName = _ro.removedName;
                 window.AppStore.logAction(tId, _ro.actionMsg);
-                window.AppStore.sync();
                 var el3 = document.getElementById('odd-entries-panel');
                 if (el3) el3.remove();
                 showNotification(_t('draw.participantRemoved'), _t('draw.participantRemovedMsg', {name: removedName, total: oddInfo.count - 1}), 'warning');
@@ -3059,7 +3185,7 @@ window._handleP2Option = function (tId, option) {
                 // A conta (splice dos últimos N até a pot-2 inferior) é núcleo PURO em
                 // draw-decisions.js — a MESMA que a CF roda. O confirm acima continua UI.
                 var _rx = window._applyP2Resolution(t, 'exclusion', {});
-                t._drawDecisions = Object.assign({}, t._drawDecisions, { p2: { option: 'exclusion' } });
+                window._setDrawDecision(t.id, { p2: { option: 'exclusion' } }); // v1.3.93: mapa por tId
                 window.AppStore.logAction(tId, _rx.actionMsg);
                 // v4.5.7: SEM sync() antes do sorteio (clobberava a chave → sorteio-fantasma).
                 // A exclusão persiste no delta do _commitInitialDraw (preDraw usa o elenco
@@ -3144,7 +3270,7 @@ window._showReopenPanel = function (tId, info) {
             </div>
 
             <div style="padding:1.25rem 2.5rem 1.75rem;display:flex;gap:12px;justify-content:flex-end;background:rgba(0,0,0,0.1);border-top:1px solid rgba(255,255,255,0.05);border-radius:0 0 20px 20px;">
-                <button onclick="window._cancelDrawResolution('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" style="background:transparent;color:#94a3b8;border:2px solid rgba(148,163,184,0.2);padding:10px 24px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;transition:all 0.2s;">${_t('predraw.reopenBack')}</button>
+                <button onclick="window._cancelDrawResolution('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" style="background:#dc2626;color:#fff;border:none;padding:10px 24px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#dc2626'">${_t('predraw.reopenBack')}</button>
                 <button onclick="window._confirmReopen('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${_rpHi})" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;border:none;padding:10px 28px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;box-shadow:0 4px 15px rgba(59,130,246,0.3);transition:all 0.2s;">${_t('predraw.reopenConfirm')}</button>
             </div>
         </div>
@@ -3712,7 +3838,7 @@ window._confirmP2Resolution = function (tId, option) {
     });
     var actionMsg = _r.actionMsg;
     // O pacote que a CF vai aplicar (o cliente NÃO é a fonte da verdade do elenco):
-    t._drawDecisions = Object.assign({}, t._drawDecisions, {
+    window._setDrawDecision(t.id, { // v1.3.93: mapa por tId (sobrevive ao onSnapshot)
         p2: { option: option, pick: _pickRadio ? _pickRadio.value : 'last',
               mode: _modeRadio ? _modeRadio.value : 'teams',
               swissRounds: window._swissSelectedRounds || null }

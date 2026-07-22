@@ -104,12 +104,16 @@ function renderBracket(container, tournamentId, isInline) {
   var _t = window._t || function(k) { return k; };
   const tId = tournamentId || window._lastActiveTournamentId;
   // Entrada no bracket (navegação REAL) → agenda o scroll pro próximo jogo do usuário.
-  // Consumido em _applyMyMatchesFilter quando os cards existem. O gate exclui o
-  // SOFT-REFRESH (onSnapshot → _softRefreshView → initRouter também seta
-  // _inRouterRender): sem o !_isSoftRefresh, QUALQUER clique que salvava (Cheguei,
-  // placar, W.O.) disparava snapshot → re-render → a tela PULAVA pro grupo de novo.
-  // Regra: scroll fixo e estável em re-render; auto-scroll SÓ na entrada.
-  if (window._inRouterRender && !window._isSoftRefresh) window._bracketPendingScroll = String(tId);
+  // O token _navScrollTid é setado no ROUTER, síncrono no momento da navegação, e é DURÁVEL —
+  // sobrevive ao render ASSÍNCRONO do detalhe (que carrega o torneio via await). Antes o gate
+  // era _inRouterRender, resetado em setTimeout(0): com cache o render vinha síncrono (rolava),
+  // sem cache vinha depois do reset (NÃO rolava) → o scroll inconsistente que o dono apontou.
+  // Consumido 1× aqui (casando o tId) e limpo → re-render/soft-refresh não re-scrolla. Regra:
+  // scroll fixo e estável em re-render; auto-scroll SÓ na entrada. [[feedback_rerender_keep_scroll]]
+  if (window._navScrollTid && String(window._navScrollTid) === String(tId)) {
+    window._navScrollTid = null;
+    window._bracketPendingScroll = String(tId);
+  }
 
   // v1.8.94: buscar em tournaments (membro/org) E publicDiscovery (torneios públicos)
   let t = tId && window.AppStore ? window._findTournamentById(tId) : null;
@@ -205,70 +209,32 @@ function renderBracket(container, tournamentId, isInline) {
   if (isOrg) {
     var _healedPrem = (typeof window._healPrematureLigaRounds === 'function') && window._healPrematureLigaRounds(t);
     var _healedSit = (typeof window._healSitOutWinners === 'function') && window._healSitOutWinners(t);
-    if ((_healedPrem || _healedSit) && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+    // v1.3.62: heal do 3º lugar em Elim Simples — a chave integrada de tardios (v1.3.61) apagou
+    // t.thirdPlaceMatch ao reconstruir e a recriação só rodava ao lançar resultado. Aqui recria
+    // ao ABRIR o bracket (idempotente: _maybeGenerate3rdPlace só cria se faltar). SÓ elim simples
+    // — em Liga/Suíço/Grupos a função criaria 3º lugar bogus (penúltima rodada ≠ semifinal).
+    var _healed3rd = false;
+    var _isElimSimples = (t.format === 'Eliminatórias Simples' || t.format === 'Eliminatória Simples');
+    if (_isElimSimples && typeof window._maybeGenerate3rdPlace === 'function') {
+      var _had3rd = !!t.thirdPlaceMatch;
+      try { window._maybeGenerate3rdPlace(t); } catch (e) {}
+      _healed3rd = (!_had3rd && !!t.thirdPlaceMatch);
+    }
+    if ((_healedPrem || _healedSit || _healed3rd) && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
       try { window.FirestoreDB.saveTournament(t); } catch (e) {}
     }
   }
 
-  // v1.2.58: DUPLA formada na espera entra NO LUGAR DO REPESCADO na chave PLAYIN (Elim
-  // Simples/Dupla Elim): preenche o slot repFill da ímpar (JOGO N "VS A definir"), some 1
-  // repescado. Reusa a mecânica repFill — sem reconstruir. Ver project_late_dupla_fills_awaiting_slot.
-  if (isOrg && typeof window._fillRepFillWithLateDuplas === 'function') {
-    try {
-      var _nRF = window._fillRepFillWithLateDuplas(t);
-      if (_nRF > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t);
-        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nRF + ' dupla(s) na chave', 'Entrou no lugar do repescado — a chave recalculou os repescados.', 'success');
-      }
-    } catch (e) {}
-  }
-
-  // v2.1.26: tardios entram NA chave — SÓ o organizador dispara (escrita de
-  // matches/participants só passa nas rules como admin). Auto ao abrir o bracket.
-  if (isOrg && typeof window._createExtraGamesFromWaitlist === 'function') {
-    try {
-      var _nExtra = window._createExtraGamesFromWaitlist(t); // já integra na chave + rebuild
-      if (_nExtra > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t);
-        if (typeof showNotification !== 'undefined') showNotification('⚡ ' + (_nExtra * 2) + ' tardios na chave', _nExtra + ' jogo(s) novo(s) na rodada 1 — chave redesenhada.', 'info');
-      }
-    } catch (e) {}
-  }
-
-  // INCREMENT 2: duplas formadas na lista de espera (Dupla Eliminatória) entram na chave, por
-  // progressão do torneio — Tier 1 (R2 upper não começou) → R1 do upper; Tier 2 (R2 upper já
-  // começou) → R1 da chave inferior; Tier 3 (R2 lower já começou) → suplentes individuais.
-  // Ver _integrateLateDuplas / project_dupla_elim_repechage.
-  if (isOrg && typeof window._integrateLateDuplas === 'function') {
-    try {
-      var _nLJ = window._integrateLateDuplas(t);
-      if (_nLJ > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t);
-        var _ljTier = window._lastIntegrateTier || 1;
-        var _ljMsg = (_ljTier === 2)
-          ? 'Entraram na R1 da chave inferior (vencedor segue no lower, derrotado eliminado).'
-          : 'Entraram na R1 da chave superior (vencedor sobe, derrotado cai pro lower).';
-        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nLJ + ' dupla(s) na chave', _ljMsg, 'success');
-      } else if (_nLJ === -3 && typeof window._dissolveLateDuplas === 'function') {
-        // Tier 3: R2 do lower já começou → duplas viram suplentes individuais.
-        var _nd = window._dissolveLateDuplas(t);
-        if (_nd > 0 && window.FirestoreDB) { window.FirestoreDB.saveTournament(t);
-          if (typeof showNotification !== 'undefined') showNotification('👤 Suplentes individuais', 'O torneio já avançou na chave inferior — as duplas em espera viraram suplentes individuais.', 'info'); }
-      }
-    } catch (e) {}
-  }
-
-  // v3.1.22: Rei/Rainha — novos GRUPOS a partir da lista de espera (Inscrições durante
-  // a fase, "Novos Confrontos"). Regra canônica: só quando expand, mesmo-dia conta
-  // presença, sorteia o pareamento. Idempotente (forma 0 em regime → sem loop/save).
-  if (isOrg && typeof window._expandMonarchFromWaitlist === 'function') {
-    try {
-      var _nRR = window._expandMonarchFromWaitlist(t);
-      if (_nRR > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t);
-        if (typeof showNotification !== 'undefined') showNotification('⚡ ' + _nRR + ' novo(s) grupo(s)', 'Novos confrontos formados da lista de espera.', 'info');
-      }
-    } catch (e) {}
+  // v1.3.87 (dono, SANDBOX): a INTEGRAÇÃO TARDIA passa a rodar SÓ na CF (integrateLateEntries),
+  // como o sorteio inicial (drawRound). O cliente NÃO computa mais a chave — só DISPARA e o
+  // onSnapshot re-renderiza. Isto MATA o 2º caminho (client-side) que se comportava diferente do
+  // sorteio inicial ("um foi pela CF, o outro não"): o mesmo motor vendorado, um caminho só. As
+  // funções _fillRepFillWithLateDuplas / _createExtraGamesFromWaitlist / _integrateLateDuplas /
+  // _expandMonarchFromWaitlist continuam DEFINIDAS só porque a CF as roda via vendor/ — o cliente
+  // nunca mais as chama. Regra do dono: "no cliente só o disparo do sorteio e as respostas às
+  // perguntas que vão pra CF". Ver [[feedback_draw_is_cf_only]] / [[project_autodraw_server_parity]].
+  if (isOrg && typeof window._triggerLateIntegration === 'function') {
+    try { window._triggerLateIntegration(t); } catch (e) {}
   }
   const canEnterResult = isOrg || window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee');
   const isLiga = window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
@@ -292,8 +258,9 @@ function renderBracket(container, tournamentId, isInline) {
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift" onclick="window._exportTournamentCSV('${_tIdSafe}')">📊 CSV</button>` : '<span></span>'}
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._tvMode('${_tIdSafe}')">📺 Modo TV</button>` : '<span></span>'}
       ${isOrg && !hasContent ? `<button class="btn btn-primary btn-sm hover-lift" style="grid-column:span 2;" onclick="window.generateDrawFunction('${_tIdSafe}')">🎲 Realizar Sorteio</button>` : ''}
-      ${(isOrg && hasContent && window.AppStore.isCreator && window.AppStore.isCreator(t)) ? `<button class="btn btn-warning btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._resetTournamentToEnrollment('${_tIdSafe}')" title="Apaga sorteio, rodadas e fases; mantém os inscritos">🔄 Resetar (manter inscritos)</button>` : ''}
-      ${(hasContent && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-purple btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._devSimulateCurrentPhase('${_tIdSafe}')" title="DEV (só você): simula os resultados da fase atual com horários reais">🎲 Simular fase (dev)</button>` : ''}
+      ${/* Reset + Simular fase: SÓ no SB e só pro dev (removidos dos torneios normais). */ ''}
+      ${(hasContent && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-warning btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._resetTournamentToEnrollment('${_tIdSafe}')" title="SB: re-sincroniza o roster do original agora e apaga sorteio/resultados/adições de teste">🔄 Resetar (manter inscritos)</button>` : ''}
+      ${(hasContent && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-purple btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._devSimulateCurrentPhase('${_tIdSafe}')" title="SB (só você): simula os resultados da fase atual com horários reais">🎲 Simular fase (dev)</button>` : ''}
     </div>
     <style>
       @media (min-width: 768px) {
@@ -769,6 +736,18 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   var _solos = _merged.filter(function (p) { return !_isPair(p) && _nm(p).indexOf('/') === -1 && !(p && Array.isArray(p.participants) && p.participants.length); });
   var _duplas = _merged.filter(_isPair);
   if (!_solos.length && !_duplas.length) return '';
+  // v1.3.44: PRESENTE SOBE — quem recebe presença sobe pro topo da fila "Sem dupla", na
+  // ORDEM em que recebeu (timestamp de check-in ascendente); ausentes ficam abaixo na ordem
+  // original. Pedido do dono: "o primeiro a receber presença vai pra primeiro, o 2º pra 2º".
+  // Mesma regra do _renderStandbyPanel (modo 'present'). O re-render no toggle já reordena.
+  var _ciTs = function (p) { return (typeof window._idMapGet === 'function') ? (window._idMapGet(t, t.checkedIn || {}, p) || 0) : 0; };
+  _solos.sort(function (a, b) {
+    var tsa = _ciTs(a), tsb = _ciTs(b);
+    if (tsa && tsb) return tsa - tsb; // ambos presentes → quem marcou antes vem antes
+    if (tsa) return -1;               // só a presente → a sobe
+    if (tsb) return 1;                // só b presente → b sobe
+    return 0;                         // nenhum presente → mantém a ordem original
+  });
   var _canPair = isOrg || (t && t.manualPairing === 'open');
   var ci = t.checkedIn || {};
   var _nameFs = (window._INSCRITO_NAME_FONT_PX || 17);
@@ -785,7 +764,7 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var safeName = _sa(nm);
     return '<div style="display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 42%;">'
       + '<div style="display:flex;align-items:center;gap:7px;min-width:0;"><img src="' + _safeHtml(ph.url) + '" onerror="this.onerror=null;this.src=\'' + ph.fb + '\'" data-player-name="' + _safeHtml(nm) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:' + _nameFs + 'px;color:var(--text-bright);line-height:1.18;word-break:break-word;min-width:0;">' + _safeHtml(nm) + '</span></div>'
-      + '<div style="display:flex;align-items:center;gap:6px;"><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + safeName + '\');"><span class="toggle-slider"></span></label><span style="font-size:0.62rem;font-weight:700;color:' + (mc ? '#4ade80' : '#64748b') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span></div>'
+      + '<div style="display:flex;align-items:center;gap:6px;"><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + safeName + '\',\'' + String((pObj && pObj.uid) || '').replace(/'/g, "\\'") + '\');"><span class="toggle-slider"></span></label><span style="font-size:0.62rem;font-weight:700;color:' + (mc ? '#4ade80' : '#64748b') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span></div>'
       + '</div>';
   };
 
@@ -795,19 +774,42 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   // arraste — assim a lista continua rolando com o toque normal. O toggle de presença
   // (label/input) e botões nunca iniciam o arraste (ver _ljIsInteractive). Sem ícone de
   // alça — o card inteiro é a alça. Os dados do arraste (tId/name) vão no PRÓPRIO card.
-  var solosHtml = _solos.map(function (p) {
-    var nm = _nm(p);
-    var uid = (typeof p === 'object' ? (p.uid || '') : '');
-    var keyAttr = _safeHtml(uid || nm);
-    var badge = (window._enrollNumberBadge && window._enrollNumber && window._buildEnrollOrderMap)
-      ? window._enrollNumberBadge(window._enrollNumber(window._buildEnrollOrderMap(t), p)) : '';
-    var pairAttr = _canPair ? ' data-lj-tid="' + _safeHtml(t.id) + '" data-lj-name="' + _safeHtml(nm) + '"' : '';
-    return '<div data-lj-card="1" data-lj-key="' + keyAttr + '"' + pairAttr + ' style="' + (_canPair ? 'cursor:grab;-webkit-user-select:none;user-select:none;' : '') + 'background:linear-gradient(135deg,rgba(180,120,20,0.32),rgba(245,158,11,0.26));border:1px solid rgba(245,158,11,0.5);border-radius:12px;padding:12px;position:relative;overflow:hidden;">'
-      + badge
-      + '<div style="position:relative;z-index:1;min-width:0;">' + _memberBlock(nm, p)
-      + '<div style="font-size:0.62rem;color:rgba(255,255,255,0.5);margin-top:5px;">' + (_canPair ? 'Segure e arraste sobre outro card para formar dupla' : 'Sem dupla') + '</div></div>'
-      + '</div>';
-  }).join('');
+  // v1.3.36: card SOLO renderizado pela FONTE ÚNICA window._inscritoIndividualCard (modo
+  // lateJoin: âmbar + arraste data-lj-* + toggle Presente/Ausente). Zero pirata: o mesmo card
+  // do #participants/detalhe, só com a pele/arraste do pareamento tardio via ctx.
+  var _ljOrderMap = (typeof window._buildEnrollOrderMap === 'function') ? window._buildEnrollOrderMap(t) : {};
+  var _ljPresence = function (pp) {
+    var nmp = _nm(pp);
+    var _who = (pp && typeof pp === 'object' && pp.uid) ? { uid: pp.uid } : nmp;
+    var mc = window._idMapHas ? window._idMapHas(t, ci, _who) : false;
+    var _abs = window._idMapHas ? window._idMapHas(t, t.absent || {}, _who) : false;
+    var uidp = String((pp && typeof pp === 'object' && pp.uid) || '').replace(/'/g, "\\'");
+    // v1.3.55: W.O. no card "Sem dupla" (faltava). Só pro organizador; vira Reverter se ausente.
+    var wo = (isOrg && typeof window._woBtnHtml === 'function')
+      ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + tIdSafe + "', '" + _sa(nmp) + "');", !_abs, { label: _abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
+      : '';
+    // v1.3.148 (dono: "mantenha as cores dos inscritos consistente"): este painel colorizava por
+    // STATUS DE PAREAMENTO (âmbar = sem dupla, verde = dupla formada) e devolvia styleExtra VAZIO —
+    // então um inscrito PRESENTE sem dupla ficava ÂMBAR e uma dupla com os DOIS AUSENTES ficava
+    // VERDE. Agora bebe da FONTE ÚNICA de presença (store.js `_PRESENCE_TONES`): verde=presente,
+    // azul=ausente. Ver [[project_inscrito_card_canonical]].
+    var _st = (mc ? 'present' : 'absent');
+    var _txtC = window._presenceTextColor ? window._presenceTextColor(_st, 'solo') : (mc ? '#4ade80' : '#bfdbfe');
+    var _tglC = window._presenceToggleColor ? window._presenceToggleColor(_st, 'solo') : '#10b981';
+    var row = '<span style="font-size:0.74rem;font-weight:800;color:' + _txtC + ';white-space:nowrap;">' + (mc ? 'Presente' : 'Ausente') + '</span>'
+      + '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _tglC + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _tglC + ';flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmp) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label>'
+      + wo;
+    return { skip: false, styleExtra: (window._presenceCardStyle ? window._presenceCardStyle(_st, 'solo') : ''), rowHtml: row };
+  };
+  var solosHtml = (typeof window._inscritoIndividualCard === 'function')
+    ? _solos.map(function (p, i) {
+        return window._inscritoIndividualCard(t, p, i, {
+          isOrg: isOrg, drawDone: true, canRollCall: false, postDrawPresence: false,
+          lateJoin: { canPair: _canPair }, enrollOrderMap: _ljOrderMap,
+          nameToParticipant: {}, waitSet: {}, cardPresence: _ljPresence
+        });
+      }).join('')
+    : '';
 
   // Cards DUPLA FORMADA (teal) — 2 pessoas + Desfazer.
   // v1.2.55: nome de CADA membro pelo SEU uid (cânone: identidade é uid; nome vem do perfil
@@ -822,16 +824,39 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     }
     return s.trim();
   };
-  var duplasHtml = _duplas.map(function (p) {
-    var m1 = _ljMemberName(p.p1Uid, p.p1Name), m2 = _ljMemberName(p.p2Uid, p.p2Name);
-    var desfazer = isOrg
-      ? '<button type="button" class="btn btn-danger btn-micro" onclick="event.stopPropagation();window._splitLateDupla(\'' + tIdSafe + '\',\'' + _sa(_nm(p)) + '\')" style="min-height:0;height:26px;padding:0 10px;font-size:0.68rem;font-weight:800;white-space:nowrap;">↩️ Desfazer</button>'
-      : '';
-    return '<div style="background:linear-gradient(135deg,rgba(15,118,110,0.5),rgba(20,184,166,0.42));border:1px solid rgba(20,184,166,0.5);border-radius:12px;padding:12px;">'
-      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memberBlock(m1, { displayName: m1, name: m1, uid: p.p1Uid }) + _memberBlock(m2, { displayName: m2, name: m2, uid: p.p2Uid }) + '</div>'
-      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;"><span style="font-size:0.65rem;color:#34d399;">✅ Dupla formada</span>' + desfazer + '</div>'
-      + '</div>';
-  }).join('');
+  // v1.3.37: card de DUPLA formada renderizado pela FONTE ÚNICA window._duplaCard (o mesmo
+  // do #participants/detalhe), modo formado (draggable=false). Presença por membro e o
+  // Desfazer (via _splitLateDupla) injetados por ctx. Zero pirata: _memberBlock/_ljMemberName
+  // inline aposentados.
+  var _ljMemberPres = function (mm, right) {
+    var nmm = (typeof window._displayName === 'function') ? window._displayName(mm.uid, mm.guest) : (mm.guest || mm.uid || '');
+    var mc = window._idMapHas ? window._idMapHas(t, ci, mm.uid ? { uid: mm.uid } : nmm) : false;
+    var uidp = String(mm.uid || '').replace(/'/g, "\\'");
+    // v1.3.76: toggle À DIREITA da palavra Presente/Ausente (pedido do dono) — span antes, label depois.
+    var _mTxt = window._presenceTextColor ? window._presenceTextColor(mc ? 'present' : 'absent', 'pair') : (mc ? '#4ade80' : '#93c5fd');
+    var html = '<div style="display:flex;align-items:center;gap:6px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.62rem;font-weight:700;color:' + _mTxt + ';">' + (mc ? 'Presente' : 'Ausente') + '</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmm) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label></div>';
+    return { html: html };
+  };
+  // Desfazer: passa as 2 IDENTIDADES de membro (uid||nome-guest), NUNCA a string "A / B" — o cânone
+  // uid proíbe casar dupla por displayName (a resolução por uid diverge entre render e split → o ✕
+  // não achava a dupla e não fazia nada). Espelha o _splitDupla do roster. [[project_uid_identity_canon_locked]]
+  var _ljSplit = function (tid, m1id, m2id, name) { return 'window._splitLateDupla(\'' + tid + '\',\'' + m1id + '\',\'' + m2id + '\')'; };
+  // v1.3.148 (dono): antes `cardPresence: null` → a dupla NÃO recebia cor de presença e caía no
+  // VERDE base do _duplaCard: no print, Luigi/Adriana com os DOIS AUSENTES aparecia verde. Agora usa
+  // a FONTE ÚNICA com os 3 estados: os 2 presentes = VERDE · 1 presente = ÂMBAR · nenhum = AZUL.
+  var _ljCardPres = function (pp) {
+    if (!pp || typeof pp !== 'object') return { skip: false, styleExtra: '', rowHtml: '' };
+    var _n1 = (typeof window._displayName === 'function') ? window._displayName(pp.p1Uid, pp.p1Name) : (pp.p1Name || '');
+    var _n2 = (typeof window._displayName === 'function') ? window._displayName(pp.p2Uid, pp.p2Name) : (pp.p2Name || '');
+    var _has = function (uid, nm) { return window._idMapHas ? window._idMapHas(t, ci, uid ? { uid: uid } : nm) : false; };
+    var _q1 = _has(pp.p1Uid, _n1), _q2 = _has(pp.p2Uid, _n2);
+    var _st = (_q1 && _q2) ? 'present' : ((_q1 || _q2) ? 'partial' : 'absent');
+    return { skip: false, styleExtra: (window._presenceCardStyle ? window._presenceCardStyle(_st, 'pair') : ''), rowHtml: '' };
+  };
+  var _ljDctx = { isOrg: isOrg, drawDone: true, orgUids: {}, orgEmails: {}, cardPresence: _ljCardPres, memberPresence: _ljMemberPres, enrollOrderMap: _ljOrderMap, splitDupla: _ljSplit };
+  var duplasHtml = (typeof window._duplaCard === 'function')
+    ? _duplas.map(function (p) { return window._duplaCard(t, p, false, _ljDctx); }).join('')
+    : '';
 
   var _readyMsg = (_duplas.length >= 1)
     ? '<div style="font-size:0.72rem;color:#2dd4bf;font-weight:700;margin-top:2px;">✔️ ' + _duplas.length + ' dupla(s) formada(s) na lista de espera.</div>'
@@ -840,61 +865,33 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   return '<div id="late-join-pairing-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.25);border-radius:16px;padding:1.5rem;">'
     + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;"><span style="font-size:1.3rem;">🤝</span><h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Formar novas duplas</h3><span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">inscrições abertas · R1</span></div>'
     + '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:1rem;">Arraste um card sobre outro para formar uma dupla (no celular, segure e arraste). Enquanto a 2ª rodada do upper não começou, cada dupla nova entra na <b>R1 da chave superior</b> (vencedor sobe, derrotado cai pro lower).</div>'
-    + (solosHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#f59e0b;margin-bottom:6px;">Sem dupla</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:1.1rem;">' + solosHtml + '</div>' : '')
-    + (duplasHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#2dd4bf;margin-bottom:6px;">Duplas formadas</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;">' + duplasHtml + '</div>' : '')
+    + (solosHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#f59e0b;margin-bottom:6px;">Sem dupla</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:10px;margin-bottom:1.1rem;align-items:stretch;">' + solosHtml + '</div>' : '')
+    + (duplasHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#2dd4bf;margin-bottom:6px;">Duplas formadas</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:10px;align-items:stretch;">' + duplasHtml + '</div>' : '')
     + _readyMsg
     + '</div>';
 };
 
-// Formar dupla na LISTA DE ESPERA (standbyParticipants + waitlist): remove os 2 avulsos de
-// onde estiverem e empurra {p1Name,p2Name,_lateJoin} pra standbyParticipants. Chamado pelo
-// pointer-drag (_ljEnd) — não depende de HTML5 DnD.
-window._formLateJoinDupla = function (tId, src, tgt) {
-  if (!src || !tgt || src === tgt) return;
-  var t = window.AppStore && window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
-  if (!t) return;
-  var _keyOf = function (p) { var uid = (typeof p === 'object' ? (p.uid || '') : ''); var nm = (window._pName ? window._pName(p, '') : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '')); return uid || nm; };
-  var _pull = function (key) {
-    var stores = [t.standbyParticipants, t.waitlist];
-    for (var s = 0; s < stores.length; s++) {
-      var arr = stores[s]; if (!Array.isArray(arr)) continue;
-      for (var i = 0; i < arr.length; i++) {
-        var p = arr[i];
-        if (p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) continue;
-        if (_keyOf(p) === key) { arr.splice(i, 1); return p; }
-      }
-    }
-    return null;
-  };
-  var a = _pull(src), b = _pull(tgt);
-  if (!a || !b) { if (a) { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; t.standbyParticipants.push(a); } if (b) { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; t.standbyParticipants.push(b); } return; }
-  // v1.2.55: nunca gravar undefined em pXName. Com uid o nome é stripado no save e resolvido
-  // do perfil ao vivo no render (_ljMemberName). Sem uid (guest, ex.: tonho) o nome É a
-  // identidade → guarda. `|| ''` evita o "undefined" que aparecia quando o cache estava frio.
-  var an = ((window._pName ? window._pName(a, '') : (a.displayName || a.name || '')) || (typeof a === 'object' ? (a.displayName || a.name) : a) || '');
-  var bn = ((window._pName ? window._pName(b, '') : (b.displayName || b.name || '')) || (typeof b === 'object' ? (b.displayName || b.name) : b) || '');
-  if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
-  // v1.2.45: CARREGA o nº de inscrição de cada um pra dentro da dupla (p1Seq/p2Seq).
-  // CÂNONE (dono): o número é da PESSOA e a acompanha SEMPRE — formar dupla (manual ou
-  // sorteio) e desfazer NÃO mexem nele; só a saída de um inscrito renumera (aí o 3º vira
-  // 2º). Sem isto, o seq sumia aqui, `_ensureEnrollSeqs` inventava um novo na hora de
-  // renderizar, e o "Desfazer dupla" devolvia fielmente esse número INVENTADO — foi assim
-  // que uma simulação desfeita embaralhou os 20 números do "Duplas Mistas Sorteadas".
-  // Os outros dois caminhos de formação (_formDuplaByUids e o merge do sorteio) já
-  // preservam desde a v2.7.97; este era o que faltava.
-  if (window._ensureEnrollSeqs) window._ensureEnrollSeqs(t);
-  var _sqA = (typeof a === 'object' && a && a.enrollSeq != null) ? a.enrollSeq : null;
-  var _sqB = (typeof b === 'object' && b && b.enrollSeq != null) ? b.enrollSeq : null;
-  t.standbyParticipants.push({
-    p1Name: an, p1Uid: (typeof a === 'object' ? (a.uid || '') : ''),
-    p2Name: bn, p2Uid: (typeof b === 'object' ? (b.uid || '') : ''),
-    p1Seq: _sqA, p2Seq: _sqB,
-    displayName: an + ' / ' + bn, name: an + ' / ' + bn, _lateJoin: true
-  });
-  t.updatedAt = new Date().toISOString();
-  window.FirestoreDB.saveTournament(t).then(function () {
-    if (typeof showNotification !== 'undefined') showNotification('🤝 Dupla formada', an + ' / ' + bn, 'success');
-    if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+// Formar dupla na LISTA DE ESPERA — CF-ONLY (regra do dono "tudo na CF, cliente só dispara").
+// src/tgt = identidade (uid||nome) dos 2 avulsos. A CF formLatePair (functions-autodraw) tira os 2
+// da espera, forma a dupla _lateJoin, marca presença E integra na chave — ATÔMICO — e devolve o
+// doc. O cliente só dispara e REFLETE (via _applyCFTournament). Zero mutação/save local.
+window._formLateJoinDupla = function (tId, src, tgt, opts) {
+  var _cards = (opts && opts.cards) || null;
+  if (!src || !tgt || src === tgt) { if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards); return; }
+  if (!(window.FirestoreDB && typeof window.FirestoreDB.formLatePair === 'function')) {
+    if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards);
+    if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível formar a dupla agora — tente de novo.', 'warning');
+    return;
+  }
+  window.FirestoreDB.formLatePair(tId, { key1: src, key2: tgt }).then(function (res) {
+    if (window._dtrace) window._dtrace('formLatePair:done', { v: (window.SCOREPLACE_VERSION || '?'), formed: res && res.formed, integrated: res && res.integrated && res.integrated.changed });
+    // sucesso: o re-render (via _applyCFTournament) substitui os cards → o estado "formando" some sozinho.
+    if (res && res.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, res.tournament);
+    else if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards);
+    if (typeof showNotification !== 'undefined') showNotification('🤝 Dupla formada', (res && res.formed ? (res.formed + ' entrou na chave.') : 'Dupla na chave.'), 'success');
+  }).catch(function (e) {
+    if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards);   // erro: restaura os cards
+    if (typeof showNotification !== 'undefined') showNotification('Não foi possível formar a dupla', (e && (e.message || e.code)) || '', 'warning');
   });
 };
 
@@ -932,7 +929,12 @@ window._formLateJoinDupla = function (tId, src, tgt) {
   function _ljClearPending() { if (_ljPending && _ljPending.timer) clearTimeout(_ljPending.timer); _ljPending = null; }
   function _ljBegin(card, pt) {
     var key = card.getAttribute('data-lj-key');
-    var nm = card.getAttribute('data-lj-name') || key;
+    // v1.3.67: resolve o nome AO VIVO pelo uid (data-lj-key = uid nas entradas com conta) —
+    // se o cache do perfil estava frio no render, data-lj-name virou "Participante N" e o
+    // clone arrastado mostrava isso em vez do nome. Guest: key = nome, _displayNameForUid não
+    // resolve → cai no data-lj-name. Ver [[project_uid_identity_canon_locked]].
+    var _liveNm = (key && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(key, '') : '';
+    var nm = _liveNm || card.getAttribute('data-lj-name') || key;
     var clone = document.createElement('div');
     clone.textContent = '👤 ' + nm;
     clone.style.cssText = 'position:fixed;z-index:100060;pointer-events:none;background:#f59e0b;color:#111;font-weight:800;font-size:0.8rem;padding:6px 12px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);transform:translate(-50%,-160%);left:' + pt.clientX + 'px;top:' + pt.clientY + 'px;';
@@ -979,6 +981,22 @@ window._formLateJoinDupla = function (tId, src, tgt) {
     if (hit && hit.key !== _ljDrag.key) { hit.card.style.outline = '3px solid #f59e0b'; hit.card.style.outlineOffset = '2px'; _ljDrag.hi = hit.card; }
     if (e.cancelable) e.preventDefault();   // só bloqueia o scroll DURANTE o arraste
   }
+  // Feedback "formando…" nos 2 cards enquanto a CF responde (dim + spinner no card-alvo).
+  function _ljMarkForming(cards) {
+    (cards || []).forEach(function (c) { if (!c) return; c.style.opacity = '0.55'; c.style.pointerEvents = 'none'; c.style.transition = 'opacity 0.15s'; });
+    var tgt = cards && cards[1];
+    if (tgt && tgt.querySelector && !tgt.querySelector('.lj-forming-badge')) {
+      try { if (window.getComputedStyle(tgt).position === 'static') tgt.style.position = 'relative'; } catch (e) {}
+      var b = document.createElement('div');
+      b.className = 'lj-forming-badge';
+      b.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(15,23,42,0.6);border-radius:inherit;z-index:6;color:#22d3ee;font-weight:800;font-size:0.8rem;pointer-events:none;';
+      b.innerHTML = '<span class="lj-spin"></span> Formando dupla…';
+      tgt.appendChild(b);
+    }
+  }
+  window._ljClearForming = function (cards) {
+    (cards || []).forEach(function (c) { if (!c) return; c.style.opacity = ''; c.style.pointerEvents = ''; var b = c.querySelector && c.querySelector('.lj-forming-badge'); if (b) b.remove(); });
+  };
   function _ljEnd(e) {
     if (_ljPending) _ljClearPending();
     if (!_ljDrag) return;
@@ -990,7 +1008,10 @@ window._formLateJoinDupla = function (tId, src, tgt) {
     var pt = _ljPoint(e);
     var hit = _ljKeyAtPoint(pt.clientX, pt.clientY);
     if (!hit || hit.key === d.key) return;
-    if (typeof window._formLateJoinDupla === 'function') window._formLateJoinDupla(d.tId, d.key, hit.key);
+    // FEEDBACK IMEDIATO enquanto a CF (formLatePair) responde: marca os 2 cards como "formando…"
+    // (spinner) — antes era instantâneo (mutação local), agora tem ida à rede. Ver [[project_busy_button_canonical]].
+    _ljMarkForming([d.card, hit.card]);
+    if (typeof window._formLateJoinDupla === 'function') window._formLateJoinDupla(d.tId, d.key, hit.key, { cards: [d.card, hit.card] });
   }
   window._wireLateJoinPairDnD = function () {
     if (window._ljDndGlobalWired) return;
@@ -1005,23 +1026,19 @@ window._formLateJoinDupla = function (tId, src, tgt) {
   };
 })();
 
-window._splitLateDupla = function (tId, duplaName) {
-  var t = window.AppStore && window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
-  if (!t || !Array.isArray(t.standbyParticipants)) return;
-  var arr = t.standbyParticipants;
-  var idx = arr.findIndex(function (p) { return (window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || '') === duplaName && p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); });
-  if (idx === -1) return;
-  var e = arr[idx];
-  // FASE 2: nome do membro pelo uid (perfil ao vivo); nome gravado só p/ guest sem conta
-  var _dn1 = e.p1Uid ? (window._displayNameForUid ? window._displayNameForUid(e.p1Uid, e.p1Name) : (e.p1Name || e.p1Uid || '')) : null;
-  var _dn2 = e.p2Uid ? (window._displayNameForUid ? window._displayNameForUid(e.p2Uid, e.p2Name) : (e.p2Name || e.p2Uid || '')) : null;
-  var s1 = e.p1Uid ? { displayName: _dn1, name: _dn1, uid: e.p1Uid, _lateJoin: true } : e.p1Name;
-  var s2 = e.p2Uid ? { displayName: _dn2, name: _dn2, uid: e.p2Uid, _lateJoin: true } : e.p2Name;
-  arr.splice(idx, 1, s1, s2);
-  t.updatedAt = new Date().toISOString();
-  window.FirestoreDB.saveTournament(t).then(function () {
-    if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', (e.p1Name || '') + ' e ' + (e.p2Name || '') + ' voltaram para Sem dupla.', 'info');
-    if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+// Desfazer dupla da LISTA DE ESPERA — CF-ONLY. id1/id2 = identidade (uid||nome) dos 2 membros. A CF
+// splitLatePair acha a dupla nos 2 stores (standby/waitlist), reparte em 2 solos e devolve o doc; o
+// cliente só dispara e REFLETE. id2 vazio = casa pelo nome inteiro (compat). Zero mutação/save local.
+window._splitLateDupla = function (tId, id1, id2) {
+  if (!(window.FirestoreDB && typeof window.FirestoreDB.splitLatePair === 'function')) {
+    if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível desfazer agora — tente de novo.', 'warning');
+    return;
+  }
+  window.FirestoreDB.splitLatePair(tId, { id1: id1, id2: id2 }).then(function (res) {
+    if (res && res.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, res.tournament);
+    if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', (res && res.split ? (res.split + ' voltaram para Sem dupla.') : ''), 'info');
+  }).catch(function (e) {
+    if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', (e && (e.message || e.code)) || '', 'warning');
   });
 };
 window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
@@ -1042,13 +1059,40 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
     : (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : []);
   if (_merged.length === 0) return '';
 
+  // v1.3.97 (dono, "não travado, alterável durante a fase"): controle do organizador AO VIVO pra
+  // ligar/desligar a ENTRADA TARDIA desta fase. O default do torneio é 'closed' (o dono não escolheu
+  // de propósito) → com 'closed' a integração tardia não roda e marcar presença na espera não cria
+  // confronto. Ligado ('expand'), marcar presença de quem está na espera cria o confronto por
+  // repescagem (vs a definir). Só pro organizador; presente NOS DOIS caminhos de retorno (pareamento
+  // e lista). Ver [[project_late_enrollment_per_phase]].
+  var _lateToggleHtml = '';
+  if (isOrg) {
+    var _leCur = (typeof window._effectiveLateEnrollment === 'function') ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+    var _leOn = (_leCur === 'expand');
+    var _tIdTog = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    _lateToggleHtml =
+      '<div style="margin-bottom:0.9rem;padding:10px 12px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.22);border-radius:12px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;">' +
+        '<div style="min-width:0;flex:1;">' +
+          '<div style="font-weight:800;font-size:0.84rem;color:' + (_leOn ? '#4ade80' : 'var(--text-color)') + ';">➕ Aceitar entradas tardias nesta fase</div>' +
+          '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">' +
+            (_leOn ? 'Marque presença de quem está na espera — entra por repescagem (vs a definir).'
+                   : 'Ligado: marcar presença de quem está na espera cria um novo confronto (vs a definir).') +
+          '</div>' +
+        '</div>' +
+        '<label class="toggle-switch" style="--toggle-on-bg:#22c55e;--toggle-on-glow:rgba(34,197,94,0.3);--toggle-on-border:#22c55e;flex-shrink:0;" onclick="event.stopPropagation();">' +
+          '<input type="checkbox" ' + (_leOn ? 'checked' : '') + ' onclick="event.stopPropagation(); window._setPhaseLateEnrollment(\'' + _tIdTog + '\', this.checked ? \'expand\' : \'closed\');">' +
+          '<span class="toggle-slider"></span>' +
+        '</label>' +
+      '</div>';
+  }
+
   // v4.5.18: DUPLAS com janela de inscrição tardia ABERTA (R1) → a lista de espera vira
   // seção de PAREAMENTO (arrastar/soltar formando duplas). Fora disso, lista padrão.
   var _teamSizeSb = parseInt(t.teamSize) || 1;
   var _isDuplasSb = _teamSizeSb === 2 || (window._isTeamEnrollMode && window._isTeamEnrollMode(t.enrollmentMode));
   if (_isDuplasSb && typeof window._lateEnrollWindowOpen === 'function' && window._lateEnrollWindowOpen(t) && typeof window._renderLateJoinPairing === 'function') {
     var _ljHtml = window._renderLateJoinPairing(t, isOrg);
-    if (_ljHtml) return _ljHtml;
+    if (_ljHtml) return _lateToggleHtml + _ljHtml;
   }
 
   const getName = (p) => window._pName(p, '?');
@@ -1085,17 +1129,32 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
     });
   }
 
+  // v1.3.94 (dono): as DUPLAS da espera aparecem como CARDS DE DUPLA (2 membros empilhados +
+  // toggle/W.O.) LOGO ACIMA da lista; só os SOLOS (sem dupla) ficam na lista flat numerada. Reusa
+  // _duplaCard + o factory de presença _rollCallPresenceCtx (mesmo card do detalhe/chamada).
+  const _isPairWL = (p) => !!(p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
+  const _duplasWL = sorted.filter(_isPairWL);
+  const _solosWL = sorted.filter((p) => !_isPairWL(p));
+  const _rcWL = (typeof window._rollCallPresenceCtx === 'function')
+    ? window._rollCallPresenceCtx(t, { isOrg: isOrg, active: true, postDraw: true, woScope: ((t.woScope || 'individual') === 'individual' ? 'individual' : 'team') })
+    : {};
+  const _duplaCardsWL = (_duplasWL.length && typeof window._duplaCard === 'function')
+    ? '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;">' +
+        _duplasWL.map((p) => window._duplaCard(t, p, false, { isOrg: isOrg, drawDone: true, cardPresence: _rcWL.cardPresence, memberPresence: _rcWL.memberPresence })).join('') +
+      '</div>'
+    : '';
+
   // "Próximo a entrar": no modo travado é o primeiro presente (não-ausente) na
-  // ordem sorteada; no modo presença é simplesmente o topo (índice 0).
+  // ordem sorteada; no modo presença é simplesmente o topo (índice 0). Aplica à lista de SOLOS.
   let nextIdx = 0;
   if (_policy === 'locked') {
     nextIdx = -1;
-    for (let _k = 0; _k < sorted.length; _k++) {
-      if (window._idMapHas(t, ci, sorted[_k]) && !window._idMapHas(t, ab, sorted[_k])) { nextIdx = _k; break; }
+    for (let _k = 0; _k < _solosWL.length; _k++) {
+      if (window._idMapHas(t, ci, _solosWL[_k]) && !window._idMapHas(t, ab, _solosWL[_k])) { nextIdx = _k; break; }
     }
   }
 
-  const listItems = sorted.map((p, i) => {
+  const listItems = _solosWL.map((p, i) => {
     const name = getName(p);
     const safeName = name.replace(/'/g, "\\'");
     const mc = window._idMapHas(t, ci, p);
@@ -1125,7 +1184,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       <div ${_phDragAttrs}style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)'};border-radius:10px;border-left:4px solid ${isNext ? '#f59e0b' : 'rgba(255,255,255,0.08)'};${dimAbsent ? 'opacity:0.5;' : ''}${_phDragAttrs ? 'cursor:grab;touch-action:none;' : ''}">
         <div style="width:26px;height:26px;border-radius:50%;background:${isNext ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.08)'};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;color:${isNext ? '#000' : '#94a3b8'};flex-shrink:0;">${i + 1}</div>
         <span style="font-weight:600;font-size:0.88rem;color:${isNext ? '#fbbf24' : '#94a3b8'};flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">${name}${isNext && _policy === 'locked' ? ' <span style="font-size:0.62rem;font-weight:700;color:#fbbf24;background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>' : ''}</span>
-        <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAb ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}"><input type="checkbox" ${mc ? 'checked' : ''} ${isAb ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${_tIdSafe}', '${safeName}');"`}><span class="toggle-slider"></span></label>
+        <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAb ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}"><input type="checkbox" ${mc ? 'checked' : ''} ${isAb ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${_tIdSafe}', '${safeName}', '${String(_pUid).replace(/'/g, "\\'")}');"`}><span class="toggle-slider"></span></label>
         <span style="font-size:0.65rem;font-weight:700;color:${statusColor};white-space:nowrap;">${statusLabel}</span>
         ${window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${_tIdSafe}', '${safeName}')`, !isAb, { label: isAb ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem' })}
       </div>`;
@@ -1133,12 +1192,15 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
 
   return `
     <div id="standby-panel-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.2);border-radius:16px;padding:1.5rem;">
+      ${_lateToggleHtml}
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;">
         <span style="font-size:1.3rem;">📋</span>
         <h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Lista de Espera</h3>
         <span style="font-size:0.75rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;">${(function () { var n = 0; sorted.forEach(function (p) { var nm = getName(p); if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) n += 2; else if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) n += p.participants.length; else if (nm.indexOf('/') !== -1) n += nm.split('/').filter(function (x) { return x.trim(); }).length; else n += 1; }); return n; })()}
       </div>
       <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem;">${_policy === 'locked' ? '🔒 Ordem do sorteio travada — entra o próximo presente na ordem.' : '🏃 Quem fizer check-in primeiro é o próximo a entrar.'}</div>
+      ${_duplaCardsWL ? ('<div style="font-size:0.72rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas na espera (' + _duplasWL.length + ')</div>' + _duplaCardsWL) : ''}
+      ${(_duplaCardsWL && listItems) ? '<div style="font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">🙋 Sem dupla</div>' : ''}
       <div style="display:flex;flex-direction:column;gap:6px;">
         ${listItems}
       </div>
@@ -1446,12 +1508,16 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
 
   let globalMatchNum = swissPastMatchOffset;
 
-  // 3rd place match — pull from adapter's thirdplace column (falls back to t.thirdPlaceMatch)
+  // 3º lugar SEMPRE do jogo REAL: coluna 'thirdplace' do adapter → t.thirdPlaceMatch (legado)
+  // → match isThirdPlace canônico em t.matches. SEM placeholder fabricado — se não existe jogo
+  // real de 3º lugar, não há card (não se inventa um "TBD"). [[project_third_place_always]]
   const _thirdCol = unified ? unified.columns.find(c => c.phase === 'thirdplace') : null;
+  const _allMs3rd = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
   const thirdPlaceMatch = (_thirdCol && _thirdCol.matches[0])
     || t.thirdPlaceMatch
-    || { id: 'match-3rd-placeholder', p1: 'TBD', p2: 'TBD', winner: null };
-  const hasThirdPlace = activeRounds.length >= 2;
+    || _allMs3rd.find(m => m && m.isThirdPlace)
+    || null;
+  const hasThirdPlace = activeRounds.length >= 2 && !!thirdPlaceMatch;
 
   // Numbering: 3rd place = last semifinal + 1, final = 3rd place + 1
   // Count matches in all rounds EXCEPT the final round (last positive round gets its own number)
@@ -2811,7 +2877,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:1.1rem;">${_soIcon}</span>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:0.82rem;font-weight:700;color:#fbbf24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="if(window._showPlayerStats)window._showPlayerStats('${window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}','${String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${window._safeHtml(t ? window._resolveSideLive(t, m.p1, (window._slotUids ? window._slotUids(m, 'p1') : (m.p1Uid || m.team1Uids))) : m.p1)}</div>
+            <div style="font-size:0.82rem;font-weight:700;color:#fbbf24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="if(window._showPlayerStats)window._showPlayerStats('${window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}','${String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${window._safeHtml(t ? window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids))) : m.p1)}</div>
             <div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">${_soDetail}</div>
           </div>
         </div>
@@ -2821,7 +2887,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const t = window.AppStore ? window._findTournamentById(tId) : null;
   // v2.6.96: placar efetivo do match (fase pode ter GSM próprio — "Personalizado").
   const _msc = (t && typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : (t && t.scoring);
-  const useSets = t && _msc && _msc.type === 'sets';
+  const useSets = !!(t && window._scoringUsesSets(_msc));
   const useFixedSet = useSets && _msc.fixedSet;
 
   const isDecided = !!m.winner;
@@ -2876,14 +2942,18 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       const score = playerNum === 1 ? match.scoreP1 : match.scoreP2;
       return score != null ? String(score) : '';
     }
-    // Fixed set: show the single set game count as the main score
+    // Fixed set (ex.: Beach Tennis, set único): mostra o set, MAS com o tie-break.
+    // html:true → usa o <sup> estilizado (font-size ajustável) em vez do superscript
+    // unicode minúsculo/não-dimensionável. [[project_live_scoring_canonical]]
     if (match.fixedSet || useFixedSet) {
       var s0 = match.sets[0];
       if (!s0) return '';
-      return String(playerNum === 1 ? s0.gamesP1 : s0.gamesP2);
+      return (typeof window._formatSetForPlayer === 'function')
+        ? window._formatSetForPlayer(s0, playerNum, { html: true })
+        : String(playerNum === 1 ? s0.gamesP1 : s0.gamesP2);
     }
     return match.sets.map(s => (typeof window._formatSetForPlayer === 'function')
-      ? window._formatSetForPlayer(s, playerNum, { html: false })
+      ? window._formatSetForPlayer(s, playerNum, { html: true })
       : String(playerNum === 1 ? s.gamesP1 : s.gamesP2)
     ).join(' ');
   };
@@ -2981,7 +3051,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
-      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1, pendingSub, t, (window._slotUids ? window._slotUids(m, 'p1') : (m.p1Uid || m.team1Uids)))}</div>
+      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)))}</div>
       ${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" style="display:flex;align-items:center;flex-shrink:0;">
         ${showInputs ? p1Score : (p1ScoreVal || '')}
@@ -2990,7 +3060,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
-      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2, pendingSub, t, (window._slotUids ? window._slotUids(m, 'p2') : (m.p2Uid || m.team2Uids)))}</div>
+      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2') : (m.p2Uid || m.team2Uids)))}</div>
       ${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" style="display:flex;align-items:center;flex-shrink:0;">
         ${showInputs ? p2Score : (p2ScoreVal || '')}
@@ -3132,29 +3202,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     }
     // Se é o proponente atual (mesmo sendo org): aguardando — sem botões
   }
-  // v3.0.77 (Parte 8 uid): uid-first via _userTeamInMatch (resolve o objeto do
-  // participante e checa uid/p1Uid/p2Uid) — pega o p2 de dupla cujo displayName
-  // é só o nome do p1. Fallback nome/email mantido pra legado/informal.
-  const _isMyMatch = !!(_cu && !isByeMatch && (
-    (typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, _cu) > 0) ||
-    (function() {
-      var sides = [m.p1 || '', m.p2 || ''];
-      for (var si = 0; si < sides.length; si++) {
-        var s = sides[si];
-        if (!s || s === 'TBD' || s === 'BYE') continue;
-        if (_cuName && (s === _cuName || s.indexOf(_cuName) !== -1)) return true;
-        if (_cuEmail && s === _cuEmail) return true;
-        if (s.indexOf('/') !== -1) {
-          var members = s.split('/').map(function(n) { return n.trim(); });
-          for (var mi = 0; mi < members.length; mi++) {
-            if (_cuName && members[mi] === _cuName) return true;
-            if (_cuEmail && members[mi] === _cuEmail) return true;
-          }
-        }
-      }
-      return false;
-    })()
-  ));
+  // CANÔNICO (dono, 18/jul): "é o meu jogo?" — SÓ pelo UID do slot (_userTeamInMatch →
+  // _slotUids). Sem fallback de nome/e-mail/substring: casar nome mostrava o input de placar
+  // pro jogador errado (homônimo / "X" dentro de "X / Y"). [[project_uid_identity_canon_locked]]
+  const _isMyMatch = !!(_cu && !isByeMatch &&
+    typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, _cu) > 0);
 
   // Card border color based on check-in readiness
   let cardBorder = isDecided ? 'rgba(16,185,129,0.2)' : hasTBD ? 'rgba(255,255,255,0.05)' : 'var(--border-color)';
@@ -3200,7 +3252,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     // Rei/Rainha suprime o botão por-jogo (_suppressMatchArrivedBtn): a presença é do jogador
     // no LOCAL, não de cada partida → 1 "Cheguei" só no header do grupo.
     if (!_meHere && !window._suppressMatchArrivedBtn) {
-      _arrivedBtn = `<button class="btn btn-amber btn-micro" onclick="event.stopPropagation(); window._toggleCheckIn('${_esc(tId)}','${_esc(_cuName)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.arrivedTip') || 'Marcar que você chegou no local (confirma pelo GPS)'}">📍 ${_t('bracket.arrived') || 'Cheguei'}</button>`;
+      _arrivedBtn = `<button class="btn btn-amber btn-micro" onclick="event.stopPropagation(); window._toggleCheckIn('${_esc(tId)}','${_esc(_cuName)}','${_esc((_cu && _cu.uid) || '')}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.arrivedTip') || 'Marcar que você chegou no local (confirma pelo GPS)'}">📍 ${_t('bracket.arrived') || 'Cheguei'}</button>`;
     }
   }
 
@@ -3378,7 +3430,8 @@ window._monGroupArrivedBtn = function (t, matches, groupDone) {
   var _meHereMon = (typeof window._idMapHas === 'function') ? window._idMapHas(t, t.checkedIn, _cuMonName) : false;
   var _tIdEsc = String(t.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var _cuEsc = String(_cuMonName).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  var _onc = 'event.stopPropagation(); window._toggleCheckIn(\'' + _tIdEsc + '\',\'' + _cuEsc + '\')';
+  var _cuUidEsc = String((_cuMon && _cuMon.uid) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var _onc = 'event.stopPropagation(); window._toggleCheckIn(\'' + _tIdEsc + '\',\'' + _cuEsc + '\',\'' + _cuUidEsc + '\')';
   // Cores (pedido do dono): Cheguei = ÂMBAR (ação pendente); marcado = Presente VERDE.
   return _meHereMon
     ? '<button class="btn btn-success btn-micro" onclick="' + _onc + '" style="flex-shrink:0;font-size:0.72rem;" title="Você está presente — clique para sair">📍 Presente</button>'
@@ -3887,7 +3940,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   const medal = i => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`;
   const posColor = i => i === 0 ? '#fbbf24' : i === 1 ? '#94a3b8' : i === 2 ? '#b45309' : 'var(--text-muted)';
 
-  const _useSetsStandings = t.scoring && t.scoring.type === 'sets';
+  const _useSetsStandings = window._scoringUsesSets(t.scoring);
   const _useAdvStandings = !!(t.advancedScoring && t.advancedScoring.enabled);
   // v0.17.74: oculta coluna E (Empates) em 2 casos cumulativos:
   // (a) scoring sets/gsm com tiebreak (impossível matematicamente); OU
@@ -4210,7 +4263,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             var _borderPill = _isMe ? 'rgba(34,211,238,0.55)' : border;
             var _colorPill = _isMe ? '#22d3ee' : color;
             var _meBadge = _isMe ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.5px;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
-            return '<span style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;" onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/\'/g, "\\'")) + '\',\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUids ? window._slotUids(m, 'p1') : (m.p1Uid || m.team1Uids)))) + _ptsLbl + _meBadge + '</span>';
+            return '<span style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;" onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/\'/g, "\\'")) + '\',\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)))) + _ptsLbl + _meBadge + '</span>';
           }).join('');
           // v4.x: cabeçalho DENTRO do box colorido (igual à Lista de espera) — o título
           // "Desativados (N) — …" fica no mesmo box vermelho dos chips, não solto acima.
@@ -4574,23 +4627,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         const _cuEmail = _cu ? (_cu.email || '') : '';
         const _matchHasMe = (m) => {
           if (!_cu) return false;
-          // v3.0.77 (Parte 8 uid): uid-first via _userTeamInMatch; fallback nome/email.
-          if (typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, _cu) > 0) return true;
-          const sides = [m.p1 || '', m.p2 || ''];
-          for (let si = 0; si < sides.length; si++) {
-            const s = sides[si];
-            if (!s || s === 'TBD' || s === 'BYE') continue;
-            if (_cuName && (s === _cuName || s.indexOf(_cuName) !== -1)) return true;
-            if (_cuEmail && s === _cuEmail) return true;
-            if (s.indexOf('/') !== -1) {
-              const members = s.split('/').map(n => n.trim());
-              for (let mi = 0; mi < members.length; mi++) {
-                if (_cuName && members[mi] === _cuName) return true;
-                if (_cuEmail && members[mi] === _cuEmail) return true;
-              }
-            }
-          }
-          return false;
+          // CANÔNICO (dono, 18/jul): "é o meu jogo?" SÓ pelo UID do slot (_userTeamInMatch →
+          // _slotUids). Sem fallback nome/e-mail/substring. [[project_uid_identity_canon_locked]]
+          return typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, _cu) > 0;
         };
         // v0.17.29: usuário fora da rodada (desativado/sem grupo) → todos
         // os jogos vão pra ligaOtherMatchesHtml (collapsed). Standings ficam
@@ -4734,7 +4773,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           prevRoundsInner += '<div style="min-width:200px;flex:1;max-width:280px;background:' + _soBg2 + ';border:1px solid ' + _soBd2 + ';border-radius:8px;padding:8px 12px;font-size:0.8rem;">' +
             '<div style="display:flex;align-items:center;gap:6px;">' +
               '<span style="flex-shrink:0;">' + _soIc2 + '</span>' +
-              '<span style="flex:1;min-width:0;overflow-wrap:anywhere;color:var(--text-muted);">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUids ? window._slotUids(m, 'p1') : (m.p1Uid || m.team1Uids))) || m.p1) + '</span>' +
+              '<span style="flex:1;min-width:0;overflow-wrap:anywhere;color:var(--text-muted);">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids))) || m.p1) + '</span>' +
               '<span style="flex-shrink:0;font-weight:800;font-size:0.6rem;color:' + _soCol + ';text-transform:uppercase;letter-spacing:0.4px;">' + _soLbl + '</span>' +
             '</div>' +
           '</div>';
@@ -4758,11 +4797,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         else if (isDraw && !hasScore) footer = '<div style="font-size:0.65rem;color:#94a3b8;text-align:center;margin-top:3px;">' + _t('bracket.draw') + '</div>';
         prevRoundsInner += '<div style="min-width: 200px; flex: 1; max-width: 280px; background: rgba(0,0,0,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem;">' +
           '<div style="' + rowS + '">' +
-            '<span style="' + nameS + p1Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUids ? window._slotUids(m, 'p1') : (m.p1Uid || m.team1Uids))) || 'TBD') + '</span>' +
+            '<span style="' + nameS + p1Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids))) || 'TBD') + '</span>' +
             '<span style="' + numS + (p1Win ? 'color:#4ade80;' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP1 : '') + '</span>' +
           '</div>' +
           '<div style="' + rowS + 'margin-top:3px;">' +
-            '<span style="' + nameS + p2Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p2, (window._slotUids ? window._slotUids(m, 'p2') : (m.p2Uid || m.team2Uids))) || 'TBD') + '</span>' +
+            '<span style="' + nameS + p2Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p2, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2') : (m.p2Uid || m.team2Uids))) || 'TBD') + '</span>' +
             '<span style="' + numS + (p2Win ? 'color:#4ade80;' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP2 : '') + '</span>' +
           '</div>' +
           footer +

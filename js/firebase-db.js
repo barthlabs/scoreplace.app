@@ -29,11 +29,14 @@ window.FirestoreDB = {
       // tudo). .catch degrada gracioso: navegador sem suporte / aba privada / persistência
       // já ativa (outra aba pegou) → app segue sem a fila durável.
       // v4.0.23: REMOVIDO synchronizeTabs:true. A persistência IndexedDB MULTI-ABA do SDK
-      // 10.8.1 é o gatilho nº1 do bug interno "INTERNAL ASSERTION FAILED: Unexpected state"
-      // (Sentry SCOREPLACE-WEB-67): abas concorrentes corrompem o IndexedDB compartilhado →
+      // 10.8.1 era o gatilho nº1 do bug interno "INTERNAL ASSERTION FAILED: Unexpected state"
+      // (Sentry SCOREPLACE-WEB-66/67): abas concorrentes corrompem o IndexedDB compartilhado →
       // a AsyncQueue do Firestore "falha" → TODA chamada seguinte morre em cascata. Aba
       // única é o caminho estável; a 2ª aba simplesmente cai no .catch (sem fila durável,
       // mas sem corromper). Recuperação adicional: auto-reload guardado em sentry-init.js.
+      // v1.3.27: FIX RAIZ — SDK subido 10.8.1 → 10.14.1 (as correções internas de
+      // "Unexpected state" entraram em 10.12+). synchronizeTabs segue removido e o
+      // auto-reload segue ativo como cinto-e-suspensório enquanto se confirma no Sentry.
       try {
         this.db.enablePersistence().then(function () {
           if (window._log) window._log('[FirestoreDB] persistência offline ATIVA — saves sobrevivem a fechar o app');
@@ -249,6 +252,32 @@ window.FirestoreDB = {
   //
   // Retorna { aborted:boolean, data:object } — data = estado autoritativo pós-commit
   // (ou o lido, se abortou), pra o chamador sincronizar o AppStore local.
+  // ── PRESENÇA POR CAMPO (v1.3.157) — a correção do "presença pula/desmarca em rajada" ──────
+  // MEDIDO no Firestore REAL (doc temporário, 25 marcações):
+  //   • 25 transações que gravam o DOC INTEIRO, concorrentes .......... 23/25 (PERDE)
+  //   • idem + CF gravando o doc inteiro junto ........................ 23/25 (PERDE)
+  //   • 25 updates POR CAMPO, concorrentes ........................... 25/25 ✅
+  //   • idem + CF gravando o doc inteiro junto ....................... 25/25 ✅
+  // Causa: marcar UMA presença reescrevia o TORNEIO INTEIRO dentro de uma transação. Sob
+  // contenção elas se atropelam, algumas esgotam os retries e FALHAM — a marca já estava na tela
+  // (otimista) e o snapshot seguinte a removia. Update por CAMPO não colide: o Firestore funde no
+  // nível do campo, sem read-modify-write. Ver [[project_concurrency_safe_saves]].
+  // `sets`/`dels` = arrays de {map, key}. Ex.: sets [{map:'checkedIn', key:'uid1'}].
+  async setPresenceFields(tournamentId, sets, dels) {
+    if (!this.ensureDb()) throw new Error('Firestore not initialized');
+    var FieldValue = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue) || null;
+    var FieldPath = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldPath) || null;
+    if (!FieldValue || !FieldPath) throw new Error('FieldValue/FieldPath indisponível');
+    var ref = this.db.collection('tournaments').doc(String(tournamentId));
+    // FieldPath com segmentos evita QUALQUER problema de escaping (nome com ponto, etc.)
+    var args = [];
+    (sets || []).forEach(function (o) { if (o && o.map && o.key) args.push(new FieldPath(o.map, String(o.key)), o.value); });
+    (dels || []).forEach(function (o) { if (o && o.map && o.key) args.push(new FieldPath(o.map, String(o.key)), FieldValue.delete()); });
+    if (!args.length) return true;
+    await ref.update.apply(ref, args);
+    return true;
+  },
+
   async mutateTournament(tournamentId, mutatorFn, options) {
     if (!this.ensureDb()) throw new Error('Firestore not initialized');
     var ref = this.db.collection('tournaments').doc(String(tournamentId));
@@ -590,6 +619,42 @@ window.FirestoreDB = {
       }
       return this._deenrollParticipantTx(tournamentId, userUid);
     }
+  },
+
+  // Formar/desfazer DUPLA manual via Cloud Function (Admin SDK, concorrência-safe + replica
+  // pro Sandbox). Thin wrappers: o chamador (_formDuplaByUids/_splitDupla) mantém a mutação
+  // em memória pra UI imediata e, no CATCH, faz o saveTournament DIRETO como fallback (persiste
+  // o t já mutado se a CF estiver fora). Ver pair-core.js / [[project_draw_client_to_cf_migration]].
+  async formPair(tournamentId, opts) {
+    return await this._callFn('formPair', {
+      tournamentId: String(tournamentId),
+      uid1: (opts && opts.uid1) || '', name1: (opts && opts.name1) || '',
+      uid2: (opts && opts.uid2) || '', name2: (opts && opts.name2) || '',
+      changeRule: !!(opts && opts.changeRule)
+    });
+  },
+  async splitPair(tournamentId, opts) {
+    return await this._callFn('splitPair', {
+      tournamentId: String(tournamentId),
+      id1: (opts && opts.id1) != null ? opts.id1 : '',
+      id2: (opts && opts.id2) != null ? opts.id2 : ''
+    });
+  },
+  // CF-only da DUPLA NA LISTA DE ESPERA: formar (funde _lateJoin + presença + integra na chave,
+  // atômico) e desfazer. A CF (functions-autodraw) devolve `tournament` pro cliente refletir sem
+  // reload. key1/key2 = uid||nome dos 2 avulsos; id1/id2 = identidade dos membros da dupla.
+  async formLatePair(tournamentId, opts) {
+    return await this._callFn('formLatePair', {
+      tournamentId: String(tournamentId),
+      key1: (opts && opts.key1) || '', key2: (opts && opts.key2) || ''
+    });
+  },
+  async splitLatePair(tournamentId, opts) {
+    return await this._callFn('splitLatePair', {
+      tournamentId: String(tournamentId),
+      id1: (opts && opts.id1) != null ? opts.id1 : '',
+      id2: (opts && opts.id2) != null ? opts.id2 : ''
+    });
   },
 
   async _deenrollParticipantTx(tournamentId, userUid) {

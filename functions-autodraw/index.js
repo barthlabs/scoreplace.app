@@ -13,6 +13,9 @@ const { getMessaging } = require('firebase-admin/messaging');
 let generateLigaRound = null;
 let drawInitial = null;   // v1.2.25: motor do SORTEIO INICIAL (Etapa 3 · fase A) — usado pela drawRound
 let integrateLateFn = null; // v1.2.57: integração de tardios no servidor — usado pela integrateLateEntries
+let formLatePairFn = null;  // formar dupla na espera + integrar, atômico — usado pela formLatePair
+let splitLatePairFn = null; // desfazer dupla da espera, atômico — usado pela splitLatePair
+let closeRoundFn = null;    // fecho de rodada no servidor (Suíço-pow2 Opção B) — usado pela closeRound
 let canRecompile = null;
 let hasDrawnBracket = null;  // régua de 'já tem chave' — a MESMA do cliente (matches/rounds/groups)
 let drawWindow = null; // window do shim Node — expõe _calcNextDrawDate (prazo p/ lançar resultado)
@@ -21,6 +24,9 @@ try {
   generateLigaRound = _dc.generateLigaRound;
   drawInitial = _dc.drawInitial;
   integrateLateFn = _dc.integrateLateEntries;
+  formLatePairFn = _dc.formLatePairCore;
+  splitLatePairFn = _dc.splitLatePairCore;
+  closeRoundFn = _dc.closeRoundCore;
   canRecompile = _dc.canRecompile;
   hasDrawnBracket = _dc.hasDrawnBracket;
   drawWindow = _dc._window;
@@ -81,9 +87,36 @@ async function _preloadDrawNames(t) {
       if (Array.isArray(p.participants)) p.participants.forEach(sp => { if (sp && sp.uid) uids.add(String(sp.uid)); });
     });
     if (!uids.size) return;
-    const { nameByUid } = await _loadLiveNames(uids);
+    const { profByUid, nameByUid } = await _loadLiveNames(uids);
     drawWindow._profileNameByUid = nameByUid || {};
+    drawWindow._profByUid = profByUid || {}; // v1.3.52: perfil COMPLETO por uid p/ enriquecer
   } catch (e) { /* best-effort; motor cai no nome gravado legado */ }
+}
+
+// v1.3.52: resolve o perfil POR UID e ESCREVE nos participantes em memória (gênero/skill/idade/
+// email/phone/defaultCategory) ANTES do motor e das notificações. Assim o inscrito grava SÓ uid;
+// a CF re-resolve tudo aqui (o vendor lê p.gender/p.email etc., que passam a vir do perfil vivo).
+// Idempotente. Usa drawWindow._profByUid populado por _preloadDrawNames. Ver [[project_autodraw_server_parity]].
+function _enrichParticipantsFromProfiles(t) {
+  try {
+    const prof = (drawWindow && drawWindow._profByUid) || {};
+    if (!Object.keys(prof).length) return;
+    const _one = (p) => {
+      if (!p || typeof p !== 'object') return;
+      const d = p.uid && prof[p.uid];
+      if (d) {
+        if (d.gender) p.gender = d.gender;
+        if (d.skillBySport && typeof d.skillBySport === 'object') p.skillBySport = d.skillBySport;
+        if (d.birthDate) p.birthDate = d.birthDate;
+        if (d.defaultCategory) p.defaultCategory = d.defaultCategory;
+        if (d.email) p.email = d.email;
+        if (d.phone) p.phone = d.phone;
+      }
+      const d1 = p.p1Uid && prof[p.p1Uid]; if (d1 && d1.gender) p.p1Gender = d1.gender;
+      const d2 = p.p2Uid && prof[p.p2Uid]; if (d2 && d2.gender) p.p2Gender = d2.gender;
+    };
+    ['participants', 'standbyParticipants', 'waitlist'].forEach((k) => { if (Array.isArray(t[k])) t[k].forEach(_one); });
+  } catch (e) { /* best-effort */ }
 }
 
 // Nome exibido de um lado da partida: nomes VIVOS dos uids do slot (dupla junta com
@@ -169,6 +202,23 @@ function _isTournamentAdmin(t, uid, email) {
   // (4) recovery — adminEmails vazio/ausente → organizerEmail (bug v1.6.66 apagava o campo).
   if (mail && !hasAdminEmails && typeof t.organizerEmail === 'string'
       && t.organizerEmail.toLowerCase() === mail) return true;
+  return false;
+}
+
+// Espelha isTournamentParticipant das firestore.rules: memberUids primeiro (uid é a identidade
+// primária), memberEmails só como FALLBACK quando memberUids está vazio (docs legados). Usado
+// só pela closeRound — o fecho de rodada é disparado por quem salva o ÚLTIMO placar, que num
+// resultEntry='players' é um PARTICIPANTE, não só admin. Seguro pq a CF computa o passo
+// DETERMINÍSTICO do doc fresco (o caller só dispara o passo canônico). Ver project_uid_primary_identity.
+function _isTournamentParticipant(t, uid, email) {
+  if (!t || !uid) return false;
+  if (Array.isArray(t.memberUids) && t.memberUids.length > 0) {
+    return t.memberUids.indexOf(uid) !== -1;
+  }
+  const mail = String(email || '').toLowerCase();
+  if (mail && Array.isArray(t.memberEmails)) {
+    return t.memberEmails.some(function (e) { return String(e || '').toLowerCase() === mail; });
+  }
   return false;
 }
 
@@ -286,6 +336,7 @@ exports.drawRound = onCall(async (request) => {
     if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
     const t = snap.data();
     t.id = tId;
+    _enrichParticipantsFromProfiles(t); // v1.3.52: gênero/skill/etc. por uid (inscrito grava só uid)
 
     // Re-checa authz sobre o doc FRESCO: entre o read de fora e a transação o organizador
     // pode ter perdido o acesso (transferência de organização / co-host removido).
@@ -416,6 +467,153 @@ exports.integrateLateEntries = onCall(async (request) => {
   return out;
 });
 
+// ─── FORMAR dupla na LISTA DE ESPERA + INTEGRAR, atômico (CF-only) ──────────
+// O cliente só dispara (key1/key2 = uid||nome dos 2 avulsos); a CF forma a dupla _lateJoin,
+// marca presença, integra na chave e persiste — tudo numa transação. Devolve o doc pro cliente
+// refletir SEM reload. Espelha integrateLateEntries (authz + txn + write-boundary).
+exports.formLatePair = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const email = request.auth && request.auth.token && request.auth.token.email;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const key1 = String((request.data && request.data.key1) || '').trim();
+  const key2 = String((request.data && request.data.key2) || '').trim();
+  if (!tId || !key1 || !key2) throw new HttpsError('invalid-argument', 'tournamentId, key1 e key2 são obrigatórios.');
+  if (typeof formLatePairFn !== 'function' || !drawWindow) throw _drawFail('internal', 'Motor indisponível.', { tId });
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid, email)) throw _drawFail('permission-denied', 'Só o organizador ou co-organizador forma duplas.', { tId, uid });
+  await _preloadDrawNames(pre.data());
+
+  let out;
+  try {
+    out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const t = snap.data(); t.id = tId;
+      if (!_isTournamentAdmin(t, uid, email)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      try { drawWindow._hydrateMonarchGroups(t); } catch (e) {}
+      const res = formLatePairFn(t, { key1: key1, key2: key2, nowTs: Date.now() });
+      if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'form-failed', { tId });
+      const b = _applyWriteBoundary(t);
+      tx.set(ref, b.persist);
+      return { ok: true, formed: res.formed, integrated: res.integrated, tournament: b.clean };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error(`formLatePair EXPLODIU ${tId} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha ao formar dupla: ' + String((e && e.message) || e).slice(0, 300));
+  }
+  console.log(`formLatePair v${CF_VERSION}: ${tId} por ${uid} — ${out.formed} · integrated.changed=${out.integrated && out.integrated.changed}`);
+  return out;
+});
+
+// ─── DESFAZER dupla da LISTA DE ESPERA, atômico (CF-only) ──────────────────
+exports.splitLatePair = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const email = request.auth && request.auth.token && request.auth.token.email;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const id1 = String((request.data && request.data.id1) || '').trim();
+  const id2 = (request.data && request.data.id2 != null) ? String(request.data.id2).trim() : '';
+  if (!tId || !id1) throw new HttpsError('invalid-argument', 'tournamentId e id1 são obrigatórios.');
+  if (typeof splitLatePairFn !== 'function' || !drawWindow) throw _drawFail('internal', 'Motor indisponível.', { tId });
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid, email)) throw _drawFail('permission-denied', 'Só o organizador ou co-organizador desfaz duplas.', { tId, uid });
+  await _preloadDrawNames(pre.data());
+
+  let out;
+  try {
+    out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const t = snap.data(); t.id = tId;
+      if (!_isTournamentAdmin(t, uid, email)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      try { drawWindow._hydrateMonarchGroups(t); } catch (e) {}
+      const res = splitLatePairFn(t, { id1: id1, id2: id2 });
+      if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'split-failed', { tId });
+      const b = _applyWriteBoundary(t);
+      tx.set(ref, b.persist);
+      return { ok: true, split: res.split, tournament: b.clean };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error(`splitLatePair EXPLODIU ${tId} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha ao desfazer dupla: ' + String((e && e.message) || e).slice(0, 300));
+  }
+  console.log(`splitLatePair v${CF_VERSION}: ${tId} por ${uid} — ${out.split}`);
+  return out;
+});
+
+// ─── FECHO de rodada no servidor (Suíço-pow2, Opção B) ──────────────────────
+// O cliente DISPARA ao salvar o último placar da rodada; a mutação (gera a próxima rodada
+// Suíço / marca a classificatória completa) + a persistência rodam AQUI, com as MESMAS funções
+// vendoradas que o cliente rodava. Espelha drawRound/integrateLateEntries (authz + txn sobre o
+// doc FRESCO + closeRoundCore + _applyWriteBoundary + tx.set clobber-free). Guards de
+// concorrência (stale-round/already-closed/round-incomplete) → NÃO grava, devolve o motivo
+// (outro fechou primeiro / echo). AUTHZ = PARTICIPANTE (o fecho é disparado por quem salva o
+// placar, num resultEntry='players' pode ser participante) — difere do drawRound (admin-only).
+// Ver project_draw_canonization_cf_phase23_deferred / project_concurrency_safe_saves.
+exports.closeRound = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const email = request.auth && request.auth.token && request.auth.token.email;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!tId) throw new HttpsError('invalid-argument', 'tournamentId é obrigatório.');
+  const roundIdx = parseInt((request.data && request.data.roundIdx), 10);
+  if (isNaN(roundIdx) || roundIdx < 0) throw new HttpsError('invalid-argument', 'roundIdx é obrigatório.');
+  const resultCtx = (request.data && request.data.resultCtx) || null;
+
+  if (typeof closeRoundFn !== 'function' || !drawWindow) {
+    throw _drawFail('internal', 'Motor de fecho de rodada indisponível no servidor.', { tId });
+  }
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentParticipant(pre.data(), uid, email) && !_isTournamentAdmin(pre.data(), uid, email)) {
+    throw _drawFail('permission-denied', 'Só um participante ou o organizador fecha a rodada.', { tId, uid, email: email || '(sem email)' });
+  }
+  await _preloadDrawNames(pre.data()); // nome vivo por uid (o motor gera a próxima rodada e lê nomes)
+
+  let out;
+  try {
+    out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const t = snap.data(); t.id = tId;
+      // Re-checa authz sobre o doc FRESCO (acesso pode ter mudado entre o read de fora e a txn).
+      if (!_isTournamentParticipant(t, uid, email) && !_isTournamentAdmin(t, uid, email)) {
+        throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      }
+      try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+
+      const res = closeRoundFn(t, roundIdx, resultCtx);
+      if (!res || !res.ok) {
+        // stale-round/already-closed/round-incomplete = idempotência/concorrência: NÃO grava
+        // (outro fechou primeiro, ou a rodada não fechou de fato). O cliente reconcilia pelo listener.
+        return { ok: false, reason: (res && res.reason) || 'close-failed' };
+      }
+      const b = _applyWriteBoundary(t);
+      tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+      return { ok: true, branch: res.branch, tournament: b.clean };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error(`closeRound EXPLODIU no torneio ${tId} r${roundIdx} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha no fecho de rodada: ' + String((e && e.message) || e).slice(0, 300));
+  }
+
+  console.log(`closeRound v${CF_VERSION}: ${tId} r${roundIdx} por ${uid} — ` +
+    (out.ok ? 'branch=' + out.branch : 'noop(' + out.reason + ')'));
+  return out;
+});
+
 // ─── Auto-Draw: runs every hour, checks for pending draws ───────────────────
 // v2.6.74: sorteio NA HORA + custo baixo. Cadência de 1 minuto, mas em vez de
 // varrer a coleção inteira a cada tick, consulta só os torneios com `nextDrawAt`
@@ -538,6 +736,7 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
         // equilíbrio, categorias, folgas justas, desempate). Muta `t` in-place.
         t.id = tId;
         await _preloadDrawNames(t); // v4.5.85: nomes vivos por uid antes do motor
+        _enrichParticipantsFromProfiles(t); // v1.3.52: gênero/skill/email por uid
         const res = generateLigaRound(t, mostRecentScheduled);
         if (!res.ok) {
           console.log(`Auto-draw: skip ${tId} (${res.reason})`);
@@ -691,8 +890,12 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
             (deadlineLabel ? '\n⏰ Lance os resultados até ' + deadlineLabel : '');
         };
 
+        // Sandbox/killswitch: o SB SORTEIA na mesma CF (fidelidade), mas NÃO notifica.
+        const _sbMuteAuto = (t.isSandbox === true || t.notificationsMuted === true);
+        if (_sbMuteAuto) console.log(`Auto-draw: ${tId} é sandbox/mudo — sorteio feito, notificações suprimidas`);
         const notifiedUids = new Set();
         for (const p of activePlayers) {
+          if (_sbMuteAuto) break;
           const uids = [];
           [p.uid, p.p1Uid, p.p2Uid].forEach(u => { if (u) uids.push(String(u)); });
           if (Array.isArray(p.participants)) {
@@ -755,6 +958,7 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
   if (typeof owed !== 'number' || owed > nowMs) return; // sem slot devido agora
   const cur = t.currentPhaseIndex || 0;
   await _preloadDrawNames(t); // v4.5.85: nomes vivos por uid antes do motor de fase
+  _enrichParticipantsFromProfiles(t); // v1.3.52: gênero/skill/email por uid
   if (typeof drawWindow._rehydrateEntryNames === 'function') drawWindow._rehydrateEntryNames(t);
   const ok = drawWindow._phaseGenNextLeagueRound(t, cur);
   if (!ok) { console.log(`Auto-draw phase: skip ${tId} (gen falhou / jogadores insuficientes)`); return; }
@@ -805,8 +1009,11 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
       _sideDisplayName(pm.p2Uids, _nameByUid, pm.p2)).join('\n\n');
     return '🔄 Nova rodada no torneio ' + (t.name || '') + '!\n\n' + gamesText + (t.venue ? '\n\n📍 ' + t.venue : '');
   };
+  // Sandbox/killswitch: SB sorteia na mesma CF, mas não notifica.
+  const _sbMuteAuto = (t.isSandbox === true || t.notificationsMuted === true);
   const notified = new Set();
   for (const p of pool) {
+    if (_sbMuteAuto) break;
     const uids = [];
     [p && p.uid, p && p.p1Uid, p && p.p2Uid].forEach(u => { if (u) uids.push(String(u)); });
     const message = buildMsg(new Set(uids)) || 'Nova rodada sorteada! Confira seus jogos.';

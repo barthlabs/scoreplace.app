@@ -65,6 +65,7 @@ var ROOT = path.join(__dirname, '..', 'js');
 function loadAbs(full) {
   vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: full });
   sandbox._callDrawRound = h.drawRoundStub; // ver headless: o arquivo real sobrescreveria o stub
+  sandbox._callCloseRound = h.closeRoundStub; // idem pro fecho de rodada Suíço (CF closeRound)
 }
 
 // i18n REAL — pra os nomes de rodada saírem em pt-BR ("Semifinais"/"Final"/"Quartas de Final")
@@ -89,6 +90,11 @@ loadAbs(path.join(ROOT, 'store.js'));
 // então sem este load o store.js/firebase-db chamariam um `undefined` guardado = no-op
 // silencioso, e o harness deixaria de exercitar a hidratação. Como no index.html.
 loadAbs(path.join(ROOT, 'views', 'bracket-model.js'));
+// bracket-ui: define window._userTeamInMatch / _resultNeedsApproval / _saveResultInline etc.
+// COMO NO index.html (bracket-ui é carregado com bracket). O render (bracket.js) chama
+// window._userTeamInMatch pra "é o meu jogo?" (uid-only, _slotUids); sem este load ele fica
+// undefined e o render caía em resolução por nome — que o cânone uid proíbe. Espelha prod.
+loadAbs(path.join(ROOT, 'views', 'bracket-ui.js'));
 loadAbs(path.join(ROOT, 'views', 'bracket.js'));
 
 var E = sandbox._phasesEngine;

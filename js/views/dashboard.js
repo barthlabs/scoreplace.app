@@ -687,7 +687,10 @@ function renderDashboard(container) {
     if (_isInStandby && !isFinished) {
       enrollBtnHtml = `<div style="font-size: 0.6rem; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.4px; background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 6px;">⏳ ${_t('enroll.onWaitlist')}</div><button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._leaveStandby('${t.id}')">🛑 ${_t('enroll.leaveWaitlist')}</button>`;
     } else if (isParticipating && canEnroll) {
-      enrollBtnHtml = `<button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button>`;
+      // "Entrar no grupo" do WhatsApp fica à ESQUERDA de "Desinscrever-se" — bem
+      // na cara do participante. O chip auto-oculta (sem link / WhatsApp off).
+      const _waJoin = (typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : '';
+      enrollBtnHtml = `<div style="display:flex;align-items:stretch;justify-content:flex-end;gap:6px;flex-wrap:wrap;">${_waJoin}<button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button></div>`;
     } else if (!isParticipating && canEnroll) {
       enrollBtnHtml = `<button class="btn btn-sm btn-success hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._dashEnroll('${t.id}')">✅ ${_t('enroll.enrollBtn')}</button>`;
     } else if (isParticipating && !canEnroll && !isFinished) {
@@ -713,6 +716,7 @@ function renderDashboard(container) {
                <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(251,191,36,0.95)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
              </div>
           ` : ''}
+          ${t.isSandbox ? `<div style="background:#b91c1c;color:#fff;text-align:center;font:800 11px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;letter-spacing:1.5px;padding:5px 8px;">🧪 SANDBOX · TORNEIO DE TESTE</div>` : ''}
           <div class="card-body p-4" style="${_photoPanelD}${isOrg ? 'padding-bottom: 38px;' : ''}">
 
             <!-- Top Row: Icon/Modality | Status (same line, consistent with detail page) -->
@@ -874,6 +878,8 @@ function renderDashboard(container) {
                 '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.1rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;white-space:nowrap;flex-shrink:0;">' + _countdownText + '</span>' +
               '</div>';
             })()}
+
+            ${(typeof window._buildDurationForecast === 'function') ? window._buildDurationForecast(t) : ''}
 
             ${(() => {
               // v2.1.52: box de progresso COMPLETO (mesmo do card de detalhes) no
@@ -1459,7 +1465,7 @@ function renderDashboard(container) {
         var _phaseLabel = '';
         if (m.label) _phaseLabel = String(m.label);
         else if (m.roundLabel) _phaseLabel = String(m.roundLabel);
-        else if (m.round != null) _phaseLabel = 'Rodada ' + m.round;
+        else if (m.round != null) _phaseLabel = 'Rodada ' + window._matchRoundDisplayNum(t, m); // 1-based, nunca R0
         var _formatLabel = m.isMonarch ? 'Rei/Rainha' : ((window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '');
         if (t.format === 'Liga' && t.ligaRoundFormat === 'rei_rainha' && m.isMonarch) _formatLabel = 'Pontos Corridos · Rei/Rainha';
         var _subLine = [_formatLabel, _phaseLabel].filter(Boolean).join(' · ');
@@ -1576,7 +1582,7 @@ function renderDashboard(container) {
       if (_isLiga || _isSwiss || (m && m.isMonarch)) {
         if (m && m.label) return String(m.label);
         if (m && m.roundLabel) return String(m.roundLabel);
-        if (m && m.round != null) return 'Rodada ' + m.round;
+        if (m && m.round != null) return 'Rodada ' + window._matchRoundDisplayNum(t, m); // 1-based, nunca R0
         return '';
       }
       // Conta partidas totais do torneio (excluindo BYE/TBD) para estimar total de times
@@ -1587,16 +1593,20 @@ function renderDashboard(container) {
       // v2.4.40: o TOTAL de rodadas vem do TAMANHO do bracket (nº de inscritos),
       // não do round máximo já gerado. Antes, um bracket só com R1 tinha maxRound=1
       // → fromEnd=0 → TODO jogo virava "Final" (bug do torneio da Vivi Hirata).
-      var maxRound = 0;
-      realMatches.forEach(function(mm) { if ((mm.round || 0) > maxRound) maxRound = mm.round || 0; });
+      // v1.3.9: nº de rodadas POSICIONAL (contagem de rodadas distintas do bracket do jogo),
+      // não o maxRound CRU — a repescagem/play-in usa round 0, então maxRound subestimava o
+      // total e o round cru gerava "Rodada 0"/"(R0)". curRound e totalRounds agora 1-based.
+      var _bkR = m.bracket || 'main';
+      var _rsetU = {};
+      realMatches.forEach(function(mm) { if (mm && (mm.bracket || 'main') === _bkR && typeof mm.round === 'number') _rsetU[mm.round] = 1; });
       var _parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
       var _entries = _parts.length;
-      var totalRounds = maxRound;
+      var totalRounds = Object.keys(_rsetU).length;
       if (_entries >= 2) {
         var _byEntries = Math.ceil(Math.log2(_entries)); // bracket de N → log2(N) rodadas
         if (_byEntries > totalRounds) totalRounds = _byEntries;
       }
-      var curRound = m.round || 0;
+      var curRound = window._matchRoundDisplayNum(t, m); // 1-based (posição), nunca 0
       // fromEnd: 0 = final, 1 = semi, 2 = quartas, 3 = oitavas
       var fromEnd = totalRounds - curRound;
       var phaseStr = '';
@@ -1882,7 +1892,7 @@ function renderDashboard(container) {
       // meta: Rodada X · Fase Y (multi-fase) · Linha (Ouro/Prata) — coroa se Rei/Rainha
       var _meta = [];
       var _rdM = String(_ngM.label || '').match(/R(?:odada)?\s*(\d+)/i);
-      var _rnum = _rdM ? Number(_rdM[1]) : ((_ngM.round != null && !isNaN(Number(_ngM.round))) ? Number(_ngM.round) : null);
+      var _rnum = _rdM ? Number(_rdM[1]) : ((_ngM.round != null && !isNaN(Number(_ngM.round))) ? window._matchRoundDisplayNum(_ngT || t, _ngM) : null); // 1-based, nunca R0
       if (_rnum != null) _meta.push('Rodada ' + _rnum);
       if (_ngT && window._isMultiPhase && window._isMultiPhase(_ngT) && _ngM.phaseIndex != null) {
         var _phN = (_ngT.phases && _ngT.phases[_ngM.phaseIndex] && _ngT.phases[_ngM.phaseIndex].name) || ('Fase ' + ((Number(_ngM.phaseIndex) || 0) + 1));
@@ -2481,6 +2491,7 @@ function renderDashboard(container) {
             '</div>' +
           '</div>' +
           '<div class="compact-badges" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
+            (t.isSandbox ? '<span style="font-size:0.62rem;font-weight:700;padding:2px 6px;border-radius:5px;background:#b91c1c;color:#fff;letter-spacing:0.5px;white-space:nowrap;">🧪 SB</span>' : '') +
             '<span style="font-size:0.7rem;color:var(--text-muted);">👤 ' + pCount + '</span>' +
             (hasDraw && !isFinished ? '<span style="font-size:0.7rem;color:' + (prog.pct === 100 ? '#10b981' : '#f59e0b') + ';">' + prog.pct + '%</span>' : '') +
             '<span style="font-size:0.68rem;font-weight:600;padding:3px 8px;border-radius:6px;background:rgba(' + statusBadgeBgRgb + ',0.15);color:' + statusColor + ';white-space:nowrap;">' + statusText + '</span>' +

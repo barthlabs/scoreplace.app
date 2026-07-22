@@ -8,11 +8,6 @@
       "extensionInstances": {
         "firestore-send-email": "8aa4cd0ccb7d528b96ddb49a3fa72eb7baff3a74de891e1f613bf66101752327"
       }
-    },
-    "scoreplace-staging": {
-      "extensionInstances": {
-        "firestore-send-email": "997b45038583ab6f37a1dd03fb9be97046f286c8fbbc9f2c5dbd9da6a1b993f8"
-      }
     }
   }
 }

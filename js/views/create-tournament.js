@@ -384,12 +384,13 @@ function setupCreateTournamentModal() {
               <div id="late-enroll-box" style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ${_t('create.lateEnrollSection')}</p>
                 <input type="hidden" id="late-enrollment" value="closed">
+                <input type="hidden" id="new-matchups" value="false">
                 <div style="display:flex;flex-direction:column;gap:8px;" id="late-enrollment-buttons">
                   <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
                     <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon" id="late-closed-icon">🚫</span><div><span id="late-closed-title" style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollClosed')}</span><div class="toggle-desc" id="late-closed-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollClosedOnDesc')}</div></div></div>
                     <label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;"><input type="checkbox" id="late-toggle-closed" aria-label="Inscrições fora do prazo fechadas" checked onchange="window._syncLateEnrollment('closed')"><span class="toggle-slider"></span></label>
                   </div>
-                  <div class="toggle-row" style="display:none;padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
+                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
                     <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon" id="late-expand-icon">➕</span><div><span id="late-expand-title" style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollExpand')}</span><div class="toggle-desc" id="late-expand-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollExpandDisabledDesc')}</div></div></div>
                     <label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;"><input type="checkbox" id="late-toggle-expand" aria-label="Inscrições fora do prazo expandem lista" onchange="window._syncLateEnrollment('expand')"><span class="toggle-slider"></span></label>
                   </div>
@@ -608,6 +609,7 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="gsm-tiebreakEnabled" value="true">
                 <input type="hidden" id="gsm-tiebreakPoints" value="7">
                 <input type="hidden" id="gsm-tiebreakMargin" value="2">
+                <input type="hidden" id="gsm-tiebreakAt" value="">
                 <input type="hidden" id="gsm-superTiebreak" value="false">
                 <input type="hidden" id="gsm-superTiebreakPoints" value="10">
                 <input type="hidden" id="gsm-countingType" value="numeric">
@@ -731,6 +733,17 @@ function setupCreateTournamentModal() {
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #60a5fa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">📋 ${_t('create.resultSection')}</p>
                 ${window._resultEntryButtonsHtml(0)}
                 <input type="hidden" id="select-result-entry" value="organizer">
+              </div>
+
+              <!-- Tie-break do set (5-5 vs 6-6) — atalho visível; escreve no mesmo gsm-tiebreakAt do
+                   painel de pontuação. Visível só em esportes com set/tie-break (via #re-tiebreak-at-block). -->
+              <div id="re-tiebreak-at-block" style="display:none; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin: 0 0 0.35rem; font-size: 0.8rem; color: #60a5fa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎾 Tie-break do set</p>
+                <p style="margin: 0 0 0.7rem; font-size: 0.78rem; color: var(--text-muted);">Em que placar o set vai pro tie-break.</p>
+                <div id="re-tbat-seg" data-tbat="" style="display:flex; gap:8px;">
+                  <button type="button" id="re-tbat-g1" onclick="window._reSetTbAt('g-1')" style="flex:1; padding:12px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; border:2px solid rgba(255,255,255,0.12); background:transparent; color:var(--text-bright,#f1f5f9);">Em 5-5 <span style="font-size:0.7rem; color:var(--text-muted); display:block; font-weight:600;">set curto · 6-5</span></button>
+                  <button type="button" id="re-tbat-g" onclick="window._reSetTbAt('g')" style="flex:1; padding:12px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; border:2px solid rgba(255,255,255,0.12); background:transparent; color:var(--text-bright,#f1f5f9);">Em 6-6 <span style="font-size:0.7rem; color:var(--text-muted); display:block; font-weight:600;">padrão · 7-6</span></button>
+                </div>
               </div>
 
               <!-- Classificação (Personalizada × Em blocos) — logo após o Lançamento de
@@ -1830,19 +1843,17 @@ function setupCreateTournamentModal() {
     var expand = document.getElementById('late-toggle-expand');
     if (!closed || !expand) return;
 
-    // Mutual exclusion: ligar um desliga o outro. Se source não foi passado
-    // (re-render programático), preserva estado atual sem alterar.
-    if (source === 'closed' && closed.checked) {
-      expand.checked = false;
-    } else if (source === 'expand' && expand.checked) {
-      closed.checked = false;
-    }
-
+    // v1.3.x (dono): "Fechadas" (Abertas) e "Novos Confrontos" são INDEPENDENTES — não há mais
+    // exclusão mútua. Fechadas = aceitar novos inscritos após o sorteio. Novos Confrontos = suplentes/
+    // duplas formadas entram na chave na hora, MESMO com as inscrições fechadas. Ver _allowsNewMatchups.
+    // lateEnrollment carrega o estado de INSCRIÇÃO (closed x open); new-matchups é o flag independente.
     var value;
     if (closed.checked) value = 'closed';
     else value = expand.checked ? 'expand' : 'standby';
     var hidden = document.getElementById('late-enrollment');
     if (hidden) hidden.value = value;
+    var nmHidden = document.getElementById('new-matchups');
+    if (nmHidden) nmHidden.value = expand.checked ? 'true' : 'false';
     // Update visual active state independently per toggle
     var rows = document.querySelectorAll('#late-enrollment-buttons .toggle-row');
     if (rows[0]) {
@@ -1850,12 +1861,15 @@ function setupCreateTournamentModal() {
       rows[0].style.background = closed.checked ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)';
     }
     if (rows[1]) {
-      var expandEffective = !closed.checked && expand.checked;
+      var expandEffective = expand.checked; // v1.3.x: independente de "Fechadas"
       rows[1].style.border = expandEffective ? '1px solid rgba(251,191,36,0.25)' : '1px solid rgba(255,255,255,0.08)';
       rows[1].style.background = expandEffective ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)';
-      // v2.6.52: "Novos Confrontos" some quando Fechadas (não há suplentes); aparece só quando aberta.
-      rows[1].style.display = closed.checked ? 'none' : '';
-      rows[1].style.opacity = '1';
+      // v1.3.98 (dono, "inscrições durante a fase travadas"): "Novos Confrontos" SEMPRE visível —
+      // antes sumia quando Fechadas estava ON (display:none), então o organizador via só "Fechadas"
+      // e achava que não dava pra mudar. Agora as duas opções aparecem; ligar uma desliga a outra
+      // (1 clique). Quando Fechadas está ON, esta fica dim (não-efetiva) mas VISÍVEL e clicável.
+      rows[1].style.display = '';
+      rows[1].style.opacity = '1'; // v1.3.x: sempre efetivo (independente de "Fechadas")
     }
     // Título + ícone canônicos acompanham a posição de cada toggle (v3.1.20).
     var mLbl = window._lateEnrollLabel('master', closed.checked);
@@ -1863,8 +1877,8 @@ function setupCreateTournamentModal() {
     if (closedTitle) closedTitle.textContent = mLbl.title;
     var closedIcon = document.getElementById('late-closed-icon');
     if (closedIcon) closedIcon.textContent = mLbl.icon;
-    // Segundo toggle só aparece com inscrição aberta; rótulo segue o próprio estado.
-    var cLbl = window._lateEnrollLabel('conf', (expand.checked && !closed.checked));
+    // v1.3.x: rótulo do 2º toggle segue SÓ o próprio estado (independente de "Fechadas").
+    var cLbl = window._lateEnrollLabel('conf', expand.checked);
     var expandTitle = document.getElementById('late-expand-title');
     if (expandTitle) expandTitle.textContent = cLbl.title;
     var expandIcon = document.getElementById('late-expand-icon');
@@ -3687,7 +3701,7 @@ function setupCreateTournamentModal() {
       var bd = real ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.06)';
       var lc = real ? '#60a5fa' : 'var(--text-muted)';
       h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + bg + ';border:' + bd + ';border-radius:8px;flex-wrap:wrap;">';
-      h += '<span style="font-size:0.78rem;font-weight:' + (real ? '700' : '600') + ';color:' + lc + ';min-width:104px;">' + c + ' inscritos' + (real ? ' <span style="font-size:0.62rem;">(real)</span>' : '') + '</span>';
+      h += '<span style="font-size:0.78rem;font-weight:' + (real ? '700' : '600') + ';color:' + lc + ';min-width:104px;">' + c + ' ' + (o.unitLbl || 'inscritos') + (real ? ' <span style="font-size:0.62rem;">(real)</span>' : '') + '</span>';
       h += '<span style="font-size:0.74rem;color:var(--text-muted);opacity:0.65;">' + m + ' jogos</span>';
       h += '<span style="font-size:0.85rem;font-weight:700;color:' + (real ? '#e2e8f0' : 'rgba(255,255,255,0.7)') + ';margin-left:auto;">' + fmtMin(timeFor(c)) + '</span>';
       h += '</div>';
@@ -3712,21 +3726,37 @@ function setupCreateTournamentModal() {
       if (catData.combinedCategories && catData.combinedCategories.length) K = catData.combinedCategories.length;
       ageCats = (catData.ageCategories || []).length;
     } catch (e) { K = 1; }
+    // v1.3.168 (dono): a escada estima por UNIDADE COMPETITIVA — em duplas, EQUIPES, nunca nº
+    // de entradas (31 pessoas = 14 equipes + 3 sem dupla ⇒ chave de 14; solo sem dupla é
+    // pendência). Real: _diagnoseAll.effectiveTeams (fonte única, o mesmo nº dos painéis de
+    // resolução). Planejado: pessoas ÷ tamanho do time.
+    var teamSize = Math.max(iv('tourn-team-size', 1), 1);
     var N = 0, isReal = false;
     var editId = gv('edit-tournament-id');
     if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
       var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); });
-      if (t && Array.isArray(t.participants) && t.participants.length > 0) { N = t.participants.length; isReal = true; }
+      if (t && Array.isArray(t.participants) && t.participants.length > 0) {
+        N = t.participants.length; isReal = true;
+        try {
+          if (typeof window._diagnoseAll === 'function') {
+            var _di = window._diagnoseAll(t);
+            if (_di && _di.effectiveTeams > 0) N = _di.effectiveTeams;
+            if (_di && _di.teamSize > teamSize) teamSize = _di.teamSize;
+          }
+        } catch (e) {}
+      }
     }
     if (!isReal) {
       var elm = gv('enrollment-limit-mode') || 'cap';
       if (elm === 'draw') N = iv('tourn-target-slots', 0);
       if (!N) N = iv('tourn-max-participants', 0);
+      if (teamSize >= 2 && N > 0) N = Math.floor(N / teamSize); // planejado é em PESSOAS
     }
     ladder.innerHTML = window._buildPhaseEstimate({
       call: iv('tourn-call-time', 0), warm: iv('tourn-warmup-time', 0), dur: iv('tourn-game-duration', 0),
       courts: iv('tourn-court-count', 1), fmt: gv('select-formato') || 'elim_simples', drawMode: gv('draw-mode') || 'sorteio',
       K: K, ageCats: ageCats, N: N, isReal: isReal,
+      unitLbl: (teamSize >= 2 ? 'equipes' : 'inscritos'),
       gruposCount: iv('grupos-count', 4)
     });
   };
@@ -4498,10 +4528,13 @@ function setupCreateTournamentModal() {
     if (typeof window._setPhaseWo === 'function') window._setPhaseWo(0, _woScope);
     // Late Enrollment (Fechadas + Novos Confrontos)
     var _lateEnroll = t.lateEnrollment || 'closed';
+    // v1.3.x: "Novos Confrontos" é INDEPENDENTE de "Fechadas". Vem de t.newMatchups; compat: torneios
+    // antigos só têm lateEnrollment ('expand' implicava Novos Confrontos ON).
+    var _newMatch = (t.newMatchups != null) ? (t.newMatchups === true) : (_lateEnroll === 'expand');
     document.getElementById('late-enrollment').value = _lateEnroll;
     document.getElementById('late-toggle-closed').checked = _lateEnroll === 'closed';
-    // Novos Confrontos: ON when mode is 'expand'. For new tournaments with Fechadas OFF, default ON.
-    document.getElementById('late-toggle-expand').checked = _lateEnroll === 'expand';
+    document.getElementById('late-toggle-expand').checked = _newMatch;
+    var _nmEl0 = document.getElementById('new-matchups'); if (_nmEl0) _nmEl0.value = _newMatch ? 'true' : 'false';
     window._syncLateEnrollment();
     // Lançamento de Resultados — v2.6.62: render canônica. Grava no hidden + re-renderiza botões.
     var _reVal = t.resultEntry || 'organizer';
@@ -4587,6 +4620,8 @@ function setupCreateTournamentModal() {
       document.getElementById('gsm-tiebreakEnabled').value = t.scoring.tiebreakEnabled || false;
       document.getElementById('gsm-tiebreakPoints').value = t.scoring.tiebreakPoints || 7;
       document.getElementById('gsm-tiebreakMargin').value = t.scoring.tiebreakMargin || 2;
+      document.getElementById('gsm-tiebreakAt').value = t.scoring.tiebreakAt || '';
+      if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
       document.getElementById('gsm-superTiebreak').value = t.scoring.superTiebreak || false;
       document.getElementById('gsm-superTiebreakPoints').value = t.scoring.superTiebreakPoints || 10;
       document.getElementById('gsm-countingType').value = t.scoring.countingType || 'numeric';
@@ -4810,6 +4845,8 @@ function setupCreateTournamentModal() {
       tiebreakEnabled: g('gsm-tiebreakEnabled') === 'true',
       tiebreakPoints: parseInt(g('gsm-tiebreakPoints')) || 7,
       tiebreakMargin: parseInt(g('gsm-tiebreakMargin')) || 2,
+      // regra do TB: 'g-1' (5-5→6-5) ou 'g' (6-6→7-6); vazio = default do esporte (_sportTiebreakAt)
+      tiebreakAt: g('gsm-tiebreakAt') || undefined,
       superTiebreak: g('gsm-superTiebreak') === 'true',
       superTiebreakPoints: parseInt(g('gsm-superTiebreakPoints')) || 10,
       countingType: g('gsm-countingType') || 'numeric',
@@ -4834,6 +4871,8 @@ function setupCreateTournamentModal() {
     set('gsm-advantageRule', s.advantageRule ? 'true' : 'false');
     set('gsm-fixedSet', s.fixedSet ? 'true' : 'false');
     set('gsm-fixedSetGames', s.fixedSetGames != null ? s.fixedSetGames : 6);
+    set('gsm-tiebreakAt', s.tiebreakAt || '');
+    if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
   };
 
   window._scoringMeaningfullyChanged = function(o, n) {
@@ -5102,6 +5141,7 @@ function setupCreateTournamentModal() {
           resultEntry: resultEntryVal,
           woScope: (document.getElementById('wo-scope') || {}).value || 'individual',
           lateEnrollment: (document.getElementById('late-enrollment') || {}).value || 'closed',
+          newMatchups: ((document.getElementById('new-matchups') || {}).value === 'true'), // v1.3.x: independente de Abertas
           venue: venueVal,
           venueAccess: venueAccessVal,
           venueLat: venueLatVal,
@@ -6002,6 +6042,11 @@ window._openGSMConfig = function(targetPhase) {
   var advantage = _ps ? !!_ps.advantageRule : document.getElementById('gsm-advantageRule').value === 'true';
   var fixedSet = _ps ? !!_ps.fixedSet : document.getElementById('gsm-fixedSet').value === 'true';
   var fixedSetGames = _ps ? String(_ps.fixedSetGames || 6) : (document.getElementById('gsm-fixedSetGames').value || '6');
+  // Regra do tie-break (5-5 vs 6-6): valor gravado no torneio (gsm-tiebreakAt) OU default do esporte.
+  var _hTbAt = document.getElementById('gsm-tiebreakAt');
+  var _sport = (typeof window._currentSportName === 'function') ? window._currentSportName() : '';
+  var tbAt = (_hTbAt && _hTbAt.value) || ((typeof window._sportTiebreakAt === 'function') ? window._sportTiebreakAt(_sport) : 'g');
+  var _gm1 = (parseInt(gamesPerSet) || 6) - 1, _gg = (parseInt(gamesPerSet) || 6);
 
   var existing = document.getElementById('gsm-config-overlay');
   if (existing) existing.remove();
@@ -6014,7 +6059,7 @@ window._openGSMConfig = function(targetPhase) {
     '<div style="background:linear-gradient(135deg,#6d28d9 0%,#a855f7 100%);padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">' +
       '<h3 style="margin:0;color:#f5f3ff;font-size:1.1rem;font-weight:800;">⚙️ Personalizado</h3>' +
       '<div style="display:flex;gap:8px;">' +
-        '<button type="button" onclick="window._gsmConfigTargetPhase=null;document.getElementById(\'gsm-config-overlay\').remove();" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#f5f3ff;border:1px solid rgba(255,255,255,0.25);">Cancelar</button>' +
+        '<button type="button" onclick="window._gsmConfigTargetPhase=null;document.getElementById(\'gsm-config-overlay\').remove();" class="btn btn-sm" style="background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;border:1px solid rgba(239,68,68,0.45);">Cancelar</button>' +
         '<button type="button" onclick="window._gsmSaveConfig();" class="btn btn-sm" style="background:#fff;color:#6d28d9;font-weight:700;border:none;">Aplicar</button>' +
       '</div>' +
     '</div>' +
@@ -6044,12 +6089,19 @@ window._openGSMConfig = function(targetPhase) {
         // Tiebreak
         '<div id="gsm-tb-section" style="border-top:1px solid var(--border-color);padding-top:1rem;">' +
           '<div class="toggle-row" style="padding:6px 0;margin-bottom:8px;">' +
-            '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;" id="gsm-tb-label">Tie-break em ' + (parseInt(gamesPerSet) - 1) + '-' + (parseInt(gamesPerSet) - 1) + '</span></div>' +
+            '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;" id="gsm-tb-label">Tie-break em ' + (tbAt === 'g-1' ? _gm1 : _gg) + '-' + (tbAt === 'g-1' ? _gm1 : _gg) + '</span></div>' +
             '<label class="toggle-switch toggle-sm"><input type="checkbox" id="gsm-cfg-tiebreak" ' + (tbEnabled ? 'checked' : '') + ' onchange="window._gsmToggleTiebreak()"><span class="toggle-slider"></span></label>' +
           '</div>' +
           '<div id="gsm-tb-details" style="display:' + (tbEnabled ? 'flex' : 'none') + ';gap:12px;flex-wrap:wrap;padding-left:26px;">' +
             '<div><label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">Pontos</label><input type="number" id="gsm-cfg-tbPoints" class="form-control" min="5" max="15" value="' + tbPoints + '" style="font-size:0.82rem;width:70px;" oninput="window._gsmUpdateSummary()"></div>' +
             '<div><label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">Diferenca min.</label><input type="number" id="gsm-cfg-tbMargin" class="form-control" min="1" max="5" value="' + tbMargin + '" style="font-size:0.82rem;width:70px;" oninput="window._gsmUpdateSummary()"></div>' +
+            // Quando o tie-break acontece: em (g-1)-(g-1) [set curto, ex. 6-5] ou em g-g [padrão, ex. 7-6].
+            '<div style="flex:1 1 100%;"><label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:4px;">Tie-break no empate</label>' +
+              '<div id="gsm-tbat-seg" data-tbat="' + tbAt + '" style="display:flex;gap:6px;">' +
+                '<button type="button" id="gsm-tbat-g1" onclick="window._gsmSetTbAt(\'g-1\')" style="flex:1;padding:8px;border-radius:8px;font-size:0.8rem;font-weight:700;cursor:pointer;border:2px solid ' + (tbAt === 'g-1' ? '#a855f7' : 'rgba(255,255,255,0.12)') + ';background:' + (tbAt === 'g-1' ? 'rgba(168,85,247,0.18)' : 'transparent') + ';color:var(--text-bright,#f1f5f9);">' + _gm1 + '-' + _gm1 + ' <span style="font-size:0.66rem;color:var(--text-muted);">(set curto · ' + _gg + '-' + _gm1 + ')</span></button>' +
+                '<button type="button" id="gsm-tbat-g" onclick="window._gsmSetTbAt(\'g\')" style="flex:1;padding:8px;border-radius:8px;font-size:0.8rem;font-weight:700;cursor:pointer;border:2px solid ' + (tbAt === 'g' ? '#a855f7' : 'rgba(255,255,255,0.12)') + ';background:' + (tbAt === 'g' ? 'rgba(168,85,247,0.18)' : 'transparent') + ';color:var(--text-bright,#f1f5f9);">' + _gg + '-' + _gg + ' <span style="font-size:0.66rem;color:var(--text-muted);">(padrão · ' + (_gg + 1) + '-' + _gg + ')</span></button>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
         '</div>' +
         // Super tiebreak
@@ -6104,6 +6156,60 @@ window._gsmToggleTiebreak = function() {
   var checked = document.getElementById('gsm-cfg-tiebreak').checked;
   document.getElementById('gsm-tb-details').style.display = checked ? 'flex' : 'none';
   window._gsmUpdateSummary();
+};
+
+// Regra do tie-break: 'g-1' (empate em (g-1)-(g-1) → set curto, ex. 6-5) ou 'g' (empate g-g,
+// ex. 7-6). Grava no segmento (data-tbat), atualiza pills + label. _gsmSaveConfig lê e persiste.
+window._gsmSetTbAt = function(v) {
+  var seg = document.getElementById('gsm-tbat-seg'); if (!seg) return;
+  seg.dataset.tbat = v;
+  var g1 = document.getElementById('gsm-tbat-g1'), gg = document.getElementById('gsm-tbat-g');
+  if (g1) { g1.style.borderColor = (v === 'g-1') ? '#a855f7' : 'rgba(255,255,255,0.12)'; g1.style.background = (v === 'g-1') ? 'rgba(168,85,247,0.18)' : 'transparent'; }
+  if (gg) { gg.style.borderColor = (v === 'g') ? '#a855f7' : 'rgba(255,255,255,0.12)'; gg.style.background = (v === 'g') ? 'rgba(168,85,247,0.18)' : 'transparent'; }
+  var _ge = document.getElementById('gsm-cfg-gamesPerSet') || document.getElementById('gsm-gamesPerSet');
+  var g = (parseInt(_ge && _ge.value) || 6);
+  var n = (v === 'g-1') ? (g - 1) : g;
+  var lbl = document.getElementById('gsm-tb-label'); if (lbl) lbl.textContent = 'Tie-break em ' + n + '-' + n;
+  if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
+  if (typeof window._gsmUpdateSummary === 'function') window._gsmUpdateSummary();
+};
+
+// Selector de tie-break 5-5/6-6 no bloco de Lançamento de Resultados (atalho visível). Escreve no
+// MESMO hidden gsm-tiebreakAt do painel GSM → flui pro scoring no save.
+window._reHighlightTbAt = function(v) {
+  var seg = document.getElementById('re-tbat-seg'); if (seg) seg.dataset.tbat = v;
+  var g1 = document.getElementById('re-tbat-g1'), gg = document.getElementById('re-tbat-g');
+  if (g1) { g1.style.borderColor = (v === 'g-1') ? '#3b82f6' : 'rgba(255,255,255,0.12)'; g1.style.background = (v === 'g-1') ? 'rgba(59,130,246,0.18)' : 'transparent'; }
+  if (gg) { gg.style.borderColor = (v === 'g') ? '#3b82f6' : 'rgba(255,255,255,0.12)'; gg.style.background = (v === 'g') ? 'rgba(59,130,246,0.18)' : 'transparent'; }
+};
+window._reSetTbAt = function(v) {
+  var h = document.getElementById('gsm-tiebreakAt'); if (h) h.value = v;
+  window._reHighlightTbAt(v);
+};
+// Mostra o bloco só quando o esporte usa SET + TIE-BREAK; destaca a opção atual (gsm-tiebreakAt OU
+// default do esporte). Chamado no load, na troca de esporte e ao aplicar a config GSM.
+window._reSyncTbAt = function() {
+  var blk = document.getElementById('re-tiebreak-at-block'); if (!blk) return;
+  var tbEnabled = ((document.getElementById('gsm-tiebreakEnabled') || {}).value) === 'true';
+  // v1.3.151 (dono: "onde esta o tie break 5-5/6-6? regressao"): "usa SETS" tem de vir da FONTE
+  // CANÔNICA window._scoringUsesSets — a mesma que o PLACAR usa. Aqui havia lógica própria
+  // (`gsm-type === 'sets'`), e torneios reais gravam `type:'simple'` COM `gamesPerSet`+`tiebreakEnabled`
+  // (o caso do SB: Beach Tennis, type simple, 6 games, TB ligado). Resultado: o placar revelava os
+  // campos de tie-break (tbReveal hit:true) mas a CONFIG escondia o seletor 5-5/6-6 — duas verdades
+  // diferentes pro mesmo torneio. Ver [[project_sport_rules_canonical]].
+  var _scCfg = {
+    type: (document.getElementById('gsm-type') || {}).value || '',
+    tiebreakEnabled: tbEnabled,
+    gamesPerSet: parseInt((document.getElementById('gsm-gamesPerSet') || {}).value) || 0
+  };
+  var isSets = (typeof window._scoringUsesSets === 'function')
+    ? window._scoringUsesSets(_scCfg)
+    : (!_scCfg.type || _scCfg.type === 'sets');
+  blk.style.display = (tbEnabled && isSets) ? 'block' : 'none';
+  if (blk.style.display === 'none') return;
+  var stored = (document.getElementById('gsm-tiebreakAt') || {}).value;
+  var at = stored || ((typeof window._sportTiebreakAt === 'function') ? window._sportTiebreakAt((typeof window._currentSportName === 'function') ? window._currentSportName() : '') : 'g');
+  window._reHighlightTbAt(at);
 };
 
 window._gsmToggleSuperTb = function() {
@@ -6216,6 +6322,9 @@ window._gsmSaveConfig = function() {
   document.getElementById('gsm-tiebreakEnabled').value = tbOn ? 'true' : 'false';
   document.getElementById('gsm-tiebreakPoints').value = tbPts;
   document.getElementById('gsm-tiebreakMargin').value = tbMargin;
+  var _seg = document.getElementById('gsm-tbat-seg');
+  document.getElementById('gsm-tiebreakAt').value = (_seg && _seg.dataset.tbat) || '';
+  if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
   document.getElementById('gsm-superTiebreak').value = stbOn ? 'true' : 'false';
   document.getElementById('gsm-superTiebreakPoints').value = stbPts;
   document.getElementById('gsm-advantageRule').value = advantage ? 'true' : 'false';
@@ -6393,7 +6502,9 @@ window._prefillFromTemplate = function(tpl) {
   if (tpl.lateEnrollment) {
     document.getElementById('late-enrollment').value = tpl.lateEnrollment;
     document.getElementById('late-toggle-closed').checked = tpl.lateEnrollment === 'closed';
-    document.getElementById('late-toggle-expand').checked = tpl.lateEnrollment === 'expand';
+    var _tplNM = (tpl.newMatchups != null) ? (tpl.newMatchups === true) : (tpl.lateEnrollment === 'expand'); // v1.3.x independente
+    document.getElementById('late-toggle-expand').checked = _tplNM;
+    var _nmElT = document.getElementById('new-matchups'); if (_nmElT) _nmElT.value = _tplNM ? 'true' : 'false';
     if (typeof window._syncLateEnrollment === 'function') window._syncLateEnrollment();
   }
 
@@ -6879,6 +6990,7 @@ window._saveCurrentFormAsTemplate = function() {
       resultEntry: get('select-result-entry') || 'organizer',
       woScope: get('wo-scope') || 'individual',
       lateEnrollment: get('late-enrollment') || 'closed',
+      newMatchups: (get('new-matchups') === 'true'), // v1.3.x: "Novos Confrontos" independente de "Abertas"
       courtCount: parseInt(get('tourn-court-count')) || '',
       courtNames: (get('tourn-court-names') || '').trim(),
       callTime: parseInt(get('tourn-call-time')) || 0,

@@ -77,8 +77,23 @@
       (typeof window._renderBallLoader === 'function' ? window._renderBallLoader('Carregando…', { minHeight: '18vh', size: '2.2rem' }) : 'Carregando…') +
       '</div>';
 
+    // v1.3.21: relatório dos convites do grupo de WhatsApp (o "🔔 Notificar participantes" do
+    // card do grupo grava t.waGroup.notifyLog). Mostra data/hora + quem enviou.
+    var _wg = t.waGroup || {};
+    var _wgBlock = '';
+    if (_wg.notifiedAt || (Array.isArray(_wg.notifyLog) && _wg.notifyLog.length)) {
+      var _fmt = function (ms) { try { var d = new Date(ms); return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
+      var _rows = (Array.isArray(_wg.notifyLog) ? _wg.notifyLog : []).slice(0, 10).map(function (e) {
+        return '<div style="display:flex;align-items:center;gap:8px;font-size:0.74rem;color:var(--text-color);padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05);"><span style="color:#34d399;">✅</span><span style="color:var(--text-muted);min-width:104px;">' + _fmt(e.at) + '</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _safe(e.byName || 'organizador') + '</span></div>';
+      }).join('');
+      _wgBlock = '<div style="background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.3);border-radius:14px;padding:1rem;margin-bottom:1.25rem;">' +
+        '<h3 style="margin:0 0 6px;font-size:0.9rem;color:#34d399;">📱 Convites do grupo do WhatsApp</h3>' +
+        '<p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 10px;">Link do grupo enviado aos inscritos (app · e-mail · notificação)' + (_wg.notifyCount ? ' — ' + _wg.notifyCount + ' envio(s)' : '') + '.</p>' +
+        (_rows || '<div style="font-size:0.72rem;color:var(--text-muted);">Último envio: ' + _fmt(_wg.notifiedAt) + '.</div>') +
+      '</div>';
+    }
     container.innerHTML = _header(tId, '📢 Comunicados') +
-      '<div style="max-width:640px;margin:0 auto;padding:1rem;">' + writeBox + divider + listBox + '</div>';
+      '<div style="max-width:640px;margin:0 auto;padding:1rem;">' + writeBox + _wgBlock + divider + listBox + '</div>';
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
     window._loadComms(tId);
   };

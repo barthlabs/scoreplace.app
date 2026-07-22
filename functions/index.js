@@ -295,6 +295,15 @@ async function _executeMerge(db, keepDoc, dropDoc) {
     { merge: true }
   );
 
+  // v1.3.18: loginRedirects — cobre TODO caminho de fusão que passa por aqui (inclui o SCAN
+  // automático: _scanAndMergeByField / autoMergeOnProfileUpdate), não só os merges interativos.
+  // Credenciais REAIS do drop vêm do Auth (e-mail/telefone E.164 = o que a resolveLoginRedirect
+  // lê do token); se o Auth já sumiu, cai nos campos do perfil. Idempotente (item 9).
+  let _drEmail = null, _drPhone = null;
+  try { const _da = await admin.auth().getUser(dropUid); _drEmail = _da.email || null; _drPhone = _da.phoneNumber || null; }
+  catch (e) { _drEmail = dropData.email || null; _drPhone = dropData.phone || null; }
+  await _recordLoginRedirects(db, keepUid, _drEmail, _drPhone);
+
   console.log(`[_executeMerge] Done: tourFixed=${tourFixed} casualFixed=${casualFixed}`);
   return { tourFixed, casualFixed };
 }
@@ -302,6 +311,31 @@ async function _executeMerge(db, keepDoc, dropDoc) {
 // E-mail sintético de conta phone-only — nunca é credencial "de verdade" a preservar.
 function _isSyntheticAuthEmail(email) {
   return /@phone\.scoreplace\.app$/i.test(String(email || ""));
+}
+
+// v1.3.18 — POPULA `loginRedirects` na fusão. Furo do item 9: a resolveLoginRedirect LIA essa
+// coleção mas NADA a escrevia → o redirect nunca disparava (feature morta). Aqui gravamos
+// {e-mail | telefone do DROP} → uid do sobrevivente. Motivo: numa fusão do MESMO provedor (duas
+// Google), o provedor da conta absorvida não migra; logar com aquele e-mail cria uma conta VAZIA,
+// e a resolveLoginRedirect precisa deste mapa pra jogar a sessão na conta certa.
+// SEGURANÇA: só o Admin SDK escreve (rules deny-all — [[project_privileged_fields_never_client_writable]]).
+// Chave = e-mail MINÚSCULO / telefone E.164, EXATAMENTE como a resolveLoginRedirect lê do token
+// verificado (tok.email.toLowerCase() / tok.phone_number). Idempotente (merge:true). Ignora
+// e-mail sintético (@phone.scoreplace.app) — não é login real. Escrever pra credencial que FOI
+// transferida ao keep é inócuo: logar com ela cai numa conta COM perfil → resolveLoginRedirect
+// devolve has_profile (nunca redireciona quem já tem perfil).
+async function _recordLoginRedirects(db, ownerUid, dropEmail, dropPhone) {
+  if (!ownerUid) return;
+  const keys = [];
+  if (dropEmail && !_isSyntheticAuthEmail(dropEmail)) keys.push(String(dropEmail).toLowerCase());
+  if (dropPhone) keys.push(String(dropPhone));
+  for (const k of keys) {
+    try {
+      await db.collection("loginRedirects").doc(k).set(
+        { ownerUid: ownerUid, at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      console.log(`[loginRedirects] ${k} → ${ownerUid}`);
+    } catch (e) { console.error("[loginRedirects] write falhou:", k, e.code || e.message); }
+  }
 }
 
 /**
@@ -392,6 +426,11 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   if (upd.email) profUpd.email = upd.email;
   if (upd.phoneNumber) { profUpd.phone = upd.phoneNumber; profUpd.phoneCountry = profUpd.phoneCountry || "55"; }
   await db.collection("users").doc(keepU.uid).set(profUpd, { merge: true }).catch(() => {});
+
+  // 5) loginRedirects: futuro login com a credencial do DROP → cai no keep. Essencial na fusão
+  //    do MESMO provedor (2 Google): o provider não migra, logar com aquele e-mail cria conta
+  //    vazia, e a resolveLoginRedirect usa este mapa pra corrigir. Ver _recordLoginRedirects.
+  await _recordLoginRedirects(db, keepU.uid, dropEmail, dropPhone);
 
   return { survivorUid: keepU.uid, droppedUid: dropU.uid, already: false };
 }
@@ -1013,6 +1052,24 @@ exports.backupFirestore = onSchedule(
       throw err; // marca a função como falha pro retry kick in
     }
   }
+);
+
+// ─── Lembrete de torneio CONFIÁVEL (item 7) ─────────────────────────────────
+// ANTES o lembrete (7d/2d/dia) só saía quando ALGUÉM abria o app (_checkTournamentReminders
+// no cliente, dedup por localStorage por-dispositivo). Quem não abria no dia certo NUNCA
+// recebia — gente ficou sem aviso do torneio real. Agora uma CF AGENDADA roda todo dia e
+// entrega server-side, com dedup POR TORNEIO (t.remindersSent.rNd) e idempotência por notif
+// doc determinístico. Espelha EXATAMENTE as janelas/níveis do cliente (reminder-core.js, o
+// mesmo módulo, testado). Respeita notifyLevel/notifyPlatform/notifyEmail de cada um e o
+// killswitch do Sandbox (isSandbox/notificationsMuted). E-mail via a MESMA fila digest do
+// comunicado do organizador (notif_email_queue → flushNotifEmailDigest). Ver
+// [[project_tournament_reminder_cf]]. O cliente deixa de disparar (fim do envio duplo).
+// Deploy:  firebase deploy --only functions:sendTournamentReminders
+const { runTournamentReminders: _runTournamentReminders } = require("./reminder-run");
+exports.sendTournamentReminders = onSchedule(
+  { schedule: "every day 09:00", timeZone: "America/Sao_Paulo", region: "us-central1",
+    timeoutSeconds: 300, memory: "256MiB" },
+  async () => { await _runTournamentReminders(admin.firestore(), Date.now()); }
 );
 
 // ─── Magic Link via Custom Email (firestore-send-email extension) ────────────
@@ -1847,6 +1904,12 @@ exports.setParticipantsProfile = onCall(
 // bug de inscrição vira `firebase deploy` de minutos, não release nativo de dias.
 // Lógica pura vive em ./enroll-core.js (espelha o cliente). Ver
 // [[project_firestore_assertion_bug]] / [[project_result_launch_cf_evaluation]].
+// Sandbox (SB): replicação one-way original→SB via a MESMA CF + o MESMO core. A lógica
+// vive em ./sandbox-replicate.js (módulo isolado só pra ser testável contra o emulador —
+// o código que roda é ESTE, não uma cópia). enrollParticipant/deenrollParticipant, depois
+// de aplicar no original, rodam o MESMO computeEnroll/computeDeenroll no doc do SB.
+const { replicateRosterToSandbox: _replicateRosterToSandbox } = require("./sandbox-replicate");
+
 // Deploy:  firebase deploy --only functions:enrollParticipant,functions:deenrollParticipant
 exports.enrollParticipant = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
@@ -1874,6 +1937,11 @@ exports.enrollParticipant = onCall(
       const r = _enrollCore.computeEnroll(snap.data(), participantObj, extraUpdates, nowMs);
       if (r.updateData) tx.update(docRef, r.updateData);
       return r;
+    });
+
+    // Sandbox: a MESMA CF replica a inscrição no SB via o MESMO core (best-effort).
+    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+      return _enrollCore.computeEnroll(sbData, participantObj, extraUpdates, nowMs);
     });
 
     if (out.outcome === "capacityFull") return { capacityFull: true, participants: out.participants };
@@ -1919,6 +1987,109 @@ exports.deenrollParticipant = onCall(
       const r = _enrollCore.computeDeenroll(t, userUid);
       if (r.updateData) tx.update(docRef, r.updateData);
       return r;
+    });
+
+    // Sandbox: a MESMA CF replica a desinscrição no SB via o MESMO core (best-effort).
+    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+      return _enrollCore.computeDeenroll(sbData, userUid);
+    });
+
+    if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
+    return { notFound: false, participants: out.participants };
+  }
+);
+
+// Formar/desfazer DUPLA manual — MESMO padrão do enroll (item #2, roster→CF). A formação
+// manual gravava via saveTournament direto (NÃO concorrência-safe, NÃO replicava pro SB → o
+// Sandbox divergia do original ao formar duplas). Lógica pura em ./pair-core.js. Ver
+// [[project_draw_client_to_cf_migration]] / [[project_sandbox_tournament]].
+// Deploy:  firebase deploy --only functions:formPair,functions:splitPair
+const _pairCore = require("./pair-core");
+
+function _isTournamentOrgCaller(t, callerUid, callerEmail) {
+  const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
+  return (t.creatorUid && t.creatorUid === callerUid) ||
+    (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
+    (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
+    (callerEmail && adminEmails.indexOf(callerEmail) !== -1);
+}
+
+exports.formPair = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const d = request.data || {};
+    const opts = { uid1: d.uid1 || "", name1: d.name1 || "", uid2: d.uid2 || "", name2: d.name2 || "", changeRule: !!d.changeRule };
+    if (!tournamentId || (!opts.uid1 && !opts.name1) || (!opts.uid2 && !opts.name2)) {
+      throw new HttpsError("invalid-argument", "tournamentId e os dois membros são obrigatórios");
+    }
+
+    const db = admin.firestore();
+    const docRef = db.collection("tournaments").doc(tournamentId);
+    const out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = snap.data();
+      // Permissão: o organizador/co-host forma qualquer dupla; senão, o próprio (aceite de
+      // convite) só pode formar dupla que INCLUA o seu uid.
+      const isOrg = _isTournamentOrgCaller(t, callerUid, callerEmail);
+      const involvesCaller = (opts.uid1 && opts.uid1 === callerUid) || (opts.uid2 && opts.uid2 === callerUid);
+      if (!isOrg && !involvesCaller) {
+        throw new HttpsError("permission-denied", "só o organizador ou um dos dois da dupla podem formá-la");
+      }
+      const r = _pairCore.computeFormPair(t, opts);
+      if (r.updateData) tx.update(docRef, r.updateData);
+      return r;
+    });
+
+    // Sandbox: a MESMA CF replica a formação no SB via o MESMO core (best-effort).
+    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+      return _pairCore.computeFormPair(sbData, opts);
+    });
+
+    if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
+    return { notFound: false, participants: out.participants, newName: out.newName };
+  }
+);
+
+exports.splitPair = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const d = request.data || {};
+    const opts = { id1: d.id1, id2: d.id2 };
+    if (!tournamentId || (opts.id1 == null || String(opts.id1) === "")) {
+      throw new HttpsError("invalid-argument", "tournamentId e id1 são obrigatórios");
+    }
+
+    const db = admin.firestore();
+    const docRef = db.collection("tournaments").doc(tournamentId);
+    const out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = snap.data();
+      const r = _pairCore.computeSplitPair(t, opts);
+      // Permissão: organizador/co-host desfaz qualquer dupla; senão, um MEMBRO da dupla.
+      const isOrg = _isTournamentOrgCaller(t, callerUid, callerEmail);
+      const isMember = r.outcome === "split" && (r.p1Uid === callerUid || r.p2Uid === callerUid);
+      if (!isOrg && !isMember) {
+        throw new HttpsError("permission-denied", "só o organizador ou um membro da dupla podem desfazê-la");
+      }
+      if (r.updateData) tx.update(docRef, r.updateData);
+      return r;
+    });
+
+    // Sandbox: a MESMA CF replica o desfazer no SB via o MESMO core (best-effort).
+    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+      return _pairCore.computeSplitPair(sbData, opts);
     });
 
     if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
@@ -2042,6 +2213,11 @@ exports.sendOrgCommunication = onCall(
     const tSnap = await db.collection("tournaments").doc(tournamentId).get();
     if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = tSnap.data();
+
+    // Sandbox/killswitch: torneio com notificações mudas não dispara comunicado.
+    if (t && (t.isSandbox === true || t.notificationsMuted === true)) {
+      return { ok: true, muted: true, sent: 0 };
+    }
 
     // Autorização: só organizador / co-organizador.
     const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
@@ -4534,6 +4710,8 @@ exports.mergePhoneAccount = onCall(
         mergedInto: callerUid,
         mergedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+      // loginRedirects: logar depois com a credencial da conta antiga cai no caller (item 9).
+      await _recordLoginRedirects(db, callerUid, _oldAuth && _oldAuth.email, _oldAuth && _oldAuth.phoneNumber);
     }
 
     console.log(`[mergePhoneAccount] ${dryRun ? "DRY-RUN " : ""}DONE ` + JSON.stringify(report));

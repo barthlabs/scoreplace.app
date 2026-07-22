@@ -574,7 +574,7 @@ window._tbBirthByName = function(t) {
     if (!p || typeof p !== 'object') return;
     var nm = p.displayName || p.name || '';
     var times = [];
-    var own = _tbParseBirth(p.birthDate);
+    var own = _tbParseBirth(window._pBirth ? window._pBirth(p) : p.birthDate); // v1.3.39: idade perfil-first
     if (own != null) times.push(own);
     if (Array.isArray(p.participants)) {
       p.participants.forEach(function(sub) {
@@ -1032,6 +1032,10 @@ function _getChampion(t, activeRounds) {
 }
 
 // ─── Find match anywhere ──────────────────────────────────────────────────────
+// Exposto pro window explicitamente: no browser _findMatch já é global (script top-level),
+// mas via require() do vendor (draw-core) top-level vira LOCAL — bracket-ui._applyResultToTournament
+// chama window._findMatch. Ver project_draw_canonization_cf_phase23_deferred.
+window._findMatch = _findMatch;
 function _findMatch(t, matchId) {
   // Use canonical collector: covers all 7 storage shapes
   // (t.matches, t.thirdPlaceMatch, t.rounds[].matches, t.groups[].matches,
@@ -1116,6 +1120,24 @@ function _slotObj(m, side) {
   if (!m) return null;
   return side === 'p1' ? (m.team1Obj || null) : (m.team2Obj || null);
 }
+// v1.3.136: hint POSICIONAL de uid pro _resolveSideLive — 1 slot por membro na MESMA ordem do
+// display, com vazio ('') pro membro FICTÍCIO (sem conta). Diferente de _slotUids, que filtra os
+// vazios (certo pra avanço, errado pro display): sem a posição do ficto, uma dupla ficto+conta
+// tinha contagem uid≠partes → a conta nunca resolvia pelo uid (o "Camila sumiu"). Aqui a conta
+// resolve pelo SEU uid mesmo com parceiro fictício, sem gravar nome nem pattern-match.
+// [[project_uid_identity_canon_locked]] — nome com uid nunca é gravado; resolve-se pelo uid.
+function _slotUidsPositional(m, side) {
+  if (!m) return [];
+  var obj = side === 'p1' ? m.team1Obj : m.team2Obj;
+  if (obj && typeof obj === 'object') {
+    if (obj.p1Uid || obj.p2Uid || (obj.p1Name && obj.p2Name)) return [obj.p1Uid || '', obj.p2Uid || ''];
+    if (Array.isArray(obj.participants) && obj.participants.length > 1) {
+      return obj.participants.map(function (s) { return (s && typeof s === 'object' && s.uid) || ''; });
+    }
+  }
+  return _slotUids(m, side); // 1v1 / solo / legado sem obj
+}
+window._slotUidsPositional = _slotUidsPositional;
 // Escreve a identidade num slot de destino: team*Uids sempre (forma geral),
 // p*Uid só quando 1v1 (1 uid) pra o hint de _resolveSideLive não truncar dupla.
 function _setSlot(m, side, uids, obj) {
@@ -1224,6 +1246,13 @@ function _advanceWinner(t, completedMatch) {
   // TODAS as vagas (repFill) cujas fontes já fecharam. Idempotente. feedback_resolution_one_logic.
   if (typeof window !== 'undefined' && typeof window._resolveRepFills === 'function') {
     try { window._resolveRepFills(t); } catch (e) {}
+  }
+  // v1.3.164: a resolução de repescagem pode ter PROMOVIDO alguém pra um jogo de tardio na
+  // 1ª superior — a DONA ÚNICA da chave inferior (_syncLowerBracket) puxa o promovido da 1ª
+  // inferior, re-aponta o perdedor do jogo do tardio pro buraco e refecha a conta ⌈descem/2⌉.
+  // No-op barato fora da Dupla Eliminatória de árvore mínima (guardas internas).
+  if (typeof window !== 'undefined' && typeof window._syncLowerBracket === 'function') {
+    try { window._syncLowerBracket(t); } catch (e) {}
   }
   // Repechage: when repechage match completes, check if ALL done → advance best loser
   if (completedMatch.isRepechage && t.repechageConfig && t.repechageConfig.bestLoserCount > 0) {
@@ -1718,18 +1747,29 @@ function _updateProgressiveClassification(t) {
   var placed = {}; // name -> true: already assigned a definitive position
 
   // Record 3rd place match winner/loser up-front so semi/earlier rounds skip them.
-  if (t.thirdPlaceMatch && t.thirdPlaceMatch.winner) {
-    placed[t.thirdPlaceMatch.winner] = true;
-    var _tp_loser = t.thirdPlaceMatch.winner === t.thirdPlaceMatch.p1 ? t.thirdPlaceMatch.p2 : t.thirdPlaceMatch.p1;
+  if (_thirdM && _thirdM.winner) {
+    placed[_thirdM.winner] = true;
+    var _tp_loser = _thirdM.winner === _thirdM.p1 ? _thirdM.p2 : _thirdM.p1;
     if (_tp_loser && _tp_loser !== 'TBD') placed[_tp_loser] = true;
   }
 
+  // v1.3.79: POSIÇÃO por CONTADOR CORRIDO (posições reais, sem buraco), NÃO 2^roundFromEnd+1.
+  // A fórmula pow2 (perdedor da rodada X → posição 2^X+1) só bate quando a chave é potência de 2
+  // cheia. Na fórmula MÍNIMA (⌈E/2⌉, ex. 9 equipes) o perdedor da 1ª rodada caía em 2³+1=9 pulando
+  // 7 e 8 → "9 equipes com pior lugar 11º". Agora: 1,2 = final; 3,4 = 3º lugar (se houver); daí cada
+  // grupo de rodada (do fim pro começo) pega as próximas posições livres, sem gap. Ver [[project_podium_classif_canonical]].
+  // v1.3.79: 3º lugar pode vir do t.thirdPlaceMatch separado (legado) OU do match isThirdPlace
+  // canônico dentro de t.matches (fórmula mínima). Trata os dois igual. Ver [[project_third_place_always]].
+  var _thirdM = t.thirdPlaceMatch || allMatches.find(function(m){ return m && m.isThirdPlace; });
+  var _runPos = _thirdM ? 5 : 3;
   var reverseOrder = rounds.slice().reverse(); // [final, semi, qf, ..., r1]
   reverseOrder.forEach(function(roundNum) {
     var originalIdx = rounds.indexOf(roundNum);
     var roundFromEnd = totalRounds - 1 - originalIdx;
     var matchesInRound = allMatches.filter(function(m) {
-      return m.round === roundNum && m.bracket !== 'lower' && m.bracket !== 'grand';
+      // isThirdPlace tem round=final mas é jogo de COLOCAÇÃO, não degrau da escada — nunca conta
+      // como perdedor de rodada (senão vira 1º/2º junto com a final). 3º/4º saem dele no fim.
+      return m.round === roundNum && m.bracket !== 'lower' && m.bracket !== 'grand' && !m.isThirdPlace;
     });
 
     if (roundFromEnd === 0) {
@@ -1751,7 +1791,7 @@ function _updateProgressiveClassification(t) {
       // jogo de 3º existia mas estava SEM resultado os perdedores de semi eram ranqueados
       // 3º/4º por desempate — exatamente o que o organizador apontou que está errado.
       // Só ranqueia por desempate quando NÃO há jogo de 3º lugar (formatos legados).
-      if (!t.thirdPlaceMatch) {
+      if (!_thirdM) {
         var semiLosers = [];
         matchesInRound.forEach(function(m) {
           if (!m.winner || m.winner === 'draw' || m.isBye) return;
@@ -1763,13 +1803,15 @@ function _updateProgressiveClassification(t) {
           semiLosers.push({ name: stats.loser, stats: stats, history: history });
         });
         if (semiLosers.length > 0) {
-          positionGroups.push({ posStart: 3, losers: semiLosers });
+          positionGroups.push({ posStart: _runPos, losers: semiLosers });
           semiLosers.forEach(function(e) { placed[e.name] = true; });
+          _runPos += semiLosers.length;
         }
       }
     } else {
-      // Collect all losers in this round for tiebreaking
-      var posStart = Math.pow(2, roundFromEnd) + 1;
+      // Collect all losers in this round for tiebreaking.
+      // v1.3.79: posStart = próxima posição livre (contador corrido), NÃO 2^roundFromEnd+1 (pow2).
+      var posStart = _runPos;
       // v3.1.29: DEDUP por nome dentro do round. Na resolução PLAY-IN/REPESCAGEM, o
       // round 0 tem o jogo normal (isPhaseRepR1) E o jogo de repescagem (isPhaseRepGame).
       // Um derrotado da R1 que é repescado pra disputar a repescagem e PERDE de novo
@@ -1791,6 +1833,7 @@ function _updateProgressiveClassification(t) {
       if (losers.length > 0) {
         positionGroups.push({ posStart: posStart, losers: losers });
         losers.forEach(function(e) { placed[e.name] = true; });
+        _runPos += losers.length;
       }
     }
   });
@@ -1821,10 +1864,12 @@ function _updateProgressiveClassification(t) {
 
   // Handle 3rd place match result (applied LAST so it wins over any
   // contradictory entry a pathological dataset could produce).
-  if (t.thirdPlaceMatch && t.thirdPlaceMatch.winner) {
-    t.classification[t.thirdPlaceMatch.winner] = 3;
-    var tp_loser = t.thirdPlaceMatch.winner === t.thirdPlaceMatch.p1 ? t.thirdPlaceMatch.p2 : t.thirdPlaceMatch.p1;
-    if (tp_loser && tp_loser !== 'TBD') t.classification[tp_loser] = 4;
+  if (_thirdM && _thirdM.winner) {
+    t.classification[_thirdM.winner] = 3;
+    var tp_loser = _thirdM.winner === _thirdM.p1 ? _thirdM.p2 : _thirdM.p1;
+    // v1.3.79: só há 4º lugar se o perdedor for OUTRA equipe. Em N pequeno (ex. N=3) o jogo de 3º
+    // pode ser degenerado (mesma equipe repescada nos dois lados) → 4º não existe, não abrir buraco.
+    if (tp_loser && tp_loser !== 'TBD' && tp_loser !== _thirdM.winner) t.classification[tp_loser] = 4;
   }
 
   // v1.0.89-beta: incluir times cortados na fase Suíça na classificação final.
@@ -2196,9 +2241,13 @@ window._lateEnrollR2Started = function (t) {
     .filter(function (v, i, a) { return a.indexOf(v) === i; });
   if (uniqRounds.length < 2) return false; // só existe a 1ª rodada ainda → R2 não começou
   var secondRound = uniqRounds[1];
+  // "R2 começou" = tem PLACAR LANÇADO num jogo da 2ª rodada (regra do dono). NÃO conta
+  // startedAt (só abrir o placar ao vivo, sem lançar) nem um score parcial de um lado só —
+  // senão a janela fecha ANTES de existir resultado e o +Participante fica inativo cedo demais.
+  // Placar lançado = decidido (winner, inclui 'draw') OU placar registrado nos DOIS lados.
   return main.some(function (m) {
-    return m.round >= secondRound &&
-           (m.winner || m.startedAt || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length));
+    if (m.round < secondRound) return false;
+    return m.winner != null || (m.scoreP1 != null && m.scoreP2 != null);
   });
 };
 
@@ -2209,7 +2258,7 @@ window._lateEnrollWindowOpen = function (t) {
   if (!t) return false;
   var _le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
   if (_le !== 'standby' && _le !== 'expand') return false;
-  if (t.status === 'closed') return false; // organizador fechou na mão
+  if (t.status === 'closed' || t.status === 'finished') return false; // fechado na mão / encerrado
   return !window._lateEnrollR2Started(t); // aberta enquanto a 2ª rodada não começou
 };
 
@@ -2333,6 +2382,14 @@ function _maybeGenerate3rdPlace(t) {
 
   const allMatches = t.matches || [];
 
+  // v1.3.74: se JÁ existe o 3º lugar CANÔNICO (match isThirdPlace em t.matches — forma do
+  // sorteio inicial/genTierBracket e da integração tardia unificada), NÃO cria um
+  // t.thirdPlaceMatch separado (seria 2ª representação → render duplicado/perdido). Uma só.
+  if (allMatches.some(function (m) { return m && m.isThirdPlace; })) {
+    if (t.thirdPlaceMatch) delete t.thirdPlaceMatch; // limpa resíduo da representação antiga
+    return;
+  }
+
   // Identificar a rodada da semifinal (penúltima rodada do bracket)
   const allRounds = {};
   allMatches.filter(m => m.bracket !== 'lower' && m.bracket !== 'grand').forEach(m => {
@@ -2372,6 +2429,9 @@ function _maybeGenerate3rdPlace(t) {
   t.thirdPlaceMatch.p1 = losers.length >= 1 ? losers[0] : 'TBD';
   t.thirdPlaceMatch.p2 = losers.length >= 2 ? losers[1] : 'TBD';
 }
+// v1.3.62: expõe pro rebuild de chave integrada (tardios) recriar o 3º lugar, que é
+// apagado ao reconstruir as rodadas. Fonte única — mesma lógica do fluxo normal.
+window._maybeGenerate3rdPlace = _maybeGenerate3rdPlace;
 
 // ─── Close round + generate next ─────────────────────────────────────────────
 // v0.17.27: auto-approve pending results scattered no bracket. Pedido do
@@ -2487,9 +2547,18 @@ window._applyRoundCloseToTournament = function (t, roundIdx) {
   var isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
   var maxRounds = t.swissRounds || 99;
   var isSwissClassification = t.p2Resolution === 'swiss' && t.currentStage === 'swiss';
+  // Suíço-2-FASES (classificatória do construtor de fases, via _buildSwissClassifDraw): o
+  // avanço pra eliminatória (fase 1) é do motor MULTIFASE (advanceMultiPhase → materializeNextPhase),
+  // NÃO o finish/transition legado. Sem este guard, no maxRounds caía em 'pureSwissFinish' e
+  // ENCERRAVA o torneio antes de avançar (p2Resolution=null ⇒ isSwissClassification=false).
+  // Ver project_draw_canonization_cf_phase23_deferred.
+  var _curIdxRC = t.currentPhaseIndex || 0;
+  var isMultiPhaseSwiss = (t.classifyFormat === 'swiss' || t.currentStage === 'swiss')
+    && Array.isArray(t.phases) && t.phases.length > _curIdxRC + 1;
 
   if (isSuico && t.rounds.length >= maxRounds) {
-    if (isSwissClassification && t.p2TargetCount) return 'transition'; // #3 (generateDrawFunction)
+    if (isMultiPhaseSwiss) return 'phaseComplete';                     // classificatória completa → Avançar (multifase)
+    if (isSwissClassification && t.p2TargetCount) return 'transition'; // #3 (generateDrawFunction, legado)
     t.status = 'finished';
     return 'pureSwissFinish';
   }
@@ -2584,6 +2653,38 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
   if (roundIdx !== (t.rounds || []).length - 1) return;
   if (t.rounds[roundIdx] && t.rounds[roundIdx].status === 'complete') return;
 
+  // isMultiPhaseSwiss: classificatória Suíço do construtor de fases (fase 0 de N). O FECHO
+  // (gera a próxima rodada / marca a classificatória completa) roda na CF closeRound sobre o
+  // doc FRESCO — NÃO fazemos a mutação otimista local (marcaria complete/geraria a próxima e
+  // DIVERGIRIA do fresco; o closeRoundCore veria 'already-closed'). A CF é a autoridade; a
+  // resposta substitui `t` e o .then renderiza. Sem fallback (a CF é a única versão do motor).
+  // Se _callCloseRound faltar (cliente velho), cai no caminho local abaixo (com o pré-fix).
+  // Ver project_draw_canonization_cf_phase23_deferred.
+  var _curIdxDC = t.currentPhaseIndex || 0;
+  var isMultiPhaseSwiss = (t.classifyFormat === 'swiss' || t.currentStage === 'swiss')
+    && Array.isArray(t.phases) && t.phases.length > _curIdxDC + 1;
+  if (isMultiPhaseSwiss && typeof window._callCloseRound === 'function') {
+    window.AppStore.logAction(tId, `Rodada ${roundIdx + 1} encerrada`);
+    window._callCloseRound({ tournamentId: String(tId), roundIdx: roundIdx, resultCtx: resultCtx || null })
+      .then(function (_res) {
+        var d = (_res && _res.data) || {};
+        if (d.ok && d.tournament) {
+          // Estado AUTORITATIVO do servidor no `t` local (in-place: preserva refs de outras views).
+          Object.keys(t).forEach(function (k) { delete t[k]; });
+          Object.keys(d.tournament).forEach(function (k) { t[k] = d.tournament[k]; });
+          if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(t); } catch (_e) {} }
+          try { window.AppStore._saveToCache(); } catch (_e) {}
+        }
+        // noop (d.ok===false: outro fechou primeiro / rodada não fechou) → o listener reconcilia.
+        if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId, anchorMatchId);
+      })
+      .catch(function (err) {
+        window._lastSaveError = { tournamentId: tId, area: 'closeRound', code: (err && err.code) || '', message: (err && err.message) || String(err) };
+        if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId, anchorMatchId);
+      });
+    return;
+  }
+
   t.rounds[roundIdx].status = 'complete';
   // v2.3.17: marca a conclusão da rodada (último ponto/jogo lançado) — usado
   // como "Final real" na barra de progresso da rodada.
@@ -2593,10 +2694,18 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
   const isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
   const maxRounds = t.swissRounds || 99;
   const isSwissClassification = t.p2Resolution === 'swiss' && t.currentStage === 'swiss';
+  // isMultiPhaseSwiss já declarado no topo (o Suíço-2-fases retorna cedo pela CF; este ramo
+  // local só é alcançado se _callCloseRound faltar — fallback com o pré-fix). No maxRounds NÃO
+  // encerra: o avanço pra elim é do motor MULTIFASE ("Avançar"). Espelha _applyRoundCloseToTournament.
 
   if (isSuico && t.rounds.length >= maxRounds) {
     // Swiss-as-classification: transition to elimination phase
-    if (isSwissClassification && t.p2TargetCount) {
+    if (isMultiPhaseSwiss) {
+      // Classificatória Suíço (fase 0) completa — NÃO encerra. Notifica e cai pro commit+render
+      // abaixo, que persiste via _applyRoundCloseToTournament ('phaseComplete') e mostra "Avançar".
+      showNotification(_t('bui.swissClassifDone') || 'Classificatória concluída',
+        _t('bui.swissClassifDoneMsg') || 'Todos jogaram — avance para a eliminatória quando quiser.', 'success');
+    } else if (isSwissClassification && t.p2TargetCount) {
       var _targetCount = t.p2TargetCount;
       // Mutação LOCAL otimista (UI + notificações imediatas).
       window._applySwissEliminationTransition(t, roundIdx);
@@ -2624,19 +2733,19 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
         });
       }
       return;
-    }
-
-    // Pure Swiss: just finish
-    t.status = 'finished';
-    showNotification(_t('bui.swissFinishedRounds'), _t('bui.swissFinishedRoundsMsg', { n: maxRounds }), 'success');
-    // Notify all participants about Swiss tournament finish
-    if (!t.finishNotifiedAt && typeof window._notifyTournamentParticipants === 'function') {
-      t.finishNotifiedAt = new Date().toISOString();
-      window._notifyTournamentParticipants(t, {
-        type: 'tournament_finished',
-        message: _t('notif.tournamentFinished').replace('{name}', t.name || 'Torneio'),
-        level: 'important'
-      });
+    } else {
+      // Pure Swiss (single-phase): just finish
+      t.status = 'finished';
+      showNotification(_t('bui.swissFinishedRounds'), _t('bui.swissFinishedRoundsMsg', { n: maxRounds }), 'success');
+      // Notify all participants about Swiss tournament finish
+      if (!t.finishNotifiedAt && typeof window._notifyTournamentParticipants === 'function') {
+        t.finishNotifiedAt = new Date().toISOString();
+        window._notifyTournamentParticipants(t, {
+          type: 'tournament_finished',
+          message: _t('notif.tournamentFinished').replace('{name}', t.name || 'Torneio'),
+          level: 'important'
+        });
+      }
     }
   } else {
     // v2.3.7 FIX (bug reportado): Liga com sorteio AGENDADO NÃO gera a próxima

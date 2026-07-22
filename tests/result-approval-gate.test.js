@@ -10,8 +10,10 @@
  *
  * Obs: a ORQUESTRAÇÃO das 4 fases (_notifyPendingApproval/_contestResult/_approveResult) é
  * acoplada a AppStore/Firestore/DOM → fica pra camada 2 (Playwright). store.js NÃO carrega no
- * harness (trava no load por DOM), então o gate roda com o fallback de uid (uid top-level) —
- * suficiente pra travar a LÓGICA DE DECISÃO. A acumulação/uid de duplas é coberta noutras suítes.
+ * harness (trava no load por DOM), então o gate roda direto.
+ * CANÔNICO (dono, 18/jul): a resolução de lado é SÓ pelo UID do SLOT (window._slotUids —
+ * team*Uids/p*Uid/team*Obj), nunca casando nome. Os matches reais carregam uid no slot
+ * (verificado no doc de prod: team1Obj com p1Uid/p2Uid) — o fixture reflete isso.
  */
 const H = require('./headless.js');
 H.load('bracket-ui.js');
@@ -22,11 +24,11 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
 const A = { displayName: 'Ana', uid: 'uA' };
 const B = { displayName: 'Bia', uid: 'uB' };
-const Bnouid = { displayName: 'Bia' }; // participante informal (sem conta)
 function tour(resultEntry, parts) {
   return { id: 't', resultEntry: resultEntry, creatorUid: 'ORG', participants: parts || [A, B] };
 }
-const matchAB = { id: 'm', p1: 'Ana', p2: 'Bia', winner: null };
+// SLOT carrega o uid (p1Uid/p2Uid) — como o sorteio grava. Resolução = uid, não nome.
+const matchAB = { id: 'm', p1: 'Ana', p2: 'Bia', p1Uid: 'uA', p2Uid: 'uB', winner: null };
 const need = (t, m, u) => W._resultNeedsApproval(t, m, u);
 
 // ── resultEntry: quem pode lançar ──────────────────────────────────────────
@@ -40,13 +42,13 @@ ok(need(tour('players'), matchAB, { uid: 'ORG' }) === false, '[papel] organizado
 ok(need(tour('players'), matchAB, { uid: 'uZ' }) === false, '[papel] usuário fora do jogo → sem aprovação');
 ok(need(tour('players'), matchAB, null) === false, '[papel] sem usuário → false');
 
-// ── adversário precisa existir e ter uid ───────────────────────────────────
-ok(need(tour('players', [A, Bnouid]), matchAB, { uid: 'uA' }) === false, '[adversário] sem uid (informal) → ninguém pra aprovar → false');
-ok(need(tour('players'), { id: 'm', p1: 'Ana', p2: 'TBD' }, { uid: 'uA' }) === false, '[adversário] TBD → false');
-ok(need(tour('players'), { id: 'm', p1: 'Ana', p2: 'BYE' }, { uid: 'uA' }) === false, '[adversário] BYE → false');
+// ── adversário precisa existir e ter uid NO SLOT ───────────────────────────
+ok(need(tour('players'), { id: 'm', p1: 'Ana', p2: 'Bia', p1Uid: 'uA', winner: null }, { uid: 'uA' }) === false, '[adversário] slot sem uid (informal) → ninguém pra aprovar → false');
+ok(need(tour('players'), { id: 'm', p1: 'Ana', p2: 'TBD', p1Uid: 'uA' }, { uid: 'uA' }) === false, '[adversário] TBD → false');
+ok(need(tour('players'), { id: 'm', p1: 'Ana', p2: 'BYE', p1Uid: 'uA' }, { uid: 'uA' }) === false, '[adversário] BYE → false');
 
 // ── disputa: trava participantes (só organizador lança) ────────────────────
-ok(need(tour('players'), { id: 'm', p1: 'Ana', p2: 'Bia', pendingResult: { disputed: true } }, { uid: 'uA' }) === false,
+ok(need(tour('players'), { id: 'm', p1: 'Ana', p2: 'Bia', p1Uid: 'uA', p2Uid: 'uB', pendingResult: { disputed: true } }, { uid: 'uA' }) === false,
   '[disputa] resultado em disputa → participantes bloqueados (só org)');
 
 // ── guarda de args ─────────────────────────────────────────────────────────

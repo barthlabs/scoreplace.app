@@ -60,7 +60,7 @@
         terceiro: true,
         grandFinal: true,        // v4.4.73: grande final unindo as linhas. Só editável na SIMPLES
                                  // com 2/4 linhas (desativar = linhas independentes). Dupla = sempre.
-        lateEnrollment: 'closed' // inscrições durante a ELIMINATÓRIA: closed | standby | expand
+        lateEnrollment: 'inherit' // inscrições durante a ELIMINATÓRIA: inherit (segue a fase inicial) | closed | standby | expand
       }
     }, sport);
   }
@@ -153,7 +153,8 @@
     e.openReiRainha = (e.openReiRainha === true) && isDupla && (out.classifAtiva === false);
     e.reiRainhaCut = (parseInt(e.reiRainhaCut, 10) === 2) ? 2 : 4;
     e.qualifyAll = !!e.qualifyAll;
-    if (['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) === -1) e.lateEnrollment = 'closed';
+    // 'inherit' (default) = a elim segue a inscrição da fase inicial; só coage o que for inválido.
+    if (['inherit', 'closed', 'standby', 'expand'].indexOf(e.lateEnrollment) === -1) e.lateEnrollment = 'inherit';
     e.terceiro = true; // 3º lugar SEMPRE existe (project_third_place_always) — não é opcional.
     // v4.4.33: fase classificatória on/off. Ao menos UMA fase ativa: sem classificatória ⇒
     // eliminatória obrigatória (eliminação direta do enrollment).
@@ -213,6 +214,13 @@
   function compileToPhases(cfg, opts) {
     opts = opts || {};
     cfg = normalize(cfg, opts.sport);
+    // Inscrição tardia da ELIMINATÓRIA (project_late_enrollment_per_phase + incidente 18/jul):
+    // por padrão HERDA a política da fase inicial (opts.lateEnrollment = painel do form). Só
+    // um valor EXPLÍCITO no painel da elim (closed/standby/expand) sobrepõe — "cada fase
+    // gerencia a sua" continua, mas o default deixa de FECHAR a inscrição por surpresa.
+    var _elimLE = function (cfgLE) {
+      return (cfgLE && cfgLE !== 'inherit') ? cfgLE : (opts.lateEnrollment || 'closed');
+    };
     var isDupla = cfg.disputa === 'dupla';
     var teamSize = teamSizeFor(cfg.disputa);
     var scoreInd = cfg._scoreBy === 'individual';
@@ -261,7 +269,7 @@
           },
           fixedPairs: true, pairingStrategy: pairRR, bracketSeeding: seedRR,
           mapping: mapRR, grandFinal: elimDuplaRR || (e0.linhas > 1 && e0.grandFinal !== false),
-          thirdPlace: e0.terceiro, lateEnrollment: e0.lateEnrollment || 'closed', drawManual: false
+          thirdPlace: e0.terceiro, lateEnrollment: _elimLE(e0.lateEnrollment), drawManual: false
         });
         if (opts.lateEnrollment) pRR.lateEnrollment = opts.lateEnrollment; // fase inicial = painel
         return { topLevel: top, phases: [pRR, pElimRR], cfg: cfg };
@@ -406,7 +414,7 @@
         },
         fixedPairs: elimFixedPairs, pairingStrategy: elimPairing, bracketSeeding: elimSeeding,
         mapping: mapping, grandFinal: elimDupla || (nLines > 1 && e.grandFinal !== false), thirdPlace: e.terceiro,
-        lateEnrollment: e.lateEnrollment || 'closed', // inscrições durante a eliminatória
+        lateEnrollment: _elimLE(e.lateEnrollment), // inscrições durante a elim: herda a fase inicial por padrão
         drawManual: false
       });
       phases.push(p1);

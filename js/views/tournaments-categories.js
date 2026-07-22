@@ -187,12 +187,14 @@ window._categoryMissingFields = function(p, t) {
     // Habilidade do participante (por modalidade, com fallback legado defaultCategory)
     var tSport = t.sport ? String(t.sport).trim() : null;
     var hasSkill = false;
-    if (p.skillBySport && typeof p.skillBySport === 'object' && tSport && p.skillBySport[tSport]) hasSkill = true;
-    if (!hasSkill && p.defaultCategory) hasSkill = true;
+    // v1.3.39: gênero/skill/idade resolvidos PELO PERFIL (uid), fallback pro gravado.
+    var _smA = window._pSkillMap(p);
+    if (_smA && tSport && _smA[tSport]) hasSkill = true;
+    if (!hasSkill && window._pDefaultCat(p)) hasSkill = true;
 
-    if (res.usesGender && !p.gender) res.missing.push('gênero');
+    if (res.usesGender && !window._pGender(p)) res.missing.push('gênero');
     if (res.usesSkill && !hasSkill) res.missing.push('habilidade');
-    if (res.usesAge && !p.birthDate) res.missing.push('data de nascimento');
+    if (res.usesAge && !window._pBirth(p)) res.missing.push('data de nascimento');
     return res;
 };
 
@@ -571,9 +573,12 @@ window._buildCategoryCountHtml = function(t) {
 };
 
 // Estimated tournament duration
-window._buildTimeEstimation = function(t) {
-  // Só mostra se NÃO tem data/hora de fim
-  if (t.endDate) return '';
+window._buildTimeEstimation = function(t, opts) {
+  // A CAIXA completa só aparece sem data/hora de fim (se há endDate, o término já
+  // é conhecido — estimar seria redundante). Mas o modo {dataOnly} (linha compacta
+  // "Previsão de duração" abaixo da regressiva) IGNORA esse gate: a previsão pelos
+  // inscritos é útil mesmo com endDate definido (ex.: bater o real com o planejado).
+  if (t.endDate && !(opts && opts.dataOnly)) return '';
   // v0.16.82: Liga não tem duração estimada — formato é uma "temporada
   // contínua" com sorteios automáticos a cada N dias, não um evento de
   // duração fixa. Mostrar simulação de partidas é enganoso. Pedido do
@@ -711,7 +716,16 @@ window._buildTimeEstimation = function(t) {
 
   // Inscritos reais (contar pessoas individuais, não times)
   var parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-  var unitCount = parts.length; // unidades competitivas (times ou individuais) para cálculo do bracket
+  // v1.3.168 (dono): unidade competitiva = EQUIPES EFETIVAS, nunca nº de entradas. Em duplas,
+  // 31 pessoas = 14 equipes + 3 sem dupla → a chave é de 14 (solo sem dupla é pendência, não
+  // competidor). Fonte ÚNICA: _diagnoseAll (o mesmo número dos painéis de resolução do sorteio).
+  var unitCount = parts.length; // fallback: nº de entradas
+  try {
+    if (typeof window._diagnoseAll === 'function') {
+      var _di = window._diagnoseAll(t);
+      if (_di && _di.effectiveTeams > 0) unitCount = _di.effectiveTeams;
+    }
+  } catch (e) {}
   var realCount = 0;
   parts.forEach(function(p) {
     if (typeof p === 'object' && p !== null && Array.isArray(p.participants)) {
@@ -725,6 +739,15 @@ window._buildTimeEstimation = function(t) {
       }
     }
   });
+
+  // v1.3.2: modo "dataOnly" — devolve só os números do cenário REAL (nº atual de
+  // inscritos), sem HTML, pra alimentar a linha compacta _buildDurationForecast
+  // logo abaixo da regressiva. FONTE ÚNICA das fórmulas — não duplicar noutro lugar.
+  if (opts && opts.dataOnly) {
+    if (unitCount < 2) return null;
+    return { realCount: realCount, unitCount: unitCount, format: format,
+             matches: calcMatches(unitCount, format), minutes: estimateDuration(unitCount, format) };
+  }
 
   // Verificar se formato é Liga com muitos jogadores (seria longo demais)
   var isLiga = window._isLigaFormat && window._isLigaFormat(t);
@@ -803,6 +826,61 @@ window._buildTimeEstimation = function(t) {
   html += '</div>';
   html += '</div>';
   return html;
+};
+
+// v1.3.2: caixa "Estimativa de duração" — LOGO ABAIXO da regressiva na dashboard
+// e no detalhe. Layout (v1.3.4): título na 1ª linha; na 2ª, "(X participantes /
+// Y jogos)" à esquerda e a duração em DD:HH:MM à direita. Mostra só o cenário
+// REAL (nº atual de inscritos), sem as simulações 8/16/32/64 da caixa completa.
+// Reaproveita _buildTimeEstimation(t,{dataOnly}) como fonte única das fórmulas.
+// Auto-oculta: Liga / menos de 2 unidades (endDate NÃO oculta — ver dataOnly).
+window._buildDurationForecast = function(t) {
+  try {
+    var d = (typeof window._buildTimeEstimation === 'function')
+      ? window._buildTimeEstimation(t, { dataOnly: true })
+      : null;
+    if (!d || !(d.minutes > 0)) return '';
+    var min = d.minutes;
+    // Duração em DD:HH:MM (dias:horas:minutos), zero-padded.
+    function _p2(x) { return (x < 10 ? '0' : '') + x; }
+    var dd = Math.floor(min / 1440);
+    var hh = Math.floor((min % 1440) / 60);
+    var mm = Math.round(min % 60);
+    var jogosLbl = d.matches + (d.matches === 1 ? ' jogo' : ' jogos');
+    var partsLbl = d.realCount + (d.realCount === 1 ? ' participante' : ' participantes');
+    // duplas: mostra as EQUIPES (base real do cálculo) junto das pessoas — "31 participantes ·
+    // 14 equipes / 13 jogos". v1.3.168, pedido do dono.
+    if (d.unitCount && d.unitCount !== d.realCount) {
+      partsLbl += ' · ' + d.unitCount + (d.unitCount === 1 ? ' equipe' : ' equipes');
+    }
+    var rb = (typeof window._photoReadBox === 'function')
+      ? window._photoReadBox()
+      : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
+    // Segmento DD/HH/MM: rótulo menor em cima (dias/horas/min), número maior embaixo.
+    var _seg = function(lbl, val) {
+      return '<div style="display:flex;flex-direction:column;align-items:center;line-height:1.05;">' +
+        '<span style="font-size:0.55rem;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;opacity:0.62;color:' + rb.fg + ' !important;">' + lbl + '</span>' +
+        '<span style="font-size:1.2rem;font-weight:900;color:' + rb.fg + ' !important;font-variant-numeric:tabular-nums;">' + _p2(val) + '</span>' +
+      '</div>';
+    };
+    var _colon = '<span style="font-size:1.2rem;font-weight:900;opacity:0.4;color:' + rb.fg + ' !important;">:</span>';
+    // Título + "(participantes/jogos)" empilhados e colados à esquerda; bloco de
+    // tempo DD:HH:MM centralizado ocupando as 2 linhas à direita.
+    return '<div style="margin-top:6px;padding:8px 14px;background:' + rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid ' + rb.border + ';border-radius:12px;">' +
+      '<div style="display:flex;align-items:center;gap:12px;">' +
+        '<div style="display:flex;flex-direction:column;min-width:0;">' +
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<span style="font-size:1.1rem;flex-shrink:0;">⏱️</span>' +
+            '<span style="font-size:0.95rem;font-weight:800;color:' + rb.fg + ' !important;">Estimativa de duração</span>' +
+          '</div>' +
+          '<span style="font-size:0.72rem;font-weight:600;opacity:0.82;color:' + rb.fg + ' !important;">(' + partsLbl + ' / ' + jogosLbl + ')</span>' +
+        '</div>' +
+        '<div style="margin-left:auto;display:flex;align-items:flex-end;gap:6px;flex-shrink:0;">' +
+          _seg('dias', dd) + _colon + _seg('horas', hh) + _colon + _seg('min', mm) +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  } catch (e) { return ''; }
 };
 
 // Open category manager modal
@@ -952,9 +1030,10 @@ window.renderCategoryManagerPage = function(container, tId) {
             var diagRows = uncategorized.map(function(u) {
                 var p = u.p;
                 if (!p || typeof p !== 'object') return '';
-                var g = p.gender || '—';
-                var skill = (p.skillBySport && tSportForDiag && p.skillBySport[tSportForDiag]) || p.defaultCategory || '—';
-                var bd = p.birthDate || '—';
+                var g = window._pGender(p) || '—';
+                var _smDiag = window._pSkillMap(p);
+                var skill = (_smDiag && tSportForDiag && _smDiag[tSportForDiag]) || window._pDefaultCat(p) || '—';
+                var bd = window._pBirth(p) || '—';
                 var uid = p.uid ? p.uid.substring(0, 6) + '…' : '(sem uid)';
                 return '<tr style="font-size:0.72rem;border-bottom:1px solid rgba(255,255,255,0.06);">' +
                     '<td style="padding:3px 6px;color:var(--text-bright);">' + window._safeHtml(u.name || '?') + '</td>' +
@@ -2438,7 +2517,7 @@ function _eligibleCatsForParticipant(p, allCats, tSport) {
     var genderPrefixMap = { fem: 'fem', masc: 'masc', misto_aleatorio: 'misto aleat.', misto_obrigatorio: 'misto obrig.' };
 
     // ── 1. Gênero ─────────────────────────────────────────────────────────────
-    var pGender = p.gender || '';
+    var pGender = window._pGender(p) || ''; // v1.3.39: perfil-first (uid), fallback gravado
     if (pGender && typeof window._userGenderToCatCodes === 'function') {
         var validGenderCodes = window._userGenderToCatCodes(pGender);
         if (validGenderCodes && validGenderCodes.length > 0) {
@@ -2455,7 +2534,7 @@ function _eligibleCatsForParticipant(p, allCats, tSport) {
     if (eligible.length === 1) return eligible;
 
     // ── 2. Idade ──────────────────────────────────────────────────────────────
-    var birthDate = p.birthDate || '';
+    var birthDate = window._pBirth(p) || ''; // v1.3.39: perfil-first (uid), fallback gravado
     if (birthDate) {
         var bd = new Date(birthDate);
         if (!isNaN(bd.getTime())) {
@@ -2487,12 +2566,13 @@ function _eligibleCatsForParticipant(p, allCats, tSport) {
 
     // ── 3. Habilidade ─────────────────────────────────────────────────────────
     var profileSkill = null;
-    if (p.skillBySport && typeof p.skillBySport === 'object' && tSport) {
-        var raw = p.skillBySport[tSport];
+    var _smB = window._pSkillMap(p); // v1.3.39: perfil-first (uid), fallback gravado
+    if (_smB && tSport) {
+        var raw = _smB[tSport];
         if (raw) profileSkill = String(raw).trim().toUpperCase();
     }
-    if (!profileSkill && p.defaultCategory) {
-        profileSkill = String(p.defaultCategory).trim().toUpperCase();
+    if (!profileSkill && window._pDefaultCat(p)) {
+        profileSkill = String(window._pDefaultCat(p)).trim().toUpperCase();
     }
     if (profileSkill) {
         var skillFiltered = eligible.filter(function(cat) {
@@ -2534,7 +2614,7 @@ window._autoAssignCategories = function(tId, _preloadedT) {
         var hasValidCat = existingCats.some(function(c) { return allCats.indexOf(c) !== -1; });
         if (hasValidCat) return;
 
-        var hasAnyProfileData = p.gender || p.birthDate || p.skillBySport || p.defaultCategory;
+        var hasAnyProfileData = window._pGender(p) || window._pBirth(p) || window._pSkillMap(p) || window._pDefaultCat(p);
         if (!hasAnyProfileData) return;
 
         var eligible = _eligibleCatsForParticipant(p, allCats, tSport);
@@ -2595,11 +2675,12 @@ window._autoAssignCategoriesAsync = async function(tId) {
         var hasValidCat = existingCats.some(function(c) { return allCats.indexOf(c) !== -1; });
         if (hasValidCat) return false;
         // skillBySport with all-null values (sport selected but skill not set) counts as missing
-        var hasMeaningfulSkill = p.skillBySport && typeof p.skillBySport === 'object' &&
-            Object.keys(p.skillBySport).some(function(k) { return !!p.skillBySport[k]; });
+        var _smMean = window._pSkillMap(p);
+        var hasMeaningfulSkill = _smMean && typeof _smMean === 'object' &&
+            Object.keys(_smMean).some(function(k) { return !!_smMean[k]; });
         // Missing gender when tournament has gender categories also requires enrichment
-        var missingGender = !p.gender && (t.genderCategories || []).length > 0;
-        return !(p.birthDate || hasMeaningfulSkill || p.defaultCategory) || missingGender;
+        var missingGender = !window._pGender(p) && (t.genderCategories || []).length > 0;
+        return !(window._pBirth(p) || hasMeaningfulSkill || window._pDefaultCat(p)) || missingGender;
     }
 
     // Participants with uid — load by uid
@@ -2608,8 +2689,9 @@ window._autoAssignCategoriesAsync = async function(tId) {
     var toLoadByEmail = parts.filter(function(p) { return _needsEnrichment(p) && !p.uid && p.email; });
 
     function _hasMeaningfulSkill(participant) {
-        return participant.skillBySport && typeof participant.skillBySport === 'object' &&
-            Object.keys(participant.skillBySport).some(function(k) { return !!participant.skillBySport[k]; });
+        var _smP = window._pSkillMap(participant); // v1.3.39: skill perfil-first
+        return _smP && typeof _smP === 'object' &&
+            Object.keys(_smP).some(function(k) { return !!_smP[k]; });
     }
 
     // Enrich by uid

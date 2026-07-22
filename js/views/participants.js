@@ -26,6 +26,42 @@ function _reRenderParticipants() {
   }
 }
 
+// v1.3.80: re-render ESTÁVEL da tela de inscritos — MESMO caminho robusto do card estático (in-place),
+// pros casos em que o in-place não se aplica (painel de check-in pós-sorteio, cujos cards não têm
+// data-card-key). Preserva o scroll E suprime o eco do onSnapshot (o próprio write echoa → re-render
+// com dado stale → "presente vira ausente, tem que clicar 3x" + pulinho). É a ÚNICA saída de re-render
+// que os handlers de presença usam, pra que TODO caminho (individual, dupla, W.O. indiv/time) seja
+// robusto igual. Dono (20/jul): "o caminho deve ser um só, robusto".
+function _reRenderParticipantsStable() {
+  var _y = 0;
+  try { _y = window.scrollY || window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0; } catch (_e) {}
+  // TRAVA DE ALTURA (mesma técnica do _rerenderBracket): `renderParticipants` faz
+  // container.innerHTML = '' antes de repintar → o documento COLAPSA por 1 frame → o browser
+  // clampa o scroll pra cima → o restore traz de volta = "sobe uma linha e desce rapidinho".
+  // Segurar a altura atual do container durante o rebuild impede o colapso → zero pulinho.
+  var _container = document.getElementById('view-container');
+  var _lockH = 0;
+  try { if (_container) _lockH = _container.offsetHeight; } catch (_e) {}
+  if (_container && _lockH) { try { _container.style.minHeight = _lockH + 'px'; } catch (_e) {} }
+  window._suppressSoftRefresh = true;
+  clearTimeout(window._presenceRefreshRelease);
+  window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
+  _reRenderParticipants();
+  // v1.3.92: acabou de re-renderizar com o estado atual → adianta a assinatura pro eco tardio do
+  // snapshot ver "igual" e NÃO re-renderizar de novo (o pulinho que sobrava no fallback).
+  try {
+    var _tSig = window._findTournamentById && window._findTournamentById((window.location.hash || '').split('/')[1]);
+    if (_tSig && window._participantsViewSig) window._pdetailSig = window._participantsViewSig(_tSig);
+  } catch (_eSig) {}
+  var _restore = function () { try { window.scrollTo(0, _y); } catch (_e) {} };
+  _restore();
+  var _unlock = function () { try { var c = document.getElementById('view-container'); if (c) c.style.minHeight = ''; } catch (_e) {} };
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function () { _restore(); requestAnimationFrame(function () { _restore(); _unlock(); }); });
+  } else { _unlock(); }
+}
+window._reRenderParticipantsStable = _reRenderParticipantsStable;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // v1.0.87-beta: REDE DE SEGURANÇA — _processWoSubstitutions
 // User: 'continua falhando em algum ponto. tem gente presente na lista de espera,
@@ -510,6 +546,29 @@ window._applyWO = function (t, opts) {
     }
   }
 
+  // ── DESFECHO oferecido a quem decreta (Stage 1 — W.O. individual de eliminatória) ──
+  // Regra do dono (18-jul-2026, ver project_wo_outcome_negotiation_canon): em vez de o motor
+  // decidir o desfecho sozinho (substituir/avançar), quando `opts.offerOutcomeChoice` está
+  // setado devolvemos 'needsOutcomeChoice' com o contexto — a UI abre o overlay das opções
+  // (avançar/desclassificar · suplente da espera · convidar folga · Jogador X). SÓ eliminatória
+  // INDIVIDUAL; time/Liga/monarch seguem o fluxo próprio. ADITIVO: sem a flag, nada muda.
+  if (opts.offerOutcomeChoice && !opts.outcomeChoice && !_isLigaFmt && !_isMonarch && _preMatch) {
+    const _cslot = _absentInSlot(_preMatch, 'p1') ? 'p1' : 'p2';
+    const _csu = (typeof window._slotUids === 'function') ? window._slotUids(_preMatch, _cslot).filter(Boolean) : [];
+    const _cEntry = String(_preMatch[_cslot] || '');
+    const _cIsTeam = _csu.length ? _csu.length > 1 : _cEntry.includes('/');
+    const _cIndiv = woScope === 'individual' && _cIsTeam && (_csu.length
+      ? (absentUids.length && _csu.some(u => absentUids.indexOf(u) !== -1) && !_csu.every(u => absentUids.indexOf(u) !== -1))
+      : (_cEntry.split(/\s*\/\s*/).map(n => n.trim()).indexOf(absentName) !== -1 && _cEntry !== absentName));
+    if (_cIndiv) {
+      const _partnerUid = _csu.length ? (_csu.find(u => absentUids.indexOf(u) === -1) || null) : null;
+      const _coppSide = _cslot === 'p1' ? 'p2' : 'p1';
+      return { ok: true, outcome: 'needsOutcomeChoice', absentName: absentName, absentUids: absentUids,
+        matchId: _preMatch.id, matchNum: _friendlyOf(_preAll, _preMatch), partnerUid: _partnerUid,
+        oppName: _preMatch[_coppSide] || '', scope: scope };
+    }
+  }
+
   // 1) tenta substituto da lista de espera (só se houver alguém PRESENTE na fila).
   // v4.1.38: substituição SÓ no escopo INDIVIDUAL. No escopo TIME (woScope==='team')
   // a regra do dono é: faltou 1 → o TIME INTEIRO leva W.O. (adversário vence), NUNCA
@@ -519,9 +578,12 @@ window._applyWO = function (t, opts) {
   const pool = (typeof window._getStandbyPool === 'function') ? window._getStandbyPool(t) : [];
   const _isPresent = p => { const ci = window._idMapGet(t, t.checkedIn, p); return typeof ci === 'number' ? ci > 0 : !!ci; };
   const presentInPool = pool.filter(_isPresent);
-  // _forceNoSub: o organizador escolheu "W.O. ao time" no diálogo de categoria — pula a
-  // tentativa de substituição e escala direto (o adversário vence).
-  if (woScope === 'individual' && !opts._forceNoSub && pool.length && presentInPool.length && typeof window._processWoSubstitutions === 'function') {
+  // outcomeChoice (Stage 1 — project_wo_outcome_negotiation_canon): 'advance' | 'waitlistSub'
+  // | 'ghost'. null = fluxo legado (consenso de participante / chamadas antigas) → inalterado.
+  const _choice = opts.outcomeChoice || null;
+  // _forceNoSub: "W.O. ao time" no diálogo de categoria — pula a substituição e escala.
+  // 'advance'/'ghost' também pulam a substituição automática (o desfecho já foi escolhido).
+  if (woScope === 'individual' && !opts._forceNoSub && _choice !== 'advance' && _choice !== 'ghost' && pool.length && presentInPool.length && typeof window._processWoSubstitutions === 'function') {
     const r = window._applyWoSubsToTournament(t);
     if (r && r.subCount > 0) return { ok: true, outcome: 'subbed', subCount: r.subCount, subDetails: r.subDetails || [] };
     // Há suplente presente, mas NENHUM atende a categoria do ausente → NÃO escala pra W.O.
@@ -544,7 +606,7 @@ window._applyWO = function (t, opts) {
     .filter(m => m && !m.winner && (_absentInSlot(m, 'p1') || _absentInSlot(m, 'p2')));
   if (!pending.length) return { ok: false, outcome: 'noMatch', reason: 'jogo do ausente não encontrado', absentMarked: true };
 
-  let applied = 0, winner = null, matchNum = null, partnerToWaitlist = null, waitedTBD = false, anyKO = false;
+  let applied = 0, winner = null, matchNum = null, partnerToWaitlist = null, waitedTBD = false, anyKO = false, ghostApplied = 0;
   for (const m of pending) {
     const slot = _absentInSlot(m, 'p1') ? 'p1' : 'p2';
     const oppSide = slot === 'p1' ? 'p2' : 'p1';
@@ -574,6 +636,26 @@ window._applyWO = function (t, opts) {
       isTeamEntry = entryStr.includes('/');
       members = isTeamEntry ? entryStr.split(/\s*\/\s*/).map(n => n.trim()) : [entryStr];
       isIndividualWO = woScope === 'individual' && isTeamEntry && members.indexOf(absentName) !== -1 && entryStr !== absentName;
+    }
+    // ── Jogador X (ghost): o parceiro que ficou SEGUE com um placeholder; o jogo NÃO é
+    //    decidido e o adversário NÃO avança. Só W.O. INDIVIDUAL. Reconstitui o slot por uid
+    //    (parceiro + ghost). Ver project_wo_outcome_negotiation_canon.
+    if (isIndividualWO && _choice === 'ghost') {
+      const _pUid = slotUids.length ? slotUids.find(u => absentUids.indexOf(u) === -1) : null;
+      const _pName = (_pUid && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(_pUid, '') : (members.find(n => n !== absentName) || '');
+      const _ghostUid = 'ghostwo_' + Date.now() + '_' + Math.floor(Math.random() * 1e4);
+      if (!Array.isArray(t.woGhosts)) t.woGhosts = [];
+      t.woGhosts.push({ uid: _ghostUid, name: 'Jogador X', replacedUid: (absentUids[0] || null), replacedName: absentName, matchId: m.id, at: Date.now() });
+      const _label = _pName ? (_pName + ' / Jogador X') : 'Jogador X';
+      const _newObj = { p1Uid: _pUid || null, p2Uid: _ghostUid, p1Name: _pName || '', p2Name: 'Jogador X',
+        displayName: _label, name: _label,
+        participants: [{ uid: (_pUid || undefined), displayName: (_pName || undefined), name: (_pName || undefined) },
+                       { uid: _ghostUid, displayName: 'Jogador X', name: 'Jogador X', isGhost: true }] };
+      if (typeof window._setSlot === 'function') window._setSlot(m, slot, [_pUid, _ghostUid].filter(Boolean), _newObj);
+      m[slot] = _label;
+      ghostApplied++;
+      _log(`W.O. individual: ${absentName} → Jogador X; ${_pName || 'parceiro'} segue no Jogo ${_friendlyOf(all, m)}.`);
+      continue;
     }
     // W.O. individual de dupla sem substituto → parceiro vai pra lista de espera
     if (isIndividualWO) {
@@ -620,6 +702,11 @@ window._applyWO = function (t, opts) {
     applied++; winner = oppName; matchNum = _friendlyOf(all, m);
   }
 
+  // Jogador X aplicado (parceiro segue no jogo): não decidiu, ninguém avançou.
+  if (ghostApplied > 0 && applied === 0) {
+    return { ok: true, outcome: 'ghostApplied', ghostApplied: ghostApplied, absentName: absentName };
+  }
+
   if (applied === 0) {
     // só sobrou o caso adversário-TBD (marcou ausente, W.O. deferido)
     if (waitedTBD) {
@@ -651,67 +738,268 @@ window._applyWO = function (t, opts) {
 // Pôr a ação numa linha própria evita cobrir o nº de inscrição (marca d'água) e
 // o texto do tipo. presenceGroupHtml DEVE vir na ordem: palavra + toggle + W.O.
 // (o 🗑️ é passado à parte, em delBtnHtml, e fica sempre por último/à direita).
+// v1.3.45: tipo (ex.: "Inscrição Individual") e ações (Presente/Ausente·toggle·W.O.·✕) na
+// MESMA linha — tipo à esquerda, ações à direita (space-between). Economiza 1 linha por card
+// (pedido do dono, recorrente). Degrada com graça: se não couber, a barra de ações quebra pra
+// baixo (flex-wrap). CANÔNICO — as DUAS telas (participants + detalhe) passam por aqui.
 window._inscritoActionRow = function (typeText, presenceGroupHtml, delBtnHtml) {
   var action = (presenceGroupHtml || '') + (delBtnHtml || '');
-  var typeLine = typeText
-    ? '<div style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + typeText + '</div>'
+  if (!typeText && !action) return '';
+  var typeSpan = '<div style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto;">' + (typeText || '') + '</div>';
+  var actionSpan = action
+    ? '<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;flex-shrink:0;flex-wrap:wrap;" onclick="event.stopPropagation();">' + action + '</div>'
     : '';
-  var actionLine = action
-    ? '<div style="display:flex;align-items:center;gap:6px;margin-top:5px;justify-content:flex-end;" onclick="event.stopPropagation();">' + action + '</div>'
-    : '';
-  return (typeLine || actionLine) ? '<div style="margin-top:6px;">' + typeLine + actionLine + '</div>' : '';
+  return '<div style="margin-top:6px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;">' + typeSpan + actionSpan + '</div>';
 };
 
-window._toggleCheckIn = function (tId, playerName) {
+// Feedback "salvando presença" no(s) card(s) do inscrito enquanto o write confirma (como o de
+// formar dupla). A classe fica no ELEMENTO do card (sobrevive ao update in-place) → spinner ::after.
+window._presenceCardBusy = function (key, on) {
+  if (!key) return;
+  try {
+    var esc = String(key).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    var cards = document.querySelectorAll('.participant-card[data-card-key="' + esc + '"]');
+    for (var i = 0; i < cards.length; i++) { if (on) cards[i].classList.add('presence-saving'); else cards[i].classList.remove('presence-saving'); }
+  } catch (e) {}
+};
+// Marca busy e limpa quando a promise do write resolve (ou já, se não for promise).
+window._presenceBusyUntil = function (key, done) {
+  window._presenceCardBusy(key, true);
+  var clear = function () { window._presenceCardBusy(key, false); };
+  if (done && typeof done.then === 'function') done.then(clear, clear); else clear();
+};
+
+window._toggleCheckIn = function (tId, playerName, uid) {
   const t = window._findTournamentById(tId);
   if (!t) return;
   const user = window.AppStore && window.AppStore.currentUser;
+  // uid only (dono, 18-jul): quando o render passa o uid, a presença é gravada/lida pela
+  // chave-UID — homônimos não colidem mais. Sem uid (guest sem conta), cai no nome (exceção
+  // canônica). _who é o objeto {uid} que _idMap* usa pra chavear por uid. playerName segue
+  // só pro display/self-presence/notificação.
+  const _who = uid ? { uid: uid, displayName: playerName } : playerName;
 
   // 1) Autoridade (org/co-org/árbitro): controla a presença de todos.
   if (window._canManagePresence && window._canManagePresence(t, user)) {
-    return window._applyCheckInToggle(tId, playerName);
+    return window._applyCheckInToggle(tId, playerName, uid);
   }
 
-  // 2) Auto-presença do próprio jogador (só em torneios com placar pelos
-  //    participantes e quando o nome é o do próprio usuário).
-  const _canSelf = window._participantsSelfPresence && window._participantsSelfPresence(t) &&
-    window._isMyOwnPlayerName && window._isMyOwnPlayerName(t, playerName, user);
+  // 2) Autopresença do PRÓPRIO participante (dono, jul/2026): disponível a QUALQUER inscrito —
+  //    NÃO só nos torneios em que o participante lança o placar. Precisa ser o próprio nome.
+  //    Verde = GPS confirma no local; azul = confirma fora do local (não bloqueia mais). Ver
+  //    _applySelfPresence.
+  const _canSelf = window._isMyOwnPlayerName && window._isMyOwnPlayerName(t, playerName, user);
   if (!_canSelf) {
     if (typeof showNotification === 'function') {
-      showNotification('Presença', 'Apenas o organizador ou o árbitro pode marcar a presença.', 'info');
+      showNotification('Presença', 'Só o organizador ou o árbitro pode marcar a presença de outra pessoa.', 'info');
     }
     return;
   }
-  const _wasIn = window._idMapHas(t, t.checkedIn, playerName);
-  if (_wasIn) {
-    // Retirar a própria presença é livre (você pode dizer que saiu).
-    return window._applyCheckInToggle(tId, playerName);
+  return window._applySelfPresence(tId, playerName, uid);
+};
+
+// Autopresença do PRÓPRIO participante — VERDE (presente, GPS no local) vs AZUL (confirmado,
+// fora do local). Tocar de novo quando já verde/azul = SAIR. Só o VERDE (checkedIn) conta como
+// presença; o AZUL (checkedInConfirmed) é um aviso "eu venho" que NÃO entra na % nem no sorteio.
+window._applySelfPresence = function (tId, playerName, uid) {
+  const t = window._findTournamentById(tId);
+  if (!t) return;
+  const _who = uid ? { uid: uid, displayName: playerName } : playerName;
+  const isGreen = window._idMapHas(t, t.checkedIn || {}, _who);
+  const isBlue = window._idMapHas(t, t.checkedInConfirmed || {}, _who);
+  if (isGreen || isBlue) {
+    // Já marcado → tocar de novo = sair (remove verde E azul).
+    var _mdOff = window.AppStore.mutate(tId, function (ft) {
+      ft.checkedIn = ft.checkedIn || {}; ft.checkedInConfirmed = ft.checkedInConfirmed || {};
+      window._idMapDel(ft, ft.checkedIn, _who);
+      window._idMapDel(ft, ft.checkedInConfirmed, _who);
+    });
+    window._presenceBusyUntil(uid || playerName, _mdOff);
+    _reRenderParticipantsStable();
+    return;
   }
-  // Marcar a própria presença → confirma pelo GPS que está no local.
   if (typeof showNotification === 'function') {
-    showNotification('📍 Verificando local…', 'Confirmando pelo GPS que você está no local.', 'info');
+    showNotification('📍 Verificando local…', 'Confirmando pelo GPS se você está no local.', 'info');
   }
+  window._presenceCardBusy(uid || playerName, true); // spinner já durante o GPS + write
   window._isUserAtTournamentVenue(t).then(function (atVenue) {
-    if (!atVenue) {
-      if (typeof showNotification === 'function') {
-        showNotification('📍 Fora do local', 'Ative o GPS e esteja no local do torneio pra marcar sua presença.', 'warning');
-      }
-      return;
+    var _mdSelf = window.AppStore.mutate(tId, function (ft) {
+      ft.checkedIn = ft.checkedIn || {}; ft.absent = ft.absent || {}; ft.checkedInConfirmed = ft.checkedInConfirmed || {};
+      window._idMapDel(ft, ft.absent, _who);
+      if (atVenue) { window._idMapSet(ft, ft.checkedIn, _who, Date.now()); window._idMapDel(ft, ft.checkedInConfirmed, _who); }
+      else { window._idMapSet(ft, ft.checkedInConfirmed, _who, Date.now()); window._idMapDel(ft, ft.checkedIn, _who); }
+    });
+    window._presenceBusyUntil(uid || playerName, _mdSelf);
+    if (typeof showNotification === 'function') {
+      if (atVenue) showNotification('✅ Presente', 'O GPS confirmou você no local do torneio.', 'success');
+      else showNotification('🔵 Presença confirmada', 'Você confirmou que vem. Ao chegar no local, vira "Presente" automaticamente.', 'info');
     }
-    window._applyCheckInToggle(tId, playerName);
+    _reRenderParticipantsStable();
   });
 };
 
-window._applyCheckInToggle = function (tId, playerName) {
+// v1.3.46: atualiza a presença de UM card NO LUGAR (sem re-render da lista) → os cards ficam
+// ESTÁTICOS ao marcar presença pré-sorteio (dono: "pulavam e voltavam"). Reconstrói só o card
+// tocado via a FONTE ÚNICA _inscritoIndividualCard, com o ctx do último render. Retorna true se
+// atualizou; false (→ fallback pro re-render completo) quando não dá: ctx ausente, card não
+// achado, filtro muda a visibilidade, ou modo lista-de-espera (lateJoin) que DEVE reordenar.
+window._updateCardPresenceInPlace = function (tId, uid, playerName) {
+  try {
+    var t = window._findTournamentById(tId); if (!t) return false;
+    var stash = window._lastInscritoCardCtx;
+    if (!stash || String(stash.tId) !== String(tId) || !stash.ctx) return false;
+    var ctx = stash.ctx;
+    if (ctx.lateJoin) return false;                            // espera reordena → re-render
+    if (typeof ctx.cardPresence !== 'function') return false;  // sem presença → nada a fazer
+    // v1.3.47: RECONSTRÓI a presença contra o `t` ATUAL (o snapshot troca o objeto de torneio;
+    // o cardPresence do ctx guardado fechava sobre o `t` órfão → só a 1ª presença "pegava").
+    if (typeof window._rollCallPresenceCtx === 'function' && window._lastRcOpts) {
+      try {
+        var _rc = window._rollCallPresenceCtx(t, window._lastRcOpts);
+        var _merged = {};
+        for (var _k in ctx) { if (Object.prototype.hasOwnProperty.call(ctx, _k)) _merged[_k] = ctx[_k]; }
+        _merged.cardPresence = _rc.cardPresence;
+        _merged.memberPresence = _rc.memberPresence;
+        ctx = _merged;
+      } catch (_eRc) {}
+    }
+    var key = String(uid || playerName || '');
+    var _kEsc = (window.CSS && CSS.escape) ? CSS.escape(key) : key.replace(/["\\]/g, '\\$&');
+    var card = document.querySelector('.participant-card[data-card-key="' + _kEsc + '"]');
+    if (!card) return false;
+    var parts = Array.isArray(t.participants) ? t.participants : [];
+    var idx = parseInt(card.getAttribute('data-card-idx') || '', 10); if (isNaN(idx)) idx = 0;
+    var p = null;
+    for (var i = 0; i < parts.length; i++) {
+      var pp = parts[i]; if (!pp) continue;
+      if (uid && typeof pp === 'object' && pp.uid === uid) { p = pp; break; }
+      var nm = (typeof pp === 'string') ? pp : (pp.displayName || pp.name || pp.email || '');
+      if (!uid && nm === playerName) { p = pp; break; }
+    }
+    if (!p) return false;
+    var pr = ctx.cardPresence(p);
+    if (pr && pr.skip) return false;                           // filtro esconde/mostra → re-render
+    var html = window._inscritoIndividualCard(t, p, idx, ctx);
+    if (!html) return false;
+    var tmp = document.createElement('div'); tmp.innerHTML = html;
+    var fresh = tmp.firstElementChild; if (!fresh) return false;
+    card.replaceWith(fresh);                                   // só ESTE card; os demais intactos
+    if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(fresh); } catch (_e) {} }
+    try {
+      var imgs = fresh.querySelectorAll('img[data-player-name]');
+      imgs.forEach(function (img) { var n = (img.getAttribute('data-player-name') || '').toLowerCase(); var real = window._playerPhotoCache && window._playerPhotoCache[n]; if (real && real.indexOf('dicebear.com') === -1) img.src = real; });
+    } catch (_e) {}
+    return true;
+  } catch (_e) { return false; }
+};
+
+// v1.3.83: atualiza no LUGAR o card do PAINEL de check-in pós-sorteio (grade rica per-person, que
+// NÃO passa por _inscritoIndividualCard). Reconstrói SÓ o card tocado via o builder stashado no
+// render (_lastPanelCardCtx) — preserva a FOTO (o builder lê _playerPhotoCache, não re-hidrata do
+// zero → fim da "bola bege") e não faz full re-render (fim do pulinho). Guard de staleness: o
+// builder fecha sobre o `t` do render; se um snapshot trocou o objeto (tRef !== t atual), o builder
+// ficou órfão e não veria a mutação → retorna false (cai no re-render, que refaz o stash). Dono
+// (SB Casais): "fotos somem, vira bola bege, e continua o pulinho — o caminho tem que ser um só".
+window._updatePanelCardInPlace = function (tId, uid, playerName) {
+  try {
+    var stash = window._lastPanelCardCtx;
+    if (!stash || String(stash.tId) !== String(tId) || typeof stash.build !== 'function' || !Array.isArray(stash.list)) return false;
+    var t = window._findTournamentById(tId); if (!t) return false;
+    if (stash.tRef && stash.tRef !== t) return false;                     // objeto trocado por snapshot → re-render
+    if ((window._checkInFilter || 'all') !== stash.filter) return false;  // filtro mudou → visibilidade muda → re-render
+    var ind = null;
+    for (var i = 0; i < stash.list.length; i++) {
+      var it = stash.list[i]; if (!it) continue;
+      if (uid && String(it.uid || '') === String(uid)) { ind = it; break; }
+      if (!ind && playerName && String(it.name || '') === String(playerName)) ind = it;
+    }
+    if (!ind) return false;
+    var html = stash.build(ind);
+    if (!html || !String(html).trim()) return false;                      // filtro escondeu este card → re-render
+    var keyStr = String(ind.uid || ind.name || '');
+    var _kEsc = (window.CSS && CSS.escape) ? CSS.escape(keyStr) : keyStr.replace(/["\\]/g, '\\$&');
+    var card = document.querySelector('.participant-card[data-panel-card="1"][data-card-key="' + _kEsc + '"]');
+    if (!card) return false;
+    var tmp = document.createElement('div'); tmp.innerHTML = String(html).trim();
+    var fresh = tmp.firstElementChild; if (!fresh) return false;
+    card.replaceWith(fresh);                                              // só ESTE card; os demais intactos → sem pulinho
+    try {
+      var imgs = fresh.querySelectorAll('img[data-player-name]');
+      imgs.forEach(function (img) { var n = (img.getAttribute('data-player-name') || '').toLowerCase(); var real = window._playerPhotoCache && window._playerPhotoCache[n]; if (real && real.indexOf('dicebear.com') === -1) img.src = real; });
+    } catch (_e) {}
+    if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(fresh); } catch (_e) {} }
+    return true;
+  } catch (_e) { return false; }
+};
+
+// v1.3.48: FONTE ÚNICA do expansor pessoa→uid (identidade). Reusado pela contagem no render
+// E pela barra de chamada in-place. A presença é gravada por uid; casar por nome (que cai pro
+// email quando o inscrito grava só uid) NÃO bate. Ver [[project_id_maps_uid_keyed]].
+window._expandParticipantWho = function (p) {
+  if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+    return [
+      { uid: p.p1Uid || '', name: ((window._displayName && window._displayName(p.p1Uid || '', p.p1Name || '')) || p.p1Name || '') },
+      { uid: p.p2Uid || '', name: ((window._displayName && window._displayName(p.p2Uid || '', p.p2Name || '')) || p.p2Name || '') }
+    ];
+  }
+  if (p && typeof p === 'object' && p.uid) return [{ uid: p.uid, name: window._pName(p) }];
+  var n = window._pName(p);
+  if (n && n.indexOf('/') !== -1) return n.split('/').map(function (s) { return s.trim(); }).filter(Boolean).map(function (s) { return { uid: '', name: s }; });
+  return n ? [{ uid: '', name: n }] : [];
+};
+
+// v1.3.48: barra de chamada (Presentes/Ausentes/Aguardando + %) recomputada POR UID a partir do
+// `t` fresco. FONTE ÚNICA usada no render E no update in-place (o card estático não re-renderiza
+// a lista, então a barra é atualizada separadamente). mode: 'rollcall' (parts) | 'postdraw'
+// (parts + lista de espera) | 'checkin'. Casa presença por uid (não por nome/email).
+window._rollCallBarHtml = function (tId, mode) {
+  var t = window._findTournamentById(tId); if (!t) return '';
+  var checkedIn = t.checkedIn || {}, absent = t.absent || {};
+  var seen = {}, total = 0, present = 0, abs = 0;
+  var _add = function (arr) {
+    (arr || []).forEach(function (p) {
+      (window._expandParticipantWho(p) || []).forEach(function (w) {
+        var k = ((w.uid || w.name) || '').toLowerCase(); if (!k || seen[k]) return; seen[k] = 1;
+        var who = w.uid ? { uid: w.uid, displayName: w.name } : w.name;
+        var isAbs = window._idMapHas(t, absent, who);
+        var isPres = !isAbs && window._idMapHas(t, checkedIn, who);
+        total++; if (isPres) present++; else if (isAbs) abs++;
+      });
+    });
+  };
+  _add(Array.isArray(t.participants) ? t.participants : []);
+  if (mode === 'postdraw') { _add((typeof window._getWaitlist === 'function') ? window._getWaitlist(t) : (t.standbyParticipants || [])); }
+  var pending = total - present - abs;
+  var pct = total > 0 ? Math.round(present / total * 100) : 0;
+  var cf = window._checkInFilter || 'all';
+  var tIdS = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var dot = function (key, dotC, bg, bd, fg, count, label) {
+    var a = (cf === key);
+    return '<button type="button" class="btn" title="' + label + ' (' + count + ')" onclick="event.stopPropagation();window._setCheckInFilter(\'' + tIdS + '\',\'' + key + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:0.8rem;font-weight:800;cursor:pointer;line-height:1;flex-shrink:0;background:' + (a ? bg : 'rgba(255,255,255,0.04)') + ';border:1px solid ' + (a ? bd : 'rgba(255,255,255,0.12)') + ';color:' + (a ? fg : 'var(--text-main)') + ';"><span style="width:9px;height:9px;border-radius:50%;background:' + dotC + ';flex-shrink:0;display:inline-block;"></span>' + count + '</button>';
+  };
+  return '<div id="rollcall-bar" data-rc-mode="' + (mode || 'rollcall') + '" style="display:flex;align-items:center;gap:6px;margin-top:8px;margin-bottom:4px;flex-wrap:wrap;">'
+    + dot('all', '#60a5fa', 'rgba(96,165,250,0.22)', 'rgba(96,165,250,0.6)', '#93c5fd', total, 'Todos')
+    + dot('present', '#10b981', 'rgba(16,185,129,0.22)', 'rgba(16,185,129,0.6)', '#4ade80', present, 'Presentes')
+    + dot('pending', '#a78bfa', 'rgba(167,139,250,0.22)', 'rgba(167,139,250,0.6)', '#c4b5fd', pending, 'Aguardando')
+    + dot('absent', '#ef4444', 'rgba(239,68,68,0.22)', 'rgba(239,68,68,0.6)', '#f87171', abs, 'W.O.')
+    + '<div title="' + present + ' de ' + total + ' presentes" style="flex:1;min-width:50px;height:9px;border-radius:6px;overflow:hidden;display:flex;background:rgba(167,139,250,0.35);"><div style="width:' + pct + '%;background:linear-gradient(90deg,#10b981,#4ade80);transition:width 0.3s;"></div></div>'
+    + '<span style="font-size:0.76rem;color:#94a3b8;font-weight:700;white-space:nowrap;flex-shrink:0;">' + present + '/' + total + ' · ' + pct + '%</span>'
+    + '</div>';
+};
+
+window._applyCheckInToggle = function (tId, playerName, uid) {
   const t = window._findTournamentById(tId);
   if (!t) return;
   if (!t.checkedIn) t.checkedIn = {};
   if (!t.absent) t.absent = {};
-  const wasCheckedIn = window._idMapHas(t, t.checkedIn, playerName);
+  // uid only: chaveia a presença pelo uid quando o render o forneceu (homônimo não colide);
+  // guest sem conta cai no nome. Ver _toggleCheckIn.
+  const _who = uid ? { uid: uid, displayName: playerName } : playerName;
+  const wasCheckedIn = window._idMapHas(t, t.checkedIn, _who);
 
   // Guard v2.2.8: jogadores na lista de espera por ausência devem ser reativados
   // via botão "Reverter" — toggle fica desabilitado na UI, isso é um safety net.
-  if (!wasCheckedIn && window._idMapHas(t, t.absent, playerName)) {
+  if (!wasCheckedIn && window._idMapHas(t, t.absent, _who)) {
     const _pnFor = p => (typeof p === 'string' ? p : (p && (p.displayName || p.name || p.email || '')));
     const _inStandby = (Array.isArray(t.standbyParticipants) &&
       t.standbyParticipants.some(p => _pnFor(p) === playerName)) ||
@@ -731,21 +1019,94 @@ window._applyCheckInToggle = function (tId, playerName) {
   // lost-update. Agora ambos rodam no MESMO doc fresco da transação, usando o
   // núcleo PURO _applyWoSubsToTournament (sem save próprio). `_was` recomputado
   // do doc fresco decide o toggle; o toast da sub vem da execução LOCAL.
+  // ⚠️ MUTATOR IDEMPOTENTE (v1.3.152) — CAUSA-RAIZ do "presença pulando e desmarcando sozinha".
+  // O mutator era um TOGGLE que lia o estado do doc FRESCO e INVERTIA. Mas ele roda MAIS DE UMA VEZ:
+  //   (a) AppStore.mutate aplica no objeto LOCAL e de novo no doc fresco da transação;
+  //   (b) commitTournamentTx faz RETRY (até 5×) em conflito transiente, re-executando o mutator;
+  //   (c) o próprio Firestore re-executa a função da transação em contenção.
+  // Cada re-execução INVERTIA de novo → nº PAR de aplicações = volta a DESMARCADO. Marcando 16-24
+  // pessoas em rajada a contenção sobe, os retries acontecem e presenças caem sozinhas.
+  // Agora o ALVO é decidido UMA vez (estado no clique) e o mutator SETA esse alvo absoluto —
+  // aplicar N vezes dá exatamente o mesmo resultado. Ver [[project_concurrency_safe_saves]].
+  var _wantPresent = !wasCheckedIn;
+  var _presTs = Date.now();
   let _subResult;
-  window.AppStore.mutate(tId, function (ft) {
+  // ── CAMINHO RÁPIDO: escrita POR CAMPO (v1.3.157) ─────────────────────────────────────────
+  // MEDIDO no Firestore real: doc-inteiro em rajada PERDE marcações (23/25); por campo é 25/25,
+  // mesmo com a CF gravando junto. Marcar presença não precisa reescrever o torneio inteiro.
+  // Só cai na transação (doc inteiro) quando há AUSENTES — aí a substituição de W.O.
+  // (_applyWoSubsToTournament) precisa mexer na chave. Ver [[project_concurrency_safe_saves]].
+  var _kPres = (typeof window._idMapKey === 'function') ? window._idMapKey(t, _who) : null;
+  var _presKey = _kPres ? (_kPres.uid || _kPres.name) : null;
+  var _temAusentes = !!(t.absent && Object.keys(t.absent).length);
+  var _fieldDone = null;
+  var _viaCampo = !!(_presKey && !_temAusentes &&
+    window.FirestoreDB && typeof window.FirestoreDB.setPresenceFields === 'function');
+  if (_viaCampo) {
+    // estado local otimista (idêntico ao do mutator), depois UM update de campo
+    if (!t.checkedIn) t.checkedIn = {};
+    if (!t.absent) t.absent = {};
+    if (!t.checkedInConfirmed) t.checkedInConfirmed = {};
+    if (_wantPresent) {
+      window._idMapSet(t, t.checkedIn, _who, _presTs);
+      window._idMapDel(t, t.absent, _who);
+      window._idMapDel(t, t.checkedInConfirmed, _who);
+    } else {
+      window._idMapDel(t, t.checkedIn, _who);
+    }
+    var _dels = _wantPresent
+      ? [{ map: 'absent', key: _presKey }, { map: 'checkedInConfirmed', key: _presKey }]
+      : [{ map: 'checkedIn', key: _presKey }];
+    var _sets = _wantPresent ? [{ map: 'checkedIn', key: _presKey, value: _presTs }] : [];
+    // chave-nome legada (quando há uid) some junto — mesma migração do _idMapSet
+    if (_kPres && _kPres.uid && _kPres.name && _kPres.name !== _kPres.uid) {
+      _dels.push({ map: 'checkedIn', key: _kPres.name });
+    }
+    _fieldDone = window.FirestoreDB.setPresenceFields(tId, _sets, _dels)
+      .catch(function (e) {
+        if (window._error) window._error('[presença por campo] falhou', e);
+        if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', (e && e.message) || 'Tente de novo.', 'warning');
+      });
+    if (window._dtrace) window._dtrace('presField', { quem: String(_presKey).slice(0, 10), alvo: _wantPresent ? 'presente' : 'fora', total: Object.keys(t.checkedIn || {}).length });
+  }
+  // ── INSTRUMENTAÇÃO (v1.3.155, diagnóstico do "presença pulando") ─────────────────────────
+  // Conta QUANTAS VEZES o mutator roda para ESTE clique (local + doc fresco + retries) e mostra a
+  // contagem de presentes ANTES/DEPOIS de cada execução. É a medição que faltava: em vez de
+  // deduzir, vemos a trajetória real (write parcial? re-execução? doc que volta zerado?).
+  var _runN = 0;
+  var _mutateDone = _viaCampo ? _fieldDone : window.AppStore.mutate(tId, function (ft) {
+    _runN++;
+    var _mb = Object.keys(ft.checkedIn || {}).length;
     if (!ft.checkedIn) ft.checkedIn = {};
     if (!ft.absent) ft.absent = {};
-    const _was = window._idMapHas(ft, ft.checkedIn, playerName);
-    if (_was) {
-      window._idMapDel(ft, ft.checkedIn, playerName);
+    if (!ft.checkedInConfirmed) ft.checkedInConfirmed = {};
+    if (!_wantPresent) {
+      window._idMapDel(ft, ft.checkedIn, _who);
     } else {
-      window._idMapSet(ft, ft.checkedIn, playerName, Date.now());
-      window._idMapDel(ft, ft.absent, playerName);
+      window._idMapSet(ft, ft.checkedIn, _who, _presTs);
+      window._idMapDel(ft, ft.absent, _who);
+      // v1.3.19: marcar PRESENTE (verde) tira o "Confirmado" (azul) — o organizador confirma
+      // que a pessoa está no local, então o aviso remoto some.
+      window._idMapDel(ft, ft.checkedInConfirmed, _who);
       const r = window._applyWoSubsToTournament(ft); // núcleo puro, sem save
       if (_subResult === undefined) _subResult = r;
     }
+    if (window._dtrace) {
+      window._dtrace('presMut', { run: _runN, quem: String(uid || playerName).slice(0, 10),
+        alvo: _wantPresent ? 'presente' : 'fora', antes: _mb, depois: Object.keys(ft.checkedIn || {}).length });
+    }
   });
-  if (_subResult && _subResult.ok && _subResult.subCount > 0) {
+  // contagem LOCAL logo após o clique (antes de qualquer snapshot) — âncora da comparação
+  try {
+    if (window._dtrace) {
+      var _tLoc = window._findTournamentById(tId);
+      window._dtrace('presLocal', { presentes: _tLoc ? Object.keys(_tLoc.checkedIn || {}).length : -1, runs: _runN });
+    }
+  } catch (_eTr) {}
+  // feedback "salvando presença" no card até o write confirmar (como formar dupla).
+  window._presenceBusyUntil(uid || playerName, _mutateDone);
+  var _woSub = !!(_subResult && _subResult.ok && _subResult.subCount > 0);
+  if (_woSub) {
     _subResult.subDetails.forEach(d => {
       if (typeof showNotification === 'function') {
         showNotification('✅ Substituição W.O.',
@@ -754,7 +1115,106 @@ window._applyCheckInToggle = function (tId, playerName) {
       }
     });
   }
-  _reRenderParticipants();
+  // v1.3.82: registra a INTENÇÃO otimista (present/absent/none) deste jogador pra ela SOBREVIVER
+  // a snapshots stale do Firestore (o listener troca o objeto inteiro) até o write confirmar —
+  // fim do "clica, aparece, apaga". Por-jogador, não reverte presença de outro organizador.
+  try {
+    if (typeof window._stampPresenceIntent === 'function') {
+      var _fp = window._idMapHas(t, t.checkedIn || {}, _who);
+      var _fa = window._idMapHas(t, t.absent || {}, _who);
+      window._stampPresenceIntent(tId, _who, _fp ? 'present' : (_fa ? 'absent' : 'none'));
+    }
+  } catch (_eStamp) {}
+  // v1.3.46: card ESTÁTICO — atualiza só o card tocado no lugar (sem re-render da lista) e
+  // suprime o eco do onSnapshot (o próprio write), que re-renderizava e fazia os cards "pular e
+  // voltar" (dono: "o certo é ficarem estáticos"). Se houve substituição de W.O. (muda a chave)
+  // ou o in-place não deu, cai no re-render completo (correto).
+  // v1.3.83/84: tenta atualizar SÓ o card tocado no lugar, em QUALQUER um dos 3 renderers de card
+  // de presença — inscrito (grade), painel pós-sorteio (per-person), e DUPLA (chamada pré-sorteio,
+  // o caso do SB Casais). Só cai no re-render completo se nenhum aplicar. Um caminho robusto.
+  var _inPlace = !_woSub && (
+    window._updateCardPresenceInPlace(tId, uid, playerName) ||
+    (typeof window._updatePanelCardInPlace === 'function' && window._updatePanelCardInPlace(tId, uid, playerName)) ||
+    (typeof window._updateDuplaCardInPlace === 'function' && window._updateDuplaCardInPlace(tId, uid, playerName))
+  );
+  if (_inPlace) {
+    // atualiza a BARRA de chamada (Presentes/Ausentes/%) — recomputa por UID a partir do `t`
+    // fresco, sem re-render da lista. Sem isto o card fica estático mas o contador não mexia.
+    try {
+      var _bar = document.getElementById('rollcall-bar');
+      if (_bar) {
+        var _mode = _bar.getAttribute('data-rc-mode') || 'rollcall';
+        if (_mode === 'detail' && typeof window._detailCheckInBarHtml === 'function') {
+          _bar.outerHTML = window._detailCheckInBarHtml(tId);           // barra do detalhe
+        } else if (typeof window._rollCallBarHtml === 'function') {
+          _bar.outerHTML = window._rollCallBarHtml(tId, _mode);         // barra do #participants
+        }
+      }
+    } catch (_eBar) {}
+    window._suppressSoftRefresh = true;
+    clearTimeout(window._presenceRefreshRelease);
+    window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
+    // v1.3.92: o card já foi atualizado in-place → adianta a assinatura da tela pro estado ATUAL, pra
+    // o ECO tardio do snapshot (depois do suppress) ver "igual" e NÃO re-renderizar a lista (o pulinho
+    // que sobrava). O gate de _softRefreshView compara com _pdetailSig; setando aqui, ele pula.
+    // v1.3.96: adianta TAMBÉM _tdetailSig — a chamada de DUPLAS (_duplaCard) vive na view de DETALHE
+    // (#tournaments/:id), cujo gate é _tournamentDetailSig. Sem isto, o toggle de dupla atualizava o
+    // card in-place mas o eco re-renderizava o detalhe inteiro (o pulo que o dono via "ao colocar
+    // presenças"). Adiantando ambas as assinaturas, o eco vê "igual" em qualquer uma das duas views.
+    try { if (window._participantsViewSig) window._pdetailSig = window._participantsViewSig(t); } catch (_eSig) {}
+    try { if (window._tournamentDetailSig) window._tdetailSig = window._tournamentDetailSig(t); } catch (_eSig2) {}
+  } else {
+    // in-place não se aplica (ex.: painel de check-in pós-sorteio) → re-render ESTÁVEL:
+    // preserva scroll + suprime o eco do onSnapshot (mesmo robustez do card estático).
+    _reRenderParticipantsStable();
+  }
+  // v1.3.95 (dono, SB Casais): marcar PRESENTE uma dupla/solo da LISTA DE ESPERA precisa disparar a
+  // INTEGRAÇÃO TARDIA (CF integrateLateEntries) — que preenche o "a definir" existente ou cria o
+  // confronto. Antes SÓ o RENDER do bracket (bracket.js:232) disparava; mas o toggle virou in-place
+  // (fix do pulinho) e SUPRIME o re-render → a dupla presente atualizava o card mas NUNCA entrava na
+  // chave. Aqui disparamos explicitamente, MAS só DEPOIS do commit (a CF lê o doc FRESCO do Firestore
+  // — disparar antes faria a CF ver a dupla ainda ausente → nada a integrar). A CF faz TODO o
+  // trabalho — cliente só dispara. Ver [[feedback_draw_is_cf_only]] / [[project_late_dupla_fills_awaiting_slot]].
+  //
+  // v1.3.96 (dono, "tela continua pulando ao colocar presenças"): o disparo agora é CIRÚRGICO —
+  // SÓ quando a pessoa que acabou de ser marcada PERTENCE À LISTA DE ESPERA. Antes disparava em
+  // TODO toggle (com espera+bracket), inclusive marcando presença de quem JÁ está na chave (a
+  // chamada de rota normal): cada presença virava uma chamada de CF + eco → contribuía pro pulo.
+  // A integração tardia só faz sentido pra quem está na espera; pra esses, o re-render que MOVE a
+  // dupla pra chave é legítimo (e raro: só na 2ª marca, quando o par fica completo).
+  try {
+    var _canMng = !window._canManagePresence || window._canManagePresence(t, window.AppStore && window.AppStore.currentUser);
+    var _hasBracket = (Array.isArray(t.matches) && t.matches.length) ||
+                      (Array.isArray(t.rounds) && t.rounds.length) ||
+                      (Array.isArray(t.groups) && t.groups.length);
+    // a pessoa marcada está na ESPERA? (por uid de membro OU por nome) — só então integra.
+    var _wl = (typeof window._getWaitlist === 'function') ? window._getWaitlist(t)
+      : (t.standbyParticipants || []).concat(t.waitlist || []);
+    var _toggledInWaitlist = Array.isArray(_wl) && _wl.some(function (e) {
+      var _us = (typeof window._participantUids === 'function') ? window._participantUids(e) : [];
+      if (uid && _us && _us.indexOf(uid) !== -1) return true;
+      var _en = window._pName ? window._pName(e, '') : (e && (e.displayName || e.name)) || '';
+      // nome do membro (par "A / B") OU nome inteiro da entrada
+      if (playerName && _en) {
+        if (_en === playerName) return true;
+        if (_en.indexOf(' / ') !== -1 && _en.split(' / ').some(function (x) { return x.trim() === playerName; })) return true;
+      }
+      return false;
+    });
+    if (_canMng && _hasBracket && _toggledInWaitlist && typeof window._triggerLateIntegration === 'function') {
+      var _fireLate = function () {
+        try {
+          var _ft = window._findTournamentById(tId) || t;
+          // DEBOUNCE (v1.3.149): marcar presença em rajada (chamada de 20+ pessoas) coalesce numa
+          // ÚNICA chamada de CF. Antes era 1 por toggle → enxurrada de docs + re-render = "presença
+          // pulando/regredindo, instabilidade total".
+          window._triggerLateIntegration(_ft, { force: true, debounce: true });
+        } catch (_eFire) {}
+      };
+      if (_mutateDone && typeof _mutateDone.then === 'function') _mutateDone.then(_fireLate, _fireLate);
+      else _fireLate();
+    }
+  } catch (_eLate) {}
 };
 
 window._markAbsent = function (tId, playerName) {
@@ -780,21 +1240,39 @@ window._markAbsent = function (tId, playerName) {
     }
   }
   // mutação (toggle ausência / revert de W.O.) ATÔMICA pelo portão AppStore.mutate
-  window.AppStore.mutate(tId, function (ft) { window._applyAbsenceToggle(ft, playerName); });
-  _reRenderParticipants();
+  // alvo decidido UMA vez, do estado LOCAL no clique (o mutator pode re-executar em retry)
+  var _wantAbs = !(window._idMapHas(t, t.absent || {}, playerName) || window._woHistGet(t, playerName));
+  window.AppStore.mutate(tId, function (ft) { window._applyAbsenceToggle(ft, playerName, _wantAbs); });
+  // v1.3.82: intenção otimista sobrevive a snapshot stale (aparece/apaga). W.O. usa o NOME.
+  try {
+    if (typeof window._stampPresenceIntent === 'function') {
+      var _ma = window._idMapHas(t, t.absent || {}, playerName);
+      var _mp = window._idMapHas(t, t.checkedIn || {}, playerName);
+      window._stampPresenceIntent(tId, playerName, _ma ? 'absent' : (_mp ? 'present' : 'none'));
+    }
+  } catch (_eStamp) {}
+  _reRenderParticipantsStable();
 };
 
 // Mutação PURA de ausência (marcar/reverter W.O.) — muta só o `t` passado, sem
 // save (transaction-safe). Extraída de _markAbsent na blindagem (v4.0.117). A
 // trava "não reverte se já jogou" aqui é SILENCIOSA (toast no pre-check acima).
-window._applyAbsenceToggle = function (t, playerName) {
+// v1.3.154: IDEMPOTENTE. `wantAbsent` = alvo ABSOLUTO decidido pelo CHAMADOR (estado no clique).
+// Sem ele, mantém o toggle antigo (compat). Este mutator roda dentro de AppStore.mutate →
+// commitTournamentTx, que RE-EXECUTA em retry de conflito; um toggle ali se auto-inverte
+// (mesma bomba da presença na v1.3.152). A guarda "já está no alvo → no-op" torna N execuções
+// equivalentes a 1, SEM alterar a lógica de reverter W.O. Ver [[project_concurrency_safe_saves]].
+window._applyAbsenceToggle = function (t, playerName, wantAbsent) {
   if (!t.absent) t.absent = {};
   if (!t.checkedIn) t.checkedIn = {};
   // v1.0.79-beta: revert completo. Detecta orphan (W.O.'d via woHistory) e,
   // se há replacedBy, desfaz substituição: restaura time original, remove
   // substituto da chave, devolve ele à waitlist se aplicável.
   const _woMeta = window._woHistGet(t, playerName); // uid-first, nome fallback
-  if (window._idMapHas(t, t.absent, playerName) || _woMeta) {
+  var _isAbsNow = !!(window._idMapHas(t, t.absent, playerName) || _woMeta);
+  var _want = (wantAbsent === undefined || wantAbsent === null) ? !_isAbsNow : !!wantAbsent;
+  if (_want === _isAbsNow) return;   // JÁ está no alvo → no-op (idempotência)
+  if (!_want) {
     // Trava: se o jogo do W.O. já foi jogado de verdade (placar lançado / placar
     // ao vivo iniciado), não dá pra reverter — reverter zeraria um resultado real.
     if (_woMeta && _woMeta.matchNum && typeof window._matchHasRealPlay === 'function') {
@@ -873,7 +1351,7 @@ window._applyAbsenceToggle = function (t, playerName) {
 window._resetCheckIn = function (tId) {
   const t = window._findTournamentById(tId);
   if (!t) return;
-  window.AppStore.mutate(tId, function (ft) { ft.checkedIn = {}; ft.absent = {}; });
+  window.AppStore.mutate(tId, function (ft) { ft.checkedIn = {}; ft.absent = {}; ft.checkedInConfirmed = {}; });
   _reRenderParticipants();
   if (typeof showNotification === 'function') showNotification(_t('participants.resetCheckin'), _t('participants.resetCheckinMsg'), 'info');
 };
@@ -918,7 +1396,14 @@ window._drawPresentOnly = function (tId) {
       if (!lateMode && t2.status !== 'closed' && t2.status !== 'finished') t2.status = 'closed';
     }
     if (typeof window._handleSortearClick === 'function') {
-      window._handleSortearClick(tId, false);
+      // skipGates=TRUE: a presença JÁ foi resolvida aqui (_drawPresentOnly + diálogo de
+      // ausentes). Sem isto, em torneio 'expand'/'standby' (inscrições seguem abertas) o
+      // status fica 'open' e _handleSortearClick reabre _showPresenceDrawChoice — um 2º
+      // diálogo de presença REDUNDANTE. O usuário cancelava esse 2º diálogo achando que
+      // era loop → o sorteio nunca chegava em _startDraw (sem tela equilibrado/livre nem
+      // pow2, sem chaves), mesmo com o toast "Chamada concluída" já exibido. Pular o gate
+      // leva direto pro _startDraw (painéis + sorteio).
+      window._handleSortearClick(tId, false, true);
     } else if (typeof window.showUnifiedResolutionPanel === 'function') {
       window.showUnifiedResolutionPanel(tId);
     }
@@ -957,7 +1442,7 @@ window._showAbsenteeResolutionDialog = function (tId, present, absentees, procee
       '<div style="padding:0 1.25rem 1.25rem;display:flex;flex-direction:column;gap:8px;">' +
         '<button id="absres-waitlist" class="btn hover-lift" style="background:rgba(251,191,36,0.18);color:#fbbf24;border:1px solid rgba(251,191,36,0.5);font-weight:800;padding:11px;border-radius:10px;">🕐 Enviar à Lista de Espera</button>' +
         '<button id="absres-dq" class="btn hover-lift" style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.5);font-weight:800;padding:11px;border-radius:10px;">🚫 Desclassificar</button>' +
-        '<button id="absres-cancel" class="btn" style="background:rgba(255,255,255,0.08);color:var(--text-muted);border:1px solid var(--border-color);padding:10px;border-radius:10px;">Cancelar</button>' +
+        '<button id="absres-cancel" class="btn" style="background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;border:1px solid rgba(239,68,68,0.45);padding:10px;border-radius:10px;">Cancelar</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(dialog);
@@ -991,26 +1476,18 @@ window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
       absentees.length + (mode === 'waitlist' ? ' à lista de espera' : ' desclassificado(s)'));
   }
 
-  // BLINDAGEM (project_concurrency_safe_saves): re-aplica a chamada no doc FRESCO via
-  // portão (idempotente), em vez de syncImmediate (doc inteiro → clobbera check-in
-  // concorrente). Re-particiona pela presença fresca — mais correto sob concorrência.
-  const savePromise = (window.AppStore && typeof window.AppStore.mutate === 'function')
-    ? window.AppStore.mutate(tId, function (ft) { _applyRoll(ft); })
-    : ((window.AppStore && typeof window.AppStore.syncImmediate === 'function')
-        ? window.AppStore.syncImmediate(tId)
-        : (window.FirestoreDB ? window.FirestoreDB.saveTournament(t) : Promise.resolve()));
-
-  Promise.resolve(savePromise).then(function () {
-    if (typeof showNotification === 'function') {
-      showNotification('✅ Chamada concluída',
-        present.length + ' no sorteio · ' + absentees.length +
-        (mode === 'waitlist' ? ' na lista de espera' : ' desclassificado(s)'), 'success');
-    }
-    if (typeof proceed === 'function') proceed();
-  }).catch(function (e) {
-    if (window._warn) window._warn('[rollcall] save failed:', e);
-    if (typeof proceed === 'function') proceed();
-  });
+  // v1.3.x (migração→CF): NÃO persiste mais a chamada aqui. A decisão `absentees` viaja no
+  // pacote e a CF RE-aplica _applyPresenceRoll sobre o roster ORIGINAL restaurado no despacho
+  // (usando o checkedIn persistido) → autoridade no servidor, independente da versão do app.
+  // O _applyRoll(t) acima é só preview/feedback (arrays pra UI/log). Elimina o mutate do sorteio.
+  window._setDrawDecision(tId, { absentees: mode });
+  if (window._dtrace) window._dtrace('roll:decision', { mode: mode, present: present.length, absent: absentees.length });
+  if (typeof showNotification === 'function') {
+    showNotification('✅ Chamada concluída',
+      present.length + ' no sorteio · ' + absentees.length +
+      (mode === 'waitlist' ? ' na lista de espera' : ' desclassificado(s)'), 'success');
+  }
+  if (typeof proceed === 'function') proceed();
 };
 
 // ── Inline name editing for organizers ──
@@ -1166,6 +1643,136 @@ window._setCheckInFilter = function (tId, filter) {
   _reRenderParticipants();
 };
 
+// Factory CANÔNICO dos callbacks de presença da CHAMADA (roll-call) — v1.3.16. Extraído de
+// renderParticipants pra ser reusado TAMBÉM no DETALHE do torneio (tournaments.js) sem duplicar
+// a lógica. Retorna {cardPresence, memberPresence} pra passar como ctx ao
+// _buildDoublesInscritosSection (seção canônica de duplas). Assim a CHAMADA de duplas aparece
+// igual no detalhe e no #participants. `active` = chamada pré-sorteio (org marca presença);
+// `postDraw` = pós-sorteio antes de iniciar (mostra estado, W.O. individual). uid only: os toggles
+// passam o uid da pessoa; a presença é lida por _idMapHas (uid-first). Ver
+// [[project_two_participant_card_renderers]] e [[project_id_maps_uid_keyed]].
+window._rollCallPresenceCtx = function (t, opts) {
+  opts = opts || {};
+  // v1.3.47: guarda os OPTS do último ctx de chamada → o update in-place (após o snapshot
+  // TROCAR o objeto de torneio em store.tournaments) reconstrói a presença contra o `t` ATUAL,
+  // não contra o `t` órfão capturado no build. Sem isto, só a 1ª presença "pegava".
+  try { window._lastRcOpts = opts; } catch (_eO) {}
+  var isOrg = !!opts.isOrg;
+  var active = !!opts.active;       // canRollCall (chamada pré-sorteio)
+  var postDraw = !!opts.postDraw;   // postDrawPresence (pós-sorteio, antes de iniciar)
+  var woScope = ((opts.woScope || t.woScope || 'individual') === 'individual') ? 'individual' : 'team';
+  var ci = t.checkedIn || {}, ab = t.absent || {}, conf = t.checkedInConfirmed || {};
+  var _pres = function (who) { return !!window._idMapHas(t, ci, who) && !window._idMapHas(t, ab, who); };
+  var _abs = function (who) { return !!window._idMapHas(t, ab, who); };
+  // v1.3.19: AZUL = confirmado remoto (checkedInConfirmed) e NÃO presente (verde vence).
+  var _conf = function (who) { return !!window._idMapHas(t, conf, who) && !window._idMapHas(t, ci, who); };
+  // CORES CANÔNICAS (store.js `_PRESENCE_TONES`): PRESENTE=verde · AUSENTE=azul · Confirmado=âmbar;
+  // DUPLA=tom escuro ('pair') · INDIVIDUAL=tom claro ('solo'). NUNCA hardcodar hex aqui — o dono
+  // canonizou pra ficar consistente em qualquer torneio. Ver [[project_inscrito_card_canonical]].
+  var _sty = function (state, scope) { return window._presenceCardStyle ? window._presenceCardStyle(state, scope) : ''; };
+  var _txt = function (state, scope) { return window._presenceTextColor ? window._presenceTextColor(state, scope) : '#4ade80'; };
+  var _tgl = function (state, scope) { return window._presenceToggleColor ? window._presenceToggleColor(state, scope) : '#10b981'; };
+  var _cf = function () { return window._checkInFilter || 'all'; };
+  return {
+    cardPresence: function (p) {
+      if (!(active || postDraw)) return { skip: false, styleExtra: '', rowHtml: '' };
+      var currentFilter = _cf();
+      var _pairKeys = null;
+      if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) _pairKeys = [(p.p1Uid || String(p.p1Name || '').trim()), (p.p2Uid || String(p.p2Name || '').trim())];
+      else { var _nmC = (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || ''); if (_nmC.indexOf('/') !== -1) { var _pp = _nmC.split('/').map(function (s) { return s.trim(); }).filter(Boolean); if (_pp.length >= 2) _pairKeys = _pp; } }
+      if (_pairKeys) {
+        var _q1 = _pres(_pairKeys[0]), _z1 = !_q1 && _abs(_pairKeys[0]);
+        var _q2 = _pres(_pairKeys[1]), _z2 = !_q2 && _abs(_pairKeys[1]);
+        var _both = _q1 && _q2, _anyAbs = _z1 || _z2;
+        if (currentFilter === 'present' && !_both) return { skip: true };
+        if (currentFilter === 'absent' && !_anyAbs) return { skip: true };
+        if (currentFilter === 'pending' && (_both || _anyAbs)) return { skip: true };
+        var _teamRow = '';
+        if (active && isOrg && woScope === 'team') {
+          var _tEntry = window._pName(p);
+          var _tAbs = _anyAbs || _abs(_tEntry);
+          var _tE = String(_tEntry).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "');", !_tAbs, { label: _tAbs ? 'Reverter' : 'W.O. do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
+        }
+        // DUPLA → tom ESCURO ('pair'): VERDE só quando os DOIS estão presentes; qualquer outro
+        // caso (ausente OU ainda não marcado) = AZUL. Antes o "pendente" não pintava nada e o card
+        // caía no fundo VERDE base — uma dupla rotulada "Ausente" aparecia verde, igual a uma
+        // presente (o print do dono: "as cores dos presentes e ausentes está muito parecido").
+        // Rótulo e cor agora SEMPRE concordam: o card já escreve "Ausente" pra quem não marcou.
+        // v1.3.147 (dono): TRÊS estados na dupla — os DOIS presentes = VERDE; UM presente e outro
+        // não = ÂMBAR ("falta um"); NENHUM presente (ausente ou pendente) = AZUL. Antes o parcial
+        // caía no MESMO azul do "nenhum": no print, Eduardo(ausente)/Ciça(PRESENTE) ficava idêntico
+        // a Kelly(ausente)/Rodrigo(ausente).
+        var _anyPres = _q1 || _q2;
+        return {
+          skip: false,
+          styleExtra: _both ? _sty('present', 'pair') : (_anyPres ? _sty('partial', 'pair') : _sty('absent', 'pair')),
+          rowHtml: _teamRow
+        };
+      }
+      // SOLO
+      var entry = window._pName(p);
+      var mc = _pres(entry);
+      var blu = !mc && _conf(entry);
+      var abs = !mc && !blu && _abs(entry);
+      var pend = !mc && !blu && !abs;
+      if (currentFilter === 'present' && !mc) return { skip: true };
+      if (currentFilter === 'confirmed' && !blu) return { skip: true };
+      if (currentFilter === 'absent' && !(abs || pend)) return { skip: true };
+      if (currentFilter === 'pending' && !pend) return { skip: true };
+      // INDIVIDUAL → tom CLARO ('solo'). Mesma regra da dupla: VERDE só presente; ausente E
+      // pendente = AZUL (o card já rotula os dois como "Ausente"), Confirmado = âmbar.
+      var styleExtra = mc ? _sty('present', 'solo') : (blu ? _sty('confirmed', 'solo') : _sty('absent', 'solo'));
+      var rowHtml = '';
+      var _puid = String((p && p.uid) || '').replace(/'/g, "\\'");
+      if (active) {
+        var _rcEntry = entry.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        var label = mc ? 'Presente' : (blu ? 'Confirmado' : 'Ausente');
+        var color = mc ? _txt('present', 'solo') : (blu ? _txt('confirmed', 'solo') : _txt('absent', 'solo'));
+        var _onc = mc ? _tgl('present', 'solo') : (blu ? _tgl('confirmed', 'solo') : _tgl('absent', 'solo'));
+        var wo = (!mc && !blu && isOrg)
+          ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
+          : '';
+        rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>' +
+          '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _onc + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _onc + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\', \'' + _puid + '\');"><span class="toggle-slider"></span></label>' + wo;
+      } else {
+        var l2 = mc ? 'Presente' : (blu ? 'Confirmado' : 'Ausente');
+        var c2 = mc ? _txt('present', 'solo') : (blu ? _txt('confirmed', 'solo') : _txt('absent', 'solo'));
+        var ic = mc ? '✅' : (blu ? '🟡' : '🔵');
+        rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + c2 + ';white-space:nowrap;">' + ic + ' ' + l2 + '</span>';
+      }
+      return { skip: false, styleExtra: styleExtra, rowHtml: rowHtml };
+    },
+    memberPresence: function (member, right) {
+      if (!(active || postDraw)) return { html: '' };
+      var keyName = (member && member.guest) ? String(member.guest).trim()
+        : (window._displayName ? window._displayName(member && member.uid, member && member.guest) : '');
+      if (!keyName) return { html: '' };
+      var _mWho = (member && member.uid) ? { uid: member.uid, displayName: keyName } : keyName;
+      var _mUidEsc = String((member && member.uid) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var mc = _pres(_mWho);
+      var blu = !mc && _conf(_mWho);
+      var abs = !mc && !blu && _abs(_mWho);
+      var label = mc ? 'Presente' : (blu ? 'Confirmado' : 'Ausente');
+      // membro vive DENTRO do card de dupla (fundo escuro) → tom 'pair' (texto mais claro, contraste)
+      var color = mc ? _txt('present', 'pair') : (blu ? _txt('confirmed', 'pair') : _txt('absent', 'pair'));
+      if (!active) {
+        var ic = mc ? '✅' : (blu ? '🟡' : '🔵');
+        return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + ic + ' ' + label + '</span></div>' };
+      }
+      var _e = keyName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var _oncM = mc ? _tgl('present', 'pair') : (blu ? _tgl('confirmed', 'pair') : _tgl('absent', 'pair'));
+      var wo = (!mc && !blu && isOrg && woScope === 'individual')
+        ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
+        : '';
+      var word = '<span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>';
+      var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _oncM + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _oncM + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\', \'' + _mUidEsc + '\');"><span class="toggle-slider"></span></label>';
+      var inner = right ? (wo + toggle + word) : (word + toggle + wo);
+      return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;' + (right ? 'justify-content:flex-end;' : '') + '" onclick="event.stopPropagation();">' + inner + '</div>' };
+    }
+  };
+};
+
 // v2.6.108: tela de Inscritos usa a BARRA CANÔNICA (window._inscritosFilterBar) —
 // mesma da Análise: busca + Ordenar (Inscrição ↑↓ / Nome A→Z/Z→A) + Gênero + Habilidade.
 // Tudo DOM (sem re-render → não perde foco): busca/gênero/habilidade escondem cards;
@@ -1220,7 +1827,17 @@ window._partApplyFilter = function () {
     // v2.7.53: LISTA DE ESPERA NÃO é mais fixada no rodapé — ela entra na ordem
     // normal (alfabética/cronológica) junto com os demais inscritos, só em âmbar.
     if (sort === 'name-asc' || sort === 'name-desc') {
-      var r = (a.getAttribute('data-part-name') || '').localeCompare(b.getAttribute('data-part-name') || '', 'pt-BR', { sensitivity: 'base' });
+      // v1.3.51 (CANON do dono): a chave de ordem PUXA O NOME PELO UID. Só cai pro nome
+      // gravado quando NÃO há uid (jogador fictício/guest). Nunca ordena por email — o email
+      // no lugar do nome era sinal de que a resolução por uid não estava sendo aplicada no
+      // sort. Resolvido AQUI (no comparador) → robusto a timing; quando o perfil carrega,
+      // _hydrateUidNames re-dispara _partApplyFilter e reordena. Ver [[project_uid_identity_canon_locked]].
+      var _sn = function (el) {
+        var u = el.getAttribute('data-part-uid') || '';
+        var byUid = (u && typeof window._nameForUid === 'function') ? window._nameForUid(u) : '';
+        return (byUid || el.getAttribute('data-part-name') || '').toLowerCase();
+      };
+      var r = _sn(a).localeCompare(_sn(b), 'pt-BR', { sensitivity: 'base' });
       return sort === 'name-desc' ? -r : r;
     }
     // v4.4.65: ativo/inativo virou FILTRO (acima), não sort — sort era imperceptível.
@@ -1434,6 +2051,197 @@ window._declareAbsent = function (tId, playerName) {
   }, null, { type: 'warning', confirmText: confirmBtn, cancelText: _t('btn.waitMore') });
 };
 
+// ─── CARD DE INSCRITO INDIVIDUAL — FONTE ÚNICA (v1.3.35) ─────────────────────
+// O CANÔNICO extraído do renderParticipants pra virar chamável pelas DUAS telas
+// (#participants E detalhe do torneio), matando a divergência que fazia o SB testar
+// um caminho e a produção outro (dono: "não tem que ter outra opção; a pirata morre").
+// Presença (Presente/Ausente·toggle·W.O. + fundo verde/vermelho) vem do MESMO factory
+// _rollCallPresenceCtx via ctx.cardPresence — caminho único até na presença.
+// ctx = { isOrg, drawDone, canRollCall, postDrawPresence, enrollOrderMap, nameToParticipant,
+//         waitSet, cardPresence }. Ver [[project_two_participant_card_renderers]],
+// [[project_inscrito_card_canonical]], [[feedback_unify_dual_entry_points]].
+window._inscritoIndividualCard = function (t, p, idx, ctx) {
+  ctx = ctx || {};
+  // v1.3.46: guarda o ctx do último render dos cards de inscrito → o toggle de presença
+  // reconstrói SÓ o card tocado no lugar (window._updateCardPresenceInPlace), sem re-render
+  // da lista (que fazia os cards "pularem e voltarem" — dono). Todos os cards de UM render
+  // compartilham o MESMO ctx, então guardar em toda chamada é idempotente.
+  try { window._lastInscritoCardCtx = { tId: (t && t.id), ctx: ctx }; } catch (_eStash) {}
+  var isOrg = !!ctx.isOrg, drawDone = !!ctx.drawDone;
+  var canRollCall = !!ctx.canRollCall, postDrawPresence = !!ctx.postDrawPresence;
+  var _nameToParticipant = ctx.nameToParticipant || {};
+  var _enrollOrderMap = ctx.enrollOrderMap || {};
+  var _gridWaitSet = ctx.waitSet || {};
+  var _T = window._t || function (k) { return k; };
+  // v1.3.67: resolve o nome pelo UID ANTES do fallback "Participante N"/email. Entrada só-uid
+  // (nome stripado no save — cânone: identidade é uid) caía direto no "Participante N" e o card
+  // (e o data-lj-name do drag de formar dupla) mostrava "Participante 2" no lugar do nome real.
+  // Ver [[project_uid_identity_canon_locked]].
+  var _pUidN = (p && typeof p === 'object') ? (p.uid || '') : '';
+  var pName = (typeof p === 'string') ? p
+    : (p.displayName || p.name
+       || (_pUidN && typeof window._displayNameForUid === 'function' ? window._displayNameForUid(_pUidN, '') : '')
+       || p.email || _T('participants.participant', { n: idx + 1 }));
+  var isTeam = !!window._entryTeamMembers(p);
+  var _isOrgP = (typeof window._isOrgPlayer === 'function') && window._isOrgPlayer(t, pName, p);
+  var _orgStar = _isOrgP ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.95rem;line-height:1;">⭐</span>' : '';
+
+  // Presença via factory compartilhado (rowHtml = Presente/Ausente·toggle·W.O.; styleExtra
+  // = fundo verde/vermelho; skip = filtro presente/ausente/aguardando). Caminho ÚNICO.
+  var _pr = (typeof ctx.cardPresence === 'function') ? ctx.cardPresence(p) : null;
+  if (_pr && _pr.skip) return '';
+  var _presenceGroup = _pr ? (_pr.rowHtml || '') : '';
+  var _rcCardExtra = _pr ? (_pr.styleExtra || '') : '';
+
+  var _isStandbyEntry = !!(p && typeof p === 'object' && p._isStandbyEntry) || !!_gridWaitSet[(pName || '').toLowerCase().trim()];
+  var isVip = window._entryHasVip(t, p || pName);
+  var cardStyle = '';
+  if (isVip) cardStyle = 'background: linear-gradient(135deg, rgba(161,98,7,0.5) 0%, rgba(234,179,8,0.35) 100%); border: 2px solid rgba(251,191,36,0.7); box-shadow: 0 0 12px rgba(251,191,36,0.15);';
+  else if (_isStandbyEntry) cardStyle = 'background: linear-gradient(135deg, rgba(146,64,14,0.55) 0%, rgba(245,158,11,0.42) 100%); border: 2px solid rgba(251,191,36,0.55);';
+  else if (isTeam) cardStyle = 'background: linear-gradient(135deg, rgba(15, 118, 110, 0.6) 0%, rgba(20, 184, 166, 0.6) 100%); border: 1px solid rgba(20, 184, 166, 0.5);';
+  else cardStyle = 'background: linear-gradient(135deg, rgba(67, 56, 202, 0.6) 0%, rgba(99, 102, 241, 0.6) 100%); border: 1px solid rgba(99, 102, 241, 0.5);';
+  // v1.3.36: modo PAREAMENTO TARDIO (lista de espera pós-sorteio, _renderLateJoinPairing) —
+  // âmbar de propósito (janela de formar dupla na R1). Card canônico, só muda a pele + o arraste.
+  if (ctx.lateJoin) cardStyle = 'background:linear-gradient(135deg,rgba(180,120,20,0.32),rgba(245,158,11,0.26));border:1px solid rgba(245,158,11,0.5);' + (ctx.lateJoin.canPair ? 'cursor:grab;-webkit-user-select:none;user-select:none;' : '');
+
+  var _FONT = window._INSCRITO_NAME_FONT_PX || 17;
+  var pNameHtml = '';
+  if (isTeam) {
+    pNameHtml = pName.split('/').map(function (n) {
+      var _nm = n.trim();
+      var _nmSafe = _nm.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var _mSeed = encodeURIComponent(_nm);
+      var _mCached = (window._playerPhotoCache && window._playerPhotoCache[_nm.toLowerCase()] && window._playerPhotoCache[_nm.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_nm.toLowerCase()] : '';
+      var _mInitials = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _mSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+      var _mPhoto = _mCached || _mInitials;
+      var _mErr = 'onerror="this.onerror=null;this.src=\'' + _mInitials + '\'"';
+      var _nmH = window._safeHtml(_nm);
+      var _mPart = _nameToParticipant && _nameToParticipant[_nm];
+      var _mUid = '';
+      if (_mPart && typeof _mPart === 'object') {
+        if (_mPart.p1Name && _nm === String(_mPart.p1Name).trim()) _mUid = _mPart.p1Uid || '';
+        else if (_mPart.p2Name && _nm === String(_mPart.p2Name).trim()) _mUid = _mPart.p2Uid || '';
+        else _mUid = _mPart.uid || '';
+      }
+      var _mUidJs = _mUid ? (',{uid:\'' + _mUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
+      var _mDisp = _mUid ? window._safeHtml(window._displayName(_mUid, _nm)) : _nmH;
+      var _mUidAttr = _mUid ? ' data-uid-name="' + window._safeHtml(_mUid) + '"' : '';
+      var _editAttr = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _nmSafe + '\'' + _mUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _nmSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _nmH + '"';
+      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;"><img src="' + _mPhoto + '" ' + _mErr + ' data-player-name="' + _nmH + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span' + _mUidAttr + ' ' + _editAttr + '>' + _mDisp + '</span></div>';
+    }).join('') + (_orgStar ? '<div style="margin-top:2px;">' + _orgStar + '</div>' : '');
+  } else {
+    var _pSafe = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var _pSeedN = encodeURIComponent(pName);
+    var _pCachedN = (window._playerPhotoCache && window._playerPhotoCache[pName.toLowerCase()] && window._playerPhotoCache[pName.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[pName.toLowerCase()] : '';
+    var _pInitialsN = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _pSeedN + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+    var _pPhotoN = _pCachedN || _pInitialsN;
+    var _pErrN = 'onerror="this.onerror=null;this.src=\'' + _pInitialsN + '\'"';
+    var _pNameH = window._safeHtml(pName);
+    // v1.3.38: uid vem DIRETO de p (fonte da verdade). Antes buscava _nameToParticipant[pName],
+    // mas com displayName/name stripados (contas com uid) pName cai pro EMAIL e o mapa é chaveado
+    // pelo NOME resolvido → lookup falha → _pUid vazio → nome preso no email/"Participante N" e SEM
+    // data-uid-name (não re-hidrata). p.uid resolve sempre; mapa só fallback p/ p string.
+    var _pPart = _nameToParticipant && _nameToParticipant[pName];
+    var _pUid = (typeof p === 'object' && p && p.uid) ? p.uid : ((_pPart && typeof _pPart === 'object') ? (_pPart.uid || '') : '');
+    var _pUidJs = _pUid ? (',{uid:\'' + _pUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
+    var _pDisp = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : _pNameH;
+    var _pUidAttr = _pUid ? ' data-uid-name="' + window._safeHtml(_pUid) + '"' : '';
+    var _editAttrN = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _pSafe + '\'' + _pUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _pSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _pNameH + '"';
+    pNameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="' + _pPhotoN + '" ' + _pErrN + ' data-player-name="' + _pNameH + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span' + _pUidAttr + ' ' + _editAttrN + '>' + _pDisp + '</span>' + _orgStar + '</div>';
+  }
+
+  var safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var teamOrigins = t.teamOrigins || {};
+  var teamLabel = _T('participants.teamIndividual');
+  if (isTeam) {
+    var origin = teamOrigins[pName];
+    if (origin === 'inscrita') teamLabel = _T('tourn.teamEnrolled');
+    else if (origin === 'sorteada') teamLabel = _T('tourn.teamDrawn');
+    else teamLabel = _T('tourn.teamFormed');
+  }
+  var _standbyBadge = _isStandbyEntry ? '<span style="background:linear-gradient(135deg,#92400e,#f59e0b);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;">🕐 Lista de Espera</span>' : '';
+  var typeText = _isStandbyEntry ? _standbyBadge : teamLabel;
+  if (ctx.lateJoin && !isTeam) typeText = '<span style="font-size:0.62rem;color:rgba(255,255,255,0.5);">' + (ctx.lateJoin.canPair ? 'Segure e arraste sobre outro card para formar dupla' : 'Sem dupla') + '</span>';
+
+  var _nmSkillCats = t.skillCategories || [];
+  var _nmSkillHtml = '';
+  if (_nmSkillCats.length > 0) {
+    var _nmCatStr = (typeof p === 'object' && p !== null) ? (p.category || '') : '';
+    var _nmCurrentSkill = '';
+    for (var _si = 0; _si < _nmSkillCats.length; _si++) { var _sk = _nmSkillCats[_si]; if (_nmCatStr === _sk || _nmCatStr.endsWith(' ' + _sk)) { _nmCurrentSkill = _sk; break; } }
+    if (isOrg && !_isStandbyEntry) {
+      var _nmOpts = _nmSkillCats.map(function (sk) { return '<option value="' + sk + '" ' + (_nmCurrentSkill === sk ? 'selected' : '') + '>' + sk + '</option>'; }).join('');
+      _nmSkillHtml = '<select onchange="event.stopPropagation();window._setParticipantSkillCategory(\'' + t.id + '\',\'' + safeP + '\',this.value)" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:4px;"><option value="" ' + (!_nmCurrentSkill ? 'selected' : '') + '>— nível</option>' + _nmOpts + '</select>';
+    }
+  }
+
+  var dragProps = '', _vipBtn = '', _delBtn = '', _splitBtn = '', undoMergeBtn = '';
+  if (isOrg && p && typeof p === 'object' && p._mergedFrom) {
+    undoMergeBtn = '<button class="btn btn-micro" title="Desfazer mesclagem" style="background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px dashed rgba(251,191,36,0.5);" onmouseover="this.style.transform=\'scale(1.1)\'" onmouseout="this.style.transform=\'none\'" onclick="event.stopPropagation(); window._undoMergeParticipant(\'' + t.id + '\', \'' + safeP + '\');">↩️</button>';
+  }
+  if (isOrg && !_isStandbyEntry) {
+    dragProps = 'draggable="true" ondragstart="window.handleDragStart(event, ' + idx + ', \'' + t.id + '\')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ' + idx + ')"';
+    if (!drawDone) {
+      _vipBtn = '<button class="btn btn-micro" title="' + (isVip ? _T('tourn.removeVip') : _T('tourn.markVip')) + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ' + (isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)') + '; color: ' + (isVip ? '#fbbf24' : '#a3842a') + '; border: 1px ' + (isVip ? 'solid' : 'dashed') + ' ' + (isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)') + ';" onclick="event.stopPropagation(); window._toggleVip(\'' + t.id + '\', \'' + safeP + '\');">💎 VIP</button>';
+      _delBtn = '<button type="button" class="cancel-x-btn" title="' + _T('btn.remove') + '" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✕</button>';
+      if (window._entryTeamMembers(p)) {
+        _splitBtn = '<button class="btn btn-micro" title="' + _T('participants.splitTeam') + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✂️</button>';
+      }
+    }
+  }
+  // v1.3.36: pareamento tardio → arraste pointer-drag (data-lj-*), NÃO HTML5 DnD (trava no
+  // touch). VIP/✂️/🗑️ já saem sozinhos (drawDone=true). Mantém o handler exato do painel.
+  if (ctx.lateJoin) {
+    dragProps = ctx.lateJoin.canPair
+      ? ('data-lj-card="1" data-lj-key="' + window._safeHtml(String((p && typeof p === 'object' && p.uid) || pName)) + '" data-lj-tid="' + window._safeHtml(t.id) + '" data-lj-name="' + window._safeHtml(pName) + '"')
+      : '';
+  }
+
+  var _gPart = (typeof p === 'object' && p !== null) ? p : (_nameToParticipant && _nameToParticipant[pName]);
+  var _fGender = (typeof window._canonGender === 'function') ? window._canonGender(window._pGender(_gPart)) : 'none'; // v1.3.39: perfil-first
+  var _fSkill = 'none';
+  var _fSkillCats = t.skillCategories || [];
+  var _fCatStr = (_gPart && typeof _gPart === 'object') ? (_gPart.category || '') : '';
+  for (var _fi = 0; _fi < _fSkillCats.length; _fi++) { if (_fCatStr === _fSkillCats[_fi] || _fCatStr.endsWith(' ' + _fSkillCats[_fi])) { _fSkill = _fSkillCats[_fi]; break; } }
+  var _fEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _gPart || pName) : '';
+  var _fOrder = (_fEnrollNum !== '' && _fEnrollNum != null) ? (_fEnrollNum - 1) : idx;
+  // v1.3.45/48: _dragName = nome de EXIBIÇÃO resolvido POR UID (perfil vivo). Usado em:
+  // (a) data-participant-name — o CSS do modo compacto de arraste
+  // (body.sp-drag-compact .participant-card::before) le ESTE atributo pra mostrar só o nome ao
+  // arrastar (a extração v1.3.35 tinha dropado → nome sumia); (b) data-part-name — a CHAVE de
+  // ORDENAÇÃO/BUSCA. Como o inscrito grava SÓ uid (nome stripado, canon), `pName` cai pro EMAIL
+  // → ordenar/buscar por pName ordenava por email (Angelica Reck sob "m" de mangelica@...).
+  // Ambos são RE-HIDRATADOS por uid em _hydrateUidNames (+ re-sort) quando o perfil chega.
+  var _dragName = isTeam ? pName : (function () {
+    var _u = (typeof p === 'object' && p && p.uid) ? p.uid : '';
+    return (_u && typeof window._displayName === 'function') ? window._displayName(_u, pName) : pName;
+  })();
+  var _fNameAttr = (_dragName || pName || '').toLowerCase().replace(/"/g, '&quot;');
+  var _fInactive = (t.allowSelfDeactivation !== false && _gPart && _gPart.ligaActive === false) ? '1' : '0';
+  var _metaSlots = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, pName, isTeam, t, isOrg, { inline: true }) : '';
+  var _wmNum = (function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_n, 'right') : ''; })();
+
+  return '' +
+    '<div class="participant-card" data-part-card="1" data-part-org="' + (_isOrgP ? '1' : '0') + '" data-part-vip="' + (isVip ? '1' : '0') + '" data-part-standby="' + (_isStandbyEntry ? '1' : '0') + '" data-part-name="' + _fNameAttr + '" data-participant-name="' + window._safeHtml(_dragName) + '" data-card-key="' + window._safeHtml(String((typeof p === 'object' && p && p.uid) ? p.uid : pName)) + '" data-card-idx="' + idx + '" data-part-uid="' + window._safeHtml(String((typeof p === 'object' && p && p.uid && !isTeam) ? p.uid : '')) + '" data-part-inactive="' + _fInactive + '" data-part-gender="' + _fGender + '" data-part-skill="' + String(_fSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _fOrder + '" ' + dragProps + ' style="' + cardStyle + ' border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (isOrg ? 'cursor:grab;' : '') + _rcCardExtra + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
+      _wmNum +
+      '<div style="position:relative;z-index:1;">' +
+        pNameHtml +
+        '<div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;' + (ctx.lateJoin ? 'justify-content:space-between;' : '') + '">' +
+          '<div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;' + (ctx.lateJoin ? 'flex:1 1 auto;' : '') + '" onclick="event.stopPropagation();">' + _vipBtn + _metaSlots + _nmSkillHtml + '</div>' +
+          // v1.3.55: no pareamento tardio ("Sem dupla") a AÇÃO (Presente/Ausente·toggle·W.O.·✕)
+          // vem na MESMA linha das categorias (economiza 1 linha) — o hint "arraste…" fica sozinho
+          // abaixo. Fora do lateJoin, a ação segue no _inscritoActionRow (tipo+ação mesma linha).
+          (ctx.lateJoin
+            ? ('<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;" onclick="event.stopPropagation();">' + _presenceGroup + _delBtn + '</div>')
+            : ((_splitBtn || undoMergeBtn) ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">' + _splitBtn + undoMergeBtn + '</div>' : '')) +
+        '</div>' +
+        (ctx.lateJoin
+          ? (typeText ? '<div style="margin-top:5px;">' + typeText + '</div>' : '')
+          : window._inscritoActionRow(typeText, _presenceGroup, _delBtn)) +
+      '</div>' +
+    '</div>';
+};
+
 function renderParticipants(container, tournamentId) {
   if (window._autoKeepScroll) window._autoKeepScroll(); // v2.8.82: re-render por ação não pula scroll
   const tId = tournamentId;
@@ -1491,6 +2299,15 @@ function renderParticipants(container, tournamentId) {
     if (n && n.indexOf('/') !== -1) return n.split('/').map(s => s.trim()).filter(Boolean);
     return n ? [n] : [];
   };
+  // v1.3.48: expande a PESSOA com o UID (identidade). A presença é gravada por uid; contar/
+  // casar por NOME (que cai pro email quando o inscrito grava só uid) NÃO bate → o count ficava
+  // errado ("Presentes (4)" com 16 gravados). `who` = {uid, name} → _idMapHas resolve por uid;
+  // guest sem uid cai no nome. Ver [[project_id_maps_uid_keyed]] / [[project_uid_identity_canon_locked]].
+  // Delega à FONTE ÚNICA global (evita drift entre a contagem do render e a barra in-place).
+  const _expandMemberWho = window._expandParticipantWho;
+  // `who` pronto pro _idMap*/_entryPresent: objeto {uid,displayName} quando há uid; senão o nome.
+  const _whoOf = (w) => (w && w.uid) ? { uid: w.uid, displayName: w.name } : (w ? w.name : '');
+  const _whoKey = (w) => ((w && (w.uid || w.name)) || '').toLowerCase();
   let individualCount = 0;
   parts.forEach(p => { individualCount += _expandMemberNames(p).length; });
 
@@ -1517,10 +2334,16 @@ function renderParticipants(container, tournamentId) {
   }
   // v2.4.70: hidrata os badges de meta (gênero/nível/idade) pra TODOS os inscritos,
   // não só o organizador — as categorias são informação pública da chave.
-  if (typeof window._loadParticipantProfilesByName === 'function') {
-    window._loadParticipantProfilesByName(parts).then(function () {
-      if (typeof window._patchProfileMetaSlots === 'function') window._patchProfileMetaSlots(container, t);
-    }).catch(function () {});
+  // v1.3.50: garante o perfil POR UID (gênero/skill/idade em _userProfileCache) ANTES do patch —
+  // o loader por-nome pulava as entradas só-uid (nome vazio) → gênero/categoria sumiam. Espera
+  // os dois (nome + uid) e então aplica os badges (o patch resolve por uid primeiro).
+  if (typeof window._patchProfileMetaSlots === 'function') {
+    var _mUids = [];
+    parts.forEach(function (p) { if (typeof window._participantUids === 'function') (window._participantUids(p) || []).forEach(function (u) { if (u) _mUids.push(u); }); });
+    var _patch = function () { try { window._patchProfileMetaSlots(container, t); } catch (e) {} };
+    var _pName = (typeof window._loadParticipantProfilesByName === 'function') ? window._loadParticipantProfilesByName(parts) : Promise.resolve();
+    var _pUid = (_mUids.length && typeof window._preloadUserProfiles === 'function') ? window._preloadUserProfiles(_mUids) : Promise.resolve();
+    Promise.all([Promise.resolve(_pName), Promise.resolve(_pUid)]).then(_patch).catch(_patch);
   }
 
   // ── Check-in logic ──
@@ -1551,21 +2374,22 @@ function renderParticipants(container, tournamentId) {
   // de inscritos. Detecção é por ENTRY (nome direto) OU, sendo dupla "A / B",
   // por todos os membros — cobre duplas formadas no sorteio a partir de
   // indivíduos (o check-in foi feito nos nomes individuais).
-  const _entryPresent = (name) => {
-    if (!name) return false;
-    if (window._idMapHas(t, absent, name)) return false;
-    if (window._idMapHas(t, checkedIn, name)) return true;
-    if (name.indexOf('/') !== -1) {
-      const ms = name.split('/').map(s => s.trim()).filter(Boolean);
+  // Aceita OBJETO {uid} (chaveia por uid — homônimo não colide) OU string nome (guest/dupla "A / B").
+  const _entryPresent = (who) => {
+    if (!who) return false;
+    if (window._idMapHas(t, absent, who)) return false;
+    if (window._idMapHas(t, checkedIn, who)) return true;
+    if (typeof who === 'string' && who.indexOf('/') !== -1) {
+      const ms = who.split('/').map(s => s.trim()).filter(Boolean);
       if (ms.length >= 2 && ms.every(m => window._idMapHas(t, checkedIn, m))) return true;
     }
     return false;
   };
-  const _entryAbsent = (name) => {
-    if (!name) return false;
-    if (window._idMapHas(t, absent, name)) return true;
-    if (name.indexOf('/') !== -1) {
-      const ms = name.split('/').map(s => s.trim()).filter(Boolean);
+  const _entryAbsent = (who) => {
+    if (!who) return false;
+    if (window._idMapHas(t, absent, who)) return true;
+    if (typeof who === 'string' && who.indexOf('/') !== -1) {
+      const ms = who.split('/').map(s => s.trim()).filter(Boolean);
       if (ms.length >= 2 && ms.some(m => window._idMapHas(t, absent, m))) return true;
     }
     return false;
@@ -1596,12 +2420,13 @@ function renderParticipants(container, tournamentId) {
   const _countedNames = {};
   const countIndividuals = (arr) => {
     arr.forEach(p => {
-      _expandMemberNames(p).forEach(nm => {
-        const k = nm.toLowerCase();
-        if (_countedNames[k]) return;
+      _expandMemberWho(p).forEach(w => {
+        const k = _whoKey(w);
+        if (!k || _countedNames[k]) return;
         _countedNames[k] = 1;
         totalIndividuals++;
-        if (window._idMapHas(t, checkedIn, nm)) checkedCount++; else if (window._idMapHas(t, absent, nm)) absentConfirmedCount++;
+        const who = _whoOf(w); // uid-first: a presença é gravada por uid
+        if (window._idMapHas(t, checkedIn, who)) checkedCount++; else if (window._idMapHas(t, absent, who)) absentConfirmedCount++;
       });
     });
   };
@@ -1614,13 +2439,14 @@ function renderParticipants(container, tournamentId) {
   if (canRollCall || postDrawPresence) {
     const _seenRc = {};
     parts.forEach(p => {
-      _expandMemberNames(p).forEach(nm => {
-        const k = nm.toLowerCase().trim();
+      _expandMemberWho(p).forEach(w => {
+        const k = _whoKey(w);
         if (!k || _seenRc[k]) return;
         _seenRc[k] = 1;
         rcTotal++;
-        if (_entryPresent(nm)) rcPresent++;
-        else if (_entryAbsent(nm)) rcAbsent++;
+        const who = _whoOf(w); // uid-first
+        if (_entryPresent(who)) rcPresent++;
+        else if (_entryAbsent(who)) rcAbsent++;
       });
     });
   }
@@ -1902,7 +2728,10 @@ function renderParticipants(container, tournamentId) {
     } catch (_e) {}
 
     // v2.1.3: _nameToParticipant agora é definido no escopo da função (acima).
-    cardsStr = _dedupedIndividuals.map((ind) => {
+    // v1.3.83: builder NOMEADO (era map inline) pra o toggle de presença reconstruir SÓ o card
+    // tocado no lugar (in-place) — sem full re-render. Fim do pulinho + da foto virando bola bege
+    // (o rebuild usa o cache _playerPhotoCache, não re-hidrata do zero). Ver _updatePanelCardInPlace.
+    const _panelCardBuild = (ind) => {
       const mc = window._idMapHas(t, checkedIn, ind.name);
       // v0.17.34: W.O. orphan = jogador que teve W.O. decretado e foi
       // substituído. Foi removido do time, agora é solo com nota.
@@ -2008,7 +2837,7 @@ function renderParticipants(container, tournamentId) {
       // v2.2.8: standby players marcados como ausentes ficam com toggle desabilitado — usar "Reverter"
       const isAbsentStandby = isStandby && isAbsent;
       // v2.7.42: switch e palavra SEPARADOS (pra montar "Ausente [toggle] W.O." numa linha).
-      const _toggleSwitch = `<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAbsentStandby ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} ${isAbsentStandby ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${tId}', '${safeName}');"`}><span class="toggle-slider"></span></label>`;
+      const _toggleSwitch = `<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAbsentStandby ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} ${isAbsentStandby ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${tId}', '${safeName}', '${String(ind.uid || '').replace(/'/g, "\\'")}');"`}><span class="toggle-slider"></span></label>`;
       const _presenceWord = `<span style="font-size:0.68rem;font-weight:700;color:${mc ? '#4ade80' : '#94a3b8'};white-space:nowrap;">${mc ? 'Presente' : 'Ausente'}</span>`;
 
       // W.O. button — marca W.O. / reverte W.O.
@@ -2039,15 +2868,15 @@ function renderParticipants(container, tournamentId) {
       // v2.2.0: isWO (match-level) removido dos visuais — só isAbsent torna o card
       // vermelho/riscado. Antes, todo jogador no lado perdedor de um W.O. ficava
       // vermelho, mesmo estando Presente ou apenas sem check-in.
-      const presenceDotColor = mc ? '#10b981' : isAbsent ? '#ef4444' : '#64748b';
+      const presenceDotColor = mc ? '#10b981' : isAbsent ? '#3b82f6' : '#64748b';  // CANON: ausente=azul
       const presenceDot = `<span style="width:8px;height:8px;border-radius:50%;background:${presenceDotColor};display:inline-block;flex-shrink:0;"></span>`;
-      const nameColor = isStandby ? '#fbbf24' : (mc ? '#4ade80' : isAbsent ? '#f87171' : 'var(--text-bright)');
+      const nameColor = isStandby ? '#fbbf24' : (mc ? window._presenceTextColor('present','solo') : isAbsent ? window._presenceTextColor('absent','solo') : 'var(--text-bright)');
       const cardBg = isStandby
-        ? (mc ? 'rgba(251,191,36,0.12)' : isAbsent ? 'rgba(239,68,68,0.08)' : 'rgba(251,191,36,0.06)')
-        : (mc ? 'rgba(16,185,129,0.12)' : isAbsent ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)');
+        ? (mc ? 'rgba(251,191,36,0.12)' : isAbsent ? 'rgba(59,130,246,0.10)' : 'rgba(251,191,36,0.06)')
+        : (mc ? 'rgba(16,185,129,0.12)' : isAbsent ? 'rgba(59,130,246,0.10)' : 'rgba(255,255,255,0.03)');
       const cardBorder = isStandby
-        ? (mc ? 'rgba(251,191,36,0.3)' : isAbsent ? 'rgba(239,68,68,0.25)' : 'rgba(251,191,36,0.15)')
-        : (mc ? 'rgba(16,185,129,0.3)' : isAbsent ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)');
+        ? (mc ? 'rgba(251,191,36,0.3)' : isAbsent ? 'rgba(59,130,246,0.30)' : 'rgba(251,191,36,0.15)')
+        : (mc ? 'rgba(16,185,129,0.3)' : isAbsent ? 'rgba(59,130,246,0.30)' : 'rgba(255,255,255,0.06)');
 
       // VIP check — uid-aware (v3.0.78: t.vips é uid-keyed desde v3.0.74; ler
       // direto por nome (vipMap[ind.name]) MISSAVA a chave-uid → tag VIP sumia).
@@ -2144,7 +2973,7 @@ function renderParticipants(container, tournamentId) {
 
       const _ciPart = _nameToParticipant[ind.name];
       const _ciInactive = (t.allowSelfDeactivation !== false && _ciPart && _ciPart.ligaActive === false) ? '1' : '0';
-      const _ciGender = (typeof window._canonGender === 'function') ? window._canonGender(_ciPart && _ciPart.gender) : 'none';
+      const _ciGender = (typeof window._canonGender === 'function') ? window._canonGender(window._pGender(_ciPart)) : 'none'; // v1.3.39: perfil-first
       const _ciSkillVal = _ciCurrentSkill || 'none';
       const _ciEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _ciPart || (ind && ind.name) || '') : '';
       const _ciOrder = (_ciEnrollNum !== '' && _ciEnrollNum != null) ? (_ciEnrollNum - 1) : 9999;
@@ -2161,14 +2990,14 @@ function renderParticipants(container, tournamentId) {
       // dourado só vence pra VIP de verdade (isVipPlayer).
       const _statusGrad = isStandby ? 'linear-gradient(135deg, rgba(146,64,14,0.58) 0%, rgba(245,158,11,0.45) 100%)'
         : mc ? 'linear-gradient(135deg, rgba(6,95,70,0.6) 0%, rgba(16,185,129,0.5) 100%)'
-        : isAbsent ? 'linear-gradient(135deg, rgba(127,29,29,0.62) 0%, rgba(220,38,38,0.5) 100%)'
+        : isAbsent ? 'linear-gradient(135deg, rgba(30,58,138,0.62) 0%, rgba(37,99,235,0.5) 100%)'
         : 'linear-gradient(135deg, rgba(67,56,202,0.6) 0%, rgba(99,102,241,0.6) 100%)';
       const _riGrad = (isVipPlayer && !isStandby)
         ? 'linear-gradient(135deg, rgba(161,98,7,0.6) 0%, rgba(234,179,8,0.45) 100%)'
         : _statusGrad;
       const _riBorder = isStandby ? '2px solid rgba(251,191,36,0.6)'
         : mc ? '2px solid rgba(16,185,129,0.7)'
-        : isAbsent ? '2px solid rgba(239,68,68,0.6)'
+        : isAbsent ? '2px solid rgba(59,130,246,0.6)'
         : isVipPlayer ? '2px solid rgba(251,191,36,0.6)'
         : '1px solid rgba(99,102,241,0.5)';
       const _riGlow = mc ? 'box-shadow:0 0 0 1px rgba(16,185,129,0.45),0 4px 10px rgba(0,0,0,0.12);' : 'box-shadow:0 4px 10px rgba(0,0,0,0.1);';
@@ -2176,12 +3005,12 @@ function renderParticipants(container, tournamentId) {
       const _riNum = (typeof _ciOrder === 'number' && _ciOrder !== 9999) ? (_ciOrder + 1) : '';
       const _riWoBadge = isWOOrphan ? '<div style="font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:8px;background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.35);">W.O.</div>' : woBadge;
       return `
-        <div class="participant-card" data-part-card="1" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-standby="${isStandby ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
+        <div class="participant-card" data-part-card="1" data-panel-card="1" data-card-key="${String(ind.uid || ind.name || '').replace(/"/g, '&quot;')}" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-standby="${isStandby ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
             ${(typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_riNum, 'right') : ''}
             <div style="position:relative;z-index:1;">
                 <!-- HEADER: avatar + nome + estrela (Jogo N foi pro match strip, na linha do 2º time) -->
                 <div style="display:flex;align-items:center;gap:8px;">
-                    <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
+                    <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(59,130,246,0.45)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
                     <div style="flex:1;min-width:0;">${standbyHeader}${_nameRow}</div>
                 </div>
                 <!-- Meta: VIP + categorias + nível (à esquerda). O 🗑️ saiu daqui — -->
@@ -2192,7 +3021,11 @@ function renderParticipants(container, tournamentId) {
                 ${_matchStrip}
             </div>
         </div>`;
-    }).join('');
+    };
+    cardsStr = _dedupedIndividuals.map(_panelCardBuild).join('');
+    // v1.3.83: stash do builder + lista → o toggle reconstrói SÓ o card tocado (in-place),
+    // sem full re-render (fim do pulinho + foto→bola bege). Ver _updatePanelCardInPlace.
+    try { window._lastPanelCardCtx = { tId: t.id, tRef: t, build: _panelCardBuild, list: _dedupedIndividuals.slice(), filter: (window._checkInFilter || 'all') }; } catch (_ePc) {}
 
   } else {
     // v4.5.74: torneio de DUPLAS pré-sorteio → SEÇÃO CANÔNICA (Sem dupla / Duplas
@@ -2208,89 +3041,20 @@ function renderParticipants(container, tournamentId) {
     // toggles); 'team'/'time' → UM W.O. do time (falta 1 → time inteiro leva W.O.).
     // Ver [[project_wo_scope_individual_vs_team]].
     var woScopeP = (t.woScope || 'individual') === 'individual' ? 'individual' : 'team';
+    // v1.3.16: callbacks de presença da CHAMADA agora vêm do factory CANÔNICO
+    // window._rollCallPresenceCtx (definido acima) — a MESMA lógica reusada no detalhe do
+    // torneio (tournaments.js). Antes vivia inline aqui (duplicada). woScopeP/canRollCall/
+    // postDrawPresence viram os params active/postDraw/woScope. Ver [[project_two_participant_card_renderers]].
+    var _rcCtxP = (typeof window._rollCallPresenceCtx === 'function')
+      ? window._rollCallPresenceCtx(t, { isOrg: isOrg, active: canRollCall, postDraw: postDrawPresence, woScope: woScopeP })
+      : {};
     var _dsecP = (typeof window._buildDoublesInscritosSection === 'function')
       ? window._buildDoublesInscritosSection(t, {
           isOrg: isOrg, drawDone: drawDone,
           orgUids: _orgUidsP, orgEmails: _orgEmailsP, hasTournCats: _hasTournCatsP,
           chrome: false,
-          cardPresence: function (p) {
-            if (!(canRollCall || postDrawPresence)) return { skip: false, styleExtra: '', rowHtml: '' };
-            var _grn = 'background:linear-gradient(135deg,rgba(16,185,129,0.5),rgba(5,150,105,0.6)) !important;border:2px solid rgba(16,185,129,0.85) !important;box-shadow:0 0 0 1px rgba(16,185,129,0.4),0 4px 12px rgba(0,0,0,0.14);';
-            var _red = 'background:linear-gradient(135deg,rgba(239,68,68,0.45),rgba(220,38,38,0.58)) !important;border:2px solid rgba(239,68,68,0.8) !important;box-shadow:0 0 0 1px rgba(239,68,68,0.35),0 4px 12px rgba(0,0,0,0.14);';
-            // v4.5.75: DUPLA formada → estado do CARD deriva dos DOIS membros (verde só se
-            // ambos presentes, vermelho se algum ausente); cada membro tem o SEU toggle
-            // (ctx.memberPresence), então SEM linha de presença por entrada (rowHtml='').
-            var _pairKeys = null;
-            if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) _pairKeys = [(p.p1Uid || String(p.p1Name || '').trim()), (p.p2Uid || String(p.p2Name || '').trim())]; // v4.5.86: uid OU nome; presença é uid-keyed (_idMapHas resolve o uid direto)
-            else { var _nmC = (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || ''); if (_nmC.indexOf('/') !== -1) { var _pp = _nmC.split('/').map(function (s) { return s.trim(); }).filter(Boolean); if (_pp.length >= 2) _pairKeys = _pp; } }
-            if (_pairKeys) {
-              var _q1 = _entryPresent(_pairKeys[0]), _z1 = !_q1 && _entryAbsent(_pairKeys[0]);
-              var _q2 = _entryPresent(_pairKeys[1]), _z2 = !_q2 && _entryAbsent(_pairKeys[1]);
-              var _both = _q1 && _q2, _anyAbs = _z1 || _z2;
-              if (currentFilter === 'present' && !_both) return { skip: true };
-              if (currentFilter === 'absent' && !_anyAbs) return { skip: true };
-              if (currentFilter === 'pending' && (_both || _anyAbs)) return { skip: true };
-              // Escopo TIME → um W.O. do time (na base do card); escopo individual → cada
-              // membro tem o seu W.O. (via memberPresence), então rowHtml fica vazio.
-              var _teamRow = '';
-              if (canRollCall && isOrg && woScopeP === 'team') {
-                var _tEntry = window._pName(p);
-                var _tAbs = _anyAbs || _entryAbsent(_tEntry);
-                var _tE = String(_tEntry).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "');", !_tAbs, { label: _tAbs ? 'Reverter' : 'W.O. do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
-              }
-              return { skip: false, styleExtra: _both ? _grn : (_anyAbs ? _red : ''), rowHtml: _teamRow };
-            }
-            // SOLO
-            var entry = window._pName(p);
-            var mc = _entryPresent(entry);
-            var abs = !mc && _entryAbsent(entry);
-            var pend = !mc && !abs;
-            if (currentFilter === 'present' && !mc) return { skip: true };
-            if (currentFilter === 'absent' && !abs) return { skip: true };
-            if (currentFilter === 'pending' && !pend) return { skip: true };
-            var styleExtra = mc ? _grn : (abs ? _red : '');
-            var rowHtml = '';
-            if (canRollCall) {
-              var _rcEntry = entry.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-              var label = mc ? 'Presente' : 'Ausente';
-              var color = mc ? '#4ade80' : '#f87171';
-              var wo = (!mc && isOrg)
-                ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
-                : '';
-              rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>' +
-                '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\');"><span class="toggle-slider"></span></label>' + wo;
-            } else {
-              var l2 = mc ? 'Presente' : 'Ausente';
-              var c2 = mc ? '#4ade80' : '#f87171';
-              var ic = mc ? '✅' : '🚫';
-              rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + c2 + ';white-space:nowrap;">' + ic + ' ' + l2 + '</span>';
-            }
-            return { skip: false, styleExtra: styleExtra, rowHtml: rowHtml };
-          },
-          // v4.5.75: presença POR MEMBRO da dupla — um toggle por jogador, no bloco dele.
-          memberPresence: function (member, right) {
-            if (!(canRollCall || postDrawPresence)) return { html: '' };
-            var keyName = (member && member.guest) ? String(member.guest).trim()
-              : (window._displayName ? window._displayName(member && member.uid, member && member.guest) : '');
-            if (!keyName) return { html: '' };
-            var mc = _entryPresent(keyName);
-            var abs = !mc && _entryAbsent(keyName);
-            var label = mc ? 'Presente' : 'Ausente';
-            var color = mc ? '#4ade80' : '#f87171';
-            if (!canRollCall) {
-              var ic = mc ? '✅' : '🚫';
-              return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + ic + ' ' + label + '</span></div>' };
-            }
-            var _e = keyName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            var wo = (!mc && isOrg && woScopeP === 'individual')
-              ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
-              : '';
-            var word = '<span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>';
-            var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\');"><span class="toggle-slider"></span></label>';
-            var inner = right ? (wo + toggle + word) : (word + toggle + wo);
-            return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;' + (right ? 'justify-content:flex-end;' : '') + '" onclick="event.stopPropagation();">' + inner + '</div>' };
-          }
+          cardPresence: _rcCtxP.cardPresence,
+          memberPresence: _rcCtxP.memberPresence
         })
       : null;
     if (_dsecP && _dsecP.isDoubles) {
@@ -2316,209 +3080,13 @@ function renderParticipants(container, tournamentId) {
     // mutar o objeto de parts; o card consulta este set.
     const _gridWaitSet = (typeof window._waitlistNameSet === 'function') ? window._waitlistNameSet(t) : {};
 
-    cardsStr = _gridParts.map((p, idx) => {
-      const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _t('participants.participant', {n: idx + 1}));
-      const isTeam = !!window._entryTeamMembers(p); // v3.0.x: time por estrutura (slots), não por '/'
-      // v2.7.37: estrela do organizador (sempre visível) + pin no topo (data-part-org).
-      const _isOrgP = (typeof window._isOrgPlayer === 'function') && window._isOrgPlayer(t, pName, p);
-      const _orgStar = _isOrgP ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.95rem;line-height:1;">⭐</span>' : '';
-
-      // v2.1.86/v2.2.40: estado da CHAMADA (por entry) + filtro presente/ausente/aguardando.
-      // Vale na chamada pré-sorteio (interativa) e pós-sorteio antes de iniciar (leitura).
-      const _showPres = canRollCall || postDrawPresence;
-      const rcMc = _showPres && _entryPresent(window._pName(p)); // v3.0.x: nome canônico (dupla="A / B") pro check de presença
-      const rcAbs = _showPres && !rcMc && _entryAbsent(window._pName(p));
-      const rcPend = _showPres && !rcMc && !rcAbs;
-      if (_showPres) {
-        if (currentFilter === 'present' && !rcMc) return '';
-        if (currentFilter === 'absent' && !rcAbs) return '';
-        if (currentFilter === 'pending' && !rcPend) return '';
-      }
-
-      const _isStandbyEntry = !!(p && typeof p === 'object' && p._isStandbyEntry) || !!_gridWaitSet[(pName || '').toLowerCase().trim()];
-      const isVipEarly = window._entryHasVip(t, p || pName);
-      let cardStyle = '';
-      if (isVipEarly) {
-        cardStyle = 'background: linear-gradient(135deg, rgba(161,98,7,0.5) 0%, rgba(234,179,8,0.35) 100%); border: 2px solid rgba(251,191,36,0.7); box-shadow: 0 0 12px rgba(251,191,36,0.15);';
-      } else if (_isStandbyEntry) {
-        cardStyle = 'background: linear-gradient(135deg, rgba(146,64,14,0.55) 0%, rgba(245,158,11,0.42) 100%); border: 2px solid rgba(251,191,36,0.55);';
-      } else if (isTeam) {
-        cardStyle = 'background: linear-gradient(135deg, rgba(15, 118, 110, 0.6) 0%, rgba(20, 184, 166, 0.6) 100%); border: 1px solid rgba(20, 184, 166, 0.5);';
-      } else {
-        cardStyle = 'background: linear-gradient(135deg, rgba(67, 56, 202, 0.6) 0%, rgba(99, 102, 241, 0.6) 100%); border: 1px solid rgba(99, 102, 241, 0.5);';
-      }
-
-      let pNameHtml = '';
-      if (isTeam) {
-        pNameHtml = pName.split('/').map((n, i) => {
-          const _nm = n.trim();
-          const _nmSafe = _nm.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          const _mSeed = encodeURIComponent(_nm);
-          const _mCached = (window._playerPhotoCache && window._playerPhotoCache[_nm.toLowerCase()] && window._playerPhotoCache[_nm.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_nm.toLowerCase()] : '';
-          const _mInitials = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _mSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-          const _mPhoto = _mCached || _mInitials;
-          const _mErr = `onerror="this.onerror=null;this.src='${_mInitials}'"`;
-          const _nmH = window._safeHtml(_nm);
-          const _mPart = _nameToParticipant && _nameToParticipant[_nm];
-          // v4.5.64: uid ESTRUTURAL do slot (p1Uid/p2Uid) — não o .uid do capitão.
-          let _mUid = '';
-          if (_mPart && typeof _mPart === 'object') {
-            if (_mPart.p1Name && _nm === String(_mPart.p1Name).trim()) _mUid = _mPart.p1Uid || '';
-            else if (_mPart.p2Name && _nm === String(_mPart.p2Name).trim()) _mUid = _mPart.p2Uid || '';
-            else _mUid = _mPart.uid || '';
-          }
-          const _mUidJs = _mUid ? (',{uid:\'' + _mUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
-          const _mDisp = _mUid ? window._safeHtml(window._displayName(_mUid, _nm)) : _nmH;
-          const _mUidAttr = _mUid ? ` data-uid-name="${window._safeHtml(_mUid)}"` : '';
-          const _editAttr = isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${t.id}','${_nmSafe}')" title="Clique para editar" style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text;"` : `style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_nmSafe}'${_mUidJs});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_nmSafe}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${_nmH}"`;
-          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;"><img src="${_mPhoto}" ${_mErr} data-player-name="${_nmH}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span${_mUidAttr} ${_editAttr}>${_mDisp}</span></div>`;
-        }).join('') + (_orgStar ? `<div style="margin-top:2px;">${_orgStar}</div>` : '');
-      } else {
-        const _pSafe = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        const _pSeedN = encodeURIComponent(pName);
-        const _pCachedN = (window._playerPhotoCache && window._playerPhotoCache[pName.toLowerCase()] && window._playerPhotoCache[pName.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[pName.toLowerCase()] : '';
-        const _pInitialsN = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _pSeedN + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-        const _pPhotoN = _pCachedN || _pInitialsN;
-        const _pErrN = `onerror="this.onerror=null;this.src='${_pInitialsN}'"`;
-        const _pNameH = window._safeHtml(pName);
-        const _pPart = _nameToParticipant && _nameToParticipant[pName];
-        const _pUid  = (_pPart && typeof _pPart === 'object') ? (_pPart.uid || '') : '';
-        const _pUidJs = _pUid ? (',{uid:\'' + _pUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
-        const _pDisp = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : _pNameH;
-        const _pUidAttr = _pUid ? ` data-uid-name="${window._safeHtml(_pUid)}"` : '';
-        const _editAttrN = isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${t.id}','${_pSafe}')" title="Clique para editar" style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:text;"` : `style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_pSafe}'${_pUidJs});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_pSafe}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${_pNameH}"`;
-        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="${_pPhotoN}" ${_pErrN} data-player-name="${_pNameH}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span${_pUidAttr} ${_editAttrN}>${_pDisp}</span>${_orgStar}</div>`;
-      }
-
-      const safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      const isVip = window._entryHasVip(t, p || pName);
-      const vipBadge = isVip ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;margin-left:4px;">💎 VIP</span>' : '';
-
-      // Label de tipo: origem da equipe
-      const teamOrigins = t.teamOrigins || {};
-      let teamLabel = _t('participants.teamIndividual');
-      if (isTeam) {
-          const origin = teamOrigins[pName];
-          if (origin === 'inscrita') teamLabel = _t('tourn.teamEnrolled');
-          else if (origin === 'sorteada') teamLabel = _t('tourn.teamDrawn');
-          else if (origin === 'formada') teamLabel = _t('tourn.teamFormed');
-          else teamLabel = _t('tourn.teamFormed');
-      }
-      const _standbyBadge = _isStandbyEntry ? '<span style="background:linear-gradient(135deg,#92400e,#f59e0b);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;">🕐 Lista de Espera</span>' : '';
-      // v2.7.73: SEM tag VIP redundante — o card dourado + o botão VIP ativo já indicam.
-      const typeText = _isStandbyEntry ? _standbyBadge : teamLabel;
-
-      // Skill category badge/dropdown for normal (grid) mode
-      const _nmSkillCats = t.skillCategories || [];
-      let _nmSkillHtml = '';
-      if (_nmSkillCats.length > 0) {
-        const _nmCatStr = (typeof p === 'object' && p !== null) ? (p.category || '') : '';
-        let _nmCurrentSkill = '';
-        for (let _si = 0; _si < _nmSkillCats.length; _si++) {
-          const _sk = _nmSkillCats[_si];
-          if (_nmCatStr === _sk || _nmCatStr.endsWith(' ' + _sk)) { _nmCurrentSkill = _sk; break; }
-        }
-        if (isOrg && !_isStandbyEntry) {
-          // v2.3.50: dropdown de atribuição de nível pelo organizador. Pra
-          // não-organizador o nível já aparece no badge de meta (gênero ·
-          // categoria · idade) abaixo do nome — não duplica aqui.
-          const _nmOpts = _nmSkillCats.map(sk => `<option value="${sk}" ${_nmCurrentSkill === sk ? 'selected' : ''}>${sk}</option>`).join('');
-          _nmSkillHtml = `<select onchange="event.stopPropagation();window._setParticipantSkillCategory('${t.id}','${safeP}',this.value)" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:4px;"><option value="" ${!_nmCurrentSkill ? 'selected' : ''}>— nível</option>${_nmOpts}</select>`;
-        }
-      }
-
-      let dragProps = '';
-      // v2.7.72: botões expostos (VIP à esquerda com a meta; split/undo/excluir à
-      // direita) pra montar a LINHA COMBINADA igual ao card pós-sorteio (canônico).
-      let _vipBtn = '', _delBtn = '', _splitBtn = '';
-      // v2.0.0: botão "Desfazer mesclagem" — aparece quando o card resultou de
-      // uma mesclagem (p._mergedFrom), em qualquer estado do torneio.
-      let undoMergeBtn = '';
-      if (isOrg && p && typeof p === 'object' && p._mergedFrom) {
-        undoMergeBtn = `<button class="btn btn-micro" title="Desfazer mesclagem" style="background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px dashed rgba(251,191,36,0.5);" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window._undoMergeParticipant('${t.id}', '${safeP}');">↩️</button>`;
-      }
-      if (isOrg && !_isStandbyEntry) {
-        // v2.0.0: drag habilitado pro organizador também — a MESCLAGEM funciona
-        // enquanto a grade estiver visível (inclui o estado "sorteado, antes de
-        // iniciar"). Formar equipe / VIP / remover continuam só pré-sorteio.
-        dragProps = `draggable="true" ondragstart="window.handleDragStart(event, ${idx}, '${t.id}')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ${idx})"`;
-        if (!drawDone) {
-          _vipBtn = `<button class="btn btn-micro" title="${isVip ? _t('tourn.removeVip') : _t('tourn.markVip')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ${isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)'}; color: ${isVip ? '#fbbf24' : '#a3842a'}; border: 1px ${isVip ? 'solid' : 'dashed'} ${isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)'};" onclick="event.stopPropagation(); window._toggleVip('${t.id}', '${safeP}');">💎 VIP</button>`;
-          _delBtn = `<button type="button" class="cancel-x-btn" title="${_t('btn.remove')}" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">✕</button>`;
-          if (window._entryTeamMembers(p)) { // v3.0.x: botão dividir só pra dupla (estrutura), não por '/'
-            _splitBtn = `<button class="btn btn-micro" title="${_t('participants.splitTeam')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', '${safeP}');">✂️</button>`;
-          }
-        }
-      }
-
-      // v2.1.86: linha de presença da CHAMADA pré-sorteio (só organizador, antes do sorteio).
-      // Reusa _toggleCheckIn / _markAbsent, que já gravam em t.checkedIn / t.absent
-      // pela chave do entry (time "A / B" ou individual). Pré-sorteio não há matches,
-      // então _processWoSubstitutions é no-op e _markAbsent só alterna o flag.
-      // v3.0.x: chamada CANÔNICA no card individual — na MESMA linha do tipo de
-      // inscrição ("Inscrição Individual"), alinhada à DIREITA: PALAVRA + toggle +
-      // W.O. + remover. Economiza uma linha por jogador. Estado binário: Presente
-      // (toggle ligado) ou Ausente (desligado).
-      let _presenceGroup = '';
-      if (canRollCall) {
-        const _rcEntry = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        const _rcLabel = rcMc ? 'Presente' : 'Ausente';
-        const _rcColor = rcMc ? '#4ade80' : '#f87171';
-        const _rcWoBtn = (!rcMc && isOrg)
-          ? window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${t.id}', '${_rcEntry}');`, !rcAbs, { label: rcAbs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
-          : '';
-        // Ordem canônica: palavra (Presente/Ausente) + toggle + W.O. O 🗑️ é
-        // anexado depois (em _inscritoActionRow) → palavra, toggle, W.O., 🗑️.
-        _presenceGroup = `<span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}');"><span class="toggle-slider"></span></label>${_rcWoBtn}`;
-      } else if (postDrawPresence) {
-        // v2.2.40: pós-sorteio (antes de iniciar) — presença em modo somente leitura.
-        const _rcLabel = rcMc ? 'Presente' : 'Ausente';
-        const _rcColor = rcMc ? '#4ade80' : '#f87171';
-        const _rcIcon = rcMc ? '✅' : '🚫';
-        _presenceGroup = `<span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcIcon} ${_rcLabel}</span>`;
-      }
-      // v3.0.x: card INTEIRO verde quando Presente, vermelho quando W.O./Ausente
-      // (não só a borda). Append no fim do style → sobrepõe o background do cardStyle.
-      const _rcCardExtra = (canRollCall || postDrawPresence)
-        ? (rcMc ? 'background:linear-gradient(135deg,rgba(16,185,129,0.5),rgba(5,150,105,0.6)) !important;border:2px solid rgba(16,185,129,0.85) !important;box-shadow:0 0 0 1px rgba(16,185,129,0.4),0 4px 12px rgba(0,0,0,0.14);'
-          : rcAbs ? 'background:linear-gradient(135deg,rgba(239,68,68,0.45),rgba(220,38,38,0.58)) !important;border:2px solid rgba(239,68,68,0.8) !important;box-shadow:0 0 0 1px rgba(239,68,68,0.35),0 4px 12px rgba(0,0,0,0.14);'
-          : '')
-        : '';
-
-      const bgNum = isVip ? '⭐' : idx + 1;
-      // v2.7.27: data-attrs canônicos p/ a barra de filtro/sort (_inscritosFilterBar
-      // + _partApplyFilter) funcionar TAMBÉM na grade — antes só a lista compacta os
-      // tinha. Espelha a lógica de _canonGender/skill/_partEnrollIdx da lista.
-      const _gPart = (typeof p === 'object' && p !== null) ? p : (_nameToParticipant && _nameToParticipant[pName]);
-      const _fGender = (typeof window._canonGender === 'function') ? window._canonGender(_gPart && _gPart.gender) : 'none';
-      let _fSkill = 'none';
-      const _fSkillCats = t.skillCategories || [];
-      const _fCatStr = (_gPart && typeof _gPart === 'object') ? (_gPart.category || '') : '';
-      for (let _fi = 0; _fi < _fSkillCats.length; _fi++) { if (_fCatStr === _fSkillCats[_fi] || _fCatStr.endsWith(' ' + _fSkillCats[_fi])) { _fSkill = _fSkillCats[_fi]; break; } }
-      const _fKey = (pName || '').toLowerCase().trim();
-      const _fEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _gPart || pName) : '';
-      const _fOrder = (_fEnrollNum !== '' && _fEnrollNum != null) ? (_fEnrollNum - 1) : idx;
-      const _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
-      // v4.4.64: inativo (Liga com auto-desativação) → data-part-inactive p/ o sort ativos/inativos
-      // funcionar TAMBÉM neste renderer (antes só a lista compacta 1937 tinha o attr).
-      const _fInactive = (t.allowSelfDeactivation !== false && _gPart && _gPart.ligaActive === false) ? '1' : '0';
-      return `
-        <div class="participant-card" data-part-card="1" data-part-org="${_isOrgP ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="${_isStandbyEntry ? '1' : '0'}" data-part-name="${_fNameAttr}" data-part-inactive="${_fInactive}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
-            ${(function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_n, 'right') : ''; })()}
-            <div style="position:relative;z-index:1;">
-                <!-- HEADER: avatar + nome + estrela (igual ao card pós-sorteio) -->
-                ${pNameHtml}
-                <!-- LINHA COMBINADA (canônica): VIP + meta + nível (esquerda) | split/desfazer/excluir (direita) -->
-                <div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_vipBtn}${_metaSlotsFor(p, pName, isTeam, { inline: true })}${_nmSkillHtml}</div>
-                    ${(_splitBtn || undoMergeBtn) ? `<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">${_splitBtn}${undoMergeBtn}</div>` : ''}
-                </div>
-                <!-- CARD CANÔNICO: tipo de inscrição na linha 1; ação (Presente/
-                     Ausente · toggle · W.O. · 🗑️) na linha de baixo, à direita. -->
-                ${window._inscritoActionRow(typeText, _presenceGroup, _delBtn)}
-            </div>
-        </div>`;
-    }).join('');
+    var _icPresCtx = (typeof window._rollCallPresenceCtx === 'function' && (canRollCall || postDrawPresence))
+      ? window._rollCallPresenceCtx(t, { isOrg: isOrg, active: canRollCall, postDraw: postDrawPresence, woScope: t.woScope })
+      : null;
+    // v1.3.35: CARD ÚNICO — o #participants passa a renderizar o inscrito individual pela
+    // MESMA função que o detalhe usa (window._inscritoIndividualCard). Zero código duplicado.
+    var _icCtx = { isOrg: isOrg, drawDone: drawDone, canRollCall: canRollCall, postDrawPresence: postDrawPresence, enrollOrderMap: _enrollOrderMap, nameToParticipant: _nameToParticipant, waitSet: _gridWaitSet, cardPresence: _icPresCtx ? _icPresCtx.cardPresence : null };
+    cardsStr = _gridParts.map((p, idx) => window._inscritoIndividualCard(t, p, idx, _icCtx)).join('');
     }
   }
 
@@ -2545,28 +3113,19 @@ function renderParticipants(container, tournamentId) {
       + '<span style="font-size:0.76rem;color:#94a3b8;font-weight:700;white-space:nowrap;flex-shrink:0;">' + present + '/' + total + ' · ' + pct + '%</span>'
     + '</div>';
   }
-  const checkInControls = canCheckIn ? _rollCallBar(totalIndividuals, checkedCount, absentConfirmedCount, pendingCount) : '';
-  // v4.5.78: roll-call SEMPRE conta por PESSOA (dupla = 2) — pré-sorteio (rcTotal) e
-  // pós-sorteio (totalIndividuals). A presença é por jogador (toggle por membro), então
-  // a barra reflete gente, não entradas. Ver [[project_count_people_not_entries]].
+  // v1.3.48: barra pela FONTE ÚNICA global (window._rollCallBarHtml) — reconta por UID e é a
+  // MESMA usada no refresh in-place ao marcar presença (card estático não re-renderiza a lista).
+  const checkInControls = canCheckIn ? window._rollCallBarHtml(tId, drawDone ? 'postdraw' : 'checkin') : '';
   const rollCallControls = canRollCall
-    ? _rollCallBar(rcTotal, rcPresent, rcAbsent, rcPending)
-    : (postDrawPresence ? _rollCallBar(totalIndividuals, checkedCount, absentConfirmedCount, totalIndividuals - checkedCount - absentConfirmedCount) : '');
+    ? window._rollCallBarHtml(tId, 'rollcall')
+    : (postDrawPresence ? window._rollCallBarHtml(tId, 'postdraw') : '');
 
-  // ── Banner da CHAMADA pré-sorteio: instrução + "Sortear entre os presentes" ──
-  const rollCallBanner = (canRollCall && parts.length > 0) ? `
-    <div style="margin-bottom:1.25rem;padding:16px 18px;background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(79,70,229,0.1));border:2px solid rgba(99,102,241,0.4);border-radius:16px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-            <span style="font-size:1.3rem;">📋</span>
-            <span style="font-size:1rem;font-weight:800;color:var(--text-bright);">Chamada antes do sorteio</span>
-        </div>
-        <p style="color:#94a3b8;font-size:0.83rem;line-height:1.5;margin:0 0 12px;">
-            Marque quem está <b style="color:#4ade80;">presente</b>. Ao sortear, você decide o que fazer com os ausentes — <b style="color:#fbbf24;">enviar à lista de espera</b> ou <b style="color:#f87171;">desclassificar</b> — e o sorteio roda só entre os presentes.
-        </p>
-        <button class="btn btn-cta hover-lift" onclick="event.stopPropagation(); window._drawPresentOnly('${tId}')" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;padding:13px;border-radius:12px;border:none;font-size:0.95rem;">
-            🎲 Sortear entre os presentes (${rcPresent})
-        </button>
-    </div>` : '';
+  // v1.3.15 (dono): box "Chamada antes do sorteio" + "Sortear entre os presentes" REMOVIDO —
+  // o sorteio tem tela própria no fluxo (org sorteia pelo botão "🎲 Sortear" das ferramentas,
+  // que já resolve presentes/ausentes via _handleSortearClick). A contagem que trava abaixo do
+  // cabeçalho (_rollCallBar → rollCallControls, belowHtml) permanece. `_drawPresentOnly` segue
+  // existindo pra quem chamar direto, só não há mais este botão.
+  const rollCallBanner = '';
 
   // ── "Iniciar Torneio" banner (after draw, before start) ──
   const startBanner = (isOrg && drawDone && !t.tournamentStarted && !(window._hasAnyMatchResult && window._hasAnyMatchResult(t))) ? `

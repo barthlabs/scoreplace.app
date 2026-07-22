@@ -37,6 +37,28 @@ g.window._error = function () { console.error.apply(console, arguments); };
 g.window._profileNameByUid = g.window._profileNameByUid || {};
 g.window._nameForUid = function (uid) { return (uid && g.window._profileNameByUid[uid]) || ''; };
 
+// ── v1.3.52: resolvedores de PERFIL por participante NO SERVIDOR ────────────────────
+// O vendor (tournaments-draw/-prep/-categories) chama window._pGender/_pSkillMap/_pBirth/
+// _pDefaultCat/_canonGender (migração uid-first do cliente). No servidor NÃO há
+// _userProfileCache: o index.js (_enrichParticipantsFromProfiles) já resolveu gênero/skill/
+// idade/categoria POR UID e ESCREVEU em p.* ANTES do motor. Então aqui os _p* leem p.* (já
+// resolvido). Sem estes, o vendor sincronizado chamaria _pGender indefinido → o sorteio de
+// duplas mistas crasharia. Ver [[project_autodraw_server_parity]] / [[project_id_maps_uid_keyed]].
+g.window._pGender = function (p) { return (p && typeof p === 'object' && p.gender) || ''; };
+g.window._pSkillMap = function (p) { return (p && typeof p === 'object' && p.skillBySport) || null; };
+g.window._pBirth = function (p) { return (p && typeof p === 'object' && p.birthDate) || ''; };
+g.window._pDefaultCat = function (p) { return (p && typeof p === 'object' && p.defaultCategory) || ''; };
+g.window._genderForUid = function () { return ''; };
+g.window._skillMapForUid = function () { return null; };
+g.window._birthForUid = function () { return ''; };
+g.window._defaultCatForUid = function () { return ''; };
+g.window._canonGender = function (gRaw) {
+  var s = String(gRaw == null ? '' : gRaw).toLowerCase().trim();
+  if (s.indexOf('masc') !== -1 || s === 'm' || s === 'male') return 'masculino';
+  if (s.indexOf('fem') !== -1 || s === 'f' || s === 'female') return 'feminino';
+  return '';
+};
+
 // ── v1.2.2: PARIDADE com store.js — _displayNameForUid/_entryDisplayName/_pName ───
 // O vendor CHAMA os três (bracket-logic L640/3323/3430/3433/3630, tournaments-categories
 // L720), mas o shim não os definia → cada call site caía no seu fallback INLINE, e vários
@@ -142,6 +164,9 @@ require('./vendor/tournaments-draw-prep.js');
 // _applyDrawDecisions + os núcleos PUROS extraídos dos handlers de painel. É o que permite
 // o servidor APLICAR a decisão do organizador ao elenco com a MESMA função do cliente.
 require('./vendor/draw-decisions.js');
+// _applyResultToTournament (fecho de rodada no servidor re-aplica o placar DEFERIDO que fechou
+// a rodada). DOM só em funções que o servidor não chama (live-scoring/TV) — no load é limpo.
+require('./vendor/bracket-ui.js');
 
 // Sanity: o dispatcher precisa ter sido exposto (v2.3.91+ do cliente).
 if (typeof g.window._generateNextRound !== 'function') {
@@ -298,6 +323,27 @@ function hasDrawnBracket(t) {
     || (Array.isArray(t.groups) && t.groups.length > 0);
 }
 
+// Rótulos de TODOS os competidores REPRESENTADOS na chave desenhada (matches p1/p2 + team1/team2,
+// jogadores de grupo, rounds Suíço/Liga). Usado pra achar inscrito de `t.participants` que ficou
+// FORA da chave — o caso da dupla FORMADA depois do sorteio: ela entra em participants (não na
+// espera) e nenhuma função de integração tardia (que lê waitlist/_lateJoin) a enxergava.
+function bracketLabels(t) {
+  const win = g.window;
+  const s = new Set();
+  const add = (x) => { const l = (x && (x.displayName || x.name)) || (typeof x === 'string' ? x : ''); if (l) s.add(String(l)); };
+  try {
+    const all = (typeof win._collectAllMatches === 'function') ? (win._collectAllMatches(t) || []) : (t.matches || []);
+    all.forEach(function (m) {
+      if (!m) return;
+      add(m.p1); add(m.p2);
+      if (Array.isArray(m.team1)) m.team1.forEach(add);
+      if (Array.isArray(m.team2)) m.team2.forEach(add);
+    });
+  } catch (e) {}
+  try { (t.groups || []).forEach(function (gr) { (gr && (gr.players || gr.participants) || []).forEach(add); }); } catch (e) {}
+  return s;
+}
+
 // Recompilar o FORMATO é seguro SÓ antes de existir chave (fase 0 intocada). Depois disso o
 // doc carrega estado de fase que a recompilação atropelaria. É pergunta DIFERENTE de "já tem
 // chave?" — por isso são duas funções.
@@ -369,9 +415,8 @@ function drawInitial(t, opts) {
     _decisions = win._applyDrawDecisions(t, opts.decisions).applied;
   }
 
-  // Suíço-classificatório tem ramo próprio no cliente (round-gen incremental) — ainda
-  // não canonizado. Não fingir que sabe: devolve e o cliente sorteia.
-  if (t.p2Resolution === 'swiss') return { ok: false, reason: 'swiss-not-canonical' };
+  // Suíço-pow2 (Opção B): NÃO recusa mais — é tratado ABAIXO, depois da formação de duplas
+  // (as duplas entram COMO ESTÃO no Suíço). Ver project_draw_canonization_cf_phase23_deferred.
 
   const _E0 = win._phasesEngine;
   const _cfg0 = win._buildPhase0Cfg(t);
@@ -399,12 +444,25 @@ function drawInitial(t, opts) {
     }
   }
 
+  // ── Suíço como RESOLUÇÃO de pow2 (Opção B, canonizado): monta a classificatória Suíço
+  // (fase 0) + a eliminatória (fase 1) e gera a 1ª rodada, com a MESMA função vendorada que
+  // o cliente roda. DEPOIS da formação de duplas (entram COMO ESTÃO), ANTES do reset/
+  // generatePhase da fase 0 (caminho NÃO-Suíço). Ver project_draw_canonization_cf_phase23_deferred.
+  if (t.p2Resolution === 'swiss') {
+    if (typeof win._buildSwissClassifDraw !== 'function') return { ok: false, reason: 'swiss-builder-missing' };
+    const _sw = win._buildSwissClassifDraw(t);
+    return { ok: true, format: t.format, native: true, matchCount: _sw.roundMatches, sitOuts: _sw.sitOuts, allMaleCount: _allMale };
+  }
+
   // Reset do storage stale da fase 0 (generatePhase/storePhase reescrevem).
   t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
   t.currentPhaseIndex = 0; delete t._phaseMaterialized;
   if (!t.drawVisibility) t.drawVisibility = 'public';
-  // v4.1.30: o SORTEIO LIMPA a presença — "acabou de sortear, ninguém está presente".
-  t.checkedIn = {}; t.absent = {};
+  // v1.3.73: o SORTEIO limpa a presença de quem ENTROU na chave, mas PRESERVA a de quem foi pro
+  // resto/lista de espera (estava presente antes → continua presente, primeiro na fila). Regra do
+  // dono. Fonte única vendorada (win._clearPresenceKeepWaitlist); fallback = clear total.
+  if (typeof win._clearPresenceKeepWaitlist === 'function') win._clearPresenceKeepWaitlist(t);
+  else { t.checkedIn = {}; t.absent = {}; }
 
   const _pool0 = win._buildPhase0Pool(t, _isMon0, _ts0);
   const _built0 = _E0.generatePhase(_pool0, _cfg0, {
@@ -463,6 +521,12 @@ function integrateLateEntries(t, opts) {
 
   // Nome vivo por uid antes de formar duplas/rótulos (storage é só-uid; o motor lê nome).
   if (typeof win._rehydrateEntryNames === 'function') win._rehydrateEntryNames(t);
+  // v1.3.162 (dono: "marcelo x luigi esta duplicado ... jogo 7 e 8"): ANTES de qualquer decisão,
+  // repõe a identidade dos jogos que nasceram sem uid. Sem isso as checagens de "já está na chave"
+  // e de "confronto já existe" são cegas — foi assim que o MESMO confronto entrou duas vezes, um
+  // com uid e rótulo cru, outro com rótulo resolvido e uid nulo. [[project_uid_identity_canon_locked]]
+  try { if (typeof win._stampMissingMatchUids === 'function') win._stampMissingMatchUids(t); }
+  catch (e) { win._error && win._error('[integrateLate] stampUids:', e); }
 
   let extra = 0, duplas = 0, duplasTier = 0, dissolved = 0, monarch = 0, repfill = 0;
   // v1.2.58: dupla formada entra no lugar do repescado (chave PLAYIN) — precede o createExtra
@@ -476,12 +540,163 @@ function integrateLateEntries(t, opts) {
   } catch (e) { win._error && win._error('[integrateLate] duplas:', e); }
   try { monarch = win._expandMonarchFromWaitlist(t) || 0; } catch (e) { win._error && win._error('[integrateLate] monarch:', e); }
 
-  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0);
+  // v1.3.146 — COLOCAÇÃO CIRÚRGICA DO TARDIO (regra do dono). SUBSTITUI o antigo fallback de
+  // REDRAW (_clearTournamentDraw + drawInitial), que apagava a chave INTEIRA e re-sorteava tudo.
+  // O guard de então era só "não há resultado lançado" — isso protege os PLACARES mas NÃO os
+  // CONFRONTOS: a chave já estava publicada e todo mundo já tinha visto seu jogo. Desastre
+  // relatado pelo dono: "era pra entrarem no jogo 7 sem mudar nenhum dos demais 6 jogos; mudou
+  // tudo, dupla virou individual, criou jogo 8". Assinatura no diag: changed:true com
+  // extra/duplas/monarch/repfill todos 0 (só o redraw podia ter mudado).
+  //
+  // REGRA CANÔNICA: (1) existe "a definir" ABERTO? o tardio entra ALI; (2) não existe? cria UM
+  // jogo novo com "a definir" aberto (o próximo tardio preenche esse); (3) NUNCA re-sortear nem
+  // tocar em jogo existente. Ver [[project_late_dupla_fills_awaiting_slot]].
+  let redrawn = 0;
+  try {
+    if (typeof win._placeLateEntriesSurgically === 'function') {
+      redrawn = win._placeLateEntriesSurgically(t) || 0;
+    }
+  } catch (e) { win._error && win._error('[integrateLate] placeLate:', e); }
+
+  // v1.3.162: rede de segurança FINAL — confronto repetido (mesmo par de uids, mesma rodada) que
+  // tenha escapado por qualquer caminho é removido, desde que o duplicado NÃO tenha placar. Jogo já
+  // disputado nunca é apagado pelo código.
+  let dedup = 0;
+  try { if (typeof win._dedupMatchesByUid === 'function') dedup = win._dedupMatchesByUid(t) || 0; }
+  catch (e) { win._error && win._error('[integrateLate] dedup:', e); }
+
+  // v1.3.165 — RECONCILIAÇÃO FINAL: re-propaga resultados decididos pelos fios (rebuilds deixam
+  // slot TBD com fio de jogo já decidido) e a DONA ÚNICA da inferior fecha a conta. Foi a cura do
+  // doc real tour_1784727218055_sb (2ª sup e 1ª inf zeradas com 6 resultados lançados).
+  let healed = 0;
+  try { if (typeof win._repropagateDecided === 'function') healed = win._repropagateDecided(t) || 0; }
+  catch (e) { win._error && win._error('[integrateLate] repropagate:', e); }
+  try { if (typeof win._syncLowerBracket === 'function') { if (win._syncLowerBracket(t)) healed++; } }
+  catch (e) { win._error && win._error('[integrateLate] syncLower:', e); }
+
+  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0 || healed > 0);
   if (changed) {
     try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e) {}
     t.updatedAt = new Date().toISOString();
   }
-  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill };
+  // `placed` NO RETORNO (v1.3.146): antes o contador do fallback (`redrawn`) NÃO era devolvido —
+  // por isso o diag do dono mostrou `changed:true` com tudo 0 e o redraw passou despercebido.
+  // Todo caminho que muda a chave TEM de aparecer no retorno.
+  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill, placed: redrawn };
 }
 
-module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, _window: g.window };
+// ── FORMAR dupla na LISTA DE ESPERA + INTEGRAR, ATÔMICO no servidor (CF-only). Espelha
+// _formLateJoinDupla (bracket.js) mas PURO: tira os 2 avulsos de standby/waitlist, empurra a dupla
+// _lateJoin, marca presença dos 2, e INTEGRA na chave (integrateLateEntries) — tudo numa passada.
+// O cliente só dispara e reflete o doc devolvido. opts: {key1, key2, nowTs}.
+function formLatePairCore(t, opts) {
+  const win = g.window;
+  if (!t) return { ok: false, reason: 'no-tournament' };
+  const key1 = String((opts && opts.key1) || ''), key2 = String((opts && opts.key2) || '');
+  const nowTs = (opts && opts.nowTs) || 1;
+  if (!key1 || !key2 || key1 === key2) return { ok: false, reason: 'bad-keys' };
+  if (typeof win._rehydrateEntryNames === 'function') { try { win._rehydrateEntryNames(t); } catch (e) {} }
+  const _keyOf = function (p) { const uid = (typeof p === 'object' ? (p.uid || '') : ''); const nm = (win._pName ? win._pName(p, '') : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '')); return uid || nm; };
+  const _pull = function (key) {
+    const stores = [t.standbyParticipants, t.waitlist];
+    for (let s = 0; s < stores.length; s++) {
+      const arr = stores[s]; if (!Array.isArray(arr)) continue;
+      for (let i = 0; i < arr.length; i++) {
+        const p = arr[i];
+        if (p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) continue; // já é dupla
+        if (_keyOf(p) === key) { arr.splice(i, 1); return p; }
+      }
+    }
+    return null;
+  };
+  const a = _pull(key1), b = _pull(key2);
+  if (!a || !b) { // rollback do que tirou
+    if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+    if (a) t.standbyParticipants.push(a);
+    if (b) t.standbyParticipants.push(b);
+    return { ok: false, reason: 'not-found' };
+  }
+  const _nm = function (p) { return ((win._pName ? win._pName(p, '') : (p && (p.displayName || p.name)) || '') || (typeof p === 'object' ? (p.displayName || p.name) : p) || ''); };
+  const an = _nm(a), bn = _nm(b);
+  if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+  if (typeof win._ensureEnrollSeqs === 'function') { try { win._ensureEnrollSeqs(t); } catch (e) {} }
+  const _sqA = (typeof a === 'object' && a && a.enrollSeq != null) ? a.enrollSeq : null;
+  const _sqB = (typeof b === 'object' && b && b.enrollSeq != null) ? b.enrollSeq : null;
+  t.standbyParticipants.push({ p1Name: an, p1Uid: (typeof a === 'object' ? (a.uid || '') : ''), p2Name: bn, p2Uid: (typeof b === 'object' ? (b.uid || '') : ''), p1Seq: _sqA, p2Seq: _sqB, displayName: an + ' / ' + bn, name: an + ' / ' + bn, _lateJoin: true });
+  if (!t.checkedIn || typeof t.checkedIn !== 'object') t.checkedIn = {};
+  [a, b].forEach(function (m) {
+    const _mUid = (m && typeof m === 'object') ? (m.uid || '') : '';
+    const _mName = (typeof m === 'string') ? m : (m && (m.displayName || m.name)) || '';
+    const _mKey = _mUid || _mName;
+    if (_mKey) { t.checkedIn[_mKey] = nowTs; if (t.absent && t.absent[_mKey] != null) delete t.absent[_mKey]; }
+  });
+  t.updatedAt = new Date().toISOString();
+  let integrated = null;
+  try { integrated = integrateLateEntries(t, {}); } catch (e) { win._error && win._error('[formLatePair] integrate:', e); }
+  return { ok: true, formed: an + ' / ' + bn, integrated: integrated };
+}
+
+// ── DESFAZER dupla da LISTA DE ESPERA, ATÔMICO (CF-only). Espelha _splitLateDupla PURO: acha a
+// dupla nos 2 stores (standby/waitlist) por identidade de MEMBRO (uid||nome) e reparte em 2 solos.
+// opts: {id1, id2}. id2 vazio = casa pelo nome inteiro (compat).
+function splitLatePairCore(t, opts) {
+  const win = g.window;
+  if (!t) return { ok: false, reason: 'no-tournament' };
+  const id1 = String((opts && opts.id1) || ''), id2 = (opts && opts.id2 != null) ? String(opts.id2) : '';
+  const _isDupla = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
+  const _want = id2 ? [id1, id2].filter(Boolean).sort() : null;
+  const _byMembers = function (p) { if (!_isDupla(p) || !_want) return false; const gg = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort(); return gg.length === _want.length && gg.every(function (v, i) { return v === _want[i]; }); };
+  const _byName = function (p) { return _isDupla(p) && ((win._pName ? win._pName(p, '') : (p.displayName || p.name)) === id1 || (p.displayName || p.name) === id1); };
+  let arr = null, idx = -1;
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (idx !== -1 || !Array.isArray(t[k])) return;
+    let i = t[k].findIndex(_want ? _byMembers : _byName);
+    if (i === -1 && _want) i = t[k].findIndex(_byName);
+    if (i !== -1) { arr = t[k]; idx = i; }
+  });
+  if (idx === -1) return { ok: false, reason: 'not-found' };
+  const e = arr[idx];
+  const _dn1 = e.p1Uid ? (win._displayNameForUid ? win._displayNameForUid(e.p1Uid, e.p1Name) : (e.p1Name || e.p1Uid || '')) : null;
+  const _dn2 = e.p2Uid ? (win._displayNameForUid ? win._displayNameForUid(e.p2Uid, e.p2Name) : (e.p2Name || e.p2Uid || '')) : null;
+  const s1 = e.p1Uid ? { displayName: _dn1, name: _dn1, uid: e.p1Uid, _lateJoin: true } : e.p1Name;
+  const s2 = e.p2Uid ? { displayName: _dn2, name: _dn2, uid: e.p2Uid, _lateJoin: true } : e.p2Name;
+  arr.splice(idx, 1, s1, s2);
+  t.updatedAt = new Date().toISOString();
+  try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e2) {}
+  return { ok: true, split: (e.p1Name || '') + ' / ' + (e.p2Name || '') };
+}
+
+// ── FECHO de rodada no servidor (Opção B do Suíço-pow2) ─────────────────────────────
+// Roda o MESMO fecho que _doCloseRound faz no cliente, mas PURO: re-aplica o placar DEFERIDO
+// que fechou a rodada (resultCtx — não persistido no cliente pra evitar o clobber-race) e fecha
+// a rodada via a mutação canônica vendorada _applyRoundCloseToTournament (gera a próxima rodada
+// Suíço, marca 'phaseComplete' quando a classificatória acaba, ou 'transition'/'pureSwissFinish'/
+// 'ligaScheduled'). NÃO faz o commit — quem chama (a CF closeRound) persiste com o boundary.
+// Guards de concorrência/idempotência espelham _doCloseRound (só a rodada mais recente e não
+// fechada). Ver project_draw_canonization_cf_phase23_deferred / project_concurrency_safe_saves.
+function closeRoundCore(t, roundIdx, resultCtx) {
+  const win = g.window;
+  if (!t) return { ok: false, reason: 'no-tournament' };
+  const rounds = Array.isArray(t.rounds) ? t.rounds : [];
+  const round = rounds[roundIdx];
+  if (!round) return { ok: false, reason: 'no-round' };
+  // Re-aplica o placar DEFERIDO do último jogo (o que disparou o auto-close) ANTES de fechar —
+  // senão o fresco não tem o vencedor e a rodada parece incompleta.
+  if (resultCtx && resultCtx.matchId && typeof win._applyResultToTournament === 'function') {
+    win._applyResultToTournament(t, resultCtx.matchId, resultCtx.payload || {});
+  }
+  // Só fecha a rodada MAIS RECENTE e ainda não fechada — uma chamada stale (echo/retry/corrida)
+  // não avança a geração nem transiciona (mesmo guard de _doCloseRound).
+  if (roundIdx !== rounds.length - 1) return { ok: false, reason: 'stale-round' };
+  if (round.status === 'complete') return { ok: false, reason: 'already-closed' };
+  const unfinished = (round.matches || []).filter(function (m) { return !m.winner && !m.isBye && !m.isSitOut; });
+  if (unfinished.length > 0) return { ok: false, reason: 'round-incomplete', unfinished: unfinished.length };
+  // Decide + executa (a mutação PURA canônica, vendorada e já testada em apply-round-close).
+  const branch = win._applyRoundCloseToTournament(t, roundIdx);
+  if (branch === 'transition' && typeof win._applySwissEliminationTransition === 'function') {
+    win._applySwissEliminationTransition(t, roundIdx);
+  }
+  return { ok: true, branch: branch };
+}
+
+module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, _window: g.window };

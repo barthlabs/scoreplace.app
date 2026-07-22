@@ -254,7 +254,10 @@ function mkT() {
   t.currentPhaseIndex = 0;
   var g = t.rounds[0].monarchGroups[0];
   var absent = g.players[1];
-  RW.AppStore.currentUser = { uid: 'u1', displayName: g.players[0], email: 'x@y.z' };
+  // CANÔNICO uid: o usuário logado é o jogador g.players[0] com o uid REAL dele (buildViaDraw =
+  // 'u'+i, name 'J'+i). Antes fixava 'u1' e casava por NOME — com resolução uid-only (dono,
+  // 18/jul) tem que ser o uid certo, senão o sorteio aleatório desalinha o "meu grupo" (flake).
+  RW.AppStore.currentUser = { uid: 'u' + String(g.players[0]).replace(/^J/, ''), displayName: g.players[0], email: 'x@y.z' };
 
   // (a) falta APONTADA (claim pendente, não confirmada) → nome ÂMBAR + tag W.O.
   t.woClaims = [{ id: 'c1', status: 'pending', scope: 'group', groupName: g.name, roundIndex: 0,

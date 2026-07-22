@@ -87,6 +87,11 @@ global.AppStore.syncImmediate = function () {};
 
 // Ordem = index.html / headless.js: utils → categorias → model → logic → ui → participants → db.
 const FILES = [
+  // CÂNONES base que firebase-db.js delega (window._cleanUndefined/_computeMemberUids etc.) — foram
+  // extraídos pra estes arquivos; a lista tinha bit-rotado sem eles → _cleanUndefined caía no fallback
+  // e o save gravava null. Carregar PRIMEIRO (mesma ordem do index.html).
+  'js/views/identity-core.js',
+  'js/views/persist-core.js',
   'js/views/sport-rules.js',
   'js/views/tournaments-utils.js',
   'js/views/tournaments-categories.js',

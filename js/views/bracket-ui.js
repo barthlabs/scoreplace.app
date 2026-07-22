@@ -344,49 +344,19 @@ window._propagateMatchUpdate = _propagateMatchUpdate;
 
 // Retorna 1 ou 2 se user está num dos lados do match; 0 se em nenhum.
 // Compara por uid (preferido), email e displayName.
+// CANÔNICO (dono, 18/jul: "uid e nada mais sempre. nem nome, nem email, nem celular"):
+// de que lado do jogo o `user` está? SÓ pelo UID do SLOT — window._slotUids lê a identidade
+// estrutural do slot (team*Uids → p*Uid → team*Obj/_participantUids), a MESMA que o W.O. e o
+// avanço usam. Nenhum casamento por nome/e-mail/substring: a barra do nome é tipografia, o
+// displayName pode ter mudado, e homônimos colidiam. Sem uid no user → 0 (guest/informal não
+// loga; não é "o usuário atual"). Cobre 1v1, dupla e Rei/Rainha (todos carregam uid no slot).
+// Ver [[project_uid_identity_canon_locked]] / [[project_match_slot_uid_identity]].
 function _userTeamInMatch(t, m, user) {
-  if (!t || !m || !user) return 0;
-  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  // Busca o participant pelo nome completo do lado (p1 ou p2 do match).
-  // Para duplas, o participant é salvo com o nome completo do time ("Kelly / Rodrigo Barth"),
-  // idêntico ao p1/p2. Verificamos uid e email. Fallback: displayName do usuário
-  // aparece em algum trecho do nome do lado (para nomes individuais dentro de dupla).
-  var checkSide = function(sideStr) {
-    if (!sideStr || sideStr === 'TBD' || sideStr === 'BYE') return false;
-    var pp = null;
-    for (var j = 0; j < parts.length; j++) {
-      var p = parts[j];
-      var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-      // v4.0.76: casa também pelo nome canônico da entrada ("p1 / p2" — _entryDisplayName).
-      // O lado da partida de dupla é "A / B", mas o displayName da entrada pode ser só o p1;
-      // sem isto a entrada não era achada e caía no fallback de substring (nome, não uid).
-      var pCanon = (typeof window._entryDisplayName === 'function') ? window._entryDisplayName(p) : pName;
-      if (pName === sideStr || pCanon === sideStr) { pp = p; break; }
-    }
-    if (pp && typeof pp === 'object') {
-      if (user.uid && pp.uid && pp.uid === user.uid) return true;
-      // Duplas: verificar p1Uid e p2Uid individualmente
-      if (user.uid && pp.p1Uid && pp.p1Uid === user.uid) return true;
-      if (user.uid && pp.p2Uid && pp.p2Uid === user.uid) return true;
-      if (user.email && pp.email && pp.email === user.email) return true;
-      if (user.email && pp.email_lower && pp.email_lower === (user.email || '').toLowerCase()) return true;
-    }
-    // Fallback: nome do usuário aparece no nome do lado (ex: "Rodrigo Barth" em "Kelly / Rodrigo Barth")
-    if (user.displayName) {
-      var uDN = user.displayName;
-      if (sideStr === uDN || sideStr.indexOf(uDN) !== -1) return true;
-    }
-    return false;
-  };
-  if (m.isMonarch) {
-    // v4.0.77: Rei/Rainha — cada membro do time é um INDIVÍDUO (parceiro rotativo). Resolve
-    // por UID via checkSide (acha o participante pelo nome → checa p.uid/p1Uid/p2Uid), não
-    // por displayName/email solto. Cobre o 3º modo de fase de dupla junto com formada/sorteada.
-    if (Array.isArray(m.team1) && m.team1.some(function(nm) { return checkSide(nm); })) return 1;
-    if (Array.isArray(m.team2) && m.team2.some(function(nm) { return checkSide(nm); })) return 2;
-  }
-  if (checkSide(m.p1)) return 1;
-  if (checkSide(m.p2)) return 2;
+  if (!m || !user || !user.uid) return 0;
+  var uid = user.uid;
+  var _su = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };
+  if (_su(m, 'p1').indexOf(uid) !== -1) return 1;
+  if (_su(m, 'p2').indexOf(uid) !== -1) return 2;
   return 0;
 }
 
@@ -433,16 +403,13 @@ function _resultNeedsApproval(t, m, user) {
   if (_isUserOrgOrCoHost(t, user)) return false;
   var userSide = _userTeamInMatch(t, m, user);
   if (userSide === 0) return false;
-  var opposingSideStr = userSide === 1 ? m.p2 : m.p1;
+  var oppSide = userSide === 1 ? 'p2' : 'p1';
+  var opposingSideStr = m[oppSide];
   if (!opposingSideStr || opposingSideStr === 'TBD' || opposingSideStr === 'BYE') return false;
-  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  var opp = parts.find(function(p) {
-    return (typeof p === 'object') && ((p.displayName || p.name || '') === opposingSideStr);
-  });
-  // Verifica p1Uid E p2Uid — duplas têm ambos
-  if (!opp || typeof opp !== 'object') return false;
-  var _allUids = typeof window._participantUids === 'function' ? window._participantUids : function(p) { return p && p.uid ? [p.uid] : []; };
-  return _allUids(opp).length > 0;
+  // Adversário tem gente com conta (uid) pra aprovar? — UID direto do slot, nunca casando
+  // nome. Sem uid no lado adversário (guest/informal) → auto-aprova (não há quem aprove).
+  var _su = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };
+  return _su(m, oppSide).length > 0;
 }
 
 // Notifica o time adversário (cada player com uid) + organizador
@@ -474,54 +441,22 @@ function _notifyPendingApproval(t, m, proposerName) {
     level: 'fundamental',
     timestamp: Date.now()
   };
-  // Descobre o lado do proposer e notifica o lado adversário pelo nome completo do time.
-  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  function _findPartBySide(sideStr) {
-    return parts.find(function(p) {
-      return typeof p === 'object' && (p.displayName || p.name || '') === sideStr;
-    }) || null;
-  }
-  var proposerSide = 0;
-  if (pr.proposedBy || pr.proposedByEmail) {
-    proposerSide = _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail });
-  }
+  // Lado do proponente E adversário — SÓ pelo UID do slot (nunca casando nome). Notifica
+  // TODOS os uids do lado adversário; o proponente é pulado. Ver [[project_uid_identity_canon_locked]].
+  var _su = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };
+  var u1 = _su(m, 'p1'), u2 = _su(m, 'p2');
+  var proposerSide = pr.proposedBy ? (u1.indexOf(pr.proposedBy) !== -1 ? 1 : u2.indexOf(pr.proposedBy) !== -1 ? 2 : 0) : 0;
+  var oppUids = proposerSide === 1 ? u2 : proposerSide === 2 ? u1 : [];
   var skipUids = {};
-  var _allUids = typeof window._participantUids === 'function' ? window._participantUids : function(p) { return p && p.uid ? [p.uid] : []; };
-  var proposerSideStr = proposerSide === 1 ? m.p1 : proposerSide === 2 ? m.p2 : null;
-  if (proposerSideStr) {
-    var proposerPart = _findPartBySide(proposerSideStr);
-    _allUids(proposerPart).forEach(function(u) { skipUids[u] = true; });
-  } else {
-    if (pr.proposedBy) skipUids[pr.proposedBy] = true;
-  }
-  // Notifica TODOS os UIDs do lado adversário (p1Uid + p2Uid de duplas)
-  var opposingSideStr = proposerSide === 1 ? m.p2 : m.p1;
-  if (opposingSideStr && opposingSideStr !== 'TBD' && opposingSideStr !== 'BYE') {
-    var oppPart = _findPartBySide(opposingSideStr);
-    _allUids(oppPart).forEach(function(u) {
-      if (!skipUids[u]) {
-        window._sendUserNotification(u, notifData);
-        skipUids[u] = true;
-      }
-    });
-  }
-  // Also notify organizer if not proposer and not already notified
-  // First try by uid (works even when org isn't a participant — e.g. phone-only)
+  (proposerSide === 1 ? u1 : proposerSide === 2 ? u2 : (pr.proposedBy ? [pr.proposedBy] : [])).forEach(function(u) { if (u) skipUids[u] = true; });
+  oppUids.forEach(function(u) {
+    if (u && !skipUids[u]) { window._sendUserNotification(u, notifData); skipUids[u] = true; }
+  });
+  // Organizador + co-organizadores ativos — SÓ por uid (creatorUid / coHosts[].uid).
   var orgUid = t.creatorUid;
-  if (orgUid && !skipUids[orgUid]) {
-    window._sendUserNotification(orgUid, notifData);
-    skipUids[orgUid] = true;
-  } else {
-    // Fallback: acha o organizador entre os participantes. v2.8.80: uid (creatorUid) primeiro, email fallback.
-    var orgEmail = t.organizerEmail || t.creatorEmail;
-    if (orgEmail || t.creatorUid) {
-      var orgPart = parts.find(function(p) {
-        return typeof p === 'object' && ((t.creatorUid && p.uid === t.creatorUid) || (orgEmail && p.email === orgEmail));
-      });
-      if (orgPart && orgPart.uid && !skipUids[orgPart.uid]) {
-        window._sendUserNotification(orgPart.uid, notifData);
-      }
-    }
+  if (orgUid && !skipUids[orgUid]) { window._sendUserNotification(orgUid, notifData); skipUids[orgUid] = true; }
+  if (Array.isArray(t.coHosts)) {
+    t.coHosts.forEach(function(ch) { if (ch && ch.status === 'active' && ch.uid && !skipUids[ch.uid]) { window._sendUserNotification(ch.uid, notifData); skipUids[ch.uid] = true; } });
   }
 }
 
@@ -907,6 +842,8 @@ function _buildMatchPlayersList(t, m) {
 // Inline scoring has no pointLog/gameLog, so only games/sets aggregate —
 // point-level analytics (holds, breaks, deuce, streaks) stay zero here.
 function _persistInlineTournamentMatchRecord(t, m, s1, s2, tbP1, tbP2, isTiebreakEntry, useSets) {
+  // Sandbox: resultados do SB NÃO vazam pro matchHistory (nem stats, nem troféus).
+  if (window._isSandboxTournament && window._isSandboxTournament(t)) return;
   if (!window.FirestoreDB || !window.FirestoreDB.saveUserMatchRecords) return;
   var pl = _buildMatchPlayersList(t, m);
   if (!pl) return;
@@ -955,6 +892,8 @@ function _persistInlineTournamentMatchRecord(t, m, s1, s2, tbP1, tbP2, isTiebrea
 // GSM (set-by-set) variant used by _saveSetResult. m.sets already holds the
 // full per-set data so the record is richer than the inline path.
 function _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGamesP1, totalGamesP2) {
+  // Sandbox: resultados do SB NÃO vazam pro matchHistory (nem stats, nem troféus).
+  if (window._isSandboxTournament && window._isSandboxTournament(t)) return;
   if (!window.FirestoreDB || !window.FirestoreDB.saveUserMatchRecords) return;
   var pl = _buildMatchPlayersList(t, m);
   if (!pl) return;
@@ -1183,6 +1122,37 @@ window._showAllHiddenSwissPast = function (tId) {
   _rerenderBracket(tId);
 };
 
+// CANÔNICO (dono, 18/19-jul): o TIE-BREAK acontece no empate GATILHO configurado pelo organizador
+// (o campo "games por set", `gamesPerSet`): um set de N games vai a N-N e joga o TB → placar FINAL
+// (N+1, N). Ou seja gamesPerSet 6 → TB no 6-6 → final 7-6; gamesPerSet 5 → 5-5 → 6-5 (bate com o
+// padrão ITF do Beach Tennis, project_sport_rules_canonical). Um set foi decidido no TB sse o placar
+// difere por 1 E o PERDEDOR tem EXATAMENTE gamesPerSet (o vencedor gamesPerSet+1). RESPEITA a config
+// (não é "qualquer empate"). O placar digitado é o FINAL (sem somar +1). FONTE ÚNICA revelar+salvar.
+// (Antes o código usava gamesPerSet-1 → revelava no 6-5 e o 7-6 real não abria os campos — off-by-one.)
+window._isTiebreakSetScore = function (g1, g2, loserGames) {
+  g1 = parseInt(g1); g2 = parseInt(g2);
+  if (isNaN(g1) || isNaN(g2)) return false;
+  var lg = parseInt(loserGames) || 6;
+  return Math.abs(g1 - g2) === 1 && Math.min(g1, g2) === lg;
+};
+// Regra do TIE-BREAK do torneio (config do dono): 'g-1' = TB em (gp-1)-(gp-1) → set 6-5 (set
+// curto); 'g' = TB em gp-gp → set 7-6 (padrão tênis). Override por torneio em scoring.tiebreakAt;
+// fallback por ESPORTE quando o torneio não gravou (Beach Tennis = 5-5; resto = 6-6). O que muda é
+// os GAMES DO PERDEDOR no set decidido no TB (o gatilho que _isTiebreakSetScore usa).
+// "Usa sets?" — MESMO critério do reveal do tie-break: type==='sets' OU (tiebreak ligado + games
+// por set). Sem isto, save/display gateavam só em type==='sets' → o campo do TB aparecia (reveal),
+// mas o valor NÃO era gravado nem exibido no card decidido (caía no scoreP1 cru). Fonte ÚNICA pra
+// os 3 (reveal implícito + _saveResultInline + render do card). [[project_live_scoring_canonical]]
+window._scoringUsesSets = function (sc) {
+  return !!(sc && (sc.type === 'sets' || sc.type === 'gsm' || (sc.tiebreakEnabled !== false && sc.gamesPerSet)));
+};
+window._sportTiebreakAt = function (sport) { return (sport === 'Beach Tennis') ? 'g-1' : 'g'; };
+window._tbLoserGames = function (scoring, sport) {
+  var gp = parseInt(scoring && scoring.gamesPerSet) || 6;
+  var at = (scoring && scoring.tiebreakAt) || window._sportTiebreakAt(sport);
+  return (at === 'g-1') ? Math.max(1, gp - 1) : gp;
+};
+
 window._highlightWinner = function (matchId) {
   const s1El = document.getElementById(`s1-${matchId}`);
   const s2El = document.getElementById(`s2-${matchId}`);
@@ -1207,10 +1177,10 @@ window._highlightWinner = function (matchId) {
               // (não exige type==='sets'). Permite TB inputs em torneios simples
               // que tenham tiebreak configurado.
               var _tsc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(_tour, _matches[mi]) : _tour.scoring;
-              if (_tsc && _tsc.tiebreakEnabled !== false &&
-                  (_tsc.type === 'sets' || _tsc.gamesPerSet)) {
-                // Tiebreak triggers at (gamesPerSet - 1) — e.g. 5-5 in a 6-game set
-                _trigger = (parseInt(_tsc.gamesPerSet) || 6) - 1;
+              if (window._scoringUsesSets(_tsc) && _tsc.tiebreakEnabled !== false) {
+                // _trigger = games do PERDEDOR no set decidido no TB, conforme a regra do torneio
+                // (scoring.tiebreakAt: 'g-1'→6-5, 'g'→7-6; fallback por esporte). Ver _tbLoserGames.
+                _trigger = window._tbLoserGames(_tsc, _tour && _tour.sport);
               }
               break;
             }
@@ -1224,10 +1194,10 @@ window._highlightWinner = function (matchId) {
     // em alguns casos por race do dataset.tbShown vs reflow. Agora: simples —
     // se trigger hit, mostra E marca data-tb-shown. Se data-tb-shown='1', fica.
     // Reset só quando card re-renderiza (input novo, sem o data attribute).
-    var triggerHit = _trigger !== null && (
-      (s1 === _trigger + 1 && s2 === _trigger) ||
-      (s1 === _trigger && s2 === _trigger + 1)
-    );
+    // _trigger = gamesPerSet configurado pelo dono → revela os campos de TB SÓ no placar do
+    // gatilho: gp6 → 7-6, gp5 → 6-5 (nunca 6-5 num set de 6, nem 8-7 — o set fecha no gatilho).
+    var triggerHit = _trigger !== null && window._isTiebreakSetScore(s1, s2, _trigger);
+    if (window._dtrace && !isNaN(s1) && !isNaN(s2)) window._dtrace('tbReveal', { v: (window.SCOREPLACE_VERSION || '?'), s: s1 + '-' + s2, trigger: _trigger, hit: triggerHit });
     var alreadyShown = tb1El.getAttribute('data-tb-shown') === '1';
     if (triggerHit || alreadyShown) {
       tb1El.style.display = 'inline-block';
@@ -1294,17 +1264,12 @@ window._saveSetResult = function(tId, matchId) {
 
       const setData = { gamesP1: g1, gamesP2: g2 };
 
-      // Tiebreak triggers at (gamesPerSet - 1) — e.g. 5-5 in a 6-game set
-      var _tbAt = sc.gamesPerSet - 1;
-      if (g1 === _tbAt && g2 === _tbAt) {
+      // TB canônico: placar FINAL digitado (6-5/7-6/8-7) — difere por 1 e perdedor ≥ gamesPerSet-1.
+      // Registra os pontos do TB SEM somar +1 (o games digitado já é o final). window._isTiebreakSetScore.
+      if (window._isTiebreakSetScore(g1, g2, window._tbLoserGames(sc, t.sport))) {
         const tbP1 = parseInt(document.getElementById('tb-p1')?.value) || 0;
         const tbP2 = parseInt(document.getElementById('tb-p2')?.value) || 0;
-        setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
-        var tbMargin = (sc.tiebreakMargin || 2);
-        var tbTarget = (sc.tiebreakPoints || 7);
-        var tbComplete = (tbP1 >= tbTarget || tbP2 >= tbTarget) && Math.abs(tbP1 - tbP2) >= tbMargin;
-        if (tbComplete && tbP1 > tbP2) { setData.gamesP1 = g1 + 1; }
-        else if (tbComplete && tbP2 > tbP1) { setData.gamesP2 = g2 + 1; }
+        if (tbP1 || tbP2) setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
       }
 
       sets.push(setData);
@@ -1655,21 +1620,18 @@ window._saveResultInline = function (tId, matchId) {
   // GSM scoring compatibility: store inline scores as sets data when tournament uses GSM
   // v2.6.96: placar efetivo do match (a fase pode ter GSM próprio).
   const _isc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
-  const useSets = _isc && _isc.type === 'sets';
+  const useSets = window._scoringUsesSets(_isc);   // MESMO critério do reveal (type==='sets' OU tb+games)
   const isFixedSet = useSets && _isc.fixedSet;
   const tbEnabled = useSets && _isc.tiebreakEnabled !== false;
-  // Tiebreak triggers at (gamesPerSet - 1) — e.g. 5-5 in a 6-game set (final 6-5)
-  const tbTrigger = tbEnabled ? ((parseInt(_isc.gamesPerSet) || 6) - 1) : null;
+  // tbTrigger = games do PERDEDOR no set decidido no TB, conforme a regra do torneio
+  // (scoring.tiebreakAt: 'g-1' → 6-5; 'g' → 7-6; fallback por esporte). vencedor = tbTrigger+1.
+  const tbTrigger = tbEnabled ? window._tbLoserGames(_isc, t.sport) : null;
 
-  // Tiebreak mode: a trigger+1 / trigger score (e.g. 7-6) implies the set was
-  // decided on a tie-break. The winner of the set is already known from s1/s2;
-  // we only ask for the tie-break points.
+  // Tiebreak mode: o placar final (gamesPerSet+1, gamesPerSet), ex.: 7-6, implica que o set foi
+  // decidido no tie-break. O vencedor já é conhecido por s1/s2; só pedimos os pontos do TB.
   var tbP1 = NaN, tbP2 = NaN;
   var isTiebreakEntry = false;
-  if (tbEnabled && (
-    (s1 === tbTrigger + 1 && s2 === tbTrigger) ||
-    (s1 === tbTrigger && s2 === tbTrigger + 1)
-  )) {
+  if (tbEnabled && window._isTiebreakSetScore(s1, s2, tbTrigger)) {
     var tb1El = document.getElementById('tb1-' + matchId);
     var tb2El = document.getElementById('tb2-' + matchId);
     tbP1 = tb1El ? parseInt(tb1El.value) : NaN;
@@ -1698,6 +1660,22 @@ window._saveResultInline = function (tId, matchId) {
   // recebe notificação pra aprovar.
   var _curUser = window.AppStore && window.AppStore.currentUser;
   if (_curUser && _resultNeedsApproval(t, m, _curUser)) {
+    // TRAVA DE LÓGICA (item 3, incidente 18/jul): quando um lado já lançou (pendingResult
+    // não-disputado), o input do OUTRO lado fica travado — o 2º lançamento NÃO sobrescreve a
+    // proposta; o adversário confirma/edita/contesta. Antes o lock era só de RENDER, então um
+    // 2º _saveResultInline do lado oposto (view stale / mini-card) clobberava o pendingResult.
+    // Lado resolvido SÓ por uid (_userTeamInMatch). Mesmo lado (proponente relançando a própria
+    // proposta antes do adversário agir) segue permitido. [[project_uid_identity_canon_locked]]
+    var _existing = m.pendingResult;
+    if (_existing && !_existing.disputed) {
+      var _mySide = _userTeamInMatch(t, m, _curUser);
+      var _propSide = _existing.proposedBy ? _userTeamInMatch(t, m, { uid: _existing.proposedBy }) : 0;
+      if (_mySide > 0 && _propSide > 0 && _mySide !== _propSide) {
+        showNotification('Já tem placar pra aprovar', 'O outro time já lançou. Use Confirmar, Editar ou Contestar.', 'info');
+        _rerenderBracket(tId, matchId); // restaura o estado travado (Confirmar/Editar/Contestar)
+        return;
+      }
+    }
     var _proposedWinner;
     var _proposedDraw = false;
     if (s1 === s2 && allowDraw) {
@@ -2163,19 +2141,11 @@ window._approveResult = function(tId, matchId) {
       level: 'fundamental',
       timestamp: Date.now()
     };
-    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-    var _allUids = typeof window._participantUids === 'function' ? window._participantUids : function(p) { return p && p.uid ? [p.uid] : []; };
+    // Notifica os dois lados — SÓ pelos UIDs do slot (nunca casando nome). [[project_uid_identity_canon_locked]]
+    var _su = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };
     var notifSeen = {};
-    [m.p1, m.p2].forEach(function(side) {
-      if (!side || side === 'TBD' || side === 'BYE') return;
-      // Busca o participante pelo nome completo do lado (funciona para duplas)
-      var p = parts.find(function(pp) {
-        return typeof pp === 'object' && (pp.displayName || pp.name || '') === side;
-      });
-      // Notifica todos os UIDs (p1Uid + p2Uid para duplas)
-      _allUids(p).forEach(function(u) {
-        if (u && !notifSeen[u]) { notifSeen[u] = true; window._sendUserNotification(u, notifData); }
-      });
+    _su(m, 'p1').concat(_su(m, 'p2')).forEach(function(u) {
+      if (u && !notifSeen[u]) { notifSeen[u] = true; window._sendUserNotification(u, notifData); }
     });
   }
 
@@ -2655,7 +2625,7 @@ window._editResultInline = function(tId, matchId) {
   // If this is a GSM set match with tiebreak enabled, also render hidden TB inputs
   // pre-filled with any existing tiebreak points from the saved set.
   var _esc2 = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
-  var _useSets = _esc2 && _esc2.type === 'sets';
+  var _useSets = window._scoringUsesSets(_esc2);
   var _tbEnabled = _useSets && _esc2.tiebreakEnabled !== false;
   var _existingTb = (m.sets && m.sets[0] && m.sets[0].tiebreak) || null;
   var _tbInputStyle = 'width:40px;text-align:center;font-size:0.75rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.4);color:var(--text-bright);border-radius:5px;padding:3px 4px;';
@@ -2897,8 +2867,8 @@ window._tvBuildNextMatches = function(t) {
     html += '<div style="flex:1;text-align:center;">';
     // v4.5.68: nome vivo por uid do slot (Modo TV).
     var _rsl = (typeof window._resolveSideLive === 'function') ? window._resolveSideLive : function(_t, s) { return s; };
-    var _tvN1 = _rsl(t, m.p1 || 'TBD', (window._slotUids ? window._slotUids(m, 'p1') : (m.p1Uid || m.team1Uids)));
-    var _tvN2 = _rsl(t, m.p2 || 'TBD', (window._slotUids ? window._slotUids(m, 'p2') : (m.p2Uid || m.team2Uids)));
+    var _tvN1 = _rsl(t, m.p1 || 'TBD', (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)));
+    var _tvN2 = _rsl(t, m.p2 || 'TBD', (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2') : (m.p2Uid || m.team2Uids)));
     html += '<div style="font-size:1rem;font-weight:700;color:white;">' + presenceP1 + ' ' + window._safeHtml(_tvN1) + '</div>';
     html += '</div>';
     html += '<div style="font-size:0.9rem;font-weight:800;color:rgba(255,255,255,0.25);margin:0 12px;">VS</div>';
@@ -3970,6 +3940,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     serveOrder: [],      // [{team:1|2, name:'Ana'}, ...] rotation cycle (2 for singles, 4 for doubles)
     serveSkipped: false, // user chose to skip serve tracking
     servePending: false, // true when waiting for user to pick a server
+    secondServerPicked: false, // Tela 2 (duplas): 2º sacador (do outro time) já foi escolhido?
     totalGamesPlayed: 0, // total games completed (for serve rotation)
     gameLog: [],         // [{winner:1|2, serverName, serverTeam}] per completed normal game
     pointLog: []         // [{team:1|2, endSet:bool}] every point scored, set boundaries marked
@@ -4005,6 +3976,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (_ils.totalGamesPlayed) state.totalGamesPlayed = _ils.totalGamesPlayed;
     if (_ils.tieRule) state.tieRule = _ils.tieRule;
     if (Array.isArray(_ils.serveOrder) && _ils.serveOrder.length) state.serveOrder = _ils.serveOrder;
+    if (state.serveOrder.length > 0) state.secondServerPicked = true; // partida retomada → não re-perguntar
     state.serveSkipped = !!_ils.serveSkipped;
     if (Array.isArray(_ils.gameLog)) state.gameLog = _ils.gameLog.slice();
     if (Array.isArray(_ils.pointLog)) state.pointLog = _ils.pointLog.slice();
@@ -4046,7 +4018,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
             state.tieRulePending = !!remote.tieRulePending;
             state.totalGamesPlayed = remote.totalGamesPlayed || 0;
             state.tieRule = remote.tieRule || state.tieRule;
-            if (Array.isArray(remote.serveOrder) && remote.serveOrder.length > 0) state.serveOrder = remote.serveOrder;
+            if (Array.isArray(remote.serveOrder) && remote.serveOrder.length > 0) { state.serveOrder = remote.serveOrder; state.secondServerPicked = true; }
             state.serveSkipped = !!remote.serveSkipped;
             if (Array.isArray(remote.gameLog)) state.gameLog = remote.gameLog.slice();
             if (Array.isArray(remote.pointLog)) state.pointLog = remote.pointLog.slice();
@@ -5142,6 +5114,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Serve picker overlay no longer used — serve is set inline via draggable ball
   function _needsServePick() {
+    if (state.serveSkipped) return false;
+    if (state.isFinished || state.tieRulePending) return false;
+    // Tela 1: antes do 1º game e nenhum sacador escolhido.
+    if (state.totalGamesPlayed === 0 && state.serveOrder.length === 0) return true;
+    // Tela 2 (só duplas): entre o 1º e o 2º game, 2º sacador (do outro time) ainda não escolhido.
+    if (isDoubles && state.totalGamesPlayed === 1 && state.serveOrder.length >= 2 && !state.secondServerPicked) return true;
     return false;
   }
 
@@ -5239,42 +5217,93 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var _serveDragIdx = null;
   var _serveDragGhost = null;
 
+  // v1.3.11 (dono, 18-jul): tela de SACADOR por CLIQUE (não arrastar), em 2 estágios.
+  //   Tela 1 (antes do 1º game): escolher o 1º sacador entre TODOS. Botão verde "Iniciar".
+  //   Tela 2 (duplas, entre o 1º e o 2º game): escolher o 2º sacador SÓ do outro time. "Confirmar".
+  //   Clique num nome → box em volta + bolinha da modalidade à esquerda do nome. 1º pré-selecionado.
+  //   Fechar (esq) = pula o rastreio de saque. Layout scroll-safe (nada corta; ver mock).
+  var _pickerSel = null; // { team, idx } — jogador selecionado
+
+  function _serveStage() { return (state.totalGamesPlayed === 0) ? 1 : 2; }
+
+  function _servePickerPlayers(stage) {
+    var out = [];
+    if (stage === 2 && state.serveOrder.length >= 2) {
+      var t2 = state.serveOrder[1].team; // o time que saca no 2º game
+      var arr = t2 === 1 ? p1Players : p2Players;
+      for (var i = 0; i < arr.length; i++) out.push({ team: t2, idx: i, name: arr[i] });
+    } else {
+      for (var a = 0; a < p1Players.length; a++) out.push({ team: 1, idx: a, name: p1Players[a] });
+      for (var b = 0; b < p2Players.length; b++) out.push({ team: 2, idx: b, name: p2Players[b] });
+    }
+    return out;
+  }
+
   function _showServePickerOverlay() {
     var container = document.getElementById('live-score-content');
     if (!container) return;
+    var stage = _serveStage();
+    var players = _servePickerPlayers(stage);
+    if (!players.length) return;
+    // pré-seleção: mantém a atual se ainda válida; senão o 1º da lista (já vem escolhido).
+    var _valid = _pickerSel && players.some(function (p) { return p.team === _pickerSel.team && p.idx === _pickerSel.idx; });
+    if (!_valid) _pickerSel = { team: players[0].team, idx: players[0].idx };
 
-    // Enforce alternation
-    _rebuildProposedOrder();
+    var title = stage === 1 ? 'Quem saca primeiro?' : 'Quem saca no 2º game?';
+    var confirmLabel = stage === 1 ? 'Iniciar' : 'Confirmar';
 
-    // Build 4 cards in serve order
-    var cardsHtml = '';
-    for (var i = 0; i < _proposedOrder.length; i++) {
-      var p = _proposedOrder[i];
+    var cardsHtml = players.map(function (p) {
+      var sel = (_pickerSel.team === p.team && _pickerSel.idx === p.idx);
       var clr = p.team === 1 ? '#3b82f6' : '#ef4444';
-      var bgClr = p.team === 1 ? 'rgba(59,130,246,0.08)' : 'rgba(239,68,68,0.08)';
-      var bdrClr = p.team === 1 ? 'rgba(59,130,246,0.30)' : 'rgba(239,68,68,0.30)';
-      cardsHtml +=
-        '<div class="serve-card" draggable="true" data-serve-idx="' + i + '" style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:12px;border:1px solid ' + bdrClr + ';background:' + bgClr + ';cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,box-shadow 0.15s;">' +
-          '<div style="color:var(--text-muted);font-size:0.85rem;flex-shrink:0;opacity:0.4;">☰</div>' +
-          '<div style="width:24px;height:24px;border-radius:50%;background:' + clr + ';color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:800;flex-shrink:0;">' + (i + 1) + '</div>' +
-          _liveAvatarHtml(p.name, 32) +
-          '<div style="flex:1;min-width:0;font-size:0.95rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(p.name) + '</div>' +
-        '</div>';
-    }
+      var bg = sel ? (p.team === 1 ? 'rgba(59,130,246,0.16)' : 'rgba(239,68,68,0.16)') : 'rgba(255,255,255,0.03)';
+      var bd = sel ? clr : 'rgba(255,255,255,0.10)';
+      var ball = sel ? '<span style="font-size:1.15rem;line-height:1;flex-shrink:0;">' + _sportBall + '</span>' : '';
+      return '<button type="button" onclick="window._liveServeSelect(' + p.team + ',' + p.idx + ')" ' +
+        'style="box-sizing:border-box;width:100%;max-width:360px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:12px;cursor:pointer;text-align:left;' +
+        'border:2px solid ' + bd + ';background:' + bg + ';transition:background 0.12s,border-color 0.12s;">' +
+          _liveAvatarHtml(p.name, 34) + ball +
+          '<span style="flex:1;min-width:0;font-size:1rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(p.name) + '</span>' +
+        '</button>';
+    }).join('');
 
+    // Layout scroll-safe: barra FIXA (Fechar esq · título · Iniciar/Confirmar dir) + lista ROLÁVEL.
     container.innerHTML =
-      '<div style="display:flex;flex-direction:column;align-items:center;height:100%;padding:1rem 1.5rem 1.5rem;gap:1rem;">' +
-        // Action buttons pinned at the top of the page.
-        '<div style="display:flex;gap:12px;flex-shrink:0;">' +
-          '<button onclick="window._liveConfirmServeOrder()" style="padding:14px 32px;border-radius:12px;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:0.95rem;font-weight:700;box-shadow:0 2px 12px rgba(16,185,129,0.3);">Iniciar Partida</button>' +
-          '<button onclick="window._liveSkipServe()" style="padding:14px 20px;border-radius:12px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.85rem;font-weight:600;">Pular</button>' +
+      '<div style="height:100%;display:flex;flex-direction:column;align-items:stretch;">' +
+        '<div style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 12px;background:#0a0e1a;border-bottom:1px solid rgba(255,255,255,0.05);">' +
+          '<button onclick="window._liveSkipServe()" style="flex-shrink:0;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.82rem;font-weight:600;">Fechar</button>' +
+          '<div style="flex:1;min-width:0;text-align:center;font-size:0.9rem;font-weight:800;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>' +
+          '<button onclick="window._liveServeConfirm()" style="flex-shrink:0;padding:10px 20px;border-radius:10px;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:0.9rem;font-weight:800;box-shadow:0 2px 12px rgba(16,185,129,0.3);">' + confirmLabel + '</button>' +
         '</div>' +
-        '<div style="font-size:1.1rem;font-weight:800;color:var(--text-bright);">Ordem de Saque</div>' +
-        '<div id="serve-order-list" style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:360px;">' + cardsHtml + '</div>' +
+        '<div id="serve-order-list" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;padding:14px 1rem calc(14px + env(safe-area-inset-bottom, 0px));">' + cardsHtml + '</div>' +
       '</div>';
-
-    setTimeout(function() { _setupServeDragDrop(); }, 30);
   }
+
+  // clique num nome → seleciona (box + bolinha) e re-renderiza a tela.
+  window._liveServeSelect = function (team, idx) {
+    _pickerSel = { team: team, idx: idx };
+    _showServePickerOverlay();
+  };
+
+  // Iniciar (tela 1) / Confirmar (tela 2) → aplica o sacador escolhido via _liveSetServer
+  // (constrói/atualiza a serveOrder e re-renderiza; a tela some porque _needsServePick vira false).
+  window._liveServeConfirm = function () {
+    if (!_pickerSel) return;
+    var sel = _pickerSel;
+    if (!isDoubles) {
+      // SIMPLES: 1º sacador escolhido; o 2º é o outro jogador. serveOrder = 2 entradas (não 4 —
+      // _liveSetServer é feito p/ duplas e criaria jogadores-fantasma). Sem Tela 2 (só 2 pessoas).
+      var otherTeam = sel.team === 1 ? 2 : 1;
+      var srvName = (sel.team === 1 ? p1Players : p2Players)[sel.idx] || '';
+      var otherName = (otherTeam === 1 ? p1Players : p2Players)[0] || '';
+      state.serveOrder = [{ team: sel.team, name: srvName, pIdx: 0 }, { team: otherTeam, name: otherName, pIdx: 0 }];
+      state.secondServerPicked = true;
+      _render();
+      _watchNotify();
+      return;
+    }
+    if (state.totalGamesPlayed === 1) state.secondServerPicked = true;
+    _liveSetServer(sel.team, sel.idx);
+  };
 
   function _setupServeDragDrop() {
     var cards = document.querySelectorAll('[data-serve-idx]');
@@ -5385,10 +5414,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _watchNotify(); // relógio começa sem rastrear sacador
   };
 
-  // Auto-confirm serve order from proposed order (no separate picker screen)
-  if (state.serveOrder.length === 0 && !state.serveSkipped && _proposedOrder.length >= serveSlots) {
-    state.serveOrder = _proposedOrder.map(function(p) { return { team: p.team, name: p.name, pIdx: p.pIdx }; });
-  }
+  // v1.3.11: NÃO auto-preenche a ordem de saque — a Tela 1 (escolher o 1º sacador) é
+  // obrigatória em partida nova (dono, 18-jul). serveOrder vazio → _needsServePick() dispara
+  // a tela. Retomada/sync já traz serveOrder e não re-pergunta (ver blocos acima).
 
   // Set 1st server by dragging ball to a player name (inline, on the live scoring screen)
   // Before game 1: any player can be set as 1st server → auto-sets 3rd (teammate)
@@ -7244,6 +7272,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     state.tieRule = remote.tieRule || state.tieRule;
     if (Array.isArray(remote.serveOrder) && remote.serveOrder.length > 0) {
       state.serveOrder = remote.serveOrder;
+      state.secondServerPicked = true;
     }
     state.serveSkipped = !!remote.serveSkipped;
     if (Array.isArray(remote.gameLog)) state.gameLog = remote.gameLog.slice();
@@ -7956,9 +7985,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       if (_pi < p1Players.length) _proposedOrder.push({ team: 1, name: p1Players[_pi], pIdx: _pi });
       if (_pi < p2Players.length) _proposedOrder.push({ team: 2, name: p2Players[_pi], pIdx: _pi });
     }
-    if (!state.serveSkipped && _proposedOrder.length >= serveSlots) {
-      state.serveOrder = _proposedOrder.map(function(p) { return { team: p.team, name: p.name, pIdx: p.pIdx }; });
-    }
+    // v1.3.11: partida nova/reiniciada → zera a ordem de saque pra a Tela 1 (escolher o 1º
+    // sacador) reaparecer. Antes auto-preenchia com a ordem padrão, pulando a tela.
+    state.serveOrder = [];
+    state.secondServerPicked = false;
   }
 
   // Reset handler: zero all points, restart from scratch — always available
@@ -7978,6 +8008,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         state.serveOrder = [];
         state.serveSkipped = false;
         state.servePending = false;
+        state.secondServerPicked = false;
         state.gameLog = [];
         state.pointLog = [];
         // Reset tieRule to original value from scoring config
@@ -8466,6 +8497,20 @@ window._openLiveScoring = function(tId, matchId, opts) {
         if (state.isFinished && !_resultSaved) {
           try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
         }
+        // v1.3.x: registra o jogo que ACABOU no histórico da sessão ANTES de
+        // re-sortear (a mesma coisa que _doRestartNow e _liveScoreGoToSetup já
+        // fazem). Sem isto, o "re-sortear" vindo do RELÓGIO (que cai aqui, e não
+        // nos fluxos do celular) nunca acumulava pares jogados → _rrSuggestNow
+        // travava em 1 par e a sugestão "👑 Rei/Rainha" jamais aparecia no
+        // relógio (bug reportado: 3º jogo mostrava re-sortear normal). Usa os
+        // times ATUAIS, antes do shuffle abaixo mutar p1Players/p2Players.
+        if (isCasual && isDoubles && state.isFinished && state.winner != null) {
+          _sessionGameHistory.push({
+            p1: p1Players.slice(),
+            p2: p2Players.slice(),
+            winner: state.winner || 0
+          });
+        }
         // v1.3.56-beta: se o overlay foi aberto sobre uma partida já finalizada
         // (viewOnly — histórico), desvincula o novo jogo do doc antigo ANTES de
         // resetar o estado. Sem isso, _closeLiveScoring chama cancelCasualMatch
@@ -8508,6 +8553,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         state.serveOrder = [];
         state.serveSkipped = false;
         state.servePending = false;
+        state.secondServerPicked = false;
         state.gameLog = [];
         state.pointLog = [];
         state.tieRule = sc.tieRule || null;
@@ -9800,7 +9846,7 @@ window._openScanQR = function() {
         '<div style="font-size:1.1rem;font-weight:800;color:#fff;margin-bottom:14px;text-align:center;">Digite o código da sala</div>' +
         '<input type="text" id="scan-qr-code-input" placeholder="Ex: ABC123" maxlength="8" style="width:100%;box-sizing:border-box;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,0.06);border:2px solid rgba(168,85,247,0.3);color:#fff;font-size:1.3rem;font-weight:800;letter-spacing:4px;text-align:center;text-transform:uppercase;outline:none;font-family:monospace;margin-bottom:14px;" onfocus="this.style.borderColor=\'rgba(168,85,247,0.7)\'" onblur="this.style.borderColor=\'rgba(168,85,247,0.3)\'" />' +
         '<div style="display:flex;gap:8px;">' +
-          '<button id="scan-qr-manual-cancel-btn" style="flex:1;padding:14px;border-radius:12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;font-size:0.95rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
+          '<button id="scan-qr-manual-cancel-btn" style="flex:1;padding:14px;border-radius:12px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);color:#ef4444;font-size:0.95rem;font-weight:700;cursor:pointer;">Cancelar</button>' +
           '<button id="scan-qr-go-btn" style="flex:1;padding:14px;border-radius:12px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;color:white;font-size:0.95rem;font-weight:700;cursor:pointer;">Entrar</button>' +
         '</div>' +
       '</div>' +
@@ -11708,7 +11754,7 @@ window._openCasualMatch = function(restoreOpts) {
       '<div style="background:var(--bg-darker,#0f172a);border-radius:18px;padding:22px;max-width:340px;width:100%;">' +
         '<div style="font-size:1.05rem;font-weight:800;color:#fff;margin-bottom:14px;text-align:center;">Gênero do jogador</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">' + btnsHtml + '</div>' +
-        '<button id="_gender-picker-cancel" style="width:100%;padding:12px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-size:0.88rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
+        '<button id="_gender-picker-cancel" style="width:100%;padding:12px;border-radius:10px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);color:#ef4444;font-size:0.88rem;font-weight:700;cursor:pointer;">Cancelar</button>' +
       '</div>';
     document.body.appendChild(ov);
     function _close() { try { ov.remove(); } catch(e) {} }

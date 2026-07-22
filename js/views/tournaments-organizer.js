@@ -1,5 +1,50 @@
 // ── Organizer Actions & Notifications ──
 // Clone tournament — creates a new tournament based on an existing one
+// ─── Sandbox (SB) do desenvolvedor ──────────────────────────────────────────
+// Cria (ou abre) um clone PRIVADO do torneio que roda EXATAMENTE o mesmo código do
+// original — as mesmas Cloud Functions (drawRound, integrateLateEntries, enroll/deenroll,
+// autoDraw). O SB começa como cópia PROFUNDA do estado atual do original + as flags de
+// isolamento. Depois um trigger de CF (Etapa 3) espelha o roster do original → SB. As
+// ÚNICAS diferenças: notificações mudas, stats/resultados não vazam, invisível pra não-dev.
+// Só o dev (_isTestIdentity) enxerga/usa. Ver memória project_sandbox_tournament.
+window._openOrCreateSandbox = function(origId) {
+    if (!(window._isTestIdentity && window._isTestIdentity())) return; // só o dev
+    var orig = window._findTournamentById ? window._findTournamentById(origId) : null;
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!orig || !cu || !cu.uid) return;
+    if (window._isSandboxTournament && window._isSandboxTournament(orig)) {
+        // já é um SB — não cria SB de SB; só abre.
+        window.location.hash = '#tournaments/' + orig.id; return;
+    }
+    // Já existe um SB deste original? Abre.
+    var existing = window._findSandboxOf ? window._findSandboxOf(origId) : null;
+    if (existing) { window.location.hash = '#tournaments/' + existing.id; return; }
+    // Clona o estado ATUAL (deep copy) → SB.
+    var clone;
+    try { clone = JSON.parse(JSON.stringify(orig)); } catch (e) { clone = Object.assign({}, orig); }
+    var sbId = 'tour_' + Date.now() + '_sb';
+    clone.id = sbId;
+    clone.name = '(SB) ' + String(orig.name || 'Torneio');
+    clone.isSandbox = true;
+    clone.sandboxOf = String(origId);
+    clone.notificationsMuted = true;   // killswitch — rede de segurança
+    clone.isPublic = false;            // privado
+    clone.sandboxOwnerUid = cu.uid;
+    clone.creatorUid = cu.uid;         // dev = admin do SB (autoriza drawRound/reset)
+    clone.organizerEmail = cu.email || '';
+    clone.organizerName = cu.displayName || '';
+    clone.createdAt = new Date().toISOString();
+    clone.sandboxSyncedAt = Date.now();
+    delete clone.sandboxId;            // SB não tem SB próprio
+    if (!Array.isArray(clone.memberUids)) clone.memberUids = [];
+    if (clone.memberUids.indexOf(cu.uid) === -1) clone.memberUids.push(cu.uid);
+    window.AppStore.addTournament(clone);
+    if (typeof showNotification === 'function') {
+        showNotification('🧪 Sandbox criado', '"' + clone.name + '" — privado, notificações mudas, espelha o original.', 'success');
+    }
+    setTimeout(function() { window.location.hash = '#tournaments/' + sbId; }, 400);
+};
+
 window._cloneTournament = function(tournamentId) {
     var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });
     if (!t || !window.AppStore.currentUser) return;
@@ -113,6 +158,13 @@ function _notifDedupCheck(uid, type, tId, matchId) {
 // WhatsApp pra pular — `skipWhatsApp` virou no-op e só a cópia por e-mail importa.
 window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     if (!window.FirestoreDB || !window.FirestoreDB.db || !uid) return;
+    // Sandbox/killswitch: se a notif é de um torneio com notificações mudas, não dispara.
+    // Resolve o torneio pelo id do payload (o SB está carregado quando a ação parte dele).
+    if (notifData && notifData.tournamentId && typeof window._findTournamentById === 'function'
+        && window._tournamentNotificationsMuted) {
+        var _tMute = window._findTournamentById(notifData.tournamentId);
+        if (_tMute && window._tournamentNotificationsMuted(_tMute)) return;
+    }
     var _skipOpt = (_skipDispatch && typeof _skipDispatch === 'object') ? _skipDispatch : null;
     var _skipAll = (_skipDispatch === true);
     var _skipEmail = _skipAll || !!(_skipOpt && _skipOpt.skipEmail);
@@ -125,10 +177,11 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     // próprio uid em casos edge (auto-friendship via bugs históricos ou
     // email que resolve pra si mesmo). Notif pra si mesmo é sempre noise —
     // user já sabe o que acabou de fazer (toast no momento da ação cobre).
-    // Nenhum call site legítimo notifica a si mesmo: todos visam organizador,
-    // amigo, participante, oponente, etc.
+    // v1.3.22: EXCEÇÃO — notifData._allowSelf=true permite notificar quem disparou
+    // (ex.: o organizador quer receber o convite do grupo do WhatsApp "pra monitorar",
+    // igual ao comunicado do org via CF). Fora isso, self continua sendo suprimido.
     var _cu = window.AppStore && window.AppStore.currentUser;
-    if (_cu && _cu.uid && uid === _cu.uid) {
+    if (_cu && _cu.uid && uid === _cu.uid && !(notifData && notifData._allowSelf)) {
         return;
     }
     try {
@@ -157,7 +210,7 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
             // qualquer override do caller pra evitar spoofing.
             var _notifPayload = {};
             Object.keys(notifData).forEach(function(k) {
-                if (k === 'level') return; // local-only filter
+                if (k === 'level' || k === '_allowSelf') return; // flags locais — não gravar
                 var v = notifData[k];
                 if (v === undefined) return; // Firestore reject
                 _notifPayload[k] = v;
@@ -176,7 +229,22 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         }
         // Email dispatch — writes to 'mail' Firestore collection, processed by
         // the "Trigger Email from Firestore" extension.
-        var email = (!_skipEmail && profile.notifyEmail !== false && profile.email) ? profile.email : null;
+        // v1.3.28: resolve TODOS os e-mails do usuário — principal (`email`) MAIS os
+        // vinculados por união de contas (`linkedEmails[]`, verificados) — respeitando
+        // o opt-out `notifyEmail`. A pessoa pode ler qualquer um, então TODOS recebem.
+        // ⚠️ A resolução é INDEPENDENTE do `_skipEmail`: o skip só gateia o DISPATCH
+        // individual abaixo; o RETORNO precisa dos e-mails pra que o lote em
+        // _notifyTournamentParticipants monte `allEmails`. Antes (regressão v2.4.82) o
+        // `!_skipEmail` anulava `email` no caminho skip → allEmails saía VAZIO → e-mail
+        // de torneio (grupo WhatsApp, sorteio, rodada…) NUNCA disparava.
+        var _optedIn = (profile.notifyEmail !== false);
+        var _seenEm = {}, emails = [];
+        var _pushEm = function(e) { var k = String(e == null ? '' : e).trim().toLowerCase(); if (k && !_seenEm[k]) { _seenEm[k] = true; emails.push(k); } };
+        if (_optedIn) {
+            _pushEm(profile.email);
+            if (Array.isArray(profile.linkedEmails)) profile.linkedEmails.forEach(_pushEm);
+        }
+        var email = emails.length ? emails[0] : null;
         // v1.2.9: a resolução de telefone saiu — não há canal de WhatsApp pra onde
         // mandar (número banido, portfólio Meta morto). Ver project_whatsapp_meta_2fa_block.
 
@@ -186,7 +254,7 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         // WhatsApp ("Olá, Rodrigo."). Primeiro nome só: o template é curto e
         // "Olá, Rodrigo" lê melhor que "Olá, Rodrigo Barth".
         var _toName = String(profile.displayName || '').trim().split(/\s+/)[0] || '';
-        if (email && typeof window._dispatchChannels === 'function') {
+        if (!_skipEmail && emails.length && typeof window._dispatchChannels === 'function') {
             var tUrl = notifData.tournamentId ? 'https://scoreplace.app/#tournaments/' + notifData.tournamentId : 'https://scoreplace.app';
             // v1.8.1-beta: pass ALL notifData fields so rich email templates
             // can access player1/player2/score1/score2/matchLines/playerMatch etc.
@@ -196,13 +264,13 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
             _tplData.subject = 'scoreplace.app — ' + (notifData.tournamentName || 'Notificação');
             if (!_tplData.message) _tplData.message = '';
             window._dispatchChannels(
-                { emails: email ? [email] : [] },
+                { emails: emails.slice() },
                 notifData.type || 'info',
                 _tplData
             );
         }
 
-        return { email: email, name: _toName };
+        return { email: email, emails: emails, name: _toName };
     } catch(e) {
         window._warn('_sendUserNotification error:', e);
         return null;
@@ -218,6 +286,9 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
 window._notifyTournamentParticipants = async function(tournament, notifData, excludeEmail) {
     if (!window.FirestoreDB || !window.FirestoreDB.db) return;
     var t = tournament;
+    // Sandbox/killswitch: torneio com notificações mudas NÃO dispara nada (nem app,
+    // nem e-mail). Ver _tournamentNotificationsMuted. É a rede de segurança do SB.
+    if (window._tournamentNotificationsMuted && window._tournamentNotificationsMuted(t)) return;
     var parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
 
     // Build list of {uid, email} from participants — prefer uid directly from participant object
@@ -270,14 +341,23 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
             }
             if (uid) {
                 var result = await window._sendUserNotification(uid, nd, true); // skip individual dispatch; batch below
-                if (result && result.email) allEmails.push(result.email);
+                // v1.3.28: coleta TODOS os e-mails do usuário (principal + linkedEmails)
+                // pro lote — não só o principal.
+                if (result && Array.isArray(result.emails)) result.emails.forEach(function(e){ allEmails.push(e); });
+            } else if (r.email) {
+                // Participante informal (sem conta): sem perfil pra ler linkedEmails/opt-out,
+                // mas o e-mail do próprio participante é destinatário válido.
+                allEmails.push(r.email);
             }
         } catch(e) { window._warn('Notify participant error:', e); }
     }
 
-    // Auto-dispatch email channel
-    var channelResult = { emails: allEmails };
-    if (allEmails.length > 0 && typeof window._dispatchChannels === 'function') {
+    // Auto-dispatch email channel — dedup case-insensitive (dois participantes podem
+    // compartilhar um e-mail; o mesmo linkedEmail pode reaparecer em outro perfil).
+    var _seenAll = {}, _emailsDedup = [];
+    allEmails.forEach(function(e){ var k = String(e == null ? '' : e).trim().toLowerCase(); if (k && !_seenAll[k]) { _seenAll[k] = true; _emailsDedup.push(k); } });
+    var channelResult = { emails: _emailsDedup };
+    if (_emailsDedup.length > 0 && typeof window._dispatchChannels === 'function') {
         var tUrl = 'https://scoreplace.app/#tournaments/' + String(t.id);
         // v1.8.1-beta: pass all nd fields so rich email templates receive full payload
         var _tplData = Object.assign({}, nd);
@@ -322,6 +402,7 @@ window._notifCta = function(type, td) {
   if (['cohost_invite','host_transfer_invite'].indexOf(t) !== -1 && tUrl) return { label: 'Responder', url: tUrl };
   if ((t === 'presence_plan' || t === 'presence_checkin') && td.placeId) return { label: 'Ver local', url: base + '/#venues/' + td.placeId };
   if ((t === 'casual_invite' || t === 'casual_link_accepted' || t === 'casual_link_rejected' || t === 'casual_link_request') && td.roomCode) return { label: 'Ver partida', url: base + '/#casual/' + String(td.roomCode).toUpperCase() };
+  if (t === 'wa_group' && td.waGroupLink) return { label: '💬 Entrar no grupo', url: String(td.waGroupLink) };
   if (t === 'friend_request') return { label: 'Responder', url: base + '/#notifications' };
   if (t === 'poll' && tUrl) return { label: '📊 Responder enquete', url: tUrl };
   if (t === 'schedule' && tId) return { label: '📅 Combinar jogo', url: base + '/#bracket/' + tId };
@@ -423,6 +504,13 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
  * Should be called on app load / periodically.
  */
 window._checkTournamentReminders = async function() {
+    // Item 7 (jul/2026): o lembrete de torneio agora sai por uma CF AGENDADA CONFIÁVEL
+    // (sendTournamentReminders) — server-side, dedup por torneio, entrega mesmo quem não
+    // abre o app. Este caminho de cliente (só rodava no login, dedup por localStorage por-
+    // dispositivo → gente ficava sem aviso) foi APOSENTADO pra não duplicar o envio. Vive
+    // como no-op só pra não quebrar os call sites. Ver project_tournament_reminder_cf.
+    return;
+    // eslint-disable-next-line no-unreachable
     if (!window.AppStore || !window.AppStore.currentUser || !window.FirestoreDB) return;
     var cu = window.AppStore.currentUser;
     var today = new Date();

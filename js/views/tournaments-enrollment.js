@@ -185,10 +185,20 @@ function _checkEnrollmentEligibility(t, user) {
 
 // Helper: check if late enrollment to standby is allowed
 function _allowsLateEnrollment(t) {
-  // valor EFETIVO da fase corrente (per-phase sobrepõe o top-level) — cada fase gerencia a sua.
+  // v1.3.134 (regra do dono): "inscrições durante a fase" é UMA regra só — o toggle standby/expand
+  // abre a inscrição tardia e a JANELA fica aberta na R1, fechando no 1º PLACAR LANÇADO da R2.
+  // Fonte ÚNICA: _lateEnrollWindowOpen (toggle + status + janela R1→R2). Antes esta função olhava
+  // SÓ o toggle, então o add/self-enroll continuava liberado DEPOIS da R2 — dessincronizado do
+  // botão +Participante (que já usava a janela). Todos os call sites desta função rodam em contexto
+  // pós-sorteio/fechado, então a janela é o critério correto. [[project_late_enrollment_default_closed_live_toggle]]
+  if (typeof window._lateEnrollWindowOpen === 'function') return window._lateEnrollWindowOpen(t);
   var le = (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) || 'closed';
   return le === 'standby' || le === 'expand';
 }
+
+// v1.3.66: _setPhaseLateEnrollment + _phaseLateEnrollControlHtml + _isTournamentOrg REMOVIDOS
+// (controle "INSCRIÇÕES DURANTE A FASE" saiu das Ferramentas do Organizador — não foi pedido).
+// A config de novos confrontos vive na criação/edição do torneio e no painel do sorteio.
 
 // v2.1.66/67: plano de presença ("Planejar ida") vinculado ao torneio.
 // Calcula a janela desejada (início + duração estimada do torneio) a partir do
@@ -196,6 +206,8 @@ function _allowsLateEnrollment(t) {
 // usada por criar/sincronizar — garante consistência.
 window._computeTournamentPlanWindow = function(t) {
   if (!t || !window.PresenceDB) return null;
+  if (t.status === 'finished') return null;                                  // encerrado: acabou, não planeja ida
+  if (window._isSandboxTournament && window._isSandboxTournament(t)) return null; // SB não vaza presença (isolamento)
   if (window._isLigaFormat && window._isLigaFormat(t)) return null;          // temporada contínua
   if (!t.startDate || String(t.startDate).indexOf('T') === -1) return null;  // exige hora
   var startsAt = new Date(t.startDate).getTime();
@@ -220,6 +232,11 @@ window._computeTournamentPlanWindow = function(t) {
   if (!endsAt) endsAt = startsAt + 3 * 3600000;
   var MAX = 12 * 3600000;
   if (endsAt - startsAt > MAX) endsAt = startsAt + MAX;                       // cap 1 sessão
+  // v1.3.33: sessão INTEIRA no passado → sem "ida planejada". Torneio de data passada
+  // (ex: encerrado/resetado com startDate antigo) criava um plano que NUNCA fica ativo
+  // (loadMyActive filtra passado) → _findTournamentPresencePlan não achava → recriava +
+  // re-toastava "🗓️ Ida planejada" a CADA abertura do torneio. Guard mata o loop.
+  if (endsAt && endsAt < Date.now()) return null;
   var sport = window.PresenceDB.normalizeSport(t.sport || '');
   var w = { startsAt: startsAt, endsAt: endsAt, placeId: placeId, venueName: venueName, sports: sport ? [sport] : [] };
   if (t.venueLat) { var la = parseFloat(t.venueLat); if (!isNaN(la)) w.venueLat = la; }
@@ -1460,7 +1477,7 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
           '<button type="button" class="cancel-x-btn" title="Limpar" onclick="window._apClear()" style="--cx-size:18px;">✕</button>' +
         '</div>' +
         '<div style="display:flex;gap:8px;margin-top:14px;">' +
-          '<button onclick="document.getElementById(\'add-participant-overlay\').remove()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
+          '<button onclick="document.getElementById(\'add-participant-overlay\').remove()" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
           '<button id="ap-confirm" onclick="window._apConfirm()" disabled style="flex:2;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff;font-weight:700;font-size:0.88rem;cursor:not-allowed;opacity:0.4;transition:opacity 0.2s;">Adicionar</button>' +
         '</div>' +
       '</div>' +

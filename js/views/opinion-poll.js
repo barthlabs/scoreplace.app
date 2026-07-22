@@ -332,7 +332,7 @@
       // ao rolar (o container do overlay é o scroller; top:0 gruda nele). z-index alto
       // pra ficar acima dos blocos de seção.
       '<div style="position:sticky;top:0;z-index:10;padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#4338ca,#6d28d9);border-radius:16px 16px 0 0;">' +
-        '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">Cancelar</button>' +
+        '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;border:1px solid rgba(239,68,68,0.45);">Cancelar</button>' +
         '<span style="font-weight:800;color:#fff;font-size:0.95rem;">📊 ' + (editing ? 'Editar enquete' : 'Nova enquete') + '</span>' +
         '<button type="button" onclick="' + saveCall + '" class="btn btn-sm" style="background:#fff;color:#4338ca;font-weight:800;border:none;">' + (editing ? 'Salvar' : 'Criar') + '</button>' +
       '</div>' +

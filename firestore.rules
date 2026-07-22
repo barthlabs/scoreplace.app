@@ -101,8 +101,11 @@ service cloud.firestore {
           'sitOutHistory', 'lastAutoDrawAt',
           // Visibilidade do sorteio (set quando rodada fecha)
           'drawVisibility',
-          // Check-in / presença / lista de espera em torneio
-          'checkedIn', 'absent', 'tournamentStarted',
+          // Check-in / presença / lista de espera em torneio.
+          // v1.3.19: checkedInConfirmed = "Confirmado" (azul) — o participante confirma que vem
+          // mas NÃO está no local (sem GPS/fora da área). NÃO conta como presente (só o verde
+          // checkedIn conta); é um aviso pro organizador. Mesmo allowlist do checkedIn.
+          'checkedIn', 'checkedInConfirmed', 'absent', 'tournamentStarted',
           'standbyParticipants', 'waitlist',
           // Activity log (logAction escreve em t.history)
           'history',
@@ -153,6 +156,13 @@ service cloud.firestore {
     match /discoveryFeed/{tournamentId} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // DEBUG (v1.3.42, TEMPORÁRIO): log do fluxo de sorteio, gravado pelo cliente, pra o
+    // desenvolvedor LER direto no Firestore (sem depender de print de tela). Doc por uid.
+    // Remover quando o bug do fluxo de sorteio estiver fechado.
+    match /debugDrawLogs/{docId} {
+      allow read, write: if request.auth != null;
     }
 
     match /tournaments/{tournamentId} {

@@ -95,7 +95,11 @@
   //   conf  : ligado = Novos Confrontos (➕) · desligado = Suplentes Apenas (🪑)  [só aparece quando aberta]
   function _lateEnrollElimBlock(e) {
     var T = window._t || function (k) { return k; };
-    var v = (['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) >= 0) ? e.lateEnrollment : 'closed';
+    // 'inherit' (default) = a elim SEGUE a inscrição da fase inicial (#late-enrollment do form).
+    // Exibe o valor herdado + aviso; tocar num toggle grava um valor EXPLÍCITO (regra própria).
+    var _explicit = ['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) >= 0;
+    var _inh = (function () { var el = document.getElementById('late-enrollment'); var val = el && el.value; return (['closed', 'standby', 'expand'].indexOf(val) >= 0) ? val : 'expand'; })();
+    var v = _explicit ? e.lateEnrollment : _inh;
     var isClosed = v === 'closed', isExpand = v === 'expand';
     var onRow = 'border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);';
     var offRow = 'border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);';
@@ -116,9 +120,10 @@
       T(isExpand ? 'create.lateEnrollExpand' : 'create.lateEnrollSuplentesOnly'),
       T(isExpand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc'),
       _tg(isExpand, 'window._f2ElimLateConf(this.checked)')) + '</div>');
+    var inheritHint = _explicit ? '' : ('<div style="font-size:0.72rem;color:#93c5fd;margin:0 0 8px;display:flex;align-items:flex-start;gap:5px;line-height:1.4;"><span>🔗</span><span>' + T('create.lateEnrollInheritHint') + '</span></div>');
     return '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:12px;padding:1rem;margin-top:14px;">' +
       '<p style="margin:0 0 0.75rem;font-size:0.8rem;color:#fbbf24;font-weight:600;text-transform:uppercase;letter-spacing:1px;">⏱️ ' + T('create.lateEnrollSection') + '</p>' +
-      masterRow + confRow + '</div>';
+      inheritHint + masterRow + confRow + '</div>';
   }
   // Janela da fase em dias: (término − 1º sorteio). Base da via de mão dupla rodadas↔repetir.
   // v4.4.62: CONSIDERA O HORÁRIO de cada campo (não meia-noite). 1º sorteio = data+hora do
@@ -380,6 +385,10 @@
       '<input type="checkbox"' + (e.ativa ? ' checked' : '') + (_elimLocked ? ' disabled' : '') + ' onchange="window._f2Elim(this.checked)">' +
       '<span class="toggle-slider"></span></label>';
     var eb = '';
+    // v1.3.99: slot do FORM (DATAS + INSCRIÇÕES durante a fase) da fase INICIAL na eliminação
+    // DIRETA. Fica FORA do wrapper de trava (igual às datas da classificatória) → editável no
+    // calor do torneio mesmo após o sorteio. Só a ESTRUTURA trava. Ver [[project_late_enrollment_default_closed_live_toggle]].
+    var _elimInitExtra = '';
     if (e.ativa) {
       if (!cfg.classifAtiva) {
         // v4.4.33: ELIMINAÇÃO DIRETA (sem classificatória) — todos os inscritos entram no bracket
@@ -514,18 +523,25 @@
       // t.lateEnrollment). Com classificatória, ELA é a inicial (tem o bloco do form via slot);
       // a eliminatória é 2ª fase e ganha o SEU próprio painel (cfg.eliminatoria.lateEnrollment),
       // que só passa a valer quando o torneio avança de fase.
-      if (!cfg.classifAtiva) eb += '<div id="f2-classif-extra" style="margin-top:12px;"></div>';
+      // v1.3.99: na eliminação DIRETA (sem classificatória) a fase inicial carrega o slot do FORM
+      // (#f2-classif-extra = DATAS + INSCRIÇÕES durante a fase). Guardo SEPARADO pra ficar FORA do
+      // wrapper de trava — igual às datas da classificatória (abaixo). Só a ESTRUTURA trava.
+      if (!cfg.classifAtiva) _elimInitExtra = '<div id="f2-classif-extra" style="margin-top:12px;"></div>';
       else eb += _lateEnrollElimBlock(e);
     }
-    var elimInner = e.ativa ? eb : '';
+    var elimInner = e.ativa ? (eb + _elimInitExtra) : '';
     // v4.4.52: fase avançou → config da eliminatória travada (cinza, sem cliques). Nota muda
     // conforme haja classificatória (avançou de fase) ou seja eliminação direta (já sorteada).
     if (_elimLocked) {
       var _elimNote = cfg.classifAtiva
         ? '🔒 <b>Fase eliminatória em andamento</b> — o torneio já avançou de fase; a configuração não pode mais ser alterada.'
-        : '🔒 <b>Eliminatória já sorteada</b> — a configuração não pode mais ser alterada.';
+        // v1.3.99 (dono): eliminação direta já sorteada → só a ESTRUTURA trava. DATAS e INSCRIÇÕES
+        // durante a fase (novos confrontos) ficam editáveis pra o organizador corrigir no calor do
+        // torneio (estender/abreviar a fase, aceitar/parar novos confrontos).
+        : '🔒 <b>Estrutura travada</b> — formato, chaves e estratégia não mudam mais (já sorteada). Você ainda pode ajustar as <b>datas</b> e as <b>inscrições durante a fase</b> abaixo.';
       elimInner = '<div style="font-size:0.76rem;color:#fde68a;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">' + _elimNote + '</div>' +
-        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + eb + '</div>';
+        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + eb + '</div>' +
+        _elimInitExtra;   // DATAS + INSCRIÇÕES FORA do lock → editáveis no calor do torneio
     }
 
     // Slot (Datas + Inscrições) dentro da CLASSIFICATÓRIA quando ela está ativa.
