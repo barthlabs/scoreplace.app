@@ -210,6 +210,9 @@ const SUITES = [
   // CAUSA-RAIZ do "presença pulando e desmarcando depois de ~16" (dono): o mutator era um TOGGLE e
   // roda MAIS DE UMA VEZ (local+fresco, retry da txn) → nº par de aplicações desmarcava. Idempotente.
   'tests/presence-mutator-idempotent.test.js',
+  // Dupla Elim (dono): dupla PRÉ-FORMADA na espera, ao receber presença, ia pro LIMBO — o placer
+  // exigia _lateJoin (flag que só dupla formada TARDE tem). Entra na R1 da chave SUPERIOR.
+  'tests/late-dupla-elim-r1-entry.test.js',
   // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
   'tests/count-competitors.test.js',
   'tests/phase-repechage-lines.test.js',

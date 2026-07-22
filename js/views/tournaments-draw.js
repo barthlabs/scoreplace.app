@@ -3812,7 +3812,12 @@ window._placeLateEntriesSurgically = function (t) {
     if (!Array.isArray(t[k])) return;
     t[k].forEach(function (p) {
       var n = _nm(p), kk = _key(p);
-      if (!n || seen[kk] || !p || !p._lateJoin || !_present(p)) return;
+      // v1.3.153: NÃO exigir `_lateJoin`. Essa flag só existe em dupla FORMADA TARDE; a dupla
+      // PRÉ-FORMADA que o sorteio mandou pra espera (sorteio "só entre os presentes") não a tem —
+      // e era ignorada aqui → ficava no LIMBO ao receber presença. A própria UI promete o contrário:
+      // "Marque presença de quem está na espera — entra por repescagem (vs a definir)".
+      // O gate correto é: está na ESPERA e está PRESENTE. Ver [[project_late_dupla_fills_awaiting_slot]].
+      if (!n || seen[kk] || !p || !_present(p)) return;
       if (window._entryInBracket(t, p, _brkSetP)) return;
       if (window._lateAlreadyIntegrated(t, p)) return;
       seen[kk] = 1; pending.push({ e: p, fromWait: true });
@@ -3830,9 +3835,14 @@ window._placeLateEntriesSurgically = function (t) {
   if (!pending.length) return 0;
 
   // rodada base = MENOR round entre os jogos (onde o tardio entra)
-  var rounds = _all().map(function (m) { return (m && typeof m.round === 'number') ? m.round : 1; });
+  // v1.3.153: a rodada de ENTRADA é da chave PRINCIPAL (upper/main). Antes o mínimo era tirado de
+  // TODOS os jogos — em Dupla Eliminatória isso inclui `lower` e `grand`, então o jogo novo podia
+  // nascer na chave INFERIOR. O tardio entra na R1 da chave SUPERIOR (regra do dono).
+  var _mainMs = _all().filter(function (m) { return m && (m.bracket === 'upper' || m.bracket === 'main' || !m.bracket); });
+  if (!_mainMs.length) _mainMs = _all();
+  var rounds = _mainMs.map(function (m) { return (m && typeof m.round === 'number') ? m.round : 1; });
   var baseRound = rounds.length ? Math.min.apply(null, rounds) : 1;
-  var _tpl = _all().filter(function (m) { return m && ((typeof m.round === 'number') ? m.round : 1) === baseRound; })[0] || {};
+  var _tpl = _mainMs.filter(function (m) { return m && ((typeof m.round === 'number') ? m.round : 1) === baseRound; })[0] || {};
   var _brk = _tpl.bracket || 'main';
   var _pi = (_tpl.phaseIndex != null) ? _tpl.phaseIndex : (t.currentPhaseIndex || 0);
 
@@ -3856,8 +3866,10 @@ window._placeLateEntriesSurgically = function (t) {
     // colocado na R1 era VARRIDO na passada seguinte. Foi exatamente o "jogo 9 foi criado e depois
     // sumiu da chave" (o dono confirmou: jogo 9 estava na R1).
     var target = null;
-    cur.filter(function (m) { return m && ((typeof m.round === 'number') ? m.round : 1) === baseRound; })
-      .forEach(function (m) {
+    cur.filter(function (m) {
+      return m && ((typeof m.round === 'number') ? m.round : 1) === baseRound &&
+        (m.bracket === _brk || (!m.bracket && _brk === 'main'));
+    }).forEach(function (m) {
       if (target || !m || m.winner) return;
       ['p1', 'p2'].forEach(function (slot) {
         if (target || !_empty(m[slot])) return;
