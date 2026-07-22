@@ -1340,16 +1340,23 @@ window._fillRepFillWithLateDuplas = function (t) {
         });
       });
       if (!steal) return; // chave cheia (sem repescado pra migrar) → aguarda
+      // v1.3.161: o `bracket` era 'main' FIXO. Em Eliminatória Simples isso é certo, mas na Dupla
+      // Eliminatória os jogos da 1ª rodada são 'upper' — o jogo novo virava órfão ('main' não é
+      // desenhado em nenhuma das duas chaves) e o tardio sumia. Herda dos IRMÃOS da R0.
+      var _sibR0 = cur.filter(function (m) { return m && m.round === 0 && m.bracket; })[0];
+      var _r0Brk = (_sibR0 && _sibR0.bracket) || 'main';
       var newG = {
-        id: 'p0-lj-' + ts + '-' + integrated, round: 0, bracket: 'main', phaseIndex: _cpi,
+        id: 'p0-lj-' + ts + '-' + integrated, round: 0, bracket: _r0Brk, phaseIndex: _cpi,
         isPhaseRepGame: true, p1: null, p2: 'TBD', winner: null,
         nextMatchId: steal.m.id, nextSlot: steal.rf.slot,
         repFill: [{ slot: 'p2', srcBracket: steal.rf.srcBracket || 'main', srcRound: (steal.rf.srcRound != null ? steal.rf.srcRound : 0), rank: steal.rf.rank, tagRep: true }]
       };
       _setSide(newG, 'p1', d);
       steal.m.repFill = steal.m.repFill.filter(function (x) { return x !== steal.rf; }); // agora vem do vencedor do jogo novo
-      if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'main', round: 0, matches: [newG] }); } catch (e) { t.matches.push(newG); } }
+      if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _r0Brk, round: 0, matches: [newG] }); } catch (e) { t.matches.push(newG); } }
       else { t.matches.push(newG); }
+      // 1ª superior cresceu ⇒ 1ª inferior cresce junto e o perdedor deste jogo tem pra onde ir.
+      try { if (typeof window._wireLateLoserToLower === 'function') window._wireLateLoserToLower(t, newG, _cpi); } catch (e) {}
     }
     var _dn = _nm(d);
     var _already = t.participants.some(function (p) { return _nm(p) === _dn; });
@@ -3785,6 +3792,119 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
 // sobrescrito depois. Slot com `repFill` (espera repescado) CONTA: é exatamente o "a definir" que o
 // organizador vê. Guard anti-auto-confronto: nunca colocar onde a própria entrada já está do outro lado.
 // Ver [[project_late_dupla_fills_awaiting_slot]] [[project_formed_pair_roster_orphan]].
+// ── O PERDEDOR DO JOGO NOVO TEM QUE TER PRA ONDE IR (v1.3.161, bug do dono) ──────────────────
+// Dono: "nao foi recriado o jogo 7 com o entrante e um melhor repescado da r1 sup e reorganizada
+// a r1 inf de acordo (com repescagem). o entrante foi para o limbo".
+// Quando um tardio faz a 1ª SUPERIOR crescer (6→7 jogos), a 1ª INFERIOR tem que crescer junto:
+// são 7 derrotados agora, e 7 não cabem em 3 jogos. Sem isto o perdedor do jogo novo evapora.
+// Reorganização ADITIVA: cresce até ⌈derrotados/2⌉; o novo perdedor ocupa preferencialmente uma
+// vaga de REPESCAGEM ainda PENDENTE (trocar uma vaga "a definir" por um competidor real é
+// reorganizar, não desalojar ninguém — REP já resolvido em pessoa nunca é tocado); e se sobrar
+// vaga, ela vira repescagem em vez de morrer. Ver [[project_dupla_elim_late_integration_cascade]].
+window._wireLateLoserToLower = function (t, ng, pi) {
+  if (!t || !ng || !Array.isArray(t.matches)) return false;
+  var _all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
+  var low = _all.filter(function (m) { return m && m.bracket === 'lower'; });
+  if (!low.length) return false;                       // Eliminatória Simples: não há inferior
+  var lowR = Math.min.apply(null, low.map(function (m) { return (typeof m.round === 'number') ? m.round : 1; }));
+  var lowFirst = low.filter(function (m) { return ((typeof m.round === 'number') ? m.round : 1) === lowR; });
+  // quantos jogos a 1ª SUPERIOR tem agora (o jogo novo incluso) → quantos derrotados descem
+  var supBrk = ng.bracket, supR = ng.round;
+  var sup = _all.filter(function (m) {
+    return m && m.bracket === supBrk && ((typeof m.round === 'number') ? m.round : 1) === supR;
+  });
+  // ⚠️ SÓ na chave do motor MÍNIMO (marcada por `isPhaseRepR1` na 1ª rodada). A chave de potência
+  // de 2 é montada por _buildDoubleElimBracket, com outra convenção de fiação: crescer a inferior
+  // ali deixa slot morto (medido no sweep, N=4 e N=8). Cada motor cuida da sua chave.
+  if (!sup.some(function (m) { return m && m.isPhaseRepR1; })) return false;
+  var precisa = Math.ceil(sup.length / 2);
+  var ts = Date.now(), add = 0;
+  while (lowFirst.length < precisa) {
+    var nm2 = { id: 'ltL-' + t.id + '-' + ts + '-' + (add++), round: lowR, bracket: 'lower', p1: 'TBD', p2: 'TBD', winner: null };
+    if (pi != null) nm2.phaseIndex = pi;
+    if (ng.category != null) nm2.category = ng.category;
+    if (typeof window._appendCanonicalColumn === 'function') {
+      try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'lower', round: lowR, matches: [nm2] }); }
+      catch (e) { t.matches.push(nm2); }
+    } else { t.matches.push(nm2); }
+    lowFirst.push(nm2);
+  }
+  var _vazio = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
+  var _alimentado = function (m, slot) {
+    return t.matches.some(function (x) {
+      return x && x !== m && ((x.nextMatchId === m.id && x.nextSlot === slot) || (x.loserMatchId === m.id && x.loserSlot === slot));
+    });
+  };
+  // 1ª escolha: vaga de repescagem PENDENTE (troca "a definir" por competidor real)
+  var alvo = null;
+  lowFirst.forEach(function (m) {
+    if (alvo || !m || m.winner) return;
+    (m.repFill || []).forEach(function (rf) {
+      if (alvo || !rf || !rf.slot || !_vazio(m[rf.slot])) return;
+      alvo = { m: m, slot: rf.slot, rf: rf };
+    });
+  });
+  // 2ª escolha: slot vazio que ninguém alimenta
+  if (!alvo) {
+    lowFirst.forEach(function (m) {
+      if (alvo || !m || m.winner) return;
+      ['p1', 'p2'].forEach(function (s) {
+        if (alvo || !_vazio(m[s]) || _alimentado(m, s)) return;
+        alvo = { m: m, slot: s, rf: null };
+      });
+    });
+  }
+  if (!alvo) return false;
+  ng.loserMatchId = alvo.m.id; ng.loserSlot = alvo.slot;
+  if (alvo.rf) {
+    alvo.m.repFill = (alvo.m.repFill || []).filter(function (x) { return x !== alvo.rf; });
+    if (!alvo.m.repFill.length) { delete alvo.m.repFill; delete alvo.m.isPhaseRepGame; delete alvo.m.isLowerImpar; }
+  }
+  // sobrou vaga sem dono? vira REPESCAGEM (a vaga do ímpar), nunca slot morto
+  var sobra = null;
+  lowFirst.forEach(function (m) {
+    if (sobra || !m || m.winner) return;
+    ['p1', 'p2'].forEach(function (s) {
+      if (sobra || !_vazio(m[s]) || _alimentado(m, s)) return;
+      if ((m.repFill || []).some(function (x) { return x && x.slot === s; })) return;
+      sobra = { m: m, slot: s };
+    });
+  });
+  if (sobra) {
+    sobra.m.isPhaseRepGame = true; sobra.m.isLowerImpar = true;
+    (sobra.m.repFill = sobra.m.repFill || []).push({ slot: sobra.slot, srcBracket: 'lower', srcRound: lowR, rank: 0, cat: (ng.category != null ? ng.category : null), tagRep: true });
+  }
+  // A 1ª inferior cresceu ⇒ as rodadas SEGUINTES não fecham mais a conta (o vencedor do jogo novo
+  // não teria pra onde ir, e o encontro seguinte ficaria com vaga morta). Refaz da 2ª inferior pra
+  // frente com o MESMO motor que a montou (_rebuildLowerBracket, modo wipe: preserva a superior
+  // COM resultados e a 1ª inferior).
+  // ⚠️ SÓ na chave do motor MÍNIMO (marcada por `isPhaseRepR1` na 1ª rodada). Chave de potência de
+  // 2 é montada por _buildDoubleElimBracket, com outra convenção de fiação — reconstruir com os
+  // parâmetros do playin ali PIOROU (4 slots mortos no sweep N=4/N=8). Cada motor refaz o seu.
+  if (add > 0 && typeof window._rebuildLowerBracket === 'function') {
+    var _todos = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
+    var _depois = _todos.filter(function (m) { return m && m.bracket === 'lower' && ((typeof m.round === 'number') ? m.round : 1) > lowR; });
+    var _grand = _todos.filter(function (m) { return m && m.bracket === 'grand'; });
+    if (_depois.every(function (m) { return !m.winner; }) && _grand.every(function (m) { return !m.winner; })) {
+      var _porR = {};
+      _todos.filter(function (m) { return m && m.bracket === supBrk && !m.isThirdPlace; })
+        .forEach(function (m) { var r = (typeof m.round === 'number') ? m.round : 1; (_porR[r] = _porR[r] || []).push(m); });
+      var _rs = Object.keys(_porR).map(Number).sort(function (a, b) { return a - b; });
+      var _ult = _rs[_rs.length - 1];
+      try {
+        window._rebuildLowerBracket(t, {
+          preRound: lowFirst,
+          mergeUppers: _rs.filter(function (r) { return r > supR; }).map(function (r) { return _porR[r]; }),
+          satout: null, upperChamp: (_porR[_ult] || [])[0] || null, W: _rs.length - 1, mode: 'playin',
+          cat: (ng.category != null ? ng.category : null), phaseIndex: (pi != null ? pi : null),
+          idPrefix: 'ltRL-' + t.id + '-' + ts, ts: ts, wipe: true
+        });
+      } catch (e) { if (window._error) window._error('[tardio] rebuild inferior:', e); }
+    }
+  }
+  return true;
+};
+
 window._placeLateEntriesSurgically = function (t) {
   if (!t || !window._allowsNewMatchups || !window._allowsNewMatchups(t)) return 0;
   if (!Array.isArray(t.matches) || !t.matches.length) return 0;
@@ -3950,6 +4070,9 @@ window._placeLateEntriesSurgically = function (t) {
         try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _brk, round: baseRound, matches: [ng] }); }
         catch (e) { t.matches.push(ng); }
       } else { t.matches.push(ng); }
+      // v1.3.161: a 1ª superior cresceu ⇒ a 1ª INFERIOR cresce junto e o perdedor deste jogo
+      // ganha destino (senão evapora). Reorganização ADITIVA — ver _wireLateLoserToLower.
+      try { if (typeof window._wireLateLoserToLower === 'function') window._wireLateLoserToLower(t, ng, _pi); } catch (e) {}
       // ── DESTINO do jogo novo (v1.3.156) ──────────────────────────────────────────────────
       // Um jogo criado na 1ª rodada precisa de para ONDE mandar o vencedor; sem isso a chave
       // TRAVA (visto no sweep em N=2: "Tardia VS TBD" com next=- e a grande final esperando pra

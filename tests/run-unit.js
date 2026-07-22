@@ -214,6 +214,7 @@ const SUITES = [
   'tests/draw-scope-all-ignores-presence.test.js',
   'tests/dupla-elim-minimal-tree.test.js',
   'tests/late-entry-door-closes.test.js',
+  'tests/late-entry-upper-grows-lower.test.js',
   // Dupla Elim (dono): dupla PRÉ-FORMADA na espera, ao receber presença, ia pro LIMBO — o placer
   // exigia _lateJoin (flag que só dupla formada TARDE tem). Entra na R1 da chave SUPERIOR.
   'tests/late-dupla-elim-r1-entry.test.js',
