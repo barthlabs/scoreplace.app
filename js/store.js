@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.146';
+window.SCOREPLACE_VERSION = '1.3.147';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -7957,6 +7957,14 @@ window._PRESENCE_TONES = {
   confirmed: {
     solo: { bg: 'linear-gradient(135deg,rgba(251,191,36,0.34),rgba(245,158,11,0.46))', border: 'rgba(251,191,36,0.80)', glow: 'rgba(245,158,11,0.32)', text: '#fcd34d', toggle: '#f59e0b', soft: 'rgba(245,158,11,0.12)', line: 'rgba(245,158,11,0.30)' },
     pair: { bg: 'linear-gradient(135deg,rgba(120,53,15,0.85),rgba(146,64,14,0.92))', border: 'rgba(245,158,11,0.70)', glow: 'rgba(245,158,11,0.28)', text: '#fcd34d', toggle: '#f59e0b', soft: 'rgba(120,53,15,0.55)', line: 'rgba(245,158,11,0.28)' }
+  },
+  // PARCIAL (v1.3.147, dono): dupla com UM presente e outro não. Antes caía no MESMO azul de
+  // "nenhum presente" — no print, Eduardo(ausente)/Ciça(PRESENTE) ficava idêntico a
+  // Kelly(ausente)/Rodrigo(ausente). ÂMBAR = "falta um". Só faz sentido no escopo 'pair' (um
+  // indivíduo nunca é "meio presente"); o 'solo' existe só por simetria da API.
+  partial: {
+    solo: { bg: 'linear-gradient(135deg,rgba(251,191,36,0.34),rgba(245,158,11,0.46))', border: 'rgba(251,191,36,0.80)', glow: 'rgba(245,158,11,0.32)', text: '#fcd34d', toggle: '#f59e0b', soft: 'rgba(245,158,11,0.12)', line: 'rgba(245,158,11,0.30)' },
+    pair: { bg: 'linear-gradient(135deg,rgba(120,53,15,0.88),rgba(180,83,9,0.92))', border: 'rgba(245,158,11,0.78)', glow: 'rgba(245,158,11,0.34)', text: '#fcd34d', toggle: '#f59e0b', soft: 'rgba(120,53,15,0.55)', line: 'rgba(245,158,11,0.30)' }
   }
 };
 // state: 'present' | 'absent' | 'confirmed'   ·   scope: 'solo' (individual) | 'pair' (dupla)

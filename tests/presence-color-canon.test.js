@@ -33,6 +33,17 @@ ok(typeof W._presenceTextColor === 'function', '_presenceTextColor existe');
   ok(!RED.test(b), 'AUSENTE/' + scope + ' NUNCA é vermelho');
   ok(!RED.test(g), 'PRESENTE/' + scope + ' NUNCA é vermelho');
 });
+// PARCIAL (dupla com 1 presente) = ÂMBAR, distinto de verde E de azul
+const AMBER = /245\s*,\s*158\s*,\s*11|251\s*,\s*191\s*,\s*36|120\s*,\s*53\s*,\s*15|180\s*,\s*83\s*,\s*9/;
+(function () {
+  const pt = W._presenceCardStyle('partial', 'pair');
+  ok(AMBER.test(pt), 'PARCIAL/pair é ÂMBAR');
+  ok(!GREEN.test(pt) && !BLUE.test(pt), 'PARCIAL não se confunde com verde nem azul');
+  ok(!RED.test(pt), 'PARCIAL nunca é vermelho');
+  ok(pt !== W._presenceCardStyle('present', 'pair') && pt !== W._presenceCardStyle('absent', 'pair'),
+     'PARCIAL é um tom PRÓPRIO (≠ presente e ≠ ausente)');
+})();
+
 // dupla ESCURA ≠ individual CLARA
 ok(W._presenceCardStyle('present', 'pair') !== W._presenceCardStyle('present', 'solo'), 'PRESENTE: dupla (escuro) ≠ individual (claro)');
 ok(W._presenceCardStyle('absent', 'pair') !== W._presenceCardStyle('absent', 'solo'), 'AUSENTE: dupla (escuro) ≠ individual (claro)');
@@ -60,10 +71,16 @@ let st = ctxOf(t).cardPresence(PAIR).styleExtra;
 ok(GREEN.test(st) && !BLUE.test(st), 'dupla com os DOIS presentes → VERDE');
 ok(st === W._presenceCardStyle('present', 'pair'), 'dupla presente usa o tom ESCURO de dupla');
 
-// dupla com um ausente → AZUL escuro
+// dupla com UM presente e outro ausente → ÂMBAR (parcial) — o caso do print
 t = mkT({ a1: 1 }, { b1: 1 });
 st = ctxOf(t).cardPresence(PAIR).styleExtra;
-ok(BLUE.test(st) && !RED.test(st), 'dupla com um AUSENTE → AZUL (nunca vermelho)');
+ok(st === W._presenceCardStyle('partial', 'pair'), '✅ dupla com 1 presente → ÂMBAR (parcial), não azul');
+ok(st !== W._presenceCardStyle('absent', 'pair'), 'parcial NÃO é igual a "nenhum presente" (era o bug do print)');
+
+// dupla com um ausente → AZUL escuro
+t = mkT({}, { a1: 1, b1: 1 });
+st = ctxOf(t).cardPresence(PAIR).styleExtra;
+ok(BLUE.test(st) && !RED.test(st), 'dupla com os DOIS ausentes → AZUL (nunca vermelho)');
 
 // dupla PENDENTE (ninguém marcado) → AZUL (era o bug do print: ficava VERDE)
 t = mkT({}, {});

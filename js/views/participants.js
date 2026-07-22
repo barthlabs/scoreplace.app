@@ -1620,7 +1620,16 @@ window._rollCallPresenceCtx = function (t, opts) {
         // caía no fundo VERDE base — uma dupla rotulada "Ausente" aparecia verde, igual a uma
         // presente (o print do dono: "as cores dos presentes e ausentes está muito parecido").
         // Rótulo e cor agora SEMPRE concordam: o card já escreve "Ausente" pra quem não marcou.
-        return { skip: false, styleExtra: _both ? _sty('present', 'pair') : _sty('absent', 'pair'), rowHtml: _teamRow };
+        // v1.3.147 (dono): TRÊS estados na dupla — os DOIS presentes = VERDE; UM presente e outro
+        // não = ÂMBAR ("falta um"); NENHUM presente (ausente ou pendente) = AZUL. Antes o parcial
+        // caía no MESMO azul do "nenhum": no print, Eduardo(ausente)/Ciça(PRESENTE) ficava idêntico
+        // a Kelly(ausente)/Rodrigo(ausente).
+        var _anyPres = _q1 || _q2;
+        return {
+          skip: false,
+          styleExtra: _both ? _sty('present', 'pair') : (_anyPres ? _sty('partial', 'pair') : _sty('absent', 'pair')),
+          rowHtml: _teamRow
+        };
       }
       // SOLO
       var entry = window._pName(p);
