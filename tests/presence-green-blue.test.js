@@ -1,6 +1,12 @@
-/* Presença VERDE (checkedIn, presente) vs AZUL (checkedInConfirmed, confirmado remoto — NÃO é
- * presente). Dono, jul/2026: "presente é só o verde; confirmado não é presente". O verde vence o
- * azul (chegar no local move azul→verde). Testa o factory canônico _rollCallPresenceCtx.
+/* Presença VERDE (checkedIn, presente) vs CONFIRMADO (checkedInConfirmed, confirmação remota —
+ * NÃO é presente). Dono, jul/2026: "presente é só o verde; confirmado não é presente". O verde
+ * vence o confirmado (chegar no local move confirmado→verde). Testa o factory _rollCallPresenceCtx.
+ *
+ * ⚠️ CÂNONE DE COR ATUALIZADO (v1.3.140): o AZUL passou a ser do AUSENTE (dono: "verde para
+ * presentes, azul para ausentes"), então o Confirmado migrou pra ÂMBAR. Este teste trava a
+ * SEMÂNTICA (confirmado ≠ presente; verde vence) e compara com a FONTE ÚNICA
+ * (_presenceCardStyle/_presenceToggleColor), não com hex cru — assim uma troca de paleta não o
+ * quebra, mas trocar o SIGNIFICADO quebra. Ver [[project_inscrito_card_canonical]].
  */
 const fs = require('fs');
 const path = require('path');
@@ -30,8 +36,9 @@ W._idMapSet(t, t.checkedInConfirmed, { uid: 'uA', displayName: 'Ana' }, 1000);
 var ctx = W._rollCallPresenceCtx(t, { isOrg: false, active: true });
 var r = ctx.cardPresence(t.participants[0]);
 ok(r.rowHtml.indexOf('Confirmado') !== -1, 'azul: rótulo "Confirmado"');
-ok(r.rowHtml.indexOf('#3b82f6') !== -1, 'azul: toggle azul (#3b82f6)');
-ok(r.styleExtra.indexOf('59,130,246') !== -1, 'azul: card com tinta azul');
+ok(r.rowHtml.indexOf(W._presenceToggleColor('confirmed', 'solo')) !== -1, 'confirmado: toggle na cor canônica de Confirmado');
+ok(r.styleExtra === W._presenceCardStyle('confirmed', 'solo'), 'confirmado: card usa o tom canônico de Confirmado');
+ok(r.styleExtra !== W._presenceCardStyle('absent', 'solo') && r.styleExtra !== W._presenceCardStyle('present', 'solo'), 'confirmado NÃO se confunde com presente nem com ausente');
 
 // (2) filtro: "present" ESCONDE o azul; "confirmed" MOSTRA; "confirmado não é presente".
 W._checkInFilter = 'present';

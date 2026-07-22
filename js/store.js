@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.139';
+window.SCOREPLACE_VERSION = '1.3.140';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -7889,6 +7889,58 @@ window._enrollNumberBadge = function(num, side) {
 // deve usar `window._INSCRITO_NAME_FONT_PX` no `font-size` (e no `data-fit-max` do auto-fit de 2
 // linhas). NUNCA hardcodar outro valor (0.95rem/0.92rem etc.) → é regressão. O dono canonizou 17px.
 window._INSCRITO_NAME_FONT_PX = 17;
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// CORES DE PRESENÇA — CANÔNICO (v1.3.140, dono: "isso está canonizado e precisa se manter
+// canonizado ... sempre consistente para qualquer torneio que use esses cards").
+//   • PRESENTE = tons de VERDE      • AUSENTE = tons de AZUL
+//   • DUPLA    = tom mais ESCURO    • INDIVIDUAL = tom mais CLARO
+// Antes: presente=verde e ausente=VERMELHO, com o mesmo tom pra dupla e individual — o dono
+// reportou (print) que presentes e ausentes ficavam "muito parecidos", especialmente nas duplas.
+// O AZUL era do estado "Confirmado" (confirmação remota, v1.3.19); como o azul passou a ser do
+// AUSENTE, o Confirmado migrou pra ÂMBAR (único slot livre que não colide com verde/azul).
+// "pending" (ainda não marcado) NÃO pinta o card — segue neutro/transparente, como sempre foi.
+//
+// FONTE ÚNICA: todo card de presença (individual, dupla formada, membro dentro da dupla, painel
+// pós-sorteio) DEVE pegar cor daqui — nunca hardcodar hex/rgba de presença no renderer. Card ou
+// renderer novo herda automaticamente. Ver [[project_inscrito_card_canonical]].
+// ═══════════════════════════════════════════════════════════════════════════════════
+window._PRESENCE_TONES = {
+  present: {
+    // individual = CLARO
+    solo: { bg: 'linear-gradient(135deg,rgba(52,211,153,0.42),rgba(16,185,129,0.55))', border: 'rgba(52,211,153,0.85)', glow: 'rgba(16,185,129,0.40)', text: '#4ade80', toggle: '#10b981', soft: 'rgba(16,185,129,0.12)', line: 'rgba(16,185,129,0.30)' },
+    // dupla = ESCURO
+    pair: { bg: 'linear-gradient(135deg,rgba(6,78,59,0.88),rgba(6,95,70,0.94))', border: 'rgba(16,185,129,0.70)', glow: 'rgba(16,185,129,0.30)', text: '#6ee7b7', toggle: '#10b981', soft: 'rgba(6,78,59,0.55)', line: 'rgba(16,185,129,0.28)' }
+  },
+  absent: {
+    solo: { bg: 'linear-gradient(135deg,rgba(96,165,250,0.40),rgba(59,130,246,0.52))', border: 'rgba(96,165,250,0.85)', glow: 'rgba(59,130,246,0.38)', text: '#bfdbfe', toggle: '#3b82f6', soft: 'rgba(59,130,246,0.12)', line: 'rgba(59,130,246,0.30)' },
+    pair: { bg: 'linear-gradient(135deg,rgba(23,37,84,0.90),rgba(30,58,138,0.94))', border: 'rgba(59,130,246,0.70)', glow: 'rgba(59,130,246,0.30)', text: '#93c5fd', toggle: '#3b82f6', soft: 'rgba(23,37,84,0.55)', line: 'rgba(59,130,246,0.28)' }
+  },
+  confirmed: {
+    solo: { bg: 'linear-gradient(135deg,rgba(251,191,36,0.34),rgba(245,158,11,0.46))', border: 'rgba(251,191,36,0.80)', glow: 'rgba(245,158,11,0.32)', text: '#fcd34d', toggle: '#f59e0b', soft: 'rgba(245,158,11,0.12)', line: 'rgba(245,158,11,0.30)' },
+    pair: { bg: 'linear-gradient(135deg,rgba(120,53,15,0.85),rgba(146,64,14,0.92))', border: 'rgba(245,158,11,0.70)', glow: 'rgba(245,158,11,0.28)', text: '#fcd34d', toggle: '#f59e0b', soft: 'rgba(120,53,15,0.55)', line: 'rgba(245,158,11,0.28)' }
+  }
+};
+// state: 'present' | 'absent' | 'confirmed'   ·   scope: 'solo' (individual) | 'pair' (dupla)
+window._presenceTone = function (state, scope) {
+  var g = window._PRESENCE_TONES[state];
+  if (!g) return null;
+  return g[(scope === 'pair') ? 'pair' : 'solo'];
+};
+// estilo COMPLETO do card (fundo + borda + glow). '' = pendente (neutro, não pinta).
+window._presenceCardStyle = function (state, scope) {
+  var c = window._presenceTone(state, scope);
+  if (!c) return '';
+  return 'background:' + c.bg + ' !important;border:2px solid ' + c.border + ' !important;box-shadow:0 0 0 1px ' + c.glow + ',0 4px 12px rgba(0,0,0,0.14);';
+};
+window._presenceTextColor = function (state, scope) {
+  var c = window._presenceTone(state, scope);
+  return c ? c.text : 'var(--text-bright)';
+};
+window._presenceToggleColor = function (state, scope) {
+  var c = window._presenceTone(state, scope);
+  return c ? c.toggle : '#10b981';
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════════
 // CANÔNICO (v3.1.33): pódio(s) + classificação(ões) do torneio encerrado — UMA fonte só.

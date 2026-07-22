@@ -1587,9 +1587,12 @@ window._rollCallPresenceCtx = function (t, opts) {
   var _abs = function (who) { return !!window._idMapHas(t, ab, who); };
   // v1.3.19: AZUL = confirmado remoto (checkedInConfirmed) e NÃO presente (verde vence).
   var _conf = function (who) { return !!window._idMapHas(t, conf, who) && !window._idMapHas(t, ci, who); };
-  var _grn = 'background:linear-gradient(135deg,rgba(16,185,129,0.5),rgba(5,150,105,0.6)) !important;border:2px solid rgba(16,185,129,0.85) !important;box-shadow:0 0 0 1px rgba(16,185,129,0.4),0 4px 12px rgba(0,0,0,0.14);';
-  var _red = 'background:linear-gradient(135deg,rgba(239,68,68,0.45),rgba(220,38,38,0.58)) !important;border:2px solid rgba(239,68,68,0.8) !important;box-shadow:0 0 0 1px rgba(239,68,68,0.35),0 4px 12px rgba(0,0,0,0.14);';
-  var _blu = 'background:linear-gradient(135deg,rgba(59,130,246,0.42),rgba(37,99,235,0.55)) !important;border:2px solid rgba(59,130,246,0.8) !important;box-shadow:0 0 0 1px rgba(59,130,246,0.35),0 4px 12px rgba(0,0,0,0.14);';
+  // CORES CANÔNICAS (store.js `_PRESENCE_TONES`): PRESENTE=verde · AUSENTE=azul · Confirmado=âmbar;
+  // DUPLA=tom escuro ('pair') · INDIVIDUAL=tom claro ('solo'). NUNCA hardcodar hex aqui — o dono
+  // canonizou pra ficar consistente em qualquer torneio. Ver [[project_inscrito_card_canonical]].
+  var _sty = function (state, scope) { return window._presenceCardStyle ? window._presenceCardStyle(state, scope) : ''; };
+  var _txt = function (state, scope) { return window._presenceTextColor ? window._presenceTextColor(state, scope) : '#4ade80'; };
+  var _tgl = function (state, scope) { return window._presenceToggleColor ? window._presenceToggleColor(state, scope) : '#10b981'; };
   var _cf = function () { return window._checkInFilter || 'all'; };
   return {
     cardPresence: function (p) {
@@ -1612,7 +1615,12 @@ window._rollCallPresenceCtx = function (t, opts) {
           var _tE = String(_tEntry).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
           _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "');", !_tAbs, { label: _tAbs ? 'Reverter' : 'W.O. do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
         }
-        return { skip: false, styleExtra: _both ? _grn : (_anyAbs ? _red : ''), rowHtml: _teamRow };
+        // DUPLA → tom ESCURO ('pair'): VERDE só quando os DOIS estão presentes; qualquer outro
+        // caso (ausente OU ainda não marcado) = AZUL. Antes o "pendente" não pintava nada e o card
+        // caía no fundo VERDE base — uma dupla rotulada "Ausente" aparecia verde, igual a uma
+        // presente (o print do dono: "as cores dos presentes e ausentes está muito parecido").
+        // Rótulo e cor agora SEMPRE concordam: o card já escreve "Ausente" pra quem não marcou.
+        return { skip: false, styleExtra: _both ? _sty('present', 'pair') : _sty('absent', 'pair'), rowHtml: _teamRow };
       }
       // SOLO
       var entry = window._pName(p);
@@ -1624,14 +1632,16 @@ window._rollCallPresenceCtx = function (t, opts) {
       if (currentFilter === 'confirmed' && !blu) return { skip: true };
       if (currentFilter === 'absent' && !(abs || pend)) return { skip: true };
       if (currentFilter === 'pending' && !pend) return { skip: true };
-      var styleExtra = mc ? _grn : (blu ? _blu : (abs ? _red : ''));
+      // INDIVIDUAL → tom CLARO ('solo'). Mesma regra da dupla: VERDE só presente; ausente E
+      // pendente = AZUL (o card já rotula os dois como "Ausente"), Confirmado = âmbar.
+      var styleExtra = mc ? _sty('present', 'solo') : (blu ? _sty('confirmed', 'solo') : _sty('absent', 'solo'));
       var rowHtml = '';
       var _puid = String((p && p.uid) || '').replace(/'/g, "\\'");
       if (active) {
         var _rcEntry = entry.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var label = mc ? 'Presente' : (blu ? 'Confirmado' : 'Ausente');
-        var color = mc ? '#4ade80' : (blu ? '#60a5fa' : '#f87171');
-        var _onc = blu ? '#3b82f6' : '#10b981';
+        var color = mc ? _txt('present', 'solo') : (blu ? _txt('confirmed', 'solo') : _txt('absent', 'solo'));
+        var _onc = mc ? _tgl('present', 'solo') : (blu ? _tgl('confirmed', 'solo') : _tgl('absent', 'solo'));
         var wo = (!mc && !blu && isOrg)
           ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
           : '';
@@ -1639,8 +1649,8 @@ window._rollCallPresenceCtx = function (t, opts) {
           '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _onc + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _onc + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\', \'' + _puid + '\');"><span class="toggle-slider"></span></label>' + wo;
       } else {
         var l2 = mc ? 'Presente' : (blu ? 'Confirmado' : 'Ausente');
-        var c2 = mc ? '#4ade80' : (blu ? '#60a5fa' : '#f87171');
-        var ic = mc ? '✅' : (blu ? '🔵' : '🚫');
+        var c2 = mc ? _txt('present', 'solo') : (blu ? _txt('confirmed', 'solo') : _txt('absent', 'solo'));
+        var ic = mc ? '✅' : (blu ? '🟡' : '🔵');
         rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + c2 + ';white-space:nowrap;">' + ic + ' ' + l2 + '</span>';
       }
       return { skip: false, styleExtra: styleExtra, rowHtml: rowHtml };
@@ -1656,13 +1666,14 @@ window._rollCallPresenceCtx = function (t, opts) {
       var blu = !mc && _conf(_mWho);
       var abs = !mc && !blu && _abs(_mWho);
       var label = mc ? 'Presente' : (blu ? 'Confirmado' : 'Ausente');
-      var color = mc ? '#4ade80' : (blu ? '#60a5fa' : '#f87171');
+      // membro vive DENTRO do card de dupla (fundo escuro) → tom 'pair' (texto mais claro, contraste)
+      var color = mc ? _txt('present', 'pair') : (blu ? _txt('confirmed', 'pair') : _txt('absent', 'pair'));
       if (!active) {
-        var ic = mc ? '✅' : (blu ? '🔵' : '🚫');
+        var ic = mc ? '✅' : (blu ? '🟡' : '🔵');
         return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + ic + ' ' + label + '</span></div>' };
       }
       var _e = keyName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      var _oncM = blu ? '#3b82f6' : '#10b981';
+      var _oncM = mc ? _tgl('present', 'pair') : (blu ? _tgl('confirmed', 'pair') : _tgl('absent', 'pair'));
       var wo = (!mc && !blu && isOrg && woScope === 'individual')
         ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
         : '';
@@ -2769,15 +2780,15 @@ function renderParticipants(container, tournamentId) {
       // v2.2.0: isWO (match-level) removido dos visuais — só isAbsent torna o card
       // vermelho/riscado. Antes, todo jogador no lado perdedor de um W.O. ficava
       // vermelho, mesmo estando Presente ou apenas sem check-in.
-      const presenceDotColor = mc ? '#10b981' : isAbsent ? '#ef4444' : '#64748b';
+      const presenceDotColor = mc ? '#10b981' : isAbsent ? '#3b82f6' : '#64748b';  // CANON: ausente=azul
       const presenceDot = `<span style="width:8px;height:8px;border-radius:50%;background:${presenceDotColor};display:inline-block;flex-shrink:0;"></span>`;
-      const nameColor = isStandby ? '#fbbf24' : (mc ? '#4ade80' : isAbsent ? '#f87171' : 'var(--text-bright)');
+      const nameColor = isStandby ? '#fbbf24' : (mc ? window._presenceTextColor('present','solo') : isAbsent ? window._presenceTextColor('absent','solo') : 'var(--text-bright)');
       const cardBg = isStandby
-        ? (mc ? 'rgba(251,191,36,0.12)' : isAbsent ? 'rgba(239,68,68,0.08)' : 'rgba(251,191,36,0.06)')
-        : (mc ? 'rgba(16,185,129,0.12)' : isAbsent ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)');
+        ? (mc ? 'rgba(251,191,36,0.12)' : isAbsent ? 'rgba(59,130,246,0.10)' : 'rgba(251,191,36,0.06)')
+        : (mc ? 'rgba(16,185,129,0.12)' : isAbsent ? 'rgba(59,130,246,0.10)' : 'rgba(255,255,255,0.03)');
       const cardBorder = isStandby
-        ? (mc ? 'rgba(251,191,36,0.3)' : isAbsent ? 'rgba(239,68,68,0.25)' : 'rgba(251,191,36,0.15)')
-        : (mc ? 'rgba(16,185,129,0.3)' : isAbsent ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)');
+        ? (mc ? 'rgba(251,191,36,0.3)' : isAbsent ? 'rgba(59,130,246,0.30)' : 'rgba(251,191,36,0.15)')
+        : (mc ? 'rgba(16,185,129,0.3)' : isAbsent ? 'rgba(59,130,246,0.30)' : 'rgba(255,255,255,0.06)');
 
       // VIP check — uid-aware (v3.0.78: t.vips é uid-keyed desde v3.0.74; ler
       // direto por nome (vipMap[ind.name]) MISSAVA a chave-uid → tag VIP sumia).
@@ -2891,14 +2902,14 @@ function renderParticipants(container, tournamentId) {
       // dourado só vence pra VIP de verdade (isVipPlayer).
       const _statusGrad = isStandby ? 'linear-gradient(135deg, rgba(146,64,14,0.58) 0%, rgba(245,158,11,0.45) 100%)'
         : mc ? 'linear-gradient(135deg, rgba(6,95,70,0.6) 0%, rgba(16,185,129,0.5) 100%)'
-        : isAbsent ? 'linear-gradient(135deg, rgba(127,29,29,0.62) 0%, rgba(220,38,38,0.5) 100%)'
+        : isAbsent ? 'linear-gradient(135deg, rgba(30,58,138,0.62) 0%, rgba(37,99,235,0.5) 100%)'
         : 'linear-gradient(135deg, rgba(67,56,202,0.6) 0%, rgba(99,102,241,0.6) 100%)';
       const _riGrad = (isVipPlayer && !isStandby)
         ? 'linear-gradient(135deg, rgba(161,98,7,0.6) 0%, rgba(234,179,8,0.45) 100%)'
         : _statusGrad;
       const _riBorder = isStandby ? '2px solid rgba(251,191,36,0.6)'
         : mc ? '2px solid rgba(16,185,129,0.7)'
-        : isAbsent ? '2px solid rgba(239,68,68,0.6)'
+        : isAbsent ? '2px solid rgba(59,130,246,0.6)'
         : isVipPlayer ? '2px solid rgba(251,191,36,0.6)'
         : '1px solid rgba(99,102,241,0.5)';
       const _riGlow = mc ? 'box-shadow:0 0 0 1px rgba(16,185,129,0.45),0 4px 10px rgba(0,0,0,0.12);' : 'box-shadow:0 4px 10px rgba(0,0,0,0.1);';
@@ -2911,7 +2922,7 @@ function renderParticipants(container, tournamentId) {
             <div style="position:relative;z-index:1;">
                 <!-- HEADER: avatar + nome + estrela (Jogo N foi pro match strip, na linha do 2º time) -->
                 <div style="display:flex;align-items:center;gap:8px;">
-                    <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
+                    <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(59,130,246,0.45)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
                     <div style="flex:1;min-width:0;">${standbyHeader}${_nameRow}</div>
                 </div>
                 <!-- Meta: VIP + categorias + nível (à esquerda). O 🗑️ saiu daqui — -->
