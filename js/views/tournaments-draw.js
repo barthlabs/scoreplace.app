@@ -3786,6 +3786,8 @@ window._placeLateEntriesSurgically = function (t) {
   var _nm = function (p) { return window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || ''; };
   var _pu = function (x) { return (typeof window._participantUids === 'function') ? window._participantUids(x) : []; };
   var _empty = function (v) { return !v || v === 'TBD' || v === 'BYE (Avança Direto)' || /a definir/i.test(String(v)); };
+  // dupla = ESTRUTURA (p1/p2), nunca includes('/') — [[project_dupla_entry_structural_not_slash]]
+  var _isPairEntry = function (p) { return !!(p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)); };
   var _key = function (p) {
     if (!p || typeof p !== 'object') return String(p || '');
     var a = String(p.p1Uid || p.p1Name || ''), b = String(p.p2Uid || p.p2Name || '');
@@ -3807,6 +3809,15 @@ window._placeLateEntriesSurgically = function (t) {
   var _brkSetP = window._bracketUidKeySet(t);   // membership POR UID
 
   // pendentes = espera (_lateJoin) + ÓRFÃO DE ROSTER (dupla formada à mão), presentes, dedup
+  // COMPETIDOR VÁLIDO (v1.3.156) — regressão que EU causei na 1.3.153: ao parar de exigir
+  // `_lateJoin` (pra dupla PRÉ-FORMADA entrar), o coletor passou a pegar QUALQUER presente da
+  // espera, inclusive SOLO SEM DUPLA — que foi arrastado pro slot que devia ser "a definir".
+  // Num torneio de DUPLAS só uma DUPLA é competidor; solo espera parceiro (é o que a seção
+  // "Sem dupla / Formar novas duplas" existe pra resolver). Ver [[project_count_people_not_entries]].
+  var _teamsMode = (parseInt(t.teamSize) || 1) > 1 ||
+    (typeof window._isTeamEnrollMode === 'function' && window._isTeamEnrollMode(t.enrollmentMode)) ||
+    (Array.isArray(t.participants) && t.participants.some(_isPairEntry));
+  var _isValidCompetitor = function (p) { return _teamsMode ? _isPairEntry(p) : true; };
   var seen = {}, pending = [];
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
     if (!Array.isArray(t[k])) return;
@@ -3818,6 +3829,7 @@ window._placeLateEntriesSurgically = function (t) {
       // "Marque presença de quem está na espera — entra por repescagem (vs a definir)".
       // O gate correto é: está na ESPERA e está PRESENTE. Ver [[project_late_dupla_fills_awaiting_slot]].
       if (!n || seen[kk] || !p || !_present(p)) return;
+      if (!_isValidCompetitor(p)) return;   // duplas: SOLO sem parceiro NÃO entra na chave
       if (window._entryInBracket(t, p, _brkSetP)) return;
       if (window._lateAlreadyIntegrated(t, p)) return;
       seen[kk] = 1; pending.push({ e: p, fromWait: true });
@@ -3828,6 +3840,7 @@ window._placeLateEntriesSurgically = function (t) {
       var n = _nm(p), kk = _key(p);
       if (!n || seen[kk] || window._entryInBracket(t, p, _brkSetP)) return;
       if (t.teamOrigins[n] !== 'formada' || !_present(p)) return;
+      if (!_isValidCompetitor(p)) return;
       if (window._lateAlreadyIntegrated(t, p)) return;
       seen[kk] = 1; pending.push({ e: p, fromWait: false });
     });
@@ -3909,6 +3922,58 @@ window._placeLateEntriesSurgically = function (t) {
         try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _brk, round: baseRound, matches: [ng] }); }
         catch (e) { t.matches.push(ng); }
       } else { t.matches.push(ng); }
+      // ── DESTINO do jogo novo (v1.3.156) ──────────────────────────────────────────────────
+      // Um jogo criado na 1ª rodada precisa de para ONDE mandar o vencedor; sem isso a chave
+      // TRAVA (visto no sweep em N=2: "Tardia VS TBD" com next=- e a grande final esperando pra
+      // sempre). Regra: se algum IRMÃO da mesma rodada/chave já tem destino D, o novo vai pro
+      // MESMO D quando houver vaga livre lá; senão a chave CRESCE uma rodada — cria-se o
+      // confronto (irmão × novo) que herda o destino D. Só quando a 1ª rodada AINDA NÃO tem
+      // resultado (crescer a árvore com jogo já jogado atropelaria o que aconteceu).
+      try {
+        var _sibs = _all().filter(function (m) {
+          return m && m !== ng && ((typeof m.round === 'number') ? m.round : 1) === baseRound &&
+            (m.bracket === _brk || (!m.bracket && _brk === 'main'));
+        });
+        var _semResultado = _sibs.every(function (m) { return !m.winner; });
+        var _comDestino = _sibs.filter(function (m) { return m.nextMatchId; })[0];
+        if (!ng.nextMatchId && _comDestino && _semResultado) {
+          var _dest = _all().filter(function (m) { return m && m.id === _comDestino.nextMatchId; })[0];
+          var _livre = null;
+          if (_dest) {
+            // Se ALGUÉM aponta pro destino SEM slot explícito (convenção da Dupla Elim: o vencedor
+            // ocupa a 1ª vaga livre), não dá pra saber quais vagas já estão comprometidas — então
+            // NÃO reivindicamos vaga nenhuma e deixamos a árvore CRESCER. Sem isto o tardio
+            // sequestrava a vaga da grande final (visto no sweep em N=2).
+            var _ambiguo = _all().some(function (x) { return x && x.nextMatchId === _dest.id && !x.nextSlot; });
+            if (!_ambiguo) {
+              ['p1', 'p2'].forEach(function (sl) {
+                if (_livre || !_empty(_dest[sl])) return;
+                var _fed = _all().some(function (x) { return x && x.nextMatchId === _dest.id && x.nextSlot === sl; });
+                if (!_fed) _livre = sl;
+              });
+            }
+          }
+          var _comDestinoSlotOrig = _comDestino.nextSlot;
+          if (_livre) {
+            ng.nextMatchId = _dest.id; ng.nextSlot = _livre;      // havia vaga no destino comum
+          } else {
+            // sem vaga → a chave cresce UMA rodada: irmão × novo, herdando o destino do irmão
+            var _novoR = {
+              id: 'lt-' + t.id + '-' + ts + '-x' + placed, round: baseRound + 1, bracket: _brk,
+              phaseIndex: _pi, p1: 'TBD', p2: 'TBD', winner: null,
+              nextMatchId: _comDestino.nextMatchId, nextSlot: _comDestino.nextSlot
+            };
+            if (typeof window._appendCanonicalColumn === 'function') {
+              try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _brk, round: baseRound + 1, matches: [_novoR] }); }
+              catch (e) { t.matches.push(_novoR); }
+            } else { t.matches.push(_novoR); }
+            _comDestino.nextMatchId = _novoR.id; _comDestino.nextSlot = 'p1';
+            ng.nextMatchId = _novoR.id; ng.nextSlot = 'p2';
+            // o confronto novo herda o destino ORIGINAL do irmão, com a mesma convenção de slot
+            _novoR.nextSlot = _comDestinoSlotOrig;
+          }
+        }
+      } catch (_eDest) {}
     }
     // vira inscrito (idempotente) e sai da espera
     var exists = t.participants.some(function (p) { return _nm(p) === dn; });

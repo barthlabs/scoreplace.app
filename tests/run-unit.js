@@ -216,6 +216,9 @@ const SUITES = [
   // TRAVA ESTRUTURAL (dono: "faça de forma robusta"): TODO mutator que roda em AppStore.mutate/
   // commitTournamentTx é IDEMPOTENTE (N× ≡ 1×). Mutator novo nascendo como toggle fica VERMELHO.
   'tests/mutators-idempotent-canon.test.js',
+  // VARREDURA Dupla Elim × TODOS os N (2..24) com integração tardia + playout até o campeão.
+  // A Simples entra como CASO DERIVADO (= a Dupla sem a linha inferior).
+  'tests/dupla-elim-late-sweep.test.js',
   // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
   'tests/count-competitors.test.js',
   'tests/phase-repechage-lines.test.js',
