@@ -1247,6 +1247,13 @@ function _advanceWinner(t, completedMatch) {
   if (typeof window !== 'undefined' && typeof window._resolveRepFills === 'function') {
     try { window._resolveRepFills(t); } catch (e) {}
   }
+  // v1.3.164: a resolução de repescagem pode ter PROMOVIDO alguém pra um jogo de tardio na
+  // 1ª superior — a DONA ÚNICA da chave inferior (_syncLowerBracket) puxa o promovido da 1ª
+  // inferior, re-aponta o perdedor do jogo do tardio pro buraco e refecha a conta ⌈descem/2⌉.
+  // No-op barato fora da Dupla Eliminatória de árvore mínima (guardas internas).
+  if (typeof window !== 'undefined' && typeof window._syncLowerBracket === 'function') {
+    try { window._syncLowerBracket(t); } catch (e) {}
+  }
   // Repechage: when repechage match completes, check if ALL done → advance best loser
   if (completedMatch.isRepechage && t.repechageConfig && t.repechageConfig.bestLoserCount > 0) {
     _advanceBestLoser(t);

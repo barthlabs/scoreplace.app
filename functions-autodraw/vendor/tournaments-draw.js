@@ -1337,9 +1337,17 @@ window._fillRepFillWithLateDuplas = function (t) {
           ocup = { m: m, slot: sl, nome: m[sl], obj: (sl === 'p1') ? m.team1Obj : m.team2Obj };
         });
       });
-      if (ocup && window._returnRepescadoToLower(t, ocup.nome, ocup.obj)) {
+      // v1.3.164: precheck ANTES de deslocar (vaga pronta OU inferior pode crescer) — e o
+      // deslocamento acontece ANTES da reacomodação, senão o _syncLowerBracket ainda veria a
+      // promoção de pé e puxaria o repescado de volta. Ordem: tira a flag → devolve → sync.
+      if (ocup && window._canReturnRepescadoToLower && window._canReturnRepescadoToLower(t, ocup.nome, ocup.obj)) {
+        var _nomeRep = ocup.nome, _objRep = ocup.obj;
         _setSide(ocup.m, ocup.slot, d);
         if (ocup.slot === 'p1') delete ocup.m.p1FromRepechage; else delete ocup.m.p2FromRepechage;
+        var _volta = window._returnRepescadoToLower(t, _nomeRep, _objRep);
+        if (typeof window._syncLowerBracket === 'function') {
+          try { window._syncLowerBracket(t, { forceRebuild: _volta === 'grow' }); } catch (e) {}
+        }
         var _dn2 = _nm(d);
         if (!t.participants.some(function (p) { return _nm(p) === _dn2; })) {
           var _cl2 = Object.assign({}, d); delete _cl2._lateJoin; t.participants.push(_cl2);
@@ -1403,6 +1411,8 @@ window._fillRepFillWithLateDuplas = function (t) {
   });
   // se a R1 já fechou, resolve os repescados restantes na hora (idempotente).
   if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }
+  // …e a DONA ÚNICA da inferior reconcilia (pull do promovido, tamanho, fiação). v1.3.164.
+  if (typeof window._syncLowerBracket === 'function') { try { window._syncLowerBracket(t); } catch (e) {} }
   if (typeof window._computeMemberUids === 'function') { try { window._computeMemberUids(t); } catch (e) {} }
   if (window.AppStore && typeof window.AppStore.logAction === 'function') {
     window.AppStore.logAction(t.id, integrated + ' dupla(s) tardia(s) → entrou no lugar do repescado (chave playin)');
@@ -3821,20 +3831,39 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
 // sobrescrito depois. Slot com `repFill` (espera repescado) CONTA: é exatamente o "a definir" que o
 // organizador vê. Guard anti-auto-confronto: nunca colocar onde a própria entrada já está do outro lado.
 // Ver [[project_late_dupla_fills_awaiting_slot]] [[project_formed_pair_roster_orphan]].
-// ── DEVOLVE O REPESCADO DESLOCADO À CHAVE INFERIOR (v1.3.163) ────────────────────────────────
+// ── DEVOLVE O REPESCADO DESLOCADO À CHAVE INFERIOR (v1.3.163, ampliado v1.3.164) ─────────────
 // Dono: "o repescado nao pode ser retirado para nao jogar. mas para ser promovido para a superior
 // ... isso nao é perda dele, é promocao. entao nesse caso sobe."
 // Ou seja: PROMOVER é permitido, TIRAR DE JOGAR não. Quando um tardio ocupa o lugar que um
 // repescado ocupava na superior (porque, se o tardio estivesse inscrito, aquele repescado nunca
 // teria sido chamado), o repescado NÃO desaparece — ele volta à chave inferior, onde continua
-// jogando com a derrota que já tinha. Devolve true só se conseguiu reacomodá-lo; quem chama NÃO
-// desloca ninguém sem isso. [[project_lower_bracket_recursive_repechage]]
+// jogando com a derrota que já tinha. v1.3.164: se não há vaga, a 1ª inferior CRESCE um jogo
+// (é a chave de N novo: com o repescado de volta são ⌈derrotados/2⌉ jogos — mesma conta do
+// _syncLowerBracket, que reconcilia sobra/rebuild em seguida). Devolve true só se reacomodou;
+// quem chama NÃO desloca ninguém sem o _canReturnRepescadoToLower dizer que dá.
+// [[project_lower_bracket_recursive_repechage]]
 window._returnRepescadoToLower = function (t, nome, entrada) {
   if (!t || !nome || !Array.isArray(t.matches)) return false;
   var _all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
   var low = _all.filter(function (m) { return m && m.bracket === 'lower'; });
   if (!low.length) return false;
   var r = Math.min.apply(null, low.map(function (m) { return (typeof m.round === 'number') ? m.round : 1; }));
+  // JÁ ESTÁ EMBAIXO? Então não há o que devolver — a descida original dele nunca foi cortada
+  // (é o caso do repescado do jogo da ímpar do SORTEIO, cuja promoção não cancela a descida).
+  // Colocar de novo criava DUPLICATA na 1ª inferior (medido no sweep ímpar, v1.3.164).
+  var _uidsEnt = (entrada && typeof window._participantUids === 'function') ? (window._participantUids(entrada) || []) : [];
+  var _keyEnt = _uidsEnt.length ? 'u:' + _uidsEnt.slice().sort().join('+') : 'n:' + String(nome).trim().toLowerCase();
+  var _keyLado = function (m, sl) {
+    var u = (sl === 'p1') ? m.team1Uids : m.team2Uids;
+    if (Array.isArray(u) && u.length) return 'u:' + u.slice().sort().join('+');
+    var rot = String((sl === 'p1' ? m.p1 : m.p2) || '').trim().toLowerCase();
+    return (!rot || rot === 'tbd') ? '' : 'n:' + rot;
+  };
+  var _jaEmbaixo = low.some(function (m) {
+    return ((typeof m.round === 'number') ? m.round : 1) === r &&
+      ['p1', 'p2'].some(function (sl) { return _keyLado(m, sl) === _keyEnt; });
+  });
+  if (_jaEmbaixo) return 'slot';
   var low1 = low.filter(function (m) { return ((typeof m.round === 'number') ? m.round : 1) === r && !m.winner; });
   var _vaz = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
   var _fed = function (m, sl) {
@@ -3856,6 +3885,22 @@ window._returnRepescadoToLower = function (t, nome, entrada) {
       ['p1', 'p2'].forEach(function (sl) { if (!alvo && _vaz(m[sl]) && !_fed(m, sl)) alvo = { m: m, slot: sl, rf: null }; });
     });
   }
+  // 3ª escolha (v1.3.164): SEM vaga → a 1ª inferior cresce um jogo (só no motor mínimo e com o
+  // resto da inferior intocado — mesma guarda do rebuild). O _syncLowerBracket fecha a conta
+  // (sobra vira repescagem, rodadas seguintes refeitas) logo depois, no chamador.
+  var _cresceu = false;
+  if (!alvo && window._canReturnRepescadoToLower(t) === 'grow') {
+    _cresceu = true;
+    var ng2 = { id: 'ltR-' + t.id + '-' + Date.now(), round: r, bracket: 'lower', p1: 'TBD', p2: 'TBD', winner: null };
+    var _tpl2 = low1[0] || low[0] || {};
+    if (_tpl2.phaseIndex != null) ng2.phaseIndex = _tpl2.phaseIndex;
+    if (_tpl2.category != null) ng2.category = _tpl2.category;
+    if (typeof window._appendCanonicalColumn === 'function') {
+      try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'lower', round: r, matches: [ng2] }); }
+      catch (e) { t.matches.push(ng2); }
+    } else { t.matches.push(ng2); }
+    alvo = { m: ng2, slot: 'p1', rf: null };
+  }
   if (!alvo) return false;                    // sem lugar: NÃO desloca (ele não pode parar de jogar)
   alvo.m[alvo.slot] = nome;
   if (entrada) {
@@ -3867,7 +3912,57 @@ window._returnRepescadoToLower = function (t, nome, entrada) {
     alvo.m.repFill = (alvo.m.repFill || []).filter(function (x) { return x !== alvo.rf; });
     if (!alvo.m.repFill.length) { delete alvo.m.repFill; delete alvo.m.isPhaseRepGame; delete alvo.m.isLowerImpar; }
   }
-  return true;
+  return _cresceu ? 'grow' : 'slot';
+};
+
+// Precheck do deslocamento (v1.3.164): dá pra reacomodar o repescado embaixo? Devolve
+// 'slot' (há vaga pronta), 'grow' (não há, mas a inferior pode crescer — motor mínimo com
+// rodadas seguintes intocadas) ou false (não desloca ninguém). O chamador SÓ tira o
+// repescado do jogo do tardio quando isto não é false — tirar de jogar é proibido.
+window._canReturnRepescadoToLower = function (t, nome, entrada) {
+  if (!t || !Array.isArray(t.matches)) return false;
+  var _all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
+  var low = _all.filter(function (m) { return m && m.bracket === 'lower'; });
+  if (!low.length) return false;
+  var r = Math.min.apply(null, low.map(function (m) { return (typeof m.round === 'number') ? m.round : 1; }));
+  // já materializado na 1ª inferior (descida original intacta) ⇒ nada a reacomodar
+  if (nome) {
+    var _uidsE = (entrada && typeof window._participantUids === 'function') ? (window._participantUids(entrada) || []) : [];
+    var _kE = _uidsE.length ? 'u:' + _uidsE.slice().sort().join('+') : 'n:' + String(nome).trim().toLowerCase();
+    var _kL = function (m, sl) {
+      var u = (sl === 'p1') ? m.team1Uids : m.team2Uids;
+      if (Array.isArray(u) && u.length) return 'u:' + u.slice().sort().join('+');
+      var rot = String((sl === 'p1' ? m.p1 : m.p2) || '').trim().toLowerCase();
+      return (!rot || rot === 'tbd') ? '' : 'n:' + rot;
+    };
+    var _ja = low.some(function (m) {
+      return ((typeof m.round === 'number') ? m.round : 1) === r &&
+        ['p1', 'p2'].some(function (sl) { return _kL(m, sl) === _kE; });
+    });
+    if (_ja) return 'slot';
+  }
+  var low1 = low.filter(function (m) { return ((typeof m.round === 'number') ? m.round : 1) === r && !m.winner; });
+  var _vaz = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
+  var _fed = function (m, sl) {
+    return t.matches.some(function (x) { return x && x !== m && ((x.nextMatchId === m.id && x.nextSlot === sl) || (x.loserMatchId === m.id && x.loserSlot === sl)); });
+  };
+  var temVaga = low1.some(function (m) {
+    return ['p1', 'p2'].some(function (sl) {
+      if (!_vaz(m[sl])) return false;
+      if ((m.repFill || []).some(function (rf) { return rf && rf.slot === sl; })) return true;
+      return !_fed(m, sl);
+    });
+  });
+  if (temVaga) return 'slot';
+  // crescer exige: motor MÍNIMO (isPhaseRepR1 na 1ª sup) + nada jogado da 2ª inferior em diante
+  var supAll = _all.filter(function (m) { return m && m.bracket !== 'lower' && m.bracket !== 'grand' && !m.isThirdPlace; });
+  if (!supAll.length) return false;
+  var supR = Math.min.apply(null, supAll.map(function (m) { return (typeof m.round === 'number') ? m.round : 1; }));
+  var minimo = supAll.some(function (m) { return ((typeof m.round === 'number') ? m.round : 1) === supR && m.isPhaseRepR1; });
+  if (!minimo) return false;
+  var tailOk = low.every(function (m) { return ((typeof m.round === 'number') ? m.round : 1) === r || !m.winner; }) &&
+    _all.filter(function (m) { return m && m.bracket === 'grand'; }).every(function (m) { return !m.winner; });
+  return tailOk ? 'grow' : false;
 };
 
 // ── IDENTIDADE NO JOGO + CONFRONTO REPETIDO POR UID (v1.3.162, bug do dono) ──────────────────
@@ -3951,108 +4046,324 @@ window._dedupMatchesByUid = function (t) {
 // vaga de REPESCAGEM ainda PENDENTE (trocar uma vaga "a definir" por um competidor real é
 // reorganizar, não desalojar ninguém — REP já resolvido em pessoa nunca é tocado); e se sobrar
 // vaga, ela vira repescagem em vez de morrer. Ver [[project_dupla_elim_late_integration_cascade]].
+// v1.3.164: virou casca fina da DONA ÚNICA da inferior. Marca o jogo novo como TARDIO
+// (isExtra — é por essa marca que o _syncLowerBracket sabe que a promoção dele SUBTRAI da
+// conta de quem desce) e delega tamanho/conteúdo/fiação da 1ª inferior ao sync. Antes esta
+// função crescia a inferior por conta própria e se atropelava com o resolveRepFills — os
+// 8 reverts da saga. [[project_dupla_elim_late_integration_cascade]]
 window._wireLateLoserToLower = function (t, ng, pi) {
   if (!t || !ng || !Array.isArray(t.matches)) return false;
+  if (ng.bracket === 'lower') return false;             // porta-2 (tardio já entra na inferior): perder lá é eliminação
   var _all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
-  var low = _all.filter(function (m) { return m && m.bracket === 'lower'; });
-  if (!low.length) return false;                       // Eliminatória Simples: não há inferior
-  var lowR = Math.min.apply(null, low.map(function (m) { return (typeof m.round === 'number') ? m.round : 1; }));
-  var lowFirst = low.filter(function (m) { return ((typeof m.round === 'number') ? m.round : 1) === lowR; });
-  // quantos jogos a 1ª SUPERIOR tem agora (o jogo novo incluso) → quantos derrotados descem
-  var supBrk = ng.bracket, supR = ng.round;
-  var sup = _all.filter(function (m) {
-    return m && m.bracket === supBrk && ((typeof m.round === 'number') ? m.round : 1) === supR;
-  });
-  // ⚠️ SÓ na chave do motor MÍNIMO (marcada por `isPhaseRepR1` na 1ª rodada). A chave de potência
-  // de 2 é montada por _buildDoubleElimBracket, com outra convenção de fiação: crescer a inferior
-  // ali deixa slot morto (medido no sweep, N=4 e N=8). Cada motor cuida da sua chave.
-  if (!sup.some(function (m) { return m && m.isPhaseRepR1; })) return false;
-  var precisa = Math.ceil(sup.length / 2);
-  var ts = Date.now(), add = 0;
-  while (lowFirst.length < precisa) {
-    var nm2 = { id: 'ltL-' + t.id + '-' + ts + '-' + (add++), round: lowR, bracket: 'lower', p1: 'TBD', p2: 'TBD', winner: null };
-    if (pi != null) nm2.phaseIndex = pi;
-    if (ng.category != null) nm2.category = ng.category;
-    if (typeof window._appendCanonicalColumn === 'function') {
-      try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'lower', round: lowR, matches: [nm2] }); }
-      catch (e) { t.matches.push(nm2); }
-    } else { t.matches.push(nm2); }
-    lowFirst.push(nm2);
-  }
-  var _vazio = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
-  var _alimentado = function (m, slot) {
-    return t.matches.some(function (x) {
-      return x && x !== m && ((x.nextMatchId === m.id && x.nextSlot === slot) || (x.loserMatchId === m.id && x.loserSlot === slot));
+  if (!_all.some(function (m) { return m && m.bracket === 'lower'; })) return false; // Eliminatória Simples
+  ng.isExtra = true;                                    // marca canônica de jogo tardio
+  try { window._syncLowerBracket(t); } catch (e) { if (window._error) window._error('[tardio] syncLower:', e); }
+  return !!ng.loserMatchId;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// _syncLowerBracket — A DONA ÚNICA DA 1ª CHAVE INFERIOR (v1.3.164)
+//
+// Três mecanismos mexiam na 1ª inferior em momentos diferentes e se atropelavam:
+// _wireLateLoserToLower (na criação do jogo do tardio), resolveRepFills (quando a repescagem
+// resolvia) e a definição do repescado "na hora". Agora existe UM lugar que decide o tamanho
+// e o conteúdo da 1ª inferior; os outros CHAMAM esta função. Regra do dono (canônica):
+//   • A chave é sempre a chave de N — entrar tarde só muda o N.
+//   • 1ª sup decidida + tardio ⇒ o repescado (melhor derrotado da 1ª sup, já escalado na 1ª
+//     inferior) é definido NA HORA, SAI da inferior e sobe pro jogo do tardio; o PERDEDOR
+//     desse jogo preenche o buraco que ele deixou. Por isso a inferior NÃO cresce nesse caso.
+//   • Quem desce = 1 perdedor por jogo da 1ª sup, MENOS quem subiu por repescagem pra um jogo
+//     de TARDIO (isExtra). Tamanho da 1ª inferior = ⌈descem/2⌉; ímpar → vaga de repescagem.
+//   • Jogo já disputado é INTOCÁVEL (confronto e placar). Repescado só é puxado de jogo
+//     PENDENTE; promover é ganho, tirar de jogar é proibido.
+//   • Da 2ª inferior em diante: refeita com _rebuildLowerBracket (wipe) — SÓ quando nada dali
+//     pra frente foi jogado.
+// ⚠️ SÓ o motor MÍNIMO (isPhaseRepR1 na 1ª sup). Chave de potência de 2 é do
+// _buildDoubleElimBracket, com outra convenção de fiação — mexer ali deixa slot morto
+// (medido no sweep, N=4 e N=8). Cada motor cuida da sua chave.
+// [[project_dupla_elim_minimal_tree_canon]] [[project_late_entry_door_upper_then_lower]]
+// [[project_lower_bracket_recursive_repechage]] [[project_uid_identity_canon_locked]]
+window._syncLowerBracket = function (t, opts) {
+  opts = opts || {};
+  if (!t || !Array.isArray(t.matches)) return false;
+  // multi-categoria fora do escopo (mesma regra de toda a integração tardia)
+  if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return false;
+  var _r = function (m) { return (m && typeof m.round === 'number') ? m.round : 1; };
+  var _vazio = function (v) { return !v || v === 'TBD' || v === 'BYE (Avança Direto)' || /a definir/i.test(String(v)); };
+  var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
+  var low = all.filter(function (m) { return m && m.bracket === 'lower'; });
+  if (!low.length) return false;                        // Eliminatória Simples: não há inferior
+  var supAll = all.filter(function (m) { return m && m.bracket !== 'lower' && m.bracket !== 'grand' && !m.isThirdPlace; });
+  if (!supAll.length) return false;
+  var supR = Math.min.apply(null, supAll.map(_r));
+  var sup = supAll.filter(function (m) { return _r(m) === supR; });
+  if (!sup.some(function (m) { return m && m.isPhaseRepR1; })) return false;   // motor mínimo apenas
+  var supBrk = (sup.filter(function (m) { return m.isPhaseRepR1 && m.bracket; })[0] || sup[0] || {}).bracket;
+  var lowR = Math.min.apply(null, low.map(_r));
+  var lowFirst = low.filter(function (m) { return _r(m) === lowR; });
+  if (!lowFirst.length) return false;
+  var cat = (sup[0] && sup[0].category != null) ? sup[0].category : null;
+  var pi = (sup[0] && sup[0].phaseIndex != null) ? sup[0].phaseIndex : (t.currentPhaseIndex || 0);
+
+  // identidade POR UID (rótulo só de fallback) — [[project_uid_identity_canon_locked]]
+  var _sideKey = function (m, sl) {
+    var u = (sl === 'p1') ? m.team1Uids : m.team2Uids;
+    if (Array.isArray(u) && u.length) return 'u:' + u.slice().sort().join('+');
+    var rot = String((sl === 'p1' ? m.p1 : m.p2) || '').trim().toLowerCase();
+    return (!rot || rot === 'tbd') ? '' : 'n:' + rot;
+  };
+  var _fedByAny = function (m, sl) {
+    return all.some(function (x) {
+      return x && x !== m && ((x.nextMatchId === m.id && x.nextSlot === sl) || (x.loserMatchId === m.id && x.loserSlot === sl));
     });
   };
-  // 1ª escolha: vaga de repescagem PENDENTE (troca "a definir" por competidor real)
-  var alvo = null;
-  lowFirst.forEach(function (m) {
-    if (alvo || !m || m.winner) return;
-    (m.repFill || []).forEach(function (rf) {
-      if (alvo || !rf || !rf.slot || !_vazio(m[rf.slot])) return;
-      alvo = { m: m, slot: rf.slot, rf: rf };
+  // fontes REAIS da 1ª superior (mesmo filtro do _resolveRepFills: repGame não é fonte)
+  var reais = sup.filter(function (m) { return !m.isPhaseRepGame && m.p1 && !_vazio(m.p1) && m.p2 && !_vazio(m.p2); });
+  var todasDecididas = reais.length > 0 && reais.every(function (m) { return !!m.winner; });
+  var changed = false;
+
+  // ── (1) A FONTE do repescado de jogo TARDIO é SEMPRE a 1ª superior (regra do dono:
+  // "o repescado é sempre da rodada superior"). O caminho de steal herdava srcRound da
+  // rodada de onde a vaga foi roubada (2ª sup) → "A definir" ficava pendente até a 2ª
+  // fechar, mesmo com a 1ª já toda decidida — a reclamação literal do dono.
+  sup.forEach(function (g) {
+    if (!g || !g.isExtra || !Array.isArray(g.repFill)) return;
+    g.repFill.forEach(function (rf) {
+      if (!rf || !rf.tagRep) return;
+      if (rf.srcRound !== supR) { rf.srcRound = supR; changed = true; }
+      if (supBrk !== undefined && rf.srcBracket !== supBrk) { rf.srcBracket = supBrk; changed = true; }
+      if (cat != null && rf.cat == null) rf.cat = cat;
     });
   });
-  // 2ª escolha: slot vazio que ninguém alimenta
-  if (!alvo) {
-    lowFirst.forEach(function (m) {
-      if (alvo || !m || m.winner) return;
-      ['p1', 'p2'].forEach(function (s) {
-        if (alvo || !_vazio(m[s]) || _alimentado(m, s)) return;
-        alvo = { m: m, slot: s, rf: null };
+
+  // já promovidos (qualquer jogo da 1ª sup — satout inicial incluso): não repescar 2×
+  var _promKeys = {};
+  sup.forEach(function (g) {
+    ['p1', 'p2'].forEach(function (sl) {
+      if (g[sl + 'FromRepechage'] && !_vazio(g[sl])) { var k = _sideKey(g, sl); if (k) _promKeys[k] = 1; }
+    });
+  });
+
+  // ── (2) DEFINIÇÃO IMEDIATA: 1ª sup decidida ⇒ o "a definir" do jogo do tardio resolve JÁ
+  // (melhor derrotado: saldo desc, pontos desc, semente asc — mesmo critério do resolveRepFills).
+  if (todasDecididas) {
+    var losers = reais.map(function (x) {
+      var s1 = parseFloat(x.scoreP1) || 0, s2 = parseFloat(x.scoreP2) || 0;
+      var lp1 = (x.winner !== x.p1);
+      return {
+        name: lp1 ? x.p1 : x.p2, obj: lp1 ? x.team1Obj : x.team2Obj,
+        uids: (lp1 ? x.team1Uids : x.team2Uids) || [],
+        key: _sideKey(x, lp1 ? 'p1' : 'p2'),
+        saldo: lp1 ? (s1 - s2) : (s2 - s1), score: lp1 ? s1 : s2,
+        seed: (lp1 ? x.p1Seed : x.p2Seed)
+      };
+    }).filter(function (l) { return l.name && !_vazio(l.name); });
+    losers.forEach(function (l) { if (l.seed == null) l.seed = 9999; });
+    losers.sort(function (a, b) { return (b.saldo - a.saldo) || (b.score - a.score) || (a.seed - b.seed); });
+    sup.forEach(function (g) {
+      if (!g || !g.isExtra || g.winner || !Array.isArray(g.repFill) || !g.repFill.length) return;
+      var keep = [];
+      g.repFill.forEach(function (rf) {
+        if (!rf || !rf.tagRep || !rf.slot || !_vazio(g[rf.slot])) { keep.push(rf); return; }
+        var pick = null;
+        losers.forEach(function (l) {
+          if (pick || !l.key || _promKeys[l.key]) return;
+          // jogo já disputado é intocável: quem já JOGOU na 1ª inferior não é puxado
+          var jogouEmbaixo = lowFirst.some(function (m) {
+            return m.winner && (['p1', 'p2'].some(function (s) { return _sideKey(m, s) === l.key; }));
+          });
+          if (jogouEmbaixo) return;
+          pick = l;
+        });
+        if (!pick) { keep.push(rf); return; }
+        g[rf.slot] = pick.name;
+        if (rf.slot === 'p1') {
+          if (pick.obj) g.team1Obj = pick.obj;
+          g.team1Uids = pick.uids.slice(); g.p1Uid = (pick.uids.length === 1 ? pick.uids[0] : null);
+          g.p1FromRepechage = true;
+        } else {
+          if (pick.obj) g.team2Obj = pick.obj;
+          g.team2Uids = pick.uids.slice(); g.p2Uid = (pick.uids.length === 1 ? pick.uids[0] : null);
+          g.p2FromRepechage = true;
+        }
+        _promKeys[pick.key] = 1;
+        changed = true;
+      });
+      if (keep.length) g.repFill = keep; else delete g.repFill;
+    });
+  }
+
+  // ── (3) PULL: promoção resolvida em jogo TARDIO ⇒ o promovido SAI da 1ª inferior (só de
+  // jogo pendente) e o PERDEDOR do jogo do tardio herda o buraco. O jogo de origem do
+  // promovido deixa de mandar alguém pra baixo (o perdedor dele SUBIU). Jogo do tardio JÁ
+  // decidido não puxa mais ninguém — se o repescado perdeu lá, a volta dele pra inferior é
+  // a descida LEGÍTIMA do perdedor do jogo (nunca desfazer).
+  sup.forEach(function (g) {
+    if (!g || !g.isExtra || g.winner) return;
+    ['p1', 'p2'].forEach(function (sl) {
+      if (!g[sl + 'FromRepechage'] || _vazio(g[sl])) return;
+      var key = _sideKey(g, sl);
+      if (!key) return;
+      var alvo = null;
+      lowFirst.forEach(function (m) {
+        if (alvo || !m || m.winner || m === g) return;
+        ['p1', 'p2'].forEach(function (s) {
+          if (alvo) return;
+          if (_sideKey(m, s) === key) alvo = { m: m, slot: s };
+        });
+      });
+      if (!alvo) return;                                 // não está embaixo (já puxado) ou já jogou
+      alvo.m[alvo.slot] = 'TBD';
+      if (alvo.slot === 'p1') { delete alvo.m.team1Obj; alvo.m.team1Uids = []; alvo.m.p1Uid = null; }
+      else { delete alvo.m.team2Obj; alvo.m.team2Uids = []; alvo.m.p2Uid = null; }
+      // quem alimentava esse buraco era o jogo de ORIGEM do promovido (decidido) — corta o fio
+      sup.forEach(function (m) {
+        if (m !== g && m.winner && m.loserMatchId === alvo.m.id && m.loserSlot === alvo.slot) {
+          delete m.loserMatchId; delete m.loserSlot;
+        }
+      });
+      g.loserMatchId = alvo.m.id; g.loserSlot = alvo.slot;
+      changed = true;
+    });
+  });
+
+  // ── (4) TAMANHO: quem desce = 1 perdedor por jogo da 1ª sup — MENOS o jogo cujo perdedor
+  // foi PROMOVIDO pra um jogo de TARDIO (isExtra): esse jogo não entrega ninguém embaixo (o
+  // perdedor subiu; quem desce no lugar é o perdedor do jogo do tardio, contado pelo próprio
+  // jogo do tardio). Promoção pendente ainda conta como descida (o repescado só sai quando é
+  // definido e puxado). A promoção do satout INICIAL (não-isExtra) não subtrai — convenção
+  // pré-existente da chave ímpar de sorteio.
+  var descem = 0;
+  sup.forEach(function (g) {
+    if (!g) return;
+    if (!g.winner) { descem++; return; }
+    var loserSl = (g.winner === g.p1) ? 'p2' : 'p1';
+    var key = _sideKey(g, loserSl);
+    var promovido = key && sup.some(function (x) {
+      return x && x !== g && x.isExtra && ['p1', 'p2'].some(function (sl) {
+        return x[sl + 'FromRepechage'] && _sideKey(x, sl) === key;
       });
     });
-  }
-  if (!alvo) return false;
-  ng.loserMatchId = alvo.m.id; ng.loserSlot = alvo.slot;
-  if (alvo.rf) {
-    alvo.m.repFill = (alvo.m.repFill || []).filter(function (x) { return x !== alvo.rf; });
-    if (!alvo.m.repFill.length) { delete alvo.m.repFill; delete alvo.m.isPhaseRepGame; delete alvo.m.isLowerImpar; }
-  }
-  // sobrou vaga sem dono? vira REPESCAGEM (a vaga do ímpar), nunca slot morto
-  var sobra = null;
-  lowFirst.forEach(function (m) {
-    if (sobra || !m || m.winner) return;
-    ['p1', 'p2'].forEach(function (s) {
-      if (sobra || !_vazio(m[s]) || _alimentado(m, s)) return;
-      if ((m.repFill || []).some(function (x) { return x && x.slot === s; })) return;
-      sobra = { m: m, slot: s };
-    });
+    if (!promovido) descem++;
   });
-  if (sobra) {
-    sobra.m.isPhaseRepGame = true; sobra.m.isLowerImpar = true;
-    (sobra.m.repFill = sobra.m.repFill || []).push({ slot: sobra.slot, srcBracket: 'lower', srcRound: lowR, rank: 0, cat: (ng.category != null ? ng.category : null), tagRep: true });
-  }
-  // A 1ª inferior cresceu ⇒ as rodadas SEGUINTES não fecham mais a conta (o vencedor do jogo novo
-  // não teria pra onde ir, e o encontro seguinte ficaria com vaga morta). Refaz da 2ª inferior pra
-  // frente com o MESMO motor que a montou (_rebuildLowerBracket, modo wipe: preserva a superior
-  // COM resultados e a 1ª inferior).
-  // ⚠️ SÓ na chave do motor MÍNIMO (marcada por `isPhaseRepR1` na 1ª rodada). Chave de potência de
-  // 2 é montada por _buildDoubleElimBracket, com outra convenção de fiação — reconstruir com os
-  // parâmetros do playin ali PIOROU (4 slots mortos no sweep N=4/N=8). Cada motor refaz o seu.
-  if (add > 0 && typeof window._rebuildLowerBracket === 'function') {
-    var _todos = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
-    var _depois = _todos.filter(function (m) { return m && m.bracket === 'lower' && ((typeof m.round === 'number') ? m.round : 1) > lowR; });
-    var _grand = _todos.filter(function (m) { return m && m.bracket === 'grand'; });
-    if (_depois.every(function (m) { return !m.winner; }) && _grand.every(function (m) { return !m.winner; })) {
-      var _porR = {};
-      _todos.filter(function (m) { return m && m.bracket === supBrk && !m.isThirdPlace; })
-        .forEach(function (m) { var r = (typeof m.round === 'number') ? m.round : 1; (_porR[r] = _porR[r] || []).push(m); });
-      var _rs = Object.keys(_porR).map(Number).sort(function (a, b) { return a - b; });
-      var _ult = _rs[_rs.length - 1];
-      try {
-        window._rebuildLowerBracket(t, {
-          preRound: lowFirst,
-          mergeUppers: _rs.filter(function (r) { return r > supR; }).map(function (r) { return _porR[r]; }),
-          satout: null, upperChamp: (_porR[_ult] || [])[0] || null, W: _rs.length - 1, mode: 'playin',
-          cat: (ng.category != null ? ng.category : null), phaseIndex: (pi != null ? pi : null),
-          idPrefix: 'ltRL-' + t.id + '-' + ts, ts: ts, wipe: true
-        });
-      } catch (e) { if (window._error) window._error('[tardio] rebuild inferior:', e); }
+  var need = Math.max(1, Math.ceil(descem / 2));
+  var tail = low.filter(function (m) { return _r(m) > lowR; });
+  var grand = all.filter(function (m) { return m && m.bracket === 'grand'; });
+  var rebuildSafe = tail.every(function (m) { return !m.winner; }) && grand.every(function (m) { return !m.winner; });
+  var resized = false;
+  var ts = Date.now(), add = 0;
+  if (rebuildSafe) {
+    while (lowFirst.length < need) {
+      var nm2 = { id: 'ltL-' + t.id + '-' + ts + '-' + (add++), round: lowR, bracket: 'lower', p1: 'TBD', p2: 'TBD', winner: null };
+      if (pi != null) nm2.phaseIndex = pi;
+      if (cat != null) nm2.category = cat;
+      if (typeof window._appendCanonicalColumn === 'function') {
+        try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'lower', round: lowR, matches: [nm2] }); }
+        catch (e) { t.matches.push(nm2); }
+      } else { t.matches.push(nm2); }
+      lowFirst.push(nm2);
+      resized = true;
+    }
+    // encolher: só jogo VAZIO (sem nome, sem resultado, sem ninguém apontando pra ele) sai.
+    while (lowFirst.length > need) {
+      var rmIdx = -1;
+      for (var ri = lowFirst.length - 1; ri >= 0; ri--) {
+        var cand = lowFirst[ri];
+        if (!cand || cand.winner) continue;
+        var ocupado = ['p1', 'p2'].some(function (s) { return !_vazio(cand[s]) || _fedByAny(cand, s); });
+        if (!ocupado) { rmIdx = ri; break; }
+      }
+      if (rmIdx < 0) break;                              // nada removível: mantém (nunca apaga jogo vivo)
+      var rm = lowFirst.splice(rmIdx, 1)[0];
+      t.matches = t.matches.filter(function (x) { return x !== rm; });
+      all = all.filter(function (x) { return x !== rm; });
+      t.matches.forEach(function (x) {
+        if (!x) return;
+        if (x.loserMatchId === rm.id) { delete x.loserMatchId; delete x.loserSlot; }
+        if (x.nextMatchId === rm.id) { delete x.nextMatchId; delete x.nextSlot; }
+      });
+      resized = true;
     }
   }
-  return true;
+
+  // ── (5) FIAÇÃO: todo jogo PENDENTE da 1ª sup manda o perdedor pra um slot válido da 1ª
+  // inferior; toda vaga da inferior ou é alimentada, ou é repescagem — nunca slot morto.
+  var claimed = {};
+  sup.forEach(function (g) {
+    if (!g || g.winner) return;                          // decidido: o perdedor já desceu (ou subiu)
+    var tgt = g.loserMatchId ? lowFirst.filter(function (m) { return m.id === g.loserMatchId; })[0] : null;
+    var okWire = tgt && g.loserSlot && !tgt.winner && _vazio(tgt[g.loserSlot]) && !claimed[tgt.id + '|' + g.loserSlot];
+    if (okWire) { claimed[tgt.id + '|' + g.loserSlot] = 1; return; }
+    if (g.loserMatchId) { delete g.loserMatchId; delete g.loserSlot; changed = true; }
+  });
+  sup.forEach(function (g) {
+    if (!g || g.winner || g.loserMatchId) return;
+    var alvo = null;
+    // 1ª escolha: vaga de repescagem PENDENTE (troca "a definir" por competidor real)
+    lowFirst.forEach(function (m) {
+      if (alvo || !m || m.winner) return;
+      (m.repFill || []).forEach(function (rf) {
+        if (alvo || !rf || !rf.slot || !_vazio(m[rf.slot]) || claimed[m.id + '|' + rf.slot]) return;
+        alvo = { m: m, slot: rf.slot, rf: rf };
+      });
+    });
+    // 2ª escolha: slot vazio que ninguém alimenta
+    if (!alvo) {
+      lowFirst.forEach(function (m) {
+        if (alvo || !m || m.winner) return;
+        ['p1', 'p2'].forEach(function (s) {
+          if (alvo || !_vazio(m[s]) || claimed[m.id + '|' + s] || _fedByAny(m, s)) return;
+          if ((m.repFill || []).some(function (x) { return x && x.slot === s; })) return;
+          alvo = { m: m, slot: s, rf: null };
+        });
+      });
+    }
+    if (!alvo) return;                                   // sem vaga (inferior travada): perdedor fica sem destino, como antes
+    g.loserMatchId = alvo.m.id; g.loserSlot = alvo.slot; claimed[alvo.m.id + '|' + alvo.slot] = 1;
+    if (alvo.rf) {
+      alvo.m.repFill = (alvo.m.repFill || []).filter(function (x) { return x !== alvo.rf; });
+      if (!alvo.m.repFill.length) { delete alvo.m.repFill; delete alvo.m.isPhaseRepGame; delete alvo.m.isLowerImpar; }
+    }
+    changed = true;
+  });
+  // sobra sem dono? vira REPESCAGEM (a vaga do ímpar — 3ª vida do melhor derrotado da própria
+  // 1ª inferior), nunca slot morto. Rank incremental por fonte (nunca 2 vagas no mesmo derrotado).
+  var _rankLow = 0;
+  lowFirst.forEach(function (m) {
+    (m && m.repFill || []).forEach(function (rf) {
+      if (rf && rf.srcBracket === 'lower' && rf.srcRound === lowR) _rankLow++;
+    });
+  });
+  lowFirst.forEach(function (m) {
+    if (!m || m.winner) return;
+    ['p1', 'p2'].forEach(function (s) {
+      if (!_vazio(m[s]) || claimed[m.id + '|' + s] || _fedByAny(m, s)) return;
+      if ((m.repFill || []).some(function (x) { return x && x.slot === s; })) return;
+      m.isPhaseRepGame = true; m.isLowerImpar = true;
+      (m.repFill = m.repFill || []).push({ slot: s, srcBracket: 'lower', srcRound: lowR, rank: _rankLow++, cat: cat, tagRep: true });
+      changed = true;
+    });
+  });
+
+  // ── (6) O tamanho da 1ª inferior mudou ⇒ da 2ª em diante a conta não fecha mais. Refaz com
+  // o MESMO motor que montou (_rebuildLowerBracket, wipe) — só quando nada dali pra frente
+  // foi jogado (rebuildSafe, já garantido pra qualquer resize).
+  if ((resized || opts.forceRebuild) && rebuildSafe && typeof window._rebuildLowerBracket === 'function') {
+    var _porR = {};
+    supAll.forEach(function (m) { var r2 = _r(m); (_porR[r2] = _porR[r2] || []).push(m); });
+    var _rs = Object.keys(_porR).map(Number).sort(function (a, b) { return a - b; });
+    var _ult = _rs[_rs.length - 1];
+    try {
+      window._rebuildLowerBracket(t, {
+        preRound: lowFirst,
+        mergeUppers: _rs.filter(function (r2) { return r2 > supR; }).map(function (r2) { return _porR[r2]; }),
+        satout: null, upperChamp: (_porR[_ult] || [])[0] || null, W: _rs.length - 1, mode: 'playin',
+        cat: cat, phaseIndex: pi, idPrefix: 'ltRL-' + t.id + '-' + ts, ts: ts, wipe: true
+      });
+    } catch (e) { if (window._error) window._error('[syncLower] rebuild inferior:', e); }
+    changed = true;
+  }
+  return changed;
 };
 
 window._placeLateEntriesSurgically = function (t) {

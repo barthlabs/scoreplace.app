@@ -217,6 +217,10 @@ const SUITES = [
   'tests/late-entry-upper-grows-lower.test.js',
   'tests/match-identity-dedup.test.js',
   'tests/late-entry-recompute-n.test.js',
+  // _syncLowerBracket (dona única da 1ª inferior): cenário do dono (1ª sup jogada ANTES do
+  // tardio — repescado na hora, inferior não cresce, 2º tardio toma a vaga) + varredura
+  // N=3..20 × 0/1/2 tardios do mesmo fluxo. O 1.3.163 falha esta suíte.
+  'tests/sync-lower-bracket.test.js',
   // Dupla Elim (dono): dupla PRÉ-FORMADA na espera, ao receber presença, ia pro LIMBO — o placer
   // exigia _lateJoin (flag que só dupla formada TARDE tem). Entra na R1 da chave SUPERIOR.
   'tests/late-dupla-elim-r1-entry.test.js',
