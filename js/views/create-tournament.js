@@ -3701,7 +3701,7 @@ function setupCreateTournamentModal() {
       var bd = real ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.06)';
       var lc = real ? '#60a5fa' : 'var(--text-muted)';
       h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + bg + ';border:' + bd + ';border-radius:8px;flex-wrap:wrap;">';
-      h += '<span style="font-size:0.78rem;font-weight:' + (real ? '700' : '600') + ';color:' + lc + ';min-width:104px;">' + c + ' inscritos' + (real ? ' <span style="font-size:0.62rem;">(real)</span>' : '') + '</span>';
+      h += '<span style="font-size:0.78rem;font-weight:' + (real ? '700' : '600') + ';color:' + lc + ';min-width:104px;">' + c + ' ' + (o.unitLbl || 'inscritos') + (real ? ' <span style="font-size:0.62rem;">(real)</span>' : '') + '</span>';
       h += '<span style="font-size:0.74rem;color:var(--text-muted);opacity:0.65;">' + m + ' jogos</span>';
       h += '<span style="font-size:0.85rem;font-weight:700;color:' + (real ? '#e2e8f0' : 'rgba(255,255,255,0.7)') + ';margin-left:auto;">' + fmtMin(timeFor(c)) + '</span>';
       h += '</div>';
@@ -3726,21 +3726,37 @@ function setupCreateTournamentModal() {
       if (catData.combinedCategories && catData.combinedCategories.length) K = catData.combinedCategories.length;
       ageCats = (catData.ageCategories || []).length;
     } catch (e) { K = 1; }
+    // v1.3.168 (dono): a escada estima por UNIDADE COMPETITIVA — em duplas, EQUIPES, nunca nº
+    // de entradas (31 pessoas = 14 equipes + 3 sem dupla ⇒ chave de 14; solo sem dupla é
+    // pendência). Real: _diagnoseAll.effectiveTeams (fonte única, o mesmo nº dos painéis de
+    // resolução). Planejado: pessoas ÷ tamanho do time.
+    var teamSize = Math.max(iv('tourn-team-size', 1), 1);
     var N = 0, isReal = false;
     var editId = gv('edit-tournament-id');
     if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
       var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); });
-      if (t && Array.isArray(t.participants) && t.participants.length > 0) { N = t.participants.length; isReal = true; }
+      if (t && Array.isArray(t.participants) && t.participants.length > 0) {
+        N = t.participants.length; isReal = true;
+        try {
+          if (typeof window._diagnoseAll === 'function') {
+            var _di = window._diagnoseAll(t);
+            if (_di && _di.effectiveTeams > 0) N = _di.effectiveTeams;
+            if (_di && _di.teamSize > teamSize) teamSize = _di.teamSize;
+          }
+        } catch (e) {}
+      }
     }
     if (!isReal) {
       var elm = gv('enrollment-limit-mode') || 'cap';
       if (elm === 'draw') N = iv('tourn-target-slots', 0);
       if (!N) N = iv('tourn-max-participants', 0);
+      if (teamSize >= 2 && N > 0) N = Math.floor(N / teamSize); // planejado é em PESSOAS
     }
     ladder.innerHTML = window._buildPhaseEstimate({
       call: iv('tourn-call-time', 0), warm: iv('tourn-warmup-time', 0), dur: iv('tourn-game-duration', 0),
       courts: iv('tourn-court-count', 1), fmt: gv('select-formato') || 'elim_simples', drawMode: gv('draw-mode') || 'sorteio',
       K: K, ageCats: ageCats, N: N, isReal: isReal,
+      unitLbl: (teamSize >= 2 ? 'equipes' : 'inscritos'),
       gruposCount: iv('grupos-count', 4)
     });
   };

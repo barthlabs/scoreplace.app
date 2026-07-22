@@ -716,7 +716,16 @@ window._buildTimeEstimation = function(t, opts) {
 
   // Inscritos reais (contar pessoas individuais, não times)
   var parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-  var unitCount = parts.length; // unidades competitivas (times ou individuais) para cálculo do bracket
+  // v1.3.168 (dono): unidade competitiva = EQUIPES EFETIVAS, nunca nº de entradas. Em duplas,
+  // 31 pessoas = 14 equipes + 3 sem dupla → a chave é de 14 (solo sem dupla é pendência, não
+  // competidor). Fonte ÚNICA: _diagnoseAll (o mesmo número dos painéis de resolução do sorteio).
+  var unitCount = parts.length; // fallback: nº de entradas
+  try {
+    if (typeof window._diagnoseAll === 'function') {
+      var _di = window._diagnoseAll(t);
+      if (_di && _di.effectiveTeams > 0) unitCount = _di.effectiveTeams;
+    }
+  } catch (e) {}
   var realCount = 0;
   parts.forEach(function(p) {
     if (typeof p === 'object' && p !== null && Array.isArray(p.participants)) {
@@ -839,6 +848,11 @@ window._buildDurationForecast = function(t) {
     var mm = Math.round(min % 60);
     var jogosLbl = d.matches + (d.matches === 1 ? ' jogo' : ' jogos');
     var partsLbl = d.realCount + (d.realCount === 1 ? ' participante' : ' participantes');
+    // duplas: mostra as EQUIPES (base real do cálculo) junto das pessoas — "31 participantes ·
+    // 14 equipes / 13 jogos". v1.3.168, pedido do dono.
+    if (d.unitCount && d.unitCount !== d.realCount) {
+      partsLbl += ' · ' + d.unitCount + (d.unitCount === 1 ? ' equipe' : ' equipes');
+    }
     var rb = (typeof window._photoReadBox === 'function')
       ? window._photoReadBox()
       : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
