@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.144';
+window.SCOREPLACE_VERSION = '1.3.145';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1938,6 +1938,33 @@ window._stampPresenceIntent = function (tId, who, state) {
     var k = (who && typeof who === 'object' && who.uid) ? ('uid:' + who.uid) : ('nm:' + String(who));
     m[k] = { who: who, state: state, at: Date.now() };
   } catch (_e) {}
+};
+// ─── Eco de CF NUNCA regride presença (v1.3.145) ────────────────────────────────────
+// Dono: "continua diminuindo os presentes depois de 24 presenças". Torneio sorteado "só entre os
+// presentes" manda todo ausente pra ESPERA; marcar presença de alguém da espera dispara a CF
+// integrateLateEntries (por design — a pessoa entra na chave). A CF devolve o DOC INTEIRO e o
+// cliente ESPELHA. Com dezenas de marcações, uma resposta cuja LEITURA no servidor aconteceu ANTES
+// das últimas marcações chega DEPOIS e sobrescreve `checkedIn` → o contador REGRIDE.
+// A camada de INTENÇÃO (_reapplyPendingPresence) não cobre: ela expira (~15s) e DESCARTA a intenção
+// assim que qualquer doc a reflete — um doc mais velho chegando depois apaga sem rede.
+// REGRA: no eco de CF, presença é UNIÃO — o que existe LOCALMENTE e falta no doc é PRESERVADO.
+// Não ressuscita quem o organizador desmarcou (desmarcar tira a chave do mapa LOCAL também, então
+// não há o que preservar). Remoção legítima do servidor continua chegando pelo LISTENER do
+// Firestore (fonte de verdade), que não passa por aqui. Ver [[project_concurrency_safe_saves]].
+window._mergePresenceNoRegress = function (prevT, freshT) {
+  var restored = 0;
+  try {
+    if (!prevT || !freshT) return 0;
+    ['checkedIn', 'absent', 'checkedInConfirmed'].forEach(function (k) {
+      var prev = prevT[k];
+      if (!prev || typeof prev !== 'object') return;
+      var fresh = freshT[k] = (freshT[k] && typeof freshT[k] === 'object') ? freshT[k] : {};
+      Object.keys(prev).forEach(function (key) {
+        if (fresh[key] == null) { fresh[key] = prev[key]; restored++; }
+      });
+    });
+  } catch (e) { if (window._error) window._error('mergePresenceNoRegress', e); }
+  return restored;
 };
 window._reapplyPendingPresence = function (tournaments) {
   try {

@@ -189,6 +189,9 @@ const SUITES = [
   // Bug (dono, jul/2026, print "JOGO 7"): dupla tardia entrou na chave contra SI MESMA (dos 2
   // lados). Trava: dedup por identidade nos 2 stores + guard anti-auto-confronto no "a definir".
   'tests/late-dupla-no-self-match.test.js',
+  // Bug (dono, jul/2026): "continua diminuindo os presentes depois de 24 presenças" — doc da CF
+  // lido ANTES das últimas marcações sobrescrevia checkedIn. Eco de CF nunca regride presença.
+  'tests/cf-doc-no-presence-regress.test.js',
   // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
   'tests/count-competitors.test.js',
   'tests/phase-repechage-lines.test.js',

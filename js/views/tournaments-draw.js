@@ -1888,6 +1888,12 @@ window._applyCFTournament = function (tId, doc) {
         doc.id = String(tId);
         var _list = window.AppStore.tournaments, _i = -1;
         for (var _k = 0; _k < _list.length; _k++) { if (String(_list[_k].id) === String(tId)) { _i = _k; break; } }
+        // v1.3.145: guarda a presença LOCAL antes de trocar o objeto — o doc da CF pode ter sido
+        // LIDO antes das últimas marcações e sobrescreveria (contador regredindo).
+        var _prevT = (_i !== -1) ? _list[_i] : null;
+        if (_prevT && typeof window._mergePresenceNoRegress === 'function') {
+          try { window._mergePresenceNoRegress(_prevT, doc); } catch (e) {}
+        }
         if (_i !== -1) _list[_i] = doc; else _list.push(doc);
         // v1.3.139 (dono: "Presentes chega em 24, cai e dá pulinhos"): trocar o torneio inteiro pelo
         // doc da CF JOGA FORA a presença otimista que o organizador acabou de marcar, quando a CF leu
