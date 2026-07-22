@@ -183,6 +183,9 @@ const SUITES = [
   // CÂNONE de cores de presença (dono, jul/2026): presente=VERDE, ausente=AZUL; dupla=tom escuro,
   // individual=tom claro. Trava pra não regredir em nenhum renderer.
   'tests/presence-color-canon.test.js',
+  // Bug (dono, jul/2026): no meio do sorteio a tela voltava pro detalhe (cards) por baixo do
+  // "Sorteando…" — a tela de processamento global faltava na safe-list do _softRefreshView.
+  'tests/loading-blocks-softrefresh.test.js',
   // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
   'tests/count-competitors.test.js',
   'tests/phase-repechage-lines.test.js',

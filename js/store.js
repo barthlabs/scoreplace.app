@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.142';
+window.SCOREPLACE_VERSION = '1.3.143';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1795,7 +1795,18 @@ window._softRefreshView = function() {
                   document.getElementById('gender-draw-overlay') ||
                   document.getElementById('presence-draw-choice') ||
                   document.getElementById('absentee-resolution-dialog') ||
-                  document.getElementById('final-review-panel');
+                  document.getElementById('final-review-panel') ||
+                  // v1.3.143 (dono: "em momentos do sorteio volta pra tela de detalhes mostrando os
+                  // cards cedo demais — em 2 momentos"): a TELA DE PROCESSAMENTO GLOBAL ("🎾
+                  // Sorteando…", _showLoading) faltava na safe-list. O próprio sorteio ESCREVE no doc
+                  // antes de montar a chave (salvar decisões; restaurar o roster original antes de
+                  // despachar pra CF) → cada escrita ECOA um snapshot → _softRefreshView → initRouter
+                  // → re-render do DETALHE (cards de inscritos) POR BAIXO do loader. Dava a impressão
+                  // de "voltou sozinho / não funcionou", 2× por sorteio — exatamente os 2 momentos.
+                  // Regra geral: enquanto houver tela de processamento bloqueante, NADA re-renderiza
+                  // por baixo; o refresh fica adiado (retry 500ms) e roda quando o loader sai.
+                  // Mesma classe da v0.15.89 / v1.3.43 / v1.3.86. Ver [[project_overlay_softrefresh_detection]].
+                  document.getElementById('sp-global-loading');
   var active = document.activeElement;
   var isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT' || active.isContentEditable);
   // v2.8.51: NÃO re-renderiza durante um arraste em andamento (body.sp-drag-compact).
