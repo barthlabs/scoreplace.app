@@ -788,10 +788,18 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var wo = (isOrg && typeof window._woBtnHtml === 'function')
       ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + tIdSafe + "', '" + _sa(nmp) + "');", !_abs, { label: _abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
       : '';
-    var row = '<span style="font-size:0.74rem;font-weight:800;color:' + (mc ? '#4ade80' : '#f87171') + ';white-space:nowrap;">' + (mc ? 'Presente' : 'Ausente') + '</span>'
-      + '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmp) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label>'
+    // v1.3.148 (dono: "mantenha as cores dos inscritos consistente"): este painel colorizava por
+    // STATUS DE PAREAMENTO (âmbar = sem dupla, verde = dupla formada) e devolvia styleExtra VAZIO —
+    // então um inscrito PRESENTE sem dupla ficava ÂMBAR e uma dupla com os DOIS AUSENTES ficava
+    // VERDE. Agora bebe da FONTE ÚNICA de presença (store.js `_PRESENCE_TONES`): verde=presente,
+    // azul=ausente. Ver [[project_inscrito_card_canonical]].
+    var _st = (mc ? 'present' : 'absent');
+    var _txtC = window._presenceTextColor ? window._presenceTextColor(_st, 'solo') : (mc ? '#4ade80' : '#bfdbfe');
+    var _tglC = window._presenceToggleColor ? window._presenceToggleColor(_st, 'solo') : '#10b981';
+    var row = '<span style="font-size:0.74rem;font-weight:800;color:' + _txtC + ';white-space:nowrap;">' + (mc ? 'Presente' : 'Ausente') + '</span>'
+      + '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _tglC + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _tglC + ';flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmp) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label>'
       + wo;
-    return { skip: false, styleExtra: '', rowHtml: row };
+    return { skip: false, styleExtra: (window._presenceCardStyle ? window._presenceCardStyle(_st, 'solo') : ''), rowHtml: row };
   };
   var solosHtml = (typeof window._inscritoIndividualCard === 'function')
     ? _solos.map(function (p, i) {
@@ -825,14 +833,27 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var mc = window._idMapHas ? window._idMapHas(t, ci, mm.uid ? { uid: mm.uid } : nmm) : false;
     var uidp = String(mm.uid || '').replace(/'/g, "\\'");
     // v1.3.76: toggle À DIREITA da palavra Presente/Ausente (pedido do dono) — span antes, label depois.
-    var html = '<div style="display:flex;align-items:center;gap:6px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.62rem;font-weight:700;color:' + (mc ? '#4ade80' : '#64748b') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmm) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label></div>';
+    var _mTxt = window._presenceTextColor ? window._presenceTextColor(mc ? 'present' : 'absent', 'pair') : (mc ? '#4ade80' : '#93c5fd');
+    var html = '<div style="display:flex;align-items:center;gap:6px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.62rem;font-weight:700;color:' + _mTxt + ';">' + (mc ? 'Presente' : 'Ausente') + '</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmm) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label></div>';
     return { html: html };
   };
   // Desfazer: passa as 2 IDENTIDADES de membro (uid||nome-guest), NUNCA a string "A / B" — o cânone
   // uid proíbe casar dupla por displayName (a resolução por uid diverge entre render e split → o ✕
   // não achava a dupla e não fazia nada). Espelha o _splitDupla do roster. [[project_uid_identity_canon_locked]]
   var _ljSplit = function (tid, m1id, m2id, name) { return 'window._splitLateDupla(\'' + tid + '\',\'' + m1id + '\',\'' + m2id + '\')'; };
-  var _ljDctx = { isOrg: isOrg, drawDone: true, orgUids: {}, orgEmails: {}, cardPresence: null, memberPresence: _ljMemberPres, enrollOrderMap: _ljOrderMap, splitDupla: _ljSplit };
+  // v1.3.148 (dono): antes `cardPresence: null` → a dupla NÃO recebia cor de presença e caía no
+  // VERDE base do _duplaCard: no print, Luigi/Adriana com os DOIS AUSENTES aparecia verde. Agora usa
+  // a FONTE ÚNICA com os 3 estados: os 2 presentes = VERDE · 1 presente = ÂMBAR · nenhum = AZUL.
+  var _ljCardPres = function (pp) {
+    if (!pp || typeof pp !== 'object') return { skip: false, styleExtra: '', rowHtml: '' };
+    var _n1 = (typeof window._displayName === 'function') ? window._displayName(pp.p1Uid, pp.p1Name) : (pp.p1Name || '');
+    var _n2 = (typeof window._displayName === 'function') ? window._displayName(pp.p2Uid, pp.p2Name) : (pp.p2Name || '');
+    var _has = function (uid, nm) { return window._idMapHas ? window._idMapHas(t, ci, uid ? { uid: uid } : nm) : false; };
+    var _q1 = _has(pp.p1Uid, _n1), _q2 = _has(pp.p2Uid, _n2);
+    var _st = (_q1 && _q2) ? 'present' : ((_q1 || _q2) ? 'partial' : 'absent');
+    return { skip: false, styleExtra: (window._presenceCardStyle ? window._presenceCardStyle(_st, 'pair') : ''), rowHtml: '' };
+  };
+  var _ljDctx = { isOrg: isOrg, drawDone: true, orgUids: {}, orgEmails: {}, cardPresence: _ljCardPres, memberPresence: _ljMemberPres, enrollOrderMap: _ljOrderMap, splitDupla: _ljSplit };
   var duplasHtml = (typeof window._duplaCard === 'function')
     ? _duplas.map(function (p) { return window._duplaCard(t, p, false, _ljDctx); }).join('')
     : '';

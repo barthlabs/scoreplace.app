@@ -74,6 +74,8 @@ window._clearDrawRuntimeFlags = function (t) {
 // (t.phases, t.scoring, categorias, tiebreakers…). Base do re-sorteio e do reset.
 window._clearTournamentDraw = function (t) {
   if (!t) return;
+  // re-sorteio começa com a lousa limpa: o registro de integração tardia não pode sobreviver.
+  try { delete t.lateIntegrated; } catch (e) { t.lateIntegrated = null; }
   // v4.5.6: o reset já restaura o elenco (waitlist/standby → participants abaixo). Descarta
   // qualquer snapshot de draw-prep pendente pra não restaurar um elenco obsoleto num cancel
   // posterior. "O botão de reset do sorteio reseta tudo também" (pedido do dono).
@@ -630,6 +632,34 @@ window._allowsNewMatchups = function (t) {
   return le === 'expand';
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// IDEMPOTÊNCIA DA INTEGRAÇÃO TARDIA (v1.3.148) — registro POR ENTRADA, nunca "nome na chave".
+// Bug do dono: a integração roda 1× por toggle de presença E de novo ao ligar "aceitar entradas";
+// uma 2ª passada criava um SEGUNDO jogo pra mesma dupla ("criou 2 jogos em vez de 1" — JOGO 7 e
+// JOGO 8 idênticos).
+// ⚠️ POR QUE NÃO DÁ PRA USAR "já está na chave" (ressalva do dono): na REPESCAGEM um time aparece
+// LEGITIMAMENTE em 2 jogos — perdeu a R1 e volta como repescado (o cânone que flexibiliza a regra
+// das 2 derrotas). "Nome na chave → pula" inviabilizaria a repescagem. Por isso o registro é da
+// ENTRADA TARDIA que já foi COLOCADA (t.lateIntegrated[key]), e não da presença do nome na chave.
+// Zerado no reset do sorteio (_clearTournamentDraw) → re-sorteio começa com a lousa limpa.
+window._lateEntryKey = function (p) {
+  if (!p || typeof p !== 'object') return String(p || '');
+  var a = String(p.p1Uid || p.p1Name || ''), b = String(p.p2Uid || p.p2Name || '');
+  if (a && b) return [a, b].sort().join('|');
+  var u = String(p.uid || '');
+  return u || (window._pName ? window._pName(p, '') : (p.displayName || p.name || ''));
+};
+window._lateAlreadyIntegrated = function (t, p) {
+  var k = window._lateEntryKey(p);
+  return !!(k && t && t.lateIntegrated && t.lateIntegrated[k]);
+};
+window._markLateIntegrated = function (t, p) {
+  var k = window._lateEntryKey(p);
+  if (!k || !t) return;
+  if (!t.lateIntegrated || typeof t.lateIntegrated !== 'object') t.lateIntegrated = {};
+  t.lateIntegrated[k] = Date.now();
+};
+
 window._integrateLateDuplas = function (t) {
   if (!t) return 0;
   if (!window._allowsNewMatchups(t)) return 0;
@@ -950,7 +980,12 @@ window._createExtraGamesFromWaitlist = function(t) {
   var _sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
   var _wl = Array.isArray(t.waitlist) ? t.waitlist : [];
   var seen = {}; var pool = [];
-  _sp.concat(_wl).forEach(function(p){ var n = _name(p); if (n && !seen[n]) { seen[n] = true; pool.push(p); } });
+  _sp.concat(_wl).forEach(function(p){
+    var n = _name(p);
+    if (!n || seen[n]) return;
+    if (window._lateAlreadyIntegrated(t, p)) return;   // já COLOCADA antes → não cria 2º jogo
+    seen[n] = true; pool.push(p);
+  });
   // v1.3.146: ÓRFÃO DE ROSTER (dupla FORMADA à mão, `teamOrigins==='formada'`, que entrou em
   // t.participants sem passar pela espera) também entra por AQUI — jogo NOVO vs "a definir", com os
   // jogos existentes INTOCADOS. Sem isto ele não era visto (este coletor só lia a espera) e caía no
@@ -966,6 +1001,7 @@ window._createExtraGamesFromWaitlist = function(t) {
       var n = _name(p);
       if (!n || seen[n] || _brk[n]) return;             // já coletado ou já na chave
       if (t.teamOrigins[n] !== 'formada') return;        // só dupla formada à mão
+      if (window._lateAlreadyIntegrated(t, p)) return;   // já COLOCADA antes
       seen[n] = true; pool.push(p);
     });
   })();
@@ -1043,6 +1079,7 @@ window._createExtraGamesFromWaitlist = function(t) {
   var _addPart = function(entry, nm){
     var exists = t.participants.some(function(p){ var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); return n === nm; });
     if (!exists) t.participants.push(entry);
+    window._markLateIntegrated(t, entry);   // registro POR ENTRADA (não bloqueia repescagem)
   };
   var _pushExtraGame = function(n1, n2, u1, u2){
     // novo JOGO da rodada 1 (cor roxa via isExtra) — mesma apresentação dos demais
@@ -1190,6 +1227,7 @@ window._fillRepFillWithLateDuplas = function (t) {
       if (!(_isPair(p) && (p._lateJoin || _pairPresent(p)))) return;
       var _k = _entryKey(p);
       if (!_k || _seenFormed[_k]) return;   // já coletada do outro store → NÃO duplica
+      if (window._lateAlreadyIntegrated(t, p)) return;  // já COLOCADA numa passada anterior
       _seenFormed[_k] = 1; formed.push(p);
     });
   });
@@ -1285,6 +1323,7 @@ window._fillRepFillWithLateDuplas = function (t) {
     var _already = t.participants.some(function (p) { return _nm(p) === _dn; });
     if (!_already) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
     t.teamOrigins[_dn] = 'formada';
+    window._markLateIntegrated(t, d);
     usedNames[_dn] = 1; integrated++;
   });
   if (!integrated) return 0;
@@ -3719,6 +3758,7 @@ window._placeLateEntriesSurgically = function (t) {
     t[k].forEach(function (p) {
       var n = _nm(p), kk = _key(p);
       if (!n || inBracket[n] || seen[kk] || !p || !p._lateJoin || !_present(p)) return;
+      if (window._lateAlreadyIntegrated(t, p)) return;
       seen[kk] = 1; pending.push({ e: p, fromWait: true });
     });
   });
@@ -3727,6 +3767,7 @@ window._placeLateEntriesSurgically = function (t) {
       var n = _nm(p), kk = _key(p);
       if (!n || inBracket[n] || seen[kk]) return;
       if (t.teamOrigins[n] !== 'formada' || !_present(p)) return;
+      if (window._lateAlreadyIntegrated(t, p)) return;
       seen[kk] = 1; pending.push({ e: p, fromWait: false });
     });
   }
@@ -3799,6 +3840,7 @@ window._placeLateEntriesSurgically = function (t) {
     var exists = t.participants.some(function (p) { return _nm(p) === dn; });
     if (!exists) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
     if (d && (d.p1Uid || d.p1Name) && (d.p2Uid || d.p2Name)) t.teamOrigins[dn] = t.teamOrigins[dn] || 'formada';
+    window._markLateIntegrated(t, d);
     usedNames[dn] = 1; inBracket[dn] = 1; placed++;
   });
   if (placed) {
