@@ -167,15 +167,16 @@ window._duplaCard = function (t, p, draggable, ctx) {
       ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + _presStyle + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
       _enrollBadge + _wmL + _wmR +
       (function () {
-        // ✕ (desfazer/excluir) + presença (Ausente/toggle/W.O.) juntos, à direita, na MESMA linha.
-        // v1.3.141 (dono): `margin-left:auto` mantém o grupo de ações COLADO NA DIREITA mesmo
-        // quando ele QUEBRA pra linha de baixo. Sem isso, o `justify-content:space-between` do
-        // _labelRow alinhava à ESQUERDA quando as ações eram o único item da linha nova — era o
-        // caso do card COM W.O. (não cabe ao lado de "Arraste para formar dupla"), que aparecia
-        // à esquerda enquanto o card sem W.O. ficava à direita. Ordem interna INTOCADA
-        // (✕ · palavra · toggle · W.O., com o W.O. mais à direita).
+        // Ações à DIREITA, na MESMA linha. ORDEM CANÔNICA (v1.3.142, dono): ↩️ Desfazer ·
+        // palavra(Presente/Ausente) · toggle · W.O. · ✕ EXCLUIR — o **excluir é sempre o ÚLTIMO,
+        // mais à direita**. Isto realinha o _duplaCard ao cânone de [[project_inscrito_card_canonical]]
+        // ("o 🗑️ vem em delBtnHtml, sempre por último/direita"), do qual ele estava fora: até a
+        // v1.3.141 o ✕ vinha ANTES da presença (`_delBtnDupla + _presInline`).
+        // v1.3.141: `margin-left:auto` mantém o grupo COLADO NA DIREITA mesmo quando ele QUEBRA pra
+        // linha de baixo — sem isso o `justify-content:space-between` do _labelRow o alinhava à
+        // ESQUERDA quando as ações eram o único item da linha nova (caso do card COM W.O.).
         var _actions = (desfazerBtn || _delBtnDupla || _presInline)
-          ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;" onclick="event.stopPropagation();">' + desfazerBtn + _delBtnDupla + _presInline + '</div>'
+          ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;" onclick="event.stopPropagation();">' + desfazerBtn + _presInline + _delBtnDupla + '</div>'
           : '';
         var _labelRow = _actions
           ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">' + (labelHtml || '<span></span>') + _actions + '</div>'
