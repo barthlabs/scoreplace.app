@@ -19,7 +19,9 @@ console.log('\n== Dupla Eliminatória — saída observável ==');
 (function () {
   const t = buildDupla(14);
   const cad = lowerCadence(t);
-  eq(cad, [3, 4, 3, 2, 1], 'chave inferior de 14 = 3-4-3-2-1 (merge, sem battle intercalada)');
+  // v1.3.159 (árvore mínima): a 1ª sup de 14 duplas tem 7 jogos ⇒ 7 derrotados caem na 1ª inf
+  // pelo jeito clássico ⇒ ⌈7/2⌉ = 4 jogos (era 3 quando parte deles subia por repescagem).
+  eq(cad, [4, 4, 3, 2, 1], 'chave inferior de 14 = 4-4-3-2-1 (⌈7/2⌉ na 1ª, depois encontros)');
   ok(cad[cad.length - 1] === 1, 'última rodada inferior = 1 jogo (Final da inferior)');
   ok(!cad.slice(0, -1).some(function (g, i) { return g === 1 && cad[i + 1] === 1; }), 'sem duas rodadas de 1 jogo seguidas (battle dupla = bug antigo)');
 })();

@@ -212,7 +212,7 @@ const SUITES = [
   'tests/presence-mutator-idempotent.test.js',
   'tests/presence-field-write.test.js',
   'tests/draw-scope-all-ignores-presence.test.js',
-  'tests/draw-scope-all-ignores-presence.test.js',
+  'tests/dupla-elim-minimal-tree.test.js',
   // Dupla Elim (dono): dupla PRÉ-FORMADA na espera, ao receber presença, ia pro LIMBO — o placer
   // exigia _lateJoin (flag que só dupla formada TARDE tem). Entra na R1 da chave SUPERIOR.
   'tests/late-dupla-elim-r1-entry.test.js',

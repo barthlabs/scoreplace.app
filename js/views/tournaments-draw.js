@@ -2896,49 +2896,59 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
         };
         mergeUppers = []; for (let r = 2; r <= W; r++) mergeUppers.push(upper[r]);
     } else {
-        // playin (repescagem): repR1 (round 0) → chave de T (vencedores + melhores derrotados).
-        const g = meta.g, T = meta.T, promote = meta.promote, toLower = meta.toLower;
-        W = Math.round(Math.log(T) / Math.log(2));
+        // ── ÁRVORE MÍNIMA (v1.3.159, regra do dono) ────────────────────────────────────────
+        // ANTES: a superior era inflada até a POTÊNCIA DE 2 acima (T), e as vagas sobrando eram
+        // preenchidas PROMOVENDO melhores derrotados direto pra R2 sup; os demais derrotados caíam
+        // na pré-rodada inferior também por repescagem. Com 12 duplas isso dava 7 REPESCADOS logo
+        // na 1ª virada (2 subindo + 4 na pré + 1), quando o mínimo é 1: 6 é PAR, ⌈6/2⌉=3 fecha sem
+        // repescar ninguém. Também criava um SEGUNDO motor de chave, proibido pelo cânone.
+        //
+        // AGORA: a superior é a MESMA árvore mínima da Eliminatória Simples (⌈E/2⌉ por rodada;
+        // 1 repescado SÓ quando E é ímpar) — `_buildMinimalElimTree`, a fonte única. A inferior
+        // não muda: `_rebuildLowerBracket` já aplica exatamente a mesma regra (`entrants % 2`),
+        // alternando encontro (recebe quem cai) e confronto. Resultado com 12 duplas: sup 6/3/2/1
+        // e inf começando em 3, com a repescagem caindo na 3ª rodada dos DOIS lados — espelhadas.
+        //
+        // POR QUE ISSO É O QUE FAZ A ENTRADA TARDIA FECHAR: a integração tardia JÁ usa
+        // `_buildMinimalElimTree`. Com o sorteio inicial na mesma fórmula, chave inicial e chave
+        // pós-entrada-tardia passam a ser a MESMA construção — o REP/BYE é recalculado pelo número
+        // novo de forma ADITIVA (quem já foi definido congela; acrescenta vaga em vez de tirar
+        // alguém), sem re-sortear nada. Ver [[project_minimal_elim_formula_canon]],
+        // [[project_dupla_elim_late_integration_cascade]] e [[project_lower_bracket_recursive_repechage]].
         const rep = t.matches.filter(m => m && m.isPhaseRepR1 && m.round === 0 && (cat == null || m.category === cat) && (_pi == null || (m.phaseIndex || 0) === _pi))
             .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-        // A DUPLA ÍMPAR joga o repGame na R1 sup (não vai direto pro lower). Espelha o
-        // genTierBracket: g vencedores + directSpots melhores derrotados (direto pra R2) +
-        // o VENCEDOR do repGame preenchem a chave de T; o PERDEDOR do repGame cai no lower.
-        const repGame = rep.filter(m => m.isPhaseRepGame)[0] || null;
-        const normalRep = rep.filter(m => !m.isPhaseRepGame);            // g jogos "cheios"
-        const directSpots = repGame ? (promote - 1) : promote;          // melhores derrotados que sobem DIRETO
-        const entrants = [];                                             // semente 0..T-1 da chave de T
-        for (let ei = 0; ei < normalRep.length; ei++) entrants.push({ fromR1: normalRep[ei] });
-        for (let di = 0; di < directSpots; di++) entrants.push({ repDirect: di });   // di-ésimo melhor derrotado
-        if (repGame) entrants.push({ fromRepGame: repGame });           // vencedor do jogo da ímpar
-        upper[1] = [];
-        for (let i = 0; i < T / 2; i++) upper[1].push(M('upper', 1));
-        const _wireEnt = function (ent, slot, gm) {
-            if (!ent) return;
-            if (ent.fromR1) { ent.fromR1.nextMatchId = gm.id; ent.fromR1.nextSlot = slot; }
-            else if (ent.fromRepGame) { ent.fromRepGame.nextMatchId = gm.id; ent.fromRepGame.nextSlot = slot; }
-            else if (ent.repDirect != null) { (gm.repFill = gm.repFill || []).push({ slot, srcBracket: 'upper', srcRound: 0, rank: ent.repDirect, cat, tagRep: true }); } // sobe pra chave superior → TAG REP
-        };
-        for (let e = 0; e < T; e++) { _wireEnt(entrants[e], (e % 2 === 0) ? 'p1' : 'p2', upper[1][Math.floor(e / 2)]); }
-        for (let r = 2; r <= W; r++) {
-            upper[r] = [];
-            const pc = upper[r - 1].length / 2;
-            for (let j = 0; j < pc; j++) upper[r].push(M('upper', r));
-            upper[r - 1].forEach((pm, idx) => { const nm = upper[r][Math.floor(idx / 2)]; pm.nextMatchId = nm.id; pm.nextSlot = (idx % 2 === 0) ? 'p1' : 'p2'; });
-        }
-        // Pré-rodada inferior: os `toLower` piores derrotados (rank promote..). toLower é sempre par.
-        preGames = toLower / 2;
+        if (!rep.length) return;
+        // 1) SUPERIOR = árvore mínima a partir da 1ª rodada (round 0). O builder cria os jogos e
+        //    liga os `nextMatchId`; aqui só carimbamos fase/categoria e registramos as colunas.
+        const _novos = [];
+        const _mkUpId = function () { return idp + '-upper-' + (cnt++) + '-' + ts; };
+        window._buildMinimalElimTree(_novos, rep, _mkUpId, 'upper', false, false, {}, 0);
+        _novos.forEach(function (m) {
+            if (_pi != null) m.phaseIndex = _pi;
+            if (cat != null) m.category = cat;
+            if (typeof window._appendCanonicalColumn === 'function') {
+                window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'upper', round: m.round, matches: [m] });
+            } else { t.matches.push(m); }
+        });
+        _novos.forEach(function (m) { (upper[m.round] = upper[m.round] || []).push(m); });
+        W = 0; Object.keys(upper).forEach(function (r) { if (+r > W) W = +r; });
+        // 2) PRÉ-RODADA INFERIOR = os derrotados da 1ª sup, do jeito CLÁSSICO (cai direto, via
+        //    loserMatchId) — não por repescagem. ⌈derrotados/2⌉ jogos.
+        preGames = Math.ceil(rep.length / 2);
         feedPre = function (pre) {
-            pre.forEach((m, i) => { m.repFill = [
-                { slot: 'p1', srcBracket: 'upper', srcRound: 0, rank: promote + 2 * i, cat },
-                { slot: 'p2', srcBracket: 'upper', srcRound: 0, rank: promote + 2 * i + 1, cat }
-            ]; });
+            const s = slotsOf(pre); let si = 0;
+            rep.forEach(um => { const sl = s[si++]; um.loserMatchId = sl.m.id; um.loserSlot = sl.s; });
+            // Sobrou 1 vaga (nº ÍMPAR de derrotados): repescagem, NUNCA bye — mesma regra do
+            // `fillOdd` da inferior (melhor derrotado desta própria rodada ganha a 3ª vida).
+            if (si < s.length) {
+                const sl = s[si];
+                sl.m.isPhaseRepGame = true; sl.m.isLowerImpar = true;
+                (sl.m.repFill = sl.m.repFill || []).push({ slot: sl.s, srcBracket: 'lower', srcRound: 1, rank: 0, cat, tagRep: true });
+            }
         };
+        // Os derrotados da 1ª sup já foram pra pré-rodada → os encontros consomem da 2ª em diante.
         mergeUppers = []; for (let r = 1; r <= W; r++) mergeUppers.push(upper[r]);
-        // A ímpar NÃO entra direto no lower — joga o repGame. O PERDEDOR do repGame entra no 1º
-        // merge inferior, EXATAMENTE onde o satout estático entrava (mesma contagem de vagas),
-        // só que via wiring dinâmico (loserFeed → loserMatchId), pois quem cai só se sabe ao jogar.
-        satout = repGame ? { loserFeed: repGame } : null;
+        satout = null;   // sem "sobra" estática: a ímpar é resolvida DENTRO da árvore mínima
     }
 
     // ---- CHAVE INFERIOR + GRANDE FINAL (motor ÚNICO — extraído p/ _rebuildLowerBracket) ----
@@ -2977,25 +2987,22 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
 // usado pelas estimativas dos painéis de resolução pra o número prometido == o sorteio real.
 window._countRepechageDoubleElim = function (n) {
     if (!(n > 2) || (n & (n - 1)) === 0) return null;
-    var g = Math.floor(n / 2), hasSat = (n % 2) === 1;
-    var T = 1; while (T * 2 <= n) T *= 2;            // maior pow2 <= n (IGUAL ao builder _duplaR1FromPool)
-    var toLower = 2 * g - T;
-    var W = Math.round(Math.log(T) / Math.log(2));
-    var total = g + (hasSat ? 1 : 0);               // repescagem R1 (round 0): g normais + jogo da ímpar (n ímpar)
-    var uc = T / 2; for (var r = 1; r <= W; r++) { total += uc; uc = Math.floor(uc / 2); } // upper R1..W
-    // Pré-rodada inferior: preNormal jogos normais + (se n ímpar E há normais p/ ressuscitar) 1 jogo-ímpar.
-    // Se toLower=0 (n=2^k+1), o perdedor da ímpar superior vai direto pro merge1 (satToMerge).
-    var preNormal = toLower / 2;
-    var imparInLower = (hasSat && preNormal > 0) ? 1 : 0;
-    var satToMerge = (hasSat && !imparInLower) ? 1 : 0;
-    var alive = preNormal + imparInLower; total += alive; // pré-rodada inferior
-    for (var w = 1; w <= W; w++) {
-        var upLose = T / Math.pow(2, w);
-        var ent = alive + upLose + ((w === 1) ? satToMerge : 0);
+    // v1.3.159 — ÁRVORE MÍNIMA (mesma aritmética do builder novo; a de potência de 2 saiu junto
+    // com o modelo antigo). 1ª rodada = ⌈n/2⌉ jogos (o da ímpar incluso quando n é ímpar).
+    var F = Math.ceil(n / 2);
+    var total = F;
+    // Superior: ⌈E/2⌉ por rodada até sobrar 1 (o repescado do ímpar OCUPA vaga, não cria jogo).
+    var upRounds = [], cur = F;
+    while (cur > 1) { var nx = Math.ceil(cur / 2); upRounds.push(nx); total += nx; cur = nx; }
+    // Pré-rodada inferior: TODOS os derrotados da 1ª superior caem aqui (jeito clássico).
+    var alive = Math.ceil(F / 2); total += alive;
+    // Encontros: cada rodada da superior derruba os seus; ímpar vira 1 repescado (ocupa vaga).
+    for (var w = 0; w < upRounds.length; w++) {
+        var ent = alive + upRounds[w];
         ent += ent % 2;
         var merge = ent / 2; total += merge; alive = merge;
     }
-    while (alive > 1) { var b = alive; b += b % 2; var battle = b / 2; total += battle; alive = battle; } // battle(s) final(is)
+    while (alive > 1) { var b = alive; b += b % 2; var battle = b / 2; total += battle; alive = battle; } // confronto(s) final(is)
     return total + 1;                                // grande final
 };
 
