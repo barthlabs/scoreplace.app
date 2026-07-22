@@ -521,6 +521,12 @@ function integrateLateEntries(t, opts) {
 
   // Nome vivo por uid antes de formar duplas/rótulos (storage é só-uid; o motor lê nome).
   if (typeof win._rehydrateEntryNames === 'function') win._rehydrateEntryNames(t);
+  // v1.3.162 (dono: "marcelo x luigi esta duplicado ... jogo 7 e 8"): ANTES de qualquer decisão,
+  // repõe a identidade dos jogos que nasceram sem uid. Sem isso as checagens de "já está na chave"
+  // e de "confronto já existe" são cegas — foi assim que o MESMO confronto entrou duas vezes, um
+  // com uid e rótulo cru, outro com rótulo resolvido e uid nulo. [[project_uid_identity_canon_locked]]
+  try { if (typeof win._stampMissingMatchUids === 'function') win._stampMissingMatchUids(t); }
+  catch (e) { win._error && win._error('[integrateLate] stampUids:', e); }
 
   let extra = 0, duplas = 0, duplasTier = 0, dissolved = 0, monarch = 0, repfill = 0;
   // v1.2.58: dupla formada entra no lugar do repescado (chave PLAYIN) — precede o createExtra
@@ -552,7 +558,14 @@ function integrateLateEntries(t, opts) {
     }
   } catch (e) { win._error && win._error('[integrateLate] placeLate:', e); }
 
-  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0);
+  // v1.3.162: rede de segurança FINAL — confronto repetido (mesmo par de uids, mesma rodada) que
+  // tenha escapado por qualquer caminho é removido, desde que o duplicado NÃO tenha placar. Jogo já
+  // disputado nunca é apagado pelo código.
+  let dedup = 0;
+  try { if (typeof win._dedupMatchesByUid === 'function') dedup = win._dedupMatchesByUid(t) || 0; }
+  catch (e) { win._error && win._error('[integrateLate] dedup:', e); }
+
+  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0);
   if (changed) {
     try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e) {}
     t.updatedAt = new Date().toISOString();

@@ -3792,6 +3792,78 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
 // sobrescrito depois. Slot com `repFill` (espera repescado) CONTA: é exatamente o "a definir" que o
 // organizador vê. Guard anti-auto-confronto: nunca colocar onde a própria entrada já está do outro lado.
 // Ver [[project_late_dupla_fills_awaiting_slot]] [[project_formed_pair_roster_orphan]].
+// ── IDENTIDADE NO JOGO + CONFRONTO REPETIDO POR UID (v1.3.162, bug do dono) ──────────────────
+// Dono: "marcelo x luigi esta duplicado. se enfrentam no jogo 7 e 8".
+// MEDIDO no doc real: o mesmo confronto existia duas vezes na 1ª superior — um jogo com os uids
+// gravados e rótulo cru ("Jogador sem perfil (aL7U)…"), outro com o rótulo resolvido
+// ("Marcello / Karla") e `team1Uids`/`team2Uids` = NULL. Sem identidade, NENHUMA checagem de
+// "esse confronto já existe" funciona: por uid o lado sem uid cai no fallback de nome, e por nome
+// os rótulos são diferentes. Aí o mesmo par entra por um segundo caminho e o jogo duplica.
+// Ver [[project_uid_identity_canon_locked]] / [[project_match_slot_uid_identity]].
+
+// (1) Repõe a identidade que faltou: casa o rótulo do slot com a entrada do elenco e copia os uids.
+//     Idempotente; nunca sobrescreve uid já gravado.
+window._stampMissingMatchUids = function (t) {
+  if (!t || !Array.isArray(t.matches)) return 0;
+  var _nm = function (p) { return window._pName ? window._pName(p, '') : ((p && (p.displayName || p.name)) || ''); };
+  var _uids = function (p) { return (typeof window._participantUids === 'function') ? window._participantUids(p) : []; };
+  var porNome = {};
+  (Array.isArray(t.participants) ? t.participants : []).forEach(function (p) {
+    var n = String(_nm(p) || '').trim(); if (!n) return;
+    var u = _uids(p); if (u && u.length) porNome[n.toLowerCase()] = u;
+  });
+  var n = 0;
+  (typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : t.matches).forEach(function (m) {
+    if (!m) return;
+    [['p1', 'team1Uids'], ['p2', 'team2Uids']].forEach(function (par) {
+      var slot = par[0], campo = par[1];
+      if (Array.isArray(m[campo]) && m[campo].length) return;      // já tem identidade
+      var rot = String(m[slot] || '').trim(); if (!rot || rot === 'TBD') return;
+      var u = porNome[rot.toLowerCase()];
+      if (u && u.length) { m[campo] = u.slice(); n++; }
+    });
+  });
+  return n;
+};
+
+// (2) Confronto repetido é detectado POR UID (nunca por rótulo). Remove o duplicado SEM resultado;
+//     jogo com placar NUNCA é apagado — se os dois já foram disputados, é decisão do organizador.
+window._dedupMatchesByUid = function (t) {
+  if (!t || !Array.isArray(t.matches)) return 0;
+  var _chave = function (m, lado) {
+    var u = (lado === 'p1') ? m.team1Uids : m.team2Uids;
+    if (Array.isArray(u) && u.length) return 'u:' + u.slice().sort().join('+');
+    var rot = String((lado === 'p1' ? m.p1 : m.p2) || '').trim().toLowerCase();
+    return rot ? 'n:' + rot : '';
+  };
+  var grupos = {};
+  t.matches.forEach(function (m) {
+    if (!m) return;
+    var a = _chave(m, 'p1'), b = _chave(m, 'p2');
+    if (!a || !b || /^n:(tbd|)$/.test(a) || /^n:(tbd|)$/.test(b)) return;   // vaga aberta não é confronto
+    var k = (m.bracket || '') + '|R' + m.round + '|' + [a, b].sort().join('   x   ');
+    (grupos[k] = grupos[k] || []).push(m);
+  });
+  var apagar = {};
+  Object.keys(grupos).forEach(function (k) {
+    var l = grupos[k]; if (l.length < 2) return;
+    var comPlacar = l.filter(function (m) { return m.winner; });
+    if (comPlacar.length >= 2) return;                    // dois já disputados: não se apaga resultado
+    var manter = comPlacar[0] || l[0];
+    l.forEach(function (m) { if (m !== manter) apagar[m.id] = 1; });
+  });
+  var ids = Object.keys(apagar);
+  if (!ids.length) return 0;
+  t.matches = t.matches.filter(function (m) { return !(m && apagar[m.id]); });
+  // quem apontava pro jogo removido perde a ligação (senão fica destino fantasma)
+  t.matches.forEach(function (m) {
+    if (!m) return;
+    if (m.nextMatchId && apagar[m.nextMatchId]) { delete m.nextMatchId; delete m.nextSlot; }
+    if (m.loserMatchId && apagar[m.loserMatchId]) { delete m.loserMatchId; delete m.loserSlot; }
+  });
+  return ids.length;
+};
+
 // ── O PERDEDOR DO JOGO NOVO TEM QUE TER PRA ONDE IR (v1.3.161, bug do dono) ──────────────────
 // Dono: "nao foi recriado o jogo 7 com o entrante e um melhor repescado da r1 sup e reorganizada
 // a r1 inf de acordo (com repescagem). o entrante foi para o limbo".
