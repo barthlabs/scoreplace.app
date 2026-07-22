@@ -19,6 +19,18 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🏆 v1.4 — Eliminatórias com repescagem redondas, do sorteio ao campeão <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎾 Repescagem como deve ser:</b> a Dupla Eliminatória usa a <b>árvore mínima</b> (chaves superior e inferior espelhadas, sem BYE artificial) e quem chega atrasado entra <b>na hora</b>: o jogo novo nasce contra o <b>melhor derrotado</b> da 1ª rodada — já definido, sem "a definir" pendurado. Chegou um segundo atrasado antes do jogo acontecer? Os dois se enfrentam e o repescado <b>volta pro jogo original dele</b> na chave inferior.</li>' +
+        '<li><b>⚖️ Desempate visível:</b> empate de saldo e pontos entre derrotados resolve pela <b>ordem dos jogos na tela</b> — o critério que o organizador consegue conferir olhando a chave.</li>' +
+        '<li><b>🤝 Lista de espera viva:</b> formar dupla na espera coloca o time <b>direto na chave</b>, sem re-sortear e sem mexer em nenhum jogo existente; a chave inferior se reorganiza sozinha e nunca "some". Cada pessoa é reconhecida pela <b>conta</b> (uid) — ninguém entra duas vezes, nem com nome trocado.</li>' +
+        '<li><b>📋 Presença de torneio estável:</b> marcações em rajada não se atropelam mais (cada toque grava só o próprio campo), com cores canônicas — <b>verde</b> presente, <b>azul</b> confirmado, âmbar "falta um da dupla".</li>' +
+        '<li><b>🖥️ Sorteio 100% no servidor:</b> o sorteio, a formação de duplas e a integração de atrasados rodam na nuvem com tela de processamento — sem depender do celular do organizador, e o Cancelar restaura o elenco exatamente como estava.</li>' +
+        '<li><b>🎯 Tie-break configurável</b> por torneio (dispara em 5-5 ou 6-6) valendo no placar ao vivo e no lançamento de resultado.</li>' +
+        '<li><b>⏱️ Estimativa honesta:</b> a duração prevista do torneio conta <b>equipes efetivas</b> (14 duplas = chave de 14), não pessoas nem inscrições soltas.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #25D366;border-radius:12px;padding:14px 16px;background:rgba(37,211,102,0.08);">' +
       '<div style="font-weight:800; color:#4ade80; font-size:1rem; margin-bottom:8px;">🎾 v1.3 — Torneio ao vivo, grupo do WhatsApp e presença <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
