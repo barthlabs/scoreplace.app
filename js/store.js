@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.3.154';
+window.SCOREPLACE_VERSION = '1.3.155';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -6414,7 +6414,18 @@ window.AppStore = {
               var _vt = tournaments.find(function (x) { return x && String(x.id) === String(_vtId); });
               if (_vt && _vt.checkedIn) {
                 var _pendN = (window._pendingPresence && window._pendingPresence[String(_vtId)]) ? Object.keys(window._pendingPresence[String(_vtId)]).length : 0;
-                window._dtrace('presSnap', { present: Object.keys(_vt.checkedIn).length, absent: Object.keys(_vt.absent || {}).length, pending: _pendN });
+                var _pn = Object.keys(_vt.checkedIn).length;
+                // v1.3.155: marca a QUEDA de forma inconfundível — quando o nº de presentes DIMINUI
+                // entre snapshots, mostra de onde veio (pendingWrites = eco do próprio device;
+                // fromCache = cache local) pra separar "outro escritor apagou" de "eco stale".
+                var _md = (snap && snap.metadata) || {};
+                if (window._lastPresSnapN != null && _pn < window._lastPresSnapN) {
+                  window._dtrace('presQUEDA', { de: window._lastPresSnapN, para: _pn,
+                    perdeu: window._lastPresSnapN - _pn, pend: _pendN,
+                    local: !!_md.hasPendingWrites, cache: !!_md.fromCache });
+                }
+                window._lastPresSnapN = _pn;
+                window._dtrace('presSnap', { present: _pn, absent: Object.keys(_vt.absent || {}).length, pending: _pendN, local: !!_md.hasPendingWrites, cache: !!_md.fromCache });
               }
             }
           }

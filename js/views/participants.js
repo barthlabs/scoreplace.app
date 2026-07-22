@@ -1031,7 +1031,14 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   var _wantPresent = !wasCheckedIn;
   var _presTs = Date.now();
   let _subResult;
+  // ── INSTRUMENTAÇÃO (v1.3.155, diagnóstico do "presença pulando") ─────────────────────────
+  // Conta QUANTAS VEZES o mutator roda para ESTE clique (local + doc fresco + retries) e mostra a
+  // contagem de presentes ANTES/DEPOIS de cada execução. É a medição que faltava: em vez de
+  // deduzir, vemos a trajetória real (write parcial? re-execução? doc que volta zerado?).
+  var _runN = 0;
   var _mutateDone = window.AppStore.mutate(tId, function (ft) {
+    _runN++;
+    var _mb = Object.keys(ft.checkedIn || {}).length;
     if (!ft.checkedIn) ft.checkedIn = {};
     if (!ft.absent) ft.absent = {};
     if (!ft.checkedInConfirmed) ft.checkedInConfirmed = {};
@@ -1046,7 +1053,18 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
       const r = window._applyWoSubsToTournament(ft); // núcleo puro, sem save
       if (_subResult === undefined) _subResult = r;
     }
+    if (window._dtrace) {
+      window._dtrace('presMut', { run: _runN, quem: String(uid || playerName).slice(0, 10),
+        alvo: _wantPresent ? 'presente' : 'fora', antes: _mb, depois: Object.keys(ft.checkedIn || {}).length });
+    }
   });
+  // contagem LOCAL logo após o clique (antes de qualquer snapshot) — âncora da comparação
+  try {
+    if (window._dtrace) {
+      var _tLoc = window._findTournamentById(tId);
+      window._dtrace('presLocal', { presentes: _tLoc ? Object.keys(_tLoc.checkedIn || {}).length : -1, runs: _runN });
+    }
+  } catch (_eTr) {}
   // feedback "salvando presença" no card até o write confirmar (como formar dupla).
   window._presenceBusyUntil(uid || playerName, _mutateDone);
   var _woSub = !!(_subResult && _subResult.ok && _subResult.subCount > 0);
