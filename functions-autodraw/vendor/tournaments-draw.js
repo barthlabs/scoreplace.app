@@ -3862,6 +3862,27 @@ window._placeLateEntriesSurgically = function (t) {
   if (!_mainMs.length) _mainMs = _all();
   var rounds = _mainMs.map(function (m) { return (m && typeof m.round === 'number') ? m.round : 1; });
   var baseRound = rounds.length ? Math.min.apply(null, rounds) : 1;
+  // ── A PORTA DO TARDIO (v1.3.160, regra do dono) ──────────────────────────────────────────
+  // "r2 sup/inf definida, se entrar um tardio entra na sup reorganizando repescagens. é o ULTIMO
+  //  momento em que entra na r1 sup. lançado o PRIMEIRO resultado na r2 sup, qualquer tardio
+  //  entrará na r1 inf."
+  // Enquanto a 2ª rodada da SUPERIOR não tem NENHUM resultado, a 1ª superior ainda é elenco em
+  // aberto: o tardio entra ali e as repescagens se reorganizam pelo número novo (aditivo — quem
+  // já foi definido congela). Assim que sai o 1º resultado da 2ª superior, a 1ª superior está
+  // ENCERRADA de fato: mexer nela reescreveria um confronto que já produziu vencedor. Daí em
+  // diante a porta é a 1ª INFERIOR — que é exatamente onde ele estaria se tivesse jogado e
+  // perdido a 1ª superior. Em Eliminatória Simples não há inferior: a porta simplesmente fecha.
+  var _segundaSupJogada = _mainMs.some(function (m) {
+    return m && ((typeof m.round === 'number') ? m.round : 1) === baseRound + 1 && m.winner;
+  });
+  if (_segundaSupJogada) {
+    var _lowMs = _all().filter(function (m) { return m && m.bracket === 'lower'; });
+    if (!_lowMs.length) return 0;                       // Simples: sem inferior, porta fechada
+    _mainMs = _lowMs;
+    baseRound = Math.min.apply(null, _lowMs.map(function (m) { return (typeof m.round === 'number') ? m.round : 1; }));
+    // 1ª inferior também já resolvida? aí não há mais porta nenhuma.
+    if (_lowMs.some(function (m) { return m && m.round === baseRound + 1 && m.winner; })) return 0;
+  }
   var _tpl = _mainMs.filter(function (m) { return m && ((typeof m.round === 'number') ? m.round : 1) === baseRound; })[0] || {};
   var _brk = _tpl.bracket || 'main';
   var _pi = (_tpl.phaseIndex != null) ? _tpl.phaseIndex : (t.currentPhaseIndex || 0);
