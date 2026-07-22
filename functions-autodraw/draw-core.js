@@ -534,87 +534,33 @@ function integrateLateEntries(t, opts) {
   } catch (e) { win._error && win._error('[integrateLate] duplas:', e); }
   try { monarch = win._expandMonarchFromWaitlist(t) || 0; } catch (e) { win._error && win._error('[integrateLate] monarch:', e); }
 
-  // v1.3.x — GAP achado pelos sweeps de integração tardia: fora de Eliminatória SIMPLES (que tem o
-  // append cirúrgico de _createExtraGamesFromWaitlist), NENHUMA função integrava tardio →
-  // Dupla Elim (sem repR1), FASE DE GRUPOS, SUÍÇO, LIGA e Rei/Rainha deixavam o tardio ÓRFÃO.
-  // Fallback Tier-1 (NENHUM resultado lançado, então re-sortear não perde nada): move os tardios
-  // PRESENTES pra participants e RE-SORTEIA pelo MESMO motor (drawInitial) — a estrutura nasce
-  // completa com o elenco novo (grupos, chave, upper+lower+grand, rodadas Suíço/Liga). Vale pra
-  // TODO formato EXCETO Elim Simples (surgical) + expand/newMatchups + sem resultado + mono-categoria.
-  // Roda mesmo que as funções acima tenham integrado ALGUNS: a coleta `late` abaixo só pega os
-  // tardios presentes que AINDA ficaram órfãos. Se `late` vier vazio (todos já entraram), NÃO roda.
+  // v1.3.146 — COLOCAÇÃO CIRÚRGICA DO TARDIO (regra do dono). SUBSTITUI o antigo fallback de
+  // REDRAW (_clearTournamentDraw + drawInitial), que apagava a chave INTEIRA e re-sorteava tudo.
+  // O guard de então era só "não há resultado lançado" — isso protege os PLACARES mas NÃO os
+  // CONFRONTOS: a chave já estava publicada e todo mundo já tinha visto seu jogo. Desastre
+  // relatado pelo dono: "era pra entrarem no jogo 7 sem mudar nenhum dos demais 6 jogos; mudou
+  // tudo, dupla virou individual, criou jogo 8". Assinatura no diag: changed:true com
+  // extra/duplas/monarch/repfill todos 0 (só o redraw podia ter mudado).
+  //
+  // REGRA CANÔNICA: (1) existe "a definir" ABERTO? o tardio entra ALI; (2) não existe? cria UM
+  // jogo novo com "a definir" aberto (o próximo tardio preenche esse); (3) NUNCA re-sortear nem
+  // tocar em jogo existente. Ver [[project_late_dupla_fills_awaiting_slot]].
   let redrawn = 0;
   try {
-    const _newMatchups = (typeof win._allowsNewMatchups === 'function' ? win._allowsNewMatchups(t)
-      : ((win._effectiveLateEnrollment ? win._effectiveLateEnrollment(t) : t.lateEnrollment) === 'expand'));
-    const _multiCat = (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1);
-    if (_newMatchups && !_multiCat) {
-      // "tem resultado?" cobre chave (t.matches) E round-based (t.rounds[] de Liga/Suíço) — senão
-      // re-sortear destruiria rodadas jogadas. Fora do Tier-1 (algum resultado), NÃO re-sorteia.
-      const _resM = function (m) { return m && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length) || m.startedAt); };
-      const _hasResult = (t.matches || []).some(_resM) ||
-        (Array.isArray(t.rounds) && t.rounds.some(function (r) { return r && Array.isArray(r.matches) && r.matches.some(_resM); }));
-      if (!_hasResult) {
-        const _sameDay = (typeof win._tournamentIsSameDay !== 'function') || win._tournamentIsSameDay(t);
-        const _present = function (p) {
-          if (!_sameDay) return true; // multi-dia: presença não conta
-          const ci = t.checkedIn || {}, ab = t.absent || {};
-          const uids = (typeof win._participantUids === 'function') ? win._participantUids(p) : [];
-          if (uids.length) return uids.every(function (u) { return ci[u] && !ab[u]; });
-          const nm = (p && (p.displayName || p.name)) || '';
-          return !!(nm && ci[nm] && !ab[nm]);
-        };
-        // ESPERA (_lateJoin presente): re-sorteia via este caminho FORA de Elim Simples — Elim Simples
-        // integra a espera pelo append cirúrgico (_createExtraGamesFromWaitlist), preservando repescagem.
-        const _isElimSimples = /elimin[áa]?t[óo]?rias?\s*simples/i.test(t.format || '');
-        const late = [];
-        if (!_isElimSimples) {
-          ['standbyParticipants', 'waitlist'].forEach(function (k) {
-            if (Array.isArray(t[k])) t[k].forEach(function (p) { if (p && p._lateJoin && _present(p)) late.push(p); });
-          });
-        }
-        // ÓRFÃOS DE ROSTER: inscrito que JÁ está em `t.participants` mas ficou FORA da chave — o caso
-        // da DUPLA FORMADA À MÃO depois do sorteio (funde 2 solos em participants, sem passar pela
-        // espera). Vale pra TODO formato INCLUSIVE Elim Simples (o append cirúrgico só lê a WAITLIST).
-        // ⚠️ SÓ conta dupla com teamOrigins==='formada'. Sem esse gate, em formatos onde o ROSTER é de
-        // INDIVÍDUOS e a chave é de DUPLAS SORTEADAS (Duplas Mistas Sorteadas, Rei/Rainha,
-        // sorteio_rodada), cada indivíduo — cujo nome não é rótulo de dupla na chave — seria "órfão" e
-        // dispararia um RE-SORTEIO espúrio que EMBARALHA as duplas (parceiro em branco). Bug pego pelo
-        // dono no SB. [[project_formed_pair_roster_orphan]]
-        const _brk = bracketLabels(t);
-        const _lbl = function (p) { return (p && (p.displayName || p.name)) || (typeof p === 'string' ? p : ''); };
-        const orphans = (Array.isArray(t.participants) ? t.participants : []).filter(function (p) {
-          const l = _lbl(p); if (!l || _brk.has(l) || !_present(p)) return false;
-          return !!(t.teamOrigins && t.teamOrigins[l] === 'formada');
-        });
-        if (late.length || orphans.length) {
-          if (!Array.isArray(t.participants)) t.participants = [];
-          if (!t.teamOrigins) t.teamOrigins = {};
-          const lateKeys = {};
-          late.forEach(function (p) {
-            const nm = (p.displayName || p.name) || '';
-            const clone = Object.assign({}, p); delete clone._lateJoin;
-            t.participants.push(clone);
-            if (nm && (p.p1Uid || p.p1Name)) t.teamOrigins[nm] = 'formada';
-            if (nm) lateKeys[nm] = 1;
-          });
-          ['standbyParticipants', 'waitlist'].forEach(function (k) {
-            if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(p && p._lateJoin && lateKeys[(p.displayName || p.name) || '']); });
-          });
-          if (typeof win._clearTournamentDraw === 'function') win._clearTournamentDraw(t);
-          const _rd = drawInitial(t, {});
-          if (_rd && _rd.ok) redrawn = late.length + orphans.length;
-        }
-      }
+    if (typeof win._placeLateEntriesSurgically === 'function') {
+      redrawn = win._placeLateEntriesSurgically(t) || 0;
     }
-  } catch (e) { win._error && win._error('[integrateLate] duplaElimRedraw:', e); }
+  } catch (e) { win._error && win._error('[integrateLate] placeLate:', e); }
 
   const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0);
   if (changed) {
     try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e) {}
     t.updatedAt = new Date().toISOString();
   }
-  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill };
+  // `placed` NO RETORNO (v1.3.146): antes o contador do fallback (`redrawn`) NÃO era devolvido —
+  // por isso o diag do dono mostrou `changed:true` com tudo 0 e o redraw passou despercebido.
+  // Todo caminho que muda a chave TEM de aparecer no retorno.
+  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill, placed: redrawn };
 }
 
 // ── FORMAR dupla na LISTA DE ESPERA + INTEGRAR, ATÔMICO no servidor (CF-only). Espelha
