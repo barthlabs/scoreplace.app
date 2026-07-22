@@ -1843,6 +1843,15 @@ window._applyCFTournament = function (tId, doc) {
         var _list = window.AppStore.tournaments, _i = -1;
         for (var _k = 0; _k < _list.length; _k++) { if (String(_list[_k].id) === String(tId)) { _i = _k; break; } }
         if (_i !== -1) _list[_i] = doc; else _list.push(doc);
+        // v1.3.139 (dono: "Presentes chega em 24, cai e dá pulinhos"): trocar o torneio inteiro pelo
+        // doc da CF JOGA FORA a presença otimista que o organizador acabou de marcar, quando a CF leu
+        // o doc ANTES do write da presença landar (devolve checkedIn VELHO) → o contador REGRIDE e
+        // volta quando o snapshot real chega = o "pulinho". O listener do Firestore já se defende
+        // disso reaplicando as INTENÇÕES pendentes (_reapplyPendingPresence, v1.3.82); o caminho da CF
+        // não passava por essa camada. Agora passa — MESMA defesa, caminho único. A intenção expira
+        // (~15s) e é dropada assim que o doc já a reflete, então não gruda nem inventa presença de
+        // terceiros. Ver [[project_concurrency_safe_saves]].
+        if (typeof window._reapplyPendingPresence === 'function') { try { window._reapplyPendingPresence(_list); } catch (e) {} }
         if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(doc); } catch (e) {} }
     } catch (e) {}
     if (typeof window._rerenderBracket === 'function') { try { window._rerenderBracket(tId); } catch (e) {} }

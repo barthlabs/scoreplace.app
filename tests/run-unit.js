@@ -177,6 +177,9 @@ const SUITES = [
   // Bug (dono, jul/2026): Dupla Elim playin, repescado JÁ definido (frozen) + dupla formada à mão
   // (órfão de roster) → entra CIRURGICAMENTE, sem redraw, preservando o congelado.
   'tests/late-dupla-orphan-frozen-rep.test.js',
+  // Bug (dono, jul/2026): "Presentes chega em 24, cai e dá pulinhos" — doc stale da CF trocava o
+  // torneio inteiro e engolia a presença otimista recém-marcada.
+  'tests/cf-doc-clobbers-presence.test.js',
   // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
   'tests/count-competitors.test.js',
   'tests/phase-repechage-lines.test.js',
