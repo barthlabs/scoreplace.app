@@ -1610,6 +1610,10 @@ function renderTournaments(container, tournamentId = null) {
         dialog.querySelector('#pdc-cancel').addEventListener('click', _cancelClose);
         dialog.querySelector('#pdc-confirm').addEventListener('click', function() {
             if (_pdcMode === 'all') {
+                // v1.3.158 (dono): "sortear entre todos ... a presença deve ser IGNORADA e todos
+                // entram na chave". A escolha vira DECISÃO no pacote — sem isso o pacote ia vazio,
+                // a CF não sabia de nada e a REGRA do move de ausentes filtrava assim mesmo.
+                window._setDrawDecision(tId, { scope: 'all' });
                 close();
                 // v1.3.103 (dono): loader ENTRE a tela de presença e o próximo painel — sem isto o
                 // usuário fica no limbo achando que nada acontece. Some sozinho quando o painel entra.
@@ -1754,7 +1758,9 @@ function renderTournaments(container, tournamentId = null) {
             if (movedCount > 0 && typeof showNotification !== 'undefined') {
                 showNotification('🙋 ' + movedCount + ' participante(s) sem dupla', 'Movido(s) para lista de espera.', 'info');
             }
-            var absentMovedCount = t ? window._autoMoveAbsentToStandby(t) : 0;
+            // v1.3.158: com scope:'all' o organizador dispensou a presença — nem ausente sai.
+            var _scopeAll = (function () { var _d = window._getDrawDecisions && window._getDrawDecisions(tId); return !!(_d && _d.scope === 'all'); })();
+            var absentMovedCount = (t && !_scopeAll) ? window._autoMoveAbsentToStandby(t) : 0;
             if (absentMovedCount > 0 && typeof showNotification !== 'undefined') {
                 showNotification('⚠️ ' + absentMovedCount + ' participante(s) ausente(s)', 'Removido(s) do sorteio e enviado(s) para lista de espera.', 'warning');
             }

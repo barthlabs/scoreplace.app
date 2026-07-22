@@ -458,7 +458,12 @@
       var aS = window._autoMoveSoloToWaitlist(t);
       if (aS > 0) applied.push({ step: 'autoSolo', moved: aS });
     }
-    if (typeof window._autoMoveAbsentToStandby === 'function') {
+    // v1.3.158 (dono): "se quer sortear entre todos os inscritos, a presença deve ser IGNORADA e
+    // todos entram na chave". Com scope:'all' o organizador DISPENSOU a presença — nem o ausente
+    // marcado sai do elenco. Antes esta REGRA rodava sempre e sobrescrevia, calada, a escolha que
+    // ele acabara de fazer no diálogo ("sorteou só entre os presentes apesar de pedir todos").
+    // Sem escopo escolhido (pacote vazio / auto-draw), a regra antiga segue valendo.
+    if (d.scope !== 'all' && typeof window._autoMoveAbsentToStandby === 'function') {
       var aA = window._autoMoveAbsentToStandby(t);
       if (aA > 0) applied.push({ step: 'autoAbsent', moved: aA });
     }
