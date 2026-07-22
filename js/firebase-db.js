@@ -252,6 +252,32 @@ window.FirestoreDB = {
   //
   // Retorna { aborted:boolean, data:object } — data = estado autoritativo pós-commit
   // (ou o lido, se abortou), pra o chamador sincronizar o AppStore local.
+  // ── PRESENÇA POR CAMPO (v1.3.157) — a correção do "presença pula/desmarca em rajada" ──────
+  // MEDIDO no Firestore REAL (doc temporário, 25 marcações):
+  //   • 25 transações que gravam o DOC INTEIRO, concorrentes .......... 23/25 (PERDE)
+  //   • idem + CF gravando o doc inteiro junto ........................ 23/25 (PERDE)
+  //   • 25 updates POR CAMPO, concorrentes ........................... 25/25 ✅
+  //   • idem + CF gravando o doc inteiro junto ....................... 25/25 ✅
+  // Causa: marcar UMA presença reescrevia o TORNEIO INTEIRO dentro de uma transação. Sob
+  // contenção elas se atropelam, algumas esgotam os retries e FALHAM — a marca já estava na tela
+  // (otimista) e o snapshot seguinte a removia. Update por CAMPO não colide: o Firestore funde no
+  // nível do campo, sem read-modify-write. Ver [[project_concurrency_safe_saves]].
+  // `sets`/`dels` = arrays de {map, key}. Ex.: sets [{map:'checkedIn', key:'uid1'}].
+  async setPresenceFields(tournamentId, sets, dels) {
+    if (!this.ensureDb()) throw new Error('Firestore not initialized');
+    var FieldValue = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue) || null;
+    var FieldPath = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldPath) || null;
+    if (!FieldValue || !FieldPath) throw new Error('FieldValue/FieldPath indisponível');
+    var ref = this.db.collection('tournaments').doc(String(tournamentId));
+    // FieldPath com segmentos evita QUALQUER problema de escaping (nome com ponto, etc.)
+    var args = [];
+    (sets || []).forEach(function (o) { if (o && o.map && o.key) args.push(new FieldPath(o.map, String(o.key)), o.value); });
+    (dels || []).forEach(function (o) { if (o && o.map && o.key) args.push(new FieldPath(o.map, String(o.key)), FieldValue.delete()); });
+    if (!args.length) return true;
+    await ref.update.apply(ref, args);
+    return true;
+  },
+
   async mutateTournament(tournamentId, mutatorFn, options) {
     if (!this.ensureDb()) throw new Error('Firestore not initialized');
     var ref = this.db.collection('tournaments').doc(String(tournamentId));

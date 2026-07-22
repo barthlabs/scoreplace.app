@@ -1031,12 +1031,50 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   var _wantPresent = !wasCheckedIn;
   var _presTs = Date.now();
   let _subResult;
+  // ── CAMINHO RÁPIDO: escrita POR CAMPO (v1.3.157) ─────────────────────────────────────────
+  // MEDIDO no Firestore real: doc-inteiro em rajada PERDE marcações (23/25); por campo é 25/25,
+  // mesmo com a CF gravando junto. Marcar presença não precisa reescrever o torneio inteiro.
+  // Só cai na transação (doc inteiro) quando há AUSENTES — aí a substituição de W.O.
+  // (_applyWoSubsToTournament) precisa mexer na chave. Ver [[project_concurrency_safe_saves]].
+  var _kPres = (typeof window._idMapKey === 'function') ? window._idMapKey(t, _who) : null;
+  var _presKey = _kPres ? (_kPres.uid || _kPres.name) : null;
+  var _temAusentes = !!(t.absent && Object.keys(t.absent).length);
+  var _fieldDone = null;
+  var _viaCampo = !!(_presKey && !_temAusentes &&
+    window.FirestoreDB && typeof window.FirestoreDB.setPresenceFields === 'function');
+  if (_viaCampo) {
+    // estado local otimista (idêntico ao do mutator), depois UM update de campo
+    if (!t.checkedIn) t.checkedIn = {};
+    if (!t.absent) t.absent = {};
+    if (!t.checkedInConfirmed) t.checkedInConfirmed = {};
+    if (_wantPresent) {
+      window._idMapSet(t, t.checkedIn, _who, _presTs);
+      window._idMapDel(t, t.absent, _who);
+      window._idMapDel(t, t.checkedInConfirmed, _who);
+    } else {
+      window._idMapDel(t, t.checkedIn, _who);
+    }
+    var _dels = _wantPresent
+      ? [{ map: 'absent', key: _presKey }, { map: 'checkedInConfirmed', key: _presKey }]
+      : [{ map: 'checkedIn', key: _presKey }];
+    var _sets = _wantPresent ? [{ map: 'checkedIn', key: _presKey, value: _presTs }] : [];
+    // chave-nome legada (quando há uid) some junto — mesma migração do _idMapSet
+    if (_kPres && _kPres.uid && _kPres.name && _kPres.name !== _kPres.uid) {
+      _dels.push({ map: 'checkedIn', key: _kPres.name });
+    }
+    _fieldDone = window.FirestoreDB.setPresenceFields(tId, _sets, _dels)
+      .catch(function (e) {
+        if (window._error) window._error('[presença por campo] falhou', e);
+        if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', (e && e.message) || 'Tente de novo.', 'warning');
+      });
+    if (window._dtrace) window._dtrace('presField', { quem: String(_presKey).slice(0, 10), alvo: _wantPresent ? 'presente' : 'fora', total: Object.keys(t.checkedIn || {}).length });
+  }
   // ── INSTRUMENTAÇÃO (v1.3.155, diagnóstico do "presença pulando") ─────────────────────────
   // Conta QUANTAS VEZES o mutator roda para ESTE clique (local + doc fresco + retries) e mostra a
   // contagem de presentes ANTES/DEPOIS de cada execução. É a medição que faltava: em vez de
   // deduzir, vemos a trajetória real (write parcial? re-execução? doc que volta zerado?).
   var _runN = 0;
-  var _mutateDone = window.AppStore.mutate(tId, function (ft) {
+  var _mutateDone = _viaCampo ? _fieldDone : window.AppStore.mutate(tId, function (ft) {
     _runN++;
     var _mb = Object.keys(ft.checkedIn || {}).length;
     if (!ft.checkedIn) ft.checkedIn = {};
