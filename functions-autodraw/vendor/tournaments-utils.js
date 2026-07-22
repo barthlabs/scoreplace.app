@@ -488,20 +488,10 @@ window._getTournamentProgress = function(t) {
         }
         if (t.thirdPlaceMatch) allMatches.push(t.thirdPlaceMatch);
     }
-    // For elimination formats with 2+ rounds, always count 3rd place even if not yet created.
-    // v1.0.91-beta: EXCLUI Dupla Eliminatória — em DE o 3º lugar vem do Lower
-    // Final loser, não tem match dedicado de 3º lugar. Antes esse placeholder
-    // inflava o total e gerava progresso "13/14" quando deveria ser "13/14"
-    // ou "14/14" sem placeholder.
-    if (!t.thirdPlaceMatch) {
-        var _fmt = (t.format || '').toLowerCase();
-        var _isElim = _fmt.indexOf('eliminat') === 0;
-        var _isDuplaElim = _fmt.indexOf('dupla') !== -1;
-        var _hasMultipleRounds = (Array.isArray(t.matches) && t.matches.some(function(m) { return m.round >= 2; }));
-        if (_isElim && !_isDuplaElim && _hasMultipleRounds) {
-            allMatches.push({ id: 'match-3rd-placeholder', p1: 'TBD', p2: 'TBD', winner: null });
-        }
-    }
+    // v1.3.132: SEM placeholder fantasma de 3º lugar. Era resíduo da opção (já MORTA) de
+    // ligar/desligar a disputa de 3º lugar — fabricava um match "TBD" pra reservar o slot no
+    // total antes de existir. Hoje o 3º lugar é SEMPRE criado como match real (isThirdPlace,
+    // pelo motor de fases) → já é contado quando existe. Contamos SÓ jogos reais; nada de inventar.
     // Filter out BYE matches (keep TBD — they are real future matches)
     var realMatches = allMatches.filter(function(m) {
         var p1 = m.p1 || m.player1 || '';

@@ -643,6 +643,34 @@ window._integrateLateDuplas = function (t) {
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
     if (Array.isArray(t[k])) t[k].forEach(function (p) { if (_isPair(p) && p._lateJoin) formed.push(p); });
   });
+  // v1.3.x — ÓRFÃO DE ROSTER: dupla FORMADA À MÃO (teamOrigins==='formada') depois do sorteio funde
+  // 2 solos direto em t.participants — NÃO passa pela lista de espera, então não tem _lateJoin. Ela
+  // fica em participants mas FORA da chave. Entra pela MESMA cascata (Tier 1/2) da dupla tardia da
+  // espera — em vez de cair no REDRAW completo da CF (que re-embaralharia a repescagem e descartaria
+  // o repescado já definido). Só dupla com teamOrigins==='formada' conta (nunca solos de roster de
+  // duplas SORTEADAS — esses NÃO são _isPair). Ver [[project_formed_pair_roster_orphan]] /
+  // [[project_dupla_elim_late_integration_cascade]].
+  // presença: mesmo-dia exige TODOS os membros presentes (por uid) — canônico "só presentes"
+  // (espelha _createExtraGamesFromWaitlist / _fillRepFillWithLateDuplas / CF redraw). Multi-dia ignora.
+  var _orphPresent = function (p) {
+    if ((typeof window._tournamentIsSameDay === 'function') && !window._tournamentIsSameDay(t)) return true;
+    var _ci = t.checkedIn || {}, _ab = t.absent || {};
+    var _uids = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
+    if (_uids && _uids.length) return _uids.every(function (u) { return window._idMapHas(t, _ci, { uid: u }) && !window._idMapHas(t, _ab, { uid: u }); });
+    return false;
+  };
+  var _brkLabels = {};
+  t.matches.forEach(function (m) { if (m) { if (m.p1) _brkLabels[m.p1] = 1; if (m.p2) _brkLabels[m.p2] = 1; } });
+  var _formedNames = {}; formed.forEach(function (p) { _formedNames[_nm(p)] = 1; });
+  if (Array.isArray(t.participants) && t.teamOrigins) {
+    t.participants.forEach(function (p) {
+      if (!_isPair(p)) return;
+      var nm = _nm(p);
+      if (!nm || _brkLabels[nm] || _formedNames[nm]) return;         // já na chave ou já coletado
+      if (t.teamOrigins[nm] !== 'formada' || !_orphPresent(p)) return; // só dupla formada à mão E presente
+      formed.push(p); _formedNames[nm] = 1;
+    });
+  }
   if (!formed.length) return 0;
 
   // Só a estrutura de REPESCAGEM (playin) tem repR1 round 0 (todos jogam a "R1 do upper").
@@ -729,8 +757,10 @@ window._integrateLateDuplas = function (t) {
     var integrated2 = 0;
     formed.forEach(function (d) {
       if (!usedNames2[_nm(d)]) return; // sobra: continua na lista de espera
-      var clone = Object.assign({}, d); delete clone._lateJoin;
-      t.participants.push(clone); t.teamOrigins[_nm(d)] = 'formada'; integrated2++;
+      var _dn2 = _nm(d);
+      var _already2 = t.participants.some(function (p) { return _nm(p) === _dn2; }); // órfão de roster já existe
+      if (!_already2) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
+      t.teamOrigins[_dn2] = 'formada'; integrated2++;
     });
     ['standbyParticipants', 'waitlist'].forEach(function (k) {
       if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(_isPair(p) && p._lateJoin && usedNames2[_nm(p)]); });
@@ -770,7 +800,9 @@ window._integrateLateDuplas = function (t) {
   repR1.forEach(function (m) { if (m.p1) inRep[m.p1] = 1; if (m.p2) inRep[m.p2] = 1; });
   var parts = Array.isArray(t.participants) ? t.participants : [];
   var satTeam = null;
-  for (var pi = 0; pi < parts.length && !satTeam; pi++) { if (_isPair(parts[pi]) && !inRep[_nm(parts[pi])]) satTeam = parts[pi]; }
+  // NÃO pegar um ÓRFÃO DE ROSTER formado como satTeam: ele já está em `formed` (entra como jogo
+  // NOVO ou como a dupla ímpar/repGame). Se virasse satTeam seria pareado consigo mesmo.
+  for (var pi = 0; pi < parts.length && !satTeam; pi++) { if (_isPair(parts[pi]) && !inRep[_nm(parts[pi])] && !_formedNames[_nm(parts[pi])]) satTeam = parts[pi]; }
 
   // v1.2.57 (dono 17/jul): a dupla ÍMPAR normalmente está DENTRO de um repGame esperando
   // adversário — "JOGO N: Kelly/Rodrigo VS A definir" (isPhaseRepGame, um lado real + outro
@@ -797,6 +829,9 @@ window._integrateLateDuplas = function (t) {
   var repR1Base = satRepGame ? repR1.filter(function (m) { return m !== satRepGame; }) : repR1;
 
   // Pool não-pareado = [satTeam?] + duplas tardias. Forma jogos 2-a-2; SOBRA de 1 dupla nova aguarda.
+  // (A dupla ÍMPAR/lone que precisaria de um NOVO repescado NÃO é reconstruída aqui — reconstruir a
+  // repescagem inteira re-deriva os repFills e DUPLICA um repescado já congelado. Esse caso é resolvido
+  // ANTES, cirurgicamente, por _fillRepFillWithLateDuplas — [[project_late_dupla_fills_awaiting_slot]].)
   var unpaired = (satTeam ? [satTeam] : []).concat(formed);
   var idp = 'p0-lj-' + Date.now();
   var newGames = [], usedNames = {};
@@ -814,13 +849,16 @@ window._integrateLateDuplas = function (t) {
   if (!newGames.length) return 0; // 1 dupla nova sem par (e sem satTeam) → aguarda na lista de espera
 
   // As duplas NOVAS que entraram num jogo viram inscritas; saem da lista de espera. A que sobrou fica.
+  // Órfão de roster já está em participants → push IDEMPOTENTE (não duplica).
   if (!Array.isArray(t.participants)) t.participants = [];
   if (!t.teamOrigins) t.teamOrigins = {};
   var integrated = 0;
   formed.forEach(function (d) {
     if (!usedNames[_nm(d)]) return; // sobra: continua na lista de espera
-    var clone = Object.assign({}, d); delete clone._lateJoin;
-    t.participants.push(clone); t.teamOrigins[_nm(d)] = 'formada'; integrated++;
+    var _dn = _nm(d);
+    var _already = t.participants.some(function (p) { return _nm(p) === _dn; });
+    if (!_already) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
+    t.teamOrigins[_dn] = 'formada'; integrated++;
   });
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
     if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(_isPair(p) && p._lateJoin && usedNames[_nm(p)]); });
@@ -1108,6 +1146,22 @@ window._fillRepFillWithLateDuplas = function (t) {
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
     if (Array.isArray(t[k])) t[k].forEach(function (p) { if (_isPair(p) && (p._lateJoin || _pairPresent(p))) formed.push(p); });
   });
+  // ÓRFÃO DE ROSTER: dupla FORMADA À MÃO (teamOrigins==='formada') que entrou em t.participants sem
+  // passar pela espera — entra AQUI, cirurgicamente, no lugar de um repescado (sem reconstruir a
+  // chave, preservando o repescado JÁ congelado). Só dupla 'formada' presente (nunca solos de duplas
+  // SORTEADAS — não são _isPair). Ver [[project_formed_pair_roster_orphan]] [[project_late_dupla_fills_awaiting_slot]].
+  var _brkLbls = {};
+  (Array.isArray(t.matches) ? window._collectAllMatches(t) : []).forEach(function (m) { if (m) { if (m.p1) _brkLbls[m.p1] = 1; if (m.p2) _brkLbls[m.p2] = 1; } });
+  var _seenFormed = {}; formed.forEach(function (p) { _seenFormed[_nm(p)] = 1; });
+  if (Array.isArray(t.participants) && t.teamOrigins) {
+    t.participants.forEach(function (p) {
+      if (!_isPair(p)) return;
+      var nm = _nm(p);
+      if (!nm || _brkLbls[nm] || _seenFormed[nm]) return;
+      if (t.teamOrigins[nm] !== 'formada' || !_pairPresent(p)) return;
+      formed.push(p); _seenFormed[nm] = 1;
+    });
+  }
   if (!formed.length) return 0;
 
   var _cpi = (t.currentPhaseIndex || 0);
@@ -1163,9 +1217,11 @@ window._fillRepFillWithLateDuplas = function (t) {
       if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'main', round: 0, matches: [newG] }); } catch (e) { t.matches.push(newG); } }
       else { t.matches.push(newG); }
     }
-    var clone = Object.assign({}, d); delete clone._lateJoin;
-    t.participants.push(clone); t.teamOrigins[_nm(d)] = 'formada';
-    usedNames[_nm(d)] = 1; integrated++;
+    var _dn = _nm(d);
+    var _already = t.participants.some(function (p) { return _nm(p) === _dn; });
+    if (!_already) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
+    t.teamOrigins[_dn] = 'formada';
+    usedNames[_dn] = 1; integrated++;
   });
   if (!integrated) return 0;
   // v1.3.87: remove QUALQUER par integrado (não só `_lateJoin`) — senão a dupla pré-formada que
