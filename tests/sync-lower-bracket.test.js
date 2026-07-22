@@ -76,6 +76,10 @@ console.log('── CENÁRIO DO DONO: 12 duplas, 1ª sup jogada, +1 e +2 tardios
   const infAntes = all(t).filter(m => m.bracket === 'lower' && m.round === 1);
   ok(infAntes.length === 3, 'pré: 1ª inferior com 3 jogos (got ' + infAntes.length + ')');
 
+  // confrontos originais da 1ª inferior (pra checar a VOLTA ao jogo original depois)
+  const infOrig = all(t).filter(m => m.bracket === 'lower' && m.round === 1)
+    .map(m => ({ id: m.id, p1: m.p1, p2: m.p2 }));
+
   // +1 tardio: repescado definido NA HORA, sai da inferior, perdedor do jogo 7 herda o buraco
   const t1 = chegaTardio(t, 100);
   dc.integrateLateEntries(t, {});
@@ -105,6 +109,14 @@ console.log('── CENÁRIO DO DONO: 12 duplas, 1ª sup jogada, +1 e +2 tardios
   const inf2 = all(t).filter(m => m.bracket === 'lower' && m.round === 1);
   ok(inf2.length === 4, '+2º tardio: repescado volta pra inferior — chave de 14 ⇒ 4 jogos (got ' + inf2.length + ')');
   ok(inf2.some(m => m.p1 === rep1 || m.p2 === rep1), '+2º tardio: o repescado CONTINUA jogando (voltou pra 1ª inferior)');
+  // v1.3.166 (dono): a volta é pro JOGO ORIGINAL — reúne o confronto que ele deixou (ele × o
+  // adversário que ficou com "a definir"), nunca um jogo novo com adversário a definir.
+  const jogoOrig = infOrig.find(j => j.p1 === rep1 || j.p2 === rep1);
+  const advOrig = jogoOrig && (jogoOrig.p1 === rep1 ? jogoOrig.p2 : jogoOrig.p1);
+  const volta = jogoOrig && inf2.find(m => m.id === jogoOrig.id);
+  ok(!!volta && (volta.p1 === rep1 || volta.p2 === rep1) && (volta.p1 === advOrig || volta.p2 === advOrig),
+    '+2º tardio: repescado volta pro JOGO ORIGINAL, contra o adversário original (' +
+    (volta ? volta.p1 + ' x ' + volta.p2 : '—') + ')');
   const cnt = {};
   inf2.forEach(m => ['p1', 'p2'].forEach(s => { const v = m[s]; if (v && !isEmpty(v)) cnt[v] = (cnt[v] || 0) + 1; }));
   ok(Object.keys(cnt).filter(k => cnt[k] > 1).length === 0, '+2º tardio: NINGUÉM duplicado na 1ª inferior');

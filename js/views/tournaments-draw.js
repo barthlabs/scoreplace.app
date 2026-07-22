@@ -1385,7 +1385,7 @@ window._fillRepFillWithLateDuplas = function (t) {
         if (!(ocup.m.repFill || []).length && ocup.m.p1 && ocup.m.p2 && ocup.m.p2 !== 'TBD') {
           delete ocup.m.isPhaseRepGame; ocup.m.isPhaseRepR1 = true;
         }
-        var _volta = window._returnRepescadoToLower(t, _nomeRep, _objRep);
+        var _volta = window._returnRepescadoToLower(t, _nomeRep, _objRep, ocup.m);
         if (typeof window._syncLowerBracket === 'function') {
           try { window._syncLowerBracket(t, { forceRebuild: _volta === 'grow' }); } catch (e) {}
         }
@@ -3883,7 +3883,7 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
 // _syncLowerBracket, que reconcilia sobra/rebuild em seguida). Devolve true só se reacomodou;
 // quem chama NÃO desloca ninguém sem o _canReturnRepescadoToLower dizer que dá.
 // [[project_lower_bracket_recursive_repechage]]
-window._returnRepescadoToLower = function (t, nome, entrada) {
+window._returnRepescadoToLower = function (t, nome, entrada, fromGame) {
   if (!t || !nome || !Array.isArray(t.matches)) return false;
   var _all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
   var low = _all.filter(function (m) { return m && m.bracket === 'lower'; });
@@ -3891,7 +3891,8 @@ window._returnRepescadoToLower = function (t, nome, entrada) {
   var r = Math.min.apply(null, low.map(function (m) { return (typeof m.round === 'number') ? m.round : 1; }));
   // JÁ ESTÁ EMBAIXO? Então não há o que devolver — a descida original dele nunca foi cortada
   // (é o caso do repescado do jogo da ímpar do SORTEIO, cuja promoção não cancela a descida).
-  // Colocar de novo criava DUPLICATA na 1ª inferior (medido no sweep ímpar, v1.3.164).
+  // Colocar de novo criava DUPLICATA na 1ª inferior (medido no sweep ímpar, v1.3.164). Esta
+  // guarda roda ANTES de qualquer escolha de vaga — inclusive a volta ao jogo original.
   var _uidsEnt = (entrada && typeof window._participantUids === 'function') ? (window._participantUids(entrada) || []) : [];
   var _keyEnt = _uidsEnt.length ? 'u:' + _uidsEnt.slice().sort().join('+') : 'n:' + String(nome).trim().toLowerCase();
   var _keyLado = function (m, sl) {
@@ -3905,6 +3906,30 @@ window._returnRepescadoToLower = function (t, nome, entrada) {
       ['p1', 'p2'].some(function (sl) { return _keyLado(m, sl) === _keyEnt; });
   });
   if (_jaEmbaixo) return 'slot';
+  // 0ª escolha (v1.3.166, dono): volta pro JOGO ORIGINAL. Só quando fromGame é jogo TARDIO
+  // (isExtra) — nesses, o loserMatchId aponta EXATAMENTE pro buraco que o repescado deixou ao
+  // subir (o pull re-apontou). Devolvê-lo ali REÚNE o confronto original (ele × o adversário
+  // que ficou com "a definir"). O fio do jogo do tardio é solto e a dona única re-aponta o
+  // perdedor pra vaga que sobrar (jogo novo). No satout do SORTEIO (não-isExtra) o
+  // loserMatchId é o fio NORMAL de derrota — nunca usar como buraco.
+  if (fromGame && fromGame.isExtra && fromGame.loserMatchId && fromGame.loserSlot) {
+    var tgt0 = null;
+    low.forEach(function (m) {
+      if (!tgt0 && m && m.id === fromGame.loserMatchId && ((typeof m.round === 'number') ? m.round : 1) === r) tgt0 = m;
+    });
+    var _vz0 = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
+    if (tgt0 && !tgt0.winner && _vz0(tgt0[fromGame.loserSlot])) {
+      var sl0 = fromGame.loserSlot;
+      tgt0[sl0] = nome;
+      if (entrada) {
+        var uids0 = (typeof window._participantUids === 'function') ? window._participantUids(entrada) : [];
+        if (sl0 === 'p1') { tgt0.team1Obj = entrada; tgt0.team1Uids = uids0; tgt0.p1Uid = (uids0.length === 1 ? uids0[0] : null); }
+        else { tgt0.team2Obj = entrada; tgt0.team2Uids = uids0; tgt0.p2Uid = (uids0.length === 1 ? uids0[0] : null); }
+      }
+      delete fromGame.loserMatchId; delete fromGame.loserSlot;
+      return 'slot';
+    }
+  }
   var low1 = low.filter(function (m) { return ((typeof m.round === 'number') ? m.round : 1) === r && !m.winner; });
   var _vaz = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
   var _fed = function (m, sl) {
