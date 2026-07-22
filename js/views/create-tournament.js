@@ -6175,8 +6175,20 @@ window._reSetTbAt = function(v) {
 window._reSyncTbAt = function() {
   var blk = document.getElementById('re-tiebreak-at-block'); if (!blk) return;
   var tbEnabled = ((document.getElementById('gsm-tiebreakEnabled') || {}).value) === 'true';
-  var typeEl = document.getElementById('gsm-type');
-  var isSets = !typeEl || !typeEl.value || typeEl.value === 'sets';
+  // v1.3.151 (dono: "onde esta o tie break 5-5/6-6? regressao"): "usa SETS" tem de vir da FONTE
+  // CANÔNICA window._scoringUsesSets — a mesma que o PLACAR usa. Aqui havia lógica própria
+  // (`gsm-type === 'sets'`), e torneios reais gravam `type:'simple'` COM `gamesPerSet`+`tiebreakEnabled`
+  // (o caso do SB: Beach Tennis, type simple, 6 games, TB ligado). Resultado: o placar revelava os
+  // campos de tie-break (tbReveal hit:true) mas a CONFIG escondia o seletor 5-5/6-6 — duas verdades
+  // diferentes pro mesmo torneio. Ver [[project_sport_rules_canonical]].
+  var _scCfg = {
+    type: (document.getElementById('gsm-type') || {}).value || '',
+    tiebreakEnabled: tbEnabled,
+    gamesPerSet: parseInt((document.getElementById('gsm-gamesPerSet') || {}).value) || 0
+  };
+  var isSets = (typeof window._scoringUsesSets === 'function')
+    ? window._scoringUsesSets(_scCfg)
+    : (!_scCfg.type || _scCfg.type === 'sets');
   blk.style.display = (tbEnabled && isSets) ? 'block' : 'none';
   if (blk.style.display === 'none') return;
   var stored = (document.getElementById('gsm-tiebreakAt') || {}).value;

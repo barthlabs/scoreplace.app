@@ -204,6 +204,9 @@ const SUITES = [
   // Dados REAIS do SB (dono): mesmo par de uids em 2 jogos com NOMES diferentes ("Jogador sem
   // perfil (aL7U)…" vs "Marcello/Karla") — guards por NOME não casavam. Membership é por UID.
   'tests/late-entry-uid-identity.test.js',
+  // Seletor de tie-break 5-5/6-6 sumia na config (dono): _reSyncTbAt tinha lógica própria de
+  // "usa sets"; tem de usar a FONTE CANÔNICA _scoringUsesSets (a mesma do placar).
+  'tests/tiebreak-at-visibility.test.js',
   // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
   'tests/count-competitors.test.js',
   'tests/phase-repechage-lines.test.js',
