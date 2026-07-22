@@ -639,9 +639,23 @@ window._integrateLateDuplas = function (t) {
 
   var _isPair = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
   var _nm = function (p) { return window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || ''; };
+  // DEDUP por identidade (uid dos membros; nome pra guest): a MESMA dupla pode estar nos DOIS
+  // stores (standby E waitlist). Sem isto ela entrava 2× em `formed` e o pareamento 2-a-2 abaixo
+  // a colocava como ADVERSÁRIA DE SI MESMA. Mesma classe do bug do print "JOGO 7".
+  var _entryKeyD = function (p) {
+    if (!p || typeof p !== 'object') return String(p || '');
+    var a = String(p.p1Uid || p.p1Name || ''), b = String(p.p2Uid || p.p2Name || '');
+    return (a && b) ? [a, b].sort().join('|') : (_nm(p) || '');
+  };
+  var _seenD = {};
   var formed = [];
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
-    if (Array.isArray(t[k])) t[k].forEach(function (p) { if (_isPair(p) && p._lateJoin) formed.push(p); });
+    if (Array.isArray(t[k])) t[k].forEach(function (p) {
+      if (!(_isPair(p) && p._lateJoin)) return;
+      var _k = _entryKeyD(p);
+      if (!_k || _seenD[_k]) return;
+      _seenD[_k] = 1; formed.push(p);
+    });
   });
   // v1.3.x — ÓRFÃO DE ROSTER: dupla FORMADA À MÃO (teamOrigins==='formada') depois do sorteio funde
   // 2 solos direto em t.participants — NÃO passa pela lista de espera, então não tem _lateJoin. Ela
@@ -1142,9 +1156,24 @@ window._fillRepFillWithLateDuplas = function (t) {
   };
   // duplas na espera prontas pra entrar: formadas TARDE (_lateJoin, já auto-presentes) OU pré-formadas
   // PRESENTES. Estrutural (nunca includes('/')) — [[project_dupla_entry_structural_not_slash]].
+  // IDENTIDADE da entrada (uid dos membros; nome só pra guest) — a MESMA dupla pode estar nos DOIS
+  // stores (standbyParticipants E waitlist). Sem dedup ela entrava 2×: a 1ª passada abria
+  // "dupla vs a definir" (caso B) e a 2ª preenchia ESSE MESMO "a definir" (caso A) → a dupla
+  // acabava dos DOIS LADOS do confronto (bug do dono, print "JOGO 7"). Ver [[project_uid_identity_canon_locked]].
+  var _entryKey = function (p) {
+    if (!p || typeof p !== 'object') return String(p || '');
+    var a = String(p.p1Uid || p.p1Name || ''), b = String(p.p2Uid || p.p2Name || '');
+    return (a && b) ? [a, b].sort().join('|') : (_nm(p) || '');
+  };
+  var _seenFormed = {};
   var formed = [];
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
-    if (Array.isArray(t[k])) t[k].forEach(function (p) { if (_isPair(p) && (p._lateJoin || _pairPresent(p))) formed.push(p); });
+    if (Array.isArray(t[k])) t[k].forEach(function (p) {
+      if (!(_isPair(p) && (p._lateJoin || _pairPresent(p)))) return;
+      var _k = _entryKey(p);
+      if (!_k || _seenFormed[_k]) return;   // já coletada do outro store → NÃO duplica
+      _seenFormed[_k] = 1; formed.push(p);
+    });
   });
   // ÓRFÃO DE ROSTER: dupla FORMADA À MÃO (teamOrigins==='formada') que entrou em t.participants sem
   // passar pela espera — entra AQUI, cirurgicamente, no lugar de um repescado (sem reconstruir a
@@ -1152,14 +1181,15 @@ window._fillRepFillWithLateDuplas = function (t) {
   // SORTEADAS — não são _isPair). Ver [[project_formed_pair_roster_orphan]] [[project_late_dupla_fills_awaiting_slot]].
   var _brkLbls = {};
   (Array.isArray(t.matches) ? window._collectAllMatches(t) : []).forEach(function (m) { if (m) { if (m.p1) _brkLbls[m.p1] = 1; if (m.p2) _brkLbls[m.p2] = 1; } });
-  var _seenFormed = {}; formed.forEach(function (p) { _seenFormed[_nm(p)] = 1; });
+  // reusa o MESMO `_seenFormed` do scan dos stores (não redeclarar — zerava a dedup e a dupla
+  // que já veio da espera voltava a entrar como "órfã").
   if (Array.isArray(t.participants) && t.teamOrigins) {
     t.participants.forEach(function (p) {
       if (!_isPair(p)) return;
-      var nm = _nm(p);
-      if (!nm || _brkLbls[nm] || _seenFormed[nm]) return;
+      var nm = _nm(p), _k = _entryKey(p);
+      if (!nm || _brkLbls[nm] || _seenFormed[_k]) return;
       if (t.teamOrigins[nm] !== 'formada' || !_pairPresent(p)) return;
-      formed.push(p); _seenFormed[nm] = 1;
+      formed.push(p); _seenFormed[_k] = 1;
     });
   }
   if (!formed.length) return 0;
@@ -1181,10 +1211,26 @@ window._fillRepFillWithLateDuplas = function (t) {
     var cur = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
     // (A) COMPLETA um jogo da 1ª rodada (R0) que está SEM ADVERSÁRIO: um repGame (a ímpar) ou um
     //     jogo novo aberto por um par anterior. A dupla toma o slot (que aguardava um repescado).
+    // GUARD ANTI-AUTO-CONFRONTO (dono, print "JOGO 7"): NUNCA preencher o "a definir" de um jogo
+    // em que a PRÓPRIA dupla já ocupa o outro lado — senão ela joga contra si mesma. Acontecia
+    // quando ela já tinha aberto o jogo numa passada anterior (caso B) e voltava a ser coletada.
+    // Compara por UID de membro (cânone) e, pra guest, por nome. O adversário fica "a definir"
+    // até vir OUTRO time. Ver [[project_uid_identity_canon_locked]].
+    var _dKey = _entryKey(d), _dNm = _nm(d);
+    var _isSelf = function (m, slot) {
+      var other = (slot === 'p1') ? 'p2' : 'p1';
+      if (m[other] && String(m[other]) === String(_dNm)) return true;
+      var oObj = (other === 'p1') ? m.team1Obj : m.team2Obj;
+      if (oObj && _entryKey(oObj) === _dKey) return true;
+      var oUids = ((other === 'p1') ? m.team1Uids : m.team2Uids) || [];
+      var dUids = _pu(d) || [];
+      return !!(oUids.length && dUids.length && oUids.length === dUids.length &&
+        oUids.slice().sort().join('|') === dUids.slice().sort().join('|'));
+    };
     var openRep = null;
     cur.forEach(function (m) {
       if (openRep || !m || m.round !== 0 || !m.isPhaseRepGame || !Array.isArray(m.repFill) || !m.repFill.length) return;
-      var rf = null; m.repFill.forEach(function (x) { if (!rf && x && x.slot && _empty(m[x.slot])) rf = x; });
+      var rf = null; m.repFill.forEach(function (x) { if (!rf && x && x.slot && _empty(m[x.slot]) && !_isSelf(m, x.slot)) rf = x; });
       if (rf) openRep = { m: m, rf: rf };
     });
     if (openRep) {
