@@ -201,6 +201,9 @@ const SUITES = [
   // Instabilidade da chamada (dono: "presença pulando e regredindo depois de 24"): a integração era
   // disparada 1× por toggle → enxurrada de docs+re-render. Rajada agora coalesce numa chamada.
   'tests/late-integration-debounce.test.js',
+  // Dados REAIS do SB (dono): mesmo par de uids em 2 jogos com NOMES diferentes ("Jogador sem
+  // perfil (aL7U)…" vs "Marcello/Karla") — guards por NOME não casavam. Membership é por UID.
+  'tests/late-entry-uid-identity.test.js',
   // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
   'tests/count-competitors.test.js',
   'tests/phase-repechage-lines.test.js',

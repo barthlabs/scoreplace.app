@@ -642,6 +642,33 @@ window._allowsNewMatchups = function (t) {
 // das 2 derrotas). "Nome na chave → pula" inviabilizaria a repescagem. Por isso o registro é da
 // ENTRADA TARDIA que já foi COLOCADA (t.lateIntegrated[key]), e não da presença do nome na chave.
 // Zerado no reset do sorteio (_clearTournamentDraw) → re-sorteio começa com a lousa limpa.
+// PERTENCE À CHAVE? — POR UID, nunca por nome (v1.3.150). PROVA do doc real do dono: o MESMO par
+// de uids estava em 2 jogos com NOMES DIFERENTES — "Jogador sem perfil (aL7U) / (EABk)" num e
+// "Marcello Martins de Souza / Karla Fernandes" no outro (um resolveu o perfil, o outro caiu no
+// fallback). Todos os guards de "já está na chave" eram por NOME → nenhum casou → o par entrou 2×.
+// Cânone: identidade é UID. [[project_uid_identity_canon_locked]]
+window._bracketUidKeySet = function (t) {
+  var set = {};
+  var ms = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : ((t && t.matches) || []);
+  (ms || []).forEach(function (m) {
+    if (!m) return;
+    [['team1Uids', 'p1Uid', 'p1'], ['team2Uids', 'p2Uid', 'p2']].forEach(function (tr) {
+      var uids = (Array.isArray(m[tr[0]]) && m[tr[0]].length) ? m[tr[0]] : (m[tr[1]] ? [m[tr[1]]] : []);
+      uids = (uids || []).filter(Boolean).map(String);
+      if (uids.length) set[uids.sort().join('|')] = 1;
+      if (m[tr[2]]) set['NM:' + m[tr[2]]] = 1;   // guest sem uid: só aí o nome vale
+    });
+  });
+  return set;
+};
+window._entryInBracket = function (t, p, set) {
+  set = set || window._bracketUidKeySet(t);
+  var uids = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
+  uids = (uids || []).filter(Boolean).map(String);
+  if (uids.length && set[uids.sort().join('|')]) return true;
+  var nm = window._pName ? window._pName(p, '') : ((p && (p.displayName || p.name)) || '');
+  return !!(nm && set['NM:' + nm]);
+};
 window._lateEntryKey = function (p) {
   if (!p || typeof p !== 'object') return String(p || '');
   var a = String(p.p1Uid || p.p1Name || ''), b = String(p.p2Uid || p.p2Name || '');
@@ -980,10 +1007,12 @@ window._createExtraGamesFromWaitlist = function(t) {
   var _sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
   var _wl = Array.isArray(t.waitlist) ? t.waitlist : [];
   var seen = {}; var pool = [];
+  var _brkSet = window._bracketUidKeySet(t);   // membership POR UID (nome não identifica)
   _sp.concat(_wl).forEach(function(p){
     var n = _name(p);
     if (!n || seen[n]) return;
     if (window._lateAlreadyIntegrated(t, p)) return;   // já COLOCADA antes → não cria 2º jogo
+    if (window._entryInBracket(t, p, _brkSet)) return; // já ESTÁ na chave (por uid)
     seen[n] = true; pool.push(p);
   });
   // v1.3.146: ÓRFÃO DE ROSTER (dupla FORMADA à mão, `teamOrigins==='formada'`, que entrou em
@@ -999,7 +1028,8 @@ window._createExtraGamesFromWaitlist = function(t) {
     });
     t.participants.forEach(function (p) {
       var n = _name(p);
-      if (!n || seen[n] || _brk[n]) return;             // já coletado ou já na chave
+      if (!n || seen[n]) return;
+      if (window._entryInBracket(t, p, _brkSet)) return;  // já na chave (POR UID)
       if (t.teamOrigins[n] !== 'formada') return;        // só dupla formada à mão
       if (window._lateAlreadyIntegrated(t, p)) return;   // já COLOCADA antes
       seen[n] = true; pool.push(p);
@@ -1221,6 +1251,7 @@ window._fillRepFillWithLateDuplas = function (t) {
     return (a && b) ? [a, b].sort().join('|') : (_nm(p) || '');
   };
   var _seenFormed = {};
+  var _brkSetF = window._bracketUidKeySet(t);   // membership POR UID (nome não identifica)
   var formed = [];
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
     if (Array.isArray(t[k])) t[k].forEach(function (p) {
@@ -1228,6 +1259,7 @@ window._fillRepFillWithLateDuplas = function (t) {
       var _k = _entryKey(p);
       if (!_k || _seenFormed[_k]) return;   // já coletada do outro store → NÃO duplica
       if (window._lateAlreadyIntegrated(t, p)) return;  // já COLOCADA numa passada anterior
+      if (window._entryInBracket(t, p, _brkSetF)) return; // já ESTÁ na chave (POR UID)
       _seenFormed[_k] = 1; formed.push(p);
     });
   });
@@ -1243,7 +1275,7 @@ window._fillRepFillWithLateDuplas = function (t) {
     t.participants.forEach(function (p) {
       if (!_isPair(p)) return;
       var nm = _nm(p), _k = _entryKey(p);
-      if (!nm || _brkLbls[nm] || _seenFormed[_k]) return;
+      if (!nm || _seenFormed[_k] || window._entryInBracket(t, p, _brkSetF)) return;
       if (t.teamOrigins[nm] !== 'formada' || !_pairPresent(p)) return;
       formed.push(p); _seenFormed[_k] = 1;
     });
@@ -3772,6 +3804,7 @@ window._placeLateEntriesSurgically = function (t) {
   // rótulos JÁ na chave → quem está lá não é tardio pendente
   var inBracket = {};
   _all().forEach(function (m) { if (m) { if (m.p1) inBracket[m.p1] = 1; if (m.p2) inBracket[m.p2] = 1; } });
+  var _brkSetP = window._bracketUidKeySet(t);   // membership POR UID
 
   // pendentes = espera (_lateJoin) + ÓRFÃO DE ROSTER (dupla formada à mão), presentes, dedup
   var seen = {}, pending = [];
@@ -3779,7 +3812,8 @@ window._placeLateEntriesSurgically = function (t) {
     if (!Array.isArray(t[k])) return;
     t[k].forEach(function (p) {
       var n = _nm(p), kk = _key(p);
-      if (!n || inBracket[n] || seen[kk] || !p || !p._lateJoin || !_present(p)) return;
+      if (!n || seen[kk] || !p || !p._lateJoin || !_present(p)) return;
+      if (window._entryInBracket(t, p, _brkSetP)) return;
       if (window._lateAlreadyIntegrated(t, p)) return;
       seen[kk] = 1; pending.push({ e: p, fromWait: true });
     });
@@ -3787,7 +3821,7 @@ window._placeLateEntriesSurgically = function (t) {
   if (Array.isArray(t.participants) && t.teamOrigins) {
     t.participants.forEach(function (p) {
       var n = _nm(p), kk = _key(p);
-      if (!n || inBracket[n] || seen[kk]) return;
+      if (!n || seen[kk] || window._entryInBracket(t, p, _brkSetP)) return;
       if (t.teamOrigins[n] !== 'formada' || !_present(p)) return;
       if (window._lateAlreadyIntegrated(t, p)) return;
       seen[kk] = 1; pending.push({ e: p, fromWait: false });
@@ -3816,8 +3850,14 @@ window._placeLateEntriesSurgically = function (t) {
     var d = item.e, dn = _nm(d), dk = _key(d);
     var cur = _all();
     // (1) procura um "a definir" ABERTO — slot vazio que NÃO é alimentado por outro jogo
+    // ⚠️ SÓ a PRIMEIRA RODADA (v1.3.150). O tardio entra na rodada de entrada — NUNCA num slot de
+    // rodada posterior. Slots de rodadas seguintes são alimentados por vencedores; pior, o
+    // _rebuildIntegratedBracket preserva SÓ `round === firstRound` e RECONSTRÓI o resto — um tardio
+    // colocado na R1 era VARRIDO na passada seguinte. Foi exatamente o "jogo 9 foi criado e depois
+    // sumiu da chave" (o dono confirmou: jogo 9 estava na R1).
     var target = null;
-    cur.slice().sort(function (a, b) { return ((a.round || 0) - (b.round || 0)); }).forEach(function (m) {
+    cur.filter(function (m) { return m && ((typeof m.round === 'number') ? m.round : 1) === baseRound; })
+      .forEach(function (m) {
       if (target || !m || m.winner) return;
       ['p1', 'p2'].forEach(function (slot) {
         if (target || !_empty(m[slot])) return;
