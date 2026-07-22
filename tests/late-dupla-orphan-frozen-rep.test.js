@@ -69,7 +69,20 @@ console.log('── SUB B: repescado congelado + dupla formada (órfão de roste
   // repescado congelado preservado: o MESMO jogo (id) D4vD3 continua existindo com os dois lados reais
   const frozenGame = all(t).find(m=>m.id===frozenId);
   ok(!!frozenGame, 'repescado CONGELADO preservado — MESMO jogo ('+frozenP1+' VS '+frozenP2+', id intacto ⇒ sem redraw)');
-  ok(frozenGame && ((frozenGame.p1===frozenP1&&frozenGame.p2===frozenP2)||(frozenGame.p1===frozenP2&&frozenGame.p2===frozenP1)), 'repescado congelado com os MESMOS dois times');
+  // v1.3.163 — REGRA NOVA (dono): "o repescado nao pode ser retirado para nao jogar. mas para ser
+  // promovido para a superior ... isso nao é perda dele, é promocao" + "se o tardio ja estivesse
+  // ali ele nunca teria descido". Ou seja: o repescado PODE ceder a vaga para um competidor de
+  // verdade, DESDE QUE continue jogando (volta à chave inferior). O que segue INTOCÁVEL é o jogo
+  // (mesmo id, sem redraw) e o lado que NÃO era do repescado. Antes esta linha exigia os dois
+  // lados idênticos — gravava a regra de 21/jul, superada pela de hoje.
+  const ladosDepois = [frozenGame && frozenGame.p1, frozenGame && frozenGame.p2];
+  ok(ladosDepois.indexOf(frozenP1) >= 0 || ladosDepois.indexOf(frozenP2) >= 0,
+     'o jogo congelado mantém pelo menos o lado que não era do repescado');
+  // e quem cedeu a vaga NÃO sumiu do torneio — continua escalado em algum jogo
+  const cedeu = [frozenP1, frozenP2].filter(x => ladosDepois.indexOf(x) < 0);
+  cedeu.forEach(function (n) {
+    ok(labels(t).has(n), 'o repescado deslocado CONTINUA jogando ("' + n + '" segue na chave) — ceder vaga nunca é tirar de jogar');
+  });
   // resultados R1 preservados
   ok(all(t).filter(m=>m.winner).length >= winsBefore, 'resultados R1 preservados (>= '+winsBefore+' vitórias)');
   // a dupla nova entrou jogando (vs a definir / repescado) — jogo com adversário a resolver

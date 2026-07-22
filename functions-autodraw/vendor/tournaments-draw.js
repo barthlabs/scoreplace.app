@@ -1321,6 +1321,35 @@ window._fillRepFillWithLateDuplas = function (t) {
       var rf = null; m.repFill.forEach(function (x) { if (!rf && x && x.slot && _empty(m[x.slot]) && !_isSelf(m, x.slot)) rf = x; });
       if (rf) openRep = { m: m, rf: rf };
     });
+    // v1.3.163 (dono): "se o tardio ja estivesse ali ele nunca teria descido" — um REPESCADO ocupa
+    // a vaga só porque faltava adversário. Chegando um competidor de verdade, ele assume, e o
+    // repescado VOLTA À INFERIOR (continua jogando, com a derrota que já tinha). Promover é ganho;
+    // TIRAR DE JOGAR é proibido — por isso só desloca se conseguir reacomodá-lo. Sem isto, cada
+    // tardio abria um jogo NOVO: 2 tardios davam 8 jogos em vez de 7, com repescado repetido.
+    if (!openRep) {
+      var ocup = null;
+      cur.forEach(function (m) {
+        if (ocup || !m || m.round !== 0 || m.winner) return;
+        ['p1', 'p2'].forEach(function (sl) {
+          if (ocup) return;
+          var veioDeRep = (sl === 'p1') ? m.p1FromRepechage : m.p2FromRepechage;
+          if (!veioDeRep || _isSelf(m, sl) || _empty(m[sl])) return;
+          ocup = { m: m, slot: sl, nome: m[sl], obj: (sl === 'p1') ? m.team1Obj : m.team2Obj };
+        });
+      });
+      if (ocup && window._returnRepescadoToLower(t, ocup.nome, ocup.obj)) {
+        _setSide(ocup.m, ocup.slot, d);
+        if (ocup.slot === 'p1') delete ocup.m.p1FromRepechage; else delete ocup.m.p2FromRepechage;
+        var _dn2 = _nm(d);
+        if (!t.participants.some(function (p) { return _nm(p) === _dn2; })) {
+          var _cl2 = Object.assign({}, d); delete _cl2._lateJoin; t.participants.push(_cl2);
+        }
+        t.teamOrigins[_dn2] = 'formada';
+        window._markLateIntegrated(t, d);
+        usedNames[_dn2] = 1; integrated++;
+        return;
+      }
+    }
     if (openRep) {
       _setSide(openRep.m, openRep.rf.slot, d);
       openRep.m.repFill = openRep.m.repFill.filter(function (x) { return x !== openRep.rf; });
@@ -3792,6 +3821,55 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
 // sobrescrito depois. Slot com `repFill` (espera repescado) CONTA: é exatamente o "a definir" que o
 // organizador vê. Guard anti-auto-confronto: nunca colocar onde a própria entrada já está do outro lado.
 // Ver [[project_late_dupla_fills_awaiting_slot]] [[project_formed_pair_roster_orphan]].
+// ── DEVOLVE O REPESCADO DESLOCADO À CHAVE INFERIOR (v1.3.163) ────────────────────────────────
+// Dono: "o repescado nao pode ser retirado para nao jogar. mas para ser promovido para a superior
+// ... isso nao é perda dele, é promocao. entao nesse caso sobe."
+// Ou seja: PROMOVER é permitido, TIRAR DE JOGAR não. Quando um tardio ocupa o lugar que um
+// repescado ocupava na superior (porque, se o tardio estivesse inscrito, aquele repescado nunca
+// teria sido chamado), o repescado NÃO desaparece — ele volta à chave inferior, onde continua
+// jogando com a derrota que já tinha. Devolve true só se conseguiu reacomodá-lo; quem chama NÃO
+// desloca ninguém sem isso. [[project_lower_bracket_recursive_repechage]]
+window._returnRepescadoToLower = function (t, nome, entrada) {
+  if (!t || !nome || !Array.isArray(t.matches)) return false;
+  var _all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
+  var low = _all.filter(function (m) { return m && m.bracket === 'lower'; });
+  if (!low.length) return false;
+  var r = Math.min.apply(null, low.map(function (m) { return (typeof m.round === 'number') ? m.round : 1; }));
+  var low1 = low.filter(function (m) { return ((typeof m.round === 'number') ? m.round : 1) === r && !m.winner; });
+  var _vaz = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
+  var _fed = function (m, sl) {
+    return t.matches.some(function (x) { return x && x !== m && ((x.nextMatchId === m.id && x.nextSlot === sl) || (x.loserMatchId === m.id && x.loserSlot === sl)); });
+  };
+  // 1ª escolha: vaga de repescagem pendente (é literalmente o lugar dele lá embaixo)
+  var alvo = null;
+  low1.forEach(function (m) {
+    if (alvo) return;
+    (m.repFill || []).forEach(function (rf) {
+      if (alvo || !rf || !rf.slot || !_vaz(m[rf.slot])) return;
+      alvo = { m: m, slot: rf.slot, rf: rf };
+    });
+  });
+  // 2ª escolha: qualquer vaga vazia que ninguém alimenta
+  if (!alvo) {
+    low1.forEach(function (m) {
+      if (alvo) return;
+      ['p1', 'p2'].forEach(function (sl) { if (!alvo && _vaz(m[sl]) && !_fed(m, sl)) alvo = { m: m, slot: sl, rf: null }; });
+    });
+  }
+  if (!alvo) return false;                    // sem lugar: NÃO desloca (ele não pode parar de jogar)
+  alvo.m[alvo.slot] = nome;
+  if (entrada) {
+    var uids = (typeof window._participantUids === 'function') ? window._participantUids(entrada) : [];
+    if (alvo.slot === 'p1') { alvo.m.team1Obj = entrada; alvo.m.team1Uids = uids; }
+    else { alvo.m.team2Obj = entrada; alvo.m.team2Uids = uids; }
+  }
+  if (alvo.rf) {
+    alvo.m.repFill = (alvo.m.repFill || []).filter(function (x) { return x !== alvo.rf; });
+    if (!alvo.m.repFill.length) { delete alvo.m.repFill; delete alvo.m.isPhaseRepGame; delete alvo.m.isLowerImpar; }
+  }
+  return true;
+};
+
 // ── IDENTIDADE NO JOGO + CONFRONTO REPETIDO POR UID (v1.3.162, bug do dono) ──────────────────
 // Dono: "marcelo x luigi esta duplicado. se enfrentam no jogo 7 e 8".
 // MEDIDO no doc real: o mesmo confronto existia duas vezes na 1ª superior — um jogo com os uids
