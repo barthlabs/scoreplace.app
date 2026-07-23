@@ -76,6 +76,49 @@ console.log('\n── desfazer dupla (computeSplitPair) ──');
   ok('nenhuma entrada é mais dupla de uA/uB', !parts.some((p) => p.p1Uid && p.p2Uid));
 }
 
+// BUG DO DONO (22/jul, "Torneio de Férias só Casais"): clicava no ✕ da dupla, o toast dizia
+// "Dupla desfeita" e NADA acontecia — quantas vezes clicasse. Raiz: o storage é SÓ-UID
+// ("nome com uid nunca é gravado" — identity-core._stripStoredNamesForUidEntries), então a
+// dupla gravada NÃO tem p1Name/p2Name/displayName; computeSplitPair exigia os DOIS NOMES e
+// devolvia notFound → não gravava nada. A entrada abaixo é cópia FIEL do doc de produção.
+console.log('\n── desfazer dupla SÓ-UID (sem nome gravado) — bug de produção ──');
+{
+  const t = {
+    id: 'T', enrollmentMode: 'teams', teamSize: 2, creatorUid: 'uidOrg',
+    participants: [
+      { uid: 'uidA', p1Uid: 'uidA', p2Uid: 'uidB', p1Seq: 2, p2Seq: 1, ligaActive: true,
+        category: 'Misto Obrig.', categories: ['Misto Obrig.'], categorySource: 'perfil' },
+      { uid: 'uidC', enrollSeq: 21 },
+    ],
+  };
+  const r = computeSplitPair(t, { id1: 'uidA', id2: 'uidB' });
+  ok('só-uid → split (era notFound)', r.outcome === 'split', r.outcome);
+  const parts = (r.updateData || {}).participants || [];
+  ok('gravou update (participants)', !!r.updateData && parts.length === 3, 'len=' + parts.length);
+  const a = parts.find((p) => p && p.uid === 'uidA'), b = parts.find((p) => p && p.uid === 'uidB');
+  ok('2 solos por uid', !!a && !!b && !a.p2Uid && !b.p2Uid);
+  ok('herda nº de inscrição (2 e 1)', a && b && a.enrollSeq === 2 && b.enrollSeq === 1,
+     a && b && (a.enrollSeq + '/' + b.enrollSeq));
+  ok('herda categoria', a && a.category === 'Misto Obrig.' && b && b.category === 'Misto Obrig.');
+  ok('NÃO grava nome junto do uid (cânone só-uid)',
+     a && !a.displayName && !a.name && b && !b.displayName && !b.name);
+  ok('memberUids mantém os 2', ['uidA', 'uidB'].every((u) => r.updateData.memberUids.indexOf(u) !== -1));
+  ok('nenhuma dupla sobrou', !parts.some((p) => p && p.p1Uid && p.p2Uid));
+}
+
+console.log('\n── desfazer dupla com FICTÍCIO (sem conta) — nome continua sendo a identidade ──');
+{
+  const t = {
+    id: 'T', enrollmentMode: 'teams', teamSize: 2, creatorUid: 'uidOrg',
+    participants: [{ uid: 'uidA', p1Uid: 'uidA', p2Name: 'Convidado', p1Seq: 1 }],
+  };
+  const r = computeSplitPair(t, { id1: 'uidA', id2: 'Convidado' });
+  ok('uid + fictício → split', r.outcome === 'split', r.outcome);
+  const parts = (r.updateData || {}).participants || [];
+  ok('fictício volta como string do nome', parts.indexOf('Convidado') !== -1, JSON.stringify(parts));
+  ok('titular volta por uid', parts.some((p) => p && p.uid === 'uidA' && !p.p2Uid && !p.p2Name));
+}
+
 console.log('\n── desfazer: por nome do time (id2 vazio) ──');
 {
   const t = mkT();

@@ -943,18 +943,23 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
     }
     var _hasBracket = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
     window.FirestoreDB.formPair(tId, { uid1: _u1, name1: name1, uid2: _u2, name2: name2 })
-        .then(function () {
+        .then(function (res) {
+            // MESMA regra do desfazer: só comemora se a CF gravou de verdade (notFound = não achou).
+            var _r = (res && res.data) ? res.data : res;
+            if (_r && _r.notFound) {
+                if (typeof showNotification !== 'undefined') showNotification('Não foi possível formar a dupla', 'O servidor não encontrou os dois inscritos. Recarregue e tente de novo.', 'warning');
+                return;
+            }
             // chave já sorteada → integra na CF (integrateLateEntries detecta o órfão e re-sorteia)
             if (_hasBracket && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
+            if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');
+            if (_u2 && _u2 !== _u1 && typeof window._sendUserNotification === 'function') {
+                var cu = window.AppStore.currentUser;
+                window._sendUserNotification(_u2, { type: 'enrollment_new', title: '🤝 Dupla formada!', message: (cu && cu.displayName ? cu.displayName : 'O organizador') + ' formou dupla com você em ' + window._safeHtml(t.name || '') + ': ' + window._safeHtml(newName), tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
+            }
             if (typeof window._softRefreshView === 'function') window._softRefreshView();
         })
         .catch(function (e) { if (typeof showNotification !== 'undefined') showNotification('Não foi possível formar a dupla', (e && e.message) || '', 'warning'); });
-    if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');
-    if (_u2 && _u2 !== _u1 && typeof window._sendUserNotification === 'function') {
-        var cu = window.AppStore.currentUser;
-        window._sendUserNotification(_u2, { type: 'enrollment_new', title: '🤝 Dupla formada!', message: (cu && cu.displayName ? cu.displayName : 'O organizador') + ' formou dupla com você em ' + window._safeHtml(t.name || '') + ': ' + window._safeHtml(newName), tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
-    }
-    if (typeof window._softRefreshView === 'function') window._softRefreshView();
 };
 // Desfazer dupla → 2 inscritos solo. ESCOPO DE MÓDULO (v1.3.x): estava dentro de
 // renderTournaments — mesmo bug que moveu _formDuplaByUids pro load (o botão "Desfazer" no
@@ -988,18 +993,27 @@ window._splitDupla = function(tId, id1, id2) {
     // CF-ONLY: o cliente NÃO desfaz nem grava — só LÊ nomes/uids (pra notificar) e dispara a CF
     // splitPair (computeSplitPair: 2 solos + enrollSeq + memberUids, atômico + replica pro SB).
     var nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
-    var parts = nm.split(' / ');
+    var parts = nm.indexOf(' / ') !== -1 ? nm.split(' / ') : [];
     var p1Name = ((entry.p1Uid && window._displayNameForUid) ? window._displayNameForUid(entry.p1Uid, entry.p1Name || parts[0]) : (entry.p1Name || parts[0] || '')).trim();
     var p2Name = ((entry.p2Uid && window._displayNameForUid) ? window._displayNameForUid(entry.p2Uid, entry.p2Name || parts[1]) : (entry.p2Name || parts[1] || '')).trim();
-    if (!p1Name || !p2Name) return;
     var p1Uid  = entry.p1Uid || '';
     var p2Uid  = entry.p2Uid || '';
+    // IDENTIDADE = uid (o nome só identifica o fictício). O storage é só-uid, então exigir os
+    // dois NOMES aqui abortava o desfazer sempre que o perfil ainda não tinha resolvido.
+    if (!(p1Uid || p1Name) || !(p2Uid || p2Name)) return;
     if (!(window.FirestoreDB && typeof window.FirestoreDB.splitPair === 'function')) {
         if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível desfazer a dupla agora — tente de novo.', 'warning');
         return;
     }
     var _hasBracketSplit = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
-    window.FirestoreDB.splitPair(tId, { id1: id1, id2: id2 }).then(function () {
+    window.FirestoreDB.splitPair(tId, { id1: id1, id2: id2 }).then(function (res) {
+        // A CF devolve notFound quando NÃO achou/NÃO gravou. Comemorar assim mesmo (como era)
+        // dava o pior sintoma possível: toast "Dupla desfeita" e a dupla intacta, pra sempre.
+        var _r = (res && res.data) ? res.data : res;
+        if (_r && _r.notFound) {
+            if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', 'O servidor não encontrou esta dupla no torneio. Recarregue e tente de novo.', 'warning');
+            return;
+        }
         try {
             var _actorUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
             var _msg = 'O organizador desfez a dupla "' + p1Name + ' / ' + p2Name + '" em ' + (t.name || '') + '. Você voltou para Sem Dupla.';

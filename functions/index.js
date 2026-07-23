@@ -39,8 +39,21 @@ admin.initializeApp();
 // CORS unificado pros callables/onRequest do frontend. Inclui produção, o ambiente
 // de STAGING (scoreplace-staging.web.app + .firebaseapp.com) e localhost de dev.
 // Centralizado pra evitar drift entre as ~23 functions e dar paridade prod↔staging.
+// ORIGENS que podem chamar as CFs. O APP NATIVO NÃO fala "https://scoreplace.app": o WKWebView
+// PROÍBE registrar handler pra http/https, então o Capacitor descarta iosScheme:"https" e cai no
+// default → a origem no iPhone é "capacitor://scoreplace.app" (CAPInstanceDescriptor: se
+// WKWebView.handlesURLScheme(scheme) o esquema é inválido → InstanceDescriptorDefaults.scheme).
+// Sem essa origem aqui, o preflight volta 204 SEM Access-Control-Allow-Origin → o WebKit barra e o
+// POST nunca sai: erro "Load failed" (TypeError) em TODA CF sem fallback — o que o dono viu ao
+// desfazer dupla no TestFlight. O Android usa androidScheme:"https" → já casava.
+// (CORS não é fronteira de segurança aqui: toda CF exige ID token no Authorization.)
 const APP_ORIGINS = [
   "https://scoreplace.app",
+  "capacitor://scoreplace.app",   // iOS nativo (Capacitor)
+  "ionic://scoreplace.app",       // iOS legado (iosScheme antigo)
+  "capacitor://localhost",        // iOS nativo sem hostname configurado
+  "http://localhost",             // Android WebView legado
+  "https://localhost",            // Android nativo (androidScheme https sem hostname)
   "https://scoreplace-staging.web.app",
   "https://scoreplace-staging.firebaseapp.com",
   "http://localhost:9876",
