@@ -56,5 +56,20 @@ input.value=''; F();
 ok(vis().every(Boolean),'limpar a busca RESTAURA todos os cards');
 ok(colB.style.display!=='none','limpar a busca restaura as colunas');
 
+
+// ── A barra tem que ser injetada TAMBÉM no bracket INLINE ────────────────────
+// Bug real (v1.4.14→18): eu gateei a injeção com `!isInline`, copiando o gate que existe
+// pros BOTÕES DE AÇÃO (esses sim seriam duplicados na página do torneio). Resultado: a barra
+// não aparecia em #tournaments/<id> — exatamente a tela onde o dono foi procurar alguém.
+// Checagem no FONTE porque o bug é do call site (o _bracketBar em si sempre funcionou).
+(function () {
+  const fs2 = require('fs'), path2 = require('path');
+  const src2 = fs2.readFileSync(path2.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
+  const m = src2.match(/if \(([^)]*)typeof window\._bracketBar === 'function'\) \{/);
+  ok(!!m, 'injeção do _bracketBar não encontrada em bracket.js');
+  ok(m && m[1].indexOf('isInline') === -1,
+    'REGRESSÃO: a barra de busca voltou a ser gateada por isInline — some do chaveamento inline (#tournaments/<id>)');
+})();
+
 console.log((fail===0?'✅':'❌')+` bracket-search: ${pass} ok, ${fail} falharam`);
 process.exit(fail===0?0:1);

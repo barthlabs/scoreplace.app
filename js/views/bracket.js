@@ -316,11 +316,15 @@ function renderBracket(container, tournamentId, isInline) {
       <div>${actionBtnsHtml}</div>
     </div>`;
 
-  // v1.4.14: BUSCA NAS CHAVES logo abaixo do cabeçalho (sticky canônico). Vem daqui, e não
-  // de cada um dos 7 render sites (Liga/Grupos/Elim/Dupla Elim/Suíço/fase/inline), porque
-  // headerHtml é o único ponto por onde TODOS passam — um lugar só, sem drift
+  // v1.4.14/18: BUSCA NAS CHAVES logo abaixo do cabeçalho (sticky canônico). Vem daqui, e
+  // não de cada um dos 7 render sites (Liga/Grupos/Elim/Dupla Elim/Suíço/fase/inline),
+  // porque headerHtml é o único ponto por onde TODOS passam — um lugar só, sem drift
   // (feedback_sweep_all_render_sites). Só com chave sorteada: sem jogo não há o que buscar.
-  if (!isInline && hasContent && typeof window._bracketBar === 'function') {
+  // ⚠️ NÃO gatear por isInline (v1.4.18): a tela onde mais se procura alguém é justamente a
+  // INLINE (#tournaments/<id>, o chaveamento dentro da página do torneio) — foi lá que o dono
+  // foi olhar e não achou. O `isInline` existe pra não DUPLICAR os botões de ação que a página
+  // já tem; a busca não é duplicada por ninguém.
+  if (hasContent && typeof window._bracketBar === 'function') {
     headerHtml += window._bracketBar(true);
   }
 
