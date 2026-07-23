@@ -182,27 +182,26 @@
       fld('Nº de rodadas', '<input id="f2-sched-n" type="number" min="1" max="30" value="' + (r.n || '') + '" placeholder="—" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;">') +
     '</div>';
     var tgl = '<div style="margin-top:14px;">' + _toggleRight('Sortear manualmente', manual, 'window._f2SchedManual(this.checked)') + '</div>';
-    // v1.4.12 — "Deixar inscritos ficarem de fora (Ativado/Desativado)" VOLTOU. O controle
-    // existia no #liga-fields do form antigo e SUMIU quando o configurador novo (format2)
-    // assumiu a config da fase — o organizador ficou sem como desligar a autodesativação.
-    // Mora aqui porque é decisão da MESMA fase que o agendamento define (quem entra em quais
-    // sorteios). Mantém o id 'liga-allow-self-deactivation' — o save/load do form lê por ele.
-    // REGRA DERIVADA (dono): RODADA ÚNICA não tem "próximo sorteio" pra ficar de fora — todos
-    // entram, ponto. Com n=1 o toggle vem DESLIGADO e TRAVADO, e o controle de Ativado/
-    // Desativado nem aparece pros participantes (t.allowSelfDeactivation=false).
+    // v1.4.12/15 — "Deixar inscritos ficarem de fora (Ativado/Desativado)". O controle existia
+    // no #liga-fields do form antigo e SUMIU quando o configurador novo (format2) assumiu a
+    // config da fase. Mora aqui porque é decisão da MESMA fase que o agendamento define.
+    // Mantém o id 'liga-allow-self-deactivation' — o save/load do form lê por ele.
+    // RODADA ÚNICA (n=1) → vem DESLIGADO por padrão: não há próximo sorteio pra ficar de fora.
+    // ⚠️ É DEFAULT, NÃO CADEADO (v1.4.15): o dono pediu a configuração desativada, não o
+    // controle travado — travar foi invenção minha. O organizador liga se quiser.
     var _oneRound = (parseInt(r.n, 10) || 0) === 1;
-    var _adOn = _oneRound ? false : (r.allowSelfDeactivation !== false);
-    var _adTgl = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);' + (_oneRound ? 'opacity:0.55;' : '') + '">' +
-      '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;' + (_oneRound ? '' : 'cursor:pointer;') + 'font-size:0.9rem;color:var(--text-main);width:100%;">' +
+    var _adOn = (r.allowSelfDeactivation != null) ? (r.allowSelfDeactivation !== false) : !_oneRound;
+    var _adTgl = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">' +
+      '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;font-size:0.9rem;color:var(--text-main);width:100%;">' +
         '<span>Deixar inscritos ficarem de fora <span style="color:var(--text-muted);font-size:0.78rem;">(Ativado/Desativado)</span></span>' +
         '<span class="toggle-switch"><input type="checkbox" id="liga-allow-self-deactivation"' +
-          (_adOn ? ' checked' : '') + (_oneRound ? ' disabled' : '') +
+          (_adOn ? ' checked' : '') +
           ' onchange="window._f2AllowSelfDeact(this.checked)"><span class="toggle-slider"></span></span>' +
       '</label>' +
       '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.4;">' +
-        (_oneRound
-          ? 'Rodada única: ninguém pode se desativar — <b>todos entram no sorteio</b>. O controle não aparece pros participantes.'
-          : 'Cada inscrito pode se marcar como <b>Desativado</b> pra ficar de fora de um sorteio. Desligue pra que ninguém fique de fora.') +
+        'Cada inscrito pode se marcar como <b>Desativado</b> pra ficar de fora de um sorteio. ' +
+        'Desligue pra que ninguém fique de fora — todos sempre <b>Ativados</b> e o controle some dos cards.' +
+        (_oneRound ? ' <span style="color:#94a3b8;">(Rodada única: já vem desligado, porque não há próximo sorteio pra ficar de fora.)</span>' : '') +
       '</div>' +
     '</div>';
     var note = '<div id="f2-sched-note" style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">' + _f2SchedNote(r) + '</div>';
@@ -680,9 +679,9 @@
   // manual). A data re-renderiza (recalcula o intervalo sugerido e o default manual/auto). Hora
   // e intervalo NÃO re-renderizam (preserva foco); editar o intervalo desliga o auto-sugerido.
   window._f2SchedManual = function (checked) { if (!S) return; S.cfg.rodadas.drawManual = !!checked; _norm(); _rerender(); };
-  // v1.4.12: autodesativação dos inscritos (id liga-allow-self-deactivation, lido pelo save do
-  // form). Sem _rerender: o toggle é estado puro do modelo, e re-renderizar aqui roubaria o
-  // foco do bloco. Com n=1 o input vem disabled, então este handler nem dispara.
+  // v1.4.12/15: autodesativação dos inscritos (id liga-allow-self-deactivation, lido pelo save
+  // do form). Sem _rerender: o toggle é estado puro do modelo, e re-renderizar aqui roubaria o
+  // foco do bloco. Grava a escolha EXPLÍCITA — que vence o default de rodada única (format2.js).
   window._f2AllowSelfDeact = function (checked) { if (!S) return; S.cfg.rodadas.allowSelfDeactivation = !!checked; };
   // A data/hora do 1º sorteio é TAMBÉM o início da fase (pedido do dono): espelha nos
   // campos #tourn-start-date/#tourn-start-time e dispara os recálculos do form.

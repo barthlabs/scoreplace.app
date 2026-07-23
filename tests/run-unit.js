@@ -25,6 +25,9 @@ const SUITES = [
   // Globais das views existem DEPOIS do load. Pega definição presa dentro de template
   // literal (vira texto) — que o `node --check` NÃO pega, porque string é sintaxe válida.
   'tests/view-globals-smoke.test.js',
+  // "Deixar inscritos ficarem de fora": rodada única é DEFAULT desligado, não cadeado —
+  // escolha explícita do organizador vence nos dois sentidos.
+  'tests/allow-self-deact-default.test.js',
   'tests/phase-transition-matrix.test.js',
   'tests/phase-adversarial.test.js',
   'tests/phase-lifecycle.test.js',

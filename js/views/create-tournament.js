@@ -4679,8 +4679,7 @@ function setupCreateTournamentModal() {
     if (_balLoad) _balLoad.checked = (t.equilibrado !== false);
     // v2.7.38: permitir auto-desativação (default true).
     var _adLoad = window._allowSelfDeactEl();
-    // disabled = rodada única (o configurador travou em desligado): não re-marcar.
-    if (_adLoad && !_adLoad.disabled) _adLoad.checked = (t.allowSelfDeactivation !== false);
+    if (_adLoad) _adLoad.checked = (t.allowSelfDeactivation !== false);
     if (t.clusterSize) {
       var _clusterLoad = document.getElementById('liga-cluster-size');
       if (_clusterLoad) _clusterLoad.value = t.clusterSize;
@@ -5222,8 +5221,7 @@ function setupCreateTournamentModal() {
           // config "se perdia" num save parcial. Só usa o default true se for criação nova.
           var _adEl = window._allowSelfDeactEl();
           if (_adEl) {
-            // disabled = rodada única → ninguém se desativa (regra do dono), independente do DOM.
-            tourData.allowSelfDeactivation = _adEl.disabled ? false : !!_adEl.checked;
+            tourData.allowSelfDeactivation = !!_adEl.checked;
           } else {
             var _adPrev = true;
             if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
