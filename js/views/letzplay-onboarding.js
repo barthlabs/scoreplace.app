@@ -156,6 +156,10 @@
         '<div style="height:12px;border-radius:999px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.1));"><div id="sp-imp-bar" style="height:100%;width:8%;background:linear-gradient(90deg,#84cc16,#65a30d);transition:width .3s;"></div></div>' +
         '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;"></div>' +
         '<div id="sp-imp-eta" style="font-size:0.78rem;color:var(--text-bright,#e2e8f0);margin-top:6px;font-weight:700;font-variant-numeric:tabular-nums;"></div>' +
+        // BARRAS x de y (v1.4.22): Torneios/Rankings/Jogos crescem AO VIVO durante a
+        // busca — mesmas barras do dialog do atleta, agora dentro do overlay (pedido
+        // do dono: "que elas vão crescendo conforme as coisas cheguem").
+        '<div id="sp-imp-bars" style="display:none;margin-top:10px;text-align:left;"></div>' +
         // FEED (v1.42): o que está sendo lido aparece aqui (torneio · categoria ·
         // classificação · nº de jogos), 2 linhas visíveis com scroll — pedido do dono.
         '<div id="sp-imp-feed" style="display:none;margin-top:10px;max-height:3.1em;overflow-y:auto;font-size:0.74rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);text-align:left;background:var(--bg-darker,rgba(0,0,0,0.25));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;"></div>' +
@@ -165,6 +169,31 @@
     var l = document.getElementById('sp-imp-label'); if (l) l.textContent = opts.label || '';
     var b = document.getElementById('sp-imp-bar'); if (b && opts.pct != null) b.style.width = opts.pct + '%';
     var s = document.getElementById('sp-imp-sub'); if (s) s.textContent = opts.sub || '';
+    // bars: [{id,icon,label,x,y}] — cria a linha 1x e depois só atualiza texto/preenchimento
+    // in-place (transition no width faz o crescimento ser visível, não um pulo).
+    if (opts.bars && opts.bars.length) {
+      var bw = document.getElementById('sp-imp-bars');
+      if (bw) {
+        bw.style.display = 'block';
+        opts.bars.forEach(function (bi) {
+          var pct = (bi.y && bi.y > 0) ? Math.min(100, Math.round((bi.x || 0) / bi.y * 100)) : null;
+          var row = document.getElementById('sp-impb-' + bi.id);
+          if (!row) {
+            row = document.createElement('div');
+            row.id = 'sp-impb-' + bi.id;
+            row.style.cssText = 'margin:5px 0;';
+            row.innerHTML =
+              '<div style="display:flex;justify-content:space-between;gap:8px;font-size:0.78rem;"><span>' + bi.icon + ' ' + bi.label + '</span><span class="sp-impb-txt"></span></div>' +
+              '<div style="height:7px;border-radius:99px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.08));"><div class="sp-impb-fill" style="height:100%;width:2%;background:linear-gradient(90deg,#10b981,#059669);transition:width .35s;"></div></div>';
+            bw.appendChild(row);
+          }
+          var bt = row.querySelector('.sp-impb-txt');
+          if (bt) bt.innerHTML = '<b>' + (bi.x || 0) + '</b>' + (bi.y ? (' de ' + bi.y + ' (' + pct + '%)') : ' de …');
+          var bf = row.querySelector('.sp-impb-fill');
+          if (bf) bf.style.width = (pct != null ? Math.max(2, pct) : 2) + '%';
+        });
+      }
+    }
     // feedAdd: acrescenta UMA linha ao vivo (nome/categoria/classificação/jogos do que
     // acabou de ser lido) e rola pro fim. O box só aparece quando a 1ª linha chega.
     if (opts.feedAdd) {

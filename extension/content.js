@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.43';
+  var EXT_VERSION = '1.44';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -548,12 +548,32 @@
   // `prior` = fullImport de rodada anterior: semeia o acumulado (pula o que já tem).
   async function _runAthleteImport(handle, uid, tournamentId, prior) {
     var X = window._spExtract, I = window._spImport, F = window._spFlow;
-    // prog agora carrega pct (0–100, barra REAL) e feed (linha do que acabou de ser lido).
+    // prog agora carrega pct (0–100, barra REAL), feed (linha do que acabou de ser lido)
+    // e counts (x/y ao vivo das 3 barras Torneios/Rankings/Jogos que o app exibe).
     function prog(extra) {
       extra = extra || {};
       var cur = { uid: uid || null, handle: handle, phase: extra.phase || null, note: extra.note || null };
       post({ __sp_lp: 'athlete-import-progress', tournamentId: tournamentId, uid: uid || null, handle: handle,
-        current: cur, pct: (extra.pct != null ? extra.pct : null), feed: extra.feed || null });
+        current: cur, pct: (extra.pct != null ? extra.pct : null), feed: extra.feed || null, counts: liveCounts() });
+    }
+    // Contagens AO VIVO pras barras do app: x = competições/jogos distintos já no
+    // acumulado (`all` + páginas de torneio já lidas), y = totais declarados pelo perfil.
+    function liveCounts() {
+      var tS = {}, rS = {}, nG = 0;
+      try {
+        (all || []).forEach(function (m) {
+          nG++;
+          if (m.official) { if (m.tourneyId != null) tS['t/' + (m.club || '') + '/' + m.tourneyId] = 1; }
+          else if (m.rankingId != null) rS['r/' + (m.club || '') + '/' + m.rankingId] = 1;
+        });
+        Object.keys(tourneyDetails || {}).forEach(function (k) { if (tourneyDetails[k]) tS[k] = 1; });
+      } catch (e) { return null; }
+      return {
+        g: nG, t: Object.keys(tS).length, r: Object.keys(rS).length,
+        gY: (declaredGamesTotal != null) ? declaredGamesTotal : ((prior && prior.declaredGames != null) ? prior.declaredGames : null),
+        tY: (declaredTournTotal != null) ? declaredTournTotal : ((prior && prior.declaredTournaments != null) ? prior.declaredTournaments : null),
+        rY: (declaredRankingsTotal != null) ? declaredRankingsTotal : ((prior && prior.declaredRankings != null) ? prior.declaredRankings : null)
+      };
     }
     function fail(code) { post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: code }); }
     if (!X || !I || !F) { fail('libs'); return; }

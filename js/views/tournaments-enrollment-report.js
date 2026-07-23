@@ -1675,9 +1675,43 @@
     window._lzPendingMode = 'full';
     var done = false, started = false, versions = [], idleTimer = null;
     var who = tg.name || ('@' + tg.handle);
+    // BARRAS AO VIVO (v1.4.22): as 3 barras do dialog (Torneios/Rankings/Jogos, x de y %)
+    // ficam VISÍVEIS no overlay durante a busca e crescem conforme as coisas chegam.
+    // Semente = melhor import já gravado (mesma escolha do prior lá embaixo); depois a
+    // extensão manda `counts` em cada progresso e os parciais confirmam pelo fullImport.
+    var _bs = { t: { x: 0, y: null }, r: { x: 0, y: null }, g: { x: 0, y: null } };
+    function _seedBarsFrom(imp) {
+      if (!imp) return;
+      _updBars({
+        g: (imp.games || []).length,
+        t: (imp.footprint || []).filter(function (f) { return f.official; }).length,
+        r: (imp.footprint || []).filter(function (f) { return !f.official; }).length,
+        gY: (imp.declaredGames != null) ? imp.declaredGames : null,
+        tY: (imp.declaredTournaments != null) ? imp.declaredTournaments : null,
+        rY: (imp.declaredRankings != null) ? imp.declaredRankings : null
+      });
+    }
+    // x nunca anda pra trás (critérios de contagem variam entre fontes); y atualiza
+    // quando o total declarado do perfil chega.
+    function _updBars(c) {
+      if (!c) return;
+      if (c.t != null) _bs.t.x = Math.max(_bs.t.x, c.t);
+      if (c.r != null) _bs.r.x = Math.max(_bs.r.x, c.r);
+      if (c.g != null) _bs.g.x = Math.max(_bs.g.x, c.g);
+      if (c.tY != null) _bs.t.y = c.tY;
+      if (c.rY != null) _bs.r.y = c.rY;
+      if (c.gY != null) _bs.g.y = c.gY;
+    }
+    function _barsArr() {
+      return [
+        { id: 't', icon: '🏆', label: 'Torneios', x: _bs.t.x, y: _bs.t.y },
+        { id: 'r', icon: '📊', label: 'Rankings', x: _bs.r.x, y: _bs.r.y },
+        { id: 'g', icon: '🎾', label: 'Jogos', x: _bs.g.x, y: _bs.g.y }
+      ];
+    }
     function setProg(o) {
       o = o || {};
-      window._spProgressOverlay({ label: '📚 ' + who, sub: o.sub || '', pct: o.pct, feedAdd: o.feedAdd || null, onCancel: cancel });
+      window._spProgressOverlay({ label: '📚 ' + who, sub: o.sub || '', pct: o.pct, feedAdd: o.feedAdd || null, bars: _barsArr(), onCancel: cancel });
     }
     function cleanup() {
       done = true;
@@ -1715,6 +1749,8 @@
       if (d.__sp_lp === 'athlete-import-progress' && d.uid === uid) {
         ping();
         var cur = d.current || {};
+        // counts (ext ≥1.44): x/y ao vivo das 3 barras — cresce a cada torneio/página lida.
+        _updBars(d.counts || null);
         // pct REAL (0–100, calculado pela extensão por etapa) + feed do que foi lido
         // (nome do torneio · classificação · nº de jogos) num box de 2 linhas com scroll.
         setProg({ sub: cur.note || '', pct: (d.pct != null ? Math.max(3, d.pct) : null), feedAdd: d.feed || null });
@@ -1729,6 +1765,9 @@
           _lzPersistScans(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }])
             .catch(function (e) { window._log && window._log('[athlete parcial] não gravou (segue):', (e && e.message) || e); });
         }
+        // O parcial traz o fullImport consolidado — atualiza as barras por ele (também
+        // cobre extensão antiga sem `counts` no progresso).
+        _seedBarsFrom(d.fullImport || null);
         setProg({ sub: (d.stage === 'torneios' ? ('torneio ' + d.done + ' de ' + d.total + ' gravado') : ('página ' + d.done + ' de ' + d.total + ' gravada')), pct: null });
         return;
       }
@@ -1774,6 +1813,20 @@
         return;
       }
     }
+    // PRIOR = o que já foi gravado (scan do organizador OU import próprio do atleta —
+    // o de MAIS jogos vence): a extensão semeia o acumulado, PULA torneios já completos
+    // e para cedo nos jogos gerais quando alcança o que já está gravado. Computado JÁ
+    // (não só no dispatch) pra semear as barras do overlay com o que está gravado.
+    var rctx = window._lzRenderCtx || {};
+    var _prof = rctx.profileMap && rctx.profileMap[uid];
+    var _sc = rctx.scanMap && rctx.scanMap[uid];
+    var _pImp = (_prof && _prof.letzplayImport) || null;
+    var _sImp = (_sc && _sc.fullImport) || null;
+    var prior = _sImp || _pImp || null;
+    if (_sImp && _pImp) {
+      prior = ((_pImp.games || []).length > (_sImp.games || []).length) ? _pImp : _sImp;
+    }
+    _seedBarsFrom(prior);
     setProg({ sub: 'conectando à extensão…', pct: 2 });
     window.addEventListener('message', onMsg);
     window.postMessage({ __sp_lp: 'ext-ping' }, window.location.origin);
@@ -1784,18 +1837,6 @@
       var best = versions.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
       if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
       started = true;
-      // PRIOR = o que já foi gravado (scan do organizador OU import próprio do atleta —
-      // o de MAIS jogos vence): a extensão semeia o acumulado, PULA torneios já completos
-      // e para cedo nos jogos gerais quando alcança o que já está gravado.
-      var rctx = window._lzRenderCtx || {};
-      var _prof = rctx.profileMap && rctx.profileMap[uid];
-      var _sc = rctx.scanMap && rctx.scanMap[uid];
-      var _pImp = (_prof && _prof.letzplayImport) || null;
-      var _sImp = (_sc && _sc.fullImport) || null;
-      var prior = _sImp || _pImp || null;
-      if (_sImp && _pImp) {
-        prior = ((_pImp.games || []).length > (_sImp.games || []).length) ? _pImp : _sImp;
-      }
       window.postMessage({ __sp_lp: 'run-athlete-import', handle: tg.handle, uid: uid, tournamentId: ctx.tId, prior: prior }, window.location.origin);
     }, 900);
   };
