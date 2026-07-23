@@ -16,6 +16,9 @@ const SUITES = [
   // Cânone da LISTA DE ESPERA no AMBIENTE DO SERVIDOR (CF). Falha se alguém devolver
   // as funções pro store.js (não vendorado) — o tardio voltaria a ficar preso na espera.
   'tests/waitlist-core-server.test.js',
+  // Toast de push em foreground: campos vêm de payload.data (contrato DATA-ONLY da CF).
+  // Falha se alguém voltar a ler só payload.notification → toast 'scoreplace.app' vazio.
+  'tests/fcm-foreground-toast.test.js',
   'tests/phase-transition-matrix.test.js',
   'tests/phase-adversarial.test.js',
   'tests/phase-lifecycle.test.js',

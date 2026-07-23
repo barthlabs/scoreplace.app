@@ -7,6 +7,23 @@
 // so we show a banner prompting the user to enable notifications.
 
 var _t = window._t || function(k) { return k; };
+// FONTE ÚNICA dos campos do toast de push em FOREGROUND. Espelha o sw.js (background):
+// `payload.data` PRIMEIRO, `payload.notification` só como compat de mensagens antigas.
+// A sendPushNotification manda DATA-ONLY de propósito (contrato anti-duplicata), então
+// quem lê só `payload.notification` recebe undefined e cai no fallback — foi exatamente
+// isso que produzia o toast 'scoreplace.app' com corpo VAZIO. Testado em
+// tests/fcm-foreground-toast.test.js. Ver [[project_notification_dedup]].
+window._fcmToastFields = function (payload) {
+  payload = payload || {};
+  var data = payload.data || {};
+  var note = payload.notification || {};
+  return {
+    title: data.title || note.title || 'scoreplace.app',
+    body: data.body || note.body || '',
+    link: data.link || '',
+  };
+};
+
 // Internal: register FCM token after permission is already granted
 window._registerFCMToken = async function() {
   var user = window.AppStore && window.AppStore.currentUser;
@@ -41,11 +58,17 @@ window._registerFCMToken = async function() {
 
     // Handle foreground messages (show as toast notification)
     messaging.onMessage(function(payload) {
-      // Foreground message received
-      var title = (payload.notification && payload.notification.title) || 'scoreplace.app';
-      var body = (payload.notification && payload.notification.body) || '';
+      // v1.4.13 — LÊ `payload.data` PRIMEIRO (espelha sw.js:27-31). A sendPushNotification
+      // manda DATA-ONLY de propósito (contrato anti-duplicata: qualquer payload
+      // `notification` faz o navegador exibir uma cópia automática além da do SW). Este
+      // handler lia SÓ payload.notification — que nunca existe → caía no fallback e o toast
+      // saía com título "scoreplace.app" e corpo VAZIO. O sw.js (background) já tinha sido
+      // corrigido; o foreground ficou pra trás. Ver [[project_notification_dedup]].
+      var f = window._fcmToastFields(payload);
+      // Sem corpo não há o que dizer — um toast só com o nome do app é ruído puro.
+      if (!f.body) return;
       if (typeof showNotification === 'function') {
-        showNotification(title, body, 'info');
+        showNotification(f.title, f.body, 'info');
       }
     });
 
