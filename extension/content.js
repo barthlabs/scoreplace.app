@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.45';
+  var EXT_VERSION = '1.46';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -669,6 +669,16 @@
       }
 
       try {   // ── etapas 1–3: um 'rate-budget' aqui dentro PAUSA (grava e sai), não falha ──
+      // ── ABRE o perfil do jogador NA ABA do letzplay (v1.46 — automático, como o scan
+      // antigo). A navegação real resolve o desafio do Cloudflare no contexto da página;
+      // sem ela, com o CF desconfiado, os fetches voltavam bloqueados e "não achava nada".
+      prog({ phase: 'perfil', note: 'abrindo o perfil de @' + handle + ' no letzplay', pct: 1 });
+      await new Promise(function (rNav) {
+        try {
+          chrome.runtime.sendMessage({ type: 'lp-nav', url: 'https://letzplay.me/' + encodeURIComponent(handle) },
+            function () { void chrome.runtime.lastError; rNav(); });
+        } catch (eNav) { rNav(); }
+      });
       // ── ETAPA 0: TOTAIS do perfil público ("472 Jogos · 29 Rankings · 35 Torneios") —
       // vêm no HTML cru e viram os "de y" das barras (jogos/rankings/torneios).
       prog({ phase: 'perfil', note: 'lendo os totais do perfil', pct: 1 });
