@@ -4,6 +4,16 @@
 // e pro _casualDefaults (casual). Dependência fixa (sem fallback): se não carregou, estoura.
 window._sportScoringDefaults = window._sportScoringDefaultsMap();
 
+// v1.4.12: o toggle "Deixar inscritos ficarem de fora" existe em DOIS lugares — o bloco novo
+// do configurador (format2-ui, dentro de "Agendamento dos sorteios") e o #liga-fields legado.
+// Nunca podem ter o MESMO id (getElementById devolveria um deles ao acaso). Fonte única de
+// lookup: o do configurador vence; o legado é fallback.
+window._allowSelfDeactEl = function () {
+  return document.getElementById('liga-allow-self-deactivation') ||
+         document.getElementById('liga-allow-self-deactivation-legacy');
+};
+
+
 function setupCreateTournamentModal() {
   // ═══ RENDER CANÔNICA DE CONFIG DE FASE (v2.6.61) — definida ANTES do template ═══
   // v4.4.x (Camada 2): SÓ existe a Fase 1 (idx 0). O ramo idx>=1 (construtor de fases 2+ /
@@ -448,14 +458,6 @@ function setupCreateTournamentModal() {
                 <label class="form-label">${_t('create.drawMode')}</label>
                 <input type="hidden" id="draw-mode" value="sorteio">
                 <div id="draw-mode-buttons" style="display:flex;gap:6px;flex-wrap:wrap;">
-// v1.4.12: o toggle "Deixar inscritos ficarem de fora" existe em DOIS lugares — o bloco novo
-// do configurador (format2-ui, dentro de "Agendamento dos sorteios") e o #liga-fields legado.
-// Nunca podem ter o MESMO id (getElementById devolveria um deles ao acaso). Fonte única de
-// lookup: o do configurador vence; o legado é fallback.
-window._allowSelfDeactEl = function () {
-  return document.getElementById('liga-allow-self-deactivation') ||
-         document.getElementById('liga-allow-self-deactivation-legacy');
-};
                   <button type="button" class="draw-mode-btn draw-mode-active" data-value="sorteio" onclick="window._selectDrawMode(this)" style="padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #34d399;background:rgba(16,185,129,0.15);color:#34d399;font-weight:600;">🎲 ${_t('create.drawModeSorteio')}</button>
                   <button type="button" class="draw-mode-btn" data-value="rei_rainha" id="btn-draw-mode-monarch" onclick="window._selectDrawMode(this)" style="padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:600;">👑 ${_t('format.monarchShort')}</button>
                   <button type="button" class="draw-mode-btn" data-value="round_robin" id="btn-draw-mode-rr" onclick="window._selectDrawMode(this)" style="display:none;padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:600;">🔄 Todos contra todos</button>

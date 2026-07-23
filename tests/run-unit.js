@@ -22,6 +22,9 @@ const SUITES = [
   // Busca nas CHAVES: filtro DOM dos cards de jogo (acento-insensitive, membro de dupla,
   // coluna vazia some, limpar restaura). Verificado também no navegador real.
   'tests/bracket-search.test.js',
+  // Globais das views existem DEPOIS do load. Pega definição presa dentro de template
+  // literal (vira texto) — que o `node --check` NÃO pega, porque string é sintaxe válida.
+  'tests/view-globals-smoke.test.js',
   'tests/phase-transition-matrix.test.js',
   'tests/phase-adversarial.test.js',
   'tests/phase-lifecycle.test.js',
