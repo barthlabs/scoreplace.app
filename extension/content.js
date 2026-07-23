@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.46';
+  var EXT_VERSION = '1.47';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -723,33 +723,44 @@
         // classificação. Antes bastava 1 jogo pra "já gravado, pulando" — a página de
         // jogos do torneio é PAGINADA e só a 1ª era lida, então torneio ficava
         // eternamente com 1-2 jogos (caso Camila: 13 torneios · 15 jogos).
-        var expPrior = priorNames[key] ? expGames(priorNames[key].standings, realHandle) : null;
-        if (priorNames[key] && priorNames[key].standings && countTid(P.tid) > 0 &&
+        var priorDet = priorNames[key] || null;
+        var expPrior = priorDet ? expGames(priorDet.standings, realHandle) : null;
+        if (priorDet && priorDet.standings && countTid(P.tid) > 0 &&
             expPrior != null && countTid(P.tid) >= expPrior) {
-          tourneyDetails[key] = priorNames[key];
+          tourneyDetails[key] = priorDet;
           prog({ phase: 'torneios', note: labelT + ' — já gravado, pulando', pct: pctTour(ti + 1) });
           continue;
         }
-        prog({ phase: 'torneios', note: labelT + ' — nome, categoria e classificação', pct: pctTour(ti) });
-        try {
-          var dp = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
-          tourneyDetails[key] = { name: tourneyNameFromDoc(dp), standings: tourneyStandingsFromDoc(dp), logo: tourneyLogoFromDoc(dp) };
-        } catch (e1) { if (isPause(e1)) throw e1; tourneyDetails[key] = priorNames[key] || null; }
-        prog({ phase: 'torneios', note: labelT + ' — lendo os jogos', pct: pctTour(ti) });
+        // RETOMADA SEM RELER (v1.47, pedido do dono: "não parece estar pulando o já
+        // obtido"): nome+classificação de rodada anterior são REUSADOS (zero fetch) —
+        // só busca a página do torneio quando ainda não temos a classificação dele.
+        if (priorDet && priorDet.standings) {
+          tourneyDetails[key] = priorDet;
+        } else {
+          prog({ phase: 'torneios', note: labelT + ' — nome, categoria e classificação', pct: pctTour(ti) });
+          try {
+            var dp = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
+            tourneyDetails[key] = { name: tourneyNameFromDoc(dp), standings: tourneyStandingsFromDoc(dp), logo: tourneyLogoFromDoc(dp) };
+          } catch (e1) { if (isPause(e1)) throw e1; tourneyDetails[key] = priorDet || null; }
+        }
         // Jogos do torneio: página é de TODOS os participantes → PAGINA até o fim
         // (cap 15 págs) e para cedo quando alcança o V+D esperado da classificação.
+        // Se o acumulado JÁ alcança o esperado, nem a página 1 é buscada (retomada).
         // Jogos de playoff além do V+D chegam pela ETAPA 3 (histórico pessoal) e dedupe.
         try {
           var expT = expGames((tourneyDetails[key] || {}).standings, realHandle);
-          var tmBase = 'https://letzplay.me/' + P.club + '/tournaments/' + P.tid + '/matches';
-          var dm = await bgFetchDoc(tmBase);
-          addMatches(X.extractMatchesFromDoc(dm, handle));
-          var tmMax = Math.min(15, F.detectMaxPage(dm));
-          for (var tgp = 2; tgp <= tmMax; tgp++) {
-            if (expT != null && countTid(P.tid) >= expT) break;
-            checkDeadline();
-            prog({ phase: 'torneios', note: labelT + ' — jogos, página ' + tgp + ' de ' + tmMax, pct: pctTour(ti) });
-            addMatches(X.extractMatchesFromDoc(await bgFetchDoc(tmBase + '?page=' + tgp), handle));
+          if (!(expT != null && countTid(P.tid) >= expT)) {
+            prog({ phase: 'torneios', note: labelT + ' — lendo os jogos', pct: pctTour(ti) });
+            var tmBase = 'https://letzplay.me/' + P.club + '/tournaments/' + P.tid + '/matches';
+            var dm = await bgFetchDoc(tmBase);
+            addMatches(X.extractMatchesFromDoc(dm, handle));
+            var tmMax = Math.min(15, F.detectMaxPage(dm));
+            for (var tgp = 2; tgp <= tmMax; tgp++) {
+              if (expT != null && countTid(P.tid) >= expT) break;
+              checkDeadline();
+              prog({ phase: 'torneios', note: labelT + ' — jogos, página ' + tgp + ' de ' + tmMax, pct: pctTour(ti) });
+              addMatches(X.extractMatchesFromDoc(await bgFetchDoc(tmBase + '?page=' + tgp), handle));
+            }
           }
         } catch (e2) { if (isPause(e2)) throw e2; }
         // FEED: o que acabou de ser lido — nome (com categoria), classificação e nº de jogos.

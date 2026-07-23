@@ -1826,10 +1826,14 @@
           html += '<div style="margin-bottom:6px;">' + (d.paused ? 'A leitura desta rodada terminou — <b>o que veio está gravado</b>.' : 'A leitura foi interrompida — <b>o que veio está gravado</b>.') + '</div>';
           if (rep.tournaments && rep.tournaments.length) {
             html += '<div style="font-weight:800;margin:8px 0 3px;">Torneios</div>';
+            // BOX SCROLLÁVEL (v1.4.31, pedido do dono): 35 torneios estouravam a página e
+            // os botões do dialog sumiam. Lista rola dentro do box; o resto fica visível.
+            html += '<div style="max-height:14em;overflow-y:auto;background:var(--bg-darker,rgba(0,0,0,0.2));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;">';
             rep.tournaments.forEach(function (tt) {
-              html += '<div>' + (tt.got ? '✅' : '❌') + ' ' + _esc(tt.title) +
+              html += '<div style="padding:1px 0;">' + (tt.got ? '✅' : '❌') + ' ' + _esc(tt.title) +
                 (tt.got ? ((tt.pos != null ? (' · ' + tt.pos + 'º lugar') : '') + ' · ' + tt.games + ' jogo(s)') : ' · não lido') + '</div>';
             });
+            html += '</div>';
           }
           html += '<div style="font-weight:800;margin:8px 0 3px;">Jogos gerais</div>';
           html += '<div>' + (rep.pagesRead >= rep.maxPage ? '✅' : '⏳') + ' páginas lidas: <b>' + rep.pagesRead + ' de ' + rep.maxPage + '</b> · jogos gravados: <b>' + rep.games + (rep.declared ? (' de ' + rep.declared) : '') + '</b></div>';

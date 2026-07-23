@@ -161,8 +161,9 @@
         // do dono: "que elas vão crescendo conforme as coisas cheguem").
         '<div id="sp-imp-bars" style="display:none;margin-top:10px;text-align:left;"></div>' +
         // FEED (v1.42): o que está sendo lido aparece aqui (torneio · categoria ·
-        // classificação · nº de jogos), 2 linhas visíveis com scroll — pedido do dono.
-        '<div id="sp-imp-feed" style="display:none;margin-top:10px;max-height:3.1em;overflow-y:auto;font-size:0.74rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);text-align:left;background:var(--bg-darker,rgba(0,0,0,0.25));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;"></div>' +
+        // classificação · nº de jogos). v1.4.31: 3 linhas visíveis (2 cortava no meio —
+        // pedido do dono), scroll pro resto.
+        '<div id="sp-imp-feed" style="display:none;margin-top:10px;max-height:4.65em;overflow-y:auto;font-size:0.74rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);text-align:left;background:var(--bg-darker,rgba(0,0,0,0.25));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;"></div>' +
         '<div id="sp-imp-actions" style="margin-top:14px;display:none;"></div>'
       );
     }
