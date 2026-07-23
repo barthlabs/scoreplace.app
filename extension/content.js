@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.40';
+  var EXT_VERSION = '1.41';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -91,7 +91,7 @@
       if (h2) { var hn = (h2.textContent || '').replace(/\s+/g, ' ').trim(); if (hn) return hn; }
       var og = doc.querySelector('meta[property="og:title"]');
       var t = (og ? (og.getAttribute('content') || '') : (doc.title || '')).replace(/\s+/g, ' ').trim();
-      t = t.replace(/\s*-\s*Letzplay\s*$/i, '').replace(/^Informa[çc][õo]es do Torneio\s+/i, '');
+      t = t.replace(/\s*-\s*Letzplay\s*$/i, '').replace(/^(Informa[çc][õo]es|Chaves) do Torneio\s+/i, '');
       return t || null;
     } catch (e) { return null; }
   }
@@ -210,13 +210,16 @@
   // (.table-ranking). Best-effort: se falhar/404, mantém a categoria. Retorna {total, resolved}.
   async function fillTourneyNames(raw, onProg) {
     var seen = {}, uniq = [];
+    // Competições que JÁ têm nome real + classificação (etapa por-torneio desta rodada
+    // ou herdadas de rodada anterior) são PULADAS — zero re-fetch do que já está pronto.
+    function _done(x) { return !!(x.name && x.name !== x.categoryRaw && x.standings); }
     (raw.tournaments || []).forEach(function (t) {
-      if (!t.tourneyId || !t.club) return;
+      if (!t.tourneyId || !t.club || _done(t)) return;
       var id = 't/' + t.club + '/' + t.tourneyId;
       if (!seen[id]) { seen[id] = 1; uniq.push({ id: id, type: 't', club: t.club, cid: t.tourneyId, categoryRaw: t.categoryRaw || '' }); }
     });
     (raw.rankings || []).forEach(function (r) {
-      if (!r.rankingId || !r.club) return;
+      if (!r.rankingId || !r.club || _done(r)) return;
       var id = 'r/' + r.club + '/' + r.rankingId;
       if (!seen[id]) { seen[id] = 1; uniq.push({ id: id, type: 'r', club: r.club, cid: r.rankingId, categoryRaw: r.categoryRaw || '' }); }
     });
@@ -459,33 +462,188 @@
       lastPlayed: null, source: 'public-matches'
     };
   }
+  // Chave ESTÁVEL de um jogo — dedupe entre etapas e entre RODADAS (o que já foi
+  // gravado numa rodada anterior entra como semente e nunca duplica).
+  function _gameKey(m) {
+    return [m.date || '', m.club || '', (m.tourneyId || m.rankingId || ''), (m.categoryRaw || m.competition || ''),
+      m.myScore, m.oppScore, (m.partnerHandle || ''), (m.oppHandles || []).slice().sort().join('+')].join('|').toLowerCase();
+  }
+  // games GRAVADOS (schema salvo) → shape de "match cru" que o buildRaw espera.
+  function _gamesToMatches(games) {
+    return (games || []).map(function (g) {
+      return {
+        date: g.date || null, categoryRaw: g.competition || '', round: (g.round != null) ? g.round : null,
+        year: (g.year != null) ? g.year : null, official: g.official === true,
+        kind: g.kind || (g.official === true ? 'tournament' : 'ranking'),
+        club: g.club || null, rankingId: (g.rankingId != null) ? g.rankingId : null,
+        tourneyId: (g.tourneyId != null) ? g.tourneyId : null, tourneyName: g.tourneyName || null,
+        partnerHandle: g.partnerHandle || null, partnerName: g.partnerName || null,
+        oppHandles: (g.oppHandles || []).slice(), oppNames: (g.oppNames || []).slice(),
+        myScore: (typeof g.myScore === 'number') ? g.myScore : null,
+        oppScore: (typeof g.oppScore === 'number') ? g.oppScore : null,
+        won: (g.won === true) ? true : (g.won === false ? false : null)
+      };
+    });
+  }
   var _athleteImportRunning = null;
-  function runAthleteImport(handle, uid, tournamentId) {
+  function runAthleteImport(handle, uid, tournamentId, prior) {
     if (_athleteImportRunning) return _athleteImportRunning;   // 1 por vez nesta aba
-    _athleteImportRunning = _runAthleteImport(handle, uid, tournamentId)
+    _athleteImportRunning = _runAthleteImport(handle, uid, tournamentId, prior)
       .catch(function () {})
       .then(function () { _athleteImportRunning = null; });
     return _athleteImportRunning;
   }
-  async function _runAthleteImport(handle, uid, tournamentId) {
+  // v1.41 — pipeline EM ETAPAS, gravando a cada passo (sistemática do dono, 14/jul):
+  //   1) lista de TORNEIOS da pessoa (/{handle}/tournaments — HTML cru, confiável);
+  //   2) POR TORNEIO (mais recente primeiro): nome+categoria+CLASSIFICAÇÃO (página do
+  //      torneio) e os JOGOS do torneio (/{...}/matches) → PARCIAL gravado a cada um;
+  //   3) jogos gerais (/{handle}/matches paginado, recente→antigo) → parcial a cada
+  //      3 páginas. O que já veio NUNCA se perde; a próxima rodada continua de onde parou.
+  // `prior` = fullImport de rodada anterior: semeia o acumulado (pula o que já tem).
+  async function _runAthleteImport(handle, uid, tournamentId, prior) {
+    var X = window._spExtract, I = window._spImport, F = window._spFlow;
     function prog(extra) {
       var cur = { uid: uid || null, handle: handle };
       if (extra) { cur.phase = extra.phase || null; cur.note = extra.note || null; }
       post({ __sp_lp: 'athlete-import-progress', tournamentId: tournamentId, uid: uid || null, handle: handle, current: cur });
     }
+    function fail(code) { post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: code }); }
+    if (!X || !I || !F) { fail('libs'); return; }
     try {
-      prog({ phase: 'jogos', note: 'abrindo histórico' });
-      var imp = await importFromHandleMatches(handle, prog);
-      if (!imp || !Array.isArray(imp.games) || !imp.games.length) {
-        post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: 'sem-jogos' });
-        return;
+      // SEMENTE: rodadas anteriores entram no acumulado (dedupe por chave) e os
+      // nomes/classificações já resolvidos não são re-buscados.
+      var all = _gamesToMatches(prior && prior.games);
+      var seen = {}; all.forEach(function (m) { seen[_gameKey(m)] = 1; });
+      var priorNames = {};
+      ((prior && prior.footprint) || []).forEach(function (f) {
+        var id = (f.official ? 't/' : 'r/') + (f.club || '') + '/' + (f.tourneyId || f.rankingId || '');
+        if (f.name && f.name !== f.categoryRaw) priorNames[id] = { name: f.name, standings: f.standings || null, logo: f.logo || null };
+      });
+      function addMatches(list) {
+        var n = 0;
+        (list || []).forEach(function (m) { if (!m) return; var k = _gameKey(m); if (seen[k]) return; seen[k] = 1; all.push(m); n++; });
+        return n;
       }
-      var scan = scanFromImport(handle, imp);
+      var realHandle = handle;
+      var tourneyDetails = {};
+      function buildRawWithDetails() {
+        var raw = F.buildRaw(realHandle, all);
+        (raw.tournaments || []).forEach(function (t) {
+          if (!t.tourneyId || !t.club) return;
+          var d = tourneyDetails['t/' + t.club + '/' + t.tourneyId] || priorNames['t/' + t.club + '/' + t.tourneyId];
+          if (d) { if (d.name) t.name = d.name; if (d.standings) t.standings = d.standings; if (d.logo) t.logo = d.logo; }
+        });
+        (raw.rankings || []).forEach(function (r) {
+          if (!r.rankingId || !r.club) return;
+          var d = priorNames['r/' + r.club + '/' + r.rankingId];
+          if (d) { if (d.name) r.name = d.name; if (d.standings) r.standings = d.standings; if (d.logo) r.logo = d.logo; }
+        });
+        return raw;
+      }
+      function postPartial(stage, done, total) {
+        try {
+          if (!all.length) return;
+          var imp = I.normalize(buildRawWithDetails(), { importedAt: new Date().toISOString() });
+          imp.partialReason = 'parcial: ' + stage + ' ' + done + '/' + total;   // rodada em curso — nunca marca completo
+          post({ __sp_lp: 'athlete-import-partial', tournamentId: tournamentId, uid: uid || null, handle: handle,
+            stage: stage, done: done, total: total, scan: scanFromImport(realHandle, imp), fullImport: imp });
+        } catch (e) {}
+      }
+
+      // ── ETAPA 1: lista de torneios da pessoa ──
+      prog({ phase: 'torneios', note: 'lendo a lista de torneios' });
+      var parts = [];
+      try {
+        var dl = await bgFetchDoc('https://letzplay.me/' + encodeURIComponent(handle) + '/tournaments');
+        var seenT = {};
+        [].slice.call(dl.querySelectorAll('a[href]')).forEach(function (a) {
+          var h = a.getAttribute('href') || '';
+          var mm = h.match(/^\/([^\/]+)\/tournaments\/(\d+)$/);
+          if (!mm || seenT[h]) return; seenT[h] = 1;
+          parts.push({ club: mm[1], tid: mm[2], title: (a.textContent || '').replace(/\s+/g, ' ').trim() });
+        });
+      } catch (eT) {}   // sem lista pública → segue direto pros jogos gerais
+
+      // ── ETAPA 2: por torneio (a lista já vem do mais recente pro mais antigo) ──
+      for (var ti = 0; ti < parts.length; ti++) {
+        var P = parts[ti], key = 't/' + P.club + '/' + P.tid;
+        var labelT = 'torneio ' + (ti + 1) + ' de ' + parts.length;
+        var hasGames = all.some(function (m) { return m.official && String(m.tourneyId) === String(P.tid); });
+        if (priorNames[key] && priorNames[key].standings && hasGames) {
+          tourneyDetails[key] = priorNames[key];
+          prog({ phase: 'torneios', note: labelT + ' — já gravado, pulando' });
+          continue;
+        }
+        prog({ phase: 'torneios', note: labelT + ' — nome, categoria e classificação' });
+        try {
+          var dp = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
+          tourneyDetails[key] = { name: tourneyNameFromDoc(dp), standings: tourneyStandingsFromDoc(dp), logo: tourneyLogoFromDoc(dp) };
+        } catch (e1) { tourneyDetails[key] = priorNames[key] || null; }
+        prog({ phase: 'torneios', note: labelT + ' — lendo os jogos' });
+        try {
+          var dm = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid + '/matches');
+          addMatches(X.extractMatchesFromDoc(dm, handle));
+        } catch (e2) {}
+        postPartial('torneios', ti + 1, parts.length);   // grava a cada torneio
+      }
+
+      // ── ETAPA 3: jogos gerais (rankings + torneios fora da lista), recente→antigo ──
+      prog({ phase: 'jogos', note: 'abrindo o histórico geral' });
+      var base = 'https://letzplay.me/' + encodeURIComponent(handle) + '/matches';
+      var d1 = await bgFetchDoc(base);
+      var cards1 = d1.querySelectorAll('.row.match').length;
+      var page1 = X.extractMatchesFromDoc(d1, handle);
+      if (!page1.length && cards1 > 0) {
+        // O @ digitado não casa com os cards → detecta o @ REAL predominante da página
+        // (na página de jogos do atleta, é ele). Cobre variação/typo de handle.
+        var det = F.detectMe(d1);
+        if (det && det.toLowerCase() !== String(handle).toLowerCase()) {
+          realHandle = det;
+          page1 = X.extractMatchesFromDoc(d1, det);
+          prog({ phase: 'jogos', note: '@ real detectado: ' + det });
+        }
+      }
+      if (!cards1 && !all.length && !page1.length) { fail('pagina-sem-cards'); return; }
+      var maxPage = F.detectMaxPage(d1);
+      var total = F.parseTotalGames(d1);
+      addMatches(page1);
+      var parcial = null;
+      // Rodada anterior COMPLETA → pode PARAR quando uma página inteira já é conhecida
+      // (dali pra trás está tudo gravado). Rodada anterior parcial → lê até o fim.
+      var priorComplete = !!(prior && !prior.partialReason && prior.declaredGames != null &&
+        Array.isArray(prior.games) && prior.games.length >= prior.declaredGames);
+      try {
+        for (var p = 2; p <= maxPage; p++) {
+          prog({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage });
+          var d = await bgFetchDoc(base + '?page=' + p);
+          var list = X.extractMatchesFromDoc(d, realHandle);
+          var added = addMatches(list);
+          if (p % 3 === 0) postPartial('jogos', p, maxPage);   // grava a cada 3 páginas
+          if (priorComplete && added === 0 && list.length > 0) {
+            prog({ phase: 'jogos', note: 'daqui pra trás já está gravado — parando' });
+            break;
+          }
+        }
+      } catch (errPag) {
+        if (!all.length) throw errPag;
+        parcial = (errPag && errPag.message) || 'paginação interrompida';
+      }
+      if (!all.length) { fail('sem-jogos'); return; }
+
+      // ── FINAL: nomes/classificações que ainda faltam (1 fetch por competição SEM nome) ──
+      var rawF = buildRawWithDetails();
+      try { await fillTourneyNames(rawF, prog); } catch (e) {}
+      var impF = I.normalize(rawF, { importedAt: new Date().toISOString() });
+      impF.declaredGames = (total != null) ? total : null;
+      if (parcial) impF.partialReason = String(parcial).slice(0, 120);
+      var v = I.validate(impF);
+      if (!v || !v.valid) { fail('invalido'); return; }
       try { chrome.runtime.sendMessage({ type: 'lp-close-scan-tab' }); } catch (e) {}
-      post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: true, scan: scan, fullImport: imp });
+      post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle,
+        ok: true, scan: scanFromImport(realHandle, impF), fullImport: impF });
     } catch (e) {
       var em = String((e && e.message) || e);
-      post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: em.slice(0, 140) });
+      fail(em.slice(0, 140));
     }
   }
 
@@ -522,7 +680,7 @@
     if (d.__sp_lp === 'run-import') { runDirectImport(); return; }
     if (d.__sp_lp === 'check-letzplay') { checkLetzplay(); return; }
     if (d.__sp_lp === 'run-org-scan') { runOrgScan(d.targets, d.tournamentId, d.mode === 'full' ? 'full' : 'essential'); return; }
-    if (d.__sp_lp === 'run-athlete-import') { runAthleteImport(d.handle, d.uid, d.tournamentId); return; }
+    if (d.__sp_lp === 'run-athlete-import') { runAthleteImport(d.handle, d.uid, d.tournamentId, d.prior || null); return; }
   };
   window.addEventListener('message', window.__spLzpMsgHandler);
 

@@ -62,16 +62,20 @@
     var cat = parseCategory(card.catText);
     var ref = parseRankingRef(card.catHref);
     var teams = Array.isArray(card.teams) ? card.teams : [];
+    // Casamento do @ CASE-INSENSITIVE (sincronizado com extension/lib): "camilaxyz"
+    // digitado vs "/CamilaXYZ" no card — com === estrito, zero jogos casavam.
+    var meLow = String(meHandle || '').toLowerCase();
+    function isMe(h) { return String(h || '').toLowerCase() === meLow; }
     var myIdx = -1;
     for (var i = 0; i < teams.length; i++) {
-      if ((teams[i].handles || []).indexOf(meHandle) >= 0) { myIdx = i; break; }
+      if ((teams[i].handles || []).some(isMe)) { myIdx = i; break; }
     }
     if (myIdx < 0) return null;                                     // não é jogo do usuário
     var mine = teams[myIdx] || { handles: [], names: [] };
     var opp = teams[1 - myIdx] || { handles: [], names: [] };
     var partnerHandle = null, partnerName = null;
     (mine.handles || []).forEach(function (h, ix) {
-      if (h !== meHandle) { partnerHandle = h; partnerName = (mine.names || [])[ix] || null; }
+      if (!isMe(h)) { partnerHandle = h; partnerName = (mine.names || [])[ix] || null; }
     });
     var won = (typeof mine.score === 'number' && typeof opp.score === 'number')
       ? (mine.score > opp.score) : null;

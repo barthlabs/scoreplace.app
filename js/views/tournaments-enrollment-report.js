@@ -1628,6 +1628,18 @@
         setProg({ sub: cur.note || 'lendo o histórico…', pct: null });
         return;
       }
+      // PARCIAL (v1.41): a extensão grava por etapa — a cada torneio lido e a cada
+      // 3 páginas de jogos. Persistimos NA HORA: se a rodada morrer no meio (rate-limit,
+      // aba fechada), o que veio ficou; a próxima rodada continua de onde parou (prior).
+      if (d.__sp_lp === 'athlete-import-partial' && d.uid === uid) {
+        ping();
+        if (d.scan && d.fullImport && typeof _lzPersistScans === 'function') {
+          _lzPersistScans(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }])
+            .catch(function (e) { window._log && window._log('[athlete parcial] não gravou (segue):', (e && e.message) || e); });
+        }
+        setProg({ sub: (d.stage === 'torneios' ? ('torneio ' + d.done + ' de ' + d.total + ' gravado') : ('página ' + d.done + ' de ' + d.total + ' gravada')), pct: null });
+        return;
+      }
       if (d.__sp_lp === 'athlete-import-result' && d.uid === uid) {
         if (done) return;
         if (!d.ok) {
@@ -1653,7 +1665,19 @@
       var best = versions.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
       if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
       started = true;
-      window.postMessage({ __sp_lp: 'run-athlete-import', handle: tg.handle, uid: uid, tournamentId: ctx.tId }, window.location.origin);
+      // PRIOR = o que já foi gravado (scan do organizador OU import próprio do atleta —
+      // o de MAIS jogos vence): a extensão semeia o acumulado, PULA torneios já completos
+      // e para cedo nos jogos gerais quando alcança o que já está gravado.
+      var rctx = window._lzRenderCtx || {};
+      var _prof = rctx.profileMap && rctx.profileMap[uid];
+      var _sc = rctx.scanMap && rctx.scanMap[uid];
+      var _pImp = (_prof && _prof.letzplayImport) || null;
+      var _sImp = (_sc && _sc.fullImport) || null;
+      var prior = _sImp || _pImp || null;
+      if (_sImp && _pImp) {
+        prior = ((_pImp.games || []).length > (_sImp.games || []).length) ? _pImp : _sImp;
+      }
+      window.postMessage({ __sp_lp: 'run-athlete-import', handle: tg.handle, uid: uid, tournamentId: ctx.tId, prior: prior }, window.location.origin);
     }, 900);
   };
 
