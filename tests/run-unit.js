@@ -129,6 +129,9 @@ const SUITES = [
   // "Novos Confrontos" ⊥ "Abertas" TAMBÉM na ELIMINATÓRIA (a elim tem flag PRÓPRIA e o gate
   // _allowsNewMatchups lê a FASE, não só o top-level). v1.4.6.
   'tests/new-matchups-elim-independent.test.js',
+  // Resumo da config indica ONDE o tie-break entra (5-5 / 6-6), pela MESMA fonte do placar
+  // ao vivo (_tbLoserGames) — antes só dizia "tiebreak 7pts". v1.4.7.
+  'tests/config-summary-tiebreak-at.test.js',
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',

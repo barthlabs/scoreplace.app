@@ -170,10 +170,15 @@
   // largo e é o primeiro a ser empurrado pra linha de baixo, sozinho. Quebrado, ele
   // fica estreito e cabe junto dos outros. Mesmo shape do irmão "📅 Combinar<br>jogos"
   // (padding 4px 9px + line-height 1.05 + centro) pra os dois ficarem gêmeos.
+  // RAIO CANÔNICO 10px (o mesmo de `.btn` em components.css). `.btn-micro` traz 6px — medido no
+  // navegador: 6px aqui contra 10px em TODO botão do app, e o chip ficava visivelmente menos
+  // arredondado que os vizinhos ("fora do padrão", dono 22/jul). O chip de ENTRAR já corrigia isso
+  // inline, o que só provava a intenção. Agora é o default dos dois. Ver o cânone de botões no
+  // CLAUDE.md (border-radius 10px).
   function _btn(label, onclick, extra) {
     return '<button type="button" class="btn btn-micro btn-shine hover-lift" onclick="' + onclick + '" ' +
       'style="background:' + WA_GREEN + ';color:#fff;font-size:0.72rem;font-weight:800;' +
-      'padding:4px 9px;line-height:1.05;text-align:center;' + (extra || '') + '">' +
+      'padding:4px 9px;line-height:1.05;text-align:center;border-radius:10px;' + (extra || '') + '">' +
       _icon() + label + '</button>';
   }
   function _editBtn(onclick, title) {
@@ -244,7 +249,7 @@
       if (!_isEnrolled(t, cu) && !_isOrg(t, cu)) return '';
       // v1.3.100 (dono): texto COMPLETO "grupo oficial do torneio"; border-radius no PADRÃO do app
       // (.btn = 10px; o btn-micro herdado era 6px = "quadrado") e um pouco mais largo.
-      return _btn('Entrar no grupo<br>oficial do torneio', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'\')', 'border-radius:10px;min-width:118px;padding:6px 14px;');
+      return _btn('Entrar no grupo<br>oficial do torneio', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'\')', 'min-width:118px;padding:6px 14px;');
     } catch (e) { return ''; }
   };
 
