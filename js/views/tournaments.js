@@ -101,7 +101,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
       ? '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();' + _splitCall + '" title="Desfazer dupla" style="--cx-size:24px;">✕</button>'
       : '';
     var _delBtnDupla = (isOrg && !drawDone && draggable)
-      ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_entryName) + '\')" style="--cx-size:24px;">✕</button>'
+      ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_entryName) + '\',\'' + _safeAttr(uid || '') + '\')" style="--cx-size:24px;">✕</button>'
       : '';
     var _s1 = (members && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p1Uid) || '', displayName: (p && p.p1Name) || members[0], name: (p && p.p1Name) || members[0] }) : '';
     var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p2Uid) || '', displayName: (p && p.p2Name) || members[1], name: (p && p.p2Name) || members[1] }) : '';
@@ -473,27 +473,105 @@ window._addPlaceholdersCore = function (id, qtd, onDone) {
 // window.removeParticipantFunction undefined → clicar na lixeira não fazia NADA (nem
 // abria a confirmação). Definir aqui garante que existam assim que tournaments.js
 // carrega. setupDone=true faz os blocos inline (em renderTournaments) virarem no-op.
-window.removeParticipantFunction = function (tId, participantName) {
+// Converte a dupla `entry` no INSCRITO SOLO do lado que FICA (n = 1 ou 2). Espelha o solo que a
+// CF splitPair devolve (functions/pair-core.computeSplitPair): identidade = uid, nome só se
+// existia gravado (fictício), e herda nº de inscrição, contato e categoria.
+window._pairPartnerSolo = function (entry, n) {
+    if (!entry || typeof entry !== 'object') return entry;
+    var g = function (suf) { return entry['p' + n + suf]; };
+    var uid = g('Uid') || '';
+    var nome = String(g('Name') || '').trim();
+    if (!uid) return nome || null;                      // fictício volta como string do nome
+    var o = { uid: uid, ligaActive: true };
+    if (nome) { o.displayName = nome; o.name = nome; }
+    if (g('Seq') != null) o.enrollSeq = g('Seq');
+    if (g('Email')) o.email = g('Email');
+    if (g('Photo')) o.photoURL = g('Photo');
+    if (g('Gender')) o.gender = g('Gender');
+    if (g('BirthDate')) o.birthDate = g('BirthDate');
+    if (entry.category) o.category = entry.category;
+    if (Array.isArray(entry.categories)) o.categories = entry.categories.slice();
+    if (entry.categorySource) o.categorySource = entry.categorySource;
+    return o;
+};
+// Tira o uid (e o nome, pra doc legado) de TODO mapa por-pessoa — senão o excluído fica
+// pendurado como presente/ausente/VIP e reaparece nos contadores. [[project_id_maps_uid_keyed]]
+window._purgePersonFromMaps = function (t, uid, name) {
+    var nm = String(name || '').trim().toLowerCase();
+    ['checkedIn', 'absent', 'checkedInConfirmed', 'vips'].forEach(function (k) {
+        var m = t && t[k];
+        if (!m || typeof m !== 'object') return;
+        if (uid) delete m[uid];
+        if (nm) Object.keys(m).forEach(function (key) { if (String(key).trim().toLowerCase() === nm) delete m[key]; });
+    });
+};
+// memberUid = a IDENTIDADE de quem o card representa. O card individual manda o uid; o nome é
+// só fallback (fictício sem conta / doc legado). Sem o uid, excluir alguém que está EM DUPLA era
+// no-op silencioso — o nome da entrada é "A / B", nunca "A" — e o dono via o ✕ "não fazer nada".
+window.removeParticipantFunction = function (tId, participantName, memberUid) {
+    var _tPre = window._findTournamentById(tId);
+    // Quem está em dupla: excluir 1 pessoa DESFAZ a dupla e o parceiro fica como inscrito solo.
+    // O diálogo diz isso — o organizador não pode descobrir depois.
+    var _pairMsg = '';
+    if (_tPre && memberUid) {
+        var _arrPre = Array.isArray(_tPre.participants) ? _tPre.participants : [];
+        for (var _i = 0; _i < _arrPre.length; _i++) {
+            var _e = _arrPre[_i];
+            if (!_e || typeof _e !== 'object') continue;
+            var _side = (_e.p1Uid === memberUid) ? 1 : (_e.p2Uid === memberUid ? 2 : 0);
+            if (!_side) continue;
+            var _keep = window._pairPartnerSolo(_e, _side === 1 ? 2 : 1);
+            var _keepNm = (typeof _keep === 'string') ? _keep : (window._pName ? window._pName(_keep) : '');
+            _pairMsg = ' Ele(a) está em dupla: a dupla será desfeita e ' + (_keepNm || 'o parceiro') + ' fica como inscrito individual.';
+            break;
+        }
+    }
     showConfirmDialog(
         _t('tourn.removeParticipantTitle'),
-        _t('tourn.removeParticipantMsg'),
+        _t('tourn.removeParticipantMsg') + _pairMsg,
         () => {
             const t = window._findTournamentById(tId);
             if (t) {
                 // v2.7.54: casa nome CRU/FORMATADO (telefone "+5511981933576" vs
                 // "+55 (11) 98193-3576") e remove TAMBÉM dos storages da lista de espera
                 // — assim o organizador remove qualquer um, inclusive quem só está na espera.
-                var _target = String(participantName).trim().toLowerCase();
+                var _target = String(participantName || '').trim().toLowerCase();
                 var _removedP = null;
                 let arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-                var idx = arr.findIndex(function(p, i) {
-                    var forms = (typeof window._nameForms === 'function') ? window._nameForms(p) : [String(window._pName(p) || '').toLowerCase()];
-                    if (forms.indexOf(_target) !== -1) return true;
-                    return ('participante ' + (i + 1)) === _target;
-                });
-                if (idx !== -1) { _removedP = arr[idx]; arr.splice(idx, 1); t.participants = arr; }
+                // 1) IDENTIDADE (uid) primeiro: entrada solo da pessoa.
+                var idx = -1;
+                if (memberUid) {
+                    var si = arr.findIndex(function (p) {
+                        return p && typeof p === 'object' && p.uid === memberUid && !p.p1Uid && !p.p2Uid && !p.p1Name && !p.p2Name;
+                    });
+                    if (si !== -1) { _removedP = arr[si]; arr.splice(si, 1); t.participants = arr; idx = si; }
+                }
+                // 2) Está EM DUPLA → a dupla vira o parceiro solo (a pessoa sai).
+                if (idx === -1 && memberUid) {
+                    var pi = arr.findIndex(function (p) {
+                        return p && typeof p === 'object' && (p.p1Uid === memberUid || p.p2Uid === memberUid);
+                    });
+                    if (pi !== -1) {
+                        var ent = arr[pi];
+                        var keep = window._pairPartnerSolo(ent, ent.p1Uid === memberUid ? 2 : 1);
+                        _removedP = { uid: memberUid };
+                        if (keep) arr.splice(pi, 1, keep); else arr.splice(pi, 1);
+                        t.participants = arr;
+                        idx = pi;                         // marca que houve remoção
+                    }
+                }
+                // 3) Fallback por NOME (fictício sem conta / doc legado / "Participante N").
+                if (idx === -1) {
+                    idx = arr.findIndex(function(p, i) {
+                        var forms = (typeof window._nameForms === 'function') ? window._nameForms(p) : [String(window._pName(p) || '').toLowerCase()];
+                        if (forms.indexOf(_target) !== -1) return true;
+                        return ('participante ' + (i + 1)) === _target;
+                    });
+                    if (idx !== -1) { _removedP = arr[idx]; arr.splice(idx, 1); t.participants = arr; }
+                } else if (!_removedP) { _removedP = { uid: memberUid }; }
                 var _removedFromWait = (typeof window._removeFromWaitlist === 'function') ? window._removeFromWaitlist(t, participantName) : false;
                 if (idx === -1 && !_removedFromWait) return; // nada pra remover
+                if (typeof window._purgePersonFromMaps === 'function') window._purgePersonFromMaps(t, memberUid || (_removedP && _removedP.uid), participantName);
                 if (_removedP && typeof _removedP === 'object' && _removedP.uid && typeof window._sendUserNotification === 'function') {
                     var _cuRem = window.AppStore && window.AppStore.currentUser;
                     var _remover = (_cuRem && (_cuRem.displayName || _cuRem.email)) || 'o organizador';

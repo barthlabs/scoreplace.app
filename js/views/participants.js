@@ -2183,7 +2183,10 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     dragProps = 'draggable="true" ondragstart="window.handleDragStart(event, ' + idx + ', \'' + t.id + '\')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ' + idx + ')"';
     if (!drawDone) {
       _vipBtn = '<button class="btn btn-micro" title="' + (isVip ? _T('tourn.removeVip') : _T('tourn.markVip')) + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ' + (isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)') + '; color: ' + (isVip ? '#fbbf24' : '#a3842a') + '; border: 1px ' + (isVip ? 'solid' : 'dashed') + ' ' + (isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)') + ';" onclick="event.stopPropagation(); window._toggleVip(\'' + t.id + '\', \'' + safeP + '\');">💎 VIP</button>';
-      _delBtn = '<button type="button" class="cancel-x-btn" title="' + _T('btn.remove') + '" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✕</button>';
+      // Este ✕ é da ENTRADA inteira (dupla sai inteira) → NÃO manda uid de membro: mandar
+      // p.uid (que numa dupla é o uid do p1) tiraria só uma pessoa e deixaria a outra.
+      var _delUid = (p && typeof p === 'object' && p.uid && !p.p1Uid && !p.p2Uid && !p.p1Name && !p.p2Name) ? p.uid : '';
+      _delBtn = '<button type="button" class="cancel-x-btn" title="' + _T('btn.remove') + '" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction(\'' + t.id + '\', \'' + safeP + '\', \'' + _delUid + '\');">✕</button>';
       if (window._entryTeamMembers(p)) {
         _splitBtn = '<button class="btn btn-micro" title="' + _T('participants.splitTeam') + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✂️</button>';
       }
@@ -2889,7 +2892,9 @@ function renderParticipants(container, tournamentId) {
       // v2.7.54: botão de REMOVER inscrito (só organizador) — poder de tirar qualquer
       // jogador do card, inclusive os da lista de espera. A remoção (tournaments.js)
       // tira de participants E dos storages da espera, casando nome cru/formatado.
-      const _delBtnC = isOrg ? `<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window.removeParticipantFunction('${tId}','${safeName}')" title="Remover inscrito" style="--cx-size:22px;">✕</button>` : '';
+      // 3º argumento = o UID da PESSOA deste card. Sem ele, excluir quem está em dupla era
+      // no-op (o nome da entrada é "A / B", nunca "A"). [[project_uid_identity_canon_locked]]
+      const _delBtnC = isOrg ? `<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window.removeParticipantFunction('${tId}','${safeName}','${window._safeHtml(ind.uid || '')}')" title="Remover inscrito" style="--cx-size:22px;">✕</button>` : '';
 
       const _safeName = (ind.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
       const _pSeed = encodeURIComponent(ind.name);
