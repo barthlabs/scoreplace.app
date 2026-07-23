@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.4.4';
+window.SCOREPLACE_VERSION = '1.4.5';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -66,6 +66,32 @@ window._dtrace = function (stage, extra) {
     }
   } catch (_e3) {}
 };
+
+// O selo só era REMOVIDO dentro do próprio _dtrace — ou seja, só quando um NOVO evento de
+// sorteio acontecia. Saindo do sandbox pro dashboard ninguém mais chamava _dtrace, e o selo
+// FICAVA na tela por cima da dashboard (print do dono, v1.4.4). Agora a troca de rota limpa.
+// `_drawTraceRouteOk(hash)` é a decisão PURA (testável): fora de rota de torneio → fora;
+// em rota de torneio ainda não carregado → mantém (o doc chega async, não pisca à toa).
+window._drawTraceRouteOk = function (hash) {
+  var h = String(hash == null ? '' : hash).replace(/^#/, '');
+  var m = h.match(/^(tournaments|bracket|pre-draw|participants|rules|analise|categorias)\/([^/?#]+)/);
+  if (!m) return false;                                   // dashboard e qualquer outra tela
+  var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(m[2]) : null;
+  if (!t) return true;                                    // ainda carregando → não remove
+  return t.isSandbox === true;                            // torneio conhecido: só SB mantém
+};
+window._syncDrawTraceBadge = function () {
+  try {
+    if (typeof document === 'undefined') return;
+    var b = document.getElementById('sp-draw-trace');
+    if (b && !window._drawTraceRouteOk(window.location && window.location.hash)) b.remove();
+  } catch (_e) {}
+};
+try {
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('hashchange', function () { window._syncDrawTraceBadge(); });
+  }
+} catch (_eHc) {}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)

@@ -123,6 +123,9 @@ const SUITES = [
   // Excluir inscrito num roster SÓ-UID (o ✕ do card individual): solo sem nome gravado e
   // membro de dupla. Os dois eram no-op silencioso — o clique "não fazia nada". v1.4.2.
   'tests/remove-participant-uid.test.js',
+  // Selo verde de diagnóstico do sorteio: só pode existir em rota de torneio SANDBOX —
+  // estava sobrevivendo à navegação e aparecendo por cima da dashboard. v1.4.5.
+  'tests/draw-trace-badge-route.test.js',
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
