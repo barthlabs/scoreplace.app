@@ -182,6 +182,12 @@ window.FirestoreDB = {
       if (Array.isArray(cleanData.standbyParticipants)) cleanData.standbyParticipants = window._stripStoredNamesForUidEntries(cleanData.standbyParticipants);
       if (Array.isArray(cleanData.waitlist)) cleanData.waitlist = window._stripStoredNamesForUidEntries(cleanData.waitlist);
     }
+    // v1.4.30: CHOKE POINT da cura de rótulo cru — "Jogador sem perfil (…)" gravado em
+    // m.p1/m.p2/team1/team2 por corrida de cache no sorteio/integração é reescrito pro
+    // nome vivo em TODO save que passa aqui com o perfil resolvível. Best-effort.
+    try {
+      if (typeof window !== 'undefined' && typeof window._cureRawMatchLabels === 'function') window._cureRawMatchLabels(cleanData);
+    } catch (_lblErr) { /* cura nunca derruba o save */ }
     // v2.6.74: nextDrawAt — ms epoch do próximo sorteio devido (ver _nextOwedDrawMs).
     // É o índice que o autoDraw do servidor consulta com where('nextDrawAt','<=',now)
     // pra disparar perto da hora exata sem varrer a coleção toda. Recalculado em TODO
