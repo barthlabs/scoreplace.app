@@ -93,7 +93,12 @@ window._duplaCard = function (t, p, draggable, ctx) {
     // achava a entrada). Desfazer passa as 2 identidades (uid||nome-guest) e _splitDupla casa o PAR.
     var _m1Id = (p && (p.p1Uid || p.p1Name)) || '';
     var _m2Id = (p && (p.p2Uid || p.p2Name)) || '';
-    var _entryName = (members && members.length) ? members.join(' / ') : nm; // só p/ o botão Remover (solo)
+    // Nome só p/ o botão Remover do SOLO — e RESOLVIDO ao vivo (_pName), nunca o `nm` cru: num
+    // roster só-uid o `nm` é STRING VAZIA (a entrada não guarda nome), e o ✕ chamava a remoção
+    // com nome vazio → não achava nada e saía calado ("o excluir não faz nada", dono 22/jul).
+    // A identidade que MANDA é o uid (3º argumento); isto aqui é só o fallback do fictício.
+    var _entryName = (members && members.length) ? members.join(' / ')
+      : (((typeof window._pName === 'function') ? window._pName(p) : '') || nm);
     var _splitCall = (ctx && typeof ctx.splitDupla === 'function')
       ? ctx.splitDupla(_safeAttr(tIdStr), _safeAttr(_m1Id), _safeAttr(_m2Id), _safeAttr(_entryName))
       : ('window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_m1Id) + '\',\'' + _safeAttr(_m2Id) + '\')');
