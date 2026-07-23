@@ -1224,7 +1224,12 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
 window._markAbsent = function (tId, playerName, uid) {
   const t = window._findTournamentById(tId);
   if (!t) return;
-  const _who = uid ? { uid: uid, displayName: playerName } : playerName;
+  // `uid` aceita 1 identidade (pessoa) ou VÁRIAS separadas por '|' — o W.O. DO TIME chaveia pelos
+  // DOIS MEMBROS (regra do dono), nunca pelo nome do time. Token 'u:<uid>' = conta, 'n:<nome>' =
+  // fictício (sem conta, a única exceção); token cru = uid (compat com os call sites de 1 pessoa).
+  // Assim a dupla MISTA (um com conta + um fictício) marca os dois pelo que cada um é.
+  const _whos = window._absenceIdentities(uid, playerName);
+  const _who = _whos[0];
   // v2.3.82: W.O. (declarar ausente / reverter) só por autoridade (org/co-org/
   // árbitro). O W.O. por consenso entre participantes virá num próximo passo.
   if (window._canManagePresence && !window._canManagePresence(t, window.AppStore && window.AppStore.currentUser)) {
@@ -1235,28 +1240,58 @@ window._markAbsent = function (tId, playerName, uid) {
   }
   // pre-check: se o jogo do W.O. já foi jogado, não reverte — toast + aborta ANTES
   // de mutar/gravar (a trava dentro de _applyAbsenceToggle é a defesa silenciosa).
-  const _woMetaPre = window._woHistGet(t, _who);
-  if ((window._idMapHas(t, t.absent, _who) || _woMetaPre) && _woMetaPre && _woMetaPre.matchNum && typeof window._matchHasRealPlay === 'function') {
-    const _allPre = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches.slice() : []);
-    const _mPre = _allPre[_woMetaPre.matchNum - 1];
-    if (_mPre && window._matchHasRealPlay(_mPre)) {
-      if (typeof showNotification === 'function') showNotification('W.O. não pode ser revertido', 'A partida já foi jogada (placar lançado ou placar ao vivo iniciado). O W.O. não é mais reversível.', 'warning');
-      return;
+  for (var _pi = 0; _pi < _whos.length; _pi++) {
+    const _woMetaPre = window._woHistGet(t, _whos[_pi]);
+    if ((window._idMapHas(t, t.absent, _whos[_pi]) || _woMetaPre) && _woMetaPre && _woMetaPre.matchNum && typeof window._matchHasRealPlay === 'function') {
+      const _allPre = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches.slice() : []);
+      const _mPre = _allPre[_woMetaPre.matchNum - 1];
+      if (_mPre && window._matchHasRealPlay(_mPre)) {
+        if (typeof showNotification === 'function') showNotification('W.O. não pode ser revertido', 'A partida já foi jogada (placar lançado ou placar ao vivo iniciado). O W.O. não é mais reversível.', 'warning');
+        return;
+      }
     }
   }
   // mutação (toggle ausência / revert de W.O.) ATÔMICA pelo portão AppStore.mutate
-  // alvo decidido UMA vez, do estado LOCAL no clique (o mutator pode re-executar em retry)
-  var _wantAbs = !(window._idMapHas(t, t.absent || {}, _who) || window._woHistGet(t, _who));
-  window.AppStore.mutate(tId, function (ft) { window._applyAbsenceToggle(ft, _who, _wantAbs); });
+  // alvo decidido UMA vez, do estado LOCAL no clique (o mutator pode re-executar em retry).
+  // TIME: se QUALQUER membro já está fora, o clique REVERTE os dois; senão marca os dois.
+  var _wantAbs = !_whos.some(function (w) {
+    return window._idMapHas(t, t.absent || {}, w) || window._woHistGet(t, w);
+  });
+  window.AppStore.mutate(tId, function (ft) {
+    _whos.forEach(function (w) { window._applyAbsenceToggle(ft, w, _wantAbs); });
+  });
   // v1.3.82: intenção otimista sobrevive a snapshot stale (aparece/apaga). Chaveada pelo uid.
   try {
     if (typeof window._stampPresenceIntent === 'function') {
-      var _ma = window._idMapHas(t, t.absent || {}, _who);
-      var _mp = window._idMapHas(t, t.checkedIn || {}, _who);
-      window._stampPresenceIntent(tId, (uid || playerName), _ma ? 'absent' : (_mp ? 'present' : 'none'));
+      _whos.forEach(function (w) {
+        var _key = (w && typeof w === 'object') ? w.uid : w;
+        var _ma = window._idMapHas(t, t.absent || {}, w);
+        var _mp = window._idMapHas(t, t.checkedIn || {}, w);
+        window._stampPresenceIntent(tId, _key, _ma ? 'absent' : (_mp ? 'present' : 'none'));
+      });
     }
   } catch (_eStamp) {}
   _reRenderParticipantsStable();
+};
+
+// Traduz o argumento de identidade do W.O. numa LISTA de identidades pros mapas (uid-keyed).
+// '' → [nome] (fictício/legado) · 'UID' → [{uid}] · 'u:U1|n:Convidado' → [{uid:U1}, 'Convidado'].
+window._absenceIdentities = function (uid, playerName) {
+  var raw = String(uid == null ? '' : uid).trim();
+  if (!raw) return [playerName];
+  var out = [];
+  raw.split('|').forEach(function (tok) {
+    tok = String(tok || '').trim();
+    if (!tok) return;
+    if (tok.indexOf('n:') === 0) { var nm = tok.slice(2).trim(); if (nm) out.push(nm); return; }
+    var u = (tok.indexOf('u:') === 0) ? tok.slice(2).trim() : tok;
+    if (u) out.push({ uid: u });
+  });
+  if (!out.length) return [playerName];
+  // 1 pessoa: leva o nome junto (display/meta do woHistory). Time: cada membro resolve o SEU nome
+  // pelo uid dentro do _applyAbsenceToggle — o nome do TIME não serve de identidade pra ninguém.
+  if (out.length === 1 && out[0] && typeof out[0] === 'object') out[0].displayName = playerName;
+  return out;
 };
 
 // Mutação PURA de ausência (marcar/reverter W.O.) — muta só o `t` passado, sem
@@ -1705,7 +1740,14 @@ window._rollCallPresenceCtx = function (t, opts) {
           var _tEntry = window._pName(p);
           var _tAbs = _anyAbs || _abs(_tEntry);
           var _tE = String(_tEntry).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "');", !_tAbs, { label: _tAbs ? 'Reverter' : 'W.O. do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
+          // W.O. DO TIME chaveia pelos DOIS MEMBROS (dono, 22/jul), nunca pelo nome do time: cada
+          // um vai como 'u:<uid>' (conta) ou 'n:<nome>' (fictício sem conta — a única exceção).
+          // Dupla mista marca os dois pelo que cada um é. [[project_id_maps_uid_keyed]]
+          var _tIds = [
+            (p && p.p1Uid) ? ('u:' + p.p1Uid) : (p && p.p1Name ? ('n:' + String(p.p1Name).trim()) : ''),
+            (p && p.p2Uid) ? ('u:' + p.p2Uid) : (p && p.p2Name ? ('n:' + String(p.p2Name).trim()) : '')
+          ].filter(Boolean).join('|').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "', '" + _tIds + "');", !_tAbs, { label: _tAbs ? 'Reverter' : 'W.O. do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
         }
         // DUPLA → tom ESCURO ('pair'): VERDE só quando os DOIS estão presentes; qualquer outro
         // caso (ausente OU ainda não marcado) = AZUL. Antes o "pendente" não pintava nada e o card

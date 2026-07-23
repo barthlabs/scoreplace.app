@@ -112,6 +112,31 @@ console.log('\n── ações do card gravam na CHAVE-UID (W.O. · VIP · nível
   ok(solo && String(solo.category || '').indexOf('B') !== -1, 'nível :: aplicado no inscrito certo — got ' + (solo && solo.category));
 }
 
+// W.O. DO TIME — chaveia pelos DOIS MEMBROS (dono, 22/jul), nunca pelo nome do time.
+console.log('\n── W.O. do time chaveia pelos DOIS membros ──');
+{
+  const t = mkT();
+  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, mutate: (tid, fn) => fn(t), getTournament: () => t };
+  W._canManagePresence = function () { return true; };
+  W._markAbsent(t.id, 'Marcello Martins de Souza / Karla Fernandes', 'u:uMarcello|u:uKarla');
+  ok(t.absent.uMarcello != null && t.absent.uKarla != null, 'time :: os DOIS uids ficaram ausentes — got ' + JSON.stringify(Object.keys(t.absent)));
+  ok(!Object.keys(t.absent).some((k) => k.indexOf('/') !== -1), 'time :: NENHUMA chave com o nome do time');
+  // reverter: um clique devolve os dois
+  W._markAbsent(t.id, 'Marcello Martins de Souza / Karla Fernandes', 'u:uMarcello|u:uKarla');
+  ok(t.absent.uMarcello == null && t.absent.uKarla == null, 'time :: reverter devolve os DOIS');
+}
+
+// DUPLA MISTA (um com conta + um fictício) — cada um pelo que ele é.
+{
+  const t = mkT();
+  t.participants = [{ uid: 'uMarcello', p1Uid: 'uMarcello', p2Name: 'Convidado sem conta' }];
+  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, mutate: (tid, fn) => fn(t), getTournament: () => t };
+  W._canManagePresence = function () { return true; };
+  W._markAbsent(t.id, 'Marcello / Convidado sem conta', 'u:uMarcello|n:Convidado sem conta');
+  ok(t.absent.uMarcello != null, 'mista :: quem tem conta foi pelo UID');
+  ok(t.absent['Convidado sem conta'] != null, 'mista :: o fictício foi pelo NOME');
+}
+
 // FICTÍCIO (sem conta) — ÚNICO caso que continua pelo nome, como o dono definiu.
 {
   const t = mkT();
