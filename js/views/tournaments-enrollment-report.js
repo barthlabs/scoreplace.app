@@ -1272,24 +1272,13 @@
   // Nomes agrupados por categoria (aferida pelo letzplay quando verificado) e
   // PINTADOS pela verificação letzplay. Arrastar → atribui gênero; soltar numa
   // categoria → gênero + categoria. Reusa _pendingEdits + save.
-  var _GENMAP = { feminino: 'Fem', masculino: 'Masc', misto: 'Misto' };
+  var _GENMAP = { feminino: 'Fem', masculino: 'Masc' };
   function _mxGenderOf(r) {
     var pe = _pendingEdits[r.order] || {};
     var g = (pe.gender != null) ? pe.gender : (r.gender || '');
     g = String(g).toLowerCase();
     if (g.indexOf('fem') === 0) return 'feminino';
     if (g.indexOf('masc') === 0) return 'masculino';
-    return null;
-  }
-  // Gênero da CATEGORIA efetiva da pessoa (pending > atribuída). 'Misto' aqui é o que
-  // manda a pessoa pra coluna Misto — o gênero PESSOAL (fem/masc) fica intacto.
-  function _mxCatGenderOf(r, t) {
-    var pe = _pendingEdits[r.order] || {};
-    var cats = (pe.category != null) ? (pe.category ? [pe.category] : []) : (r.assigned || []);
-    for (var i = 0; i < cats.length; i++) {
-      var d = _decomposeCat(cats[i], t);
-      if (d.gender) return d.gender;
-    }
     return null;
   }
   function _erIsMistoTok(v) { return /^misto/i.test(String(v || '')); }
@@ -1306,10 +1295,7 @@
     var gTok = _GENMAP[genderKey];
     var i, d;
     for (i = 0; i < cats.length; i++) { d = _decomposeCat(cats[i], t); if (d.skill === skill && d.gender === gTok) return cats[i]; }
-    // Fallback só pra categoria SEM gênero. Categoria Mista NÃO serve mais de fallback
-    // pra fem/masc: com a coluna Misto na matriz, soltar em "Fem A" tem que dar Fem A —
-    // se caísse em "Misto A" a pessoa voltava pra coluna Misto (parecia drag quebrado).
-    for (i = 0; i < cats.length; i++) { d = _decomposeCat(cats[i], t); if (d.skill === skill && !d.gender) return cats[i]; }
+    for (i = 0; i < cats.length; i++) { d = _decomposeCat(cats[i], t); if (d.skill === skill && (d.gender === 'Misto' || !d.gender)) return cats[i]; }
     // Torneio sem essa categoria configurada (ex: informal, skillCategories vazio) →
     // FABRICA a categoria pelo gênero + habilidade. `_decomposeCat` reconhece "Fem D".
     return gTok ? (gTok + ' ' + skill) : skill;
@@ -1321,43 +1307,22 @@
     (t.skillCategories || []).forEach(function (s) { if (skills.indexOf(s) < 0) skills.push(s); });
     var groups = skills.concat(['__none__']);
     function emptyBox() { var o = {}; groups.forEach(function (g) { o[g] = []; }); return o; }
-    var fem = emptyBox(), misto = emptyBox(), masc = emptyBox(), semG = emptyBox();
-    // Torneio SÓ misto (genderCategories tem Misto e não tem Fem/Masc) → todo mundo
-    // cai na coluna Misto por default: num torneio misto, separar em fem/masc parece
-    // "categorias diferentes" e gera dúvida (pedido do dono, 23/jul).
-    var gcatsAll = t.genderCategories || [];
-    var mistoOn = gcatsAll.some(_erIsMistoTok);
-    var fmOn = gcatsAll.some(_erIsFMTok);
-    var mistoOnly = mistoOn && !fmOn;
-    // Coluna de uma pessoa: categoria Mista (ou gênero editado 'misto') vence; depois
-    // categoria Fem/Masc explícita; depois, em torneio SÓ-misto, todo mundo é Misto
-    // (o gênero pessoal fica pro pareamento, não pra coluna); senão gênero pessoal.
-    function colKeyOf(r) {
-      var pe = _pendingEdits[r.order] || {};
-      var peG = String((pe.gender != null) ? pe.gender : (r.gender || '')).toLowerCase();
-      var cg = _mxCatGenderOf(r, t);
-      if (cg === 'Misto' || peG.indexOf('misto') === 0) return 'misto';
-      if (cg === 'Fem') return 'fem';
-      if (cg === 'Masc') return 'masc';
-      if (mistoOnly) return 'misto';
-      var g = _mxGenderOf(r);
-      if (g === 'feminino') return 'fem';
-      if (g === 'masculino') return 'masc';
-      return 'sem';
-    }
-    var COLBOX = { fem: fem, misto: misto, masc: masc, sem: semG };
+    var fem = emptyBox(), masc = emptyBox(), semG = emptyBox();
     (rows || []).forEach(function (r) {
-      var sk = _mxSkillOf(r, t);
+      var g = _mxGenderOf(r), sk = _mxSkillOf(r, t);
       var key = (sk && groups.indexOf(sk) !== -1) ? sk : '__none__';
-      COLBOX[colKeyOf(r)][key].push(r);
+      (g === 'feminino' ? fem : g === 'masculino' ? masc : semG)[key].push(r);
     });
     function sumBox(b) { return groups.reduce(function (a, g) { return a + b[g].length; }, 0); }
-    var femTotal = sumBox(fem), mistoTotal = sumBox(misto), mascTotal = sumBox(masc), semTotal = sumBox(semG), total = (rows || []).length;
+    var femTotal = sumBox(fem), mascTotal = sumBox(masc), semTotal = sumBox(semG), total = (rows || []).length;
 
     // FORMALIZAÇÃO de categorias (torneio informal → formal). genderOn = divisão
-    // Fem/Masc criada; mistoOn = categoria Misto criada; createdSkills = habilidades
-    // formalizadas. Botões abaixo alternam.
-    var genderOn = fmOn;
+    // Fem/Masc criada; mistoOn = categoria Misto criada (box indicador acima do grid —
+    // Misto é UMA categoria com todo mundo, não duas separadas Fem/Masc; as pessoas
+    // continuam nas colunas do gênero delas). createdSkills = habilidades formalizadas.
+    var gcatsAll = t.genderCategories || [];
+    var mistoOn = gcatsAll.some(_erIsMistoTok);
+    var genderOn = gcatsAll.some(_erIsFMTok);
     var createdSkills = (t.skillCategories || []);
     var tIdEsc = _esc(String(t.id));
     var MIN_CAT = 2; // mínimo de pessoas pra oferecer "Criar categoria"
@@ -1365,8 +1330,9 @@
     function catCount(catName) {
       var d = _decomposeCat(catName, t), n = 0;
       (rows || []).forEach(function (r) {
-        var ck = colKeyOf(r), sk = _mxSkillOf(r, t);
-        var gOk = !d.gender || (d.gender === 'Fem' && ck === 'fem') || (d.gender === 'Masc' && ck === 'masc') || (d.gender === 'Misto' && ck === 'misto');
+        var g = _mxGenderOf(r), sk = _mxSkillOf(r, t);
+        // Categoria Mista = UMA categoria com todo mundo → conta fem E masc juntos.
+        var gOk = !d.gender || d.gender === 'Misto' || (d.gender === 'Fem' && g === 'feminino') || (d.gender === 'Masc' && g === 'masculino');
         var sOk = !d.skill || (sk === d.skill);
         if (gOk && sOk) n++;
       });
@@ -1441,29 +1407,29 @@
         cardGrid(arr) + '</div>';
     }
     // Cabeçalho do gênero (drop = só gênero) + botão criar categoria por gênero.
-    function ghead(icon, gKey, name, color, tot, call, created) {
-      var btn = (tot >= MIN_CAT || (gKey === 'misto' && total >= MIN_CAT)) ? createBtn(call, created) : '';
+    function ghead(icon, gKey, name, color, tot) {
+      var btn = (tot >= MIN_CAT) ? createBtn('window._erToggleGender(\'' + tIdEsc + '\',this)', genderOn) : '';
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + gKey + '\',\'\')" ' +
         'style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:17px;font-weight:800;color:' + color + ';border-bottom:2px solid ' + color + ';padding-bottom:6px;">' +
         '<span>' + icon + ' ' + name + ' <span style="opacity:0.8;font-size:15px;">(' + tot + ')</span></span>' + btn + '</div>';
     }
-    var femCol = '#ec4899', mascCol = '#3b82f6', mistoCol = '#a855f7';
-    var femTint = 'rgba(236,72,153,0.45)', mascTint = 'rgba(59,130,246,0.45)', mistoTint = 'rgba(168,85,247,0.45)';
-    // GRID alinhado: 3 colunas (Feminino | Misto | Masculino) — Misto CENTRALIZADO
-    // entre os dois (pedido do dono, 23/jul): torneio misto vive na coluna do meio,
-    // sem parecer que fem e masc são categorias diferentes. Cada habilidade é uma
-    // LINHA → C fem, C misto e C masc na mesma linha. align-items:stretch uniformiza.
-    var callFM = 'window._erToggleGender(\'' + tIdEsc + '\',this)';
-    var callMisto = 'window._erToggleGenderMisto(\'' + tIdEsc + '\',this)';
-    var gridRows = ghead('♀', 'feminino', 'Feminino', femCol, femTotal, callFM, genderOn) +
-      ghead('⚥', 'misto', 'Misto', mistoCol, mistoTotal, callMisto, mistoOn) +
-      ghead('♂', 'masculino', 'Masculino', mascCol, mascTotal, callFM, genderOn);
+    var femCol = '#ec4899', mascCol = '#3b82f6';
+    var femTint = 'rgba(236,72,153,0.45)', mascTint = 'rgba(59,130,246,0.45)';
+    // GRID alinhado: 2 colunas (Feminino | Masculino); cada habilidade é uma LINHA →
+    // C fem e C masc na mesma linha. align-items:stretch mantém a linha uniforme.
+    var gridRows = ghead('♀', 'feminino', 'Feminino', femCol, femTotal) + ghead('♂', 'masculino', 'Masculino', mascCol, mascTotal);
     groups.forEach(function (sk) {
-      gridRows += catBox('feminino', sk, fem[sk], femCol, femTint) +
-        catBox('misto', sk, misto[sk], mistoCol, mistoTint) +
-        catBox('masculino', sk, masc[sk], mascCol, mascTint);
+      gridRows += catBox('feminino', sk, fem[sk], femCol, femTint) + catBox('masculino', sk, masc[sk], mascCol, mascTint);
     });
-    var grid = '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:6px 8px;align-items:stretch;">' + gridRows + '</div>';
+    var grid = '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 8px;align-items:stretch;">' + gridRows + '</div>';
+    // BOX MISTO acima do grid (pedido do dono, 23/jul): NÃO é uma coluna — só indica
+    // que a categoria do torneio é MISTA (uma categoria só, fem e masc juntos) e dá o
+    // ➕ Criar categoria / ↩ Reverter próprio. Quem é fem segue na coluna fem, masc na
+    // masc — igual ao box "Sem gênero" abaixo, mas de indicação/formalização.
+    var mistoStrip = '<div style="margin-bottom:10px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid rgba(168,85,247,0.55);border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
+      '<span style="min-width:0;"><span style="font-size:17px;font-weight:800;color:#a855f7;">⚥ Misto' + (mistoOn ? ' <span style="opacity:0.8;font-size:15px;">(' + total + ')</span>' : '') + '</span> ' +
+      '<span style="font-size:13px;color:var(--text-muted);">categoria única — fem e masc jogam juntos, não são duas categorias</span></span>' +
+      createBtn('window._erToggleGenderMisto(\'' + tIdEsc + '\',this)', mistoOn) + '</div>';
     // "Categorias no torneio" — resultado das formalizações + contagem (acima do total).
     var formalCats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
     var catsBoxInner = formalCats.length
@@ -1479,10 +1445,10 @@
     if (semTotal) {
       var semInner = groups.map(function (sk) { return catBox('', sk, semG[sk], '#8592a6', 'rgba(133,146,166,0.45)'); }).join('');
       semSection = '<div style="margin-top:14px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid #8592a6;border-radius:12px;padding:10px 12px;">' +
-        '<div style="font-size:17px;font-weight:800;color:#8592a6;border-bottom:2px solid #8592a6;padding-bottom:6px;margin-bottom:8px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste pra Feminino, Misto ou Masculino</div>' +
+        '<div style="font-size:17px;font-weight:800;color:#8592a6;border-bottom:2px solid #8592a6;padding-bottom:6px;margin-bottom:8px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste pra Feminino ou Masculino</div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:9px;">' + semInner + '</div></div>';
     }
-    return catsBox + totalBar + grid + semSection;
+    return catsBox + totalBar + mistoStrip + grid + semSection;
   }
   window._erRenderMatrix = function () {
     var el = document.getElementById('er-cat-matrix');
@@ -1562,32 +1528,9 @@
     window._erMxDrag = null;
     if (order == null || isNaN(order)) return;
     if (!_pendingEdits[order]) _pendingEdits[order] = {};
-    var row = (_liveState.rows || []).find(function (r) { return r.order === order; });
-    if (genderKey === 'misto') {
-      // Coluna Misto: quem carrega o "misto" é a CATEGORIA ("Misto A") — o gênero
-      // PESSOAL (fem/masc) fica intacto (misto-obrigatório precisa dele pro pareamento).
-      _pendingEdits[order].category = (sk && sk !== '__none__')
-        ? (_mxFindValidCat(_liveState.t, 'misto', sk) || ('Misto ' + sk))
-        : 'Misto';
-    } else {
-      if (genderKey === 'feminino' || genderKey === 'masculino') {
-        _pendingEdits[order].gender = genderKey;
-        // Vindo da coluna Misto com drop só no cabeçalho: reescreve a categoria pro
-        // lado escolhido (senão a pessoa não sai da coluna Misto). Em torneio SÓ-misto
-        // a categoria precisa carregar o gênero ("Fem"/"Fem A") — categoria vazia
-        // roteia de volta pra Misto.
-        var gcs = (_liveState.t && _liveState.t.genderCategories) || [];
-        var mistoOnlyLive = gcs.some(_erIsMistoTok) && !gcs.some(_erIsFMTok);
-        if (!sk && row && (_mxCatGenderOf(row, _liveState.t) === 'Misto' || mistoOnlyLive)) {
-          var curSk = _mxSkillOf(row, _liveState.t);
-          _pendingEdits[order].category = curSk
-            ? (_mxFindValidCat(_liveState.t, genderKey, curSk) || _GENMAP[genderKey])
-            : (mistoOnlyLive ? _GENMAP[genderKey] : '');
-        }
-      }
-      if (sk && sk !== '__none__') { var vc = _mxFindValidCat(_liveState.t, genderKey, sk); if (vc) _pendingEdits[order].category = vc; }
-      else if (sk === '__none__') { _pendingEdits[order].category = ''; }
-    }
+    if (genderKey === 'feminino' || genderKey === 'masculino') _pendingEdits[order].gender = genderKey;
+    if (sk && sk !== '__none__') { var vc = _mxFindValidCat(_liveState.t, genderKey, sk); if (vc) _pendingEdits[order].category = vc; }
+    else if (sk === '__none__') { _pendingEdits[order].category = ''; }
     window._erRenderMatrix();
     window._erUpdateSaveBar();
   };
