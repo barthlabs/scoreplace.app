@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.4.13';
+window.SCOREPLACE_VERSION = '1.4.14';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -4196,6 +4196,26 @@ window._fbAction = function (key, field, val, noRerender) {
     }
     if (opts.onChange) { try { (new Function(opts.onChange))(); } catch (e) {} }
 };
+// v1.4.14: digitar na busca — mostra/esconde o ✕ de limpar e repassa pro _fbAction.
+// Existe pra que o toggle do ✕ NÃO precise de re-render da barra (noRerender=true
+// preserva o foco e o cursor de quem está digitando).
+window._fbSearchInput = function (key, el) {
+    var opts = window._filterBarCfg[key] || {};
+    var x = opts.searchId && document.getElementById(opts.searchId + '-clear');
+    if (x) x.style.display = (el && el.value) ? '' : 'none';
+    window._fbAction(key, 'search', el ? el.value : '', true);
+};
+// ✕ do campo de busca: limpa, some, devolve o foco (o dono já vai digitar outra coisa)
+// e reaplica o filtro via o MESMO onChange da barra.
+window._fbClearSearch = function (key) {
+    var opts = window._filterBarCfg[key] || {};
+    var el = opts.searchId && document.getElementById(opts.searchId);
+    if (el) el.value = '';
+    var x = opts.searchId && document.getElementById(opts.searchId + '-clear');
+    if (x) x.style.display = 'none';
+    window._fbAction(key, 'search', '', true);
+    if (el && el.focus) el.focus();
+};
 // v2.7.33 (Opção 1): pílula de sort por critério — clicar a ATIVA inverte a seta
 // (cresc↔decr); clicar a inativa ativa-a com a direção lembrada (st.nameDir/orderDir).
 window._fbSortPill = function (key, dim) {
@@ -4322,11 +4342,32 @@ window._fbInner = function (key) {
         // altura que os botões". As pílulas são <button>, e o CSS global força
         // min-height:44px (alvo de toque iOS) por cima do height inline → renderizam 44px.
         // Logo a busca também é 44px (height+min-height) p/ casar exatamente.
-        searchInp = '<input id="' + opts.searchId + '" type="text" oninput="window._fbAction(\'' + key + '\',\'search\',this.value,true)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'flex:1 1 64px;min-width:60px;height:44px;min-height:44px;padding:0 10px;font-size:0.8rem;">';
+        // v1.4.14 (dono): ✕ pra LIMPAR a busca e começar outro texto — na barra CANÔNICA,
+        // então vale em TODA tela que a usa (inscritos, dashboard, chaves). Usa o ✕ canônico
+        // (.cancel-x-btn — círculo vermelho, borda branca, X desenhado), NUNCA um "✕ solto
+        // colorido", que o cânone proíbe (components.css:556 / project_cancel_x_canonical).
+        // Mora DENTRO do campo, à direita, e só aparece com texto — campo vazio não tem o que
+        // limpar. O input ganha padding-right pra o texto não passar por baixo do botão.
+        // O wrapper herda o flex do input (era o input que absorvia a sobra da linha).
+        var _clr = "window._fbClearSearch('" + key + "')";
+        searchInp = '<span style="position:relative;display:inline-flex;align-items:center;flex:1 1 64px;min-width:60px;">'
+            + '<input id="' + opts.searchId + '" type="text" oninput="window._fbSearchInput(\'' + key + '\',this)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'width:100%;height:44px;min-height:44px;padding:0 34px 0 10px;font-size:0.8rem;">'
+            + '<button type="button" id="' + opts.searchId + '-clear" class="cancel-x-btn" title="Limpar busca" onclick="' + _clr + '" style="--cx-size:20px;position:absolute;right:8px;top:50%;transform:translateY(-50%);' + (search ? '' : 'display:none;') + '">✕</button>'
+            + '</span>';
     }
     // v3.0.91: TUDO numa linha só (pedido do usuário) — flex-wrap:nowrap. A busca
     // (flex:1, min-width:60) absorve a sobra e encolhe em telas estreitas mantendo
     // as pílulas na mesma linha.
+    // v1.4.14: modo SÓ BUSCA (opts.searchOnly) — as chaves não têm o que ordenar por A-Z
+    // nem filtrar por gênero/habilidade: os cards são JOGOS, não pessoas. O que serve lá é
+    // achar alguém no meio de dezenas de confrontos. Continua sendo ESTA barra (mesmo input,
+    // mesmo estado, mesmo sticky) — só sem as pílulas. Nunca recriar um campo de busca local.
+    if (opts.searchOnly) {
+        return hidden
+            + '<div style="display:flex;flex-wrap:nowrap;align-items:center;gap:6px;">'
+            + searchInp
+            + '</div>';
+    }
     return hidden
         + '<div style="display:flex;flex-wrap:nowrap;align-items:center;gap:6px;">'
         + azPill + clockPill + activePill
@@ -4373,6 +4414,23 @@ window._inscritosFilterBar = function (opts) {
 // sorteio) usa: `${window._inscritosBar(t, parts.length > 1)}` logo acima dos cards.
 // Filtro/sort operam via window._partApplyFilter (lê os data-part-* — inclusive em
 // telas de DUAS seções, que ele ordena por seção). NÃO criar variação local da barra.
+// v1.4.14 CANÔNICO: barra de BUSCA das CHAVES. Mesma barra dos inscritos (mesmo builder,
+// mesmo sticky, mesmo input) em modo searchOnly — filtra os CARDS DE JOGO por trecho de
+// nome, pra achar uma pessoa e os jogos dela no meio de dezenas de confrontos. O filtro é
+// DOM puro (window._bracketApplyFilter lê data-players dos cards) — não re-renderiza o
+// bracket, então scroll, <details> aberto e placar em edição sobrevivem.
+window._bracketBar = function (show) {
+    if (!show || typeof window._inscritosFilterBar !== 'function') return '';
+    var bar = window._inscritosFilterBar({
+        stateKey: 'chaves', sticky: true, searchOnly: true,
+        searchId: 'bracket-search', onChange: 'window._bracketApplyFilter()'
+    });
+    // O texto digitado sobrevive ao re-render (estado da barra), mas os CARDS voltam sem
+    // filtro. Reaplica assim que o DOM novo aterrissa — daqui, e não de cada render site do
+    // bracket (são 7). setTimeout(0) porque este HTML ainda é string quando esta função roda.
+    setTimeout(function () { if (typeof window._bracketApplyFilter === 'function') window._bracketApplyFilter(); }, 0);
+    return bar + '<div id="bracket-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum jogo encontrado.</div>';
+};
 window._inscritosBar = function (t, show) {
     if (!show || typeof window._inscritosFilterBar !== 'function') return '';
     var bar = window._inscritosFilterBar({

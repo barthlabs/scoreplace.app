@@ -295,7 +295,7 @@ function renderBracket(container, tournamentId, isInline) {
     '</div>';
   })() : '';
 
-  const headerHtml = isInline ? '' /* v1.9.98: inline (dentro da página de detalhes) NÃO renderiza botões de ação — já existem na página (evita duplicação). Só o standalone #bracket/:id mantém o cabeçalho completo. */ : `
+  let headerHtml = isInline ? '' /* v1.9.98: inline (dentro da página de detalhes) NÃO renderiza botões de ação — já existem na página (evita duplicação). Só o standalone #bracket/:id mantém o cabeçalho completo. */ : `
     ${(typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({
           href: '#tournaments/' + _tIdSafe,
@@ -315,6 +315,14 @@ function renderBracket(container, tournamentId, isInline) {
       </div>
       <div>${actionBtnsHtml}</div>
     </div>`;
+
+  // v1.4.14: BUSCA NAS CHAVES logo abaixo do cabeçalho (sticky canônico). Vem daqui, e não
+  // de cada um dos 7 render sites (Liga/Grupos/Elim/Dupla Elim/Suíço/fase/inline), porque
+  // headerHtml é o único ponto por onde TODOS passam — um lugar só, sem drift
+  // (feedback_sweep_all_render_sites). Só com chave sorteada: sem jogo não há o que buscar.
+  if (!isInline && hasContent && typeof window._bracketBar === 'function') {
+    headerHtml += window._bracketBar(true);
+  }
 
   // ── Banner "Iniciar Torneio" e Progress Bar (skip quando inline — já existem no card acima) ──
   const hasDrawContent = (t.matches && t.matches.length > 0) || (t.rounds && t.rounds.length > 0) || (t.groups && t.groups.length > 0);
@@ -3376,10 +3384,37 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // verde) e 'lower' (Chave Inferior, âmbar) — MESMAS cores dos cabeçalhos das seções
   // (ver renderSection em ~1551-1552). Linha única 'main', Grande Final ('grand') e 3º
   // lugar NÃO recebem (culminação/linha única — não há "linha paralela" a distinguir).
+  // v1.4.14: nomes do card em data-players, pra barra de BUSCA das chaves filtrar sem
+  // re-render (window._bracketApplyFilter). Usa os nomes RESOLVIDOS AO VIVO — os mesmos
+  // que aparecem na tela — senão buscar por quem trocou o nome no perfil não acharia nada.
+  // Duplas entram inteiras E membro a membro (o "A / B" é tipografia, nunca chave —
+  // project_dupla_entry_structural_not_slash).
+  var _searchNames = (function () {
+    var out = [];
+    function add(v) {
+      var nm = String(v == null ? '' : v).trim();
+      if (!nm || nm === 'TBD' || nm === 'BYE') return;
+      out.push(nm);
+      if (nm.indexOf(' / ') !== -1) nm.split(' / ').forEach(function (x) { if (x.trim()) out.push(x.trim()); });
+    }
+    try {
+      var _uidsFor = function (slot) {
+        return window._slotUidsPositional ? window._slotUidsPositional(m, slot)
+          : (slot === 'p1' ? (m.p1Uid || m.team1Uids) : (m.p2Uid || m.team2Uids));
+      };
+      add(t && window._resolveSideLive ? window._resolveSideLive(t, m.p1, _uidsFor('p1')) : m.p1);
+      add(t && window._resolveSideLive ? window._resolveSideLive(t, m.p2, _uidsFor('p2')) : m.p2);
+      // Rei/Rainha: os times são arrays de PESSOAS.
+      (m.team1 || []).forEach(add);
+      (m.team2 || []).forEach(add);
+    } catch (e) {}
+    return window._safeHtml(out.join(' | '));
+  })();
+
   var _tierLC = { gold: '#fbbf24', silver: '#cbd5e1', line3: '#cd7f32', line4: '#3b82f6', upper: '#10b981', lower: '#f59e0b' };
   var _lineLeftBorder = _tierLC[m.bracket] ? ('border-left:4px solid ' + _tierLC[m.bracket] + ';') : '';
   return `
-    <div id="card-${m.id}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:120px;background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" data-players="${_searchNames}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:120px;background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
@@ -5268,3 +5303,47 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
 }
 
 // ─── Compute standings ────────────────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BUSCA NAS CHAVES (v1.4.14) — filtra os CARDS DE JOGO por trecho de nome.
+// Pedido do dono: "filtrar sequência de caracteres e encontrar pessoas e seus jogos
+// mais facilmente". A barra é a CANÔNICA (window._bracketBar → _inscritosFilterBar em
+// modo searchOnly); aqui mora só o filtro.
+//
+// DOM PURO, sem re-render: esconder/mostrar card preserva scroll, <details> aberto e
+// placar em edição (project_dashboard_no_rerender / feedback_rerender_keep_scroll).
+// Casa acento-insensitive ("jose" acha "José") e por trecho em qualquer posição.
+// Container que fica sem NENHUM card visível some junto — senão sobra coluna/box vazio.
+// ═══════════════════════════════════════════════════════════════════════════════
+window._bracketNorm = function (s) {
+  return String(s == null ? '' : s).toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+};
+window._bracketApplyFilter = function () {
+  var inp = document.getElementById('bracket-search');
+  var q = window._bracketNorm(inp ? inp.value : '').trim();
+  var cards = document.querySelectorAll('[data-players]');
+  if (!cards.length) return;
+  var shown = 0;
+  var parents = [];
+  for (var i = 0; i < cards.length; i++) {
+    var c = cards[i];
+    var hit = !q || window._bracketNorm(c.getAttribute('data-players') || '').indexOf(q) !== -1;
+    // Guarda o display original UMA vez — o card pode ter display próprio (flex/grid).
+    if (c.dataset.fbDisp === undefined) c.dataset.fbDisp = c.style.display || '';
+    c.style.display = hit ? c.dataset.fbDisp : 'none';
+    if (hit) shown++;
+    if (c.parentElement && parents.indexOf(c.parentElement) === -1) parents.push(c.parentElement);
+  }
+  // Container sem nenhum card visível some (coluna de rodada, box de grupo…).
+  parents.forEach(function (p) {
+    var kids = p.querySelectorAll(':scope > [data-players]');
+    if (!kids.length) return;
+    var any = false;
+    for (var k = 0; k < kids.length; k++) { if (kids[k].style.display !== 'none') { any = true; break; } }
+    if (p.dataset.fbDisp === undefined) p.dataset.fbDisp = p.style.display || '';
+    p.style.display = any ? p.dataset.fbDisp : 'none';
+  });
+  var empty = document.getElementById('bracket-search-empty');
+  if (empty) empty.style.display = (q && shown === 0) ? 'block' : 'none';
+};

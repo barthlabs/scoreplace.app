@@ -19,6 +19,9 @@ const SUITES = [
   // Toast de push em foreground: campos vêm de payload.data (contrato DATA-ONLY da CF).
   // Falha se alguém voltar a ler só payload.notification → toast 'scoreplace.app' vazio.
   'tests/fcm-foreground-toast.test.js',
+  // Busca nas CHAVES: filtro DOM dos cards de jogo (acento-insensitive, membro de dupla,
+  // coluna vazia some, limpar restaura). Verificado também no navegador real.
+  'tests/bracket-search.test.js',
   'tests/phase-transition-matrix.test.js',
   'tests/phase-adversarial.test.js',
   'tests/phase-lifecycle.test.js',
