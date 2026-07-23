@@ -34,6 +34,9 @@ const SUITES = [
   // Destaque VERDE do próprio usuário na classificação: resolve por UID, nunca por nome —
   // senão pinta a linha de um homônimo/dupla alheia.
   'tests/classif-highlight-me.test.js',
+  // Busca na CLASSIFICAÇÃO: UMA barra por render (no 1º bloco, sem id duplicado) e o
+  // filtro cobrindo as linhas de TODOS os blocos.
+  'tests/classif-search.test.js',
   'tests/phase-transition-matrix.test.js',
   'tests/phase-adversarial.test.js',
   'tests/phase-lifecycle.test.js',

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.4.19';
+window.SCOREPLACE_VERSION = '1.4.20';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -8117,6 +8117,63 @@ window._classifModeFor = function (t, phaseIdx) {
 // compara por UID via _participantUids — nunca `split('/')` no rótulo da dupla, que é
 // TIPOGRAFIA e não chave (project_dupla_entry_structural_not_slash). Fallback pra solo via
 // _memberUidByName. Sem uid (visitante/jogador informal) → false, sem destaque errado.
+// v1.4.20 (dono): "vamos colocar a barra de busca logo acima da classificação da linha 1
+// (assim podemos buscar nomes e ver o seu resultado final mais facilmente)".
+//
+// A barra das CHAVES filtra cards de JOGO; esta filtra LINHAS DE CLASSIFICAÇÃO. É a mesma
+// barra canônica (_inscritosFilterBar em modo searchOnly), com estado próprio ('classif')
+// pra não brigar com a das chaves.
+//
+// SAI UMA VEZ POR RENDER, no PRIMEIRO bloco — "acima da linha 1". Em vez de plumbar uma flag
+// por todos os call sites (bracket.js por linha, _renderPodiumsAndClassif por chave,
+// classificação geral…), o próprio _renderClassifBlock decide: quem renderiza chama
+// _classifSearchReset() no começo do passo, e o primeiro bloco daquele passo leva a barra.
+// Filtra TODAS as linhas de TODOS os blocos (Ouro e Prata juntos) — é uma busca só.
+window._classifSearchPending = false;
+window._classifSearchReset = function () { window._classifSearchPending = true; };
+window._classifSearchBar = function () {
+  if (!window._classifSearchPending || typeof window._inscritosFilterBar !== 'function') return '';
+  window._classifSearchPending = false;
+  var bar = window._inscritosFilterBar({
+    stateKey: 'classif', sticky: false, searchOnly: true,
+    searchId: 'classif-search', onChange: 'window._classifApplyFilter()'
+  });
+  setTimeout(function () { if (typeof window._classifApplyFilter === 'function') window._classifApplyFilter(); }, 0);
+  return '<div style="margin:6px 0 8px;">' + bar +
+    '<div id="classif-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:10px;font-size:0.82rem;">Nenhum nome encontrado na classificação.</div>' +
+    '</div>';
+};
+// Filtro das linhas da classificação. DOM puro (sem re-render) — o <details> aberto, o scroll
+// e o placar em edição sobrevivem. Acento-insensitive, trecho em qualquer posição. Bloco que
+// fica sem nenhuma linha visível some junto, senão sobra cabeçalho vazio.
+window._classifApplyFilter = function () {
+  var inp = document.getElementById('classif-search');
+  var norm = window._bracketNorm || function (x) { return String(x == null ? '' : x).toLowerCase(); };
+  var q = norm(inp ? inp.value : '').trim();
+  var rows = document.querySelectorAll('[data-classif-name]');
+  if (!rows.length) return;
+  var shown = 0, blocks = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var hit = !q || norm(r.getAttribute('data-classif-name') || '').indexOf(q) !== -1;
+    if (r.dataset.csDisp === undefined) r.dataset.csDisp = r.style.display || '';
+    r.style.display = hit ? r.dataset.csDisp : 'none';
+    if (hit) shown++;
+    var blk = r.closest ? r.closest('details') : null;
+    if (blk && blocks.indexOf(blk) === -1) blocks.push(blk);
+  }
+  blocks.forEach(function (b) {
+    var kids = b.querySelectorAll('[data-classif-name]');
+    var any = false;
+    for (var k = 0; k < kids.length; k++) { if (kids[k].style.display !== 'none') { any = true; break; } }
+    if (b.dataset.csDisp === undefined) b.dataset.csDisp = b.style.display || '';
+    b.style.display = any ? b.dataset.csDisp : 'none';
+    if (any && q) b.open = true;   // com busca ativa, abre o bloco que tem resultado
+  });
+  var empty = document.getElementById('classif-search-empty');
+  if (empty) empty.style.display = (q && shown === 0) ? 'block' : 'none';
+};
+
 window._classifEntryIsMe = function (t, entryName) {
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!t || !cu || !cu.uid || !entryName) return false;
@@ -8164,7 +8221,7 @@ window._renderClassifBlock = function (t, clMap, opts) {
         '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:800;color:' + bc + ';margin-bottom:3px;">' + rng + (g.names.length > 1 ? ' · ' + g.names.length + ' times' : '') + '</div>' +
         g.names.map(function (n) {
           var _meB = (typeof window._classifEntryIsMe === 'function') && window._classifEntryIsMe(t, n);
-          return '<div style="font-size:0.84rem;font-weight:' + (_meB ? '800' : '600') + ';color:' + (_meB ? '#34d399' : 'var(--text-bright,#f1f5f9)') + ';padding:1px 0;">' + nameHtml(n) + '</div>';
+          return '<div data-classif-name="' + esc(n) + '" style="font-size:0.84rem;font-weight:' + (_meB ? '800' : '600') + ';color:' + (_meB ? '#34d399' : 'var(--text-bright,#f1f5f9)') + ';padding:1px 0;">' + nameHtml(n) + '</div>';
         }).join('') +
         '</div>';
     }).join('');
@@ -8182,7 +8239,7 @@ window._renderClassifBlock = function (t, clMap, opts) {
       var _rowSt = _me
         ? 'display:flex;align-items:center;gap:8px;padding:4px 12px;background:rgba(52,211,153,0.10);border-left:3px solid #34d399;'
         : 'display:flex;align-items:center;gap:8px;padding:4px 12px;';
-      return '<div style="' + _rowSt + '">' +
+      return '<div data-classif-name="' + esc(e.name) + '" style="' + _rowSt + '">' +
         '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + c + ';">' + pos + 'º</span>' +
         '<span style="font-weight:' + (_me ? '800' : '600') + ';color:' + c + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml(e.name) + '</span>' +
         (pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medals[pos] + '</span>' : '') +
@@ -8190,7 +8247,8 @@ window._renderClassifBlock = function (t, clMap, opts) {
     }).join('');
     countLabel = entries.length + ' definidos';
   }
-  return '<details' + (open ? ' open' : '') + ' style="margin:6px 0 1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + color + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + label + ' — ' + countLabel + '</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + inner + '</div></details>';
+  var _searchBar = (typeof window._classifSearchBar === 'function') ? window._classifSearchBar() : '';
+  return _searchBar + '<details' + (open ? ' open' : '') + ' style="margin:6px 0 1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + color + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + label + ' — ' + countLabel + '</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + inner + '</div></details>';
 };
 
 // pódio de UMA linha (winner/loser da final da linha + 3º da linha). '' se não há final.
@@ -8211,6 +8269,7 @@ window._linePodiumHtml = function (t, lineMatches, title, color) {
 
 // FUNÇÃO CANÔNICA: pódio(s) + classificação(ões). Usada na página do torneio (encerrado).
 window._renderPodiumsAndClassif = function (t) {
+  if (typeof window._classifSearchReset === 'function') window._classifSearchReset();
   if (!t) return '';
   var cur = (typeof t.currentPhaseIndex === 'number') ? t.currentPhaseIndex : 0;
   var isMulti = Array.isArray(t.phases) && t.phases.length > 1 && cur > 0;

@@ -101,6 +101,9 @@ function _applyMyMatchesFilter() {
 }
 
 function renderBracket(container, tournamentId, isInline) {
+  // v1.4.20: a barra de busca da CLASSIFICAÇÃO sai no PRIMEIRO bloco deste render.
+  // Reset aqui = começo do passo; sem isto, um render posterior não emitiria a barra.
+  if (typeof window._classifSearchReset === 'function') window._classifSearchReset();
   var _t = window._t || function(k) { return k; };
   const tId = tournamentId || window._lastActiveTournamentId;
   // Entrada no bracket (navegação REAL) → agenda o scroll pro próximo jogo do usuário.
