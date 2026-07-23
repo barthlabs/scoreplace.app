@@ -142,6 +142,21 @@ function renderBracket(container, tournamentId, isInline) {
     } catch (_efin) {}
   }
 
+  // CURA do rótulo cru "Jogador sem perfil (…)" com uids gravados (v1.4.29): busca os
+  // perfis que faltam e reescreve o nome real no doc (persiste se organizador). 1× por
+  // torneio por sessão — se curou algo, re-renderiza pra tela mostrar o nome na hora.
+  if (t && typeof window._healOrphanLabels === 'function') {
+    window._healedOrphanTids = window._healedOrphanTids || {};
+    if (!window._healedOrphanTids[String(tId)]) {
+      window._healedOrphanTids[String(tId)] = 1;
+      try {
+        window._healOrphanLabels(t).then(function (n) {
+          if (n > 0 && typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+        });
+      } catch (_ehl) {}
+    }
+  }
+
   // Se torneio não encontrado localmente, tentar carregar do Firestore
   if (!t) {
     const _cu = window.AppStore && window.AppStore.currentUser;

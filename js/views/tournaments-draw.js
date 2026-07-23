@@ -4144,7 +4144,17 @@ window._stampMissingMatchUids = function (t) {
     if (!m) return;
     [['p1', 'team1Uids'], ['p2', 'team2Uids']].forEach(function (par) {
       var slot = par[0], campo = par[1];
-      if (Array.isArray(m[campo]) && m[campo].length) return;      // já tem identidade
+      if (Array.isArray(m[campo]) && m[campo].length) {
+        // Identidade OK mas o RÓTULO ficou cru ("Jogador sem perfil (…)") — caso real
+        // tour_1784833628631_sb (23/jul): a integração tardia gravou o rótulo porque o
+        // cache de perfis não tinha a dupla NAQUELE momento, e este early-return pulava
+        // o conserto pra sempre. Com os uids no slot, resolve o nome por ELES.
+        if (/jogador sem perfil \(/i.test(String(m[slot] || ''))) {
+          var vivos = m[campo].map(function (u) { return (typeof window._nameForUid === 'function') ? window._nameForUid(u) : ''; });
+          if (vivos.length && vivos.every(Boolean)) { m[slot] = vivos.join(' / '); n++; }
+        }
+        return;
+      }
       var rot = String(m[slot] || '').trim(); if (!rot || rot === 'TBD') return;
       var u = porNome[rot.toLowerCase()];
       if (u && u.length) { m[campo] = u.slice(); n++; return; }
@@ -4160,6 +4170,36 @@ window._stampMissingMatchUids = function (t) {
     });
   });
   return n;
+};
+
+// (1b) CURA ASSÍNCRONA do rótulo cru (v1.4.29): quando o jogo tem os uids gravados mas o
+// rótulo ficou "Jogador sem perfil (…)" (perfil não estava no cache na hora do sorteio/
+// integração), busca os perfis QUE FALTAM no Firestore, reescreve os rótulos via
+// _stampMissingMatchUids e persiste (só organizador). Chamada no render do bracket —
+// o doc se auto-conserta na primeira abertura com os perfis vivos.
+window._healOrphanLabels = function (t) {
+  if (!t) return Promise.resolve(0);
+  var RE = /jogador sem perfil \(/i;
+  var ms = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
+  var uids = [];
+  (ms || []).forEach(function (m) {
+    if (!m) return;
+    [['p1', 'team1Uids'], ['p2', 'team2Uids']].forEach(function (par) {
+      if (RE.test(String(m[par[0]] || '')) && Array.isArray(m[par[1]])) {
+        m[par[1]].forEach(function (u) { if (u && uids.indexOf(u) < 0) uids.push(u); });
+      }
+    });
+  });
+  if (!uids.length) return Promise.resolve(0);
+  var pre = (typeof window._preloadUserProfiles === 'function') ? window._preloadUserProfiles(uids) : Promise.resolve();
+  return pre.then(function () {
+    var n = (typeof window._stampMissingMatchUids === 'function') ? window._stampMissingMatchUids(t) : 0;
+    if (n > 0 && window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t) &&
+        window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+      try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+    }
+    return n;
+  });
 };
 
 // (2) Confronto repetido é detectado POR UID (nunca por rótulo). Remove o duplicado SEM resultado;
