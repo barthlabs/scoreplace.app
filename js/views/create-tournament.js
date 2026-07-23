@@ -5334,7 +5334,7 @@ function setupCreateTournamentModal() {
         }
         try {
           var _f2sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || tourData.sport;
-          var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry, lateEnrollment: tourData.lateEnrollment });
+          var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry, lateEnrollment: tourData.lateEnrollment, newMatchups: tourData.newMatchups });
           Object.assign(tourData, _f2out.topLevel);
           tourData.phases = _f2out.phases;
           tourData.fmt2 = _f2cfg;

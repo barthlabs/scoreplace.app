@@ -126,6 +126,9 @@ const SUITES = [
   // Selo verde de diagnóstico do sorteio: só pode existir em rota de torneio SANDBOX —
   // estava sobrevivendo à navegação e aparecendo por cima da dashboard. v1.4.5.
   'tests/draw-trace-badge-route.test.js',
+  // "Novos Confrontos" ⊥ "Abertas" TAMBÉM na ELIMINATÓRIA (a elim tem flag PRÓPRIA e o gate
+  // _allowsNewMatchups lê a FASE, não só o top-level). v1.4.6.
+  'tests/new-matchups-elim-independent.test.js',
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',

@@ -627,6 +627,12 @@ window._buildPhase0Pool = function (t, isMon, ts) {
 // Compat: torneios antigos só têm lateEnrollment; 'expand' implicava Novos Confrontos ON.
 window._allowsNewMatchups = function (t) {
   if (!t) return false;
+  // POR FASE primeiro (v1.4.6): cada fase tem a SUA regra — a ELIMINATÓRIA não é obrigada a
+  // repetir a da classificatória. Lia só o top-level, então na elim o "Novos Confrontos" só
+  // existia disfarçado de lateEnrollment='expand' → voltava a depender de "Abertas" (o que o
+  // dono viu). Ordem: fase corrente → torneio → compat legado (lateEnrollment efetivo).
+  var ph = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
+  if (ph && ph.newMatchups != null) return ph.newMatchups === true;
   if (t.newMatchups != null) return t.newMatchups === true;
   var le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
   return le === 'expand';
@@ -2165,7 +2171,10 @@ window._setPhaseLateEnrollment = function (tId, mode) {
         ft.lateEnrollment = mode;
         // v1.3.x: mode 'expand' liga "Novos Confrontos" (integração tardia); 'standby'/'closed' desliga.
         // (A independência total Abertas×NovosConfrontos vive na config de criar/editar via newMatchups.)
+        // v1.4.6: grava TAMBÉM na fase corrente — senão o valor por-fase (que _allowsNewMatchups lê
+        // primeiro) continuava valendo e o toggle ao vivo não tinha efeito na eliminatória.
         ft.newMatchups = (mode === 'expand');
+        if (Array.isArray(ft.phases) && ft.phases[_cp]) ft.phases[_cp].newMatchups = (mode === 'expand');
     }, 'Entrada tardia da fase: ' + (mode === 'expand' ? 'ABERTA (novos confrontos)' : mode === 'standby' ? 'suplentes apenas' : 'fechada'));
     if (typeof showNotification === 'function') {
         if (mode === 'expand') showNotification('➕ Entradas tardias ABERTAS', 'Marque presença de quem está na espera — entra por repescagem (vs a definir).', 'success');

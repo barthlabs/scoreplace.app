@@ -100,7 +100,12 @@
     var _explicit = ['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) >= 0;
     var _inh = (function () { var el = document.getElementById('late-enrollment'); var val = el && el.value; return (['closed', 'standby', 'expand'].indexOf(val) >= 0) ? val : 'expand'; })();
     var v = _explicit ? e.lateEnrollment : _inh;
-    var isClosed = v === 'closed', isExpand = v === 'expand';
+    var isClosed = v === 'closed';
+    // "Novos Confrontos" é INDEPENDENTE de "Abertas" (cânone do dono, v1.3.108) — na fase inicial
+    // já era; aqui na ELIMINATÓRIA ainda estava amarrado ao lateEnrollment ('expand') e a linha
+    // sumia quando fechava. Agora tem flag PRÓPRIA (e.newMatchups) e as duas linhas convivem.
+    var _nmInh = (function () { var el = document.getElementById('new-matchups'); if (el) return el.value === 'true'; return _inh === 'expand'; })();
+    var isExpand = (e.newMatchups === true || e.newMatchups === false) ? e.newMatchups : _nmInh;
     var onRow = 'border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);';
     var offRow = 'border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);';
     function _tg(checked, on) {
@@ -116,7 +121,9 @@
       T(isClosed ? 'create.lateEnrollClosed' : 'create.lateEnrollOpen'),
       T(isClosed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc'),
       _tg(isClosed, 'window._f2ElimLateMaster(this.checked)'));
-    var confRow = isClosed ? '' : ('<div style="margin-top:8px;">' + _row(isExpand, isExpand ? '➕' : '🪑',
+    // SEMPRE renderizada (mesmo com inscrições fechadas): suplente/dupla formada entra na chave
+    // na hora independentemente de aceitar NOVOS inscritos.
+    var confRow = ('<div style="margin-top:8px;">' + _row(isExpand, isExpand ? '➕' : '🪑',
       T(isExpand ? 'create.lateEnrollExpand' : 'create.lateEnrollSuplentesOnly'),
       T(isExpand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc'),
       _tg(isExpand, 'window._f2ElimLateConf(this.checked)')) + '</div>');
@@ -811,14 +818,18 @@
   // Fechadas; master OFF preserva o conf (expand/standby). conf só vale com inscrição aberta.
   window._f2ElimLateMaster = function (closedOn) {
     if (!S) return; var e = S.cfg.eliminatoria;
+    // Só mexe na INSCRIÇÃO. "Novos Confrontos" (e.newMatchups) NÃO é tocado aqui — são ortogonais.
     if (closedOn) e.lateEnrollment = 'closed';
-    else e.lateEnrollment = (e.lateEnrollment === 'expand') ? 'expand' : 'standby';
+    else e.lateEnrollment = (e.newMatchups === true) ? 'expand' : 'standby';
     _norm(); _rerender();
   };
   window._f2ElimLateConf = function (expandOn) {
     if (!S) return; var e = S.cfg.eliminatoria;
-    if (e.lateEnrollment === 'closed') return; // conf irrelevante quando fechada
-    e.lateEnrollment = expandOn ? 'expand' : 'standby';
+    // Vale MESMO com as inscrições fechadas (o suplente que já está na espera entra na chave).
+    e.newMatchups = !!expandOn;
+    // lateEnrollment segue só a inscrição; mantém 'expand'/'standby' coerente quando ABERTA
+    // (compat com quem lê o valor antigo), sem nunca reabrir uma inscrição fechada.
+    if (e.lateEnrollment !== 'closed') e.lateEnrollment = expandOn ? 'expand' : 'standby';
     _norm(); _rerender();
   };
   window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
@@ -862,7 +873,9 @@
   };
   window._f2ApplyPage = function () {
     var t = S.t;
-    var out = window.FORMAT2.compileToPhases(S.cfg, { sport: S.sport, resultEntry: t.resultEntry || ['organizer'] });
+    // preserva a política de inscrição/novos confrontos JÁ escolhida no torneio (o painel da fase
+    // inicial vive no form de criar/editar, não nesta página) — senão 'inherit' cairia no default.
+    var out = window.FORMAT2.compileToPhases(S.cfg, { sport: S.sport, resultEntry: t.resultEntry || ['organizer'], lateEnrollment: t.lateEnrollment, newMatchups: t.newMatchups });
     Object.assign(t, out.topLevel);
     t.phases = out.phases; t.fmt2 = S.cfg;
     if (t.format === 'Fase de Grupos') { t.ligaRoundFormat = 'standard'; t.ligaDrawMode = 'standard'; }
