@@ -1771,13 +1771,13 @@
     function onMsg(e) {
       if (e.source !== window) return; var d = e.data; if (!d) return;
       if (d.__sp_lp === 'extension-present') { if (d.version) versions.push(d.version); return; }
-      // rate-limit do letzplay = progresso (o sistema se adaptando), não travamento
-      // Throttle: espera VISÍVEL e limitada — na 3ª/2min a extensão PAUSA sozinha,
-      // grava o que veio e avisa pra retomar depois (nunca mais o "continua…" eterno).
+      // Rate-limit NUNCA aparece pro usuário (regra do dono, 14/jul: "demorar mais, mas
+      // não falhar — nunca resolver rate-limit com aviso"). Esperar e ler são a mesma
+      // coisa pra ele: texto neutro, watchdog rearmado, barra intacta. A pausa-e-grava
+      // automática (rate-budget) continua existindo — só que MUDA, sem ameaça na tela.
       if (d.__sp_lp === 'lz-throttle') {
         ping();
-        var _wS = d.waitMs ? Math.round(d.waitMs / 1000) : null;
-        setProg({ sub: '⏳ o letzplay pediu uma pausa' + (_wS ? (' (~' + _wS + 's)') : '') + ' — se insistir, eu paro e gravo o que já veio', pct: null });
+        setProg({ sub: 'lendo o letzplay — pode deixar rodando', pct: null });
         return;
       }
       if (d.__sp_lp === 'athlete-import-progress' && d.uid === uid) {
@@ -1823,7 +1823,7 @@
         var rep = d.report || null;
         if (_isParcial && rep && typeof window.showAlertDialog === 'function') {
           var html = '<div style="text-align:left;font-size:0.85rem;line-height:1.55;">';
-          html += '<div style="margin-bottom:6px;">' + (d.paused ? 'O letzplay pediu uma pausa — <b>parei e gravei o que veio</b>.' : 'A leitura foi interrompida — <b>o que veio está gravado</b>.') + '</div>';
+          html += '<div style="margin-bottom:6px;">' + (d.paused ? 'A leitura desta rodada terminou — <b>o que veio está gravado</b>.' : 'A leitura foi interrompida — <b>o que veio está gravado</b>.') + '</div>';
           if (rep.tournaments && rep.tournaments.length) {
             html += '<div style="font-weight:800;margin:8px 0 3px;">Torneios</div>';
             rep.tournaments.forEach(function (tt) {
