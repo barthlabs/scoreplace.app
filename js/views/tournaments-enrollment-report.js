@@ -1589,16 +1589,30 @@
     if (_p1 && _p2) imp = ((_p1.games || []).length > (_p2.games || []).length) ? _p1 : _p2;
     var body = 'Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> (@' + _esc(tg.handle) + ') no letzplay.<br>';
     var btnLabel = '📚 Puxar histórico completo';
+    // 3 BARRAS (x = gravado · y = total do perfil letzplay). Os "de y" que faltarem são
+    // completados ao vivo pela extensão (lz-profile-counts lê "472 Jogos · 29 Rankings ·
+    // 35 Torneios" do perfil público) — direto na tela, como o dono pediu.
+    function barLine(id, icon, label, x, y) {
+      var pct = (y && y > 0) ? Math.min(100, Math.round(x / y * 100)) : null;
+      return '<div id="' + id + '" data-x="' + x + '" style="margin:5px 0;">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;font-size:0.8rem;"><span>' + icon + ' ' + label + '</span><span class="lz-bar-txt"><b>' + x + '</b>' + (y ? (' de ' + y + ' (' + pct + '%)') : ' de …') + '</span></div>' +
+        '<div style="height:7px;border-radius:99px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.08));"><div class="lz-bar-fill" style="height:100%;width:' + (pct != null ? Math.max(2, pct) : 2) + '%;background:linear-gradient(90deg,#10b981,#059669);"></div></div>' +
+      '</div>';
+    }
+    var gX = imp ? (imp.games || []).length : 0;
+    var gY = (imp && imp.declaredGames != null) ? imp.declaredGames : null;
+    var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
+    var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];
+    var tX = offFp.filter(function (f) { return f.standings || (f.name && f.name !== f.categoryRaw); }).length;
+    var tY = (imp && imp.declaredTournaments != null) ? imp.declaredTournaments : null;
+    var rX = rkFp.length;
+    var rY = (imp && imp.declaredRankings != null) ? imp.declaredRankings : null;
+    body += '<div style="margin:8px 0 6px;">' +
+      barLine('lz-ath-t', '🏆', 'Torneios', tX, tY) +
+      barLine('lz-ath-r', '📊', 'Rankings', rX, rY) +
+      barLine('lz-ath-g', '🎾', 'Jogos', gX, gY) +
+      '</div>';
     if (imp) {
-      var gX = (imp.games || []).length, gY = (imp.declaredGames != null) ? imp.declaredGames : null;
-      var offFp = (imp.footprint || []).filter(function (f) { return f.official; });
-      var tX = offFp.filter(function (f) { return f.standings || (f.name && f.name !== f.categoryRaw); }).length;
-      var tY = (imp.declaredTournaments != null) ? imp.declaredTournaments : (offFp.length || null);
-      function pctS(x, y) { return (y && y > 0) ? (' (' + Math.min(100, Math.round(x / y * 100)) + '%)') : ''; }
-      body += '<div style="margin:8px 0 6px;font-size:0.85rem;">' +
-        '🏆 Torneios lidos: <b>' + tX + (tY ? (' de ' + tY) : '') + '</b>' + pctS(tX, tY) + '<br>' +
-        '🎾 Jogos gravados: <b>' + gX + (gY ? (' de ' + gY) : '') + '</b>' + pctS(gX, gY) +
-        '</div>';
       // Torneios já puxados: nome · categoria · ano · classificação do atleta.
       if (offFp.length) {
         var lis = offFp.map(function (f) {
@@ -1617,16 +1631,39 @@
       }
       body += (lu ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Última atualização: <b>' + lu.label + '</b></div>' : '');
     } else {
-      body += '<br>Ainda sem histórico puxado. Vou ler torneios (nome, categoria, classificação) e depois os jogos, gravando a cada passo.';
+      body += '<div style="font-size:0.8rem;color:var(--text-muted);">Nada gravado ainda — leio torneios (nome, categoria, classificação) e depois os jogos, gravando a cada passo.</div>';
     }
     if (typeof window.showConfirmDialog === 'function') {
       window.showConfirmDialog('🎾 ' + (tg.name || '@' + tg.handle), body,
         function () { window._lzAthleteImport(uid); }, null,
         { confirmText: btnLabel, cancelText: 'Fechar', type: 'info' });
+      // Completa os "de y" das barras AO VIVO com os totais do perfil público
+      // (a extensão lê "472 Jogos · 29 Rankings · 35 Torneios" e devolve).
+      setTimeout(function () { _lzAskProfileCounts(tg.handle); }, 60);
     } else {
       window._lzAthleteImport(uid);
     }
   };
+  // Pede os TOTAIS do perfil público à extensão e atualiza as barras do dialog aberto.
+  function _lzAskProfileCounts(handle) {
+    function onMsg(e) {
+      if (e.source !== window) return; var d = e.data;
+      if (!d || d.__sp_lp !== 'lz-profile-counts-result' || d.handle !== handle) return;
+      window.removeEventListener('message', onMsg);
+      if (d.error) return;
+      function upd(id, y) {
+        var el = document.getElementById(id); if (!el || y == null) return;
+        var x = parseInt(el.getAttribute('data-x'), 10) || 0;
+        var pct = y > 0 ? Math.min(100, Math.round(x / y * 100)) : 0;
+        var t = el.querySelector('.lz-bar-txt'); if (t) t.innerHTML = '<b>' + x + '</b> de ' + y + ' (' + pct + '%)';
+        var f = el.querySelector('.lz-bar-fill'); if (f) f.style.width = Math.max(2, pct) + '%';
+      }
+      upd('lz-ath-t', d.tournaments); upd('lz-ath-r', d.rankings); upd('lz-ath-g', d.games);
+    }
+    window.addEventListener('message', onMsg);
+    setTimeout(function () { window.removeEventListener('message', onMsg); }, 15000);
+    window.postMessage({ __sp_lp: 'lz-profile-counts', handle: handle }, window.location.origin);
+  }
   // Puxa a COMPLETA de UM atleta pelo @ público — o caminho do autoimport (fetch das
   // páginas /{handle}/matches), sem navegar o perfil SPA (a causa do lote travar).
   window._lzAthleteImport = function (uid) {
@@ -2239,7 +2276,20 @@
       }
       var doc = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, scannedByName: meName, tournamentId: String(tId), tournamentName: tName };
       if (gotFull) doc.fullImport = s.fullImport;
-      var w = db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
+      var w = db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true })
+        .catch(function (err) {
+          // NUNCA falhar MUDO (caso Camila: 472 jogos → doc >1MiB → todos os writes
+          // morriam em silêncio e "não gravava porra nenhuma"). Mostra o ERRO REAL e
+          // regrava SEM o fullImport — o resumo (scan) sempre cabe e sempre fica.
+          var em = ((err && err.code) ? err.code + ': ' : '') + ((err && err.message) || err);
+          if (typeof showNotification === 'function') showNotification('⚠️ Falha ao gravar histórico', String(em).slice(0, 140), 'error');
+          if (doc.fullImport) {
+            var lean = { handle: doc.handle, scan: doc.scan, scannedAt: doc.scannedAt, scannedBy: doc.scannedBy, scannedByName: doc.scannedByName, tournamentId: doc.tournamentId, tournamentName: doc.tournamentName };
+            if (lean.scan && typeof lean.scan === 'object') { lean.scan._mode = 'essential'; lean.scan._fullError = ('write: ' + String(em)).slice(0, 120); }
+            return db.collection('letzplayScans').doc(s.uid).set(lean, { merge: true });
+          }
+          throw err;
+        });
       // ESCRITA DUPLA (transição): o histórico também vai pro canônico — 1 doc por
       // competição, 1 por partida, compartilhado. É aqui que o ganho aparece: a mesma
       // partida trazida por 4 pessoas vira UM doc, e varrer alguém já preenche o pedaço
@@ -2293,7 +2343,19 @@
       // Não gravar `fullImport: null` quando falhou: o set é merge, e apagar um histórico
       // BOM de uma varredura anterior por causa de um 403 de hoje seria perda de dado real.
       if (gotFull) doc.fullImport = s.fullImport;
-      return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
+      return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true })
+        .catch(function (err) {
+          // Erro REAL na tela + regrava sem o fullImport (o resumo sempre cabe) — ver
+          // _lzPersistScans; mesmo fallback aqui (caso Camila: doc >1MiB falhava mudo).
+          var em = ((err && err.code) ? err.code + ': ' : '') + ((err && err.message) || err);
+          if (typeof showNotification === 'function') showNotification('⚠️ Falha ao gravar histórico', String(em).slice(0, 140), 'error');
+          if (doc.fullImport) {
+            var lean = { handle: doc.handle, scan: doc.scan, scannedAt: doc.scannedAt, scannedBy: doc.scannedBy, scannedByName: doc.scannedByName, tournamentId: doc.tournamentId, tournamentName: doc.tournamentName };
+            if (lean.scan && typeof lean.scan === 'object') { lean.scan._mode = 'essential'; lean.scan._fullError = ('write: ' + String(em)).slice(0, 120); }
+            return db.collection('letzplayScans').doc(s.uid).set(lean, { merge: true });
+          }
+          throw err;
+        });
     });
     Promise.all(writes).then(function () {
       // APLICA no perfil de cada inscrito (gênero + nível + histórico) AGORA, via Cloud

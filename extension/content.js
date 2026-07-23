@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.42';
+  var EXT_VERSION = '1.43';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -247,7 +247,9 @@
         var d = await bgFetchDoc(url);
         var nm = tourneyNameFromDoc(d);
         cache[u.id] = nm || null;
-        standCache[u.id] = (u.type === 't') ? tourneyStandingsFromDoc(d) : rankingStandingsFromDoc(d);
+        // Ranking: classificação ENXUTA (top 5 + o próprio atleta) — a completa do clube
+        // (100+ duplas × N rankings) estourava o limite de 1MiB do doc no Firestore.
+        standCache[u.id] = (u.type === 't') ? tourneyStandingsFromDoc(d) : slimRankingStandings(rankingStandingsFromDoc(d), raw.handle);
         logoCache[u.id] = tourneyLogoFromDoc(d);
         if (nm) { resolved++; } else { failed.push(u.categoryRaw || u.id); }
       } catch (e) { cache[u.id] = null; failed.push(u.categoryRaw || u.id); }
@@ -496,12 +498,45 @@
       };
     });
   }
-  var _athleteImportRunning = null;
+  // Classificação de RANKING enxuta: top 5 + a(s) linha(s) do PRÓPRIO atleta. O ranking
+  // completo do clube (100+ duplas × 29 rankings) estourava o limite de 1MiB do doc no
+  // Firestore → TODOS os writes da Camila (472 jogos) falhavam em silêncio. O app só usa
+  // a posição do atleta + o topo; o resto era peso morto fatal.
+  function slimRankingStandings(st, handle) {
+    var low = String(handle || '').toLowerCase();
+    return (st || []).map(function (g) {
+      var rows = (g.rows || []).filter(function (r) {
+        var mine = (r.handles || []).some(function (x) { return String(x).toLowerCase() === low; });
+        return mine || (r.pos != null && r.pos <= 5);
+      });
+      return { group: g.group, ranking: g.ranking === true, rows: rows };
+    });
+  }
+  // Corte de emergência por TAMANHO (limite do doc Firestore = 1MiB): se ainda passar de
+  // ~900KB, derruba standings dos rankings; depois standings/logos de tudo.
+  function shrinkImport(imp) {
+    function size(o) { try { return JSON.stringify(o).length; } catch (e) { return 0; } }
+    if (size(imp) <= 900000) return imp;
+    (imp.footprint || []).forEach(function (f) { if (!f.official) { delete f.standings; } });
+    if (size(imp) <= 900000) { imp.slimmed = 'rank-standings'; return imp; }
+    (imp.footprint || []).forEach(function (f) { delete f.standings; delete f.logo; });
+    imp.slimmed = 'all-standings';
+    return imp;
+  }
+  var _athleteImportRunning = null, _athleteImportUid = null;
   function runAthleteImport(handle, uid, tournamentId, prior) {
-    if (_athleteImportRunning) return _athleteImportRunning;   // 1 por vez nesta aba
+    if (_athleteImportRunning) {
+      // Ocupado com OUTRO atleta → responde na hora (antes: silêncio total e o
+      // organizador achava que "não puxa mais ninguém").
+      if (_athleteImportUid !== uid) {
+        post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: 'ocupado — outra leitura em andamento; aguarde ela terminar' });
+      }
+      return _athleteImportRunning;
+    }
+    _athleteImportUid = uid;
     _athleteImportRunning = _runAthleteImport(handle, uid, tournamentId, prior)
       .catch(function () {})
-      .then(function () { _athleteImportRunning = null; });
+      .then(function () { _athleteImportRunning = null; _athleteImportUid = null; });
     return _athleteImportRunning;
   }
   // v1.41 — pipeline EM ETAPAS, gravando a cada passo (sistemática do dono, 14/jul):
@@ -552,20 +587,32 @@
         (raw.rankings || []).forEach(function (r) {
           if (!r.rankingId || !r.club) return;
           var d = priorNames['r/' + r.club + '/' + r.rankingId];
-          if (d) { if (d.name) r.name = d.name; if (d.standings) r.standings = d.standings; if (d.logo) r.logo = d.logo; }
+          // standings herdados de gravação ANTIGA podem estar completos → slim de novo
+          if (d) { if (d.name) r.name = d.name; if (d.standings) r.standings = slimRankingStandings(d.standings, realHandle); if (d.logo) r.logo = d.logo; }
         });
         return raw;
       }
       var parts = [];                     // participações em torneios (lista pública)
       var declaredGamesTotal = null;      // quantos jogos o letzplay DIZ que existem
+      var declaredRankingsTotal = null, declaredTournTotal = null;
       var maxPage = 1, parcial = null, pausado = false, lastPageRead = 0;
+      // PRAZO DURO da rodada: 4 min. Rodada nunca fica pendurada — estourou, PAUSA
+      // (grava o que veio) e o organizador retoma com outro clique.
+      var deadline = Date.now() + 240000;
+      function checkDeadline() { if (Date.now() > deadline) { var e = new Error('tempo da rodada esgotado'); e.code = 'rate-budget'; throw e; } }
+      function stampDeclared(imp) {
+        imp.declaredTournaments = (declaredTournTotal != null) ? declaredTournTotal : (parts.length || ((prior && prior.declaredTournaments) || null));
+        imp.declaredRankings = (declaredRankingsTotal != null) ? declaredRankingsTotal : ((prior && prior.declaredRankings) || null);
+        if (declaredGamesTotal != null) imp.declaredGames = declaredGamesTotal;
+        else if (prior && prior.declaredGames != null) imp.declaredGames = prior.declaredGames;
+        return shrinkImport(imp);
+      }
       function postPartial(stage, done, total) {
         try {
           if (!all.length) return;
           var imp = I.normalize(buildRawWithDetails(), { importedAt: new Date().toISOString() });
           imp.partialReason = 'parcial: ' + stage + ' ' + done + '/' + total;   // rodada em curso — nunca marca completo
-          imp.declaredTournaments = parts.length || null;
-          if (declaredGamesTotal != null) imp.declaredGames = declaredGamesTotal;
+          imp = stampDeclared(imp);
           post({ __sp_lp: 'athlete-import-partial', tournamentId: tournamentId, uid: uid || null, handle: handle,
             stage: stage, done: done, total: total, scan: scanFromImport(realHandle, imp), fullImport: imp });
         } catch (e) {}
@@ -586,21 +633,44 @@
       function isPause(e) { return !!(e && e.code === 'rate-budget'); }
 
       try {   // ── etapas 1–3: um 'rate-budget' aqui dentro PAUSA (grava e sai), não falha ──
-      // ── ETAPA 1: lista de torneios da pessoa ──
+      // ── ETAPA 0: TOTAIS do perfil público ("472 Jogos · 29 Rankings · 35 Torneios") —
+      // vêm no HTML cru e viram os "de y" das barras (jogos/rankings/torneios).
+      prog({ phase: 'perfil', note: 'lendo os totais do perfil', pct: 1 });
+      try {
+        var dprof = await bgFetchDoc('https://letzplay.me/' + encodeURIComponent(handle));
+        var btxt = ((dprof.body && dprof.body.textContent) || '').replace(/\s+/g, ' ');
+        var mJ = btxt.match(/(\d+)\s*Jogos/); if (mJ) declaredGamesTotal = +mJ[1];
+        var mR = btxt.match(/(\d+)\s*Rankings/); if (mR) declaredRankingsTotal = +mR[1];
+        var mT = btxt.match(/(\d+)\s*Torneios/); if (mT) declaredTournTotal = +mT[1];
+        prog({ pct: 2, feed: '👤 perfil: ' + (declaredGamesTotal != null ? declaredGamesTotal : '?') + ' jogos · ' + (declaredRankingsTotal != null ? declaredRankingsTotal : '?') + ' rankings · ' + (declaredTournTotal != null ? declaredTournTotal : '?') + ' torneios' });
+      } catch (e0) { if (isPause(e0)) throw e0; }
+      // ── ETAPA 1: lista de torneios da pessoa (PAGINADA — 35 não cabem numa página) ──
       prog({ phase: 'torneios', note: 'lendo a lista de torneios', pct: 2 });
       try {
-        var dl = await bgFetchDoc('https://letzplay.me/' + encodeURIComponent(handle) + '/tournaments');
+        var tBase = 'https://letzplay.me/' + encodeURIComponent(handle) + '/tournaments';
         var seenT = {};
-        [].slice.call(dl.querySelectorAll('a[href]')).forEach(function (a) {
-          var h = a.getAttribute('href') || '';
-          var mm = h.match(/^\/([^\/]+)\/tournaments\/(\d+)$/);
-          if (!mm || seenT[h]) return; seenT[h] = 1;
-          parts.push({ club: mm[1], tid: mm[2], title: (a.textContent || '').replace(/\s+/g, ' ').trim() });
-        });
+        function collectParts(docL) {
+          [].slice.call(docL.querySelectorAll('a[href]')).forEach(function (a) {
+            var h = a.getAttribute('href') || '';
+            var mm = h.match(/^\/([^\/]+)\/tournaments\/(\d+)$/);
+            if (!mm || seenT[h]) return; seenT[h] = 1;
+            parts.push({ club: mm[1], tid: mm[2], title: (a.textContent || '').replace(/\s+/g, ' ').trim() });
+          });
+        }
+        var dl = await bgFetchDoc(tBase);
+        collectParts(dl);
+        var tMax = F.detectMaxPage(dl);
+        for (var tp = 2; tp <= tMax; tp++) {
+          checkDeadline();
+          prog({ phase: 'torneios', note: 'lista de torneios — página ' + tp + ' de ' + tMax, pct: 2 });
+          collectParts(await bgFetchDoc(tBase + '?page=' + tp));
+        }
+        if (declaredTournTotal == null && parts.length) declaredTournTotal = parts.length;
       } catch (eT) { if (isPause(eT)) throw eT; }   // sem lista pública → segue pros jogos gerais
 
       // ── ETAPA 2: por torneio (a lista já vem do mais recente pro mais antigo) ──
       for (var ti = 0; ti < parts.length; ti++) {
+        checkDeadline();
         var P = parts[ti], key = 't/' + P.club + '/' + P.tid;
         var labelT = 'torneio ' + (ti + 1) + ' de ' + parts.length;
         var hasGames = all.some(function (m) { return m.official && String(m.tourneyId) === String(P.tid); });
@@ -655,6 +725,7 @@
       var priorComplete = !!(prior && !prior.partialReason && prior.declaredGames != null &&
         Array.isArray(prior.games) && prior.games.length >= prior.declaredGames);
       for (var p = 2; p <= maxPage; p++) {
+        checkDeadline();
         prog({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage, pct: pctPage(p - 1, maxPage) });
         var d = await bgFetchDoc(base + '?page=' + p);
         var list = X.extractMatchesFromDoc(d, realHandle);
@@ -681,8 +752,7 @@
       var rawF = buildRawWithDetails();
       if (!pausado) { try { await fillTourneyNames(rawF, prog); } catch (e) {} }
       var impF = I.normalize(rawF, { importedAt: new Date().toISOString() });
-      impF.declaredGames = (declaredGamesTotal != null) ? declaredGamesTotal : ((prior && prior.declaredGames != null) ? prior.declaredGames : null);
-      impF.declaredTournaments = parts.length || ((prior && prior.declaredTournaments) || null);
+      impF = stampDeclared(impF);
       if (pausado) impF.partialReason = 'pausado: limite do letzplay — retome mais tarde';
       else if (parcial) impF.partialReason = String(parcial).slice(0, 120);
       var v = I.validate(impF);
@@ -708,6 +778,20 @@
       fail(em.slice(0, 140));
     } finally {
       _rateBudget = null;
+    }
+  }
+
+  // TOTAIS do perfil público ("472 Jogos · 29 Rankings · 35 Torneios") pro DIALOG do
+  // atleta mostrar as barras x de y ANTES mesmo de puxar. 1 fetch, HTML cru.
+  async function profileCounts(handle) {
+    try {
+      var d = await bgFetchDoc('https://letzplay.me/' + encodeURIComponent(handle));
+      var t = ((d.body && d.body.textContent) || '').replace(/\s+/g, ' ');
+      function n(re) { var m = t.match(re); return m ? +m[1] : null; }
+      post({ __sp_lp: 'lz-profile-counts-result', handle: handle,
+        games: n(/(\d+)\s*Jogos/), rankings: n(/(\d+)\s*Rankings/), tournaments: n(/(\d+)\s*Torneios/) });
+    } catch (e) {
+      post({ __sp_lp: 'lz-profile-counts-result', handle: handle, error: String((e && e.message) || e).slice(0, 80) });
     }
   }
 
@@ -745,6 +829,7 @@
     if (d.__sp_lp === 'check-letzplay') { checkLetzplay(); return; }
     if (d.__sp_lp === 'run-org-scan') { runOrgScan(d.targets, d.tournamentId, d.mode === 'full' ? 'full' : 'essential'); return; }
     if (d.__sp_lp === 'run-athlete-import') { runAthleteImport(d.handle, d.uid, d.tournamentId, d.prior || null); return; }
+    if (d.__sp_lp === 'lz-profile-counts') { profileCounts(d.handle); return; }
   };
   window.addEventListener('message', window.__spLzpMsgHandler);
 
