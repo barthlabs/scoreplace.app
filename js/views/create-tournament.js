@@ -448,6 +448,14 @@ function setupCreateTournamentModal() {
                 <label class="form-label">${_t('create.drawMode')}</label>
                 <input type="hidden" id="draw-mode" value="sorteio">
                 <div id="draw-mode-buttons" style="display:flex;gap:6px;flex-wrap:wrap;">
+// v1.4.12: o toggle "Deixar inscritos ficarem de fora" existe em DOIS lugares — o bloco novo
+// do configurador (format2-ui, dentro de "Agendamento dos sorteios") e o #liga-fields legado.
+// Nunca podem ter o MESMO id (getElementById devolveria um deles ao acaso). Fonte única de
+// lookup: o do configurador vence; o legado é fallback.
+window._allowSelfDeactEl = function () {
+  return document.getElementById('liga-allow-self-deactivation') ||
+         document.getElementById('liga-allow-self-deactivation-legacy');
+};
                   <button type="button" class="draw-mode-btn draw-mode-active" data-value="sorteio" onclick="window._selectDrawMode(this)" style="padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #34d399;background:rgba(16,185,129,0.15);color:#34d399;font-weight:600;">🎲 ${_t('create.drawModeSorteio')}</button>
                   <button type="button" class="draw-mode-btn" data-value="rei_rainha" id="btn-draw-mode-monarch" onclick="window._selectDrawMode(this)" style="padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:600;">👑 ${_t('format.monarchShort')}</button>
                   <button type="button" class="draw-mode-btn" data-value="round_robin" id="btn-draw-mode-rr" onclick="window._selectDrawMode(this)" style="display:none;padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:600;">🔄 Todos contra todos</button>
@@ -526,7 +534,7 @@ function setupCreateTournamentModal() {
                      achava). Controla o canon do "Ativado/Desativado" que aparece nos cards. -->
                 <div class="toggle-row" style="margin-bottom:0.75rem;">
                   <div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">Deixar inscritos ficarem de fora (Ativado/Desativado)</span><div class="toggle-desc">Cada inscrito pode se marcar como <b>Desativado</b> pra ficar de fora de um sorteio. Desligue pra que ninguém fique de fora — todos sempre <b>Ativados</b> e o controle some dos cards.</div></div></div>
-                  <label class="toggle-switch"><input type="checkbox" id="liga-allow-self-deactivation" checked><span class="toggle-slider"></span></label>
+                  <label class="toggle-switch"><input type="checkbox" id="liga-allow-self-deactivation-legacy" checked><span class="toggle-slider"></span></label>
                 </div>
                 <!-- v2.6.56: "Temporada contínua" removida — início/fim da fase já definem a temporada
                      (t.temporada=true por padrão no save; sem elemento). -->
@@ -4668,8 +4676,9 @@ function setupCreateTournamentModal() {
     var _balLoad = document.getElementById('liga-balanced-toggle');
     if (_balLoad) _balLoad.checked = (t.equilibrado !== false);
     // v2.7.38: permitir auto-desativação (default true).
-    var _adLoad = document.getElementById('liga-allow-self-deactivation');
-    if (_adLoad) _adLoad.checked = (t.allowSelfDeactivation !== false);
+    var _adLoad = window._allowSelfDeactEl();
+    // disabled = rodada única (o configurador travou em desligado): não re-marcar.
+    if (_adLoad && !_adLoad.disabled) _adLoad.checked = (t.allowSelfDeactivation !== false);
     if (t.clusterSize) {
       var _clusterLoad = document.getElementById('liga-cluster-size');
       if (_clusterLoad) _clusterLoad.value = t.clusterSize;
@@ -5209,9 +5218,10 @@ function setupCreateTournamentModal() {
           // v3.0.x: se o toggle NÃO está no DOM (save de um contexto que não renderizou a
           // config), PRESERVA o valor já gravado em vez de resetar pra true — senão a
           // config "se perdia" num save parcial. Só usa o default true se for criação nova.
-          var _adEl = document.getElementById('liga-allow-self-deactivation');
+          var _adEl = window._allowSelfDeactEl();
           if (_adEl) {
-            tourData.allowSelfDeactivation = !!_adEl.checked;
+            // disabled = rodada única → ninguém se desativa (regra do dono), independente do DOM.
+            tourData.allowSelfDeactivation = _adEl.disabled ? false : !!_adEl.checked;
           } else {
             var _adPrev = true;
             if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
@@ -6612,7 +6622,7 @@ window._prefillFromTemplate = function(tpl) {
   if (tpl.gruposEqualOnly !== undefined) _setC('grupos-equal-only', tpl.gruposEqualOnly);
   if (tpl.gruposSeedVip !== undefined) _setC('grupos-seed-vip', tpl.gruposSeedVip);
   if (tpl.gruposSeedCategory !== undefined) _setC('grupos-seed-category', tpl.gruposSeedCategory);
-  if (tpl.allowSelfDeactivation !== undefined) _setC('liga-allow-self-deactivation', tpl.allowSelfDeactivation);
+  if (tpl.allowSelfDeactivation !== undefined) { var _adTpl = window._allowSelfDeactEl(); if (_adTpl) _adTpl.checked = !!tpl.allowSelfDeactivation; }
   if (tpl.reiRainhaGroupsBy) _setV('reirainha-groups-by', tpl.reiRainhaGroupsBy);
   if (typeof window._f2MountInEditForm === 'function') { try { window._f2MountInEditForm(); } catch (e) {} }
   if (typeof window._renderGruposSuggestions === 'function') { try { window._renderGruposSuggestions(); } catch (e) {} }
@@ -7017,7 +7027,7 @@ window._saveCurrentFormAsTemplate = function() {
       // round-trips 100%. Fase 1 (nome) + toggles top-level completam.
       fmt2: (function () { try { return (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) { return null; } })(),
       phase1Name: (function () { var el = document.getElementById('phase1-name'); return el ? el.value.trim() : ''; })(),
-      allowSelfDeactivation: (function () { var el = document.getElementById('liga-allow-self-deactivation'); return el ? !!el.checked : true; })(),
+      allowSelfDeactivation: (function () { var el = window._allowSelfDeactEl(); return el ? !!el.checked : true; })(),
       gruposCount: parseInt(get('grupos-count')) || 4,
       gruposClassified: parseInt(get('grupos-classified')) || 2,
       gruposEqualOnly: getChecked('grupos-equal-only'),

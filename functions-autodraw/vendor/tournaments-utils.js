@@ -1892,7 +1892,16 @@ window._buildTournamentConfigBox = function (t, opts) {
         parts.push((parseInt(s.gamesPerSet) || 6) + ' games/set');
         if (s.countingType === 'tennis') parts.push('15/30/40');
         if (s.advantageRule) parts.push('com vantagem');
-        if (s.tiebreakEnabled) parts.push('tiebreak ' + (parseInt(s.tiebreakPoints) || 7) + 'pts');
+        if (s.tiebreakEnabled) {
+            // Mostra ONDE o tie-break dispara (5-5 / 6-6) — só "tiebreak 7pts" não dizia em que
+            // placar de games ele entra, que é justamente o que muda entre Beach Tennis e Tênis.
+            // Fonte ÚNICA: _tbLoserGames (a mesma que o placar ao vivo usa pra disparar o TB) —
+            // nada de recalcular a regra aqui. [[project_live_scoring_canonical]]
+            var _tbAtG = (typeof window._tbLoserGames === 'function')
+                ? window._tbLoserGames(s, t.sport)
+                : ((s.tiebreakAt === 'g-1') ? Math.max(1, (parseInt(s.gamesPerSet) || 6) - 1) : (parseInt(s.gamesPerSet) || 6));
+            parts.push('tiebreak ' + (parseInt(s.tiebreakPoints) || 7) + 'pts (' + _tbAtG + '-' + _tbAtG + ')');
+        }
         if (s.superTiebreak) parts.push('super tiebreak ' + (parseInt(s.superTiebreakPoints) || 10) + 'pts');
         return parts.join(' · ');
     }

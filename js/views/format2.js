@@ -43,7 +43,7 @@
       formacaoDupla: 'sorteio',
       manualPairingOpen: false,   // duplas "já formadas": os PARTICIPANTES podem formar duplas?
                                   // false (padrão) = só o organizador forma. → t.manualPairing.
-      rodadas: { modo: 'fixo', turnos: 'ida', n: 5, drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, _intervalAuto: true },
+      rodadas: { modo: 'fixo', turnos: 'ida', n: 5, drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, allowSelfDeactivation: true, _intervalAuto: true },
       classifAtiva: true,        // false = SEM classificatória → eliminação direta do enrollment
       classificados: 2,          // X que classificam (por grupo OU total, conforme classifScope)
       classifScope: 'per_group', // 'per_group' (melhores de cada grupo) | 'overall' (tabela geral)
@@ -117,6 +117,10 @@
     var _di = parseInt(out.rodadas.drawIntervalDays, 10);
     out.rodadas.drawIntervalDays = (_di >= 1) ? _di : null; // vazio = sem repetição (NÃO força 7)
     out.rodadas.drawManual = !!out.rodadas.drawManual;
+    // v1.4.12: autodesativação dos inscritos. RODADA ÚNICA força false — não há próximo
+    // sorteio pra ficar de fora, então todos entram (regra do dono). A UI trava o toggle;
+    // aqui o modelo garante o mesmo mesmo que a UI não tenha renderizado.
+    out.rodadas.allowSelfDeactivation = (out.rodadas.n === 1) ? false : (out.rodadas.allowSelfDeactivation !== false);
     out.rodadas._intervalAuto = (out.rodadas._intervalAuto !== false); // sugere intervalo até o user editar
 
     out.classificados = Math.max(1, parseInt(out.classificados, 10) || 2);

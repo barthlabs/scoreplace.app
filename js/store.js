@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.4.11';
+window.SCOREPLACE_VERSION = '1.4.12';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -3698,26 +3698,10 @@ window._resolveSideLive = function (t, sideStr, uidHint) {
 //   • t.monarchWaitlist     (map por categoria, ex {_default_:[...]}) — Rei/Rainha
 // _getWaitlist UNE os três numa lista única e deduplicada — é a ÚNICA forma
 // correta de LER a espera. Todo display/lógica deve passar por aqui.
-window._getWaitlist = function(t) {
-  if (!t) return [];
-  var out = [], seen = {};
-  function add(e) {
-    var nm = String(window._pName ? window._pName(e, '') : (typeof e === 'string' ? e : ((e && (e.displayName || e.name || e.email)) || ''))).trim();
-    if (!nm) return;
-    var k = nm.toLowerCase();
-    if (seen[k]) return; seen[k] = 1;
-    out.push((e && typeof e === 'object') ? e : { name: nm, displayName: nm });
-  }
-  if (Array.isArray(t.waitlist)) t.waitlist.forEach(add);
-  if (Array.isArray(t.standbyParticipants)) t.standbyParticipants.forEach(add);
-  if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object' && !Array.isArray(t.monarchWaitlist)) {
-    Object.keys(t.monarchWaitlist).forEach(function(cat) {
-      var arr = t.monarchWaitlist[cat];
-      if (Array.isArray(arr)) arr.forEach(add);
-    });
-  }
-  return out;
-};
+// _getWaitlist / _nameForms / _removeFromWaitlist / _clearAllWaitlists / _waitlistNameSet
+// foram EXTRAÍDOS pra js/views/waitlist-core.js (carregado antes deste arquivo) — o
+// servidor (Cloud Function integrateLateEntries) precisa das MESMAS funções e o store.js
+// não carrega lá. Ver waitlist-core.js.
 
 // ─── Inscrições durante a fase: regra CANÔNICA de "Novos Confrontos" (jun/2026) ───
 // Vale pra qualquer formato/modo de sorteio. Três peças ortogonais:
@@ -3770,68 +3754,6 @@ window._waitlistExpandPool = function(t, namesOnly) {
   return namesOnly ? pool.map(_nm) : pool;
 };
 
-// CANÔNICO: a lista de espera vive em 3 storages (waitlist + standbyParticipants +
-// monarchWaitlist por categoria). Toda vez que se RE-DERIVA a espera (reset, re-sorteio)
-// tem que limpar OS TRÊS — senão um deles vira resíduo e o painel (que lê os 3 via
-// _getWaitlist) mostra gente fantasma. Retorna TODAS as pessoas que estavam na espera
-// (deduplicadas, via _getWaitlist) pra quem precisar devolvê-las ao pool.
-window._clearAllWaitlists = function(t) {
-  if (!t) return [];
-  var collected = window._getWaitlist(t);
-  t.waitlist = [];
-  t.standbyParticipants = [];
-  t.monarchWaitlist = {};
-  return collected;
-};
-
-// Conjunto de nomes (lowercase) na espera — inclui membros de duplas "A / B".
-window._waitlistNameSet = function(t) {
-  var s = {};
-  window._getWaitlist(t).forEach(function(e) {
-    var nm = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim().toLowerCase();
-    if (!nm) return;
-    if (nm.indexOf('/') !== -1) nm.split('/').forEach(function(x) { var k = x.trim(); if (k) s[k] = 1; });
-    else s[nm] = 1;
-  });
-  return s;
-};
-
-
-// Formas do nome de um participante/entrada (cru displayName/name/email + formatado
-// via _pName), em lowercase. Usado pra casar nomes que aparecem em formas diferentes
-// (ex.: telefone cru "+5511981933576" vs formatado "+55 (11) 98193-3576").
-window._nameForms = function(e) {
-  var forms = [];
-  if (window._pName) { var f = String(window._pName(e, '') || ''); if (f) forms.push(f); }
-  if (e && typeof e === 'object') {
-    ['displayName', 'name', 'email'].forEach(function(k) { if (e[k]) forms.push(String(e[k])); });
-  } else if (typeof e === 'string') { forms.push(e); }
-  return forms.map(function(s) { return s.trim().toLowerCase(); }).filter(Boolean);
-};
-
-// Remove um nome de TODOS os storages da espera (waitlist + standbyParticipants +
-// monarchWaitlist por categoria). Casa nome cru/formatado. Retorna true se removeu algo.
-window._removeFromWaitlist = function(t, name) {
-  if (!t || !name) return false;
-  var target = String(name).trim().toLowerCase();
-  var removed = false;
-  function matches(e) { return window._nameForms(e).indexOf(target) !== -1; }
-  if (Array.isArray(t.waitlist)) {
-    var b = t.waitlist.length; t.waitlist = t.waitlist.filter(function(e) { return !matches(e); });
-    if (t.waitlist.length < b) removed = true;
-  }
-  if (Array.isArray(t.standbyParticipants)) {
-    var b2 = t.standbyParticipants.length; t.standbyParticipants = t.standbyParticipants.filter(function(e) { return !matches(e); });
-    if (t.standbyParticipants.length < b2) removed = true;
-  }
-  if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object' && !Array.isArray(t.monarchWaitlist)) {
-    Object.keys(t.monarchWaitlist).forEach(function(cat) {
-      var arr = t.monarchWaitlist[cat];
-      if (Array.isArray(arr)) { var b3 = arr.length; t.monarchWaitlist[cat] = arr.filter(function(e) { return !matches(e); }); if (t.monarchWaitlist[cat].length < b3) removed = true; }
-    });
-  }
-  return removed;
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // v2.7.68: TRAVA DE SCROLL DE FUNDO (global) — quando um overlay/modal de tela

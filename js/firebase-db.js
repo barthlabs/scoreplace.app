@@ -1418,10 +1418,18 @@ window.FirestoreDB = {
   async queueNotifEmail(emails, level, message, opts) {
     if (!this.db || !emails || !emails.length) return;
     if (window.SCOREPLACE_ENV === 'staging') { try { window._warn && window._warn('[staging] notif e-mail suprimido (queueNotifEmail)'); } catch(_e){} return; }
+    opts = opts || {};
+    // v1.4.12 — BACKSTOP DO SANDBOX na ÚLTIMA porta antes do e-mail. O killswitch principal
+    // é o _sendUserNotification/_notifyTournamentParticipants; este é a rede embaixo dele
+    // (mesmo espírito da supressão de staging acima). Um e-mail de SB que vaza chega em gente
+    // que nem sabe que o SB existe. Ver [[project_sandbox_tournament]].
+    if (/^\(SB\)/.test(String(opts.tournamentName || '')) || /_sb(\b|$)/.test(String(opts.tournamentUrl || ''))) {
+      try { window._warn && window._warn('[sandbox] notif e-mail suprimido (queueNotifEmail)'); } catch (_e) {}
+      return;
+    }
     var WINDOWS = { fundamental: 5, important: 15, all: 30 }; // minutos
     var mins = (WINDOWS[level] != null) ? WINDOWS[level] : 30;
     var now = Date.now();
-    opts = opts || {};
     try {
       for (var i = 0; i < emails.length; i++) {
         if (!emails[i]) continue;
