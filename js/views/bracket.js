@@ -786,7 +786,7 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var uidp = String((pp && typeof pp === 'object' && pp.uid) || '').replace(/'/g, "\\'");
     // v1.3.55: W.O. no card "Sem dupla" (faltava). Só pro organizador; vira Reverter se ausente.
     var wo = (isOrg && typeof window._woBtnHtml === 'function')
-      ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + tIdSafe + "', '" + _sa(nmp) + "');", !_abs, { label: _abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
+      ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + tIdSafe + "', '" + _sa(nmp) + "', '" + uidp + "');", !_abs, { label: _abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
       : '';
     // v1.3.148 (dono: "mantenha as cores dos inscritos consistente"): este painel colorizava por
     // STATUS DE PAREAMENTO (âmbar = sem dupla, verde = dupla formada) e devolvia styleExtra VAZIO —
@@ -1186,7 +1186,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
         <span style="font-weight:600;font-size:0.88rem;color:${isNext ? '#fbbf24' : '#94a3b8'};flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">${name}${isNext && _policy === 'locked' ? ' <span style="font-size:0.62rem;font-weight:700;color:#fbbf24;background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>' : ''}</span>
         <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAb ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}"><input type="checkbox" ${mc ? 'checked' : ''} ${isAb ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${_tIdSafe}', '${safeName}', '${String(_pUid).replace(/'/g, "\\'")}');"`}><span class="toggle-slider"></span></label>
         <span style="font-size:0.65rem;font-weight:700;color:${statusColor};white-space:nowrap;">${statusLabel}</span>
-        ${window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${_tIdSafe}', '${safeName}')`, !isAb, { label: isAb ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem' })}
+        ${window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${_tIdSafe}', '${safeName}', '${String(_pUid).replace(/'/g, "\\'")}')`, !isAb, { label: isAb ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem' })}
       </div>`;
   }).join('');
 

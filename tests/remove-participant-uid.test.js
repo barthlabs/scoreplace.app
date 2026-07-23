@@ -4,6 +4,12 @@
 // vivo). Prova os 3 casos: solo, membro de DUPLA (o parceiro tem que sobrar sozinho) e fictício.
 // [[project_uid_identity_canon_locked]]
 const { window: W } = require('./render-harness');
+// participants.js não está no harness de render (que carrega store/tournaments/bracket) — as ações
+// do card (W.O./VIP/nível) vivem nele. Carrega o arquivo REAL no MESMO contexto, como o <script>
+// faz no browser: nada de reimplementar a lógica no teste.
+require('vm').runInContext(
+  require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'views', 'participants.js'), 'utf8'),
+  W, { filename: 'participants.js' });
 
 let pass = 0, fail = 0; const fails = [];
 function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
@@ -73,6 +79,46 @@ console.log('\n── excluir inscrito num roster SÓ-UID (o clique real do ✕)
   W.removeParticipantFunction(t.id, 'Karla Fernandes', 'uKarla');
   ok(!t.checkedIn.uKarla && !t.absent.uKarla && !t.vips.uKarla, 'limpa presença/ausência/VIP do excluído');
   ok(t.checkedIn.uSolo === true, 'não mexe na presença de quem ficou');
+}
+
+// ── CÂNONE (dono, 22/jul): "quem tem uid PRECISA ser controlado EXCLUSIVAMENTE pelo uid; só o
+// fictício digitado pelo organizador, que não tem uid, fica pelo nome." Aqui: as ações do card
+// (W.O., VIP, nível) num roster SÓ-UID têm que gravar na CHAVE-UID, nunca numa chave-nome.
+console.log('\n── ações do card gravam na CHAVE-UID (W.O. · VIP · nível) ──');
+{
+  const t = mkT();
+  t.skillCategories = ['A', 'B', 'C'];
+  W.AppStore = {
+    tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {},
+    mutate: function (tid, fn) { fn(t); },
+    getTournament: function () { return t; },
+  };
+  W._canManagePresence = function () { return true; };
+  W._reRenderParticipants = function () {};
+
+  // W.O. do solo — o card manda nome VAZIO (não há nome gravado) + uid
+  W._markAbsent(t.id, '', 'uSolo');
+  ok(t.absent.uSolo != null, 'W.O. :: gravou na chave-UID');
+  ok(Object.keys(t.absent).every((k) => k === 'uSolo'), 'W.O. :: NENHUMA chave-nome criada — got ' + JSON.stringify(Object.keys(t.absent)));
+
+  // VIP do solo
+  W._toggleVip(t.id, '', 'uSolo');
+  ok(t.vips.uSolo != null, 'VIP :: gravou na chave-UID');
+  ok(!Object.keys(t.vips).some((k) => k === '' || k === 'undefined'), 'VIP :: sem chave-nome órfã — got ' + JSON.stringify(Object.keys(t.vips)));
+
+  // nível (habilidade) do solo
+  W._setParticipantSkillCategory(t.id, '', 'B', 'uSolo');
+  const solo = t.participants.find((p) => p && p.uid === 'uSolo');
+  ok(solo && String(solo.category || '').indexOf('B') !== -1, 'nível :: aplicado no inscrito certo — got ' + (solo && solo.category));
+}
+
+// FICTÍCIO (sem conta) — ÚNICO caso que continua pelo nome, como o dono definiu.
+{
+  const t = mkT();
+  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, mutate: (tid, fn) => fn(t), getTournament: () => t };
+  W._canManagePresence = function () { return true; };
+  W._markAbsent(t.id, 'Convidado sem conta');
+  ok(t.absent['Convidado sem conta'] != null, 'fictício :: W.O. pelo NOME (sem uid, é a exceção)');
 }
 
 console.log(fail === 0 ? `✅ remove-participant-uid: OK  (${pass} asserts ok)` : `❌ ${fail} FALHA(S)  (${pass} ok)`);
