@@ -31,6 +31,9 @@ const SUITES = [
   // Contexto da TRANSIÇÃO DE FASE sobrevive ao snapshot do Firestore (que substitui os
   // objetos). Sem isso, clicar no painel de pow2 dispara o sorteio da FASE 0.
   'tests/phase-res-info-survives-snapshot.test.js',
+  // Destaque VERDE do próprio usuário na classificação: resolve por UID, nunca por nome —
+  // senão pinta a linha de um homônimo/dupla alheia.
+  'tests/classif-highlight-me.test.js',
   'tests/phase-transition-matrix.test.js',
   'tests/phase-adversarial.test.js',
   'tests/phase-lifecycle.test.js',

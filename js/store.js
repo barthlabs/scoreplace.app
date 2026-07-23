@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.4.18';
+window.SCOREPLACE_VERSION = '1.4.19';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -8108,6 +8108,34 @@ window._classifModeFor = function (t, phaseIdx) {
   var ph = t.phases[cur] || t.phases[0] || {};
   return (ph.rankingType === 'blocks') ? 'blocks' : 'individual';
 };
+// v1.4.19 (dono): "na classificação vamos usar a cor verde para o nome do usuário e sua
+// posição para que ele se encontre mais facilmente". Responde "esta linha da classificação
+// sou eu?" — inclusive quando a linha é uma DUPLA e eu sou só um dos dois.
+//
+// IDENTIDADE É UID (project_uid_identity_canon_locked). A classificação é indexada por NOME
+// (é o que o mapa carrega), então: acha a ENTRADA do torneio cujo nome exibido bate, e daí
+// compara por UID via _participantUids — nunca `split('/')` no rótulo da dupla, que é
+// TIPOGRAFIA e não chave (project_dupla_entry_structural_not_slash). Fallback pra solo via
+// _memberUidByName. Sem uid (visitante/jogador informal) → false, sem destaque errado.
+window._classifEntryIsMe = function (t, entryName) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!t || !cu || !cu.uid || !entryName) return false;
+  var target = String(entryName).trim().toLowerCase();
+  if (!target) return false;
+  var arr = Array.isArray(t.participants) ? t.participants
+    : (t.participants ? Object.values(t.participants) : []);
+  var _uids = (typeof window._participantUids === 'function') ? window._participantUids : function (p) { return p && p.uid ? [p.uid] : []; };
+  for (var i = 0; i < arr.length; i++) {
+    var p = arr[i];
+    if (!p || typeof p !== 'object') continue;
+    var nm = String((window._pName ? window._pName(p, '') : (p.displayName || p.name || '')) || '').trim().toLowerCase();
+    if (nm && nm === target) return _uids(p).indexOf(cu.uid) !== -1;
+  }
+  // Entrada não encontrada pelo rótulo (ex.: nome de UMA pessoa dentro de um grupo
+  // Rei/Rainha, que não é uma "entrada" do roster): resolve a pessoa por uid.
+  return (typeof window._memberUidByName === 'function') && window._memberUidByName(t, entryName) === cu.uid;
+};
+
 window._renderClassifBlock = function (t, clMap, opts) {
   opts = opts || {};
   var keys = Object.keys(clMap || {});
@@ -8134,7 +8162,10 @@ window._renderClassifBlock = function (t, clMap, opts) {
       var bc = g.k === 1 ? '#fbbf24' : g.k === 2 ? '#cd7f32' : 'var(--text-muted)';
       return '<div style="padding:6px 12px;">' +
         '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:800;color:' + bc + ';margin-bottom:3px;">' + rng + (g.names.length > 1 ? ' · ' + g.names.length + ' times' : '') + '</div>' +
-        g.names.map(function (n) { return '<div style="font-size:0.84rem;font-weight:600;color:var(--text-bright,#f1f5f9);padding:1px 0;">' + nameHtml(n) + '</div>'; }).join('') +
+        g.names.map(function (n) {
+          var _meB = (typeof window._classifEntryIsMe === 'function') && window._classifEntryIsMe(t, n);
+          return '<div style="font-size:0.84rem;font-weight:' + (_meB ? '800' : '600') + ';color:' + (_meB ? '#34d399' : 'var(--text-bright,#f1f5f9)') + ';padding:1px 0;">' + nameHtml(n) + '</div>';
+        }).join('') +
         '</div>';
     }).join('');
     countLabel = groups.length + ' faixas';
@@ -8143,9 +8174,17 @@ window._renderClassifBlock = function (t, clMap, opts) {
     inner = entries.map(function (e) {
       var pos = e.pos;
       var c = pos === 1 ? '#fbbf24' : pos === 2 ? '#94a3b8' : pos === 3 ? '#cd7f32' : 'var(--text-muted)';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;">' +
+      // v1.4.19: VERDE pra linha do próprio usuário (nome + posição) — achar-se na lista é
+      // mais útil que a cor de pódio, que o emoji da medalha continua comunicando. Fundo
+      // sutil + borda à esquerda pra localizar no meio de dezenas de linhas.
+      var _me = (typeof window._classifEntryIsMe === 'function') && window._classifEntryIsMe(t, e.name);
+      if (_me) c = '#34d399';
+      var _rowSt = _me
+        ? 'display:flex;align-items:center;gap:8px;padding:4px 12px;background:rgba(52,211,153,0.10);border-left:3px solid #34d399;'
+        : 'display:flex;align-items:center;gap:8px;padding:4px 12px;';
+      return '<div style="' + _rowSt + '">' +
         '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + c + ';">' + pos + 'º</span>' +
-        '<span style="font-weight:600;color:' + c + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml(e.name) + '</span>' +
+        '<span style="font-weight:' + (_me ? '800' : '600') + ';color:' + c + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml(e.name) + '</span>' +
         (pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medals[pos] + '</span>' : '') +
         '</div>';
     }).join('');
