@@ -159,7 +159,10 @@ window._clearTournamentDraw = function (t) {
   t.phaseRounds = null;
   t.phaseLeagueState = null;
   t._canonicalDraw = false;
-  try { delete t._phaseResInfo; } catch (e) { t._phaseResInfo = null; }
+  // v1.4.17: limpa TAMBÉM o registro por id (o contexto vive fora do objeto pra sobreviver
+  // ao snapshot do Firestore) — senão o reset deixaria o contexto velho ressuscitar.
+  if (typeof window._clearPhaseResInfo === 'function') window._clearPhaseResInfo(t);
+  else { try { delete t._phaseResInfo; } catch (e) { t._phaseResInfo = null; } }
   // PRESENÇA — "sem nenhuma presença marcada" (pedido do dono). O reset roda por
   // commitTournamentTx (transaction.set SEM merge = overwrite total), então {} limpa.
   t.checkedIn = {};

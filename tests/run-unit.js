@@ -28,6 +28,9 @@ const SUITES = [
   // "Deixar inscritos ficarem de fora": rodada única é DEFAULT desligado, não cadeado —
   // escolha explícita do organizador vence nos dois sentidos.
   'tests/allow-self-deact-default.test.js',
+  // Contexto da TRANSIÇÃO DE FASE sobrevive ao snapshot do Firestore (que substitui os
+  // objetos). Sem isso, clicar no painel de pow2 dispara o sorteio da FASE 0.
+  'tests/phase-res-info-survives-snapshot.test.js',
   'tests/phase-transition-matrix.test.js',
   'tests/phase-adversarial.test.js',
   'tests/phase-lifecycle.test.js',

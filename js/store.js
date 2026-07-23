@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.4.16';
+window.SCOREPLACE_VERSION = '1.4.17';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1992,6 +1992,45 @@ window._mergePresenceNoRegress = function (prevT, freshT) {
   } catch (e) { if (window._error) window._error('mergePresenceNoRegress', e); }
   return restored;
 };
+// ═══════════════════════════════════════════════════════════════════════════════════
+// CONTEXTO DA TRANSIÇÃO DE FASE (v1.4.17) — sobrevive ao snapshot do Firestore.
+//
+// BUG REAL (Confra, jul/2026): promover linha → painel de potência de 2 abre certo
+// (diag: phaseCtx:true) → clicar na opção disparava o SORTEIO DA FASE 0 e o alerta
+// "Sorteio já realizado. Refazer o sorteio apagará todos os resultados".
+//
+// CAUSA: `t._phaseResInfo` era estado SÓ DE MEMÓRIA, gravado no objeto do torneio. O
+// listener do Firestore faz `store.tournaments = tournaments` — SUBSTITUI todos os
+// objetos pelos docs frescos. Um snapshot chegando entre abrir o painel e clicar a
+// opção apagava o contexto; `_handleUnifiedOption` via `_phaseResInfo` falsy e caía no
+// ramo de INSCRIÇÃO (fase 0) em vez do ramo de TRANSIÇÃO DE FASE.
+//
+// CURA: o contexto mora num REGISTRO POR ID (fora do objeto) e é reancorado a cada
+// snapshot — mesmo padrão do window._pendingPresence. Todo `t._phaseResInfo` continua
+// funcionando pra quem LÊ; quem ESCREVE usa estes helpers.
+// ═══════════════════════════════════════════════════════════════════════════════════
+window._phaseResInfoById = window._phaseResInfoById || {};
+window._setPhaseResInfo = function (t, info) {
+  if (!t) return;
+  t._phaseResInfo = info;
+  window._phaseResInfoById[String(t.id)] = info;
+};
+window._clearPhaseResInfo = function (t) {
+  if (!t) return;
+  delete t._phaseResInfo;
+  delete window._phaseResInfoById[String(t.id)];
+};
+// Reancora o contexto nos docs frescos que o snapshot acabou de trazer.
+window._reattachPhaseResInfo = function (tournaments) {
+  var reg = window._phaseResInfoById || {};
+  if (!Object.keys(reg).length) return;
+  (tournaments || []).forEach(function (t) {
+    if (!t) return;
+    var info = reg[String(t.id)];
+    if (info) t._phaseResInfo = info;
+  });
+};
+
 window._reapplyPendingPresence = function (tournaments) {
   try {
     if (!window._pendingPresence || typeof window._idMapHas !== 'function') return;
@@ -6409,6 +6448,8 @@ window.AppStore = {
         // render/cache — senão um snapshot stale (pré-write) reverte o que o org acabou de marcar
         // ("aparece/apaga"). Cada intenção some sozinha quando o doc fresco confirma ou em ~15s.
         if (typeof window._reapplyPendingPresence === 'function') window._reapplyPendingPresence(tournaments);
+        // v1.4.17: o contexto da transição de fase é memória-only e morreria no replace acima.
+        if (typeof window._reattachPhaseResInfo === 'function') window._reattachPhaseResInfo(tournaments);
         // DIAGNÓSTICO (dono, "24 caem pra 19 e voltam" ao marcar muitos presentes): loga a contagem
         // de presentes/ausentes/pendentes do torneio NA TELA a cada snapshot (DEPOIS do reapply), pra
         // ver a trajetória real da oscilação e a causa (write parcial? reapply não cobre? re-render).

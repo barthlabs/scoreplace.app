@@ -671,7 +671,7 @@ window._cancelDrawResolution = function(tId) {
         try {
             var _pnIdx = (t.currentPhaseIndex || 0) + 1;
             if (t.phases && t.phases[_pnIdx]) { delete t.phases[_pnIdx]._promoteAsked; delete t.phases[_pnIdx]._promoteLines; }
-            delete t._phaseResInfo;
+            window._clearPhaseResInfo(t);
         } catch (e) {}
         if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') window.FirestoreDB.saveTournament(t);
     }
@@ -954,7 +954,7 @@ window._showPhasePromotePanel = function(tId) {
     // os ímpares). Guarda defensiva: se não ajuda, pula direto pro painel de pow2.
     if (_lines.length < 2 || typeof window._phasePromoteHelps !== 'function' || !window._phasePromoteHelps(_lines)) {
         if (t.phases && t.phases[_idx]) t.phases[_idx]._promoteAsked = true;
-        delete t._phaseResInfo;
+        window._clearPhaseResInfo(t);
         if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
         return;
     }
@@ -1013,7 +1013,7 @@ window._phasePromoteApply = function(tId) {
     if (!t) return;
     var _idx = (t._phaseResInfo && t._phaseResInfo.nextIdx != null) ? t._phaseResInfo.nextIdx : ((t.currentPhaseIndex || 0) + 1);
     if (t.phases && t.phases[_idx]) { t.phases[_idx]._promoteLines = 1; t.phases[_idx]._promoteAsked = true; }
-    delete t._phaseResInfo;
+    window._clearPhaseResInfo(t);
     var _p = document.getElementById('phase-promote-panel'); if (_p) _p.remove();
     document.body.style.overflow = '';
     if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
@@ -1026,7 +1026,7 @@ window._phasePromoteSkip = function(tId) {
     if (!t) return;
     var _idx = (t._phaseResInfo && t._phaseResInfo.nextIdx != null) ? t._phaseResInfo.nextIdx : ((t.currentPhaseIndex || 0) + 1);
     if (t.phases && t.phases[_idx]) { t.phases[_idx]._promoteLines = 0; t.phases[_idx]._promoteAsked = true; }
-    delete t._phaseResInfo;
+    window._clearPhaseResInfo(t);
     var _p = document.getElementById('phase-promote-panel'); if (_p) _p.remove();
     document.body.style.overflow = '';
     if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
@@ -1597,7 +1597,7 @@ window.showUnifiedResolutionPanel = function(tId) {
             var _pi = t._phaseResInfo;
             var _idx = (_pi.nextIdx != null) ? _pi.nextIdx : ((t.currentPhaseIndex||0)+1);
             if (t.phases && t.phases[_idx]) t.phases[_idx].bracketResolution = option;
-            delete t._phaseResInfo;
+            window._clearPhaseResInfo(t);
             var _pp = document.getElementById('unified-resolution-panel'); if (_pp) _pp.remove();
             document.body.style.overflow = '';
             if (window._advanceMultiPhase) window._advanceMultiPhase(tId);

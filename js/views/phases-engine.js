@@ -1764,7 +1764,9 @@
         // pergunta uma vez por transição (_promoteAsked).
         if (_lines.length >= 2 && !_nextCfg._promoteAsked && typeof window._showPhasePromotePanel === 'function' &&
             typeof window._phasePromoteHelps === 'function' && window._phasePromoteHelps(_lines)) {
-          t._phaseResInfo = { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) };
+          // v1.4.17: via _setPhaseResInfo — o contexto precisa sobreviver ao snapshot do
+          // Firestore (que substitui o objeto do torneio). Ver _reattachPhaseResInfo.
+          window._setPhaseResInfo(t, { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) });
           window._showPhasePromotePanel(tId);
           return;
         }
@@ -1776,7 +1778,7 @@
         // forçava play-in direto sem perguntar — pedido do dono: sempre perguntar.
         // Fallback só se o painel não existir: play-in (repescagem, mais inclusivo).
         if (typeof window.showUnifiedResolutionPanel === 'function') {
-          t._phaseResInfo = { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) };
+          window._setPhaseResInfo(t, { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) });
           window.showUnifiedResolutionPanel(tId);
           return;
         }
