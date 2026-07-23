@@ -1566,17 +1566,63 @@
   }
   // Tela individual (v1.1.21): nome + @ + última atualização + botão de puxar a
   // COMPLETA daquele atleta — substitui os botões de lote da Análise.
+  // Posição do atleta na classificação gravada de um torneio (footprint[].standings).
+  function _lzMyPosIn(standings, handle) {
+    var low = String(handle || '').toLowerCase(), out = null;
+    (standings || []).forEach(function (g) {
+      (g.rows || []).forEach(function (r) {
+        if (out == null && r.pos != null && (r.handles || []).some(function (x) { return String(x).toLowerCase() === low; })) out = r.pos;
+      });
+    });
+    return out;
+  }
   window._lzAthleteDialog = function (uid) {
     var ctx = window._lzScanCtx || {};
     var tg = ctx.byUid && ctx.byUid[uid];
     if (!tg) return;
     var lu = _lzLastUpdateOf(uid);
-    var body = 'Vou ler o histórico público completo de <b>' + _esc(tg.name || tg.handle) + '</b> (@' + _esc(tg.handle) + ') no letzplay — jogos, torneios e rankings — do mesmo jeito do import do próprio atleta.<br><br>' +
-      (lu ? 'Última atualização: <b>' + lu.label + '</b>' : 'Ainda sem histórico puxado.');
+    // Melhor import disponível (scan do organizador OU import próprio — o de mais jogos).
+    var rctx = window._lzRenderCtx || {};
+    var _p1 = rctx.profileMap && rctx.profileMap[uid] && rctx.profileMap[uid].letzplayImport;
+    var _p2 = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].fullImport;
+    var imp = _p2 || _p1 || null;
+    if (_p1 && _p2) imp = ((_p1.games || []).length > (_p2.games || []).length) ? _p1 : _p2;
+    var body = 'Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> (@' + _esc(tg.handle) + ') no letzplay.<br>';
+    var btnLabel = '📚 Puxar histórico completo';
+    if (imp) {
+      var gX = (imp.games || []).length, gY = (imp.declaredGames != null) ? imp.declaredGames : null;
+      var offFp = (imp.footprint || []).filter(function (f) { return f.official; });
+      var tX = offFp.filter(function (f) { return f.standings || (f.name && f.name !== f.categoryRaw); }).length;
+      var tY = (imp.declaredTournaments != null) ? imp.declaredTournaments : (offFp.length || null);
+      function pctS(x, y) { return (y && y > 0) ? (' (' + Math.min(100, Math.round(x / y * 100)) + '%)') : ''; }
+      body += '<div style="margin:8px 0 6px;font-size:0.85rem;">' +
+        '🏆 Torneios lidos: <b>' + tX + (tY ? (' de ' + tY) : '') + '</b>' + pctS(tX, tY) + '<br>' +
+        '🎾 Jogos gravados: <b>' + gX + (gY ? (' de ' + gY) : '') + '</b>' + pctS(gX, gY) +
+        '</div>';
+      // Torneios já puxados: nome · categoria · ano · classificação do atleta.
+      if (offFp.length) {
+        var lis = offFp.map(function (f) {
+          var nm = f.name || f.categoryRaw || 'torneio';
+          var cat = (f.name && f.categoryRaw && f.name.indexOf(f.categoryRaw) < 0) ? (' · ' + _esc(f.categoryRaw)) : '';
+          var yr = f.year ? (' · ' + f.year) : '';
+          var pos = _lzMyPosIn(f.standings, tg.handle);
+          return '<div style="padding:2px 0;">🏆 ' + _esc(nm) + cat + yr + (pos != null ? (' · <b>' + pos + 'º lugar</b>') : '') + '</div>';
+        }).join('');
+        body += '<div style="max-height:8.5em;overflow-y:auto;font-size:0.78rem;color:var(--text-secondary,#c8cdd6);background:var(--bg-darker,rgba(0,0,0,0.2));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;margin-bottom:6px;text-align:left;">' + lis + '</div>';
+      }
+      var incompleto = (gY && gX < gY) || (imp.partialReason != null);
+      if (incompleto) {
+        body += '<div style="font-size:0.8rem;color:#fbbf24;">Perfil INCOMPLETO — puxe de novo pra continuar de onde parou (o que já veio está gravado).</div>';
+        btnLabel = '▶️ Continuar de onde parou';
+      }
+      body += (lu ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Última atualização: <b>' + lu.label + '</b></div>' : '');
+    } else {
+      body += '<br>Ainda sem histórico puxado. Vou ler torneios (nome, categoria, classificação) e depois os jogos, gravando a cada passo.';
+    }
     if (typeof window.showConfirmDialog === 'function') {
       window.showConfirmDialog('🎾 ' + (tg.name || '@' + tg.handle), body,
         function () { window._lzAthleteImport(uid); }, null,
-        { confirmText: '📚 Puxar histórico completo', cancelText: 'Fechar', type: 'info' });
+        { confirmText: btnLabel, cancelText: 'Fechar', type: 'info' });
     } else {
       window._lzAthleteImport(uid);
     }
@@ -1594,7 +1640,7 @@
     var who = tg.name || ('@' + tg.handle);
     function setProg(o) {
       o = o || {};
-      window._spProgressOverlay({ label: '📚 ' + who, sub: o.sub || '', pct: o.pct, onCancel: cancel });
+      window._spProgressOverlay({ label: '📚 ' + who, sub: o.sub || '', pct: o.pct, feedAdd: o.feedAdd || null, onCancel: cancel });
     }
     function cleanup() {
       done = true;
@@ -1621,11 +1667,20 @@
       if (e.source !== window) return; var d = e.data; if (!d) return;
       if (d.__sp_lp === 'extension-present') { if (d.version) versions.push(d.version); return; }
       // rate-limit do letzplay = progresso (o sistema se adaptando), não travamento
-      if (d.__sp_lp === 'lz-throttle') { ping(); setProg({ sub: 'a busca continua — pode deixar rodando', pct: null }); return; }
+      // Throttle: espera VISÍVEL e limitada — na 3ª/2min a extensão PAUSA sozinha,
+      // grava o que veio e avisa pra retomar depois (nunca mais o "continua…" eterno).
+      if (d.__sp_lp === 'lz-throttle') {
+        ping();
+        var _wS = d.waitMs ? Math.round(d.waitMs / 1000) : null;
+        setProg({ sub: '⏳ o letzplay pediu uma pausa' + (_wS ? (' (~' + _wS + 's)') : '') + ' — se insistir, eu paro e gravo o que já veio', pct: null });
+        return;
+      }
       if (d.__sp_lp === 'athlete-import-progress' && d.uid === uid) {
         ping();
         var cur = d.current || {};
-        setProg({ sub: cur.note || 'lendo o histórico…', pct: null });
+        // pct REAL (0–100, calculado pela extensão por etapa) + feed do que foi lido
+        // (nome do torneio · classificação · nº de jogos) num box de 2 linhas com scroll.
+        setProg({ sub: cur.note || '', pct: (d.pct != null ? Math.max(3, d.pct) : null), feedAdd: d.feed || null });
         return;
       }
       // PARCIAL (v1.41): a extensão grava por etapa — a cada torneio lido e a cada
@@ -1649,9 +1704,36 @@
         cleanup();
         if (typeof window._showLoading === 'function') window._showLoading('Salvando ' + who + '…');
         var n = (d.fullImport && Array.isArray(d.fullImport.games)) ? d.fullImport.games.length : 0;
+        var nDecl = d.fullImport && d.fullImport.declaredGames;
         _saveScansAndReload(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }],
           function (m) { if (typeof showNotification === 'function') showNotification('Não deu pra salvar', m, 'error'); });
-        if (typeof showNotification === 'function') showNotification('🎾 Histórico puxado', who + ' — ' + n + ' jogo(s).', 'success');
+        // PAUSADO/PARCIAL: RELATÓRIO NA TELA (pedido do dono) — o que puxou e o que
+        // não puxou, torneio a torneio + jogos gerais — e como retomar.
+        var _isParcial = d.paused || (d.fullImport && d.fullImport.partialReason);
+        var rep = d.report || null;
+        if (_isParcial && rep && typeof window.showAlertDialog === 'function') {
+          var html = '<div style="text-align:left;font-size:0.85rem;line-height:1.55;">';
+          html += '<div style="margin-bottom:6px;">' + (d.paused ? 'O letzplay pediu uma pausa — <b>parei e gravei o que veio</b>.' : 'A leitura foi interrompida — <b>o que veio está gravado</b>.') + '</div>';
+          if (rep.tournaments && rep.tournaments.length) {
+            html += '<div style="font-weight:800;margin:8px 0 3px;">Torneios</div>';
+            rep.tournaments.forEach(function (tt) {
+              html += '<div>' + (tt.got ? '✅' : '❌') + ' ' + _esc(tt.title) +
+                (tt.got ? ((tt.pos != null ? (' · ' + tt.pos + 'º lugar') : '') + ' · ' + tt.games + ' jogo(s)') : ' · não lido') + '</div>';
+            });
+          }
+          html += '<div style="font-weight:800;margin:8px 0 3px;">Jogos gerais</div>';
+          html += '<div>' + (rep.pagesRead >= rep.maxPage ? '✅' : '⏳') + ' páginas lidas: <b>' + rep.pagesRead + ' de ' + rep.maxPage + '</b> · jogos gravados: <b>' + rep.games + (rep.declared ? (' de ' + rep.declared) : '') + '</b></div>';
+          html += '<div style="margin-top:10px;color:#fbbf24;">▶️ Clique no nome de novo mais tarde — continuo <b>de onde parei</b> (nada se perde).</div>';
+          html += '</div>';
+          window.showAlertDialog('⏸️ ' + who + ' — relatório da leitura', html);
+        }
+        if (typeof showNotification === 'function') {
+          if (_isParcial) {
+            showNotification('⏸️ Parcial salvo', who + ': ' + n + (nDecl ? (' de ' + nDecl) : '') + ' jogo(s) gravados.', 'warning');
+          } else {
+            showNotification('🎾 Histórico puxado', who + ' — ' + n + ' jogo(s).', 'success');
+          }
+        }
         return;
       }
     }

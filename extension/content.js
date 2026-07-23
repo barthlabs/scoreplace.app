@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.41';
+  var EXT_VERSION = '1.42';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -48,6 +48,12 @@
     if (st >= 500) return true;   // erro do servidor → tentar de novo faz sentido
     return /Failed to fetch|NetworkError|network|load failed|ERR_|no-resp|port closed|message channel|Extension context|inject-timeout|exec-failed/i.test((r && r.error) || '');
   }
+  // ORÇAMENTO DE PACIÊNCIA (v1.42) — setado pelo fluxo individual. O caso Camila
+  // (14/jul): no 11º de 20, o letzplay pediu pra esperar e a busca ficou em "a busca
+  // continua…" indefinidamente. Regra do dono: NESSA situação tem que PARAR, GRAVAR o
+  // que tem e retomar depois. Estourou o orçamento → 'rate-budget' sobe e o pipeline
+  // finaliza como PAUSADO (parcial salvo) em vez de esperar sem fim.
+  var _rateBudget = null;
   async function bgFetchDoc(url, opts) {
     var last = null;
     for (var i = 0; i < 8; i++) {
@@ -55,6 +61,10 @@
       if (r && r.ok) return new DOMParser().parseFromString(r.html, 'text/html');
       last = r;
       if (_isRate(r)) {
+        if (_rateBudget && (_rateBudget.waits >= 2 || _rateBudget.totalMs >= 120000)) {
+          var eb = new Error('rate-budget'); eb.code = 'rate-budget'; eb.httpStatus = r && r.status;
+          throw eb;
+        }
         var ra = parseInt(r && r.retryAfter, 10);
         // Backoff com RUÍDO: 2s/4s/8s cravados são tão robóticos quanto a rajada que
         // causou o bloqueio. Quem volta exatamente no tempo do relógio é máquina. Quando
@@ -68,6 +78,7 @@
         // baixava nada. O app mostra isto na barra e rearma o watchdog de ociosidade.
         post({ __sp_lp: 'lz-throttle', waitMs: waitMs, attempt: i + 1,
           gap: (r && r.pace && r.pace.gap) || null, source: (ra > 0 ? 'retry-after' : 'backoff') });
+        if (_rateBudget) { _rateBudget.waits++; _rateBudget.totalMs += waitMs; }
         await sleep(waitMs);
         continue;
       }
@@ -502,13 +513,18 @@
   // `prior` = fullImport de rodada anterior: semeia o acumulado (pula o que já tem).
   async function _runAthleteImport(handle, uid, tournamentId, prior) {
     var X = window._spExtract, I = window._spImport, F = window._spFlow;
+    // prog agora carrega pct (0–100, barra REAL) e feed (linha do que acabou de ser lido).
     function prog(extra) {
-      var cur = { uid: uid || null, handle: handle };
-      if (extra) { cur.phase = extra.phase || null; cur.note = extra.note || null; }
-      post({ __sp_lp: 'athlete-import-progress', tournamentId: tournamentId, uid: uid || null, handle: handle, current: cur });
+      extra = extra || {};
+      var cur = { uid: uid || null, handle: handle, phase: extra.phase || null, note: extra.note || null };
+      post({ __sp_lp: 'athlete-import-progress', tournamentId: tournamentId, uid: uid || null, handle: handle,
+        current: cur, pct: (extra.pct != null ? extra.pct : null), feed: extra.feed || null });
     }
     function fail(code) { post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: code }); }
     if (!X || !I || !F) { fail('libs'); return; }
+    // Orçamento de paciência: até 2 esperas de rate-limit (ou 2min somados). Estourou →
+    // 'rate-budget' sobe, a rodada PAUSA, grava o que tem e o organizador retoma depois.
+    _rateBudget = { waits: 0, totalMs: 0 };
     try {
       // SEMENTE: rodadas anteriores entram no acumulado (dedupe por chave) e os
       // nomes/classificações já resolvidos não são re-buscados.
@@ -540,19 +556,38 @@
         });
         return raw;
       }
+      var parts = [];                     // participações em torneios (lista pública)
+      var declaredGamesTotal = null;      // quantos jogos o letzplay DIZ que existem
+      var maxPage = 1, parcial = null, pausado = false, lastPageRead = 0;
       function postPartial(stage, done, total) {
         try {
           if (!all.length) return;
           var imp = I.normalize(buildRawWithDetails(), { importedAt: new Date().toISOString() });
           imp.partialReason = 'parcial: ' + stage + ' ' + done + '/' + total;   // rodada em curso — nunca marca completo
+          imp.declaredTournaments = parts.length || null;
+          if (declaredGamesTotal != null) imp.declaredGames = declaredGamesTotal;
           post({ __sp_lp: 'athlete-import-partial', tournamentId: tournamentId, uid: uid || null, handle: handle,
             stage: stage, done: done, total: total, scan: scanFromImport(realHandle, imp), fullImport: imp });
         } catch (e) {}
       }
+      // Barra REAL 0–100: torneios ocupam 2→30%, páginas de jogos 30→95%, final 97%.
+      function pctTour(i) { return Math.min(30, 2 + Math.round((i / Math.max(1, parts.length)) * 28)); }
+      function pctPage(p, mx) { return Math.min(95, 30 + Math.round((p / Math.max(1, mx)) * 65)); }
+      // Posição do atleta na classificação do torneio (pros feeds e pro dialog do app).
+      function myPos(standings, h) {
+        var low = String(h || '').toLowerCase(), out = null;
+        (standings || []).forEach(function (g) {
+          (g.rows || []).forEach(function (r) {
+            if (out == null && r.pos != null && (r.handles || []).some(function (x) { return String(x).toLowerCase() === low; })) out = r.pos;
+          });
+        });
+        return out;
+      }
+      function isPause(e) { return !!(e && e.code === 'rate-budget'); }
 
+      try {   // ── etapas 1–3: um 'rate-budget' aqui dentro PAUSA (grava e sai), não falha ──
       // ── ETAPA 1: lista de torneios da pessoa ──
-      prog({ phase: 'torneios', note: 'lendo a lista de torneios' });
-      var parts = [];
+      prog({ phase: 'torneios', note: 'lendo a lista de torneios', pct: 2 });
       try {
         var dl = await bgFetchDoc('https://letzplay.me/' + encodeURIComponent(handle) + '/tournaments');
         var seenT = {};
@@ -562,7 +597,7 @@
           if (!mm || seenT[h]) return; seenT[h] = 1;
           parts.push({ club: mm[1], tid: mm[2], title: (a.textContent || '').replace(/\s+/g, ' ').trim() });
         });
-      } catch (eT) {}   // sem lista pública → segue direto pros jogos gerais
+      } catch (eT) { if (isPause(eT)) throw eT; }   // sem lista pública → segue pros jogos gerais
 
       // ── ETAPA 2: por torneio (a lista já vem do mais recente pro mais antigo) ──
       for (var ti = 0; ti < parts.length; ti++) {
@@ -571,24 +606,30 @@
         var hasGames = all.some(function (m) { return m.official && String(m.tourneyId) === String(P.tid); });
         if (priorNames[key] && priorNames[key].standings && hasGames) {
           tourneyDetails[key] = priorNames[key];
-          prog({ phase: 'torneios', note: labelT + ' — já gravado, pulando' });
+          prog({ phase: 'torneios', note: labelT + ' — já gravado, pulando', pct: pctTour(ti + 1) });
           continue;
         }
-        prog({ phase: 'torneios', note: labelT + ' — nome, categoria e classificação' });
+        prog({ phase: 'torneios', note: labelT + ' — nome, categoria e classificação', pct: pctTour(ti) });
         try {
           var dp = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
           tourneyDetails[key] = { name: tourneyNameFromDoc(dp), standings: tourneyStandingsFromDoc(dp), logo: tourneyLogoFromDoc(dp) };
-        } catch (e1) { tourneyDetails[key] = priorNames[key] || null; }
-        prog({ phase: 'torneios', note: labelT + ' — lendo os jogos' });
+        } catch (e1) { if (isPause(e1)) throw e1; tourneyDetails[key] = priorNames[key] || null; }
+        prog({ phase: 'torneios', note: labelT + ' — lendo os jogos', pct: pctTour(ti) });
         try {
           var dm = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid + '/matches');
           addMatches(X.extractMatchesFromDoc(dm, handle));
-        } catch (e2) {}
+        } catch (e2) { if (isPause(e2)) throw e2; }
+        // FEED: o que acabou de ser lido — nome (com categoria), classificação e nº de jogos.
+        var det2 = tourneyDetails[key] || {};
+        var nG = 0; all.forEach(function (m) { if (m.official && String(m.tourneyId) === String(P.tid)) nG++; });
+        var posMe = myPos(det2.standings, realHandle);
+        prog({ phase: 'torneios', pct: pctTour(ti + 1),
+          feed: '🏆 ' + (det2.name || P.title || ('torneio ' + P.tid)) + (posMe != null ? (' · ' + posMe + 'º lugar') : '') + ' · ' + nG + ' jogo(s)' });
         postPartial('torneios', ti + 1, parts.length);   // grava a cada torneio
       }
 
       // ── ETAPA 3: jogos gerais (rankings + torneios fora da lista), recente→antigo ──
-      prog({ phase: 'jogos', note: 'abrindo o histórico geral' });
+      prog({ phase: 'jogos', note: 'abrindo o histórico geral', pct: pctPage(0, 1) });
       var base = 'https://letzplay.me/' + encodeURIComponent(handle) + '/matches';
       var d1 = await bgFetchDoc(base);
       var cards1 = d1.querySelectorAll('.row.match').length;
@@ -604,46 +645,69 @@
         }
       }
       if (!cards1 && !all.length && !page1.length) { fail('pagina-sem-cards'); return; }
-      var maxPage = F.detectMaxPage(d1);
-      var total = F.parseTotalGames(d1);
-      addMatches(page1);
-      var parcial = null;
+      maxPage = F.detectMaxPage(d1);
+      declaredGamesTotal = F.parseTotalGames(d1);
+      var add1 = addMatches(page1);
+      lastPageRead = 1;
+      prog({ phase: 'jogos', pct: pctPage(1, maxPage), feed: '🎾 página 1 de ' + maxPage + ': +' + add1 + ' jogo(s) · total ' + all.length });
       // Rodada anterior COMPLETA → pode PARAR quando uma página inteira já é conhecida
       // (dali pra trás está tudo gravado). Rodada anterior parcial → lê até o fim.
       var priorComplete = !!(prior && !prior.partialReason && prior.declaredGames != null &&
         Array.isArray(prior.games) && prior.games.length >= prior.declaredGames);
-      try {
-        for (var p = 2; p <= maxPage; p++) {
-          prog({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage });
-          var d = await bgFetchDoc(base + '?page=' + p);
-          var list = X.extractMatchesFromDoc(d, realHandle);
-          var added = addMatches(list);
-          if (p % 3 === 0) postPartial('jogos', p, maxPage);   // grava a cada 3 páginas
-          if (priorComplete && added === 0 && list.length > 0) {
-            prog({ phase: 'jogos', note: 'daqui pra trás já está gravado — parando' });
-            break;
-          }
+      for (var p = 2; p <= maxPage; p++) {
+        prog({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage, pct: pctPage(p - 1, maxPage) });
+        var d = await bgFetchDoc(base + '?page=' + p);
+        var list = X.extractMatchesFromDoc(d, realHandle);
+        var added = addMatches(list);
+        lastPageRead = p;
+        prog({ phase: 'jogos', pct: pctPage(p, maxPage), feed: '🎾 página ' + p + ' de ' + maxPage + ': +' + added + ' jogo(s) · total ' + all.length });
+        if (p % 3 === 0) postPartial('jogos', p, maxPage);   // grava a cada 3 páginas
+        if (priorComplete && added === 0 && list.length > 0) {
+          prog({ phase: 'jogos', note: 'daqui pra trás já está gravado — parando' });
+          break;
         }
-      } catch (errPag) {
-        if (!all.length) throw errPag;
-        parcial = (errPag && errPag.message) || 'paginação interrompida';
+      }
+      } catch (eStg) {   // fim das etapas 1–3
+        // PAUSA (regra do dono, caso Camila 11/20): rate-limit demais → NÃO espera sem
+        // fim, NÃO joga fora — grava o que veio e sai avisando pra retomar depois.
+        if (isPause(eStg)) { pausado = true; }
+        else if (!all.length) { throw eStg; }
+        else { parcial = String((eStg && eStg.message) || eStg).slice(0, 100); }
       }
       if (!all.length) { fail('sem-jogos'); return; }
 
-      // ── FINAL: nomes/classificações que ainda faltam (1 fetch por competição SEM nome) ──
+      // ── FINAL: nomes/classificações que ainda faltam (1 fetch por competição SEM nome).
+      // Pausado → NÃO busca mais nada; só consolida e entrega o parcial.
       var rawF = buildRawWithDetails();
-      try { await fillTourneyNames(rawF, prog); } catch (e) {}
+      if (!pausado) { try { await fillTourneyNames(rawF, prog); } catch (e) {} }
       var impF = I.normalize(rawF, { importedAt: new Date().toISOString() });
-      impF.declaredGames = (total != null) ? total : null;
-      if (parcial) impF.partialReason = String(parcial).slice(0, 120);
+      impF.declaredGames = (declaredGamesTotal != null) ? declaredGamesTotal : ((prior && prior.declaredGames != null) ? prior.declaredGames : null);
+      impF.declaredTournaments = parts.length || ((prior && prior.declaredTournaments) || null);
+      if (pausado) impF.partialReason = 'pausado: limite do letzplay — retome mais tarde';
+      else if (parcial) impF.partialReason = String(parcial).slice(0, 120);
       var v = I.validate(impF);
       if (!v || !v.valid) { fail('invalido'); return; }
+      // RELATÓRIO da rodada (pedido do dono): o que PUXOU e o que NÃO puxou — por
+      // torneio (nome, classificação, nº de jogos) e nos jogos gerais (páginas/total).
+      var report = {
+        tournaments: parts.map(function (Pp) {
+          var kk = 't/' + Pp.club + '/' + Pp.tid;
+          var dd = tourneyDetails[kk] || priorNames[kk] || null;
+          var ng = 0; all.forEach(function (m) { if (m.official && String(m.tourneyId) === String(Pp.tid)) ng++; });
+          return { title: (dd && dd.name) || Pp.title || ('torneio ' + Pp.tid), got: !!(dd || ng),
+            games: ng, pos: dd ? myPos(dd.standings, realHandle) : null };
+        }),
+        pagesRead: lastPageRead, maxPage: maxPage,
+        games: all.length, declared: (impF.declaredGames != null) ? impF.declaredGames : null
+      };
       try { chrome.runtime.sendMessage({ type: 'lp-close-scan-tab' }); } catch (e) {}
       post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle,
-        ok: true, scan: scanFromImport(realHandle, impF), fullImport: impF });
+        ok: true, paused: !!pausado, report: report, scan: scanFromImport(realHandle, impF), fullImport: impF });
     } catch (e) {
       var em = String((e && e.message) || e);
       fail(em.slice(0, 140));
+    } finally {
+      _rateBudget = null;
     }
   }
 

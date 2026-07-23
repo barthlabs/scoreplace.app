@@ -156,12 +156,28 @@
         '<div style="height:12px;border-radius:999px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.1));"><div id="sp-imp-bar" style="height:100%;width:8%;background:linear-gradient(90deg,#84cc16,#65a30d);transition:width .3s;"></div></div>' +
         '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;"></div>' +
         '<div id="sp-imp-eta" style="font-size:0.78rem;color:var(--text-bright,#e2e8f0);margin-top:6px;font-weight:700;font-variant-numeric:tabular-nums;"></div>' +
+        // FEED (v1.42): o que está sendo lido aparece aqui (torneio · categoria ·
+        // classificação · nº de jogos), 2 linhas visíveis com scroll — pedido do dono.
+        '<div id="sp-imp-feed" style="display:none;margin-top:10px;max-height:3.1em;overflow-y:auto;font-size:0.74rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);text-align:left;background:var(--bg-darker,rgba(0,0,0,0.25));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;"></div>' +
         '<div id="sp-imp-actions" style="margin-top:14px;display:none;"></div>'
       );
     }
     var l = document.getElementById('sp-imp-label'); if (l) l.textContent = opts.label || '';
     var b = document.getElementById('sp-imp-bar'); if (b && opts.pct != null) b.style.width = opts.pct + '%';
     var s = document.getElementById('sp-imp-sub'); if (s) s.textContent = opts.sub || '';
+    // feedAdd: acrescenta UMA linha ao vivo (nome/categoria/classificação/jogos do que
+    // acabou de ser lido) e rola pro fim. O box só aparece quando a 1ª linha chega.
+    if (opts.feedAdd) {
+      var f = document.getElementById('sp-imp-feed');
+      if (f) {
+        f.style.display = 'block';
+        var ln = document.createElement('div');
+        ln.textContent = String(opts.feedAdd);
+        f.appendChild(ln);
+        while (f.children.length > 40) f.removeChild(f.firstChild);
+        f.scrollTop = f.scrollHeight;
+      }
+    }
     // O regressivo tem que ANDAR sozinho: sem um tick próprio ele só mudaria quando
     // chegasse notícia da extensão — e ficaria parado justamente nas esperas longas, que
     // é quando o usuário mais precisa ver que a busca está viva.
