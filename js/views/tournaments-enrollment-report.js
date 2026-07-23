@@ -1357,14 +1357,26 @@
       });
     }
     // Card do atleta — tamanho padrão (min 150px), nome com ellipsis.
+    // v1.1.21: hover mostra a última atualização (< 1 mês); clique em AUTORIZADO
+    // (organizador) abre a tela de puxar o histórico individual do letzplay.
+    var _mxIsOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
     function chip(r) {
       var pe = _pendingEdits[r.order] || {}; var edited = Object.keys(pe).length > 0;
       // _lzColor já vem resolvido por _erApplyLzToRows: veredito verificado, ou
       // violeta (autorizou), ou branco (não autorizou). Fallback branco por segurança.
       var nameCol = edited ? '#f59e0b' : (r._lzColor || _LZ_COL.white);
       var border = edited ? 'rgba(245,158,11,0.55)' : (r._lzColor ? (r._lzColor + '55') : 'var(--border-color)');
-      return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')" ' +
-        'style="cursor:grab;font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + _esc(r.name || '(sem nome)') + ' — arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + '</div>';
+      var ctx = window._lzScanCtx || {};
+      var canPull = _mxIsOrg && r.uid && ctx.byUid && ctx.byUid[r.uid];
+      var lu = r.uid ? _lzLastUpdateOf(r.uid) : null;
+      var fresh = lu && (Date.now() - lu.ts) < 30 * 86400000;   // < 1 mês
+      var tip = _esc(r.name || '(sem nome)') +
+        (fresh ? (' — Última atualização: ' + lu.label) : '') +
+        (canPull ? ' — clique pra puxar o histórico do letzplay' : '') +
+        ' — arraste pra atribuir gênero/categoria';
+      var click = canPull ? ' onclick="window._lzAthleteDialog(\'' + String(r.uid).replace(/['\\]/g, '') + '\')"' : '';
+      return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')"' + click + ' ' +
+        'style="cursor:' + (canPull ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
     }
     function cardGrid(arr) {
       // minmax(0,...) e o que impede o estouro: com min-width:auto o nome longo
@@ -1538,6 +1550,113 @@
     return out;
   }
 
+  // Última atualização do dado letzplay de UMA pessoa — o mais novo entre o import
+  // próprio dela (perfil) e o que o organizador puxou (scan). → {ts, label} ou null.
+  function _lzLastUpdateOf(uid) {
+    var ctx = window._lzRenderCtx || {};
+    var prof = ctx.profileMap && ctx.profileMap[uid];
+    var sc = ctx.scanMap && ctx.scanMap[uid];
+    var ts = 0;
+    if (prof && prof.letzplayImport && prof.letzplayImport.importedAt) ts = Math.max(ts, Date.parse(prof.letzplayImport.importedAt) || 0);
+    if (sc && sc.fullImport && sc.fullImport.importedAt) ts = Math.max(ts, Date.parse(sc.fullImport.importedAt) || 0);
+    if (sc && sc.scannedAt) ts = Math.max(ts, Date.parse(sc.scannedAt) || 0);
+    if (!ts) return null;
+    var d = new Date(ts);
+    return { ts: ts, label: d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) };
+  }
+  // Tela individual (v1.1.21): nome + @ + última atualização + botão de puxar a
+  // COMPLETA daquele atleta — substitui os botões de lote da Análise.
+  window._lzAthleteDialog = function (uid) {
+    var ctx = window._lzScanCtx || {};
+    var tg = ctx.byUid && ctx.byUid[uid];
+    if (!tg) return;
+    var lu = _lzLastUpdateOf(uid);
+    var body = 'Vou ler o histórico público completo de <b>' + _esc(tg.name || tg.handle) + '</b> (@' + _esc(tg.handle) + ') no letzplay — jogos, torneios e rankings — do mesmo jeito do import do próprio atleta.<br><br>' +
+      (lu ? 'Última atualização: <b>' + lu.label + '</b>' : 'Ainda sem histórico puxado.');
+    if (typeof window.showConfirmDialog === 'function') {
+      window.showConfirmDialog('🎾 ' + (tg.name || '@' + tg.handle), body,
+        function () { window._lzAthleteImport(uid); }, null,
+        { confirmText: '📚 Puxar histórico completo', cancelText: 'Fechar', type: 'info' });
+    } else {
+      window._lzAthleteImport(uid);
+    }
+  };
+  // Puxa a COMPLETA de UM atleta pelo @ público — o caminho do autoimport (fetch das
+  // páginas /{handle}/matches), sem navegar o perfil SPA (a causa do lote travar).
+  window._lzAthleteImport = function (uid) {
+    if (window._lzScanRunning) return;
+    var ctx = window._lzScanCtx || {};
+    var tg = ctx.byUid && ctx.byUid[uid];
+    if (!tg || !tg.handle) return;
+    window._lzScanRunning = true;
+    window._lzPendingMode = 'full';
+    var done = false, started = false, versions = [], idleTimer = null;
+    var who = tg.name || ('@' + tg.handle);
+    function setProg(o) {
+      o = o || {};
+      window._spProgressOverlay({ label: '📚 ' + who, sub: o.sub || '', pct: o.pct, onCancel: cancel });
+    }
+    function cleanup() {
+      done = true;
+      window._lzScanRunning = false;
+      window.removeEventListener('message', onMsg);
+      if (idleTimer) clearTimeout(idleTimer);
+      if (typeof window._spCloseImportOverlay === 'function') window._spCloseImportOverlay();
+    }
+    function cancel() {
+      if (done) return;
+      cleanup();
+      if (typeof showNotification === 'function') showNotification('Busca cancelada', 'Nada foi alterado.', 'info');
+    }
+    function fail(msg) {
+      if (done) return;
+      cleanup();
+      if (typeof showNotification === 'function') showNotification('Não deu pra puxar', msg, 'error');
+    }
+    function ping() {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(function () { fail('A extensão parou de responder (3 min em silêncio). Recarregue a página e tente de novo.'); }, _LZ_IDLE_MS);
+    }
+    function onMsg(e) {
+      if (e.source !== window) return; var d = e.data; if (!d) return;
+      if (d.__sp_lp === 'extension-present') { if (d.version) versions.push(d.version); return; }
+      // rate-limit do letzplay = progresso (o sistema se adaptando), não travamento
+      if (d.__sp_lp === 'lz-throttle') { ping(); setProg({ sub: 'a busca continua — pode deixar rodando', pct: null }); return; }
+      if (d.__sp_lp === 'athlete-import-progress' && d.uid === uid) {
+        ping();
+        var cur = d.current || {};
+        setProg({ sub: cur.note || 'lendo o histórico…', pct: null });
+        return;
+      }
+      if (d.__sp_lp === 'athlete-import-result' && d.uid === uid) {
+        if (done) return;
+        if (!d.ok) {
+          fail(d.error === 'sem-jogos' ? 'O perfil público de @' + tg.handle + ' não mostrou nenhum jogo.' : ('Falhou: ' + (d.error || 'erro')));
+          return;
+        }
+        cleanup();
+        if (typeof window._showLoading === 'function') window._showLoading('Salvando ' + who + '…');
+        var n = (d.fullImport && Array.isArray(d.fullImport.games)) ? d.fullImport.games.length : 0;
+        _saveScansAndReload(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }],
+          function (m) { if (typeof showNotification === 'function') showNotification('Não deu pra salvar', m, 'error'); });
+        if (typeof showNotification === 'function') showNotification('🎾 Histórico puxado', who + ' — ' + n + ' jogo(s).', 'success');
+        return;
+      }
+    }
+    setProg({ sub: 'conectando à extensão…', pct: 2 });
+    window.addEventListener('message', onMsg);
+    window.postMessage({ __sp_lp: 'ext-ping' }, window.location.origin);
+    ping();
+    setTimeout(function () {
+      if (done || started) return;
+      if (!versions.length) { cleanup(); _lzExtDialog(null); return; }
+      var best = versions.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
+      if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
+      started = true;
+      window.postMessage({ __sp_lp: 'run-athlete-import', handle: tg.handle, uid: uid, tournamentId: ctx.tId }, window.location.origin);
+    }, 900);
+  };
+
   // Seção ÚNICA da Análise: Categorias com apuração pelo letzplay. Junta os botões
   // de busca, a legenda de cores e a matriz (nomes pintados pela verificação).
   function _renderCategoriesSection(rows, t, profileMap, scanMap) {
@@ -1556,67 +1675,20 @@
       if (!prof || !prof.letzplayHandle) return false;
       return (_meUid && r.uid === _meUid) || prof.letzplayConsent === true;
     }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
-    // PENDENTES = quem está DESATUALIZADO (> 6 dias). Re-varrer quem foi lido anteontem
-    // só gasta tempo e leitura do letzplay (que responde com rate-limit em rajada).
-    // Separado por MODO: um "essencial" fresco NÃO cobre um pedido de "completa" (a
-    // completa lê os jogos, que a essencial nem olha); uma "completa" fresca cobre as duas.
-    var pend = { essential: [], full: [] };
-    targets.forEach(function (tg) {
-      var have = _lzFreshness(tg.uid, profileMap, scanMap);
-      if (!have.essential) pend.essential.push(tg);
-      if (!have.full) pend.full.push(tg);
-    });
-    window._lzScanCtx = { tId: t.id, targets: targets, pend: pend };
-
-    // Última verificação + o MODO usado (essencial/completa) do scan mais recente.
-    var lastTs = 0, lastMode = null;
-    Object.keys(scanMap).forEach(function (uid) {
-      var s = scanMap[uid]; if (s && s.scannedAt) { var v = Date.parse(s.scannedAt) || 0; if (v > lastTs) { lastTs = v; lastMode = (s.scan && s.scan._mode) || 'essential'; } }
-    });
-    var _ld = lastTs ? new Date(lastTs) : null;
-    var _dateStr = _ld ? (_ld.toLocaleDateString('pt-BR') + ' ' + _ld.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })) : '';
-    function dateLine() { return _ld ? '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Última verificação: <b style="color:var(--text-bright,#fff);">' + _dateStr + '</b></div>' : ''; }
-    // Título + botões Essencial / Completa (padrão do app; Completa com BRILHO). A data
-    // da última verificação fica EMBAIXO do botão que foi efetivamente usado.
-    var essCss = 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;cursor:pointer;';
-    var fullCss = 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;cursor:pointer;';
-    // CINZA + INATIVO = "não há nada novo pra buscar". Uma busca COMPLETA fresca apaga
-    // os DOIS botões (ela contém a essencial); uma ESSENCIAL fresca apaga só o dela —
-    // a completa continua acesa porque lê os jogos, que a essencial nem olha.
-    // CINZA de verdade. Era var(--bg-darker) — que no tema escuro é quase PRETO, então o
-    // botão inativo sumia no fundo e não lia como "desabilitado", lia como buraco.
-    var _greyCss = 'background:#4a5163;color:#c3c9d6;border:1px solid #5b6376;cursor:not-allowed;opacity:0.9;';
-    // Cada botão mostra QUANTOS ele vai buscar de verdade (os frescos < 6 dias ficam de
-    // fora). Sem NINGUÉM pendente o botão fica CINZA E INATIVO — só volta a acender
-    // quando entrar um inscrito novo autorizado ou quando algum dos já buscados passar
-    // dos 6 dias. Nada de re-buscar à toa: cada busca é leitura no letzplay, que
-    // responde com rate-limit em rajada.
-    function scanCol(mode, id, label, css, title, shine) {
-      var nPend = (pend[mode] || []).length, nAll = targets.length;
-      var doneAll = nPend === 0;
-      var cnt = doneAll ? '' : (nPend < nAll ? ' (' + nPend + ' de ' + nAll + ')' : ' (' + nAll + ')');
-      var btnCss = doneAll ? (_greyCss + 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;') : css;
-      var dis = doneAll ? ' disabled' : '';
-      var tip = doneAll ? 'Todos verificados há menos de ' + _LZ_FRESH_DAYS + ' dias — nada novo pra buscar' : title;
-      return '<div style="flex:1;">' +
-        '<button type="button" id="' + id + '"' + dis + ' onclick="window._lzOrgScan(\'' + mode + '\')" title="' + _esc(tip) + '" class="btn' + (doneAll ? '' : ' hover-lift') + (shine && !doneAll ? ' btn-shine' : '') + '" style="' + btnCss + '">' +
-          label + (doneAll ? ' ✅' : cnt) + '</button>' +
-        (lastMode === mode || doneAll ? dateLine() : '') +
-      '</div>';
-    }
-    var scanBtn = (_isOrg && targets.length)
-      ? '<div style="font-size:15px;font-weight:800;color:var(--text-secondary,#c8cdd6);margin-bottom:8px;">🎾 Verificar histórico no letzplay (' + targets.length + ')</div>' +
-        '<div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-start;">' +
-          scanCol('essential', 'lz-scan-btn-essential', '🔎 Essencial', essCss, 'Busca rápida: só o nível real do ranking ativo', false) +
-          scanCol('full', 'lz-scan-btn-full', '📚 Completa', fullCss, 'Busca completa: rankings + torneios + jogos', true) +
-        '</div>'
-      : (_ld ? '<div style="margin-bottom:10px;">' + dateLine() + '</div>' : '');
+    // v1.1.21: FIM do lote (Essencial/Completa em batch) — travava e não trazia nada.
+    // A busca virou INDIVIDUAL: clicar num nome autorizado abre a tela de puxar o
+    // histórico DAQUELE atleta (caminho do autoimport, pelo @ público). O hover no
+    // nome mostra a última atualização (< 1 mês). byUid alimenta o clique/hover.
+    var byUid = {};
+    targets.forEach(function (tg) { if (tg.uid) byUid[tg.uid] = tg; });
+    window._lzScanCtx = { tId: t.id, targets: targets, byUid: byUid };
+    var scanBtn = '';
     // Legenda (todos os rótulos) — código de cor da verificação.
     function leg(c, txt) { return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:' + c + ';"><span style="width:11px;height:11px;border-radius:50%;background:' + c + ';"></span>' + txt + '</span>'; }
     var legend = '<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;">' +
       leg(_LZ_COL.red, 'deve subir') + leg(_LZ_COL.yellow, 'pode subir') + leg(_LZ_COL.blue, 'rebaixar') + leg(_LZ_COL.green, 'coerente') + leg(_LZ_COL.violet, 'autorizado') + leg(_LZ_COL.white, 'não autorizou') +
       '</div>';
-    var hint = _isOrg ? '<div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no topo.</div>' : '';
+    var hint = _isOrg ? '<div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no topo. <b style="color:var(--text-secondary,#c8cdd6);">Clique</b> num nome <span style="color:' + _LZ_COL.violet + ';font-weight:700;">autorizado</span> pra puxar o histórico do letzplay dele (um por vez); pare o mouse em cima pra ver a última atualização.</div>' : '';
     // Barra Cancelar/Salvar — STICKY no topo (abaixo do cabeçalho fixo), aparece só
     // quando há alteração pendente (drag de gênero/categoria).
     // Cancelar/Salvar vive na barra Voltar (rightHtml, em _renderPage) — não aqui.

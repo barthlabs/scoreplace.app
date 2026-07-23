@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.39';
+  var EXT_VERSION = '1.40';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -424,6 +424,71 @@
     post({ __sp_lp: 'org-scan-result', tournamentId: tournamentId, ok: true, scans: scans });
   }
 
+  // ── PUXAR UM ATLETA (individual) — o caminho do AUTOIMPORT, pelo @ público ──
+  // O lote travava no scanProfileViaTab (navegar o perfil SPA numa aba, com retries).
+  // Aqui NÃO navegamos nada: só fetch das páginas /{handle}/matches — exatamente o
+  // caminho do import do próprio usuário, que funciona. O resumo anti-gato (banda,
+  // gênero, categorias) é derivado do PRÓPRIO histórico importado.
+  function scanFromImport(handle, imp) {
+    var RANK = { A: 0, B: 1, C: 2, D: 3 }, LTR = ['A', 'B', 'C', 'D'];
+    function lettersOf(c) { var rs = []; (' ' + String(c || '').toUpperCase() + ' ').replace(/[\s\/]([A-D])[+\-]?(?=[\s\/])/g, function (_m, l) { rs.push(RANK[l]); return _m; }); return rs; }
+    function strongestOf(cats) { var all = []; (cats || []).forEach(function (c) { all = all.concat(lettersOf(c)); }); return all.length ? Math.min.apply(null, all) : null; }
+    var fp = (imp && imp.footprint) || [];
+    var rankCats = fp.filter(function (f) { return !f.official && f.categoryRaw; }).map(function (f) { return f.categoryRaw; });
+    var tourCats = fp.filter(function (f) { return f.official && f.categoryRaw; }).map(function (f) { return f.categoryRaw; });
+    var allCats = []; rankCats.concat(tourCats).forEach(function (c) { if (allCats.indexOf(c) < 0) allCats.push(c); });
+    // banda real = categoria mais forte entre RANKINGS (sem status ativo/inativo aqui →
+    // considera todos), fallback torneios — mesma regra do _spDeriveScan do background.
+    var realRank = strongestOf(rankCats), realCats = rankCats;
+    if (realRank == null) { realRank = strongestOf(tourCats); realCats = tourCats; }
+    var rankingCategory = null;
+    if (realRank != null) { for (var i = 0; i < realCats.length; i++) { if (strongestOf([realCats[i]]) === realRank) { rankingCategory = realCats[i]; break; } } }
+    var gender = /Feminina|\bFem\b/i.test(allCats.join(' ')) ? 'feminino' : (/Masculina|\bMasc\b/i.test(allCats.join(' ')) ? 'masculino' : null);
+    // categoria de perfil = borda MAIS FRACA da banda (conservador; ex "C+/B-" → C)
+    var weak = rankingCategory ? (function () { var rs = lettersOf(rankingCategory); return rs.length ? Math.max.apply(null, rs) : null; })() : realRank;
+    return {
+      handle: handle, name: (imp.profile && imp.profile.name) || null,
+      rankingCategory: rankingCategory, allCategories: allCats,
+      gender: gender,
+      skill: realRank != null ? LTR[realRank] : null,
+      profileSkill: weak != null ? LTR[weak] : null,
+      champions: fp.filter(function (f) { return f.title === true && f.categoryRaw; }).map(function (f) { return f.categoryRaw; }),
+      rankings: fp.filter(function (f) { return !f.official; }).map(function (f) { return { name: f.name || f.categoryRaw, category: f.categoryRaw, active: null, wins: f.wins, losses: f.losses }; }),
+      tournaments: fp.filter(function (f) { return f.official; }).map(function (f) { return { name: f.name || f.categoryRaw, category: f.categoryRaw, wins: f.wins, losses: f.losses, champion: f.title === true }; }),
+      totals: (imp.profile && imp.profile.totals) || {},
+      lastPlayed: null, source: 'public-matches'
+    };
+  }
+  var _athleteImportRunning = null;
+  function runAthleteImport(handle, uid, tournamentId) {
+    if (_athleteImportRunning) return _athleteImportRunning;   // 1 por vez nesta aba
+    _athleteImportRunning = _runAthleteImport(handle, uid, tournamentId)
+      .catch(function () {})
+      .then(function () { _athleteImportRunning = null; });
+    return _athleteImportRunning;
+  }
+  async function _runAthleteImport(handle, uid, tournamentId) {
+    function prog(extra) {
+      var cur = { uid: uid || null, handle: handle };
+      if (extra) { cur.phase = extra.phase || null; cur.note = extra.note || null; }
+      post({ __sp_lp: 'athlete-import-progress', tournamentId: tournamentId, uid: uid || null, handle: handle, current: cur });
+    }
+    try {
+      prog({ phase: 'jogos', note: 'abrindo histórico' });
+      var imp = await importFromHandleMatches(handle, prog);
+      if (!imp || !Array.isArray(imp.games) || !imp.games.length) {
+        post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: 'sem-jogos' });
+        return;
+      }
+      var scan = scanFromImport(handle, imp);
+      try { chrome.runtime.sendMessage({ type: 'lp-close-scan-tab' }); } catch (e) {}
+      post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: true, scan: scan, fullImport: imp });
+    } catch (e) {
+      var em = String((e && e.message) || e);
+      post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: em.slice(0, 140) });
+    }
+  }
+
   // Checa se o usuário está logado no letzplay (o app não consegue — cross-origin;
   // a extensão consulta com os cookies da sessão e reporta). Alimenta o "Passo 2 verde".
   async function checkLetzplay() {
@@ -457,6 +522,7 @@
     if (d.__sp_lp === 'run-import') { runDirectImport(); return; }
     if (d.__sp_lp === 'check-letzplay') { checkLetzplay(); return; }
     if (d.__sp_lp === 'run-org-scan') { runOrgScan(d.targets, d.tournamentId, d.mode === 'full' ? 'full' : 'essential'); return; }
+    if (d.__sp_lp === 'run-athlete-import') { runAthleteImport(d.handle, d.uid, d.tournamentId); return; }
   };
   window.addEventListener('message', window.__spLzpMsgHandler);
 
