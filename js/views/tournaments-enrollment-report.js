@@ -1474,6 +1474,11 @@
   }
   function _erCommitCats(t) {
     t.combinedCategories = _erComputeCombined(t.genderCategories, t.skillCategories);
+    // O onSnapshot troca os OBJETOS de AppStore.tournaments — _liveState.t pode estar
+    // apontando pro objeto VELHO. O toggle muta o novo (via _erFindT) mas o re-render
+    // lia o velho: o botão mostrava o estado antigo e "Reverter não funcionava"
+    // (bug real, 23/jul). Sincroniza a referência antes de re-renderizar.
+    if (_liveState) _liveState.t = t;
     // Suprime o re-render da página inteira que o snapshot do Firestore dispararia
     // (era o "carregando" que pulava a tela). Re-render só a matriz, in-place.
     window._suppressSoftRefresh = true;
