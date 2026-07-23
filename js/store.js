@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.4.20';
+window.SCOREPLACE_VERSION = '1.4.21';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -8188,8 +8188,24 @@ window._classifEntryIsMe = function (t, entryName) {
     var nm = String((window._pName ? window._pName(p, '') : (p.displayName || p.name || '')) || '').trim().toLowerCase();
     if (nm && nm === target) return _uids(p).indexOf(cu.uid) !== -1;
   }
-  // Entrada não encontrada pelo rótulo (ex.: nome de UMA pessoa dentro de um grupo
-  // Rei/Rainha, que não é uma "entrada" do roster): resolve a pessoa por uid.
+  // ── 2ª via: SLOT DO JOGO (v1.4.21 — bug reportado: minha dupla não ficava verde) ──
+  // Numa fase de eliminatória as duplas são FORMADAS NA TRANSIÇÃO (buildEntrantsByDest →
+  // mkTeam). O roster (t.participants) segue com o cadastro da CLASSIFICATÓRIA — que no
+  // Rei/Rainha é INDIVIDUAL. Logo "Vivi Hirata / Rodrigo Barth" NÃO existe como entrada, a
+  // busca acima falha e nada ficava verde. O slot do jogo, sim, carrega os uids da dupla
+  // (team1Uids/p1Uid/team1Obj — project_match_slot_uid_identity). Então: acha o slot cujo
+  // rótulo bate e compara por UID. Continua sem NUNCA fatiar "A / B" (é tipografia).
+  var _slot = (typeof window._slotUids === 'function') ? window._slotUids : null;
+  if (_slot) {
+    var ms = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
+    for (var k = 0; k < ms.length; k++) {
+      var m = ms[k];
+      if (!m) continue;
+      if (String(m.p1 || '').trim().toLowerCase() === target && _slot(m, 'p1').indexOf(cu.uid) !== -1) return true;
+      if (String(m.p2 || '').trim().toLowerCase() === target && _slot(m, 'p2').indexOf(cu.uid) !== -1) return true;
+    }
+  }
+  // 3ª via: rótulo de UMA pessoa (grupo Rei/Rainha lista PESSOAS, não entradas).
   return (typeof window._memberUidByName === 'function') && window._memberUidByName(t, entryName) === cu.uid;
 };
 

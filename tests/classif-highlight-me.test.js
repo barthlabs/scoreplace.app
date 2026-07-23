@@ -3,78 +3,93 @@
  * Pedido do dono: "na classificação vamos usar a cor verde para o nome do usuário e sua
  * posição para que ele se encontre mais facilmente na classificação."
  *
- * O RISCO desta feature é casar por NOME. A classificação é indexada por nome (é o que o mapa
- * carrega), e o rótulo de dupla "A / B" é TIPOGRAFIA, não chave. Casar por substring pintaria
- * de verde a linha de OUTRA pessoa — o mesmo erro que já mordeu o "é o meu jogo?"
- * (project_uid_identity_canon_locked / project_dupla_entry_structural_not_slash).
+ * DOIS riscos, e o teste tem que cobrir OS DOIS:
  *
- * Aqui a resolução é: rótulo → ENTRADA do roster → comparação por UID. Este teste inclui o
- * caso venenoso real da Confra: "RODRIGO UNGER PIRES DA SILVA / Vanessa Soares" existindo na
- * mesma classificação que o Rodrigo Barth logado.
+ * (A) casar por NOME pinta a linha de OUTRA pessoa. O rótulo de dupla "A / B" é TIPOGRAFIA,
+ *     não chave — o mesmo erro que já mordeu o "é o meu jogo?"
+ *     (project_uid_identity_canon_locked / project_dupla_entry_structural_not_slash).
+ *     Caso venenoso real da Confra: "RODRIGO UNGER PIRES DA SILVA / Vanessa Soares" na mesma
+ *     classificação que o Rodrigo Barth logado.
+ *
+ * (B) a dupla da ELIMINATÓRIA não existe no roster. Ela é FORMADA na transição de fase
+ *     (buildEntrantsByDest → mkTeam); t.participants segue com o cadastro da classificatória,
+ *     que no Rei/Rainha é INDIVIDUAL. Quem procurar a dupla só em t.participants não acha e
+ *     não pinta nada — foi o bug reportado na v1.4.19 ("cadê o verde?", linha 28º
+ *     "Vivi Hirata / Rodrigo Barth"). A identidade da dupla vive no SLOT DO JOGO
+ *     (team1Uids/p1Uid — project_match_slot_uid_identity).
+ *
+ * ⚠️ A 1ª versão deste teste tinha as duplas COMO ENTRADAS DO ROSTER — fixture irreal — e
+ * por isso ficou verde com o bug (B) em produção. A fixture abaixo é a estrutura de verdade.
  */
-const fs = require('fs');
 const path = require('path');
+const { window: W, load } = require(path.join(__dirname, 'headless.js'));
+const fs = require('fs');
 const vm = require('vm');
 
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
-// Carrega identity-core (puro) + só o helper do store.js.
-const sandbox = { window: null, console, Object: Object };
-sandbox.window = sandbox;
-vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'identity-core.js'), 'utf8'),
-  sandbox, { filename: 'identity-core' });
+// _slotUids e _collectAllMatches REAIS (bracket-logic/bracket-model já vêm do harness).
+ok(typeof W._slotUids === 'function', 'harness devia expor _slotUids real');
+ok(typeof W._collectAllMatches === 'function', 'harness devia expor _collectAllMatches real');
+
+// Só o helper do store.js (o arquivo inteiro toca document no load).
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8');
 const i = src.indexOf('window._classifEntryIsMe = function');
 const j = src.indexOf('window._renderClassifBlock = function');
 ok(i !== -1 && j > i, '_classifEntryIsMe não encontrado no store.js');
-vm.runInContext(src.slice(i, j), sandbox, { filename: 'store-classif' });
-const W = sandbox.window;
-W._pName = function (p, fb) {
-  if (!p) return fb || '';
-  return p.displayName || p.name || fb || '';
-};
+vm.runInContext(src.slice(i, j), W, { filename: 'store-classif' });
 
+// ── FIXTURE REAL: roster INDIVIDUAL (Rei/Rainha) + duplas só nos SLOTS da fase 2 ──
 const t = {
   id: 't1',
   participants: [
-    { displayName: 'Fe Biojone / marcia andrade', p1Name: 'Fe Biojone', p1Uid: 'uFe', p2Name: 'marcia andrade', p2Uid: 'uMa' },
-    // CASO VENENOSO: outro Rodrigo, nome mais longo, contém "Rodrigo".
-    { displayName: 'RODRIGO UNGER PIRES DA SILVA / Vanessa Soares', p1Name: 'RODRIGO UNGER PIRES DA SILVA', p1Uid: 'uUnger', p2Name: 'Vanessa Soares', p2Uid: 'uVa' },
-    { displayName: 'Monica Rossi / Rodrigo Barth', p1Name: 'Monica Rossi', p1Uid: 'uMo', p2Name: 'Rodrigo Barth', p2Uid: 'uRod' },
-    { displayName: 'Solo Silva', uid: 'uSolo' },
+    { displayName: 'Vivi Hirata', name: 'Vivi Hirata', uid: 'uVivi' },
+    { displayName: 'Rodrigo Barth', name: 'Rodrigo Barth', uid: 'uRod' },
+    { displayName: 'RODRIGO UNGER PIRES DA SILVA', name: 'RODRIGO UNGER PIRES DA SILVA', uid: 'uUnger' },
+    { displayName: 'Vanessa Soares', name: 'Vanessa Soares', uid: 'uVa' },
+    { displayName: 'Lician Tomimatsu', name: 'Lician Tomimatsu', uid: 'uLi' },
+    { displayName: 'Kelly Barth', name: 'Kelly Barth', uid: 'uKe' },
+  ],
+  matches: [
+    { id: 'm1', phaseIndex: 1, bracket: 'silver',
+      p1: 'Vivi Hirata / Rodrigo Barth', team1Uids: ['uVivi', 'uRod'],
+      p2: 'RODRIGO UNGER PIRES DA SILVA / Vanessa Soares', team2Uids: ['uUnger', 'uVa'], winner: null },
+    { id: 'm2', phaseIndex: 1, bracket: 'silver',
+      p1: 'Lician Tomimatsu / Kelly Barth', team1Uids: ['uLi', 'uKe'],
+      p2: 'TBD', winner: null },
   ],
 };
 
-function login(uid) { W.AppStore = { currentUser: uid ? { uid: uid, displayName: (uid==='uRod'?'Rodrigo Barth':'Solo Silva') } : null }; }
+function login(uid) {
+  W.AppStore = W.AppStore || {};
+  W.AppStore.currentUser = uid ? { uid: uid, displayName: (uid === 'uRod' ? 'Rodrigo Barth' : 'Outro') } : null;
+}
 
-// ── 1. dupla onde eu sou o SEGUNDO membro ────────────────────────────────────
+// ── (B) a dupla da eliminatória — o bug reportado ────────────────────────────
 login('uRod');
-ok(W._classifEntryIsMe(t, 'Monica Rossi / Rodrigo Barth') === true,
-  'devia reconhecer a dupla onde sou o 2º membro');
+ok(W._classifEntryIsMe(t, 'Vivi Hirata / Rodrigo Barth') === true,
+  'REGRESSÃO (bug v1.4.19): dupla formada na TRANSIÇÃO não existe no roster — tem que resolver pelo SLOT do jogo');
 
-// ── 2. NÃO pinta a dupla do outro Rodrigo (colisão de nome) ──────────────────
+// ── (A) colisão de nome: NÃO pintar a dupla do outro Rodrigo ─────────────────
 ok(W._classifEntryIsMe(t, 'RODRIGO UNGER PIRES DA SILVA / Vanessa Soares') === false,
   'REGRESSÃO: casou por NOME e pintaria a linha de OUTRA pessoa (uid é a identidade)');
 
-// ── 3. não pinta linha de terceiros ──────────────────────────────────────────
-ok(W._classifEntryIsMe(t, 'Fe Biojone / marcia andrade') === false, 'não devia casar com dupla alheia');
+// ── terceiros ────────────────────────────────────────────────────────────────
+ok(W._classifEntryIsMe(t, 'Lician Tomimatsu / Kelly Barth') === false, 'não devia casar com dupla alheia');
 
-// ── 4. solo ──────────────────────────────────────────────────────────────────
-login('uSolo');
-ok(W._classifEntryIsMe(t, 'Solo Silva') === true, 'devia reconhecer entrada solo');
-ok(W._classifEntryIsMe(t, 'Monica Rossi / Rodrigo Barth') === false, 'solo não pode casar com dupla alheia');
+// ── classificação INDIVIDUAL (Rei/Rainha lista PESSOAS, não entradas) ────────
+ok(W._classifEntryIsMe(t, 'Rodrigo Barth') === true, 'classificação individual devia resolver a pessoa por uid');
+ok(W._classifEntryIsMe(t, 'Vivi Hirata') === false, 'parceira do MESMO time não é "eu"');
 
-// ── 5. nome de UMA pessoa (grupo Rei/Rainha lista pessoas, não entradas) ─────
-login('uRod');
-ok(W._classifEntryIsMe(t, 'Rodrigo Barth') === true,
-  'classificação individual (Rei/Rainha) devia resolver a pessoa por uid');
-ok(W._classifEntryIsMe(t, 'Monica Rossi') === false, 'pessoa do MESMO time não é "eu"');
+// ── entrada SOLO que existe no roster (torneio individual comum) ─────────────
+login('uLi');
+ok(W._classifEntryIsMe(t, 'Lician Tomimatsu') === true, 'devia reconhecer entrada solo do roster');
+ok(W._classifEntryIsMe(t, 'Vivi Hirata / Rodrigo Barth') === false, 'não pode casar com dupla alheia');
 
-// ── 6. sem login / entrada vazia → nunca destaca ─────────────────────────────
+// ── sem login / entradas vazias → nunca destaca ──────────────────────────────
 login(null);
-ok(W._classifEntryIsMe(t, 'Monica Rossi / Rodrigo Barth') === false, 'visitante não pode ter linha verde');
+ok(W._classifEntryIsMe(t, 'Vivi Hirata / Rodrigo Barth') === false, 'visitante não pode ter linha verde');
 login('uRod');
 ok(W._classifEntryIsMe(t, '') === false, 'nome vazio → false');
 ok(W._classifEntryIsMe(null, 'Qualquer') === false, 'sem torneio → false');
