@@ -4687,11 +4687,23 @@ window._syncLowerBracket = function (t, opts) {
   return changed;
 };
 
-window._placeLateEntriesSurgically = function (t) {
+window._placeLateEntriesSurgically = function (t, _theCat) {
   if (!t || !window._allowsNewMatchups || !window._allowsNewMatchups(t)) return 0;
   if (!Array.isArray(t.matches) || !t.matches.length) return 0;
-  if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-cat fora do escopo
-  var _all = function () { return (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []); };
+  // v1.4.45: ENTRADA TARDIA MULTI-CATEGORIA — antes desistia (`return 0`) se havia >1 categoria, então
+  // o time formado NUNCA entrava (integrated:false — o bug do dono na "SB Casais"). Agora processa UMA
+  // categoria por vez (recursão): o tardio entra na chave DA CATEGORIA DELE. `_theCat` escopa `_all()`
+  // e o coletor. Ver project_late_dupla_fills_awaiting_slot.
+  if (_theCat === undefined && Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) {
+    var _totCat = 0;
+    t.combinedCategories.forEach(function (c) { _totCat += window._placeLateEntriesSurgically(t, c); });
+    return _totCat;
+  }
+  var _catOf = function (x) { var c = x && (x.category || (Array.isArray(x.categories) && x.categories.length && x.categories[0])); return c || null; };
+  var _all = function () {
+    var ms = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
+    return _theCat ? ms.filter(function (m) { return m && m.category === _theCat; }) : ms;
+  };
   var _nm = function (p) { return window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || ''; };
   var _pu = function (x) { return (typeof window._participantUids === 'function') ? window._participantUids(x) : []; };
   var _empty = function (v) { return !v || v === 'TBD' || v === 'BYE (Avança Direto)' || /a definir/i.test(String(v)); };
@@ -4706,10 +4718,18 @@ window._placeLateEntriesSurgically = function (t) {
   var _present = function (p) {
     if ((typeof window._tournamentIsSameDay === 'function') && !window._tournamentIsSameDay(t)) return true;
     var ci = t.checkedIn || {}, ab = t.absent || {};
-    var uids = _pu(p);
-    if (uids && uids.length) return uids.every(function (u) { return window._idMapHas(t, ci, { uid: u }) && !window._idMapHas(t, ab, { uid: u }); });
-    var n = _nm(p);
-    return !!(n && window._idMapHas(t, ci, n) && !window._idMapHas(t, ab, n));
+    var _has = function (map, k) { return !!k && (window._idMapHas(t, map, { uid: k }) || window._idMapHas(t, map, k)); };
+    // Presença POR MEMBRO: uid quando tem, senão o NOME do membro (placeholder "Jogador 01" entra por
+    // nome). NUNCA o nome COMBINADO da dupla — que não está em checkedIn. Foi o bug do dono: time
+    // formado de placeholders (p1Uid/p2Uid vazios) caía no nome combinado → _present=false → não
+    // coletava → não entrava (integrated:false). Ver project_late_dupla_fills_awaiting_slot.
+    var keys;
+    if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+      keys = [p.p1Uid || p.p1Name, p.p2Uid || p.p2Name];
+    } else {
+      var uids = _pu(p); keys = (uids && uids.length) ? uids : [_nm(p)];
+    }
+    return keys.length > 0 && keys.every(function (k) { return _has(ci, k); }) && !keys.some(function (k) { return _has(ab, k); });
   };
 
   // rótulos JÁ na chave → quem está lá não é tardio pendente
@@ -4857,7 +4877,13 @@ window._placeLateEntriesSurgically = function (t) {
     var _fillOpenAdefinir = function (d) {
       var dn = _nm(d), dk = _key(d), cur = _all(), target = null;
       cur.filter(function (m) {
-        return m && ((typeof m.round === 'number') ? m.round : 1) === baseRound && (m.bracket === _brk || (!m.bracket && _brk === 'main'));
+        if (!m) return false;
+        // "a definir" de TARDIO (awaitsLatePartner) é preenchível em QUALQUER rodada/chave — NÃO fica
+        // preso à "porta" (que vira a inferior depois que a 2ª sup joga). Foi o bug: o jogo 5 tinha
+        // um slot aberto na superior, mas o _fillOpenAdefinir só olhava na inferior → o time formado
+        // não entrava (formLatePair:integrated=false). project_late_dupla_fills_awaiting_slot.
+        if (m.awaitsLatePartner) return true;
+        return ((typeof m.round === 'number') ? m.round : 1) === baseRound && (m.bracket === _brk || (!m.bracket && _brk === 'main'));
       }).forEach(function (m) {
         if (target || !m || m.winner) return;
         ['p1', 'p2'].forEach(function (slot) {
