@@ -2339,14 +2339,13 @@ window.checkPowerOf2 = function (t) {
 window._autoP2Resolution = function (t) {
     var info = window.checkPowerOf2(t);
     if (!info || info.isPowerOf2 || info.count <= 2) return 'bye';   // resolução moot
-    // Chave que ACEITA entrada tardia (novos confrontos ON) usa BYE: os byes são as VAGAS que o
-    // tardio preenche (bye→confronto) SEM re-sortear. Play-in REDUZ o elenco → não deixa vaga, e
-    // formar dupla na espera não teria onde encaixar (foi o que o dono viu: "formei dupla e não
-    // criou jogo"). Sem entrada tardia, segue a de MENOS intervenções. Ver project_bye_rep_auto_resolution.
-    if (typeof window._allowsNewMatchups === 'function' && window._allowsNewMatchups(t)) return 'bye';
-    var byes = info.missing;   // P_hi − N
-    var reps = info.excess;    // N − P_lo
-    return (byes <= reps) ? 'bye' : 'playin';   // empate → bye
+    // FÓRMULA DA PLANILHA DO DONO (torneio_bye_repescagem.xlsx): decide bye × repescagem pelo nº de
+    // participantes, SEMPRE o MÍNIMO de intervenções. byes = P − N (pad até a potência de 2 ACIMA);
+    // rep = N − P/2 (reduz até a potência de 2 ABAIXO via rodada preliminar). Aplica o menor; empate
+    // → bye. É AUTOMÁTICO em todo torneio — nunca "sempre bye". Ver project_bye_rep_auto_resolution.
+    var byes = info.missing;   // P − N  (folgas na 1ª rodada)
+    var reps = info.excess;    // N − P/2 (jogos de repescagem / rodada preliminar)
+    return (byes <= reps) ? 'bye' : 'playin';   // menor nº de intervenções; empate → bye
 };
 
 // Formatos onde a resolução de "fora de potência de 2" é AUTOMÁTICA (bye/play-in decididos por
