@@ -44,5 +44,26 @@ let fail = 0;
   if (!ok) fail++;
   console.log(`N=${N} ${[4, 8, 16].includes(N) ? '(pow2)' : ''}  X entrou=${inX?'✅':'❌'}  Y entrou=${inY?'✅':'❌'}  R1_intacta=${r1ok?'✅':'❌'}  double-book=${db||'não'}  playout=${po}  ${ok?'':'  ⟵ FALHA'}`);
 });
+// ── UMA dupla ausente → presença → ENTRA sozinha (vs BYE), mesmo sem bye na chave ──────────
+// (é o bug reportado: "deu presença pra um ausente, não entrou se não tem bye")
+[4, 6, 8].forEach(N => {
+  const t = mkT(N); W.AppStore.tournaments = [t];
+  dc.compileFromFmt2(t); dc.drawInitial(t, {});
+  const antesR1 = r1real(t);
+  const NM = 'Z1 / Z2';
+  // uma dupla na espera (ausente que recebeu presença), SOZINHA
+  t.waitlist = [{ p1Uid: 'z1', p1Name: 'Z1', p2Uid: 'z2', p2Name: 'Z2', displayName: NM, name: NM, _lateJoin: true }];
+  t.checkedIn['z1'] = 1; t.checkedIn['z2'] = 1;
+  dc.integrateLateEntries(t, {});
+  const labels = new Set(); all(t).forEach(m => [m.p1, m.p2].forEach(x => { if (x && !isEmpty(x)) labels.add(String(x)); }));
+  const entrou = labels.has(NM);
+  const r1ok = antesR1.filter(x => r1real(t).indexOf(x) < 0).length === 0;
+  const db = liveDouble(t);
+  const po = playout(t);
+  const ok = entrou && r1ok && !db && po === 'CAMPEÃO';
+  if (!ok) fail++;
+  console.log(`SOZINHA N=${N} ${[4, 8].includes(N) ? '(pow2)' : ''}  entrou=${entrou?'✅':'❌'}  R1_intacta=${r1ok?'✅':'❌'}  double-book=${db||'não'}  playout=${po}  ${ok?'':'  ⟵ FALHA'}`);
+});
+
 console.log('\n' + (fail === 0 ? '✅ TODOS OK' : '❌ ' + fail + ' FALHA(S)'));
 process.exit(fail ? 1 : 0);
