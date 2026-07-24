@@ -1930,11 +1930,47 @@
           // Derrotado que cai na chave INFERIOR é fluxo normal da dupla eliminatória → SEM tag.
           // Regra do dono. slot.tagRep marca as vagas que sobem.
           if (slot.tagRep) { if (slot.slot === 'p1') m.p1FromRepechage = true; else m.p2FromRepechage = true; }
+          // VACÂNCIA (repescagem da SUPERIOR): quando um perdedor da chave superior SOBE de volta
+          // pra superior (rep no ímpar), ele NÃO cai na inferior. O drop já pôs o nome dele num slot
+          // inferior — libera esse slot pra não ficar vivo nos dois lugares (double-book). O jogo
+          // inferior resolve com o que sobrar (BYE). Guardado a srcBracket==='upper' → NÃO toca os
+          // fluxos atuais (que só repescam da inferior). Regra do dono: "sobe e deixa o slot vazio".
+          if (slot.tagRep && slot.srcBracket === 'upper') {
+            // Acha o repescado ONDE ELE ESTIVER na inferior (não só no slot do drop original — ele
+            // pode já ter avançado uma rodada antes da repescagem disparar) e libera essa vaga. O
+            // jogo inferior resolve com quem sobrar (BYE). Sem isso = vivo nos dois = double-book.
+            all.forEach(function (_lm) {
+              if (!_lm || _lm.winner || _lm.bracket !== 'lower') return;
+              if (_lm.p1 === pick.name && _lm.p2 !== pick.name) { _lm.p1 = 'BYE (Avança Direto)'; _lm.team1Obj = null; }
+              else if (_lm.p2 === pick.name && _lm.p1 !== pick.name) { _lm.p2 = 'BYE (Avança Direto)'; _lm.team2Obj = null; }
+            });
+          }
           changed = true;
         } else keep.push(slot);
       });
       m.repFill = keep;
     });
+    // BYE pendente resolvido no fim (ex.: vaga liberada pela vacância da repescagem-superior, onde
+    // o repescado subiu e deixou o slot inferior vazio). Jogo com um lado real + outro BYE e sem
+    // winner → avança o real e propaga pro nextMatchId. Loop até estabilizar (um bye pode preencher
+    // o slot seguinte, que vira outro bye). Idempotente; não toca awaitsLatePartner (já resolvido acima).
+    var _byeChg = true, _bg = 0;
+    while (_byeChg && _bg++ < 100) {
+      _byeChg = false;
+      all.forEach(function (m) {
+        if (!m || m.winner || m.awaitsLatePartner) return;
+        var b1 = (m.p1 === 'BYE (Avança Direto)'), b2 = (m.p2 === 'BYE (Avança Direto)');
+        if (b1 === b2) return;
+        var rs = b1 ? 'p2' : 'p1', rv = m[rs];
+        if (!rv || rv === 'TBD' || rv === 'BYE (Avança Direto)') return;
+        m.winner = rv; m.isBye = true;
+        if (m.nextMatchId && m.nextSlot) {
+          var _nx3 = all.filter(function (x) { return x && x.id === m.nextMatchId; })[0];
+          if (_nx3) { _nx3[m.nextSlot] = rv; var _o3 = (rs === 'p1') ? m.team1Obj : m.team2Obj; if (m.nextSlot === 'p1') _nx3.team1Obj = _o3; else _nx3.team2Obj = _o3; }
+        }
+        _byeChg = true; changed = true;
+      });
+    }
     return changed;
   }
 

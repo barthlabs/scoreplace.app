@@ -3072,6 +3072,108 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
     });
 };
 
+// RECOMPUTA a superior R2+ e a chave INFERIOR a partir da R1 sup REAL, MANTENDO os confrontos da
+// R1 (nunca re-sorteia). Só em chave FRESCA (nenhum resultado real). A entrada tardia ADITIVA deixa
+// a chave fora de proporção (ex.: 6 R1 → 4 R2 + 2 inf em vez de 3/3); isto refaz o downstream em
+// ÁRVORE MÍNIMA (⌈E/2⌉ por rodada, BYE onde o ímpar precisa equilibrar). O motor único
+// _rebuildLowerBracket conta perdedores por `mergeUppers[w].length` — então excluímos os BYE-games
+// (folga do ímpar não solta perdedor), senão sobra vaga morta e a chave não fecha.
+// Ver project_dupla_elim_minimal_tree_canon e project_dupla_downstream_bye_deadend.
+window._rebuildDuplaDownstream = function (t, _mode) {
+    if (!t || !Array.isArray(t.matches) || typeof window._rebuildLowerBracket !== 'function') return 0;
+    if (typeof window._collectAllMatches !== 'function') return 0;
+    var REP = (_mode !== 'bye');                               // PADRÃO = repescagem no ímpar (dupla-elim clássica, com vacância na inferior); 'bye' força folga
+    var BYE = 'BYE (Avança Direto)';
+    if (window._collectAllMatches(t).some(function (m) { return m && m.winner && !m.isBye; })) return 0; // em andamento
+    var cats = (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) ? t.combinedCategories.slice() : [null];
+    var pi = (t.currentPhaseIndex || 0), did = 0;
+    cats.forEach(function (cat) {
+        var _c = function (m) { return cat == null || m.category === cat; };
+        var r1 = window._collectAllMatches(t).filter(function (m) {
+            return m && m.bracket === 'upper' && m.round === 1 && _c(m) && (pi == null || (m.phaseIndex || 0) === pi);
+        }).sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+        if (r1.length < 2) return;
+        // R1 precisa estar COMPLETA: nenhum slot "a definir"/TBD pendente (BYE conta como resolvido).
+        // Se pendente, PULA esta categoria — a recompute wiparia um tardio ainda esperando parceiro.
+        // Auto-guarda: seguro chamar em qualquer ponto. NÃO basear em awaitsLatePartner — o flag pode
+        // ficar RESÍDUO num jogo já com os 2 lados reais (o parceiro chegou); checa o SLOT de verdade.
+        var _slotPend = function (v) { return (!v || v === 'TBD' || /a definir/i.test(String(v))); }; // BYE NÃO conta
+        if (r1.some(function (m) { return _slotPend(m.p1) || _slotPend(m.p2); })) return;
+        r1.forEach(function (m) { if (m.awaitsLatePartner) delete m.awaitsLatePartner; }); // limpa flag resíduo (jogo completo)
+        var minR = 1;
+        var _wipe = function (m) { return m && _c(m) && (m.round > minR || m.bracket === 'lower' || m.bracket === 'grand'); };
+        t.matches = t.matches.filter(function (m) { return !_wipe(m); });
+        if (Array.isArray(t.rounds)) t.rounds.forEach(function (col) { if (col && Array.isArray(col.matches)) col.matches = col.matches.filter(function (m) { return !_wipe(m); }); });
+        if (cat == null) t.thirdPlaceMatch = null;                 // dupla-elim NÃO tem 3º lugar (stray de t.thirdPlaceMatch)
+        var ts = Date.now(), cnt = 0, idp = 'rdd-' + ts;
+        function M(bracket, round, extra) {
+            var m = Object.assign({ id: idp + '-' + bracket + '-r' + round + '-' + (cnt++) + '-' + ts, bracket: bracket, round: round, p1: 'TBD', p2: 'TBD', winner: null }, extra || {});
+            if (pi != null) m.phaseIndex = pi;
+            if (cat != null) m.category = cat;
+            if (typeof window._appendCanonicalColumn === 'function') window._appendCanonicalColumn(t, { phase: 'elim', bracket: bracket, round: round, matches: [m] });
+            else t.matches.push(m);
+            return m;
+        }
+        function slotsOf(arr) { var s = []; arr.forEach(function (m) { s.push({ m: m, s: 'p1' }); s.push({ m: m, s: 'p2' }); }); return s; }
+        // ---- SUPERIOR R2..W (⌈prev/2⌉ jogos; slot que sobra = BYE → jogo vira bye-game) ----
+        var upper = { 1: r1 }, W = 1, prev = r1;
+        while (prev.length > 1) {
+            var r = W + 1, gc = Math.ceil(prev.length / 2), cur = [];
+            for (var j = 0; j < gc; j++) cur.push(M('upper', r));
+            var s = slotsOf(cur), si = 0;
+            prev.forEach(function (pm) { var sl = s[si++]; pm.nextMatchId = sl.m.id; pm.nextSlot = sl.s; });
+            for (; si < s.length; si++) {
+                var sl = s[si];
+                if (REP) {
+                    // Repescagem no ímpar: o slot recebe o MELHOR perdedor da rodada superior anterior,
+                    // que SOBE (e libera o slot dele na inferior via vacância em _resolveRepFills).
+                    sl.m.isPhaseRepGame = true;
+                    (sl.m.repFill = sl.m.repFill || []).push({ slot: sl.s, srcBracket: 'upper', srcRound: r - 1, rank: 0, cat: cat, tagRep: true });
+                } else {
+                    if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; sl.m.isByeGame = true;
+                }
+            }
+            upper[r] = cur; W = r; prev = cur;
+        }
+        // ---- INFERIOR: pré-rodada = perdedores da R1 sup (SÓ jogos reais; bye da R1 não solta) ----
+        var _isBye = function (m) { return m && (m.isByeGame || m.isBye || m.p1 === BYE || m.p2 === BYE); };
+        var r1real = r1.filter(function (m) { return !_isBye(m); });
+        var pre = [], preGames = Math.max(1, Math.ceil(r1real.length / 2));
+        for (var k = 0; k < preGames; k++) pre.push(M('lower', 1));
+        var ps = slotsOf(pre), psi = 0;
+        r1real.forEach(function (um) { var sl = ps[psi++]; um.loserMatchId = sl.m.id; um.loserSlot = sl.s; });
+        for (; psi < ps.length; psi++) { var sl = ps[psi]; if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; }
+        // mergeUppers = R2..W SÓ jogos reais (bye-game não solta perdedor → excluído p/ não criar vaga morta)
+        var mergeUppers = [];
+        for (var rr = 2; rr <= W; rr++) mergeUppers.push((upper[rr] || []).filter(function (m) { return !m.isByeGame; }));
+        window._rebuildLowerBracket(t, {
+            preRound: pre, mergeUppers: mergeUppers, satout: null,
+            upperChamp: (upper[W] && upper[W][0]) || null, W: W, mode: (REP ? 'playin' : 'bye'),
+            cat: cat, phaseIndex: pi, idPrefix: idp, ts: ts, wipe: false
+        });
+        // RESOLVE byes (R1 + downstream): jogo com um lado real e o outro BYE auto-avança o real.
+        // Loop porque avançar um bye preenche o slot seguinte, que pode virar OUTRO bye pronto.
+        // (Mesmo princípio do _buildDoubleElimBracket, que resolve os byes da R1 no build.)
+        var _empb = function (v) { return !v || v === 'TBD' || v === BYE || /a definir/i.test(String(v)); };
+        var chg = true, guard = 0;
+        while (chg && guard++ < 200) {
+            chg = false;
+            window._collectAllMatches(t).forEach(function (m) {
+                if (!m || m.winner || !_c(m)) return;
+                var b1 = (m.p1 === BYE), b2 = (m.p2 === BYE);
+                if (b1 === b2) return;                                // 0 ou 2 byes → não resolve aqui
+                var real = b1 ? m.p2 : m.p1;
+                if (_empb(real)) return;                             // lado real ainda não chegou
+                m.winner = real; m.isBye = true;
+                if (typeof window._advanceWinner === 'function') { try { window._advanceWinner(t, m); } catch (e) {} }
+                chg = true;
+            });
+        }
+        did++;
+    });
+    return did;
+};
+
 // Conta o total de jogos de uma Dupla Eliminatória com repescagem (n fora de pow2).
 // ESPELHA a cadência do _buildRepechageDoubleElim (aritmética pura, sem montar nada) —
 // usado pelas estimativas dos painéis de resolução pra o número prometido == o sorteio real.
@@ -5095,6 +5197,12 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
       if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !usedNames[_nm(p)]; });
     });
     if (typeof window._computeMemberUids === 'function') { try { window._computeMemberUids(t); } catch (e) {} }
+    // NORMALIZA a proporção da árvore dupla-elim FRESCA: a colocação aditiva deixa 6 R1 → 4 R2 + 2
+    // inf em vez de 3/3. Recompõe o downstream em árvore-mínima com repescagem no ímpar, MANTENDO a
+    // R1. Auto-guardado (fresca + R1 completa por categoria). project_dupla_downstream_bye_deadend.
+    if (/dupla/i.test(String(t.format || '')) && typeof window._rebuildDuplaDownstream === 'function') {
+      try { window._rebuildDuplaDownstream(t); } catch (e) {}
+    }
   }
   return placed;
 };
