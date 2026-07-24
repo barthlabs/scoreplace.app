@@ -4838,18 +4838,103 @@ window._placeLateEntriesSurgically = function (t) {
       _setSide(tgt.m, tgt.slot, d);
       return true;
     };
-    // Sem bye fillável: o tardio fica na espera (suplente). A chave FRESCA (nada jogado) é tratada
-    // ANTES, no draw-core (integrateLateEntries re-semeia pro N+1 — decisão do dono); então aqui só
-    // chega o caso PÓS-JOGO, onde sem bye materializado não há vaga aditiva. project_bye_rep_auto_resolution.
-    pending.forEach(function (item) {
-      var d = item.e, dn = _nm(d);
-      if (!_placeAtBye(d)) return;                              // sem bye materializado → suplente
+    // ── SEM BYE → ADICIONA UM JOGO (regra do dono, 2026-07-24) ──────────────────────────────────
+    // "se houver slot livre eliminando bye/rep, ocupa pelo tardio; se não tiver, ADICIONA jogo e cria
+    // bye/rep." Chave pow2 (ex.: 8 duplas) nasce SEM bye → antes o tardio ficava na espera pra sempre
+    // ("pra que serve novos confrontos se ele nunca entra"). Agora, sem bye fillável, os tardios sem
+    // vaga são PAREADOS 2 a 2 num jogo novo (cresce a chave, ambos reais). Um tardio SOZINHO sem par
+    // fica na espera até o PRÓXIMO chegar (não se cria "vs a definir" solto — travaria o playout).
+    // Só cresce na rodada de entrada FRESCA (crescer com jogo já jogado atropelaria o resultado — aí
+    // fica na espera). Ver project_late_dupla_fills_awaiting_slot / project_bye_rep_auto_resolution.
+    // (1) preenche um "a definir" ABERTO já existente (jogo de integração anterior)
+    var _fillOpenAdefinir = function (d) {
+      var dn = _nm(d), dk = _key(d), cur = _all(), target = null;
+      cur.filter(function (m) {
+        return m && ((typeof m.round === 'number') ? m.round : 1) === baseRound && (m.bracket === _brk || (!m.bracket && _brk === 'main'));
+      }).forEach(function (m) {
+        if (target || !m || m.winner) return;
+        ['p1', 'p2'].forEach(function (slot) {
+          if (target || !_empty(m[slot])) return;
+          var other = (slot === 'p1') ? 'p2' : 'p1';
+          if (_empty(m[other]) || _byeish(m[other])) return;   // outro lado tem de ser TIME REAL (não vazio/bye)
+          if (String(m[other]) === String(dn)) return;         // anti-auto-confronto
+          var oObj = (other === 'p1') ? m.team1Obj : m.team2Obj;
+          if (oObj && _key(oObj) === dk) return;
+          var fed = cur.some(function (x) { return x && x !== m && ((x.nextMatchId === m.id && x.nextSlot === slot) || (x.loserMatchId === m.id && x.loserSlot === slot)); });
+          if (fed) return;                                     // alimentado por vencedor de outro → não é vaga livre
+          target = { m: m, slot: slot };
+        });
+      });
+      if (!target) return false;
+      _setSide(target.m, target.slot, d); delete target.m.awaitsBestLoser; return true;
+    };
+    // (2) cria o JOGO NOVO "d1 vs d2" (cresce a chave). AMBOS reais → sem slot morto (o lone-vs-a-definir
+    // travava o playout). Só na rodada de entrada FRESCA (crescer com jogo já jogado atropelaria o
+    // resultado). SEM repFill (best-loser): na Dupla Elim o derrotado já vive na inferior → seria
+    // double-book (o bug da árvore-mínima). Ver project_late_dupla_fills_awaiting_slot.
+    var _growPair = function (d1, d2) {
+      var cur = _all();
+      var _sibs0 = cur.filter(function (m) { return m && ((typeof m.round === 'number') ? m.round : 1) === baseRound && (m.bracket === _brk || (!m.bracket && _brk === 'main')); });
+      if (!_sibs0.length || _sibs0.some(function (m) { return m.winner; })) return false;   // jogado → não cresce
+      var u1 = _pu(d1), u2 = _pu(d2);
+      var ng = {
+        id: 'lt-' + t.id + '-' + ts + '-' + placed, round: baseRound, bracket: _brk, phaseIndex: _pi,
+        p1: _nm(d1), p2: _nm(d2), winner: null, isExtra: true,
+        team1Obj: d1, team1Uids: u1, p1Uid: (u1.length === 1 ? u1[0] : null),
+        team2Obj: d2, team2Uids: u2, p2Uid: (u2.length === 1 ? u2[0] : null), createdAt: new Date().toISOString()
+      };
+      if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _brk, round: baseRound, matches: [ng] }); } catch (e) { t.matches.push(ng); } }
+      else { t.matches.push(ng); }
+      try { if (typeof window._wireLateLoserToLower === 'function') window._wireLateLoserToLower(t, ng, _pi); } catch (e) {}
+      // DESTINO do jogo novo (mesma lógica da via antiga): irmão com destino D → vaga livre em D,
+      // senão a chave cresce UMA rodada (irmão × novo herdando D). Só com a 1ª rodada sem resultado.
+      try {
+        var _sibs = _all().filter(function (m) { return m && m !== ng && ((typeof m.round === 'number') ? m.round : 1) === baseRound && (m.bracket === _brk || (!m.bracket && _brk === 'main')); });
+        var _semResultado = _sibs.every(function (m) { return !m.winner; });
+        var _comDestino = _sibs.filter(function (m) { return m.nextMatchId; })[0];
+        if (!ng.nextMatchId && _comDestino && _semResultado) {
+          var _dest = _all().filter(function (m) { return m && m.id === _comDestino.nextMatchId; })[0];
+          var _livre = null;
+          if (_dest) {
+            var _ambiguo = _all().some(function (x) { return x && x.nextMatchId === _dest.id && !x.nextSlot; });
+            if (!_ambiguo) { ['p1', 'p2'].forEach(function (sl) { if (_livre || !_empty(_dest[sl])) return; var _fed = _all().some(function (x) { return x && x.nextMatchId === _dest.id && x.nextSlot === sl; }); if (!_fed) _livre = sl; }); }
+          }
+          var _comDestinoSlotOrig = _comDestino.nextSlot;
+          if (_livre) { ng.nextMatchId = _dest.id; ng.nextSlot = _livre; }
+          else {
+            var _novoR = { id: 'lt-' + t.id + '-' + ts + '-x' + placed, round: baseRound + 1, bracket: _brk, phaseIndex: _pi, p1: 'TBD', p2: 'TBD', winner: null, nextMatchId: _comDestino.nextMatchId, nextSlot: _comDestino.nextSlot };
+            if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _brk, round: baseRound + 1, matches: [_novoR] }); } catch (e) { t.matches.push(_novoR); } }
+            else { t.matches.push(_novoR); }
+            _comDestino.nextMatchId = _novoR.id; _comDestino.nextSlot = 'p1';
+            ng.nextMatchId = _novoR.id; ng.nextSlot = 'p2';
+            _novoR.nextSlot = _comDestinoSlotOrig;
+          }
+        }
+      } catch (_eDest) {}
+      return true;
+    };
+    var _commit = function (d) {
+      var dn = _nm(d);
       var exists = t.participants.some(function (p) { return _nm(p) === dn; });
       if (!exists) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
       if (d && (d.p1Uid || d.p1Name) && (d.p2Uid || d.p2Name)) t.teamOrigins[dn] = t.teamOrigins[dn] || 'formada';
       window._markLateIntegrated(t, d);
       usedNames[dn] = 1; inBracket[dn] = 1; placed++;
+    };
+    // preenche vaga (a definir aberto → bye); sem vaga, junta pra parear 2 a 2
+    var _noBye = [];
+    pending.forEach(function (item) {
+      var d = item.e;
+      if (_fillOpenAdefinir(d)) { _commit(d); return; }        // completa jogo aberto de integração anterior
+      if (_placeAtBye(d)) { _commit(d); return; }              // bye → jogo (o time que folgava passa a jogar)
+      _noBye.push(d);                                          // sem vaga → tenta parear abaixo
     });
+    // 2 tardios sem vaga → JOGO NOVO entre eles (cresce a chave; ambos reais → sem slot morto).
+    // Sobra ímpar sem par → fica na espera (não cria jogo que travaria o playout). O próximo
+    // tardio formado completa o par. Regra do dono: "adiciona jogo e cria bye/rep".
+    for (var _gi = 0; _gi + 1 < _noBye.length; _gi += 2) {
+      if (_growPair(_noBye[_gi], _noBye[_gi + 1])) { _commit(_noBye[_gi]); _commit(_noBye[_gi + 1]); }
+    }
     if (placed) {
       ['standbyParticipants', 'waitlist'].forEach(function (k) {
         if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !usedNames[_nm(p)]; });

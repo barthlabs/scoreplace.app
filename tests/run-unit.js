@@ -251,6 +251,9 @@ const SUITES = [
   'tests/dupla-elim-minimal-tree.test.js',
   'tests/late-entry-door-closes.test.js',
   'tests/late-entry-upper-grows-lower.test.js',
+  // Chave SEM bye (pow2 4/8/16) + 2 duplas formadas → PAREAM num jogo novo e ENTRAM (cresce a
+  // chave, sem slot morto). Trava o "formei dupla e não entrou" reportado pelo dono em pow2.
+  'tests/late-dupla-pow2-grow.test.js',
   'tests/match-identity-dedup.test.js',
   'tests/late-entry-recompute-n.test.js',
   // _syncLowerBracket (dona única da 1ª inferior): cenário do dono (1ª sup jogada ANTES do
