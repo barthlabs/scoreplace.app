@@ -272,6 +272,15 @@ window._devSimulateCurrentPhase = function (tId) {
   } else {
     pend = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
   }
+  // v1.4.44: INCLUI os jogos TARDIOS (isExtra — o "jogo 5" criado por integração/formar dupla) que
+  // o enumerador de fase (pendingMatches) pode NÃO listar. Sem isto o simulador pula o jogo novo →
+  // ele fica sem vencedor → a rodada não fecha → a repescagem (melhor derrotado) nunca dispara. É o
+  // que o dono viu: "jogo 5 sem vencedor + R2 não repescou o Nei". Ver project_late_dupla_fills_awaiting_slot.
+  try {
+    var _allSim = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+    var _haveSim = {}; pend.forEach(function (m) { if (m && m.id != null) _haveSim[m.id] = 1; });
+    _allSim.forEach(function (m) { if (m && m.isExtra && !m.winner && m.id != null && !_haveSim[m.id]) pend.push(m); });
+  } catch (_eSim) {}
   var todo = pend.filter(function (m) {
     if (!m || m.winner || m.isSitOut || m.isBye) return false;
     var p1ok = realTeam(m.p1), p2ok = realTeam(m.p2);
