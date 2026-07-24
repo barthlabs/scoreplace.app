@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.47';
+  var EXT_VERSION = '1.48';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -625,6 +625,12 @@
         imp.declaredRankings = (declaredRankingsTotal != null) ? declaredRankingsTotal : ((prior && prior.declaredRankings) || null);
         if (declaredGamesTotal != null) imp.declaredGames = declaredGamesTotal;
         else if (prior && prior.declaredGames != null) imp.declaredGames = prior.declaredGames;
+        // v1.48: a LISTA de torneios (título já traz a categoria) é PERSISTIDA — o app
+        // mostra todos no dialog (lidos e pendentes) e a rodada seguinte pula a releitura
+        // da lista quando ela já está completa. Pedido do dono: "se leu 2 de 2, já
+        // deveria ter todos os torneios dela com a categoria".
+        if (parts.length) imp.tournamentsList = parts.map(function (Pp) { return { club: Pp.club, tid: Pp.tid, title: Pp.title || null }; });
+        else if (prior && Array.isArray(prior.tournamentsList) && prior.tournamentsList.length) imp.tournamentsList = prior.tournamentsList;
         return shrinkImport(imp);
       }
       function postPartial(stage, done, total) {
@@ -690,7 +696,20 @@
         var mT = btxt.match(/(\d+)\s*Torneios/); if (mT) declaredTournTotal = +mT[1];
         prog({ pct: 2, feed: '👤 perfil: ' + (declaredGamesTotal != null ? declaredGamesTotal : '?') + ' jogos · ' + (declaredRankingsTotal != null ? declaredRankingsTotal : '?') + ' rankings · ' + (declaredTournTotal != null ? declaredTournTotal : '?') + ' torneios' });
       } catch (e0) { if (isPause(e0)) throw e0; }
-      // ── ETAPA 1: lista de torneios da pessoa (PAGINADA — 35 não cabem numa página) ──
+      // ── ETAPA 1: lista de torneios da pessoa (PAGINADA — 35 não cabem numa página).
+      // v1.48: lista COMPLETA de rodada anterior é reusada SEM fetch (só relê quando o
+      // total declarado do perfil cresceu — torneio novo).
+      var priorList = (prior && Array.isArray(prior.tournamentsList)) ? prior.tournamentsList : null;
+      function seedFromPriorList() {
+        (priorList || []).forEach(function (Pp) {
+          if (Pp && Pp.club && Pp.tid) parts.push({ club: Pp.club, tid: Pp.tid, title: Pp.title || '' });
+        });
+      }
+      if (priorList && priorList.length && (declaredTournTotal == null || priorList.length >= declaredTournTotal)) {
+        seedFromPriorList();
+        prog({ phase: 'torneios', note: 'lista de torneios já gravada (' + parts.length + ') — pulando releitura', pct: 2 });
+        if (declaredTournTotal == null) declaredTournTotal = parts.length;
+      } else {
       prog({ phase: 'torneios', note: 'lendo a lista de torneios', pct: 2 });
       try {
         var tBase = 'https://letzplay.me/' + encodeURIComponent(handle) + '/tournaments';
@@ -713,6 +732,9 @@
         }
         if (declaredTournTotal == null && parts.length) declaredTournTotal = parts.length;
       } catch (eT) { if (isPause(eT)) throw eT; }   // sem lista pública → segue pros jogos gerais
+      // fetch da lista falhou/veio vazio mas a rodada anterior tinha → usa a gravada
+      if (!parts.length && priorList && priorList.length) seedFromPriorList();
+      }
 
       // ── ETAPA 2: por torneio (a lista já vem do mais recente pro mais antigo) ──
       for (var ti = 0; ti < parts.length; ti++) {

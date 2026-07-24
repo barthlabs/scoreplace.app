@@ -1648,7 +1648,19 @@
       '</div>';
     if (imp) {
       // Torneios já puxados: nome · categoria · ano · classificação do atleta.
-      if (offFp.length) {
+      // v1.4.32: + os AINDA NÃO LIDOS da lista persistida (tournamentsList — o título já
+      // traz a categoria). O dono vê os 35 de cara, não só os que já têm jogos.
+      var pendLis = '';
+      if (Array.isArray(imp.tournamentsList) && imp.tournamentsList.length) {
+        var lidosKey = {};
+        offFp.forEach(function (f) { lidosKey['t/' + (f.club || '') + '/' + (f.tourneyId || '')] = 1; });
+        pendLis = imp.tournamentsList.filter(function (p) {
+          return p && p.tid && !lidosKey['t/' + (p.club || '') + '/' + p.tid];
+        }).map(function (p) {
+          return '<div style="padding:2px 0;opacity:0.7;">⏳ ' + _esc(p.title || ('torneio ' + p.tid)) + ' · ainda não lido</div>';
+        }).join('');
+      }
+      if (offFp.length || pendLis) {
         var lis = offFp.map(function (f) {
           var nm = f.name || f.categoryRaw || 'torneio';
           var cat = (f.name && f.categoryRaw && f.name.indexOf(f.categoryRaw) < 0) ? (' · ' + _esc(f.categoryRaw)) : '';
@@ -1656,7 +1668,7 @@
           var pos = _lzMyPosIn(f.standings, tg.handle);
           return '<div style="padding:2px 0;">🏆 ' + _esc(nm) + cat + yr + (pos != null ? (' · <b>' + pos + 'º lugar</b>') : '') + '</div>';
         }).join('');
-        body += '<div style="max-height:8.5em;overflow-y:auto;font-size:0.78rem;color:var(--text-secondary,#c8cdd6);background:var(--bg-darker,rgba(0,0,0,0.2));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;margin-bottom:6px;text-align:left;">' + lis + '</div>';
+        body += '<div style="max-height:12em;overflow-y:auto;font-size:0.78rem;color:var(--text-secondary,#c8cdd6);background:var(--bg-darker,rgba(0,0,0,0.2));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;margin-bottom:6px;text-align:left;">' + lis + pendLis + '</div>';
       }
       var incompleto = (gY && gX < gY) || (imp.partialReason != null);
       if (incompleto) {
