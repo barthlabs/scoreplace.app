@@ -2339,6 +2339,11 @@ window.checkPowerOf2 = function (t) {
 window._autoP2Resolution = function (t) {
     var info = window.checkPowerOf2(t);
     if (!info || info.isPowerOf2 || info.count <= 2) return 'bye';   // resolução moot
+    // Chave que ACEITA entrada tardia (novos confrontos ON) usa BYE: os byes são as VAGAS que o
+    // tardio preenche (bye→confronto) SEM re-sortear. Play-in REDUZ o elenco → não deixa vaga, e
+    // formar dupla na espera não teria onde encaixar (foi o que o dono viu: "formei dupla e não
+    // criou jogo"). Sem entrada tardia, segue a de MENOS intervenções. Ver project_bye_rep_auto_resolution.
+    if (typeof window._allowsNewMatchups === 'function' && window._allowsNewMatchups(t)) return 'bye';
     var byes = info.missing;   // P_hi − N
     var reps = info.excess;    // N − P_lo
     return (byes <= reps) ? 'bye' : 'playin';   // empate → bye
