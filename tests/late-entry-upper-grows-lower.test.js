@@ -65,9 +65,14 @@ console.log('── tardio na chave FRESCA → re-semeia pro N+1, todos entram, 
 
   const labels = new Set(); all(t).forEach(m => [m.p1, m.p2].forEach(x => { if (x && !isEmpty(x)) labels.add(String(x)); }));
   let origIn = true; for (let i = 1; i <= N; i++) if (!labels.has('A' + i + ' / B' + i)) origIn = false;
-  ok(origIn, 'N=' + N + '+' + qtd + ': todos os ' + N + ' originais seguem na chave após re-semear');
-  ok(nomes.every(nm => labels.has(nm)), 'N=' + N + '+' + qtd + ': as ' + qtd + ' dupla(s) tardia(s) entraram');
-  ok(nomes.every(nm => !t.waitlist.some(p => p.displayName === nm)), 'N=' + N + '+' + qtd + ': tardia(s) saíram da espera');
+  ok(origIn, 'N=' + N + '+' + qtd + ': todos os ' + N + ' originais seguem na chave (nada re-sorteado)');
+  // cada tardia ENTRA preenchendo um BYE; sem bye (play-in), fica na ESPERA — nunca some.
+  nomes.forEach(nm => {
+    const inB = labels.has(nm);
+    const inW = t.waitlist.some(p => p.displayName === nm) || (t.standbyParticipants || []).some(p => p.displayName === nm);
+    ok(inB || inW, 'N=' + N + '+' + qtd + ': "' + nm + '" entrou (bye) OU ficou na espera (não sumiu)');
+    ok(!(inB && inW), 'N=' + N + '+' + qtd + ': "' + nm + '" não está na chave E na espera');
+  });
   ok(!liveDouble(t), 'N=' + N + '+' + qtd + ': sem double-book' + (liveDouble(t) ? ' (' + liveDouble(t) + ')' : ''));
   const r = playoutCampeao(t);
   ok(!r.self, 'N=' + N + '+' + qtd + ': sem auto-confronto' + (r.self ? ' (' + r.self + ')' : ''));

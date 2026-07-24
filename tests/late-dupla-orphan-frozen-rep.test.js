@@ -20,9 +20,9 @@ let pass = 0, fail = 0; const fails = [];
 function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
 
 function mkPool(n){var a=[];for(var i=0;i<n;i++)a.push({displayName:'D'+i,name:'D'+i,uid:'u'+i});return a;}
-function build(n){
+function build(n, res){
   const CAT='Misto Obrig.';
-  const cfg={format:'Dupla Eliminatória',formatCode:'elim_dupla',teamSize:2,bracketResolution:'playin',seedVip:true,thirdPlace:true,source:{type:'enrollment'},categories:[CAT]};
+  const cfg={format:'Dupla Eliminatória',formatCode:'elim_dupla',teamSize:2,bracketResolution:(res||'playin'),seedVip:true,thirdPlace:true,source:{type:'enrollment'},categories:[CAT]};
   const pool=mkPool(n).map(p=>Object.assign({categories:[CAT]},p));
   const t={id:'DEO'+n,format:'Dupla Eliminatória',teamSize:2,matches:[],currentPhaseIndex:0,lateEnrollment:'expand',newMatchups:true,participants:pool.slice(),teamOrigins:{},standbyParticipants:[],waitlist:[],checkedIn:{},absent:{},combinedCategories:[CAT]};
   pool.forEach(p=>{t.checkedIn[p.uid]=1;});
@@ -51,12 +51,13 @@ function playout(t){
 // ── SUB A: chave FRESCA + órfão de roster → re-semeia pro N+1, órfão entra ──────────────
 console.log('── SUB A: chave fresca + dupla formada (órfão) → re-semeia, entra ──');
 (function(){
-  const t=build(5); W.AppStore.tournaments=[t];
+  const t=build(12,'bye'); W.AppStore.tournaments=[t];   // bye-mode: há bye pra o órfão preencher
   const nm=orphan(t,1);
   ok(!labels(t).has(nm), 'pré: dupla formada NÃO está na chave');
   const r=dc.integrateLateEntries(t,{});
-  ok(r && r.changed===true, 'SUB A: CF integrou (changed=true) ['+JSON.stringify(r)+']');
+  ok(r && r.changed===true, 'SUB A: CF integrou (changed=true, preencheu bye) ['+JSON.stringify(r)+']');
   ok(labels(t).has(nm), '✅ SUB A: a dupla FORMADA entrou na chave');
+  ok(!r.redrawnFresh, 'SUB A: NÃO re-semeou a chave');
   ok(!liveDouble(t), 'SUB A: sem double-book');
   const err=playout(t);
   ok(!err, 'SUB A: playout sem erro/auto-confronto ('+(err||'')+')');

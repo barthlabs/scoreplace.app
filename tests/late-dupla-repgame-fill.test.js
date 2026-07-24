@@ -34,17 +34,21 @@ function liveDouble(t) {
   return Object.keys(slots).find(v => slots[v].length > 1);
 }
 
+function r1real(t) { const sup = all(t).filter(m => m.bracket === 'upper' || !m.bracket); const minR = Math.min.apply(null, sup.map(m => m.round)); return sup.filter(m => m.round === minR && !isEmpty(m.p1) && !isEmpty(m.p2)).map(m => [m.p1, m.p2].sort().join(' vs ')).sort(); }
 function run(n) {
-  console.log('\n== dupla ímpar n=' + n + ' + 1 tardia (chave fresca → re-semeia) ==');
+  console.log('\n== dupla n=' + n + ' (bye-mode) + 1 tardia → preenche um BYE, R1 intacta ==');
   const t = mkT(n); W.AppStore.tournaments = [t];
+  const antesR1 = r1real(t);
   const NM = 'LA / LB';
   t.standbyParticipants = [{ p1Name: 'LA', p2Name: 'LB', p1Uid: 'lla', p2Uid: 'llb', displayName: NM, name: NM, _lateJoin: true }];
   t.checkedIn['lla'] = 1; t.checkedIn['llb'] = 1;
 
   const ret = dc.integrateLateEntries(t, {});
   ok(ret && ret.changed, 'integração AGIU (não ficou no limbo) [' + JSON.stringify(ret) + ']');
-  ok(all(t).some(m => m && (m.p1 === NM || m.p2 === NM)), 'a dupla tardia ENTROU na chave');
+  ok(all(t).some(m => m && (m.p1 === NM || m.p2 === NM)), 'a dupla tardia ENTROU na chave (preencheu um bye)');
   ok(!(t.standbyParticipants || []).some(p => p.displayName === NM), 'saiu da lista de espera');
+  ok(!ret.redrawnFresh, 'NÃO re-semeou a chave');
+  ok(antesR1.filter(x => r1real(t).indexOf(x) < 0).length === 0, 'confrontos REAIS da 1ª rodada INTACTOS (nada re-sorteado)');
   ok(!liveDouble(t), 'sem double-book' + (liveDouble(t) ? ' (' + liveDouble(t) + ')' : ''));
   // todos os n+1 (originais + tardia) estão na chave
   const labels = new Set(); all(t).forEach(m => [m.p1, m.p2].forEach(x => { if (x && !isEmpty(x)) labels.add(String(x)); }));
@@ -65,7 +69,7 @@ function run(n) {
   ok(grand.length >= 1 && grand[grand.length - 1].winner, 'playout: grande final num campeão');
 }
 
-run(5); run(7); run(9);
+run(12); run(13); run(15);   // bye-mode: há byes pra preencher (play-in/pow2 não têm — o tardio espera)
 
 console.log('\n' + (fail === 0 ? '✅ TODOS PASSARAM' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 process.exit(fail === 0 ? 0 : 1);

@@ -35,32 +35,36 @@ function mkT(N) {
 }
 const all = t => W._collectAllMatches(t) || [];
 
-console.log('── Dupla Elim: presente na espera entra na R1 SUPERIOR (não vai pro limbo) ──');
-[4, 8].forEach(N => {
+// N em modo BYE (12,13,15) — a chave tem byes que o tardio preenche (bye→confronto). Pow2/play-in
+// não tem vaga aditiva (o tardio ficaria na espera, testado no sweep); aqui provamos a ENTRADA.
+console.log('── Dupla Elim: presente na espera PREENCHE UM BYE na R1 sup (bye→confronto, R1 intacta) ──');
+const isEmptyR1 = v => !v || v === 'TBD' || /^bye/i.test(String(v).trim()) || /a definir/i.test(String(v));
+function r1real(t) { const sup = all(t).filter(m => m.bracket === 'upper' || !m.bracket); const minR = Math.min.apply(null, sup.map(m => m.round)); return sup.filter(m => m.round === minR && !isEmptyR1(m.p1) && !isEmptyR1(m.p2)).map(m => [m.p1, m.p2].sort().join(' vs ')).sort(); }
+[12, 13, 15].forEach(N => {
   const t = mkT(N);
   W.AppStore.tournaments = [t];
   const rd = dc.drawInitial(t, {});
   ok(rd && rd.ok, `N=${N}: sorteio inicial ok`);
-  ok(/dupla/i.test(t.format || ''), `N=${N}: é MESMO Dupla Eliminatória (format="${t.format}") — o gate de Elim Simples NÃO pode pegar`);
+  ok(/dupla/i.test(t.format || ''), `N=${N}: é MESMO Dupla Eliminatória (format="${t.format}")`);
   if (!rd || !rd.ok) return;
+  const antesR1 = r1real(t);
 
-  // ESTRUTURA NOVA (resolução automática): a chave pow2 fresca NÃO tem vaga aditiva sem re-semear.
-  // Decisão do dono (2026-07-24): chave FRESCA (nada jogado) + tardio → RE-SEMEIA pro N+1. A dupla
-  // presente da espera ENTRA de verdade (com adversário REAL, não "a definir"), sem limbo, sem
-  // double-book, e a chave fecha num campeão. project_bye_rep_auto_resolution.
   // dupla PRÉ-FORMADA na espera — SEM _lateJoin (é o que o sorteio "só presentes" produz)
   const dupla = { p1Uid: 'wA', p1Name: 'Espera A', p2Uid: 'wB', p2Name: 'Espera B', displayName: NM, name: NM };
   t.standbyParticipants.push(dupla);
   ok(!dupla._lateJoin, `N=${N}: (pré) a dupla NÃO tem _lateJoin — é pré-formada`);
-  // organizador dá PRESENÇA aos dois
   t.checkedIn['wA'] = 1; t.checkedIn['wB'] = 1;
 
   const r = dc.integrateLateEntries(t, {});
   ok(r && r.changed, `N=${N}: integração AGIU (não ficou no limbo) [${JSON.stringify(r)}]`);
   const mine = all(t).filter(m => m && (m.p1 === NM || m.p2 === NM));
-  ok(mine.length >= 1, `N=${N}: ✅ a dupla presente ENTROU na chave (got ${mine.length} jogo(s))`);
+  ok(mine.length >= 1, `N=${N}: ✅ a dupla presente ENTROU na chave preenchendo um bye (got ${mine.length} jogo(s))`);
   ok(!t.standbyParticipants.some(p => p.displayName === NM), `N=${N}: saiu da lista de espera`);
   ok(mine.every(m => m.p1 !== m.p2), `N=${N}: nenhum jogo dela é auto-confronto`);
+  // ⛔ NUNCA re-sortear: nenhum confronto REAL da 1ª rodada SOME (o bye vira +1 jogo, os originais
+  // ficam). Checa antes ⊆ depois (o preenchimento do bye ACRESCENTA, não remove).
+  ok(antesR1.filter(x => r1real(t).indexOf(x) < 0).length === 0, `N=${N}: confrontos REAIS da 1ª sup INTACTOS (nada re-sorteado)`);
+  ok(!r.redrawnFresh, `N=${N}: NÃO re-semeou a chave (redrawnFresh ausente)`);
   // sem double-book vivo
   const liveSlots = {}; all(t).filter(m => !m.winner).forEach(m => ['p1', 'p2'].forEach(s => { const v = m[s]; if (v && !isEmpty(v) && !/bye/i.test(String(v))) (liveSlots[v] = liveSlots[v] || []).push(m.id); }));
   ok(!(liveSlots[NM] && liveSlots[NM].length > 1), `N=${N}: dupla não está viva em 2 jogos (double-book)`);

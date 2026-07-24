@@ -79,15 +79,18 @@ function corrida(N, dupla) {
   const depois = snapshotR0(t);
   const labels = []; all(t).forEach(m => { [m.p1, m.p2].forEach(x => { if (x && !isEmpty(x)) labels.push(String(x)); }); });
 
-  // (3) RE-SEMEADURA no fresh (decisão do dono, 2026-07-24, project_bye_rep_auto_resolution): a
-  // chave FRESCA (nada jogado) é re-sorteada pro N+1 — os confrontos PODEM mudar. O invariante já
-  // não é "jogos intactos" e sim: ninguém do elenco original SUMIU + o tardio ENTROU + nada de
-  // double-book. (Eliminatória Simples segue aditiva — a flag _duplaAutoStructure é só da Dupla.)
+  // (3) NUNCA re-sortear os confrontos JÁ SORTEADOS (regra do dono, 2026-07-24): a entrada tardia SÓ
+  // transforma um BYE já sorteado num confronto (bye→jogo real); os jogos da 1ª rodada com AMBOS os
+  // lados reais ficam INTACTOS. project_late_entry_never_redraws.
   const brkLabels = new Set(); all(t).forEach(m => { [m.p1, m.p2].forEach(x => { if (x && !isEmpty(x)) brkLabels.add(String(x)); }); });
-  let _origIn = true; for (let i = 1; i <= N; i++) if (!brkLabels.has('A' + i + ' / B' + i)) _origIn = false;
-  ok(_origIn, rot + ' :: (3) todos os N originais seguem na chave após integrar');
+  ok(antes.every(b => depois.indexOf(b) !== -1), rot + ' :: (3) confrontos REAIS da 1ª rodada INTACTOS (nada re-sorteado)');
   ok(labels.indexOf('Solo Um') === -1, rot + ' :: (4) SOLO sem dupla NÃO entrou na chave');
-  ok(brkLabels.has(NM), rot + ' :: (1) a dupla tardia ENTROU na chave');
+  // (1) a dupla tardia ENTRA preenchendo um BYE; sem bye pra preencher (play-in), fica na ESPERA —
+  // nunca some, nunca re-sorteia. Está numa das duas, nunca nas duas.
+  const naChave = brkLabels.has(NM);
+  const naEspera = (t.standbyParticipants || []).some(p => p.displayName === NM) || (t.waitlist || []).some(p => p.displayName === NM);
+  ok(naChave || naEspera, rot + ' :: (1) a dupla tardia entrou (preencheu bye) OU ficou na espera (não sumiu)');
+  ok(!(naChave && naEspera), rot + ' :: (1b) não está na chave E na espera ao mesmo tempo');
   const liveSlots = {}; all(t).filter(m => !m.winner).forEach(m => ['p1', 'p2'].forEach(s => { const v = m[s]; if (v && !isEmpty(v)) (liveSlots[v] = liveSlots[v] || []).push(m.id); }));
   ok(!(liveSlots[NM] && liveSlots[NM].length > 1), rot + ' :: (2) tardia não está viva em 2 jogos (double-book)');
   const self = all(t).find(m => m && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2) && String(m.p1) === String(m.p2));
