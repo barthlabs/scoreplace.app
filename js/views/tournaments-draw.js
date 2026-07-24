@@ -1898,10 +1898,15 @@ window._buildPhase0Cfg = function (t) {
         // só quando o organizador liga o toggle (gruposSeedVip → espalha pelos grupos).
         seedVip: (code === 'elim_simples' || code === 'elim_dupla') ? true : !!t.gruposSeedVip,
         seedCategory: !!t.gruposSeedCategory,
-        // BYE não fecha chave em Dupla Eliminatória fora de pow2 → coage p/ repescagem (playin).
-        // Inofensivo em pow2 (o dupla ignora a resolução lá). Rede de segurança p/ config legada
-        // salva como 'bye'. feedback_resolution_one_logic.
-        bracketResolution: ((t.p2Resolution || 'bye') === 'bye' && code === 'elim_dupla') ? 'playin' : (t.p2Resolution || 'bye'),
+        // RESOLUÇÃO AUTOMÁTICA (planilha do dono): em Dupla Eliminatória fora de pow2, a lógica
+        // escolhe bye (pad pra cima) OU play-in (reduz pra baixo) pela de MENOS intervenções —
+        // não pergunta ao organizador. Overrides explícitos de OUTRA natureza (swiss/exclusion/
+        // standby) são respeitados. Ver _autoP2Resolution / project_bye_rep_auto_resolution.
+        bracketResolution: (function () {
+            var pr = t.p2Resolution || 'bye';
+            if (code === 'elim_dupla' && (pr === 'bye' || pr === 'playin') && typeof window._autoP2Resolution === 'function') return window._autoP2Resolution(t);
+            return pr;
+        })(),
         thirdPlace: t.thirdPlace !== false,
         categories: (Array.isArray(t.combinedCategories) && t.combinedCategories.length) ? t.combinedCategories.slice() : null,
         source: { type: 'enrollment' }
@@ -2622,6 +2627,10 @@ window._buildNextMatchLinks = function (t) {
 // ─── Build Double Elimination Bracket ───────────────────────────────
 window._buildDoubleElimBracket = function (t, opts) {
     if (!t.matches || !t.matches.length) return;
+    // Dupla Eliminatória pow2 LIMPA (sem play-in/bye): também é a estrutura nova — a entrada
+    // tardia usa o preenchimento de BYE (e, sem bye, deixa o tardio na espera em vez de criar
+    // repFill que double-booka). project_bye_rep_auto_resolution.
+    t._duplaAutoStructure = true;
     const ts = Date.now();
     // v4.1.29: phase-aware. opts.phaseIndex → só olha a R1 do upper DAQUELA fase e tagueia
     // TODOS os jogos novos (upper R2+/lower/grand) com phaseIndex (senão o render da fase,
@@ -2935,6 +2944,10 @@ window._rebuildLowerBracket = function (t, opts) {
 // Ver project_dupla_elim_repechage. meta = { g,T,promote,toLower,hasSat,satName,satObj,idPrefix }.
 window._buildRepechageDoubleElim = function (t, meta, opts) {
     if (!t || !meta || !Array.isArray(t.matches)) return;
+    // MARCA a estrutura nova (resolução automática: play-in ou bye, pow2 limpo + byes, SEM
+    // repescagem). A entrada tardia lê esta flag pra PREENCHER um BYE em vez de criar repFill
+    // (que ressuscitaria um derrotado já vivo na inferior = double-book). project_bye_rep_auto_resolution.
+    t._duplaAutoStructure = true;
     const _pi = (opts && opts.phaseIndex != null) ? opts.phaseIndex : null;
     const ts = Date.now();
     let cnt = 0;
@@ -2995,59 +3008,41 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
         };
         mergeUppers = []; for (let r = 2; r <= W; r++) mergeUppers.push(upper[r]);
     } else {
-        // ── ÁRVORE MÍNIMA (v1.3.159, regra do dono) ────────────────────────────────────────
-        // ANTES: a superior era inflada até a POTÊNCIA DE 2 acima (T), e as vagas sobrando eram
-        // preenchidas PROMOVENDO melhores derrotados direto pra R2 sup; os demais derrotados caíam
-        // na pré-rodada inferior também por repescagem. Com 12 duplas isso dava 7 REPESCADOS logo
-        // na 1ª virada (2 subindo + 4 na pré + 1), quando o mínimo é 1: 6 é PAR, ⌈6/2⌉=3 fecha sem
-        // repescar ninguém. Também criava um SEGUNDO motor de chave, proibido pelo cânone.
-        //
-        // AGORA: a superior é a MESMA árvore mínima da Eliminatória Simples (⌈E/2⌉ por rodada;
-        // 1 repescado SÓ quando E é ímpar) — `_buildMinimalElimTree`, a fonte única. A inferior
-        // não muda: `_rebuildLowerBracket` já aplica exatamente a mesma regra (`entrants % 2`),
-        // alternando encontro (recebe quem cai) e confronto. Resultado com 12 duplas: sup 6/3/2/1
-        // e inf começando em 3, com a repescagem caindo na 3ª rodada dos DOIS lados — espelhadas.
-        //
-        // POR QUE ISSO É O QUE FAZ A ENTRADA TARDIA FECHAR: a integração tardia JÁ usa
-        // `_buildMinimalElimTree`. Com o sorteio inicial na mesma fórmula, chave inicial e chave
-        // pós-entrada-tardia passam a ser a MESMA construção — o REP/BYE é recalculado pelo número
-        // novo de forma ADITIVA (quem já foi definido congela; acrescenta vaga em vez de tirar
-        // alguém), sem re-sortear nada. Ver [[project_minimal_elim_formula_canon]],
-        // [[project_dupla_elim_late_integration_cascade]] e [[project_lower_bracket_recursive_repechage]].
-        const rep = t.matches.filter(m => m && m.isPhaseRepR1 && m.round === 0 && (cat == null || m.category === cat) && (_pi == null || (m.phaseIndex || 0) === _pi))
+        // ── PLAY-IN CLÁSSICO (planilha do dono, project_bye_rep_auto_resolution) ────────────
+        // A chave SUPERIOR é uma pow2 LIMPA de P_lo (maior pow2 ≤ n): o _duplaR1FromPool já
+        // emitiu o round 0 (play-in, `reps` jogos entre os piores) + round 1 (R1 sup, P_lo/2
+        // jogos, com os diretos postos e os vencedores do play-in ligados via nextMatchId).
+        // Aqui montamos o upper R2..W (halving) e alimentamos a pré-rodada INFERIOR com TODOS
+        // os perdedores da R1 sup + TODOS os perdedores do play-in (2ª vida — ninguém eliminado
+        // na 1ª). A superior é pow2 limpa ⇒ SEM rodada ímpar ⇒ SEM repFill/ressurreição ⇒ SEM
+        // double-book. A inferior usa BYE no ímpar (a repescagem recursiva foi SUBSTITUÍDA por
+        // esta resolução automática — o modo do _rebuildLowerBracket vai como 'bye'). Ver
+        // [[project_bye_rep_auto_resolution]] e [[project_lower_bracket_recursive_repechage]].
+        const P_lo = meta.P_lo;
+        W = Math.round(Math.log(P_lo) / Math.log(2));
+        upper[1] = t.matches.filter(m => m && m.round === 1 && m.bracket === 'upper' && (cat == null || m.category === cat) && (_pi == null || (m.phaseIndex || 0) === _pi))
             .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-        if (!rep.length) return;
-        // 1) SUPERIOR = árvore mínima a partir da 1ª rodada (round 0). O builder cria os jogos e
-        //    liga os `nextMatchId`; aqui só carimbamos fase/categoria e registramos as colunas.
-        const _novos = [];
-        const _mkUpId = function () { return idp + '-upper-' + (cnt++) + '-' + ts; };
-        window._buildMinimalElimTree(_novos, rep, _mkUpId, 'upper', false, false, {}, 0);
-        _novos.forEach(function (m) {
-            if (_pi != null) m.phaseIndex = _pi;
-            if (cat != null) m.category = cat;
-            if (typeof window._appendCanonicalColumn === 'function') {
-                window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'upper', round: m.round, matches: [m] });
-            } else { t.matches.push(m); }
-        });
-        _novos.forEach(function (m) { (upper[m.round] = upper[m.round] || []).push(m); });
-        W = 0; Object.keys(upper).forEach(function (r) { if (+r > W) W = +r; });
-        // 2) PRÉ-RODADA INFERIOR = os derrotados da 1ª sup, do jeito CLÁSSICO (cai direto, via
-        //    loserMatchId) — não por repescagem. ⌈derrotados/2⌉ jogos.
-        preGames = Math.ceil(rep.length / 2);
+        const playin = t.matches.filter(m => m && m.round === 0 && m.isPlayIn && m.bracket === 'upper' && (cat == null || m.category === cat) && (_pi == null || (m.phaseIndex || 0) === _pi))
+            .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        if (!upper[1].length) return;
+        for (let r = 2; r <= W; r++) {
+            upper[r] = [];
+            const pc = upper[r - 1].length / 2;
+            for (let j = 0; j < pc; j++) upper[r].push(M('upper', r));
+            upper[r - 1].forEach((pm, idx) => { const nm = upper[r][Math.floor(idx / 2)]; pm.nextMatchId = nm.id; pm.nextSlot = (idx % 2 === 0) ? 'p1' : 'p2'; });
+        }
+        // PRÉ-RODADA INFERIOR = perdedores da R1 sup (todos reais, sem bye) + perdedores do
+        // play-in. ⌈entrantes/2⌉ jogos; sobra ímpar → BYE (auto-resolve no _advanceWinner).
+        const preEntrants = upper[1].length + playin.length;
+        preGames = Math.ceil(preEntrants / 2);
         feedPre = function (pre) {
             const s = slotsOf(pre); let si = 0;
-            rep.forEach(um => { const sl = s[si++]; um.loserMatchId = sl.m.id; um.loserSlot = sl.s; });
-            // Sobrou 1 vaga (nº ÍMPAR de derrotados): repescagem, NUNCA bye — mesma regra do
-            // `fillOdd` da inferior (melhor derrotado desta própria rodada ganha a 3ª vida).
-            if (si < s.length) {
-                const sl = s[si];
-                sl.m.isPhaseRepGame = true; sl.m.isLowerImpar = true;
-                (sl.m.repFill = sl.m.repFill || []).push({ slot: sl.s, srcBracket: 'lower', srcRound: 1, rank: 0, cat, tagRep: true });
-            }
+            upper[1].forEach(um => { const sl = s[si++]; um.loserMatchId = sl.m.id; um.loserSlot = sl.s; });
+            playin.forEach(pg => { const sl = s[si++]; pg.loserMatchId = sl.m.id; pg.loserSlot = sl.s; });
+            for (; si < s.length; si++) { const sl = s[si]; if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; }
         };
-        // Os derrotados da 1ª sup já foram pra pré-rodada → os encontros consomem da 2ª em diante.
-        mergeUppers = []; for (let r = 1; r <= W; r++) mergeUppers.push(upper[r]);
-        satout = null;   // sem "sobra" estática: a ímpar é resolvida DENTRO da árvore mínima
+        mergeUppers = []; for (let r = 2; r <= W; r++) mergeUppers.push(upper[r]);
+        satout = null;
     }
 
     // ---- CHAVE INFERIOR + GRANDE FINAL (motor ÚNICO — extraído p/ _rebuildLowerBracket) ----
@@ -3056,27 +3051,12 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
     // _integrateLateDuplas Tier 2). Ver project_dupla_elim_repechage.
     let prevLower = lowerRound(preGames);
     feedPre(prevLower);
-    // ── REPESCAGEM RECURSIVA na R1 inferior (3ª vida) — project_lower_bracket_recursive_repechage ──
-    // n ímpar (satout = perdedor do jogo da ímpar superior) E há jogos normais na pré-rodada
-    // (preGames>0 → existe derrotado da própria R1 inf pra ressuscitar): a ímpar da INFERIOR joga
-    // um jogo-repescagem na PRÓPRIA R1 inf — mesmo padrão do jogo da ímpar superior. p1 = perdedor
-    // do jogo da ímpar superior (loserFeed dinâmico), p2 = MELHOR derrotado dos `preGames` jogos
-    // normais desta R1 inf (repFill rank 0, MESMA rodada, isPhaseRepGame → não é fonte de si mesmo;
-    // SEM tagRep porque continua na inferior). Vencedor → merge1 (ocupa a vaga do antigo satout);
-    // perdedor → eliminado (3ª derrota). Assim a R1 inf fica com 4 jogos (n=15) em vez de empurrar
-    // a ímpar direto pro merge1. Regra do dono: ímpar+repescagem = 3ª vida, SEM bye. Quando toLower=0
-    // (n=2^k+1: pré sem jogos normais, nada pra ressuscitar) mantém o comportamento antigo
-    // (satout → merge1, que lá pode dar bye por falta de fonte — caso de borda documentado).
-    if (mode === 'playin' && satout && satout.loserFeed && preGames > 0) {
-        const lowImpar = M('lower', lround, { isPhaseRepGame: true, isLowerImpar: true });
-        satout.loserFeed.loserMatchId = lowImpar.id; satout.loserFeed.loserSlot = 'p1';
-        lowImpar.repFill = [{ slot: 'p2', srcBracket: 'lower', srcRound: lround, rank: 0, cat: cat, tagRep: true }];
-        prevLower.push(lowImpar);   // entra na R1 inf; seu VENCEDOR alimenta o merge1
-        satout = null;              // não injeta mais direto no merge1
-    }
+    // Chave inferior + grande final via motor único. O ÍMPAR sempre vira BYE (mode:'bye') — os
+    // DOIS modos (bye/play-in) são pow2 limpos na superior; a repescagem recursiva antiga foi
+    // substituída pela resolução automática. Ver project_bye_rep_auto_resolution.
     window._rebuildLowerBracket(t, {
         preRound: prevLower, mergeUppers: mergeUppers, satout: satout,
-        upperChamp: (upper[W] && upper[W][0]) || null, W: W, mode: mode,
+        upperChamp: (upper[W] && upper[W][0]) || null, W: W, mode: 'bye',
         cat: cat, phaseIndex: _pi, idPrefix: idp, ts: ts, wipe: false
     });
 };
@@ -4807,6 +4787,75 @@ window._placeLateEntriesSurgically = function (t) {
   var ts = Date.now(), placed = 0, usedNames = {};
   if (!Array.isArray(t.participants)) t.participants = [];
   if (!t.teamOrigins) t.teamOrigins = {};
+
+  // ── ESTRUTURA NOVA (resolução automática: play-in/bye, pow2 limpo, SEM repescagem) ──────────
+  // O tardio PREENCHE um BYE existente (bye→jogo real): o time que folgava passa a jogar o tardio.
+  // NUNCA cria repFill (que ressuscitaria um derrotado JÁ VIVO na inferior = double-book — o bug
+  // que a árvore-mínima dava). Sem bye fillável → o tardio fica na espera (suplente). Ver
+  // project_bye_rep_auto_resolution (Fase 2) e project_late_dupla_fills_awaiting_slot.
+  if (t._duplaAutoStructure) {
+    var _byeish = function (v) { return /^\s*bye|a definir/i.test(String(v || '')); };
+    var _placeAtBye = function (d) {
+      var dn = _nm(d), dk = _key(d), cur = _all(), tgt = null;
+      // DOOR-AWARE: quando a porta já virou a INFERIOR (2ª sup teve resultado ⇒ _brk==='lower'), o
+      // tardio NÃO pode reabrir a superior — preenche SÓ bye da inferior; sem bye lá, fica na espera.
+      // Enquanto a porta é a superior, preferimos ela mas caímos pra qualquer bye. Ver
+      // project_late_entry_door_upper_then_lower.
+      var _cand = (_brk === 'lower') ? cur.filter(function (m) { return m && m.bracket === 'lower'; }) : cur.slice();
+      var _ord = _cand.sort(function (a, b) {
+        return (a && a.bracket === _brk ? 0 : 1) - (b && b.bracket === _brk ? 0 : 1);
+      });
+      _ord.forEach(function (m) {
+        if (tgt || !m) return;
+        ['p1', 'p2'].forEach(function (slot) {
+          if (tgt) return;
+          var other = (slot === 'p1') ? 'p2' : 'p1';
+          if (!_byeish(m[slot])) return;                        // este lado tem de ser o BYE
+          if (_empty(m[other]) || _byeish(m[other])) return;    // o outro tem de ser um time real
+          if (String(m[other]) === String(dn)) return;          // anti-auto-confronto
+          var oObj = (other === 'p1') ? m.team1Obj : m.team2Obj;
+          if (oObj && _key(oObj) === dk) return;
+          if (m.winner) {                                       // auto-vencido (bye): só se dá p/ puxar de volta
+            if (!m.nextMatchId) return;
+            var nx0 = cur.filter(function (x) { return x && x.id === m.nextMatchId; })[0];
+            if (nx0 && nx0.winner) return;                      // rodada seguinte já jogada → intocável
+          }
+          tgt = { m: m, slot: slot };
+        });
+      });
+      if (!tgt) return false;                                   // sem bye → suplente
+      if (tgt.m.winner) {                                       // desfaz o auto-avanço do lado que folgava
+        var nx = _all().filter(function (x) { return x && x.id === tgt.m.nextMatchId; })[0];
+        if (nx && tgt.m.nextSlot) {
+          nx[tgt.m.nextSlot] = 'TBD';
+          if (tgt.m.nextSlot === 'p1') { nx.team1Obj = null; nx.p1Uid = null; nx.team1Uids = []; }
+          else { nx.team2Obj = null; nx.p2Uid = null; nx.team2Uids = []; }
+        }
+        tgt.m.winner = null; tgt.m.scoreP1 = null; tgt.m.scoreP2 = null; delete tgt.m.isBye;
+      }
+      _setSide(tgt.m, tgt.slot, d);
+      return true;
+    };
+    // Sem bye fillável: o tardio fica na espera (suplente). A chave FRESCA (nada jogado) é tratada
+    // ANTES, no draw-core (integrateLateEntries re-semeia pro N+1 — decisão do dono); então aqui só
+    // chega o caso PÓS-JOGO, onde sem bye materializado não há vaga aditiva. project_bye_rep_auto_resolution.
+    pending.forEach(function (item) {
+      var d = item.e, dn = _nm(d);
+      if (!_placeAtBye(d)) return;                              // sem bye materializado → suplente
+      var exists = t.participants.some(function (p) { return _nm(p) === dn; });
+      if (!exists) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
+      if (d && (d.p1Uid || d.p1Name) && (d.p2Uid || d.p2Name)) t.teamOrigins[dn] = t.teamOrigins[dn] || 'formada';
+      window._markLateIntegrated(t, d);
+      usedNames[dn] = 1; inBracket[dn] = 1; placed++;
+    });
+    if (placed) {
+      ['standbyParticipants', 'waitlist'].forEach(function (k) {
+        if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !usedNames[_nm(p)]; });
+      });
+      if (typeof window._computeMemberUids === 'function') { try { window._computeMemberUids(t); } catch (e) {} }
+    }
+    return placed;
+  }
 
   pending.forEach(function (item) {
     var d = item.e, dn = _nm(d), dk = _key(d);

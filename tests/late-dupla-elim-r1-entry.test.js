@@ -44,13 +44,10 @@ console.log('── Dupla Elim: presente na espera entra na R1 SUPERIOR (não va
   ok(/dupla/i.test(t.format || ''), `N=${N}: é MESMO Dupla Eliminatória (format="${t.format}") — o gate de Elim Simples NÃO pode pegar`);
   if (!rd || !rd.ok) return;
 
-  // CENÁRIO DO DONO: "aqui como nenhum jogo com posicao a definir". Tira TODA vaga de repescagem
-  // (repFill) — assim o _fillRepFillWithLateDuplas não tem o que preencher nem de onde roubar, e a
-  // responsabilidade cai em _placeLateEntriesSurgically (criar jogo novo na R1 superior).
-  all(t).forEach(m => { if (m) { delete m.repFill; delete m.isPhaseRepGame; delete m.awaitsBestLoser; } });
-  const semADefinir = all(t).every(m => !(Array.isArray(m.repFill) && m.repFill.length));
-  ok(semADefinir, `N=${N}: (pré) nenhuma vaga de repescagem sobrou — é o cenário do dono`);
-
+  // ESTRUTURA NOVA (resolução automática): a chave pow2 fresca NÃO tem vaga aditiva sem re-semear.
+  // Decisão do dono (2026-07-24): chave FRESCA (nada jogado) + tardio → RE-SEMEIA pro N+1. A dupla
+  // presente da espera ENTRA de verdade (com adversário REAL, não "a definir"), sem limbo, sem
+  // double-book, e a chave fecha num campeão. project_bye_rep_auto_resolution.
   // dupla PRÉ-FORMADA na espera — SEM _lateJoin (é o que o sorteio "só presentes" produz)
   const dupla = { p1Uid: 'wA', p1Name: 'Espera A', p2Uid: 'wB', p2Name: 'Espera B', displayName: NM, name: NM };
   t.standbyParticipants.push(dupla);
@@ -58,23 +55,26 @@ console.log('── Dupla Elim: presente na espera entra na R1 SUPERIOR (não va
   // organizador dá PRESENÇA aos dois
   t.checkedIn['wA'] = 1; t.checkedIn['wB'] = 1;
 
-  const before = all(t).length;
   const r = dc.integrateLateEntries(t, {});
+  ok(r && r.changed, `N=${N}: integração AGIU (não ficou no limbo) [${JSON.stringify(r)}]`);
   const mine = all(t).filter(m => m && (m.p1 === NM || m.p2 === NM));
-
-  ok(mine.length === 1, `N=${N}: ✅ entrou na chave em UM jogo (got ${mine.length}) — antes ficava no LIMBO [${JSON.stringify(r)}]`);
-  if (mine.length === 1) {
-    const g = mine[0];
-    ok(g.bracket === 'upper' || g.bracket === 'main',
-       `N=${N}: o jogo é da chave SUPERIOR (got "${g.bracket}") — nunca lower/grand`);
-    // é a 1ª rodada da chave principal
-    const mainMs = all(t).filter(m => m && (m.bracket === 'upper' || m.bracket === 'main' || !m.bracket));
-    const minR = Math.min.apply(null, mainMs.map(m => (typeof m.round === 'number') ? m.round : 1));
-    ok(((typeof g.round === 'number') ? g.round : 1) === minR, `N=${N}: está na 1ª RODADA da chave principal (r${g.round}, min=${minR})`);
-    ok(isEmpty(g.p1) || isEmpty(g.p2), `N=${N}: adversário fica "a definir" (não inventa oponente)`);
-    ok(g.p1 !== g.p2, `N=${N}: não joga contra si mesma`);
+  ok(mine.length >= 1, `N=${N}: ✅ a dupla presente ENTROU na chave (got ${mine.length} jogo(s))`);
+  ok(!t.standbyParticipants.some(p => p.displayName === NM), `N=${N}: saiu da lista de espera`);
+  ok(mine.every(m => m.p1 !== m.p2), `N=${N}: nenhum jogo dela é auto-confronto`);
+  // sem double-book vivo
+  const liveSlots = {}; all(t).filter(m => !m.winner).forEach(m => ['p1', 'p2'].forEach(s => { const v = m[s]; if (v && !isEmpty(v) && !/bye/i.test(String(v))) (liveSlots[v] = liveSlots[v] || []).push(m.id); }));
+  ok(!(liveSlots[NM] && liveSlots[NM].length > 1), `N=${N}: dupla não está viva em 2 jogos (double-book)`);
+  // joga até o fim → campeão único
+  let g = 0;
+  while (g++ < 4000) {
+    const p = all(t).filter(m => m && !m.winner && !m.isBye && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2) && !/bye/i.test(String(m.p1)) && !/bye/i.test(String(m.p2)));
+    if (!p.length) break;
+    const m = p[0]; m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = g % 5;
+    try { W._advanceWinner(t, m); } catch (e) {}
+    if (W._resolveRepFills) { try { W._resolveRepFills(t); } catch (e) {} }
   }
-  ok(all(t).length > before, `N=${N}: um jogo NOVO foi criado`);
+  const grand = all(t).filter(m => m.bracket === 'grand');
+  ok(grand.length >= 1 && grand[grand.length - 1].winner, `N=${N}: campeão único após re-semear pro N+1`);
 });
 
 console.log('\n' + (fail === 0 ? '✅ late-dupla-elim-r1-entry: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');

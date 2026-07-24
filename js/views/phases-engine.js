@@ -898,47 +898,49 @@
     var n = pool.length;
     var pow2 = n > 0 && (n & (n - 1)) === 0;
     if (resolution === 'playin' && n > 2 && !pow2) {
-      // DUPLA ELIMINATÓRIA de verdade fora de pow2: TODOS jogam a repescagem R1 (round 0)
-      // e NINGUÉM é eliminado na 1ª rodada. Os g=floor(n/2) vencedores + os melhores
-      // derrotados sobem pra chave superior de T (=pow2 acima dos vencedores); os demais
-      // derrotados CAEM na chave inferior. O upper R2+, a chave inferior (com todos os
-      // derrotados) e a grande final são montados por _buildRepechageDoubleElim, que lê
-      // esta repescagem R1. Aqui só a R1 + os metadados. Ver project_dupla_elim_repechage.
-      var g = Math.floor(n / 2);
-      var hasSat = (n % 2) === 1;                          // n ímpar → 1 dupla é a "ímpar" da R1 sup
-      var satTeam = hasSat ? pool[n - 1] : null;
-      var playing = hasSat ? pool.slice(0, n - 1) : pool.slice();
-      var T = 1; while (T * 2 <= n) T *= 2;                // maior pow2 <= n (=chave superior). MESMA base
-                                                            // do single-elim (genTierBracket): a ímpar joga
-                                                            // a R1 sup, NÃO cai direto pra chave inferior.
-      var repR1 = [];
-      for (var gi = 0; gi < g; gi++) {
-        var ra = playing[gi], rb = playing[playing.length - 1 - gi];
-        repR1.push({
-          id: idPrefix + '-rep' + gi, round: 0, bracket: 'upper', isPhaseRepR1: true,
-          p1: ra.displayName, p2: rb.displayName, team1Obj: ra, team2Obj: rb,
-          p1Seed: gi, p2Seed: (playing.length - 1 - gi), winner: null
+      // ── PLAY-IN CLÁSSICO (planilha do dono, project_bye_rep_auto_resolution) ──────────────
+      // Reduz a chave SUPERIOR pra P_lo (maior pow2 ≤ n) via uma rodada preliminar (round 0)
+      // entre os PIORES semeados. Os `direct` melhores sobem direto pra R1 sup; os vencedores
+      // do play-in completam a R1 sup; os PERDEDORES do play-in caem na chave INFERIOR (2ª vida,
+      // ninguém eliminado na 1ª — project_inclusion_philosophy_canon). A superior é pow2 LIMPA
+      // (P_lo) → halving sem rodada ímpar → SEM repFill/ressurreição → SEM double-book. A inferior
+      // usa BYE no ímpar (não repescagem — a repescagem recursiva foi substituída por esta
+      // resolução automática). O upper R2+, a inferior e a grande final saem no
+      // _buildRepechageDoubleElim, que lê o round 0 (play-in) + round 1 (R1 sup) daqui.
+      var P_lo = 1; while (P_lo * 2 <= n) P_lo *= 2;        // maior pow2 ≤ n = tamanho da chave superior
+      var reps = n - P_lo;                                   // jogos de play-in (round 0)
+      var direct = 2 * P_lo - n;                             // sobem direto (seeds 0..direct-1); direct+2·reps = n
+      // Play-in R0: `reps` jogos entre os 2·reps PIORES semeados (mirror interno do pool de baixo).
+      var playin = [];
+      for (var k = 0; k < reps; k++) {
+        var pa = pool[direct + k], pb = pool[n - 1 - k];
+        playin.push({
+          id: idPrefix + '-pi' + k, round: 0, bracket: 'upper', isPlayIn: true,
+          p1: pa.displayName, p2: pb.displayName, team1Obj: pa, team2Obj: pb,
+          p1Seed: (direct + k), p2Seed: (n - 1 - k), winner: null, scoreP1: null, scoreP2: null
         });
       }
-      // DUPLA ÍMPAR (n ímpar): cria o JOGO DA ÍMPAR na R1 SUPERIOR (não vai direto pro lower).
-      // Espelha o repGame do single-elim (genTierBracket): satTeam × repescado da PRÓPRIA R1 sup
-      // (o "primeiro que cairia" = melhor derrotado logo abaixo do corte, rank=directSpots). O builder
-      // liga o VENCEDOR à R2 sup e o PERDEDOR à chave inferior. Ver project_dupla_elim_repechage.
-      if (hasSat) {
-        var directSpots = (T - g) - 1;                     // melhores derrotados que sobem DIRETO; o próximo joga a ímpar
-        repR1.push({
-          id: idPrefix + '-repsat', round: 0, bracket: 'upper', isPhaseRepR1: true, isPhaseRepGame: true,
-          p1: satTeam.displayName, p2: 'TBD', team1Obj: satTeam, p1Seed: -1, winner: null,
-          repFill: [{ slot: 'p2', srcBracket: 'upper', srcRound: 0, rank: directSpots, tagRep: true }]
-        });
+      // R1 sup (round 1): P_lo/2 jogos, semeadura espelho 1×P_lo (seed s × seed P_lo-1-s).
+      var r1 = [];
+      for (var j = 0; j < P_lo / 2; j++) r1.push({
+        id: idPrefix + '-u' + j, round: 1, bracket: 'upper',
+        p1: 'TBD', p2: 'TBD', team1Obj: null, team2Obj: null,
+        p1Seed: j, p2Seed: (P_lo - 1 - j), winner: null, scoreP1: null, scoreP2: null
+      });
+      var _r1place = function (seed) { var jj = Math.min(seed, P_lo - 1 - seed); return { m: r1[jj], slot: (seed < P_lo / 2 ? 'p1' : 'p2') }; };
+      // Times diretos (seeds 0..direct-1) postos já na R1 sup.
+      for (var s = 0; s < direct; s++) {
+        var pt = pool[s], loc = _r1place(s);
+        loc.m[loc.slot] = pt.displayName; loc.m[loc.slot === 'p1' ? 'team1Obj' : 'team2Obj'] = pt;
       }
+      // Vencedores do play-in preenchem os slots restantes (seeds direct..P_lo-1) via nextMatchId.
+      playin.forEach(function (pg, kk) {
+        var seed = direct + kk, loc = _r1place(seed);
+        pg.nextMatchId = loc.m.id; pg.nextSlot = loc.slot;
+      });
       return {
-        matches: repR1, needsRepechageDoubleElim: true,
-        repMeta: {
-          g: g, T: T, promote: (T - g), toLower: (2 * g - T), n: n,
-          hasSat: hasSat, satName: satTeam ? satTeam.displayName : null, satObj: satTeam || null,
-          idPrefix: idPrefix
-        }
+        matches: playin.concat(r1), needsRepechageDoubleElim: true,
+        repMeta: { mode: 'playin', P_lo: P_lo, reps: reps, direct: direct, n: n, idPrefix: idPrefix }
       };
     }
     // BYE CANÔNICO fora de pow2 — MESMA lógica do single-elim (genTierBracket): completa até a

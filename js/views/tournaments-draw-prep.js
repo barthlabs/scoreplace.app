@@ -2323,6 +2323,19 @@ window.checkPowerOf2 = function (t) {
     };
 };
 
+// RESOLUÇÃO AUTOMÁTICA de "fora de potência de 2" (planilha do dono, jul/2026): não pergunta
+// mais bye-vs-repescagem — aplica a de MENOS intervenções. byes = P_hi−N (padding pra cima),
+// reps = N−P_lo (play-in pra baixo); aplica a menor. EMPATE (N = 1.5·P_lo, ex. 12/24/48) → BYE
+// (chave pow2 limpa, tanto faz em intervenções). Pow2/trivial → 'bye' (moot). Ver
+// project_bye_rep_auto_resolution. Consumido por _buildPhase0Cfg (elim_dupla).
+window._autoP2Resolution = function (t) {
+    var info = window.checkPowerOf2(t);
+    if (!info || info.isPowerOf2 || info.count <= 2) return 'bye';   // resolução moot
+    var byes = info.missing;   // P_hi − N
+    var reps = info.excess;    // N − P_lo
+    return (byes <= reps) ? 'bye' : 'playin';   // empate → bye
+};
+
 window.showPowerOf2Panel = function (tId) {
     // Redirect to unified resolution panel
     window.showUnifiedResolutionPanel(tId);

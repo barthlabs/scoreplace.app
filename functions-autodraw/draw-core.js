@@ -532,6 +532,69 @@ function integrateLateEntries(t, opts) {
   try { if (typeof win._stampMissingMatchUids === 'function') win._stampMissingMatchUids(t); }
   catch (e) { win._error && win._error('[integrateLate] stampUids:', e); }
 
+  // ── RE-SEMEADURA DO FRESH (decisão do dono, 2026-07-24) ──────────────────────────────────
+  // Dupla Elim estrutura nova (pow2 limpo, sem repescagem): a chave fresca NÃO tem vaga aditiva
+  // sem re-semear. Quando NADA foi jogado (só byes podem ter winner) e há tardio presente FORA da
+  // chave, re-semeia pro N+1 (redraw limpo — nada a preservar). Jogo com placar torna a chave
+  // NÃO-fresca → cai no caminho aditivo (bye-fill do _placeLateEntriesSurgically). SÓ Dupla Elim
+  // auto-estruturada. Ver project_bye_rep_auto_resolution (FORK resolvido).
+  if (t._duplaAutoStructure && typeof drawInitial === 'function' &&
+      (typeof win._allowsNewMatchups !== 'function' || win._allowsNewMatchups(t))) {   // respeita o gate "novos confrontos"
+    const _allM = (typeof win._collectAllMatches === 'function') ? (win._collectAllMatches(t) || []) : (t.matches || []);
+    const _fresh = !_allM.some(m => m && m.winner && !m.isBye);
+    if (_fresh) {
+      const _isPair = p => !!(p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
+      const _teamsMode = (parseInt(t.teamSize) || 1) > 1 || (typeof win._isTeamEnrollMode === 'function' && win._isTeamEnrollMode(t.enrollmentMode));
+      const _brkSet = (typeof win._bracketUidKeySet === 'function') ? win._bracketUidKeySet(t) : null;
+      const _nm = p => (typeof win._pName === 'function') ? win._pName(p, '') : (p && (p.displayName || p.name)) || '';
+      const _present = p => {
+        if ((typeof win._tournamentIsSameDay === 'function') && !win._tournamentIsSameDay(t)) return true;
+        const uids = (typeof win._participantUids === 'function') ? win._participantUids(p) : [];
+        const ci = t.checkedIn || {}, ab = t.absent || {};
+        if (uids && uids.length) return uids.every(u => win._idMapHas(t, ci, { uid: u }) && !win._idMapHas(t, ab, { uid: u }));
+        const n = _nm(p); return !!(n && win._idMapHas(t, ci, n) && !win._idMapHas(t, ab, n));
+      };
+      const _late = [];
+      ['standbyParticipants', 'waitlist'].forEach(k => {
+        if (!Array.isArray(t[k])) return;
+        t[k].forEach(p => {
+          if (_teamsMode && !_isPair(p)) return;                 // solo não entra em duplas
+          if (typeof win._entryInBracket === 'function' && win._entryInBracket(t, p, _brkSet)) return;
+          if (!_present(p)) return;
+          _late.push(p);
+        });
+      });
+      // ÓRFÃO DE ROSTER: dupla formada à mão entra em participants (teamOrigins==='formada'), NÃO na
+      // espera. Sem detectá-la aqui, ela ficaria em LIMBO na chave fresca. project_formed_pair_roster_orphan.
+      if (Array.isArray(t.participants) && t.teamOrigins) {
+        t.participants.forEach(p => {
+          const n = _nm(p);
+          if (!n || t.teamOrigins[n] !== 'formada') return;
+          if (_teamsMode && !_isPair(p)) return;
+          if (typeof win._entryInBracket === 'function' && win._entryInBracket(t, p, _brkSet)) return;
+          if (!_present(p)) return;
+          if (_late.some(x => _nm(x) === n)) return;
+          _late.push(p);
+        });
+      }
+      if (_late.length) {
+        if (!Array.isArray(t.participants)) t.participants = [];
+        _late.forEach(p => { if (!t.participants.some(x => _nm(x) === _nm(p))) { const c = Object.assign({}, p); delete c._lateJoin; t.participants.push(c); } });
+        const _usedN = {}; _late.forEach(p => { _usedN[_nm(p)] = 1; });
+        ['standbyParticipants', 'waitlist'].forEach(k => { if (Array.isArray(t[k])) t[k] = t[k].filter(p => !_usedN[_nm(p)]); });
+        // limpa a chave fresca e re-sorteia pro N+1 (mesmo caminho do sorteio inicial)
+        t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
+        t.currentPhaseIndex = 0; delete t._phaseMaterialized; delete t._canonicalDraw;
+        const _rd = drawInitial(t, {});
+        if (_rd && _rd.ok) {
+          if (typeof win._computeMemberUids === 'function') { try { win._computeMemberUids(t); } catch (e) {} }
+          t.updatedAt = new Date().toISOString();
+          return { ok: true, changed: true, redrawnFresh: _late.length, matchCount: (t.matches || []).length };
+        }
+      }
+    }
+  }
+
   let extra = 0, duplas = 0, duplasTier = 0, dissolved = 0, monarch = 0, repfill = 0;
   // v1.2.58: dupla formada entra no lugar do repescado (chave PLAYIN) — precede o createExtra
   // (que é do outro formato de chave). Reusa repFill/_resolveRepFills.

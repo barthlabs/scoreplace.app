@@ -1604,7 +1604,10 @@ function _updateDuplaElimClassification(t) {
     matchesInRound.forEach(function(m) {
       if (!m.winner || m.winner === 'draw') return;
       var loser = m.winner === m.p1 ? m.p2 : m.p1;
-      if (!loser || loser === 'TBD' || loser === 'BYE') return;
+      // exclui BYE em qualquer rótulo ('BYE', 'BYE (Avança Direto)') — a estrutura nova usa byes
+      // na inferior (a árvore-mínima antiga usava repescagem, nunca bye), então o rótulo do bye
+      // vazava pra classificação. project_bye_rep_auto_resolution.
+      if (!loser || loser === 'TBD' || /^\s*bye/i.test(String(loser)) || /a definir/i.test(String(loser))) return;
       if (t.classification[loser] !== undefined) return; // já placed
       losersWithMatch.push({ match: m, loser: loser });
     });

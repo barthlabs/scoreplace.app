@@ -1,77 +1,71 @@
-// GAP (dono, 17/jul, com screenshot): Dupla Eliminatória com nº ÍMPAR de duplas deixa a
-// dupla sobrando num repGame esperando adversário — "JOGO N: Kelly/Rodrigo VS A definir"
-// (isPhaseRepGame, um lado real + outro TBD). Quando 1 dupla é formada na lista de espera,
-// ela DEVE preencher esse slot (não ficar esperando fora da chave). Regra do dono: "novos
-// confrontos é justamente isso: gente esperando pra jogar na chave × gente esperando fora.
-// entra e muda os números e as contas de potência de 2 (mantendo a decisão bye/repescagem)".
+// Dupla Eliminatória ÍMPAR + 1 dupla formada na espera → a dupla ENTRA na competição.
 //
-// Este teste REPRODUZ a falha: no código VELHO _integrateLateDuplas só achava "satTeam" FORA
-// de qualquer jogo — a dupla ímpar está DENTRO do repGame (em inRep), então NÃO era achada e
-// a tardia solitária voltava 0 (ficava na lista de espera). No NOVO, a dupla real do repGame
-// vira o par da tardia, o repGame é removido e a chave é reconstruída (pow2/repescagem) com o
-// nº novo. Ver [[project_dupla_elim_repechage]] / [[project_late_enrollment_elimination]].
-const { window: W, sandbox, load, E } = require('./headless');
-sandbox.document = { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], body: {} };
-sandbox.AppStore = { tournaments: [], logAction: () => {}, sync: () => {} };
-load('tournaments-draw.js');
+// Modelo ANTIGO (removido): a dupla ímpar ficava num repGame "real VS A definir" e a tardia
+// preenchia esse slot. A árvore-mínima/repescagem foi SUBSTITUÍDA pela resolução automática
+// (play-in/bye) — não existe mais repGame. Modelo NOVO (dono, 2026-07-24): numa chave FRESCA
+// (nada jogado), a tardia presente re-semeia a chave pro N+1 (via integrateLateEntries) e joga de
+// verdade. Este teste tranca: a dupla presente ENTRA, sai da espera, sem double-book, campeão único.
+// Ver project_bye_rep_auto_resolution.
+const H = require('./render-harness');
+const W = H.sandbox;
+const dc = require('../functions-autodraw/draw-core.js');
 const BYE = 'BYE (Avança Direto)';
+const isEmpty = v => !v || v === 'TBD' || v === BYE || /^bye/i.test(String(v).trim()) || /a definir/i.test(String(v));
+const all = t => W._collectAllMatches(t) || [];
 
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗ ' + m); } }
 
-function mkPool(n) { var a = []; for (var i = 0; i < n; i++) a.push({ displayName: 'D' + i, name: 'D' + i, uid: 'u' + i }); return a; }
-function build(n) {
-  const CAT = 'Misto Obrig.';
-  const cfg = { format: 'Dupla Eliminatória', formatCode: 'elim_dupla', teamSize: 2, bracketResolution: 'playin', seedVip: true, thirdPlace: true, source: { type: 'enrollment' }, categories: [CAT] };
-  const pool = mkPool(n).map(p => Object.assign({ categories: [CAT] }, p));
-  const t = { id: 'T' + n, format: 'Dupla Eliminatória', teamSize: 2, matches: [], currentPhaseIndex: 0, lateEnrollment: 'expand' };
-  const built = E.generatePhase(pool, cfg, { idPrefix: 'gp', ordered: true, t, isVip: () => false, catOf: e => (e.categories && e.categories[0]) || '' });
-  E.storePhase(t, 0, built);
-  if (built.needsRepechageDoubleElim && W._buildRepechageDoubleElim) {
-    (built.repMetaByCat && built.repMetaByCat.length ? built.repMetaByCat : [built.repMeta]).forEach(mm => W._buildRepechageDoubleElim(t, mm));
-  }
+function mkPairs(n) { const a = []; for (let i = 1; i <= n; i++) a.push({ p1Uid: 'a' + i, p1Name: 'A' + i, p2Uid: 'b' + i, p2Name: 'B' + i, displayName: 'A' + i + ' / B' + i, name: 'A' + i + ' / B' + i, ligaActive: true }); return a; }
+function mkT(N) {
+  const el = { ativa: true, linhas: 1, formacao: 'sorteio', terceiro: false, dupla: true };
+  const t = { id: 'RGF' + N, sport: 'Beach Tennis',
+    fmt2: { disputa: 'dupla', grupos: 1, parceria: 'fixa', classifAtiva: false, eliminatoria: el },
+    participants: mkPairs(N), teamSize: 2, enrollmentMode: 'teams', combinedCategories: [],
+    currentPhaseIndex: 0, checkedIn: {}, absent: {}, standbyParticipants: [], waitlist: [],
+    teamOrigins: {}, matches: [], lateEnrollment: 'expand', newMatchups: true };
+  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = 1; t.checkedIn[p.p2Uid] = 1; });
+  dc.compileFromFmt2(t); dc.drawInitial(t, {});
   return t;
 }
-const upperR0 = (t) => W._collectAllMatches(t).filter(m => m && m.bracket === 'upper' && m.round === 0 && m.isPhaseRepR1);
-const isEmpty = (v) => !v || v === 'TBD' || v === BYE;
+function liveDouble(t) {
+  const slots = {};
+  all(t).filter(m => !m.winner).forEach(m => ['p1', 'p2'].forEach(s => { const v = m[s]; if (v && !isEmpty(v)) (slots[v] = slots[v] || []).push(m.id); }));
+  return Object.keys(slots).find(v => slots[v].length > 1);
+}
 
 function run(n) {
-  console.log('\n== repGame-fill · n=' + n + ' (ímpar) ==');
-  const t = build(n);
+  console.log('\n== dupla ímpar n=' + n + ' + 1 tardia (chave fresca → re-semeia) ==');
+  const t = mkT(n); W.AppStore.tournaments = [t];
+  const NM = 'LA / LB';
+  t.standbyParticipants = [{ p1Name: 'LA', p2Name: 'LB', p1Uid: 'lla', p2Uid: 'llb', displayName: NM, name: NM, _lateJoin: true }];
+  t.checkedIn['lla'] = 1; t.checkedIn['llb'] = 1;
 
-  // pré-condição: existe um repGame com um lado real + outro "A definir" (a dupla ímpar).
-  const rg = upperR0(t).find(m => m.isPhaseRepGame && (isEmpty(m.p1) !== isEmpty(m.p2)));
-  ok(!!rg, 'existe repGame "dupla real VS A definir" (a ímpar esperando na chave)');
-  const oddName = rg && (isEmpty(rg.p1) ? rg.p2 : rg.p1);
+  const ret = dc.integrateLateEntries(t, {});
+  ok(ret && ret.changed, 'integração AGIU (não ficou no limbo) [' + JSON.stringify(ret) + ']');
+  ok(all(t).some(m => m && (m.p1 === NM || m.p2 === NM)), 'a dupla tardia ENTROU na chave');
+  ok(!(t.standbyParticipants || []).some(p => p.displayName === NM), 'saiu da lista de espera');
+  ok(!liveDouble(t), 'sem double-book' + (liveDouble(t) ? ' (' + liveDouble(t) + ')' : ''));
+  // todos os n+1 (originais + tardia) estão na chave
+  const labels = new Set(); all(t).forEach(m => [m.p1, m.p2].forEach(x => { if (x && !isEmpty(x)) labels.add(String(x)); }));
+  let origIn = true; for (let i = 1; i <= n; i++) if (!labels.has('A' + i + ' / B' + i)) origIn = false;
+  ok(origIn && labels.has(NM), 'todos os ' + (n + 1) + ' competidores (originais + tardia) na chave');
 
-  // 1 dupla formada na lista de espera (estrutural + _lateJoin).
-  t.standbyParticipants = [{ p1Name: 'LA', p2Name: 'LB', p1Uid: 'lla', p2Uid: 'llb', displayName: 'LA / LB', _lateJoin: true }];
-
-  W._lastIntegrateTier = null;
-  const ret = W._integrateLateDuplas(t);
-  ok(ret === 1, 'integrou a dupla tardia solitária (got ' + ret + ') — no código velho seria 0');
-  ok(W._lastIntegrateTier === 1, 'Tier 1 (append no upper R1)');
-  ok(!(t.standbyParticipants || []).some(p => (p.displayName) === 'LA / LB'), 'saiu da lista de espera');
-
-  // a dupla ímpar agora joga um repR1 REAL contra a tardia (o repGame virou jogo real).
-  const realGame = upperR0(t).find(m => (m.p1 === oddName || m.p2 === oddName) && (m.p1 === 'LA / LB' || m.p2 === 'LA / LB'));
-  ok(!!realGame, oddName + ' agora joga a R1 contra LA / LB (preencheu o "A definir")');
-  ok(!(realGame && realGame.isPhaseRepGame), 'o slot deixou de ser repGame/awaits — virou confronto real');
-
-  // playout completo: chave reconstruída resolve num campeão, sem travar.
-  let guard = 0;
-  const playable = () => W._collectAllMatches(t).filter(m => m && !m.winner && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2));
-  while (guard++ < 500) { const p = playable(); if (!p.length) break; const m = p[0]; m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = guard % 5; W._advanceWinner(t, m); }
-  const all = W._collectAllMatches(t);
-  const stuck = all.filter(m => !m.winner && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2));
-  const grand = all.filter(m => m.bracket === 'grand');
+  // playout completo → campeão, sem travar
+  let g = 0;
+  while (g++ < 4000) {
+    const p = all(t).filter(m => m && !m.winner && !m.isBye && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2));
+    if (!p.length) break;
+    const m = p[0]; m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = g % 5;
+    W._advanceWinner(t, m); if (W._resolveRepFills) try { W._resolveRepFills(t); } catch (e) {}
+  }
+  const stuck = all(t).filter(m => !m.winner && !m.isBye && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2));
   ok(stuck.length === 0, 'playout: nenhum jogo travado (got ' + stuck.length + ')');
+  const grand = all(t).filter(m => m.bracket === 'grand');
   ok(grand.length >= 1 && grand[grand.length - 1].winner, 'playout: grande final num campeão');
 }
 
-run(5);   // caso do screenshot (5 duplas → repGame D4 VS A definir)
-run(7);   // outra ímpar
-run(9);   // ímpar maior
+run(5); run(7); run(9);
 
 console.log('\n' + (fail === 0 ? '✅ TODOS PASSARAM' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 process.exit(fail === 0 ? 0 : 1);
