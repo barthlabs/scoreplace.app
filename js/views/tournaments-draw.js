@@ -2145,14 +2145,14 @@ window._triggerLateIntegration = function (t, opts) {
         window._lateIntegrateInflight[tId] = false;
         window._lateIntegrateLastSig[tId] = sig;
         var d = (res && res.data) || {};
-        if (window._dtrace) window._dtrace('integrateLate:done', { v: (window.SCOREPLACE_VERSION || '?'), changed: d.changed, extra: d.extra, duplas: d.duplas, monarch: d.monarch, repfill: d.repfill, redrawn: d.redrawn, reason: d.reason });
+        if (window._dtrace) window._dtrace('integrateLate:done', { v: (window.SCOREPLACE_VERSION || '?'), changed: d.changed, extra: d.extra, duplas: d.duplas, monarch: d.monarch, repfill: d.repfill, placed: d.placed, wlClean: d.wlClean, reason: d.reason });
         // RAIZ da "gambiarra" (dono, console): a CF INTEGRA a dupla e PERSISTE (changed:true), mas o
         // AppStore LOCAL nunca era atualizado com o doc que a CF devolve → a UI ficava STALE até um
         // reload ("a dupla só entra na próxima versão"). E o Desfazer não achava a dupla porque a CF
         // já a moveu de standby/waitlist pra participants, mas o card local (stale) ainda a mostrava
         // na espera. Fix: ESPELHA o doc autoritativo da CF no AppStore AGORA e re-renderiza a view.
         if (d.changed && d.tournament) window._applyCFTournament(tId, d.tournament);
-        var _novos = (d.extra || 0) + (d.duplas || 0) + (d.monarch || 0) + (d.repfill || 0);
+        var _novos = (d.extra || 0) + (d.duplas || 0) + (d.monarch || 0) + (d.repfill || 0) + (d.placed || 0);
         if (_novos > 0 && typeof showNotification !== 'undefined') {
             showNotification('⚡ Tardios na chave', 'A dupla entrou na chave.', 'info');
         }
