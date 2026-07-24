@@ -4840,12 +4840,12 @@ window._placeLateEntriesSurgically = function (t) {
     };
     // ── SEM BYE → ADICIONA UM JOGO (regra do dono, 2026-07-24) ──────────────────────────────────
     // "se houver slot livre eliminando bye/rep, ocupa pelo tardio; se não tiver, ADICIONA jogo e cria
-    // bye/rep." Chave pow2 (ex.: 8 duplas) nasce SEM bye → antes o tardio ficava na espera pra sempre
-    // ("pra que serve novos confrontos se ele nunca entra"). Agora, sem bye fillável, os tardios sem
-    // vaga viram JOGO NOVO: 2 a 2 jogam entre si; um SOZINHO/ímpar entra como "dupla vs BYE" (avança
-    // de bye e joga um time real na rodada seguinte). NUNCA fica de fora — cresce a chave. NÃO usa "vs
-    // a definir" solto (travava o playout). Só cresce na rodada de entrada FRESCA (crescer com jogo já
-    // jogado atropelaria o resultado — aí fica na espera). Ver project_late_dupla_fills_awaiting_slot.
+    // bye/rep." Sem bye fillável, os tardios viram JOGO NOVO: 2 a 2 jogam entre si (`_growPair`); um
+    // SOZINHO/ímpar (byes esgotados) DEVOLVE um bye a um seed e joga o tardio deslocado
+    // (`_returnByeAndPair`) — NUNCA ganha bye de graça ("passou de bye" era o bug reportado). Se não há
+    // bye preenchido pra devolver (pow2 puro sem tardio anterior), fica na espera pro próximo formar
+    // par. Só cresce na rodada de entrada FRESCA (crescer com jogo já jogado atropelaria o resultado).
+    // Ver project_late_dupla_fills_awaiting_slot.
     // (1) preenche um "a definir" ABERTO já existente (jogo de integração anterior)
     var _fillOpenAdefinir = function (d) {
       var dn = _nm(d), dk = _key(d), cur = _all(), target = null;
@@ -4876,17 +4876,16 @@ window._placeLateEntriesSurgically = function (t) {
       var cur = _all();
       var _sibs0 = cur.filter(function (m) { return m && ((typeof m.round === 'number') ? m.round : 1) === baseRound && (m.bracket === _brk || (!m.bracket && _brk === 'main')); });
       if (!_sibs0.length || _sibs0.some(function (m) { return m.winner; })) return false;   // jogado → não cresce
-      var u1 = _pu(d1), u2 = d2 ? _pu(d2) : [];
+      var u1 = _pu(d1), u2 = _pu(d2);
       var ng = {
         id: 'lt-' + t.id + '-' + ts + '-' + placed, round: baseRound, bracket: _brk, phaseIndex: _pi,
-        p1: _nm(d1), p2: (d2 ? _nm(d2) : 'BYE (Avança Direto)'), winner: null, isExtra: true,
+        p1: _nm(d1), p2: _nm(d2), winner: null, isExtra: true,
         team1Obj: d1, team1Uids: u1, p1Uid: (u1.length === 1 ? u1[0] : null),
-        team2Obj: (d2 || null), team2Uids: u2, p2Uid: (d2 && u2.length === 1 ? u2[0] : null), createdAt: new Date().toISOString()
+        team2Obj: d2, team2Uids: u2, p2Uid: (u2.length === 1 ? u2[0] : null), createdAt: new Date().toISOString()
       };
       if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _brk, round: baseRound, matches: [ng] }); } catch (e) { t.matches.push(ng); } }
       else { t.matches.push(ng); }
-      // loser→inferior só quando é JOGO REAL (bye não tem perdedor — não pendura slot morto na inferior)
-      try { if (d2 && typeof window._wireLateLoserToLower === 'function') window._wireLateLoserToLower(t, ng, _pi); } catch (e) {}
+      try { if (typeof window._wireLateLoserToLower === 'function') window._wireLateLoserToLower(t, ng, _pi); } catch (e) {}
       // DESTINO do jogo novo (mesma lógica da via antiga): irmão com destino D → vaga livre em D,
       // senão a chave cresce UMA rodada (irmão × novo herdando D). Só com a 1ª rodada sem resultado.
       try {
@@ -4912,16 +4911,51 @@ window._placeLateEntriesSurgically = function (t) {
           }
         }
       } catch (_eDest) {}
-      // BYE (tardio ÍMPAR/SOZINHO sem par): o jogo novo é "dupla vs BYE" → a dupla ENTRA e avança
-      // de bye pro destino (joga um time real na rodada seguinte, não é walkover total). Regra do
-      // dono: "entra com bye/rep OU criando um novo jogo" — nunca fica de fora.
-      if (!d2) {
-        ng.isBye = true; ng.winner = _nm(d1);
-        if (ng.nextMatchId && ng.nextSlot) {
-          var _nx = _all().filter(function (x) { return x && x.id === ng.nextMatchId; })[0];
-          if (_nx) _setSide(_nx, ng.nextSlot, d1);
-        }
-      }
+      return true;
+    };
+    // TARDIO SOZINHO (ímpar), byes já esgotados: NÃO ganha bye de graça (o dono viu "passou de bye"
+    // e reclamou). Em vez disso DEVOLVE um BYE que um tardio anterior tinha preenchido — o SEED volta
+    // a folgar — e o tardio deslocado JOGA contra o novo. "cria bye/rep" = o bye do seed é restaurado.
+    // Cresce 1 rodada: seed (de bye) × (vencedor do jogo tardio-vs-tardio), herdando o destino de m.
+    var _returnByeAndPair = function (dNew) {
+      var cur = _all(), found = null;
+      cur.filter(function (m) {
+        return m && !m.winner && ((typeof m.round === 'number') ? m.round : 1) === baseRound && (m.bracket === _brk || (!m.bracket && _brk === 'main'));
+      }).forEach(function (m) {
+        if (found) return;
+        ['p1', 'p2'].forEach(function (lateSlot) {
+          if (found) return;
+          var seedSlot = (lateSlot === 'p1') ? 'p2' : 'p1';
+          if (_empty(m[lateSlot]) || _empty(m[seedSlot])) return;              // ambos reais
+          var lateObj = (lateSlot === 'p1') ? m.team1Obj : m.team2Obj;
+          var seedObj = (seedSlot === 'p1') ? m.team1Obj : m.team2Obj;
+          if (!lateObj || !window._lateAlreadyIntegrated(t, lateObj)) return;  // este lado é tardio integrado (preencheu um bye)
+          if (seedObj && window._lateAlreadyIntegrated(t, seedObj)) return;    // o outro é SEED (não-tardio)
+          found = { m: m, lateSlot: lateSlot, seedSlot: seedSlot, lateObj: lateObj, seedObj: seedObj };
+        });
+      });
+      if (!found) return false;
+      var m = found.m, lateObj = found.lateObj, seedObj = found.seedObj;
+      var oldNext = m.nextMatchId, oldSlot = m.nextSlot;
+      var _novoR = { id: 'lt-' + t.id + '-' + ts + '-r' + placed, round: baseRound + 1, bracket: _brk, phaseIndex: _pi, p1: 'TBD', p2: 'TBD', winner: null, nextMatchId: oldNext, nextSlot: oldSlot };
+      // m volta a ser "seed vs BYE": o seed folga e avança pro _novoR.p1
+      if (found.lateSlot === 'p1') { m.p1 = 'BYE (Avança Direto)'; m.team1Obj = null; m.team1Uids = []; m.p1Uid = null; }
+      else { m.p2 = 'BYE (Avança Direto)'; m.team2Obj = null; m.team2Uids = []; m.p2Uid = null; }
+      m.isBye = true; m.winner = _nm(seedObj); m.nextMatchId = _novoR.id; m.nextSlot = 'p1';
+      var uL = _pu(lateObj), uN = _pu(dNew);
+      var pg = {
+        id: 'lt-' + t.id + '-' + ts + '-p' + placed, round: baseRound, bracket: _brk, phaseIndex: _pi,
+        p1: _nm(lateObj), p2: _nm(dNew), winner: null, isExtra: true,
+        team1Obj: lateObj, team1Uids: uL, p1Uid: (uL.length === 1 ? uL[0] : null),
+        team2Obj: dNew, team2Uids: uN, p2Uid: (uN.length === 1 ? uN[0] : null),
+        nextMatchId: _novoR.id, nextSlot: 'p2', createdAt: new Date().toISOString()
+      };
+      [{ r: baseRound + 1, mm: _novoR }, { r: baseRound, mm: pg }].forEach(function (col) {
+        if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _brk, round: col.r, matches: [col.mm] }); } catch (e) { t.matches.push(col.mm); } }
+        else { t.matches.push(col.mm); }
+      });
+      _setSide(_novoR, 'p1', seedObj);                                          // seed avançou de bye
+      try { if (typeof window._wireLateLoserToLower === 'function') window._wireLateLoserToLower(t, pg, _pi); } catch (e) {}
       return true;
     };
     var _commit = function (d) {
@@ -4940,12 +4974,13 @@ window._placeLateEntriesSurgically = function (t) {
       if (_placeAtBye(d)) { _commit(d); return; }              // bye → jogo (o time que folgava passa a jogar)
       _noBye.push(d);                                          // sem vaga → tenta parear abaixo
     });
-    // Tardios sem vaga: 2 a 2 → JOGO NOVO entre eles (ambos reais); ÍMPAR/SOZINHO → "dupla vs BYE"
-    // (entra e avança de bye). SEMPRE entra — cresce a chave. Regra do dono: "entra com bye/rep OU
-    // criando um novo jogo — pra que serve novos confrontos se ele nunca entra".
+    // Tardios sem vaga: 2 a 2 → JOGO NOVO entre eles (ambos reais). ÍMPAR/SOZINHO → devolve um bye já
+    // preenchido ao seed e JOGA contra o tardio deslocado (nunca ganha bye de graça). Se não há bye
+    // preenchido pra devolver (pow2 puro sem tardio anterior), fica na espera pro próximo formar par.
     for (var _gi = 0; _gi < _noBye.length; _gi += 2) {
       var _d1 = _noBye[_gi], _d2 = (_gi + 1 < _noBye.length) ? _noBye[_gi + 1] : null;
-      if (_growPair(_d1, _d2)) { _commit(_d1); if (_d2) _commit(_d2); }
+      if (_d2) { if (_growPair(_d1, _d2)) { _commit(_d1); _commit(_d2); } }
+      else if (_returnByeAndPair(_d1)) { _commit(_d1); }        // lone: devolve bye + pareia c/ deslocado
     }
     if (placed) {
       ['standbyParticipants', 'waitlist'].forEach(function (k) {
