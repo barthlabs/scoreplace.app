@@ -1904,7 +1904,7 @@ window._buildPhase0Cfg = function (t) {
         // standby) são respeitados. Ver _autoP2Resolution / project_bye_rep_auto_resolution.
         bracketResolution: (function () {
             var pr = t.p2Resolution || 'bye';
-            if (code === 'elim_dupla' && (pr === 'bye' || pr === 'playin') && typeof window._autoP2Resolution === 'function') return window._autoP2Resolution(t);
+            if ((code === 'elim_dupla' || code === 'elim_simples') && (pr === 'bye' || pr === 'playin') && typeof window._autoP2Resolution === 'function') return window._autoP2Resolution(t);
             return pr;
         })(),
         thirdPlace: t.thirdPlace !== false,
@@ -2353,7 +2353,9 @@ window.generateDrawFunction = function (tId) {
             showAlertDialog(_t('draw.tooFewTitle'), _t('draw.tooFewDrawMsg', { label: _label }), null, { type: 'warning' });
             return;
         }
-        if (!info.isPowerOf2) {
+        // pow2/ímpar AUTO (elim): o programa decide sozinho (bye/play-in) — NÃO abre painel,
+        // segue direto pro sorteio. Só formatos sem resolução automática abrem o painel.
+        if (!info.isPowerOf2 && !(typeof window._autoResolvesPow2 === 'function' && window._autoResolvesPow2(t))) {
             window.showPowerOf2Panel(tId);
             return;
         }

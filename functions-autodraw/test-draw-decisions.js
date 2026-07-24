@@ -68,8 +68,11 @@ console.log('VELHO (servidor sem o pacote de decisões) — deve reproduzir o bu
   // formou dupla com eles → 18 entradas → chave de 32 → BYEs.
   ok('elenco NÃO respeita a decisão (avulsos continuam inscritos)',
      (t.waitlist || []).length === 0, 'waitlist=' + (t.waitlist || []).length + ' (0 = o bug)');
-  ok('e por isso a chave sai com BYE (o sintoma relatado)',
-     byes(t) > 0, 'byes=' + byes(t) + ', R1=' + r1(t) + ' (esperado 8), ok=' + (res && res.ok));
+  // Sintoma: a chave sai DISTORCIDA (os 3 avulsos vazaram no elenco → não é a chave limpa de 16
+  // duplas, R1=8). Antes o sintoma era "sai com BYE"; com a resolução automática (bye/play-in) o
+  // sintoma virou play-in em vez de bye, mas a raiz é a MESMA: elenco não respeitou a decisão.
+  ok('e por isso a chave sai DISTORCIDA (avulsos vazaram no elenco)',
+     r1(t) !== 8, 'R1=' + r1(t) + ' (limpo=8 p/ 16 duplas), byes=' + byes(t) + ', ok=' + (res && res.ok));
 }
 
 // ── 2. NOVO: servidor COM o pacote ───────────────────────────────────────────
