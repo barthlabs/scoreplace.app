@@ -1867,6 +1867,33 @@
     // Corrige inclusive torneios JÁ sorteados com os ranks invertidos (sem precisar re-sortear).
     _rankRepFillsByAdvancement(all);
     var changed = false;
+    // AWAITS-LATE-PARTNER → BYE no fim da rodada (v1.4.41): "dupla vs a definir" de um tardio SOZINHO
+    // (criado por _growAdefinir quando não há bye). Quando os jogos REAIS da mesma chave+rodada
+    // fecham e ninguém preencheu o "a definir", o tardio avança de bye — a chave não trava. NUNCA puxa
+    // repescado (não é repFill) → sem double-book. O 2º tardio já teria preenchido via _fillOpenAdefinir.
+    (function () {
+      var _emp = function (v) { return !v || v === 'TBD' || v === 'BYE (Avança Direto)' || /a definir/i.test(String(v)); };
+      all.forEach(function (g) {
+        if (!g || !g.awaitsLatePartner || g.winner) return;
+        var realSlot = !_emp(g.p1) ? 'p1' : (!_emp(g.p2) ? 'p2' : null);
+        var byeSlot = realSlot === 'p1' ? 'p2' : 'p1';
+        if (!realSlot || !_emp(g[byeSlot])) return;
+        var br = g.bracket, rd = (typeof g.round === 'number') ? g.round : 1;
+        var reais = all.filter(function (m) { return m && m.bracket === br && ((typeof m.round === 'number') ? m.round : 1) === rd && !m.isExtra && !m.isPhaseRepGame && !_emp(m.p1) && !_emp(m.p2); });
+        if (!reais.length || !reais.every(function (m) { return !!m.winner; })) return;   // rodada ainda aberta
+        g[byeSlot] = 'BYE (Avança Direto)'; g.isBye = true; g.winner = g[realSlot]; delete g.awaitsLatePartner;
+        if (g.nextMatchId && g.nextSlot) {
+          var _nx = all.filter(function (x) { return x && x.id === g.nextMatchId; })[0];
+          if (_nx) {
+            var _o = (realSlot === 'p1') ? g.team1Obj : g.team2Obj, _u = ((realSlot === 'p1') ? g.team1Uids : g.team2Uids) || [];
+            _nx[g.nextSlot] = g[realSlot];
+            if (g.nextSlot === 'p1') { _nx.team1Obj = _o; _nx.team1Uids = _u.slice(); _nx.p1Uid = (_u.length === 1 ? _u[0] : null); }
+            else { _nx.team2Obj = _o; _nx.team2Uids = _u.slice(); _nx.p2Uid = (_u.length === 1 ? _u[0] : null); }
+          }
+        }
+        changed = true;
+      });
+    })();
     all.forEach(function (m) {
       if (!m || !Array.isArray(m.repFill) || !m.repFill.length) return;
       var keep = [];
