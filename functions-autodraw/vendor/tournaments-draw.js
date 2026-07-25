@@ -4188,6 +4188,25 @@ window._repropagateDecided = function (t) {
   if (!t || !Array.isArray(t.matches)) return 0;
   var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
   var _vz = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
+  // v1.5.4 — HEAL de AUTO-CONFRONTO: jogo PENDENTE com o mesmo time nos dois lados. Devolve pra TBD
+  // o slot que é alimentado por um fio explícito ainda sem vencedor (é ele que espera alguém).
+  // Cura docs que já ficaram assim (corrida entre a re-propagação do cliente e a da CF).
+  (function () {
+    all.forEach(function (m) {
+      if (!m || m.winner || _vz(m.p1) || _vz(m.p2) || String(m.p1) !== String(m.p2)) return;
+      var _fedBy = function (sl) {
+        return all.some(function (x) {
+          return x && x !== m && !x.winner &&
+            ((x.nextMatchId === m.id && x.nextSlot === sl) || (x.loserMatchId === m.id && x.loserSlot === sl));
+        });
+      };
+      var sl = _fedBy('p2') ? 'p2' : (_fedBy('p1') ? 'p1' : null);
+      if (!sl) return;                                   // ninguém pra repor: não apaga por chute
+      m[sl] = 'TBD';
+      if (sl === 'p1') { m.team1Obj = null; m.team1Uids = []; m.p1Uid = null; }
+      else { m.team2Obj = null; m.team2Uids = []; m.p2Uid = null; }
+    });
+  })();
   var _key = function (m, sl) {
     var u = (sl === 'p1') ? m.team1Uids : m.team2Uids;
     if (Array.isArray(u) && u.length) return 'u:' + u.slice().sort().join('+');
@@ -4212,6 +4231,11 @@ window._repropagateDecided = function (t) {
       if (['p1', 'p2'].some(function (s) { return tgt[s] === nome || (k && _key(tgt, s) === k); })) return;
       var s2 = (tslot && _vz(tgt[tslot])) ? tslot : null;
       if (!s2) return;                                   // sem slot explícito vazio: não chuta
+      // v1.5.4: ANTI-AUTO-CONFRONTO — nunca escrever um time no slot quando o OUTRO lado já é ele
+      // mesmo (visto AO VIVO: "Kelly/Rodrigo vs Kelly/Rodrigo" numa corrida de re-propagação com o
+      // doc do cliente). O outro lado é sempre reescrito por quem tem o fio explícito.
+      var _outro = (s2 === 'p1') ? 'p2' : 'p1';
+      if (tgt[_outro] === nome || (k && _key(tgt, _outro) === k)) return;
       tgt[s2] = nome;
       var uids = ((srcSl === 'p1') ? m.team1Uids : m.team2Uids) || [];
       var obj = (srcSl === 'p1') ? m.team1Obj : m.team2Obj;
