@@ -314,7 +314,10 @@
     });
     Object.keys(bySrc).forEach(function (key) {
       var list = bySrc[key];
-      if (list.length < 2) return; // 1 vaga só → o rank já é o único
+      // v1.5.3: normaliza SEMPRE (inclusive vaga única) — os ranks são índices na lista de
+      // derrotados AINDA NÃO repescados (o resolveRepFills filtra quem já subiu). Uma vaga
+      // sobrevivente com rank 1 herdado apontava pra fora dessa lista encurtada e ficava
+      // pendurada pra sempre (vaga morta medida em tests/draw-sweep-wo-late).
       // rodada de destino MAIOR (menos jogos até a final) primeiro → rank 0 (melhor derrotado).
       list.sort(function (a, b) { return (b.m.round || 0) - (a.m.round || 0); });
       list.forEach(function (item, i) { item.rf.rank = i; });
@@ -1869,15 +1872,26 @@
     var changed = false;
     // AWAITS-LATE-PARTNER → BYE no fim da rodada (v1.4.41): "dupla vs a definir" de um tardio SOZINHO
     // (criado por _growAdefinir quando não há bye). Quando os jogos REAIS da mesma chave+rodada
-    // fecham e ninguém preencheu o "a definir", o tardio avança de bye — a chave não trava. NUNCA puxa
-    // repescado (não é repFill) → sem double-book. O 2º tardio já teria preenchido via _fillOpenAdefinir.
+    // fecham e ninguém preencheu o "a definir", o tardio avança de bye — a chave não trava.
+    // v1.5.3 (regra 2 do dono): o BYE é o ÚLTIMO recurso. Se o jogo carrega uma vaga de
+    // REPESCAGEM (repFill) pra esse slot, ela tem prioridade — o tardio joga o MELHOR DERROTADO
+    // da rodada, não avança de graça. O BYE só volta a valer se a vaga não tiver derrotado
+    // elegível (tratado no laço de repFill abaixo, que então converte pra BYE).
     (function () {
       var _emp = function (v) { return !v || v === 'TBD' || v === 'BYE (Avança Direto)' || /a definir/i.test(String(v)); };
+      // v1.5.3 — HEAL: `awaitsLatePartner` PENDURADO num jogo já completo (os dois lados reais). Docs
+      // antigos ficaram assim porque quem preenchia o slot não limpava a flag. Enquanto ela existe o
+      // jogo não conta como FONTE de repescado (filtro abaixo) → a rodada parecia fechada sem ele e
+      // a vaga do tardio resolvia ANTES da hora. Medido no doc real tour_1781996342871.
+      all.forEach(function (g) {
+        if (g && g.awaitsLatePartner && !_emp(g.p1) && !_emp(g.p2)) delete g.awaitsLatePartner;
+      });
       all.forEach(function (g) {
         if (!g || !g.awaitsLatePartner || g.winner) return;
         var realSlot = !_emp(g.p1) ? 'p1' : (!_emp(g.p2) ? 'p2' : null);
         var byeSlot = realSlot === 'p1' ? 'p2' : 'p1';
         if (!realSlot || !_emp(g[byeSlot])) return;
+        if (Array.isArray(g.repFill) && g.repFill.some(function (rf) { return rf && rf.slot === byeSlot; })) return;
         var br = g.bracket, rd = (typeof g.round === 'number') ? g.round : 1;
         var reais = all.filter(function (m) { return m && m.bracket === br && ((typeof m.round === 'number') ? m.round : 1) === rd && !m.isExtra && !m.isPhaseRepGame && !_emp(m.p1) && !_emp(m.p2); });
         if (!reais.length || !reais.every(function (m) { return !!m.winner; })) return;   // rodada ainda aberta
@@ -1902,6 +1916,7 @@
           return x && x.bracket === slot.srcBracket && x.round === slot.srcRound &&
             (slot.cat == null || x.category === slot.cat) &&
             !x.isPhaseRepGame &&  // o jogo da ÍMPAR não é fonte de repescado (seu perdedor cai via loserMatchId)
+            !x.awaitsLatePartner &&  // v1.5.3: idem pro jogo "tardio × a definir" (ele É a vaga de repescagem)
             x.p1 && x.p1 !== 'TBD' && x.p2 && x.p2 !== 'TBD';
         });
         if (!src.length || src.some(function (x) { return !x.winner; })) { keep.push(slot); return; }
@@ -1914,6 +1929,31 @@
             ord: xi, seed: (lp1 ? x.p1Seed : x.p2Seed)
           };
         }).filter(function (l) { return l.name && l.name !== 'BYE (Avança Direto)' && l.name !== 'TBD'; }); // BYE nunca é repescável
+        // v1.5.3: NUNCA repescar 2× a mesma pessoa/dupla. Duas vagas abertas em MOMENTOS diferentes
+        // (ex.: 2 duplas tardias chegando em passadas separadas com a rodada já fechada) recebem
+        // rank 0 cada uma — sem este filtro as duas puxavam o MESMO melhor derrotado (double-book:
+        // vivo em 2 jogos). Mesma regra do `_promKeys` do _syncLowerBracket.
+        // Ver project_dupla_elim_repechage / project_late_dupla_fills_awaiting_slot.
+        var _jaRep = {};
+        all.forEach(function (x) {
+          if (!x) return;
+          ['p1', 'p2'].forEach(function (s) { if (x[s + 'FromRepechage'] && x[s]) _jaRep[String(x[s])] = 1; });
+        });
+        losers = losers.filter(function (l) { return !_jaRep[String(l.name)]; });
+        // v1.5.3: quem SOBE da superior tem de sair da inferior (vacância, mais abaixo) — e isso só
+        // é possível se ele estiver num jogo inferior PENDENTE. Se o jogo dele lá já tem vencedor
+        // (jogou, ou avançou de bye), puxá-lo o deixaria vivo nos DOIS lugares (double-book) ou
+        // apagaria um jogo disputado. Cânone do dono: "repescado só é puxado de jogo PENDENTE;
+        // promover é ganho, TIRAR DE JOGAR é proibido". Medido em tests/sync-lower-bracket (N pow2
+        // + 2 tardios). Sem candidato elegível a vaga cai no BYE (bloco acima).
+        if (slot.tagRep && slot.srcBracket === 'upper') {
+          var _lowFechado = {};
+          all.forEach(function (x) {
+            if (!x || x.bracket !== 'lower' || !x.winner) return;
+            ['p1', 'p2'].forEach(function (s) { if (x[s]) _lowFechado[String(x[s])] = 1; });
+          });
+          losers = losers.filter(function (l) { return !_lowFechado[String(l.name)]; });
+        }
         losers.forEach(function (l) { if (l.seed == null) l.seed = 9999; });
         // v1.3.167 (dono): empate total (saldo E pontos) desempata pela ORDEM DO JOGO na rodada —
         // o que a tela mostra ("Mari está no jogo 1, Luiza no jogo 2 ⇒ Mari na frente"). O seed
@@ -1946,6 +1986,19 @@
             });
           }
           changed = true;
+        } else if (m.awaitsLatePartner && !m.winner) {
+          // v1.5.3: fontes TODAS decididas e nenhum derrotado elegível pra este rank (ex.: a rodada
+          // só teve byes, ou os melhores derrotados já foram repescados por outras vagas). O jogo do
+          // tardio NÃO pode ficar pendurado: cai no BYE (último recurso) e o laço final abaixo
+          // avança o lado real. Descarta o descritor pra não reabrir a vaga em passadas futuras.
+          var _slotVazio = (slot.slot === 'p1') ? m.p1 : m.p2;
+          if (!_slotVazio || _slotVazio === 'TBD' || /a definir/i.test(String(_slotVazio))) {
+            m[slot.slot] = 'BYE (Avança Direto)';
+            if (slot.slot === 'p1') { m.team1Obj = null; m.team1Uids = []; m.p1Uid = null; }
+            else { m.team2Obj = null; m.team2Uids = []; m.p2Uid = null; }
+            delete m.awaitsLatePartner;   // libera o laço de BYE abaixo (ele pula awaitsLatePartner)
+            changed = true;
+          }
         } else keep.push(slot);
       });
       m.repFill = keep;
@@ -1964,9 +2017,26 @@
         var rs = b1 ? 'p2' : 'p1', rv = m[rs];
         if (!rv || rv === 'TBD' || rv === 'BYE (Avança Direto)') return;
         m.winner = rv; m.isBye = true;
-        if (m.nextMatchId && m.nextSlot) {
+        if (m.nextMatchId) {
           var _nx3 = all.filter(function (x) { return x && x.id === m.nextMatchId; })[0];
-          if (_nx3) { _nx3[m.nextSlot] = rv; var _o3 = (rs === 'p1') ? m.team1Obj : m.team2Obj; if (m.nextSlot === 'p1') _nx3.team1Obj = _o3; else _nx3.team2Obj = _o3; }
+          // v1.5.3: sem `nextSlot` explícito, usa a convenção do _advanceWinner — 1ª vaga TBD livre.
+          // A chave INFERIOR do _buildDoubleElimBracket é fiada assim (nextSlot undefined); sem este
+          // fallback o BYE da VACÂNCIA da repescagem definia vencedor e NÃO o propagava → slot morto.
+          var _sl3 = m.nextSlot;
+          if (_nx3 && !_sl3) {
+            ['p1', 'p2'].forEach(function (s) {
+              if (_sl3 || !(!_nx3[s] || _nx3[s] === 'TBD')) return;
+              var _fed3 = all.some(function (x) { return x && x !== m && ((x.nextMatchId === _nx3.id && x.nextSlot === s) || (x.loserMatchId === _nx3.id && x.loserSlot === s)); });
+              if (!_fed3) _sl3 = s;
+            });
+          }
+          if (_nx3 && _sl3) {
+            _nx3[_sl3] = rv;
+            var _o3 = (rs === 'p1') ? m.team1Obj : m.team2Obj;
+            var _u3 = ((rs === 'p1') ? m.team1Uids : m.team2Uids) || [];
+            if (_sl3 === 'p1') { _nx3.team1Obj = _o3; _nx3.team1Uids = _u3.slice(); _nx3.p1Uid = (_u3.length === 1 ? _u3[0] : null); }
+            else { _nx3.team2Obj = _o3; _nx3.team2Uids = _u3.slice(); _nx3.p2Uid = (_u3.length === 1 ? _u3[0] : null); }
+          }
         }
         _byeChg = true; changed = true;
       });

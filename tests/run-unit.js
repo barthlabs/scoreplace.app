@@ -94,6 +94,7 @@ const SUITES = [
   'tests/wo-outcome-negotiation.test.js',
   'tests/late-enroll-inherit.test.js',
   'tests/late-enroll-window-r2-result.test.js',
+  'tests/dash-enroll-late-window.test.js',
   'tests/round-display-no-r0.test.js',
   'tests/result-approval-uid.test.js',
   'tests/tiebreak-set-score.test.js',
@@ -213,6 +214,10 @@ const SUITES = [
   // Bug (dono, jul/2026): Dupla Elim playin, repescado JÁ definido (frozen) + dupla formada à mão
   // (órfão de roster) → entra CIRURGICAMENTE, sem redraw, preservando o congelado.
   'tests/late-dupla-orphan-frozen-rep.test.js',
+  // Bug (dono, torneio AO VIVO 25/jul/2026 — SB Casais): dupla tardia PRESENTE com a R1 sup já com
+  // placar não ganhava jogo (ficava presa na espera) e o "a definir" do tardio virava BYE em vez de
+  // puxar o MELHOR DERROTADO da R1. Regras 1 e 2 do dono, ponta a ponta.
+  'tests/late-pair-repechage.test.js',
   // Bug (dono, jul/2026): "Presentes chega em 24, cai e dá pulinhos" — doc stale da CF trocava o
   // torneio inteiro e engolia a presença otimista recém-marcada.
   'tests/cf-doc-clobbers-presence.test.js',

@@ -153,6 +153,21 @@ window._dashEnroll = function(tId) {
                  (Array.isArray(t.groups) && t.groups.length > 0);
   var _aberto = (t.status !== 'closed' && t.status !== 'finished' && !_sorteio) || _ligaOpen;
   if (!_aberto) {
+    // v1.5.3 (bug de produção, torneio ao vivo): esta regra era uma CÓPIA driftada que
+    // ignorava a INSCRIÇÃO DURANTE A FASE. Com o sorteio feito e o toggle em Abertas
+    // (standby/expand) ela dizia FECHADA e o clique respondia "Inscrições Encerradas" —
+    // contradizendo o PRÓPRIO card, cujo `canEnroll` (abaixo) mostra o botão exatamente
+    // nesse caso. Nada a ver com a R2: bastava o sorteio existir. Fonte ÚNICA agora é a
+    // janela canônica (window._lateEnrollWindowOpen: aberta na R1 da fase, fecha no 1º
+    // placar LANÇADO da R2) — e o fluxo é o de enrollCurrentUser, que pós-sorteio inscreve
+    // na LISTA DE ESPERA (o servidor recusa, e deve recusar, inserção direta no roster).
+    // Fallback fail-open igual ao _allowsLateEnrollment: sem a janela carregada, vale o
+    // toggle. Ver [[project_late_enrollment_default_closed_live_toggle]].
+    var _leDash = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+    var _lateOpen = (typeof window._lateEnrollWindowOpen === 'function')
+      ? window._lateEnrollWindowOpen(t)
+      : (t.status !== 'closed' && (_leDash === 'standby' || _leDash === 'expand'));
+    if (t.status !== 'finished' && _lateOpen) { window.enrollCurrentUser(tId); return; }
     if (typeof showAlertDialog === 'function') showAlertDialog(window._t('auth.enrollClosed'), window._t('auth.enrollClosedMsg'), null, { type: 'warning' });
     return;
   }
