@@ -1892,9 +1892,22 @@
         var byeSlot = realSlot === 'p1' ? 'p2' : 'p1';
         if (!realSlot || !_emp(g[byeSlot])) return;
         if (Array.isArray(g.repFill) && g.repFill.some(function (rf) { return rf && rf.slot === byeSlot; })) return;
+        // v1.5.3: a vaga está PROMETIDA a alguém (fio explícito de vencedor/perdedor)? então não é
+        // BYE — espera o time chegar. Se o dono do fio fechar de BYE (sem perdedor), o passe de
+        // liberação mais abaixo transforma a vaga em BYE.
+        if (all.some(function (x) {
+          return x && x !== g && ((x.loserMatchId === g.id && x.loserSlot === byeSlot) || (x.nextMatchId === g.id && x.nextSlot === byeSlot));
+        })) return;
         var br = g.bracket, rd = (typeof g.round === 'number') ? g.round : 1;
         var reais = all.filter(function (m) { return m && m.bracket === br && ((typeof m.round === 'number') ? m.round : 1) === rd && !m.isExtra && !m.isPhaseRepGame && !_emp(m.p1) && !_emp(m.p2); });
-        if (!reais.length || !reais.every(function (m) { return !!m.winner; })) return;   // rodada ainda aberta
+        // FONTES deste jogo (quem manda time pra ele). Enquanto uma estiver pendente, espera.
+        var _fontes = all.filter(function (x) { return x && x !== g && (x.loserMatchId === g.id || x.nextMatchId === g.id); });
+        if (_fontes.some(function (f) { return !f.winner; })) return;
+        // v1.5.3: sem irmão REAL na rodada (caso do jogo de POUSO da 1ª inferior, que nasce só com
+        // fios) o fecho é dado pelas FONTES — todas decididas ⇒ ninguém mais vem. Sem irmão real E
+        // sem fonte, não há como saber: espera.
+        if (!reais.length) { if (!_fontes.length) return; }
+        else if (!reais.every(function (m) { return !!m.winner; })) return;   // rodada ainda aberta
         g[byeSlot] = 'BYE (Avança Direto)'; g.isBye = true; g.winner = g[realSlot]; delete g.awaitsLatePartner;
         if (g.nextMatchId && g.nextSlot) {
           var _nx = all.filter(function (x) { return x && x.id === g.nextMatchId; })[0];
@@ -2010,6 +2023,22 @@
     var _byeChg = true, _bg = 0;
     while (_byeChg && _bg++ < 100) {
       _byeChg = false;
+      // v1.5.3: jogo que fechou de BYE NÃO TEM PERDEDOR — libera a vaga que ele prometeu na chave
+      // inferior (loserMatchId/loserSlot), senão o jogo de pouso fica esperando um perdedor que
+      // nunca vem e a chave inferior TRAVA (medido em tests/sync-lower-bracket e -pow2-grow: playout
+      // sem campeão). O lado real do jogo de pouso avança pelo laço abaixo.
+      all.forEach(function (m) {
+        if (!m || !m.isBye || !m.winner || !m.loserMatchId || !m.loserSlot) return;
+        var _lt = all.filter(function (x) { return x && x.id === m.loserMatchId; })[0];
+        if (!_lt || _lt.winner) return;
+        var _lv = _lt[m.loserSlot];
+        if (_lv && _lv !== 'TBD' && !/a definir/i.test(String(_lv))) return;   // já preenchido
+        _lt[m.loserSlot] = 'BYE (Avança Direto)';
+        if (m.loserSlot === 'p1') { _lt.team1Obj = null; _lt.team1Uids = []; _lt.p1Uid = null; }
+        else { _lt.team2Obj = null; _lt.team2Uids = []; _lt.p2Uid = null; }
+        delete _lt.awaitsLatePartner;
+        _byeChg = true; changed = true;
+      });
       all.forEach(function (m) {
         if (!m || m.winner || m.awaitsLatePartner) return;
         var b1 = (m.p1 === 'BYE (Avança Direto)'), b2 = (m.p2 === 'BYE (Avança Direto)');

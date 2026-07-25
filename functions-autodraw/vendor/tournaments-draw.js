@@ -4454,6 +4454,106 @@ window._dedupMatchesByUid = function (t) {
 // conta de quem desce) e delega tamanho/conteúdo/fiação da 1ª inferior ao sync. Antes esta
 // função crescia a inferior por conta própria e se atropelava com o resolveRepFills — os
 // 8 reverts da saga. [[project_dupla_elim_late_integration_cascade]]
+// ── JOGO DA R1 INFERIOR PRA RECEBER OS PERDEDORES TARDIOS (v1.5.3, dono, torneio AO VIVO) ────
+// "Com a adição da dupla tardia, também é necessário criar um jogo adicional na R1 Inf."
+// Dupla Eliminatória: quem perde a 1ª superior CAI na 1ª inferior. Os jogos TARDIOS da 1ª superior
+// (isExtra, criados por _growAdefinir) nasciam SEM `loserMatchId` na chave de potência de 2 — o
+// perdedor deles evaporava (eliminado com UMA derrota, enquanto todo mundo tem direito a duas).
+// Esta função garante o pouso: um jogo NOVO na 1ª inferior que recebe os perdedores dos jogos
+// tardios da 1ª superior (2 tardios → 1 jogo; 1 tardio sozinho → o outro lado fica "a definir" e
+// vira BYE no fim da rodada, via awaitsLatePartner no _resolveRepFills — nunca puxa repescado, que
+// double-bookaria). Antes de criar, tenta uma vaga LIVRE (não alimentada por ninguém) num jogo
+// existente da 1ª inferior. Idempotente: chamada de novo, não duplica nada.
+// Ver [[project_dupla_elim_late_integration_cascade]] / [[project_inclusion_philosophy_canon]].
+window._ensureLowerLandingForLate = function (t, pi) {
+  if (!t || !Array.isArray(t.matches)) return 0;
+  var all = function () { return (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []); };
+  var _r = function (m) { return (m && typeof m.round === 'number') ? m.round : 1; };
+  var _emp = function (v) { return !v || v === 'TBD' || v === 'BYE (Avança Direto)' || /a definir/i.test(String(v)); };
+  var low = all().filter(function (m) { return m && m.bracket === 'lower'; });
+  if (!low.length) return 0;                                  // Eliminatória Simples: não há inferior
+  var lowR = Math.min.apply(null, low.map(_r));
+  // jogos TARDIOS da 1ª SUPERIOR ainda sem pouso (sem loserMatchId) e sem resultado
+  var sup = all().filter(function (m) { return m && (m.bracket === 'upper' || m.bracket === 'main' || !m.bracket); });
+  if (!sup.length) return 0;
+  var supR = Math.min.apply(null, sup.map(_r));
+  var orfaos = sup.filter(function (m) { return m && _r(m) === supR && m.isExtra && !m.loserMatchId && !m.winner; });
+  if (!orfaos.length) return 0;
+  var _fed = function (m, sl) {
+    return all().some(function (x) {
+      return x && x !== m && ((x.loserMatchId === m.id && x.loserSlot === sl) || (x.nextMatchId === m.id && x.nextSlot === sl));
+    });
+  };
+  var _vagaLivre = function (m) {                             // slot vazio E não prometido a ninguém
+    if (!m || m.winner) return null;
+    var s = null;
+    ['p1', 'p2'].forEach(function (sl) { if (!s && _emp(m[sl]) && !_fed(m, sl)) s = sl; });
+    return s;
+  };
+  var criados = 0, mutou = 0, ts = Date.now();
+  orfaos.forEach(function (g) {
+    // (1) vaga livre num jogo da 1ª inferior (prioriza jogo TARDIO já aberto — os 2 perdedores
+    //     tardios se enfrentam; depois qualquer jogo da 1ª inferior com vaga real).
+    var alvos = all().filter(function (m) { return m && m.bracket === 'lower' && _r(m) === lowR; })
+      .sort(function (a, b) { return (b.isExtra ? 1 : 0) - (a.isExtra ? 1 : 0); });
+    var alvo = null, slot = null;
+    for (var i = 0; i < alvos.length && !alvo; i++) { var s = _vagaLivre(alvos[i]); if (s) { alvo = alvos[i]; slot = s; } }
+    if (!alvo) {
+      // (2) cria o jogo NOVO da 1ª inferior (o "JOGO N" da inferior que o dono pediu).
+      alvo = {
+        id: 'ltlow-' + t.id + '-' + ts + '-' + criados, round: lowR, bracket: 'lower',
+        phaseIndex: (pi != null ? pi : (t.currentPhaseIndex || 0)),
+        p1: 'TBD', p2: 'TBD', winner: null, isExtra: true, awaitsLatePartner: true,
+        createdAt: new Date().toISOString()
+      };
+      if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'lower', round: lowR, matches: [alvo] }); } catch (e) { t.matches.push(alvo); } }
+      else { t.matches.push(alvo); }
+      slot = 'p1'; criados++;
+      // destino do vencedor: vaga livre no destino de um irmão da 1ª inferior; senão cresce um nó
+      // (irmão × novo, herdando o destino do irmão). Só irmão PENDENTE (jogo disputado é intocável).
+      try {
+        var irmaos = all().filter(function (m) { return m && m !== alvo && m.bracket === 'lower' && _r(m) === lowR && m.nextMatchId; });
+        var byId = function (id) { return all().filter(function (m) { return m && m.id === id; })[0]; };
+        var destino = null, livre = null;
+        irmaos.forEach(function (ir) {
+          if (livre) return;
+          var d0 = byId(ir.nextMatchId);
+          if (!d0 || d0.winner) return;
+          if (all().some(function (x) { return x && x.nextMatchId === d0.id && !x.nextSlot; })) return;  // convenção "1ª vaga livre": não reivindica
+          var s2 = _vagaLivre(d0);
+          if (s2) { destino = d0; livre = s2; }
+        });
+        if (livre) { alvo.nextMatchId = destino.id; alvo.nextSlot = livre; }
+        else {
+          var irmao = irmaos.filter(function (ir) { return !ir.winner; })[0];
+          if (irmao) {
+            var slotOrig = irmao.nextSlot;
+            var novoR = {
+              id: 'ltlow-' + t.id + '-' + ts + '-x' + criados, round: lowR + 1, bracket: 'lower',
+              phaseIndex: (pi != null ? pi : (t.currentPhaseIndex || 0)),
+              p1: 'TBD', p2: 'TBD', winner: null, nextMatchId: irmao.nextMatchId
+            };
+            // `nextSlot` undefined é a convenção "1ª vaga livre" da chave inferior — mas Firestore
+            // REJEITA o valor undefined num campo. Só grava a chave quando existe de verdade.
+            if (slotOrig) novoR.nextSlot = slotOrig;
+            if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'lower', round: lowR + 1, matches: [novoR] }); } catch (e) { t.matches.push(novoR); } }
+            else { t.matches.push(novoR); }
+            irmao.nextMatchId = novoR.id; irmao.nextSlot = 'p1';
+            alvo.nextMatchId = novoR.id; alvo.nextSlot = 'p2';
+          }
+        }
+      } catch (_e) {}
+    }
+    g.loserMatchId = alvo.id; g.loserSlot = slot; mutou++;
+    // os dois lados prometidos ⇒ o jogo não espera mais ninguém (sem BYE no fim da rodada)
+    if (alvo.isExtra && _fed(alvo, 'p1') && _fed(alvo, 'p2')) delete alvo.awaitsLatePartner;
+  });
+  if (window.AppStore && typeof window.AppStore.logAction === 'function' && criados) {
+    try { window.AppStore.logAction(t.id, criados + ' jogo(s) na 1ª chave inferior pra receber os perdedores dos jogos tardios'); } catch (e) {}
+  }
+  return mutou;   // nº de jogos tardios que ganharam pouso (criação OU vaga existente)
+};
+
 window._wireLateLoserToLower = function (t, ng, pi) {
   if (!t || !ng || !Array.isArray(t.matches)) return false;
   if (ng.bracket === 'lower') return false;             // porta-2 (tardio já entra na inferior): perder lá é eliminação
@@ -5107,6 +5207,10 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
       if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _brk, round: baseRound, matches: [ng] }); } catch (e) { t.matches.push(ng); } }
       else { t.matches.push(ng); }
       try { if (typeof window._wireLateLoserToLower === 'function') window._wireLateLoserToLower(t, ng, _pi); } catch (e) {}
+      // v1.5.3 (dono): o jogo tardio da 1ª SUPERIOR precisa de POUSO na 1ª INFERIOR — senão o
+      // perdedor dele é eliminado com uma derrota só. Cria/usa o jogo da R1 Inf que recebe os
+      // perdedores tardios (2 tardios → 1 jogo; 1 sozinho → "a definir" que vira BYE).
+      try { if (typeof window._ensureLowerLandingForLate === 'function') window._ensureLowerLandingForLate(t, _pi); } catch (e) {}
       // DESTINO do jogo novo: (a) vaga LIVRE no destino de um irmão; (b) senão a chave cresce UMA
       // rodada (irmão × novo, herdando o destino do irmão).
       // v1.5.3: não depende mais de "1ª rodada SEM resultado" — o jogo tem de ter destino mesmo
@@ -5156,7 +5260,8 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
             if (_comDestino) {
               var _comDestinoSlotOrig = _comDestino.nextSlot;
               var _destAntigo = _byId(_comDestino.nextMatchId);
-              var _novoR = { id: 'lt-' + t.id + '-' + ts + '-x' + placed, round: baseRound + 1, bracket: _brk, phaseIndex: _pi, p1: 'TBD', p2: 'TBD', winner: null, nextMatchId: _comDestino.nextMatchId, nextSlot: _comDestinoSlotOrig };
+              var _novoR = { id: 'lt-' + t.id + '-' + ts + '-x' + placed, round: baseRound + 1, bracket: _brk, phaseIndex: _pi, p1: 'TBD', p2: 'TBD', winner: null, nextMatchId: _comDestino.nextMatchId };
+              if (_comDestinoSlotOrig) _novoR.nextSlot = _comDestinoSlotOrig;   // undefined = convenção "1ª vaga livre"; Firestore rejeita undefined
               if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _brk, round: baseRound + 1, matches: [_novoR] }); } catch (e) { t.matches.push(_novoR); } }
               else { t.matches.push(_novoR); }
               // o irmão que JÁ jogou levou o vencedor pro destino antigo: traz esse time pro jogo novo

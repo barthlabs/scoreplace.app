@@ -568,6 +568,14 @@ function integrateLateEntries(t, opts) {
     }
   } catch (e) { win._error && win._error('[integrateLate] placeLate:', e); }
 
+  // v1.5.3 (dono, torneio AO VIVO): POUSO na 1ª INFERIOR pros jogos TARDIOS da 1ª superior — o
+  // perdedor do jogo do tardio tem direito à segunda vida como todo mundo. Roda como HEAL (não só
+  // na criação do jogo): docs onde o tardio já entrou numa passada anterior ganham o jogo da R1 Inf
+  // agora. Idempotente — sem tardio órfão, devolve 0. [[project_dupla_elim_late_integration_cascade]]
+  let lowLand = 0;
+  try { if (typeof win._ensureLowerLandingForLate === 'function') lowLand = win._ensureLowerLandingForLate(t, t.currentPhaseIndex || 0) || 0; }
+  catch (e) { win._error && win._error('[integrateLate] lowerLanding:', e); }
+
   // v1.4.12 — SANEAMENTO DA ESPERA: quem JÁ ESTÁ num grupo não pode continuar na Lista de
   // Espera. Cura os docs que ficaram sujos enquanto _removeFromWaitlist não existia no
   // servidor (bug Confra jul/2026: os tardios formavam grupo, jogavam e classificavam, mas
@@ -593,7 +601,7 @@ function integrateLateEntries(t, opts) {
   try { if (typeof win._syncLowerBracket === 'function') { if (win._syncLowerBracket(t)) healed++; } }
   catch (e) { win._error && win._error('[integrateLate] syncLower:', e); }
 
-  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0 || healed > 0 || wlClean > 0);
+  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0 || healed > 0 || wlClean > 0 || lowLand > 0);
   if (changed) {
     try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e) {}
     t.updatedAt = new Date().toISOString();
@@ -601,7 +609,7 @@ function integrateLateEntries(t, opts) {
   // `placed` NO RETORNO (v1.3.146): antes o contador do fallback (`redrawn`) NÃO era devolvido —
   // por isso o diag do dono mostrou `changed:true` com tudo 0 e o redraw passou despercebido.
   // Todo caminho que muda a chave TEM de aparecer no retorno.
-  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill, placed: redrawn, wlClean: wlClean };
+  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill, placed: redrawn, wlClean: wlClean, lowLand: lowLand };
 }
 
 // ── FORMAR dupla na LISTA DE ESPERA + INTEGRAR, ATÔMICO no servidor (CF-only). Espelha
