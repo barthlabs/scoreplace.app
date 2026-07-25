@@ -661,7 +661,12 @@
     // reconhecido como "eu"/"amigo" — antes só o capitão (p.uid) entrava e o
     // parceiro sumia do movimento do local. Mantém o "pelo menos 1" anônimo
     // quando o torneio não tem participantes carregados.
+    var _seenUid = {};
     function _vpush(uid, dn, photo) {
+      // v1.5.x: dedup por uid DENTRO do torneio — uma pessoa que aparece em 2 entradas
+      // (ex.: numa dupla E numa entrada solo, resíduo de inscrição duplicada) não conta
+      // duas vezes no movimento do local. Anônimo (uid null) pode repetir.
+      if (uid) { if (_seenUid[uid]) return; _seenUid[uid] = true; }
       // v2.1.68: displayName + photoURL reais pra AMIGOS aparecerem com nome/foto.
       // v4.5.72: identidade-por-uid — o nome exibido resolve do perfil vivo por uid;
       // o nome gravado no inscrito só sobra como fallback pra não deixar em branco

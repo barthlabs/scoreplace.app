@@ -1000,15 +1000,23 @@ window.deenrollCurrentUser = function (tId) {
             () => {
                 // --- Optimistic UI: remove locally FIRST, then sync to Firestore ---
                 var _savedParticipants = Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants || {}).slice();
-                // Remove from local state immediately
-                t.participants = _savedParticipants.filter(function(p) {
-                    // v1.2.2: UID ONLY — tem que ser o MESMO critério de deenrollParticipant
-                    // (a transação que roda logo abaixo). Enquanto isto casava por nome/e-mail
-                    // e a transação não, o otimista sumia com a entrada na tela e o onSnapshot
-                    // a trazia de volta — pior que não remover, porque parece que funcionou.
-                    // _participantUids cobre uid + p1Uid + p2Uid + sub-participants[].
-                    return window._participantUids(p).indexOf(user.uid) === -1;
-                });
+                // v1.5.x — MESMO critério da CF/transação deenrollParticipant (têm que casar,
+                // senão o otimista some e o onSnapshot traz de volta). DUPLA: quem sai a DESFAZ
+                // e o parceiro fica SOLO ("sem dupla"). Iterar limpa duplicatas e não deixa slot
+                // com o uid de quem saiu — senão re-inscrever vira no-op.
+                t.participants = _savedParticipants.reduce(function(acc, p) {
+                    if (!p || typeof p !== 'object') { acc.push(p); return acc; } // string guest
+                    var isPair = !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
+                    if (isPair && (p.p1Uid === user.uid || p.p2Uid === user.uid)) {
+                        var keep = (typeof window._pairPartnerSolo === 'function')
+                            ? window._pairPartnerSolo(p, p.p1Uid === user.uid ? 2 : 1) : null;
+                        if (keep) acc.push(keep); // parceiro sobrevive solo
+                        return acc;
+                    }
+                    if (window._participantUids(p).indexOf(user.uid) !== -1) return acc; // solo/time → sai
+                    acc.push(p);
+                    return acc;
+                }, []);
 
                 // Show success and re-render immediately (no wait for network)
                 if (typeof showNotification !== 'undefined') showNotification(_t('enroll.cancelledTitle'), _t('enroll.cancelledMsg', { name: window._safeHtml(t.name) }), 'info');
