@@ -2056,13 +2056,20 @@ window._callIntegrateLate = function (payload) {
     try { pid = fb.app().options.projectId; } catch (e) {}
     if (!pid) return Promise.reject(Object.assign(new Error('App não inicializado.'), { code: 'functions/internal' }));
     var url = 'https://us-central1-' + pid + '.cloudfunctions.net/integrateLateEntries';
+    // v1.5.2: TIMEOUT. `fetch` sem timeout pode ficar pendurado pra sempre (celular na quadra, 4G
+    // caindo, aba em segundo plano) — e o chamador marca "em voo" antes de disparar. Sem teto, a
+    // trava nunca era liberada e TODA marcação de presença seguinte virava no-op silencioso.
+    var _ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var _tmo = setTimeout(function () { try { _ctl && _ctl.abort(); } catch (e) {} }, 25000);
+    var _clear = function (v) { clearTimeout(_tmo); return v; };
     return user.getIdToken().then(function (tok) {
         return fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
-            body: JSON.stringify({ data: payload })
+            body: JSON.stringify({ data: payload }),
+            signal: _ctl ? _ctl.signal : undefined
         });
-    }).then(function (r) {
+    }).then(_clear, function (e) { _clear(); throw e; }).then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
             if (j && j.error) {
                 var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
@@ -2138,7 +2145,20 @@ window._triggerLateIntegration = function (t, opts) {
     }
     clearTimeout(window._lateIntegrateDebounce[tId]);
     window._lateIntegrateDebounce[tId] = null;
-    if (window._lateIntegrateInflight[tId]) return;
+    // v1.5.2 (dono, torneio AO VIVO 25/jul — "marquei presença do Max e da Cátia e não gerou jogo"):
+    // o disparo NUNCA pode ser ENGOLIDO. Antes, com uma chamada em voo o gatilho simplesmente
+    // RETORNAVA — e não havia NADA que tentasse de novo: a pessoa ficava presente, fora da chave,
+    // pra sempre. No doc real a chave só faltava o `integrateLateEntries` rodar (o motor coloca a
+    // dupla — verificado contra o doc de produção); o que faltou foi a CHAMADA. Agora o pedido é
+    // ENFILEIRADO e re-disparado assim que a chamada em voo termina. Ver [[project_late_dupla_fills_awaiting_slot]].
+    if (window._lateIntegrateInflight[tId]) {
+        var _prev = window._lateIntegratePending[tId] || {};
+        var _mrg = {}; for (var _pk in _prev) if (_prev.hasOwnProperty(_pk)) _mrg[_pk] = _prev[_pk];
+        for (var _ok in opts) if (opts.hasOwnProperty(_ok)) _mrg[_ok] = opts[_ok];
+        _mrg.debounce = false;
+        window._lateIntegratePending[tId] = _mrg;
+        return;
+    }
     // só dispara quando há gente na espera (senão não há o que integrar) — EXCETO com force, que é o
     // caso da DUPLA FORMADA pós-sorteio: ela entra em participants (não na espera), então não há nada
     // na waitlist, mas a CF ainda precisa rodar pra detectar o órfão de roster e re-sortear.
@@ -2150,8 +2170,20 @@ window._triggerLateIntegration = function (t, opts) {
     var sig = wl.map(_nm).sort().join('|') + '#' + Object.keys(t.checkedIn || {}).sort().join(',');
     if (!opts.force && window._lateIntegrateLastSig[tId] === sig) return;
     window._lateIntegrateInflight[tId] = true;
-    window._callIntegrateLate({ tournamentId: tId }).then(function (res) {
+    // v1.5.2: LIBERA a trava e roda o pedido ENFILEIRADO (se houver). Chamado nos DOIS desfechos —
+    // sucesso e erro — para que a trava jamais fique presa (era o que deixava todo toggle de
+    // presença seguinte virar no-op silencioso).
+    var _releaseLate = function () {
         window._lateIntegrateInflight[tId] = false;
+        var _q = window._lateIntegratePending[tId];
+        if (_q) {
+            window._lateIntegratePending[tId] = null;
+            var _ft = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : t;
+            setTimeout(function () { window._triggerLateIntegration(_ft || t, _q); }, 0);
+        }
+    };
+    window._callIntegrateLate({ tournamentId: tId }).then(function (res) {
+        _releaseLate();
         window._lateIntegrateLastSig[tId] = sig;
         var d = (res && res.data) || {};
         if (window._dtrace) window._dtrace('integrateLate:done', { v: (window.SCOREPLACE_VERSION || '?'), changed: d.changed, extra: d.extra, duplas: d.duplas, monarch: d.monarch, repfill: d.repfill, placed: d.placed, wlClean: d.wlClean, reason: d.reason });
@@ -2166,7 +2198,7 @@ window._triggerLateIntegration = function (t, opts) {
             showNotification('⚡ Tardios na chave', 'A dupla entrou na chave.', 'info');
         }
     }).catch(function (e) {
-        window._lateIntegrateInflight[tId] = false;
+        _releaseLate();
         if (window._dtrace) window._dtrace('integrateLate:ERR', { code: e && e.code, msg: e && e.message });
     });
 };
@@ -4866,11 +4898,21 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
       seen[kk] = 1; pending.push({ e: p, fromWait: true });
     });
   });
-  if (Array.isArray(t.participants) && t.teamOrigins) {
+  // ÓRFÃO DE ROSTER: está em `t.participants` mas FORA da chave.
+  // v1.5.2 (dono, torneio AO VIVO 25/jul): antes só a dupla FORMADA à mão (teamOrigins==='formada')
+  // era coletada aqui — quem foi marcado AUSENTE antes do sorteio e ficou em participants (sem ir
+  // pra espera) não era visto por NENHUM coletor: marcar presença nele nunca gerava jogo. O critério
+  // canônico é o mesmo da espera: PRESENTE + fora da chave + competidor válido. Restrito a torneio
+  // de MESMO DIA — é onde a chamada/presença tem significado; multi-dia (`_present` sempre true)
+  // arrastaria o elenco inteiro. Ver [[project_late_dupla_fills_awaiting_slot]].
+  var _mesmoDia = (typeof window._tournamentIsSameDay !== 'function') || !!window._tournamentIsSameDay(t);
+  if (Array.isArray(t.participants)) {
     t.participants.forEach(function (p) {
       var n = _nm(p), kk = _key(p);
       if (!n || seen[kk] || window._entryInBracket(t, p, _brkSetP)) return;
-      if (t.teamOrigins[n] !== 'formada' || !_present(p)) return;
+      var _formada = !!(t.teamOrigins && t.teamOrigins[n] === 'formada');
+      if (!_formada && !_mesmoDia) return;          // fora do mesmo dia só a dupla formada entra
+      if (!_present(p)) return;
       if (!_isValidCompetitor(p)) return;
       if (window._lateAlreadyIntegrated(t, p)) return;
       seen[kk] = 1; pending.push({ e: p, fromWait: false });

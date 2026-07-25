@@ -237,6 +237,10 @@ const SUITES = [
   // Instabilidade da chamada (dono: "presença pulando e regredindo depois de 24"): a integração era
   // disparada 1× por toggle → enxurrada de docs+re-render. Rajada agora coalesce numa chamada.
   'tests/late-integration-debounce.test.js',
+  // Torneio AO VIVO (dono, 25/jul/2026): marcou presença pós-sorteio e NÃO gerou jogo. Duas causas —
+  // disparo ENGOLIDO quando havia chamada em voo (sem fila, sem retry) e coletor CEGO pra quem ficou
+  // em `participants` fora da chave (só espera + dupla 'formada' entravam).
+  'tests/late-integration-never-dropped.test.js',
   // Dados REAIS do SB (dono): mesmo par de uids em 2 jogos com NOMES diferentes ("Jogador sem
   // perfil (aL7U)…" vs "Marcello/Karla") — guards por NOME não casavam. Membership é por UID.
   'tests/late-entry-uid-identity.test.js',
