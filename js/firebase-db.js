@@ -692,12 +692,44 @@ window.FirestoreDB = {
             if (Array.isArray(p.participants)) p.participants.forEach(function (s) { if (s && s.uid) out.push(s.uid); });
             return out;
           };
-      var newParticipants = participants.filter(function(p) {
-        if (!p || typeof p !== 'object') return true;  // string legada = guest, não tem uid
-        return _pUids(p).indexOf(userUid) === -1;
+      // v1.5.x — DUPLA NÃO SOME O PARCEIRO: quem sai de uma dupla a DESFAZ e o parceiro
+      // fica SOLO ("sem dupla"). Espelha functions/enroll-core.computeDeenroll (CF é o
+      // caminho primário; isto é o fallback). Iterar limpa DUPLICATAS (uid some de TODA
+      // entrada) e não deixa slot com o uid do que saiu — senão re-inscrever vira no-op.
+      var _partnerSolo = (typeof window !== 'undefined' && window._pairPartnerSolo)
+        ? window._pairPartnerSolo
+        : function (entry, n) {
+            var g = function (s) { return entry['p' + n + s]; };
+            var uid = g('Uid') || ''; var nome = String(g('Name') || '').trim();
+            if (!uid) return nome || null;
+            var o = { uid: uid, ligaActive: true };
+            if (nome) { o.displayName = nome; o.name = nome; }
+            if (g('Seq') != null) o.enrollSeq = g('Seq');
+            if (g('Email')) o.email = g('Email');
+            if (g('Photo')) o.photoURL = g('Photo');
+            if (g('Gender')) o.gender = g('Gender');
+            if (g('BirthDate')) o.birthDate = g('BirthDate');
+            if (entry.category) o.category = entry.category;
+            if (Array.isArray(entry.categories)) o.categories = entry.categories.slice();
+            if (entry.categorySource) o.categorySource = entry.categorySource;
+            return o;
+          };
+      var _changed = false;
+      var newParticipants = [];
+      participants.forEach(function (p) {
+        if (!p || typeof p !== 'object') { newParticipants.push(p); return; } // string guest
+        var isPair = !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
+        if (isPair && (p.p1Uid === userUid || p.p2Uid === userUid)) {
+          var keep = _partnerSolo(p, p.p1Uid === userUid ? 2 : 1);
+          _changed = true;
+          if (keep) newParticipants.push(keep);
+          return;
+        }
+        if (_pUids(p).indexOf(userUid) !== -1) { _changed = true; return; }
+        newParticipants.push(p);
       });
 
-      if (newParticipants.length === participants.length) {
+      if (!_changed) {
         return { notFound: true, participants: participants };
       }
 

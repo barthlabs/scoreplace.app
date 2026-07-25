@@ -457,7 +457,11 @@
     // reconhecido como "eu"/"amigo" — antes só o capitão (p.uid) entrava e o
     // parceiro sumia. Mantém o "pelo menos 1" anônimo quando o torneio não tem
     // participantes carregados.
+    var _seenUid = {};
     function _vpush(uid, email, dn, photo) {
+      // v1.5.x: dedup por uid DENTRO do torneio — uma pessoa em 2 entradas (dupla + solo,
+      // resíduo de inscrição duplicada) não conta duas vezes. Anônimo (uid null) repete.
+      if (uid) { if (_seenUid[uid]) return; _seenUid[uid] = true; }
       // v4.5.72: identidade-por-uid — nome exibido resolve do perfil vivo por uid;
       // nome gravado só sobra como fallback pra não ficar em branco (e é a
       // identidade legítima do guest sem conta, que não tem uid).

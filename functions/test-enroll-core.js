@@ -84,15 +84,54 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
   eq('deenroll solo → sobrou other', r.participants[0].uid, 'other-uid');
 })();
 
-// ── Desinscrição de UM membro remove a dupla inteira ─────────────────────────
+// ── Desinscrição de UM membro DESFAZ a dupla e o PARCEIRO fica SOLO (v1.5.x) ──
+// Regra do dono: quem tem dupla e a dupla se desinscreve → o parceiro vai pra
+// "sem dupla" e CONTINUA aparecendo, nunca some. (Bug: sumia a dupla inteira.)
 (() => {
   const data = { status: 'open', participants: [
-    { uid: 'kelly-uid', displayName: 'Kelly / Rodrigo', p1Uid: 'kelly-uid', p2Uid: 'rodrigo-uid' },
+    { uid: 'kelly-uid', displayName: 'Kelly / Rodrigo',
+      p1Uid: 'kelly-uid', p1Name: 'Kelly', p1Seq: 3, p1Email: 'k@x.com',
+      p2Uid: 'rodrigo-uid', p2Name: 'Rodrigo', p2Seq: 4, category: 'Misto' },
     { uid: 'solo-uid' }
   ] };
   const r = C.computeDeenroll(data, 'rodrigo-uid');
-  eq('deenroll p2 da dupla → remove a dupla', r.participants.length, 1);
-  eq('deenroll p2 → sobra o solo', r.participants[0].uid, 'solo-uid');
+  eq('deenroll membro da dupla → deenrolled', r.outcome, 'deenrolled');
+  eq('deenroll dupla → parceiro NÃO some (2 entradas)', r.participants.length, 2);
+  const kelly = r.participants.find(p => p && p.uid === 'kelly-uid');
+  eq('deenroll dupla → Kelly sobra como SOLO', !!kelly, true);
+  eq('deenroll dupla → Kelly não é mais dupla', !!(kelly && (kelly.p1Uid || kelly.p2Uid)), false);
+  eq('deenroll dupla → Kelly herda nº de inscrição', kelly && kelly.enrollSeq, 3);
+  eq('deenroll dupla → Kelly herda categoria', kelly && kelly.category, 'Misto');
+  // TRAP re-inscrição: o uid de quem saiu não pode sobrar em NENHUM slot, senão
+  // _userMatchesParticipant ainda o vê inscrito e "Inscrever-se" vira no-op.
+  const rodrigoAnywhere = r.participants.some(p =>
+    p && typeof p === 'object' && ['uid','p1Uid','p2Uid'].some(k => p[k] === 'rodrigo-uid'));
+  eq('deenroll dupla → uid de quem saiu some de TODO slot', rodrigoAnywhere, false);
+  eq('deenroll dupla → solo intacto', r.participants.some(p => p && p.uid === 'solo-uid'), true);
+})();
+
+// ── Desinscrição LIMPA DUPLICATAS: mesmo uid em 2 entradas (dupla + solo) ─────
+// (Raízes do "Raquel aparece 2×": um resíduo em dupla + solo. deenroll limpa os dois.)
+(() => {
+  const data = { status: 'open', participants: [
+    { p1Uid: 'raquel-uid', p1Name: 'Raquel', p2Uid: 'luiza-uid', p2Name: 'Luiza' },
+    { uid: 'raquel-uid', displayName: 'Raquel' }
+  ] };
+  const r = C.computeDeenroll(data, 'raquel-uid');
+  const stillRaquel = r.participants.some(p =>
+    p && typeof p === 'object' && ['uid','p1Uid','p2Uid'].some(k => p[k] === 'raquel-uid'));
+  eq('deenroll com duplicata → Raquel some de TODAS as entradas', stillRaquel, false);
+  eq('deenroll com duplicata → Luiza fica como solo', r.participants.some(p => p && p.uid === 'luiza-uid'), true);
+  eq('deenroll com duplicata → só sobra a Luiza', r.participants.length, 1);
+})();
+
+// ── Parceiro FICTÍCIO (sem uid) volta como string do nome ─────────────────────
+(() => {
+  const data = { status: 'open', participants: [
+    { p1Uid: 'me-uid', p1Name: 'Eu', p2Name: 'Convidado sem conta' }
+  ] };
+  const r = C.computeDeenroll(data, 'me-uid');
+  eq('deenroll → parceiro fictício vira string do nome', r.participants[0], 'Convidado sem conta');
 })();
 
 // ── Desinscrição de quem não está → notFound ─────────────────────────────────

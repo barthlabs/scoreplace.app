@@ -153,16 +153,54 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   return { outcome: 'enrolled', participants: participants, updateData: updateData, autoClose: autoClose, reachedDraw: reachedDraw };
 }
 
-// Decide a desinscrição (self) a partir do doc atual. Remove a entrada inteira em
-// que o uid aparece (uid / p1Uid / p2Uid / sub-participants) — dupla não joga com
-// uma pessoa só. Espelha deenrollParticipant.
+// Constrói o PARCEIRO (lado `n`) de uma dupla como inscrito SOLO. Espelha
+// window._pairPartnerSolo (js/views/tournaments.js) e o solo() de computeSplitPair
+// (pair-core.js) — o solo herda o que era POR MEMBRO (nº de inscrição, contato,
+// categoria). Fictício (sem uid) volta como a STRING do nome. Sem uid nem nome → null.
+function pairPartnerSolo(entry, n) {
+  var g = function (suf) { return entry['p' + n + suf]; };
+  var uid = g('Uid') || '';
+  var nome = String(g('Name') || '').trim();
+  if (!uid) return nome || null; // fictício sem conta → string do nome
+  var o = { uid: uid, ligaActive: true };
+  if (nome) { o.displayName = nome; o.name = nome; }
+  if (g('Seq') != null) o.enrollSeq = g('Seq');
+  if (g('Email')) o.email = g('Email');
+  if (g('Photo')) o.photoURL = g('Photo');
+  if (g('Gender')) o.gender = g('Gender');
+  if (g('BirthDate')) o.birthDate = g('BirthDate');
+  if (entry.category) o.category = entry.category;
+  if (Array.isArray(entry.categories)) o.categories = entry.categories.slice();
+  if (entry.categorySource) o.categorySource = entry.categorySource;
+  return o;
+}
+
+// Decide a desinscrição (self) a partir do doc atual. Quem sai é o uid.
+// v1.5.x — DUPLA NÃO SOME O PARCEIRO: se o uid está numa DUPLA, a dupla é DESFEITA
+// e o PARCEIRO fica como inscrito SOLO ("sem dupla"), continuando no torneio — mesmo
+// comportamento que o organizador já tem ao remover 1 da dupla (removeParticipantFunction
+// → _pairPartnerSolo). Antes a entrada inteira era filtrada e o parceiro sumia.
+// Também: o uid do que saiu tem que sair de TODO slot (uid/p1Uid/p2Uid) — senão
+// _userMatchesParticipant ainda o vê inscrito e "Inscrever-se" vira no-op. Iterar
+// (não filtrar por 1º match) também limpa DUPLICATAS: o uid é removido de todas as
+// entradas em que aparece. Time >2 (participants[]) segue removendo a entrada inteira.
 function computeDeenroll(data, userUid) {
   var participants = asParticipantsArray(data);
-  var newParticipants = participants.filter(function (p) {
-    if (!p || typeof p !== 'object') return true; // string legada = guest, sem uid
-    return participantUids(p).indexOf(userUid) === -1;
+  var changed = false;
+  var newParticipants = [];
+  participants.forEach(function (p) {
+    if (!p || typeof p !== 'object') { newParticipants.push(p); return; } // string guest
+    var isPair = !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
+    if (isPair && (p.p1Uid === userUid || p.p2Uid === userUid)) {
+      var keep = pairPartnerSolo(p, p.p1Uid === userUid ? 2 : 1);
+      changed = true;
+      if (keep) newParticipants.push(keep); // parceiro sobrevive (solo ou string fictícia)
+      return;
+    }
+    if (participantUids(p).indexOf(userUid) !== -1) { changed = true; return; } // solo/time → remove
+    newParticipants.push(p);
   });
-  if (newParticipants.length === participants.length) {
+  if (!changed) {
     return { outcome: 'notFound', participants: participants, updateData: null };
   }
   var deenrollData = Object.assign({}, data, { participants: newParticipants });
