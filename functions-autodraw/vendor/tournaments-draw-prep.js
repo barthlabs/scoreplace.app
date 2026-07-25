@@ -671,7 +671,7 @@ window._cancelDrawResolution = function(tId) {
         try {
             var _pnIdx = (t.currentPhaseIndex || 0) + 1;
             if (t.phases && t.phases[_pnIdx]) { delete t.phases[_pnIdx]._promoteAsked; delete t.phases[_pnIdx]._promoteLines; }
-            delete t._phaseResInfo;
+            window._clearPhaseResInfo(t);
         } catch (e) {}
         if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') window.FirestoreDB.saveTournament(t);
     }
@@ -954,7 +954,7 @@ window._showPhasePromotePanel = function(tId) {
     // os ímpares). Guarda defensiva: se não ajuda, pula direto pro painel de pow2.
     if (_lines.length < 2 || typeof window._phasePromoteHelps !== 'function' || !window._phasePromoteHelps(_lines)) {
         if (t.phases && t.phases[_idx]) t.phases[_idx]._promoteAsked = true;
-        delete t._phaseResInfo;
+        window._clearPhaseResInfo(t);
         if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
         return;
     }
@@ -1013,7 +1013,7 @@ window._phasePromoteApply = function(tId) {
     if (!t) return;
     var _idx = (t._phaseResInfo && t._phaseResInfo.nextIdx != null) ? t._phaseResInfo.nextIdx : ((t.currentPhaseIndex || 0) + 1);
     if (t.phases && t.phases[_idx]) { t.phases[_idx]._promoteLines = 1; t.phases[_idx]._promoteAsked = true; }
-    delete t._phaseResInfo;
+    window._clearPhaseResInfo(t);
     var _p = document.getElementById('phase-promote-panel'); if (_p) _p.remove();
     document.body.style.overflow = '';
     if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
@@ -1026,7 +1026,7 @@ window._phasePromoteSkip = function(tId) {
     if (!t) return;
     var _idx = (t._phaseResInfo && t._phaseResInfo.nextIdx != null) ? t._phaseResInfo.nextIdx : ((t.currentPhaseIndex || 0) + 1);
     if (t.phases && t.phases[_idx]) { t.phases[_idx]._promoteLines = 0; t.phases[_idx]._promoteAsked = true; }
-    delete t._phaseResInfo;
+    window._clearPhaseResInfo(t);
     var _p = document.getElementById('phase-promote-panel'); if (_p) _p.remove();
     document.body.style.overflow = '';
     if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
@@ -1152,6 +1152,14 @@ window.showUnifiedResolutionPanel = function(tId) {
 
         info = window._diagnoseAll(t);
         if (window._dtrace) window._dtrace('resolutionPanel:diag', { hasIssues: !!info.hasIssues, isPow2: !!info.isPowerOf2, isOdd: !!info.isOdd, remainder: info.remainder, incompl: (info.incompleteTeams || []).length });
+
+        // POW2/ÍMPAR é AUTO-resolvido (Eliminatória): se a ÚNICA pendência é pow2/ímpar (sem
+        // incompleto nem remainder), o programa decide sozinho (bye/play-in) — NÃO abre painel,
+        // sorteia direto. Ver _autoResolvesPow2 / project_bye_rep_auto_resolution.
+        if (window._autoResolvesPow2 && window._autoResolvesPow2(t) && info.hasIssues &&
+            (info.remainder || 0) === 0 && (info.incompleteTeams || []).length === 0) {
+            info = Object.assign({}, info, { hasIssues: false });
+        }
 
         // If no issues, proceed directly to actual draw (skip Final Review step)
         if (!info.hasIssues) {
@@ -1597,7 +1605,7 @@ window.showUnifiedResolutionPanel = function(tId) {
             var _pi = t._phaseResInfo;
             var _idx = (_pi.nextIdx != null) ? _pi.nextIdx : ((t.currentPhaseIndex||0)+1);
             if (t.phases && t.phases[_idx]) t.phases[_idx].bracketResolution = option;
-            delete t._phaseResInfo;
+            window._clearPhaseResInfo(t);
             var _pp = document.getElementById('unified-resolution-panel'); if (_pp) _pp.remove();
             document.body.style.overflow = '';
             if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
@@ -2321,6 +2329,38 @@ window.checkPowerOf2 = function (t) {
         excess: n - lo,
         teamSize: teamSize
     };
+};
+
+// RESOLUÇÃO AUTOMÁTICA de "fora de potência de 2" (planilha do dono, jul/2026): não pergunta
+// mais bye-vs-repescagem — aplica a de MENOS intervenções. byes = P_hi−N (padding pra cima),
+// reps = N−P_lo (play-in pra baixo); aplica a menor. EMPATE (N = 1.5·P_lo, ex. 12/24/48) → BYE
+// (chave pow2 limpa, tanto faz em intervenções). Pow2/trivial → 'bye' (moot). Ver
+// project_bye_rep_auto_resolution. Consumido por _buildPhase0Cfg (elim_dupla).
+window._autoP2Resolution = function (t) {
+    var info = window.checkPowerOf2(t);
+    if (!info || info.isPowerOf2 || info.count <= 2) return 'bye';   // resolução moot
+    // FÓRMULA DA PLANILHA DO DONO (torneio_bye_repescagem.xlsx): decide bye × repescagem pelo nº de
+    // participantes, SEMPRE o MÍNIMO de intervenções. byes = P − N (pad até a potência de 2 ACIMA);
+    // rep = N − P/2 (reduz até a potência de 2 ABAIXO via rodada preliminar). Aplica o menor; empate
+    // → bye. É AUTOMÁTICO em todo torneio — nunca "sempre bye". Ver project_bye_rep_auto_resolution.
+    var byes = info.missing;   // P − N  (folgas na 1ª rodada)
+    var reps = info.excess;    // N − P/2 (jogos de repescagem / rodada preliminar)
+    return (byes <= reps) ? 'bye' : 'playin';   // menor nº de intervenções; empate → bye
+};
+
+// Formatos onde a resolução de "fora de potência de 2" é AUTOMÁTICA (bye/play-in decididos por
+// _autoP2Resolution no sorteio). Nesses, o PAINEL de ajuste NÃO deve perguntar pow2/ímpar — a
+// máquina decide sozinha. Só o "RESTO" (times incompletos, remainder de grupos) precisa de painel.
+// Eliminatória Simples E Dupla. Grupos/Liga/Suíço/Rei-Rainha NÃO (têm resolução própria).
+// Ver project_bye_rep_auto_resolution.
+window._autoResolvesPow2 = function (t) {
+    if (!t) return false;
+    if (typeof window._isMonarchFormat === 'function' && window._isMonarchFormat(t)) return false; // Rei/Rainha agrupa de 4
+    var f = String(t.format || '');
+    if (/Grupo|Liga|Su[íi][çc]o|Ranking|Pontos Corridos/i.test(f)) return false;
+    if (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) return false;
+    var code = t.formatCode || '';
+    return code === 'elim_simples' || code === 'elim_dupla' || /Eliminat[óo]ria|Dupla Elimin/i.test(f);
 };
 
 window.showPowerOf2Panel = function (tId) {
@@ -3577,9 +3617,11 @@ window.toggleRegistrationStatus = function (tId) {
     }
 
     if (diag) {
-        // Liga/Swiss: only incomplete teams and remainder matter.
-        // Everything else (Elim, Dupla Elim, Rei/Rainha, unknown): full check.
-        var hasRelevantIssues = isLigaOrSwiss
+        // Liga/Swiss E Eliminatória (pow2 AUTO): só incompleto e remainder importam — pow2/ímpar
+        // o programa decide sozinho (bye/play-in), sem painel. Só formatos sem resolução automática
+        // (legado desconhecido) usam o check completo. Ver _autoResolvesPow2.
+        var _autoP2 = (typeof window._autoResolvesPow2 === 'function') && window._autoResolvesPow2(t);
+        var hasRelevantIssues = (isLigaOrSwiss || _autoP2)
             ? (diag.incompleteTeams.length > 0 || diag.remainder > 0)
             : diag.hasIssues;
         try {

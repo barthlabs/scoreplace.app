@@ -204,6 +204,39 @@ function fetchViaLetzplayTab(url, cb, noCreate) {
   }, noCreate);
 }
 
+// NAVEGA a aba do letzplay pra uma URL (v1.46 — pedido do dono: o puxar individual tem
+// que ABRIR a página do jogador automaticamente, como o scan antigo fazia). Além de
+// mostrar onde a busca está, a navegação REAL resolve o desafio do Cloudflare no
+// contexto da página — sem ela, com o CF desconfiado, TODOS os fetches voltavam
+// bloqueados e a busca "não achava nada". Sonda o desafio e espera ele resolver.
+function navLetzplayTab(url, cb) {
+  if (!chrome.tabs || !chrome.scripting) { cb({ ok: false, error: 'no-tabs' }); return; }
+  ensureLetzplayTab(function (tabId) {
+    if (!tabId) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
+    var navDone = false;
+    function settle() {
+      var n = 0;
+      (function check() {
+        setTimeout(function () {
+          chrome.scripting.executeScript({ target: { tabId: tabId }, func: _spProbeTab })
+            .then(function (pr) {
+              var probe = (pr && pr[0] && pr[0].result) || null;
+              if (probe && probe.challenge) { _qSlower(); if (n < 6) { n++; check(); return; } cb({ ok: true, challenge: true }); return; }
+              _qFaster(); cb({ ok: true });
+            })
+            .catch(function () { cb({ ok: true }); });
+        }, Math.max(1200, Math.min(9000, Math.round(_q.gap * 0.8))));
+      })();
+    }
+    function onUpd(tid, info) { if (tid === tabId && info.status === 'complete' && !navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} settle(); } }
+    chrome.tabs.onUpdated.addListener(onUpd);
+    chrome.tabs.update(tabId, { url: url }, function () {
+      if (chrome.runtime.lastError && !navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} cb({ ok: false, error: chrome.runtime.lastError.message }); }
+    });
+    setTimeout(function () { if (!navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} settle(); } }, 12000);
+  });
+}
+
 // EXTRATOR do PERFIL PÚBLICO — roda no DOM RENDERIZADO da aba do letzplay (o perfil
 // é SPA: rankings/torneios/jogos vêm por JS e NÃO estão no HTML cru do fetch).
 // Self-contained; extrai TUDO que a página atual expõe (base OU /rankings OU /tournaments).
@@ -408,6 +441,15 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // Passo medido, sob demanda — o app usa pra explicar a espera ("letzplay limitando,
   // indo de 1,2s pra 9,6s por página") em vez de parecer travado.
   if (msg && msg.type === 'lp-pace') { sendResponse(_qStats()); return true; }
+  // Navegação da aba compartilhada (v1.46) — serializada na MESMA fila dos fetches:
+  // navegar no meio de uma leitura de outra operação seria pisar no pé dela.
+  if (msg && msg.type === 'lp-nav' && typeof msg.url === 'string' &&
+      msg.url.indexOf('https://letzplay.me/') === 0) {
+    enqueue(function () {
+      return new Promise(function (res) { navLetzplayTab(msg.url, res); });
+    }).then(sendResponse, function (e) { sendResponse({ ok: false, error: String((e && e.message) || e) }); });
+    return true; // assíncrona
+  }
   if (msg && msg.type === 'lp-scan-profile' && typeof msg.handle === 'string') {
     // NAVEGA a aba compartilhada → obrigatoriamente serializado com todo o resto.
     enqueue(function () {

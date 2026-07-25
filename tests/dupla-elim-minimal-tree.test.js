@@ -1,17 +1,11 @@
-// ESPEC do dono (jul/2026), Dupla Eliminatória com 12 duplas:
-//   "com 6 jogos na R1 sup, deveriam ter 3 jogos na r2 sup e 3 jogos na r1 inf. a repescagem vai
-//    ocorrer, com esses numeros, na r3 (sup e inf)"
-//   "o numero de repescados deve ser o minimo e manter o mais que der a dupla eliminatoria classica"
+// Dupla Eliminatória fora de potência de 2 — RESOLUÇÃO AUTOMÁTICA (planilha do dono, jul/2026).
+// A árvore-mínima (⌈E/2⌉ por rodada + repescado no ímpar) foi SUBSTITUÍDA: a resolução escolhe
+// automaticamente a de MENOS intervenções — BYE (pad até a pow2 ACIMA) ou PLAY-IN (reduz até a
+// pow2 ABAIXO). A chave SUPERIOR fica sempre pow2 LIMPA (halving sem rodada ímpar ⇒ SEM repFill/
+// ressurreição ⇒ SEM double-book). A inferior usa BYE no ímpar. Ver project_bye_rep_auto_resolution.
 //
-// ESTADO ANTERIOR (medido): a Dupla Elim montava uma PRÉ-RODADA + chave superior de POTÊNCIA DE 2
-// (T=8): 6 jogos na R0, 4 na R1 sup (6 vencedores + 2 melhores derrotados PROMOVIDOS) e só 2 jogos
-// na R1 inf, preenchidos por 4 vagas de repescagem (upperR0 ranks #2..#5). Ou seja: 6 repescados
-// logo na 1ª virada, quando o mínimo é ZERO — 6 é par, ⌈6/2⌉=3 fecha sem repescar ninguém.
-//
-// REGRA TRAVADA: a chave usa a FÓRMULA MÍNIMA (⌈E/2⌉ por rodada; repescado SÓ quando E é ímpar,
-// e apenas 1). Nada de inflar pra potência de 2. Isso vale pros DOIS lados: superior e inferior.
-// A Dupla Elim clássica é preservada no que dá — o que muda é só o tamanho das rodadas.
-// [[project_minimal_elim_formula_canon]] / [[project_dupla_elim_repechage]]
+// 12 duplas: byes = 16−12 = 4, reps = 12−8 = 4 → EMPATE → BYE (pad até 16). Superior = 8/4/2/1
+// (4 byes na R1). NENHUM repescado (repFill) em lugar nenhum — byes, não repescagem.
 const H = require('./render-harness');
 const W = H.sandbox;
 const dc = require('../functions-autodraw/draw-core.js');
@@ -31,7 +25,7 @@ function mkT(N) {
   dc.compileFromFmt2(t);
   return t;
 }
-// rodadas por chave, normalizadas: a 1ª rodada existente de cada chave vira índice 1
+// rodadas por chave: a 1ª rodada existente de cada chave vira índice 0
 function estrutura(t) {
   const ms = (W._collectAllMatches(t) || []).filter(m => m && !m.isThirdPlace);
   const por = {};
@@ -52,8 +46,10 @@ function estrutura(t) {
   });
   return out;
 }
+const isEmpty = v => !v || v === 'TBD' || /^bye/i.test(String(v).trim()) || /a definir/i.test(String(v));
+const all = t => W._collectAllMatches(t) || [];
 
-console.log('── Dupla Eliminatória usa a FÓRMULA MÍNIMA (12 duplas) ──');
+console.log('── Dupla Eliminatória 12 duplas: resolução AUTOMÁTICA (bye, superior pow2 limpa) ──');
 
 (function () {
   const t = mkT(12);
@@ -65,25 +61,33 @@ console.log('── Dupla Eliminatória usa a FÓRMULA MÍNIMA (12 duplas) ─�
   const sup = e.upper || [];
   const inf = e.lower || [];
 
-  // ── chave SUPERIOR: 6 → 3 → 2 → 1
-  ok(sup.length >= 4, 'superior tem 4 rodadas (6/3/2/1), tem ' + sup.length);
-  ok(sup[0] && sup[0].jogos === 6, '1ª sup = 6 jogos (12 duplas), veio ' + (sup[0] && sup[0].jogos));
-  ok(sup[1] && sup[1].jogos === 3, '2ª sup = 3 jogos (⌈6/2⌉), veio ' + (sup[1] && sup[1].jogos));
-  ok(sup[2] && sup[2].jogos === 2, '3ª sup = 2 jogos (⌈3/2⌉), veio ' + (sup[2] && sup[2].jogos));
+  // ── chave SUPERIOR: pow2 LIMPA (16) → 8 → 4 → 2 → 1 (12 duplas, 4 byes na R1)
+  ok(sup.length === 4, 'superior tem 4 rodadas (8/4/2/1), tem ' + sup.length);
+  ok(sup[0] && sup[0].jogos === 8, '1ª sup = 8 jogos (pow2 16, 12 duplas + 4 byes), veio ' + (sup[0] && sup[0].jogos));
+  ok(sup[1] && sup[1].jogos === 4, '2ª sup = 4 jogos (halving), veio ' + (sup[1] && sup[1].jogos));
+  ok(sup[2] && sup[2].jogos === 2, '3ª sup = 2 jogos, veio ' + (sup[2] && sup[2].jogos));
   ok(sup[3] && sup[3].jogos === 1, '4ª sup = 1 jogo (final da superior), veio ' + (sup[3] && sup[3].jogos));
 
-  // ── repescagem MÍNIMA: zero na 2ª (6 é par), exatamente 1 na 3ª (3 é ímpar)
-  ok(sup[1] && sup[1].repescados === 0, '2ª sup SEM repescado (6 é par ⇒ mínimo é zero), veio ' + (sup[1] && sup[1].repescados));
-  ok(sup[2] && sup[2].repescados === 1, '3ª sup com EXATAMENTE 1 repescado (3 é ímpar), veio ' + (sup[2] && sup[2].repescados));
-  ok(sup[3] && sup[3].repescados === 0, 'final da superior sem repescado, veio ' + (sup[3] && sup[3].repescados));
-
-  // ── chave INFERIOR: os 6 derrotados da 1ª sup fazem 3 jogos, sem repescar ninguém
-  ok(inf[0] && inf[0].jogos === 3, '1ª inf = 3 jogos (6 derrotados da 1ª sup), veio ' + (inf[0] && inf[0].jogos));
-  ok(inf[0] && inf[0].repescados === 0, '1ª inf SEM repescado (6 derrotados fecham em 3 jogos), veio ' + (inf[0] && inf[0].repescados));
-
-  // ── total de repescados na chave inteira: o MÍNIMO (só onde a conta dá ímpar)
+  // ── ZERO repescado (repFill) na chave inteira: a estrutura nova usa BYE, não repescagem
   const totalRep = Object.keys(e).reduce((s, b) => s + e[b].reduce((x, r) => x + r.repescados, 0), 0);
-  ok(totalRep <= 2, 'total de repescados é o MÍNIMO (≤2 com 12 duplas), veio ' + totalRep);
+  ok(totalRep === 0, 'NENHUM repescado (byes, não repescagem) na chave inteira, veio ' + totalRep);
+
+  // ── inferior existe e reduz a 1 (motor único), com a superior alimentando os merges
+  ok(inf.length >= 1 && inf[inf.length - 1].jogos === 1, 'inferior fecha em 1 jogo (campeão da inferior)');
+
+  // ── PLAYOUT completo: sem travar, com 1 campeão na grande final
+  let g = 0;
+  while (g++ < 4000) {
+    const p = all(t).filter(m => m && !m.winner && !m.isBye && !m.isSitOut && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2));
+    if (!p.length) break;
+    const m = p[0]; m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = g % 5;
+    try { W._advanceWinner(t, m); } catch (e2) {}
+    if (W._resolveRepFills) { try { W._resolveRepFills(t); } catch (e2) {} }
+  }
+  const travados = all(t).filter(m => !m.winner && !m.isBye && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2));
+  ok(travados.length === 0, 'nenhum jogo travado no fim (' + travados.length + ')');
+  const gf = all(t).filter(m => m.bracket === 'grand');
+  ok(gf.length >= 1 && gf[gf.length - 1].winner, 'grande final coroou um campeão');
 
   if (fail) {
     console.log('\nESTRUTURA MEDIDA:');

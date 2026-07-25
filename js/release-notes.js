@@ -19,6 +19,17 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.08);">' +
+      '<div style="font-weight:800; color:#fbbf24; font-size:1rem; margin-bottom:8px;">✨ v1.5 — Entrada tardia madura, busca nas chaves e identidade blindada <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎾 Entrada tardia sempre entra:</b> na Dupla Eliminatória, quem chega depois do sorteio entra <b>na hora</b> — vira um confronto novo que faz a chave crescer (nunca "passa de BYE" de graça), com repescagem no número ímpar. O painel de chaveamento sumiu pra Eliminatória: potência de 2 é resolvida <b>sozinha</b>; só o resto abre decisão.</li>' +
+        '<li><b>🔎 Busca nas chaves e na classificação:</b> nova barra de busca no chaveamento e na tabela — ache seu jogo ou sua posição na hora. E a <b>sua linha aparece em verde</b> (nome e colocação) pra você se achar de relance.</li>' +
+        '<li><b>🆔 Identidade pela conta, sem confusão de nomes:</b> excluir inscrito, desfazer dupla e registrar W.O. passam a usar a <b>conta</b> (uid) de cada pessoa — dois homônimos não se misturam, e trocar o nome no perfil não quebra nada. W.O. de time chaveia pelos <b>dois</b> membros.</li>' +
+        '<li><b>🏷️ Categorias mais claras:</b> a categoria Misto virou um <b>indicador destacado</b> acima do grid (Fem · Misto · Masc centralizado), em vez de uma coluna solta.</li>' +
+        '<li><b>🎯 Tie-break explicado:</b> o resumo do torneio agora diz <b>onde</b> o tie-break entra (5-5 ou 6-6), e o botão do grupo do WhatsApp aparece já no raio padrão.</li>' +
+        '<li><b>📱 App iOS reconectado:</b> corrigida a conversa do app iOS com a nuvem (CORS <code>capacitor://</code>) — login e dados voltam a funcionar no aplicativo.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🏆 v1.4 — Eliminatórias com repescagem redondas, do sorteio ao campeão <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

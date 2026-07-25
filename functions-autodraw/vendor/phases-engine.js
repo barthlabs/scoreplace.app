@@ -898,47 +898,49 @@
     var n = pool.length;
     var pow2 = n > 0 && (n & (n - 1)) === 0;
     if (resolution === 'playin' && n > 2 && !pow2) {
-      // DUPLA ELIMINATÓRIA de verdade fora de pow2: TODOS jogam a repescagem R1 (round 0)
-      // e NINGUÉM é eliminado na 1ª rodada. Os g=floor(n/2) vencedores + os melhores
-      // derrotados sobem pra chave superior de T (=pow2 acima dos vencedores); os demais
-      // derrotados CAEM na chave inferior. O upper R2+, a chave inferior (com todos os
-      // derrotados) e a grande final são montados por _buildRepechageDoubleElim, que lê
-      // esta repescagem R1. Aqui só a R1 + os metadados. Ver project_dupla_elim_repechage.
-      var g = Math.floor(n / 2);
-      var hasSat = (n % 2) === 1;                          // n ímpar → 1 dupla é a "ímpar" da R1 sup
-      var satTeam = hasSat ? pool[n - 1] : null;
-      var playing = hasSat ? pool.slice(0, n - 1) : pool.slice();
-      var T = 1; while (T * 2 <= n) T *= 2;                // maior pow2 <= n (=chave superior). MESMA base
-                                                            // do single-elim (genTierBracket): a ímpar joga
-                                                            // a R1 sup, NÃO cai direto pra chave inferior.
-      var repR1 = [];
-      for (var gi = 0; gi < g; gi++) {
-        var ra = playing[gi], rb = playing[playing.length - 1 - gi];
-        repR1.push({
-          id: idPrefix + '-rep' + gi, round: 0, bracket: 'upper', isPhaseRepR1: true,
-          p1: ra.displayName, p2: rb.displayName, team1Obj: ra, team2Obj: rb,
-          p1Seed: gi, p2Seed: (playing.length - 1 - gi), winner: null
+      // ── PLAY-IN CLÁSSICO (planilha do dono, project_bye_rep_auto_resolution) ──────────────
+      // Reduz a chave SUPERIOR pra P_lo (maior pow2 ≤ n) via uma rodada preliminar (round 0)
+      // entre os PIORES semeados. Os `direct` melhores sobem direto pra R1 sup; os vencedores
+      // do play-in completam a R1 sup; os PERDEDORES do play-in caem na chave INFERIOR (2ª vida,
+      // ninguém eliminado na 1ª — project_inclusion_philosophy_canon). A superior é pow2 LIMPA
+      // (P_lo) → halving sem rodada ímpar → SEM repFill/ressurreição → SEM double-book. A inferior
+      // usa BYE no ímpar (não repescagem — a repescagem recursiva foi substituída por esta
+      // resolução automática). O upper R2+, a inferior e a grande final saem no
+      // _buildRepechageDoubleElim, que lê o round 0 (play-in) + round 1 (R1 sup) daqui.
+      var P_lo = 1; while (P_lo * 2 <= n) P_lo *= 2;        // maior pow2 ≤ n = tamanho da chave superior
+      var reps = n - P_lo;                                   // jogos de play-in (round 0)
+      var direct = 2 * P_lo - n;                             // sobem direto (seeds 0..direct-1); direct+2·reps = n
+      // Play-in R0: `reps` jogos entre os 2·reps PIORES semeados (mirror interno do pool de baixo).
+      var playin = [];
+      for (var k = 0; k < reps; k++) {
+        var pa = pool[direct + k], pb = pool[n - 1 - k];
+        playin.push({
+          id: idPrefix + '-pi' + k, round: 0, bracket: 'upper', isPlayIn: true,
+          p1: pa.displayName, p2: pb.displayName, team1Obj: pa, team2Obj: pb,
+          p1Seed: (direct + k), p2Seed: (n - 1 - k), winner: null, scoreP1: null, scoreP2: null
         });
       }
-      // DUPLA ÍMPAR (n ímpar): cria o JOGO DA ÍMPAR na R1 SUPERIOR (não vai direto pro lower).
-      // Espelha o repGame do single-elim (genTierBracket): satTeam × repescado da PRÓPRIA R1 sup
-      // (o "primeiro que cairia" = melhor derrotado logo abaixo do corte, rank=directSpots). O builder
-      // liga o VENCEDOR à R2 sup e o PERDEDOR à chave inferior. Ver project_dupla_elim_repechage.
-      if (hasSat) {
-        var directSpots = (T - g) - 1;                     // melhores derrotados que sobem DIRETO; o próximo joga a ímpar
-        repR1.push({
-          id: idPrefix + '-repsat', round: 0, bracket: 'upper', isPhaseRepR1: true, isPhaseRepGame: true,
-          p1: satTeam.displayName, p2: 'TBD', team1Obj: satTeam, p1Seed: -1, winner: null,
-          repFill: [{ slot: 'p2', srcBracket: 'upper', srcRound: 0, rank: directSpots, tagRep: true }]
-        });
+      // R1 sup (round 1): P_lo/2 jogos, semeadura espelho 1×P_lo (seed s × seed P_lo-1-s).
+      var r1 = [];
+      for (var j = 0; j < P_lo / 2; j++) r1.push({
+        id: idPrefix + '-u' + j, round: 1, bracket: 'upper',
+        p1: 'TBD', p2: 'TBD', team1Obj: null, team2Obj: null,
+        p1Seed: j, p2Seed: (P_lo - 1 - j), winner: null, scoreP1: null, scoreP2: null
+      });
+      var _r1place = function (seed) { var jj = Math.min(seed, P_lo - 1 - seed); return { m: r1[jj], slot: (seed < P_lo / 2 ? 'p1' : 'p2') }; };
+      // Times diretos (seeds 0..direct-1) postos já na R1 sup.
+      for (var s = 0; s < direct; s++) {
+        var pt = pool[s], loc = _r1place(s);
+        loc.m[loc.slot] = pt.displayName; loc.m[loc.slot === 'p1' ? 'team1Obj' : 'team2Obj'] = pt;
       }
+      // Vencedores do play-in preenchem os slots restantes (seeds direct..P_lo-1) via nextMatchId.
+      playin.forEach(function (pg, kk) {
+        var seed = direct + kk, loc = _r1place(seed);
+        pg.nextMatchId = loc.m.id; pg.nextSlot = loc.slot;
+      });
       return {
-        matches: repR1, needsRepechageDoubleElim: true,
-        repMeta: {
-          g: g, T: T, promote: (T - g), toLower: (2 * g - T), n: n,
-          hasSat: hasSat, satName: satTeam ? satTeam.displayName : null, satObj: satTeam || null,
-          idPrefix: idPrefix
-        }
+        matches: playin.concat(r1), needsRepechageDoubleElim: true,
+        repMeta: { mode: 'playin', P_lo: P_lo, reps: reps, direct: direct, n: n, idPrefix: idPrefix }
       };
     }
     // BYE CANÔNICO fora de pow2 — MESMA lógica do single-elim (genTierBracket): completa até a
@@ -1764,7 +1766,9 @@
         // pergunta uma vez por transição (_promoteAsked).
         if (_lines.length >= 2 && !_nextCfg._promoteAsked && typeof window._showPhasePromotePanel === 'function' &&
             typeof window._phasePromoteHelps === 'function' && window._phasePromoteHelps(_lines)) {
-          t._phaseResInfo = { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) };
+          // v1.4.17: via _setPhaseResInfo — o contexto precisa sobreviver ao snapshot do
+          // Firestore (que substitui o objeto do torneio). Ver _reattachPhaseResInfo.
+          window._setPhaseResInfo(t, { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) });
           window._showPhasePromotePanel(tId);
           return;
         }
@@ -1776,7 +1780,7 @@
         // forçava play-in direto sem perguntar — pedido do dono: sempre perguntar.
         // Fallback só se o painel não existir: play-in (repescagem, mais inclusivo).
         if (typeof window.showUnifiedResolutionPanel === 'function') {
-          t._phaseResInfo = { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) };
+          window._setPhaseResInfo(t, { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) });
           window.showUnifiedResolutionPanel(tId);
           return;
         }
@@ -1863,6 +1867,33 @@
     // Corrige inclusive torneios JÁ sorteados com os ranks invertidos (sem precisar re-sortear).
     _rankRepFillsByAdvancement(all);
     var changed = false;
+    // AWAITS-LATE-PARTNER → BYE no fim da rodada (v1.4.41): "dupla vs a definir" de um tardio SOZINHO
+    // (criado por _growAdefinir quando não há bye). Quando os jogos REAIS da mesma chave+rodada
+    // fecham e ninguém preencheu o "a definir", o tardio avança de bye — a chave não trava. NUNCA puxa
+    // repescado (não é repFill) → sem double-book. O 2º tardio já teria preenchido via _fillOpenAdefinir.
+    (function () {
+      var _emp = function (v) { return !v || v === 'TBD' || v === 'BYE (Avança Direto)' || /a definir/i.test(String(v)); };
+      all.forEach(function (g) {
+        if (!g || !g.awaitsLatePartner || g.winner) return;
+        var realSlot = !_emp(g.p1) ? 'p1' : (!_emp(g.p2) ? 'p2' : null);
+        var byeSlot = realSlot === 'p1' ? 'p2' : 'p1';
+        if (!realSlot || !_emp(g[byeSlot])) return;
+        var br = g.bracket, rd = (typeof g.round === 'number') ? g.round : 1;
+        var reais = all.filter(function (m) { return m && m.bracket === br && ((typeof m.round === 'number') ? m.round : 1) === rd && !m.isExtra && !m.isPhaseRepGame && !_emp(m.p1) && !_emp(m.p2); });
+        if (!reais.length || !reais.every(function (m) { return !!m.winner; })) return;   // rodada ainda aberta
+        g[byeSlot] = 'BYE (Avança Direto)'; g.isBye = true; g.winner = g[realSlot]; delete g.awaitsLatePartner;
+        if (g.nextMatchId && g.nextSlot) {
+          var _nx = all.filter(function (x) { return x && x.id === g.nextMatchId; })[0];
+          if (_nx) {
+            var _o = (realSlot === 'p1') ? g.team1Obj : g.team2Obj, _u = ((realSlot === 'p1') ? g.team1Uids : g.team2Uids) || [];
+            _nx[g.nextSlot] = g[realSlot];
+            if (g.nextSlot === 'p1') { _nx.team1Obj = _o; _nx.team1Uids = _u.slice(); _nx.p1Uid = (_u.length === 1 ? _u[0] : null); }
+            else { _nx.team2Obj = _o; _nx.team2Uids = _u.slice(); _nx.p2Uid = (_u.length === 1 ? _u[0] : null); }
+          }
+        }
+        changed = true;
+      });
+    })();
     all.forEach(function (m) {
       if (!m || !Array.isArray(m.repFill) || !m.repFill.length) return;
       var keep = [];
@@ -1899,11 +1930,47 @@
           // Derrotado que cai na chave INFERIOR é fluxo normal da dupla eliminatória → SEM tag.
           // Regra do dono. slot.tagRep marca as vagas que sobem.
           if (slot.tagRep) { if (slot.slot === 'p1') m.p1FromRepechage = true; else m.p2FromRepechage = true; }
+          // VACÂNCIA (repescagem da SUPERIOR): quando um perdedor da chave superior SOBE de volta
+          // pra superior (rep no ímpar), ele NÃO cai na inferior. O drop já pôs o nome dele num slot
+          // inferior — libera esse slot pra não ficar vivo nos dois lugares (double-book). O jogo
+          // inferior resolve com o que sobrar (BYE). Guardado a srcBracket==='upper' → NÃO toca os
+          // fluxos atuais (que só repescam da inferior). Regra do dono: "sobe e deixa o slot vazio".
+          if (slot.tagRep && slot.srcBracket === 'upper') {
+            // Acha o repescado ONDE ELE ESTIVER na inferior (não só no slot do drop original — ele
+            // pode já ter avançado uma rodada antes da repescagem disparar) e libera essa vaga. O
+            // jogo inferior resolve com quem sobrar (BYE). Sem isso = vivo nos dois = double-book.
+            all.forEach(function (_lm) {
+              if (!_lm || _lm.winner || _lm.bracket !== 'lower') return;
+              if (_lm.p1 === pick.name && _lm.p2 !== pick.name) { _lm.p1 = 'BYE (Avança Direto)'; _lm.team1Obj = null; }
+              else if (_lm.p2 === pick.name && _lm.p1 !== pick.name) { _lm.p2 = 'BYE (Avança Direto)'; _lm.team2Obj = null; }
+            });
+          }
           changed = true;
         } else keep.push(slot);
       });
       m.repFill = keep;
     });
+    // BYE pendente resolvido no fim (ex.: vaga liberada pela vacância da repescagem-superior, onde
+    // o repescado subiu e deixou o slot inferior vazio). Jogo com um lado real + outro BYE e sem
+    // winner → avança o real e propaga pro nextMatchId. Loop até estabilizar (um bye pode preencher
+    // o slot seguinte, que vira outro bye). Idempotente; não toca awaitsLatePartner (já resolvido acima).
+    var _byeChg = true, _bg = 0;
+    while (_byeChg && _bg++ < 100) {
+      _byeChg = false;
+      all.forEach(function (m) {
+        if (!m || m.winner || m.awaitsLatePartner) return;
+        var b1 = (m.p1 === 'BYE (Avança Direto)'), b2 = (m.p2 === 'BYE (Avança Direto)');
+        if (b1 === b2) return;
+        var rs = b1 ? 'p2' : 'p1', rv = m[rs];
+        if (!rv || rv === 'TBD' || rv === 'BYE (Avança Direto)') return;
+        m.winner = rv; m.isBye = true;
+        if (m.nextMatchId && m.nextSlot) {
+          var _nx3 = all.filter(function (x) { return x && x.id === m.nextMatchId; })[0];
+          if (_nx3) { _nx3[m.nextSlot] = rv; var _o3 = (rs === 'p1') ? m.team1Obj : m.team2Obj; if (m.nextSlot === 'p1') _nx3.team1Obj = _o3; else _nx3.team2Obj = _o3; }
+        }
+        _byeChg = true; changed = true;
+      });
+    }
     return changed;
   }
 

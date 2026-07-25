@@ -56,61 +56,64 @@ function ondeEntrou(t, p) {
   const m = all(t).filter(x => x && (x.p1 === alvo || x.p2 === alvo))[0];
   return m ? { bracket: m.bracket || 'upper', round: m.round } : null;
 }
+const isEmpty2 = v => !v || v === 'TBD' || /^bye/i.test(String(v).trim()) || /a definir/i.test(String(v));
+function liveDouble(t) {
+  const slots = {};
+  all(t).filter(m => !m.winner).forEach(m => ['p1', 'p2'].forEach(s => { const v = m[s]; if (v && !isEmpty2(v)) (slots[v] = slots[v] || []).push(m.id); }));
+  return Object.keys(slots).find(v => slots[v].length > 1);
+}
 
-console.log('── a porta do tardio: 1ª superior até a 2ª superior começar, depois 1ª inferior ──');
+console.log('── a porta do tardio (estrutura nova): fresca=re-semeia; 2ª sup jogada=preenche bye ──');
 
-// (1) 2ª sup AINDA SEM RESULTADO ⇒ entra na 1ª SUPERIOR
+// (1) chave FRESCA (2ª sup sem resultado) ⇒ re-semeia pro N+1, o tardio ENTRA (via integrateLateEntries)
 (function () {
   const t = mkT(12, true);
-  const rSup = rodadaBase(t, 'upper');
   const n = chegaTardio(t, 100);
-  const colocados = W._placeLateEntriesSurgically(t);
-  ok(colocados > 0, 'com a 2ª sup sem resultado, o tardio É colocado (got ' + colocados + ')');
+  const r = dc.integrateLateEntries(t, {});
+  ok(r && r.changed, 'com a chave fresca, a integração AGE [' + JSON.stringify(r) + ']');
   const onde = ondeEntrou(t, n);
-  ok(!!onde, 'o tardio aparece na chave');
-  ok(onde && (onde.bracket === 'upper' || onde.bracket === 'main'), 'entra na chave SUPERIOR (got ' + (onde && onde.bracket) + ')');
-  ok(onde && onde.round === rSup, 'entra na 1ª rodada da superior (got R' + (onde && onde.round) + ', esperado R' + rSup + ')');
+  ok(!!onde, 'o tardio aparece na chave (re-semeado pro N+1)');
+  ok(!liveDouble(t), 'sem double-book');
 })();
 
-// (2) PRIMEIRO resultado lançado na 2ª sup ⇒ a porta da superior FECHA; entra na 1ª INFERIOR
+// (2) 1ª sup JOGADA + 1º resultado na 2ª sup ⇒ door-aware: se entra, é na INFERIOR (nunca reabre a
+// superior). Sem bye materializado na inferior o tardio fica na espera (suplente) — seguro. O que
+// NUNCA pode: aparecer na SUPERIOR (reabrir round encerrado) ou double-book. project_late_entry_door_upper_then_lower.
 (function () {
   const t = mkT(12, true);
   const rSup = rodadaBase(t, 'upper');
-  const rInf = rodadaBase(t, 'lower');
-  // joga a 1ª superior inteira e lança UM resultado na 2ª superior
   doBracket(t, 'upper').filter(m => m.round === rSup).forEach(m => {
-    if (m.winner || !m.p1 || !m.p2) return;
+    if (m.winner || !m.p1 || !m.p2 || m.isBye) return;
     m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = 3;
     try { W._advanceWinner(t, m); } catch (e) {}
   });
-  const segunda = doBracket(t, 'upper').filter(m => m.round === rSup + 1 && m.p1 && m.p2 && m.p1 !== 'TBD' && m.p2 !== 'TBD')[0];
+  const segunda = doBracket(t, 'upper').filter(m => m.round === rSup + 1 && m.p1 && m.p2 && !isEmpty2(m.p1) && !isEmpty2(m.p2))[0];
   ok(!!segunda, 'existe jogo jogável na 2ª superior pra lançar o 1º resultado');
-  if (segunda) {
-    segunda.winner = segunda.p1; segunda.scoreP1 = 6; segunda.scoreP2 = 4;
-    try { W._advanceWinner(t, segunda); } catch (e) {}
-  }
+  if (segunda) { segunda.winner = segunda.p1; segunda.scoreP1 = 6; segunda.scoreP2 = 4; try { W._advanceWinner(t, segunda); } catch (e) {} }
 
   const n = chegaTardio(t, 200);
-  W._placeLateEntriesSurgically(t);
+  dc.integrateLateEntries(t, {});
   const onde = ondeEntrou(t, n);
-  ok(!!onde, 'o tardio continua entrando (a porta não é o fim da linha, muda de lugar)');
-  ok(onde && onde.bracket === 'lower', 'com resultado na 2ª sup, entra na chave INFERIOR (got ' + (onde && onde.bracket) + ')');
-  ok(onde && onde.round === rInf, 'entra na 1ª rodada da inferior (got R' + (onde && onde.round) + ', esperado R' + rInf + ')');
-  // e NÃO pode ter sido enfiado na superior
   const naSup = doBracket(t, 'upper').some(m => m && (m.p1 === n.displayName || m.p2 === n.displayName));
-  ok(!naSup, 'o tardio NÃO aparece na superior depois que a 2ª sup começou');
+  ok(!naSup, 'o tardio NÃO reabre a chave SUPERIOR depois que a 2ª sup começou');
+  ok(!onde || onde.bracket === 'lower', 'se entra, é na chave INFERIOR (got ' + JSON.stringify(onde) + ')');
+  ok(!liveDouble(t), 'sem double-book');
 })();
 
-// (3) jogo já decidido nunca é tocado — nem antes nem depois da porta fechar
+// (3) jogo REAL já disputado nunca é tocado (após jogar a 1ª sup e integrar um tardio)
 (function () {
   const t = mkT(12, true);
   const rSup = rodadaBase(t, 'upper');
-  const antes = doBracket(t, 'upper').filter(m => m.round === rSup).map(m => m.id + '|' + m.p1 + '|' + m.p2).sort();
+  doBracket(t, 'upper').filter(m => m.round === rSup).forEach(m => {
+    if (m.winner || !m.p1 || !m.p2 || m.isBye) return;
+    m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = 2; try { W._advanceWinner(t, m); } catch (e) {}
+  });
+  const reaisAntes = all(t).filter(m => m.winner && !m.isBye && !isEmpty2(m.p1) && !isEmpty2(m.p2)).map(m => m.id + '|' + m.winner + '|' + m.scoreP1 + '-' + m.scoreP2).sort();
   chegaTardio(t, 300);
-  W._placeLateEntriesSurgically(t);
-  const depois = doBracket(t, 'upper').filter(m => m.round === rSup).map(m => m.id + '|' + m.p1 + '|' + m.p2).sort();
-  const sumiu = antes.filter(x => depois.indexOf(x) < 0);
-  ok(sumiu.length === 0, 'nenhum confronto da 1ª sup foi alterado pelo tardio (sumiram ' + sumiu.length + ')');
+  dc.integrateLateEntries(t, {});
+  const reaisDepois = all(t).filter(m => m.winner && !m.isBye && !isEmpty2(m.p1) && !isEmpty2(m.p2)).map(m => m.id + '|' + m.winner + '|' + m.scoreP1 + '-' + m.scoreP2).sort();
+  const sumiu = reaisAntes.filter(x => reaisDepois.indexOf(x) < 0);
+  ok(sumiu.length === 0, 'nenhum jogo REAL disputado foi alterado pelo tardio (sumiram ' + sumiu.length + ')');
 })();
 
 // (4) Eliminatória Simples: sem chave inferior, a porta fecha e ninguém é enfiado na superior

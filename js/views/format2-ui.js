@@ -100,7 +100,12 @@
     var _explicit = ['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) >= 0;
     var _inh = (function () { var el = document.getElementById('late-enrollment'); var val = el && el.value; return (['closed', 'standby', 'expand'].indexOf(val) >= 0) ? val : 'expand'; })();
     var v = _explicit ? e.lateEnrollment : _inh;
-    var isClosed = v === 'closed', isExpand = v === 'expand';
+    var isClosed = v === 'closed';
+    // "Novos Confrontos" é INDEPENDENTE de "Abertas" (cânone do dono, v1.3.108) — na fase inicial
+    // já era; aqui na ELIMINATÓRIA ainda estava amarrado ao lateEnrollment ('expand') e a linha
+    // sumia quando fechava. Agora tem flag PRÓPRIA (e.newMatchups) e as duas linhas convivem.
+    var _nmInh = (function () { var el = document.getElementById('new-matchups'); if (el) return el.value === 'true'; return _inh === 'expand'; })();
+    var isExpand = (e.newMatchups === true || e.newMatchups === false) ? e.newMatchups : _nmInh;
     var onRow = 'border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);';
     var offRow = 'border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);';
     function _tg(checked, on) {
@@ -116,7 +121,9 @@
       T(isClosed ? 'create.lateEnrollClosed' : 'create.lateEnrollOpen'),
       T(isClosed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc'),
       _tg(isClosed, 'window._f2ElimLateMaster(this.checked)'));
-    var confRow = isClosed ? '' : ('<div style="margin-top:8px;">' + _row(isExpand, isExpand ? '➕' : '🪑',
+    // SEMPRE renderizada (mesmo com inscrições fechadas): suplente/dupla formada entra na chave
+    // na hora independentemente de aceitar NOVOS inscritos.
+    var confRow = ('<div style="margin-top:8px;">' + _row(isExpand, isExpand ? '➕' : '🪑',
       T(isExpand ? 'create.lateEnrollExpand' : 'create.lateEnrollSuplentesOnly'),
       T(isExpand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc'),
       _tg(isExpand, 'window._f2ElimLateConf(this.checked)')) + '</div>');
@@ -175,10 +182,32 @@
       fld('Nº de rodadas', '<input id="f2-sched-n" type="number" min="1" max="30" value="' + (r.n || '') + '" placeholder="—" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;">') +
     '</div>';
     var tgl = '<div style="margin-top:14px;">' + _toggleRight('Sortear manualmente', manual, 'window._f2SchedManual(this.checked)') + '</div>';
+    // v1.4.12/15 — "Deixar inscritos ficarem de fora (Ativado/Desativado)". O controle existia
+    // no #liga-fields do form antigo e SUMIU quando o configurador novo (format2) assumiu a
+    // config da fase. Mora aqui porque é decisão da MESMA fase que o agendamento define.
+    // Mantém o id 'liga-allow-self-deactivation' — o save/load do form lê por ele.
+    // RODADA ÚNICA (n=1) → vem DESLIGADO por padrão: não há próximo sorteio pra ficar de fora.
+    // ⚠️ É DEFAULT, NÃO CADEADO (v1.4.15): o dono pediu a configuração desativada, não o
+    // controle travado — travar foi invenção minha. O organizador liga se quiser.
+    var _oneRound = (parseInt(r.n, 10) || 0) === 1;
+    var _adOn = (r.allowSelfDeactivation != null) ? (r.allowSelfDeactivation !== false) : !_oneRound;
+    var _adTgl = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">' +
+      '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;font-size:0.9rem;color:var(--text-main);width:100%;">' +
+        '<span>Deixar inscritos ficarem de fora <span style="color:var(--text-muted);font-size:0.78rem;">(Ativado/Desativado)</span></span>' +
+        '<span class="toggle-switch"><input type="checkbox" id="liga-allow-self-deactivation"' +
+          (_adOn ? ' checked' : '') +
+          ' onchange="window._f2AllowSelfDeact(this.checked)"><span class="toggle-slider"></span></span>' +
+      '</label>' +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.4;">' +
+        'Cada inscrito pode se marcar como <b>Desativado</b> pra ficar de fora de um sorteio. ' +
+        'Desligue pra que ninguém fique de fora — todos sempre <b>Ativados</b> e o controle some dos cards.' +
+        (_oneRound ? ' <span style="color:#94a3b8;">(Rodada única: já vem desligado, porque não há próximo sorteio pra ficar de fora.)</span>' : '') +
+      '</div>' +
+    '</div>';
     var note = '<div id="f2-sched-note" style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">' + _f2SchedNote(r) + '</div>';
     return '<div style="margin-top:14px;padding:12px 13px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);">' +
       '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:12px;">Agendamento dos sorteios</div>' +
-      row1 + row2 + tgl + note + '</div>';
+      row1 + row2 + tgl + _adTgl + note + '</div>';
   }
 
   // Conta PESSOAS inscritas (dupla-entry = 2; senão 1). project_count_people_not_entries.
@@ -650,6 +679,10 @@
   // manual). A data re-renderiza (recalcula o intervalo sugerido e o default manual/auto). Hora
   // e intervalo NÃO re-renderizam (preserva foco); editar o intervalo desliga o auto-sugerido.
   window._f2SchedManual = function (checked) { if (!S) return; S.cfg.rodadas.drawManual = !!checked; _norm(); _rerender(); };
+  // v1.4.12/15: autodesativação dos inscritos (id liga-allow-self-deactivation, lido pelo save
+  // do form). Sem _rerender: o toggle é estado puro do modelo, e re-renderizar aqui roubaria o
+  // foco do bloco. Grava a escolha EXPLÍCITA — que vence o default de rodada única (format2.js).
+  window._f2AllowSelfDeact = function (checked) { if (!S) return; S.cfg.rodadas.allowSelfDeactivation = !!checked; };
   // A data/hora do 1º sorteio é TAMBÉM o início da fase (pedido do dono): espelha nos
   // campos #tourn-start-date/#tourn-start-time e dispara os recálculos do form.
   function _mirrorPhaseStart() {
@@ -811,14 +844,18 @@
   // Fechadas; master OFF preserva o conf (expand/standby). conf só vale com inscrição aberta.
   window._f2ElimLateMaster = function (closedOn) {
     if (!S) return; var e = S.cfg.eliminatoria;
+    // Só mexe na INSCRIÇÃO. "Novos Confrontos" (e.newMatchups) NÃO é tocado aqui — são ortogonais.
     if (closedOn) e.lateEnrollment = 'closed';
-    else e.lateEnrollment = (e.lateEnrollment === 'expand') ? 'expand' : 'standby';
+    else e.lateEnrollment = (e.newMatchups === true) ? 'expand' : 'standby';
     _norm(); _rerender();
   };
   window._f2ElimLateConf = function (expandOn) {
     if (!S) return; var e = S.cfg.eliminatoria;
-    if (e.lateEnrollment === 'closed') return; // conf irrelevante quando fechada
-    e.lateEnrollment = expandOn ? 'expand' : 'standby';
+    // Vale MESMO com as inscrições fechadas (o suplente que já está na espera entra na chave).
+    e.newMatchups = !!expandOn;
+    // lateEnrollment segue só a inscrição; mantém 'expand'/'standby' coerente quando ABERTA
+    // (compat com quem lê o valor antigo), sem nunca reabrir uma inscrição fechada.
+    if (e.lateEnrollment !== 'closed') e.lateEnrollment = expandOn ? 'expand' : 'standby';
     _norm(); _rerender();
   };
   window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
@@ -862,7 +899,9 @@
   };
   window._f2ApplyPage = function () {
     var t = S.t;
-    var out = window.FORMAT2.compileToPhases(S.cfg, { sport: S.sport, resultEntry: t.resultEntry || ['organizer'] });
+    // preserva a política de inscrição/novos confrontos JÁ escolhida no torneio (o painel da fase
+    // inicial vive no form de criar/editar, não nesta página) — senão 'inherit' cairia no default.
+    var out = window.FORMAT2.compileToPhases(S.cfg, { sport: S.sport, resultEntry: t.resultEntry || ['organizer'], lateEnrollment: t.lateEnrollment, newMatchups: t.newMatchups });
     Object.assign(t, out.topLevel);
     t.phases = out.phases; t.fmt2 = S.cfg;
     if (t.format === 'Fase de Grupos') { t.ligaRoundFormat = 'standard'; t.ligaDrawMode = 'standard'; }

@@ -182,6 +182,12 @@ window.FirestoreDB = {
       if (Array.isArray(cleanData.standbyParticipants)) cleanData.standbyParticipants = window._stripStoredNamesForUidEntries(cleanData.standbyParticipants);
       if (Array.isArray(cleanData.waitlist)) cleanData.waitlist = window._stripStoredNamesForUidEntries(cleanData.waitlist);
     }
+    // v1.4.30: CHOKE POINT da cura de rótulo cru — "Jogador sem perfil (…)" gravado em
+    // m.p1/m.p2/team1/team2 por corrida de cache no sorteio/integração é reescrito pro
+    // nome vivo em TODO save que passa aqui com o perfil resolvível. Best-effort.
+    try {
+      if (typeof window !== 'undefined' && typeof window._cureRawMatchLabels === 'function') window._cureRawMatchLabels(cleanData);
+    } catch (_lblErr) { /* cura nunca derruba o save */ }
     // v2.6.74: nextDrawAt — ms epoch do próximo sorteio devido (ver _nextOwedDrawMs).
     // É o índice que o autoDraw do servidor consulta com where('nextDrawAt','<=',now)
     // pra disparar perto da hora exata sem varrer a coleção toda. Recalculado em TODO
@@ -1418,10 +1424,18 @@ window.FirestoreDB = {
   async queueNotifEmail(emails, level, message, opts) {
     if (!this.db || !emails || !emails.length) return;
     if (window.SCOREPLACE_ENV === 'staging') { try { window._warn && window._warn('[staging] notif e-mail suprimido (queueNotifEmail)'); } catch(_e){} return; }
+    opts = opts || {};
+    // v1.4.12 — BACKSTOP DO SANDBOX na ÚLTIMA porta antes do e-mail. O killswitch principal
+    // é o _sendUserNotification/_notifyTournamentParticipants; este é a rede embaixo dele
+    // (mesmo espírito da supressão de staging acima). Um e-mail de SB que vaza chega em gente
+    // que nem sabe que o SB existe. Ver [[project_sandbox_tournament]].
+    if (/^\(SB\)/.test(String(opts.tournamentName || '')) || /_sb(\b|$)/.test(String(opts.tournamentUrl || ''))) {
+      try { window._warn && window._warn('[sandbox] notif e-mail suprimido (queueNotifEmail)'); } catch (_e) {}
+      return;
+    }
     var WINDOWS = { fundamental: 5, important: 15, all: 30 }; // minutos
     var mins = (WINDOWS[level] != null) ? WINDOWS[level] : 30;
     var now = Date.now();
-    opts = opts || {};
     try {
       for (var i = 0; i < emails.length; i++) {
         if (!emails[i]) continue;

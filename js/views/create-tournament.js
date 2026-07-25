@@ -4,6 +4,16 @@
 // e pro _casualDefaults (casual). Dependência fixa (sem fallback): se não carregou, estoura.
 window._sportScoringDefaults = window._sportScoringDefaultsMap();
 
+// v1.4.12: o toggle "Deixar inscritos ficarem de fora" existe em DOIS lugares — o bloco novo
+// do configurador (format2-ui, dentro de "Agendamento dos sorteios") e o #liga-fields legado.
+// Nunca podem ter o MESMO id (getElementById devolveria um deles ao acaso). Fonte única de
+// lookup: o do configurador vence; o legado é fallback.
+window._allowSelfDeactEl = function () {
+  return document.getElementById('liga-allow-self-deactivation') ||
+         document.getElementById('liga-allow-self-deactivation-legacy');
+};
+
+
 function setupCreateTournamentModal() {
   // ═══ RENDER CANÔNICA DE CONFIG DE FASE (v2.6.61) — definida ANTES do template ═══
   // v4.4.x (Camada 2): SÓ existe a Fase 1 (idx 0). O ramo idx>=1 (construtor de fases 2+ /
@@ -526,7 +536,7 @@ function setupCreateTournamentModal() {
                      achava). Controla o canon do "Ativado/Desativado" que aparece nos cards. -->
                 <div class="toggle-row" style="margin-bottom:0.75rem;">
                   <div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">Deixar inscritos ficarem de fora (Ativado/Desativado)</span><div class="toggle-desc">Cada inscrito pode se marcar como <b>Desativado</b> pra ficar de fora de um sorteio. Desligue pra que ninguém fique de fora — todos sempre <b>Ativados</b> e o controle some dos cards.</div></div></div>
-                  <label class="toggle-switch"><input type="checkbox" id="liga-allow-self-deactivation" checked><span class="toggle-slider"></span></label>
+                  <label class="toggle-switch"><input type="checkbox" id="liga-allow-self-deactivation-legacy" checked><span class="toggle-slider"></span></label>
                 </div>
                 <!-- v2.6.56: "Temporada contínua" removida — início/fim da fase já definem a temporada
                      (t.temporada=true por padrão no save; sem elemento). -->
@@ -4668,7 +4678,7 @@ function setupCreateTournamentModal() {
     var _balLoad = document.getElementById('liga-balanced-toggle');
     if (_balLoad) _balLoad.checked = (t.equilibrado !== false);
     // v2.7.38: permitir auto-desativação (default true).
-    var _adLoad = document.getElementById('liga-allow-self-deactivation');
+    var _adLoad = window._allowSelfDeactEl();
     if (_adLoad) _adLoad.checked = (t.allowSelfDeactivation !== false);
     if (t.clusterSize) {
       var _clusterLoad = document.getElementById('liga-cluster-size');
@@ -5209,7 +5219,7 @@ function setupCreateTournamentModal() {
           // v3.0.x: se o toggle NÃO está no DOM (save de um contexto que não renderizou a
           // config), PRESERVA o valor já gravado em vez de resetar pra true — senão a
           // config "se perdia" num save parcial. Só usa o default true se for criação nova.
-          var _adEl = document.getElementById('liga-allow-self-deactivation');
+          var _adEl = window._allowSelfDeactEl();
           if (_adEl) {
             tourData.allowSelfDeactivation = !!_adEl.checked;
           } else {
@@ -5334,7 +5344,7 @@ function setupCreateTournamentModal() {
         }
         try {
           var _f2sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || tourData.sport;
-          var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry, lateEnrollment: tourData.lateEnrollment });
+          var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry, lateEnrollment: tourData.lateEnrollment, newMatchups: tourData.newMatchups });
           Object.assign(tourData, _f2out.topLevel);
           tourData.phases = _f2out.phases;
           tourData.fmt2 = _f2cfg;
@@ -6612,7 +6622,7 @@ window._prefillFromTemplate = function(tpl) {
   if (tpl.gruposEqualOnly !== undefined) _setC('grupos-equal-only', tpl.gruposEqualOnly);
   if (tpl.gruposSeedVip !== undefined) _setC('grupos-seed-vip', tpl.gruposSeedVip);
   if (tpl.gruposSeedCategory !== undefined) _setC('grupos-seed-category', tpl.gruposSeedCategory);
-  if (tpl.allowSelfDeactivation !== undefined) _setC('liga-allow-self-deactivation', tpl.allowSelfDeactivation);
+  if (tpl.allowSelfDeactivation !== undefined) { var _adTpl = window._allowSelfDeactEl(); if (_adTpl) _adTpl.checked = !!tpl.allowSelfDeactivation; }
   if (tpl.reiRainhaGroupsBy) _setV('reirainha-groups-by', tpl.reiRainhaGroupsBy);
   if (typeof window._f2MountInEditForm === 'function') { try { window._f2MountInEditForm(); } catch (e) {} }
   if (typeof window._renderGruposSuggestions === 'function') { try { window._renderGruposSuggestions(); } catch (e) {} }
@@ -7017,7 +7027,7 @@ window._saveCurrentFormAsTemplate = function() {
       // round-trips 100%. Fase 1 (nome) + toggles top-level completam.
       fmt2: (function () { try { return (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) { return null; } })(),
       phase1Name: (function () { var el = document.getElementById('phase1-name'); return el ? el.value.trim() : ''; })(),
-      allowSelfDeactivation: (function () { var el = document.getElementById('liga-allow-self-deactivation'); return el ? !!el.checked : true; })(),
+      allowSelfDeactivation: (function () { var el = window._allowSelfDeactEl(); return el ? !!el.checked : true; })(),
       gruposCount: parseInt(get('grupos-count')) || 4,
       gruposClassified: parseInt(get('grupos-classified')) || 2,
       gruposEqualOnly: getChecked('grupos-equal-only'),

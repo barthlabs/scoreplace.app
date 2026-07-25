@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.4';
+window.SCOREPLACE_VERSION = '1.5';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -67,6 +67,32 @@ window._dtrace = function (stage, extra) {
   } catch (_e3) {}
 };
 
+// O selo só era REMOVIDO dentro do próprio _dtrace — ou seja, só quando um NOVO evento de
+// sorteio acontecia. Saindo do sandbox pro dashboard ninguém mais chamava _dtrace, e o selo
+// FICAVA na tela por cima da dashboard (print do dono, v1.4.4). Agora a troca de rota limpa.
+// `_drawTraceRouteOk(hash)` é a decisão PURA (testável): fora de rota de torneio → fora;
+// em rota de torneio ainda não carregado → mantém (o doc chega async, não pisca à toa).
+window._drawTraceRouteOk = function (hash) {
+  var h = String(hash == null ? '' : hash).replace(/^#/, '');
+  var m = h.match(/^(tournaments|bracket|pre-draw|participants|rules|analise|categorias)\/([^/?#]+)/);
+  if (!m) return false;                                   // dashboard e qualquer outra tela
+  var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(m[2]) : null;
+  if (!t) return true;                                    // ainda carregando → não remove
+  return t.isSandbox === true;                            // torneio conhecido: só SB mantém
+};
+window._syncDrawTraceBadge = function () {
+  try {
+    if (typeof document === 'undefined') return;
+    var b = document.getElementById('sp-draw-trace');
+    if (b && !window._drawTraceRouteOk(window.location && window.location.hash)) b.remove();
+  } catch (_e) {}
+};
+try {
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('hashchange', function () { window._syncDrawTraceBadge(); });
+  }
+} catch (_eHc) {}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // VERSÃO EXIGIDA DA EXTENSÃO letzplay — FONTE ÚNICA (v1.1.19)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,7 +108,7 @@ window._dtrace = function (stage, extra) {
 // Auto-atualização: quando a extensão estiver publicada na Chrome Web Store, o
 // Chrome atualiza sozinho e este gate para de disparar. Enquanto não está, o gate
 // BLOQUEIA e pede a atualização manual pelo zip — de propósito.
-window.SP_EXT_VERSION = '1.39';
+window.SP_EXT_VERSION = '1.48';
 // O zip da versão exigida, servido pelo próprio site (fica na raiz do repo → GitHub Pages
 // entrega). Derivado de SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não
 // aceita, e a trava de deploy (scripts/check-ext-version.js) garante que o arquivo existe.
@@ -1966,6 +1992,45 @@ window._mergePresenceNoRegress = function (prevT, freshT) {
   } catch (e) { if (window._error) window._error('mergePresenceNoRegress', e); }
   return restored;
 };
+// ═══════════════════════════════════════════════════════════════════════════════════
+// CONTEXTO DA TRANSIÇÃO DE FASE (v1.4.17) — sobrevive ao snapshot do Firestore.
+//
+// BUG REAL (Confra, jul/2026): promover linha → painel de potência de 2 abre certo
+// (diag: phaseCtx:true) → clicar na opção disparava o SORTEIO DA FASE 0 e o alerta
+// "Sorteio já realizado. Refazer o sorteio apagará todos os resultados".
+//
+// CAUSA: `t._phaseResInfo` era estado SÓ DE MEMÓRIA, gravado no objeto do torneio. O
+// listener do Firestore faz `store.tournaments = tournaments` — SUBSTITUI todos os
+// objetos pelos docs frescos. Um snapshot chegando entre abrir o painel e clicar a
+// opção apagava o contexto; `_handleUnifiedOption` via `_phaseResInfo` falsy e caía no
+// ramo de INSCRIÇÃO (fase 0) em vez do ramo de TRANSIÇÃO DE FASE.
+//
+// CURA: o contexto mora num REGISTRO POR ID (fora do objeto) e é reancorado a cada
+// snapshot — mesmo padrão do window._pendingPresence. Todo `t._phaseResInfo` continua
+// funcionando pra quem LÊ; quem ESCREVE usa estes helpers.
+// ═══════════════════════════════════════════════════════════════════════════════════
+window._phaseResInfoById = window._phaseResInfoById || {};
+window._setPhaseResInfo = function (t, info) {
+  if (!t) return;
+  t._phaseResInfo = info;
+  window._phaseResInfoById[String(t.id)] = info;
+};
+window._clearPhaseResInfo = function (t) {
+  if (!t) return;
+  delete t._phaseResInfo;
+  delete window._phaseResInfoById[String(t.id)];
+};
+// Reancora o contexto nos docs frescos que o snapshot acabou de trazer.
+window._reattachPhaseResInfo = function (tournaments) {
+  var reg = window._phaseResInfoById || {};
+  if (!Object.keys(reg).length) return;
+  (tournaments || []).forEach(function (t) {
+    if (!t) return;
+    var info = reg[String(t.id)];
+    if (info) t._phaseResInfo = info;
+  });
+};
+
 window._reapplyPendingPresence = function (tournaments) {
   try {
     if (!window._pendingPresence || typeof window._idMapHas !== 'function') return;
@@ -3672,26 +3737,10 @@ window._resolveSideLive = function (t, sideStr, uidHint) {
 //   • t.monarchWaitlist     (map por categoria, ex {_default_:[...]}) — Rei/Rainha
 // _getWaitlist UNE os três numa lista única e deduplicada — é a ÚNICA forma
 // correta de LER a espera. Todo display/lógica deve passar por aqui.
-window._getWaitlist = function(t) {
-  if (!t) return [];
-  var out = [], seen = {};
-  function add(e) {
-    var nm = String(window._pName ? window._pName(e, '') : (typeof e === 'string' ? e : ((e && (e.displayName || e.name || e.email)) || ''))).trim();
-    if (!nm) return;
-    var k = nm.toLowerCase();
-    if (seen[k]) return; seen[k] = 1;
-    out.push((e && typeof e === 'object') ? e : { name: nm, displayName: nm });
-  }
-  if (Array.isArray(t.waitlist)) t.waitlist.forEach(add);
-  if (Array.isArray(t.standbyParticipants)) t.standbyParticipants.forEach(add);
-  if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object' && !Array.isArray(t.monarchWaitlist)) {
-    Object.keys(t.monarchWaitlist).forEach(function(cat) {
-      var arr = t.monarchWaitlist[cat];
-      if (Array.isArray(arr)) arr.forEach(add);
-    });
-  }
-  return out;
-};
+// _getWaitlist / _nameForms / _removeFromWaitlist / _clearAllWaitlists / _waitlistNameSet
+// foram EXTRAÍDOS pra js/views/waitlist-core.js (carregado antes deste arquivo) — o
+// servidor (Cloud Function integrateLateEntries) precisa das MESMAS funções e o store.js
+// não carrega lá. Ver waitlist-core.js.
 
 // ─── Inscrições durante a fase: regra CANÔNICA de "Novos Confrontos" (jun/2026) ───
 // Vale pra qualquer formato/modo de sorteio. Três peças ortogonais:
@@ -3744,68 +3793,6 @@ window._waitlistExpandPool = function(t, namesOnly) {
   return namesOnly ? pool.map(_nm) : pool;
 };
 
-// CANÔNICO: a lista de espera vive em 3 storages (waitlist + standbyParticipants +
-// monarchWaitlist por categoria). Toda vez que se RE-DERIVA a espera (reset, re-sorteio)
-// tem que limpar OS TRÊS — senão um deles vira resíduo e o painel (que lê os 3 via
-// _getWaitlist) mostra gente fantasma. Retorna TODAS as pessoas que estavam na espera
-// (deduplicadas, via _getWaitlist) pra quem precisar devolvê-las ao pool.
-window._clearAllWaitlists = function(t) {
-  if (!t) return [];
-  var collected = window._getWaitlist(t);
-  t.waitlist = [];
-  t.standbyParticipants = [];
-  t.monarchWaitlist = {};
-  return collected;
-};
-
-// Conjunto de nomes (lowercase) na espera — inclui membros de duplas "A / B".
-window._waitlistNameSet = function(t) {
-  var s = {};
-  window._getWaitlist(t).forEach(function(e) {
-    var nm = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim().toLowerCase();
-    if (!nm) return;
-    if (nm.indexOf('/') !== -1) nm.split('/').forEach(function(x) { var k = x.trim(); if (k) s[k] = 1; });
-    else s[nm] = 1;
-  });
-  return s;
-};
-
-
-// Formas do nome de um participante/entrada (cru displayName/name/email + formatado
-// via _pName), em lowercase. Usado pra casar nomes que aparecem em formas diferentes
-// (ex.: telefone cru "+5511981933576" vs formatado "+55 (11) 98193-3576").
-window._nameForms = function(e) {
-  var forms = [];
-  if (window._pName) { var f = String(window._pName(e, '') || ''); if (f) forms.push(f); }
-  if (e && typeof e === 'object') {
-    ['displayName', 'name', 'email'].forEach(function(k) { if (e[k]) forms.push(String(e[k])); });
-  } else if (typeof e === 'string') { forms.push(e); }
-  return forms.map(function(s) { return s.trim().toLowerCase(); }).filter(Boolean);
-};
-
-// Remove um nome de TODOS os storages da espera (waitlist + standbyParticipants +
-// monarchWaitlist por categoria). Casa nome cru/formatado. Retorna true se removeu algo.
-window._removeFromWaitlist = function(t, name) {
-  if (!t || !name) return false;
-  var target = String(name).trim().toLowerCase();
-  var removed = false;
-  function matches(e) { return window._nameForms(e).indexOf(target) !== -1; }
-  if (Array.isArray(t.waitlist)) {
-    var b = t.waitlist.length; t.waitlist = t.waitlist.filter(function(e) { return !matches(e); });
-    if (t.waitlist.length < b) removed = true;
-  }
-  if (Array.isArray(t.standbyParticipants)) {
-    var b2 = t.standbyParticipants.length; t.standbyParticipants = t.standbyParticipants.filter(function(e) { return !matches(e); });
-    if (t.standbyParticipants.length < b2) removed = true;
-  }
-  if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object' && !Array.isArray(t.monarchWaitlist)) {
-    Object.keys(t.monarchWaitlist).forEach(function(cat) {
-      var arr = t.monarchWaitlist[cat];
-      if (Array.isArray(arr)) { var b3 = arr.length; t.monarchWaitlist[cat] = arr.filter(function(e) { return !matches(e); }); if (t.monarchWaitlist[cat].length < b3) removed = true; }
-    });
-  }
-  return removed;
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // v2.7.68: TRAVA DE SCROLL DE FUNDO (global) — quando um overlay/modal de tela
@@ -4248,6 +4235,26 @@ window._fbAction = function (key, field, val, noRerender) {
     }
     if (opts.onChange) { try { (new Function(opts.onChange))(); } catch (e) {} }
 };
+// v1.4.14: digitar na busca — mostra/esconde o ✕ de limpar e repassa pro _fbAction.
+// Existe pra que o toggle do ✕ NÃO precise de re-render da barra (noRerender=true
+// preserva o foco e o cursor de quem está digitando).
+window._fbSearchInput = function (key, el) {
+    var opts = window._filterBarCfg[key] || {};
+    var x = opts.searchId && document.getElementById(opts.searchId + '-clear');
+    if (x) x.style.display = (el && el.value) ? '' : 'none';
+    window._fbAction(key, 'search', el ? el.value : '', true);
+};
+// ✕ do campo de busca: limpa, some, devolve o foco (o dono já vai digitar outra coisa)
+// e reaplica o filtro via o MESMO onChange da barra.
+window._fbClearSearch = function (key) {
+    var opts = window._filterBarCfg[key] || {};
+    var el = opts.searchId && document.getElementById(opts.searchId);
+    if (el) el.value = '';
+    var x = opts.searchId && document.getElementById(opts.searchId + '-clear');
+    if (x) x.style.display = 'none';
+    window._fbAction(key, 'search', '', true);
+    if (el && el.focus) el.focus();
+};
 // v2.7.33 (Opção 1): pílula de sort por critério — clicar a ATIVA inverte a seta
 // (cresc↔decr); clicar a inativa ativa-a com a direção lembrada (st.nameDir/orderDir).
 window._fbSortPill = function (key, dim) {
@@ -4374,11 +4381,32 @@ window._fbInner = function (key) {
         // altura que os botões". As pílulas são <button>, e o CSS global força
         // min-height:44px (alvo de toque iOS) por cima do height inline → renderizam 44px.
         // Logo a busca também é 44px (height+min-height) p/ casar exatamente.
-        searchInp = '<input id="' + opts.searchId + '" type="text" oninput="window._fbAction(\'' + key + '\',\'search\',this.value,true)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'flex:1 1 64px;min-width:60px;height:44px;min-height:44px;padding:0 10px;font-size:0.8rem;">';
+        // v1.4.14 (dono): ✕ pra LIMPAR a busca e começar outro texto — na barra CANÔNICA,
+        // então vale em TODA tela que a usa (inscritos, dashboard, chaves). Usa o ✕ canônico
+        // (.cancel-x-btn — círculo vermelho, borda branca, X desenhado), NUNCA um "✕ solto
+        // colorido", que o cânone proíbe (components.css:556 / project_cancel_x_canonical).
+        // Mora DENTRO do campo, à direita, e só aparece com texto — campo vazio não tem o que
+        // limpar. O input ganha padding-right pra o texto não passar por baixo do botão.
+        // O wrapper herda o flex do input (era o input que absorvia a sobra da linha).
+        var _clr = "window._fbClearSearch('" + key + "')";
+        searchInp = '<span style="position:relative;display:inline-flex;align-items:center;flex:1 1 64px;min-width:60px;">'
+            + '<input id="' + opts.searchId + '" type="text" oninput="window._fbSearchInput(\'' + key + '\',this)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'width:100%;height:44px;min-height:44px;padding:0 34px 0 10px;font-size:0.8rem;">'
+            + '<button type="button" id="' + opts.searchId + '-clear" class="cancel-x-btn" title="Limpar busca" onclick="' + _clr + '" style="--cx-size:20px;position:absolute;right:8px;top:50%;transform:translateY(-50%);' + (search ? '' : 'display:none;') + '">✕</button>'
+            + '</span>';
     }
     // v3.0.91: TUDO numa linha só (pedido do usuário) — flex-wrap:nowrap. A busca
     // (flex:1, min-width:60) absorve a sobra e encolhe em telas estreitas mantendo
     // as pílulas na mesma linha.
+    // v1.4.14: modo SÓ BUSCA (opts.searchOnly) — as chaves não têm o que ordenar por A-Z
+    // nem filtrar por gênero/habilidade: os cards são JOGOS, não pessoas. O que serve lá é
+    // achar alguém no meio de dezenas de confrontos. Continua sendo ESTA barra (mesmo input,
+    // mesmo estado, mesmo sticky) — só sem as pílulas. Nunca recriar um campo de busca local.
+    if (opts.searchOnly) {
+        return hidden
+            + '<div style="display:flex;flex-wrap:nowrap;align-items:center;gap:6px;">'
+            + searchInp
+            + '</div>';
+    }
     return hidden
         + '<div style="display:flex;flex-wrap:nowrap;align-items:center;gap:6px;">'
         + azPill + clockPill + activePill
@@ -4425,6 +4453,23 @@ window._inscritosFilterBar = function (opts) {
 // sorteio) usa: `${window._inscritosBar(t, parts.length > 1)}` logo acima dos cards.
 // Filtro/sort operam via window._partApplyFilter (lê os data-part-* — inclusive em
 // telas de DUAS seções, que ele ordena por seção). NÃO criar variação local da barra.
+// v1.4.14 CANÔNICO: barra de BUSCA das CHAVES. Mesma barra dos inscritos (mesmo builder,
+// mesmo sticky, mesmo input) em modo searchOnly — filtra os CARDS DE JOGO por trecho de
+// nome, pra achar uma pessoa e os jogos dela no meio de dezenas de confrontos. O filtro é
+// DOM puro (window._bracketApplyFilter lê data-players dos cards) — não re-renderiza o
+// bracket, então scroll, <details> aberto e placar em edição sobrevivem.
+window._bracketBar = function (show) {
+    if (!show || typeof window._inscritosFilterBar !== 'function') return '';
+    var bar = window._inscritosFilterBar({
+        stateKey: 'chaves', sticky: true, searchOnly: true,
+        searchId: 'bracket-search', onChange: 'window._bracketApplyFilter()'
+    });
+    // O texto digitado sobrevive ao re-render (estado da barra), mas os CARDS voltam sem
+    // filtro. Reaplica assim que o DOM novo aterrissa — daqui, e não de cada render site do
+    // bracket (são 7). setTimeout(0) porque este HTML ainda é string quando esta função roda.
+    setTimeout(function () { if (typeof window._bracketApplyFilter === 'function') window._bracketApplyFilter(); }, 0);
+    return bar + '<div id="bracket-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum jogo encontrado.</div>';
+};
 window._inscritosBar = function (t, show) {
     if (!show || typeof window._inscritosFilterBar !== 'function') return '';
     var bar = window._inscritosFilterBar({
@@ -6430,6 +6475,8 @@ window.AppStore = {
         // render/cache — senão um snapshot stale (pré-write) reverte o que o org acabou de marcar
         // ("aparece/apaga"). Cada intenção some sozinha quando o doc fresco confirma ou em ~15s.
         if (typeof window._reapplyPendingPresence === 'function') window._reapplyPendingPresence(tournaments);
+        // v1.4.17: o contexto da transição de fase é memória-only e morreria no replace acima.
+        if (typeof window._reattachPhaseResInfo === 'function') window._reattachPhaseResInfo(tournaments);
         // DIAGNÓSTICO (dono, "24 caem pra 19 e voltam" ao marcar muitos presentes): loga a contagem
         // de presentes/ausentes/pendentes do torneio NA TELA a cada snapshot (DEPOIS do reapply), pra
         // ver a trajetória real da oscilação e a causa (write parcial? reapply não cobre? re-render).
@@ -8088,6 +8135,107 @@ window._classifModeFor = function (t, phaseIdx) {
   var ph = t.phases[cur] || t.phases[0] || {};
   return (ph.rankingType === 'blocks') ? 'blocks' : 'individual';
 };
+// v1.4.19 (dono): "na classificação vamos usar a cor verde para o nome do usuário e sua
+// posição para que ele se encontre mais facilmente". Responde "esta linha da classificação
+// sou eu?" — inclusive quando a linha é uma DUPLA e eu sou só um dos dois.
+//
+// IDENTIDADE É UID (project_uid_identity_canon_locked). A classificação é indexada por NOME
+// (é o que o mapa carrega), então: acha a ENTRADA do torneio cujo nome exibido bate, e daí
+// compara por UID via _participantUids — nunca `split('/')` no rótulo da dupla, que é
+// TIPOGRAFIA e não chave (project_dupla_entry_structural_not_slash). Fallback pra solo via
+// _memberUidByName. Sem uid (visitante/jogador informal) → false, sem destaque errado.
+// v1.4.20 (dono): "vamos colocar a barra de busca logo acima da classificação da linha 1
+// (assim podemos buscar nomes e ver o seu resultado final mais facilmente)".
+//
+// A barra das CHAVES filtra cards de JOGO; esta filtra LINHAS DE CLASSIFICAÇÃO. É a mesma
+// barra canônica (_inscritosFilterBar em modo searchOnly), com estado próprio ('classif')
+// pra não brigar com a das chaves.
+//
+// SAI UMA VEZ POR RENDER, no PRIMEIRO bloco — "acima da linha 1". Em vez de plumbar uma flag
+// por todos os call sites (bracket.js por linha, _renderPodiumsAndClassif por chave,
+// classificação geral…), o próprio _renderClassifBlock decide: quem renderiza chama
+// _classifSearchReset() no começo do passo, e o primeiro bloco daquele passo leva a barra.
+// Filtra TODAS as linhas de TODOS os blocos (Ouro e Prata juntos) — é uma busca só.
+window._classifSearchPending = false;
+window._classifSearchReset = function () { window._classifSearchPending = true; };
+window._classifSearchBar = function () {
+  if (!window._classifSearchPending || typeof window._inscritosFilterBar !== 'function') return '';
+  window._classifSearchPending = false;
+  var bar = window._inscritosFilterBar({
+    stateKey: 'classif', sticky: false, searchOnly: true,
+    searchId: 'classif-search', onChange: 'window._classifApplyFilter()'
+  });
+  setTimeout(function () { if (typeof window._classifApplyFilter === 'function') window._classifApplyFilter(); }, 0);
+  return '<div style="margin:6px 0 8px;">' + bar +
+    '<div id="classif-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:10px;font-size:0.82rem;">Nenhum nome encontrado na classificação.</div>' +
+    '</div>';
+};
+// Filtro das linhas da classificação. DOM puro (sem re-render) — o <details> aberto, o scroll
+// e o placar em edição sobrevivem. Acento-insensitive, trecho em qualquer posição. Bloco que
+// fica sem nenhuma linha visível some junto, senão sobra cabeçalho vazio.
+window._classifApplyFilter = function () {
+  var inp = document.getElementById('classif-search');
+  var norm = window._bracketNorm || function (x) { return String(x == null ? '' : x).toLowerCase(); };
+  var q = norm(inp ? inp.value : '').trim();
+  var rows = document.querySelectorAll('[data-classif-name]');
+  if (!rows.length) return;
+  var shown = 0, blocks = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var hit = !q || norm(r.getAttribute('data-classif-name') || '').indexOf(q) !== -1;
+    if (r.dataset.csDisp === undefined) r.dataset.csDisp = r.style.display || '';
+    r.style.display = hit ? r.dataset.csDisp : 'none';
+    if (hit) shown++;
+    var blk = r.closest ? r.closest('details') : null;
+    if (blk && blocks.indexOf(blk) === -1) blocks.push(blk);
+  }
+  blocks.forEach(function (b) {
+    var kids = b.querySelectorAll('[data-classif-name]');
+    var any = false;
+    for (var k = 0; k < kids.length; k++) { if (kids[k].style.display !== 'none') { any = true; break; } }
+    if (b.dataset.csDisp === undefined) b.dataset.csDisp = b.style.display || '';
+    b.style.display = any ? b.dataset.csDisp : 'none';
+    if (any && q) b.open = true;   // com busca ativa, abre o bloco que tem resultado
+  });
+  var empty = document.getElementById('classif-search-empty');
+  if (empty) empty.style.display = (q && shown === 0) ? 'block' : 'none';
+};
+
+window._classifEntryIsMe = function (t, entryName) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!t || !cu || !cu.uid || !entryName) return false;
+  var target = String(entryName).trim().toLowerCase();
+  if (!target) return false;
+  var arr = Array.isArray(t.participants) ? t.participants
+    : (t.participants ? Object.values(t.participants) : []);
+  var _uids = (typeof window._participantUids === 'function') ? window._participantUids : function (p) { return p && p.uid ? [p.uid] : []; };
+  for (var i = 0; i < arr.length; i++) {
+    var p = arr[i];
+    if (!p || typeof p !== 'object') continue;
+    var nm = String((window._pName ? window._pName(p, '') : (p.displayName || p.name || '')) || '').trim().toLowerCase();
+    if (nm && nm === target) return _uids(p).indexOf(cu.uid) !== -1;
+  }
+  // ── 2ª via: SLOT DO JOGO (v1.4.21 — bug reportado: minha dupla não ficava verde) ──
+  // Numa fase de eliminatória as duplas são FORMADAS NA TRANSIÇÃO (buildEntrantsByDest →
+  // mkTeam). O roster (t.participants) segue com o cadastro da CLASSIFICATÓRIA — que no
+  // Rei/Rainha é INDIVIDUAL. Logo "Vivi Hirata / Rodrigo Barth" NÃO existe como entrada, a
+  // busca acima falha e nada ficava verde. O slot do jogo, sim, carrega os uids da dupla
+  // (team1Uids/p1Uid/team1Obj — project_match_slot_uid_identity). Então: acha o slot cujo
+  // rótulo bate e compara por UID. Continua sem NUNCA fatiar "A / B" (é tipografia).
+  var _slot = (typeof window._slotUids === 'function') ? window._slotUids : null;
+  if (_slot) {
+    var ms = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
+    for (var k = 0; k < ms.length; k++) {
+      var m = ms[k];
+      if (!m) continue;
+      if (String(m.p1 || '').trim().toLowerCase() === target && _slot(m, 'p1').indexOf(cu.uid) !== -1) return true;
+      if (String(m.p2 || '').trim().toLowerCase() === target && _slot(m, 'p2').indexOf(cu.uid) !== -1) return true;
+    }
+  }
+  // 3ª via: rótulo de UMA pessoa (grupo Rei/Rainha lista PESSOAS, não entradas).
+  return (typeof window._memberUidByName === 'function') && window._memberUidByName(t, entryName) === cu.uid;
+};
+
 window._renderClassifBlock = function (t, clMap, opts) {
   opts = opts || {};
   var keys = Object.keys(clMap || {});
@@ -8114,7 +8262,10 @@ window._renderClassifBlock = function (t, clMap, opts) {
       var bc = g.k === 1 ? '#fbbf24' : g.k === 2 ? '#cd7f32' : 'var(--text-muted)';
       return '<div style="padding:6px 12px;">' +
         '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:800;color:' + bc + ';margin-bottom:3px;">' + rng + (g.names.length > 1 ? ' · ' + g.names.length + ' times' : '') + '</div>' +
-        g.names.map(function (n) { return '<div style="font-size:0.84rem;font-weight:600;color:var(--text-bright,#f1f5f9);padding:1px 0;">' + nameHtml(n) + '</div>'; }).join('') +
+        g.names.map(function (n) {
+          var _meB = (typeof window._classifEntryIsMe === 'function') && window._classifEntryIsMe(t, n);
+          return '<div data-classif-name="' + esc(n) + '" style="font-size:0.84rem;font-weight:' + (_meB ? '800' : '600') + ';color:' + (_meB ? '#34d399' : 'var(--text-bright,#f1f5f9)') + ';padding:1px 0;">' + nameHtml(n) + '</div>';
+        }).join('') +
         '</div>';
     }).join('');
     countLabel = groups.length + ' faixas';
@@ -8123,15 +8274,24 @@ window._renderClassifBlock = function (t, clMap, opts) {
     inner = entries.map(function (e) {
       var pos = e.pos;
       var c = pos === 1 ? '#fbbf24' : pos === 2 ? '#94a3b8' : pos === 3 ? '#cd7f32' : 'var(--text-muted)';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;">' +
+      // v1.4.19: VERDE pra linha do próprio usuário (nome + posição) — achar-se na lista é
+      // mais útil que a cor de pódio, que o emoji da medalha continua comunicando. Fundo
+      // sutil + borda à esquerda pra localizar no meio de dezenas de linhas.
+      var _me = (typeof window._classifEntryIsMe === 'function') && window._classifEntryIsMe(t, e.name);
+      if (_me) c = '#34d399';
+      var _rowSt = _me
+        ? 'display:flex;align-items:center;gap:8px;padding:4px 12px;background:rgba(52,211,153,0.10);border-left:3px solid #34d399;'
+        : 'display:flex;align-items:center;gap:8px;padding:4px 12px;';
+      return '<div data-classif-name="' + esc(e.name) + '" style="' + _rowSt + '">' +
         '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + c + ';">' + pos + 'º</span>' +
-        '<span style="font-weight:600;color:' + c + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml(e.name) + '</span>' +
+        '<span style="font-weight:' + (_me ? '800' : '600') + ';color:' + c + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml(e.name) + '</span>' +
         (pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medals[pos] + '</span>' : '') +
         '</div>';
     }).join('');
     countLabel = entries.length + ' definidos';
   }
-  return '<details' + (open ? ' open' : '') + ' style="margin:6px 0 1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + color + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + label + ' — ' + countLabel + '</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + inner + '</div></details>';
+  var _searchBar = (typeof window._classifSearchBar === 'function') ? window._classifSearchBar() : '';
+  return _searchBar + '<details' + (open ? ' open' : '') + ' style="margin:6px 0 1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + color + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + label + ' — ' + countLabel + '</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + inner + '</div></details>';
 };
 
 // pódio de UMA linha (winner/loser da final da linha + 3º da linha). '' se não há final.
@@ -8152,6 +8312,7 @@ window._linePodiumHtml = function (t, lineMatches, title, color) {
 
 // FUNÇÃO CANÔNICA: pódio(s) + classificação(ões). Usada na página do torneio (encerrado).
 window._renderPodiumsAndClassif = function (t) {
+  if (typeof window._classifSearchReset === 'function') window._classifSearchReset();
   if (!t) return '';
   var cur = (typeof t.currentPhaseIndex === 'number') ? t.currentPhaseIndex : 0;
   var isMulti = Array.isArray(t.phases) && t.phases.length > 1 && cur > 0;

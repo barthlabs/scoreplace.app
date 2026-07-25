@@ -129,19 +129,36 @@ function computeSplitPair(data, opts) {
 
   var entry = arr[idx];
   var nm = entryName(entry);
-  var parts = nm.split(' / ');
-  var p1Name = (entry.p1Name || parts[0] || '').trim();
-  var p2Name = (entry.p2Name || parts[1] || '').trim();
-  if (!p1Name || !p2Name) return { outcome: 'notFound', participants: asParticipantsArray(data), updateData: null };
+  var parts = nm.indexOf(' / ') !== -1 ? nm.split(' / ') : [];
   var p1Uid = entry.p1Uid || '';
   var p2Uid = entry.p2Uid || '';
+  var p1Name = (entry.p1Name || parts[0] || '').trim();
+  var p2Name = (entry.p2Name || parts[1] || '').trim();
+  // IDENTIDADE = uid; o NOME só identifica o fictício (sem conta). Exigir os dois nomes aqui
+  // (como era) fazia TODA dupla com conta cair em notFound — porque o storage é SÓ-UID
+  // (identity-core._stripStoredNamesForUidEntries: "nome com uid nunca é gravado"). Sintoma no
+  // dono: toast "Dupla desfeita" e NADA acontecia, quantas vezes clicasse. [[project_uid_identity_canon_locked]]
+  if (!(p1Uid || p1Name) || !(p2Uid || p2Name)) {
+    return { outcome: 'notFound', participants: asParticipantsArray(data), updateData: null };
+  }
 
-  var solo1 = p1Uid
-    ? cleanUndefined({ displayName: p1Name, name: p1Name, uid: p1Uid, ligaActive: true, enrollSeq: (entry.p1Seq != null ? entry.p1Seq : undefined) })
-    : p1Name;
-  var solo2 = p2Uid
-    ? cleanUndefined({ displayName: p2Name, name: p2Name, uid: p2Uid, ligaActive: true, enrollSeq: (entry.p2Seq != null ? entry.p2Seq : undefined) })
-    : p2Name;
+  // O solo herda o que era POR MEMBRO na dupla (nº de inscrição, contato, categoria). O nome só
+  // entra se EXISTIA gravado (entrada só-uid continua só-uid — o nome vem do perfil na leitura).
+  // Fictício (sem uid) continua sendo a string do nome, como antes.
+  var solo = function (uid, name, seq, emailK, photoK, genderK, birthK) {
+    if (!uid) return name;
+    return cleanUndefined({
+      uid: uid, ligaActive: true,
+      displayName: (name || undefined), name: (name || undefined),
+      enrollSeq: (seq != null ? seq : undefined),
+      email: entry[emailK], photoURL: entry[photoK],
+      gender: entry[genderK], birthDate: entry[birthK],
+      category: entry.category, categories: entry.categories,
+      categorySource: entry.categorySource
+    });
+  };
+  var solo1 = solo(p1Uid, p1Name, entry.p1Seq, 'p1Email', 'p1Photo', 'p1Gender', 'p1BirthDate');
+  var solo2 = solo(p2Uid, p2Name, entry.p2Seq, 'p2Email', 'p2Photo', 'p2Gender', 'p2BirthDate');
 
   arr.splice(idx, 1, solo1, solo2);
 

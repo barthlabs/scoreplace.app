@@ -1217,9 +1217,19 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   } catch (_eLate) {}
 };
 
-window._markAbsent = function (tId, playerName) {
+// uid = IDENTIDADE (3º arg, igual _toggleCheckIn). Sem ele, os mapas caíam em _memberUidByName,
+// que num roster SÓ-UID com cache frio devolve '' → o W.O. era gravado na CHAVE-NOME em vez da
+// chave-uid (estado fantasma, homônimo colidindo). Nome = só fictício sem conta.
+// [[project_uid_identity_canon_locked]] / [[project_id_maps_uid_keyed]]
+window._markAbsent = function (tId, playerName, uid) {
   const t = window._findTournamentById(tId);
   if (!t) return;
+  // `uid` aceita 1 identidade (pessoa) ou VÁRIAS separadas por '|' — o W.O. DO TIME chaveia pelos
+  // DOIS MEMBROS (regra do dono), nunca pelo nome do time. Token 'u:<uid>' = conta, 'n:<nome>' =
+  // fictício (sem conta, a única exceção); token cru = uid (compat com os call sites de 1 pessoa).
+  // Assim a dupla MISTA (um com conta + um fictício) marca os dois pelo que cada um é.
+  const _whos = window._absenceIdentities(uid, playerName);
+  const _who = _whos[0];
   // v2.3.82: W.O. (declarar ausente / reverter) só por autoridade (org/co-org/
   // árbitro). O W.O. por consenso entre participantes virá num próximo passo.
   if (window._canManagePresence && !window._canManagePresence(t, window.AppStore && window.AppStore.currentUser)) {
@@ -1230,28 +1240,58 @@ window._markAbsent = function (tId, playerName) {
   }
   // pre-check: se o jogo do W.O. já foi jogado, não reverte — toast + aborta ANTES
   // de mutar/gravar (a trava dentro de _applyAbsenceToggle é a defesa silenciosa).
-  const _woMetaPre = window._woHistGet(t, playerName);
-  if ((window._idMapHas(t, t.absent, playerName) || _woMetaPre) && _woMetaPre && _woMetaPre.matchNum && typeof window._matchHasRealPlay === 'function') {
-    const _allPre = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches.slice() : []);
-    const _mPre = _allPre[_woMetaPre.matchNum - 1];
-    if (_mPre && window._matchHasRealPlay(_mPre)) {
-      if (typeof showNotification === 'function') showNotification('W.O. não pode ser revertido', 'A partida já foi jogada (placar lançado ou placar ao vivo iniciado). O W.O. não é mais reversível.', 'warning');
-      return;
+  for (var _pi = 0; _pi < _whos.length; _pi++) {
+    const _woMetaPre = window._woHistGet(t, _whos[_pi]);
+    if ((window._idMapHas(t, t.absent, _whos[_pi]) || _woMetaPre) && _woMetaPre && _woMetaPre.matchNum && typeof window._matchHasRealPlay === 'function') {
+      const _allPre = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches.slice() : []);
+      const _mPre = _allPre[_woMetaPre.matchNum - 1];
+      if (_mPre && window._matchHasRealPlay(_mPre)) {
+        if (typeof showNotification === 'function') showNotification('W.O. não pode ser revertido', 'A partida já foi jogada (placar lançado ou placar ao vivo iniciado). O W.O. não é mais reversível.', 'warning');
+        return;
+      }
     }
   }
   // mutação (toggle ausência / revert de W.O.) ATÔMICA pelo portão AppStore.mutate
-  // alvo decidido UMA vez, do estado LOCAL no clique (o mutator pode re-executar em retry)
-  var _wantAbs = !(window._idMapHas(t, t.absent || {}, playerName) || window._woHistGet(t, playerName));
-  window.AppStore.mutate(tId, function (ft) { window._applyAbsenceToggle(ft, playerName, _wantAbs); });
-  // v1.3.82: intenção otimista sobrevive a snapshot stale (aparece/apaga). W.O. usa o NOME.
+  // alvo decidido UMA vez, do estado LOCAL no clique (o mutator pode re-executar em retry).
+  // TIME: se QUALQUER membro já está fora, o clique REVERTE os dois; senão marca os dois.
+  var _wantAbs = !_whos.some(function (w) {
+    return window._idMapHas(t, t.absent || {}, w) || window._woHistGet(t, w);
+  });
+  window.AppStore.mutate(tId, function (ft) {
+    _whos.forEach(function (w) { window._applyAbsenceToggle(ft, w, _wantAbs); });
+  });
+  // v1.3.82: intenção otimista sobrevive a snapshot stale (aparece/apaga). Chaveada pelo uid.
   try {
     if (typeof window._stampPresenceIntent === 'function') {
-      var _ma = window._idMapHas(t, t.absent || {}, playerName);
-      var _mp = window._idMapHas(t, t.checkedIn || {}, playerName);
-      window._stampPresenceIntent(tId, playerName, _ma ? 'absent' : (_mp ? 'present' : 'none'));
+      _whos.forEach(function (w) {
+        var _key = (w && typeof w === 'object') ? w.uid : w;
+        var _ma = window._idMapHas(t, t.absent || {}, w);
+        var _mp = window._idMapHas(t, t.checkedIn || {}, w);
+        window._stampPresenceIntent(tId, _key, _ma ? 'absent' : (_mp ? 'present' : 'none'));
+      });
     }
   } catch (_eStamp) {}
   _reRenderParticipantsStable();
+};
+
+// Traduz o argumento de identidade do W.O. numa LISTA de identidades pros mapas (uid-keyed).
+// '' → [nome] (fictício/legado) · 'UID' → [{uid}] · 'u:U1|n:Convidado' → [{uid:U1}, 'Convidado'].
+window._absenceIdentities = function (uid, playerName) {
+  var raw = String(uid == null ? '' : uid).trim();
+  if (!raw) return [playerName];
+  var out = [];
+  raw.split('|').forEach(function (tok) {
+    tok = String(tok || '').trim();
+    if (!tok) return;
+    if (tok.indexOf('n:') === 0) { var nm = tok.slice(2).trim(); if (nm) out.push(nm); return; }
+    var u = (tok.indexOf('u:') === 0) ? tok.slice(2).trim() : tok;
+    if (u) out.push({ uid: u });
+  });
+  if (!out.length) return [playerName];
+  // 1 pessoa: leva o nome junto (display/meta do woHistory). Time: cada membro resolve o SEU nome
+  // pelo uid dentro do _applyAbsenceToggle — o nome do TIME não serve de identidade pra ninguém.
+  if (out.length === 1 && out[0] && typeof out[0] === 'object') out[0].displayName = playerName;
+  return out;
 };
 
 // Mutação PURA de ausência (marcar/reverter W.O.) — muta só o `t` passado, sem
@@ -1262,14 +1302,22 @@ window._markAbsent = function (tId, playerName) {
 // commitTournamentTx, que RE-EXECUTA em retry de conflito; um toggle ali se auto-inverte
 // (mesma bomba da presença na v1.3.152). A guarda "já está no alvo → no-op" torna N execuções
 // equivalentes a 1, SEM alterar a lógica de reverter W.O. Ver [[project_concurrency_safe_saves]].
-window._applyAbsenceToggle = function (t, playerName, wantAbsent) {
+window._applyAbsenceToggle = function (t, who, wantAbsent) {
   if (!t.absent) t.absent = {};
   if (!t.checkedIn) t.checkedIn = {};
+  // `who` = IDENTIDADE ({uid} do card) ou nome (fictício sem conta / chamadores legados).
+  // Os MAPAS (absent/checkedIn/woHistory) são chaveados por `who` — uid quando existe. O
+  // `playerName` abaixo serve SÓ pras operações de string do revert de substituição (nome do
+  // time na chave), nunca como identidade. [[project_id_maps_uid_keyed]]
+  var playerName = (who && typeof who === 'object') ? String(who.displayName || who.name || '') : String(who == null ? '' : who);
+  if (!playerName && who && who.uid && typeof window._displayNameForUid === 'function') {
+    playerName = window._displayNameForUid(who.uid, '');
+  }
   // v1.0.79-beta: revert completo. Detecta orphan (W.O.'d via woHistory) e,
   // se há replacedBy, desfaz substituição: restaura time original, remove
   // substituto da chave, devolve ele à waitlist se aplicável.
-  const _woMeta = window._woHistGet(t, playerName); // uid-first, nome fallback
-  var _isAbsNow = !!(window._idMapHas(t, t.absent, playerName) || _woMeta);
+  const _woMeta = window._woHistGet(t, who); // uid-first, nome fallback
+  var _isAbsNow = !!(window._idMapHas(t, t.absent, who) || _woMeta);
   var _want = (wantAbsent === undefined || wantAbsent === null) ? !_isAbsNow : !!wantAbsent;
   if (_want === _isAbsNow) return;   // JÁ está no alvo → no-op (idempotência)
   if (!_want) {
@@ -1285,7 +1333,7 @@ window._applyAbsenceToggle = function (t, playerName, wantAbsent) {
       }
     }
     // Desmarcar ausência → volta ao estado "sem confirmação"
-    window._idMapDel(t, t.absent, playerName);
+    window._idMapDel(t, t.absent, who);
     if (_woMeta) {
       const _replacedBy = _woMeta.replacedBy;
       const _origTeam = _woMeta.originalTeam;
@@ -1339,12 +1387,12 @@ window._applyAbsenceToggle = function (t, playerName, wantAbsent) {
         } catch (_e) { window._warn('[markAbsent revert] failed:', _e); }
       }
       // Sempre limpa woHistory após revert (uid-key + nome legado)
-      window._woHistDel(t, playerName);
+      window._woHistDel(t, who);
     }
   } else {
     // Marcar ausente → limpa presença se existia
-    window._idMapSet(t, t.absent, playerName, Date.now());
-    window._idMapDel(t, t.checkedIn, playerName);
+    window._idMapSet(t, t.absent, who, Date.now());
+    window._idMapDel(t, t.checkedIn, who);
   }
 };
 
@@ -1692,7 +1740,14 @@ window._rollCallPresenceCtx = function (t, opts) {
           var _tEntry = window._pName(p);
           var _tAbs = _anyAbs || _abs(_tEntry);
           var _tE = String(_tEntry).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "');", !_tAbs, { label: _tAbs ? 'Reverter' : 'W.O. do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
+          // W.O. DO TIME chaveia pelos DOIS MEMBROS (dono, 22/jul), nunca pelo nome do time: cada
+          // um vai como 'u:<uid>' (conta) ou 'n:<nome>' (fictício sem conta — a única exceção).
+          // Dupla mista marca os dois pelo que cada um é. [[project_id_maps_uid_keyed]]
+          var _tIds = [
+            (p && p.p1Uid) ? ('u:' + p.p1Uid) : (p && p.p1Name ? ('n:' + String(p.p1Name).trim()) : ''),
+            (p && p.p2Uid) ? ('u:' + p.p2Uid) : (p && p.p2Name ? ('n:' + String(p.p2Name).trim()) : '')
+          ].filter(Boolean).join('|').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "', '" + _tIds + "');", !_tAbs, { label: _tAbs ? 'Reverter' : 'W.O. do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
         }
         // DUPLA → tom ESCURO ('pair'): VERDE só quando os DOIS estão presentes; qualquer outro
         // caso (ausente OU ainda não marcado) = AZUL. Antes o "pendente" não pintava nada e o card
@@ -1731,7 +1786,7 @@ window._rollCallPresenceCtx = function (t, opts) {
         var color = mc ? _txt('present', 'solo') : (blu ? _txt('confirmed', 'solo') : _txt('absent', 'solo'));
         var _onc = mc ? _tgl('present', 'solo') : (blu ? _tgl('confirmed', 'solo') : _tgl('absent', 'solo'));
         var wo = (!mc && !blu && isOrg)
-          ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
+          ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "', '" + _puid + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
           : '';
         rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>' +
           '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _onc + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _onc + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\', \'' + _puid + '\');"><span class="toggle-slider"></span></label>' + wo;
@@ -1763,7 +1818,7 @@ window._rollCallPresenceCtx = function (t, opts) {
       var _e = keyName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var _oncM = mc ? _tgl('present', 'pair') : (blu ? _tgl('confirmed', 'pair') : _tgl('absent', 'pair'));
       var wo = (!mc && !blu && isOrg && woScope === 'individual')
-        ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
+        ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "', '" + _mUidEsc + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
         : '';
       var word = '<span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>';
       var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _oncM + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _oncM + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\', \'' + _mUidEsc + '\');"><span class="toggle-slider"></span></label>';
@@ -1863,7 +1918,7 @@ window._partApplyFilter = function () {
   try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(_keepY, !!q); } catch (e) {}
 };
 
-window._toggleVip = function (tId, participantName) {
+window._toggleVip = function (tId, participantName, uid) {
   const t = window._findTournamentById(tId);
   if (!t) return;
   if (!t.vips) t.vips = {};
@@ -1872,7 +1927,12 @@ window._toggleVip = function (tId, participantName) {
   // members.some(m => _vips[m]) acham, e dois jogadores de mesmo nome não
   // colidem. Jogador informal (sem uid) continua pelo nome (fallback).
   const partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  const entry = partsArr.find(p => window._pName(p) === participantName);
+  // A ENTRADA é achada pelo UID (3º arg, mandado pelo card). Casar por nome só funcionava
+  // enquanto o nome resolvia igual dos dois lados — num roster só-uid com cache frio, não
+  // resolve, `entry` vinha undefined e o VIP ia parar numa CHAVE-NOME órfã.
+  const entry = (uid ? partsArr.find(p => p && typeof p === 'object' &&
+                   (p.uid === uid || p.p1Uid === uid || p.p2Uid === uid)) : null)
+             || partsArr.find(p => window._pName(p) === participantName);
   const uids = (entry && typeof window._participantUids === 'function') ? window._participantUids(entry) : [];
   let isVip = false;
   uids.forEach(u => { if (t.vips[u]) isVip = true; });
@@ -2073,6 +2133,12 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   var _enrollOrderMap = ctx.enrollOrderMap || {};
   var _gridWaitSet = ctx.waitSet || {};
   var _T = window._t || function (k) { return k; };
+  // IDENTIDADE DO CARD = uid. Só o FICTÍCIO (digitado pelo organizador, sem conta) não tem uid e
+  // é controlado pelo nome — regra do dono: quem tem uid é controlado EXCLUSIVAMENTE pelo uid.
+  // Vazio de propósito quando a entrada é uma DUPLA: aí o card representa a ENTRADA inteira, e as
+  // ações de pessoa (VIP/nível/excluir) valem pra entrada. [[project_uid_identity_canon_locked]]
+  var _cardUid = (p && typeof p === 'object' && p.uid && !p.p1Uid && !p.p2Uid && !p.p1Name && !p.p2Name)
+    ? String(p.uid).replace(/'/g, "\\'") : '';
   // v1.3.67: resolve o nome pelo UID ANTES do fallback "Participante N"/email. Entrada só-uid
   // (nome stripado no save — cânone: identidade é uid) caía direto no "Participante N" e o card
   // (e o data-lj-name do drag de formar dupla) mostrava "Participante 2" no lugar do nome real.
@@ -2171,7 +2237,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     for (var _si = 0; _si < _nmSkillCats.length; _si++) { var _sk = _nmSkillCats[_si]; if (_nmCatStr === _sk || _nmCatStr.endsWith(' ' + _sk)) { _nmCurrentSkill = _sk; break; } }
     if (isOrg && !_isStandbyEntry) {
       var _nmOpts = _nmSkillCats.map(function (sk) { return '<option value="' + sk + '" ' + (_nmCurrentSkill === sk ? 'selected' : '') + '>' + sk + '</option>'; }).join('');
-      _nmSkillHtml = '<select onchange="event.stopPropagation();window._setParticipantSkillCategory(\'' + t.id + '\',\'' + safeP + '\',this.value)" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:4px;"><option value="" ' + (!_nmCurrentSkill ? 'selected' : '') + '>— nível</option>' + _nmOpts + '</select>';
+      _nmSkillHtml = '<select onchange="event.stopPropagation();window._setParticipantSkillCategory(\'' + t.id + '\',\'' + safeP + '\',this.value,\'' + _cardUid + '\')" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:4px;"><option value="" ' + (!_nmCurrentSkill ? 'selected' : '') + '>— nível</option>' + _nmOpts + '</select>';
     }
   }
 
@@ -2182,8 +2248,10 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   if (isOrg && !_isStandbyEntry) {
     dragProps = 'draggable="true" ondragstart="window.handleDragStart(event, ' + idx + ', \'' + t.id + '\')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ' + idx + ')"';
     if (!drawDone) {
-      _vipBtn = '<button class="btn btn-micro" title="' + (isVip ? _T('tourn.removeVip') : _T('tourn.markVip')) + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ' + (isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)') + '; color: ' + (isVip ? '#fbbf24' : '#a3842a') + '; border: 1px ' + (isVip ? 'solid' : 'dashed') + ' ' + (isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)') + ';" onclick="event.stopPropagation(); window._toggleVip(\'' + t.id + '\', \'' + safeP + '\');">💎 VIP</button>';
-      _delBtn = '<button type="button" class="cancel-x-btn" title="' + _T('btn.remove') + '" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✕</button>';
+      _vipBtn = '<button class="btn btn-micro" title="' + (isVip ? _T('tourn.removeVip') : _T('tourn.markVip')) + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ' + (isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)') + '; color: ' + (isVip ? '#fbbf24' : '#a3842a') + '; border: 1px ' + (isVip ? 'solid' : 'dashed') + ' ' + (isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)') + ';" onclick="event.stopPropagation(); window._toggleVip(\'' + t.id + '\', \'' + safeP + '\', \'' + _cardUid + '\');">💎 VIP</button>';
+      // Este ✕ é da ENTRADA inteira (dupla sai inteira) → NÃO manda uid de membro: mandar
+      // p.uid (que numa dupla é o uid do p1) tiraria só uma pessoa e deixaria a outra.
+      _delBtn = '<button type="button" class="cancel-x-btn" title="' + _T('btn.remove') + '" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction(\'' + t.id + '\', \'' + safeP + '\', \'' + _cardUid + '\');">✕</button>';
       if (window._entryTeamMembers(p)) {
         _splitBtn = '<button class="btn btn-micro" title="' + _T('participants.splitTeam') + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✂️</button>';
       }
@@ -2844,9 +2912,9 @@ function renderParticipants(container, tournamentId) {
       // Standby players use simple toggle; active participants always go through the
       // dialog (_declareAbsent uses _collectAllMatches which is more robust than ind.matchNum).
       const woAction = isAbsent
-        ? `window._markAbsent('${tId}', '${safeName}')`
+        ? `window._markAbsent('${tId}', '${safeName}', '${ind.uid || ''}')`
         : (isStandby
-          ? `window._markAbsent('${tId}', '${safeName}')`
+          ? `window._markAbsent('${tId}', '${safeName}', '${ind.uid || ''}')`
           : `window._declareAbsent('${tId}', '${safeName}')`);
       const woLabel = isAbsent ? 'Reverter' : 'W.O.';
       // Regra simples: botão W.O./Reverter aparece para todo participante que
@@ -2885,11 +2953,13 @@ function renderParticipants(container, tournamentId) {
         (ind.teamName ? window._entryHasVip(t, ind.teamName) : false);
       const vipTag = isVipPlayer ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.55rem;font-weight:900;padding:1px 5px;border-radius:3px;letter-spacing:0.5px;flex-shrink:0;">💎 VIP</span>' : '';
       // v2.7.40: botão VIP ao lado do W.O. — SÓ pro organizador (toggle marca/desmarca).
-      const _vipBtnC = isOrg ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window._toggleVip('${tId}','${safeName}')" title="${isVipPlayer ? 'Remover VIP' : 'Marcar VIP'}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background:${isVipPlayer ? 'linear-gradient(135deg,rgba(234,179,8,0.4),rgba(251,191,36,0.28))' : 'rgba(234,179,8,0.1)'};color:${isVipPlayer ? '#fbbf24' : '#d4a72a'};border:1px ${isVipPlayer ? 'solid rgba(251,191,36,0.65)' : 'dashed rgba(234,179,8,0.4)'};">💎 VIP</button>` : '';
+      const _vipBtnC = isOrg ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window._toggleVip('${tId}','${safeName}','${ind.uid || ''}')" title="${isVipPlayer ? 'Remover VIP' : 'Marcar VIP'}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background:${isVipPlayer ? 'linear-gradient(135deg,rgba(234,179,8,0.4),rgba(251,191,36,0.28))' : 'rgba(234,179,8,0.1)'};color:${isVipPlayer ? '#fbbf24' : '#d4a72a'};border:1px ${isVipPlayer ? 'solid rgba(251,191,36,0.65)' : 'dashed rgba(234,179,8,0.4)'};">💎 VIP</button>` : '';
       // v2.7.54: botão de REMOVER inscrito (só organizador) — poder de tirar qualquer
       // jogador do card, inclusive os da lista de espera. A remoção (tournaments.js)
       // tira de participants E dos storages da espera, casando nome cru/formatado.
-      const _delBtnC = isOrg ? `<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window.removeParticipantFunction('${tId}','${safeName}')" title="Remover inscrito" style="--cx-size:22px;">✕</button>` : '';
+      // 3º argumento = o UID da PESSOA deste card. Sem ele, excluir quem está em dupla era
+      // no-op (o nome da entrada é "A / B", nunca "A"). [[project_uid_identity_canon_locked]]
+      const _delBtnC = isOrg ? `<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window.removeParticipantFunction('${tId}','${safeName}','${window._safeHtml(ind.uid || '')}')" title="Remover inscrito" style="--cx-size:22px;">✕</button>` : '';
 
       const _safeName = (ind.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
       const _pSeed = encodeURIComponent(ind.name);
@@ -2967,7 +3037,7 @@ function renderParticipants(container, tournamentId) {
           // aparece no badge de meta (gênero · nível · idade) abaixo do nome —
           // não duplica como pill read-only pra não-org.
           const _ciOpts = _ciSkillCats.map(sk => `<option value="${sk}" ${_ciCurrentSkill === sk ? 'selected' : ''}>${sk}</option>`).join('');
-          _ciSkillHtml = `<select onchange="event.stopPropagation();window._setParticipantSkillCategory('${tId}','${_ciNameSafe}',this.value)" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:0;"><option value="" ${!_ciCurrentSkill ? 'selected' : ''}>— nível</option>${_ciOpts}</select>`;
+          _ciSkillHtml = `<select onchange="event.stopPropagation();window._setParticipantSkillCategory('${tId}','${_ciNameSafe}',this.value,'${ind.uid || ''}')" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:0;"><option value="" ${!_ciCurrentSkill ? 'selected' : ''}>— nível</option>${_ciOpts}</select>`;
         }
       }
 
@@ -3199,20 +3269,25 @@ function renderParticipants(container, tournamentId) {
 }
 
 // ── Skill category assignment from participant cards ──────────────────────────
-window._setParticipantSkillCategory = function(tId, pName, newSkill) {
+window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
   const t = window.AppStore && window.AppStore.getTournament ? window.AppStore.getTournament(tId) : null;
   if (!t) return;
   const skillCats = t.skillCategories || [];
   if (!skillCats.length) return;
 
-  // Find the participant in t.participants by name (handles both string and object entries)
+  // Acha o inscrito pelo UID (identidade). O nome só resolve fictício sem conta / doc legado —
+  // num roster só-uid o nome pode nem existir, e o nível ia pro vazio sem aviso.
   let found = false;
   (t.participants || []).forEach(function(p) {
     if (!p) return;
-    const pn = window._pName(p);
-    // Also match individual names inside a team "A/B" entry
-    const memberNames = pn.includes('/') ? pn.split('/').map(n => n.trim()) : [pn];
-    if (pn !== pName && !memberNames.includes(pName)) return;
+    if (uid) {
+      if (!(typeof p === 'object' && (p.uid === uid || p.p1Uid === uid || p.p2Uid === uid))) return;
+    } else {
+      const pn = window._pName(p);
+      // Also match individual names inside a team "A/B" entry
+      const memberNames = pn.includes('/') ? pn.split('/').map(n => n.trim()) : [pn];
+      if (pn !== pName && !memberNames.includes(pName)) return;
+    }
     if (typeof p === 'string') return; // can't attach category to string entries
 
     const existingCat = p.category || '';

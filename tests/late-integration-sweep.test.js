@@ -79,11 +79,14 @@ function scenario(o) {
   const ires = dc.integrateLateEntries(t, {});
   ok(!!(ires && ires.ok), o.label + ' :: integrate ok (' + (ires && ires.reason || '') + ')');
 
-  // INVARIANTE: cada tardio "que pode entrar" TEM que estar na chave (não órfão na espera).
+  // INVARIANTE (regra do dono 2026-07-24): o tardio ENTRA preenchendo um BYE já sorteado
+  // (bye→confronto) OU, sem bye pra preencher (Dupla play-in/pow2), fica na ESPERA — nunca vira
+  // órfão/limbo, nunca re-sorteia. Está na chave XOR na espera. project_late_entry_never_redraws.
   (o.mustIntegrate || []).forEach((dn) => {
-    ok(inBracket(t, dn), o.label + ' :: "' + dn + '" ENTROU na chave (não ficou órfão)');
-    ok(!(t.standbyParticipants || []).concat(t.waitlist || []).some((p) => nameOf(p) === dn && !inBracket(t, dn)),
-       o.label + ' :: "' + dn + '" saiu da espera');
+    const inB = inBracket(t, dn);
+    const inW = (t.standbyParticipants || []).concat(t.waitlist || []).some((p) => nameOf(p) === dn);
+    ok(inB || inW, o.label + ' :: "' + dn + '" entrou (preencheu bye) OU ficou na espera (não sumiu)');
+    ok(!(inB && inW), o.label + ' :: "' + dn + '" não está na chave E na espera ao mesmo tempo');
   });
 
   // a chave ainda joga até 1 campeão, sem travado, sem TBD morto.

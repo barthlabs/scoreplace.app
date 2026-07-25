@@ -159,11 +159,22 @@ function _notifDedupCheck(uid, type, tId, matchId) {
 window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     if (!window.FirestoreDB || !window.FirestoreDB.db || !uid) return;
     // Sandbox/killswitch: se a notif é de um torneio com notificações mudas, não dispara.
-    // Resolve o torneio pelo id do payload (o SB está carregado quando a ação parte dele).
-    if (notifData && notifData.tournamentId && typeof window._findTournamentById === 'function'
-        && window._tournamentNotificationsMuted) {
-        var _tMute = window._findTournamentById(notifData.tournamentId);
-        if (_tMute && window._tournamentNotificationsMuted(_tMute)) return;
+    // v1.4.12 — À PROVA DE FALHA. Antes dependia SÓ de _findTournamentById resolver o doc;
+    // quando o SB não estava na lista local (ou o payload vinha de outro caminho) o lookup
+    // devolvia null, o guard passava e o e-mail VAZAVA (bug real: "Arnaldo saiu da SB" chegou
+    // por e-mail, sendo que só o dev vê o SB). Agora qualquer um dos 3 sinais silencia —
+    // nenhum depende do doc estar carregado. Ver [[project_sandbox_tournament]].
+    if (notifData) {
+        var _tid = String(notifData.tournamentId || '');
+        // (1) id do SB — convenção do clone (_openOrCreateSandbox): 'tour_<ts>_sb'
+        if (/_sb$/.test(_tid)) return;
+        // (2) nome do SB — o clone prefixa '(SB) '
+        if (/^\(SB\)/.test(String(notifData.tournamentName || ''))) return;
+        // (3) doc carregado com killswitch/isSandbox
+        if (_tid && typeof window._findTournamentById === 'function' && window._tournamentNotificationsMuted) {
+            var _tMute = window._findTournamentById(_tid);
+            if (_tMute && window._tournamentNotificationsMuted(_tMute)) return;
+        }
     }
     var _skipOpt = (_skipDispatch && typeof _skipDispatch === 'object') ? _skipDispatch : null;
     var _skipAll = (_skipDispatch === true);

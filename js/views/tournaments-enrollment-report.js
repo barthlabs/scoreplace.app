@@ -1281,6 +1281,8 @@
     if (g.indexOf('masc') === 0) return 'masculino';
     return null;
   }
+  function _erIsMistoTok(v) { return /^misto/i.test(String(v || '')); }
+  function _erIsFMTok(v) { var s = String(v || '').toLowerCase(); return s.indexOf('fem') === 0 || s.indexOf('masc') === 0; }
   function _mxSkillOf(r, t) {
     var pe = _pendingEdits[r.order] || {};
     if (pe.category != null) { if (!pe.category) return null; var d = _decomposeCat(pe.category, t); return d.skill || null; }
@@ -1314,9 +1316,13 @@
     function sumBox(b) { return groups.reduce(function (a, g) { return a + b[g].length; }, 0); }
     var femTotal = sumBox(fem), mascTotal = sumBox(masc), semTotal = sumBox(semG), total = (rows || []).length;
 
-    // FORMALIZAÇÃO de categorias (torneio informal → formal). genderOn = divisão por
-    // gênero criada; createdSkills = habilidades formalizadas. Botões abaixo alternam.
-    var genderOn = (t.genderCategories || []).length > 0;
+    // FORMALIZAÇÃO de categorias (torneio informal → formal). genderOn = divisão
+    // Fem/Masc criada; mistoOn = categoria Misto criada (box indicador acima do grid —
+    // Misto é UMA categoria com todo mundo, não duas separadas Fem/Masc; as pessoas
+    // continuam nas colunas do gênero delas). createdSkills = habilidades formalizadas.
+    var gcatsAll = t.genderCategories || [];
+    var mistoOn = gcatsAll.some(_erIsMistoTok);
+    var genderOn = gcatsAll.some(_erIsFMTok);
     var createdSkills = (t.skillCategories || []);
     var tIdEsc = _esc(String(t.id));
     var MIN_CAT = 2; // mínimo de pessoas pra oferecer "Criar categoria"
@@ -1325,7 +1331,8 @@
       var d = _decomposeCat(catName, t), n = 0;
       (rows || []).forEach(function (r) {
         var g = _mxGenderOf(r), sk = _mxSkillOf(r, t);
-        var gOk = !d.gender || (d.gender === 'Fem' && g === 'feminino') || (d.gender === 'Masc' && g === 'masculino');
+        // Categoria Mista = UMA categoria com todo mundo → conta fem E masc juntos.
+        var gOk = !d.gender || d.gender === 'Misto' || (d.gender === 'Fem' && g === 'feminino') || (d.gender === 'Masc' && g === 'masculino');
         var sOk = !d.skill || (sk === d.skill);
         if (gOk && sOk) n++;
       });
@@ -1357,14 +1364,26 @@
       });
     }
     // Card do atleta — tamanho padrão (min 150px), nome com ellipsis.
+    // v1.1.21: hover mostra a última atualização (< 1 mês); clique em AUTORIZADO
+    // (organizador) abre a tela de puxar o histórico individual do letzplay.
+    var _mxIsOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
     function chip(r) {
       var pe = _pendingEdits[r.order] || {}; var edited = Object.keys(pe).length > 0;
       // _lzColor já vem resolvido por _erApplyLzToRows: veredito verificado, ou
       // violeta (autorizou), ou branco (não autorizou). Fallback branco por segurança.
       var nameCol = edited ? '#f59e0b' : (r._lzColor || _LZ_COL.white);
       var border = edited ? 'rgba(245,158,11,0.55)' : (r._lzColor ? (r._lzColor + '55') : 'var(--border-color)');
-      return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')" ' +
-        'style="cursor:grab;font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + _esc(r.name || '(sem nome)') + ' — arraste pra atribuir gênero/categoria">' + _esc(r.name || '(sem nome)') + '</div>';
+      var ctx = window._lzScanCtx || {};
+      var canPull = _mxIsOrg && r.uid && ctx.byUid && ctx.byUid[r.uid];
+      var lu = r.uid ? _lzLastUpdateOf(r.uid) : null;
+      var fresh = lu && (Date.now() - lu.ts) < 30 * 86400000;   // < 1 mês
+      var tip = _esc(r.name || '(sem nome)') +
+        (fresh ? (' — Última atualização: ' + lu.label) : '') +
+        (canPull ? ' — clique pra puxar o histórico do letzplay' : '') +
+        ' — arraste pra atribuir gênero/categoria';
+      var click = canPull ? ' onclick="window._lzAthleteDialog(\'' + String(r.uid).replace(/['\\]/g, '') + '\')"' : '';
+      return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')"' + click + ' ' +
+        'style="cursor:' + (canPull ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
     }
     function cardGrid(arr) {
       // minmax(0,...) e o que impede o estouro: com min-width:auto o nome longo
@@ -1403,6 +1422,14 @@
       gridRows += catBox('feminino', sk, fem[sk], femCol, femTint) + catBox('masculino', sk, masc[sk], mascCol, mascTint);
     });
     var grid = '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 8px;align-items:stretch;">' + gridRows + '</div>';
+    // BOX MISTO acima do grid (pedido do dono, 23/jul): NÃO é uma coluna — só indica
+    // que a categoria do torneio é MISTA (uma categoria só, fem e masc juntos) e dá o
+    // ➕ Criar categoria / ↩ Reverter próprio. Quem é fem segue na coluna fem, masc na
+    // masc — igual ao box "Sem gênero" abaixo, mas de indicação/formalização.
+    var mistoStrip = '<div style="margin-bottom:10px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid rgba(168,85,247,0.55);border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
+      '<span style="min-width:0;"><span style="font-size:17px;font-weight:800;color:#a855f7;">⚥ Misto' + (mistoOn ? ' <span style="opacity:0.8;font-size:15px;">(' + total + ')</span>' : '') + '</span> ' +
+      '<span style="font-size:13px;color:var(--text-muted);">categoria única — fem e masc jogam juntos, não são duas categorias</span></span>' +
+      createBtn('window._erToggleGenderMisto(\'' + tIdEsc + '\',this)', mistoOn) + '</div>';
     // "Categorias no torneio" — resultado das formalizações + contagem (acima do total).
     var formalCats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
     var catsBoxInner = formalCats.length
@@ -1421,7 +1448,7 @@
         '<div style="font-size:17px;font-weight:800;color:#8592a6;border-bottom:2px solid #8592a6;padding-bottom:6px;margin-bottom:8px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste pra Feminino ou Masculino</div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:9px;">' + semInner + '</div></div>';
     }
-    return catsBox + totalBar + grid + semSection;
+    return catsBox + totalBar + mistoStrip + grid + semSection;
   }
   window._erRenderMatrix = function () {
     var el = document.getElementById('er-cat-matrix');
@@ -1447,6 +1474,11 @@
   }
   function _erCommitCats(t) {
     t.combinedCategories = _erComputeCombined(t.genderCategories, t.skillCategories);
+    // O onSnapshot troca os OBJETOS de AppStore.tournaments — _liveState.t pode estar
+    // apontando pro objeto VELHO. O toggle muta o novo (via _erFindT) mas o re-render
+    // lia o velho: o botão mostrava o estado antigo e "Reverter não funcionava"
+    // (bug real, 23/jul). Sincroniza a referência antes de re-renderizar.
+    if (_liveState) _liveState.t = t;
     // Suprime o re-render da página inteira que o snapshot do Firestore dispararia
     // (era o "carregando" que pulava a tela). Re-render só a matriz, in-place.
     window._suppressSoftRefresh = true;
@@ -1462,9 +1494,23 @@
   window._erToggleGender = function (tId, btn) {
     if (!_liveState || !_liveState.isOrg) return;
     var t = _erFindT(tId); if (!t) return;
-    var reverting = (t.genderCategories || []).length > 0;
+    // Alterna SÓ a divisão Fem/Masc — a categoria Misto (coluna do meio) tem toggle
+    // próprio e sobrevive intacta a este botão.
+    var gc = (t.genderCategories || []).slice();
+    var others = gc.filter(function (v) { return !_erIsFMTok(v); });
+    var reverting = gc.length > others.length;
     _erSetBtnBusy(btn, reverting);
-    t.genderCategories = reverting ? [] : ['Fem', 'Masc'];
+    t.genderCategories = reverting ? others : others.concat(['Fem', 'Masc']);
+    _erCommitCats(t);
+  };
+  window._erToggleGenderMisto = function (tId, btn) {
+    if (!_liveState || !_liveState.isOrg) return;
+    var t = _erFindT(tId); if (!t) return;
+    var gc = (t.genderCategories || []).slice();
+    var others = gc.filter(function (v) { return !_erIsMistoTok(v); });
+    var reverting = gc.length > others.length;
+    _erSetBtnBusy(btn, reverting);
+    t.genderCategories = reverting ? others : others.concat(['Misto']);
     _erCommitCats(t);
   };
   window._erToggleSkill = function (tId, sk, btn) {
@@ -1538,6 +1584,313 @@
     return out;
   }
 
+  // Última atualização do dado letzplay de UMA pessoa — o mais novo entre o import
+  // próprio dela (perfil) e o que o organizador puxou (scan). → {ts, label} ou null.
+  function _lzLastUpdateOf(uid) {
+    var ctx = window._lzRenderCtx || {};
+    var prof = ctx.profileMap && ctx.profileMap[uid];
+    var sc = ctx.scanMap && ctx.scanMap[uid];
+    var ts = 0;
+    if (prof && prof.letzplayImport && prof.letzplayImport.importedAt) ts = Math.max(ts, Date.parse(prof.letzplayImport.importedAt) || 0);
+    if (sc && sc.fullImport && sc.fullImport.importedAt) ts = Math.max(ts, Date.parse(sc.fullImport.importedAt) || 0);
+    if (sc && sc.scannedAt) ts = Math.max(ts, Date.parse(sc.scannedAt) || 0);
+    if (!ts) return null;
+    var d = new Date(ts);
+    return { ts: ts, label: d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) };
+  }
+  // Tela individual (v1.1.21): nome + @ + última atualização + botão de puxar a
+  // COMPLETA daquele atleta — substitui os botões de lote da Análise.
+  // Posição do atleta na classificação gravada de um torneio (footprint[].standings).
+  function _lzMyPosIn(standings, handle) {
+    var low = String(handle || '').toLowerCase(), out = null;
+    (standings || []).forEach(function (g) {
+      (g.rows || []).forEach(function (r) {
+        if (out == null && r.pos != null && (r.handles || []).some(function (x) { return String(x).toLowerCase() === low; })) out = r.pos;
+      });
+    });
+    return out;
+  }
+  window._lzAthleteDialog = function (uid) {
+    var ctx = window._lzScanCtx || {};
+    var tg = ctx.byUid && ctx.byUid[uid];
+    if (!tg) return;
+    var lu = _lzLastUpdateOf(uid);
+    // Melhor import disponível (scan do organizador OU import próprio — o de mais jogos).
+    var rctx = window._lzRenderCtx || {};
+    var _p1 = rctx.profileMap && rctx.profileMap[uid] && rctx.profileMap[uid].letzplayImport;
+    var _p2 = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].fullImport;
+    var imp = _p2 || _p1 || null;
+    if (_p1 && _p2) imp = ((_p1.games || []).length > (_p2.games || []).length) ? _p1 : _p2;
+    var body = 'Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> (@' + _esc(tg.handle) + ') no letzplay.<br>';
+    var btnLabel = '📚 Puxar histórico completo';
+    // 3 BARRAS (x = gravado · y = total do perfil letzplay). Os "de y" que faltarem são
+    // completados ao vivo pela extensão (lz-profile-counts lê "472 Jogos · 29 Rankings ·
+    // 35 Torneios" do perfil público) — direto na tela, como o dono pediu.
+    function barLine(id, icon, label, x, y) {
+      var pct = (y && y > 0) ? Math.min(100, Math.round(x / y * 100)) : null;
+      return '<div id="' + id + '" data-x="' + x + '" style="margin:5px 0;">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;font-size:0.8rem;"><span>' + icon + ' ' + label + '</span><span class="lz-bar-txt"><b>' + x + '</b>' + (y ? (' de ' + y + ' (' + pct + '%)') : ' de …') + '</span></div>' +
+        '<div style="height:7px;border-radius:99px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.08));"><div class="lz-bar-fill" style="height:100%;width:' + (pct != null ? Math.max(2, pct) : 2) + '%;background:linear-gradient(90deg,#10b981,#059669);"></div></div>' +
+      '</div>';
+    }
+    var gX = imp ? (imp.games || []).length : 0;
+    var gY = (imp && imp.declaredGames != null) ? imp.declaredGames : null;
+    var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
+    var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];
+    var tX = offFp.filter(function (f) { return f.standings || (f.name && f.name !== f.categoryRaw); }).length;
+    var tY = (imp && imp.declaredTournaments != null) ? imp.declaredTournaments : null;
+    var rX = rkFp.length;
+    var rY = (imp && imp.declaredRankings != null) ? imp.declaredRankings : null;
+    body += '<div style="margin:8px 0 6px;">' +
+      barLine('lz-ath-t', '🏆', 'Torneios', tX, tY) +
+      barLine('lz-ath-r', '📊', 'Rankings', rX, rY) +
+      barLine('lz-ath-g', '🎾', 'Jogos', gX, gY) +
+      '</div>';
+    if (imp) {
+      // Torneios já puxados: nome · categoria · ano · classificação do atleta.
+      // v1.4.32: + os AINDA NÃO LIDOS da lista persistida (tournamentsList — o título já
+      // traz a categoria). O dono vê os 35 de cara, não só os que já têm jogos.
+      var pendLis = '';
+      if (Array.isArray(imp.tournamentsList) && imp.tournamentsList.length) {
+        var lidosKey = {};
+        offFp.forEach(function (f) { lidosKey['t/' + (f.club || '') + '/' + (f.tourneyId || '')] = 1; });
+        pendLis = imp.tournamentsList.filter(function (p) {
+          return p && p.tid && !lidosKey['t/' + (p.club || '') + '/' + p.tid];
+        }).map(function (p) {
+          return '<div style="padding:2px 0;opacity:0.7;">⏳ ' + _esc(p.title || ('torneio ' + p.tid)) + ' · ainda não lido</div>';
+        }).join('');
+      }
+      if (offFp.length || pendLis) {
+        var lis = offFp.map(function (f) {
+          var nm = f.name || f.categoryRaw || 'torneio';
+          var cat = (f.name && f.categoryRaw && f.name.indexOf(f.categoryRaw) < 0) ? (' · ' + _esc(f.categoryRaw)) : '';
+          var yr = f.year ? (' · ' + f.year) : '';
+          var pos = _lzMyPosIn(f.standings, tg.handle);
+          return '<div style="padding:2px 0;">🏆 ' + _esc(nm) + cat + yr + (pos != null ? (' · <b>' + pos + 'º lugar</b>') : '') + '</div>';
+        }).join('');
+        body += '<div style="max-height:12em;overflow-y:auto;font-size:0.78rem;color:var(--text-secondary,#c8cdd6);background:var(--bg-darker,rgba(0,0,0,0.2));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;margin-bottom:6px;text-align:left;">' + lis + pendLis + '</div>';
+      }
+      var incompleto = (gY && gX < gY) || (imp.partialReason != null);
+      if (incompleto) {
+        body += '<div style="font-size:0.8rem;color:#fbbf24;">Perfil INCOMPLETO — puxe de novo pra continuar de onde parou (o que já veio está gravado).</div>';
+        btnLabel = '▶️ Continuar de onde parou';
+      }
+      body += (lu ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Última atualização: <b>' + lu.label + '</b></div>' : '');
+    } else {
+      body += '<div style="font-size:0.8rem;color:var(--text-muted);">Nada gravado ainda — leio torneios (nome, categoria, classificação) e depois os jogos, gravando a cada passo.</div>';
+    }
+    if (typeof window.showConfirmDialog === 'function') {
+      window.showConfirmDialog('🎾 ' + (tg.name || '@' + tg.handle), body,
+        function () { window._lzAthleteImport(uid); }, null,
+        { confirmText: btnLabel, cancelText: 'Fechar', type: 'info' });
+      // Completa os "de y" das barras AO VIVO com os totais do perfil público
+      // (a extensão lê "472 Jogos · 29 Rankings · 35 Torneios" e devolve).
+      setTimeout(function () { _lzAskProfileCounts(tg.handle); }, 60);
+    } else {
+      window._lzAthleteImport(uid);
+    }
+  };
+  // Pede os TOTAIS do perfil público à extensão e atualiza as barras do dialog aberto.
+  function _lzAskProfileCounts(handle) {
+    function onMsg(e) {
+      if (e.source !== window) return; var d = e.data;
+      if (!d || d.__sp_lp !== 'lz-profile-counts-result' || d.handle !== handle) return;
+      window.removeEventListener('message', onMsg);
+      if (d.error) return;
+      function upd(id, y) {
+        var el = document.getElementById(id); if (!el || y == null) return;
+        var x = parseInt(el.getAttribute('data-x'), 10) || 0;
+        var pct = y > 0 ? Math.min(100, Math.round(x / y * 100)) : 0;
+        var t = el.querySelector('.lz-bar-txt'); if (t) t.innerHTML = '<b>' + x + '</b> de ' + y + ' (' + pct + '%)';
+        var f = el.querySelector('.lz-bar-fill'); if (f) f.style.width = Math.max(2, pct) + '%';
+      }
+      upd('lz-ath-t', d.tournaments); upd('lz-ath-r', d.rankings); upd('lz-ath-g', d.games);
+    }
+    window.addEventListener('message', onMsg);
+    setTimeout(function () { window.removeEventListener('message', onMsg); }, 15000);
+    window.postMessage({ __sp_lp: 'lz-profile-counts', handle: handle }, window.location.origin);
+  }
+  // Puxa a COMPLETA de UM atleta pelo @ público — o caminho do autoimport (fetch das
+  // páginas /{handle}/matches), sem navegar o perfil SPA (a causa do lote travar).
+  window._lzAthleteImport = function (uid) {
+    if (window._lzScanRunning) return;
+    var ctx = window._lzScanCtx || {};
+    var tg = ctx.byUid && ctx.byUid[uid];
+    if (!tg || !tg.handle) return;
+    window._lzScanRunning = true;
+    window._lzPendingMode = 'full';
+    var done = false, started = false, versions = [], idleTimer = null;
+    var who = tg.name || ('@' + tg.handle);
+    // BARRAS AO VIVO (v1.4.22): as 3 barras do dialog (Torneios/Rankings/Jogos, x de y %)
+    // ficam VISÍVEIS no overlay durante a busca e crescem conforme as coisas chegam.
+    // Semente = melhor import já gravado (mesma escolha do prior lá embaixo); depois a
+    // extensão manda `counts` em cada progresso e os parciais confirmam pelo fullImport.
+    var _bs = { t: { x: 0, y: null }, r: { x: 0, y: null }, g: { x: 0, y: null } };
+    function _seedBarsFrom(imp) {
+      if (!imp) return;
+      _updBars({
+        g: (imp.games || []).length,
+        t: (imp.footprint || []).filter(function (f) { return f.official; }).length,
+        r: (imp.footprint || []).filter(function (f) { return !f.official; }).length,
+        gY: (imp.declaredGames != null) ? imp.declaredGames : null,
+        tY: (imp.declaredTournaments != null) ? imp.declaredTournaments : null,
+        rY: (imp.declaredRankings != null) ? imp.declaredRankings : null
+      });
+    }
+    // x nunca anda pra trás (critérios de contagem variam entre fontes); y atualiza
+    // quando o total declarado do perfil chega.
+    function _updBars(c) {
+      if (!c) return;
+      if (c.t != null) _bs.t.x = Math.max(_bs.t.x, c.t);
+      if (c.r != null) _bs.r.x = Math.max(_bs.r.x, c.r);
+      if (c.g != null) _bs.g.x = Math.max(_bs.g.x, c.g);
+      if (c.tY != null) _bs.t.y = c.tY;
+      if (c.rY != null) _bs.r.y = c.rY;
+      if (c.gY != null) _bs.g.y = c.gY;
+    }
+    function _barsArr() {
+      return [
+        { id: 't', icon: '🏆', label: 'Torneios', x: _bs.t.x, y: _bs.t.y },
+        { id: 'r', icon: '📊', label: 'Rankings', x: _bs.r.x, y: _bs.r.y },
+        { id: 'g', icon: '🎾', label: 'Jogos', x: _bs.g.x, y: _bs.g.y }
+      ];
+    }
+    function setProg(o) {
+      o = o || {};
+      window._spProgressOverlay({ label: '📚 ' + who, sub: o.sub || '', pct: o.pct, feedAdd: o.feedAdd || null, bars: _barsArr(), onCancel: cancel });
+    }
+    function cleanup() {
+      done = true;
+      window._lzScanRunning = false;
+      window.removeEventListener('message', onMsg);
+      if (idleTimer) clearTimeout(idleTimer);
+      if (typeof window._spCloseImportOverlay === 'function') window._spCloseImportOverlay();
+    }
+    function cancel() {
+      if (done) return;
+      cleanup();
+      if (typeof showNotification === 'function') showNotification('Busca cancelada', 'Nada foi alterado.', 'info');
+    }
+    function fail(msg) {
+      if (done) return;
+      cleanup();
+      if (typeof showNotification === 'function') showNotification('Não deu pra puxar', msg, 'error');
+    }
+    function ping() {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(function () { fail('A extensão parou de responder (3 min em silêncio). Recarregue a página e tente de novo.'); }, _LZ_IDLE_MS);
+    }
+    function onMsg(e) {
+      if (e.source !== window) return; var d = e.data; if (!d) return;
+      if (d.__sp_lp === 'extension-present') { if (d.version) versions.push(d.version); return; }
+      // Rate-limit NUNCA aparece pro usuário (regra do dono, 14/jul: "demorar mais, mas
+      // não falhar — nunca resolver rate-limit com aviso"). Esperar e ler são a mesma
+      // coisa pra ele: texto neutro, watchdog rearmado, barra intacta. A pausa-e-grava
+      // automática (rate-budget) continua existindo — só que MUDA, sem ameaça na tela.
+      if (d.__sp_lp === 'lz-throttle') {
+        ping();
+        setProg({ sub: 'lendo o letzplay — pode deixar rodando', pct: null });
+        return;
+      }
+      if (d.__sp_lp === 'athlete-import-progress' && d.uid === uid) {
+        ping();
+        var cur = d.current || {};
+        // counts (ext ≥1.44): x/y ao vivo das 3 barras — cresce a cada torneio/página lida.
+        _updBars(d.counts || null);
+        // pct REAL (0–100, calculado pela extensão por etapa) + feed do que foi lido
+        // (nome do torneio · classificação · nº de jogos) num box de 2 linhas com scroll.
+        setProg({ sub: cur.note || '', pct: (d.pct != null ? Math.max(3, d.pct) : null), feedAdd: d.feed || null });
+        return;
+      }
+      // PARCIAL (v1.41): a extensão grava por etapa — a cada torneio lido e a cada
+      // 3 páginas de jogos. Persistimos NA HORA: se a rodada morrer no meio (rate-limit,
+      // aba fechada), o que veio ficou; a próxima rodada continua de onde parou (prior).
+      if (d.__sp_lp === 'athlete-import-partial' && d.uid === uid) {
+        ping();
+        if (d.scan && d.fullImport && typeof _lzPersistScans === 'function') {
+          _lzPersistScans(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }])
+            .catch(function (e) { window._log && window._log('[athlete parcial] não gravou (segue):', (e && e.message) || e); });
+        }
+        // O parcial traz o fullImport consolidado — atualiza as barras por ele (também
+        // cobre extensão antiga sem `counts` no progresso).
+        _seedBarsFrom(d.fullImport || null);
+        setProg({ sub: (d.stage === 'torneios' ? ('torneio ' + d.done + ' de ' + d.total + ' gravado') : ('página ' + d.done + ' de ' + d.total + ' gravada')), pct: null });
+        return;
+      }
+      if (d.__sp_lp === 'athlete-import-result' && d.uid === uid) {
+        if (done) return;
+        if (!d.ok) {
+          fail(d.error === 'sem-jogos' ? 'O perfil público de @' + tg.handle + ' não mostrou nenhum jogo.' : ('Falhou: ' + (d.error || 'erro')));
+          return;
+        }
+        cleanup();
+        if (typeof window._showLoading === 'function') window._showLoading('Salvando ' + who + '…');
+        var n = (d.fullImport && Array.isArray(d.fullImport.games)) ? d.fullImport.games.length : 0;
+        var nDecl = d.fullImport && d.fullImport.declaredGames;
+        _saveScansAndReload(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }],
+          function (m) { if (typeof showNotification === 'function') showNotification('Não deu pra salvar', m, 'error'); });
+        // PAUSADO/PARCIAL: RELATÓRIO NA TELA (pedido do dono) — o que puxou e o que
+        // não puxou, torneio a torneio + jogos gerais — e como retomar.
+        var _isParcial = d.paused || (d.fullImport && d.fullImport.partialReason);
+        var rep = d.report || null;
+        if (_isParcial && rep && typeof window.showAlertDialog === 'function') {
+          var html = '<div style="text-align:left;font-size:0.85rem;line-height:1.55;">';
+          html += '<div style="margin-bottom:6px;">' + (d.paused ? 'A leitura desta rodada terminou — <b>o que veio está gravado</b>.' : 'A leitura foi interrompida — <b>o que veio está gravado</b>.') + '</div>';
+          if (rep.tournaments && rep.tournaments.length) {
+            html += '<div style="font-weight:800;margin:8px 0 3px;">Torneios</div>';
+            // BOX SCROLLÁVEL (v1.4.31, pedido do dono): 35 torneios estouravam a página e
+            // os botões do dialog sumiam. Lista rola dentro do box; o resto fica visível.
+            html += '<div style="max-height:14em;overflow-y:auto;background:var(--bg-darker,rgba(0,0,0,0.2));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;">';
+            rep.tournaments.forEach(function (tt) {
+              html += '<div style="padding:1px 0;">' + (tt.got ? '✅' : '❌') + ' ' + _esc(tt.title) +
+                (tt.got ? ((tt.pos != null ? (' · ' + tt.pos + 'º lugar') : '') + ' · ' + tt.games + ' jogo(s)') : ' · não lido') + '</div>';
+            });
+            html += '</div>';
+          }
+          html += '<div style="font-weight:800;margin:8px 0 3px;">Jogos gerais</div>';
+          html += '<div>' + (rep.pagesRead >= rep.maxPage ? '✅' : '⏳') + ' páginas lidas: <b>' + rep.pagesRead + ' de ' + rep.maxPage + '</b> · jogos gravados: <b>' + rep.games + (rep.declared ? (' de ' + rep.declared) : '') + '</b></div>';
+          html += '<div style="margin-top:10px;color:#fbbf24;">▶️ Clique no nome de novo mais tarde — continuo <b>de onde parei</b> (nada se perde).</div>';
+          html += '</div>';
+          window.showAlertDialog('⏸️ ' + who + ' — relatório da leitura', html);
+        }
+        if (typeof showNotification === 'function') {
+          if (_isParcial) {
+            showNotification('⏸️ Parcial salvo', who + ': ' + n + (nDecl ? (' de ' + nDecl) : '') + ' jogo(s) gravados.', 'warning');
+          } else {
+            showNotification('🎾 Histórico puxado', who + ' — ' + n + ' jogo(s).', 'success');
+          }
+        }
+        return;
+      }
+    }
+    // PRIOR = o que já foi gravado (scan do organizador OU import próprio do atleta —
+    // o de MAIS jogos vence): a extensão semeia o acumulado, PULA torneios já completos
+    // e para cedo nos jogos gerais quando alcança o que já está gravado. Computado JÁ
+    // (não só no dispatch) pra semear as barras do overlay com o que está gravado.
+    var rctx = window._lzRenderCtx || {};
+    var _prof = rctx.profileMap && rctx.profileMap[uid];
+    var _sc = rctx.scanMap && rctx.scanMap[uid];
+    var _pImp = (_prof && _prof.letzplayImport) || null;
+    var _sImp = (_sc && _sc.fullImport) || null;
+    var prior = _sImp || _pImp || null;
+    if (_sImp && _pImp) {
+      prior = ((_pImp.games || []).length > (_sImp.games || []).length) ? _pImp : _sImp;
+    }
+    _seedBarsFrom(prior);
+    setProg({ sub: 'conectando à extensão…', pct: 2 });
+    window.addEventListener('message', onMsg);
+    window.postMessage({ __sp_lp: 'ext-ping' }, window.location.origin);
+    ping();
+    setTimeout(function () {
+      if (done || started) return;
+      if (!versions.length) { cleanup(); _lzExtDialog(null); return; }
+      var best = versions.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
+      if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
+      started = true;
+      window.postMessage({ __sp_lp: 'run-athlete-import', handle: tg.handle, uid: uid, tournamentId: ctx.tId, prior: prior }, window.location.origin);
+    }, 900);
+  };
+
   // Seção ÚNICA da Análise: Categorias com apuração pelo letzplay. Junta os botões
   // de busca, a legenda de cores e a matriz (nomes pintados pela verificação).
   function _renderCategoriesSection(rows, t, profileMap, scanMap) {
@@ -1556,67 +1909,20 @@
       if (!prof || !prof.letzplayHandle) return false;
       return (_meUid && r.uid === _meUid) || prof.letzplayConsent === true;
     }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
-    // PENDENTES = quem está DESATUALIZADO (> 6 dias). Re-varrer quem foi lido anteontem
-    // só gasta tempo e leitura do letzplay (que responde com rate-limit em rajada).
-    // Separado por MODO: um "essencial" fresco NÃO cobre um pedido de "completa" (a
-    // completa lê os jogos, que a essencial nem olha); uma "completa" fresca cobre as duas.
-    var pend = { essential: [], full: [] };
-    targets.forEach(function (tg) {
-      var have = _lzFreshness(tg.uid, profileMap, scanMap);
-      if (!have.essential) pend.essential.push(tg);
-      if (!have.full) pend.full.push(tg);
-    });
-    window._lzScanCtx = { tId: t.id, targets: targets, pend: pend };
-
-    // Última verificação + o MODO usado (essencial/completa) do scan mais recente.
-    var lastTs = 0, lastMode = null;
-    Object.keys(scanMap).forEach(function (uid) {
-      var s = scanMap[uid]; if (s && s.scannedAt) { var v = Date.parse(s.scannedAt) || 0; if (v > lastTs) { lastTs = v; lastMode = (s.scan && s.scan._mode) || 'essential'; } }
-    });
-    var _ld = lastTs ? new Date(lastTs) : null;
-    var _dateStr = _ld ? (_ld.toLocaleDateString('pt-BR') + ' ' + _ld.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })) : '';
-    function dateLine() { return _ld ? '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Última verificação: <b style="color:var(--text-bright,#fff);">' + _dateStr + '</b></div>' : ''; }
-    // Título + botões Essencial / Completa (padrão do app; Completa com BRILHO). A data
-    // da última verificação fica EMBAIXO do botão que foi efetivamente usado.
-    var essCss = 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;cursor:pointer;';
-    var fullCss = 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;cursor:pointer;';
-    // CINZA + INATIVO = "não há nada novo pra buscar". Uma busca COMPLETA fresca apaga
-    // os DOIS botões (ela contém a essencial); uma ESSENCIAL fresca apaga só o dela —
-    // a completa continua acesa porque lê os jogos, que a essencial nem olha.
-    // CINZA de verdade. Era var(--bg-darker) — que no tema escuro é quase PRETO, então o
-    // botão inativo sumia no fundo e não lia como "desabilitado", lia como buraco.
-    var _greyCss = 'background:#4a5163;color:#c3c9d6;border:1px solid #5b6376;cursor:not-allowed;opacity:0.9;';
-    // Cada botão mostra QUANTOS ele vai buscar de verdade (os frescos < 6 dias ficam de
-    // fora). Sem NINGUÉM pendente o botão fica CINZA E INATIVO — só volta a acender
-    // quando entrar um inscrito novo autorizado ou quando algum dos já buscados passar
-    // dos 6 dias. Nada de re-buscar à toa: cada busca é leitura no letzplay, que
-    // responde com rate-limit em rajada.
-    function scanCol(mode, id, label, css, title, shine) {
-      var nPend = (pend[mode] || []).length, nAll = targets.length;
-      var doneAll = nPend === 0;
-      var cnt = doneAll ? '' : (nPend < nAll ? ' (' + nPend + ' de ' + nAll + ')' : ' (' + nAll + ')');
-      var btnCss = doneAll ? (_greyCss + 'width:100%;font-size:0.96rem;font-weight:800;padding:12px;border-radius:10px;') : css;
-      var dis = doneAll ? ' disabled' : '';
-      var tip = doneAll ? 'Todos verificados há menos de ' + _LZ_FRESH_DAYS + ' dias — nada novo pra buscar' : title;
-      return '<div style="flex:1;">' +
-        '<button type="button" id="' + id + '"' + dis + ' onclick="window._lzOrgScan(\'' + mode + '\')" title="' + _esc(tip) + '" class="btn' + (doneAll ? '' : ' hover-lift') + (shine && !doneAll ? ' btn-shine' : '') + '" style="' + btnCss + '">' +
-          label + (doneAll ? ' ✅' : cnt) + '</button>' +
-        (lastMode === mode || doneAll ? dateLine() : '') +
-      '</div>';
-    }
-    var scanBtn = (_isOrg && targets.length)
-      ? '<div style="font-size:15px;font-weight:800;color:var(--text-secondary,#c8cdd6);margin-bottom:8px;">🎾 Verificar histórico no letzplay (' + targets.length + ')</div>' +
-        '<div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-start;">' +
-          scanCol('essential', 'lz-scan-btn-essential', '🔎 Essencial', essCss, 'Busca rápida: só o nível real do ranking ativo', false) +
-          scanCol('full', 'lz-scan-btn-full', '📚 Completa', fullCss, 'Busca completa: rankings + torneios + jogos', true) +
-        '</div>'
-      : (_ld ? '<div style="margin-bottom:10px;">' + dateLine() + '</div>' : '');
+    // v1.1.21: FIM do lote (Essencial/Completa em batch) — travava e não trazia nada.
+    // A busca virou INDIVIDUAL: clicar num nome autorizado abre a tela de puxar o
+    // histórico DAQUELE atleta (caminho do autoimport, pelo @ público). O hover no
+    // nome mostra a última atualização (< 1 mês). byUid alimenta o clique/hover.
+    var byUid = {};
+    targets.forEach(function (tg) { if (tg.uid) byUid[tg.uid] = tg; });
+    window._lzScanCtx = { tId: t.id, targets: targets, byUid: byUid };
+    var scanBtn = '';
     // Legenda (todos os rótulos) — código de cor da verificação.
     function leg(c, txt) { return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:' + c + ';"><span style="width:11px;height:11px;border-radius:50%;background:' + c + ';"></span>' + txt + '</span>'; }
     var legend = '<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;">' +
       leg(_LZ_COL.red, 'deve subir') + leg(_LZ_COL.yellow, 'pode subir') + leg(_LZ_COL.blue, 'rebaixar') + leg(_LZ_COL.green, 'coerente') + leg(_LZ_COL.violet, 'autorizado') + leg(_LZ_COL.white, 'não autorizou') +
       '</div>';
-    var hint = _isOrg ? '<div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no topo.</div>' : '';
+    var hint = _isOrg ? '<div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no topo. <b style="color:var(--text-secondary,#c8cdd6);">Clique</b> num nome <span style="color:' + _LZ_COL.violet + ';font-weight:700;">autorizado</span> pra puxar o histórico do letzplay dele (um por vez); pare o mouse em cima pra ver a última atualização.</div>' : '';
     // Barra Cancelar/Salvar — STICKY no topo (abaixo do cabeçalho fixo), aparece só
     // quando há alteração pendente (drag de gênero/categoria).
     // Cancelar/Salvar vive na barra Voltar (rightHtml, em _renderPage) — não aqui.
@@ -2061,7 +2367,20 @@
       }
       var doc = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, scannedByName: meName, tournamentId: String(tId), tournamentName: tName };
       if (gotFull) doc.fullImport = s.fullImport;
-      var w = db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
+      var w = db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true })
+        .catch(function (err) {
+          // NUNCA falhar MUDO (caso Camila: 472 jogos → doc >1MiB → todos os writes
+          // morriam em silêncio e "não gravava porra nenhuma"). Mostra o ERRO REAL e
+          // regrava SEM o fullImport — o resumo (scan) sempre cabe e sempre fica.
+          var em = ((err && err.code) ? err.code + ': ' : '') + ((err && err.message) || err);
+          if (typeof showNotification === 'function') showNotification('⚠️ Falha ao gravar histórico', String(em).slice(0, 140), 'error');
+          if (doc.fullImport) {
+            var lean = { handle: doc.handle, scan: doc.scan, scannedAt: doc.scannedAt, scannedBy: doc.scannedBy, scannedByName: doc.scannedByName, tournamentId: doc.tournamentId, tournamentName: doc.tournamentName };
+            if (lean.scan && typeof lean.scan === 'object') { lean.scan._mode = 'essential'; lean.scan._fullError = ('write: ' + String(em)).slice(0, 120); }
+            return db.collection('letzplayScans').doc(s.uid).set(lean, { merge: true });
+          }
+          throw err;
+        });
       // ESCRITA DUPLA (transição): o histórico também vai pro canônico — 1 doc por
       // competição, 1 por partida, compartilhado. É aqui que o ganho aparece: a mesma
       // partida trazida por 4 pessoas vira UM doc, e varrer alguém já preenche o pedaço
@@ -2115,7 +2434,19 @@
       // Não gravar `fullImport: null` quando falhou: o set é merge, e apagar um histórico
       // BOM de uma varredura anterior por causa de um 403 de hoje seria perda de dado real.
       if (gotFull) doc.fullImport = s.fullImport;
-      return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
+      return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true })
+        .catch(function (err) {
+          // Erro REAL na tela + regrava sem o fullImport (o resumo sempre cabe) — ver
+          // _lzPersistScans; mesmo fallback aqui (caso Camila: doc >1MiB falhava mudo).
+          var em = ((err && err.code) ? err.code + ': ' : '') + ((err && err.message) || err);
+          if (typeof showNotification === 'function') showNotification('⚠️ Falha ao gravar histórico', String(em).slice(0, 140), 'error');
+          if (doc.fullImport) {
+            var lean = { handle: doc.handle, scan: doc.scan, scannedAt: doc.scannedAt, scannedBy: doc.scannedBy, scannedByName: doc.scannedByName, tournamentId: doc.tournamentId, tournamentName: doc.tournamentName };
+            if (lean.scan && typeof lean.scan === 'object') { lean.scan._mode = 'essential'; lean.scan._fullError = ('write: ' + String(em)).slice(0, 120); }
+            return db.collection('letzplayScans').doc(s.uid).set(lean, { merge: true });
+          }
+          throw err;
+        });
     });
     Promise.all(writes).then(function () {
       // APLICA no perfil de cada inscrito (gênero + nível + histórico) AGORA, via Cloud

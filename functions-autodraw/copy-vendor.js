@@ -20,6 +20,7 @@ const OUT_DIR = path.resolve(__dirname, 'vendor');
 const FILES = [
   'identity-core.js',
   'persist-core.js',          // _participantUids, _memberUidByName, _idMap*, _entryHasVip (cânone uid)
+  'waitlist-core.js',          // _getWaitlist/_removeFromWaitlist/_nameForms/_sanitizeWaitlistVsGroups
   'sport-rules.js',            // window.SPORT_RULES — dep de format2 (allowsSingles/teamSize)
   'tournaments-utils.js',      // _isLigaFormat, _calcNextDrawDate
   'tournaments-categories.js', // _displayCategoryName, _sortCategoriesBySkillOrder, _getParticipantCategories, _participantInCategory

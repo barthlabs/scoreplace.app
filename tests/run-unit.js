@@ -13,6 +13,30 @@ const SUITES = [
   // cliente×CF). Se alguém religar o poller, esta suíte fica vermelha.
   'tests/liga-autodraw-server-only.test.js',
   'tests/draw-cores.test.js',
+  // Cânone da LISTA DE ESPERA no AMBIENTE DO SERVIDOR (CF). Falha se alguém devolver
+  // as funções pro store.js (não vendorado) — o tardio voltaria a ficar preso na espera.
+  'tests/waitlist-core-server.test.js',
+  // Toast de push em foreground: campos vêm de payload.data (contrato DATA-ONLY da CF).
+  // Falha se alguém voltar a ler só payload.notification → toast 'scoreplace.app' vazio.
+  'tests/fcm-foreground-toast.test.js',
+  // Busca nas CHAVES: filtro DOM dos cards de jogo (acento-insensitive, membro de dupla,
+  // coluna vazia some, limpar restaura). Verificado também no navegador real.
+  'tests/bracket-search.test.js',
+  // Globais das views existem DEPOIS do load. Pega definição presa dentro de template
+  // literal (vira texto) — que o `node --check` NÃO pega, porque string é sintaxe válida.
+  'tests/view-globals-smoke.test.js',
+  // "Deixar inscritos ficarem de fora": rodada única é DEFAULT desligado, não cadeado —
+  // escolha explícita do organizador vence nos dois sentidos.
+  'tests/allow-self-deact-default.test.js',
+  // Contexto da TRANSIÇÃO DE FASE sobrevive ao snapshot do Firestore (que substitui os
+  // objetos). Sem isso, clicar no painel de pow2 dispara o sorteio da FASE 0.
+  'tests/phase-res-info-survives-snapshot.test.js',
+  // Destaque VERDE do próprio usuário na classificação: resolve por UID, nunca por nome —
+  // senão pinta a linha de um homônimo/dupla alheia.
+  'tests/classif-highlight-me.test.js',
+  // Busca na CLASSIFICAÇÃO: UMA barra por render (no 1º bloco, sem id duplicado) e o
+  // filtro cobrindo as linhas de TODOS os blocos.
+  'tests/classif-search.test.js',
   'tests/phase-transition-matrix.test.js',
   'tests/phase-adversarial.test.js',
   'tests/phase-lifecycle.test.js',
@@ -120,6 +144,18 @@ const SUITES = [
   // Nome da dupla tardia vem do uid ao vivo (nunca a string "undefined").
   'tests/late-join-name-uid.test.js',
   'tests/pair-side-no-third-line.test.js',
+  // Excluir inscrito num roster SÓ-UID (o ✕ do card individual): solo sem nome gravado e
+  // membro de dupla. Os dois eram no-op silencioso — o clique "não fazia nada". v1.4.2.
+  'tests/remove-participant-uid.test.js',
+  // Selo verde de diagnóstico do sorteio: só pode existir em rota de torneio SANDBOX —
+  // estava sobrevivendo à navegação e aparecendo por cima da dashboard. v1.4.5.
+  'tests/draw-trace-badge-route.test.js',
+  // "Novos Confrontos" ⊥ "Abertas" TAMBÉM na ELIMINATÓRIA (a elim tem flag PRÓPRIA e o gate
+  // _allowsNewMatchups lê a FASE, não só o top-level). v1.4.6.
+  'tests/new-matchups-elim-independent.test.js',
+  // Resumo da config indica ONDE o tie-break entra (5-5 / 6-6), pela MESMA fonte do placar
+  // ao vivo (_tbLoserGames) — antes só dizia "tiebreak 7pts". v1.4.7.
+  'tests/config-summary-tiebreak-at.test.js',
   'tests/wo-slot-uid-identity.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
@@ -215,6 +251,9 @@ const SUITES = [
   'tests/dupla-elim-minimal-tree.test.js',
   'tests/late-entry-door-closes.test.js',
   'tests/late-entry-upper-grows-lower.test.js',
+  // Chave SEM bye (pow2 4/8/16) + 2 duplas formadas → PAREAM num jogo novo e ENTRAM (cresce a
+  // chave, sem slot morto). Trava o "formei dupla e não entrou" reportado pelo dono em pow2.
+  'tests/late-dupla-pow2-grow.test.js',
   'tests/match-identity-dedup.test.js',
   'tests/late-entry-recompute-n.test.js',
   // _syncLowerBracket (dona única da 1ª inferior): cenário do dono (1ª sup jogada ANTES do

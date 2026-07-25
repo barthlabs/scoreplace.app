@@ -279,3 +279,36 @@ function _stripUidEntryNames(p) {
 window._stripStoredNamesForUidEntries = function (arr) {
   return Array.isArray(arr) ? arr.map(_stripUidEntryNames) : arr;
 };
+
+// ── CURA DO RÓTULO CRU NOS JOGOS (v1.4.30) — POR QUE O BUG "FICAVA VOLTANDO" ────────
+// O roster é só-uid, mas o motor grava o NOME resolvido como texto em m.p1/m.p2 (e
+// team1/team2 no Rei/Rainha). Todo caminho que cria jogo (sorteio, integração tardia,
+// W.O., lower bracket…) depende do cache de perfis estar quente NAQUELE instante —
+// qualquer corrida persistia "Jogador sem perfil (xxxx)" como identidade. Em vez de
+// caçar caminho por caminho (3ª encarnação do bug em jul/2026), a cura roda no CHOKE
+// POINT: saveTournament chama isto em TODO save → o rótulo não sobrevive a nenhum save
+// feito com o perfil resolvível. Complementa _healOrphanLabels (render do bracket), que
+// busca perfis que faltam. Puro: usa window._nameForUid só se existir (servidor: no-op).
+window._cureRawMatchLabels = function (t) {
+  if (!t || typeof window._nameForUid !== 'function') return 0;
+  var RE = /jogador sem perfil \(/i;
+  var ms = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t && t.matches) || [];
+  var n = 0;
+  (ms || []).forEach(function (m) {
+    if (!m) return;
+    [['p1', 'team1Uids', 'team1'], ['p2', 'team2Uids', 'team2']].forEach(function (par) {
+      var uids = m[par[1]];
+      if (!Array.isArray(uids) || !uids.length) return;
+      if (RE.test(String(m[par[0]] || ''))) {
+        var nomes = uids.map(function (u) { return window._nameForUid(u); });
+        if (nomes.length && nomes.every(Boolean)) { m[par[0]] = nomes.join(' / '); n++; }
+      }
+      // Rei/Rainha: team1[i] ↔ team1Uids[i] (nomes individuais, casados por índice)
+      var arr = m[par[2]];
+      if (Array.isArray(arr)) arr.forEach(function (nm, i) {
+        if (RE.test(String(nm || '')) && uids[i]) { var v = window._nameForUid(uids[i]); if (v) { arr[i] = v; n++; } }
+      });
+    });
+  });
+  return n;
+};

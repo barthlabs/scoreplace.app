@@ -639,6 +639,27 @@
       return { columns: [], format: null, stage: null, context: {} };
     }
 
+    // TAG "BYE" (display): quem VENCEU um jogo-bye na rodada r leva a tag âmbar SÓ na rodada r+1
+    // (some quando avança por vitória). Antes isto só rodava em _renderPhaseBracket (single-elim);
+    // a Dupla Eliminatória renderiza por outro caminho (renderDoubleElimBracket) e a tag NÃO
+    // aparecia consistente — o novo modelo bye/play-in tem MAIS byes (a árvore-mínima não tinha).
+    // Rodar aqui, no processador ÚNICO, cobre TODOS os renders. Idempotente; não sobrescreve flag.
+    if (typeof window._isByeMatch === 'function' && Array.isArray(t.matches) && t.matches.length) {
+      var _byeNext = {};
+      t.matches.forEach(function (m) {
+        if (window._isByeMatch(m) && m.winner) {
+          var _r = (m.round == null) ? 1 : m.round;
+          _byeNext[(m.bracket || 'main') + '|' + m.winner] = _r + 1;
+        }
+      });
+      t.matches.forEach(function (m) {
+        if (window._isByeMatch(m)) return;
+        var _r = (m.round == null) ? 1 : m.round, _bk = (m.bracket || 'main');
+        if (m.p1 && m.p1FromBye == null && _byeNext[_bk + '|' + m.p1] === _r) m.p1FromBye = true;
+        if (m.p2 && m.p2FromBye == null && _byeNext[_bk + '|' + m.p2] === _r) m.p2FromBye = true;
+      });
+    }
+
     var cols = [];
 
     // 1) Swiss past (p2 resolution recap) — only when we're in the elim phase

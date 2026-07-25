@@ -143,6 +143,10 @@ g.window._expandFormationAllowed = function (t) {
 // no servidor (toca document no load), e espelhar as funções aqui criaria uma 2ª versão do
 // código — o bug de versão que a canonização quer matar. Agora é UM arquivo só, vendored.
 require('./vendor/identity-core.js');
+require('./vendor/waitlist-core.js');            // cânone da LISTA DE ESPERA (3 storages) —
+                                                // _removeFromWaitlist é chamada pelo motor ao formar
+                                                // grupo Rei/Rainha a partir da espera. Sem isto ela não
+                                                // existia no servidor e o tardio ficava na espera pra sempre.
 require('./vendor/persist-core.js');            // _cleanUndefined + _computeAdminEmails/Uids/MemberUids
                                                 // — o boundary de escrita (o que a drawRound grava
                                                 // tem de sair pela MESMA regra do cliente)
@@ -528,6 +532,12 @@ function integrateLateEntries(t, opts) {
   try { if (typeof win._stampMissingMatchUids === 'function') win._stampMissingMatchUids(t); }
   catch (e) { win._error && win._error('[integrateLate] stampUids:', e); }
 
+  // ⛔ NUNCA RE-SORTEAR (regra do dono, 2026-07-24): entrada tardia SÓ pode transformar um BYE já
+  // sorteado num confronto (bye→jogo real), NUNCA re-sortear os confrontos já publicados. O
+  // caminho é ADITIVO — `_placeLateEntriesSurgically` (bye-fill) abaixo. O antigo bloco de
+  // RE-SEMEADURA DO FRESH foi REMOVIDO: ele re-sorteava a chave inteira ("tá re-sorteando tudo,
+  // isso não pode ocorrer"). Ver project_bye_rep_auto_resolution / project_late_entry_never_redraws.
+
   let extra = 0, duplas = 0, duplasTier = 0, dissolved = 0, monarch = 0, repfill = 0;
   // v1.2.58: dupla formada entra no lugar do repescado (chave PLAYIN) — precede o createExtra
   // (que é do outro formato de chave). Reusa repFill/_resolveRepFills.
@@ -558,6 +568,15 @@ function integrateLateEntries(t, opts) {
     }
   } catch (e) { win._error && win._error('[integrateLate] placeLate:', e); }
 
+  // v1.4.12 — SANEAMENTO DA ESPERA: quem JÁ ESTÁ num grupo não pode continuar na Lista de
+  // Espera. Cura os docs que ficaram sujos enquanto _removeFromWaitlist não existia no
+  // servidor (bug Confra jul/2026: os tardios formavam grupo, jogavam e classificavam, mas
+  // seus nomes nunca saíam de standbyParticipants — apareciam na espera até depois de avançar
+  // de fase). Idempotente: sem resíduo, remove 0. Ver waitlist-core.js.
+  let wlClean = 0;
+  try { if (typeof win._sanitizeWaitlistVsGroups === 'function') wlClean = win._sanitizeWaitlistVsGroups(t) || 0; }
+  catch (e) { win._error && win._error('[integrateLate] sanitizeWaitlist:', e); }
+
   // v1.3.162: rede de segurança FINAL — confronto repetido (mesmo par de uids, mesma rodada) que
   // tenha escapado por qualquer caminho é removido, desde que o duplicado NÃO tenha placar. Jogo já
   // disputado nunca é apagado pelo código.
@@ -574,7 +593,7 @@ function integrateLateEntries(t, opts) {
   try { if (typeof win._syncLowerBracket === 'function') { if (win._syncLowerBracket(t)) healed++; } }
   catch (e) { win._error && win._error('[integrateLate] syncLower:', e); }
 
-  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0 || healed > 0);
+  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0 || healed > 0 || wlClean > 0);
   if (changed) {
     try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e) {}
     t.updatedAt = new Date().toISOString();
@@ -582,7 +601,7 @@ function integrateLateEntries(t, opts) {
   // `placed` NO RETORNO (v1.3.146): antes o contador do fallback (`redrawn`) NÃO era devolvido —
   // por isso o diag do dono mostrou `changed:true` com tudo 0 e o redraw passou despercebido.
   // Todo caminho que muda a chave TEM de aparecer no retorno.
-  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill, placed: redrawn };
+  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill, placed: redrawn, wlClean: wlClean };
 }
 
 // ── FORMAR dupla na LISTA DE ESPERA + INTEGRAR, ATÔMICO no servidor (CF-only). Espelha

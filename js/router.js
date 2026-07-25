@@ -37,6 +37,9 @@ function initRouter() {
 
   const handleRoute = () => {
     const hash = window.location.hash || '#dashboard';
+    // Selo de diagnóstico do sorteio (SANDBOX) não pode sobreviver à troca de tela — ele só
+    // se auto-removia no próximo _dtrace, então ficava por cima da dashboard. Ver store.js.
+    try { if (typeof window._syncDrawTraceBadge === 'function') window._syncDrawTraceBadge(); } catch (e) {}
     const hashPath = hash.substring(1);
     const parts = hashPath.split('/');
     const view = parts[0];

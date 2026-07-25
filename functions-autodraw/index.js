@@ -453,8 +453,13 @@ exports.integrateLateEntries = onCall(async (request) => {
       if (!res.changed) return { ok: true, changed: false }; // nada a integrar → não grava
       const b = _applyWriteBoundary(t);
       tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+      // Devolve TODOS os contadores (v1.4.43): faltava `placed`/`repfill`/etc. — o "jogo 5" novo
+      // (via _growAdefinir/_placeLateEntriesSurgically volta em `placed`) não aparecia no trace nem
+      // disparava o toast, dando a impressão de "não criou" mesmo tendo criado. Todo caminho que muda
+      // a chave TEM de aparecer no retorno. Ver [[project_late_dupla_fills_awaiting_slot]].
       return { ok: true, changed: true, extra: res.extra, duplas: res.duplas, duplasTier: res.duplasTier,
-               dissolved: res.dissolved, monarch: res.monarch, tournament: b.clean };
+               dissolved: res.dissolved, monarch: res.monarch, repfill: res.repfill, placed: res.placed,
+               wlClean: res.wlClean, tournament: b.clean };
     });
   } catch (e) {
     if (e instanceof HttpsError) throw e;

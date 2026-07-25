@@ -101,6 +101,9 @@ function _applyMyMatchesFilter() {
 }
 
 function renderBracket(container, tournamentId, isInline) {
+  // v1.4.20: a barra de busca da CLASSIFICAÇÃO sai no PRIMEIRO bloco deste render.
+  // Reset aqui = começo do passo; sem isto, um render posterior não emitiria a barra.
+  if (typeof window._classifSearchReset === 'function') window._classifSearchReset();
   var _t = window._t || function(k) { return k; };
   const tId = tournamentId || window._lastActiveTournamentId;
   // Entrada no bracket (navegação REAL) → agenda o scroll pro próximo jogo do usuário.
@@ -137,6 +140,21 @@ function renderBracket(container, tournamentId, isInline) {
         });
       }
     } catch (_efin) {}
+  }
+
+  // CURA do rótulo cru "Jogador sem perfil (…)" com uids gravados (v1.4.29): busca os
+  // perfis que faltam e reescreve o nome real no doc (persiste se organizador). 1× por
+  // torneio por sessão — se curou algo, re-renderiza pra tela mostrar o nome na hora.
+  if (t && typeof window._healOrphanLabels === 'function') {
+    window._healedOrphanTids = window._healedOrphanTids || {};
+    if (!window._healedOrphanTids[String(tId)]) {
+      window._healedOrphanTids[String(tId)] = 1;
+      try {
+        window._healOrphanLabels(t).then(function (n) {
+          if (n > 0 && typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+        });
+      } catch (_ehl) {}
+    }
   }
 
   // Se torneio não encontrado localmente, tentar carregar do Firestore
@@ -295,7 +313,7 @@ function renderBracket(container, tournamentId, isInline) {
     '</div>';
   })() : '';
 
-  const headerHtml = isInline ? '' /* v1.9.98: inline (dentro da página de detalhes) NÃO renderiza botões de ação — já existem na página (evita duplicação). Só o standalone #bracket/:id mantém o cabeçalho completo. */ : `
+  let headerHtml = isInline ? '' /* v1.9.98: inline (dentro da página de detalhes) NÃO renderiza botões de ação — já existem na página (evita duplicação). Só o standalone #bracket/:id mantém o cabeçalho completo. */ : `
     ${(typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({
           href: '#tournaments/' + _tIdSafe,
@@ -315,6 +333,18 @@ function renderBracket(container, tournamentId, isInline) {
       </div>
       <div>${actionBtnsHtml}</div>
     </div>`;
+
+  // v1.4.14/18: BUSCA NAS CHAVES logo abaixo do cabeçalho (sticky canônico). Vem daqui, e
+  // não de cada um dos 7 render sites (Liga/Grupos/Elim/Dupla Elim/Suíço/fase/inline),
+  // porque headerHtml é o único ponto por onde TODOS passam — um lugar só, sem drift
+  // (feedback_sweep_all_render_sites). Só com chave sorteada: sem jogo não há o que buscar.
+  // ⚠️ NÃO gatear por isInline (v1.4.18): a tela onde mais se procura alguém é justamente a
+  // INLINE (#tournaments/<id>, o chaveamento dentro da página do torneio) — foi lá que o dono
+  // foi olhar e não achou. O `isInline` existe pra não DUPLICAR os botões de ação que a página
+  // já tem; a busca não é duplicada por ninguém.
+  if (hasContent && typeof window._bracketBar === 'function') {
+    headerHtml += window._bracketBar(true);
+  }
 
   // ── Banner "Iniciar Torneio" e Progress Bar (skip quando inline — já existem no card acima) ──
   const hasDrawContent = (t.matches && t.matches.length > 0) || (t.rounds && t.rounds.length > 0) || (t.groups && t.groups.length > 0);
@@ -786,7 +816,7 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var uidp = String((pp && typeof pp === 'object' && pp.uid) || '').replace(/'/g, "\\'");
     // v1.3.55: W.O. no card "Sem dupla" (faltava). Só pro organizador; vira Reverter se ausente.
     var wo = (isOrg && typeof window._woBtnHtml === 'function')
-      ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + tIdSafe + "', '" + _sa(nmp) + "');", !_abs, { label: _abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
+      ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + tIdSafe + "', '" + _sa(nmp) + "', '" + uidp + "');", !_abs, { label: _abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
       : '';
     // v1.3.148 (dono: "mantenha as cores dos inscritos consistente"): este painel colorizava por
     // STATUS DE PAREAMENTO (âmbar = sem dupla, verde = dupla formada) e devolvia styleExtra VAZIO —
@@ -1186,7 +1216,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
         <span style="font-weight:600;font-size:0.88rem;color:${isNext ? '#fbbf24' : '#94a3b8'};flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">${name}${isNext && _policy === 'locked' ? ' <span style="font-size:0.62rem;font-weight:700;color:#fbbf24;background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>' : ''}</span>
         <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAb ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}"><input type="checkbox" ${mc ? 'checked' : ''} ${isAb ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${_tIdSafe}', '${safeName}', '${String(_pUid).replace(/'/g, "\\'")}');"`}><span class="toggle-slider"></span></label>
         <span style="font-size:0.65rem;font-weight:700;color:${statusColor};white-space:nowrap;">${statusLabel}</span>
-        ${window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${_tIdSafe}', '${safeName}')`, !isAb, { label: isAb ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem' })}
+        ${window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${_tIdSafe}', '${safeName}', '${String(_pUid).replace(/'/g, "\\'")}')`, !isAb, { label: isAb ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem' })}
       </div>`;
   }).join('');
 
@@ -3376,10 +3406,37 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // verde) e 'lower' (Chave Inferior, âmbar) — MESMAS cores dos cabeçalhos das seções
   // (ver renderSection em ~1551-1552). Linha única 'main', Grande Final ('grand') e 3º
   // lugar NÃO recebem (culminação/linha única — não há "linha paralela" a distinguir).
+  // v1.4.14: nomes do card em data-players, pra barra de BUSCA das chaves filtrar sem
+  // re-render (window._bracketApplyFilter). Usa os nomes RESOLVIDOS AO VIVO — os mesmos
+  // que aparecem na tela — senão buscar por quem trocou o nome no perfil não acharia nada.
+  // Duplas entram inteiras E membro a membro (o "A / B" é tipografia, nunca chave —
+  // project_dupla_entry_structural_not_slash).
+  var _searchNames = (function () {
+    var out = [];
+    function add(v) {
+      var nm = String(v == null ? '' : v).trim();
+      if (!nm || nm === 'TBD' || nm === 'BYE') return;
+      out.push(nm);
+      if (nm.indexOf(' / ') !== -1) nm.split(' / ').forEach(function (x) { if (x.trim()) out.push(x.trim()); });
+    }
+    try {
+      var _uidsFor = function (slot) {
+        return window._slotUidsPositional ? window._slotUidsPositional(m, slot)
+          : (slot === 'p1' ? (m.p1Uid || m.team1Uids) : (m.p2Uid || m.team2Uids));
+      };
+      add(t && window._resolveSideLive ? window._resolveSideLive(t, m.p1, _uidsFor('p1')) : m.p1);
+      add(t && window._resolveSideLive ? window._resolveSideLive(t, m.p2, _uidsFor('p2')) : m.p2);
+      // Rei/Rainha: os times são arrays de PESSOAS.
+      (m.team1 || []).forEach(add);
+      (m.team2 || []).forEach(add);
+    } catch (e) {}
+    return window._safeHtml(out.join(' | '));
+  })();
+
   var _tierLC = { gold: '#fbbf24', silver: '#cbd5e1', line3: '#cd7f32', line4: '#3b82f6', upper: '#10b981', lower: '#f59e0b' };
   var _lineLeftBorder = _tierLC[m.bracket] ? ('border-left:4px solid ' + _tierLC[m.bracket] + ';') : '';
   return `
-    <div id="card-${m.id}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:120px;background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" data-players="${_searchNames}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:120px;background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
@@ -5268,3 +5325,47 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
 }
 
 // ─── Compute standings ────────────────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BUSCA NAS CHAVES (v1.4.14) — filtra os CARDS DE JOGO por trecho de nome.
+// Pedido do dono: "filtrar sequência de caracteres e encontrar pessoas e seus jogos
+// mais facilmente". A barra é a CANÔNICA (window._bracketBar → _inscritosFilterBar em
+// modo searchOnly); aqui mora só o filtro.
+//
+// DOM PURO, sem re-render: esconder/mostrar card preserva scroll, <details> aberto e
+// placar em edição (project_dashboard_no_rerender / feedback_rerender_keep_scroll).
+// Casa acento-insensitive ("jose" acha "José") e por trecho em qualquer posição.
+// Container que fica sem NENHUM card visível some junto — senão sobra coluna/box vazio.
+// ═══════════════════════════════════════════════════════════════════════════════
+window._bracketNorm = function (s) {
+  return String(s == null ? '' : s).toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+};
+window._bracketApplyFilter = function () {
+  var inp = document.getElementById('bracket-search');
+  var q = window._bracketNorm(inp ? inp.value : '').trim();
+  var cards = document.querySelectorAll('[data-players]');
+  if (!cards.length) return;
+  var shown = 0;
+  var parents = [];
+  for (var i = 0; i < cards.length; i++) {
+    var c = cards[i];
+    var hit = !q || window._bracketNorm(c.getAttribute('data-players') || '').indexOf(q) !== -1;
+    // Guarda o display original UMA vez — o card pode ter display próprio (flex/grid).
+    if (c.dataset.fbDisp === undefined) c.dataset.fbDisp = c.style.display || '';
+    c.style.display = hit ? c.dataset.fbDisp : 'none';
+    if (hit) shown++;
+    if (c.parentElement && parents.indexOf(c.parentElement) === -1) parents.push(c.parentElement);
+  }
+  // Container sem nenhum card visível some (coluna de rodada, box de grupo…).
+  parents.forEach(function (p) {
+    var kids = p.querySelectorAll(':scope > [data-players]');
+    if (!kids.length) return;
+    var any = false;
+    for (var k = 0; k < kids.length; k++) { if (kids[k].style.display !== 'none') { any = true; break; } }
+    if (p.dataset.fbDisp === undefined) p.dataset.fbDisp = p.style.display || '';
+    p.style.display = any ? p.dataset.fbDisp : 'none';
+  });
+  var empty = document.getElementById('bracket-search-empty');
+  if (empty) empty.style.display = (q && shown === 0) ? 'block' : 'none';
+};

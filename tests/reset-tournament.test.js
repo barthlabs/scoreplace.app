@@ -78,7 +78,17 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
   ok(!t.tournamentStarted, 'tournamentStarted zerado');
 
   // ── INSCRITOS PRESERVADOS ──
-  ok((t.participants || []).length === 4, 'os 4 inscritos MANTIDOS [' + (t.participants || []).length + ']');
+  // v1.4.12: o reset DEVOLVE a lista de espera pros inscritos (comportamento documentado em
+  // _clearTournamentDraw: "devolve os suplentes da lista de espera pros inscritos"). A fixture
+  // tem 4 inscritos + 'E' em monarchWaitlist → 5 depois do reset.
+  // ⚠️ Este assert dizia 4 e passava PELO MOTIVO ERRADO: _getWaitlist morava no store.js, que o
+  // harness não carrega, então a devolução nunca rodava (guard `typeof === 'function'` falso —
+  // a MESMA classe de bug que prendia o tardio na espera no servidor). Com waitlist-core.js
+  // vendorado/carregado, a função existe e o comportamento real aparece.
+  var _names = (t.participants || []).map(function (p) { return (p && (p.displayName || p.name)) || String(p || ''); });
+  ok(_names.length === 5, 'inscritos + suplente devolvido = 5 [' + _names.length + ': ' + _names.join(',') + ']');
+  ['A', 'B', 'C', 'D'].forEach(function (n) { ok(_names.indexOf(n) !== -1, 'inscrito ' + n + ' MANTIDO'); });
+  ok(_names.indexOf('E') !== -1, "suplente 'E' (monarchWaitlist) DEVOLVIDO ao pool");
 
   // ── bracketResolution da fase limpo (re-avanço reabre o painel) ──
   ok(!t.phases[1].bracketResolution, 'bracketResolution da fase 2 limpo (painel reabre no re-avanço)');
