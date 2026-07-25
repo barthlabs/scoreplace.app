@@ -440,19 +440,29 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   var r = eng.buildPhaseBrackets([{ players: names, matches: [] }],
     { name: 'E', source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 24 }] }, fixedPairs: false, grandFinal: false, bracketResolution: 'playin' }, cs, 'rw');
   var ms = r.matches.filter(function (m) { return m.bracket === 'main'; });
-  var r1 = ms.filter(function (m) { return m.isPhaseRepR1; });
-  var oit = ms.filter(function (m) { return m.round === 1; });
-  eq(r1.length, 12, 'repescagem 24: R1 tem 12 jogos');
-  // v1.3.77: FÓRMULA MÍNIMA (⌈E/2⌉). 12 vencedores → 6 jogos na 2ª rodada (não 8/pow2), TODOS
-  // pareamento de vencedores adjacentes, ZERO repescado aqui (12 é par). O repescado só aparece
-  // onde o nº de vencedores fica ímpar (mais à frente). Ver feedback_draw_is_cf_only.
-  eq(oit.length, 6, 'repescagem 24: 2ª rodada tem 6 jogos (⌈12/2⌉, mínimo)');
-  function src(oid, slot) { var s = r1.filter(function (x) { return x.nextMatchId === oid && x.nextSlot === slot; })[0]; return s ? (r1.indexOf(s) + 1) : null; }
-  eq([src(oit[0].id, 'p1'), src(oit[0].id, 'p2')], [1, 2], 'oitavas[0] = vencedor jogo1 × vencedor jogo2');
-  eq([src(oit[1].id, 'p1'), src(oit[1].id, 'p2')], [3, 4], 'oitavas[1] = vencedor jogo3 × vencedor jogo4');
-  eq([src(oit[5].id, 'p1'), src(oit[5].id, 'p2')], [11, 12], 'oitavas[5] = vencedor jogo11 × vencedor jogo12');
-  ok(oit.every(function (m) { return !(m.repFill && m.repFill.length); }), 'repescagem 24: ZERO repescado na 2ª rodada (12 vencedores é par)');
-  ok(ms.some(function (m) { return m.repFill && m.repFill.length; }), 'repescagem 24: repescado existe MAIS À FRENTE (rodada com nº ímpar de vencedores)');
+  // DECISÃO DO DONO (25/jul): a FÓRMULA MÍNIMA (⌈E/2⌉ por rodada, com repFill onde o
+  // nº de vencedores fica ímpar) foi SUPERSEDIDA pelo desenho determinístico
+  // (js/views/chaves.js): chave = f(N, formato), sobre potência de 2, com a regra do
+  // MENOR esforço decidindo bye × repescagem. Não há mais rodada 0 nem `repFill`.
+  //
+  // Em N=24: B=32 → vagas=8, perdedores=8 → EMPATE, e empate vai pra BYE. Logo 24
+  // resolve com 8 folgas e ZERO repescagem — não com 12 jogos de repescagem na R1.
+  var r1 = ms.filter(function (m) { return m.round === 1; });
+  var reais = r1.filter(function (m) { return !m.isBye; });
+  eq(reais.length, 8, 'N=24: 8 jogos reais na R1 (as outras 8 posições são folga)');
+  ok(r1.length === 16, 'N=24: R1 tem 16 posições (B/2 com B=32), got ' + r1.length);
+  ok(!ms.some(function (m) { return m.repFill && m.repFill.length; }),
+    'N=24: ZERO repFill — a repescagem virou estrutural, sem vaga pendente');
+  ok(!ms.some(function (m) { return m.isRepechageSlot; }),
+    'N=24 resolve por BYE (empate vagas × perdedores), então não há vaga de repescagem');
+  // todos os 24 entram, ninguém é cortado
+  var dentro = {};
+  ms.forEach(function (m) {
+    [[m.p1, m.p1Seed], [m.p2, m.p2Seed]].forEach(function (par) {
+      if (par[1] != null && par[0] && !/BYE/.test(String(par[0]))) dentro[par[0]] = 1;
+    });
+  });
+  eq(Object.keys(dentro).length, 24, 'N=24: todos os 24 entram na chave (ninguém é cortado)');
 })();
 
 // ── v3.1: FASE DE GRUPOS como fase posterior ───────────────────────────────

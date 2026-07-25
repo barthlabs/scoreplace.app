@@ -19,12 +19,24 @@ console.log('\n== Dupla Eliminatória — saída observável ==');
 (function () {
   const t = buildDupla(14);
   const cad = lowerCadence(t);
-  // PLAY-IN CLÁSSICO (buildDupla força bracketResolution:'playin'): 14 duplas → P_lo=8, reps=6.
-  // A pré-rodada inferior recebe os 4 derrotados da R1 sup + os 6 derrotados do play-in = 10 → 5
-  // jogos; depois os encontros (merges/battles) reduzem 5-4-3-2-1. project_bye_rep_auto_resolution.
-  eq(cad, [5, 4, 3, 2, 1], 'chave inferior de 14 (play-in) = 5-4-3-2-1 (pré = R1 sup + play-in losers)');
+  // DECISÃO DO DONO (25/jul, depois do torneio de casais): a Dupla Eliminatória passou
+  // a usar o DESENHO DETERMINÍSTICO (js/views/chaves.js) — chave = f(N, formato), com
+  // topologia PADRÃO sobre potência de 2, absorvendo a diferença em bye/repescagem.
+  //
+  //   ANTES (árvore mínima):  5 - 4 - 3 - 2 - 1
+  //   AGORA (padrão, B=16):   4 - 4 - 2 - 2 - 1 - 1
+  //
+  // A regra "NUNCA pow2" da árvore mínima foi SUPERSEDIDA. Não é regressão: foi troca
+  // deliberada de motor, pra que o id do jogo vire estrutural (VC-R1-P3) e a entrada
+  // tardia deixe de precisar de cirurgia — que foi o que quebrou ao vivo.
+  eq(cad, [4, 4, 2, 2, 1, 1], 'chave inferior de 14 = topologia padrão da dupla eliminatória');
   ok(cad[cad.length - 1] === 1, 'última rodada inferior = 1 jogo (Final da inferior)');
-  ok(!cad.slice(0, -1).some(function (g, i) { return g === 1 && cad[i + 1] === 1; }), 'sem duas rodadas de 1 jogo seguidas (battle dupla = bug antigo)');
+  // As DUAS últimas rodadas da inferior têm 1 jogo cada, e isso é CORRETO na dupla
+  // eliminatória padrão: a penúltima é a semifinal da inferior e a última é a final da
+  // inferior (que produz o adversário da grande final). O teste antigo tratava isso
+  // como "battle dupla = bug" porque a árvore mínima não tinha essa forma.
+  ok(cad.length >= 2 && cad[cad.length - 1] === 1 && cad[cad.length - 2] === 1,
+    'as duas últimas rodadas da inferior são semifinal e final (1 jogo cada)');
 })();
 
 // ---------- 2. NOME DAS RODADAS renderizadas (bug: "Linha", "Rodada 5", "Quartas" na inferior) ----------

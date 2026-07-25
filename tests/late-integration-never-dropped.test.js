@@ -46,7 +46,11 @@ const gamesOf = (t, nm) => (W._collectAllMatches(t) || []).filter(m => m && (m.p
 // ── (B) COLETOR: ausente-no-sorteio que fica em participants, ao virar PRESENTE, ganha jogo ──
 console.log('── ausente no sorteio + presente depois ⇒ ganha jogo (mesmo FORA da espera) ──');
 [['Elim Simples', false], ['Dupla Elim', true]].forEach(([label, dupla]) => {
-  [4, 8].forEach(N => {
+  // N=5/9 e não 4/8 DE PROPÓSITO: 4 e 8 são potência de 2 EXATA, onde a chave está cheia
+  // e um tardio SOZINHO não entra — espera par (regra do dono, 25/jul). O que está sob
+  // teste AQUI é o COLETOR enxergar o órfão de roster; o comportamento de chave cheia
+  // mora em tests/late-entry-never-redraws. Fixture com folga isola a pergunta.
+  [5, 9].forEach(N => {
     const t = mkT(N, dupla);
     W.AppStore.tournaments = [t];
     if (!dc.drawInitial(t, {}).ok) return;

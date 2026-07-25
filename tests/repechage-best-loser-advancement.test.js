@@ -1,60 +1,71 @@
-// REGRA DO DONO (jul/2026): na repescagem de 1 linha (fórmula mínima), o MELHOR derrotado pega a
-// vaga que exige MENOS jogos até a final (avança mais) — repescar numa rodada mais baixa = mais
-// jogos, então fica pros PIORES. Bug: o satout (rodada 0, mais jogos) pegava o rank 0 (melhor).
-// Fix: _rankRepFillsByAdvancement reordena os ranks por altura da rodada de destino.
-const H = require('./render-harness');
-const W = H.sandbox, E = H.E;
-let pass = 0, fail = 0; const fails = [];
-function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
-function mkPool(n) { const a = []; for (let i = 1; i <= n; i++) a.push({ displayName: 'T' + i, name: 'T' + i, uid: 'u' + i, categories: ['C'] }); return a; }
+/* REPESCAGEM — QUEM É REPESCADO E CONTRA QUEM. node tests/repechage-best-loser-advancement.test.js
+ *
+ * SUPERSEDE a regra anterior deste arquivo (decisão do dono, 25/jul):
+ *
+ *   ANTES — "o MELHOR derrotado pega a vaga que exige MENOS jogos até a final",
+ *   implementado por _rankRepFillsByAdvancement, que reordenava os ranks das vagas
+ *   depois da rodada fechar. Quem era repescado dependia do DESEMPENHO.
+ *
+ *   AGORA — a repescagem é ESTRUTURAL: chave = f(N, formato). Já no sorteio se sabe
+ *   que a vaga do seed #S recebe o perdedor de um jogo NOMEADO da R1. Não há
+ *   ranqueamento, não há vaga pendente, não depende de saldo.
+ *
+ * MAS a propriedade que de fato protege o jogador continua — e é mais forte que a
+ * regra antiga: o receptor da repescagem é sempre escolhido na METADE OPOSTA da
+ * chave (chaves.js: `cand = livres.filter(j => (j < meta) !== (pos < meta))`).
+ * Consequência prática: quem perde e é repescado NÃO reencontra imediatamente quem
+ * acabou de derrotá-lo. É isso que este arquivo trava agora.
+ */
+const H = require('./headless.js');
+const W = H.window;
+const C = W._chaves, A = W._chavesAdapter;
 
-function buildElim(n) {
-  const cfg = { format: 'Eliminatórias Simples', formatCode: 'elim', teamSize: 1, bracketResolution: 'playin', source: { type: 'enrollment' }, categories: ['C'] };
-  const t = { id: 'E' + n, format: 'Eliminatórias Simples', teamSize: 1, matches: [], currentPhaseIndex: 0 };
-  const b = E.generatePhase(mkPool(n), cfg, { idPrefix: 'p' + n, ordered: true, t: t, isVip: function () { return false; }, catOf: function (e) { return (e.categories || [])[0]; } });
-  E.storePhase(t, 0, b);
-  return t;
-}
-function repFillRows(t) {
-  const all = W._collectAllMatches(t);
-  const rows = [];
-  all.forEach(function (m) { if (Array.isArray(m.repFill)) m.repFill.forEach(function (rf) { if (rf.tagRep) rows.push({ round: m.round || 0, src: rf.srcRound, rank: rf.rank, sat: !!m.isPhaseRepGame }); }); });
-  return rows;
-}
+let pass = 0, fail = 0;
+function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
-console.log('── melhor derrotado → vaga com MENOS jogos (rank 0 na rodada MAIS ALTA) ──');
-// N com 2+ repescados da MESMA rodada-fonte (o caso do dono).
-[13, 21, 25].forEach(function (N) {
-  const rows = repFillRows(buildElim(N));
-  // agrupa por srcRound; onde há 2+, o rank 0 tem que estar na rodada MAIS ALTA de todas.
-  const bySrc = {};
-  rows.forEach(function (r) { (bySrc[r.src] = bySrc[r.src] || []).push(r); });
-  let checkedMulti = false;
-  Object.keys(bySrc).forEach(function (src) {
-    const list = bySrc[src];
-    if (list.length < 2) return;
-    checkedMulti = true;
-    const byRank = list.slice().sort(function (a, b) { return a.rank - b.rank; });
-    // rank crescente ⇒ rodada NÃO-crescente (rank 0 = rodada mais alta = menos jogos)
-    let mono = true;
-    for (let i = 1; i < byRank.length; i++) { if (byRank[i].round > byRank[i - 1].round) mono = false; }
-    ok(mono, 'N=' + N + ' srcRound=' + src + ': rank crescente → rodada decrescente (melhor=vaga mais alta) [' + byRank.map(function (r) { return 'r' + r.rank + '@round' + r.round; }).join(',') + ']');
-    // o rank 0 NÃO pode ser o satout (rodada 0) quando existe vaga em rodada mais alta
-    const rank0 = byRank[0];
-    const maxRound = Math.max.apply(null, list.map(function (r) { return r.round; }));
-    ok(rank0.round === maxRound, 'N=' + N + ' srcRound=' + src + ': rank 0 está na rodada MAIS ALTA (' + rank0.round + '===' + maxRound + '), não no satout');
+const parts = (n) => Array.from({ length: n }, (_, i) => ({ displayName: 'T' + (i + 1), uid: 'u' + (i + 1) }));
+const isBye = (x) => !x || x === 'TBD' || /BYE/.test(String(x));
+
+console.log('\n== repescagem: receptor na METADE OPOSTA do jogo de origem (N = 3..64) ==');
+for (let N = 3; N <= 64; N++) {
+  const pl = C.plano(N);
+  if (!pl.repescagens) continue;           // este N resolve por bye — nada a checar
+  const d = C.chave(N, 'simples');
+  const meta = pl.B / 4;                   // fronteira das metades na R1
+  const reps = d.jogos.filter((j) => j.tipo === 'repescagem');
+  ok(reps.length === pl.repescagens, `N=${N}: ${reps.length} repescagens, esperado ${pl.repescagens}`);
+  reps.forEach((j) => {
+    const src = d.porId[j.origemRepescado];
+    ok(!!src, `N=${N}: ${j.id} sem jogo de origem declarado`);
+    if (!src) return;
+    const posRep = j.pos - 1, posSrc = src.pos - 1;
+    ok((posRep < meta) !== (posSrc < meta),
+      `N=${N}: ${j.id} (pos ${j.pos}) recebe repescado de ${src.id} (pos ${src.pos}) — MESMA metade, deveria ser oposta`);
   });
-  ok(checkedMulti, 'N=' + N + ' :: tem 2+ repescados da mesma rodada (o caso testado)');
-});
+}
 
-// caso 1 repescado só (N=11/15): rank 0 é o único — não quebra.
-[11, 15].forEach(function (N) {
-  const rows = repFillRows(buildElim(N));
-  const bySrc = {};
-  rows.forEach(function (r) { (bySrc[r.src] = bySrc[r.src] || []).push(r); });
-  Object.keys(bySrc).forEach(function (src) { ok(bySrc[src].every(function (r) { return r.rank >= 0; }), 'N=' + N + ' srcRound=' + src + ': rank válido'); });
+console.log('== o repescado NÃO reencontra quem acabou de derrotá-lo ==');
+[5, 9, 10, 11, 19, 21, 37].forEach((N) => {
+  if (!C.plano(N).repescagens) return;
+  const built = A.build(N, 'simples', { participantes: parts(N) });
+  const t = { id: 'r' + N, format: 'Eliminatórias Simples', matches: built.matches };
+
+  const algozDe = {};   // derrotado -> quem o derrotou
+  let guard = 0;
+  for (;;) {
+    if (++guard > 4000) break;
+    const m = t.matches.find((x) => !x.winner && !isBye(x.p1) && !isBye(x.p2));
+    if (!m) break;
+    if (m.isRepechageSlot) {
+      ok(algozDe[m.p1] !== m.p2 && algozDe[m.p2] !== m.p1,
+        `N=${N}: ${m.id} — repescado reencontrou de imediato quem o derrotou (${m.p1} x ${m.p2})`);
+    }
+    const venc = m.p1, perd = m.p2;
+    m.winner = venc;
+    if (!algozDe[perd]) algozDe[perd] = venc;
+    W._advanceWinner(t, m);
+  }
 });
 
 console.log('\n' + (fail === 0 ? '✅ repechage-best-loser-advancement: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
-if (fails.length) { fails.forEach(function (f) { console.error('  ✗ ' + f); }); }
 process.exit(fail > 0 ? 1 : 0);

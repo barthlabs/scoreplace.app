@@ -450,7 +450,10 @@ exports.integrateLateEntries = onCall(async (request) => {
       if (!res || !res.ok) {
         throw _drawFail('failed-precondition', (res && res.reason) || 'integrate-failed', { tId, format: t.format });
       }
-      if (!res.changed) return { ok: true, changed: false }; // nada a integrar → não grava
+      // `recusas` viaja MESMO com changed=false — é justamente o caso "chave cheia": o
+      // tardio está presente, NÃO entrou, e o organizador precisa saber por quê e o que
+      // fazer. Devolver só `changed:false` aqui era silêncio, e silêncio foi o pecado da 1.5.x.
+      if (!res.changed) return { ok: true, changed: false, recusas: res.recusas || [] };
       const b = _applyWriteBoundary(t);
       tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
       // Devolve TODOS os contadores (v1.4.43): faltava `placed`/`repfill`/etc. — o "jogo 5" novo
@@ -459,7 +462,7 @@ exports.integrateLateEntries = onCall(async (request) => {
       // a chave TEM de aparecer no retorno. Ver [[project_late_dupla_fills_awaiting_slot]].
       return { ok: true, changed: true, extra: res.extra, duplas: res.duplas, duplasTier: res.duplasTier,
                dissolved: res.dissolved, monarch: res.monarch, repfill: res.repfill, placed: res.placed,
-               wlClean: res.wlClean, tournament: b.clean };
+               wlClean: res.wlClean, recusas: res.recusas || [], tournament: b.clean };
     });
   } catch (e) {
     if (e instanceof HttpsError) throw e;

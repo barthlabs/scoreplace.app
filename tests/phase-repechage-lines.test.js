@@ -76,14 +76,31 @@ function pool(n, pfx) { var a = []; for (var i = 1; i <= n; i++) a.push({ displa
   var goldPlayin = pms.filter(function (m) { return m.bracket === 'gold'; });
   var silverPlayin = pms.filter(function (m) { return m.bracket === 'silver'; });
   ok(goldPlayin.length > 0 && silverPlayin.length > 0, 'buildPhaseBrackets: 2 linhas (gold/silver) geradas');
-  ok(!goldPlayin.some(function (m) { return m.isBye; }) && !silverPlayin.some(function (m) { return m.isBye; }),
-    'playin: NENHUMA linha por BYE (repescagem chega em ambas)');
-  ok(goldPlayin.some(function (m) { return m.isPhaseRepR1; }) && silverPlayin.some(function (m) { return m.isPhaseRepR1; }),
-    'playin: as duas linhas têm R1 de repescagem (isPhaseRepR1)');
-  // contraprova bye
+
+  // DECISÃO DO DONO (25/jul): quem manda na resolução de potência de 2 é a LÓGICA,
+  // não o organizador — vale o que exige MENOS intervenção (menor entre vagas e
+  // perdedores; empate vai pra bye). `cfg.bracketResolution` é IGNORADO pelo motor.
+  //
+  // Logo, NÃO se pode mais afirmar "com playin as duas linhas têm repescagem": cada
+  // linha tem o seu N e a regra decide sozinha, podendo dar bye numa e repescagem na
+  // outra. O que continua obrigatório — e é o que o bug original deste arquivo
+  // atacava (25 equipes viravam 9 jogos + BYEs, perdendo gente) — é que NINGUÉM SUMA:
+  // toda linha entrega todos os seus participantes na chave.
+  var todos = function (ms) {
+    var s = {};
+    ms.forEach(function (m) {
+      [m.p1, m.p2].forEach(function (nm) { if (nm && nm !== 'TBD' && !/BYE/.test(String(nm))) s[nm] = 1; });
+    });
+    return Object.keys(s);
+  };
+  ok(todos(goldPlayin).length > 0, 'linha Ouro entrega participantes na chave');
+  ok(todos(silverPlayin).length > 0, 'linha Prata entrega participantes na chave');
+
+  // A resolução é a MESMA independente do que o organizador pedir — a lógica decide.
   var bye = build7('bye');
   var goldBye = (bye.matches || []).filter(function (m) { return m.bracket === 'gold'; });
-  ok(goldBye.some(function (m) { return m.isBye; }), 'bye: linha gold tem BYE (contraste com playin)');
+  ok(todos(goldBye).length === todos(goldPlayin).length,
+    'a resolução não muda com bracketResolution: mesma linha, mesmos participantes (a LÓGICA decide)');
 })();
 
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phase-repechage-lines: ' + pass + ' asserts ok, ' + fail + ' falharam');

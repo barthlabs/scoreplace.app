@@ -8,6 +8,34 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/test-utils.js',
+  // MOTOR DE CHAVES determinístico (js/views/chaves.js): a chave é função pura de
+  // (N, formato). Trava os invariantes que quebraram AO VIVO no torneio de casais
+  // (1.5.2→1.5.5): auto-confronto Time X vs X, tardio derrubando confronto já
+  // sorteado, tardio sem jogo, perdedor sem pouso na inferior. Se estas duas
+  // ficarem vermelhas, alguém reintroduziu patch incremental na chave.
+  'tests/chaves-aceite.test.js',
+  'tests/chaves-stress.test.js',
+  // JOGA a chave inteira até o campeão com o _advanceWinner REAL (não simulação).
+  // Foi este que pegou os 3 bugs do adapter que os testes de estrutura não viam:
+  // double-book do perdedor em fonte de repescagem (auto-confronto), cadeia
+  // travada por jogo com os dois lados mortos, e placar recolado em confronto
+  // diferente ao cruzar potência de 2.
+  'tests/chaves-adapter.test.js',
+  'tests/growth-frozen-prefix.test.js',
+  // "JOGO N" tem UM contador só. Regressão vista ao vivo: número da chave superior
+  // repetido na inferior, porque um 2º contador dentro de renderDoubleElimBracket
+  // sobrescrevia a fonte única sem pular BYE e sem deduplicar por id.
+  'tests/game-number-single-counter.test.js',
+  // A única inversão que existe: FINAL é o último jogo do torneio, 3º/4º um número
+  // abaixo (mesmo a final aparecendo ACIMA do 3º na tela). Pegou 2 furos: a Dupla
+  // Eliminatória não numerava o 3º lugar, e t.thirdPlaceMatch (que mora fora de
+  // t.matches) não era visitado por ninguém, em nenhum formato.
+  'tests/game-number-final-last.test.js',
+  // O TESTE DO FIASCO: torneio em andamento, com placar lançado, recebe dupla tardia.
+  // Prova que o placar sobrevive no MESMO jogo, o tardio ganha jogo de verdade (com
+  // pouso na inferior, na dupla), nenhum confronto existente muda, e a chave ainda
+  // fecha com campeão. Substitui as ~1.250 linhas de cirurgia incremental.
+  'tests/late-entry-recalc.test.js',
   'tests/bracket-logic.test.js',
   // Trava a canonização: o cliente NÃO sorteia a Liga agendada (fim da corrida
   // cliente×CF). Se alguém religar o poller, esta suíte fica vermelha.

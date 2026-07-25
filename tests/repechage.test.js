@@ -1,76 +1,115 @@
-/* REPESCAGEM da Fase 0 (playin) — MECANISMO ÚNICO repFill/_resolveRepFills.
- * node tests/repechage.test.js
+/* REPESCAGEM da Fase 0 — MECANISMO ESTRUTURAL. node tests/repechage.test.js
  *
- * O phase-lifecycle já travou a CONSERVAÇÃO de entrantes nos modos bye/exclusion/standby/playin.
- * Aqui congela a MECÂNICA da repescagem 'playin' (a MESMA do dupla-elim — feedback_resolution_one_logic):
- * materializa a chave (round 0 = repescagem), JOGA a R1 e verifica que `window._resolveRepFills`
- * (phases-engine.js REAL) preenche as vagas repFill da chave de T com o(s) MELHOR(es) PERDEDOR(es)
- * (saldo→score→seed):
- *   • n=6 → 3 jogos R1 + 1 vaga repFill: melhor perdedor entra direto na chave de 4.
- *   • n=7 → 3 jogos R1 + 1 jogo de REPESCAGEM (repGame): satout × melhor perdedor (repFill).
- * Cobre o gate "R1 não fechou" (não resolve antes) e idempotência (não re-resolve).
+ * SUPERSEDE a versão anterior deste arquivo (decisão do dono, 25/jul, depois do
+ * torneio de casais). O que mudou e por quê:
+ *
+ *  ANTES — repescagem por MELHOR DERROTADO: a vaga nascia como `repFill` e só era
+ *  preenchida depois da R1 fechar, por `_resolveRepFills`, escolhendo o derrotado
+ *  com melhor saldo. Quem seria repescado só se sabia no fim da rodada.
+ *
+ *  AGORA — repescagem ESTRUTURAL: o desenho é função pura de (N, formato)
+ *  (js/views/chaves.js). No sorteio já se sabe que o seed #4 enfrenta o perdedor
+ *  de um jogo NOMEADO da R1, escolhido na METADE OPOSTA da chave. Não há vaga
+ *  pendente, não há ranqueamento posterior, não há `repFill` na eliminatória.
+ *
+ *  E QUANDO há repescagem: quem manda é a LÓGICA, não o organizador — aplica-se o
+ *  que exige MENOS intervenção (o menor entre vagas B−N e perdedores N−B/2;
+ *  empate vai pra bye). Por isso N=12 e N=13 NÃO têm repescagem nenhuma.
+ *
+ * O que este arquivo trava: (1) a escolha bye × repescagem segue a regra do menor;
+ * (2) o perdedor do jogo-fonte chega mesmo na vaga, jogando com o motor REAL; e
+ * (3) ele NÃO é duplicado — não ocupa dois slots ao mesmo tempo (esse double-book
+ * foi a raiz do auto-confronto Time X vs X que quebrou ao vivo na 1.5.5).
  */
-const { E, window: W } = require('./headless.js');
+const { window: W } = require('./headless.js');
 
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
-const cs = (g) => (g.players || []).map((p) => ({ name: p.name }));
-function grpN(n) {
-  const names = []; for (let i = 1; i <= n; i++) names.push('P' + i);
-  return { players: names.map((x) => ({ name: x })), matches: [{ p1: names[0], p2: names[1], winner: names[0] }] };
-}
-function materialize(n) {
-  const t = {
-    id: 'rep' + n, currentPhaseIndex: 0, matches: [], groups: [grpN(n)],
-    phases: [
-      { name: 'G', formatCode: 'grupos_mata', source: { type: 'enrollment' } },
-      { name: 'E', formatCode: 'elim_simples', fixedPairs: false, bracketResolution: 'playin', source: { type: 'previous_phase', mapping: [{ dest: 'main', rankFrom: 1, rankTo: 999 }] } },
-    ],
-  };
-  E.materializeNextPhase(t, cs, 'rep');
-  return t;
-}
-const phaseMs = (t) => t.matches.filter((m) => (m.phaseIndex || 0) === 1);
-const repR1 = (t) => phaseMs(t).filter((m) => m.isPhaseRepR1);
-function findRep(t, a, b) {
-  return repR1(t).find((m) => (m.p1 === a && m.p2 === b) || (m.p1 === b && m.p2 === a));
-}
-function playRep(t, a, b, scoreA, scoreB) {
-  const m = findRep(t, a, b);
-  m.winner = a;
-  if (m.p1 === a) { m.scoreP1 = scoreA; m.scoreP2 = scoreB; } else { m.scoreP1 = scoreB; m.scoreP2 = scoreA; }
-}
-const hasRepFill = (t) => phaseMs(t).some((m) => Array.isArray(m.repFill) && m.repFill.length);
 
-// ── n=6: melhor perdedor entra na chave (vaga repFill) ─────────────────────
-(function () {
-  const t = materialize(6);
-  ok(repR1(t).length === 3, '[n=6] 3 jogos de R1 de repescagem');
-  playRep(t, 'P1', 'P6', 6, 0); // perdedor P6 saldo -6
-  playRep(t, 'P2', 'P5', 6, 5); // perdedor P5 saldo -1 (MELHOR perdedor)
-  ok(W._resolveRepFills(t) === false, '[n=6] não resolve com R1 incompleta (gate)');
-  playRep(t, 'P3', 'P4', 6, 2); // perdedor P4 saldo -4
-  ok(W._resolveRepFills(t) === true, '[n=6] resolve quando R1 fecha');
-  const filled = phaseMs(t).filter((m) => m.round === 1 && (m.p1 === 'P5' || m.p2 === 'P5'));
-  ok(filled.length === 1, '[n=6] melhor perdedor (P5) entrou na chave de T');
-  ok(filled[0].p1FromRepechage || filled[0].p2FromRepechage, '[n=6] slot marcado FromRepechage');
-  ok(!hasRepFill(t), '[n=6] sem vaga repFill pendente');
-  ok(W._resolveRepFills(t) === false, '[n=6] idempotente (não re-resolve)');
-})();
+const C = W._chaves, A = W._chavesAdapter;
+const parts = (n) => Array.from({ length: n }, (_, i) => ({ displayName: 'P' + (i + 1), uid: 'u' + (i + 1) }));
+const isBye = (x) => !x || x === 'TBD' || /BYE/.test(String(x));
 
-// ── n=7: satout × melhor perdedor no jogo de repescagem (repGame, vaga repFill) ──
-(function () {
-  const t = materialize(7);
-  const rg = phaseMs(t).filter((m) => m.isPhaseRepGame)[0];
-  ok(!!rg && rg.p1 === 'P7', '[n=7] jogo de repescagem tem o satout (P7) como p1');
-  ok(rg.p2 === 'TBD' || rg.p2 == null, '[n=7] adversário do satout ainda indefinido antes da R1');
-  playRep(t, 'P1', 'P6', 6, 1); // P6 saldo -5
-  playRep(t, 'P2', 'P5', 6, 5); // P5 saldo -1 (melhor)
-  playRep(t, 'P3', 'P4', 6, 3); // P4 saldo -3
-  ok(W._resolveRepFills(t) === true, '[n=7] resolve quando R1 fecha');
-  ok(rg.p2 === 'P5', '[n=7] satout enfrenta o MELHOR perdedor (P5) no jogo de repescagem');
-  ok(!(Array.isArray(rg.repFill) && rg.repFill.length), '[n=7] vaga repFill consumida (resolvida)');
-})();
+console.log('\n== 1) a escolha bye × repescagem segue a regra do MENOR esforço ==');
+[[5, 'repescagem'], [9, 'repescagem'], [10, 'repescagem'], [11, 'repescagem'],
+ [12, 'bye'], [13, 'bye'], [14, 'bye'], [8, 'bye'], [16, 'bye']].forEach(function (par) {
+  var n = par[0], esperado = par[1];
+  var p = C.plano(n);
+  ok(p.modo === esperado, `N=${n}: modo=${p.modo}, esperado ${esperado} (vagas=${p.vagas}, perdedores=${p.pool})`);
+  // o total de intervenções é sempre `vagas` — o que a regra escolhe é a MISTURA
+  ok(p.byes + p.repescagens === p.vagas, `N=${n}: byes(${p.byes}) + reps(${p.repescagens}) = vagas(${p.vagas})`);
+});
+// empate vai pra bye, explicitamente (N=12: vagas=4, perdedores=4)
+ok(C.plano(12).repescagens === 0, 'N=12 (empate vagas × perdedores) resolve por BYE, não por repescagem');
 
-console.log('\n' + (fail === 0 ? '✅' : '❌') + ' repechage: ' + pass + ' asserts ok, ' + fail + ' falharam');
-process.exit(fail ? 1 : 0);
+console.log('== 2) o perdedor do jogo-fonte CHEGA na vaga de repescagem (motor real) ==');
+[5, 9, 10, 11].forEach(function (n) {
+  var built = A.build(n, 'simples', { participantes: parts(n) });
+  var t = { id: 'r', format: 'Eliminatórias Simples', matches: built.matches };
+
+  var vagas = t.matches.filter(function (m) { return m.isRepechageSlot; });
+  ok(vagas.length === C.plano(n).repescagens,
+    `N=${n}: ${vagas.length} vaga(s) de repescagem, esperado ${C.plano(n).repescagens}`);
+
+  // a vaga é alimentada por um jogo NOMEADO já no sorteio (loserNextMatchId)
+  var fontes = t.matches.filter(function (m) { return m.loserNextMatchId; });
+  ok(fontes.length === vagas.length, `N=${n}: cada vaga tem um jogo-fonte declarado no sorteio`);
+
+  // joga o jogo-fonte e confere que o PERDEDOR aterrissou na vaga
+  fontes.forEach(function (src) {
+    var alvo = t.matches.filter(function (m) { return m.id === src.loserNextMatchId; })[0];
+    ok(!!alvo, `N=${n}: jogo-fonte ${src.id} aponta pra vaga inexistente ${src.loserNextMatchId}`);
+    if (!alvo) return;
+    var perdedor = src.p2;
+    src.winner = src.p1;
+    W._advanceWinner(t, src);
+    ok(alvo.p1 === perdedor || alvo.p2 === perdedor,
+      `N=${n}: perdedor de ${src.id} (${perdedor}) não chegou na vaga ${alvo.id} (${alvo.p1} x ${alvo.p2})`);
+  });
+});
+
+console.log('== 3) o repescado NÃO é duplicado (raiz do auto-confronto) ==');
+[5, 9, 10, 11].forEach(function (n) {
+  var built = A.build(n, 'simples', { participantes: parts(n) });
+  var t = { id: 'r', format: 'Eliminatórias Simples', matches: built.matches };
+  var guard = 0;
+  for (;;) {
+    if (++guard > 3000) break;
+    var m = t.matches.find(function (x) { return !x.winner && !isBye(x.p1) && !isBye(x.p2); });
+    if (!m) break;
+    ok(m.p1 !== m.p2, `N=${n}: ${m.id} — ${m.p1} enfrentaria a si mesmo`);
+    m.winner = m.p1;
+    W._advanceWinner(t, m);
+  }
+  // Ninguém ocupa dois slots SIMULTÂNEOS na mesma rodada.
+  //
+  // A vaga de repescagem é EXCLUÍDA desta conta de propósito: quem é repescado
+  // aparece mesmo duas vezes na rodada 1 — no jogo normal que perdeu e, depois,
+  // na repescagem. Não é double-book, é sequência: a repescagem consome o
+  // perdedor de um jogo normal, então só pode ser jogada DEPOIS dele (é por isso
+  // que chaves.js ordena os normais antes das repescagens). O double-book de
+  // verdade — a mesma pessoa em dois jogos que rolam ao mesmo tempo — é o que
+  // gerava o auto-confronto, e é o que esta conta pega.
+  var porRodada = {};
+  t.matches.forEach(function (m) {
+    if (m.isRepechageSlot) return;
+    if (isBye(m.p1) && isBye(m.p2)) return;
+    (porRodada[m.round] = porRodada[m.round] || []).push(m.p1, m.p2);
+  });
+  Object.keys(porRodada).forEach(function (r) {
+    var reais = porRodada[r].filter(function (x) { return !isBye(x); });
+    ok(new Set(reais).size === reais.length,
+      `N=${n} rodada ${r}: alguém ocupa DOIS slots simultâneos (double-book) → [${reais.join(', ')}]`);
+  });
+  // E o repescado entra na vaga UMA vez só (não em duas vagas diferentes).
+  var ocupantesDeVaga = [];
+  t.matches.forEach(function (m) {
+    if (!m.isRepechageSlot) return;
+    [m.p1, m.p2].forEach(function (x) { if (!isBye(x) && x) ocupantesDeVaga.push(x); });
+  });
+  ok(new Set(ocupantesDeVaga).size === ocupantesDeVaga.length,
+    `N=${n}: alguém foi repescado para DUAS vagas → [${ocupantesDeVaga.join(', ')}]`);
+});
+
+console.log('\n' + (fail === 0 ? '✅ repechage: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
+if (fail > 0) process.exit(1);

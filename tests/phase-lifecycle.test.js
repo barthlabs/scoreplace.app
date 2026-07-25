@@ -66,18 +66,19 @@ const COUNTS = [8, 6, 5, 7];
     ok(entrants.every((p) => allNames(n).indexOf(p) !== -1), tag + ' sem jogador fantasma na chave');
     ok(new Set(entrants).size === entrants.length, tag + ' sem entrante duplicado [' + entrants.slice().sort().join(',') + ']');
 
-    if (mode === 'bye' || mode === 'playin') {
-      ok(eqSet(entrants, allNames(n)), tag + ' TODOS os ' + n + ' entram (ninguém some) [' + entrants.slice().sort().join(',') + ']');
-      ok(sb.length === 0, tag + ' sem standby');
-    } else { // exclusion / standby → corta pros top-K (K = potência inferior)
-      const K = isPow2(n) ? n : prevPow2(n);
-      ok(eqSet(entrants, topK(K)), tag + ' entram os top-' + K + ' (melhores) [' + entrants.slice().sort().join(',') + ']');
-      if (mode === 'standby') {
-        ok(eqSet(entrants.concat(sb.map(String)), allNames(n)), tag + ' entrantes + standby = todos (ninguém some) standby=[' + sb.join(',') + ']');
-      } else {
-        ok(sb.length === 0, tag + ' exclusão não usa standby (cortados descartados de propósito)');
-      }
-    }
+    // DECISÃO DO DONO (25/jul): quem manda na resolução de potência de 2 é a LÓGICA,
+    // não o organizador — aplica-se o que exige MENOS intervenção (o menor entre vagas
+    // e perdedores disponíveis; empate vai pra bye). Consequência: 'exclusion' e
+    // 'standby', que CORTAVAM gente até a potência inferior, deixaram de existir.
+    // `cfg.bracketResolution` é ignorado pelo motor.
+    //
+    // Logo, o invariante agora é o MESMO nos quatro modos: TODOS entram, ninguém é
+    // cortado, standby fica vazio. Isso alinha com o princípio de inclusão do projeto
+    // ("todos jogam"). O laço percorre os 4 modos de propósito: se algum dia alguém
+    // religar o corte por resolução, estas asserções ficam vermelhas.
+    ok(eqSet(entrants, allNames(n)),
+      tag + ' TODOS os ' + n + ' entram (ninguém é cortado) [' + entrants.slice().sort().join(',') + ']');
+    ok(sb.length === 0, tag + ' sem standby (a chave não corta mais ninguém)');
   });
 });
 

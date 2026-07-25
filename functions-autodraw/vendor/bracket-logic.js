@@ -2863,6 +2863,23 @@ function _generateNextRound(t) {
 // (Rei/Rainha, duplas, equilíbrio, categorias) em vez do stub 1×1 antigo.
 window._generateNextRound = _generateNextRound;
 
+// v1.5.6: `_advanceWinner` e `_autoResolveBye` TAMBÉM precisam ser expostos, pelo mesmo
+// motivo — e a falta disso era INVISÍVEL nos testes.
+//
+// No browser este arquivo entra por <script>, então `function _x(){}` no topo JÁ é
+// window._x e nada disso seria necessário. No servidor ele entra por require(): a função
+// fica presa no escopo do módulo e `window._advanceWinner` é undefined. O harness headless
+// carrega via vm com o sandbox COMO global, ou seja, se comporta igual ao browser — por
+// isso a suíte ficava verde enquanto a CF estava quebrada.
+//
+// O motor determinístico depende dos dois: `_autoResolveBye` faz a folga auto-avançar já
+// no sorteio, e `_advanceWinner` re-propaga os vencedores depois de recalcular a chave com
+// um tardio. Sem eles a CF gravava chave com folga sem vencedor e, na entrada tardia,
+// deixava todos os slots das rodadas seguintes presos em 'TBD' — quem já tinha avançado
+// sumia da chave. Ver [[feedback_functions_must_mirror_app]].
+window._advanceWinner = _advanceWinner;
+window._autoResolveBye = _autoResolveBye;
+
 // ─── Rei/Rainha round generation for Liga ────────────────────────────────────
 
 // Helper: get active players for Liga (filters out ligaActive === false)

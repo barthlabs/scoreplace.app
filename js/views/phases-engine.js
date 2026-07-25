@@ -609,8 +609,10 @@
     if (_duplaClassic) {
       // Fonte única compartilhada com a Fase 0 (_genElimFromPool) — inclui a repescagem
       // (playin) fora de potência de 2. Ver _duplaR1FromPool / project_dupla_elim_repechage.
-      var _deRes = (phaseCfg && phaseCfg.bracketResolution) || 'bye';
-      return _duplaR1FromPool(byDest.main, _deRes, idPrefix);
+      // MESMO motor da Fase 0 (_genElimFromPool → _genElimFromChaves): a chave
+      // inteira (superior + inferior + grande final) sai de chave(N, 'dupla').
+      // Um gerador só nos dois caminhos — é o que tests/phase-identity trava.
+      return _genElimFromChaves(byDest.main, phaseCfg, idPrefix, true);
     }
 
     var allMatches = [];
@@ -631,8 +633,10 @@
       var bracketKey = DEST_BRACKET[dest] || dest;
       // v2.7.23: resolução de potência-de-2 escolhida pelo organizador (uma só pra
       // todas as linhas). Default 'bye' = comportamento legado. Setado pelo painel.
-      var _res = (phaseCfg && phaseCfg.bracketResolution) || 'bye';
-      var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey, _res, _tierThird, bracketSeeding);
+      // Resolução de pow2 é da LÓGICA, não do organizador (menor intervenção):
+      // phaseCfg.bracketResolution é ignorado, como na Fase 0.
+      var res = _genElimFromChaves(byDest[dest], { thirdPlace: _tierThird },
+        idPrefix + '-' + bracketKey, false, bracketKey);
       // Nome da chave = o que o ORGANIZADOR digitou (mapping[].label). Sem nome, com 2+ chaves →
       // default POSICIONAL "Chave N" (ordem da chave). NUNCA Ouro/Prata (exemplo ≠ regra,
       // feedback_dont_canonize_examples). Com 1 chave só e SEM nome custom → NÃO grava tierLabel:
@@ -984,8 +988,59 @@
     return { matches: dms, needsDoubleElim: true };
   }
 
+  // NAMESPACE DETERMINÍSTICO pros ids estruturais. `idPrefix` vem como
+  // 'p0-<Date.now()>' (e '-c<i>' por categoria) — o timestamp destruiria a
+  // propriedade que o motor novo compra: id derivável de (N, formato). Tira o
+  // carimbo de tempo e mantém fase + categoria, que É o que precisa separar
+  // (fase 0 e fase 1 têm, cada uma, o seu VC-R1-P1).
+  function _nsDeterministico(idPrefix) {
+    return String(idPrefix || 'p0').replace(/-\d{6,}/g, '') || 'p0';
+  }
+
+  // MOTOR DE CHAVES DETERMINÍSTICO (js/views/chaves.js + chaves-adapter.js).
+  // A chave é função pura de (nº de participantes, formato) — cada N tem UM
+  // desenho. Substitui genTierBracket/_duplaR1FromPool/_buildDoubleElimBracket
+  // pra Eliminatória Simples e Dupla.
+  //
+  // QUEM MANDA NA RESOLUÇÃO DE POTÊNCIA DE 2 É A LÓGICA, NÃO O ORGANIZADOR
+  // (regra do dono, 25/jul): aplica-se o que exige MENOS intervenção — o menor
+  // entre vagas (B−N) e perdedores disponíveis (N−B/2); empate vai pra bye.
+  // `cfg.bracketResolution` é IGNORADO de propósito. 'exclusion' e 'standby'
+  // (que cortavam gente até a potência abaixo) deixam de existir: ninguém é
+  // cortado, todos jogam.
+  function _genElimFromChaves(pool, cfg, idPrefix, dupla, bracketKey) {
+    var A = (typeof window !== 'undefined') && window._chavesAdapter;
+    if (!A && typeof require === 'function') { try { A = require('./chaves-adapter.js'); } catch (e) {} }
+    if (!A) throw new Error('phases-engine: chaves-adapter não carregado');
+    // Linha/categoria com 0 ou 1 participante não tem chave: com 1, ele é campeão
+    // direto (a convergência lê `soleWinner` pra mandá-lo à grande final). O motor
+    // exige N>=2 — sem este guard, uma linha de 1 estourava.
+    if (!pool || pool.length === 0) return { matches: [], finalMatchId: null, soleWinner: null };
+    if (pool.length === 1) {
+      return { matches: [], finalMatchId: null, soleWinner: pool[0].displayName || pool[0].name || null };
+    }
+    var built = A.build(pool.length, dupla ? 'dupla' : 'simples', {
+      participantes: pool,
+      tierThird: cfg ? (cfg.thirdPlace !== false) : true,
+      ns: _nsDeterministico(idPrefix),
+      bracketKey: bracketKey || null
+    });
+    // chaves monta a chave INTEIRA (na dupla: superior + inferior + grande final),
+    // então nada de needsDoubleElim — não há 2º construtor pra rodar depois.
+    //
+    // `finalMatchId` é CONTRATO com quem monta a convergência entre linhas: a final
+    // de cada linha é ligada à grande final, e o vice ao 3º/4º do nível da
+    // convergência. Sem devolver isto, `grandfinal-lines` estourava com
+    // "Cannot read properties of undefined (reading 'nextSlot')".
+    // `soleWinner` idem pro caso de linha com 1 participante só (campeão por W.O.).
+    return {
+      matches: built.matches,
+      finalMatchId: built.meta.finalId || null,
+      chavesMeta: built.meta
+    };
+  }
+
   function _genElimFromPool(pool, cfg, idPrefix) {
-    var _res = (cfg && cfg.bracketResolution) || 'bye';
     var _third = cfg ? (cfg.thirdPlace !== false) : true;
     var dupla = !!(cfg && (cfg.formatCode === 'elim_dupla' || /dupla/i.test(String(cfg.format || ''))));
     if (pool.length === 1) {
@@ -994,16 +1049,11 @@
       var _byeUids = (typeof window._participantUids === 'function') ? window._participantUids(pool[0]) : [];
       return { matches: [{ id: idPrefix + '-bye', round: 1, bracket: 'main', p1: pool[0].displayName, p2: 'BYE (Avança Direto)', winner: pool[0].displayName, isBye: true, team1Obj: pool[0], p1Uid: (_byeUids.length === 1 ? _byeUids[0] : null), team1Uids: _byeUids, winnerUid: (_byeUids.length === 1 ? _byeUids[0] : null), winnerUids: _byeUids }] };
     }
-    if (dupla) {
-      // Dupla Eliminatória: gera a R1 do upper (com repescagem quando resolution='playin'
-      // e fora de pow2). O upper R2+, o lower e a grande final são montados por
-      // _buildDoubleElimBracket (lê t.matches round 1) → needsDoubleElim. Fonte única
-      // compartilhada com a transição entre fases (_duplaClassic).
-      return _duplaR1FromPool(pool, _res, idPrefix);
-    }
-    // Linha única = bracket 'main' (igual à Fase N) → _renderPhaseBracket renderiza por 1 render só.
-    var _seed = (cfg && cfg.bracketSeeding === 'balanced') ? 'balanced' : 'seed'; // cabeças × equilíbrio
-    return genTierBracket(pool, 'main', idPrefix, _res, _third, _seed);
+    // MOTOR ÚNICO pras duas eliminatórias. A chave inteira sai de chave(N, formato):
+    // simples = árvore + 3º/4º; dupla = superior + inferior + grande final (sem
+    // segundo construtor). Ids ESTRUTURAIS (p0-VC-R1-P3), então recalcular é seguro
+    // e a entrada tardia deixa de precisar de cirurgia.
+    return _genElimFromChaves(pool, cfg, idPrefix, dupla);
   }
 
   function generatePhase(pool, cfg, ctx) {

@@ -1,3 +1,7 @@
+// NOTA (25/jul/2026): os fixtures usam 10 duplas, não 8. Com 8 a chave de eliminatória fica
+// EXATAMENTE cheia (potência de 2) e, por regra do dono, uma dupla formada SOZINHA não entra —
+// espera par. Esse comportamento é travado em tests/late-entry-never-redraws; aqui o assunto é o
+// fluxo de FORMAR a dupla e integrá-la, então o fixture usa N com folga pra isolar a pergunta.
 // E2E "TUDO NA CF": dirige a AÇÃO REAL do usuário — window._formDuplaByUids (o mesmo que o
 // clique de "formar dupla" chama) — pelo dispatch real → CF formPair (funde) → CF
 // integrateLateEntries (integra na chave). Prova que a dupla formada pós-sorteio ENTRA na chave
@@ -42,19 +46,30 @@ console.log('── E2E form-pair pós-sorteio pelo DISPATCH REAL (todo formato)
   E.draw(t);
   ok(W._collectAllMatches(t).length > 0, label + ' :: sorteou (chave existe)');
 
-  // chega uma dupla nova (2 solos presentes) e o ORGANIZADOR forma a dupla — AÇÃO REAL
+  // chegam DUAS duplas novas (4 solos presentes) e o ORGANIZADOR forma as duas — AÇÃO REAL.
+  //
+  // Duas, e não uma, porque o fixture tem 8 duplas: na eliminatória isso é potência de 2
+  // EXATA, chave cheia. Por regra do dono (25/jul/2026) uma dupla formada SOZINHA não entra
+  // aí — espera par, e as duas entram juntas num jogo novo entre elas, sem tocar em nenhum
+  // confronto já publicado. O ciclo "espera → chega o par → entram" está travado em
+  // tests/late-entry-never-redraws; aqui o que se testa é o DISPATCH real de formar dupla.
   t.participants.push({ uid: 'lx', displayName: 'LateX', name: 'LateX', ligaActive: true });
   t.participants.push({ uid: 'ly', displayName: 'LateY', name: 'LateY', ligaActive: true });
-  t.checkedIn['lx'] = 1; t.checkedIn['ly'] = 1;
+  t.participants.push({ uid: 'lz', displayName: 'LateZ', name: 'LateZ', ligaActive: true });
+  t.participants.push({ uid: 'lw', displayName: 'LateW', name: 'LateW', ligaActive: true });
+  t.checkedIn['lx'] = 1; t.checkedIn['ly'] = 1; t.checkedIn['lz'] = 1; t.checkedIn['lw'] = 1;
   const before = labels(t);
   ok(!before.has('LateX / LateY'), label + ' :: (pré) dupla nova não está na chave');
 
   E.resetSaveCounter();
   E.resetLateGuards();
   W._formDuplaByUids(t.id, 'LateX', 'lx', 'LateY', 'ly');   // ← o clique real
+  E.resetLateGuards();
+  W._formDuplaByUids(t.id, 'LateZ', 'lz', 'LateW', 'lw');   // ← e o par dela
 
   const after = labels(t);
   ok(after.has('LateX / LateY'), label + ' :: ✅ dupla formada ENTROU na chave (via CF)');
+  ok(after.has('LateZ / LateW'), label + ' :: ✅ a 2ª dupla formada TAMBÉM entrou');
   ok(E.sawSave() === 0, label + ' :: cliente NÃO chamou saveTournament (tudo na CF)');
   // a fusão saiu do roster de solos e virou 1 dupla
   const roster = t.participants.map((p) => (p && (p.displayName || p.name)) || p);
@@ -106,14 +121,22 @@ console.log('\n── dupla formada na LISTA DE ESPERA (_formLateJoinDupla) entr
   E.draw(t);
   if (typeof W._formLateJoinDupla !== 'function') { ok(false, label + ' :: _formLateJoinDupla indisponível'); return; }
   // dois solos chegam tarde e vão pra LISTA DE ESPERA (não pro roster)
+  // DOIS pares, não um: com 8 duplas a eliminatória está em potência de 2 EXATA (chave cheia)
+  // e, por regra do dono, uma dupla sozinha espera par antes de entrar. Ver
+  // tests/late-entry-never-redraws pro ciclo completo.
   t.standbyParticipants.push({ uid: 'lx', displayName: 'LateX', name: 'LateX', ligaActive: true });
   t.standbyParticipants.push({ uid: 'ly', displayName: 'LateY', name: 'LateY', ligaActive: true });
+  t.standbyParticipants.push({ uid: 'lz', displayName: 'LateZ', name: 'LateZ', ligaActive: true });
+  t.standbyParticipants.push({ uid: 'lw', displayName: 'LateW', name: 'LateW', ligaActive: true });
   E.resetLateGuards();
   ok(!labels(t).has('LateX / LateY'), label + ' :: (pré) dupla da espera não está na chave');
   E.resetSaveCounter();
   W._formLateJoinDupla(t.id, 'lx', 'ly');   // ← CLIQUE REAL (agora CF-only: dispatch → CF → reflete)
+  E.resetLateGuards();
+  W._formLateJoinDupla(E.findDoc(t.id).id, 'lz', 'lw');
   const t1 = E.findDoc(t.id);               // CF-only substitui o doc no AppStore → re-buscar
   ok(labels(t1).has('LateX / LateY'), label + ' :: ✅ dupla da ESPERA entrou na chave (via CF)');
+  ok(labels(t1).has('LateZ / LateW'), label + ' :: ✅ o par dela TAMBÉM entrou');
   ok(E.sawSave() === 0, label + ' :: cliente NÃO chamou saveTournament (tudo na CF)');
   const stillSolo = (t1.standbyParticipants || []).some((p) => (p.displayName || p.name) === 'LateX' || (p.displayName || p.name) === 'LateY');
   ok(!stillSolo, label + ' :: os 2 solos saíram da espera');
@@ -131,13 +154,16 @@ console.log('\n── 2 duplas na espera em sequência + desfazer (_splitLateDup
   d.standbyParticipants.push({ uid: 'y1', displayName: 'Bia', name: 'Bia', ligaActive: true });
   E.resetLateGuards();
   W._formLateJoinDupla('LJ2', 'x1', 'y1');
-  ok(labels(E.findDoc('LJ2')).has('Ana / Bia'), '2seq :: 1ª dupla da espera entrou');
+  // Chave cheia (8 = potência de 2): a 1ª dupla ESPERA par — é a regra do dono, não uma falha.
+  // O ponto do teste continua sendo a 2ª "criada em seguida", que antes não entrava.
+  ok(!labels(E.findDoc('LJ2')).has('Ana / Bia'), '2seq :: 1ª dupla sozinha ESPERA par (chave cheia)');
   // 2ª dupla EM SEGUIDA — no doc atual (o caso que "não entrava")
   d = E.findDoc('LJ2');
   d.standbyParticipants.push({ uid: 'x2', displayName: 'Cid', name: 'Cid', ligaActive: true });
   d.standbyParticipants.push({ uid: 'y2', displayName: 'Duda', name: 'Duda', ligaActive: true });
   W._formLateJoinDupla('LJ2', 'x2', 'y2');
   ok(labels(E.findDoc('LJ2')).has('Cid / Duda'), '2seq :: ✅ 2ª dupla (EM SEGUIDA) TAMBÉM entrou');
+  ok(labels(E.findDoc('LJ2')).has('Ana / Bia'), '2seq :: ✅ e a 1ª entrou JUNTO, ao ganhar par');
 
   // DESFAZER: gate off → a dupla FICA na espera; o ✕ desfaz (CF-only, casa por uid de membro).
   if (typeof W._splitLateDupla !== 'function') { ok(false, 'desfazer :: _splitLateDupla indisponível'); return; }

@@ -2206,6 +2206,41 @@ window._triggerLateIntegration = function (t, opts) {
         if (_novos > 0 && typeof showNotification !== 'undefined') {
             showNotification('⚡ Tardios na chave', 'A dupla entrou na chave.', 'info');
         }
+        // CHAVE CHEIA — o tardio ficou de fora e o organizador PRECISA saber.
+        // Regra do dono (25/jul): confronto já publicado é intocável. Numa chave em
+        // potência de 2 exata não há vaga, e encaixar mais um só seria possível
+        // redesenhando tudo — que é justamente o desastre do torneio de casais
+        // ("era pra entrarem no jogo 7 sem mudar nenhum dos demais 6"). Então em vez
+        // de entrar torto, ele espera — e a tela diz o que falta pra abrir jogo novo.
+        // Sem este aviso o organizador vê "marquei presença e não aconteceu nada",
+        // que é literalmente o bug que originou toda esta migração.
+        var _rec = Array.isArray(d.recusas) ? d.recusas : [];
+        if (_rec.length && typeof showNotification !== 'undefined') {
+            // Uma mensagem por MOTIVO. O organizador precisa saber o que fazer, não o
+            // código do erro — e qualquer recusa sem mensagem vira "marquei presença e
+            // não aconteceu nada", que é o bug que originou toda esta migração.
+            var _textos = {
+                'falta-par': ['⏳ Falta 1 pra abrir o jogo',
+                    'A chave está cheia. Com mais 1 inscrição os dois entram juntos num jogo novo, sem mexer em nenhum confronto já publicado.'],
+                'confronto-publicado-mudaria': ['⏳ Chave cheia — entrada na espera',
+                    'Incluir agora mudaria confrontos que já foram publicados, então ninguém entrou. Pra incluir mesmo assim, refaça o sorteio.'],
+                'crescimento-dupla-nao-implementado': ['⏳ Chave cheia — entrada na espera',
+                    'Nesta Dupla Eliminatória a chave está cheia e ainda não é possível abrir jogo novo sem re-sortear. A inscrição segue na espera.'],
+                'chave-legada-sem-coordenada': ['⏳ Chave antiga — entrada na espera',
+                    'Esta chave foi sorteada por uma versão anterior e não pode ser recalculada sem mudar os confrontos. A inscrição segue na espera.'],
+                'chave-legada-sem-seeds': ['⏳ Chave antiga — entrada na espera',
+                    'Esta chave não guarda a semeadura do sorteio, então não dá pra incluir sem mudar os confrontos. A inscrição segue na espera.']
+            };
+            var _vistos = {};
+            _rec.forEach(function (r) {
+                var k = r && r.motivo;
+                if (!k || _vistos[k]) return;
+                _vistos[k] = 1;
+                var msg = _textos[k] || ['⏳ Entrada na espera',
+                    'A inscrição não pôde entrar na chave agora (' + k + ') e segue na lista de espera.'];
+                showNotification(msg[0], msg[1], 'warning');
+            });
+        }
     }).catch(function (e) {
         _releaseLate();
         if (window._dtrace) window._dtrace('integrateLate:ERR', { code: e && e.code, msg: e && e.message });
@@ -4954,6 +4989,125 @@ window._syncLowerBracket = function (t, opts) {
   return changed;
 };
 
+/**
+ * COLETOR ÚNICO de entrada tardia. Responde uma pergunta só: **quem está de fora
+ * da chave e tem direito de entrar agora?** Não coloca ninguém — só coleta.
+ *
+ * Existe como função própria porque tem DOIS consumidores e as regras aqui foram
+ * pagas caras, uma a uma, em torneio ao vivo:
+ *   • `_placeLateEntriesSurgically` — Grupos (encaixa no round-robin);
+ *   • `draw-core.integrateLateEntries` — Eliminatória Simples/Dupla, que entrega a
+ *     lista pro motor determinístico (`_chavesAdapter.integrarTardiosElim`).
+ *
+ * Quando a eliminatória migrou pro motor determinístico, o servidor ganhou um
+ * coletor PRÓPRIO, mais fraco (lia só `standbyParticipants + waitlist`). O órfão
+ * de roster voltou a ser invisível — exatamente o bug ao vivo de 25/jul que a
+ * v1.5.2 já tinha corrigido AQUI. Dois coletores = a regra deriva num deles.
+ * Por isso: um só. Ver [[feedback_unify_dual_entry_points]].
+ *
+ * @returns {Array<{e:Object, fromWait:boolean}>}
+ */
+window._collectLateCandidates = function (t, _theCat) {
+  if (!t) return [];
+  // GATE CANÔNICO, e o primeiro de todos: "Novos Confrontos" desligado ⇒ ninguém
+  // entra, por nenhum caminho. É ORTOGONAL a "inscrições abertas" — o organizador
+  // pode receber inscrição e ainda assim não querer que a chave cresça.
+  // Mora aqui (e não em cada consumidor) justamente pra não valer só num deles.
+  // Ver [[project_new_matchups_independent]].
+  if (typeof window._allowsNewMatchups === 'function' && !window._allowsNewMatchups(t)) return [];
+  // JANELA FECHADA: a 2ª rodada DISTINTA da fase já começou. Ninguém entra mais, porque a
+  // R1 deixou de ser "a rodada que está acontecendo" — colocar alguém nela agora produziria
+  // um jogo cujo vencedor precisaria avançar pra uma rodada já em andamento. É gate SEPARADO
+  // de `_allowsNewMatchups` (que é a chave "Novos Confrontos" do organizador): um é vontade,
+  // o outro é possibilidade. `_lateEnrollR2Started` é a regra canônica — "R2" é a 2ª rodada
+  // distinta, não `round===2` literal, que quebra com play-in/repescagem.
+  if (typeof window._lateEnrollR2Started === 'function' && window._lateEnrollR2Started(t)) return [];
+  var _nm = function (p) { return window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || ''; };
+  var _pu = function (x) { return (typeof window._participantUids === 'function') ? window._participantUids(x) : []; };
+  // dupla = ESTRUTURA (p1/p2), nunca includes('/') — [[project_dupla_entry_structural_not_slash]]
+  var _isPairEntry = function (p) { return !!(p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)); };
+  var _key = function (p) {
+    if (!p || typeof p !== 'object') return String(p || '');
+    var a = String(p.p1Uid || p.p1Name || ''), b = String(p.p2Uid || p.p2Name || '');
+    return (a && b) ? [a, b].sort().join('|') : (_nm(p) || '');
+  };
+  // presença: mesmo-dia exige todos os membros presentes (cânone "só presentes")
+  var _present = function (p) {
+    if ((typeof window._tournamentIsSameDay === 'function') && !window._tournamentIsSameDay(t)) return true;
+    var ci = t.checkedIn || {}, ab = t.absent || {};
+    var _has = function (map, k) { return !!k && (window._idMapHas(t, map, { uid: k }) || window._idMapHas(t, map, k)); };
+    // Presença POR MEMBRO: uid quando tem, senão o NOME do membro (placeholder "Jogador 01" entra por
+    // nome). NUNCA o nome COMBINADO da dupla — que não está em checkedIn. Foi o bug do dono: time
+    // formado de placeholders (p1Uid/p2Uid vazios) caía no nome combinado → _present=false → não
+    // coletava → não entrava (integrated:false). Ver project_late_dupla_fills_awaiting_slot.
+    var keys;
+    if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+      keys = [p.p1Uid || p.p1Name, p.p2Uid || p.p2Name];
+    } else {
+      var uids = _pu(p); keys = (uids && uids.length) ? uids : [_nm(p)];
+    }
+    return keys.length > 0 && keys.every(function (k) { return _has(ci, k); }) && !keys.some(function (k) { return _has(ab, k); });
+  };
+  var _catOk = function (p) {
+    if (!_theCat) return true;
+    var c = p && (p.category || (Array.isArray(p.categories) && p.categories.length && p.categories[0]));
+    return !c || String(c) === String(_theCat);
+  };
+
+  var _brkSetP = window._bracketUidKeySet(t);   // membership POR UID
+
+  // pendentes = espera (_lateJoin) + ÓRFÃO DE ROSTER (dupla formada à mão), presentes, dedup
+  // COMPETIDOR VÁLIDO (v1.3.156) — regressão que EU causei na 1.3.153: ao parar de exigir
+  // `_lateJoin` (pra dupla PRÉ-FORMADA entrar), o coletor passou a pegar QUALQUER presente da
+  // espera, inclusive SOLO SEM DUPLA — que foi arrastado pro slot que devia ser "a definir".
+  // Num torneio de DUPLAS só uma DUPLA é competidor; solo espera parceiro (é o que a seção
+  // "Sem dupla / Formar novas duplas" existe pra resolver). Ver [[project_count_people_not_entries]].
+  var _teamsMode = (parseInt(t.teamSize) || 1) > 1 ||
+    (typeof window._isTeamEnrollMode === 'function' && window._isTeamEnrollMode(t.enrollmentMode)) ||
+    (Array.isArray(t.participants) && t.participants.some(_isPairEntry));
+  var _isValidCompetitor = function (p) { return _teamsMode ? _isPairEntry(p) : true; };
+  var seen = {}, pending = [];
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (!Array.isArray(t[k])) return;
+    t[k].forEach(function (p) {
+      var n = _nm(p), kk = _key(p);
+      // v1.3.153: NÃO exigir `_lateJoin`. Essa flag só existe em dupla FORMADA TARDE; a dupla
+      // PRÉ-FORMADA que o sorteio mandou pra espera (sorteio "só entre os presentes") não a tem —
+      // e era ignorada aqui → ficava no LIMBO ao receber presença. A própria UI promete o contrário:
+      // "Marque presença de quem está na espera — entra por repescagem (vs a definir)".
+      // O gate correto é: está na ESPERA e está PRESENTE. Ver [[project_late_dupla_fills_awaiting_slot]].
+      if (!n || seen[kk] || !p || !_present(p)) return;
+      if (!_catOk(p)) return;
+      if (!_isValidCompetitor(p)) return;   // duplas: SOLO sem parceiro NÃO entra na chave
+      if (window._entryInBracket(t, p, _brkSetP)) return;
+      if (window._lateAlreadyIntegrated(t, p)) return;
+      seen[kk] = 1; pending.push({ e: p, fromWait: true });
+    });
+  });
+  // ÓRFÃO DE ROSTER: está em `t.participants` mas FORA da chave.
+  // v1.5.2 (dono, torneio AO VIVO 25/jul): antes só a dupla FORMADA à mão (teamOrigins==='formada')
+  // era coletada aqui — quem foi marcado AUSENTE antes do sorteio e ficou em participants (sem ir
+  // pra espera) não era visto por NENHUM coletor: marcar presença nele nunca gerava jogo. O critério
+  // canônico é o mesmo da espera: PRESENTE + fora da chave + competidor válido. Restrito a torneio
+  // de MESMO DIA — é onde a chamada/presença tem significado; multi-dia (`_present` sempre true)
+  // arrastaria o elenco inteiro. Ver [[project_late_dupla_fills_awaiting_slot]].
+  var _mesmoDia = (typeof window._tournamentIsSameDay !== 'function') || !!window._tournamentIsSameDay(t);
+  if (Array.isArray(t.participants)) {
+    t.participants.forEach(function (p) {
+      var n = _nm(p), kk = _key(p);
+      if (!n || seen[kk] || window._entryInBracket(t, p, _brkSetP)) return;
+      var _formada = !!(t.teamOrigins && t.teamOrigins[n] === 'formada');
+      if (!_formada && !_mesmoDia) return;          // fora do mesmo dia só a dupla formada entra
+      if (!_present(p)) return;
+      if (!_catOk(p)) return;
+      if (!_isValidCompetitor(p)) return;
+      if (window._lateAlreadyIntegrated(t, p)) return;
+      seen[kk] = 1; pending.push({ e: p, fromWait: false });
+    });
+  }
+  return pending;
+};
+
 window._placeLateEntriesSurgically = function (t, _theCat) {
   if (!t || !window._allowsNewMatchups || !window._allowsNewMatchups(t)) return 0;
   if (!Array.isArray(t.matches) || !t.matches.length) return 0;
@@ -5002,55 +5156,10 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
   // rótulos JÁ na chave → quem está lá não é tardio pendente
   var inBracket = {};
   _all().forEach(function (m) { if (m) { if (m.p1) inBracket[m.p1] = 1; if (m.p2) inBracket[m.p2] = 1; } });
-  var _brkSetP = window._bracketUidKeySet(t);   // membership POR UID
-
-  // pendentes = espera (_lateJoin) + ÓRFÃO DE ROSTER (dupla formada à mão), presentes, dedup
-  // COMPETIDOR VÁLIDO (v1.3.156) — regressão que EU causei na 1.3.153: ao parar de exigir
-  // `_lateJoin` (pra dupla PRÉ-FORMADA entrar), o coletor passou a pegar QUALQUER presente da
-  // espera, inclusive SOLO SEM DUPLA — que foi arrastado pro slot que devia ser "a definir".
-  // Num torneio de DUPLAS só uma DUPLA é competidor; solo espera parceiro (é o que a seção
-  // "Sem dupla / Formar novas duplas" existe pra resolver). Ver [[project_count_people_not_entries]].
-  var _teamsMode = (parseInt(t.teamSize) || 1) > 1 ||
-    (typeof window._isTeamEnrollMode === 'function' && window._isTeamEnrollMode(t.enrollmentMode)) ||
-    (Array.isArray(t.participants) && t.participants.some(_isPairEntry));
-  var _isValidCompetitor = function (p) { return _teamsMode ? _isPairEntry(p) : true; };
-  var seen = {}, pending = [];
-  ['standbyParticipants', 'waitlist'].forEach(function (k) {
-    if (!Array.isArray(t[k])) return;
-    t[k].forEach(function (p) {
-      var n = _nm(p), kk = _key(p);
-      // v1.3.153: NÃO exigir `_lateJoin`. Essa flag só existe em dupla FORMADA TARDE; a dupla
-      // PRÉ-FORMADA que o sorteio mandou pra espera (sorteio "só entre os presentes") não a tem —
-      // e era ignorada aqui → ficava no LIMBO ao receber presença. A própria UI promete o contrário:
-      // "Marque presença de quem está na espera — entra por repescagem (vs a definir)".
-      // O gate correto é: está na ESPERA e está PRESENTE. Ver [[project_late_dupla_fills_awaiting_slot]].
-      if (!n || seen[kk] || !p || !_present(p)) return;
-      if (!_isValidCompetitor(p)) return;   // duplas: SOLO sem parceiro NÃO entra na chave
-      if (window._entryInBracket(t, p, _brkSetP)) return;
-      if (window._lateAlreadyIntegrated(t, p)) return;
-      seen[kk] = 1; pending.push({ e: p, fromWait: true });
-    });
-  });
-  // ÓRFÃO DE ROSTER: está em `t.participants` mas FORA da chave.
-  // v1.5.2 (dono, torneio AO VIVO 25/jul): antes só a dupla FORMADA à mão (teamOrigins==='formada')
-  // era coletada aqui — quem foi marcado AUSENTE antes do sorteio e ficou em participants (sem ir
-  // pra espera) não era visto por NENHUM coletor: marcar presença nele nunca gerava jogo. O critério
-  // canônico é o mesmo da espera: PRESENTE + fora da chave + competidor válido. Restrito a torneio
-  // de MESMO DIA — é onde a chamada/presença tem significado; multi-dia (`_present` sempre true)
-  // arrastaria o elenco inteiro. Ver [[project_late_dupla_fills_awaiting_slot]].
-  var _mesmoDia = (typeof window._tournamentIsSameDay !== 'function') || !!window._tournamentIsSameDay(t);
-  if (Array.isArray(t.participants)) {
-    t.participants.forEach(function (p) {
-      var n = _nm(p), kk = _key(p);
-      if (!n || seen[kk] || window._entryInBracket(t, p, _brkSetP)) return;
-      var _formada = !!(t.teamOrigins && t.teamOrigins[n] === 'formada');
-      if (!_formada && !_mesmoDia) return;          // fora do mesmo dia só a dupla formada entra
-      if (!_present(p)) return;
-      if (!_isValidCompetitor(p)) return;
-      if (window._lateAlreadyIntegrated(t, p)) return;
-      seen[kk] = 1; pending.push({ e: p, fromWait: false });
-    });
-  }
+  // COLETOR ÚNICO — as regras de "quem pode entrar agora" moram em
+  // `_collectLateCandidates` porque o caminho da eliminatória (draw-core →
+  // motor determinístico) consome a MESMA lista. Ver a função pra o porquê.
+  var pending = window._collectLateCandidates(t, _theCat);
   if (!pending.length) return 0;
 
   // rodada base = MENOR round entre os jogos (onde o tardio entra)

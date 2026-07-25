@@ -76,7 +76,10 @@ function formPairPostDraw(t, idx) {
 console.log('── FORM-PAIR PÓS-SORTEIO: a dupla formada TEM que entrar na chave (todo formato) ──');
 
 ['Elim Simples', 'Dupla Elim', 'Grupos', 'Suíço', 'Liga'].forEach((kind) => {
-  const N = (kind === 'Grupos') ? 8 : (kind === 'Suíço' || kind === 'Liga') ? 8 : 8;
+  // 9 e não 8: 8 é potência de 2 EXATA, chave cheia — lá uma dupla formada SOZINHA espera
+  // par (regra do dono, 25/jul; travada em tests/late-entry-never-redraws). O assunto AQUI é
+  // formar dupla a partir de dois avulsos e integrá-la, então o fixture usa N com folga.
+  const N = 9;
   const { t, rc } = mkTournament(kind, N);
   const label = 'FormPair ' + kind + ' N=' + N;
   ok(rc && rc.ok, label + ' :: compile ok (' + (rc && rc.reason || '') + ')');

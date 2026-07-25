@@ -1921,26 +1921,21 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
     grandCols = bucket(function(m) { return m.bracket === 'grand'; });
   }
 
-  // Numeração CANÔNICA intercalada por rodada: Chave Superior R1, Chave Inferior R1,
-  // Superior R2, Inferior R2… (e segue; a Inferior tem mais rodadas → continua sozinha
-  // ao fim). A Grande Final é o último número. Atribui m._gameNum ANTES de renderizar,
-  // pra que cada seção use o número global certo (não a ordem de render da seção).
-  (function _assignGameNums() {
-    // v4.1.31: numeração GLOBAL do torneio — começa APÓS os jogos das fases anteriores (ex.:
-    // Suíço com 21 jogos → a Dupla Eliminatória começa no Jogo 22, não no 1). Antes esta
-    // função re-carimbava n=0, apagando o offset que _assignGlobalGameNumbers já tinha posto.
-    var n = (typeof window._phaseGameOffset === 'function') ? window._phaseGameOffset(t, t.currentPhaseIndex || 0) : 0;
-    // v4.1.x: intercala por POSIÇÃO DE COLUNA (1ª sup, 1ª inf, 2ª sup, 2ª inf…), NÃO por nº de
-    // rodada. A Dupla Eliminatória com REPESCAGEM tem uma coluna a mais no upper (a repescagem,
-    // round 0), então o alinhamento por rodada ficava torto. Por posição: N-ésima coluna superior
-    // com N-ésima inferior. Clássica (rodadas alinhadas): mesmo resultado. (pedido do dono)
-    var maxCols = Math.max(upperCols.length, lowerCols.length);
-    for (var i = 0; i < maxCols; i++) {
-      if (upperCols[i]) (upperCols[i].matches || []).forEach(function (m) { m._gameNum = ++n; });
-      if (lowerCols[i]) (lowerCols[i].matches || []).forEach(function (m) { m._gameNum = ++n; });
-    }
-    grandCols.forEach(function (c) { (c.matches || []).forEach(function (m) { m._gameNum = ++n; }); });
-  })();
+  // NÃO NUMERE AQUI. A numeração "JOGO N" já foi carimbada por
+  // window._assignGlobalGameNumbers no topo de renderBracket (linha ~204), que é a
+  // FONTE ÚNICA (regra em js/store.js:541).
+  //
+  // Existia aqui um segundo contador (_assignGameNums) que rodava DEPOIS e
+  // sobrescrevia. Ele fazia a MESMA intercalação por coluna, mas com duas
+  // diferenças fatais: NÃO pulava BYE (gastava número com jogo que não se joga) e
+  // NÃO deduplicava por id. Como a fonte única pula BYE e este não, as sequências
+  // divergiam e o número da chave INFERIOR colidia com o de outro jogo —
+  // regressão vista AO VIVO no torneio de casais.
+  //
+  // A fonte única já cobre tudo que este bloco fazia, inclusive o offset de fases
+  // (ela percorre t.rounds e depois t.matches por phaseIndex asc com um contador
+  // só, então o Suíço com 21 jogos faz a Dupla Eliminatória começar no Jogo 22).
+  // Cercado por tests/game-number-single-counter.test.js.
   const renderSection = (cols, title, color, trailingColHtml) => {
     if (!cols || !cols.length) return '';
     const colsHtml = cols.map(function(col, ci) {
@@ -2070,13 +2065,44 @@ window._assignGlobalGameNumbers = function (t) {
   // ganha ++n; visitar o mesmo objeto de novo (grupo e depois plano) reaproveita numById —
   // idempotente. Rei/Rainha numera POR GRUPO (ordem dos grupos), depois o plano confirma pelas
   // MESMAS ids. Zero cópia, zero colisão, zero fallback.
-  var numById = {};
+  // A travessia abaixo só COLETA a ordem cronológica; o número é atribuído no FIM
+  // (_emitir), depois de aplicar a única inversão que existe: a FINAL é o último
+  // jogo do torneio e o 3º/4º lugar fica um número abaixo dela — mesmo a final
+  // aparecendo ACIMA do 3º na tela. Coletar antes de numerar é o que permite essa
+  // garantia sem um segundo contador.
+  var ordem = [];        // 1ª ocorrência de cada jogo, em ordem cronológica
+  var copiasPorId = {};  // id -> todos os objetos com esse id (grupo + array plano)
   function stamp(m) {
     if (!m) return;
     if (m.isSitOut || isBye(m)) { m._gameNum = null; return; }
-    if (m.id != null && numById[m.id] != null) { m._gameNum = numById[m.id]; return; } // cópia já numerada
-    m._gameNum = ++n;
-    if (m.id != null) numById[m.id] = m._gameNum;
+    var k = (m.id != null) ? String(m.id) : null;
+    if (k == null) { ordem.push(m); return; }
+    if (!copiasPorId[k]) { copiasPorId[k] = []; ordem.push(m); }
+    copiasPorId[k].push(m);   // cópias do MESMO jogo recebem o MESMO número
+  }
+  function _ehTerceiro(m) {
+    return !!(m && (m.isThirdPlace || m.bracket === 'thirdplace' || m.bracket === 'grand3'));
+  }
+  function _ehExtra(m) { return !!(m && (m.isExtra || m.condicional)); }
+  function _emitir() {
+    // INVERSÃO ÚNICA DO TORNEIO: tira o 3º lugar de onde estiver e recoloca
+    // imediatamente ANTES da final (o último jogo que não é a final-extra
+    // condicional da Dupla Eliminatória). Vale pra qualquer formato.
+    var terceiros = ordem.filter(_ehTerceiro);
+    if (terceiros.length) {
+      ordem = ordem.filter(function (m) { return !_ehTerceiro(m); });
+      var iFinal = -1;
+      for (var z = ordem.length - 1; z >= 0; z--) { if (!_ehExtra(ordem[z])) { iFinal = z; break; } }
+      if (iFinal < 0) iFinal = ordem.length;
+      Array.prototype.splice.apply(ordem, [iFinal, 0].concat(terceiros));
+    }
+    ordem.forEach(function (m, i) {
+      var num = i + 1;
+      var k = (m.id != null) ? String(m.id) : null;
+      if (k && copiasPorId[k]) copiasPorId[k].forEach(function (o) { o._gameNum = num; });
+      else m._gameNum = num;
+    });
+    n = ordem.length;
   }
   // (1) Classificatória Liga/Suíço (t.rounds) — rodada asc (ordem do array), índice do array.
   //     Rei/Rainha numera POR GRUPO na ordem do array de grupos (A, B, C…), jogos dentro do grupo
@@ -2114,6 +2140,10 @@ window._assignGlobalGameNumbers = function (t) {
         if (upRounds[i] != null) ms.filter(function (m) { return m.bracket === 'upper' && _rnd(m) === upRounds[i]; }).forEach(stamp);
         if (loRounds[i] != null) ms.filter(function (m) { return m.bracket === 'lower' && _rnd(m) === loRounds[i]; }).forEach(stamp);
       }
+      // 3º/4º da Dupla Eliminatória: entra na coleta aqui; _emitir() garante que
+      // ele fica um número ABAIXO da Grande Final. Antes este caminho ignorava o
+      // 3º lugar por completo — ele ficava sem número nenhum.
+      ms.filter(_ehTerceiro).forEach(stamp);
       ms.filter(function (m) { return m.bracket === 'grand'; }).forEach(stamp);
       return;
     }
@@ -2131,14 +2161,20 @@ window._assignGlobalGameNumbers = function (t) {
       var rounds = Object.keys(byRound).map(Number).sort(function (a, b) { return a - b; });
       var thirdM = ms.filter(function (m) { return (m.bracket || 'main') === bk && m.isThirdPlace; })[0];
       rounds.forEach(function (rn, idx) {
-        var isFinalCol = (idx === rounds.length - 1);
         var real = byRound[rn].filter(function (m) { return !isBye(m); });
-        if (isFinalCol && thirdM) stamp(thirdM);   // 3º reservado ANTES da final (final-1)
         real.forEach(stamp);
       });
+      if (thirdM) stamp(thirdM);   // posição final é decidida por _emitir()
     });
     ms.filter(function (m) { return (m.bracket || '') === 'grandfinal'; }).forEach(stamp);
   });
+
+  // t.thirdPlaceMatch mora FORA de t.matches (_appendCanonicalColumn grava nesse
+  // campo próprio) — sem isto ele NUNCA recebia número. _emitir() o coloca logo
+  // abaixo da final.
+  if (t.thirdPlaceMatch) stamp(t.thirdPlaceMatch);
+
+  _emitir();
 };
 
 // ─── Construtor de Fases: render das chaves da fase atual (Ouro/Prata + final) ─
