@@ -22,6 +22,10 @@ const SUITES = [
   // diferente ao cruzar potência de 2.
   'tests/chaves-adapter.test.js',
   'tests/growth-frozen-prefix.test.js',
+  // O AVISO da chave cheia ("2 novas equipes para novo confronto") derivado do MESMO estado
+  // que faz o motor recusar com 'falta-par'. Existe pra tela nunca prometer o que o motor
+  // não fará — e pra o organizador parar de depender de um toast que some.
+  'tests/late-growth-gap-banner.test.js',
   // "JOGO N" tem UM contador só. Regressão vista ao vivo: número da chave superior
   // repetido na inferior, porque um 2º contador dentro de renderDoubleElimBracket
   // sobrescrevia a fonte única sem pular BYE e sem deduplicar por id.

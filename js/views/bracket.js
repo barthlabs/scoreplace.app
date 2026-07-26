@@ -753,6 +753,101 @@ window._assignMatchCourt = function(tId, matchId, court) {
 // 2 duplas, o motor cria um novo confronto na R1 SUPERIOR (Increment 2). Fechada a janela
 // (1º resultado de R2), volta a ser a lista de espera padrão (suplentes). Renderer ISOLADO —
 // não toca o _duplaCard do pré-sorteio (evita regressão). Reusa helpers globais.
+// ─── "Falta N equipe pra abrir jogo novo" — AVISO PERMANENTE (v1.5.9) ─────────────────
+// PORQUÊ: com a chave CHEIA (potência de 2 exata) o tardio NÃO entra sozinho — confronto já
+// publicado é intocável, então o crescimento só acontece AOS PARES (chaves-adapter
+// `crescerComPrefixo`, recusa 'falta-par'). O organizador só sabia disso por um TOAST efêmero
+// ("⏳ Falta 1 pra abrir o jogo"), que some e nunca mais volta: quem chega depois na tela vê a
+// dupla parada na espera sem nenhuma explicação. Este helper devolve o estado pra tela mostrar
+// enquanto a condição durar.
+//
+// A condição NÃO é regra nova: é a MESMA pré-condição do motor — R1 da chave principal/superior
+// com os dois lados reais em TODOS os jogos ⇒ não há vaga, qualquer recálculo mudaria confronto
+// publicado ⇒ só entra em par. Com folga/vaga na R1 o tardio entra sozinho pelo recálculo normal
+// e não há nada a avisar. Ver [[project_pow2_growth_frozen_prefix]].
+//
+// @returns {null | {ready:number, falta:1|2, teams:boolean, isWaiting:fn}}
+window._lateGrowthPairGap = function (t) {
+  if (!t || !Array.isArray(t.matches) || !t.matches.length) return null;
+  // Gates canônicos, os MESMOS do coletor: vontade do organizador ("Novos Confrontos") e
+  // janela ainda aberta. Sem eles um torneio com a entrada tardia desligada mostraria
+  // "faltam 2 equipes" — promessa que o motor não cumpriria.
+  if (typeof window._allowsNewMatchups === 'function' && !window._allowsNewMatchups(t)) return null;
+  if (typeof window._lateEnrollR2Started === 'function' && window._lateEnrollR2Started(t)) return null;
+
+  var _cp = (t.currentPhaseIndex) || 0;
+  var _r1 = t.matches.filter(function (m) {
+    if (!m || (m.bracket !== 'main' && m.bracket !== 'upper') || m.round !== 1) return false;
+    return ((m.phaseIndex == null) ? 0 : m.phaseIndex) === _cp;
+  });
+  if (!_r1.length) return null;
+  // espelha o _slotVivo do chaves-adapter: vazio/TBD/BYE/"a definir" = vaga
+  var _vivo = function (v) {
+    var s = String(v == null ? '' : v);
+    return !!s && s !== 'TBD' && !/^\s*bye/i.test(s) && !/a definir/i.test(s);
+  };
+  var _cheia = _r1.every(function (m) { return !m.isBye && _vivo(m.p1) && _vivo(m.p2); });
+  if (!_cheia) return null;   // tem vaga → entra sozinho, nada a avisar
+
+  // PRONTOS = quem o motor levaria pra chave AGORA (presença por membro, dupla formada,
+  // ainda fora da chave). Mesmo coletor que a CF usa — nunca uma contagem paralela.
+  var _prontos = (typeof window._collectLateCandidates === 'function')
+    ? (window._collectLateCandidates(t) || []).map(function (x) { return x && x.e; }).filter(Boolean)
+    : [];
+  var _teams = (parseInt(t.teamSize) || 1) > 1 ||
+    (typeof window._isTeamEnrollMode === 'function' && window._isTeamEnrollMode(t.enrollmentMode));
+  return {
+    ready: _prontos.length,
+    falta: (_prontos.length % 2 === 1) ? 1 : 2,
+    teams: !!_teams,
+    // a entrada que está parada esperando par (só existe quando falta exatamente 1)
+    isWaiting: function (p) { return (_prontos.length % 2 === 1) && _prontos.indexOf(p) !== -1; }
+  };
+};
+
+// Faixa do topo do box: "2 novas equipes para novo confronto" / "1 nova equipe para novo confronto".
+window._lateGrowthGapBanner = function (gap) {
+  if (!gap) return '';
+  var n = gap.falta;
+  var alvo = gap.teams
+    ? (n === 1 ? '1 equipe' : '2 equipes')
+    : (n === 1 ? '1 jogador' : '2 jogadores');
+  return '<div style="margin-bottom:0.9rem;padding:9px 12px;'
+    + 'background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.32);border-radius:12px;">'
+    + '<div style="min-width:0;">'
+    + '<div style="font-weight:800;font-size:0.86rem;color:#fbbf24;">⏳ ' + alvo + ' para novo confronto</div>'
+    + '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">A chave está cheia — o jogo novo abre com duas entradas de uma vez, sem mexer em nenhum confronto já publicado.</div>'
+    + '</div></div>';
+};
+
+// ─── PORTA do tardio: qual é a etapa AGORA (v1.5.9) ──────────────────────────────────
+// A pill dizia sempre "inscrições abertas · R1" — mas "R1" de qual chave? Numa Dupla
+// Eliminatória a entrada é na R1 SUPERIOR (o novo confronto nasce lá; quem perde cai para a
+// chave inferior). Fechada a porta, quem está na espera é SUPLENTE — entra só por W.O./
+// substituição, não abre jogo novo. O rótulo passa a dizer a etapa REAL.
+//
+// ⚠️ "R1 inferior" NÃO é uma etapa que existe hoje: `_collectLateCandidates` devolve VAZIO
+// assim que a 2ª rodada superior tem resultado (`_lateEnrollR2Started`) — nenhuma porta fica
+// aberta depois disso, nem a inferior. O cânone [[project_late_entry_door_upper_then_lower]]
+// prevê essa porta, mas ela não está no motor. Rotular "R1 inferior" aqui seria prometer uma
+// entrada que não acontece; quando o motor abrir essa porta, é UM caso a mais neste switch.
+window._lateDoorStage = function (t) {
+  if (!t) return null;
+  var _aberta = (typeof window._lateEnrollWindowOpen === 'function') && window._lateEnrollWindowOpen(t);
+  var _dupla = /dupla elimina/i.test(String(t.format || '')) ||
+    (Array.isArray(t.matches) && t.matches.some(function (m) { return m && m.bracket === 'lower'; }));
+  if (_aberta) return { code: 'r1sup', label: 'inscrições abertas · ' + (_dupla ? 'R1 superior' : 'R1') };
+  return { code: 'suplentes', label: 'suplentes' };
+};
+
+// Etiqueta logo ACIMA do card de quem está parado esperando par.
+window._lateGrowthWaitTag = function (gap) {
+  if (!gap) return '';
+  return '<div style="font-size:0.68rem;font-weight:800;color:#fbbf24;background:rgba(245,158,11,0.12);'
+    + 'border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:4px 9px;align-self:flex-start;">'
+    + '⏳ Aguardando mais ' + (gap.teams ? '1 equipe' : '1 jogador') + '</div>';
+};
+
 window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   if (!t) return '';
   var _safeHtml = window._safeHtml || function (s) { return String(s == null ? '' : s); };
@@ -884,17 +979,28 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     return { skip: false, styleExtra: (window._presenceCardStyle ? window._presenceCardStyle(_st, 'pair') : ''), rowHtml: '' };
   };
   var _ljDctx = { isOrg: isOrg, drawDone: true, orgUids: {}, orgEmails: {}, cardPresence: _ljCardPres, memberPresence: _ljMemberPres, enrollOrderMap: _ljOrderMap, splitDupla: _ljSplit };
+  // v1.5.9: chave cheia ⇒ o tardio só entra AOS PARES. Quem já está pronto e parado ganha a
+  // etiqueta "Aguardando mais 1 equipe" LOGO ACIMA do card — em vez do toast que sumia.
+  var _ljGap = (typeof window._lateGrowthPairGap === 'function') ? window._lateGrowthPairGap(t) : null;
+  var _ljWaitTag = (_ljGap && _ljGap.falta === 1 && typeof window._lateGrowthWaitTag === 'function')
+    ? window._lateGrowthWaitTag(_ljGap) : '';
   var duplasHtml = (typeof window._duplaCard === 'function')
-    ? _duplas.map(function (p) { return window._duplaCard(t, p, false, _ljDctx); }).join('')
+    ? _duplas.map(function (p) {
+        var card = window._duplaCard(t, p, false, _ljDctx);
+        if (!_ljWaitTag || !_ljGap.isWaiting(p)) return card;
+        return '<div style="display:flex;flex-direction:column;gap:6px;min-width:0;">' + _ljWaitTag + card + '</div>';
+      }).join('')
     : '';
 
   var _readyMsg = (_duplas.length >= 1)
     ? '<div style="font-size:0.72rem;color:#2dd4bf;font-weight:700;margin-top:2px;">✔️ ' + _duplas.length + ' dupla(s) formada(s) na lista de espera.</div>'
     : '';
 
+  var _ljStage = (typeof window._lateDoorStage === 'function') ? window._lateDoorStage(t) : null;
   return '<div id="late-join-pairing-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.25);border-radius:16px;padding:1.5rem;">'
-    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;"><span style="font-size:1.3rem;">🤝</span><h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Formar novas duplas</h3><span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">inscrições abertas · R1</span></div>'
-    + '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:1rem;">Arraste um card sobre outro para formar uma dupla (no celular, segure e arraste). Enquanto a 2ª rodada do upper não começou, cada dupla nova entra na <b>R1 da chave superior</b> (vencedor sobe, derrotado cai pro lower).</div>'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;flex-wrap:wrap;"><span style="font-size:1.3rem;">🤝</span><h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Formar novas duplas</h3><span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">' + ((_ljStage && _ljStage.label) || 'inscrições abertas · R1') + '</span></div>'
+    + ((typeof window._lateGrowthGapBanner === 'function') ? window._lateGrowthGapBanner(_ljGap) : '')
+    + '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:1rem;">Arraste um card sobre outro para formar uma dupla (no celular, segure e arraste). Enquanto a 2ª rodada da chave superior não começou, cada dupla nova entra na <b>R1 da chave superior</b> (vencedor sobe, derrotado cai para a chave inferior).</div>'
     + (solosHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#f59e0b;margin-bottom:6px;">Sem dupla</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:10px;margin-bottom:1.1rem;align-items:stretch;">' + solosHtml + '</div>' : '')
     + (duplasHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#2dd4bf;margin-bottom:6px;">Duplas formadas</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:10px;align-items:stretch;">' + duplasHtml + '</div>' : '')
     + _readyMsg
@@ -1168,9 +1274,18 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   const _rcWL = (typeof window._rollCallPresenceCtx === 'function')
     ? window._rollCallPresenceCtx(t, { isOrg: isOrg, active: true, postDraw: true, woScope: ((t.woScope || 'individual') === 'individual' ? 'individual' : 'team') })
     : {};
+  // v1.5.9: chave cheia ⇒ tardio só entra aos pares (ver _lateGrowthPairGap). Aviso PERMANENTE:
+  // faixa no topo do painel + etiqueta logo acima de quem está parado esperando par.
+  const _sbGap = (typeof window._lateGrowthPairGap === 'function') ? window._lateGrowthPairGap(t) : null;
+  const _sbWaitTag = (_sbGap && _sbGap.falta === 1 && typeof window._lateGrowthWaitTag === 'function')
+    ? window._lateGrowthWaitTag(_sbGap) : '';
   const _duplaCardsWL = (_duplasWL.length && typeof window._duplaCard === 'function')
     ? '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;">' +
-        _duplasWL.map((p) => window._duplaCard(t, p, false, { isOrg: isOrg, drawDone: true, cardPresence: _rcWL.cardPresence, memberPresence: _rcWL.memberPresence })).join('') +
+        _duplasWL.map((p) => {
+          const _c = window._duplaCard(t, p, false, { isOrg: isOrg, drawDone: true, cardPresence: _rcWL.cardPresence, memberPresence: _rcWL.memberPresence });
+          if (!_sbWaitTag || !_sbGap.isWaiting(p)) return _c;
+          return '<div style="display:flex;flex-direction:column;gap:6px;min-width:0;">' + _sbWaitTag + _c + '</div>';
+        }).join('') +
       '</div>'
     : '';
 
@@ -1223,11 +1338,13 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   return `
     <div id="standby-panel-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.2);border-radius:16px;padding:1.5rem;">
       ${_lateToggleHtml}
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;flex-wrap:wrap;">
         <span style="font-size:1.3rem;">📋</span>
         <h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Lista de Espera</h3>
+        ${(function () { var s = (typeof window._lateDoorStage === 'function') ? window._lateDoorStage(t) : null; return s ? ('<span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">' + s.label + '</span>') : ''; })()}
         <span style="font-size:0.75rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;">${(function () { var n = 0; sorted.forEach(function (p) { var nm = getName(p); if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) n += 2; else if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) n += p.participants.length; else if (nm.indexOf('/') !== -1) n += nm.split('/').filter(function (x) { return x.trim(); }).length; else n += 1; }); return n; })()}
       </div>
+      ${(typeof window._lateGrowthGapBanner === 'function') ? window._lateGrowthGapBanner(_sbGap) : ''}
       <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem;">${_policy === 'locked' ? '🔒 Ordem do sorteio travada — entra o próximo presente na ordem.' : '🏃 Quem fizer check-in primeiro é o próximo a entrar.'}</div>
       ${_duplaCardsWL ? ('<div style="font-size:0.72rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas na espera (' + _duplasWL.length + ')</div>' + _duplaCardsWL) : ''}
       ${(_duplaCardsWL && listItems) ? '<div style="font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">🙋 Sem dupla</div>' : ''}
