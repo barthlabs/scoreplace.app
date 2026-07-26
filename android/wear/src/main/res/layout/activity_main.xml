@@ -296,6 +296,20 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
+    <!-- ♥ BPM no BEZEL DIREITO (idioma do Wear redondo — no Apple, que é reto,
+         o mesmo dado fica numa linha abaixo do relógio). Fica às 2h: logo abaixo
+         do relógio do sistema, na curva da direita. Some sozinho sem leitura
+         (sem permissão de sensor / relógio sem sensor). -->
+    <androidx.wear.widget.CurvedTextView
+        android:id="@+id/hr_arc"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:text="♥ --"
+        android:textColor="@color/hr_pink"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <!-- Rodapé: DESFAZER = barra inferior (mesmo formato/posição do Iniciar) —
          topo reto, largura cheia, colada na base, cantos cortados pela curva. O
          "Sacador" (só nos 2 primeiros jogos) é uma pílula logo ACIMA da barra. -->
