@@ -1558,6 +1558,22 @@ input[type="number"] {
   vertical-align: middle;
   margin-right: 6px;
 }
+/* CANON v1.5.14 (dono: "faz o spin do tamanho do botão e centralizado; canonize isso para
+   sempre que não for instantâneo"): botão ocupado centra o spinner no PRÓPRIO botão. O
+   `margin-right` do .btn-spinner só faz sentido quando há TEXTO ao lado — sozinho ele
+   descentraliza (era o caso do ✕ de 24px). O tamanho vem inline do _spinButton, medido do
+   botão. Ver [[project_busy_button_canonical]]. */
+button[data-spinning="1"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+button[data-spinning="1"] .btn-spinner:only-child { margin-right: 0; }
+/* O ✕ do .cancel-x-btn é DESENHADO por ::before/::after — sem escondê-los o spinner girava
+   por trás do X. Some enquanto processa e volta sozinho quando o atributo sai. */
+button.cancel-x-btn[data-spinning="1"]::before,
+button.cancel-x-btn[data-spinning="1"]::after { display: none; }
+button.cancel-x-btn[data-spinning="1"] { background: #6b7280; }
 button[data-spinning="1"] {
   pointer-events: none;
   opacity: 0.75;

@@ -30,6 +30,10 @@ const SUITES = [
   // nome (uid→perfil) e identidade pelos DOIS uids da dupla — nos dois carimbos do adapter
   // (sorteio e crescimento) — mais a cura do doc já gravado.
   'tests/late-entry-slot-label-uid.test.js',
+  // Desfazer dupla: ENTRADA ÚNICA que roteia (roster → splitPair, espera → splitLatePair,
+  // lugar nenhum → AVISA). O `return` mudo do roster era o "desfazer não funciona mais" —
+  // clique sem toast e sem NENHUMA invocação da CF nos logs.
+  'tests/split-dupla-routing.test.js',
   // "JOGO N" tem UM contador só. Regressão vista ao vivo: número da chave superior
   // repetido na inferior, porque um 2º contador dentro de renderDoubleElimBracket
   // sobrescrevia a fonte única sem pular BYE e sem deduplicar por id.

@@ -1007,7 +1007,8 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   // Desfazer: passa as 2 IDENTIDADES de membro (uid||nome-guest), NUNCA a string "A / B" — o cânone
   // uid proíbe casar dupla por displayName (a resolução por uid diverge entre render e split → o ✕
   // não achava a dupla e não fazia nada). Espelha o _splitDupla do roster. [[project_uid_identity_canon_locked]]
-  var _ljSplit = function (tid, m1id, m2id, name) { return 'window._splitLateDupla(\'' + tid + '\',\'' + m1id + '\',\'' + m2id + '\')'; };
+  // `this` = o próprio ✕ → o spinner gira NELE enquanto a CF responde (v1.5.14).
+  var _ljSplit = function (tid, m1id, m2id, name) { return 'window._splitLateDupla(\'' + tid + '\',\'' + m1id + '\',\'' + m2id + '\',this)'; };
   // v1.3.148 (dono): antes `cardPresence: null` → a dupla NÃO recebia cor de presença e caía no
   // VERDE base do _duplaCard: no print, Luigi/Adriana com os DOIS AUSENTES aparecia verde. Agora usa
   // a FONTE ÚNICA com os 3 estados: os 2 presentes = VERDE · 1 presente = ÂMBAR · nenhum = AZUL.
@@ -1207,15 +1208,31 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
 // Desfazer dupla da LISTA DE ESPERA — CF-ONLY. id1/id2 = identidade (uid||nome) dos 2 membros. A CF
 // splitLatePair acha a dupla nos 2 stores (standby/waitlist), reparte em 2 solos e devolve o doc; o
 // cliente só dispara e REFLETE. id2 vazio = casa pelo nome inteiro (compat). Zero mutação/save local.
-window._splitLateDupla = function (tId, id1, id2) {
+window._splitLateDupla = function (tId, id1, id2, btnEl) {
+  // v1.5.14 CANON: desfazer vai e volta da CF — não é instantâneo, então o ✕ gira até a
+  // resposta. Soltar em TODA saída (guard, sucesso, erro), nunca por timeout cego.
+  // [[project_busy_button_canonical]]
+  var _btn = (btnEl && btnEl.nodeType === 1) ? btnEl : null;
+  var _done = function () { if (_btn && window._spinButtonDone) window._spinButtonDone(_btn); };
+  if (_btn && typeof window._spinButton === 'function') window._spinButton(_btn, '');
   if (!(window.FirestoreDB && typeof window.FirestoreDB.splitLatePair === 'function')) {
+    _done();
     if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível desfazer agora — tente de novo.', 'warning');
     return;
   }
   window.FirestoreDB.splitLatePair(tId, { id1: id1, id2: id2 }).then(function (res) {
-    if (res && res.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, res.tournament);
-    if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', (res && res.split ? (res.split + ' voltaram para Sem dupla.') : ''), 'info');
+    _done();
+    // A CF devolve reason:'not-found' quando NÃO achou — comemorar assim mesmo daria o pior
+    // sintoma: toast "Dupla desfeita" com a dupla intacta. Mesmo cuidado do _splitDupla.
+    var _r = (res && res.data) ? res.data : res;
+    if (_r && _r.ok === false) {
+      if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', 'Ela pode já ter entrado na chave. Atualize a tela.', 'warning');
+      return;
+    }
+    if (_r && _r.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, _r.tournament);
+    if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', (_r && _r.split ? (_r.split + ' voltaram para Sem dupla.') : ''), 'info');
   }).catch(function (e) {
+    _done();
     if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', (e && (e.message || e.code)) || '', 'warning');
   });
 };
@@ -1324,7 +1341,13 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   const _duplaCardsWL = (_duplasWL.length && typeof window._duplaCard === 'function')
     ? '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;">' +
         _duplasWL.map((p) => {
-          const _c = window._duplaCard(t, p, false, { isOrg: isOrg, drawDone: true, cardPresence: _rcWL.cardPresence, memberPresence: _rcWL.memberPresence });
+          // v1.5.14: estas duplas moram na LISTA DE ESPERA — o Desfazer TEM de ser o da espera
+          // (_splitLateDupla). Sem este ctx o card caía no _splitDupla do ROSTER, que não acha e
+          // saía calado: era o "desfazer dupla não está mais funcionando" do dono.
+          const _c = window._duplaCard(t, p, false, {
+            isOrg: isOrg, drawDone: true, cardPresence: _rcWL.cardPresence, memberPresence: _rcWL.memberPresence,
+            splitDupla: function (tid, m1id, m2id) { return 'window._splitLateDupla(\'' + tid + '\',\'' + m1id + '\',\'' + m2id + '\',this)'; }
+          });
           if (!_sbWaitTag || !_sbGap.isWaiting(p)) return _c;
           return '<div style="display:flex;flex-direction:column;gap:6px;min-width:0;">' + _sbWaitTag + _c + '</div>';
         }).join('') +

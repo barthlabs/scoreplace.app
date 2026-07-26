@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.5.13';
+window.SCOREPLACE_VERSION = '1.5.14';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -5272,7 +5272,20 @@ window._spinButton = function(btn, label) {
   btn.style.cursor = 'wait';
   btn.style.opacity = '0.85';
   var txt = label || '';
-  btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>' + (txt ? window._safeHtml(txt) : '');
+  // v1.5.14 CANON (dono): spinner NO TAMANHO DO BOTÃO e centralizado. Sem rótulo (✕ de 24px,
+  // ícone) o spinner fixo de 14px com margem à direita ficava pequeno e torto; agora é medido
+  // do próprio botão (~64% do menor lado, teto de 22px pra não engolir botão grande). Com
+  // rótulo, mantém o tamanho de sempre — ali ele acompanha o texto, não substitui o botão.
+  var _spinStyle = '';
+  if (!txt) {
+    var _r = btn.getBoundingClientRect();
+    var _lado = Math.min(_r.width || 0, _r.height || 0);
+    if (_lado > 0) {
+      var _d = Math.max(12, Math.min(22, Math.round(_lado * 0.64)));
+      _spinStyle = ' style="width:' + _d + 'px;height:' + _d + 'px;margin:0;border-width:' + (_d >= 18 ? 2.5 : 2) + 'px;"';
+    }
+  }
+  btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"' + _spinStyle + '></span>' + (txt ? window._safeHtml(txt) : '');
   setTimeout(function() {
     if (btn && btn.getAttribute('data-spinning') === '1' && document.body.contains(btn)) {
       btn.innerHTML = original;

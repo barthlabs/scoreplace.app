@@ -1095,7 +1095,35 @@ window._splitDupla = function(tId, id1, id2, btnEl) {
             return (p.displayName || p.name || '') === teamName || _resolved === teamName;
         });
     }
-    if (idx === -1) { _busyDone(); return; }
+    // v1.5.14 (dono: "desfazer dupla não está mais funcionando"): a dupla pode não estar no
+    // ROSTER — a que o organizador desfaz durante a fase vive na LISTA DE ESPERA (standby/
+    // waitlist), e o painel de espera renderiza o ✕ SEM ctx de split, caindo aqui. O `return`
+    // mudo daqui era a falha: clique sem toast, sem chamada de CF, sem nada (confirmado nos
+    // logs da CF — zero invocações). Agora ROTEIA: espera → _splitLateDupla; em lugar nenhum
+    // → avisa. Entrada ÚNICA que decide o caminho. [[feedback_unify_dual_entry_points]]
+    if (idx === -1) {
+        var _naEspera = (typeof window._getWaitlist === 'function') ? window._getWaitlist(t) : []
+            .concat(Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [])
+            .concat(Array.isArray(t.waitlist) ? t.waitlist : []);
+        var _wantW = [String(id1 || ''), String(id2 || '')].filter(Boolean).sort();
+        var _achouEspera = _naEspera.some(function (p) {
+            if (!p || typeof p !== 'object') return false;
+            if (!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))) return false;
+            var g = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort();
+            if (_wantW.length === 2) return g.length === 2 && g[0] === _wantW[0] && g[1] === _wantW[1];
+            var _res = (typeof window._pName === 'function') ? window._pName(p, '') : '';
+            return (p.displayName || p.name || '') === id1 || _res === id1;
+        });
+        if (_achouEspera && typeof window._splitLateDupla === 'function') {
+            window._splitLateDupla(tId, id1, id2, _btn);   // ele cuida do próprio spinner
+            return;
+        }
+        _busyDone();
+        if (typeof showNotification !== 'undefined') {
+            showNotification('Não encontrei essa dupla', 'Ela pode já ter entrado na chave. Atualize a tela e tente de novo.', 'warning');
+        }
+        return;
+    }
     var entry = arr[idx];
     // CF-ONLY: o cliente NÃO desfaz nem grava — só LÊ nomes/uids (pra notificar) e dispara a CF
     // splitPair (computeSplitPair: 2 solos + enrollSeq + memberUids, atômico + replica pro SB).
