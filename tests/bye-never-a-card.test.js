@@ -135,14 +135,33 @@ ok(!W._isByeMatch({ p1: 'A / B', p2: 'TBD' }), '"a definir" (TBD) NÃO é bye �
   ok(ms[2].p1FromBye == null, '(8) avanço normal (r1→r2) NÃO leva tag');
 })();
 
-// ── 9. cair da chave superior pra inferior NÃO é folga ───────────────────────────────────
+// ── 9. QUEDA da superior que aterrissa DEPOIS da 1ª inferior TAMBÉM é folga ──────────────
+// Dono, apontando Fernando e Cynara na 3ª inferior: "deveriam estar na r2 inf, mas como estão
+// na r3 inf, isso É bye. aplica a tag BYE neles nesse caso." Eles chegam pela aresta de
+// DERROTA — que a inferência não seguia; por isso ficavam sem tag.
 (function () {
   var ms = [
-    { id: 'u1', bracket: 'upper', round: 1, p1: 'A / B', p2: 'C / D', winner: 'A / B', nextMatchId: 'l9', nextSlot: 'p1' },
-    { id: 'l9', bracket: 'lower', round: 4, p1: 'A / B', p2: 'TBD' }
+    { id: 'l1', bracket: 'lower', round: 1, p1: 'X / Y', p2: 'Z / W' },                     // 1ª inferior
+    { id: 'u2', bracket: 'upper', round: 2, p1: 'A / B', p2: 'C / D', winner: 'A / B',
+      nextMatchId: 'u3', nextSlot: 'p1', loserMatchId: 'l3', loserSlot: 'p2' },
+    { id: 'u3', bracket: 'upper', round: 3, p1: 'A / B', p2: 'TBD' },
+    { id: 'l3', bracket: 'lower', round: 3, p1: 'TBD', p2: 'C / D' }                        // caiu direto na 3ª
   ];
   W._inferByeTags(ms);
-  ok(ms[1].p1FromBye == null, '(9) mudar de chave (upper→lower) não vira tag de BYE');
+  ok(ms[3].p2FromBye === true,
+    '(9) derrotado da 2ª superior aterrissa na 3ª inferior sem ter jogado lá → tag BYE — got ' + JSON.stringify(ms[3].p2FromBye));
+  ok(ms[2].p1FromBye == null, '(9) o vencedor seguiu na superior em avanço normal — sem tag');
+})();
+
+// ── 10. quem ENTRA na 1ª rodada da chave inferior NÃO leva tag (começou ali) ─────────────
+(function () {
+  var ms = [
+    { id: 'u1', bracket: 'upper', round: 1, p1: 'A / B', p2: 'C / D', winner: 'A / B',
+      loserMatchId: 'l1', loserSlot: 'p1' },
+    { id: 'l1', bracket: 'lower', round: 1, p1: 'C / D', p2: 'TBD' }
+  ];
+  W._inferByeTags(ms);
+  ok(ms[1].p1FromBye == null, '(10) derrotado da 1ª superior começa na 1ª inferior — não é folga');
 })();
 
 console.log((fail ? '❌' : '✅') + ' bye-never-a-card: ' + pass + ' ok, ' + fail + ' falhas');

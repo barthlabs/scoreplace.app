@@ -84,17 +84,37 @@ window._inferByeTags = function (matches) {
   // uma ARESTA DIRETA. Ou seja: é folga, mas não existe jogo de BYE pra inferir a tag, então a
   // tela não dizia nada e a rodada parecia faltar gente. Aqui a folga é lida do PRÓPRIO fio:
   // destino a mais de uma rodada de distância, na mesma chave = pulou rodada.
-  var porId = {};
-  ms.forEach(function (m) { if (m && m.id != null) porId[String(m.id)] = m; });
+  var porId = {}, minR = {};
   ms.forEach(function (m) {
-    if (!m || !m.winner || !m.nextMatchId) return;
-    var alvo = porId[String(m.nextMatchId)];
+    if (!m) return;
+    if (m.id != null) porId[String(m.id)] = m;
+    var bk = m.bracket || 'main', r = (m.round == null) ? 1 : m.round;
+    if (minR[bk] == null || r < minR[bk]) minR[bk] = r;
+  });
+  // Regra do dono (26/jul), olhando Fernando e Cynara na 3ª inferior: _"deveriam estar na r2
+  // inf, mas como estão na r3 inf, isso É bye. aplica a tag BYE neles nesse caso."_ Ou seja:
+  // CHEGOU numa rodada sem ter jogado a anterior DAQUELA chave ⇒ folga. Dois jeitos de isso
+  // acontecer, e os dois contam:
+  //   (a) mesma chave, destino a mais de uma rodada → pulou rodada (o 3º vencedor da 1ª inf);
+  //   (b) veio de OUTRA chave e aterrissa depois da 1ª rodada dela (o derrotado da 2ª superior
+  //       cai na 3ª inferior sem ter jogado a 1ª nem a 2ª de lá).
+  // A aresta de DERROTA precisava entrar junto — era só por ela que Fernando/Cynara chegavam,
+  // e a versão anterior só seguia a de vitória: por isso eles ficavam sem tag nenhuma.
+  var _marca = function (m, alvoId, slotRaw) {
+    if (!alvoId) return;
+    var alvo = porId[String(alvoId)];
     if (!alvo) return;
     var rm = (m.round == null) ? 1 : m.round, ra = (alvo.round == null) ? 1 : alvo.round;
-    if ((alvo.bracket || 'main') !== (m.bracket || 'main')) return;   // trocar de chave não é folga
-    if (ra <= rm + 1) return;                                         // avanço normal
-    var slot = (m.nextSlot === 'p2') ? 'p2' : 'p1';
+    var bkM = m.bracket || 'main', bkA = alvo.bracket || 'main';
+    var folga = (bkA === bkM) ? (ra > rm + 1) : (ra > (minR[bkA] == null ? ra : minR[bkA]));
+    if (!folga) return;
+    var slot = (slotRaw === 'p2') ? 'p2' : 'p1';
     if (alvo[slot] && alvo[slot + 'FromBye'] == null) alvo[slot + 'FromBye'] = true;
+  };
+  ms.forEach(function (m) {
+    if (!m || !m.winner) return;              // sem resultado ainda não há quem marcar
+    _marca(m, m.nextMatchId, m.nextSlot);     // quem avançou
+    _marca(m, m.loserMatchId, m.loserSlot);   // quem CAIU pra outra chave
   });
   return ms;
 };
