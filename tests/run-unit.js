@@ -26,6 +26,10 @@ const SUITES = [
   // que faz o motor recusar com 'falta-par'. Existe pra tela nunca prometer o que o motor
   // não fará — e pra o organizador parar de depender de um toast que some.
   'tests/late-growth-gap-banner.test.js',
+  // Dupla tardia virando "#10" na chave (bug ao vivo 26/jul): rótulo pela fonte única de
+  // nome (uid→perfil) e identidade pelos DOIS uids da dupla — nos dois carimbos do adapter
+  // (sorteio e crescimento) — mais a cura do doc já gravado.
+  'tests/late-entry-slot-label-uid.test.js',
   // "JOGO N" tem UM contador só. Regressão vista ao vivo: número da chave superior
   // repetido na inferior, porque um 2º contador dentro de renderDoubleElimBracket
   // sobrescrevia a fonte única sem pular BYE e sem deduplicar por id.

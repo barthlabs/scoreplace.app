@@ -4335,6 +4335,27 @@ window._stampMissingMatchUids = function (t) {
   var n = 0;
   (typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : t.matches).forEach(function (m) {
     if (!m) return;
+    // v1.5.10 — HEAL do rótulo "#N" + identidade INCOMPLETA de dupla. Caso real
+    // (tour_1785038880593_sb, 26/jul): a dupla que entrou tarde ficou na chave como "#10" e
+    // com team2Uids de UM uid só (dupla tem dois). O slot guarda o `team*Obj` COMPLETO, então
+    // dá pra reconstruir os dois pela fonte única — sem depender de resolver nome nenhum.
+    // Cura o doc na próxima passada da CF/render, sem migração.
+    [['p1', 'team1Uids', 'team1Obj'], ['p2', 'team2Uids', 'team2Obj']].forEach(function (par) {
+      var slot = par[0], campo = par[1], obj = m[par[2]];
+      if (!obj || typeof obj !== 'object') return;
+      var esperados = _uids(obj);
+      if (!esperados.length) return;
+      var atual = Array.isArray(m[campo]) ? m[campo] : [];
+      if (atual.length !== esperados.length || esperados.some(function (u) { return atual.indexOf(u) < 0; })) {
+        if (typeof window._setSlot === 'function') window._setSlot(m, slot, esperados, obj);
+        else m[campo] = esperados.slice();
+        n++;
+      }
+      if (/^#\d+$/.test(String(m[slot] || '').trim())) {
+        var nomeVivo = _nm(obj);
+        if (nomeVivo && !/^#\d+$/.test(nomeVivo)) { m[slot] = nomeVivo; n++; }
+      }
+    });
     [['p1', 'team1Uids'], ['p2', 'team2Uids']].forEach(function (par) {
       var slot = par[0], campo = par[1];
       if (Array.isArray(m[campo]) && m[campo].length) {
@@ -4372,15 +4393,22 @@ window._stampMissingMatchUids = function (t) {
 // o doc se auto-conserta na primeira abertura com os perfis vivos.
 window._healOrphanLabels = function (t) {
   if (!t) return Promise.resolve(0);
-  var RE = /jogador sem perfil \(/i;
+  // v1.5.10: "#N" entra na cura junto com "Jogador sem perfil (…)" — é o MESMO defeito visto
+  // de outro ângulo (slot com identidade, sem nome). A dupla tardia do doc real virou "#10"
+  // na tela e o organizador leu como "não entrou". Os uids vêm do team*Uids OU do team*Obj
+  // (no caso medido o team*Uids estava incompleto — é justamente o que o stamp conserta).
+  var RE = /jogador sem perfil \(|^#\d+$/i;
   var ms = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
   var uids = [];
   (ms || []).forEach(function (m) {
     if (!m) return;
-    [['p1', 'team1Uids'], ['p2', 'team2Uids']].forEach(function (par) {
-      if (RE.test(String(m[par[0]] || '')) && Array.isArray(m[par[1]])) {
-        m[par[1]].forEach(function (u) { if (u && uids.indexOf(u) < 0) uids.push(u); });
+    [['p1', 'team1Uids', 'team1Obj'], ['p2', 'team2Uids', 'team2Obj']].forEach(function (par) {
+      if (!RE.test(String(m[par[0]] || '').trim())) return;
+      var us = Array.isArray(m[par[1]]) ? m[par[1]].slice() : [];
+      if (m[par[2]] && typeof window._participantUids === 'function') {
+        window._participantUids(m[par[2]]).forEach(function (u) { if (us.indexOf(u) < 0) us.push(u); });
       }
+      us.forEach(function (u) { if (u && uids.indexOf(u) < 0) uids.push(u); });
     });
   });
   if (!uids.length) return Promise.resolve(0);

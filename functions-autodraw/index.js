@@ -81,11 +81,19 @@ async function _preloadDrawNames(t) {
   try {
     if (!drawWindow) return;
     const uids = new Set();
-    (Array.isArray(t.participants) ? t.participants : []).forEach(p => {
+    // v1.5.10: a ESPERA entra aqui também. Quem entra tarde vem de standby/waitlist, e o
+    // inscrito grava SÓ uid (o nome vem do perfil vivo) — sem carregar esses uids, o motor
+    // não tinha nome nenhum pra carimbar e o slot da dupla tardia virava "#10" na chave
+    // (caso real tour_1785038880593_sb). Mesma leitura em lote, sem custo relevante.
+    const _walk = (arr) => (Array.isArray(arr) ? arr : []).forEach(p => {
       if (!p || typeof p !== 'object') return;
       [p.uid, p.p1Uid, p.p2Uid].forEach(u => { if (u) uids.add(String(u)); });
       if (Array.isArray(p.participants)) p.participants.forEach(sp => { if (sp && sp.uid) uids.add(String(sp.uid)); });
     });
+    _walk(t.participants); _walk(t.standbyParticipants); _walk(t.waitlist);
+    if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object') {
+      Object.keys(t.monarchWaitlist).forEach(k => _walk(t.monarchWaitlist[k]));
+    }
     if (!uids.size) return;
     const { profByUid, nameByUid } = await _loadLiveNames(uids);
     drawWindow._profileNameByUid = nameByUid || {};

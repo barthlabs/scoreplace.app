@@ -63,6 +63,34 @@
 
   function _slotName(k) { return k === 0 ? 'p1' : 'p2'; }
 
+  // ─── Carimba uma ENTRADA num slot: RÓTULO + IDENTIDADE (v1.5.10) ────────────────────
+  // BUG MEDIDO no torneio ao vivo (tour_1785038880593_sb, 26/jul): a dupla que entrou tarde
+  // apareceu na chave como **"#10"** e o organizador concluiu que ela não tinha entrado —
+  // ela ESTAVA lá, só sem nome. Causa: o inscrito grava SÓ uid (cânone: nome vem do perfil
+  // ao vivo), então a entrada da espera é `{uid,p1Uid,p2Uid}` SEM displayName/name — e este
+  // carimbo lia `p.displayName || p.name`, caindo no rótulo cru `#seed`.
+  //
+  // Pior, e invisível: a identidade era `p.uids || [p.uid]` → uma DUPLA entrava no slot com
+  // UM uid só (o do p1) e `pXUid` preenchido como se fosse 1v1. Isso quebra "é o meu jogo?",
+  // W.O., presença e notificação do parceiro. Dupla = 2 SLOTS/2 uid, sempre.
+  //
+  // Fonte ÚNICA pros dois: `_pName` (nome vivo por uid, o mesmo do resto do app) e
+  // `_participantUids` (TODOS os uids da entrada). Nada de resolução paralela aqui.
+  // Ver [[project_uid_identity_canon_locked]] / [[feedback_uid_controls_everything_name_only_ficticio]].
+  function _stampEntry(m, slot, p, seed) {
+    if (seed != null) m[slot + 'Seed'] = seed;
+    if (!p) { m[slot] = '#' + seed; return; }
+    var W = (typeof window !== 'undefined') ? window : null;
+    var nome = (W && typeof W._pName === 'function') ? String(W._pName(p, '') || '') : '';
+    if (!nome) nome = p.displayName || p.name || '';
+    m[slot] = nome || ('#' + seed);
+    var uids = (W && typeof W._participantUids === 'function')
+      ? W._participantUids(p)
+      : (p.uids || (p.uid ? [p.uid] : []));
+    if (W && typeof W._setSlot === 'function') W._setSlot(m, slot, uids, p);
+    else m[slot === 'p1' ? 'team1Obj' : 'team2Obj'] = p;
+  }
+
   /**
    * Monta os matches do app a partir de (N, formato).
    *
@@ -147,16 +175,7 @@
         }
 
         if (e.tipo === 'seed') {
-          var p = parts[e.seed - 1];
-          m[slot] = p ? (p.displayName || p.name || String(p)) : ('#' + e.seed);
-          m[slot + 'Seed'] = e.seed;
-          var _setSlot = (typeof window !== 'undefined') && window._setSlot;
-          if (p && typeof _setSlot === 'function') {
-            var uids = p.uids || (p.uid ? [p.uid] : []);
-            _setSlot(m, slot, uids, p);
-          } else if (p) {
-            m[slot === 'p1' ? 'team1Obj' : 'team2Obj'] = p;
-          }
+          _stampEntry(m, slot, parts[e.seed - 1], e.seed);
           return;
         }
 
@@ -507,9 +526,7 @@
       var m = {
         id: ns + 'VC-R1-P' + (f + i + 1),
         round: 1, bracket: (r1[0] && r1[0].bracket) || 'main',
-        p1: (a && (a.displayName || a.name)) || ('#' + sa),
-        p2: (b && (b.displayName || b.name)) || ('#' + sb),
-        p1Seed: sa, p2Seed: sb, winner: null,
+        winner: null,
         phaseIndex: opts.phaseIndex || 0,
         // `C<K>` no lugar do B: este jogo nasceu no CRESCIMENTO, não no desenho
         // puro. Marcar assim evita que ele seja confundido com um confronto do
@@ -517,14 +534,8 @@
         _sig: 'C' + K + '|normal:#' + sa + ' x #' + sb
       };
       if (opts.category != null) m.category = opts.category;
-      var _setSlot = (typeof window !== 'undefined') && window._setSlot;
-      [[a, 'p1'], [b, 'p2']].forEach(function (par) {
-        var p = par[0], slot = par[1];
-        if (!p) return;
-        var uids = p.uids || (p.uid ? [p.uid] : []);
-        if (typeof _setSlot === 'function') _setSlot(m, slot, uids, p);
-        else m[slot === 'p1' ? 'team1Obj' : 'team2Obj'] = p;
-      });
+      _stampEntry(m, 'p1', a, sa);
+      _stampEntry(m, 'p2', b, sb);
       novosR1.push(m);
     }
 
