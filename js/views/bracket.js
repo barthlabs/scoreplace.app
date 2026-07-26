@@ -796,13 +796,45 @@ window._lateGrowthPairGap = function (t) {
     : [];
   var _teams = (parseInt(t.teamSize) || 1) > 1 ||
     (typeof window._isTeamEnrollMode === 'function' && window._isTeamEnrollMode(t.enrollmentMode));
+  var _impar = (_prontos.length % 2 === 1);
   return {
     ready: _prontos.length,
-    falta: (_prontos.length % 2 === 1) ? 1 : 2,
+    falta: _impar ? 1 : 2,
     teams: !!_teams,
-    // a entrada que está parada esperando par (só existe quando falta exatamente 1)
-    isWaiting: function (p) { return (_prontos.length % 2 === 1) && _prontos.indexOf(p) !== -1; }
+    // chaves das entradas paradas esperando par — o sync in-place casa a etiqueta por AQUI
+    // (identidade, nunca posição: o card pode ter mudado de lugar entre um render e outro)
+    waitingKeys: _impar ? _prontos.map(window._lateEntryKey) : [],
+    isWaiting: function (p) { return _impar && _prontos.indexOf(p) !== -1; }
   };
+};
+
+// Chave de identidade de uma entrada da espera (uids ordenados; fictício cai no nome).
+window._lateEntryKey = function (p) {
+  if (!p || typeof p !== 'object') return String(p || '');
+  var u = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
+  if (u.length) return 'u:' + u.slice().sort().join('+');
+  return 'n:' + ((typeof window._pName === 'function') ? window._pName(p, '') : (p.displayName || p.name || ''));
+};
+
+// v1.5.15 (dono: "dei presença... veio o toast de falta 1, mas o texto indicativo não mudou"):
+// o toggle de presença atualiza o card NO LUGAR e SUPRIME o re-render de propósito (cânone dos
+// "cards estáticos") — a faixa ficava com o número do render anterior. Mesmo tratamento que a
+// barra de chamada já recebia: recomputa e troca só ela. Ver [[project_dashboard_no_rerender]].
+window._syncLateGrowthBanner = function (tId) {
+  try {
+    var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+    if (!t) return;
+    var gap = window._lateGrowthPairGap(t);
+    var faixas = document.querySelectorAll('[data-late-gap-banner]');
+    for (var i = 0; i < faixas.length; i++) faixas[i].outerHTML = window._lateGrowthGapBanner(gap);
+    var tags = document.querySelectorAll('[data-late-wait-tag]');
+    for (var j = 0; j < tags.length; j++) {
+      var k = tags[j].getAttribute('data-late-wait-tag');
+      var mostra = !!(gap && gap.falta === 1 && gap.waitingKeys.indexOf(k) !== -1);
+      tags[j].style.display = mostra ? '' : 'none';
+    }
+    if (typeof window._syncStickyBarOffset === 'function') window._syncStickyBarOffset();
+  } catch (e) {}
 };
 
 // ─── Empilhar sticky ABAIXO da barra de busca (v1.5.12) ──────────────────────────────
@@ -838,7 +870,10 @@ if (!window._stickyBarOffsetWired && typeof window.addEventListener === 'functio
 
 // Faixa do topo do box: "2 novas equipes para novo confronto" / "1 nova equipe para novo confronto".
 window._lateGrowthGapBanner = function (gap) {
-  if (!gap) return '';
+  // Sem condição, sai um PLACEHOLDER (não string vazia): é ele que o _syncLateGrowthBanner
+  // acha depois pra trocar no lugar quando a presença muda a conta. Precisa nascer no MESMO
+  // pai do painel — `position:sticky` só viaja dentro do próprio pai.
+  if (!gap) return '<div data-late-gap-banner="1" style="display:none;"></div>';
   var n = gap.falta;
   var alvo = gap.teams
     ? (n === 1 ? '1 equipe' : '2 equipes')
@@ -851,7 +886,7 @@ window._lateGrowthGapBanner = function (gap) {
   // var(--bg-card)) — translúcido deixaria os cards passarem por baixo quando grudado.
   // mede a barra de busca DEPOIS que este HTML aterrissa no DOM (aqui ainda é string)
   setTimeout(function () { if (typeof window._syncStickyBarOffset === 'function') window._syncStickyBarOffset(); }, 0);
-  return '<div style="position:sticky;z-index:6;'
+  return '<div data-late-gap-banner="1" style="position:sticky;z-index:6;'
     + 'top:calc(var(--topbar-h, 61px) + var(--hamburger-dd-h, 0px) + var(--backheader-h, 0px) + var(--stickybar-h, 0px) - 1px);'
     + 'margin-bottom:0.9rem;padding:9px 12px;'
     + 'background:linear-gradient(rgba(245,158,11,0.10),rgba(245,158,11,0.10)),var(--bg-card);'
@@ -882,12 +917,18 @@ window._lateDoorStage = function (t) {
   return { code: 'suplentes', label: 'suplentes' };
 };
 
-// Etiqueta logo ACIMA do card de quem está parado esperando par.
-window._lateGrowthWaitTag = function (gap) {
-  if (!gap) return '';
-  return '<div style="font-size:0.68rem;font-weight:800;color:#fbbf24;background:rgba(245,158,11,0.12);'
+// Etiqueta logo ACIMA do card de quem está parado esperando par. Renderizada SEMPRE (oculta
+// quando não se aplica) pra que o sync in-place só precise alternar `display` — inserir
+// elemento novo exigiria re-render do card, que é exatamente o que o cânone dos cards
+// estáticos proíbe durante a chamada de presença.
+window._lateGrowthWaitTag = function (gap, entrada) {
+  var k = (typeof window._lateEntryKey === 'function') ? window._lateEntryKey(entrada) : '';
+  var mostra = !!(gap && gap.falta === 1 && gap.waitingKeys && gap.waitingKeys.indexOf(k) !== -1);
+  var quem = (gap && !gap.teams) ? '1 jogador' : '1 equipe';
+  return '<div data-late-wait-tag="' + window._safeHtml(k) + '" style="' + (mostra ? '' : 'display:none;')
+    + 'font-size:0.68rem;font-weight:800;color:#fbbf24;background:rgba(245,158,11,0.12);'
     + 'border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:4px 9px;align-self:flex-start;">'
-    + '⏳ Aguardando mais ' + (gap.teams ? '1 equipe' : '1 jogador') + '</div>';
+    + '⏳ Aguardando mais ' + quem + '</div>';
 };
 
 window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
@@ -1025,13 +1066,11 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   // v1.5.9: chave cheia ⇒ o tardio só entra AOS PARES. Quem já está pronto e parado ganha a
   // etiqueta "Aguardando mais 1 equipe" LOGO ACIMA do card — em vez do toast que sumia.
   var _ljGap = (typeof window._lateGrowthPairGap === 'function') ? window._lateGrowthPairGap(t) : null;
-  var _ljWaitTag = (_ljGap && _ljGap.falta === 1 && typeof window._lateGrowthWaitTag === 'function')
-    ? window._lateGrowthWaitTag(_ljGap) : '';
   var duplasHtml = (typeof window._duplaCard === 'function')
     ? _duplas.map(function (p) {
         var card = window._duplaCard(t, p, false, _ljDctx);
-        if (!_ljWaitTag || !_ljGap.isWaiting(p)) return card;
-        return '<div style="display:flex;flex-direction:column;gap:6px;min-width:0;">' + _ljWaitTag + card + '</div>';
+        var tag = (typeof window._lateGrowthWaitTag === 'function') ? window._lateGrowthWaitTag(_ljGap, p) : '';
+        return tag ? ('<div style="display:flex;flex-direction:column;gap:6px;min-width:0;">' + tag + card + '</div>') : card;
       }).join('')
     : '';
 
@@ -1336,8 +1375,6 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   // v1.5.9: chave cheia ⇒ tardio só entra aos pares (ver _lateGrowthPairGap). Aviso PERMANENTE:
   // faixa no topo do painel + etiqueta logo acima de quem está parado esperando par.
   const _sbGap = (typeof window._lateGrowthPairGap === 'function') ? window._lateGrowthPairGap(t) : null;
-  const _sbWaitTag = (_sbGap && _sbGap.falta === 1 && typeof window._lateGrowthWaitTag === 'function')
-    ? window._lateGrowthWaitTag(_sbGap) : '';
   const _duplaCardsWL = (_duplasWL.length && typeof window._duplaCard === 'function')
     ? '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;">' +
         _duplasWL.map((p) => {
@@ -1348,8 +1385,8 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
             isOrg: isOrg, drawDone: true, cardPresence: _rcWL.cardPresence, memberPresence: _rcWL.memberPresence,
             splitDupla: function (tid, m1id, m2id) { return 'window._splitLateDupla(\'' + tid + '\',\'' + m1id + '\',\'' + m2id + '\',this)'; }
           });
-          if (!_sbWaitTag || !_sbGap.isWaiting(p)) return _c;
-          return '<div style="display:flex;flex-direction:column;gap:6px;min-width:0;">' + _sbWaitTag + _c + '</div>';
+          const _tg = (typeof window._lateGrowthWaitTag === 'function') ? window._lateGrowthWaitTag(_sbGap, p) : '';
+          return _tg ? ('<div style="display:flex;flex-direction:column;gap:6px;min-width:0;">' + _tg + _c + '</div>') : _c;
         }).join('') +
       '</div>'
     : '';

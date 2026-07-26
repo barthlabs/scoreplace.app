@@ -74,6 +74,14 @@ gap = W._lateGrowthPairGap(t8);
 ok(gap && gap.falta === 1 && gap.ready === 1, '(2) chave cheia + 1 dupla pronta → falta 1 — got ' + JSON.stringify(gap && { r: gap.ready, f: gap.falta }));
 ok(/1 equipe para novo confronto/.test(W._lateGrowthGapBanner(gap)), '(2) faixa diz "1 equipe para novo confronto"');
 ok(gap.isWaiting(d1), '(2) a etiqueta "aguardando" cai na dupla que está esperando par');
+// waitingKeys é o que o sync IN-PLACE usa pra achar a etiqueta certa depois que a presença muda
+// (a faixa não pode re-renderizar a lista — cânone dos cards estáticos). Casa por IDENTIDADE.
+ok(gap.waitingKeys.length === 1 && gap.waitingKeys[0] === W._lateEntryKey(d1),
+  '(2) waitingKeys casa a dupla por identidade (uid), não por posição — got ' + JSON.stringify(gap.waitingKeys));
+ok(/data-late-wait-tag="[^"]+"/.test(W._lateGrowthWaitTag(gap, d1)) && !/display:none/.test(W._lateGrowthWaitTag(gap, d1)),
+  '(2) a etiqueta da dupla que espera nasce VISÍVEL e chaveada');
+ok(/display:none/.test(W._lateGrowthWaitTag(gap, { uid: 'zzz' })),
+  '(2) a etiqueta de quem NÃO espera nasce oculta (o sync só alterna display)');
 ok(/Aguardando mais 1 equipe/.test(W._lateGrowthWaitTag(gap)), '(2) etiqueta escrita em equipe (torneio de duplas)');
 
 const d2 = espera(t8, 2);

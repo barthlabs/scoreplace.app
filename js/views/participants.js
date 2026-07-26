@@ -1156,6 +1156,10 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
         }
       }
     } catch (_eBar) {}
+    // v1.5.15: a faixa "N equipes para novo confronto" (e a etiqueta "aguardando mais 1") também
+    // depende de QUEM está presente — sem isto ela ficava com o número do render anterior enquanto
+    // o toast já dizia "Falta 1". Mesmo tratamento da barra: recomputa e troca só ela.
+    try { if (typeof window._syncLateGrowthBanner === 'function') window._syncLateGrowthBanner(tId); } catch (_eGap) {}
     window._suppressSoftRefresh = true;
     clearTimeout(window._presenceRefreshRelease);
     window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
