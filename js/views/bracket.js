@@ -36,6 +36,35 @@ window._isByeMatch = function(m) {
   return p2 === 'BYE' || p2 === 'BYE (Avança Direto)';
 };
 
+// ─── Tag "BYE" na rodada SEGUINTE — CANÔNICO (v2.8.87, generalizado na v1.5.17) ──────────
+// Regra do dono: "não precisamos mostrar esse box partida com 1 dupla e bye avança direto. só
+// colocar a dupla que recebe o bye na rodada seguinte com a tag BYE e adv a definir basta.
+// sem mostrar na rodada jogo que não acontecerá, apenas confrontos verdadeiros." + "assim deve
+// ser SEMPRE que houver bye. padrão canonizado."
+//
+// Quem passou de BYE leva a tag âmbar na rodada r+1 (e só nela — some quando avança por
+// vitória). Isto INFERE o flag pra chaves já sorteadas que não o têm gravado; o gerador
+// (phases-engine) persiste em sorteios novos. Estava PRESO dentro do renderer de fase — a
+// Dupla Eliminatória retorna ANTES dele e ficava sem tag E com o card de BYE na tela.
+// Ver [[project_bracket_bye_and_3rd4th]].
+window._inferByeTags = function (matches) {
+  var ms = Array.isArray(matches) ? matches : [];
+  var byeNext = {}; // "bracket|nome" -> rodada da tag (r+1)
+  ms.forEach(function (m) {
+    if (window._isByeMatch(m) && m.winner) {
+      var r = (m.round == null) ? 1 : m.round;
+      byeNext[(m.bracket || 'main') + '|' + m.winner] = r + 1;
+    }
+  });
+  ms.forEach(function (m) {
+    if (window._isByeMatch(m)) return;
+    var r = (m.round == null) ? 1 : m.round, bk = (m.bracket || 'main');
+    if (m.p1 && m.p1FromBye == null && byeNext[bk + '|' + m.p1] === r) m.p1FromBye = true;
+    if (m.p2 && m.p2FromBye == null && byeNext[bk + '|' + m.p2] === r) m.p2FromBye = true;
+  });
+  return ms;
+};
+
 // Helper: check if a result entry role is active (backward compat: string or array).
 // v2.6.60: `match` opcional → resolve por FASE (t.phases[m.phaseIndex]) com fallback
 // pro top-level. Sem match → top-level (comportamento de sempre).
@@ -2112,6 +2141,13 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
     _updateProgressiveClassification(t);
   }
 
+  // v1.5.17: tag "BYE" na rodada SEGUINTE. A Dupla Eliminatória entra por aqui e nunca passava
+  // pela inferência (que vivia presa no renderer de fase) → o time que passou de BYE aparecia
+  // sem tag nenhuma, e o jogo de BYE ainda era desenhado como card. Ver _inferByeTags.
+  if (typeof window._inferByeTags === 'function') {
+    try { window._inferByeTags(window._collectAllMatches ? window._collectAllMatches(t) : (t.matches || [])); } catch (e) {}
+  }
+
   // Source per-bracket column layout from the unified adapter. Adapter emits
   // one column per (bracket, round) combo with bracket ∈ {upper, lower, grand}
   // for double-elim. When unavailable, fall back to manual partitioning of
@@ -2164,18 +2200,26 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
       // Superior E na Inferior. "se não tiver 4 não é quartas; se não tiver 8 não é oitavas".
       // Na inferior de 14 (3,4,3,2,1): Rodada 1, Rodada 2, Rodada 3, Semifinal (2j), Final —
       // SEM quartas (a rodada anterior tem 3 jogos, não 4). Exatamente como o dono descreveu.
+      // ATENÇÃO: o nome da rodada segue contando a coluna INTEIRA (com BYE). Uma coluna de
+      // 3 jogos + 1 bye É a rodada de 4 — o bye ocupa a posição, só não se joga. Contar só os
+      // reais renomearia "Quartas" pra "Rodada N" quando houvesse folga. [[project_round_naming]]
       var games = matches.length, fromEnd = cols.length - ci, rname;
       if (fromEnd === 1) rname = _t('bracket.final');
       else if (fromEnd === 2 && games === 2) rname = _t('bracket.semiFinal');
       else if (fromEnd === 3 && games === 4) rname = _t('bracket.quarterFinal');
       else if (fromEnd === 4 && games === 8) rname = _t('bracket.roundOf16');
       else rname = _t('bracket.round', { n: ci + 1 });
+      // v1.5.17 CANON: jogo de BYE NÃO vira card — a rodada mostra só CONFRONTOS DE VERDADE.
+      // Quem passou de bye aparece na rodada SEGUINTE com a tag âmbar (ver _inferByeTags).
+      // Coluna que sobra só com bye deixa de existir (senão fica um título órfão na tela).
+      var reais = matches.filter(function (m) { return !window._isByeMatch(m); });
+      if (!reais.length) return '';
       // Nome da rodada + cards JUNTOS no TOPO (align-self:flex-start) — "deixe no topo como
       // sempre foi" (dono). Centralizar só os cards afastava o nome deles nas colunas curtas.
       return `
       <div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;align-self:flex-start;">
         <h5 style="color:${color};font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ${color};padding-left:8px;">${rname}</h5>
-        ${matches.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
+        ${reais.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
       </div>`;
     }).join('');
     return `
@@ -2191,7 +2235,7 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
   var _grandColHtml = grandMatches.length ? `
       <div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;align-self:flex-start;">
         <h5 style="color:#fbbf24;font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid #fbbf24;padding-left:8px;">🏆 ${_t('bracket.grandFinal')}</h5>
-        ${grandMatches.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
+        ${grandMatches.filter(m => !window._isByeMatch(m)).map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
       </div>` : '';
 
   // v1.0.94-beta: render classificação progressiva em DE no MESMO LUGAR
@@ -2421,21 +2465,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   // o vencedor de um jogo BYE (rodada r) leva a tag âmbar SÓ na rodada r+1 (some quando
   // avança por vitória). O gerador (phases-engine) já persiste isso em sorteios novos;
   // aqui é fallback p/ não exigir re-sorteio. Não sobrescreve flag já existente.
-  (function _inferFromBye() {
-    var byeNext = {}; // "bracket|nome" -> rodada da tag (r+1)
-    pm.forEach(function (m) {
-      if (window._isByeMatch(m) && m.winner) {
-        var r = (m.round == null) ? 1 : m.round;
-        byeNext[(m.bracket || 'main') + '|' + m.winner] = r + 1;
-      }
-    });
-    pm.forEach(function (m) {
-      if (window._isByeMatch(m)) return;
-      var r = (m.round == null) ? 1 : m.round, bk = (m.bracket || 'main');
-      if (m.p1 && m.p1FromBye == null && byeNext[bk + '|' + m.p1] === r) m.p1FromBye = true;
-      if (m.p2 && m.p2FromBye == null && byeNext[bk + '|' + m.p2] === r) m.p2FromBye = true;
-    });
-  })();
+  window._inferByeTags(pm);
 
   function colsFor(bracketKey) {
     var byRound = {};

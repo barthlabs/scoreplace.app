@@ -34,6 +34,10 @@ const SUITES = [
   // lugar nenhum → AVISA). O `return` mudo do roster era o "desfazer não funciona mais" —
   // clique sem toast e sem NENHUMA invocação da CF nos logs.
   'tests/split-dupla-routing.test.js',
+  // BYE nunca vira card de jogo — a rodada mostra só confrontos VERDADEIROS e quem passou
+  // leva a tag na rodada seguinte. A regra era canônica mas vivia presa no renderer de FASE;
+  // a Dupla Eliminatória retorna antes dele e desenhava o "PARTIDA vs BYE (Avança Direto)".
+  'tests/bye-never-a-card.test.js',
   // "JOGO N" tem UM contador só. Regressão vista ao vivo: número da chave superior
   // repetido na inferior, porque um 2º contador dentro de renderDoubleElimBracket
   // sobrescrevia a fonte única sem pular BYE e sem deduplicar por id.
