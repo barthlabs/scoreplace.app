@@ -311,11 +311,29 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         } catch (Exception e) { /* no-op */ }
     }
 
+    // Chegou algum estado do celular nesta sessão de tela? Usado pra parar o retry do hello.
+    private boolean gotStateSinceResume = false;
+
     @Override
     protected void onResume() {
         super.onResume();
         Wearable.getMessageClient(this).addListener(this);
+        gotStateSinceResume = false;
         sendIntent("hello", 0); // pede o estado atual ao celular
+        // O `hello` era UM tiro: se o app do celular estava fechado/suspenso, ninguém
+        // respondia e o relógio ficava em "Aguardando…" pra sempre — a sensação de
+        // "o relógio nunca conversou com o celular". Re-tenta 3× a cada 2s até chegar
+        // estado. Espelha o WatchSession.retryHelloUntilAnswered do lado Apple.
+        retryHello(0);
+    }
+
+    private void retryHello(int attempt) {
+        if (attempt >= 3 || gotStateSinceResume) return;
+        ui.postDelayed(() -> {
+            if (gotStateSinceResume) return;
+            sendIntent("hello", 0);
+            retryHello(attempt + 1);
+        }, 2000);
     }
 
     @Override
@@ -348,6 +366,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     public void onMessageReceived(MessageEvent event) {
         if (!PATH_STATE.equals(event.getPath())) return;
         final String json = new String(event.getData(), StandardCharsets.UTF_8);
+        gotStateSinceResume = true; // chegou estado → para o retry do hello
         ui.post(() -> {
             try { render(new JSONObject(json)); } catch (Exception e) { /* ignore */ }
         });
@@ -394,7 +413,9 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             setsArcL.setVisibility(View.GONE); setsArcR.setVisibility(View.GONE);
             setsWordArc.setVisibility(View.GONE);
             setLabel.setVisibility(View.VISIBLE);
-            setLabel.setText("Aguardando…");
+            // Diz O QUE FAZER: "Aguardando…" sozinho lia como "o relógio não conversou com
+            // o celular". A partida tem que estar montada/rolando no celular (relógio burro).
+            setLabel.setText("Aguardando…\nabra a partida no celular");
         }
 
         // ── Iniciar: montagem aberta no celular e nada ao vivo ──
@@ -425,8 +446,12 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             lastServePhase = servePhase;
         }
         // Barra do sacador no rodapé: só durante os 2 primeiros jogos.
-        serveBar.setVisibility(canSetServer && active && !finished && !tiePending ? View.VISIBLE : View.GONE);
-        if (canSetServer && server != null) serveBarName.setText(server.optString("name", "Sacador"));
+        // A pílula "Sacador" saiu (dono, 25/jul/2026): "não tem 1 linha para sacador — a
+        // bolinha ao lado do nome indica o sacador". Empilhada acima do Desfazer, ela
+        // subia por cima do 2º nome de cada dupla; e é redundante (o nome do sacador já
+        // vem com a bola). A troca continua pelo seletor, que abre sozinho na virada do
+        // 1º game. Espelha o RemoteView.swift do lado Apple.
+        serveBar.setVisibility(View.GONE);
         // Overlay do seletor (aberto por toque ou pela virada de fase).
         boolean showServe = serveOpen && canSetServer && !finished;
         if (showServe) {

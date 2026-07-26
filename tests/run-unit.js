@@ -143,8 +143,13 @@ const SUITES = [
   // Autopresença via presença de LOCAL: check-in confirmado no local do torneio, na janela
   // [início−2h, fim] → vira PRESENTE (verde) sozinho. Sem GPS silencioso; respeita "ausente" do org.
   'tests/auto-presence-venue.test.js',
+  // "Iniciar" pelo RELÓGIO: a escolha do 1º sacador feita no relógio é aplicada e a tela
+  // "Quem saca primeiro?" do celular é CONFIRMADA — senão a partida não começa (serveOrder
+  // vazio ⇒ sem sacador ⇒ sem a bolinha no nome). Dirige o js/watch-bridge.js REAL.
+  'tests/watch-start-serve.test.js',
   // Sandbox (SB) do dev — rede de isolamento: notif mudas, stats/resultados não vazam, invisível
-  // pra não-dev. Trava _statsEligibleTournaments + getVisibleTournaments/getMyParticipations.
+  // pra não-dev. Trava _statsEligibleTournaments + getVisibleTournaments/getMyParticipations +
+  // ENTREGA (memberUids do SB = só o dev, senão o Firestore entrega o doc pra todo participante).
   'tests/sandbox-isolation.test.js',
   // Sandbox — criação do clone: _openOrCreateSandbox clona o estado atual (deep-copy), privado +
   // notif mudas + isSandbox, dev-only, sem tocar no original; 2ª chamada abre o mesmo SB.

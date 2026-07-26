@@ -205,12 +205,16 @@
         android:gravity="center_horizontal"
         android:layout_marginTop="4dp">
 
-        <!-- "Aguardando…" quando não há partida (só visível inativo) -->
+        <!-- "Aguardando…" quando não há partida (só visível inativo). Sozinho não dizia
+             NADA: quem abria o relógio sem o app aberto no celular concluía que o relógio
+             "nunca conversou". O relógio é BURRO por design — a partida tem que estar
+             montada/rolando lá. Espelha o RemoteView.swift do lado Apple. -->
         <TextView
             android:id="@+id/set_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Aguardando…"
+            android:text="Aguardando…\nabra a partida no celular"
+            android:gravity="center_horizontal"
             android:textColor="@color/meta"
             android:textSize="10sp"
             android:visibility="gone" />

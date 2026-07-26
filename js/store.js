@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.5.6';
+window.SCOREPLACE_VERSION = '1.5.7';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -975,6 +975,15 @@ window._isSandboxRoute = function () {
 window._tournamentNotificationsMuted = function (t) {
   return !!(t && (t.notificationsMuted === true || t.isSandbox === true));
 };
+// CINTO de ingestão: tira os SB da lista pra quem não é o dev. Aplicado em TODO ponto onde
+// torneios entram no AppStore (listener, load, cache) — assim nenhum consumidor de
+// AppStore.tournaments precisa lembrar de filtrar (eram 2 de dezenas). O suspensório é o
+// memberUids só-dev, que impede o doc de sequer ser entregue. Ver project_sandbox_tournament.
+window._dropSandboxForNonDev = function (list) {
+  var arr = Array.isArray(list) ? list : [];
+  if (window._isTestIdentity && window._isTestIdentity()) return arr;
+  return arr.filter(function (t) { return !(t && t.isSandbox === true); });
+};
 // Lista de torneios elegível pra STATS GLOBAIS (perfil, troféus, pills, confrontos):
 // exclui os sandboxes — resultados do SB não vazam pra agregação nenhuma. Recebe a
 // lista base (default = AppStore.tournaments).
@@ -1123,14 +1132,14 @@ window._resyncSandboxRoster = function (ft) {
     ft.monarchWaitlist = {};
     if (typeof window._ensureEnrollSeqs === 'function') window._ensureEnrollSeqs(ft);
 
-    // memberUids = donos do SB + uids do roster (recomputado do zero, sem herdar o do original).
-    var mu = {};
-    if (ft.sandboxOwnerUid) mu[ft.sandboxOwnerUid] = 1;
-    if (ft.creatorUid) mu[ft.creatorUid] = 1;
-    ft.participants.forEach(function (p) {
-      [p.uid, p.p1Uid, p.p2Uid].forEach(function (u) { if (u) mu[u] = 1; });
-    });
-    ft.memberUids = Object.keys(mu);
+    // memberUids = SÓ os donos do SB (dev). Antes o roster real entrava aqui — e era isso
+    // que fazia o Firestore ENTREGAR o SB no listener de cada participante espelhado. O
+    // roster continua completo em participants[] (é dele que o motor sorteia); memberUids é
+    // só chave de entrega. Fonte única: _computeMemberUids. Ver project_sandbox_tournament.
+    ft.coHosts = [];
+    ft.memberUids = (typeof window._computeMemberUids === 'function')
+      ? window._computeMemberUids(ft)
+      : [ft.sandboxOwnerUid, ft.creatorUid].filter(Boolean);
   } catch (e) { if (window._error) window._error('resyncSandboxRoster', e); }
 };
 
@@ -5963,12 +5972,13 @@ window.AppStore = {
       // Cache valid for 24h
       if (data && data.tournaments && (Date.now() - data.ts) < 86400000) {
         var deletedIds = this._deletedTournamentIds || [];
+        var _cached = window._dropSandboxForNonDev(data.tournaments);
         if (deletedIds.length > 0) {
-          this.tournaments = data.tournaments.filter(function(t) {
+          this.tournaments = _cached.filter(function(t) {
             return deletedIds.indexOf(String(t.id)) === -1;
           });
         } else {
-          this.tournaments = data.tournaments;
+          this.tournaments = _cached;
         }
         // v4.4.69 Rei/Rainha: o cache guarda grupos só com matchIds — reidrata
         // group.matches como refs de round.matches antes de qualquer consumidor.
@@ -6437,8 +6447,15 @@ window.AppStore = {
         var _prevIds = (store.tournaments || []).map(function(t) { return String(t.id); });
         var tournaments = [];
         var deletedIds = store._deletedTournamentIds || [];
+        // CINTO do isolamento do SANDBOX: mesmo que um doc de SB chegue aqui (legado criado
+        // antes do fix de memberUids, ou leitura por id), ele NÃO entra no AppStore de quem
+        // não é o dev. Sem isto a invisibilidade dependia de cada consumidor de
+        // AppStore.tournaments lembrar de filtrar — eram 2 de dezenas (dashboard de locais,
+        // presença, venues, wo-claim, histórico…). Ver [[project_sandbox_tournament]].
+        var _devSeesSb = !!(window._isTestIdentity && window._isTestIdentity());
         snap.forEach(function(doc) {
           var data = doc.data();
+          if (data && data.isSandbox === true && !_devSeesSb) return;
           if (deletedIds.indexOf(String(data.id)) === -1) {
             tournaments.push(data);
           }
@@ -6930,7 +6947,7 @@ window.AppStore = {
           return deletedIds.indexOf(String(t.id)) === -1;
         });
       }
-      this.tournaments = tournaments;
+      this.tournaments = window._dropSandboxForNonDev(tournaments);
       this._saveToCache();
       // v4.4.69 Rei/Rainha: reidrata group.matches como refs de round.matches (fonte única).
       if (typeof window._hydrateMonarchGroups === 'function') {
@@ -7025,6 +7042,13 @@ window.AppStore = {
         // check-in choices survive app restarts.
         // v1.9.63: preferências de tamanho do placar ao vivo (sliders).
         if (profile.liveScorePrefs && typeof profile.liveScorePrefs === 'object') this.currentUser.liveScorePrefs = profile.liveScorePrefs;
+        // ÚLTIMA config da Partida Casual (modalidade + dupla/individual). _persistLastCasualChoice
+        // GRAVA isto no perfil, mas ninguém LIA de volta — então `currentUser.casualLast` nascia
+        // sempre undefined, o "perfil vence o cache" virava no-op e a abertura caía no
+        // localStorage; quando o iOS limpa o storage (ou em app novo/reinstalado) caía no
+        // 1º esporte preferido do perfil = Pickleball. Era a causa do "abre sempre em
+        // Pickleball mesmo eu só jogando Beach Tennis". Ver bracket-ui.js:_persistLastCasualChoice.
+        if (profile.casualLast && typeof profile.casualLast === 'object') this.currentUser.casualLast = profile.casualLast;
         if (profile.presenceVisibility) this.currentUser.presenceVisibility = profile.presenceVisibility;
         if (profile.presenceMuteDays !== undefined) this.currentUser.presenceMuteDays = profile.presenceMuteDays;
         if (profile.presenceMuteUntil !== undefined) this.currentUser.presenceMuteUntil = profile.presenceMuteUntil;

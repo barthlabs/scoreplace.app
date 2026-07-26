@@ -36,6 +36,15 @@ function participantUids(p) {
 // Espelha window._computeMemberUids (js/views/persist-core.js).
 function computeMemberUids(data) {
   if (!data) return [];
+  // SANDBOX: SÓ os uids do dev. Impede o Firestore de ENTREGAR o doc do SB no listener
+  // (`memberUids array-contains`) de um participante real espelhado. Espelha persist-core.
+  if (data.isSandbox === true) {
+    var own = {};
+    [data.sandboxOwnerUid, data.creatorUid].forEach(function (u) {
+      if (u && typeof u === 'string' && u.length >= 4) own[u] = true;
+    });
+    return Object.keys(own);
+  }
   var set = {};
   var push = function (u) { if (u && typeof u === 'string' && u.length >= 4) set[u] = true; };
   push(data.creatorUid);

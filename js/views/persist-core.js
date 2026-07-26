@@ -41,8 +41,46 @@ window._cleanUndefined = function (obj) {
   return obj;
 };
 
+// ── SANDBOX: quem pode SEQUER RECEBER o doc ──────────────────────────────────
+// O SB tem que ser invisível pra quem não é o dev. Filtro no CLIENTE não garante isso:
+// o listener é `tournaments where memberUids array-contains <meu uid>`, então enquanto o
+// uid do participante real estiver no memberUids do SB o Firestore ENTREGA o doc no
+// device dele — e aí a invisibilidade depende de cada tela lembrar de filtrar (eram 2 de
+// dezenas). A garantia real é NÃO ENTREGAR: no SB, memberUids = SÓ os uids do dev.
+// O roster (participants[]) continua completo — é dele que o motor sorteia; memberUids é
+// só chave de entrega/leitura. Ver [[project_sandbox_tournament]].
+window._isSandboxData = function (data) { return !!(data && data.isSandbox === true); };
+
+// Uids que podem receber/abrir um SB: o dono do sandbox e o criador (ambos = o dev).
+// Co-organizadores do ORIGINAL NÃO entram — são pessoas reais clonadas junto.
+window._sandboxOwnerUids = function (data) {
+  if (!data) return [];
+  var set = {};
+  [data.sandboxOwnerUid, data.creatorUid].forEach(function (u) {
+    if (u && typeof u === 'string' && u.length >= 4) set[u] = true;
+  });
+  return Object.keys(set);
+};
+
+// Merge canônico de memberUids no limite de escrita. Torneio normal: UNIÃO (nunca encolhe
+// — um uid que só existe no denormalizado não pode sumir e derrubar o listener de quem
+// depende dele). SANDBOX: substitui, SEM união — senão os uids reais clonados na criação
+// ressuscitariam a cada gravação e o SB voltaria a ser entregue pra todo mundo.
+window._mergeMemberUids = function (data, prev, next) {
+  var n = Array.isArray(next) ? next : [];
+  if (window._isSandboxData(data)) return n.slice();
+  var p = Array.isArray(prev) ? prev : [];
+  return Array.from(new Set(p.concat(n)));
+};
+
 window._computeAdminEmails = function (data) {
   if (!data) return [];
+  // SB: só o dev administra. Sem isto, co-host do original clonado viraria admin do SB.
+  if (window._isSandboxData(data)) {
+    var e = (data.organizerEmail || '');
+    e = (typeof e === 'string') ? e.trim().toLowerCase() : '';
+    return e ? [e] : [];
+  }
   var set = {};
   var push = function(e) {
     if (!e || typeof e !== 'string') return;
@@ -61,6 +99,8 @@ window._computeAdminEmails = function (data) {
 
 window._computeAdminUids = function (data) {
   if (!data) return [];
+  // SB: só o dev administra (co-host do original clonado não vira admin do sandbox).
+  if (window._isSandboxData(data)) return window._sandboxOwnerUids(data);
   var set = {};
   var push = function(u) { if (u && typeof u === 'string' && u.length >= 4) set[u] = true; };
   push(data.creatorUid);
@@ -72,6 +112,10 @@ window._computeAdminUids = function (data) {
 
 window._computeMemberUids = function (data) {
   if (!data) return [];
+  // SANDBOX: SÓ o dev entra em memberUids. É esta linha que faz o Firestore NUNCA entregar
+  // o doc do SB no listener de um participante real — a invisibilidade deixa de depender de
+  // cada tela lembrar de filtrar. O roster real segue intacto em participants[].
+  if (window._isSandboxData(data)) return window._sandboxOwnerUids(data);
   var set = {};
   var push = function(u) {
     if (!u || typeof u !== 'string' || u.length < 4) return;

@@ -239,12 +239,12 @@ function _applyWriteBoundary(data) {
   // NUNCA ENCOLHE (união com o que já está no doc): um uid que só existe no denormalizado
   // (co-host por path que não popula participants) não pode sumir e derrubar o listener
   // `array-contains` de quem depende dele. Mesma blindagem do cliente.
-  const _union = (prev, next) => Array.from(new Set(
-    (Array.isArray(prev) ? prev : []).concat(Array.isArray(next) ? next : [])));
-
+  // EXCEÇÃO: SANDBOX substitui (não une) — o memberUids do SB é só o dev, senão os uids
+  // reais clonados voltam a cada gravação e o Firestore entrega o SB pra todo mundo.
+  // _mergeMemberUids é o MESMO helper do cliente (vendorado de persist-core.js).
   data.adminEmails = w._computeAdminEmails(data);
   data.adminUids = w._computeAdminUids(data);
-  data.memberUids = _union(data.memberUids, w._computeMemberUids(data));
+  data.memberUids = w._mergeMemberUids(data, data.memberUids, w._computeMemberUids(data));
   try {
     const owed = w._nextOwedDrawMs(data);
     if (typeof owed === 'number') data.nextDrawAt = owed;

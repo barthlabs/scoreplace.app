@@ -7,6 +7,9 @@ import SwiftUI
 @main
 struct ScoreplaceWatchCompanionApp: App {
     @StateObject private var session = WatchSession()
+    // Batimento ao vivo. Só liga enquanto há partida AO VIVO — a HKWorkoutSession
+    // custa bateria e não faz sentido com o placar parado. Ver HeartRate.swift.
+    @StateObject private var heart = HeartRateMonitor()
 
     var body: some Scene {
         WindowGroup {
@@ -20,9 +23,14 @@ struct ScoreplaceWatchCompanionApp: App {
                 onSetServer: { team, idx in session.sendSetServer(team: team, playerIdx: idx) },
                 onReiRainhaNext: { session.sendReiRainhaNext() },
                 onReiRainhaFinal: { session.sendReiRainhaFinal() },
-                onReiRainhaStart: { session.sendReiRainhaStart() }
+                onReiRainhaStart: { session.sendReiRainhaStart() },
+                bpm: heart.bpm
             )
             .onAppear { session.hello() } // pede o estado atual ao aparecer
+            // Liga/desliga o sensor conforme a partida está ao vivo.
+            .onChange(of: session.state.active) { active in
+                if active { heart.start() } else { heart.stop() }
+            }
         }
     }
 }

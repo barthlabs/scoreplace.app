@@ -56,6 +56,10 @@ struct RemoteView: View {
     @State private var reshuffle = false         // toggle "Re-sortear duplas"
     @State private var pickingServer = false     // seletor de sacador aberto
     @State private var pendingPick: ScoreState.ServeSlot? = nil  // escolha ainda não confirmada
+    /// BPM ao vivo (nil = sem leitura). Injetado pelo companion; o preview standalone
+    /// não passa nada e a UI simplesmente não desenha o coração.
+    var bpm: Int? = nil
+    @State private var heartBeat = false          // escala do coração (pulso)
 
     private var leftTeam: Int { state.leftTeam }
     private var rightTeam: Int { state.rightTeam }
@@ -187,11 +191,47 @@ struct RemoteView: View {
                     .frame(width: fullW)
                     .offset(y: gamesY)                           // colado logo abaixo do relógio
                     .allowsHitTesting(false)
-                } else {
-                    Text("Aguardando…").font(.system(size: sz(12)))
-                        .foregroundColor(.spMeta)
+
+                    // ── ❤️ BATIMENTO, logo ABAIXO DO RELÓGIO (canto direito) ──
+                    // Fica na mesma altura da linha GAMES, mas encostado à direita: é o
+                    // espaço livre debaixo do relógio do sistema. Some sozinho quando não
+                    // há leitura (sem permissão, sem sensor, simulador).
+                    if let hr = bpm {
+                        HStack(spacing: sz(3)) {
+                            Spacer(minLength: 0)
+                            Text("♥")
+                                .font(.system(size: sz(12)))
+                                .foregroundColor(Color(hex: 0xF43F5E))
+                                .scaleEffect(heartBeat ? 1.35 : 1.0)
+                                // Pulsa NO RITMO do próprio coração: meia batida por
+                                // ciclo (autoreverses), então duração = 30/bpm.
+                                .animation(.easeInOut(duration: max(0.28, min(0.9, 30.0 / Double(max(hr, 40)))))
+                                            .repeatForever(autoreverses: true), value: heartBeat)
+                            Text("\(hr)")
+                                .font(.system(size: sz(13), weight: .semibold))
+                                .foregroundColor(Color(hex: 0xFDA4AF))
+                        }
+                        .padding(.trailing, ins.trailing + sz(14))
                         .frame(width: fullW)
                         .offset(y: gamesY)
+                        .allowsHitTesting(false)
+                        .onAppear { heartBeat = true }
+                    }
+                } else {
+                    // Estado inativo. "Aguardando…" sozinho não dizia NADA — quem abria o
+                    // relógio sem o app aberto no iPhone concluía que o relógio "nunca
+                    // conversou com o celular". O relógio é BURRO por design: só existe
+                    // partida aqui quando ela está montada/rolando lá. Dizer isso.
+                    VStack(spacing: sz(3)) {
+                        Text("Aguardando…").font(.system(size: sz(12)))
+                            .foregroundColor(.spMeta)
+                        Text("abra a partida no iPhone")
+                            .font(.system(size: sz(9)))
+                            .foregroundColor(.spMetaDim)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(width: fullW)
+                    .offset(y: gamesY)
                 }
                 // ── Desfazer colado na BASE ──
                 VStack(spacing: 0) { Spacer(minLength: 0); bottomBar }
@@ -285,28 +325,6 @@ struct RemoteView: View {
             }
         }
         return out
-    }
-
-    // Barra "🎾 Sacador: <nome>" — só existe enquanto a ordem pode mudar (duplas,
-    // 2 primeiros jogos). É o equivalente no relógio a arrastar a bola no celular:
-    // arrastar num mostrador de 40mm não funciona (as metades já são os botões de
-    // +1 e um alvo de arrasto ali só geraria ponto errado), então o gesto vira
-    // toque → lista → escolhe. Some sozinha quando o saque trava.
-    private var serverBar: some View {
-        Button(action: { pickingServer = true }) {
-            HStack(spacing: 4) {
-                Circle().fill(Color.spBall).frame(width: 8, height: 8)
-                Text(state.serverName.isEmpty ? "Sacador" : state.serverName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.4)   // nome nunca trunca — encolhe-pra-caber
-            }
-            .foregroundColor(Color(hex: 0xF5D5A5))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(Color.spBall.opacity(0.14))
-        }
-        .buttonStyle(.plain)
     }
 
     // Lista de quem pode sacar. Cobre as metades → nenhum toque vira ponto por
@@ -508,10 +526,12 @@ struct RemoteView: View {
     // pode mudar: num 40mm duas faixas empilhadas empurravam o "Desfazer" pra
     // fora da tela. Fora dos 2 primeiros jogos, o "Desfazer" ocupa a linha toda.
     private var bottomBar: some View {
-        // Sacador (pílula) ACIMA da barra Desfazer (full-bleed, colada na base) —
-        // igual ao Wear. layoutPriority: reserva a altura ANTES das metades flex.
-        VStack(spacing: sz(4)) {
-            if state.canSetServer { serverBar }
+        // SÓ o Desfazer. A pílula "Sacador" saiu (dono, 25/jul/2026): "não tem 1 linha
+        // para sacador — a bolinha ao lado do nome indica o sacador". Ela empilhava
+        // acima do Desfazer e subia POR CIMA do 2º nome de cada dupla; e era redundante,
+        // porque o nameRow já desenha a bola no sacador. A troca de sacador continua
+        // pelo seletor, que abre SOZINHO na virada do 1º game (servePickPhase == 1).
+        VStack(spacing: 0) {
             undoBar.padding(.horizontal, -sz(16))   // estoura pra encostar nas bordas
         }
         .padding(.bottom, 3)
