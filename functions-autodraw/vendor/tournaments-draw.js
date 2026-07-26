@@ -2120,7 +2120,20 @@ window._applyCFTournament = function (tId, doc) {
         // terceiros. Ver [[project_concurrency_safe_saves]].
         if (typeof window._reapplyPendingPresence === 'function') { try { window._reapplyPendingPresence(_list); } catch (e) {} }
         if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(doc); } catch (e) {} }
+        // v1.5.13: CURA no MESMO tick em que o doc da CF chega. A cura de rótulo já existia,
+        // mas rodava 1× por sessão AO ABRIR a chave — e o slot cru ("#10", entrada só-uid)
+        // nasce DEPOIS, quando o organizador forma a dupla e a CF grava. Resultado medido no
+        // torneio ao vivo: ele formava a dupla e continuava vendo "#10" até recarregar a
+        // página. Aqui é síncrono (idempotente) + a busca de perfis que faltam em seguida.
+        if (typeof window._stampMissingMatchUids === 'function') { try { window._stampMissingMatchUids(doc); } catch (e) {} }
     } catch (e) {}
+    if (typeof window._healOrphanLabels === 'function') {
+        try {
+            window._healOrphanLabels(doc).then(function (n) {
+                if (n > 0 && typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+            });
+        } catch (e) {}
+    }
     if (typeof window._rerenderBracket === 'function') { try { window._rerenderBracket(tId); } catch (e) {} }
     if (typeof window._softRefreshView === 'function') { window._suppressSoftRefresh = false; try { window._softRefreshView(); } catch (e) {} }
 };
