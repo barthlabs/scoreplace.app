@@ -385,6 +385,11 @@ const SUITES = [
   'tests/inscritos-grid-canon.test.js',
   // Botões CANCELAR do fluxo de sorteio são VERMELHOS (#dc2626), nunca transparentes. v1.3.103.
   'tests/draw-cancel-red-canon.test.js',
+  // FANTASMA DE ARRASTE (bug ao vivo 26/jul): card de inscrito flutuando preso sobre a
+  // lista, só sumia fechando o app — o clone morava no <body> e os listeners que o
+  // matavam morriam com o container no re-render. Trava a rede única de aborto
+  // (data-drag-ghost + _activeDragReset + vigia). Comportamento: tests/e2e/drag-ghost.spec.js.
+  'tests/drag-ghost-canon.test.js',
   'functions/test-match-roster.js',
   // Formar/desfazer dupla manual → CF (roster→CF): lógica pura de pair-core (espelha
   // _formDuplaByUids/_splitDupla). A replicação sandbox roda no emulador (test-pair-replicate.js). v1.3.x.

@@ -1228,6 +1228,19 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
     return null;
   }
   function _ljClearPending() { if (_ljPending && _ljPending.timer) clearTimeout(_ljPending.timer); _ljPending = null; }
+  // v1.5.20: aborta o arraste SEM soltar dupla — usado pela rede global (gesto
+  // cancelado pelo SO, app pro fundo, navegação). Antes, um touchcancel caía no
+  // _ljEnd e podia FORMAR a dupla de um gesto que o usuário nem concluiu.
+  function _ljAbort() {
+    _ljClearPending();
+    var d = _ljDrag; _ljDrag = null;
+    if (window._activeDragReset === _ljAbort) window._activeDragReset = null;
+    if (!d) return;
+    if (d.clone && d.clone.parentElement) d.clone.remove();
+    if (d.hi) { d.hi.style.outline = ''; d.hi.style.outlineOffset = ''; }
+    if (d.card) { d.card.style.opacity = ''; d.card.removeAttribute('data-drag-dimmed'); }
+    document.body.style.userSelect = '';
+  }
   function _ljBegin(card, pt) {
     var key = card.getAttribute('data-lj-key');
     // v1.3.67: resolve o nome AO VIVO pelo uid (data-lj-key = uid nas entradas com conta) —
@@ -1238,10 +1251,14 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
     var nm = _liveNm || card.getAttribute('data-lj-name') || key;
     var clone = document.createElement('div');
     clone.textContent = '👤 ' + nm;
+    clone.setAttribute('data-drag-ghost', '1'); // v1.5.20: varredura global (store.js)
     clone.style.cssText = 'position:fixed;z-index:100060;pointer-events:none;background:#f59e0b;color:#111;font-weight:800;font-size:0.8rem;padding:6px 12px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);transform:translate(-50%,-160%);left:' + pt.clientX + 'px;top:' + pt.clientY + 'px;';
     document.body.appendChild(clone);
     _ljDrag = { key: key, tId: card.getAttribute('data-lj-tid'), clone: clone, hi: null, card: card };
     card.style.opacity = '0.55';
+    card.setAttribute('data-drag-dimmed', '1'); // v1.5.20: varredura global
+    // v1.5.20: publica a limpeza deste arraste pra rede global de aborto.
+    window._activeDragReset = _ljAbort;
     document.body.style.userSelect = 'none';
     if (window._haptic) { try { window._haptic('medium'); } catch (e) {} }
   }
@@ -1302,9 +1319,10 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
     if (_ljPending) _ljClearPending();
     if (!_ljDrag) return;
     var d = _ljDrag; _ljDrag = null;
+    if (window._activeDragReset === _ljAbort) window._activeDragReset = null;
     if (d.clone) d.clone.remove();
     if (d.hi) { d.hi.style.outline = ''; d.hi.style.outlineOffset = ''; }
-    if (d.card) d.card.style.opacity = '';
+    if (d.card) { d.card.style.opacity = ''; d.card.removeAttribute('data-drag-dimmed'); }
     document.body.style.userSelect = '';
     var pt = _ljPoint(e);
     var hit = _ljKeyAtPoint(pt.clientX, pt.clientY);

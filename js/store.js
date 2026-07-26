@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.5.19';
+window.SCOREPLACE_VERSION = '1.5.20';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -4147,6 +4147,61 @@ window._markDragSource = function (el) {
     if (card) card.classList.add('sp-drag-source');
   } catch (e) {}
 };
+// ── FANTASMA DE ARRASTE: varredura canônica (v1.5.20) ────────────────────────
+// Todo clone flutuante de arraste por TOQUE (mesclar inscritos, gerenciador de
+// categorias, formar dupla tardia) vive no <body> e é marcado com
+// data-drag-ghost="1"; o card de origem que fica esmaecido leva
+// data-drag-dimmed="1". Quando o gesto é INTERROMPIDO (re-render no meio do
+// arraste, cancelamento do SO, app pro fundo, navegação), o touchend/touchcancel
+// do container nunca chega — o clone ficava órfão sobreposto à lista e só sumia
+// fechando o app. Aqui fica a rede única: quem estiver arrastando publica sua
+// função de limpeza em window._activeDragReset e ela é chamada em toda saída.
+window._activeDragReset = null;   // limpeza do arraste em curso (null = nenhum)
+
+// force=true varre mesmo com arraste ativo (usado por _abortActiveDrag).
+window._killDragGhosts = function (force) {
+  try {
+    if (!force && window._activeDragReset) return; // arraste legítimo em andamento
+    var gs = document.querySelectorAll('[data-drag-ghost="1"]');
+    for (var i = 0; i < gs.length; i++) { if (gs[i].parentElement) gs[i].parentElement.removeChild(gs[i]); }
+    var ds = document.querySelectorAll('[data-drag-dimmed="1"]');
+    for (var j = 0; j < ds.length; j++) {
+      ds[j].style.opacity = '';
+      ds[j].style.boxShadow = '';
+      ds[j].style.outline = '';
+      ds[j].style.outlineOffset = '';
+      ds[j].removeAttribute('data-drag-dimmed');
+    }
+  } catch (e) {}
+};
+
+// Aborta o arraste em curso (se houver) e varre qualquer resíduo.
+window._abortActiveDrag = function () {
+  var r = window._activeDragReset;
+  window._activeDragReset = null;
+  if (typeof r === 'function') { try { r(); } catch (e) {} }
+  window._killDragGhosts(true);
+};
+
+if (!window._spDragGhostWired) {
+  window._spDragGhostWired = true;
+  // Gesto morto pelo SO / ponteiro cancelado / fim de arraste nativo.
+  ['touchcancel', 'pointercancel', 'dragend'].forEach(function (ev) {
+    try { document.addEventListener(ev, function () { window._abortActiveDrag(); }, true); } catch (e) {}
+  });
+  // App pro fundo, janela perdeu foco, navegação de rota: nada sobrevive.
+  try { document.addEventListener('visibilitychange', function () { if (document.hidden) window._abortActiveDrag(); }); } catch (e) {}
+  try { window.addEventListener('blur', function () { window._abortActiveDrag(); }); } catch (e) {}
+  try { window.addEventListener('pagehide', function () { window._abortActiveDrag(); }); } catch (e) {}
+  try { window.addEventListener('hashchange', function () { window._abortActiveDrag(); }); } catch (e) {}
+  // Dedo/ponteiro soltou: se o dono do arraste já se limpou (_activeDragReset
+  // nulo) mas sobrou clone no <body>, varre. Em setTimeout pra rodar DEPOIS do
+  // handler de drop do próprio arraste.
+  var _sweepAfterRelease = function () { setTimeout(function () { window._killDragGhosts(); }, 0); };
+  try { document.addEventListener('touchend', _sweepAfterRelease, true); } catch (e) {}
+  try { document.addEventListener('pointerup', _sweepAfterRelease, true); } catch (e) {}
+}
+
 // Desliga o modo compacto em QUALQUER fim de arraste (uma vez só).
 if (!window._spDragCompactWired) {
   window._spDragCompactWired = true;
