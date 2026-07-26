@@ -105,6 +105,32 @@ const nova = { uid: 'Nw1L', p1Uid: 'Nw1L', p2Uid: 'WgGJ', category: 'Misto Obrig
   ok(W._stampMissingMatchUids(t) === 0, 'cura é IDEMPOTENTE (2ª passada não conserta nada)');
 })();
 
+// ── 3b. o doc que a CF DEVOLVE é curado no MESMO tick ────────────────────────────────────
+// A cura existia mas rodava 1× por sessão AO ABRIR a chave. O slot cru nasce DEPOIS — quando
+// o organizador forma a dupla e a CF grava — então ele formava e seguia vendo "#10" até
+// recarregar a página. Trava o CALL SITE: _applyCFTournament cura o doc que acabou de chegar.
+(function () {
+  W.AppStore.tournaments = [{ id: 'sb3', matches: [] }];
+  let rerender = 0;
+  W._rerenderBracket = function () { rerender++; };
+  W._softRefreshView = function () {};
+  const doc = {
+    id: 'sb3', format: 'Dupla Eliminatória', teamSize: 2, currentPhaseIndex: 0,
+    participants: [soUid, nova],
+    matches: [{
+      id: 'p0-VC-R1-P5', bracket: 'upper', round: 1, phaseIndex: 0,
+      p1: 'Luiza Ruic / Cynara Quiroz', p2: '#10', p1Seed: 9, p2Seed: 10,
+      team1Obj: nova, team2Obj: soUid
+    }]
+  };
+  W._applyCFTournament('sb3', doc);
+  const guardado = W.AppStore.tournaments.find(x => String(x.id) === 'sb3');
+  const m = guardado.matches[0];
+  ok(m.p2 === 'Catia Cavedon / Max Mano', 'doc da CF chega curado — "#10" já vira nome sem recarregar — got ' + JSON.stringify(m.p2));
+  ok((m.team2Uids || []).slice().sort().join('|') === 'gtTy|wyzum', 'doc da CF chega com os DOIS uids — got ' + JSON.stringify(m.team2Uids));
+  ok(rerender > 0, 'a tela é re-renderizada depois da cura');
+})();
+
 // ── 4. jogo com placar/rótulo legítimo não é tocado ──────────────────────────────────────
 (function () {
   const t = {
