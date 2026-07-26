@@ -36,6 +36,20 @@ window._isByeMatch = function(m) {
   return p2 === 'BYE' || p2 === 'BYE (Avança Direto)';
 };
 
+// ─── Quantos JOGOS de verdade tem a rodada — CANÔNICO (v1.5.18) ─────────────────────────
+// Dono: _"quando há 2 jogos na rodada e a próxima é a semifinal, não pode ser quartas de
+// final. deve ser rodada x. está considerando ter os 2 jogos com bye aqui provavelmente."_
+// Exato: a coluna tinha 2 jogos + 2 byes e o nome era decidido por `matches.length` (4) →
+// "Quartas de Final". O cânone do nome sempre foi POSIÇÃO + CONTAGEM EXATA ("se não tiver 4
+// não é quartas"), e BYE não é jogo — ninguém entra em quadra. Contagem única aqui pra os 3
+// renderizadores (simples, dupla, fase) não divergirem de novo. Sit-out também não é jogo.
+// Ver [[project_round_naming]] / [[feedback_sweep_all_render_sites]].
+window._realGameCount = function (matches) {
+  return (Array.isArray(matches) ? matches : []).filter(function (m) {
+    return m && !m.isSitOut && !window._isByeMatch(m);
+  }).length;
+};
+
 // ─── Tag "BYE" na rodada SEGUINTE — CANÔNICO (v2.8.87, generalizado na v1.5.17) ──────────
 // Regra do dono: "não precisamos mostrar esse box partida com 1 dupla e bye avança direto. só
 // colocar a dupla que recebe o bye na rodada seguinte com a tag BYE e adv a definir basta.
@@ -61,6 +75,26 @@ window._inferByeTags = function (matches) {
     var r = (m.round == null) ? 1 : m.round, bk = (m.bracket || 'main');
     if (m.p1 && m.p1FromBye == null && byeNext[bk + '|' + m.p1] === r) m.p1FromBye = true;
     if (m.p2 && m.p2FromBye == null && byeNext[bk + '|' + m.p2] === r) m.p2FromBye = true;
+  });
+
+  // BYE ESTRUTURAL — sem card nenhum (v1.5.18). Dono, olhando a chave inferior: _"a rodada 2
+  // inferior não parece correta. tem apenas o jogo 12, mas na r1 inf tem 3 jogos que trarão 3
+  // vencedores... o que vai ser?"_ A cadência ESTAVA certa (medido no doc real: 22 jogos, que
+  // é 2N−2 pra 12 duplas) — o 3º vencedor da 1ª inferior PULA a 2ª e entra direto na 3ª por
+  // uma ARESTA DIRETA. Ou seja: é folga, mas não existe jogo de BYE pra inferir a tag, então a
+  // tela não dizia nada e a rodada parecia faltar gente. Aqui a folga é lida do PRÓPRIO fio:
+  // destino a mais de uma rodada de distância, na mesma chave = pulou rodada.
+  var porId = {};
+  ms.forEach(function (m) { if (m && m.id != null) porId[String(m.id)] = m; });
+  ms.forEach(function (m) {
+    if (!m || !m.winner || !m.nextMatchId) return;
+    var alvo = porId[String(m.nextMatchId)];
+    if (!alvo) return;
+    var rm = (m.round == null) ? 1 : m.round, ra = (alvo.round == null) ? 1 : alvo.round;
+    if ((alvo.bracket || 'main') !== (m.bracket || 'main')) return;   // trocar de chave não é folga
+    if (ra <= rm + 1) return;                                         // avanço normal
+    var slot = (m.nextSlot === 'p2') ? 'p2' : 'p1';
+    if (alvo[slot] && alvo[slot + 'FromBye'] == null) alvo[slot + 'FromBye'] = true;
   });
   return ms;
 };
@@ -1755,7 +1789,8 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
     // com nº ≠ 8 não vira "oitavas".
     var posIdx = positiveRounds.indexOf(roundNum);
     var fromEnd = positiveRounds.length - posIdx;
-    var gamesInRound = (roundsMap[roundNum] || []).length;
+    // v1.5.18: só JOGOS DE VERDADE contam pro nome (bye/sit-out fora) — [[project_round_naming]]
+    var gamesInRound = window._realGameCount(roundsMap[roundNum] || []);
     if (fromEnd === 1) return _t('bracket.final');
     if (fromEnd === 2 && gamesInRound === 2) return _t('bracket.semiFinal');
     if (fromEnd === 3 && gamesInRound === 4) return _t('bracket.quarterFinal');
@@ -2200,10 +2235,10 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
       // Superior E na Inferior. "se não tiver 4 não é quartas; se não tiver 8 não é oitavas".
       // Na inferior de 14 (3,4,3,2,1): Rodada 1, Rodada 2, Rodada 3, Semifinal (2j), Final —
       // SEM quartas (a rodada anterior tem 3 jogos, não 4). Exatamente como o dono descreveu.
-      // ATENÇÃO: o nome da rodada segue contando a coluna INTEIRA (com BYE). Uma coluna de
-      // 3 jogos + 1 bye É a rodada de 4 — o bye ocupa a posição, só não se joga. Contar só os
-      // reais renomearia "Quartas" pra "Rodada N" quando houvesse folga. [[project_round_naming]]
-      var games = matches.length, fromEnd = cols.length - ci, rname;
+      // v1.5.18 (correção do que EU escrevi na 1.5.17): eu tinha mandado contar a coluna
+      // INTEIRA, bye incluído. Errado — o dono viu "Quartas de Final" numa coluna de 2 jogos
+      // + 2 byes cuja seguinte era a semifinal. BYE não é jogo; a contagem é dos REAIS.
+      var games = window._realGameCount(matches), fromEnd = cols.length - ci, rname;
       if (fromEnd === 1) rname = _t('bracket.final');
       else if (fromEnd === 2 && games === 2) rname = _t('bracket.semiFinal');
       else if (fromEnd === 3 && games === 4) rname = _t('bracket.quarterFinal');
@@ -2487,7 +2522,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   var globalNum = (typeof window._phaseGameOffset === 'function') ? window._phaseGameOffset(t, curPhase) : 0;
   function roundLabel(cols, idx) {
     var col = cols[idx];
-    var games = col.matches.length;
+    var games = window._realGameCount(col.matches);   // bye não é jogo — v1.5.18
     var fromEnd = cols.length - idx;
     if (fromEnd === 1) return _t('bracket.final');
     if (fromEnd === 2 && games === 2) return _t('bracket.semiFinal');
