@@ -1538,6 +1538,7 @@ function _attachCatManagerDragDrop(tId) {
         var rect = target.getBoundingClientRect();
         _touchClone = target.cloneNode(true);
         _touchClone.id = 'cat-mgr-touch-clone'; // v2.8.26: id pra varredura de órfão na navegação
+        _touchClone.setAttribute('data-drag-ghost', '1'); // v1.5.20: varredura global (store.js)
         _touchClone.removeAttribute('data-pidx'); // evita colidir com seletores do manager
         _touchClone.style.position = 'fixed';
         _touchClone.style.left = rect.left + 'px';
@@ -1551,6 +1552,10 @@ function _attachCatManagerDragDrop(tId) {
         _touchClone.style.borderRadius = '12px';
         document.body.appendChild(_touchClone);
         target.style.opacity = '0.3';
+        target.setAttribute('data-drag-dimmed', '1'); // v1.5.20: varredura global
+        // v1.5.20: publica a limpeza — a rede global (touchcancel/pointercancel/app pro
+        // fundo/navegação) derruba o arraste mesmo que o evento não volte pra cá.
+        window._activeDragReset = _onTouchCancel;
         if (window._haptic) window._haptic('medium');
     }
 
@@ -1603,16 +1608,18 @@ function _attachCatManagerDragDrop(tId) {
         // Sem long-press concluído = foi toque/rolagem, não arraste → nada a fazer.
         if (!_lpArmed || !_touchClone) {
             if (_touchClone && _touchClone.parentElement) _touchClone.remove();
-            if (_touchDragEl) _touchDragEl.style.opacity = '1';
+            if (_touchDragEl) { _touchDragEl.style.opacity = '1'; _touchDragEl.removeAttribute('data-drag-dimmed'); }
             _touchClone = null; _touchDragEl = null; _dragData = null; _lpArmed = false;
+            if (window._activeDragReset === _onTouchCancel) window._activeDragReset = null;
             return;
         }
         _lpArmed = false;
+        if (window._activeDragReset === _onTouchCancel) window._activeDragReset = null;
         _catMgrDropScrollY = window.scrollY || window.pageYOffset || 0;
         var touch = e.changedTouches[0];
         var targetEl = _getTouchTarget(touch.clientX, touch.clientY);
         if (_touchClone.parentElement) _touchClone.remove();
-        if (_touchDragEl) _touchDragEl.style.opacity = '1';
+        if (_touchDragEl) { _touchDragEl.style.opacity = '1'; _touchDragEl.removeAttribute('data-drag-dimmed'); }
         catCards.forEach(function(c) { c.style.border = '2px solid rgba(99,102,241,0.2)'; });
 
         if (targetEl && _dragData) {
@@ -1656,8 +1663,9 @@ function _attachCatManagerDragDrop(tId) {
         var orphan = document.getElementById('cat-mgr-touch-clone');
         if (orphan && orphan.parentElement) orphan.remove();
         if (_touchClone && _touchClone.parentElement) _touchClone.remove();
-        if (_touchDragEl) _touchDragEl.style.opacity = '1';
+        if (_touchDragEl) { _touchDragEl.style.opacity = '1'; _touchDragEl.removeAttribute('data-drag-dimmed'); }
         _touchClone = null; _touchDragEl = null; _dragData = null; _lpArmed = false;
+        if (window._activeDragReset === _onTouchCancel) window._activeDragReset = null;
         if (typeof window._dragAutoScrollStop === 'function') window._dragAutoScrollStop();
     }
 

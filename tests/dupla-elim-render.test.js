@@ -19,24 +19,26 @@ console.log('\n== Dupla Eliminatória — saída observável ==');
 (function () {
   const t = buildDupla(14);
   const cad = lowerCadence(t);
-  // DECISÃO DO DONO (25/jul, depois do torneio de casais): a Dupla Eliminatória passou
-  // a usar o DESENHO DETERMINÍSTICO (js/views/chaves.js) — chave = f(N, formato), com
-  // topologia PADRÃO sobre potência de 2, absorvendo a diferença em bye/repescagem.
+  // DECISÃO DO DONO (jul/2026): a chave deixou de ser inflada até potência de 2. O
+  // desenho continua determinístico (js/views/chaves.js, chave = f(N, formato)) e o id
+  // continua estrutural — o que mudou é que não se completa mais até B.
   //
-  //   ANTES (árvore mínima):  5 - 4 - 3 - 2 - 1
-  //   AGORA (padrão, B=16):   4 - 4 - 2 - 2 - 1 - 1
+  //   inflada até B=16:  4 - 4 - 2 - 2 - 1 - 1   (com 2 equipes avançando sem jogar)
+  //   árvore mínima:     4 - 4 - 3 - 2 - 1       (14 duplas, sem inflar)
   //
-  // A regra "NUNCA pow2" da árvore mínima foi SUPERSEDIDA. Não é regressão: foi troca
-  // deliberada de motor, pra que o id do jogo vire estrutural (VC-R1-P3) e a entrada
-  // tardia deixe de precisar de cirurgia — que foi o que quebrou ao vivo.
-  eq(cad, [4, 4, 2, 2, 1, 1], 'chave inferior de 14 = topologia padrão da dupla eliminatória');
+  // A inferior encolhe porque cada rodada da superior manda piso(E/2) para baixo, e não
+  // mais um número fixado pelo tamanho da chave inflada.
+  eq(cad, [4, 4, 3, 2, 1], 'chave inferior de 14 = árvore mínima (sem inflar até potência de 2)');
   ok(cad[cad.length - 1] === 1, 'última rodada inferior = 1 jogo (Final da inferior)');
-  // As DUAS últimas rodadas da inferior têm 1 jogo cada, e isso é CORRETO na dupla
-  // eliminatória padrão: a penúltima é a semifinal da inferior e a última é a final da
-  // inferior (que produz o adversário da grande final). O teste antigo tratava isso
-  // como "battle dupla = bug" porque a árvore mínima não tinha essa forma.
-  ok(cad.length >= 2 && cad[cad.length - 1] === 1 && cad[cad.length - 2] === 1,
-    'as duas últimas rodadas da inferior são semifinal e final (1 jogo cada)');
+  // A cadência é monotônica não-crescente e termina em 1: cada rodada da inferior
+  // entrega teto(E/2) sobreviventes, então nunca cresce e sempre converge para o
+  // campeão da inferior, que vai à grande final.
+  for (let i = 1; i < cad.length; i++) {
+    ok(cad[i] <= cad[i - 1],
+      `inferior cresceu da rodada ${i} para a ${i + 1} (${cad[i - 1]} → ${cad[i]}) — deveria só encolher`);
+  }
+  ok(cad.length >= 2 && cad[cad.length - 2] === 2,
+    'penúltima rodada da inferior = 2 jogos (semifinal da inferior)');
 })();
 
 // ---------- 2. NOME DAS RODADAS renderizadas (bug: "Linha", "Rodada 5", "Quartas" na inferior) ----------

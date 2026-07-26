@@ -1019,11 +1019,18 @@
     if (pool.length === 1) {
       return { matches: [], finalMatchId: null, soleWinner: pool[0].displayName || pool[0].name || null };
     }
+    // SEMEADURA: a chave emparelha posições adjacentes (é o que permite crescer sem
+    // resortear). Quando o pool chega ORDENADO POR MÉRITO — classificados de uma fase
+    // anterior, linha Ouro/Prata — a ordem significa alguma coisa e precisa virar
+    // espelho 1×N, senão o 1º pega o 2º na estreia. Na Fase 0 o pool já vem
+    // embaralhado por _shufflePool, e aí semear seria só embaralhar de novo.
+    var _daInscricao = !!(cfg && cfg.source && cfg.source.type === 'enrollment');
     var built = A.build(pool.length, dupla ? 'dupla' : 'simples', {
       participantes: pool,
       tierThird: cfg ? (cfg.thirdPlace !== false) : true,
       ns: _nsDeterministico(idPrefix),
-      bracketKey: bracketKey || null
+      bracketKey: bracketKey || null,
+      semear: !_daInscricao
     });
     // chaves monta a chave INTEIRA (na dupla: superior + inferior + grande final),
     // então nada de needsDoubleElim — não há 2º construtor pra rodar depois.

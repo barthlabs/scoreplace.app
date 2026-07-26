@@ -30,17 +30,58 @@ const C = W._chaves, A = W._chavesAdapter;
 const parts = (n) => Array.from({ length: n }, (_, i) => ({ displayName: 'P' + (i + 1), uid: 'u' + (i + 1) }));
 const isBye = (x) => !x || x === 'TBD' || /BYE/.test(String(x));
 
-console.log('\n== 1) a escolha bye × repescagem segue a regra do MENOR esforço ==');
-[[5, 'repescagem'], [9, 'repescagem'], [10, 'repescagem'], [11, 'repescagem'],
- [12, 'bye'], [13, 'bye'], [14, 'bye'], [8, 'bye'], [16, 'bye']].forEach(function (par) {
-  var n = par[0], esperado = par[1];
-  var p = C.plano(n);
-  ok(p.modo === esperado, `N=${n}: modo=${p.modo}, esperado ${esperado} (vagas=${p.vagas}, perdedores=${p.pool})`);
-  // o total de intervenções é sempre `vagas` — o que a regra escolhe é a MISTURA
-  ok(p.byes + p.repescagens === p.vagas, `N=${n}: byes(${p.byes}) + reps(${p.repescagens}) = vagas(${p.vagas})`);
+console.log('\n== 1) a REGRA: intervenção onde E é ímpar, folga longe do fim, repescagem perto ==');
+// A chave não é mais inflada até potência de 2. Cada rodada com E entrantes gera
+// teto(E/2) jogos; E ímpar deixa uma sobra, que recebe FOLGA (se faltam >=3 rodadas
+// até a final DAQUELA chave, e dentro do teto de 3 folgas a cada 12 inscritos) ou
+// REPESCAGEM (caso contrário). Isso é o que impede alguém de chegar à final sem jogar.
+['simples', 'dupla'].forEach(function (fmt) {
+  for (var n = 2; n <= 200; n++) {
+    var p = C.plano(n, fmt);
+    p.rodadas.forEach(function (r) {
+      if (r.impar) ok(r.acao === 'bye' || r.acao === 'repescagem',
+        `${fmt} N=${n} ${r.fase}R${r.rodada}: E=${r.E} ímpar sem intervenção`);
+      else ok(!r.acao, `${fmt} N=${n} ${r.fase}R${r.rodada}: E=${r.E} par recebeu "${r.acao}"`);
+      if (r.acao === 'bye') ok(r.ateFinalChave >= 3,
+        `${fmt} N=${n}: FOLGA em ${r.fase}R${r.rodada}, a ${r.ateFinalChave} rodada(s) do fim da chave`);
+      // topologia não depende da política: folga e repescagem dão os mesmos números
+      ok(r.sobe === Math.ceil(r.E / 2), `${fmt} N=${n} ${r.fase}R${r.rodada}: sobem ${r.sobe} != teto(E/2)`);
+      if (r.fase === 'VC') ok(r.desce === Math.floor(r.E / 2),
+        `${fmt} N=${n} ${r.fase}R${r.rodada}: descem ${r.desce} != piso(E/2)`);
+    });
+    ok(p.byes <= p.tetoFolgas, `${fmt} N=${n}: ${p.byes} folgas > teto ${p.tetoFolgas} (3 a cada 12)`);
+  }
 });
-// empate vai pra bye, explicitamente (N=12: vagas=4, perdedores=4)
-ok(C.plano(12).repescagens === 0, 'N=12 (empate vagas × perdedores) resolve por BYE, não por repescagem');
+// chave exata não precisa de intervenção nenhuma
+[2, 4, 8, 16, 32, 64].forEach(function (n) {
+  var p = C.plano(n, 'simples');
+  ok(p.byes === 0 && p.repescagens === 0,
+    `N=${n} simples (potência de 2): esperado 0 folgas / 0 repescagens, got ${p.byes}/${p.repescagens}`);
+});
+// 12 duplas: as duas rodadas ímpares caem em semifinais, onde folga é proibida →
+// zero folga, duas repescagens. É a chave que o dono desenhou (sup 6/3/2/1).
+ok(C.plano(12, 'dupla').byes === 0, 'N=12 dupla: nenhuma folga (as ímpares são semifinais)');
+ok(C.plano(12, 'dupla').repescagens === 2, 'N=12 dupla: exatamente 2 repescagens');
+
+console.log('== 1b) a repescagem sai da PRÓPRIA rodada, sem revanche e sem descida dupla ==');
+['simples', 'dupla'].forEach(function (fmt) {
+  for (var n = 3; n <= 120; n++) {
+    var d = C.chave(n, fmt);
+    d.jogos.filter(function (j) { return j.tipo === 'repescagem'; }).forEach(function (j) {
+      var src = d.porId[j.origemRepescado];
+      ok(!!src, `${fmt} N=${n}: ${j.id} sem jogo de origem`);
+      if (!src) return;
+      ok(src.rodada === j.rodada && src.fase === j.fase,
+        `${fmt} N=${n}: ${j.id} repesca de ${src.id}, de outra rodada/chave`);
+      // descida ADIADA: quem cai à inferior é o perdedor DESTE jogo, não o do cedente
+      ok(src.perdedorDesce === false,
+        `${fmt} N=${n}: ${src.id} cedeu o perdedor e ainda o manda descer (double-book)`);
+      // a sobra não disputou nada nesta rodada → revanche é impossível por construção
+      ok(!(j.entradas[0].de && j.entradas[0].de === src.id),
+        `${fmt} N=${n}: ${j.id} seria revanche — a sobra veio do próprio ${src.id}`);
+    });
+  }
+});
 
 console.log('== 2) o perdedor do jogo-fonte CHEGA na vaga de repescagem (motor real) ==');
 [5, 9, 10, 11].forEach(function (n) {
@@ -69,16 +110,27 @@ console.log('== 2) o perdedor do jogo-fonte CHEGA na vaga de repescagem (motor r
 });
 
 console.log('== 3) o repescado NÃO é duplicado (raiz do auto-confronto) ==');
+// Dois padrões de playout, e a razão é específica desta seção: num jogo de repescagem
+// o p1 é a SOBRA e o p2 é o REPESCADO. Jogando sempre "p1 vence", o repescado perde
+// SEMPRE — e o caminho em que ele avança (o único que poderia lhe dar uma 3ª vida)
+// nunca chega a ser exercitado. O padrão "p2 vence" cobre justamente esse.
+[['p1', function (m) { return m.p1; }], ['p2', function (m) { return m.p2; }]].forEach(function (padrao) {
+  var tagP = padrao[0], escolhe = padrao[1];
 [5, 9, 10, 11].forEach(function (n) {
   var built = A.build(n, 'simples', { participantes: parts(n) });
   var t = { id: 'r', format: 'Eliminatórias Simples', matches: built.matches };
+  // quantas vezes cada competidor entrou numa vaga COMO REPESCADO (a vida extra)
+  var vidasExtras = {};
   var guard = 0;
   for (;;) {
     if (++guard > 3000) break;
     var m = t.matches.find(function (x) { return !x.winner && !isBye(x.p1) && !isBye(x.p2); });
     if (!m) break;
-    ok(m.p1 !== m.p2, `N=${n}: ${m.id} — ${m.p1} enfrentaria a si mesmo`);
-    m.winner = m.p1;
+    ok(m.p1 !== m.p2, `N=${n} [${tagP}]: ${m.id} — ${m.p1} enfrentaria a si mesmo`);
+    ['p1', 'p2'].forEach(function (s) {
+      if (m[s + 'FromRepechage'] && !isBye(m[s])) vidasExtras[m[s]] = (vidasExtras[m[s]] || 0) + 1;
+    });
+    m.winner = escolhe(m);
     W._advanceWinner(t, m);
   }
   // Ninguém ocupa dois slots SIMULTÂNEOS na mesma rodada.
@@ -99,16 +151,32 @@ console.log('== 3) o repescado NÃO é duplicado (raiz do auto-confronto) ==');
   Object.keys(porRodada).forEach(function (r) {
     var reais = porRodada[r].filter(function (x) { return !isBye(x); });
     ok(new Set(reais).size === reais.length,
-      `N=${n} rodada ${r}: alguém ocupa DOIS slots simultâneos (double-book) → [${reais.join(', ')}]`);
+      `N=${n} rodada ${r} [${tagP}]: alguém ocupa DOIS slots simultâneos (double-book) → [${reais.join(', ')}]`);
   });
-  // E o repescado entra na vaga UMA vez só (não em duas vagas diferentes).
-  var ocupantesDeVaga = [];
-  t.matches.forEach(function (m) {
-    if (!m.isRepechageSlot) return;
-    [m.p1, m.p2].forEach(function (x) { if (!isBye(x) && x) ocupantesDeVaga.push(x); });
-  });
-  ok(new Set(ocupantesDeVaga).size === ocupantesDeVaga.length,
-    `N=${n}: alguém foi repescado para DUAS vagas → [${ocupantesDeVaga.join(', ')}]`);
+
+  // NINGUÉM É REPESCADO DUAS VEZES — o teto de vidas que o dono aceitou.
+  //
+  // A conta é sobre o lado REPESCADO da vaga (`pXFromRepechage`), não sobre a vaga
+  // inteira. Antes esta asserção olhava os DOIS lados e passava por acidente: a R1
+  // ganhava folga, então só sobrava uma vaga de repescagem na chave e não havia o que
+  // colidir. Com a folga proibida na R1 (regra do dono, jul/2026) aparecem duas vagas,
+  // e o outro lado — a SOBRA — legitimamente ocupa as duas: quem é a última posição da
+  // R1 e vence continua sendo a última posição da R2. Isso não é vida extra, é a mesma
+  // pessoa jogando rodadas consecutivas. Contar aquilo como duplicação transformaria
+  // um comportamento correto em falha.
+  //
+  // A vida extra é ser REPESCADO: perder e voltar. Ela vale UMA vez — é o que sustenta
+  // a regra publicada "sai com 2 derrotas na simples (1 se nunca repescado)". Se alguém
+  // for repescado duas vezes, sairia com 3 e o teto teria furado.
+  var multi = Object.keys(vidasExtras).filter(function (k) { return vidasExtras[k] > 1; });
+  ok(multi.length === 0,
+    `N=${n} [${tagP}]: ${multi.join(', ')} foi repescado mais de uma vez → ${JSON.stringify(vidasExtras)}`);
+
+  // e a chave fecha mesmo quando o repescado é quem avança
+  var pendentes = t.matches.filter(function (m) { return !m.winner && !isBye(m.p1) && !isBye(m.p2); });
+  ok(pendentes.length === 0,
+    `N=${n} [${tagP}]: ${pendentes.length} jogo(s) pendente(s) → ${pendentes.map(function (m) { return m.id; }).join(',')}`);
+});
 });
 
 console.log('\n' + (fail === 0 ? '✅ repechage: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');

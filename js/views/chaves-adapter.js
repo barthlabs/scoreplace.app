@@ -63,6 +63,30 @@
 
   function _slotName(k) { return k === 0 ? 'p1' : 'p2'; }
 
+  // ─── SEMEADURA ESPELHO (1×N) ───────────────────────────────────────────────────
+  // chaves.js emparelha posições ADJACENTES — (pos0,pos1), (pos2,pos3)… — porque é
+  // isso que deixa a chave crescer sem resortear: um inscrito novo entra no fim e
+  // não toca em confronto já sorteado. Quando a ordem de entrada é ALEATÓRIA (Fase 0,
+  // pool já embaralhado) isso basta.
+  //
+  // Mas quando a ordem SIGNIFICA alguma coisa — classificados de uma fase de grupos,
+  // linha Ouro/Prata — emparelhar adjacente colocaria o 1º contra o 2º logo de cara.
+  // A correção não é mudar o emparelhamento (perderíamos o crescimento), é entregar a
+  // LISTA na ordem certa: [1º, último, 2º, penúltimo, …]. Sobre pares adjacentes isso
+  // reproduz exatamente o espelho 1×N.
+  //
+  // Com número ímpar de classificados, quem sobra é o MELHOR: a sobra ocupa a última
+  // posição, que é a que recebe folga ou repescagem — a vantagem vai para quem fez a
+  // melhor campanha, não para o pior colocado.
+  function _ordemEspelho(arr) {
+    var a = arr.slice(), sobra = null;
+    if (a.length % 2 === 1) sobra = a.shift();
+    var out = [], i = 0, j = a.length - 1;
+    while (i < j) { out.push(a[i]); out.push(a[j]); i++; j--; }
+    if (sobra) out.push(sobra);
+    return out;
+  }
+
   // ─── Carimba uma ENTRADA num slot: RÓTULO + IDENTIDADE (v1.5.10) ────────────────────
   // BUG MEDIDO no torneio ao vivo (tour_1785038880593_sb, 26/jul): a dupla que entrou tarde
   // apareceu na chave como **"#10"** e o organizador concluiu que ela não tinha entrado —
@@ -108,6 +132,9 @@
     opts = opts || {};
     formato = formato === 'dupla' ? 'dupla' : 'simples';
     var parts = opts.participantes || [];
+    // ordem significativa (classificação de fase, linha Ouro/Prata) → semeadura espelho.
+    // ordem aleatória (inscrição já embaralhada) → mantém como veio. Ver _ordemEspelho.
+    if (opts.semear) parts = _ordemEspelho(parts);
     var C = _resolveChaves();
     if (!C) throw new Error('chaves-adapter: window._chaves não carregado');
     if (N < 2) return { matches: [], meta: { N: N, formato: formato, vazio: true } };
@@ -137,13 +164,16 @@
       if (j.tipo === 'repescagem') m.isRepechageSlot = true;
       if (j.id === 'GF-EXTRA') { m.isExtra = true; m.condicional = true; }
       // ASSINATURA ESTRUTURAL — o que torna a reconciliação segura.
-      // Inclui o TAMANHO DA CHAVE (B) de propósito: ao cruzar potência de 2 o id
-      // `VC-R1-P2` SOBREVIVE mas deixa de ser #8x#9 e vira #16x#17; e jogos de
-      // rodadas seguintes têm entradas textualmente idênticas em oitavas
-      // diferentes (`vencedor(VC-R1-P1) x vencedor(VC-R1-P2)`). Sem o B, um
-      // placar seria recolado num confronto DIFERENTE em silêncio — exatamente
-      // o pior caso descrito no spec. Bug pego pelo playout 16->17.
-      m._sig = desenho.plano.B + '|' + j.tipo + ':' + j.entradas.map(function (e) {
+      //
+      // Já incluiu o tamanho da chave (B). Fazia sentido enquanto a chave era inflada
+      // até a potência de 2: ali `VC-R1-P2` sobrevivia ao crescimento mas deixava de
+      // ser #8x#9 e virava #16x#17, e um placar seria recolado num confronto DIFERENTE
+      // em silêncio. Com a árvore mínima e emparelhamento adjacente isso não acontece
+      // mais — `VC-R1-P2` é #3x#4 em qualquer N, porque o seed é a posição no sorteio e
+      // ela não se move. Manter o B aqui passaria a ser NOCIVO: B virou o próprio N,
+      // então toda assinatura mudaria a cada inscrito e o recálculo recusaria sempre
+      // com 'confronto-publicado-mudaria' — nenhum tardio conseguiria entrar.
+      m._sig = j.tipo + ':' + j.entradas.map(function (e) {
         return e.tipo === 'seed' ? '#' + e.seed
           : e.tipo === 'vazio' ? '-'
             : e.tipo + '(' + e.de + ')';
@@ -205,25 +235,36 @@
         .map(function (id) { return desenho.porId[id]; })
         .filter(function (j) { return j.fase === 'VC' && j.rodada === rSemi; });
       if (semis.length === 2) {
-        var terceiro = {
-          id: ns + '3P',                 // id ESTRUTURAL, como todos os outros
-          round: desenho.rodadas, bracket: _bracketOf('VC', formato, opts.bracketKey),
-          isThirdPlace: true, p1: 'TBD', p2: 'TBD', winner: null,
-          phaseIndex: opts.phaseIndex || 0,
-          _sig: desenho.plano.B + '|terceiro:' + semis[0].id + ' x ' + semis[1].id
-        };
-        if (opts.category != null) terceiro.category = opts.category;
-        // Só roteia o perdedor de semifinal REALMENTE disputada — semifinal
-        // decidida por BYE não produz perdedor (o slot ficaria preso em 'TBD').
-        var vivos = 0;
-        [0, 1].forEach(function (k) {
+        // Elegível = semifinal REALMENTE disputada (decidida por BYE não produz
+        // perdedor, o slot ficaria preso em 'TBD') E cujo perdedor ainda NÃO tem
+        // destino. Este segundo teste passou a ser obrigatório com a árvore mínima:
+        // a penúltima rodada pode conter um jogo de REPESCAGEM, e a repescagem já
+        // consome o perdedor de outro jogo pela mesma aresta (`loserNextMatchId`).
+        // Sem o teste, o 3º lugar roubava essa aresta — o jogo de repescagem ficava
+        // com um lado preso em 'TBD' para sempre (vaga morta) e a chave não fechava.
+        // A repescagem é estrutural e tem prioridade; o 3º lugar é extra.
+        var elegiveis = [0, 1].filter(function (k) {
           var s = byId[semis[k].id];
-          if (!s || !semis[k].disputado) return;
-          s.loserNextMatchId = terceiro.id;
-          s.loserNextSlot = _slotName(k);
-          vivos++;
+          return !!(s && semis[k].disputado && !s.loserNextMatchId);
         });
-        if (vivos === 2) { byId['3P'] = terceiro; matches.push(terceiro); }
+        if (elegiveis.length === 2) {
+          var terceiro = {
+            id: ns + '3P',                 // id ESTRUTURAL, como todos os outros
+            round: desenho.rodadas, bracket: _bracketOf('VC', formato, opts.bracketKey),
+            isThirdPlace: true, p1: 'TBD', p2: 'TBD', winner: null,
+            phaseIndex: opts.phaseIndex || 0,
+            _sig: 'terceiro:' + semis[0].id + ' x ' + semis[1].id
+          };
+          if (opts.category != null) terceiro.category = opts.category;
+          // Só grava as arestas DEPOIS de decidir que o jogo existe — senão
+          // sobravam ponteiros para um match que nunca entrou em `matches`.
+          elegiveis.forEach(function (k, idx) {
+            var s = byId[semis[k].id];
+            s.loserNextMatchId = terceiro.id;
+            s.loserNextSlot = _slotName(idx);
+          });
+          byId['3P'] = terceiro; matches.push(terceiro);
+        }
       }
     }
 
@@ -358,6 +399,19 @@
     return { rodadas: rodadas, campeaoDe: sobrev.length === 1 ? sobrev[0] : null };
   }
 
+  // JOGO REALMENTE DISPUTADO. `winner` sozinho NÃO serve: um BYE recebe `winner` de
+  // `_autoResolveBye` sem nunca ter ido a quadra. Mesmo critério de
+  // window._matchHasRealPlay (store.js) — e é o MESMO teste usado nos dois pontos
+  // abaixo (preservação e `perdidos`), de propósito: dois critérios diferentes para a
+  // mesma pergunta foi como a folga passou a valer como resultado num lugar e não no
+  // outro.
+  function _jogouDeVerdade(m) {
+    return !!(m && (m.resultAt != null || m.startedAt != null || m.liveScored ||
+      m.scoreP1 != null || m.scoreP2 != null ||
+      (Array.isArray(m.sets) && m.sets.length) ||
+      m.pendingResult != null || m.wo != null));
+  }
+
   function reconciliar(antigos, novos) {
     var antigoPorId = {};
     (antigos || []).forEach(function (m) { if (m && m.id) antigoPorId[String(m.id)] = m; });
@@ -372,6 +426,30 @@
       // o placar ali seria corrupção silenciosa.
       if (velho._sig && novo._sig && velho._sig !== novo._sig) return;
       vistos[String(novo.id)] = true;
+
+      // FOLGA NÃO É RESULTADO — não se carrega o `winner` de um bye para o recálculo.
+      //
+      // BUG MEDIDO (jul/2026, guardrail _repechage-invariant, N≡2 mod 4: 18, 22, 26,
+      // 34, 38, 42): com a 1ª superior jogada, a entrada de UM tardio fazia a mesma
+      // dupla ficar viva em dois jogos ao mesmo tempo — a assinatura do auto-confronto
+      // "Time X vs Time X".
+      //
+      // Como acontecia: em N=18 o jogo VC-R3-P3 era um bye, `_autoResolveBye` lhe dava
+      // `winner = A1/B1`, e esse vencedor cascateava até ocupar o slot de VC-R4-P2. Com
+      // o tardio (N=19) a camada de folga é REDESENHADA e aquele bye deixa de existir:
+      // VC-R3-P3 volta a esperar quem vencer VC-R2-P5. Mas o `winner` antigo era copiado
+      // aqui de volta, a re-propagação o reinjetava em VC-R4-P2, e A1/B1 passava a estar
+      // simultaneamente escalada em VC-R2-P5 (jogo que ainda tem de jogar) e em VC-R4-P2.
+      //
+      // Byes e repescagens são camada DERIVADA — o próprio motor declara que "recalculam
+      // a cada N, e tudo bem". Preservar o desfecho de uma folga é preservar justamente o
+      // que tinha de ser recalculado. O jogo novo nasce limpo e `_autoResolveBye` (que o
+      // build já roda, em ordem cronológica) reconstrói a cascata correta para o N novo.
+      //
+      // Só vale para folga SEM jogo real: se alguém lançou placar naquele id, é resultado
+      // de verdade e continua protegido — inclusive pelo `rec.perdidos` logo abaixo.
+      if (velho.isBye && !_jogouDeVerdade(velho)) return;
+
       var tocou = false;
       CAMPOS_PRESERVADOS.forEach(function (campo) {
         if (velho[campo] !== undefined && velho[campo] !== null) {
@@ -396,11 +474,7 @@
       if (vistos[id]) return;
       var m = antigoPorId[id];
       if (m.isBye) return;                       // folga não é jogo
-      var jogouDeVerdade = m.resultAt != null || m.startedAt != null || m.liveScored ||
-        m.scoreP1 != null || m.scoreP2 != null ||
-        (Array.isArray(m.sets) && m.sets.length) ||
-        m.pendingResult != null || m.wo != null;
-      if (jogouDeVerdade) perdidos.push({ id: id, p1: m.p1, p2: m.p2, winner: m.winner });
+      if (_jogouDeVerdade(m)) perdidos.push({ id: id, p1: m.p1, p2: m.p2, winner: m.winner });
     });
 
     return { matches: novos, preservados: preservados, perdidos: perdidos };

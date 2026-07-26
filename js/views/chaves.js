@@ -31,32 +31,132 @@
 (function () {
   'use strict';
 
-  var proxPow2 = function (n) { var b = 1; while (b < n) b *= 2; return b; };
+  /* ===================================================================
+   * A CHAVE NÃO É INFLADA ATÉ POTÊNCIA DE 2 (regra do dono, jul/2026).
+   *
+   * Antes, N virava B = próxima potência de 2 e as B−N posições vazias eram
+   * preenchidas com folga ou repescagem. Isso produzia absurdos: 36 duplas
+   * viravam uma chave de 64 com 24 equipes avançando sem jogar na 1ª rodada,
+   * e a 1ª rodada da chave inferior ficava sem NENHUM jogo de verdade.
+   *
+   * Agora a chave é a árvore mínima e a regra é uma recorrência:
+   *
+   *   rodada com E entrantes  ->  teto(E/2) jogos
+   *     E par    : E/2 jogos, todos normais.
+   *     E ímpar  : (E−1)/2 jogos normais + 1 jogo para a sobra, que recebe
+   *                FOLGA      se faltam >=3 rodadas até a final DAQUELA chave,
+   *                           o torneio está dentro do teto de 3 folgas a cada
+   *                           12 inscritos, e NÃO é a 1ª rodada da principal;
+   *                REPESCAGEM caso contrário — enfrenta o perdedor do primeiro
+   *                           jogo normal da PRÓPRIA rodada.
+   *   Em ambos os casos: avançam = teto(E/2) e descem = piso(E/2).
+   *
+   * NA 1ª RODADA DA PRINCIPAL A SOBRA NUNCA GANHA FOLGA (regra do dono, jul/2026).
+   * Como o emparelhamento é adjacente e o tardio entra na próxima posição livre
+   * (o fim da ordem), a sobra daquela rodada É o último inscrito — e folga ali
+   * significa "quem chegou por último avança sem jogar". Ele joga a repescagem.
+   *
+   * Como folga e repescagem entregam os mesmos números, a TOPOLOGIA não depende
+   * da política — a chave continua sendo função pura de (N, formato).
+   *
+   * Consequência aceita e desejada: quem é repescado ganha vida extra. Sai com
+   * 2 derrotas na simples (1 se nunca foi repescado) e com até 4 na dupla
+   * (2 se nunca foi repescado).
+   *
+   * A folga nunca cai em semifinal nem em final, de nenhuma das chaves — é o
+   * que o critério das 3 rodadas garante, sem depender de configuração.
+   *
+   * EMPARELHAMENTO É ADJACENTE, NUNCA ESPELHADO. É o que preserva a admissão
+   * de tardios: com pares (1,2)(3,4)(5,6)…, aumentar N acrescenta um par no fim
+   * e não toca em nenhum confronto já sorteado. Espelho remapearia todos.
+   * =================================================================== */
 
-  /**
-   * Ajuste de entrada: quantos byes e quantas repescagens.
-   * vagas = posições da R1 sem adversário   (B - N)
-   * pool  = jogos normais da R1 = perdedores gerados  (N - B/2)
-   * Aplica-se o MENOR dos dois; EMPATE VAI PARA BYE.
-   * Repescagem só cobre até `pool`, pois cada uma consome um perdedor.
-   */
-  function plano(N) {
-    if (N < 2) throw new Error('N minimo = 2');
-    var B = Math.max(2, proxPow2(N));
-    var vagas = B - N;
-    var pool = N - B / 2;
-    var modo = vagas <= pool ? 'bye' : 'repescagem';
-    var repescagens = modo === 'bye' ? 0 : Math.min(vagas, pool);
-    return { N: N, B: B, vagas: vagas, pool: pool, menor: Math.min(vagas, pool), modo: modo, repescagens: repescagens, byes: vagas - repescagens };
+  // teto de folgas: 3 a cada 12 inscritos
+  function tetoFolgas(N) { return Math.max(1, Math.floor(N / 4)); }
+
+  // Topologia pura: quantas rodadas, quantos entram/avançam/descem em cada uma.
+  // Não depende de folga vs repescagem (as duas dão os mesmos números).
+  function _topologia(N, formato) {
+    var sup = [], E = N, r = 0;
+    while (E > 1) {
+      r++;
+      sup.push({ fase: 'VC', rodada: r, E: E, jogos: Math.ceil(E / 2), sobe: Math.ceil(E / 2), desce: Math.floor(E / 2), impar: E % 2 === 1 });
+      E = Math.ceil(E / 2);
+    }
+    var totSup = r, inf = [];
+    if (formato === 'dupla') {
+      var vivos = 0, lr = 0;
+      for (var k = 1; k <= totSup + 10; k++) {
+        var caem = (k <= totSup) ? sup[k - 1].desce : 0;
+        var Ein = vivos + caem;
+        if (Ein < 2) { vivos = Ein; if (k > totSup && vivos <= 1) break; continue; }
+        lr++;
+        inf.push({ fase: 'PD', rodada: lr, E: Ein, jogos: Math.ceil(Ein / 2), sobe: Math.ceil(Ein / 2), impar: Ein % 2 === 1, aposSup: k });
+        vivos = Math.ceil(Ein / 2);
+        if (vivos === 1 && k >= totSup) break;
+      }
+    }
+    sup.forEach(function (x) { x.ateFinalChave = totSup - x.rodada + 1; });
+    inf.forEach(function (x) { x.ateFinalChave = inf.length - x.rodada + 1; });
+    return { sup: sup, inf: inf, totSup: totSup, totInf: inf.length };
   }
 
-  function ordemSeeds(size) {
-    var o = [1];
-    while (o.length < size) {
-      var n = o.length * 2;
-      o = o.flatMap(function (p) { return [p, n + 1 - p]; });
+  /**
+   * Plano da chave: rodadas, folgas e repescagens que a regra produz para este N.
+   * `B` é mantido por compatibilidade com a assinatura estrutural do adapter —
+   * agora vale o próprio N, porque a chave não é mais inflada.
+   */
+  function plano(N, formato) {
+    if (N < 2) throw new Error('N minimo = 2');
+    formato = formato === 'dupla' ? 'dupla' : 'simples';
+    var t = _topologia(N, formato);
+    var teto = tetoFolgas(N), folgas = 0, reps = 0;
+    var ordem = _ordemRodadas(t);
+    ordem.forEach(function (x) {
+      if (!x.impar) { x.acao = null; return; }
+      // O ÚLTIMO INSCRITO NUNCA GANHA FOLGA (regra do dono, jul/2026).
+      //
+      // O emparelhamento é adjacente e o tardio entra na PRÓXIMA POSIÇÃO LIVRE,
+      // que é o fim da ordem — então, na 1ª rodada da chave principal, a SOBRA
+      // de um N ímpar É o último inscrito. Dar folga ali é exatamente o que o
+      // dono vetou: quem chegou por último avançava sem jogar enquanto quem se
+      // inscreveu antes jogava. Agora ele joga a repescagem: entra em quadra
+      // contra o perdedor do primeiro jogo da rodada.
+      //
+      // Motivo do dono: "aumenta as chances de todos sem prejudicar ninguém" —
+      // ninguém perde jogo, e o repescado ganha uma vida a mais em vez de pular
+      // a rodada.
+      //
+      // Só a 1ª rodada da PRINCIPAL é afetada. Da 2ª em diante (e em toda a
+      // chave inferior) a sobra é alguém que JÁ jogou e venceu, não um recém-
+      // chegado — ali a folga continua valendo, dentro do teto e nunca em
+      // semifinal/final.
+      var sobraEhOUltimoInscrito = (x.fase === 'VC' && x.rodada === 1);
+      if (!sobraEhOUltimoInscrito && folgas < teto && x.ateFinalChave >= 3) { x.acao = 'bye'; folgas++; }
+      else { x.acao = 'repescagem'; reps++; }
+    });
+    return {
+      N: N, B: N, formato: formato,
+      rodadasSup: t.totSup, rodadasInf: t.totInf,
+      byes: folgas, repescagens: reps, tetoFolgas: teto,
+      modo: (folgas && reps) ? 'misto' : (folgas ? 'bye' : (reps ? 'repescagem' : 'exata')),
+      vagas: 0, pool: 0, menor: 0,
+      rodadas: ordem
+    };
+  }
+
+  // Ordem cronológica das rodadas: superior R1, inferior R1, superior R2, ...
+  function _ordemRodadas(t) {
+    var ordem = [];
+    var maxK = Math.max(t.totSup, t.inf.length ? t.inf[t.inf.length - 1].aposSup : 0);
+    for (var k = 1; k <= maxK; k++) {
+      var s = t.sup.filter(function (x) { return x.rodada === k; })[0];
+      if (s) ordem.push(s);
+      var i = t.inf.filter(function (x) { return x.aposSup === k; })[0];
+      if (i) ordem.push(i);
     }
-    return o;
+    t.inf.forEach(function (x) { if (ordem.indexOf(x) < 0) ordem.push(x); });
+    return ordem;
   }
 
   var S = function (seed) { return { tipo: 'seed', seed: seed }; };
@@ -71,128 +171,106 @@
    * @returns {{plano, rodadas, jogos: Array, porId: Object, totalJogos: number, ordem: string[]}}
    */
   function chave(N, formato) {
-    formato = formato || 'simples';
-    var pl = plano(N);
-    var B = pl.B, repescagens = pl.repescagens;
-    var rodadas = Math.log2(B);
-    var ordem = ordemSeeds(B);
+    formato = formato === 'dupla' ? 'dupla' : 'simples';
+    var pl = plano(N, formato);
+    var rodadas = pl.rodadasSup;
     var jogos = [];
     var novo = function (o) { jogos.push(o); return o; };
+    var seq = [];                       // ordem cronológica
+    var VC = {}, PD = {}, gf = null;
 
-    // ---------- Rodada 1 da chave superior ----------
-    var pares = [];
-    for (var i = 0; i < B / 2; i++) pares.push([ordem[2 * i], ordem[2 * i + 1]]);
-
-    var normais = [], vagas = [];
-    pares.forEach(function (par, i) {
-      var a = par[0], b = par[1];
-      if (a <= N && b <= N) normais.push(i);
-      else vagas.push({ seed: Math.min(a, b), pos: i });
-    });
-    vagas.sort(function (x, y) { return y.seed - x.seed; }); // piores seeds recebem repescado
-
-    var R1 = new Array(B / 2);
-    var id1 = function (i) { return 'VC-R1-P' + (i + 1); };
-
-    normais.forEach(function (i) {
-      R1[i] = novo({
-        id: id1(i), fase: 'VC', rodada: 1, pos: i + 1, tipo: 'normal',
-        entradas: [S(pares[i][0]), S(pares[i][1])], perdedorDesce: true
-      });
-    });
-
-    // repescagem: receptor sempre na metade OPOSTA à do jogo de origem
-    var livres = normais.slice();
-    vagas.slice(0, repescagens).forEach(function (v) {
-      var seed = v.seed, pos = v.pos;
-      var meta = B / 4;
-      var cand = livres.filter(function (j) { return (j < meta) !== (pos < meta); });
-      var src = (cand.length ? cand : livres)[0];
-      livres.splice(livres.indexOf(src), 1);
-      R1[src].perdedorDesce = false; // derrota anulada: vira repescado
-      R1[pos] = novo({
-        id: id1(pos), fase: 'VC', rodada: 1, pos: pos + 1, tipo: 'repescagem',
-        entradas: [S(seed), R(id1(src))], perdedorDesce: true, origemRepescado: id1(src)
-      });
-    });
-
-    vagas.slice(repescagens).forEach(function (v) {
-      R1[v.pos] = novo({
-        id: id1(v.pos), fase: 'VC', rodada: 1, pos: v.pos + 1, tipo: 'bye',
-        entradas: [S(v.seed), VAZIO], perdedorDesce: false
-      });
-    });
-
-    // ---------- Demais rodadas da superior ----------
-    var VC = { 1: R1 };
-    for (var r = 2; r <= rodadas; r++) {
-      (function (r) {
-        var pv = VC[r - 1];
-        VC[r] = Array.from({ length: pv.length / 2 }, function (_, i) {
-          return novo({
-            id: 'VC-R' + r + '-P' + (i + 1), fase: 'VC', rodada: r, pos: i + 1, tipo: 'normal',
-            entradas: [V(pv[2 * i].id), V(pv[2 * i + 1].id)], perdedorDesce: true
-          });
-        });
-      })(r);
-    }
-
-    // ---------- Chave inferior (dupla eliminatória) ----------
-    var PD = {};
-    var gf = null;
-    var nlb = 2 * rodadas - 2;
-    if (formato === 'dupla' && rodadas >= 2) {
-      PD[1] = Array.from({ length: B / 4 }, function (_, i) {
-        return novo({
-          id: 'PD-R1-P' + (i + 1), fase: 'PD', rodada: 1, pos: i + 1, tipo: 'normal',
-          entradas: [P(VC[1][2 * i].id), P(VC[1][2 * i + 1].id)]
-        });
-      });
-      for (var lr = 2; lr <= nlb; lr++) {
-        (function (lr) {
-          var c = B / Math.pow(2, Math.ceil(lr / 2) + 1);
-          var pv = PD[lr - 1];
-          PD[lr] = Array.from({ length: c }, function (_, i) {
-            return novo({
-              id: 'PD-R' + lr + '-P' + (i + 1), fase: 'PD', rodada: lr, pos: i + 1, tipo: 'normal',
-              entradas: lr % 2 === 0
-                ? [V(pv[i].id), P(VC[lr / 2 + 1][c - 1 - i].id)]   // descida da superior
-                : [V(pv[2 * i].id), V(pv[2 * i + 1].id)]
-            });
-          });
-        })(lr);
+    // Monta UMA rodada. `entrantes` são descritores de entrada (S/V) já na ordem
+    // de posição. Emparelhamento ADJACENTE; a SOBRA (E ímpar) é o ÚLTIMO — é a
+    // posição que o próximo inscrito ocuparia, então admitir um tardio apenas
+    // completa esse jogo em vez de mexer nos confrontos já sorteados.
+    // Devolve os jogos na ordem cronológica: normais primeiro, depois o da sobra
+    // (que consome o perdedor do primeiro normal quando é repescagem).
+    function montarRodada(fase, r, entrantes, acao) {
+      var E = entrantes.length;
+      var idDe = function (i) { return fase + '-R' + r + '-P' + (i + 1); };
+      var lista = [], nNormais = Math.floor(E / 2);
+      for (var i = 0; i < nNormais; i++) {
+        lista.push(novo({
+          id: idDe(i), fase: fase, rodada: r, pos: i + 1, tipo: 'normal',
+          entradas: [entrantes[2 * i], entrantes[2 * i + 1]],
+          perdedorDesce: (fase === 'VC')
+        }));
       }
-      gf = novo({
-        id: 'GF', fase: 'GF', rodada: 1, pos: 1, tipo: 'normal',
-        entradas: [V(VC[rodadas][0].id), V(PD[nlb][0].id)]
-      });
-      novo({
-        id: 'GF-EXTRA', fase: 'GF', rodada: 2, pos: 1, tipo: 'extra',
-        condicional: true, entradas: [V('GF'), P('GF')]
-      });
-    }
-
-    // ---------- Ordem cronológica ----------
-    var seq = [];
-    var push = function (arr) { if (arr) seq.push.apply(seq, arr.filter(Boolean)); };
-    // na R1 os jogos normais precedem as repescagens: a repescagem consome o
-    // perdedor de um jogo normal, então a dependência é real, não estética.
-    var R1ordenada = R1.filter(function (m) { return m && m.tipo !== 'repescagem'; })
-      .concat(R1.filter(function (m) { return m && m.tipo === 'repescagem'; }));
-    if (formato !== 'dupla') {
-      push(R1ordenada);
-      for (var k1 = 2; k1 <= rodadas; k1++) push(VC[k1]);
-    } else {
-      push(R1ordenada); push(PD[1]);
-      for (var k = 2; k <= rodadas; k++) {
-        push(VC[k]);
-        var pair = [2 * k - 2, 2 * k - 1];
-        for (var pi = 0; pi < pair.length; pi++) {
-          var rr = pair[pi];
-          if (rr >= 2 && rr <= nlb) push(PD[rr]);
+      if (E % 2 === 1) {
+        var pos = nNormais, sobra = entrantes[E - 1];
+        if (acao === 'bye' || nNormais === 0) {
+          lista.push(novo({
+            id: idDe(pos), fase: fase, rodada: r, pos: pos + 1, tipo: 'bye',
+            entradas: [sobra, VAZIO], perdedorDesce: false
+          }));
+        } else {
+          // repescagem: enfrenta o perdedor do PRIMEIRO jogo normal desta rodada
+          // (extremo oposto da sobra, que está no fim — nunca é revanche).
+          // A descida daquele perdedor é ADIADA: quem cai para a chave inferior
+          // passa a ser o perdedor DESTE jogo.
+          var src = lista[0];
+          src.perdedorDesce = false;
+          lista.push(novo({
+            id: idDe(pos), fase: fase, rodada: r, pos: pos + 1, tipo: 'repescagem',
+            entradas: [sobra, R(src.id)], perdedorDesce: (fase === 'VC'),
+            origemRepescado: src.id
+          }));
         }
       }
-      if (gf) seq.push(gf);
+      seq.push.apply(seq, lista);
+      return lista;
+    }
+
+    // Quem CAI de uma rodada da superior, na ordem: perdedores dos jogos que
+    // realmente soltam perdedor (o jogo cuja derrota virou repescagem não solta;
+    // quem solta no lugar dele é o próprio jogo de repescagem).
+    function quedasDe(lista) {
+      return lista.filter(function (m) { return m.perdedorDesce; })
+        .map(function (m) { return P(m.id); });
+    }
+
+    var porRodada = {};
+    pl.rodadas.forEach(function (x) { porRodada[x.fase + x.rodada] = x; });
+
+    // ---------- percorre as rodadas na ordem cronológica ----------
+    var vivosInf = [];          // descritores de entrada dos vivos na inferior
+    pl.rodadas.forEach(function (x) {
+      if (x.fase === 'VC') {
+        var entrantes;
+        if (x.rodada === 1) {
+          entrantes = [];
+          for (var s = 1; s <= N; s++) entrantes.push(S(s));
+        } else {
+          entrantes = VC[x.rodada - 1].map(function (m) { return V(m.id); });
+        }
+        VC[x.rodada] = montarRodada('VC', x.rodada, entrantes, x.acao);
+      } else {
+        // inferior: intercala os vivos da chave inferior com quem acabou de cair
+        // da superior (quedas em ordem invertida — anti-revanche), para que o
+        // emparelhamento adjacente case sobrevivente × recém-caído.
+        var caem = (x.aposSup && VC[x.aposSup]) ? quedasDe(VC[x.aposSup]).reverse() : [];
+        var ent = [], a = vivosInf, b = caem, n = Math.max(a.length, b.length);
+        for (var i = 0; i < n; i++) { if (a[i]) ent.push(a[i]); if (b[i]) ent.push(b[i]); }
+        PD[x.rodada] = montarRodada('PD', x.rodada, ent, x.acao);
+        vivosInf = PD[x.rodada].map(function (m) { return V(m.id); });
+      }
+    });
+
+    // ---------- grande final ----------
+    if (formato === 'dupla' && pl.rodadasInf >= 1 && rodadas >= 1) {
+      var champSup = VC[rodadas][VC[rodadas].length - 1];
+      var champInf = PD[pl.rodadasInf][PD[pl.rodadasInf].length - 1];
+      if (champSup && champInf) {
+        gf = novo({
+          id: 'GF', fase: 'GF', rodada: 1, pos: 1, tipo: 'normal',
+          entradas: [V(champSup.id), V(champInf.id)], perdedorDesce: false
+        });
+        seq.push(gf);
+        novo({
+          id: 'GF-EXTRA', fase: 'GF', rodada: 2, pos: 1, tipo: 'extra',
+          condicional: true, entradas: [V('GF'), P('GF')], perdedorDesce: false
+        });
+      }
     }
 
     // ---------- Resolução de byes + numeração (DERIVADA, nunca persistida) ----------
@@ -318,7 +396,10 @@
     };
     var a = nAntes >= 2 ? r1(nAntes) : {};
     var b = r1(nDepois);
-    var out = { redesenhoTotal: plano(nAntes).B !== plano(nDepois).B, criados: [], destruidos: [], preservados: [] };
+    // A chave não é mais inflada até potência de 2, então NÃO existe mais o
+    // "cruzar B" que redesenhava tudo. Com emparelhamento adjacente, crescer N
+    // acrescenta um jogo no fim e preserva todos os confrontos anteriores.
+    var out = { redesenhoTotal: false, criados: [], destruidos: [], preservados: [] };
     var ids = {};
     Object.keys(a).forEach(function (k) { ids[k] = 1; });
     Object.keys(b).forEach(function (k) { ids[k] = 1; });
@@ -330,12 +411,25 @@
     return out;
   }
 
-  /** Avisa o organizador quando a próxima inscrição DOBRA a chave. */
+  /**
+   * Antes existia um ponto de ruptura: com a chave cheia (N = potência de 2), o
+   * próximo inscrito dobrava B e redesenhava todos os confrontos — e o organizador
+   * tinha de confirmar. Isso ACABOU: a chave não é mais inflada, e o emparelhamento
+   * adjacente faz o inscrito seguinte apenas completar o último jogo ou criar um
+   * novo no fim. Nenhum confronto já sorteado se perde, em nenhum N.
+   *
+   * A função permanece na API porque a UI a consulta antes de admitir tardios;
+   * agora ela nunca alerta. `vagasAteDobrar` fica 0: não há mais o que "dobrar".
+   */
   function avisoPotencia2(N) {
-    var B = plano(N).B;
-    return N === B
-      ? { alerta: true, mensagem: 'Chave cheia (' + B + '). A próxima inscrição dobra a chave para ' + (B * 2) + ' e redesenha todos os confrontos.' }
-      : { alerta: false, vagasAteDobrar: B - N };
+    var p = plano(N);
+    return {
+      alerta: false, vagasAteDobrar: 0,
+      mensagem: 'A próxima inscrição entra sem redesenhar a chave: ' +
+        (N % 2 === 1 ? 'completa o jogo que hoje está com folga ou repescagem.'
+                     : 'cria um jogo novo no fim da primeira rodada.'),
+      folgas: p.byes, repescagens: p.repescagens
+    };
   }
 
   var api = {

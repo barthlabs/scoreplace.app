@@ -28,19 +28,28 @@ const isBye = (x) => !x || x === 'TBD' || /BYE/.test(String(x));
 
 console.log('\n== repescagem: receptor na METADE OPOSTA do jogo de origem (N = 3..64) ==');
 for (let N = 3; N <= 64; N++) {
-  const pl = C.plano(N);
-  if (!pl.repescagens) continue;           // este N resolve por bye — nada a checar
+  const pl = C.plano(N, 'simples');
+  if (!pl.repescagens) continue;           // este N resolve por folga — nada a checar
   const d = C.chave(N, 'simples');
-  const meta = pl.B / 4;                   // fronteira das metades na R1
   const reps = d.jogos.filter((j) => j.tipo === 'repescagem');
   ok(reps.length === pl.repescagens, `N=${N}: ${reps.length} repescagens, esperado ${pl.repescagens}`);
   reps.forEach((j) => {
     const src = d.porId[j.origemRepescado];
     ok(!!src, `N=${N}: ${j.id} sem jogo de origem declarado`);
     if (!src) return;
-    const posRep = j.pos - 1, posSrc = src.pos - 1;
-    ok((posRep < meta) !== (posSrc < meta),
-      `N=${N}: ${j.id} (pos ${j.pos}) recebe repescado de ${src.id} (pos ${src.pos}) — MESMA metade, deveria ser oposta`);
+    // ANTES: exigia que o jogo de repescagem estivesse na METADE OPOSTA à do jogo-fonte
+    // (fronteira B/4), porque na chave inflada a vaga era um buraco em qualquer ponto da
+    // R1 e podia calhar de receber quem tinha acabado de derrotá-la — revanche imediata.
+    // AGORA a sobra é sempre a ÚLTIMA posição da rodada e o cedente é o PRIMEIRO jogo
+    // normal dela: a sobra não disputou nada ali, então revanche é impossível POR
+    // CONSTRUÇÃO. O que resta travar é isso mesmo — mesma rodada, extremos opostos,
+    // e a sobra não vindo do próprio cedente.
+    ok(src.rodada === j.rodada && src.fase === j.fase,
+      `N=${N}: ${j.id} repesca de ${src.id}, que é de outra rodada/chave`);
+    ok(j.pos > src.pos,
+      `N=${N}: ${j.id} (pos ${j.pos}) deveria vir DEPOIS do cedente ${src.id} (pos ${src.pos}) — a repescagem consome um perdedor, então só pode ser jogada depois dele`);
+    ok(!(j.entradas[0].de && j.entradas[0].de === src.id),
+      `N=${N}: ${j.id} seria REVANCHE — a sobra saiu do próprio ${src.id}`);
   });
 }
 

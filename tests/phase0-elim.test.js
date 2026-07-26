@@ -81,26 +81,52 @@ function realNames(t) {
   ok(realNames(t).length === 8, '8 jogadores → todos os 8 na R1');
 })();
 
-// ── 6 jogadores: pow2=8 → 2 BYEs, BYEs auto-avançados pra R2, ninguém some ──
-// (não-pow2 → fluxo real exige t.p2Resolution já escolhido no painel = 'bye')
+// ── 6 jogadores: ÁRVORE MÍNIMA → 3 jogos exatos, ZERO folga, ninguém some ──
+//
+// Era "pow2=8 → 2 BYEs". A chave deixou de ser inflada até a potência de 2 (decisão do
+// dono, jul/2026: o desenho novo SUBSTITUI o anterior, com menos repescagens e poucos
+// byes). Com 6 inscritos a 1ª rodada tem piso(6/2)=3 jogos reais e não sobra ninguém —
+// não há vaga para preencher, então não há folga nem repescagem para criar.
 (function () {
   var t = runDraw(mkT(6, { p2Resolution: 'bye' }));
-  var byes = byRound(t, 1).filter(function (m) { return m.isBye; });
-  ok(byes.length === 2, '6 jogadores → 2 BYEs na R1 [' + byes.length + ']');
-  ok(byes.every(function (m) { return m.winner; }), '6 jogadores → cada BYE tem vencedor (auto-avança)');
-  // os vencedores de BYE caem na R2 já preenchidos (pXFromBye)
-  var r2 = byRound(t, 2);
-  var seeded = r2.some(function (m) { return m.p1FromBye || m.p2FromBye; });
-  ok(seeded, '6 jogadores → R2 recebe os vencedores de BYE pré-preenchidos (p1FromBye/p2FromBye)');
+  var r1 = byRound(t, 1);
+  ok(r1.length === 3, '6 jogadores → 3 jogos na R1 (piso(6/2)) [' + r1.length + ']');
+  ok(r1.every(function (m) { return !m.isBye; }), '6 jogadores → ZERO folga na R1 (N par não deixa sobra)');
+  ok(r1.every(function (m) { return !m.isRepechageSlot; }), '6 jogadores → ZERO repescagem na R1');
   ok(realNames(t).length === 6, '6 jogadores → todos os 6 preservados (ninguém some)');
 })();
 
-// ── VIP folga: 2 VIPs num sorteio de 6 → eles são os vencedores dos BYEs ──
+// ── 7 jogadores: N ÍMPAR deixa UMA sobra, e ela entra por REPESCAGEM (nunca folga) ──
+// Regra do dono: a sobra da 1ª rodada da principal é o ÚLTIMO INSCRITO (emparelhamento
+// adjacente + tardio entra na próxima posição livre). Folga ali seria "quem chegou por
+// último avança sem jogar". Ele joga contra o perdedor do 1º jogo da rodada.
+(function () {
+  var t = runDraw(mkT(7, { p2Resolution: 'bye' }));
+  var r1 = byRound(t, 1);
+  ok(r1.length === 4, '7 jogadores → 4 jogos na R1 (teto(7/2)) [' + r1.length + ']');
+  ok(r1.filter(function (m) { return m.isRepechageSlot; }).length === 1, '7 jogadores → exatamente 1 repescagem na R1');
+  ok(r1.every(function (m) { return !m.isBye; }), '7 jogadores → ZERO folga na R1 (a sobra joga a repescagem)');
+  ok(realNames(t).length === 7, '7 jogadores → todos os 7 preservados (ninguém some)');
+})();
+
+// ── VIP na Fase 0: não existe mais folga na 1ª rodada para dar a ninguém ──
+//
+// MUDANÇA DE COMPORTAMENTO, deliberada. Antes, a chave inflada criava B−N vagas na R1
+// e o `seedVip` as entregava aos VIPs — era assim que "VIP folga" funcionava. Na árvore
+// mínima a R1 é toda de jogos reais (no máximo uma repescagem, quando N é ímpar), então
+// não há folga a distribuir e o VIP entra em quadra como todo mundo. O que continua
+// valendo, e é o que este bloco tranca, é que o VIP não pode SUMIR nem ser duplicado
+// pelo sorteio.
 (function () {
   var t = mkT(6, { p2Resolution: 'bye', vips: { P3: true, P5: true } });
   runDraw(t);
-  var byeWinners = byRound(t, 1).filter(function (m) { return m.isBye; }).map(function (m) { return m.winner; });
-  ok(byeWinners.indexOf('P3') !== -1 && byeWinners.indexOf('P5') !== -1, 'VIP folga → P3 e P5 (VIPs) recebem os BYEs [byes ' + JSON.stringify(byeWinners) + ']');
+  var r1 = byRound(t, 1);
+  ok(r1.every(function (m) { return !m.isBye; }), 'VIP: N par não abre folga nem para VIP [' + r1.filter(function (m) { return m.isBye; }).length + ' bye(s)]');
+  var nomes = realNames(t);
+  ok(nomes.indexOf('P3') !== -1 && nomes.indexOf('P5') !== -1, 'VIP: P3 e P5 continuam na chave [' + JSON.stringify(nomes) + ']');
+  var vezes = {};
+  r1.forEach(function (m) { [m.p1, m.p2].forEach(function (p) { if (p) vezes[p] = (vezes[p] || 0) + 1; }); });
+  ok(vezes.P3 === 1 && vezes.P5 === 1, 'VIP: cada VIP ocupa exatamente 1 slot (sem duplicar)');
 })();
 
 // ── Categorias: 2 categorias → 2 chaves independentes, matches marcados ──

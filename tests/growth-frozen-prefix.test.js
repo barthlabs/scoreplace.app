@@ -3,10 +3,15 @@
 // Dono, 25/jul/2026: _"avisa na 9a que precisa da 10a, mas nao mexe nos outros jogos. só cria
 // jogo entre 9 e 10"_ + _"nao é só 9/10. o 17/18, 33/34... todos que passarem 1 de pow2"_.
 //
-// Numa chave em potência de 2 EXATA não há vaga: encaixar mais um só seria possível
-// redesenhando a semeadura, que é o desastre do torneio de casais ("era para eles entrarem no
-// jogo 7 sem mudar nenhum dos demais 6. mudou tudo"). Então a R1 publicada é CONGELADA, os
-// tardios entram AOS PARES num jogo novo, e só o downstream é redesenhado.
+// Numa chave com a R1 CHEIA não há vaga: encaixar mais um só seria possível redesenhando a
+// semeadura, que é o desastre do torneio de casais ("era para eles entrarem no jogo 7 sem mudar
+// nenhum dos demais 6. mudou tudo"). Então a R1 publicada é CONGELADA, os tardios entram AOS
+// PARES num jogo novo, e só o downstream é redesenhado.
+//
+// NOTA (jul/2026): "chave cheia" deixou de ser sinônimo de "potência de 2". Aquilo valia na
+// fórmula inflada, em que N virava B = próxima potência de 2 e o resto era folga. Na árvore
+// mínima a R1 tem piso(N/2) jogos normais, então TODO N PAR nasce cheio e cresce por aqui —
+// o ímpar é que deixa sobra, e para ele o recálculo normal já resolve.
 //
 // Este arquivo é a cerca das INVARIANTES — o que precisa valer em TODO cenário, e é isso que
 // distingue "a chave cresceu" de "a chave virou um grafo quebrado":
@@ -34,8 +39,15 @@ function parts(n, off) {
   return a;
 }
 
-// bases em potência de 2 = chave CHEIA, que é exatamente quando o crescimento entra
-const BASES = [2, 4, 8, 16, 32];
+// Base com R1 CHEIA = todo jogo com os dois lados reais. É exatamente quando o
+// crescimento com prefixo congelado entra.
+//
+// ANTES eram só as potências de 2: com a chave inflada até B, qualquer N que não
+// fosse potência de 2 nascia com folga na R1 (N=6 virava B=8 com 2 byes). Com a
+// ÁRVORE MÍNIMA isso mudou — a R1 tem piso(N/2) jogos normais, então TODO N PAR
+// nasce cheio e é candidato a crescer. Os ímpares são os que deixam sobra, e caem
+// no bloco de recusa no fim do arquivo.
+const BASES = [2, 4, 6, 8, 10, 12, 16, 20, 32];
 
 ['simples', 'dupla'].forEach((fmt) => {
   BASES.forEach((N) => {
@@ -98,10 +110,14 @@ const BASES = [2, 4, 8, 16, 32];
   });
 });
 
-// ── prefixo COM FOLGA não cresce: recusa explícita, nunca chave inválida ──
-// A R1 com bye/repescagem não fecha o mapeamento (nem todo jogo produz vencedor E perdedor),
-// e é justamente o caso em que o recálculo NORMAL funciona — então recusar aqui não custa nada.
-[3, 5, 6, 7].forEach((N) => {
+// ── prefixo INCOMPLETO não cresce: recusa explícita, nunca chave inválida ──
+// A R1 com sobra (folga ou repescagem) não fecha o mapeamento — nem todo jogo produz
+// vencedor E perdedor —, e é justamente o caso em que o recálculo NORMAL funciona, então
+// recusar aqui não custa nada.
+//
+// Na árvore mínima quem deixa sobra é o N ÍMPAR (piso(N/2) jogos normais + 1 posição
+// solta). N=6 saiu desta lista: hoje ele dá 3 jogos exatos e CRESCE — está nas BASES.
+[3, 5, 7, 9, 11, 15].forEach((N) => {
   const base = A.build(N, 'dupla', { participantes: parts(N), ns: 'p0' });
   const g = A.crescerComPrefixo(base.matches, parts(2, 100), 'dupla', { ns: 'p0' });
   ok(!g.ok && g.motivo === 'prefixo-com-folga',

@@ -154,16 +154,18 @@ console.log('\n── 2 duplas na espera em sequência + desfazer (_splitLateDup
   d.standbyParticipants.push({ uid: 'y1', displayName: 'Bia', name: 'Bia', ligaActive: true });
   E.resetLateGuards();
   W._formLateJoinDupla('LJ2', 'x1', 'y1');
-  // Chave cheia (8 = potência de 2): a 1ª dupla ESPERA par — é a regra do dono, não uma falha.
-  // O ponto do teste continua sendo a 2ª "criada em seguida", que antes não entrava.
-  ok(!labels(E.findDoc('LJ2')).has('Ana / Bia'), '2seq :: 1ª dupla sozinha ESPERA par (chave cheia)');
+  // Com a ÁRVORE MÍNIMA (jul/2026, o desenho novo substituiu o inflado) a 1ª dupla JÁ ENTRA
+  // sozinha: 9 entrantes dão 5 jogos e ela ocupa a vaga de sobra, jogando a repescagem. Antes,
+  // com a chave padded até 16, não havia vaga e ela tinha de esperar par. O ponto central do
+  // teste continua sendo a 2ª dupla "criada em seguida", que antes não entrava de jeito nenhum.
+  ok(labels(E.findDoc('LJ2')).has('Ana / Bia'), '2seq :: 1ª dupla sozinha JÁ ENTRA (vaga de sobra)');
   // 2ª dupla EM SEGUIDA — no doc atual (o caso que "não entrava")
   d = E.findDoc('LJ2');
   d.standbyParticipants.push({ uid: 'x2', displayName: 'Cid', name: 'Cid', ligaActive: true });
   d.standbyParticipants.push({ uid: 'y2', displayName: 'Duda', name: 'Duda', ligaActive: true });
   W._formLateJoinDupla('LJ2', 'x2', 'y2');
   ok(labels(E.findDoc('LJ2')).has('Cid / Duda'), '2seq :: ✅ 2ª dupla (EM SEGUIDA) TAMBÉM entrou');
-  ok(labels(E.findDoc('LJ2')).has('Ana / Bia'), '2seq :: ✅ e a 1ª entrou JUNTO, ao ganhar par');
+  ok(labels(E.findDoc('LJ2')).has('Ana / Bia'), '2seq :: ✅ e a 1ª segue na chave');
 
   // DESFAZER: gate off → a dupla FICA na espera; o ✕ desfaz (CF-only, casa por uid de membro).
   if (typeof W._splitLateDupla !== 'function') { ok(false, 'desfazer :: _splitLateDupla indisponível'); return; }

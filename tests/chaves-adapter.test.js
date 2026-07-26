@@ -73,7 +73,17 @@ console.log('── 1 e 2) joga a chave inteira: 1 campeão, zero órfãos, zero
     if (fmt === 'dupla') {
       ok(!terceiro, `dupla N=${N}: não deveria existir jogo de 3º/4º`);
     } else if (N >= 4) {
-      ok(!!terceiro, `simples N=${N}: faltou a disputa de 3º/4º`);
+      // A disputa de 3º/4º precisa de DOIS eliminados na penúltima rodada. Quando essa
+      // rodada tem contagem ímpar, ela vira 1 jogo normal + 1 de repescagem: o perdedor
+      // do normal vai para a repescagem (ganha outra chance) e só UM competidor é
+      // eliminado ali — não há dois para disputar o 3º lugar, e o 3º sai naturalmente
+      // como o perdedor da repescagem. Nesses N o jogo não existe, e isso é estrutural.
+      const pl = W._chaves.plano(N, 'simples');
+      const penultima = pl.rodadas.filter((r) => r.fase === 'VC' && r.ateFinalChave === 2)[0];
+      const semDisputa = !!(penultima && penultima.acao === 'repescagem');
+      if (semDisputa) ok(!terceiro,
+        `simples N=${N}: penúltima rodada tem repescagem (só 1 eliminado), não deveria haver jogo de 3º/4º`);
+      else ok(!!terceiro, `simples N=${N}: faltou a disputa de 3º/4º`);
       if (terceiro) {
         ok(!isBye(terceiro.p1) && !isBye(terceiro.p2),
           `simples N=${N}: 3º/4º ficou com slot vazio (${terceiro.p1} x ${terceiro.p2})`);
@@ -126,12 +136,22 @@ console.log('── 4) cruzar potência de 2 DECLARA a perda (não engole em sil
   const j = t.matches.find((m) => m.round === 1 && !isBye(m.p1) && !isBye(m.p2));
   j.winner = j.p1; j.scoreP1 = 6; j.scoreP2 = 0; j.resultAt = 1;
 
+  // ANTES: 16→17 dobrava a chave (B de 16 para 32) e TODOS os confrontos da R1 eram
+  // redesenhados — o resultado já lançado virava órfão e o adapter tinha de declará-lo
+  // perdido. Com a chave não inflada e emparelhamento adjacente esse ponto de ruptura
+  // ACABOU: o 17º entra como sobra da R1, os 8 jogos publicados ficam intactos e o
+  // placar continua ancorado no mesmo id. Nada se perde, em nenhum N.
   const depois = W._chavesAdapter.build(17, 'simples', { participantes: parts(17) });
   const rec = W._chavesAdapter.reconciliar(t.matches, depois.matches);
-  ok(rec.perdidos.length > 0, '16->17 deveria DECLARAR resultado perdido (redesenho total), mas devolveu 0');
+  ok(rec.perdidos.length === 0,
+    `16->17 não deveria perder resultado (a chave não dobra mais), mas perdeu ${rec.perdidos.length}`);
+  const mantido = depois.matches.find((m) => m.id === j.id);
+  ok(!!mantido && mantido.p1 === j.p1 && mantido.p2 === j.p2,
+    '16->17: o jogo já lançado manteve id e adversários');
 
   const aviso = W._chaves.avisoPotencia2(16);
-  ok(aviso.alerta === true, 'avisoPotencia2(16) deveria alertar que a próxima inscrição dobra a chave');
+  ok(aviso.alerta === false,
+    'avisoPotencia2(16) não deve mais alertar: a chave não dobra e ninguém é resorteado');
   ok(W._chaves.avisoPotencia2(11).alerta === false, 'avisoPotencia2(11) não deveria alertar');
   ok(W._chaves.podeRedesenhar({ 'VC-R1-P2': {} }).ok === false, 'podeRedesenhar deveria travar com resultado lançado');
   ok(W._chaves.podeRedesenhar({}).ok === true, 'podeRedesenhar deveria liberar sem resultado');

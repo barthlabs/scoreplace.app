@@ -90,13 +90,17 @@ upperR1Reais(t).filter((m) => !m.winner).forEach((m, i) => {
 const placar0 = placares(t);
 ok('os 4 jogos ficaram com placar', placar0.length === 4, placar0.length);
 
-// ── CATIA chega SOZINHA: espera par, e nada na chave se mexe ─────────────────
-console.log('\n── CATIA chega sozinha: chave cheia ⇒ espera par ──');
+// ── CATIA chega SOZINHA: ENTRA pela vaga de sobra, e nada na chave se mexe ───
+// Mudou em jul/2026, quando a ÁRVORE MÍNIMA substituiu a chave inflada: 9 entrantes dão 5
+// jogos (4 normais + a vaga da sobra), então o tardio sozinho não espera mais par — ele
+// ocupa a sobra e joga a REPESCAGEM contra o perdedor do 1º jogo da rodada. O que continua
+// intocável, e é o ponto deste arquivo, são os 4 placares já lançados.
+console.log('\n── CATIA chega sozinha: entra pela vaga de sobra (repescagem) ──');
 t.standbyParticipants.push(Object.assign({ _lateJoin: true }, CATIA));
 t.teamOrigins[CATIA.displayName] = 'formada'; checkInPair(t, CATIA);
 const r1 = core.integrateLateEntries(t, {});
-ok('CATIA NÃO entrou (chave cheia, falta par)', jogosDe(t, CATIA.displayName).length === 0);
-ok('e o organizador é AVISADO do porquê (falta-par)', motivos(r1).indexOf('falta-par') !== -1, motivos(r1));
+ok('CATIA ENTROU sozinha (não espera mais par)', jogosDe(t, CATIA.displayName).length === 1, jogosDe(t, CATIA.displayName).length);
+ok('sem recusa "falta-par" — ninguém fica de fora por falta de parceiro', motivos(r1).indexOf('falta-par') === -1, motivos(r1));
 ok('nenhum placar já lançado se mexeu', placares(t).join('#') === placar0.join('#'));
 
 // ── MARILIA chega: as duas entram JUNTAS, num jogo entre elas ────────────────
@@ -119,13 +123,15 @@ ok('✅ os 4 placares já lançados seguem INTACTOS (id, confronto e vencedor)',
 ok('saíram da Lista de Espera',
   !(t.standbyParticipants || []).some((p) => p && (p.displayName === CATIA.displayName || p.displayName === MARILIA.displayName)));
 
-// ── PAULO chega sozinho: a chave voltou a ficar cheia ⇒ espera de novo ───────
-console.log('\n── PAULO chega sozinho: a regra vale sempre, não só na 9ª ──');
+// ── PAULO chega sozinho: com a chave de novo cheia, ele abre a próxima sobra ─
+// A regra vale sempre, e agora é a regra INVERSA da antiga: chave cheia (10 duplas, par)
+// + 1 tardio = 11 entrantes = 6 jogos, o último sendo a vaga dele. Ninguém espera.
+console.log('\n── PAULO chega sozinho: entra também, pela nova vaga de sobra ──');
 t.standbyParticipants.push(Object.assign({ _lateJoin: true }, PAULO));
 t.teamOrigins[PAULO.displayName] = 'formada'; checkInPair(t, PAULO);
 const r3 = core.integrateLateEntries(t, {});
-ok('PAULO NÃO entrou sozinho', jogosDe(t, PAULO.displayName).length === 0);
-ok('e foi avisado do porquê', motivos(r3).indexOf('falta-par') !== -1, motivos(r3));
+ok('PAULO ENTROU sozinho', jogosDe(t, PAULO.displayName).length === 1, jogosDe(t, PAULO.displayName).length);
+ok('sem recusa "falta-par"', motivos(r3).indexOf('falta-par') === -1, motivos(r3));
 
 // ── a chave inteira fecha num campeão, sem auto-confronto nem slot morto ────
 console.log('\n── joga tudo até o fim ──');

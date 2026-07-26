@@ -68,7 +68,7 @@ function jogarTudo(t) {
 console.log('\n== 1..4) torneio EM ANDAMENTO recebe tardio: placar sobrevive, tardio joga ==');
 ['simples', 'dupla'].forEach((fmt) => {
   for (let N = 5; N <= 22; N++) {
-    if (C.plano(N).B !== C.plano(N + 1).B) continue;   // dobrar a chave é o caso 6
+    // (a chave não dobra mais: nenhum N é ponto de ruptura, todos são exercitados)
 
     const built = A.build(N, fmt, { participantes: parts(N) });
     const t = { id: 'lt', format: fmtApp(fmt), matches: built.matches };
@@ -140,7 +140,7 @@ console.log('\n== 1..4) torneio EM ANDAMENTO recebe tardio: placar sobrevive, ta
 
 console.log('== 2b) na DUPLA o tardio também tem pouso na chave inferior ==');
 [5, 9, 10, 11, 13, 20].forEach((N) => {
-  if (C.plano(N).B !== C.plano(N + 1).B) return;
+  // (a chave não dobra mais: nenhum N é ponto de ruptura)
   const built = A.build(N, 'dupla', { participantes: parts(N) });
   const t = { id: 'lt', format: 'Dupla Eliminatória', matches: built.matches };
   jogarAlguns(t, 1);
@@ -179,18 +179,73 @@ console.log('== 5) VÁRIOS tardios em sequência (gente chegando aos poucos) =='
   ok(jogarTudo(t2), `${fmt}: playout não converge depois de 7 tardios`);
 });
 
-console.log('== 6) cruzar potência de 2 NÃO aplica pela metade ==');
-['simples', 'dupla'].forEach((fmt) => {
-  const built = A.build(16, fmt, { participantes: parts(16) });
-  const t = { id: 'p2', format: fmtApp(fmt), matches: built.matches };
-  jogarAlguns(t, 2);
-  const r = A.recalcularComTardio(t.matches, 17, fmt, { participantes: parts(17) });
-  ok(r.ok === false, `${fmt} 16→17: deveria RECUSAR (redesenho total), mas aplicou`);
-  ok(r.cruzouPotencia2 === true, `${fmt} 16→17: deveria sinalizar cruzouPotencia2`);
-  ok(r.matches === null, `${fmt} 16→17: não pode devolver chave aplicada pela metade`);
-  ok(r.perdidos && r.perdidos.length > 0, `${fmt} 16→17: deveria listar o que se perde`);
-  // e o aviso existe ANTES, pra o organizador decidir com informação
-  ok(C.avisoPotencia2(16).alerta === true, 'avisoPotencia2(16) deveria alertar que a próxima dobra a chave');
+console.log('== 6) chave CHEIA (potência de 2) recebe tardio SEM redesenhar ==');
+/* Era o ponto de ruptura da fórmula inflada: com B = próxima potência de 2, o 17º
+ * inscrito dobrava B para 32, a semeadura inteira mudava e o recálculo tinha de ser
+ * RECUSADO (só cabia 1 jogo com 17 inscritos numa chave de 32). Com a árvore mínima
+ * esse ponto não existe: 17 entrantes = 9 jogos, os 8 confrontos publicados ficam
+ * intactos e o 17º apenas ocupa a posição livre no fim da rodada. Nenhum N é ponto
+ * de ruptura — é o que este bloco passa a travar. */
+[16, 32, 8].forEach((base) => {
+  ['simples', 'dupla'].forEach((fmt) => {
+    const built = A.build(base, fmt, { participantes: parts(base) });
+    const t = { id: 'p2', format: fmtApp(fmt), matches: built.matches };
+
+    // fotografa os confrontos publicados da 1ª rodada da chave principal
+    const r1 = t.matches.filter((m) => m.round === 1 && (m.bracket === 'main' || m.bracket === 'upper'));
+    ok(r1.length === base / 2, `${fmt} N=${base}: chave cheia deveria ter ${base / 2} jogos na R1, tem ${r1.length}`);
+    const publicados = {};
+    r1.forEach((m) => { publicados[m.id] = m.p1 + '|' + m.p2; });
+    ok(r1.every((m) => !m.isBye && !m.isRepechageSlot),
+      `${fmt} N=${base}: chave cheia não pode nascer com folga nem repescagem na R1`);
+
+    const jogados = jogarAlguns(t, 2);
+    ok(jogados.length === 2, `${fmt} N=${base}: não consegui lançar os 2 placares do cenário`);
+
+    const r = A.recalcularComTardio(t.matches, base + 1, fmt, { participantes: parts(base + 1) });
+    ok(r.ok === true, `${fmt} ${base}→${base + 1}: deveria APLICAR (a chave não dobra mais), recusou com "${r.motivo}"`);
+    if (!r.ok) return;
+
+    // 1) nenhum confronto publicado se moveu
+    Object.keys(publicados).forEach((id) => {
+      const m = r.matches.find((x) => x.id === id);
+      ok(!!m, `${fmt} ${base}→${base + 1}: o jogo publicado ${id} sumiu`);
+      if (m) ok(m.p1 + '|' + m.p2 === publicados[id],
+        `${fmt} ${base}→${base + 1}: confronto publicado ${id} MUDOU (${publicados[id]} → ${m.p1}|${m.p2})`);
+    });
+
+    // 2) os placares já lançados sobreviveram
+    jogados.forEach((j) => {
+      const m = r.matches.find((x) => x.id === j.id);
+      ok(m && m.winner === j.winner && m.scoreP1 === j.s1 && m.scoreP2 === j.s2,
+        `${fmt} ${base}→${base + 1}: placar de ${j.id} não sobreviveu`);
+    });
+
+    // 3) o tardio ganhou jogo de VERDADE — e por REPESCAGEM, nunca por folga.
+    //    A sobra da R1 é o último inscrito; a regra do dono proíbe folga ali.
+    const tardio = 'D' + (base + 1);
+    const seus = r.matches.filter((m) => m.p1 === tardio || m.p2 === tardio);
+    ok(seus.length > 0, `${fmt} ${base}→${base + 1}: o tardio ${tardio} ficou SEM JOGO`);
+    ok(seus.some((m) => !isBye(m.p1) && !isBye(m.p2)),
+      `${fmt} ${base}→${base + 1}: o tardio ${tardio} só tem jogo "a definir"/BYE`);
+    ok(seus.some((m) => m.isRepechageSlot),
+      `${fmt} ${base}→${base + 1}: o tardio ${tardio} deveria entrar por REPESCAGEM, não por folga`);
+
+    // 4) e a chave ainda fecha
+    const t2 = { id: 'p2', format: fmtApp(fmt), matches: r.matches };
+    ok(jogarTudo(t2), `${fmt} ${base}→${base + 1}: playout não converge`);
+  });
+
+  // o aviso prévio acompanha: não há mais o que "dobrar"
+  ok(C.avisoPotencia2(base).alerta === false,
+    `avisoPotencia2(${base}) não deve alertar: a chave não dobra e ninguém é resorteado`);
+  ok(C.avisoPotencia2(base).vagasAteDobrar === 0,
+    `avisoPotencia2(${base}).vagasAteDobrar deveria ser 0 (não existe mais dobra)`);
+  // e o delta confirma pelo motor puro: crescer não destrói confronto
+  const d = C.delta(base, base + 1, 'simples');
+  ok(d.redesenhoTotal === false, `delta(${base}→${base + 1}) não pode declarar redesenho total`);
+  ok(d.destruidos.length === 0,
+    `delta(${base}→${base + 1}) destruiu ${d.destruidos.length} confronto(s) — deveria destruir 0`);
 });
 
 console.log('== 7) REPESCAGEM já disputada: recusa com veredito, não invalida em silêncio ==');

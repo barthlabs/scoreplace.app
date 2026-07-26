@@ -1795,7 +1795,21 @@ function _updateProgressiveClassification(t) {
       // 3º/4º por desempate — exatamente o que o organizador apontou que está errado.
       // Só ranqueia por desempate quando NÃO há jogo de 3º lugar (formatos legados).
       if (!_thirdM) {
-        var semiLosers = [];
+        // v1.5.21: DEDUP por nome DENTRO do round — o mesmo tratamento que o bloco das
+        // rodadas iniciais já fazia (v3.1.29) e que faltava aqui.
+        //
+        // BUG MEDIDO: classificação com BURACO — 5 inscritos saíam nas posições 1,2,3,5,6
+        // (a 4ª vazia e um "6º lugar" num torneio de 5). Idem 6→1..7 e 9→1..10.
+        //
+        // Causa: na ÁRVORE MÍNIMA a repescagem pode cair na PRÓPRIA semi (E ímpar naquela
+        // rodada), e ela consome o perdedor do primeiro jogo normal da MESMA rodada. Quem
+        // perde o jogo normal e perde de novo a repescagem aparece como perdedor DUAS vezes
+        // no mesmo round. `placed` só é gravado depois do forEach, então não pegava o duplo
+        // — o nome entrava 2× em `semiLosers`, o contador `_runPos` avançava 2 posições e a
+        // segunda atribuição sobrescrevia a primeira: uma posição consumida por ninguém.
+        //
+        // Mantém a ÚLTIMA aparição (a derrota que de fato eliminou), igual ao outro bloco.
+        var _semiByName = {};
         matchesInRound.forEach(function(m) {
           if (!m.winner || m.winner === 'draw' || m.isBye) return;
           var stats = _getLoserStats(m);
@@ -1803,8 +1817,9 @@ function _updateProgressiveClassification(t) {
           if (placed[stats.loser]) return;
           if (_advancedPast(stats.loser, roundNum)) return; // repescado: ainda em jogo OU já classificado por uma derrota posterior
           var history = _getPlayerHistory(stats.loser);
-          semiLosers.push({ name: stats.loser, stats: stats, history: history });
+          _semiByName[stats.loser] = { name: stats.loser, stats: stats, history: history };
         });
+        var semiLosers = Object.keys(_semiByName).map(function(k) { return _semiByName[k]; });
         if (semiLosers.length > 0) {
           positionGroups.push({ posStart: _runPos, losers: semiLosers });
           semiLosers.forEach(function(e) { placed[e.name] = true; });
@@ -2406,6 +2421,49 @@ function _maybeGenerate3rdPlace(t) {
   const semiRoundNum = roundNums[roundNums.length - 2];
   const semis = allRounds[semiRoundNum] || [];
 
+  // Perdedores da semi, SEM REPETIR NOME.
+  //
+  // v1.5.21 — BUG MEDIDO (Elim Simples, N=5, 6, 9, 10, 11, 12…): o jogo de 3º lugar
+  // nascia `P3 x P3` — a MESMA pessoa dos dois lados. Na ÁRVORE MÍNIMA a penúltima
+  // rodada pode conter o jogo normal E a repescagem daquela rodada (quando E é ímpar),
+  // e a repescagem consome justamente o perdedor do jogo normal. Quem perde os dois
+  // aparece como "perdedor de semi" DUAS vezes, e `losers[0]`/`losers[1]` caíam no
+  // mesmo nome. Além do auto-confronto, isso abria BURACO na classificação: o jogo de
+  // 3º reserva as posições 3 e 4, mas a 4 nunca era preenchida (não há adversário) —
+  // 5 inscritos saíam em 1,2,3,5,6, com um "6º lugar" que não existe.
+  //
+  // E QUEM FOI REPESCADO NÃO É PERDEDOR DE SEMI. Perder um jogo da penúltima rodada
+  // deixou de significar "eliminado ali": a repescagem daquela mesma rodada devolve a
+  // vida, e quem a vence segue para a final. Sem este filtro o campeão entrava no jogo
+  // de 3º lugar — e como o 3º/4º é aplicado POR ÚLTIMO na classificação (para vencer
+  // dados contraditórios), ele SOBRESCREVIA o 1º lugar: medido em N=5, o campeão P1
+  // terminava em 4º. Critério: quem venceu qualquer jogo desta rodada em diante não foi
+  // eliminado nela.
+  const seguiuVivo = {};
+  allMatches.forEach(m => {
+    if (!m || m.bracket === 'lower' || m.bracket === 'grand' || m.isThirdPlace) return;
+    if (m.round == null || m.round < semiRoundNum) return;
+    if (m.winner && m.winner !== 'draw') seguiuVivo[m.winner] = true;
+  });
+
+  const losers = [];
+  semis
+    .filter(m => m.winner && m.winner !== 'draw' && !m.isBye)
+    .map(m => m.winner === m.p1 ? m.p2 : m.p1)
+    .filter(name => name && name !== 'TBD' && name !== 'BYE' && !seguiuVivo[name])
+    .forEach(name => { if (losers.indexOf(name) === -1) losers.push(name); });
+
+  // SEMI JÁ DECIDIDA e sem DOIS perdedores distintos ⇒ não existe disputa de 3º/4º.
+  // Só há um eliminado naquele degrau (a repescagem devolveu a vida ao outro), então
+  // o 3º sai pelo contador corrido da classificação e o 4º vem do degrau seguinte —
+  // sem jogo impossível na tela e sem posição reservada para ninguém.
+  const semisDecididas = semis.length > 0 &&
+    semis.every(m => m.winner || m.isBye || m.isSitOut);
+  if (semisDecididas && losers.length < 2) {
+    if (t.thirdPlaceMatch && !t.thirdPlaceMatch.winner) delete t.thirdPlaceMatch;
+    return;
+  }
+
   // Inicializar thirdPlaceMatch se não existir
   if (!t.thirdPlaceMatch) {
     window._appendCanonicalColumn(t, {
@@ -2421,13 +2479,6 @@ function _maybeGenerate3rdPlace(t) {
 
   // Se já tem resultado confirmado no 3º lugar, não mexer
   if (t.thirdPlaceMatch.winner) return;
-
-  // Sempre recalcular os participantes baseado no estado atual das semifinais
-  // (corrige dados legados e acompanha edições de resultado)
-  const losers = semis
-    .filter(m => m.winner && m.winner !== 'draw' && !m.isBye)
-    .map(m => m.winner === m.p1 ? m.p2 : m.p1)
-    .filter(name => name && name !== 'TBD' && name !== 'BYE');
 
   t.thirdPlaceMatch.p1 = losers.length >= 1 ? losers[0] : 'TBD';
   t.thirdPlaceMatch.p2 = losers.length >= 2 ? losers[1] : 'TBD';

@@ -50,10 +50,21 @@ console.log('── entrada tardia NÃO pode re-sortear a chave já publicada �
   const before = firstRoundSnapshot(t);
   ok(before.length === 4, 'pré: 4 jogos reais na 1ª rodada (got ' + before.length + ')');
 
-  // CHAVE CHEIA (8 = potência de 2 EXATA: 4 jogos, zero folga). Regra do dono, 25/jul/2026:
-  // _"avisa na 9a que precisa da 10a, mas nao mexe nos outros jogos. só cria jogo entre 9 e
-  // 10"_ — e vale pra família toda (9/10, 17/18, 33/34). Não há vaga livre: encaixar UM só
-  // exigiria redesenhar a semeadura, que é exatamente o desastre que este arquivo impede.
+  // CHAVE CHEIA (8 duplas: 4 jogos, zero folga).
+  //
+  // A regra de 25/jul/2026 era _"avisa na 9a que precisa da 10a… só cria jogo entre 9 e 10"_:
+  // com a chave inflada até a potência de 2 não havia vaga, e encaixar UM só exigiria
+  // redesenhar a semeadura — o desastre que este arquivo impede.
+  //
+  // Com a ÁRVORE MÍNIMA (jul/2026, o desenho novo substitui o anterior) essa restrição CAIU:
+  // 9 entrantes dão 5 jogos (4 normais + 1 para a sobra), e a sobra é a posição que o 9º
+  // ocupa. Ele entra SOZINHO, por REPESCAGEM, e os 4 confrontos publicados continuam
+  // intocados. Quando a 10ª chega, ela apenas COMPLETA aquele mesmo jogo, que deixa de ser
+  // repescagem e vira confronto normal — de novo sem mexer em nada.
+  //
+  // O invariante deste arquivo é o mesmo de sempre e continua travado abaixo: entrada tardia
+  // é SEMPRE ADITIVA, jogo publicado é INTOCÁVEL, nunca re-sortear. O que mudou é que agora
+  // ninguém precisa ficar esperando um par para poder jogar.
   const nm = 'Marcello / Karla';
   const chega = (nome, u1, n1, u2, n2) => {
     t.participants.push({ p1Uid: u1, p1Name: n1, p2Uid: u2, p2Name: n2, displayName: nome, name: nome, ligaActive: true });
@@ -61,17 +72,21 @@ console.log('── entrada tardia NÃO pode re-sortear a chave já publicada �
     t.checkedIn[u1] = 1; t.checkedIn[u2] = 1;   // presença é POR MEMBRO, nunca pelo nome da dupla
   };
 
-  // ── 9ª dupla sozinha: ESPERA. Nada na chave se move. ──
+  // ── 9ª dupla sozinha: ENTRA por repescagem. Nada na chave se move. ──
   chega(nm, 'mm', 'Marcello', 'kf', 'Karla');
   const rA = dc.integrateLateEntries(t, {});
   ok(before.every(b => firstRoundSnapshot(t).indexOf(b) !== -1),
      '9ª sozinha: os jogos ORIGINAIS seguem INTACTOS');
-  ok(all(t).filter(m => m && (m.p1 === nm || m.p2 === nm)).length === 0,
-     '9ª sozinha NÃO entra — chave cheia, precisa de par');
-  ok((rA.recusas || []).some(x => x && x.motivo === 'falta-par'),
-     '…e o organizador é AVISADO do porquê (falta-par) [' + JSON.stringify(rA.recusas) + ']');
+  const jogosDa9 = all(t).filter(m => m && (m.p1 === nm || m.p2 === nm));
+  ok(jogosDa9.length === 1, '9ª sozinha ENTRA e tem exatamente 1 jogo (got ' + jogosDa9.length + ')');
+  ok(jogosDa9.length === 1 && jogosDa9[0].isRepechageSlot,
+     '…e entra pela REPESCAGEM (a sobra da 1ª rodada é a vaga do último inscrito)');
+  ok(!(rA.recusas || []).some(x => x && x.motivo === 'falta-par'),
+     'ninguém mais fica esperando par: sem recusa "falta-par" [' + JSON.stringify(rA.recusas || []) + ']');
+  ok(firstRoundSnapshot(t).length === before.length,
+     'a 9ª não criou confronto REAL novo — ela ocupa a vaga de sobra, que ainda espera adversário');
 
-  // ── 10ª chega: as duas entram JUNTAS, num jogo novo entre elas ──
+  // ── 10ª chega: COMPLETA o jogo da 9ª (a repescagem vira confronto normal) ──
   const nm2 = 'Ana / Bia';
   chega(nm2, 'an', 'Ana', 'bi', 'Bia');
   const r = dc.integrateLateEntries(t, {});

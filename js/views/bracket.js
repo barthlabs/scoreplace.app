@@ -851,44 +851,24 @@ window._assignMatchCourt = function(tId, matchId, court) {
 //
 // @returns {null | {ready:number, falta:1|2, teams:boolean, isWaiting:fn}}
 window._lateGrowthPairGap = function (t) {
-  if (!t || !Array.isArray(t.matches) || !t.matches.length) return null;
-  // Gates canônicos, os MESMOS do coletor: vontade do organizador ("Novos Confrontos") e
-  // janela ainda aberta. Sem eles um torneio com a entrada tardia desligada mostraria
-  // "faltam 2 equipes" — promessa que o motor não cumpriria.
-  if (typeof window._allowsNewMatchups === 'function' && !window._allowsNewMatchups(t)) return null;
-  if (typeof window._lateEnrollR2Started === 'function' && window._lateEnrollR2Started(t)) return null;
-
-  var _cp = (t.currentPhaseIndex) || 0;
-  var _r1 = t.matches.filter(function (m) {
-    if (!m || (m.bracket !== 'main' && m.bracket !== 'upper') || m.round !== 1) return false;
-    return ((m.phaseIndex == null) ? 0 : m.phaseIndex) === _cp;
-  });
-  if (!_r1.length) return null;
-  // espelha o _slotVivo do chaves-adapter: vazio/TBD/BYE/"a definir" = vaga
-  var _vivo = function (v) {
-    var s = String(v == null ? '' : v);
-    return !!s && s !== 'TBD' && !/^\s*bye/i.test(s) && !/a definir/i.test(s);
-  };
-  var _cheia = _r1.every(function (m) { return !m.isBye && _vivo(m.p1) && _vivo(m.p2); });
-  if (!_cheia) return null;   // tem vaga → entra sozinho, nada a avisar
-
-  // PRONTOS = quem o motor levaria pra chave AGORA (presença por membro, dupla formada,
-  // ainda fora da chave). Mesmo coletor que a CF usa — nunca uma contagem paralela.
-  var _prontos = (typeof window._collectLateCandidates === 'function')
-    ? (window._collectLateCandidates(t) || []).map(function (x) { return x && x.e; }).filter(Boolean)
-    : [];
-  var _teams = (parseInt(t.teamSize) || 1) > 1 ||
-    (typeof window._isTeamEnrollMode === 'function' && window._isTeamEnrollMode(t.enrollmentMode));
-  var _impar = (_prontos.length % 2 === 1);
-  return {
-    ready: _prontos.length,
-    falta: _impar ? 1 : 2,
-    teams: !!_teams,
-    // chaves das entradas paradas esperando par — o sync in-place casa a etiqueta por AQUI
-    // (identidade, nunca posição: o card pode ter mudado de lugar entre um render e outro)
-    waitingKeys: _impar ? _prontos.map(window._lateEntryKey) : [],
-    isWaiting: function (p) { return _impar && _prontos.indexOf(p) !== -1; }
-  };
+  // ⛔ DESATIVADO em v1.5.21 — o motor não faz mais ninguém esperar par.
+  //
+  // Este aviso existia porque, com a chave INFLADA até a potência de 2, uma R1 cheia não
+  // tinha vaga: o tardio sozinho era recusado com 'falta-par' e só entrava quando aparecia
+  // um segundo (`crescerComPrefixo`). A ÁRVORE MÍNIMA (dono, jul/2026 — o desenho novo
+  // substitui o anterior) acabou com isso: N+1 entrantes sempre cabem em teto((N+1)/2)
+  // jogos, e o tardio ocupa a vaga de sobra jogando a repescagem. Medido em 4→5, 8→9 e
+  // 16→17: entra sozinho, sem mover nenhum confronto publicado.
+  //
+  // Na prática a recusa virou inalcançável: `recalcularComTardio` só cai em
+  // 'confronto-publicado-mudaria' se alguma `_sig` de jogo semeado mudar, e com
+  // emparelhamento adjacente `VC-R1-P2` é #3x#4 em qualquer N.
+  //
+  // Manter a faixa seria PROMETER O CONTRÁRIO do que o motor faz — o organizador leria
+  // "falta 1 equipe para novo confronto" enquanto a inscrição já entrou na chave. A função
+  // continua existindo (a UI a chama em 4 pontos, e todos já tratam null) para que a
+  // desativação seja num lugar só.
+  return null;
 };
 
 // Chave de identidade de uma entrada da espera (uids ordenados; fictício cai no nome).

@@ -81,11 +81,16 @@ console.log('== Dupla Eliminatória ==');
 // buildDupla NÃO serve em pow2: ele só chama o construtor da repescagem, que em
 // potência de 2 não roda — sobrava só a R1 (4 jogos em N=8) e o teste validava
 // meia chave. Fora de pow2 é o contrário: buildDupla é o caminho da repescagem.
-// Contagens conferidas contra a tabela do spec: N=8 → 14 jogos, N=16 → 30.
-[[8, 14], [16, 30]].forEach(([n, esperado]) => {
+// Contagens pela fórmula canônica da ÁRVORE MÍNIMA: dupla = 2N−2+repescagens.
+//   N=8  → 14 + 1 = 15. A superior 8→4→2→1 é limpa, mas a INFERIOR passa por uma
+//          rodada de E ímpar, e ali a sobra vira repescagem (ver plano(8,'dupla')).
+//   N=16 → 30 + 0 = 30: as duas chaves fecham sem nenhuma rodada ímpar.
+// Era 14 na fórmula inflada, quando a chave era padded até a potência de 2 e a
+// inferior nunca tinha rodada ímpar. O desenho novo substituiu aquele.
+[[8, 15], [16, 30]].forEach(([n, esperado]) => {
   const t = buildViaDraw('Dupla Eliminatória', n);
   const { ns, maior } = conferirBasico(t, 'dupla N=' + n);
-  ok(ns.length === esperado, `dupla N=${n}: esperado ${esperado} jogos (tabela do spec), got ${ns.length}`);
+  ok(ns.length === esperado, `dupla N=${n}: esperado ${esperado} jogos (2N−2+rep), got ${ns.length}`);
 
   // a Grande Final leva o ÚLTIMO número (a final-extra é condicional e fica fora)
   const grand = ns.filter((m) => m.bracket === 'grand' && !m.isExtra && !m.condicional);

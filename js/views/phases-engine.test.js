@@ -445,16 +445,17 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   // (js/views/chaves.js): chave = f(N, formato), sobre potência de 2, com a regra do
   // MENOR esforço decidindo bye × repescagem. Não há mais rodada 0 nem `repFill`.
   //
-  // Em N=24: B=32 → vagas=8, perdedores=8 → EMPATE, e empate vai pra BYE. Logo 24
-  // resolve com 8 folgas e ZERO repescagem — não com 12 jogos de repescagem na R1.
+  // A chave não é mais inflada até potência de 2 (jul/2026). N=24 é PAR, então a R1
+  // é exata: 12 jogos, todos reais, nenhuma folga e nenhuma repescagem. Antes, 24
+  // virava uma chave de 32 com 16 posições, das quais 8 eram folga.
   var r1 = ms.filter(function (m) { return m.round === 1; });
   var reais = r1.filter(function (m) { return !m.isBye; });
-  eq(reais.length, 8, 'N=24: 8 jogos reais na R1 (as outras 8 posições são folga)');
-  ok(r1.length === 16, 'N=24: R1 tem 16 posições (B/2 com B=32), got ' + r1.length);
+  eq(reais.length, 12, 'N=24: 12 jogos reais na R1 (24 entrantes, todos jogam)');
+  ok(r1.length === 12, 'N=24: R1 tem 12 posições (teto(24/2)), got ' + r1.length);
+  ok(!ms.some(function (m) { return m.isBye; }),
+    'N=24: nenhuma folga — N par tem chave exata na primeira rodada');
   ok(!ms.some(function (m) { return m.repFill && m.repFill.length; }),
-    'N=24: ZERO repFill — a repescagem virou estrutural, sem vaga pendente');
-  ok(!ms.some(function (m) { return m.isRepechageSlot; }),
-    'N=24 resolve por BYE (empate vagas × perdedores), então não há vaga de repescagem');
+    'N=24: ZERO repFill — a repescagem é estrutural, sem vaga pendente');
   // todos os 24 entram, ninguém é cortado
   var dentro = {};
   ms.forEach(function (m) {

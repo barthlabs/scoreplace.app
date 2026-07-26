@@ -116,10 +116,20 @@ console.log('\n── p2=standby → chave de 4, 2 standby, ZERO BYE ──');
   ok('ZERO BYE', byes(t) === 0, 'byes=' + byes(t));
   ok('2 no standby', (t.standbyParticipants || []).length === 2, 'standby=' + (t.standbyParticipants || []).length); }
 
-console.log('\n── p2=bye → chave de 8 com BYE (escolha do organizador) ──');
+console.log('\n── p2=bye → NINGUÉM sai da chave (e, na árvore mínima, ninguém folga) ──');
+// Era "chave de 8 com BYE": a decisão `bye` significava inflar até a potência de 2 ACIMA e
+// preencher as vagas com folga. Esse desenho foi SUBSTITUÍDO (dono, jul/2026 — menos
+// repescagens e poucos byes): a chave passou a ser a árvore mínima, e 6 entrantes dão 3 jogos
+// exatos. Não sobra vaga para preencher, então `bye` não produz folga nenhuma.
+//
+// O que o bloco continua provando, e é o que importa na PARIDADE: a decisão do organizador
+// chega à CF e é respeitada no ponto em que ela ainda difere de verdade — `bye` mantém os 6
+// na chave, enquanto `standby` (bloco acima) manda 2 para a lista de espera.
 { const t = mkSolos(6); const r = core.drawInitial(t, { idStamp: 13, decisions: { p2: { option: 'bye' } } });
   ok('sorteou', !!(r && r.ok), 'reason=' + (r && r.reason || '—'));
-  ok('há BYE', byes(t) > 0, 'byes=' + byes(t)); }
+  ok('os 6 continuam na chave (nada vai pro standby)', (t.standbyParticipants || []).length === 0, 'standby=' + (t.standbyParticipants || []).length);
+  ok('R1 = 3 jogos (árvore mínima de 6)', r1(t) === 3, 'R1=' + r1(t));
+  ok('ZERO folga — N par não deixa sobra pra preencher', byes(t) === 0, 'byes=' + byes(t)); }
 
 console.log('\n══════════ FLEXIBILIZAR: forma duplas dos avulsos (bug #2 — auto-move não drena antes) ══════════');
 // Bug #2 achado neste ciclo: o auto-move (step 3) drenava os avulsos pra espera ANTES do
