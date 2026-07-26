@@ -812,8 +812,17 @@ window._lateGrowthGapBanner = function (gap) {
   var alvo = gap.teams
     ? (n === 1 ? '1 equipe' : '2 equipes')
     : (n === 1 ? '1 jogador' : '2 jogadores');
-  return '<div style="margin-bottom:0.9rem;padding:9px 12px;'
-    + 'background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.32);border-radius:12px;">'
+  // STICKY (v1.5.11, pedido do dono): rolando a lista de cards, o aviso gruda no topo em vez
+  // de sumir — é ele que diz quantas entradas ainda faltam ENQUANTO o organizador arrasta os
+  // cards lá embaixo. Fórmula CANÔNICA do app (a mesma da barra de filtro): topbar + dropdown
+  // do hambúrguer + back-header, −1px pro subpixel da topbar não abrir vão.
+  // Ver [[project_canonical_filter_bar_sticky]]. O fundo TEM de ser opaco (a tinta âmbar sobre
+  // var(--bg-card)) — translúcido deixaria os cards passarem por baixo quando grudado.
+  return '<div style="position:sticky;z-index:6;'
+    + 'top:calc(var(--topbar-h, 61px) + var(--hamburger-dd-h, 0px) + var(--backheader-h, 0px) - 1px);'
+    + 'margin-bottom:0.9rem;padding:9px 12px;'
+    + 'background:linear-gradient(rgba(245,158,11,0.10),rgba(245,158,11,0.10)),var(--bg-card);'
+    + 'border:1px solid rgba(245,158,11,0.32);border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.35);">'
     + '<div style="min-width:0;">'
     + '<div style="font-weight:800;font-size:0.86rem;color:#fbbf24;">⏳ ' + alvo + ' para novo confronto</div>'
     + '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">A chave está cheia — o jogo novo abre com duas entradas de uma vez, sem mexer em nenhum confronto já publicado.</div>'
