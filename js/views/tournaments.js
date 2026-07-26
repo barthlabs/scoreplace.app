@@ -101,7 +101,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
       : (((typeof window._pName === 'function') ? window._pName(p) : '') || nm);
     var _splitCall = (ctx && typeof ctx.splitDupla === 'function')
       ? ctx.splitDupla(_safeAttr(tIdStr), _safeAttr(_m1Id), _safeAttr(_m2Id), _safeAttr(_entryName))
-      : ('window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_m1Id) + '\',\'' + _safeAttr(_m2Id) + '\')');
+      : ('window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_m1Id) + '\',\'' + _safeAttr(_m2Id) + '\',this)');
     var desfazerBtn = (!draggable && isOrg)
       ? '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();' + _splitCall + '" title="Desfazer dupla" style="--cx-size:24px;">✕</button>'
       : '';
@@ -354,39 +354,51 @@ window._updateDuplaCardInPlace = function (tId, uid, playerName) {
     // mudou de verdade → o gate de _tournamentDetailSig re-renderiza. Só re-referencia e segue.
     if (stash.tRef && stash.tRef !== t) stash.tRef = t;
     if ((window._checkInFilter || 'all') !== stash.filter) return false;
-    // acha a entrada que CONTÉM o jogador tocado (por uid ou nome)
-    var match = null;
+    // v1.5.8: acha TODAS as entradas que contêm o jogador tocado — não a PRIMEIRA. Quando a
+    // mesma pessoa aparece em mais de uma entrada (roster corrompido por dupla duplicada), o
+    // "primeira que achar" repintava o card ERRADO: o dono marcava a Patrícia no card do Nei
+    // e quem acendia era o card da Lucia — parecia que a presença TROCAVA gente de dupla.
+    // Repintar todos é correto também no caso são: aí só existe uma.
+    var matches = [];
     for (var i = 0; i < stash.entries.length; i++) {
       var e = stash.entries[i]; if (!e || !e.p) continue;
       var whos = (typeof window._expandParticipantWho === 'function') ? window._expandParticipantWho(e.p) : [];
+      var hit = false;
       for (var j = 0; j < whos.length; j++) {
         var w = whos[j] || {};
-        if (uid && String(w.uid || '') === String(uid)) { match = e; break; }
-        if (!match && playerName && String(w.name || '') === String(playerName)) match = e;
+        if (uid && String(w.uid || '') === String(uid)) { hit = true; break; }
+        if (!uid && playerName && String(w.name || '') === String(playerName)) { hit = true; break; }
       }
-      if (match) break;
+      if (hit) matches.push(e);
     }
-    if (!match) return false;
+    if (!matches.length) return false;
     // reconstrói a presença contra o t ATUAL (o dctx stashado fecha sobre o t do render)
     var dctx = stash.dctx || {};
     if (typeof window._rollCallPresenceCtx === 'function' && window._lastRcOpts) {
       try { var rc = window._rollCallPresenceCtx(t, window._lastRcOpts); dctx = Object.assign({}, dctx, { cardPresence: rc.cardPresence, memberPresence: rc.memberPresence }); } catch (_eRc) {}
     }
-    var html = window._duplaCard(t, match.p, match.draggable, dctx);
-    if (!html || !String(html).trim()) return false;   // filtro escondeu → re-render
-    var keyStr = window._duplaEntryKey(match.p);
-    var _kEsc = (window.CSS && CSS.escape) ? CSS.escape(keyStr) : keyStr.replace(/["\\]/g, '\\$&');
-    var card = document.querySelector('.participant-card[data-dupla-card="1"][data-card-key="' + _kEsc + '"]');
-    if (!card) return false;
-    var tmp = document.createElement('div'); tmp.innerHTML = String(html).trim();
-    var fresh = tmp.firstElementChild; if (!fresh) return false;
-    card.replaceWith(fresh);
-    try {
-      var imgs = fresh.querySelectorAll('img[data-player-name]');
-      imgs.forEach(function (img) { var n = (img.getAttribute('data-player-name') || '').toLowerCase(); var real = window._playerPhotoCache && window._playerPhotoCache[n]; if (real && real.indexOf('dicebear.com') === -1) img.src = real; });
-    } catch (_e) {}
-    if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(fresh); } catch (_e) {} }
-    return true;
+    // Repinta CADA card da pessoa. Se QUALQUER um dos cards esperados não estiver no DOM
+    // (filtro/roster mudou), devolve false → re-render completo, que é sempre correto.
+    var painted = 0;
+    for (var k = 0; k < matches.length; k++) {
+      var match = matches[k];
+      var html = window._duplaCard(t, match.p, match.draggable, dctx);
+      if (!html || !String(html).trim()) return false;   // filtro escondeu → re-render
+      var keyStr = window._duplaEntryKey(match.p);
+      var _kEsc = (window.CSS && CSS.escape) ? CSS.escape(keyStr) : keyStr.replace(/["\\]/g, '\\$&');
+      var card = document.querySelector('.participant-card[data-dupla-card="1"][data-card-key="' + _kEsc + '"]');
+      if (!card) return false;
+      var tmp = document.createElement('div'); tmp.innerHTML = String(html).trim();
+      var fresh = tmp.firstElementChild; if (!fresh) return false;
+      card.replaceWith(fresh);
+      painted++;
+      try {
+        var imgs = fresh.querySelectorAll('img[data-player-name]');
+        imgs.forEach(function (img) { var n = (img.getAttribute('data-player-name') || '').toLowerCase(); var real = window._playerPhotoCache && window._playerPhotoCache[n]; if (real && real.indexOf('dicebear.com') === -1) img.src = real; });
+      } catch (_e) {}
+      if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(fresh); } catch (_e) {} }
+    }
+    return painted > 0;
   } catch (_e) { return false; }
 };
 
@@ -1029,6 +1041,12 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
         .then(function (res) {
             // MESMA regra do desfazer: só comemora se a CF gravou de verdade (notFound = não achou).
             var _r = (res && res.data) ? res.data : res;
+            // v1.5.8: a CF passou a RECUSAR formar dupla com quem já está em outra (era o
+            // caminho que duplicava a pessoa no roster e sumia com o parceiro dela).
+            if (_r && _r.alreadyPaired) {
+                if (typeof showNotification !== 'undefined') showNotification('Já está em dupla', (_r.who ? (_r.who + ' já') : 'Essa pessoa já') + ' faz parte de outra dupla. Desfaça a dupla atual antes de formar uma nova.', 'warning');
+                return;
+            }
             if (_r && _r.notFound) {
                 if (typeof showNotification !== 'undefined') showNotification('Não foi possível formar a dupla', 'O servidor não encontrou os dois inscritos. Recarregue e tente de novo.', 'warning');
                 return;
@@ -1049,9 +1067,15 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
 // dashboard/participants quebrava antes de abrir o torneio). Casa a dupla pela IDENTIDADE de cada
 // membro (uid; só fictício sem conta usa nome). id1/id2 = (p1Uid||p1Name) e (p2Uid||p2Name);
 // chamada antiga só com o nome inteiro (id2 vazio) cai no match por nome. CF-ONLY: só dispara.
-window._splitDupla = function(tId, id1, id2) {
+window._splitDupla = function(tId, id1, id2, btnEl) {
+    // v1.5.8 (dono): desfazer NÃO é instantâneo (vai e volta da CF) e o ✕ não dava sinal
+    // nenhum — o organizador clicava de novo achando que travou. Cinza + spinner no próprio
+    // ✕ até a CF responder; solto por EVENTO em TODA saída. [[project_busy_button_canonical]]
+    var _btn = (btnEl && btnEl.nodeType === 1) ? btnEl : null;
+    var _busyDone = function () { if (_btn && window._spinButtonDone) window._spinButtonDone(_btn); };
+    if (_btn && typeof window._spinButton === 'function') window._spinButton(_btn, '');
     var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
-    if (!t) return;
+    if (!t) { _busyDone(); return; }
     var arr = Array.isArray(t.participants) ? t.participants : [];
     var idx;
     if (id2 != null && String(id2) !== '') {
@@ -1071,7 +1095,7 @@ window._splitDupla = function(tId, id1, id2) {
             return (p.displayName || p.name || '') === teamName || _resolved === teamName;
         });
     }
-    if (idx === -1) return;
+    if (idx === -1) { _busyDone(); return; }
     var entry = arr[idx];
     // CF-ONLY: o cliente NÃO desfaz nem grava — só LÊ nomes/uids (pra notificar) e dispara a CF
     // splitPair (computeSplitPair: 2 solos + enrollSeq + memberUids, atômico + replica pro SB).
@@ -1083,9 +1107,10 @@ window._splitDupla = function(tId, id1, id2) {
     var p2Uid  = entry.p2Uid || '';
     // IDENTIDADE = uid (o nome só identifica o fictício). O storage é só-uid, então exigir os
     // dois NOMES aqui abortava o desfazer sempre que o perfil ainda não tinha resolvido.
-    if (!(p1Uid || p1Name) || !(p2Uid || p2Name)) return;
+    if (!(p1Uid || p1Name) || !(p2Uid || p2Name)) { _busyDone(); return; }
     if (!(window.FirestoreDB && typeof window.FirestoreDB.splitPair === 'function')) {
         if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível desfazer a dupla agora — tente de novo.', 'warning');
+        _busyDone();
         return;
     }
     var _hasBracketSplit = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
@@ -1093,6 +1118,7 @@ window._splitDupla = function(tId, id1, id2) {
         // A CF devolve notFound quando NÃO achou/NÃO gravou. Comemorar assim mesmo (como era)
         // dava o pior sintoma possível: toast "Dupla desfeita" e a dupla intacta, pra sempre.
         var _r = (res && res.data) ? res.data : res;
+        _busyDone();
         if (_r && _r.notFound) {
             if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', 'O servidor não encontrou esta dupla no torneio. Recarregue e tente de novo.', 'warning');
             return;
@@ -1109,6 +1135,7 @@ window._splitDupla = function(tId, id1, id2) {
         if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', p1Name + ' e ' + p2Name + ' voltaram para Sem Dupla.', 'info');
         if (typeof window._softRefreshView === 'function') window._softRefreshView();
     }).catch(function (e) {
+        _busyDone();
         if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', (e && e.message) || '', 'warning');
     });
 };

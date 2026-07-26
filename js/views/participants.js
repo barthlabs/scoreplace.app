@@ -758,7 +758,12 @@ window._presenceCardBusy = function (key, on) {
   if (!key) return;
   try {
     var esc = String(key).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    var cards = document.querySelectorAll('.participant-card[data-card-key="' + esc + '"]');
+    // v1.5.8: card de DUPLA tem chave "pair:<uid1>~<uid2>" — o seletor exato nunca casava, e
+    // marcar presença na chamada de duplas (SB Casais) não mostrava spinner nenhum. Agora o
+    // card cuja chave CONTÉM a identidade da pessoa também entra (uid/nome não têm ~).
+    var sel = '.participant-card[data-card-key="' + esc + '"], ' +
+              '.participant-card[data-dupla-card="1"][data-card-key*="' + esc + '"]';
+    var cards = document.querySelectorAll(sel);
     for (var i = 0; i < cards.length; i++) { if (on) cards[i].classList.add('presence-saving'); else cards[i].classList.remove('presence-saving'); }
   } catch (e) {}
 };

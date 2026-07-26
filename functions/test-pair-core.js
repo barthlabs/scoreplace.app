@@ -1,6 +1,6 @@
 /* test-pair-core.js — LÓGICA PURA de formar/desfazer dupla (CF). Sem Firebase/emulador.
  * Espelha _formDuplaByUids / _splitDupla do cliente. node functions/test-pair-core.js */
-const { computeFormPair, computeSplitPair } = require('./pair-core');
+const { computeFormPair, computeSplitPair, findDuplicatePeople } = require('./pair-core');
 
 let pass = 0, fail = 0;
 function ok(name, cond, got) {
@@ -59,6 +59,53 @@ console.log('\n── formar: alvo inexistente / mesmo ──');
   const t = mkT();
   ok('uid inexistente → notFound', computeFormPair(t, { uid1: 'uidA', name1: 'Ana', uid2: 'uidZ', name2: 'Zé' }).outcome === 'notFound');
   ok('mesmo uid → notFound', computeFormPair(t, { uid1: 'uidA', name1: 'Ana', uid2: 'uidA', name2: 'Ana' }).outcome === 'notFound');
+}
+
+// ── REGRESSÃO v1.5.8 — "Torneio de Casais: a presença embaralhou as duplas" ────────────
+// Visto AO VIVO: Lucia aparecia em "Fernando/Lucia" E em "Lucia/Patrícia"; Patrícia em
+// "Nei/Patrícia" E na mesma. Causa: computeFormPair casava a entrada por `p.uid` SEM checar
+// se ela era DUPLA — e numa dupla o uid de topo é o do p1. Formar dupla com quem já era p1
+// engolia a entrada inteira (o parceiro SUMIA do roster); quem era p2 não era achado e
+// acabava pareado de novo → a MESMA pessoa em duas duplas.
+console.log('\n── formar: quem já está em dupla NÃO pode ser pareado de novo (v1.5.8) ──');
+{
+  const t = mkT();
+  const f = computeFormPair(t, { uid1: 'uidA', name1: 'Ana', uid2: 'uidB', name2: 'Bia' });
+  const t2 = Object.assign({}, t, f.updateData);
+
+  // p1 da dupla (uid de topo da entrada) — era ESTE que consumia a dupla inteira
+  const r1 = computeFormPair(t2, { uid1: 'uidA', name1: 'Ana', uid2: 'uidC', name2: 'Cid' });
+  ok('p1 já em dupla → alreadyPaired', r1.outcome === 'alreadyPaired', r1.outcome);
+  ok('não grava nada', r1.updateData === null);
+  ok('roster intacto (dupla + Cid)', r1.participants.length === 2, 'len=' + r1.participants.length);
+  ok('Bia NÃO sumiu do roster',
+     r1.participants.some((p) => p.p1Uid === 'uidA' && p.p2Uid === 'uidB'));
+
+  // p2 da dupla — o lado que "não era achado" e virava dupla nova (a Lucia/Patrícia do print)
+  const r2 = computeFormPair(t2, { uid1: 'uidB', name1: 'Bia', uid2: 'uidC', name2: 'Cid' });
+  ok('p2 já em dupla → alreadyPaired', r2.outcome === 'alreadyPaired', r2.outcome);
+  ok('não cria 2ª dupla com a mesma pessoa', r2.updateData === null);
+
+  // fictício (sem uid) também é protegido — a identidade dele é o nome
+  const t3 = { participants: [
+    { p1Uid: '', p1Name: 'Paulo', p2Uid: '', p2Name: 'Elide' }, 'Zeca'
+  ], teamOrigins: {} };
+  const r3 = computeFormPair(t3, { uid1: '', name1: 'Paulo', uid2: '', name2: 'Zeca' });
+  ok('fictício já em dupla → alreadyPaired', r3.outcome === 'alreadyPaired', r3.outcome);
+}
+
+console.log('\n── auditoria: findDuplicatePeople ──');
+{
+  // o estado REAL do doc quando o dono reportou (uma pessoa em 2 entradas)
+  const t = { participants: [
+    { uid: 'uL', p1Uid: 'uL', p2Uid: 'uP' },
+    { uid: 'uF', p1Uid: 'uF', p2Uid: 'uL' },
+    { uid: 'uN', p1Uid: 'uN', p2Uid: 'uP' },
+  ] };
+  const dup = findDuplicatePeople(t).map((d) => d.id).sort();
+  ok('acusa uL e uP duplicados', dup.join(',') === 'uL,uP', dup.join(','));
+  ok('roster são → nenhum duplicado',
+     findDuplicatePeople({ participants: [{ uid: 'a' }, { uid: 'b' }] }).length === 0);
 }
 
 console.log('\n── desfazer dupla (computeSplitPair) ──');

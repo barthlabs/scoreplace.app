@@ -28,6 +28,32 @@ function entryName(p) {
   return typeof p === 'string' ? p : ((p && (p.displayName || p.name)) || '');
 }
 
+// A entrada é uma DUPLA (estrutural — nunca por "/" no nome). Espelha _isPairEntry do
+// cliente. Ver [[project_dupla_entry_structural_not_slash]].
+function isPairEntry(p) {
+  return !!(p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
+}
+
+// TODAS as identidades que uma entrada carrega: uid de cada slot, e o NOME só de quem não
+// tem uid (fictício — é a única identidade dele). Usado pra provar que uma pessoa não está
+// em NENHUMA outra entrada antes de formar dupla. [[project_uid_identity_canon_locked]]
+function entryIdentities(p) {
+  if (typeof p === 'string') return [String(p).trim()].filter(Boolean);
+  if (!p || typeof p !== 'object') return [];
+  var out = [];
+  function add(v) { if (v && out.indexOf(String(v)) === -1) out.push(String(v)); }
+  if (isPairEntry(p)) {
+    add(p.p1Uid); add(p.p2Uid);
+    if (!p.p1Uid) add(String(p.p1Name || '').trim());
+    if (!p.p2Uid) add(String(p.p2Name || '').trim());
+  } else {
+    add(p.uid);
+    if (!p.uid) add(String(entryName(p) || '').trim());
+  }
+  if (Array.isArray(p.participants)) p.participants.forEach(function (s) { if (s) add(s.uid); });
+  return out;
+}
+
 // Espelha window._teamFormation.dropRequestsInvolving (js/views/team-formation.js:56).
 function dropRequestsInvolving(pairRequests, uids) {
   if (!Array.isArray(pairRequests)) return pairRequests;
@@ -54,10 +80,34 @@ function computeFormPair(data, opts) {
   var uid2 = opts.uid2 || '', name2 = opts.name2 || '';
   var arr = asParticipantsArray(data).slice();
 
+  // ⚠️ SÓ ENTRADA SOLO PODE VIRAR DUPLA (v1.5.8 — a "mistura" do Torneio de Casais).
+  // O findIndex antigo era `p.uid === uid1` SEM checar se a entrada é dupla. Numa dupla o
+  // `uid` de topo é o do p1 → formar dupla com quem já era p1 CONSUMIA a entrada inteira
+  // (splice) e o parceiro dele SUMIA do roster; e quem era p2 não era achado por lugar
+  // nenhum, então acabava pareado de novo → a MESMA pessoa em DUAS duplas (visto ao vivo:
+  // Lucia em "Fernando/Lucia" e em "Lucia/Patrícia"; Patrícia em "Nei/Patrícia" e na mesma).
+  // Agora: (a) só casa SOLO; (b) se qualquer um dos dois já está em ALGUMA dupla, aborta.
+  var idA = uid1 || String(name1 || '').trim();
+  var idB = uid2 || String(name2 || '').trim();
+  var pairedIds = {};
+  arr.forEach(function (p) {
+    if (!isPairEntry(p)) return;
+    entryIdentities(p).forEach(function (k) { pairedIds[k] = true; });
+  });
+  if (pairedIds[idA] || pairedIds[idB]) {
+    return {
+      outcome: 'alreadyPaired',
+      who: pairedIds[idA] ? (name1 || idA) : (name2 || idB),
+      participants: asParticipantsArray(data), updateData: null
+    };
+  }
+
   var fi1 = arr.findIndex(function (p) {
+    if (isPairEntry(p)) return false;
     return uid1 ? (typeof p === 'object' && p && p.uid === uid1) : (entryName(p) === name1);
   });
   var fi2 = arr.findIndex(function (p) {
+    if (isPairEntry(p)) return false;
     return uid2 ? (typeof p === 'object' && p && p.uid === uid2) : (entryName(p) === name2);
   });
   if (fi1 === -1 || fi2 === -1 || fi1 === fi2) {
@@ -170,4 +220,19 @@ function computeSplitPair(data, opts) {
   };
 }
 
-module.exports = { computeFormPair, computeSplitPair, dropRequestsInvolving, markDuplasManualUpdate };
+// Auditoria do roster: devolve as pessoas (uid ou nome de fictício) que aparecem em MAIS de
+// uma entrada — o estado impossível que a v1.5.8 passou a bloquear na formação. Usado pelo
+// teste e por script de reparo; não muta nada.
+function findDuplicatePeople(data) {
+  var count = {}, out = [];
+  asParticipantsArray(data).forEach(function (p) {
+    entryIdentities(p).forEach(function (k) { count[k] = (count[k] || 0) + 1; });
+  });
+  Object.keys(count).forEach(function (k) { if (count[k] > 1) out.push({ id: k, times: count[k] }); });
+  return out;
+}
+
+module.exports = {
+  computeFormPair, computeSplitPair, dropRequestsInvolving, markDuplasManualUpdate,
+  isPairEntry, entryIdentities, findDuplicatePeople
+};

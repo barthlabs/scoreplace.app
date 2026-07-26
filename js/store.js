@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.5.7';
+window.SCOREPLACE_VERSION = '1.5.8';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -5253,6 +5253,16 @@ window._spinButton = function(btn, label) {
   if (!btn || btn.getAttribute('data-spinning') === '1') return;
   var original = btn.innerHTML;
   var _oFilter = btn.style.filter, _oCursor = btn.style.cursor, _oOpacity = btn.style.opacity;
+  // v1.5.8: guarda o restore no próprio elemento pra _spinButtonDone soltar por EVENTO (a
+  // função terminou), como manda o cânone do botão ocupado. O setTimeout de 8s abaixo
+  // continua valendo só como rede pra quem não chama o done. [[project_busy_button_canonical]]
+  btn._spinRestore = function () {
+    if (btn.getAttribute('data-spinning') !== '1') return;
+    btn.innerHTML = original;
+    btn.disabled = false;
+    btn.style.filter = _oFilter; btn.style.cursor = _oCursor; btn.style.opacity = _oOpacity;
+    btn.removeAttribute('data-spinning');
+  };
   btn.setAttribute('data-spinning', '1');
   btn.disabled = true;
   // v4.1.12: enquanto processa, o botão fica CINZA (desatura a cor) + spinner + texto —
@@ -5271,6 +5281,11 @@ window._spinButton = function(btn, label) {
       btn.removeAttribute('data-spinning');
     }
   }, 8000);
+};
+// Solta o botão QUANDO A FUNÇÃO TERMINA (evento) — não no timeout cego. Todo call site que
+// sabe o fim (settle da promise, guard que aborta) deve chamar isto. [[project_busy_button_canonical]]
+window._spinButtonDone = function (btn) {
+  try { if (btn && typeof btn._spinRestore === 'function') btn._spinRestore(); } catch (e) {}
 };
 
 // v4.1.14: SPIN do botão SORTEAR — o cinza "Sorteando…" PERSISTE até aparecer a
