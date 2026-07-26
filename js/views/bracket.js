@@ -805,6 +805,37 @@ window._lateGrowthPairGap = function (t) {
   };
 };
 
+// ─── Empilhar sticky ABAIXO da barra de busca (v1.5.12) ──────────────────────────────
+// A barra canônica de busca (`fbwrap-*`, store.js) já é sticky no MESMO topo (topbar +
+// dropdown + back-header) e tem z-index 30. Sem descontar a altura dela, o aviso grudava
+// ATRÁS da barra e sumia — foi o que o dono viu. Aqui a altura REAL da barra visível
+// (+ margem) é medida e publicada em `--stickybar-h`; o aviso soma isso no seu `top`.
+// Medir, não chutar: a barra tem 44px de controle (mínimo de toque iOS) + paddings que já
+// mudaram duas vezes. Em telas sem barra o valor é 0 e a fórmula colapsa sozinha.
+// Ver [[project_canonical_filter_bar_sticky]].
+window._syncStickyBarOffset = function () {
+  try {
+    var h = 0;
+    var bars = document.querySelectorAll('[id^="fbwrap-"]');
+    for (var i = 0; i < bars.length; i++) {
+      var b = bars[i];
+      if (!b.getClientRects().length) continue;                       // não renderizada
+      var cs = getComputedStyle(b);
+      if (cs.position !== 'sticky') continue;
+      var alt = b.getBoundingClientRect().height + (parseFloat(cs.marginBottom) || 0);
+      if (alt > h) h = alt;
+    }
+    document.documentElement.style.setProperty('--stickybar-h', Math.ceil(h) + 'px');
+  } catch (e) {}
+};
+// guardado: este arquivo também é carregado fora do browser (harness headless), onde
+// `window` é um sandbox sem addEventListener — sem a guarda, o load inteiro explodia e
+// TODAS as globais do bracket sumiam. Foi o smoke de globais que pegou.
+if (!window._stickyBarOffsetWired && typeof window.addEventListener === 'function') {
+  window._stickyBarOffsetWired = true;
+  window.addEventListener('resize', function () { window._syncStickyBarOffset(); });
+}
+
 // Faixa do topo do box: "2 novas equipes para novo confronto" / "1 nova equipe para novo confronto".
 window._lateGrowthGapBanner = function (gap) {
   if (!gap) return '';
@@ -818,8 +849,10 @@ window._lateGrowthGapBanner = function (gap) {
   // do hambúrguer + back-header, −1px pro subpixel da topbar não abrir vão.
   // Ver [[project_canonical_filter_bar_sticky]]. O fundo TEM de ser opaco (a tinta âmbar sobre
   // var(--bg-card)) — translúcido deixaria os cards passarem por baixo quando grudado.
+  // mede a barra de busca DEPOIS que este HTML aterrissa no DOM (aqui ainda é string)
+  setTimeout(function () { if (typeof window._syncStickyBarOffset === 'function') window._syncStickyBarOffset(); }, 0);
   return '<div style="position:sticky;z-index:6;'
-    + 'top:calc(var(--topbar-h, 61px) + var(--hamburger-dd-h, 0px) + var(--backheader-h, 0px) - 1px);'
+    + 'top:calc(var(--topbar-h, 61px) + var(--hamburger-dd-h, 0px) + var(--backheader-h, 0px) + var(--stickybar-h, 0px) - 1px);'
     + 'margin-bottom:0.9rem;padding:9px 12px;'
     + 'background:linear-gradient(rgba(245,158,11,0.10),rgba(245,158,11,0.10)),var(--bg-card);'
     + 'border:1px solid rgba(245,158,11,0.32);border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.35);">'
