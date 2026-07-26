@@ -1338,16 +1338,19 @@
       });
       return n;
     }
-    function createBtn(call, created) {
-      var cls = created ? 'btn btn-outline btn-sm hover-lift' : 'btn btn-success btn-sm hover-lift';
-      // Rotulo CURTO em tela estreita: "➕ Criar categoria" nao cabe numa coluna de
-      // 50% no celular — era ele que empurrava a coluna Masculino pra fora. O texto
-      // longo volta acima de 520px. Duas versoes no DOM + CSS decide (nao JS): o
-      // relatorio re-renderiza sozinho e um teste de largura em JS ficaria defasado.
-      var lbl = created
-        ? '<span class="er-lbl-full">↩ Reverter</span><span class="er-lbl-short">↩</span>'
-        : '<span class="er-lbl-full">➕ Criar categoria</span><span class="er-lbl-short">➕ cat.</span>';
-      return '<button type="button" onclick="event.stopPropagation();' + call + '" class="' + cls + '" style="min-width:0;">' + lbl + '</button>';
+    // v1.5.16 (dono): TOGGLE no lugar do botão "➕ cat." — "vai funcionar melhor e ocupar menos
+    // espaço. sem texto algum. ligar o toggle ativa a categoria equivalente." A semântica já era
+    // de liga/desliga (os handlers se chamam _erToggle*), e o botão gastava largura preciosa numa
+    // coluna de 50% no celular — era ele que empurrava a coluna Masculino pra fora. O toggle é o
+    // componente canônico do app (.toggle-switch), então herda tamanho/foco/toque de tudo o mais.
+    // Sem texto VISÍVEL, mas com title/aria-label: leitor de tela e tooltip não podem sumir junto.
+    function createToggle(call, on, rotulo) {
+      var _t = _esc(rotulo || '');
+      return '<label class="toggle-switch toggle-sm" title="' + _t + '" aria-label="' + _t + '" '
+        + 'style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" '
+        + 'onclick="event.stopPropagation();">'
+        + '<input type="checkbox"' + (on ? ' checked' : '') + ' onclick="event.stopPropagation();' + call + '">'
+        + '<span class="toggle-slider"></span></label>';
     }
 
     // Ordena: EDITADOS (âmbar, ainda não salvos) vão pro FINAL; entre os demais,
@@ -1399,7 +1402,8 @@
       // pessoas em C no torneio) e "A (0)" SEM botao. Mesmo numero na tela, comportamento
       // diferente = parece bug. Pedido do dono: tem que ter em todas.
       var btn = (sk !== '__none__')
-        ? createBtn('window._erToggleSkill(\'' + tIdEsc + '\',\'' + sk + '\',this)', createdSkills.indexOf(sk) !== -1)
+        ? createToggle('window._erToggleSkill(\'' + tIdEsc + '\',\'' + sk + '\',this)', createdSkills.indexOf(sk) !== -1,
+            (createdSkills.indexOf(sk) !== -1 ? 'Desativar' : 'Ativar') + ' a categoria ' + sk)
         : '';
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
         'style="border:1.5px solid ' + tint + ';border-radius:10px;padding:8px 10px;background:var(--bg-darker,rgba(0,0,0,0.15));">' +
@@ -1408,7 +1412,10 @@
     }
     // Cabeçalho do gênero (drop = só gênero) + botão criar categoria por gênero.
     function ghead(icon, gKey, name, color, tot) {
-      var btn = (tot >= MIN_CAT) ? createBtn('window._erToggleGender(\'' + tIdEsc + '\',this)', genderOn) : '';
+      var btn = (tot >= MIN_CAT)
+        ? createToggle('window._erToggleGender(\'' + tIdEsc + '\',this)', genderOn,
+            (genderOn ? 'Desativar' : 'Ativar') + ' as categorias Feminino e Masculino')
+        : '';
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + gKey + '\',\'\')" ' +
         'style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:17px;font-weight:800;color:' + color + ';border-bottom:2px solid ' + color + ';padding-bottom:6px;">' +
         '<span>' + icon + ' ' + name + ' <span style="opacity:0.8;font-size:15px;">(' + tot + ')</span></span>' + btn + '</div>';
@@ -1429,14 +1436,15 @@
     var mistoStrip = '<div style="margin-bottom:10px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid rgba(168,85,247,0.55);border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
       '<span style="min-width:0;"><span style="font-size:17px;font-weight:800;color:#a855f7;">⚥ Misto' + (mistoOn ? ' <span style="opacity:0.8;font-size:15px;">(' + total + ')</span>' : '') + '</span> ' +
       '<span style="font-size:13px;color:var(--text-muted);">categoria única — fem e masc jogam juntos, não são duas categorias</span></span>' +
-      createBtn('window._erToggleGenderMisto(\'' + tIdEsc + '\',this)', mistoOn) + '</div>';
+      createToggle('window._erToggleGenderMisto(\'' + tIdEsc + '\',this)', mistoOn,
+        (mistoOn ? 'Desativar' : 'Ativar') + ' a categoria Misto') + '</div>';
     // "Categorias no torneio" — resultado das formalizações + contagem (acima do total).
     var formalCats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
     var catsBoxInner = formalCats.length
       ? '<div style="display:flex;flex-wrap:wrap;gap:8px;">' + formalCats.map(function (c) {
           return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:16px;font-weight:700;padding:6px 14px;border-radius:20px;background:rgba(99,102,241,0.16);color:var(--text-bright,#fff);border:1px solid rgba(99,102,241,0.4);">' + _esc(c) + ' <span style="opacity:0.7;">(' + catCount(c) + ')</span></span>';
         }).join('') + '</div>'
-      : '<span style="font-size:15px;color:var(--text-muted);">Nenhuma categoria formal — o sorteio mistura todos. Use os botões “Criar categoria” abaixo.</span>';
+      : '<span style="font-size:15px;color:var(--text-muted);">Nenhuma categoria formal — o sorteio mistura todos. Ligue os toggles abaixo para ativar as categorias.</span>';
     var catsBox = '<div style="background:var(--bg-darker,rgba(0,0,0,0.18));border:1px solid var(--border-color);border-radius:12px;padding:12px 14px;margin-bottom:12px;">' +
       '<div style="font-size:15px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary,#c8cdd6);margin-bottom:9px;">🗂️ Categorias no torneio</div>' + catsBoxInner + '</div>';
     var totalBar = '<div style="font-size:18px;font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;">Total de inscritos: ' + total + '</div>';
@@ -1466,8 +1474,18 @@
     var out = []; genders.forEach(function (g) { skills.forEach(function (s) { out.push(g + ' ' + s); }); }); return out;
   }
   // Feedback imediato no botão clicado (cinza "Criando…"/"Revertendo…") sem re-render.
+  // v1.5.16: o controle virou TOGGLE (input dentro do label) — escrever textContent nele
+  // apagaria o próprio input. Agora trava e esmaece o toggle inteiro até o re-render da matriz
+  // (que vem logo em seguida e devolve o estado real). Mantém o caminho do <button> pra quem
+  // ainda passe um. [[project_busy_button_canonical]]
   function _erSetBtnBusy(btn, reverting) {
     if (!btn) return;
+    if (btn.tagName === 'INPUT') {
+      btn.disabled = true;
+      var lab = btn.closest ? btn.closest('.toggle-switch') : null;
+      if (lab) { lab.style.opacity = '0.55'; lab.style.cursor = 'wait'; lab.style.pointerEvents = 'none'; }
+      return;
+    }
     btn.disabled = true;
     btn.className = 'btn btn-outline btn-sm';
     btn.textContent = reverting ? '⏳ Revertendo…' : '⏳ Criando…';

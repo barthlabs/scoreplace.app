@@ -1707,14 +1707,7 @@ html, body,
   overscroll-behavior: contain;
 }
 
-/* Análise de Inscritos — rótulo do botão de categoria por largura. Em tela estreita
-   as 2 colunas de gênero têm ~50% cada, e "➕ Criar categoria" não cabe: era ele que
-   empurrava a coluna Masculino pra fora da tela. As duas versões vão no DOM e o CSS
-   escolhe — nada de medir largura em JS (o relatório re-renderiza sozinho e a medida
-   ficaria defasada). Ver createBtn em tournaments-enrollment-report.js. */
-.er-lbl-short { display: inline; }
-.er-lbl-full { display: none; }
-@media (min-width: 520px) {
-  .er-lbl-short { display: none; }
-  .er-lbl-full { display: inline; }
-}
+/* (v1.5.16) `.er-lbl-short/.er-lbl-full` REMOVIDOS: existiam pro rótulo do botão
+   "➕ Criar categoria" da Análise de Inscritos caber na coluna de 50% do celular. O botão
+   virou TOGGLE sem texto (createToggle), então o problema de largura deixou de existir e as
+   classes ficaram sem nenhum consumidor em JS. */
