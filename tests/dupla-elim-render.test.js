@@ -24,18 +24,21 @@ console.log('\n== Dupla Eliminatória — saída observável ==');
   // continua estrutural — o que mudou é que não se completa mais até B.
   //
   //   inflada até B=16:  4 - 4 - 2 - 2 - 1 - 1   (com 2 equipes avançando sem jogar)
-  //   árvore mínima:     4 - 4 - 3 - 2 - 1       (14 duplas, sem inflar)
+  //   árvore mínima:     3 - 4 - 3 - 2 - 1       (14 duplas, sem inflar)
   //
-  // A inferior encolhe porque cada rodada da superior manda piso(E/2) para baixo, e não
-  // mais um número fixado pelo tamanho da chave inflada.
-  eq(cad, [4, 4, 3, 2, 1], 'chave inferior de 14 = árvore mínima (sem inflar até potência de 2)');
+  // A 1ª rodada da inferior recebe MENOS que as seguintes por causa da NORMALIZAÇÃO DA R2
+  // (jul/2026): dos 7 perdedores da 1ª superior, 1 é REPESCADO para completar a R2 até 8,
+  // então só 6 descem naquele momento (3 jogos). Ele desce depois, se perder na R2 — por
+  // isso a inferior CRESCE de 3 para 4 antes de encolher. Não é anomalia: é a descida
+  // adiada do repescado chegando junto com as quedas da 2ª superior.
+  eq(cad, [3, 4, 3, 2, 1], 'chave inferior de 14 = árvore mínima com a R2 normalizada');
   ok(cad[cad.length - 1] === 1, 'última rodada inferior = 1 jogo (Final da inferior)');
-  // A cadência é monotônica não-crescente e termina em 1: cada rodada da inferior
-  // entrega teto(E/2) sobreviventes, então nunca cresce e sempre converge para o
-  // campeão da inferior, que vai à grande final.
-  for (let i = 1; i < cad.length; i++) {
+  // A cadência CONVERGE para 1. Ela não é mais monotônica desde a normalização da R2:
+  // a descida dos repescados é adiada, então a inferior pode crescer UMA vez (a 1ª para
+  // a 2ª rodada) antes de encolher. Da 2ª em diante nunca mais cresce.
+  for (let i = 2; i < cad.length; i++) {
     ok(cad[i] <= cad[i - 1],
-      `inferior cresceu da rodada ${i} para a ${i + 1} (${cad[i - 1]} → ${cad[i]}) — deveria só encolher`);
+      `inferior cresceu da rodada ${i} para a ${i + 1} (${cad[i - 1]} → ${cad[i]}) — depois da 2ª só encolhe`);
   }
   ok(cad.length >= 2 && cad[cad.length - 2] === 2,
     'penúltima rodada da inferior = 2 jogos (semifinal da inferior)');

@@ -38,6 +38,7 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
 const teto = (x) => Math.ceil(x / 2);
 const piso = (x) => Math.floor(x / 2);
+const pow2Acima = (n) => { let p = 1; while (p < n) p *= 2; return p; };
 
 console.log('── 1) a RECORRÊNCIA: teto(E/2) jogos, sobem teto, descem piso — N=2..64 ──');
 ['simples', 'dupla'].forEach((fmt) => {
@@ -49,10 +50,14 @@ console.log('── 1) a RECORRÊNCIA: teto(E/2) jogos, sobem teto, descem piso 
     sup.forEach((r, i) => {
       ok(r.jogos === teto(r.E), `${fmt} N=${N} VC-R${r.rodada}: E=${r.E} deveria dar ${teto(r.E)} jogos, deu ${r.jogos}`);
       ok(r.sobe === teto(r.E), `${fmt} N=${N} VC-R${r.rodada}: deveriam subir ${teto(r.E)}, sobem ${r.sobe}`);
-      ok(r.desce === piso(r.E), `${fmt} N=${N} VC-R${r.rodada}: deveriam descer ${piso(r.E)}, descem ${r.desce}`);
+      // A 1ª rodada desce MENOS quando há normalização da R2: os repescados seguem
+      // vivos na superior, então a descida deles é ADIADA para o jogo da R2.
+      const repAqui = (r.rodada === 1) ? (p.repR2 || 0) : 0;
+      ok(r.desce === piso(r.E) - repAqui, `${fmt} N=${N} VC-R${r.rodada}: deveriam descer ${piso(r.E) - repAqui}, descem ${r.desce}`);
       ok(r.impar === (r.E % 2 === 1), `${fmt} N=${N} VC-R${r.rodada}: flag ímpar errada`);
       const prox = sup[i + 1];
-      if (prox) ok(prox.E === r.sobe, `${fmt} N=${N}: VC-R${prox.rodada} recebe ${prox.E} mas VC-R${r.rodada} sobe ${r.sobe}`);
+      if (prox) ok(prox.E === r.sobe + repAqui,
+        `${fmt} N=${N}: VC-R${prox.rodada} recebe ${prox.E}, esperado ${r.sobe + repAqui} (sobem ${r.sobe} + ${repAqui} repescados)`);
     });
     // a superior termina com exatamente 1 sobrevivente — o campeão da chave
     const ultima = sup[sup.length - 1];
@@ -68,6 +73,26 @@ console.log('── 1) a RECORRÊNCIA: teto(E/2) jogos, sobem teto, descem piso 
 
     // B deixou de ser a potência de 2: a chave não é mais inflada
     ok(p.B === N, `${fmt} N=${N}: B deveria ser o próprio N (chave não inflada), veio ${p.B}`);
+
+    // ── NORMALIZAÇÃO DA R2 (regra do dono, jul/2026) ─────────────────────────────
+    // A 2ª rodada fecha em POTÊNCIA DE 2, completando com repescados da 1ª. É o que
+    // zera as folgas do MEIO da chave: daí em diante é halving puro (8→4→2→1).
+    // Sem isso, a Confra dava 14/7/4/2/1 (Ouro) e 13/7/4/2/1 (Prata), com folga na
+    // R3 — o organizador via "3 jogos" numa rodada de 4, porque folga não vira card.
+    const r2 = sup[1];
+    if (r2) {
+      ok((r2.E & (r2.E - 1)) === 0, `${fmt} N=${N}: a R2 deveria receber potência de 2, recebe ${r2.E}`);
+      ok(r2.E === Math.max(2, pow2Acima(sup[0].sobe)),
+        `${fmt} N=${N}: R2 recebe ${r2.E}, esperado ${Math.max(2, pow2Acima(sup[0].sobe))} (pot. de 2 acima dos ${sup[0].sobe} que sobem)`);
+      ok(!r2.impar, `${fmt} N=${N}: a R2 nunca pode ficar ímpar (E=${r2.E})`);
+      // e da R3 em diante é halving puro: nenhuma rodada ímpar, nenhuma intervenção
+      sup.slice(2).forEach((r) => {
+        ok(!r.impar, `${fmt} N=${N}: VC-R${r.rodada} ficou ímpar (E=${r.E}) — a R2 normalizada deveria deixar o resto limpo`);
+        ok(r.acao === null, `${fmt} N=${N}: VC-R${r.rodada} tem ação '${r.acao}' — depois da R2 não deveria haver folga nem repescagem`);
+      });
+    }
+    ok(p.repR2 >= 0 && p.repR2 <= N - sup[0].sobe,
+      `${fmt} N=${N}: repR2=${p.repR2} fora do disponível (${N - sup[0].sobe} eliminados na R1)`);
   }
 });
 
@@ -77,16 +102,24 @@ for (let N = 4; N <= 64; N++) {
   const sup = p.rodadas.filter((r) => r.fase === 'VC');
   const inf = p.rodadas.filter((r) => r.fase === 'PD');
   ok(inf.length === p.rodadasInf, `N=${N}: rodadasInf=${p.rodadasInf} mas há ${inf.length} rodadas na inferior`);
-  // cada rodada da inferior recebe os vivos da anterior + as quedas da superior daquele momento
-  let vivos = 0;
-  inf.forEach((r) => {
-    const daSup = sup.filter((s) => s.rodada === r.aposSup)[0];
-    const caem = daSup ? daSup.desce : 0;
-    ok(r.E === vivos + caem,
-      `N=${N} PD-R${r.rodada}: deveria receber ${vivos}+${caem}=${vivos + caem}, recebeu ${r.E}`);
+  // Cada rodada da inferior recebe os vivos da anterior + TODAS as quedas ainda não
+  // consumidas. A fila importa: desde a normalização da R2 uma rodada da superior pode
+  // soltar UM perdedor só, e com 1 não se abre rodada na inferior — esse perdedor espera
+  // a próxima queda em vez de sumir (era assim que ele ficava órfão).
+  let vivos = 0, pendentes = 0;
+  const porApos = {};
+  inf.forEach((r) => { porApos[r.aposSup] = r; });
+  const ultimoApos = inf.length ? inf[inf.length - 1].aposSup : 0;
+  for (let k = 1; k <= ultimoApos; k++) {
+    const daSup = sup.filter((x) => x.rodada === k)[0];
+    pendentes += daSup ? daSup.desce : 0;
+    const r = porApos[k];
+    if (!r) continue;
+    ok(r.E === vivos + pendentes,
+      `N=${N} PD-R${r.rodada}: deveria receber ${vivos}+${pendentes}=${vivos + pendentes}, recebeu ${r.E}`);
     ok(r.jogos === teto(r.E), `N=${N} PD-R${r.rodada}: E=${r.E} deveria dar ${teto(r.E)} jogos, deu ${r.jogos}`);
-    vivos = r.sobe;
-  });
+    vivos = r.sobe; pendentes = 0;
+  }
   ok(vivos === 1, `N=${N}: a inferior deveria terminar em 1 campeão, terminou em ${vivos}`);
 }
 
@@ -94,15 +127,15 @@ console.log('── 2) tabela oficial de plano(N), N = 8..16 ──');
 // Gerada do motor e conferida contra a recorrência à mão. Se um número mudar aqui,
 // o desenho mudou — e mudar desenho é decisão do dono, não efeito colateral.
 const TABELA = {
-  8:  { rodadasSup: 3, rodadasInf: 4, teto: 2, sByes: 0, sRep: 0, sModo: 'exata',      sJogos: 7,  dByes: 0, dRep: 1, dModo: 'repescagem', dJogos: 15 },
-  9:  { rodadasSup: 4, rodadasInf: 5, teto: 2, sByes: 1, sRep: 2, sModo: 'misto',      sJogos: 10, dByes: 2, dRep: 3, dModo: 'misto',      dJogos: 19 },
-  10: { rodadasSup: 4, rodadasInf: 5, teto: 2, sByes: 1, sRep: 1, sModo: 'misto',      sJogos: 10, dByes: 2, dRep: 3, dModo: 'misto',      dJogos: 21 },
-  11: { rodadasSup: 4, rodadasInf: 5, teto: 2, sByes: 0, sRep: 2, sModo: 'repescagem', sJogos: 12, dByes: 1, dRep: 3, dModo: 'misto',      dJogos: 23 },
-  12: { rodadasSup: 4, rodadasInf: 5, teto: 3, sByes: 0, sRep: 1, sModo: 'repescagem', sJogos: 12, dByes: 0, dRep: 2, dModo: 'repescagem', dJogos: 24 },
-  13: { rodadasSup: 4, rodadasInf: 5, teto: 3, sByes: 1, sRep: 1, sModo: 'misto',      sJogos: 13, dByes: 2, dRep: 1, dModo: 'misto',      dJogos: 25 },
-  14: { rodadasSup: 4, rodadasInf: 5, teto: 3, sByes: 1, sRep: 0, sModo: 'bye',        sJogos: 13, dByes: 3, dRep: 0, dModo: 'bye',        dJogos: 26 },
-  15: { rodadasSup: 4, rodadasInf: 5, teto: 3, sByes: 0, sRep: 1, sModo: 'repescagem', sJogos: 15, dByes: 1, dRep: 1, dModo: 'misto',      dJogos: 29 },
-  16: { rodadasSup: 4, rodadasInf: 5, teto: 4, sByes: 0, sRep: 0, sModo: 'exata',      sJogos: 15, dByes: 0, dRep: 0, dModo: 'exata',      dJogos: 30 },
+  8:  { rodadasSup: 3, rodadasInf: 4, teto: 2, sByes: 0, sRep: 0, sRepR2: 0, sModo: 'exata',      sJogos: 7,  dByes: 0, dRep: 1, dRepR2: 0, dJogos: 15 },
+  9:  { rodadasSup: 4, rodadasInf: 4, teto: 2, sByes: 0, sRep: 1, sRepR2: 3, sModo: 'repescagem', sJogos: 12, dByes: 2, dRep: 1, dRepR2: 3, dJogos: 20 },
+  10: { rodadasSup: 4, rodadasInf: 5, teto: 2, sByes: 0, sRep: 0, sRepR2: 3, sModo: 'exata',      sJogos: 12, dByes: 2, dRep: 0, dRepR2: 3, dJogos: 21 },
+  11: { rodadasSup: 4, rodadasInf: 5, teto: 2, sByes: 0, sRep: 1, sRepR2: 2, sModo: 'repescagem', sJogos: 13, dByes: 2, dRep: 1, dRepR2: 2, dJogos: 23 },
+  12: { rodadasSup: 4, rodadasInf: 5, teto: 3, sByes: 0, sRep: 0, sRepR2: 2, sModo: 'exata',      sJogos: 13, dByes: 1, dRep: 0, dRepR2: 2, dJogos: 24 },
+  13: { rodadasSup: 4, rodadasInf: 5, teto: 3, sByes: 0, sRep: 1, sRepR2: 1, sModo: 'repescagem', sJogos: 14, dByes: 2, dRep: 1, dRepR2: 1, dJogos: 26 },
+  14: { rodadasSup: 4, rodadasInf: 5, teto: 3, sByes: 0, sRep: 0, sRepR2: 1, sModo: 'exata',      sJogos: 14, dByes: 1, dRep: 0, dRepR2: 1, dJogos: 27 },
+  15: { rodadasSup: 4, rodadasInf: 5, teto: 3, sByes: 0, sRep: 1, sRepR2: 0, sModo: 'repescagem', sJogos: 15, dByes: 1, dRep: 1, dRepR2: 0, dJogos: 29 },
+  16: { rodadasSup: 4, rodadasInf: 5, teto: 4, sByes: 0, sRep: 0, sRepR2: 0, sModo: 'exata',      sJogos: 15, dByes: 0, dRep: 0, dRepR2: 0, dJogos: 30 },
 };
 Object.keys(TABELA).map(Number).forEach((N) => {
   const t = TABELA[N], s = plano(N, 'simples'), d = plano(N, 'dupla');
@@ -114,23 +147,25 @@ Object.keys(TABELA).map(Number).forEach((N) => {
   ok(s.modo === t.sModo, `N=${N} simples modo ${s.modo} != ${t.sModo}`);
   ok(d.byes === t.dByes, `N=${N} dupla byes ${d.byes} != ${t.dByes}`);
   ok(d.repescagens === t.dRep, `N=${N} dupla repescagens ${d.repescagens} != ${t.dRep}`);
-  ok(d.modo === t.dModo, `N=${N} dupla modo ${d.modo} != ${t.dModo}`);
+  ok(s.repR2 === t.sRepR2, `N=${N} simples repR2 ${s.repR2} != ${t.sRepR2}`);
+  ok(d.repR2 === t.dRepR2, `N=${N} dupla repR2 ${d.repR2} != ${t.dRepR2}`);
   ok(chave(N, 'simples').totalJogos === t.sJogos, `N=${N} simples jogos ${chave(N, 'simples').totalJogos} != ${t.sJogos}`);
   ok(chave(N, 'dupla').totalJogos === t.dJogos, `N=${N} dupla jogos ${chave(N, 'dupla').totalJogos} != ${t.dJogos}`);
 });
 
-console.log('── 3) contagem de jogos: simples = N−1+rep (N=2..64), dupla = 2N−2+rep (N=4..64) ──');
-// Cada jogo elimina exatamente 1 competidor; a repescagem devolve uma vida, então
-// custa 1 jogo a mais. N=2 e N=3 na dupla são degenerados (não há chave inferior
+console.log('── 3) contagem: simples = N−1+rep+repR2 (N=2..64), dupla = 2N−2+rep+repR2 (N=4..64) ──');
+// Cada jogo elimina exatamente 1 competidor; cada vida devolvida custa 1 jogo a mais —
+// tanto a repescagem da sobra (`repescagens`) quanto os repescados que completam a R2
+// até a potência de 2 (`repR2`). N=2 e N=3 na dupla são degenerados (não há chave inferior
 // completa nem grande final), por isso a fórmula da dupla começa em 4.
 for (let N = 2; N <= 64; N++) {
   const c = chave(N, 'simples');
-  const esperado = N - 1 + c.plano.repescagens;
+  const esperado = N - 1 + c.plano.repescagens + c.plano.repR2;
   ok(c.totalJogos === esperado, `N=${N} simples total ${c.totalJogos} != ${esperado}`);
 }
 for (let N = 4; N <= 64; N++) {
   const c = chave(N, 'dupla');
-  const esperado = 2 * N - 2 + c.plano.repescagens;
+  const esperado = 2 * N - 2 + c.plano.repescagens + c.plano.repR2;
   ok(c.totalJogos === esperado, `N=${N} dupla total ${c.totalJogos} != ${esperado}`);
 }
 
@@ -247,8 +282,11 @@ console.log('── 9) o caso N=11 (simples) por extenso ──');
   ok(par(r1[5]) === '11', `N=11: a sobra deveria ser o seed #11, veio ${par(r1[5])}`);
 
   const p = plano(11, 'simples');
-  ok(JSON.stringify(p.rodadas.map((r) => r.jogos)) === JSON.stringify([6, 3, 2, 1]),
-    `N=11 simples: rodadas ${JSON.stringify(p.rodadas.map((r) => r.jogos))} (esperado 6,3,2,1)`);
+  // 6 na R1; a R2 é NORMALIZADA: os 6 que sobem + 2 repescados = 8 → 4 jogos → 2 → 1.
+  ok(JSON.stringify(p.rodadas.map((r) => r.jogos)) === JSON.stringify([6, 4, 2, 1]),
+    `N=11 simples: rodadas ${JSON.stringify(p.rodadas.map((r) => r.jogos))} (esperado 6,4,2,1)`);
+  ok(p.repR2 === 2, `N=11: repR2 deveria ser 2 (6 sobem → 8), veio ${p.repR2}`);
+  ok(p.byes === 0, `N=11: ZERO folga na chave inteira, veio ${p.byes}`);
   // 11 jogam a R1 inteira: 10 nos jogos normais + a sobra na repescagem. Ninguém folga.
   const jogamR1 = r1.reduce((s, j) => s + (j.tipo === 'normal' ? 2 : 1), 0);
   ok(jogamR1 === 11, `N=11: deveriam jogar a R1 os 11 inscritos, jogam ${jogamR1}`);
@@ -259,11 +297,17 @@ console.log('── 9b) o caso canônico: 12 duplas (validado pelo dono) ──'
   const p = plano(12, 'dupla'), c = chave(12, 'dupla');
   const sup = p.rodadas.filter((r) => r.fase === 'VC').map((r) => r.jogos);
   const inf = p.rodadas.filter((r) => r.fase === 'PD').map((r) => r.jogos);
-  ok(JSON.stringify(sup) === JSON.stringify([6, 3, 2, 1]), `12 duplas: superior ${JSON.stringify(sup)} (esperado 6,3,2,1)`);
-  ok(JSON.stringify(inf) === JSON.stringify([3, 3, 2, 2, 1]), `12 duplas: inferior ${JSON.stringify(inf)} (esperado 3,3,2,2,1)`);
+  // Superior 6/4/2/1: os 6 vencedores da R1 + 2 repescados = 8 na R2 (normalização),
+  // e daí em diante halving puro. Confirmado pelo dono ao canonizar o padrão da R2.
+  ok(JSON.stringify(sup) === JSON.stringify([6, 4, 2, 1]), `12 duplas: superior ${JSON.stringify(sup)} (esperado 6,4,2,1)`);
+  ok(JSON.stringify(inf) === JSON.stringify([2, 3, 3, 2, 1]), `12 duplas: inferior ${JSON.stringify(inf)} (esperado 2,3,3,2,1)`);
   ok(c.totalJogos === 24, `12 duplas: ${c.totalJogos} jogos (esperado 24)`);
-  ok(p.byes === 0, `12 duplas: ${p.byes} folgas (esperado ZERO)`);
-  ok(p.repescagens === 2, `12 duplas: ${p.repescagens} repescagens (esperado 2)`);
+  ok(p.repR2 === 2, `12 duplas: repR2 ${p.repR2} (esperado 2)`);
+  ok(p.repescagens === 0, `12 duplas: ${p.repescagens} repescagens de sobra (esperado 0)`);
+  // a SUPERIOR sai sem folga nenhuma; a folga que resta mora na chave inferior, que
+  // segue a recorrência normal (a regra da R2 é da chave principal)
+  ok(p.rodadas.filter((r) => r.fase === 'VC' && r.acao === 'bye').length === 0,
+    '12 duplas: ZERO folga na chave SUPERIOR');
   ok(!!c.porId['GF'], '12 duplas: sem grande final');
 }
 

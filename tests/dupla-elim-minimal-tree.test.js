@@ -70,14 +70,18 @@ console.log('── CASO CANÔNICO: 12 duplas (o que o dono validou) ──');
   ok(/dupla/i.test(t.format), 'o mock compilou como DUPLA ELIMINATÓRIA (não Simples): ' + t.format);
 
   const e = estrutura(t);
-  ok(jogosDe(e, 'upper') === '6/3/2/1', 'superior = 6/3/2/1, veio ' + jogosDe(e, 'upper'));
-  ok(jogosDe(e, 'lower') === '3/3/2/2/1', 'inferior = 3/3/2/2/1, veio ' + jogosDe(e, 'lower'));
+  // Superior 6/4/2/1: a R2 é NORMALIZADA até a potência de 2 — os 6 vencedores da R1
+  // + 2 repescados = 8 entrantes → 4 jogos, e daí em diante halving puro. (Era 6/3/2/1
+  // antes da normalização; o dono canonizou o padrão da R2 em 27/jul.)
+  ok(jogosDe(e, 'upper') === '6/4/2/1', 'superior = 6/4/2/1, veio ' + jogosDe(e, 'upper'));
+  ok(jogosDe(e, 'lower') === '2/3/3/2/1', 'inferior = 2/3/3/2/1, veio ' + jogosDe(e, 'lower'));
   ok(jogosDe(e, 'grand') === '1', 'grande final = 1 jogo, veio ' + jogosDe(e, 'grand'));
 
-  const totBye = Object.keys(e).reduce((s, b) => s + e[b].reduce((x, r2) => x + r2.bye, 0), 0);
-  const totRep = Object.keys(e).reduce((s, b) => s + e[b].reduce((x, r2) => x + r2.rep, 0), 0);
-  ok(totBye === 0, '12 duplas: ZERO folga na chave inteira, veio ' + totBye);
-  ok(totRep === 2, '12 duplas: exatamente 2 repescagens, veio ' + totRep);
+  // A chave SUPERIOR sai sem folga nenhuma (é o que a normalização da R2 garante). A
+  // inferior segue a recorrência normal, então ali ainda pode haver folga.
+  const byeSup = (e.upper || []).reduce((x, r2) => x + r2.bye, 0);
+  ok(byeSup === 0, '12 duplas: ZERO folga na chave SUPERIOR, veio ' + byeSup);
+  ok(plano(12, 'dupla').repR2 === 2, '12 duplas: 2 repescados completam a R2 até 8');
 
   const disputados = all(t).filter(m => !m.isThirdPlace && !m.isExtra && !m.condicional && !m.isBye).length;
   ok(disputados === 24, '12 duplas: 24 jogos de verdade, veio ' + disputados);
@@ -104,8 +108,8 @@ for (let N = 4; N <= 24; N++) {
 
   // jogos REALMENTE disputados = 2N−2+repescagens (a folga não é jogo)
   const disputados = all(t).filter(m => !m.isThirdPlace && !m.isExtra && !m.condicional && !m.isBye).length;
-  ok(disputados === 2 * N - 2 + p.repescagens,
-    'N=' + N + ': ' + disputados + ' jogos disputados, esperado ' + (2 * N - 2 + p.repescagens) + ' (2N−2+rep)');
+  ok(disputados === 2 * N - 2 + p.repescagens + p.repR2,
+    'N=' + N + ': ' + disputados + ' jogos disputados, esperado ' + (2 * N - 2 + p.repescagens + p.repR2) + ' (2N−2+rep+repR2)');
 
   // a 1ª rodada da SUPERIOR nunca folga — é a posição do último inscrito
   const supR1 = (e.upper || [])[0];

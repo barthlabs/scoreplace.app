@@ -46,8 +46,12 @@ console.log('\n== 1) a REGRA: intervenção onde E é ímpar, folga longe do fim
         `${fmt} N=${n}: FOLGA em ${r.fase}R${r.rodada}, a ${r.ateFinalChave} rodada(s) do fim da chave`);
       // topologia não depende da política: folga e repescagem dão os mesmos números
       ok(r.sobe === Math.ceil(r.E / 2), `${fmt} N=${n} ${r.fase}R${r.rodada}: sobem ${r.sobe} != teto(E/2)`);
-      if (r.fase === 'VC') ok(r.desce === Math.floor(r.E / 2),
-        `${fmt} N=${n} ${r.fase}R${r.rodada}: descem ${r.desce} != piso(E/2)`);
+      // A 1ª rodada desce MENOS quando a R2 é normalizada até a potência de 2: os
+      // repescados escolhidos ali seguem VIVOS na superior, então a descida deles para a
+      // inferior é adiada para o jogo da R2 (senão estariam nas duas chaves ao mesmo tempo).
+      var _repAqui = (r.fase === 'VC' && r.rodada === 1) ? (p.repR2 || 0) : 0;
+      if (r.fase === 'VC') ok(r.desce === Math.floor(r.E / 2) - _repAqui,
+        `${fmt} N=${n} ${r.fase}R${r.rodada}: descem ${r.desce} != piso(E/2)-${_repAqui}`);
     });
     ok(p.byes <= p.tetoFolgas, `${fmt} N=${n}: ${p.byes} folgas > teto ${p.tetoFolgas} (3 a cada 12)`);
   }
@@ -58,10 +62,17 @@ console.log('\n== 1) a REGRA: intervenção onde E é ímpar, folga longe do fim
   ok(p.byes === 0 && p.repescagens === 0,
     `N=${n} simples (potência de 2): esperado 0 folgas / 0 repescagens, got ${p.byes}/${p.repescagens}`);
 });
-// 12 duplas: as duas rodadas ímpares caem em semifinais, onde folga é proibida →
-// zero folga, duas repescagens. É a chave que o dono desenhou (sup 6/3/2/1).
-ok(C.plano(12, 'dupla').byes === 0, 'N=12 dupla: nenhuma folga (as ímpares são semifinais)');
-ok(C.plano(12, 'dupla').repescagens === 2, 'N=12 dupla: exatamente 2 repescagens');
+// 12 duplas: com a R2 normalizada (6 sobem + 2 repescados = 8), a chave SUPERIOR sai
+// 6/4/2/1 e sem folga nenhuma. A folga que sobra mora na inferior, que segue a
+// recorrência normal — a regra da R2 é da chave principal.
+(function () {
+  var p12 = C.plano(12, 'dupla');
+  ok(p12.repR2 === 2, 'N=12 dupla: 2 repescados completam a R2 até 8 (got ' + p12.repR2 + ')');
+  ok(p12.rodadas.filter(function (r) { return r.fase === 'VC' && r.acao === 'bye'; }).length === 0,
+    'N=12 dupla: ZERO folga na chave SUPERIOR');
+  ok(p12.rodadas.filter(function (r) { return r.fase === 'VC'; }).map(function (r) { return r.jogos; }).join('/') === '6/4/2/1',
+    'N=12 dupla: superior 6/4/2/1');
+})();
 
 console.log('== 1b) a repescagem sai da PRÓPRIA rodada, sem revanche e sem descida dupla ==');
 ['simples', 'dupla'].forEach(function (fmt) {
@@ -88,13 +99,17 @@ console.log('== 2) o perdedor do jogo-fonte CHEGA na vaga de repescagem (motor r
   var built = A.build(n, 'simples', { participantes: parts(n) });
   var t = { id: 'r', format: 'Eliminatórias Simples', matches: built.matches };
 
-  var vagas = t.matches.filter(function (m) { return m.isRepechageSlot; });
-  ok(vagas.length === C.plano(n).repescagens,
-    `N=${n}: ${vagas.length} vaga(s) de repescagem, esperado ${C.plano(n).repescagens}`);
-
-  // a vaga é alimentada por um jogo NOMEADO já no sorteio (loserNextMatchId)
+  // Repescados existem em DOIS papéis: a sobra de uma rodada ímpar (`repescagens`) e os
+  // que completam a R2 até a potência de 2 (`repR2`). Cada um é cedido por um jogo-fonte
+  // NOMEADO já no sorteio — é essa aresta que a contagem trava. O nº de JOGOS marcados
+  // como vaga pode ser menor, porque dois repescados podem cair no mesmo jogo (rep × rep).
+  var _pl = C.plano(n);
   var fontes = t.matches.filter(function (m) { return m.loserNextMatchId; });
-  ok(fontes.length === vagas.length, `N=${n}: cada vaga tem um jogo-fonte declarado no sorteio`);
+  ok(fontes.length === _pl.repescagens + _pl.repR2,
+    `N=${n}: ${fontes.length} jogo(s)-fonte, esperado ${_pl.repescagens + _pl.repR2} (rep ${_pl.repescagens} + repR2 ${_pl.repR2})`);
+  var vagas = t.matches.filter(function (m) { return m.isRepechageSlot; });
+  ok(vagas.length >= 1 && vagas.length <= fontes.length,
+    `N=${n}: ${vagas.length} vaga(s) pra ${fontes.length} fonte(s)`);
 
   // joga o jogo-fonte e confere que o PERDEDOR aterrissou na vaga
   fontes.forEach(function (src) {

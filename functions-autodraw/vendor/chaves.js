@@ -76,12 +76,42 @@
 
   // Topologia pura: quantas rodadas, quantos entram/avançam/descem em cada uma.
   // Não depende de folga vs repescagem (as duas dão os mesmos números).
+  function _pow2Acima(n) { var p = 1; while (p < n) p *= 2; return p; }
+
   function _topologia(N, formato) {
-    var sup = [], E = N, r = 0;
+    var sup = [], E = N, r = 0, repR2 = 0;
     while (E > 1) {
       r++;
-      sup.push({ fase: 'VC', rodada: r, E: E, jogos: Math.ceil(E / 2), sobe: Math.ceil(E / 2), desce: Math.floor(E / 2), impar: E % 2 === 1 });
-      E = Math.ceil(E / 2);
+      var _jogos = Math.ceil(E / 2);
+      sup.push({ fase: 'VC', rodada: r, E: E, jogos: _jogos, sobe: _jogos, desce: Math.floor(E / 2), impar: E % 2 === 1 });
+      if (r === 1) {
+        // ── NORMALIZAÇÃO DA 2ª RODADA (regra do dono, jul/2026) ──────────────────
+        // A 2ª rodada fecha em POTÊNCIA DE 2, completando com REPESCADOS da 1ª. Daí em
+        // diante a chave é limpa: 8 → 4 → 2 → 1, sem uma folga sequer.
+        //
+        // POR QUÊ: só a recorrência teto(E/2) não zera as folgas do meio da chave. Na
+        // Confra a linha Ouro (28) dava 14/7/4/2/1 e a Prata (26) dava 13/7/4/2/1 — a
+        // rodada de 7 entrantes é ímpar, então sobrava folga na R3 (e na R2 da Prata).
+        // O organizador via "3 jogos" numa rodada de 4 porque a folga não vira card.
+        // Normalizando a R2: Ouro 14 sobem +2 repescados = 16 → 8/4/2/1; Prata 13 +3 = 16
+        // → 8/4/2/1. Zero folga em ambas.
+        //
+        // Os repescados são perdedores da 1ª rodada, e a descida deles para a chave
+        // inferior é ADIADA (mesma mecânica da repescagem da sobra): quem cai passa a ser
+        // o perdedor do jogo da R2. Por isso `desce` da R1 é reduzido aqui — sem isso a
+        // mesma equipe estaria viva na superior E na inferior (double-book).
+        //
+        // Vale para Eliminatória Simples E para a chave superior da Dupla (decisão do
+        // dono ao confirmar o padrão). A chave INFERIOR segue a recorrência normal.
+        var _alvo = _pow2Acima(_jogos);
+        var _eliminados = N - _jogos;             // quem perdeu a 1ª rodada
+        repR2 = Math.max(0, Math.min(_alvo - _jogos, _eliminados));
+        sup[0].desce = Math.max(0, sup[0].desce - repR2);
+        sup[0].repParaProxima = repR2;
+        E = _jogos + repR2;
+      } else {
+        E = _jogos;
+      }
     }
     var totSup = r, inf = [];
     if (formato === 'dupla') {
@@ -98,7 +128,7 @@
     }
     sup.forEach(function (x) { x.ateFinalChave = totSup - x.rodada + 1; });
     inf.forEach(function (x) { x.ateFinalChave = inf.length - x.rodada + 1; });
-    return { sup: sup, inf: inf, totSup: totSup, totInf: inf.length };
+    return { sup: sup, inf: inf, totSup: totSup, totInf: inf.length, repR2: repR2 };
   }
 
   /**
@@ -139,6 +169,7 @@
       N: N, B: N, formato: formato,
       rodadasSup: t.totSup, rodadasInf: t.totInf,
       byes: folgas, repescagens: reps, tetoFolgas: teto,
+      repR2: t.repR2,
       modo: (folgas && reps) ? 'misto' : (folgas ? 'bye' : (reps ? 'repescagem' : 'exata')),
       vagas: 0, pool: 0, menor: 0,
       rodadas: ordem
@@ -234,6 +265,14 @@
 
     // ---------- percorre as rodadas na ordem cronológica ----------
     var vivosInf = [];          // descritores de entrada dos vivos na inferior
+    // Quedas da superior que AINDA não entraram na inferior. Fila, não instantâneo:
+    // uma rodada da superior pode soltar UM perdedor só (acontece desde a normalização
+    // da R2, que adia a descida dos repescados) — e com 1 não se abre rodada na inferior
+    // (`Ein < 2` na topologia). Esse perdedor tem de ESPERAR a próxima queda, não sumir.
+    // Antes as quedas eram lidas só da rodada superior imediata (`quedasDe(VC[aposSup])`),
+    // então quem caía numa rodada sem PD correspondente ficava ÓRFÃO — sem jogo na inferior
+    // (pego pelo stress em N=5, 9, 17, 33 e pelo sweep de integração tardia).
+    var quedasPendentes = [], repsParaR2 = [];
     pl.rodadas.forEach(function (x) {
       if (x.fase === 'VC') {
         var entrantes;
@@ -242,13 +281,34 @@
           for (var s = 1; s <= N; s++) entrantes.push(S(s));
         } else {
           entrantes = VC[x.rodada - 1].map(function (m) { return V(m.id); });
+          // Os repescados escolhidos na R1 entram no FIM da ordem da R2 — assim o
+          // emparelhamento adjacente nunca dá revanche imediata (o vencedor do
+          // jogo-fonte está no começo da lista).
+          if (x.rodada === 2 && repsParaR2.length) entrantes = entrantes.concat(repsParaR2);
         }
         VC[x.rodada] = montarRodada('VC', x.rodada, entrantes, x.acao);
+        // NORMALIZAÇÃO DA R2 — escolhida AQUI, logo após montar a R1 e ANTES de
+        // empilhar as quedas. Fontes = os primeiros jogos normais que ainda soltam
+        // perdedor; a descida deles é ADIADA (perdedorDesce=false), porque quem cai
+        // para a inferior passa a ser o perdedor do jogo da R2. Marcar depois de
+        // empilhar as quedas fazia a inferior receber gente que continua viva na
+        // superior — a PD-R1 nascia com jogos a mais, de lados mortos (BYE x BYE).
+        if (x.rodada === 1 && pl.repR2 > 0) {
+          VC[1].filter(function (m) {
+            return m.tipo === 'normal' && m.perdedorDesce !== false;
+          }).slice(0, pl.repR2).forEach(function (f) {
+            f.perdedorDesce = false;
+            repsParaR2.push(R(f.id));
+          });
+        }
+        // quedas em ordem invertida — anti-revanche (quem acabou de cair não
+        // reencontra de imediato quem o derrotou)
+        quedasPendentes = quedasPendentes.concat(quedasDe(VC[x.rodada]).reverse());
       } else {
         // inferior: intercala os vivos da chave inferior com quem acabou de cair
         // da superior (quedas em ordem invertida — anti-revanche), para que o
         // emparelhamento adjacente case sobrevivente × recém-caído.
-        var caem = (x.aposSup && VC[x.aposSup]) ? quedasDe(VC[x.aposSup]).reverse() : [];
+        var caem = quedasPendentes; quedasPendentes = [];
         var ent = [], a = vivosInf, b = caem, n = Math.max(a.length, b.length);
         for (var i = 0; i < n; i++) { if (a[i]) ent.push(a[i]); if (b[i]) ent.push(b[i]); }
         PD[x.rodada] = montarRodada('PD', x.rodada, ent, x.acao);
