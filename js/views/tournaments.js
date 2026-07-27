@@ -2833,8 +2833,22 @@ function renderTournaments(container, tournamentId = null) {
                     //    (fica na fase atual; adia a próxima). Vale mesmo sem rodada programada.
                     //  • "Avançar de Fase" → sorteia a PRÓXIMA fase (dispara o painel unificado).
                     //    Só quando a fase atual está completa e existe próxima fase.
+                    // "Rodada Extra" só existe em fase de RODADAS SUCESSIVAS (Pontos
+                    // Corridos / Suíço / Rei-Rainha), onde gerar mais uma rodada é uma ação
+                    // que faz sentido. Na ELIMINATÓRIA a chave é uma árvore fechada: a
+                    // próxima rodada sai dos vencedores, não de um sorteio novo — o botão
+                    // ali só oferece uma ação impossível (reportado pelo dono nas Oitavas).
+                    // Detecção pela FASE ATUAL: se ela já materializou chave (bracket
+                    // main/upper/lower/grand), é eliminatória.
+                    var _cpIdx = (t.currentPhaseIndex || 0);
+                    var _elimBk = { main: 1, upper: 1, lower: 1, grand: 1 };
+                    var _faseEhElim = (window._collectAllMatches ? (window._collectAllMatches(t) || []) : (t.matches || []))
+                        .some(function (m) {
+                            if (!m || !_elimBk[m.bracket]) return false;
+                            return ((m.phaseIndex == null) ? 0 : m.phaseIndex) === _cpIdx;
+                        });
                     var _adManualLbl = hasDraw ? '🎲 Rodada Extra (manual)' : '🎲 Sortear agora (manual)';
-                    var _manualBtn = `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._confirmManualAutoDraw('${t.id}')">${_adManualLbl}</button>`;
+                    var _manualBtn = _faseEhElim ? '' : `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._confirmManualAutoDraw('${t.id}')">${_adManualLbl}</button>`;
                     var _phaseCanAdvance = window._isMultiPhase && window._isMultiPhase(t) &&
                         window._phasesPhaseComplete && window._phasesPhaseComplete(t) &&
                         ((t.currentPhaseIndex || 0) + 1) < ((t.phases || []).length);
