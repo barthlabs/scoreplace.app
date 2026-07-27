@@ -3509,10 +3509,14 @@ window._expandMonarchFromWaitlist = function (t) {
   (target.monarchGroups || []).forEach(function (g) { (g.players || []).forEach(function (n) { inGroup[String(n).toLowerCase()] = 1; }); });
   // ponte: indivíduos em standbyParticipants/waitlist → fila monarch da sua categoria.
   var cats = {};
+  // Guarda a ENTRADA original de quem veio da espera, por nome. É ela que vira INSCRITO
+  // quando o grupo se forma — ver o bloco "vira INSCRITO" no fim desta função.
+  var _daEspera = {};
   var bridge = function (e) {
     var nm = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim();
     if (!nm || nm.indexOf(' / ') !== -1) return;       // só indivíduos
     if (inGroup[nm.toLowerCase()]) return;             // já joga nesta rodada
+    _daEspera[nm.toLowerCase()] = e;
     var cat = (e && (e.category || (Array.isArray(e.categories) && e.categories[0]))) || null;
     var wl = window._getMonarchWaitlist(t, cat);
     if (wl.indexOf(nm) === -1) { wl.push(nm); _setMonarchWaitlist(t, cat, wl); }
@@ -3527,6 +3531,62 @@ window._expandMonarchFromWaitlist = function (t) {
   Object.keys(cats).forEach(function (k) {
     try { formed += (window._tryFormMonarchWaitlistGroups(t, cats[k], roundNum) || 0); } catch (e) {}
   });
+
+  // ── QUEM ENTROU NA CHAVE VIRA INSCRITO (v1.5.28) ────────────────────────────────
+  // BUG MEDIDO (dono, 27/jul, Confra SB, tour_1785146858717_sb): 4 placeholders foram
+  // adicionados, formaram um grupo Rei/Rainha e estavam JOGANDO 3 jogos — mas o card
+  // dizia 104 INSCRITOS em vez de 108. No doc: `participants` com 104 (103 uid + 1
+  // fictício), `standbyParticipants` VAZIO, e os "Jogador 01..04" só dentro de
+  // `rounds[].monarchGroups`.
+  //
+  // Causa: esta função é só uma PONTE — leva o nome da espera para a fila monarch e
+  // forma o grupo. Ela nunca gravou ninguém em `t.participants`, e o
+  // `_sanitizeWaitlistVsGroups` (wlClean) depois remove da espera quem já está em
+  // grupo. Resultado: a pessoa joga, sai da espera e NUNCA vira inscrita — órfã de
+  // roster ([[project_formed_pair_roster_orphan]]).
+  //
+  // O cânone é "INSCRITOS = participants[]. Ponto." (store.js). Então quem passou a
+  // ocupar um lugar na chave tem de estar no roster — senão a contagem, a Análise de
+  // Inscritos e a presença enxergam menos gente do que está em quadra.
+  if (formed > 0) {
+    var _agora = {};
+    (target.monarchGroups || []).forEach(function (g) {
+      (g.players || []).forEach(function (n) {
+        var s2 = String(n == null ? '' : n).trim();
+        if (!s2 || s2.indexOf(' / ') !== -1) return;    // só indivíduos
+        _agora[s2.toLowerCase()] = 1;
+      });
+    });
+    if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
+    // dedup por uid quando há (cânone), por nome quando é fictício/vaga
+    var _jaUid = {}, _jaNome = {};
+    t.participants.forEach(function (p) {
+      ((typeof window._participantUids === 'function') ? window._participantUids(p) : []).forEach(function (u) { _jaUid[String(u)] = 1; });
+      var s = String(window._pName ? window._pName(p, '') : ((p && (p.displayName || p.name)) || '')).trim();
+      if (s) _jaNome[s.toLowerCase()] = 1;
+    });
+    // Só quem veio da espera NESTA passagem: é a entrada original, com uid, categoria e
+    // contato preservados. Nada é inventado a partir do nome.
+    Object.keys(_daEspera).forEach(function (k) {
+      if (!_agora[k]) return;                      // não entrou em grupo agora
+      var e = _daEspera[k];
+      var us = (typeof window._participantUids === 'function') ? window._participantUids(e) : [];
+      if (us.some(function (u) { return _jaUid[String(u)]; })) return;
+      if (_jaNome[k]) return;
+      t.participants.push(e);
+      us.forEach(function (u) { _jaUid[String(u)] = 1; });
+      _jaNome[k] = 1;
+    });
+    // e sai da espera: está na chave XOR na espera, nunca nos dois
+    var _fora = function (arr) {
+      return (Array.isArray(arr) ? arr : []).filter(function (e) {
+        var nm = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim().toLowerCase();
+        return !(nm && _agora[nm]);
+      });
+    };
+    t.standbyParticipants = _fora(t.standbyParticipants);
+    t.waitlist = _fora(t.waitlist);
+  }
   return formed;
 };
 // Chamado quando um +participante entra num torneio Rei/Rainha com rodada em

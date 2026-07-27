@@ -329,6 +329,7 @@ const SUITES = [
   'tests/dupla-elim-late-sweep.test.js',
   // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
   'tests/count-competitors.test.js',
+  'tests/monarch-late-roster.test.js',
   'tests/phase-repechage-lines.test.js',
   'tests/reset-tournament.test.js',
   'tests/dupla-elim-render.test.js',
