@@ -141,78 +141,108 @@ console.log('\n── integração tardia na classificatória ──');
   ok(!(t.standbyParticipants || []).some(function (p) { return p.displayName === 'LateX'; }), label + ' :: saiu da espera');
 });
 
-// ── CONFRA: 2 linhas NÃO-pow2 avançam DIRETO, sem painel de "Ajuste de Chaveamento" ──
+// ── CONFRA: linhas fora da pow2 avançam DIRETO; promover linha CONTINUA perguntando ──
 //
-// Cenário real (dono, 27/jul/2026): na Confra, ao passar da classificatória para a
-// eliminatória, aparecia o painel "Detectado: As linhas (Ouro: 28 · Prata: 26) não fecham
-// em potência de 2" pedindo Play-in / BYE / Lista de Espera. Com a ÁRVORE MÍNIMA a pergunta
-// não faz sentido — 28 e 26 geram suas árvores direto — e `_genElimFromChaves` já IGNORA
-// `bracketResolution`, então a escolha do organizador nem mudava a chave.
+// Dois painéis existiam no avanço de fase, e só um saiu (dono, 27/jul):
+//  • "Ajuste de Chaveamento" (Play-in / BYE / Lista de Espera) — REMOVIDO. Era resolução
+//    de potência de 2, que a árvore mínima + normalização da R2 tornaram desnecessária;
+//    `_genElimFromChaves` já ignorava `bracketResolution`, então nem mudava a chave.
+//  • "Promover linha" — MANTIDO. Não é pow2, é PARIDADE: sobe a melhor equipe da linha de
+//    baixo pra de cima quando alguma linha ficaria com número ÍMPAR de equipes (alguém sem
+//    adversário). É decisão de mérito, do organizador.
 //
-// O sweep acima NÃO pegava isso: no headless `showUnifiedResolutionPanel` não existe, e o
-// código caía no fallback. Aqui os dois painéis são instalados como ESPIÕES — se algum for
-// chamado, o teste quebra.
-console.log('\n── Confra: 2 linhas fora da potência de 2 → avança sem perguntar ──');
+// O sweep acima não pega nada disso: no headless os painéis não existem e o código segue.
+// Aqui eles são instalados como ESPIÕES.
+// O render-harness não sobe tournaments-draw-prep.js, então `_phasePromoteHelps` não
+// existe aqui — e o gate exige que ela exista. Em vez de REPLICAR a regra (que sairia de
+// sincronia em silêncio e faria o teste mentir), carrega a implementação REAL do arquivo.
 (function () {
-  var chamou = [];
-  W.showUnifiedResolutionPanel = function () { chamou.push('resolution'); };
-  W._showPhasePromotePanel = function () { chamou.push('promote'); };
-  W._phasePromoteHelps = function () { return true; };   // força o pior caso
+  var src = require('fs').readFileSync(require('path').join(__dirname, '../js/views/tournaments-draw-prep.js'), 'utf8');
+  var m = src.match(/window\._phasePromoteHelps = function[\s\S]*?\n\};/);
+  if (!m) { ok(false, 'não achei _phasePromoteHelps em tournaments-draw-prep.js'); return; }
+  var f = null;
+  eval('f = ' + m[0].replace('window._phasePromoteHelps = ', '').replace(/;$/, ''));
+  W._phasePromoteHelps = f;
+  ok(typeof W._phasePromoteHelps === 'function', 'pré-requisito :: _phasePromoteHelps REAL carregada');
+  ok(W._phasePromoteHelps([{ size: 7 }, { size: 7 }]) === true, 'pré-requisito :: 7/7 (ímpares) → promover AJUDA');
+  ok(W._phasePromoteHelps([{ size: 6 }, { size: 6 }]) === false, 'pré-requisito :: 6/6 (pares) → promover não ajuda');
+})();
 
-  // 2 linhas a partir de grupos, com contagens que NÃO são potência de 2
+console.log('\n── Confra: linhas PARES fora da pow2 → avança sem perguntar ──');
+function _cenarioLinhas(o) {
+  var abriu = [];
+  W.showUnifiedResolutionPanel = function () { abriu.push('resolution'); };
+  W._showPhasePromotePanel = function () { abriu.push('promote'); };
   var cfg = {
-    disputa: 'dupla', grupos: 8, classifAtiva: true, classificados: 2,
+    disputa: 'dupla', grupos: o.grupos, classifAtiva: true, classificados: o.classif,
     rodadas: { modo: 'todos', turnos: 'ida' },
     eliminatoria: { ativa: true, linhas: 2, formacao: 'performance', terceiro: false, dupla: false }
   };
   var t = {
-    id: 'CONFRA2L', sport: 'Beach Tennis', fmt2: cfg, participants: mkPairs(24), teamSize: 2,
+    id: o.id, sport: 'Beach Tennis', fmt2: cfg, participants: mkPairs(o.N), teamSize: 2,
     enrollmentMode: 'teams', combinedCategories: [], currentPhaseIndex: 0, checkedIn: {}, absent: {},
     standbyParticipants: [], waitlist: [], teamOrigins: {}, matches: []
   };
   var rc = dc.compileFromFmt2(t);
-  ok(!!(rc && rc.ok), 'confra :: compileFromFmt2 ok');
+  ok(!!(rc && rc.ok), o.label + ' :: compileFromFmt2 ok');
   W.AppStore.tournaments = [t];
   var rd = dc.drawInitial(t, {});
-  ok(!!(rd && rd.ok), 'confra :: drawInitial ok (' + (rd && rd.reason || '') + ')');
-  if (!rd || !rd.ok) return;
+  ok(!!(rd && rd.ok), o.label + ' :: drawInitial ok (' + (rd && rd.reason || '') + ')');
+  if (!rd || !rd.ok) return null;
   var e0 = playPhase(t, 0);
-  ok(!e0, 'confra :: classificatória jogou sem erro (' + (e0 || '') + ')');
-
+  ok(!e0, o.label + ' :: classificatória jogou sem erro (' + (e0 || '') + ')');
   W._advanceMultiPhase(t.id);
+  return { t: t, abriu: abriu };
+}
 
-  ok(chamou.length === 0, 'confra :: NENHUM painel foi aberto no avanço de fase (abriu: ' + (chamou.join(',') || 'nenhum') + ')');
-  ok(t.currentPhaseIndex === 1, 'confra :: avançou pra fase 1 sozinho (currentPhaseIndex=' + t.currentPhaseIndex + ')');
-  var el = elimHealth(t);
-  ok(el.n > 0, 'confra :: eliminatória MATERIALIZOU jogos (' + el.n + ')');
-
-  // e a chave saiu pela ÁRVORE MÍNIMA: a 1ª rodada de cada linha tem teto(E/2) jogos,
-  // sem folga (N par) ou com exatamente 1 repescagem (N ímpar)
-  var porLinha = {};
-  (W._collectAllMatches(t) || []).forEach(function (m) {
-    if (!m || m.phaseIndex !== 1 || m.isThirdPlace) return;
-    var r = (typeof m.round === 'number') ? m.round : 1;
-    var k = (m.bracket || 'main');
-    porLinha[k] = porLinha[k] || {};
-    (porLinha[k][r] = porLinha[k][r] || []).push(m);
-  });
-  Object.keys(porLinha).forEach(function (k) {
-    var rs = Object.keys(porLinha[k]).map(Number).sort(function (a, b) { return a - b; });
-    var r1 = porLinha[k][rs[0]] || [];
-    var byes = r1.filter(function (m) { return m.isBye; }).length;
-    ok(byes === 0, 'confra :: linha "' + k + '" — ZERO folga na 1ª rodada (got ' + byes + ')');
-  });
-
-  // e a elim JOGA inteira até o campeão (mesma aferição do sweep: depois de jogada)
-  var e1 = playPhase(t, 1);
-  ok(!e1, 'confra :: elim jogou sem erro (' + (e1 || '') + ')');
-  var el2 = elimHealth(t);
-  ok(el2.stuck === 0, 'confra :: elim sem jogo travado (' + el2.stuck + ')');
-  ok(el2.dead === 0, 'confra :: elim sem vaga morta (' + el2.dead + ')');
-  ok(el2.champ, 'confra :: elim FECHA num campeão');
-
-  delete W.showUnifiedResolutionPanel; delete W._showPhasePromotePanel; delete W._phasePromoteHelps;
+// (1) linhas PARES fora da potência de 2 (6 e 6) → NADA pergunta, avança sozinho.
+//     É o caso da Confra: Ouro 28 e Prata 26 são pares, então só o painel de pow2
+//     aparecia — e é justamente ele que saiu.
+(function () {
+  var r = _cenarioLinhas({ id: 'CONFPAR', N: 24, grupos: 6, classif: 2, label: 'linhas pares' });
+  if (!r) return;
+  ok(r.abriu.length === 0, 'linhas pares :: NENHUM painel abriu (abriu: ' + (r.abriu.join(',') || 'nenhum') + ')');
+  ok(r.t.currentPhaseIndex === 1, 'linhas pares :: avançou pra fase 1 sozinho (idx=' + r.t.currentPhaseIndex + ')');
+  var el = elimHealth(r.t);
+  ok(el.n > 0, 'linhas pares :: eliminatória MATERIALIZOU jogos (' + el.n + ')');
+  var e1 = playPhase(r.t, 1);
+  ok(!e1, 'linhas pares :: elim jogou sem erro (' + (e1 || '') + ')');
+  var el2 = elimHealth(r.t);
+  ok(el2.stuck === 0, 'linhas pares :: elim sem jogo travado (' + el2.stuck + ')');
+  ok(el2.dead === 0, 'linhas pares :: elim sem vaga morta (' + el2.dead + ')');
+  ok(el2.champ, 'linhas pares :: elim FECHA num campeão');
+  // e a 1ª rodada de cada linha nasce sem folga (normalização da R2 + regra da R1)
+  var r1bye = (W._collectAllMatches(r.t) || []).filter(function (m) {
+    return m && m.phaseIndex === 1 && !m.isThirdPlace && (typeof m.round === 'number' ? m.round : 1) === 1 && m.isBye;
+  }).length;
+  ok(r1bye === 0, 'linhas pares :: ZERO folga na 1ª rodada das linhas (got ' + r1bye + ')');
 })();
+
+console.log('\n── Promover linha: linhas ÍMPARES continuam perguntando ao organizador ──');
+// (2) linhas ÍMPARES (7 e 7) → o painel de PROMOVER abre (uma promoção deixa 8/6, tudo
+//     par) e o de pow2 NUNCA. `_phasePromoteHelps` é o real, sem stub.
+(function () {
+  var r = _cenarioLinhas({ id: 'CONFIMPAR', N: 21, grupos: 7, classif: 2, label: 'linhas ímpares' });
+  if (!r) return;
+  ok(r.abriu.indexOf('promote') !== -1, 'linhas ímpares :: o painel de PROMOVER LINHA abriu (abriu: ' + (r.abriu.join(',') || 'nenhum') + ')');
+  ok(r.abriu.indexOf('resolution') === -1, 'linhas ímpares :: o painel de pow2 NÃO abriu (abriu: ' + r.abriu.join(',') + ')');
+  ok(r.t.currentPhaseIndex === 0, 'linhas ímpares :: o avanço ESPERA a decisão (idx=' + r.t.currentPhaseIndex + ')');
+
+  // decidido (o organizador escolheu no painel) → avança sem perguntar mais nada
+  var _idx = (r.t.currentPhaseIndex || 0) + 1;
+  if (r.t.phases && r.t.phases[_idx]) r.t.phases[_idx]._promoteAsked = true;
+  if (typeof W._clearPhaseResInfo === 'function') W._clearPhaseResInfo(r.t);
+  r.abriu.length = 0;
+  W._advanceMultiPhase(r.t.id);
+  ok(r.abriu.length === 0, 'linhas ímpares :: depois de decidido, NENHUM painel volta (abriu: ' + (r.abriu.join(',') || 'nenhum') + ')');
+  ok(r.t.currentPhaseIndex === 1, 'linhas ímpares :: avançou pra fase 1 (idx=' + r.t.currentPhaseIndex + ')');
+  var e1 = playPhase(r.t, 1);
+  ok(!e1, 'linhas ímpares :: elim jogou sem erro (' + (e1 || '') + ')');
+  var el2 = elimHealth(r.t);
+  ok(el2.dead === 0, 'linhas ímpares :: elim sem vaga morta (' + el2.dead + ')');
+  ok(el2.champ, 'linhas ímpares :: elim FECHA num campeão');
+})();
+delete W.showUnifiedResolutionPanel; delete W._showPhasePromotePanel;
 
 console.log('\n' + (fail === 0 ? '✅ classificatory-phase-sweep: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok, ' + COMBOS.length + ' combos × 2)');
 if (fails.length) { console.error('\nFALHAS (' + fails.length + '):'); fails.slice(0, 80).forEach((f) => console.error('  ✗ ' + f)); }

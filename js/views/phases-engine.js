@@ -1794,28 +1794,44 @@
           return window._computeMonarchStandings({ players: g.players || [], matches: ms }, t, g.category || null);
         }
       : function (g) { return _groupTeamStandings(g, _tbOpts); };
-    // ⛔ SEM PAINEL DE AJUSTE DE CHAVEAMENTO (v1.5.23 — decisão do dono, jul/2026).
+    // ⛔ SEM PAINEL DE AJUSTE DE CHAVEAMENTO — mas COM o de PROMOVER LINHA (v1.5.25).
     //
-    // Aqui existia um gate: se alguma LINHA da próxima fase não fechasse em potência de 2,
-    // o avanço PARAVA e abria o painel "Ajuste de Chaveamento" (Play-in / Aplicar BYE /
-    // Lista de Espera), às vezes precedido do painel de "promover linha". Era necessário
-    // enquanto a chave era INFLADA até a potência de 2: sobravam vagas, e alguém tinha de
-    // dizer como preenchê-las.
+    // Aqui havia UM gate que disparava DOIS painéis quando alguma linha da próxima fase
+    // não fechava em potência de 2. Só o segundo saiu:
     //
-    // A ÁRVORE MÍNIMA acabou com a pergunta. A chave é função pura de (N, formato) — 28 e
-    // 26 classificados geram suas árvores diretamente, teto(E/2) jogos por rodada, sem vaga
-    // a preencher. Tanto que `_genElimFromChaves` **já ignora `cfg.bracketResolution` de
-    // propósito** ("quem manda na resolução é a LÓGICA, não o organizador"): o painel
-    // perguntava, o organizador escolhia, e a escolha NÃO mudava a chave. Diálogo puro,
-    // travando o avanço de fase.
+    //  • REMOVIDO — "Ajuste de Chaveamento" (Play-in / Aplicar BYE / Lista de Espera).
+    //    Existia enquanto a chave era INFLADA até a potência de 2: sobravam vagas e alguém
+    //    tinha de dizer como preenchê-las. Com a ÁRVORE MÍNIMA + a normalização da R2 não
+    //    há vaga a preencher, e `_genElimFromChaves` **já ignora `cfg.bracketResolution`
+    //    de propósito** — o organizador escolhia e a escolha não mudava a chave.
     //
-    // O painel de PROMOVER LINHA saiu junto: ele só era oferecido quando promover zerava as
-    // linhas ímpares (`_phasePromoteHelps`), e linha ímpar deixou de ser um problema — a
-    // sobra joga a repescagem. Ver [[project_promote_line_before_pow2]] (superado) e
-    // [[project_numeric_resolution_canon]].
+    //  • MANTIDO — PROMOVER LINHA. Não é resolução de potência de 2: é PARIDADE. Sobe a
+    //    melhor equipe da linha de baixo para a de cima (cima +1, baixo −1) para que
+    //    nenhuma linha fique com número ÍMPAR de equipes, isto é, com uma equipe sem
+    //    adversário. É decisão de MÉRITO e continua sendo do organizador.
     //
-    // `showUnifiedResolutionPanel` continua existindo para a resolução de INSCRIÇÃO (fora de
-    // fase); o que morreu foi o ramo de TRANSIÇÃO DE FASE.
+    // O gate agora pergunta o que o painel realmente resolve: `_phasePromoteHelps` — que
+    // já é sobre ímpares (uma promoção zera TODOS os ímpares das linhas). Antes ele vinha
+    // atrás de um teste de pow2, que era a pergunta errada. Uma vez decidido
+    // (`_promoteAsked`), a fase avança direto. Ver [[project_promote_line_before_pow2]].
+    var _cur = t.currentPhaseIndex || 0;
+    var _nextCfg = t.phases[_cur + 1] || {};
+    // Fase de Grupos / Rei-Rainha / Liga não têm chave → paridade de linha não se aplica.
+    if (!_phaseIsGroups(_nextCfg) && !_phaseIsMonarch(_nextCfg) && !_phaseIsLiga(_nextCfg)) {
+      var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
+      var _src = _nextCfg.source || {};
+      var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
+      var _byDest = selectQualifiers(_curG, _nextCfg, { computeStandings: (_cur === 0 ? cs : function (g) { return g.standings || []; }) });
+      var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
+      if (_lines.length >= 2 && !_nextCfg._promoteAsked && typeof window._showPhasePromotePanel === 'function' &&
+          typeof window._phasePromoteHelps === 'function' && window._phasePromoteHelps(_lines)) {
+        // via _setPhaseResInfo — o contexto precisa sobreviver ao snapshot do Firestore
+        // (que substitui o objeto do torneio). Ver _reattachPhaseResInfo.
+        window._setPhaseResInfo(t, { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) });
+        window._showPhasePromotePanel(tId);
+        return;
+      }
+    }
 
     var res = materializeNextPhase(t, cs, 'ph-' + tId + '-' + ((t.currentPhaseIndex || 0) + 1));
     if (!res.ok) {
