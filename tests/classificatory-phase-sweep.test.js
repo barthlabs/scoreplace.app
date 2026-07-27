@@ -141,6 +141,79 @@ console.log('\n── integração tardia na classificatória ──');
   ok(!(t.standbyParticipants || []).some(function (p) { return p.displayName === 'LateX'; }), label + ' :: saiu da espera');
 });
 
+// ── CONFRA: 2 linhas NÃO-pow2 avançam DIRETO, sem painel de "Ajuste de Chaveamento" ──
+//
+// Cenário real (dono, 27/jul/2026): na Confra, ao passar da classificatória para a
+// eliminatória, aparecia o painel "Detectado: As linhas (Ouro: 28 · Prata: 26) não fecham
+// em potência de 2" pedindo Play-in / BYE / Lista de Espera. Com a ÁRVORE MÍNIMA a pergunta
+// não faz sentido — 28 e 26 geram suas árvores direto — e `_genElimFromChaves` já IGNORA
+// `bracketResolution`, então a escolha do organizador nem mudava a chave.
+//
+// O sweep acima NÃO pegava isso: no headless `showUnifiedResolutionPanel` não existe, e o
+// código caía no fallback. Aqui os dois painéis são instalados como ESPIÕES — se algum for
+// chamado, o teste quebra.
+console.log('\n── Confra: 2 linhas fora da potência de 2 → avança sem perguntar ──');
+(function () {
+  var chamou = [];
+  W.showUnifiedResolutionPanel = function () { chamou.push('resolution'); };
+  W._showPhasePromotePanel = function () { chamou.push('promote'); };
+  W._phasePromoteHelps = function () { return true; };   // força o pior caso
+
+  // 2 linhas a partir de grupos, com contagens que NÃO são potência de 2
+  var cfg = {
+    disputa: 'dupla', grupos: 8, classifAtiva: true, classificados: 2,
+    rodadas: { modo: 'todos', turnos: 'ida' },
+    eliminatoria: { ativa: true, linhas: 2, formacao: 'performance', terceiro: false, dupla: false }
+  };
+  var t = {
+    id: 'CONFRA2L', sport: 'Beach Tennis', fmt2: cfg, participants: mkPairs(24), teamSize: 2,
+    enrollmentMode: 'teams', combinedCategories: [], currentPhaseIndex: 0, checkedIn: {}, absent: {},
+    standbyParticipants: [], waitlist: [], teamOrigins: {}, matches: []
+  };
+  var rc = dc.compileFromFmt2(t);
+  ok(!!(rc && rc.ok), 'confra :: compileFromFmt2 ok');
+  W.AppStore.tournaments = [t];
+  var rd = dc.drawInitial(t, {});
+  ok(!!(rd && rd.ok), 'confra :: drawInitial ok (' + (rd && rd.reason || '') + ')');
+  if (!rd || !rd.ok) return;
+  var e0 = playPhase(t, 0);
+  ok(!e0, 'confra :: classificatória jogou sem erro (' + (e0 || '') + ')');
+
+  W._advanceMultiPhase(t.id);
+
+  ok(chamou.length === 0, 'confra :: NENHUM painel foi aberto no avanço de fase (abriu: ' + (chamou.join(',') || 'nenhum') + ')');
+  ok(t.currentPhaseIndex === 1, 'confra :: avançou pra fase 1 sozinho (currentPhaseIndex=' + t.currentPhaseIndex + ')');
+  var el = elimHealth(t);
+  ok(el.n > 0, 'confra :: eliminatória MATERIALIZOU jogos (' + el.n + ')');
+
+  // e a chave saiu pela ÁRVORE MÍNIMA: a 1ª rodada de cada linha tem teto(E/2) jogos,
+  // sem folga (N par) ou com exatamente 1 repescagem (N ímpar)
+  var porLinha = {};
+  (W._collectAllMatches(t) || []).forEach(function (m) {
+    if (!m || m.phaseIndex !== 1 || m.isThirdPlace) return;
+    var r = (typeof m.round === 'number') ? m.round : 1;
+    var k = (m.bracket || 'main');
+    porLinha[k] = porLinha[k] || {};
+    (porLinha[k][r] = porLinha[k][r] || []).push(m);
+  });
+  Object.keys(porLinha).forEach(function (k) {
+    var rs = Object.keys(porLinha[k]).map(Number).sort(function (a, b) { return a - b; });
+    var r1 = porLinha[k][rs[0]] || [];
+    var byes = r1.filter(function (m) { return m.isBye; }).length;
+    ok(byes === 0, 'confra :: linha "' + k + '" — ZERO folga na 1ª rodada (got ' + byes + ')');
+  });
+
+  // e a elim JOGA inteira até o campeão (mesma aferição do sweep: depois de jogada)
+  var e1 = playPhase(t, 1);
+  ok(!e1, 'confra :: elim jogou sem erro (' + (e1 || '') + ')');
+  var el2 = elimHealth(t);
+  ok(el2.stuck === 0, 'confra :: elim sem jogo travado (' + el2.stuck + ')');
+  ok(el2.dead === 0, 'confra :: elim sem vaga morta (' + el2.dead + ')');
+  ok(el2.champ, 'confra :: elim FECHA num campeão');
+
+  delete W.showUnifiedResolutionPanel; delete W._showPhasePromotePanel; delete W._phasePromoteHelps;
+})();
+
 console.log('\n' + (fail === 0 ? '✅ classificatory-phase-sweep: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok, ' + COMBOS.length + ' combos × 2)');
 if (fails.length) { console.error('\nFALHAS (' + fails.length + '):'); fails.slice(0, 80).forEach((f) => console.error('  ✗ ' + f)); }
 process.exit(fail > 0 ? 1 : 0);

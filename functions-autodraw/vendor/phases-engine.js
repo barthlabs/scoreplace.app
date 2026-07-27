@@ -1794,59 +1794,29 @@
           return window._computeMonarchStandings({ players: g.players || [], matches: ms }, t, g.category || null);
         }
       : function (g) { return _groupTeamStandings(g, _tbOpts); };
-    // v2.7.24: se alguma LINHA da próxima fase NÃO for potência de 2 e o organizador
-    // ainda não escolheu como resolver → PERGUNTA (painel) em vez de aplicar BYE
-    // direto. Tamanhos das linhas são determinísticos (não dependem do sorteio).
-    var _cur = t.currentPhaseIndex || 0;
-    var _nextCfg = t.phases[_cur + 1] || {};
-    // Fase de Grupos / Rei-Rainha / Liga não têm chave → não precisam resolver potência de 2.
-    if (!_nextCfg.bracketResolution && !_phaseIsGroups(_nextCfg) && !_phaseIsMonarch(_nextCfg) && !_phaseIsLiga(_nextCfg)) {
-      var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
-      var _src = _nextCfg.source || {};
-      var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
-      // v4.4.110: selectQualifiers já inclui os inativos (por classificação) no _byDest,
-      // então a contagem por linha do medidor já reflete cima/baixo corretamente.
-      var _byDest = selectQualifiers(_curG, _nextCfg, { computeStandings: (_cur === 0 ? cs : function (g) { return g.standings || []; }) });
-      var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
-      var _anyNonPow2 = _lines.some(function (l) { return l.size > 1 && (l.size & (l.size - 1)) !== 0; });
-      if (_anyNonPow2) {
-        // v4.5.5: PROMOVER LINHA é um passo SEPARADO e ANTERIOR à resolução de pow2 —
-        // NÃO uma opção de chave. Promover sobe a melhor dupla da linha de baixo pra de
-        // cima (cima +1, baixo −1), mudando as CONTAGENS de cada linha (ex.: 25/25 → 26/24).
-        // Só depois de fixadas as contagens é que a pow2 é proposta — e aí cada linha
-        // resolve com o SEU número (26 e 24 rendem BYE/repescagem diferentes). Antes as duas
-        // decisões vinham misturadas no mesmo painel, e escolher "promover" não escolhia a
-        // solução de pow2 (bug reportado). Multi-linha → pergunta o promote primeiro; uma vez
-        // decidido (_promoteAsked) segue pro painel de pow2. selectQualifiers já aplica
-        // _promoteLines, então _lines aqui já reflete o promote acumulado. Ver
-        // feedback_resolution_one_logic / project_numeric_resolution_canon.
-        // Promover é decisão de 0 ou 1: só faz sentido quando UMA promoção ZERA as linhas
-        // ímpares (linha ímpar = 1 equipe sem adversário). 25/25 (2 ímpares) → 26/24 (tudo
-        // par): resolve. _phasePromoteHelps é a fonte única (mesma regra do painel). Só
-        // pergunta uma vez por transição (_promoteAsked).
-        if (_lines.length >= 2 && !_nextCfg._promoteAsked && typeof window._showPhasePromotePanel === 'function' &&
-            typeof window._phasePromoteHelps === 'function' && window._phasePromoteHelps(_lines)) {
-          // v1.4.17: via _setPhaseResInfo — o contexto precisa sobreviver ao snapshot do
-          // Firestore (que substitui o objeto do torneio). Ver _reattachPhaseResInfo.
-          window._setPhaseResInfo(t, { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) });
-          window._showPhasePromotePanel(tId);
-          return;
-        }
-        // v3.1.23: quando uma linha não fecha em potência de 2, SEMPRE pergunta ao
-        // organizador como resolver (Play-in/Repescagem · Lista de espera · BYE ·
-        // Exclusão) — com o equilíbrio de Nash, o tempo estimado e o nº de partidas
-        // de cada uma (showUnifiedResolutionPanel, ramo de fase). Vale pra QUALQUER origem
-        // (Grupos, Rei/Rainha, Pontos Corridos). Antes (v3.0.x) a transição de Grupos/Rei-Rainha
-        // forçava play-in direto sem perguntar — pedido do dono: sempre perguntar.
-        // Fallback só se o painel não existir: play-in (repescagem, mais inclusivo).
-        if (typeof window.showUnifiedResolutionPanel === 'function') {
-          window._setPhaseResInfo(t, { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) });
-          window.showUnifiedResolutionPanel(tId);
-          return;
-        }
-        _nextCfg.bracketResolution = 'playin';
-      }
-    }
+    // ⛔ SEM PAINEL DE AJUSTE DE CHAVEAMENTO (v1.5.23 — decisão do dono, jul/2026).
+    //
+    // Aqui existia um gate: se alguma LINHA da próxima fase não fechasse em potência de 2,
+    // o avanço PARAVA e abria o painel "Ajuste de Chaveamento" (Play-in / Aplicar BYE /
+    // Lista de Espera), às vezes precedido do painel de "promover linha". Era necessário
+    // enquanto a chave era INFLADA até a potência de 2: sobravam vagas, e alguém tinha de
+    // dizer como preenchê-las.
+    //
+    // A ÁRVORE MÍNIMA acabou com a pergunta. A chave é função pura de (N, formato) — 28 e
+    // 26 classificados geram suas árvores diretamente, teto(E/2) jogos por rodada, sem vaga
+    // a preencher. Tanto que `_genElimFromChaves` **já ignora `cfg.bracketResolution` de
+    // propósito** ("quem manda na resolução é a LÓGICA, não o organizador"): o painel
+    // perguntava, o organizador escolhia, e a escolha NÃO mudava a chave. Diálogo puro,
+    // travando o avanço de fase.
+    //
+    // O painel de PROMOVER LINHA saiu junto: ele só era oferecido quando promover zerava as
+    // linhas ímpares (`_phasePromoteHelps`), e linha ímpar deixou de ser um problema — a
+    // sobra joga a repescagem. Ver [[project_promote_line_before_pow2]] (superado) e
+    // [[project_numeric_resolution_canon]].
+    //
+    // `showUnifiedResolutionPanel` continua existindo para a resolução de INSCRIÇÃO (fora de
+    // fase); o que morreu foi o ramo de TRANSIÇÃO DE FASE.
+
     var res = materializeNextPhase(t, cs, 'ph-' + tId + '-' + ((t.currentPhaseIndex || 0) + 1));
     if (!res.ok) {
       if (window.showAlertDialog) window.showAlertDialog('Não foi possível avançar', 'Motivo: ' + res.error, null, { type: 'warning' });
