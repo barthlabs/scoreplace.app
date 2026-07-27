@@ -724,12 +724,34 @@ window._drainWaitlistsIfOpen = function(t, opts) {
 // duas listas conta 1x; uma equipe na espera conta como equipe, não como "1
 // pessoa"). Mantém INSCRITOS/EQUIPES estáveis antes E depois do sorteio.
 window._countCompetitors = function(t) {
-    var seenPpl = {}, seenTeam = {}, people = 0, teams = 0;
+    var seenPpl = {}, seenTeam = {}, people = 0, teams = 0, vagaSeq = 0;
+    // VAGA (placeholder) É SEMPRE ÚNICA — nunca deduplica (v1.5.26).
+    //
+    // BUG MEDIDO (dono, 27/jul, Confra): os placeholders não entravam nos INSCRITOS. A
+    // dedup deste contador é por uid/email OU, na falta deles, pelo NOME — e vaga não
+    // tem identidade:
+    //   • sem nome (o cânone só-uid strippa o nome no save) → a chave virava 'n:', que
+    //     é justamente o valor descartado logo abaixo → a vaga SUMIA da conta;
+    //   • com nome repetido ("Jogador 1" duas vezes, que é o que
+    //     `_normalizePlaceholderNumbers` existe pra curar) → as duas viravam a MESMA
+    //     chave e contavam como UMA.
+    // Duas vagas são duas vagas: cada uma ocupa um lugar na chave e é uma pessoa a
+    // convidar. Aqui elas recebem uma chave própria por ocorrência.
+    var PH_NOME = /^(?:jogador|placeholder)\s+\d+$/i;
+    var ehVaga = function(o, nm) {
+        if (o && typeof o === 'object' && o.isPlaceholder) return true;
+        if (o && typeof o === 'object' && (o.uid || o.email)) return false;   // tem identidade
+        var s = String(nm == null ? '' : nm).trim();
+        return !s || PH_NOME.test(s);
+    };
     var pKey = function(o, nm) {
         if (o && typeof o === 'object' && (o.uid || o.email)) return 'id:' + String(o.uid || o.email).toLowerCase();
         return 'n:' + String(nm == null ? '' : nm).trim().toLowerCase();
     };
-    var addP = function(o, nm) { var k = pKey(o, nm); if (k !== 'n:' && !seenPpl[k]) { seenPpl[k] = 1; people++; } };
+    var addP = function(o, nm) {
+        if (ehVaga(o, nm)) { seenPpl['vaga:' + (++vagaSeq)] = 1; people++; return; }
+        var k = pKey(o, nm); if (k !== 'n:' && !seenPpl[k]) { seenPpl[k] = 1; people++; }
+    };
     var addTeam = function(label) { var k = String(label == null ? '' : label).trim().toLowerCase(); if (k && !seenTeam[k]) { seenTeam[k] = 1; teams++; return true; } return false; };
     var tally = function(arr) {
         (Array.isArray(arr) ? arr : (arr ? Object.values(arr) : [])).forEach(function(p) {

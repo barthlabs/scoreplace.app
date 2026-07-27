@@ -38,5 +38,37 @@ const t2 = { participants: [uidPair('a', 'b'), uidPair('a', 'b')], waitlist: [],
 const c2 = W._countCompetitors(t2);
 ok(c2.teams === 1 && c2.people === 2, 'dedup por uid: dupla repetida conta 1 time/2 pessoas (got ' + c2.teams + '/' + c2.people + ')');
 
+// ── VAGA (placeholder) É SEMPRE ÚNICA — nunca deduplica (bug do dono, 27/jul, Confra) ──
+// Os placeholders não apareciam nos INSCRITOS. A dedup é por uid/email OU, na falta deles,
+// pelo NOME — e vaga não tem identidade: sem nome a chave virava 'n:' (descartada, a vaga
+// SUMIA) e com nome repetido ("Jogador 1" duas vezes, que é o que
+// `_normalizePlaceholderNumbers` existe pra curar) as duas viravam a MESMA chave.
+// Duas vagas são duas vagas: cada uma ocupa um lugar na chave e é uma pessoa a convidar.
+(function () {
+  const casos = [
+    ['placeholder SEM nome não some',
+      [uidPair('a', 'b'), { isPlaceholder: true }, { isPlaceholder: true }], 4, 1],
+    ['placeholders com nome REPETIDO contam separado',
+      [uidPair('a', 'b'), { name: 'Jogador 1', isPlaceholder: true }, { name: 'Jogador 1', isPlaceholder: true }, { name: 'Jogador 1', isPlaceholder: true }], 5, 1],
+    ['placeholders nomeados normalmente',
+      [uidPair('a', 'b'), { name: 'Jogador 1', displayName: 'Jogador 1', isPlaceholder: true }, { name: 'Jogador 2', displayName: 'Jogador 2', isPlaceholder: true }], 4, 1],
+    ['dupla com UM lado vaga',
+      [{ p1Uid: 'a1', p2Name: 'Jogador 1' }, { p1Uid: 'a2', p2Name: 'Jogador 2' }], 4, 2],
+    ['dupla com os DOIS lados vaga e nomes repetidos entre elas',
+      [{ p1Name: 'Jogador 1', p2Name: 'Jogador 2', displayName: 'V1' }, { p1Name: 'Jogador 1', p2Name: 'Jogador 2', displayName: 'V2' }], 4, 2],
+  ];
+  casos.forEach(function (c) {
+    const r = W._countCompetitors({ participants: c[1], waitlist: [], standbyParticipants: [] });
+    ok(r.people === c[2] && r.teams === c[3],
+      'vaga :: ' + c[0] + ' — got ' + r.people + ' pessoa(s)/' + r.teams + ' time(s), esperado ' + c[2] + '/' + c[3]);
+  });
+
+  // CONTRAPROVA: pessoa REAL sem conta (fictício) continua deduplicando pelo nome — o
+  // cânone é que o nome fictício É a identidade. Se isso inflar, a conta passa a mentir
+  // pro outro lado ([[feedback_uid_controls_everything_name_only_ficticio]]).
+  const r2 = W._countCompetitors({ participants: [{ displayName: 'Ana' }, { displayName: 'Bia' }, { displayName: 'Ana' }], waitlist: [], standbyParticipants: [] });
+  ok(r2.people === 2, 'fictício :: nome real repetido continua contando 1 (got ' + r2.people + ')');
+})();
+
 console.log('\n' + (fail === 0 ? '✅ TODOS PASSARAM' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 process.exit(fail === 0 ? 0 : 1);
