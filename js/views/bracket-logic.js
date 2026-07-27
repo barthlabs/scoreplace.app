@@ -1512,30 +1512,33 @@ window._reassignBestLosersToRepechage = function (t) {
       });
     if (!derrotados.length) return;
 
-    var ranked = (typeof window._rankByTiebreakers === 'function')
-      ? window._rankByTiebreakers(t, derrotados).map(function (x) { return (x && x.name) || x; })
-      : derrotados;
-    // ORDEM DOS JOGOS É O DESEMPATE FINAL — e precisa ser IMPOSTA aqui.
-    // `_rankByTiebreakers` não garante ordem estável quando TUDO empata: com 3 derrotados
-    // 6-4 ele devolveu E6,E2,E4. O dono é explícito: nesse caso sobem "os primeiros na
-    // ordem dos jogos". Então o ranking manda enquanto houver mérito diferente, e onde o
-    // mérito é idêntico prevalece a ordem em que os jogos aconteceram.
-    var _mer = {};
-    fonte.forEach(function (m) {
-      if (!m.winner) return;
-      var ehP1 = (m.winner === m.p1);
-      var perd = ehP1 ? m.p2 : m.p1;
-      if (!perd || _vazio(perd)) return;
-      var fez = parseInt(ehP1 ? m.scoreP2 : m.scoreP1, 10) || 0;
-      var tomou = parseInt(ehP1 ? m.scoreP1 : m.scoreP2, 10) || 0;
-      _mer[String(perd)] = fez + ':' + (fez - tomou);
-    });
-    var _pos = {};
-    ranked.forEach(function (n, i) { _pos[String(n)] = i; });
-    // `derrotados` já está na ordem dos jogos; o sort é estável, então empate mantém.
-    ranked = derrotados.slice().sort(function (a, b) {
-      if ((_mer[String(a)] || '') === (_mer[String(b)] || '')) return 0;   // empate → ordem dos jogos
-      return (_pos[String(a)] || 0) - (_pos[String(b)] || 0);              // mérito → critérios do organizador
+    // ── ORDENA PELO CRITÉRIO DO ORGANIZADOR, SEMPRE ────────────────────────────────
+    // `_rankByTiebreakers` aplica os tiebreakers configurados, mas não diz QUEM ficou
+    // empatado — e a ordem que ele devolve para empatados é arbitrária (com 3 derrotados
+    // iguais devolveu E6,E2,E4). A ordem dos jogos é o desempate FINAL, e só pode valer
+    // onde o critério do organizador realmente não distingue.
+    //
+    // Como descobrir isso sem reimplementar os tiebreakers (o que faria a regra sair de
+    // sincronia com a classificação): roda o MESMO ranking duas vezes, com a entrada em
+    // ordens opostas. Se um par mantém a ordem relativa nas duas passadas, o critério o
+    // distingue de fato. Se inverte junto com a entrada, é empate — e aí manda a ordem
+    // dos jogos. Nada de heurística própria de "pontos e saldo": quem decide é sempre o
+    // desempate que o organizador escolheu.
+    var _rank = (typeof window._rankByTiebreakers === 'function')
+      ? function (arr) { return window._rankByTiebreakers(t, arr).map(function (x) { return (x && x.name) || x; }); }
+      : function (arr) { return arr.slice(); };
+    var _posDe = function (lista) { var o = {}; lista.forEach(function (n, i) { o[String(n)] = i; }); return o; };
+    var pA = _posDe(_rank(derrotados));                       // entrada na ordem dos jogos
+    var pB = _posDe(_rank(derrotados.slice().reverse()));     // entrada invertida
+    var pJogo = _posDe(derrotados);                           // ordem dos jogos
+    var ranked = derrotados.slice().sort(function (a, b) {
+      var da = (pA[String(a)] - pA[String(b)]);
+      var db = (pB[String(a)] - pB[String(b)]);
+      // mesmo sinal nas duas passadas ⇒ o critério do organizador separa de verdade
+      if (da < 0 && db < 0) return -1;
+      if (da > 0 && db > 0) return 1;
+      // sinais divergentes (ou zero) ⇒ empatados no critério ⇒ ordem dos jogos
+      return pJogo[String(a)] - pJogo[String(b)];
     });
 
     // quem VENCEU a rodada-fonte está vivo por mérito próprio — nunca é repescado

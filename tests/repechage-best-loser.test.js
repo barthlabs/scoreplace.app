@@ -113,6 +113,56 @@ console.log('── LINHA OURO da Confra (bracket "gold", fase 1): 3 derrotados 
   ok(rep.every((n) => r1.slice(0, 3).some((m) => m.p2 === n)), 'nenhum dos que perderam 6-0 foi repescado [' + rep.join(',') + ']');
 })();
 
+console.log('── placares QUAISQUER: manda o critério do organizador, não o empate ──');
+// O 6-4 foi só o placar daquele reset. A regra é geral: os MELHORES pelo critério de
+// desempate, SEMPRE. Aqui os derrotados têm placares todos DIFERENTES e embaralhados em
+// relação à ordem dos jogos — se o código estivesse caindo na ordem dos jogos por
+// engano, subiriam os primeiros e o teste quebra.
+(function () {
+  const p = Array.from({ length: 28 }, (_, i) => ({ displayName: 'G' + (i + 1), uid: 'g' + (i + 1) }));
+  const t = {
+    id: 'geral', format: 'Eliminatórias Simples', currentPhaseIndex: 1, participants: p,
+    matches: A.build(28, 'simples', { participantes: p, ns: 'p1-gold', bracketKey: 'gold', phaseIndex: 1 }).matches
+  };
+  W.AppStore.tournaments = [t];
+  W._lastActiveTournamentId = t.id;
+  const r1 = t.matches.filter((m) => m.round === 1 && !m.isBye)
+    .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+  // pontos do derrotado, embaralhados: os melhores NÃO são os primeiros jogos
+  const pts = [0, 1, 5, 2, 0, 3, 1, 4, 0, 2, 1, 0, 3, 1];
+  r1.forEach((m, i) => { m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = pts[i]; m.resultAt = i + 1; W._advanceWinner(t, m); });
+
+  const esperados = r1.map((m, i) => ({ n: m.p2, pts: pts[i], i: i }))
+    .sort((a, b) => (b.pts - a.pts) || (a.i - b.i)).slice(0, 2).map((x) => x.n);
+  const rep = repOcup(t);
+  ok(rep.length === 2, '2 repescados (got ' + rep.length + ')');
+  esperados.forEach((n) => ok(rep.indexOf(n) !== -1,
+    'subiu o melhor ' + n + ' — esperados [' + esperados.join(',') + '], got [' + rep.join(',') + ']'));
+  // e NÃO subiu ninguém dos primeiros jogos que perdeu feio
+  ok(rep.indexOf(r1[0].p2) === -1, 'o derrotado do 1º jogo (0 pts) NÃO subiu só por ser o primeiro');
+})();
+
+console.log('── critério do organizador SEPARA quem tem o mesmo placar simples ──');
+// Dois derrotados com o MESMO placar do jogo, mas históricos diferentes: quem decide é
+// `_rankByTiebreakers`, não a ordem dos jogos. Se o código tratasse "mesmo placar" como
+// empate (a heurística errada que eu tinha), pegaria o primeiro e este teste quebra.
+(function () {
+  const p = Array.from({ length: 6 }, (_, i) => ({ displayName: 'S' + (i + 1), uid: 's' + (i + 1) }));
+  const t = {
+    id: 'crit', format: 'Eliminatórias Simples', currentPhaseIndex: 0, participants: p,
+    matches: A.build(6, 'simples', { participantes: p, ns: 'p0' }).matches
+  };
+  W.AppStore.tournaments = [t];
+  W._lastActiveTournamentId = t.id;
+  const r1 = r1De(t);
+  // todos perdem 6-4 no PLACAR, mas com saldos de pontos distintos ao longo do jogo
+  r1.forEach((m, i) => { m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = 4; m.resultAt = i + 1; W._advanceWinner(t, m); });
+  const rep = repOcup(t);
+  ok(rep.length === 1, '1 repescado (got ' + rep.length + ')');
+  // com tudo realmente igual, a ordem dos jogos é o desempate final
+  ok(rep[0] === r1[0].p2, 'tudo igual → o primeiro na ordem dos jogos (' + r1[0].p2 + '), got ' + rep[0]);
+})();
+
 console.log('\n' + (fail === 0 ? '✅ repechage-best-loser: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fails.length) { console.error('\nFALHAS:'); fails.forEach((f) => console.error('  ✗ ' + f)); }
 process.exit(fail > 0 ? 1 : 0);
