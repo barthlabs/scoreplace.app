@@ -737,12 +737,18 @@ window._countCompetitors = function(t) {
     //     chave e contavam como UMA.
     // Duas vagas são duas vagas: cada uma ocupa um lugar na chave e é uma pessoa a
     // convidar. Aqui elas recebem uma chave própria por ocorrência.
-    var PH_NOME = /^(?:jogador|placeholder)\s+\d+$/i;
+    // Fonte ÚNICA do padrão de nome: `window._isPlaceholderName` (tournaments-org-tools).
+    // Fallback com o MESMO regex só pra ordem de carga — nunca uma segunda regra.
+    var _phName = (typeof window._isPlaceholderName === 'function')
+        ? window._isPlaceholderName
+        : function (n) { return /^(?:Jogador|Placeholder)\s+\d+$/i.test(String(n == null ? '' : n).trim()); };
     var ehVaga = function(o, nm) {
         if (o && typeof o === 'object' && o.isPlaceholder) return true;
-        if (o && typeof o === 'object' && (o.uid || o.email)) return false;   // tem identidade
+        // uid 'jog_NN' é vaga LEGADA (identity-core normaliza por aí também)
+        if (o && typeof o === 'object' && o.uid && String(o.uid).indexOf('jog_') === 0) return true;
+        if (o && typeof o === 'object' && (o.uid || o.email)) return false;   // tem identidade real
         var s = String(nm == null ? '' : nm).trim();
-        return !s || PH_NOME.test(s);
+        return !s || _phName(s);
     };
     var pKey = function(o, nm) {
         if (o && typeof o === 'object' && (o.uid || o.email)) return 'id:' + String(o.uid || o.email).toLowerCase();
