@@ -1268,6 +1268,12 @@ function _advanceWinner(t, completedMatch) {
     }
   }
 
+  // REPESCADO = MELHOR DERROTADO — por ÚLTIMO: os passos acima (aresta, _resolveRepFills,
+  // _syncLowerBracket) ainda escrevem nos slots. Idempotente; no-op com a rodada em curso.
+  if (typeof window !== 'undefined' && typeof window._reassignBestLosersToRepechage === 'function') {
+    try { window._reassignBestLosersToRepechage(t); } catch (e) {}
+  }
+
   _maybeGenerate3rdPlace(t);
 
   // Progressive classification: assign final positions to eliminated players
@@ -1427,6 +1433,161 @@ function _rankByTiebreakers(t, playerNames) {
 // ─── Repechage: assign R1 losers to repechage matches by full tiebreaker criteria ─
 // Called after each R1 result. Only acts when ALL R1 matches are complete.
 // Ranks losers using tournament tiebreaker criteria (score diff, sets, games, h2h, etc).
+if (typeof window !== 'undefined') window._rankByTiebreakers = _rankByTiebreakers;
+
+// ─── REPESCADO = MELHOR DERROTADO (regra do dono, 27/jul/2026) ──────────────────
+// A normalização da R2 completa a rodada até a potência de 2 com repescados da R1. O
+// DESENHO escolhe as fontes por POSIÇÃO (os primeiros jogos) porque no sorteio ninguém
+// jogou — não existe "melhor". Quem sobe, porém, tem de ser o melhor derrotado pelos
+// critérios de desempate QUE O ORGANIZADOR ESCOLHEU.
+//
+// Bug: 3 equipes perderam 6-4 na linha Ouro e subiram as dos primeiros jogos.
+//
+// COMO (e por que a 1ª tentativa quebrou): trocar só o lado de cima reintroduziu o
+// AUTO-CONFRONTO (self@lower) — quem eu tirava do slot ficava sem destino, e quem eu
+// punha continuava vivo na chave inferior. Duas pessoas, um lugar cada, e sobrava um
+// fantasma. A troca tem de ser SIMÉTRICA: o melhor sobe para o slot e o que estava lá
+// vai EXATAMENTE para a posição que o outro ocupava. Um swap, não uma substituição.
+// Na Eliminatória Simples o perdedor não tem pouso (é eliminado), então ali a
+// substituição direta basta — e é o que acontece quando o desejado não está vivo em
+// lugar nenhum.
+//
+// Só roda com a rodada-fonte FECHADA: com ela em curso não existe "melhor", e reavaliar
+// a cada resultado faria o nome dançar na tela.
+window._reassignBestLosersToRepechage = function (t) {
+  if (!t) return 0;
+  var all = (typeof window._collectAllMatches === 'function') ? (window._collectAllMatches(t) || []) : (t.matches || []);
+  if (!all.length) return 0;
+  var _vazio = function (v) { return !v || v === 'TBD' || /^bye/i.test(String(v).trim()) || /a definir/i.test(String(v)); };
+  var _r = function (m) { return (typeof m.round === 'number') ? m.round : 1; };
+  var _fase = function (m) { return (m.phaseIndex == null) ? 0 : m.phaseIndex; };
+  var _cat = function (m) { return (m.category == null ? '' : m.category); };
+  // A linha é (fase, categoria). O BRACKET fica de fora de propósito: o swap cruza a
+  // superior com a inferior, que são a MESMA linha do torneio.
+  var _linha = function (m) { return _fase(m) + '|' + _cat(m); };
+  var _ehSup = function (m) { return m.bracket === 'main' || m.bracket === 'upper'; };
+
+  var porLinha = {};
+  all.forEach(function (m) {
+    if (!m || m.winner || !_ehSup(m)) return;
+    ['p1', 'p2'].forEach(function (sl) {
+      if (!m[sl + 'FromRepechage']) return;
+      (porLinha[_linha(m)] = porLinha[_linha(m)] || []).push({ m: m, slot: sl });
+    });
+  });
+
+  var trocas = 0;
+  Object.keys(porLinha).forEach(function (k) {
+    var slots = porLinha[k].slice().sort(function (a, b) {
+      return String(a.m.id).localeCompare(String(b.m.id), undefined, { numeric: true });
+    });
+    var supDaLinha = all.filter(function (m) { return _linha(m) === k && _ehSup(m); });
+    if (!supDaLinha.length) return;
+    var rMin = Math.min.apply(null, supDaLinha.map(_r));
+    var fonte = supDaLinha.filter(function (m) { return _r(m) === rMin && !m.isBye && !m.isSitOut; });
+    // rodada-fonte TODA decidida, senão não há "melhor"
+    if (!fonte.length || !fonte.every(function (m) { return !!m.winner || _vazio(m.p1) || _vazio(m.p2); })) return;
+
+    // derrotados NA ORDEM DOS JOGOS — é o desempate final quando os critérios empatam
+    var derrotados = [];
+    fonte.slice().sort(function (a, b) { return String(a.id).localeCompare(String(b.id), undefined, { numeric: true }); })
+      .forEach(function (m) {
+        if (!m.winner) return;
+        var perd = (m.winner === m.p1) ? m.p2 : m.p1;
+        if (perd && !_vazio(perd) && derrotados.indexOf(perd) === -1) derrotados.push(perd);
+      });
+    if (!derrotados.length) return;
+
+    var ranked = (typeof window._rankByTiebreakers === 'function')
+      ? window._rankByTiebreakers(t, derrotados).map(function (x) { return (x && x.name) || x; })
+      : derrotados;
+    // ORDEM DOS JOGOS É O DESEMPATE FINAL — e precisa ser IMPOSTA aqui.
+    // `_rankByTiebreakers` não garante ordem estável quando TUDO empata: com 3 derrotados
+    // 6-4 ele devolveu E6,E2,E4. O dono é explícito: nesse caso sobem "os primeiros na
+    // ordem dos jogos". Então o ranking manda enquanto houver mérito diferente, e onde o
+    // mérito é idêntico prevalece a ordem em que os jogos aconteceram.
+    var _mer = {};
+    fonte.forEach(function (m) {
+      if (!m.winner) return;
+      var ehP1 = (m.winner === m.p1);
+      var perd = ehP1 ? m.p2 : m.p1;
+      if (!perd || _vazio(perd)) return;
+      var fez = parseInt(ehP1 ? m.scoreP2 : m.scoreP1, 10) || 0;
+      var tomou = parseInt(ehP1 ? m.scoreP1 : m.scoreP2, 10) || 0;
+      _mer[String(perd)] = fez + ':' + (fez - tomou);
+    });
+    var _pos = {};
+    ranked.forEach(function (n, i) { _pos[String(n)] = i; });
+    // `derrotados` já está na ordem dos jogos; o sort é estável, então empate mantém.
+    ranked = derrotados.slice().sort(function (a, b) {
+      if ((_mer[String(a)] || '') === (_mer[String(b)] || '')) return 0;   // empate → ordem dos jogos
+      return (_pos[String(a)] || 0) - (_pos[String(b)] || 0);              // mérito → critérios do organizador
+    });
+
+    // quem VENCEU a rodada-fonte está vivo por mérito próprio — nunca é repescado
+    var venceu = {};
+    fonte.forEach(function (m) { if (m.winner) venceu[String(m.winner)] = 1; });
+    // UMA VIDA EXTRA SÓ. Quem já ocupa OUTRO slot de repescagem (a sobra da rodada
+    // ímpar, por exemplo) não pode ser puxado pra um segundo — sairia com 3 derrotas
+    // na simples, furando o teto que o desenho publica.
+    var jaRepescado = {};
+    all.forEach(function (m) {
+      if (_linha(m) !== k) return;
+      ['p1', 'p2'].forEach(function (sl) {
+        if (m[sl + 'FromRepechage'] && !_vazio(m[sl])) jaRepescado[String(m[sl])] = 1;
+      });
+    });
+    var fila = ranked.filter(function (n) { return !venceu[String(n)]; });
+
+    // Chave vinda do CRESCIMENTO com prefixo congelado (`_sig` começa com 'C<K>|') tem a
+    // inferior montada por OUTRO construtor (_inferiorDaSuperior), com contagens próprias.
+    // Trocar ocupante ali desalinha o pouso do perdedor e a chave para antes da grande
+    // final (medido em growth-frozen-prefix, 25 asserts). Não reavalia.
+    if (all.some(function (m) { return _linha(m) === k && /^C\d+\|/.test(String(m._sig || '')); })) return;
+    var temInferior = all.some(function (m) { return _linha(m) === k && m.bracket === 'lower'; });
+    var usados = {};
+    slots.forEach(function (s) {
+      var atual = s.m[s.slot];
+      // pula quem já está noutro slot de repescagem (exceto o ocupante deste)
+      var quer = null;
+      for (var fi = 0; fi < fila.length; fi++) {
+        var cand = fila[fi];
+        if (usados[String(cand)]) continue;
+        if (jaRepescado[String(cand)] && String(cand) !== String(atual)) continue;
+        quer = cand; usados[String(cand)] = 1; break;
+      }
+      if (!quer) return;
+      if (String(atual) === String(quer)) return;
+
+      // onde o DESEJADO está vivo agora (tipicamente um slot da chave inferior)
+      var origem = null;
+      all.some(function (m) {
+        if (m.winner) return false;
+        return ['p1', 'p2'].some(function (sl) {
+          if (m === s.m && sl === s.slot) return false;
+          if (String(m[sl]) !== String(quer)) return false;
+          origem = { m: m, slot: sl }; return true;
+        });
+      });
+
+      // SEM ORIGEM + chave com INFERIOR ⇒ NÃO TROCA. Na Dupla o perdedor tem pouso: se
+      // eu não sei de onde o promovido veio, não tenho para onde mandar quem sai, e a
+      // inferior fica com um slot que ninguém alimenta (medido em `growth-frozen-prefix`:
+      // a chave parava antes da grande final). Na Simples o perdedor é eliminado e não
+      // há pouso a preservar — ali a substituição direta é segura.
+      if (!origem && temInferior) return;
+      if (!_vazio(atual)) delete jaRepescado[String(atual)];
+      jaRepescado[String(quer)] = 1;
+      s.m[s.slot] = quer;
+      // SWAP: quem saiu do slot ocupa exatamente o lugar de onde o outro veio. Sem isto
+      // o removido some da chave e o promovido fica em dois lugares — o auto-confronto.
+      if (origem) origem.m[origem.slot] = _vazio(atual) ? 'TBD' : atual;
+      trocas++;
+    });
+  });
+  return trocas;
+};
+
 // Top N losers fill repechage matches; rest are eliminated.
 function _assignRepechageLosers(t) {
   var cfg = t.repechageConfig;
