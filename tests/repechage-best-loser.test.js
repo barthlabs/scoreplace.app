@@ -87,6 +87,32 @@ console.log('── UMA vida extra só, e sem double-book ──');
   ok(repOcup(t).join(',') === antes, 'idempotente (' + antes + ' → ' + repOcup(t).join(',') + ')');
 })();
 
+console.log('── LINHA OURO da Confra (bracket "gold", fase 1): 3 derrotados 6-4 ──');
+// O caso REAL. As linhas de uma fase usam o nome que o organizador deu — 'gold'/'silver',
+// não main/upper. Foi por assumir a lista fixa de brackets que este passo não rodava
+// NADA nas linhas Ouro/Prata, e o dono seguia vendo os primeiros por posição.
+(function () {
+  const p = Array.from({ length: 28 }, (_, i) => ({ displayName: 'O' + (i + 1), uid: 'o' + (i + 1) }));
+  const t = {
+    id: 'confra', format: 'Eliminatórias Simples', currentPhaseIndex: 1, participants: p,
+    matches: A.build(28, 'simples', { participantes: p, ns: 'p1-gold', bracketKey: 'gold', phaseIndex: 1 }).matches
+  };
+  W.AppStore.tournaments = [t];
+  W._lastActiveTournamentId = t.id;
+  const r1 = t.matches.filter((m) => m.round === 1 && !m.isBye)
+    .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+  ok(r1[0].bracket === 'gold', 'a linha usa bracket "gold" (got ' + r1[0].bracket + ')');
+  ok(r1.length === 14, 'R1 da Ouro tem 14 jogos (got ' + r1.length + ')');
+  // 3 perdem por 6-4 (os 3 primeiros jogos); o resto perde de 6-0
+  r1.forEach((m, i) => { m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = (i < 3 ? 4 : 0); m.resultAt = i + 1; W._advanceWinner(t, m); });
+  const rep = repOcup(t);
+  ok(rep.length === 2, '2 repescados completam a R2 até 8 (got ' + rep.length + ')');
+  ok(rep.indexOf(r1[0].p2) !== -1 && rep.indexOf(r1[1].p2) !== -1,
+    'subiram os 2 PRIMEIROS dos que perderam 6-4 (' + r1[0].p2 + ',' + r1[1].p2 + '), got [' + rep.join(',') + ']');
+  ok(rep.indexOf(r1[2].p2) === -1, 'o 3º que perdeu 6-4 (' + r1[2].p2 + ') NÃO subiu — só há 2 vagas');
+  ok(rep.every((n) => r1.slice(0, 3).some((m) => m.p2 === n)), 'nenhum dos que perderam 6-0 foi repescado [' + rep.join(',') + ']');
+})();
+
 console.log('\n' + (fail === 0 ? '✅ repechage-best-loser: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fails.length) { console.error('\nFALHAS:'); fails.forEach((f) => console.error('  ✗ ' + f)); }
 process.exit(fail > 0 ? 1 : 0);

@@ -1464,8 +1464,16 @@ window._reassignBestLosersToRepechage = function (t) {
   var _cat = function (m) { return (m.category == null ? '' : m.category); };
   // A linha é (fase, categoria). O BRACKET fica de fora de propósito: o swap cruza a
   // superior com a inferior, que são a MESMA linha do torneio.
-  var _linha = function (m) { return _fase(m) + '|' + _cat(m); };
-  var _ehSup = function (m) { return m.bracket === 'main' || m.bracket === 'upper'; };
+  // A LINHA é (fase, categoria, chave). O nome da chave é o que o organizador deu —
+  // 'gold'/'silver' na Confra —, então NÃO se lista brackets fixos aqui: foi assim que
+  // este passo deixou de rodar por completo nas linhas Ouro/Prata. Na Dupla, `lower` e
+  // `grand` pertencem à MESMA linha da superior (é lá que o swap cruza).
+  var _bkLinha = function (m) {
+    var b = m.bracket || 'main';
+    return (b === 'lower' || b === 'grand') ? 'upper' : b;
+  };
+  var _linha = function (m) { return _fase(m) + '|' + _cat(m) + '|' + _bkLinha(m); };
+  var _ehSup = function (m) { return m.bracket !== 'lower' && m.bracket !== 'grand'; };
 
   var porLinha = {};
   all.forEach(function (m) {
@@ -1485,7 +1493,13 @@ window._reassignBestLosersToRepechage = function (t) {
     if (!supDaLinha.length) return;
     var rMin = Math.min.apply(null, supDaLinha.map(_r));
     var fonte = supDaLinha.filter(function (m) { return _r(m) === rMin && !m.isBye && !m.isSitOut; });
-    // rodada-fonte TODA decidida, senão não há "melhor"
+    // rodada-fonte TODA decidida, senão não há "melhor" — no-op enquanto ela corre.
+    //
+    // NOTA: durante a rodada o slot mostra quem a aresta trouxe (o perdedor do jogo-fonte).
+    // Tentei limpar pra 'TBD' e a chave deixou de coroar campeão em vários N (NOCHAMP no
+    // guardrail): o slot vazio corta a cadeia de avanço. Então o valor provisório fica, e é
+    // CORRIGIDO aqui assim que a rodada fecha — que é quando o jogo de repescagem passa a
+    // ser jogável de qualquer forma.
     if (!fonte.length || !fonte.every(function (m) { return !!m.winner || _vazio(m.p1) || _vazio(m.p2); })) return;
 
     // derrotados NA ORDEM DOS JOGOS — é o desempate final quando os critérios empatam

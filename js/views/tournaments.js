@@ -2840,13 +2840,18 @@ function renderTournaments(container, tournamentId = null) {
                     // ali só oferece uma ação impossível (reportado pelo dono nas Oitavas).
                     // Detecção pela FASE ATUAL: se ela já materializou chave (bracket
                     // main/upper/lower/grand), é eliminatória.
+                    // NÃO listar nomes de bracket aqui. As linhas de uma fase usam o nome
+                    // que o organizador deu ('gold'/'silver' na Confra), não só
+                    // main/upper/lower/grand — foi por assumir a lista fixa que este
+                    // guard não pegou nada e o botão continuou nas Oitavas.
+                    // Critério estrutural: fase de RODADAS guarda os jogos em
+                    // `t.rounds[].matches`; fase de CHAVE guarda em `t.matches` com
+                    // `bracket`. Se a fase atual tem jogo em t.matches, é eliminatória.
                     var _cpIdx = (t.currentPhaseIndex || 0);
-                    var _elimBk = { main: 1, upper: 1, lower: 1, grand: 1 };
-                    var _faseEhElim = (window._collectAllMatches ? (window._collectAllMatches(t) || []) : (t.matches || []))
-                        .some(function (m) {
-                            if (!m || !_elimBk[m.bracket]) return false;
-                            return ((m.phaseIndex == null) ? 0 : m.phaseIndex) === _cpIdx;
-                        });
+                    var _faseEhElim = (Array.isArray(t.matches) ? t.matches : []).some(function (m) {
+                        if (!m || !m.bracket) return false;
+                        return ((m.phaseIndex == null) ? 0 : m.phaseIndex) === _cpIdx;
+                    });
                     var _adManualLbl = hasDraw ? '🎲 Rodada Extra (manual)' : '🎲 Sortear agora (manual)';
                     var _manualBtn = _faseEhElim ? '' : `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._confirmManualAutoDraw('${t.id}')">${_adManualLbl}</button>`;
                     var _phaseCanAdvance = window._isMultiPhase && window._isMultiPhase(t) &&
