@@ -167,6 +167,13 @@ function _applyMyMatchesFilter() {
     clearTimeout(window._pendingSoftRefresh);
     var _goMine = function (behavior) {
       try {
+        // Re-mede o chrome AGORA. `--scroll-anchor` (topbar + dropdown do hamburger +
+        // back-header + barra STICKY de busca + 12px) é o que o `scroll-margin-top` dos
+        // cards e dos boxes de grupo consome. Medir no instante do scroll cobre o caso
+        // em que a barra de busca só passa a existir depois deste render — sem isto o
+        // alvo pousava ATRÁS dela e o topo do card/grupo saía cortado (reportado pelo
+        // dono: o cabeçalho do grupo, com as pills e os botões, ficava escondido).
+        if (typeof window._reflowChrome === 'function') window._reflowChrome();
         // Fase concluída + organizador → o banner "🏆 Avançar" está no topo. O alvo do
         // scroll passa a ser ELE (a próxima ação do org é avançar de fase), não o jogo/
         // grupo do usuário. Só existe pro organizador quando a fase fecha (bracket.js).
@@ -3774,7 +3781,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _tierLC = { gold: '#fbbf24', silver: '#cbd5e1', line3: '#cd7f32', line4: '#3b82f6', upper: '#10b981', lower: '#f59e0b' };
   var _lineLeftBorder = _tierLC[m.bracket] ? ('border-left:4px solid ' + _tierLC[m.bracket] + ';') : '';
   return `
-    <div id="card-${m.id}" data-players="${_searchNames}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:120px;background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" data-players="${_searchNames}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
@@ -3963,7 +3970,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // Controle de PRESENÇA do grupo (entre Combinar e W.O.) — helper ÚNICO compartilhado
     // com o render de grupo Rei/Rainha da rota Liga (t.rounds[].monarchGroups).
     var _grpArrived = window._monGroupArrivedBtn(t, matches, groupDone);
-    html += '<div data-group-box="1" style="scroll-margin-top:120px;background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : '#fbbf24') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
+    html += '<div data-group-box="1" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : '#fbbf24') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       '<div class="btn-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
         '<h3 style="margin:0;font-size:1.1rem;color:var(--text-bright);flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
         (statusBadge || '') + _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
@@ -4170,7 +4177,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     var _woGsPlayers = (sg.players && sg.players.length) ? sg.players : sorted.map(function (s) { return s.name; });
     var _woGsChip = (typeof window._woClaimChip === 'function') ? window._woClaimChip(t, { scope: 'group', roundIndex: (t.currentPhaseIndex || 0), groupName: sg.name, players: _woGsPlayers, matches: _woGsMatches }) : '';
     return `
-      <div class="card" id="group-section-${gi}" data-group-box="1" style="border-left:4px solid ${isMyGroupGS ? '#22d3ee' : groupColor};scroll-margin-top:120px;">
+      <div class="card" id="group-section-${gi}" data-group-box="1" style="border-left:4px solid ${isMyGroupGS ? '#22d3ee' : groupColor};scroll-margin-top:var(--scroll-anchor,120px);">
         <div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:${isMyGroupGS ? '#22d3ee' : groupColor};font-size:1rem;font-weight:800;">${window._safeHtml(sg.name)}${myGroupBadge}</h3>${_woGsChip ? `<span style="margin-left:auto;">${_woGsChip}</span>` : ''}</div>
         <div class="standings-scroll" style="margin-bottom:1rem;">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem;min-width:480px;">
@@ -4939,7 +4946,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // o convite pendente aparece UMA vez só no card de controle (_ligaCtrl) e
           // o substituto convidado já surge nos cards de jogo (via _pendingSub).
           // _woName já foi calculado acima.
-          return '<div data-group-box="1" style="scroll-margin-top:120px;background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
+          return '<div data-group-box="1" style="scroll-margin-top:var(--scroll-anchor,120px);background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
             // Header do grupo: nome + SEU GRUPO + 👑 Rei/Rainha. Quando NÃO há botões
             // (_rightCtrl vazio) economiza espaço colocando tudo numa LINHA só (pedido do
             // dono); com botões, empilha à esquerda e deixa os controles à direita.

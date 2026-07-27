@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.5.21';
+window.SCOREPLACE_VERSION = '1.5.22';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -2733,10 +2733,42 @@ window._reflowChrome = function() {
   // Qualquer sticky abaixo da topbar (ex.: barra de filtro/busca da dashboard) usa
   // `top: calc(var(--topbar-h) + var(--hamburger-dd-h))` pra grudar no fundo da
   // topbar (que cresce ao quebrar linha no mobile) e descer com o menu aberto.
+  // v1.5.22: `--stickybar-h` = altura da barra CANÔNICA de filtro/busca quando ela está
+  // em `position:sticky` (ela gruda logo ABAIXO do back-header, então cobre conteúdo).
+  // 0 quando a tela não tem barra, ou quando a barra rola junto (não-sticky).
+  var stickyBarH = 0;
+  try {
+    var _bars = document.querySelectorAll('[id^="fbwrap-"]');
+    for (var _bi = 0; _bi < _bars.length; _bi++) {
+      var _b = _bars[_bi];
+      if (!_b.offsetParent && _b.offsetHeight === 0) continue;       // invisível
+      if (window.getComputedStyle(_b).position !== 'sticky') continue;
+      var _bh2 = Math.ceil(_b.getBoundingClientRect().height);
+      if (_bh2 > stickyBarH) stickyBarH = _bh2;
+    }
+  } catch (e) {}
+
   try {
     document.documentElement.style.setProperty('--topbar-h', topbarH + 'px');
     document.documentElement.style.setProperty('--hamburger-dd-h', ((ddOpen ? ddH : 0)) + 'px');
     document.documentElement.style.setProperty('--backheader-h', fixedBackHeaderH + 'px');
+    document.documentElement.style.setProperty('--stickybar-h', stickyBarH + 'px');
+    // ── ÂNCORA DE SCROLL (v1.5.22) ────────────────────────────────────────────────
+    // Offset ÚNICO pra qualquer `scrollIntoView({block:'start'})` da app: é TUDO que
+    // fica grudado no topo e taparia o alvo — topbar + dropdown do hamburger +
+    // back-header + a barra sticky de busca — mais 12px de respiro.
+    //
+    // POR QUÊ: os cards e os boxes de grupo usavam `scroll-margin-top:120px` fixo, que
+    // cobria topbar(60) + back-header(50) e ESQUECIA a barra de busca. Resultado medido
+    // pelo dono: o auto-scroll do "meu jogo" parava com o topo do card/grupo escondido
+    // atrás da barra — o cabeçalho do grupo (nome, pills, botões W.O./Cheguei/Combinar)
+    // ficava cortado. Somando a barra, o alvo pousa logo abaixo dela, inteiro.
+    //
+    // Dinâmico de propósito: a topbar quebra em 2 linhas no mobile, o dropdown do
+    // hamburger abre/fecha e a barra existe só em algumas telas. Número fixo erra em
+    // todas essas. O fallback (120px) só vale antes do 1º reflow.
+    document.documentElement.style.setProperty('--scroll-anchor',
+      'calc(' + topbarH + 'px + ' + (ddOpen ? ddH : 0) + 'px + ' + fixedBackHeaderH + 'px + ' + stickyBarH + 'px + 12px)');
   } catch (e) {}
 };
 window._hamburgerOutsideClick = function(e) {
