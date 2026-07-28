@@ -163,6 +163,43 @@ console.log('── critério do organizador SEPARA quem tem o mesmo placar simp
   ok(rep[0] === r1[0].p2, 'tudo igual → o primeiro na ordem dos jogos (' + r1[0].p2 + '), got ' + rep[0]);
 })();
 
+console.log('── ESPERAR A RODADA FECHAR: 1 resultado NÃO define repescado (Ouro e Prata) ──');
+// A queixa do dono: lançou UM jogo da R1 Ouro e o repescado já apareceu no último jogo
+// da R2 Ouro. A aresta enche o slot no instante em que o jogo-fonte fecha — mas só se
+// sabe quem é o melhor com a rodada INTEIRA terminada. O dado fica (esvaziar fazia a
+// pessoa sumir da chave, o slot é o único destino dela) e a EXIBIÇÃO espera: enquanto
+// `pXAguardaMelhor` estiver ligada o card mostra "A definir".
+['gold', 'silver'].forEach(function (linha) {
+  const p = Array.from({ length: 28 }, (_, i) => ({ displayName: linha[0].toUpperCase() + (i + 1), uid: linha[0] + (i + 1) }));
+  const t = {
+    id: 'wait-' + linha, format: 'Eliminatórias Simples', currentPhaseIndex: 1, participants: p,
+    matches: A.build(28, 'simples', { participantes: p, ns: 'p1-' + linha, bracketKey: linha, phaseIndex: 1 }).matches
+  };
+  W.AppStore.tournaments = [t];
+  W._lastActiveTournamentId = t.id;
+  const r1 = t.matches.filter((m) => m.round === 1 && !m.isBye)
+    .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+  const slot = t.matches.filter((m) => m.p1FromRepechage || m.p2FromRepechage)[0];
+  ok(!!slot, linha + ': existe slot de repescagem na R2');
+
+  // UM resultado só
+  const m0 = r1[0]; m0.winner = m0.p1; m0.scoreP1 = 6; m0.scoreP2 = 4; m0.resultAt = 1; W._advanceWinner(t, m0);
+  const aguardando = ['p1', 'p2'].some((sl) => slot[sl + 'FromRepechage'] && slot[sl + 'AguardaMelhor']);
+  ok(aguardando, linha + ': com 1 jogo lançado o slot fica AGUARDANDO (card = "A definir")');
+
+  // fecha a rodada: 3 empatam em 6-4 (os 3 primeiros jogos), o resto perde 6-0
+  r1.forEach((m, i) => { if (m.winner) return; m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = (i < 3 ? 4 : 0); m.resultAt = i + 2; W._advanceWinner(t, m); });
+  const aindaAguarda = ['p1', 'p2'].some((sl) => slot[sl + 'FromRepechage'] && slot[sl + 'AguardaMelhor']);
+  ok(!aindaAguarda, linha + ': fechada a rodada, o slot deixa de aguardar');
+
+  const empatados = r1.slice(0, 3).map((m) => m.p2);      // os 3 que perderam 6-4
+  const rep = repOcup(t);
+  ok(rep.length === 2, linha + ': 2 repescados (got ' + rep.length + ')');
+  ok(rep.indexOf(empatados[0]) !== -1 && rep.indexOf(empatados[1]) !== -1,
+    linha + ': subiram os 2 PRIMEIROS na ordem dos jogos (' + empatados.slice(0, 2).join(',') + '), got [' + rep.join(',') + ']');
+  ok(rep.indexOf(empatados[2]) === -1, linha + ': o 3º empatado (' + empatados[2] + ') NÃO subiu');
+});
+
 console.log('\n' + (fail === 0 ? '✅ repechage-best-loser: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fails.length) { console.error('\nFALHAS:'); fails.forEach((f) => console.error('  ✗ ' + f)); }
 process.exit(fail > 0 ? 1 : 0);

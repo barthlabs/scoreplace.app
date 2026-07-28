@@ -3175,6 +3175,12 @@ async function _preloadPlayerPhotos(tournament) {
   }
 }
 
+// AGUARDANDO MELHOR DERROTADO: o slot de repescagem da normalização guarda o ocupante
+// provisório (a aresta o preenche quando o jogo-fonte fecha), mas ele SÓ VALE quando a
+// rodada inteira termina e os critérios de desempate rodam sobre todos os derrotados.
+// Até lá o card mostra "A definir" — o dado fica, a exibição espera. A flag é posta e
+// retirada por `_reassignBestLosersToRepechage` (bracket-logic).
+
 // ─── Player avatars helper for bracket cards ────────────────────────────────
 function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
   // v4.0.84: identidade = uid → resolve a string GUARDADA da partida pro nome AO VIVO
@@ -3426,7 +3432,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
-      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)))}</div>
+      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)))}</div>
       ${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" style="display:flex;align-items:center;flex-shrink:0;">
         ${showInputs ? p1Score : (p1ScoreVal || '')}
@@ -3435,7 +3441,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
-      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2') : (m.p2Uid || m.team2Uids)))}</div>
+      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2') : (m.p2Uid || m.team2Uids)))}</div>
       ${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" style="display:flex;align-items:center;flex-shrink:0;">
         ${showInputs ? p2Score : (p2ScoreVal || '')}

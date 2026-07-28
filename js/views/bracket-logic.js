@@ -1486,21 +1486,41 @@ window._reassignBestLosersToRepechage = function (t) {
 
   var trocas = 0;
   Object.keys(porLinha).forEach(function (k) {
-    var slots = porLinha[k].slice().sort(function (a, b) {
-      return String(a.m.id).localeCompare(String(b.m.id), undefined, { numeric: true });
-    });
     var supDaLinha = all.filter(function (m) { return _linha(m) === k && _ehSup(m); });
     if (!supDaLinha.length) return;
     var rMin = Math.min.apply(null, supDaLinha.map(_r));
+    // SÓ os slots da NORMALIZAÇÃO — os que ficam na rodada SEGUINTE à fonte.
+    // O outro tipo de repescagem, a da SOBRA (N ímpar), mora na PRÓPRIA rodada-fonte e é
+    // estrutural: enfrenta o perdedor do 1º jogo e tem de ser preenchida na hora. Foi por
+    // mexer também nela que a chave parou de coroar campeão (NOCHAMP no guardrail) quando
+    // tentei segurar o preenchimento.
+    var slots = porLinha[k].filter(function (s) { return _r(s.m) > rMin; })
+      .sort(function (a, b) { return String(a.m.id).localeCompare(String(b.m.id), undefined, { numeric: true }); });
+    if (!slots.length) return;
     var fonte = supDaLinha.filter(function (m) { return _r(m) === rMin && !m.isBye && !m.isSitOut; });
-    // rodada-fonte TODA decidida, senão não há "melhor" — no-op enquanto ela corre.
+    // ── RODADA-FONTE EM CURSO ⇒ O SLOT FICA "A DEFINIR" ───────────────────────────
+    // A aresta `loserNextMatchId` enche o slot no instante em que o jogo-fonte termina: o
+    // dono lançou UM resultado da R1 Ouro e o repescado já apareceu no último jogo da R2
+    // Ouro. Errado por definição — só se sabe quem é o melhor quando a rodada INTEIRA
+    // fecha, com os critérios de desempate aplicados sobre TODOS os derrotados.
     //
-    // NOTA: durante a rodada o slot mostra quem a aresta trouxe (o perdedor do jogo-fonte).
-    // Tentei limpar pra 'TBD' e a chave deixou de coroar campeão em vários N (NOCHAMP no
-    // guardrail): o slot vazio corta a cadeia de avanço. Então o valor provisório fica, e é
-    // CORRIGIDO aqui assim que a rodada fecha — que é quando o jogo de repescagem passa a
-    // ser jogável de qualquer forma.
-    if (!fonte.length || !fonte.every(function (m) { return !!m.winner || _vazio(m.p1) || _vazio(m.p2); })) return;
+    // Mas o slot NÃO pode ser esvaziado: na normalização, os repescados são justamente os
+    // perdedores que NÃO descem (o desenho já reduziu a descida), então esse slot é o
+    // ÚNICO destino deles. Apagar o nome fazia a pessoa sumir da chave — foi o que deu
+    // NOCHAMP no guardrail, em duas tentativas.
+    //
+    // Então o dado FICA e a EXIBIÇÃO espera: a flag abaixo faz o card mostrar "A definir"
+    // enquanto a rodada corre. Quando ela fecha, a flag sai e o nome que aparece já é o do
+    // melhor derrotado. Vale para Ouro, Prata e qualquer linha — o agrupamento é por linha.
+    var _fechou = fonte.length && fonte.every(function (m) { return !!m.winner || _vazio(m.p1) || _vazio(m.p2); });
+    if (!_fechou) {
+      slots.forEach(function (s) {
+        if (s.m.winner) return;                        // já jogado: não mexe
+        if (!s.m[s.slot + 'AguardaMelhor']) { s.m[s.slot + 'AguardaMelhor'] = true; trocas++; }
+      });
+      return;
+    }
+    slots.forEach(function (s) { if (s.m[s.slot + 'AguardaMelhor']) delete s.m[s.slot + 'AguardaMelhor']; });
 
     // derrotados NA ORDEM DOS JOGOS — é o desempate final quando os critérios empatam
     var derrotados = [];
@@ -1512,34 +1532,42 @@ window._reassignBestLosersToRepechage = function (t) {
       });
     if (!derrotados.length) return;
 
-    // ── ORDENA PELO CRITÉRIO DO ORGANIZADOR, SEMPRE ────────────────────────────────
-    // `_rankByTiebreakers` aplica os tiebreakers configurados, mas não diz QUEM ficou
-    // empatado — e a ordem que ele devolve para empatados é arbitrária (com 3 derrotados
-    // iguais devolveu E6,E2,E4). A ordem dos jogos é o desempate FINAL, e só pode valer
-    // onde o critério do organizador realmente não distingue.
+    // ── CRITÉRIO DO ORGANIZADOR MANDA; EMPATE REAL → ORDEM DOS JOGOS ──────────────
+    // `_rankByTiebreakers` ordena pelos tiebreakers configurados e devolve, junto, os
+    // STATS de cada um. Ele só não diz quem ficou EMPATADO — e a ordem que atribui a
+    // empatados é arbitrária (com 3 derrotados idênticos devolveu E6,E2,E4, subindo o
+    // do 3º jogo). Comparar os stats resolve: assinatura igual = empate de verdade.
     //
-    // Como descobrir isso sem reimplementar os tiebreakers (o que faria a regra sair de
-    // sincronia com a classificação): roda o MESMO ranking duas vezes, com a entrada em
-    // ordens opostas. Se um par mantém a ordem relativa nas duas passadas, o critério o
-    // distingue de fato. Se inverte junto com a entrada, é empate — e aí manda a ordem
-    // dos jogos. Nada de heurística própria de "pontos e saldo": quem decide é sempre o
-    // desempate que o organizador escolheu.
-    var _rank = (typeof window._rankByTiebreakers === 'function')
-      ? function (arr) { return window._rankByTiebreakers(t, arr).map(function (x) { return (x && x.name) || x; }); }
-      : function (arr) { return arr.slice(); };
-    var _posDe = function (lista) { var o = {}; lista.forEach(function (n, i) { o[String(n)] = i; }); return o; };
-    var pA = _posDe(_rank(derrotados));                       // entrada na ordem dos jogos
-    var pB = _posDe(_rank(derrotados.slice().reverse()));     // entrada invertida
-    var pJogo = _posDe(derrotados);                           // ordem dos jogos
-    var ranked = derrotados.slice().sort(function (a, b) {
-      var da = (pA[String(a)] - pA[String(b)]);
-      var db = (pB[String(a)] - pB[String(b)]);
-      // mesmo sinal nas duas passadas ⇒ o critério do organizador separa de verdade
-      if (da < 0 && db < 0) return -1;
-      if (da > 0 && db > 0) return 1;
-      // sinais divergentes (ou zero) ⇒ empatados no critério ⇒ ordem dos jogos
-      return pJogo[String(a)] - pJogo[String(b)];
+    // Então: mantém-se a ordem do ranking, e dentro de cada bloco de assinatura idêntica
+    // reordena-se pela ORDEM DOS JOGOS — o desempate final que o dono definiu. Nada é
+    // reimplementado aqui, então a regra não sai de sincronia com a classificação.
+    var _rankObjs = (typeof window._rankByTiebreakers === 'function')
+      ? window._rankByTiebreakers(t, derrotados)
+      : derrotados.map(function (n) { return { name: n }; });
+    var _nomeDe = function (x) { return String((x && x.name) || x); };
+    var _sig = function (x) {
+      if (!x || typeof x !== 'object') return '';
+      return Object.keys(x).filter(function (kk) { return typeof x[kk] === 'number'; })
+        .sort().map(function (kk) { return kk + '=' + x[kk]; }).join('|');
+    };
+    var _pJogo = {};
+    derrotados.forEach(function (n, i) { _pJogo[String(n)] = i; });
+    var ranked = [];
+    var _bloco = [];
+    var _sigAtual = null;
+    var _fecha = function () {
+      if (!_bloco.length) return;
+      _bloco.sort(function (a, b) { return _pJogo[_nomeDe(a)] - _pJogo[_nomeDe(b)]; });
+      _bloco.forEach(function (x) { ranked.push(_nomeDe(x)); });
+      _bloco = [];
+    };
+    _rankObjs.forEach(function (x) {
+      var sg = _sig(x);
+      if (_sigAtual !== null && sg !== _sigAtual) _fecha();
+      _sigAtual = sg;
+      _bloco.push(x);
     });
+    _fecha();
 
     // quem VENCEU a rodada-fonte está vivo por mérito próprio — nunca é repescado
     var venceu = {};
