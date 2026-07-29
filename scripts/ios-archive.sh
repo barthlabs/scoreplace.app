@@ -25,6 +25,29 @@ EXPORT_DIR="${TMPDIR:-/tmp}/scoreplace-$STAMP-export"
 EXPORT_OPTS="$REPO_ROOT/scripts/ios-exportOptions.plist"
 EMBEDDED_WATCH="Products/Applications/App.app/Watch/ScoreplaceWatch.app"
 
+# ── CREDENCIAL DA API (App Store Connect) — PRECISA ESTAR NO ARCHIVE TAMBÉM ──
+# Aprendido em 29/jul/2026 (leva 1.6): a chave só era passada no -exportArchive.
+# Sem ela no `archive`, o -allowProvisioningUpdates NÃO consegue falar com o portal
+# e o build morre com "No Accounts: Add a new account in Accounts settings" +
+# "Provisioning profile doesn't include the HealthKit capability" — exatamente o que
+# acontece quando uma capability NOVA entra no entitlements (HealthKit do relógio).
+# Com a chave, o xcodebuild registra a capability no App ID e regenera o perfil só.
+# Ver project_ios_upload_apikey_canonical.
+ASC_KEY_ID="${ASC_KEY_ID:-Z49BK5AM75}"
+ASC_ISSUER_ID="${ASC_ISSUER_ID:-3231e4cb-d4f6-4ff2-a095-b98d57c33a6c}"
+ASC_KEY_PATH="${ASC_KEY_PATH:-$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8}"
+AUTH_ARGS=()
+if [ -f "$ASC_KEY_PATH" ]; then
+  AUTH_ARGS=(-authenticationKeyPath "$ASC_KEY_PATH" \
+             -authenticationKeyID "$ASC_KEY_ID" \
+             -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+  echo "▶ Chave da API ASC encontrada ($ASC_KEY_ID) — archive e export vão usá-la."
+else
+  echo "⚠ Chave da API ASC AUSENTE em $ASC_KEY_PATH."
+  echo "  Sem ela, capability nova no entitlements FALHA o archive (No Accounts) e"
+  echo "  o upload falha com 'Failed to Use Accounts' (EXIT 70)."
+fi
+
 # ── TRAVA DE TREE NATIVO ────────────────────────────────────────────────────
 # Recusa arquivar a partir de um tree SEM a fiação nativa. Arquivar do main = app
 # QUEBRADO (sem login nativo, 403 em tudo). O marcador _handleGoogleLoginNative em
@@ -62,6 +85,7 @@ xcodebuild \
   -destination 'generic/platform=iOS' \
   -archivePath "$ARCHIVE" \
   -allowProvisioningUpdates \
+  "${AUTH_ARGS[@]}" \
   archive
 
 # ── VALIDAÇÃO CRÍTICA: o watch app precisa estar embutido ──
@@ -115,7 +139,8 @@ xcodebuild -exportArchive \
   -archivePath "$ARCHIVE" \
   -exportPath "$EXPORT_DIR" \
   -exportOptionsPlist "$EXPORT_OPTS" \
-  -allowProvisioningUpdates
+  -allowProvisioningUpdates \
+  "${AUTH_ARGS[@]}"
 
 IPA="$(find "$EXPORT_DIR" -name '*.ipa' -maxdepth 1 | head -1)"
 
