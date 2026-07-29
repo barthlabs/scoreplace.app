@@ -8,7 +8,6 @@ import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
-import androidx.health.connect.client.units.BeatsPerMinute
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,6 +35,9 @@ object WorkoutRecorder {
     private const val TAG = "spWorkout"
     private const val PREFS = "scoreplace_workouts"
     private const val KEY_PENDING = "pending"
+    private const val KEY_ASKED_AT = "askedAt"
+    /** Só pede permissão de novo depois de uma semana. */
+    private const val ASK_COOLDOWN_MS = 7L * 24 * 60 * 60 * 1000
     private const val MAX_PENDING = 20
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -62,6 +64,39 @@ object WorkoutRecorder {
         val app = context.applicationContext
         enqueue(app, json)
         flushPending(app)
+    }
+
+    /**
+     * Se existe treino esperando e falta permissão, abre o pedido — mas SÓ com o app
+     * em primeiro plano (Android bloqueia abrir tela do background) e no máximo uma
+     * vez por semana, pra não virar chateação. Chamado no load do plugin, quando o
+     * usuário acabou de abrir o app depois de jogar.
+     */
+    @JvmStatic
+    fun promptIfNeeded(activity: android.app.Activity) {
+        val app = activity.applicationContext
+        scope.launch {
+            try {
+                if (!isAvailable(app)) return@launch
+                if (readPending(app).length() == 0) return@launch
+                val client = HealthConnectClient.getOrCreate(app)
+                if (client.permissionController.getGrantedPermissions().containsAll(permissions)) return@launch
+                val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                val last = prefs.getLong(KEY_ASKED_AT, 0L)
+                val now = System.currentTimeMillis()
+                if (now - last < ASK_COOLDOWN_MS) return@launch
+                prefs.edit().putLong(KEY_ASKED_AT, now).apply()
+                activity.runOnUiThread {
+                    try {
+                        activity.startActivity(
+                            android.content.Intent(activity, HealthPermissionActivity::class.java)
+                        )
+                    } catch (t: Throwable) { Log.w(TAG, "prompt: ${t.message}") }
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "promptIfNeeded: ${t.message}")
+            }
+        }
     }
 
     /** Tenta gravar tudo que está na fila. Silencioso quando não há permissão. */

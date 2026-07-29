@@ -36,6 +36,8 @@ public class ScoreplaceWatchPlugin extends Plugin implements MessageClient.OnMes
         // Treino que ficou na fila (app fechado / sem permissão na hora) entra agora.
         try {
             WorkoutRecorder.flushPending(getContext());
+            // Tem treino na fila e falta permissão? Pede agora, que o app está na frente.
+            if (getActivity() != null) WorkoutRecorder.promptIfNeeded(getActivity());
         } catch (Throwable t) { /* sem Health Connect: inerte */ }
     }
 

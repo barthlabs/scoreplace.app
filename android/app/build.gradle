@@ -22,6 +22,15 @@ android {
             }
         }
     }
+    // O Health Connect exige minSdk 26 e nosso piso é 24. Em vez de derrubar
+    // Android 7, desugarizamos a core library (java.time) e forçamos o override no
+    // manifest — em API < 26 o WorkoutRecorder simplesmente nunca roda
+    // (HealthConnectClient.getSdkStatus != SDK_AVAILABLE).
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
     defaultConfig {
         applicationId "app.scoreplace"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -60,6 +69,7 @@ dependencies {
     implementation "com.google.android.gms:play-services-wearable:18.2.0"
     // Grava o treino medido no relógio (ExerciseSessionRecord + HeartRateRecord).
     implementation "androidx.health.connect:connect-client:$healthConnectVersion"
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
     implementation "androidx.activity:activity-ktx:$androidxActivityVersion"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

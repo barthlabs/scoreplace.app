@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -60,6 +61,11 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
     </application>
+
+    <!-- Health Connect declara minSdk 26; o app roda de 24 pra cima. O override
+         mantém Android 7 instalando — o código de treino só é acionado quando
+         getSdkStatus() diz SDK_AVAILABLE (Android 9+ com Health Connect). -->
+    <uses-sdk tools:overrideLibrary="androidx.health.connect.client" />
 
     <!-- Permissions -->
 
