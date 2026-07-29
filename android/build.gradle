@@ -9,6 +9,11 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:8.13.0'
         classpath 'com.google.gms:google-services:4.4.4'
+        // Kotlin só no :app, e só por causa do Health Connect: os construtores de
+        // record (ExerciseSessionRecord/HeartRateRecord) têm argumentos default,
+        // que Java não consegue omitir. Ver WorkoutRecorder.kt.
+        // Versão literal de propósito: variables.gradle é aplicado DEPOIS do buildscript.
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files

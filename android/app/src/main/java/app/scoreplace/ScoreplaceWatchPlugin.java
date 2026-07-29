@@ -25,12 +25,41 @@ public class ScoreplaceWatchPlugin extends Plugin implements MessageClient.OnMes
 
     private static final String PATH_STATE = "/scoreplace/state";
     private static final String PATH_INTENT = "/scoreplace/intent";
+    /** Resumo do treino medido no relógio → gravado no Health Connect. */
+    private static final String PATH_WORKOUT = "/scoreplace/workout";
 
     @Override
     public void load() {
         try {
             Wearable.getMessageClient(getContext()).addListener(this);
         } catch (Exception e) { /* sem Play Services / sem relógio: fica inerte */ }
+        // Treino que ficou na fila (app fechado / sem permissão na hora) entra agora.
+        try {
+            WorkoutRecorder.flushPending(getContext());
+        } catch (Throwable t) { /* sem Health Connect: inerte */ }
+    }
+
+    /** JS: o Health Connect está disponível neste aparelho? */
+    @PluginMethod
+    public void healthAvailable(PluginCall call) {
+        JSObject r = new JSObject();
+        boolean ok;
+        try { ok = WorkoutRecorder.isAvailable(getContext()); } catch (Throwable t) { ok = false; }
+        r.put("available", ok);
+        call.resolve(r);
+    }
+
+    /** JS: abre o fluxo oficial do Health Connect pra permitir gravar o treino. */
+    @PluginMethod
+    public void requestHealthPermissions(PluginCall call) {
+        try {
+            android.content.Intent i = new android.content.Intent(getContext(), HealthPermissionActivity.class);
+            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            call.resolve();
+        } catch (Throwable t) {
+            call.reject("health-permission-unavailable");
+        }
     }
 
     @Override
@@ -63,6 +92,14 @@ public class ScoreplaceWatchPlugin extends Plugin implements MessageClient.OnMes
     // entregue ao WatchBridge, que dirige o motor GSM.
     @Override
     public void onMessageReceived(MessageEvent event) {
+        // Fim de partida no relógio: grava o treino (exercício + BPM) no Health Connect.
+        if (PATH_WORKOUT.equals(event.getPath())) {
+            try {
+                String json = new String(event.getData(), StandardCharsets.UTF_8);
+                WorkoutRecorder.onWorkoutJson(getContext(), json);
+            } catch (Throwable t) { /* nunca derruba o app por causa do treino */ }
+            return;
+        }
         if (!PATH_INTENT.equals(event.getPath())) return;
         try {
             String json = new String(event.getData(), StandardCharsets.UTF_8);

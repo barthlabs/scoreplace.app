@@ -40,6 +40,8 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
 
     private static final String PATH_STATE = "/scoreplace/state";
     private static final String PATH_INTENT = "/scoreplace/intent";
+    /** Resumo do treino da partida → celular grava no Health Connect (ver WorkoutRecorder.kt). */
+    private static final String PATH_WORKOUT = "/scoreplace/workout";
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private int courtLeft = 1; // qual time está à esquerda (vem do estado)
@@ -327,17 +329,30 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     // Chegou algum estado do celular nesta sessão de tela? Usado pra parar o retry do hello.
     private boolean gotStateSinceResume = false;
 
-    // ── ♥ BATIMENTO CARDÍACO ─────────────────────────────────────────────────
+    // ── ♥ BATIMENTO CARDÍACO + TREINO ────────────────────────────────────────
     // SensorManager TYPE_HEART_RATE enquanto a tela está viva e há partida AO VIVO.
     // Degrada em silêncio: sem permissão, sem sensor ou sem leitura, o arco fica GONE.
-    // ⚠️ Diferença honesta pro Apple: aqui NÃO abrimos sessão de exercício, então a
-    // partida NÃO conta nos anéis/Google Fit — pra isso seria Health Services
-    // (ExerciseClient) + Health Connect, que é outro bloco de trabalho.
+    //
+    // O ESFORÇO NÃO É DESCARTADO (paridade com o Apple, que grava HKWorkout): as
+    // amostras de BPM viram um resumo de treino que é enviado ao CELULAR no fim da
+    // partida, e lá é gravado no Health Connect (ExerciseSessionRecord +
+    // HeartRateRecord) → conta nos exercícios e na atividade diária. O Health Connect
+    // NÃO existe no relógio (é plataforma de celular), por isso a ponte.
     private static final int REQ_BODY_SENSORS = 4201;
+    /** Treinos mais curtos que isso não valem registro (toque acidental no placar). */
+    private static final long WORKOUT_MIN_MS = 60_000L;
+    /** 1 amostra a cada 5s basta pro HeartRateRecord; evita mensagem gigante. */
+    private static final long HR_SAMPLE_EVERY_MS = 5_000L;
     private SensorManager sensorMgr;
     private Sensor hrSensor;
     private Integer lastBpm = null;
     private boolean hrRegistered = false;
+
+    // Acumuladores do treino em curso. Sobrevivem ao apagar da tela (a sessão só
+    // encerra quando a partida deixa de estar AO VIVO ou o app sai de cena).
+    private long wkStartMs = 0L, wkEndMs = 0L, wkLastSampleMs = 0L;
+    private int wkCount = 0, wkSum = 0, wkMax = 0, wkMin = 0;
+    private final JSONArray wkSamples = new JSONArray();
 
     private final SensorEventListener hrListener = new SensorEventListener() {
         @Override public void onSensorChanged(SensorEvent e) {
@@ -345,10 +360,69 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             int v = Math.round(e.values[0]);
             if (v <= 0) return;                       // 0 = sensor sem contato com a pele
             lastBpm = v;
+            accumulateWorkout(v);
             ui.post(() -> renderHeartRate());
         }
         @Override public void onAccuracyChanged(Sensor s, int a) { }
     };
+
+    /** Soma a leitura no treino em curso (média/máx/mín + amostra a cada 5s). */
+    private void accumulateWorkout(int bpm) {
+        long now = System.currentTimeMillis();
+        if (wkStartMs == 0L) wkStartMs = now;
+        wkEndMs = now;
+        wkCount++;
+        wkSum += bpm;
+        if (bpm > wkMax) wkMax = bpm;
+        if (wkMin == 0 || bpm < wkMin) wkMin = bpm;
+        if (now - wkLastSampleMs >= HR_SAMPLE_EVERY_MS) {
+            wkLastSampleMs = now;
+            try {
+                JSONObject s = new JSONObject();
+                s.put("t", now);
+                s.put("bpm", bpm);
+                wkSamples.put(s);
+            } catch (Exception ignored) { }
+        }
+    }
+
+    /**
+     * Fecha o treino e manda o resumo pro celular gravar no Health Connect.
+     * Idempotente: zera os acumuladores, então chamar duas vezes não duplica.
+     * Espelha o `finishWorkout()` do HeartRate.swift no lado Apple.
+     */
+    private void finishWorkoutAndSend() {
+        if (wkStartMs == 0L || wkCount == 0) { resetWorkout(); return; }
+        long start = wkStartMs, end = Math.max(wkEndMs, wkStartMs);
+        int count = wkCount, sum = wkSum, max = wkMax, min = wkMin;
+        JSONArray samples = new JSONArray();
+        for (int i = 0; i < wkSamples.length(); i++) samples.put(wkSamples.optJSONObject(i));
+        resetWorkout();
+        if (end - start < WORKOUT_MIN_MS) return;      // partida curta demais
+        try {
+            JSONObject o = new JSONObject();
+            o.put("v", 1);
+            o.put("id", UUID.randomUUID().toString());
+            o.put("startMs", start);
+            o.put("endMs", end);
+            o.put("avgBpm", Math.round((float) sum / count));
+            o.put("maxBpm", max);
+            o.put("minBpm", min);
+            o.put("samples", samples);
+            final byte[] bytes = o.toString().getBytes(StandardCharsets.UTF_8);
+            Wearable.getNodeClient(this).getConnectedNodes()
+                .addOnSuccessListener(nodes -> {
+                    MessageClient mc = Wearable.getMessageClient(this);
+                    for (Node node : nodes) mc.sendMessage(node.getId(), PATH_WORKOUT, bytes);
+                });
+        } catch (Exception e) { /* sem nó / json: no-op */ }
+    }
+
+    private void resetWorkout() {
+        wkStartMs = 0L; wkEndMs = 0L; wkLastSampleMs = 0L;
+        wkCount = 0; wkSum = 0; wkMax = 0; wkMin = 0;
+        while (wkSamples.length() > 0) wkSamples.remove(0);
+    }
 
     private void startHeartRate() {
         if (hrRegistered) return;
@@ -423,6 +497,15 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         super.onPause();
         Wearable.getMessageClient(this).removeListener(this);
         stopHeartRate();   // sensor desligado fora da tela = bateria
+        // NÃO fecha o treino aqui: apagar a tela no meio do jogo não é fim de partida.
+        // O fechamento é no onStop (app saiu de cena) ou quando o estado vira active=false.
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        // App saiu de cena de vez: grava o que já foi medido em vez de jogar fora.
+        finishWorkoutAndSend();
     }
 
     private void sendPoint(int team) { sendIntent("point", team); }
@@ -459,7 +542,13 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         boolean active = s.optBoolean("active", false);
         // ♥ só enquanto há partida AO VIVO — sensor ligado com o placar parado é
         // bateria queimada à toa. Espelha o start/stop do lado Apple.
-        if (active) startHeartRate(); else stopHeartRate();
+        // Partida deixou de estar AO VIVO = fim do treino: fecha e manda pro celular.
+        if (active) {
+            startHeartRate();
+        } else {
+            stopHeartRate();
+            finishWorkoutAndSend();
+        }
         courtLeft = s.optInt("courtLeft", 1);
         int leftTeam = courtLeft, rightTeam = leftTeam == 1 ? 2 : 1;
         JSONArray points = s.optJSONArray("points");
