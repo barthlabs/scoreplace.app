@@ -1013,7 +1013,7 @@ function renderDashboard(container) {
               var _cuD = window.AppStore.currentUser;
               var _amOrg = isOrg ||
                 (_cuD && t.creatorUid && _cuD.uid === t.creatorUid) ||
-                (_cuD && Array.isArray(t.coHosts) && t.coHosts.some(function(ch){ return ch.status === 'active' && ((ch.uid && ch.uid === _cuD.uid) || (ch.email && ch.email === _cuD.email)); }));
+                (_cuD && Array.isArray(t.coHosts) && t.coHosts.some(function(ch){ return ch.status === 'active' && ch.uid && ch.uid === _cuD.uid; }));
               if (!_amOrg && (t.creatorUid || t.organizerEmail) && typeof window._contactOrgButtonHtml === 'function') {
                 _html += '<div style="margin-top:10px;">' + window._contactOrgButtonHtml(t, { fullWidth: true, marginTop: '0' }) + '</div>';
               }
@@ -1029,7 +1029,7 @@ function renderDashboard(container) {
               if (_hid) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Mostrar de novo na lista" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.9);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;">👁 Desocultar</button></div>';
               var _cuX = window.AppStore && window.AppStore.currentUser;
               var _amOrgX = isOrg || (_cuX && t.creatorUid && _cuX.uid === t.creatorUid) ||
-                (_cuX && Array.isArray(t.coHosts) && t.coHosts.some(function(ch){ return ch && ch.status === 'active' && ((ch.uid && ch.uid === _cuX.uid) || (ch.email && ch.email === _cuX.email)); }));
+                (_cuX && Array.isArray(t.coHosts) && t.coHosts.some(function(ch){ return ch && ch.status === 'active' && ch.uid && ch.uid === _cuX.uid; }));
               if (!isParticipating && !_amOrgX) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Ocultar este torneio da sua lista" style="background:transparent;border:1px solid rgba(255,255,255,0.16);color:rgba(255,255,255,0.5);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;" onmouseover="this.style.color=\'rgba(255,255,255,0.85)\'" onmouseout="this.style.color=\'rgba(255,255,255,0.5)\'">🙈 Ocultar</button></div>';
               return '';
             })()}

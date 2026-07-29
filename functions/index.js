@@ -2113,6 +2113,84 @@ exports.splitPair = onCall(
   }
 );
 
+// ── Convite de CO-ORGANIZAÇÃO / TRANSFERÊNCIA → CF ────────────────────────────
+// Aceitar convite estava 100% QUEBRADO no cliente (permission-denied determinístico):
+// o aceite promove o co-host a 'active', o que MUDA adminUids, e a regra
+// isCoHostAcceptanceDiff só permitia hasOnly(['coHosts','adminEmails']) — mas quem aceita
+// AINDA NÃO é admin, então nenhuma cláusula cobria. Sentry SCOREPLACE-WEB-6R.
+// A transferência, além disso, não conferia se quem aceitava era o DESTINATÁRIO.
+// Aqui roda no Admin SDK: a regra deixa de ser o gate, esta função é.
+// IDENTIDADE = UID SEMPRE (nunca e-mail/nome/telefone). Lógica pura em ./cohost-core.js.
+// Deploy:  firebase deploy --only functions:respondHostInvite
+const _coHostCore = require("./cohost-core");
+
+exports.respondHostInvite = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const d = request.data || {};
+    const tournamentId = String(d.tournamentId || "");
+    const inviteType = String(d.inviteType || "");
+    const action = String(d.action || "");
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+    if (inviteType !== "cohost" && inviteType !== "transfer") {
+      throw new HttpsError("invalid-argument", "inviteType deve ser cohost ou transfer");
+    }
+    if (action !== "accept" && action !== "reject") {
+      throw new HttpsError("invalid-argument", "action deve ser accept ou reject");
+    }
+
+    // Perfil do caller (para preencher os campos DERIVADOS de exibição na transferência —
+    // a identidade continua sendo só o uid).
+    let callerEmail = ((request.auth.token && request.auth.token.email) || "").toLowerCase();
+    let callerName = (request.auth.token && request.auth.token.name) || "";
+    const db = admin.firestore();
+    try {
+      const u = await db.collection("users").doc(callerUid).get();
+      if (u.exists) {
+        const ud = u.data() || {};
+        callerEmail = String(ud.email || callerEmail || "").toLowerCase();
+        callerName = ud.displayName || callerName || "";
+      }
+    } catch (_e) { /* perfil é só display; nunca derruba a resposta ao convite */ }
+
+    const docRef = db.collection("tournaments").doc(tournamentId);
+    const out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = snap.data();
+      const r = _coHostCore.computeRespondHostInvite(t, callerUid, inviteType, action);
+      if (r.outcome !== "applied" || !r.updateData) return r;
+
+      const upd = Object.assign({}, r.updateData);
+      // Transferência aceita: quem assume vira o organizador também nos campos de exibição.
+      if (inviteType === "transfer" && action === "accept") {
+        upd.organizerEmail = callerEmail || "";
+        upd.organizerName = callerName || "";
+        upd.creatorEmail = callerEmail || "";
+        // adminEmails recomputado com o e-mail novo do organizador (campo derivado).
+        upd.adminEmails = _coHostCore.computeAdminEmails(
+          Object.assign({}, t, upd, { coHosts: upd.coHosts })
+        );
+      }
+      upd.updatedAt = new Date().toISOString();
+      tx.update(docRef, upd);
+      return r;
+    });
+
+    if (out.outcome !== "applied") return { notFound: true };
+    return {
+      notFound: false, applied: true,
+      inviteType, action,
+      tournamentName: out.tournamentName || "",
+      orgUid: out.orgUid || "",
+      fromUid: out.fromUid || ""
+    };
+  }
+);
+
 // O servidor RELÊ letzplayScans/{uid} — não confia em payload do cliente (qualquer authed
 // escreve nessa coleção; sem reler, dava pra forjar o nível de terceiros via esta função).
 // Deploy:  firebase deploy --only functions:applyLetzplayScans

@@ -184,6 +184,9 @@ window.FirestoreDB = {
       if (Array.isArray(cleanData.participants)) cleanData.participants = window._stripStoredNamesForUidEntries(cleanData.participants);
       if (Array.isArray(cleanData.standbyParticipants)) cleanData.standbyParticipants = window._stripStoredNamesForUidEntries(cleanData.standbyParticipants);
       if (Array.isArray(cleanData.waitlist)) cleanData.waitlist = window._stripStoredNamesForUidEntries(cleanData.waitlist);
+      // jul/2026: co-host também é identificado SÓ por uid — o nome sai do doc quando o
+      // perfil é resolvível (o strip preserva o nome de quem NÃO tem perfil).
+      if (Array.isArray(cleanData.coHosts)) cleanData.coHosts = window._stripStoredNamesForUidEntries(cleanData.coHosts);
     }
     // v1.4.30: CHOKE POINT da cura de rótulo cru — "Jogador sem perfil (…)" gravado em
     // m.p1/m.p2/team1/team2 por corrida de cache no sorteio/integração é reescrito pro
@@ -326,6 +329,7 @@ window.FirestoreDB = {
         var _stripped = {};
         if (Array.isArray(clean.participants)) _stripped.participants = window._stripStoredNamesForUidEntries(clean.participants);
         if (Array.isArray(clean.standbyParticipants)) _stripped.standbyParticipants = window._stripStoredNamesForUidEntries(clean.standbyParticipants);
+        if (Array.isArray(clean.coHosts)) _stripped.coHosts = window._stripStoredNamesForUidEntries(clean.coHosts);
         if (Array.isArray(clean.waitlist)) _stripped.waitlist = window._stripStoredNamesForUidEntries(clean.waitlist);
         if (Object.keys(_stripped).length) _persist = Object.assign({}, clean, _stripped);
       }
@@ -636,6 +640,16 @@ window.FirestoreDB = {
       uid1: (opts && opts.uid1) || '', name1: (opts && opts.name1) || '',
       uid2: (opts && opts.uid2) || '', name2: (opts && opts.name2) || '',
       changeRule: !!(opts && opts.changeRule)
+    });
+  },
+  // Responder convite de co-organização/transferência. CF-ONLY: o cliente não consegue
+  // gravar (o aceite muda adminUids e a regra do participante não cobre) e a CF é quem
+  // valida que o destinatário da transferência é quem aceita. Identidade só por uid.
+  async respondHostInvite(tournamentId, inviteType, action) {
+    return await this._callFn('respondHostInvite', {
+      tournamentId: String(tournamentId),
+      inviteType: String(inviteType || ''),
+      action: String(action || '')
     });
   },
   async splitPair(tournamentId, opts) {
