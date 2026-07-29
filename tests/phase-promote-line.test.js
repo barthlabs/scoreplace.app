@@ -27,7 +27,11 @@ function entrantsInLine(res, lineLabel) {
   var names = {};
   (res.matches || []).forEach(function (m) {
     if (m.tierLabel !== lineLabel) return;
-    [m.p1, m.p2].forEach(function (nm) { if (nm && nm !== 'TBD' && nm !== 'BYE') names[nm] = 1; });
+    // BYE não é participante. Filtro por SUBSTRING (não igualdade): o rótulo real é
+    // 'BYE (Avança Direto)', e o motor determinístico coloca as folgas já na RODADA 1
+    // (o motor antigo as criava só na rodada 2), então elas passam por aqui. Mesmo
+    // filtro que tests/double-elim.test.js já usava.
+    [m.p1, m.p2].forEach(function (nm) { if (nm && nm !== 'TBD' && !/BYE/.test(String(nm))) names[nm] = 1; });
   });
   return Object.keys(names);
 }

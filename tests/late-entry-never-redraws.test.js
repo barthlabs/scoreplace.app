@@ -50,25 +50,62 @@ console.log('── entrada tardia NÃO pode re-sortear a chave já publicada �
   const before = firstRoundSnapshot(t);
   ok(before.length === 4, 'pré: 4 jogos reais na 1ª rodada (got ' + before.length + ')');
 
-  // dupla FORMADA à mão, presente, fora da chave (o caso Marcello/Karla)
+  // CHAVE CHEIA (8 duplas: 4 jogos, zero folga).
+  //
+  // A regra de 25/jul/2026 era _"avisa na 9a que precisa da 10a… só cria jogo entre 9 e 10"_:
+  // com a chave inflada até a potência de 2 não havia vaga, e encaixar UM só exigiria
+  // redesenhar a semeadura — o desastre que este arquivo impede.
+  //
+  // Com a ÁRVORE MÍNIMA (jul/2026, o desenho novo substitui o anterior) essa restrição CAIU:
+  // 9 entrantes dão 5 jogos (4 normais + 1 para a sobra), e a sobra é a posição que o 9º
+  // ocupa. Ele entra SOZINHO, por REPESCAGEM, e os 4 confrontos publicados continuam
+  // intocados. Quando a 10ª chega, ela apenas COMPLETA aquele mesmo jogo, que deixa de ser
+  // repescagem e vira confronto normal — de novo sem mexer em nada.
+  //
+  // O invariante deste arquivo é o mesmo de sempre e continua travado abaixo: entrada tardia
+  // é SEMPRE ADITIVA, jogo publicado é INTOCÁVEL, nunca re-sortear. O que mudou é que agora
+  // ninguém precisa ficar esperando um par para poder jogar.
   const nm = 'Marcello / Karla';
-  t.participants.push({ p1Uid: 'mm', p1Name: 'Marcello', p2Uid: 'kf', p2Name: 'Karla', displayName: nm, name: nm, ligaActive: true });
-  t.teamOrigins[nm] = 'formada';
-  t.checkedIn['mm'] = 1; t.checkedIn['kf'] = 1;
+  const chega = (nome, u1, n1, u2, n2) => {
+    t.participants.push({ p1Uid: u1, p1Name: n1, p2Uid: u2, p2Name: n2, displayName: nome, name: nome, ligaActive: true });
+    t.teamOrigins[nome] = 'formada';
+    t.checkedIn[u1] = 1; t.checkedIn[u2] = 1;   // presença é POR MEMBRO, nunca pelo nome da dupla
+  };
 
+  // ── 9ª dupla sozinha: ENTRA por repescagem. Nada na chave se move. ──
+  chega(nm, 'mm', 'Marcello', 'kf', 'Karla');
+  const rA = dc.integrateLateEntries(t, {});
+  ok(before.every(b => firstRoundSnapshot(t).indexOf(b) !== -1),
+     '9ª sozinha: os jogos ORIGINAIS seguem INTACTOS');
+  const jogosDa9 = all(t).filter(m => m && (m.p1 === nm || m.p2 === nm));
+  ok(jogosDa9.length === 1, '9ª sozinha ENTRA e tem exatamente 1 jogo (got ' + jogosDa9.length + ')');
+  ok(jogosDa9.length === 1 && jogosDa9[0].isRepechageSlot,
+     '…e entra pela REPESCAGEM (a sobra da 1ª rodada é a vaga do último inscrito)');
+  ok(!(rA.recusas || []).some(x => x && x.motivo === 'falta-par'),
+     'ninguém mais fica esperando par: sem recusa "falta-par" [' + JSON.stringify(rA.recusas || []) + ']');
+  ok(firstRoundSnapshot(t).length === before.length,
+     'a 9ª não criou confronto REAL novo — ela ocupa a vaga de sobra, que ainda espera adversário');
+
+  // ── 10ª chega: COMPLETA o jogo da 9ª (a repescagem vira confronto normal) ──
+  const nm2 = 'Ana / Bia';
+  chega(nm2, 'an', 'Ana', 'bi', 'Bia');
   const r = dc.integrateLateEntries(t, {});
 
   const after = firstRoundSnapshot(t);
-  // ⚠️ O ASSERT CENTRAL: os 6 jogos que já existiam continuam EXATAMENTE iguais.
+  // ⚠️ O ASSERT CENTRAL: os jogos que já existiam continuam EXATAMENTE iguais.
   ok(before.every(b => after.indexOf(b) !== -1),
      '✅ os jogos ORIGINAIS seguem INTACTOS (mesmos ids e confrontos) [' + JSON.stringify(r) + ']');
   // e nenhum rótulo quebrado tipo "/ Camila Putignani" (dupla virando individual)
   const broken = all(t).filter(m => m && [m.p1, m.p2].some(x => typeof x === 'string' && /^\s*\/|\/\s*$/.test(x)));
   ok(broken.length === 0, 'nenhum rótulo de dupla quebrado ("/ Fulano") — got ' + broken.length);
-  // a dupla nova entrou (num jogo NOVO, vs "a definir" ou contra alguém)
-  const mine = all(t).filter(m => m && (m.p1 === nm || m.p2 === nm));
-  ok(mine.length >= 1, 'a dupla tardia entrou na chave (jogo novo)');
-  ok(mine.every(m => m.p1 !== m.p2), 'não joga contra si mesma');
+  // as duas entraram, e entraram UMA CONTRA A OUTRA — é o "jogo 5"
+  const jogo = all(t).filter(m => m && [m.p1, m.p2].indexOf(nm) !== -1 && [m.p1, m.p2].indexOf(nm2) !== -1);
+  ok(jogo.length === 1, 'as 2 tardias entraram NO MESMO jogo novo (got ' + jogo.length + ')');
+  ok(all(t).filter(m => m && (m.p1 === nm || m.p2 === nm)).length === 1, 'a 9ª tem exatamente 1 jogo');
+  ok(all(t).filter(m => m && (m.p1 === nm2 || m.p2 === nm2)).length === 1, 'a 10ª tem exatamente 1 jogo');
+  ok(after.length === before.length + 1,
+     'a 1ª rodada cresceu de ' + before.length + ' pra ' + after.length + ' — 1 jogo novo, só');
+  ok(jogo.every(m => m.p1 !== m.p2), 'não joga contra si mesma');
 })();
 
 console.log('\n' + (fail === 0 ? '✅ late-entry-never-redraws: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');

@@ -1597,6 +1597,22 @@ input[type="number"] {
   vertical-align: middle;
   margin-right: 6px;
 }
+/* CANON v1.5.14 (dono: "faz o spin do tamanho do botão e centralizado; canonize isso para
+   sempre que não for instantâneo"): botão ocupado centra o spinner no PRÓPRIO botão. O
+   `margin-right` do .btn-spinner só faz sentido quando há TEXTO ao lado — sozinho ele
+   descentraliza (era o caso do ✕ de 24px). O tamanho vem inline do _spinButton, medido do
+   botão. Ver [[project_busy_button_canonical]]. */
+button[data-spinning="1"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+button[data-spinning="1"] .btn-spinner:only-child { margin-right: 0; }
+/* O ✕ do .cancel-x-btn é DESENHADO por ::before/::after — sem escondê-los o spinner girava
+   por trás do X. Some enquanto processa e volta sozinho quando o atributo sai. */
+button.cancel-x-btn[data-spinning="1"]::before,
+button.cancel-x-btn[data-spinning="1"]::after { display: none; }
+button.cancel-x-btn[data-spinning="1"] { background: #6b7280; }
 button[data-spinning="1"] {
   pointer-events: none;
   opacity: 0.75;
@@ -1730,14 +1746,7 @@ html, body,
   overscroll-behavior: contain;
 }
 
-/* Análise de Inscritos — rótulo do botão de categoria por largura. Em tela estreita
-   as 2 colunas de gênero têm ~50% cada, e "➕ Criar categoria" não cabe: era ele que
-   empurrava a coluna Masculino pra fora da tela. As duas versões vão no DOM e o CSS
-   escolhe — nada de medir largura em JS (o relatório re-renderiza sozinho e a medida
-   ficaria defasada). Ver createBtn em tournaments-enrollment-report.js. */
-.er-lbl-short { display: inline; }
-.er-lbl-full { display: none; }
-@media (min-width: 520px) {
-  .er-lbl-short { display: none; }
-  .er-lbl-full { display: inline; }
-}
+/* (v1.5.16) `.er-lbl-short/.er-lbl-full` REMOVIDOS: existiam pro rótulo do botão
+   "➕ Criar categoria" da Análise de Inscritos caber na coluna de 50% do celular. O botão
+   virou TOGGLE sem texto (createToggle), então o problema de largura deixou de existir e as
+   classes ficaram sem nenhum consumidor em JS. */

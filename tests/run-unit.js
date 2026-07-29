@@ -8,6 +8,50 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/test-utils.js',
+  // MOTOR DE CHAVES determinístico (js/views/chaves.js): a chave é função pura de
+  // (N, formato). Trava os invariantes que quebraram AO VIVO no torneio de casais
+  // (1.5.2→1.5.5): auto-confronto Time X vs X, tardio derrubando confronto já
+  // sorteado, tardio sem jogo, perdedor sem pouso na inferior. Se estas duas
+  // ficarem vermelhas, alguém reintroduziu patch incremental na chave.
+  'tests/chaves-aceite.test.js',
+  'tests/chaves-stress.test.js',
+  // JOGA a chave inteira até o campeão com o _advanceWinner REAL (não simulação).
+  // Foi este que pegou os 3 bugs do adapter que os testes de estrutura não viam:
+  // double-book do perdedor em fonte de repescagem (auto-confronto), cadeia
+  // travada por jogo com os dois lados mortos, e placar recolado em confronto
+  // diferente ao cruzar potência de 2.
+  'tests/chaves-adapter.test.js',
+  'tests/growth-frozen-prefix.test.js',
+  // O AVISO da chave cheia ("2 novas equipes para novo confronto") derivado do MESMO estado
+  // que faz o motor recusar com 'falta-par'. Existe pra tela nunca prometer o que o motor
+  // não fará — e pra o organizador parar de depender de um toast que some.
+  'tests/late-growth-gap-banner.test.js',
+  // Dupla tardia virando "#10" na chave (bug ao vivo 26/jul): rótulo pela fonte única de
+  // nome (uid→perfil) e identidade pelos DOIS uids da dupla — nos dois carimbos do adapter
+  // (sorteio e crescimento) — mais a cura do doc já gravado.
+  'tests/late-entry-slot-label-uid.test.js',
+  // Desfazer dupla: ENTRADA ÚNICA que roteia (roster → splitPair, espera → splitLatePair,
+  // lugar nenhum → AVISA). O `return` mudo do roster era o "desfazer não funciona mais" —
+  // clique sem toast e sem NENHUMA invocação da CF nos logs.
+  'tests/split-dupla-routing.test.js',
+  // BYE nunca vira card de jogo — a rodada mostra só confrontos VERDADEIROS e quem passou
+  // leva a tag na rodada seguinte. A regra era canônica mas vivia presa no renderer de FASE;
+  // a Dupla Eliminatória retorna antes dele e desenhava o "PARTIDA vs BYE (Avança Direto)".
+  'tests/bye-never-a-card.test.js',
+  // "JOGO N" tem UM contador só. Regressão vista ao vivo: número da chave superior
+  // repetido na inferior, porque um 2º contador dentro de renderDoubleElimBracket
+  // sobrescrevia a fonte única sem pular BYE e sem deduplicar por id.
+  'tests/game-number-single-counter.test.js',
+  // A única inversão que existe: FINAL é o último jogo do torneio, 3º/4º um número
+  // abaixo (mesmo a final aparecendo ACIMA do 3º na tela). Pegou 2 furos: a Dupla
+  // Eliminatória não numerava o 3º lugar, e t.thirdPlaceMatch (que mora fora de
+  // t.matches) não era visitado por ninguém, em nenhum formato.
+  'tests/game-number-final-last.test.js',
+  // O TESTE DO FIASCO: torneio em andamento, com placar lançado, recebe dupla tardia.
+  // Prova que o placar sobrevive no MESMO jogo, o tardio ganha jogo de verdade (com
+  // pouso na inferior, na dupla), nenhum confronto existente muda, e a chave ainda
+  // fecha com campeão. Substitui as ~1.250 linhas de cirurgia incremental.
+  'tests/late-entry-recalc.test.js',
   'tests/bracket-logic.test.js',
   // Trava a canonização: o cliente NÃO sorteia a Liga agendada (fim da corrida
   // cliente×CF). Se alguém religar o poller, esta suíte fica vermelha.
@@ -94,6 +138,7 @@ const SUITES = [
   'tests/wo-outcome-negotiation.test.js',
   'tests/late-enroll-inherit.test.js',
   'tests/late-enroll-window-r2-result.test.js',
+  'tests/dash-enroll-late-window.test.js',
   'tests/round-display-no-r0.test.js',
   'tests/result-approval-uid.test.js',
   'tests/tiebreak-set-score.test.js',
@@ -114,8 +159,13 @@ const SUITES = [
   // Autopresença via presença de LOCAL: check-in confirmado no local do torneio, na janela
   // [início−2h, fim] → vira PRESENTE (verde) sozinho. Sem GPS silencioso; respeita "ausente" do org.
   'tests/auto-presence-venue.test.js',
+  // "Iniciar" pelo RELÓGIO: a escolha do 1º sacador feita no relógio é aplicada e a tela
+  // "Quem saca primeiro?" do celular é CONFIRMADA — senão a partida não começa (serveOrder
+  // vazio ⇒ sem sacador ⇒ sem a bolinha no nome). Dirige o js/watch-bridge.js REAL.
+  'tests/watch-start-serve.test.js',
   // Sandbox (SB) do dev — rede de isolamento: notif mudas, stats/resultados não vazam, invisível
-  // pra não-dev. Trava _statsEligibleTournaments + getVisibleTournaments/getMyParticipations.
+  // pra não-dev. Trava _statsEligibleTournaments + getVisibleTournaments/getMyParticipations +
+  // ENTREGA (memberUids do SB = só o dev, senão o Firestore entrega o doc pra todo participante).
   'tests/sandbox-isolation.test.js',
   // Sandbox — criação do clone: _openOrCreateSandbox clona o estado atual (deep-copy), privado +
   // notif mudas + isSandbox, dev-only, sem tocar no original; 2ª chamada abre o mesmo SB.
@@ -213,6 +263,10 @@ const SUITES = [
   // Bug (dono, jul/2026): Dupla Elim playin, repescado JÁ definido (frozen) + dupla formada à mão
   // (órfão de roster) → entra CIRURGICAMENTE, sem redraw, preservando o congelado.
   'tests/late-dupla-orphan-frozen-rep.test.js',
+  // Bug (dono, torneio AO VIVO 25/jul/2026 — SB Casais): dupla tardia PRESENTE com a R1 sup já com
+  // placar não ganhava jogo (ficava presa na espera) e o "a definir" do tardio virava BYE em vez de
+  // puxar o MELHOR DERROTADO da R1. Regras 1 e 2 do dono, ponta a ponta.
+  'tests/late-pair-repechage.test.js',
   // Bug (dono, jul/2026): "Presentes chega em 24, cai e dá pulinhos" — doc stale da CF trocava o
   // torneio inteiro e engolia a presença otimista recém-marcada.
   'tests/cf-doc-clobbers-presence.test.js',
@@ -237,6 +291,10 @@ const SUITES = [
   // Instabilidade da chamada (dono: "presença pulando e regredindo depois de 24"): a integração era
   // disparada 1× por toggle → enxurrada de docs+re-render. Rajada agora coalesce numa chamada.
   'tests/late-integration-debounce.test.js',
+  // Torneio AO VIVO (dono, 25/jul/2026): marcou presença pós-sorteio e NÃO gerou jogo. Duas causas —
+  // disparo ENGOLIDO quando havia chamada em voo (sem fila, sem retry) e coletor CEGO pra quem ficou
+  // em `participants` fora da chave (só espera + dupla 'formada' entravam).
+  'tests/late-integration-never-dropped.test.js',
   // Dados REAIS do SB (dono): mesmo par de uids em 2 jogos com NOMES diferentes ("Jogador sem
   // perfil (aL7U)…" vs "Marcello/Karla") — guards por NOME não casavam. Membership é por UID.
   'tests/late-entry-uid-identity.test.js',
@@ -271,6 +329,7 @@ const SUITES = [
   'tests/dupla-elim-late-sweep.test.js',
   // Bug (dono, 17/jul): contagem INSCRITOS/EQUIPES pulava dupla só-uid (nome stripado) — 8/4 vs 26/13.
   'tests/count-competitors.test.js',
+  'tests/monarch-late-roster.test.js',
   'tests/phase-repechage-lines.test.js',
   'tests/reset-tournament.test.js',
   'tests/dupla-elim-render.test.js',
@@ -327,6 +386,11 @@ const SUITES = [
   'tests/inscritos-grid-canon.test.js',
   // Botões CANCELAR do fluxo de sorteio são VERMELHOS (#dc2626), nunca transparentes. v1.3.103.
   'tests/draw-cancel-red-canon.test.js',
+  // FANTASMA DE ARRASTE (bug ao vivo 26/jul): card de inscrito flutuando preso sobre a
+  // lista, só sumia fechando o app — o clone morava no <body> e os listeners que o
+  // matavam morriam com o container no re-render. Trava a rede única de aborto
+  // (data-drag-ghost + _activeDragReset + vigia). Comportamento: tests/e2e/drag-ghost.spec.js.
+  'tests/drag-ghost-canon.test.js',
   'functions/test-match-roster.js',
   // Formar/desfazer dupla manual → CF (roster→CF): lógica pura de pair-core (espelha
   // _formDuplaByUids/_splitDupla). A replicação sandbox roda no emulador (test-pair-replicate.js). v1.3.x.

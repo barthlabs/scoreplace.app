@@ -170,9 +170,12 @@ window.FirestoreDB = {
       // listener `where(memberUids array-contains uid)` parava de devolver o
       // torneio e ele desaparecia da tela do participante. Merge prev+new
       // garante que um uid, uma vez membro, nunca é removido por um save.
+      // SANDBOX é a EXCEÇÃO ao "nunca encolhe": no SB o memberUids é SUBSTITUÍDO pelos uids
+      // do dev (sem união), senão os uids reais copiados na clonagem ressuscitariam a cada
+      // save e o Firestore voltaria a entregar o SB no listener de todo participante.
       var _newUids  = this._computeMemberUids(cleanData);
       var _prevUids = Array.isArray(tourData.memberUids) ? tourData.memberUids : [];
-      cleanData.memberUids = Array.from(new Set(_prevUids.concat(_newUids)));
+      cleanData.memberUids = window._mergeMemberUids(cleanData, _prevUids, _newUids);
     }
     // v4.5.85 (ITEM 3 · Fase 4): SANITIZA identidade — não grava nome de quem tem uid
     // (resolve do perfil vivo); guest sem uid mantém o nome. Opera na CÓPIA (cleanData),
@@ -302,14 +305,10 @@ window.FirestoreDB = {
       // saveTournament: um uid/email que só existe no denormalizado (co-host por
       // path que não popula participants) não pode sumir e derrubar o listener
       // `array-contains` de quem depende dele. Ver saveTournament (v1.8.96/1.9.84).
-      var _union = function (prev, next) {
-        var p = Array.isArray(prev) ? prev : [];
-        var n = Array.isArray(next) ? next : [];
-        return Array.from(new Set(p.concat(n)));
-      };
+      // SANDBOX: _mergeMemberUids SUBSTITUI (não une) — ver saveTournament/persist-core.
       data.adminEmails  = self._computeAdminEmails(data);
       data.adminUids    = self._computeAdminUids(data);
-      data.memberUids   = _union(data.memberUids, self._computeMemberUids(data));
+      data.memberUids   = window._mergeMemberUids(data, data.memberUids, self._computeMemberUids(data));
       try {
         if (typeof window !== 'undefined' && typeof window._nextOwedDrawMs === 'function') {
           var owed = window._nextOwedDrawMs(data);

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.5.1';
+window.SCOREPLACE_VERSION = '1.6';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -975,6 +975,15 @@ window._isSandboxRoute = function () {
 window._tournamentNotificationsMuted = function (t) {
   return !!(t && (t.notificationsMuted === true || t.isSandbox === true));
 };
+// CINTO de ingestão: tira os SB da lista pra quem não é o dev. Aplicado em TODO ponto onde
+// torneios entram no AppStore (listener, load, cache) — assim nenhum consumidor de
+// AppStore.tournaments precisa lembrar de filtrar (eram 2 de dezenas). O suspensório é o
+// memberUids só-dev, que impede o doc de sequer ser entregue. Ver project_sandbox_tournament.
+window._dropSandboxForNonDev = function (list) {
+  var arr = Array.isArray(list) ? list : [];
+  if (window._isTestIdentity && window._isTestIdentity()) return arr;
+  return arr.filter(function (t) { return !(t && t.isSandbox === true); });
+};
 // Lista de torneios elegível pra STATS GLOBAIS (perfil, troféus, pills, confrontos):
 // exclui os sandboxes — resultados do SB não vazam pra agregação nenhuma. Recebe a
 // lista base (default = AppStore.tournaments).
@@ -1123,14 +1132,14 @@ window._resyncSandboxRoster = function (ft) {
     ft.monarchWaitlist = {};
     if (typeof window._ensureEnrollSeqs === 'function') window._ensureEnrollSeqs(ft);
 
-    // memberUids = donos do SB + uids do roster (recomputado do zero, sem herdar o do original).
-    var mu = {};
-    if (ft.sandboxOwnerUid) mu[ft.sandboxOwnerUid] = 1;
-    if (ft.creatorUid) mu[ft.creatorUid] = 1;
-    ft.participants.forEach(function (p) {
-      [p.uid, p.p1Uid, p.p2Uid].forEach(function (u) { if (u) mu[u] = 1; });
-    });
-    ft.memberUids = Object.keys(mu);
+    // memberUids = SÓ os donos do SB (dev). Antes o roster real entrava aqui — e era isso
+    // que fazia o Firestore ENTREGAR o SB no listener de cada participante espelhado. O
+    // roster continua completo em participants[] (é dele que o motor sorteia); memberUids é
+    // só chave de entrega. Fonte única: _computeMemberUids. Ver project_sandbox_tournament.
+    ft.coHosts = [];
+    ft.memberUids = (typeof window._computeMemberUids === 'function')
+      ? window._computeMemberUids(ft)
+      : [ft.sandboxOwnerUid, ft.creatorUid].filter(Boolean);
   } catch (e) { if (window._error) window._error('resyncSandboxRoster', e); }
 };
 
@@ -2724,10 +2733,42 @@ window._reflowChrome = function() {
   // Qualquer sticky abaixo da topbar (ex.: barra de filtro/busca da dashboard) usa
   // `top: calc(var(--topbar-h) + var(--hamburger-dd-h))` pra grudar no fundo da
   // topbar (que cresce ao quebrar linha no mobile) e descer com o menu aberto.
+  // v1.5.22: `--stickybar-h` = altura da barra CANÔNICA de filtro/busca quando ela está
+  // em `position:sticky` (ela gruda logo ABAIXO do back-header, então cobre conteúdo).
+  // 0 quando a tela não tem barra, ou quando a barra rola junto (não-sticky).
+  var stickyBarH = 0;
+  try {
+    var _bars = document.querySelectorAll('[id^="fbwrap-"]');
+    for (var _bi = 0; _bi < _bars.length; _bi++) {
+      var _b = _bars[_bi];
+      if (!_b.offsetParent && _b.offsetHeight === 0) continue;       // invisível
+      if (window.getComputedStyle(_b).position !== 'sticky') continue;
+      var _bh2 = Math.ceil(_b.getBoundingClientRect().height);
+      if (_bh2 > stickyBarH) stickyBarH = _bh2;
+    }
+  } catch (e) {}
+
   try {
     document.documentElement.style.setProperty('--topbar-h', topbarH + 'px');
     document.documentElement.style.setProperty('--hamburger-dd-h', ((ddOpen ? ddH : 0)) + 'px');
     document.documentElement.style.setProperty('--backheader-h', fixedBackHeaderH + 'px');
+    document.documentElement.style.setProperty('--stickybar-h', stickyBarH + 'px');
+    // ── ÂNCORA DE SCROLL (v1.5.22) ────────────────────────────────────────────────
+    // Offset ÚNICO pra qualquer `scrollIntoView({block:'start'})` da app: é TUDO que
+    // fica grudado no topo e taparia o alvo — topbar + dropdown do hamburger +
+    // back-header + a barra sticky de busca — mais 12px de respiro.
+    //
+    // POR QUÊ: os cards e os boxes de grupo usavam `scroll-margin-top:120px` fixo, que
+    // cobria topbar(60) + back-header(50) e ESQUECIA a barra de busca. Resultado medido
+    // pelo dono: o auto-scroll do "meu jogo" parava com o topo do card/grupo escondido
+    // atrás da barra — o cabeçalho do grupo (nome, pills, botões W.O./Cheguei/Combinar)
+    // ficava cortado. Somando a barra, o alvo pousa logo abaixo dela, inteiro.
+    //
+    // Dinâmico de propósito: a topbar quebra em 2 linhas no mobile, o dropdown do
+    // hamburger abre/fecha e a barra existe só em algumas telas. Número fixo erra em
+    // todas essas. O fallback (120px) só vale antes do 1º reflow.
+    document.documentElement.style.setProperty('--scroll-anchor',
+      'calc(' + topbarH + 'px + ' + (ddOpen ? ddH : 0) + 'px + ' + fixedBackHeaderH + 'px + ' + stickyBarH + 'px + 12px)');
   } catch (e) {}
 };
 window._hamburgerOutsideClick = function(e) {
@@ -4138,6 +4179,61 @@ window._markDragSource = function (el) {
     if (card) card.classList.add('sp-drag-source');
   } catch (e) {}
 };
+// ── FANTASMA DE ARRASTE: varredura canônica (v1.5.20) ────────────────────────
+// Todo clone flutuante de arraste por TOQUE (mesclar inscritos, gerenciador de
+// categorias, formar dupla tardia) vive no <body> e é marcado com
+// data-drag-ghost="1"; o card de origem que fica esmaecido leva
+// data-drag-dimmed="1". Quando o gesto é INTERROMPIDO (re-render no meio do
+// arraste, cancelamento do SO, app pro fundo, navegação), o touchend/touchcancel
+// do container nunca chega — o clone ficava órfão sobreposto à lista e só sumia
+// fechando o app. Aqui fica a rede única: quem estiver arrastando publica sua
+// função de limpeza em window._activeDragReset e ela é chamada em toda saída.
+window._activeDragReset = null;   // limpeza do arraste em curso (null = nenhum)
+
+// force=true varre mesmo com arraste ativo (usado por _abortActiveDrag).
+window._killDragGhosts = function (force) {
+  try {
+    if (!force && window._activeDragReset) return; // arraste legítimo em andamento
+    var gs = document.querySelectorAll('[data-drag-ghost="1"]');
+    for (var i = 0; i < gs.length; i++) { if (gs[i].parentElement) gs[i].parentElement.removeChild(gs[i]); }
+    var ds = document.querySelectorAll('[data-drag-dimmed="1"]');
+    for (var j = 0; j < ds.length; j++) {
+      ds[j].style.opacity = '';
+      ds[j].style.boxShadow = '';
+      ds[j].style.outline = '';
+      ds[j].style.outlineOffset = '';
+      ds[j].removeAttribute('data-drag-dimmed');
+    }
+  } catch (e) {}
+};
+
+// Aborta o arraste em curso (se houver) e varre qualquer resíduo.
+window._abortActiveDrag = function () {
+  var r = window._activeDragReset;
+  window._activeDragReset = null;
+  if (typeof r === 'function') { try { r(); } catch (e) {} }
+  window._killDragGhosts(true);
+};
+
+if (!window._spDragGhostWired) {
+  window._spDragGhostWired = true;
+  // Gesto morto pelo SO / ponteiro cancelado / fim de arraste nativo.
+  ['touchcancel', 'pointercancel', 'dragend'].forEach(function (ev) {
+    try { document.addEventListener(ev, function () { window._abortActiveDrag(); }, true); } catch (e) {}
+  });
+  // App pro fundo, janela perdeu foco, navegação de rota: nada sobrevive.
+  try { document.addEventListener('visibilitychange', function () { if (document.hidden) window._abortActiveDrag(); }); } catch (e) {}
+  try { window.addEventListener('blur', function () { window._abortActiveDrag(); }); } catch (e) {}
+  try { window.addEventListener('pagehide', function () { window._abortActiveDrag(); }); } catch (e) {}
+  try { window.addEventListener('hashchange', function () { window._abortActiveDrag(); }); } catch (e) {}
+  // Dedo/ponteiro soltou: se o dono do arraste já se limpou (_activeDragReset
+  // nulo) mas sobrou clone no <body>, varre. Em setTimeout pra rodar DEPOIS do
+  // handler de drop do próprio arraste.
+  var _sweepAfterRelease = function () { setTimeout(function () { window._killDragGhosts(); }, 0); };
+  try { document.addEventListener('touchend', _sweepAfterRelease, true); } catch (e) {}
+  try { document.addEventListener('pointerup', _sweepAfterRelease, true); } catch (e) {}
+}
+
 // Desliga o modo compacto em QUALQUER fim de arraste (uma vez só).
 if (!window._spDragCompactWired) {
   window._spDragCompactWired = true;
@@ -5271,6 +5367,16 @@ window._spinButton = function(btn, label) {
   if (!btn || btn.getAttribute('data-spinning') === '1') return;
   var original = btn.innerHTML;
   var _oFilter = btn.style.filter, _oCursor = btn.style.cursor, _oOpacity = btn.style.opacity;
+  // v1.5.8: guarda o restore no próprio elemento pra _spinButtonDone soltar por EVENTO (a
+  // função terminou), como manda o cânone do botão ocupado. O setTimeout de 8s abaixo
+  // continua valendo só como rede pra quem não chama o done. [[project_busy_button_canonical]]
+  btn._spinRestore = function () {
+    if (btn.getAttribute('data-spinning') !== '1') return;
+    btn.innerHTML = original;
+    btn.disabled = false;
+    btn.style.filter = _oFilter; btn.style.cursor = _oCursor; btn.style.opacity = _oOpacity;
+    btn.removeAttribute('data-spinning');
+  };
   btn.setAttribute('data-spinning', '1');
   btn.disabled = true;
   // v4.1.12: enquanto processa, o botão fica CINZA (desatura a cor) + spinner + texto —
@@ -5280,7 +5386,20 @@ window._spinButton = function(btn, label) {
   btn.style.cursor = 'wait';
   btn.style.opacity = '0.85';
   var txt = label || '';
-  btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>' + (txt ? window._safeHtml(txt) : '');
+  // v1.5.14 CANON (dono): spinner NO TAMANHO DO BOTÃO e centralizado. Sem rótulo (✕ de 24px,
+  // ícone) o spinner fixo de 14px com margem à direita ficava pequeno e torto; agora é medido
+  // do próprio botão (~64% do menor lado, teto de 22px pra não engolir botão grande). Com
+  // rótulo, mantém o tamanho de sempre — ali ele acompanha o texto, não substitui o botão.
+  var _spinStyle = '';
+  if (!txt) {
+    var _r = btn.getBoundingClientRect();
+    var _lado = Math.min(_r.width || 0, _r.height || 0);
+    if (_lado > 0) {
+      var _d = Math.max(12, Math.min(22, Math.round(_lado * 0.64)));
+      _spinStyle = ' style="width:' + _d + 'px;height:' + _d + 'px;margin:0;border-width:' + (_d >= 18 ? 2.5 : 2) + 'px;"';
+    }
+  }
+  btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"' + _spinStyle + '></span>' + (txt ? window._safeHtml(txt) : '');
   setTimeout(function() {
     if (btn && btn.getAttribute('data-spinning') === '1' && document.body.contains(btn)) {
       btn.innerHTML = original;
@@ -5289,6 +5408,11 @@ window._spinButton = function(btn, label) {
       btn.removeAttribute('data-spinning');
     }
   }, 8000);
+};
+// Solta o botão QUANDO A FUNÇÃO TERMINA (evento) — não no timeout cego. Todo call site que
+// sabe o fim (settle da promise, guard que aborta) deve chamar isto. [[project_busy_button_canonical]]
+window._spinButtonDone = function (btn) {
+  try { if (btn && typeof btn._spinRestore === 'function') btn._spinRestore(); } catch (e) {}
 };
 
 // v4.1.14: SPIN do botão SORTEAR — o cinza "Sorteando…" PERSISTE até aparecer a
@@ -5990,12 +6114,13 @@ window.AppStore = {
       // Cache valid for 24h
       if (data && data.tournaments && (Date.now() - data.ts) < 86400000) {
         var deletedIds = this._deletedTournamentIds || [];
+        var _cached = window._dropSandboxForNonDev(data.tournaments);
         if (deletedIds.length > 0) {
-          this.tournaments = data.tournaments.filter(function(t) {
+          this.tournaments = _cached.filter(function(t) {
             return deletedIds.indexOf(String(t.id)) === -1;
           });
         } else {
-          this.tournaments = data.tournaments;
+          this.tournaments = _cached;
         }
         // v4.4.69 Rei/Rainha: o cache guarda grupos só com matchIds — reidrata
         // group.matches como refs de round.matches antes de qualquer consumidor.
@@ -6464,8 +6589,15 @@ window.AppStore = {
         var _prevIds = (store.tournaments || []).map(function(t) { return String(t.id); });
         var tournaments = [];
         var deletedIds = store._deletedTournamentIds || [];
+        // CINTO do isolamento do SANDBOX: mesmo que um doc de SB chegue aqui (legado criado
+        // antes do fix de memberUids, ou leitura por id), ele NÃO entra no AppStore de quem
+        // não é o dev. Sem isto a invisibilidade dependia de cada consumidor de
+        // AppStore.tournaments lembrar de filtrar — eram 2 de dezenas (dashboard de locais,
+        // presença, venues, wo-claim, histórico…). Ver [[project_sandbox_tournament]].
+        var _devSeesSb = !!(window._isTestIdentity && window._isTestIdentity());
         snap.forEach(function(doc) {
           var data = doc.data();
+          if (data && data.isSandbox === true && !_devSeesSb) return;
           if (deletedIds.indexOf(String(data.id)) === -1) {
             tournaments.push(data);
           }
@@ -6957,7 +7089,7 @@ window.AppStore = {
           return deletedIds.indexOf(String(t.id)) === -1;
         });
       }
-      this.tournaments = tournaments;
+      this.tournaments = window._dropSandboxForNonDev(tournaments);
       this._saveToCache();
       // v4.4.69 Rei/Rainha: reidrata group.matches como refs de round.matches (fonte única).
       if (typeof window._hydrateMonarchGroups === 'function') {
@@ -7052,6 +7184,13 @@ window.AppStore = {
         // check-in choices survive app restarts.
         // v1.9.63: preferências de tamanho do placar ao vivo (sliders).
         if (profile.liveScorePrefs && typeof profile.liveScorePrefs === 'object') this.currentUser.liveScorePrefs = profile.liveScorePrefs;
+        // ÚLTIMA config da Partida Casual (modalidade + dupla/individual). _persistLastCasualChoice
+        // GRAVA isto no perfil, mas ninguém LIA de volta — então `currentUser.casualLast` nascia
+        // sempre undefined, o "perfil vence o cache" virava no-op e a abertura caía no
+        // localStorage; quando o iOS limpa o storage (ou em app novo/reinstalado) caía no
+        // 1º esporte preferido do perfil = Pickleball. Era a causa do "abre sempre em
+        // Pickleball mesmo eu só jogando Beach Tennis". Ver bracket-ui.js:_persistLastCasualChoice.
+        if (profile.casualLast && typeof profile.casualLast === 'object') this.currentUser.casualLast = profile.casualLast;
         if (profile.presenceVisibility) this.currentUser.presenceVisibility = profile.presenceVisibility;
         if (profile.presenceMuteDays !== undefined) this.currentUser.presenceMuteDays = profile.presenceMuteDays;
         if (profile.presenceMuteUntil !== undefined) this.currentUser.presenceMuteUntil = profile.presenceMuteUntil;

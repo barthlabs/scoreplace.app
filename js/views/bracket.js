@@ -36,6 +36,89 @@ window._isByeMatch = function(m) {
   return p2 === 'BYE' || p2 === 'BYE (Avança Direto)';
 };
 
+// ─── Quantos JOGOS de verdade tem a rodada — CANÔNICO (v1.5.18) ─────────────────────────
+// Dono: _"quando há 2 jogos na rodada e a próxima é a semifinal, não pode ser quartas de
+// final. deve ser rodada x. está considerando ter os 2 jogos com bye aqui provavelmente."_
+// Exato: a coluna tinha 2 jogos + 2 byes e o nome era decidido por `matches.length` (4) →
+// "Quartas de Final". O cânone do nome sempre foi POSIÇÃO + CONTAGEM EXATA ("se não tiver 4
+// não é quartas"), e BYE não é jogo — ninguém entra em quadra. Contagem única aqui pra os 3
+// renderizadores (simples, dupla, fase) não divergirem de novo. Sit-out também não é jogo.
+// Ver [[project_round_naming]] / [[feedback_sweep_all_render_sites]].
+window._realGameCount = function (matches) {
+  return (Array.isArray(matches) ? matches : []).filter(function (m) {
+    return m && !m.isSitOut && !window._isByeMatch(m);
+  }).length;
+};
+
+// ─── Tag "BYE" na rodada SEGUINTE — CANÔNICO (v2.8.87, generalizado na v1.5.17) ──────────
+// Regra do dono: "não precisamos mostrar esse box partida com 1 dupla e bye avança direto. só
+// colocar a dupla que recebe o bye na rodada seguinte com a tag BYE e adv a definir basta.
+// sem mostrar na rodada jogo que não acontecerá, apenas confrontos verdadeiros." + "assim deve
+// ser SEMPRE que houver bye. padrão canonizado."
+//
+// Quem passou de BYE leva a tag âmbar na rodada r+1 (e só nela — some quando avança por
+// vitória). Isto INFERE o flag pra chaves já sorteadas que não o têm gravado; o gerador
+// (phases-engine) persiste em sorteios novos. Estava PRESO dentro do renderer de fase — a
+// Dupla Eliminatória retorna ANTES dele e ficava sem tag E com o card de BYE na tela.
+// Ver [[project_bracket_bye_and_3rd4th]].
+window._inferByeTags = function (matches) {
+  var ms = Array.isArray(matches) ? matches : [];
+  var byeNext = {}; // "bracket|nome" -> rodada da tag (r+1)
+  ms.forEach(function (m) {
+    if (window._isByeMatch(m) && m.winner) {
+      var r = (m.round == null) ? 1 : m.round;
+      byeNext[(m.bracket || 'main') + '|' + m.winner] = r + 1;
+    }
+  });
+  ms.forEach(function (m) {
+    if (window._isByeMatch(m)) return;
+    var r = (m.round == null) ? 1 : m.round, bk = (m.bracket || 'main');
+    if (m.p1 && m.p1FromBye == null && byeNext[bk + '|' + m.p1] === r) m.p1FromBye = true;
+    if (m.p2 && m.p2FromBye == null && byeNext[bk + '|' + m.p2] === r) m.p2FromBye = true;
+  });
+
+  // BYE ESTRUTURAL — sem card nenhum (v1.5.18). Dono, olhando a chave inferior: _"a rodada 2
+  // inferior não parece correta. tem apenas o jogo 12, mas na r1 inf tem 3 jogos que trarão 3
+  // vencedores... o que vai ser?"_ A cadência ESTAVA certa (medido no doc real: 22 jogos, que
+  // é 2N−2 pra 12 duplas) — o 3º vencedor da 1ª inferior PULA a 2ª e entra direto na 3ª por
+  // uma ARESTA DIRETA. Ou seja: é folga, mas não existe jogo de BYE pra inferir a tag, então a
+  // tela não dizia nada e a rodada parecia faltar gente. Aqui a folga é lida do PRÓPRIO fio:
+  // destino a mais de uma rodada de distância, na mesma chave = pulou rodada.
+  var porId = {}, minR = {};
+  ms.forEach(function (m) {
+    if (!m) return;
+    if (m.id != null) porId[String(m.id)] = m;
+    var bk = m.bracket || 'main', r = (m.round == null) ? 1 : m.round;
+    if (minR[bk] == null || r < minR[bk]) minR[bk] = r;
+  });
+  // Regra do dono (26/jul), olhando Fernando e Cynara na 3ª inferior: _"deveriam estar na r2
+  // inf, mas como estão na r3 inf, isso É bye. aplica a tag BYE neles nesse caso."_ Ou seja:
+  // CHEGOU numa rodada sem ter jogado a anterior DAQUELA chave ⇒ folga. Dois jeitos de isso
+  // acontecer, e os dois contam:
+  //   (a) mesma chave, destino a mais de uma rodada → pulou rodada (o 3º vencedor da 1ª inf);
+  //   (b) veio de OUTRA chave e aterrissa depois da 1ª rodada dela (o derrotado da 2ª superior
+  //       cai na 3ª inferior sem ter jogado a 1ª nem a 2ª de lá).
+  // A aresta de DERROTA precisava entrar junto — era só por ela que Fernando/Cynara chegavam,
+  // e a versão anterior só seguia a de vitória: por isso eles ficavam sem tag nenhuma.
+  var _marca = function (m, alvoId, slotRaw) {
+    if (!alvoId) return;
+    var alvo = porId[String(alvoId)];
+    if (!alvo) return;
+    var rm = (m.round == null) ? 1 : m.round, ra = (alvo.round == null) ? 1 : alvo.round;
+    var bkM = m.bracket || 'main', bkA = alvo.bracket || 'main';
+    var folga = (bkA === bkM) ? (ra > rm + 1) : (ra > (minR[bkA] == null ? ra : minR[bkA]));
+    if (!folga) return;
+    var slot = (slotRaw === 'p2') ? 'p2' : 'p1';
+    if (alvo[slot] && alvo[slot + 'FromBye'] == null) alvo[slot + 'FromBye'] = true;
+  };
+  ms.forEach(function (m) {
+    if (!m || !m.winner) return;              // sem resultado ainda não há quem marcar
+    _marca(m, m.nextMatchId, m.nextSlot);     // quem avançou
+    _marca(m, m.loserMatchId, m.loserSlot);   // quem CAIU pra outra chave
+  });
+  return ms;
+};
+
 // Helper: check if a result entry role is active (backward compat: string or array).
 // v2.6.60: `match` opcional → resolve por FASE (t.phases[m.phaseIndex]) com fallback
 // pro top-level. Sem match → top-level (comportamento de sempre).
@@ -84,6 +167,13 @@ function _applyMyMatchesFilter() {
     clearTimeout(window._pendingSoftRefresh);
     var _goMine = function (behavior) {
       try {
+        // Re-mede o chrome AGORA. `--scroll-anchor` (topbar + dropdown do hamburger +
+        // back-header + barra STICKY de busca + 12px) é o que o `scroll-margin-top` dos
+        // cards e dos boxes de grupo consome. Medir no instante do scroll cobre o caso
+        // em que a barra de busca só passa a existir depois deste render — sem isto o
+        // alvo pousava ATRÁS dela e o topo do card/grupo saía cortado (reportado pelo
+        // dono: o cabeçalho do grupo, com as pills e os botões, ficava escondido).
+        if (typeof window._reflowChrome === 'function') window._reflowChrome();
         // Fase concluída + organizador → o banner "🏆 Avançar" está no topo. O alvo do
         // scroll passa a ser ELE (a próxima ação do org é avançar de fase), não o jogo/
         // grupo do usuário. Só existe pro organizador quando a fase fecha (bracket.js).
@@ -140,6 +230,30 @@ function renderBracket(container, tournamentId, isInline) {
         });
       }
     } catch (_efin) {}
+  }
+
+  // REPESCADO = MELHOR DERROTADO — TAMBÉM AO ABRIR A CHAVE (v1.5.34).
+  //
+  // `_reassignBestLosersToRepechage` só era chamado de dentro de `_advanceWinner`: a chave
+  // só se corrigia quando ALGUÉM lançava MAIS UM resultado. Se o último jogo da rodada-fonte
+  // foi lançado antes do fix (ou por um cliente com bundle velho), a vaga ficava com quem a
+  // aresta `loserNextMatchId` trouxe — os perdedores do 1º, 2º e 3º jogos, justamente os de
+  // PIOR placar — e nada mais a corrigia, porque abrir a chave não reavaliava nada.
+  // Foi exatamente o que o dono viu na linha Ouro do SB: Marina Turri (6-2), Anke (6-1) e
+  // Kelly Barth (6-3) nas vagas, no lugar de Marilia/Silvia (6-5 7-5), Glauce (6-4) e
+  // Gabriela (6-4), que são as melhores pelos critérios de desempate do organizador.
+  //
+  // Idempotente e no-op com a rodada-fonte em curso (aí o card mostra "A definir"). Persiste
+  // no doc FRESCO só quando realmente trocou algo — mesmo padrão do `_maybeFinishElimination`
+  // logo acima. [[feedback_resolution_one_logic]]
+  if (t && typeof window._reassignBestLosersToRepechage === 'function') {
+    try {
+      if (window._reassignBestLosersToRepechage(t) > 0 && window.AppStore && typeof window.AppStore.mutate === 'function') {
+        window.AppStore.mutate(String(tId), function (ft) {
+          try { window._reassignBestLosersToRepechage(ft); } catch (_e) {}
+        });
+      }
+    } catch (_erep) {}
   }
 
   // CURA do rótulo cru "Jogador sem perfil (…)" com uids gravados (v1.4.29): busca os
@@ -753,6 +867,164 @@ window._assignMatchCourt = function(tId, matchId, court) {
 // 2 duplas, o motor cria um novo confronto na R1 SUPERIOR (Increment 2). Fechada a janela
 // (1º resultado de R2), volta a ser a lista de espera padrão (suplentes). Renderer ISOLADO —
 // não toca o _duplaCard do pré-sorteio (evita regressão). Reusa helpers globais.
+// ─── "Falta N equipe pra abrir jogo novo" — AVISO PERMANENTE (v1.5.9) ─────────────────
+// PORQUÊ: com a chave CHEIA (potência de 2 exata) o tardio NÃO entra sozinho — confronto já
+// publicado é intocável, então o crescimento só acontece AOS PARES (chaves-adapter
+// `crescerComPrefixo`, recusa 'falta-par'). O organizador só sabia disso por um TOAST efêmero
+// ("⏳ Falta 1 pra abrir o jogo"), que some e nunca mais volta: quem chega depois na tela vê a
+// dupla parada na espera sem nenhuma explicação. Este helper devolve o estado pra tela mostrar
+// enquanto a condição durar.
+//
+// A condição NÃO é regra nova: é a MESMA pré-condição do motor — R1 da chave principal/superior
+// com os dois lados reais em TODOS os jogos ⇒ não há vaga, qualquer recálculo mudaria confronto
+// publicado ⇒ só entra em par. Com folga/vaga na R1 o tardio entra sozinho pelo recálculo normal
+// e não há nada a avisar. Ver [[project_pow2_growth_frozen_prefix]].
+//
+// @returns {null | {ready:number, falta:1|2, teams:boolean, isWaiting:fn}}
+window._lateGrowthPairGap = function (t) {
+  // ⛔ DESATIVADO em v1.5.21 — o motor não faz mais ninguém esperar par.
+  //
+  // Este aviso existia porque, com a chave INFLADA até a potência de 2, uma R1 cheia não
+  // tinha vaga: o tardio sozinho era recusado com 'falta-par' e só entrava quando aparecia
+  // um segundo (`crescerComPrefixo`). A ÁRVORE MÍNIMA (dono, jul/2026 — o desenho novo
+  // substitui o anterior) acabou com isso: N+1 entrantes sempre cabem em teto((N+1)/2)
+  // jogos, e o tardio ocupa a vaga de sobra jogando a repescagem. Medido em 4→5, 8→9 e
+  // 16→17: entra sozinho, sem mover nenhum confronto publicado.
+  //
+  // Na prática a recusa virou inalcançável: `recalcularComTardio` só cai em
+  // 'confronto-publicado-mudaria' se alguma `_sig` de jogo semeado mudar, e com
+  // emparelhamento adjacente `VC-R1-P2` é #3x#4 em qualquer N.
+  //
+  // Manter a faixa seria PROMETER O CONTRÁRIO do que o motor faz — o organizador leria
+  // "falta 1 equipe para novo confronto" enquanto a inscrição já entrou na chave. A função
+  // continua existindo (a UI a chama em 4 pontos, e todos já tratam null) para que a
+  // desativação seja num lugar só.
+  return null;
+};
+
+// Chave de identidade de uma entrada da espera (uids ordenados; fictício cai no nome).
+window._lateEntryKey = function (p) {
+  if (!p || typeof p !== 'object') return String(p || '');
+  var u = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
+  if (u.length) return 'u:' + u.slice().sort().join('+');
+  return 'n:' + ((typeof window._pName === 'function') ? window._pName(p, '') : (p.displayName || p.name || ''));
+};
+
+// v1.5.15 (dono: "dei presença... veio o toast de falta 1, mas o texto indicativo não mudou"):
+// o toggle de presença atualiza o card NO LUGAR e SUPRIME o re-render de propósito (cânone dos
+// "cards estáticos") — a faixa ficava com o número do render anterior. Mesmo tratamento que a
+// barra de chamada já recebia: recomputa e troca só ela. Ver [[project_dashboard_no_rerender]].
+window._syncLateGrowthBanner = function (tId) {
+  try {
+    var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+    if (!t) return;
+    var gap = window._lateGrowthPairGap(t);
+    var faixas = document.querySelectorAll('[data-late-gap-banner]');
+    for (var i = 0; i < faixas.length; i++) faixas[i].outerHTML = window._lateGrowthGapBanner(gap);
+    var tags = document.querySelectorAll('[data-late-wait-tag]');
+    for (var j = 0; j < tags.length; j++) {
+      var k = tags[j].getAttribute('data-late-wait-tag');
+      var mostra = !!(gap && gap.falta === 1 && gap.waitingKeys.indexOf(k) !== -1);
+      tags[j].style.display = mostra ? '' : 'none';
+    }
+    if (typeof window._syncStickyBarOffset === 'function') window._syncStickyBarOffset();
+  } catch (e) {}
+};
+
+// ─── Empilhar sticky ABAIXO da barra de busca (v1.5.12) ──────────────────────────────
+// A barra canônica de busca (`fbwrap-*`, store.js) já é sticky no MESMO topo (topbar +
+// dropdown + back-header) e tem z-index 30. Sem descontar a altura dela, o aviso grudava
+// ATRÁS da barra e sumia — foi o que o dono viu. Aqui a altura REAL da barra visível
+// (+ margem) é medida e publicada em `--stickybar-h`; o aviso soma isso no seu `top`.
+// Medir, não chutar: a barra tem 44px de controle (mínimo de toque iOS) + paddings que já
+// mudaram duas vezes. Em telas sem barra o valor é 0 e a fórmula colapsa sozinha.
+// Ver [[project_canonical_filter_bar_sticky]].
+window._syncStickyBarOffset = function () {
+  try {
+    var h = 0;
+    var bars = document.querySelectorAll('[id^="fbwrap-"]');
+    for (var i = 0; i < bars.length; i++) {
+      var b = bars[i];
+      if (!b.getClientRects().length) continue;                       // não renderizada
+      var cs = getComputedStyle(b);
+      if (cs.position !== 'sticky') continue;
+      var alt = b.getBoundingClientRect().height + (parseFloat(cs.marginBottom) || 0);
+      if (alt > h) h = alt;
+    }
+    document.documentElement.style.setProperty('--stickybar-h', Math.ceil(h) + 'px');
+  } catch (e) {}
+};
+// guardado: este arquivo também é carregado fora do browser (harness headless), onde
+// `window` é um sandbox sem addEventListener — sem a guarda, o load inteiro explodia e
+// TODAS as globais do bracket sumiam. Foi o smoke de globais que pegou.
+if (!window._stickyBarOffsetWired && typeof window.addEventListener === 'function') {
+  window._stickyBarOffsetWired = true;
+  window.addEventListener('resize', function () { window._syncStickyBarOffset(); });
+}
+
+// Faixa do topo do box: "2 novas equipes para novo confronto" / "1 nova equipe para novo confronto".
+window._lateGrowthGapBanner = function (gap) {
+  // Sem condição, sai um PLACEHOLDER (não string vazia): é ele que o _syncLateGrowthBanner
+  // acha depois pra trocar no lugar quando a presença muda a conta. Precisa nascer no MESMO
+  // pai do painel — `position:sticky` só viaja dentro do próprio pai.
+  if (!gap) return '<div data-late-gap-banner="1" style="display:none;"></div>';
+  var n = gap.falta;
+  var alvo = gap.teams
+    ? (n === 1 ? '1 equipe' : '2 equipes')
+    : (n === 1 ? '1 jogador' : '2 jogadores');
+  // STICKY (v1.5.11, pedido do dono): rolando a lista de cards, o aviso gruda no topo em vez
+  // de sumir — é ele que diz quantas entradas ainda faltam ENQUANTO o organizador arrasta os
+  // cards lá embaixo. Fórmula CANÔNICA do app (a mesma da barra de filtro): topbar + dropdown
+  // do hambúrguer + back-header, −1px pro subpixel da topbar não abrir vão.
+  // Ver [[project_canonical_filter_bar_sticky]]. O fundo TEM de ser opaco (a tinta âmbar sobre
+  // var(--bg-card)) — translúcido deixaria os cards passarem por baixo quando grudado.
+  // mede a barra de busca DEPOIS que este HTML aterrissa no DOM (aqui ainda é string)
+  setTimeout(function () { if (typeof window._syncStickyBarOffset === 'function') window._syncStickyBarOffset(); }, 0);
+  return '<div data-late-gap-banner="1" style="position:sticky;z-index:6;'
+    + 'top:calc(var(--topbar-h, 61px) + var(--hamburger-dd-h, 0px) + var(--backheader-h, 0px) + var(--stickybar-h, 0px) - 1px);'
+    + 'margin-bottom:0.9rem;padding:9px 12px;'
+    + 'background:linear-gradient(rgba(245,158,11,0.10),rgba(245,158,11,0.10)),var(--bg-card);'
+    + 'border:1px solid rgba(245,158,11,0.32);border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.35);">'
+    + '<div style="min-width:0;">'
+    + '<div style="font-weight:800;font-size:0.86rem;color:#fbbf24;">⏳ ' + alvo + ' para novo confronto</div>'
+    + '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">A chave está cheia — o jogo novo abre com duas entradas de uma vez, sem mexer em nenhum confronto já publicado.</div>'
+    + '</div></div>';
+};
+
+// ─── PORTA do tardio: qual é a etapa AGORA (v1.5.9) ──────────────────────────────────
+// A pill dizia sempre "inscrições abertas · R1" — mas "R1" de qual chave? Numa Dupla
+// Eliminatória a entrada é na R1 SUPERIOR (o novo confronto nasce lá; quem perde cai para a
+// chave inferior). Fechada a porta, quem está na espera é SUPLENTE — entra só por W.O./
+// substituição, não abre jogo novo. O rótulo passa a dizer a etapa REAL.
+//
+// ⚠️ "R1 inferior" NÃO é uma etapa que existe hoje: `_collectLateCandidates` devolve VAZIO
+// assim que a 2ª rodada superior tem resultado (`_lateEnrollR2Started`) — nenhuma porta fica
+// aberta depois disso, nem a inferior. O cânone [[project_late_entry_door_upper_then_lower]]
+// prevê essa porta, mas ela não está no motor. Rotular "R1 inferior" aqui seria prometer uma
+// entrada que não acontece; quando o motor abrir essa porta, é UM caso a mais neste switch.
+window._lateDoorStage = function (t) {
+  if (!t) return null;
+  var _aberta = (typeof window._lateEnrollWindowOpen === 'function') && window._lateEnrollWindowOpen(t);
+  var _dupla = /dupla elimina/i.test(String(t.format || '')) ||
+    (Array.isArray(t.matches) && t.matches.some(function (m) { return m && m.bracket === 'lower'; }));
+  if (_aberta) return { code: 'r1sup', label: 'inscrições abertas · ' + (_dupla ? 'R1 superior' : 'R1') };
+  return { code: 'suplentes', label: 'suplentes' };
+};
+
+// Etiqueta logo ACIMA do card de quem está parado esperando par. Renderizada SEMPRE (oculta
+// quando não se aplica) pra que o sync in-place só precise alternar `display` — inserir
+// elemento novo exigiria re-render do card, que é exatamente o que o cânone dos cards
+// estáticos proíbe durante a chamada de presença.
+window._lateGrowthWaitTag = function (gap, entrada) {
+  var k = (typeof window._lateEntryKey === 'function') ? window._lateEntryKey(entrada) : '';
+  var mostra = !!(gap && gap.falta === 1 && gap.waitingKeys && gap.waitingKeys.indexOf(k) !== -1);
+  var quem = (gap && !gap.teams) ? '1 jogador' : '1 equipe';
+  return '<div data-late-wait-tag="' + window._safeHtml(k) + '" style="' + (mostra ? '' : 'display:none;')
+    + 'font-size:0.68rem;font-weight:800;color:#fbbf24;background:rgba(245,158,11,0.12);'
+    + 'border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:4px 9px;align-self:flex-start;">'
+    + '⏳ Aguardando mais ' + quem + '</div>';
+};
+
 window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   if (!t) return '';
   var _safeHtml = window._safeHtml || function (s) { return String(s == null ? '' : s); };
@@ -870,7 +1142,8 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
   // Desfazer: passa as 2 IDENTIDADES de membro (uid||nome-guest), NUNCA a string "A / B" — o cânone
   // uid proíbe casar dupla por displayName (a resolução por uid diverge entre render e split → o ✕
   // não achava a dupla e não fazia nada). Espelha o _splitDupla do roster. [[project_uid_identity_canon_locked]]
-  var _ljSplit = function (tid, m1id, m2id, name) { return 'window._splitLateDupla(\'' + tid + '\',\'' + m1id + '\',\'' + m2id + '\')'; };
+  // `this` = o próprio ✕ → o spinner gira NELE enquanto a CF responde (v1.5.14).
+  var _ljSplit = function (tid, m1id, m2id, name) { return 'window._splitLateDupla(\'' + tid + '\',\'' + m1id + '\',\'' + m2id + '\',this)'; };
   // v1.3.148 (dono): antes `cardPresence: null` → a dupla NÃO recebia cor de presença e caía no
   // VERDE base do _duplaCard: no print, Luigi/Adriana com os DOIS AUSENTES aparecia verde. Agora usa
   // a FONTE ÚNICA com os 3 estados: os 2 presentes = VERDE · 1 presente = ÂMBAR · nenhum = AZUL.
@@ -884,17 +1157,26 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     return { skip: false, styleExtra: (window._presenceCardStyle ? window._presenceCardStyle(_st, 'pair') : ''), rowHtml: '' };
   };
   var _ljDctx = { isOrg: isOrg, drawDone: true, orgUids: {}, orgEmails: {}, cardPresence: _ljCardPres, memberPresence: _ljMemberPres, enrollOrderMap: _ljOrderMap, splitDupla: _ljSplit };
+  // v1.5.9: chave cheia ⇒ o tardio só entra AOS PARES. Quem já está pronto e parado ganha a
+  // etiqueta "Aguardando mais 1 equipe" LOGO ACIMA do card — em vez do toast que sumia.
+  var _ljGap = (typeof window._lateGrowthPairGap === 'function') ? window._lateGrowthPairGap(t) : null;
   var duplasHtml = (typeof window._duplaCard === 'function')
-    ? _duplas.map(function (p) { return window._duplaCard(t, p, false, _ljDctx); }).join('')
+    ? _duplas.map(function (p) {
+        var card = window._duplaCard(t, p, false, _ljDctx);
+        var tag = (typeof window._lateGrowthWaitTag === 'function') ? window._lateGrowthWaitTag(_ljGap, p) : '';
+        return tag ? ('<div style="display:flex;flex-direction:column;gap:6px;min-width:0;">' + tag + card + '</div>') : card;
+      }).join('')
     : '';
 
   var _readyMsg = (_duplas.length >= 1)
     ? '<div style="font-size:0.72rem;color:#2dd4bf;font-weight:700;margin-top:2px;">✔️ ' + _duplas.length + ' dupla(s) formada(s) na lista de espera.</div>'
     : '';
 
+  var _ljStage = (typeof window._lateDoorStage === 'function') ? window._lateDoorStage(t) : null;
   return '<div id="late-join-pairing-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.25);border-radius:16px;padding:1.5rem;">'
-    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;"><span style="font-size:1.3rem;">🤝</span><h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Formar novas duplas</h3><span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">inscrições abertas · R1</span></div>'
-    + '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:1rem;">Arraste um card sobre outro para formar uma dupla (no celular, segure e arraste). Enquanto a 2ª rodada do upper não começou, cada dupla nova entra na <b>R1 da chave superior</b> (vencedor sobe, derrotado cai pro lower).</div>'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;flex-wrap:wrap;"><span style="font-size:1.3rem;">🤝</span><h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Formar novas duplas</h3><span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">' + ((_ljStage && _ljStage.label) || 'inscrições abertas · R1') + '</span></div>'
+    + ((typeof window._lateGrowthGapBanner === 'function') ? window._lateGrowthGapBanner(_ljGap) : '')
+    + '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:1rem;">Arraste um card sobre outro para formar uma dupla (no celular, segure e arraste). Enquanto a 2ª rodada da chave superior não começou, cada dupla nova entra na <b>R1 da chave superior</b> (vencedor sobe, derrotado cai para a chave inferior).</div>'
     + (solosHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#f59e0b;margin-bottom:6px;">Sem dupla</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:10px;margin-bottom:1.1rem;align-items:stretch;">' + solosHtml + '</div>' : '')
     + (duplasHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#2dd4bf;margin-bottom:6px;">Duplas formadas</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:10px;align-items:stretch;">' + duplasHtml + '</div>' : '')
     + _readyMsg
@@ -957,6 +1239,19 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
     return null;
   }
   function _ljClearPending() { if (_ljPending && _ljPending.timer) clearTimeout(_ljPending.timer); _ljPending = null; }
+  // v1.5.20: aborta o arraste SEM soltar dupla — usado pela rede global (gesto
+  // cancelado pelo SO, app pro fundo, navegação). Antes, um touchcancel caía no
+  // _ljEnd e podia FORMAR a dupla de um gesto que o usuário nem concluiu.
+  function _ljAbort() {
+    _ljClearPending();
+    var d = _ljDrag; _ljDrag = null;
+    if (window._activeDragReset === _ljAbort) window._activeDragReset = null;
+    if (!d) return;
+    if (d.clone && d.clone.parentElement) d.clone.remove();
+    if (d.hi) { d.hi.style.outline = ''; d.hi.style.outlineOffset = ''; }
+    if (d.card) { d.card.style.opacity = ''; d.card.removeAttribute('data-drag-dimmed'); }
+    document.body.style.userSelect = '';
+  }
   function _ljBegin(card, pt) {
     var key = card.getAttribute('data-lj-key');
     // v1.3.67: resolve o nome AO VIVO pelo uid (data-lj-key = uid nas entradas com conta) —
@@ -967,10 +1262,14 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
     var nm = _liveNm || card.getAttribute('data-lj-name') || key;
     var clone = document.createElement('div');
     clone.textContent = '👤 ' + nm;
+    clone.setAttribute('data-drag-ghost', '1'); // v1.5.20: varredura global (store.js)
     clone.style.cssText = 'position:fixed;z-index:100060;pointer-events:none;background:#f59e0b;color:#111;font-weight:800;font-size:0.8rem;padding:6px 12px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);transform:translate(-50%,-160%);left:' + pt.clientX + 'px;top:' + pt.clientY + 'px;';
     document.body.appendChild(clone);
     _ljDrag = { key: key, tId: card.getAttribute('data-lj-tid'), clone: clone, hi: null, card: card };
     card.style.opacity = '0.55';
+    card.setAttribute('data-drag-dimmed', '1'); // v1.5.20: varredura global
+    // v1.5.20: publica a limpeza deste arraste pra rede global de aborto.
+    window._activeDragReset = _ljAbort;
     document.body.style.userSelect = 'none';
     if (window._haptic) { try { window._haptic('medium'); } catch (e) {} }
   }
@@ -1031,9 +1330,10 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
     if (_ljPending) _ljClearPending();
     if (!_ljDrag) return;
     var d = _ljDrag; _ljDrag = null;
+    if (window._activeDragReset === _ljAbort) window._activeDragReset = null;
     if (d.clone) d.clone.remove();
     if (d.hi) { d.hi.style.outline = ''; d.hi.style.outlineOffset = ''; }
-    if (d.card) d.card.style.opacity = '';
+    if (d.card) { d.card.style.opacity = ''; d.card.removeAttribute('data-drag-dimmed'); }
     document.body.style.userSelect = '';
     var pt = _ljPoint(e);
     var hit = _ljKeyAtPoint(pt.clientX, pt.clientY);
@@ -1059,15 +1359,31 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
 // Desfazer dupla da LISTA DE ESPERA — CF-ONLY. id1/id2 = identidade (uid||nome) dos 2 membros. A CF
 // splitLatePair acha a dupla nos 2 stores (standby/waitlist), reparte em 2 solos e devolve o doc; o
 // cliente só dispara e REFLETE. id2 vazio = casa pelo nome inteiro (compat). Zero mutação/save local.
-window._splitLateDupla = function (tId, id1, id2) {
+window._splitLateDupla = function (tId, id1, id2, btnEl) {
+  // v1.5.14 CANON: desfazer vai e volta da CF — não é instantâneo, então o ✕ gira até a
+  // resposta. Soltar em TODA saída (guard, sucesso, erro), nunca por timeout cego.
+  // [[project_busy_button_canonical]]
+  var _btn = (btnEl && btnEl.nodeType === 1) ? btnEl : null;
+  var _done = function () { if (_btn && window._spinButtonDone) window._spinButtonDone(_btn); };
+  if (_btn && typeof window._spinButton === 'function') window._spinButton(_btn, '');
   if (!(window.FirestoreDB && typeof window.FirestoreDB.splitLatePair === 'function')) {
+    _done();
     if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível desfazer agora — tente de novo.', 'warning');
     return;
   }
   window.FirestoreDB.splitLatePair(tId, { id1: id1, id2: id2 }).then(function (res) {
-    if (res && res.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, res.tournament);
-    if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', (res && res.split ? (res.split + ' voltaram para Sem dupla.') : ''), 'info');
+    _done();
+    // A CF devolve reason:'not-found' quando NÃO achou — comemorar assim mesmo daria o pior
+    // sintoma: toast "Dupla desfeita" com a dupla intacta. Mesmo cuidado do _splitDupla.
+    var _r = (res && res.data) ? res.data : res;
+    if (_r && _r.ok === false) {
+      if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', 'Ela pode já ter entrado na chave. Atualize a tela.', 'warning');
+      return;
+    }
+    if (_r && _r.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, _r.tournament);
+    if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', (_r && _r.split ? (_r.split + ' voltaram para Sem dupla.') : ''), 'info');
   }).catch(function (e) {
+    _done();
     if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', (e && (e.message || e.code)) || '', 'warning');
   });
 };
@@ -1168,9 +1484,22 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   const _rcWL = (typeof window._rollCallPresenceCtx === 'function')
     ? window._rollCallPresenceCtx(t, { isOrg: isOrg, active: true, postDraw: true, woScope: ((t.woScope || 'individual') === 'individual' ? 'individual' : 'team') })
     : {};
+  // v1.5.9: chave cheia ⇒ tardio só entra aos pares (ver _lateGrowthPairGap). Aviso PERMANENTE:
+  // faixa no topo do painel + etiqueta logo acima de quem está parado esperando par.
+  const _sbGap = (typeof window._lateGrowthPairGap === 'function') ? window._lateGrowthPairGap(t) : null;
   const _duplaCardsWL = (_duplasWL.length && typeof window._duplaCard === 'function')
     ? '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;">' +
-        _duplasWL.map((p) => window._duplaCard(t, p, false, { isOrg: isOrg, drawDone: true, cardPresence: _rcWL.cardPresence, memberPresence: _rcWL.memberPresence })).join('') +
+        _duplasWL.map((p) => {
+          // v1.5.14: estas duplas moram na LISTA DE ESPERA — o Desfazer TEM de ser o da espera
+          // (_splitLateDupla). Sem este ctx o card caía no _splitDupla do ROSTER, que não acha e
+          // saía calado: era o "desfazer dupla não está mais funcionando" do dono.
+          const _c = window._duplaCard(t, p, false, {
+            isOrg: isOrg, drawDone: true, cardPresence: _rcWL.cardPresence, memberPresence: _rcWL.memberPresence,
+            splitDupla: function (tid, m1id, m2id) { return 'window._splitLateDupla(\'' + tid + '\',\'' + m1id + '\',\'' + m2id + '\',this)'; }
+          });
+          const _tg = (typeof window._lateGrowthWaitTag === 'function') ? window._lateGrowthWaitTag(_sbGap, p) : '';
+          return _tg ? ('<div style="display:flex;flex-direction:column;gap:6px;min-width:0;">' + _tg + _c + '</div>') : _c;
+        }).join('') +
       '</div>'
     : '';
 
@@ -1223,11 +1552,13 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   return `
     <div id="standby-panel-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.2);border-radius:16px;padding:1.5rem;">
       ${_lateToggleHtml}
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;flex-wrap:wrap;">
         <span style="font-size:1.3rem;">📋</span>
         <h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Lista de Espera</h3>
+        ${(function () { var s = (typeof window._lateDoorStage === 'function') ? window._lateDoorStage(t) : null; return s ? ('<span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">' + s.label + '</span>') : ''; })()}
         <span style="font-size:0.75rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;">${(function () { var n = 0; sorted.forEach(function (p) { var nm = getName(p); if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) n += 2; else if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) n += p.participants.length; else if (nm.indexOf('/') !== -1) n += nm.split('/').filter(function (x) { return x.trim(); }).length; else n += 1; }); return n; })()}
       </div>
+      ${(typeof window._lateGrowthGapBanner === 'function') ? window._lateGrowthGapBanner(_sbGap) : ''}
       <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem;">${_policy === 'locked' ? '🔒 Ordem do sorteio travada — entra o próximo presente na ordem.' : '🏃 Quem fizer check-in primeiro é o próximo a entrar.'}</div>
       ${_duplaCardsWL ? ('<div style="font-size:0.72rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas na espera (' + _duplasWL.length + ')</div>' + _duplaCardsWL) : ''}
       ${(_duplaCardsWL && listItems) ? '<div style="font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">🙋 Sem dupla</div>' : ''}
@@ -1507,7 +1838,8 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
     // com nº ≠ 8 não vira "oitavas".
     var posIdx = positiveRounds.indexOf(roundNum);
     var fromEnd = positiveRounds.length - posIdx;
-    var gamesInRound = (roundsMap[roundNum] || []).length;
+    // v1.5.18: só JOGOS DE VERDADE contam pro nome (bye/sit-out fora) — [[project_round_naming]]
+    var gamesInRound = window._realGameCount(roundsMap[roundNum] || []);
     if (fromEnd === 1) return _t('bracket.final');
     if (fromEnd === 2 && gamesInRound === 2) return _t('bracket.semiFinal');
     if (fromEnd === 3 && gamesInRound === 4) return _t('bracket.quarterFinal');
@@ -1893,6 +2225,13 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
     _updateProgressiveClassification(t);
   }
 
+  // v1.5.17: tag "BYE" na rodada SEGUINTE. A Dupla Eliminatória entra por aqui e nunca passava
+  // pela inferência (que vivia presa no renderer de fase) → o time que passou de BYE aparecia
+  // sem tag nenhuma, e o jogo de BYE ainda era desenhado como card. Ver _inferByeTags.
+  if (typeof window._inferByeTags === 'function') {
+    try { window._inferByeTags(window._collectAllMatches ? window._collectAllMatches(t) : (t.matches || [])); } catch (e) {}
+  }
+
   // Source per-bracket column layout from the unified adapter. Adapter emits
   // one column per (bracket, round) combo with bracket ∈ {upper, lower, grand}
   // for double-elim. When unavailable, fall back to manual partitioning of
@@ -1921,26 +2260,21 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
     grandCols = bucket(function(m) { return m.bracket === 'grand'; });
   }
 
-  // Numeração CANÔNICA intercalada por rodada: Chave Superior R1, Chave Inferior R1,
-  // Superior R2, Inferior R2… (e segue; a Inferior tem mais rodadas → continua sozinha
-  // ao fim). A Grande Final é o último número. Atribui m._gameNum ANTES de renderizar,
-  // pra que cada seção use o número global certo (não a ordem de render da seção).
-  (function _assignGameNums() {
-    // v4.1.31: numeração GLOBAL do torneio — começa APÓS os jogos das fases anteriores (ex.:
-    // Suíço com 21 jogos → a Dupla Eliminatória começa no Jogo 22, não no 1). Antes esta
-    // função re-carimbava n=0, apagando o offset que _assignGlobalGameNumbers já tinha posto.
-    var n = (typeof window._phaseGameOffset === 'function') ? window._phaseGameOffset(t, t.currentPhaseIndex || 0) : 0;
-    // v4.1.x: intercala por POSIÇÃO DE COLUNA (1ª sup, 1ª inf, 2ª sup, 2ª inf…), NÃO por nº de
-    // rodada. A Dupla Eliminatória com REPESCAGEM tem uma coluna a mais no upper (a repescagem,
-    // round 0), então o alinhamento por rodada ficava torto. Por posição: N-ésima coluna superior
-    // com N-ésima inferior. Clássica (rodadas alinhadas): mesmo resultado. (pedido do dono)
-    var maxCols = Math.max(upperCols.length, lowerCols.length);
-    for (var i = 0; i < maxCols; i++) {
-      if (upperCols[i]) (upperCols[i].matches || []).forEach(function (m) { m._gameNum = ++n; });
-      if (lowerCols[i]) (lowerCols[i].matches || []).forEach(function (m) { m._gameNum = ++n; });
-    }
-    grandCols.forEach(function (c) { (c.matches || []).forEach(function (m) { m._gameNum = ++n; }); });
-  })();
+  // NÃO NUMERE AQUI. A numeração "JOGO N" já foi carimbada por
+  // window._assignGlobalGameNumbers no topo de renderBracket (linha ~204), que é a
+  // FONTE ÚNICA (regra em js/store.js:541).
+  //
+  // Existia aqui um segundo contador (_assignGameNums) que rodava DEPOIS e
+  // sobrescrevia. Ele fazia a MESMA intercalação por coluna, mas com duas
+  // diferenças fatais: NÃO pulava BYE (gastava número com jogo que não se joga) e
+  // NÃO deduplicava por id. Como a fonte única pula BYE e este não, as sequências
+  // divergiam e o número da chave INFERIOR colidia com o de outro jogo —
+  // regressão vista AO VIVO no torneio de casais.
+  //
+  // A fonte única já cobre tudo que este bloco fazia, inclusive o offset de fases
+  // (ela percorre t.rounds e depois t.matches por phaseIndex asc com um contador
+  // só, então o Suíço com 21 jogos faz a Dupla Eliminatória começar no Jogo 22).
+  // Cercado por tests/game-number-single-counter.test.js.
   const renderSection = (cols, title, color, trailingColHtml) => {
     if (!cols || !cols.length) return '';
     const colsHtml = cols.map(function(col, ci) {
@@ -1950,18 +2284,26 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
       // Superior E na Inferior. "se não tiver 4 não é quartas; se não tiver 8 não é oitavas".
       // Na inferior de 14 (3,4,3,2,1): Rodada 1, Rodada 2, Rodada 3, Semifinal (2j), Final —
       // SEM quartas (a rodada anterior tem 3 jogos, não 4). Exatamente como o dono descreveu.
-      var games = matches.length, fromEnd = cols.length - ci, rname;
+      // v1.5.18 (correção do que EU escrevi na 1.5.17): eu tinha mandado contar a coluna
+      // INTEIRA, bye incluído. Errado — o dono viu "Quartas de Final" numa coluna de 2 jogos
+      // + 2 byes cuja seguinte era a semifinal. BYE não é jogo; a contagem é dos REAIS.
+      var games = window._realGameCount(matches), fromEnd = cols.length - ci, rname;
       if (fromEnd === 1) rname = _t('bracket.final');
       else if (fromEnd === 2 && games === 2) rname = _t('bracket.semiFinal');
       else if (fromEnd === 3 && games === 4) rname = _t('bracket.quarterFinal');
       else if (fromEnd === 4 && games === 8) rname = _t('bracket.roundOf16');
       else rname = _t('bracket.round', { n: ci + 1 });
+      // v1.5.17 CANON: jogo de BYE NÃO vira card — a rodada mostra só CONFRONTOS DE VERDADE.
+      // Quem passou de bye aparece na rodada SEGUINTE com a tag âmbar (ver _inferByeTags).
+      // Coluna que sobra só com bye deixa de existir (senão fica um título órfão na tela).
+      var reais = matches.filter(function (m) { return !window._isByeMatch(m); });
+      if (!reais.length) return '';
       // Nome da rodada + cards JUNTOS no TOPO (align-self:flex-start) — "deixe no topo como
       // sempre foi" (dono). Centralizar só os cards afastava o nome deles nas colunas curtas.
       return `
       <div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;align-self:flex-start;">
         <h5 style="color:${color};font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ${color};padding-left:8px;">${rname}</h5>
-        ${matches.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
+        ${reais.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
       </div>`;
     }).join('');
     return `
@@ -1977,7 +2319,7 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
   var _grandColHtml = grandMatches.length ? `
       <div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;align-self:flex-start;">
         <h5 style="color:#fbbf24;font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid #fbbf24;padding-left:8px;">🏆 ${_t('bracket.grandFinal')}</h5>
-        ${grandMatches.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
+        ${grandMatches.filter(m => !window._isByeMatch(m)).map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
       </div>` : '';
 
   // v1.0.94-beta: render classificação progressiva em DE no MESMO LUGAR
@@ -2070,13 +2412,44 @@ window._assignGlobalGameNumbers = function (t) {
   // ganha ++n; visitar o mesmo objeto de novo (grupo e depois plano) reaproveita numById —
   // idempotente. Rei/Rainha numera POR GRUPO (ordem dos grupos), depois o plano confirma pelas
   // MESMAS ids. Zero cópia, zero colisão, zero fallback.
-  var numById = {};
+  // A travessia abaixo só COLETA a ordem cronológica; o número é atribuído no FIM
+  // (_emitir), depois de aplicar a única inversão que existe: a FINAL é o último
+  // jogo do torneio e o 3º/4º lugar fica um número abaixo dela — mesmo a final
+  // aparecendo ACIMA do 3º na tela. Coletar antes de numerar é o que permite essa
+  // garantia sem um segundo contador.
+  var ordem = [];        // 1ª ocorrência de cada jogo, em ordem cronológica
+  var copiasPorId = {};  // id -> todos os objetos com esse id (grupo + array plano)
   function stamp(m) {
     if (!m) return;
     if (m.isSitOut || isBye(m)) { m._gameNum = null; return; }
-    if (m.id != null && numById[m.id] != null) { m._gameNum = numById[m.id]; return; } // cópia já numerada
-    m._gameNum = ++n;
-    if (m.id != null) numById[m.id] = m._gameNum;
+    var k = (m.id != null) ? String(m.id) : null;
+    if (k == null) { ordem.push(m); return; }
+    if (!copiasPorId[k]) { copiasPorId[k] = []; ordem.push(m); }
+    copiasPorId[k].push(m);   // cópias do MESMO jogo recebem o MESMO número
+  }
+  function _ehTerceiro(m) {
+    return !!(m && (m.isThirdPlace || m.bracket === 'thirdplace' || m.bracket === 'grand3'));
+  }
+  function _ehExtra(m) { return !!(m && (m.isExtra || m.condicional)); }
+  function _emitir() {
+    // INVERSÃO ÚNICA DO TORNEIO: tira o 3º lugar de onde estiver e recoloca
+    // imediatamente ANTES da final (o último jogo que não é a final-extra
+    // condicional da Dupla Eliminatória). Vale pra qualquer formato.
+    var terceiros = ordem.filter(_ehTerceiro);
+    if (terceiros.length) {
+      ordem = ordem.filter(function (m) { return !_ehTerceiro(m); });
+      var iFinal = -1;
+      for (var z = ordem.length - 1; z >= 0; z--) { if (!_ehExtra(ordem[z])) { iFinal = z; break; } }
+      if (iFinal < 0) iFinal = ordem.length;
+      Array.prototype.splice.apply(ordem, [iFinal, 0].concat(terceiros));
+    }
+    ordem.forEach(function (m, i) {
+      var num = i + 1;
+      var k = (m.id != null) ? String(m.id) : null;
+      if (k && copiasPorId[k]) copiasPorId[k].forEach(function (o) { o._gameNum = num; });
+      else m._gameNum = num;
+    });
+    n = ordem.length;
   }
   // (1) Classificatória Liga/Suíço (t.rounds) — rodada asc (ordem do array), índice do array.
   //     Rei/Rainha numera POR GRUPO na ordem do array de grupos (A, B, C…), jogos dentro do grupo
@@ -2114,6 +2487,10 @@ window._assignGlobalGameNumbers = function (t) {
         if (upRounds[i] != null) ms.filter(function (m) { return m.bracket === 'upper' && _rnd(m) === upRounds[i]; }).forEach(stamp);
         if (loRounds[i] != null) ms.filter(function (m) { return m.bracket === 'lower' && _rnd(m) === loRounds[i]; }).forEach(stamp);
       }
+      // 3º/4º da Dupla Eliminatória: entra na coleta aqui; _emitir() garante que
+      // ele fica um número ABAIXO da Grande Final. Antes este caminho ignorava o
+      // 3º lugar por completo — ele ficava sem número nenhum.
+      ms.filter(_ehTerceiro).forEach(stamp);
       ms.filter(function (m) { return m.bracket === 'grand'; }).forEach(stamp);
       return;
     }
@@ -2131,14 +2508,20 @@ window._assignGlobalGameNumbers = function (t) {
       var rounds = Object.keys(byRound).map(Number).sort(function (a, b) { return a - b; });
       var thirdM = ms.filter(function (m) { return (m.bracket || 'main') === bk && m.isThirdPlace; })[0];
       rounds.forEach(function (rn, idx) {
-        var isFinalCol = (idx === rounds.length - 1);
         var real = byRound[rn].filter(function (m) { return !isBye(m); });
-        if (isFinalCol && thirdM) stamp(thirdM);   // 3º reservado ANTES da final (final-1)
         real.forEach(stamp);
       });
+      if (thirdM) stamp(thirdM);   // posição final é decidida por _emitir()
     });
     ms.filter(function (m) { return (m.bracket || '') === 'grandfinal'; }).forEach(stamp);
   });
+
+  // t.thirdPlaceMatch mora FORA de t.matches (_appendCanonicalColumn grava nesse
+  // campo próprio) — sem isto ele NUNCA recebia número. _emitir() o coloca logo
+  // abaixo da final.
+  if (t.thirdPlaceMatch) stamp(t.thirdPlaceMatch);
+
+  _emitir();
 };
 
 // ─── Construtor de Fases: render das chaves da fase atual (Ouro/Prata + final) ─
@@ -2166,21 +2549,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   // o vencedor de um jogo BYE (rodada r) leva a tag âmbar SÓ na rodada r+1 (some quando
   // avança por vitória). O gerador (phases-engine) já persiste isso em sorteios novos;
   // aqui é fallback p/ não exigir re-sorteio. Não sobrescreve flag já existente.
-  (function _inferFromBye() {
-    var byeNext = {}; // "bracket|nome" -> rodada da tag (r+1)
-    pm.forEach(function (m) {
-      if (window._isByeMatch(m) && m.winner) {
-        var r = (m.round == null) ? 1 : m.round;
-        byeNext[(m.bracket || 'main') + '|' + m.winner] = r + 1;
-      }
-    });
-    pm.forEach(function (m) {
-      if (window._isByeMatch(m)) return;
-      var r = (m.round == null) ? 1 : m.round, bk = (m.bracket || 'main');
-      if (m.p1 && m.p1FromBye == null && byeNext[bk + '|' + m.p1] === r) m.p1FromBye = true;
-      if (m.p2 && m.p2FromBye == null && byeNext[bk + '|' + m.p2] === r) m.p2FromBye = true;
-    });
-  })();
+  window._inferByeTags(pm);
 
   function colsFor(bracketKey) {
     var byRound = {};
@@ -2202,7 +2571,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   var globalNum = (typeof window._phaseGameOffset === 'function') ? window._phaseGameOffset(t, curPhase) : 0;
   function roundLabel(cols, idx) {
     var col = cols[idx];
-    var games = col.matches.length;
+    var games = window._realGameCount(col.matches);   // bye não é jogo — v1.5.18
     var fromEnd = cols.length - idx;
     if (fromEnd === 1) return _t('bracket.final');
     if (fromEnd === 2 && games === 2) return _t('bracket.semiFinal');
@@ -2830,6 +3199,12 @@ async function _preloadPlayerPhotos(tournament) {
   }
 }
 
+// AGUARDANDO MELHOR DERROTADO: o slot de repescagem da normalização guarda o ocupante
+// provisório (a aresta o preenche quando o jogo-fonte fecha), mas ele SÓ VALE quando a
+// rodada inteira termina e os critérios de desempate rodam sobre todos os derrotados.
+// Até lá o card mostra "A definir" — o dado fica, a exibição espera. A flag é posta e
+// retirada por `_reassignBestLosersToRepechage` (bracket-logic).
+
 // ─── Player avatars helper for bracket cards ────────────────────────────────
 function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
   // v4.0.84: identidade = uid → resolve a string GUARDADA da partida pro nome AO VIVO
@@ -3081,7 +3456,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
-      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)))}</div>
+      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)))}</div>
       ${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" style="display:flex;align-items:center;flex-shrink:0;">
         ${showInputs ? p1Score : (p1ScoreVal || '')}
@@ -3090,7 +3465,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
-      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2') : (m.p2Uid || m.team2Uids)))}</div>
+      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2') : (m.p2Uid || m.team2Uids)))}</div>
       ${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" style="display:flex;align-items:center;flex-shrink:0;">
         ${showInputs ? p2Score : (p2ScoreVal || '')}
@@ -3436,7 +3811,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _tierLC = { gold: '#fbbf24', silver: '#cbd5e1', line3: '#cd7f32', line4: '#3b82f6', upper: '#10b981', lower: '#f59e0b' };
   var _lineLeftBorder = _tierLC[m.bracket] ? ('border-left:4px solid ' + _tierLC[m.bracket] + ';') : '';
   return `
-    <div id="card-${m.id}" data-players="${_searchNames}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:120px;background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" data-players="${_searchNames}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
@@ -3625,7 +4000,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // Controle de PRESENÇA do grupo (entre Combinar e W.O.) — helper ÚNICO compartilhado
     // com o render de grupo Rei/Rainha da rota Liga (t.rounds[].monarchGroups).
     var _grpArrived = window._monGroupArrivedBtn(t, matches, groupDone);
-    html += '<div data-group-box="1" style="scroll-margin-top:120px;background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : '#fbbf24') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
+    html += '<div data-group-box="1" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : '#fbbf24') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       '<div class="btn-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
         '<h3 style="margin:0;font-size:1.1rem;color:var(--text-bright);flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
         (statusBadge || '') + _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
@@ -3832,7 +4207,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     var _woGsPlayers = (sg.players && sg.players.length) ? sg.players : sorted.map(function (s) { return s.name; });
     var _woGsChip = (typeof window._woClaimChip === 'function') ? window._woClaimChip(t, { scope: 'group', roundIndex: (t.currentPhaseIndex || 0), groupName: sg.name, players: _woGsPlayers, matches: _woGsMatches }) : '';
     return `
-      <div class="card" id="group-section-${gi}" data-group-box="1" style="border-left:4px solid ${isMyGroupGS ? '#22d3ee' : groupColor};scroll-margin-top:120px;">
+      <div class="card" id="group-section-${gi}" data-group-box="1" style="border-left:4px solid ${isMyGroupGS ? '#22d3ee' : groupColor};scroll-margin-top:var(--scroll-anchor,120px);">
         <div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:${isMyGroupGS ? '#22d3ee' : groupColor};font-size:1rem;font-weight:800;">${window._safeHtml(sg.name)}${myGroupBadge}</h3>${_woGsChip ? `<span style="margin-left:auto;">${_woGsChip}</span>` : ''}</div>
         <div class="standings-scroll" style="margin-bottom:1rem;">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem;min-width:480px;">
@@ -4601,7 +4976,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // o convite pendente aparece UMA vez só no card de controle (_ligaCtrl) e
           // o substituto convidado já surge nos cards de jogo (via _pendingSub).
           // _woName já foi calculado acima.
-          return '<div data-group-box="1" style="scroll-margin-top:120px;background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
+          return '<div data-group-box="1" style="scroll-margin-top:var(--scroll-anchor,120px);background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
             // Header do grupo: nome + SEU GRUPO + 👑 Rei/Rainha. Quando NÃO há botões
             // (_rightCtrl vazio) economiza espaço colocando tudo numa LINHA só (pedido do
             // dono); com botões, empilha à esquerda e deixa os controles à direita.

@@ -39,6 +39,10 @@
           s.sportName = setup.sportName || '';
           s.isDoubles = !!setup.isDoubles;
           s.teams = setup.teams || {};
+          // A montagem SÓ existe pra partida casual — sem este campo o relógio
+          // desenhava 🏆 (torneio) no lugar de ⚡ na tela "Iniciar / 1º sacador".
+          // O _getLiveScoreState já manda isCasual; o lobby tinha ficado de fora.
+          s.isCasual = true;
         }
       } catch (e) {}
     }
@@ -70,6 +74,29 @@
     for (var i = 0; i < subscribers.length; i++) {
       try { subscribers[i](snapshot); } catch (e) {}
     }
+  }
+
+  // 1º sacador escolhido NO RELÓGIO enquanto ainda estávamos na montagem (o placar
+  // não existia, então _liveSetServer ainda não). Aplicado no `start`.
+  var _pendingServerPick = null;
+
+  // Fecha o fluxo do "Iniciar pelo relógio": o celular abre "Quem saca primeiro?" e
+  // espera confirmação — sem ela o serveOrder fica vazio e a partida não anda. Aplica
+  // a escolha do relógio (se houve) e confirma, usando as MESMAS funções do celular.
+  // O placar abre de forma assíncrona (render), então tenta por ~1s.
+  function _confirmServeFromWatch(tries) {
+    if (tries > 12) { _pendingServerPick = null; return; }
+    setTimeout(function () {
+      if (typeof window._liveServeConfirm !== 'function') { _confirmServeFromWatch(tries + 1); return; }
+      try {
+        if (_pendingServerPick && typeof window._liveServeSelect === 'function') {
+          window._liveServeSelect(_pendingServerPick.team, _pendingServerPick.idx);
+        }
+        window._liveServeConfirm();
+      } catch (e) {}
+      _pendingServerPick = null;
+      push(currentState(), true);   // relógio recebe o estado JÁ com sacador definido
+    }, 80);
   }
 
   // Recebe uma intenção do relógio e dirige o motor GSM (nunca duplica regra).
@@ -113,8 +140,16 @@
       case 'start':
         // "Iniciar" no relógio — dispara a MESMA função do botão do celular.
         // Só existe enquanto a montagem está aberta (canStart no snapshot).
+        //
+        // MAS iniciar não bastava: o celular abre a tela "Quem saca primeiro?" e FICA
+        // PARADO nela esperando um toque que só existe lá. O relógio, que já tinha
+        // escolhido o 1º sacador na própria tela "Iniciar", pulava pro placar — e a
+        // partida NUNCA começava de verdade (serveOrder vazio ⇒ sem sacador ⇒ sem a
+        // bolinha no nome). Era o "o início pelo relógio não aconteceu" do relato.
+        // Agora o start APLICA a escolha do relógio e CONFIRMA a tela, fechando o fluxo.
         if (typeof window._casualStart === 'function') {
           window._casualStart();
+          _confirmServeFromWatch(0);
         }
         break;
       case 'rrNext':
@@ -147,10 +182,14 @@
         // Escolha do sacador nos 2 primeiros jogos (o equivalente no relógio ao
         // arrastar a bola no celular). Dirige a MESMA função — o hard lock de
         // "após 2 jogos ninguém muda" vive lá, nunca aqui.
-        if ((intent.team === 1 || intent.team === 2)
-            && typeof intent.playerIdx === 'number'
-            && typeof window._liveSetServer === 'function') {
-          window._liveSetServer(intent.team, intent.playerIdx);
+        if ((intent.team === 1 || intent.team === 2) && typeof intent.playerIdx === 'number') {
+          if (typeof window._liveSetServer === 'function') {
+            window._liveSetServer(intent.team, intent.playerIdx);
+          } else {
+            // Ainda no LOBBY: o placar não abriu, então _liveSetServer nem existe e a
+            // escolha do relógio caía no vazio. Guarda pra aplicar no `start`.
+            _pendingServerPick = { team: intent.team, idx: intent.playerIdx };
+          }
         }
         break;
       case 'hello':

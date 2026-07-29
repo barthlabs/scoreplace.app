@@ -1373,6 +1373,11 @@ window._fillRepFillWithLateDuplas = function (t) {
     var openRep = null;
     cur.forEach(function (m) {
       if (openRep || !m || m.round !== 0 || !m.isPhaseRepGame || !Array.isArray(m.repFill) || !m.repFill.length) return;
+      // v1.5.3: jogo "tardio × a definir" (awaitsLatePartner) é do _placeLateEntriesSurgically —
+      // o _fillOpenAdefinir dele preenche o slot na mesma passada, com as flags certas. Esta função
+      // é do motor de ÁRVORE MÍNIMA (R0); mexer ali carimbaria isPhaseRepR1 numa chave de potência
+      // de 2 e ligaria o _syncLowerBracket sobre outra convenção de fiação (slot morto).
+      if (m.awaitsLatePartner) return;
       var rf = null; m.repFill.forEach(function (x) { if (!rf && x && x.slot && _empty(m[x.slot]) && !_isSelf(m, x.slot)) rf = x; });
       if (rf) openRep = { m: m, rf: rf };
     });
@@ -1430,6 +1435,10 @@ window._fillRepFillWithLateDuplas = function (t) {
       var steal = null;
       cur.forEach(function (m) {
         if (!m || m.round < 1 || !Array.isArray(m.repFill) || !m.repFill.length) return;
+        // v1.5.3: NÃO roubar a vaga de repescagem de um jogo "tardio × a definir" — ela É a vaga
+        // dele (o melhor derrotado quando a rodada fechar). Roubando, nascia um play-in fantasma
+        // "dupla × a definir" na R0 alimentando o slot do tardio: dois jogos vazios em cadeia.
+        if (m.awaitsLatePartner) return;
         m.repFill.forEach(function (rf) {
           if (!rf || !rf.slot || !_empty(m[rf.slot])) return;
           if (!steal || (rf.rank || 0) > (steal.rf.rank || 0)) steal = { m: m, rf: rf };
@@ -2056,13 +2065,20 @@ window._callIntegrateLate = function (payload) {
     try { pid = fb.app().options.projectId; } catch (e) {}
     if (!pid) return Promise.reject(Object.assign(new Error('App não inicializado.'), { code: 'functions/internal' }));
     var url = 'https://us-central1-' + pid + '.cloudfunctions.net/integrateLateEntries';
+    // v1.5.2: TIMEOUT. `fetch` sem timeout pode ficar pendurado pra sempre (celular na quadra, 4G
+    // caindo, aba em segundo plano) — e o chamador marca "em voo" antes de disparar. Sem teto, a
+    // trava nunca era liberada e TODA marcação de presença seguinte virava no-op silencioso.
+    var _ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var _tmo = setTimeout(function () { try { _ctl && _ctl.abort(); } catch (e) {} }, 25000);
+    var _clear = function (v) { clearTimeout(_tmo); return v; };
     return user.getIdToken().then(function (tok) {
         return fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
-            body: JSON.stringify({ data: payload })
+            body: JSON.stringify({ data: payload }),
+            signal: _ctl ? _ctl.signal : undefined
         });
-    }).then(function (r) {
+    }).then(_clear, function (e) { _clear(); throw e; }).then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
             if (j && j.error) {
                 var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
@@ -2104,7 +2120,20 @@ window._applyCFTournament = function (tId, doc) {
         // terceiros. Ver [[project_concurrency_safe_saves]].
         if (typeof window._reapplyPendingPresence === 'function') { try { window._reapplyPendingPresence(_list); } catch (e) {} }
         if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(doc); } catch (e) {} }
+        // v1.5.13: CURA no MESMO tick em que o doc da CF chega. A cura de rótulo já existia,
+        // mas rodava 1× por sessão AO ABRIR a chave — e o slot cru ("#10", entrada só-uid)
+        // nasce DEPOIS, quando o organizador forma a dupla e a CF grava. Resultado medido no
+        // torneio ao vivo: ele formava a dupla e continuava vendo "#10" até recarregar a
+        // página. Aqui é síncrono (idempotente) + a busca de perfis que faltam em seguida.
+        if (typeof window._stampMissingMatchUids === 'function') { try { window._stampMissingMatchUids(doc); } catch (e) {} }
     } catch (e) {}
+    if (typeof window._healOrphanLabels === 'function') {
+        try {
+            window._healOrphanLabels(doc).then(function (n) {
+                if (n > 0 && typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+            });
+        } catch (e) {}
+    }
     if (typeof window._rerenderBracket === 'function') { try { window._rerenderBracket(tId); } catch (e) {} }
     if (typeof window._softRefreshView === 'function') { window._suppressSoftRefresh = false; try { window._softRefreshView(); } catch (e) {} }
 };
@@ -2138,7 +2167,20 @@ window._triggerLateIntegration = function (t, opts) {
     }
     clearTimeout(window._lateIntegrateDebounce[tId]);
     window._lateIntegrateDebounce[tId] = null;
-    if (window._lateIntegrateInflight[tId]) return;
+    // v1.5.2 (dono, torneio AO VIVO 25/jul — "marquei presença do Max e da Cátia e não gerou jogo"):
+    // o disparo NUNCA pode ser ENGOLIDO. Antes, com uma chamada em voo o gatilho simplesmente
+    // RETORNAVA — e não havia NADA que tentasse de novo: a pessoa ficava presente, fora da chave,
+    // pra sempre. No doc real a chave só faltava o `integrateLateEntries` rodar (o motor coloca a
+    // dupla — verificado contra o doc de produção); o que faltou foi a CHAMADA. Agora o pedido é
+    // ENFILEIRADO e re-disparado assim que a chamada em voo termina. Ver [[project_late_dupla_fills_awaiting_slot]].
+    if (window._lateIntegrateInflight[tId]) {
+        var _prev = window._lateIntegratePending[tId] || {};
+        var _mrg = {}; for (var _pk in _prev) if (_prev.hasOwnProperty(_pk)) _mrg[_pk] = _prev[_pk];
+        for (var _ok in opts) if (opts.hasOwnProperty(_ok)) _mrg[_ok] = opts[_ok];
+        _mrg.debounce = false;
+        window._lateIntegratePending[tId] = _mrg;
+        return;
+    }
     // só dispara quando há gente na espera (senão não há o que integrar) — EXCETO com force, que é o
     // caso da DUPLA FORMADA pós-sorteio: ela entra em participants (não na espera), então não há nada
     // na waitlist, mas a CF ainda precisa rodar pra detectar o órfão de roster e re-sortear.
@@ -2150,8 +2192,20 @@ window._triggerLateIntegration = function (t, opts) {
     var sig = wl.map(_nm).sort().join('|') + '#' + Object.keys(t.checkedIn || {}).sort().join(',');
     if (!opts.force && window._lateIntegrateLastSig[tId] === sig) return;
     window._lateIntegrateInflight[tId] = true;
-    window._callIntegrateLate({ tournamentId: tId }).then(function (res) {
+    // v1.5.2: LIBERA a trava e roda o pedido ENFILEIRADO (se houver). Chamado nos DOIS desfechos —
+    // sucesso e erro — para que a trava jamais fique presa (era o que deixava todo toggle de
+    // presença seguinte virar no-op silencioso).
+    var _releaseLate = function () {
         window._lateIntegrateInflight[tId] = false;
+        var _q = window._lateIntegratePending[tId];
+        if (_q) {
+            window._lateIntegratePending[tId] = null;
+            var _ft = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : t;
+            setTimeout(function () { window._triggerLateIntegration(_ft || t, _q); }, 0);
+        }
+    };
+    window._callIntegrateLate({ tournamentId: tId }).then(function (res) {
+        _releaseLate();
         window._lateIntegrateLastSig[tId] = sig;
         var d = (res && res.data) || {};
         if (window._dtrace) window._dtrace('integrateLate:done', { v: (window.SCOREPLACE_VERSION || '?'), changed: d.changed, extra: d.extra, duplas: d.duplas, monarch: d.monarch, repfill: d.repfill, placed: d.placed, wlClean: d.wlClean, reason: d.reason });
@@ -2165,8 +2219,43 @@ window._triggerLateIntegration = function (t, opts) {
         if (_novos > 0 && typeof showNotification !== 'undefined') {
             showNotification('⚡ Tardios na chave', 'A dupla entrou na chave.', 'info');
         }
+        // CHAVE CHEIA — o tardio ficou de fora e o organizador PRECISA saber.
+        // Regra do dono (25/jul): confronto já publicado é intocável. Numa chave em
+        // potência de 2 exata não há vaga, e encaixar mais um só seria possível
+        // redesenhando tudo — que é justamente o desastre do torneio de casais
+        // ("era pra entrarem no jogo 7 sem mudar nenhum dos demais 6"). Então em vez
+        // de entrar torto, ele espera — e a tela diz o que falta pra abrir jogo novo.
+        // Sem este aviso o organizador vê "marquei presença e não aconteceu nada",
+        // que é literalmente o bug que originou toda esta migração.
+        var _rec = Array.isArray(d.recusas) ? d.recusas : [];
+        if (_rec.length && typeof showNotification !== 'undefined') {
+            // Uma mensagem por MOTIVO. O organizador precisa saber o que fazer, não o
+            // código do erro — e qualquer recusa sem mensagem vira "marquei presença e
+            // não aconteceu nada", que é o bug que originou toda esta migração.
+            var _textos = {
+                'falta-par': ['⏳ Falta 1 pra abrir o jogo',
+                    'A chave está cheia. Com mais 1 inscrição os dois entram juntos num jogo novo, sem mexer em nenhum confronto já publicado.'],
+                'confronto-publicado-mudaria': ['⏳ Chave cheia — entrada na espera',
+                    'Incluir agora mudaria confrontos que já foram publicados, então ninguém entrou. Pra incluir mesmo assim, refaça o sorteio.'],
+                'crescimento-dupla-nao-implementado': ['⏳ Chave cheia — entrada na espera',
+                    'Nesta Dupla Eliminatória a chave está cheia e ainda não é possível abrir jogo novo sem re-sortear. A inscrição segue na espera.'],
+                'chave-legada-sem-coordenada': ['⏳ Chave antiga — entrada na espera',
+                    'Esta chave foi sorteada por uma versão anterior e não pode ser recalculada sem mudar os confrontos. A inscrição segue na espera.'],
+                'chave-legada-sem-seeds': ['⏳ Chave antiga — entrada na espera',
+                    'Esta chave não guarda a semeadura do sorteio, então não dá pra incluir sem mudar os confrontos. A inscrição segue na espera.']
+            };
+            var _vistos = {};
+            _rec.forEach(function (r) {
+                var k = r && r.motivo;
+                if (!k || _vistos[k]) return;
+                _vistos[k] = 1;
+                var msg = _textos[k] || ['⏳ Entrada na espera',
+                    'A inscrição não pôde entrar na chave agora (' + k + ') e segue na lista de espera.'];
+                showNotification(msg[0], msg[1], 'warning');
+            });
+        }
     }).catch(function (e) {
-        window._lateIntegrateInflight[tId] = false;
+        _releaseLate();
         if (window._dtrace) window._dtrace('integrateLate:ERR', { code: e && e.code, msg: e && e.message });
     });
 };
@@ -4147,6 +4236,25 @@ window._repropagateDecided = function (t) {
   if (!t || !Array.isArray(t.matches)) return 0;
   var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
   var _vz = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
+  // v1.5.4 — HEAL de AUTO-CONFRONTO: jogo PENDENTE com o mesmo time nos dois lados. Devolve pra TBD
+  // o slot que é alimentado por um fio explícito ainda sem vencedor (é ele que espera alguém).
+  // Cura docs que já ficaram assim (corrida entre a re-propagação do cliente e a da CF).
+  (function () {
+    all.forEach(function (m) {
+      if (!m || m.winner || _vz(m.p1) || _vz(m.p2) || String(m.p1) !== String(m.p2)) return;
+      var _fedBy = function (sl) {
+        return all.some(function (x) {
+          return x && x !== m && !x.winner &&
+            ((x.nextMatchId === m.id && x.nextSlot === sl) || (x.loserMatchId === m.id && x.loserSlot === sl));
+        });
+      };
+      var sl = _fedBy('p2') ? 'p2' : (_fedBy('p1') ? 'p1' : null);
+      if (!sl) return;                                   // ninguém pra repor: não apaga por chute
+      m[sl] = 'TBD';
+      if (sl === 'p1') { m.team1Obj = null; m.team1Uids = []; m.p1Uid = null; }
+      else { m.team2Obj = null; m.team2Uids = []; m.p2Uid = null; }
+    });
+  })();
   var _key = function (m, sl) {
     var u = (sl === 'p1') ? m.team1Uids : m.team2Uids;
     if (Array.isArray(u) && u.length) return 'u:' + u.slice().sort().join('+');
@@ -4171,6 +4279,11 @@ window._repropagateDecided = function (t) {
       if (['p1', 'p2'].some(function (s) { return tgt[s] === nome || (k && _key(tgt, s) === k); })) return;
       var s2 = (tslot && _vz(tgt[tslot])) ? tslot : null;
       if (!s2) return;                                   // sem slot explícito vazio: não chuta
+      // v1.5.4: ANTI-AUTO-CONFRONTO — nunca escrever um time no slot quando o OUTRO lado já é ele
+      // mesmo (visto AO VIVO: "Kelly/Rodrigo vs Kelly/Rodrigo" numa corrida de re-propagação com o
+      // doc do cliente). O outro lado é sempre reescrito por quem tem o fio explícito.
+      var _outro = (s2 === 'p1') ? 'p2' : 'p1';
+      if (tgt[_outro] === nome || (k && _key(tgt, _outro) === k)) return;
       tgt[s2] = nome;
       var uids = ((srcSl === 'p1') ? m.team1Uids : m.team2Uids) || [];
       var obj = (srcSl === 'p1') ? m.team1Obj : m.team2Obj;
@@ -4235,6 +4348,27 @@ window._stampMissingMatchUids = function (t) {
   var n = 0;
   (typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : t.matches).forEach(function (m) {
     if (!m) return;
+    // v1.5.10 — HEAL do rótulo "#N" + identidade INCOMPLETA de dupla. Caso real
+    // (tour_1785038880593_sb, 26/jul): a dupla que entrou tarde ficou na chave como "#10" e
+    // com team2Uids de UM uid só (dupla tem dois). O slot guarda o `team*Obj` COMPLETO, então
+    // dá pra reconstruir os dois pela fonte única — sem depender de resolver nome nenhum.
+    // Cura o doc na próxima passada da CF/render, sem migração.
+    [['p1', 'team1Uids', 'team1Obj'], ['p2', 'team2Uids', 'team2Obj']].forEach(function (par) {
+      var slot = par[0], campo = par[1], obj = m[par[2]];
+      if (!obj || typeof obj !== 'object') return;
+      var esperados = _uids(obj);
+      if (!esperados.length) return;
+      var atual = Array.isArray(m[campo]) ? m[campo] : [];
+      if (atual.length !== esperados.length || esperados.some(function (u) { return atual.indexOf(u) < 0; })) {
+        if (typeof window._setSlot === 'function') window._setSlot(m, slot, esperados, obj);
+        else m[campo] = esperados.slice();
+        n++;
+      }
+      if (/^#\d+$/.test(String(m[slot] || '').trim())) {
+        var nomeVivo = _nm(obj);
+        if (nomeVivo && !/^#\d+$/.test(nomeVivo)) { m[slot] = nomeVivo; n++; }
+      }
+    });
     [['p1', 'team1Uids'], ['p2', 'team2Uids']].forEach(function (par) {
       var slot = par[0], campo = par[1];
       if (Array.isArray(m[campo]) && m[campo].length) {
@@ -4272,15 +4406,22 @@ window._stampMissingMatchUids = function (t) {
 // o doc se auto-conserta na primeira abertura com os perfis vivos.
 window._healOrphanLabels = function (t) {
   if (!t) return Promise.resolve(0);
-  var RE = /jogador sem perfil \(/i;
+  // v1.5.10: "#N" entra na cura junto com "Jogador sem perfil (…)" — é o MESMO defeito visto
+  // de outro ângulo (slot com identidade, sem nome). A dupla tardia do doc real virou "#10"
+  // na tela e o organizador leu como "não entrou". Os uids vêm do team*Uids OU do team*Obj
+  // (no caso medido o team*Uids estava incompleto — é justamente o que o stamp conserta).
+  var RE = /jogador sem perfil \(|^#\d+$/i;
   var ms = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
   var uids = [];
   (ms || []).forEach(function (m) {
     if (!m) return;
-    [['p1', 'team1Uids'], ['p2', 'team2Uids']].forEach(function (par) {
-      if (RE.test(String(m[par[0]] || '')) && Array.isArray(m[par[1]])) {
-        m[par[1]].forEach(function (u) { if (u && uids.indexOf(u) < 0) uids.push(u); });
+    [['p1', 'team1Uids', 'team1Obj'], ['p2', 'team2Uids', 'team2Obj']].forEach(function (par) {
+      if (!RE.test(String(m[par[0]] || '').trim())) return;
+      var us = Array.isArray(m[par[1]]) ? m[par[1]].slice() : [];
+      if (m[par[2]] && typeof window._participantUids === 'function') {
+        window._participantUids(m[par[2]]).forEach(function (u) { if (us.indexOf(u) < 0) us.push(u); });
       }
+      us.forEach(function (u) { if (u && uids.indexOf(u) < 0) uids.push(u); });
     });
   });
   if (!uids.length) return Promise.resolve(0);
@@ -4413,6 +4554,106 @@ window._dedupMatchesByUid = function (t) {
 // conta de quem desce) e delega tamanho/conteúdo/fiação da 1ª inferior ao sync. Antes esta
 // função crescia a inferior por conta própria e se atropelava com o resolveRepFills — os
 // 8 reverts da saga. [[project_dupla_elim_late_integration_cascade]]
+// ── JOGO DA R1 INFERIOR PRA RECEBER OS PERDEDORES TARDIOS (v1.5.3, dono, torneio AO VIVO) ────
+// "Com a adição da dupla tardia, também é necessário criar um jogo adicional na R1 Inf."
+// Dupla Eliminatória: quem perde a 1ª superior CAI na 1ª inferior. Os jogos TARDIOS da 1ª superior
+// (isExtra, criados por _growAdefinir) nasciam SEM `loserMatchId` na chave de potência de 2 — o
+// perdedor deles evaporava (eliminado com UMA derrota, enquanto todo mundo tem direito a duas).
+// Esta função garante o pouso: um jogo NOVO na 1ª inferior que recebe os perdedores dos jogos
+// tardios da 1ª superior (2 tardios → 1 jogo; 1 tardio sozinho → o outro lado fica "a definir" e
+// vira BYE no fim da rodada, via awaitsLatePartner no _resolveRepFills — nunca puxa repescado, que
+// double-bookaria). Antes de criar, tenta uma vaga LIVRE (não alimentada por ninguém) num jogo
+// existente da 1ª inferior. Idempotente: chamada de novo, não duplica nada.
+// Ver [[project_dupla_elim_late_integration_cascade]] / [[project_inclusion_philosophy_canon]].
+window._ensureLowerLandingForLate = function (t, pi) {
+  if (!t || !Array.isArray(t.matches)) return 0;
+  var all = function () { return (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []); };
+  var _r = function (m) { return (m && typeof m.round === 'number') ? m.round : 1; };
+  var _emp = function (v) { return !v || v === 'TBD' || v === 'BYE (Avança Direto)' || /a definir/i.test(String(v)); };
+  var low = all().filter(function (m) { return m && m.bracket === 'lower'; });
+  if (!low.length) return 0;                                  // Eliminatória Simples: não há inferior
+  var lowR = Math.min.apply(null, low.map(_r));
+  // jogos TARDIOS da 1ª SUPERIOR ainda sem pouso (sem loserMatchId) e sem resultado
+  var sup = all().filter(function (m) { return m && (m.bracket === 'upper' || m.bracket === 'main' || !m.bracket); });
+  if (!sup.length) return 0;
+  var supR = Math.min.apply(null, sup.map(_r));
+  var orfaos = sup.filter(function (m) { return m && _r(m) === supR && m.isExtra && !m.loserMatchId && !m.winner; });
+  if (!orfaos.length) return 0;
+  var _fed = function (m, sl) {
+    return all().some(function (x) {
+      return x && x !== m && ((x.loserMatchId === m.id && x.loserSlot === sl) || (x.nextMatchId === m.id && x.nextSlot === sl));
+    });
+  };
+  var _vagaLivre = function (m) {                             // slot vazio E não prometido a ninguém
+    if (!m || m.winner) return null;
+    var s = null;
+    ['p1', 'p2'].forEach(function (sl) { if (!s && _emp(m[sl]) && !_fed(m, sl)) s = sl; });
+    return s;
+  };
+  var criados = 0, mutou = 0, ts = Date.now();
+  orfaos.forEach(function (g) {
+    // (1) vaga livre num jogo da 1ª inferior (prioriza jogo TARDIO já aberto — os 2 perdedores
+    //     tardios se enfrentam; depois qualquer jogo da 1ª inferior com vaga real).
+    var alvos = all().filter(function (m) { return m && m.bracket === 'lower' && _r(m) === lowR; })
+      .sort(function (a, b) { return (b.isExtra ? 1 : 0) - (a.isExtra ? 1 : 0); });
+    var alvo = null, slot = null;
+    for (var i = 0; i < alvos.length && !alvo; i++) { var s = _vagaLivre(alvos[i]); if (s) { alvo = alvos[i]; slot = s; } }
+    if (!alvo) {
+      // (2) cria o jogo NOVO da 1ª inferior (o "JOGO N" da inferior que o dono pediu).
+      alvo = {
+        id: 'ltlow-' + t.id + '-' + ts + '-' + criados, round: lowR, bracket: 'lower',
+        phaseIndex: (pi != null ? pi : (t.currentPhaseIndex || 0)),
+        p1: 'TBD', p2: 'TBD', winner: null, isExtra: true, awaitsLatePartner: true,
+        createdAt: new Date().toISOString()
+      };
+      if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'lower', round: lowR, matches: [alvo] }); } catch (e) { t.matches.push(alvo); } }
+      else { t.matches.push(alvo); }
+      slot = 'p1'; criados++;
+      // destino do vencedor: vaga livre no destino de um irmão da 1ª inferior; senão cresce um nó
+      // (irmão × novo, herdando o destino do irmão). Só irmão PENDENTE (jogo disputado é intocável).
+      try {
+        var irmaos = all().filter(function (m) { return m && m !== alvo && m.bracket === 'lower' && _r(m) === lowR && m.nextMatchId; });
+        var byId = function (id) { return all().filter(function (m) { return m && m.id === id; })[0]; };
+        var destino = null, livre = null;
+        irmaos.forEach(function (ir) {
+          if (livre) return;
+          var d0 = byId(ir.nextMatchId);
+          if (!d0 || d0.winner) return;
+          if (all().some(function (x) { return x && x.nextMatchId === d0.id && !x.nextSlot; })) return;  // convenção "1ª vaga livre": não reivindica
+          var s2 = _vagaLivre(d0);
+          if (s2) { destino = d0; livre = s2; }
+        });
+        if (livre) { alvo.nextMatchId = destino.id; alvo.nextSlot = livre; }
+        else {
+          var irmao = irmaos.filter(function (ir) { return !ir.winner; })[0];
+          if (irmao) {
+            var slotOrig = irmao.nextSlot;
+            var novoR = {
+              id: 'ltlow-' + t.id + '-' + ts + '-x' + criados, round: lowR + 1, bracket: 'lower',
+              phaseIndex: (pi != null ? pi : (t.currentPhaseIndex || 0)),
+              p1: 'TBD', p2: 'TBD', winner: null, nextMatchId: irmao.nextMatchId
+            };
+            // `nextSlot` undefined é a convenção "1ª vaga livre" da chave inferior — mas Firestore
+            // REJEITA o valor undefined num campo. Só grava a chave quando existe de verdade.
+            if (slotOrig) novoR.nextSlot = slotOrig;
+            if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'lower', round: lowR + 1, matches: [novoR] }); } catch (e) { t.matches.push(novoR); } }
+            else { t.matches.push(novoR); }
+            irmao.nextMatchId = novoR.id; irmao.nextSlot = 'p1';
+            alvo.nextMatchId = novoR.id; alvo.nextSlot = 'p2';
+          }
+        }
+      } catch (_e) {}
+    }
+    g.loserMatchId = alvo.id; g.loserSlot = slot; mutou++;
+    // os dois lados prometidos ⇒ o jogo não espera mais ninguém (sem BYE no fim da rodada)
+    if (alvo.isExtra && _fed(alvo, 'p1') && _fed(alvo, 'p2')) delete alvo.awaitsLatePartner;
+  });
+  if (window.AppStore && typeof window.AppStore.logAction === 'function' && criados) {
+    try { window.AppStore.logAction(t.id, criados + ' jogo(s) na 1ª chave inferior pra receber os perdedores dos jogos tardios'); } catch (e) {}
+  }
+  return mutou;   // nº de jogos tardios que ganharam pouso (criação OU vaga existente)
+};
+
 window._wireLateLoserToLower = function (t, ng, pi) {
   if (!t || !ng || !Array.isArray(t.matches)) return false;
   if (ng.bracket === 'lower') return false;             // porta-2 (tardio já entra na inferior): perder lá é eliminação
@@ -4544,7 +4785,26 @@ window._syncLowerBracket = function (t, opts) {
       };
     }).filter(function (l) { return l.name && !_vazio(l.name); });
     losers.forEach(function (l) { if (l.seed == null) l.seed = 9999; });
-    losers.sort(function (a, b) { return (b.saldo - a.saldo) || (b.score - a.score) || (a.ord - b.ord) || (a.seed - b.seed); });
+    // v1.5.36: CRITÉRIO DO ORGANIZADOR MANDA em toda vaga de repescagem (regra do dono:
+    // "o ranking dos derrotados considerando os critérios de desempate"). O comparador
+    // saldo→pontos→ordem vira fallback/desempate — mantém o comportamento onde os
+    // critérios não distinguem e a ordem auditável dos jogos como último recurso.
+    var _posCrit = null;
+    if (typeof window._rankLosersByCriteria === 'function') {
+      try {
+        var _nomesOrd = losers.slice().sort(function (a, b) { return a.ord - b.ord; }).map(function (l) { return String(l.name); });
+        var _rkd = window._rankLosersByCriteria(t, _nomesOrd);
+        _posCrit = {}; _rkd.forEach(function (n, i) { _posCrit[String(n)] = i; });
+      } catch (e) { _posCrit = null; }
+    }
+    losers.sort(function (a, b) {
+      if (_posCrit) {
+        var pa = (_posCrit[String(a.name)] != null) ? _posCrit[String(a.name)] : 9e9;
+        var pb = (_posCrit[String(b.name)] != null) ? _posCrit[String(b.name)] : 9e9;
+        if (pa !== pb) return pa - pb;
+      }
+      return (b.saldo - a.saldo) || (b.score - a.score) || (a.ord - b.ord) || (a.seed - b.seed);
+    });
     sup.forEach(function (g) {
       if (!g || !g.isExtra || g.winner || !Array.isArray(g.repFill) || !g.repFill.length) return;
       var keep = [];
@@ -4789,6 +5049,125 @@ window._syncLowerBracket = function (t, opts) {
   return changed;
 };
 
+/**
+ * COLETOR ÚNICO de entrada tardia. Responde uma pergunta só: **quem está de fora
+ * da chave e tem direito de entrar agora?** Não coloca ninguém — só coleta.
+ *
+ * Existe como função própria porque tem DOIS consumidores e as regras aqui foram
+ * pagas caras, uma a uma, em torneio ao vivo:
+ *   • `_placeLateEntriesSurgically` — Grupos (encaixa no round-robin);
+ *   • `draw-core.integrateLateEntries` — Eliminatória Simples/Dupla, que entrega a
+ *     lista pro motor determinístico (`_chavesAdapter.integrarTardiosElim`).
+ *
+ * Quando a eliminatória migrou pro motor determinístico, o servidor ganhou um
+ * coletor PRÓPRIO, mais fraco (lia só `standbyParticipants + waitlist`). O órfão
+ * de roster voltou a ser invisível — exatamente o bug ao vivo de 25/jul que a
+ * v1.5.2 já tinha corrigido AQUI. Dois coletores = a regra deriva num deles.
+ * Por isso: um só. Ver [[feedback_unify_dual_entry_points]].
+ *
+ * @returns {Array<{e:Object, fromWait:boolean}>}
+ */
+window._collectLateCandidates = function (t, _theCat) {
+  if (!t) return [];
+  // GATE CANÔNICO, e o primeiro de todos: "Novos Confrontos" desligado ⇒ ninguém
+  // entra, por nenhum caminho. É ORTOGONAL a "inscrições abertas" — o organizador
+  // pode receber inscrição e ainda assim não querer que a chave cresça.
+  // Mora aqui (e não em cada consumidor) justamente pra não valer só num deles.
+  // Ver [[project_new_matchups_independent]].
+  if (typeof window._allowsNewMatchups === 'function' && !window._allowsNewMatchups(t)) return [];
+  // JANELA FECHADA: a 2ª rodada DISTINTA da fase já começou. Ninguém entra mais, porque a
+  // R1 deixou de ser "a rodada que está acontecendo" — colocar alguém nela agora produziria
+  // um jogo cujo vencedor precisaria avançar pra uma rodada já em andamento. É gate SEPARADO
+  // de `_allowsNewMatchups` (que é a chave "Novos Confrontos" do organizador): um é vontade,
+  // o outro é possibilidade. `_lateEnrollR2Started` é a regra canônica — "R2" é a 2ª rodada
+  // distinta, não `round===2` literal, que quebra com play-in/repescagem.
+  if (typeof window._lateEnrollR2Started === 'function' && window._lateEnrollR2Started(t)) return [];
+  var _nm = function (p) { return window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || ''; };
+  var _pu = function (x) { return (typeof window._participantUids === 'function') ? window._participantUids(x) : []; };
+  // dupla = ESTRUTURA (p1/p2), nunca includes('/') — [[project_dupla_entry_structural_not_slash]]
+  var _isPairEntry = function (p) { return !!(p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)); };
+  var _key = function (p) {
+    if (!p || typeof p !== 'object') return String(p || '');
+    var a = String(p.p1Uid || p.p1Name || ''), b = String(p.p2Uid || p.p2Name || '');
+    return (a && b) ? [a, b].sort().join('|') : (_nm(p) || '');
+  };
+  // presença: mesmo-dia exige todos os membros presentes (cânone "só presentes")
+  var _present = function (p) {
+    if ((typeof window._tournamentIsSameDay === 'function') && !window._tournamentIsSameDay(t)) return true;
+    var ci = t.checkedIn || {}, ab = t.absent || {};
+    var _has = function (map, k) { return !!k && (window._idMapHas(t, map, { uid: k }) || window._idMapHas(t, map, k)); };
+    // Presença POR MEMBRO: uid quando tem, senão o NOME do membro (placeholder "Jogador 01" entra por
+    // nome). NUNCA o nome COMBINADO da dupla — que não está em checkedIn. Foi o bug do dono: time
+    // formado de placeholders (p1Uid/p2Uid vazios) caía no nome combinado → _present=false → não
+    // coletava → não entrava (integrated:false). Ver project_late_dupla_fills_awaiting_slot.
+    var keys;
+    if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+      keys = [p.p1Uid || p.p1Name, p.p2Uid || p.p2Name];
+    } else {
+      var uids = _pu(p); keys = (uids && uids.length) ? uids : [_nm(p)];
+    }
+    return keys.length > 0 && keys.every(function (k) { return _has(ci, k); }) && !keys.some(function (k) { return _has(ab, k); });
+  };
+  var _catOk = function (p) {
+    if (!_theCat) return true;
+    var c = p && (p.category || (Array.isArray(p.categories) && p.categories.length && p.categories[0]));
+    return !c || String(c) === String(_theCat);
+  };
+
+  var _brkSetP = window._bracketUidKeySet(t);   // membership POR UID
+
+  // pendentes = espera (_lateJoin) + ÓRFÃO DE ROSTER (dupla formada à mão), presentes, dedup
+  // COMPETIDOR VÁLIDO (v1.3.156) — regressão que EU causei na 1.3.153: ao parar de exigir
+  // `_lateJoin` (pra dupla PRÉ-FORMADA entrar), o coletor passou a pegar QUALQUER presente da
+  // espera, inclusive SOLO SEM DUPLA — que foi arrastado pro slot que devia ser "a definir".
+  // Num torneio de DUPLAS só uma DUPLA é competidor; solo espera parceiro (é o que a seção
+  // "Sem dupla / Formar novas duplas" existe pra resolver). Ver [[project_count_people_not_entries]].
+  var _teamsMode = (parseInt(t.teamSize) || 1) > 1 ||
+    (typeof window._isTeamEnrollMode === 'function' && window._isTeamEnrollMode(t.enrollmentMode)) ||
+    (Array.isArray(t.participants) && t.participants.some(_isPairEntry));
+  var _isValidCompetitor = function (p) { return _teamsMode ? _isPairEntry(p) : true; };
+  var seen = {}, pending = [];
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (!Array.isArray(t[k])) return;
+    t[k].forEach(function (p) {
+      var n = _nm(p), kk = _key(p);
+      // v1.3.153: NÃO exigir `_lateJoin`. Essa flag só existe em dupla FORMADA TARDE; a dupla
+      // PRÉ-FORMADA que o sorteio mandou pra espera (sorteio "só entre os presentes") não a tem —
+      // e era ignorada aqui → ficava no LIMBO ao receber presença. A própria UI promete o contrário:
+      // "Marque presença de quem está na espera — entra por repescagem (vs a definir)".
+      // O gate correto é: está na ESPERA e está PRESENTE. Ver [[project_late_dupla_fills_awaiting_slot]].
+      if (!n || seen[kk] || !p || !_present(p)) return;
+      if (!_catOk(p)) return;
+      if (!_isValidCompetitor(p)) return;   // duplas: SOLO sem parceiro NÃO entra na chave
+      if (window._entryInBracket(t, p, _brkSetP)) return;
+      if (window._lateAlreadyIntegrated(t, p)) return;
+      seen[kk] = 1; pending.push({ e: p, fromWait: true });
+    });
+  });
+  // ÓRFÃO DE ROSTER: está em `t.participants` mas FORA da chave.
+  // v1.5.2 (dono, torneio AO VIVO 25/jul): antes só a dupla FORMADA à mão (teamOrigins==='formada')
+  // era coletada aqui — quem foi marcado AUSENTE antes do sorteio e ficou em participants (sem ir
+  // pra espera) não era visto por NENHUM coletor: marcar presença nele nunca gerava jogo. O critério
+  // canônico é o mesmo da espera: PRESENTE + fora da chave + competidor válido. Restrito a torneio
+  // de MESMO DIA — é onde a chamada/presença tem significado; multi-dia (`_present` sempre true)
+  // arrastaria o elenco inteiro. Ver [[project_late_dupla_fills_awaiting_slot]].
+  var _mesmoDia = (typeof window._tournamentIsSameDay !== 'function') || !!window._tournamentIsSameDay(t);
+  if (Array.isArray(t.participants)) {
+    t.participants.forEach(function (p) {
+      var n = _nm(p), kk = _key(p);
+      if (!n || seen[kk] || window._entryInBracket(t, p, _brkSetP)) return;
+      var _formada = !!(t.teamOrigins && t.teamOrigins[n] === 'formada');
+      if (!_formada && !_mesmoDia) return;          // fora do mesmo dia só a dupla formada entra
+      if (!_present(p)) return;
+      if (!_catOk(p)) return;
+      if (!_isValidCompetitor(p)) return;
+      if (window._lateAlreadyIntegrated(t, p)) return;
+      seen[kk] = 1; pending.push({ e: p, fromWait: false });
+    });
+  }
+  return pending;
+};
+
 window._placeLateEntriesSurgically = function (t, _theCat) {
   if (!t || !window._allowsNewMatchups || !window._allowsNewMatchups(t)) return 0;
   if (!Array.isArray(t.matches) || !t.matches.length) return 0;
@@ -4837,45 +5216,10 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
   // rótulos JÁ na chave → quem está lá não é tardio pendente
   var inBracket = {};
   _all().forEach(function (m) { if (m) { if (m.p1) inBracket[m.p1] = 1; if (m.p2) inBracket[m.p2] = 1; } });
-  var _brkSetP = window._bracketUidKeySet(t);   // membership POR UID
-
-  // pendentes = espera (_lateJoin) + ÓRFÃO DE ROSTER (dupla formada à mão), presentes, dedup
-  // COMPETIDOR VÁLIDO (v1.3.156) — regressão que EU causei na 1.3.153: ao parar de exigir
-  // `_lateJoin` (pra dupla PRÉ-FORMADA entrar), o coletor passou a pegar QUALQUER presente da
-  // espera, inclusive SOLO SEM DUPLA — que foi arrastado pro slot que devia ser "a definir".
-  // Num torneio de DUPLAS só uma DUPLA é competidor; solo espera parceiro (é o que a seção
-  // "Sem dupla / Formar novas duplas" existe pra resolver). Ver [[project_count_people_not_entries]].
-  var _teamsMode = (parseInt(t.teamSize) || 1) > 1 ||
-    (typeof window._isTeamEnrollMode === 'function' && window._isTeamEnrollMode(t.enrollmentMode)) ||
-    (Array.isArray(t.participants) && t.participants.some(_isPairEntry));
-  var _isValidCompetitor = function (p) { return _teamsMode ? _isPairEntry(p) : true; };
-  var seen = {}, pending = [];
-  ['standbyParticipants', 'waitlist'].forEach(function (k) {
-    if (!Array.isArray(t[k])) return;
-    t[k].forEach(function (p) {
-      var n = _nm(p), kk = _key(p);
-      // v1.3.153: NÃO exigir `_lateJoin`. Essa flag só existe em dupla FORMADA TARDE; a dupla
-      // PRÉ-FORMADA que o sorteio mandou pra espera (sorteio "só entre os presentes") não a tem —
-      // e era ignorada aqui → ficava no LIMBO ao receber presença. A própria UI promete o contrário:
-      // "Marque presença de quem está na espera — entra por repescagem (vs a definir)".
-      // O gate correto é: está na ESPERA e está PRESENTE. Ver [[project_late_dupla_fills_awaiting_slot]].
-      if (!n || seen[kk] || !p || !_present(p)) return;
-      if (!_isValidCompetitor(p)) return;   // duplas: SOLO sem parceiro NÃO entra na chave
-      if (window._entryInBracket(t, p, _brkSetP)) return;
-      if (window._lateAlreadyIntegrated(t, p)) return;
-      seen[kk] = 1; pending.push({ e: p, fromWait: true });
-    });
-  });
-  if (Array.isArray(t.participants) && t.teamOrigins) {
-    t.participants.forEach(function (p) {
-      var n = _nm(p), kk = _key(p);
-      if (!n || seen[kk] || window._entryInBracket(t, p, _brkSetP)) return;
-      if (t.teamOrigins[n] !== 'formada' || !_present(p)) return;
-      if (!_isValidCompetitor(p)) return;
-      if (window._lateAlreadyIntegrated(t, p)) return;
-      seen[kk] = 1; pending.push({ e: p, fromWait: false });
-    });
-  }
+  // COLETOR ÚNICO — as regras de "quem pode entrar agora" moram em
+  // `_collectLateCandidates` porque o caminho da eliminatória (draw-core →
+  // motor determinístico) consome a MESMA lista. Ver a função pra o porquê.
+  var pending = window._collectLateCandidates(t, _theCat);
   if (!pending.length) return 0;
 
   // rodada base = MENOR round entre os jogos (onde o tardio entra)
@@ -4959,9 +5303,17 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
       if (!tgt) return false;                                   // sem bye → suplente
       if (tgt.m.winner) {                                       // desfaz o auto-avanço do lado que folgava
         var nx = _all().filter(function (x) { return x && x.id === tgt.m.nextMatchId; })[0];
-        if (nx && tgt.m.nextSlot) {
-          nx[tgt.m.nextSlot] = 'TBD';
-          if (tgt.m.nextSlot === 'p1') { nx.team1Obj = null; nx.p1Uid = null; nx.team1Uids = []; }
+        // v1.5.3: sem `nextSlot` explícito (convenção da chave INFERIOR do _buildDoubleElimBracket),
+        // acha o slot que CONTÉM o auto-vencedor e limpa esse. Sem isto o nome ficava na rodada
+        // seguinte enquanto o jogo voltava a ser pendente → o time vivo em DOIS jogos (double-book
+        // medido em tests/sync-lower-bracket, N pow2 + 2 tardios).
+        var _nxSl = tgt.m.nextSlot;
+        if (nx && !_nxSl) {
+          ['p1', 'p2'].forEach(function (s) { if (!_nxSl && String(nx[s] || '') === String(tgt.m.winner)) _nxSl = s; });
+        }
+        if (nx && _nxSl) {
+          nx[_nxSl] = 'TBD';
+          if (_nxSl === 'p1') { nx.team1Obj = null; nx.p1Uid = null; nx.team1Uids = []; }
           else { nx.team2Obj = null; nx.p2Uid = null; nx.team2Uids = []; }
         }
         tgt.m.winner = null; tgt.m.scoreP1 = null; tgt.m.scoreP2 = null; delete tgt.m.isBye;
@@ -5001,50 +5353,125 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
         });
       });
       if (!target) return false;
-      _setSide(target.m, target.slot, d); delete target.m.awaitsBestLoser; return true;
+      _setSide(target.m, target.slot, d);
+      // v1.5.3: o slot era do REPESCADO (repFill) — o tardio tem PRIORIDADE (regra 1 do dono),
+      // então o descritor MORRE aqui (1 repescado a menos) e o jogo deixa de ser repGame: vira
+      // confronto real e o perdedor dele volta a poder repescar. Sem isto o _resolveRepFills
+      // sobrescreveria o tardio pelo melhor derrotado. Também limpa a flag `awaitsLatePartner`,
+      // que ficava PENDURADA no jogo já completo (visto no doc real, lt-…-0 da SB Casais).
+      if (Array.isArray(target.m.repFill)) {
+        target.m.repFill = target.m.repFill.filter(function (rf) { return !(rf && rf.slot === target.slot); });
+        if (!target.m.repFill.length) { delete target.m.repFill; delete target.m.isPhaseRepGame; }
+      }
+      delete target.m.awaitsLatePartner;
+      delete target.m.awaitsBestLoser;
+      return true;
     };
     // (2) cria o JOGO NOVO "dupla vs a definir" (o Jogo N na R1 sup que o dono quer). O "a definir"
-    // é preenchido pelo PRÓXIMO tardio (jogam entre si, via _fillOpenAdefinir) OU, se a rodada de
-    // entrada fechar sem ninguém, vira BYE (o tardio avança) — resolvido em _resolveRepFills pela flag
-    // awaitsLatePartner, NUNCA puxando repescado (que double-booka na inferior). Só na rodada de
-    // entrada FRESCA (crescer com jogo já jogado atropela o resultado). Ver project_late_dupla_fills_awaiting_slot.
+    // é preenchido pelo PRÓXIMO tardio (jogam entre si, via _fillOpenAdefinir) OU, se ninguém mais
+    // chegar, pelo MELHOR DERROTADO da rodada de entrada quando ela fecha — repescagem, via o
+    // descritor `repFill` que este jogo já nasce carregando (regra 2 do dono, 25/jul, torneio AO
+    // VIVO). Antes o slot virava BYE (o tardio avançava sem jogar) e o jogo só era criado se NENHUM
+    // irmão tivesse resultado — então quem chegava com a R1 em andamento ficava preso na espera
+    // pra sempre (Paulo/Elide, SB Casais). Agora o jogo nasce SEMPRE; o double-book do repescado
+    // (que também caiu na inferior) é resolvido pela VACÂNCIA do _resolveRepFills (tagRep +
+    // srcBracket:'upper' → libera o slot dele na inferior). NÃO marca isPhaseRepR1: essa flag
+    // liga o motor de ÁRVORE MÍNIMA (_syncLowerBracket) sobre uma chave de potência de 2, com
+    // outra convenção de fiação. Ver project_late_dupla_fills_awaiting_slot /
+    // project_dupla_elim_minimal_tree_canon / project_inclusion_philosophy_canon.
     var _growAdefinir = function (d) {
       if (_brk === 'lower') return false;   // porta já é a INFERIOR (2ª sup jogada) → não cria Jogo novo aqui
       var cur = _all();
       var _sibs0 = cur.filter(function (m) { return m && ((typeof m.round === 'number') ? m.round : 1) === baseRound && (m.bracket === _brk || (!m.bracket && _brk === 'main')); });
-      if (!_sibs0.length || _sibs0.some(function (m) { return m.winner; })) return false;   // jogado → fica na espera
+      if (!_sibs0.length) return false;
       var u1 = _pu(d);
       var ng = {
         id: 'lt-' + t.id + '-' + ts + '-' + placed, round: baseRound, bracket: _brk, phaseIndex: _pi,
         p1: _nm(d), p2: 'TBD', winner: null, isExtra: true, awaitsLatePartner: true,
+        // NÃO carimbar `isPhaseRepGame`: essa flag é do repGame da ÍMPAR no motor de árvore mínima e
+        // liga três mecanismos que não são deste caso (Tier 1 do _integrateLateDuplas puxaria a dupla
+        // pra fora e RE-SEMEARIA a R1; _fillRepFillWithLateDuplas trataria o slot como vaga de
+        // repescado). O que ela garantiria aqui — "não ser FONTE de repescado" — já vem do
+        // `awaitsLatePartner` (filtro no _resolveRepFills). Medido em tests/late-dupla-pow2-grow.
+        repFill: [{ slot: 'p2', srcBracket: _brk, srcRound: baseRound, rank: 0, tagRep: true }],
         team1Obj: d, team1Uids: u1, p1Uid: (u1.length === 1 ? u1[0] : null),
         p2Uid: null, team2Uids: [], createdAt: new Date().toISOString()
       };
       if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _brk, round: baseRound, matches: [ng] }); } catch (e) { t.matches.push(ng); } }
       else { t.matches.push(ng); }
       try { if (typeof window._wireLateLoserToLower === 'function') window._wireLateLoserToLower(t, ng, _pi); } catch (e) {}
-      // DESTINO do jogo novo (mesma lógica da via antiga): irmão com destino D → vaga livre em D,
-      // senão a chave cresce UMA rodada (irmão × novo herdando D). Só com a 1ª rodada sem resultado.
+      // v1.5.3 (dono): o jogo tardio da 1ª SUPERIOR precisa de POUSO na 1ª INFERIOR — senão o
+      // perdedor dele é eliminado com uma derrota só. Cria/usa o jogo da R1 Inf que recebe os
+      // perdedores tardios (2 tardios → 1 jogo; 1 sozinho → "a definir" que vira BYE).
+      try { if (typeof window._ensureLowerLandingForLate === 'function') window._ensureLowerLandingForLate(t, _pi); } catch (e) {}
+      // DESTINO do jogo novo: (a) vaga LIVRE no destino de um irmão; (b) senão a chave cresce UMA
+      // rodada (irmão × novo, herdando o destino do irmão).
+      // v1.5.3: não depende mais de "1ª rodada SEM resultado" — o jogo tem de ter destino mesmo
+      // entrando com a R1 em andamento (senão o vencedor do tardio evapora). O que continua
+      // PROIBIDO é mexer em jogo já JOGADO: por isso o irmão escolhido pra crescer a árvore é,
+      // por ordem de preferência, (1) um SEM resultado; (2) um com resultado cujo destino ainda
+      // NÃO foi jogado — e aí o vencedor dele é MOVIDO pro jogo novo (o slot antigo volta a TBD),
+      // que é reagendar um confronto futuro, não reescrever um passado.
       try {
         var _sibs = _all().filter(function (m) { return m && m !== ng && ((typeof m.round === 'number') ? m.round : 1) === baseRound && (m.bracket === _brk || (!m.bracket && _brk === 'main')); });
-        var _semResultado = _sibs.every(function (m) { return !m.winner; });
-        var _comDestino = _sibs.filter(function (m) { return m.nextMatchId; })[0];
-        if (!ng.nextMatchId && _comDestino && _semResultado) {
-          var _dest = _all().filter(function (m) { return m && m.id === _comDestino.nextMatchId; })[0];
-          var _livre = null;
-          if (_dest) {
-            var _ambiguo = _all().some(function (x) { return x && x.nextMatchId === _dest.id && !x.nextSlot; });
-            if (!_ambiguo) { ['p1', 'p2'].forEach(function (sl) { if (_livre || !_empty(_dest[sl])) return; var _fed = _all().some(function (x) { return x && x.nextMatchId === _dest.id && x.nextSlot === sl; }); if (!_fed) _livre = sl; }); }
+        var _byId = function (id) { return _all().filter(function (m) { return m && m.id === id; })[0]; };
+        var _slotLivreEm = function (_dest) {
+          if (!_dest || _dest.winner) return null;
+          // Se ALGUÉM aponta pro destino SEM slot explícito (convenção "1ª vaga livre"), não se sabe
+          // quais vagas estão comprometidas → não reivindica nenhuma (a árvore cresce).
+          if (_all().some(function (x) { return x && x.nextMatchId === _dest.id && !x.nextSlot; })) return null;
+          var _l = null;
+          ['p1', 'p2'].forEach(function (sl) {
+            if (_l || !_empty(_dest[sl])) return;
+            var _fed = _all().some(function (x) { return x && x !== ng && ((x.nextMatchId === _dest.id && x.nextSlot === sl) || (x.loserMatchId === _dest.id && x.loserSlot === sl)); });
+            if (!_fed) _l = sl;
+          });
+          return _l;
+        };
+        // irmãos com destino, PENDENTES primeiro (mexer em quem já jogou é o último recurso)
+        var _cands = _sibs.filter(function (m) { return m.nextMatchId; })
+          .sort(function (a, b) { return (a.winner ? 1 : 0) - (b.winner ? 1 : 0); });
+        if (!ng.nextMatchId && _cands.length) {
+          // (a) vaga livre em QUALQUER destino de irmão
+          var _dest = null, _livre = null;
+          for (var _ci = 0; _ci < _cands.length && !_livre; _ci++) {
+            var _d0 = _byId(_cands[_ci].nextMatchId);
+            var _l0 = _slotLivreEm(_d0);
+            if (_l0) { _dest = _d0; _livre = _l0; }
           }
-          var _comDestinoSlotOrig = _comDestino.nextSlot;
           if (_livre) { ng.nextMatchId = _dest.id; ng.nextSlot = _livre; }
           else {
-            var _novoR = { id: 'lt-' + t.id + '-' + ts + '-x' + placed, round: baseRound + 1, bracket: _brk, phaseIndex: _pi, p1: 'TBD', p2: 'TBD', winner: null, nextMatchId: _comDestino.nextMatchId, nextSlot: _comDestino.nextSlot };
-            if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _brk, round: baseRound + 1, matches: [_novoR] }); } catch (e) { t.matches.push(_novoR); } }
-            else { t.matches.push(_novoR); }
-            _comDestino.nextMatchId = _novoR.id; _comDestino.nextSlot = 'p1';
-            ng.nextMatchId = _novoR.id; ng.nextSlot = 'p2';
-            _novoR.nextSlot = _comDestinoSlotOrig;
+            // (b) cresce uma rodada. Irmão elegível: sem resultado, OU com resultado cujo destino
+            // ainda não foi jogado E com slot de destino explícito (pra saber de onde tirar o time).
+            var _comDestino = null;
+            for (var _si = 0; _si < _cands.length && !_comDestino; _si++) {
+              var _c = _cands[_si];
+              if (!_c.winner) { _comDestino = _c; break; }
+              var _dOld = _byId(_c.nextMatchId);
+              if (_dOld && !_dOld.winner && _c.nextSlot) _comDestino = _c;
+            }
+            if (_comDestino) {
+              var _comDestinoSlotOrig = _comDestino.nextSlot;
+              var _destAntigo = _byId(_comDestino.nextMatchId);
+              var _novoR = { id: 'lt-' + t.id + '-' + ts + '-x' + placed, round: baseRound + 1, bracket: _brk, phaseIndex: _pi, p1: 'TBD', p2: 'TBD', winner: null, nextMatchId: _comDestino.nextMatchId };
+              if (_comDestinoSlotOrig) _novoR.nextSlot = _comDestinoSlotOrig;   // undefined = convenção "1ª vaga livre"; Firestore rejeita undefined
+              if (typeof window._appendCanonicalColumn === 'function') { try { window._appendCanonicalColumn(t, { phase: 'elim', bracket: _brk, round: baseRound + 1, matches: [_novoR] }); } catch (e) { t.matches.push(_novoR); } }
+              else { t.matches.push(_novoR); }
+              // o irmão que JÁ jogou levou o vencedor pro destino antigo: traz esse time pro jogo novo
+              if (_comDestino.winner && _destAntigo && !_destAntigo.winner && _comDestinoSlotOrig &&
+                  String(_destAntigo[_comDestinoSlotOrig] || '') === String(_comDestino.winner)) {
+                var _wSl = (_comDestino.winner === _comDestino.p1) ? 'p1' : 'p2';
+                _novoR.p1 = _comDestino.winner;
+                _novoR.team1Obj = (_wSl === 'p1') ? _comDestino.team1Obj : _comDestino.team2Obj;
+                _novoR.team1Uids = (((_wSl === 'p1') ? _comDestino.team1Uids : _comDestino.team2Uids) || []).slice();
+                _novoR.p1Uid = (_novoR.team1Uids.length === 1 ? _novoR.team1Uids[0] : null);
+                _destAntigo[_comDestinoSlotOrig] = 'TBD';
+                if (_comDestinoSlotOrig === 'p1') { _destAntigo.team1Obj = null; _destAntigo.team1Uids = []; _destAntigo.p1Uid = null; }
+                else { _destAntigo.team2Obj = null; _destAntigo.team2Uids = []; _destAntigo.p2Uid = null; }
+              }
+              _comDestino.nextMatchId = _novoR.id; _comDestino.nextSlot = 'p1';
+              ng.nextMatchId = _novoR.id; ng.nextSlot = 'p2';
+            }
           }
         }
       } catch (_eDest) {}
@@ -5072,6 +5499,10 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
         if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !usedNames[_nm(p)]; });
       });
       if (typeof window._computeMemberUids === 'function') { try { window._computeMemberUids(t); } catch (e) {} }
+      // v1.5.3: se a rodada de entrada JÁ está toda com placar, a vaga "a definir" do jogo novo
+      // resolve NA HORA (melhor derrotado) — sem esperar o próximo resultado pra disparar o
+      // _advanceWinner. Idempotente: rodada em andamento ⇒ o descritor fica pendente.
+      if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }
     }
     return placed;
   }

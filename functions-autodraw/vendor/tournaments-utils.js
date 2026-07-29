@@ -251,6 +251,9 @@ window._mergeDrop = function(e, targetName, tId) {
 window._mergeTouchState = null;
 
 window._initMergeTouchDrag = function(tId) {
+    // v1.5.20: todo render varre clone órfão de um arraste anterior (não mexe em
+    // arraste ativo — _killDragGhosts sai cedo se window._activeDragReset existe).
+    if (typeof window._killDragGhosts === 'function') window._killDragGhosts();
     // Find the participant grid container
     var containers = document.querySelectorAll('[data-merge-container]');
     containers.forEach(function(container) {
@@ -263,6 +266,8 @@ window._initMergeTouchDrag = function(tId) {
         var _touchSourceName = null;
         var _longPressTimer = null;
         var _isDragging = false;
+        var _watchdog = null;     // v1.5.20: mata arraste órfão (re-render / gesto perdido)
+        var _lastTouchAt = 0;
 
         function _getCardName(card) {
             if (!card) return null;
@@ -280,7 +285,11 @@ window._initMergeTouchDrag = function(tId) {
 
         function _resetAll() {
             if (_touchClone && _touchClone.parentElement) _touchClone.remove();
-            if (_touchSourceCard) { _touchSourceCard.style.opacity = '1'; _touchSourceCard.style.boxShadow = ''; }
+            if (_touchSourceCard) {
+                _touchSourceCard.style.opacity = '1';
+                _touchSourceCard.style.boxShadow = '';
+                _touchSourceCard.removeAttribute('data-drag-dimmed');
+            }
             container.querySelectorAll('[data-merge-name],.participant-card').forEach(function(c) {
                 c.style.outline = ''; c.style.outlineOffset = '';
             });
@@ -289,6 +298,30 @@ window._initMergeTouchDrag = function(tId) {
             _touchSourceName = null;
             _isDragging = false;
             if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
+            if (_watchdog) { clearInterval(_watchdog); _watchdog = null; }
+            if (window._activeDragReset === _resetAll) window._activeDragReset = null;
+            // v1.5.20: rede final — se o container já saiu do DOM (re-render no meio
+            // do arraste), o clone acima pode não ser o único órfão no <body>.
+            if (typeof window._killDragGhosts === 'function') window._killDragGhosts(true);
+        }
+
+        // v1.5.20: vigia do arraste. O clone vive no <body>, mas os listeners vivem no
+        // container — se a lista re-renderiza no meio do gesto, o container é trocado e
+        // NENHUM touchend/touchcancel volta pra esta closure: o clone ficava preso na
+        // tela até fechar o app (fantasma). O vigia derruba o arraste quando o container
+        // (ou o card de origem) sai do DOM, ou quando o dedo some sem avisar.
+        function _startWatchdog() {
+            if (_watchdog) clearInterval(_watchdog);
+            _lastTouchAt = Date.now();
+            _watchdog = setInterval(function() {
+                if (!_isDragging) { clearInterval(_watchdog); _watchdog = null; return; }
+                var gone = !document.body.contains(container) ||
+                           (_touchSourceCard && !document.body.contains(_touchSourceCard));
+                // 8s sem NENHUM movimento de dedo = gesto morto (dedo parado num
+                // arraste real produz micro-movimento constante). Folga grande de
+                // propósito: derrubar um arraste legítimo é pior que esperar.
+                if (gone || (Date.now() - _lastTouchAt) > 8000) _resetAll();
+            }, 400);
         }
 
         container.addEventListener('touchstart', function(e) {
@@ -306,10 +339,17 @@ window._initMergeTouchDrag = function(tId) {
                 // Visual feedback on source
                 card.style.opacity = '0.4';
                 card.style.boxShadow = '0 0 15px rgba(251,191,36,0.4)';
+                card.setAttribute('data-drag-dimmed', '1'); // v1.5.20: varredura global
 
                 // Create floating clone
                 var rect = card.getBoundingClientRect();
                 _touchClone = card.cloneNode(true);
+                // v1.5.20: marca o clone como fantasma varrível e limpa atributos que
+                // fariam ele ser confundido com um card real da lista.
+                _touchClone.setAttribute('data-drag-ghost', '1');
+                _touchClone.removeAttribute('data-drag-dimmed');
+                _touchClone.removeAttribute('data-merge-name');
+                _touchClone.removeAttribute('data-participant-name');
                 _touchClone.style.position = 'fixed';
                 _touchClone.style.left = rect.left + 'px';
                 _touchClone.style.top = rect.top + 'px';
@@ -322,6 +362,12 @@ window._initMergeTouchDrag = function(tId) {
                 _touchClone.style.borderRadius = '12px';
                 _touchClone.style.transform = 'scale(1.05)';
                 document.body.appendChild(_touchClone);
+
+                // v1.5.20: publica a limpeza deste arraste + liga o vigia. A rede global
+                // (touchcancel/pointercancel/app pro fundo/hashchange, em store.js) chama
+                // _resetAll mesmo que o evento nunca volte pra este container.
+                window._activeDragReset = _resetAll;
+                _startWatchdog();
 
                 // Haptic de "peguei o item" no long-press (Android; iOS não
                 // dispara fora de gesto direto — limitação do switch trick).
@@ -336,6 +382,7 @@ window._initMergeTouchDrag = function(tId) {
                 return;
             }
             e.preventDefault(); // Prevent scroll while dragging
+            _lastTouchAt = Date.now(); // v1.5.20: pulso pro vigia
 
             var touch = e.touches[0];
             _touchClone.style.left = (touch.clientX - _touchClone.offsetWidth / 2) + 'px';

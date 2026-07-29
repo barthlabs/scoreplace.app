@@ -1,6 +1,13 @@
 package app.scoreplace.wear;
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -44,6 +51,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private View winnerOverlay, replayControls, reshuffleRow, tieOverlay;
     private TextView winnerLabel, winnerNames, winnerScoreL, winnerScoreR;
     private androidx.wear.widget.CurvedTextView setsArcL, setsArcR, setsWordArc, winnerArcSport;
+    private androidx.wear.widget.CurvedTextView hrArc;   // ♥ BPM no bezel direito
     private TextView btnReplayCancel, btnReplayConfirm, reshuffleLabel;
     private boolean rrSuggestNow = false;   // fim de jogo com sugestão de Rei/Rainha
     private TextView tieScoreL, tieScoreR, btnTieExtend, btnTieTiebreak;
@@ -95,6 +103,11 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         // SETS na borda curva: esquerdo às 11h (330°), direito à 1h (30°).
         setsArcL.setAnchorType(1); setsArcL.setAnchorAngleDegrees(330f); setsArcL.setClockwise(true);
         setsArcR.setAnchorType(1); setsArcR.setAnchorAngleDegrees(30f);  setsArcR.setClockwise(true);
+        // ♥ BPM às 2h (60°): logo abaixo do relógio do sistema, na curva da DIREITA.
+        // No Apple (mostrador reto) o mesmo dado vive numa linha abaixo do relógio —
+        // cânone compartilhado (escala + setores), cromo no idioma de cada plataforma.
+        hrArc = findViewById(R.id.hr_arc);
+        hrArc.setAnchorType(1); hrArc.setAnchorAngleDegrees(60f); hrArc.setClockwise(true);
         setsWordArc = findViewById(R.id.sets_word_arc);
         setsWordArc.setAnchorType(1); setsWordArc.setAnchorAngleDegrees(316f); setsWordArc.setClockwise(true); // perto do "1" (11h)
         winnerOverlay = findViewById(R.id.winner_overlay);
@@ -311,17 +324,105 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         } catch (Exception e) { /* no-op */ }
     }
 
+    // Chegou algum estado do celular nesta sessão de tela? Usado pra parar o retry do hello.
+    private boolean gotStateSinceResume = false;
+
+    // ── ♥ BATIMENTO CARDÍACO ─────────────────────────────────────────────────
+    // SensorManager TYPE_HEART_RATE enquanto a tela está viva e há partida AO VIVO.
+    // Degrada em silêncio: sem permissão, sem sensor ou sem leitura, o arco fica GONE.
+    // ⚠️ Diferença honesta pro Apple: aqui NÃO abrimos sessão de exercício, então a
+    // partida NÃO conta nos anéis/Google Fit — pra isso seria Health Services
+    // (ExerciseClient) + Health Connect, que é outro bloco de trabalho.
+    private static final int REQ_BODY_SENSORS = 4201;
+    private SensorManager sensorMgr;
+    private Sensor hrSensor;
+    private Integer lastBpm = null;
+    private boolean hrRegistered = false;
+
+    private final SensorEventListener hrListener = new SensorEventListener() {
+        @Override public void onSensorChanged(SensorEvent e) {
+            if (e.values == null || e.values.length == 0) return;
+            int v = Math.round(e.values[0]);
+            if (v <= 0) return;                       // 0 = sensor sem contato com a pele
+            lastBpm = v;
+            ui.post(() -> renderHeartRate());
+        }
+        @Override public void onAccuracyChanged(Sensor s, int a) { }
+    };
+
+    private void startHeartRate() {
+        if (hrRegistered) return;
+        if (sensorMgr == null) sensorMgr = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        if (sensorMgr == null) return;
+        if (hrSensor == null) hrSensor = sensorMgr.getDefaultSensor(Sensor.TYPE_HEART_RATE);
+        if (hrSensor == null) return;                 // relógio sem sensor de HR
+        if (checkSelfPermission(Manifest.permission.BODY_SENSORS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{ Manifest.permission.BODY_SENSORS }, REQ_BODY_SENSORS);
+            return;                                   // volta em onRequestPermissionsResult
+        }
+        hrRegistered = sensorMgr.registerListener(hrListener, hrSensor, SensorManager.SENSOR_DELAY_UI);
+    }
+
+    private void stopHeartRate() {
+        if (sensorMgr != null && hrRegistered) sensorMgr.unregisterListener(hrListener);
+        hrRegistered = false;
+        lastBpm = null;
+        ui.post(() -> renderHeartRate());
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
+        super.onRequestPermissionsResult(req, perms, res);
+        if (req == REQ_BODY_SENSORS && res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) {
+            startHeartRate();
+        }
+    }
+
+    /** Desenha o ♥ no bezel e o faz pulsar NO RITMO do próprio batimento. */
+    private void renderHeartRate() {
+        if (hrArc == null) return;
+        if (lastBpm == null) { hrArc.setVisibility(View.GONE); hrArc.clearAnimation(); return; }
+        hrArc.setText("♥ " + lastBpm);
+        hrArc.setVisibility(View.VISIBLE);
+        long half = Math.max(280, Math.min(900, Math.round(30000.0 / Math.max(lastBpm, 40))));
+        android.view.animation.ScaleAnimation pulse = new android.view.animation.ScaleAnimation(
+            1f, 1.18f, 1f, 1.18f,
+            android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f,
+            android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f);
+        pulse.setDuration(half);
+        pulse.setRepeatMode(android.view.animation.Animation.REVERSE);
+        pulse.setRepeatCount(android.view.animation.Animation.INFINITE);
+        pulse.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+        hrArc.startAnimation(pulse);
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
         Wearable.getMessageClient(this).addListener(this);
+        gotStateSinceResume = false;
         sendIntent("hello", 0); // pede o estado atual ao celular
+        // O `hello` era UM tiro: se o app do celular estava fechado/suspenso, ninguém
+        // respondia e o relógio ficava em "Aguardando…" pra sempre — a sensação de
+        // "o relógio nunca conversou com o celular". Re-tenta 3× a cada 2s até chegar
+        // estado. Espelha o WatchSession.retryHelloUntilAnswered do lado Apple.
+        retryHello(0);
+    }
+
+    private void retryHello(int attempt) {
+        if (attempt >= 3 || gotStateSinceResume) return;
+        ui.postDelayed(() -> {
+            if (gotStateSinceResume) return;
+            sendIntent("hello", 0);
+            retryHello(attempt + 1);
+        }, 2000);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         Wearable.getMessageClient(this).removeListener(this);
+        stopHeartRate();   // sensor desligado fora da tela = bateria
     }
 
     private void sendPoint(int team) { sendIntent("point", team); }
@@ -348,6 +449,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     public void onMessageReceived(MessageEvent event) {
         if (!PATH_STATE.equals(event.getPath())) return;
         final String json = new String(event.getData(), StandardCharsets.UTF_8);
+        gotStateSinceResume = true; // chegou estado → para o retry do hello
         ui.post(() -> {
             try { render(new JSONObject(json)); } catch (Exception e) { /* ignore */ }
         });
@@ -355,6 +457,9 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
 
     private void render(JSONObject s) {
         boolean active = s.optBoolean("active", false);
+        // ♥ só enquanto há partida AO VIVO — sensor ligado com o placar parado é
+        // bateria queimada à toa. Espelha o start/stop do lado Apple.
+        if (active) startHeartRate(); else stopHeartRate();
         courtLeft = s.optInt("courtLeft", 1);
         int leftTeam = courtLeft, rightTeam = leftTeam == 1 ? 2 : 1;
         JSONArray points = s.optJSONArray("points");
@@ -394,7 +499,9 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             setsArcL.setVisibility(View.GONE); setsArcR.setVisibility(View.GONE);
             setsWordArc.setVisibility(View.GONE);
             setLabel.setVisibility(View.VISIBLE);
-            setLabel.setText("Aguardando…");
+            // Diz O QUE FAZER: "Aguardando…" sozinho lia como "o relógio não conversou com
+            // o celular". A partida tem que estar montada/rolando no celular (relógio burro).
+            setLabel.setText("Aguardando…\nabra a partida no celular");
         }
 
         // ── Iniciar: montagem aberta no celular e nada ao vivo ──
@@ -425,8 +532,12 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             lastServePhase = servePhase;
         }
         // Barra do sacador no rodapé: só durante os 2 primeiros jogos.
-        serveBar.setVisibility(canSetServer && active && !finished && !tiePending ? View.VISIBLE : View.GONE);
-        if (canSetServer && server != null) serveBarName.setText(server.optString("name", "Sacador"));
+        // A pílula "Sacador" saiu (dono, 25/jul/2026): "não tem 1 linha para sacador — a
+        // bolinha ao lado do nome indica o sacador". Empilhada acima do Desfazer, ela
+        // subia por cima do 2º nome de cada dupla; e é redundante (o nome do sacador já
+        // vem com a bola). A troca continua pelo seletor, que abre sozinho na virada do
+        // 1º game. Espelha o RemoteView.swift do lado Apple.
+        serveBar.setVisibility(View.GONE);
         // Overlay do seletor (aberto por toque ou pela virada de fase).
         boolean showServe = serveOpen && canSetServer && !finished;
         if (showServe) {

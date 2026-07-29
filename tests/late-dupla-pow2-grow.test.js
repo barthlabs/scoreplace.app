@@ -50,22 +50,39 @@ console.log('== (A) 2 duplas formadas ==');
   console.log(`  N=${N} ${[4,8,16].includes(N)?'(pow2)':''}  ${ok?'✅':'FALHA'}`);
 });
 
-// ── (B) byes esgotados + 1 tardio → JOGA (não passa de bye), seed mantém folga, campeão ───────
-console.log('== (B) byes esgotados + 1 extra → joga, não ganha bye ==');
+// ── (B) tardio NUNCA ganha folga de graça; esgotadas as folgas, ele ESPERA PAR ────────────────
+//
+// A intenção original deste bloco continua valendo: quem chega depois não pode ser premiado com
+// uma folga enquanto os outros jogam. O que mudou (dono, 25/jul/2026) é o que acontece quando as
+// folgas ACABAM. Antes se esperava que o extra ganhasse um jogo assim mesmo; agora a chave está
+// CHEIA e um tardio sozinho não entra — espera par, e aí os dois entram juntos num jogo novo,
+// sem tocar em nenhum confronto publicado. Ver tests/late-entry-never-redraws e
+// tests/growth-frozen-prefix.
+//
+// Então o que se afirma aqui é o par de regras: TODO tardio que ENTROU está num jogo de verdade
+// (nunca numa folga), e no máximo UM fica de fora — o ímpar, esperando parceiro.
+console.log('== (B) tardio joga de verdade; sem par sobrando, espera ==');
 [6, 7, 10, 12].forEach(N => {
   const t = mkT(N); W.AppStore.tournaments = [t];
   const byes = nBye(t);
   const antes = r1real(t);
-  const nomes = []; for (let i = 1; i <= byes + 1; i++) nomes.push(addLate(t, i));
-  const extra = nomes[nomes.length - 1];
-  const mx = all(t).find(m => m.p1 === extra || m.p2 === extra);
-  const opp = mx ? (mx.p1 === extra ? mx.p2 : mx.p1) : null;
-  const passouBye = !mx || isBye(opp) || mx.isBye;         // extra NÃO pode passar de bye
+  // folgas + 2: garante passar do ponto em que a chave enche, já com par disponível
+  const nomes = []; for (let i = 1; i <= byes + 2; i++) nomes.push(addLate(t, i));
+
+  const jogoDe = (nm) => all(t).find(m => m.p1 === nm || m.p2 === nm);
+  const deFolga = nomes.filter(nm => {
+    const m = jogoDe(nm);
+    if (!m) return false;                                   // não entrou: é o caso "espera par"
+    const opp = m.p1 === nm ? m.p2 : m.p1;
+    return isBye(opp) || m.isBye;                           // entrou POR FOLGA — proibido
+  });
+  const foraDaChave = nomes.filter(nm => !jogoDe(nm));
+
   const r1ok = antes.filter(x => r1real(t).indexOf(x) < 0).length === 0;
   const po = playout(t);
-  const ok = !passouBye && r1ok && !liveDouble(t) && po === 'CAMPEÃO';
-  ck(ok, `N=${N}: extra passou_bye=${passouBye} R1ok=${r1ok} double=${liveDouble(t)||'não'} playout=${po}`);
-  console.log(`  N=${N} byes=${byes}  extra joga="${opp}"  ${ok?'✅':'FALHA'}`);
+  const ok = deFolga.length === 0 && foraDaChave.length <= 1 && r1ok && !liveDouble(t) && po === 'CAMPEÃO';
+  ck(ok, `N=${N}: porFolga=${deFolga.length} fora=${foraDaChave.length} R1ok=${r1ok} double=${liveDouble(t)||'não'} playout=${po}`);
+  console.log(`  N=${N} folgas=${byes}  tardios=${nomes.length}  entraram=${nomes.length - foraDaChave.length}  esperando=${foraDaChave.length}  ${ok?'✅':'FALHA'}`);
 });
 
 console.log('\n' + (fail === 0 ? '✅ TODOS OK' : '❌ ' + fail + ' FALHA(S)'));

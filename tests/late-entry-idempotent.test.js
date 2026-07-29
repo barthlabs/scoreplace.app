@@ -32,7 +32,12 @@ const gamesOf = (t, nm) => (W._collectAllMatches(t) || []).filter(m => m && (m.p
 
 console.log('── integração tardia é IDEMPOTENTE (N chamadas ⇒ 1 jogo) ──');
 [['Elim Simples', false], ['Dupla Elim', true]].forEach(([label, dupla]) => {
-  [4, 8].forEach(N => {
+  // N=5/9 e não 4/8 DE PROPÓSITO: 4 e 8 são potência de 2 EXATA, onde a chave está cheia
+  // e um tardio SOZINHO não entra — espera par (regra do dono, 25/jul: "avisa na 9a que
+  // precisa da 10a"). Isso é assunto de tests/late-entry-never-redraws; aqui o que está
+  // sob teste é a IDEMPOTÊNCIA do coletor, então o fixture usa N com folga pra que o
+  // tardio entre e a repetição de chamada possa ser observada.
+  [5, 9].forEach(N => {
     ['roster', 'wait'].forEach(where => {
       const t = mkT(N, dupla);
       W.AppStore.tournaments = [t];

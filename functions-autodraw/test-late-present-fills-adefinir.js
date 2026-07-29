@@ -64,9 +64,13 @@ checkInPair(t, D);
 const ires = core.integrateLateEntries(t, {});
 ok('integrate ok', !!(ires && ires.ok), ires && ires.reason);
 ok('changed=true (D entrou na chave)', ires && ires.changed === true, ires && ires.changed);
-ok('CF formou confronto pra D (repfill OU extra > 0)',
-  ires && ((ires.repfill || 0) + (ires.extra || 0) + (ires.duplas || 0)) > 0,
-  ires && { repfill: ires.repfill, extra: ires.extra, duplas: ires.duplas });
+// `placed` é o contador do caminho NOVO (recálculo pelo motor determinístico). `repfill`,
+// `extra` e `duplas` eram contadores da CIRURGIA incremental (_fillRepFillWithLateDuplas,
+// _createExtraGamesFromWaitlist, _integrateLateDuplas), que a eliminatória não usa mais —
+// ficam em 0 e não medem mais nada aqui. Ver [[project_chaves_deterministic_engine]].
+ok('CF formou confronto pra D (placed > 0)',
+  ires && (ires.placed || 0) > 0,
+  ires && { placed: ires.placed, repfill: ires.repfill, extra: ires.extra, duplas: ires.duplas });
 ok('D agora aparece na chave', dInMatch(), dInMatch());
 ok('D saiu da lista de espera', !dInWaitlist(), dInWaitlist());
 

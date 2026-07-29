@@ -314,7 +314,10 @@
     });
     Object.keys(bySrc).forEach(function (key) {
       var list = bySrc[key];
-      if (list.length < 2) return; // 1 vaga só → o rank já é o único
+      // v1.5.3: normaliza SEMPRE (inclusive vaga única) — os ranks são índices na lista de
+      // derrotados AINDA NÃO repescados (o resolveRepFills filtra quem já subiu). Uma vaga
+      // sobrevivente com rank 1 herdado apontava pra fora dessa lista encurtada e ficava
+      // pendurada pra sempre (vaga morta medida em tests/draw-sweep-wo-late).
       // rodada de destino MAIOR (menos jogos até a final) primeiro → rank 0 (melhor derrotado).
       list.sort(function (a, b) { return (b.m.round || 0) - (a.m.round || 0); });
       list.forEach(function (item, i) { item.rf.rank = i; });
@@ -606,8 +609,10 @@
     if (_duplaClassic) {
       // Fonte única compartilhada com a Fase 0 (_genElimFromPool) — inclui a repescagem
       // (playin) fora de potência de 2. Ver _duplaR1FromPool / project_dupla_elim_repechage.
-      var _deRes = (phaseCfg && phaseCfg.bracketResolution) || 'bye';
-      return _duplaR1FromPool(byDest.main, _deRes, idPrefix);
+      // MESMO motor da Fase 0 (_genElimFromPool → _genElimFromChaves): a chave
+      // inteira (superior + inferior + grande final) sai de chave(N, 'dupla').
+      // Um gerador só nos dois caminhos — é o que tests/phase-identity trava.
+      return _genElimFromChaves(byDest.main, phaseCfg, idPrefix, true);
     }
 
     var allMatches = [];
@@ -628,8 +633,10 @@
       var bracketKey = DEST_BRACKET[dest] || dest;
       // v2.7.23: resolução de potência-de-2 escolhida pelo organizador (uma só pra
       // todas as linhas). Default 'bye' = comportamento legado. Setado pelo painel.
-      var _res = (phaseCfg && phaseCfg.bracketResolution) || 'bye';
-      var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey, _res, _tierThird, bracketSeeding);
+      // Resolução de pow2 é da LÓGICA, não do organizador (menor intervenção):
+      // phaseCfg.bracketResolution é ignorado, como na Fase 0.
+      var res = _genElimFromChaves(byDest[dest], { thirdPlace: _tierThird },
+        idPrefix + '-' + bracketKey, false, bracketKey);
       // Nome da chave = o que o ORGANIZADOR digitou (mapping[].label). Sem nome, com 2+ chaves →
       // default POSICIONAL "Chave N" (ordem da chave). NUNCA Ouro/Prata (exemplo ≠ regra,
       // feedback_dont_canonize_examples). Com 1 chave só e SEM nome custom → NÃO grava tierLabel:
@@ -981,8 +988,66 @@
     return { matches: dms, needsDoubleElim: true };
   }
 
+  // NAMESPACE DETERMINÍSTICO pros ids estruturais. `idPrefix` vem como
+  // 'p0-<Date.now()>' (e '-c<i>' por categoria) — o timestamp destruiria a
+  // propriedade que o motor novo compra: id derivável de (N, formato). Tira o
+  // carimbo de tempo e mantém fase + categoria, que É o que precisa separar
+  // (fase 0 e fase 1 têm, cada uma, o seu VC-R1-P1).
+  function _nsDeterministico(idPrefix) {
+    return String(idPrefix || 'p0').replace(/-\d{6,}/g, '') || 'p0';
+  }
+
+  // MOTOR DE CHAVES DETERMINÍSTICO (js/views/chaves.js + chaves-adapter.js).
+  // A chave é função pura de (nº de participantes, formato) — cada N tem UM
+  // desenho. Substitui genTierBracket/_duplaR1FromPool/_buildDoubleElimBracket
+  // pra Eliminatória Simples e Dupla.
+  //
+  // QUEM MANDA NA RESOLUÇÃO DE POTÊNCIA DE 2 É A LÓGICA, NÃO O ORGANIZADOR
+  // (regra do dono, 25/jul): aplica-se o que exige MENOS intervenção — o menor
+  // entre vagas (B−N) e perdedores disponíveis (N−B/2); empate vai pra bye.
+  // `cfg.bracketResolution` é IGNORADO de propósito. 'exclusion' e 'standby'
+  // (que cortavam gente até a potência abaixo) deixam de existir: ninguém é
+  // cortado, todos jogam.
+  function _genElimFromChaves(pool, cfg, idPrefix, dupla, bracketKey) {
+    var A = (typeof window !== 'undefined') && window._chavesAdapter;
+    if (!A && typeof require === 'function') { try { A = require('./chaves-adapter.js'); } catch (e) {} }
+    if (!A) throw new Error('phases-engine: chaves-adapter não carregado');
+    // Linha/categoria com 0 ou 1 participante não tem chave: com 1, ele é campeão
+    // direto (a convergência lê `soleWinner` pra mandá-lo à grande final). O motor
+    // exige N>=2 — sem este guard, uma linha de 1 estourava.
+    if (!pool || pool.length === 0) return { matches: [], finalMatchId: null, soleWinner: null };
+    if (pool.length === 1) {
+      return { matches: [], finalMatchId: null, soleWinner: pool[0].displayName || pool[0].name || null };
+    }
+    // SEMEADURA: a chave emparelha posições adjacentes (é o que permite crescer sem
+    // resortear). Quando o pool chega ORDENADO POR MÉRITO — classificados de uma fase
+    // anterior, linha Ouro/Prata — a ordem significa alguma coisa e precisa virar
+    // espelho 1×N, senão o 1º pega o 2º na estreia. Na Fase 0 o pool já vem
+    // embaralhado por _shufflePool, e aí semear seria só embaralhar de novo.
+    var _daInscricao = !!(cfg && cfg.source && cfg.source.type === 'enrollment');
+    var built = A.build(pool.length, dupla ? 'dupla' : 'simples', {
+      participantes: pool,
+      tierThird: cfg ? (cfg.thirdPlace !== false) : true,
+      ns: _nsDeterministico(idPrefix),
+      bracketKey: bracketKey || null,
+      semear: !_daInscricao
+    });
+    // chaves monta a chave INTEIRA (na dupla: superior + inferior + grande final),
+    // então nada de needsDoubleElim — não há 2º construtor pra rodar depois.
+    //
+    // `finalMatchId` é CONTRATO com quem monta a convergência entre linhas: a final
+    // de cada linha é ligada à grande final, e o vice ao 3º/4º do nível da
+    // convergência. Sem devolver isto, `grandfinal-lines` estourava com
+    // "Cannot read properties of undefined (reading 'nextSlot')".
+    // `soleWinner` idem pro caso de linha com 1 participante só (campeão por W.O.).
+    return {
+      matches: built.matches,
+      finalMatchId: built.meta.finalId || null,
+      chavesMeta: built.meta
+    };
+  }
+
   function _genElimFromPool(pool, cfg, idPrefix) {
-    var _res = (cfg && cfg.bracketResolution) || 'bye';
     var _third = cfg ? (cfg.thirdPlace !== false) : true;
     var dupla = !!(cfg && (cfg.formatCode === 'elim_dupla' || /dupla/i.test(String(cfg.format || ''))));
     if (pool.length === 1) {
@@ -991,16 +1056,11 @@
       var _byeUids = (typeof window._participantUids === 'function') ? window._participantUids(pool[0]) : [];
       return { matches: [{ id: idPrefix + '-bye', round: 1, bracket: 'main', p1: pool[0].displayName, p2: 'BYE (Avança Direto)', winner: pool[0].displayName, isBye: true, team1Obj: pool[0], p1Uid: (_byeUids.length === 1 ? _byeUids[0] : null), team1Uids: _byeUids, winnerUid: (_byeUids.length === 1 ? _byeUids[0] : null), winnerUids: _byeUids }] };
     }
-    if (dupla) {
-      // Dupla Eliminatória: gera a R1 do upper (com repescagem quando resolution='playin'
-      // e fora de pow2). O upper R2+, o lower e a grande final são montados por
-      // _buildDoubleElimBracket (lê t.matches round 1) → needsDoubleElim. Fonte única
-      // compartilhada com a transição entre fases (_duplaClassic).
-      return _duplaR1FromPool(pool, _res, idPrefix);
-    }
-    // Linha única = bracket 'main' (igual à Fase N) → _renderPhaseBracket renderiza por 1 render só.
-    var _seed = (cfg && cfg.bracketSeeding === 'balanced') ? 'balanced' : 'seed'; // cabeças × equilíbrio
-    return genTierBracket(pool, 'main', idPrefix, _res, _third, _seed);
+    // MOTOR ÚNICO pras duas eliminatórias. A chave inteira sai de chave(N, formato):
+    // simples = árvore + 3º/4º; dupla = superior + inferior + grande final (sem
+    // segundo construtor). Ids ESTRUTURAIS (p0-VC-R1-P3), então recalcular é seguro
+    // e a entrada tardia deixa de precisar de cirurgia.
+    return _genElimFromChaves(pool, cfg, idPrefix, dupla);
   }
 
   function generatePhase(pool, cfg, ctx) {
@@ -1734,59 +1794,45 @@
           return window._computeMonarchStandings({ players: g.players || [], matches: ms }, t, g.category || null);
         }
       : function (g) { return _groupTeamStandings(g, _tbOpts); };
-    // v2.7.24: se alguma LINHA da próxima fase NÃO for potência de 2 e o organizador
-    // ainda não escolheu como resolver → PERGUNTA (painel) em vez de aplicar BYE
-    // direto. Tamanhos das linhas são determinísticos (não dependem do sorteio).
+    // ⛔ SEM PAINEL DE AJUSTE DE CHAVEAMENTO — mas COM o de PROMOVER LINHA (v1.5.25).
+    //
+    // Aqui havia UM gate que disparava DOIS painéis quando alguma linha da próxima fase
+    // não fechava em potência de 2. Só o segundo saiu:
+    //
+    //  • REMOVIDO — "Ajuste de Chaveamento" (Play-in / Aplicar BYE / Lista de Espera).
+    //    Existia enquanto a chave era INFLADA até a potência de 2: sobravam vagas e alguém
+    //    tinha de dizer como preenchê-las. Com a ÁRVORE MÍNIMA + a normalização da R2 não
+    //    há vaga a preencher, e `_genElimFromChaves` **já ignora `cfg.bracketResolution`
+    //    de propósito** — o organizador escolhia e a escolha não mudava a chave.
+    //
+    //  • MANTIDO — PROMOVER LINHA. Não é resolução de potência de 2: é PARIDADE. Sobe a
+    //    melhor equipe da linha de baixo para a de cima (cima +1, baixo −1) para que
+    //    nenhuma linha fique com número ÍMPAR de equipes, isto é, com uma equipe sem
+    //    adversário. É decisão de MÉRITO e continua sendo do organizador.
+    //
+    // O gate agora pergunta o que o painel realmente resolve: `_phasePromoteHelps` — que
+    // já é sobre ímpares (uma promoção zera TODOS os ímpares das linhas). Antes ele vinha
+    // atrás de um teste de pow2, que era a pergunta errada. Uma vez decidido
+    // (`_promoteAsked`), a fase avança direto. Ver [[project_promote_line_before_pow2]].
     var _cur = t.currentPhaseIndex || 0;
     var _nextCfg = t.phases[_cur + 1] || {};
-    // Fase de Grupos / Rei-Rainha / Liga não têm chave → não precisam resolver potência de 2.
-    if (!_nextCfg.bracketResolution && !_phaseIsGroups(_nextCfg) && !_phaseIsMonarch(_nextCfg) && !_phaseIsLiga(_nextCfg)) {
+    // Fase de Grupos / Rei-Rainha / Liga não têm chave → paridade de linha não se aplica.
+    if (!_phaseIsGroups(_nextCfg) && !_phaseIsMonarch(_nextCfg) && !_phaseIsLiga(_nextCfg)) {
       var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
       var _src = _nextCfg.source || {};
       var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
-      // v4.4.110: selectQualifiers já inclui os inativos (por classificação) no _byDest,
-      // então a contagem por linha do medidor já reflete cima/baixo corretamente.
       var _byDest = selectQualifiers(_curG, _nextCfg, { computeStandings: (_cur === 0 ? cs : function (g) { return g.standings || []; }) });
       var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
-      var _anyNonPow2 = _lines.some(function (l) { return l.size > 1 && (l.size & (l.size - 1)) !== 0; });
-      if (_anyNonPow2) {
-        // v4.5.5: PROMOVER LINHA é um passo SEPARADO e ANTERIOR à resolução de pow2 —
-        // NÃO uma opção de chave. Promover sobe a melhor dupla da linha de baixo pra de
-        // cima (cima +1, baixo −1), mudando as CONTAGENS de cada linha (ex.: 25/25 → 26/24).
-        // Só depois de fixadas as contagens é que a pow2 é proposta — e aí cada linha
-        // resolve com o SEU número (26 e 24 rendem BYE/repescagem diferentes). Antes as duas
-        // decisões vinham misturadas no mesmo painel, e escolher "promover" não escolhia a
-        // solução de pow2 (bug reportado). Multi-linha → pergunta o promote primeiro; uma vez
-        // decidido (_promoteAsked) segue pro painel de pow2. selectQualifiers já aplica
-        // _promoteLines, então _lines aqui já reflete o promote acumulado. Ver
-        // feedback_resolution_one_logic / project_numeric_resolution_canon.
-        // Promover é decisão de 0 ou 1: só faz sentido quando UMA promoção ZERA as linhas
-        // ímpares (linha ímpar = 1 equipe sem adversário). 25/25 (2 ímpares) → 26/24 (tudo
-        // par): resolve. _phasePromoteHelps é a fonte única (mesma regra do painel). Só
-        // pergunta uma vez por transição (_promoteAsked).
-        if (_lines.length >= 2 && !_nextCfg._promoteAsked && typeof window._showPhasePromotePanel === 'function' &&
-            typeof window._phasePromoteHelps === 'function' && window._phasePromoteHelps(_lines)) {
-          // v1.4.17: via _setPhaseResInfo — o contexto precisa sobreviver ao snapshot do
-          // Firestore (que substitui o objeto do torneio). Ver _reattachPhaseResInfo.
-          window._setPhaseResInfo(t, { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) });
-          window._showPhasePromotePanel(tId);
-          return;
-        }
-        // v3.1.23: quando uma linha não fecha em potência de 2, SEMPRE pergunta ao
-        // organizador como resolver (Play-in/Repescagem · Lista de espera · BYE ·
-        // Exclusão) — com o equilíbrio de Nash, o tempo estimado e o nº de partidas
-        // de cada uma (showUnifiedResolutionPanel, ramo de fase). Vale pra QUALQUER origem
-        // (Grupos, Rei/Rainha, Pontos Corridos). Antes (v3.0.x) a transição de Grupos/Rei-Rainha
-        // forçava play-in direto sem perguntar — pedido do dono: sempre perguntar.
-        // Fallback só se o painel não existir: play-in (repescagem, mais inclusivo).
-        if (typeof window.showUnifiedResolutionPanel === 'function') {
-          window._setPhaseResInfo(t, { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) });
-          window.showUnifiedResolutionPanel(tId);
-          return;
-        }
-        _nextCfg.bracketResolution = 'playin';
+      if (_lines.length >= 2 && !_nextCfg._promoteAsked && typeof window._showPhasePromotePanel === 'function' &&
+          typeof window._phasePromoteHelps === 'function' && window._phasePromoteHelps(_lines)) {
+        // via _setPhaseResInfo — o contexto precisa sobreviver ao snapshot do Firestore
+        // (que substitui o objeto do torneio). Ver _reattachPhaseResInfo.
+        window._setPhaseResInfo(t, { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) });
+        window._showPhasePromotePanel(tId);
+        return;
       }
     }
+
     var res = materializeNextPhase(t, cs, 'ph-' + tId + '-' + ((t.currentPhaseIndex || 0) + 1));
     if (!res.ok) {
       if (window.showAlertDialog) window.showAlertDialog('Não foi possível avançar', 'Motivo: ' + res.error, null, { type: 'warning' });
@@ -1869,18 +1915,42 @@
     var changed = false;
     // AWAITS-LATE-PARTNER → BYE no fim da rodada (v1.4.41): "dupla vs a definir" de um tardio SOZINHO
     // (criado por _growAdefinir quando não há bye). Quando os jogos REAIS da mesma chave+rodada
-    // fecham e ninguém preencheu o "a definir", o tardio avança de bye — a chave não trava. NUNCA puxa
-    // repescado (não é repFill) → sem double-book. O 2º tardio já teria preenchido via _fillOpenAdefinir.
+    // fecham e ninguém preencheu o "a definir", o tardio avança de bye — a chave não trava.
+    // v1.5.3 (regra 2 do dono): o BYE é o ÚLTIMO recurso. Se o jogo carrega uma vaga de
+    // REPESCAGEM (repFill) pra esse slot, ela tem prioridade — o tardio joga o MELHOR DERROTADO
+    // da rodada, não avança de graça. O BYE só volta a valer se a vaga não tiver derrotado
+    // elegível (tratado no laço de repFill abaixo, que então converte pra BYE).
     (function () {
       var _emp = function (v) { return !v || v === 'TBD' || v === 'BYE (Avança Direto)' || /a definir/i.test(String(v)); };
+      // v1.5.3 — HEAL: `awaitsLatePartner` PENDURADO num jogo já completo (os dois lados reais). Docs
+      // antigos ficaram assim porque quem preenchia o slot não limpava a flag. Enquanto ela existe o
+      // jogo não conta como FONTE de repescado (filtro abaixo) → a rodada parecia fechada sem ele e
+      // a vaga do tardio resolvia ANTES da hora. Medido no doc real tour_1781996342871.
+      all.forEach(function (g) {
+        if (g && g.awaitsLatePartner && !_emp(g.p1) && !_emp(g.p2)) delete g.awaitsLatePartner;
+      });
       all.forEach(function (g) {
         if (!g || !g.awaitsLatePartner || g.winner) return;
         var realSlot = !_emp(g.p1) ? 'p1' : (!_emp(g.p2) ? 'p2' : null);
         var byeSlot = realSlot === 'p1' ? 'p2' : 'p1';
         if (!realSlot || !_emp(g[byeSlot])) return;
+        if (Array.isArray(g.repFill) && g.repFill.some(function (rf) { return rf && rf.slot === byeSlot; })) return;
+        // v1.5.3: a vaga está PROMETIDA a alguém (fio explícito de vencedor/perdedor)? então não é
+        // BYE — espera o time chegar. Se o dono do fio fechar de BYE (sem perdedor), o passe de
+        // liberação mais abaixo transforma a vaga em BYE.
+        if (all.some(function (x) {
+          return x && x !== g && ((x.loserMatchId === g.id && x.loserSlot === byeSlot) || (x.nextMatchId === g.id && x.nextSlot === byeSlot));
+        })) return;
         var br = g.bracket, rd = (typeof g.round === 'number') ? g.round : 1;
         var reais = all.filter(function (m) { return m && m.bracket === br && ((typeof m.round === 'number') ? m.round : 1) === rd && !m.isExtra && !m.isPhaseRepGame && !_emp(m.p1) && !_emp(m.p2); });
-        if (!reais.length || !reais.every(function (m) { return !!m.winner; })) return;   // rodada ainda aberta
+        // FONTES deste jogo (quem manda time pra ele). Enquanto uma estiver pendente, espera.
+        var _fontes = all.filter(function (x) { return x && x !== g && (x.loserMatchId === g.id || x.nextMatchId === g.id); });
+        if (_fontes.some(function (f) { return !f.winner; })) return;
+        // v1.5.3: sem irmão REAL na rodada (caso do jogo de POUSO da 1ª inferior, que nasce só com
+        // fios) o fecho é dado pelas FONTES — todas decididas ⇒ ninguém mais vem. Sem irmão real E
+        // sem fonte, não há como saber: espera.
+        if (!reais.length) { if (!_fontes.length) return; }
+        else if (!reais.every(function (m) { return !!m.winner; })) return;   // rodada ainda aberta
         g[byeSlot] = 'BYE (Avança Direto)'; g.isBye = true; g.winner = g[realSlot]; delete g.awaitsLatePartner;
         if (g.nextMatchId && g.nextSlot) {
           var _nx = all.filter(function (x) { return x && x.id === g.nextMatchId; })[0];
@@ -1902,6 +1972,7 @@
           return x && x.bracket === slot.srcBracket && x.round === slot.srcRound &&
             (slot.cat == null || x.category === slot.cat) &&
             !x.isPhaseRepGame &&  // o jogo da ÍMPAR não é fonte de repescado (seu perdedor cai via loserMatchId)
+            !x.awaitsLatePartner &&  // v1.5.3: idem pro jogo "tardio × a definir" (ele É a vaga de repescagem)
             x.p1 && x.p1 !== 'TBD' && x.p2 && x.p2 !== 'TBD';
         });
         if (!src.length || src.some(function (x) { return !x.winner; })) { keep.push(slot); return; }
@@ -1914,13 +1985,57 @@
             ord: xi, seed: (lp1 ? x.p1Seed : x.p2Seed)
           };
         }).filter(function (l) { return l.name && l.name !== 'BYE (Avança Direto)' && l.name !== 'TBD'; }); // BYE nunca é repescável
+        // v1.5.3: NUNCA repescar 2× a mesma pessoa/dupla. Duas vagas abertas em MOMENTOS diferentes
+        // (ex.: 2 duplas tardias chegando em passadas separadas com a rodada já fechada) recebem
+        // rank 0 cada uma — sem este filtro as duas puxavam o MESMO melhor derrotado (double-book:
+        // vivo em 2 jogos). Mesma regra do `_promKeys` do _syncLowerBracket.
+        // Ver project_dupla_elim_repechage / project_late_dupla_fills_awaiting_slot.
+        var _jaRep = {};
+        all.forEach(function (x) {
+          if (!x) return;
+          ['p1', 'p2'].forEach(function (s) { if (x[s + 'FromRepechage'] && x[s]) _jaRep[String(x[s])] = 1; });
+        });
+        losers = losers.filter(function (l) { return !_jaRep[String(l.name)]; });
+        // v1.5.3: quem SOBE da superior tem de sair da inferior (vacância, mais abaixo) — e isso só
+        // é possível se ele estiver num jogo inferior PENDENTE. Se o jogo dele lá já tem vencedor
+        // (jogou, ou avançou de bye), puxá-lo o deixaria vivo nos DOIS lugares (double-book) ou
+        // apagaria um jogo disputado. Cânone do dono: "repescado só é puxado de jogo PENDENTE;
+        // promover é ganho, TIRAR DE JOGAR é proibido". Medido em tests/sync-lower-bracket (N pow2
+        // + 2 tardios). Sem candidato elegível a vaga cai no BYE (bloco acima).
+        if (slot.tagRep && slot.srcBracket === 'upper') {
+          var _lowFechado = {};
+          all.forEach(function (x) {
+            if (!x || x.bracket !== 'lower' || !x.winner) return;
+            ['p1', 'p2'].forEach(function (s) { if (x[s]) _lowFechado[String(x[s])] = 1; });
+          });
+          losers = losers.filter(function (l) { return !_lowFechado[String(l.name)]; });
+        }
         losers.forEach(function (l) { if (l.seed == null) l.seed = 9999; });
         // v1.3.167 (dono): empate total (saldo E pontos) desempata pela ORDEM DO JOGO na rodada —
         // o que a tela mostra ("Mari está no jogo 1, Luiza no jogo 2 ⇒ Mari na frente"). O seed
         // interno é invisível e no pareamento 1×N contradiz a leitura natural (o jogo 1 junta o
         // 1º sorteado com o ÚLTIMO). Critério auditável > critério interno. Seed fica de último
         // recurso teórico.
-        losers.sort(function (a, b) { return (b.saldo - a.saldo) || (b.score - a.score) || (a.ord - b.ord) || (a.seed - b.seed); });
+        // v1.5.36: CRITÉRIO DO ORGANIZADOR MANDA em toda vaga de repescagem (regra do dono:
+        // "o ranking dos derrotados considerando os critérios de desempate"). O comparador
+        // saldo→pontos→ordem vira fallback/desempate — mantém o comportamento onde os
+        // critérios não distinguem e a ordem auditável dos jogos como último recurso.
+        var _posCrit = null;
+        if (typeof window._rankLosersByCriteria === 'function') {
+          try {
+            var _nomesOrd = losers.slice().sort(function (a, b) { return a.ord - b.ord; }).map(function (l) { return String(l.name); });
+            var _rkd = window._rankLosersByCriteria(t, _nomesOrd);
+            _posCrit = {}; _rkd.forEach(function (n, i) { _posCrit[String(n)] = i; });
+          } catch (e) { _posCrit = null; }
+        }
+        losers.sort(function (a, b) {
+          if (_posCrit) {
+            var pa = (_posCrit[String(a.name)] != null) ? _posCrit[String(a.name)] : 9e9;
+            var pb = (_posCrit[String(b.name)] != null) ? _posCrit[String(b.name)] : 9e9;
+            if (pa !== pb) return pa - pb;
+          }
+          return (b.saldo - a.saldo) || (b.score - a.score) || (a.ord - b.ord) || (a.seed - b.seed);
+        });
         var pick = losers[slot.rank];
         if (pick && pick.name) {
           m[slot.slot] = pick.name;
@@ -1946,6 +2061,19 @@
             });
           }
           changed = true;
+        } else if (m.awaitsLatePartner && !m.winner) {
+          // v1.5.3: fontes TODAS decididas e nenhum derrotado elegível pra este rank (ex.: a rodada
+          // só teve byes, ou os melhores derrotados já foram repescados por outras vagas). O jogo do
+          // tardio NÃO pode ficar pendurado: cai no BYE (último recurso) e o laço final abaixo
+          // avança o lado real. Descarta o descritor pra não reabrir a vaga em passadas futuras.
+          var _slotVazio = (slot.slot === 'p1') ? m.p1 : m.p2;
+          if (!_slotVazio || _slotVazio === 'TBD' || /a definir/i.test(String(_slotVazio))) {
+            m[slot.slot] = 'BYE (Avança Direto)';
+            if (slot.slot === 'p1') { m.team1Obj = null; m.team1Uids = []; m.p1Uid = null; }
+            else { m.team2Obj = null; m.team2Uids = []; m.p2Uid = null; }
+            delete m.awaitsLatePartner;   // libera o laço de BYE abaixo (ele pula awaitsLatePartner)
+            changed = true;
+          }
         } else keep.push(slot);
       });
       m.repFill = keep;
@@ -1957,6 +2085,22 @@
     var _byeChg = true, _bg = 0;
     while (_byeChg && _bg++ < 100) {
       _byeChg = false;
+      // v1.5.3: jogo que fechou de BYE NÃO TEM PERDEDOR — libera a vaga que ele prometeu na chave
+      // inferior (loserMatchId/loserSlot), senão o jogo de pouso fica esperando um perdedor que
+      // nunca vem e a chave inferior TRAVA (medido em tests/sync-lower-bracket e -pow2-grow: playout
+      // sem campeão). O lado real do jogo de pouso avança pelo laço abaixo.
+      all.forEach(function (m) {
+        if (!m || !m.isBye || !m.winner || !m.loserMatchId || !m.loserSlot) return;
+        var _lt = all.filter(function (x) { return x && x.id === m.loserMatchId; })[0];
+        if (!_lt || _lt.winner) return;
+        var _lv = _lt[m.loserSlot];
+        if (_lv && _lv !== 'TBD' && !/a definir/i.test(String(_lv))) return;   // já preenchido
+        _lt[m.loserSlot] = 'BYE (Avança Direto)';
+        if (m.loserSlot === 'p1') { _lt.team1Obj = null; _lt.team1Uids = []; _lt.p1Uid = null; }
+        else { _lt.team2Obj = null; _lt.team2Uids = []; _lt.p2Uid = null; }
+        delete _lt.awaitsLatePartner;
+        _byeChg = true; changed = true;
+      });
       all.forEach(function (m) {
         if (!m || m.winner || m.awaitsLatePartner) return;
         var b1 = (m.p1 === 'BYE (Avança Direto)'), b2 = (m.p2 === 'BYE (Avança Direto)');
@@ -1964,9 +2108,26 @@
         var rs = b1 ? 'p2' : 'p1', rv = m[rs];
         if (!rv || rv === 'TBD' || rv === 'BYE (Avança Direto)') return;
         m.winner = rv; m.isBye = true;
-        if (m.nextMatchId && m.nextSlot) {
+        if (m.nextMatchId) {
           var _nx3 = all.filter(function (x) { return x && x.id === m.nextMatchId; })[0];
-          if (_nx3) { _nx3[m.nextSlot] = rv; var _o3 = (rs === 'p1') ? m.team1Obj : m.team2Obj; if (m.nextSlot === 'p1') _nx3.team1Obj = _o3; else _nx3.team2Obj = _o3; }
+          // v1.5.3: sem `nextSlot` explícito, usa a convenção do _advanceWinner — 1ª vaga TBD livre.
+          // A chave INFERIOR do _buildDoubleElimBracket é fiada assim (nextSlot undefined); sem este
+          // fallback o BYE da VACÂNCIA da repescagem definia vencedor e NÃO o propagava → slot morto.
+          var _sl3 = m.nextSlot;
+          if (_nx3 && !_sl3) {
+            ['p1', 'p2'].forEach(function (s) {
+              if (_sl3 || !(!_nx3[s] || _nx3[s] === 'TBD')) return;
+              var _fed3 = all.some(function (x) { return x && x !== m && ((x.nextMatchId === _nx3.id && x.nextSlot === s) || (x.loserMatchId === _nx3.id && x.loserSlot === s)); });
+              if (!_fed3) _sl3 = s;
+            });
+          }
+          if (_nx3 && _sl3) {
+            _nx3[_sl3] = rv;
+            var _o3 = (rs === 'p1') ? m.team1Obj : m.team2Obj;
+            var _u3 = ((rs === 'p1') ? m.team1Uids : m.team2Uids) || [];
+            if (_sl3 === 'p1') { _nx3.team1Obj = _o3; _nx3.team1Uids = _u3.slice(); _nx3.p1Uid = (_u3.length === 1 ? _u3[0] : null); }
+            else { _nx3.team2Obj = _o3; _nx3.team2Uids = _u3.slice(); _nx3.p2Uid = (_u3.length === 1 ? _u3[0] : null); }
+          }
         }
         _byeChg = true; changed = true;
       });

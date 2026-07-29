@@ -170,7 +170,17 @@ service cloud.firestore {
       // read any tournament (needed for invite links and enroll/deenroll
       // transactions, which have to read before writing). Private
       // tournaments remain hidden from unauth visitors.
-      allow read: if (resource.data.isPublic == true) || (request.auth != null);
+      // SANDBOX (project_sandbox_tournament): o torneio de teste do dev NÃO é legível por
+      // terceiro NEM por link/id — só quem está no memberUids dele (= o dev). Sem esta
+      // linha a invisibilidade era 100% client-side: bastava a regra genérica "authed lê
+      // qualquer torneio" pra qualquer um puxar o SB. Fecha o item (3) do isolamento.
+      allow read: if (
+        (resource.data.get('isSandbox', false) != true
+          && ((resource.data.isPublic == true) || (request.auth != null)))
+        || (resource.data.get('isSandbox', false) == true
+          && request.auth != null
+          && (request.auth.uid in resource.data.get('memberUids', [])))
+      );
 
       // Create: the caller must be the declared creator. Prevents forging
       // tournaments on someone else's behalf. v2.8.79: aceita uid (creatorUid)

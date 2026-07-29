@@ -13,6 +13,7 @@
 		AB01F00D000000000000BABE /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AB01F00D000000000000CAFE /* PrivacyInfo.xcprivacy */; };
 		3C642F95D1DC28B20B736829 /* ScoreplaceWatchPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C086B4DF33BE7E79AA21F7A6 /* ScoreplaceWatchPlugin.swift */; };
 		4C201DBF363C5A75D6D680AC /* WatchSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2387F19430B11E865FC7A2C /* WatchSession.swift */; };
+		HR01B0000000000000000002 /* HeartRate.swift in Sources */ = {isa = PBXBuildFile; fileRef = HR01A0000000000000000001 /* HeartRate.swift */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
@@ -75,6 +76,7 @@
 		AFC3DA374FC762CF4AA932C7 /* ScoreState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScoreState.swift; sourceTree = "<group>"; };
 		C086B4DF33BE7E79AA21F7A6 /* ScoreplaceWatchPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScoreplaceWatchPlugin.swift; sourceTree = "<group>"; };
 		D2387F19430B11E865FC7A2C /* WatchSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchSession.swift; sourceTree = "<group>"; };
+		HR01A0000000000000000001 /* HeartRate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HeartRate.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -157,6 +159,7 @@
 			isa = PBXGroup;
 			children = (
 				D2387F19430B11E865FC7A2C /* WatchSession.swift */,
+				HR01A0000000000000000001 /* HeartRate.swift */,
 				7A7925D9F67938D04B593D40 /* ScoreplaceWatchCompanionApp.swift */,
 				2FF51099A8018323CCBDF3D0 /* Info.plist */,
 				AA10CA7A100900000A55E751 /* Assets.xcassets */,
@@ -299,6 +302,7 @@
 				FF82F26A8FF22704CA928E27 /* RemoteView.swift in Sources */,
 				5FF8290AD58121B557DC1B73 /* ScoreState.swift in Sources */,
 				4C201DBF363C5A75D6D680AC /* WatchSession.swift in Sources */,
+				HR01B0000000000000000002 /* HeartRate.swift in Sources */,
 				A1227616F5AF7B28DA4B25B3 /* ScoreplaceWatchCompanionApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -340,7 +344,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = 6724SP9XN7;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Watch/Info.plist;
@@ -348,7 +352,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.5;
+				MARKETING_VERSION = 1.6;
+				CODE_SIGN_ENTITLEMENTS = Watch/ScoreplaceWatch.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace.watchapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -475,7 +480,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = 6724SP9XN7;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				INFOPLIST_FILE = App/Info.plist;
@@ -484,7 +489,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.5;
+				MARKETING_VERSION = 1.6;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace;
@@ -500,7 +505,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = 6724SP9XN7;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				INFOPLIST_FILE = App/Info.plist;
@@ -509,7 +514,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.5;
+				MARKETING_VERSION = 1.6;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -525,7 +530,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = 6724SP9XN7;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Watch/Info.plist;
@@ -533,7 +538,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.5;
+				MARKETING_VERSION = 1.6;
+				CODE_SIGN_ENTITLEMENTS = Watch/ScoreplaceWatch.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace.watchapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;

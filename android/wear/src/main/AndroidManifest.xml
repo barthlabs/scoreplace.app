@@ -3,6 +3,11 @@
 
     <uses-feature android:name="android.hardware.type.watch" />
 
+    <!-- Batimento cardíaco no placar. `required=false` = relógio sem sensor de HR
+         continua instalando o app (o ♥ simplesmente não aparece). -->
+    <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <uses-feature android:name="android.hardware.sensor.heartrate" android:required="false" />
+
     <application
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"

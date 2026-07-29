@@ -2064,6 +2064,9 @@ exports.formPair = onCall(
       return _pairCore.computeFormPair(sbData, opts);
     });
 
+    if (out.outcome === "alreadyPaired") {
+      return { notFound: false, alreadyPaired: true, who: out.who || "", participants: out.participants };
+    }
     if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
     return { notFound: false, participants: out.participants, newName: out.newName };
   }

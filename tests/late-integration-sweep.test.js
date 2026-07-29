@@ -163,7 +163,10 @@ console.log('── SWEEP INTEGRAÇÃO TARDIA: formato × config × N ──');
 console.log('\n── independência Novos Confrontos × Abertas ──');
 [['closed', true, true], ['closed', false, false], ['closed', undefined, false], ['standby', true, true], ['expand', undefined, true]].forEach(function (c) {
   const le = c[0], nm = c[1], shouldIntegrate = c[2];
-  const t = tour('Eliminatórias Simples', { teamSize: 2, enrollmentMode: 'teams', participants: mkPairs(4), lateEnrollment: le });
+  // 5 e não 4: 4 é potência de 2 EXATA (chave cheia) e lá um tardio SOZINHO espera par, por
+  // regra do dono — o que confundiria a pergunta deste bloco, que é a INDEPENDÊNCIA entre
+  // "inscrições abertas" e "novos confrontos". Ver tests/late-entry-never-redraws.
+  const t = tour('Eliminatórias Simples', { teamSize: 2, enrollmentMode: 'teams', participants: mkPairs(5), lateEnrollment: le });
   if (nm !== undefined) t.newMatchups = nm;
   mkPairs(4).forEach(function () {}); // noop
   t.participants.forEach(function (p) { checkInEntry(t, p); });

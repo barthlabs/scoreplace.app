@@ -36,8 +36,15 @@ window._openOrCreateSandbox = function(origId) {
     clone.createdAt = new Date().toISOString();
     clone.sandboxSyncedAt = Date.now();
     delete clone.sandboxId;            // SB não tem SB próprio
-    if (!Array.isArray(clone.memberUids)) clone.memberUids = [];
-    if (clone.memberUids.indexOf(cu.uid) === -1) clone.memberUids.push(cu.uid);
+    // ENTREGA: o clone trouxe memberUids/coHosts/admin* do ORIGINAL — ou seja, os uids de
+    // TODAS as pessoas reais. Enquanto eles estiverem aqui, o Firestore ENTREGA o doc do SB
+    // no listener (`memberUids array-contains`) de cada uma delas e a invisibilidade passa a
+    // depender de cada tela filtrar. Zera aqui e deixa SÓ o dev; _computeMemberUids mantém
+    // assim em toda gravação seguinte. Ver [[project_sandbox_tournament]].
+    clone.memberUids = [cu.uid];
+    clone.coHosts = [];                // co-host do original não administra (nem vê) o SB
+    clone.adminUids = [cu.uid];
+    clone.adminEmails = cu.email ? [String(cu.email).toLowerCase()] : [];
     window.AppStore.addTournament(clone);
     if (typeof showNotification === 'function') {
         showNotification('🧪 Sandbox criado', '"' + clone.name + '" — privado, notificações mudas, espelha o original.', 'success');

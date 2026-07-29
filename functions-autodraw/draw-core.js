@@ -16,8 +16,18 @@
 const g = globalThis;
 if (!g.window) g.window = g;
 
-// i18n mínimo: só `label.group` é usado pelos geradores de sorteio.
-const _I18N = { 'label.group': 'Grupo' };
+// i18n mínimo dos geradores de sorteio.
+//
+// `bui.byeLabel` NÃO é só exibição — é IDENTIDADE DE SLOT. `_autoResolveBye`
+// (bracket-logic) e o motor determinístico (chaves-adapter, phases-engine)
+// comparam o conteúdo do slot com `_t('bui.byeLabel')` POR IGUALDADE. Sem a
+// chave aqui, o `_t` de fallback devolvia a própria chave e o SERVIDOR gravava
+// a string crua 'bui.byeLabel' no slot. Dentro da CF ficava consistente (todos
+// os sites liam o mesmo valor), mas o CLIENTE resolve pro rótulo pt-BR real —
+// então nenhuma folga auto-avançava depois de um sorteio feito na CF: o slot
+// seguinte ficava preso em 'TBD' e quem tinha bye sumia da chave.
+// Tem que bater EXATAMENTE com js/i18n-pt.js.
+const _I18N = { 'label.group': 'Grupo', 'bui.byeLabel': 'BYE (Avança Direto)' };
 g.window._t = function (k, v) {
   if (_I18N[k]) return _I18N[k];
   return (v && v.name) ? v.name : k;
@@ -156,6 +166,8 @@ require('./vendor/tournaments-categories.js');  // _displayCategoryName, _sortCa
 require('./vendor/format2.js');                 // FORMAT2.normalize/compileToPhases (precisa de SPORT_RULES)
 require('./vendor/bracket-model.js');           // _appendCanonicalColumn
 require('./vendor/bracket-logic.js');           // _computeStandings, _generateNextRound, geradores
+require('./vendor/chaves.js');                  // _chaves — desenho determinístico: chave = f(N, formato)
+require('./vendor/chaves-adapter.js');          // _chavesAdapter — desenho → matches (id ESTRUTURAL) + tardio
 require('./vendor/phases-engine.js');           // _phasesEngine.generatePhase/storePhase
 require('./vendor/phase-generators.js');        // _phaseGen (precisa de phases-engine)
 // Helpers do SORTEIO INICIAL (_buildPhase0Cfg/_buildPhase0Pool/_formDoublesTeams/
@@ -538,62 +550,110 @@ function integrateLateEntries(t, opts) {
   // RE-SEMEADURA DO FRESH foi REMOVIDO: ele re-sorteava a chave inteira ("tá re-sorteando tudo,
   // isso não pode ocorrer"). Ver project_bye_rep_auto_resolution / project_late_entry_never_redraws.
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // ENTRADA TARDIA = APPEND + RECALCULAR  (v1.5.6 — substitui a cirurgia)
+  //
+  // Antes daqui viviam ~1.250 linhas operando o grafo vivo à mão:
+  // _fillRepFillWithLateDuplas, _createExtraGamesFromWaitlist, _integrateLateDuplas
+  // (cascata Tier 1/2/3), _placeLateEntriesSurgically, _ensureLowerLandingForLate,
+  // _repropagateDecided, _syncLowerBracket, _dedupMatchesByUid, a "porta"
+  // superior→inferior. Elas existiam porque o id do jogo era cunhado com Date.now():
+  // sem id derivável, recalcular órfãos TODOS os resultados, e só restava remendar.
+  // Remendo de grafo tem combinatória infinita — quebrou ao vivo em 4 versões
+  // seguidas (1.5.2→1.5.5) no torneio de casais.
+  //
+  // Com id ESTRUTURAL (p0-VC-R1-P3) o problema deixa de existir: o tardio entra no
+  // FIM da ordem do sorteio, a chave é redesenhada do zero, e cada resultado volta
+  // pro seu jogo sozinho. Ver js/views/chaves.js + chaves-adapter.js.
+  //
+  // Grupos, Liga/Suíço e Rei/Rainha NÃO passam por aqui — têm caminho próprio.
+  // ══════════════════════════════════════════════════════════════════════════
   let extra = 0, duplas = 0, duplasTier = 0, dissolved = 0, monarch = 0, repfill = 0;
-  // v1.2.58: dupla formada entra no lugar do repescado (chave PLAYIN) — precede o createExtra
-  // (que é do outro formato de chave). Reusa repFill/_resolveRepFills.
-  try { repfill = win._fillRepFillWithLateDuplas(t) || 0; } catch (e) { win._error && win._error('[integrateLate] repfill:', e); }
-  try { extra = win._createExtraGamesFromWaitlist(t) || 0; } catch (e) { win._error && win._error('[integrateLate] extra:', e); }
+  let placed = 0; const recusas = [];
+
+  // Quem pode entrar agora. NÃO reimplementar aqui: o coletor é o MESMO que o
+  // caminho de Grupos usa (`window._collectLateCandidates`, tournaments-draw.js).
+  //
+  // Este ponto já teve um coletor próprio, mais fraco — lia só
+  // `standbyParticipants + waitlist`. Com isso o ÓRFÃO DE ROSTER (quem foi marcado
+  // ausente antes do sorteio e ficou em `t.participants`, fora da chave, sem passar
+  // pela espera) voltou a ser invisível: marcar presença nele não gerava jogo
+  // nenhum. É literalmente o bug ao vivo de 25/jul que a v1.5.2 já tinha corrigido
+  // do outro lado. Perdia junto as outras regras pagas caras — presença por MEMBRO
+  // (não pelo nome combinado da dupla), "SOLO sem parceiro não é competidor em
+  // torneio de duplas", e a idempotência por `_lateAlreadyIntegrated`.
+  // Ver [[feedback_unify_dual_entry_points]] e [[project_formed_pair_roster_orphan]].
+  function _poolEspera() {
+    if (typeof win._collectLateCandidates !== 'function') return [];
+    return (win._collectLateCandidates(t) || []).map(function (x) { return x && x.e; }).filter(Boolean);
+  }
+
   try {
-    const nLJ = win._integrateLateDuplas(t) || 0;
-    if (nLJ > 0) { duplas = nLJ; duplasTier = win._lastIntegrateTier || 1; }
-    else if (nLJ === -3 && typeof win._dissolveLateDuplas === 'function') { dissolved = win._dissolveLateDuplas(t) || 0; }
-  } catch (e) { win._error && win._error('[integrateLate] duplas:', e); }
+    const A = win._chavesAdapter;
+    if (A && typeof A.integrarTardiosElim === 'function') {
+      // Sem filtro extra aqui de propósito: presença, "já está na chave", competidor
+      // válido e idempotência já são aplicados DENTRO do coletor canônico. Repetir a
+      // checagem com outros helpers foi como as duas versões divergiram.
+      const pend = _poolEspera();
+      if (pend.length) {
+        const r = A.integrarTardiosElim(t, pend);
+        placed = r.aplicados || 0;
+        (r.recusados || []).forEach(function (x) { recusas.push(x); });
+        // CADASTRO: quem entrou na chave deixa de ser espera e vira INSCRITO.
+        // Sem isto o tardio jogava mas seguia aparecendo na Lista de Espera (bug
+        // real do Confra, jul/2026).
+        (r.entrantes || []).forEach(function (p) {
+          const nome = String((p && (p.displayName || p.name)) || p);
+          t.participants = t.participants || [];
+          const ja = t.participants.some(function (x) {
+            return String((x && (x.displayName || x.name)) || x) === nome;
+          });
+          if (!ja) t.participants.push(p);
+          // ATENÇÃO: _removeFromWaitlist(t, NOME) recebe string, não o objeto —
+          // passar o objeto vira no-op silencioso e o tardio segue na espera.
+          if (typeof win._removeFromWaitlist === 'function') { try { win._removeFromWaitlist(t, nome); } catch (e) {} }
+          else {
+            const fora = function (arr) {
+              return (arr || []).filter(function (x) {
+                return String((x && (x.displayName || x.name)) || x) !== nome;
+              });
+            };
+            t.standbyParticipants = fora(t.standbyParticipants);
+            t.waitlist = fora(t.waitlist);
+          }
+          if (typeof win._markLateIntegrated === 'function') { try { win._markLateIntegrated(t, p); } catch (e) {} }
+        });
+      }
+    }
+  } catch (e) { win._error && win._error('[integrateLate] recalc:', e); }
+
+  // GRUPOS (e qualquer fase que NÃO seja eliminatória) continuam no caminho antigo:
+  // o motor de chaves determinístico cobre Eliminatória Simples e Dupla — só. Entrar
+  // tardio num grupo é outro problema (encaixar a pessoa num grupo e gerar os jogos
+  // do round-robin dela), não o de re-cabear um grafo de mata-mata. Sem esta guarda,
+  // remover a cirurgia quebrava a entrada tardia em Grupos, que nunca esteve em causa.
+  const _temElim = (t.matches || []).some(function (m) {
+    return m && (m.bracket === 'main' || m.bracket === 'upper' || m.bracket === 'lower' || m.bracket === 'grand');
+  });
+  if (!_temElim) {
+    try {
+      if (typeof win._placeLateEntriesSurgically === 'function') {
+        placed += win._placeLateEntriesSurgically(t) || 0;
+      }
+    } catch (e) { win._error && win._error('[integrateLate] grupos:', e); }
+  }
+
+  // Rei/Rainha tem expansão própria (grupos de 4), fora do motor de chaves.
   try { monarch = win._expandMonarchFromWaitlist(t) || 0; } catch (e) { win._error && win._error('[integrateLate] monarch:', e); }
 
-  // v1.3.146 — COLOCAÇÃO CIRÚRGICA DO TARDIO (regra do dono). SUBSTITUI o antigo fallback de
-  // REDRAW (_clearTournamentDraw + drawInitial), que apagava a chave INTEIRA e re-sorteava tudo.
-  // O guard de então era só "não há resultado lançado" — isso protege os PLACARES mas NÃO os
-  // CONFRONTOS: a chave já estava publicada e todo mundo já tinha visto seu jogo. Desastre
-  // relatado pelo dono: "era pra entrarem no jogo 7 sem mudar nenhum dos demais 6 jogos; mudou
-  // tudo, dupla virou individual, criou jogo 8". Assinatura no diag: changed:true com
-  // extra/duplas/monarch/repfill todos 0 (só o redraw podia ter mudado).
-  //
-  // REGRA CANÔNICA: (1) existe "a definir" ABERTO? o tardio entra ALI; (2) não existe? cria UM
-  // jogo novo com "a definir" aberto (o próximo tardio preenche esse); (3) NUNCA re-sortear nem
-  // tocar em jogo existente. Ver [[project_late_dupla_fills_awaiting_slot]].
-  let redrawn = 0;
-  try {
-    if (typeof win._placeLateEntriesSurgically === 'function') {
-      redrawn = win._placeLateEntriesSurgically(t) || 0;
-    }
-  } catch (e) { win._error && win._error('[integrateLate] placeLate:', e); }
-
-  // v1.4.12 — SANEAMENTO DA ESPERA: quem JÁ ESTÁ num grupo não pode continuar na Lista de
-  // Espera. Cura os docs que ficaram sujos enquanto _removeFromWaitlist não existia no
-  // servidor (bug Confra jul/2026: os tardios formavam grupo, jogavam e classificavam, mas
-  // seus nomes nunca saíam de standbyParticipants — apareciam na espera até depois de avançar
-  // de fase). Idempotente: sem resíduo, remove 0. Ver waitlist-core.js.
+  // Saneamento da espera: quem já está num GRUPO não pode seguir na lista.
   let wlClean = 0;
   try { if (typeof win._sanitizeWaitlistVsGroups === 'function') wlClean = win._sanitizeWaitlistVsGroups(t) || 0; }
   catch (e) { win._error && win._error('[integrateLate] sanitizeWaitlist:', e); }
 
-  // v1.3.162: rede de segurança FINAL — confronto repetido (mesmo par de uids, mesma rodada) que
-  // tenha escapado por qualquer caminho é removido, desde que o duplicado NÃO tenha placar. Jogo já
-  // disputado nunca é apagado pelo código.
-  let dedup = 0;
-  try { if (typeof win._dedupMatchesByUid === 'function') dedup = win._dedupMatchesByUid(t) || 0; }
-  catch (e) { win._error && win._error('[integrateLate] dedup:', e); }
+  const redrawn = placed, healed = 0, dedup = 0, lowLand = 0;
 
-  // v1.3.165 — RECONCILIAÇÃO FINAL: re-propaga resultados decididos pelos fios (rebuilds deixam
-  // slot TBD com fio de jogo já decidido) e a DONA ÚNICA da inferior fecha a conta. Foi a cura do
-  // doc real tour_1784727218055_sb (2ª sup e 1ª inf zeradas com 6 resultados lançados).
-  let healed = 0;
-  try { if (typeof win._repropagateDecided === 'function') healed = win._repropagateDecided(t) || 0; }
-  catch (e) { win._error && win._error('[integrateLate] repropagate:', e); }
-  try { if (typeof win._syncLowerBracket === 'function') { if (win._syncLowerBracket(t)) healed++; } }
-  catch (e) { win._error && win._error('[integrateLate] syncLower:', e); }
-
-  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0 || healed > 0 || wlClean > 0);
+  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0 || healed > 0 || wlClean > 0 || lowLand > 0);
   if (changed) {
     try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e) {}
     t.updatedAt = new Date().toISOString();
@@ -601,7 +661,10 @@ function integrateLateEntries(t, opts) {
   // `placed` NO RETORNO (v1.3.146): antes o contador do fallback (`redrawn`) NÃO era devolvido —
   // por isso o diag do dono mostrou `changed:true` com tudo 0 e o redraw passou despercebido.
   // Todo caminho que muda a chave TEM de aparecer no retorno.
-  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill, placed: redrawn, wlClean: wlClean };
+  // `recusas` NO RETORNO: quando o recálculo é recusado (cruzar potência de 2 com
+  // jogo já disputado), o organizador precisa SABER e decidir — lista de espera ou
+  // refazer descartando. Engolir em silêncio foi o pecado da 1.5.x.
+  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill, placed: redrawn, wlClean: wlClean, lowLand: lowLand, recusas: recusas };
 }
 
 // ── FORMAR dupla na LISTA DE ESPERA + INTEGRAR, ATÔMICO no servidor (CF-only). Espelha

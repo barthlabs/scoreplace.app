@@ -8452,7 +8452,6 @@ window._openLiveScoring = function(tId, matchId, opts) {
         '<div style="display:flex;flex-direction:column;gap:10px;width:100%;">' +
           // Cabeçalho: Ajustar / Resetar / Fechar
           '<div id="live-score-header-actions" style="display:flex;gap:6px;align-items:center;justify-content:flex-end;">' +
-            '<button class="live-vol-sm" onclick="window._liveScoreOpenSizeSettings&&window._liveScoreOpenSizeSettings()" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;"><span style="font-size:0.88rem;line-height:1;">⚙️</span>Ajustar</button>' +
             '<button class="live-vol-sm" onclick="window._liveScoreReset()" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">↺ Resetar</button>' +
             '<button class="live-vol-sm" onclick="window._liveStatsClose()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">✕ Fechar</button>' +
           '</div>' +
@@ -9015,24 +9014,30 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // `10px + inset` (22px a MAIS que a topbar), desperdiçando faixa no cabeçalho.
   // max() protege quem não tem notch (inset=0).
   var headerPadTop = 'max(8px, calc(env(safe-area-inset-top, 0px) - 12px))';
-  var headerHtml = '<div style="background:' + headerBg + ';padding:' + headerPadTop + ' 12px 8px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:4px;">' +
-    // Left: AO VIVO + match info
-    '<div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0;">' +
+  // padding lateral respeita o safe-area (paisagem/notch): sem isso o "✕ Fechar" cai
+  // debaixo do corte da tela. max() mantém 12px em quem não tem inset.
+  var headerPadX = 'max(12px, env(safe-area-inset-right, 0px))';
+  var headerHtml = '<div style="background:' + headerBg + ';padding:' + headerPadTop + ' ' + headerPadX + ' 8px max(12px, env(safe-area-inset-left, 0px));display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:4px;">' +
+    // Left: AO VIVO + match info.
+    // flex:1 1 auto + min-width:0 = ENCOLHE. Era `flex:0 0 auto` (não encolhe): com nome
+    // de torneio/partida comprido este bloco empurrava o grupo de botões pra fora da tela
+    // e o "✕ Fechar" estourava à direita (relato do dono, 25/jul/2026). O min-width:0 que
+    // já estava aqui não fazia nada sem permissão de encolher; o ellipsis do nome também
+    // nunca disparava. Agora o nome trunca e os botões ficam sempre alcançáveis.
+    '<div style="display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;">' +
       '<span style="font-size:1rem;">📡</span>' +
       '<div style="min-width:0;">' +
         '<div style="font-size:0.78rem;font-weight:800;color:#f87171;">AO VIVO</div>' +
         '<div style="font-size:0.6rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(isCasual ? casualTitle : (t && t.name || matchLabel)) + '</div>' +
       '</div>' +
     '</div>' +
-    // Spacer
-    '<div style="flex:1;"></div>' +
-    // Right: Undo + Reset + Close (Reset hidden on finish screen in
-    // tournament mode; Undo permanece visível em todos os contextos)
-    '<div id="live-score-header-actions" style="display:flex;gap:6px;align-items:center;flex:0 0 auto;">' +
+    // (o spacer saiu: `justify-content:space-between` já separa, e com o bloco da
+    //  esquerda podendo encolher um spacer `flex:1` só roubava espaço dos botões)
+    // Right: Reset + Close — NUNCA encolhem nem quebram (flex:0 0 auto + nowrap).
+    '<div id="live-score-header-actions" style="display:flex;gap:6px;align-items:center;flex:0 0 auto;white-space:nowrap;">' +
       // v1.9.69: botão "⚙️ Configurar" no header, no lugar do antigo "Desfazer"
       // (que era redundante — o undo real é a setinha ↺ ao lado do placar de
       // games, que desfaz ponto a ponto). Engrenagem + texto = visível em quadra.
-      '<button class="live-vol-sm" onclick="window._liveScoreOpenSizeSettings&&window._liveScoreOpenSizeSettings()" title="Ajustar tamanhos" aria-label="Ajustar tamanhos" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;"><span style="font-size:0.88rem;line-height:1;">⚙️</span>Ajustar</button>' +
       '<button class="live-vol-sm" onclick="window._liveScoreReset()" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">↺ Resetar</button>' +
       '<button class="live-vol-sm" onclick="window._closeLiveScoring()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">✕ Fechar</button>' +
     '</div>' +

@@ -148,6 +148,8 @@ load('tournaments-utils.js');       // _isLigaFormat, _calcNextDrawDate
 load('tournaments-categories.js');  // _displayCategoryName, _getParticipantCategories, _participantInCategory
 load('bracket-model.js');           // _appendCanonicalColumn
 load('bracket-logic.js');           // _computeStandings, _advanceWinner, _findMatch, _maybeFinish*, _generateNextRound
+load('chaves.js');                  // window._chaves — desenho determinístico: chave = f(N, formato)
+load('chaves-adapter.js');          // window._chavesAdapter — desenho → matches do app (id ESTRUTURAL)
 load('phases-engine.js');           // window._phasesEngine: buildEntrantsByDest, materializeNextPhase, bracketPhaseGroups…
 
 module.exports = { window: sandbox, sandbox, load, E: sandbox._phasesEngine, drawRoundStub: _drawRoundStub, closeRoundStub: _closeRoundStub };

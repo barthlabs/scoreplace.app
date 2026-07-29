@@ -19,12 +19,29 @@ console.log('\n== Dupla Eliminatória — saída observável ==');
 (function () {
   const t = buildDupla(14);
   const cad = lowerCadence(t);
-  // PLAY-IN CLÁSSICO (buildDupla força bracketResolution:'playin'): 14 duplas → P_lo=8, reps=6.
-  // A pré-rodada inferior recebe os 4 derrotados da R1 sup + os 6 derrotados do play-in = 10 → 5
-  // jogos; depois os encontros (merges/battles) reduzem 5-4-3-2-1. project_bye_rep_auto_resolution.
-  eq(cad, [5, 4, 3, 2, 1], 'chave inferior de 14 (play-in) = 5-4-3-2-1 (pré = R1 sup + play-in losers)');
+  // DECISÃO DO DONO (jul/2026): a chave deixou de ser inflada até potência de 2. O
+  // desenho continua determinístico (js/views/chaves.js, chave = f(N, formato)) e o id
+  // continua estrutural — o que mudou é que não se completa mais até B.
+  //
+  //   inflada até B=16:  4 - 4 - 2 - 2 - 1 - 1   (com 2 equipes avançando sem jogar)
+  //   árvore mínima:     3 - 4 - 3 - 2 - 1       (14 duplas, sem inflar)
+  //
+  // A 1ª rodada da inferior recebe MENOS que as seguintes por causa da NORMALIZAÇÃO DA R2
+  // (jul/2026): dos 7 perdedores da 1ª superior, 1 é REPESCADO para completar a R2 até 8,
+  // então só 6 descem naquele momento (3 jogos). Ele desce depois, se perder na R2 — por
+  // isso a inferior CRESCE de 3 para 4 antes de encolher. Não é anomalia: é a descida
+  // adiada do repescado chegando junto com as quedas da 2ª superior.
+  eq(cad, [3, 4, 3, 2, 1], 'chave inferior de 14 = árvore mínima com a R2 normalizada');
   ok(cad[cad.length - 1] === 1, 'última rodada inferior = 1 jogo (Final da inferior)');
-  ok(!cad.slice(0, -1).some(function (g, i) { return g === 1 && cad[i + 1] === 1; }), 'sem duas rodadas de 1 jogo seguidas (battle dupla = bug antigo)');
+  // A cadência CONVERGE para 1. Ela não é mais monotônica desde a normalização da R2:
+  // a descida dos repescados é adiada, então a inferior pode crescer UMA vez (a 1ª para
+  // a 2ª rodada) antes de encolher. Da 2ª em diante nunca mais cresce.
+  for (let i = 2; i < cad.length; i++) {
+    ok(cad[i] <= cad[i - 1],
+      `inferior cresceu da rodada ${i} para a ${i + 1} (${cad[i - 1]} → ${cad[i]}) — depois da 2ª só encolhe`);
+  }
+  ok(cad.length >= 2 && cad[cad.length - 2] === 2,
+    'penúltima rodada da inferior = 2 jogos (semifinal da inferior)');
 })();
 
 // ---------- 2. NOME DAS RODADAS renderizadas (bug: "Linha", "Rodada 5", "Quartas" na inferior) ----------

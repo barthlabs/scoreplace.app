@@ -31,11 +31,12 @@ function mkSingleElim() {
     creatorUid: 'uOrg', organizerEmail: 'org@x.com',
     participants: [A, B, C, D],
     standbyParticipants: [], waitlist: [], checkedIn: {}, absent: {}, teamOrigins: {},
-    matches: [
-      { id: 'm1', round: 1, p1: A.displayName, p2: B.displayName, winner: null, bracket: 'main', phaseIndex: 0, nextMatchId: 'mf', nextSlot: 'p1' },
-      { id: 'm2', round: 1, p1: C.displayName, p2: D.displayName, winner: null, bracket: 'main', phaseIndex: 0, nextMatchId: 'mf', nextSlot: 'p2' },
-      { id: 'mf', round: 2, p1: 'TBD', p2: 'TBD', winner: null, bracket: 'main', phaseIndex: 0 },
-    ],
+    // Chave montada pelo MOTOR REAL (chaves.js), com ids ESTRUTURAIS e seeds — é o
+    // que a produção passa a ter. A fixture antiga era feita à mão ('m1','m2','mf',
+    // sem p1Seed): nesse formato o recálculo não consegue derivar a ordem do sorteio
+    // e, corretamente, não mexe na chave.
+    matches: core._window._chavesAdapter
+      .build(4, 'simples', { participantes: [A, B, C, D], ns: 'p0' }).matches,
   };
 }
 const R1 = (t) => (t.matches || []).filter((m) => m && m.round === 1);
@@ -44,20 +45,32 @@ const R1 = (t) => (t.matches || []).filter((m) => m && m.round === 1);
 (function () {
   const t = mkSingleElim();
   t.standbyParticipants = [latePair('LA', 'LB'), latePair('LC', 'LD')];
-  t.checkedIn = { 'LA / LB': 1, 'LC / LD': 1 }; // mesmo-dia no servidor → precisa presença
+  // Presença é POR MEMBRO (uid), nunca pelo nome COMBINADO da dupla — o nome combinado
+  // não existe em `checkedIn` na produção, e o coletor canônico (_collectLateCandidates)
+  // rejeita de propósito. A fixture antiga marcava 'LA / LB' e por isso as duplas nem
+  // chegavam a ser coletadas. Ver [[project_late_dupla_fills_awaiting_slot]].
+  t.checkedIn = { la: 1, lb: 1, lc: 1, ld: 1 };
   const before = R1(t).length;
 
   const res = core.integrateLateEntries(t, {});
   ok('res.ok', !!(res && res.ok), res && res.reason);
   ok('changed=true (integrou)', res && res.changed === true, res && res.changed);
-  ok('extra=1 jogo novo', res && res.extra === 1, res && res.extra);
-  ok('R1 cresceu +1', R1(t).length === before + 1, before + '→' + R1(t).length);
-  const newG = R1(t).some((m) => m.isExtra &&
-    ((m.p1 === 'LA / LB' && m.p2 === 'LC / LD') || (m.p1 === 'LC / LD' && m.p2 === 'LA / LB')));
-  ok('jogo novo tem as 2 duplas tardias', newG);
+  // `placed` é o contador do caminho novo (recálculo). `extra` era do
+  // _createExtraGamesFromWaitlist, que foi removido junto com a cirurgia.
+  ok('placed=2 (as 2 duplas tardias entraram)', res && res.placed === 2, res && res.placed);
+  ok('R1 cresceu', R1(t).length > before, before + '→' + R1(t).length);
+  const temJogo = (dn) => (t.matches || []).some((m) =>
+    (m.p1 === dn || m.p2 === dn) && m.p1 !== 'TBD' && m.p2 !== 'TBD' && !/BYE/.test(String(m.p1)) && !/BYE/.test(String(m.p2)));
+  ok('LA / LB tem jogo de verdade', temJogo('LA / LB'));
+  ok('LC / LD tem jogo de verdade', temJogo('LC / LD'));
   const inParts = (dn) => (t.participants || []).some((p) => (p && (p.displayName || p.name)) === dn);
   ok('duplas viraram inscritas', inParts('LA / LB') && inParts('LC / LD'));
-  ok('repescagem presente (repFill — fórmula única)', (t.matches || []).some(function (m) { return m.repFill && m.repFill.length; }), true);
+  // repFill deixou de existir: a repescagem virou ESTRUTURAL (decidida no desenho,
+  // não por ranqueamento posterior). Ver tests/repechage.test.js.
+  ok('sem repFill pendente (repescagem é estrutural agora)',
+    !(t.matches || []).some(function (m) { return m.repFill && m.repFill.length; }), true);
+  ok('saíram da Lista de Espera',
+    !(t.standbyParticipants || []).some(function (p) { return /^L/.test(String(p && p.p1Name || '')); }));
 })();
 
 // ── idempotente: sem tardio → changed=false (a CF não grava) ─────────────────

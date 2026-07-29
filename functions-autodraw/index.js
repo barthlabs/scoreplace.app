@@ -81,11 +81,19 @@ async function _preloadDrawNames(t) {
   try {
     if (!drawWindow) return;
     const uids = new Set();
-    (Array.isArray(t.participants) ? t.participants : []).forEach(p => {
+    // v1.5.10: a ESPERA entra aqui também. Quem entra tarde vem de standby/waitlist, e o
+    // inscrito grava SÓ uid (o nome vem do perfil vivo) — sem carregar esses uids, o motor
+    // não tinha nome nenhum pra carimbar e o slot da dupla tardia virava "#10" na chave
+    // (caso real tour_1785038880593_sb). Mesma leitura em lote, sem custo relevante.
+    const _walk = (arr) => (Array.isArray(arr) ? arr : []).forEach(p => {
       if (!p || typeof p !== 'object') return;
       [p.uid, p.p1Uid, p.p2Uid].forEach(u => { if (u) uids.add(String(u)); });
       if (Array.isArray(p.participants)) p.participants.forEach(sp => { if (sp && sp.uid) uids.add(String(sp.uid)); });
     });
+    _walk(t.participants); _walk(t.standbyParticipants); _walk(t.waitlist);
+    if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object') {
+      Object.keys(t.monarchWaitlist).forEach(k => _walk(t.monarchWaitlist[k]));
+    }
     if (!uids.size) return;
     const { profByUid, nameByUid } = await _loadLiveNames(uids);
     drawWindow._profileNameByUid = nameByUid || {};
@@ -239,12 +247,12 @@ function _applyWriteBoundary(data) {
   // NUNCA ENCOLHE (união com o que já está no doc): um uid que só existe no denormalizado
   // (co-host por path que não popula participants) não pode sumir e derrubar o listener
   // `array-contains` de quem depende dele. Mesma blindagem do cliente.
-  const _union = (prev, next) => Array.from(new Set(
-    (Array.isArray(prev) ? prev : []).concat(Array.isArray(next) ? next : [])));
-
+  // EXCEÇÃO: SANDBOX substitui (não une) — o memberUids do SB é só o dev, senão os uids
+  // reais clonados voltam a cada gravação e o Firestore entrega o SB pra todo mundo.
+  // _mergeMemberUids é o MESMO helper do cliente (vendorado de persist-core.js).
   data.adminEmails = w._computeAdminEmails(data);
   data.adminUids = w._computeAdminUids(data);
-  data.memberUids = _union(data.memberUids, w._computeMemberUids(data));
+  data.memberUids = w._mergeMemberUids(data, data.memberUids, w._computeMemberUids(data));
   try {
     const owed = w._nextOwedDrawMs(data);
     if (typeof owed === 'number') data.nextDrawAt = owed;
@@ -450,7 +458,10 @@ exports.integrateLateEntries = onCall(async (request) => {
       if (!res || !res.ok) {
         throw _drawFail('failed-precondition', (res && res.reason) || 'integrate-failed', { tId, format: t.format });
       }
-      if (!res.changed) return { ok: true, changed: false }; // nada a integrar → não grava
+      // `recusas` viaja MESMO com changed=false — é justamente o caso "chave cheia": o
+      // tardio está presente, NÃO entrou, e o organizador precisa saber por quê e o que
+      // fazer. Devolver só `changed:false` aqui era silêncio, e silêncio foi o pecado da 1.5.x.
+      if (!res.changed) return { ok: true, changed: false, recusas: res.recusas || [] };
       const b = _applyWriteBoundary(t);
       tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
       // Devolve TODOS os contadores (v1.4.43): faltava `placed`/`repfill`/etc. — o "jogo 5" novo
@@ -459,7 +470,7 @@ exports.integrateLateEntries = onCall(async (request) => {
       // a chave TEM de aparecer no retorno. Ver [[project_late_dupla_fills_awaiting_slot]].
       return { ok: true, changed: true, extra: res.extra, duplas: res.duplas, duplasTier: res.duplasTier,
                dissolved: res.dissolved, monarch: res.monarch, repfill: res.repfill, placed: res.placed,
-               wlClean: res.wlClean, tournament: b.clean };
+               wlClean: res.wlClean, recusas: res.recusas || [], tournament: b.clean };
     });
   } catch (e) {
     if (e instanceof HttpsError) throw e;

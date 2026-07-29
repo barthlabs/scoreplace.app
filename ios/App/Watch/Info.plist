@@ -26,5 +26,16 @@
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>app.scoreplace</string>
+	<!-- Batimento cardíaco no placar. A leitura AO VIVO (cadência de ~5s) só existe
+	     dentro de um HKWorkoutSession — daí o background mode workout-processing,
+	     que também impede o watchOS de suspender o app no meio da partida. -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>Mostra seus batimentos cardíacos na tela do placar durante a partida.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Salva a partida como treino no app Saúde, para contar nos seus anéis de atividade.</string>
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>workout-processing</string>
+	</array>
 </dict>
 </plist>

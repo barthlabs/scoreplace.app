@@ -758,7 +758,12 @@ window._presenceCardBusy = function (key, on) {
   if (!key) return;
   try {
     var esc = String(key).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    var cards = document.querySelectorAll('.participant-card[data-card-key="' + esc + '"]');
+    // v1.5.8: card de DUPLA tem chave "pair:<uid1>~<uid2>" — o seletor exato nunca casava, e
+    // marcar presença na chamada de duplas (SB Casais) não mostrava spinner nenhum. Agora o
+    // card cuja chave CONTÉM a identidade da pessoa também entra (uid/nome não têm ~).
+    var sel = '.participant-card[data-card-key="' + esc + '"], ' +
+              '.participant-card[data-dupla-card="1"][data-card-key*="' + esc + '"]';
+    var cards = document.querySelectorAll(sel);
     for (var i = 0; i < cards.length; i++) { if (on) cards[i].classList.add('presence-saving'); else cards[i].classList.remove('presence-saving'); }
   } catch (e) {}
 };
@@ -1151,6 +1156,10 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
         }
       }
     } catch (_eBar) {}
+    // v1.5.15: a faixa "N equipes para novo confronto" (e a etiqueta "aguardando mais 1") também
+    // depende de QUEM está presente — sem isto ela ficava com o número do render anterior enquanto
+    // o toast já dizia "Falta 1". Mesmo tratamento da barra: recomputa e troca só ela.
+    try { if (typeof window._syncLateGrowthBanner === 'function') window._syncLateGrowthBanner(tId); } catch (_eGap) {}
     window._suppressSoftRefresh = true;
     clearTimeout(window._presenceRefreshRelease);
     window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
@@ -1201,7 +1210,28 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
       }
       return false;
     });
-    if (_canMng && _hasBracket && _toggledInWaitlist && typeof window._triggerLateIntegration === 'function') {
+    // v1.5.2 (dono, torneio AO VIVO 25/jul): a espera NÃO é a única origem de quem está FORA da
+    // chave. Quem foi marcado AUSENTE antes do sorteio pode ter ficado em `t.participants` (fora da
+    // chave) — marcar presença nele tem de gerar jogo igual. O gate agora é o que realmente importa:
+    // a pessoa ficou PRESENTE e NÃO está na chave. Continua cirúrgico (quem já está na chave não
+    // dispara nada). Ver [[project_late_dupla_fills_awaiting_slot]].
+    var _toggledOutOfBracket = false;
+    try {
+      if (!_toggledInWaitlist && _wantPresent && typeof window._entryInBracket === 'function') {
+        var _bset = window._bracketUidKeySet ? window._bracketUidKeySet(t) : null;
+        _toggledOutOfBracket = (Array.isArray(t.participants) ? t.participants : []).some(function (p) {
+          var _us = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
+          var _mine = (uid && _us && _us.indexOf(uid) !== -1);
+          if (!_mine && playerName) {
+            var _pn = window._pName ? window._pName(p, '') : '';
+            _mine = (_pn === playerName) ||
+              (_pn.indexOf(' / ') !== -1 && _pn.split(' / ').some(function (x) { return x.trim() === playerName; }));
+          }
+          return _mine && !window._entryInBracket(t, p, _bset);
+        });
+      }
+    } catch (_eOob) {}
+    if (_canMng && _hasBracket && (_toggledInWaitlist || _toggledOutOfBracket) && typeof window._triggerLateIntegration === 'function') {
       var _fireLate = function () {
         try {
           var _ft = window._findTournamentById(tId) || t;

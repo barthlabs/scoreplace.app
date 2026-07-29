@@ -1,14 +1,26 @@
-// Dupla Eliminatória fora de potência de 2 — RESOLUÇÃO AUTOMÁTICA (planilha do dono, jul/2026).
-// A árvore-mínima (⌈E/2⌉ por rodada + repescado no ímpar) foi SUBSTITUÍDA: a resolução escolhe
-// automaticamente a de MENOS intervenções — BYE (pad até a pow2 ACIMA) ou PLAY-IN (reduz até a
-// pow2 ABAIXO). A chave SUPERIOR fica sempre pow2 LIMPA (halving sem rodada ímpar ⇒ SEM repFill/
-// ressurreição ⇒ SEM double-book). A inferior usa BYE no ímpar. Ver project_bye_rep_auto_resolution.
+// Dupla Eliminatória — ÁRVORE MÍNIMA pelo caminho REAL da CF (draw-core → vendor).
 //
-// 12 duplas: byes = 16−12 = 4, reps = 12−8 = 4 → EMPATE → BYE (pad até 16). Superior = 8/4/2/1
-// (4 byes na R1). NENHUM repescado (repFill) em lugar nenhum — byes, não repescagem.
+// Esta suíte travava a RESOLUÇÃO AUTOMÁTICA pow2 ("12 duplas → byes=16−12=4 → pad até 16 →
+// superior 8/4/2/1"). O dono decidiu (jul/2026) que **o desenho novo substitui o anterior,
+// para ter menos repescagens e poucos byes**: a chave não é mais inflada até a potência de 2.
+// Com 12 duplas aquilo dava 4 equipes avançando sem jogar; a árvore mínima dá 6/3/2/1 na
+// superior, ZERO folga e 2 repescagens.
+//
+// A regra é uma recorrência: rodada com E entrantes → teto(E/2) jogos; sobem teto(E/2),
+// descem piso(E/2). E ímpar deixa UMA sobra, que recebe folga (dentro do teto de 3 a cada 12,
+// nunca a menos de 3 rodadas da final e NUNCA na 1ª rodada da principal) ou repescagem.
+//
+// O QUE ESTA SUÍTE PROTEGE, e por que roda por `draw-core` e não por `chaves.js`:
+// o sorteio de produção roda na Cloud Function, que usa `functions-autodraw/vendor/`. Testar
+// só `js/views/chaves.js` provaria o desenho e não provaria que a CF o reproduz. Aqui o
+// desenho REAL emitido pelo motor da CF é comparado rodada a rodada com `plano(N)` — é o
+// contrato "functions espelham o app", medido em vez de presumido.
 const H = require('./render-harness');
 const W = H.sandbox;
 const dc = require('../functions-autodraw/draw-core.js');
+const HH = require('./headless.js');
+HH.load('chaves.js');
+const { plano } = HH.window._chaves;
 
 let pass = 0, fail = 0; const fails = [];
 function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
@@ -27,7 +39,7 @@ function mkT(N) {
 }
 // rodadas por chave: a 1ª rodada existente de cada chave vira índice 0
 function estrutura(t) {
-  const ms = (W._collectAllMatches(t) || []).filter(m => m && !m.isThirdPlace);
+  const ms = (W._collectAllMatches(t) || []).filter(m => m && !m.isThirdPlace && !m.isExtra && !m.condicional);
   const por = {};
   ms.forEach(m => {
     const b = m.bracket || 'upper';
@@ -38,19 +50,19 @@ function estrutura(t) {
   const out = {};
   Object.keys(por).forEach(b => {
     const rs = Object.keys(por[b]).map(Number).sort((x, y) => x - y);
-    out[b] = rs.map(r => {
-      const lista = por[b][r];
-      const reps = lista.reduce((s, m) => s + ((m.repFill || []).length), 0);
-      return { jogos: lista.length, repescados: reps };
-    });
+    out[b] = rs.map(r => ({
+      jogos: por[b][r].length,
+      rep: por[b][r].filter(m => m.isRepechageSlot).length,
+      bye: por[b][r].filter(m => m.isBye).length
+    }));
   });
   return out;
 }
 const isEmpty = v => !v || v === 'TBD' || /^bye/i.test(String(v).trim()) || /a definir/i.test(String(v));
 const all = t => W._collectAllMatches(t) || [];
+const jogosDe = (e, b) => (e[b] || []).map(r => r.jogos).join('/');
 
-console.log('── Dupla Eliminatória 12 duplas: resolução AUTOMÁTICA (bye, superior pow2 limpa) ──');
-
+console.log('── CASO CANÔNICO: 12 duplas (o que o dono validou) ──');
 (function () {
   const t = mkT(12);
   const r = dc.drawInitial(t, {});
@@ -58,43 +70,81 @@ console.log('── Dupla Eliminatória 12 duplas: resolução AUTOMÁTICA (bye,
   ok(/dupla/i.test(t.format), 'o mock compilou como DUPLA ELIMINATÓRIA (não Simples): ' + t.format);
 
   const e = estrutura(t);
-  const sup = e.upper || [];
-  const inf = e.lower || [];
+  // Superior 6/4/2/1: a R2 é NORMALIZADA até a potência de 2 — os 6 vencedores da R1
+  // + 2 repescados = 8 entrantes → 4 jogos, e daí em diante halving puro. (Era 6/3/2/1
+  // antes da normalização; o dono canonizou o padrão da R2 em 27/jul.)
+  ok(jogosDe(e, 'upper') === '6/4/2/1', 'superior = 6/4/2/1, veio ' + jogosDe(e, 'upper'));
+  ok(jogosDe(e, 'lower') === '2/3/3/2/1', 'inferior = 2/3/3/2/1, veio ' + jogosDe(e, 'lower'));
+  ok(jogosDe(e, 'grand') === '1', 'grande final = 1 jogo, veio ' + jogosDe(e, 'grand'));
 
-  // ── chave SUPERIOR: pow2 LIMPA (16) → 8 → 4 → 2 → 1 (12 duplas, 4 byes na R1)
-  ok(sup.length === 4, 'superior tem 4 rodadas (8/4/2/1), tem ' + sup.length);
-  ok(sup[0] && sup[0].jogos === 8, '1ª sup = 8 jogos (pow2 16, 12 duplas + 4 byes), veio ' + (sup[0] && sup[0].jogos));
-  ok(sup[1] && sup[1].jogos === 4, '2ª sup = 4 jogos (halving), veio ' + (sup[1] && sup[1].jogos));
-  ok(sup[2] && sup[2].jogos === 2, '3ª sup = 2 jogos, veio ' + (sup[2] && sup[2].jogos));
-  ok(sup[3] && sup[3].jogos === 1, '4ª sup = 1 jogo (final da superior), veio ' + (sup[3] && sup[3].jogos));
+  // A chave SUPERIOR sai sem folga nenhuma (é o que a normalização da R2 garante). A
+  // inferior segue a recorrência normal, então ali ainda pode haver folga.
+  const byeSup = (e.upper || []).reduce((x, r2) => x + r2.bye, 0);
+  ok(byeSup === 0, '12 duplas: ZERO folga na chave SUPERIOR, veio ' + byeSup);
+  ok(plano(12, 'dupla').repR2 === 2, '12 duplas: 2 repescados completam a R2 até 8');
 
-  // ── ZERO repescado (repFill) na chave inteira: a estrutura nova usa BYE, não repescagem
-  const totalRep = Object.keys(e).reduce((s, b) => s + e[b].reduce((x, r) => x + r.repescados, 0), 0);
-  ok(totalRep === 0, 'NENHUM repescado (byes, não repescagem) na chave inteira, veio ' + totalRep);
-
-  // ── inferior existe e reduz a 1 (motor único), com a superior alimentando os merges
-  ok(inf.length >= 1 && inf[inf.length - 1].jogos === 1, 'inferior fecha em 1 jogo (campeão da inferior)');
-
-  // ── PLAYOUT completo: sem travar, com 1 campeão na grande final
-  let g = 0;
-  while (g++ < 4000) {
-    const p = all(t).filter(m => m && !m.winner && !m.isBye && !m.isSitOut && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2));
-    if (!p.length) break;
-    const m = p[0]; m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = g % 5;
-    try { W._advanceWinner(t, m); } catch (e2) {}
-    if (W._resolveRepFills) { try { W._resolveRepFills(t); } catch (e2) {} }
-  }
-  const travados = all(t).filter(m => !m.winner && !m.isBye && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2));
-  ok(travados.length === 0, 'nenhum jogo travado no fim (' + travados.length + ')');
-  const gf = all(t).filter(m => m.bracket === 'grand');
-  ok(gf.length >= 1 && gf[gf.length - 1].winner, 'grande final coroou um campeão');
+  const disputados = all(t).filter(m => !m.isThirdPlace && !m.isExtra && !m.condicional && !m.isBye).length;
+  ok(disputados === 24, '12 duplas: 24 jogos de verdade, veio ' + disputados);
 
   if (fail) {
     console.log('\nESTRUTURA MEDIDA:');
-    Object.keys(e).sort().forEach(b => console.log('  ' + b + ': ' + e[b].map((r, i) => 'R' + (i + 1) + '=' + r.jogos + 'j/' + r.repescados + 'rep').join('  ')));
+    Object.keys(e).sort().forEach(b => console.log('  ' + b + ': ' + e[b].map((x, i) => 'R' + (i + 1) + '=' + x.jogos + 'j/' + x.rep + 'rep/' + x.bye + 'bye').join('  ')));
   }
 })();
 
+console.log('── PARIDADE CF ↔ motor: a chave emitida bate com plano(N) rodada a rodada, N=4..24 ──');
+// Se este bloco quebrar, o vendor está fora de sincronia com js/views/ — o sorteio de
+// produção passaria a desenhar uma chave que nenhum teste do app descreve.
+for (let N = 4; N <= 24; N++) {
+  const t = mkT(N);
+  const r = dc.drawInitial(t, {});
+  if (!(r && r.ok)) { ok(false, 'N=' + N + ': sorteio recusado (' + ((r && r.reason) || '?') + ')'); continue; }
+  const e = estrutura(t);
+  const p = plano(N, 'dupla');
+  const supEsp = p.rodadas.filter(x => x.fase === 'VC').map(x => x.jogos).join('/');
+  const infEsp = p.rodadas.filter(x => x.fase === 'PD').map(x => x.jogos).join('/');
+  ok(jogosDe(e, 'upper') === supEsp, 'N=' + N + ' superior: CF=' + jogosDe(e, 'upper') + ' vs plano=' + supEsp);
+  ok(jogosDe(e, 'lower') === infEsp, 'N=' + N + ' inferior: CF=' + jogosDe(e, 'lower') + ' vs plano=' + infEsp);
+
+  // jogos REALMENTE disputados = 2N−2+repescagens (a folga não é jogo)
+  const disputados = all(t).filter(m => !m.isThirdPlace && !m.isExtra && !m.condicional && !m.isBye).length;
+  ok(disputados === 2 * N - 2 + p.repescagens + p.repR2,
+    'N=' + N + ': ' + disputados + ' jogos disputados, esperado ' + (2 * N - 2 + p.repescagens + p.repR2) + ' (2N−2+rep+repR2)');
+
+  // a 1ª rodada da SUPERIOR nunca folga — é a posição do último inscrito
+  const supR1 = (e.upper || [])[0];
+  ok(supR1 && supR1.bye === 0, 'N=' + N + ': folga na 1ª superior (proibida — é a vaga do último inscrito)');
+  ok(supR1 && supR1.rep === (N % 2 === 1 ? 1 : 0),
+    'N=' + N + ': 1ª superior deveria ter ' + (N % 2 === 1 ? 1 : 0) + ' repescagem, tem ' + (supR1 && supR1.rep));
+}
+
+console.log('── PLAYOUT: a chave fecha num campeão, sem travar e sem duplicar ninguém ──');
+for (let N = 4; N <= 24; N++) {
+  const t = mkT(N);
+  if (!dc.drawInitial(t, {}).ok) continue;
+  W.AppStore.tournaments = [t];
+  let g = 0, erro = null;
+  while (g++ < 4000) {
+    const self = all(t).find(m => m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2) && String(m.p1) === String(m.p2));
+    if (self) { erro = 'AUTO-CONFRONTO em ' + self.id + ' (' + self.p1 + ')'; break; }
+    const slots = {};
+    all(t).filter(m => !m.winner).forEach(m => ['p1', 'p2'].forEach(s => { if (!isEmpty(m[s])) (slots[m[s]] = slots[m[s]] || []).push(m.id); }));
+    const dup = Object.keys(slots).find(v => slots[v].length > 1);
+    if (dup) { erro = 'DOUBLE-BOOK: ' + dup + ' em ' + slots[dup].join(','); break; }
+    const p = all(t).filter(m => m && !m.winner && !m.isBye && !m.isSitOut && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2));
+    if (!p.length) break;
+    const m = p[0]; m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = g % 5;
+    try { W._advanceWinner(t, m); } catch (e2) { erro = 'advanceWinner: ' + e2.message; break; }
+    if (W._resolveRepFills) { try { W._resolveRepFills(t); } catch (e2) {} }
+  }
+  ok(!erro, 'N=' + N + ': playout limpo (' + (erro || 'ok') + ')');
+  if (erro) continue;
+  const travados = all(t).filter(m => !m.winner && !m.isBye && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2));
+  ok(travados.length === 0, 'N=' + N + ': nenhum jogo travado no fim (' + travados.length + ')');
+  const gf = all(t).filter(m => m.bracket === 'grand');
+  ok(gf.length >= 1 && gf[gf.length - 1].winner, 'N=' + N + ': grande final coroou um campeão');
+}
+
 console.log('\n' + (fail === 0 ? '✅ dupla-elim-minimal-tree: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
-if (fails.length) { console.error('\nFALHAS:'); fails.forEach(f => console.error('  ✗ ' + f)); }
+if (fails.length) { console.error('\nFALHAS:'); fails.slice(0, 20).forEach(f => console.error('  ✗ ' + f)); }
 process.exit(fail > 0 ? 1 : 0);
