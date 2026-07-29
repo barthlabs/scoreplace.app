@@ -400,6 +400,11 @@ const SUITES = [
   // Item 7: janelas do lembrete de torneio (7d/2d/0d) ESPELHAM o cliente; data-only BRT.
   // Se o servidor contar em UTC ou disparar em dia errado, sai fora. (Entrega = emulador.)
   'functions/test-reminder-core.js',
+  // Convite de co-organização/transferência → CF. TRAVA a regressão real (Sentry
+  // SCOREPLACE-WEB-6R): o aceite MUDA adminUids, o que estourava a regra antiga e dava
+  // permission-denied em TODO convidado com conta. Também trava a identidade SÓ-UID e a
+  // escalada da transferência (terceiro assumindo organização alheia).
+  'functions/test-cohost-core.js',
 ];
 
 let failed = [];

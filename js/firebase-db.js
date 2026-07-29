@@ -638,6 +638,16 @@ window.FirestoreDB = {
       changeRule: !!(opts && opts.changeRule)
     });
   },
+  // Responder convite de co-organização/transferência. CF-ONLY: o cliente não consegue
+  // gravar (o aceite muda adminUids e a regra do participante não cobre) e a CF é quem
+  // valida que o destinatário da transferência é quem aceita. Identidade só por uid.
+  async respondHostInvite(tournamentId, inviteType, action) {
+    return await this._callFn('respondHostInvite', {
+      tournamentId: String(tournamentId),
+      inviteType: String(inviteType || ''),
+      action: String(action || '')
+    });
+  },
   async splitPair(tournamentId, opts) {
     return await this._callFn('splitPair', {
       tournamentId: String(tournamentId),

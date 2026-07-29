@@ -54,11 +54,13 @@ service cloud.firestore {
     // Participante aceita convite de co-organização (muda seu próprio status
     // de 'pending' para 'active' em coHosts + atualiza adminEmails).
     // Só permitido para quem já é participante do torneio (memberUids).
-    function isCoHostAcceptanceDiff() {
-      return isTournamentParticipant(resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['coHosts', 'adminEmails']);   // v1.2.2: memberEmails saiu do schema
-    }
+    // REMOVIDA (jul/2026) — aceitar/recusar convite virou CF (respondHostInvite, Admin SDK).
+    // Duas razões: (1) esta regra NUNCA deixou o aceite passar — promover o co-host a
+    // 'active' muda `adminUids`, que não estava no hasOnly, e quem aceita ainda não é
+    // admin → permission-denied determinístico (Sentry SCOREPLACE-WEB-6R); (2) ela era um
+    // caminho de AUTO-PROMOÇÃO: qualquer participante podia escrever coHosts+adminEmails
+    // e virar organizador sem convite nenhum — não havia checagem de convite pendente.
+    // A CF casa o convite pelo UID de quem chama. Ver functions/cohost-core.js.
 
     // Participant of the tournament.
     // v1.2.2: UID ONLY. O fallback por memberEmails saiu — participante é quem está em
@@ -209,7 +211,6 @@ service cloud.firestore {
           || isTournamentAdminByUid(resource.data)
           || isEnrollmentOnlyDiff()
           || (isTournamentParticipant(resource.data) && isParticipantBracketDiff())
-          || isCoHostAcceptanceDiff()
         );
 
       // Delete: admins only.

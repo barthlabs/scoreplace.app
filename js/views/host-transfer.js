@@ -7,6 +7,18 @@
   var CROWN_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
   window._CROWN_SVG = CROWN_SVG;
 
+  // Responder convite de co-organização/transferência = CF respondHostInvite (Admin SDK).
+  // O cliente NUNCA grava isso: o aceite muda adminUids e a regra do participante não
+  // cobre (era permission-denied determinístico). Devolve {applied, tournamentName,
+  // orgUid, fromUid} pra camada de notificação abaixo. Ver functions/cohost-core.js.
+  function _respondHostInviteCF(tId, inviteType, action) {
+    if (!(window.FirestoreDB && typeof window.FirestoreDB.respondHostInvite === 'function')) {
+      return Promise.reject(new Error('sem conexão com o servidor'));
+    }
+    return window.FirestoreDB.respondHostInvite(String(tId), String(inviteType), String(action))
+      .then(function (res) { return (res && res.data) ? res.data : res; });
+  }
+
   // ─── Open host transfer dialog ────────────────────────────────────────────
   window._openHostTransferDialog = function(participant, tId) {
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
@@ -199,39 +211,20 @@
   window._acceptHostInvite = function(tId, inviteType) {
     var user = window.AppStore.currentUser;
     if (!user) return;
-    // Blindagem v4.0.119: aceitação ATÔMICA pelo portão AppStore.mutate (lê fresco
-    // DENTRO da transação — antes era get()+saveTournament, com janela de lost-update).
-    // Campos p/ notificação são capturados de dentro do mutator (o aceitante pode nem
-    // ter o torneio no AppStore local ainda).
+    // CF-ONLY (jul/2026). O aceite NUNCA foi gravável pelo cliente: promover o co-host a
+    // 'active' muda `adminUids`, e a regra isCoHostAcceptanceDiff só permitia
+    // hasOnly(['coHosts','adminEmails']) — como quem aceita ainda NÃO é admin, o Firestore
+    // recusava com permission-denied em TODO convidado com conta (Sentry SCOREPLACE-WEB-6R).
+    // Agora quem grava é a CF respondHostInvite (Admin SDK), que também exige que o
+    // destinatário da TRANSFERÊNCIA seja quem aceita — antes qualquer participante assumia.
+    // Identidade SÓ por uid. Ver functions/cohost-core.js.
     var _oldOrgUid, _orgRef, _tName = '', _entryFound = false, _applied = false;
-    window.AppStore.mutate(tId, function (ft) {
-      _tName = ft.name || '';
-      if (inviteType === 'transfer' && ft.pendingTransfer) {
-        if (!Array.isArray(ft.coHosts)) ft.coHosts = [];
-        _oldOrgUid = ft.pendingTransfer.fromUid;
-        ft.coHosts.push({ email: ft.organizerEmail, displayName: ft.organizerName, uid: ft.pendingTransfer.fromUid || '', status: 'active', type: 'cohost', invitedAt: new Date().toISOString() });
-        ft.organizerEmail = user.email; ft.organizerName = user.displayName; ft.creatorEmail = user.email;
-        ft.pendingTransfer = null;
-        _applied = true;
-      } else if (inviteType === 'cohost') {
-        if (!Array.isArray(ft.coHosts)) ft.coHosts = [];
-        var entry = ft.coHosts.find(function (ch) {
-          if (ch.status !== 'pending') return false;
-          if (user.uid && ch.uid && ch.uid === user.uid) return true;
-          if (user.email && ch.email && ch.email === user.email) return true;
-          return false;
-        });
-        if (entry) {
-          entry.status = 'active';
-          if (!Array.isArray(ft.adminEmails)) ft.adminEmails = [];
-          var ce = user.email || entry.email || '';
-          if (ce && !ft.adminEmails.includes(ce)) ft.adminEmails.push(ce);
-          // v1.2.2: memberEmails saiu — o co-host entra em memberUids (recomputado no save).
-          _orgRef = ft.creatorUid || ft.creatorEmail || ft.organizerEmail;
-          _entryFound = true; _applied = true;
-        }
-      }
-    }).then(function () {
+    _respondHostInviteCF(tId, inviteType, 'accept').then(function (res) {
+      _applied = !!(res && res.applied);
+      _entryFound = _applied;
+      _tName = (res && res.tournamentName) || '';
+      _orgRef = (res && res.orgUid) || '';
+      _oldOrgUid = (res && res.fromUid) || '';
       if (inviteType === 'transfer') {
         if (!_applied) return; // já transferido (idempotência) — nada a notificar
         _notifyByEmail(_oldOrgUid, { type: 'host_invite_accepted', tournamentId: String(tId), tournamentName: _tName, message: (user.displayName || _tH('org.theUser')) + ' ' + _tH('org.acceptedTransfer') + ' "' + _tName + '".', level: 'fundamental' });
@@ -258,20 +251,14 @@
     var user = window.AppStore.currentUser;
     if (!user) return;
     // Blindagem v4.0.119: recusa ATÔMICA pelo portão (lê fresco na transação).
+    // CF-ONLY (jul/2026): mesma via do aceite. Identidade SÓ por uid — a recusa deixa de
+    // casar convite por e-mail. Ver functions/cohost-core.js.
     var _fromUid, _orgRef, _tName = '', _applied = false;
-    window.AppStore.mutate(tId, function (ft) {
-      _tName = ft.name || '';
-      if (inviteType === 'transfer' && ft.pendingTransfer) {
-        _fromUid = ft.pendingTransfer.fromUid;
-        ft.pendingTransfer = null;
-        _applied = true;
-      } else if (inviteType === 'cohost' && Array.isArray(ft.coHosts)) {
-        var before = ft.coHosts.length;
-        // v2.8.79: casa o convite pendente por UID (primário) OU email.
-        ft.coHosts = ft.coHosts.filter(function (ch) { return !(ch.status === 'pending' && ((user.uid && ch.uid && ch.uid === user.uid) || (user.email && ch.email && ch.email === user.email))); });
-        if (ft.coHosts.length !== before) { _orgRef = ft.creatorUid || ft.creatorEmail || ft.organizerEmail; _applied = true; }
-      }
-    }).then(function () {
+    _respondHostInviteCF(tId, inviteType, 'reject').then(function (res) {
+      _applied = !!(res && res.applied);
+      _tName = (res && res.tournamentName) || '';
+      _orgRef = (res && res.orgUid) || '';
+      _fromUid = (res && res.fromUid) || '';
       if (inviteType === 'transfer' && _applied) {
         _notifyByEmail(_fromUid, { type: 'host_invite_rejected', tournamentId: String(tId), tournamentName: _tName, message: (user.displayName || _tH('org.theUser')) + ' ' + _tH('org.rejectedTransfer') + ' "' + _tName + '".', level: 'important' });
         _markInviteNotifsRead(_fromUid, tId, ['host_transfer_sent']);
