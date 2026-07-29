@@ -6,7 +6,7 @@ Plataforma web de gestao de torneios esportivos e board games. App SPA (Single P
 
 > ⚠️ **CONVENÇÃO CRÍTICA — nomes de formato são SÓ EXIBIÇÃO (desde jun/2026, staging):** na tela, "Liga" virou **"Pontos Corridos"** e "Grupos + Eliminatórias" virou **"Fase de Grupos"**. MAS o valor interno `t.format` é INTOCADO de propósito: continua `'Liga'` (legado `'Ranking'`) e `'Fase de Grupos + Eliminatórias'`; os códigos seguem `'liga'`/`'grupos_mata'`; `_isLigaFormat` checa `=== 'Liga'`. **Regra dos dois lados:** falando com o usuário/UI = use os nomes novos; lendo/escrevendo LÓGICA = os valores são AINDA os antigos — NUNCA "consertar" `=== 'Liga'` achando que é resíduo (quebra motor de sorteio/autoDraw/dados). Exibição passa por `window._formatDisplayName(fmt)` (store.js) ou pelas chaves i18n `format.*`. Detalhe na memória `project_format_rename_display_only`.
 
-- **Versao atual:** `1.1.17` (definida em `window.SCOREPLACE_VERSION` no store.js; esquema alinhado às lojas desde a v1.1 — ver memória `project_version_scheme_store_aligned`)
+- **Versao atual:** `1.6` (definida em `window.SCOREPLACE_VERSION` no store.js; esquema alinhado às lojas desde a v1.1 — ver memória `project_version_scheme_store_aligned`)
 - **Convenção de versão (a partir de 30 Abr 2026):** `MAJOR.MINOR.PATCH-channel` no padrão semver. Em fase **beta**, incremento PATCH a cada deploy (`1.0.0-beta` → `1.0.1-beta` → `1.0.2-beta` → ...). MINOR sobe quando há feature significativa nova; MAJOR reservado pra v2.0 (mudanças incompatíveis). Estável: dropar o `-beta` (`1.0.0`).
 - **URL principal:** https://scoreplace.app
 - **GitHub repo:** `rstbarth/scoreplace.app`
@@ -50,6 +50,16 @@ Projeto criado em Março 2026 como **scoreplace.app**. Lançado em beta soft em 
 ### Changelog
 
 > **Nota:** entre v0.8.6 e v0.15.45 foram ~400 version bumps. O bloco abaixo consolida por tema. Para detalhe de uma versão específica, consulte `git log --oneline | grep vX.Y.Z`. **Aviso de esquema:** a partir da v1.1 a numeração foi alinhada às lojas (native), então `1.1.x` é MAIS NOVO que os `1.9.x-beta`/`4.x-beta` legados abaixo.
+
+**v1.6 (29 Jul 2026) — RELEASE DE LOJA UNIFICADA (web + Apple + Google), consolidando o ciclo 1.5.1→1.5.36**
+- **Bump unificado nos três alvos** conforme `project_version_scheme_store_aligned`: web (`SCOREPLACE_VERSION='1.6'`, `version.txt`, `CACHE_NAME='scoreplace-v1.6'`, cache-buster do store.js, `npm run prerender`), Apple (`MARKETING_VERSION=1.6`, `CURRENT_PROJECT_VERSION=11`) e Google (`versionName "1.6"` nos DOIS gradles; `:app` versionCode 18, `:wear` versionCode 21). Versões nativas vivem no worktree `native/v1-submit` — nunca buildar do main.
+- **Árvore mínima de eliminatória** (1.5.6/21/24/25): a chave nasce do tamanho real do torneio em vez de inflar até potência de 2; 12 duplas = 6/3/2/1 e o último inscrito nunca folga. A 2ª rodada em diante fecha redonda. Ver memória `project_minimal_elim_formula_canon`.
+- **Repescagem canonizada** (1.5.30/32/33/34/35/36): vaga fica VAZIA até a rodada inteira fechar; repescado = melhor derrotado pelos critérios de desempate DO ORGANIZADOR (não só no empate); a chave se reconcilia ao ser aberta. Auto-confronto resolvido na 1.5.21 (raiz: `reconciliar` preservava o `winner` de um BYE) + guardrail `_repechage-invariant.js`.
+- **Entrada tardia** (1.5.1–1.5.5, 1.5.10, 1.5.13): dupla/solo tardio gera jogo na R1 superior E o pouso na inferior; presença pós-sorteio sempre gera confronto (disparo enfileirado); nome da entrada tardia curado no mesmo tick (fim do "#10").
+- **Duplas sem mistura** (1.5.8/14/26/27/28): ninguém entra em duas duplas; Desfazer dupla parou de falhar calado (+ spinner canônico); placeholder e quem entra pela chave contam como inscrito via fonte única.
+- **Chave mais limpa** (1.5.17/18/19/23/29): BYE nunca vira card, nome da rodada conta só jogos reais, avanço de fase não pergunta "Ajuste de Chaveamento", "Rodada Extra (manual)" some na eliminatória.
+- **Relógio + sandbox** (1.5.7): ponte relógio↔celular com BPM/treino; sandbox de dev deixou de vazar em `memberUids`.
+- **UI** (1.5.9/11/12/15/16/20/22): faixa "N equipes para novo confronto" sticky abaixo da busca; fim do card fantasma no arraste interrompido; auto-scroll do "meu jogo" sem cortar o topo.
 
 **v1.1.16–1.1.17 (14 Jul 2026) — Casual lembra config + check-in/GPS por modalidade + cor "autorizado" + W.O. co-hosts**
 - **Partida casual persiste a última config** (bracket-ui.js): `scoreplace_casual_last`/`_prefs` deixam de ser apagados no beta-cleanup (store.js) — são preferências, não stats — e passam a persistir também ao INICIAR a partida (não só no clique do seletor). Fim do "abre em Pickleball em vez do último Beach Tennis".
