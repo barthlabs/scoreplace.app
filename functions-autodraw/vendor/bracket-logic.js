@@ -1192,7 +1192,13 @@ function _advanceWinner(t, completedMatch) {
         if (fromBye) next.p2FromBye = true;
       } else {
         // Standard advancement: fill first available TBD slot
-        if (!next.p1 || next.p1 === 'TBD') {
+        if ((!next.p1 || next.p1 === 'TBD') && !next.p1AguardaMelhor) {
+          next.p1 = winner; _setSlot(next, 'p1', _winUids, _winObj);
+          if (fromBye) next.p1FromBye = true;
+        } else if ((!next.p2 || next.p2 === 'TBD') && !next.p2AguardaMelhor) {
+          next.p2 = winner; _setSlot(next, 'p2', _winUids, _winObj);
+          if (fromBye) next.p2FromBye = true;
+        } else if (!next.p1 || next.p1 === 'TBD') {
           next.p1 = winner; _setSlot(next, 'p1', _winUids, _winObj);
           if (fromBye) next.p1FromBye = true;
         } else if (!next.p2 || next.p2 === 'TBD') {
@@ -1226,7 +1232,63 @@ function _advanceWinner(t, completedMatch) {
   if (completedMatch.loserNextMatchId) {
     const lnMatch = _findMatch(t, completedMatch.loserNextMatchId);
     if (lnMatch) {
-      if (completedMatch.loserNextSlot === 'p1') { lnMatch.p1 = loser; _setSlot(lnMatch, 'p1', _loseUids, _loseObj); }
+      // ── A VAGA DE REPESCAGEM NÃO SE PREENCHE ANTES DA RODADA FECHAR (v1.5.35) ──────
+      // Regra do dono: "tem que esperar a rodada fechar. não tem que pôr ninguém antes
+      // disso lá, para depois corrigir. fechou a rodada, aí vê quem foi o melhor seguindo
+      // os critérios de desempate e daí sim coloca lá. não antes."
+      //
+      // Quem é DONO da vaga é o descritor `repFill` (phases-engine): ele só resolve quando
+      // TODOS os jogos da rodada-fonte têm vencedor, ordena os derrotados (saldo → pontos →
+      // ordem dos jogos) e escreve UMA vez, marcando `FromRepechage`.
+      // O furo era esta aresta: ela despeja o perdedor DESTE jogo na vaga no instante em que
+      // o jogo fecha — antes de existir "melhor". Foi assim que o dono viu, na Ouro, os
+      // perdedores do 1º, 2º e 3º jogos (6-2, 6-1, 6-3) ocupando as três vagas.
+      //
+      // Enquanto houver descritor PENDENTE pra este slot, a aresta não escreve: a vaga fica
+      // vazia e marcada (`AguardaMelhor` ⇒ card mostra "A definir"). Só quando a rodada fecha
+      // o `_resolveRepFills` põe o melhor derrotado ali. Nada de preencher e corrigir depois.
+      //
+      // A condição é o descritor pendente — NÃO "qualquer slot de repescagem". Esvaziar por
+      // flag `FromRepechage` apaga vaga JÁ resolvida (o descritor é consumido e ninguém
+      // repõe) e a chave para de coroar campeão: 284 NOCHAMP no guardrail.
+      // SÓ NA ELIMINATÓRIA SIMPLES a vaga pode ficar vazia. Na DUPLA o ocupante que a aresta
+      // traz não é só "provisório": aquele slot é TAMBÉM o pouso do perdedor (o desenho já
+      // reduziu a descida), e a correção acontece por SWAP simétrico — o melhor sobe e quem
+      // sai vai exatamente pro lugar de onde o outro veio. Deixar a vaga vazia lá apaga a
+      // descida: o perdedor não pousa em lugar nenhum, a chave inferior fica com slots que
+      // ninguém alimenta e não há campeão (284 NOCHAMP no guardrail, medido). Na simples o
+      // perdedor é ELIMINADO — não há pouso a preservar, então a vaga fica vazia até a
+      // rodada fechar, que é o caso das linhas Ouro/Prata da Confra.
+      var _todosM = ((typeof window !== 'undefined' && typeof window._collectAllMatches === 'function')
+        ? (window._collectAllMatches(t) || []) : (t.matches || []));
+      var _temInferior = _todosM.some(function (_m) { return _m && (_m.bracket === 'lower' || _m.bracket === 'grand'); });
+      // Chave de CRESCIMENTO com prefixo congelado (`_sig` = 'C<K>|…') é montada por outro
+      // construtor e `_reassignBestLosersToRepechage` se recusa a reavaliá-la de propósito.
+      // Como ninguém preencheria a vaga depois, ali ela NÃO pode ficar vazia (52 falhas em
+      // growth-frozen-prefix: a chave não fechava). [[project_pow2_growth_frozen_prefix]]
+      var _congelada = _todosM.some(function (_m) { return _m && /^C\d+\|/.test(String(_m._sig || '')); });
+      var _lnSlot = completedMatch.loserNextSlot
+        || ((!lnMatch.p1 || lnMatch.p1 === 'TBD') ? 'p1' : ((!lnMatch.p2 || lnMatch.p2 === 'TBD') ? 'p2' : null));
+      // Dois desenhos produzem a MESMA vaga: (a) descritor `repFill` pendente (phases-engine,
+      // dupla/tardio) e (b) slot já marcado `FromRepechage` no BUILD, vazio, numa rodada
+      // POSTERIOR à fonte — que é o desenho da normalização da Ouro/Prata (R1 13 jogos → R2
+      // de 16: os jogos 1,2,3 têm `loserNextSlot` apontando pras 3 vagas da R2).
+      var _vagaPendente = !!_lnSlot && (
+        (Array.isArray(lnMatch.repFill) && lnMatch.repFill.some(function (rf) { return rf && rf.slot === _lnSlot; }))
+        || (lnMatch[_lnSlot + 'FromRepechage']
+            && typeof lnMatch.round === 'number' && typeof completedMatch.round === 'number'
+            && lnMatch.round > completedMatch.round
+            && !_temInferior && !_congelada)
+      );
+      if (_vagaPendente) {
+        lnMatch[_lnSlot + 'AguardaMelhor'] = true;
+        if (lnMatch[_lnSlot] && lnMatch[_lnSlot] !== 'TBD') {
+          lnMatch[_lnSlot] = 'TBD';
+          if (_lnSlot === 'p1') { lnMatch.team1Obj = null; lnMatch.team1Uids = []; lnMatch.p1Uid = null; }
+          else { lnMatch.team2Obj = null; lnMatch.team2Uids = []; lnMatch.p2Uid = null; }
+        }
+      }
+      else if (completedMatch.loserNextSlot === 'p1') { lnMatch.p1 = loser; _setSlot(lnMatch, 'p1', _loseUids, _loseObj); }
       else if (completedMatch.loserNextSlot === 'p2') { lnMatch.p2 = loser; _setSlot(lnMatch, 'p2', _loseUids, _loseObj); }
       else {
         if (!lnMatch.p1 || lnMatch.p1 === 'TBD') { lnMatch.p1 = loser; _setSlot(lnMatch, 'p1', _loseUids, _loseObj); }
@@ -1620,7 +1682,7 @@ window._reassignBestLosersToRepechage = function (t) {
       // inferior fica com um slot que ninguém alimenta (medido em `growth-frozen-prefix`:
       // a chave parava antes da grande final). Na Simples o perdedor é eliminado e não
       // há pouso a preservar — ali a substituição direta é segura.
-      if (!origem && temInferior) return;
+      if (!_vazio(atual) && !origem && temInferior) return;
       if (!_vazio(atual)) delete jaRepescado[String(atual)];
       jaRepescado[String(quer)] = 1;
       s.m[s.slot] = quer;

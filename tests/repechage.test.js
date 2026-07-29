@@ -111,16 +111,61 @@ console.log('== 2) o perdedor do jogo-fonte CHEGA na vaga de repescagem (motor r
   ok(vagas.length >= 1 && vagas.length <= fontes.length,
     `N=${n}: ${vagas.length} vaga(s) pra ${fontes.length} fonte(s)`);
 
-  // joga o jogo-fonte e confere que o PERDEDOR aterrissou na vaga
+  // ── QUEM ATERRISSA NA VAGA, E QUANDO (regra do dono, v1.5.35) ────────────────────
+  // A vaga da SOBRA (rodada ímpar) mora na PRÓPRIA rodada-fonte e é estrutural: enfrenta o
+  // perdedor daquele jogo e enche na hora. A vaga da NORMALIZAÇÃO mora na rodada SEGUINTE e
+  // NÃO pode receber ninguém antes de a rodada fechar — "não tem que pôr ninguém antes disso
+  // lá, para depois corrigir". Fechada a rodada, entra o MELHOR derrotado.
+  var _vazio = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
+  var mesmaRodada = fontes.filter(function (s) {
+    var a = t.matches.filter(function (m) { return m.id === s.loserNextMatchId; })[0];
+    return a && a.round === s.round;
+  });
+  var rodadaSeguinte = fontes.filter(function (s) {
+    var a = t.matches.filter(function (m) { return m.id === s.loserNextMatchId; })[0];
+    return a && a.round > s.round;
+  });
   fontes.forEach(function (src) {
     var alvo = t.matches.filter(function (m) { return m.id === src.loserNextMatchId; })[0];
     ok(!!alvo, `N=${n}: jogo-fonte ${src.id} aponta pra vaga inexistente ${src.loserNextMatchId}`);
+  });
+
+  // 1 resultado por vez: a vaga da rodada seguinte tem de continuar VAZIA
+  mesmaRodada.concat(rodadaSeguinte).forEach(function (src, i) {
+    if (src.winner) return;
+    var alvo = t.matches.filter(function (m) { return m.id === src.loserNextMatchId; })[0];
     if (!alvo) return;
     var perdedor = src.p2;
-    src.winner = src.p1;
+    src.winner = src.p1; src.scoreP1 = 6; src.scoreP2 = i % 5;
     W._advanceWinner(t, src);
-    ok(alvo.p1 === perdedor || alvo.p2 === perdedor,
-      `N=${n}: perdedor de ${src.id} (${perdedor}) não chegou na vaga ${alvo.id} (${alvo.p1} x ${alvo.p2})`);
+    if (alvo.round === src.round) {
+      ok(alvo.p1 === perdedor || alvo.p2 === perdedor,
+        `N=${n}: vaga da SOBRA (${alvo.id}) recebe o perdedor de ${src.id} na hora (${alvo.p1} x ${alvo.p2})`);
+    }
+  });
+  rodadaSeguinte.forEach(function (src) {
+    var alvo = t.matches.filter(function (m) { return m.id === src.loserNextMatchId; })[0];
+    if (!alvo) return;
+    var rodadaAberta = t.matches.some(function (m) {
+      return m.round === src.round && !m.winner && !m.isBye && !m.isSitOut && !_vazio(m.p1) && !_vazio(m.p2);
+    });
+    if (!rodadaAberta) return;   // já fechou nesta passada — nada a exigir aqui
+    var ocupou = (alvo.p1 === src.p2 || alvo.p2 === src.p2);
+    ok(!ocupou, `N=${n}: com a rodada ABERTA, ${src.p2} NÃO pode estar na vaga ${alvo.id} (${alvo.p1} x ${alvo.p2})`);
+  });
+
+  // fecha a rodada-fonte inteira → agora a vaga tem de estar preenchida
+  var rodadasFonte = {};
+  rodadaSeguinte.forEach(function (s) { rodadasFonte[s.round] = 1; });
+  Object.keys(rodadasFonte).forEach(function (r) {
+    t.matches.filter(function (m) { return String(m.round) === String(r) && !m.winner && !m.isBye && !m.isSitOut && !_vazio(m.p1) && !_vazio(m.p2); })
+      .forEach(function (m, i) { m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = i % 5; W._advanceWinner(t, m); });
+  });
+  rodadaSeguinte.forEach(function (src) {
+    var alvo = t.matches.filter(function (m) { return m.id === src.loserNextMatchId; })[0];
+    if (!alvo || alvo.winner) return;
+    var cheia = ['p1', 'p2'].some(function (sl) { return alvo[sl + 'FromRepechage'] && !_vazio(alvo[sl]); });
+    ok(cheia, `N=${n}: fechada a rodada, a vaga ${alvo.id} tem repescado (${alvo.p1} x ${alvo.p2})`);
   });
 });
 

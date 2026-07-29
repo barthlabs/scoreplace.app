@@ -243,6 +243,54 @@ console.log('\n── a chave se corrige AO ABRIR, sem lançar mais um resultado
   ok(W._reassignBestLosersToRepechage(t) === 0, 'reabrir a chave é no-op (idempotente)');
 })();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// v1.5.35 — A VAGA FICA VAZIA ATÉ A RODADA FECHAR.
+//
+// Regra do dono (28/jul): "tem que esperar a porra da rodada fechar. não tem que pôr
+// ninguém antes disso lá, para depois corrigir. fechou a rodada, aí vê quem foi o melhor
+// seguindo os critérios de desempate e daí sim coloca lá. não antes."
+//
+// Antes, a aresta `loserNextMatchId` despejava o perdedor do jogo-fonte na vaga no instante
+// em que aquele jogo fechava — na Ouro do SB isso pôs os perdedores do 1º, 2º e 3º jogos
+// (6-2, 6-1, 6-3) nas três vagas, e a correção vinha só depois. Agora a aresta não escreve
+// enquanto a vaga estiver pendente: fica vazia e marcada (card = "A definir").
+console.log('\n── a vaga fica VAZIA enquanto a rodada corre (26 duplas, 13 jogos) ──');
+(function () {
+  const t = mk(26, 'tVazia');
+  const r1 = r1De(t);
+  ok(r1.length === 13, '13 jogos na R1 (got ' + r1.length + ')');
+  const vagas = [];
+  t.matches.forEach((m) => ['p1', 'p2'].forEach((sl) => {
+    if (m[sl + 'FromRepechage'] && m.round > r1[0].round) vagas.push({ m: m, sl: sl });
+  }));
+  ok(vagas.length > 0, 'existem vagas de normalização (got ' + vagas.length + ')');
+  const vazio = (v) => !v || v === 'TBD' || /a definir/i.test(String(v));
+  ok(vagas.every((v) => vazio(v.m[v.sl])), 'no sorteio as vagas nascem vazias');
+
+  // 1 resultado: a vaga NÃO pode receber ninguém
+  const m0 = r1[0]; m0.winner = m0.p1; m0.scoreP1 = 6; m0.scoreP2 = 2; m0.resultAt = 1;
+  W._advanceWinner(t, m0);
+  ok(vagas.every((v) => vazio(v.m[v.sl])),
+    'com 1 resultado a vaga continua VAZIA (o perdedor ' + m0.p2 + ' NÃO entra)');
+  ok(vagas.some((v) => v.m[v.sl + 'AguardaMelhor']), 'a vaga fica marcada como aguardando');
+
+  // metade da rodada: ainda vazia
+  r1.slice(1, 7).forEach((m, i) => { m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = 2; m.resultAt = i + 2; W._advanceWinner(t, m); });
+  ok(vagas.every((v) => vazio(v.m[v.sl])), 'na metade da rodada a vaga continua VAZIA');
+
+  // fecha: o melhor derrotado (6-5, jogo 10) entra
+  r1.forEach((m, i) => {
+    if (m.winner) return;
+    m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = (i === 9 ? 5 : (i === 8 || i === 10 ? 4 : 2)); m.resultAt = i + 2;
+    W._advanceWinner(t, m);
+  });
+  ok(vagas.every((v) => !v.m[v.sl + 'AguardaMelhor']), 'fechada a rodada, a marca sai');
+  const ocup = vagas.map((v) => v.m[v.sl]);
+  ok(ocup.every((x) => !vazio(x)), 'fechada a rodada, as vagas estão preenchidas: [' + ocup.join(', ') + ']');
+  ok(ocup.indexOf(r1[9].p2) !== -1, 'o MELHOR derrotado (6-5, jogo 10) ocupa uma vaga');
+  ok(ocup.indexOf(r1[0].p2) === -1, 'o perdedor do 1º jogo (6-2) NÃO ocupa vaga');
+})();
+
 // SOURCE: o render TEM de chamar a reavaliação — é isso que quebrava no código antigo.
 console.log('\n── renderBracket chama a reavaliação (source) ──');
 (function () {
