@@ -2016,7 +2016,26 @@
         // interno é invisível e no pareamento 1×N contradiz a leitura natural (o jogo 1 junta o
         // 1º sorteado com o ÚLTIMO). Critério auditável > critério interno. Seed fica de último
         // recurso teórico.
-        losers.sort(function (a, b) { return (b.saldo - a.saldo) || (b.score - a.score) || (a.ord - b.ord) || (a.seed - b.seed); });
+        // v1.5.36: CRITÉRIO DO ORGANIZADOR MANDA em toda vaga de repescagem (regra do dono:
+        // "o ranking dos derrotados considerando os critérios de desempate"). O comparador
+        // saldo→pontos→ordem vira fallback/desempate — mantém o comportamento onde os
+        // critérios não distinguem e a ordem auditável dos jogos como último recurso.
+        var _posCrit = null;
+        if (typeof window._rankLosersByCriteria === 'function') {
+          try {
+            var _nomesOrd = losers.slice().sort(function (a, b) { return a.ord - b.ord; }).map(function (l) { return String(l.name); });
+            var _rkd = window._rankLosersByCriteria(t, _nomesOrd);
+            _posCrit = {}; _rkd.forEach(function (n, i) { _posCrit[String(n)] = i; });
+          } catch (e) { _posCrit = null; }
+        }
+        losers.sort(function (a, b) {
+          if (_posCrit) {
+            var pa = (_posCrit[String(a.name)] != null) ? _posCrit[String(a.name)] : 9e9;
+            var pb = (_posCrit[String(b.name)] != null) ? _posCrit[String(b.name)] : 9e9;
+            if (pa !== pb) return pa - pb;
+          }
+          return (b.saldo - a.saldo) || (b.score - a.score) || (a.ord - b.ord) || (a.seed - b.seed);
+        });
         var pick = losers[slot.rank];
         if (pick && pick.name) {
           m[slot.slot] = pick.name;

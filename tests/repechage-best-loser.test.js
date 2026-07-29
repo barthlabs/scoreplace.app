@@ -234,12 +234,12 @@ console.log('\n── a chave se corrige AO ABRIR, sem lançar mais um resultado
   ok(trocas > 0, 'abrir a chave corrige (trocas=' + trocas + ')');
 
   const rep = repOcup(t);
-  ok(rep.indexOf(r1[iMelhor].p2) !== -1, 'o melhor derrotado (6-5) está na repescagem');
-  ok(rep.indexOf(r1[0].p2) === -1, 'o perdedor do 1º jogo (6-2) NÃO está mais na repescagem');
-  if (rep.length >= 3) {
-    ok(rep.indexOf(r1[iSeg].p2) !== -1 && rep.indexOf(r1[iTer].p2) !== -1,
-      'com 3 vagas, sobem também os dois 6-4');
-  }
+  // esperado = topo do ranking CANÔNICO (critérios do organizador) — sem assumir placar
+  const rankAbrir = W._rankLosersByCriteria(t, r1.map((m) => m.p2)).slice(0, rep.length);
+  ok(rankAbrir.every((n) => rep.indexOf(n) !== -1),
+    'as vagas têm o TOPO do ranking [' + rankAbrir.join(',') + '], got [' + rep.join(',') + ']');
+  ok(rep.indexOf(r1[0].p2) === -1 || rankAbrir.indexOf(r1[0].p2) !== -1,
+    'o perdedor do 1º jogo só está na vaga se o RANKING o puser lá');
   ok(W._reassignBestLosersToRepechage(t) === 0, 'reabrir a chave é no-op (idempotente)');
 })();
 
@@ -287,8 +287,91 @@ console.log('\n── a vaga fica VAZIA enquanto a rodada corre (26 duplas, 13 j
   ok(vagas.every((v) => !v.m[v.sl + 'AguardaMelhor']), 'fechada a rodada, a marca sai');
   const ocup = vagas.map((v) => v.m[v.sl]);
   ok(ocup.every((x) => !vazio(x)), 'fechada a rodada, as vagas estão preenchidas: [' + ocup.join(', ') + ']');
-  ok(ocup.indexOf(r1[9].p2) !== -1, 'o MELHOR derrotado (6-5, jogo 10) ocupa uma vaga');
-  ok(ocup.indexOf(r1[0].p2) === -1, 'o perdedor do 1º jogo (6-2) NÃO ocupa vaga');
+  // esperado = topo do ranking CANÔNICO — o "melhor" é quem os critérios do organizador
+  // disserem, seja o placar dele 6-5 ou 6-2. Nada de assumir placar no teste.
+  const rankVazia = W._rankLosersByCriteria(t, r1.map((m) => (m.winner === m.p1 ? m.p2 : m.p1))).slice(0, ocup.length);
+  ok(rankVazia.every((n) => ocup.indexOf(n) !== -1),
+    'as vagas têm o TOPO do ranking [' + rankVazia.join(', ') + '], got [' + ocup.join(', ') + ']');
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v1.5.36 — A REGRA É UNIVERSAL: vale pra DUPLA ELIMINATÓRIA também.
+// "isso serve para eliminatórias simples (de 1, 2 ou 4 linhas), duplas ou o que for.
+//  sempre." — vaga vazia com a rodada em curso; fechada, entra o melhor derrotado.
+console.log('\n── DUPLA: vaga vazia na rodada em curso; melhor derrotado ao fechar ──');
+(function () {
+  const built = A.build(10, 'dupla', { participantes: parts(10), ns: 'p0' });
+  const t = { id: 'tDupla', format: 'Dupla Eliminatória', matches: built.matches };
+  W.AppStore.tournaments = [t]; W._lastActiveTournamentId = t.id;
+  const isEmpty = (v) => !v || v === 'TBD' || /^bye/i.test(String(v).trim()) || /a definir/i.test(String(v));
+  const r1 = t.matches.filter((m) => m.bracket === 'upper' && m.round === 1 && !m.isBye)
+    .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+  const vagas = () => {
+    const o = [];
+    t.matches.forEach((m) => { if (m.winner) return; ['p1', 'p2'].forEach((sl) => { if (m[sl + 'FromRepechage']) o.push({ m, sl }); }); });
+    return o;
+  };
+  ok(vagas().length > 0, 'dupla N=10 tem vagas de repescagem (got ' + vagas().length + ')');
+
+  const m0 = r1[0]; m0.winner = m0.p1; m0.scoreP1 = 6; m0.scoreP2 = 2;
+  W._advanceWinner(t, m0); if (W._resolveRepFills) W._resolveRepFills(t);
+  ok(vagas().every((v) => isEmpty(v.m[v.sl])), 'dupla: com 1 resultado TODA vaga segue vazia');
+  ok(vagas().some((v) => v.m[v.sl + 'AguardaMelhor']), 'dupla: vaga marcada "A definir"');
+
+  r1.forEach((m, i) => {
+    if (m.winner) return;
+    m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = (i === 3 ? 5 : i % 5);
+    W._advanceWinner(t, m); if (W._resolveRepFills) W._resolveRepFills(t);
+  });
+  const ocup = [];
+  t.matches.filter((m) => m.bracket === 'upper' && m.round === 2).forEach((m) =>
+    ['p1', 'p2'].forEach((sl) => { if (m[sl + 'FromRepechage'] && !isEmpty(m[sl])) ocup.push(m[sl]); }));
+  ok(ocup.length > 0, 'dupla: fechada a R1, as vagas da normalização estão preenchidas');
+  ok(ocup.indexOf(r1[3].p2) !== -1, 'dupla: o MELHOR derrotado (6-5) ocupa vaga (got [' + ocup.join(', ') + '])');
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v1.5.36 — A REGRA É UNIVERSAL: vale pra DUPLA ELIMINATÓRIA também.
+// "isso serve para eliminatórias simples (de 1, 2 ou 4 linhas), duplas ou o que for.
+//  sempre." — vaga vazia com a rodada em curso; fechada, entram OS MAIS BEM
+// QUALIFICADOS pelo ranking dos critérios do organizador. O teste NÃO assume placar
+// nenhum: o esperado é computado pelo MESMO ranking canônico (_rankLosersByCriteria),
+// então a trava é "vaga = topo do ranking", qualquer que seja o placar de cada um.
+console.log('\n── DUPLA: vaga vazia na rodada em curso; topo do ranking ao fechar ──');
+(function () {
+  const built = A.build(10, 'dupla', { participantes: parts(10), ns: 'p0' });
+  const t = { id: 'tDupla', format: 'Dupla Eliminatória', matches: built.matches };
+  W.AppStore.tournaments = [t]; W._lastActiveTournamentId = t.id;
+  const isEmpty = (v) => !v || v === 'TBD' || /^bye/i.test(String(v).trim()) || /a definir/i.test(String(v));
+  const r1 = t.matches.filter((m) => m.bracket === 'upper' && m.round === 1 && !m.isBye)
+    .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+  const vagas = () => {
+    const o = [];
+    t.matches.forEach((m) => { if (m.winner) return; ['p1', 'p2'].forEach((sl) => { if (m[sl + 'FromRepechage']) o.push({ m, sl }); }); });
+    return o;
+  };
+  const nVagas = vagas().length;
+  ok(nVagas > 0, 'dupla N=10 tem vagas de repescagem (got ' + nVagas + ')');
+
+  const m0 = r1[0]; m0.winner = m0.p1; m0.scoreP1 = 6; m0.scoreP2 = 2;
+  W._advanceWinner(t, m0); if (W._resolveRepFills) W._resolveRepFills(t);
+  ok(vagas().every((v) => isEmpty(v.m[v.sl])), 'dupla: com 1 resultado TODA vaga segue vazia');
+  ok(vagas().some((v) => v.m[v.sl + 'AguardaMelhor']), 'dupla: vaga marcada "A definir"');
+
+  r1.forEach((m, i) => {
+    if (m.winner) return;
+    m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = [2, 4, 1, 5, 3][i % 5];
+    W._advanceWinner(t, m); if (W._resolveRepFills) W._resolveRepFills(t);
+  });
+  // esperado = topo do ranking CANÔNICO dos derrotados da R1 (ordem dos jogos na entrada)
+  const derrotados = r1.map((m) => (m.winner === m.p1 ? m.p2 : m.p1));
+  const rankTopo = W._rankLosersByCriteria(t, derrotados).slice(0, nVagas);
+  const ocup = [];
+  t.matches.filter((m) => m.bracket === 'upper' && m.round === 2).forEach((m) =>
+    ['p1', 'p2'].forEach((sl) => { if (m[sl + 'FromRepechage'] && !isEmpty(m[sl])) ocup.push(m[sl]); }));
+  ok(ocup.length === nVagas, 'dupla: fechada a R1, TODAS as vagas preenchidas (got ' + ocup.length + '/' + nVagas + ')');
+  ok(rankTopo.every((n) => ocup.indexOf(n) !== -1),
+    'dupla: as vagas têm o TOPO do ranking [' + rankTopo.join(', ') + '], got [' + ocup.join(', ') + ']');
 })();
 
 // SOURCE: o render TEM de chamar a reavaliação — é isso que quebrava no código antigo.

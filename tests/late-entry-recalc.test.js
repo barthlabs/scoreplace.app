@@ -127,8 +127,25 @@ console.log('\n== 1..4) torneio EM ANDAMENTO recebe tardio: placar sobrevive, ta
     const tardio = 'D' + (N + 1);
     const jogosDoTardio = r.matches.filter((m) => m.p1 === tardio || m.p2 === tardio);
     ok(jogosDoTardio.length > 0, `${fmt} N=${N}→${N + 1}: o tardio ${tardio} ficou SEM JOGO`);
+
+    // v1.5.36 (regra do dono): a vaga de repescagem fica VAZIA até a rodada-fonte fechar —
+    // o jogo do tardio pode estar "tardio x A definir" AGORA, e isso é o desenho certo.
+    // Fecha-se a rodada-fonte inteira e AÍ o adversário real (o melhor derrotado) aparece.
+    (function fechaFonte(mats, tt) {
+      var hosp = {};
+      mats.forEach(function (m) { if (m.isRepechageSlot || m.p1FromRepechage || m.p2FromRepechage) hosp[String(m.id)] = 1; });
+      var guard = 0;
+      while (guard++ < 300) {
+        var pend = mats.find(function (m) {
+          return !m.winner && !hosp[String(m.id)] && !isBye(m.p1) && !isBye(m.p2);
+        });
+        if (!pend) break;
+        pend.winner = pend.p1; pend.scoreP1 = 6; pend.scoreP2 = guard % 5;
+        W._advanceWinner(tt, pend);
+      }
+    })(r.matches, { id: 'lt-f', format: fmtApp(fmt), matches: r.matches });
     ok(jogosDoTardio.some((m) => !isBye(m.p1) && !isBye(m.p2)),
-      `${fmt} N=${N}→${N + 1}: o tardio ${tardio} só tem jogo "a definir"/BYE`);
+      `${fmt} N=${N}→${N + 1}: fechada a rodada-fonte, o tardio ${tardio} segue sem adversário real`);
 
     // (4) a chave ainda fecha, com campeão e sem órfão
     const t2 = { id: 'lt', format: fmtApp(fmt), matches: r.matches };
@@ -226,8 +243,25 @@ console.log('== 6) chave CHEIA (potência de 2) recebe tardio SEM redesenhar =='
     const tardio = 'D' + (base + 1);
     const seus = r.matches.filter((m) => m.p1 === tardio || m.p2 === tardio);
     ok(seus.length > 0, `${fmt} ${base}→${base + 1}: o tardio ${tardio} ficou SEM JOGO`);
+
+    // v1.5.36 (regra do dono): a vaga de repescagem fica VAZIA até a rodada-fonte fechar —
+    // o jogo do tardio pode estar "tardio x A definir" AGORA, e isso é o desenho certo.
+    // Fecha-se a rodada-fonte inteira e AÍ o adversário real (o melhor derrotado) aparece.
+    (function fechaFonte(mats, tt) {
+      var hosp = {};
+      mats.forEach(function (m) { if (m.isRepechageSlot || m.p1FromRepechage || m.p2FromRepechage) hosp[String(m.id)] = 1; });
+      var guard = 0;
+      while (guard++ < 300) {
+        var pend = mats.find(function (m) {
+          return !m.winner && !hosp[String(m.id)] && !isBye(m.p1) && !isBye(m.p2);
+        });
+        if (!pend) break;
+        pend.winner = pend.p1; pend.scoreP1 = 6; pend.scoreP2 = guard % 5;
+        W._advanceWinner(tt, pend);
+      }
+    })(r.matches, { id: 'lt-g', format: fmtApp(fmt), matches: r.matches });
     ok(seus.some((m) => !isBye(m.p1) && !isBye(m.p2)),
-      `${fmt} ${base}→${base + 1}: o tardio ${tardio} só tem jogo "a definir"/BYE`);
+      `${fmt} ${base}→${base + 1}: fechada a rodada-fonte, o tardio ${tardio} segue sem adversário real`);
     ok(seus.some((m) => m.isRepechageSlot),
       `${fmt} ${base}→${base + 1}: o tardio ${tardio} deveria entrar por REPESCAGEM, não por folga`);
 
