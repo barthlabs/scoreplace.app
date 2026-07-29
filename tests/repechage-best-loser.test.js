@@ -200,6 +200,61 @@ console.log('── ESPERAR A RODADA FECHAR: 1 resultado NÃO define repescado (
   ok(rep.indexOf(empatados[2]) === -1, linha + ': o 3º empatado (' + empatados[2] + ') NÃO subiu');
 });
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v1.5.34 — A CHAVE TAMBÉM SE CORRIGE AO SER ABERTA.
+//
+// Falha real (Confra SB, linha Ouro, 28/jul): a R1 fechou e as 3 vagas de repescagem
+// mostravam Marina Turri (perdeu 6-2), Anke (6-1) e Kelly Barth (6-3) — os perdedores do
+// 1º, 2º e 3º jogos, os de PIOR placar — em vez de Marilia/Silvia (6-5 7-5), Glauce (6-4)
+// e Gabriela (6-4). Causa: `_reassignBestLosersToRepechage` só era chamado de dentro de
+// `_advanceWinner`, então a correção dependia de alguém lançar MAIS UM resultado. Fechada
+// a rodada, abrir a chave não reavaliava nada e o erro ficava congelado na tela.
+console.log('\n── a chave se corrige AO ABRIR, sem lançar mais um resultado ──');
+(function () {
+  const t = mk(26, 'tAbrir');          // 26 duplas = 13 jogos na R1, como a Ouro do SB
+  const r1 = r1De(t);
+  ok(r1.length >= 6, 'R1 com jogos suficientes (got ' + r1.length + ')');
+  // fecha a R1 INTEIRA sem passar pelo caminho que corrige (simula o estado gravado por
+  // um cliente sem o fix): winner na mão + a aresta enchendo a vaga com o perdedor dela.
+  // Placar do perdedor: quase todos 2; o MELHOR faz 5 e dois outros fazem 4.
+  const iMelhor = r1.length - 4, iSeg = r1.length - 5, iTer = r1.length - 2;
+  r1.forEach((m, i) => {
+    const g = (i === iMelhor) ? 5 : ((i === iSeg || i === iTer) ? 4 : 2);
+    m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = g; m.resultAt = i + 1;
+  });
+  const slots = [];
+  t.matches.forEach((m) => ['p1', 'p2'].forEach((s) => { if (m[s + 'FromRepechage']) slots.push({ m: m, s: s }); }));
+  ok(slots.length > 0, 'existe vaga de repescagem (got ' + slots.length + ')');
+  slots.forEach((x, i) => { x.m[x.s] = r1[i].p2; delete x.m[x.s + 'AguardaMelhor']; });   // perdedores dos 1ºs jogos
+  ok(slots[0].m[slots[0].s] === r1[0].p2, 'estado inicial: a vaga tem o perdedor do 1º jogo (placar pior)');
+
+  // AGORA: só ABRIR a chave — nenhum resultado novo. É o que renderBracket passou a fazer.
+  const trocas = W._reassignBestLosersToRepechage(t);
+  ok(trocas > 0, 'abrir a chave corrige (trocas=' + trocas + ')');
+
+  const rep = repOcup(t);
+  ok(rep.indexOf(r1[iMelhor].p2) !== -1, 'o melhor derrotado (6-5) está na repescagem');
+  ok(rep.indexOf(r1[0].p2) === -1, 'o perdedor do 1º jogo (6-2) NÃO está mais na repescagem');
+  if (rep.length >= 3) {
+    ok(rep.indexOf(r1[iSeg].p2) !== -1 && rep.indexOf(r1[iTer].p2) !== -1,
+      'com 3 vagas, sobem também os dois 6-4');
+  }
+  ok(W._reassignBestLosersToRepechage(t) === 0, 'reabrir a chave é no-op (idempotente)');
+})();
+
+// SOURCE: o render TEM de chamar a reavaliação — é isso que quebrava no código antigo.
+console.log('\n── renderBracket chama a reavaliação (source) ──');
+(function () {
+  const fs = require('fs'), path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
+  const i = src.indexOf('function renderBracket(');
+  ok(i !== -1, 'renderBracket existe');
+  const corpo = src.slice(i, i + 12000);
+  ok(corpo.indexOf('_reassignBestLosersToRepechage') !== -1,
+    'renderBracket chama _reassignBestLosersToRepechage (sem isto, a chave só se corrige no próximo resultado)');
+})();
+
 console.log('\n' + (fail === 0 ? '✅ repechage-best-loser: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fails.length) { console.error('\nFALHAS:'); fails.forEach((f) => console.error('  ✗ ' + f)); }
 process.exit(fail > 0 ? 1 : 0);
