@@ -20,14 +20,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #22d3ee;border-radius:12px;padding:14px 16px;background:rgba(34,211,238,0.08);">' +
-      '<div style="font-weight:800; color:#67e8f9; font-size:1rem; margin-bottom:8px;">🌳 v1.6 — Chave enxuta, repescagem justa e duplas sem confusão <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#67e8f9; font-size:1rem; margin-bottom:8px;">🌳 v1.6.3 — Chave enxuta, repescagem justa e o treino do relógio contando <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🌳 Chave mínima, sem folga de graça:</b> a chave agora nasce do <b>tamanho real</b> do torneio, em vez de inflar até a próxima potência de 2. Com 12 duplas são 6 jogos, depois 3, 2 e a final — e o <b>último inscrito nunca folga</b>. Da 2ª rodada em diante a chave fecha redonda, sem BYE no meio do caminho.</li>' +
         '<li><b>🎟️ Repescagem justa e transparente:</b> a vaga de repescagem fica <b>vazia até a rodada inteira fechar</b> — nada de nome provisório que troca depois. Quem volta é o <b>melhor derrotado</b> segundo os critérios de desempate <b>do próprio organizador</b>, e a chave se corrige sozinha ao ser aberta.</li>' +
         '<li><b>⏱️ Quem chega depois entra na hora:</b> inscrição tardia (sozinho ou em dupla) vira <b>jogo de verdade</b> na mesma hora, na chave de cima e com o pouso certo na de baixo. Marcar presença depois do sorteio <b>sempre</b> gera o confronto — nunca mais fica ninguém de fora sem aviso.</li>' +
         '<li><b>🤝 Duplas sem mistura:</b> ninguém mais entra em duas duplas ao mesmo tempo. <b>Desfazer dupla</b> voltou a funcionar (antes falhava calado), desinscrever um dos dois <b>mantém o parceiro</b> como individual, e quem entra na chave passa a contar como inscrito de fato.</li>' +
         '<li><b>🧹 Chave mais limpa de ler:</b> BYE não vira mais card — a rodada mostra só confrontos verdadeiros, e o nome da rodada conta só os <b>jogos reais</b>. O avanço de fase parou de perguntar "Ajuste de Chaveamento" quando não há o que ajustar.</li>' +
-        '<li><b>⌚ Relógio conversando com o celular:</b> o app do relógio troca dados com o telefone, com <b>batimentos e resumo do treino</b> na partida ao vivo.</li>' +
+        '<li><b>⌚ O treino do relógio agora CONTA:</b> a partida vira <b>exercício registrado</b> — no iPhone vai pro app Saúde (conta nos anéis de atividade) e no Android é gravado no <b>Health Connect</b>, entrando nos seus exercícios e na atividade diária. O relógio mostra os <b>batimentos ao vivo</b> durante o jogo e o esforço não é mais descartado no fim da partida.</li>' +
         '<li><b>📌 Detalhes que incomodavam:</b> o aviso de "faltam N equipes" gruda no topo ao rolar (não some mais), o card não fica preso na tela se você soltar o arraste no meio, e o "meu jogo" rola até a posição certa sem cortar o topo.</li>' +
       '</ul>' +
     '</div>' +
