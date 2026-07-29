@@ -73,11 +73,14 @@ service cloud.firestore {
         && data.memberUids is list
         && request.auth.uid in data.memberUids;
     }
-    // v1.8.65: usuário pode gerenciar seus próprios emails vinculados
-    function isOwnLinkedEmailDiff() {
-      return request.auth != null
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedEmails']);
-    }
+    // REMOVIDA (jul/2026): `isOwnLinkedEmailDiff` era CÓDIGO MORTO — o compile das rules
+    // acusava "Unused function". O dono já escreve o próprio perfil pelo `allow update` de
+    // users/{userId} (owner pode tudo menos privilegedUserFields), então a função nunca foi
+    // chamada. NÃO é buraco: `linkedEmails` é lido como PROVA de posse em mergePhoneAccount
+    // (functions/index.js ~4478), mas o único caminho cross-user de escrita em users/{uid}
+    // é isFriendArrayDiff, que permite só friends/friendRequestsSent/friendRequestsReceived
+    // — ninguém escreve o linkedEmails de terceiro. A prova atesta o dono, e é o dono que
+    // escreve. Ver [[project_privileged_fields_never_client_writable]].
 
     // v1.8.62: admin por uid (creatorUid) — fallback para organizadores phone-only.
     function isTournamentAdminByUid(data) {
