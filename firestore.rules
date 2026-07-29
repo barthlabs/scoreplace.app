@@ -4,36 +4,30 @@ service cloud.firestore {
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
-    // Authenticated user's email, lowercased. Empty string when unavailable.
-    function authEmail() {
-      return request.auth != null && request.auth.token.email != null
-        ? request.auth.token.email.lower() : '';
-    }
+    // `authEmail()` REMOVIDA (jul/2026): com a identidade só-uid, nenhuma regra decide
+    // permissão por e-mail — a função ficou sem chamador. E-mail é atributo mutável do
+    // perfil; identidade é o uid. Ver [[project_uid_primary_identity]].
 
-    // Caller is an admin of the tournament: creator, current organizer, or
-    // an active co-host. Caminho normal: email denormalizado em adminEmails[].
-    // Caminho de recovery (v1.6.68): adminEmails vazio ou ausente (bug v1.6.66
-    // que apagava o campo ao salvar objeto parcial) — cai no organizerEmail
-    // declarado como fallback, permitindo que o organizador salve e restaure
-    // o campo. A recovery em background (_recoverWipedAdminEmails) repopula
-    // adminEmails na próxima sessão para voltar ao caminho normal.
+    // Caller é admin do torneio.
+    // SÓ UID (jul/2026, regra do dono: "apenas o uid para identificar os participantes e
+    // co-hosts"). Os caminhos por E-MAIL (adminEmails e a recovery via organizerEmail)
+    // FORAM REMOVIDOS: e-mail é atributo mutável do perfil, não identidade — a pessoa troca
+    // o e-mail e perde/ganha admin sem nada ter mudado no torneio.
+    //
+    // MIGRAÇÃO FEITA ANTES DE REMOVER (29/jul/2026): varredura dos 8 torneios de produção
+    // achou 3 que eram admin SÓ por e-mail (adminUids vazio) — tirar o caminho sem backfill
+    // teria trancado 2 organizadores fora dos próprios torneios. `adminUids` foi backfillado
+    // (= creatorUid + co-hosts ATIVOS por uid) em todos; conferido: 8/8 convergidos, nenhum
+    // torneio sem dono por uid, e as 3 entradas de co-host existentes já tinham uid.
+    // `adminEmails` continua sendo GRAVADO como campo derivado (a UI ainda o exibe), mas
+    // NÃO decide mais permissão. Ver [[project_cohost_invite_cf_uid_only]].
     function isTournamentAdmin(data) {
-      // v1.8.99: uid como fonte primária de autenticação
       return request.auth != null && (
-        // Caminho uid: creatorUid (mais confiável, imutável)
+        // creatorUid — o dono, imutável.
         (data.creatorUid is string && data.creatorUid == request.auth.uid)
-        // v2.8.79: Caminho adminUids — co-hosts ativos por UID (cobre co-host
-        // com email '' / conta por telefone). UID é a identidade primária.
+        // adminUids — co-hosts ATIVOS por uid (recomputado em todo save).
         || (data.adminUids is list && data.adminUids.size() > 0
             && request.auth.uid in data.adminUids)
-        // Caminho adminEmails: backward compat + co-hosts com email
-        || (authEmail() != '' && data.adminEmails is list
-            && data.adminEmails.size() > 0 && authEmail() in data.adminEmails)
-        // Recovery: adminEmails vazio → organizerEmail
-        || (authEmail() != ''
-            && !(data.adminEmails is list && data.adminEmails.size() > 0)
-            && data.organizerEmail is string
-            && data.organizerEmail.lower() == authEmail())
       );
     }
 
@@ -187,21 +181,19 @@ service cloud.firestore {
           && (request.auth.uid in resource.data.get('memberUids', [])))
       );
 
-      // Create: the caller must be the declared creator. Prevents forging
-      // tournaments on someone else's behalf. v2.8.79: aceita uid (creatorUid)
-      // como caminho primário — criador com conta por telefone tem email ''.
+      // Create: quem cria TEM que declarar o próprio uid como creatorUid.
+      // SÓ UID (jul/2026). O caminho alternativo por `creatorEmail == authEmail()` foi
+      // REMOVIDO: além de identidade por atributo mutável, ele permitia criar um torneio
+      // declarando `creatorUid` de OUTRA pessoa (bastava o creatorEmail ser o seu) — doc
+      // atribuído a terceiro. Todo torneio em produção já tem creatorUid (varredura de
+      // 29/jul: 0 sem dono por uid), e o cliente sempre o grava.
       allow create: if request.auth != null
-        && (
-          (request.resource.data.creatorUid is string
-            && request.resource.data.creatorUid == request.auth.uid)
-          || (authEmail() != '' && request.resource.data.creatorEmail is string
-            && request.resource.data.creatorEmail.lower() == authEmail())
-        );
+        && request.resource.data.creatorUid is string
+        && request.resource.data.creatorUid == request.auth.uid;
 
       // Update permitido em 3 caminhos:
-      //   1. Admin (creator/organizer/co-host) — qualquer mudança.
-      //      isTournamentAdmin inclui fallback p/ organizerEmail quando
-      //      adminEmails está vazio (recovery do bug v1.6.66).
+      //   1. Admin (creator/co-host ativo) — qualquer mudança. SÓ POR UID
+      //      (creatorUid / adminUids); e-mail não decide mais permissão.
       //   2. Qualquer authed pode fazer enrollment-only diff (entrar/sair)
       //   3. Participante pode atualizar campos do bracket (placar, check-in,
       //      aprovação de resultado, voto em poll, etc.) — lista positiva

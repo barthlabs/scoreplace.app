@@ -141,15 +141,19 @@
       return;
     }
 
+    // SÓ UID (jul/2026): a entrada guarda o uid como identidade. `displayName` fica só
+    // como âncora pra quem NÃO tem perfil resolvível — o choke point de persistência
+    // (_stripStoredNamesForUidEntries) o remove quando o perfil existe. `email` NÃO é
+    // mais gravado: nada casa co-host por e-mail (nem as rules, nem a UI, nem a CF).
     var _chEntry = {
-      email: target.email, displayName: target.displayName, uid: target.uid,
+      uid: target.uid, displayName: target.displayName,
       status: 'pending', type: 'cohost', invitedAt: new Date().toISOString()
     };
     t.coHosts.push(_chEntry);
     // Blindagem v4.0.119: portão AppStore.mutate; re-check existência no fresco (idempotência).
     window.AppStore.mutate(tId, function (ft) {
       if (!Array.isArray(ft.coHosts)) ft.coHosts = [];
-      var ex = ft.coHosts.find(function (ch) { return (target.uid && ch.uid && ch.uid === target.uid) || (target.email && ch.email && ch.email === target.email); });
+      var ex = ft.coHosts.find(function (ch) { return target.uid && ch.uid && ch.uid === target.uid; });
       if (ex) return;
       ft.coHosts.push(_chEntry);
     });
@@ -316,14 +320,14 @@
     if (!Array.isArray(t.coHosts)) return;
     // v2.8.79: casa por UID (primário) OU email — co-host com email '' (conta por
     // telefone) era impossível de remover. Remove por REFERÊNCIA do objeto achado.
-    var removed = t.coHosts.find(function(ch) { return ch && ((ch.uid && ch.uid === coHostKey) || (ch.email && ch.email === coHostKey)); });
+    var removed = t.coHosts.find(function(ch) { return ch && ch.uid && ch.uid === coHostKey; });
     if (!removed) return;
     t.coHosts = t.coHosts.filter(function(ch) { return ch !== removed; });
     // Blindagem v4.0.119: portão AppStore.mutate — re-filtra no fresco por chave
     // (a ref do objeto `removed` não casa no doc fresco).
     window.AppStore.mutate(tId, function (ft) {
       if (!Array.isArray(ft.coHosts)) return;
-      ft.coHosts = ft.coHosts.filter(function (ch) { return !(ch && ((ch.uid && ch.uid === coHostKey) || (ch.email && ch.email === coHostKey))); });
+      ft.coHosts = ft.coHosts.filter(function (ch) { return !(ch && ch.uid && ch.uid === coHostKey); });
     });
     if (removed && typeof window._sendUserNotification === 'function') {
       _notifyByEmail(removed.uid || removed.email || coHostKey, {
@@ -358,7 +362,7 @@
     var parts = Array.isArray(t.participants) ? t.participants : [];
     // Filter: only participants with email (can receive notification), exclude self and current org/coHosts
     var orgEmails = [t.organizerEmail];
-    if (Array.isArray(t.coHosts)) t.coHosts.forEach(function(ch) { if (ch.email && ch.status === 'active') orgEmails.push(ch.email); });
+    // co-host NÃO entra por e-mail (jul/2026): a exclusão do picker usa orgUids, abaixo.
 
     // v2.8.50: elegível por UID **ou** email (antes exigia email → inscritos só-uid,
     // comuns em torneios de duplas, NÃO apareciam e não dava pra promover). Exclui o
@@ -378,9 +382,15 @@
     });
 
     // Also check for pending invites
+    // Convites PENDENTES — por uid (cânone só-uid, jul/2026). O e-mail do pendingTransfer
+    // fica só como fallback pra convite legado que ainda não tem targetUid.
+    var pendingUids = [];
     var pendingEmails = [];
-    if (t.pendingTransfer) pendingEmails.push(t.pendingTransfer.targetEmail);
-    if (Array.isArray(t.coHosts)) t.coHosts.forEach(function(ch) { if (ch.status === 'pending') pendingEmails.push(ch.email); });
+    if (t.pendingTransfer) {
+      if (t.pendingTransfer.targetUid) pendingUids.push(t.pendingTransfer.targetUid);
+      else if (t.pendingTransfer.targetEmail) pendingEmails.push(t.pendingTransfer.targetEmail);
+    }
+    if (Array.isArray(t.coHosts)) t.coHosts.forEach(function(ch) { if (ch.status === 'pending' && ch.uid) pendingUids.push(ch.uid); });
 
     var overlay = document.createElement('div');
     overlay.id = 'org-picker-overlay';
@@ -394,7 +404,7 @@
         var name = p.displayName || p.name || p.email;
         var email = p.email || '';
         var pUid = p.uid || '';
-        var isPending = pendingEmails.indexOf(email) !== -1;
+        var isPending = (pUid && pendingUids.indexOf(pUid) !== -1) || (email && pendingEmails.indexOf(email) !== -1);
         var safeEmail = email.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var safeUid = pUid.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var safeName = window._safeHtml(name).replace(/\\/g, '\\\\').replace(/'/g, "\\'");

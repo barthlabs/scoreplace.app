@@ -1066,7 +1066,7 @@ window._dispatchOrgPlatformNotification = async function(t, fullMsg, useWhatsApp
   var skipOpt = useWhatsApp ? { skipWhatsApp: true } : true;
   var targets = [];
   if (t.creatorUid) targets.push({ uid: t.creatorUid, email: t.organizerEmail || '' });
-  (Array.isArray(t.coHosts) ? t.coHosts : []).forEach(function(ch){ if (ch.status === 'active') targets.push({ uid: ch.uid || '', email: ch.email || '' }); });
+  (Array.isArray(t.coHosts) ? t.coHosts : []).forEach(function(ch){ if (ch.status === 'active' && ch.uid) targets.push({ uid: ch.uid, email: '' }); }); // co-host SÓ por uid (jul/2026)
   if (targets.length === 0 && t.organizerEmail) targets.push({ uid: '', email: t.organizerEmail });
   var seen = {};
   for (var i = 0; i < targets.length; i++) {

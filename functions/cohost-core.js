@@ -124,9 +124,12 @@ function computeRespondHostInvite(data, callerUid, inviteType, action) {
     }
 
     // ACEITE: o organizador atual vira co-host ativo; quem aceita assume a organização.
+    // SÓ UID: a entrada do organizador que sai guarda o uid dele. Sem `email` — nada casa
+    // co-host por e-mail. `displayName` fica como âncora pra quem não tem perfil; o choke
+    // point de persistência do cliente o remove quando o perfil é resolvível.
     const coHosts = coHostsArray(data).slice();
     coHosts.push({
-      uid: pt.fromUid || '', email: data.organizerEmail || '', displayName: data.organizerName || '',
+      uid: pt.fromUid || '', displayName: data.organizerName || '',
       status: 'active', type: 'cohost', invitedAt: new Date().toISOString()
     });
     const next = Object.assign({}, data, {

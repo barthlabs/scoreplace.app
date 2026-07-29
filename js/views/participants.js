@@ -3135,7 +3135,7 @@ function renderParticipants(container, tournamentId) {
     var _orgEmailsP = {}; var _orgUidsP = {};
     if (t.organizerEmail) _orgEmailsP[t.organizerEmail] = true;
     if (t.creatorUid) _orgUidsP[t.creatorUid] = true;
-    if (Array.isArray(t.coHosts)) t.coHosts.forEach(function (ch) { if (ch && ch.status === 'active') { if (ch.email) _orgEmailsP[ch.email] = true; if (ch.uid) _orgUidsP[ch.uid] = true; } });
+    if (Array.isArray(t.coHosts)) t.coHosts.forEach(function (ch) { if (ch && ch.status === 'active' && ch.uid) _orgUidsP[ch.uid] = true; }); // co-host SÓ por uid (jul/2026)
     var _hasTournCatsP = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
     // v4.5.76: escopo do W.O. — 'individual' → W.O. POR MEMBRO (2, esq/dir, igual aos
     // toggles); 'team'/'time' → UM W.O. do time (falta 1 → time inteiro leva W.O.).

@@ -373,13 +373,13 @@ function _isUserOrgOrCoHost(t, user) {
       if (t.coHosts.some(function(ch) { return ch.uid === uid && ch.status === 'active'; })) return true;
     }
   }
-  // Email-based fallback
+  // Fallback por e-mail — SÓ pro organizador declarado (organizerEmail/creatorEmail), que
+  // é campo do torneio. CO-HOST saiu daqui (jul/2026): co-host é identificado SÓ por uid,
+  // igual às Firestore rules (isTournamentAdmin usa creatorUid/adminUids e mais nada).
+  // Ver [[project_cohost_invite_cf_uid_only]].
   if (email) {
     if (t.organizerEmail === email) return true;
     if (t.creatorEmail === email) return true;
-    if (Array.isArray(t.coHosts)) {
-      if (t.coHosts.some(function(ch) { return ch.email === email && ch.status === 'active'; })) return true;
-    }
   }
   return false;
 }

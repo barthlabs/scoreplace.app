@@ -3653,14 +3653,19 @@ function renderTournaments(container, tournamentId = null) {
         if (Array.isArray(_t.coHosts)) {
           _t.coHosts.forEach(function(ch) {
             if (!ch) return;
+            // Nome do co-host: PERFIL VIVO por uid primeiro (jul/2026 — o doc deixou de
+            // guardar displayName pra quem tem perfil; ver _stripStoredNamesForUidEntries).
+            // Só cai no que está gravado quando não há perfil resolvível.
+            var _chName = (ch.uid && typeof window._nameForUid === 'function' && window._nameForUid(ch.uid))
+              || ch.displayName || ch.email || '';
             if (ch.status === 'active') {
               var _chGender = ch.gender || _resolveOrgGender(ch.email, ch.uid);
               var _chLabel = _gw(_chGender, 'Co-organizador', 'Co-organizadora');
-              _orgCards += _buildOrgCard(ch.displayName || ch.email, _chLabel, _orgBgCohost, _isCreatorNow, ch.uid || ch.email);
+              _orgCards += _buildOrgCard(_chName, _chLabel, _orgBgCohost, _isCreatorNow, ch.uid || ch.email);
             } else if (ch.status === 'pending') {
               // v2.8.48: convidado pendente aparece AQUI (box âmbar pontilhado, ao
               // lado do organizador), não mais só na lista de inscritos.
-              _orgCards += _buildPendingOrgCard(ch.displayName || ch.email, ch.uid || ch.email || '', _isCreatorNow);
+              _orgCards += _buildPendingOrgCard(_chName, ch.uid || ch.email || '', _isCreatorNow);
             }
           });
         }
