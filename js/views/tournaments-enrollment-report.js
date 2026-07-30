@@ -1871,7 +1871,24 @@
     }
     if (typeof window.showConfirmDialog === 'function') {
       window.showConfirmDialog('🎾 ' + (tg.name || '@' + tg.handle), body,
-        function () { window._lzAthleteImport(uid); }, null,
+        // ERRO DENTRO DO CALLBACK DO DIALOG É ENGOLIDO. Se qualquer coisa estourar aqui, o
+        // dialog fecha e a tela volta — exatamente o "clica em continuar e não faz nada",
+        // sem toast, sem console, sem pista. Nunca deixar este callback nu.
+        function () {
+          try { window._lzAthleteImport(uid); }
+          catch (e) {
+            var m = (e && (e.stack || e.message)) || String(e);
+            if (window._warn) window._warn('[letzplay] falha ao iniciar leitura:', m);
+            if (typeof window.showAlertDialog === 'function') {
+              window.showAlertDialog('Não deu pra iniciar a leitura',
+                '<div style="text-align:left;font-size:0.82rem;">Aconteceu um erro antes de a leitura começar. Recarregue a página e tente de novo.<br><br>' +
+                '<details><summary style="cursor:pointer;">detalhe técnico</summary><pre style="white-space:pre-wrap;font-size:0.7rem;margin-top:6px;">' +
+                _esc(String(m).slice(0, 400)) + '</pre></details></div>');
+            } else if (typeof showNotification === 'function') {
+              showNotification('Não deu pra iniciar a leitura', String(m).slice(0, 120), 'error');
+            }
+          }
+        }, null,
         { confirmText: btnLabel, cancelText: 'Fechar', type: 'info' });
       // Completa os "de y" das barras AO VIVO com os totais do perfil público
       // (a extensão lê "472 Jogos · 29 Rankings · 35 Torneios" e devolve).
@@ -1903,6 +1920,8 @@
   // Puxa a COMPLETA de UM atleta pelo @ público — o caminho do autoimport (fetch das
   // páginas /{handle}/matches), sem navegar o perfil SPA (a causa do lote travar).
   window._lzAthleteImport = function (uid) {
+    if (window._log) window._log('[letzplay] iniciar leitura de', uid, '· travaAtiva=', !!window._lzScanRunning,
+      '· overlay=', !!document.getElementById('sp-import-overlay'), '· ctx=', !!(window._lzScanCtx && window._lzScanCtx.byUid));
     // NENHUM CLIQUE PODE MORRER CALADO. Estes três `return` mudos faziam o botão
     // "Continuar de onde parou" não fazer NADA — sem toast, sem log, sem pista. O caso real:
     // uma leitura que terminou de forma anormal (aba fechada, página trocada, extensão
