@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.59';
+  var EXT_VERSION = '1.60';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -857,7 +857,13 @@
     function conferirTeto() { if (Date.now() > limite) { var e = new Error('teto da rodada'); e.code = 'rate-budget'; throw e; } }
 
     // Lê uma lista paginada de competições (/{handle}/tournaments ou /rankings).
-    async function lerLista(url, re, campo) {
+    // `esperado` = quantos o perfil declara. Se a paginação da página não for detectável
+    // pelo padrão `?page=`, continua pedindo página por página ATÉ SECAR (uma página que
+    // não acrescenta nada encerra). Foi o que travou os rankings em "7 de 29": a lista
+    // entrega 7 por página e a detecção de paginação não pegava — a leitura parava na
+    // primeira página e a barra nunca passava disso. Não depender do markup deles é o que
+    // faz isso funcionar mesmo quando a página muda.
+    async function lerLista(url, re, campo, esperado) {
       var achados = [], visto = {};
       function colher(doc) {
         [].slice.call(doc.querySelectorAll('a[href]')).forEach(function (a) {
@@ -872,9 +878,19 @@
       var d1 = await bgFetchDoc(url);
       colher(d1);
       var mx = F.detectMaxPage(d1);
-      for (var p = 2; p <= mx; p++) {
+      var p = 2;
+      for (; p <= mx; p++) {
         conferirTeto();
         colher(await bgFetchDoc(url + '?page=' + p));
+      }
+      // ainda falta pro que o perfil declara? insiste até uma página não trazer nada novo
+      var teto = 30;
+      while ((esperado == null || achados.length < esperado) && p <= teto) {
+        conferirTeto();
+        var antes = achados.length;
+        colher(await bgFetchDoc(url + '?page=' + p));
+        if (achados.length === antes) break;      // secou
+        p++;
       }
       return achados;
     }
@@ -904,7 +920,7 @@
         // ── ETAPA 1: TORNEIOS ──────────────────────────────────────────────────
         if (!toursList.length || (totTorneios != null && toursList.length < totTorneios)) {
           prog({ phase: 'torneios', note: 'lendo a lista de torneios', pct: 4 });
-          try { toursList = await lerLista('https://letzplay.me/' + encodeURIComponent(handle) + '/tournaments', /^\/([^\/]+)\/tournaments\/(\d+)$/, 'tid'); }
+          try { toursList = await lerLista('https://letzplay.me/' + encodeURIComponent(handle) + '/tournaments', /^\/([^\/]+)\/tournaments\/(\d+)(?:\/|$)/, 'tid', totTorneios); }
           catch (e1) { if (ehPausa(e1)) throw e1; }
         }
         if (totTorneios == null && toursList.length) totTorneios = toursList.length;
@@ -945,7 +961,7 @@
         // ── ETAPA 2: RANKINGS ──────────────────────────────────────────────────
         if (!ranksList.length || (totRankings != null && ranksList.length < totRankings)) {
           prog({ phase: 'rankings', note: 'lendo a lista de rankings', pct: 31 });
-          try { ranksList = await lerLista('https://letzplay.me/' + encodeURIComponent(handle) + '/rankings', /^\/([^\/]+)\/rankings\/(\d+)$/, 'rid'); }
+          try { ranksList = await lerLista('https://letzplay.me/' + encodeURIComponent(handle) + '/rankings', /^\/([^\/]+)\/rankings\/(\d+)(?:\/|$)/, 'rid', totRankings); }
           catch (e2) { if (ehPausa(e2)) throw e2; }
         }
         if (totRankings == null && ranksList.length) totRankings = ranksList.length;

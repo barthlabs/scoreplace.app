@@ -120,14 +120,14 @@ window.__LZ = {
     // lista de rankings: /{handle}/rankings[?page=]
     mm = u.match(/^\\/CamilaExemplo\\/rankings(?:\\?page=(\\d+))?$/);
     if (mm) {
-      const page = +(mm[1] || 1), perPage = 12;
-      const maxPage = Math.ceil(this.cfg.ranks / perPage);
+      // 7 por página e SEM links de paginação — é o caso real que travou a barra em
+      // "7 de 29": a detecção de paginação não pega, e só insistir página a página resolve.
+      const page = +(mm[1] || 1), perPage = 7;
       let h = '<html><body>';
       for (let r = (page-1)*perPage; r < Math.min(this.cfg.ranks, page*perPage); r++) {
-        h += '<a href="/' + CLUB + '/rankings/' + (90000+r) + '">Social Fem C / B ' + r + '</a>';
+        h += '<a href="/' + CLUB + '/rankings/' + (90000+r) + '/table">Social Fem C / B ' + r + '</a>';
       }
-      h += pager(page, maxPage) + '</body></html>';
-      return h;
+      return h + '</body></html>';
     }
     // histórico geral: /{handle}/matches[?page=]
     mm = u.match(/^\\/CamilaExemplo\\/matches(?:\\?page=(\\d+))?$/);
