@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.49';
+  var EXT_VERSION = '1.50';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -622,23 +622,39 @@
       post({ __sp_lp: 'athlete-import-progress', tournamentId: tournamentId, uid: uid || null, handle: handle,
         current: cur, pct: (extra.pct != null ? extra.pct : null), feed: extra.feed || null, counts: liveCounts() });
     }
-    // Contagens AO VIVO pras barras do app: x = competições/jogos distintos já no
-    // acumulado (`all` + páginas de torneio já lidas), y = totais declarados pelo perfil.
+    // Contagens AO VIVO pras barras do app. y = o total DECLARADO pelo perfil ("35
+    // Torneios"), que é a verdade; x = quanto disso já foi LIDO.
+    //
+    // ⚠️ x É "LIDO", NÃO "CONHECIDO" — e confundir os dois produziu dois absurdos na tela
+    // (30/jul): "🏆 35 de 35 (100%)" enquanto o rodapé dizia "torneio 16 de 35", e depois
+    // "38 de 35 (100%)". Antes, x contava todo tourneyId CITADO por qualquer jogo do
+    // acumulado; como o acumulado entra semeado pela rodada anterior, x nascia no total (ou
+    // acima dele, porque o histórico dela referencia mais torneios do que o perfil declara).
+    // Torneio LIDO = aquele cuja página foi aberta nesta rodada (`tourneyDetails`) ou já
+    // vinha marcada no cursor (`C.toursDone`). E x é CAPADO em y: o declarado é o total, e
+    // 35 de 35 é 100% — nunca 38 de 35 (regra explícita do dono).
     function liveCounts() {
-      var tS = {}, rS = {}, nG = 0;
+      var rS = {}, nG = 0, tLidos = {};
       try {
         (all || []).forEach(function (m) {
           nG++;
-          if (m.official) { if (m.tourneyId != null) tS['t/' + (m.club || '') + '/' + m.tourneyId] = 1; }
-          else if (m.rankingId != null) rS['r/' + (m.club || '') + '/' + m.rankingId] = 1;
+          if (!m.official && m.rankingId != null) rS['r/' + (m.club || '') + '/' + m.rankingId] = 1;
         });
-        Object.keys(tourneyDetails || {}).forEach(function (k) { if (tourneyDetails[k]) tS[k] = 1; });
+        // lidos NESTA rodada + marcados no cursor + os que já tinham nome/classificação
+        // resolvidos numa rodada ANTERIOR (priorNames) — esses foram lidos de verdade, e sem
+        // eles a barra voltava pra zero numa retomada e ficava em 0 quando o perfil não tem
+        // lista pública de torneios (aí quem resolve os nomes é a etapa final).
+        Object.keys(tourneyDetails || {}).forEach(function (k) { if (tourneyDetails[k]) tLidos[k] = 1; });
+        Object.keys(C.toursDone || {}).forEach(function (k) { tLidos[k] = 1; });
+        Object.keys(priorNames || {}).forEach(function (k) { if (k.charAt(0) === 't') tLidos[k] = 1; });
       } catch (e) { return null; }
+      var gY = (declaredGamesTotal != null) ? declaredGamesTotal : ((prior && prior.declaredGames != null) ? prior.declaredGames : null);
+      var tY = (declaredTournTotal != null) ? declaredTournTotal : ((prior && prior.declaredTournaments != null) ? prior.declaredTournaments : null);
+      var rY = (declaredRankingsTotal != null) ? declaredRankingsTotal : ((prior && prior.declaredRankings != null) ? prior.declaredRankings : null);
+      function cap(x, y) { return (y != null && y > 0) ? Math.min(x, y) : x; }
       return {
-        g: nG, t: Object.keys(tS).length, r: Object.keys(rS).length,
-        gY: (declaredGamesTotal != null) ? declaredGamesTotal : ((prior && prior.declaredGames != null) ? prior.declaredGames : null),
-        tY: (declaredTournTotal != null) ? declaredTournTotal : ((prior && prior.declaredTournaments != null) ? prior.declaredTournaments : null),
-        rY: (declaredRankingsTotal != null) ? declaredRankingsTotal : ((prior && prior.declaredRankings != null) ? prior.declaredRankings : null)
+        g: cap(nG, gY), t: cap(Object.keys(tLidos).length, tY), r: cap(Object.keys(rS).length, rY),
+        gY: gY, tY: tY, rY: rY
       };
     }
     function fail(code) { post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: code }); }

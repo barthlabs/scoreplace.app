@@ -220,3 +220,44 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
 
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BARRAS DO PROGRESSO: "torneios LIDOS", não "torneios conhecidos"
+//
+// REPRODUZ O BUG REAL de 30/jul/2026 (screenshots do dono, leitura da Camila):
+//   • "🏆 Torneios  35 de 35 (100%)" enquanto o rodapé dizia "torneio 16 de 35";
+//   • depois "🏆 Torneios  38 de 35 (100%)" — x MAIOR que o total declarado.
+// Causa: o número contava todo torneio CITADO por algum jogo (o footprint inteiro).
+// Como o acumulado entra semeado pela rodada anterior, ele nascia no total — e passava
+// dele, porque o histórico dela referencia mais torneios do que o perfil declara.
+// Regra do dono: "se são 35 torneios, são 35 torneios e não mais que isso. 35 é 100%".
+console.log('\n── barras: torneios LIDOS vs CONHECIDOS ──');
+var _read = window._lzTournamentsRead;
+
+// 20 lidos (têm classificação), 15 só conhecidos (só a categoria, vindos de jogos),
+// e 3 além do declarado — o retrato exato do que produziu "38 de 35".
+var _fp = [];
+for (var i = 0; i < 20; i++) {
+  _fp.push({ official: true, club: 'c', tourneyId: 't' + i, categoryRaw: 'Feminina C',
+    name: 'Interno Ciclo ' + i + ' - Feminina C',
+    standings: [{ group: 'Grupo 1', rows: [{ pos: 1, handles: ['CamilaX'] }] }] });
+}
+for (var j = 0; j < 18; j++) {
+  _fp.push({ official: true, club: 'c', tourneyId: 'x' + j, categoryRaw: 'Feminina C' });
+}
+_fp.push({ official: false, club: 'c', rankingId: 'r1', categoryRaw: 'Social Fem C / B' });
+var _imp = { footprint: _fp, declaredTournaments: 35 };
+
+ok(_read(_imp) === 20, 'conta só os LIDOS (20), não os 38 conhecidos — era daqui que saía "38 de 35"');
+ok(_read({ footprint: [] }) === 0, 'footprint vazio → 0 lidos');
+ok(_read(null) === 0, 'sem import → 0 lidos (não explode)');
+// nome igual à categoria crua NÃO é nome resolvido: a página do torneio nunca foi aberta
+ok(_read({ footprint: [{ official: true, categoryRaw: 'Feminina C', name: 'Feminina C' }] }) === 0,
+  'nome igual à categoria crua não conta como lido');
+ok(_read({ footprint: [{ official: true, categoryRaw: 'Feminina C', name: 'Interno Ciclo 2 - Feminina C' }] }) === 1,
+  'nome REAL resolvido conta como lido, mesmo sem classificação');
+ok(_read({ footprint: [{ official: false, categoryRaw: 'Social Fem C / B', standings: [{}] }] }) === 0,
+  'ranking não entra na barra de torneios');
+// o teto: nunca mais de 35 de 35
+ok(Math.min(_read(_imp), _imp.declaredTournaments) <= _imp.declaredTournaments,
+  'x capado no declarado: 35 de 35 é 100%, "38 de 35" não existe');

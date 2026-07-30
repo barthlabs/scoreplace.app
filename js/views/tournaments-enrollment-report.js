@@ -1186,6 +1186,17 @@
     if (!imp) return 0;
     return (imp.gamesTotal != null) ? imp.gamesTotal : ((imp.games || []).length);
   }
+  // TORNEIO LIDO ≠ torneio conhecido — e é UMA regra, num lugar só, porque a tela mostra
+  // esse número em dois pontos (as 3 barras do dialog e as 3 barras do overlay ao vivo) e
+  // eles divergiram: o overlay contava "conhecido" e nascia em "35 de 35 (100%)" com a
+  // leitura ainda no torneio 16. Um id de torneio entra no footprint só porque algum jogo o
+  // citou; LIDO é ter aberto a página dele, o que se prova pela CLASSIFICAÇÃO ou pelo NOME
+  // real resolvido (a categoria crua não conta como nome).
+  window._lzTournamentsRead = function (imp) {
+    return ((imp && imp.footprint) || []).filter(function (f) {
+      return f && f.official && (f.standings || (f.name && f.name !== f.categoryRaw));
+    }).length;
+  };
   function _lzImportComplete(li) {
     if (!li) return false;
     var n = _lzTot(li);
@@ -1652,6 +1663,8 @@
     // completados ao vivo pela extensão (lz-profile-counts lê "472 Jogos · 29 Rankings ·
     // 35 Torneios" do perfil público) — direto na tela, como o dono pediu.
     function barLine(id, icon, label, x, y) {
+      // x jamais passa do declarado: 35 de 35 é 100%, "38 de 35" não existe.
+      if (y != null && y > 0) x = Math.min(x, y);
       var pct = (y && y > 0) ? Math.min(100, Math.round(x / y * 100)) : null;
       return '<div id="' + id + '" data-x="' + x + '" style="margin:5px 0;">' +
         '<div style="display:flex;justify-content:space-between;gap:8px;font-size:0.8rem;"><span>' + icon + ' ' + label + '</span><span class="lz-bar-txt"><b>' + x + '</b>' + (y ? (' de ' + y + ' (' + pct + '%)') : ' de …') + '</span></div>' +
@@ -1662,7 +1675,7 @@
     var gY = (imp && imp.declaredGames != null) ? imp.declaredGames : null;
     var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
     var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];
-    var tX = offFp.filter(function (f) { return f.standings || (f.name && f.name !== f.categoryRaw); }).length;
+    var tX = window._lzTournamentsRead(imp);   // mesma regra do overlay ao vivo
     var tY = (imp && imp.declaredTournaments != null) ? imp.declaredTournaments : null;
     var rX = rkFp.length;
     var rY = (imp && imp.declaredRankings != null) ? imp.declaredRankings : null;
@@ -1762,23 +1775,30 @@
       if (!imp) return;
       _updBars({
         g: _lzTot(imp),
-        t: (imp.footprint || []).filter(function (f) { return f.official; }).length,
+        t: window._lzTournamentsRead(imp),   // LIDOS, não conhecidos — regra única
         r: (imp.footprint || []).filter(function (f) { return !f.official; }).length,
         gY: (imp.declaredGames != null) ? imp.declaredGames : null,
         tY: (imp.declaredTournaments != null) ? imp.declaredTournaments : null,
         rY: (imp.declaredRankings != null) ? imp.declaredRankings : null
       });
     }
-    // x nunca anda pra trás (critérios de contagem variam entre fontes); y atualiza
-    // quando o total declarado do perfil chega.
+    // x nunca anda pra trás (critérios de contagem variam entre fontes) e NUNCA passa de y:
+    // o total declarado pelo perfil é a verdade, então 35 de 35 é 100% — "38 de 35" não é
+    // um número, é um bug na cara do organizador (regra explícita do dono, 30/jul).
+    function _cap(x, y) { return (y != null && y > 0) ? Math.min(x, y) : x; }
     function _updBars(c) {
       if (!c) return;
-      if (c.t != null) _bs.t.x = Math.max(_bs.t.x, c.t);
-      if (c.r != null) _bs.r.x = Math.max(_bs.r.x, c.r);
-      if (c.g != null) _bs.g.x = Math.max(_bs.g.x, c.g);
       if (c.tY != null) _bs.t.y = c.tY;
       if (c.rY != null) _bs.r.y = c.rY;
       if (c.gY != null) _bs.g.y = c.gY;
+      if (c.t != null) _bs.t.x = Math.max(_bs.t.x, c.t);
+      if (c.r != null) _bs.r.x = Math.max(_bs.r.x, c.r);
+      if (c.g != null) _bs.g.x = Math.max(_bs.g.x, c.g);
+      // capa DEPOIS do max e DEPOIS de y ter chegado — senão um x semeado grande fica
+      // preso acima do total quando o declarado só aparece na requisição seguinte.
+      _bs.t.x = _cap(_bs.t.x, _bs.t.y);
+      _bs.r.x = _cap(_bs.r.x, _bs.r.y);
+      _bs.g.x = _cap(_bs.g.x, _bs.g.y);
     }
     function _barsArr() {
       return [

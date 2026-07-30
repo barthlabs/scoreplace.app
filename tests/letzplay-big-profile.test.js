@@ -209,7 +209,7 @@ const APP_DRIVER = `
 window.__APP = {
   rodadas: 0, parciais: 0, cursor: null, imp: null, done: false, erro: null,
   escritasCanonicas: 0, docsPorGid: {}, tamanhoDoc: 0, deltasVazios: 0,
-  pausas: 0, throttles: 0,
+  pausas: 0, throttles: 0, violacoesTeto: [], violacoesLidos: [],
   gravar(imp, delta) {
     const M = window._spLzModel;
     const fonte = Array.isArray(delta) ? { games: delta, handle: imp.handle } : imp;
@@ -224,6 +224,23 @@ window.__APP = {
     window.addEventListener('message', function (e) {
       const d = e.data; if (!d) return;
       if (d.__sp_lp === 'lz-throttle') { self.throttles++; return; }
+      if (d.__sp_lp === 'athlete-import-progress') {
+        // AUDITORIA DAS BARRAS: guarda toda violação de "x nunca passa de y" e todo caso de
+        // "torneios lidos" maior que o nº do torneio que está sendo processado agora.
+        const c = d.counts || {};
+        ['t', 'r', 'g'].forEach(k => {
+          const y = c[k + 'Y'];
+          if (y != null && y > 0 && c[k] != null && c[k] > y) {
+            self.violacoesTeto.push(k + '=' + c[k] + ' de ' + y + ' · ' + ((d.current && d.current.note) || ''));
+          }
+        });
+        const nota = (d.current && d.current.note) || '';
+        const m = nota.match(/torneio (\\d+) de (\\d+)/);
+        if (m && c.t != null && c.t > +m[1]) {
+          self.violacoesLidos.push('lidos=' + c.t + ' mas está no torneio ' + m[1] + ' de ' + m[2]);
+        }
+        return;
+      }
       if (d.__sp_lp === 'athlete-import-partial') {
         self.parciais++;
         if (d.cursor) self.cursor = d.cursor;
@@ -279,6 +296,7 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     window.__APP.imp = null; window.__APP.done = false; window.__APP.erro = null;
     window.__APP.escritasCanonicas = 0; window.__APP.docsPorGid = {}; window.__APP.tamanhoDoc = 0;
     window.__APP.pausas = 0; window.__APP.throttles = 0;
+    window.__APP.violacoesTeto = []; window.__APP.violacoesLidos = [];
     window.__APP.start('CamilaExemplo', 'uid-camila', null, null);
   });
   await page.waitForFunction(() => window.__APP.done === true, null, { timeout: 120000 });
@@ -293,6 +311,8 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     declarados: (window.__APP.imp && window.__APP.imp.declaredGames) || 0,
     truncado: !!(window.__APP.imp && window.__APP.imp.gamesTruncated),
     pausas: window.__APP.pausas, throttles: window.__APP.throttles,
+    violacoesTeto: window.__APP.violacoesTeto.slice(0, 5), nViolTeto: window.__APP.violacoesTeto.length,
+    violacoesLidos: window.__APP.violacoesLidos.slice(0, 5), nViolLidos: window.__APP.violacoesLidos.length,
     observacoes: (window.__APP.imp && (window.__APP.imp.observations || []).length),
     footprint: (window.__APP.imp && (window.__APP.imp.footprint || []).length) || 0,
     cursor: window.__APP.cursor,
@@ -336,6 +356,14 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
   // 4. doc cabe no Firestore
   ok(r.tamanhoDoc < 1048576, 'o doc resumo cabe no limite de 1MiB (' + (r.tamanhoDoc / 1024).toFixed(0) + 'KB)');
   ok(r.observacoes === 0, 'observations não vai mais no doc (eram 41% do peso e ninguém lia)');
+
+  // 5. as BARRAS têm que ser um número, não um absurdo. Bug real visto pelo dono
+  // (30/jul): "🏆 38 de 35 (100%)" e "35 de 35" enquanto o rodapé dizia "torneio 16 de 35".
+  // Regra dele: "se são 35 torneios, são 35 torneios e não mais que isso. 35 é 100%".
+  ok(r.nViolTeto === 0, 'nenhuma barra passou do total declarado (x <= y sempre)',
+    r.nViolTeto + ' violações, ex: ' + (r.violacoesTeto || []).join(' | '));
+  ok(r.nViolLidos === 0, '"torneios lidos" nunca é maior que o torneio em processamento',
+    r.nViolLidos + ' violações, ex: ' + (r.violacoesLidos || []).join(' | '));
 
   // ── CENÁRIO 2: retomada — cursor pela metade ─────────────────────────────
   console.log('\n⏸️  CENÁRIO 2 — retomada de um cursor pela metade (não relê o que já leu)');
