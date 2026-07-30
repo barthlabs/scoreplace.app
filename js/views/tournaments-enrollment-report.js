@@ -2049,6 +2049,13 @@
       if (!w.total) return null;
       return Math.max(2, Math.min(100, Math.round(w.feito / w.total * 100)));
     }
+    // Linha de base do trabalho JÁ FEITO quando esta leitura começou (o acumulado vem
+    // semeado das rodadas anteriores). Sem descontar, o ritmo sai fantasioso.
+    // ⚠️ Esta declaração foi apagada por engano na 1.6.23 quando reescrevi `_trabalho()` —
+    // `_tempos()` continuou usando `_w0`, e como o relógio de 1s chama `setProg` (que chama
+    // `_tempos`), virava ReferenceError A CADA SEGUNDO: a leitura não andava e o clique em
+    // "Continuar" morria. O Sentry pegou (8 ocorrências) antes de eu adivinhar mais uma vez.
+    var _w0 = null;
     function _tempos() {
       var dec = Date.now() - _t0;
       var w = _trabalho();
