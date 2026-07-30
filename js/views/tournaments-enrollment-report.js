@@ -1997,20 +1997,23 @@
       var m = Math.floor(s / 60), r = s % 60;
       return m + 'min ' + (r < 10 ? '0' : '') + r + 's';
     }
+    // UMA FONTE SÓ: a barra geral e o tempo saem das MESMAS três barras que estão na tela.
+    // Antes cada um tinha sua conta: o `pct` era uma faixa fixa por fase (torneios 4–30,
+    // rankings 31–45, jogos 46–97), então com os jogos já completos pelo cursor a barra
+    // geral ficava presa em 45% "quase terminando"; e o tempo somava torneios + páginas mas
+    // ESQUECIA os rankings — na fase deles o decorrido crescia e o feito não, então o
+    // "restam" SUBIA em vez de descer. Derivar das barras é consistente por construção.
     function _trabalho() {
-      var tTot = _bs.t.y || 0, tFeito = Math.min(_bs.t.x || 0, tTot || (_bs.t.x || 0));
-      // páginas do histórico: o total sai da nota ("página X de Y"); antes da etapa 3
-      // começar, estima pelos jogos declarados (~13,5 por página no letzplay).
-      var pagFeita = 0, pagTot = (_bs.g.y) ? Math.ceil(_bs.g.y / 13.5) : 0;
-      var m = /página (\d+) de (\d+)/.exec(ultimaNota || '');
-      if (m) { pagFeita = +m[1]; pagTot = Math.max(pagTot, +m[2]); }
-      return { feito: tFeito * 2 + pagFeita, total: tTot * 2 + pagTot };
+      var feito = (_bs.t.x || 0) + (_bs.r.x || 0) + (_bs.g.x || 0);
+      var total = (_bs.t.y || 0) + (_bs.r.y || 0) + (_bs.g.y || 0);
+      return { feito: feito, total: Math.max(total, feito) };
     }
-    // O RITMO SE MEDE NO QUE ESTA LEITURA FEZ, não no acumulado. O trabalho já vem semeado
-    // pelas rodadas anteriores (a da Camila começa com 21 torneios prontos = 42 unidades);
-    // dividir o tempo desta sessão por esse acumulado dá um ritmo fantasiosamente rápido e
-    // um "faltam" que nunca chega. Por isso a linha de base é tirada no começo e descontada.
-    var _w0 = null;
+    // pct geral = o quanto do trabalho declarado já está em casa
+    function _pctGeral() {
+      var w = _trabalho();
+      if (!w.total) return null;
+      return Math.max(2, Math.min(100, Math.round(w.feito / w.total * 100)));
+    }
     function _tempos() {
       var dec = Date.now() - _t0;
       var w = _trabalho();
@@ -2030,7 +2033,8 @@
     function setProg(o) {
       o = o || {};
       if (o.sub == null) o.sub = ultimaNota;   // sem passo novo, mantém o que está em curso
-      window._spProgressOverlay({ label: '📚 ' + who, sub: o.sub || '', pct: o.pct,
+      var _pg = _pctGeral();
+      window._spProgressOverlay({ label: '📚 ' + who, sub: o.sub || '', pct: (_pg != null ? _pg : o.pct),
         feedAdd: o.feedAdd || null, bars: _barsArr(), tempos: _tempos(), onCancel: cancel });
     }
     function cleanup() {
