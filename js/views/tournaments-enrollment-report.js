@@ -2133,6 +2133,14 @@
     }
     var ctx = window._lzScanCtx || {};
     var tg = ctx.byUid && ctx.byUid[uid];
+    // A PÁGINA DA PESSOA ABRE NO INSTANTE DO CLIQUE. Isto é resposta ao toque, não
+    // trabalho de raspagem: vai por um canal próprio (`lz-open-profile` → `lp-nav-now`)
+    // que NÃO passa pela fila de trabalho da extensão. Antes a navegação era enfileirada
+    // junto com as buscas e esperava o passo aprendido — dezenas de segundos até a aba
+    // sequer mudar de página, com o organizador olhando pra uma tela parada.
+    if (tg && tg.handle) {
+      try { window.postMessage({ __sp_lp: 'lz-open-profile', handle: tg.handle }, '*'); } catch (e) {}
+    }
     if (!tg || !tg.handle) {
       if (typeof showNotification === 'function') showNotification('Não deu pra puxar', !tg ? 'Não achei este inscrito na tela — recarregue a página.' : 'Este inscrito não tem @ do letzplay no perfil.', 'error');
       return;

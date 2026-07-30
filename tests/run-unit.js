@@ -114,6 +114,7 @@ const SUITES = [
   'tests/letzplay-level-bar.test.js',
   'tests/org-gender-label.test.js',
   'tests/letzplay-game-cards.test.js',
+  'tests/letzplay-open-profile.test.js',
   'tests/letzplay-pace.test.js',
   'tests/letzplay-model.test.js',
   'tests/letzplay-eta.test.js',

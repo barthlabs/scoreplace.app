@@ -97,8 +97,14 @@ function _qFaster() {
   _q.okStreak++;
   if (_q.okStreak < 12) return;
   _q.okStreak = 0;
-  var next = Math.max(_q.floor, Math.round(_q.gap * 0.9));
-  if (next !== _q.gap) { _q.gap = next; _qSave(); }
+  // O PISO TAMBÉM DECAI. Antes ele só subia: um bloqueio numa tarde deixava o passo alto
+  // PARA SEMPRE, mesmo com mil sucessos seguidos depois. Medido em 30/jul: o letzplay
+  // respondendo em 0,3–2,2 s sem limitar nada, e a fila ainda esperando 10–25 s por
+  // operação por causa de um piso aprendido meses antes — a leitura ficava lenta sem
+  // motivo. Cada 12 sucessos seguidos derruba o piso 10%, nunca abaixo do piso de fábrica.
+  var floorNovo = Math.max(_Q_DEFAULTS.floor, Math.round(_q.floor * 0.9));
+  var next = Math.max(floorNovo, Math.round(_q.gap * 0.9));
+  if (floorNovo !== _q.floor || next !== _q.gap) { _q.floor = floorNovo; _q.gap = next; _qSave(); }
 }
 // Marca o resultado vindo de QUALQUER caminho — fetch, navegação, ou página de desafio
 // devolvida com status 200 (`blocked`). Um desafio do Cloudflare É um bloqueio: contar
@@ -441,6 +447,16 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // Passo medido, sob demanda — o app usa pra explicar a espera ("letzplay limitando,
   // indo de 1,2s pra 9,6s por página") em vez de parecer travado.
   if (msg && msg.type === 'lp-pace') { sendResponse(_qStats()); return true; }
+  // NAVEGAÇÃO IMEDIATA — FORA DA FILA. Abrir a página de quem o organizador acabou de
+  // clicar é resposta ao TOQUE dele, não trabalho de raspagem: não pode esperar o passo
+  // aprendido (medido em 30/jul: 10 a 25 s por operação, enquanto o letzplay respondia em
+  // menos de 2 s). Uma navegação de tela não gera carga de leitura — o custo é uma página,
+  // a mesma que o usuário abriria clicando no link.
+  if (msg && msg.type === 'lp-nav-now' && typeof msg.url === 'string' &&
+      msg.url.indexOf('https://letzplay.me/') === 0) {
+    navLetzplayTab(msg.url, function () { sendResponse({ ok: true }); });
+    return true;
+  }
   // Navegação da aba compartilhada (v1.46) — serializada na MESMA fila dos fetches:
   // navegar no meio de uma leitura de outra operação seria pisar no pé dela.
   if (msg && msg.type === 'lp-nav' && typeof msg.url === 'string' &&

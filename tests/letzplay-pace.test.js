@@ -93,7 +93,20 @@ function loadBg(stored) {
   ok(sandbox._q.gap === gapApos, 'um sucesso isolado NÃO pode acelerar (era o bug: ×0.85 a cada sucesso → rajava de novo)');
   for (let i = 0; i < 200; i++) sandbox._qNoteStatus(200);
   ok(sandbox._q.gap < gapApos, 'depois de MUITO sucesso seguido, afrouxa aos poucos');
-  ok(sandbox._q.gap >= piso, 'nunca volta abaixo do piso aprendido (gap ' + sandbox._q.gap + ' >= piso ' + piso + ')');
+  // REGRA MUDADA EM 30/jul/2026, por medição. Antes o piso aprendido era PERMANENTE — e
+  // isso deixava a leitura lenta pra sempre: medido em produção, o letzplay respondendo em
+  // 0,3–2,2 s sem limitar nada e a nossa fila ainda esperando 10–25 s por operação por
+  // causa de um bloqueio de outro dia. O piso agora DECAI com sucesso sustentado, mas
+  // nunca abaixo do piso de fábrica, e a recuperação continua lenta e assimétrica.
+  ok(sandbox._q.gap < piso, 'com sucesso sustentado, o piso aprendido DECAI (gap ' + sandbox._q.gap + ' < piso antigo ' + piso + ')');
+  ok(sandbox._q.floor >= 2000, 'mas nunca abaixo do piso de fábrica (piso ' + sandbox._q.floor + ')');
+  ok(sandbox._q.gap >= 2000, 'e o passo idem — decair não é virar rajada');
+  {
+    // e apanhar de novo volta a frear na hora
+    const antes = sandbox._q.gap;
+    sandbox._qNoteStatus(429);
+    ok(sandbox._q.gap > antes, 'depois de decair, um bloqueio novo freia outra vez');
+  }
 }
 
 // ── 5. O passo aprendido SOBREVIVE à reciclagem do service worker (MV3) ──

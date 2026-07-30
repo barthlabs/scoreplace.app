@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.63';
+  var EXT_VERSION = '1.64';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -955,10 +955,11 @@
       try {
         // ── ETAPA 0: os três totais, de cara ───────────────────────────────────
         prog({ phase: 'perfil', note: 'abrindo o perfil de @' + handle, pct: 1 });
-        await new Promise(function (r) {
-          try { chrome.runtime.sendMessage({ type: 'lp-nav', url: 'https://letzplay.me/' + encodeURIComponent(handle) }, function () { void chrome.runtime.lastError; r(); }); }
-          catch (e) { r(); }
-        });
+        // A navegação NÃO passa mais pela fila de trabalho: o app já mandou abrir a página
+        // no instante do clique (`lz-open-profile` → `lp-nav-now`). Enfileirar aqui custava
+        // um passo inteiro da fila — dezenas de segundos — antes de a leitura começar.
+        try { chrome.runtime.sendMessage({ type: 'lp-nav-now', url: 'https://letzplay.me/' + encodeURIComponent(handle) }, function () { void chrome.runtime.lastError; }); }
+        catch (e) {}
         prog({ phase: 'perfil', note: 'lendo quantos torneios, rankings e jogos existem', pct: 2 });
         try {
           var dp = await bgFetchDoc('https://letzplay.me/' + encodeURIComponent(handle));
@@ -1186,6 +1187,14 @@
     if (d.__sp_lp === 'run-org-scan') { runOrgScan(d.targets, d.tournamentId, d.mode === 'full' ? 'full' : 'essential'); return; }
     if (d.__sp_lp === 'run-athlete-import') { runAthleteImport(d.handle, d.uid, d.tournamentId, d.prior || null, d.cursor || null); return; }
     if (d.__sp_lp === 'lz-profile-counts') { profileCounts(d.handle); return; }
+    // Abrir o perfil da pessoa NA HORA do clique (fora da fila de trabalho).
+    if (d.__sp_lp === 'lz-open-profile' && d.handle) {
+      try {
+        chrome.runtime.sendMessage({ type: 'lp-nav-now',
+          url: 'https://letzplay.me/' + encodeURIComponent(d.handle) }, function () { void chrome.runtime.lastError; });
+      } catch (e) {}
+      return;
+    }
   };
   window.addEventListener('message', window.__spLzpMsgHandler);
 
