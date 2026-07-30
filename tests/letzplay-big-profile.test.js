@@ -223,7 +223,7 @@ window.__APP = {
   escritasCanonicas: 0, docsPorGid: {}, tamanhoDoc: 0, deltasVazios: 0,
   pausas: 0, throttles: 0, violacoesTeto: [], violacoesLidos: [],
   jogosAntesDosRankings: 0, jogosAntesDosTorneios: 0, notasSemSujeito: [],
-  faseJogosComeçou: 0, torneiosDepoisDosJogos: 0, rankingsDepoisDosJogos: 0, totaisVistos: {},
+  faseJogosComeçou: 0, torneiosDepoisDosJogos: 0, rankingsDepoisDosJogos: 0, totaisVistos: {}, rotuloAtrasado: [],
   gravar(imp, delta) {
     const M = window._spLzModel;
     const fonte = Array.isArray(delta) ? { games: delta, handle: imp.handle } : imp;
@@ -261,6 +261,12 @@ window.__APP = {
         // TEXTO SEM SUJEITO: "2 de 41" não informa nada a quem está olhando.
         var _n = (d.current && d.current.note) || '';
         if (/^\s*\d+\s+de\s+\d+\s*$/.test(_n)) self.notasSemSujeito.push(_n);
+        // RÓTULO x BARRA: "torneio 1 de 35" embaixo de "30 de 35" são dois contadores
+        // diferentes na mesma tela. O do rótulo nunca pode ficar ATRÁS do da barra.
+        var _mt = _n.match(/^torneio (\d+) de (\d+)/);
+        if (_mt && _c.t != null && +_mt[1] < _c.t) self.rotuloAtrasado.push(_n + ' (barra: ' + _c.t + ')');
+        var _mr = _n.match(/^ranking (\d+) de (\d+)/);
+        if (_mr && _c.r != null && +_mr[1] < _c.r) self.rotuloAtrasado.push(_n + ' (barra: ' + _c.r + ')');
       }
       if (d.__sp_lp === 'athlete-import-progress') {
         // AUDITORIA DAS BARRAS: guarda toda violação de "x nunca passa de y" e todo caso de
@@ -356,6 +362,7 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     jogosAntesDosRankings: window.__APP.jogosAntesDosRankings, jogosAntesDosTorneios: window.__APP.jogosAntesDosTorneios,
     torneiosDepoisDosJogos: window.__APP.torneiosDepoisDosJogos, rankingsDepoisDosJogos: window.__APP.rankingsDepoisDosJogos,
     totaisVistos: window.__APP.totaisVistos,
+    rotuloAtrasado: window.__APP.rotuloAtrasado.slice(0,4), nRotulo: window.__APP.rotuloAtrasado.length,
     notasSemSujeito: window.__APP.notasSemSujeito.slice(0, 4), nSemSujeito: window.__APP.notasSemSujeito.length,
     observacoes: (window.__APP.imp && (window.__APP.imp.observations || []).length),
     footprint: (window.__APP.imp && (window.__APP.imp.footprint || []).length) || 0,
@@ -424,6 +431,8 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
   // 6d. ZERO DUPLICATA
   ok(r.jogosTotal === r.declarados, 'jogos guardados == declarados, sem duplicata (' + r.jogosTotal + ' × ' + r.declarados + ')');
   // 7. nenhum texto de progresso é um número solto ("2 de 41")
+  ok(r.nRotulo === 0, 'o número do rótulo nunca fica ATRÁS do da barra ("torneio 1 de 35" com "30 de 35")',
+    r.nRotulo + ' vezes, ex: ' + (r.rotuloAtrasado || []).join(' | '));
   ok(r.nSemSujeito === 0, 'nenhuma nota de progresso é um número sem sujeito ("2 de 41")',
     r.nSemSujeito + ' notas assim, ex: ' + (r.notasSemSujeito || []).join(' | '));
 
@@ -434,7 +443,9 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
   await page.evaluate(async (cfg) => {
     window.__LZ.init(cfg);
     // cursor fingindo: torneios todos lidos, histórico geral parado na página 20
-    const cur = { v: 3, handle: 'CamilaExemplo', toursDone: {}, pageDone: 20, pagesTotal: 34, complete: false };
+    // cursor MODERNO (v4): é este que promete retomada sem releitura. Cursor v3 é o do
+    // pipeline velho e DEVE reler — isso é o cenário 2b, logo abaixo.
+    const cur = { v: 4, handle: 'CamilaExemplo', toursDone: {}, ranksDone: {}, pageDone: 20, pagesTotal: 34, complete: false };
     for (let t = 0; t < cfg.tours; t++) cur.toursDone['t/paineiras-bt/' + (300000 + t)] = 1;
     // prior com footprint dos torneios (nome+classificação já resolvidos)
     const fp = [];
@@ -469,6 +480,55 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
   });
   ok(antesDe20.length === 0, 'NÃO releu nenhuma página anterior à do cursor (página 20)', antesDe20.join(', '));
   ok(r2.cursor && r2.cursor.complete === true, 'a retomada chegou ao fim');
+
+  // ── CENÁRIO 2b: dado SUJO do pipeline velho tem que sair na próxima leitura ──
+  // Caso real: o doc da Camila tinha 569 jogos para 478 reais — 24 duplicatas puras
+  // (mesma partida por dois caminhos, chave antiga incluía a categoria) mais jogos vindos
+  // das páginas de torneio. Semear a leitura nova com isso carregaria o erro pra sempre.
+  console.log('\n🧹 CENÁRIO 2b — import velho com DUPLICATAS é limpo na próxima leitura');
+  await page.close();
+  page = await novaPagina(browser);
+  await page.evaluate((cfg) => {
+    window.__LZ.init(cfg);
+    // prior do pipeline VELHO: cursor v3 e jogos inflados (cada um repetido)
+    const sujos = [];
+    for (let i = 0; i < 60; i++) {
+      const g = { date: 'Sábado, 0' + (1 + i % 9) + '/0' + (1 + i % 9) + '/26 às 08:00hs', official: false,
+        club: 'paineiras-bt', rankingId: '90000', competition: 'Social Fem C / B',
+        oppHandles: ['AdvUm' + i, 'AdvDois' + i], oppNames: ['A', 'B'], partnerHandle: 'P' + i,
+        myScore: 6, oppScore: 3, won: true };
+      sujos.push(g);
+      sujos.push(Object.assign({}, g, { competition: 'Ver trilha de X/Y' }));  // a MESMA partida
+    }
+    const prior = { source: 'letzplay', handle: 'CamilaExemplo', games: sujos, footprint: [],
+      categories: [], pairs: [], observations: [], declaredGames: cfg.games,
+      lzCursor: { v: 3, handle: 'CamilaExemplo', toursDone: {}, pageDone: 12, pagesTotal: 34, complete: false } };
+    window.__APP.rodadas = 0; window.__APP.parciais = 0; window.__APP.done = false; window.__APP.erro = null;
+    window.__APP.escritasCanonicas = 0; window.__APP.docsPorGid = {}; window.__APP.tamanhoDoc = 0;
+    window.__APP.pausas = 0; window.__APP.throttles = 0; window.__APP.violacoesTeto = []; window.__APP.violacoesLidos = [];
+    window.__APP.faseJogosComeçou = 0; window.__APP.torneiosDepoisDosJogos = 0; window.__APP.rankingsDepoisDosJogos = 0;
+    window.__APP.notasSemSujeito = []; window.__APP.totaisVistos = {}; window.__APP.rotuloAtrasado = [];
+    window.__LZ.hits = {};
+    window.__APP.start('CamilaExemplo', 'uid-camila', prior, prior.lzCursor);
+  }, camila);
+  await page.waitForFunction(() => window.__APP.done === true, null, { timeout: 180000 });
+  const r2b = await page.evaluate(() => ({
+    erro: window.__APP.erro, jogos: (window.__APP.imp && window.__APP.imp.gamesTotal) || 0,
+    declarados: (window.__APP.imp && window.__APP.imp.declaredGames) || 0,
+    cursorV: (window.__APP.cursor || {}).v,
+    hits: Object.keys(window.__LZ.hits).filter(u => /^\/CamilaExemplo\/matches/.test(u)).length,
+    rodadas: window.__APP.rodadas, motivo: (window.__APP.imp && window.__APP.imp.partialReason) || null,
+    urlsMatches: Object.keys(window.__LZ.hits).filter(u => /matches/.test(u)).sort().slice(0,60),
+    pageDone: (window.__APP.cursor || {}).pageDone, pagesTotal: (window.__APP.cursor || {}).pagesTotal,
+    completo: (window.__APP.cursor || {}).complete
+  }));
+  console.log('     jogos=' + r2b.jogos + '/' + r2b.declarados + ' · páginas=' + r2b.hits + ' · cursor v' + r2b.cursorV +
+    ' · rodadas=' + r2b.rodadas + ' · pageDone=' + r2b.pageDone + '/' + r2b.pagesTotal + ' · completo=' + r2b.completo + ' · motivo=' + r2b.motivo);
+  ok(!r2b.erro, 'a leitura de migração não falhou', r2b.erro);
+  ok(r2b.jogos === r2b.declarados, 'os 120 registros sujos (60 duplicados) SUMIRAM — ficou ' +
+    r2b.jogos + ' = declarado ' + r2b.declarados);
+  ok(r2b.cursorV === 4, 'o cursor foi promovido pra v4');
+  ok(r2b.hits > 1, 'releu o histórico do começo em vez de confiar no cursor velho (' + r2b.hits + ' páginas)');
 
   // ── CENÁRIO 3: perfil MONSTRO — o doc tem que continuar cabendo ──────────
   console.log('\n🐘 CENÁRIO 3 — perfil monstro (2.000 jogos, 120 torneios, 60 rankings)');

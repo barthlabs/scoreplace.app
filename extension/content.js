@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.55';
+  var EXT_VERSION = '1.56';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -650,12 +650,33 @@
 
     // ── estado da rodada ────────────────────────────────────────────────────────
     var C = (cursor && typeof cursor === 'object') ? cursor : {};
+    // ⚠️ LER A VERSÃO ANTES DE ESCREVER NELA. `C` é o MESMO objeto que `prior.lzCursor`
+    // (o app passa a referência), então marcar `C.v = 4` aqui e só depois perguntar
+    // "que versão era?" comparava a versão com ela mesma — a migração NUNCA rodava e a
+    // retomada continuava usando a página do cursor velho. Sintoma exato: a leitura
+    // começava na página 13 em vez da 1 e o total nunca fechava.
+    var versaoAnterior = (C.v || (prior && prior.lzCursor && prior.lzCursor.v) || 0);
     C.v = 4;
     if (!C.toursDone || typeof C.toursDone !== 'object') C.toursDone = {};
     if (!C.ranksDone || typeof C.ranksDone !== 'object') C.ranksDone = {};
     C.pageDone = (typeof C.pageDone === 'number' && C.pageDone > 0) ? C.pageDone : 0;
     C.complete = false;
 
+    // ── MIGRAÇÃO: o que o pipeline VELHO gravou não serve de semente ────────────
+    // Import feito antes desta reescrita (cursor < v4) tem jogos vindos das páginas de
+    // torneio além do histórico pessoal — inclusive a MESMA partida duas vezes, porque a
+    // chave de dedup antiga incluía a categoria. Medido no perfil da Camila: 569 jogos
+    // gravados para 478 reais, 24 deles duplicatas puras. Semear a leitura nova com isso
+    // carregaria o erro pra sempre: o total nunca fecharia e as duplicatas nunca sairiam.
+    // Então os JOGOS antigos são descartados e o histórico é relido do começo — são ~36
+    // requisições, baratas. O que NÃO é descartado é o caro: nome e classificação de cada
+    // torneio/ranking já lido, que continuam valendo e seguem sendo pulados.
+    var migrando = !!(prior && versaoAnterior < 4);
+    if (migrando) {
+      _acc = null;                    // não reaproveita o acumulado desta página
+      C.pageDone = 0; C.pagesTotal = 0;
+      prior = Object.assign({}, prior, { games: [] });
+    }
     var A = _accFor(handle, prior);
     var all = A.all, seen = A.seen, det = A.tourDet;   // det = nome/classificação por competição
     var realHandle = C.handle || handle;
@@ -867,7 +888,12 @@
           var P = toursList[ti], tk = 't/' + P.club + '/' + P.tid;
           if (C.toursDone[tk] && detDe(tk)) { det[tk] = detDe(tk); pulT++; continue; }
           if (pulT) { prog({ phase: 'torneios', feed: '⏭️ ' + pulT + ' já lidos — pulados sem reler' }); pulT = 0; }
-          prog({ phase: 'torneios', note: 'torneio ' + (ti + 1) + ' de ' + toursList.length + ' — nome, categoria e classificação',
+          // O NÚMERO DO RÓTULO É O MESMO DA BARRA. Antes o rótulo usava a posição na LISTA
+          // e a barra usava o quanto já foi lido — dois contadores diferentes na mesma tela
+          // ("torneio 1 de 35" embaixo de "30 de 35"). Agora ele conta o que está sendo
+          // lido AGORA: os já lidos + 1. Consistente por construção.
+          prog({ phase: 'torneios',
+            note: 'torneio ' + (Object.keys(C.toursDone).length + 1) + ' de ' + (totTorneios || toursList.length) + ' — nome, categoria e classificação',
             pct: 4 + Math.round((ti / Math.max(1, toursList.length)) * 26) });
           try {
             var dT = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
@@ -894,7 +920,8 @@
           var R = ranksList[ri], rk = 'r/' + R.club + '/' + R.rid;
           if (C.ranksDone[rk] && detDe(rk)) { det[rk] = detDe(rk); pulR++; continue; }
           if (pulR) { prog({ phase: 'rankings', feed: '⏭️ ' + pulR + ' já lidos — pulados sem reler' }); pulR = 0; }
-          prog({ phase: 'rankings', note: 'ranking ' + (ri + 1) + ' de ' + ranksList.length + ' — nome e classificação',
+          prog({ phase: 'rankings',   // idem: o rótulo conta o mesmo que a barra
+            note: 'ranking ' + (Object.keys(C.ranksDone).length + 1) + ' de ' + (totRankings || ranksList.length) + ' — nome e classificação',
             pct: 31 + Math.round((ri / Math.max(1, ranksList.length)) * 14) });
           try {
             var dR = await bgFetchDoc('https://letzplay.me/' + R.club + '/rankings/' + R.rid);
