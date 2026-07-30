@@ -146,7 +146,13 @@
   }
 
   function _fromLetzplay(cu) {
-    var imp = cu && cu.letzplayImport;
+    return _itensDoImport(cu && cu.letzplayImport);
+  }
+  // MESMO MAPEAMENTO, IMPORT QUALQUER. O diálogo do histórico do letzplay (Análise de
+  // Inscritos) mostra o histórico de OUTRA pessoa e precisa exatamente destes cards —
+  // sem isto eu tinha escrito uma lista de uma linha à parte, que é como as duas telas
+  // divergem. Exportado como `window._spLzGameItems`.
+  function _itensDoImport(imp) {
     var games = imp && Array.isArray(imp.games) ? imp.games : [];
     if (!games.length) return [];
     var importedAtTs = imp.importedAt ? (Date.parse(imp.importedAt) || null) : null;
@@ -323,6 +329,15 @@
   var _all = [];
   var _meName = 'Você';   // nome do dono nos cards (seu nome real, não "Você")
   var _filters = { source: 'all', sport: '', venue: '', comp: '' };
+
+  // Cards do histórico, reaproveitáveis fora desta tela. `meNome` é como o dono aparece
+  // na linha de cima (na Análise é o nome do inscrito, não "Você").
+  window._spLzGameItems = function (imp) { return _itensDoImport(imp); };
+  window._spGameCard = function (it, meNome) {
+    var antes = _meName;
+    if (meNome) _meName = meNome;
+    try { return _gameCard(it); } finally { _meName = antes; }
+  };
 
   function _applyFilters() {
     return _all.filter(function (it) {

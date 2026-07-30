@@ -530,5 +530,33 @@ console.log('\n── total de rankings (footprint fragmentado) ──');
   ok(n === 8, 'a aba de rankings mostra 8 linhas, não 20 (veio ' + n + ')');
 }
 
+// ── 17. VERDE EXIGE O MOTOR NOVO (jogo com o id do letzplay) ─────────────────
+// "os nomes que não puxaram com o motor certo continuam verdes. tinham que estar roxos."
+// Data recente NÃO basta: um import de 16 dias é fresco e mesmo assim veio do pipeline
+// velho, que duplicava partida e perdia competição.
+console.log('\n── verde exige o motor novo ──');
+{
+  const base = { importedAt: AGORA, officialCategory: { skill: 'D', categoryRaw: 'Fem D' },
+    rankings: [], tournaments: [], declaredGames: 81,
+    lzCursor: { v: 4, complete: true, pageDone: 1, pagesTotal: 1 } };
+  const motorNovo = Object.assign({}, base, { games: Array.from({ length: 81 }, (_, i) => ({ lzId: 'g' + i })) });
+  const motorVelho = Object.assign({}, base, { games: Array.from({ length: 81 }, () => ({})) });
+  const meioAMeio = Object.assign({}, base, { games: [{ lzId: '1' }, {}, { lzId: '3' }] });
+  const rN = run({ uid: 'm1', effectiveSkills: [] }, { m1: Object.assign({ letzplayImport: motorNovo }, profAuthorized) }, {});
+  const rV = run({ uid: 'm2', effectiveSkills: [] }, { m2: Object.assign({ letzplayImport: motorVelho }, profAuthorized) }, {});
+  const rM = run({ uid: 'm3', effectiveSkills: [] }, { m3: Object.assign({ letzplayImport: meioAMeio }, profAuthorized) }, {});
+  ok(rN._lzColor === COL.green, 'lido com o motor novo e recente → VERDE');
+  ok(rV._lzColor !== COL.green, 'motor VELHO, mesmo recente, NÃO absolve — violeta');
+  ok(rV._lzVerified === false, 'motor velho não conta como verificado');
+  ok(rM._lzColor !== COL.green, 'meio lido pelo motor velho também não absolve');
+
+  // AS DUAS CONDIÇÕES, JUNTAS (regra do dono: "é motor atual E data. as duas coisas").
+  const novoMasVelho = Object.assign({}, base, { importedAt: VELHO,
+    games: Array.from({ length: 81 }, (_, i) => ({ lzId: 'g' + i })) });
+  const rNV = run({ uid: 'm4', effectiveSkills: [] }, { m4: Object.assign({ letzplayImport: novoMasVelho }, profAuthorized) }, {});
+  ok(rNV._lzColor !== COL.green, 'motor NOVO mas leitura de 45 dias → NÃO absolve');
+  ok(rN._lzColor === COL.green, 'só absolve com motor novo E leitura recente — as duas');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

@@ -1369,8 +1369,23 @@
     });
   };
 
-  // HISTÓRICO DE JOGOS — data · competição · placar · adversários, do mais recente pro mais
-  // antigo. Mesmas cores da lista de torneios pra leitura não mudar de gramática entre abas.
+  // HISTÓRICO DE JOGOS — os MESMOS CARDS da tela #histórico (dois times empilhados, placar
+  // à direita na cor do time, selo LetzPlay/Scoreplace, data e a linha de contexto). Eu
+  // tinha escrito uma lista de uma linha aqui, e o dono comparou lado a lado: as duas
+  // telas mostram a mesma coisa e têm que ler igual. `_spLzGameItems`/`_spGameCard` vêm de
+  // match-history.js — nada é recriado aqui.
+  window._lzGameCards = function (imp, meNome) {
+    if (typeof window._spLzGameItems !== 'function' || typeof window._spGameCard !== 'function') return null;
+    var itens = window._spLzGameItems(imp) || [];
+    if (!itens.length) return '';
+    itens.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+    var LIM = 300, corte = itens.length > LIM;
+    return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;">' +
+      itens.slice(0, LIM).map(function (it) { return window._spGameCard(it, meNome || 'Ela/Ele'); }).join('') +
+      '</div>' + (corte ? '<div style="opacity:0.6;padding:8px 0;">… e mais ' + (itens.length - LIM) + ' jogo(s) — o acervo completo está gravado.</div>' : '');
+  };
+
+  // Formato de UMA LINHA — usado só quando o módulo do histórico não está carregado.
   window._lzGameRows = function (imp, handle) {
     var gs = (imp && imp.games) || [];
     if (!gs.length) return '';
@@ -1523,6 +1538,11 @@
         // e título é o que manda subir. Vermelho/amarelo seguem valendo: achar é prova.
         if (v.key === 'green' && !_lzImportComplete(li)) v = { key: 'white', apurada: null };
         if (v.key === 'green' && !_lzFresco(li)) v = { key: 'white', apurada: null };
+        // VERDE EXIGE O MOTOR NOVO. Data recente não basta: um import de 16 dias atrás é
+        // "fresco" e mesmo assim foi lido pelo pipeline velho, que duplicava partida e
+        // perdia competição. A prova de motor novo está no dado — o id da partida vindo do
+        // letzplay (`lzId`). Sem ele, violeta: autorizou, mas ainda não foi lido direito.
+        if (v.key === 'green' && !_lzTemIds(li)) v = { key: 'white', apurada: null };
         if (v.key !== 'white') { r._lzColor = _LZ_COL[v.key]; r._lzVerified = true; }
       } else if (sc) {
         var ev2 = _lzEvidence(sc.champions || [], sc.rankings || [], [sc.rankingCategory].concat(sc.allCategories || []));
@@ -2011,7 +2031,7 @@
       window._lzAbas = {
         tour: _lzTourneyRows(imp, tg.handle, 'tour'),
         rank: _lzTourneyRows(imp, tg.handle, 'rank'),
-        jogo: _lzGameRows(imp, tg.handle)
+        jogo: (window._lzGameCards(imp, tg.name || ('@' + tg.handle)) || _lzGameRows(imp, tg.handle))
       };
       var _n = { tour: tX, rank: rX, jogo: gX };
       body += '<div id="lz-abas" style="display:flex;gap:6px;margin:9px 0 0;">' +
@@ -2059,7 +2079,7 @@
             }
           }
         }, null,
-        { confirmText: btnLabel, cancelText: 'Fechar', type: 'info', maxWidth: '760px' });
+        { confirmText: btnLabel, cancelText: '← Voltar', type: 'info', maxWidth: '760px' });
       // a aba de torneios já está montada; isto só pinta o botão ativo
       setTimeout(function () { if (typeof window._lzAba === 'function') window._lzAba('tour'); }, 0);
       // Completa os "de y" das barras AO VIVO com os totais do perfil público
@@ -2100,12 +2120,16 @@
     // recarregada no meio) deixa `_lzScanRunning = true` pra sempre, e a partir daí TODO
     // clique seguinte retorna aqui em silêncio. A trava só vale enquanto existe leitura de
     // verdade na tela; sem overlay, ela é lixo de uma sessão morta e é limpa na hora.
-    if (window._lzScanRunning) {
-      if (document.getElementById('sp-import-overlay')) {
-        if (typeof showNotification === 'function') showNotification('Já tem uma leitura rodando', 'Espere terminar ou clique em Suspender.', 'info');
-        return;
-      }
-      window._lzScanRunning = false;   // trava órfã de leitura anterior
+    // CLICAR SEMPRE PUXA QUEM FOI PEDIDO. Antes, se houvesse qualquer leitura na tela, o
+    // clique era RECUSADO ("já tem uma leitura rodando") — inclusive quando a leitura em
+    // curso era de outra pessoa ou era resto de uma sessão morta. Recusar é preguiça
+    // nossa: quem pediu a Camila quer a Camila. A leitura anterior é ENCERRADA (overlay
+    // fora, trava limpa) e a nova começa na hora.
+    if (window._lzScanRunning || document.getElementById('sp-import-overlay')) {
+      try { if (typeof window._spCloseImportOverlay === 'function') window._spCloseImportOverlay(); } catch (e) {}
+      var _ov = document.getElementById('sp-import-overlay');
+      if (_ov && _ov.parentNode) _ov.parentNode.removeChild(_ov);
+      window._lzScanRunning = false;
     }
     var ctx = window._lzScanCtx || {};
     var tg = ctx.byUid && ctx.byUid[uid];
