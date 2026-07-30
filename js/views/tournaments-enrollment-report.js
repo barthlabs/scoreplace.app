@@ -1822,6 +1822,9 @@
     }
     var gX = _lzTot(imp);
     var gY = (imp && imp.declaredGames != null) ? imp.declaredGames : null;
+    // o declarado pode ficar pequeno (medido: 569 gravados × 478 declarados) — barra travada
+    // em "478 de 478" enquanto ainda entram jogos é mentira
+    if (gX > (gY || 0)) gY = gX;
     var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
     var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];
     var tX = window._lzTournamentsRead(imp);   // mesma regra do overlay ao vivo
@@ -1832,8 +1835,8 @@
     var tY = (imp && imp.declaredTournaments != null) ? imp.declaredTournaments : null;
     var tLista = (imp && Array.isArray(imp.tournamentsList)) ? imp.tournamentsList.length : 0;
     if (tLista > 0) tY = (tY != null) ? Math.max(tY, tLista) : tLista;
-    var rX = rkFp.length;
-    var rY = (imp && imp.declaredRankings != null) ? imp.declaredRankings : null;
+    var rX = rkFp.filter(function (f) { return f.standings || (f.name && f.name !== f.categoryRaw); }).length;
+    var rY = rkFp.length || ((imp && imp.declaredRankings != null) ? imp.declaredRankings : null);
     body += '<div style="margin:8px 0 6px;">' +
       barLine('lz-ath-t', '🏆', 'Torneios', tX, tY) +
       barLine('lz-ath-r', '📊', 'Rankings', rX, rY) +
@@ -1918,10 +1921,16 @@
       _updBars({
         g: _lzTot(imp),
         t: window._lzTournamentsRead(imp),   // LIDOS, não conhecidos — regra única
-        r: (imp.footprint || []).filter(function (f) { return !f.official; }).length,
+        // rankings RESOLVIDOS (nome/classificação lidos), não só descobertos
+        r: (imp.footprint || []).filter(function (f) {
+          return !f.official && (f.standings || (f.name && f.name !== f.categoryRaw));
+        }).length,
         gY: (imp.declaredGames != null) ? imp.declaredGames : null,
         tY: (imp.declaredTournaments != null) ? imp.declaredTournaments : null,
-        rY: (imp.declaredRankings != null) ? imp.declaredRankings : null
+        // total = rankings DESCOBERTOS. O do perfil não é alcançável (medido: 29 declarados,
+        // 20 com jogo no histórico) e barra que nunca fecha é barra quebrada.
+        rY: ((imp.footprint || []).filter(function (f) { return !f.official; }).length)
+          || ((imp.declaredRankings != null) ? imp.declaredRankings : null)
       });
     }
     // x nunca anda pra trás (critérios de contagem variam entre fontes) e NUNCA passa de y:

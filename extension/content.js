@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.53';
+  var EXT_VERSION = '1.54';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -227,7 +227,13 @@
   // por competição (nome + classificação + logo saem do MESMO fetch — zero requisição extra).
   // Torneio: /{club}/tournaments/{id} (.table-group). Ranking: /{club}/rankings/{id}
   // (.table-ranking). Best-effort: se falhar/404, mantém a categoria. Retorna {total, resolved}.
-  async function fillTourneyNames(raw, onProg) {
+  // `limite` = resolve no máximo N competições nesta chamada, e `guarda` = onde gravar o
+  // resultado pra não se perder entre chamadas. Servem pro INTERCALAMENTO: o dono viu
+  // "Jogos 478 de 478 (100%)" com "Rankings 20 de 29" e reclamou com razão — os jogos
+  // terminavam primeiro e as competições ficavam se resolvendo depois. Mas é a leitura dos
+  // jogos que REVELA os rankings, então não dá pra resolvê-los antes; o que dá é resolver
+  // um punhado a cada página lida, e aí tudo termina junto — com os jogos por último.
+  async function fillTourneyNames(raw, onProg, limite, guarda) {
     var seen = {}, uniq = [];
     // Competições que JÁ têm nome real + classificação (etapa por-torneio desta rodada
     // ou herdadas de rodada anterior) são PULADAS — zero re-fetch do que já está pronto.
@@ -243,12 +249,14 @@
       if (!seen[id]) { seen[id] = 1; uniq.push({ id: id, type: 'r', club: r.club, cid: r.rankingId, categoryRaw: r.categoryRaw || '' }); }
     });
     var cache = {}, standCache = {}, logoCache = {}, resolved = 0, failed = [];
-    for (var i = 0; i < uniq.length; i++) {
-      // Progresso: 'names' pro import do próprio usuário; onProg quando é a busca do
-      // organizador (Análise de Inscritos), que tem barra própria.
-      if (onProg) onProg({ phase: 'torneios', note: (i + 1) + ' de ' + uniq.length });
-      else post({ __sp_lp: 'import-progress', phase: 'names', done: i, total: uniq.length });
+    var teto = (typeof limite === 'number' && limite > 0) ? Math.min(limite, uniq.length) : uniq.length;
+    for (var i = 0; i < teto; i++) {
       var u = uniq[i];
+      // O TEXTO TEM QUE DIZER O QUE ESTÁ SENDO FEITO. Antes saía só "2 de 41" — número solto,
+      // sem sujeito, que não informa nada a quem está olhando.
+      var oQue = (u.type === 't' ? 'torneio' : 'ranking') + (u.categoryRaw ? (' · ' + u.categoryRaw) : '');
+      if (onProg) onProg({ phase: 'torneios', note: 'nome e classificação — ' + oQue + ' (' + (i + 1) + ' de ' + teto + ')' });
+      else post({ __sp_lp: 'import-progress', phase: 'names', done: i, total: teto });
       // (o espaçamento entre requisições é da FILA do background.js — ver enqueue())
       try {
         var url = 'https://letzplay.me/' + u.club + '/' + (u.type === 't' ? 'tournaments' : 'rankings') + '/' + u.cid;
@@ -259,10 +267,14 @@
         // (100+ duplas × N rankings) estourava o limite de 1MiB do doc no Firestore.
         standCache[u.id] = (u.type === 't') ? tourneyStandingsFromDoc(d) : slimRankingStandings(rankingStandingsFromDoc(d), raw.handle);
         logoCache[u.id] = tourneyLogoFromDoc(d);
-        if (nm) { resolved++; } else { failed.push(u.categoryRaw || u.id); }
+        if (guarda) guarda[u.id] = { name: cache[u.id], standings: standCache[u.id], logo: logoCache[u.id] };
+        if (nm) {
+          resolved++;
+          if (onProg) onProg({ phase: 'torneios', feed: (u.type === 't' ? '🏆 ' : '📊 ') + nm });
+        } else { failed.push(u.categoryRaw || u.id); }
       } catch (e) { cache[u.id] = null; failed.push(u.categoryRaw || u.id); }
     }
-    if (!onProg) post({ __sp_lp: 'import-progress', phase: 'names', done: uniq.length, total: uniq.length });
+    if (!onProg) post({ __sp_lp: 'import-progress', phase: 'names', done: teto, total: teto });
     // Aplica UMA VEZ por competição (nome + classificação + logo). Jogos só guardam a referência.
     (raw.tournaments || []).forEach(function (t) {
       if (!t.tourneyId || !t.club) return;
@@ -278,7 +290,7 @@
       if (standCache[k]) r.standings = standCache[k];
       if (logoCache[k]) r.logo = logoCache[k];
     });
-    return { total: uniq.length, resolved: resolved, failed: failed };
+    return { total: uniq.length, resolved: resolved, failed: failed, pendentes: Math.max(0, uniq.length - teto) };
   }
 
   // Import COMPLETO de um participante a partir do perfil PÚBLICO /{handle}/matches
@@ -649,16 +661,34 @@
         Object.keys(priorNames || {}).forEach(function (k) { if (k.charAt(0) === 't') tLidos[k] = 1; });
       } catch (e) { return null; }
       var gY = (declaredGamesTotal != null) ? declaredGamesTotal : ((prior && prior.declaredGames != null) ? prior.declaredGames : null);
+      // O DECLARADO PODE FICAR PEQUENO. Medido no perfil da Camila: 569 jogos gravados
+      // contra 478 declarados (as páginas dos torneios trazem jogos que a lista pessoal não
+      // conta). Barra travada em "478 de 478" enquanto ainda entravam jogos é mentira; o
+      // total vira o maior entre o declarado e o que já temos — mesma regra dos torneios.
+      if (nG > (gY || 0)) gY = nG;
       var tY = (declaredTournTotal != null) ? declaredTournTotal : ((prior && prior.declaredTournaments != null) ? prior.declaredTournaments : null);
       // A lista ENUMERADA manda quando é maior que o contador do perfil: o perfil da Camila
       // diz "35 Torneios" e a lista pública tem mais entradas — era assim que a barra
       // fechava "35 de 35 (100%)" com torneios ainda por ler. Contador que a gente não sabe
       // o que conta perde de uma lista que a gente consegue contar.
       if (parts && parts.length) tY = (tY != null) ? Math.max(tY, parts.length) : parts.length;
-      var rY = (declaredRankingsTotal != null) ? declaredRankingsTotal : ((prior && prior.declaredRankings != null) ? prior.declaredRankings : null);
+      // RANKINGS: o total do PERFIL não é alcançável por esta leitura. Medido: a Camila
+      // declara 29 rankings mas só 20 aparecem no histórico dela — 9 não têm jogo nenhum,
+      // e nós só descobrimos ranking através dos jogos. Barra que nunca fecha é barra
+      // quebrada, então ela mede o que ESTA leitura pode entregar: rankings encontrados.
+      // O número do perfil continua à vista, na linha "perfil: … · 29 rankings · …".
+      // x = rankings RESOLVIDOS (nome/classificação lidos), y = descobertos. Mesma régua
+      // dos torneios: descobrir não é ler. É esta barra que sobe durante o intercalamento.
+      var rDescobertos = Object.keys(rS).length, rLidos = 0;
+      Object.keys(rS).forEach(function (k) {
+        var d = (tourneyDetails && tourneyDetails[k]) || (priorNames && priorNames[k]);
+        if (d && (d.standings || d.name)) rLidos++;
+      });
+      var rY = rDescobertos || (declaredRankingsTotal != null ? declaredRankingsTotal
+        : ((prior && prior.declaredRankings != null) ? prior.declaredRankings : null));
       function cap(x, y) { return (y != null && y > 0) ? Math.min(x, y) : x; }
       return {
-        g: cap(nG, gY), t: cap(Object.keys(tLidos).length, tY), r: cap(Object.keys(rS).length, rY),
+        g: cap(nG, gY), t: cap(Object.keys(tLidos).length, tY), r: cap(rLidos, rY),
         gY: gY, tY: tY, rY: rY
       };
     }
@@ -714,7 +744,8 @@
         });
         (raw.rankings || []).forEach(function (r) {
           if (!r.rankingId || !r.club) return;
-          var d = priorNames['r/' + r.club + '/' + r.rankingId];
+          // resolvidos NESTA rodada (intercalados com a leitura das páginas) vencem o prior
+          var d = tourneyDetails['r/' + r.club + '/' + r.rankingId] || priorNames['r/' + r.club + '/' + r.rankingId];
           // standings herdados de gravação ANTIGA podem estar completos → slim de novo
           if (d) { if (d.name) r.name = d.name; if (d.standings) r.standings = slimRankingStandings(d.standings, realHandle); if (d.logo) r.logo = d.logo; }
         });
@@ -882,6 +913,7 @@
       }
 
       // ── ETAPA 2: por torneio (a lista já vem do mais recente pro mais antigo) ──
+      var pulados = 0;   // já lidos em rodada anterior — contados, não narrados um a um
       for (var ti = 0; ti < parts.length; ti++) {
         checkDeadline();
         var P = parts[ti], key = 't/' + P.club + '/' + P.tid;
@@ -894,8 +926,17 @@
         // tamanho, a dedução falhava e a rodada relia tudo de novo, pra sempre.
         if (C.toursDone[key] && priorDet) {
           tourneyDetails[key] = priorDet;
-          prog({ phase: 'torneios', note: labelT + ' — já lido, pulando', pct: pctTour(ti + 1) });
+          // NÃO narra torneio por torneio ao pular. Anunciar "torneio 1 de 35", "torneio 2
+          // de 35"… em rajada é indistinguível de RECOMEÇAR do zero — foi exatamente o que
+          // o dono viu ("começou do 1 de 35"), embora nenhuma requisição estivesse sendo
+          // feita. Conta os pulados e diz UMA vez, quando a leitura de verdade começar.
+          pulados++;
           continue;
+        }
+        if (pulados) {
+          prog({ phase: 'torneios', note: pulados + ' torneio(s) já lidos — retomando do ' + (ti + 1) + ' de ' + parts.length,
+            pct: pctTour(ti), feed: '⏭️ ' + pulados + ' torneio(s) já gravados — pulados sem reler' });
+          pulados = 0;
         }
         // SKIP HONESTO (v1.45): só pula se os jogos gravados ≥ V+D da linha dela na
         // classificação. Antes bastava 1 jogo pra "já gravado, pulando" — a página de
@@ -906,7 +947,7 @@
             expPrior != null && countTid(P.tid) >= expPrior) {
           tourneyDetails[key] = priorDet;
           C.toursDone[key] = 1;
-          prog({ phase: 'torneios', note: labelT + ' — já gravado, pulando', pct: pctTour(ti + 1) });
+          pulados++;                                   // idem: conta, não narra
           continue;
         }
         // RETOMADA SEM RELER (v1.47, pedido do dono: "não parece estar pulando o já
@@ -953,6 +994,11 @@
         prog({ phase: 'torneios', pct: pctTour(ti + 1),
           feed: '🏆 ' + (det2.name || P.title || ('torneio ' + P.tid)) + (posMe != null ? (' · ' + posMe + 'º lugar') : '') + ' · ' + nG + ' jogo(s)' });
         postPartial('torneios', ti + 1, parts.length);   // grava a cada torneio
+      }
+
+      if (pulados) {
+        prog({ phase: 'torneios', note: 'todos os ' + parts.length + ' torneios já estavam lidos', pct: 30,
+          feed: '⏭️ ' + pulados + ' torneio(s) já gravados — pulados sem reler' });
       }
 
       // ── ETAPA 3: jogos gerais (rankings + torneios fora da lista), recente→antigo ──
@@ -1002,6 +1048,11 @@
         var added = addMatches(list);
         lastPageRead = p;
         prog({ phase: 'jogos', pct: pctPage(p, maxPage), feed: '🎾 página ' + p + ' de ' + maxPage + ': +' + added + ' jogo(s) · total ' + all.length });
+        // COMPETIÇÕES RESOLVEM JUNTO COM OS JOGOS. Ler uma página revela rankings novos;
+        // resolvemos alguns já, em vez de deixar tudo pro fim. Assim as três barras andam
+        // juntas e os JOGOS são a última coisa a fechar — que é como o dono pediu.
+        try { await fillTourneyNames(buildRawWithDetails(), prog, 2, tourneyDetails); }
+        catch (eN) { if (isPause(eN)) throw eN; }
         if (p % 3 === 0) postPartial('jogos', p, maxPage);   // grava a cada 3 páginas
         if (priorComplete && added === 0 && list.length > 0) {
           prog({ phase: 'jogos', note: 'daqui pra trás já está gravado — parando' });
@@ -1026,7 +1077,7 @@
       // Pausado → NÃO busca mais nada; só consolida e entrega o parcial.
       var rawF = buildRawWithDetails();
       if (!pausado) {
-        try { await fillTourneyNames(rawF, prog); }
+        try { await fillTourneyNames(rawF, prog, 0, tourneyDetails); }
         catch (e) { if (isPause(e)) { pausado = true; C.complete = false; } }
       }
       var impF = I.normalize(rawF, { importedAt: new Date().toISOString() });

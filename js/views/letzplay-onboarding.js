@@ -123,6 +123,7 @@
     var o = document.getElementById('sp-import-overlay');
     if (o && o.parentNode) o.parentNode.removeChild(o);
     if (typeof _vivoParar === 'function') _vivoParar();   // sem timer órfão depois de fechar
+    _temposOwn = false;                                   // a linha volta a ser do regressivo
   };
 
   // CARD CANÔNICO de progresso do letzplay (v1.1.18): BOLINHA QUE SEMPRE GIRA (spinner
@@ -135,9 +136,17 @@
   // Ticker do regressivo: 1s, só enquanto há overlay E contagem ativa. Se a barra sumiu
   // ou a contagem acabou, ele se desliga sozinho (nada de timer órfão rodando pra sempre).
   var _etaTimer = null;
+  // A linha #sp-imp-eta tem DOIS donos possíveis: o regressivo do org-scan (_spEtaText) e
+  // os tempos explícitos do fluxo do atleta (opts.tempos). Quando os tempos assumem, este
+  // ticker TEM QUE SAIR — ele fazia `textContent = ''` a cada chamada e apagava os tempos
+  // no mesmo tick em que eram escritos, então a linha nunca aparecia. Bug real (30/jul):
+  // passou pelos meus testes porque eu exercitei uma CÓPIA da função na página em vez de
+  // chamar a função deployada. Verificação vale pelo que ela EXECUTA, não pelo que imita.
+  var _temposOwn = false;
   function _etaTick() {
     var el = document.getElementById('sp-imp-eta');
     if (!el) { if (_etaTimer) { clearInterval(_etaTimer); _etaTimer = null; } return; }
+    if (_temposOwn) return;                     // linha ocupada pelos tempos explícitos
     var txt = (typeof window._spEtaText === 'function') ? window._spEtaText() : '';
     el.textContent = txt ? ('⏳ ' + txt) : '';
     if (txt && !_etaTimer) _etaTimer = setInterval(_etaTick, 1000);
@@ -217,6 +226,7 @@
     // tempos EXPLÍCITOS: {decorrido, restante}. Os dois rótulos existem SEMPRE (restante
     // vira "—" enquanto não há amostra pra estimar), pra nenhum dos dois mudar de lugar.
     if (opts.tempos) {
+      _temposOwn = true;                        // trava o _etaTick (ver comentário lá em cima)
       var eF = document.getElementById('sp-imp-eta');
       if (eF) {
         eF.innerHTML =

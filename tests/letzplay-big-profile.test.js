@@ -210,6 +210,7 @@ window.__APP = {
   rodadas: 0, parciais: 0, cursor: null, imp: null, done: false, erro: null,
   escritasCanonicas: 0, docsPorGid: {}, tamanhoDoc: 0, deltasVazios: 0,
   pausas: 0, throttles: 0, violacoesTeto: [], violacoesLidos: [],
+  jogosAntesDosRankings: 0, jogosAntesDosTorneios: 0, notasSemSujeito: [],
   gravar(imp, delta) {
     const M = window._spLzModel;
     const fonte = Array.isArray(delta) ? { games: delta, handle: imp.handle } : imp;
@@ -224,6 +225,19 @@ window.__APP = {
     window.addEventListener('message', function (e) {
       const d = e.data; if (!d) return;
       if (d.__sp_lp === 'lz-throttle') { self.throttles++; return; }
+      if (d.__sp_lp === 'athlete-import-progress') {
+        // ORDEM DE CONCLUSÃO: os JOGOS têm que ser a última barra a fechar. O dono viu
+        // "Jogos 478 de 478 (100%)" com "Rankings 20 de 29" e reclamou com razão — as
+        // competições ficavam se resolvendo DEPOIS dos jogos acabarem.
+        var _c = d.counts || {};
+        if (_c.gY && _c.g >= _c.gY) {
+          if (_c.rY && _c.r < _c.rY) self.jogosAntesDosRankings++;
+          if (_c.tY && _c.t < _c.tY) self.jogosAntesDosTorneios++;
+        }
+        // TEXTO SEM SUJEITO: "2 de 41" não informa nada a quem está olhando.
+        var _n = (d.current && d.current.note) || '';
+        if (/^\s*\d+\s+de\s+\d+\s*$/.test(_n)) self.notasSemSujeito.push(_n);
+      }
       if (d.__sp_lp === 'athlete-import-progress') {
         // AUDITORIA DAS BARRAS: guarda toda violação de "x nunca passa de y" e todo caso de
         // "torneios lidos" maior que o nº do torneio que está sendo processado agora.
@@ -297,6 +311,7 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     window.__APP.escritasCanonicas = 0; window.__APP.docsPorGid = {}; window.__APP.tamanhoDoc = 0;
     window.__APP.pausas = 0; window.__APP.throttles = 0;
     window.__APP.violacoesTeto = []; window.__APP.violacoesLidos = [];
+    window.__APP.jogosAntesDosRankings = 0; window.__APP.jogosAntesDosTorneios = 0; window.__APP.notasSemSujeito = [];
     window.__APP.start('CamilaExemplo', 'uid-camila', null, null);
   });
   await page.waitForFunction(() => window.__APP.done === true, null, { timeout: 120000 });
@@ -313,6 +328,8 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     pausas: window.__APP.pausas, throttles: window.__APP.throttles,
     violacoesTeto: window.__APP.violacoesTeto.slice(0, 5), nViolTeto: window.__APP.violacoesTeto.length,
     violacoesLidos: window.__APP.violacoesLidos.slice(0, 5), nViolLidos: window.__APP.violacoesLidos.length,
+    jogosAntesDosRankings: window.__APP.jogosAntesDosRankings, jogosAntesDosTorneios: window.__APP.jogosAntesDosTorneios,
+    notasSemSujeito: window.__APP.notasSemSujeito.slice(0, 4), nSemSujeito: window.__APP.notasSemSujeito.length,
     observacoes: (window.__APP.imp && (window.__APP.imp.observations || []).length),
     footprint: (window.__APP.imp && (window.__APP.imp.footprint || []).length) || 0,
     cursor: window.__APP.cursor,
@@ -364,6 +381,14 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     r.nViolTeto + ' violações, ex: ' + (r.violacoesTeto || []).join(' | '));
   ok(r.nViolLidos === 0, '"torneios lidos" nunca é maior que o torneio em processamento',
     r.nViolLidos + ' violações, ex: ' + (r.violacoesLidos || []).join(' | '));
+  // 6. os JOGOS fecham por ÚLTIMO — competições resolvem junto, não depois
+  ok(r.jogosAntesDosRankings === 0, 'Jogos nunca chega a 100% com Rankings ainda incompleto',
+    r.jogosAntesDosRankings + ' momentos com jogos cheios e rankings pela metade');
+  ok(r.jogosAntesDosTorneios === 0, 'Jogos nunca chega a 100% com Torneios ainda incompleto',
+    r.jogosAntesDosTorneios + ' momentos');
+  // 7. nenhum texto de progresso é um número solto ("2 de 41")
+  ok(r.nSemSujeito === 0, 'nenhuma nota de progresso é um número sem sujeito ("2 de 41")',
+    r.nSemSujeito + ' notas assim, ex: ' + (r.notasSemSujeito || []).join(' | '));
 
   // ── CENÁRIO 2: retomada — cursor pela metade ─────────────────────────────
   console.log('\n⏸️  CENÁRIO 2 — retomada de um cursor pela metade (não relê o que já leu)');
