@@ -117,6 +117,18 @@ window.__LZ = {
       h += pager(page, maxPage) + '</body></html>';
       return h;
     }
+    // lista de rankings: /{handle}/rankings[?page=]
+    mm = u.match(/^\\/CamilaExemplo\\/rankings(?:\\?page=(\\d+))?$/);
+    if (mm) {
+      const page = +(mm[1] || 1), perPage = 12;
+      const maxPage = Math.ceil(this.cfg.ranks / perPage);
+      let h = '<html><body>';
+      for (let r = (page-1)*perPage; r < Math.min(this.cfg.ranks, page*perPage); r++) {
+        h += '<a href="/' + CLUB + '/rankings/' + (90000+r) + '">Social Fem C / B ' + r + '</a>';
+      }
+      h += pager(page, maxPage) + '</body></html>';
+      return h;
+    }
     // histórico geral: /{handle}/matches[?page=]
     mm = u.match(/^\\/CamilaExemplo\\/matches(?:\\?page=(\\d+))?$/);
     if (mm) {
@@ -211,6 +223,7 @@ window.__APP = {
   escritasCanonicas: 0, docsPorGid: {}, tamanhoDoc: 0, deltasVazios: 0,
   pausas: 0, throttles: 0, violacoesTeto: [], violacoesLidos: [],
   jogosAntesDosRankings: 0, jogosAntesDosTorneios: 0, notasSemSujeito: [],
+  faseJogosComeçou: 0, torneiosDepoisDosJogos: 0, rankingsDepoisDosJogos: 0, totaisVistos: {},
   gravar(imp, delta) {
     const M = window._spLzModel;
     const fonte = Array.isArray(delta) ? { games: delta, handle: imp.handle } : imp;
@@ -226,10 +239,21 @@ window.__APP = {
       const d = e.data; if (!d) return;
       if (d.__sp_lp === 'lz-throttle') { self.throttles++; return; }
       if (d.__sp_lp === 'athlete-import-progress') {
+        var _f=(d.current&&d.current.phase)||'';
+        if(_f==='jogos'&&(d.counts||{}).g>0){ if(self.faseJogosComeçou===0) self.faseJogosComeçou=1; }
+        if(_f==='torneios'&&self.faseJogosComeçou) self.torneiosDepoisDosJogos++;
+        if(_f==='rankings'&&self.faseJogosComeçou) self.rankingsDepoisDosJogos++;
         // ORDEM DE CONCLUSÃO: os JOGOS têm que ser a última barra a fechar. O dono viu
         // "Jogos 478 de 478 (100%)" com "Rankings 20 de 29" e reclamou com razão — as
         // competições ficavam se resolvendo DEPOIS dos jogos acabarem.
         var _c = d.counts || {};
+        // TOTAIS FIXOS: guarda cada valor distinto visto por barra — se mudar no meio,
+        // aparece aqui. Era o "nasce 478 e vira 569" que o dono viu.
+        ['t','r','g'].forEach(function (k) {
+          if (_c[k+'Y'] == null) return;
+          self.totaisVistos[k] = self.totaisVistos[k] || [];
+          if (self.totaisVistos[k].indexOf(_c[k+'Y']) < 0) self.totaisVistos[k].push(_c[k+'Y']);
+        });
         if (_c.gY && _c.g >= _c.gY) {
           if (_c.rY && _c.r < _c.rY) self.jogosAntesDosRankings++;
           if (_c.tY && _c.t < _c.tY) self.jogosAntesDosTorneios++;
@@ -312,6 +336,7 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     window.__APP.pausas = 0; window.__APP.throttles = 0;
     window.__APP.violacoesTeto = []; window.__APP.violacoesLidos = [];
     window.__APP.jogosAntesDosRankings = 0; window.__APP.jogosAntesDosTorneios = 0; window.__APP.notasSemSujeito = [];
+    window.__APP.faseJogosComeçou = 0; window.__APP.torneiosDepoisDosJogos = 0; window.__APP.rankingsDepoisDosJogos = 0; window.__APP.totaisVistos = {};
     window.__APP.start('CamilaExemplo', 'uid-camila', null, null);
   });
   await page.waitForFunction(() => window.__APP.done === true, null, { timeout: 120000 });
@@ -329,6 +354,8 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     violacoesTeto: window.__APP.violacoesTeto.slice(0, 5), nViolTeto: window.__APP.violacoesTeto.length,
     violacoesLidos: window.__APP.violacoesLidos.slice(0, 5), nViolLidos: window.__APP.violacoesLidos.length,
     jogosAntesDosRankings: window.__APP.jogosAntesDosRankings, jogosAntesDosTorneios: window.__APP.jogosAntesDosTorneios,
+    torneiosDepoisDosJogos: window.__APP.torneiosDepoisDosJogos, rankingsDepoisDosJogos: window.__APP.rankingsDepoisDosJogos,
+    totaisVistos: window.__APP.totaisVistos,
     notasSemSujeito: window.__APP.notasSemSujeito.slice(0, 4), nSemSujeito: window.__APP.notasSemSujeito.length,
     observacoes: (window.__APP.imp && (window.__APP.imp.observations || []).length),
     footprint: (window.__APP.imp && (window.__APP.imp.footprint || []).length) || 0,
@@ -386,6 +413,16 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     r.jogosAntesDosRankings + ' momentos com jogos cheios e rankings pela metade');
   ok(r.jogosAntesDosTorneios === 0, 'Jogos nunca chega a 100% com Torneios ainda incompleto',
     r.jogosAntesDosTorneios + ' momentos');
+  // 6b. ORDEM torneios → rankings → JOGOS (especificação do dono)
+  ok(r.torneiosDepoisDosJogos === 0, 'nenhum torneio é lido DEPOIS dos jogos começarem', r.torneiosDepoisDosJogos + 'x');
+  ok(r.rankingsDepoisDosJogos === 0, 'nenhum ranking é lido DEPOIS dos jogos começarem', r.rankingsDepoisDosJogos + 'x');
+  // 6c. TOTAIS vistos "de cara" e FIXOS — nunca mudam no meio
+  var _tv = r.totaisVistos || {};
+  ok((_tv.t || []).length <= 1, 'total de TORNEIOS não muda durante a leitura', 'vistos: ' + JSON.stringify(_tv.t));
+  ok((_tv.r || []).length <= 1, 'total de RANKINGS não muda durante a leitura', 'vistos: ' + JSON.stringify(_tv.r));
+  ok((_tv.g || []).length <= 1, 'total de JOGOS não muda (nascia 478 e virava 569)', 'vistos: ' + JSON.stringify(_tv.g));
+  // 6d. ZERO DUPLICATA
+  ok(r.jogosTotal === r.declarados, 'jogos guardados == declarados, sem duplicata (' + r.jogosTotal + ' × ' + r.declarados + ')');
   // 7. nenhum texto de progresso é um número solto ("2 de 41")
   ok(r.nSemSujeito === 0, 'nenhuma nota de progresso é um número sem sujeito ("2 de 41")',
     r.nSemSujeito + ' notas assim, ex: ' + (r.notasSemSujeito || []).join(' | '));

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.6.14';
+window.SCOREPLACE_VERSION = '1.6.15';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -108,7 +108,7 @@ try {
 // Auto-atualização: quando a extensão estiver publicada na Chrome Web Store, o
 // Chrome atualiza sozinho e este gate para de disparar. Enquanto não está, o gate
 // BLOQUEIA e pede a atualização manual pelo zip — de propósito.
-window.SP_EXT_VERSION = '1.54';
+window.SP_EXT_VERSION = '1.55';
 // O zip da versão exigida, servido pelo próprio site (fica na raiz do repo → GitHub Pages
 // entrega). Derivado de SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não
 // aceita, e a trava de deploy (scripts/check-ext-version.js) garante que o arquivo existe.

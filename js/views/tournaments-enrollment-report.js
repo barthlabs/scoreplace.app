@@ -1925,7 +1925,10 @@
         r: (imp.footprint || []).filter(function (f) {
           return !f.official && (f.standings || (f.name && f.name !== f.categoryRaw));
         }).length,
-        gY: (imp.declaredGames != null) ? imp.declaredGames : null,
+        // total de jogos = o MAIOR entre o declarado e o que já temos. Numa RETOMADA isso
+        // faz a barra começar já no número real, em vez de nascer em "478" e pular pro
+        // verdadeiro no meio da leitura — que foi o que o dono viu e reclamou com razão.
+        gY: Math.max((imp.declaredGames != null) ? imp.declaredGames : 0, _lzTot(imp)) || null,
         tY: (imp.declaredTournaments != null) ? imp.declaredTournaments : null,
         // total = rankings DESCOBERTOS. O do perfil não é alcançável (medido: 29 declarados,
         // 20 com jogo no histórico) e barra que nunca fecha é barra quebrada.
