@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.56';
+  var EXT_VERSION = '1.57';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -816,6 +816,7 @@
     }
 
     function ehPausa(e) { return !!(e && e.code === 'rate-budget'); }
+    function _medalha(p) { return p === 1 ? '🥇' : (p === 2 ? '🥈' : (p === 3 ? '🥉' : '🏅')); }
     function minhaPos(st) {
       var low = String(realHandle || '').toLowerCase(), out = null;
       (st || []).forEach(function (g) {
@@ -892,16 +893,20 @@
           // e a barra usava o quanto já foi lido — dois contadores diferentes na mesma tela
           // ("torneio 1 de 35" embaixo de "30 de 35"). Agora ele conta o que está sendo
           // lido AGORA: os já lidos + 1. Consistente por construção.
+          var _totT = totTorneios || toursList.length;
           prog({ phase: 'torneios',
-            note: 'torneio ' + (Object.keys(C.toursDone).length + 1) + ' de ' + (totTorneios || toursList.length) + ' — nome, categoria e classificação',
+            note: 'torneio ' + Math.min(Object.keys(C.toursDone).length + 1, _totT) + ' de ' + _totT + ' — nome, categoria e classificação',
             pct: 4 + Math.round((ti / Math.max(1, toursList.length)) * 26) });
           try {
             var dT = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
             det[tk] = { name: tourneyNameFromDoc(dT), standings: tourneyStandingsFromDoc(dT), logo: tourneyLogoFromDoc(dT) };
             C.toursDone[tk] = 1;
             var pT = minhaPos(det[tk].standings);
+            // ESTRUTURADO: o app pinta cada campo (nome / colocação) com a paleta da lista.
+            // String pronta não dá pra colorir sem injetar HTML de fonte não confiável.
             prog({ phase: 'torneios', pct: 4 + Math.round(((ti + 1) / Math.max(1, toursList.length)) * 26),
-              feed: '🏆 ' + (det[tk].name || P.title || ('torneio ' + P.tid)) + (pT != null ? (' · ' + pT + 'º lugar') : '') });
+              feed: { icon: '🏆', nome: (det[tk].name || P.title || ('torneio ' + P.tid)),
+                pos: (pT != null ? (_medalha(pT) + ' ' + pT + 'º') : null) } });
           } catch (eT) { if (ehPausa(eT)) throw eT; }
           parcialAgora('torneios', ti + 1, toursList.length);
         }
@@ -920,15 +925,18 @@
           var R = ranksList[ri], rk = 'r/' + R.club + '/' + R.rid;
           if (C.ranksDone[rk] && detDe(rk)) { det[rk] = detDe(rk); pulR++; continue; }
           if (pulR) { prog({ phase: 'rankings', feed: '⏭️ ' + pulR + ' já lidos — pulados sem reler' }); pulR = 0; }
-          prog({ phase: 'rankings',   // idem: o rótulo conta o mesmo que a barra
-            note: 'ranking ' + (Object.keys(C.ranksDone).length + 1) + ' de ' + (totRankings || ranksList.length) + ' — nome e classificação',
+          var _totR = totRankings || ranksList.length;
+          prog({ phase: 'rankings',   // idem: o rótulo conta o mesmo que a barra, e nunca passa dele
+            note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length + 1, _totR) + ' de ' + _totR + ' — nome e classificação',
             pct: 31 + Math.round((ri / Math.max(1, ranksList.length)) * 14) });
           try {
             var dR = await bgFetchDoc('https://letzplay.me/' + R.club + '/rankings/' + R.rid);
             det[rk] = { name: tourneyNameFromDoc(dR), standings: slimRankingStandings(rankingStandingsFromDoc(dR), realHandle), logo: tourneyLogoFromDoc(dR) };
             C.ranksDone[rk] = 1;
+            var pR = minhaPos(det[rk].standings);
             prog({ phase: 'rankings', pct: 31 + Math.round(((ri + 1) / Math.max(1, ranksList.length)) * 14),
-              feed: '📊 ' + (det[rk].name || R.title || ('ranking ' + R.rid)) });
+              feed: { icon: '📊', nome: (det[rk].name || R.title || ('ranking ' + R.rid)),
+                pos: (pR != null ? (pR + 'º') : null) } });
           } catch (eR) { if (ehPausa(eR)) throw eR; }
           parcialAgora('rankings', ri + 1, ranksList.length);
         }

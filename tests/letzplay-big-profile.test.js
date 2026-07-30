@@ -265,8 +265,10 @@ window.__APP = {
         // diferentes na mesma tela. O do rótulo nunca pode ficar ATRÁS do da barra.
         var _mt = _n.match(/^torneio (\d+) de (\d+)/);
         if (_mt && _c.t != null && +_mt[1] < _c.t) self.rotuloAtrasado.push(_n + ' (barra: ' + _c.t + ')');
+        if (_mt && +_mt[1] > +_mt[2]) self.rotuloAtrasado.push('PASSOU DO TOTAL: ' + _n);
         var _mr = _n.match(/^ranking (\d+) de (\d+)/);
         if (_mr && _c.r != null && +_mr[1] < _c.r) self.rotuloAtrasado.push(_n + ' (barra: ' + _c.r + ')');
+        if (_mr && +_mr[1] > +_mr[2]) self.rotuloAtrasado.push('PASSOU DO TOTAL: ' + _n);
       }
       if (d.__sp_lp === 'athlete-import-progress') {
         // AUDITORIA DAS BARRAS: guarda toda violação de "x nunca passa de y" e todo caso de

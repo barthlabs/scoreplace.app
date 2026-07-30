@@ -18,7 +18,15 @@
         var ra = null, cfm = null;
         try { ra = r.headers.get('retry-after'); } catch (e) {}
         try { cfm = r.headers.get('cf-mitigated'); } catch (e) {}
-        return r.text().then(function (h) {
+        // DECODIFICA SEMPRE COMO UTF-8, não como o cabeçalho manda. `r.text()` obedece o
+        // charset do Content-Type, e o letzplay serve páginas com charset Latin-1 num corpo
+        // que é UTF-8 — o resultado é o nome do torneio chegando como
+        // «FEMININA â€œCâ€» em vez de «FEMININA “C”». Os bytes estão certos; quem estava
+        // errado era a régua de leitura.
+        return r.arrayBuffer().then(function (buf) {
+          var h;
+          try { h = new TextDecoder('utf-8').decode(buf); }
+          catch (e) { h = String.fromCharCode.apply(null, new Uint8Array(buf)); }
           // BLOQUEIO DISFARÇADO DE SUCESSO: o Cloudflare às vezes devolve a página de
           // desafio ("Just a moment…") com status 200/503. Sem esta detecção, r.ok=true,
           // o HTML volta SEM jogo nenhum, o import conclui "sem-jogos" e — pior — a fila

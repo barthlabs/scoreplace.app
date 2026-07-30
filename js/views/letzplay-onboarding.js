@@ -288,7 +288,21 @@
       if (f) {
         f.style.display = 'block';
         var ln = document.createElement('div');
-        ln.textContent = String(opts.feedAdd);
+        // FEED COLORIDO, com a MESMA paleta da lista de torneios do dialog: data azul-céu,
+        // categoria violeta, colocação âmbar. Vem ESTRUTURADO ({icon,nome,cat,pos,data}) e
+        // é montado aqui com escape — o texto é nome de torneio vindo do letzplay, então
+        // não pode ir pra innerHTML cru vindo de fora.
+        var fa = opts.feedAdd;
+        if (fa && typeof fa === 'object') {
+          var h = (fa.icon ? _esc(fa.icon) + ' ' : '');
+          if (fa.data) h += '<span style="color:#7dd3fc;">' + _esc(fa.data) + '</span> · ';
+          h += _esc(fa.nome || '');
+          if (fa.cat) h += ' · <span style="color:#a78bfa;font-weight:700;">' + _esc(fa.cat) + '</span>';
+          if (fa.pos != null) h += ' · <span style="color:#fbbf24;font-weight:800;">' + _esc(fa.pos) + '</span>';
+          ln.innerHTML = h;
+        } else {
+          ln.textContent = String(fa);
+        }
         f.appendChild(ln);
         while (f.children.length > 40) f.removeChild(f.firstChild);
         f.scrollTop = f.scrollHeight;
