@@ -193,6 +193,7 @@
     var games = matches.map(function (m, i) {
       return {
         idx: i,
+        lzId: m.lzId || null,           // id da partida dado pelo letzplay — a identidade
         date: m.date || null,
         sport: lpSport,
         official: m.official === true,

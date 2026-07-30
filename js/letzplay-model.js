@@ -120,6 +120,10 @@
   //     de clubes diferentes no mesmo dia se cruzem;
   //   • o mesmo jogo visto de qualquer lado dá a MESMA chave — é o objetivo.
   function matchId(g, meHandle) {
+    // ID DA FONTE VENCE. O letzplay identifica cada partida (medido em 30/jul/2026:
+    // class="match-{id}-schedule", 20/20 presentes e distintos). A chave de conteúdo
+    // abaixo continua valendo pra dado gravado antes de a extensão capturar esse id.
+    if (g && g.lzId) return 'lz' + String(g.lzId);
     var t = _teams(g, meHandle);
     var placares = t.map(function (x) { return x.score == null ? '' : x.score; }).join('-');
     var times = t.map(function (x) { return x.handles.join(','); }).join('~');

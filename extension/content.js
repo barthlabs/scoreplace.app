@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.60';
+  var EXT_VERSION = '1.61';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -510,6 +510,11 @@
   // É a MESMA regra que js/letzplay-model.js já aplica no gid canônico (e por isso o acervo
   // canônico nunca duplicou) — aqui a chave de dedup em voo tinha ficado pra trás.
   function _gameKey(m) {
+    // O LETZPLAY DÁ ID POR PARTIDA (class="match-10004859-schedule") — medido: 20 cards,
+    // 20 ids distintos, 100% presentes. Identidade dada pela fonte vence qualquer chave
+    // que a gente derive. A de conteúdo fica só pra dado antigo, gravado antes de a
+    // extensão capturar o id.
+    if (m && m.lzId) return 'lz' + m.lzId;
     return [m.date || '', m.club || '', m.myScore, m.oppScore,
       (m.partnerHandle || ''), (m.oppHandles || []).slice().sort().join('+')].join('|').toLowerCase();
   }
@@ -868,10 +873,23 @@
       function colher(doc) {
         [].slice.call(doc.querySelectorAll('a[href]')).forEach(function (a) {
           var h = a.getAttribute('href') || '', m = h.match(re);
-          if (!m || visto[h]) return;
-          visto[h] = 1;
+          if (!m) return;
+          // DEDUP PELO ID DA COMPETIÇÃO, NUNCA PELO HREF. Verificado na página real
+          // (letzplay.me/camilacalia/tournaments, 30/jul): são 59 links pra ~20 torneios —
+          // cada torneio aparece 3 vezes, em /{id}, /{id}/players e /{id}/matches. Dedup
+          // por href tratava os três como torneios diferentes, e a leitura percorria a
+          // lista inteira de novo. O id é a identidade; a URL é só um caminho até ele.
+          var chave = m[1] + '/' + m[2];
+          if (visto[chave]) {
+            // guarda o melhor título: o link base costuma ter o nome, /players e /matches não
+            var t0 = (a.textContent || '').replace(/\s+/g, ' ').trim();
+            var ja = visto[chave];
+            if (t0 && (!ja.title || t0.length > ja.title.length)) ja.title = t0;
+            return;
+          }
           var item = { club: m[1], title: (a.textContent || '').replace(/\s+/g, ' ').trim() };
           item[campo] = m[2];
+          visto[chave] = item;
           achados.push(item);
         });
       }

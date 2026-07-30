@@ -40,36 +40,45 @@ function ok(cond, msg, detalhe) {
 // .row.match-player, .match-players-double, .table-group, .table-ranking).
 const FIXTURE = `
 const CLUB = 'paineiras-bt';
-const PER_PAGE = 14;
+const PER_PAGE = 20;   // medido na página real de /matches
 
 function mkCard(g) {
+  // ESTRUTURA MEDIDA na página real (letzplay.me/camilacalia/matches, 30/jul/2026):
+  // .match-title > a[/{club}/(tournaments|rankings)/{id}] · .row.match-player ×2 ·
+  // .match-results-points (o placar) · span.match-{ID}-schedule (data + ID DA PARTIDA)
   const href = g.tid ? ('/' + CLUB + '/tournaments/' + g.tid) : ('/' + CLUB + '/rankings/' + g.rid);
-  const catText = g.tid
-    ? ('Grupos • Finals ' + g.tid + ' - Feminina C')
-    : ('Social Fem C / B | 2026 Rodada: ' + ((g.i % 9) + 1));
+  const catText = g.tid ? ('Grupos • Finals ' + g.tid + ' - Feminina C')
+                        : ('Competitivo Fem C | 2026 2a Etapa • Rodada: ' + ((g.i % 9) + 1));
   const meWin = g.i % 3 !== 0;
   const s1 = meWin ? 6 : 4, s2 = meWin ? 3 : 6;
+  const mid = 10000000 + g.i;
   return \`<div class="row match">
-    <div>\${g.date}</div>
-    <div><a href="\${href}">\${catText}</a></div>
-    <div class="col-xs-12">
+    <div class="col-xs-10 match-title small"><a class="text-muted" href="\${href}">\${catText}</a></div>
+    <div class="col-xs-12" style="padding:0px;">
       <div class="row match-player">
-        <div class="match-player-info"><a href="/CamilaExemplo">av</a><a href="/Parceira\${g.i % 40}">av</a></div>
-        <span class="match-players-double">Camila Exemplo Parceira\${g.i % 40} Sobrenome</span>
-        <div>\${s1}</div>
+        <div class="col-xs-11">
+          <div class="match-player-info"><a href="/CamilaExemplo">av</a></div>
+          <div class="match-player-info"><a href="/Parceira\${g.i % 40}">av</a></div>
+          <span class="match-players-double">Camila Exemplo Parceira\${g.i % 40} Sobrenome</span>
+        </div>
+        <div class="match-results-points">\${s1}</div>
       </div>
       <div class="row match-player">
-        <div class="match-player-info"><a href="/AdvUm\${g.i % 90}">av</a><a href="/AdvDois\${g.i % 77}">av</a></div>
-        <span class="match-players-double">AdvUm\${g.i % 90} Sobrenome AdvDois\${g.i % 77} Sobrenome</span>
-        <div>\${s2}</div>
+        <div class="col-xs-11">
+          <div class="match-player-info"><a href="/AdvUm\${g.i % 90}">av</a></div>
+          <div class="match-player-info"><a href="/AdvDois\${g.i % 77}">av</a></div>
+          <span class="match-players-double">AdvUm\${g.i % 90} Sobrenome AdvDois\${g.i % 77} Sobrenome</span>
+        </div>
+        <div class="match-results-points">\${s2}</div>
       </div>
     </div>
+    <div class="col-xs-12 match-footer small"><span class="match-\${mid}-schedule">\${g.date}</span></div>
   </div>\`;
 }
 function pager(page, max) {
   let h = '';
-  for (let p = 1; p <= max; p++) h += '<a href="?page=' + p + '">' + p + '</a>';
-  return h;
+  for (let p = 2; p <= max; p++) h += '<a href="?page=' + p + '">' + p + '</a>';
+  return h + (page < max ? '<a href="?page=' + (page + 1) + '">Próxima</a>' : '');
 }
 // O universo: N_GAMES jogos, N_TOUR torneios (4 jogos cada), resto em N_RANK rankings.
 function build(cfg) {
@@ -112,7 +121,11 @@ window.__LZ = {
       const maxPage = Math.ceil(this.cfg.tours / perPage);
       let h = '<html><body>';
       for (let t = (page-1)*perPage; t < Math.min(this.cfg.tours, page*perPage); t++) {
-        h += '<a href="/' + CLUB + '/tournaments/' + (300000+t) + '">Interno Ciclo ' + t + ' - Feminina C</a>';
+        // a página REAL repete cada torneio em 3 links (/id, /id/players, /id/matches) —
+        // verificado em letzplay.me/camilacalia/tournaments: 59 links pra ~20 torneios
+        h += '<a href="/' + CLUB + '/tournaments/' + (300000+t) + '">Interno Ciclo ' + t + ' - Feminina C</a>'
+           + '<a href="/' + CLUB + '/tournaments/' + (300000+t) + '/players">Jogadores</a>'
+           + '<a href="/' + CLUB + '/tournaments/' + (300000+t) + '/matches">Jogos</a>';
       }
       h += pager(page, maxPage) + '</body></html>';
       return h;
