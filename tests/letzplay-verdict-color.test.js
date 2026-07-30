@@ -307,7 +307,10 @@ ok(iNovo >= 0 && iMeio > iNovo && iAnt > iMeio, 'ordem cronológica INVERSA: jun
 
 // 3) NÃO LIDO vai pro fim, e não inventa data
 ok(htmlL.indexOf('PENDENTE') > iAnt, 'ainda-não-lido desce pro fim da lista');
-ok(/PENDENTE[^<]*<[^>]*>ainda não lido/.test(htmlL.replace(/\n/g, '')), 'não lido é rotulado, sem data inventada');
+// o não-lido é rotulado E não ganha data inventada (a linha dele não tem a cor da data)
+var _linhaPend = htmlL.split('<div ').filter(function (x) { return x.indexOf('PENDENTE') >= 0; })[0] || '';
+ok(_linhaPend.indexOf('ainda não lido') >= 0, 'não lido é rotulado como tal');
+ok(_linhaPend.indexOf('#7dd3fc') < 0, 'não lido NÃO ganha data inventada (sem a cor da data)');
 
 // 4) TRÊS CORES distintas — data, categoria e classificação
 ok(htmlL.indexOf('#7dd3fc') >= 0, 'data tem cor própria (#7dd3fc)');
@@ -334,6 +337,66 @@ ok(meio.indexOf('Copa Feminina C de Verao 2026') >= 0, 'categoria no meio do nom
 
 // 7) ranking não entra na lista de torneios
 ok(htmlL.indexOf('Social Fem') < 0, 'ranking não aparece na lista de torneios');
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Ver trilha de X/Y" NO CAMPO DA CATEGORIA — o defeito real, medido em produção
+// (letzplayScans/h2J8..., @camilacalia, 30/jul/2026): 55 de 55 entradas oficiais com
+// categoryRaw = "Ver trilha de …". O card do jogo tem DOIS links pro mesmo
+// /tournaments/{id} (a categoria e a trilha da dupla) e o extrator pegava o primeiro.
+// Como o agrupamento usava categoryRaw, o MESMO torneio virava várias entradas —
+// 35 torneios contados como 55, e a barra dizia "35 de 35 (100%)" com 14 por ler.
+console.log('\n── trilha no campo da categoria (defeito medido em prod) ──');
+
+// 3 entradas do MESMO torneio, cada uma com a trilha de uma dupla diferente
+function _fpTrilha(tid, trilha, pos) {
+  return { official: true, club: 'paineiras-bt', tourneyId: tid, categoryRaw: trilha,
+    name: "2º Final's Ranking 7BTW - Finais ranking W7BT - Feminina C",
+    year: 2026, standings: [{ group: 'G1', rows: [{ pos: pos, handles: ['camilacalia'] }] }] };
+}
+var impT = { footprint: [
+    _fpTrilha('700', 'Ver trilha de I. Garcia/L. Costa', 4),
+    _fpTrilha('700', 'Ver trilha de L. Costa/N. Pinto', 2),
+    _fpTrilha('700', 'Ver trilha de I. Garcia/N. Pinto', 6)
+  ], games: [], declaredTournaments: 35,
+  tournamentsList: [{ club: 'paineiras-bt', tid: '700' }] };
+
+// 1) CONTAGEM por torneio DISTINTO, não por entrada de footprint
+ok(window._lzTournamentsRead(impT) === 1,
+  '3 entradas do mesmo torneio contam como 1 torneio lido (era 3 → inflava a barra)');
+
+// 2) UMA linha só na lista, com a MELHOR colocação
+var htmlT = window._lzTourneyRows(impT, 'camilacalia');
+var divsT = (htmlT.match(/<div /g) || []).length;
+ok(divsT === 1, 'a lista mostra UMA linha para o torneio (era uma por trilha)', 'linhas=' + divsT);
+ok(/🥈 2º/.test(htmlT), 'funde as entradas mantendo a melhor colocação (2º, não 4º nem 6º)');
+
+// 3) a TRILHA sai do campo da categoria, fica BRANCA e vai pro FIM
+ok(new RegExp('color:#f3f4f6[^>]*>Ver trilha de').test(htmlT), 'trilha em BRANCO (#f3f4f6), não no roxo');
+ok(htmlT.indexOf('#a78bfa') < 0 || !/color:#a78bfa[^>]*>Ver trilha/.test(htmlT),
+  'trilha NUNCA sai com a cor da categoria');
+var iCat = htmlT.indexOf('#a78bfa'), iPos = htmlT.indexOf('#fbbf24'), iTr = htmlT.indexOf('#f3f4f6');
+ok(iCat >= 0 && iPos > iCat && iTr > iPos,
+  'ordem: categoria → classificação → trilha (pedido do dono)', 'cat=' + iCat + ' pos=' + iPos + ' trilha=' + iTr);
+
+// 4) a CATEGORIA REAL é resgatada do nome, já que o campo dela estava ocupado pela trilha
+ok(new RegExp('color:#a78bfa[^>]*>Feminina C<').test(htmlT),
+  '"Feminina C" (que estava dentro do nome) virou a categoria colorida');
+ok(htmlT.indexOf("Finais ranking W7BT - Feminina C") < 0, 'o sufixo da categoria saiu do nome');
+
+// 5) o extrator não pega mais o link da trilha
+var X = window._spExtract || require('../extension/lib/letzplay-extract.js') || null;
+if (window._spExtract && window._spExtract.isTrailText) {
+  ok(window._spExtract.isTrailText('Ver trilha de I. Garcia/L. Costa') === true, 'reconhece texto de trilha');
+  ok(window._spExtract.isTrailText('Grupos • Finals - Feminina C') === false, 'não confunde categoria com trilha');
+}
+
+// 6) texto que NÃO é categoria nem trilha não vira chip colorido
+var htmlN = window._lzTourneyRows({ footprint: [{ official: true, club: 'c', tourneyId: '9',
+  categoryRaw: 'Finais ranking W7BT', name: "2º Final's Ranking 7BTW - Finais ranking W7BT",
+  year: 2026, standings: [{ group: 'G1', rows: [{ pos: 1, handles: ['x'] }] }] }] }, 'x');
+ok(htmlN.indexOf('#a78bfa') < 0, '"Finais ranking W7BT" não é categoria → sem chip roxo');
+
 
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

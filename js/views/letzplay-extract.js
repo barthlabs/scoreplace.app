@@ -127,6 +127,19 @@
     return teams;
   }
 
+  /** Texto de link que NÃO é categoria: "Ver trilha de X/Y" é o caminho da dupla na chave. */
+  function isTrailText(t) { return /ver\s+trilha|trilha\s+de/i.test(String(t || '')); }
+
+  /** Primeiro link de competição do card que NÃO seja a trilha. */
+  function _pickCatLink(card, tipo) {
+    var links = Array.prototype.slice.call(card.querySelectorAll('a[href*="/' + tipo + '/"]'));
+    if (!links.length) return null;
+    for (var i = 0; i < links.length; i++) {
+      if (!isTrailText(links[i].textContent)) return links[i];
+    }
+    return links[0];
+  }
+
   /** Extrai os jogos da página de histórico. Cada jogo é um `.row.match`.
    * VERIFICADO AO VIVO: 14 jogos reais de @RodrigoBarth extraídos corretamente
    * (parceiro / adversários / placar / vitória). */
@@ -137,8 +150,11 @@
     var cards = Array.prototype.slice.call(doc.querySelectorAll('.row.match'));
     cards.forEach(function (card) {
       // Puxa TUDO: torneio (OFICIAL, /tournaments/) e ranking (recreativo, /rankings/).
-      var tournLink = card.querySelector('a[href*="/tournaments/"]');
-      var catLink = tournLink || card.querySelector('a[href*="/rankings/"]');
+      // Pula o link "Ver trilha de X/Y" (o caminho da dupla na chave) — ele aponta pro
+      // MESMO /tournaments/{id} da categoria, e pegá-lo punha o texto dele em categoryRaw.
+      // Ver o comentário longo em extension/lib/letzplay-extract.js.
+      var tournLink = _pickCatLink(card, 'tournaments');
+      var catLink = tournLink || _pickCatLink(card, 'rankings');
       var body = card.querySelector('.col-xs-12');
       if (!catLink || !body) return;
       var dateText = Array.prototype.slice.call(card.children)
@@ -157,6 +173,7 @@
   }
 
   root._spExtract = {
+    isTrailText: isTrailText,
     handleFromHref: handleFromHref,
     parseCategory: parseCategory,
     parseRankingRef: parseRankingRef,

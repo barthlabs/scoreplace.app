@@ -175,6 +175,20 @@
     return map;
   }
 
+  /** Texto de link que NÃO é categoria: "Ver trilha de X/Y" é o caminho da dupla na chave. */
+  function isTrailText(t) { return /ver\s+trilha|trilha\s+de/i.test(String(t || '')); }
+
+  /** Primeiro link de competição do card que NÃO seja a trilha. Fallback: o primeiro que
+   * existir (melhor um categoryRaw sujo que nenhuma referência de competição). */
+  function _pickCatLink(card, tipo) {
+    var links = Array.prototype.slice.call(card.querySelectorAll('a[href*="/' + tipo + '/"]'));
+    if (!links.length) return null;
+    for (var i = 0; i < links.length; i++) {
+      if (!isTrailText(links[i].textContent)) return links[i];
+    }
+    return links[0];
+  }
+
   /** Extrai os jogos da página de histórico. Cada jogo é um `.row.match`.
    * VERIFICADO AO VIVO: jogos reais de @RodrigoBarth extraídos corretamente
    * (parceiro / adversários / NOME de apresentação / placar / vitória). */
@@ -185,8 +199,16 @@
     var cards = Array.prototype.slice.call(doc.querySelectorAll('.row.match'));
     cards.forEach(function (card) {
       // Puxa TUDO: torneio (OFICIAL, /tournaments/) e ranking (recreativo, /rankings/).
-      var tournLink = card.querySelector('a[href*="/tournaments/"]');
-      var catLink = tournLink || card.querySelector('a[href*="/rankings/"]');
+      //
+      // ⚠️ O CARD TEM MAIS DE UM LINK PRO MESMO /tournaments/{id}: além da CATEGORIA, existe
+      // o "Ver trilha de X/Y" (o caminho da dupla na chave). Pegar o primeiro pegava a
+      // TRILHA, e o texto dela ia parar em `categoryRaw`. Medido em produção (30/jul/2026,
+      // perfil @camilacalia): 55 de 55 entradas oficiais com categoryRaw = "Ver trilha de
+      // …". Como o `buildRaw` agrupava por categoryRaw, o MESMO torneio com trilhas de
+      // duplas diferentes virava entradas separadas — 35 torneios contados como 55.
+      // Então: pula os links de trilha e fica no primeiro que sobrar.
+      var tournLink = _pickCatLink(card, 'tournaments');
+      var catLink = tournLink || _pickCatLink(card, 'rankings');
       var body = card.querySelector('.col-xs-12');
       if (!catLink || !body) return;
       var dateText = Array.prototype.slice.call(card.children)
@@ -247,6 +269,7 @@
   }
 
   root._spExtract = {
+    isTrailText: isTrailText,
     handleFromHref: handleFromHref,
     parsePublicProfile: parsePublicProfile,
     parseCategory: parseCategory,

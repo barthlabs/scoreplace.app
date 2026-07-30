@@ -1200,6 +1200,7 @@
   var _LZ_C_DATA = '#7dd3fc';   // data       — azul-céu
   var _LZ_C_CAT = '#a78bfa';    // categoria  — violeta (a cor do letzplay no app)
   var _LZ_C_POS = '#fbbf24';    // colocação  — âmbar (pódio)
+  var _LZ_C_TRILHA = '#f3f4f6'; // trilha     — BRANCO (é contexto, não classificação)
 
   function _lzPad2(n) { return (n < 10 ? '0' : '') + n; }
   var _LZ_MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -1233,6 +1234,28 @@
   // cor — o pedido do dono era exatamente destacá-la. Então tiramos o sufixo do nome e a
   // categoria vira sempre um campo próprio, colorido. Bônus: encurta nomes que ocupavam 3
   // linhas na caixa.
+  // "Ver trilha de X/Y" é o caminho da DUPLA na chave, não a categoria — e por um erro de
+  // parse foi gravado no campo da categoria. Aqui ele é reconhecido, tirado de lá e
+  // mostrado no fim da linha, em BRANCO (pedido do dono: "dá pra deixar isso branco e o
+  // feminina C nesse roxo?").
+  function _lzEhTrilha(s) { return /ver\s+trilha|trilha\s+de/i.test(String(s || '')); }
+  // Isto se parece com uma categoria? ("Feminina C", "DUPLA FEMININA D", "CAT. FUN
+  // FEMININO", "Mista FUN"). Serve pra rejeitar o que caiu no campo por engano.
+  function _lzPareceCategoria(s) {
+    var t = String(s || '').trim();
+    if (!t || t.length > 40 || _lzEhTrilha(t)) return false;
+    if (/(masculin|feminin|mist[ao]|\bmasc\b|\bfem\b)/i.test(t)) return true;
+    return t.length <= 20 && /(^|[\s\/])(FUN|[A-D])\s*[+\-]?\s*($|[\s\/])/i.test(t);
+  }
+  // Categoria a partir do NOME real: o letzplay escreve "<evento> - <categoria>", então o
+  // último trecho depois de " - " costuma ser ela. É o que salva os imports cujo
+  // `categoryRaw` está contaminado — a categoria estava lá, só não no campo dela.
+  function _lzCatDoNome(nome) {
+    var partes = String(nome || '').split(/\s+[-–—]\s+/);
+    if (partes.length < 2) return null;
+    var ult = partes[partes.length - 1].trim();
+    return _lzPareceCategoria(ult) ? ult : null;
+  }
   function _lzSplitCat(nome, cat) {
     var n = String(nome || '').trim();
     if (!cat) return { nome: n, cat: null };
@@ -1249,17 +1272,34 @@
   window._lzTourneyRows = function (imp, handle) {
     if (!imp) return '';
     var datas = _lzTourneyDateIdx(imp);
-    var linhas = [], vistos = {};
+    var linhas = [], vistos = {}, porId = {};
     ((imp.footprint) || []).forEach(function (f) {
       if (!f || !f.official) return;
       var k = 't/' + (f.club || '') + '/' + (f.tourneyId || '');
       vistos[k] = 1;
-      var part = _lzSplitCat(f.name || f.categoryRaw || 'torneio', f.categoryRaw);
-      linhas.push({
-        lido: true, ord: datas[k] || 0, nome: part.nome, cat: part.cat,
+      // UMA LINHA POR TORNEIO. Imports antigos têm o footprint fragmentado (o mesmo torneio
+      // em várias entradas, uma por trilha de dupla) — sem isto a lista repetia o mesmo
+      // torneio 3, 4 vezes, que é como o dono viu "2º Final's Ranking 7BTW" duplicado.
+      var nomeBruto = f.name || f.categoryRaw || 'torneio';
+      var cat = _lzPareceCategoria(f.categoryRaw) ? String(f.categoryRaw).trim() : _lzCatDoNome(nomeBruto);
+      var part = _lzSplitCat(nomeBruto, cat);
+      var trilha = _lzEhTrilha(f.categoryRaw) ? String(f.categoryRaw).trim() : null;
+      var pos = _lzMyPosIn(f.standings, handle);
+      var ja = porId[k];
+      if (ja) {
+        // funde: a melhor colocação e a primeira categoria/trilha conhecidas vencem
+        if (ja.pos == null || (pos != null && pos < ja.pos)) ja.pos = pos;
+        if (!ja.cat && part.cat) ja.cat = part.cat;
+        if (!ja.trilha && trilha) ja.trilha = trilha;
+        if (!ja.data && datas[k]) ja.data = _lzFmtDataNum(datas[k]);
+        return;
+      }
+      porId[k] = {
+        lido: true, ord: datas[k] || 0, nome: part.nome, cat: part.cat, trilha: trilha,
         data: datas[k] ? _lzFmtDataNum(datas[k]) : (f.year ? String(f.year) : null),
-        pos: _lzMyPosIn(f.standings, handle)
-      });
+        pos: pos
+      };
+      linhas.push(porId[k]);
     });
     // AINDA NÃO LIDOS: a lista pública vem do mais recente pro mais antigo, então a posição
     // nela é a única noção de tempo que temos deles — vão no fim, nessa mesma ordem.
@@ -1268,29 +1308,43 @@
       if (!p || !p.tid) return;
       if (vistos['t/' + (p.club || '') + '/' + p.tid]) return;
       pend++;
-      linhas.push({ lido: false, ord: -pend, nome: p.title || ('torneio ' + p.tid), cat: null, data: null, pos: null });
+      var pn = p.title || ('torneio ' + p.tid);
+      var pc = _lzCatDoNome(pn);                       // o título da lista já traz a categoria
+      var pp = _lzSplitCat(pn, pc);
+      linhas.push({ lido: false, ord: -pend, nome: pp.nome, cat: pp.cat, trilha: null, data: null, pos: null });
     });
     if (!linhas.length) return '';
     // cronológica INVERSA; sem data (não lido) desce, preservando a ordem da lista pública
     linhas.sort(function (a, b) { return b.ord - a.ord; });
+    // ORDEM DOS CAMPOS (pedido do dono): data · nome · CATEGORIA · CLASSIFICAÇÃO · trilha.
+    // A trilha vem por último e em BRANCO — ela é contexto (com quem ela jogou), não
+    // classificação nem categoria, e disputava a atenção quando estava colorida.
     return linhas.map(function (L) {
-      if (!L.lido) {
-        return '<div style="padding:2px 0;opacity:0.6;">⏳ ' + _esc(L.nome) +
-          ' · <span style="color:' + _LZ_C_CAT + ';opacity:0.8;">ainda não lido</span></div>';
-      }
-      var h = '<div style="padding:2px 0;">🏆 ';
-      if (L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
-      h += _esc(L.nome);
+      var h = '<div style="padding:2px 0;">' + (L.lido ? '🏆 ' : '⏳ ');
+      if (L.lido && L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
+      h += '<span' + (L.lido ? '' : ' style="opacity:0.6;"') + '>' + _esc(L.nome) + '</span>';
       if (L.cat) h += ' · <span style="color:' + _LZ_C_CAT + ';font-weight:700;">' + _esc(L.cat) + '</span>';
       if (L.pos != null) h += ' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos) + ' ' + L.pos + 'º</span>';
+      if (L.trilha) h += ' · <span style="color:' + _LZ_C_TRILHA + ';">' + _esc(L.trilha) + '</span>';
+      if (!L.lido) h += ' · <span style="opacity:0.5;">ainda não lido</span>';
       return h + '</div>';
     }).join('');
   };
 
+  // Conta TORNEIOS DISTINTOS (por club/tourneyId), não entradas de footprint. Imports
+  // gravados antes de 30/jul/2026 têm o footprint FRAGMENTADO: o extrator pegava o link
+  // "Ver trilha de X/Y" no lugar do da categoria, e como o agrupamento usava esse texto, o
+  // mesmo torneio virava várias entradas (medido: 35 torneios → 55 entradas). Contar
+  // entradas dava 55, o teto cortava em 35 e a tela dizia "35 de 35 (100%)" com 14 torneios
+  // ainda por ler. Contar por ID acerta nos dois: no dado novo e no já gravado.
   window._lzTournamentsRead = function (imp) {
-    return ((imp && imp.footprint) || []).filter(function (f) {
-      return f && f.official && (f.standings || (f.name && f.name !== f.categoryRaw));
-    }).length;
+    var ids = {};
+    ((imp && imp.footprint) || []).forEach(function (f) {
+      if (!f || !f.official) return;
+      if (!(f.standings || (f.name && f.name !== f.categoryRaw))) return;
+      ids[(f.club || '') + '/' + (f.tourneyId != null ? f.tourneyId : ('?' + (f.categoryRaw || '')))] = 1;
+    });
+    return Object.keys(ids).length;
   };
   function _lzImportComplete(li) {
     if (!li) return false;
