@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.61';
+  var EXT_VERSION = '1.62';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -676,7 +676,17 @@
     // Então os JOGOS antigos são descartados e o histórico é relido do começo — são ~36
     // requisições, baratas. O que NÃO é descartado é o caro: nome e classificação de cada
     // torneio/ranking já lido, que continuam valendo e seguem sendo pulados.
-    var migrando = !!(prior && versaoAnterior < 4);
+    // A PROVA DE QUE OS JOGOS SÃO BONS ESTÁ NELES, NÃO NUM CARIMBO. O carimbo `v` é posto
+    // no INÍCIO da rodada e salvo no primeiro parcial — então uma rodada que começou, gravou
+    // um parcial e foi suspensa deixava carimbo NOVO com dado VELHO, e a migração virava
+    // impossível pra sempre. Foi exatamente o que aconteceu no perfil da Camila: cursor v4
+    // convivendo com os 569 jogos sujos (478 reais + 24 duplicatas + resto), e a barra
+    // fechando "569 de 569 (100%)" em cima de um total errado.
+    // O pipeline novo carrega o ID DA PARTIDA do próprio letzplay (`lzId`). Jogo sem `lzId`
+    // só pode ter vindo do pipeline velho. Isso é verificável a qualquer momento, em qualquer
+    // rodada, e não depende de nada ter dado certo antes.
+    var jogosSujos = ((prior && prior.games) || []).some(function (g) { return g && !g.lzId; });
+    var migrando = !!(prior && (versaoAnterior < 4 || jogosSujos));
     if (migrando) {
       _acc = null;                    // não reaproveita o acumulado desta página
       C.pageDone = 0; C.pagesTotal = 0;
@@ -946,7 +956,11 @@
         for (var ti = 0; ti < toursList.length; ti++) {
           conferirTeto();
           var P = toursList[ti], tk = 't/' + P.club + '/' + P.tid;
-          if (C.toursDone[tk] && detDe(tk)) { det[tk] = detDe(tk); pulT++; continue; }
+          // O CURSOR SOZINHO É A PROVA DE QUE A PÁGINA FOI ABERTA — ele só é marcado depois
+          // de uma leitura que deu certo. Exigir também `detDe(tk)` fazia competição sem
+          // classificação publicada (3 dos 35 torneios dela) nunca contar como lida e ser
+          // REBUSCADA em toda rodada, pra sempre: "32 de 35" que nunca fecha.
+          if (C.toursDone[tk]) { var _dT = detDe(tk); if (_dT) det[tk] = _dT; pulT++; continue; }
           if (pulT) { prog({ phase: 'torneios', feed: '⏭️ ' + pulT + ' já lidos — pulados sem reler' }); pulT = 0; }
           // O NÚMERO DO RÓTULO É O MESMO DA BARRA. Antes o rótulo usava a posição na LISTA
           // e a barra usava o quanto já foi lido — dois contadores diferentes na mesma tela
@@ -989,7 +1003,7 @@
         for (var ri = 0; ri < ranksList.length; ri++) {
           conferirTeto();
           var R = ranksList[ri], rk = 'r/' + R.club + '/' + R.rid;
-          if (C.ranksDone[rk] && detDe(rk)) { det[rk] = detDe(rk); pulR++; continue; }
+          if (C.ranksDone[rk]) { var _dR = detDe(rk); if (_dR) det[rk] = _dR; pulR++; continue; }
           if (pulR) { prog({ phase: 'rankings', feed: '⏭️ ' + pulR + ' já lidos — pulados sem reler' }); pulR = 0; }
           var _totR = totRankings || ranksList.length;
           prog({ phase: 'rankings',   // idem: o rótulo conta o mesmo que a barra, e nunca passa dele

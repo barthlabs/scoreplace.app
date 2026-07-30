@@ -545,6 +545,53 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
   ok(r2b.cursorV === 4, 'o cursor foi promovido pra v4');
   ok(r2b.hits > 1, 'releu o histórico do começo em vez de confiar no cursor velho (' + r2b.hits + ' páginas)');
 
+  // ── CENÁRIO 2c: cursor JÁ v4 com jogo sujo — o estado REAL de produção ──────
+  // Este é o caso que passou pelo 2b e chegou na tela do dono: "Jogos 569 de 569 (100%)"
+  // com o perfil declarando 478. O carimbo `v` é posto no INÍCIO da rodada e salvo no
+  // primeiro parcial — então uma rodada que começou, gravou parcial e foi suspensa deixa
+  // carimbo NOVO com dado VELHO, e a migração-por-carimbo nunca mais roda. A prova de que
+  // o jogo é bom tem que estar NELE: o pipeline novo carrega o id do letzplay (`lzId`).
+  console.log('\n🩹 CENÁRIO 2c — cursor já v4 mas jogos SEM lzId (estado real da Camila)');
+  await page.close();
+  page = await novaPagina(browser);
+  await page.evaluate((cfg) => {
+    window.__LZ.init(cfg);
+    const sujos = [];
+    for (let i = 0; i < 40; i++) {
+      const g = { date: 'Sábado, 0' + (1 + i % 9) + '/0' + (1 + i % 9) + '/26 às 08:00hs', official: false,
+        club: 'paineiras-bt', rankingId: '90000', competition: 'Social Fem C / B',
+        oppHandles: ['AdvUm' + i, 'AdvDois' + i], oppNames: ['A', 'B'], partnerHandle: 'P' + i,
+        myScore: 6, oppScore: 3, won: true };           // ← repare: SEM lzId
+      sujos.push(g); sujos.push(Object.assign({}, g, { competition: 'Ver trilha de X/Y' }));
+    }
+    const prior = { source: 'letzplay', handle: 'CamilaExemplo', games: sujos, footprint: [],
+      categories: [], pairs: [], observations: [], declaredGames: cfg.games,
+      // carimbo NOVO (v4) em cima de dado VELHO — exatamente o doc de produção
+      lzCursor: { v: 4, handle: 'CamilaExemplo', toursDone: {}, ranksDone: {},
+        pageDone: 24, pagesTotal: 24, complete: false } };
+    window.__APP.rodadas = 0; window.__APP.parciais = 0; window.__APP.done = false; window.__APP.erro = null;
+    window.__APP.escritasCanonicas = 0; window.__APP.docsPorGid = {}; window.__APP.tamanhoDoc = 0;
+    window.__APP.pausas = 0; window.__APP.throttles = 0; window.__APP.violacoesTeto = []; window.__APP.violacoesLidos = [];
+    window.__APP.faseJogosComeçou = 0; window.__APP.torneiosDepoisDosJogos = 0; window.__APP.rankingsDepoisDosJogos = 0;
+    window.__APP.notasSemSujeito = []; window.__APP.totaisVistos = {}; window.__APP.rotuloAtrasado = [];
+    window.__LZ.hits = {};
+    window.__APP.start('CamilaExemplo', 'uid-camila', prior, prior.lzCursor);
+  }, camila);
+  await page.waitForFunction(() => window.__APP.done === true, null, { timeout: 180000 });
+  const r2c = await page.evaluate(() => ({
+    erro: window.__APP.erro, jogos: (window.__APP.imp && window.__APP.imp.gamesTotal) || 0,
+    declarados: (window.__APP.imp && window.__APP.imp.declaredGames) || 0,
+    semId: ((window.__APP.imp && window.__APP.imp.games) || []).filter(g => !g.lzId).length,
+    paginas: Object.keys(window.__LZ.hits).filter(u => /^\/CamilaExemplo\/matches/.test(u)).length
+  }));
+  console.log('     jogos=' + r2c.jogos + '/' + r2c.declarados + ' · sem lzId=' + r2c.semId +
+    ' · páginas relidas=' + r2c.paginas);
+  ok(!r2c.erro, 'a limpeza por evidência não falhou', r2c.erro);
+  ok(r2c.jogos === r2c.declarados, 'o total fechou no DECLARADO (' + r2c.declarados +
+    '), não no inflado — era o "569 de 569" da tela', 'ficou ' + r2c.jogos);
+  ok(r2c.semId === 0, 'nenhum jogo sobrou sem o id do letzplay', r2c.semId + ' sem lzId');
+  ok(r2c.paginas > 1, 'releu o histórico apesar do carimbo dizer que estava em dia');
+
   // ── CENÁRIO 3: perfil MONSTRO — o doc tem que continuar cabendo ──────────
   console.log('\n🐘 CENÁRIO 3 — perfil monstro (2.000 jogos, 120 torneios, 60 rankings)');
   await page.close();
@@ -634,6 +681,36 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
   ok(r6b.rankings === 0, 'NENHUM ranking foi lido de novo', r6b.rankings + ' rankings re-buscados');
   ok(r6b.paginas <= 1, 'não repaginou o histórico (no máximo a página de conferência)',
     r6b.paginas + ' páginas relidas');
+
+  // ── CENÁRIO 6b: cursor SOZINHO basta pra pular ─────────────────────────────
+  // 3 dos 35 torneios da Camila não publicam classificação; sem classificação eles não
+  // entram no footprint, e a regra antiga ("cursor E detalhe") os tratava como não-lidos
+  // e os rebuscava em TODA rodada — "32 de 35" que nunca fecha. O cursor só é marcado
+  // depois de uma leitura que deu certo; ele é prova suficiente de "esta página foi aberta".
+  console.log('\n🕳️  CENÁRIO 6b — competição sem classificação não é rebuscada pra sempre');
+  const r6c = await page.evaluate(() => {
+    const imp = window.__APP.imp;
+    // apaga TODO o detalhe conhecido: sobra só o cursor
+    const magro = Object.assign({}, imp, { footprint: [] });
+    window.__LZ.hits = {};
+    window.__APP.rodadas = 0; window.__APP.done = false; window.__APP.erro = null;
+    window.__APP.start('CamilaExemplo', 'uid-camila', magro, imp.lzCursor);
+    return { tours: Object.keys((imp.lzCursor || {}).toursDone || {}).length,
+             ranks: Object.keys((imp.lzCursor || {}).ranksDone || {}).length };
+  });
+  await page.waitForFunction(() => window.__APP.done === true, null, { timeout: 120000 });
+  const r6d = await page.evaluate(() => {
+    const u = Object.keys(window.__LZ.hits);
+    return { erro: window.__APP.erro,
+      torneios: u.filter(x => /\/tournaments\/\d+$/.test(x)).length,
+      rankings: u.filter(x => /\/rankings\/\d+$/.test(x)).length,
+      lidosT: window._lzTournamentsRead ? window._lzTournamentsRead(window.__APP.imp) : null };
+  });
+  console.log('     cursor tinha ' + r6c.tours + ' torneios · re-buscados agora: ' + r6d.torneios);
+  ok(!r6d.erro, 'a leitura sem footprint não falhou', r6d.erro);
+  ok(r6d.torneios === 0, 'sem footprint nenhum, o cursor sozinho segurou os torneios',
+    r6d.torneios + ' rebuscados');
+  ok(r6d.rankings === 0, 'idem rankings', r6d.rankings + ' rebuscados');
 
   await page.close();
   await browser.close();

@@ -1338,6 +1338,12 @@
   // entradas dava 55, o teto cortava em 35 e a tela dizia "35 de 35 (100%)" com 14 torneios
   // ainda por ler. Contar por ID acerta nos dois: no dado novo e no já gravado.
   window._lzTournamentsRead = function (imp) {
+    // O CURSOR MANDA quando existe: `toursDone` só recebe uma competição depois que a
+    // página dela foi aberta com sucesso. O footprint é prova mais fraca — competição sem
+    // classificação publicada não entra nele, e por isso 3 dos 35 torneios da Camila
+    // ficavam eternamente "não lidos" enquanto eram rebuscados em toda rodada.
+    var c = imp && imp.lzCursor;
+    if (c && c.toursDone) return Object.keys(c.toursDone).length;
     var ids = {};
     ((imp && imp.footprint) || []).forEach(function (f) {
       if (!f || !f.official) return;
@@ -1843,7 +1849,9 @@
     var tY = (imp && imp.declaredTournaments != null) ? imp.declaredTournaments : null;
     var tLista = (imp && Array.isArray(imp.tournamentsList)) ? imp.tournamentsList.length : 0;
     if (tLista > 0) tY = (tY != null) ? Math.max(tY, tLista) : tLista;
-    var rX = rkFp.filter(function (f) { return f.standings || (f.name && f.name !== f.categoryRaw); }).length;
+    var _cur = imp && imp.lzCursor;
+    var rX = (_cur && _cur.ranksDone) ? Object.keys(_cur.ranksDone).length
+      : rkFp.filter(function (f) { return f.standings || (f.name && f.name !== f.categoryRaw); }).length;
     var rY = rkFp.length || ((imp && imp.declaredRankings != null) ? imp.declaredRankings : null);
     body += '<div style="margin:8px 0 6px;">' +
       barLine('lz-ath-t', '🏆', 'Torneios', tX, tY) +
