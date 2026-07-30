@@ -25,6 +25,22 @@ extension Color {
     static let spMeta      = Color(hex: 0x9A9AB0)
     static let spMetaDim   = Color(hex: 0x7A7A95)
     static let spDash      = Color(hex: 0x5A5A70)
+    // FAIXAS DE QUEIMA (5 zonas), do AZUL ao VERMELHO — a régua é a mesma de
+    // qualquer app de treino: leve → máximo. A zona vem de ScoreState.hrZone.
+    static let spZone1 = Color(hex: 0x3B82F6)   // muito leve
+    static let spZone2 = Color(hex: 0x22D3EE)   // leve (queima de gordura)
+    static let spZone3 = Color(hex: 0x10B981)   // aeróbico
+    static let spZone4 = Color(hex: 0xF59E0B)   // anaeróbico
+    static let spZone5 = Color(hex: 0xEF4444)   // máximo
+    static func zone(_ z: Int) -> Color {
+        switch z {
+        case 1: return .spZone1
+        case 2: return .spZone2
+        case 3: return .spZone3
+        case 4: return .spZone4
+        default: return .spZone5
+        }
+    }
 }
 
 // Paleta por TIME (1 = azul, 2 = vermelho).
@@ -134,7 +150,11 @@ struct RemoteView: View {
             let fullH = root.size.height + ins.top + ins.bottom
             // "1-2" colado LOGO ABAIXO do relógio VISÍVEL (não da faixa inteira, que
             // é bem maior que o relógio) → gamesY é fração da faixa, não a faixa toda.
-            let gamesY = bandH * 0.52
+            // 0.52 → 0.68 (dono, 30/jul/2026: "abaixa um pouco o 1-2 que melhora"):
+            // com o ♥ agora ocupando o meio da faixa, os GAMES colados logo abaixo
+            // ficavam apertados contra ela. Como topInset deriva daqui, o conteúdo
+            // das metades desce junto e a folga de baixo é preservada.
+            let gamesY = bandH * 0.68
             let topInset = gamesY + sz(36)                       // cromo do topo (relógio + games)
             let bottomInset = sz(34)                             // reserva da barra + FOLGA (nomes não colam no Desfazer)
             ZStack(alignment: .topLeading) {
@@ -146,25 +166,50 @@ struct RemoteView: View {
                 }
                 .frame(width: fullW, height: fullH)
 
-                // ── SETOR 1 (faixa do relógio): SETS à ESQUERDA, alinhado com o
-                //    relógio (à direita). Só em melhor-de-N (showsSets). ──
+                // ── SETOR 1 (faixa do relógio): SETS à ESQUERDA, ♥ BPM no CENTRO da
+                //    TELA, relógio do sistema à direita (dono, 30/jul/2026). O ♥ é um
+                //    overlay SEPARADO, centrado em fullW: dentro da mesma HStack ele
+                //    ficava no meio do espaço QUE SOBRA (SETS de um lado, reserva do
+                //    relógio do outro) e caía ~5pt à direita do centro real — "parece
+                //    fora de centro". Medido: com o ♥ em 16pt sobram 14px de folga pro
+                //    SETS no 40mm, então centrar de verdade não encosta em nada.
                 if state.active && state.showsSets {
-                    HStack(spacing: sz(4)) {
-                        Text("SETS").font(.system(size: sz(9))).foregroundColor(.spMetaDim)
-                        Text(String(state.setsFor(leftTeam)))
-                            .font(.system(size: sz(13), weight: .semibold))
-                            .foregroundColor(TeamPalette.of(leftTeam).point)
-                        Text("-").font(.system(size: sz(10))).foregroundColor(.spDash)
-                        Text(String(state.setsFor(rightTeam)))
-                            .font(.system(size: sz(13), weight: .semibold))
-                            .foregroundColor(TeamPalette.of(rightTeam).point)
+                    HStack(spacing: sz(3)) {
+                        // fixedSize() em TODOS: numa faixa apertada (40mm com SETS + ♥ +
+                        // reserva do relógio) o SwiftUI escolhia comprimir o rótulo e
+                        // quebrava "SETS" em "SET/S". Estes textos são curtos e nunca
+                        // devem quebrar — quem cede espaço são os Spacers, não a palavra.
+                        if state.showsSets {
+                            Text("SETS").font(.system(size: sz(9))).foregroundColor(.spMetaDim)
+                                .lineLimit(1).fixedSize()
+                            Text(String(state.setsFor(leftTeam)))
+                                .font(.system(size: sz(13), weight: .semibold))
+                                .foregroundColor(TeamPalette.of(leftTeam).point)
+                                .lineLimit(1).fixedSize()
+                            Text("-").font(.system(size: sz(10))).foregroundColor(.spDash)
+                                .lineLimit(1).fixedSize()
+                            Text(String(state.setsFor(rightTeam)))
+                                .font(.system(size: sz(13), weight: .semibold))
+                                .foregroundColor(TeamPalette.of(rightTeam).point)
+                                .lineLimit(1).fixedSize()
+                        }
                         Spacer(minLength: 0)
                     }
-                    .padding(.leading, ins.leading + sz(14))
-                    .padding(.trailing, ins.trailing + sz(52))   // reserva do relógio
+                    .padding(.leading, ins.leading + sz(12))
+                    // Reserva do relógio DO SISTEMA. Quem desenha a hora é o watchOS, por
+                    // cima de tudo — o que está na nossa mão é só não chegar perto. Com o
+                    // ♥ no meio da faixa, sz(52) deixava ~1 caractere de folga no 40mm e
+                    // dava leitura de aperto ("as horas cortadas"). sz(60) devolve o ar.
+                    .padding(.trailing, ins.trailing + sz(60))
                     .frame(width: fullW, height: bandH)
                     .offset(y: -bandH * 0.10)                     // alinha com o relógio
                     .allowsHitTesting(false)
+                }
+                if state.active, let hr = bpm {
+                    hrPill(hr)
+                        .frame(width: fullW, height: bandH)       // CENTRO da tela física
+                        .offset(y: -bandH * 0.10)                 // mesma linha do relógio
+                        .allowsHitTesting(false)
                 }
                 // ── GAMES (esquerda) + números "1 - 2" (centrados) LOGO ABAIXO da
                 //    faixa do relógio. GAMES no tamanho de sempre; 1-2 não encolhe. ──
@@ -191,32 +236,6 @@ struct RemoteView: View {
                     .frame(width: fullW)
                     .offset(y: gamesY)                           // colado logo abaixo do relógio
                     .allowsHitTesting(false)
-
-                    // ── ❤️ BATIMENTO, logo ABAIXO DO RELÓGIO (canto direito) ──
-                    // Fica na mesma altura da linha GAMES, mas encostado à direita: é o
-                    // espaço livre debaixo do relógio do sistema. Some sozinho quando não
-                    // há leitura (sem permissão, sem sensor, simulador).
-                    if let hr = bpm {
-                        HStack(spacing: sz(3)) {
-                            Spacer(minLength: 0)
-                            Text("♥")
-                                .font(.system(size: sz(12)))
-                                .foregroundColor(Color(hex: 0xF43F5E))
-                                .scaleEffect(heartBeat ? 1.35 : 1.0)
-                                // Pulsa NO RITMO do próprio coração: meia batida por
-                                // ciclo (autoreverses), então duração = 30/bpm.
-                                .animation(.easeInOut(duration: max(0.28, min(0.9, 30.0 / Double(max(hr, 40)))))
-                                            .repeatForever(autoreverses: true), value: heartBeat)
-                            Text("\(hr)")
-                                .font(.system(size: sz(13), weight: .semibold))
-                                .foregroundColor(Color(hex: 0xFDA4AF))
-                        }
-                        .padding(.trailing, ins.trailing + sz(14))
-                        .frame(width: fullW)
-                        .offset(y: gamesY)
-                        .allowsHitTesting(false)
-                        .onAppear { heartBeat = true }
-                    }
                 } else {
                     // Estado inativo. "Aguardando…" sozinho não dizia NADA — quem abria o
                     // relógio sem o app aberto no iPhone concluía que o relógio "nunca
@@ -240,6 +259,46 @@ struct RemoteView: View {
             .frame(width: fullW, height: fullH)
             .offset(x: -ins.leading, y: -ins.top)                // cobre a tela física
         }
+    }
+
+    // ♥ BPM em CÁPSULA pintada com a cor da FAIXA DE QUEIMA (dono, 30/jul/2026:
+    // "envolvê-lo num box da cor das faixas de queima — 5 faixas, do azul para o
+    // vermelho"). A zona sai de ScoreState.hrZone(bpm), que compara com a FCmáx
+    // mandada pelo celular (220 − idade do perfil). SEM FCmáx (perfil sem data de
+    // nascimento) não há zona: a cápsula fica neutra e o número volta ao rosa —
+    // pintar uma faixa chutada seria pior que não pintar.
+    private func hrPill(_ hr: Int) -> some View {
+        let z = state.hrZone(hr)
+        let c = z.map { Color.zone($0) }
+        return HStack(spacing: sz(3)) {
+            Text("♥")
+                .font(.system(size: 12))
+                .foregroundColor(c ?? Color(hex: 0xF43F5E))
+                .scaleEffect(heartBeat ? 1.35 : 1.0)
+                // Pulsa NO RITMO do próprio coração: meia batida por ciclo
+                // (autoreverses), então duração = 30/bpm.
+                .animation(.easeInOut(duration: max(0.28, min(0.9, 30.0 / Double(max(hr, 40)))))
+                            .repeatForever(autoreverses: true), value: heartBeat)
+                .onAppear { heartBeat = true }
+            // 100% do tamanho DO RELÓGIO do sistema (dono, 30/jul/2026: "no centro o
+            // BPM deve ficar 100% das horas"). ÚNICA exceção ao cânone de escala por
+            // área, e de propósito: o alvo desta medida é o relógio do watchOS, que o
+            // sistema desenha praticamente do MESMO tamanho em 40mm e em 49mm (medido:
+            // 21px e 22px de altura de dígito). Passar por sz() faria o ♥ encolher
+            // enquanto o relógio fica parado — a paridade quebrava no aparelho menor.
+            Text("\(hr)")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(c ?? Color(hex: 0xFDA4AF))
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .fixedSize()
+        }
+        // Cápsula justa de propósito: no 40mm, com SETS à esquerda e o relógio à
+        // direita, cada ponto de padding aqui é folga que some da faixa (medido:
+        // com sz(7) a cápsula chegava a 1px do "0" dos sets).
+        .padding(.horizontal, sz(5))
+        .padding(.vertical, sz(2))
+        .background(Capsule().fill((c ?? .clear).opacity(0.18)))
+        .overlay(Capsule().stroke((c ?? .clear).opacity(0.85), lineWidth: sz(1.2)))
     }
 
     // Metade de um time (fundo colorido do topo à base): ponto grande CENTRADO no
@@ -309,6 +368,24 @@ struct RemoteView: View {
     private var selectedServeName: String {
         pendingPick?.name ?? state.servePickCurrent
     }
+    // Nome aceso na tela INICIAR (1º sacador). Mesma regra do seletor: a escolha
+    // local vence; sem toque, quem o celular já indica como sacador.
+    // Por que LOCAL: no lobby o celular ainda não abriu o placar, então
+    // `_liveSetServer` nem existe — a escolha fica guardada lá (_pendingServerPick)
+    // e o snapshot NÃO muda. Acender pelo estado devolvido significava tocar num
+    // nome e a tela não reagir a nada. O box/bola agora respondem no toque, e a
+    // escolha só é ENVIADA no "Iniciar" (que já aplica antes de começar).
+    private var startSelectedName: String {
+        pendingPick?.name ?? state.serverName
+    }
+    // O que o "Iniciar" vai mandar antes de começar: a escolha local ou, sem
+    // toque, o sacador que o celular já indica. nil = não mexe em nada.
+    private var startResolvedPick: ScoreState.ServeSlot? {
+        if let p = pendingPick { return p }
+        guard let s = allSlots.first(where: { $0.name == state.serverName && !$0.name.isEmpty })
+        else { return nil }
+        return ScoreState.ServeSlot(team: s.team, playerIdx: s.idx, name: s.name)
+    }
     // O que o "Confirmar" vai mandar. Cai no slot atual quando o usuário não
     // tocou em nada; nil (botão apagado) se nem isso existir na lista elegível.
     private var resolvedServePick: ScoreState.ServeSlot? {
@@ -335,22 +412,32 @@ struct RemoteView: View {
     private func serveNameRow(_ slot: ScoreState.ServeSlot) -> some View {
         let isSel = slot.name == selectedServeName
         return Button(action: { pendingPick = slot }) {
-            HStack(spacing: sz(4)) {
-                Circle().fill(isSel ? Color.spBall : Color.clear)
-                    .frame(width: sz(7), height: sz(7))
-                Text(slot.name)
-                    .font(.system(size: sz(23), weight: isSel ? .bold : .medium))
-                    .foregroundColor(TeamPalette.of(slot.team).point)
-                    .lineLimit(1).minimumScaleFactor(0.4)   // nome nunca trunca
-                Spacer()
-            }
-            .padding(.vertical, sz(3)).padding(.horizontal, sz(6))
-            .overlay(
-                RoundedRectangle(cornerRadius: sz(8))
-                    .stroke(Color.spBall.opacity(isSel ? 0.9 : 0), lineWidth: sz(1.5))
-            )
+            pickableName(slot.name, team: slot.team, isSel: isSel)
         }
         .buttonStyle(.plain)
+    }
+
+    // Nome selecionável (Iniciar e seletor do 2º sacador usam o MESMO desenho —
+    // fonte única, senão as duas telas drifam). Aceso = box na COR DO TIME em volta
+    // do nome + bolinha da MODALIDADE (laranja, a mesma bola do saque no placar) à
+    // esquerda. A bola reserva espaço sempre (invisível quando não aceso), então
+    // acender/apagar não empurra o nome de lado.
+    private func pickableName(_ name: String, team: Int, isSel: Bool) -> some View {
+        HStack(spacing: sz(5)) {
+            Circle().fill(isSel ? Color.spBall : Color.clear)
+                .frame(width: sz(9), height: sz(9))
+            Text(name)
+                .font(.system(size: sz(23), weight: isSel ? .bold : .medium))
+                .foregroundColor(TeamPalette.of(team).point)
+                .lineLimit(1).minimumScaleFactor(0.4)   // nome nunca trunca
+            Spacer()
+        }
+        .padding(.vertical, sz(3)).padding(.horizontal, sz(6))
+        .overlay(
+            RoundedRectangle(cornerRadius: sz(8))
+                // Box na COR DO TIME (dono, 30/jul/2026) — laranja é a bola, não o box.
+                .stroke(TeamPalette.of(team).point.opacity(isSel ? 0.9 : 0), lineWidth: sz(1.5))
+        )
     }
 
     // Seletor de sacador com a MESMA cara do Iniciar (modelo de 3 setores). Dispara
@@ -421,25 +508,15 @@ struct RemoteView: View {
 
     // Tela de "Iniciar": o celular está com a montagem aberta. Mostra modalidade
     // e quem vai jogar, e o botão que dispara a MESMA função do botão do celular.
-    // Uma linha de nome tappável na tela Iniciar. O sacador escolhido (server)
-    // ganha box + bola à esquerda. Tocar manda a intenção de sacador inicial.
+    // Uma linha de nome tappável na tela Iniciar. Tocar só ACENDE (box na cor do
+    // time + bola da modalidade); tocar em outro nome move a seleção. Quem APLICA
+    // é o "Iniciar" — igual ao "Confirmar" do seletor do 2º sacador.
     private func startNameRow(team: Int, idx: Int, name: String) -> some View {
-        let isSel = state.serverName == name && !name.isEmpty
-        return Button(action: { onSetServer(team, idx) }) {
-            HStack(spacing: sz(4)) {
-                Circle().fill(isSel ? Color.spBall : Color.clear)
-                    .frame(width: sz(7), height: sz(7))
-                Text(name)
-                    .font(.system(size: sz(23), weight: isSel ? .bold : .medium))
-                    .foregroundColor(TeamPalette.of(team).point)   // cor FORTE do time (= nº 30-40 do placar)
-                    .lineLimit(1).minimumScaleFactor(0.4)   // nome nunca trunca
-                Spacer()
-            }
-            .padding(.vertical, sz(3)).padding(.horizontal, sz(6))
-            .overlay(
-                RoundedRectangle(cornerRadius: sz(8))
-                    .stroke(Color.spBall.opacity(isSel ? 0.9 : 0), lineWidth: sz(1.5))
-            )
+        let isSel = !name.isEmpty && name == startSelectedName
+        return Button(action: {
+            pendingPick = ScoreState.ServeSlot(team: team, playerIdx: idx, name: name)
+        }) {
+            pickableName(name, team: team, isSel: isSel)
         }
         .buttonStyle(.plain)
     }
@@ -505,7 +582,17 @@ struct RemoteView: View {
                     Spacer(minLength: sz(4))                       // central NÃO cola na linha de baixo
                     // BOTÃO: mínimo (o menor que funcione), colado na linha de baixo;
                     // topo RETO, estoura largura/base, cortado pela curva da tela.
-                    Button(action: onStart) {
+                    // "Iniciar" = o CONFIRMAR desta tela: aplica o 1º sacador escolhido
+                    // e só então começa. O celular recebe o setServer com o placar ainda
+                    // fechado (guarda em _pendingServerPick) e o `start` o consome ao
+                    // confirmar a tela "Quem saca primeiro?" — ordem garantida pela fila
+                    // do WCSession. Sem isto, tocar num nome no lobby não chegava a lugar
+                    // nenhum visível e a partida abria com o sacador que o motor chutou.
+                    Button(action: {
+                        if let p = startResolvedPick { onSetServer(p.team, p.playerIdx) }
+                        pendingPick = nil
+                        onStart()
+                    }) {
                         Text("Iniciar").font(.system(size: sz(15), weight: .bold))
                             .frame(maxWidth: .infinity)
                             .padding(.top, sz(4))

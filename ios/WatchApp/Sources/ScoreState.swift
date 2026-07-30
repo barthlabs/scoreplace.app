@@ -52,6 +52,10 @@ struct ScoreState: Decodable {
     // Vitórias por PESSOA, já ordenado pelo celular (a dupla muda todo jogo, o
     // mérito é individual). O relógio só desenha.
     var rrStandings: [RRStanding] = []
+    // FC máxima da pessoa (220 − idade), calculada no celular a partir do perfil.
+    // O relógio usa só pra saber em qual FAIXA DE QUEIMA (5 zonas) o BPM está e
+    // pintar o box. 0 = perfil sem data de nascimento → não pinta faixa nenhuma.
+    var hrMax: Int = 0
 
     struct RRStanding: Decodable, Hashable {
         let name: String
@@ -72,7 +76,7 @@ struct ScoreState: Decodable {
     enum CodingKeys: String, CodingKey {
         case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isCasual, isDoubles, isFinished, winner, tieRulePending, tiedAt
         case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent
-        case reiRainha, rrRound, rrStandings, rrSuggest
+        case reiRainha, rrRound, rrStandings, rrSuggest, hrMax
     }
     init() {}
     init(from decoder: Decoder) throws {
@@ -106,6 +110,21 @@ struct ScoreState: Decodable {
         rrRound    = (try? c.decodeIfPresent(Int.self, forKey: .rrRound)) ?? 0
         rrStandings = (try? c.decodeIfPresent([RRStanding].self, forKey: .rrStandings)) ?? []
         rrSuggest  = (try? c.decodeIfPresent(Bool.self, forKey: .rrSuggest)) ?? false
+        hrMax      = (try? c.decodeIfPresent(Int.self, forKey: .hrMax)) ?? 0
+    }
+
+    // ── FAIXAS DE QUEIMA (5 zonas por % da FCmáx) ─────────────────────────────
+    // 1 muito leve (<60%) · 2 leve/queima de gordura (60-70%) · 3 aeróbico
+    // (70-80%) · 4 anaeróbico (80-90%) · 5 máximo (≥90%). nil quando não dá pra
+    // saber (perfil sem data de nascimento) — o relógio não inventa zona.
+    func hrZone(_ bpm: Int) -> Int? {
+        guard hrMax > 0, bpm > 0 else { return nil }
+        let pct = Double(bpm) / Double(hrMax)
+        if pct < 0.60 { return 1 }
+        if pct < 0.70 { return 2 }
+        if pct < 0.80 { return 3 }
+        if pct < 0.90 { return 4 }
+        return 5
     }
 
     // ── Acessores por TIME (1/2) ──
@@ -246,6 +265,7 @@ struct ScoreState: Decodable {
         s.setsToWin = 3
         s.isDoubles = true
         s.courtLeft = 1
+        s.hrMax = 185                // ≈ 220 − 35 anos, só pro preview ter faixa
         s.server = Server(team: 1, name: "Rodrigo")
         s.teams = [
             "1": Team(players: ["Rodrigo", "Nelson"]),

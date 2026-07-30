@@ -14,6 +14,13 @@
     <color name="meta_dim">#7a7a95</color>
     <!-- batimento cardíaco (mesmo rosa do ♥ no Apple) -->
     <color name="hr_pink">#fda4af</color>
+    <!-- FAIXAS DE QUEIMA (5 zonas por % da FCmáx), do AZUL ao VERMELHO —
+         mesmas cores do Apple (Color.spZone1..5 em RemoteView.swift). -->
+    <color name="hr_zone1">#3b82f6</color>
+    <color name="hr_zone2">#22d3ee</color>
+    <color name="hr_zone3">#10b981</color>
+    <color name="hr_zone4">#f59e0b</color>
+    <color name="hr_zone5">#ef4444</color>
     <color name="dash">#5a5a70</color>
     <color name="undo_bg">#1a1a2e</color>
     <color name="undo_border">#33334d</color>

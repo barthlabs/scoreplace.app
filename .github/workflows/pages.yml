@@ -45,6 +45,12 @@ jobs:
       - name: Testes unitários (gate — bloqueia o deploy se falhar)
         run: |
           npm ci --ignore-scripts
+          # tests/letzplay-big-profile.test.js sobe um Chromium (Playwright) contra um
+          # letzplay sintético. `--ignore-scripts` pula o postinstall que baixa o browser,
+          # então SEM esta linha a suíte morre com "Executable doesn't exist" e o gate
+          # reprova o deploy inteiro — foi o que aconteceu da 1.6.5 à 1.6.9. Local passava
+          # porque o Chromium já estava na máquina. Mesmo conserto da CI de staging (1.1.17).
+          npx playwright install --with-deps chromium
           npm test
 
       - name: Configure Pages
