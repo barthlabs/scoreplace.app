@@ -1919,6 +1919,7 @@
     var rodada = 0, MAX_RODADAS = 40;
     var cursorAtual = null, ultimoImp = null;
     var ultimaNota = '';   // último passo REAL anunciado — sobrevive às esperas
+    var _unidadeDesde = 0, _unidadePasso = '';   // há quanto tempo preso no MESMO passo
     // BARRAS AO VIVO (v1.4.22): as 3 barras do dialog (Torneios/Rankings/Jogos, x de y %)
     // ficam VISÍVEIS no overlay durante a busca e crescem conforme as coisas chegam.
     // Semente = melhor import já gravado (mesma escolha do prior lá embaixo); depois a
@@ -2073,6 +2074,18 @@
       // automática (rate-budget) continua existindo — só que MUDA, sem ameaça na tela.
       if (d.__sp_lp === 'lz-throttle') {
         ping();
+        // TETO POR UNIDADE DE TRABALHO. O `ping()` é rearmado a cada espera, então uma
+        // SEQUÊNCIA de esperas no MESMO passo nunca disparava o corte por ociosidade — a
+        // leitura ficava indefinidamente no mesmo item, calada, e de fora isso é idêntico a
+        // travado ("parece que travou faltando 2"). Passados 4 min preso no mesmo passo, a
+        // rodada é encerrada COMO PAUSA e a seguinte retoma pelo cursor: o que veio já está
+        // gravado. Não é desistir — é parar de fingir que anda.
+        if (!_unidadeDesde || _unidadePasso !== ultimaNota) { _unidadePasso = ultimaNota; _unidadeDesde = Date.now(); }
+        else if (Date.now() - _unidadeDesde > 240000 && rodada < MAX_RODADAS) {
+          _unidadeDesde = 0;
+          setProg({ sub: 'retomando…' });
+          proximaRodada();
+        }
         // MANTÉM O PASSO NA TELA. Antes isto trocava o texto por uma frase genérica, e o
         // "página 10 de 24" — a única informação real ali — DESAPARECIA justo no momento em
         // que a leitura demora mais. Ficava minutos sem dizer nada, e sem dizer nada é
@@ -2083,6 +2096,8 @@
       if (d.__sp_lp === 'athlete-import-progress' && d.uid === uid) {
         ping();
         var cur = d.current || {};
+        // passo NOVO = progresso de verdade → zera o relógio da unidade
+        if (cur.note && cur.note !== ultimaNota) { _unidadeDesde = Date.now(); _unidadePasso = cur.note; }
         if (cur.note) ultimaNota = cur.note;   // o passo em curso, preservado durante as esperas
         // counts (ext ≥1.44): x/y ao vivo das 3 barras — cresce a cada torneio/página lida.
         _updBars(d.counts || null);
