@@ -180,6 +180,10 @@
   function _vivoTick() {
     var e = document.getElementById('sp-imp-eta');
     if (!e) { _vivoParar(); return; }                       // overlay sumiu → timer morre
+    // A linha tem UM dono. Quando os tempos explícitos assumem, este ticker SAI — ele
+    // escrevia por cima 1s depois e os tempos nunca duravam na tela. Foi o segundo
+    // apagador da mesma linha (o primeiro era _etaTick); parar só um não resolvia nada.
+    if (_temposOwn) { _vivoParar(); return; }
     // cede a linha pro regressivo do org-scan quando ele está ativo (não brigam pelo mesmo lugar)
     if (typeof window._spEtaText === 'function' && window._spEtaText()) return;
     if (Date.now() - _vivoDesde < 8000) { e.textContent = ''; return; }
@@ -248,7 +252,9 @@
         if (e0 && !(typeof window._spEtaText === 'function' && window._spEtaText())) e0.textContent = '';
       }
       s.textContent = opts.sub || '';
-      if (!_vivoTimer) { _vivoDesde = _vivoDesde || Date.now(); _vivoTimer = setInterval(_vivoTick, 1000); }
+      // só liga a prova-de-vida genérica quando NÃO há tempos explícitos — senão ela
+      // renasce aqui logo depois de o bloco dos tempos tê-la desligado.
+      if (!_vivoTimer && !_temposOwn) { _vivoDesde = _vivoDesde || Date.now(); _vivoTimer = setInterval(_vivoTick, 1000); }
     }
     // bars: [{id,icon,label,x,y}] — cria a linha 1x e depois só atualiza texto/preenchimento
     // in-place (transition no width faz o crescimento ser visível, não um pulo).
