@@ -217,7 +217,10 @@
       if (opts.onCancel && !a.firstChild) {
         a.style.display = 'block';
         var btn = document.createElement('button');
-        btn.type = 'button'; btn.className = 'btn btn-outline btn-sm'; btn.textContent = 'Cancelar';
+        // "Suspender", não "Cancelar" (pedido do dono): tudo o que já foi lido está gravado
+        // e a próxima leitura continua de onde esta parou. "Cancelar" prometia perda.
+        btn.type = 'button'; btn.className = 'btn btn-outline btn-sm';
+        btn.textContent = opts.cancelLabel || 'Suspender';
         btn.onclick = function () { try { opts.onCancel(); } catch (e) {} };
         a.appendChild(btn);
       } else if (!opts.onCancel) { a.style.display = 'none'; a.innerHTML = ''; }

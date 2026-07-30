@@ -115,6 +115,12 @@ const SUITES = [
   'tests/letzplay-model.test.js',
   'tests/letzplay-eta.test.js',
   'tests/letzplay-scan-order.test.js',
+  // Leitura de perfil GRANDE do letzplay, ponta a ponta com o content.js REAL da extensão
+  // num Chromium contra um letzplay sintético. Trava o que quebrava no perfil da Camila
+  // (472 jogos): rodada time-boxed em 240s pra um trabalho de ~9 min, etapa dos jogos
+  // nunca alcançada, parciais regravando o histórico inteiro (24.656 escritas) e doc
+  // estourando 1MiB. Roda 5 cenários, inclusive "letzplay pediu pausa no meio".
+  'tests/letzplay-big-profile.test.js',
   'tests/phase0-elim.test.js',
   // Item 10: TODO slot do sorteio carrega uid EXPLÍCITO (team*Uids/p*Uid) — R1 inclusive.
   // Antes a R1 saía só com team1Obj (undefined uid). Roda o motor REAL (draw-core → storePhase).

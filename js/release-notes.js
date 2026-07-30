@@ -20,7 +20,7 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #22d3ee;border-radius:12px;padding:14px 16px;background:rgba(34,211,238,0.08);">' +
-      '<div style="font-weight:800; color:#67e8f9; font-size:1rem; margin-bottom:8px;">🌳 v1.6.3 — Chave enxuta, repescagem justa e o treino do relógio contando <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#67e8f9; font-size:1rem; margin-bottom:8px;">🌳 v1.6 — Chave enxuta, repescagem justa, histórico grande do letzplay e o treino do relógio contando <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🌳 Chave mínima, sem folga de graça:</b> a chave agora nasce do <b>tamanho real</b> do torneio, em vez de inflar até a próxima potência de 2. Com 12 duplas são 6 jogos, depois 3, 2 e a final — e o <b>último inscrito nunca folga</b>. Da 2ª rodada em diante a chave fecha redonda, sem BYE no meio do caminho.</li>' +
         '<li><b>🎟️ Repescagem justa e transparente:</b> a vaga de repescagem fica <b>vazia até a rodada inteira fechar</b> — nada de nome provisório que troca depois. Quem volta é o <b>melhor derrotado</b> segundo os critérios de desempate <b>do próprio organizador</b>, e a chave se corrige sozinha ao ser aberta.</li>' +
@@ -28,6 +28,7 @@ window._RELEASE_NOTES_HTML = (function () {
         '<li><b>🤝 Duplas sem mistura:</b> ninguém mais entra em duas duplas ao mesmo tempo. <b>Desfazer dupla</b> voltou a funcionar (antes falhava calado), desinscrever um dos dois <b>mantém o parceiro</b> como individual, e quem entra na chave passa a contar como inscrito de fato.</li>' +
         '<li><b>🧹 Chave mais limpa de ler:</b> BYE não vira mais card — a rodada mostra só confrontos verdadeiros, e o nome da rodada conta só os <b>jogos reais</b>. O avanço de fase parou de perguntar "Ajuste de Chaveamento" quando não há o que ajustar.</li>' +
         '<li><b>⌚ O treino do relógio agora CONTA:</b> a partida vira <b>exercício registrado</b> — no iPhone vai pro app Saúde (conta nos anéis de atividade) e no Android é gravado no <b>Health Connect</b>, entrando nos seus exercícios e na atividade diária. O relógio mostra os <b>batimentos ao vivo</b> durante o jogo e o esforço não é mais descartado no fim da partida.</li>' +
+        '<li><b>📚 Histórico grande do letzplay agora vem inteiro:</b> trazer um histórico com centenas de jogos parava no meio e não gravava nada — funcionava só com perfis pequenos. Agora a leitura <b>não tem prazo</b>: ela vai até o fim, grava o que já leu a cada torneio e a cada punhado de páginas, e se o letzplay pedir uma pausa ela <b>continua sozinha de onde parou</b>, sem você clicar de novo. Testado com 472 e com 2.000 jogos. O botão virou <b>Suspender</b>: o que veio fica guardado e a próxima leitura retoma do ponto exato.</li>' +
         '<li><b>📌 Detalhes que incomodavam:</b> o aviso de "faltam N equipes" gruda no topo ao rolar (não some mais), o card não fica preso na tela se você soltar o arraste no meio, e o "meu jogo" rola até a posição certa sem cortar o topo.</li>' +
       '</ul>' +
     '</div>' +

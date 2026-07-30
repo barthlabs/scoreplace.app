@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.6.4';
+window.SCOREPLACE_VERSION = '1.6.5';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -108,7 +108,7 @@ try {
 // Auto-atualização: quando a extensão estiver publicada na Chrome Web Store, o
 // Chrome atualiza sozinho e este gate para de disparar. Enquanto não está, o gate
 // BLOQUEIA e pede a atualização manual pelo zip — de propósito.
-window.SP_EXT_VERSION = '1.48';
+window.SP_EXT_VERSION = '1.49';
 // O zip da versão exigida, servido pelo próprio site (fica na raiz do repo → GitHub Pages
 // entrega). Derivado de SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não
 // aceita, e a trava de deploy (scripts/check-ext-version.js) garante que o arquivo existe.
@@ -386,6 +386,21 @@ window._spCompByRef = function (imp, g) {
 window._spCompByRefStr = function (imp, ref) {
   if (!imp || !ref) return null;
   return _spBuildCompIdx(imp)[ref] || null;
+};
+
+// Quantos jogos um letzplayImport REPRESENTA — não quantos couberam no array dele.
+//
+// O doc do perfil/scan carrega só os jogos mais RECENTES (o acervo completo vive em
+// letzplayTournaments/{comp}/matches/{gid}, que não tem teto de 1MiB), então `games.length`
+// mede o TAMANHO DO DOC, não o histórico. Quem confunde os dois lê um perfil grande como
+// eternamente incompleto: a barra travava em "600 de 2000" e o botão nunca saía de
+// "▶️ Continuar de onde parou" mesmo com tudo já lido. Use isto em qualquer lugar que
+// signifique "quanto desta pessoa nós temos": completude, comparação entre imports, barras,
+// contagens na tela. `games.length` só onde a pergunta é literalmente sobre o array.
+window._lzGamesTotal = function (imp) {
+  if (!imp) return 0;
+  if (imp.gamesTotal != null) return imp.gamesTotal;
+  return Array.isArray(imp.games) ? imp.games.length : 0;
 };
 
 window._spGameComp = function (imp, g) {
@@ -7315,9 +7330,9 @@ window.AppStore = {
       // "Só atualiza se desatualizado": aplica o scan só quando ele traz MAIS jogos que o
       // perfil atual (ou quando não há perfil). Um re-scan que não trouxe jogo novo não
       // mexe no perfil (nem troca a procedência à toa).
-      var fiGames = Array.isArray(fi.games) ? fi.games.length : 0;
+      var fiGames = window._lzGamesTotal(fi);
       var curImp = cu.letzplayImport;
-      var curGames = (curImp && Array.isArray(curImp.games)) ? curImp.games.length : 0;
+      var curGames = window._lzGamesTotal(curImp);
       if (!curImp || fiGames > curGames) {
         fi.importedVia = 'organizer';
         fi.importedByName = data.scannedByName || null;

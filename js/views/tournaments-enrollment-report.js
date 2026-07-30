@@ -1179,9 +1179,16 @@
   // 81 declarados e 81 guardados = completo. Sem o campo (import anterior à v1.39) caímos
   // no antigo "se salvou, paginou tudo" — que era verdade só porque falhar não salvava;
   // agora que salvamos parcial, presumir seria absolver dado pela metade.
+  // Quantos jogos o import REPRESENTA (≠ quantos couberam no doc) — ver
+  // window._lzGamesTotal em store.js. Atalho local com fallback pra ordem de carga.
+  function _lzTot(imp) {
+    if (typeof window._lzGamesTotal === 'function') return window._lzGamesTotal(imp);
+    if (!imp) return 0;
+    return (imp.gamesTotal != null) ? imp.gamesTotal : ((imp.games || []).length);
+  }
   function _lzImportComplete(li) {
     if (!li) return false;
-    var n = (li.games || []).length;
+    var n = _lzTot(li);
     if (li.declaredGames == null) return n > 0;          // legado: sem o número, confia no all-or-nothing
     if (li.partialReason) return false;                   // ele mesmo diz que parou no meio
     return n >= li.declaredGames;
@@ -1212,7 +1219,7 @@
       // organizador depender do inscrito. Vence o que tem MAIS jogos (mesma regra da CF).
       var _fi = (r.uid && scanMap[r.uid] && scanMap[r.uid].fullImport) || null;
       var _own = prof && prof.letzplayImport;
-      var _nGames = function (x) { return (x && Array.isArray(x.games)) ? x.games.length : -1; };
+      var _nGames = function (x) { return x ? _lzTot(x) : -1; };
       var li = (_nGames(_fi) > _nGames(_own)) ? _fi : _own;
       var sc = (r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
       if (li) {
@@ -1638,7 +1645,7 @@
     var _p1 = rctx.profileMap && rctx.profileMap[uid] && rctx.profileMap[uid].letzplayImport;
     var _p2 = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].fullImport;
     var imp = _p2 || _p1 || null;
-    if (_p1 && _p2) imp = ((_p1.games || []).length > (_p2.games || []).length) ? _p1 : _p2;
+    if (_p1 && _p2) imp = (_lzTot(_p1) > _lzTot(_p2)) ? _p1 : _p2;
     var body = 'Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> (@' + _esc(tg.handle) + ') no letzplay.<br>';
     var btnLabel = '📚 Puxar histórico completo';
     // 3 BARRAS (x = gravado · y = total do perfil letzplay). Os "de y" que faltarem são
@@ -1651,7 +1658,7 @@
         '<div style="height:7px;border-radius:99px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.08));"><div class="lz-bar-fill" style="height:100%;width:' + (pct != null ? Math.max(2, pct) : 2) + '%;background:linear-gradient(90deg,#10b981,#059669);"></div></div>' +
       '</div>';
     }
-    var gX = imp ? (imp.games || []).length : 0;
+    var gX = _lzTot(imp);
     var gY = (imp && imp.declaredGames != null) ? imp.declaredGames : null;
     var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
     var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];
@@ -1739,6 +1746,13 @@
     window._lzPendingMode = 'full';
     var done = false, started = false, versions = [], idleTimer = null;
     var who = tg.name || ('@' + tg.handle);
+    // RODADAS ENCADEADAS: uma leitura grande não cabe numa rodada só (o perfil da Camila
+    // são ~140 requisições com espaçamento humano ≈ 9 min, e uma pausa do letzplay pode
+    // interromper antes disso). Quando a rodada devolve `done:false`, o app dispara a
+    // seguinte SOZINHO com o cursor — ninguém tem que clicar de novo pra continuar.
+    // Regra do dono: "o processo deve demorar mais, mas não falhar nunca."
+    var rodada = 0, MAX_RODADAS = 40;
+    var cursorAtual = null, ultimoImp = null;
     // BARRAS AO VIVO (v1.4.22): as 3 barras do dialog (Torneios/Rankings/Jogos, x de y %)
     // ficam VISÍVEIS no overlay durante a busca e crescem conforme as coisas chegam.
     // Semente = melhor import já gravado (mesma escolha do prior lá embaixo); depois a
@@ -1747,7 +1761,7 @@
     function _seedBarsFrom(imp) {
       if (!imp) return;
       _updBars({
-        g: (imp.games || []).length,
+        g: _lzTot(imp),
         t: (imp.footprint || []).filter(function (f) { return f.official; }).length,
         r: (imp.footprint || []).filter(function (f) { return !f.official; }).length,
         gY: (imp.declaredGames != null) ? imp.declaredGames : null,
@@ -1787,7 +1801,12 @@
     function cancel() {
       if (done) return;
       cleanup();
-      if (typeof showNotification === 'function') showNotification('Busca cancelada', 'Nada foi alterado.', 'info');
+      // SUSPENDER, não cancelar: os parciais já foram gravados e o cursor está salvo —
+      // clicar no nome de novo continua daqui, sem reler nada.
+      if (typeof showNotification === 'function') {
+        showNotification('⏸️ Leitura suspensa', 'O que já veio está gravado. Clique no nome de novo pra continuar de onde parou.', 'info');
+      }
+      try { if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix(); } catch (e) {}
     }
     function fail(msg) {
       if (done) return;
@@ -1825,8 +1844,10 @@
       // aba fechada), o que veio ficou; a próxima rodada continua de onde parou (prior).
       if (d.__sp_lp === 'athlete-import-partial' && d.uid === uid) {
         ping();
+        if (d.cursor) cursorAtual = d.cursor;
+        if (d.fullImport) ultimoImp = d.fullImport;
         if (d.scan && d.fullImport && typeof _lzPersistScans === 'function') {
-          _lzPersistScans(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }])
+          _lzPersistScans(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }], d.gamesDelta)
             .catch(function (e) { window._log && window._log('[athlete parcial] não gravou (segue):', (e && e.message) || e); });
         }
         // O parcial traz o fullImport consolidado — atualiza as barras por ele (também
@@ -1841,15 +1862,30 @@
           fail(d.error === 'sem-jogos' ? 'O perfil público de @' + tg.handle + ' não mostrou nenhum jogo.' : ('Falhou: ' + (d.error || 'erro')));
           return;
         }
+        if (d.cursor) cursorAtual = d.cursor;
+        if (d.fullImport) ultimoImp = d.fullImport;
+        // AINDA FALTA LER → grava o que veio e CONTINUA na hora, na mesma sessão, com o
+        // cursor. Nada de pedir clique: pra quem está olhando é uma leitura só, que anda.
+        if (d.done !== true && rodada < MAX_RODADAS) {
+          ping();
+          if (d.scan && d.fullImport && typeof _lzPersistScans === 'function') {
+            _lzPersistScans(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }], d.gamesDelta)
+              .catch(function (e) { window._log && window._log('[athlete rodada] não gravou (segue):', (e && e.message) || e); });
+          }
+          _seedBarsFrom(d.fullImport || null);
+          setProg({ sub: 'continuando de onde parou…', pct: null });
+          proximaRodada();
+          return;
+        }
         cleanup();
         if (typeof window._showLoading === 'function') window._showLoading('Salvando ' + who + '…');
-        var n = (d.fullImport && Array.isArray(d.fullImport.games)) ? d.fullImport.games.length : 0;
+        var n = _lzTot(d.fullImport);
         var nDecl = d.fullImport && d.fullImport.declaredGames;
         _saveScansAndReload(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }],
           function (m) { if (typeof showNotification === 'function') showNotification('Não deu pra salvar', m, 'error'); });
         // PAUSADO/PARCIAL: RELATÓRIO NA TELA (pedido do dono) — o que puxou e o que
         // não puxou, torneio a torneio + jogos gerais — e como retomar.
-        var _isParcial = d.paused || (d.fullImport && d.fullImport.partialReason);
+        var _isParcial = (d.done !== true) || (d.fullImport && d.fullImport.partialReason);
         var rep = d.report || null;
         if (_isParcial && rep && typeof window.showAlertDialog === 'function') {
           var html = '<div style="text-align:left;font-size:0.85rem;line-height:1.55;">';
@@ -1892,7 +1928,18 @@
     var _sImp = (_sc && _sc.fullImport) || null;
     var prior = _sImp || _pImp || null;
     if (_sImp && _pImp) {
-      prior = ((_pImp.games || []).length > (_sImp.games || []).length) ? _pImp : _sImp;
+      prior = (_lzTot(_pImp) > _lzTot(_sImp)) ? _pImp : _sImp;
+    }
+    // CURSOR gravado: onde a última leitura parou. Sem ele a retomada recomeça do zero.
+    cursorAtual = (prior && prior.lzCursor) || null;
+    ultimoImp = prior;
+    // Dispara UMA rodada. A extensão devolve `done:false` enquanto sobrar trabalho e o
+    // handler do resultado chama isto de novo — sempre com o cursor mais recente.
+    function proximaRodada() {
+      if (done) return;
+      rodada++;
+      window.postMessage({ __sp_lp: 'run-athlete-import', handle: tg.handle, uid: uid,
+        tournamentId: ctx.tId, prior: ultimoImp || prior, cursor: cursorAtual }, window.location.origin);
     }
     _seedBarsFrom(prior);
     setProg({ sub: 'conectando à extensão…', pct: 2 });
@@ -1905,7 +1952,7 @@
       var best = versions.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
       if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
       started = true;
-      window.postMessage({ __sp_lp: 'run-athlete-import', handle: tg.handle, uid: uid, tournamentId: ctx.tId, prior: prior }, window.location.origin);
+      proximaRodada();
     }, 900);
   };
 
@@ -2365,7 +2412,7 @@
   // no fim. Numa busca completa de 100 inscritos (~3h), fechar a aba, dormir o notebook ou
   // um refresh perdia TUDO, apesar de o comentário na extensão prometer que "o que já foi
   // lido está salvo". Agora cada pessoa é gravada assim que fica pronta.
-  function _lzPersistScans(tId, scans) {
+  function _lzPersistScans(tId, scans, gamesDelta) {
     var ok = (scans || []).filter(function (s) { return s.uid && s.scan; });
     if (!ok.length) return Promise.resolve(0);
     var db = firebase.firestore();
@@ -2380,7 +2427,7 @@
       var gotFull = !!(s.fullImport && Array.isArray(s.fullImport.games) && s.fullImport.games.length);
       if (s.scan && typeof s.scan === 'object') {
         s.scan._mode = (scanMode === 'full' && gotFull) ? 'full' : 'essential';
-        s.scan._fullGames = gotFull ? s.fullImport.games.length : 0;
+        s.scan._fullGames = gotFull ? _lzTot(s.fullImport) : 0;
         s.scan._fullError = (scanMode === 'full' && !gotFull) ? (s.fullError || 'sem-jogos') : null;
       }
       var doc = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, scannedByName: meName, tournamentId: String(tId), tournamentName: tName };
@@ -2403,12 +2450,18 @@
       // competição, 1 por partida, compartilhado. É aqui que o ganho aparece: a mesma
       // partida trazida por 4 pessoas vira UM doc, e varrer alguém já preenche o pedaço
       // dos parceiros/adversários dela. Best-effort: falhar aqui não pode derrubar o scan.
+      // Só o DELTA quando ele vem (parciais da leitura individual): o acervo canônico é
+      // cumulativo por gid, então regravar o histórico inteiro a cada parcial não adiciona
+      // nada e é o que fazia uma leitura de 472 jogos emitir ~25 mil escritas.
       if (gotFull && typeof window._lzHistoryWrite === 'function') {
-        w = w.then(function () {
-          return window._lzHistoryWrite(s.fullImport, s.handle)
-            .then(function (r) { window._log && window._log('[lz história] scan', s.handle + ':', JSON.stringify(r)); })
-            .catch(function (e) { window._log && window._log('[lz história] scan falhou (não bloqueia):', (e && e.message) || e); });
-        });
+        var _lote = Array.isArray(gamesDelta) ? gamesDelta : null;
+        if (!_lote || _lote.length) {
+          w = w.then(function () {
+            return window._lzHistoryWrite(s.fullImport, s.handle, _lote)
+              .then(function (r) { window._log && window._log('[lz história] scan', s.handle + ':', JSON.stringify(r)); })
+              .catch(function (e) { window._log && window._log('[lz história] scan falhou (não bloqueia):', (e && e.message) || e); });
+          });
+        }
       }
       return w;
     })).then(function () { return ok.length; });
@@ -2442,7 +2495,7 @@
         // sub-campos do scan: a regra do Firestore valida as chaves do TOPO do doc, então
         // diagnóstico novo entra aqui sem precisar mexer/deployar firestore.rules.
         s.scan._mode = (scanMode === 'full' && gotFull) ? 'full' : 'essential';
-        s.scan._fullGames = gotFull ? s.fullImport.games.length : 0;
+        s.scan._fullGames = gotFull ? _lzTot(s.fullImport) : 0;
         // POR QUE não veio o histórico — o `catch {}` da extensão engolia isto e a busca
         // reportava sucesso sem nenhum jogo. Sem motivo gravado, não há como diagnosticar.
         s.scan._fullError = (scanMode === 'full' && !gotFull) ? (s.fullError || 'sem-jogos') : null;
