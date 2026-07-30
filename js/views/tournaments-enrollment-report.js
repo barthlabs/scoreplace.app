@@ -1600,11 +1600,19 @@
     // que a categoria do torneio é MISTA (uma categoria só, fem e masc juntos) e dá o
     // ➕ Criar categoria / ↩ Reverter próprio. Quem é fem segue na coluna fem, masc na
     // masc — igual ao box "Sem gênero" abaixo, mas de indicação/formalização.
-    var mistoStrip = '<div style="margin-bottom:10px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid rgba(168,85,247,0.55);border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
-      '<span style="min-width:0;"><span style="font-size:17px;font-weight:800;color:#a855f7;">⚥ Misto' + (mistoOn ? ' <span style="opacity:0.8;font-size:15px;">(' + total + ')</span>' : '') + '</span> ' +
-      '<span style="font-size:13px;color:var(--text-muted);">categoria única — fem e masc jogam juntos, não são duas categorias</span></span>' +
-      createToggle('window._erToggleGenderMisto(\'' + tIdEsc + '\',this)', mistoOn,
-        (mistoOn ? 'Desativar' : 'Ativar') + ' a categoria Misto') + '</div>';
+    // LAYOUT (pedido do dono, 30/jul): TÍTULO e TOGGLE na mesma linha, o toggle à direita;
+    // a DESCRIÇÃO abaixo do título. Antes título e descrição eram um parágrafo só e o
+    // `flex-wrap` jogava o toggle pra linha de baixo quando o texto crescia — o controle
+    // aparecia solto no canto inferior, longe do que ele controla.
+    var mistoStrip = '<div style="margin-bottom:10px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid rgba(168,85,247,0.55);border-radius:12px;padding:10px 12px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
+        '<span style="font-size:17px;font-weight:800;color:#a855f7;min-width:0;">⚥ Misto' +
+          (mistoOn ? ' <span style="opacity:0.8;font-size:15px;">(' + total + ')</span>' : '') + '</span>' +
+        createToggle('window._erToggleGenderMisto(\'' + tIdEsc + '\',this)', mistoOn,
+          (mistoOn ? 'Desativar' : 'Ativar') + ' a categoria Misto') +
+      '</div>' +
+      '<div style="font-size:13px;color:var(--text-muted);margin-top:3px;">categoria única — fem e masc jogam juntos, não são duas categorias</div>' +
+    '</div>';
     // "Categorias no torneio" — resultado das formalizações + contagem (acima do total).
     var formalCats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
     var catsBoxInner = formalCats.length
