@@ -588,6 +588,40 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
   ok(r5.jogosTotal >= 81, 'terminou com os 81 jogos mesmo assim (veio ' + r5.jogosTotal + ')');
   ok(r5.cursor && r5.cursor.complete === true, 'o cursor terminou completo');
 
+  // ── CENÁRIO 6: 2ª leitura em cima do RESULTADO REAL da 1ª — não pode reler NADA ──
+  // O teste que faltava e que teria pego o bug na hora: em vez de um `prior` escrito à mão,
+  // usa o fullImport que a própria leitura produziu. Foi assim que "repassando todos os
+  // torneios de novo" passou despercebido — o prior de laboratório tinha
+  // `name !== categoryRaw`, e o import REAL passou a gravar categoryRaw = nome.
+  console.log('\n🔁 CENÁRIO 6 — segunda leitura sobre o resultado REAL da primeira');
+  await page.close();
+  page = await novaPagina(browser);
+  const r6a = await rodarCenario(page, pequeno, 'primeira');
+  const r6 = await page.evaluate(() => {
+    const imp = window.__APP.imp;                    // o que a 1ª leitura REALMENTE gravou
+    window.__LZ.hits = {};
+    window.__APP.rodadas = 0; window.__APP.done = false; window.__APP.erro = null;
+    window.__APP.escritasCanonicas = 0; window.__APP.docsPorGid = {};
+    window.__APP.start('CamilaExemplo', 'uid-camila', imp, imp.lzCursor);
+    return true;
+  });
+  await page.waitForFunction(() => window.__APP.done === true, null, { timeout: 120000 });
+  const r6b = await page.evaluate(() => {
+    const u = Object.keys(window.__LZ.hits);
+    return { erro: window.__APP.erro, total: u.length,
+      torneios: u.filter(x => /\/tournaments\/\d+$/.test(x)).length,
+      rankings: u.filter(x => /\/rankings\/\d+$/.test(x)).length,
+      paginas: u.filter(x => /\/CamilaExemplo\/matches/.test(x)).length };
+  });
+  console.log('     requisições na 2ª: ' + r6b.total + ' (torneios ' + r6b.torneios +
+    ' · rankings ' + r6b.rankings + ' · páginas ' + r6b.paginas + ')');
+  ok(!r6b.erro, 'a segunda leitura não falhou', r6b.erro);
+  ok(r6b.torneios === 0, 'NENHUM torneio foi lido de novo (era isto que refazia os 35 um a um)',
+    r6b.torneios + ' torneios re-buscados');
+  ok(r6b.rankings === 0, 'NENHUM ranking foi lido de novo', r6b.rankings + ' rankings re-buscados');
+  ok(r6b.paginas <= 1, 'não repaginou o histórico (no máximo a página de conferência)',
+    r6b.paginas + ' páginas relidas');
+
   await page.close();
   await browser.close();
   console.log('\n' + (falhas ? '❌ ' + falhas + ' de ' + testes + ' falharam' : '✅ ' + testes + ' verificações passaram'));

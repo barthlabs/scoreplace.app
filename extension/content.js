@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.58';
+  var EXT_VERSION = '1.59';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -697,7 +697,12 @@
     // com footprint fragmentado, a última entrada não pode apagar o que a anterior trouxe)
     var priorNames = {};
     ((prior && prior.footprint) || []).forEach(function (f) {
-      if (!f || !f.name || f.name === f.categoryRaw) return;
+      // A PROVA DE QUE FOI LIDO É A CLASSIFICAÇÃO. Exigir `name !== categoryRaw` sozinho
+      // era frágil e virou bug na reescrita: eu passei a gravar `categoryRaw` = título da
+      // lista, que É o próprio nome do torneio — então todo torneio recém-lido voltava a
+      // contar como NÃO lido e a rodada seguinte re-buscava os 35, um a um. Era isto que o
+      // dono via como "repassando todos os torneios de novo".
+      if (!f || !(f.standings || (f.name && f.name !== f.categoryRaw))) return;
       var id = (f.official ? 't/' : 'r/') + (f.club || '') + '/' + (f.tourneyId || f.rankingId || '');
       var ja = priorNames[id];
       priorNames[id] = {
@@ -768,16 +773,18 @@
         var id = 't/' + P.club + '/' + P.tid;
         if (temT[id]) return;
         var d = detDe(id); if (!d) return;
+        var _pt = _partirNome(d.name || P.title || '');
         raw.tournaments.push({ name: d.name || P.title || '', club: P.club, sport: 'Beach Tennis',
-          categoryRaw: P.title || '', year: null, status: 'done', wins: 0, losses: 0,
+          categoryRaw: _pt.cat || '', year: null, status: 'done', wins: 0, losses: 0,
           tourneyId: P.tid, rankingId: null, standings: d.standings || null, logo: d.logo || null });
       });
       ranksList.forEach(function (R) {
         var id = 'r/' + R.club + '/' + R.rid;
         if (temR[id]) return;
         var d = detDe(id); if (!d) return;
+        var _pr = _partirNome(d.name || R.title || '');
         raw.rankings.push({ name: d.name || R.title || '', club: R.club, sport: 'Beach Tennis',
-          categoryRaw: R.title || '', year: null, status: 'done', wins: 0, losses: 0,
+          categoryRaw: _pr.cat || '', year: null, status: 'done', wins: 0, losses: 0,
           tourneyId: null, rankingId: R.rid, standings: d.standings || null, logo: d.logo || null });
       });
       return raw;
