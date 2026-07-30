@@ -492,5 +492,43 @@ console.log('\n── abas: torneios · rankings · jogos ──');
   ok(window._lzGameRows({ games: [] }, 'x') === '', 'sem jogos → vazio (a aba mostra o texto de vazio)');
 }
 
+// ── 15. QUAL IMPORT VALE: quem tem o id do letzplay vence quem tem MAIS jogos ──
+// Medido em 30/jul: letzplayScans tinha os 469 LIMPOS e users/{uid} os 569 SUJOS, 15min
+// mais velhos. "Vence quem tem mais" trouxe o lixo de volta pra tela.
+console.log('\n── escolha entre os dois imports ──');
+{
+  const limpo = { importedAt: AGORA, games: Array.from({ length: 469 }, (_, i) => ({ lzId: 'x' + i })) };
+  const sujo = { importedAt: VELHO, games: Array.from({ length: 569 }, () => ({})) };
+  ok(window._lzMelhorImport(sujo, limpo) === limpo, 'com id vence sem id, mesmo com menos jogos');
+  ok(window._lzMelhorImport(limpo, sujo) === limpo, 'a ordem dos argumentos não muda o resultado');
+  const velhoComId = { importedAt: VELHO, games: [{ lzId: '1' }] };
+  const novoComId = { importedAt: AGORA, games: [{ lzId: '1' }, { lzId: '2' }] };
+  ok(window._lzMelhorImport(velhoComId, novoComId) === novoComId, 'empatados no id, vence o mais recente');
+  ok(window._lzMelhorImport(null, sujo) === sujo, 'um só existindo, é ele');
+  ok(window._lzMelhorImport(null, null) === null, 'nenhum dos dois → null');
+}
+
+// ── 16. TOTAL DE RANKINGS vem da LISTA/declarado, nunca das entradas do footprint ──
+// O footprint fragmenta: 30 entradas pros 29 rankings da Camila, 21 pros 8 da Kelly.
+console.log('\n── total de rankings (footprint fragmentado) ──');
+{
+  const fp = [];
+  for (let i = 0; i < 8; i++) {
+    // cada ranking aparece 2 ou 3 vezes, uma por categoria — é o footprint real
+    for (let k = 0; k < (i % 2 ? 3 : 2); k++) {
+      fp.push({ official: false, club: 'pb', rankingId: String(100 + i), name: 'R' + i, categoryRaw: 'cat' + k,
+        standings: [{ group: 'G', rows: [{ pos: 3, handles: ['kelly'] }] }] });
+    }
+  }
+  ok(fp.length === 20, 'o fixture reproduz o footprint inflado (' + fp.length + ' entradas pra 8 rankings)');
+  const imp = { handle: 'kelly', importedAt: AGORA, declaredRankings: 8, footprint: fp,
+    rankingsList: Array.from({ length: 8 }, (_, i) => ({ club: 'pb', rid: String(100 + i) })),
+    games: [{ lzId: '1' }], lzCursor: { v: 4, complete: true,
+      ranksDone: Object.fromEntries(fp.map(f => ['r/pb/' + f.rankingId, 1])) } };
+  const linhas = window._lzTourneyRows(imp, 'kelly', 'rank');
+  const n = (linhas.match(/padding:2px 0/g) || []).length;
+  ok(n === 8, 'a aba de rankings mostra 8 linhas, não 20 (veio ' + n + ')');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

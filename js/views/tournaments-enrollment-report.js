@@ -1416,6 +1416,43 @@
     });
     return Object.keys(ids).length;
   };
+  // Conta COMPETIÇÕES DISTINTAS num footprint (por club/id), não entradas — o footprint
+  // fragmenta: a mesma competição entra uma vez por categoria/trilha.
+  function _lzContarDistintos(fp, oficial) {
+    var ids = {};
+    (fp || []).forEach(function (f) {
+      if (!f || !!f.official !== !!oficial) return;
+      ids[(f.club || '') + '/' + (oficial ? (f.tourneyId || '') : (f.rankingId || ''))] = 1;
+    });
+    return Object.keys(ids).length;
+  }
+  // QUAL DOS DOIS IMPORTS VALE. O histórico mora em dois lugares (users/{uid}.letzplayImport,
+  // feito pela própria pessoa, e letzplayScans/{uid}.fullImport, feito pelo organizador).
+  // A regra antiga — "vence quem tem MAIS jogos" — inverteu de sentido no dia em que a
+  // limpeza chegou: medido em 30/jul, o doc do organizador tinha os 469 jogos LIMPOS (todos
+  // com o id do letzplay) e o da pessoa tinha os 569 SUJOS do pipeline velho, de 15 minutos
+  // antes. Mais jogos venceu, e a tela voltou a mostrar 569.
+  // Quantidade não é qualidade: quem carrega o id da partida veio do pipeline novo e vence.
+  // Empatado nisso, vence o mais RECENTE; só então o maior.
+  function _lzTemIds(x) {
+    var g = (x && x.games) || [];
+    return g.length > 0 && g.every(function (y) { return y && y.lzId; });
+  }
+  function _lzQuando(x) {
+    var ms = Date.parse((x && (x.importedAt || x.at)) || '');
+    return isNaN(ms) ? 0 : ms;
+  }
+  function _lzMelhorImport(a, b) {
+    if (!a) return b || null;
+    if (!b) return a;
+    var ia = _lzTemIds(a), ib = _lzTemIds(b);
+    if (ia !== ib) return ia ? a : b;
+    var qa = _lzQuando(a), qb = _lzQuando(b);
+    if (qa !== qb) return qa > qb ? a : b;
+    return (_lzTot(a) >= _lzTot(b)) ? a : b;
+  }
+  window._lzMelhorImport = _lzMelhorImport;
+
   function _lzImportComplete(li) {
     if (!li) return false;
     var n = _lzTot(li);
@@ -1467,8 +1504,7 @@
       // organizador depender do inscrito. Vence o que tem MAIS jogos (mesma regra da CF).
       var _fi = (r.uid && scanMap[r.uid] && scanMap[r.uid].fullImport) || null;
       var _own = prof && prof.letzplayImport;
-      var _nGames = function (x) { return x ? _lzTot(x) : -1; };
-      var li = (_nGames(_fi) > _nGames(_own)) ? _fi : _own;
+      var li = _lzMelhorImport(_fi, _own);
       var sc = (r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
       if (li) {
         var oc = li.officialCategory, band = li.rating && li.rating.band;
@@ -1902,15 +1938,18 @@
     var rctx = window._lzRenderCtx || {};
     var _p1 = rctx.profileMap && rctx.profileMap[uid] && rctx.profileMap[uid].letzplayImport;
     var _p2 = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].fullImport;
-    var imp = _p2 || _p1 || null;
-    if (_p1 && _p2) imp = (_lzTot(_p1) > _lzTot(_p2)) ? _p1 : _p2;
+    var imp = _lzMelhorImport(_p1, _p2);
     // MEDIDOR DE NÍVEL no topo — a MESMA barra das estatísticas (`_lzLevelBar`).
     // O card INTEIRO estava aqui e virou um rolo sem fim dentro do diálogo: as três listas
     // empilhadas, sem como chegar no fim de nenhuma ("essa tela está imprestável"). As
     // listas passaram a ser ABAS, com UMA área de rolagem — ver `_lzAba`.
     var _nivel = (imp && typeof window._lzLevelBar === 'function') ? window._lzLevelBar(imp) : '';
     var body = (_nivel ? '<div style="background:var(--bg-card,#141a24);border:1px solid var(--border-color,#28313f);border-radius:12px;padding:11px 12px;margin-bottom:9px;text-align:left;">' + _nivel + '</div>' : '') +
-      '<div style="font-size:0.8rem;">Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> (@' + _esc(tg.handle) + ') no letzplay.</div>';
+      '<div style="font-size:0.8rem;">Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> ' +
+      // O @ ABRE O PERFIL DELA no letzplay. Antes só a leitura navegava a aba compartilhada,
+      // então quem só queria conferir a fonte não tinha caminho nenhum.
+      '(<a href="https://letzplay.me/' + encodeURIComponent(tg.handle) + '" target="_blank" rel="noopener" ' +
+      'style="color:#7dd3fc;text-decoration:none;font-weight:700;">@' + _esc(tg.handle) + ' ↗</a>) no letzplay.</div>';
     var btnLabel = '📚 Puxar histórico completo';
     // 3 BARRAS (x = gravado · y = total do perfil letzplay). Os "de y" que faltarem são
     // completados ao vivo pela extensão (lz-profile-counts lê "472 Jogos · 29 Rankings ·
@@ -1948,7 +1987,15 @@
     var _cur = imp && imp.lzCursor;
     var rX = (_cur && _cur.ranksDone) ? Object.keys(_cur.ranksDone).length
       : rkFp.filter(function (f) { return f.standings || (f.name && f.name !== f.categoryRaw); }).length;
-    var rY = rkFp.length || ((imp && imp.declaredRankings != null) ? imp.declaredRankings : null);
+    // MESMA REGRA DOS TORNEIOS: o total é o que o perfil DECLARA ou o que a LISTA enumera,
+    // o que for maior — nunca a contagem de ENTRADAS do footprint. O footprint fragmenta:
+    // 30 entradas pros 29 rankings da Camila e 21 pros 8 da Kelly. Contar entradas prendia
+    // a barra em "29 de 30" e inventava "21 rankings" pra quem tem 8.
+    var rY = (imp && imp.declaredRankings != null) ? imp.declaredRankings : null;
+    var rLista = (imp && Array.isArray(imp.rankingsList)) ? imp.rankingsList.length : 0;
+    if (rLista > 0) rY = (rY != null) ? Math.max(rY, rLista) : rLista;
+    if (rY == null) rY = _lzContarDistintos(rkFp, false) || null;
+    if (rY != null && rX > rY) rX = rY;      // x jamais passa de y
     body += '<div style="margin:8px 0 6px;">' +
       barLine('lz-ath-t', '🏆', 'Torneios', tX, tY) +
       barLine('lz-ath-r', '📊', 'Rankings', rX, rY) +
@@ -1976,7 +2023,13 @@
         }).join('') + '</div>' +
         '<div id="lz-aba-box" style="max-height:340px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;' +
         'font-size:0.78rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);background:var(--bg-darker,rgba(0,0,0,0.2));' +
-        'border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:7px 10px;margin:6px 0;text-align:left;"></div>';
+        'border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:7px 10px;margin:6px 0;text-align:left;">' +
+        // A PRIMEIRA ABA JÁ VEM RENDERIZADA NO HTML. Eu tinha deixado a caixa vazia pra um
+        // setTimeout preencher — e o patch que adicionava esse setTimeout falhou sem eu ver:
+        // resultado, a caixa aparecia VAZIA na tela do dono. Conteúdo que existe na hora de
+        // montar vai montado; nada de depender de o diálogo já estar no DOM.
+        (window._lzAbas.tour || '<div style="opacity:0.6;padding:6px 0;">Nenhum torneio lido ainda.</div>') +
+        '</div>';
       var incompleto = (gY && gX < gY) || (imp.partialReason != null);
       if (incompleto) {
         body += '<div style="font-size:0.8rem;color:#fbbf24;">Perfil INCOMPLETO — puxe de novo pra continuar de onde parou (o que já veio está gravado).</div>';
@@ -2007,6 +2060,8 @@
           }
         }, null,
         { confirmText: btnLabel, cancelText: 'Fechar', type: 'info', maxWidth: '760px' });
+      // a aba de torneios já está montada; isto só pinta o botão ativo
+      setTimeout(function () { if (typeof window._lzAba === 'function') window._lzAba('tour'); }, 0);
       // Completa os "de y" das barras AO VIVO com os totais do perfil público
       // (a extensão lê "472 Jogos · 29 Rankings · 35 Torneios" e devolve).
       setTimeout(function () { _lzAskProfileCounts(tg.handle); }, 60);
