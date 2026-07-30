@@ -1192,6 +1192,101 @@
   // leitura ainda no torneio 16. Um id de torneio entra no footprint só porque algum jogo o
   // citou; LIDO é ter aberto a página dele, o que se prova pela CLASSIFICAÇÃO ou pelo NOME
   // real resolvido (a categoria crua não conta como nome).
+  // ── LISTA DE TORNEIOS DO ATLETA (dialog "Puxar histórico") ────────────────────
+  // Uma linha por torneio: DATA · nome · CATEGORIA · CLASSIFICAÇÃO, em cores distintas,
+  // ordenada do mais recente pro mais antigo. Pedido do dono (30/jul): _"precisa colocar
+  // as datas aqui. e ordenar em ordem cronológica inversa. Tem que ter a categoria e a
+  // classificação… dando destaque com cores"_.
+  var _LZ_C_DATA = '#7dd3fc';   // data       — azul-céu
+  var _LZ_C_CAT = '#a78bfa';    // categoria  — violeta (a cor do letzplay no app)
+  var _LZ_C_POS = '#fbbf24';    // colocação  — âmbar (pódio)
+
+  function _lzPad2(n) { return (n < 10 ? '0' : '') + n; }
+  var _LZ_MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  // Data de CALENDÁRIO montada dos componentes (nunca parse de string, nunca UTC) — ver
+  // js/letzplay-model.js dateParts. A data que o atleta vê é a data em que jogou.
+  function _lzFmtDataNum(n) {
+    var M = window._spLzModel;
+    var p = (M && M.dateParts) ? M.dateParts(n) : null;
+    if (!p) return null;
+    return _lzPad2(p.d) + ' ' + (_LZ_MES[p.m - 1] || '') + ' ' + String(p.y).slice(2);
+  }
+  // Data do torneio = a do jogo MAIS RECENTE dela ali. O footprint só guarda o ano; a data
+  // real vive nos jogos. Quando o jogo daquele torneio está fora do recorte do doc (o doc
+  // carrega os mais recentes), sobra o ano — que é melhor que nada e nunca mente.
+  function _lzTourneyDateIdx(imp) {
+    var M = window._spLzModel, out = {};
+    ((imp && imp.games) || []).forEach(function (g) {
+      if (!g || !g.official || g.tourneyId == null) return;
+      var n = M ? M.dateNum(g.date) : 0;
+      if (!n) return;
+      var k = 't/' + (g.club || '') + '/' + g.tourneyId;
+      if (!out[k] || n > out[k]) out[k] = n;
+    });
+    return out;
+  }
+  function _lzMedalha(pos) {
+    return pos === 1 ? '🥇' : (pos === 2 ? '🥈' : (pos === 3 ? '🥉' : '🏅'));
+  }
+  // O nome real do letzplay quase sempre TERMINA na categoria ("… Ortobom - DUPLA FEMININA
+  // D"). Se a gente só evitasse repetir, a categoria ficava dentro do nome e portanto SEM
+  // cor — o pedido do dono era exatamente destacá-la. Então tiramos o sufixo do nome e a
+  // categoria vira sempre um campo próprio, colorido. Bônus: encurta nomes que ocupavam 3
+  // linhas na caixa.
+  function _lzSplitCat(nome, cat) {
+    var n = String(nome || '').trim();
+    if (!cat) return { nome: n, cat: null };
+    var c = String(cat).trim();
+    var low = n.toLowerCase(), lowc = c.toLowerCase();
+    if (low.length > lowc.length && low.slice(-lowc.length) === lowc) {
+      var corte = n.slice(0, n.length - c.length).replace(/[\s\-–—·.,:]+$/, '').trim();
+      if (corte) return { nome: corte, cat: c };
+    }
+    // categoria aparece no meio do nome → não mexe (cortar ali mutilaria o nome)
+    if (low.indexOf(lowc) >= 0) return { nome: n, cat: null };
+    return { nome: n, cat: c };
+  }
+  window._lzTourneyRows = function (imp, handle) {
+    if (!imp) return '';
+    var datas = _lzTourneyDateIdx(imp);
+    var linhas = [], vistos = {};
+    ((imp.footprint) || []).forEach(function (f) {
+      if (!f || !f.official) return;
+      var k = 't/' + (f.club || '') + '/' + (f.tourneyId || '');
+      vistos[k] = 1;
+      var part = _lzSplitCat(f.name || f.categoryRaw || 'torneio', f.categoryRaw);
+      linhas.push({
+        lido: true, ord: datas[k] || 0, nome: part.nome, cat: part.cat,
+        data: datas[k] ? _lzFmtDataNum(datas[k]) : (f.year ? String(f.year) : null),
+        pos: _lzMyPosIn(f.standings, handle)
+      });
+    });
+    // AINDA NÃO LIDOS: a lista pública vem do mais recente pro mais antigo, então a posição
+    // nela é a única noção de tempo que temos deles — vão no fim, nessa mesma ordem.
+    var pend = 0;
+    ((imp.tournamentsList) || []).forEach(function (p) {
+      if (!p || !p.tid) return;
+      if (vistos['t/' + (p.club || '') + '/' + p.tid]) return;
+      pend++;
+      linhas.push({ lido: false, ord: -pend, nome: p.title || ('torneio ' + p.tid), cat: null, data: null, pos: null });
+    });
+    if (!linhas.length) return '';
+    // cronológica INVERSA; sem data (não lido) desce, preservando a ordem da lista pública
+    linhas.sort(function (a, b) { return b.ord - a.ord; });
+    return linhas.map(function (L) {
+      if (!L.lido) {
+        return '<div style="padding:2px 0;opacity:0.6;">⏳ ' + _esc(L.nome) +
+          ' · <span style="color:' + _LZ_C_CAT + ';opacity:0.8;">ainda não lido</span></div>';
+      }
+      var h = '<div style="padding:2px 0;">🏆 ';
+      if (L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
+      h += _esc(L.nome);
+      if (L.cat) h += ' · <span style="color:' + _LZ_C_CAT + ';font-weight:700;">' + _esc(L.cat) + '</span>';
+      if (L.pos != null) h += ' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos) + ' ' + L.pos + 'º</span>';
+      return h + '</div>';
+    }).join('');
+  };
+
   window._lzTournamentsRead = function (imp) {
     return ((imp && imp.footprint) || []).filter(function (f) {
       return f && f.official && (f.standings || (f.name && f.name !== f.categoryRaw));
@@ -1676,7 +1771,13 @@
     var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
     var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];
     var tX = window._lzTournamentsRead(imp);   // mesma regra do overlay ao vivo
+    // TOTAL = o MAIOR entre o que o perfil declara e o que a lista pública realmente
+    // ENUMERA. O contador do perfil da Camila diz 35, mas a lista tem mais entradas — e
+    // aí "35 de 35 (100%)" aparecia junto de itens "ainda não lido" na mesma tela. Uma
+    // lista que se pode contar vale mais que um contador que a gente não sabe o que conta.
     var tY = (imp && imp.declaredTournaments != null) ? imp.declaredTournaments : null;
+    var tLista = (imp && Array.isArray(imp.tournamentsList)) ? imp.tournamentsList.length : 0;
+    if (tLista > 0) tY = (tY != null) ? Math.max(tY, tLista) : tLista;
     var rX = rkFp.length;
     var rY = (imp && imp.declaredRankings != null) ? imp.declaredRankings : null;
     body += '<div style="margin:8px 0 6px;">' +
@@ -1685,28 +1786,14 @@
       barLine('lz-ath-g', '🎾', 'Jogos', gX, gY) +
       '</div>';
     if (imp) {
-      // Torneios já puxados: nome · categoria · ano · classificação do atleta.
-      // v1.4.32: + os AINDA NÃO LIDOS da lista persistida (tournamentsList — o título já
-      // traz a categoria). O dono vê os 35 de cara, não só os que já têm jogos.
-      var pendLis = '';
-      if (Array.isArray(imp.tournamentsList) && imp.tournamentsList.length) {
-        var lidosKey = {};
-        offFp.forEach(function (f) { lidosKey['t/' + (f.club || '') + '/' + (f.tourneyId || '')] = 1; });
-        pendLis = imp.tournamentsList.filter(function (p) {
-          return p && p.tid && !lidosKey['t/' + (p.club || '') + '/' + p.tid];
-        }).map(function (p) {
-          return '<div style="padding:2px 0;opacity:0.7;">⏳ ' + _esc(p.title || ('torneio ' + p.tid)) + ' · ainda não lido</div>';
-        }).join('');
-      }
-      if (offFp.length || pendLis) {
-        var lis = offFp.map(function (f) {
-          var nm = f.name || f.categoryRaw || 'torneio';
-          var cat = (f.name && f.categoryRaw && f.name.indexOf(f.categoryRaw) < 0) ? (' · ' + _esc(f.categoryRaw)) : '';
-          var yr = f.year ? (' · ' + f.year) : '';
-          var pos = _lzMyPosIn(f.standings, tg.handle);
-          return '<div style="padding:2px 0;">🏆 ' + _esc(nm) + cat + yr + (pos != null ? (' · <b>' + pos + 'º lugar</b>') : '') + '</div>';
-        }).join('');
-        body += '<div style="max-height:12em;overflow-y:auto;font-size:0.78rem;color:var(--text-secondary,#c8cdd6);background:var(--bg-darker,rgba(0,0,0,0.2));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;margin-bottom:6px;text-align:left;">' + lis + pendLis + '</div>';
+      // LISTA DE TORNEIOS — data · nome · categoria · classificação, do mais RECENTE pro
+      // mais antigo, cada campo na sua cor. Os ainda-não-lidos entram na mesma lista
+      // (vindos de `tournamentsList`, cujo título já carrega a categoria).
+      var lis = _lzTourneyRows(imp, tg.handle);
+      if (lis) {
+        // 16em (era 12): com nome + data + categoria + colocação, 12em mostrava 2 torneios
+        // e meio de 35 — a rolagem existe, mas não pode ser a única forma de ver a lista.
+        body += '<div style="max-height:16em;overflow-y:auto;font-size:0.78rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);background:var(--bg-darker,rgba(0,0,0,0.2));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;margin-bottom:6px;text-align:left;">' + lis + '</div>';
       }
       var incompleto = (gY && gX < gY) || (imp.partialReason != null);
       if (incompleto) {
@@ -1791,6 +1878,14 @@
       if (c.tY != null) _bs.t.y = c.tY;
       if (c.rY != null) _bs.r.y = c.rY;
       if (c.gY != null) _bs.g.y = c.gY;
+      // TOTAL de torneios = o MAIOR entre o contador do perfil e o que a lista pública
+      // ENUMERA. O perfil da Camila diz 35 e a lista tem mais — e era assim que "35 de 35
+      // (100%)" convivia com itens "ainda não lido" na mesma tela. Uma lista que se pode
+      // contar vale mais que um contador cujo critério a gente não conhece. Fica AQUI (e
+      // não na extensão) pra não obrigar mais um recarregamento dela: o app sabe a lista
+      // pelo `tournamentsList` do próprio import.
+      var _lst = (ultimoImp && Array.isArray(ultimoImp.tournamentsList)) ? ultimoImp.tournamentsList.length : 0;
+      if (_lst > 0) _bs.t.y = (_bs.t.y != null) ? Math.max(_bs.t.y, _lst) : _lst;
       if (c.t != null) _bs.t.x = Math.max(_bs.t.x, c.t);
       if (c.r != null) _bs.r.x = Math.max(_bs.r.x, c.r);
       if (c.g != null) _bs.g.x = Math.max(_bs.g.x, c.g);

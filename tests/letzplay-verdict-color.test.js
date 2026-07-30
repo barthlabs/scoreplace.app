@@ -218,8 +218,6 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
   ok(r._lzSkill === 'B', 'entre autoimport (10 jogos) e scan do org (152), vence o de MAIS jogos');
 }
 
-console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');
-process.exit(fail ? 1 : 0);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BARRAS DO PROGRESSO: "torneios LIDOS", não "torneios conhecidos"
@@ -261,3 +259,81 @@ ok(_read({ footprint: [{ official: false, categoryRaw: 'Social Fem C / B', stand
 // o teto: nunca mais de 35 de 35
 ok(Math.min(_read(_imp), _imp.declaredTournaments) <= _imp.declaredTournaments,
   'x capado no declarado: 35 de 35 é 100%, "38 de 35" não existe');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LISTA DE TORNEIOS do dialog: DATA · nome · CATEGORIA · CLASSIFICAÇÃO, em cores,
+// do mais recente pro mais antigo. Pedido do dono (30/jul), olhando a leitura da Camila:
+// "precisa colocar as datas aqui. e ordenar em ordem cronológica inversa. Tem que ter a
+// categoria e a classificação… dando destaque com cores".
+console.log('\n── lista de torneios: data, ordem inversa, cores ──');
+// o modelo canônico (dateNum/dateParts) roda no mesmo contexto do arquivo sob teste
+require('fs'); var _vm = require('vm'), _fs = require('fs'), _pathM = require('path');
+_vm.runInContext(_fs.readFileSync(_pathM.join(__dirname, '..', 'js', 'letzplay-model.js'), 'utf8'), window);
+
+function _g(tid, dia, mes, ano) {
+  return { official: true, tourneyId: tid, club: 'paineiras-bt',
+    date: 'Sábado, ' + dia + '/' + mes + '/' + ano + ' às 08:00hs' };
+}
+var impL = {
+  footprint: [
+    { official: true, club: 'paineiras-bt', tourneyId: 'A', categoryRaw: 'Feminina D',
+      name: 'Torneio ANTIGO - Feminina D', year: 2025,
+      standings: [{ group: 'G1', rows: [{ pos: 3, handles: ['camilacalia'] }] }] },
+    { official: true, club: 'paineiras-bt', tourneyId: 'B', categoryRaw: 'Feminina C',
+      name: 'Torneio NOVO - Feminina C', year: 2026,
+      standings: [{ group: 'G1', rows: [{ pos: 1, handles: ['camilacalia'] }] }] },
+    { official: true, club: 'paineiras-bt', tourneyId: 'C', categoryRaw: 'Feminina C',
+      name: 'Torneio MEIO - Feminina C', year: 2026,
+      standings: [{ group: 'G1', rows: [{ pos: 2, handles: ['camilacalia'] }] }] },
+    { official: false, club: 'paineiras-bt', rankingId: 'R', categoryRaw: 'Social Fem C / B' }
+  ],
+  games: [_g('A', '10', '03', '25'), _g('B', '27', '06', '26'), _g('C', '15', '05', '26')],
+  tournamentsList: [
+    { club: 'paineiras-bt', tid: 'A', title: 'Torneio ANTIGO' },
+    { club: 'paineiras-bt', tid: 'B', title: 'Torneio NOVO' },
+    { club: 'paineiras-bt', tid: 'C', title: 'Torneio MEIO' },
+    { club: 'paineiras-bt', tid: 'Z', title: 'PENDENTE - Feminina C' }
+  ]
+};
+var htmlL = window._lzTourneyRows(impL, 'camilacalia');
+
+// 1) DATA presente e formatada a partir dos componentes (sem fuso)
+ok(/27 jun 26/.test(htmlL), 'mostra a data do jogo mais recente do torneio (27 jun 26)');
+ok(/10 mar 25/.test(htmlL), 'torneio antigo mostra a data dele (10 mar 25)');
+
+// 2) ORDEM CRONOLÓGICA INVERSA
+var iNovo = htmlL.indexOf('Torneio NOVO'), iMeio = htmlL.indexOf('Torneio MEIO'), iAnt = htmlL.indexOf('Torneio ANTIGO');
+ok(iNovo >= 0 && iMeio > iNovo && iAnt > iMeio, 'ordem cronológica INVERSA: jun/26 → mai/26 → mar/25');
+
+// 3) NÃO LIDO vai pro fim, e não inventa data
+ok(htmlL.indexOf('PENDENTE') > iAnt, 'ainda-não-lido desce pro fim da lista');
+ok(/PENDENTE[^<]*<[^>]*>ainda não lido/.test(htmlL.replace(/\n/g, '')), 'não lido é rotulado, sem data inventada');
+
+// 4) TRÊS CORES distintas — data, categoria e classificação
+ok(htmlL.indexOf('#7dd3fc') >= 0, 'data tem cor própria (#7dd3fc)');
+ok(htmlL.indexOf('#a78bfa') >= 0, 'categoria tem cor própria (#a78bfa)');
+ok(htmlL.indexOf('#fbbf24') >= 0, 'classificação tem cor própria (#fbbf24)');
+ok(new Set(['#7dd3fc', '#a78bfa', '#fbbf24']).size === 3, 'as três cores são diferentes entre si');
+
+// 5) CLASSIFICAÇÃO com medalha
+ok(/🥇 1º/.test(htmlL), 'campeã sai com 🥇 1º');
+ok(/🥈 2º/.test(htmlL) && /🥉 3º/.test(htmlL), '2º e 3º saem com 🥈 e 🥉');
+
+// 6) CATEGORIA sempre destacada: sai de dentro do nome e vira campo colorido próprio.
+// (o nome real do letzplay quase sempre TERMINA na categoria — se só evitássemos repetir,
+// ela ficava dentro do nome e portanto SEM cor, que era justamente o que o dono pediu)
+ok(/>Torneio NOVO<\/|Torneio NOVO ·/.test(htmlL) || htmlL.indexOf('Torneio NOVO ·') >= 0,
+  'nome fica sem o sufixo da categoria');
+ok(htmlL.indexOf('Torneio NOVO - Feminina C') < 0, 'o sufixo "- Feminina C" saiu do nome');
+ok(new RegExp('color:#a78bfa[^>]*>Feminina C<').test(htmlL), 'a categoria virou chip COLORIDO próprio');
+ok(new RegExp('color:#a78bfa[^>]*>Feminina D<').test(htmlL), 'idem pro torneio da outra categoria');
+// categoria no MEIO do nome não é cortada (cortar ali mutilaria o nome)
+var meio = window._lzTourneyRows({ footprint: [{ official: true, club: 'c', tourneyId: 'm',
+  categoryRaw: 'Feminina C', name: 'Copa Feminina C de Verao 2026', year: 2026 }] }, 'x');
+ok(meio.indexOf('Copa Feminina C de Verao 2026') >= 0, 'categoria no meio do nome: nome preservado inteiro');
+
+// 7) ranking não entra na lista de torneios
+ok(htmlL.indexOf('Social Fem') < 0, 'ranking não aparece na lista de torneios');
+
+console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');
+process.exit(fail ? 1 : 0);

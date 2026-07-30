@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.50';
+  var EXT_VERSION = '1.51';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -650,6 +650,11 @@
       } catch (e) { return null; }
       var gY = (declaredGamesTotal != null) ? declaredGamesTotal : ((prior && prior.declaredGames != null) ? prior.declaredGames : null);
       var tY = (declaredTournTotal != null) ? declaredTournTotal : ((prior && prior.declaredTournaments != null) ? prior.declaredTournaments : null);
+      // A lista ENUMERADA manda quando é maior que o contador do perfil: o perfil da Camila
+      // diz "35 Torneios" e a lista pública tem mais entradas — era assim que a barra
+      // fechava "35 de 35 (100%)" com torneios ainda por ler. Contador que a gente não sabe
+      // o que conta perde de uma lista que a gente consegue contar.
+      if (parts && parts.length) tY = (tY != null) ? Math.max(tY, parts.length) : parts.length;
       var rY = (declaredRankingsTotal != null) ? declaredRankingsTotal : ((prior && prior.declaredRankings != null) ? prior.declaredRankings : null);
       function cap(x, y) { return (y != null && y > 0) ? Math.min(x, y) : x; }
       return {
@@ -715,7 +720,10 @@
       var deadline = Date.now() + 1800000;   // 30 min
       function checkDeadline() { if (Date.now() > deadline) { var e = new Error('teto da rodada'); e.code = 'rate-budget'; throw e; } }
       function stampDeclared(imp) {
-        imp.declaredTournaments = (declaredTournTotal != null) ? declaredTournTotal : (parts.length || ((prior && prior.declaredTournaments) || null));
+        // mesmo critério do liveCounts: o MAIOR entre declarado e enumerado
+        var _tDecl = (declaredTournTotal != null) ? declaredTournTotal : ((prior && prior.declaredTournaments) || null);
+        imp.declaredTournaments = (parts.length && _tDecl != null) ? Math.max(_tDecl, parts.length)
+          : (parts.length || _tDecl);
         imp.declaredRankings = (declaredRankingsTotal != null) ? declaredRankingsTotal : ((prior && prior.declaredRankings) || null);
         if (declaredGamesTotal != null) imp.declaredGames = declaredGamesTotal;
         else if (prior && prior.declaredGames != null) imp.declaredGames = prior.declaredGames;
