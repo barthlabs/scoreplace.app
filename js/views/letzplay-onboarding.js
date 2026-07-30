@@ -165,12 +165,17 @@
     var t = (seg < 60) ? (seg + 's') : (Math.floor(seg / 60) + 'min' + (seg % 60 ? ' ' + (seg % 60) + 's' : ''));
     return _VIVO_FRASES[_vivoIdx % _VIVO_FRASES.length] + ' · ' + t;
   }
+  // Escreve numa LINHA PRÓPRIA (#sp-imp-eta), nunca por cima do `sub`. O `sub` carrega O
+  // QUE ESTÁ SENDO LIDO ("página 10 de 24") e não pode ser trocado por frase genérica — foi
+  // exatamente essa troca que deixava a tela sem informação nenhuma durante a espera.
   function _vivoTick() {
-    var s = document.getElementById('sp-imp-sub');
-    if (!s) { _vivoParar(); return; }                       // overlay sumiu → timer morre
-    if (Date.now() - _vivoDesde < 8000) return;             // ainda é novidade recente
-    _vivoIdx++;
-    s.textContent = _vivoTexto();
+    var e = document.getElementById('sp-imp-eta');
+    if (!e) { _vivoParar(); return; }                       // overlay sumiu → timer morre
+    // cede a linha pro regressivo do org-scan quando ele está ativo (não brigam pelo mesmo lugar)
+    if (typeof window._spEtaText === 'function' && window._spEtaText()) return;
+    if (Date.now() - _vivoDesde < 8000) { e.textContent = ''; return; }
+    if (Date.now() - _vivoDesde >= 8000 * (_vivoIdx + 1)) _vivoIdx++;
+    e.textContent = _vivoTexto();
   }
   function _vivoParar() { if (_vivoTimer) { clearInterval(_vivoTimer); _vivoTimer = null; } }
   window._spProgressOverlay = function (opts) {
@@ -185,8 +190,14 @@
         '<div style="font-size:2.4rem;margin:0 auto 10px;display:inline-block;animation:spImpSpin 0.85s linear infinite;">🎾</div>' +
         '<div id="sp-imp-label" style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;"></div>' +
         '<div style="height:12px;border-radius:999px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.1));"><div id="sp-imp-bar" style="height:100%;width:8%;background:linear-gradient(90deg,#84cc16,#65a30d);transition:width .3s;"></div></div>' +
-        '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;"></div>' +
-        '<div id="sp-imp-eta" style="font-size:0.78rem;color:var(--text-bright,#e2e8f0);margin-top:6px;font-weight:700;font-variant-numeric:tabular-nums;"></div>' +
+        // ALTURA FIXA nas duas linhas: o passo ora cabe em 1 linha ("página 10 de 24"), ora
+        // em 2 ("torneio 17 de 35 — nome, categoria e classificação"). Sem reservar o
+        // espaço, tudo abaixo PULA a cada troca de texto. Posição fixa é o que deixa a
+        // leitura confortável de acompanhar por minutos.
+        '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;min-height:2.5em;display:flex;align-items:center;justify-content:center;text-align:center;"></div>' +
+        // DECORRIDO à esquerda, RESTAM à direita — cada um sempre no mesmo lugar, com
+        // dígitos tabulares (não dançam quando 9s vira 10s).
+        '<div id="sp-imp-eta" style="font-size:0.78rem;color:var(--text-bright,#e2e8f0);margin-top:6px;font-weight:700;font-variant-numeric:tabular-nums;min-height:1.3em;display:flex;align-items:center;justify-content:space-between;gap:12px;"></div>' +
         // BARRAS x de y (v1.4.22): Torneios/Rankings/Jogos crescem AO VIVO durante a
         // busca — mesmas barras do dialog do atleta, agora dentro do overlay (pedido
         // do dono: "que elas vão crescendo conforme as coisas cheguem").
@@ -194,18 +205,40 @@
         // FEED (v1.42): o que está sendo lido aparece aqui (torneio · categoria ·
         // classificação · nº de jogos). v1.4.31: 3 linhas visíveis (2 cortava no meio —
         // pedido do dono), scroll pro resto.
-        '<div id="sp-imp-feed" style="display:none;margin-top:10px;max-height:4.65em;overflow-y:auto;font-size:0.74rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);text-align:left;background:var(--bg-darker,rgba(0,0,0,0.25));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;"></div>' +
+        '<div id="sp-imp-feed" style="display:none;margin-top:10px;max-height:9em;overflow-y:auto;font-size:0.74rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);text-align:left;background:var(--bg-darker,rgba(0,0,0,0.25));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;"></div>' +
         '<div id="sp-imp-actions" style="margin-top:14px;display:none;"></div>'
       );
     }
     var l = document.getElementById('sp-imp-label'); if (l) l.textContent = opts.label || '';
     var b = document.getElementById('sp-imp-bar'); if (b && opts.pct != null) b.style.width = opts.pct + '%';
+    // `eta` explícito (o fluxo do atleta calcula decorrido/faltam com ritmo MEDIDO) vence
+    // tudo: assume a linha e desliga a prova de vida genérica, que existe só pra quem não
+    // tem como estimar.
+    // tempos EXPLÍCITOS: {decorrido, restante}. Os dois rótulos existem SEMPRE (restante
+    // vira "—" enquanto não há amostra pra estimar), pra nenhum dos dois mudar de lugar.
+    if (opts.tempos) {
+      var eF = document.getElementById('sp-imp-eta');
+      if (eF) {
+        eF.innerHTML =
+          '<span>⏱️ decorrido <b style="color:var(--text-bright,#fff);">' + _esc(opts.tempos.decorrido || '—') + '</b></span>' +
+          '<span>⏳ restam <b style="color:var(--text-bright,#fff);">' + _esc(opts.tempos.restante || '—') + '</b></span>';
+      }
+      _vivoParar();
+    } else if (opts.eta != null) {
+      var eG = document.getElementById('sp-imp-eta');
+      if (eG) eG.textContent = opts.eta;
+      _vivoParar();
+    }
     var s = document.getElementById('sp-imp-sub');
     if (s) {
-      // Texto novo = novidade: rearma o relógio da prova de vida e volta pra 1ª frase.
-      if ((opts.sub || '') !== _vivoBase) { _vivoBase = opts.sub || ''; _vivoDesde = Date.now(); _vivoIdx = 0; }
+      // Texto novo = novidade de verdade: rearma o relógio e limpa a linha de vida.
+      if ((opts.sub || '') !== _vivoBase) {
+        _vivoBase = opts.sub || ''; _vivoDesde = Date.now(); _vivoIdx = 0;
+        var e0 = document.getElementById('sp-imp-eta');
+        if (e0 && !(typeof window._spEtaText === 'function' && window._spEtaText())) e0.textContent = '';
+      }
       s.textContent = opts.sub || '';
-      if (!_vivoTimer) { _vivoDesde = _vivoDesde || Date.now(); _vivoTimer = setInterval(_vivoTick, 2000); }
+      if (!_vivoTimer) { _vivoDesde = _vivoDesde || Date.now(); _vivoTimer = setInterval(_vivoTick, 1000); }
     }
     // bars: [{id,icon,label,x,y}] — cria a linha 1x e depois só atualiza texto/preenchimento
     // in-place (transition no width faz o crescimento ser visível, não um pulo).

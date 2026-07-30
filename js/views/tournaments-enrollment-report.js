@@ -1907,6 +1907,7 @@
     // Regra do dono: "o processo deve demorar mais, mas não falhar nunca."
     var rodada = 0, MAX_RODADAS = 40;
     var cursorAtual = null, ultimoImp = null;
+    var ultimaNota = '';   // último passo REAL anunciado — sobrevive às esperas
     // BARRAS AO VIVO (v1.4.22): as 3 barras do dialog (Torneios/Rankings/Jogos, x de y %)
     // ficam VISÍVEIS no overlay durante a busca e crescem conforme as coisas chegam.
     // Semente = melhor import já gravado (mesma escolha do prior lá embaixo); depois a
@@ -1956,15 +1957,68 @@
         { id: 'g', icon: '🎾', label: 'Jogos', x: _bs.g.x, y: _bs.g.y }
       ];
     }
+    // ── DECORRIDO e FALTAM ───────────────────────────────────────────────────────
+    // O ritmo é MEDIDO nesta leitura, não estimado por tabela: divide o tempo já gasto
+    // pelo trabalho já feito e projeta no que falta. Se o letzplay ficar lento, a conta
+    // sobe sozinha — é honesto por construção e não precisa de calibração.
+    //
+    // Unidade de trabalho = requisição: cada torneio custa ~2 (a página dele + a de jogos),
+    // cada página do histórico custa 1. É a mesma conta que mostrou que o perfil da Camila
+    // são ~172 requisições — a razão de tudo isto existir.
+    var _t0 = Date.now();
+    // SEMPRE com segundos. Sem eles o decorrido ficava um minuto inteiro no mesmo texto —
+    // e um número parado é justamente o que faz uma leitura sadia parecer travada. Os
+    // segundos vão com 2 dígitos pra largura não mudar (a linha usa dígitos tabulares).
+    // Acima de 1h continua em minutos ("78min 04s") em vez de "1h 18min": é mais compacto
+    // numa linha que já divide espaço com o restante, e continua andando a cada segundo.
+    function _fmtDur(ms) {
+      var s = Math.max(0, Math.round(ms / 1000));
+      if (s < 60) return s + 's';
+      var m = Math.floor(s / 60), r = s % 60;
+      return m + 'min ' + (r < 10 ? '0' : '') + r + 's';
+    }
+    function _trabalho() {
+      var tTot = _bs.t.y || 0, tFeito = Math.min(_bs.t.x || 0, tTot || (_bs.t.x || 0));
+      // páginas do histórico: o total sai da nota ("página X de Y"); antes da etapa 3
+      // começar, estima pelos jogos declarados (~13,5 por página no letzplay).
+      var pagFeita = 0, pagTot = (_bs.g.y) ? Math.ceil(_bs.g.y / 13.5) : 0;
+      var m = /página (\d+) de (\d+)/.exec(ultimaNota || '');
+      if (m) { pagFeita = +m[1]; pagTot = Math.max(pagTot, +m[2]); }
+      return { feito: tFeito * 2 + pagFeita, total: tTot * 2 + pagTot };
+    }
+    // O RITMO SE MEDE NO QUE ESTA LEITURA FEZ, não no acumulado. O trabalho já vem semeado
+    // pelas rodadas anteriores (a da Camila começa com 21 torneios prontos = 42 unidades);
+    // dividir o tempo desta sessão por esse acumulado dá um ritmo fantasiosamente rápido e
+    // um "faltam" que nunca chega. Por isso a linha de base é tirada no começo e descontada.
+    var _w0 = null;
+    function _tempos() {
+      var dec = Date.now() - _t0;
+      var w = _trabalho();
+      if (_w0 == null) _w0 = w.feito;
+      var feitoAgora = w.feito - _w0, falta = w.total - w.feito;
+      // Os DOIS rótulos existem sempre; o restante vira "—" enquanto não há amostra pra
+      // medir (com 1 ou 2 unidades a projeção é ruído). Assim nenhum dos dois muda de lugar.
+      return {
+        decorrido: _fmtDur(dec),
+        restante: (feitoAgora >= 3 && falta > 0) ? ('~' + _fmtDur((dec / feitoAgora) * falta)) : '—'
+      };
+    }
+    // Relógio de 1s: é ele que faz a tela se MEXER durante as esperas longas. O passo
+    // (`sub`) e as barras ficam parados porque nada novo chegou — o que não pode é a tela
+    // inteira parecer morta enquanto a leitura está viva.
+    var _relogio = setInterval(function () { if (!done) setProg({}); }, 1000);
     function setProg(o) {
       o = o || {};
-      window._spProgressOverlay({ label: '📚 ' + who, sub: o.sub || '', pct: o.pct, feedAdd: o.feedAdd || null, bars: _barsArr(), onCancel: cancel });
+      if (o.sub == null) o.sub = ultimaNota;   // sem passo novo, mantém o que está em curso
+      window._spProgressOverlay({ label: '📚 ' + who, sub: o.sub || '', pct: o.pct,
+        feedAdd: o.feedAdd || null, bars: _barsArr(), tempos: _tempos(), onCancel: cancel });
     }
     function cleanup() {
       done = true;
       window._lzScanRunning = false;
       window.removeEventListener('message', onMsg);
       if (idleTimer) clearTimeout(idleTimer);
+      if (_relogio) { clearInterval(_relogio); _relogio = null; }   // sem relógio órfão
       if (typeof window._spCloseImportOverlay === 'function') window._spCloseImportOverlay();
     }
     function cancel() {
@@ -1995,12 +2049,17 @@
       // automática (rate-budget) continua existindo — só que MUDA, sem ameaça na tela.
       if (d.__sp_lp === 'lz-throttle') {
         ping();
-        setProg({ sub: 'lendo o letzplay — pode deixar rodando', pct: null });
+        // MANTÉM O PASSO NA TELA. Antes isto trocava o texto por uma frase genérica, e o
+        // "página 10 de 24" — a única informação real ali — DESAPARECIA justo no momento em
+        // que a leitura demora mais. Ficava minutos sem dizer nada, e sem dizer nada é
+        // indistinguível de travado. O passo continua; quem se mexe é a linha de baixo.
+        setProg({ sub: ultimaNota || 'lendo o letzplay', pct: null });
         return;
       }
       if (d.__sp_lp === 'athlete-import-progress' && d.uid === uid) {
         ping();
         var cur = d.current || {};
+        if (cur.note) ultimaNota = cur.note;   // o passo em curso, preservado durante as esperas
         // counts (ext ≥1.44): x/y ao vivo das 3 barras — cresce a cada torneio/página lida.
         _updBars(d.counts || null);
         // pct REAL (0–100, calculado pela extensão por etapa) + feed do que foi lido
