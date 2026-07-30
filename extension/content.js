@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.57';
+  var EXT_VERSION = '1.58';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -817,6 +817,24 @@
 
     function ehPausa(e) { return !!(e && e.code === 'rate-budget'); }
     function _medalha(p) { return p === 1 ? '🥇' : (p === 2 ? '🥈' : (p === 3 ? '🥉' : '🏅')); }
+    // Separa a CATEGORIA do fim do nome, igual à lista do dialog — o nome do letzplay quase
+    // sempre termina nela ("… Praia Brava Panamby - DUPLA FEMININA C"). Sem separar, ela vai
+    // pro feed grudada no nome e sem cor nenhuma, que é o que o dono está vendo.
+    function _pareceCat(x) {
+      var t = String(x || '').trim();
+      if (!t || t.length > 40 || /ver\s+trilha|trilha\s+de/i.test(t)) return false;
+      if (/(masculin|feminin|mist[ao]|\bmasc\b|\bfem\b)/i.test(t)) return true;
+      return t.length <= 20 && /(^|[\s\/])(FUN|[A-D])\s*[+\-]?\s*($|[\s\/])/i.test(t);
+    }
+    function _partirNome(nome) {
+      var n = String(nome || '').trim();
+      var partes = n.split(/\s+[-–—]\s+/);
+      if (partes.length < 2) return { nome: n, cat: null };
+      var ult = partes[partes.length - 1].trim();
+      if (!_pareceCat(ult)) return { nome: n, cat: null };
+      var corte = n.slice(0, n.length - ult.length).replace(/[\s\-–—·.,:]+$/, '').trim();
+      return corte ? { nome: corte, cat: ult } : { nome: n, cat: null };
+    }
     function minhaPos(st) {
       var low = String(realHandle || '').toLowerCase(), out = null;
       (st || []).forEach(function (g) {
@@ -904,9 +922,14 @@
             var pT = minhaPos(det[tk].standings);
             // ESTRUTURADO: o app pinta cada campo (nome / colocação) com a paleta da lista.
             // String pronta não dá pra colorir sem injetar HTML de fonte não confiável.
+            // O RÓTULO VAI EM TODO EMIT DA FASE. Emit sem `note` deixa o texto anterior na
+            // tela, e no fim da fase de torneios ele ficava congelado em "torneio 35 de 35"
+            // enquanto os RANKINGS já estavam sendo lidos — a tela dizia uma coisa e a barra
+            // outra. Rótulo é estado da fase, não evento.
             prog({ phase: 'torneios', pct: 4 + Math.round(((ti + 1) / Math.max(1, toursList.length)) * 26),
-              feed: { icon: '🏆', nome: (det[tk].name || P.title || ('torneio ' + P.tid)),
-                pos: (pT != null ? (_medalha(pT) + ' ' + pT + 'º') : null) } });
+              note: 'torneio ' + Math.min(Object.keys(C.toursDone).length, _totT) + ' de ' + _totT + ' — nome, categoria e classificação',
+              feed: Object.assign({ icon: '🏆' }, _partirNome(det[tk].name || P.title || ('torneio ' + P.tid)),
+                { pos: (pT != null ? (_medalha(pT) + ' ' + pT + 'º') : null) }) });
           } catch (eT) { if (ehPausa(eT)) throw eT; }
           parcialAgora('torneios', ti + 1, toursList.length);
         }
@@ -919,6 +942,8 @@
           catch (e2) { if (ehPausa(e2)) throw e2; }
         }
         if (totRankings == null && ranksList.length) totRankings = ranksList.length;
+        prog({ phase: 'rankings', pct: 31,
+          note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, (totRankings || ranksList.length) || 1) + ' de ' + ((totRankings || ranksList.length) || '?') + ' — nome e classificação' });
         var pulR = 0;
         for (var ri = 0; ri < ranksList.length; ri++) {
           conferirTeto();
@@ -935,8 +960,9 @@
             C.ranksDone[rk] = 1;
             var pR = minhaPos(det[rk].standings);
             prog({ phase: 'rankings', pct: 31 + Math.round(((ri + 1) / Math.max(1, ranksList.length)) * 14),
-              feed: { icon: '📊', nome: (det[rk].name || R.title || ('ranking ' + R.rid)),
-                pos: (pR != null ? (pR + 'º') : null) } });
+              note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, _totR) + ' de ' + _totR + ' — nome e classificação',
+              feed: Object.assign({ icon: '📊' }, _partirNome(det[rk].name || R.title || ('ranking ' + R.rid)),
+                { pos: (pR != null ? (pR + 'º') : null) }) });
           } catch (eR) { if (ehPausa(eR)) throw eR; }
           parcialAgora('rankings', ri + 1, ranksList.length);
         }
