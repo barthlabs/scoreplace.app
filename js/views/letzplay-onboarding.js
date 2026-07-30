@@ -122,6 +122,7 @@
   window._spCloseImportOverlay = function () {
     var o = document.getElementById('sp-import-overlay');
     if (o && o.parentNode) o.parentNode.removeChild(o);
+    if (typeof _vivoParar === 'function') _vivoParar();   // sem timer órfão depois de fechar
   };
 
   // CARD CANÔNICO de progresso do letzplay (v1.1.18): BOLINHA QUE SEMPRE GIRA (spinner
@@ -142,6 +143,36 @@
     if (txt && !_etaTimer) _etaTimer = setInterval(_etaTick, 1000);
     if (!txt && _etaTimer) { clearInterval(_etaTimer); _etaTimer = null; }
   }
+  // ── PROVA DE VIDA ────────────────────────────────────────────────────────────
+  // Uma leitura grande passa MINUTOS sem notícia nova (o letzplay pede cadência, e a fila
+  // espera). A tela ficava congelada no mesmo texto, e parado é indistinguível de travado:
+  // o dono cancelou leituras sadias por isso, e reportou "travou na página 9 de 24" quando
+  // a leitura estava viva, só esperando. Aqui o overlay passa a se mexer sozinho — frase
+  // rotativa + tempo decorrido desde a última novidade.
+  //
+  // ⛔ NADA de rate-limit no texto (regra do dono): o problema é NOSSO, não do usuário.
+  // As frases são neutras e o relógio é só tempo, nunca "aguardando N segundos".
+  var _vivoTimer = null, _vivoDesde = 0, _vivoBase = '', _vivoIdx = 0;
+  var _VIVO_FRASES = [
+    'lendo o letzplay — pode deixar rodando',
+    'processando as informações…',
+    'organizando o que já veio…',
+    'trazendo os dados do atleta…',
+    'conferindo o que falta…'
+  ];
+  function _vivoTexto() {
+    var seg = Math.round((Date.now() - _vivoDesde) / 1000);
+    var t = (seg < 60) ? (seg + 's') : (Math.floor(seg / 60) + 'min' + (seg % 60 ? ' ' + (seg % 60) + 's' : ''));
+    return _VIVO_FRASES[_vivoIdx % _VIVO_FRASES.length] + ' · ' + t;
+  }
+  function _vivoTick() {
+    var s = document.getElementById('sp-imp-sub');
+    if (!s) { _vivoParar(); return; }                       // overlay sumiu → timer morre
+    if (Date.now() - _vivoDesde < 8000) return;             // ainda é novidade recente
+    _vivoIdx++;
+    s.textContent = _vivoTexto();
+  }
+  function _vivoParar() { if (_vivoTimer) { clearInterval(_vivoTimer); _vivoTimer = null; } }
   window._spProgressOverlay = function (opts) {
     opts = opts || {};
     if (!document.getElementById('sp-imp-spin-style')) {
@@ -169,7 +200,13 @@
     }
     var l = document.getElementById('sp-imp-label'); if (l) l.textContent = opts.label || '';
     var b = document.getElementById('sp-imp-bar'); if (b && opts.pct != null) b.style.width = opts.pct + '%';
-    var s = document.getElementById('sp-imp-sub'); if (s) s.textContent = opts.sub || '';
+    var s = document.getElementById('sp-imp-sub');
+    if (s) {
+      // Texto novo = novidade: rearma o relógio da prova de vida e volta pra 1ª frase.
+      if ((opts.sub || '') !== _vivoBase) { _vivoBase = opts.sub || ''; _vivoDesde = Date.now(); _vivoIdx = 0; }
+      s.textContent = opts.sub || '';
+      if (!_vivoTimer) { _vivoDesde = _vivoDesde || Date.now(); _vivoTimer = setInterval(_vivoTick, 2000); }
+    }
     // bars: [{id,icon,label,x,y}] — cria a linha 1x e depois só atualiza texto/preenchimento
     // in-place (transition no width faz o crescimento ser visível, não um pulo).
     if (opts.bars && opts.bars.length) {

@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.52';
+  var EXT_VERSION = '1.53';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -680,7 +680,24 @@
       var priorNames = {};
       ((prior && prior.footprint) || []).forEach(function (f) {
         var id = (f.official ? 't/' : 'r/') + (f.club || '') + '/' + (f.tourneyId || f.rankingId || '');
-        if (f.name && f.name !== f.categoryRaw) priorNames[id] = { name: f.name, standings: f.standings || null, logo: f.logo || null };
+        if (f.name && f.name !== f.categoryRaw) {
+          // MELHOR CONHECIDO VENCE: com o footprint fragmentado (várias entradas do mesmo
+          // torneio), a última não pode apagar a classificação que a anterior trouxe.
+          var ja = priorNames[id];
+          priorNames[id] = {
+            name: f.name || (ja && ja.name) || null,
+            standings: f.standings || (ja && ja.standings) || null,
+            logo: f.logo || (ja && ja.logo) || null
+          };
+        }
+      });
+      // TER NOME + CLASSIFICAÇÃO **É** ESTAR LIDO. O cursor sozinho não bastava: ele
+      // registrou 18 torneios enquanto o footprint já provava 21, e os 3 de diferença eram
+      // rebuscados a cada rodada — o dono viu isso como "se já puxou 21 de 35, não deveria
+      // começar do 1 de novo". A prova está no DADO, não no contador: se a classificação
+      // daquele torneio já está gravada, não há o que reler.
+      Object.keys(priorNames).forEach(function (id) {
+        if (id.charAt(0) === 't' && priorNames[id].standings) C.toursDone[id] = 1;
       });
       function addMatches(list) {
         var n = 0;
