@@ -18,6 +18,12 @@
  * Ver feedback_tests_must_reproduce_real_failure, project_letzplay_authorization_color_and_rigor.
  */
 const { window, load } = require('./headless.js');
+// O modelo canônico do histórico (dateNum/dateParts) vive em js/letzplay-model.js, fora de
+// js/views — sem ele as datas não formatam e a ordenação por data não acontece. No browser
+// ele é carregado pelo index.html; aqui é preciso injetar na mão, no MESMO contexto.
+require('vm').runInContext(
+  require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'letzplay-model.js'), 'utf8'),
+  require('./headless.js').sandbox, { filename: 'letzplay-model.js' });
 load('tournaments-enrollment-report.js');
 
 const apply = window._erApplyLzToRows;
@@ -447,6 +453,43 @@ console.log('\n── completude pelo cursor (478 cards × 469 partidas) ──'
   const meio = Object.assign({}, camila, { lzCursor: { v: 4, complete: false, pageDone: 12, pagesTotal: 24 } });
   const r2 = run({ uid: 'c2', effectiveSkills: [] }, { c2: Object.assign({ letzplayImport: meio }, profAuthorized) }, {});
   ok(r2._lzColor !== COL.green, 'cursor pela metade continua NÃO absolvendo');
+}
+
+// ── 14. TRÊS ABAS: torneios, rankings e jogos, cada uma com a sua lista ───────
+// O diálogo empilhava as três listas e travava ("essa tela está imprestável").
+console.log('\n── abas: torneios · rankings · jogos ──');
+{
+  const imp = {
+    handle: 'camilacalia', declaredGames: 3,
+    footprint: [
+      { official: true, club: 'cl', tourneyId: '11', name: 'Open Reação - Feminina C', categoryRaw: 'Feminina C',
+        year: 2026, standings: [{ group: 'G', rows: [{ pos: 2, handles: ['camilacalia'] }] }] },
+      { official: false, club: 'pb', rankingId: '55291', name: 'Competitivo Fem C | 2026', categoryRaw: 'Fem C',
+        year: 2026, standings: [{ group: 'G', rows: [{ pos: 4, handles: ['camilacalia'] }] }] }
+    ],
+    tournamentsList: [{ club: 'cl', tid: '11' }, { club: 'cl', tid: '99', title: 'Torneio ainda não lido - Fem C' }],
+    rankingsList: [{ club: 'pb', rid: '55291' }, { club: 'pb', rid: '777', title: 'Ranking não lido' }],
+    games: [
+      { lzId: '1', date: 'Quarta, 29/07/26', club: 'cl', tourneyId: '11', official: true,
+        competition: 'Feminina C', myScore: 6, oppScore: 3, won: true, oppNames: ['Ana', 'Bia'] },
+      { lzId: '2', date: 'Terça, 28/07/26', club: 'pb', rankingId: '55291', official: false,
+        competition: 'Fem C', myScore: 4, oppScore: 6, won: false, oppNames: ['Cris'] }
+    ]
+  };
+  const t = window._lzTourneyRows(imp, 'camilacalia', 'tour');
+  const r = window._lzTourneyRows(imp, 'camilacalia', 'rank');
+  const j = window._lzGameRows(imp, 'camilacalia');
+  ok(/Open Reação/.test(t) && !/Competitivo Fem C/.test(t), 'aba TORNEIOS mostra só torneio');
+  ok(/Competitivo Fem C/.test(r) && !/Open Reação/.test(r), 'aba RANKINGS mostra só ranking');
+  ok(/Torneio ainda não lido/.test(t) && /ainda não lido/.test(t), 'torneio pendente aparece na aba dele');
+  ok(/Ranking não lido/.test(r), 'ranking pendente aparece na aba dele');
+  ok(/🥈 2º/.test(t) && /🏅 4º/.test(r), 'cada aba traz a classificação da sua competição');
+  ok(/6–3/.test(j) && /4–6/.test(j), 'aba JOGOS traz o placar');
+  ok(/vs Ana \/ Bia/.test(j), 'aba JOGOS traz os adversários');
+  ok(/29 jul 26/.test(j) && /28 jul 26/.test(j), 'aba JOGOS traz a data formatada');
+  ok(j.indexOf('29 jul 26') < j.indexOf('28 jul 26'), 'jogos em ordem cronológica INVERSA');
+  ok(/✅/.test(j) && /❌/.test(j), 'vitória e derrota se distinguem de relance');
+  ok(window._lzGameRows({ games: [] }, 'x') === '', 'sem jogos → vazio (a aba mostra o texto de vazio)');
 }
 
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');

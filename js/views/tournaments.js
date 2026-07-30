@@ -3629,6 +3629,15 @@ function renderTournaments(container, tournamentId = null) {
         var _resolveOrgGender = function(email, uid) {
           var e = (email || '').toLowerCase();
           if (_cu2 && ((e && _cu2.email && String(_cu2.email).toLowerCase() === e) || (uid && _cu2.uid === uid)) && _cu2.gender) return _cu2.gender;
+          // O PERFIL DA PESSOA VEM PRIMEIRO. Co-organizadora quase nunca está em
+          // `participants` com gênero (o doc deixou de guardar dados de quem tem perfil),
+          // então a busca caía na forma neutra e a tela mostrava "Co-organizador(a)" pra
+          // Kelly e pra Raquel, que têm gênero declarado. O cache de perfis por uid é a
+          // fonte de verdade — é o mesmo que já resolve nome, e-mail e telefone.
+          if (uid && typeof window._genderForUid === 'function') {
+            var _pg = window._genderForUid(uid);
+            if (_pg) return _pg;
+          }
           var _pa = Array.isArray(_t.participants) ? _t.participants : (_t.participants ? Object.values(_t.participants) : []);
           for (var _gi = 0; _gi < _pa.length; _gi++) {
             var _pp = _pa[_gi];

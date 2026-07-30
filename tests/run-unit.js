@@ -112,6 +112,7 @@ const SUITES = [
   'tests/chave-label-default.test.js',
   'tests/letzplay-verdict-color.test.js',
   'tests/letzplay-level-bar.test.js',
+  'tests/org-gender-label.test.js',
   'tests/letzplay-pace.test.js',
   'tests/letzplay-model.test.js',
   'tests/letzplay-eta.test.js',

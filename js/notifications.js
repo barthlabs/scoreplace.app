@@ -299,7 +299,9 @@ function showNotification(title, message, type = 'info') {
 // Modal de Confirmação Customizado
 function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
   title = _safeText(title);
-  const { confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning' } = options;
+  // `maxWidth`: telas com LISTA (histórico do letzplay) precisam da largura do usuário —
+  // 400px espremia 35 torneios em linhas de 3 alturas e a tela ficava imprestável.
+  const { confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning', maxWidth = '400px' } = options;
   
   let dialog = document.getElementById('custom-confirm-dialog');
   if (dialog) dialog.remove();
@@ -332,8 +334,8 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
       background: var(--surface-color);
       border: 1px solid var(--border-color);
       border-radius: 16px;
-      max-width: 400px;
-      width: 90%;
+      max-width: ${maxWidth};
+      width: 94%;
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     ">
@@ -343,7 +345,7 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
           <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-color);">${title}</div>
         </div>
       </div>
-      <div style="padding: 1.25rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.6;">
+      <div style="padding: 1.25rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; overflow-y: auto; flex: 1 1 auto; min-height: 0;">
         ${message}
       </div>
       <div style="padding: 1rem 1.25rem 1.25rem; display: flex; gap: 10px; justify-content: flex-end;">

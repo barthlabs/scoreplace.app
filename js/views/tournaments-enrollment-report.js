@@ -1215,14 +1215,30 @@
   // Data do torneio = a do jogo MAIS RECENTE dela ali. O footprint só guarda o ano; a data
   // real vive nos jogos. Quando o jogo daquele torneio está fora do recorte do doc (o doc
   // carrega os mais recentes), sobra o ano — que é melhor que nada e nunca mente.
+  // Data do jogo → número comparável (aaaammdd). Usa o modelo canônico quando ele está
+  // carregado e, se não estiver, lê o dd/mm/aa em QUALQUER posição da string — o letzplay
+  // manda "Quarta, 29/07/26 às 08:00hs", com o dia da semana na frente.
+  function _lzDataNumDe(d) {
+    var M = window._spLzModel;
+    var n = (M && typeof M.dateNum === 'function') ? (M.dateNum(d) || 0) : 0;
+    if (n) return n;
+    var m = String(d || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (!m) return 0;
+    var ano = +m[3]; if (ano < 100) ano += 2000;
+    return ano * 10000 + (+m[2]) * 100 + (+m[1]);
+  }
+  // Data de cada competição = a do jogo MAIS RECENTE dela. Indexa torneio E ranking: a aba
+  // de rankings precisa ordenar igual à de torneios.
   function _lzTourneyDateIdx(imp) {
-    var M = window._spLzModel, out = {};
+    var out = {};
     ((imp && imp.games) || []).forEach(function (g) {
-      if (!g || !g.official || g.tourneyId == null) return;
-      var n = M ? M.dateNum(g.date) : 0;
+      if (!g) return;
+      var id = (g.tourneyId != null) ? ('t/' + (g.club || '') + '/' + g.tourneyId)
+             : ((g.rankingId != null) ? ('r/' + (g.club || '') + '/' + g.rankingId) : null);
+      if (!id) return;
+      var n = _lzDataNumDe(g.date);
       if (!n) return;
-      var k = 't/' + (g.club || '') + '/' + g.tourneyId;
-      if (!out[k] || n > out[k]) out[k] = n;
+      if (!out[id] || n > out[id]) out[id] = n;
     });
     return out;
   }
@@ -1269,13 +1285,15 @@
     if (low.indexOf(lowc) >= 0) return { nome: n, cat: null };
     return { nome: n, cat: c };
   }
-  window._lzTourneyRows = function (imp, handle) {
+  window._lzTourneyRows = function (imp, handle, kind) {
     if (!imp) return '';
+    var _rank = (kind === 'rank');
+    var _pre = _rank ? 'r/' : 't/';
     var datas = _lzTourneyDateIdx(imp);
     var linhas = [], vistos = {}, porId = {};
     ((imp.footprint) || []).forEach(function (f) {
-      if (!f || !f.official) return;
-      var k = 't/' + (f.club || '') + '/' + (f.tourneyId || '');
+      if (!f || (!!f.official === _rank)) return;
+      var k = _pre + (f.club || '') + '/' + (_rank ? (f.rankingId || '') : (f.tourneyId || ''));
       vistos[k] = 1;
       // UMA LINHA POR TORNEIO. Imports antigos têm o footprint fragmentado (o mesmo torneio
       // em várias entradas, uma por trilha de dupla) — sem isto a lista repetia o mesmo
@@ -1304,11 +1322,12 @@
     // AINDA NÃO LIDOS: a lista pública vem do mais recente pro mais antigo, então a posição
     // nela é a única noção de tempo que temos deles — vão no fim, nessa mesma ordem.
     var pend = 0;
-    ((imp.tournamentsList) || []).forEach(function (p) {
-      if (!p || !p.tid) return;
-      if (vistos['t/' + (p.club || '') + '/' + p.tid]) return;
+    ((_rank ? imp.rankingsList : imp.tournamentsList) || []).forEach(function (p) {
+      var _pid = _rank ? p && p.rid : p && p.tid;
+      if (!p || !_pid) return;
+      if (vistos[_pre + (p.club || '') + '/' + _pid]) return;
       pend++;
-      var pn = p.title || ('torneio ' + p.tid);
+      var pn = p.title || ((_rank ? 'ranking ' : 'torneio ') + _pid);
       var pc = _lzCatDoNome(pn);                       // o título da lista já traz a categoria
       var pp = _lzSplitCat(pn, pc);
       linhas.push({ lido: false, ord: -pend, nome: pp.nome, cat: pp.cat, trilha: null, data: null, pos: null });
@@ -1320,7 +1339,7 @@
     // A trilha vem por último e em BRANCO — ela é contexto (com quem ela jogou), não
     // classificação nem categoria, e disputava a atenção quando estava colorida.
     return linhas.map(function (L) {
-      var h = '<div style="padding:2px 0;">' + (L.lido ? '🏆 ' : '⏳ ');
+      var h = '<div style="padding:2px 0;">' + (L.lido ? (_rank ? '📊 ' : '🏆 ') : '⏳ ');
       if (L.lido && L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
       h += '<span' + (L.lido ? '' : ' style="opacity:0.6;"') + '>' + _esc(L.nome) + '</span>';
       if (L.cat) h += ' · <span style="color:' + _LZ_C_CAT + ';font-weight:700;">' + _esc(L.cat) + '</span>';
@@ -1329,6 +1348,51 @@
       if (!L.lido) h += ' · <span style="opacity:0.5;">ainda não lido</span>';
       return h + '</div>';
     }).join('');
+  };
+
+  // Troca a aba visível. Só mexe no innerHTML da caixa — nada de re-renderizar o diálogo
+  // (que apagaria a barra de progresso de uma leitura em curso).
+  window._lzAba = function (qual) {
+    var box = document.getElementById('lz-aba-box');
+    if (!box) return;
+    var A = window._lzAbas || {};
+    var vazio = { tour: 'Nenhum torneio lido ainda.', rank: 'Nenhum ranking lido ainda.', jogo: 'Nenhum jogo gravado ainda.' };
+    box.innerHTML = A[qual] || ('<div style="opacity:0.6;padding:6px 0;">' + (vazio[qual] || '—') + '</div>');
+    box.scrollTop = 0;
+    var abas = document.getElementById('lz-abas');
+    if (!abas) return;
+    [].slice.call(abas.querySelectorAll('[data-lz-aba]')).forEach(function (b) {
+      var on = b.getAttribute('data-lz-aba') === qual;
+      b.style.background = on ? 'linear-gradient(135deg,#6366f1,#4f46e5)' : 'var(--bg-darker,rgba(0,0,0,0.25))';
+      b.style.color = on ? '#fff' : 'var(--text-secondary,#c8cdd6)';
+      b.style.borderColor = on ? 'rgba(99,102,241,0.55)' : 'var(--border-color,rgba(255,255,255,0.12))';
+    });
+  };
+
+  // HISTÓRICO DE JOGOS — data · competição · placar · adversários, do mais recente pro mais
+  // antigo. Mesmas cores da lista de torneios pra leitura não mudar de gramática entre abas.
+  window._lzGameRows = function (imp, handle) {
+    var gs = (imp && imp.games) || [];
+    if (!gs.length) return '';
+    var lin = gs.map(function (g, i) {
+      var d = _lzDataNumDe(g && g.date);
+      return { ord: d || (1 - i / 1e6), g: g, data: d ? _lzFmtDataNum(d) : null };
+    });
+    lin.sort(function (a, b) { return b.ord - a.ord; });
+    var LIM = 400;                                   // não despeja 2 mil linhas de uma vez
+    var corte = lin.length > LIM;
+    return lin.slice(0, LIM).map(function (L) {
+      var g = L.g;
+      var venceu = (g.won === true), perdeu = (g.won === false);
+      var placar = (g.myScore != null && g.oppScore != null) ? (g.myScore + '–' + g.oppScore) : null;
+      var advs = (g.oppNames && g.oppNames.length ? g.oppNames : g.oppHandles || []).filter(Boolean).join(' / ');
+      var h = '<div style="padding:2px 0;">' + (venceu ? '✅ ' : (perdeu ? '❌ ' : '• '));
+      if (L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
+      if (placar) h += '<span style="color:' + (venceu ? '#2dd4a0' : (perdeu ? '#f87171' : _LZ_C_POS)) + ';font-weight:800;font-variant-numeric:tabular-nums;">' + _esc(placar) + '</span> · ';
+      if (advs) h += '<span>vs ' + _esc(advs) + '</span>';
+      if (g.competition) h += ' · <span style="color:' + _LZ_C_CAT + ';">' + _esc(g.competition) + '</span>';
+      return h + '</div>';
+    }).join('') + (corte ? '<div style="opacity:0.6;padding:6px 0;">… e mais ' + (lin.length - LIM) + ' jogo(s) — o acervo completo está gravado.</div>' : '');
   };
 
   // Conta TORNEIOS DISTINTOS (por club/tourneyId), não entradas de footprint. Imports
@@ -1840,14 +1904,13 @@
     var _p2 = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].fullImport;
     var imp = _p2 || _p1 || null;
     if (_p1 && _p2) imp = (_lzTot(_p1) > _lzTot(_p2)) ? _p1 : _p2;
-    // O CARD INTEIRO DAS ESTATÍSTICAS no topo, logo abaixo do nome (pedido do dono,
-    // 30/jul/2026: "deve aparecer as coisas como aparecem nas estatísticas... até o
-    // histórico dos jogos"). É a MESMA função que a tela de estatísticas usa — recriar o
-    // markup aqui seria garantir que um dia os dois divergem. As linhas de competição
-    // continuam clicáveis: a delegação de `.lp-foot-row` é no document.
-    var _card = (imp && typeof window._renderLetzplayCard === 'function') ? window._renderLetzplayCard(imp) : '';
-    var body = (_card ? '<div style="text-align:left;">' + _card + '</div>' : '') +
-      'Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> (@' + _esc(tg.handle) + ') no letzplay.<br>';
+    // MEDIDOR DE NÍVEL no topo — a MESMA barra das estatísticas (`_lzLevelBar`).
+    // O card INTEIRO estava aqui e virou um rolo sem fim dentro do diálogo: as três listas
+    // empilhadas, sem como chegar no fim de nenhuma ("essa tela está imprestável"). As
+    // listas passaram a ser ABAS, com UMA área de rolagem — ver `_lzAba`.
+    var _nivel = (imp && typeof window._lzLevelBar === 'function') ? window._lzLevelBar(imp) : '';
+    var body = (_nivel ? '<div style="background:var(--bg-card,#141a24);border:1px solid var(--border-color,#28313f);border-radius:12px;padding:11px 12px;margin-bottom:9px;text-align:left;">' + _nivel + '</div>' : '') +
+      '<div style="font-size:0.8rem;">Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> (@' + _esc(tg.handle) + ') no letzplay.</div>';
     var btnLabel = '📚 Puxar histórico completo';
     // 3 BARRAS (x = gravado · y = total do perfil letzplay). Os "de y" que faltarem são
     // completados ao vivo pela extensão (lz-profile-counts lê "472 Jogos · 29 Rankings ·
@@ -1892,15 +1955,28 @@
       barLine('lz-ath-g', '🎾', 'Jogos', gX, gY) +
       '</div>';
     if (imp) {
-      // LISTA DE TORNEIOS — data · nome · categoria · classificação, do mais RECENTE pro
-      // mais antigo, cada campo na sua cor. Os ainda-não-lidos entram na mesma lista
-      // (vindos de `tournamentsList`, cujo título já carrega a categoria).
-      var lis = _lzTourneyRows(imp, tg.handle);
-      if (lis) {
-        // 16em (era 12): com nome + data + categoria + colocação, 12em mostrava 2 torneios
-        // e meio de 35 — a rolagem existe, mas não pode ser a única forma de ver a lista.
-        body += '<div style="max-height:16em;overflow-y:auto;font-size:0.78rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);background:var(--bg-darker,rgba(0,0,0,0.2));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;margin-bottom:6px;text-align:left;">' + lis + '</div>';
-      }
+      // TRÊS ABAS, UMA ROLAGEM (pedido do dono, 30/jul/2026: "tem que ter um botão com
+      // torneios, outro com rankings e outro com histórico de jogos, de forma que possamos
+      // abrir, ler e scrollar"). Empilhar as três listas travava o diálogo.
+      // O conteúdo é montado UMA vez e guardado em `window._lzAbas`; trocar de aba só
+      // troca o innerHTML — não re-renderiza o diálogo (e não perde a barra de progresso
+      // se uma leitura estiver rodando).
+      window._lzAbas = {
+        tour: _lzTourneyRows(imp, tg.handle, 'tour'),
+        rank: _lzTourneyRows(imp, tg.handle, 'rank'),
+        jogo: _lzGameRows(imp, tg.handle)
+      };
+      var _n = { tour: tX, rank: rX, jogo: gX };
+      body += '<div id="lz-abas" style="display:flex;gap:6px;margin:9px 0 0;">' +
+        [['tour', '🏆', 'Torneios'], ['rank', '📊', 'Rankings'], ['jogo', '🎾', 'Jogos']].map(function (A) {
+          return '<button type="button" data-lz-aba="' + A[0] + '" onclick="window._lzAba(\'' + A[0] + '\')" ' +
+            'style="flex:1;min-width:0;padding:7px 4px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:700;' +
+            'border:1px solid var(--border-color,rgba(255,255,255,0.12));background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-secondary,#c8cdd6);">' +
+            A[1] + ' ' + A[2] + ' <span style="opacity:0.65;font-weight:500;">' + (_n[A[0]] || 0) + '</span></button>';
+        }).join('') + '</div>' +
+        '<div id="lz-aba-box" style="max-height:340px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;' +
+        'font-size:0.78rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);background:var(--bg-darker,rgba(0,0,0,0.2));' +
+        'border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:7px 10px;margin:6px 0;text-align:left;"></div>';
       var incompleto = (gY && gX < gY) || (imp.partialReason != null);
       if (incompleto) {
         body += '<div style="font-size:0.8rem;color:#fbbf24;">Perfil INCOMPLETO — puxe de novo pra continuar de onde parou (o que já veio está gravado).</div>';
@@ -1930,7 +2006,7 @@
             }
           }
         }, null,
-        { confirmText: btnLabel, cancelText: 'Fechar', type: 'info' });
+        { confirmText: btnLabel, cancelText: 'Fechar', type: 'info', maxWidth: '760px' });
       // Completa os "de y" das barras AO VIVO com os totais do perfil público
       // (a extensão lê "472 Jogos · 29 Rankings · 35 Torneios" e devolve).
       setTimeout(function () { _lzAskProfileCounts(tg.handle); }, 60);
