@@ -1840,7 +1840,14 @@
     var _p2 = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].fullImport;
     var imp = _p2 || _p1 || null;
     if (_p1 && _p2) imp = (_lzTot(_p1) > _lzTot(_p2)) ? _p1 : _p2;
-    var body = 'Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> (@' + _esc(tg.handle) + ') no letzplay.<br>';
+    // O CARD INTEIRO DAS ESTATÍSTICAS no topo, logo abaixo do nome (pedido do dono,
+    // 30/jul/2026: "deve aparecer as coisas como aparecem nas estatísticas... até o
+    // histórico dos jogos"). É a MESMA função que a tela de estatísticas usa — recriar o
+    // markup aqui seria garantir que um dia os dois divergem. As linhas de competição
+    // continuam clicáveis: a delegação de `.lp-foot-row` é no document.
+    var _card = (imp && typeof window._renderLetzplayCard === 'function') ? window._renderLetzplayCard(imp) : '';
+    var body = (_card ? '<div style="text-align:left;">' + _card + '</div>' : '') +
+      'Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> (@' + _esc(tg.handle) + ') no letzplay.<br>';
     var btnLabel = '📚 Puxar histórico completo';
     // 3 BARRAS (x = gravado · y = total do perfil letzplay). Os "de y" que faltarem são
     // completados ao vivo pela extensão (lz-profile-counts lê "472 Jogos · 29 Rankings ·
