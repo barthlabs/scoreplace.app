@@ -1903,10 +1903,25 @@
   // Puxa a COMPLETA de UM atleta pelo @ público — o caminho do autoimport (fetch das
   // páginas /{handle}/matches), sem navegar o perfil SPA (a causa do lote travar).
   window._lzAthleteImport = function (uid) {
-    if (window._lzScanRunning) return;
+    // NENHUM CLIQUE PODE MORRER CALADO. Estes três `return` mudos faziam o botão
+    // "Continuar de onde parou" não fazer NADA — sem toast, sem log, sem pista. O caso real:
+    // uma leitura que terminou de forma anormal (aba fechada, página trocada, extensão
+    // recarregada no meio) deixa `_lzScanRunning = true` pra sempre, e a partir daí TODO
+    // clique seguinte retorna aqui em silêncio. A trava só vale enquanto existe leitura de
+    // verdade na tela; sem overlay, ela é lixo de uma sessão morta e é limpa na hora.
+    if (window._lzScanRunning) {
+      if (document.getElementById('sp-import-overlay')) {
+        if (typeof showNotification === 'function') showNotification('Já tem uma leitura rodando', 'Espere terminar ou clique em Suspender.', 'info');
+        return;
+      }
+      window._lzScanRunning = false;   // trava órfã de leitura anterior
+    }
     var ctx = window._lzScanCtx || {};
     var tg = ctx.byUid && ctx.byUid[uid];
-    if (!tg || !tg.handle) return;
+    if (!tg || !tg.handle) {
+      if (typeof showNotification === 'function') showNotification('Não deu pra puxar', !tg ? 'Não achei este inscrito na tela — recarregue a página.' : 'Este inscrito não tem @ do letzplay no perfil.', 'error');
+      return;
+    }
     window._lzScanRunning = true;
     window._lzPendingMode = 'full';
     var done = false, started = false, versions = [], idleTimer = null;
