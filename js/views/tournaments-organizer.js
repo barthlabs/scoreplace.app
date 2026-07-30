@@ -1056,11 +1056,25 @@ window._buildOrgGreeting = function(t, orgName) {
     ' do torneio "' + (t.name || '') + '" no scoreplace.app. ';
 };
 
+// A mensagem é SÓ a saudação pré-preenchida (o participante não escreveu nada)?
+// Existe porque avisar o organizador de uma saudação-modelo é falso positivo: ele
+// recebe "Fabio quer falar com você" (nível fundamental → e-mail + push) sem que
+// exista mensagem alguma, e nada chega no WhatsApp dele. Ver v1.6.4.
+window._orgMsgIsBareGreeting = function(msg) {
+  var s = String(msg || '').trim();
+  if (!s) return true;
+  return /^Ol[áa][^!]*!\s*Sou\s+(?:[^,]*,\s*)?participante\s+do\s+torneio\s+"[^"]*"\s+no\s+scoreplace\.app\.?$/i.test(s);
+};
+
 // Avisa o organizador na plataforma (in-app) → criador + co-organizadores ativos.
 // Assíncrono — SEMPRE chamado DEPOIS de abrir o canal externo (os awaits aqui
 // não podem mais bloquear a navegação). skipWhatsApp no caminho wa.me evita
 // duplicar (o wa.me já entrega).
 window._dispatchOrgPlatformNotification = async function(t, fullMsg, useWhatsApp) {
+  // GUARDA (v1.6.4): sem texto do participante, NÃO notifica. Defense-in-depth —
+  // qualquer caller futuro que passe só a saudação pré-preenchida cai aqui em vez
+  // de gerar aviso "fundamental" vazio pro organizador.
+  if (window._orgMsgIsBareGreeting(fullMsg)) return false;
   var cu = window.AppStore.currentUser;
   var senderName = (cu && (cu.displayName || cu.name)) || 'Um participante';
   var skipOpt = useWhatsApp ? { skipWhatsApp: true } : true;
@@ -1085,6 +1099,7 @@ window._dispatchOrgPlatformNotification = async function(t, fullMsg, useWhatsApp
       } catch (e) {}
     }
   }
+  return true;
 };
 
 // v4.0.41 — Entry point do botão "Falar com o organizador". Abre o WhatsApp
@@ -1117,8 +1132,13 @@ window._contactOrganizerDirect = function(tId) {
       window._openExternalUrl('mailto:' + info.email + '?subject=' + subject + '&body=' + encodeURIComponent(msg));
     }
   } catch (e) {}
-  // Avisa o org na plataforma (assíncrono, depois de abrir o canal externo).
-  try { window._dispatchOrgPlatformNotification(t, msg, info.useWhatsApp); } catch (e) {}
+  // v1.6.4 — NÃO avisa o org na plataforma aqui. Este caminho é só "abriu o
+  // WhatsApp/e-mail com a saudação pré-preenchida": o app não tem como saber se a
+  // pessoa apertou Enviar do outro lado, e a saudação-modelo não contém mensagem
+  // nenhuma. Notificar aqui gerava aviso FUNDAMENTAL (in-app + e-mail) de "Fabio
+  // quer falar com você" a cada toque curioso no botão, sem nada chegar no
+  // WhatsApp do organizador. Quem quiser registro na plataforma escreve no
+  // diálogo (_contactOrganizer → _submitContactOrg), que aí sim notifica.
 };
 
 // Entry point assíncrono (FALLBACK) — resolve o contato do organizador e abre o
@@ -1237,16 +1257,22 @@ window._submitContactOrg = async function(tId) {
   var modalEl = document.getElementById('modal-msg-org-' + tId);
   if (modalEl) modalEl.remove();
 
+  // v1.6.4: o aviso na plataforma só sai quando o participante ESCREVEU algo —
+  // saudação-modelo pura não gera notificação (ver _orgMsgIsBareGreeting). O toast
+  // passa a refletir o que de fato aconteceu, em vez de prometer "avisamos o
+  // organizador na plataforma" sempre.
+  var _willNotify = !window._orgMsgIsBareGreeting(fullMsg);
   if (typeof showNotification !== 'undefined') {
-    showNotification('Mensagem enviada',
-      pend.useWhatsApp ? 'Abrimos o WhatsApp e avisamos o organizador na plataforma.' :
-      (pend.email && pend.email.indexOf('@') !== -1) ? 'Abrimos seu e-mail e avisamos o organizador na plataforma.' :
+    var _tail = _willNotify ? ' e avisamos o organizador na plataforma.' : '.';
+    showNotification(_willNotify ? 'Mensagem enviada' : 'WhatsApp aberto',
+      pend.useWhatsApp ? ('Abrimos o WhatsApp' + _tail) :
+      (pend.email && pend.email.indexOf('@') !== -1) ? ('Abrimos seu e-mail' + (_willNotify ? _tail : '. Escreva sua mensagem por lá.')) :
       'O organizador foi avisado na plataforma.',
       'success');
   }
 
-  // Plataforma (in-app) SEMPRE → criador + co-organizadores ativos. Roda DEPOIS
-  // de abrir o canal externo — os awaits aqui não bloqueiam mais a navegação.
+  // Plataforma (in-app) → criador + co-organizadores ativos. Roda DEPOIS de abrir
+  // o canal externo — os awaits aqui não bloqueiam mais a navegação.
   await window._dispatchOrgPlatformNotification(t, fullMsg, pend.useWhatsApp);
 };
 
