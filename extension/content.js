@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.62';
+  var EXT_VERSION = '1.63';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -740,9 +740,17 @@
       Object.keys(C.toursDone).forEach(function () { tOk++; });
       Object.keys(C.ranksDone).forEach(function () { rOk++; });
       function cap(x, y) { return (y != null && y > 0) ? Math.min(x, y) : x; }
+      // HISTÓRICO LIDO ATÉ O FIM → O TOTAL É O QUE A LISTA ENUMERA, não o contador do perfil.
+      // MEDIDO no letzplay em 30/jul (24 páginas de @camilacalia): 478 CARDS mas só 469 ids
+      // de partida distintos — 9 partidas aparecem duas vezes na lista deles. O "478 Jogos"
+      // do perfil conta card, não partida. Enquanto o total vinha dele, a barra fechava em
+      // "469 de 478" e o perfil ficava eternamente INCOMPLETO por 9 fantasmas.
+      // Mesma regra que já vale pros torneios: lista que se pode contar vale mais que
+      // contador cujo critério a gente não conhece.
+      var gTot = (C.complete === true) ? jogos : totJogos;
       return {
-        g: cap(jogos, totJogos), t: cap(tOk, totTorneios), r: cap(rOk, totRankings),
-        gY: totJogos, tY: totTorneios, rY: totRankings
+        g: cap(jogos, gTot), t: cap(tOk, totTorneios), r: cap(rOk, totRankings),
+        gY: gTot, tY: totTorneios, rY: totRankings
       };
     }
     function prog(e) {
@@ -878,6 +886,24 @@
     // entrega 7 por página e a detecção de paginação não pegava — a leitura parava na
     // primeira página e a barra nunca passava disso. Não depender do markup deles é o que
     // faz isso funcionar mesmo quando a página muda.
+    // Junta à lista pública tudo o que já sabemos existir (footprint de rodadas anteriores
+    // e o próprio cursor). `pre` é 't' ou 'r'; `campo` é 'tid' ou 'rid'.
+    function unirConhecidos(lista, pre, campo) {
+      var tem = {};
+      (lista || []).forEach(function (x) { tem[pre + '/' + x.club + '/' + x[campo]] = 1; });
+      var extras = {};
+      Object.keys(priorNames).forEach(function (k) { if (k.charAt(0) === pre && !tem[k]) extras[k] = 1; });
+      Object.keys(pre === 't' ? C.toursDone : C.ranksDone).forEach(function (k) { if (!tem[k]) extras[k] = 1; });
+      Object.keys(extras).forEach(function (k) {
+        var partes = k.split('/');                       // 't/clube/123'
+        if (partes.length < 3 || !partes[1] || !partes[2]) return;
+        var item = { club: partes[1], title: (priorNames[k] && priorNames[k].name) || null };
+        item[campo] = partes[2];
+        lista.push(item);
+      });
+      return lista;
+    }
+
     async function lerLista(url, re, campo, esperado) {
       var achados = [], visto = {};
       function colher(doc) {
@@ -951,6 +977,11 @@
           try { toursList = await lerLista('https://letzplay.me/' + encodeURIComponent(handle) + '/tournaments', /^\/([^\/]+)\/tournaments\/(\d+)(?:\/|$)/, 'tid', totTorneios); }
           catch (e1) { if (ehPausa(e1)) throw e1; }
         }
+        // UNIÃO COM O QUE JÁ CONHECEMOS. A lista pública nem sempre traz tudo: competição
+        // descoberta pelos JOGOS (etapa 3) existe de verdade mas não aparece em
+        // /{handle}/tournaments — e como o laço só percorre a lista, ela nunca era lida e a
+        // barra ficava eternamente "29 de 30". Conhecido e não lido tem que virar trabalho.
+        toursList = unirConhecidos(toursList, 't', 'tid');
         if (totTorneios == null && toursList.length) totTorneios = toursList.length;
         var pulT = 0;
         for (var ti = 0; ti < toursList.length; ti++) {
@@ -996,6 +1027,7 @@
           try { ranksList = await lerLista('https://letzplay.me/' + encodeURIComponent(handle) + '/rankings', /^\/([^\/]+)\/rankings\/(\d+)(?:\/|$)/, 'rid', totRankings); }
           catch (e2) { if (ehPausa(e2)) throw e2; }
         }
+        ranksList = unirConhecidos(ranksList, 'r', 'rid');
         if (totRankings == null && ranksList.length) totRankings = ranksList.length;
         prog({ phase: 'rankings', pct: 31,
           note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, (totRankings || ranksList.length) || 1) + ' de ' + ((totRankings || ranksList.length) || '?') + ' — nome e classificação' });
@@ -1059,7 +1091,11 @@
             lastPageRead = p;
             prog({ phase: 'jogos', pct: 46 + Math.round((p / Math.max(1, maxPage)) * 51),
               feed: '🎾 página ' + p + ' de ' + maxPage + ': +' + add + ' jogo(s)' });
-            if (p % 3 === 0) parcialAgora('jogos', p, maxPage);
+            // NUNCA na última página: o fechamento vem logo atrás e as duas escritas
+            // correm pro MESMO doc. Medido em produção: o doc final da Camila ficou com
+            // `partialReason: "parcial: jogos 24/24"` (o parcial chegou depois), e por
+            // causa disso a tela dizia "Perfil INCOMPLETO" numa leitura que fechou.
+            if (p % 3 === 0 && p < maxPage) parcialAgora('jogos', p, maxPage);
           }
           if (lastPageRead >= maxPage) C.complete = true;
         }
@@ -1077,6 +1113,7 @@
       imp = carimbar(imp);
       if (pausado) imp.partialReason = 'pausado: retomando';
       else if (parcial) imp.partialReason = String(parcial).slice(0, 120);
+      else delete imp.partialReason;   // fechou de verdade: não pode sobrar rastro de parcial
       var v = I.validate(imp);
       if (!v || !v.valid) { fail('invalido'); return; }
 

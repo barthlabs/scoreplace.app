@@ -22,6 +22,10 @@ load('tournaments-enrollment-report.js');
 
 const apply = window._erApplyLzToRows;
 const COL = window._LZ_COL;
+// VERDE exige leitura de MENOS DE 1 MÊS (regra do dono, 30/jul/2026): verde é absolvição,
+// e absolver com dado velho é chute — um título tirado semana passada muda o veredito.
+const AGORA = new Date().toISOString();
+const VELHO = new Date(Date.now() - 45 * 86400000).toISOString();
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
@@ -30,6 +34,7 @@ const scanFlavia = {
   handle: 'FlaviaCampion', name: 'Flavia Campion',
   rankingCategory: 'Fem D+ / C-', allCategories: ['Fem D+ / C-'],
   gender: 'feminino', skill: 'C', profileSkill: 'D', champions: [],
+  at: AGORA,
   rankings: [{ category: 'Fem D+ / C-', active: true, position: null, fieldSize: null }, { category: 'Fem D+ / C-', active: true }, { category: 'Fem D', active: false }],
   tournaments: [], totals: { rankings: 3, tournaments: 2, matches: 66 },   // ← 2 torneios declarados, 0 capturados: INCOMPLETO (real)
 };
@@ -37,6 +42,7 @@ const scanKelly = {
   handle: 'KellyBarth1', name: 'Kelly Barth',
   rankingCategory: 'Fem C+ / B-', allCategories: ['Fem C+ / B-'],
   gender: 'feminino', skill: 'B', profileSkill: 'C', champions: [],
+  at: AGORA,
   rankings: [{ category: 'Fem C+ / B-', active: true, position: null, fieldSize: null }],
   tournaments: [], totals: { rankings: 1, tournaments: 0, matches: 152 },   // scan COMPLETO (pra testar o caminho feliz)
 };
@@ -150,7 +156,7 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
 // O letzplay declara o total na própria página; guardá-lo dá prova de completude de graça.
 {
   const impCompleto = { handle: 'RodrigoBarth', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
-    rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81), declaredGames: 81 };
+    importedAt: AGORA, rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81), declaredGames: 81 };
   const r = run({ uid: 'r1', effectiveSkills: [] }, { r1: Object.assign({ letzplayImport: impCompleto }, profAuthorized) }, {});
   ok(r._lzColor === COL.green, 'autoimport 81 de 81 declarados → VERDE (veio: ' + r._lzColor + ')');
   ok(r._lzSrc === '🎾', 'fonte = autoimport');
@@ -158,14 +164,14 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
 {
   // PARCIAL salvo (a paginação morreu na metade): tem 60 dos 81 → não absolve
   const impParcial = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
-    rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(60), declaredGames: 81 };
+    importedAt: AGORA, rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(60), declaredGames: 81 };
   const r = run({ uid: 'r2', effectiveSkills: [] }, { r2: Object.assign({ letzplayImport: impParcial }, profAuthorized) }, {});
   ok(r._lzColor === COL.violet, '60 de 81 declarados → ROXO, não verde (veio: ' + r._lzColor + ')');
 }
 {
   // ele mesmo diz que parou no meio, mesmo com a contagem batendo
   const impInterrompido = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
-    rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81), declaredGames: 81,
+    importedAt: AGORA, rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81), declaredGames: 81,
     partialReason: 'rate: HTTP 403' };
   const r = run({ uid: 'r3', effectiveSkills: [] }, { r3: Object.assign({ letzplayImport: impInterrompido }, profAuthorized) }, {});
   ok(r._lzColor === COL.violet, 'partialReason presente → ROXO mesmo com a contagem batendo');
@@ -173,14 +179,14 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
 {
   // import LEGADO (sem declaredGames): mantém o comportamento antigo — não regride
   const impLegado = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
-    rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81) };
+    importedAt: AGORA, rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81) };
   const r = run({ uid: 'r4', effectiveSkills: [] }, { r4: Object.assign({ letzplayImport: impLegado }, profAuthorized) }, {});
   ok(r._lzColor === COL.green, 'import legado sem declaredGames → segue VERDE (não regride quem já tinha)');
 }
 {
   // acusação NÃO depende de completude: achar título é prova mesmo com 60 de 81
   const impGato = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
-    rating: { band: 'D+/C-' }, rankings: [], games: new Array(60), declaredGames: 81,
+    importedAt: AGORA, rating: { band: 'D+/C-' }, rankings: [], games: new Array(60), declaredGames: 81,
     tournaments: [{ categoryRaw: 'Masculina C', title: true }] };
   const r = run({ uid: 'r5', effectiveSkills: ['D'] }, { r5: Object.assign({ letzplayImport: impGato }, profAuthorized) }, {});
   ok(r._lzColor === COL.red, 'campeão achado em import PARCIAL → VERMELHO (achar é prova; não achar não é)');
@@ -196,7 +202,7 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
 // Depender do letzplayImport é fazer a leitura do organizador esperar o inscrito logar.
 {
   const fullDoOrg = { games: new Array(152), officialCategory: { categoryRaw: 'Feminina C', skill: 'C' },
-    rating: { band: 'C+/B-' }, rankings: [], tournaments: [] };
+    importedAt: AGORA, rating: { band: 'C+/B-' }, rankings: [], tournaments: [] };
   const scanResumido = Object.assign({}, scanKelly, { tournaments: [], totals: { rankings: 8, tournaments: 8, matches: 152 } });
   const r = run({ uid: 'k9', effectiveSkills: [] }, { k9: profAuthorized }, { k9: { scan: scanResumido, fullImport: fullDoOrg } });
   ok(r._lzColor === COL.green, 'histórico completo no fullImport do SCAN → VERDE (veio: ' + r._lzColor + ')');
@@ -397,6 +403,51 @@ var htmlN = window._lzTourneyRows({ footprint: [{ official: true, club: 'c', tou
   year: 2026, standings: [{ group: 'G1', rows: [{ pos: 1, handles: ['x'] }] }] }] }, 'x');
 ok(htmlN.indexOf('#a78bfa') < 0, '"Finais ranking W7BT" não é categoria → sem chip roxo');
 
+
+// ── 12. VERDE SÓ COM LEITURA DE MENOS DE 1 MÊS ────────────────────────────────
+// Regra do dono (30/jul/2026): "como nenhum aqui passou pelo novo sistema deveriam estar
+// todos roxos. só ficar verde aqueles que estão atualizados de verdade a menos de 1 mês".
+console.log('\n── frescor: verde exige leitura recente ──');
+{
+  const base = { source: 'letzplay', handle: 'x', officialCategory: { skill: 'D', categoryRaw: 'Fem D' },
+    rankings: [], tournaments: [], games: new Array(81), declaredGames: 81 };
+  const novo = Object.assign({}, base, { importedAt: AGORA });
+  const velho = Object.assign({}, base, { importedAt: VELHO });
+  const semData = Object.assign({}, base);                       // é o caso de TODO perfil antigo
+  const rN = run({ uid: 'f1', effectiveSkills: [] }, { f1: Object.assign({ letzplayImport: novo }, profAuthorized) }, {});
+  const rV = run({ uid: 'f2', effectiveSkills: [] }, { f2: Object.assign({ letzplayImport: velho }, profAuthorized) }, {});
+  const rS = run({ uid: 'f3', effectiveSkills: [] }, { f3: Object.assign({ letzplayImport: semData }, profAuthorized) }, {});
+  ok(rN._lzColor === COL.green, 'leitura de hoje → VERDE (veio: ' + rN._lzColor + ')');
+  ok(rV._lzColor !== COL.green, 'leitura de 45 dias NÃO absolve — cai pro violeta');
+  ok(rV._lzVerified === false, 'leitura velha não conta como verificada');
+  ok(rS._lzColor !== COL.green, 'sem data de leitura NÃO absolve (é o caso dos perfis antigos)');
+}
+{
+  // evidência POSITIVA não envelhece: título achado é prova, mesmo em leitura velha
+  const gato = { source: 'letzplay', handle: 'x', importedAt: VELHO,
+    officialCategory: { skill: 'B', categoryRaw: 'Fem B' }, rankings: [], tournaments: [],
+    games: new Array(81), declaredGames: 81 };
+  const r = run({ uid: 'f4', effectiveSkills: ['D'] }, { f4: Object.assign({ letzplayImport: gato }, profAuthorized) }, {});
+  ok(r._lzColor !== COL.green && r._lzColor !== undefined,
+    'divergência achada continua pintando mesmo com leitura velha (veio: ' + r._lzColor + ')');
+}
+
+// ── 13. CURSOR COMPLETO fecha a leitura, mesmo com o contador deles maior ─────
+// MEDIDO no letzplay em 30/jul: as 24 páginas de @camilacalia têm 478 CARDS e 469 ids de
+// partida distintos — 9 partidas listadas duas vezes por eles. Enquanto a completude
+// exigia `jogos >= declaredGames`, a leitura fechada ficava "INCOMPLETA" por 9 fantasmas.
+console.log('\n── completude pelo cursor (478 cards × 469 partidas) ──');
+{
+  const camila = { source: 'letzplay', handle: 'camilacalia', importedAt: AGORA,
+    officialCategory: { skill: 'C', categoryRaw: 'Fem C' }, rankings: [], tournaments: [],
+    games: new Array(469), declaredGames: 478,
+    lzCursor: { v: 4, complete: true, pageDone: 24, pagesTotal: 24 } };
+  const r = run({ uid: 'c1', effectiveSkills: [] }, { c1: Object.assign({ letzplayImport: camila }, profAuthorized) }, {});
+  ok(r._lzColor === COL.green, '469 de 478 com cursor COMPLETO → leitura fechada, VERDE (veio: ' + r._lzColor + ')');
+  const meio = Object.assign({}, camila, { lzCursor: { v: 4, complete: false, pageDone: 12, pagesTotal: 24 } });
+  const r2 = run({ uid: 'c2', effectiveSkills: [] }, { c2: Object.assign({ letzplayImport: meio }, profAuthorized) }, {});
+  ok(r2._lzColor !== COL.green, 'cursor pela metade continua NÃO absolvendo');
+}
 
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

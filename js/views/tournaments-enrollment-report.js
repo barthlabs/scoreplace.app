@@ -1355,9 +1355,27 @@
   function _lzImportComplete(li) {
     if (!li) return false;
     var n = _lzTot(li);
+    // O CURSOR COMPLETO É A PROVA MAIS FORTE: a última página do histórico foi lida.
+    // Comparar com `declaredGames` não fecha nunca quando o contador do letzplay conta
+    // card e não partida (medido: 478 cards × 469 partidas em @camilacalia).
+    if (li.lzCursor && li.lzCursor.complete === true && !li.partialReason) return true;
     if (li.declaredGames == null) return n > 0;          // legado: sem o número, confia no all-or-nothing
     if (li.partialReason) return false;                   // ele mesmo diz que parou no meio
     return n >= li.declaredGames;
+  }
+  // VERDE SÓ COM LEITURA RECENTE (regra do dono, 30/jul/2026): "só ficar verde aqueles que
+  // estão atualizados de verdade a menos de 1 mês". Verde é ABSOLVIÇÃO — dizer que a pessoa
+  // está na categoria certa. Isso depende de dado fresco: um título tirado semana passada
+  // muda o veredito e uma leitura de três meses atrás não o conhece.
+  // Vermelho e amarelo NÃO envelhecem: evidência positiva encontrada continua sendo prova.
+  var _LZ_FRESCO_DIAS = 30;
+  function _lzFresco(x) {
+    if (!x) return false;
+    var t = x.importedAt || x.at || x.scannedAt || x.updatedAt || null;
+    if (t && typeof t.toDate === 'function') { try { t = t.toDate(); } catch (e) {} }
+    var ms = (t instanceof Date) ? t.getTime() : Date.parse(t || '');
+    if (!ms || isNaN(ms)) return false;                   // sem data conhecida → não absolve
+    return (Date.now() - ms) <= _LZ_FRESCO_DIAS * 86400000;
   }
   function _lzScanComplete(sc) {
     if (!sc) return false;
@@ -1404,6 +1422,7 @@
         // pela metade, "não achei título contra" é ausência de dado, não absolvição —
         // e título é o que manda subir. Vermelho/amarelo seguem valendo: achar é prova.
         if (v.key === 'green' && !_lzImportComplete(li)) v = { key: 'white', apurada: null };
+        if (v.key === 'green' && !_lzFresco(li)) v = { key: 'white', apurada: null };
         if (v.key !== 'white') { r._lzColor = _LZ_COL[v.key]; r._lzVerified = true; }
       } else if (sc) {
         var ev2 = _lzEvidence(sc.champions || [], sc.rankings || [], [sc.rankingCategory].concat(sc.allCategories || []));
@@ -1421,6 +1440,7 @@
         // Vermelho/amarelo NÃO dependem disso: evidência positiva encontrada é prova,
         // mesmo com captura incompleta. O que a falta de dado impede é a ABSOLVIÇÃO.
         if (v2.key === 'green' && !_lzScanComplete(sc)) v2 = { key: 'white', apurada: null };
+        if (v2.key === 'green' && !_lzFresco(sc) && !_lzFresco(scanMap[r.uid])) v2 = { key: 'white', apurada: null };
         r._lzSrc = '🔎';
         r._lzSkill = sc.profileSkill || sc.skill || (v2.apurada != null ? _LTR[v2.apurada] : null);
         if (v2.key !== 'white') { r._lzColor = _LZ_COL[v2.key]; r._lzVerified = true; }
@@ -1836,9 +1856,15 @@
     }
     var gX = _lzTot(imp);
     var gY = (imp && imp.declaredGames != null) ? imp.declaredGames : null;
-    // o declarado pode ficar pequeno (medido: 569 gravados × 478 declarados) — barra travada
-    // em "478 de 478" enquanto ainda entram jogos é mentira
+    // o declarado pode ficar pequeno — barra travada em "478 de 478" enquanto ainda
+    // entram jogos é mentira
     if (gX > (gY || 0)) gY = gX;
+    // HISTÓRICO LIDO ATÉ O FIM → o total é o que a lista ENUMERA. MEDIDO no letzplay em
+    // 30/jul (as 24 páginas de @camilacalia): 478 cards, 469 ids de partida distintos —
+    // 9 partidas aparecem duas vezes na lista deles. O "478 Jogos" do perfil conta CARD,
+    // não partida. Enquanto o total vinha dele, a leitura fechava em "469 de 478" e o
+    // perfil ficava INCOMPLETO pra sempre por causa de 9 fantasmas.
+    if (imp && imp.lzCursor && imp.lzCursor.complete === true) gY = gX;
     var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
     var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];
     var tX = window._lzTournamentsRead(imp);   // mesma regra do overlay ao vivo
