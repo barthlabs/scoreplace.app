@@ -1469,13 +1469,24 @@
   }
 
   // Ações da barra do topo — fazem exatamente o que os botões do rodapé fazem.
+  // A barra do topo DISPARA OS BOTÕES NATIVOS (que ficam escondidos). Assim o caminho de
+  // fechar e o de confirmar continuam sendo um só — sem duplicar callback nem correr o
+  // risco de a barra fechar o diálogo por fora e o `onConfirm` nunca rodar.
+  function _lzBotaoNativo(id) {
+    var d = document.getElementById('custom-confirm-dialog');
+    return d ? d.querySelector('#' + id) : null;
+  }
   window._lzFecharDialogo = function () {
+    var b = _lzBotaoNativo('confirm-cancel-btn');
+    if (b) { b.click(); return; }
     var d = document.getElementById('custom-confirm-dialog');
     if (d && d.parentNode) d.parentNode.removeChild(d);
   };
   window._lzPuxarDoTopo = function () {
+    var b = _lzBotaoNativo('confirm-ok-btn');
+    if (b) { b.click(); return; }
+    // sem diálogo na tela (chamada solta): faz o que o botão faria
     var uid = window._lzDialogUid;
-    window._lzFecharDialogo();
     if (!uid) return;
     try { window._lzAthleteImport(uid); }
     catch (e) {
@@ -2241,22 +2252,6 @@
     } else {
       body += '<div style="font-size:0.8rem;color:var(--text-muted);">Nada gravado ainda — leio torneios (nome, categoria, classificação) e depois os jogos, gravando a cada passo.</div>';
     }
-    // AÇÕES NO TOPO, SEMPRE VISÍVEIS (pedido do dono, 31/jul/2026). Os botões nativos do
-    // diálogo ficam no rodapé — e com o card de nível, as três barras, as abas e a lista, o
-    // rodapé sai do campo de visão: o organizador rola atrás dele. Esta barra é `sticky`
-    // dentro do corpo que rola, então acompanha a rolagem e nunca some. Montada AQUI, no
-    // fim, porque só agora `btnLabel` é o definitivo ("Continuar de onde parou" quando o
-    // perfil está incompleto) — montá-la antes mostrava o rótulo errado.
-    body = '<div id="lz-acoes-topo" style="position:sticky;top:-14px;z-index:5;display:flex;gap:8px;' +
-      'padding:9px 0 10px;margin:-4px 0 8px;background:var(--surface-color,#141a24);">' +
-      '<button type="button" onclick="window._lzFecharDialogo()" style="flex:0 0 auto;padding:9px 14px;border-radius:10px;cursor:pointer;' +
-      'font-size:0.82rem;font-weight:700;border:1px solid var(--border-color,rgba(255,255,255,0.15));' +
-      'background:rgba(255,255,255,0.08);color:var(--text-main,#e8ecf3);">← Voltar</button>' +
-      '<button type="button" onclick="window._lzPuxarDoTopo()" style="flex:1 1 auto;min-width:0;padding:9px 14px;border-radius:10px;cursor:pointer;' +
-      'font-size:0.82rem;font-weight:800;border:1px solid rgba(59,130,246,0.5);' +
-      'background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;">' + _esc(btnLabel) + '</button>' +
-      '</div>' + body;
-
     if (typeof window.showConfirmDialog === 'function') {
       window.showConfirmDialog('🎾 ' + (tg.name || '@' + tg.handle), body,
         // ERRO DENTRO DO CALLBACK DO DIALOG É ENGOLIDO. Se qualquer coisa estourar aqui, o
@@ -2277,7 +2272,23 @@
             }
           }
         }, null,
-        { confirmText: btnLabel, cancelText: '← Voltar', type: 'info', maxWidth: '760px' });
+        // SEM RODAPÉ: esta tela tem a barra fixa no topo. Dois pares de botões era o
+        // "fantasma" que o dono via embaixo. Os botões nativos seguem no DOM, escondidos,
+        // e a barra de cima dispara ELES — um caminho só de confirmação/cancelamento.
+        // AS AÇÕES FICAM NA LINHA DO NOME. Antes eram uma barra `sticky` dentro do corpo:
+        // ela vazava por cima do conteúdo ao rolar e roubava uma faixa inteira de altura.
+        // No cabeçalho elas já estão sempre visíveis por construção (o cabeçalho é fixo,
+        // `flex: 0 0 auto`) e não ocupam linha nenhuma a mais.
+        { confirmText: btnLabel, cancelText: '← Voltar', type: 'info', maxWidth: '760px', hideFooter: true,
+          headerHtml:
+            '<button type="button" onclick="window._lzFecharDialogo()" ' +
+            'style="padding:8px 12px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:700;' +
+            'border:1px solid var(--border-color,rgba(255,255,255,0.15));background:rgba(255,255,255,0.08);' +
+            'color:var(--text-main,#e8ecf3);white-space:nowrap;">← Voltar</button>' +
+            '<button type="button" onclick="window._lzPuxarDoTopo()" ' +
+            'style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:800;' +
+            'border:1px solid rgba(59,130,246,0.5);background:linear-gradient(135deg,#3b82f6,#2563eb);' +
+            'color:#fff;white-space:nowrap;">' + _esc(btnLabel) + '</button>' });
       // a aba de torneios já está montada; isto só pinta o botão ativo
       setTimeout(function () { if (typeof window._lzAba === 'function') window._lzAba('tour'); }, 0);
       // Completa os "de y" das barras AO VIVO com os totais do perfil público

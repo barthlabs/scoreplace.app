@@ -30,5 +30,36 @@ ok(/border-top: 1px solid var\(--border-color\)/.test(card), 'o rodapé ganha bo
 // largura continua configurável (a tela do letzplay usa 760px)
 ok(/max-width: \$\{maxWidth\}/.test(card), 'a largura segue vindo do caller');
 
+// ── RODAPÉ OPCIONAL: quem tem botões próprios não mostra os nativos ─────────
+// "os botões só em cima. esses de baixo têm que sair sem fantasma."
+ok(/hideFooter = false/.test(src), 'showConfirmDialog aceita esconder o rodapé');
+ok(/display: \$\{hideFooter \? 'none' : 'flex'\}/.test(card), 'e o rodapé some de verdade quando pedido');
+ok(/id="confirm-cancel-btn"/.test(src) && /id="confirm-ok-btn"/.test(src),
+  'os botões continuam no DOM (escondidos) — o fluxo de callback segue sendo um só');
+
+{
+  const rep = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/hideFooter: true/.test(rep), 'a tela do letzplay pede pra esconder o rodapé');
+  const fechar = rep.slice(rep.indexOf('window._lzFecharDialogo'), rep.indexOf('window._lzFecharDialogo') + 420);
+  ok(/confirm-cancel-btn'\)/.test(fechar) && /b\.click\(\)/.test(fechar),
+    'o Voltar do topo dispara o botão nativo (não some com o diálogo por fora)');
+  const puxar = rep.slice(rep.indexOf('window._lzPuxarDoTopo'), rep.indexOf('window._lzPuxarDoTopo') + 700);
+  ok(/confirm-ok-btn'\)/.test(puxar) && /b\.click\(\)/.test(puxar),
+    'e o Puxar do topo dispara o de confirmação — senão o onConfirm nunca rodaria');
+  ok(/if \(!uid\) return;/.test(puxar), 'com caminho de reserva se não houver diálogo na tela');
+}
+
+// ── AÇÕES NA LINHA DO NOME ──────────────────────────────────────────────────
+// "coloca os botões alinhados com o nome, assim tiramos essa situação com vazamento e
+// ocupando espaço inutilmente." A barra sticky dentro do corpo vazava por cima do
+// conteúdo ao rolar e roubava uma faixa inteira de altura.
+ok(/headerHtml = ''/.test(src), 'o diálogo aceita ações no cabeçalho');
+const hdr = src.slice(src.indexOf('${c.icon}') - 400, src.indexOf('${c.icon}') + 700);
+ok(/\$\{headerHtml/.test(hdr), 'e as renderiza na MESMA linha do título');
+ok(/flex: 1 1 auto; min-width: 0/.test(hdr), 'o título ocupa a sobra e pode encolher');
+ok(/flex-wrap: wrap/.test(hdr), 'em tela estreita as ações caem pra linha de baixo em vez de vazar');
+ok(/flex: 0 0 auto;">\$\{c\.icon\}/.test(hdr) || /font-size: 2rem; flex: 0 0 auto/.test(hdr),
+  'o ícone não encolhe');
+
 console.log((fail ? '✗' : '✓') + ' dialog-fits-screen: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

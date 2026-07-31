@@ -83,18 +83,19 @@ ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fáb
 {
   const rep = require('fs').readFileSync(
     require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
-  ok(/id="lz-acoes-topo"/.test(rep), 'existe a barra de ações no topo do diálogo');
-  const barra = rep.slice(rep.indexOf('id="lz-acoes-topo"'), rep.indexOf('id="lz-acoes-topo"') + 900);
-  ok(/position:sticky/.test(barra), 'ela é sticky — acompanha a rolagem e não some');
-  ok(/← Voltar/.test(barra) && /_lzFecharDialogo/.test(barra), 'tem Voltar, ligado ao fechamento');
-  ok(/_lzPuxarDoTopo/.test(barra), 'e o botão de puxar, ligado à leitura');
-  ok(/_esc\(btnLabel\)/.test(barra), 'usa o MESMO rótulo do botão de baixo (vira "Continuar" quando incompleto)');
-  // montada só depois de btnLabel virar definitivo
-  ok(rep.indexOf('id="lz-acoes-topo"') > rep.indexOf("var btnLabel = '📚 Puxar histórico completo'"),
-    'montada depois de o rótulo estar decidido (senão sai "undefined")');
-  ok(/window\._lzDialogUid = uid/.test(rep), 'o diálogo registra sobre quem a barra age');
+  // As ações passaram da barra `sticky` (que vazava por cima do conteúdo e roubava uma
+  // faixa de altura) pra LINHA DO NOME, no cabeçalho — que já é fixo por construção.
+  ok(!/id="lz-acoes-topo"/.test(rep), 'a barra sticky saiu de cena');
+  ok(/headerHtml:/.test(rep), 'as ações vão no cabeçalho do diálogo');
+  const hdr = rep.slice(rep.indexOf('headerHtml:'), rep.indexOf('headerHtml:') + 900);
+  ok(/← Voltar/.test(hdr) && /_lzFecharDialogo/.test(hdr), 'tem Voltar, ligado ao fechamento');
+  ok(/_lzPuxarDoTopo/.test(hdr), 'e o botão de puxar, ligado à leitura');
+  ok(/_esc\(btnLabel\)/.test(hdr), 'usa o MESMO rótulo do botão nativo (vira "Continuar" quando incompleto)');
+  ok(rep.indexOf('headerHtml:') > rep.indexOf("var btnLabel = '📚 Puxar histórico completo'"),
+    'montado depois de o rótulo estar decidido (senão sai "undefined")');
+  ok(/window\._lzDialogUid = uid/.test(rep), 'o diálogo registra sobre quem as ações agem');
   const puxar = rep.slice(rep.indexOf('window._lzPuxarDoTopo'), rep.indexOf('window._lzPuxarDoTopo') + 700);
-  ok(/_lzAthleteImport\(uid\)/.test(puxar), 'o botão do topo dispara a mesma leitura do de baixo');
+  ok(/_lzAthleteImport\(uid\)/.test(puxar), 'o botão dispara a leitura');
   ok(/catch \(e\)/.test(puxar), 'e não morre calado se estourar');
 }
 

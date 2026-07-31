@@ -301,7 +301,11 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
   title = _safeText(title);
   // `maxWidth`: telas com LISTA (histórico do letzplay) precisam da largura do usuário —
   // 400px espremia 35 torneios em linhas de 3 alturas e a tela ficava imprestável.
-  const { confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning', maxWidth = '400px' } = options;
+  // `hideFooter`: a tela traz os PRÓPRIOS botões (caso do histórico do letzplay, que tem
+  // uma barra fixa no topo). Sem isso o diálogo mostrava dois pares — o de cima, útil, e o
+  // de baixo, duplicado, que o dono chamou de fantasma. Quem esconde o rodapé assume a
+  // responsabilidade de fechar/confirmar pelos próprios controles.
+  const { confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning', maxWidth = '400px', hideFooter = false, headerHtml = '' } = options;
   
   let dialog = document.getElementById('custom-confirm-dialog');
   if (dialog) dialog.remove();
@@ -347,16 +351,17 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     ">
-      <div style="background: ${c.bg}; border-bottom: 1px solid var(--border-color); padding: 1.25rem; display: flex; align-items: center; gap: 12px; flex: 0 0 auto;">
-        <span style="font-size: 2rem;">${c.icon}</span>
-        <div>
-          <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-color);">${title}</div>
+      <div style="background: ${c.bg}; border-bottom: 1px solid var(--border-color); padding: 1rem 1.25rem; display: flex; align-items: center; gap: 12px; flex: 0 0 auto; flex-wrap: wrap;">
+        <span style="font-size: 2rem; flex: 0 0 auto;">${c.icon}</span>
+        <div style="flex: 1 1 auto; min-width: 0;">
+          <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-color); overflow-wrap: anywhere;">${title}</div>
         </div>
+        ${headerHtml ? `<div style="display: flex; gap: 8px; align-items: center; flex: 0 0 auto;">${headerHtml}</div>` : ''}
       </div>
       <div style="padding: 1.25rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; overflow-y: auto; flex: 1 1 auto; min-height: 0;">
         ${message}
       </div>
-      <div style="padding: 1rem 1.25rem 1.25rem; display: flex; gap: 10px; justify-content: flex-end; flex: 0 0 auto; border-top: 1px solid var(--border-color);">
+      <div style="padding: 1rem 1.25rem 1.25rem; display: ${hideFooter ? 'none' : 'flex'}; gap: 10px; justify-content: flex-end; flex: 0 0 auto; border-top: 1px solid var(--border-color);">
         <button id="confirm-cancel-btn" style="
           background: rgba(255, 255, 255, 0.08);
           color: var(--text-main);
@@ -395,6 +400,8 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
     }, 200);
   };
 
+  // Os botões continuam existindo no DOM (escondidos) quando `hideFooter` — assim quem
+  // tem barra própria pode dispará-los por `.click()` e o fluxo de callbacks é UM só.
   dialog.querySelector('#confirm-cancel-btn').addEventListener('click', () => closeDialog(false));
   dialog.querySelector('#confirm-ok-btn').addEventListener('click', () => closeDialog(true));
   dialog.addEventListener('click', (e) => { if (e.target === dialog) closeDialog(false); });
