@@ -13,8 +13,17 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 const etapa3 = src.slice(src.indexOf('ETAPA 3: JOGOS'), src.indexOf('} catch (eEtapa)'));
 
 // 1) com acervo, começa na página 1 (não na seguinte à do cursor)
-ok(/var pIni = jaConhecidos > 0 \? 1 :/.test(etapa3), 'tendo acervo, a releitura começa na página 1');
-ok(/Math\.max\(1, C\.pageDone \+ 1\)/.test(etapa3), 'sem acervo, retoma do cursor como antes');
+// REGRA ATUALIZADA (31/jul, ext 1.73): a página 1 é SEMPRE a primeira — é por lá que entra
+// jogo novo — e as demais saem do CONJUNTO de páginas que faltam, não de um ponto de
+// retomada em ordem. Ver o bloco do conjunto mais abaixo.
+// A página 1 é onde entra jogo novo — mas relê-la numa varredura ainda incompleta é
+// desperdício (o harness pegou isso). Regra: lê a 1 quando ainda não foi lida OU quando a
+// varredura anterior fechou; senão começa na primeira que falta.
+ok(/var _leAUm = !C\.pagesRead\[1\] \|\| _varreduraAnteriorFechou;/.test(etapa3),
+  'a página 1 vem primeiro quando faz sentido (nova, ou varredura anterior fechada)');
+ok(/for \(var q = 1; q <= \(C\.pagesTotal \|\| 1\); q\+\+\) if \(!C\.pagesRead\[q\]\) return q;/.test(etapa3),
+  'senão, começa na primeira página que ainda falta');
+ok(/if \(!C\.pagesRead\[_q\]\) _faltam\.push\(_q\)/.test(etapa3), 'e o resto vem do que FALTA no conjunto');
 
 // 2) para assim que uma página não traz nada novo
 ok(/if \(add === 0\) _secas\+\+; else _secas = 0;/.test(etapa3), 'conta páginas sem novidade');
@@ -66,6 +75,35 @@ ok(/for \(var p = pIni \+ 1; p <= maxPage && !C\.complete; p\+\+\)/.test(etapa3)
   const juntar = app.slice(app.indexOf('function _lzJuntarScoreplace'), app.indexOf('function _lzJuntarScoreplace') + 900);
   ok(/proprio &&/.test(juntar), 'pro próprio usuário segue usando o matchHistory (mais completo, inclui casuais)');
   ok(/_lzJogosDosTorneios\(uid\)/.test(juntar), 'pros outros, os torneios em comum');
+}
+
+// ── QUAIS PÁGINAS JÁ FORAM LIDAS (conjunto), não "até onde fui" ─────────────
+// "Kelly falta 1 jogo... faltando 1 jogo vai estar nas pontas certamente. deveria pular
+// direto para a ponta que falta." Guardar um número só obriga a recomeçar em ordem.
+{
+  ok(/C\.pagesRead = \{\}/.test(src), 'o cursor guarda o CONJUNTO de páginas lidas');
+  ok(/for \(var _lp = 1; _lp <= C\.pageDone; _lp\+\+\)/.test(src),
+    'cursor antigo (só pageDone) é convertido pro conjunto — nada é relido à toa');
+  ok(/pagesRead: C\.pagesRead/.test(src), 'e ele viaja no cursor gravado');
+
+  const et3 = src.slice(src.indexOf('ETAPA 3: JOGOS'), src.indexOf('} catch (eEtapa)'));
+  ok(/if \(!C\.pagesRead\[_q\]\) _faltam\.push\(_q\)/.test(et3), 'a varredura lê só o que FALTA');
+  ok(/Math\.min\(a - 1, maxPage - a\)/.test(et3), 'ordenado pela distância até a PONTA mais próxima');
+  ok(/var _leAUm = !C\.pagesRead\[1\]/.test(et3), 'a página 1 entra primeiro quando faz sentido');
+  ok(/for \(var _c = 1; _c <= maxPage; _c\+\+\) if \(!C\.pagesRead\[_c\]\)/.test(et3),
+    '"completo" passa a ser TODAS as páginas no conjunto, não "cheguei na última"');
+  ok(/C\.pagesRead\[_grupo\[_i\]\] = 1;/.test(et3), 'cada página lida entra no conjunto na hora');
+}
+
+// ── o "restam" saiu ────────────────────────────────────────────────────────
+{
+  const app = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/restante: ''/.test(app), 'o fluxo do atleta não manda mais estimativa');
+  const ob = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'letzplay-onboarding.js'), 'utf8');
+  ok(/opts\.tempos\.restante\s*\n?\s*\?/.test(ob) || /opts\.tempos\.restante$/m.test(ob),
+    'e o rótulo só é desenhado quando há valor');
 }
 
 console.log((fail ? '✗' : '✓') + ' lz-incremental-history: ' + pass + ' passaram, ' + fail + ' falharam');

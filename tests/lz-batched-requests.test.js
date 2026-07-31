@@ -24,15 +24,16 @@ ok(/var _pendR = ranksList\.filter/.test(cnt), 'idem rankings');
 // páginas do histórico: lote só na varredura COMPLETA
 const et3 = cnt.slice(cnt.indexOf('ETAPA 3: JOGOS'), cnt.indexOf('} catch (eEtapa)'));
 ok(/if \(!_incremental\) \{/.test(et3), 'a varredura completa vai em lote');
-ok(/us\.map\(function \(u\) \{ return bgFetchDoc\(u\); \}\)/.test(et3), 'disparando as páginas juntas');
+ok(/_grupo\.map\(function \(q\) \{/.test(et3), 'disparando as páginas do grupo juntas');
 ok(/for \(var p = pIni \+ 1; p <= maxPage && !C\.complete; p\+\+\)/.test(et3),
   'e a incremental segue página a página — ela precisa PARAR na primeira sem novidade');
 
-// ── "restam —" pra sempre ──
+// ── o "restam" foi REMOVIDO (31/jul) ──
+// A projeção dependia de um total que o letzplay conta em CARDS, não em partidas (158 pra
+// 157 reais, 478 pra 469): prometia um fim que nunca chegava.
 const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
-const t = app.slice(app.indexOf('function _tempos()'), app.indexOf('function _tempos()') + 900);
-ok(/feitoAgora >= 1/.test(t), 'uma unidade já basta pra estimar (era 3 — e numa releitura nunca chegava lá)');
-ok(/falta > 0/.test(t), 'e só estima enquanto há o que fazer');
+ok(/restante: ''/.test(app), 'o fluxo do atleta não manda estimativa nenhuma');
+ok(/decorrido: _fmtDur\(dec\) \+ _ritmoTexto\(\)/.test(app), 'o que fica é medido: decorrido + ritmo por item');
 
 console.log((fail ? '✗' : '✓') + ' lz-batched-requests: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.72';
+  var EXT_VERSION = '1.73';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -695,6 +695,13 @@
     if (!C.toursDone || typeof C.toursDone !== 'object') C.toursDone = {};
     if (!C.ranksDone || typeof C.ranksDone !== 'object') C.ranksDone = {};
     C.pageDone = (typeof C.pageDone === 'number' && C.pageDone > 0) ? C.pageDone : 0;
+    // QUAIS PÁGINAS JÁ FORAM LIDAS, não só "até onde fui". Guardar um número só obriga a
+    // recomeçar em ordem: com 157 de 158 jogos o app relia as 8 páginas atrás de um jogo
+    // que, se existisse, estaria numa ponta. O conjunto deixa a retomada ler EXATAMENTE o
+    // que falta, na ordem que fizer sentido — e torna "guardar onde parou" literal.
+    if (!C.pagesRead || typeof C.pagesRead !== 'object') C.pagesRead = {};
+    // legado: cursor antigo só tinha pageDone → as 1..pageDone estão lidas
+    for (var _lp = 1; _lp <= C.pageDone; _lp++) if (!C.pagesRead[_lp]) C.pagesRead[_lp] = 1;
     // A VARREDURA ANTERIOR CHEGOU AO FIM? Só isso autoriza a leitura incremental (parar na
     // primeira página sem novidade). Se ela parou no meio, as páginas do FIM nunca foram
     // lidas — e parar cedo perderia esses jogos pra sempre. Tem que ser lido ANTES de
@@ -725,7 +732,10 @@
     var migrando = !!(prior && (versaoAnterior < 4 || jogosSujos));
     if (migrando) {
       _acc = null;                    // não reaproveita o acumulado desta página
-      C.pageDone = 0; C.pagesTotal = 0;
+      // O CONJUNTO DE PÁGINAS TAMBÉM ZERA. Sem isto a migração descartava os jogos sujos
+      // mas continuava achando que as páginas já tinham sido lidas — e o histórico voltava
+      // pela metade. O harness pegou: 252 jogos onde deviam ser 472.
+      C.pageDone = 0; C.pagesTotal = 0; C.pagesRead = {};
       prior = Object.assign({}, prior, { games: [] });
     }
     var A = _accFor(handle, prior);
@@ -802,7 +812,8 @@
         current: { uid: uid || null, handle: handle, phase: e.phase || null, note: e.note || null },
         pct: (e.pct != null ? e.pct : null), feed: e.feed || null, counts: contagens(),
         cursor: { v: 4, handle: realHandle, toursDone: C.toursDone, ranksDone: C.ranksDone,
-                  pageDone: lastPageRead, pagesTotal: maxPage || null, complete: C.complete === true } });
+                  pageDone: lastPageRead, pagesRead: C.pagesRead, pagesTotal: maxPage || null,
+                  complete: C.complete === true } });
     }
     function fail(code) {
       post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: code });
@@ -865,7 +876,8 @@
       if (toursList.length) imp.tournamentsList = toursList.map(function (P) { return { club: P.club, tid: P.tid, title: P.title || null, data: P.data || null, dataNum: P.dataNum || null }; });
       if (ranksList.length) imp.rankingsList = ranksList.map(function (R) { return { club: R.club, rid: R.rid, title: R.title || null, data: R.data || null, dataNum: R.dataNum || null }; });
       imp.lzCursor = { v: 4, handle: realHandle, toursDone: C.toursDone, ranksDone: C.ranksDone,
-        pageDone: lastPageRead, pagesTotal: maxPage || null, complete: C.complete === true };
+        pageDone: lastPageRead, pagesRead: C.pagesRead, pagesTotal: maxPage || null,
+        complete: C.complete === true };
       return boundImportDoc(imp);
     }
     // Só o que ENTROU desde o último flush: regravar tudo a cada parcial custava ~25 mil
@@ -1166,7 +1178,16 @@
           // JÁ TEMOS ACERVO? Então a leitura é INCREMENTAL e começa na página 1 (o novo
           // entra por cima), não na página seguinte à do cursor.
           var jaConhecidos = _varreduraAnteriorFechou ? all.length : 0;
-          var pIni = jaConhecidos > 0 ? 1 : Math.max(1, C.pageDone + 1);
+          // A PÁGINA 1 é onde entra jogo novo, então ela vem primeiro — MAS só quando faz
+          // sentido: numa varredura ainda incompleta ela já foi lida e reler é desperdício
+          // (o harness pegou: "não releu nenhuma página anterior à do cursor"). Regra: lê a
+          // 1 quando ainda não foi lida, ou quando a varredura anterior FECHOU (aí ela é
+          // justamente o lugar onde o novo apareceu).
+          var _leAUm = !C.pagesRead[1] || _varreduraAnteriorFechou;
+          var pIni = _leAUm ? 1 : (function () {
+            for (var q = 1; q <= (C.pagesTotal || 1); q++) if (!C.pagesRead[q]) return q;
+            return C.pageDone + 1;
+          })();
           prog({ phase: 'jogos', note: (jaConhecidos > 0
               ? 'procurando jogos novos a partir do começo do histórico'
               : (pIni > 1 ? ('retomando o histórico na página ' + pIni) : 'abrindo o histórico de jogos')),
@@ -1187,7 +1208,7 @@
           var tg = F.parseTotalGames(d1);
           if (tg != null && totJogos == null) totJogos = tg;
           var add1 = addJogos(pg1);
-          lastPageRead = pIni;
+          lastPageRead = pIni; C.pagesRead[pIni] = 1;
           prog({ phase: 'jogos', pct: 46 + Math.round((pIni / Math.max(1, maxPage)) * 51),
             feed: '🎾 página ' + pIni + ' de ' + maxPage + ': +' + add1 + ' jogo(s)' });
           // nada novo já na primeira: o acervo está em dia, uma requisição resolveu
@@ -1210,29 +1231,45 @@
           // a INCREMENTAL segue página a página, porque ela precisa parar na primeira que
           // não trouxer novidade — e disparar 3 de uma vez leria páginas à toa.
           if (!_incremental) {
-            for (var _bp = pIni + 1; _bp <= maxPage; _bp += LOTE) {
+            // SÓ AS PÁGINAS QUE FALTAM, e das PONTAS PRO MEIO. O que é novo está no começo
+            // e o que ficou pra trás numa leitura interrompida está no fim — o meio é o
+            // menos provável. Com 157 de 158 jogos, o app relia as 8 páginas em ordem
+            // atrás de um jogo que, se existisse, estaria numa ponta.
+            var _faltam = [];
+            for (var _q = 1; _q <= maxPage; _q++) if (!C.pagesRead[_q]) _faltam.push(_q);
+            _faltam.sort(function (a, b) {
+              // distância até a ponta mais próxima: 1ª página e última primeiro
+              return Math.min(a - 1, maxPage - a) - Math.min(b - 1, maxPage - b);
+            });
+            for (var _bp = 0; _bp < _faltam.length; _bp += LOTE) {
               conferirTeto();
-              var _ate = Math.min(_bp + LOTE - 1, maxPage);
-              prog({ phase: 'jogos', note: 'páginas ' + _bp + '–' + _ate + ' de ' + maxPage,
-                pct: 46 + Math.round(((_bp - 1) / Math.max(1, maxPage)) * 51) });
-              var _docs = await Promise.all((function () {
-                var us = []; for (var q = _bp; q <= _ate; q++) us.push(base + '?page=' + q);
-                return us.map(function (u) { return bgFetchDoc(u); });
-              })());
+              var _grupo = _faltam.slice(_bp, _bp + LOTE);
+              var _rot = _grupo.join(', ');
+              prog({ phase: 'jogos', note: 'página ' + _rot + ' de ' + maxPage,
+                pct: 46 + Math.round((_bp / Math.max(1, _faltam.length)) * 51) });
+              var _docs = await Promise.all(_grupo.map(function (q) {
+                return bgFetchDoc(q > 1 ? (base + '?page=' + q) : base);
+              }));
               var _addLote = 0;
-              _docs.forEach(function (d) { _addLote += addJogos(X.extractMatchesFromDoc(d, realHandle)); });
-              lastPageRead = _ate;
-              prog({ phase: 'jogos', pct: 46 + Math.round((_ate / Math.max(1, maxPage)) * 51),
-                feed: '🎾 páginas ' + _bp + '–' + _ate + ' de ' + maxPage + ': +' + _addLote + ' jogo(s)' });
-              if (_ate < maxPage) parcialAgora('jogos', _ate, maxPage);
+              _docs.forEach(function (d, _i) {
+                _addLote += addJogos(X.extractMatchesFromDoc(d, realHandle));
+                C.pagesRead[_grupo[_i]] = 1;
+                if (_grupo[_i] > lastPageRead) lastPageRead = _grupo[_i];
+              });
+              prog({ phase: 'jogos', pct: 46 + Math.round(((_bp + _grupo.length) / Math.max(1, _faltam.length)) * 51),
+                feed: '🎾 página ' + _rot + ' de ' + maxPage + ': +' + _addLote + ' jogo(s)' });
+              if (_bp + LOTE < _faltam.length) parcialAgora('jogos', _bp + _grupo.length, _faltam.length);
             }
-            if (lastPageRead >= maxPage) C.complete = true;
+            // completo = TODAS as páginas no conjunto, não "cheguei na última"
+            var _todas = true;
+            for (var _c = 1; _c <= maxPage; _c++) if (!C.pagesRead[_c]) { _todas = false; break; }
+            if (_todas) C.complete = true;
           }
           for (var p = pIni + 1; p <= maxPage && !C.complete; p++) {
             conferirTeto();
             prog({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage, pct: 46 + Math.round(((p - 1) / Math.max(1, maxPage)) * 51) });
             var add = addJogos(X.extractMatchesFromDoc(await bgFetchDoc(base + '?page=' + p), realHandle));
-            lastPageRead = p;                  // o prog abaixo já carrega o cursor com ela
+            lastPageRead = p; C.pagesRead[p] = 1;   // o prog abaixo já leva o cursor atualizado
             if (_incremental) {
               if (add === 0) _secas++; else _secas = 0;
               if (_secas >= 1) {

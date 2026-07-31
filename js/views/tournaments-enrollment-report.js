@@ -2487,10 +2487,11 @@
       // dá uma estimativa útil (e ela se corrige a cada segundo) — melhor um número que se
       // ajusta do que um traço que não diz nada. Continua "—" só enquanto NADA foi feito
       // nesta leitura, que é o único caso em que não há o que medir.
-      return {
-        decorrido: _fmtDur(dec) + _ritmoTexto(),
-        restante: (feitoAgora >= 1 && falta > 0) ? ('~' + _fmtDur((dec / feitoAgora) * falta)) : '—'
-      };
+      // SEM "RESTAM" (pedido do dono, 31/jul). A projeção dependia de um total que o
+      // letzplay conta em CARDS (478 pra 469 partidas, 158 pra 157) — ela prometia um fim
+      // que nunca chegava e virava mais uma coisa errada na tela. O que fica é o que é
+      // medido de verdade: o tempo decorrido e o ritmo por item.
+      return { decorrido: _fmtDur(dec) + _ritmoTexto(), restante: '' };
     }
     // Relógio de 1s: é ele que faz a tela se MEXER durante as esperas longas. O passo
     // (`sub`) e as barras ficam parados porque nada novo chegou — o que não pode é a tela

@@ -227,15 +227,19 @@
     // `eta` explícito (o fluxo do atleta calcula decorrido/faltam com ritmo MEDIDO) vence
     // tudo: assume a linha e desliga a prova de vida genérica, que existe só pra quem não
     // tem como estimar.
-    // tempos EXPLÍCITOS: {decorrido, restante}. Os dois rótulos existem SEMPRE (restante
-    // vira "—" enquanto não há amostra pra estimar), pra nenhum dos dois mudar de lugar.
+    // tempos EXPLÍCITOS: {decorrido, restante}. O "restam" só aparece se vier preenchido —
+    // ele foi removido do fluxo do atleta em 31/jul/2026 porque a projeção dependia de um
+    // total que o letzplay conta em CARDS, não em partidas (158 pra 157 reais): prometia um
+    // fim que nunca chegava. O que fica é medido de verdade — decorrido e ritmo por item.
     if (opts.tempos) {
       _temposOwn = true;                        // trava o _etaTick (ver comentário lá em cima)
       var eF = document.getElementById('sp-imp-eta');
       if (eF) {
         eF.innerHTML =
           '<span>⏱️ decorrido <b style="color:var(--text-bright,#fff);">' + _esc(opts.tempos.decorrido || '—') + '</b></span>' +
-          '<span>⏳ restam <b style="color:var(--text-bright,#fff);">' + _esc(opts.tempos.restante || '—') + '</b></span>';
+          (opts.tempos.restante
+            ? '<span>⏳ restam <b style="color:var(--text-bright,#fff);">' + _esc(opts.tempos.restante) + '</b></span>'
+            : '');
       }
       _vivoParar();
     } else if (opts.eta != null) {
