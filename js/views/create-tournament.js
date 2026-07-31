@@ -4982,6 +4982,14 @@ function setupCreateTournamentModal() {
   function _autoDrawAgendadoNoForm() {
     function val(id) { var e = document.getElementById(id); return e ? (e.value || '') : ''; }
     function chk(id) { var e = document.getElementById(id); return !!(e && e.checked); }
+    // JÁ SORTEADO não pergunta nada (pedido do dono, 31/jul): a tela existe pro sorteio
+    // que ainda VAI acontecer sozinho. Com chave na mesa, a escolha vira ajuste — e o
+    // lugar dela é o toggle "Sorteio equilibrado" do próprio formulário.
+    var _eid = (document.getElementById('edit-tournament-id') || {}).value || '';
+    if (_eid && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
+      var _tj = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(_eid); });
+      if (_tj && typeof window._tournamentHasDraw === 'function' && window._tournamentHasDraw(_tj)) return false;
+    }
     var manual = chk('liga-draw-manual') || chk('suico-draw-manual') || chk('suico-manual-draw');
     if (manual) return false;
     var data = val('suico-first-draw-date') || val('liga-first-draw-date');

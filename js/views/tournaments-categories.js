@@ -3183,59 +3183,19 @@ window._categoryRequestsBannerHtml = function(t) {
         rows + '</div>';
 };
 
-// Check and show category notifications for current user
-window._checkCategoryNotifications = function(t) {
-    if (!t || !t.categoryNotifications || t.categoryNotifications.length === 0) return;
-    var user = window.AppStore.currentUser;
-    if (!user || (!user.uid && !user.email)) return;
-
-    // uid-first (varredura uid, Parte 6): notif com targetUid casa ESTRITO por uid;
-    // docs legados sem targetUid caem no match por e-mail.
-    var userNotifs = t.categoryNotifications.filter(function(n) {
-        if (n.read) return false;
-        if (n.targetUid) return !!user.uid && n.targetUid === user.uid;
-        return !!n.targetEmail && n.targetEmail === user.email;
-    });
-
-    if (userNotifs.length === 0) return;
-
-    userNotifs.forEach(function(n) {
-        n.read = true; // Mark as read
-
-        var sourceLabel = n.source === 'perfil' ? _t('cat.sourceProfile') : _t('cat.sourceOrganizer');
-        var orgEmail = t.organizerEmail || '';
-        var orgName = t.organizerName || t.organizerEmail || 'organizador';
-
-        var questionBtnId = 'cat-question-btn-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
-
-        showAlertDialog(
-            _t('cat.assigned'),
-            _t('cat.assignedDialogMsg', {cat: window._displayCategoryName(n.category), source: sourceLabel, tournament: (t.name || '')}) +
-            '<br><br><button id="' + questionBtnId + '" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;padding:8px 16px;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('cat.questionOrg') + '</button>',
-            function() {
-                // Dialog dismissed
-            },
-            { type: 'info', confirmText: 'OK' }
-        );
-
-        // Attach question button handler after dialog renders
-        setTimeout(function() {
-            var btn = document.getElementById(questionBtnId);
-            if (btn) {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    var subject = encodeURIComponent('Questionamento sobre categoria - ' + (t.name || ''));
-                    var body = encodeURIComponent('Olá ' + orgName + ',\n\nFui atribuído à categoria "' + n.category + '" no torneio "' + (t.name || '') + '" e gostaria de questionar essa atribuição.\n\nMotivo: \n\nAtenciosamente,\n' + (user.displayName || ''));
-                    window.open('mailto:' + orgEmail + '?subject=' + subject + '&body=' + body, '_blank');
-                });
-            }
-        }, 300);
-    });
-
-    // Persist the read status
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        window.FirestoreDB.saveTournament(t);
-    }
-};
+// DESLIGADA em 31/jul/2026 a pedido do dono: "tira a tela de questionar o organizador
+// quando ele atribui categoria ao usuário. voltaremos a isso depois, mas por ora isso
+// não funciona e não ajuda."
+//
+// Era um alertDialog "categoria atribuída" com um botão "💬 Questionar Organizador" que
+// só abria um mailto — o participante mandava e-mail e nada acontecia dentro do app.
+// A função vira NO-OP SILENCIOSO: não abre tela e não grava nada. O registro em
+// `t.categoryNotifications` continua sendo criado normalmente (é o histórico da
+// atribuição) e fica INTACTO — ninguém é marcado como lido — pra quando o fluxo voltar
+// de verdade (contestação dentro do app, não e-mail).
+//
+// ⚠️ Ao religar: as notificações antigas ainda estão não-lidas e apareceriam todas de
+// uma vez. Filtrar por data (ou marcar as anteriores a esta versão como lidas) antes.
+window._checkCategoryNotifications = function() { /* desligada — ver comentário acima */ };
 
 })();

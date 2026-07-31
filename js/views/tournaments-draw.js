@@ -1675,7 +1675,9 @@ window._showDrawBalanceOverlay = function (opts) {
   ov.innerHTML =
     '<div style="background:var(--bg-card,#1e293b);border-radius:18px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,0.5);margin:auto;overflow:hidden;">' +
       '<div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.08);">' +
-        '<div style="font-weight:800;font-size:1rem;color:var(--text-bright,#f1f5f9);">⚖️ Sorteio de duplas</div>' +
+        // O título diz o que ESTA porta vai sortear. "duplas" só quando são duplas
+        // mesmo — na Liga/Rei-Rainha o sorteio é de GRUPO, e chamar de dupla mente.
+        '<div style="font-weight:800;font-size:1rem;color:var(--text-bright,#f1f5f9);">' + _sh(opts.title || '⚖️ Sorteio') + '</div>' +
         '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-top:3px;">' + _sh(opts.subtitle || 'Defina o gênero de quem está sem, e escolha como formar as duplas.') + '</div>' +
         '<div style="display:flex;gap:8px;margin-top:12px;">' +
           '<button onclick="window._gdCancel()" style="flex:1;padding:11px;border-radius:10px;border:1px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
@@ -1772,6 +1774,7 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
   window._drawBalanceRows(t, function (rows) {
     window._showDrawBalanceOverlay({
       rows: rows,
+      title: '⚖️ Sorteio de duplas',   // aqui SÃO duplas (teamSize 2, formadas por sorteio)
       // abre no que ESTÁ configurado — a tela mostra a verdade, não um default próprio
       mode: (t.equilibrado === false) ? 'livre' : 'equilibrado',
       onConfirm: function (mode, assigned) {

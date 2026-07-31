@@ -19,6 +19,7 @@ const chk = src.slice(src.indexOf('function _autoDrawAgendadoNoForm'), src.index
 ok(/if \(manual\) return false;/.test(chk), 'sorteio MANUAL não dispara a tela (lá ela já existe)');
 ok(/if \(!data\) return false;/.test(chk), 'sem data marcada, não dispara');
 ok(/quando\.getTime\(\) > Date\.now\(\)/.test(chk), 'e só quando a data/hora ainda está no futuro');
+ok(/window\._tournamentHasDraw\(_tj\)\) return false;/.test(chk), 'e NUNCA quando o sorteio já aconteceu');
 
 // ── A TELA É A APROVADA, não uma nova ────────────────────────────────────────
 const dlg = src.slice(src.indexOf('function _perguntarEquilibrio'), src.indexOf('window._saveTournamentClickHandler = function'));
@@ -31,7 +32,9 @@ ok(/_hydrateParticipantGenders/.test(dlg), 'e hidrata o gênero do perfil antes 
 
 // A tela canônica existe uma vez só, e as duas portas chamam ela
 ok((draw.match(/window\._showDrawBalanceOverlay = function/g) || []).length === 1, 'a tela é definida UMA vez');
-ok(/⚖️ Sorteio de duplas/.test(draw), 'com o título aprovado');
+ok(/opts\.title \|\| '⚖️ Sorteio'/.test(draw), 'título neutro por padrão — só é "de duplas" quando são duplas');
+ok(/title: '⚖️ Sorteio de duplas'/.test(draw), 'a porta de DUPLAS diz duplas');
+ok(!/duplas/.test(dlg), 'e a porta do SALVAR não chama de dupla o que pode ser sorteio de GRUPO');
 ok(/ov\.id = 'gender-draw-overlay';/.test(draw), 'e o mesmo overlay de sempre');
 const manual = draw.slice(draw.indexOf('window._maybeShowGenderDrawDialog = function'));
 ok(/window\._showDrawBalanceOverlay\(\{/.test(manual), 'a porta MANUAL usa a mesma tela');
