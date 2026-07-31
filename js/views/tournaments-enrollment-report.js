@@ -2004,6 +2004,15 @@
     var tY = (imp && imp.declaredTournaments != null) ? imp.declaredTournaments : null;
     var tLista = (imp && Array.isArray(imp.tournamentsList)) ? imp.tournamentsList.length : 0;
     if (tLista > 0) tY = (tY != null) ? Math.max(tY, tLista) : tLista;
+    // SEM TOTAL DECLARADO, CONTA O QUE SE CONHECE. A Kelly não tinha `declaredTournaments`
+    // (import antigo) nem `tournamentsList`, e a barra ficava em "5 de …" pra sempre — um
+    // total desconhecido é indistinguível de barra quebrada. Competição distinta no
+    // footprint é um total honesto: é o que sabemos existir.
+    if (tY == null) {
+      var tFp = _lzContarDistintos(offFp, true);
+      tY = Math.max(tFp, tX) || null;
+    }
+    if (tY != null && tX > tY) tX = tY;
     var _cur = imp && imp.lzCursor;
     var rX = (_cur && _cur.ranksDone) ? Object.keys(_cur.ranksDone).length
       : rkFp.filter(function (f) { return f.standings || (f.name && f.name !== f.categoryRaw); }).length;

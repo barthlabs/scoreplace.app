@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.65';
+  var EXT_VERSION = '1.66';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -602,20 +602,23 @@
     return _acc;
   }
 
-  var _athleteImportRunning = null, _athleteImportUid = null;
+  var _athleteImportRunning = null, _athleteImportUid = null, _athleteAbort = 0;
+  // QUEM PEDIU AGORA TEM PRIORIDADE. Recusar com "ocupado — aguarde ela terminar" era
+  // preguiça nossa: o organizador clicou na Kelly, ele quer a Kelly. A leitura anterior é
+  // ABANDONADA (o número da geração muda, e a rodada velha para de emitir e de gravar ao
+  // perceber que não é mais a atual) e a nova começa na hora. Pedir a MESMA pessoa que já
+  // está sendo lida continua sendo no-op — aí sim não há o que fazer.
   function runAthleteImport(handle, uid, tournamentId, prior, cursor) {
-    if (_athleteImportRunning) {
-      // Ocupado com OUTRO atleta → responde na hora (antes: silêncio total e o
-      // organizador achava que "não puxa mais ninguém").
-      if (_athleteImportUid !== uid) {
-        post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: 'ocupado — outra leitura em andamento; aguarde ela terminar' });
-      }
-      return _athleteImportRunning;
-    }
+    if (_athleteImportRunning && _athleteImportUid === uid) return _athleteImportRunning;
+    if (_athleteImportRunning) _athleteAbort++;      // abandona a anterior
+    var geracao = _athleteAbort;
     _athleteImportUid = uid;
-    _athleteImportRunning = _runAthleteImport(handle, uid, tournamentId, prior, cursor)
+    _athleteImportRunning = _runAthleteImport(handle, uid, tournamentId, prior, cursor, function () { return geracao !== _athleteAbort; })
       .catch(function () {})
-      .then(function () { _athleteImportRunning = null; _athleteImportUid = null; });
+      .then(function () {
+        if (geracao !== _athleteAbort) return;       // outra leitura assumiu; não limpa o estado dela
+        _athleteImportRunning = null; _athleteImportUid = null;
+      });
     return _athleteImportRunning;
   }
   // ══════════════════════════════════════════════════════════════════════════════
@@ -650,8 +653,12 @@
   //
   // `prior`  = fullImport da rodada anterior (nomes/classificações já resolvidos)
   // `cursor` = o que já foi concluído (torneios, rankings, página do histórico)
-  async function _runAthleteImport(handle, uid, tournamentId, prior, cursor) {
+  async function _runAthleteImport(handle, uid, tournamentId, prior, cursor, abandonada) {
     var X = window._spExtract, I = window._spImport, F = window._spFlow;
+    // `abandonada()` = outra leitura foi pedida e esta não é mais a atual. Checar isso
+    // custa nada e evita que a rodada velha continue gastando requisições e gravando por
+    // cima da nova.
+    if (typeof abandonada !== 'function') abandonada = function () { return false; };
 
     // ── estado da rodada ────────────────────────────────────────────────────────
     var C = (cursor && typeof cursor === 'object') ? cursor : {};
@@ -754,6 +761,7 @@
       };
     }
     function prog(e) {
+      if (abandonada()) return;      // não pinta a tela de uma leitura que já foi substituída
       e = e || {};
       post({ __sp_lp: 'athlete-import-progress', tournamentId: tournamentId, uid: uid || null, handle: handle,
         current: { uid: uid || null, handle: handle, phase: e.phase || null, note: e.note || null },
@@ -834,6 +842,7 @@
       return out;
     }
     function parcialAgora(etapa, feito, total) {
+      if (abandonada()) return;      // nem grava por cima da leitura nova
       try {
         var imp = I.normalize(montarRaw(), { importedAt: new Date().toISOString() });
         imp.partialReason = 'parcial: ' + etapa + ' ' + feito + '/' + total;
@@ -877,7 +886,10 @@
     // Teto de SEGURANÇA (não é prazo de trabalho): só existe pra uma rodada nunca ficar
     // pendurada pra sempre. Ao estourar, checkpointa e o app encadeia a seguinte.
     var limite = Date.now() + 1800000;
-    function conferirTeto() { if (Date.now() > limite) { var e = new Error('teto da rodada'); e.code = 'rate-budget'; throw e; } }
+    function conferirTeto() {
+      if (abandonada()) { var a = new Error('abandonada'); a.code = 'abandonada'; throw a; }
+      if (Date.now() > limite) { var e = new Error('teto da rodada'); e.code = 'rate-budget'; throw e; }
+    }
 
     // Lê uma lista paginada de competições (/{handle}/tournaments ou /rankings).
     // `esperado` = quantos o perfil declara. Se a paginação da página não for detectável
@@ -1101,11 +1113,13 @@
           if (lastPageRead >= maxPage) C.complete = true;
         }
       } catch (eEtapa) {
+        if (eEtapa && eEtapa.code === 'abandonada') throw eEtapa;   // sai calado
         if (ehPausa(eEtapa)) pausado = true;
         else if (!all.length) throw eEtapa;
         else parcial = String((eEtapa && eEtapa.message) || eEtapa).slice(0, 100);
       }
 
+      if (abandonada()) return;      // outra pessoa foi pedida: some em silêncio
       if (!all.length && !Object.keys(det).length) { fail('sem-jogos'); return; }
 
       // ── fechamento ─────────────────────────────────────────────────────────────
@@ -1132,7 +1146,11 @@
         ok: true, done: terminou, paused: !!pausado, report: relatorio, cursor: imp.lzCursor,
         gamesDelta: deltaFinal, scan: scanFromImport(realHandle, imp), fullImport: imp });
     } catch (e) {
-      fail(String((e && e.message) || e).slice(0, 140));
+      // Leitura abandonada porque o organizador pediu outra pessoa não é erro dele —
+      // não pode virar toast vermelho na tela.
+      if (!(e && e.code === 'abandonada') && !abandonada()) {
+        fail(String((e && e.message) || e).slice(0, 140));
+      }
     } finally {
       _rateBudget = null;
     }

@@ -63,5 +63,18 @@ ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fáb
   ok(/_q\.blockAt = Date\.now\(\)/.test(slower), 'apanhar carimba o instante');
 }
 
+// ── QUEM PEDIU AGORA TEM PRIORIDADE ─────────────────────────────────────────
+// "inves de abrir a pagina da pessoa vem esse erro preguicoso" — a extensão recusava a
+// leitura nova com "ocupado — outra leitura em andamento; aguarde ela terminar".
+{
+  const run = cnt.slice(cnt.indexOf('function runAthleteImport'), cnt.indexOf('function runAthleteImport') + 1400);
+  ok(!/ocupado — outra leitura/.test(cnt), 'a recusa por ocupado NÃO existe mais em lugar nenhum');
+  ok(/_athleteAbort\+\+/.test(run), 'pedir outra pessoa ABANDONA a leitura anterior');
+  ok(/_athleteImportUid === uid\) return/.test(run), 'pedir a MESMA pessoa que já roda continua no-op');
+  ok(/abandonada/.test(cnt), 'a rodada abandonada sabe que foi substituída');
+  const fim = cnt.slice(cnt.indexOf('} catch (e) {\n      // Leitura abandonada'), cnt.indexOf('} catch (e) {\n      // Leitura abandonada') + 420);
+  ok(/code === 'abandonada'/.test(fim), 'abandono não vira toast de erro pro organizador');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-open-profile: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

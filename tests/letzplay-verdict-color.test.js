@@ -558,5 +558,26 @@ console.log('\n── verde exige o motor novo ──');
   ok(rN._lzColor === COL.green, 'só absolve com motor novo E leitura recente — as duas');
 }
 
+// ── 18. SEM TOTAL DECLARADO, a barra fecha no que se conhece ─────────────────
+// A Kelly ficava em "Torneios 5 de …" pra sempre: sem declaredTournaments e sem
+// tournamentsList, o total era nulo — e total desconhecido é indistinguível de quebrado.
+console.log('\n── barra sem total declarado ──');
+{
+  const fp = [];
+  for (let i = 0; i < 7; i++) {
+    for (let k = 0; k < 2; k++) {                    // footprint fragmentado de novo
+      fp.push({ official: true, club: 'cl', tourneyId: String(200 + i), name: 'T' + i,
+        categoryRaw: 'cat' + k, standings: [{ group: 'G', rows: [{ pos: 1, handles: ['kelly'] }] }] });
+    }
+  }
+  const imp = { handle: 'kelly', importedAt: AGORA, footprint: fp, games: [{ lzId: '1' }],
+    lzCursor: { v: 4, complete: true, toursDone: Object.fromEntries(fp.map(f => ['t/cl/' + f.tourneyId, 1])) } };
+  ok(imp.declaredTournaments === undefined, 'o fixture não declara total (como o import da Kelly)');
+  ok(window._lzTournamentsRead(imp) === 7, 'lidos = 7 competições distintas, não 14 entradas');
+  const linhas = window._lzTourneyRows(imp, 'kelly', 'tour');
+  const n = (linhas.match(/padding:2px 0/g) || []).length;
+  ok(n === 7, 'a aba mostra 7 torneios, não 14 (veio ' + n + ')');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
