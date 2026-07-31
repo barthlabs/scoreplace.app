@@ -2363,7 +2363,7 @@
     // interromper antes disso). Quando a rodada devolve `done:false`, o app dispara a
     // seguinte SOZINHO com o cursor — ninguém tem que clicar de novo pra continuar.
     // Regra do dono: "o processo deve demorar mais, mas não falhar nunca."
-    var rodada = 0, MAX_RODADAS = 40;
+    var rodada = 0, MAX_RODADAS = 40, _progAnterior = null;
     var cursorAtual = null, ultimoImp = null;
     var ultimaNota = '';   // último passo REAL anunciado — sobrevive às esperas
     var _unidadeDesde = 0, _unidadePasso = '';   // há quanto tempo preso no MESMO passo
@@ -2623,7 +2623,22 @@
         if (d.fullImport) ultimoImp = d.fullImport;
         // AINDA FALTA LER → grava o que veio e CONTINUA na hora, na mesma sessão, com o
         // cursor. Nada de pedir clique: pra quem está olhando é uma leitura só, que anda.
-        if (d.done !== true && rodada < MAX_RODADAS) {
+        // RODADA QUE NÃO ANDA NÃO SE REPETE. Encadear era pra continuar de onde parou —
+        // mas quando uma rodada termina com exatamente o mesmo tanto de jogos, torneios e
+        // rankings da anterior, ela não continuou nada: vai repetir o mesmo trabalho (perfil
+        // + listas + página 1) e chegar no mesmo lugar. Foi isto que transformou "faltam 2
+        // jogos" em dois minutos: dezenas de rodadas idênticas, cada uma com meia dúzia de
+        // requisições. Uma requisição pelo nosso caminho leva 400ms (medido em 31/jul), então
+        // minutos só se explicam por centenas delas.
+        var _prog = (function (imp) {
+          if (!imp) return '0/0/0';
+          var c = imp.lzCursor || {};
+          return _lzTot(imp) + '/' + Object.keys(c.toursDone || {}).length + '/' +
+                 Object.keys(c.ranksDone || {}).length;
+        })(d.fullImport);
+        var _andou = (_prog !== _progAnterior);
+        _progAnterior = _prog;
+        if (d.done !== true && rodada < MAX_RODADAS && _andou) {
           ping();
           if (d.scan && d.fullImport && typeof _lzPersistScans === 'function') {
             _lzPersistScans(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }], d.gamesDelta)

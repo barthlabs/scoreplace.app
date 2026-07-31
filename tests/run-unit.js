@@ -125,6 +125,7 @@ const SUITES = [
   'tests/lz-id-survives-rounds.test.js',
   'tests/lz-batched-requests.test.js',
   'tests/dialog-fits-screen.test.js',
+  'tests/lz-round-chaining.test.js',
   'tests/letzplay-pace.test.js',
   'tests/letzplay-model.test.js',
   'tests/letzplay-eta.test.js',
