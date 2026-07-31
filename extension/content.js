@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.76';
+  var EXT_VERSION = '1.77';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1350,36 +1350,27 @@
       if (!all.length && !Object.keys(det).length) { fail('sem-jogos'); return; }
 
       // ── fechamento ─────────────────────────────────────────────────────────────
-      // ── FECHAMENTO: limpar OU preservar, nunca os dois ────────────────────────
-      // Regra única, e ela cobre os dois desastres de hoje:
-      //   • limpar cedo demais perdeu histórico (158 → 20, 469 → 20);
-      //   • repor sem checar duplicou (469 → 569).
-      // Só limpa quando a varredura fechou E o conjunto limpo é pelo menos tão grande
-      // quanto o que já existia. Senão, preserva — e assume que a leitura não fechou, pra
-      // a próxima terminar o serviço.
-      var _limpos = (limparNoFim && C.complete === true)
-        ? all.filter(function (m) { return m && m.lzId; }) : null;
-      if (_limpos && _limpos.length >= _jogosAntes.length) {
-        all.length = 0; Array.prototype.push.apply(all, _limpos);
-      } else {
-        if (_limpos) {
-          // "completou" mas trouxe menos do que já tínhamos → isso não é limpeza, é perda
+      // ── FECHAMENTO ────────────────────────────────────────────────────────────
+      // O acumulado JÁ entra semeado com tudo o que estava gravado (_accFor(prior)) e nada
+      // aqui remove jogo — então não existe nada a "repor". A reposição que existia aqui
+      // nasceu na versão em que a migração APAGAVA os jogos velhos; depois que ela parou de
+      // apagar, a reposição virou acréscimo do que já estava presente — e foi ela que
+      // inflou o histórico da Camila (478 → 1038). Duplicar e depois desduplicar são dois
+      // erros pra fazer um acerto: o certo é não duplicar.
+      //
+      // A ÚNICA operação do fechamento é a LIMPEZA da migração, e só quando as duas
+      // condições valem: a varredura fechou E o conjunto limpo é pelo menos tão grande
+      // quanto o que já existia. Se não valem, o acumulado segue como está — que já é, por
+      // construção, tudo o que havia mais o que foi lido agora.
+      if (limparNoFim && C.complete === true) {
+        var _limpos = all.filter(function (m) { return m && m.lzId; });
+        if (_limpos.length >= _jogosAntes.length) {
+          all.length = 0; Array.prototype.push.apply(all, _limpos);
+        } else {
+          // "completou" mas com menos do que já tínhamos → isso não é limpeza, é perda.
           C.complete = false;
           prog({ phase: 'jogos', feed: '🛟 leitura incompleta (' + _limpos.length + ' de ' +
             _jogosAntes.length + ') — o histórico gravado foi preservado' });
-        }
-        if (_jogosAntes.length) {
-          // REPOR SEM DUPLICAR: decide pelo CONTEÚDO, porque a mesma partida lida agora tem
-          // chave de id e a velha tem chave de conteúdo.
-          var _porConteudo = {};
-          all.forEach(function (m) { _porConteudo[_contentKey(m)] = 1; });
-          var _reposto = 0;
-          _jogosAntes.forEach(function (m) {
-            var ck = _contentKey(m);
-            if (_porConteudo[ck]) return;
-            _porConteudo[ck] = 1; seen[_gameKey(m)] = 1; all.push(m); _reposto++;
-          });
-          if (_reposto) prog({ phase: 'jogos', feed: '🛟 ' + _reposto + ' jogo(s) já gravados foram preservados' });
         }
       }
       var imp = I.normalize(montarRaw(), { importedAt: new Date().toISOString() });

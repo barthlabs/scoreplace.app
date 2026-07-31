@@ -642,6 +642,10 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     ' · rodadas=' + r2d._dbgRodadas + ' · erro=' + r2d._dbgErro);
   ok(r2d.jogos >= 157, 'o doc NÃO encolheu: os 157 velhos seguem lá até a varredura fechar (ficou ' +
     r2d.jogos + ')');
+  // E NÃO INFLOU. Preservar não pode virar acrescentar o que já estava lá — foi assim que
+  // os 478 da Camila viraram 1038.
+  ok(r2d.jogos <= 157 + 20, 'e NÃO inflou: no máximo os 157 + a página que deu tempo de ler (ficou ' +
+    r2d.jogos + ')');
   await page.evaluate(() => { window.__LZ.pararApos = 0; });
 
   // ── CENÁRIO 3: perfil MONSTRO — o doc tem que continuar cabendo ──────────

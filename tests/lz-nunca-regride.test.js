@@ -12,13 +12,18 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
 // ── 1. EXTENSÃO: limpar OU preservar, nunca os dois ──
-const _iF = cnt.indexOf('FECHAMENTO: limpar OU preservar');
+const _iF = cnt.indexOf('── FECHAMENTO ──');
 const fech = cnt.slice(_iF, cnt.indexOf('var imp = I.normalize(montarRaw()', _iF));
 ok(fech.length > 300, 'existe um bloco único de fechamento');
 ok(/_limpos\.length >= _jogosAntes\.length/.test(fech), 'só limpa se o conjunto limpo for >= ao que já existia');
 ok(/C\.complete = false;/.test(fech), 'se vier menor, a leitura passa a constar como NÃO fechada');
-ok(/_porConteudo\[ck\]/.test(fech), 'a reposição decide por CONTEÚDO (id novo × conteúdo velho são a mesma partida)');
-ok(!/else if \(_jogosAntes/.test(fech), 'limpeza e reposição são exclusivas — nunca as duas');
+// NÃO DUPLICAR > desduplicar. O acumulado já entra semeado com o que estava gravado; a
+// "reposição" que existia aqui era acréscimo do que já estava presente, e foi ela que
+// inflou 478 → 1038. Duplicar e depois limpar são dois erros pra fazer um acerto.
+ok(!/_reposto/.test(fech), 'não existe reposição no fechamento — nada foi removido, nada precisa voltar');
+ok(!/_jogosAntes\.forEach/.test(fech), 'e nada é re-adicionado ao acumulado');
+ok(/all\.length = 0; Array\.prototype\.push\.apply\(all, _limpos\)/.test(fech),
+  'a única operação é a limpeza da migração');
 
 // a chave de conteúdo existe e é usada pelos dois lados
 {
