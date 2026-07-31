@@ -1368,9 +1368,58 @@
   // Firestore e entra quando chega. Competição do app vai pra RANKINGS quando é Pontos
   // Corridos (temporada contínua, o equivalente ao ranking do letzplay) e pra TORNEIOS no
   // resto — é a mesma distinção que o letzplay faz.
+  // JOGOS DO SCOREPLACE DE OUTRA PESSOA: NÃO vêm de users/{uid}/matchHistory. A regra do
+  // Firestore só libera esse caminho pro PRÓPRIO dono (firestore.rules: `request.auth.uid
+  // == userId`), então a leitura do organizador voltava permission-denied, o catch devolvia
+  // [] e a aba de jogos ficava só com o letzplay — sem dizer nada. Afrouxar a regra seria
+  // expor o histórico de qualquer um; a fonte certa é a que o organizador JÁ pode ver: os
+  // TORNEIOS dele. Se a pessoa jogou num torneio que ele organiza ou disputa, aquelas
+  // partidas são visíveis por definição.
+  function _lzJogosDosTorneios(uid) {
+    var out = [];
+    var ts = (window.AppStore && window.AppStore.tournaments) || [];
+    var coletar = window._collectAllMatches;
+    ts.forEach(function (t) {
+      var ms = (typeof coletar === 'function') ? coletar(t) : (t.matches || []);
+      (ms || []).forEach(function (m) {
+        if (!m || (m.p1Score == null && m.p2Score == null)) return;
+        var lados = [
+          { nome: m.p1, uids: (typeof window._slotUids === 'function') ? window._slotUids(m, 'p1') : null, sc: m.p1Score },
+          { nome: m.p2, uids: (typeof window._slotUids === 'function') ? window._slotUids(m, 'p2') : null, sc: m.p2Score }
+        ];
+        var meu = -1;
+        for (var i = 0; i < 2; i++) {
+          var u = lados[i].uids;
+          if (u && u.indexOf && u.indexOf(uid) >= 0) { meu = i; break; }
+        }
+        if (meu < 0) return;                       // a pessoa não jogou esta partida
+        var outro = lados[1 - meu];
+        var venceu = (m.winner != null) ? (String(m.winner) === String(lados[meu].nome)) : null;
+        var ts2 = Date.parse(m.finishedAt || m.updatedAt || t.endDate || t.startDate || '') || 0;
+        var liga = (typeof window._isLigaFormat === 'function') ? window._isLigaFormat(t) : false;
+        out.push({
+          ts: ts2, source: 'scoreplace', sport: t.sport || '', official: true,
+          venue: t.venue || '', competition: t.name || 'Torneio',
+          competitionLabel: (liga ? 'Ranking' : 'Torneio') + (t.name ? ' · ' + t.name : ''),
+          tournamentId: t.id, tournamentFormat: t.format || '',
+          opponent: outro.nome || '—', partner: null,
+          result: (venceu === true) ? 'V' : (venceu === false ? 'D' : '?'),
+          scoreA: (lados[meu].sc != null) ? String(lados[meu].sc) : '',
+          scoreB: (outro.sc != null) ? String(outro.sc) : ''
+        });
+      });
+    });
+    return out;
+  }
   function _lzJuntarScoreplace(uid, meNome) {
-    if (!uid || typeof window._spScoreplaceItems !== 'function') return;
-    Promise.resolve(window._spScoreplaceItems(uid)).then(function (itens) {
+    if (!uid) return;
+    var proprio = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) === uid;
+    // pro PRÓPRIO usuário o matchHistory é legível e é mais completo (inclui casuais);
+    // pros outros, o que dá pra ver são os torneios em comum.
+    var fonte = (proprio && typeof window._spScoreplaceItems === 'function')
+      ? Promise.resolve(window._spScoreplaceItems(uid))
+      : Promise.resolve(_lzJogosDosTorneios(uid));
+    fonte.then(function (itens) {
       itens = (itens || []).filter(Boolean);
       if (!itens.length) return;
       var A = window._lzAbas || (window._lzAbas = {});
@@ -2497,6 +2546,11 @@
         _updBars(d.counts || null);
         // pct REAL (0–100, calculado pela extensão por etapa) + feed do que foi lido
         // (nome do torneio · classificação · nº de jogos) num box de 2 linhas com scroll.
+        // O CURSOR VEM JUNTO DO PROGRESSO (ext 1.69) — guardamos A CADA página/competição.
+        // Antes ele só chegava no PARCIAL, de 3 em 3 páginas: uma interrupção perdia até
+        // duas páginas e a retomada refazia trabalho. Aqui é só memória; quem grava é o
+        // parcial (o cursor viaja dentro do fullImport).
+        if (d.cursor) cursorAtual = d.cursor;
         setProg({ sub: cur.note || '', pct: (d.pct != null ? Math.max(3, d.pct) : null), feedAdd: d.feed || null });
         return;
       }

@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.68';
+  var EXT_VERSION = '1.69';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -688,6 +688,12 @@
     if (!C.toursDone || typeof C.toursDone !== 'object') C.toursDone = {};
     if (!C.ranksDone || typeof C.ranksDone !== 'object') C.ranksDone = {};
     C.pageDone = (typeof C.pageDone === 'number' && C.pageDone > 0) ? C.pageDone : 0;
+    // A VARREDURA ANTERIOR CHEGOU AO FIM? Só isso autoriza a leitura incremental (parar na
+    // primeira página sem novidade). Se ela parou no meio, as páginas do FIM nunca foram
+    // lidas — e parar cedo perderia esses jogos pra sempre. Tem que ser lido ANTES de
+    // zerar a flag, senão eu comparo com o valor que eu mesmo acabei de escrever (o mesmo
+    // erro que já tinha matado a migração por carimbo).
+    var _varreduraAnteriorFechou = (C.complete === true);
     C.complete = false;
 
     // ── MIGRAÇÃO: o que o pipeline VELHO gravou não serve de semente ────────────
@@ -780,9 +786,16 @@
     function prog(e) {
       if (abandonada()) return;      // não pinta a tela de uma leitura que já foi substituída
       e = e || {};
+      // O CURSOR VIAJA JUNTO DO PROGRESSO. Ele é minúsculo (o que já foi lido, por id, e a
+      // página do histórico) e assim o app pode gravá-lo A CADA PÁGINA. Antes só ia dentro
+      // do PARCIAL, que sai de 3 em 3 páginas — uma interrupção perdia até duas páginas de
+      // trabalho e a retomada refazia. Guardar onde parou é o que torna barato retomar
+      // jogos, torneios e rankings exatamente do ponto em que ficaram.
       post({ __sp_lp: 'athlete-import-progress', tournamentId: tournamentId, uid: uid || null, handle: handle,
         current: { uid: uid || null, handle: handle, phase: e.phase || null, note: e.note || null },
-        pct: (e.pct != null ? e.pct : null), feed: e.feed || null, counts: contagens() });
+        pct: (e.pct != null ? e.pct : null), feed: e.feed || null, counts: contagens(),
+        cursor: { v: 4, handle: realHandle, toursDone: C.toursDone, ranksDone: C.ranksDone,
+                  pageDone: lastPageRead, pagesTotal: maxPage || null, complete: C.complete === true } });
     }
     function fail(code) {
       post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: code });
@@ -1141,8 +1154,13 @@
           C.complete = true;
           prog({ phase: 'jogos', note: 'histórico já lido por inteiro (' + C.pageDone + ' páginas)', pct: 97 });
         } else {
-          var pIni = Math.max(1, C.pageDone + 1);
-          prog({ phase: 'jogos', note: (pIni > 1 ? ('retomando o histórico na página ' + pIni) : 'abrindo o histórico de jogos'),
+          // JÁ TEMOS ACERVO? Então a leitura é INCREMENTAL e começa na página 1 (o novo
+          // entra por cima), não na página seguinte à do cursor.
+          var jaConhecidos = _varreduraAnteriorFechou ? all.length : 0;
+          var pIni = jaConhecidos > 0 ? 1 : Math.max(1, C.pageDone + 1);
+          prog({ phase: 'jogos', note: (jaConhecidos > 0
+              ? 'procurando jogos novos a partir do começo do histórico'
+              : (pIni > 1 ? ('retomando o histórico na página ' + pIni) : 'abrindo o histórico de jogos')),
             pct: 46 });
           var d1 = await bgFetchDoc(pIni > 1 ? (base + '?page=' + pIni) : base);
           var cards = d1.querySelectorAll('.row.match').length;
@@ -1163,11 +1181,37 @@
           lastPageRead = pIni;
           prog({ phase: 'jogos', pct: 46 + Math.round((pIni / Math.max(1, maxPage)) * 51),
             feed: '🎾 página ' + pIni + ' de ' + maxPage + ': +' + add1 + ' jogo(s)' });
-          for (var p = pIni + 1; p <= maxPage; p++) {
+          // nada novo já na primeira: o acervo está em dia, uma requisição resolveu
+          if (jaConhecidos > 0 && add1 === 0) {
+            C.complete = true;
+            prog({ phase: 'jogos', pct: 97, feed: '✅ nada novo — o histórico já estava em dia' });
+          }
+          // O HISTÓRICO É MAIS-RECENTE-PRIMEIRO: jogo novo entra na PÁGINA 1 e empurra o
+          // resto pra baixo. Então, numa releitura de quem já tem acervo, o que falta está
+          // no COMEÇO — e varrer as 8 páginas até o fim pra achar 6 jogos novos é trabalho
+          // jogado fora (pergunta do dono: "faltam 6 jogos e passa por 8 páginas?").
+          // Regra: se já conhecíamos jogos antes desta leitura, paramos assim que uma
+          // página inteira não trouxer NADA novo — dali pra trás é tudo o que já temos.
+          // Numa leitura do zero (acervo vazio) segue varrendo até o fim, como antes.
+          // Isso também conserta um defeito do cursor por PÁGINA: o número da página não é
+          // estável num feed que cresce por cima — "página 8" hoje não é a de ontem.
+          var _incremental = (jaConhecidos > 0);
+          var _secas = 0;
+          for (var p = pIni + 1; p <= maxPage && !C.complete; p++) {
             conferirTeto();
             prog({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage, pct: 46 + Math.round(((p - 1) / Math.max(1, maxPage)) * 51) });
             var add = addJogos(X.extractMatchesFromDoc(await bgFetchDoc(base + '?page=' + p), realHandle));
-            lastPageRead = p;
+            lastPageRead = p;                  // o prog abaixo já carrega o cursor com ela
+            if (_incremental) {
+              if (add === 0) _secas++; else _secas = 0;
+              if (_secas >= 1) {
+                // uma página inteira sem novidade = alcançamos o que já tínhamos
+                C.complete = true;
+                prog({ phase: 'jogos', pct: 97,
+                  feed: '✅ alcancei o que já estava gravado na página ' + p + ' — parei aqui' });
+                break;
+              }
+            }
             prog({ phase: 'jogos', pct: 46 + Math.round((p / Math.max(1, maxPage)) * 51),
               feed: '🎾 página ' + p + ' de ' + maxPage + ': +' + add + ' jogo(s)' });
             // NUNCA na última página: o fechamento vem logo atrás e as duas escritas
