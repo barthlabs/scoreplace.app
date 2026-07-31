@@ -47,5 +47,42 @@ const salvo = window._spLzGameItems; window._spLzGameItems = undefined;
 ok(window._lzGameCards(imp, 'x') === null, 'sem o módulo do histórico, devolve null pra cair no formato simples');
 window._spLzGameItems = salvo;
 
+// ── AS DUAS FONTES: letzplay E scoreplace ───────────────────────────────────
+// "na lista de jogos tem que aparecer os jogos do letzplay e do scoreplace. torneios de
+// ambos e rankings de ambos."
+ok(typeof window._spScoreplaceItems === 'function', 'match-history expõe os jogos do scoreplace por uid');
+
+// o localStorage de casuais é do DONO da máquina — não pode vazar pro histórico de outro
+{
+  const fonte = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'match-history.js'), 'utf8');
+  const bloco = fonte.slice(fonte.indexOf('async function _fromScoreplace'),
+    fonte.indexOf('async function _fromScoreplace') + 1200);
+  ok(/ehOutraPessoa/.test(bloco), 'sabe distinguir "sou eu" de "é outra pessoa"');
+  ok(/if \(ehOutraPessoa\)/.test(bloco), 'e pula os casuais do localStorage quando é outra pessoa');
+}
+
+// o card do scoreplace sai com o selo certo
+{
+  const it = { ts: Date.now(), source: 'scoreplace', sport: 'Beach Tennis', official: true,
+    venue: 'Paineiras', competition: 'Torneio de Férias', competitionLabel: 'Torneio de Férias',
+    opponent: 'Catia Cavedon / Max Mano', partner: 'Kelly Barth', result: 'V', scoreA: '6', scoreB: '3' };
+  const card = window._spGameCard(it, 'Rodrigo Barth');
+  ok(/Scoreplace/.test(card), 'jogo do app vem com o selo Scoreplace');
+  ok(/Rodrigo Barth \/ Kelly Barth/.test(card), 'e com a dupla certa');
+}
+
+// e a costura existe no diálogo
+{
+  const rep = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/_lzJuntarScoreplace\(uid/.test(rep), 'o diálogo chama a costura das duas fontes');
+  const fn = rep.slice(rep.indexOf('function _lzJuntarScoreplace'), rep.indexOf('function _lzJuntarScoreplace') + 2600);
+  ok(/A\.jogo = \(A\.jogo \|\| ''\) \+/.test(fn), 'os jogos do app entram NA MESMA aba (não substituem)');
+  ok(/juntar\('tour'/.test(fn) && /juntar\('rank'/.test(fn), 'competições do app entram em Torneios e em Rankings');
+  ok(/_isLigaFormat/.test(fn), 'Pontos Corridos vai pra Rankings (temporada contínua), o resto pra Torneios');
+  ok(/if \(!it\.official\) return;/.test(fn), 'partida casual não vira competição');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-game-cards: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

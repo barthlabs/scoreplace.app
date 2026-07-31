@@ -619,5 +619,19 @@ console.log('\n── janela de 3 meses ──');
   ok(r._lzColor === COL.green, 'scan vindo do BANCO (letzplayScans) já pinta verde sem clique nenhum');
 }
 
+// ── 21. "100% e roxo": a data mostrada tem que ser a do histórico EM USO ─────
+// Medido no dado do próprio dono (31/jul): o import em uso era de 14/jul, com os 81 jogos
+// SEM lzId (motor antigo) — roxo correto —, mas a tela dizia "Última atualização: 30/07
+// 18:49", porque pegava o Math.max de qualquer carimbo do documento (um scannedAt solto).
+console.log('\n── data mostrada = data do histórico em uso ──');
+{
+  const velho14 = { importedAt: '2026-07-14T17:48:43.026Z', games: Array.from({ length: 81 }, () => ({})) };
+  window._lzRenderCtx = { profileMap: { d1: { letzplayImport: velho14 } },
+    scanMap: { d1: { fullImport: velho14, scannedAt: '2026-07-30T21:49:00.000Z' } } };
+  const lu = window._lzLastUpdateOf ? window._lzLastUpdateOf('d1') : null;
+  ok(!!lu, 'achou uma data');
+  ok(/14\/07/.test(lu.label), 'mostra 14/07 (a data do histórico em uso), não 30/07 do scannedAt solto');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

@@ -1350,6 +1350,64 @@
     }).join('');
   };
 
+  // JUNTA O QUE É DO SCOREPLACE às abas do diálogo. Assíncrono de propósito: o histórico
+  // do letzplay já está em memória e abre na hora; o do scoreplace é uma leitura do
+  // Firestore e entra quando chega. Competição do app vai pra RANKINGS quando é Pontos
+  // Corridos (temporada contínua, o equivalente ao ranking do letzplay) e pra TORNEIOS no
+  // resto — é a mesma distinção que o letzplay faz.
+  function _lzJuntarScoreplace(uid, meNome) {
+    if (!uid || typeof window._spScoreplaceItems !== 'function') return;
+    Promise.resolve(window._spScoreplaceItems(uid)).then(function (itens) {
+      itens = (itens || []).filter(Boolean);
+      if (!itens.length) return;
+      var A = window._lzAbas || (window._lzAbas = {});
+
+      // ── jogos ──
+      if (typeof window._spGameCard === 'function') {
+        var cards = itens.slice().sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); })
+          .slice(0, 300).map(function (it) { return window._spGameCard(it, meNome); }).join('');
+        var grade = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;">' + cards + '</div>';
+        A.jogo = (A.jogo || '') + (A.jogo ? '<div style="height:8px;"></div>' : '') + grade;
+      }
+
+      // ── competições: uma linha por torneio/ranking do app ──
+      var porComp = {};
+      itens.forEach(function (it) {
+        if (!it.official) return;                       // casual não é competição
+        var k = it.tournamentId || ('nome:' + (it.competition || ''));
+        var b = porComp[k] || (porComp[k] = { nome: it.competition || 'Torneio', ts: 0, fmt: it.tournamentFormat || '' });
+        if ((it.ts || 0) > b.ts) b.ts = it.ts || 0;
+      });
+      var linhasT = [], linhasR = [];
+      Object.keys(porComp).forEach(function (k) {
+        var c = porComp[k];
+        var liga = (typeof window._isLigaFormat === 'function') ? window._isLigaFormat(c.fmt) : /liga|ranking|pontos corridos/i.test(c.fmt || '');
+        var d = c.ts ? new Date(c.ts) : null;
+        var data = d ? (_lzPad2(d.getDate()) + ' ' + (_LZ_MES[d.getMonth()] || '') + ' ' + String(d.getFullYear()).slice(2)) : null;
+        var h = '<div style="padding:2px 0;">🏆 ' +
+          (data ? '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(data) + '</span> · ' : '') +
+          '<span>' + _esc(c.nome) + '</span> · ' +
+          '<span style="color:#818cf8;font-weight:700;">scoreplace</span></div>';
+        (liga ? linhasR : linhasT).push({ ts: c.ts, h: h });
+      });
+      function juntar(alvo, lista) {
+        if (!lista.length) return;
+        lista.sort(function (a, b) { return b.ts - a.ts; });
+        A[alvo] = (A[alvo] || '') + lista.map(function (x) { return x.h; }).join('');
+      }
+      juntar('tour', linhasT);
+      juntar('rank', linhasR);
+
+      // repinta a aba aberta, se o diálogo ainda está na tela
+      var abas = document.getElementById('lz-abas');
+      if (!abas) return;
+      var ativo = [].slice.call(abas.querySelectorAll('[data-lz-aba]')).filter(function (b) {
+        return b.style.color === 'rgb(255, 255, 255)' || b.getAttribute('data-lz-ativo') === '1';
+      })[0];
+      window._lzAba((ativo && ativo.getAttribute('data-lz-aba')) || 'tour');
+    }).catch(function () {});
+  }
+
   // Troca a aba visível. Só mexe no innerHTML da caixa — nada de re-renderizar o diálogo
   // (que apagaria a barra de progresso de uma leitura em curso).
   window._lzAba = function (qual) {
@@ -1366,6 +1424,7 @@
       b.style.background = on ? 'linear-gradient(135deg,#6366f1,#4f46e5)' : 'var(--bg-darker,rgba(0,0,0,0.25))';
       b.style.color = on ? '#fff' : 'var(--text-secondary,#c8cdd6)';
       b.style.borderColor = on ? 'rgba(99,102,241,0.55)' : 'var(--border-color,rgba(255,255,255,0.12))';
+      b.setAttribute('data-lz-ativo', on ? '1' : '0');
     });
   };
 
@@ -1928,14 +1987,20 @@
 
   // Última atualização do dado letzplay de UMA pessoa — o mais novo entre o import
   // próprio dela (perfil) e o que o organizador puxou (scan). → {ts, label} ou null.
+  window._lzLastUpdateOf = _lzLastUpdateOf;   // exposto pro teste travar a data mostrada
   function _lzLastUpdateOf(uid) {
     var ctx = window._lzRenderCtx || {};
     var prof = ctx.profileMap && ctx.profileMap[uid];
     var sc = ctx.scanMap && ctx.scanMap[uid];
-    var ts = 0;
-    if (prof && prof.letzplayImport && prof.letzplayImport.importedAt) ts = Math.max(ts, Date.parse(prof.letzplayImport.importedAt) || 0);
-    if (sc && sc.fullImport && sc.fullImport.importedAt) ts = Math.max(ts, Date.parse(sc.fullImport.importedAt) || 0);
-    if (sc && sc.scannedAt) ts = Math.max(ts, Date.parse(sc.scannedAt) || 0);
+    // A DATA É A DO HISTÓRICO QUE ESTÁ EM USO — não o carimbo mais novo que existir no
+    // documento. Pegar o Math.max de tudo fazia a tela dizer "Última atualização: 30/07
+    // 18:49" enquanto o histórico exibido era o de 14/jul: o 30/07 era um `scannedAt` de
+    // outra coisa. Data que não é do dado mostrado é mentira — e foi o que levou o dono a
+    // perguntar "se eu estou com 100% por que continua roxo?".
+    var _li = _lzMelhorImport(sc && sc.fullImport, prof && prof.letzplayImport);
+    var ts = _lzQuando(_li);
+    // Só cai no scannedAt quando não há histórico nenhum (aí ele é a única notícia que temos)
+    if (!ts && sc && sc.scannedAt) ts = Date.parse(sc.scannedAt) || 0;
     if (!ts) return null;
     var d = new Date(ts);
     return { ts: ts, label: d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) };
@@ -2040,11 +2105,16 @@
       // O conteúdo é montado UMA vez e guardado em `window._lzAbas`; trocar de aba só
       // troca o innerHTML — não re-renderiza o diálogo (e não perde a barra de progresso
       // se uma leitura estiver rodando).
+      // AS DUAS FONTES NAS TRÊS ABAS (pedido do dono, 31/jul/2026): "na lista de jogos tem
+      // que aparecer os jogos do letzplay e do scoreplace. torneios de ambos e rankings de
+      // ambos." Os do scoreplace chegam depois (uma leitura do Firestore) e são costurados
+      // nas abas já montadas — a tela não espera por eles pra abrir.
       window._lzAbas = {
         tour: _lzTourneyRows(imp, tg.handle, 'tour'),
         rank: _lzTourneyRows(imp, tg.handle, 'rank'),
         jogo: (window._lzGameCards(imp, tg.name || ('@' + tg.handle)) || _lzGameRows(imp, tg.handle))
       };
+      _lzJuntarScoreplace(uid, tg.name || ('@' + tg.handle));
       var _n = { tour: tX, rank: rX, jogo: gX };
       body += '<div id="lz-abas" style="display:flex;gap:6px;margin:9px 0 0;">' +
         [['tour', '🏆', 'Torneios'], ['rank', '📊', 'Rankings'], ['jogo', '🎾', 'Jogos']].map(function (A) {
@@ -2067,7 +2137,18 @@
         body += '<div style="font-size:0.8rem;color:#fbbf24;">Perfil INCOMPLETO — puxe de novo pra continuar de onde parou (o que já veio está gravado).</div>';
         btnLabel = '▶️ Continuar de onde parou';
       }
-      body += (lu ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Última atualização: <b>' + lu.label + '</b></div>' : '');
+      // POR QUE ESTÁ ROXO. 100% capturado não é o mesmo que lido pelo motor atual — e sem
+      // dizer isso a tela parece contraditória ("estou com 100%, por que continua roxo?").
+      var _velho = !_lzTemIds(imp), _antigo = !_lzFresco(imp);
+      if (_velho || _antigo) {
+        body += '<div style="font-size:0.8rem;color:#a78bfa;margin-top:6px;line-height:1.45;">' +
+          (_velho
+            ? 'Este histórico foi lido pelo <b>motor antigo</b> — por isso o nome fica violeta mesmo em 100%. Puxe de novo pra ele contar como verificado.'
+            : 'Leitura com mais de 3 meses — o nome fica violeta até ser puxada de novo.') +
+          '</div>';
+      }
+      body += (lu ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Última atualização: <b>' + lu.label + '</b>' +
+        (_velho ? ' <span style="color:#a78bfa;">(motor antigo)</span>' : '') + '</div>' : '');
     } else {
       body += '<div style="font-size:0.8rem;color:var(--text-muted);">Nada gravado ainda — leio torneios (nome, categoria, classificação) e depois os jogos, gravando a cada passo.</div>';
     }

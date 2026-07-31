@@ -240,6 +240,8 @@
       venue: isCasual ? '' : _resolveVenueForTournament(r.tournamentId),
       competition: comp,
       competitionLabel: comp,
+      tournamentId: r.tournamentId || null,
+      tournamentFormat: r.tournamentFormat || r.format || null,
       opponent: opp.filter(Boolean).join(' / ') || '—',
       partner: partner.filter(Boolean).join(' / ') || null,
       result: result,
@@ -248,15 +250,23 @@
     };
   }
 
+  // Itens do SCOREPLACE de QUALQUER pessoa (não só do usuário logado): a Análise de
+  // Inscritos mostra o histórico de outro inscrito, e ele tem jogos aqui também.
+  // Exportado como `window._spScoreplaceItems(uid)`.
+  window._spScoreplaceItems = function (uid) { return _fromScoreplace({ uid: uid }); };
   async function _fromScoreplace(cu) {
     var uid = cu && cu.uid;
     if (!uid) return [];
+    var meuUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
+    var ehOutraPessoa = (uid !== meuUid);
     var records = [];
     // matchHistory persistente (torneios + casuais gravados no Firestore)
     if (window.FirestoreDB && typeof window.FirestoreDB.loadUserMatchHistory === 'function') {
       try { records = await window.FirestoreDB.loadUserMatchHistory(uid) || []; } catch (e) { records = []; }
     }
-    // casuais locais (podem não ter subido ao Firestore) — dedup por matchId
+    // casuais locais (podem não ter subido ao Firestore) — dedup por matchId.
+    // Só pro DONO da máquina: o localStorage é dele, não da pessoa que está sendo olhada.
+    if (ehOutraPessoa) { /* pula os casuais locais */ } else
     try {
       var v2 = JSON.parse(localStorage.getItem('scoreplace_casual_history_v2') || '[]');
       if (Array.isArray(v2)) {
