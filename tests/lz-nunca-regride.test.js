@@ -56,5 +56,16 @@ const compl = app.slice(app.indexOf('function _lzImportComplete'), app.indexOf('
 ok(/_c\.pagesTotal > 0 && _c\.pagesRead/.test(compl), 'quando o cursor diz quantas páginas existem…');
 ok(/_lidas < _c\.pagesTotal\) return false/.test(compl), '…exige que TODAS tenham sido lidas');
 
+// ── O GUARD NÃO PODE PROTEGER LIXO ──────────────────────────────────────────
+// 478 viraram 1038 por um bug meu; o guard então passou a proteger o 1038 e BARRAVA a
+// correção. O letzplay declara quantos jogos existem — mais que isso é provadamente errado.
+ok(/var teto = \(doc\.fullImport && doc\.fullImport\.declaredGames\)/.test(grava),
+  'o guard conhece o teto declarado pelo letzplay');
+ok(/function corrompido\(n\) \{ return teto > 0 && n > teto; \}/.test(grava),
+  'e sabe reconhecer um documento acima do teto como corrompido');
+ok(/if \(pico > agora && !corrompido\(pico\)\)/.test(grava), 'a marca d\'água não protege lixo');
+ok(/if \(antes > agora && !corrompido\(antes\)\)/.test(grava), 'nem o que está no banco');
+ok(/será substituído por/.test(grava), 'e avisa quando substitui um documento corrompido');
+
 console.log((fail ? '✗' : '✓') + ' lz-nunca-regride: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

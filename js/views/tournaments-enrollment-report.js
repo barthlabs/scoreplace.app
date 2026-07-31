@@ -3220,12 +3220,23 @@
       }
       return doc;
     }
-    if (pico > agora) return Promise.resolve(barrar(pico, 'memória'));
+    // ⚠️ TETO: o guard não pode proteger um documento CORROMPIDO. O letzplay declara
+    // quantos jogos a pessoa tem (`declaredGames`) e esse é o número de CARDS — o total de
+    // partidas distintas nunca passa disso. Um documento com mais que o declarado é
+    // provadamente errado (aconteceu: 478 viraram 1038 por um bug meu), e proteger esse
+    // número impediria a própria correção de entrar. Acima do teto, a escrita menor passa.
+    var teto = (doc.fullImport && doc.fullImport.declaredGames) || 0;
+    function corrompido(n) { return teto > 0 && n > teto; }
+    if (pico > agora && !corrompido(pico)) return Promise.resolve(barrar(pico, 'memória'));
     return db.collection('letzplayScans').doc(uid).get()
       .then(function (d) {
         var antes = d.exists ? _lzTot((d.data() || {}).fullImport) : 0;
-        if (antes > agora) return barrar(antes, 'banco');
-        _lzMaxJogos[uid] = Math.max(pico, agora);
+        if (antes > agora && !corrompido(antes)) return barrar(antes, 'banco');
+        if (corrompido(antes)) {
+          window._warn && window._warn('[letzplay] o gravado tinha ' + antes + ' jogos com ' +
+            teto + ' declarados — corrompido, será substituído por ' + agora + '.');
+        }
+        _lzMaxJogos[uid] = Math.max(corrompido(pico) ? 0 : pico, agora);
         return doc;
       })
       .catch(function () { _lzMaxJogos[uid] = Math.max(pico, agora); return doc; });
