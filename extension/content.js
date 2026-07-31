@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.78';
+  var EXT_VERSION = '1.79';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1233,8 +1233,12 @@
           var add1 = addJogos(pg1);
           lastPageRead = pIni; C.pagesRead[pIni] = 1;
           var _lidas1 = 0; for (var _z = 1; _z <= maxPage; _z++) if (C.pagesRead[_z]) _lidas1++;
+          var _falta1 = Math.max(0, maxPage - _lidas1);
           prog({ phase: 'jogos', pct: 46 + Math.round((_lidas1 / Math.max(1, maxPage)) * 51),
-            feed: '🎾 página ' + pIni + ': +' + add1 + ' jogo(s) · ' + _lidas1 + ' de ' + maxPage });
+            note: 'página ' + pIni + ' · ' + _lidas1 + ' de ' + maxPage + ' lidas · ' +
+              (_falta1 ? ('faltam ' + _falta1) : 'nenhuma falta'),
+            feed: '🎾 página ' + pIni + ': +' + add1 + ' jogo(s) · ' + _lidas1 + ' de ' + maxPage +
+              ' lidas · ' + (_falta1 ? ('faltam ' + _falta1) : 'nenhuma falta') });
           // nada novo já na primeira: o acervo está em dia, uma requisição resolveu
           if (jaConhecidos > 0 && add1 === 0) {
             C.complete = true;
@@ -1276,13 +1280,20 @@
                 var n = 0; for (var z = 1; z <= maxPage; z++) if (C.pagesRead[z]) n++;
                 return n;
               }
+              // SEMPRE OS DOIS NÚMEROS: quantas já foram lidas e quantas realmente faltam.
+              // "12 de 24" sozinho ainda obriga a fazer conta; e o que falta é o que
+              // interessa pra saber se vale esperar.
+              function _placar(lidas) {
+                var falta = Math.max(0, maxPage - lidas);
+                return lidas + ' de ' + maxPage + ' lidas · ' + (falta ? ('faltam ' + falta) : 'nenhuma falta');
+              }
               var _rot = (_grupo.length > 1 ? 'páginas ' : 'página ') + _grupo.join(' e ');
               // O NÚMERO É QUANTAS PÁGINAS JÁ FORAM LIDAS, contando a que está sendo lida
               // agora — não quantas cabem no lote. Se 23 já foram e falta uma, é "24 de 24",
               // não "1 de 24": o trabalho que já existe não deixa de existir porque esta
               // rodada só precisa de uma página.
               var _pos = Math.min(_lidasAgora() + _grupo.length, maxPage);
-              prog({ phase: 'jogos', note: _rot + ' · ' + _pos + ' de ' + maxPage + ' lidas',
+              prog({ phase: 'jogos', note: _rot + ' · ' + _placar(_pos),
                 pct: 46 + Math.round((_pos / Math.max(1, maxPage)) * 51) });
               var _docs = await Promise.all(_grupo.map(function (q) {
                 return bgFetchDoc(q > 1 ? (base + '?page=' + q) : base);
@@ -1303,8 +1314,8 @@
               });
               if (_vazias) prog({ phase: 'jogos', feed: '⚠️ ' + _vazias + ' página(s) voltaram vazias — não contam como lidas' });
               prog({ phase: 'jogos', pct: 46 + Math.round((_lidasAgora() / Math.max(1, maxPage)) * 51),
-                note: _rot + ' · ' + _lidasAgora() + ' de ' + maxPage + ' lidas',
-                feed: '🎾 ' + _rot + ': +' + _addLote + ' jogo(s) · ' + _lidasAgora() + ' de ' + maxPage });
+                note: _rot + ' · ' + _placar(_lidasAgora()),
+                feed: '🎾 ' + _rot + ': +' + _addLote + ' jogo(s) · ' + _placar(_lidasAgora()) });
               if (_bp + LOTE < _faltam.length) parcialAgora('jogos', _bp + _grupo.length, _faltam.length);
             }
             // completo = TODAS as páginas no conjunto, não "cheguei na última"
@@ -1321,8 +1332,10 @@
           for (var p = pIni + 1; _incremental && p <= maxPage && !C.complete; p++) {
             conferirTeto();
             var _lidasP = 0; for (var _y = 1; _y <= maxPage; _y++) if (C.pagesRead[_y]) _lidasP++;
+            var _posP = Math.min(_lidasP + 1, maxPage), _faltaP = Math.max(0, maxPage - _posP);
             prog({ phase: 'jogos',
-              note: 'página ' + p + ' · ' + Math.min(_lidasP + 1, maxPage) + ' de ' + maxPage + ' — procurando jogo novo',
+              note: 'página ' + p + ' · ' + _posP + ' de ' + maxPage + ' lidas · ' +
+                (_faltaP ? ('faltam ' + _faltaP) : 'nenhuma falta') + ' — procurando jogo novo',
               pct: 46 + Math.round((_lidasP / Math.max(1, maxPage)) * 51) });
             var add = addJogos(X.extractMatchesFromDoc(await bgFetchDoc(base + '?page=' + p), realHandle));
             // página vazia não é página lida (ver o mesmo cuidado no bloco de lotes)
