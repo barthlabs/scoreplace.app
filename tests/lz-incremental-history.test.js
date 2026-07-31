@@ -38,12 +38,12 @@ ok(/var _varreduraAnteriorFechou = \(C\.complete === true\);/.test(src),
 const iLeitura = src.indexOf('var _varreduraAnteriorFechou');
 const iZera = src.indexOf('C.complete = false;');
 ok(iLeitura < iZera, 'e lê ANTES de zerar a flag (senão compara com o que acabou de escrever)');
-ok(/var jaConhecidos = _varreduraAnteriorFechou \? all\.length : 0;/.test(etapa3),
-  'leitura interrompida no meio NÃO usa o atalho — as páginas do fim ainda não foram lidas');
+ok(/var jaConhecidos = \(!migrando && _varreduraAnteriorFechou\) \? all\.length : 0;/.test(etapa3),
+  'leitura interrompida no meio NÃO usa o atalho — e migração também não (precisa varrer tudo)');
 
 // 4) o laço respeita a parada
-ok(/for \(var p = pIni \+ 1; p <= maxPage && !C\.complete; p\+\+\)/.test(etapa3),
-  'o laço não roda depois de já ter fechado na página 1');
+ok(/for \(var p = pIni \+ 1; _incremental && p <= maxPage && !C\.complete; p\+\+\)/.test(etapa3),
+  'o laço página-a-página roda SÓ no incremental (rodar junto com os lotes marcava página vazia como lida)');
 
 // ── O CURSOR VIAJA NO PROGRESSO: guarda a página a CADA página ──────────────
 // "o sistema deveria guardar a página que parou de puxar... assim ficaria fácil retomar

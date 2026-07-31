@@ -25,7 +25,7 @@ ok(/var _pendR = ranksList\.filter/.test(cnt), 'idem rankings');
 const et3 = cnt.slice(cnt.indexOf('ETAPA 3: JOGOS'), cnt.indexOf('} catch (eEtapa)'));
 ok(/if \(!_incremental\) \{/.test(et3), 'a varredura completa vai em lote');
 ok(/_grupo\.map\(function \(q\) \{/.test(et3), 'disparando as páginas do grupo juntas');
-ok(/for \(var p = pIni \+ 1; p <= maxPage && !C\.complete; p\+\+\)/.test(et3),
+ok(/for \(var p = pIni \+ 1; _incremental && p <= maxPage && !C\.complete; p\+\+\)/.test(et3),
   'e a incremental segue página a página — ela precisa PARAR na primeira sem novidade');
 
 // ── o "restam" foi REMOVIDO (31/jul) ──

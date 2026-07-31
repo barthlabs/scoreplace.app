@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.73';
+  var EXT_VERSION = '1.74';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -729,16 +729,28 @@
     // só pode ter vindo do pipeline velho. Isso é verificável a qualquer momento, em qualquer
     // rodada, e não depende de nada ter dado certo antes.
     var jogosSujos = ((prior && prior.games) || []).some(function (g) { return g && !g.lzId; });
+    // ⚠️ UMA LEITURA NUNCA PODE DEIXAR O DADO PIOR DO QUE ESTAVA.
+    // A migração jogava os jogos velhos fora ANTES de ler os novos. Se a rodada terminasse
+    // no meio — e ela termina, por rate-limit, aba fechada, o que for — o documento era
+    // regravado com o pouco que tinha dado tempo de ler. Foi o que aconteceu com a Kelly:
+    // 158 jogos viraram 20, o conteúdo de UMA página. Perda de dado real, causada pela
+    // limpeza.
+    // Agora os velhos FICAM no acumulado (o doc nunca encolhe) e a limpeza acontece só no
+    // FECHAMENTO, quando a varredura completou. Enquanto ela não completa, o pior caso é
+    // conviver com os dois formatos por um tempo — que é infinitamente melhor que perder.
     var migrando = !!(prior && (versaoAnterior < 4 || jogosSujos));
+    var limparNoFim = migrando;
     if (migrando) {
       _acc = null;                    // não reaproveita o acumulado desta página
-      // O CONJUNTO DE PÁGINAS TAMBÉM ZERA. Sem isto a migração descartava os jogos sujos
-      // mas continuava achando que as páginas já tinham sido lidas — e o histórico voltava
-      // pela metade. O harness pegou: 252 jogos onde deviam ser 472.
+      // O CONJUNTO DE PÁGINAS ZERA (tudo tem que ser relido), mas os JOGOS ficam.
       C.pageDone = 0; C.pagesTotal = 0; C.pagesRead = {};
-      prior = Object.assign({}, prior, { games: [] });
     }
     var A = _accFor(handle, prior);
+    // GUARDA-CHUVA CONTRA ENCOLHIMENTO. Não basta "não descartar" — qualquer caminho que
+    // reconstrua o acumulado (cache de módulo trocado, rodada encadeada, migração) pode
+    // deixar o doc menor do que estava. Este é o número que o documento JÁ tinha; nada do
+    // que a gente escrever pode ficar abaixo dele enquanto a varredura não fechar.
+    var _jogosAntes = _gamesToMatches((prior && prior.games) || []);
     var all = A.all, seen = A.seen, det = A.tourDet;   // det = nome/classificação por competição
     var realHandle = C.handle || handle;
 
@@ -1177,7 +1189,11 @@
         } else {
           // JÁ TEMOS ACERVO? Então a leitura é INCREMENTAL e começa na página 1 (o novo
           // entra por cima), não na página seguinte à do cursor.
-          var jaConhecidos = _varreduraAnteriorFechou ? all.length : 0;
+          // MIGRANDO nunca é incremental: os jogos velhos continuam no acumulado (pra o doc
+          // não encolher), mas eles NÃO são prova de que a página foi lida — precisamos
+          // varrer tudo de novo. Sem esta linha a leitura pararia na primeira página "sem
+          // novidade" e a limpeza nunca aconteceria.
+          var jaConhecidos = (!migrando && _varreduraAnteriorFechou) ? all.length : 0;
           // A PÁGINA 1 é onde entra jogo novo, então ela vem primeiro — MAS só quando faz
           // sentido: numa varredura ainda incompleta ela já foi lida e reler é desperdício
           // (o harness pegou: "não releu nenhuma página anterior à do cursor"). Regra: lê a
@@ -1250,12 +1266,21 @@
               var _docs = await Promise.all(_grupo.map(function (q) {
                 return bgFetchDoc(q > 1 ? (base + '?page=' + q) : base);
               }));
-              var _addLote = 0;
+              var _addLote = 0, _vazias = 0;
               _docs.forEach(function (d, _i) {
+                // PÁGINA SEM CARD NÃO É PÁGINA LIDA. Um fetch que falha vira um documento
+                // vazio aqui — e marcar isso como "lida" fazia a varredura se dar por
+                // completa e a limpeza apagar o que estava bom. Foi assim que os 158 jogos
+                // da Kelly viraram 20: as páginas 2..24 "falharam com sucesso".
+                var _cards = 0;
+                try { _cards = d.querySelectorAll('.row.match').length; } catch (e) {}
                 _addLote += addJogos(X.extractMatchesFromDoc(d, realHandle));
-                C.pagesRead[_grupo[_i]] = 1;
-                if (_grupo[_i] > lastPageRead) lastPageRead = _grupo[_i];
+                if (_cards > 0) {
+                  C.pagesRead[_grupo[_i]] = 1;
+                  if (_grupo[_i] > lastPageRead) lastPageRead = _grupo[_i];
+                } else _vazias++;
               });
+              if (_vazias) prog({ phase: 'jogos', feed: '⚠️ ' + _vazias + ' página(s) voltaram vazias — não contam como lidas' });
               prog({ phase: 'jogos', pct: 46 + Math.round(((_bp + _grupo.length) / Math.max(1, _faltam.length)) * 51),
                 feed: '🎾 página ' + _rot + ' de ' + maxPage + ': +' + _addLote + ' jogo(s)' });
               if (_bp + LOTE < _faltam.length) parcialAgora('jogos', _bp + _grupo.length, _faltam.length);
@@ -1265,11 +1290,18 @@
             for (var _c = 1; _c <= maxPage; _c++) if (!C.pagesRead[_c]) { _todas = false; break; }
             if (_todas) C.complete = true;
           }
-          for (var p = pIni + 1; p <= maxPage && !C.complete; p++) {
+          // ⚠️ SÓ NO MODO INCREMENTAL. Este laço é o que para na primeira página sem
+          // novidade; no modo completo quem lê é o bloco de lotes acima. Sem esta guarda os
+          // dois rodavam em sequência: o segundo repassava as páginas (vazias, porque já
+          // tinham falhado), marcava todas como lidas e declarava a varredura completa —
+          // e aí a limpeza da migração apagava o histórico bom. Foi assim que os 158 jogos
+          // da Kelly viraram 20.
+          for (var p = pIni + 1; _incremental && p <= maxPage && !C.complete; p++) {
             conferirTeto();
             prog({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage, pct: 46 + Math.round(((p - 1) / Math.max(1, maxPage)) * 51) });
             var add = addJogos(X.extractMatchesFromDoc(await bgFetchDoc(base + '?page=' + p), realHandle));
-            lastPageRead = p; C.pagesRead[p] = 1;   // o prog abaixo já leva o cursor atualizado
+            // página vazia não é página lida (ver o mesmo cuidado no bloco de lotes)
+            lastPageRead = p; if (add > 0) C.pagesRead[p] = 1;
             if (_incremental) {
               if (add === 0) _secas++; else _secas = 0;
               if (_secas >= 1) {
@@ -1301,6 +1333,35 @@
       if (!all.length && !Object.keys(det).length) { fail('sem-jogos'); return; }
 
       // ── fechamento ─────────────────────────────────────────────────────────────
+      // A LIMPEZA NUNCA PODE ENCOLHER O DOCUMENTO. Esta é a trava final, e ela não depende
+      // de eu ter acertado o caminho: seja qual for o motivo de a varredura se declarar
+      // completa (página que falhou e voltou vazia, laço rodando duas vezes, rodada
+      // encadeada), trocar 157 jogos por 20 é perda de dado — e perda de dado não é um
+      // efeito colateral aceitável de uma limpeza. Só substitui quando o conjunto limpo é
+      // pelo menos tão grande quanto o que já existia.
+      var _limpos = (limparNoFim && C.complete === true)
+        ? all.filter(function (m) { return m && m.lzId; }) : null;
+      if (_limpos && _limpos.length >= _jogosAntes.length) {
+        all.length = 0; Array.prototype.push.apply(all, _limpos);
+      } else if (_limpos) {
+        // completou "no papel" mas trouxe menos do que já tínhamos → não é limpeza, é
+        // perda. Mantém tudo e deixa a próxima leitura terminar o serviço.
+        C.complete = false;
+        prog({ phase: 'jogos', feed: '🛟 leitura incompleta (' + _limpos.length + ' de ' +
+          _jogosAntes.length + ') — o histórico gravado foi preservado' });
+      }
+      if (_jogosAntes.length) {
+        // NÃO FECHOU: o documento não pode sair menor do que entrou. Repõe o que faltar.
+        // Caso real da Kelly (31/jul): 158 jogos viraram 20 — o conteúdo de uma página —
+        // porque a rodada morreu no meio da limpeza. Perda causada por nós.
+        var _reposto = 0;
+        _jogosAntes.forEach(function (m) {
+          var k = _gameKey(m);
+          if (seen[k]) return;
+          seen[k] = 1; all.push(m); _reposto++;
+        });
+        if (_reposto) prog({ phase: 'jogos', feed: '🛟 ' + _reposto + ' jogo(s) já gravados foram preservados' });
+      }
       var imp = I.normalize(montarRaw(), { importedAt: new Date().toISOString() });
       var deltaFinal = delta(imp);
       imp = carimbar(imp);

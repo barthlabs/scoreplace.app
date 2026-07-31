@@ -100,13 +100,21 @@ window.__LZ = {
   cfg: null,
   games: null,
   bloqueio: null, nReq: 0, nBloqueios: 0,
+  // pararApos: quantas páginas do HISTÓRICO servir antes de derrubar tudo. Simula a rodada
+  // que morre no meio (rate-limit, aba fechada) — o caso em que a limpeza pode perder dado.
+  pararApos: 0, pagesServidas: 0,
   init(cfg, bloqueio) {
     this.cfg = cfg; this.games = build(cfg); this.hits = {};
     this.bloqueio = bloqueio || null; this.nReq = 0; this.nBloqueios = 0;
+    this.pagesServidas = 0;
   },
   serve(url) {
     const u = url.replace('https://letzplay.me', '');
     this.hits[u] = (this.hits[u] || 0) + 1;
+    if (this.pararApos && u.indexOf('/matches') >= 0) {   // sem regex: dentro do template, \/ vira / e viraria comentário
+      this.pagesServidas++;
+      if (this.pagesServidas > this.pararApos) return null;   // fetch falha daqui pra frente
+    }
     const m = {};
     // perfil: /{handle}
     if (/^\\/CamilaExemplo$/.test(u)) {
@@ -252,6 +260,7 @@ window.__APP = {
       const d = e.data; if (!d) return;
       if (d.__sp_lp === 'lz-throttle') { self.throttles++; return; }
       if (d.__sp_lp === 'athlete-import-progress') {
+        if (d.feed) { self.feeds = self.feeds || []; self.feeds.push(d.feed); }
         var _f=(d.current&&d.current.phase)||'';
         if(_f==='jogos'&&(d.counts||{}).g>0){ if(self.faseJogosComeçou===0) self.faseJogosComeçou=1; }
         if(_f==='torneios'&&self.faseJogosComeçou) self.torneiosDepoisDosJogos++;
@@ -591,6 +600,49 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     '), não no inflado — era o "569 de 569" da tela', 'ficou ' + r2c.jogos);
   ok(r2c.semId === 0, 'nenhum jogo sobrou sem o id do letzplay', r2c.semId + ' sem lzId');
   ok(r2c.paginas > 1, 'releu o histórico apesar do carimbo dizer que estava em dia');
+
+  // ── CENÁRIO 2d: a limpeza NÃO PODE ENCOLHER O DOC se a rodada parar no meio ──
+  // Caso real da Kelly (31/jul): 158 jogos viraram 20 — o conteúdo de UMA página. A
+  // migração jogava os velhos fora ANTES de ler os novos, e a rodada terminou no meio.
+  // Perda de dado causada pela limpeza. Agora os velhos ficam até a varredura FECHAR.
+  console.log('\n🛟 CENÁRIO 2d — rodada interrompida no meio da limpeza não pode perder jogos');
+  await page.close();
+  page = await novaPagina(browser);
+  await page.evaluate((cfg) => {
+    window.__LZ.init(cfg);
+    window.__LZ.pararApos = 1;            // deixa UMA página passar e derruba o resto
+    const velhos = [];
+    for (let i = 0; i < 157; i++) {
+      velhos.push({ date: 'Sábado, 0' + (1 + i % 9) + '/0' + (1 + i % 9) + '/26 às 08:00hs',
+        official: false, club: 'paineiras-bt', rankingId: '90000', competition: 'Fem C',
+        oppHandles: ['a' + i], oppNames: ['A'], myScore: 6, oppScore: 3, won: true });  // sem lzId
+    }
+    const prior = { source: 'letzplay', handle: 'CamilaExemplo', games: velhos, footprint: [],
+      categories: [], pairs: [], observations: [], declaredGames: cfg.games,
+      lzCursor: { v: 4, handle: 'CamilaExemplo', toursDone: {}, ranksDone: {},
+        pageDone: 24, pagesTotal: 24, complete: true } };
+    window.__APP.rodadas = 0; window.__APP.done = false; window.__APP.erro = null;
+    window.__APP.escritasCanonicas = 0; window.__APP.docsPorGid = {}; window.__APP.tamanhoDoc = 0;
+    window.__APP.pausas = 0; window.__APP.throttles = 0; window.__APP.violacoesTeto = []; window.__APP.violacoesLidos = [];
+    window.__APP.faseJogosComeçou = 0; window.__APP.torneiosDepoisDosJogos = 0; window.__APP.rankingsDepoisDosJogos = 0;
+    window.__APP.notasSemSujeito = []; window.__APP.totaisVistos = {}; window.__APP.rotuloAtrasado = [];
+    window.__LZ.hits = {};
+    window.__APP.start('CamilaExemplo', 'uid-camila', prior, prior.lzCursor);
+  }, camila);
+  await page.waitForFunction(() => window.__APP.done === true || window.__APP.erro, null, { timeout: 180000 })
+    .catch(() => {});
+  const r2d = await page.evaluate(() => ({
+    _dbgRodadas: window.__APP.rodadas, _dbgErro: window.__APP.erro,
+    _dbgParciais: window.__APP.parciais,
+    _dbgPrimeiraChamada: (window.__APP.ultimoPrior || {}).games ? (window.__APP.ultimoPrior.games || []).length : 'sem prior',
+    jogos: (window.__APP.imp && (window.__APP.imp.gamesTotal || (window.__APP.imp.games || []).length)) || 0,
+    completo: !!((window.__APP.cursor || {}).complete)
+  }));
+  console.log('     jogos no doc após a interrupção: ' + r2d.jogos + ' · completo=' + r2d.completo +
+    ' · rodadas=' + r2d._dbgRodadas + ' · erro=' + r2d._dbgErro);
+  ok(r2d.jogos >= 157, 'o doc NÃO encolheu: os 157 velhos seguem lá até a varredura fechar (ficou ' +
+    r2d.jogos + ')');
+  await page.evaluate(() => { window.__LZ.pararApos = 0; });
 
   // ── CENÁRIO 3: perfil MONSTRO — o doc tem que continuar cabendo ──────────
   console.log('\n🐘 CENÁRIO 3 — perfil monstro (2.000 jogos, 120 torneios, 60 rankings)');
