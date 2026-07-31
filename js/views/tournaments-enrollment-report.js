@@ -1375,12 +1375,10 @@
       if (!itens.length) return;
       var A = window._lzAbas || (window._lzAbas = {});
 
-      // ── jogos ──
-      if (typeof window._spGameCard === 'function') {
-        var cards = itens.slice().sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); })
-          .slice(0, 300).map(function (it) { return window._spGameCard(it, meNome); }).join('');
-        var grade = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;">' + cards + '</div>';
-        A.jogo = (A.jogo || '') + (A.jogo ? '<div style="height:8px;"></div>' : '') + grade;
+      // ── jogos: entram na MESMA lista, que é reordenada por data ──
+      if (typeof window._spGameCard === 'function' && typeof window._lzRenderJogos === 'function') {
+        window._lzGameItens = (window._lzGameItens || []).concat(itens);
+        A.jogo = window._lzRenderJogos(meNome);
       }
 
       // ── competições: uma linha por torneio/ranking do app ──
@@ -1421,6 +1419,23 @@
     }).catch(function () {});
   }
 
+  // Ações da barra do topo — fazem exatamente o que os botões do rodapé fazem.
+  window._lzFecharDialogo = function () {
+    var d = document.getElementById('custom-confirm-dialog');
+    if (d && d.parentNode) d.parentNode.removeChild(d);
+  };
+  window._lzPuxarDoTopo = function () {
+    var uid = window._lzDialogUid;
+    window._lzFecharDialogo();
+    if (!uid) return;
+    try { window._lzAthleteImport(uid); }
+    catch (e) {
+      var m = (e && (e.stack || e.message)) || String(e);
+      if (window._warn) window._warn('[letzplay] falha ao iniciar leitura:', m);
+      if (typeof showNotification === 'function') showNotification('Não deu pra iniciar a leitura', String(m).slice(0, 120), 'error');
+    }
+  };
+
   // Troca a aba visível. Só mexe no innerHTML da caixa — nada de re-renderizar o diálogo
   // (que apagaria a barra de progresso de uma leitura em curso).
   window._lzAba = function (qual) {
@@ -1446,15 +1461,26 @@
   // tinha escrito uma lista de uma linha aqui, e o dono comparou lado a lado: as duas
   // telas mostram a mesma coisa e têm que ler igual. `_spLzGameItems`/`_spGameCard` vêm de
   // match-history.js — nada é recriado aqui.
-  window._lzGameCards = function (imp, meNome) {
-    if (typeof window._spLzGameItems !== 'function' || typeof window._spGameCard !== 'function') return null;
-    var itens = window._spLzGameItems(imp) || [];
+  // UMA LISTA SÓ, das duas fontes, do mais recente pro mais antigo (pedido do dono,
+  // 31/jul/2026). Antes eu ANEXAVA a grade do scoreplace depois da do letzplay: dois
+  // blocos, cada um ordenado por dentro, e o jogo de ontem do app aparecia embaixo de um
+  // jogo de 2023 do letzplay. Ordem cronológica só existe se a lista for uma.
+  // O selo de cada card já diz de onde veio (🎾 LetzPlay / 🏆 Scoreplace).
+  window._lzGameItens = [];
+  window._lzRenderJogos = function (meNome) {
+    var itens = (window._lzGameItens || []).slice();
     if (!itens.length) return '';
     itens.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
     var LIM = 300, corte = itens.length > LIM;
     return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;">' +
       itens.slice(0, LIM).map(function (it) { return window._spGameCard(it, meNome || 'Ela/Ele'); }).join('') +
       '</div>' + (corte ? '<div style="opacity:0.6;padding:8px 0;">… e mais ' + (itens.length - LIM) + ' jogo(s) — o acervo completo está gravado.</div>' : '');
+  };
+  window._lzGameCards = function (imp, meNome) {
+    if (typeof window._spLzGameItems !== 'function' || typeof window._spGameCard !== 'function') return null;
+    window._lzGameItens = (window._spLzGameItems(imp) || []).filter(Boolean);
+    if (!window._lzGameItens.length) return '';
+    return window._lzRenderJogos(meNome);
   };
 
   // Formato de UMA LINHA — usado só quando o módulo do histórico não está carregado.
@@ -2034,6 +2060,7 @@
     var ctx = window._lzScanCtx || {};
     var tg = ctx.byUid && ctx.byUid[uid];
     if (!tg) return;
+    window._lzDialogUid = uid;      // a barra do topo age sobre este atleta
     var lu = _lzLastUpdateOf(uid);
     // Melhor import disponível (scan do organizador OU import próprio — o de mais jogos).
     var rctx = window._lzRenderCtx || {};
@@ -2165,6 +2192,22 @@
     } else {
       body += '<div style="font-size:0.8rem;color:var(--text-muted);">Nada gravado ainda — leio torneios (nome, categoria, classificação) e depois os jogos, gravando a cada passo.</div>';
     }
+    // AÇÕES NO TOPO, SEMPRE VISÍVEIS (pedido do dono, 31/jul/2026). Os botões nativos do
+    // diálogo ficam no rodapé — e com o card de nível, as três barras, as abas e a lista, o
+    // rodapé sai do campo de visão: o organizador rola atrás dele. Esta barra é `sticky`
+    // dentro do corpo que rola, então acompanha a rolagem e nunca some. Montada AQUI, no
+    // fim, porque só agora `btnLabel` é o definitivo ("Continuar de onde parou" quando o
+    // perfil está incompleto) — montá-la antes mostrava o rótulo errado.
+    body = '<div id="lz-acoes-topo" style="position:sticky;top:-14px;z-index:5;display:flex;gap:8px;' +
+      'padding:9px 0 10px;margin:-4px 0 8px;background:var(--surface-color,#141a24);">' +
+      '<button type="button" onclick="window._lzFecharDialogo()" style="flex:0 0 auto;padding:9px 14px;border-radius:10px;cursor:pointer;' +
+      'font-size:0.82rem;font-weight:700;border:1px solid var(--border-color,rgba(255,255,255,0.15));' +
+      'background:rgba(255,255,255,0.08);color:var(--text-main,#e8ecf3);">← Voltar</button>' +
+      '<button type="button" onclick="window._lzPuxarDoTopo()" style="flex:1 1 auto;min-width:0;padding:9px 14px;border-radius:10px;cursor:pointer;' +
+      'font-size:0.82rem;font-weight:800;border:1px solid rgba(59,130,246,0.5);' +
+      'background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;">' + _esc(btnLabel) + '</button>' +
+      '</div>' + body;
+
     if (typeof window.showConfirmDialog === 'function') {
       window.showConfirmDialog('🎾 ' + (tg.name || '@' + tg.handle), body,
         // ERRO DENTRO DO CALLBACK DO DIALOG É ENGOLIDO. Se qualquer coisa estourar aqui, o

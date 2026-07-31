@@ -78,10 +78,40 @@ ok(typeof window._spScoreplaceItems === 'function', 'match-history expõe os jog
     require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
   ok(/_lzJuntarScoreplace\(uid/.test(rep), 'o diálogo chama a costura das duas fontes');
   const fn = rep.slice(rep.indexOf('function _lzJuntarScoreplace'), rep.indexOf('function _lzJuntarScoreplace') + 2600);
-  ok(/A\.jogo = \(A\.jogo \|\| ''\) \+/.test(fn), 'os jogos do app entram NA MESMA aba (não substituem)');
+  ok(/_lzGameItens = \(window\._lzGameItens \|\| \[\]\)\.concat\(itens\)/.test(fn),
+    'os jogos do app entram na MESMA lista do letzplay (não num bloco separado)');
+  ok(/A\.jogo = window\._lzRenderJogos\(meNome\)/.test(fn),
+    'e a lista inteira é re-renderizada, o que reordena por data');
   ok(/juntar\('tour'/.test(fn) && /juntar\('rank'/.test(fn), 'competições do app entram em Torneios e em Rankings');
   ok(/_isLigaFormat/.test(fn), 'Pontos Corridos vai pra Rankings (temporada contínua), o resto pra Torneios');
   ok(/if \(!it\.official\) return;/.test(fn), 'partida casual não vira competição');
+}
+
+// ── UMA LISTA SÓ, CRONOLÓGICA INVERSA, COM AS DUAS FONTES ───────────────────
+// "os jogos que aparecem do letzplay e scoreplace devem ser em ordem cronológica inversa
+// com o mais recente no topo". Antes eram dois blocos: um jogo de ontem no app aparecia
+// embaixo de um de 2023 do letzplay.
+{
+  const d = n => Date.now() - n * 86400000;
+  window._lzGameItens = [
+    { ts: d(400), source: 'letzplay', official: false, competition: 'Ranking velho', competitionLabel: 'Ranking velho',
+      opponent: 'X', partner: null, result: 'V', scoreA: '6', scoreB: '0' },
+    { ts: d(1),   source: 'scoreplace', official: true, competition: 'Torneio de ontem', competitionLabel: 'Torneio de ontem',
+      opponent: 'Y', partner: null, result: 'D', scoreA: '3', scoreB: '6' },
+    { ts: d(30),  source: 'letzplay', official: true, competition: 'Torneio do mês passado', competitionLabel: 'Torneio do mês passado',
+      opponent: 'Z', partner: null, result: 'V', scoreA: '6', scoreB: '4' }
+  ];
+  const html = window._lzRenderJogos('Fulano');
+  const iOntem = html.indexOf('Torneio de ontem');
+  const iMes = html.indexOf('Torneio do mês passado');
+  const iVelho = html.indexOf('Ranking velho');
+  ok(iOntem >= 0 && iMes >= 0 && iVelho >= 0, 'as duas fontes aparecem na mesma lista');
+  ok(iOntem < iMes && iMes < iVelho, 'ordem cronológica inversa: ontem → mês passado → velho');
+  ok(/🏆 Scoreplace/.test(html), 'o jogo do app tem a tag Scoreplace');
+  ok(/🎾 LetzPlay/.test(html), 'e o do letzplay tem a dele');
+  const iTagSp = html.indexOf('Scoreplace');
+  ok(iTagSp > 0 && iTagSp < iMes, 'a tag do app aparece no card do topo (é o mais recente)');
+  window._lzGameItens = [];
 }
 
 console.log((fail ? '✗' : '✓') + ' letzplay-game-cards: ' + pass + ' passaram, ' + fail + ' falharam');

@@ -76,5 +76,27 @@ ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fáb
   ok(/code === 'abandonada'/.test(fim), 'abandono não vira toast de erro pro organizador');
 }
 
+// ── AÇÕES NO TOPO, SEMPRE VISÍVEIS ──────────────────────────────────────────
+// "os botões puxar histórico e voltar têm que estar no topo da tela logo abaixo do
+// cabeçalho, sempre ativo e visível." Com o card de nível + 3 barras + abas + lista, o
+// rodapé do diálogo sai da tela.
+{
+  const rep = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/id="lz-acoes-topo"/.test(rep), 'existe a barra de ações no topo do diálogo');
+  const barra = rep.slice(rep.indexOf('id="lz-acoes-topo"'), rep.indexOf('id="lz-acoes-topo"') + 900);
+  ok(/position:sticky/.test(barra), 'ela é sticky — acompanha a rolagem e não some');
+  ok(/← Voltar/.test(barra) && /_lzFecharDialogo/.test(barra), 'tem Voltar, ligado ao fechamento');
+  ok(/_lzPuxarDoTopo/.test(barra), 'e o botão de puxar, ligado à leitura');
+  ok(/_esc\(btnLabel\)/.test(barra), 'usa o MESMO rótulo do botão de baixo (vira "Continuar" quando incompleto)');
+  // montada só depois de btnLabel virar definitivo
+  ok(rep.indexOf('id="lz-acoes-topo"') > rep.indexOf("var btnLabel = '📚 Puxar histórico completo'"),
+    'montada depois de o rótulo estar decidido (senão sai "undefined")');
+  ok(/window\._lzDialogUid = uid/.test(rep), 'o diálogo registra sobre quem a barra age');
+  const puxar = rep.slice(rep.indexOf('window._lzPuxarDoTopo'), rep.indexOf('window._lzPuxarDoTopo') + 700);
+  ok(/_lzAthleteImport\(uid\)/.test(puxar), 'o botão do topo dispara a mesma leitura do de baixo');
+  ok(/catch \(e\)/.test(puxar), 'e não morre calado se estourar');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-open-profile: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
