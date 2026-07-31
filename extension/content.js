@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.69';
+  var EXT_VERSION = '1.70';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -535,9 +535,16 @@
       (m.partnerHandle || ''), (m.oppHandles || []).slice().sort().join('+')].join('|').toLowerCase();
   }
   // games GRAVADOS (schema salvo) → shape de "match cru" que o buildRaw espera.
+  // ⚠️ O `lzId` TEM QUE ATRAVESSAR. Esta função reconstrói os jogos GRAVADOS pra dentro da
+  // rodada nova, e ela não copiava o id da partida: tudo que veio de uma rodada anterior
+  // voltava sem id, era regravado sem id, e a prova de "lido pelo motor novo" evaporava
+  // sozinha. Medido em 31/jul no doc da Kelly: 157 jogos, 157 SEM lzId no scan do
+  // organizador, enquanto o import dela mesma (uma rodada só) tinha os 157 COM id.
+  // Consequência visível: o nome ficava violeta depois de uma leitura correta.
   function _gamesToMatches(games) {
     return (games || []).map(function (g) {
       return {
+        lzId: g.lzId || null,
         date: g.date || null, categoryRaw: g.competition || '', round: (g.round != null) ? g.round : null,
         year: (g.year != null) ? g.year : null, official: g.official === true,
         kind: g.kind || (g.official === true ? 'tournament' : 'ranking'),
@@ -1238,7 +1245,13 @@
       imp = carimbar(imp);
       if (pausado) imp.partialReason = 'pausado: retomando';
       else if (parcial) imp.partialReason = String(parcial).slice(0, 120);
-      else delete imp.partialReason;   // fechou de verdade: não pode sobrar rastro de parcial
+      // NULL EXPLÍCITO, não `delete`. O app grava com `set(..., {merge:true})`, e merge
+      // preserva o que já está no documento quando a chave NÃO vem — então apagar a chave
+      // do objeto deixava o `partialReason` de um parcial anterior gravado pra sempre.
+      // Medido em 31/jul no doc da Kelly: leitura completa, 157 jogos com id, e o doc ainda
+      // com "parcial: jogos 6/8" — e por causa dele `_lzImportComplete` dizia incompleto e
+      // o nome ficava violeta.
+      else imp.partialReason = null;
       var v = I.validate(imp);
       if (!v || !v.valid) { fail('invalido'); return; }
 
