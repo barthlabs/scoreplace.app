@@ -33,13 +33,18 @@ ok(!/else if \(_jogosAntes/.test(fech), 'limpeza e reposição são exclusivas �
     'ordem dos adversários não muda a identidade da partida');
 }
 
-// ── 2. APP: recusa gravar um histórico menor ──
-const grava = app.slice(app.indexOf('O APP NÃO ACEITA REGRESSÃO'), app.indexOf('O APP NÃO ACEITA REGRESSÃO') + 1400);
-ok(grava.length > 300, 'o app tem a guarda de regressão na gravação');
-ok(/antes > agora/.test(grava), 'compara o que chegou com o que já está gravado');
-ok(/delete doc\.fullImport/.test(grava), 'e NÃO substitui o histórico quando o novo é menor');
-ok(/showNotification/.test(grava), 'avisando na tela — regressão barrada não pode ser silenciosa');
-ok(grava.indexOf('delete doc.fullImport') < grava.indexOf('.set(doc'), 'a decisão vem ANTES da escrita');
+// ── 2. APP: recusa gravar um histórico menor, em TODOS os caminhos ──
+const grava = app.slice(app.indexOf('TRAVA ÚNICA CONTRA REGRESSÃO'), app.indexOf('function _lzPersistScans'));
+ok(grava.length > 400, 'existe UMA trava de regressão, compartilhada');
+ok(/pico > agora/.test(grava), 'marca d\'água em memória: parcial atrasado não vence o fechamento');
+ok(/antes > agora/.test(grava), 'e conferência no banco: cobre sessão nova / outra aba');
+ok(/delete doc\.fullImport/.test(grava), 'quando barra, o histórico não é substituído');
+ok(/showNotification/.test(grava), 'e o organizador é avisado — barrar não pode ser silencioso');
+// os DOIS caminhos de escrita usam a trava
+const usos = (app.match(/_lzBarrarRegressao\(s\.uid, doc, db\)/g) || []).length;
+ok(usos === 2, 'os dois caminhos de gravação passam pela trava (achei ' + usos + ')');
+ok(!/\.set\(doc, \{ merge: true \}\)/.test(app.replace(/_lzBarrarRegressao[\s\S]{0,200}?set\(d2/g, '')),
+  'nenhuma escrita de fullImport escapa da trava');
 
 // ── 3. APP: "completo" tem que ser verificável ──
 const compl = app.slice(app.indexOf('function _lzImportComplete'), app.indexOf('function _lzImportComplete') + 1600);

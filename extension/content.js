@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.75';
+  var EXT_VERSION = '1.76';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1233,7 +1233,7 @@
           var add1 = addJogos(pg1);
           lastPageRead = pIni; C.pagesRead[pIni] = 1;
           prog({ phase: 'jogos', pct: 46 + Math.round((pIni / Math.max(1, maxPage)) * 51),
-            feed: '🎾 página ' + pIni + ' de ' + maxPage + ': +' + add1 + ' jogo(s)' });
+            feed: '🎾 página ' + pIni + ': +' + add1 + ' jogo(s) · 1 de ' + maxPage });
           // nada novo já na primeira: o acervo está em dia, uma requisição resolveu
           if (jaConhecidos > 0 && add1 === 0) {
             C.complete = true;
@@ -1267,8 +1267,16 @@
             for (var _bp = 0; _bp < _faltam.length; _bp += LOTE) {
               conferirTeto();
               var _grupo = _faltam.slice(_bp, _bp + LOTE);
-              var _rot = _grupo.join(', ');
-              prog({ phase: 'jogos', note: 'página ' + _rot + ' de ' + maxPage,
+              // RÓTULO INEQUÍVOCO. Lemos as páginas das PONTAS pro meio, então um lote é
+              // "24 e 2" — e "página 24, 2 de 24" lia como "página 24, 2 de 24", que não
+              // quer dizer nada. Agora diz quais páginas estão sendo lidas E quantas já
+              // foram, que é o número que bate com o resto da tela.
+              function _lidasAgora() {
+                var n = 0; for (var z = 1; z <= maxPage; z++) if (C.pagesRead[z]) n++;
+                return n;
+              }
+              var _rot = (_grupo.length > 1 ? 'páginas ' : 'página ') + _grupo.join(' e ');
+              prog({ phase: 'jogos', note: _rot + ' · ' + _lidasAgora() + ' de ' + maxPage + ' lidas',
                 pct: 46 + Math.round((_bp / Math.max(1, _faltam.length)) * 51) });
               var _docs = await Promise.all(_grupo.map(function (q) {
                 return bgFetchDoc(q > 1 ? (base + '?page=' + q) : base);
@@ -1289,7 +1297,8 @@
               });
               if (_vazias) prog({ phase: 'jogos', feed: '⚠️ ' + _vazias + ' página(s) voltaram vazias — não contam como lidas' });
               prog({ phase: 'jogos', pct: 46 + Math.round(((_bp + _grupo.length) / Math.max(1, _faltam.length)) * 51),
-                feed: '🎾 página ' + _rot + ' de ' + maxPage + ': +' + _addLote + ' jogo(s)' });
+                note: _rot + ' · ' + _lidasAgora() + ' de ' + maxPage + ' lidas',
+                feed: '🎾 ' + _rot + ': +' + _addLote + ' jogo(s) · ' + _lidasAgora() + ' de ' + maxPage });
               if (_bp + LOTE < _faltam.length) parcialAgora('jogos', _bp + _grupo.length, _faltam.length);
             }
             // completo = TODAS as páginas no conjunto, não "cheguei na última"
@@ -1305,7 +1314,8 @@
           // da Kelly viraram 20.
           for (var p = pIni + 1; _incremental && p <= maxPage && !C.complete; p++) {
             conferirTeto();
-            prog({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage, pct: 46 + Math.round(((p - 1) / Math.max(1, maxPage)) * 51) });
+            prog({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage + ' — procurando jogo novo',
+              pct: 46 + Math.round(((p - 1) / Math.max(1, maxPage)) * 51) });
             var add = addJogos(X.extractMatchesFromDoc(await bgFetchDoc(base + '?page=' + p), realHandle));
             // página vazia não é página lida (ver o mesmo cuidado no bloco de lotes)
             lastPageRead = p; if (add > 0) C.pagesRead[p] = 1;

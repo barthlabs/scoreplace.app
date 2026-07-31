@@ -3196,6 +3196,41 @@
   // no fim. Numa busca completa de 100 inscritos (~3h), fechar a aba, dormir o notebook ou
   // um refresh perdia TUDO, apesar de o comentário na extensão prometer que "o que já foi
   // lido está salvo". Agora cada pessoa é gravada assim que fica pronta.
+  // ⚠️ TRAVA ÚNICA CONTRA REGRESSÃO — usada por TODOS os caminhos de escrita.
+  // O histórico da pessoa não pode diminuir. Aconteceu três vezes hoje (158→20, 469→20,
+  // 469→569) e cada vez que esse número piora o app perde credibilidade inteira.
+  // Duas defesas, porque uma só não basta:
+  //   • MARCA D'ÁGUA EM MEMÓRIA (`_lzMaxJogos`): um parcial atrasado não pode vencer o
+  //     fechamento. Os dois escrevem no MESMO doc e a ordem de chegada não é garantida —
+  //     foi exatamente assim que o `partialReason` ficou grudado antes.
+  //   • CONFERÊNCIA NO BANCO: cobre sessão nova, outra aba, outro organizador.
+  // Devolve o `doc` já ajustado (sem `fullImport` quando seria regressão).
+  var _lzMaxJogos = {};
+  function _lzBarrarRegressao(uid, doc, db) {
+    var agora = doc.fullImport ? _lzTot(doc.fullImport) : 0;
+    if (!doc.fullImport) return Promise.resolve(doc);
+    var pico = _lzMaxJogos[uid] || 0;
+    function barrar(antes, origem) {
+      delete doc.fullImport;
+      window._warn && window._warn('[letzplay] regressão barrada (' + origem + '): chegaram ' +
+        agora + ' jogos, já havia ' + antes + ' — histórico mantido.');
+      if (typeof showNotification === 'function') {
+        showNotification('Histórico preservado',
+          'A leitura trouxe ' + agora + ' jogo(s) e já havia ' + antes + ' — mantive os ' + antes + '.', 'info');
+      }
+      return doc;
+    }
+    if (pico > agora) return Promise.resolve(barrar(pico, 'memória'));
+    return db.collection('letzplayScans').doc(uid).get()
+      .then(function (d) {
+        var antes = d.exists ? _lzTot((d.data() || {}).fullImport) : 0;
+        if (antes > agora) return barrar(antes, 'banco');
+        _lzMaxJogos[uid] = Math.max(pico, agora);
+        return doc;
+      })
+      .catch(function () { _lzMaxJogos[uid] = Math.max(pico, agora); return doc; });
+  }
+
   function _lzPersistScans(tId, scans, gamesDelta) {
     var ok = (scans || []).filter(function (s) { return s.uid && s.scan; });
     if (!ok.length) return Promise.resolve(0);
@@ -3216,26 +3251,8 @@
       }
       var doc = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, scannedByName: meName, tournamentId: String(tId), tournamentName: tName };
       if (gotFull) doc.fullImport = s.fullImport;
-      // ⚠️ O APP NÃO ACEITA REGRESSÃO. Esta é a guarda que não depende de a extensão estar
-      // certa: se o histórico que chegou tem MENOS jogos do que o que já está gravado, ele
-      // não substitui. Aconteceu duas vezes hoje — 158 viraram 20 e 469 viraram 20 — e cada
-      // vez que um número desses muda pra pior, o app perde credibilidade inteira.
-      // O resumo (scan) segue sendo atualizado; só o histórico é preservado.
-      var w = db.collection('letzplayScans').doc(s.uid).get()
-        .then(function (atual) {
-          var antes = atual.exists ? _lzTot((atual.data() || {}).fullImport) : 0;
-          var agora = gotFull ? _lzTot(s.fullImport) : 0;
-          if (doc.fullImport && antes > agora) {
-            delete doc.fullImport;
-            window._warn && window._warn('[letzplay] regressão barrada: chegaram ' + agora +
-              ' jogos e já havia ' + antes + ' — o histórico gravado foi mantido.');
-            if (typeof showNotification === 'function') {
-              showNotification('Histórico preservado',
-                'A leitura trouxe ' + agora + ' jogo(s) e já havia ' + antes + ' gravados — mantive os ' + antes + '.', 'info');
-            }
-          }
-          return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
-        })
+      var w = _lzBarrarRegressao(s.uid, doc, db)
+        .then(function (d2) { return db.collection('letzplayScans').doc(s.uid).set(d2, { merge: true }); })
         .catch(function (err) {
           // NUNCA falhar MUDO (caso Camila: 472 jogos → doc >1MiB → todos os writes
           // morriam em silêncio e "não gravava porra nenhuma"). Mostra o ERRO REAL e
@@ -3308,7 +3325,10 @@
       // Não gravar `fullImport: null` quando falhou: o set é merge, e apagar um histórico
       // BOM de uma varredura anterior por causa de um 403 de hoje seria perda de dado real.
       if (gotFull) doc.fullImport = s.fullImport;
-      return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true })
+      // MESMA TRAVA DO CAMINHO DOS PARCIAIS. Os dois escrevem no MESMO documento e a ordem
+      // de chegada não é garantida — pôr a guarda só num deles é não ter guarda.
+      return _lzBarrarRegressao(s.uid, doc, db)
+        .then(function (d2) { return db.collection('letzplayScans').doc(s.uid).set(d2, { merge: true }); })
         .catch(function (err) {
           // Erro REAL na tela + regrava sem o fullImport (o resumo sempre cabe) — ver
           // _lzPersistScans; mesmo fallback aqui (caso Camila: doc >1MiB falhava mudo).
