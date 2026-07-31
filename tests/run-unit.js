@@ -119,6 +119,7 @@ const SUITES = [
   'tests/rr-gender-balance.test.js',
   'tests/auto-draw-balance-choice.test.js',
   'tests/lz-label-equals-bar.test.js',
+  'tests/ext-version-single-source.test.js',
   'tests/letzplay-pace.test.js',
   'tests/letzplay-model.test.js',
   'tests/letzplay-eta.test.js',

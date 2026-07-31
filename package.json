@@ -13,7 +13,7 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install --with-deps chromium",
-    "prerender": "node tools/prerender-landing.js",
+    "prerender": "node scripts/sync-ext-version.js && node tools/prerender-landing.js",
     "prerender:dry": "node tools/prerender-landing.js --dry-run",
     "lighthouse": "lighthouse https://scoreplace.app/ --quiet --chrome-flags=\"--headless=new --no-sandbox --incognito\" --output=json --output=html --form-factor=mobile --screenEmulation.mobile=true --only-categories=performance,accessibility,best-practices,seo --max-wait-for-load=60000",
     "build:www": "node tools/build-www.js",
