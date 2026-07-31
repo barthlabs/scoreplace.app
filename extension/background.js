@@ -39,13 +39,23 @@
 //  3. Teto de 10s era baixo demais pra bloqueio sustentado do Cloudflare. Vai a 60s.
 // Preferimos SEMPRE demorar a falhar: o organizador aceita esperar, não aceita "busca
 // concluída" com zero jogos (que foi o que aconteceu em 14/jul/2026).
-// CADÊNCIA HUMANA (o plano original): a captura tem que PARECER navegação de gente.
-// `gap` é o tempo BASE entre operações — nunca a espera literal. A espera real é sorteada
-// numa faixa em torno dele (_qWait), porque intervalo cravado e idêntico é assinatura de
-// robô: o Cloudflare barra por PADRÃO, não só por volume. Piso de ~1,8s = o tempo mínimo
-// plausível pra alguém ler uma página e clicar na próxima; abaixo disso nenhum humano vai.
-var _Q_DEFAULTS = { gap: 2600, floor: 2000, min: 1800, max: 60000 };
-var _q = { chain: Promise.resolve(), busy: 0, last: 0, okStreak: 0, blocks: 0,
+// RITMO: RÁPIDO ENQUANTO O SERVIDOR DEIXA, LENTO SÓ QUANDO ELE RECLAMA.
+// A calibragem antiga (31/jul/2026) era o extremo oposto: UMA requisição por vez com ~2,6s
+// de espera ENTRE cada uma, imitando alguém lendo página por página. O custo disso é o que
+// o dono mediu na prática: o histórico da Kelly são ~20 páginas, e em série a 2,6s (mais o
+// ruído e qualquer tropeço, que DOBRA o passo) levou 7 minutos pra 5 torneios — enquanto
+// ele mesmo abriria as mesmas páginas em segundos. "Demora mais mas não falha" virou
+// "demora tanto que parece quebrado", e nessas horas ele cancela a leitura sadia.
+// A proteção de verdade nunca foi o passo largo preventivo: é o FREIO ao apanhar
+// (_qSlower, que dobra na hora e persiste) e o respeito ao retry-after. Isso continua
+// inteiro. O que muda é o ponto de partida — começamos rápido e só desaceleramos com
+// motivo medido, em vez de pagar o pior caso o tempo todo.
+var _Q_DEFAULTS = { gap: 350, floor: 250, min: 200, max: 60000 };
+// PARALELISMO: até 3 páginas ao mesmo tempo. Um navegador comum abre várias requisições
+// em paralelo numa única visita — 3 é menos do que carregar uma página com imagens. As 20
+// páginas da Kelly saem em ~3s em vez de ~60s.
+var _Q_SLOTS = 3;
+var _q = { chain: Promise.resolve(), chains: null, busy: 0, last: 0, okStreak: 0, blocks: 0,
   gap: _Q_DEFAULTS.gap, floor: _Q_DEFAULTS.floor, min: _Q_DEFAULTS.min, max: _Q_DEFAULTS.max };
 // Espera REAL de uma operação: base sorteada 0,7×–1,8× (nunca duas iguais) + uma pausa
 // longa ocasional (~8%), que é o equivalente a olhar pro lado / ler com calma. Sem esse
@@ -53,7 +63,9 @@ var _q = { chain: Promise.resolve(), busy: 0, last: 0, okStreak: 0, blocks: 0,
 function _qWait() {
   var lo = _q.gap * 0.7, hi = _q.gap * 1.8;
   var w = lo + Math.random() * (hi - lo);
-  if (Math.random() < 0.08) w += 2000 + Math.random() * 4000;
+  // A pausa longa ocasional só faz sentido quando já estamos indo devagar por castigo.
+  // Com o passo de fábrica ela era 8% das requisições parando 2–6s à toa.
+  if (_q.gap > 1500 && Math.random() < 0.08) w += 2000 + Math.random() * 4000;
   return Math.round(w);
 }
 var _Q_KEY = 'sp_lz_pace';
@@ -90,7 +102,7 @@ function _qSave(now) {
 }
 function _qDump() { var o = {}; o[_Q_KEY] = { gap: _q.gap, floor: _q.floor, at: Date.now(), blockAt: _q.blockAt || 0 }; return o; }
 // Estado medido, pro app MOSTRAR (nunca mais "travado" sem explicação).
-function _qStats() { return { gap: _q.gap, floor: _q.floor, blocks: _q.blocks, busy: _q.busy }; }
+function _qStats() { return { gap: _q.gap, floor: _q.floor, blocks: _q.blocks, busy: _q.busy, slots: _Q_SLOTS }; }
 function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 // BLOQUEIO → alarga o passo E sobe o PISO: este ritmo comprovadamente não é seguro, então
 // não voltamos a ele nem depois de mil sucessos. É o "aumentando até não travar mais".
@@ -122,16 +134,32 @@ function _qNoteStatus(st, blocked) {
   if (blocked || st === 403 || st === 429 || st === 503) _qSlower();
   else if (st >= 200 && st < 300) _qFaster();
 }
+// N CORRENTES em vez de uma. Cada corrente respeita o passo entre as SUAS operações, e a
+// nova entra sempre na corrente com menos gente. Serializar tudo numa fila só era o que
+// transformava 20 páginas em minutos; o freio ao apanhar continua valendo pra todas,
+// porque `_q.gap` é compartilhado.
+function _qChains() {
+  if (!_q.chains) {
+    _q.chains = [];
+    for (var i = 0; i < _Q_SLOTS; i++) _q.chains.push({ p: Promise.resolve(), last: 0, n: 0 });
+  }
+  return _q.chains;
+}
 function enqueue(fn) {
   _q.busy++;
-  var run = _q.chain.then(function () {
-    // Espera SORTEADA a cada operação (nunca o mesmo intervalo duas vezes) e medida a
-    // partir do fim da anterior — é o ritmo de quem lê a página antes de ir pra próxima.
-    var wait = _qWait() - (Date.now() - _q.last);
+  var cs = _qChains();
+  var c = cs[0];
+  for (var i = 1; i < cs.length; i++) if (cs[i].n < c.n) c = cs[i];
+  c.n++;
+  var run = c.p.then(function () {
+    // Espera SORTEADA (nunca o mesmo intervalo duas vezes), medida a partir do fim da
+    // operação anterior DESTA corrente.
+    var wait = _qWait() - (Date.now() - c.last);
     return (wait > 0 ? _sleep(wait) : Promise.resolve()).then(fn);
   });
-  // a CORRENTE nunca quebra: um erro numa operação não pode travar a fila inteira.
-  _q.chain = run.then(function () { _q.last = Date.now(); }, function () { _q.last = Date.now(); });
+  // a corrente nunca quebra: um erro numa operação não pode travar a fila inteira.
+  c.p = run.then(function () { c.last = Date.now(); c.n--; _q.last = Date.now(); },
+                 function () { c.last = Date.now(); c.n--; _q.last = Date.now(); });
   function dec(v) { _q.busy = Math.max(0, _q.busy - 1); return v; }
   return run.then(dec, function (e) { dec(); throw e; });
 }

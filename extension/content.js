@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.66';
+  var EXT_VERSION = '1.67';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -104,6 +104,22 @@
   //      (nome exato, SEM o nome do clube grudado);
   //   2) fallback og:title "Informações do Torneio {nome} - {clube}" (tira prefixo/sufixo;
   //      ainda traz o clube no fim, por isso o h2 é preferido).
+  // Nome de exibição do atleta na página de perfil do letzplay.
+  function _nomeDoPerfilDoc(doc) {
+    try {
+      var h = doc.querySelector('h1, h2.title, .profile-name, .athlete-name');
+      var n = h ? (h.textContent || '').replace(/\s+/g, ' ').trim() : '';
+      if (!n) {
+        var og = doc.querySelector('meta[property="og:title"]');
+        n = og ? (og.getAttribute('content') || '') : '';
+        n = n.replace(/\s*[-–|]\s*Letzplay\s*$/i, '').replace(/^\s*Jogos de\s+/i, '').trim();
+      }
+      if (!n || n.length > 60) return null;
+      if (/letzplay/i.test(n)) return null;
+      return n;
+    } catch (e) { return null; }
+  }
+
   function tourneyNameFromDoc(doc) {
     try {
       var h2 = doc.querySelector('h2.title.with-avatar, .title.with-avatar');
@@ -705,6 +721,7 @@
 
     // TOTAIS DO PERFIL — fixos a partir da ETAPA 0. Semeados do que já foi lido antes pra
     // uma retomada não começar com as barras zeradas.
+    var nomeExibicao = (prior && prior.profile && prior.profile.name) || null;
     var totJogos = (prior && prior.declaredGames != null) ? prior.declaredGames : null;
     var totTorneios = (prior && prior.declaredTournaments != null) ? prior.declaredTournaments : null;
     var totRankings = (prior && prior.declaredRankings != null) ? prior.declaredRankings : null;
@@ -821,6 +838,7 @@
       return raw;
     }
     function carimbar(imp) {
+      if (nomeExibicao) { imp.profile = imp.profile || {}; imp.profile.name = nomeExibicao; }
       imp.declaredGames = totJogos;
       imp.declaredTournaments = totTorneios;
       imp.declaredRankings = totRankings;
@@ -979,6 +997,10 @@
           var mJ = txt.match(/(\d+)\s*Jogos/); if (mJ) totJogos = +mJ[1];
           var mR = txt.match(/(\d+)\s*Rankings/); if (mR) totRankings = +mR[1];
           var mT = txt.match(/(\d+)\s*Torneios/); if (mT) totTorneios = +mT[1];
+          // NOME DE EXIBIÇÃO DO LETZPLAY. Vem do h1/h2 do perfil ("Camila Calia") ou do
+          // og:title. O app usa isso pra dar nome a quem entrou só com telefone/e-mail e
+          // aparece como "Usuário" — ver _lzAplicarNomeDoLetzplay.
+          nomeExibicao = _nomeDoPerfilDoc(dp) || nomeExibicao;
           prog({ pct: 3, feed: '👤 ' + (totTorneios != null ? totTorneios : '?') + ' torneios · ' +
             (totRankings != null ? totRankings : '?') + ' rankings · ' + (totJogos != null ? totJogos : '?') + ' jogos' });
         } catch (e0) { if (ehPausa(e0)) throw e0; }
@@ -996,6 +1018,19 @@
         // barra ficava eternamente "29 de 30". Conhecido e não lido tem que virar trabalho.
         toursList = unirConhecidos(toursList, 't', 'tid');
         if (totTorneios == null && toursList.length) totTorneios = toursList.length;
+        // A CAIXA ENCHE JÁ COM A LISTA. Ler a página de cada torneio leva tempo (uma
+        // requisição por torneio), e até a primeira voltar a caixa ficava só com a linha
+        // dos totais — parecia parada. A lista pública já traz o TÍTULO de cada um: mostra
+        // agora, em cinza-claro, e cada linha é substituída pela versão completa (com
+        // categoria e colocação) quando aquele torneio for lido de fato.
+        toursList.slice(0, 12).forEach(function (P) {
+          if (!P || !P.title) return;
+          prog({ phase: 'torneios', feed: { icon: '🏆', nome: P.title } });
+        });
+        if (toursList.length > 12) prog({ phase: 'torneios', feed: '… e mais ' + (toursList.length - 12) + ' torneio(s) na lista' });
+        // A FILA JÁ FAZ VÁRIAS AO MESMO TEMPO — mas o laço `await` por item as
+        // serializava mesmo assim. Disparamos em blocos: o tempo total passa a ser
+        // limitado pelo servidor, não pelo nosso laço.
         var pulT = 0;
         for (var ti = 0; ti < toursList.length; ti++) {
           conferirTeto();
@@ -1011,8 +1046,12 @@
           // ("torneio 1 de 35" embaixo de "30 de 35"). Agora ele conta o que está sendo
           // lido AGORA: os já lidos + 1. Consistente por construção.
           var _totT = totTorneios || toursList.length;
+          // O RÓTULO CONTA EXATAMENTE O QUE A BARRA CONTA: o que já foi LIDO. Antes ele
+          // contava "o que está sendo lido agora" (lidos + 1) e a barra contava lidos —
+          // dois contadores diferentes na mesma tela, e o dono via "torneio 4 de 8" em cima
+          // de "Torneios 5 de 8". Um número só, e ele nunca promete o que ainda não veio.
           prog({ phase: 'torneios',
-            note: 'torneio ' + Math.min(Object.keys(C.toursDone).length + 1, _totT) + ' de ' + _totT + ' — nome, categoria e classificação',
+            note: 'torneio ' + Math.min(Object.keys(C.toursDone).length, _totT) + ' de ' + _totT + ' — nome, categoria e classificação',
             pct: 4 + Math.round((ti / Math.max(1, toursList.length)) * 26) });
           try {
             var dT = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
@@ -1051,8 +1090,8 @@
           if (C.ranksDone[rk]) { var _dR = detDe(rk); if (_dR) det[rk] = _dR; pulR++; continue; }
           if (pulR) { prog({ phase: 'rankings', feed: '⏭️ ' + pulR + ' já lidos — pulados sem reler' }); pulR = 0; }
           var _totR = totRankings || ranksList.length;
-          prog({ phase: 'rankings',   // idem: o rótulo conta o mesmo que a barra, e nunca passa dele
-            note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length + 1, _totR) + ' de ' + _totR + ' — nome e classificação',
+          prog({ phase: 'rankings',   // idem: o rótulo conta o MESMO que a barra
+            note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, _totR) + ' de ' + _totR + ' — nome e classificação',
             pct: 31 + Math.round((ri / Math.max(1, ranksList.length)) * 14) });
           try {
             var dR = await bgFetchDoc('https://letzplay.me/' + R.club + '/rankings/' + R.rid);
