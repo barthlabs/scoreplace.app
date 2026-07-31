@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.84';
+  var EXT_VERSION = '1.85';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -944,9 +944,29 @@
       // de ler: "20 de 20 (100%)" para quem tem 158. Aqui o total nunca é derivado do que
       // conseguimos ler, e nunca diminui — só é substituído por um total NOVO e maior ou
       // igual, vindo da fonte.
-      var t = { jogos: _indexTotal || totJogos || 0, torneios: totTorneios || 0, rankings: totRankings || 0 };
+      // O ÍNDICE CONTA PARTIDAS; O CONTADOR DO PERFIL CONTA LINHAS — e a própria lista do
+      // letzplay REPETE linha. Medido no perfil da Kelly em 31/jul/2026: 8 páginas devolvem
+      // 158 entradas e apenas 157 ids distintos (a partida 9299283 vem na página 2 E na 3).
+      // O perfil dela mostra "158 Jogos". Não existe 158º jogo: existe uma linha repetida.
+      // Por isso o total tem PROCEDÊNCIA. Um total só disputa Math.max com outro da MESMA
+      // qualidade; quando chega um de qualidade melhor (o índice, que deduplica por id), ele
+      // SUBSTITUI — inclusive pra baixo. Sem isso, "157 de 158" nunca fecharia: o piso velho
+      // ficaria travado pra sempre por um número que a fonte contou errado.
+      var _idxOk = _indexTotal > 0;
+      var t = { jogos: _indexTotal || totJogos || 0, torneios: totTorneios || 0, rankings: totRankings || 0,
+                fonte: _idxOk ? 'indice' : 'declarado' };
       if (_totaisAntes) {
-        t.jogos = Math.max(t.jogos, _totaisAntes.jogos || 0);
+        var _antesIdx = _totaisAntes.fonte === 'indice';
+        if (_idxOk) {
+          // índice novo manda, inclusive pra baixo (só disputa com outro índice)
+          if (_antesIdx) t.jogos = Math.max(t.jogos, _totaisAntes.jogos || 0);
+        } else if (_antesIdx) {
+          // rodada sem índice não rebaixa um total que veio do índice — o contador do
+          // perfil, que é o que sobra aqui, é justamente o que conta linha repetida
+          t.jogos = _totaisAntes.jogos || t.jogos; t.fonte = 'indice';
+        } else {
+          t.jogos = Math.max(t.jogos, _totaisAntes.jogos || 0);
+        }
         t.torneios = Math.max(t.torneios, _totaisAntes.torneios || 0);
         t.rankings = Math.max(t.rankings, _totaisAntes.rankings || 0);
       }

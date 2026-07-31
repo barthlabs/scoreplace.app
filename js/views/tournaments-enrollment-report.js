@@ -1457,6 +1457,13 @@
       }
       juntar('tour', linhasT);
       juntar('rank', linhasR);
+      // O NÚMERO DA ABA TAMBÉM É DAS DUAS FONTES. Ele era carimbado no HTML com o total do
+      // letzplay e nunca mais mexido — então os jogos do app entravam na lista e a aba
+      // continuava dizendo o número antigo. Pior: quando não havia nenhum jogo do app, não
+      // dava pra saber se era "não tem" ou "não procurou". Agora o número se mexe.
+      window._lzAbaNum('jogo', (window._lzGameItens || []).length);
+      window._lzAbaNum('tour', linhasT.length, true);
+      window._lzAbaNum('rank', linhasR.length, true);
 
       // repinta a aba aberta, se o diálogo ainda está na tela
       var abas = document.getElementById('lz-abas');
@@ -1498,6 +1505,14 @@
 
   // Troca a aba visível. Só mexe no innerHTML da caixa — nada de re-renderizar o diálogo
   // (que apagaria a barra de progresso de uma leitura em curso).
+  // Soma (ou fixa) o número exibido na aba. `somar` = acrescenta ao que já está lá.
+  window._lzAbaNum = function (qual, n, somar) {
+    var abas = document.getElementById('lz-abas'); if (!abas) return;
+    var b = abas.querySelector('[data-lz-aba="' + qual + '"]'); if (!b) return;
+    var sp = b.querySelector('span'); if (!sp) return;
+    var atual = parseInt(sp.textContent, 10) || 0;
+    sp.textContent = String(somar ? (atual + (n || 0)) : (n || 0));
+  };
   window._lzAba = function (qual) {
     var box = document.getElementById('lz-aba-box');
     if (!box) return;
@@ -2192,8 +2207,15 @@
     // nunca deriva do quanto deu tempo de ler. Índice e declarado são os degraus abaixo.
     var _T = (imp && imp.totais) ||
              (rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].totaisLetzplay) || null;
-    if (_T && _T.jogos > 0) gY = _T.jogos;
-    else if (imp && imp.indexTotal > 0) gY = imp.indexTotal;
+    // ORDEM DE AUTORIDADE: índice (partidas DISTINTAS, contadas por id) > total gravado de
+    // outra procedência > contador do perfil, que conta LINHAS e por isso só serve de PISO.
+    // O contador do perfil pode ser MAIOR que a verdade: a lista do letzplay repete linha
+    // (Kelly: 158 linhas, 157 partidas). Deixar o piso vencer o índice fazia a barra parar
+    // em 99% pra sempre, esperando um jogo que não existe.
+    var _idxT = (imp && imp.indexTotal > 0) ? imp.indexTotal
+              : ((_T && _T.fonte === 'indice' && _T.jogos > 0) ? _T.jogos : 0);
+    if (_idxT > 0) gY = _idxT;
+    else if (_T && _T.jogos > 0) gY = _T.jogos;
     else if (imp && imp.declaredGames > 0) gY = Math.max(imp.declaredGames, gX);
     var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
     var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];

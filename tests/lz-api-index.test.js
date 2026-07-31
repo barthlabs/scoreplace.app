@@ -100,6 +100,68 @@ function servidor(total, opts) {
 }
 
 
+// ── O ÍNDICE REPETE LINHA: 158 entradas, 157 partidas (medido no perfil da Kelly) ────────
+// A partida 9299283 vem na página 2 E na 3. O contador do perfil diz "158 Jogos" porque
+// conta LINHAS. Não existe 158º jogo. Quem manda é o id.
+{
+  const paginas = {
+    1: Array.from({ length: 20 }, (_, i) => ({ id: 100 + i, date: '2026-01-01' })),
+    2: Array.from({ length: 20 }, (_, i) => ({ id: 200 + i, date: '2026-01-01' })),
+    3: [{ id: 219, date: '2026-01-01' }].concat(Array.from({ length: 19 }, (_, i) => ({ id: 300 + i, date: '2026-01-01' }))),
+    4: []
+  };
+  const r = await API.indice('kelly', async (u) => { const m = u.match(/[?&]page=(\d+)/); return paginas[m ? +m[1] : 1] || []; });
+  const entradas = 20 + 20 + 20;
+  ok(entradas === 60, 'a fonte devolveu 60 LINHAS');
+  ok(r.total === 59, 'e o índice contou 59 PARTIDAS distintas (veio ' + r.total + ')');
+  ok(!r.parcial, 'varreu até a página vazia');
+}
+
+// ── O TOTAL TEM PROCEDÊNCIA: índice substitui declarado, inclusive pra baixo ─────────────
+{
+  const cnt = fs.readFileSync(path.join(__dirname, '..', 'extension', 'content.js'), 'utf8');
+  const b = cnt.slice(cnt.indexOf('var _idxOk = _indexTotal > 0;'), cnt.indexOf('var _idxOk = _indexTotal > 0;') + 1600);
+  ok(/fonte: _idxOk \? 'indice' : 'declarado'/.test(b), 'o total gravado diz de onde veio');
+  ok(/if \(_antesIdx\) t\.jogos = Math\.max/.test(b) && /t\.jogos = _totaisAntes\.jogos \|\| t\.jogos; t\.fonte = 'indice'/.test(b),
+     'só disputa Math.max com total da mesma qualidade — e um declarado nunca rebaixa um índice');
+
+  // simula a regra: declarado 158 gravado antes, índice 157 agora → tem que virar 157
+  function totalDeJogos(indexTotal, declarado, antes) {
+    const idxOk = indexTotal > 0;
+    let jogos = indexTotal || declarado || 0;
+    if (antes) {
+      const antesIdx = antes.fonte === 'indice';
+      if (idxOk) { if (antesIdx) jogos = Math.max(jogos, antes.jogos || 0); }
+      else if (antesIdx) jogos = antes.jogos || jogos;
+      else jogos = Math.max(jogos, antes.jogos || 0);
+    }
+    return jogos;
+  }
+  ok(totalDeJogos(157, 158, { jogos: 158, fonte: 'declarado' }) === 157, 'o índice CORRIGE o piso errado pra baixo');
+  ok(totalDeJogos(0, 158, { jogos: 157, fonte: 'indice' }) === 157, 'e um declarado novo não estraga um índice antigo');
+  ok(totalDeJogos(160, 160, { jogos: 157, fonte: 'indice' }) === 160, 'índice novo maior vence índice antigo');
+  ok(totalDeJogos(0, 158, { jogos: 20, fonte: 'declarado' }) === 158, 'sem índice, o declarado ainda é piso e nunca cai');
+}
+
+// ── A TELA: índice > total gravado > declarado (piso) ────────────────────────────────────
+{
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/var _idxT = \(imp && imp\.indexTotal > 0\) \? imp\.indexTotal/.test(app), 'a barra usa o índice antes de tudo');
+  ok(/_T\.fonte === 'indice'/.test(app), 'e aceita o total gravado como índice quando ele diz que é');
+  ok(app.indexOf('if (_idxT > 0) gY = _idxT;') < app.indexOf('else if (imp && imp.declaredGames > 0)'),
+     'o contador do perfil só entra depois — como PISO, nunca como teto');
+}
+
+// ── O NÚMERO DA ABA É DAS DUAS FONTES ────────────────────────────────────────────────────
+{
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/window\._lzAbaNum = function \(qual, n, somar\)/.test(app), 'existe quem reescreva o número da aba');
+  ok(/window\._lzAbaNum\('jogo', \(window\._lzGameItens \|\| \[\]\)\.length\)/.test(app),
+     'depois de costurar o scoreplace, a aba Jogos passa a contar a lista inteira');
+  ok(/window\._lzAbaNum\('tour', linhasT\.length, true\)/.test(app) && /window\._lzAbaNum\('rank', linhasR\.length, true\)/.test(app),
+     'e as abas Torneios/Rankings somam as competições do app');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-api-index: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
 })();

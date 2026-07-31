@@ -36,7 +36,8 @@ ok(/rctx\.scanMap\[uid\]\.lzCursorParcial/.test(ret), 'a retomada lê o cursor p
 ok(/!\(imp\.lzCursor && imp\.lzCursor\.complete\)/.test(ret), 'e só o usa quando o histórico gravado não está completo');
 
 // ── o total exibido nunca vira o próprio número lido ──
-ok(/if \(imp && imp\.indexTotal > 0\) gY = imp\.indexTotal;/.test(app), 'o total vem do ÍNDICE quando existe');
+ok(/var _idxT = \(imp && imp\.indexTotal > 0\) \? imp\.indexTotal/.test(app) && /if \(_idxT > 0\) gY = _idxT;/.test(app),
+   'o total vem do ÍNDICE quando existe');
 ok(/else if \(imp && imp\.declaredGames > 0\) gY = Math\.max\(imp\.declaredGames, gX\);/.test(app),
   'e o declarado serve de PISO — 20 jogos nunca viram "20 de 20 (100%)"');
 ok(!/lzCursor\.complete === true\) gY = gX/.test(app), 'o cursor não redefine o total (ele é o que costuma estar errado)');
@@ -46,7 +47,7 @@ ok(!/lzCursor\.complete === true\) gY = gX/.test(app), 'o cursor não redefine o
 // povoando os totais com dados, de forma a nunca perder os totais."
 {
   const cnt = fs.readFileSync(path.join(__dirname, '..', 'extension', 'content.js'), 'utf8');
-  const bloco = cnt.slice(cnt.indexOf('OS TOTAIS SÃO FATO'), cnt.indexOf('OS TOTAIS SÃO FATO') + 1400);
+  const bloco = cnt.slice(cnt.indexOf('OS TOTAIS SÃO FATO'), cnt.indexOf('OS TOTAIS SÃO FATO') + 2600);
   ok(bloco.length > 300, 'a extensão separa TOTAIS de DETALHE');
   ok(/var t = \{ jogos: _indexTotal \|\| totJogos/.test(bloco), 'o total de jogos vem do índice (fato), não da contagem do que foi lido');
   ok(/Math\.max\(t\.jogos, _totaisAntes\.jogos \|\| 0\)/.test(bloco), 'e nunca diminui entre leituras');
