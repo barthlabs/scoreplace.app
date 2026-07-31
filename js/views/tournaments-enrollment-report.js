@@ -49,6 +49,16 @@
   // t.genderCategories quanto strings completas (feminino/masculino/outro)
   // que o perfil salva via <select id="profile-edit-gender">. Antes só
   // conhecia as curtas — masculino caía em null e gerava "Sem gênero 1".
+  // GÊNERO DE PESSOA é só Fem ou Masc. "Misto" é CATEGORIA (fem e masc jogando juntos) e
+  // NUNCA gênero de ninguém — quando aparece no campo `gender` de um inscrito, é resíduo de
+  // atribuição de categoria escrita no lugar errado. Contar isso na linha "por gênero" dava
+  // a pílula sem sentido que o dono viu: "Misto 3" no meio de Fem 91 e Masc 14.
+  // `_genderLabel` continua entendendo os rótulos de CATEGORIA (usado no casamento
+  // categoria×inscrito); quem fala de PESSOA usa `_personGender`.
+  function _personGender(g) {
+    var L = _genderLabel(g);
+    return (L === 'Fem' || L === 'Masc') ? L : null;
+  }
   function _genderLabel(g) {
     if (!g) return null;
     var key = String(g).toLowerCase().trim();
@@ -505,7 +515,7 @@
     var byAgeG   = { Fem: {}, Masc: {}, Misto: {}, sem: {} };
 
     rows.forEach(function (r) {
-      var gLabel = _genderLabel(r.gender) || 'sem';
+      var gLabel = _personGender(r.gender) || 'sem';
       if (byGender[gLabel] != null) byGender[gLabel]++; else byGender.sem++;
 
       // Skill by gender
@@ -576,7 +586,8 @@
     html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
     if (byGender.Fem > 0)  html += _statPill('♀ Fem',     byGender.Fem,  '236,72,153');
     if (byGender.Masc > 0) html += _statPill('♂ Masc',    byGender.Masc, '59,130,246');
-    if (byGender.Misto > 0) html += _statPill('⚥ Misto',  byGender.Misto,'168,85,247');
+    // sem pílula de "Misto" aqui: ninguém TEM gênero misto. Quem estiver com esse resíduo
+    // no perfil cai em "sem gênero", que é a verdade — e é acionável (dá pra corrigir).
     if (byGender.sem > 0)  html += _statPill('? Sem gênero', byGender.sem, '148,163,184');
     html += '</div></div>';
 
@@ -630,7 +641,7 @@
       var seenAges = {};
       var DEFAULT_AGE_BUCKETS = ['40+', '50+', '60+', '70+'];
       rows.forEach(function (r) {
-        var gLabel = _genderLabel(r.gender);
+        var gLabel = _personGender(r.gender);
         if (gLabel) seenGenders[gLabel] = 1;
         (r.effectiveSkills || []).forEach(function (s) { seenSkills[s] = 1; });
         if (r.age != null) {
@@ -898,18 +909,20 @@
     // _pendingEdits); nada é gravado/re-renderizado até o organizador clicar em
     // "Salvar alterações". Por isso o <select> mostra o valor STAGED se houver.
     var pe = _pendingEdits[r.order] || null;
-    var gMap = { Fem: { l: '♀ Fem', c: '236,72,153' }, Masc: { l: '♂ Masc', c: '59,130,246' }, Misto: { l: '⚥ Misto', c: '168,85,247' } };
-    var gl = _genderLabel(r.gender);
-    var rowGVal = gl === 'Fem' ? 'feminino' : (gl === 'Masc' ? 'masculino' : (gl === 'Misto' ? 'misto' : ''));
+    var gMap = { Fem: { l: '♀ Fem', c: '236,72,153' }, Masc: { l: '♂ Masc', c: '59,130,246' } };
+    var gl = _personGender(r.gender);
+    var rowGVal = gl === 'Fem' ? 'feminino' : (gl === 'Masc' ? 'masculino' : '');
     var curG = (pe && 'gender' in pe) ? pe.gender : rowGVal;
     var gBadge;
     if (isOrg) {
-      var glCur = curG === 'feminino' ? 'Fem' : (curG === 'masculino' ? 'Masc' : (curG === 'misto' ? 'Misto' : null));
+      var glCur = curG === 'feminino' ? 'Fem' : (curG === 'masculino' ? 'Masc' : null);
       var gc = (glCur && gMap[glCur]) ? gMap[glCur].c : '148,163,184';
       var gOpt = function (v, lbl) { return '<option value="' + v + '"' + (curG === v ? ' selected' : '') + '>' + lbl + '</option>'; };
       gBadge = '<select title="Editar gênero do inscrito" onchange="window._erStageGender(' + r.order + ',this.value)" ' +
         'style="font-size:0.68rem;font-weight:700;color:rgb(' + gc + ');background:rgba(' + gc + ',0.14);border:1px solid rgba(' + gc + ',0.35);border-radius:6px;padding:2px 6px;cursor:pointer;-webkit-appearance:none;appearance:none;">' +
-        gOpt('', '? Sem gên. ✎') + gOpt('feminino', '♀ Fem') + gOpt('masculino', '♂ Masc') + gOpt('misto', '⚥ Misto') +
+        // sem opção "Misto": o organizador não pode gravar uma CATEGORIA no campo de
+        // gênero de uma pessoa — foi assim que 3 inscritos ficaram com gender='misto'.
+        gOpt('', '? Sem gên. ✎') + gOpt('feminino', '♀ Fem') + gOpt('masculino', '♂ Masc') +
         '</select>';
     } else {
       gBadge = (gl && gMap[gl])
@@ -2620,7 +2633,7 @@
     var filtered = rows.filter(function (r) {
       if (q && _norm(r.name).indexOf(q) === -1 && _norm(r.email).indexOf(q) === -1) return false;
       if (gf !== 'all') {
-        var gl = _genderLabel(r.gender);
+        var gl = _personGender(r.gender);   // filtro de PESSOA: só Fem/Masc/sem
         if (gf === 'none') { if (gl) return false; }
         else if (gl !== gf) return false;
       }

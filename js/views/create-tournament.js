@@ -4978,6 +4978,36 @@ function setupCreateTournamentModal() {
   // v1.4.20-beta: expose handler on window so _renderCreateTournamentHeader can
   // re-attach it after each host.innerHTML call (innerHTML destroys the old element
   // and its listener — the new btn-save-tournament needs a fresh attachment).
+  // Sorteio automático COM data/hora futura marcada no formulário?
+  function _autoDrawAgendadoNoForm() {
+    function val(id) { var e = document.getElementById(id); return e ? (e.value || '') : ''; }
+    function chk(id) { var e = document.getElementById(id); return !!(e && e.checked); }
+    var manual = chk('liga-draw-manual') || chk('suico-draw-manual') || chk('suico-manual-draw');
+    if (manual) return false;
+    var data = val('suico-first-draw-date') || val('liga-first-draw-date');
+    if (!data) return false;
+    var hora = val('suico-first-draw-time') || val('liga-first-draw-time') || '00:00';
+    var partes = String(data).split('-'), hm = String(hora).split(':');
+    if (partes.length < 3) return false;
+    var quando = new Date(+partes[0], (+partes[1]) - 1, +partes[2], +(hm[0] || 0), +(hm[1] || 0));
+    return quando.getTime() > Date.now();      // só quando o sorteio ainda vai acontecer
+  }
+
+  // Duas opções, uma decisão. Grava em `window._drawBalanceChoice` e repete o salvar.
+  function _perguntarEquilibrio(depois) {
+    var msg = '<div style="text-align:left;font-size:0.88rem;line-height:1.55;">' +
+      'O sorteio vai acontecer sozinho na data marcada, então a escolha é agora.' +
+      '<div style="margin-top:10px;"><b>Equilibrado</b> — evita juntar gente do mesmo gênero no mesmo time ou grupo, ' +
+      'o quanto for possível. Numa rodada Rei/Rainha, os homens ficam espalhados pelos grupos em vez de caírem juntos.</div>' +
+      '<div style="margin-top:8px;"><b>Livre</b> — sorteio puro, sem olhar gênero.</div>' +
+      '<div style="margin-top:10px;font-size:0.8rem;color:var(--text-muted);">Dá pra mudar depois, editando o torneio.</div></div>';
+    if (typeof window.showConfirmDialog !== 'function') { window._drawBalanceChoice = true; window._drawBalanceConfirmed = true; depois(); return; }
+    window.showConfirmDialog('⚖️ Como sortear?', msg,
+      function () { window._drawBalanceChoice = true;  window._drawBalanceConfirmed = true; depois(); },
+      function () { window._drawBalanceChoice = false; window._drawBalanceConfirmed = true; depois(); },
+      { confirmText: '⚖️ Equilibrado', cancelText: '🎲 Livre', type: 'info', maxWidth: '560px' });
+  }
+
   window._saveTournamentClickHandler = function() {
       try {
         const editId = document.getElementById('edit-tournament-id').value;
@@ -4990,6 +5020,16 @@ function setupCreateTournamentModal() {
           return t.name && t.name.trim().toLowerCase() === name.toLowerCase();
         });
         if (nomeDuplicado) { showAlertDialog(window._t('create.nameDupe'), window._t('create.nameDupeMsg'), null, { type: 'warning' }); return; }
+
+        // SORTEIO EQUILIBRADO OU LIVRE — PERGUNTADO NO SALVAR (pedido do dono, 31/jul/2026).
+        // No sorteio MANUAL essa tela já aparece na hora de sortear. No AUTOMÁTICO não havia
+        // hora nenhuma: o sorteio acontece sozinho na data marcada, e ninguém nunca escolheu.
+        // Então a escolha passa a ser feita aqui, ao salvar, e fica gravada em `equilibrado`
+        // — que é o que o motor lê (o mesmo motor que a CF autoDraw roda).
+        if (!window._drawBalanceConfirmed && _autoDrawAgendadoNoForm()) {
+          _perguntarEquilibrio(function () { window._saveTournamentClickHandler(); });
+          return;
+        }
 
         // v2.4.11: reconciliação de pontuação. Se o organizador trocou o sistema
         // de pontuação num torneio que JÁ tem resultados, mostra "vai ficar assim"
@@ -5418,6 +5458,14 @@ function setupCreateTournamentModal() {
         tourData.ageCategories = catData.ageCategories || []; // v1.2.0
         tourData.customCategories = catData.customCategories || []; // v2.1.80
         tourData.combinedCategories = catData.combinedCategories || [];
+
+        // A ESCOLHA DA TELA VENCE, e vale pra QUALQUER formato — não só Liga. É ela que o
+        // motor lê no sorteio, inclusive o automático (a CF autoDraw roda o mesmo motor).
+        // Fica ANTES de gravar: payload sai pronto, sem depender de mutação pós-save.
+        if (window._drawBalanceConfirmed && typeof window._drawBalanceChoice === 'boolean') {
+          tourData.equilibrado = window._drawBalanceChoice;
+        }
+        window._drawBalanceConfirmed = false; window._drawBalanceChoice = undefined;
 
         if (editId) {
           const idx = window.AppStore.tournaments.findIndex(tour => tour.id.toString() === editId.toString());

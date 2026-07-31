@@ -4050,6 +4050,63 @@ function _monarchIndividuals(t, names) {
   return out;
 }
 
+// Gênero de um jogador pelo NOME, na ordem em que a verdade é mais confiável:
+// o uid (perfil vivo) → o que está gravado na inscrição → nada.
+function _monarchGenderOf(t, nome) {
+  var alvo = String(nome || '').trim().toLowerCase();
+  if (!alvo) return '';
+  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i]; if (!p) continue;
+    var cands = [
+      { n: p.displayName || p.name, uid: p.uid, g: p.gender },
+      { n: p.p1Name, uid: p.p1Uid, g: p.p1Gender || p.gender },
+      { n: p.p2Name, uid: p.p2Uid, g: p.p2Gender || p.gender }
+    ];
+    for (var k = 0; k < cands.length; k++) {
+      var c = cands[k];
+      var nm = (c.n && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(c.uid, c.n) : c.n;
+      if (!nm || String(nm).trim().toLowerCase() !== alvo) continue;
+      var g = (c.uid && typeof window._genderForUid === 'function' && window._genderForUid(c.uid)) || c.g || '';
+      g = String(g).toLowerCase().trim();
+      // "misto" é CATEGORIA, não gênero de pessoa — não serve pra equilibrar nada.
+      if (g.indexOf('misto') === 0) return '';
+      if (g.indexOf('f') === 0) return 'f';
+      if (g.indexOf('m') === 0) return 'm';
+      return '';
+    }
+  }
+  return '';
+}
+
+// Espalha a MINORIA de gênero pelos grupos de 4, por troca. Devolve a lista reordenada.
+// Melhor esforço e determinístico: percorre os grupos com excesso e troca com os que
+// ainda não têm ninguém da minoria. Não conhece "homem" nem "mulher" — só quem é minoria.
+function _spreadMinorityGender(t, lista, numGroups) {
+  var gen = {}, cF = 0, cM = 0;
+  lista.forEach(function (n) { var g = _monarchGenderOf(t, n); gen[n] = g; if (g === 'f') cF++; else if (g === 'm') cM++; });
+  if (!cF || !cM) return lista;                       // um gênero só (ou nenhum sabido) → nada a fazer
+  var min = (cM <= cF) ? 'm' : 'f';
+  var G = [];
+  for (var i = 0; i < numGroups; i++) G.push(lista.slice(i * 4, i * 4 + 4));
+  var sobra = lista.slice(numGroups * 4);             // não entra em grupo nenhum
+  function qtd(g) { return g.filter(function (n) { return gen[n] === min; }).length; }
+  // enquanto houver grupo com 2+ e grupo com 0, troca um pelo outro
+  for (var passo = 0; passo < numGroups * 4; passo++) {
+    var cheio = -1, vazio = -1;
+    for (var a = 0; a < G.length; a++) { if (qtd(G[a]) >= 2) { cheio = a; break; } }
+    for (var b = 0; b < G.length; b++) { if (qtd(G[b]) === 0) { vazio = b; break; } }
+    if (cheio < 0 || vazio < 0) break;                // acabou o que dava pra melhorar
+    var iM = G[cheio].findIndex(function (n) { return gen[n] === min; });
+    var iO = G[vazio].findIndex(function (n) { return gen[n] !== min; });
+    if (iM < 0 || iO < 0) break;
+    var tmp = G[cheio][iM]; G[cheio][iM] = G[vazio][iO]; G[vazio][iO] = tmp;
+  }
+  return G.reduce(function (acc, g) { return acc.concat(g); }, []).concat(sobra);
+}
+window._spreadMinorityGender = _spreadMinorityGender;
+window._monarchGenderOf = _monarchGenderOf;
+
 window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPlayers(t, category, _rn) {
   var standings = _computeStandings(t, category);
   var allPlayers = standings.map(function(s) { return s.name; });
@@ -4127,8 +4184,17 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     playingPlayers = _plainShuffle(playingPlayers);
   }
 
-  // Divide playing players into groups of 4
+  // EQUILÍBRIO DE GÊNERO NOS GRUPOS (t.equilibrado !== false). Pedido do dono
+  // (31/jul/2026) num torneio com 91 mulheres e 14 homens: "no sorteio não coloque 2
+  // homens num mesmo time / não devem cair num mesmo grupo 2 homens — o mais possível".
+  // É reparo por TROCA depois da ordenação, não uma ordenação nova: o `_bestShuffle`
+  // acabou de evitar reencontros e jogar isso fora sairia caro. Trocamos só o necessário
+  // pra espalhar a minoria, e paramos quando não dá mais — "o mais possível" é literal,
+  // nunca uma falha.
   var numGroups = Math.floor(playingPlayers.length / 4);
+  if (t.equilibrado !== false && numGroups > 1) {
+    playingPlayers = _spreadMinorityGender(t, playingPlayers, numGroups);
+  }
   var groups = [];
   var _n2uMap = _buildNameToUid(t); // v4.4.115: nome→uid pra gravar identidade nos jogos
 
