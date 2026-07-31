@@ -132,6 +132,7 @@ const SUITES = [
   'tests/lz-round-chaining.test.js',
   'tests/lz-nunca-regride.test.js',
   'tests/lz-agent-path.test.js',
+  'tests/lz-api-index.test.js',
   'tests/letzplay-pace.test.js',
   'tests/letzplay-model.test.js',
   'tests/letzplay-eta.test.js',

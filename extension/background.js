@@ -171,7 +171,7 @@ function enqueue(fn) {
 }
 
 var CS_MATCHES = ['https://scoreplace.app/*', 'https://scoreplace-staging.web.app/*', 'http://localhost/*'];
-var CS_FILES = ['lib/letzplay-rating.js', 'lib/letzplay-import.js', 'lib/letzplay-extract.js', 'lib/letzplay-flow.js', 'content.js'];
+var CS_FILES = ['lib/letzplay-api.js', 'lib/letzplay-rating.js', 'lib/letzplay-import.js', 'lib/letzplay-extract.js', 'lib/letzplay-flow.js', 'content.js'];
 function injectIntoOpenScoreplaceTabs() {
   if (!chrome.scripting || !chrome.tabs) return;
   chrome.tabs.query({ url: CS_MATCHES }, function (tabs) {
@@ -222,6 +222,30 @@ function fetchViaLetzplayTab(url, cb, noCreate) {
   var injUrl = chrome.runtime.getURL('inject.js');
   ensureLetzplayTab(function (tabId) {
     if (!tabId) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
+    // CAMINHO PREFERIDO: o AGENTE (lz-agent.js), content script declarado que vive COM a
+    // aba. Uma mensagem, uma resposta — nada é injetado por requisição e nada volta por
+    // postMessage no mundo da página. Medido em 31/jul: a mesma requisição levava 0,4s às
+    // 16h e estourava 40s às 18h, com a aba do letzplay aberta e navegável o tempo todo.
+    // O que variava era o intermediário: o service worker do MV3, reciclado pelo Chrome,
+    // deixava a resposta da injeção no vazio e só sobrava o prazo estourar.
+    // O caminho antigo (inject.js) fica como reserva: aba aberta ANTES de instalar/atualizar
+    // a extensão ainda não tem o agente, e recarregar a aba do usuário não é opção nossa.
+    var respondido = false;
+    function entregar(r) { if (respondido) return; respondido = true; cb(r); }
+    try {
+      chrome.tabs.sendMessage(tabId, { type: 'lz-agent-fetch', url: url }, function (r) {
+        var semAgente = !!chrome.runtime.lastError || !r;
+        if (!semAgente) { entregar(r); return; }
+        void chrome.runtime.lastError;
+        _fetchViaInject(url, tabId, injUrl, entregar);      // reserva
+      });
+    } catch (e) { _fetchViaInject(url, tabId, injUrl, entregar); }
+  }, noCreate);
+}
+
+// Caminho de RESERVA — injeta o inject.js na aba a cada requisição (era o único até 1.82).
+function _fetchViaInject(url, tabId, injUrl, cb) {
+  (function () {
     chrome.scripting.executeScript({
       target: { tabId: tabId },
       // ISOLATED (default) — carrega o inject.js (web-accessible) como <script src> na
@@ -250,7 +274,7 @@ function fetchViaLetzplayTab(url, cb, noCreate) {
     }).then(function (res) {
       cb((res && res[0] && res[0].result) || { ok: false, error: 'exec-failed' });
     }).catch(function (e) { cb({ ok: false, error: String(e && e.message || e) }); });
-  }, noCreate);
+  })();
 }
 
 // NAVEGA a aba do letzplay pra uma URL (v1.46 — pedido do dono: o puxar individual tem

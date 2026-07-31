@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "scoreplace — importar letzplay",
-  "version": "1.81",
+  "version": "1.83",
   "description": "Importa seu histórico do letzplay pro scoreplace, na sua sessão logada. Só desktop.",
   "permissions": [
     "tabs",
@@ -34,6 +34,7 @@
         "http://localhost/*"
       ],
       "js": [
+        "lib/letzplay-api.js",
         "lib/letzplay-rating.js",
         "lib/letzplay-import.js",
         "lib/letzplay-extract.js",
@@ -41,6 +42,16 @@
         "content.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://letzplay.me/*"
+      ],
+      "js": [
+        "lz-agent.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
     }
   ],
   "web_accessible_resources": [

@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.81';
+  var EXT_VERSION = '1.83';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -61,6 +61,14 @@
   function _newRateBudget(reqEstimate) {
     var n = Math.max(8, reqEstimate || 40);
     return { waits: 0, totalMs: 0, maxWaits: Math.max(6, Math.ceil(n / 6)), maxMs: Math.max(180000, n * 3000) };
+  }
+  // JSON pela MESMA via do HTML (aba logada + fila). O letzplay é Rails: toda rota responde
+  // JSON com `.json`, e é de lá que sai o ÍNDICE do histórico — id de cada partida, data,
+  // competição e fim de lista explícito.
+  async function bgFetchJson(url) {
+    var r = await bgFetchRaw(url);
+    if (!r || !r.ok) { var e = new Error((r && r.error) || ('HTTP ' + (r && r.status))); e.url = url; throw e; }
+    try { return JSON.parse(r.html); } catch (e2) { var e3 = new Error('json-invalido'); e3.url = url; throw e3; }
   }
   async function bgFetchDoc(url, opts) {
     var last = null;
@@ -1223,8 +1231,49 @@
           parcialAgora('rankings', Math.min(_br + LOTE, _pendR.length), _pendR.length);
         }
 
-        // ── ETAPA 3: JOGOS (fonte ÚNICA — o histórico pessoal) ─────────────────
+        // ── ETAPA 3: JOGOS ─────────────────────────────────────────────────────
+        // PRIMEIRO O ÍNDICE (JSON), DEPOIS O PLACAR (HTML).
+        // O índice diz QUAIS partidas existem — id, data e competição — e termina com uma
+        // página vazia. Com ele, duas coisas deixam de ser inferência:
+        //   • o TOTAL: o contador do perfil conta CARDS (478 pra 469 partidas reais na
+        //     Camila, 158 pra 157 na Kelly), e era por isso que a barra nunca fechava;
+        //   • a COMPLETUDE: "li tudo" passa a ser "tenho todos os ids do índice", em vez de
+        //     heurística de página lendo markup.
+        // O placar e os jogadores continuam vindo do HTML, que é onde eles estão.
         var base = 'https://letzplay.me/' + encodeURIComponent(handle) + '/matches';
+        var _idx = null;
+        if (window._spLzApi) {
+          try {
+            prog({ phase: 'jogos', note: 'lendo o índice do histórico', pct: 46 });
+            // já temos jogos? então o índice para na primeira página sem novidade — o
+            // que é novo entra no começo da lista e é contíguo.
+            var _conhecidos = null;
+            if (all.length) {
+              _conhecidos = {};
+              all.forEach(function (m) { if (m && m.lzId) _conhecidos[String(m.lzId)] = 1; });
+            }
+            _idx = await window._spLzApi.indice(handle, bgFetchJson, {
+              conhecidos: _conhecidos,
+              onProgresso: function (p, n) {
+                prog({ phase: 'jogos', note: 'índice: ' + n + ' partidas em ' + p + ' página(s)' });
+              }
+            });
+            // índice PARCIAL (parou cedo) não define total nem completude — ele só diz o
+            // que há de novo. Total e "li tudo" só valem quando ele varreu até o fim.
+            if (_idx && _idx.parcial) _idx = null;
+            if (_idx && _idx.total > 0) {
+              totJogos = _idx.total;               // FATO, não estimativa
+              maxPage = Math.max(maxPage, _idx.paginas);
+              prog({ phase: 'jogos', feed: '📇 índice: ' + _idx.total + ' partidas · ' +
+                Object.keys(_idx.comps).length + ' competições' });
+            }
+          } catch (eIdx) {
+            if (ehPausa(eIdx)) throw eIdx;
+            // sem índice a leitura continua do jeito antigo — ele acelera e dá certeza,
+            // mas não pode ser ponto único de falha.
+            prog({ phase: 'jogos', feed: '⚠️ índice indisponível — lendo pelo caminho longo' });
+          }
+        }
         var jaLeuTudo = (C.pagesTotal > 0 && C.pageDone >= C.pagesTotal);
         if (jaLeuTudo) {
           C.complete = true;
@@ -1348,10 +1397,19 @@
                 feed: '🎾 ' + _rot + ': +' + _addLote + ' jogo(s) · ' + _lidasAgora() + ' de ' + maxPage });
               if (_bp + LOTE < _faltam.length) parcialAgora('jogos', _bp + _grupo.length, _faltam.length);
             }
-            // completo = TODAS as páginas no conjunto, não "cheguei na última"
-            var _todas = true;
-            for (var _c = 1; _c <= maxPage; _c++) if (!C.pagesRead[_c]) { _todas = false; break; }
-            if (_todas) C.complete = true;
+            // COMPLETO = TENHO TODOS OS IDS DO ÍNDICE. Isso é verificação, não heurística:
+            // o índice já disse quais partidas existem. Sem índice, cai na regra antiga
+            // (todas as páginas no conjunto).
+            if (_idx && _idx.total > 0) {
+              var _faltando = 0;
+              for (var _k in _idx.porId) if (!seen['lz' + _k]) _faltando++;
+              if (_faltando === 0) C.complete = true;
+              else prog({ phase: 'jogos', feed: '🔎 faltam ' + _faltando + ' partida(s) do índice' });
+            } else {
+              var _todas = true;
+              for (var _c = 1; _c <= maxPage; _c++) if (!C.pagesRead[_c]) { _todas = false; break; }
+              if (_todas) C.complete = true;
+            }
           }
           // ⚠️ SÓ NO MODO INCREMENTAL. Este laço é o que para na primeira página sem
           // novidade; no modo completo quem lê é o bloco de lotes acima. Sem esta guarda os

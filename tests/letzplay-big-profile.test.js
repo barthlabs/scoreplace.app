@@ -122,6 +122,22 @@ window.__LZ = {
         this.cfg.games + ' Jogos ' + this.cfg.ranks + ' Rankings ' + this.cfg.tours + ' Torneios' +
         '</body></html>';
     }
+    // ÍNDICE JSON DO HISTÓRICO: /{handle}/matches.json[?page=]
+    // MEDIDO no letzplay real (31/jul/2026): Rails, toda rota responde JSON com .json;
+    // 20 por página; a página seguinte à última devolve []. É de onde sai o total REAL de
+    // partidas (o contador do perfil conta CARDS) e o fim de lista explícito.
+    let mj = u.match(/^\\/CamilaExemplo\\/matches\\.json(?:\\?page=(\\d+))?$/);
+    if (mj) {
+      const page = +(mj[1] || 1);
+      const ini = (page - 1) * PER_PAGE;
+      const fatia = this.games.slice(ini, ini + PER_PAGE);
+      return JSON.stringify(fatia.map(function (g) {
+        return { id: 10000000 + g.i, date: '2026-07-' + String((g.i % 28) + 1).padStart(2, '0'),
+          matchable_id: g.tid ? (300000 + (g.i % 40)) : (55000 + (g.i % 29)),
+          matchable_type: g.tid ? 'Tournament' : 'Ranking',
+          round: (g.i % 7) + 1, status: 3 };
+      }));
+    }
     // lista de torneios: /{handle}/tournaments[?page=]
     let mm = u.match(/^\\/CamilaExemplo\\/tournaments(?:\\?page=(\\d+))?$/);
     if (mm) {
@@ -348,7 +364,7 @@ async function novaPagina(browser) {
   await page.goto('http://scoreplace.test/');
   await page.addScriptTag({ content: FIXTURE });
   await page.addScriptTag({ content: CHROME_STUB });
-  for (const f of ['lib/letzplay-rating.js', 'lib/letzplay-import.js', 'lib/letzplay-extract.js', 'lib/letzplay-flow.js']) {
+  for (const f of ['lib/letzplay-api.js', 'lib/letzplay-rating.js', 'lib/letzplay-import.js', 'lib/letzplay-extract.js', 'lib/letzplay-flow.js']) {
     await page.addScriptTag({ content: read(path.join(EXT, f)) });
   }
   await page.addScriptTag({ content: read(path.join(ROOT, 'js/letzplay-model.js')) });
@@ -495,14 +511,21 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
   }));
   const urls2 = Object.keys(r2.hits);
   const pediuTorneio = urls2.filter(u => /\/tournaments\/\d+/.test(u));
-  const paginasLidas = urls2.filter(u => /^\/CamilaExemplo\/matches/.test(u));
-  console.log('     requisições na retomada: ' + urls2.length + ' (páginas de histórico: ' + paginasLidas.length + ')');
+  // ÍNDICE (JSON) e PÁGINA (HTML) são coisas diferentes e o teste tem que separá-las.
+  // O índice é a lista de ids que o letzplay serve em .json — barato, e é ele que torna o
+  // total e a completude VERIFICÁVEIS em vez de inferidos. A página de HTML é a cara,
+  // porque é de onde saem placar e jogadores. "Não reler" vale pra segunda.
+  const indice = urls2.filter(u => /matches\.json/.test(u));
+  const paginasLidas = urls2.filter(u => /^\/CamilaExemplo\/matches(?!\.json)/.test(u));
+  console.log('     requisições na retomada: ' + urls2.length +
+    ' (índice: ' + indice.length + ' · páginas de HTML: ' + paginasLidas.length + ')');
   ok(!r2.erro, 'a retomada não falhou', r2.erro);
   ok(pediuTorneio.length === 0, 'NÃO reabriu nenhum torneio já lido (cursor)', pediuTorneio.slice(0, 4).join(', '));
+  ok(indice.length > 0, 'o índice JSON foi consultado — é ele que diz o que existe');
   const antesDe20 = paginasLidas.filter(u => {
     const m = u.match(/page=(\d+)/); return m ? (+m[1] <= 20) : true;
   });
-  ok(antesDe20.length === 0, 'NÃO releu nenhuma página anterior à do cursor (página 20)', antesDe20.join(', '));
+  ok(antesDe20.length === 0, 'NÃO releu nenhuma PÁGINA DE HTML anterior à do cursor (página 20)', antesDe20.join(', '));
   ok(r2.cursor && r2.cursor.complete === true, 'a retomada chegou ao fim');
 
   // ── CENÁRIO 2b: dado SUJO do pipeline velho tem que sair na próxima leitura ──
