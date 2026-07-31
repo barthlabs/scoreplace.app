@@ -4,7 +4,7 @@
   "private": true,
   "description": "scoreplace.app — vanilla JS SPA. Package.json existe apenas para devDependencies de tooling (Playwright, Lighthouse). NÃO há build step nem bundler — index.html serve js/ e css/ direto.",
   "scripts": {
-    "test": "node tests/run-unit.js",
+    "test": "node scripts/check-ext-version.js && node tests/run-unit.js",
     "test:unit": "node tests/run-unit.js",
     "test:concurrency": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace \"node tests/concurrency/run.js\"",
     "test:rules": "node tests/rules-privileged-fields.test.js && node tests/rules-sandbox-read.test.js && node tests/rules-cohost-uid-only.test.js",
