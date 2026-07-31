@@ -35,5 +35,22 @@ const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournamen
 ok(/restante: ''/.test(app), 'o fluxo do atleta não manda estimativa nenhuma');
 ok(/decorrido: _fmtDur\(dec\) \+ _ritmoTexto\(\)/.test(app), 'o que fica é medido: decorrido + ritmo por item');
 
+// ── O NÚMERO DE PÁGINAS É ACUMULADO, não o tamanho do lote ──────────────────
+// "se está lendo só a página 24, deve dizer 24 de 24 e não 1 de 24 — as outras 23 já foram
+// lidas." O trabalho que já existe não deixa de existir porque esta rodada precisa de uma.
+{
+  const et3b = cnt.slice(cnt.indexOf('ETAPA 3: JOGOS'), cnt.indexOf('} catch (eEtapa)'));
+  ok(/function _lidasAgora\(\)/.test(et3b), 'existe uma contagem do que JÁ foi lido');
+  ok(/for \(var z = 1; z <= maxPage; z\+\+\) if \(C\.pagesRead\[z\]\)/.test(et3b),
+    'e ela varre o conjunto de páginas lidas, não um contador de lote');
+  ok(/var _pos = Math\.min\(_lidasAgora\(\) \+ _grupo\.length, maxPage\);/.test(et3b),
+    'o rótulo conta as já lidas MAIS as que estão sendo lidas agora');
+  ok(/_pos \+ ' de ' \+ maxPage \+ ' lidas'/.test(et3b), 'e é isso que vai pra tela');
+  ok(/pct: 46 \+ Math\.round\(\(_pos \/ Math\.max\(1, maxPage\)\) \* 51\)/.test(et3b),
+    'a barra usa o mesmo número — rótulo e barra não podem divergir de novo');
+  ok(!/_bp \/ Math\.max\(1, _faltam\.length\)/.test(et3b),
+    'nada mais mede progresso pelo tamanho da fila do lote');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-batched-requests: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

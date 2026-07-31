@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.77';
+  var EXT_VERSION = '1.78';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1232,8 +1232,9 @@
           if (tg != null && totJogos == null) totJogos = tg;
           var add1 = addJogos(pg1);
           lastPageRead = pIni; C.pagesRead[pIni] = 1;
-          prog({ phase: 'jogos', pct: 46 + Math.round((pIni / Math.max(1, maxPage)) * 51),
-            feed: '🎾 página ' + pIni + ': +' + add1 + ' jogo(s) · 1 de ' + maxPage });
+          var _lidas1 = 0; for (var _z = 1; _z <= maxPage; _z++) if (C.pagesRead[_z]) _lidas1++;
+          prog({ phase: 'jogos', pct: 46 + Math.round((_lidas1 / Math.max(1, maxPage)) * 51),
+            feed: '🎾 página ' + pIni + ': +' + add1 + ' jogo(s) · ' + _lidas1 + ' de ' + maxPage });
           // nada novo já na primeira: o acervo está em dia, uma requisição resolveu
           if (jaConhecidos > 0 && add1 === 0) {
             C.complete = true;
@@ -1276,8 +1277,13 @@
                 return n;
               }
               var _rot = (_grupo.length > 1 ? 'páginas ' : 'página ') + _grupo.join(' e ');
-              prog({ phase: 'jogos', note: _rot + ' · ' + _lidasAgora() + ' de ' + maxPage + ' lidas',
-                pct: 46 + Math.round((_bp / Math.max(1, _faltam.length)) * 51) });
+              // O NÚMERO É QUANTAS PÁGINAS JÁ FORAM LIDAS, contando a que está sendo lida
+              // agora — não quantas cabem no lote. Se 23 já foram e falta uma, é "24 de 24",
+              // não "1 de 24": o trabalho que já existe não deixa de existir porque esta
+              // rodada só precisa de uma página.
+              var _pos = Math.min(_lidasAgora() + _grupo.length, maxPage);
+              prog({ phase: 'jogos', note: _rot + ' · ' + _pos + ' de ' + maxPage + ' lidas',
+                pct: 46 + Math.round((_pos / Math.max(1, maxPage)) * 51) });
               var _docs = await Promise.all(_grupo.map(function (q) {
                 return bgFetchDoc(q > 1 ? (base + '?page=' + q) : base);
               }));
@@ -1296,7 +1302,7 @@
                 } else _vazias++;
               });
               if (_vazias) prog({ phase: 'jogos', feed: '⚠️ ' + _vazias + ' página(s) voltaram vazias — não contam como lidas' });
-              prog({ phase: 'jogos', pct: 46 + Math.round(((_bp + _grupo.length) / Math.max(1, _faltam.length)) * 51),
+              prog({ phase: 'jogos', pct: 46 + Math.round((_lidasAgora() / Math.max(1, maxPage)) * 51),
                 note: _rot + ' · ' + _lidasAgora() + ' de ' + maxPage + ' lidas',
                 feed: '🎾 ' + _rot + ': +' + _addLote + ' jogo(s) · ' + _lidasAgora() + ' de ' + maxPage });
               if (_bp + LOTE < _faltam.length) parcialAgora('jogos', _bp + _grupo.length, _faltam.length);
@@ -1314,8 +1320,10 @@
           // da Kelly viraram 20.
           for (var p = pIni + 1; _incremental && p <= maxPage && !C.complete; p++) {
             conferirTeto();
-            prog({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage + ' — procurando jogo novo',
-              pct: 46 + Math.round(((p - 1) / Math.max(1, maxPage)) * 51) });
+            var _lidasP = 0; for (var _y = 1; _y <= maxPage; _y++) if (C.pagesRead[_y]) _lidasP++;
+            prog({ phase: 'jogos',
+              note: 'página ' + p + ' · ' + Math.min(_lidasP + 1, maxPage) + ' de ' + maxPage + ' — procurando jogo novo',
+              pct: 46 + Math.round((_lidasP / Math.max(1, maxPage)) * 51) });
             var add = addJogos(X.extractMatchesFromDoc(await bgFetchDoc(base + '?page=' + p), realHandle));
             // página vazia não é página lida (ver o mesmo cuidado no bloco de lotes)
             lastPageRead = p; if (add > 0) C.pagesRead[p] = 1;
