@@ -1638,6 +1638,12 @@
     // como VERDE — absolvição baseada em quase nada.
     if (li.lzCursor && li.lzCursor.complete === true && !li.partialReason) {
       var _c = li.lzCursor;
+      // COMPLETO TEM QUE BATER COM O TAMANHO. O cursor pode se declarar completo por engano
+      // (aconteceu) e um histórico truncado passava por verificado. Com índice, a conta é
+      // exata; sem ele, o declarado (que conta cards) serve de piso com folga de 5%.
+      var _alvo = (li.indexTotal > 0) ? li.indexTotal
+                : (li.declaredGames > 0 ? Math.floor(li.declaredGames * 0.95) : 0);
+      if (_alvo > 0 && n < _alvo) return false;
       if (_c.pagesTotal > 0 && _c.pagesRead && typeof _c.pagesRead === 'object') {
         var _lidas = 0;
         for (var _k = 1; _k <= _c.pagesTotal; _k++) if (_c.pagesRead[_k]) _lidas++;
@@ -2139,6 +2145,12 @@
     var _p1 = rctx.profileMap && rctx.profileMap[uid] && rctx.profileMap[uid].letzplayImport;
     var _p2 = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].fullImport;
     var imp = _lzMelhorImport(_p1, _p2);
+    // cursor de uma leitura que não fechou fica FORA do fullImport (o histórico oficial só
+    // é substituído por leitura completa) — mas ele é o que permite retomar de onde parou.
+    var _curParcial = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].lzCursorParcial;
+    if (imp && _curParcial && !(imp.lzCursor && imp.lzCursor.complete)) {
+      imp = Object.assign({}, imp, { lzCursor: _curParcial });
+    }
     // MEDIDOR DE NÍVEL no topo — a MESMA barra das estatísticas (`_lzLevelBar`).
     // O card INTEIRO estava aqui e virou um rolo sem fim dentro do diálogo: as três listas
     // empilhadas, sem como chegar no fim de nenhuma ("essa tela está imprestável"). As
@@ -2168,12 +2180,21 @@
     // o declarado pode ficar pequeno — barra travada em "478 de 478" enquanto ainda
     // entram jogos é mentira
     if (gX > (gY || 0)) gY = gX;
-    // HISTÓRICO LIDO ATÉ O FIM → o total é o que a lista ENUMERA. MEDIDO no letzplay em
-    // 30/jul (as 24 páginas de @camilacalia): 478 cards, 469 ids de partida distintos —
-    // 9 partidas aparecem duas vezes na lista deles. O "478 Jogos" do perfil conta CARD,
-    // não partida. Enquanto o total vinha dele, a leitura fechava em "469 de 478" e o
-    // perfil ficava INCOMPLETO pra sempre por causa de 9 fantasmas.
-    if (imp && imp.lzCursor && imp.lzCursor.complete === true) gY = gX;
+    // TOTAL DE JOGOS — na ordem de confiança:
+    //   1) o ÍNDICE (ext ≥1.83): o letzplay serve /{h}/matches.json e ali cada linha é uma
+    //      PARTIDA. É o único número que é fato.
+    //   2) o declarado no perfil, que conta CARDS (478 pra 469 reais) — serve de piso.
+    // O QUE NÃO PODE, e era o que estava acontecendo: deixar o total virar o próprio número
+    // lido quando o cursor diz "completo". Um documento truncado em 20 jogos aparecia como
+    // "20 de 20 (100%)" — leitura pela metade exibida como perfeita. Um cursor errado não
+    // pode redefinir a verdade; ele é justamente o que costuma estar errado.
+    // TOTAIS vêm do bloco de ESTRUTURA (ext ≥1.84), que é conhecido antes de ler HTML e
+    // nunca deriva do quanto deu tempo de ler. Índice e declarado são os degraus abaixo.
+    var _T = (imp && imp.totais) ||
+             (rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].totaisLetzplay) || null;
+    if (_T && _T.jogos > 0) gY = _T.jogos;
+    else if (imp && imp.indexTotal > 0) gY = imp.indexTotal;
+    else if (imp && imp.declaredGames > 0) gY = Math.max(imp.declaredGames, gX);
     var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
     var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];
     var tX = window._lzTournamentsRead(imp);   // mesma regra do overlay ao vivo
@@ -2181,7 +2202,8 @@
     // ENUMERA. O contador do perfil da Camila diz 35, mas a lista tem mais entradas — e
     // aí "35 de 35 (100%)" aparecia junto de itens "ainda não lido" na mesma tela. Uma
     // lista que se pode contar vale mais que um contador que a gente não sabe o que conta.
-    var tY = (imp && imp.declaredTournaments != null) ? imp.declaredTournaments : null;
+    var tY = (_T && _T.torneios > 0) ? _T.torneios
+           : ((imp && imp.declaredTournaments != null) ? imp.declaredTournaments : null);
     var tLista = (imp && Array.isArray(imp.tournamentsList)) ? imp.tournamentsList.length : 0;
     if (tLista > 0) tY = (tY != null) ? Math.max(tY, tLista) : tLista;
     // SEM TOTAL DECLARADO, CONTA O QUE SE CONHECE. A Kelly não tinha `declaredTournaments`
@@ -2200,7 +2222,8 @@
     // o que for maior — nunca a contagem de ENTRADAS do footprint. O footprint fragmenta:
     // 30 entradas pros 29 rankings da Camila e 21 pros 8 da Kelly. Contar entradas prendia
     // a barra em "29 de 30" e inventava "21 rankings" pra quem tem 8.
-    var rY = (imp && imp.declaredRankings != null) ? imp.declaredRankings : null;
+    var rY = (_T && _T.rankings > 0) ? _T.rankings
+           : ((imp && imp.declaredRankings != null) ? imp.declaredRankings : null);
     var rLista = (imp && Array.isArray(imp.rankingsList)) ? imp.rankingsList.length : 0;
     if (rLista > 0) rY = (rY != null) ? Math.max(rY, rLista) : rLista;
     if (rY == null) rY = _lzContarDistintos(rkFp, false) || null;
@@ -3261,7 +3284,21 @@
         s.scan._fullError = (scanMode === 'full' && !gotFull) ? (s.fullError || 'sem-jogos') : null;
       }
       var doc = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, scannedByName: meName, tournamentId: String(tId), tournamentName: tName };
-      if (gotFull) doc.fullImport = s.fullImport;
+      // ⚠️ PARCIAL NUNCA VIRA DOCUMENTO OFICIAL.
+      // Esta é a causa-raiz de TODOS os episódios de hoje: os parciais gravavam o
+      // `fullImport`, então uma leitura interrompida no meio deixava 20 jogos como se
+      // fossem o histórico da pessoa — e a tela, corretamente, mostrava o que estava
+      // gravado. Não existe display que conserte um banco com dado errado.
+      // Agora o parcial grava só o PROGRESSO: o cursor (pra retomar de onde parou) e o
+      // resumo. O histórico em si só é substituído pelo fechamento de uma leitura
+      // COMPLETA — ver _saveScansAndReload. As partidas já lidas não se perdem: elas vão,
+      // uma a uma, pro acervo canônico (letzplayTournaments/{comp}/matches/{id}), que é
+      // append-only e não depende deste documento.
+      if (gotFull && s.fullImport && s.fullImport.lzCursor) doc.lzCursorParcial = s.fullImport.lzCursor;
+      // OS TOTAIS PODEM (e devem) IR NO PARCIAL: eles são fato conhecido antes de ler o
+      // detalhe, e é justamente isso que impede a tela de mostrar "20 de 20" enquanto a
+      // leitura ainda está preenchendo. Histórico não vai; estrutura vai.
+      if (s.fullImport && s.fullImport.totais) doc.totaisLetzplay = s.fullImport.totais;
       var w = _lzBarrarRegressao(s.uid, doc, db)
         .then(function (d2) { return db.collection('letzplayScans').doc(s.uid).set(d2, { merge: true }); })
         .catch(function (err) {
@@ -3335,7 +3372,16 @@
       // Só o scan COMPLETO leva o histórico inteiro (letzplayImport) pro perfil do participante.
       // Não gravar `fullImport: null` quando falhou: o set é merge, e apagar um histórico
       // BOM de uma varredura anterior por causa de um 403 de hoje seria perda de dado real.
-      if (gotFull) doc.fullImport = s.fullImport;
+      // SÓ LEITURA COMPLETA SUBSTITUI O HISTÓRICO. Um fechamento por pausa/erro traz o que
+      // deu tempo de ler — e isso é progresso, não é o histórico da pessoa. Gravar como se
+      // fosse é o que produziu "20 jogos" para quem tem 158. Incompleta grava só o cursor.
+      var _completa = !!(s.fullImport && s.fullImport.lzCursor && s.fullImport.lzCursor.complete === true
+                         && !s.fullImport.partialReason);
+      if (gotFull && _completa) doc.fullImport = s.fullImport;
+      else if (gotFull && s.fullImport.lzCursor) {
+        doc.lzCursorParcial = s.fullImport.lzCursor;
+        window._warn && window._warn('[letzplay] leitura incompleta — gravei só o progresso, o histórico ficou como estava.');
+      }
       // MESMA TRAVA DO CAMINHO DOS PARCIAIS. Os dois escrevem no MESMO documento e a ordem
       // de chegada não é garantida — pôr a guarda só num deles é não ter guarda.
       return _lzBarrarRegressao(s.uid, doc, db)

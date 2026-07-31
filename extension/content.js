@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.83';
+  var EXT_VERSION = '1.84';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -931,8 +931,26 @@
       });
       return raw;
     }
+    var _indexTotal = (prior && prior.indexTotal) || 0;
+    var _totaisAntes = (prior && prior.totais) || null;
     function carimbar(imp) {
       if (nomeExibicao) { imp.profile = imp.profile || {}; imp.profile.name = nomeExibicao; }
+      if (_indexTotal > 0) imp.indexTotal = _indexTotal;   // total de PARTIDAS, do índice
+      // ── OS TOTAIS SÃO FATO, SEPARADO DO DETALHE ───────────────────────────────
+      // A estrutura (quantos torneios, quantos rankings, quantas partidas) vem do perfil e
+      // do índice JSON, e é conhecida ANTES de ler qualquer HTML. O detalhe — placar,
+      // jogadores, nome, classificação — vem depois e vai PREENCHENDO essa estrutura.
+      // Guardar os dois juntos foi o que permitiu um total virar refém do quanto deu tempo
+      // de ler: "20 de 20 (100%)" para quem tem 158. Aqui o total nunca é derivado do que
+      // conseguimos ler, e nunca diminui — só é substituído por um total NOVO e maior ou
+      // igual, vindo da fonte.
+      var t = { jogos: _indexTotal || totJogos || 0, torneios: totTorneios || 0, rankings: totRankings || 0 };
+      if (_totaisAntes) {
+        t.jogos = Math.max(t.jogos, _totaisAntes.jogos || 0);
+        t.torneios = Math.max(t.torneios, _totaisAntes.torneios || 0);
+        t.rankings = Math.max(t.rankings, _totaisAntes.rankings || 0);
+      }
+      if (t.jogos || t.torneios || t.rankings) imp.totais = t;
       imp.declaredGames = totJogos;
       imp.declaredTournaments = totTorneios;
       imp.declaredRankings = totRankings;
@@ -1263,6 +1281,7 @@
             if (_idx && _idx.parcial) _idx = null;
             if (_idx && _idx.total > 0) {
               totJogos = _idx.total;               // FATO, não estimativa
+              _indexTotal = _idx.total;            // vai gravado, pra tela não depender de cursor
               maxPage = Math.max(maxPage, _idx.paginas);
               prog({ phase: 'jogos', feed: '📇 índice: ' + _idx.total + ' partidas · ' +
                 Object.keys(_idx.comps).length + ' competições' });
