@@ -336,10 +336,18 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
       border-radius: 16px;
       max-width: ${maxWidth};
       width: 94%;
+      /* O CARD NAO PODE PASSAR DA TELA. Sem altura maxima ele cresce com o conteudo e o
+         rodape com os botoes sai do viewport - o dono via um fantasma dos botoes pendurado
+         embaixo, inalcancavel. Com max-height + coluna flex, o CORPO e quem rola e
+         cabecalho e botoes ficam sempre visiveis. Percentual, nao vh: sob zoom no body o
+         vh estoura (canone de escala por area). */
+      max-height: 92%;
+      display: flex;
+      flex-direction: column;
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     ">
-      <div style="background: ${c.bg}; border-bottom: 1px solid var(--border-color); padding: 1.25rem; display: flex; align-items: center; gap: 12px;">
+      <div style="background: ${c.bg}; border-bottom: 1px solid var(--border-color); padding: 1.25rem; display: flex; align-items: center; gap: 12px; flex: 0 0 auto;">
         <span style="font-size: 2rem;">${c.icon}</span>
         <div>
           <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-color);">${title}</div>
@@ -348,7 +356,7 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
       <div style="padding: 1.25rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; overflow-y: auto; flex: 1 1 auto; min-height: 0;">
         ${message}
       </div>
-      <div style="padding: 1rem 1.25rem 1.25rem; display: flex; gap: 10px; justify-content: flex-end;">
+      <div style="padding: 1rem 1.25rem 1.25rem; display: flex; gap: 10px; justify-content: flex-end; flex: 0 0 auto; border-top: 1px solid var(--border-color);">
         <button id="confirm-cancel-btn" style="
           background: rgba(255, 255, 255, 0.08);
           color: var(--text-main);
