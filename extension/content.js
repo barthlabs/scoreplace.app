@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.67';
+  var EXT_VERSION = '1.68';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -842,8 +842,8 @@
       imp.declaredGames = totJogos;
       imp.declaredTournaments = totTorneios;
       imp.declaredRankings = totRankings;
-      if (toursList.length) imp.tournamentsList = toursList.map(function (P) { return { club: P.club, tid: P.tid, title: P.title || null }; });
-      if (ranksList.length) imp.rankingsList = ranksList.map(function (R) { return { club: R.club, rid: R.rid, title: R.title || null }; });
+      if (toursList.length) imp.tournamentsList = toursList.map(function (P) { return { club: P.club, tid: P.tid, title: P.title || null, data: P.data || null, dataNum: P.dataNum || null }; });
+      if (ranksList.length) imp.rankingsList = ranksList.map(function (R) { return { club: R.club, rid: R.rid, title: R.title || null, data: R.data || null, dataNum: R.dataNum || null }; });
       imp.lzCursor = { v: 4, handle: realHandle, toursDone: C.toursDone, ranksDone: C.ranksDone,
         pageDone: lastPageRead, pagesTotal: maxPage || null, complete: C.complete === true };
       return boundImportDoc(imp);
@@ -934,6 +934,30 @@
       return lista;
     }
 
+    // DATA DA COMPETIÇÃO, TIRADA DO PRÓPRIO CARD DA LISTA — sem requisição extra.
+    // MEDIDO na página real (letzplay.me/KellyBarth1/tournaments, 31/jul/2026): o texto do
+    // card traz "Terminou em 28/jun/2026" (concluído), "Jogos em 01/ago" (em andamento) ou
+    // "Próximo Jogo: 01/ago as 11:00hs". O ano some quando é do ano corrente.
+    var _MESES = { jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12 };
+    function _dataDoCard(txt) {
+      var t = String(txt || '');
+      var m = t.match(/Terminou em\s+(\d{1,2})\/([a-zç]{3})\/?(\d{4})?/i)
+           || t.match(/Jogos em\s+(\d{1,2})\/([a-zç]{3})\/?(\d{4})?/i)
+           || t.match(/Pr[óo]ximo Jogo:\s*(\d{1,2})\/([a-zç]{3})\/?(\d{4})?/i);
+      if (!m) return null;
+      var mes = _MESES[String(m[2]).toLowerCase().slice(0, 3)];
+      if (!mes) return null;
+      var ano = m[3] ? +m[3] : new Date().getFullYear();
+      var dia = +m[1];
+      return { num: ano * 10000 + mes * 100 + dia,
+               label: (dia < 10 ? '0' : '') + dia + ' ' + String(m[2]).toLowerCase().slice(0, 3) + ' ' + String(ano).slice(2) };
+    }
+    function _cardDe(a) {
+      var c = a;
+      for (var i = 0; i < 5 && c.parentElement; i++) { c = c.parentElement; if (/\brow\b|card|item/i.test(c.className || '')) break; }
+      return c;
+    }
+
     async function lerLista(url, re, campo, esperado) {
       var achados = [], visto = {};
       function colher(doc) {
@@ -951,9 +975,12 @@
             var t0 = (a.textContent || '').replace(/\s+/g, ' ').trim();
             var ja = visto[chave];
             if (t0 && (!ja.title || t0.length > ja.title.length)) ja.title = t0;
+            if (!ja.data) { var _d2 = _dataDoCard((_cardDe(a).textContent || '')); if (_d2) { ja.data = _d2.label; ja.dataNum = _d2.num; } }
             return;
           }
           var item = { club: m[1], title: (a.textContent || '').replace(/\s+/g, ' ').trim() };
+          var _dt = _dataDoCard((_cardDe(a).textContent || ''));
+          if (_dt) { item.data = _dt.label; item.dataNum = _dt.num; }
           item[campo] = m[2];
           visto[chave] = item;
           achados.push(item);
@@ -1023,15 +1050,15 @@
         // dos totais — parecia parada. A lista pública já traz o TÍTULO de cada um: mostra
         // agora, em cinza-claro, e cada linha é substituída pela versão completa (com
         // categoria e colocação) quando aquele torneio for lido de fato.
-        toursList.slice(0, 12).forEach(function (P) {
-          if (!P || !P.title) return;
-          prog({ phase: 'torneios', feed: { icon: '🏆', nome: P.title } });
-        });
+        toursList.slice().sort(function (a, b) { return (b.dataNum || 0) - (a.dataNum || 0); })
+          .slice(0, 12).forEach(function (P) {
+            if (!P || !P.title) return;
+            prog({ phase: 'torneios', feed: { icon: '🏆', data: P.data || null, nome: P.title } });
+          });
         if (toursList.length > 12) prog({ phase: 'torneios', feed: '… e mais ' + (toursList.length - 12) + ' torneio(s) na lista' });
         // A FILA JÁ FAZ VÁRIAS AO MESMO TEMPO — mas o laço `await` por item as
         // serializava mesmo assim. Disparamos em blocos: o tempo total passa a ser
         // limitado pelo servidor, não pelo nosso laço.
-        var pulT = 0;
         for (var ti = 0; ti < toursList.length; ti++) {
           conferirTeto();
           var P = toursList[ti], tk = 't/' + P.club + '/' + P.tid;
@@ -1039,8 +1066,10 @@
           // de uma leitura que deu certo. Exigir também `detDe(tk)` fazia competição sem
           // classificação publicada (3 dos 35 torneios dela) nunca contar como lida e ser
           // REBUSCADA em toda rodada, pra sempre: "32 de 35" que nunca fecha.
-          if (C.toursDone[tk]) { var _dT = detDe(tk); if (_dT) det[tk] = _dT; pulT++; continue; }
-          if (pulT) { prog({ phase: 'torneios', feed: '⏭️ ' + pulT + ' já lidos — pulados sem reler' }); pulT = 0; }
+          // PULAR É PULAR — SEM ANUNCIAR. A linha "⏭️ N já lidos — pulados sem reler"
+          // enchia o feed com o que NÃO aconteceu, no meio das linhas do que aconteceu.
+          // Quem só pula não gasta requisição nem tempo: não tem o que reportar.
+          if (C.toursDone[tk]) { var _dT = detDe(tk); if (_dT) det[tk] = _dT; continue; }
           // O NÚMERO DO RÓTULO É O MESMO DA BARRA. Antes o rótulo usava a posição na LISTA
           // e a barra usava o quanto já foi lido — dois contadores diferentes na mesma tela
           // ("torneio 1 de 35" embaixo de "30 de 35"). Agora ele conta o que está sendo
@@ -1066,12 +1095,12 @@
             // outra. Rótulo é estado da fase, não evento.
             prog({ phase: 'torneios', pct: 4 + Math.round(((ti + 1) / Math.max(1, toursList.length)) * 26),
               note: 'torneio ' + Math.min(Object.keys(C.toursDone).length, _totT) + ' de ' + _totT + ' — nome, categoria e classificação',
-              feed: Object.assign({ icon: '🏆' }, _partirNome(det[tk].name || P.title || ('torneio ' + P.tid)),
+              feed: Object.assign({ icon: '🏆', data: P.data || null },
+                _partirNome(det[tk].name || P.title || ('torneio ' + P.tid)),
                 { pos: (pT != null ? (_medalha(pT) + ' ' + pT + 'º') : null) }) });
           } catch (eT) { if (ehPausa(eT)) throw eT; }
           parcialAgora('torneios', ti + 1, toursList.length);
         }
-        if (pulT) prog({ phase: 'torneios', pct: 30, feed: '⏭️ ' + pulT + ' já lidos — pulados sem reler' });
 
         // ── ETAPA 2: RANKINGS ──────────────────────────────────────────────────
         if (!ranksList.length || (totRankings != null && ranksList.length < totRankings)) {
@@ -1083,12 +1112,10 @@
         if (totRankings == null && ranksList.length) totRankings = ranksList.length;
         prog({ phase: 'rankings', pct: 31,
           note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, (totRankings || ranksList.length) || 1) + ' de ' + ((totRankings || ranksList.length) || '?') + ' — nome e classificação' });
-        var pulR = 0;
         for (var ri = 0; ri < ranksList.length; ri++) {
           conferirTeto();
           var R = ranksList[ri], rk = 'r/' + R.club + '/' + R.rid;
-          if (C.ranksDone[rk]) { var _dR = detDe(rk); if (_dR) det[rk] = _dR; pulR++; continue; }
-          if (pulR) { prog({ phase: 'rankings', feed: '⏭️ ' + pulR + ' já lidos — pulados sem reler' }); pulR = 0; }
+          if (C.ranksDone[rk]) { var _dR = detDe(rk); if (_dR) det[rk] = _dR; continue; }
           var _totR = totRankings || ranksList.length;
           prog({ phase: 'rankings',   // idem: o rótulo conta o MESMO que a barra
             note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, _totR) + ' de ' + _totR + ' — nome e classificação',
@@ -1100,12 +1127,12 @@
             var pR = minhaPos(det[rk].standings);
             prog({ phase: 'rankings', pct: 31 + Math.round(((ri + 1) / Math.max(1, ranksList.length)) * 14),
               note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, _totR) + ' de ' + _totR + ' — nome e classificação',
-              feed: Object.assign({ icon: '📊' }, _partirNome(det[rk].name || R.title || ('ranking ' + R.rid)),
+              feed: Object.assign({ icon: '📊', data: R.data || null },
+                _partirNome(det[rk].name || R.title || ('ranking ' + R.rid)),
                 { pos: (pR != null ? (pR + 'º') : null) }) });
           } catch (eR) { if (ehPausa(eR)) throw eR; }
           parcialAgora('rankings', ri + 1, ranksList.length);
         }
-        if (pulR) prog({ phase: 'rankings', pct: 45, feed: '⏭️ ' + pulR + ' já lidos — pulados sem reler' });
 
         // ── ETAPA 3: JOGOS (fonte ÚNICA — o histórico pessoal) ─────────────────
         var base = 'https://letzplay.me/' + encodeURIComponent(handle) + '/matches';

@@ -23,7 +23,8 @@ ok(rotR.length >= 2, 'idem nos rankings');
 ok(rotR.every(x => !/\+ 1/.test(x)), 'e nenhum soma 1');
 
 // a caixa enche com a LISTA antes de abrir o primeiro torneio
-ok(/toursList\.slice\(0, 12\)\.forEach/.test(cnt), 'a lista de torneios já vira linhas no feed');
+ok(/toursList\.slice\(\)\.sort\(/.test(cnt) && /\.slice\(0, 12\)/.test(cnt),
+  'a lista de torneios já vira linhas no feed, do mais recente pro mais antigo');
 ok(/e mais ' \+ \(toursList\.length - 12\)/.test(cnt), 'e diz quantos ficaram de fora da prévia');
 
 // o nome de exibição do letzplay é capturado

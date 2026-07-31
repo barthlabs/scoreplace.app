@@ -120,6 +120,7 @@ const SUITES = [
   'tests/auto-draw-balance-choice.test.js',
   'tests/lz-label-equals-bar.test.js',
   'tests/ext-version-single-source.test.js',
+  'tests/lz-list-date.test.js',
   'tests/letzplay-pace.test.js',
   'tests/letzplay-model.test.js',
   'tests/letzplay-eta.test.js',
