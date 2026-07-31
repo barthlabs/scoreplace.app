@@ -59,7 +59,11 @@ function loadBg(stored) {
   const uniq = new Set(waits);
   ok(uniq.size > 150, 'a espera continua VARIANDO (únicos: ' + uniq.size + '/400) — intervalo cravado é assinatura de robô');
   const avg = waits.reduce((a, b) => a + b, 0) / waits.length;
-  ok(avg < 900, 'passo de fábrica é rápido (avg: ' + Math.round(avg) + 'ms) — era > 2000ms');
+  // AJUSTADO EM 31/jul por MEDIÇÃO, não por gosto: 350ms com 3 em paralelo derrubou o
+  // acesso ("não encontrou nenhum jogo" = bloqueio antes de ler qualquer coisa); 2600ms
+  // fazia o dono cancelar leitura sadia. O meio-termo fica aqui, e cada bloqueio agora
+  // aparece na tela — o próximo ajuste sai de número.
+  ok(avg < 1600, 'passo de fábrica continua bem abaixo do antigo (avg: ' + Math.round(avg) + 'ms, era > 2000ms)');
   ok(Math.min(...waits) >= 150, 'ainda existe um mínimo — nada de rajada sem espaçamento (min: ' + Math.min(...waits) + 'ms)');
   ok(!waits.some((w) => w > 6000), 'sem pausas longas enquanto o servidor não reclamou (elas custavam 2–6s à toa)');
 }

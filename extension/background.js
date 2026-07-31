@@ -50,11 +50,17 @@
 // (_qSlower, que dobra na hora e persiste) e o respeito ao retry-after. Isso continua
 // inteiro. O que muda é o ponto de partida — começamos rápido e só desaceleramos com
 // motivo medido, em vez de pagar o pior caso o tempo todo.
-var _Q_DEFAULTS = { gap: 350, floor: 250, min: 200, max: 60000 };
+// AJUSTE MEDIDO EM 31/jul: 350ms com 3 em paralelo derrubou o acesso — a leitura voltou
+// "não encontrou nenhum jogo", que é o que acontece quando o Cloudflare fecha a porta LOGO
+// no começo (esse erro só existe quando NADA foi lido). 350ms era rápido demais; 2600ms era
+// lento a ponto de o dono cancelar leitura sadia. Fica no meio, com o freio de sempre por
+// cima — e agora cada bloqueio APARECE na tela, então o próximo ajuste sai de número, não
+// de suposição minha.
+var _Q_DEFAULTS = { gap: 900, floor: 700, min: 600, max: 60000 };
 // PARALELISMO: até 3 páginas ao mesmo tempo. Um navegador comum abre várias requisições
 // em paralelo numa única visita — 3 é menos do que carregar uma página com imagens. As 20
 // páginas da Kelly saem em ~3s em vez de ~60s.
-var _Q_SLOTS = 3;
+var _Q_SLOTS = 2;   // 3 em paralelo + passo curto = bloqueio imediato (medido)
 var _q = { chain: Promise.resolve(), chains: null, busy: 0, last: 0, okStreak: 0, blocks: 0,
   gap: _Q_DEFAULTS.gap, floor: _Q_DEFAULTS.floor, min: _Q_DEFAULTS.min, max: _Q_DEFAULTS.max };
 // Espera REAL de uma operação: base sorteada 0,7×–1,8× (nunca duas iguais) + uma pausa

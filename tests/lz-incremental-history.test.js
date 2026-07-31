@@ -48,7 +48,7 @@ ok(/for \(var p = pIni \+ 1; p <= maxPage && !C\.complete; p\+\+\)/.test(etapa3)
     'e com os torneios e rankings já concluídos (por id, não por posição)');
   const app = require('fs').readFileSync(
     require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
-  const h = app.slice(app.indexOf("athlete-import-progress' && d.uid === uid"), app.indexOf("athlete-import-progress' && d.uid === uid") + 1400);
+  const h = app.slice(app.indexOf("athlete-import-progress' && d.uid === uid"), app.indexOf("athlete-import-progress' && d.uid === uid") + 2600);
   ok(/if \(d\.cursor\) cursorAtual = d\.cursor;/.test(h), 'o app guarda esse cursor a cada progresso');
 }
 

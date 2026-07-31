@@ -2458,6 +2458,14 @@
     // `_tempos`), virava ReferenceError A CADA SEGUNDO: a leitura não andava e o clique em
     // "Continuar" morria. O Sentry pegou (8 ocorrências) antes de eu adivinhar mais uma vez.
     var _w0 = null;
+    // Mediana dos intervalos entre itens concluídos — o ritmo real, em segundos por item.
+    var _ritmos = [], _ultimoItem = 0, _bloqueios = 0;
+    function _ritmoTexto() {
+      if (_ritmos.length < 2) return '';
+      var o = _ritmos.slice().sort(function (a, b) { return a - b; });
+      var med = o[Math.floor(o.length / 2)];
+      return ' · ' + (med >= 1000 ? (med / 1000).toFixed(1) + 's' : med + 'ms') + '/item';
+    }
     function _tempos() {
       var dec = Date.now() - _t0;
       var w = _trabalho();
@@ -2469,7 +2477,7 @@
       // ajusta do que um traço que não diz nada. Continua "—" só enquanto NADA foi feito
       // nesta leitura, que é o único caso em que não há o que medir.
       return {
-        decorrido: _fmtDur(dec),
+        decorrido: _fmtDur(dec) + _ritmoTexto(),
         restante: (feitoAgora >= 1 && falta > 0) ? ('~' + _fmtDur((dec / feitoAgora) * falta)) : '—'
       };
     }
@@ -2536,7 +2544,15 @@
         // "página 10 de 24" — a única informação real ali — DESAPARECIA justo no momento em
         // que a leitura demora mais. Ficava minutos sem dizer nada, e sem dizer nada é
         // indistinguível de travado. O passo continua; quem se mexe é a linha de baixo.
-        setProg({ sub: ultimaNota || 'lendo o letzplay', pct: null });
+        // O BLOQUEIO TEM QUE APARECER. Eu vinha ajustando velocidade no escuro e o dono
+        // olhando barra parada, sem nunca saber se era lentidão nossa ou o letzplay
+        // fechando a porta. Cada espera vira uma linha no feed, com o tempo e o motivo —
+        // um número que ele lê na hora, em vez de eu supor.
+        _bloqueios++;
+        setProg({ sub: ultimaNota || 'lendo o letzplay', pct: null,
+          feedAdd: '🚧 letzplay limitou o acesso (' + _bloqueios + 'ª vez) — esperando ' +
+            Math.round((d.waitMs || 0) / 1000) + 's' +
+            (d.gap ? ' · passo agora ' + (d.gap >= 1000 ? (d.gap / 1000).toFixed(1) + 's' : d.gap + 'ms') : '') });
         return;
       }
       if (d.__sp_lp === 'athlete-import-progress' && d.uid === uid) {
@@ -2549,6 +2565,17 @@
         _updBars(d.counts || null);
         // pct REAL (0–100, calculado pela extensão por etapa) + feed do que foi lido
         // (nome do torneio · classificação · nº de jogos) num box de 2 linhas com scroll.
+        // RITMO MEDIDO, NA TELA. Eu vinha ajustando a velocidade por raciocínio e o dono
+        // continuava esperando minutos — sem nunca ver um número. Cada item concluído
+        // (torneio, ranking, lote de páginas) chega aqui com `feed`; a distância entre dois
+        // desses é o custo REAL de uma unidade de trabalho, do clique dele até o dado.
+        // Mediana, não média: uma espera de rate-limit não pode mascarar o ritmo normal.
+        if (d.feed) {
+          var _ag = Date.now();
+          if (_ultimoItem) _ritmos.push(_ag - _ultimoItem);
+          _ultimoItem = _ag;
+          if (_ritmos.length > 40) _ritmos.shift();
+        }
         // O CURSOR VEM JUNTO DO PROGRESSO (ext 1.69) — guardamos A CADA página/competição.
         // Antes ele só chegava no PARCIAL, de 3 em 3 páginas: uma interrupção perdia até
         // duas páginas e a retomada refazia trabalho. Aqui é só memória; quem grava é o

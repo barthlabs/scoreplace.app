@@ -9,8 +9,8 @@ const bg = fs.readFileSync(path.join(__dirname, '..', 'extension', 'background.j
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
-ok(/var LOTE = 3;/.test(cnt), 'existe um tamanho de lote explícito');
-ok(/_Q_SLOTS = 3/.test(bg), 'e ele casa com os slots da fila do background');
+ok(/var LOTE = 2;/.test(cnt), 'existe um tamanho de lote explícito');
+ok(/_Q_SLOTS = 2/.test(bg), 'e ele casa com os slots da fila do background');
 
 // torneios e rankings em lote
 ok(/_pendT\.slice\(_bt, _bt \+ LOTE\)\.map\(async function \(P\)/.test(cnt), 'torneios vão em lote');

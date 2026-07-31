@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.71';
+  var EXT_VERSION = '1.72';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1028,7 +1028,7 @@
 
     // Requisições simultâneas por lote. Casa com os slots da fila do background — mandar
     // mais que isso só faz a fila segurar do outro lado.
-    var LOTE = 3;
+    var LOTE = 2;
 
     _rateBudget = _newRateBudget(((totJogos || 400) / 13) + 2 * (totTorneios || 30) + (totRankings || 25) + 8);
 
