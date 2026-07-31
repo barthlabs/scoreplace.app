@@ -578,11 +578,25 @@ function initRouter() {
     }, 900);
   }
 
-  // Safety net: never leave a blank screen — if view-container is empty after 5s, go to dashboard
-  setTimeout(function() {
+  // Safety net: never leave a blank screen — if view-container is empty after 5s, go to dashboard.
+  //
+  // Duas correções (bug "Análise joga pra dashboard na 1ª vez"):
+  //  (1) UM timer só. initRouter() roda a cada soft-refresh (onSnapshot), então os
+  //      timeouts EMPILHAVAM — um deles vencia no meio de uma navegação posterior e
+  //      chutava pra dashboard uma tela que só estava CARREGANDO.
+  //  (2) Tela vazia COM loader na frente é carregamento em curso, não tela branca.
+  //      Enquanto o loader global (ou o splash de boot) estiver no ar, o guard espera.
+  //      Sem isso, qualquer view que busca da rede em >5s na 1ª abertura (Análise:
+  //      um doc de perfil por inscrito, sem cache) era abortada.
+  try { clearTimeout(window._blankScreenGuard); } catch (e) {}
+  window._blankScreenGuard = setTimeout(function() {
+    window._blankScreenGuard = null;
     var vc = document.getElementById('view-container');
-    if (vc && vc.innerHTML.trim() === '' && window.location.hash !== '#dashboard') {
-      window.location.hash = '#dashboard';
-    }
+    if (!vc || vc.innerHTML.trim() !== '') return;
+    if (window.location.hash === '#dashboard') return;
+    if (document.getElementById('sp-global-loading')) return;
+    if (document.getElementById('scoreplace-boot-loader') || document.getElementById('sp-js-boot-overlay')) return;
+    window._warn('[router] view-container vazio após 5s — voltando pra dashboard');
+    window.location.hash = '#dashboard';
   }, 5000);
 }

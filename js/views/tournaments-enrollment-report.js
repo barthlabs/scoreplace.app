@@ -3390,9 +3390,13 @@
   // ─── Public renderer ─ chamado pelo router ──────────────────────────
   // Padrão centralizado: igual a renderProfilePage / renderSupportPage etc.
   window.renderEnrollmentReportPage = function (container, tId) {
-    var t = window.AppStore && window.AppStore.tournaments
-      ? window.AppStore.tournaments.find(function (x) { return x.id === tId; })
-      : null;
+    // FONTE ÚNICA de lookup (String-safe, também olha publicDiscovery). O `find` com
+    // `x.id === tId` cru dependia do tipo do id bater exatamente.
+    var t = (typeof window._findTournamentById === 'function')
+      ? window._findTournamentById(tId)
+      : ((window.AppStore && window.AppStore.tournaments)
+          ? window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); })
+          : null);
     if (!t) {
       if (typeof showNotification === 'function') showNotification('Erro', 'Torneio não encontrado.', 'error');
       window.location.replace('#dashboard');
@@ -3412,8 +3416,14 @@
     var _firstLoad = !(container && container.querySelector && container.querySelector('#er-categories-section'));
     function _doneLoading() { if (typeof window._hideLoading === 'function') window._hideLoading(); }
     if (_firstLoad) {
+      // O view-container TEM que ser pintado (cabeçalho + bola) junto com o loader
+      // global. O loader global é um overlay em `body`: enquanto ele girava, o
+      // view-container ficava VAZIO — e a rede de segurança "tela em branco" do
+      // router (5s) chutava a Análise pra dashboard na PRIMEIRA abertura, quando os
+      // perfis dos inscritos ainda vêm da rede. Na segunda o cache do Firestore
+      // respondia antes dos 5s e "funcionava". Tela pintada = nunca mais é branca.
+      _renderLoading(container, t);
       if (typeof window._showLoading === 'function') window._showLoading('Carregando análise dos inscritos…');
-      else _renderLoading(container, t);
     }
 
     // v1.3.24-beta: _fetchProfiles tenta rescue por email/displayName sem uid.
