@@ -31,7 +31,8 @@ const COL = window._LZ_COL;
 // VERDE exige leitura de MENOS DE 1 MÊS (regra do dono, 30/jul/2026): verde é absolvição,
 // e absolver com dado velho é chute — um título tirado semana passada muda o veredito.
 const AGORA = new Date().toISOString();
-const VELHO = new Date(Date.now() - 45 * 86400000).toISOString();
+const VELHO = new Date(Date.now() - 120 * 86400000).toISOString();   // 4 meses → fora da janela
+const DOIS_MESES = new Date(Date.now() - 60 * 86400000).toISOString(); // dentro dos 3 meses
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
@@ -424,7 +425,7 @@ console.log('\n── frescor: verde exige leitura recente ──');
   const rV = run({ uid: 'f2', effectiveSkills: [] }, { f2: Object.assign({ letzplayImport: velho }, profAuthorized) }, {});
   const rS = run({ uid: 'f3', effectiveSkills: [] }, { f3: Object.assign({ letzplayImport: semData }, profAuthorized) }, {});
   ok(rN._lzColor === COL.green, 'leitura de hoje → VERDE (veio: ' + rN._lzColor + ')');
-  ok(rV._lzColor !== COL.green, 'leitura de 45 dias NÃO absolve — cai pro violeta');
+  ok(rV._lzColor !== COL.green, 'leitura de 4 meses NÃO absolve — cai pro violeta');
   ok(rV._lzVerified === false, 'leitura velha não conta como verificada');
   ok(rS._lzColor !== COL.green, 'sem data de leitura NÃO absolve (é o caso dos perfis antigos)');
 }
@@ -554,7 +555,7 @@ console.log('\n── verde exige o motor novo ──');
   const novoMasVelho = Object.assign({}, base, { importedAt: VELHO,
     games: Array.from({ length: 81 }, (_, i) => ({ lzId: 'g' + i })) });
   const rNV = run({ uid: 'm4', effectiveSkills: [] }, { m4: Object.assign({ letzplayImport: novoMasVelho }, profAuthorized) }, {});
-  ok(rNV._lzColor !== COL.green, 'motor NOVO mas leitura de 45 dias → NÃO absolve');
+  ok(rNV._lzColor !== COL.green, 'motor NOVO mas leitura de 4 meses → NÃO absolve');
   ok(rN._lzColor === COL.green, 'só absolve com motor novo E leitura recente — as duas');
 }
 
@@ -577,6 +578,45 @@ console.log('\n── barra sem total declarado ──');
   const linhas = window._lzTourneyRows(imp, 'kelly', 'tour');
   const n = (linhas.match(/padding:2px 0/g) || []).length;
   ok(n === 7, 'a aba mostra 7 torneios, não 14 (veio ' + n + ')');
+}
+
+// ── 19. A JANELA DO VERDE É DE 3 MESES ───────────────────────────────────────
+// Regra do dono (31/jul/2026): "se estiver atualizado até 3 meses ele considera verde;
+// se for a mais tempo, volta pro roxo".
+console.log('\n── janela de 3 meses ──');
+{
+  const base = { officialCategory: { skill: 'D', categoryRaw: 'Fem D' }, rankings: [], tournaments: [],
+    declaredGames: 3, games: [{ lzId: '1' }, { lzId: '2' }, { lzId: '3' }],
+    lzCursor: { v: 4, complete: true } };
+  function cor(quando, uid) {
+    const imp = Object.assign({}, base, { importedAt: quando });
+    return run({ uid: uid, effectiveSkills: [] }, { [uid]: Object.assign({ letzplayImport: imp }, profAuthorized) }, {})._lzColor;
+  }
+  const dias = n => new Date(Date.now() - n * 86400000).toISOString();
+  ok(cor(dias(1), 'j1') === COL.green, 'ontem → verde');
+  ok(cor(dias(45), 'j2') === COL.green, '45 dias ainda é verde (era roxo com a janela de 1 mês)');
+  ok(cor(dias(89), 'j3') === COL.green, '89 dias — na borda de dentro — ainda verde');
+  ok(cor(dias(120), 'j4') !== COL.green, '4 meses → volta pro roxo');
+  ok(cor(dias(365), 'j5') !== COL.green, 'um ano → roxo');
+}
+
+// ── 20. A COR SAI DO BANCO, ANTES DE QUALQUER CLIQUE ─────────────────────────
+// "o sistema deve consultar o banco de dados para ver isso mesmo antes de qualquer clique
+// do organizador." A página busca perfis + letzplayScans por uid e SÓ ENTÃO renderiza.
+{
+  const fs = require('fs'), pth = require('path');
+  const src = fs.readFileSync(pth.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  const carga = src.slice(src.indexOf('_fetchProfiles(parts).then'), src.indexOf('_fetchProfiles(parts).then') + 1400);
+  ok(/_fetchGlobalScans\(candUids\)/.test(carga), 'a página busca os letzplayScans do banco no carregamento');
+  ok(carga.indexOf('_fetchGlobalScans') < carga.indexOf('_renderPage'), 'e busca ANTES de renderizar');
+  const render = src.slice(src.indexOf('function _renderCategoriesSection'), src.indexOf('function _renderCategoriesSection') + 400);
+  ok(/_erApplyLzToRows\(rows, profileMap, scanMap\)/.test(render), 'as cores são aplicadas com o que veio do banco');
+
+  // e o veredito só depende do dado — nenhuma cor precisa de clique
+  const imp = { importedAt: new Date().toISOString(), officialCategory: { skill: 'D', categoryRaw: 'Fem D' },
+    rankings: [], tournaments: [], games: [{ lzId: '1' }], declaredGames: 1, lzCursor: { v: 4, complete: true } };
+  const r = run({ uid: 'db1', effectiveSkills: [] }, { db1: profAuthorized }, { db1: { fullImport: imp } });
+  ok(r._lzColor === COL.green, 'scan vindo do BANCO (letzplayScans) já pinta verde sem clique nenhum');
 }
 
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');

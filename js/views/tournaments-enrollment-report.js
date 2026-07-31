@@ -1479,12 +1479,15 @@
     if (li.partialReason) return false;                   // ele mesmo diz que parou no meio
     return n >= li.declaredGames;
   }
-  // VERDE SÓ COM LEITURA RECENTE (regra do dono, 30/jul/2026): "só ficar verde aqueles que
-  // estão atualizados de verdade a menos de 1 mês". Verde é ABSOLVIÇÃO — dizer que a pessoa
-  // está na categoria certa. Isso depende de dado fresco: um título tirado semana passada
-  // muda o veredito e uma leitura de três meses atrás não o conhece.
+  // VERDE SÓ COM LEITURA RECENTE. Verde é ABSOLVIÇÃO — dizer que a pessoa está na categoria
+  // certa —, e isso depende de dado fresco: um título tirado depois da leitura muda o
+  // veredito e a leitura velha não o conhece.
+  // JANELA = 3 MESES (regra do dono, 31/jul/2026; era 1 mês na véspera): "se estiver
+  // atualizado até 3 meses ele considera verde; se for a mais tempo, volta pro roxo".
   // Vermelho e amarelo NÃO envelhecem: evidência positiva encontrada continua sendo prova.
-  var _LZ_FRESCO_DIAS = 30;
+  // A cor sai PRONTA DO BANCO no render — a página busca os perfis e os letzplayScans por
+  // uid antes de pintar (ver renderEnrollmentReportPage), sem depender de clique nenhum.
+  var _LZ_FRESCO_DIAS = 90;
   function _lzFresco(x) {
     if (!x) return false;
     var t = x.importedAt || x.at || x.scannedAt || x.updatedAt || null;
