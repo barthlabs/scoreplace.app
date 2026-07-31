@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.80';
+  var EXT_VERSION = '1.81';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -745,8 +745,43 @@
     // Agora os velhos FICAM no acumulado (o doc nunca encolhe) e a limpeza acontece só no
     // FECHAMENTO, quando a varredura completou. Enquanto ela não completa, o pior caso é
     // conviver com os dois formatos por um tempo — que é infinitamente melhor que perder.
-    var migrando = !!(prior && (versaoAnterior < 4 || jogosSujos));
+    // ⚠️ HISTÓRICO GRAVADO ACIMA DO DECLARADO É PROVADAMENTE LIXO. O letzplay diz quantos
+    // jogos a pessoa tem, e esse número conta CARDS — o total de partidas distintas nunca
+    // passa disso. Um doc com 1038 (ou 791) pra 478 declarados está errado, ponto.
+    // Sem esta checagem o lixo se perpetuava: ele entrava como SEMENTE de cada leitura nova
+    // e, por ser MAIOR que o resultado limpo, a regra do "não encolher" ainda impedia a
+    // limpeza. Cada tentativa de consertar aumentava o número. É o mesmo teto que o app
+    // aplica na gravação — faltava aqui, na origem.
+    var _decl = (prior && prior.declaredGames) || 0;
+    var _priorGames = (prior && prior.games) || [];
+    var priorCorrompido = _decl > 0 && _priorGames.length > _decl;
+    var migrando = !!(prior && (versaoAnterior < 4 || jogosSujos || priorCorrompido));
     var limparNoFim = migrando;
+    if (priorCorrompido) {
+      // não serve nem de semente nem de piso: descarta e relê do zero
+      prior = Object.assign({}, prior, { games: [] });
+      _acc = null;
+    } else if (_priorGames.length) {
+      // TODA LEITURA SANITIZA O QUE ESTAVA GRAVADO (regra do dono, 31/jul). Mesmo abaixo do
+      // teto, o histórico gravado pode trazer sujeira de versões anteriores: a MESMA partida
+      // repetida (uma entrada com o id do letzplay e outra sem, ou duas de conteúdo idêntico)
+      // e registros sem conteúdo nenhum. Não adianta só evitar criar duplicata nova — o que
+      // já está no banco tem que ser corrigido na passagem, senão ele se arrasta pra sempre.
+      // Vence a entrada COM id: ela é a identidade dada pela fonte.
+      var _porCk = {}, _limpo = [];
+      _priorGames.forEach(function (g) {
+        if (!g) return;
+        var ck = _contentKey(g);
+        var ja = _porCk[ck];
+        if (ja === undefined) { _porCk[ck] = _limpo.length; _limpo.push(g); return; }
+        if (!_limpo[ja].lzId && g.lzId) _limpo[ja] = g;      // a com id vence a sem id
+      });
+      if (_limpo.length !== _priorGames.length) {
+        _priorGames = _limpo;
+        prior = Object.assign({}, prior, { games: _limpo });
+        _acc = null;                                        // semeia do conjunto já limpo
+      }
+    }
     if (migrando) {
       _acc = null;                    // não reaproveita o acumulado desta página
       // O CONJUNTO DE PÁGINAS ZERA (tudo tem que ser relido), mas os JOGOS ficam.
@@ -757,7 +792,8 @@
     // reconstrua o acumulado (cache de módulo trocado, rodada encadeada, migração) pode
     // deixar o doc menor do que estava. Este é o número que o documento JÁ tinha; nada do
     // que a gente escrever pode ficar abaixo dele enquanto a varredura não fechar.
-    var _jogosAntes = _gamesToMatches((prior && prior.games) || []);
+    // piso do "não encolher" — vazio quando o gravado era lixo (senão o lixo vira o piso)
+    var _jogosAntes = priorCorrompido ? [] : _gamesToMatches((prior && prior.games) || []);
     var all = A.all, seen = A.seen, det = A.tourDet;   // det = nome/classificação por competição
     var realHandle = C.handle || handle;
 

@@ -648,6 +648,44 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     r2d.jogos + ')');
   await page.evaluate(() => { window.__LZ.pararApos = 0; });
 
+  // ── CENÁRIO 2e: doc INFLADO (acima do declarado) não pode se perpetuar ──────
+  // Caso real da Camila (31/jul): um bug meu inflou o histórico pra 1038 com 478 declarados.
+  // A partir daí o lixo entrava como SEMENTE de cada leitura nova e, por ser MAIOR que o
+  // resultado limpo, a regra do "não encolher" impedia a limpeza — cada tentativa de
+  // consertar aumentava o número (1038 → 791 → …). Acima do declarado é lixo, ponto.
+  console.log('\n🧨 CENÁRIO 2e — histórico inflado acima do declarado é descartado, não semeado');
+  await page.close();
+  page = await novaPagina(browser);
+  await page.evaluate((cfg) => {
+    window.__LZ.init(cfg);
+    const inflado = [];
+    for (let i = 0; i < cfg.games + 500; i++) {          // MUITO acima do declarado
+      inflado.push({ date: 'Sábado, 0' + (1 + i % 9) + '/0' + (1 + i % 9) + '/26 às 08:00hs',
+        official: false, club: 'x', rankingId: '1', competition: 'c',
+        oppHandles: ['o' + i], oppNames: ['O'], myScore: 6, oppScore: 1, won: true });
+    }
+    const prior = { source: 'letzplay', handle: 'CamilaExemplo', games: inflado, footprint: [],
+      categories: [], pairs: [], observations: [], declaredGames: cfg.games,
+      lzCursor: { v: 4, handle: 'CamilaExemplo', toursDone: {}, ranksDone: {},
+        pageDone: 24, pagesTotal: 24, pagesRead: {}, complete: true } };
+    window.__APP.rodadas = 0; window.__APP.done = false; window.__APP.erro = null;
+    window.__APP.escritasCanonicas = 0; window.__APP.docsPorGid = {}; window.__APP.tamanhoDoc = 0;
+    window.__APP.pausas = 0; window.__APP.throttles = 0; window.__APP.violacoesTeto = []; window.__APP.violacoesLidos = [];
+    window.__APP.faseJogosComeçou = 0; window.__APP.torneiosDepoisDosJogos = 0; window.__APP.rankingsDepoisDosJogos = 0;
+    window.__APP.notasSemSujeito = []; window.__APP.totaisVistos = {}; window.__APP.rotuloAtrasado = [];
+    window.__LZ.hits = {};
+    window.__APP.start('CamilaExemplo', 'uid-camila', prior, prior.lzCursor);
+  }, camila);
+  await page.waitForFunction(() => window.__APP.done === true, null, { timeout: 180000 });
+  const r2e = await page.evaluate(() => ({
+    jogos: (window.__APP.imp && (window.__APP.imp.gamesTotal || (window.__APP.imp.games || []).length)) || 0,
+    declarados: (window.__APP.imp && window.__APP.imp.declaredGames) || 0
+  }));
+  console.log('     jogos=' + r2e.jogos + ' · declarados=' + r2e.declarados);
+  ok(r2e.jogos === r2e.declarados, 'o inflado foi descartado e o histórico voltou ao real (' +
+    r2e.jogos + ' = ' + r2e.declarados + ')');
+  ok(r2e.jogos <= r2e.declarados, 'e nunca fica acima do declarado');
+
   // ── CENÁRIO 3: perfil MONSTRO — o doc tem que continuar cabendo ──────────
   console.log('\n🐘 CENÁRIO 3 — perfil monstro (2.000 jogos, 120 torneios, 60 rankings)');
   await page.close();

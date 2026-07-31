@@ -67,5 +67,20 @@ ok(/if \(pico > agora && !corrompido\(pico\)\)/.test(grava), 'a marca d\'água n
 ok(/if \(antes > agora && !corrompido\(antes\)\)/.test(grava), 'nem o que está no banco');
 ok(/será substituído por/.test(grava), 'e avisa quando substitui um documento corrompido');
 
+// ── TODA LEITURA SANITIZA O QUE JÁ ESTAVA GRAVADO ───────────────────────────
+// "toda leitura precisa sanitizar os dados para manter atual e preciso." Evitar criar
+// duplicata nova não conserta o que já está no banco — isso se arrastaria pra sempre.
+{
+  const san = cnt.slice(cnt.indexOf('TODA LEITURA SANITIZA'), cnt.indexOf('TODA LEITURA SANITIZA') + 1400);
+  ok(san.length > 300, 'a sanitização existe e roda na entrada de toda leitura');
+  ok(/_contentKey\(g\)/.test(san), 'ela agrupa por CONTEÚDO — a mesma partida com e sem id é uma só');
+  ok(/if \(!_limpo\[ja\]\.lzId && g\.lzId\) _limpo\[ja\] = g;/.test(san),
+    'e quem vence é a entrada COM o id do letzplay (identidade dada pela fonte)');
+  ok(/_acc = null;/.test(san), 'o acumulado é semeado do conjunto já limpo, não do sujo');
+  // teto continua tendo precedência: lixo acima do declarado é descartado, não sanitizado
+  ok(cnt.indexOf('priorCorrompido') < cnt.indexOf('TODA LEITURA SANITIZA'),
+    'acima do declarado o histórico é DESCARTADO — sanitizar não salva o que é provadamente lixo');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-nunca-regride: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
