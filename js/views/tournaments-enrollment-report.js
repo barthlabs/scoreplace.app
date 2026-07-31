@@ -1632,7 +1632,19 @@
     // O CURSOR COMPLETO É A PROVA MAIS FORTE: a última página do histórico foi lida.
     // Comparar com `declaredGames` não fecha nunca quando o contador do letzplay conta
     // card e não partida (medido: 478 cards × 469 partidas em @camilacalia).
-    if (li.lzCursor && li.lzCursor.complete === true && !li.partialReason) return true;
+    // MAS "completo" tem que ser VERIFICÁVEL: quando o cursor diz quantas páginas existem e
+    // quais foram lidas, exigimos que o conjunto cubra o total. Sem isso, um cursor que se
+    // declarou completo por engano (aconteceu hoje) fazia um histórico de 20 jogos aparecer
+    // como VERDE — absolvição baseada em quase nada.
+    if (li.lzCursor && li.lzCursor.complete === true && !li.partialReason) {
+      var _c = li.lzCursor;
+      if (_c.pagesTotal > 0 && _c.pagesRead && typeof _c.pagesRead === 'object') {
+        var _lidas = 0;
+        for (var _k = 1; _k <= _c.pagesTotal; _k++) if (_c.pagesRead[_k]) _lidas++;
+        if (_lidas < _c.pagesTotal) return false;      // diz que fechou, mas não fechou
+      }
+      return true;
+    }
     if (li.declaredGames == null) return n > 0;          // legado: sem o número, confia no all-or-nothing
     if (li.partialReason) return false;                   // ele mesmo diz que parou no meio
     return n >= li.declaredGames;
@@ -3204,7 +3216,26 @@
       }
       var doc = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, scannedByName: meName, tournamentId: String(tId), tournamentName: tName };
       if (gotFull) doc.fullImport = s.fullImport;
-      var w = db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true })
+      // ⚠️ O APP NÃO ACEITA REGRESSÃO. Esta é a guarda que não depende de a extensão estar
+      // certa: se o histórico que chegou tem MENOS jogos do que o que já está gravado, ele
+      // não substitui. Aconteceu duas vezes hoje — 158 viraram 20 e 469 viraram 20 — e cada
+      // vez que um número desses muda pra pior, o app perde credibilidade inteira.
+      // O resumo (scan) segue sendo atualizado; só o histórico é preservado.
+      var w = db.collection('letzplayScans').doc(s.uid).get()
+        .then(function (atual) {
+          var antes = atual.exists ? _lzTot((atual.data() || {}).fullImport) : 0;
+          var agora = gotFull ? _lzTot(s.fullImport) : 0;
+          if (doc.fullImport && antes > agora) {
+            delete doc.fullImport;
+            window._warn && window._warn('[letzplay] regressão barrada: chegaram ' + agora +
+              ' jogos e já havia ' + antes + ' — o histórico gravado foi mantido.');
+            if (typeof showNotification === 'function') {
+              showNotification('Histórico preservado',
+                'A leitura trouxe ' + agora + ' jogo(s) e já havia ' + antes + ' gravados — mantive os ' + antes + '.', 'info');
+            }
+          }
+          return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true });
+        })
         .catch(function (err) {
           // NUNCA falhar MUDO (caso Camila: 472 jogos → doc >1MiB → todos os writes
           // morriam em silêncio e "não gravava porra nenhuma"). Mostra o ERRO REAL e

@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.74';
+  var EXT_VERSION = '1.75';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -525,14 +525,21 @@
   // adversários, dois registros. Isso inflou "478 jogos" pra 569 na tela.
   // É a MESMA regra que js/letzplay-model.js já aplica no gid canônico (e por isso o acervo
   // canônico nunca duplicou) — aqui a chave de dedup em voo tinha ficado pra trás.
+  // Chave de CONTEÚDO, sempre — vale para jogo com id e para jogo sem. É ela que responde
+  // "esta partida já está aqui, ainda que sob outra identidade?". Sem isso, repor um jogo
+  // velho (chave de conteúdo) em cima do mesmo jogo já lido com id (chave 'lz…') criava
+  // DUAS entradas da mesma partida: foi assim que os 469 da Camila voltaram a 569.
+  function _contentKey(m) {
+    return [m.date || '', m.club || '', m.myScore, m.oppScore,
+      (m.partnerHandle || ''), (m.oppHandles || []).slice().sort().join('+')].join('|').toLowerCase();
+  }
   function _gameKey(m) {
     // O LETZPLAY DÁ ID POR PARTIDA (class="match-10004859-schedule") — medido: 20 cards,
     // 20 ids distintos, 100% presentes. Identidade dada pela fonte vence qualquer chave
     // que a gente derive. A de conteúdo fica só pra dado antigo, gravado antes de a
     // extensão capturar o id.
     if (m && m.lzId) return 'lz' + m.lzId;
-    return [m.date || '', m.club || '', m.myScore, m.oppScore,
-      (m.partnerHandle || ''), (m.oppHandles || []).slice().sort().join('+')].join('|').toLowerCase();
+    return _contentKey(m);
   }
   // games GRAVADOS (schema salvo) → shape de "match cru" que o buildRaw espera.
   // ⚠️ O `lzId` TEM QUE ATRAVESSAR. Esta função reconstrói os jogos GRAVADOS pra dentro da
@@ -1333,34 +1340,37 @@
       if (!all.length && !Object.keys(det).length) { fail('sem-jogos'); return; }
 
       // ── fechamento ─────────────────────────────────────────────────────────────
-      // A LIMPEZA NUNCA PODE ENCOLHER O DOCUMENTO. Esta é a trava final, e ela não depende
-      // de eu ter acertado o caminho: seja qual for o motivo de a varredura se declarar
-      // completa (página que falhou e voltou vazia, laço rodando duas vezes, rodada
-      // encadeada), trocar 157 jogos por 20 é perda de dado — e perda de dado não é um
-      // efeito colateral aceitável de uma limpeza. Só substitui quando o conjunto limpo é
-      // pelo menos tão grande quanto o que já existia.
+      // ── FECHAMENTO: limpar OU preservar, nunca os dois ────────────────────────
+      // Regra única, e ela cobre os dois desastres de hoje:
+      //   • limpar cedo demais perdeu histórico (158 → 20, 469 → 20);
+      //   • repor sem checar duplicou (469 → 569).
+      // Só limpa quando a varredura fechou E o conjunto limpo é pelo menos tão grande
+      // quanto o que já existia. Senão, preserva — e assume que a leitura não fechou, pra
+      // a próxima terminar o serviço.
       var _limpos = (limparNoFim && C.complete === true)
         ? all.filter(function (m) { return m && m.lzId; }) : null;
       if (_limpos && _limpos.length >= _jogosAntes.length) {
         all.length = 0; Array.prototype.push.apply(all, _limpos);
-      } else if (_limpos) {
-        // completou "no papel" mas trouxe menos do que já tínhamos → não é limpeza, é
-        // perda. Mantém tudo e deixa a próxima leitura terminar o serviço.
-        C.complete = false;
-        prog({ phase: 'jogos', feed: '🛟 leitura incompleta (' + _limpos.length + ' de ' +
-          _jogosAntes.length + ') — o histórico gravado foi preservado' });
-      }
-      if (_jogosAntes.length) {
-        // NÃO FECHOU: o documento não pode sair menor do que entrou. Repõe o que faltar.
-        // Caso real da Kelly (31/jul): 158 jogos viraram 20 — o conteúdo de uma página —
-        // porque a rodada morreu no meio da limpeza. Perda causada por nós.
-        var _reposto = 0;
-        _jogosAntes.forEach(function (m) {
-          var k = _gameKey(m);
-          if (seen[k]) return;
-          seen[k] = 1; all.push(m); _reposto++;
-        });
-        if (_reposto) prog({ phase: 'jogos', feed: '🛟 ' + _reposto + ' jogo(s) já gravados foram preservados' });
+      } else {
+        if (_limpos) {
+          // "completou" mas trouxe menos do que já tínhamos → isso não é limpeza, é perda
+          C.complete = false;
+          prog({ phase: 'jogos', feed: '🛟 leitura incompleta (' + _limpos.length + ' de ' +
+            _jogosAntes.length + ') — o histórico gravado foi preservado' });
+        }
+        if (_jogosAntes.length) {
+          // REPOR SEM DUPLICAR: decide pelo CONTEÚDO, porque a mesma partida lida agora tem
+          // chave de id e a velha tem chave de conteúdo.
+          var _porConteudo = {};
+          all.forEach(function (m) { _porConteudo[_contentKey(m)] = 1; });
+          var _reposto = 0;
+          _jogosAntes.forEach(function (m) {
+            var ck = _contentKey(m);
+            if (_porConteudo[ck]) return;
+            _porConteudo[ck] = 1; seen[_gameKey(m)] = 1; all.push(m); _reposto++;
+          });
+          if (_reposto) prog({ phase: 'jogos', feed: '🛟 ' + _reposto + ' jogo(s) já gravados foram preservados' });
+        }
       }
       var imp = I.normalize(montarRaw(), { importedAt: new Date().toISOString() });
       var deltaFinal = delta(imp);
