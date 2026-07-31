@@ -4993,19 +4993,41 @@ function setupCreateTournamentModal() {
     return quando.getTime() > Date.now();      // só quando o sorteio ainda vai acontecer
   }
 
-  // Duas opções, uma decisão. Grava em `window._drawBalanceChoice` e repete o salvar.
+  // A TELA É A APROVADA: "⚖️ Sorteio de duplas" (window._showDrawBalanceOverlay, em
+  // tournaments-draw.js) — a MESMA do sorteio manual. Aqui ela abre no SALVAR só porque
+  // o sorteio automático acontece sozinho na data marcada e não há outra hora de
+  // perguntar. Uma decisão, uma tela: nunca criar outra pra isso.
   function _perguntarEquilibrio(depois) {
-    var msg = '<div style="text-align:left;font-size:0.88rem;line-height:1.55;">' +
-      'O sorteio vai acontecer sozinho na data marcada, então a escolha é agora.' +
-      '<div style="margin-top:10px;"><b>Equilibrado</b> — evita juntar gente do mesmo gênero no mesmo time ou grupo, ' +
-      'o quanto for possível. Numa rodada Rei/Rainha, os homens ficam espalhados pelos grupos em vez de caírem juntos.</div>' +
-      '<div style="margin-top:8px;"><b>Livre</b> — sorteio puro, sem olhar gênero.</div>' +
-      '<div style="margin-top:10px;font-size:0.8rem;color:var(--text-muted);">Dá pra mudar depois, editando o torneio.</div></div>';
-    if (typeof window.showConfirmDialog !== 'function') { window._drawBalanceChoice = true; window._drawBalanceConfirmed = true; depois(); return; }
-    window.showConfirmDialog('⚖️ Como sortear?', msg,
-      function () { window._drawBalanceChoice = true;  window._drawBalanceConfirmed = true; depois(); },
-      function () { window._drawBalanceChoice = false; window._drawBalanceConfirmed = true; depois(); },
-      { confirmText: '⚖️ Equilibrado', cancelText: '🎲 Livre', type: 'info', maxWidth: '560px' });
+    var _seguir = function (equil) { window._drawBalanceChoice = !!equil; window._drawBalanceConfirmed = true; depois(); };
+    if (typeof window._showDrawBalanceOverlay !== 'function') { _seguir(true); return; }
+    var editId = (document.getElementById('edit-tournament-id') || {}).value || '';
+    var t = (editId && window.AppStore && Array.isArray(window.AppStore.tournaments))
+      ? window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); }) : null;
+    // abre no que já está marcado (toggle "Sorteio equilibrado" do formulário, ou o torneio)
+    var _tgl = document.getElementById('liga-balanced-toggle');
+    var _modo = (_tgl ? _tgl.checked : (!t || t.equilibrado !== false)) ? 'equilibrado' : 'livre';
+    var _abrir = function (rows) {
+      window._showDrawBalanceOverlay({
+        rows: rows, mode: _modo,
+        subtitle: 'O sorteio vai acontecer sozinho na data marcada — a escolha é agora. Dá pra mudar depois, editando o torneio.',
+        emptyText: t ? 'Todos os inscritos já têm gênero definido. ✓'
+                     : 'Ainda não há inscritos — a escolha já fica valendo pro sorteio.',
+        onConfirm: function (mode, assigned) {
+          // persist:false — quem grava é o próprio salvar, logo em seguida
+          if (t) window._applyDrawBalanceChoice(t, mode, assigned, { persist: false });
+          _seguir(mode === 'equilibrado');
+        }
+        // Cancelar = fecha e não salva; o formulário fica como estava.
+      });
+    };
+    // o gênero vem do PERFIL — hidrata antes pra tela só pedir quem realmente falta
+    var _rows = function () {
+      if (t && typeof window._drawBalanceRows === 'function') window._drawBalanceRows(t, _abrir);
+      else _abrir([]);
+    };
+    if (t && typeof window._hydrateParticipantGenders === 'function') {
+      Promise.resolve(window._hydrateParticipantGenders(t)).then(_rows).catch(_rows);
+    } else { _rows(); }
   }
 
   window._saveTournamentClickHandler = function() {

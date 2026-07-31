@@ -1961,12 +1961,22 @@ function renderTournaments(container, tournamentId = null) {
             // O listener onSnapshot substitui store.tournaments inteiro quando chega
             // dados do servidor — sem salvar primeiro, os participantes originais
             // (com ausentes) voltam do Firestore e o sorteio os inclui mesmo assim.
-            if (absentMovedCount > 0 && window.AppStore && typeof window.AppStore.mutate === 'function') {
-                var _doGenderThenDraw = function() {
+            // v1.6.40: o gênero de quem joga vem do PERFIL e o motor lê `p.gender` do
+            // INSCRITO — no servidor (CF autoDraw) não existe perfil pra consultar. Sem
+            // hidratar antes, o "equilibrado" não equilibra NADA (medido no Confra: 105
+            // inscritos, gênero conhecido de 4). Vale pra QUALQUER formato, inclusive Liga
+            // (onde a tela de duplas não aparece, mas o espalhamento nos grupos existe).
+            var _doGenderThenDraw = function() {
+                var _abrirTela = function () {
                     if (typeof window._maybeShowGenderDrawDialog === 'function' &&
                         window._maybeShowGenderDrawDialog(tId, _continueDraw)) return;
                     _continueDraw();
                 };
+                if (typeof window._hydrateParticipantGenders !== 'function') { _abrirTela(); return; }
+                Promise.resolve(window._hydrateParticipantGenders(window._findTournamentById(tId)))
+                    .then(_abrirTela).catch(_abrirTela);
+            };
+            if (absentMovedCount > 0 && window.AppStore && typeof window.AppStore.mutate === 'function') {
                 // BLINDAGEM (project_concurrency_safe_saves): re-aplica o move de ausentes
                 // no doc FRESCO, em vez de syncImmediate (doc inteiro → clobbera check-in/
                 // W.O. concorrente). _autoMoveAbsentToStandby é pura + idempotente.
@@ -1975,11 +1985,8 @@ function renderTournaments(container, tournamentId = null) {
             }
             // v2.1.20: em duplas mistas com sorteio livre (sem categoria masc/fem),
             // mostra o diálogo de gênero + modo (livre/equilibrado) antes do sorteio.
-            if (typeof window._maybeShowGenderDrawDialog === 'function' &&
-                window._maybeShowGenderDrawDialog(tId, _continueDraw)) {
-                return;
-            }
-            _continueDraw();
+            // (a hidratação de gênero acontece dentro de _doGenderThenDraw)
+            _doGenderThenDraw();
         };
         // v2.1.2: se "Fechadas" está OFF (lateEnrollment 'standby'/'expand'), o
         // SORTEIO não encerra as inscrições — elas seguem abertas. Não mostra o

@@ -118,6 +118,10 @@ const SUITES = [
   'tests/person-gender-not-misto.test.js',
   'tests/rr-gender-balance.test.js',
   'tests/auto-draw-balance-choice.test.js',
+  // O "equilibrado" só equilibra se o app SOUBER o gênero: 105 inscritos, gênero
+  // conhecido de 4 (o resto estava no PERFIL). Reproduz a falha do Confra e trava
+  // a hidratação perfil→inscrito — inclusive com o cache vazio, que é o servidor.
+  'tests/draw-gender-hydration.test.js',
   'tests/lz-label-equals-bar.test.js',
   'tests/ext-version-single-source.test.js',
   'tests/lz-list-date.test.js',
@@ -127,6 +131,7 @@ const SUITES = [
   'tests/dialog-fits-screen.test.js',
   'tests/lz-round-chaining.test.js',
   'tests/lz-nunca-regride.test.js',
+  'tests/lz-agent-path.test.js',
   'tests/letzplay-pace.test.js',
   'tests/letzplay-model.test.js',
   'tests/letzplay-eta.test.js',

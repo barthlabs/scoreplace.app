@@ -1581,12 +1581,164 @@ window._markDuplasManual = function (t) {
   else t.manualPairing = 'open';
 };
 
-// ─── v2.1.20: Diálogo de gênero pré-sorteio (duplas mistas, sorteio livre) ────
+// ─── A TELA DO SORTEIO EQUILIBRADO/LIVRE — UMA SÓ, PRAS DUAS PORTAS ──────────
+// "⚖️ Sorteio de duplas" (`_showDrawBalanceOverlay`) é a tela aprovada dessa decisão.
+// Ela serve as DUAS portas: o sorteio MANUAL (aqui, na hora de sortear) e o
+// AUTOMÁTICO (no salvar do torneio, quando o sorteio acontece sozinho na data
+// marcada — create-tournament.js). NUNCA criar outra tela pra essa escolha.
+
+// ── Gênero do PERFIL, quente, ANTES do sorteio ───────────────────────────────
+// MEDIDO no Confra em 31/jul/2026 (105 inscritos): o motor conhecia o gênero de 4
+// pessoas. As outras 101 tinham gênero no PERFIL (91 F / 14 M) e ninguém tinha
+// CARREGADO — o "equilibrado" não equilibrava nada (3 homens num grupo, vários
+// grupos sem nenhum), porque `_monarchGenderOf` resolve por uid no
+// `_userProfileCache` e o cache estava frio.
+// Não adianta "gravar o gênero no inscrito": o inscrito grava SÓ O UID por cânone
+// (identity-core._stripStoredNamesForUidEntries apaga gender/email/phone… em TODO
+// save). No servidor quem re-resolve é a CF (_enrichParticipantsFromProfiles). Aqui
+// o que faltava era só carregar o perfil antes de sortear.
+window._hydrateParticipantGenders = function (t) {
+  if (!t || !Array.isArray(t.participants)) return Promise.resolve(0);
+  if (typeof window._preloadUserProfiles !== 'function') return Promise.resolve(0);
+  var uids = [];
+  t.participants.forEach(function (p) {
+    if (!p || typeof p !== 'object') return;
+    [p.uid, p.p1Uid, p.p2Uid].forEach(function (u) { if (u && uids.indexOf(u) === -1) uids.push(u); });
+  });
+  if (!uids.length) return Promise.resolve(0);
+  // "misto" é CATEGORIA, não gênero de pessoa — nunca vira gênero de ninguém.
+  var _limpo = function (g) { g = String(g == null ? '' : g).trim(); return /^misto/i.test(g) ? '' : g; };
+  var _aplicar = function (alvo) {
+    var n = 0;
+    ((alvo && alvo.participants) || []).forEach(function (p) {
+      if (!p || typeof p !== 'object') return;
+      [['uid', 'gender'], ['p1Uid', 'p1Gender'], ['p2Uid', 'p2Gender']].forEach(function (par) {
+        var uid = p[par[0]]; if (!uid) return;
+        var g = _limpo(window._genderForUid && window._genderForUid(uid));
+        if (!g || _limpo(p[par[1]]) === g) return;
+        p[par[1]] = g; n++;
+      });
+    });
+    return n;
+  };
+  return window._preloadUserProfiles(uids).then(function () {
+    // memória apenas — o save vai apagar (é o cânone só-uid). Serve pros leitores
+    // que ainda olham p.gender direto durante ESTE sorteio.
+    var n = _aplicar(t);
+    if (window._dtrace) window._dtrace('genderHydrate', { perfis: uids.length, campos: n });
+    return n;
+  }).catch(function () { return 0; });
+};
+
+// Quem AINDA está sem gênero depois do perfil — é essa a lista que a tela mostra.
+window._drawBalanceRows = function (t, done) {
+  var parts = (t && Array.isArray(t.participants)) ? t.participants : [];
+  var solos = parts.filter(function (p) { return !(window._entryTeamMembers && window._entryTeamMembers(p)); });
+  var _pName = function (p) { return (typeof p === 'string') ? p : (p.displayName || p.name || p.email || '?'); };
+  var _tem = function (p) { var g = window._pGender ? window._pGender(p) : (p && p.gender); return typeof p === 'object' && !!g && !!String(g).trim(); };
+  var _fim = function () {
+    // o gênero AUTORITATIVO é o do PERFIL: enriquece o snapshot antes de decidir quem falta
+    solos.forEach(function (p) {
+      if (typeof p !== 'object' || _tem(p)) return;
+      var prof = window._partProfileByName && window._partProfileByName[String(_pName(p)).toLowerCase()];
+      if (prof && prof.gender && String(prof.gender).trim()) p.gender = String(prof.gender).trim();
+    });
+    done(solos.filter(function (p) { return !_tem(p); })
+              .map(function (p) { return { name: _pName(p), uid: (typeof p === 'object' && p.uid) || '', gender: '' }; }));
+  };
+  if (solos.length > 0 && typeof window._loadParticipantProfilesByName === 'function') {
+    try { window._loadParticipantProfilesByName(solos).then(_fim).catch(_fim); } catch (e) { _fim(); }
+  } else { _fim(); }
+};
+
+// A TELA. `rows` = quem está sem gênero; `mode` = como ela abre; `onConfirm(mode, atribuídos)`.
+window._showDrawBalanceOverlay = function (opts) {
+  opts = opts || {};
+  var _sh = window._safeHtml || function (s) { return String(s == null ? '' : s); };
+  var rows = Array.isArray(opts.rows) ? opts.rows : [];
+  window._gdCtx = { rows: rows, mode: (opts.mode === 'equilibrado' ? 'equilibrado' : 'livre'),
+                    onConfirm: opts.onConfirm, onCancel: opts.onCancel };
+
+  var old = document.getElementById('gender-draw-overlay'); if (old) old.remove();
+  var ov = document.createElement('div');
+  ov.id = 'gender-draw-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:100200;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:3rem 1rem 2rem;';
+
+  var rowsHtml = rows.map(function (r, i) {
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-dark,#0f172a);border:1px solid rgba(255,255,255,0.08);border-radius:10px;">' +
+      '<span style="flex:1;min-width:0;font-size:0.88rem;color:var(--text-bright,#f1f5f9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sh(r.name) + '</span>' +
+      '<button id="gd-f-' + i + '" onclick="window._gdSetGender(' + i + ',\'feminino\')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(236,72,153,0.4);background:rgba(236,72,153,0.08);color:#f9a8d4;font-size:0.78rem;font-weight:700;cursor:pointer;">♀ Fem</button>' +
+      '<button id="gd-m-' + i + '" onclick="window._gdSetGender(' + i + ',\'masculino\')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(59,130,246,0.4);background:rgba(59,130,246,0.08);color:#93c5fd;font-size:0.78rem;font-weight:700;cursor:pointer;">♂ Masc</button>' +
+    '</div>';
+  }).join('');
+
+  ov.innerHTML =
+    '<div style="background:var(--bg-card,#1e293b);border-radius:18px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,0.5);margin:auto;overflow:hidden;">' +
+      '<div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.08);">' +
+        '<div style="font-weight:800;font-size:1rem;color:var(--text-bright,#f1f5f9);">⚖️ Sorteio de duplas</div>' +
+        '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-top:3px;">' + _sh(opts.subtitle || 'Defina o gênero de quem está sem, e escolha como formar as duplas.') + '</div>' +
+        '<div style="display:flex;gap:8px;margin-top:12px;">' +
+          '<button onclick="window._gdCancel()" style="flex:1;padding:11px;border-radius:10px;border:1px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
+          '<button onclick="window._gdConfirm()" style="flex:2;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.88rem;cursor:pointer;">✓ Confirmar</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="padding:16px 18px;">' +
+        '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Modo de sorteio</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">' +
+          '<button id="gd-mode-livre" onclick="window._gdSetMode(\'livre\')" style="text-align:left;padding:11px 14px;border-radius:12px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-bright,#f1f5f9);cursor:pointer;">' +
+            '<div style="font-weight:700;font-size:0.9rem;">🎲 Livre</div><div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);margin-top:2px;">Sorteio puro, sem olhar gênero.</div></button>' +
+          '<button id="gd-mode-equilibrado" onclick="window._gdSetMode(\'equilibrado\')" style="text-align:left;padding:11px 14px;border-radius:12px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-bright,#f1f5f9);cursor:pointer;">' +
+            '<div style="font-weight:700;font-size:0.9rem;">⚖️ Equilibrado</div><div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);margin-top:2px;">Espalha a minoria: evita 2 do mesmo gênero no mesmo time ou grupo. Se não der pra todos, faz o melhor possível.</div></button>' +
+        '</div>' +
+        (rows.length > 0
+          ? '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Inscritos sem gênero (' + rows.length + ')</div>' +
+            '<div style="display:flex;flex-direction:column;gap:6px;max-height:34%;overflow-y:auto;">' + rowsHtml + '</div>'
+          : '<div style="font-size:0.8rem;color:var(--text-muted,#94a3b8);">' + _sh(opts.emptyText || 'Todos os inscritos já têm gênero definido. ✓') + '</div>') +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(ov);
+  window._gdSetMode(window._gdCtx.mode);   // pinta o modo com que a tela abriu
+  if (window._dtrace) window._dtrace('genderDialog:shown', { noGender: rows.length, mode: window._gdCtx.mode });
+};
+
+// O EFEITO da escolha — também um só, pras duas portas.
+window._applyDrawBalanceChoice = function (t, mode, assigned, opts) {
+  opts = opts || {};
+  assigned = Array.isArray(assigned) ? assigned : [];
+  if (t) {
+    // 1) gênero atribuído na tela vai pros inscritos
+    (t.participants || []).forEach(function (p) {
+      if (typeof p !== 'object') return;
+      var m = assigned.find(function (r) {
+        return (r.uid && p.uid && r.uid === p.uid) || (!r.uid && (p.displayName || p.name) === r.name);
+      });
+      if (m) p.gender = m.gender;
+    });
+    // 2) UMA escolha, os DOIS campos que o motor lê: `_drawBalanceMode` manda na
+    //    formação de duplas e `equilibrado` no espalhamento dentro dos grupos
+    //    (Rei/Rainha). Gravar só um deixava metade do sorteio sem equilíbrio.
+    t._drawBalanceMode = mode;
+    t.equilibrado = (mode === 'equilibrado');
+  }
+  // 3) grava no PERFIL global (via função) — só os que têm uid; fire-and-forget
+  var comUid = assigned.filter(function (r) { return r.uid; }).map(function (r) { return { uid: r.uid, gender: r.gender }; });
+  if (comUid.length > 0 && window.firebase && firebase.functions) {
+    try {
+      firebase.functions().httpsCallable('setParticipantsGender')({ tournamentId: String((t && t.id) || ''), assignments: comUid })
+        .catch(function (e) { window._warn && window._warn('[genderDraw] setParticipantsGender falhou:', e && (e.code || e.message)); });
+    } catch (e) {}
+  }
+  // 4) persiste (a porta do SALVAR passa persist:false — quem grava é o próprio salvar)
+  if (t && opts.persist !== false && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+    try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+  }
+};
+
+// ─── PORTA 1: sorteio MANUAL (v2.1.20) ───────────────────────────────────────
 // Mostra ANTES do sorteio quando: duplas (teamSize 2) formadas por pareamento de
-// indivíduos, SEM categoria masc/fem separada. Deixa o organizador (a) atribuir
-// gênero a inscritos sem gênero e (b) escolher Livre ou Equilibrado (evita dupla
-// 100% masculina). Retorna true se exibiu o diálogo (e chamará onProceed no
-// confirmar); false se não se aplica (o chamador segue o sorteio direto).
+// indivíduos, SEM categoria masc/fem separada. Retorna true se exibiu (e chamará
+// onProceed no confirmar); false se não se aplica (o chamador segue direto).
 window._maybeShowGenderDrawDialog = function(tId, onProceed) {
   var t = window.AppStore && window.AppStore.tournaments &&
           window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
@@ -1617,69 +1769,17 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
   });
   if (individuals.length < 2) return false; // nada pra formar dupla por sorteio
 
-  var _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
-  var _pName = function(p){ return (typeof p === 'string') ? p : (p.displayName || p.name || p.email || '?'); };
-  var _hasGender = function(p){ var g = window._pGender(p); return typeof p === 'object' && !!g && !!String(g).trim(); }; // v1.3.39: perfil-first
-  // v3.0.x: o gênero AUTORITATIVO é o do PERFIL. Carrega os perfis dos
-  // participantes e (a) enriquece o snapshot com o gênero do perfil, (b) a lista
-  // "sem gênero" passa a refletir o PERFIL — quem já tem gênero no perfil NÃO
-  // aparece aqui (antes aparecia porque o objeto-participante vinha sem gender).
-  var _build = function() {
-    individuals.forEach(function(p) {
-      if (typeof p !== 'object' || _hasGender(p)) return;
-      var _prof = window._partProfileByName && window._partProfileByName[String(_pName(p)).toLowerCase()];
-      if (_prof && _prof.gender && String(_prof.gender).trim()) p.gender = String(_prof.gender).trim();
+  window._drawBalanceRows(t, function (rows) {
+    window._showDrawBalanceOverlay({
+      rows: rows,
+      // abre no que ESTÁ configurado — a tela mostra a verdade, não um default próprio
+      mode: (t.equilibrado === false) ? 'livre' : 'equilibrado',
+      onConfirm: function (mode, assigned) {
+        window._applyDrawBalanceChoice(t, mode, assigned, { persist: true });
+        if (typeof onProceed === 'function') onProceed();
+      }
     });
-    var noGender = individuals.filter(function(p){ return !_hasGender(p); });
-
-    // Estado do diálogo
-    window._gdCtx = { tId: tId, onProceed: onProceed, mode: 'livre',
-      rows: noGender.map(function(p){ return { name: _pName(p), uid: (typeof p === 'object' && p.uid) || '', gender: '' }; }) };
-
-  var old = document.getElementById('gender-draw-overlay'); if (old) old.remove();
-  var ov = document.createElement('div');
-  ov.id = 'gender-draw-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:100200;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:3rem 1rem 2rem;';
-
-  var rowsHtml = window._gdCtx.rows.map(function(r, i){
-    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-dark,#0f172a);border:1px solid rgba(255,255,255,0.08);border-radius:10px;">' +
-      '<span style="flex:1;min-width:0;font-size:0.88rem;color:var(--text-bright,#f1f5f9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sh(r.name) + '</span>' +
-      '<button id="gd-f-' + i + '" onclick="window._gdSetGender(' + i + ',\'feminino\')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(236,72,153,0.4);background:rgba(236,72,153,0.08);color:#f9a8d4;font-size:0.78rem;font-weight:700;cursor:pointer;">♀ Fem</button>' +
-      '<button id="gd-m-' + i + '" onclick="window._gdSetGender(' + i + ',\'masculino\')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(59,130,246,0.4);background:rgba(59,130,246,0.08);color:#93c5fd;font-size:0.78rem;font-weight:700;cursor:pointer;">♂ Masc</button>' +
-    '</div>';
-  }).join('');
-
-  ov.innerHTML =
-    '<div style="background:var(--bg-card,#1e293b);border-radius:18px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,0.5);margin:auto;overflow:hidden;">' +
-      '<div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.08);">' +
-        '<div style="font-weight:800;font-size:1rem;color:var(--text-bright,#f1f5f9);">⚖️ Sorteio de duplas</div>' +
-        '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-top:3px;">Defina o gênero de quem está sem, e escolha como formar as duplas.</div>' +
-        '<div style="display:flex;gap:8px;margin-top:12px;">' +
-          '<button onclick="document.getElementById(\'gender-draw-overlay\').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
-          '<button onclick="window._gdConfirm()" style="flex:2;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.88rem;cursor:pointer;">✓ Confirmar</button>' +
-        '</div>' +
-      '</div>' +
-      '<div style="padding:16px 18px;">' +
-        '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Modo de sorteio</div>' +
-        '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">' +
-          '<button id="gd-mode-livre" onclick="window._gdSetMode(\'livre\')" style="text-align:left;padding:11px 14px;border-radius:12px;border:2px solid #6366f1;background:rgba(99,102,241,0.15);color:var(--text-bright,#f1f5f9);cursor:pointer;">' +
-            '<div style="font-weight:700;font-size:0.9rem;">🎲 Livre</div><div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);margin-top:2px;">Duplas formadas totalmente ao acaso.</div></button>' +
-          '<button id="gd-mode-equilibrado" onclick="window._gdSetMode(\'equilibrado\')" style="text-align:left;padding:11px 14px;border-radius:12px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-bright,#f1f5f9);cursor:pointer;">' +
-            '<div style="font-weight:700;font-size:0.9rem;">⚖️ Equilibrado</div><div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);margin-top:2px;">Evita duplas 100% masculinas (distribui as mulheres). Se faltarem, faz o melhor possível.</div></button>' +
-        '</div>' +
-        (window._gdCtx.rows.length > 0
-          ? '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Inscritos sem gênero (' + window._gdCtx.rows.length + ')</div>' +
-            '<div style="display:flex;flex-direction:column;gap:6px;max-height:34%;overflow-y:auto;">' + rowsHtml + '</div>'
-          : '<div style="font-size:0.8rem;color:var(--text-muted,#94a3b8);">Todos os inscritos já têm gênero definido. ✓</div>') +
-      '</div>' +
-    '</div>';
-    document.body.appendChild(ov);
-    if (window._dtrace) window._dtrace('genderDialog:shown', { noGender: (window._gdCtx && window._gdCtx.rows || []).length, mode: (window._gdCtx && window._gdCtx.mode) });
-  }; // fim _build
-  // Carrega os perfis (gênero) antes de montar — fallback síncrono se indisponível.
-  if (typeof window._loadParticipantProfilesByName === 'function') {
-    try { window._loadParticipantProfilesByName(individuals).then(_build).catch(_build); } catch (e) { _build(); }
-  } else { _build(); }
+  });
   return true;
 };
 
@@ -1697,37 +1797,18 @@ window._gdSetMode = function(mode){
   if (l) { l.style.borderColor = mode === 'livre' ? '#6366f1' : 'rgba(255,255,255,0.12)'; l.style.background = mode === 'livre' ? 'rgba(99,102,241,0.15)' : 'var(--bg-dark,#0f172a)'; }
   if (e) { e.style.borderColor = mode === 'equilibrado' ? '#22c55e' : 'rgba(255,255,255,0.12)'; e.style.background = mode === 'equilibrado' ? 'rgba(34,197,94,0.15)' : 'var(--bg-dark,#0f172a)'; }
 };
+window._gdCancel = function(){
+  var ctx = window._gdCtx; window._gdCtx = null;
+  var o = document.getElementById('gender-draw-overlay'); if (o) o.remove();
+  if (ctx && typeof ctx.onCancel === 'function') ctx.onCancel();
+};
 window._gdConfirm = function(){
   var ctx = window._gdCtx; if (!ctx) return;
-  var t = window.AppStore.tournaments.find(function(x){ return String(x.id) === String(ctx.tId); });
-  if (!t) { var o0 = document.getElementById('gender-draw-overlay'); if (o0) o0.remove(); return; }
-  // 1) aplica os gêneros aos objetos de participante (por uid ou nome)
   var assigned = ctx.rows.filter(function(r){ return r.gender; });
-  (t.participants || []).forEach(function(p){
-    if (typeof p !== 'object') return;
-    var match = assigned.find(function(r){
-      return (r.uid && p.uid && r.uid === p.uid) || (!r.uid && (p.displayName || p.name) === r.name);
-    });
-    if (match) p.gender = match.gender;
-  });
-  // 2) modo de sorteio
-  t._drawBalanceMode = ctx.mode;
-  // 3) grava no PERFIL global (via função) — só os que têm uid; fire-and-forget
-  var withUid = assigned.filter(function(r){ return r.uid; }).map(function(r){ return { uid: r.uid, gender: r.gender }; });
-  if (withUid.length > 0 && window.firebase && firebase.functions) {
-    try {
-      firebase.functions().httpsCallable('setParticipantsGender')({ tournamentId: String(ctx.tId), assignments: withUid })
-        .catch(function(e){ window._warn && window._warn('[genderDraw] setParticipantsGender falhou:', e && (e.code || e.message)); });
-    } catch (e) {}
-  }
-  // 4) persiste e segue o sorteio
-  if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-    try { window.FirestoreDB.saveTournament(t); } catch (e) {}
-  }
   var o = document.getElementById('gender-draw-overlay'); if (o) o.remove();
   window._gdCtx = null;
   if (window._dtrace) window._dtrace('genderConfirm', { mode: ctx.mode });
-  if (typeof ctx.onProceed === 'function') ctx.onProceed();
+  if (typeof ctx.onConfirm === 'function') ctx.onConfirm(ctx.mode, assigned);
 };
 
 window.showFinalReviewPanel = function (tId) {
