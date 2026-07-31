@@ -45,12 +45,13 @@ ok(/decorrido: _fmtDur\(dec\) \+ _ritmoTexto\(\)/.test(app), 'o que fica é medi
     'e ela varre o conjunto de páginas lidas, não um contador de lote');
   ok(/var _pos = Math\.min\(_lidasAgora\(\) \+ _grupo\.length, maxPage\);/.test(et3b),
     'o rótulo conta as já lidas MAIS as que estão sendo lidas agora');
-  ok(/function _placar\(lidas\)/.test(et3b), 'existe um rótulo único com os DOIS números');
-  ok(/' lidas · ' \+ \(falta \? \('faltam ' \+ falta\)/.test(et3b),
-    'sempre diz quantas foram lidas E quantas faltam');
-  ok(/'nenhuma falta'/.test(et3b), 'e diz explicitamente quando não falta nenhuma');
+  // UM NÚMERO SÓ, correndo. Se 23 páginas já foram e falta uma, é "lendo página 24 de 24".
+  ok(/function _placar\(lidas\) \{ return 'lendo página '/.test(et3b), 'rótulo único: lendo página N de M');
+  ok(!/faltam ' \+ falta/.test(et3b), 'sem "faltam" — o N de M já diz tudo');
+  ok(!/'nenhuma falta'/.test(et3b), 'e sem texto de sobra quando fecha');
   ok(/_placar\(_pos\)/.test(et3b) && /_placar\(_lidasAgora\(\)\)/.test(et3b),
-    'o mesmo rótulo serve o passo e o feed — um texto só');
+    'o mesmo rótulo serve antes e depois de cada lote');
+  ok(/Math\.min\(lidas, maxPage\)/.test(et3b), 'e nunca passa do total');
   ok(/pct: 46 \+ Math\.round\(\(_pos \/ Math\.max\(1, maxPage\)\) \* 51\)/.test(et3b),
     'a barra usa o mesmo número — rótulo e barra não podem divergir de novo');
   ok(!/_bp \/ Math\.max\(1, _faltam\.length\)/.test(et3b),
