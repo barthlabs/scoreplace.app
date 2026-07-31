@@ -123,6 +123,7 @@ const SUITES = [
   'tests/lz-list-date.test.js',
   'tests/lz-incremental-history.test.js',
   'tests/lz-id-survives-rounds.test.js',
+  'tests/lz-batched-requests.test.js',
   'tests/letzplay-pace.test.js',
   'tests/letzplay-model.test.js',
   'tests/letzplay-eta.test.js',

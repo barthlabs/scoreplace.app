@@ -2463,11 +2463,14 @@
       var w = _trabalho();
       if (_w0 == null) _w0 = w.feito;
       var feitoAgora = w.feito - _w0, falta = w.total - w.feito;
-      // Os DOIS rótulos existem sempre; o restante vira "—" enquanto não há amostra pra
-      // medir (com 1 ou 2 unidades a projeção é ruído). Assim nenhum dos dois muda de lugar.
+      // O "restam" ficava eternamente em "—" numa releitura: quase tudo já estava no banco,
+      // então `feito` mal se mexia e nunca chegava nas 3 unidades exigidas. Amostra de 1 já
+      // dá uma estimativa útil (e ela se corrige a cada segundo) — melhor um número que se
+      // ajusta do que um traço que não diz nada. Continua "—" só enquanto NADA foi feito
+      // nesta leitura, que é o único caso em que não há o que medir.
       return {
         decorrido: _fmtDur(dec),
-        restante: (feitoAgora >= 3 && falta > 0) ? ('~' + _fmtDur((dec / feitoAgora) * falta)) : '—'
+        restante: (feitoAgora >= 1 && falta > 0) ? ('~' + _fmtDur((dec / feitoAgora) * falta)) : '—'
       };
     }
     // Relógio de 1s: é ele que faz a tela se MEXER durante as esperas longas. O passo

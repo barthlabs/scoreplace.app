@@ -58,8 +58,11 @@ ok(/title: P\.title \|\| null, data: P\.data \|\| null, dataNum: P\.dataNum \|\|
 ok(!/pulados sem reler'/.test(src), 'nenhuma linha de "N já lidos — pulados sem reler" sobrou');
 ok(!/pulT\+\+|pulR\+\+/.test(src), 'e nem o contador que existia só pra isso');
 {
-  const laco = src.slice(src.indexOf('if (C.toursDone[tk])'), src.indexOf('if (C.toursDone[tk])') + 200);
-  ok(/continue;/.test(laco), 'quem já foi lido é pulado direto, sem emitir nada');
+  // agora o filtro acontece ANTES de montar os lotes (ext 1.71): quem já foi lido nem
+  // entra na lista de trabalho — mais forte que "pular dentro do laço".
+  const filtro = src.slice(src.indexOf('var _pendT = toursList.filter'), src.indexOf('var _pendT = toursList.filter') + 320);
+  ok(/return false;/.test(filtro), 'quem já foi lido é retirado antes do lote, sem emitir nada');
+  ok(/if \(d0\) det\[tk\] = d0;/.test(filtro), 'mas o que já sabíamos dele é reaproveitado');
 }
 
 console.log((fail ? '✗' : '✓') + ' lz-list-date: ' + pass + ' passaram, ' + fail + ' falharam');

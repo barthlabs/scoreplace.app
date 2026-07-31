@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.70';
+  var EXT_VERSION = '1.71';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1026,6 +1026,10 @@
       return achados;
     }
 
+    // Requisições simultâneas por lote. Casa com os slots da fila do background — mandar
+    // mais que isso só faz a fila segurar do outro lado.
+    var LOTE = 3;
+
     _rateBudget = _newRateBudget(((totJogos || 400) / 13) + 2 * (totTorneios || 30) + (totRankings || 25) + 8);
 
     try {
@@ -1079,47 +1083,39 @@
         // A FILA JÁ FAZ VÁRIAS AO MESMO TEMPO — mas o laço `await` por item as
         // serializava mesmo assim. Disparamos em blocos: o tempo total passa a ser
         // limitado pelo servidor, não pelo nosso laço.
-        for (var ti = 0; ti < toursList.length; ti++) {
+        // EM BLOCOS, NÃO UMA POR VEZ. A fila do background aceita várias ao mesmo tempo,
+        // mas este laço fazia `await` por item — nunca havia mais de UMA requisição em voo,
+        // e o paralelismo da fila não servia pra nada. Medido pelo dono: 3 minutos pra ~16
+        // páginas de competição. Agora vai de lote em lote; o tempo passa a ser limitado
+        // pelo servidor, não pelo nosso laço.
+        var _pendT = toursList.filter(function (P) {
+          var tk = 't/' + P.club + '/' + P.tid;
+          // pular é pular, sem anunciar e sem gastar requisição
+          if (C.toursDone[tk]) { var d0 = detDe(tk); if (d0) det[tk] = d0; return false; }
+          return true;
+        });
+        var _totT = totTorneios || toursList.length;
+        for (var _bt = 0; _bt < _pendT.length; _bt += LOTE) {
           conferirTeto();
-          var P = toursList[ti], tk = 't/' + P.club + '/' + P.tid;
-          // O CURSOR SOZINHO É A PROVA DE QUE A PÁGINA FOI ABERTA — ele só é marcado depois
-          // de uma leitura que deu certo. Exigir também `detDe(tk)` fazia competição sem
-          // classificação publicada (3 dos 35 torneios dela) nunca contar como lida e ser
-          // REBUSCADA em toda rodada, pra sempre: "32 de 35" que nunca fecha.
-          // PULAR É PULAR — SEM ANUNCIAR. A linha "⏭️ N já lidos — pulados sem reler"
-          // enchia o feed com o que NÃO aconteceu, no meio das linhas do que aconteceu.
-          // Quem só pula não gasta requisição nem tempo: não tem o que reportar.
-          if (C.toursDone[tk]) { var _dT = detDe(tk); if (_dT) det[tk] = _dT; continue; }
-          // O NÚMERO DO RÓTULO É O MESMO DA BARRA. Antes o rótulo usava a posição na LISTA
-          // e a barra usava o quanto já foi lido — dois contadores diferentes na mesma tela
-          // ("torneio 1 de 35" embaixo de "30 de 35"). Agora ele conta o que está sendo
-          // lido AGORA: os já lidos + 1. Consistente por construção.
-          var _totT = totTorneios || toursList.length;
-          // O RÓTULO CONTA EXATAMENTE O QUE A BARRA CONTA: o que já foi LIDO. Antes ele
-          // contava "o que está sendo lido agora" (lidos + 1) e a barra contava lidos —
-          // dois contadores diferentes na mesma tela, e o dono via "torneio 4 de 8" em cima
-          // de "Torneios 5 de 8". Um número só, e ele nunca promete o que ainda não veio.
+          // O RÓTULO CONTA O MESMO QUE A BARRA: o que já foi LIDO.
           prog({ phase: 'torneios',
             note: 'torneio ' + Math.min(Object.keys(C.toursDone).length, _totT) + ' de ' + _totT + ' — nome, categoria e classificação',
-            pct: 4 + Math.round((ti / Math.max(1, toursList.length)) * 26) });
-          try {
-            var dT = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
-            det[tk] = { name: tourneyNameFromDoc(dT), standings: tourneyStandingsFromDoc(dT), logo: tourneyLogoFromDoc(dT) };
-            C.toursDone[tk] = 1;
-            var pT = minhaPos(det[tk].standings);
-            // ESTRUTURADO: o app pinta cada campo (nome / colocação) com a paleta da lista.
-            // String pronta não dá pra colorir sem injetar HTML de fonte não confiável.
-            // O RÓTULO VAI EM TODO EMIT DA FASE. Emit sem `note` deixa o texto anterior na
-            // tela, e no fim da fase de torneios ele ficava congelado em "torneio 35 de 35"
-            // enquanto os RANKINGS já estavam sendo lidos — a tela dizia uma coisa e a barra
-            // outra. Rótulo é estado da fase, não evento.
-            prog({ phase: 'torneios', pct: 4 + Math.round(((ti + 1) / Math.max(1, toursList.length)) * 26),
-              note: 'torneio ' + Math.min(Object.keys(C.toursDone).length, _totT) + ' de ' + _totT + ' — nome, categoria e classificação',
-              feed: Object.assign({ icon: '🏆', data: P.data || null },
-                _partirNome(det[tk].name || P.title || ('torneio ' + P.tid)),
-                { pos: (pT != null ? (_medalha(pT) + ' ' + pT + 'º') : null) }) });
-          } catch (eT) { if (ehPausa(eT)) throw eT; }
-          parcialAgora('torneios', ti + 1, toursList.length);
+            pct: 4 + Math.round((_bt / Math.max(1, _pendT.length)) * 26) });
+          await Promise.all(_pendT.slice(_bt, _bt + LOTE).map(async function (P) {
+            var tk = 't/' + P.club + '/' + P.tid;
+            try {
+              var dT = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
+              det[tk] = { name: tourneyNameFromDoc(dT), standings: tourneyStandingsFromDoc(dT), logo: tourneyLogoFromDoc(dT) };
+              C.toursDone[tk] = 1;
+              var pT = minhaPos(det[tk].standings);
+              prog({ phase: 'torneios',
+                note: 'torneio ' + Math.min(Object.keys(C.toursDone).length, _totT) + ' de ' + _totT + ' — nome, categoria e classificação',
+                feed: Object.assign({ icon: '🏆', data: P.data || null },
+                  _partirNome(det[tk].name || P.title || ('torneio ' + P.tid)),
+                  { pos: (pT != null ? (_medalha(pT) + ' ' + pT + 'º') : null) }) });
+            } catch (eT) { if (ehPausa(eT)) throw eT; }
+          }));
+          parcialAgora('torneios', Math.min(_bt + LOTE, _pendT.length), _pendT.length);
         }
 
         // ── ETAPA 2: RANKINGS ──────────────────────────────────────────────────
@@ -1132,26 +1128,32 @@
         if (totRankings == null && ranksList.length) totRankings = ranksList.length;
         prog({ phase: 'rankings', pct: 31,
           note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, (totRankings || ranksList.length) || 1) + ' de ' + ((totRankings || ranksList.length) || '?') + ' — nome e classificação' });
-        for (var ri = 0; ri < ranksList.length; ri++) {
+        var _pendR = ranksList.filter(function (R) {
+          var rk = 'r/' + R.club + '/' + R.rid;
+          if (C.ranksDone[rk]) { var d0 = detDe(rk); if (d0) det[rk] = d0; return false; }
+          return true;
+        });
+        var _totR = totRankings || ranksList.length;
+        for (var _br = 0; _br < _pendR.length; _br += LOTE) {
           conferirTeto();
-          var R = ranksList[ri], rk = 'r/' + R.club + '/' + R.rid;
-          if (C.ranksDone[rk]) { var _dR = detDe(rk); if (_dR) det[rk] = _dR; continue; }
-          var _totR = totRankings || ranksList.length;
-          prog({ phase: 'rankings',   // idem: o rótulo conta o MESMO que a barra
+          prog({ phase: 'rankings',
             note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, _totR) + ' de ' + _totR + ' — nome e classificação',
-            pct: 31 + Math.round((ri / Math.max(1, ranksList.length)) * 14) });
-          try {
-            var dR = await bgFetchDoc('https://letzplay.me/' + R.club + '/rankings/' + R.rid);
-            det[rk] = { name: tourneyNameFromDoc(dR), standings: slimRankingStandings(rankingStandingsFromDoc(dR), realHandle), logo: tourneyLogoFromDoc(dR) };
-            C.ranksDone[rk] = 1;
-            var pR = minhaPos(det[rk].standings);
-            prog({ phase: 'rankings', pct: 31 + Math.round(((ri + 1) / Math.max(1, ranksList.length)) * 14),
-              note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, _totR) + ' de ' + _totR + ' — nome e classificação',
-              feed: Object.assign({ icon: '📊', data: R.data || null },
-                _partirNome(det[rk].name || R.title || ('ranking ' + R.rid)),
-                { pos: (pR != null ? (pR + 'º') : null) }) });
-          } catch (eR) { if (ehPausa(eR)) throw eR; }
-          parcialAgora('rankings', ri + 1, ranksList.length);
+            pct: 31 + Math.round((_br / Math.max(1, _pendR.length)) * 14) });
+          await Promise.all(_pendR.slice(_br, _br + LOTE).map(async function (R) {
+            var rk = 'r/' + R.club + '/' + R.rid;
+            try {
+              var dR = await bgFetchDoc('https://letzplay.me/' + R.club + '/rankings/' + R.rid);
+              det[rk] = { name: tourneyNameFromDoc(dR), standings: slimRankingStandings(rankingStandingsFromDoc(dR), realHandle), logo: tourneyLogoFromDoc(dR) };
+              C.ranksDone[rk] = 1;
+              var pR = minhaPos(det[rk].standings);
+              prog({ phase: 'rankings',
+                note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, _totR) + ' de ' + _totR + ' — nome e classificação',
+                feed: Object.assign({ icon: '📊', data: R.data || null },
+                  _partirNome(det[rk].name || R.title || ('ranking ' + R.rid)),
+                  { pos: (pR != null ? (pR + 'º') : null) }) });
+            } catch (eR) { if (ehPausa(eR)) throw eR; }
+          }));
+          parcialAgora('rankings', Math.min(_br + LOTE, _pendR.length), _pendR.length);
         }
 
         // ── ETAPA 3: JOGOS (fonte ÚNICA — o histórico pessoal) ─────────────────
@@ -1204,6 +1206,28 @@
           // estável num feed que cresce por cima — "página 8" hoje não é a de ontem.
           var _incremental = (jaConhecidos > 0);
           var _secas = 0;
+          // VARREDURA COMPLETA vai em LOTE (não há como uma página cancelar a outra);
+          // a INCREMENTAL segue página a página, porque ela precisa parar na primeira que
+          // não trouxer novidade — e disparar 3 de uma vez leria páginas à toa.
+          if (!_incremental) {
+            for (var _bp = pIni + 1; _bp <= maxPage; _bp += LOTE) {
+              conferirTeto();
+              var _ate = Math.min(_bp + LOTE - 1, maxPage);
+              prog({ phase: 'jogos', note: 'páginas ' + _bp + '–' + _ate + ' de ' + maxPage,
+                pct: 46 + Math.round(((_bp - 1) / Math.max(1, maxPage)) * 51) });
+              var _docs = await Promise.all((function () {
+                var us = []; for (var q = _bp; q <= _ate; q++) us.push(base + '?page=' + q);
+                return us.map(function (u) { return bgFetchDoc(u); });
+              })());
+              var _addLote = 0;
+              _docs.forEach(function (d) { _addLote += addJogos(X.extractMatchesFromDoc(d, realHandle)); });
+              lastPageRead = _ate;
+              prog({ phase: 'jogos', pct: 46 + Math.round((_ate / Math.max(1, maxPage)) * 51),
+                feed: '🎾 páginas ' + _bp + '–' + _ate + ' de ' + maxPage + ': +' + _addLote + ' jogo(s)' });
+              if (_ate < maxPage) parcialAgora('jogos', _ate, maxPage);
+            }
+            if (lastPageRead >= maxPage) C.complete = true;
+          }
           for (var p = pIni + 1; p <= maxPage && !C.complete; p++) {
             conferirTeto();
             prog({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage, pct: 46 + Math.round(((p - 1) / Math.max(1, maxPage)) * 51) });
