@@ -63,8 +63,17 @@ try {
   chrome.storage && chrome.storage.local && chrome.storage.local.get([_Q_KEY], function (o) {
     var s = o && o[_Q_KEY];
     if (!s) return;
+    // O CASTIGO APRENDIDO EXPIRA. Ele é memória de um bloqueio que ACONTECEU — e um
+    // bloqueio de anteontem não diz nada sobre hoje. Sem prazo, uma tarde ruim deixava a
+    // leitura lenta pra sempre: medido em 30/jul, o letzplay respondendo em 0,3–2,2 s sem
+    // limitar nada e a nossa fila ainda esperando 10–25 s por operação. O usuário via
+    // "abrindo o perfil…" por um minuto numa página que já estava aberta.
+    // Sem bloqueio nas últimas 6 h, o passo volta ao de fábrica.
+    var desde = (typeof s.blockAt === 'number') ? (Date.now() - s.blockAt) : Infinity;
+    if (desde > 6 * 3600000) return;                 // castigo vencido → fábrica
     if (typeof s.gap === 'number') _q.gap = Math.min(_q.max, Math.max(_q.min, s.gap));
     if (typeof s.floor === 'number') _q.floor = Math.min(_q.max, Math.max(_q.min, s.floor));
+    if (typeof s.blockAt === 'number') _q.blockAt = s.blockAt;
   });
 } catch (e) {}
 var _qSaveT = null;
@@ -79,7 +88,7 @@ function _qSave(now) {
   if (_qSaveT) return;   // agrupa gravações (a fila muda o gap várias vezes por busca)
   _qSaveT = setTimeout(function () { _qSaveT = null; write(); }, 500);
 }
-function _qDump() { var o = {}; o[_Q_KEY] = { gap: _q.gap, floor: _q.floor, at: Date.now() }; return o; }
+function _qDump() { var o = {}; o[_Q_KEY] = { gap: _q.gap, floor: _q.floor, at: Date.now(), blockAt: _q.blockAt || 0 }; return o; }
 // Estado medido, pro app MOSTRAR (nunca mais "travado" sem explicação).
 function _qStats() { return { gap: _q.gap, floor: _q.floor, blocks: _q.blocks, busy: _q.busy }; }
 function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
@@ -88,7 +97,7 @@ function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 function _qSlower() {
   _q.gap = Math.min(_q.max, Math.round(_q.gap * 2) + 400);
   _q.floor = Math.min(_q.max, Math.max(_q.floor, Math.round(_q.gap * 0.75)));
-  _q.okStreak = 0; _q.blocks++;
+  _q.okStreak = 0; _q.blocks++; _q.blockAt = Date.now();   // quando o castigo começou a contar
   _qSave(true);   // freio grava na hora — o SW pode morrer antes de um debounce
 }
 // Só afrouxa depois de 12 sucessos SEGUIDOS, e só 10% de cada vez — e jamais abaixo do
@@ -220,6 +229,21 @@ function navLetzplayTab(url, cb) {
   ensureLetzplayTab(function (tabId) {
     if (!tabId) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
     var navDone = false;
+    // JÁ ESTÁ NA PÁGINA? Então não há nada a fazer — e principalmente não há nada a
+    // ESPERAR. Era isto que o dono via: "porque fica 1min abrindo o perfil que já está
+    // aberto?". Navegar pra mesma URL recarrega a página e ainda cobra a espera de
+    // renderização derivada do passo aprendido.
+    try {
+      chrome.tabs.get(tabId, function (t) {
+        void chrome.runtime.lastError;
+        if (t && t.url && t.url.split('#')[0] === String(url).split('#')[0] && t.status === 'complete') {
+          if (!navDone) { navDone = true; cb({ ok: true, jaEstava: true }); }
+          return;
+        }
+        seguir();
+      });
+      return;
+    } catch (e) { /* sem chrome.tabs.get → segue o caminho normal */ }
     function settle() {
       var n = 0;
       (function check() {
@@ -235,11 +259,13 @@ function navLetzplayTab(url, cb) {
       })();
     }
     function onUpd(tid, info) { if (tid === tabId && info.status === 'complete' && !navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} settle(); } }
+    function seguir() {
     chrome.tabs.onUpdated.addListener(onUpd);
     chrome.tabs.update(tabId, { url: url }, function () {
       if (chrome.runtime.lastError && !navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} cb({ ok: false, error: chrome.runtime.lastError.message }); }
     });
     setTimeout(function () { if (!navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} settle(); } }, 12000);
+    }
   });
 }
 

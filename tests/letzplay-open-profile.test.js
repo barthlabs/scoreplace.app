@@ -37,5 +37,31 @@ const faster = bg.slice(bg.indexOf('function _qFaster'), bg.indexOf('function _q
 ok(/_q\.floor\s*=/.test(faster), 'sucessos seguidos derrubam também o PISO aprendido');
 ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fábrica');
 
+// ── A ABA JÁ ESTÁ NA PÁGINA → NÃO NAVEGA E NÃO ESPERA ────────────────────────
+// "porque fica 1min abrindo o perfil que já está aberto?" — navegar pra mesma URL
+// recarrega a página E ainda cobra a espera de renderização derivada do passo aprendido.
+{
+  const nav = bg.slice(bg.indexOf('function navLetzplayTab'), bg.indexOf('// EXTRATOR do PERFIL'));
+  ok(/chrome\.tabs\.get\(/.test(nav), 'navLetzplayTab confere a URL atual da aba antes de navegar');
+  ok(/jaEstava/.test(nav), 'e responde na hora quando já está na página');
+  ok(/t\.status === 'complete'/.test(nav), 'só considera "já está" com a página carregada');
+  ok(/function seguir\(\)/.test(nav) && /[^n]seguir\(\);/.test(nav),
+    'o caminho normal de navegação continua existindo pra quando NÃO está');
+}
+
+// ── O CASTIGO APRENDIDO EXPIRA ───────────────────────────────────────────────
+// Sem prazo, uma tarde ruim deixava a leitura lenta pra sempre — medido: letzplay
+// respondendo em 0,3–2,2 s e a fila esperando 10–25 s por causa de um bloqueio antigo.
+{
+  ok(/blockAt/.test(bg), 'a fila registra QUANDO apanhou');
+  const carga = bg.slice(bg.indexOf('chrome.storage.local.get([_Q_KEY]'), bg.indexOf('var _qSaveT'));
+  ok(/6 \* 3600000/.test(carga), 'sem bloqueio nas últimas 6 h, o passo volta ao de fábrica');
+  ok(/return;/.test(carga), 'e o castigo vencido é simplesmente descartado');
+  const dump = bg.slice(bg.indexOf('function _qDump'), bg.indexOf('function _qDump') + 220);
+  ok(/blockAt/.test(dump), 'o instante do bloqueio é persistido junto com o passo');
+  const slower = bg.slice(bg.indexOf('function _qSlower'), bg.indexOf('function _qSlower') + 420);
+  ok(/_q\.blockAt = Date\.now\(\)/.test(slower), 'apanhar carimba o instante');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-open-profile: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
