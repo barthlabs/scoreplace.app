@@ -4091,16 +4091,25 @@ function _spreadMinorityGender(t, lista, numGroups) {
   for (var i = 0; i < numGroups; i++) G.push(lista.slice(i * 4, i * 4 + 4));
   var sobra = lista.slice(numGroups * 4);             // não entra em grupo nenhum
   function qtd(g) { return g.filter(function (n) { return gen[n] === min; }).length; }
-  // enquanto houver grupo com 2+ e grupo com 0, troca um pelo outro
-  for (var passo = 0; passo < numGroups * 4; passo++) {
-    var cheio = -1, vazio = -1;
-    for (var a = 0; a < G.length; a++) { if (qtd(G[a]) >= 2) { cheio = a; break; } }
-    for (var b = 0; b < G.length; b++) { if (qtd(G[b]) === 0) { vazio = b; break; } }
-    if (cheio < 0 || vazio < 0) break;                // acabou o que dava pra melhorar
-    var iM = G[cheio].findIndex(function (n) { return gen[n] === min; });
-    var iO = G[vazio].findIndex(function (n) { return gen[n] !== min; });
+  // NIVELA: enquanto o grupo mais cheio tiver 2 a mais que o mais vazio, move um.
+  // Uma regra só, que cobre os dois casos que o dono descreveu: com MENOS minoria que
+  // grupos, ninguém fica com 2 enquanto houver grupo com 0; com MAIS minoria que grupos,
+  // todo grupo recebe 1 antes de qualquer um receber 2 (e assim por diante). Para quando
+  // a diferença é no máximo 1 — daí não existe troca que melhore.
+  // Antes daqui a busca era "primeiro grupo com 2+" × "primeiro com 0", o que dava certo
+  // no papel mas parava cedo quando a distribuição já vinha quase boa. Agora é sempre o
+  // MAIOR contra o MENOR: não há como sobrar um grupo com 2 e outro com 0.
+  for (var passo = 0; passo < numGroups * 8; passo++) {
+    var hi = 0, lo = 0;
+    for (var a = 1; a < G.length; a++) {
+      if (qtd(G[a]) > qtd(G[hi])) hi = a;
+      if (qtd(G[a]) < qtd(G[lo])) lo = a;
+    }
+    if (qtd(G[hi]) - qtd(G[lo]) < 2) break;           // já está o mais parelho possível
+    var iM = G[hi].findIndex(function (n) { return gen[n] === min; });
+    var iO = G[lo].findIndex(function (n) { return gen[n] !== min; });
     if (iM < 0 || iO < 0) break;
-    var tmp = G[cheio][iM]; G[cheio][iM] = G[vazio][iO]; G[vazio][iO] = tmp;
+    var tmp = G[hi][iM]; G[hi][iM] = G[lo][iO]; G[lo][iO] = tmp;
   }
   return G.reduce(function (acc, g) { return acc.concat(g); }, []).concat(sobra);
 }

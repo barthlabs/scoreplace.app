@@ -44,6 +44,39 @@ function homensPorGrupo(gs) { return gs.map(g => g.filter(n => /^M/.test(n)).len
   const h = homensPorGrupo(grupos(out, n));
   ok(out.length === nomes.length, 'não perde ninguém quando não dá pra separar todos');
   ok(h.every(x => x >= 1), 'todo grupo recebe ao menos um da minoria em vez de amontoar');
+  ok(Math.max(...h) - Math.min(...h) <= 1, 'e a sobra fica parelha (2 em cada, não 3+1)');
+}
+
+// 2b) O CASO AO VIVO (31/jul, sorteio v1.6.62 do Confra sandbox): 26 grupos, 14 homens,
+// e a chave saiu com UM grupo de 2 e treze grupos sem nenhum. "dá perfeitamente para
+// colocar 1 homem apenas em cada grupo que tenha homem." A busca antiga era "PRIMEIRO
+// grupo com 2+" × "PRIMEIRO com 0" e parava cedo; agora é MAIOR × MENOR.
+{
+  const t = torneio(90, 14, true);
+  const nomes = t.participants.map(p => p.displayName);
+  // reproduz a distribuição exata que o dono viu na tela
+  const porGrupo = [1,0,1,0,0,1,1,1,2,1,0,1,1,0,0,0,1,0,0,1,0,0,1,1,0,0];
+  const F = nomes.filter(n => /^F/.test(n)), M = nomes.filter(n => /^M/.test(n));
+  let fi = 0, mi = 0; const lista = [];
+  porGrupo.forEach(q => { for (let k = 0; k < 4; k++) lista.push(k < q ? M[mi++] : F[fi++]); });
+  ok(mi === 14 && lista.length === 104, 'cenário montado: 104 jogadores, 14 homens');
+  ok(Math.max(...homensPorGrupo(grupos(lista, 26))) === 2, 'a entrada É a chave que saiu errada');
+  const out = window._spreadMinorityGender(t, lista, 26);
+  const h = homensPorGrupo(grupos(out, 26));
+  ok(Math.max(...h) <= 1, 'depois do reparo, nenhum grupo com 2 (máx: ' + Math.max(...h) + ')');
+  ok(h.filter(x => x === 1).length === 14, 'os 14 homens em 14 grupos distintos');
+  ok(new Set(out).size === 104, 'ninguém sumiu nem duplicou');
+}
+
+// 2c) MAIS minoria que grupos: nivela — ninguém recebe 2 antes de todos terem 1, ninguém
+// recebe 3 antes de todos terem 2. 12 homens em 8 grupos → 4 grupos com 2 e 4 com 1.
+{
+  const t = torneio(20, 12, true);                   // 32 jogadores, 8 grupos, minoria = 12 homens
+  const nomes = t.participants.map(p => p.displayName);
+  const out = window._spreadMinorityGender(t, nomes, 8);
+  const h = homensPorGrupo(grupos(out, 8));
+  ok(h.every(x => x >= 1), 'todo grupo tem ao menos 1 antes de qualquer um ter 2');
+  ok(Math.max(...h) - Math.min(...h) <= 1, 'e a distribuição fica parelha (' + h.join(',') + ')');
 }
 
 // 3) LIVRE não mexe em nada
