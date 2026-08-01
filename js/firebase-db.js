@@ -760,10 +760,62 @@ window.FirestoreDB = {
     });
   },
 
+  // Subcoleções que vivem SOB o torneio. Apagar o doc pai NÃO as apaga (Firestore não tem
+  // delete recursivo) — quem esquece isso deixa dado vivo sem dono.
+  _tournamentSubcollections: ['results', 'letzplayScans'],
+
+  // Apaga TODOS os docs de uma subcoleção, em lotes de 400 (o teto do batch é 500).
+  // Devolve quantos foram apagados. Best-effort: erro num lote não derruba o resto.
+  async _deleteSubcollection(tournamentId, sub) {
+    var col = this.db.collection('tournaments').doc(String(tournamentId)).collection(sub);
+    var apagados = 0;
+    for (var volta = 0; volta < 50; volta++) {           // teto de segurança (20 mil docs)
+      var snap = await col.limit(400).get();
+      if (snap.empty) break;
+      var lote = this.db.batch();
+      snap.forEach(function (d) { lote.delete(d.ref); });
+      await lote.commit();
+      apagados += snap.size;
+      if (snap.size < 400) break;
+    }
+    return apagados;
+  },
+
+  // APAGAR UM TORNEIO É APAGAR TUDO QUE É DELE. Regra do dono (01/ago/2026, sobre o
+  // sandbox): _"os dados do SB devem ficar apenas enquanto existe o SB. ao apagar o SB deve
+  // apagar tudo relativo a ele para não persistir."_ Vale pra qualquer torneio.
+  //
+  // ISSO AQUI ERA UMA LINHA SÓ (`doc().delete()`) e por isso o banco tinha, medido em
+  // 01/ago/2026, **211 documentos de placar dos quais só 60 eram de torneio vivo**: 151
+  // órfãos, 85 deles de sandboxes já apagados. Órfão não é dado inerte — ele responde à
+  // consulta `collectionGroup('results')` por uid e reaparece no histórico das pessoas.
+  //
+  // A ORDEM IMPORTA: as subcoleções PRIMEIRO, o doc do torneio DEPOIS. A regra do Firestore
+  // pra `results` autoriza pelo torneio PAI (`parentT()`); com o pai já apagado o `get()`
+  // devolve nada, `isAdminOf(null)` é falso e a limpeza toma permission-denied. Ou seja: uma
+  // vez apagado o pai, os filhos ficam INALCANÇÁVEIS pelo cliente — é assim que os 151
+  // órfãos nasceram e é por isso que não dá pra "limpar depois".
   async deleteTournament(tournamentId) {
     if (!this.db) return;
+    var tId = String(tournamentId);
+    for (var i = 0; i < this._tournamentSubcollections.length; i++) {
+      var sub = this._tournamentSubcollections[i];
+      try {
+        var n = await this._deleteSubcollection(tId, sub);
+        if (n && window._log) window._log('[delete torneio]', tId, '→', n, 'doc(s) de', sub);
+      } catch (e) {
+        // Não aborta o delete do torneio: é melhor o torneio sumir e sobrar subcoleção do
+        // que o organizador clicar em Apagar e nada acontecer. Mas o erro é BARULHENTO.
+        window._error('Erro ao limpar subcoleção ' + sub + ' de ' + tId + ':', e);
+        if (typeof window._captureException === 'function') {
+          window._captureException(e, { area: 'deleteTournament.sub', tournamentId: tId, sub: sub, code: e && e.code });
+        }
+      }
+    }
+    // discoveryFeed é um doc de ÍNDICE com o id do torneio — some junto.
+    try { await this.db.collection('discoveryFeed').doc(tId).delete(); } catch (e) {}
     try {
-      await this.db.collection('tournaments').doc(String(tournamentId)).delete();
+      await this.db.collection('tournaments').doc(tId).delete();
     } catch (e) {
       window._error('Erro ao deletar torneio:', e);
       if (typeof window._captureException === 'function') {
