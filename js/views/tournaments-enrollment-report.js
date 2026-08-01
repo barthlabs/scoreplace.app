@@ -1390,52 +1390,77 @@
   //
   // A busca é UMA query, por uid, sem carregar torneio: collectionGroup('results') com
   // array-contains em playerUids. É o mesmo caminho que o dashboard já usa.
+  function _lzItemDeResult(r, uid) {
+    var meu = -1;
+    if (Array.isArray(r.p1Uids) && r.p1Uids.indexOf(uid) >= 0) meu = 0;
+    else if (Array.isArray(r.p2Uids) && r.p2Uids.indexOf(uid) >= 0) meu = 1;
+    if (meu < 0) {
+      var nome = _lzNomeDoUid(uid);
+      if (nome && String(r.p1 || '').indexOf(nome) >= 0) meu = 0;
+      else if (nome && String(r.p2 || '').indexOf(nome) >= 0) meu = 1;
+    }
+    // Ainda sem lado: o jogo É dela (veio da busca por uid), então mostra do jeito que
+    // está gravado em vez de sumir com ele. Melhor um card sem "V/D" do que um histórico
+    // que finge que a pessoa não jogou.
+    if (meu < 0) meu = 0;
+    var meuNome = meu === 0 ? r.p1 : r.p2, outro = meu === 0 ? r.p2 : r.p1;
+    var meuSc = meu === 0 ? r.scoreP1 : r.scoreP2, outroSc = meu === 0 ? r.scoreP2 : r.scoreP1;
+    var venceu = (r.draw === true) ? null : (r.winner != null ? (String(r.winner) === String(meuNome)) : null);
+    return {
+      ts: (typeof window._spTsData === 'function')
+            ? window._spTsData(r.resultAt || r.updatedAt || r.startedAt || 0, { fallback: 0 })
+            : (r.resultAt || 0),
+      source: 'scoreplace', sport: r.sport || '', official: true, venue: r.venue || '',
+      competition: r.tournamentName || 'Torneio',
+      competitionLabel: 'Torneio' + (r.tournamentName ? ' · ' + r.tournamentName : '') +
+                        (r.roundLabel ? ' · ' + r.roundLabel : ''),
+      tournamentId: r.tournamentId || null, tournamentFormat: r.format || '',
+      opponent: outro || '—', partner: null,
+      result: (venceu === true) ? 'V' : (venceu === false ? 'D' : (r.draw ? 'E' : '?')),
+      scoreA: (meuSc != null) ? String(meuSc) : '', scoreB: (outroSc != null) ? String(outroSc) : '',
+      _k: (r.tournamentId || '') + '/' + (r.matchId || '')
+    };
+  }
+  // DOIS CAMINHOS, PORQUE UM SÓ JÁ FALHOU DUAS VEZES.
+  //   (a) por TORNEIO — `tournaments/{id}/results` de cada torneio já carregado. Não usa
+  //       índice nenhum e cobre exatamente o caso da tela: gente que jogou COMIGO. Foi o
+  //       que salvou quando o collection group estava indisponível.
+  //   (b) por COLLECTION GROUP — pega o resto (torneios que não estão carregados aqui).
+  //       Precisa de regra `match /{path=**}/results/{matchId}` (regra aninhada NÃO vale
+  //       pra collection group) E de índice COLLECTION_GROUP_CONTAINS em playerUids.
+  //       Faltavam os dois: a consulta voltava permission-denied e, depois, failed-
+  //       precondition — e a ficha dizia "Jogos 0" pra quem tinha jogo gravado aqui.
+  // O que falhar não derruba o outro; o que vier dos dois é unido por torneio/partida.
   function _lzJogosDoScoreplace(uid) {
     var db = window.FirestoreDB && window.FirestoreDB.db;
     if (!db || !uid) return Promise.resolve([]);
-    return db.collectionGroup('results').where('playerUids', 'array-contains', uid).limit(400).get()
-      .then(function (qs) {
-        var out = [];
-        qs.forEach(function (d) {
-          var r = d.data() || {};
-          var meu = -1;
-          // de que lado ela jogou: o nome do slot contém o nome dela? não — uid manda.
-          // `results` guarda os uids num array só, então o lado sai dos uids por slot
-          // quando existirem; senão, do nome (último recurso, e só pra escolher o lado).
-          if (Array.isArray(r.p1Uids) && r.p1Uids.indexOf(uid) >= 0) meu = 0;
-          else if (Array.isArray(r.p2Uids) && r.p2Uids.indexOf(uid) >= 0) meu = 1;
-          if (meu < 0) {
-            var nome = _lzNomeDoUid(uid);
-            if (nome && String(r.p1 || '').indexOf(nome) >= 0) meu = 0;
-            else if (nome && String(r.p2 || '').indexOf(nome) >= 0) meu = 1;
-          }
-          if (meu < 0) return;                       // não dá pra dizer o lado: não inventa
-          var meuNome = meu === 0 ? r.p1 : r.p2, outro = meu === 0 ? r.p2 : r.p1;
-          var meuSc = meu === 0 ? r.scoreP1 : r.scoreP2, outroSc = meu === 0 ? r.scoreP2 : r.scoreP1;
-          var venceu = (r.draw === true) ? null : (r.winner != null ? (String(r.winner) === String(meuNome)) : null);
-          out.push({
-            ts: (typeof window._spTsData === 'function')
-                  ? window._spTsData(r.resultAt || r.updatedAt || r.startedAt || 0, { fallback: 0 })
-                  : (r.resultAt || 0),
-            source: 'scoreplace', sport: r.sport || '', official: true,
-            venue: r.venue || '',
-            competition: r.tournamentName || 'Torneio',
-            competitionLabel: 'Torneio' + (r.tournamentName ? ' · ' + r.tournamentName : '') +
-                              (r.roundLabel ? ' · ' + r.roundLabel : ''),
-            tournamentId: r.tournamentId || null, tournamentFormat: r.format || '',
-            opponent: outro || '—', partner: null,
-            result: (venceu === true) ? 'V' : (venceu === false ? 'D' : (r.draw ? 'E' : '?')),
-            scoreA: (meuSc != null) ? String(meuSc) : '',
-            scoreB: (outroSc != null) ? String(outroSc) : ''
-          });
-        });
-        return out;
-      })
+    var ts = (window.AppStore && window.AppStore.tournaments) || [];
+    var locais = ts.slice(0, 40).map(function (t) {
+      return db.collection('tournaments').doc(t.id).collection('results')
+        .where('playerUids', 'array-contains', uid).limit(120).get()
+        .then(function (qs) {
+          var o = []; qs.forEach(function (d) { o.push(_lzItemDeResult(d.data() || {}, uid)); }); return o;
+        })
+        .catch(function () { return []; });
+    });
+    var amplo = db.collectionGroup('results').where('playerUids', 'array-contains', uid).limit(400).get()
+      .then(function (qs) { var o = []; qs.forEach(function (d) { o.push(_lzItemDeResult(d.data() || {}, uid)); }); return o; })
       .catch(function (e) {
-        window._warn && window._warn('[letzplay] jogos do scoreplace não vieram:', (e && e.message) || e);
+        window._warn && window._warn('[letzplay] collection group de placares indisponível:', (e && e.code) || e);
         return [];
       });
+    return Promise.all(locais.concat([amplo])).then(function (rs) {
+      var vistos = {}, out = [];
+      rs.forEach(function (lista) {
+        (lista || []).forEach(function (it) {
+          var k = it._k || (it.competition + '|' + it.opponent + '|' + it.ts);
+          if (vistos[k]) return; vistos[k] = 1; out.push(it);
+        });
+      });
+      return out;
+    });
   }
+
   // ── PARTIDAS CASUAIS ──────────────────────────────────────────────────────────
   // "torneios ou casuais. diferenciados." (dono). O card já distingue pelo selo e pela
   // linha de contexto: torneio mostra o nome do torneio e a fase; casual diz "Partida

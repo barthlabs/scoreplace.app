@@ -260,6 +260,23 @@ service cloud.firestore {
       }
     }
 
+    // ─── Placares por COLLECTION GROUP ────────────────────────────────────────
+    // `tournaments/{id}/results/{matchId}` é o lugar onde o placar vive. Pra ler os jogos
+    // de UMA PESSOA sem carregar torneio nenhum, a consulta é
+    // `collectionGroup('results').where('playerUids','array-contains', uid)`.
+    //
+    // ⚠️ REGRA ANINHADA NÃO VALE PRA COLLECTION GROUP. A permissão declarada dentro de
+    // `match /tournaments/{tournamentId}/...` só se aplica àquele caminho; uma consulta de
+    // collection group é avaliada contra `match /{path=**}/results/{matchId}` e mais nada.
+    // Sem esta regra a consulta voltava permission-denied SEMPRE — e a ficha de quem jogou
+    // aqui aparecia com "Torneios 0 · Rankings 0 · Jogos 0", como se a pessoa nunca tivesse
+    // jogado. Medido em 01/ago/2026 no perfil da Flávia Barchetta.
+    // Leitura só; escrita continua exclusivamente pelo caminho aninhado, que valida o
+    // torneio pai.
+    match /{path=**}/results/{matchId} {
+      allow read: if request.auth != null;
+    }
+
     // ─── Histórico letzplay: 1 doc por COMPETIÇÃO, 1 doc por PARTIDA ──────────
     // letzplayTournaments/{compId}/matches/{gid} — mesmo molde dos nossos jogos
     // (tournaments/{id}/results/{matchId}), que é como o letzplay também organiza.

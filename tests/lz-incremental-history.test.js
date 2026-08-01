@@ -108,5 +108,33 @@ ok(/for \(var p = pIni \+ 1; _incremental && p <= maxPage && !C\.complete; p\+\+
     'e o rótulo só é desenhado quando há valor');
 }
 
+// ── OS PLACARES TÊM DOIS CAMINHOS ──────────────────────────────────────────────────────
+// 01/ago/2026: a ficha mostrava "Torneios 0 · Rankings 0 · Jogos 0" pra gente que jogou
+// torneio de teste com o dono. Duas causas empilhadas, as duas medidas no banco real:
+//   1) regra ANINHADA não vale pra collection group → permission-denied sempre;
+//   2) collection group com array-contains exige índice COLLECTION_GROUP_CONTAINS.
+// Um caminho só, que depende de duas coisas que faltavam, é caminho nenhum.
+{
+  const app = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  const fn = app.slice(app.indexOf('function _lzItemDeResult'), app.indexOf('// ── PARTIDAS CASUAIS'));
+  ok(/collection\('tournaments'\)\.doc\(t\.id\)\.collection\('results'\)/.test(fn),
+     'caminho A: por torneio já carregado — sem índice, cobre quem jogou comigo');
+  ok(/collectionGroup\('results'\)/.test(fn), 'caminho B: collection group pro resto');
+  ok((fn.match(/\.catch\(/g) || []).length >= 2, 'um caminho que falha não derruba o outro');
+  ok(/if \(vistos\[k\]\) return;/.test(fn), 'e o que vier dos dois é unido sem duplicar');
+  ok(/if \(meu < 0\) meu = 0;/.test(fn),
+     'jogo achado pelo uid nunca é descartado por não dar pra dizer o lado');
+
+  const rules = require('fs').readFileSync(require('path').join(__dirname, '..', 'firestore.rules'), 'utf8');
+  ok(/match \/\{path=\*\*\}\/results\/\{matchId\}/.test(rules),
+     'as regras têm o match de collection group (o aninhado não serve)');
+  const idx = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'firestore.indexes.json'), 'utf8'));
+  const fo = (idx.fieldOverrides || []).find(f => f.collectionGroup === 'results' && f.fieldPath === 'playerUids');
+  ok(!!fo, 'e existe o override de índice pro campo playerUids');
+  ok(!!fo && fo.indexes.some(i => i.queryScope === 'COLLECTION_GROUP' && i.arrayConfig === 'CONTAINS'),
+     'com escopo COLLECTION_GROUP e arrayConfig CONTAINS');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-incremental-history: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
