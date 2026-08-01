@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.87';
+  var EXT_VERSION = '1.88';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1058,6 +1058,22 @@
       var extras = {};
       Object.keys(priorNames).forEach(function (k) { if (k.charAt(0) === pre && !tem[k]) extras[k] = 1; });
       Object.keys(pre === 't' ? C.toursDone : C.ranksDone).forEach(function (k) { if (!tem[k]) extras[k] = 1; });
+      // ── COMPETIÇÃO CITADA POR UM JOGO TAMBÉM ENTRA NA LISTA ──────────────────────
+      // A lista pública do perfil é INCOMPLETA: medido em 01/ago/2026, o perfil do dono
+      // enumera 2 torneios e os jogos dele citam 4 (um é o BTG); o do Fabio enumera 33 e
+      // os jogos citam 35. Quem não está na lista nunca era visitado — então nome e
+      // classificação daquele torneio NUNCA chegavam, e a barra ficava em "33 de 35" pra
+      // sempre, sem nada que o usuário pudesse fazer.
+      // O jogo é a prova mais forte de que a competição existe: ele tem id e tem placar.
+      (prior && Array.isArray(prior.games) ? prior.games : []).concat(all || []).forEach(function (g) {
+        if (!g || !g.club) return;
+        var ehT = (g.official === true) || g.kind === 'tournament';
+        if ((pre === 't') !== ehT) return;
+        var id = ehT ? g.tourneyId : g.rankingId;
+        if (id == null) return;
+        var k = pre + '/' + g.club + '/' + id;
+        if (!tem[k]) extras[k] = 1;
+      });
       Object.keys(extras).forEach(function (k) {
         var partes = k.split('/');                       // 't/clube/123'
         if (partes.length < 3 || !partes[1] || !partes[2]) return;

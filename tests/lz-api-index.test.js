@@ -250,6 +250,20 @@ function servidor(total, opts) {
   ok(/data-y="' \+ \(y \|\| 0\) \+ '"/.test(app), 'e a barra guarda o total apurado pra poder comparar');
 }
 
+// ── QUEM TEM JOGO ENTRA NA LISTA DE LEITURA ─────────────────────────────────────────────
+// A lista pública do perfil é incompleta (dono: 2 enumerados × 4 citados; Fabio: 33 × 35).
+// Sem isso a barra fica em "33 de 35" pra sempre: a competição existe, tem jogo, e o
+// leitor nunca abre a página dela porque ela não está na lista.
+{
+  const cnt = fs.readFileSync(path.join(__dirname, '..', 'extension', 'content.js'), 'utf8');
+  const fn = cnt.slice(cnt.indexOf('function unirConhecidos'), cnt.indexOf('function unirConhecidos') + 2400);
+  ok(/COMPETIÇÃO CITADA POR UM JOGO TAMBÉM ENTRA NA LISTA/.test(fn), 'a regra está onde a lista é montada');
+  ok(/prior && Array\.isArray\(prior\.games\)/.test(fn), 'olha os jogos já gravados…');
+  ok(/\.concat\(all \|\| \[\]\)/.test(fn), '…e os lidos nesta rodada');
+  ok(/if \(\(pre === 't'\) !== ehT\) return;/.test(fn), 'sem misturar torneio com ranking');
+  ok(/var id = ehT \? g\.tourneyId : g\.rankingId;/.test(fn), 'a chave é club/id, como no resto');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-api-index: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
 })();
