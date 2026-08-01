@@ -4635,6 +4635,28 @@ async function simulateLoginSuccess(user) {
     // Renderizar emails + celulares vinculados
     if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
     if (typeof window._profileRenderLinkedPhones === 'function') window._profileRenderLinkedPhones();
+
+    // ── BASELINE DE HIDRATAÇÃO ──────────────────────────────────────────
+    // Registro do que o formulário REALMENTE MOSTROU pra pessoa. É esse
+    // registro que dá ao save a diferença que faltava entre:
+    //   (a) campo vazio porque ela APAGOU   → tem que sumir do Firestore;
+    //   (b) campo vazio porque o perfil ainda não carregou (race) → preservar.
+    // Sem ele, o save só sabia "está vazio" e escolhia sempre preservar —
+    // por isso a data de nascimento voltava depois de apagada.
+    var _baseVal = function (id) {
+      var el = document.getElementById(id);
+      return el ? String(el.value == null ? '' : el.value).trim() : '';
+    };
+    window._profileFormBaseline = {
+      at: Date.now(),
+      birthDate: _baseVal('profile-edit-birthdate'),
+      gender: _baseVal('profile-edit-gender'),
+      city: _baseVal('profile-edit-city'),
+      letzplayHandle: _baseVal('profile-edit-letzplay'),
+      preferredCeps: _baseVal('profile-edit-ceps'),
+      preferredSports: Array.isArray(window._profileSelectedSports) ? window._profileSelectedSports.slice() : [],
+      preferredLocations: Array.isArray(window._profileLocations) ? window._profileLocations.slice() : []
+    };
   };
 
   // v1.3.5-beta: perfil agora é uma rota (#profile), não modal-overlay.
@@ -5653,6 +5675,35 @@ function _setupPhoneMask(inputEl, countryCode) {
 // Limita a 10 chars. Conversões pra/de ISO (YYYY-MM-DD) são feitas no load
 // e save — Firestore armazena sempre em ISO pra que a ordenação/queries
 // funcionem independente de locale.
+// ─── Apagar campo do perfil ──────────────────────────────────────────────
+// Campos que a pessoa pode APAGAR (voltar a "não informado"). Nome, e-mail e
+// celular ficam de fora de propósito: são identidade e credencial de login,
+// não informação opcional.
+window._PROFILE_ERASABLE = ['gender', 'birthDate', 'city', 'letzplayHandle',
+                            'preferredCeps', 'preferredSports', 'preferredLocations'];
+
+// Decide quais campos a pessoa APAGOU — a regra inteira, num lugar só.
+//   baseline = o que o formulário MOSTROU quando foi preenchido na tela
+//   values   = o que o formulário tem AGORA, na hora de salvar
+// Campo que estava preenchido e agora está vazio foi apagado por ela.
+// Campo vazio nos DOIS lados não é apagamento: ou nunca teve valor, ou o
+// formulário não chegou a hidratar (race) — nesse caso o valor no Firestore
+// tem que ser preservado, que é a proteção que existe desde a v0.16.6.
+// `age` é derivada da data de nascimento: some junto com ela.
+window._profileFieldsToErase = function (baseline, values) {
+  if (!baseline || !values) return [];
+  var _has = function (v) {
+    return Array.isArray(v) ? v.length > 0 : !!String(v == null ? '' : v).trim();
+  };
+  var out = [];
+  window._PROFILE_ERASABLE.forEach(function (k) {
+    if (!(k in values)) return;
+    if (_has(baseline[k]) && !_has(values[k])) out.push(k);
+  });
+  if (out.indexOf('birthDate') !== -1) out.push('age');
+  return out;
+};
+
 window._maskBirthdate = function(el) {
   if (!el) return;
   var digits = (el.value || '').replace(/\D/g, '').slice(0, 8);
@@ -8002,7 +8053,7 @@ function setupProfileModal() {
 
       // Strings: só envia se preenchido
       if (finalName) payload.displayName = finalName;
-      if (genderIn) payload.gender = genderIn;          // "" = "Não informar" = preserva
+      if (genderIn) payload.gender = genderIn;          // "" = "Não informar"
       if (birthDate) payload.birthDate = birthDate;
       if (age != null) payload.age = age;
       if (cityIn) payload.city = cityIn;
@@ -8076,6 +8127,42 @@ function setupProfileModal() {
       payload.omitPhone = omitPhone;
       payload.letzplayConsent = letzplayConsentIn;
 
+      // ── 3b. APAGAR TAMBÉM É UM ATO ──────────────────────────────────────
+      // "Campo vazio = campo omitido = valor preservado" fechou o buraco em
+      // que uma race apagava o perfil (v0.16.6/v0.16.9), mas cobrou um preço
+      // que ninguém pediu: virou impossível APAGAR qualquer coisa. Relato da
+      // Ana Paula Schmidt — ela esvaziava a data de nascimento, salvava, e a
+      // data voltava.
+      // O que faltava era saber POR QUE o campo está vazio. O baseline
+      // (_profileFormBaseline, gravado quando o formulário é preenchido na
+      // tela) responde isso: preenchido na tela e vazio agora = ela apagou →
+      // FieldValue.delete(). Vazio sem baseline (formulário não hidratou)
+      // continua sendo omitido, então a proteção contra race segue de pé.
+      var _erased = [];
+      try {
+        var _base = window._profileFormBaseline || null;
+        var _delSentinel = (window.firebase && firebase.firestore && firebase.firestore.FieldValue)
+          ? firebase.firestore.FieldValue.delete()
+          : null;
+        if (_base && _delSentinel && typeof window._profileFieldsToErase === 'function') {
+          _erased = window._profileFieldsToErase(_base, {
+            gender: genderIn,
+            // birthRaw (não birthDate): data digitada errado NÃO é apagamento —
+            // o parse acima já devolve a data antiga nesse caso.
+            birthDate: birthRaw,
+            city: cityIn,
+            letzplayHandle: letzplayHandleIn,
+            preferredCeps: preferredCeps,
+            preferredSports: sportsArr,
+            preferredLocations: preferredLocations
+          });
+          _erased.forEach(function (k) { payload[k] = _delSentinel; });
+        }
+      } catch (_eraseErr) {
+        _erased = [];
+        window._warn && window._warn('[Profile] apagamento de campo falhou (segue sem apagar):', _eraseErr);
+      }
+
       // Denormalizados para lookups case-insensitive
       if (payload.displayName) payload.displayName_lower = String(payload.displayName).toLowerCase();
       // v1.7.9-beta: email_lower — usa payload.email se email está sendo alterado,
@@ -8088,12 +8175,23 @@ function setupProfileModal() {
         name: nameIn, gender: genderIn, birthRaw: birthRaw, city: cityIn,
         phone: phoneDigits, sports: sportsArr
       });
-      window._log('[Profile v0.16.9] payload:', JSON.parse(JSON.stringify(payload)));
+      // Campos apagados viram sentinelas do Firestore (FieldValue.delete()) —
+      // que não são serializáveis. O log copia só o que dá, com "(apagado)"
+      // no lugar da sentinela, e nunca pode derrubar o save.
+      try {
+        var _logPayload = {};
+        Object.keys(payload).forEach(function (k) {
+          _logPayload[k] = (_erased.indexOf(k) !== -1) ? '(apagado)' : payload[k];
+        });
+        window._log('[Profile v0.16.9] payload:', JSON.parse(JSON.stringify(_logPayload)));
+      } catch (_e) {}
+      if (_erased.length > 0) window._log('[Profile] campos APAGADOS pela pessoa:', _erased.join(', '));
       window._lastProfileSave = {
         uid: uid,
         version: window.SCOREPLACE_VERSION,
         at: new Date().toISOString(),
         payload: payload,
+        erased: _erased.slice(),
         fields: Object.keys(payload).sort()
       };
 
@@ -8148,6 +8246,14 @@ function setupProfileModal() {
           }
           Object.keys(payload).forEach(function(k) {
             if (k === 'updatedAt' || k === 'displayName_lower' || k === 'email_lower') return;
+            // Campo apagado: o certo é ele NÃO existir mais no doc. Comparar a
+            // sentinela com o valor lido daria divergência sempre.
+            if (_erased.indexOf(k) !== -1) {
+              if (got[k] !== undefined && got[k] !== null && got[k] !== '') {
+                mismatch.push({ field: k, sent: '(apagado)', got: got[k] });
+              }
+              return;
+            }
             var sent = _stableStringify(payload[k]);
             var gotVal = _stableStringify(got[k]);
             if (sent !== gotVal) {
@@ -8160,6 +8266,25 @@ function setupProfileModal() {
           // Atualiza currentUser com o que REALMENTE está no Firestore —
           // single source of truth. Próximo load não vai divergir.
           Object.keys(got).forEach(function(k) { cu[k] = got[k]; });
+          // Campo apagado não vem no readback — então o currentUser precisa
+          // ESQUECÊ-LO na mão. Sem isso o valor continuaria na memória da
+          // sessão e reapareceria na tela ao reabrir o perfil (era metade do
+          // "a data volta"). Vale também pro cache de perfis por uid, que
+          // alimenta idade/gênero em inscrições e sorteio.
+          _erased.forEach(function(k) {
+            try { delete cu[k]; } catch (_e) { cu[k] = undefined; }
+          });
+          if (_erased.length > 0 && window._userProfileCache) {
+            try { delete window._userProfileCache[uid]; } catch (_e) {}
+          }
+          // O baseline passa a refletir o que ficou gravado: campo apagado
+          // agora está vazio na tela E no doc, então não há mais o que apagar.
+          if (_erased.length > 0 && window._profileFormBaseline) {
+            _erased.forEach(function (k) {
+              if (Array.isArray(window._profileFormBaseline[k])) window._profileFormBaseline[k] = [];
+              else if (k in window._profileFormBaseline) window._profileFormBaseline[k] = '';
+            });
+          }
           cu.name = cu.displayName; // compat com código que ainda lê .name
         } catch (e) {
           window._lastProfileSave.readbackError = (e && e.message) || String(e);

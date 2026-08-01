@@ -383,6 +383,11 @@ const SUITES = [
   'tests/login-redirect-write.test.js',
   'tests/uid-sweep.test.js',
   'tests/reset-phone-reachable.test.js',
+  // Apagar campo do perfil TEM que valer (relato da Ana Paula: a data de
+  // nascimento voltava). O payload "só com campos não-vazios" da v0.16.9
+  // protegia contra race mas tornava impossível apagar qualquer coisa — o
+  // baseline do formulário dá a diferença: apagado pela pessoa × não hidratado.
+  'tests/profile-erase-field.test.js',
   'tests/delete-account-canon.test.js',
   'tests/dupla-detection-uid.test.js',
   'tests/draw-name-by-uid.test.js',
