@@ -195,20 +195,23 @@ function computeSplitPair(data, opts) {
   // O solo herda o que era POR MEMBRO na dupla (nº de inscrição, contato, categoria). O nome só
   // entra se EXISTIA gravado (entrada só-uid continua só-uid — o nome vem do perfil na leitura).
   // Fictício (sem uid) continua sendo a string do nome, como antes.
-  var solo = function (uid, name, seq, emailK, photoK, genderK, birthK) {
+  // CAMPO DE PERFIL NÃO ATRAVESSA: email/photoURL/gender/birthDate saíram daqui.
+  // Copiá-los propagava pro solo a cópia que já estava suja na dupla — o desfazer
+  // é justamente a hora de parar de carregar isso adiante. O que o solo herda é o
+  // que é DO TORNEIO (nº de inscrição, categoria) e o nome, que só identifica quem
+  // não tem perfil. Mesma regra do pairPartnerSolo (enroll-core.js).
+  var solo = function (uid, name, seq) {
     if (!uid) return name;
     return cleanUndefined({
       uid: uid, ligaActive: true,
       displayName: (name || undefined), name: (name || undefined),
       enrollSeq: (seq != null ? seq : undefined),
-      email: entry[emailK], photoURL: entry[photoK],
-      gender: entry[genderK], birthDate: entry[birthK],
       category: entry.category, categories: entry.categories,
       categorySource: entry.categorySource
     });
   };
-  var solo1 = solo(p1Uid, p1Name, entry.p1Seq, 'p1Email', 'p1Photo', 'p1Gender', 'p1BirthDate');
-  var solo2 = solo(p2Uid, p2Name, entry.p2Seq, 'p2Email', 'p2Photo', 'p2Gender', 'p2BirthDate');
+  var solo1 = solo(p1Uid, p1Name, entry.p1Seq);
+  var solo2 = solo(p2Uid, p2Name, entry.p2Seq);
 
   arr.splice(idx, 1, solo1, solo2);
 

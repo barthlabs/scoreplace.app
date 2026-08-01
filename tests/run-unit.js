@@ -383,6 +383,11 @@ const SUITES = [
   // nunca disparava). Chave = e-mail minúsculo / telefone E.164, igual ao que o reader lê.
   'tests/login-redirect-write.test.js',
   'tests/uid-sweep.test.js',
+  // "Não deveria gravar nada além do uid em torneios." O cliente já stripava no save,
+  // mas a CF não passa por lá e três construtores copiavam o perfil na mão — 2 entradas
+  // sujas medidas em produção, de uid com perfil VIVO. Cópia de perfil é um segundo
+  // lugar onde o dado da pessoa vive, fora do alcance do "apagar do perfil".
+  'tests/uid-entry-no-profile-copy.test.js',
   'tests/reset-phone-reachable.test.js',
   // Apagar campo do perfil TEM que valer (relato da Ana Paula: a data de
   // nascimento voltava). O payload "só com campos não-vazios" da v0.16.9

@@ -502,10 +502,10 @@ window._pairPartnerSolo = function (entry, n) {
     var o = { uid: uid, ligaActive: true };
     if (nome) { o.displayName = nome; o.name = nome; }
     if (g('Seq') != null) o.enrollSeq = g('Seq');
-    if (g('Email')) o.email = g('Email');
-    if (g('Photo')) o.photoURL = g('Photo');
-    if (g('Gender')) o.gender = g('Gender');
-    if (g('BirthDate')) o.birthDate = g('BirthDate');
+    // Campo de perfil NÃO acompanha quem tem uid (email/photoURL/gender/birthDate).
+    // O strip do save (identity-core._stripUidEntryNames) já limpava isso, mas só
+    // quando o uid resolve no cache — e não faz sentido escrever pra depois apagar.
+    // Espelha functions/enroll-core.pairPartnerSolo e pair-core.solo().
     if (entry.category) o.category = entry.category;
     if (Array.isArray(entry.categories)) o.categories = entry.categories.slice();
     if (entry.categorySource) o.categorySource = entry.categorySource;

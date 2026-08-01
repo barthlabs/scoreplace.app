@@ -174,10 +174,16 @@ function pairPartnerSolo(entry, n) {
   var o = { uid: uid, ligaActive: true };
   if (nome) { o.displayName = nome; o.name = nome; }
   if (g('Seq') != null) o.enrollSeq = g('Seq');
-  if (g('Email')) o.email = g('Email');
-  if (g('Photo')) o.photoURL = g('Photo');
-  if (g('Gender')) o.gender = g('Gender');
-  if (g('BirthDate')) o.birthDate = g('BirthDate');
+  // CAMPO DE PERFIL NÃO É GRAVADO EM QUEM TEM UID (email/photoURL/gender/birthDate).
+  // Antes eram copiados aqui, e o servidor não passa pelo strip do cliente
+  // (identity-core._stripUidEntryNames) — então a CF era a ÚNICA porta por onde
+  // cópia de perfil ainda entrava no torneio (medido em produção: 2 entradas com
+  // email/gender/skillBySport, ambas de uid com perfil VIVO). O argumento que
+  // justifica preservar o NOME — sem perfil, o nome é a última âncora de identidade
+  // do uid órfão — NÃO vale pra esses campos: eles nunca identificam ninguém, e o
+  // app já os resolve pelo uid (_pGender/_pBirth/_userProfileCache, e a própria CF
+  // via _enrichParticipantsFromProfiles). Guardar cópia só cria um segundo lugar
+  // onde o dado da pessoa vive — e que o "apagar do perfil" não alcança.
   if (entry.category) o.category = entry.category;
   if (Array.isArray(entry.categories)) o.categories = entry.categories.slice();
   if (entry.categorySource) o.categorySource = entry.categorySource;
