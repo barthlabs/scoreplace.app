@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.86';
+  var EXT_VERSION = '1.87';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1622,6 +1622,13 @@
     if (d.__sp_lp === 'run-org-scan') { runOrgScan(d.targets, d.tournamentId, d.mode === 'full' ? 'full' : 'essential'); return; }
     if (d.__sp_lp === 'run-athlete-import') { runAthleteImport(d.handle, d.uid, d.tournamentId, d.prior || null, d.cursor || null); return; }
     if (d.__sp_lp === 'lz-profile-counts') { profileCounts(d.handle); return; }
+    if (d.__sp_lp === 'lz-keep-tab') {
+      // O app avisa quando a leitura COMEÇA e quando ela realmente TERMINA. Sem isso o
+      // background só enxerga a fila, que esvazia ENTRE as rodadas encadeadas — e a aba
+      // do letzplay ficava abrindo e fechando na cara do usuário a cada rodada.
+      try { chrome.runtime.sendMessage({ type: 'lp-keep-tab', on: !!d.on }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      return;
+    }
     // Abrir o perfil da pessoa NA HORA do clique (fora da fila de trabalho).
     if (d.__sp_lp === 'lz-open-profile' && d.handle) {
       try {

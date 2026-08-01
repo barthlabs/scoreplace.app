@@ -211,7 +211,13 @@ function ensureLetzplayTab(cb, noCreate) {
 }
 // Só fecha a aba quando a fila esvaziou. Antes, o fim de UMA busca fechava a aba de
 // OUTRA ainda rodando (organizador clicou de novo) → "no-letzplay-tab" no meio.
+// A LEITURA DE UM ATLETA SÃO VÁRIAS RODADAS. Entre uma e outra a fila esvazia por um
+// instante — e era aí que a aba do letzplay fechava e a rodada seguinte abria outra.
+// Pra quem está olhando, é uma aba piscando na cara sem parar ("por que fica abrindo o
+// letzplay?"). Enquanto o app diz que a sessão de leitura está aberta, a aba fica.
+var _sessaoLeitura = false;
 function closeAutoScanTab() {
+  if (_sessaoLeitura) return;
   if (_q.busy > 0) return;   // ainda tem operação na fila usando a aba
   if (_autoScanTabId != null) { var id = _autoScanTabId; _autoScanTabId = null; try { chrome.tabs.remove(id, function () { void chrome.runtime.lastError; }); } catch (e) {} }
 }
@@ -536,6 +542,12 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // aprendido (medido em 30/jul: 10 a 25 s por operação, enquanto o letzplay respondia em
   // menos de 2 s). Uma navegação de tela não gera carga de leitura — o custo é uma página,
   // a mesma que o usuário abriria clicando no link.
+  if (msg && msg.type === 'lp-keep-tab') {
+    _sessaoLeitura = !!msg.on;
+    if (!_sessaoLeitura) closeAutoScanTab();
+    sendResponse({ ok: true });
+    return true;
+  }
   if (msg && msg.type === 'lp-nav-now' && typeof msg.url === 'string' &&
       msg.url.indexOf('https://letzplay.me/') === 0) {
     navLetzplayTab(msg.url, function () { sendResponse({ ok: true }); });

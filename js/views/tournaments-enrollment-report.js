@@ -2548,8 +2548,13 @@
   }
   // Puxa a COMPLETA de UM atleta pelo @ público — o caminho do autoimport (fetch das
   // páginas /{handle}/matches), sem navegar o perfil SPA (a causa do lote travar).
+  // Segura a aba do letzplay aberta durante TODA a leitura (que são várias rodadas).
+  function _lzSegurarAba(on) {
+    try { window.postMessage({ __sp_lp: 'lz-keep-tab', on: !!on }, window.location.origin); } catch (e) {}
+  }
   window._lzAthleteImport = function (uid) {
     window._lzGravouOk = true; window._lzUltimoErroGravacao = null;
+    _lzSegurarAba(true);
     if (window._log) window._log('[letzplay] iniciar leitura de', uid, '· travaAtiva=', !!window._lzScanRunning,
       '· overlay=', !!document.getElementById('sp-import-overlay'), '· ctx=', !!(window._lzScanCtx && window._lzScanCtx.byUid));
     // NENHUM CLIQUE PODE MORRER CALADO. Estes três `return` mudos faziam o botão
@@ -2737,6 +2742,8 @@
     }
     function cleanup() {
       done = true;
+      // acabou de verdade (terminou, falhou ou suspendeu): a aba do letzplay pode fechar
+      _lzSegurarAba(false);
       window._lzScanRunning = false;
       window.removeEventListener('message', onMsg);
       if (idleTimer) clearTimeout(idleTimer);

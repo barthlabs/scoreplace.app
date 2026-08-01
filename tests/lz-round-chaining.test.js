@@ -38,5 +38,20 @@ ok(/Nada foi gravado/.test(bloco), 'e a tela diz que nada foi gravado');
 // o freio não pode impedir a PRIMEIRA rodada
 ok(/_progAnterior = null;/.test(src), 'a primeira rodada nunca é barrada (não há anterior)');
 
+// ── A ABA DO LETZPLAY NÃO PODE PISCAR ENTRE AS RODADAS ─────────────────────────────────
+// "por que caralho fica abrindo o letzplay?" — entre uma rodada e outra a fila esvazia,
+// e o background fechava a aba; a rodada seguinte abria outra. Uma aba piscando na cara.
+{
+  const app = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  const bg = require('fs').readFileSync(require('path').join(__dirname, '..', 'extension', 'background.js'), 'utf8');
+  const ct = require('fs').readFileSync(require('path').join(__dirname, '..', 'extension', 'content.js'), 'utf8');
+  ok(/_lzSegurarAba\(true\)/.test(app), 'o app avisa quando a leitura começa');
+  const clean = app.slice(app.indexOf('function cleanup() {'), app.indexOf('function cleanup() {') + 400);
+  ok(/_lzSegurarAba\(false\)/.test(clean), 'e libera a aba só no fim de verdade (terminou/falhou/suspendeu)');
+  ok(/lz-keep-tab/.test(ct), 'o content repassa o recado');
+  ok(/var _sessaoLeitura = false;/.test(bg) && /if \(_sessaoLeitura\) return;/.test(bg),
+     'e o background segura a aba enquanto a sessão está aberta');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-round-chaining: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
