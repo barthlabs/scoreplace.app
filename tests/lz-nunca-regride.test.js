@@ -82,5 +82,31 @@ ok(/será substituído por/.test(grava), 'e avisa quando substitui um documento 
     'acima do declarado o histórico é DESCARTADO — sanitizar não salva o que é provadamente lixo');
 }
 
+// ── O RESUMO SEGUE A MESMA LEI DO HISTÓRICO ────────────────────────────────────────────
+// Medido no doc do Fabio (01/ago/2026): fullImport com 391 (leitura completa) e
+// scan._fullGames com 390 (releitura parcial, barrada como histórico mas gravada como
+// resumo). A BARRA lê o histórico, a COR lê o resumo — o nome voltava a violeta depois de
+// ter ficado verde, e o diálogo mostrava "390 de 391". Verdade em dois lugares é meia
+// verdade em cada um.
+{
+  const app = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/function _lzResumoRegrediu\(novo, antigo\)/.test(app), 'existe a regra do resumo');
+  const fn = app.slice(app.indexOf('function _lzResumoRegrediu'), app.indexOf('function _lzBarrarRegressao'));
+  ok(/return a > b;/.test(fn), 'resumo que descreve leitura MENOR não substitui');
+  const guard = app.slice(app.indexOf('function _lzBarrarRegressao'), app.indexOf('function _lzPersistScans'));
+  ok((guard.match(/_lzResumoRegrediu\(doc\.scan/g) || []).length === 2,
+     'e a regra vale nos DOIS caminhos: com histórico novo e sem');
+  ok(/if \(!doc\.scan\) return Promise\.resolve\(doc\);/.test(guard),
+     'sem histórico novo o guard ainda protege o resumo (antes ele desistia aqui)');
+
+  // a lei em si
+  const regrediu = (a, b) => (a && b) ? ((typeof b._fullGames === 'number' ? b._fullGames : -1) >
+                                          (typeof a._fullGames === 'number' ? a._fullGames : -1)) : false;
+  ok(regrediu({ _fullGames: 390 }, { _fullGames: 391 }) === true, '390 não substitui 391');
+  ok(regrediu({ _fullGames: 392 }, { _fullGames: 391 }) === false, 'mas 392 substitui 391');
+  ok(regrediu({ _fullGames: 391 }, { _fullGames: 391 }) === false, 'e igual passa (dado novo do mesmo tamanho)');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-nunca-regride: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

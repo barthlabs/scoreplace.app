@@ -3507,9 +3507,36 @@
   //   • CONFERÊNCIA NO BANCO: cobre sessão nova, outra aba, outro organizador.
   // Devolve o `doc` já ajustado (sem `fullImport` quando seria regressão).
   var _lzMaxJogos = {};
+  // O RESUMO SEGUE A MESMA LEI DO HISTÓRICO. Eu parei de gravar histórico em leitura
+  // parcial (1.6.64) e deixei o RESUMO (`scan`) passar direto. Resultado medido no doc do
+  // Fabio em 01/ago/2026: `fullImport` com 391 jogos (leitura completa das 03:54) e
+  // `scan._fullGames` com 390 (releitura das 10:30, que a regra barrou como parcial).
+  // Os dois documentos discordando é pior que qualquer um dos dois sozinho: a BARRA lê o
+  // histórico e a COR lê o resumo — o nome voltava a violeta depois de já ter ficado verde,
+  // e o diálogo mostrava "390 de 391". Verdade não pode morar em dois lugares.
+  function _lzResumoRegrediu(novo, antigo) {
+    if (!novo || !antigo) return false;
+    var a = (typeof antigo._fullGames === 'number') ? antigo._fullGames : -1;
+    var b = (typeof novo._fullGames === 'number') ? novo._fullGames : -1;
+    return a > b;                      // resumo que descreve leitura MENOR não substitui
+  }
   function _lzBarrarRegressao(uid, doc, db) {
     var agora = doc.fullImport ? _lzTot(doc.fullImport) : 0;
-    if (!doc.fullImport) return Promise.resolve(doc);
+    if (!doc.fullImport) {
+      // sem histórico novo, ainda há o resumo pra proteger
+      if (!doc.scan) return Promise.resolve(doc);
+      return db.collection('letzplayScans').doc(uid).get()
+        .then(function (d) {
+          var ant = (d.exists ? (d.data() || {}) : {}).scan;
+          if (_lzResumoRegrediu(doc.scan, ant)) {
+            window._warn && window._warn('[letzplay] resumo menor descartado: chegou ' +
+              doc.scan._fullGames + ', já havia ' + ant._fullGames + '.');
+            delete doc.scan;
+          }
+          return doc;
+        })
+        .catch(function () { return doc; });
+    }
     var pico = _lzMaxJogos[uid] || 0;
     function barrar(antes, origem) {
       delete doc.fullImport;
@@ -3537,6 +3564,8 @@
           window._warn && window._warn('[letzplay] o gravado tinha ' + antes + ' jogos com ' +
             teto + ' declarados — corrompido, será substituído por ' + agora + '.');
         }
+        var _ant = (d.exists ? (d.data() || {}) : {}).scan;
+        if (_lzResumoRegrediu(doc.scan, _ant)) delete doc.scan;   // mesma lei pro resumo
         _lzMaxJogos[uid] = Math.max(corrompido(pico) ? 0 : pico, agora);
         return doc;
       })
