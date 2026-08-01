@@ -162,6 +162,94 @@ function servidor(total, opts) {
      'e as abas Torneios/Rankings somam as competições do app');
 }
 
+// ── VARREDURA FECHADA EXCLUI O JOGO FANTASMA (regra do dono) ────────────────────────────
+// Prova aritmética: 20 por página. N páginas varridas ⇒ o total tem que cair em
+// (20(N-1), 20N]. Serve pra distinguir "a fonte contou linha a mais" de "a leitura parou".
+{
+  function totalNaTela(gX, declarado, cur, indexTotal) {
+    let idxT = indexTotal > 0 ? indexTotal : 0;
+    if (!(idxT > 0) && cur && cur.complete === true && cur.pagesTotal > 0 &&
+        cur.pageDone >= cur.pagesTotal && gX > (cur.pagesTotal - 2) * 20 && gX <= cur.pagesTotal * 20) idxT = gX;
+    if (idxT > 0) return idxT;
+    return declarado > 0 ? Math.max(declarado, gX) : gX;
+  }
+  const fechado = (n) => ({ complete: true, pageDone: n, pagesTotal: n });
+  ok(totalNaTela(157, 158, fechado(8), 0) === 157, 'Kelly: 8 páginas varridas, 157 achados → 157 (o 158º não existe)');
+  ok(totalNaTela(469, 478, fechado(24), 0) === 469, 'Camila: 24 páginas, 469 achados → 469');
+  ok(totalNaTela(20, 158, { complete: true, pageDone: 1, pagesTotal: 8 }, 0) === 158,
+     'leitura truncada em 1 de 8 páginas NÃO fecha — mostra 20 de 158');
+  ok(totalNaTela(20, 158, fechado(8), 0) === 158,
+     'cursor MENTINDO ("completo" com 20 em 8 páginas) não passa: 20 não cabe em (140,160]');
+  ok(totalNaTela(80, 81, fechado(5), 0) === 80,
+     'Rodrigo: varredura fechada achou 80 — o 81 é o contador de linhas do perfil');
+  ok(totalNaTela(20, 158, fechado(8), 0) === 158,
+     'e 20 em 8 páginas continua sem fechar (a faixa larga ainda separa perda de leitura)');
+  ok(totalNaTela(160, 158, fechado(8), 0) === 160, 'página cheia no fim (20×8) é limite válido');
+  ok(totalNaTela(150, 158, fechado(8), 157) === 157, 'quando o índice existe, é ele que manda');
+}
+{
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/gX > \(_cur\.pagesTotal - 2\) \* _POR_PG && gX <= _cur\.pagesTotal \* _POR_PG/.test(app),
+     'a regra na tela é a aritmética da paginação, não a palavra do cursor');
+}
+
+// ── O SEGUNDO ESCRITOR DA BARRA TAMBÉM OBEDECE AO TETO ──────────────────────────────────
+// Medido na tela do dono: "🏆 Torneios 4 de 2 (100%)". Quem escreveu não foi o barLine
+// (que capa) nem o _updBars (que capa) — foi o atualizador dos contadores ao vivo.
+{
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  const fn = app.slice(app.indexOf('function upd(id, y) {'), app.indexOf('upd(\'lz-ath-t\''));
+  ok(/if \(y > 0 && x > y\) \{ x = y;/.test(fn), 'x nunca passa de y também aqui');
+  ok(/if \(el\.getAttribute\('data-auth'\) === '1'\) return;/.test(fn),
+     'e um total que é FATO não é rebaixado pelo contador de linhas do perfil');
+  ok(/barLine\('lz-ath-g', '🎾', 'Jogos', gX, gY, _idxT > 0\)/.test(app),
+     'a barra de jogos marca quando o total veio do índice/varredura');
+}
+
+// ── COMPETIÇÃO REAL = LISTADA NO PERFIL **OU** CITADA POR UM JOGO ───────────────────────
+// Perfil do dono, medido: tournaments.json lista 2 (335721, 297385) e os jogos citam 4
+// (mais 214672 e 214674 — um deles é o BTG). O contador teria apagado dois torneios que
+// ele disputou. Do outro lado, o footprint conhecia 5 rankings onde existem 4.
+{
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  const ctx = { window: {}, console };
+  vm.createContext(ctx);
+  const ini = app.indexOf('function _lzCompsReais(imp, oficial) {');
+  const fim = app.indexOf('window._lzCompsReaisN = function');
+  vm.runInContext(app.slice(ini, fim) + '\nwindow._lzCompsReaisN = function (i, o) { return Object.keys(_lzCompsReais(i, o)).length; };', ctx);
+  const N = ctx.window._lzCompsReaisN;
+
+  const imp = {
+    tournamentsList: [{ club: 'c', tid: 335721 }, { club: 'c', tid: 297385 }],
+    rankingsList: [{ club: 'c', rid: 48552 }, { club: 'c', rid: 13332 }, { club: 'c', rid: 7839 }, { club: 'c', rid: 33695 }],
+    games: [
+      { official: true, club: 'c', tourneyId: 214672 }, { official: true, club: 'c', tourneyId: 214674 },
+      { official: true, club: 'c', tourneyId: 297385 }, { official: true, club: 'c', tourneyId: 335721 },
+      { official: false, kind: 'ranking', club: 'c', rankingId: 7839 },
+      { official: false, kind: 'ranking', club: 'c', rankingId: 33695 },
+      { official: false, kind: 'ranking', club: 'c', rankingId: 48552 }
+    ]
+  };
+  ok(N(imp, true) === 4, 'torneios: os 4 COM JOGO, incluindo os 2 fora da lista (o BTG volta) — veio ' + N(imp, true));
+  ok(N(imp, false) === 3, 'rankings: 3 COM JOGO — o de 2023, listado e sem jogo, não conta (veio ' + N(imp, false) + ')');
+  ok(N({ games: [{ official: true, club: 'c', tourneyId: 9 }] }, true) === 1, 'jogo sozinho prova a competição, mesmo fora da lista');
+  ok(N({ tournamentsList: [{ club: 'c', tid: 9 }], games: [] }, true) === 0, 'lista sozinha NÃO prova: inscrição não é participação');
+  ok(N({ footprint: [{ official: false, club: 'c', rankingId: 1 }] }, false) === 0,
+     'footprint não cria competição enquanto os jogos estão no documento');
+  ok(N({ gamesTruncated: true, games: [], footprint: [{ official: false, club: 'c', rankingId: 1 }] }, false) === 1,
+     'só quando o acervo foi truncado a pegada do jogo antigo vale');
+}
+
+// ── O CONTADOR AO VIVO NUNCA ENCOLHE O TOTAL ────────────────────────────────────────────
+{
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  const fn = app.slice(app.indexOf('function upd(id, y) {'), app.indexOf("upd('lz-ath-t'"));
+  ok(/if \(yAtual > 0 && y < yAtual\) return;/.test(fn), 'um total menor vindo do perfil é ignorado');
+  ok(!/upd\('lz-ath-t'/.test(app) && !/upd\('lz-ath-r'/.test(app),
+     'e torneios/rankings não recebem mais nada do contador do perfil');
+  ok(/data-y="' \+ \(y \|\| 0\) \+ '"/.test(app), 'e a barra guarda o total apurado pra poder comparar');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-api-index: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
 })();

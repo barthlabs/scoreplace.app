@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.6.65';
+window.SCOREPLACE_VERSION = '1.6.66';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -108,7 +108,7 @@ try {
 // Auto-atualização: quando a extensão estiver publicada na Chrome Web Store, o
 // Chrome atualiza sozinho e este gate para de disparar. Enquanto não está, o gate
 // BLOQUEIA e pede a atualização manual pelo zip — de propósito.
-window.SP_EXT_VERSION = '1.85';
+window.SP_EXT_VERSION = '1.86';
 // O zip da versão exigida, servido pelo próprio site (fica na raiz do repo → GitHub Pages
 // entrega). Derivado de SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não
 // aceita, e a trava de deploy (scripts/check-ext-version.js) garante que o arquivo existe.
@@ -3915,6 +3915,51 @@ window._avatarHtml = function(pp, size) {
   }
   return visibleCircle;
 };
+
+// ── DATA: UMA LEITURA SÓ, SEM AMBIGUIDADE (canônico) ─────────────────────────────
+// `Date.parse("10/03/26")` devolve 3 de OUTUBRO: o motor assume mês/dia (americano).
+// No Brasil — e no letzplay, que é a fonte que o app lê — 10/03 é 10 de MARÇO. O erro é
+// INVISÍVEL quando o dia passa de 12 (20/06 não pode ser mês, então acerta por acaso),
+// então ele sobrevive a qualquer teste feito com uma data "qualquer".
+// Medido em 31/jul/2026 no perfil do dono: jogos de março e maio apareciam em outubro e
+// agosto — no FUTURO — e, como a lista é ordenada por data, subiam pro topo.
+//
+// A ordem certa, e a razão de existir uma função só:
+//   1) ISO (aaaa-mm-dd) — é o que o JSON do letzplay entrega, e não tem convenção de país;
+//   2) dd/mm/aa(aa) pelos COMPONENTES (nunca por string: string carrega fuso);
+//   3) "12 de jul. de 2026" (mês por extenso em pt);
+//   4) só então Date.parse, e SÓ se não houver barra — com barra é sempre ambíguo.
+// `opts.futuroProibido` derruba data à frente de hoje: jogo jogado não acontece amanhã.
+window._SP_MES_PT = { jan: 0, fev: 1, mar: 2, abr: 3, mai: 4, jun: 5, jul: 6, ago: 7, set: 8, out: 9, nov: 10, dez: 11 };
+window._spTsData = function (raw, opts) {
+  opts = opts || {};
+  var fallback = (opts.fallback != null) ? opts.fallback : 0;
+  if (raw == null || raw === '') return fallback;
+  if (typeof raw === 'number') return _spClampFuturo(raw, opts, fallback);
+  if (raw instanceof Date) return _spClampFuturo(raw.getTime(), opts, fallback);
+  var s = String(raw).trim();
+  var t;
+  var iso = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) { t = new Date(+iso[1], (+iso[2]) - 1, +iso[3]).getTime(); if (!isNaN(t)) return _spClampFuturo(t, opts, fallback); }
+  var br = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (br) {
+    var y = +br[3]; if (y < 100) y += 2000;
+    t = new Date(y, (+br[2]) - 1, +br[1]).getTime();
+    if (!isNaN(t)) return _spClampFuturo(t, opts, fallback);
+  }
+  var ext = s.toLowerCase().match(/(\d{1,2})[^\d]{1,12}(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[^\d]{0,12}(\d{2,4})/);
+  if (ext && window._SP_MES_PT[ext[2]] != null) {
+    var y2 = +ext[3]; if (y2 < 100) y2 += 2000;
+    t = new Date(y2, window._SP_MES_PT[ext[2]], +ext[1]).getTime();
+    if (!isNaN(t)) return _spClampFuturo(t, opts, fallback);
+  }
+  if (s.indexOf('/') === -1) { t = Date.parse(s); if (!isNaN(t)) return _spClampFuturo(t, opts, fallback); }
+  return fallback;
+};
+function _spClampFuturo(ts, opts, fallback) {
+  if (!opts.futuroProibido) return ts;
+  return (ts > Date.now() + 86400000) ? fallback : ts;
+}
 
 // v1.8.8-beta: canonical HH:MM formatter — accepts Date, timestamp (number)
 // or ISO string. Eliminates the repeated padStart(2,'0') pattern spread

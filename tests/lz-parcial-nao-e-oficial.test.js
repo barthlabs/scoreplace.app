@@ -63,7 +63,10 @@ ok(!/lzCursor\.complete === true\) gY = gX/.test(app), 'o cursor não redefine o
   // a tela lê os totais gravados, mesmo com histórico velho
   ok(/rctx\.scanMap\[uid\]\.totaisLetzplay/.test(app), 'a tela usa os totais gravados quando o histórico é antigo');
   ok(/if \(_T && _T\.jogos > 0\) gY = _T\.jogos;/.test(app), 'e o total dos jogos sai dali antes de qualquer outra fonte');
-  ok(/_T && _T\.torneios > 0/.test(app) && /_T && _T\.rankings > 0/.test(app), 'idem as outras duas barras');
+  // torneios/rankings deixaram de usar os totais do perfil: só conta competição COM JOGO
+  ok(/var tY = window\._lzCompsReaisN\(imp, true\) \|\| null;/.test(app) &&
+     /var rY = window\._lzCompsReaisN\(imp, false\) \|\| null;/.test(app),
+     'as outras duas barras contam competição com jogo, não o contador do perfil');
 }
 
 console.log((fail ? '✗' : '✓') + ' lz-parcial-nao-e-oficial: ' + pass + ' passaram, ' + fail + ' falharam');

@@ -1604,6 +1604,40 @@
     });
     return Object.keys(ids).length;
   };
+  // ── QUANTAS COMPETIÇÕES EXISTEM DE VERDADE ────────────────────────────────────
+  // REGRA DO DONO (31/jul/2026): **só conta competição que tem jogo**. A página inicial
+  // do atleta não é fonte confiável — e se acharmos jogos de um torneio que não aparece
+  // na lista dele, esse torneio conta e é registrado.
+  //
+  // As duas metades da regra saíram de medição no perfil dele:
+  //   • `tournaments.json` lista 2 torneios, mas os jogos citam 4 — os outros dois
+  //     (01/12/2024, um deles o BTG) ele DISPUTOU e a lista não enumera. Confiar na lista
+  //     apagaria torneio de verdade. Ele viu na tela: "cadê meu BTG?".
+  //   • `rankings.json` lista 4, mas um deles (2023) não tem UM jogo sequer. Contar a
+  //     inscrição como participação inflava o total e a barra nunca fechava.
+  // Sobrou o critério mais simples e o mais verificável: JOGO. Ele é o registro que a
+  // fonte mais leva a sério, e é o que a pessoa lembra de ter feito.
+  //
+  // O footprint só entra quando o acervo de jogos foi truncado (perfil grande), porque aí
+  // os jogos antigos não estão mais no documento — mas a pegada deles ficou.
+  function _lzCompsReais(imp, oficial) {
+    var set = {};
+    ((imp && imp.games) || []).forEach(function (g) {
+      if (!g) return;
+      var ehOficial = (g.official === true) || g.kind === 'tournament';
+      if (ehOficial !== !!oficial) return;
+      var id = oficial ? g.tourneyId : g.rankingId;
+      if (id != null) set[(g.club || '') + '/' + id] = 1;
+    });
+    if (imp && imp.gamesTruncated) ((imp && imp.footprint) || []).forEach(function (f) {
+      if (!f || !!f.official !== !!oficial) return;
+      var id = oficial ? f.tourneyId : f.rankingId;
+      if (id != null) set[(f.club || '') + '/' + id] = 1;
+    });
+    return set;
+  }
+  window._lzCompsReaisN = function (imp, oficial) { return Object.keys(_lzCompsReais(imp, oficial)).length; };
+
   // Conta COMPETIÇÕES DISTINTAS num footprint (por club/id), não entradas — o footprint
   // fragmenta: a mesma competição entra uma vez por categoria/trilha.
   function _lzContarDistintos(fp, oficial) {
@@ -2181,11 +2215,11 @@
     // 3 BARRAS (x = gravado · y = total do perfil letzplay). Os "de y" que faltarem são
     // completados ao vivo pela extensão (lz-profile-counts lê "472 Jogos · 29 Rankings ·
     // 35 Torneios" do perfil público) — direto na tela, como o dono pediu.
-    function barLine(id, icon, label, x, y) {
+    function barLine(id, icon, label, x, y, _authY) {
       // x jamais passa do declarado: 35 de 35 é 100%, "38 de 35" não existe.
       if (y != null && y > 0) x = Math.min(x, y);
       var pct = (y && y > 0) ? Math.min(100, Math.round(x / y * 100)) : null;
-      return '<div id="' + id + '" data-x="' + x + '" style="margin:5px 0;">' +
+      return '<div id="' + id + '" data-x="' + x + '" data-y="' + (y || 0) + '" data-auth="' + (_authY ? 1 : 0) + '" style="margin:5px 0;">' +
         '<div style="display:flex;justify-content:space-between;gap:8px;font-size:0.8rem;"><span>' + icon + ' ' + label + '</span><span class="lz-bar-txt"><b>' + x + '</b>' + (y ? (' de ' + y + ' (' + pct + '%)') : ' de …') + '</span></div>' +
         '<div style="height:7px;border-radius:99px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.08));"><div class="lz-bar-fill" style="height:100%;width:' + (pct != null ? Math.max(2, pct) : 2) + '%;background:linear-gradient(90deg,#10b981,#059669);"></div></div>' +
       '</div>';
@@ -2214,6 +2248,24 @@
     // em 99% pra sempre, esperando um jogo que não existe.
     var _idxT = (imp && imp.indexTotal > 0) ? imp.indexTotal
               : ((_T && _T.fonte === 'indice' && _T.jogos > 0) ? _T.jogos : 0);
+    // ── VARREDURA FECHADA MATA O JOGO FANTASMA ────────────────────────────────
+    // "se existe um jogo que não existe, exclua ele sempre, de qualquer atleta" (dono).
+    // Quando a leitura passou por TODAS as páginas, o que ela encontrou É o histórico —
+    // o contador do perfil, que conta LINHAS e repete linha, não pode inventar um jogo
+    // que a varredura completa não achou.
+    // O QUE IMPEDE ISSO DE VIRAR O ANTIGO "20 de 20 (100%)": não basta o cursor DIZER que
+    // terminou — cursor errado é justamente o sintoma. A prova é ARITMÉTICA: a fonte serve
+    // 20 por página, então uma varredura de N páginas tem que devolver entre 20(N-1)+1 e
+    // 20N partidas. Kelly: 8 páginas, 157 → cabe em (140,160] → 157 de 157, fecha.
+    // Um doc truncado em 20 com 8 páginas não cabe em (140,160] → o declarado segue de pé
+    // e a tela mostra 20 de 158, que é a verdade feia.
+    var _cur = (imp && imp.lzCursor) || null;
+    var _POR_PG = 20;
+    if (!(_idxT > 0) && _cur && _cur.complete === true && _cur.pagesTotal > 0 &&
+        _cur.pageDone >= _cur.pagesTotal &&
+        gX > (_cur.pagesTotal - 2) * _POR_PG && gX <= _cur.pagesTotal * _POR_PG) {
+      _idxT = gX;
+    }
     if (_idxT > 0) gY = _idxT;
     else if (_T && _T.jogos > 0) gY = _T.jogos;
     else if (imp && imp.declaredGames > 0) gY = Math.max(imp.declaredGames, gX);
@@ -2224,10 +2276,10 @@
     // ENUMERA. O contador do perfil da Camila diz 35, mas a lista tem mais entradas — e
     // aí "35 de 35 (100%)" aparecia junto de itens "ainda não lido" na mesma tela. Uma
     // lista que se pode contar vale mais que um contador que a gente não sabe o que conta.
-    var tY = (_T && _T.torneios > 0) ? _T.torneios
-           : ((imp && imp.declaredTournaments != null) ? imp.declaredTournaments : null);
-    var tLista = (imp && Array.isArray(imp.tournamentsList)) ? imp.tournamentsList.length : 0;
-    if (tLista > 0) tY = (tY != null) ? Math.max(tY, tLista) : tLista;
+    // O CONTADOR DO PERFIL NÃO É PISO: ele conta inscrição, não participação (e erra
+    // pros dois lados). Quem manda é a competição com jogo. Enquanto nenhum jogo foi
+    // lido, o total é desconhecido — e a barra diz "de …", que é honesto.
+    var tY = window._lzCompsReaisN(imp, true) || null;
     // SEM TOTAL DECLARADO, CONTA O QUE SE CONHECE. A Kelly não tinha `declaredTournaments`
     // (import antigo) nem `tournamentsList`, e a barra ficava em "5 de …" pra sempre — um
     // total desconhecido é indistinguível de barra quebrada. Competição distinta no
@@ -2244,16 +2296,13 @@
     // o que for maior — nunca a contagem de ENTRADAS do footprint. O footprint fragmenta:
     // 30 entradas pros 29 rankings da Camila e 21 pros 8 da Kelly. Contar entradas prendia
     // a barra em "29 de 30" e inventava "21 rankings" pra quem tem 8.
-    var rY = (_T && _T.rankings > 0) ? _T.rankings
-           : ((imp && imp.declaredRankings != null) ? imp.declaredRankings : null);
-    var rLista = (imp && Array.isArray(imp.rankingsList)) ? imp.rankingsList.length : 0;
-    if (rLista > 0) rY = (rY != null) ? Math.max(rY, rLista) : rLista;
+    var rY = window._lzCompsReaisN(imp, false) || null;
     if (rY == null) rY = _lzContarDistintos(rkFp, false) || null;
     if (rY != null && rX > rY) rX = rY;      // x jamais passa de y
     body += '<div style="margin:8px 0 6px;">' +
       barLine('lz-ath-t', '🏆', 'Torneios', tX, tY) +
       barLine('lz-ath-r', '📊', 'Rankings', rX, rY) +
-      barLine('lz-ath-g', '🎾', 'Jogos', gX, gY) +
+      barLine('lz-ath-g', '🎾', 'Jogos', gX, gY, _idxT > 0) +
       '</div>';
     if (imp) {
       // TRÊS ABAS, UMA ROLAGEM (pedido do dono, 30/jul/2026: "tem que ter um botão com
@@ -2362,14 +2411,32 @@
       if (!d || d.__sp_lp !== 'lz-profile-counts-result' || d.handle !== handle) return;
       window.removeEventListener('message', onMsg);
       if (d.error) return;
+      // ESTE É O SEGUNDO ESCRITOR DA BARRA — e era o que escapava do teto. Ele pega os
+      // contadores AO VIVO do perfil e reescrevia o texto usando o `x` já pintado, sem
+      // capar: 4 torneios lidos com um total novo de 2 virava "4 de 2 (100%)" na tela do
+      // dono. Duas mãos escrevendo o mesmo número e só uma conhecia a regra.
+      //   • x NUNCA passa de y (a mesma lei do barLine e do _updBars);
+      //   • um total que é FATO (índice varrido / varredura fechada) não é rebaixado pelo
+      //     contador do perfil, que conta LINHAS — é ele que diz 81 onde a lista enumera 80.
       function upd(id, y) {
         var el = document.getElementById(id); if (!el || y == null) return;
+        if (el.getAttribute('data-auth') === '1') return;
+        // NUNCA ENCOLHER: o contador do perfil pode enumerar MENOS do que existe (ele diz
+        // 2 torneios pro dono, que jogou 4). Aceitar um total menor apagaria da tela um
+        // torneio que ele disputou — foi assim que o BTG sumiu.
+        var yAtual = parseInt(el.getAttribute('data-y'), 10) || 0;
+        if (yAtual > 0 && y < yAtual) return;
+        el.setAttribute('data-y', String(y));
         var x = parseInt(el.getAttribute('data-x'), 10) || 0;
+        if (y > 0 && x > y) { x = y; el.setAttribute('data-x', String(x)); }
         var pct = y > 0 ? Math.min(100, Math.round(x / y * 100)) : 0;
         var t = el.querySelector('.lz-bar-txt'); if (t) t.innerHTML = '<b>' + x + '</b> de ' + y + ' (' + pct + '%)';
         var f = el.querySelector('.lz-bar-fill'); if (f) f.style.width = Math.max(2, pct) + '%';
       }
-      upd('lz-ath-t', d.tournaments); upd('lz-ath-r', d.rankings); upd('lz-ath-g', d.games);
+      // Torneios e rankings NÃO vêm mais daqui: o contador do perfil conta inscrição
+      // (um ranking de 2023 sem nenhum jogo) e esquece participação (dois torneios de
+      // 2024 que ele jogou). Só competição com jogo conta, e isso o app já sabe.
+      upd('lz-ath-g', d.games);
     }
     window.addEventListener('message', onMsg);
     setTimeout(function () { window.removeEventListener('message', onMsg); }, 15000);
@@ -2464,8 +2531,10 @@
       // contar vale mais que um contador cujo critério a gente não conhece. Fica AQUI (e
       // não na extensão) pra não obrigar mais um recarregamento dela: o app sabe a lista
       // pelo `tournamentsList` do próprio import.
-      var _lst = (ultimoImp && Array.isArray(ultimoImp.tournamentsList)) ? ultimoImp.tournamentsList.length : 0;
+      var _lst = (ultimoImp && window._lzCompsReaisN) ? window._lzCompsReaisN(ultimoImp, true) : 0;
       if (_lst > 0) _bs.t.y = (_bs.t.y != null) ? Math.max(_bs.t.y, _lst) : _lst;
+      var _lsr = (ultimoImp && window._lzCompsReaisN) ? window._lzCompsReaisN(ultimoImp, false) : 0;
+      if (_lsr > 0) _bs.r.y = (_bs.r.y != null) ? Math.max(_bs.r.y, _lsr) : _lsr;
       if (c.t != null) _bs.t.x = Math.max(_bs.t.x, c.t);
       if (c.r != null) _bs.r.x = Math.max(_bs.r.x, c.r);
       if (c.g != null) _bs.g.x = Math.max(_bs.g.x, c.g);

@@ -92,12 +92,8 @@
     var _MON = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
     function _ts(raw) {
       if (typeof raw === 'number') return raw;                        // já é timestamp
-      var s = String(raw || '').trim(); if (!s) return 0;
-      // dd/mm/aa (Brasil) tem PRIORIDADE — Date.parse assume mm/dd (US) e inverte.
-      var m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
-      if (m) { var y = +m[3]; if (y < 100) y += 2000; var t = new Date(y, (+m[2]) - 1, +m[1]).getTime(); if (!isNaN(t)) return t; }
-      var n = Date.parse(s); if (!isNaN(n)) return n;                 // ISO (scoreplace) / nativo
-      return 0;
+      // canônico em store.js — dd/mm nunca é lido como mm/dd
+      return (typeof window._spTsData === 'function') ? window._spTsData(raw, { fallback: 0 }) : 0;
     }
     function monYr(raw) { var t = _ts(raw); if (!t) return null; var d = new Date(t); return _MON[d.getMonth()] + '/' + d.getFullYear(); }
     function prettyClub(slug) {
@@ -263,9 +259,7 @@
   function lpTs(raw) {
     if (typeof raw === 'number') return raw;
     var s = String(raw || '').trim(); if (!s) return 0;
-    var m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
-    if (m) { var y = +m[3]; if (y < 100) y += 2000; var t = new Date(y, (+m[2]) - 1, +m[1]).getTime(); if (!isNaN(t)) return t; }
-    var n = Date.parse(s); return isNaN(n) ? 0 : n;
+    return (typeof window._spTsData === 'function') ? window._spTsData(s, { fallback: 0 }) : 0;
   }
   // Sparkline do saldo acumulado (V=+1, D=−1) nos jogos DAQUELE torneio, cronológico.
   function saldoSvg(games) {

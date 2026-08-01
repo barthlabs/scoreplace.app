@@ -33,27 +33,26 @@
   // Melhor esforço pra transformar a data crua do letzplay em timestamp. Se falhar,
   // usa a ordem de import (idx; letzplay entrega mais recente primeiro) ancorada em
   // importedAt — jogos importados ficam ANTES da data de import (aconteceram antes).
-  function _lpDateToTs(dateStr, importedAtTs, idx) {
+  // `iso` (aaaa-mm-dd) vem do JSON do próprio letzplay e é a fonte preferida: não tem
+  // convenção de país pra errar. `dateStr` é o texto do card, usado só quando não há ISO.
+  function _lpDateToTs(dateStr, importedAtTs, idx, iso) {
     var fallback = (importedAtTs || Date.now()) - (idx + 1) * DAY;
-    if (!dateStr) return fallback;
-    var s = String(dateStr).trim();
-    // ISO / formatos que o engine entende direto
-    var n = Date.parse(s);
-    if (!isNaN(n)) return n;
-    // dd/mm/yyyy
-    var m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
-    if (m) {
-      var y = +m[3]; if (y < 100) y += 2000;
-      var t = new Date(y, (+m[2]) - 1, +m[1]).getTime();
-      if (!isNaN(t)) return t;
-    }
-    // "12 de jul. de 2026" / "12 jul 2026"
-    var m2 = s.toLowerCase().match(/(\d{1,2}).*?\b(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\w*.*?(\d{4})/);
-    if (m2 && _PT_MON[m2[2]] != null) {
-      var t2 = new Date(+m2[3], _PT_MON[m2[2]], +m2[1]).getTime();
-      if (!isNaN(t2)) return t2;
+    // UMA leitura de data em todo o app: window._spTsData (store.js). Este arquivo e o
+    // letzplay-profile.js tinham DUAS cópias da mesma regra e elas divergiram — a de lá
+    // punha dd/mm antes de Date.parse, a daqui não, e só a daqui errava. Regra que mora
+    // em dois lugares vira duas regras.
+    if (typeof window._spTsData === 'function') {
+      return window._spTsData(iso || dateStr, { fallback: fallback, futuroProibido: true });
     }
     return fallback;
+  }
+
+  // NINGUÉM JOGA NO FUTURO. Qualquer data à frente de hoje é artefato de parse (ou lixo
+  // da fonte) — e além de mentir, ela sequestra o topo da lista, que é ordenada por data.
+  // Um dia de folga cobre fuso de quem lê; acima disso, cai no encadeamento por ordem.
+  function _tsPassado(ts, fallback) {
+    if (!ts) return fallback;
+    return (ts > Date.now() + DAY) ? fallback : ts;
   }
 
   function _dateLabel(ts) {
@@ -157,7 +156,8 @@
     if (!games.length) return [];
     var importedAtTs = imp.importedAt ? (Date.parse(imp.importedAt) || null) : null;
     return games.map(function (g, i) {
-      var ts = _lpDateToTs(g.date, importedAtTs, (g.idx != null ? g.idx : i));
+      var _idx = (g.idx != null ? g.idx : i);
+      var ts = _lpDateToTs(g.date, importedAtTs, _idx, g.dateISO);
       var opp = _lpTeam(g.oppNames, g.oppHandles);
       var partner = _bestPlayer(g.partnerName, g.partnerHandle) || null;
       var scoreA = (typeof g.myScore === 'number') ? String(g.myScore) : '';
