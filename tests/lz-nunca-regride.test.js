@@ -41,8 +41,11 @@ ok(/all\.length = 0; Array\.prototype\.push\.apply\(all, _limpos\)/.test(fech),
 // ── 2. APP: recusa gravar um histórico menor, em TODOS os caminhos ──
 const grava = app.slice(app.indexOf('TRAVA ÚNICA CONTRA REGRESSÃO'), app.indexOf('function _lzPersistScans'));
 ok(grava.length > 400, 'existe UMA trava de regressão, compartilhada');
-ok(/pico > agora/.test(grava), 'marca d\'água em memória: parcial atrasado não vence o fechamento');
-ok(/antes > agora/.test(grava), 'e conferência no banco: cobre sessão nova / outra aba');
+// A LEI MUDOU EM 01/ago/2026: era "a maior leitura vence"; virou "as leituras se somam".
+// Motivo medido: uma leitura pior em jogos podia ser melhor em torneios, e descartá-la
+// inteira fazia 2 torneios sumirem a cada releitura.
+ok(/_lzUnirImports\(guardado, doc\.fullImport\)/.test(grava), 'a trava UNE as duas leituras');
+ok(/collection\('letzplayScans'\)\.doc\(uid\)\.get\(\)/.test(grava), 'conferindo o banco: cobre sessão nova / outra aba');
 ok(/delete doc\.fullImport/.test(grava), 'quando barra, o histórico não é substituído');
 ok(/showNotification/.test(grava), 'e o organizador é avisado — barrar não pode ser silencioso');
 // os DOIS caminhos de escrita usam a trava
@@ -63,8 +66,9 @@ ok(/var teto = \(doc\.fullImport && doc\.fullImport\.declaredGames\)/.test(grava
   'o guard conhece o teto declarado pelo letzplay');
 ok(/function corrompido\(n\) \{ return teto > 0 && n > teto; \}/.test(grava),
   'e sabe reconhecer um documento acima do teto como corrompido');
-ok(/if \(pico > agora && !corrompido\(pico\)\)/.test(grava), 'a marca d\'água não protege lixo');
-ok(/if \(antes > agora && !corrompido\(antes\)\)/.test(grava), 'nem o que está no banco');
+ok(/if \(_guardado && !corrompido\(antes\)\)/.test(grava), 'a união não acontece com documento corrompido…');
+ok(/corrompido\(antes\)/.test(grava) && /será substituído por/.test(grava),
+  '…esse é jogado fora e substituído, que é a única forma de a correção entrar');
 ok(/será substituído por/.test(grava), 'e avisa quando substitui um documento corrompido');
 
 // ── TODA LEITURA SANITIZA O QUE JÁ ESTAVA GRAVADO ───────────────────────────
@@ -106,6 +110,54 @@ ok(/será substituído por/.test(grava), 'e avisa quando substitui um documento 
   ok(regrediu({ _fullGames: 390 }, { _fullGames: 391 }) === true, '390 não substitui 391');
   ok(regrediu({ _fullGames: 392 }, { _fullGames: 391 }) === false, 'mas 392 substitui 391');
   ok(regrediu({ _fullGames: 391 }, { _fullGames: 391 }) === false, 'e igual passa (dado novo do mesmo tamanho)');
+}
+
+// ── DUAS LEITURAS DA MESMA PESSOA NÃO COMPETEM: ELAS SE SOMAM ──────────────────────────
+// Medido no Fabio (01/ago/2026): leitura das 03:54 = 391 jogos e 33 torneios abertos;
+// leitura das 10:30 = 390 jogos e 35 torneios. O guard media SÓ os jogos e descartava o
+// documento inteiro — então a cada releitura os 2 torneios sumiam e a barra oscilava entre
+// "35 de 35" e "33 de 35". Cada leitura era melhor numa dimensão e pior noutra.
+{
+  const app = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  const ctx = { window: {}, console, Object, Array, Math, JSON };
+  ctx.window._lzGamesTotal = null;
+  require('vm').createContext(ctx);
+  const ini = app.indexOf('function _lzUnirImports'), fim = app.indexOf('function _lzResumoRegrediu');
+  require('vm').runInContext(app.slice(ini, fim) + '\nwindow._unir = _lzUnirImports;', ctx);
+  const unir = ctx.window._unir;
+
+  const velho = {
+    games: Array.from({ length: 391 }, (_, i) => ({ lzId: 1000 + i })),
+    lzCursor: { toursDone: { a: 1, b: 1 }, ranksDone: { r: 1 }, complete: true, pageDone: 20, pagesTotal: 20 },
+    indexTotal: 391, declaredGames: 391, totais: { fonte: 'indice', jogos: 391, torneios: 33, rankings: 27 }
+  };
+  const novo = {
+    games: Array.from({ length: 390 }, (_, i) => ({ lzId: 1000 + i })),
+    lzCursor: { toursDone: { a: 1, b: 1, c: 1, d: 1 }, ranksDone: { r: 1 }, complete: true, pageDone: 20, pagesTotal: 20 },
+    indexTotal: 391, declaredGames: 391, totais: { fonte: 'indice', jogos: 391, torneios: 35, rankings: 27 }
+  };
+  const u = unir(velho, novo);
+  ok(u.games.length === 391, 'a união fica com os 391 jogos (nenhum se perde) — veio ' + u.games.length);
+  ok(Object.keys(u.lzCursor.toursDone).length === 4, 'e com TODOS os torneios já abertos pelas duas leituras');
+  ok(u.lzCursor.complete === true, 'completo continua completo');
+  ok(u.totais.torneios === 35, 'o total de torneios fica no maior conhecido');
+
+  // sem duplicar: o mesmo jogo nas duas leituras entra uma vez
+  const d = unir({ games: [{ lzId: 7 }] }, { games: [{ lzId: 7 }, { lzId: 8 }] });
+  ok(d.games.length === 2, 'jogo repetido entre as duas leituras não duplica');
+  // jogo SEM id é reconhecido pelo conteúdo, e o com id vence
+  const e = unir({ games: [{ club: 'c', kind: 'ranking', date: 'x', oppNames: ['A'], myScore: 6, oppScore: 4 }] },
+                 { games: [{ lzId: 9, club: 'c', kind: 'ranking', date: 'x', oppNames: ['A'], myScore: 6, oppScore: 4 }] });
+  ok(e.games.length === 2 || (e.games.length === 1 && e.games[0].lzId === 9),
+     'jogo sem id não vira duplicata do mesmo jogo com id');
+
+  const guard = app.slice(app.indexOf('function _lzBarrarRegressao'), app.indexOf('function _lzPersistScans'));
+  ok(/doc\.fullImport = _lzUnirImports\(guardado, doc\.fullImport\)/.test(guard), 'o guard une em vez de descartar');
+  ok(!/return Promise\.resolve\(barrar\(pico, 'memória'\)\)/.test(guard),
+     'e não corta caminho pela memória, onde não há o que unir');
+  ok(/if \(_guardado && !corrompido\(antes\)\) return barrar\(antes, 'banco', _guardado\)/.test(guard),
+     'une SEMPRE que já existe histórico — inclusive quando a leitura nova é maior');
 }
 
 console.log((fail ? '✗' : '✓') + ' lz-nunca-regride: ' + pass + ' passaram, ' + fail + ' falharam');

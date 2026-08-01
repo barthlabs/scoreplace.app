@@ -3514,6 +3514,67 @@
   // Os dois documentos discordando é pior que qualquer um dos dois sozinho: a BARRA lê o
   // histórico e a COR lê o resumo — o nome voltava a violeta depois de já ter ficado verde,
   // e o diálogo mostrava "390 de 391". Verdade não pode morar em dois lugares.
+  // ── UNIR, NÃO ESCOLHER ────────────────────────────────────────────────────────
+  // O guard media UMA dimensão (quantidade de jogos) e decidia pelo documento INTEIRO.
+  // Medido no Fabio em 01/ago/2026: a leitura das 03:54 tinha 391 jogos e 33 torneios
+  // abertos; a das 10:30 tinha 390 jogos e **35** torneios. Ele viu a barra oscilar entre
+  // "35 de 35" e "33 de 35" a cada releitura — porque cada leitura era melhor numa coisa e
+  // pior noutra, e eu jogava fora a leitura inteira por causa de um jogo.
+  //
+  // Duas leituras da MESMA pessoa não competem: elas se somam. Jogo é identificado por id
+  // (ou pelo conteúdo, quando o id falta), então a união não duplica nada; e o cursor é
+  // progresso puro — página aberta continua aberta.
+  function _lzUnirImports(antigo, novo) {
+    if (!antigo) return novo;
+    if (!novo) return antigo;
+    var out = Object.assign({}, antigo, novo);
+    // jogos: união por identidade, com o que tem lzId vencendo
+    var mapa = {}, ordem = [];
+    function por(g) {
+      if (!g) return null;
+      if (g.lzId) return 'lz' + g.lzId;
+      return [g.club, g.kind, g.date, (g.oppNames || []).join('|'), g.myScore, g.oppScore].join('~');
+    }
+    [antigo.games || [], novo.games || []].forEach(function (lista) {
+      lista.forEach(function (g) {
+        var k = por(g); if (!k) return;
+        if (!mapa[k]) { mapa[k] = g; ordem.push(k); return; }
+        if (!mapa[k].lzId && g.lzId) mapa[k] = g;       // o com id vence o sem id
+      });
+    });
+    out.games = ordem.map(function (k) { return mapa[k]; });
+    // cursor: união dos conjuntos — o que já foi aberto não desabre
+    var ca = antigo.lzCursor || {}, cn = novo.lzCursor || {};
+    out.lzCursor = Object.assign({}, ca, cn, {
+      toursDone: Object.assign({}, ca.toursDone || {}, cn.toursDone || {}),
+      ranksDone: Object.assign({}, ca.ranksDone || {}, cn.ranksDone || {}),
+      pagesRead: Object.assign({}, ca.pagesRead || {}, cn.pagesRead || {}),
+      pagesTotal: Math.max(ca.pagesTotal || 0, cn.pagesTotal || 0) || null,
+      pageDone: Math.max(ca.pageDone || 0, cn.pageDone || 0),
+      complete: (cn.complete === true) || (ca.complete === true)
+    });
+    // listas e totais: fica o maior/mais informativo
+    ['tournamentsList', 'rankingsList', 'footprint'].forEach(function (k) {
+      var a = Array.isArray(antigo[k]) ? antigo[k] : [], b = Array.isArray(novo[k]) ? novo[k] : [];
+      out[k] = (b.length >= a.length) ? b : a;
+    });
+    out.indexTotal = Math.max(antigo.indexTotal || 0, novo.indexTotal || 0) || undefined;
+    out.declaredGames = Math.max(antigo.declaredGames || 0, novo.declaredGames || 0) || undefined;
+    if (antigo.totais || novo.totais) {
+      var ta = antigo.totais || {}, tn = novo.totais || {};
+      var idxN = tn.fonte === 'indice', idxA = ta.fonte === 'indice';
+      out.totais = {
+        fonte: (idxN || idxA) ? 'indice' : 'declarado',
+        jogos: (idxN && !idxA) ? (tn.jogos || 0) : Math.max(ta.jogos || 0, tn.jogos || 0),
+        torneios: Math.max(ta.torneios || 0, tn.torneios || 0),
+        rankings: Math.max(ta.rankings || 0, tn.rankings || 0)
+      };
+    }
+    // um "parcial" não contamina um histórico que já estava completo
+    if (!novo.partialReason || out.lzCursor.complete) out.partialReason = null;
+    return out;
+  }
+
   function _lzResumoRegrediu(novo, antigo) {
     if (!novo || !antigo) return false;
     var a = (typeof antigo._fullGames === 'number') ? antigo._fullGames : -1;
@@ -3538,7 +3599,15 @@
         .catch(function () { return doc; });
     }
     var pico = _lzMaxJogos[uid] || 0;
-    function barrar(antes, origem) {
+    // `guardado` = o fullImport que já está no banco (quando conhecido). Com ele a gente
+    // UNE em vez de descartar — ver _lzUnirImports.
+    function barrar(antes, origem, guardado) {
+      if (guardado) {
+        doc.fullImport = _lzUnirImports(guardado, doc.fullImport);
+        window._warn && window._warn('[letzplay] leituras unidas (' + origem + '): ' + agora +
+          ' + ' + antes + ' → ' + _lzTot(doc.fullImport) + ' jogos.');
+        return doc;
+      }
       delete doc.fullImport;
       window._warn && window._warn('[letzplay] regressão barrada (' + origem + '): chegaram ' +
         agora + ' jogos, já havia ' + antes + ' — histórico mantido.');
@@ -3555,11 +3624,16 @@
     // número impediria a própria correção de entrar. Acima do teto, a escrita menor passa.
     var teto = (doc.fullImport && doc.fullImport.declaredGames) || 0;
     function corrompido(n) { return teto > 0 && n > teto; }
-    if (pico > agora && !corrompido(pico)) return Promise.resolve(barrar(pico, 'memória'));
+    // (o atalho de memória saiu: sem o documento guardado não dá pra unir, e unir é melhor
+    // que barrar — uma leitura pior em jogos pode ser melhor em torneios, e era assim que
+    // 2 torneios sumiam a cada releitura)
     return db.collection('letzplayScans').doc(uid).get()
       .then(function (d) {
-        var antes = d.exists ? _lzTot((d.data() || {}).fullImport) : 0;
-        if (antes > agora && !corrompido(antes)) return barrar(antes, 'banco');
+        var _guardado = d.exists ? (d.data() || {}).fullImport : null;
+        var antes = _lzTot(_guardado);
+        // UNE SEMPRE que já existe histórico — mesmo quando a leitura nova é maior, porque
+        // ela pode ter deixado pra trás um torneio que a antiga tinha aberto.
+        if (_guardado && !corrompido(antes)) return barrar(antes, 'banco', _guardado);
         if (corrompido(antes)) {
           window._warn && window._warn('[letzplay] o gravado tinha ' + antes + ' jogos com ' +
             teto + ' declarados — corrompido, será substituído por ' + agora + '.');
