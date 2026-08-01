@@ -87,10 +87,12 @@ ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fáb
   // faixa de altura) pra LINHA DO NOME, no cabeçalho — que já é fixo por construção.
   ok(!/id="lz-acoes-topo"/.test(rep), 'a barra sticky saiu de cena');
   ok(/headerHtml:/.test(rep), 'as ações vão no cabeçalho do diálogo');
-  const hdr = rep.slice(rep.indexOf('headerHtml:'), rep.indexOf('headerHtml:') + 900);
+  const hdr = rep.slice(rep.indexOf('headerHtml:'), rep.indexOf('headerHtml:') + 1500);
   ok(/← Voltar/.test(hdr) && /_lzFecharDialogo/.test(hdr), 'tem Voltar, ligado ao fechamento');
   ok(/_lzPuxarDoTopo/.test(hdr), 'e o botão de puxar, ligado à leitura');
   ok(/_esc\(btnLabel\)/.test(hdr), 'usa o MESMO rótulo do botão nativo (vira "Continuar" quando incompleto)');
+  // 01/ago/2026: sem letzplay não há o que puxar — a ficha abre igual, só sem esse botão.
+  ok(/\(_temLz$/m.test(hdr) || /_temLz\s*\n?\s*\?/.test(hdr), 'e o botão de puxar só aparece quando existe letzplay');
   ok(rep.indexOf('headerHtml:') > rep.indexOf("var btnLabel = '📚 Puxar histórico completo'"),
     'montado depois de o rótulo estar decidido (senão sai "undefined")');
   ok(/window\._lzDialogUid = uid/.test(rep), 'o diálogo registra sobre quem as ações agem');

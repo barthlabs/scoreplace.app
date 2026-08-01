@@ -2023,15 +2023,20 @@
       var border = edited ? 'rgba(245,158,11,0.55)' : (r._lzColor ? (r._lzColor + '55') : 'var(--border-color)');
       var ctx = window._lzScanCtx || {};
       var canPull = _mxIsOrg && r.uid && ctx.byUid && ctx.byUid[r.uid];
+      // CLICÁVEL = TEM uid. A ficha mostra os jogos do scoreplace (torneio e casual) e,
+      // quando existir, o histórico do letzplay. Antes só quem AUTORIZOU o letzplay abria
+      // — e quem só joga aqui não tinha ficha nenhuma, mesmo com jogo nosso registrado.
+      var canOpen = !!r.uid;
       var lu = r.uid ? _lzLastUpdateOf(r.uid) : null;
       var fresh = lu && (Date.now() - lu.ts) < 30 * 86400000;   // < 1 mês
       var tip = _esc(r.name || '(sem nome)') +
         (fresh ? (' — Última atualização: ' + lu.label) : '') +
-        (canPull ? ' — clique pra puxar o histórico do letzplay' : '') +
+        (canPull ? ' — clique pra puxar o histórico do letzplay'
+                 : (canOpen ? ' — clique pra ver os jogos' : '')) +
         ' — arraste pra atribuir gênero/categoria';
-      var click = canPull ? ' onclick="window._lzAthleteDialog(\'' + String(r.uid).replace(/['\\]/g, '') + '\')"' : '';
+      var click = canOpen ? ' onclick="window._lzAthleteDialog(\'' + String(r.uid).replace(/['\\]/g, '') + '\')"' : '';
       return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')"' + click + ' ' +
-        'style="cursor:' + (canPull ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
+        'style="cursor:' + (canOpen ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
     }
     function cardGrid(arr) {
       // minmax(0,...) e o que impede o estouro: com min-width:auto o nome longo
@@ -2290,7 +2295,19 @@
   window._lzAthleteDialog = function (uid) {
     var ctx = window._lzScanCtx || {};
     var tg = ctx.byUid && ctx.byUid[uid];
-    if (!tg) return;
+    // ── A FICHA É DE QUEM TEM JOGO, NÃO DE QUEM AUTORIZOU ─────────────────────────
+    // Regra do dono (01/ago/2026): _"todos os nomes na página de análise que tenham jogos
+    // (scoreplace/letzplay) devem ser clicáveis e verificáveis em página de estatísticas,
+    // não só os que autorizaram letzplay"_. Faz sentido: os jogos do scoreplace são
+    // registro NOSSO — negar a ficha a quem jogou aqui porque ele não autorizou a leitura
+    // de outro site é esconder o dado da própria casa.
+    // Sem alvo letzplay o diálogo abre igual, só sem a parte que depende do letzplay
+    // (o @, as barras do perfil público e o botão de puxar).
+    if (!tg) {
+      var _pf = (window._lzRenderCtx && window._lzRenderCtx.profileMap && window._lzRenderCtx.profileMap[uid]) || {};
+      tg = { name: _pf.displayName || _pf.name || _lzNomeDoUid(uid) || 'Atleta', handle: null, semLetzplay: true };
+    }
+    var _temLz = !tg.semLetzplay;
     window._lzDialogUid = uid;      // a barra do topo age sobre este atleta
     var lu = _lzLastUpdateOf(uid);
     // Melhor import disponível (scan do organizador OU import próprio — o de mais jogos).
@@ -2310,11 +2327,14 @@
     // listas passaram a ser ABAS, com UMA área de rolagem — ver `_lzAba`.
     var _nivel = (imp && typeof window._lzLevelBar === 'function') ? window._lzLevelBar(imp) : '';
     var body = (_nivel ? '<div style="background:var(--bg-card,#141a24);border:1px solid var(--border-color,#28313f);border-radius:12px;padding:11px 12px;margin-bottom:9px;text-align:left;">' + _nivel + '</div>' : '') +
-      '<div style="font-size:0.8rem;">Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> ' +
-      // O @ ABRE O PERFIL DELA no letzplay. Antes só a leitura navegava a aba compartilhada,
-      // então quem só queria conferir a fonte não tinha caminho nenhum.
-      '(<a href="https://letzplay.me/' + encodeURIComponent(tg.handle) + '" target="_blank" rel="noopener" ' +
-      'style="color:#7dd3fc;text-decoration:none;font-weight:700;">@' + _esc(tg.handle) + ' ↗</a>) no letzplay.</div>';
+      (_temLz
+        ? ('<div style="font-size:0.8rem;">Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> ' +
+           // O @ ABRE O PERFIL DELA no letzplay. Antes só a leitura navegava a aba
+           // compartilhada, então quem só queria conferir a fonte não tinha caminho nenhum.
+           '(<a href="https://letzplay.me/' + encodeURIComponent(tg.handle) + '" target="_blank" rel="noopener" ' +
+           'style="color:#7dd3fc;text-decoration:none;font-weight:700;">@' + _esc(tg.handle) + ' ↗</a>) no letzplay.</div>')
+        : ('<div style="font-size:0.8rem;">Jogos de <b>' + _esc(tg.name) + '</b> no scoreplace. ' +
+           '<span style="color:var(--text-muted);">Sem histórico do letzplay — a pessoa não autorizou a leitura.</span></div>'));
     var btnLabel = '📚 Puxar histórico completo';
     // 3 BARRAS (x = gravado · y = total do perfil letzplay). Os "de y" que faltarem são
     // completados ao vivo pela extensão (lz-profile-counts lê "472 Jogos · 29 Rankings ·
@@ -2403,28 +2423,22 @@
     var rY = window._lzCompsReaisN(imp, false) || null;
     if (rY == null) rY = _lzContarDistintos(rkFp, false) || null;
     if (rY != null && rX > rY) rX = rY;      // x jamais passa de y
-    body += '<div style="margin:8px 0 6px;">' +
+    // As barras medem a leitura do PERFIL LETZPLAY. Sem letzplay não há o que medir —
+    // mostrar "0 de …" pra quem só joga aqui é ruído que parece defeito.
+    if (_temLz || imp) body += '<div style="margin:8px 0 6px;">' +
       barLine('lz-ath-t', '🏆', 'Torneios', tX, tY) +
       barLine('lz-ath-r', '📊', 'Rankings', rX, rY) +
       barLine('lz-ath-g', '🎾', 'Jogos', gX, gY, _idxT > 0) +
       '</div>';
-    if (imp) {
-      // TRÊS ABAS, UMA ROLAGEM (pedido do dono, 30/jul/2026: "tem que ter um botão com
-      // torneios, outro com rankings e outro com histórico de jogos, de forma que possamos
-      // abrir, ler e scrollar"). Empilhar as três listas travava o diálogo.
-      // O conteúdo é montado UMA vez e guardado em `window._lzAbas`; trocar de aba só
-      // troca o innerHTML — não re-renderiza o diálogo (e não perde a barra de progresso
-      // se uma leitura estiver rodando).
-      // AS DUAS FONTES NAS TRÊS ABAS (pedido do dono, 31/jul/2026): "na lista de jogos tem
-      // que aparecer os jogos do letzplay e do scoreplace. torneios de ambos e rankings de
-      // ambos." Os do scoreplace chegam depois (uma leitura do Firestore) e são costurados
-      // nas abas já montadas — a tela não espera por eles pra abrir.
+    function _montarAbas() {
+      var _i = imp || {};                       // sem letzplay as abas nascem vazias e o
+      var _me = tg.name || (tg.handle ? '@' + tg.handle : 'Atleta');   // scoreplace preenche
       window._lzAbas = {
-        tour: _lzTourneyRows(imp, tg.handle, 'tour'),
-        rank: _lzTourneyRows(imp, tg.handle, 'rank'),
-        jogo: (window._lzGameCards(imp, tg.name || ('@' + tg.handle)) || _lzGameRows(imp, tg.handle))
+        tour: _lzTourneyRows(_i, tg.handle, 'tour'),
+        rank: _lzTourneyRows(_i, tg.handle, 'rank'),
+        jogo: (window._lzGameCards(_i, _me) || _lzGameRows(_i, tg.handle))
       };
-      _lzJuntarScoreplace(uid, tg.name || ('@' + tg.handle));
+      _lzJuntarScoreplace(uid, _me);
       var _n = { tour: tX, rank: rX, jogo: gX };
       body += '<div id="lz-abas" style="display:flex;gap:6px;margin:9px 0 0;">' +
         [['tour', '🏆', 'Torneios'], ['rank', '📊', 'Rankings'], ['jogo', '🎾', 'Jogos']].map(function (A) {
@@ -2442,6 +2456,19 @@
         // montar vai montado; nada de depender de o diálogo já estar no DOM.
         (window._lzAbas.tour || '<div style="opacity:0.6;padding:6px 0;">Nenhum torneio lido ainda.</div>') +
         '</div>';
+    }
+    if (imp) {
+      // TRÊS ABAS, UMA ROLAGEM (pedido do dono, 30/jul/2026: "tem que ter um botão com
+      // torneios, outro com rankings e outro com histórico de jogos, de forma que possamos
+      // abrir, ler e scrollar"). Empilhar as três listas travava o diálogo.
+      // O conteúdo é montado UMA vez e guardado em `window._lzAbas`; trocar de aba só
+      // troca o innerHTML — não re-renderiza o diálogo (e não perde a barra de progresso
+      // se uma leitura estiver rodando).
+      // AS DUAS FONTES NAS TRÊS ABAS (pedido do dono, 31/jul/2026): "na lista de jogos tem
+      // que aparecer os jogos do letzplay e do scoreplace. torneios de ambos e rankings de
+      // ambos." Os do scoreplace chegam depois (uma leitura do Firestore) e são costurados
+      // nas abas já montadas — a tela não espera por eles pra abrir.
+      _montarAbas();
       var incompleto = (gY && gX < gY) || (imp.partialReason != null);
       if (incompleto) {
         body += '<div style="font-size:0.8rem;color:#fbbf24;">Perfil INCOMPLETO — puxe de novo pra continuar de onde parou (o que já veio está gravado).</div>';
@@ -2460,10 +2487,17 @@
       body += (lu ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Última atualização: <b>' + lu.label + '</b>' +
         (_velho ? ' <span style="color:#a78bfa;">(motor antigo)</span>' : '') + '</div>' : '');
     } else {
-      body += '<div style="font-size:0.8rem;color:var(--text-muted);">Nada gravado ainda — leio torneios (nome, categoria, classificação) e depois os jogos, gravando a cada passo.</div>';
+      // SEM HISTÓRICO DO LETZPLAY as abas continuam existindo — elas é que trazem os jogos
+      // do scoreplace (torneio e casual), que são registro nosso e não dependem de
+      // autorização nenhuma. Antes o diálogo terminava aqui e a pessoa que jogou aqui
+      // semana passada aparecia como se não tivesse jogo nenhum.
+      body += '<div style="font-size:0.8rem;color:var(--text-muted);">' +
+        (_temLz ? 'Nada gravado ainda do letzplay — leio torneios (nome, categoria, classificação) e depois os jogos, gravando a cada passo.'
+                : 'Abaixo, os jogos desta pessoa aqui no scoreplace.') + '</div>';
+      _montarAbas();
     }
     if (typeof window.showConfirmDialog === 'function') {
-      window.showConfirmDialog('🎾 ' + (tg.name || '@' + tg.handle), body,
+      window.showConfirmDialog('🎾 ' + (tg.name || (tg.handle ? '@' + tg.handle : 'Atleta')), body,
         // ERRO DENTRO DO CALLBACK DO DIALOG É ENGOLIDO. Se qualquer coisa estourar aqui, o
         // dialog fecha e a tela volta — exatamente o "clica em continuar e não faz nada",
         // sem toast, sem console, sem pista. Nunca deixar este callback nu.
@@ -2495,10 +2529,14 @@
             'style="padding:8px 12px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:700;' +
             'border:1px solid var(--border-color,rgba(255,255,255,0.15));background:rgba(255,255,255,0.08);' +
             'color:var(--text-main,#e8ecf3);white-space:nowrap;">← Voltar</button>' +
-            '<button type="button" onclick="window._lzPuxarDoTopo()" ' +
-            'style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:800;' +
-            'border:1px solid rgba(59,130,246,0.5);background:linear-gradient(135deg,#3b82f6,#2563eb);' +
-            'color:#fff;white-space:nowrap;">' + _esc(btnLabel) + '</button>' });
+            // Sem letzplay não há o que puxar — o botão sumiria de qualquer jeito no
+            // primeiro clique (a leitura precisa do @). Melhor não oferecer.
+            (_temLz
+              ? ('<button type="button" onclick="window._lzPuxarDoTopo()" ' +
+                 'style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:800;' +
+                 'border:1px solid rgba(59,130,246,0.5);background:linear-gradient(135deg,#3b82f6,#2563eb);' +
+                 'color:#fff;white-space:nowrap;">' + _esc(btnLabel) + '</button>')
+              : '') });
       // a aba de torneios já está montada; isto só pinta o botão ativo
       setTimeout(function () { if (typeof window._lzAba === 'function') window._lzAba('tour'); }, 0);
       // Completa os "de y" das barras AO VIVO com os totais do perfil público

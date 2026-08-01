@@ -115,5 +115,27 @@ ok(typeof window._spScoreplaceItems === 'function', 'match-history expõe os jog
   window._lzGameItens = [];
 }
 
+// ── A FICHA É DE QUEM TEM JOGO, NÃO DE QUEM AUTORIZOU ───────────────────────────────────
+// "todos os nomes na página de análise que tenham jogos (scoreplace/letzplay) devem ser
+// clicáveis e verificáveis, não só os que autorizaram letzplay."
+{
+  const rep = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/var canOpen = !!r\.uid;/.test(rep), 'clicável = tem uid (não = autorizou letzplay)');
+  ok(/var click = canOpen \?/.test(rep), 'e é canOpen que decide o clique');
+  ok(/cursor:' \+ \(canOpen \?/.test(rep), 'inclusive o cursor de mãozinha');
+  ok(/canPull \? ' — clique pra puxar o histórico do letzplay'/.test(rep) && /clique pra ver os jogos/.test(rep),
+     'a dica distingue "puxar do letzplay" de "ver os jogos"');
+
+  const dlg = rep.slice(rep.indexOf('window._lzAthleteDialog = function'), rep.indexOf('window._lzAthleteDialog = function') + 1800);
+  ok(!/if \(!tg\) return;/.test(dlg), 'o diálogo não desiste mais quando não há alvo letzplay');
+  ok(/semLetzplay: true/.test(dlg), 'ele monta um alvo a partir do perfil do scoreplace');
+  ok(/var _temLz = !tg\.semLetzplay;/.test(dlg), 'e marca que aquela ficha não tem letzplay');
+  ok(/Sem histórico do letzplay/.test(rep), 'a tela diz isso em vez de fingir que não há jogo');
+  ok(/if \(_temLz \|\| imp\) body \+=/.test(rep), 'as barras do perfil letzplay só aparecem quando fazem sentido');
+  const semLz = rep.slice(rep.indexOf('Abaixo, os jogos desta pessoa aqui no scoreplace'), rep.indexOf('Abaixo, os jogos desta pessoa aqui no scoreplace') + 200);
+  ok(/_montarAbas\(\)/.test(semLz), 'e as abas de jogos são montadas mesmo sem letzplay nenhum');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-game-cards: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
