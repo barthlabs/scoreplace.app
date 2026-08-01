@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.6.75';
+window.SCOREPLACE_VERSION = '1.6.76';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -974,6 +974,24 @@ window._isTestIdentity = function () {
 // (3) invisível pra não-dev. `sandboxOf` aponta pro original; no original, `sandboxId`
 // aponta de volta. Ver memória project_sandbox_tournament.
 window._isSandboxTournament = function (t) { return !!(t && t.isSandbox === true); };
+// É SANDBOX, sabendo só a REFERÊNCIA (id/nome) — sem depender do doc estar carregado.
+// Existe porque o doc do SB pode não estar na lista local (só o dev recebe) e, pior, pode
+// ter sido APAGADO: apagar o doc do torneio NÃO apaga a subcoleção `results`, então os
+// placares do SB continuam vivos como ÓRFÃOS e respondem à consulta collectionGroup por
+// uid. Medido em 01/ago/2026 no perfil da Lucia Helena: 10 "jogos", 6 deles de 4 sandboxes
+// já apagados (`tour_..._sb`). Os 3 sinais (id, nome, doc) são os mesmos que
+// _sendUserNotification já usava — agora numa fonte única, usada também pelas STATS.
+// Ver [[project_sandbox_tournament]] e [[project_game_counts_only_with_score_partner_opponent]].
+window._isSandboxRef = function (tournamentId, tournamentName) {
+  var id = String(tournamentId || '');
+  if (/_sb$/.test(id)) return true;                              // convenção do clone: tour_<ts>_sb
+  if (/^\(SB\)/.test(String(tournamentName || ''))) return true; // o clone prefixa "(SB) "
+  if (id && typeof window._findTournamentById === 'function') {
+    var t = window._findTournamentById(id);
+    if (t && t.isSandbox === true) return true;
+  }
+  return false;
+};
 // A ROTA atual está sobre um torneio SANDBOX? (detalhe/bracket/chamada/etc.). Fonte ÚNICA
 // usada pelo banner 🧪 SANDBOX e pelo selo de diagnóstico do sorteio (_dtrace) — os dois só
 // aparecem em SB. O SB roda em produção, então o sinal é pela ROTA, nunca por hostname.

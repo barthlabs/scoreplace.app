@@ -214,6 +214,14 @@
 
   function _scoreplaceRecordToItem(r, myUid) {
     if (!r || !Array.isArray(r.players)) return null;
+    // AS TRÊS LEIS DO JOGO (dono, 01/ago/2026) — as mesmas da Análise de Inscritos, porque
+    // as duas telas mostram os MESMOS cards e têm que ler igual:
+    //   • SB nunca gera estatística (o guard do persist é novo; registro legado ficou);
+    //   • sem placar não houve jogo;
+    //   • sem adversário o card mente (a checagem do adversário fica abaixo, já com os
+    //     times separados). Ver project_game_counts_only_with_score_partner_opponent.
+    if (window._isSandboxRef && window._isSandboxRef(r.tournamentId, r.tournamentName)) return null;
+    if (!String(r.scoreSummary || '').trim()) return null;
     var mySlot = null;
     for (var i = 0; i < r.players.length; i++) {
       if (r.players[i] && r.players[i].uid === myUid) { mySlot = r.players[i]; break; }
@@ -226,6 +234,7 @@
       if (p.team === myTeam) { if (p.uid !== myUid) partner.push(p.name || ''); }
       else opp.push(p.name || '');
     });
+    if (!opp.filter(Boolean).length) return null;   // jogo sem adversário não é jogo
     var w = r.winnerTeam;
     var result = (w === 0 || w == null) ? '?' : (w === myTeam ? 'V' : 'D');
     if (w === 0) result = 'E';
@@ -242,7 +251,7 @@
       competitionLabel: comp,
       tournamentId: r.tournamentId || null,
       tournamentFormat: r.tournamentFormat || r.format || null,
-      opponent: opp.filter(Boolean).join(' / ') || '—',
+      opponent: opp.filter(Boolean).join(' / '),
       partner: partner.filter(Boolean).join(' / ') || null,
       result: result,
       scoreA: _splitScore(r.scoreSummary, result).a,

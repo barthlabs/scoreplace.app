@@ -173,11 +173,11 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     // nenhum depende do doc estar carregado. Ver [[project_sandbox_tournament]].
     if (notifData) {
         var _tid = String(notifData.tournamentId || '');
-        // (1) id do SB — convenção do clone (_openOrCreateSandbox): 'tour_<ts>_sb'
-        if (/_sb$/.test(_tid)) return;
-        // (2) nome do SB — o clone prefixa '(SB) '
-        if (/^\(SB\)/.test(String(notifData.tournamentName || ''))) return;
-        // (3) doc carregado com killswitch/isSandbox
+        // Os 3 sinais (id `_sb`, nome '(SB) ', doc com isSandbox) moram em UMA função só
+        // (store.js `_isSandboxRef`), compartilhada com as STATS — o SB tinha que ser mudo
+        // nos dois lugares e a regra estava escrita só aqui.
+        if (window._isSandboxRef && window._isSandboxRef(_tid, notifData.tournamentName)) return;
+        // killswitch explícito por torneio (t.notificationsMuted), que é só de notificação
         if (_tid && typeof window._findTournamentById === 'function' && window._tournamentNotificationsMuted) {
             var _tMute = window._findTournamentById(_tid);
             if (_tMute && window._tournamentNotificationsMuted(_tMute)) return;

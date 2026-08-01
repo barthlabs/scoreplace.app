@@ -134,6 +134,7 @@ const SUITES = [
   'tests/lz-agent-path.test.js',
   'tests/lz-api-index.test.js',
   'tests/lz-contagem-unica.test.js',
+  'tests/jogo-so-com-placar.test.js',
   'tests/data-sem-ambiguidade.test.js',
   'tests/rules-letzplayscans-whitelist.test.js',
   'tests/lz-parcial-nao-e-oficial.test.js',

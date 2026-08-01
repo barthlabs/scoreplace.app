@@ -1390,34 +1390,125 @@
   //
   // A busca é UMA query, por uid, sem carregar torneio: collectionGroup('results') com
   // array-contains em playerUids. É o mesmo caminho que o dashboard já usa.
-  function _lzItemDeResult(r, uid) {
-    var meu = -1;
-    if (Array.isArray(r.p1Uids) && r.p1Uids.indexOf(uid) >= 0) meu = 0;
-    else if (Array.isArray(r.p2Uids) && r.p2Uids.indexOf(uid) >= 0) meu = 1;
-    if (meu < 0) {
-      var nome = _lzNomeDoUid(uid);
-      if (nome && String(r.p1 || '').indexOf(nome) >= 0) meu = 0;
-      else if (nome && String(r.p2 || '').indexOf(nome) >= 0) meu = 1;
+  // ── AS TRÊS LEIS DE UM JOGO (regra do dono, 01/ago/2026) ──────────────────────
+  // Ele olhou a ficha da Lucia Helena e apontou três coisas na MESMA tela:
+  //   1. _"apenas os jogos com placar foram efetivamente jogados. os que não tiverem
+  //      placar devem ser desconsiderados. para todos os atletas. sempre."_
+  //   2. _"tem jogos dela sem parceiros ou sem adversários. isso não pode ocorrer…
+  //      é da NOSSA base de dados."_
+  //   3. _"SB não pode gerar estatística. para ninguém."_
+  //
+  // MEDIDO no banco (collectionGroup `results` por uid dela): **10 docs, 2 jogos reais**.
+  //   • 4 docs eram SÓ ESTRUTURA — `seedMatchResultDocs` cria um doc por jogo LOGO APÓS O
+  //     SORTEIO, com `playerUids` e sem placar nenhum. Jogo sorteado não é jogo jogado.
+  //   • 6 docs vinham de 4 sandboxes (`tour_..._sb`) cujos torneios já foram APAGADOS —
+  //     apagar o doc do torneio não apaga a subcoleção `results`, então o placar do SB
+  //     sobrevive órfão e responde à consulta por uid. Daí o "(SB) Torneio de Férias".
+  //   • 2 docs não tinham `p1`/`p2` (o "—" no adversário).
+  // E o LADO estava sendo chutado: `p1Uids`/`p2Uids` NUNCA existiram no doc (o subdoc
+  // guarda só o resultado; a estrutura mora no torneio), então caía sempre em `meu = 0` —
+  // por isso ela aparecia como adversária DELA MESMA e uma vitória de 6×1 era pintada de
+  // derrota. Agora o lado sai do uid do slot (identidade canônica) e só depois do nome.
+  function _lzNorm(s) {
+    return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  }
+  function _lzMembros(lado) {
+    return String(lado || '').split('/').map(function (n) { return n.trim(); }).filter(Boolean);
+  }
+  // O nome está NESTE lado? Igualdade primeiro; depois "o nome gravado contém o nome do
+  // perfil" (o slot às vezes guarda o nome completo e o perfil o curto, e vice-versa).
+  function _lzLadoTem(lado, nome) {
+    var alvo = _lzNorm(nome);
+    if (!alvo || !lado) return false;
+    return _lzMembros(lado).some(function (n) {
+      var x = _lzNorm(n);
+      if (!x) return false;
+      if (x === alvo || x.indexOf(alvo) >= 0) return true;
+      return alvo.indexOf(x) >= 0 && x.split(/\s+/).length >= 2;   // curto demais vira falso-positivo
+    });
+  }
+  // O jogo na ESTRUTURA (doc do torneio), quando ele está carregado — é de lá que vêm os
+  // nomes dos dois lados e os uids do slot quando o subdoc de placar não os trouxe.
+  function _lzMatchDaEstrutura(r) {
+    if (!r || !r.tournamentId || r.matchId == null) return null;
+    var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(r.tournamentId) : null;
+    if (!t || typeof window._collectAllMatches !== 'function') return null;
+    var all = window._collectAllMatches(t) || [];
+    for (var i = 0; i < all.length; i++) {
+      if (all[i] && String(all[i].id) === String(r.matchId)) return { t: t, m: all[i] };
     }
-    // Ainda sem lado: o jogo É dela (veio da busca por uid), então mostra do jeito que
-    // está gravado em vez de sumir com ele. Melhor um card sem "V/D" do que um histórico
-    // que finge que a pessoa não jogou.
-    if (meu < 0) meu = 0;
-    var meuNome = meu === 0 ? r.p1 : r.p2, outro = meu === 0 ? r.p2 : r.p1;
-    var meuSc = meu === 0 ? r.scoreP1 : r.scoreP2, outroSc = meu === 0 ? r.scoreP2 : r.scoreP1;
-    var venceu = (r.draw === true) ? null : (r.winner != null ? (String(r.winner) === String(meuNome)) : null);
+    return { t: t, m: null };
+  }
+  function _lzNum(v) {
+    if (v == null || v === '') return null;
+    var n = Number(v);
+    return isFinite(n) ? n : null;
+  }
+  function _lzItemDeResult(r, uid, meNome) {
+    if (!r) return null;
+    // LEI 3 — SANDBOX NUNCA. Antes de qualquer outra coisa: id `_sb`, nome "(SB) " ou doc
+    // com isSandbox. Pega inclusive o órfão, que é o caso que vazou.
+    if (window._isSandboxRef && window._isSandboxRef(r.tournamentId, r.tournamentName)) return null;
+
+    // LEI 1 — SEM PLACAR, NÃO ACONTECEU. Os dois lados precisam de número.
+    var s1 = _lzNum(r.scoreP1), s2 = _lzNum(r.scoreP2);
+    if (s1 == null || s2 == null) return null;
+
+    var est = _lzMatchDaEstrutura(r);
+    var mE = est && est.m;
+    // LEI 2 — OS DOIS LADOS SEMPRE. Do subdoc; se faltar, da estrutura do torneio.
+    var lado1 = r.p1 || (mE && mE.p1) || '';
+    var lado2 = r.p2 || (mE && mE.p2) || '';
+    if (!lado1 || !lado2) return null;   // sem os dois lados não é jogo, é registro pela metade
+
+    // LADO: uid do slot (identidade canônica) → nome → desiste.
+    var meu = -1;
+    if (mE && typeof window._slotUids === 'function') {
+      var u1 = window._slotUids(mE, 'p1') || [], u2 = window._slotUids(mE, 'p2') || [];
+      if (u1.indexOf(uid) >= 0) meu = 0;
+      else if (u2.indexOf(uid) >= 0) meu = 1;
+    }
+    if (meu < 0) {
+      var nome = meNome || _lzNomeDoUid(uid);
+      if (_lzLadoTem(lado1, nome)) meu = 0;
+      else if (_lzLadoTem(lado2, nome)) meu = 1;
+    }
+    if (meu < 0) return null;            // sem saber de que lado jogou, o card mente
+
+    var meuLado = meu === 0 ? lado1 : lado2, outroLado = meu === 0 ? lado2 : lado1;
+    var meuSc = meu === 0 ? s1 : s2, outroSc = meu === 0 ? s2 : s1;
+
+    // PARCEIRO = o resto do MEU lado (vazio em simples, e tudo bem). ADVERSÁRIO = o outro
+    // lado inteiro. Nunca mais "—" nem ela mesma do outro lado.
+    var euNome = meNome || _lzNomeDoUid(uid);
+    var parceiros = _lzMembros(meuLado).filter(function (n) { return !_lzLadoTem(n, euNome); });
+    // se o filtro comeu tudo (nome não bate com nenhum membro), mostra o lado sem mim
+    if (!parceiros.length && _lzMembros(meuLado).length > 1) {
+      parceiros = _lzMembros(meuLado).slice(1);
+    }
+
+    var venceu = null;
+    if (r.draw !== true) {
+      var w = _lzNorm(r.winner);
+      if (w && w === _lzNorm(meuLado)) venceu = true;
+      else if (w && w === _lzNorm(outroLado)) venceu = false;
+      else if (meuSc !== outroSc) venceu = meuSc > outroSc;   // o placar decide quando o nome não bate
+    }
+
+    var tt = est && est.t;
     return {
       ts: (typeof window._spTsData === 'function')
             ? window._spTsData(r.resultAt || r.updatedAt || r.startedAt || 0, { fallback: 0 })
             : (r.resultAt || 0),
-      source: 'scoreplace', sport: r.sport || '', official: true, venue: r.venue || '',
-      competition: r.tournamentName || 'Torneio',
-      competitionLabel: 'Torneio' + (r.tournamentName ? ' · ' + r.tournamentName : '') +
+      source: 'scoreplace', sport: r.sport || (tt && tt.sport) || '', official: true,
+      venue: r.venue || (tt && tt.venue) || '',
+      competition: r.tournamentName || (tt && tt.name) || 'Torneio',
+      competitionLabel: 'Torneio' + ((r.tournamentName || (tt && tt.name)) ? ' · ' + (r.tournamentName || tt.name) : '') +
                         (r.roundLabel ? ' · ' + r.roundLabel : ''),
-      tournamentId: r.tournamentId || null, tournamentFormat: r.format || '',
-      opponent: outro || '—', partner: null,
+      tournamentId: r.tournamentId || null, tournamentFormat: r.format || (tt && tt.format) || '',
+      opponent: outroLado, partner: parceiros.length ? parceiros.join(' / ') : null,
       result: (venceu === true) ? 'V' : (venceu === false ? 'D' : (r.draw ? 'E' : '?')),
-      scoreA: (meuSc != null) ? String(meuSc) : '', scoreB: (outroSc != null) ? String(outroSc) : '',
+      scoreA: String(meuSc), scoreB: String(outroSc),
       _k: (r.tournamentId || '') + '/' + (r.matchId || '')
     };
   }
@@ -1431,20 +1522,35 @@
   //       Faltavam os dois: a consulta voltava permission-denied e, depois, failed-
   //       precondition — e a ficha dizia "Jogos 0" pra quem tinha jogo gravado aqui.
   // O que falhar não derruba o outro; o que vier dos dois é unido por torneio/partida.
-  function _lzJogosDoScoreplace(uid) {
+  function _lzJogosDoScoreplace(uid, meNome) {
     var db = window.FirestoreDB && window.FirestoreDB.db;
     if (!db || !uid) return Promise.resolve([]);
     var ts = (window.AppStore && window.AppStore.tournaments) || [];
-    var locais = ts.slice(0, 40).map(function (t) {
-      return db.collection('tournaments').doc(t.id).collection('results')
-        .where('playerUids', 'array-contains', uid).limit(120).get()
-        .then(function (qs) {
-          var o = []; qs.forEach(function (d) { o.push(_lzItemDeResult(d.data() || {}, uid)); }); return o;
-        })
-        .catch(function () { return []; });
-    });
+    var locais = ts.slice(0, 40)
+      // SB nem é consultado (o dev tem o doc na lista) — a consulta economizada é de graça
+      // e o cinto de verdade continua sendo o `_isSandboxRef` de dentro do item.
+      .filter(function (t) { return !(window._isSandboxRef && window._isSandboxRef(t.id, t.name)); })
+      .map(function (t) {
+        return db.collection('tournaments').doc(t.id).collection('results')
+          .where('playerUids', 'array-contains', uid).limit(120).get()
+          .then(function (qs) {
+            var o = [];
+            qs.forEach(function (d) {
+              var raw = d.data() || {};
+              if (!raw.tournamentId) raw.tournamentId = t.id;   // doc antigo sem o campo
+              var it = _lzItemDeResult(raw, uid, meNome);
+              if (it) o.push(it);
+            });
+            return o;
+          })
+          .catch(function () { return []; });
+      });
     var amplo = db.collectionGroup('results').where('playerUids', 'array-contains', uid).limit(400).get()
-      .then(function (qs) { var o = []; qs.forEach(function (d) { o.push(_lzItemDeResult(d.data() || {}, uid)); }); return o; })
+      .then(function (qs) {
+        var o = [];
+        qs.forEach(function (d) { var it = _lzItemDeResult(d.data() || {}, uid, meNome); if (it) o.push(it); });
+        return o;
+      })
       .catch(function (e) {
         window._warn && window._warn('[letzplay] collection group de placares indisponível:', (e && e.code) || e);
         return [];
@@ -1453,6 +1559,7 @@
       var vistos = {}, out = [];
       rs.forEach(function (lista) {
         (lista || []).forEach(function (it) {
+          if (!it) return;
           var k = it._k || (it.competition + '|' + it.opponent + '|' + it.ts);
           if (vistos[k]) return; vistos[k] = 1; out.push(it);
         });
@@ -1460,6 +1567,10 @@
       return out;
     });
   }
+
+  // Exportado pra que o teste exercite as TRÊS LEIS no código REAL (tests/jogo-so-com-
+  // placar.test.js roda os docs de produção que quebraram a ficha da Lucia Helena).
+  window._lzItemDeResult = _lzItemDeResult;
 
   // ── PARTIDAS CASUAIS ──────────────────────────────────────────────────────────
   // "torneios ou casuais. diferenciados." (dono). O card já distingue pelo selo e pela
@@ -1493,6 +1604,11 @@
           var b = (c.result.p2Score != null) ? c.result.p2Score : (mm ? +mm[2] : null);
           if (meuTime === 2) { var t = a; a = b; b = t; }
           var venceu = (c.result.winner != null) ? (Number(c.result.winner) === meuTime) : null;
+          // AS MESMAS TRÊS LEIS: sem placar dos dois lados não houve jogo, e sem adversário
+          // o card mente. (Casual não tem torneio, então a lei do SB não se aplica aqui.)
+          if (a == null || b == null) return;
+          var advNomes = lado(outroTime);
+          if (!advNomes) return;
           out.push({
             ts: (typeof window._spTsData === 'function')
                   ? window._spTsData(c.finishedAt || c.lastActivityAt || 0, { fallback: 0 })
@@ -1502,7 +1618,7 @@
             competition: 'Partida casual',
             competitionLabel: 'Partida casual',
             tournamentId: null, tournamentFormat: '',
-            opponent: lado(outroTime) || '—', partner: par,
+            opponent: advNomes, partner: par,
             result: (venceu === true) ? 'V' : (venceu === false ? 'D' : '?'),
             scoreA: (a != null) ? String(a) : '', scoreB: (b != null) ? String(b) : ''
           });
@@ -1530,7 +1646,7 @@
     // autenticado. Ninguém mais fica sem os próprios jogos por não ter autorizado nada.
     var fonte = (proprio && typeof window._spScoreplaceItems === 'function')
       ? Promise.resolve(window._spScoreplaceItems(uid))
-      : Promise.all([_lzJogosDoScoreplace(uid), _lzCasuaisDoScoreplace(uid)])
+      : Promise.all([_lzJogosDoScoreplace(uid, meNome), _lzCasuaisDoScoreplace(uid)])
           .then(function (r) { return r[0].concat(r[1]); });
     fonte.then(function (itens) {
       itens = (itens || []).filter(Boolean);

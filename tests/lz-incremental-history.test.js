@@ -67,14 +67,16 @@ ok(/for \(var p = pIni \+ 1; _incremental && p <= maxPage && !C\.complete; p\+\+
 {
   const app = require('fs').readFileSync(
     require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
-  ok(/function _lzJogosDoScoreplace\(uid\)/.test(app), 'existe a fonte alternativa: os documentos de placar');
+  // `meNome` entrou na assinatura em 01/ago/2026: é por ele que se sabe de que LADO a
+  // pessoa jogou (o doc de placar nunca teve p1Uids/p2Uids).
+  ok(/function _lzJogosDoScoreplace\(uid, meNome\)/.test(app), 'existe a fonte alternativa: os documentos de placar');
   const fn = app.slice(app.indexOf('function _lzJogosDoScoreplace'), app.indexOf('function _lzJuntarScoreplace'));
   ok(/collectionGroup\('results'\)/.test(app), 'lê os documentos de placar, onde o placar realmente mora');
   ok(/where\('playerUids', 'array-contains', uid\)/.test(app), 'e identifica a pessoa por uid, não por nome');
   ok(/source: 'scoreplace'/.test(fn), 'os itens saem com a fonte marcada (a tag do card)');
   const juntar = app.slice(app.indexOf('function _lzJuntarScoreplace'), app.indexOf('function _lzJuntarScoreplace') + 900);
   ok(/proprio &&/.test(juntar), 'pro próprio usuário segue usando o matchHistory (mais completo, inclui casuais)');
-  ok(/_lzJogosDoScoreplace\(uid\)/.test(juntar) && /_lzCasuaisDoScoreplace\(uid\)/.test(juntar),
+  ok(/_lzJogosDoScoreplace\(uid, meNome\)/.test(juntar) && /_lzCasuaisDoScoreplace\(uid\)/.test(juntar),
      'pros outros, os placares de torneio E as partidas casuais — sem depender de autorização');
   ok(/competition: 'Partida casual'/.test(app), 'e o casual vem rotulado como casual (diferenciado do torneio)');
 }
@@ -123,8 +125,14 @@ ok(/for \(var p = pIni \+ 1; _incremental && p <= maxPage && !C\.complete; p\+\+
   ok(/collectionGroup\('results'\)/.test(fn), 'caminho B: collection group pro resto');
   ok((fn.match(/\.catch\(/g) || []).length >= 2, 'um caminho que falha não derruba o outro');
   ok(/if \(vistos\[k\]\) return;/.test(fn), 'e o que vier dos dois é unido sem duplicar');
-  ok(/if \(meu < 0\) meu = 0;/.test(fn),
-     'jogo achado pelo uid nunca é descartado por não dar pra dizer o lado');
+  // ⚠️ REGRA REVOGADA PELO DONO em 01/ago/2026. Aqui se exigia `if (meu < 0) meu = 0;` —
+  // "melhor um card sem V/D do que sumir com o jogo". Na prática esse chute fazia a Lucia
+  // Helena aparecer como ADVERSÁRIA DELA MESMA e pintava um 6×1 dela de derrota (medido
+  // nos 10 docs reais dela; ver tests/jogo-so-com-placar.test.js). Card que mente é pior
+  // que card que não existe: _"isso não pode ocorrer"_. Agora o lado sai do uid do slot,
+  // depois do nome, e sem isso o jogo não é mostrado.
+  ok(/if \(meu < 0\) return null;/.test(fn),
+     'sem saber de que lado a pessoa jogou, o jogo NÃO é mostrado (o chute mentia)');
 
   const rules = require('fs').readFileSync(require('path').join(__dirname, '..', 'firestore.rules'), 'utf8');
   ok(/match \/\{path=\*\*\}\/results\/\{matchId\}/.test(rules),
