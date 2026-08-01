@@ -61,7 +61,8 @@ ok(!/lzCursor\.complete === true\) gY = gX/.test(app), 'o cursor não redefine o
   ok(!/doc\.fullImport = s\.fullImport/.test(fn), '…e continua sem gravar o histórico');
 
   // a tela lê os totais gravados, mesmo com histórico velho
-  ok(/rctx\.scanMap\[uid\]\.totaisLetzplay/.test(app), 'a tela usa os totais gravados quando o histórico é antigo');
+  ok(/_T = \(imp && imp\.totais\) \|\| _T;/.test(app),
+     'a contagem usa os totais gravados quando o histórico é antigo (costurados no imp por quem chama)');
   ok(/if \(_T && _T\.jogos > 0\) gY = _T\.jogos;/.test(app), 'e o total dos jogos sai dali antes de qualquer outra fonte');
   // torneios/rankings deixaram de usar os totais do perfil: só conta competição COM JOGO
   ok(/var tY = window\._lzCompsReaisN\(imp, true\) \|\| null;/.test(app) &&

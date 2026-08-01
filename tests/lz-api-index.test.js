@@ -264,6 +264,34 @@ function servidor(total, opts) {
   ok(/var id = ehT \? g\.tourneyId : g\.rankingId;/.test(fn), 'a chave é club/id, como no resto');
 }
 
+// ── O TOTAL AO VIVO NÃO É TROCADO PELO CONTADOR DO PERFIL ───────────────────────────────
+// Medido na tela do dono, 47s entre dois prints: "Jogos 391 de 391 (100%)" virou
+// "391 de 397 (98%)" NO MEIO da leitura. 391 = índice (partidas distintas); 397 = contador
+// de linhas do perfil. A barra ao vivo aceitava qualquer número que chegasse.
+{
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  // 01/ago/2026, versão final: a barra ao vivo não tem MAIS NENHUMA regra própria —
+  // ela chama a função única (_lzContagens), que já conhece a procedência do total.
+  const fn = app.slice(app.indexOf('function _updBars(c) {'), app.indexOf('function _barsArr'));
+  ok(/window\._lzContagens\(_impC\)/.test(fn), 'a barra ao vivo usa a função única');
+  ok(/if \(_C\.g\.y != null\) _bs\.g\.y = _C\.g\.y;/.test(fn), 'e tira o total dela');
+  ok(/\} else \{\s*\n\s*if \(c\.tY != null\)/.test(fn),
+     'os contadores da extensão só entram enquanto não há import nenhum');
+}
+
+// ── TENTEI E NÃO ABRIU É UM RESULTADO, NÃO UM PENDENTE ETERNO ──────────────────────────
+// "nunca completa e quando falta quase nada demora uma vida para fechar." Medido no Fabio:
+// 2 dos 35 torneios (os que vêm dos jogos, fora da lista do perfil) devolvem erro. Como só
+// entravam na conta ao ABRIR, a barra ficava em 33 de 35 pra sempre e toda releitura
+// tentava os mesmos 2 de novo.
+{
+  const cnt = fs.readFileSync(path.join(__dirname, '..', 'extension', 'content.js'), 'utf8');
+  ok(/C\.toursDone\[tk\] = 2;/.test(cnt), 'torneio que não abre é marcado como TENTADO (2)');
+  ok(/C\.ranksDone\[rk\] = 2;/.test(cnt), 'e o ranking também');
+  ok((cnt.match(/não abriu — segue sem ele/g) || []).length === 2, 'e a tela fica sabendo dos dois');
+  ok(/if \(C\.toursDone\[tk\]\)/.test(cnt), 'e o marcado não é rebuscado na rodada seguinte');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-api-index: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
 })();

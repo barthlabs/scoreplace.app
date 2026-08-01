@@ -1724,6 +1724,8 @@
     // classificação publicada não entra nele, e por isso 3 dos 35 torneios da Camila
     // ficavam eternamente "não lidos" enquanto eram rebuscados em toda rodada.
     var c = imp && imp.lzCursor;
+    // `1` = abriu; `2` = tentei e não abriu. Os dois FECHAM a conta (não há mais o que
+    // fazer com eles), mas só o `1` é leitura de verdade — a lista mostra a diferença.
     if (c && c.toursDone) return Object.keys(c.toursDone).length;
     var ids = {};
     ((imp && imp.footprint) || []).forEach(function (f) {
@@ -2317,62 +2319,17 @@
     });
     return out;
   }
-  window._lzAthleteDialog = function (uid) {
-    var ctx = window._lzScanCtx || {};
-    var tg = ctx.byUid && ctx.byUid[uid];
-    // ── A FICHA É DE QUEM TEM JOGO, NÃO DE QUEM AUTORIZOU ─────────────────────────
-    // Regra do dono (01/ago/2026): _"todos os nomes na página de análise que tenham jogos
-    // (scoreplace/letzplay) devem ser clicáveis e verificáveis em página de estatísticas,
-    // não só os que autorizaram letzplay"_. Faz sentido: os jogos do scoreplace são
-    // registro NOSSO — negar a ficha a quem jogou aqui porque ele não autorizou a leitura
-    // de outro site é esconder o dado da própria casa.
-    // Sem alvo letzplay o diálogo abre igual, só sem a parte que depende do letzplay
-    // (o @, as barras do perfil público e o botão de puxar).
-    if (!tg) {
-      var _pf = (window._lzRenderCtx && window._lzRenderCtx.profileMap && window._lzRenderCtx.profileMap[uid]) || {};
-      tg = { name: _pf.displayName || _pf.name || _lzNomeDoUid(uid) || 'Atleta', handle: null, semLetzplay: true };
-    }
-    var _temLz = !tg.semLetzplay;
-    window._lzDialogUid = uid;      // a barra do topo age sobre este atleta
-    var lu = _lzLastUpdateOf(uid);
-    // Melhor import disponível (scan do organizador OU import próprio — o de mais jogos).
-    var rctx = window._lzRenderCtx || {};
-    var _p1 = rctx.profileMap && rctx.profileMap[uid] && rctx.profileMap[uid].letzplayImport;
-    var _p2 = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].fullImport;
-    var imp = _lzMelhorImport(_p1, _p2);
-    // cursor de uma leitura que não fechou fica FORA do fullImport (o histórico oficial só
-    // é substituído por leitura completa) — mas ele é o que permite retomar de onde parou.
-    var _curParcial = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].lzCursorParcial;
-    if (imp && _curParcial && !(imp.lzCursor && imp.lzCursor.complete)) {
-      imp = Object.assign({}, imp, { lzCursor: _curParcial });
-    }
-    // MEDIDOR DE NÍVEL no topo — a MESMA barra das estatísticas (`_lzLevelBar`).
-    // O card INTEIRO estava aqui e virou um rolo sem fim dentro do diálogo: as três listas
-    // empilhadas, sem como chegar no fim de nenhuma ("essa tela está imprestável"). As
-    // listas passaram a ser ABAS, com UMA área de rolagem — ver `_lzAba`.
-    var _nivel = (imp && typeof window._lzLevelBar === 'function') ? window._lzLevelBar(imp) : '';
-    var body = (_nivel ? '<div style="background:var(--bg-card,#141a24);border:1px solid var(--border-color,#28313f);border-radius:12px;padding:11px 12px;margin-bottom:9px;text-align:left;">' + _nivel + '</div>' : '') +
-      (_temLz
-        ? ('<div style="font-size:0.8rem;">Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> ' +
-           // O @ ABRE O PERFIL DELA no letzplay. Antes só a leitura navegava a aba
-           // compartilhada, então quem só queria conferir a fonte não tinha caminho nenhum.
-           '(<a href="https://letzplay.me/' + encodeURIComponent(tg.handle) + '" target="_blank" rel="noopener" ' +
-           'style="color:#7dd3fc;text-decoration:none;font-weight:700;">@' + _esc(tg.handle) + ' ↗</a>) no letzplay.</div>')
-        : ('<div style="font-size:0.8rem;">Jogos de <b>' + _esc(tg.name) + '</b> no scoreplace. ' +
-           '<span style="color:var(--text-muted);">Sem histórico do letzplay — a pessoa não autorizou a leitura.</span></div>'));
-    var btnLabel = '📚 Puxar histórico completo';
-    // 3 BARRAS (x = gravado · y = total do perfil letzplay). Os "de y" que faltarem são
-    // completados ao vivo pela extensão (lz-profile-counts lê "472 Jogos · 29 Rankings ·
-    // 35 Torneios" do perfil público) — direto na tela, como o dono pediu.
-    function barLine(id, icon, label, x, y, _authY) {
-      // x jamais passa do declarado: 35 de 35 é 100%, "38 de 35" não existe.
-      if (y != null && y > 0) x = Math.min(x, y);
-      var pct = (y && y > 0) ? Math.min(100, Math.round(x / y * 100)) : null;
-      return '<div id="' + id + '" data-x="' + x + '" data-y="' + (y || 0) + '" data-auth="' + (_authY ? 1 : 0) + '" style="margin:5px 0;">' +
-        '<div style="display:flex;justify-content:space-between;gap:8px;font-size:0.8rem;"><span>' + icon + ' ' + label + '</span><span class="lz-bar-txt"><b>' + x + '</b>' + (y ? (' de ' + y + ' (' + pct + '%)') : ' de …') + '</span></div>' +
-        '<div style="height:7px;border-radius:99px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.08));"><div class="lz-bar-fill" style="height:100%;width:' + (pct != null ? Math.max(2, pct) : 2) + '%;background:linear-gradient(90deg,#10b981,#059669);"></div></div>' +
-      '</div>';
-    }
+  // ══ AS TRÊS CONTAGENS, UM LUGAR SÓ ═══════════════════════════════════════════
+  // Regra do dono (01/ago/2026): "pare de consertar 1 coisa e quebrar 2 — faça direito
+  // de uma vez". Ele está certo, e a causa nunca foi cada bug: eram QUATRO lugares
+  // calculando os MESMOS três números (o diálogo, o overlay ao vivo, o atualizador dos
+  // contadores do perfil e o rótulo da extensão), cada um com uma regra própria.
+  // Corrigir um fazia os outros divergirem — e o usuário via a barra oscilar a cada
+  // releitura. A partir daqui existe UMA função; ninguém mais recalcula.
+  window._lzContagens = function (imp) {
+    var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
+    var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];
+    var _T = (imp && imp.totais) || null;
     var gX = _lzTot(imp);
     var gY = (imp && imp.declaredGames != null) ? imp.declaredGames : null;
     // o declarado pode ficar pequeno — barra travada em "478 de 478" enquanto ainda
@@ -2388,8 +2345,9 @@
     // pode redefinir a verdade; ele é justamente o que costuma estar errado.
     // TOTAIS vêm do bloco de ESTRUTURA (ext ≥1.84), que é conhecido antes de ler HTML e
     // nunca deriva do quanto deu tempo de ler. Índice e declarado são os degraus abaixo.
-    var _T = (imp && imp.totais) ||
-             (rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].totaisLetzplay) || null;
+    // (o `totais` do documento de scan é costurado no `imp` por quem chama — aqui dentro
+    // não existe contexto de tela, só o dado)
+    _T = (imp && imp.totais) || _T;
     // ORDEM DE AUTORIDADE: índice (partidas DISTINTAS, contadas por id) > total gravado de
     // outra procedência > contador do perfil, que conta LINHAS e por isso só serve de PISO.
     // O contador do perfil pode ser MAIOR que a verdade: a lista do letzplay repete linha
@@ -2448,6 +2406,81 @@
     var rY = window._lzCompsReaisN(imp, false) || null;
     if (rY == null) rY = _lzContarDistintos(rkFp, false) || null;
     if (rY != null && rX > rY) rX = rY;      // x jamais passa de y
+    // O TETO MORA AQUI, não em quem desenha. Enquanto ele vivia só no `barLine`, quem
+    // lesse a função direto (o overlay ao vivo) recebia x > y e pintava "4 de 2 (100%)".
+    // Se a função é a fonte única, ela entrega o número JÁ correto — não um número que
+    // depende de quem chama lembrar de capar.
+    if (gY != null && gX > gY) gX = gY;
+    if (tY != null && tX > tY) tX = tY;
+    if (rY != null && rX > rY) rX = rY;
+    return { g: { x: gX, y: gY }, t: { x: tX, y: tY }, r: { x: rX, y: rY } };
+  };
+
+  window._lzAthleteDialog = function (uid) {
+    var ctx = window._lzScanCtx || {};
+    var tg = ctx.byUid && ctx.byUid[uid];
+    // ── A FICHA É DE QUEM TEM JOGO, NÃO DE QUEM AUTORIZOU ─────────────────────────
+    // Regra do dono (01/ago/2026): _"todos os nomes na página de análise que tenham jogos
+    // (scoreplace/letzplay) devem ser clicáveis e verificáveis em página de estatísticas,
+    // não só os que autorizaram letzplay"_. Faz sentido: os jogos do scoreplace são
+    // registro NOSSO — negar a ficha a quem jogou aqui porque ele não autorizou a leitura
+    // de outro site é esconder o dado da própria casa.
+    // Sem alvo letzplay o diálogo abre igual, só sem a parte que depende do letzplay
+    // (o @, as barras do perfil público e o botão de puxar).
+    if (!tg) {
+      var _pf = (window._lzRenderCtx && window._lzRenderCtx.profileMap && window._lzRenderCtx.profileMap[uid]) || {};
+      tg = { name: _pf.displayName || _pf.name || _lzNomeDoUid(uid) || 'Atleta', handle: null, semLetzplay: true };
+    }
+    var _temLz = !tg.semLetzplay;
+    window._lzDialogUid = uid;      // a barra do topo age sobre este atleta
+    var lu = _lzLastUpdateOf(uid);
+    // Melhor import disponível (scan do organizador OU import próprio — o de mais jogos).
+    var rctx = window._lzRenderCtx || {};
+    var _p1 = rctx.profileMap && rctx.profileMap[uid] && rctx.profileMap[uid].letzplayImport;
+    var _p2 = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].fullImport;
+    var imp = _lzMelhorImport(_p1, _p2);
+    // cursor de uma leitura que não fechou fica FORA do fullImport (o histórico oficial só
+    // é substituído por leitura completa) — mas ele é o que permite retomar de onde parou.
+    var _curParcial = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].lzCursorParcial;
+    if (imp && _curParcial && !(imp.lzCursor && imp.lzCursor.complete)) {
+      imp = Object.assign({}, imp, { lzCursor: _curParcial });
+    }
+    // TOTAIS gravados pelo parcial ficam FORA do fullImport (o histórico só é substituído
+    // por leitura completa). Quem costura é aqui, porque `_lzContagens` não conhece tela —
+    // ela recebe o dado pronto. Sem isto, um histórico antigo perdia o total mais recente.
+    var _totSalvos = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].totaisLetzplay;
+    if (imp && _totSalvos && !imp.totais) imp = Object.assign({}, imp, { totais: _totSalvos });
+    // MEDIDOR DE NÍVEL no topo — a MESMA barra das estatísticas (`_lzLevelBar`).
+    // O card INTEIRO estava aqui e virou um rolo sem fim dentro do diálogo: as três listas
+    // empilhadas, sem como chegar no fim de nenhuma ("essa tela está imprestável"). As
+    // listas passaram a ser ABAS, com UMA área de rolagem — ver `_lzAba`.
+    var _nivel = (imp && typeof window._lzLevelBar === 'function') ? window._lzLevelBar(imp) : '';
+    var body = (_nivel ? '<div style="background:var(--bg-card,#141a24);border:1px solid var(--border-color,#28313f);border-radius:12px;padding:11px 12px;margin-bottom:9px;text-align:left;">' + _nivel + '</div>' : '') +
+      (_temLz
+        ? ('<div style="font-size:0.8rem;">Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> ' +
+           // O @ ABRE O PERFIL DELA no letzplay. Antes só a leitura navegava a aba
+           // compartilhada, então quem só queria conferir a fonte não tinha caminho nenhum.
+           '(<a href="https://letzplay.me/' + encodeURIComponent(tg.handle) + '" target="_blank" rel="noopener" ' +
+           'style="color:#7dd3fc;text-decoration:none;font-weight:700;">@' + _esc(tg.handle) + ' ↗</a>) no letzplay.</div>')
+        : ('<div style="font-size:0.8rem;">Jogos de <b>' + _esc(tg.name) + '</b> no scoreplace. ' +
+           '<span style="color:var(--text-muted);">Sem histórico do letzplay — a pessoa não autorizou a leitura.</span></div>'));
+    var btnLabel = '📚 Puxar histórico completo';
+    // 3 BARRAS (x = gravado · y = total do perfil letzplay). Os "de y" que faltarem são
+    // completados ao vivo pela extensão (lz-profile-counts lê "472 Jogos · 29 Rankings ·
+    // 35 Torneios" do perfil público) — direto na tela, como o dono pediu.
+    function barLine(id, icon, label, x, y, _authY) {
+      // x jamais passa do declarado: 35 de 35 é 100%, "38 de 35" não existe.
+      if (y != null && y > 0) x = Math.min(x, y);
+      var pct = (y && y > 0) ? Math.min(100, Math.round(x / y * 100)) : null;
+      return '<div id="' + id + '" data-x="' + x + '" data-y="' + (y || 0) + '" data-auth="' + (_authY ? 1 : 0) + '" style="margin:5px 0;">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;font-size:0.8rem;"><span>' + icon + ' ' + label + '</span><span class="lz-bar-txt"><b>' + x + '</b>' + (y ? (' de ' + y + ' (' + pct + '%)') : ' de …') + '</span></div>' +
+        '<div style="height:7px;border-radius:99px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.08));"><div class="lz-bar-fill" style="height:100%;width:' + (pct != null ? Math.max(2, pct) : 2) + '%;background:linear-gradient(90deg,#10b981,#059669);"></div></div>' +
+      '</div>';
+    }
+    var _CT = window._lzContagens(imp);
+    var gX = _CT.g.x, gY = _CT.g.y, tX = _CT.t.x, tY = _CT.t.y, rX = _CT.r.x, rY = _CT.r.y;
+    var _idxT = (imp && imp.indexTotal > 0) ? imp.indexTotal
+              : ((imp && imp.totais && imp.totais.fonte === 'indice') ? (imp.totais.jogos || 0) : 0);
     // As barras medem a leitura do PERFIL LETZPLAY. Sem letzplay não há o que medir —
     // mostrar "0 de …" pra quem só joga aqui é ruído que parece defeito.
     if (_temLz || imp) body += '<div style="margin:8px 0 6px;">' +
@@ -2521,6 +2554,37 @@
                 : 'Abaixo, os jogos desta pessoa aqui no scoreplace.') + '</div>';
       _montarAbas();
     }
+    // ── SÓ DÁ PRA PUXAR ONDE A EXTENSÃO RODA ──────────────────────────────────
+    // No celular (e em qualquer navegador sem a extensão) a leitura é impossível: quem lê
+    // o letzplay é a extensão, na sessão do próprio usuário. O botão ficava azul e clicável
+    // do mesmo jeito — o dono tocou nele no iPhone e não aconteceu nada, sem uma palavra de
+    // explicação. Botão que não pode agir tem que PARECER que não pode, e dizer por quê.
+    function _podePuxar() {
+      if (window._lzExtVer) return true;                 // a extensão se anunciou nesta aba
+      var ua = navigator.userAgent || '';
+      var movel = /iPhone|iPad|iPod|Android/i.test(ua);
+      return !movel;   // no desktop sem anúncio ainda deixa tentar (ela pode responder tarde)
+    }
+    function _botaoPuxar() {
+      if (_podePuxar()) {
+        return '<button type="button" onclick="window._lzPuxarDoTopo()" ' +
+          'style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:800;' +
+          'border:1px solid rgba(59,130,246,0.5);background:linear-gradient(135deg,#3b82f6,#2563eb);' +
+          'color:#fff;white-space:nowrap;">' + _esc(btnLabel) + '</button>';
+      }
+      return '<button type="button" disabled ' +
+        'title="A leitura do letzplay é feita pela extensão do Chrome, que só roda no computador." ' +
+        'style="padding:8px 14px;border-radius:9px;cursor:not-allowed;font-size:0.78rem;font-weight:800;' +
+        'border:1px solid var(--border-color,rgba(255,255,255,0.12));background:var(--bg-darker,rgba(255,255,255,0.06));' +
+        'color:var(--text-muted,#8b93a1);white-space:nowrap;opacity:0.75;">🖥️ ' + _esc(btnLabel) + '</button>';
+    }
+    if (!_podePuxar() && _temLz) {
+      body += '<div style="font-size:0.8rem;color:#fbbf24;margin-top:8px;line-height:1.45;' +
+        'background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.30);border-radius:9px;padding:8px 10px;">' +
+        '🖥️ <b>Aqui não dá pra puxar.</b> Quem lê o letzplay é a extensão do Chrome, na sua sessão — ' +
+        'e ela só roda no computador. Abra esta mesma tela no desktop com a extensão instalada ' +
+        'pra continuar de onde parou. O que já foi lido está gravado e aparece aqui normalmente.</div>';
+    }
     if (typeof window.showConfirmDialog === 'function') {
       window.showConfirmDialog('🎾 ' + (tg.name || (tg.handle ? '@' + tg.handle : 'Atleta')), body,
         // ERRO DENTRO DO CALLBACK DO DIALOG É ENGOLIDO. Se qualquer coisa estourar aqui, o
@@ -2556,12 +2620,7 @@
             'color:var(--text-main,#e8ecf3);white-space:nowrap;">← Voltar</button>' +
             // Sem letzplay não há o que puxar — o botão sumiria de qualquer jeito no
             // primeiro clique (a leitura precisa do @). Melhor não oferecer.
-            (_temLz
-              ? ('<button type="button" onclick="window._lzPuxarDoTopo()" ' +
-                 'style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:800;' +
-                 'border:1px solid rgba(59,130,246,0.5);background:linear-gradient(135deg,#3b82f6,#2563eb);' +
-                 'color:#fff;white-space:nowrap;">' + _esc(btnLabel) + '</button>')
-              : '') });
+            (_temLz ? _botaoPuxar() : '') });
       // a aba de torneios já está montada; isto só pinta o botão ativo
       setTimeout(function () { if (typeof window._lzAba === 'function') window._lzAba('tour'); }, 0);
       // Completa os "de y" das barras AO VIVO com os totais do perfil público
@@ -2695,22 +2754,32 @@
     function _cap(x, y) { return (y != null && y > 0) ? Math.min(x, y) : x; }
     function _updBars(c) {
       if (!c) return;
-      if (c.tY != null) _bs.t.y = c.tY;
-      if (c.rY != null) _bs.r.y = c.rY;
-      if (c.gY != null) _bs.g.y = c.gY;
-      // TOTAL de torneios = o MAIOR entre o contador do perfil e o que a lista pública
-      // ENUMERA. O perfil da Camila diz 35 e a lista tem mais — e era assim que "35 de 35
-      // (100%)" convivia com itens "ainda não lido" na mesma tela. Uma lista que se pode
-      // contar vale mais que um contador cujo critério a gente não conhece. Fica AQUI (e
-      // não na extensão) pra não obrigar mais um recarregamento dela: o app sabe a lista
-      // pelo `tournamentsList` do próprio import.
-      var _lst = (ultimoImp && window._lzCompsReaisN) ? window._lzCompsReaisN(ultimoImp, true) : 0;
-      if (_lst > 0) _bs.t.y = (_bs.t.y != null) ? Math.max(_bs.t.y, _lst) : _lst;
-      var _lsr = (ultimoImp && window._lzCompsReaisN) ? window._lzCompsReaisN(ultimoImp, false) : 0;
-      if (_lsr > 0) _bs.r.y = (_bs.r.y != null) ? Math.max(_bs.r.y, _lsr) : _lsr;
+      // ── OS TOTAIS SAEM DE UM LUGAR SÓ ────────────────────────────────────────────
+      // Enquanto há um import conhecido, os três totais vêm de `_lzContagens` — a MESMA
+      // função que o diálogo usa. Era a divergência entre os dois que fazia "391 de 391"
+      // virar "391 de 397" no meio da leitura (o 397 é o contador de linhas do perfil).
+      // Os contadores que a extensão manda só valem enquanto não há import nenhum.
+      var _impC = ultimoImp;
+      if (_impC && !_impC.totais && c && c.totais) _impC = Object.assign({}, _impC, { totais: c.totais });
+      var _C = (_impC && typeof window._lzContagens === 'function') ? window._lzContagens(_impC) : null;
+      if (_C) {
+        if (_C.t.y != null) _bs.t.y = _C.t.y;
+        if (_C.r.y != null) _bs.r.y = _C.r.y;
+        if (_C.g.y != null) _bs.g.y = _C.g.y;
+      } else {
+        if (c.tY != null) _bs.t.y = c.tY;
+        if (c.rY != null) _bs.r.y = c.rY;
+        if (c.gY != null) _bs.g.y = c.gY;
+      }
+      // x sobe com o que a leitura reporta e com o que o import já prova — o maior dos dois
       if (c.t != null) _bs.t.x = Math.max(_bs.t.x, c.t);
       if (c.r != null) _bs.r.x = Math.max(_bs.r.x, c.r);
       if (c.g != null) _bs.g.x = Math.max(_bs.g.x, c.g);
+      if (_C) {
+        _bs.t.x = Math.max(_bs.t.x, _C.t.x || 0);
+        _bs.r.x = Math.max(_bs.r.x, _C.r.x || 0);
+        _bs.g.x = Math.max(_bs.g.x, _C.g.x || 0);
+      }
       // capa DEPOIS do max e DEPOIS de y ter chegado — senão um x semeado grande fica
       // preso acima do total quando o declarado só aparece na requisição seguinte.
       _bs.t.x = _cap(_bs.t.x, _bs.t.y);
@@ -2834,7 +2903,7 @@
     }
     function onMsg(e) {
       if (e.source !== window) return; var d = e.data; if (!d) return;
-      if (d.__sp_lp === 'extension-present') { if (d.version) versions.push(d.version); return; }
+      if (d.__sp_lp === 'extension-present') { if (d.version) { versions.push(d.version); window._lzExtVer = d.version; } return; }
       // Rate-limit NUNCA aparece pro usuário (regra do dono, 14/jul: "demorar mais, mas
       // não falhar — nunca resolver rate-limit com aviso"). Esperar e ler são a mesma
       // coisa pra ele: texto neutro, watchdog rearmado, barra intacta. A pausa-e-grava
@@ -3406,7 +3475,7 @@
     function onMsg(e) {
       if (e.source !== window) return; var d = e.data; if (!d) return;
       // Junta as versões anunciadas (pode haver content scripts órfãos) — usa a MAIOR.
-      if (d.__sp_lp === 'extension-present') { if (d.version) versions.push(d.version); return; }
+      if (d.__sp_lp === 'extension-present') { if (d.version) { versions.push(d.version); window._lzExtVer = d.version; } return; }
       // O letzplay pediu pra esperar. Isso é PROGRESSO (o sistema está se adaptando ao
       // ritmo dele), não travamento: rearma o watchdog e explica a espera. Sem isto, uma
       // pausa legítima de 60s ficava muda e, somada, podia estourar os 3 min de ociosidade

@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.88';
+  var EXT_VERSION = '1.89';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1243,7 +1243,18 @@
                 feed: Object.assign({ icon: '🏆', data: P.data || null },
                   _partirNome(det[tk].name || P.title || ('torneio ' + P.tid)),
                   { pos: (pT != null ? (_medalha(pT) + ' ' + pT + 'º') : null) }) });
-            } catch (eT) { if (ehPausa(eT)) throw eT; }
+            } catch (eT) {
+              if (ehPausa(eT)) throw eT;
+              // TENTEI E NÃO ABRIU — isso é um RESULTADO, não um pendente eterno.
+              // Medido no Fabio: 2 dos 35 torneios (vindos dos jogos, fora da lista do
+              // perfil) devolvem erro. Como só entravam na conta ao abrir, a barra ficava
+              // em "33 de 35" pra sempre e cada releitura tentava os mesmos 2 de novo —
+              // "nunca completa e demora uma vida pra fechar".
+              // Marcar como tentado fecha a conta e para de rebuscar. O `2` distingue de
+              // um torneio lido de verdade (`1`), então a lista pode dizer que não abriu.
+              C.toursDone[tk] = 2;
+              prog({ phase: 'torneios', feed: '⚠️ torneio ' + P.tid + ' não abriu — segue sem ele' });
+            }
           }));
           parcialAgora('torneios', Math.min(_bt + LOTE, _pendT.length), _pendT.length);
         }
@@ -1281,7 +1292,11 @@
                 feed: Object.assign({ icon: '📊', data: R.data || null },
                   _partirNome(det[rk].name || R.title || ('ranking ' + R.rid)),
                   { pos: (pR != null ? (pR + 'º') : null) }) });
-            } catch (eR) { if (ehPausa(eR)) throw eR; }
+            } catch (eR) {
+              if (ehPausa(eR)) throw eR;
+              C.ranksDone[rk] = 2;      // tentado e não abriu — mesma lei dos torneios
+              prog({ phase: 'rankings', feed: '⚠️ ranking ' + R.rid + ' não abriu — segue sem ele' });
+            }
           }));
           parcialAgora('rankings', Math.min(_br + LOTE, _pendR.length), _pendR.length);
         }

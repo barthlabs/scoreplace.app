@@ -89,8 +89,19 @@ ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fáb
   ok(/headerHtml:/.test(rep), 'as ações vão no cabeçalho do diálogo');
   const hdr = rep.slice(rep.indexOf('headerHtml:'), rep.indexOf('headerHtml:') + 1500);
   ok(/← Voltar/.test(hdr) && /_lzFecharDialogo/.test(hdr), 'tem Voltar, ligado ao fechamento');
-  ok(/_lzPuxarDoTopo/.test(hdr), 'e o botão de puxar, ligado à leitura');
-  ok(/_esc\(btnLabel\)/.test(hdr), 'usa o MESMO rótulo do botão nativo (vira "Continuar" quando incompleto)');
+  const btn = rep.slice(rep.indexOf('function _botaoPuxar()'), rep.indexOf('function _botaoPuxar()') + 1400);
+  ok(/_lzPuxarDoTopo/.test(btn), 'e o botão de puxar, ligado à leitura');
+  ok((btn.match(/_esc\(btnLabel\)/g) || []).length === 2,
+     'usa o MESMO rótulo do botão nativo nos DOIS estados (vira "Continuar" quando incompleto)');
+  // 01/ago/2026: no celular a leitura é impossível — quem lê é a extensão, na sessão do
+  // usuário, e ela só roda no computador. O dono tocou no botão azul no iPhone e nada
+  // aconteceu, sem uma palavra. Botão que não pode agir tem que parecer que não pode.
+  ok(/function _podePuxar\(\)/.test(rep), 'a tela sabe se dá pra puxar aqui');
+  ok(/iPhone\|iPad\|iPod\|Android/.test(rep), 'reconhece o celular');
+  ok(/window\._lzExtVer/.test(rep), 'e a extensão que se anunciou nesta aba');
+  ok(/disabled/.test(btn) && /cursor:not-allowed/.test(btn), 'sem poder puxar, o botão fica cinza e travado');
+  ok(/Aqui não dá pra puxar/.test(rep) && /só roda no computador/.test(rep),
+     'e o corpo explica por quê, onde o usuário está olhando');
   // 01/ago/2026: sem letzplay não há o que puxar — a ficha abre igual, só sem esse botão.
   ok(/\(_temLz$/m.test(hdr) || /_temLz\s*\n?\s*\?/.test(hdr), 'e o botão de puxar só aparece quando existe letzplay');
   ok(rep.indexOf('headerHtml:') > rep.indexOf("var btnLabel = '📚 Puxar histórico completo'"),
