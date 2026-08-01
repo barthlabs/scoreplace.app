@@ -67,14 +67,16 @@ ok(/for \(var p = pIni \+ 1; _incremental && p <= maxPage && !C\.complete; p\+\+
 {
   const app = require('fs').readFileSync(
     require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
-  ok(/function _lzJogosDosTorneios\(uid\)/.test(app), 'existe a fonte alternativa: os torneios visíveis');
-  const fn = app.slice(app.indexOf('function _lzJogosDosTorneios'), app.indexOf('function _lzJuntarScoreplace'));
-  ok(/_collectAllMatches/.test(fn), 'varre TODAS as estruturas de jogo do torneio, não só t.matches');
-  ok(/_slotUids/.test(fn), 'e identifica a pessoa por uid no slot, não por nome');
+  ok(/function _lzJogosDoScoreplace\(uid\)/.test(app), 'existe a fonte alternativa: os documentos de placar');
+  const fn = app.slice(app.indexOf('function _lzJogosDoScoreplace'), app.indexOf('function _lzJuntarScoreplace'));
+  ok(/collectionGroup\('results'\)/.test(app), 'lê os documentos de placar, onde o placar realmente mora');
+  ok(/where\('playerUids', 'array-contains', uid\)/.test(app), 'e identifica a pessoa por uid, não por nome');
   ok(/source: 'scoreplace'/.test(fn), 'os itens saem com a fonte marcada (a tag do card)');
   const juntar = app.slice(app.indexOf('function _lzJuntarScoreplace'), app.indexOf('function _lzJuntarScoreplace') + 900);
   ok(/proprio &&/.test(juntar), 'pro próprio usuário segue usando o matchHistory (mais completo, inclui casuais)');
-  ok(/_lzJogosDosTorneios\(uid\)/.test(juntar), 'pros outros, os torneios em comum');
+  ok(/_lzJogosDoScoreplace\(uid\)/.test(juntar) && /_lzCasuaisDoScoreplace\(uid\)/.test(juntar),
+     'pros outros, os placares de torneio E as partidas casuais — sem depender de autorização');
+  ok(/competition: 'Partida casual'/.test(app), 'e o casual vem rotulado como casual (diferenciado do torneio)');
 }
 
 // ── QUAIS PÁGINAS JÁ FORAM LIDAS (conjunto), não "até onde fui" ─────────────

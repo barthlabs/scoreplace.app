@@ -1375,50 +1375,138 @@
   // expor o histórico de qualquer um; a fonte certa é a que o organizador JÁ pode ver: os
   // TORNEIOS dele. Se a pessoa jogou num torneio que ele organiza ou disputa, aquelas
   // partidas são visíveis por definição.
-  function _lzJogosDosTorneios(uid) {
-    var out = [];
-    var ts = (window.AppStore && window.AppStore.tournaments) || [];
-    var coletar = window._collectAllMatches;
-    ts.forEach(function (t) {
-      var ms = (typeof coletar === 'function') ? coletar(t) : (t.matches || []);
-      (ms || []).forEach(function (m) {
-        if (!m || (m.p1Score == null && m.p2Score == null)) return;
-        var lados = [
-          { nome: m.p1, uids: (typeof window._slotUids === 'function') ? window._slotUids(m, 'p1') : null, sc: m.p1Score },
-          { nome: m.p2, uids: (typeof window._slotUids === 'function') ? window._slotUids(m, 'p2') : null, sc: m.p2Score }
-        ];
-        var meu = -1;
-        for (var i = 0; i < 2; i++) {
-          var u = lados[i].uids;
-          if (u && u.indexOf && u.indexOf(uid) >= 0) { meu = i; break; }
-        }
-        if (meu < 0) return;                       // a pessoa não jogou esta partida
-        var outro = lados[1 - meu];
-        var venceu = (m.winner != null) ? (String(m.winner) === String(lados[meu].nome)) : null;
-        var ts2 = Date.parse(m.finishedAt || m.updatedAt || t.endDate || t.startDate || '') || 0;
-        var liga = (typeof window._isLigaFormat === 'function') ? window._isLigaFormat(t) : false;
-        out.push({
-          ts: ts2, source: 'scoreplace', sport: t.sport || '', official: true,
-          venue: t.venue || '', competition: t.name || 'Torneio',
-          competitionLabel: (liga ? 'Ranking' : 'Torneio') + (t.name ? ' · ' + t.name : ''),
-          tournamentId: t.id, tournamentFormat: t.format || '',
-          opponent: outro.nome || '—', partner: null,
-          result: (venceu === true) ? 'V' : (venceu === false ? 'D' : '?'),
-          scoreA: (lados[meu].sc != null) ? String(lados[meu].sc) : '',
-          scoreB: (outro.sc != null) ? String(outro.sc) : ''
+  // ── OS JOGOS DO SCOREPLACE DE QUALQUER PESSOA ─────────────────────────────────
+  // Regra do dono (01/ago/2026): _"os jogos do scoreplace entre os jogos do letzplay devem
+  // aparecer para TODOS os usuários... tem que estar no perfil de qualquer um que tenha
+  // jogo no scoreplace, MESMO SEM AUTORIZAÇÃO DO LETZPLAY"_. Faz sentido: jogo feito aqui
+  // é nosso registro, não depende de o atleta ter autorizado a leitura de outro site.
+  //
+  // POR QUE NÃO APARECIA NADA: eu lia o placar de `m.p1Score` no objeto da partida. O
+  // placar não mora mais ali desde que virou documento próprio —
+  // `tournaments/{id}/results/{matchId}`, com `playerUids[]`. Medido em 01/ago no banco
+  // real: dos torneios carregados, ZERO partidas tinham p1Score; e os `results` tinham
+  // tudo (placar, sets, vencedor, quando). Então a lista do scoreplace vinha vazia pra
+  // todo mundo — inclusive pra quem tem jogo comigo semana passada.
+  //
+  // A busca é UMA query, por uid, sem carregar torneio: collectionGroup('results') com
+  // array-contains em playerUids. É o mesmo caminho que o dashboard já usa.
+  function _lzJogosDoScoreplace(uid) {
+    var db = window.FirestoreDB && window.FirestoreDB.db;
+    if (!db || !uid) return Promise.resolve([]);
+    return db.collectionGroup('results').where('playerUids', 'array-contains', uid).limit(400).get()
+      .then(function (qs) {
+        var out = [];
+        qs.forEach(function (d) {
+          var r = d.data() || {};
+          var meu = -1;
+          // de que lado ela jogou: o nome do slot contém o nome dela? não — uid manda.
+          // `results` guarda os uids num array só, então o lado sai dos uids por slot
+          // quando existirem; senão, do nome (último recurso, e só pra escolher o lado).
+          if (Array.isArray(r.p1Uids) && r.p1Uids.indexOf(uid) >= 0) meu = 0;
+          else if (Array.isArray(r.p2Uids) && r.p2Uids.indexOf(uid) >= 0) meu = 1;
+          if (meu < 0) {
+            var nome = _lzNomeDoUid(uid);
+            if (nome && String(r.p1 || '').indexOf(nome) >= 0) meu = 0;
+            else if (nome && String(r.p2 || '').indexOf(nome) >= 0) meu = 1;
+          }
+          if (meu < 0) return;                       // não dá pra dizer o lado: não inventa
+          var meuNome = meu === 0 ? r.p1 : r.p2, outro = meu === 0 ? r.p2 : r.p1;
+          var meuSc = meu === 0 ? r.scoreP1 : r.scoreP2, outroSc = meu === 0 ? r.scoreP2 : r.scoreP1;
+          var venceu = (r.draw === true) ? null : (r.winner != null ? (String(r.winner) === String(meuNome)) : null);
+          out.push({
+            ts: (typeof window._spTsData === 'function')
+                  ? window._spTsData(r.resultAt || r.updatedAt || r.startedAt || 0, { fallback: 0 })
+                  : (r.resultAt || 0),
+            source: 'scoreplace', sport: r.sport || '', official: true,
+            venue: r.venue || '',
+            competition: r.tournamentName || 'Torneio',
+            competitionLabel: 'Torneio' + (r.tournamentName ? ' · ' + r.tournamentName : '') +
+                              (r.roundLabel ? ' · ' + r.roundLabel : ''),
+            tournamentId: r.tournamentId || null, tournamentFormat: r.format || '',
+            opponent: outro || '—', partner: null,
+            result: (venceu === true) ? 'V' : (venceu === false ? 'D' : (r.draw ? 'E' : '?')),
+            scoreA: (meuSc != null) ? String(meuSc) : '',
+            scoreB: (outroSc != null) ? String(outroSc) : ''
+          });
         });
+        return out;
+      })
+      .catch(function (e) {
+        window._warn && window._warn('[letzplay] jogos do scoreplace não vieram:', (e && e.message) || e);
+        return [];
       });
-    });
-    return out;
   }
+  // ── PARTIDAS CASUAIS ──────────────────────────────────────────────────────────
+  // "torneios ou casuais. diferenciados." (dono). O card já distingue pelo selo e pela
+  // linha de contexto: torneio mostra o nome do torneio e a fase; casual diz "Partida
+  // casual". `casualMatches` tem `playerUids` e é leitura pública, então vale pra
+  // qualquer pessoa — sem depender de autorização nenhuma.
+  function _lzCasuaisDoScoreplace(uid) {
+    var db = window.FirestoreDB && window.FirestoreDB.db;
+    if (!db || !uid) return Promise.resolve([]);
+    return db.collection('casualMatches').where('playerUids', 'array-contains', uid).limit(200).get()
+      .then(function (qs) {
+        var out = [];
+        qs.forEach(function (d) {
+          var c = d.data() || {};
+          if (c.status !== 'finished' || !c.result) return;
+          var jog = Array.isArray(c.players) ? c.players : [];
+          var eu = null;
+          for (var i = 0; i < jog.length; i++) if (jog[i] && jog[i].uid === uid) { eu = jog[i]; break; }
+          if (!eu) return;
+          var meuTime = eu.team || 1, outroTime = meuTime === 1 ? 2 : 1;
+          function lado(t) {
+            return jog.filter(function (j) { return j && (j.team || 1) === t; })
+                      .map(function (j) { return j.name || 'Jogador'; }).join(' / ');
+          }
+          var par = jog.filter(function (j) { return j && (j.team || 1) === meuTime && j.uid !== uid; })
+                       .map(function (j) { return j.name; })[0] || null;
+          // o placar do casual vem no resumo ("6-0"); os campos p1/p2Score podem vir nulos
+          var sm = String((c.result && c.result.summary) || '');
+          var mm = sm.match(/(\d+)\s*[-x–]\s*(\d+)/);
+          var a = (c.result.p1Score != null) ? c.result.p1Score : (mm ? +mm[1] : null);
+          var b = (c.result.p2Score != null) ? c.result.p2Score : (mm ? +mm[2] : null);
+          if (meuTime === 2) { var t = a; a = b; b = t; }
+          var venceu = (c.result.winner != null) ? (Number(c.result.winner) === meuTime) : null;
+          out.push({
+            ts: (typeof window._spTsData === 'function')
+                  ? window._spTsData(c.finishedAt || c.lastActivityAt || 0, { fallback: 0 })
+                  : 0,
+            source: 'scoreplace', sport: c.sport || '', official: false,
+            venue: c.venueName || '',
+            competition: 'Partida casual',
+            competitionLabel: 'Partida casual',
+            tournamentId: null, tournamentFormat: '',
+            opponent: lado(outroTime) || '—', partner: par,
+            result: (venceu === true) ? 'V' : (venceu === false ? 'D' : '?'),
+            scoreA: (a != null) ? String(a) : '', scoreB: (b != null) ? String(b) : ''
+          });
+        });
+        return out;
+      })
+      .catch(function (e) {
+        window._warn && window._warn('[letzplay] casuais não vieram:', (e && e.message) || e);
+        return [];
+      });
+  }
+  function _lzNomeDoUid(uid) {
+    var r = window._lzRenderCtx || {};
+    var p = (r.profiles && r.profiles[uid]) || null;
+    return (p && (p.displayName || p.name)) || null;
+  }
+
   function _lzJuntarScoreplace(uid, meNome) {
     if (!uid) return;
     var proprio = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) === uid;
     // pro PRÓPRIO usuário o matchHistory é legível e é mais completo (inclui casuais);
     // pros outros, o que dá pra ver são os torneios em comum.
+    // O PRÓPRIO usuário tem matchHistory legível (inclui casuais); pra QUALQUER pessoa,
+    // os jogos de torneio vêm dos documentos de placar, que são legíveis por qualquer
+    // autenticado. Ninguém mais fica sem os próprios jogos por não ter autorizado nada.
     var fonte = (proprio && typeof window._spScoreplaceItems === 'function')
       ? Promise.resolve(window._spScoreplaceItems(uid))
-      : Promise.resolve(_lzJogosDosTorneios(uid));
+      : Promise.all([_lzJogosDoScoreplace(uid), _lzCasuaisDoScoreplace(uid)])
+          .then(function (r) { return r[0].concat(r[1]); });
     fonte.then(function (itens) {
       itens = (itens || []).filter(Boolean);
       if (!itens.length) return;
@@ -1473,6 +1561,22 @@
       })[0];
       window._lzAba((ativo && ativo.getAttribute('data-lz-aba')) || 'tour');
     }).catch(function () {});
+  }
+
+  // ── A LEITURA SÓ AVANÇOU SE A ESCRITA FOI CONFIRMADA ──────────────────────────
+  // 31/jul/2026: as regras do Firestore rejeitaram todo write em letzplayScans (campo novo
+  // fora da whitelist) e a tela seguiu subindo as barras — "33 de 33 (100%)" com ZERO
+  // gravado. O progresso vinha da extensão, que de fato leu; mas ler não é gravar, e a
+  // tela mostrava leitura como se fosse registro.
+  // É a MESMA regra que já vale pro convite de co-organização desde a 1.6.9: só existe
+  // "aconteceu" depois da escrita CONFIRMADA. Aqui ela passa a valer pro histórico.
+  window._lzGravouOk = true;
+  function _lzFalhouGravar(em) {
+    window._lzGravouOk = false;
+    window._lzUltimoErroGravacao = String(em || '').slice(0, 160);
+    if (typeof window._lzAvisarFalhaGravacao === 'function') {
+      try { window._lzAvisarFalhaGravacao(window._lzUltimoErroGravacao); } catch (e) {}
+    }
   }
 
   // Ações da barra do topo — fazem exatamente o que os botões do rodapé fazem.
@@ -2445,6 +2549,7 @@
   // Puxa a COMPLETA de UM atleta pelo @ público — o caminho do autoimport (fetch das
   // páginas /{handle}/matches), sem navegar o perfil SPA (a causa do lote travar).
   window._lzAthleteImport = function (uid) {
+    window._lzGravouOk = true; window._lzUltimoErroGravacao = null;
     if (window._log) window._log('[letzplay] iniciar leitura de', uid, '· travaAtiva=', !!window._lzScanRunning,
       '· overlay=', !!document.getElementById('sp-import-overlay'), '· ctx=', !!(window._lzScanCtx && window._lzScanCtx.byUid));
     // NENHUM CLIQUE PODE MORRER CALADO. Estes três `return` mudos faziam o botão
@@ -2736,7 +2841,12 @@
         // O parcial traz o fullImport consolidado — atualiza as barras por ele (também
         // cobre extensão antiga sem `counts` no progresso).
         _seedBarsFrom(d.fullImport || null);
-        setProg({ sub: (d.stage === 'torneios' ? ('torneio ' + d.done + ' de ' + d.total + ' gravado') : ('página ' + d.done + ' de ' + d.total + ' gravada')), pct: null });
+        // "gravado" só se GRAVOU. O texto dizia gravado enquanto o servidor recusava tudo.
+        var _ok = window._lzGravouOk !== false;
+        setProg({ sub: _ok
+          ? (d.stage === 'torneios' ? ('torneio ' + d.done + ' de ' + d.total + ' gravado') : ('página ' + d.done + ' de ' + d.total + ' gravada'))
+          : ('⚠️ nada foi gravado — ' + (window._lzUltimoErroGravacao || 'escrita recusada')), pct: null });
+        if (!_ok) { fail('Nada foi gravado — ' + (window._lzUltimoErroGravacao || 'o servidor recusou a escrita') + '.'); return; }
         return;
       }
       if (d.__sp_lp === 'athlete-import-result' && d.uid === uid) {
@@ -2764,6 +2874,13 @@
         })(d.fullImport);
         var _andou = (_prog !== _progAnterior);
         _progAnterior = _prog;
+        // ESCRITA REJEITADA = A LEITURA NÃO AVANÇOU. Encadear mais rodadas em cima de um
+        // banco que está recusando tudo só faz a barra subir mentindo. Para aqui e diz.
+        if (window._lzGravouOk === false) {
+          fail('Nada foi gravado — ' + (window._lzUltimoErroGravacao || 'o servidor recusou a escrita') +
+               '. A leitura parou pra não mostrar avanço que não existe.');
+          return;
+        }
         if (d.done !== true && rodada < MAX_RODADAS && _andou) {
           ping();
           if (d.scan && d.fullImport && typeof _lzPersistScans === 'function') {
@@ -3397,6 +3514,7 @@
           // morriam em silêncio e "não gravava porra nenhuma"). Mostra o ERRO REAL e
           // regrava SEM o fullImport — o resumo (scan) sempre cabe e sempre fica.
           var em = ((err && err.code) ? err.code + ': ' : '') + ((err && err.message) || err);
+          _lzFalhouGravar(em);
           if (typeof showNotification === 'function') showNotification('⚠️ Falha ao gravar histórico', String(em).slice(0, 140), 'error');
           if (doc.fullImport) {
             var lean = { handle: doc.handle, scan: doc.scan, scannedAt: doc.scannedAt, scannedBy: doc.scannedBy, scannedByName: doc.scannedByName, tournamentId: doc.tournamentId, tournamentName: doc.tournamentName };
@@ -3481,6 +3599,7 @@
           // Erro REAL na tela + regrava sem o fullImport (o resumo sempre cabe) — ver
           // _lzPersistScans; mesmo fallback aqui (caso Camila: doc >1MiB falhava mudo).
           var em = ((err && err.code) ? err.code + ': ' : '') + ((err && err.message) || err);
+          _lzFalhouGravar(em);
           if (typeof showNotification === 'function') showNotification('⚠️ Falha ao gravar histórico', String(em).slice(0, 140), 'error');
           if (doc.fullImport) {
             var lean = { handle: doc.handle, scan: doc.scan, scannedAt: doc.scannedAt, scannedBy: doc.scannedBy, scannedByName: doc.scannedByName, tournamentId: doc.tournamentId, tournamentName: doc.tournamentName };

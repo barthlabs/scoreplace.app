@@ -12,11 +12,15 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
 ok(/var rodada = 0, MAX_RODADAS = 40, _progAnterior = null;/.test(src), 'guarda o progresso da rodada anterior');
 
-const bloco = src.slice(src.indexOf('RODADA QUE NÃO ANDA'), src.indexOf('RODADA QUE NÃO ANDA') + 1400);
+const bloco = src.slice(src.indexOf('RODADA QUE NÃO ANDA'), src.indexOf('RODADA QUE NÃO ANDA') + 2200);
 ok(/_lzTot\(imp\)/.test(bloco), 'o progresso conta os JOGOS');
 ok(/toursDone/.test(bloco) && /ranksDone/.test(bloco), 'e também torneios e rankings concluídos');
 ok(/var _andou = \(_prog !== _progAnterior\);/.test(bloco), 'compara com a rodada anterior');
 ok(/rodada < MAX_RODADAS && _andou/.test(bloco), 'e só encadeia se ALGUMA das três avançou');
+// 01/ago/2026: e NÃO encadeia quando o banco recusou a escrita — a leitura pode até estar
+// andando, mas se nada é gravado a barra subindo é mentira. Ver rules-letzplayscans-whitelist.
+ok(/if \(window\._lzGravouOk === false\) \{/.test(bloco), 'escrita recusada interrompe o encadeamento');
+ok(/Nada foi gravado/.test(bloco), 'e a tela diz que nada foi gravado');
 
 // a comparação tem que considerar as TRÊS coisas — avançar só em torneios ainda é avanço
 {

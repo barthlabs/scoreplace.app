@@ -82,7 +82,8 @@ ok(typeof window._spScoreplaceItems === 'function', 'match-history expõe os jog
     'os jogos do app entram na MESMA lista do letzplay (não num bloco separado)');
   ok(/A\.jogo = window\._lzRenderJogos\(meNome\)/.test(fn),
     'e a lista inteira é re-renderizada, o que reordena por data');
-  ok(/juntar\('tour'/.test(fn) && /juntar\('rank'/.test(fn), 'competições do app entram em Torneios e em Rankings');
+  const juntarFn = rep.slice(rep.indexOf('function _lzJuntarScoreplace'), rep.indexOf('function _lzJuntarScoreplace') + 3400);
+  ok(/juntar\('tour'/.test(juntarFn) && /juntar\('rank'/.test(juntarFn), 'competições do app entram em Torneios e em Rankings');
   ok(/_isLigaFormat/.test(fn), 'Pontos Corridos vai pra Rankings (temporada contínua), o resto pra Torneios');
   ok(/if \(!it\.official\) return;/.test(fn), 'partida casual não vira competição');
 }

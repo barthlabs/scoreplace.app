@@ -301,8 +301,14 @@ service cloud.firestore {
       allow read: if request.auth != null;
       // scannedByName + tournamentId/Name identificam quem/qual torneio puxou; fullImport
       // é o histórico COMPLETO (só no scan "completo") que vira o letzplayImport do dono.
+      //
+      // `lzCursorParcial` e `totaisLetzplay` entraram na 1.6.64, quando o PARCIAL deixou de
+      // gravar histórico e passou a gravar só PROGRESSO (onde parou) e ESTRUTURA (quantos
+      // torneios/rankings/jogos existem). Eu subi o código e esqueci a whitelist: toda
+      // escrita virou permission-denied e a leitura "avançava" na tela sem gravar nada.
+      // Campo novo no cliente sem campo novo aqui = escrita rejeitada, sempre.
       allow create, update: if request.auth != null
-        && request.resource.data.keys().hasOnly(['handle', 'scan', 'scannedAt', 'scannedBy', 'scannedByName', 'tournamentId', 'tournamentName', 'fullImport']);
+        && request.resource.data.keys().hasOnly(['handle', 'scan', 'scannedAt', 'scannedBy', 'scannedByName', 'tournamentId', 'tournamentName', 'fullImport', 'lzCursorParcial', 'totaisLetzplay']);
       allow delete: if request.auth != null;
     }
 

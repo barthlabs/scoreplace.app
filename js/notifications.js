@@ -206,7 +206,12 @@ function showNotification(title, message, type = 'info') {
       display: flex;
       flex-direction: column;
       gap: 10px;
-      z-index: 100011;
+      /* ACIMA DOS DIÁLOGOS (que ficam em 100100). O aviso de "falha ao gravar" nascia
+         ATRÁS do diálogo de progresso e cortado na quina — o erro existia e não era
+         legível, que na prática é o mesmo que não existir. */
+      z-index: 100200;
+      max-width: min(92vw, 430px);
+      pointer-events: none;
     `;
     document.body.appendChild(container);
   }
@@ -257,7 +262,8 @@ function showNotification(title, message, type = 'info') {
     box-shadow: 0 8px 32px rgba(0,0,0,0.45);
     backdrop-filter: blur(12px);
     min-width: 240px;
-    max-width: 320px;
+    max-width: 100%;
+    pointer-events: auto;
     transform: translateX(100%);
     opacity: 0;
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
