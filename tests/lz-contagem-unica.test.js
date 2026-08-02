@@ -37,22 +37,39 @@ function jogos(n, comp) {
   }));
 }
 
-console.log('\n── Kelly: 158 linhas no perfil, 157 partidas de verdade ──');
+// ══ REGRA DO DONO (02/ago/2026): O NÚMERO DO LETZPLAY É O NÚMERO DO APP ══════════════
+// "nossos números têm que bater com esses para dar tranquilidade aos organizadores... lemos
+// 397 deles e concluímos que o número é outro — escreve o número deles, SEMPRE."
+// O organizador lê 397 lá e precisa ler 397 aqui. Divergência, mesmo correta e explicada,
+// obriga cada pessoa a conferir de novo — é a insegurança que a Análise existe pra tirar.
+console.log('\n── Kelly: o perfil diz 158 → o app diz 158 ──');
 {
   const imp = { games: jogos(157, 'r1'), declaredGames: 158, indexTotal: 157,
     totais: { fonte: 'indice', jogos: 157 },
     lzCursor: { complete: true, pageDone: 8, pagesTotal: 8, toursDone: {}, ranksDone: { 'r/c/1': 1 } } };
   const c = conta(imp);
-  ok(c.g.y === 157, 'o total é o do ÍNDICE, não o contador do perfil (veio ' + c.g.y + ')');
-  ok(c.g.x === 157, 'e fecha em 100%');
+  ok(c.g.y === 158, 'o total exibido é o do PERFIL (veio ' + c.g.y + ')');
+  ok(c.g.x === 158, 'e a varredura fechada bate 100% — lemos tudo que a fonte enumera');
 }
 
-console.log('\n── Fabio: o contador do perfil diz 397, o índice diz 391 ──');
+console.log('\n── Fabio: o perfil diz 397 → o app diz 397 ──');
 {
   const imp = { games: jogos(391, 'r1'), declaredGames: 397, indexTotal: 391,
+    declaredTournaments: 33, declaredRankings: 27,
     totais: { fonte: 'indice', jogos: 391 },
     lzCursor: { complete: true, pageDone: 20, pagesTotal: 20, toursDone: {}, ranksDone: {} } };
-  ok(conta(imp).g.y === 391, 'o 397 não entra (veio ' + conta(imp).g.y + ')');
+  const c = conta(imp);
+  ok(c.g.y === 397 && c.g.x === 397, '397 de 397 (veio ' + c.g.x + ' de ' + c.g.y + ')');
+  ok(c.t.y === 33, 'torneios: 33, como no perfil (veio ' + c.t.y + ')');
+  ok(c.r.y === 27, 'rankings: 27, como no perfil (veio ' + c.r.y + ')');
+}
+
+console.log('\n── mas leitura PELA METADE não vira 100% ──');
+{
+  const imp = { games: jogos(20, 'r1'), declaredGames: 158, indexTotal: 157,
+    lzCursor: { complete: true, pageDone: 1, pagesTotal: 8, toursDone: {}, ranksDone: {} } };
+  const c = conta(imp);
+  ok(c.g.y === 158 && c.g.x === 20, '20 de 158 — o acervo não cobre o índice (veio ' + c.g.x + ' de ' + c.g.y + ')');
 }
 
 console.log('\n── competição só existe se tem jogo; e a que não abre também conta ──');

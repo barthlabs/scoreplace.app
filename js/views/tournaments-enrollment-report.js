@@ -2582,10 +2582,35 @@
     var rY = window._lzCompsReaisN(imp, false) || null;
     if (rY == null) rY = _lzContarDistintos(rkFp, false) || null;
     if (rY != null && rX > rY) rX = rY;      // x jamais passa de y
-    // O TETO MORA AQUI, não em quem desenha. Enquanto ele vivia só no `barLine`, quem
-    // lesse a função direto (o overlay ao vivo) recebia x > y e pintava "4 de 2 (100%)".
-    // Se a função é a fonte única, ela entrega o número JÁ correto — não um número que
-    // depende de quem chama lembrar de capar.
+    // ══ O NÚMERO DO LETZPLAY É O NÚMERO DO APP ═══════════════════════════════════
+    // REGRA DO DONO (02/ago/2026), depois de dois dias de divergência explicada:
+    //   "nossos números têm que bater com esses para dar tranquilidade aos organizadores,
+    //    que têm que ler esses mesmos números no nosso sistema. lemos 397 deles e
+    //    concluímos que o número é outro — escreve o número deles, SEMPRE."
+    //
+    // Ele está certo pelo lado que importa: o organizador abre o letzplay, lê 397 jogos /
+    // 27 rankings / 33 torneios, abre o nosso app e precisa ler a MESMA coisa. Uma
+    // divergência — mesmo correta, mesmo explicada — obriga cada pessoa a conferir de novo,
+    // e é exatamente a insegurança que a Análise existe pra eliminar.
+    //
+    // Continuamos MEDINDO certo por dentro: o acervo tem as partidas distintas (a lista de
+    // jogos mostra 391 cards no Fabio, não 397), a leitura ainda persegue id por id, e a
+    // limpeza de jogo apagado segue valendo. O que muda é só o que o CONTADOR exibe.
+    //
+    // E quando a varredura fechou, X = Y: nós lemos tudo o que a fonte enumera, então a
+    // barra bate 100% em vez de parar em 98% por causa de card repetido DELES.
+    var _decl = { g: (imp && imp.declaredGames > 0) ? imp.declaredGames : 0,
+                  t: (imp && imp.declaredTournaments > 0) ? imp.declaredTournaments : 0,
+                  r: (imp && imp.declaredRankings > 0) ? imp.declaredRankings : 0 };
+    // "fechou" = a varredura enumerou tudo (índice completo) E o acervo tem tudo que ela
+    // enumerou. Sem isso, uma leitura pela metade viraria 100% — o erro de 20 de 20.
+    var _fechou = !!(imp && imp.lzCursor && imp.lzCursor.complete === true &&
+                     (imp.indexTotal || 0) > 0 && gX >= imp.indexTotal);
+    if (_decl.g > 0) { gY = _decl.g; if (_fechou) gX = gY; }
+    if (_decl.t > 0) { tY = _decl.t; if (_fechou) tX = gY && tX > 0 ? tY : tX; }
+    if (_decl.r > 0) { rY = _decl.r; if (_fechou) rX = rX > 0 ? rY : rX; }
+    // O TETO MORA AQUI, não em quem desenha. Enquanto ele vivia no `barLine`, quem lesse a
+    // função direto (o overlay ao vivo) recebia x > y e pintava "4 de 2 (100%)".
     if (gY != null && gX > gY) gX = gY;
     if (tY != null && tX > tY) tX = tY;
     if (rY != null && rX > rY) rX = rY;
@@ -2760,17 +2785,9 @@
     // DENTRO do "Puxar": a pessoa lia a ficha inteira, clicava, e só então descobria que a
     // extensão não servia. O slot é preenchido pelo ping logo abaixo.
     body = '<div id="lz-ext-aviso"></div>' + body;
-    // O NÚMERO DO LETZPLAY ≠ NOSSO NÚMERO TEM QUE VIR COM EXPLICAÇÃO. O dono viu
-    // "160" aqui e "162 Jogos" lá e a leitura pareceu mentirosa — quando os 2 de
-    // diferença são o MESMO jogo servido duas vezes pelo letzplay (medido no JSON e no
-    // HTML, ids idênticos). Número divergente sem explicação é indistinguível de erro.
-    var _rep = (imp && imp.totais && imp.totais.cardsRepetidos) || 0;
-    if (_rep > 0 && imp && imp.declaredGames > 0) {
-      body += '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin:6px 0 0;">' +
-        'ℹ️ O letzplay mostra <b>' + imp.declaredGames + ' jogos</b>, mas <b>' + _rep +
-        '</b> ' + (_rep === 1 ? 'é card repetido' : 'são cards repetidos') + ' lá (o mesmo jogo aparece duas vezes na lista deles). ' +
-        'Partidas reais: <b>' + (imp.indexTotal || (imp.declaredGames - _rep)) + '</b>.</div>';
-    }
+    // (a explicação sobre "cards repetidos" saiu daqui em 02/ago: com o contador do app
+    // mostrando o MESMO número do letzplay, não há mais divergência pra justificar — e
+    // texto que explica uma diferença que não existe mais só semeia dúvida.)
     if (!_podePuxar() && _temLz) {
       body += '<div style="font-size:0.8rem;color:#fbbf24;margin-top:8px;line-height:1.45;' +
         'background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.30);border-radius:9px;padding:8px 10px;">' +
