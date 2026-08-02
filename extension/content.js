@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.92';
+  var EXT_VERSION = '1.93';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1406,6 +1406,25 @@
         // está no acervo, não está tudo lido, ponto — não importa o que o cursor ache.
         var _temId = {};
         all.forEach(function (m) { if (m && m.lzId) _temId[String(m.lzId)] = 1; });
+        // ── JOGO QUE SUMIU DA FONTE SAI DO ACERVO ────────────────────────────────
+        // Regra do dono: "se existe um jogo que não existe, exclua ele sempre, de
+        // qualquer atleta". Medido na Kelly (02/ago/2026): o letzplay APAGOU os ids
+        // 7770343 e 8894371 (recriou a série com outros ids) e o nosso acervo ficou com
+        // 162 quando a fonte enumera 160. O índice COMPLETO é a enumeração oficial do que
+        // existe: id gravado que não está nele é jogo que a fonte removeu.
+        // Só com índice completo (parcial não enumera tudo) e não-vazio.
+        if (_idx && !_idxParcial && _idx.total > 0) {
+          var _antesRm = all.length;
+          for (var _ri = all.length - 1; _ri >= 0; _ri--) {
+            var _g = all[_ri];
+            if (_g && _g.lzId && !_idx.porId[String(_g.lzId)]) all.splice(_ri, 1);
+          }
+          if (all.length < _antesRm) {
+            _temId = {}; all.forEach(function (m) { if (m && m.lzId) _temId[String(m.lzId)] = 1; });
+            prog({ phase: 'jogos', feed: '🧹 ' + (_antesRm - all.length) +
+              ' jogo(s) removidos: o letzplay apagou esses ids' });
+          }
+        }
         var _idsConhecidos = Object.keys(_temId).length;
         // Só dá pra dizer "falta o id X" quando o acervo é identificado por id. Num
         // documento do motor antigo (zero lzId) TODO id pareceria faltando e a leitura

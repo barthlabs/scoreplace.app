@@ -226,5 +226,40 @@ ok(/será substituído por/.test(grava), 'e avisa quando substitui um documento 
      'os DOIS caminhos de escrita passam pela limpeza');
 }
 
+// ── JOGO QUE A FONTE APAGOU SAI — E A UNIÃO NÃO O RESSUSCITA ───────────────────────────
+// Diff id por id na Kelly (02/ago/2026): letzplay enumera 160; nosso acervo tinha 162.
+// Os 2 extras (7770343, 8894371) foram APAGADOS pelo letzplay (recriou a série com outros
+// ids). Regra do dono: jogo que não existe, exclui sempre. A extensão remove no índice
+// completo; e a união NÃO pode re-somar do acervo antigo, senão a limpeza desfaz sempre.
+{
+  const app = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  const ctx = { window: {}, console, Object, Array, Math, JSON };
+  require('vm').createContext(ctx);
+  const ini = app.indexOf('function _lzUnirImports'), fim = app.indexOf('  // O RESUMO É FUNÇÃO DO HISTÓRICO');
+  require('vm').runInContext(app.slice(ini, fim) + '\nwindow._unir = _lzUnirImports;', ctx);
+  const unir = ctx.window._unir;
+  const antigo = { games: [{ lzId: '7770343' }, { lzId: '7770344' }, { lzId: '8894371' }] };
+  const novaCompleta = { games: [{ lzId: '7770344' }, { lzId: '10021473' }],
+    lzCursor: { complete: true }, indexTotal: 2 };
+  const u = unir(antigo, novaCompleta);
+  const ids = u.games.map(g => g.lzId).sort();
+  ok(ids.join(',') === '10021473,7770344', 'os apagados NÃO voltam pela união (veio ' + ids.join(',') + ')');
+  // mas uma leitura INCOMPLETA não apaga nada — ela não enumara tudo
+  const novaParcial = { games: [{ lzId: '10021473' }], lzCursor: { complete: false } };
+  const u2 = unir(antigo, novaParcial);
+  ok(u2.games.length === 4, 'leitura incompleta preserva o acervo inteiro (veio ' + u2.games.length + ')');
+  // a fronteira entre APAGAR e PRESERVAR: entregar tudo que o próprio índice enumera
+  const curta = { games: [{ lzId: '7770344' }], lzCursor: { complete: true }, indexTotal: 2 };
+  const u3 = unir(antigo, curta);
+  ok(u3.games.length === 3, 'leitura completa DEVENDO pro próprio índice não apaga nada (veio ' + u3.games.length + ')');
+
+  const cnt = require('fs').readFileSync(require('path').join(__dirname, '..', 'extension', 'content.js'), 'utf8');
+  ok(/JOGO QUE SUMIU DA FONTE SAI DO ACERVO/.test(cnt), 'a extensão remove no índice completo');
+  ok(/if \(_idx && !_idxParcial && _idx\.total > 0\) \{\n          var _antesRm/.test(cnt),
+     'e SÓ com índice completo e não-vazio — parcial não enumera tudo');
+  ok(/jogo\(s\) removidos: o letzplay apagou esses ids/.test(cnt), 'dizendo na tela o que removeu e por quê');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-nunca-regride: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

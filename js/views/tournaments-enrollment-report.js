@@ -3798,9 +3798,22 @@
       if (g.lzId) return 'lz' + g.lzId;
       return [g.club, g.kind, g.date, (g.oppNames || []).join('|'), g.myScore, g.oppScore].join('~');
     }
-    [antigo.games || [], novo.games || []].forEach(function (lista) {
+    // LEITURA COMPLETA É AUTORIDADE SOBRE EXISTÊNCIA. Quando a nova varreu o índice
+    // inteiro, jogo do acervo antigo que NÃO está nela é jogo que a fonte APAGOU (caso
+    // Kelly: ids 7770343/8894371 removidos pelo letzplay) — re-somá-lo aqui desfaria a
+    // limpeza que a extensão acabou de fazer, para sempre.
+    // e só quando ela ENTREGOU tudo que o índice dela enumera: uma leitura "completa" com
+    // MENOS jogos que o próprio indexTotal está devendo pra si mesma (caso Fabio 390/391)
+    // — essa não pode apagar nada de ninguém.
+    var _nGamesNovo = (novo.games || []).filter(function (g) { return g && g.lzId; }).length;
+    var _novaCompleta = !!(novo.lzCursor && novo.lzCursor.complete === true &&
+                           (novo.indexTotal || 0) > 0 && _nGamesNovo >= novo.indexTotal);
+    var _naNova = {};
+    if (_novaCompleta) (novo.games || []).forEach(function (g) { if (g && g.lzId) _naNova['lz' + g.lzId] = 1; });
+    [antigo.games || [], novo.games || []].forEach(function (lista, li2) {
       lista.forEach(function (g) {
         var k = por(g); if (!k) return;
+        if (li2 === 0 && _novaCompleta && g && g.lzId && !_naNova[k]) return;   // apagado na fonte
         if (!mapa[k]) { mapa[k] = g; ordem.push(k); return; }
         if (!mapa[k].lzId && g.lzId) mapa[k] = g;       // o com id vence o sem id
       });
