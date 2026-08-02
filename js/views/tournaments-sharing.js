@@ -1,5 +1,10 @@
 // ── Sharing & Export Functions ──
 var _t = window._t || function(k) { return k; };
+// Fim do TORNEIO (última fase). t.endDate cru é o fim da fase INICIAL — mentiria em multifase.
+// Ver _tournamentEndDate em store.js (ponto único) e project_phase_dates_belong_to_initial_phase.
+function _tEnd(t) {
+  return (typeof window._tournamentEndDate === 'function') ? window._tournamentEndDate(t) : ((t && t.endDate) || '');
+}
 
 // v1.8.43-beta: clicar no logo do torneio na tela de detalhe abre o
 // editor de crop/zoom/luminosidade. Só disponível para o organizador.
@@ -1214,7 +1219,8 @@ window._printTournament = function(tournamentId) {
       (t.sport ? '<span><b>Esporte:</b> ' + esc(t.sport) + '</span>' : '') +
       (t.format ? '<span><b>Formato:</b> ' + esc(t.format) + '</span>' : '') +
       (t.startDate ? '<span><b>Início:</b> ' + esc(fmtDate(t.startDate)) + '</span>' : '') +
-      (t.endDate ? '<span><b>Fim:</b> ' + esc(fmtDate(t.endDate)) + '</span>' : '') +
+      // v1.6.83: fim do TORNEIO (última fase) — t.endDate cru é só o fim da fase inicial.
+      (_tEnd(t) ? '<span><b>Fim:</b> ' + esc(fmtDate(_tEnd(t))) + '</span>' : '') +
       (t.venue ? '<span><b>Local:</b> ' + esc(t.venue) + '</span>' : '') +
       (t.access ? '<span><b>Acesso:</b> ' + esc(t.access) + '</span>' : '') +
       '<span><b>Inscritos:</b> ' + competitorsCount + '</span>' +
@@ -1326,7 +1332,7 @@ window._exportTournamentCSV = function(tournamentId) {
     if (t.sport) rows.push(['Esporte', t.sport]);
     if (t.format) rows.push(['Formato', t.format]);
     if (t.startDate) rows.push(['Início', t.startDate]);
-    if (t.endDate) rows.push(['Fim', t.endDate]);
+    if (_tEnd(t)) rows.push(['Fim', _tEnd(t)]);   // v1.6.83: fim do TORNEIO (última fase)
     if (t.venue) rows.push(['Local', t.venue]);
     if (t.access) rows.push(['Acesso', t.access]);
     if (t.organizerEmail) rows.push(['Organizador', t.organizerEmail]);
@@ -1440,8 +1446,9 @@ function _icsEscape(s) {
 
 function _tournamentCalendarPayload(t) {
   // Resolve start/end. Se endDate ausente, assume startDate + 4h (ball-park).
+  // v1.6.83: o fim vem da ÚLTIMA fase — o evento na agenda tem que cobrir o torneio inteiro.
   var startRaw = t.startDate;
-  var endRaw = t.endDate;
+  var endRaw = _tEnd(t);
   if (!startRaw) return null;
   var start = new Date(startRaw);
   if (isNaN(start.getTime())) return null;

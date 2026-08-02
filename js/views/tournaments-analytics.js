@@ -594,7 +594,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         if (!_started) return;
 
         stats.tournamentsPlayed++;
-        stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: (window._formatLabel ? window._formatLabel(t) : t.format) || '', date: t.endDate || t.startDate || t.date || null, isRanking: !!(window._isLigaFormat && window._isLigaFormat(t)) });
+        stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: (window._formatLabel ? window._formatLabel(t) : t.format) || '', date: (window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate) || t.startDate || t.date || null, isRanking: !!(window._isLigaFormat && window._isLigaFormat(t)) });
 
         // Track sports and formats
         if (t.sport) stats.sports[t.sport] = (stats.sports[t.sport] || 0) + 1;

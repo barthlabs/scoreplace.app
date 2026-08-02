@@ -1378,6 +1378,11 @@ window._ligaSeasonEndMs = function(t) {
         return isNaN(d.getTime()) ? NaN : d.getTime();
     }
     // 1) endDate explícita (fim do dia se date-only; hora exata se vier com 'T')
+    // v1.6.83 — DELIBERADO: aqui é t.endDate CRU, e tem que continuar sendo. Esta função
+    // responde "quando a TEMPORADA da Liga acaba" (= a fase de pontos corridos), não "quando o
+    // torneio acaba": é ela que faz o autoDraw parar de sortear rodadas. Num torneio de 2 fases,
+    // trocar pelo fim da eliminatória faria a Liga seguir sorteando rodadas depois da fase já ter
+    // avançado. Para MOSTRAR o fim do torneio use window._tournamentEndDate.
     if (t.endDate) {
         var endMs = _brt(t.endDate, '23:59:59');
         if (!isNaN(endMs)) return endMs;

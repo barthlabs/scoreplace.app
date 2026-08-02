@@ -1454,7 +1454,9 @@ window._autoPresenceFromVenue = function (t) {
         !window._isUserEnrolledInTournament(cu, t)) return;
     var tStart = Date.parse(t.startDate);
     if (isNaN(tStart)) return;
-    var tEnd = Date.parse(t.endDate);
+    // v1.6.83: a janela de auto-presença vai até o fim da ÚLTIMA fase — com t.endDate cru o app
+    // parava de oferecer presença assim que a classificatória acabava, com a elim ainda rolando.
+    var tEnd = window._tournamentEndMs ? window._tournamentEndMs(t) : Date.parse(t.endDate);
     if (isNaN(tEnd)) tEnd = tStart + 12 * 3600 * 1000;
     var now = Date.now();
     if (now < tStart - 2 * 3600 * 1000 || now > tEnd) return;
@@ -3280,8 +3282,10 @@ function renderTournaments(container, tournamentId = null) {
                 var _sd2 = new Date(t.startDate).getTime();
                 if (!isNaN(_sd2) && _sd2 > _now && !sorteioRealizado) _events.push({ ts: _sd2, label: _t('event.tournamentStart'), icon: '🏁', color: '#10b981' });
               }
-              if (t.endDate) {
-                var _ed = new Date(t.endDate).getTime();
+              // v1.6.83: fim da ÚLTIMA fase (ver dashboard.js — mesma contagem regressiva).
+              var _edRaw = window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate;
+              if (_edRaw) {
+                var _ed = new Date(_edRaw).getTime();
                 if (!isNaN(_ed) && _ed > _now) _events.push({ ts: _ed, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' });
               }
               if (_events.length === 0) return '';

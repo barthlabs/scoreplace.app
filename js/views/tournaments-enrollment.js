@@ -216,8 +216,12 @@ window._computeTournamentPlanWindow = function(t) {
   // largada. Em multi-dia cada rodada é combinada à parte (ex.: Rei/Rainha gera grupos
   // no WhatsApp pra cada grupo marcar dia/hora), e o lançamento costuma ser pelos
   // próprios competidores — um plano único de presença no início engana o inscrito.
-  if (t.endDate) {
-    var _endTs = new Date(t.endDate).getTime();
+  // v1.6.83: "mais de 1 dia" mede o TORNEIO inteiro (última fase). Classificatória num dia +
+  // eliminatória em outro é exatamente o multi-dia que esta regra quer barrar — com t.endDate
+  // cru ele passava como se fosse de um dia só.
+  var _endRaw = window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate;
+  if (_endRaw) {
+    var _endTs = new Date(_endRaw).getTime();
     if (!isNaN(_endTs) && (_endTs - startsAt) > 24 * 3600000) return null;
   }
   var venueName = t.venue || t.venueName || '';
@@ -228,6 +232,8 @@ window._computeTournamentPlanWindow = function(t) {
     var mins = window._estimateTournamentMinutes(t);
     if (mins > 0) endsAt = startsAt + mins * 60000;
   }
+  // t.endDate CRU de propósito: aqui é o fim da SESSÃO de presença (com cap de 12h logo abaixo),
+  // e só chegamos aqui em torneio de ≤1 dia — onde cru e canônico coincidem.
   if (!endsAt && t.endDate) { var e = new Date(t.endDate).getTime(); if (!isNaN(e) && e > startsAt) endsAt = e; }
   if (!endsAt) endsAt = startsAt + 3 * 3600000;
   var MAX = 12 * 3600000;

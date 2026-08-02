@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.6.81';
+window.SCOREPLACE_VERSION = '1.6.83';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -8760,6 +8760,25 @@ window._tournamentDateRange = function (t) {
   if (!startStr) startStr = t.startDate || '';
   if (!endStr) endStr = t.endDate || '';
   return { start: startStr, end: endStr };
+};
+
+// v1.6.83: FIM DO TORNEIO — a leitura canônica, em UMA chamada. Existe pra que trocar
+// `t.endDate` por "o fim de verdade" seja uma substituição de uma linha em qualquer render,
+// e pra que um grep por `t.endDate` em código de exibição acuse o que ainda está errado.
+// t.endDate CRU é o fim da fase INICIAL (o box "📅 Datas da fase" do formulário mora dentro
+// dela) — num torneio de 2 fases ele mente sobre quando o torneio acaba.
+// Use SEMPRE que for MOSTRAR/ANUNCIAR o encerramento (card, convite, folheto, CSV, agenda,
+// contagem regressiva, ficha de regras). Para a janela de UM DIA de ocupação de quadra
+// (presença virtual) continue com a data crua — lá o assunto é a sessão, não o torneio.
+window._tournamentEndDate = function (t) {
+  var r = (typeof window._tournamentDateRange === 'function') ? window._tournamentDateRange(t) : null;
+  return (r && r.end) || (t && t.endDate) || '';
+};
+// Idem em milissegundos (NaN quando não há data), pra comparações de prazo/contagem regressiva.
+window._tournamentEndMs = function (t) {
+  var s = window._tournamentEndDate(t);
+  if (!s) return NaN;
+  return new Date(String(s).indexOf('T') > -1 ? s : (s + 'T23:59')).getTime();
 };
 
 // ─── INSCRITOS = participants[]. Ponto. ───────────────────────────────────────

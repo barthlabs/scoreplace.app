@@ -338,8 +338,9 @@ function renderDashboard(container) {
     if (hasA && !hasB) return -1;
     if (!hasA && hasB) return 1;
     const _time = t => {
-      // Em andamento com data de término → usa endDate
-      if (_isInProgress(t) && t.endDate) return new Date(t.endDate).getTime();
+      // Em andamento com data de término → usa o fim do TORNEIO (última fase, v1.6.83)
+      var _e = window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate;
+      if (_isInProgress(t) && _e) return new Date(_e).getTime();
       // Não iniciado → usa startDate
       if (t.startDate) return new Date(t.startDate).getTime();
       if (t.registrationLimit) return new Date(t.registrationLimit).getTime();
@@ -881,8 +882,11 @@ function renderDashboard(container) {
                 var _sd2 = new Date(t.startDate).getTime();
                 if (!isNaN(_sd2) && _sd2 > _now && !sorteioRealizado) _events.push({ ts: _sd2, label: _t('event.tournamentStart'), icon: '🏁', color: '#10b981' });
               }
-              if (t.endDate) {
-                var _ed = new Date(t.endDate).getTime();
+              // v1.6.83: "🏆 Fim do torneio" conta pro fim da ÚLTIMA fase — com t.endDate cru
+              // a contagem zerava no fim da classificatória, com a eliminatória ainda por vir.
+              var _edRaw = window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate;
+              if (_edRaw) {
+                var _ed = new Date(_edRaw).getTime();
                 if (!isNaN(_ed) && _ed > _now) _events.push({ ts: _ed, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' });
               }
               if (_events.length === 0) return '';
@@ -2234,9 +2238,10 @@ function renderDashboard(container) {
         var sinceStart = _nowMsBand - st;
         if (sinceStart >= 0 && sinceStart <= _WK_MS) return true;
       }
-      // termina nos próximos 7 dias (inclui hoje)?
-      if (t.endDate) {
-        var et = new Date(t.endDate).getTime();
+      // termina nos próximos 7 dias (inclui hoje)? — fim da ÚLTIMA fase (v1.6.83)
+      var _etRaw = window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate;
+      if (_etRaw) {
+        var et = new Date(_etRaw).getTime();
         if (!isNaN(et)) {
           var untilEnd = et - _nowMsBand;
           if (untilEnd >= 0 && untilEnd <= _WK_MS) return true;

@@ -107,8 +107,11 @@ sS._isLigaFormat = function (t) { return t && (t.format === 'Liga' || t.format =
   const src = fs.readFileSync(path.join(__dirname, '..', 'js/store.js'), 'utf8');
   const i = src.indexOf('window._tournamentDateRange = function');
   ok(i > 0, '_tournamentDateRange encontrada em store.js');
-  const end = src.indexOf('\n};', i);
-  vm.runInContext(src.slice(i, end + 3), sS, { filename: 'store.js#_tournamentDateRange' });
+  // Do início de _tournamentDateRange até o fim de _tournamentEndMs (os 3 helpers do bloco).
+  const j = src.indexOf('window._tournamentEndMs = function', i);
+  ok(j > i, '_tournamentEndMs encontrada em store.js (logo após o range)');
+  const end = src.indexOf('\n};', j);
+  vm.runInContext(src.slice(i, end + 3), sS, { filename: 'store.js#dateHelpers' });
 })();
 // _tournamentDateText é privada do módulo — carrega o arquivo inteiro e usa o caller público
 // (_tournamentInviteText), que é exatamente o que monta a mensagem do WhatsApp.
@@ -183,6 +186,89 @@ const dateLine = (t) => {
     phases: [{ name: 'Grupos' }, { name: 'Eliminatória', endDate: '2026-08-02' }]
   };
   eq(dateLine(t), '02/08/2026 às 09:00', '[um dia] data única + hora, sem "de X a X"');
+})();
+
+// ═══ (C) TODO LUGAR que ANUNCIA o encerramento usa o fim da ÚLTIMA fase ════════
+// Correção de escopo do dono (02/ago): "o bug não é só no link de convite — é no card de
+// detalhe dentro do app. Corrige em todos os lugares onde a data de encerramento é exibida."
+// Trava o CONSUMO: nenhum render de encerramento pode ler t.endDate cru.
+(function () {
+  const t = {
+    id: 'tx', name: 'Confra', format: 'Liga', startDate: '2026-08-02T19:00', endDate: '2026-08-31T23:00',
+    phases: [{ name: 'Rei/Rainha' }, { name: 'Eliminatória', endDate: '2026-09-12', endTime: '22:00' }]
+  };
+  if (typeof sS._tournamentEndDate !== 'function' || typeof sS._tournamentEndMs !== 'function') {
+    ok(false, '[helper] _tournamentEndDate/_tournamentEndMs existem em store.js');
+  } else {
+    eq(sS._tournamentEndDate(t), '2026-09-12T22:00', '[helper] _tournamentEndDate = fim da ÚLTIMA fase');
+    ok(sS._tournamentEndMs(t) === new Date('2026-09-12T22:00').getTime(), '[helper] _tournamentEndMs em ms');
+    eq(sS._tournamentEndDate({ id: 'y', startDate: '2026-08-02', endDate: '2026-08-31' }), '2026-08-31',
+      '[helper] fase única → a própria data do torneio');
+    eq(sS._tournamentEndDate({ id: 'z' }), '', '[helper] sem data → string vazia');
+  }
+
+  // O folheto de impressão, o CSV e o payload de agenda são privados do módulo de sharing —
+  // todos passam pelo mesmo `_tEnd`, e a varredura de código abaixo garante que nenhum deles
+  // voltou a ler t.endDate cru.
+})();
+
+// ── Varredura de código: nenhum render de encerramento lendo t.endDate cru ─────
+(function () {
+  // (arquivo, trecho que NÃO pode mais existir, o que é)
+  const proibido = [
+    ['js/views/rules.js', "formatDate(t.endDate)", 'ficha de regras "Fim"'],
+    ['js/views/tournaments-sharing.js', "fmtDate(t.endDate)", 'folheto de impressão "Fim"'],
+    ['js/views/tournaments-sharing.js', "rows.push(['Fim', t.endDate])", 'export CSV "Fim"'],
+    ['js/views/tournaments-sharing.js', "var endRaw = t.endDate", 'evento de agenda (.ics)'],
+    ['functions/abandon-core.js', "var fim = msDe(t.endDate)", 'varredura de abandono (CF)']
+  ];
+  proibido.forEach(([f, trecho, oque]) => {
+    const src = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+    ok(src.indexOf(trecho) === -1, '[varredura] ' + oque + ' não lê t.endDate cru (' + f + ')');
+  });
+  // A contagem regressiva "🏆 Fim do torneio" existe em DOIS renders (dashboard + detalhe) —
+  // os dois têm de passar pelo helper, senão um deles volta a zerar cedo.
+  ['js/views/dashboard.js', 'js/views/tournaments.js'].forEach((f) => {
+    const src = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+    const i = src.indexOf("event.tournamentEnd");
+    ok(i > 0 && src.slice(Math.max(0, i - 400), i).indexOf('_tournamentEndDate') > 0,
+      '[varredura] contagem "Fim do torneio" usa o helper (' + f + ')');
+  });
+})();
+
+// ═══ (D) A CF de abandono não pode encerrar torneio VIVO na eliminatória ═══════
+// Sem isto, a varredura diária encerraria o Confra 7 dias depois de 31/08 — com a eliminatória
+// ainda rolando até 12/09. É o dano mais caro desta classe de bug: escrita em produção.
+(function () {
+  const A = require('../functions/abandon-core.js');
+  const DIA = 86400000;
+  const base = {
+    id: 'tour_1780009816637', name: 'Confra', format: 'Eliminatórias Simples', status: 'active',
+    startDate: '2026-08-02T19:00', endDate: '2026-08-31T23:00',
+    createdAt: '2026-08-01T00:00:00Z', matches: [{}]
+  };
+  // jogos até 30/08; "agora" = 10 dias depois do fim da classificatória (31/08) → passou a folga
+  const pl = { comPlacar: 8, primeiro: Date.parse('2026-08-02T22:00:00Z'), ultimo: Date.parse('2026-08-30T22:00:00Z') };
+  const agora = Date.parse('2026-09-10T12:00:00Z');
+  const run = (phases, when) => A.computeAbandon(Object.assign({}, base, { phases: phases }), pl, when);
+
+  if (typeof A.fimDoTorneioMs !== 'function') {
+    ok(false, '[CF] abandon-core exporta fimDoTorneioMs');
+  } else {
+    eq(A.fimDoTorneioMs({ endDate: '2026-08-31T23:00', phases: [{}, { endDate: '2026-09-12', endTime: '22:00' }] }),
+      Date.parse('2026-09-12T22:00:00-03:00'), 'fimDoTorneioMs = fim da última fase');
+    eq(A.fimDoTorneioMs({ endDate: '2026-08-31T23:00', phases: [{}, { endDate: '2026-08-20' }] }),
+      Date.parse('2026-08-31T23:00'), 'fimDoTorneioMs = o MAIS TARDIO (não encolhe)');
+  }
+
+  eq(run([{}, { name: 'Elim' }], agora).acao, 'encerrar',
+    '[sem término na elim] encerra, como antes (nada mudou pra base atual)');
+
+  const elim = [{}, { name: 'Elim', endDate: '2026-09-12', endTime: '22:00' }];
+  ok(run(elim, agora).acao !== 'encerrar',
+    '[com término na elim] NÃO encerra torneio vivo — a eliminatória vai até 12/09');
+  // Passado o término da elim + a folga de 7 dias, volta a encerrar (a regra continua valendo).
+  eq(run(elim, agora + 20 * DIA).acao, 'encerrar', '[depois do término da elim] encerra normalmente');
 })();
 
 console.log(pass + ' ok, ' + fail + ' falhas');

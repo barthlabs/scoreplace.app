@@ -651,6 +651,9 @@
     if (isNaN(start.getTime())) return out;
     if (window.PresenceDB.dayKey(start) !== dayKeyStr) return out;
     var endMs = start.getTime() + (3 * 60 * 60 * 1000);
+    // v1.6.83 — DELIBERADO: t.endDate CRU. Aqui o assunto é a ocupação da quadra NAQUELE DIA
+    // (a função já saiu fora em Liga e exige start no mesmo dayKey). Usar o fim do torneio
+    // (última fase) faria uma quadra aparecer ocupada por semanas. Fim do TORNEIO = _tournamentEndDate.
     if (t.endDate) {
       var end = new Date(t.endDate);
       if (!isNaN(end.getTime()) && end.getTime() > start.getTime()) endMs = end.getTime();

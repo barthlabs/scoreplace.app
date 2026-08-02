@@ -56,6 +56,23 @@ function msDe(v) {
   return isFinite(t) ? t : null;
 }
 
+// v1.6.83: FIM DO TORNEIO = a data mais tardia entre o top-level e todas as fases.
+// t.endDate cru é o fim da fase INICIAL (o box "Datas da fase" do formulário mora dentro dela):
+// num torneio de 2 fases ele venceria com a eliminatória ainda rolando, e a varredura encerraria
+// um torneio VIVO por "data de término passou". Espelha window._tournamentDateRange do cliente
+// (feedback_functions_must_mirror_app) — aqui em ms porque é só comparação de prazo.
+function fimDoTorneioMs(t) {
+  var cands = [msDe(t.endDate)];
+  if (Array.isArray(t.phases)) {
+    t.phases.forEach(function (ph) {
+      if (!ph || !ph.endDate) return;
+      cands.push(msDe(ph.endDate + (ph.endTime ? ('T' + ph.endTime + ':00-03:00') : '')));
+    });
+  }
+  cands = cands.filter(function (x) { return x != null; });
+  return cands.length ? Math.max.apply(null, cands) : null;
+}
+
 function ehLiga(fmt) {
   var f = String(fmt || '').toLowerCase();
   return f === 'liga' || f === 'ranking' || f.indexOf('pontos corridos') >= 0;
@@ -95,7 +112,7 @@ function computeAbandon(t, placares, agoraMs) {
   // ── JOGOU E PAROU ──
   var ultimo = p.ultimo || null;
   if (!ultimo) return nada;                                        // sem quando, sem prazo
-  var fim = msDe(t.endDate);
+  var fim = fimDoTorneioMs(t);
   var dueAt, motivo;
   if (fim && fim < agoraMs) {
     // A data de término é a palavra do PRÓPRIO organizador sobre quando acabaria. Placar
@@ -133,7 +150,7 @@ function mensagemEncerrado(nome) {
 module.exports = {
   DIA: DIA, FOLGA_APOS_FIM: FOLGA_APOS_FIM, OCIOSO_MINIMO: OCIOSO_MINIMO,
   FATOR_JANELA: FATOR_JANELA, AVISO_ANTES: AVISO_ANTES, SEM_JOGO_SUMICO: SEM_JOGO_SUMICO,
-  msDe: msDe, ehLiga: ehLiga, temChave: temChave,
+  msDe: msDe, ehLiga: ehLiga, temChave: temChave, fimDoTorneioMs: fimDoTorneioMs,
   computeAbandon: computeAbandon,
   mensagemAviso: mensagemAviso, mensagemEncerrado: mensagemEncerrado
 };
