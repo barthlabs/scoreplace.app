@@ -3743,6 +3743,31 @@
       var a = Array.isArray(antigo[k]) ? antigo[k] : [], b = Array.isArray(novo[k]) ? novo[k] : [];
       out[k] = (b.length >= a.length) ? b : a;
     });
+    // ── O DETALHE DAS COMPETIÇÕES TAMBÉM SE SOMA ────────────────────────────────
+    // `tournaments` e `rankings` guardam nome, categoria e CLASSIFICAÇÃO — é deles que sai
+    // a evidência do veredito (a comparação entre a categoria declarada e a que a pessoa
+    // joga). O `Object.assign` deixava a rodada nova sobrescrever os dois, e uma rodada que
+    // não reabriu nenhuma competição (porque o cursor já as tinha) traz esses arrays
+    // VAZIOS. Medido no Fabio em 02/ago/2026: 391 jogos, todos com id, leitura de hoje — e
+    // `tournaments` com título: ZERO. Sem título não há evidência, sem evidência não há
+    // veredito, e o nome que estava verde voltou a violeta.
+    // Mesma lei dos jogos: união por identidade, e vence a entrada mais informativa.
+    ['tournaments', 'rankings'].forEach(function (k) {
+      var a = Array.isArray(antigo[k]) ? antigo[k] : [], b = Array.isArray(novo[k]) ? novo[k] : [];
+      if (!a.length && !b.length) return;
+      var por = {}, seq = [];
+      function riqueza(x) {
+        return (x && x.title ? 4 : 0) + (x && x.standings ? 2 : 0) + (x && x.name ? 1 : 0);
+      }
+      a.concat(b).forEach(function (x) {
+        if (!x) return;
+        var id = (x.tourneyId != null ? x.tourneyId : (x.rankingId != null ? x.rankingId : (x.name || '')));
+        var kk = (x.club || '') + '/' + id;
+        if (!por[kk]) { por[kk] = x; seq.push(kk); return; }
+        if (riqueza(x) > riqueza(por[kk])) por[kk] = x;
+      });
+      out[k] = seq.map(function (kk) { return por[kk]; });
+    });
     out.indexTotal = Math.max(antigo.indexTotal || 0, novo.indexTotal || 0) || undefined;
     out.declaredGames = Math.max(antigo.declaredGames || 0, novo.declaredGames || 0) || undefined;
     if (antigo.totais || novo.totais) {
@@ -3760,6 +3785,18 @@
     return out;
   }
 
+  // O RESUMO É FUNÇÃO DO HISTÓRICO, não um número que vem por fora.
+  // A extensão manda o resumo com o que AQUELA RODADA leu (390); o histórico é o acumulado
+  // unido (391). Dois números medindo coisas diferentes, e a tela usando os dois: a barra
+  // lia um e a cor lia o outro. Depois de unir, o resumo é recalculado do resultado — assim
+  // eles não têm COMO discordar.
+  function _lzResumoDoHistorico(doc) {
+    if (!doc || !doc.scan || !doc.fullImport) return;
+    var n = _lzTot(doc.fullImport);
+    if (typeof doc.scan._fullGames === 'number' && doc.scan._fullGames !== n) {
+      doc.scan = Object.assign({}, doc.scan, { _fullGames: n });
+    }
+  }
   function _lzResumoRegrediu(novo, antigo) {
     if (!novo || !antigo) return false;
     var a = (typeof antigo._fullGames === 'number') ? antigo._fullGames : -1;
@@ -3789,6 +3826,7 @@
     function barrar(antes, origem, guardado) {
       if (guardado) {
         doc.fullImport = _lzUnirImports(guardado, doc.fullImport);
+        _lzResumoDoHistorico(doc);
         window._warn && window._warn('[letzplay] leituras unidas (' + origem + '): ' + agora +
           ' + ' + antes + ' → ' + _lzTot(doc.fullImport) + ' jogos.');
         return doc;

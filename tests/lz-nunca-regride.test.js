@@ -160,5 +160,41 @@ ok(/será substituído por/.test(grava), 'e avisa quando substitui um documento 
      'une SEMPRE que já existe histórico — inclusive quando a leitura nova é maior');
 }
 
+// ── O DETALHE DAS COMPETIÇÕES TAMBÉM SE SOMA — E O RESUMO SAI DO HISTÓRICO ─────────────
+// Medido no Fabio (02/ago/2026): 391 jogos, TODOS com lzId, leitura de hoje — e o nome
+// violeta. Causa: `tournaments` com título = ZERO. A união preservava jogos e cursor, mas
+// deixava o Object.assign sobrescrever os arrays de DETALHE com os da rodada nova, que numa
+// rodada parcial vêm vazios. Sem título não há evidência; sem evidência não há veredito.
+{
+  const app = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  const ctx = { window: {}, console, Object, Array, Math, JSON };
+  require('vm').createContext(ctx);
+  const ini = app.indexOf('function _lzUnirImports'), fim = app.indexOf('  // O RESUMO É FUNÇÃO DO HISTÓRICO');
+  require('vm').runInContext(app.slice(ini, fim) + '\nwindow._unir = _lzUnirImports;', ctx);
+  const unir = ctx.window._unir;
+
+  const velho = { games: [], tournaments: [
+    { club: 'c', tourneyId: '1', name: 'BT House Open', title: '1º', standings: [1], categoryRaw: 'MASCULINA C' },
+    { club: 'c', tourneyId: '2', name: 'Abacateiro', title: '2º', standings: [1] } ] };
+  const novo = { games: [], tournaments: [] };          // rodada que não reabriu nada
+  const u = unir(velho, novo);
+  ok(u.tournaments.length === 2, 'o detalhe dos torneios sobrevive a uma rodada vazia (veio ' + u.tournaments.length + ')');
+  ok(u.tournaments.filter(x => x.title).length === 2, 'com os títulos, que é o que o veredito lê');
+
+  // e a entrada mais informativa vence
+  const v2 = unir({ tournaments: [{ club: 'c', tourneyId: '1', name: 'X' }] },
+                  { tournaments: [{ club: 'c', tourneyId: '1', name: 'X', title: '1º', standings: [1] }] });
+  ok(v2.tournaments.length === 1 && v2.tournaments[0].title === '1º',
+     'a mesma competição não duplica, e fica a versão com título/classificação');
+  const v3 = unir({ tournaments: [{ club: 'c', tourneyId: '1', name: 'X', title: '1º' }] },
+                  { tournaments: [{ club: 'c', tourneyId: '1', name: 'X' }] });
+  ok(v3.tournaments[0].title === '1º', 'e a rodada nova mais pobre não apaga o que já se sabia');
+
+  ok(/function _lzResumoDoHistorico\(doc\)/.test(app), 'o resumo é recalculado do histórico');
+  ok(/_lzResumoDoHistorico\(doc\);/.test(app.slice(app.indexOf('function _lzBarrarRegressao'))),
+     'logo depois de unir — os dois não têm COMO discordar');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-nunca-regride: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
