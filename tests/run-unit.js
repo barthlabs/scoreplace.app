@@ -138,6 +138,11 @@ const SUITES = [
   'tests/jogo-so-com-placar.test.js',
   'tests/apagar-torneio-nao-deixa-orfao.test.js',
   'tests/torneio-abandonado.test.js',
+  // Tag "Misto" no card do torneio: obrigatório sempre; senão, só com 1:1 EXATA de
+  // gênero entre os inscritos. Trava o caso real do "Confra BT Alta da Clínica 2026"
+  // (8 inscritas, zero homens, e o card dizia "Misto").
+  'tests/misto-tag-so-com-1-1.test.js',
+  'tests/convite-data-multifase.test.js',
   'tests/data-sem-ambiguidade.test.js',
   'tests/rules-letzplayscans-whitelist.test.js',
   'tests/lz-parcial-nao-e-oficial.test.js',
