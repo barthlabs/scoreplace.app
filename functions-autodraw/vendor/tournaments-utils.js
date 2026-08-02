@@ -818,19 +818,38 @@ window._currentPhaseGames = function (t) {
 // as fases (e top-level); fim = MAIOR data de fim entre todas as fases. No multi-
 // fase o fim do torneio é o fim da ÚLTIMA fase (ex.: Confra = 12/11), não o fim da
 // fase atual (19/06). Datas por fase: phase.startDate/startTime, phase.endDate/endTime.
+// v1.6.84: UMA LEI SÓ. A regra ("início = min de todas as datas de início; fim = max de todas as
+// de fim, contando o top-level e as N fases") vive em window._tournamentDateRange (store.js) —
+// aqui só a convertemos pra ms. Antes esta função tinha a SUA cópia da regra, e as duas
+// DIVERGIAM em dois pontos medidos:
+//   • data sem hora: o range usa 00:00 (início) / 23:59 (FIM DO DIA — prazo acaba no fim do dia),
+//     esta usava _tProgParseMs, que assume 12:00 pros dois → 12h de diferença no fim do torneio;
+//   • com duas fases terminando NO MESMO DIA, uma com hora e outra sem, cada implementação
+//     elegia uma fase diferente como "a última" → duas telas do app com fins diferentes.
+// O fallback abaixo (quando _tournamentDateRange não está carregado — o vendor da CF autoDraw
+// não leva o store.js) repete a MESMA regra, e tests/convite-data-multifase.test.js exige que os
+// dois caminhos deem o mesmo resultado.
 window._tournamentScheduledWindow = function (t) {
-  var starts = [], ends = [];
-  function add(arr, dateStr, timeStr) {
-    if (!dateStr) return;
-    var s = String(dateStr).indexOf('T') > -1 ? dateStr : (dateStr + (timeStr ? ('T' + timeStr) : ''));
-    var ms = window._tProgParseMs(s); if (ms != null) arr.push(ms);
+  if (!t) return { startMs: null, endMs: null };
+  function _ms(dateStr, timeStr, defTime) {
+    if (!dateStr) return null;
+    var s = String(dateStr);
+    if (s.indexOf('T') === -1) s += 'T' + (timeStr || defTime);
+    var m = new Date(s).getTime();
+    return isNaN(m) ? null : m;
   }
-  add(starts, t.startDate, t.startTime);
-  add(ends, t.endDate, t.endTime);
-  if (Array.isArray(t.phases)) t.phases.forEach(function (ph) {
-    add(starts, ph.startDate, ph.startTime);
-    add(ends, ph.endDate, ph.endTime);
-  });
+  if (typeof window._tournamentDateRange === 'function') {
+    var r = window._tournamentDateRange(t) || {};
+    return { startMs: _ms(r.start, '', '00:00'), endMs: _ms(r.end, '', '23:59') };
+  }
+  var starts = [], ends = [];
+  [{ startDate: t.startDate, startTime: t.startTime, endDate: t.endDate, endTime: t.endTime }]
+    .concat(Array.isArray(t.phases) ? t.phases : [])
+    .forEach(function (ph) {
+      if (!ph) return;
+      var s = _ms(ph.startDate, ph.startTime, '00:00'); if (s != null) starts.push(s);
+      var e = _ms(ph.endDate, ph.endTime, '23:59');     if (e != null) ends.push(e);
+    });
   return {
     startMs: starts.length ? Math.min.apply(null, starts) : null,
     endMs: ends.length ? Math.max.apply(null, ends) : null
@@ -1378,6 +1397,11 @@ window._ligaSeasonEndMs = function(t) {
         return isNaN(d.getTime()) ? NaN : d.getTime();
     }
     // 1) endDate explícita (fim do dia se date-only; hora exata se vier com 'T')
+    // v1.6.83 — DELIBERADO: aqui é t.endDate CRU, e tem que continuar sendo. Esta função
+    // responde "quando a TEMPORADA da Liga acaba" (= a fase de pontos corridos), não "quando o
+    // torneio acaba": é ela que faz o autoDraw parar de sortear rodadas. Num torneio de 2 fases,
+    // trocar pelo fim da eliminatória faria a Liga seguir sorteando rodadas depois da fase já ter
+    // avançado. Para MOSTRAR o fim do torneio use window._tournamentEndDate.
     if (t.endDate) {
         var endMs = _brt(t.endDate, '23:59:59');
         if (!isNaN(endMs)) return endMs;
@@ -1680,6 +1704,64 @@ window._ligaCurrentRoundEndTs = function (t) {
     return null; // encerrada mas sem carimbo de fim → não congela com valor errado
 };
 
+// v1.6.85: a RODADA ATUAL ainda tem jogo por jogar? (true = há placar pendente). Base do
+// estado 'round-end' do relógio: só faz sentido contar o prazo de quem AINDA TEM O QUE JOGAR.
+// Cobre as três formas de storage: fase posterior de chave (t.matches por phaseIndex),
+// rodadas nativas de Pontos Corridos/Suíço/Rei-Rainha (t.rounds) e chave de fase única.
+// BYE e folga não são jogo → não seguram a rodada aberta.
+window._currentRoundHasPendingGames = function (t) {
+    if (!t) return false;
+    var _cp = t.currentPhaseIndex || 0;
+    if (_cp >= 1 && typeof window._phaseCurrentRoundProgress === 'function') {
+        var _pr = window._phaseCurrentRoundProgress(t);
+        if (_pr && _pr.total > 0) return !_pr.complete;
+    }
+    if (Array.isArray(t.rounds) && t.rounds.length) {
+        var _rm = ((t.rounds[t.rounds.length - 1] || {}).matches || []).filter(function (m) { return m && !m.isSitOut && !m.isBye; });
+        if (_rm.length) return _rm.some(function (m) { return !m.winner; });
+    }
+    if (Array.isArray(t.matches) && t.matches.length) {
+        return t.matches.some(function (m) { return m && !m.winner && !m.isBye && !m.isSitOut && (m.phaseIndex || 0) === _cp; });
+    }
+    return false;
+};
+
+// v1.6.85: FIM PROGRAMADO DA RODADA ATUAL (ms) — o PRAZO que as pessoas têm pra jogar e lançar
+// os placares desta rodada. É a fonte do estado 'round-end' do relógio (o pedido do dono,
+// ago/2026: "depois do sorteio automático o cronômetro tem que ser a regressiva pro FIM DA
+// RODADA ATUAL"). Vale o MAIS APERTADO entre os dois prazos que o torneio REALMENTE tem:
+//   • próximo sorteio agendado (a rodada vale até a próxima começar) — pela math do SERVIDOR
+//     (_ligaNextDrawEventTs), nunca por aritmética de data: prazo que ninguém vai disparar
+//     não é prazo (ver [MENTIRA-1]/[MENTIRA-2] em tests/liga-countdown.test.js);
+//   • fim configurado da FASE ATUAL (phases[i].endDate/endTime); na fase INICIAL sem fim
+//     próprio, `t.endDate` É o fim dela (cânone v1.6.80 — o box "📅 Datas da fase" do
+//     formulário mora dentro da fase inicial).
+// Data SEM hora vira FIM DO DIA (23:59:59): prazo é o fim do dia, não meio-dia.
+// Sem NENHUMA data configurada → null (o relógio volta pro "Rodada em andamento", que conta
+// pra cima). Não estimamos por tempo de quadra aqui de propósito: prazo estimado é promessa
+// inventada — o mesmo defeito que os testes de "MENTIRA" travam pro sorteio.
+// Nota: a barra "Progresso do Torneio" (_buildProgressInner) mostra este mesmo instante como
+// "final programado", derivado dos MESMOS campos (fase → torneio).
+function _rseParseMs(dateStr, timeStr) {
+    if (!dateStr) return null;
+    var s = String(dateStr);
+    var ms = new Date(s.indexOf('T') > -1 ? s : (s + 'T' + (timeStr || '23:59:59'))).getTime();
+    return isNaN(ms) ? null : ms;
+}
+window._roundScheduledEndTs = function (t) {
+    if (!t) return null;
+    var _cands = [];
+    var _nd = (typeof window._ligaNextDrawEventTs === 'function') ? window._ligaNextDrawEventTs(t) : null;
+    if (_nd) _cands.push(_nd);
+    var _cp = t.currentPhaseIndex || 0;
+    var _ph = (Array.isArray(t.phases) && t.phases[_cp]) || {};
+    var _pe = _rseParseMs(_ph.endDate, _ph.endTime);
+    if (_pe == null && _cp === 0) _pe = _rseParseMs(t.endDate, t.endTime);
+    if (_pe != null) _cands.push(_pe);
+    if (!_cands.length) return null;
+    return Math.min.apply(null, _cands);
+};
+
 // v4.4.x: FONTE ÚNICA do indicador da RODADA ATUAL. Enquanto a rodada roda → "▶️ Rodada em
 // andamento" com o tempo decorrido tickando (data-elapsed-since). Quando TODOS os resultados
 // foram lançados → "🏁 Rodada encerrada" com a DURAÇÃO TOTAL CONGELADA (sem data-elapsed-since,
@@ -1712,18 +1794,23 @@ window._ligaRoundInProgressRow = function (t, color, opts) {
 // sorteio / Rodada em andamento / Fim do torneio"). Detalhe (tournaments.js) e card
 // (dashboard.js) chamam DAQUI e só renderizam — a lógica de estados vive num lugar só, com
 // teste, pra parar de regredir. Retorna { ts, labelKey, icon, color, kind } ou null.
-//   kind: 'season-start' | 'next-draw' | 'tournament-end' | 'round-in-progress'.
-//   'round-in-progress' vem com ts=null (box próprio, decorrido da rodada). No 'next-draw' o
-//   chamador ainda desenha a 2ª linha "Rodada em andamento".
+//   kind: 'season-start' | 'first-draw' | 'next-draw' | 'round-end' | 'tournament-end' |
+//         'round-in-progress'.
+//   'round-in-progress' vem com ts=null (box próprio, decorrido da rodada). No 'next-draw' e
+//   no 'round-end' o chamador ainda desenha a 2ª linha "Rodada em andamento".
 // ESTADOS (na ordem de prioridade — o dono definiu):
 //   1) ANTES do 1º sorteio → regressiva "Início da temporada" pro 1º evento futuro:
 //      startDate se futuro; senão o 1º sorteio agendado (drawFirstDate) — cobre auto E manual,
 //      e o caso em que o startDate já passou mas o sorteio ainda não (bug do print).
 //   2) sorteado + próximo sorteio AUTO agendado (≤ fim) → "Próximo sorteio".
-//   3) sorteado + rodada ATIVA (ainda não encerrada) → "Rodada em andamento" — PRIORIDADE
-//      sobre o "Fim do torneio": um jogo rolando NUNCA fica escondido pela regressiva de fim.
-//   4) "Fim do torneio" só nas últimas 48h (multi-fase = fim da ÚLTIMA fase).
-//   5) sorteado, fora das 48h, sem sorteio por vir → "Rodada em andamento" (mesmo encerrada).
+//   3) sorteado + rodada com jogo PENDENTE + prazo da rodada no futuro → "Fim da rodada":
+//      REGRESSIVA pro fim programado da rodada (_roundScheduledEndTs) = o tempo que as
+//      pessoas têm pra jogar e lançar os placares. Pedido do dono (ago/2026).
+//   4) sorteado + rodada ATIVA (ainda não encerrada), sem prazo conhecido → "Rodada em
+//      andamento" (conta PRA CIMA) — PRIORIDADE sobre o "Fim do torneio": um jogo rolando
+//      NUNCA fica escondido pela regressiva de fim.
+//   5) "Fim do torneio" só nas últimas 48h (multi-fase = fim da ÚLTIMA fase).
+//   6) sorteado, fora das 48h, sem sorteio por vir → "Rodada em andamento" (mesmo encerrada).
 window._ligaCountdownEvent = function (t) {
     if (!t) return null;
     var now = Date.now();
@@ -1755,17 +1842,87 @@ window._ligaCountdownEvent = function (t) {
         var _nd = window._ligaNextDrawEventTs(t);
         if (_nd && _nd > now && (tEnd == null || _nd <= tEnd)) return { ts: _nd, labelKey: 'tourn.nextDraw', icon: '🎲', color: '#fb923c', kind: 'next-draw' };
     }
-    // 3) Sorteado + rodada ATIVA (não encerrada) → rodada em andamento (PRIORIDADE sobre o fim).
+    // 3) Sorteado + rodada com jogo PENDENTE + prazo conhecido no futuro → REGRESSIVA pro fim
+    //    da rodada. É o relógio que o dono pediu: depois do sorteio, o que importa pra quem vai
+    //    jogar é QUANTO TEMPO FALTA pra jogar e lançar o placar — não há de onde tirar isso
+    //    contando pra cima. Vem ANTES do 'round-in-progress' (que conta o decorrido e vira a 2ª
+    //    linha do box) e antes do 'tournament-end'. Rodada já 100% lançada não entra: aí não há
+    //    mais o que jogar e o relógio volta a ser o do fim/decorrido congelado.
+    if (drew && typeof window._roundScheduledEndTs === 'function' &&
+        typeof window._currentRoundHasPendingGames === 'function' && window._currentRoundHasPendingGames(t)) {
+        var _rEndSched = window._roundScheduledEndTs(t);
+        if (_rEndSched != null && _rEndSched > now) {
+            return { ts: _rEndSched, labelKey: 'tourn.roundEnd', icon: '⏳', color: '#38bdf8', kind: 'round-end' };
+        }
+    }
+    // 4) Sorteado + rodada ATIVA (não encerrada) → rodada em andamento (PRIORIDADE sobre o fim).
     if (drew && typeof window._ligaCurrentRoundStartTs === 'function') {
         var _rs = window._ligaCurrentRoundStartTs(t);
         var _reEnd = (typeof window._ligaCurrentRoundEndTs === 'function') ? window._ligaCurrentRoundEndTs(t) : null;
         if (_rs && _reEnd == null) return { ts: null, labelKey: null, icon: null, color: null, kind: 'round-in-progress' };
     }
-    // 4) Fim do torneio SÓ nas últimas 48h.
+    // 5) Fim do torneio SÓ nas últimas 48h.
     if (tEnd != null && tEnd > now && (tEnd - now) <= 48 * 3600000) return { ts: tEnd, labelKey: 'event.tournamentEnd', icon: '🏆', color: '#8b5cf6', kind: 'tournament-end' };
-    // 5) Sorteado, fora das 48h, sem sorteio por vir → rodada em andamento (mesmo encerrada).
+    // 6) Sorteado, fora das 48h, sem sorteio por vir → rodada em andamento (mesmo encerrada).
     if (drew && typeof window._ligaRoundInProgressRow === 'function') return { ts: null, labelKey: null, icon: null, color: null, kind: 'round-in-progress' };
     return null;
+};
+
+// v1.6.85: FONTE ÚNICA do BOX do relógio da Liga (o HTML, não só a decisão). O detalhe
+// (tournaments.js) e o card do dashboard (dashboard.js) desenhavam o MESMO box em cópias
+// separadas, e as cópias divergiram: o detalhe tratava o caso "sem linha de rodada pra
+// desenhar" e o card CAÍA no render genérico com o evento vazio do 'round-in-progress'
+// (ts/labelKey/icon = null) — imprimindo literalmente "null null 0s" no card (relato do
+// dono, ago/2026, sandbox do Confra: rodada sorteada às 12h pra valer às 19h, então o
+// "decorrido" ainda não existia). Com um render só, o buraco não tem onde se esconder.
+//   size: 'lg' (detalhe) | 'sm' (card); marginTop: espaço acima (o card encosta o box no
+//   toggle da Liga quando ele existe). Devolve '' quando não há nada a mostrar.
+window._ligaCountdownBoxHtml = function (t, size, marginTop) {
+    if (!t) return '';
+    var _mt = marginTop || '10px';
+    var _ce = (typeof window._ligaCountdownEvent === 'function') ? window._ligaCountdownEvent(t) : null;
+    if (!_ce) return '';
+    var _lg = (size !== 'sm');
+    var _rb = (typeof window._photoReadBox === 'function') ? window._photoReadBox()
+        : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
+    var _fg = _rb.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
+    var _rowFn = (typeof window._ligaRoundInProgressRow === 'function') ? window._ligaRoundInProgressRow : null;
+
+    // Rodada em andamento (sem regressiva) → box próprio com o tempo DECORRIDO.
+    if (_ce.kind === 'round-in-progress') {
+        var _solo = _rowFn ? _rowFn(t, _fg) : '';
+        if (!_solo) return ''; // nada a dizer — NUNCA cair no render genérico (era o "null null 0s")
+        return '<div style="margin-top:' + _mt + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _solo + '</div>';
+    }
+    // Guarda dura: box com regressiva EXIGE alvo e rótulo. Sem isso não se desenha nada.
+    var _ts = _ce.ts;
+    if (_ts == null || isNaN(_ts) || !_ce.labelKey) return '';
+    var _label = (typeof window._t === 'function') ? window._t(_ce.labelKey) : _ce.labelKey;
+    if (!_label) return '';
+    var _txt = window._formatCountdown ? window._formatCountdown(_ts - Date.now()) : '';
+    var _cm = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246', '#38bdf8': '56,189,248' };
+    var _rgb = _cm[_ce.color] || '139,92,246';
+
+    // 2ª linha "Rodada em andamento" (decorrido) quando o box é de sorteio/prazo da rodada —
+    // a rodada rolando nunca some, só deixa de ser o número principal.
+    var _line2 = '';
+    if ((_ce.kind === 'next-draw' || _ce.kind === 'round-end') && _rowFn) {
+        var _row = _rowFn(t, _fg, _lg ? { iconSize: '1.2rem', labelSize: '0.9rem', valueSize: '1.25rem' }
+                                      : { iconSize: '1.1rem', labelSize: '0.8rem', valueSize: '1.05rem' });
+        if (_row) {
+            _line2 = '<div style="display:flex;align-items:center;gap:10px;margin-top:' + (_lg ? '12px;padding-top:12px' : '8px;padding-top:8px') + ';border-top:1px solid rgba(' + _rgb + ',0.3);">' + _row + '</div>';
+        }
+    }
+    var _box = _lg
+        ? 'padding:14px 18px;background:' + _rb.bg + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);'
+        : 'padding:10px 14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;';
+    return '<div style="margin-top:' + _mt + ';' + _box + '">' +
+        '<div style="display:flex;align-items:center;gap:' + (_lg ? '12px' : '10px') + ';">' +
+          '<span style="font-size:' + (_lg ? '1.5rem' : '1.3rem') + ';flex-shrink:0;">' + _ce.icon + '</span>' +
+          '<span style="font-size:' + (_lg ? '0.95rem' : '0.85rem') + ';font-weight:700;color:' + _fg + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _label + '</span>' +
+          '<span data-countdown-target="' + _ts + '" style="margin-left:auto;font-size:' + (_lg ? '1.35rem' : '1.1rem') + ';font-weight:900;color:' + _fg + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;' + (_lg ? 'line-height:1;' : '') + 'white-space:nowrap;flex-shrink:0;">' + _txt + '</span>' +
+        '</div>' + _line2 +
+    '</div>';
 };
 
 // Navigate to tournament detail and scroll to highlight the enrolled participant
