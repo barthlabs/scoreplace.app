@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.91';
+  var EXT_VERSION = '1.92';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -932,6 +932,7 @@
       return raw;
     }
     var _datasISO = null;                 // lzId → 'aaaa-mm-dd', quando o índice rodou
+    var _cardsRepetidos = (prior && prior.totais && prior.totais.cardsRepetidos) || 0;
     var _indexTotal = (prior && prior.indexTotal) || 0;
     var _totaisAntes = (prior && prior.totais) || null;
     function carimbar(imp) {
@@ -971,6 +972,7 @@
         t.torneios = Math.max(t.torneios, _totaisAntes.torneios || 0);
         t.rankings = Math.max(t.rankings, _totaisAntes.rankings || 0);
       }
+      if (_cardsRepetidos > 0) t.cardsRepetidos = _cardsRepetidos;
       if (t.jogos || t.torneios || t.rankings) imp.totais = t;
       imp.declaredGames = totJogos;
       imp.declaredTournaments = totTorneios;
@@ -1372,6 +1374,15 @@
               // que qualquer parser genérico lê como mês/dia. O JSON traz "2026-03-10".
               // Casando por lzId, cada jogo passa a carregar a data da FONTE, sem
               // interpretação. Vale pros que já estão no acumulado também.
+              // CARDS REPETIDOS DO LETZPLAY: o contador do perfil conta linhas, e o
+              // letzplay serve o mesmo jogo 2× (medido: Kelly 162→160, Fabio 397→391,
+              // idêntico no HTML). A diferença NÃO é jogo faltando — e vai gravada para a
+              // tela EXPLICAR em vez de parecer que a leitura ficou devendo.
+              if (_idx.linhas != null && totJogos != null && _idx.linhas >= totJogos && totJogos > _idx.total) {
+                _cardsRepetidos = totJogos - _idx.total;
+                prog({ phase: 'jogos', feed: 'ℹ️ o letzplay mostra ' + totJogos + ' jogos, mas ' +
+                  _cardsRepetidos + ' são cards repetidos lá — partidas reais: ' + _idx.total });
+              }
               totJogos = _idx.total;               // FATO, não estimativa
               _indexTotal = _idx.total;            // vai gravado, pra tela não depender de cursor
               maxPage = Math.max(maxPage, _idx.paginas);

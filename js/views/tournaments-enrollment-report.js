@@ -2760,6 +2760,17 @@
     // DENTRO do "Puxar": a pessoa lia a ficha inteira, clicava, e só então descobria que a
     // extensão não servia. O slot é preenchido pelo ping logo abaixo.
     body = '<div id="lz-ext-aviso"></div>' + body;
+    // O NÚMERO DO LETZPLAY ≠ NOSSO NÚMERO TEM QUE VIR COM EXPLICAÇÃO. O dono viu
+    // "160" aqui e "162 Jogos" lá e a leitura pareceu mentirosa — quando os 2 de
+    // diferença são o MESMO jogo servido duas vezes pelo letzplay (medido no JSON e no
+    // HTML, ids idênticos). Número divergente sem explicação é indistinguível de erro.
+    var _rep = (imp && imp.totais && imp.totais.cardsRepetidos) || 0;
+    if (_rep > 0 && imp && imp.declaredGames > 0) {
+      body += '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin:6px 0 0;">' +
+        'ℹ️ O letzplay mostra <b>' + imp.declaredGames + ' jogos</b>, mas <b>' + _rep +
+        '</b> ' + (_rep === 1 ? 'é card repetido' : 'são cards repetidos') + ' lá (o mesmo jogo aparece duas vezes na lista deles). ' +
+        'Partidas reais: <b>' + (imp.indexTotal || (imp.declaredGames - _rep)) + '</b>.</div>';
+    }
     if (!_podePuxar() && _temLz) {
       body += '<div style="font-size:0.8rem;color:#fbbf24;margin-top:8px;line-height:1.45;' +
         'background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.30);border-radius:9px;padding:8px 10px;">' +
@@ -3853,6 +3864,8 @@
         torneios: Math.max(ta.torneios || 0, tn.torneios || 0),
         rankings: Math.max(ta.rankings || 0, tn.rankings || 0)
       };
+      var _cr = Math.max(ta.cardsRepetidos || 0, tn.cardsRepetidos || 0);
+      if (_cr > 0) out.totais.cardsRepetidos = _cr;
     }
     // um "parcial" não contamina um histórico que já estava completo
     if (!novo.partialReason || out.lzCursor.complete) out.partialReason = null;

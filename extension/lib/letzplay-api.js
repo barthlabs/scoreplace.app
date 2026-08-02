@@ -52,11 +52,12 @@
     // traz nada novo — a lista é do mais recente pro mais antigo, então o que é novo está
     // no começo e é contíguo. Sem ele, varre tudo (primeira leitura).
     var conhecidos = opts.conhecidos || null;
-    var out = [], porId = {}, comps = {}, p = 1, parcial = false;
+    var out = [], porId = {}, comps = {}, p = 1, parcial = false, linhas = 0;
     for (; p <= max; p++) {
       var arr = await pagina(handle, p, fetchJson);
       if (arr == null) { var e = new Error('indice-falhou'); e.pagina = p; throw e; }
       if (!arr.length) break;                  // FIM EXPLÍCITO
+      linhas += arr.length;
       var novosNaPagina = 0;
       arr.forEach(function (raw) {
         var m = normalizar(raw);
@@ -71,24 +72,29 @@
       if (typeof opts.onProgresso === 'function') opts.onProgresso(p, out.length);
       if (conhecidos && novosNaPagina === 0) { parcial = true; break; }
     }
-    // ── DESLOCAMENTO DE PAGINAÇÃO: A LINHA REPETIDA DENUNCIA UMA LINHA PERDIDA ──
-    // A paginação do letzplay é por OFFSET. Se uma partida é inserida (ou a ordem muda)
-    // entre a página N e a N+1, as linhas escorregam: uma reaparece na página seguinte e
-    // OUTRA, no limite, nunca é servida. Eu tratava a repetida como "linha duplicada do
-    // perfil" e concluía que o total certo era o menor — errado, e o dono corrigiu:
-    // MEDIDO no Fabio (02/ago/2026): 397 linhas, 391 ids distintos, 6 repetidos. O perfil
-    // diz 397 e ele está certo — faltam 6 que o deslocamento comeu.
-    // Quando o esperado é conhecido e sobra gente, varre de novo e FUNDE: o deslocamento é
-    // aleatório, então uma segunda passada quase nunca perde as mesmas linhas. Para quando
-    // alcança o esperado ou quando uma passada inteira não traz nada novo.
+    // ── CARD REPETIDO ≠ LINHA PERDIDA — E A PROVA É ARITMÉTICA ─────────────────────
+    // Eu já errei este diagnóstico NAS DUAS direções, então ele ficou medido e travado:
+    // o letzplay serve o MESMO jogo duas vezes (objetos idênticos, em fronteira de página)
+    // e o contador do perfil conta os dois. Medido em 02/ago/2026, no JSON e no HTML:
+    //   Kelly → 162 cards, 160 distintos (ids 7770348 e 8894372 repetidos, byte a byte);
+    //   Fabio → 397 cards, 391 distintos (6 repetidos) — estável entre varreduras.
+    // Como decidir sem chute: comparar LINHAS servidas com o esperado do perfil.
+    //   linhas >= esperado → nada foi perdido; a diferença distintos×esperado são cards
+    //                        repetidos DO LETZPLAY (e a tela deve DIZER isso, não somar);
+    //   linhas <  esperado → aí sim faltou página (falha no meio) → repassa e funde.
     var esperado = opts.esperado || 0;
     var passadas = 0;
-    while (!parcial && esperado > 0 && out.length < esperado && passadas < 3) {
+    while (!parcial && esperado > 0 && out.length < esperado && linhas < esperado && passadas < 3) {
       passadas++;
       var antes = out.length;
-      for (var q = 1; q <= (p - 1); q++) {
+      // o teto do repasse NÃO é onde a varredura parou: se a falha foi uma página vazia
+      // no MEIO, `p` parou cedo — e relendo só até ali, as páginas de trás nunca viriam.
+      // O esperado diz quantas páginas o perfil tem (20 por página).
+      var tetoRepasse = Math.max(p - 1, Math.ceil(esperado / 20));
+      for (var q = 1; q <= tetoRepasse; q++) {
         var arr2 = await pagina(handle, q, fetchJson);
         if (arr2 == null || !arr2.length) continue;
+        linhas += arr2.length;
         arr2.forEach(function (raw) {
           var m2 = normalizar(raw);
           if (!m2 || porId[m2.id]) return;
@@ -106,7 +112,7 @@
     // é o total do perfil — quem chama tem que somar com o que já tinha, e por isso o
     // campo vem explícito em vez de a gente devolver um número que parece completo.
     return { matches: out, porId: porId, comps: comps, paginas: p - 1,
-             total: out.length, parcial: parcial, passadas: passadas };
+             total: out.length, linhas: linhas, parcial: parcial, passadas: passadas };
   }
 
   root._spLzApi = { indice: indice, pagina: pagina, normalizar: normalizar };

@@ -296,6 +296,54 @@ function servidor(total, opts) {
   ok(/if \(C\.toursDone\[tk\]\)/.test(cnt), 'e o marcado não é rebuscado na rodada seguinte');
 }
 
+// ── CARD REPETIDO ≠ LINHA PERDIDA — decidido por ARITMÉTICA, não por opinião ────────────
+// Já errei este diagnóstico nas duas direções (primeiro "é duplicata", depois capitulei
+// pro "são 397"). Medição final, JSON e HTML: Kelly 162 cards → 160 partidas (ids 7770348
+// e 8894372 idênticos, byte a byte); Fabio 397 → 391 (6 repetidos, estáveis). A regra:
+// linhas >= esperado → nada foi perdido, a diferença é card repetido DO LETZPLAY;
+// linhas <  esperado → aí sim faltou página, repassa e funde.
+{
+  // Kelly: 9 páginas, 162 linhas, 160 distintos — SEM repasse (nada foi perdido)
+  // 162 linhas = 160 partidas + 2 ids repetidos (como no perfil real dela)
+  const stream = [];
+  for (let i2 = 1; i2 <= 160; i2++) stream.push(i2);
+  stream.splice(65, 0, 30);      // id 30 servido de novo
+  stream.splice(85, 0, 50);      // id 50 servido de novo
+  const paginas = {};
+  for (let pi = 0; pi * 20 < stream.length; pi++)
+    paginas[pi + 1] = stream.slice(pi * 20, pi * 20 + 20).map(x => ({ id: x, date: '2026-01-01' }));
+  const porPag = Object.keys(paginas);
+  let hits = 0;
+  const r = await API.indice('kelly', async (u) => { hits++; const m = u.match(/[?&]page=(\d+)/); return paginas[m ? +m[1] : 1] || []; },
+    { esperado: 162 });
+  ok(r.linhas === 162, 'contou as 162 LINHAS servidas (veio ' + r.linhas + ')');
+  ok(r.total === 160, 'e 160 partidas distintas (veio ' + r.total + ')');
+  ok(r.passadas === 0, 'NENHUM repasse: linhas >= esperado prova que nada foi perdido (veio ' + r.passadas + ')');
+  ok(hits === porPag.length + 1, 'uma varredura só + a página vazia (veio ' + hits + ')');
+}
+{
+  // falha real: uma página não servida → linhas < esperado → repassa e recupera
+  const boas = {}; for (let p2 = 1; p2 <= 3; p2++) boas[p2] = Array.from({ length: 20 }, (_, i) => ({ id: p2 * 100 + i, date: '2026-01-01' }));
+  let falhouUma = false;
+  const r2 = await API.indice('x', async (u) => {
+    const m = u.match(/[?&]page=(\d+)/); const pg = m ? +m[1] : 1;
+    if (pg === 2 && !falhouUma) { falhouUma = true; return []; }   // o servidor devolveu vazio no meio
+    return boas[pg] || [];
+  }, { esperado: 60 });
+  ok(r2.passadas > 0, 'linhas < esperado dispara o repasse');
+  ok(r2.total === 60, 'e o repasse recupera as 20 que a falha comeu (veio ' + r2.total + ')');
+}
+{
+  const cnt = fs.readFileSync(path.join(__dirname, '..', 'extension', 'content.js'), 'utf8');
+  ok(/_cardsRepetidos = totJogos - _idx\.total;/.test(cnt), 'a extensão registra os cards repetidos do letzplay');
+  ok(/cards repetidos lá — partidas reais/.test(cnt), 'e avisa na leitura');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/são cards repetidos' \) \+ ' lá|é card repetido/.test(app.replace(/\n/g, ' ')) || /cards repetidos/.test(app),
+     'a ficha EXPLICA a diferença — número divergente sem explicação é indistinguível de erro');
+  ok(/cardsRepetidos/.test(app.slice(app.indexOf('out.totais = {'), app.indexOf('out.totais = {') + 700)),
+     'e a união preserva o campo');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-api-index: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
 })();
