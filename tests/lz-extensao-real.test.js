@@ -160,6 +160,64 @@ function servir(url, cfg) {
     } finally { await ctx.close(); }
   }
 
+  // ── CENÁRIO: JOGOU ONTEM. A LEITURA TEM QUE VER O QUE É NOVO ──────────────────────
+  // O caso real e o mais caro de todos: a Kelly jogou um torneio ontem e o app ficou
+  // parado em 157 enquanto o perfil já mostrava 162. Causa: numa RELEITURA o índice para
+  // na primeira página sem novidade e volta `parcial` — e eu jogava o índice INTEIRO fora
+  // com `if (_idx.parcial) _idx = null`. Sem índice, "faltam ids" dava 0, "já li tudo"
+  // continuava valendo, e a leitura não lia mais NADA, pra sempre.
+  // Aqui a leitura roda DUAS vezes contra o mesmo letzplay, e entre elas o perfil ganha
+  // jogos novos. A segunda tem que enxergá-los.
+  {
+    console.log('\n🆕 EXTENSÃO REAL — jogou ontem: a releitura enxerga o que é novo');
+    const cfgA = { games: 157, ranks: 8, tours: 8, gamesPerTour: 6 };
+    const cfgB = { games: 162, ranks: 8, tours: 9, gamesPerTour: 6 };
+    let cfgAtual = cfgA;
+    const perfil = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-ext-novo-'));
+    const ctx = await chromium.launchPersistentContext(perfil, {
+      headless: false,
+      args: ['--headless=new', '--disable-extensions-except=' + EXT, '--load-extension=' + EXT,
+             '--no-first-run', '--disable-gpu'],
+    });
+    try {
+      await ctx.addInitScript({ content: FIXTURE });
+      await ctx.route('https://letzplay.me/**', async (route) => {
+        const body = servir(route.request().url(), cfgAtual);
+        if (body == null) return route.fulfill({ status: 500, body: '' });
+        const json = /\/matches\.json/.test(route.request().url());
+        await route.fulfill({ status: 200, contentType: json ? 'application/json' : 'text/html; charset=utf-8', body: body });
+      });
+      await ctx.route('https://scoreplace.app/**', (route) =>
+        route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: APP_HTML }));
+      const app = await ctx.newPage();
+      await app.goto('https://scoreplace.app/');
+      await app.waitForFunction(() => !!window.__R && !!window.__R.ext, null, { timeout: 20000 }).catch(() => {});
+
+      await app.evaluate(() => window.__R.iniciar());
+      await app.waitForFunction(() => window.__R.done === true, null, { timeout: 300000 }).catch(() => {});
+      const r1 = await app.evaluate(() => ({ jogos: (window.__R.imp && (window.__R.imp.games || []).length) || 0 }));
+      ok(r1.jogos === 157, '1ª leitura trouxe os 157 (veio ' + r1.jogos + ')');
+
+      // o atleta joga: o letzplay passa a ter 162
+      cfgAtual = cfgB;
+      const reqAntes = 0;
+      await app.evaluate(() => { window.__R.done = false; window.__R.ok = null; window.__R.rodadas = 0; window.__R.iniciar(); });
+      const fim = await app.waitForFunction(() => window.__R.done === true, null, { timeout: 300000 })
+        .then(() => true).catch(() => false);
+      const r2 = await app.evaluate(() => ({ ok: window.__R.ok, erro: window.__R.erro,
+        jogos: (window.__R.imp && (window.__R.imp.games || []).length) || 0,
+        comId: (window.__R.imp && (window.__R.imp.games || []).filter(g => g && g.lzId).length) || 0,
+        cursor: window.__R.cursor ? { pageDone: window.__R.cursor.pageDone, pagesTotal: window.__R.cursor.pagesTotal,
+          pagesRead: Object.keys(window.__R.cursor.pagesRead || {}).join(','), complete: window.__R.cursor.complete } : null,
+        feeds: (window.__R.feeds || []).filter(f => typeof f === 'string' && /nova\(s\)/.test(f)) }));
+      console.log('     diag: comId=' + r2.comId + ' · cursor=' + JSON.stringify(r2.cursor));
+      console.log('     2ª leitura: terminou=' + fim + ' · jogos=' + r2.jogos + ' · erro=' + r2.erro);
+      ok(fim && r2.ok !== false, 'a 2ª leitura terminou sem erro');
+      ok(r2.jogos === 162, 'e ENXERGOU os 5 jogos novos (veio ' + r2.jogos + ')');
+      ok(r2.feeds.length > 0, 'e disse na tela que achou partida nova' + (r2.feeds[0] ? (': "' + r2.feeds[0] + '"') : ''));
+    } finally { await ctx.close(); }
+  }
+
   console.log('\n' + (fail ? '❌ ' + fail + ' de ' + (pass + fail) + ' falharam'
                            : '✅ ' + pass + ' verificações passaram (extensão real)'));
   process.exit(fail ? 1 : 0);

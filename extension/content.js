@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.90';
+  var EXT_VERSION = '1.91';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1317,10 +1317,22 @@
             prog({ phase: 'jogos', note: 'lendo o índice do histórico', pct: 46 });
             // já temos jogos? então o índice para na primeira página sem novidade — o
             // que é novo entra no começo da lista e é contíguo.
+            // A PARADA ANTECIPADA SÓ VALE QUANDO NÃO HÁ BURACO CONHECIDO.
+            // Ela existe porque, em geral, o que é novo está no topo e é contíguo — então
+            // a primeira página sem novidade encerra o assunto. Mas se o PERFIL declara
+            // mais jogos do que temos, existe buraco conhecido, e ele pode estar em
+            // qualquer página: parar cedo é perder exatamente o que fomos buscar. O teste
+            // com a extensão real pegou isto — com 157 no acervo e 162 no perfil, a
+            // releitura voltava 157 de novo.
+            var _faltaDeclarado = (totJogos || 0) > all.length;
             var _conhecidos = null;
-            if (all.length) {
+            if (all.length && !_faltaDeclarado) {
               _conhecidos = {};
               all.forEach(function (m) { if (m && m.lzId) _conhecidos[String(m.lzId)] = 1; });
+            }
+            if (_faltaDeclarado && all.length) {
+              prog({ phase: 'jogos', note: 'o perfil declara ' + totJogos + ' e temos ' +
+                all.length + ' — varrendo o índice inteiro' });
             }
             _idx = await window._spLzApi.indice(handle, bgFetchJson, {
               conhecidos: _conhecidos,
@@ -1331,20 +1343,35 @@
                 prog({ phase: 'jogos', note: 'índice: ' + n + ' partidas em ' + p + ' página(s)' });
               }
             });
-            // índice PARCIAL (parou cedo) não define total nem completude — ele só diz o
-            // que há de novo. Total e "li tudo" só valem quando ele varreu até o fim.
-            if (_idx && _idx.parcial) _idx = null;
-            if (_idx && _idx.total > 0) {
+            // ⛔ AQUI MORAVA O BUG QUE TRAVOU TUDO. Eu fazia `if (_idx.parcial) _idx = null`.
+            // Numa RELEITURA o índice para na primeira página sem novidade (é a otimização
+            // que a torna barata) e volta `parcial: true` — então eu jogava fora o índice
+            // INTEIRO, junto com os ids novos que ele tinha acabado de achar. Sem índice,
+            // `_faltamIds` dava 0, `jaLeuTudo` continuava verdadeiro e a leitura NÃO LIA
+            // NADA. Medido pelo dono: a Kelly jogou ontem e ficou parada em 157 enquanto o
+            // perfil dela já mostrava 162; o Fabio igual.
+            // O `parcial` só diz UMA coisa: que o TOTAL dele não é o total do perfil. Ele
+            // continua sendo a lista mais confiável do que EXISTE de novo — que é
+            // justamente para o que ele serve numa releitura.
+            var _idxParcial = !!(_idx && _idx.parcial);
+            if (_idx && _idx.porId) {
+              // as datas ISO valem sempre — inclusive das partidas novas de um índice parcial
+              _datasISO = _datasISO || {};
+              Object.keys(_idx.porId).forEach(function (id) {
+                var d = _idx.porId[id] && _idx.porId[id].date;
+                if (d) _datasISO[String(id)] = String(d).slice(0, 10);
+              });
+            }
+            if (_idx && _idxParcial) {
+              prog({ phase: 'jogos', feed: '📇 índice: parou cedo (só o que é novo) — ' +
+                Object.keys(_idx.porId).length + ' partida(s) conferida(s)' });
+            }
+            if (_idx && !_idxParcial && _idx.total > 0) {
               // ── A DATA VEM DO ÍNDICE, EM ISO ────────────────────────────────────────
               // O card do HTML traz "Terça, 10/03/26" — dia/mês na convenção brasileira,
               // que qualquer parser genérico lê como mês/dia. O JSON traz "2026-03-10".
               // Casando por lzId, cada jogo passa a carregar a data da FONTE, sem
               // interpretação. Vale pros que já estão no acumulado também.
-              _datasISO = {};
-              Object.keys(_idx.porId).forEach(function (id) {
-                var d = _idx.porId[id] && _idx.porId[id].date;
-                if (d) _datasISO[String(id)] = String(d).slice(0, 10);
-              });
               totJogos = _idx.total;               // FATO, não estimativa
               _indexTotal = _idx.total;            // vai gravado, pra tela não depender de cursor
               maxPage = Math.max(maxPage, _idx.paginas);
@@ -1388,8 +1415,34 @@
             if (C.pageDone >= +pg) C.pageDone = +pg - 1;
           });
           C.complete = false;
+          var _pgs = Object.keys(_pgFalta).map(Number).sort(function (a, b) { return a - b; });
           prog({ phase: 'jogos', feed: '🆕 ' + _faltamIds + ' partida(s) nova(s) — lendo ' +
-            Object.keys(_pgFalta).length + ' página(s)' });
+            _pgs.length + ' página(s): ' + _pgs.join(', ') });
+          // LÊ EXATAMENTE ESSAS PÁGINAS, AGORA. Deixar isso pro laço incremental não
+          // funciona: ele começa na página 1 e PARA na primeira que não traz novidade —
+          // a mesma suposição de que "o novo está no topo" que já tinha falhado no índice.
+          // Quando o novo está na página 8, ele nunca chega lá. Aqui a página é conhecida
+          // pelo id: vai direto, e são só as que faltam.
+          for (var _ip = 0; _ip < _pgs.length; _ip++) {
+            conferirTeto();
+            var _pgN = _pgs[_ip];
+            try {
+              var _dN = await bgFetchDoc(_pgN > 1 ? (base + '?page=' + _pgN) : base);
+              var _addN = addJogos(X.extractMatchesFromDoc(_dN, realHandle));
+              C.pagesRead[_pgN] = 1; lastPageRead = Math.max(lastPageRead || 0, _pgN);
+              maxPage = Math.max(maxPage, F.detectMaxPage(_dN), _pgN);
+              prog({ phase: 'jogos', feed: '🎾 página ' + _pgN + ': +' + _addN + ' jogo(s) novo(s)' });
+            } catch (ePg) { if (ehPausa(ePg)) throw ePg; }
+          }
+          // recomputa: o que faltava pode ter acabado de entrar
+          _temId = {}; all.forEach(function (m) { if (m && m.lzId) _temId[String(m.lzId)] = 1; });
+          _faltamIds = Object.keys(_idx.porId).filter(function (id) { return !_temId[id]; }).length;
+          if (_faltamIds === 0) {
+            C.complete = true;
+            for (var _q2 = 1; _q2 <= (C.pagesTotal || maxPage || 1); _q2++) C.pagesRead[_q2] = 1;
+            C.pageDone = Math.max(C.pageDone || 0, C.pagesTotal || maxPage || 0);
+            prog({ phase: 'jogos', feed: '✅ tudo do índice está no acervo' });
+          }
         }
         var jaLeuTudo = (C.pagesTotal > 0 && C.pageDone >= C.pagesTotal) && _faltamIds === 0;
         if (jaLeuTudo) {
