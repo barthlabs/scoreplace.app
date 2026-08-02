@@ -1869,6 +1869,19 @@
   // os jogos antigos não estão mais no documento — mas a pegada deles ficou.
   function _lzCompsReais(imp, oficial) {
     var set = {};
+    // A LISTA DO PERFIL CONTA — ela é enumerável e verificável, e é o número que a pessoa
+    // vê no letzplay. MEDIDO no Fabio (02/ago/2026, listas paginadas 20 por página):
+    // 33 torneios e 27 rankings na lista. Eu tinha tirado a lista da conta pra excluir um
+    // ranking sem jogo, e derrubei os rankings de 27 pra 17 — divergindo do que ele vê.
+    var lista = oficial ? (imp && imp.tournamentsList) : (imp && imp.rankingsList);
+    if (Array.isArray(lista)) lista.forEach(function (c) {
+      if (!c) return;
+      var id = oficial ? c.tid : (c.rid != null ? c.rid : c.tid);
+      if (id != null) set[(c.club || '') + '/' + id] = 1;
+    });
+    // E COMPETIÇÃO COM JOGO TAMBÉM CONTA, mesmo fora da lista — medido no mesmo perfil:
+    // 2 torneios (40597, 194830) e 1 ranking (39908) que ele JOGOU e a lista não enumera.
+    // É o caso do BTG do dono. União: 35 torneios e 28 rankings.
     ((imp && imp.games) || []).forEach(function (g) {
       if (!g) return;
       var ehOficial = (g.official === true) || g.kind === 'tournament';

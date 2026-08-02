@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.89';
+  var EXT_VERSION = '1.90';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1324,6 +1324,9 @@
             }
             _idx = await window._spLzApi.indice(handle, bgFetchJson, {
               conhecidos: _conhecidos,
+              // o contador do perfil é o ALVO: se a varredura vier abaixo dele, houve
+              // deslocamento de paginação e a lib varre de novo pra recuperar o que caiu
+              esperado: totJogos || 0,
               onProgresso: function (p, n) {
                 prog({ phase: 'jogos', note: 'índice: ' + n + ' partidas em ' + p + ' página(s)' });
               }
@@ -1355,7 +1358,40 @@
             prog({ phase: 'jogos', feed: '⚠️ índice indisponível — lendo pelo caminho longo' });
           }
         }
-        var jaLeuTudo = (C.pagesTotal > 0 && C.pageDone >= C.pagesTotal);
+        // ── "JÁ LI TUDO" VALE PRA ONTEM, NÃO PRA HOJE ─────────────────────────────
+        // O cursor dizia "as 20 páginas foram lidas" e a leitura PULAVA a etapa inteira.
+        // Só que ontem a Kelly e o Fabio jogaram um torneio novo: há partidas que o cursor
+        // não conhece, e elas entram por CIMA (a lista é do mais recente pro mais antigo),
+        // não numa página 21. Enquanto o cursor mandasse sozinho, jogo novo nunca entrava —
+        // "o sistema não atualiza".
+        // O ÍNDICE é quem sabe: ele acabou de listar os ids que existem. Se algum deles não
+        // está no acervo, não está tudo lido, ponto — não importa o que o cursor ache.
+        var _temId = {};
+        all.forEach(function (m) { if (m && m.lzId) _temId[String(m.lzId)] = 1; });
+        var _idsConhecidos = Object.keys(_temId).length;
+        // Só dá pra dizer "falta o id X" quando o acervo é identificado por id. Num
+        // documento do motor antigo (zero lzId) TODO id pareceria faltando e a leitura
+        // reliria o histórico inteiro — a migração já cuida desse caso por outro caminho.
+        var _faltamIds = (_idx && _idsConhecidos > 0)
+          ? Object.keys(_idx.porId).filter(function (id) { return !_temId[id]; }).length : 0;
+        if (_faltamIds > 0) {
+          // MIRA NAS PÁGINAS QUE TÊM O QUE FALTA — não rebobina tudo. O índice devolve as
+          // partidas NA ORDEM em que o letzplay as serve (20 por página), então a posição
+          // de um id dá a página dele. Rebobinar do zero relia dezenas de páginas já lidas
+          // (o harness pegou); mirar lê só o necessário.
+          var _pgFalta = {};
+          (_idx.matches || []).forEach(function (m, i) {
+            if (m && !_temId[String(m.id)]) _pgFalta[Math.floor(i / 20) + 1] = 1;
+          });
+          Object.keys(_pgFalta).forEach(function (pg) {
+            if (C.pagesRead) delete C.pagesRead[pg];
+            if (C.pageDone >= +pg) C.pageDone = +pg - 1;
+          });
+          C.complete = false;
+          prog({ phase: 'jogos', feed: '🆕 ' + _faltamIds + ' partida(s) nova(s) — lendo ' +
+            Object.keys(_pgFalta).length + ' página(s)' });
+        }
+        var jaLeuTudo = (C.pagesTotal > 0 && C.pageDone >= C.pagesTotal) && _faltamIds === 0;
         if (jaLeuTudo) {
           C.complete = true;
           prog({ phase: 'jogos', note: 'histórico já lido por inteiro (' + C.pageDone + ' páginas)', pct: 97 });

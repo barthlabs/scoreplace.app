@@ -231,9 +231,13 @@ function servidor(total, opts) {
     ]
   };
   ok(N(imp, true) === 4, 'torneios: os 4 COM JOGO, incluindo os 2 fora da lista (o BTG volta) — veio ' + N(imp, true));
-  ok(N(imp, false) === 3, 'rankings: 3 COM JOGO — o de 2023, listado e sem jogo, não conta (veio ' + N(imp, false) + ')');
+  // REVOGADO em 02/ago/2026 pelo dono, com medição: no perfil do Fabio a lista tem 27
+  // rankings e os jogos citam 17 — o número que ele VÊ no letzplay é 27. Contar só "com
+  // jogo" divergia da fonte. A lista é enumerável e verificável; ela conta. O que a regra
+  // "com jogo" acrescenta é o que está FORA da lista (1 ranking, 2 torneios no caso dele).
+  ok(N(imp, false) === 4, 'rankings: a lista do perfil conta, mesmo sem jogo (veio ' + N(imp, false) + ')');
   ok(N({ games: [{ official: true, club: 'c', tourneyId: 9 }] }, true) === 1, 'jogo sozinho prova a competição, mesmo fora da lista');
-  ok(N({ tournamentsList: [{ club: 'c', tid: 9 }], games: [] }, true) === 0, 'lista sozinha NÃO prova: inscrição não é participação');
+  ok(N({ tournamentsList: [{ club: 'c', tid: 9 }], games: [] }, true) === 1, 'a lista sozinha já conta — é o que o perfil mostra');
   ok(N({ footprint: [{ official: false, club: 'c', rankingId: 1 }] }, false) === 0,
      'footprint não cria competição enquanto os jogos estão no documento');
   ok(N({ gamesTruncated: true, games: [], footprint: [{ official: false, club: 'c', rankingId: 1 }] }, false) === 1,

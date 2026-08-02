@@ -71,11 +71,42 @@
       if (typeof opts.onProgresso === 'function') opts.onProgresso(p, out.length);
       if (conhecidos && novosNaPagina === 0) { parcial = true; break; }
     }
+    // ── DESLOCAMENTO DE PAGINAÇÃO: A LINHA REPETIDA DENUNCIA UMA LINHA PERDIDA ──
+    // A paginação do letzplay é por OFFSET. Se uma partida é inserida (ou a ordem muda)
+    // entre a página N e a N+1, as linhas escorregam: uma reaparece na página seguinte e
+    // OUTRA, no limite, nunca é servida. Eu tratava a repetida como "linha duplicada do
+    // perfil" e concluía que o total certo era o menor — errado, e o dono corrigiu:
+    // MEDIDO no Fabio (02/ago/2026): 397 linhas, 391 ids distintos, 6 repetidos. O perfil
+    // diz 397 e ele está certo — faltam 6 que o deslocamento comeu.
+    // Quando o esperado é conhecido e sobra gente, varre de novo e FUNDE: o deslocamento é
+    // aleatório, então uma segunda passada quase nunca perde as mesmas linhas. Para quando
+    // alcança o esperado ou quando uma passada inteira não traz nada novo.
+    var esperado = opts.esperado || 0;
+    var passadas = 0;
+    while (!parcial && esperado > 0 && out.length < esperado && passadas < 3) {
+      passadas++;
+      var antes = out.length;
+      for (var q = 1; q <= (p - 1); q++) {
+        var arr2 = await pagina(handle, q, fetchJson);
+        if (arr2 == null || !arr2.length) continue;
+        arr2.forEach(function (raw) {
+          var m2 = normalizar(raw);
+          if (!m2 || porId[m2.id]) return;
+          porId[m2.id] = m2; out.push(m2);
+          if (m2.compId) {
+            var c2 = comps[m2.compId] || (comps[m2.compId] = { oficial: m2.oficial, n: 0 });
+            c2.n++;
+          }
+        });
+      }
+      if (typeof opts.onProgresso === 'function') opts.onProgresso(p - 1, out.length);
+      if (out.length === antes) break;      // a segunda passada não achou nada: é o teto real
+    }
     // `parcial` = paramos cedo porque alcançamos o que já tínhamos. Nesse caso `total` NÃO
     // é o total do perfil — quem chama tem que somar com o que já tinha, e por isso o
     // campo vem explícito em vez de a gente devolver um número que parece completo.
     return { matches: out, porId: porId, comps: comps, paginas: p - 1,
-             total: out.length, parcial: parcial };
+             total: out.length, parcial: parcial, passadas: passadas };
   }
 
   root._spLzApi = { indice: indice, pagina: pagina, normalizar: normalizar };

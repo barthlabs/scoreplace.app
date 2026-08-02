@@ -11,7 +11,7 @@
  *
  * Este teste EXECUTA a função com dados reais medidos e trava o comportamento inteiro.
  */
-const path = require('path'), fs = require('fs'), vm = require('vm');
+const path = require("path"), fs = require("fs"), vm = require("vm");
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.log('  ✗ ' + m); } }
 
@@ -66,7 +66,10 @@ console.log('\n── competição só existe se tem jogo; e a que não abre tam
   const c = conta(imp);
   ok(c.t.y === 2, 'os 2 torneios COM JOGO contam, inclusive o que a lista esqueceu (veio ' + c.t.y + ')');
   ok(c.t.x === 2, 'e o que foi TENTADO e não abriu fecha a conta (veio ' + c.t.x + ')');
-  ok(c.r.y === 1, 'o ranking listado SEM jogo nenhum não conta (veio ' + c.r.y + ')');
+  // MEDIDO no Fabio (02/ago/2026): a lista do perfil tem 27 rankings, os jogos citam 17 e
+  // 1 deles está FORA da lista. O número que ele vê no letzplay é 27; o certo é a UNIÃO,
+  // 28. Contar só "com jogo" derrubava pra 17 e divergia do que a fonte mostra.
+  ok(c.r.y === 2, 'a lista do perfil conta, mesmo o ranking sem jogo (veio ' + c.r.y + ')');
 }
 
 console.log('\n── x nunca passa de y, em nenhuma das três ──');
@@ -98,6 +101,41 @@ console.log('\n── e NINGUÉM MAIS calcula esses números por fora ──');
   ok(/var _CT = window\._lzContagens\(imp\);/.test(dlg), 'o diálogo idem');
   ok(!/upd\('lz-ath-t'/.test(app) && !/upd\('lz-ath-r'/.test(app),
      'e os contadores ao vivo do perfil não escrevem mais em torneios/rankings');
+}
+
+console.log('\n── união medida no Fabio: 33 na lista + 2 achados pelos jogos ──');
+{
+  const listaT = Array.from({ length: 33 }, (_, i) => ({ club: 'c', tid: String(100 + i) }));
+  const listaR = Array.from({ length: 27 }, (_, i) => ({ club: 'c', rid: String(500 + i) }));
+  const g = [];
+  // jogos citando 35 torneios: 33 da lista + 2 de fora
+  for (let i = 0; i < 33; i++) g.push({ lzId: i, club: 'c', official: true, kind: 'tournament', tourneyId: String(100 + i) });
+  g.push({ lzId: 901, club: 'c', official: true, kind: 'tournament', tourneyId: '40597' });
+  g.push({ lzId: 902, club: 'c', official: true, kind: 'tournament', tourneyId: '194830' });
+  // e 17 rankings com jogo, sendo 1 fora da lista
+  for (let i = 0; i < 16; i++) g.push({ lzId: 1000 + i, club: 'c', official: false, kind: 'ranking', rankingId: String(500 + i) });
+  g.push({ lzId: 999, club: 'c', official: false, kind: 'ranking', rankingId: '39908' });
+  const imp = { games: g, tournamentsList: listaT, rankingsList: listaR,
+    indexTotal: g.length, totais: { fonte: 'indice', jogos: g.length },
+    lzCursor: { complete: true, pageDone: 20, pagesTotal: 20, toursDone: {}, ranksDone: {} } };
+  const c = conta(imp);
+  ok(c.t.y === 35, 'torneios: 33 da lista ∪ 2 de fora = 35 (veio ' + c.t.y + ')');
+  ok(c.r.y === 28, 'rankings: 27 da lista ∪ 1 de fora = 28 (veio ' + c.r.y + ')');
+}
+
+console.log('\n── e a leitura não pula o que é novo ──');
+{
+  const cnt = fs.readFileSync(path.join(__dirname, '..', 'extension', 'content.js'), 'utf8');
+  ok(/var _faltamIds = \(_idx && _idsConhecidos > 0\)/.test(cnt), 'compara os ids do índice com o acervo');
+  ok(/Math\.floor\(i \/ 20\) \+ 1/.test(cnt),
+     'a posição no índice diz a PÁGINA de cada id que falta');
+  ok(/if \(C\.pagesRead\) delete C\.pagesRead\[pg\];/.test(cnt),
+     'e só essas páginas são desmarcadas — não rebobina o que já foi lido');
+  ok(/_idsConhecidos > 0/.test(cnt),
+     'e a comparação por id só vale quando o acervo tem id (documento do motor antigo não dispara isso)');
+  ok(/jaLeuTudo = \(C\.pagesTotal > 0 && C\.pageDone >= C\.pagesTotal\) && _faltamIds === 0/.test(cnt),
+     '"já li tudo" passa a exigir que não falte id nenhum');
+  ok(/partida\(s\) nova\(s\) — lendo /.test(cnt), 'e a tela diz quantas novidades achou e quantas páginas vai ler');
 }
 
 console.log((fail ? '✗' : '✓') + ' lz-contagem-unica: ' + pass + ' passaram, ' + fail + ' falharam');
