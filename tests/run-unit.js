@@ -457,6 +457,11 @@ const SUITES = [
   // permission-denied em TODO convidado com conta. Também trava a identidade SÓ-UID e a
   // escalada da transferência (terceiro assumindo organização alheia).
   'functions/test-cohost-core.js',
+  // Nome de exibição ÚNICO entre uids checado no SERVIDOR (registerPhonePassword).
+  // Trava o incidente de 02/ago/2026: segunda "Gabriela Ferreira" criada por
+  // celular+senha porque a regra só existia no cliente. Conflito = already-exists
+  // com e-mail mascarado — NUNCA auto-sufixo silencioso.
+  'functions/test-name-unique-core.js',
 ];
 
 let failed = [];

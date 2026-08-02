@@ -32,6 +32,7 @@ const admin = require("firebase-admin");
 const _mergeRules = require("./merge-rules");
 const _uidSweep = require("./uid-sweep");
 const _enrollCore = require("./enroll-core");
+const _nameUnique = require("./name-unique-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -3191,6 +3192,19 @@ exports.registerPhonePassword = onCall(
       if (e instanceof HttpsError) throw e; // user-not-found = ok
     }
 
+    // v1.6.x: NOME ÚNICO ENTRE UIDS, agora no SERVIDOR (name-unique-core.js).
+    // A regra só existia no cliente (isDisplayNameTaken) e esta CF gravava direto —
+    // foi assim que nasceu a segunda "Gabriela Ferreira" (02/ago/2026), inscrita 2x
+    // no mesmo torneio. Homônimo em cadastro por celular é quase sempre a MESMA
+    // pessoa: REJEITA apontando a conta existente (mascarada) — nunca auto-sufixa.
+    if (displayName) {
+      const conflict = await _nameUnique.findDisplayNameConflict(admin.firestore(), displayName, uid);
+      if (conflict) {
+        console.log("[registerPhonePassword] displayName em conflito com uid:", conflict.uid);
+        throw new HttpsError("already-exists", _nameUnique.buildConflictMessage(conflict));
+      }
+    }
+
     const upd = { email: synthetic, emailVerified: true, password: password, phoneNumber: phoneE164 };
     if (displayName) upd.displayName = displayName;
     try {
@@ -3200,7 +3214,9 @@ exports.registerPhonePassword = onCall(
       throw new HttpsError("internal", "não foi possível salvar: " + (err.code || err.message));
     }
     const prof = { phone: phoneE164, phoneCountry: "55", authProvider: "phone+password", updatedAt: new Date().toISOString() };
-    if (displayName) prof.displayName = displayName;
+    // displayName_lower JUNTO do displayName (contrato do saveUserProfile do cliente) —
+    // sem ele a conta fica invisível pra própria checagem de unicidade.
+    if (displayName) _nameUnique.denormalizeDisplayName(prof, displayName);
     await admin.firestore().collection("users").doc(uid).set(prof, { merge: true }).catch(() => {});
     console.log("[registerPhonePassword] set for uid:", uid);
     return { ok: true };
