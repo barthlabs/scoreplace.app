@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.93';
+  var EXT_VERSION = '1.94';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1326,7 +1326,11 @@
             // qualquer página: parar cedo é perder exatamente o que fomos buscar. O teste
             // com a extensão real pegou isto — com 157 no acervo e 162 no perfil, a
             // releitura voltava 157 de novo.
-            var _faltaDeclarado = (totJogos || 0) > all.length;
+            // O CONTADOR DO PERFIL É SEMPRE MAIOR (ele conta os cards repetidos), então
+            // comparar cru fazia a leitura achar que faltava jogo TODA vez — e varrer o
+            // índice inteiro em toda releitura, mesmo com o acervo completo. É desconto,
+            // não fé: os cardsRepetidos foram medidos na leitura anterior (id por id).
+            var _faltaDeclarado = ((totJogos || 0) - _cardsRepetidos) > all.length;
             var _conhecidos = null;
             if (all.length && !_faltaDeclarado) {
               _conhecidos = {};
