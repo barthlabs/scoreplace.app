@@ -104,6 +104,12 @@ console.log('▸ a fiação nas telas (o que o dono pediu, onde ele vê)');
   });
   ok(/_reopenSetDate/.test(reab),
      'o valor é lido enquanto se digita (o diálogo se remove ANTES do onConfirm)');
+  // ARMADILHA DE NOME: `autoCloseOnFull` (encerrar INSCRIÇÕES quando lotar, v2.4.12) é
+  // anterior e sem relação — 5 dos 8 torneios vivos têm o campo. Varrer por prefixo apagaria
+  // a configuração do organizador junto.
+  ok(!/autoCloseOnFull/.test(reab), 'reabrir NÃO toca em autoCloseOnFull (campo de outra feature)');
+  ok(!/delete fresh\[[^\]]*\]/.test(reab) && !/startsWith\(['"]autoClose/.test(reab),
+     'e nunca apaga por prefixo/dinamicamente — só os 5 campos, um a um');
 }
 
 console.log('▸ o servidor não escreve nada pra quem só sai da vitrine');

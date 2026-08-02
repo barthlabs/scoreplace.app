@@ -26,6 +26,12 @@
 // Puro e testável (functions/test-abandon-core.js). A CF sweepAbandonedTournaments decide com
 // isto; a entrega (notificação + escrita) mora na CF.
 
+// ⚠️ ARMADILHA DE NOME: já existe no torneio um campo ANTERIOR e SEM RELAÇÃO com isto —
+// `autoCloseOnFull` (encerrar as INSCRIÇÕES quando lotar, criado na v2.4.12). As marcas
+// daqui são `autoClosed`, `autoClosedAt`, `autoCloseReason`, `autoCloseWarnedAt` e
+// `autoCloseDueAt`, sempre citadas UMA A UMA. Nunca varrer por prefixo `autoClose`: apagaria
+// a configuração de inscrição do organizador junto. Medido em produção — 5 dos 8 torneios
+// vivos têm `autoCloseOnFull`.
 var DIA = 86400000;
 var FOLGA_APOS_FIM   = 7 * DIA;    // data de término venceu → ainda espera 1 semana
 var OCIOSO_MINIMO    = 14 * DIA;   // sem data de término → piso de ociosidade
