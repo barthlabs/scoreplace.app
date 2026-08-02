@@ -271,5 +271,97 @@ const dateLine = (t) => {
   eq(run(elim, agora + 20 * DIA).acao, 'encerrar', '[depois do término da elim] encerra normalmente');
 })();
 
+// ═══ (E) A REGRA GERAL, para N fases ══════════════════════════════════════════
+// Dono (02/ago): "independente do número de fases, a data exibida deve sempre ser início da
+// primeira fase até fim da última fase. Se há N fases, pega min(datas de início) e max(datas
+// de fim)." Não é "pegue a fase 0 e a última do array" — é MIN e MAX sobre TUDO (top-level +
+// as N fases). Ordem no array, buracos e fases sem data não podem mudar o resultado.
+(function () {
+  const R = sS._tournamentDateRange;
+  const win = (t) => {
+    // _tournamentScheduledWindow (tournaments-utils) — a segunda implementação da MESMA regra.
+    const s = {}; s.window = s; s.globalThis = s; s.console = console;
+    s._warn = s._log = s._error = s._debug = () => {};
+    s._tournamentDateRange = R;
+    // A implementação ANTIGA dependia deste parser (default T12:00) — fornecido aqui pra que,
+    // se alguém reverter a unificação, o teste acuse a DIVERGÊNCIA em vez de crashar.
+    s._tProgParseMs = function (x) {
+      if (x == null || x === '') return null;
+      if (typeof x === 'number') return x;
+      var str = String(x), dd = new Date(str.indexOf('T') !== -1 ? str : (str + 'T12:00'));
+      return isNaN(dd.getTime()) ? null : dd.getTime();
+    };
+    vm.createContext(s);
+    const src = fs.readFileSync(path.join(__dirname, '..', 'js/views/tournaments-utils.js'), 'utf8');
+    const i = src.indexOf('window._tournamentScheduledWindow = function');
+    const end = src.indexOf('\n};', i);
+    vm.runInContext(src.slice(i, end + 3), s, { filename: 'tournaments-utils.js#window' });
+    return s._tournamentScheduledWindow(t);
+  };
+  const ms = (s, d) => new Date(String(s).indexOf('T') > -1 ? s : (s + 'T' + d)).getTime();
+
+  // 3 fases, com a do MEIO terminando por último → o fim é dela, não o da última do array.
+  const t3 = {
+    startDate: '2026-08-10T19:00', endDate: '2026-08-20T22:00',
+    phases: [
+      { name: 'F1', startDate: '2026-08-05', endDate: '2026-08-20' },
+      { name: 'F2', startDate: '2026-08-21', endDate: '2026-10-30' },   // termina por ÚLTIMO
+      { name: 'F3', startDate: '2026-08-25', endDate: '2026-09-15' }
+    ]
+  };
+  eq(R(t3).start, '2026-08-05', '[N=3] início = MENOR de todas (a fase 1, não o top-level)');
+  eq(R(t3).end, '2026-10-30', '[N=3] fim = MAIOR de todas — a fase do MEIO, não a última do array');
+
+  // 4 fases FORA DE ORDEM no array + uma sem data nenhuma: min/max ignoram a posição.
+  const t4 = {
+    startDate: '2026-09-01', endDate: '2026-09-02',
+    phases: [
+      { name: 'D', startDate: '2026-12-01', endDate: '2026-12-20' },    // a mais TARDIA vem 1ª
+      { name: 'B' },                                                    // sem data: não atrapalha
+      { name: 'A', startDate: '2026-07-01', endDate: '2026-07-10' },    // a mais CEDO vem 3ª
+      { name: 'C', startDate: '2026-10-05', endDate: '2026-10-09' }
+    ]
+  };
+  eq(R(t4).start, '2026-07-01', '[N=4 fora de ordem] início = min, não a phases[0]');
+  eq(R(t4).end, '2026-12-20', '[N=4 fora de ordem] fim = max, não a phases[última]');
+
+  // O TOP-LEVEL é só mais um candidato: se ele for o extremo, ele vence.
+  const tTop = {
+    startDate: '2026-01-05T08:00', endDate: '2027-01-05T22:00',
+    phases: [{ startDate: '2026-06-01', endDate: '2026-06-10' }, { startDate: '2026-07-01', endDate: '2026-07-10' }]
+  };
+  eq(R(tTop).start, '2026-01-05T08:00', '[top-level extremo] início = o do torneio');
+  eq(R(tTop).end, '2027-01-05T22:00', '[top-level extremo] fim = o do torneio (janela NUNCA encolhe)');
+
+  // Fase única e zero fases seguem a mesma regra (min/max de um conjunto de 1).
+  eq(R({ startDate: '2026-08-02', endDate: '2026-08-31', phases: [{ endDate: '2026-09-12' }] }).end,
+    '2026-09-12', '[N=1] a regra é a mesma — max inclui a fase');
+  eq(R({ startDate: '2026-08-02', endDate: '2026-08-31' }).end, '2026-08-31', '[N=0] cai no torneio');
+
+  // ── As DUAS implementações da regra têm de concordar ────────────────────────
+  // Divergiam em dois pontos medidos: (a) data sem hora valia 12:00 numa e 23:59 na outra —
+  // 12h de diferença no fim do torneio; (b) com duas fases terminando no MESMO dia, uma com
+  // hora e outra sem, cada uma elegia uma fase diferente como "a última".
+  [
+    ['3 fases', t3],
+    ['4 fora de ordem', t4],
+    ['top-level extremo', tTop],
+    ['só o DIA no término da elim (o que o formulário grava)',
+      { startDate: '2026-08-02T19:00', endDate: '2026-08-31T23:00', phases: [{}, { endDate: '2026-09-12' }] }],
+    ['duas fases no MESMO dia, uma com hora',
+      { startDate: '2026-08-02', endDate: '2026-08-31', phases: [{ endDate: '2026-09-12' }, { endDate: '2026-09-12T15:00' }] }]
+  ].forEach(([nome, t]) => {
+    const r = R(t), w = win(t);
+    ok(w.endMs === ms(r.end, '23:59'), '[concordância · ' + nome + '] fim igual nos dois helpers — got ' +
+      new Date(w.endMs).toISOString() + ' vs ' + new Date(ms(r.end, '23:59')).toISOString());
+    ok(w.startMs === ms(r.start, '00:00'), '[concordância · ' + nome + '] início igual nos dois helpers');
+  });
+
+  // Data SEM hora: prazo acaba no FIM DO DIA, nunca ao meio-dia.
+  const semHora = { startDate: '2026-08-02', endDate: '2026-08-31', phases: [{ endDate: '2026-09-12' }] };
+  const d = new Date(win(semHora).endMs);
+  ok(d.getHours() === 23 && d.getMinutes() === 59, '[fim do dia] término só-data vale 23:59, não 12:00 — got ' + d.getHours() + 'h');
+})();
+
 console.log(pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

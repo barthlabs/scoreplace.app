@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.6.83';
+window.SCOREPLACE_VERSION = '1.6.84';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -8735,13 +8735,20 @@ window._tournamentDateRange = function (t) {
     var m = new Date(s).getTime();
     return isNaN(m) ? null : m;
   }
-  // v3.1.38: lê DIRETO das fases — início mais cedo, fim mais tardio.
-  // v1.6.80: o TOP-LEVEL entra no min/max junto com as fases (era só fallback). Medido em
-  // produção: NENHUMA fase de NENHUM torneio tem startDate/endDate — a janela do formulário
-  // ("📅 Datas da fase") é da fase INICIAL e grava em t.startDate/t.endDate. Só a última fase
-  // ganhou datas próprias (cfg.eliminatoria.endDate). Se o término da eliminatória viesse ANTES
-  // do fim da classificatória, ignorar o top-level ENCOLHERIA a janela do torneio. Agora é
-  // sempre o envelope de tudo — mesma regra do _tournamentScheduledWindow.
+  // ── A REGRA (dono, ago/2026), válida pra QUALQUER número de fases ────────────────────────
+  //   início = MIN(todas as datas de início)   ·   fim = MAX(todas as datas de fim)
+  // "Todas" = o top-level MAIS as N fases. Não é "a fase 0 e a última do array": a fase que
+  // começa mais cedo pode não ser a primeira, e a que termina por último pode ser a do meio —
+  // por isso min/max, e não índice. Fase sem data simplesmente não entra no conjunto.
+  //
+  // Por que o TOP-LEVEL é um candidato como outro qualquer (v1.6.80): o box "📅 Datas da fase"
+  // do formulário pertence à fase INICIAL e grava em t.startDate/t.endDate. Se ele ficasse de
+  // fora quando existem `phases`, um término de fase mais CEDO encolheria a janela do torneio.
+  // A janela nunca encolhe — ela é o envelope de tudo.
+  //
+  // Data sem hora: início vale 00:00 e fim vale 23:59 (prazo acaba no FIM DO DIA). Esta é a
+  // ÚNICA implementação da regra — _tournamentScheduledWindow (tournaments-utils) converte
+  // daqui pra ms, e tests/convite-data-multifase.test.js exige que os dois concordem.
   if (!Array.isArray(t.phases) || !t.phases.length) return { start: t.startDate || '', end: t.endDate || '' };
   var startStr = '', endStr = '', startM = null, endM = null;
   [{ startDate: t.startDate, endDate: t.endDate }].concat(t.phases).forEach(function (ph) {

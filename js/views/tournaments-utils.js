@@ -818,19 +818,38 @@ window._currentPhaseGames = function (t) {
 // as fases (e top-level); fim = MAIOR data de fim entre todas as fases. No multi-
 // fase o fim do torneio é o fim da ÚLTIMA fase (ex.: Confra = 12/11), não o fim da
 // fase atual (19/06). Datas por fase: phase.startDate/startTime, phase.endDate/endTime.
+// v1.6.84: UMA LEI SÓ. A regra ("início = min de todas as datas de início; fim = max de todas as
+// de fim, contando o top-level e as N fases") vive em window._tournamentDateRange (store.js) —
+// aqui só a convertemos pra ms. Antes esta função tinha a SUA cópia da regra, e as duas
+// DIVERGIAM em dois pontos medidos:
+//   • data sem hora: o range usa 00:00 (início) / 23:59 (FIM DO DIA — prazo acaba no fim do dia),
+//     esta usava _tProgParseMs, que assume 12:00 pros dois → 12h de diferença no fim do torneio;
+//   • com duas fases terminando NO MESMO DIA, uma com hora e outra sem, cada implementação
+//     elegia uma fase diferente como "a última" → duas telas do app com fins diferentes.
+// O fallback abaixo (quando _tournamentDateRange não está carregado — o vendor da CF autoDraw
+// não leva o store.js) repete a MESMA regra, e tests/convite-data-multifase.test.js exige que os
+// dois caminhos deem o mesmo resultado.
 window._tournamentScheduledWindow = function (t) {
-  var starts = [], ends = [];
-  function add(arr, dateStr, timeStr) {
-    if (!dateStr) return;
-    var s = String(dateStr).indexOf('T') > -1 ? dateStr : (dateStr + (timeStr ? ('T' + timeStr) : ''));
-    var ms = window._tProgParseMs(s); if (ms != null) arr.push(ms);
+  if (!t) return { startMs: null, endMs: null };
+  function _ms(dateStr, timeStr, defTime) {
+    if (!dateStr) return null;
+    var s = String(dateStr);
+    if (s.indexOf('T') === -1) s += 'T' + (timeStr || defTime);
+    var m = new Date(s).getTime();
+    return isNaN(m) ? null : m;
   }
-  add(starts, t.startDate, t.startTime);
-  add(ends, t.endDate, t.endTime);
-  if (Array.isArray(t.phases)) t.phases.forEach(function (ph) {
-    add(starts, ph.startDate, ph.startTime);
-    add(ends, ph.endDate, ph.endTime);
-  });
+  if (typeof window._tournamentDateRange === 'function') {
+    var r = window._tournamentDateRange(t) || {};
+    return { startMs: _ms(r.start, '', '00:00'), endMs: _ms(r.end, '', '23:59') };
+  }
+  var starts = [], ends = [];
+  [{ startDate: t.startDate, startTime: t.startTime, endDate: t.endDate, endTime: t.endTime }]
+    .concat(Array.isArray(t.phases) ? t.phases : [])
+    .forEach(function (ph) {
+      if (!ph) return;
+      var s = _ms(ph.startDate, ph.startTime, '00:00'); if (s != null) starts.push(s);
+      var e = _ms(ph.endDate, ph.endTime, '23:59');     if (e != null) ends.push(e);
+    });
   return {
     startMs: starts.length ? Math.min.apply(null, starts) : null,
     endMs: ends.length ? Math.max.apply(null, ends) : null
