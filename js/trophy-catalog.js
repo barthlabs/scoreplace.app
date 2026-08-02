@@ -848,6 +848,9 @@ window._applyDailyMatchLimit = function(matches, limitPerDay) {
 window._isTournamentQualifiedForTrophy = function(t) {
   if (!t) return false;
   if (t.status !== 'finished') return false;
+  // Encerrado por INATIVIDADE não premia ninguém: a classificação não foi fechada, então
+  // não há campeão pra coroar (ordem do dono, 02/ago/2026). Ver store._isAutoClosed.
+  if (window._isAutoClosed && window._isAutoClosed(t)) return false;
   // v1.2.2: participants é a fonte; memberUids como reserva (memberEmails saiu).
   var count = (t.participants && t.participants.length) ||
               (t.memberUids && t.memberUids.length) || 0;

@@ -43,6 +43,10 @@ window.NOTIF_CATALOG = {
   // Reminders
   tournament_reminder:         { level: 'fundamental', icon: '⏰', color: '#f59e0b' },
   tournament_nearby:           { level: 'all',         icon: '📍', color: 'var(--primary-color)' },
+  // v1.6.79: torneio abandonado (CF sweepAbandonedTournaments). O aviso sai 48h ANTES e diz
+  // o que resolve: preencher as datas. Os dois são fundamentais — é o torneio DELE parando.
+  tournament_auto_close_warning: { level: 'fundamental', icon: '⏳', color: '#f59e0b' },
+  tournament_auto_closed:        { level: 'fundamental', icon: '⏸️', color: '#f59e0b' },
   // v2.3.92: inscrição pendente — perfil incompleto pra encaixar em categoria.
   'category-data-request':     { level: 'fundamental', icon: '👤', color: '#f59e0b' },
   // v2.4.28: participante mudou habilidade no perfil → organizador precisa aprovar.

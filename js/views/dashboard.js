@@ -443,6 +443,11 @@ function renderDashboard(container) {
   //   4. finished   → encerrados (sessão separada/colapsada)
   const _classifyDiscoveryTournament = (t) => {
     if (!t) return null;
+    // TORNEIO PARADO SEM NENHUM JOGO some da vitrine (pedido do dono, 02/ago/2026: o
+    // abandonado "fica aparecendo para todos os usuários novos"). É decisão de LEITURA —
+    // nada é escrito, o torneio continua inteiro pro organizador. Encerrar quem nunca jogou
+    // seria pior: viraria um "finished" de pódio vazio. Ver store._isTorneioParadoSemJogo.
+    if (window._isTorneioParadoSemJogo && window._isTorneioParadoSemJogo(t)) return null;
     if (t.status === 'finished') return 'finished';
     const hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) ||
                     (Array.isArray(t.rounds) && t.rounds.length > 0) ||

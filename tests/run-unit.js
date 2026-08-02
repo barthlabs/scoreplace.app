@@ -136,6 +136,7 @@ const SUITES = [
   'tests/lz-contagem-unica.test.js',
   'tests/jogo-so-com-placar.test.js',
   'tests/apagar-torneio-nao-deixa-orfao.test.js',
+  'tests/torneio-abandonado.test.js',
   'tests/data-sem-ambiguidade.test.js',
   'tests/rules-letzplayscans-whitelist.test.js',
   'tests/lz-parcial-nao-e-oficial.test.js',
@@ -444,6 +445,7 @@ const SUITES = [
   // Item 7: janelas do lembrete de torneio (7d/2d/0d) ESPELHAM o cliente; data-only BRT.
   // Se o servidor contar em UTC ou disparar em dia errado, sai fora. (Entrega = emulador.)
   'functions/test-reminder-core.js',
+  'functions/test-abandon-core.js',
   // Convite de co-organização/transferência → CF. TRAVA a regressão real (Sentry
   // SCOREPLACE-WEB-6R): o aceite MUDA adminUids, o que estourava a regra antiga e dava
   // permission-denied em TODO convidado com conta. Também trava a identidade SÓ-UID e a

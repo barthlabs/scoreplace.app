@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.6.78';
+window.SCOREPLACE_VERSION = '1.6.79';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -989,6 +989,44 @@ window._isSandboxRef = function (tournamentId, tournamentName) {
   if (id && typeof window._findTournamentById === 'function') {
     var t = window._findTournamentById(id);
     if (t && t.isSandbox === true) return true;
+  }
+  return false;
+};
+// ── TORNEIO ENCERRADO AUTOMATICAMENTE POR INATIVIDADE ────────────────────────
+// Pedido do dono (02/ago/2026): torneio de 1 dia que nunca chegou à final e que ninguém
+// encerrou fica na vitrine de todo usuário novo. A CF `sweepAbandonedTournaments` avisa o
+// organizador 48h antes e depois encerra — a REGRA vive só no servidor (functions/
+// abandon-core.js); aqui o cliente só LÊ a marca e obedece.
+//
+// `autoClosed` não é "o torneio acabou": é "o torneio parou". Por isso, e por ordem
+// explícita do dono (_"encerrar não deve fechar a classificação"_), ele NÃO produz pódio,
+// classificação final, troféu nem título — e a única ferramenta do organizador vira Reabrir.
+window._isAutoClosed = function (t) {
+  return !!(t && t.autoClosed === true && t.status === 'finished');
+};
+// Torneio que ainda não teve NENHUM placar e já envelheceu na vitrine. Decisão de LEITURA
+// (nada é escrito): sumir da descoberta é reversível e não inventa um "encerrado" de pódio
+// vazio pra quem nunca jogou. Espelha SEM_JOGO_SUMICO do abandon-core (30 dias).
+window._SEM_JOGO_SUMICO_DIAS = 30;
+window._isTorneioParadoSemJogo = function (t) {
+  if (!t || t.status === 'finished') return false;
+  if (window._isLigaFormat && window._isLigaFormat(t)) return false;   // temporada contínua
+  var jogou = (typeof window._tournamentHasAnyScore === 'function') ? window._tournamentHasAnyScore(t) : null;
+  if (jogou === null) return false;
+  if (jogou) return false;
+  var nasceu = Date.parse(String(t.createdAt || t.updatedAt || ''));
+  if (!isFinite(nasceu)) return false;
+  return (Date.now() - nasceu) >= window._SEM_JOGO_SUMICO_DIAS * 86400000;
+};
+// Algum jogo deste torneio já teve placar? (estrutura local — o cliente não lê `results`
+// de todo torneio da vitrine). Mesma definição do servidor: placar dos DOIS lados.
+window._tournamentHasAnyScore = function (t) {
+  var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : null;
+  if (!all) return null;
+  for (var i = 0; i < all.length; i++) {
+    var m = all[i];
+    if (m && m.scoreP1 != null && m.scoreP2 != null) return true;
+    if (m && m.winner) return true;
   }
   return false;
 };

@@ -1085,6 +1085,26 @@ exports.sendTournamentReminders = onSchedule(
   async () => { await _runTournamentReminders(admin.firestore(), Date.now()); }
 );
 
+// ─── Torneios ABANDONADOS: avisa 48h antes e encerra por inatividade ─────────
+// Pedido do dono (02/ago/2026): torneio de 1 dia que nunca chegou à final e que o
+// organizador nunca encerrou fica aparecendo pra todo usuário novo. Medido: de 8 torneios
+// vivos, 4 abandonados.
+//
+// A REGRA MORA SÓ AQUI (abandon-core). O cliente não recalcula nada — ele lê `autoClosed` e
+// obedece. Sem espelho, sem drift.
+//
+// Encerrar NÃO fecha a classificação (sem pódio/troféu/título) e deixa o torneio reabrível
+// pelo organizador informando as datas. Liga/Pontos Corridos nunca entra: é temporada
+// contínua. Quem nunca teve placar não é encerrado — só sai da vitrine, e isso é decisão de
+// leitura no cliente, sem escrita nenhuma.
+// Deploy:  firebase deploy --only functions:sweepAbandonedTournaments
+const { runAbandonSweep: _runAbandonSweep } = require("./abandon-run");
+exports.sweepAbandonedTournaments = onSchedule(
+  { schedule: "every day 04:00", timeZone: "America/Sao_Paulo", region: "us-central1",
+    timeoutSeconds: 540, memory: "256MiB" },
+  async () => { await _runAbandonSweep(admin.firestore(), Date.now()); }
+);
+
 // ─── Magic Link via Custom Email (firestore-send-email extension) ────────────
 // v1.0.20-beta: substituí firebase.auth().sendSignInLinkToEmail() (que envia
 // email feio do firebaseapp.com sem botão estilizado, parando no spam) por

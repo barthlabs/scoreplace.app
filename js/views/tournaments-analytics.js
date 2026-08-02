@@ -609,8 +609,12 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
                     stats.totalLosses += computed[si].losses || 0;
                     stats.totalDraws += computed[si].draws || 0;
                     stats.totalMatches += computed[si].played || 0;
-                    if (si === 0 && (t.status === 'finished' || t.status === 'closed')) stats.titles++;
-                    if (si < 3 && (t.status === 'finished' || t.status === 'closed')) stats.podiums++;
+                    // Encerrado por INATIVIDADE não gera título nem pódio — a classificação
+                    // não foi fechada (ordem do dono, 02/ago/2026). Ver store._isAutoClosed.
+                    var _premia = (t.status === 'finished' || t.status === 'closed') &&
+                                  !(window._isAutoClosed && window._isAutoClosed(t));
+                    if (si === 0 && _premia) stats.titles++;
+                    if (si < 3 && _premia) stats.podiums++;
                     break;
                 }
             }
@@ -637,7 +641,8 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
             // Check if champion (final match winner). Prefer adapter to find
             // the true final across canonical + legacy shapes; fall back to
             // the last entry of t.matches for single-elim legacy data.
-            if (t.status === 'finished' || t.status === 'closed') {
+            if ((t.status === 'finished' || t.status === 'closed') &&
+                !(window._isAutoClosed && window._isAutoClosed(t))) {   // idem: sem campeão
                 var finalMatch = null;
                 if (typeof window._getUnifiedRounds === 'function') {
                     var cols = window._getUnifiedRounds(t) || [];

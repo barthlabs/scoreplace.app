@@ -1314,3 +1314,82 @@ window._saveAsTemplate = function(tId) {
     });
   }
 };
+
+// ─── REABRIR TORNEIO ENCERRADO POR INATIVIDADE ───────────────────────────────
+// Ordem do dono (02/ago/2026): _"o organizador pode reabrir depois de encerrado para
+// conclusão colocando as datas"_ — e, enquanto encerrado, _"a única ferramenta ativa seria
+// o reabrir torneio"_.
+//
+// As DATAS não são burocracia: o torneio foi encerrado exatamente porque ninguém sabia até
+// quando ele ia. Reabrir sem prazo devolveria o torneio ao mesmo limbo em duas semanas.
+//
+// ⚠️ O VALOR É LIDO ENQUANTO SE DIGITA, não no confirmar: `showConfirmDialog` faz
+// `dialog.remove()` ANTES de chamar o onConfirm — lá dentro os inputs já não existem e
+// `getElementById` devolveria null. Por isso o estado mora aqui fora (mesmo padrão do
+// `_pendingPlanState` de venues.js).
+//
+// A regra de QUANDO encerrar vive só no servidor (functions/abandon-core.js). Aqui o cliente
+// só limpa as marcas — nada é recalculado, então não há espelho pra derivar.
+var _reopenState = { ini: '', fim: '' };
+window._reopenSetDate = function (qual, valor) { _reopenState[qual] = String(valor || ''); };
+
+window._reopenAbandonedTournament = function (tId, _valores) {
+  var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+  if (!t) { showNotification('Torneio não encontrado', '', 'error'); return; }
+  if (!(window._isAutoClosed && window._isAutoClosed(t))) {
+    showNotification('Este torneio não está encerrado por inatividade', '', 'warning');
+    return;
+  }
+  var hoje = new Date();
+  var iso = function (d) { return d.toISOString().slice(0, 10); };
+  _reopenState.ini = (_valores && _valores.ini) || String(t.startDate || '').slice(0, 10) || iso(hoje);
+  _reopenState.fim = (_valores && _valores.fim) || iso(new Date(hoje.getTime() + 7 * 86400000));
+
+  function campo(id, rot, val) {
+    return '<label style="font-size:0.78rem;font-weight:700;box-sizing:border-box;min-width:0;">' + rot +
+      '<input type="date" id="' + id + '" value="' + val + '" oninput="window._reopenSetDate(\'' +
+      (id === 'reopen-start' ? 'ini' : 'fim') + '\', this.value)" ' +
+      'style="width:100%;box-sizing:border-box;min-width:0;margin-top:6px;padding:10px 12px;font-size:1rem;' +
+      'border-radius:8px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-bright);">' +
+      '</label>';
+  }
+  var corpo =
+    '<div style="text-align:left;font-size:0.86rem;line-height:1.5;">' +
+      '<p style="margin:0 0 12px;">Informe quando o torneio começa e quando termina. Com as datas ' +
+      'preenchidas ele volta a ficar ativo e não é encerrado de novo por inatividade.</p>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+        campo('reopen-start', 'Início', _reopenState.ini) +
+        campo('reopen-end', 'Término', _reopenState.fim) +
+      '</div>' +
+    '</div>';
+
+  showConfirmDialog('🔓 Reabrir torneio', corpo, function () {
+    var ini = _reopenState.ini, fim = _reopenState.fim;
+    var erro = '';
+    if (!ini || !fim) erro = 'Preencha as duas datas — é o que mantém o torneio ativo.';
+    else if (fim < ini) erro = 'O término não pode ser antes do início.';
+    if (erro) {
+      // Data errada é digitação, não desistência: avisa e devolve a tela com o que ele pôs.
+      showNotification('Datas inválidas', erro, 'warning');
+      setTimeout(function () { window._reopenAbandonedTournament(tId, { ini: ini, fim: fim }); }, 60);
+      return;
+    }
+    var temChave = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
+    window.AppStore.mutate(tId, function (fresh) {
+      fresh.startDate = ini;
+      fresh.endDate = fim;
+      fresh.status = temChave ? 'in_progress' : 'open';
+      // Limpar as marcas é o que faz o torneio deixar de ser "abandonado" — o `set` da
+      // transação é sem merge, então apagar a chave aqui apaga o campo no doc.
+      delete fresh.autoClosed;
+      delete fresh.autoClosedAt;
+      delete fresh.autoCloseReason;
+      delete fresh.autoCloseWarnedAt;   // volta a poder ser avisado numa próxima ociosidade
+      delete fresh.autoCloseDueAt;
+    }, 'Torneio reaberto pelo organizador (datas: ' + ini + ' a ' + fim + ')').then(function (ok) {
+      if (ok === false) { showNotification('Não foi possível reabrir', 'Tente de novo.', 'error'); return; }
+      showNotification('Torneio reaberto', 'De ' + ini + ' até ' + fim + '.', 'success');
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    });
+  }, null, { confirmText: '🔓 Reabrir', cancelText: 'Cancelar', type: 'info', maxWidth: '460px' });
+};

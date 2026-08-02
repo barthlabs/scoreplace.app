@@ -3175,7 +3175,9 @@ function renderTournaments(container, tournamentId = null) {
             ${/* v2.3.96: rede de segurança — sorteio em revisão (só organizador) */ ''}
             ${(typeof window._renderPendingDrawBanner === 'function') ? window._renderPendingDrawBanner(t) : ''}
             ${/* v2.1.16: pódio do torneio encerrado logo abaixo do nome/logo */ ''}
-            ${(tournamentId && isFinished) ? podiumHtml : ''}
+            ${/* Encerrado por INATIVIDADE não fecha classificação → não tem pódio (ordem do
+                  dono). Pódio de torneio que parou no meio seria uma mentira campeã. */ ''}
+            ${(tournamentId && isFinished && !(window._isAutoClosed && window._isAutoClosed(t))) ? podiumHtml : ''}
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._shareTournament('${t.id}');">📋 Compartilhar</button>
@@ -3385,6 +3387,28 @@ function renderTournaments(container, tournamentId = null) {
                 ? 'color:#f1f5f9 !important; text-shadow:0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95);'
                 : 'color:var(--text-muted);';
               var _toolsBorder = venuePhotoBg ? 'rgba(255,255,255,0.28)' : 'var(--border-color, rgba(255,255,255,0.12))';
+              // ── ENCERRADO POR INATIVIDADE: a ÚNICA ferramenta é Reabrir ──────────────
+              // Ordem do dono (02/ago/2026): _"depois de encerrado, a única ferramenta ativa
+              // seria o reabrir torneio"_. Não é decoração: enquanto o torneio está parado,
+              // sortear/editar/comunicar/apagar só produziriam estado inconsistente. Reabrir
+              // exige as datas — é exatamente o que faltava pra ele não ser abandonado.
+              if (window._isAutoClosed && window._isAutoClosed(t)) {
+                return `
+            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid ${_toolsBorder};">
+              <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
+              <div style="background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.35);border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+                <div style="font-weight:800;font-size:0.82rem;color:#fbbf24;margin-bottom:4px;">⏸️ Encerrado por inatividade</div>
+                <div style="font-size:0.76rem;${_toolsCss}line-height:1.45;">
+                  Este torneio ficou sem placar novo e foi encerrado automaticamente.
+                  <b>A classificação não foi fechada</b> — nada de pódio, título ou troféu.
+                  Se ainda há jogos a fazer, reabra informando as datas e conclua normalmente.
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-success hover-lift btn-shine" onclick="event.stopPropagation(); window._reopenAbandonedTournament('${t.id}')">🔓 Reabrir Torneio</button>
+              </div>
+            </div>`;
+              }
               return `
             <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid ${_toolsBorder};">
               <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
