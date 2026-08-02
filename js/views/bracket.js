@@ -143,13 +143,11 @@ function _applyMyMatchesFilter() {
   if (typeof window._wireLateJoinPairDnD === 'function') { try { window._wireLateJoinPairDnD(); } catch (e) {} }
   var cards = document.querySelectorAll('[data-my-match]');
   if (!cards.length) return;
-  cards.forEach(function(card) {
-    if (window._showOnlyMyMatches && card.getAttribute('data-my-match') === '0') {
-      card.style.display = 'none';
-    } else {
-      card.style.display = '';
-    }
-  });
+  // v1.6.86: quem decide o `display` dos cards é UMA função só — `_bracketApplyFilter`,
+  // que avalia "Só meus jogos" E a busca juntas e esconde também os containers que ficam
+  // vazios (box de grupo, coluna de rodada). Antes este loop escrevia `display=''` em todo
+  // card do usuário e DESFAZIA a busca ativa (e deixava o box do grupo de pé sem jogos).
+  window._bracketApplyFilter();
   // Ao ENTRAR no bracket (navegação, não re-render), rola pro TOPO do PRÓXIMO jogo do
   // usuário (1º card PENDENTE dele na ordem do DOM = cronológica; fallback: 1º jogo dele).
   // Se o jogo mora num GRUPO (Rei/Rainha / Fase de Grupos), rola pro TOPO DO GRUPO
@@ -5714,7 +5712,21 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
 // DOM PURO, sem re-render: esconder/mostrar card preserva scroll, <details> aberto e
 // placar em edição (project_dashboard_no_rerender / feedback_rerender_keep_scroll).
 // Casa acento-insensitive ("jose" acha "José") e por trecho em qualquer posição.
-// Container que fica sem NENHUM card visível some junto — senão sobra coluna/box vazio.
+//
+// v1.6.86 — O QUE SOME É O CONTAINER INTEIRO, ATÉ O TOPO. Relato do dono (print do Confra
+// em Rei/Rainha): digitou "Kelly" e "não filtrou nada". Filtrava — mas só o CARD e o PAI
+// IMEDIATO dele. No Rei/Rainha (e na Fase de Grupos) o card mora num grid que mora dentro
+// do BOX DO GRUPO: o grid sumia e o box ficava de pé com cabeçalho, botões (W.O./Cheguei/
+// Combinar) e a CLASSIFICAÇÃO DO GRUPO — nenhum deles a pessoa buscada. Sumia justamente
+// a única coisa que se quer ver. Agora o filtro sobe pelos ANCESTRAIS: qualquer container
+// que só existe por causa de cards de jogo e ficou sem nenhum casando some junto (grid,
+// coluna de rodada, box de grupo, <details> "Demais jogos da rodada").
+//
+// UMA decisão de visibilidade só (feedback_unify_dual_entry_points): busca E "Só meus
+// jogos" escrevem no MESMO `display` dos MESMOS cards ([data-players] e [data-my-match]
+// são o mesmo elemento). Eram duas funções decidindo em separado — a segunda a rodar
+// desfazia a primeira. Aqui as duas condições são avaliadas juntas; `_applyMyMatchesFilter`
+// só chama esta.
 // ═══════════════════════════════════════════════════════════════════════════════
 window._bracketNorm = function (s) {
   return String(s == null ? '' : s).toLowerCase()
@@ -5723,28 +5735,60 @@ window._bracketNorm = function (s) {
 window._bracketApplyFilter = function () {
   var inp = document.getElementById('bracket-search');
   var q = window._bracketNorm(inp ? inp.value : '').trim();
+  var onlyMine = !!window._showOnlyMyMatches;
   var cards = document.querySelectorAll('[data-players]');
   if (!cards.length) return;
+  // Limite de subida: nunca passar do container da view (senão, numa busca sem resultado,
+  // TUDO seria escondido — inclusive a própria barra de busca, e o dono ficaria preso).
+  var root = document.getElementById('view-container') || document.body;
+  var searchEls = [inp, document.getElementById('bracket-search-empty'),
+                   document.getElementById('fbwrap-chaves')].filter(Boolean);
+  // Container que ABRIGA a barra de busca nunca some (caso inline, em que a chave e a barra
+  // podem dividir o mesmo cartão da página do torneio).
+  var holdsSearch = function (el) {
+    if (typeof el.contains !== 'function') return false;
+    for (var s = 0; s < searchEls.length; s++) { if (el.contains(searchEls[s])) return true; }
+    return false;
+  };
+  var setDisp = function (el, visible) {
+    if (el.dataset.fbDisp === undefined) el.dataset.fbDisp = el.style.display || '';
+    el.style.display = visible ? el.dataset.fbDisp : 'none';
+  };
   var shown = 0;
-  var parents = [];
+  var conts = [];            // ancestrais candidatos, na ordem em que aparecem
+  var contHasHit = [];       // paralelo a conts: algum card casando lá dentro?
   for (var i = 0; i < cards.length; i++) {
     var c = cards[i];
-    var hit = !q || window._bracketNorm(c.getAttribute('data-players') || '').indexOf(q) !== -1;
+    var hit = (!q || window._bracketNorm(c.getAttribute('data-players') || '').indexOf(q) !== -1)
+      && (!onlyMine || c.getAttribute('data-my-match') !== '0');
     // Guarda o display original UMA vez — o card pode ter display próprio (flex/grid).
-    if (c.dataset.fbDisp === undefined) c.dataset.fbDisp = c.style.display || '';
-    c.style.display = hit ? c.dataset.fbDisp : 'none';
+    setDisp(c, hit);
     if (hit) shown++;
-    if (c.parentElement && parents.indexOf(c.parentElement) === -1) parents.push(c.parentElement);
+    for (var p = c.parentElement; p && p !== root && p !== document.body; p = p.parentElement) {
+      if (holdsSearch(p)) break;
+      var ix = conts.indexOf(p);
+      if (ix === -1) { conts.push(p); contHasHit.push(hit); }
+      else if (hit) contHasHit[ix] = true;
+    }
   }
-  // Container sem nenhum card visível some (coluna de rodada, box de grupo…).
-  parents.forEach(function (p) {
-    var kids = p.querySelectorAll(':scope > [data-players]');
-    if (!kids.length) return;
-    var any = false;
-    for (var k = 0; k < kids.length; k++) { if (kids[k].style.display !== 'none') { any = true; break; } }
-    if (p.dataset.fbDisp === undefined) p.dataset.fbDisp = p.style.display || '';
-    p.style.display = any ? p.dataset.fbDisp : 'none';
-  });
+  // Container sem NENHUM card casando some inteiro (grid, coluna de rodada, box de grupo,
+  // <details> de "Demais jogos da rodada"…). Com filtro limpo, todos voltam.
+  for (var k = 0; k < conts.length; k++) setDisp(conts[k], contHasHit[k]);
+  // O contador do <details> ("Demais jogos da rodada (N)") acompanha o filtro — senão
+  // anuncia 3 mostrando 1. O texto original fica guardado pra voltar ao limpar a busca.
+  var dets = document.querySelectorAll('details');
+  for (var d = 0; d < dets.length; d++) {
+    var inside = dets[d].querySelectorAll('[data-players]');
+    if (!inside.length || typeof dets[d].querySelector !== 'function') continue;
+    var sm = dets[d].querySelector('summary');
+    if (!sm) continue;
+    var lbl = sm.querySelector('span') || sm;
+    if (lbl.dataset.fbTxt === undefined) lbl.dataset.fbTxt = lbl.textContent;
+    if (!q && !onlyMine) { lbl.textContent = lbl.dataset.fbTxt; continue; }
+    var nvis = 0;
+    for (var z = 0; z < inside.length; z++) { if (inside[z].style.display !== 'none') nvis++; }
+    lbl.textContent = lbl.dataset.fbTxt.replace(/\((\d+)\)\s*$/, '(' + nvis + ')');
+  }
   var empty = document.getElementById('bracket-search-empty');
-  if (empty) empty.style.display = (q && shown === 0) ? 'block' : 'none';
+  if (empty) empty.style.display = ((q || onlyMine) && shown === 0) ? 'block' : 'none';
 };
