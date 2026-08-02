@@ -1720,6 +1720,53 @@
     }
   }
 
+  // ── CONFERE A EXTENSÃO AO ABRIR A FICHA ───────────────────────────────────────
+  // Pergunta a versão e responde em ~800ms: sem extensão, ou com uma abaixo do mínimo, o
+  // aviso aparece no topo da ficha e o botão de puxar fica cinza. Ninguém mais descobre
+  // que a extensão está velha DEPOIS de clicar.
+  function _lzConferirExtensao() {
+    var caixa = document.getElementById('lz-ext-aviso');
+    if (!caixa) return;
+    var achadas = [];
+    function ouvir(e) {
+      if (e.source !== window) return;
+      var d = e.data;
+      if (d && d.__sp_lp === 'extension-present' && d.version) { achadas.push(d.version); window._lzExtVer = d.version; }
+    }
+    window.addEventListener('message', ouvir);
+    try { window.postMessage({ __sp_lp: 'ext-ping' }, window.location.origin); } catch (e) {}
+    setTimeout(function () {
+      window.removeEventListener('message', ouvir);
+      var melhor = achadas.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
+      var temAlguma = achadas.length > 0;
+      var serve = temAlguma && _verGE(melhor, _LZ_MIN_EXT);
+      if (serve) { caixa.innerHTML = ''; return; }
+      // no celular a mensagem é outra (lá não existe extensão nenhuma pra instalar)
+      var movel = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+      if (movel) { caixa.innerHTML = ''; return; }
+      caixa.innerHTML = '<div style="font-size:0.82rem;color:#fbbf24;line-height:1.45;margin:0 0 9px;' +
+        'background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.32);border-radius:9px;padding:9px 11px;">' +
+        (temAlguma
+          ? ('⚠️ <b>Extensão desatualizada</b> — você está com a <b>v' + _esc(melhor) + '</b> e a busca precisa da <b>v' +
+             _esc(_LZ_MIN_EXT) + '</b>. Até atualizar, o histórico mostrado é o que já estava gravado.')
+          : ('⚠️ <b>Extensão não encontrada</b> — a leitura do letzplay precisa da extensão do Chrome (v' +
+             _esc(_LZ_MIN_EXT) + ').')) +
+        ' <a href="' + _esc((typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : ('/scoreplace-letzplay-ext-' + _LZ_MIN_EXT + '.zip')) +
+        '" download style="color:#fbbf24;font-weight:800;">baixar a v' + _esc(_LZ_MIN_EXT) + ' ↓</a></div>';
+      // e o botão do topo deixa de prometer o que não pode cumprir
+      var d = document.getElementById('custom-confirm-dialog');
+      var b = d && d.querySelector('button[onclick*="_lzPuxarDoTopo"]');
+      if (b) {
+        b.setAttribute('disabled', 'disabled');
+        b.style.cursor = 'not-allowed'; b.style.opacity = '0.6';
+        b.style.background = 'var(--bg-darker,rgba(255,255,255,0.06))';
+        b.style.borderColor = 'var(--border-color,rgba(255,255,255,0.12))';
+        b.style.color = 'var(--text-muted,#8b93a1)';
+        b.title = temAlguma ? ('Atualize a extensão para a v' + _LZ_MIN_EXT) : 'Instale a extensão do Chrome';
+      }
+    }, 800);
+  }
+
   // Ações da barra do topo — fazem exatamente o que os botões do rodapé fazem.
   // A barra do topo DISPARA OS BOTÕES NATIVOS (que ficam escondidos). Assim o caminho de
   // fechar e o de confirmar continuam sendo um só — sem duplicar callback nem correr o
@@ -2707,6 +2754,12 @@
         'border:1px solid var(--border-color,rgba(255,255,255,0.12));background:var(--bg-darker,rgba(255,255,255,0.06));' +
         'color:var(--text-muted,#8b93a1);white-space:nowrap;opacity:0.75;">🖥️ ' + _esc(btnLabel) + '</button>';
     }
+    // O AVISO DE EXTENSÃO VELHA VEM AO ABRIR, NÃO DEPOIS DO CLIQUE (pedido do dono,
+    // 02/ago/2026: "o certo seria já trazer a desatualização assim que abre a página do
+    // jogador, antes de clicar em qualquer coisa, sempre"). Antes, a checagem só existia
+    // DENTRO do "Puxar": a pessoa lia a ficha inteira, clicava, e só então descobria que a
+    // extensão não servia. O slot é preenchido pelo ping logo abaixo.
+    body = '<div id="lz-ext-aviso"></div>' + body;
     if (!_podePuxar() && _temLz) {
       body += '<div style="font-size:0.8rem;color:#fbbf24;margin-top:8px;line-height:1.45;' +
         'background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.30);border-radius:9px;padding:8px 10px;">' +
@@ -2752,6 +2805,7 @@
             (_temLz ? _botaoPuxar() : '') });
       // a aba de torneios já está montada; isto só pinta o botão ativo
       setTimeout(function () { if (typeof window._lzAba === 'function') window._lzAba('tour'); }, 0);
+      if (_temLz) _lzConferirExtensao();
       // Completa os "de y" das barras AO VIVO com os totais do perfil público
       // (a extensão lê "472 Jogos · 29 Rankings · 35 Torneios" e devolve).
       setTimeout(function () { _lzAskProfileCounts(tg.handle); }, 60);

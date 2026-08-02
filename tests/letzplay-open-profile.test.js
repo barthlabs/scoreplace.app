@@ -112,5 +112,27 @@ ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fáb
   ok(/catch \(e\)/.test(puxar), 'e não morre calado se estourar');
 }
 
+// ── A DESATUALIZAÇÃO APARECE AO ABRIR A FICHA, NÃO DEPOIS DO CLIQUE ────────────────────
+// Pedido do dono (02/ago/2026): "o certo seria já trazer a desatualização assim que abre a
+// página do jogador, antes de clicar em qualquer coisa, sempre." Antes a checagem só
+// existia DENTRO do "Puxar": a pessoa lia a ficha inteira, clicava, e só então descobria.
+{
+  const rep = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/function _lzConferirExtensao\(\)/.test(rep), 'existe a conferência ao abrir');
+  ok(/if \(_temLz\) _lzConferirExtensao\(\);/.test(rep), 'e ela roda logo depois de montar o diálogo');
+  ok(/body = '<div id="lz-ext-aviso"><\/div>' \+ body;/.test(rep), 'com um slot no TOPO do corpo');
+  const fn = rep.slice(rep.indexOf('function _lzConferirExtensao'), rep.indexOf('// Ações da barra do topo'));
+  ok(/__sp_lp: 'ext-ping'/.test(fn), 'pergunta a versão à extensão');
+  ok(/_verGE\(melhor, _LZ_MIN_EXT\)/.test(fn), 'e compara com o mínimo exigido');
+  ok(/Extensão desatualizada/.test(fn) && /Extensão não encontrada/.test(fn),
+     'distingue "velha" de "não instalada" — são coisas diferentes pra quem lê');
+  ok(/b\.setAttribute\('disabled', 'disabled'\)/.test(fn),
+     'e o botão de puxar deixa de prometer o que não pode cumprir');
+  ok(/_spExtZipUrl/.test(fn), 'o link do zip sai da fonte única da versão');
+  ok(/movel\) \{ caixa\.innerHTML = ''; return; \}/.test(fn),
+     'no celular não aparece — lá não há extensão pra instalar, e o aviso próprio já explica');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-open-profile: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
