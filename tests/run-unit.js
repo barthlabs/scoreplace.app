@@ -424,6 +424,10 @@ const SUITES = [
   'js/views/phase-brick4.test.js',
   'functions-autodraw/test-draw.js',
   'functions-autodraw/test-groupsby.js',
+  // SORTEIO AUTOMÁTICO MANDA E-MAIL (bug ao vivo 02/ago: sorteio do Confra criou as
+  // notificações in-app e ZERO e-mail — a CF só escrevia um dos dois canais que o
+  // cliente escreve). Trava a fila canônica, os opt-outs e a fiação dos 2 pontos.
+  'functions-autodraw/test-draw-email.js',
   // CF aplica o pacote de decisões do organizador ao elenco (sem-dupla, resto). v1.2.29.
   'functions-autodraw/test-draw-decisions.js',
   // PORTÃO da migração sorteio client→CF (item #2): pacote ≡ core puro para odd/incomplete/
