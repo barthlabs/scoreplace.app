@@ -1174,11 +1174,26 @@ nunca o código-fonte. Dois codebases:
 
 **Deploy das functions (o `firebase` CLI está instalado e autenticado nesta máquina
 como `rstbarth@gmail.com`; deploy é ação outward-facing → confirmar com o usuário):**
-- `functions/`: `firebase deploy --only functions --project scoreplace-app`
-  (o `.firebaserc` raiz agora tem `default: scoreplace-app`).
-- `functions-autodraw/`: `cd functions-autodraw && firebase deploy --only functions`.
+
+⛔ **NUNCA rodar `firebase deploy --only functions` puro, e NUNCA `--force`.** Os três
+codebases (`functions/`, `functions-autodraw/`, `functions-stripe/`) se enxergam como
+"default" — o deploy puro de qualquer um lista as funções dos OUTROS como "a deletar";
+com `--force` DELETA (aconteceu em 02/ago/2026: ~15min de outage total das CFs, os
+três codebases se apagando mutuamente — memória `project_autodraw_deploy_footgun`).
+Sem `--force` o não-interativo aborta — o abort É o aviso, não um obstáculo.
+
+- **Usar SEMPRE o script** (monta o deploy alvejado por nome sozinho, lendo os exports;
+  roda os testes do autodraw antes de deployar sorteio):
+  ```bash
+  scripts/deploy-functions.sh main       # functions/ (49 CFs)
+  scripts/deploy-functions.sh autodraw   # functions-autodraw/ (8 CFs, roda test-draw.js antes)
+  scripts/deploy-functions.sh stripe     # functions-stripe/ (2 CFs, prefixo functions:stripe:)
+  scripts/deploy-functions.sh all        # os três; aceita --dry-run
+  ```
 - Antes de mexer em função que roda em produção (ex.: `autoDraw` de hora em hora num
   torneio ao vivo), validar com o emulador (`firebase emulators:start --only functions`).
+- Depois do deploy do autodraw, commitar o diff de `functions-autodraw/vendor/`
+  (o predeploy re-sincroniza de `js/views/`).
 
 **Segredos** (Evolution API, Stripe, etc.) vivem em `firebase functions:secrets:set …`,
 NUNCA no git. `infra/whatsapp/` tem o Evolution API (Railway). O número que envia
