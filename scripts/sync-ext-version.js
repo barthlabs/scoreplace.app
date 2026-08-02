@@ -39,6 +39,28 @@ const sSrc = fs.readFileSync(sPath, 'utf8');
 const sNovo = sSrc.replace(/(window\.SP_EXT_VERSION\s*=\s*')[^']+(')/, '$1' + ver + '$2');
 if (sNovo !== sSrc) { fs.writeFileSync(sPath, sNovo); mudou.push('js/store.js'); }
 
+// ── E O CACHE-BUSTER DO store.js, SEMPRE JUNTO ────────────────────────────────────
+// O gate mora no store.js (`SP_EXT_VERSION`). Trocar o número e NÃO trocar o
+// cache-buster faz o navegador continuar servindo o store.js velho — e o app segue
+// exigindo a versão anterior. Foi exatamente isso em 02/ago/2026: a extensão foi pra
+// 1.91, o gate no repositório também, e o dono viu o app aceitar a 1.90 numa boa
+// ("temos a 1.91 e ele aceita a 1.90. errado"). O valor certo entregue tarde é o mesmo
+// que valor errado. Quem muda o arquivo é quem tem que furar o cache dele.
+const iPath = p('index.html');
+if (fs.existsSync(iPath)) {
+  const iSrc = fs.readFileSync(iPath, 'utf8');
+  const re = /(js\/store\.js\?v=)([^"']+)/;
+  const m = iSrc.match(re);
+  if (m) {
+    const base = m[2].replace(/-x[\d.]+$/, '');
+    const alvo = base + '-x' + ver;
+    if (m[2] !== alvo) {
+      fs.writeFileSync(iPath, iSrc.replace(re, '$1' + alvo));
+      mudou.push('index.html (cache-buster do store.js → ' + alvo + ')');
+    }
+  }
+}
+
 // zip servido pelo site — tem que existir NA versão exigida, e as antigas saem
 const zipNome = 'scoreplace-letzplay-ext-' + ver + '.zip';
 fs.readdirSync(root)

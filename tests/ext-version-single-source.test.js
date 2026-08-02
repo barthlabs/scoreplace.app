@@ -51,5 +51,23 @@ ok(/check-ext-version/.test(pkg.scripts.test), 'e a conferência roda no npm tes
   ok(okS, 'e o gate do app também — divergir manualmente não sobrevive a um deploy');
 }
 
+// ── O GATE SÓ VALE SE CHEGAR NO NAVEGADOR ──────────────────────────────────────────────
+// 02/ago/2026: a extensão foi pra 1.91 e o gate no repositório também — mas o cache-buster
+// do store.js ficou parado, então o navegador seguiu servindo o store.js que exigia 1.90.
+// O dono viu o app aceitar a 1.90 de boa. Valor certo entregue tarde = valor errado.
+{
+  const idx = R('index.html');
+  const m = idx.match(/js\/store\.js\?v=([^"']+)/);
+  ok(!!m, 'o index.html tem cache-buster no store.js');
+  ok(!!m && m[1].indexOf('-x' + manifestVer) >= 0,
+     'e ele carrega a versão da extensão (' + manifestVer + ') — veio "' + (m ? m[1] : '') + '"');
+
+  // e o sincronizador é quem faz isso, não a memória de quem edita
+  const sync = R('scripts/sync-ext-version.js');
+  ok(/js\\\/store\\\.js\\\?v=/.test(sync) || /store\\.js\\?v=/.test(sync),
+     'o sync-ext-version mexe no cache-buster do store.js');
+  ok(/'-x' \+ ver/.test(sync), 'carimbando a versão da extensão nele');
+}
+
 console.log((fail ? '✗' : '✓') + ' ext-version-single-source: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
