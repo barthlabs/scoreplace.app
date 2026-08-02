@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.6.79';
+window.SCOREPLACE_VERSION = '1.6.80';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -8735,11 +8735,16 @@ window._tournamentDateRange = function (t) {
     var m = new Date(s).getTime();
     return isNaN(m) ? null : m;
   }
-  // v3.1.38: lê DIRETO das fases (toda fase tem datas pós-migração) — início mais cedo,
-  // fim mais tardio. Null-guard pro top-level só quando não há phases / fase sem data.
+  // v3.1.38: lê DIRETO das fases — início mais cedo, fim mais tardio.
+  // v1.6.80: o TOP-LEVEL entra no min/max junto com as fases (era só fallback). Medido em
+  // produção: NENHUMA fase de NENHUM torneio tem startDate/endDate — a janela do formulário
+  // ("📅 Datas da fase") é da fase INICIAL e grava em t.startDate/t.endDate. Só a última fase
+  // ganhou datas próprias (cfg.eliminatoria.endDate). Se o término da eliminatória viesse ANTES
+  // do fim da classificatória, ignorar o top-level ENCOLHERIA a janela do torneio. Agora é
+  // sempre o envelope de tudo — mesma regra do _tournamentScheduledWindow.
   if (!Array.isArray(t.phases) || !t.phases.length) return { start: t.startDate || '', end: t.endDate || '' };
   var startStr = '', endStr = '', startM = null, endM = null;
-  t.phases.forEach(function (ph) {
+  [{ startDate: t.startDate, endDate: t.endDate }].concat(t.phases).forEach(function (ph) {
     if (!ph) return;
     if (ph.endDate) {
       var eStr = ph.endDate + (ph.endTime ? ('T' + ph.endTime) : '');

@@ -132,6 +132,30 @@
       '<p style="margin:0 0 0.75rem;font-size:0.8rem;color:#fbbf24;font-weight:600;text-transform:uppercase;letter-spacing:1px;">⏱️ ' + T('create.lateEnrollSection') + '</p>' +
       inheritHint + masterRow + confRow + '</div>';
   }
+
+  // TÉRMINO da fase eliminatória (v1.6.80). Só existe quando ela é 2ª fase: o box "📅 Datas
+  // da fase" do form é realocado pra DENTRO da fase INICIAL (#f2-classif-extra) e grava
+  // t.startDate/t.endDate — a eliminatória ficava sem janela nenhuma, e o fim do TORNEIO
+  // (card de convite, dashboard, detalhe) era o fim da classificatória. Grava em
+  // cfg.eliminatoria.endDate/endTime → phases[última].endDate/endTime.
+  // Vazio = sem término próprio (o torneio termina com a classificatória, como antes).
+  function _elimEndDateBlock(e) {
+    var d = e.endDate || '', h = e.endTime || '';
+    return '<div style="background:rgba(129,140,248,0.05);border:1px solid rgba(129,140,248,0.18);border-radius:12px;padding:1rem;margin-top:14px;">' +
+      '<p style="margin:0 0 0.6rem;font-size:0.8rem;color:#a5b4fc;font-weight:600;text-transform:uppercase;letter-spacing:1px;">📅 Término da fase</p>' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+        '<input type="date" class="form-control" id="f2-elim-end-date" value="' + d + '" aria-label="Data de término da fase eliminatória" style="padding:6px 8px;font-size:0.8rem;flex:1 1 130px;min-width:0;box-sizing:border-box;" onchange="window._f2ElimEndDate(this.value)">' +
+        '<input type="time" class="form-control" id="f2-elim-end-time" value="' + h + '" aria-label="Hora de término da fase eliminatória" style="padding:6px 8px;font-size:0.8rem;width:88px;flex-shrink:0;box-sizing:border-box;" onchange="window._f2ElimEndTime(this.value)">' +
+        // ✕ canônico (project_cancel_x_canonical) — nunca ✕ solto estilizado à mão.
+        (d && typeof window._cancelXBtn === 'function'
+          ? '<span style="flex-shrink:0;display:inline-flex;">' + window._cancelXBtn("window._f2ElimEndDate('')", 'Limpar término da eliminatória') + '</span>'
+          : '') +
+      '</div>' +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:7px;line-height:1.45;">' + (d
+        ? 'O torneio termina aqui — é esta data que aparece no <b>convite</b>, no <b>card</b> e na ficha do torneio.'
+        : 'Em branco, o torneio termina junto com a <b>fase classificatória</b>. Preencha para que o convite e o card mostrem até quando vai a eliminatória.') + '</div>' +
+      '</div>';
+  }
   // Janela da fase em dias: (término − 1º sorteio). Base da via de mão dupla rodadas↔repetir.
   // v4.4.62: CONSIDERA O HORÁRIO de cada campo (não meia-noite). 1º sorteio = data+hora do
   // agendamento (sem data, cai no início da fase); fim = data+hora de término da fase.
@@ -418,6 +442,7 @@
     // DIRETA. Fica FORA do wrapper de trava (igual às datas da classificatória) → editável no
     // calor do torneio mesmo após o sorteio. Só a ESTRUTURA trava. Ver [[project_late_enrollment_default_closed_live_toggle]].
     var _elimInitExtra = '';
+    var _elimEndExtra = '';   // v1.6.80: bloco "📅 Término da fase" da eliminatória (fora da trava)
     if (e.ativa) {
       if (!cfg.classifAtiva) {
         // v4.4.33: ELIMINAÇÃO DIRETA (sem classificatória) — todos os inscritos entram no bracket
@@ -556,21 +581,29 @@
       // (#f2-classif-extra = DATAS + INSCRIÇÕES durante a fase). Guardo SEPARADO pra ficar FORA do
       // wrapper de trava — igual às datas da classificatória (abaixo). Só a ESTRUTURA trava.
       if (!cfg.classifAtiva) _elimInitExtra = '<div id="f2-classif-extra" style="margin-top:12px;"></div>';
-      else eb += _lateEnrollElimBlock(e);
+      else {
+        eb += _lateEnrollElimBlock(e);
+        // v1.6.80: término PRÓPRIO da eliminatória — FORA do wrapper de trava (igual às datas
+        // da classificatória): estender/ajustar o fim é exatamente o que o organizador precisa
+        // fazer com a fase JÁ em andamento. Só a ESTRUTURA trava.
+        _elimEndExtra = _elimEndDateBlock(e);
+      }
     }
-    var elimInner = e.ativa ? (eb + _elimInitExtra) : '';
+    var elimInner = e.ativa ? (eb + _elimEndExtra + _elimInitExtra) : '';
     // v4.4.52: fase avançou → config da eliminatória travada (cinza, sem cliques). Nota muda
     // conforme haja classificatória (avançou de fase) ou seja eliminação direta (já sorteada).
     if (_elimLocked) {
       var _elimNote = cfg.classifAtiva
-        ? '🔒 <b>Fase eliminatória em andamento</b> — o torneio já avançou de fase; a configuração não pode mais ser alterada.'
+        // v1.6.80: as DATAS saíram da trava — estender/ajustar o término é justamente o que o
+        // organizador precisa fazer com a eliminatória já rolando.
+        ? '🔒 <b>Fase eliminatória em andamento</b> — o torneio já avançou de fase; a estrutura não muda mais. Você ainda pode ajustar o <b>término da fase</b> abaixo.'
         // v1.3.99 (dono): eliminação direta já sorteada → só a ESTRUTURA trava. DATAS e INSCRIÇÕES
         // durante a fase (novos confrontos) ficam editáveis pra o organizador corrigir no calor do
         // torneio (estender/abreviar a fase, aceitar/parar novos confrontos).
         : '🔒 <b>Estrutura travada</b> — formato, chaves e estratégia não mudam mais (já sorteada). Você ainda pode ajustar as <b>datas</b> e as <b>inscrições durante a fase</b> abaixo.';
       elimInner = '<div style="font-size:0.76rem;color:#fde68a;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">' + _elimNote + '</div>' +
         '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + eb + '</div>' +
-        _elimInitExtra;   // DATAS + INSCRIÇÕES FORA do lock → editáveis no calor do torneio
+        _elimEndExtra + _elimInitExtra;   // DATAS + INSCRIÇÕES FORA do lock → editáveis no calor do torneio
     }
 
     // Slot (Datas + Inscrições) dentro da CLASSIFICATÓRIA quando ela está ativa.
@@ -858,6 +891,17 @@
     if (e.lateEnrollment !== 'closed') e.lateEnrollment = expandOn ? 'expand' : 'standby';
     _norm(); _rerender();
   };
+  // v1.6.80: término PRÓPRIO da eliminatória (2ª fase). Vazio = sem término próprio — o torneio
+  // volta a terminar com a classificatória. A hora sozinha não vale nada (normalize a descarta
+  // sem data), então limpar a data limpa a hora junto.
+  window._f2ElimEndDate = function (v) {
+    if (!S) return; var e = S.cfg.eliminatoria;
+    e.endDate = String(v || '');
+    if (!e.endDate) e.endTime = '';
+    else if (!e.endTime) e.endTime = '23:59';   // fim do dia — o organizador escolheu o DIA
+    _norm(); _rerender();
+  };
+  window._f2ElimEndTime = function (v) { if (!S) return; S.cfg.eliminatoria.endTime = String(v || ''); _norm(); _rerender(); };
   window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
   // v4.5.51: abrir a eliminatória com rodada Rei/Rainha (grupos de 4 formam as duplas).
   window._f2ElimOpenRR = function (checked) { if (!S) return; S.cfg.eliminatoria.openReiRainha = !!checked; _norm(); _rerender(); };

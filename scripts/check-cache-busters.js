@@ -38,7 +38,13 @@ mudados.forEach((f) => {
   const achados = [...html.matchAll(re)].map((m) => m[1]);
   if (!achados.length) return;   // não referenciado no index (lazy-load, extensão, functions)
   achados.forEach((v) => {
-    if (v !== versao) falhas.push(f + ' mudou mas está com ?v=' + v + ' (atual: ' + versao + ')');
+    // O cache-buster do store.js carrega o sufixo '-x<versão da extensão>', gravado pelo
+    // próprio pipeline (scripts/sync-ext-version.js) pra invalidar o gate da extensão junto.
+    // Comparar com igualdade estrita acusava esse formato composto como "desatualizado" toda
+    // vez que o store.js mudava — falso positivo. O que importa é a BASE bater com a versão.
+    if (v.replace(/-x[\d.]+$/, '') !== versao) {
+      falhas.push(f + ' mudou mas está com ?v=' + v + ' (atual: ' + versao + ')');
+    }
   });
 });
 

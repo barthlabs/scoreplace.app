@@ -71,14 +71,26 @@ function _fmtDateBR(s) {
     if (!m) return null;
     return { d: m[3] + '/' + m[2] + '/' + m[1], time: m[4] ? (m[4] + ':' + m[5]) : null };
 }
-// Linha de data do convite. Liga (temporada) com início E fim → "de DD/MM/AAAA
-// a DD/MM/AAAA". Demais formatos → data única (+ hora quando houver).
+// Linha de data do convite. MULTIFASE (classificatória + eliminatória) e Liga (temporada)
+// mostram a JANELA INTEIRA — "de DD/MM/AAAA a DD/MM/AAAA": início da PRIMEIRA fase, fim da
+// ÚLTIMA. Fase única → data de início (+ hora quando houver).
+//
+// v1.6.80 (relato do dono): num torneio com 2 fases o card mostrava "de 02/08 a 31/08" — as
+// datas da fase CLASSIFICATÓRIA — porque lia t.startDate/t.endDate CRUS, e esses campos vêm do
+// box "📅 Datas da fase" do formulário, que pertence à fase INICIAL. Agora passa pelo
+// _tournamentDateRange (fonte canônica, envelope de todas as fases), a mesma que o card do
+// dashboard e a ficha do torneio já usam — o fim da eliminatória (phases[última].endDate)
+// entra sozinho. Mesmo dia nos dois lados → data única, em vez de "de X a X".
 function _tournamentDateText(t) {
     if (!t) return null;
     var isLiga = !!(window._isLigaFormat && window._isLigaFormat(t));
-    var s = _fmtDateBR(t.startDate);
-    var e = _fmtDateBR(t.endDate);
-    if (isLiga && s && e) return 'de ' + s.d + ' a ' + e.d;
+    var isMultiPhase = Array.isArray(t.phases) && t.phases.length > 1;
+    var range = (typeof window._tournamentDateRange === 'function')
+        ? window._tournamentDateRange(t)
+        : { start: t.startDate, end: t.endDate };
+    var s = _fmtDateBR(range.start) || _fmtDateBR(t.startDate);
+    var e = _fmtDateBR(range.end);
+    if ((isLiga || isMultiPhase) && s && e && e.d !== s.d) return 'de ' + s.d + ' a ' + e.d;
     if (s) return s.d + (s.time ? ' às ' + s.time : '');
     return null;
 }
