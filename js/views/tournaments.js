@@ -3226,50 +3226,16 @@ function renderTournaments(container, tournamentId = null) {
               var _now = Date.now();
               var _isLiga = window._isLigaFormat && window._isLigaFormat(t);
 
-              // Liga: um único countdown excludente (início → próximo sorteio → fim da temporada)
+              // Liga: um único countdown excludente (início → próximo sorteio → prazo da
+              // rodada → fim da temporada)
               if (_isLiga) {
-                // v4.x: FONTE ÚNICA da decisão dos estados — window._ligaCountdownEvent
-                // (tournaments-utils.js). Antes a lógica vivia duplicada aqui e no dashboard.js,
-                // sem teste → vivia regredindo. Aqui só se RENDERIZA o que o helper decidiu.
-                var _ce = (typeof window._ligaCountdownEvent === 'function') ? window._ligaCountdownEvent(t) : null;
-                // Rodada em andamento (sem regressiva) → box próprio.
-                if (_ce && _ce.kind === 'round-in-progress') {
-                  var _rbEl = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
-                  var _ripStandalone = (typeof window._ligaRoundInProgressRow === 'function') ? window._ligaRoundInProgressRow(t, _rbEl.fg) : '';
-                  if (_ripStandalone) {
-                    return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbEl.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _ripStandalone + '</div>';
-                  }
-                  return '';
-                }
-                if (!_ce) return '';
-                var _ligaEvent = { ts: _ce.ts, label: _t(_ce.labelKey), icon: _ce.icon, color: _ce.color };
-                var _countdownText = window._formatCountdown ? window._formatCountdown(_ligaEvent.ts - _now) : '';
-                var _colorMap = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
-                var _rgb = _colorMap[_ligaEvent.color] || '139,92,246';
-                // v0.16.90: toggle Liga removido daqui — agora vive na linha
-                // "Atualizado em..." acima (compartilhada entre lista e detalhe).
-                // v2.6.21: em tarja escura (_pReadBg) o texto é CLARO (contraste);
-                // sem tarja, usa a cor semântica sobre o tint claro.
-                var _rbCt = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
-                var _ctColor = _rbCt.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
-                // v4.4.x: 2ª linha "Rodada em andamento" com o tempo DECORRIDO da rodada atual —
-                // sempre que o box for o de "Próximo sorteio". Tick automático via data-elapsed-since.
-                var _roundLine = '';
-                if (_ce.kind === 'next-draw' && typeof window._ligaRoundInProgressRow === 'function') {
-                  var _ripRow = window._ligaRoundInProgressRow(t, _ctColor, { iconSize: '1.2rem', labelSize: '0.9rem', valueSize: '1.25rem' });
-                  if (_ripRow) {
-                    _roundLine = '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(' + _rgb + ',0.3);">' + _ripRow + '</div>';
-                  }
-                }
-                // v4.x: MAIS DESTAQUE pro cronômetro do sorteio — box maior, número grande.
-                return '<div style="margin-top:10px;padding:14px 18px;background:' + _rbCt.bg + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);">' +
-                  '<div style="display:flex;align-items:center;gap:12px;">' +
-                    '<span style="font-size:1.5rem;flex-shrink:0;">' + _ligaEvent.icon + '</span>' +
-                    '<span style="font-size:0.95rem;font-weight:700;color:' + _ctColor + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _ligaEvent.label + '</span>' +
-                    '<span data-countdown-target="' + _ligaEvent.ts + '" style="margin-left:auto;font-size:1.35rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1;white-space:nowrap;flex-shrink:0;">' + _countdownText + '</span>' +
-                  '</div>' +
-                  _roundLine +
-                '</div>';
+                // v1.6.85: FONTE ÚNICA do BOX INTEIRO — window._ligaCountdownBoxHtml
+                // (tournaments-utils.js), o MESMO render do card do dashboard. Antes cada
+                // tela desenhava a sua cópia do markup a partir do _ligaCountdownEvent, e as
+                // cópias divergiram no tratamento do evento vazio ('round-in-progress' sem
+                // linha de decorrido pra mostrar): aqui sumia o box, no card saía "null null 0s".
+                // O toggle Liga NÃO vive aqui (v0.16.90) — está na linha "Atualizado em…".
+                return (typeof window._ligaCountdownBoxHtml === 'function') ? window._ligaCountdownBoxHtml(t, 'lg') : '';
               }
 
               // Não-Liga: múltiplos countdowns (inscrições, início, fim)

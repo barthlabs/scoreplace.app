@@ -117,7 +117,14 @@ ok(typeof W._ligaCountdownEvent === 'function', '_ligaCountdownEvent existe');
   ok(e && e.kind === 'season-start' && Math.abs(e.ts - (now + 5 * HOUR)) < HOUR, '[A2] startDate futuro → season-start no startDate — got ' + (e && e.kind));
 })();
 
-// ── [BUG-B] Sorteado, rodada ATIVA (rolando), fim ≤48h, sem sorteio auto → rodada em andamento ──
+// ── [BUG-B] Sorteado, rodada ATIVA (rolando), fim ≤48h, sem sorteio auto ────────────────
+// ⚠️ ASSERÇÃO REVISADA de propósito (v1.6.85). Ela exigia 'round-in-progress'. O dono pediu
+// (ago/2026) que DEPOIS DO SORTEIO o relógio seja a REGRESSIVA pro fim da rodada — "o tempo
+// que as pessoas têm pra jogar e lançar placares" — e não o decorrido contando pra cima. Com
+// prazo conhecido (aqui o fim da fase 0 = t.endDate) o estado passa a ser 'round-end'.
+// O QUE A ASSERÇÃO SEMPRE DEFENDEU CONTINUA VALENDO E SEGUE TRAVADO ABAIXO: rodada rolando
+// NUNCA pode virar "Fim do torneio" — e o decorrido não some, vira a 2ª linha do box
+// (ver tests/liga-countdown-round-end.test.js, bloco "2ª linha").
 (function () {
   const t = {
     id: 'b', format: 'Liga', drawManual: true,
@@ -127,7 +134,8 @@ ok(typeof W._ligaCountdownEvent === 'function', '_ligaCountdownEvent existe');
     rounds: [{ round: 1, matches: [{ p1: 'A / B', p2: 'C / D', startedAt: now - HOUR }] }], // sem winner = ativa
   };
   const e = W._ligaCountdownEvent(t);
-  ok(e && e.kind === 'round-in-progress', '[BUG-B] rodada rolando + fim ≤48h → round-in-progress (não tournament-end) — got ' + (e && e.kind));
+  ok(e && e.kind !== 'tournament-end', '[BUG-B] rodada rolando NUNCA vira tournament-end — got ' + (e && e.kind));
+  ok(e && e.kind === 'round-end', '[BUG-B/v1.6.85] rodada rolando + prazo conhecido → regressiva do fim da rodada — got ' + (e && e.kind));
 })();
 
 // ── [C] Sorteado, rodada ENCERRADA (todos resultados), fim ≤48h, sem sorteio → fim do torneio ──
@@ -154,8 +162,9 @@ ok(typeof W._ligaCountdownEvent === 'function', '_ligaCountdownEvent existe');
   const nd = W._ligaNextDrawEventTs && W._ligaNextDrawEventTs(t);
   // só valida o estado se o agendamento realmente produz um próximo sorteio futuro (robustez)
   const e = W._ligaCountdownEvent(t);
+  // v1.6.85: sem próximo sorteio, o prazo da rodada (fim da fase/torneio) vira a regressiva.
   if (nd && nd > now) ok(e && e.kind === 'next-draw', '[D] auto + próximo sorteio agendado → next-draw — got ' + (e && e.kind));
-  else ok(e && e.kind === 'round-in-progress', '[D] auto sem próximo slot futuro → round-in-progress — got ' + (e && e.kind));
+  else ok(e && e.kind === 'round-end', '[D] auto sem próximo slot futuro → round-end (prazo da rodada) — got ' + (e && e.kind));
 })();
 
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' liga-countdown: ' + pass + ' asserts ok, ' + fail + ' falharam');

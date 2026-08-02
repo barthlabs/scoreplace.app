@@ -825,51 +825,26 @@ function renderDashboard(container) {
               var _now = Date.now();
               var _isLiga = window._isLigaFormat && window._isLigaFormat(t);
 
-              // Liga: um único countdown excludente (início → próximo sorteio → fim da temporada)
+              // Liga: um único countdown excludente (início → próximo sorteio → prazo da
+              // rodada → fim da temporada)
               if (_isLiga) {
-                // v4.x: FONTE ÚNICA da decisão dos estados — window._ligaCountdownEvent
-                // (tournaments-utils.js), a MESMA do detalhe (tournaments.js). Aqui só se
-                // renderiza + o toggle Liga (sempre à direita, independente do countdown).
-                var _ce = (typeof window._ligaCountdownEvent === 'function') ? window._ligaCountdownEvent(t) : null;
+                // v1.6.85: FONTE ÚNICA do BOX INTEIRO — window._ligaCountdownBoxHtml
+                // (tournaments-utils.js), o MESMO render do detalhe (tournaments.js). Aqui
+                // só sobra o que é EXCLUSIVO do card: o toggle Liga (sempre à direita,
+                // independente do countdown). Antes o markup era copiado nos dois lugares e
+                // as cópias divergiram — o card caía no render genérico com o evento vazio
+                // da "rodada em andamento" (ts/labelKey/icon = null) e imprimia "null null 0s".
                 var _ligaToggleDash = (typeof window._buildLigaActiveToggleHtml === 'function')
                   ? window._buildLigaActiveToggleHtml(t)
                   : '';
                 var _toggleRowDash = _ligaToggleDash
                   ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _ligaToggleDash + '</div>'
                   : '';
-                var _cm = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
-                var _rbCt = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
-                var _ctColor = _rbCt.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
-                // Rodada em andamento (sem regressiva) → box próprio + toggle.
-                if (_ce && _ce.kind === 'round-in-progress' && typeof window._ligaRoundInProgressRow === 'function') {
-                  var _ripStandaloneD = window._ligaRoundInProgressRow(t, _ctColor);
-                  if (_ripStandaloneD) {
-                    return _toggleRowDash +
-                      '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _ripStandaloneD + '</div>';
-                  }
-                }
-                if (!_ce) return _toggleRowDash; // sem countdown → só o toggle (direita)
-                var _ligaEv = { ts: _ce.ts, label: _t(_ce.labelKey), icon: _ce.icon, color: _ce.color };
-                var _ct = window._formatCountdown ? window._formatCountdown(_ligaEv.ts - _now) : '';
-                var _rgb = _cm[_ligaEv.color] || '139,92,246';
-                // v4.4.x: 2ª linha "Rodada em andamento" (tempo decorrido da rodada) sempre que
-                // o box for o de "Próximo sorteio". Tick automático via data-elapsed-since.
-                var _roundLineD = '';
-                if (_ce.kind === 'next-draw' && typeof window._ligaRoundInProgressRow === 'function') {
-                  var _ripRowD = window._ligaRoundInProgressRow(t, _ctColor, { iconSize: '1.1rem', labelSize: '0.8rem', valueSize: '1.05rem' });
-                  if (_ripRowD) {
-                    _roundLineD = '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(' + _rgb + ',0.3);">' + _ripRowD + '</div>';
-                  }
-                }
-                return _toggleRowDash +
-                  '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;">' +
-                  '<div style="display:flex;align-items:center;gap:10px;">' +
-                    '<span style="font-size:1.3rem;flex-shrink:0;">' + _ligaEv.icon + '</span>' +
-                    '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _ligaEv.label + '</span>' +
-                    '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.1rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;white-space:nowrap;flex-shrink:0;">' + _ct + '</span>' +
-                  '</div>' +
-                  _roundLineD +
-                '</div>';
+                // com o toggle acima, o box encosta um pouco mais (4px em vez de 10px)
+                var _boxD = (typeof window._ligaCountdownBoxHtml === 'function')
+                  ? window._ligaCountdownBoxHtml(t, 'sm', _toggleRowDash ? '4px' : '10px') : '';
+                if (!_boxD) return _toggleRowDash; // sem countdown → só o toggle (direita)
+                return _toggleRowDash + _boxD;
               }
 
               // Não-Liga: countdown do evento mais próximo
