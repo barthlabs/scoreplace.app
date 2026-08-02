@@ -4135,6 +4135,7 @@ function renderTournaments(container, tournamentId = null) {
       ${gridHtml}
     </div>
 
+    ${tournamentId && typeof window._meuCardNoTopo === 'function' ? window._meuCardNoTopo(visible[0]) : ''}
     ${tournamentId ? _organizersHtml : ''}
 
     ${hasDrawn ? '' : participantsHtml}

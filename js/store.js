@@ -5175,6 +5175,89 @@ window._haversineKm = function(lat1, lon1, lat2, lon2) {
 };
 
 // ─── v2.3.52: badges de perfil do participante (gênero · nível · faixa etária) ──
+// ── "EU ESTOU INSCRITO?" — A PERGUNTA QUE O ORGANIZADOR MAIS RECEBE ──────────────
+// Pedido do dono (02/ago/2026): _"nessa lista, vamos colocar o card do usuário no topo
+// absoluto, acima até dos organizadores. assim eles param de perguntar ao organizador se
+// estão inscritos"_ — e, logo depois: _"fazer isso em todas as listas de participantes"_.
+//
+// Numa lista de 105 nomes, achar o próprio é trabalho; e quem não acha pergunta. O card
+// fixo no topo responde antes de a pessoa procurar — inclusive quando a resposta é NÃO,
+// que é justamente o caso em que ela ia perguntar.
+//
+// Identidade por UID, sempre (nome não identifica ninguém). Cobre a dupla: `_participantUids`
+// devolve os uids de todos os membros de uma inscrição.
+window._meuCardNoTopo = function (t, opts) {
+  opts = opts || {};
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var uid = cu && cu.uid;
+  if (!t || !uid) return '';
+  var parts = (typeof window._getCompetitors === 'function') ? window._getCompetitors(t)
+            : (Array.isArray(t.participants) ? t.participants : []);
+  var uidsDe = (typeof window._participantUids === 'function') ? window._participantUids
+             : function (p) { return (p && p.uid) ? [p.uid] : []; };
+  var eu = null;
+  (parts || []).forEach(function (p) {
+    if (eu || !p) return;
+    if ((uidsDe(p) || []).indexOf(uid) >= 0) eu = p;
+  });
+
+  var nome = window._safeHtml((cu.displayName || 'Você'));
+  var foto = (typeof window._profileAvatarUrl === 'function')
+    ? window._profileAvatarUrl(cu.displayName, cu.photoURL, 40) : (cu.photoURL || '');
+  var avatar = foto
+    ? '<img src="' + window._safeHtml(foto) + '" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">'
+    : '<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.1);flex-shrink:0;"></div>';
+
+  if (!eu) {
+    // NÃO INSCRITO também é resposta — e é a que faz a pessoa procurar o organizador.
+    return '<div id="sp-meu-card" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;' +
+      'background:rgba(148,163,184,0.10);border:1px solid rgba(148,163,184,0.28);">' + avatar +
+      '<div style="min-width:0;"><div style="font-weight:800;font-size:0.9rem;color:var(--text-bright,#e8ecf3);">' + nome + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);">Você <b>não está inscrito</b> neste torneio.</div></div></div>';
+  }
+
+  // categoria e número de inscrição, quando existirem — é o que ela confere depois de
+  // saber que está inscrita
+  var cats = [];
+  if (Array.isArray(eu.categories) && eu.categories.length) cats = eu.categories.slice();
+  else if (eu.category) cats = [eu.category];
+  var chips = cats.map(function (c) {
+    return '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;' +
+      'background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.35);color:#a5b4fc;">' +
+      window._safeHtml(String(c)) + '</span>';
+  }).join(' ');
+  var seq = (eu.enrollSeq != null) ? eu.enrollSeq : null;
+  var numero = (seq != null)
+    ? '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(255,255,255,0.06);' +
+      'border:1px solid var(--border-color,rgba(255,255,255,0.12));color:var(--text-muted);">nº ' + window._safeHtml(String(seq)) + '</span>'
+    : '';
+  // presença, quando a chamada está aberta
+  var pres = '';
+  var _nomeEu = eu.displayName || eu.name || cu.displayName || '';
+  if (Array.isArray(t.checkedIn) && _nomeEu && t.checkedIn.indexOf(_nomeEu) >= 0) {
+    pres = '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(16,185,129,0.18);' +
+      'border:1px solid rgba(16,185,129,0.38);color:#6ee7b7;">✓ presente</span>';
+  } else if (Array.isArray(t.absent) && _nomeEu && t.absent.indexOf(_nomeEu) >= 0) {
+    pres = '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(239,68,68,0.16);' +
+      'border:1px solid rgba(239,68,68,0.35);color:#fca5a5;">ausente</span>';
+  }
+  var dupla = '';
+  if (eu.p1Name && eu.p2Name) {
+    var parceiro = (eu.p1Uid === uid) ? eu.p2Name : eu.p1Name;
+    if (parceiro) dupla = '<div style="font-size:0.76rem;color:var(--text-muted);margin-top:1px;">com <b>' +
+      window._safeHtml(parceiro) + '</b></div>';
+  }
+  return '<div id="sp-meu-card" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;' +
+    'background:linear-gradient(135deg,rgba(16,185,129,0.16),rgba(5,150,105,0.10));border:1px solid rgba(16,185,129,0.40);">' + avatar +
+    '<div style="min-width:0;flex:1;">' +
+      '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+        '<span style="font-weight:800;font-size:0.9rem;color:var(--text-bright,#e8ecf3);">' + nome + '</span>' +
+        '<span style="font-size:0.7rem;font-weight:800;color:#6ee7b7;">✅ você está inscrito</span>' +
+      '</div>' + dupla +
+      ((chips || numero || pres) ? '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">' + chips + ' ' + numero + ' ' + pres + '</div>' : '') +
+    '</div></div>';
+};
+
 // Usados no card de inscritos — tanto na seção "Inscritos Confirmados" do detalhe
 // do torneio (tournaments.js) quanto na página #participants (participants.js).
 // Single source of truth pra não divergir entre as duas telas. Visível só pro

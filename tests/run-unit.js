@@ -134,6 +134,7 @@ const SUITES = [
   'tests/lz-agent-path.test.js',
   'tests/lz-api-index.test.js',
   'tests/lz-contagem-unica.test.js',
+  'tests/meu-card-no-topo.test.js',
   'tests/jogo-so-com-placar.test.js',
   'tests/apagar-torneio-nao-deixa-orfao.test.js',
   'tests/torneio-abandonado.test.js',

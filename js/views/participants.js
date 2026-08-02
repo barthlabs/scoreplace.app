@@ -3278,6 +3278,7 @@ function renderParticipants(container, tournamentId) {
           belowHtml: (checkInControls || rollCallControls)
         })
       : ''}
+    ${(typeof window._meuCardNoTopo === 'function') ? window._meuCardNoTopo(t) : ''}
     ${rollCallBanner}
     ${startBanner}
     ${startedBadge}
