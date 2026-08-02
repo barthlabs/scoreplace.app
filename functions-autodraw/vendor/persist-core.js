@@ -125,15 +125,30 @@ window._computeMemberUids = function (data) {
   if (Array.isArray(data.coHosts)) {
     data.coHosts.forEach(function(ch) { if (ch && ch.status === 'active') push(ch.uid); });
   }
-  var parts = Array.isArray(data.participants) ? data.participants : [];
-  parts.forEach(function(p) {
-    if (!p || typeof p === 'string') return;
-    push(p.uid);
-    // Dupla formada: p1Uid e p2Uid
-    push(p.p1Uid); push(p.p2Uid);
-    if (Array.isArray(p.participants)) {
-      p.participants.forEach(function(sub) { if (sub) push(sub.uid); });
-    }
+  // v1.6.86: A LISTA DE ESPERA TAMBÉM É MEMBRO. Quem está na espera está INSCRITO —
+  // só não foi sorteado ainda. Como memberUids é o que o listener usa
+  // (`where memberUids array-contains uid`) E o que as rules leem pra decidir
+  // participante, ficar de fora significava a pessoa NÃO VER o próprio torneio no app.
+  // Antes isso quase não aparecia porque a espera se enchia de gente que JÁ tinha
+  // passado por participants (e memberUids nunca encolhe); com a porta nova
+  // (fase sorteada → espera) todo inscrito tardio nasceria invisível pra si mesmo.
+  // Medido em produção antes de mexer: 14 entradas de espera com uid, 1 já estava
+  // fora do memberUids (BT Corpus Christi) — este ramo também cura esse caso.
+  var pools = [
+    Array.isArray(data.participants) ? data.participants : [],
+    Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [],
+    Array.isArray(data.waitlist) ? data.waitlist : []
+  ];
+  pools.forEach(function(parts) {
+    parts.forEach(function(p) {
+      if (!p || typeof p === 'string') return;
+      push(p.uid);
+      // Dupla formada: p1Uid e p2Uid
+      push(p.p1Uid); push(p.p2Uid);
+      if (Array.isArray(p.participants)) {
+        p.participants.forEach(function(sub) { if (sub) push(sub.uid); });
+      }
+    });
   });
   return Object.keys(set);
 };

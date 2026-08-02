@@ -1,0 +1,3204 @@
+{
+"id": "confra_fixture",
+"name": "Confra BT Alta da Clínica 2026 (fixture)",
+"format": "Liga",
+"status": "active",
+"ligaOpenEnrollment": true,
+"ligaRoundFormat": "rei_rainha",
+"drawMode": "rei_rainha",
+"lateEnrollment": "expand",
+"allowSelfDeactivation": true,
+"enrollmentMode": "individual",
+"teamSize": 2,
+"enrollmentLimitMode": "cap",
+"drawFirstDate": "2026-08-02",
+"drawFirstTime": "19:00",
+"drawIntervalDays": null,
+"drawManual": false,
+"lastAutoDrawAt": "2026-08-02T22:00:00.000Z",
+"creatorUid": "uid_organizador",
+"phases": [
+{
+"name": "Rei/Rainha",
+"format": "Liga",
+"formatCode": "liga",
+"lateEnrollment": "expand"
+},
+{
+"name": "Eliminatória",
+"format": "Eliminatórias Simples",
+"formatCode": "elim_simples",
+"lateEnrollment": "closed"
+}
+],
+"standbyParticipants": [],
+"waitlist": [],
+"monarchWaitlist": {
+"_default_": []
+},
+"participants": [
+{
+"uid": "uid_001",
+"enrollSeq": 1,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_002",
+"enrollSeq": 2,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_003",
+"enrollSeq": 3,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_004",
+"enrollSeq": 4,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_005",
+"enrollSeq": 5,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_006",
+"enrollSeq": 6,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_007",
+"enrollSeq": 7,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_008",
+"enrollSeq": 8,
+"addedAt": "2026-05-29T15:57:15.816Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_009",
+"enrollSeq": 9,
+"addedAt": "2026-05-29T16:21:42.806Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_010",
+"enrollSeq": 10,
+"addedAt": "2026-05-29T17:26:37.770Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_011",
+"enrollSeq": 11,
+"addedAt": "2026-05-29T18:15:15.666Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_012",
+"enrollSeq": 12,
+"addedAt": "2026-05-29T20:14:58.134Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_013",
+"enrollSeq": 13,
+"addedAt": "2026-05-30T23:28:17.294Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_014",
+"enrollSeq": 14,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_015",
+"enrollSeq": 15,
+"addedAt": "2026-05-31T16:41:21.980Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_016",
+"enrollSeq": 16,
+"addedAt": "2026-05-31T21:30:05.971Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_017",
+"enrollSeq": 17,
+"addedAt": "2026-06-01T13:42:16.390Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_018",
+"enrollSeq": 18,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_019",
+"enrollSeq": 19,
+"addedAt": "2026-06-01T14:50:20.114Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_020",
+"enrollSeq": 20,
+"addedAt": "2026-06-01T16:11:39.677Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_021",
+"enrollSeq": 22,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_022",
+"enrollSeq": 23,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_023",
+"enrollSeq": 24,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_024",
+"enrollSeq": 25,
+"addedAt": "2026-06-05T22:00:21.585Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_025",
+"enrollSeq": 26,
+"addedAt": "2026-06-05T22:01:04.736Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_026",
+"enrollSeq": 27,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_027",
+"enrollSeq": 29,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_028",
+"enrollSeq": 30,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_029",
+"enrollSeq": 31,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_030",
+"enrollSeq": 32,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_031",
+"enrollSeq": 33,
+"addedAt": "2026-06-06T12:16:00.778Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_032",
+"enrollSeq": 34,
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_033",
+"enrollSeq": 35,
+"addedAt": "2026-06-06T13:01:20.022Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_034",
+"enrollSeq": 36,
+"addedAt": "2026-06-06T13:03:17.131Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_035",
+"enrollSeq": 37,
+"addedAt": "2026-06-06T13:05:14.205Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_036",
+"enrollSeq": 38,
+"addedAt": "2026-06-06T13:10:39.998Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_037",
+"enrollSeq": 39,
+"addedAt": "2026-06-06T13:22:07.341Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_038",
+"enrollSeq": 40,
+"addedAt": "2026-06-06T13:23:11.609Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_039",
+"enrollSeq": 41,
+"addedAt": "2026-06-06T13:25:40.843Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_040",
+"enrollSeq": 42,
+"addedAt": "2026-06-06T13:27:20.290Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_041",
+"enrollSeq": 43,
+"addedAt": "2026-06-06T13:39:29.642Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_042",
+"enrollSeq": 44,
+"addedAt": "2026-06-06T13:49:39.386Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_043",
+"enrollSeq": 45,
+"addedAt": "2026-06-06T14:21:07.582Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_044",
+"enrollSeq": 47,
+"addedAt": "2026-06-06T14:34:44.573Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_045",
+"enrollSeq": 48,
+"addedAt": "2026-06-06T14:40:24.015Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_046",
+"enrollSeq": 49,
+"addedAt": "2026-06-06T15:00:46.005Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_047",
+"enrollSeq": 50,
+"addedAt": "2026-06-06T15:04:33.248Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_048",
+"enrollSeq": 51,
+"addedAt": "2026-06-06T15:27:13.720Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_049",
+"enrollSeq": 52,
+"addedAt": "2026-06-06T15:42:23.894Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_050",
+"enrollSeq": 53,
+"addedAt": "2026-06-06T15:42:39.402Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_051",
+"enrollSeq": 54,
+"addedAt": "2026-06-06T15:47:47.365Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_052",
+"enrollSeq": 55,
+"addedAt": "2026-06-06T15:50:31.826Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_053",
+"enrollSeq": 56,
+"addedAt": "2026-06-06T16:59:47.729Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_054",
+"enrollSeq": 57,
+"addedAt": "2026-06-06T19:58:58.201Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_055",
+"enrollSeq": 58,
+"addedAt": "2026-06-07T00:42:55.191Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_056",
+"enrollSeq": 59,
+"addedAt": "2026-06-07T12:49:43.854Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_057",
+"enrollSeq": 60,
+"addedAt": "2026-06-07T22:16:43.962Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_058",
+"enrollSeq": 62,
+"addedAt": "2026-06-07T23:36:51.884Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_059",
+"enrollSeq": 63,
+"addedAt": "2026-06-08T00:31:09.683Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_inativo_1",
+"enrollSeq": 64,
+"addedAt": "2026-06-08T01:54:33.711Z",
+"selfEnrolled": true,
+"ligaActive": false
+},
+{
+"uid": "uid_061",
+"enrollSeq": 65,
+"addedAt": "2026-06-08T02:09:33.763Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_062",
+"enrollSeq": 66,
+"addedAt": "2026-06-08T09:53:55.678Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_063",
+"enrollSeq": 67,
+"addedAt": "2026-06-08T20:15:25.138Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_064",
+"enrollSeq": 69,
+"addedAt": "2026-06-09T18:51:50.150Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_inativo_2",
+"enrollSeq": 70,
+"addedAt": "2026-06-11T15:13:08.691Z",
+"selfEnrolled": true,
+"ligaActive": false
+},
+{
+"uid": "uid_066",
+"enrollSeq": 71,
+"addedAt": "2026-06-11T15:22:52.845Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_067",
+"enrollSeq": 72,
+"addedAt": "2026-06-11T15:40:33.685Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_068",
+"enrollSeq": 73,
+"addedAt": "2026-06-11T16:18:50.156Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_069",
+"enrollSeq": 74,
+"addedAt": "2026-06-11T21:04:59.890Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_070",
+"enrollSeq": 75,
+"addedAt": "2026-06-11T21:08:22.036Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_071",
+"enrollSeq": 76,
+"addedAt": "2026-06-11T21:24:06.486Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_072",
+"enrollSeq": 77,
+"addedAt": "2026-06-11T21:24:47.513Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_073",
+"enrollSeq": 78,
+"addedAt": "2026-06-12T11:07:03.401Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_074",
+"enrollSeq": 80,
+"addedAt": "2026-06-12T14:53:37.789Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_075",
+"enrollSeq": 81,
+"addedAt": "2026-06-12T14:55:55.349Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_076",
+"enrollSeq": 82,
+"addedAt": "2026-06-12T16:08:16.678Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_077",
+"enrollSeq": 83,
+"addedAt": "2026-06-12T16:20:34.786Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_078",
+"enrollSeq": 84,
+"addedAt": "2026-06-12T19:49:44.814Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_079",
+"enrollSeq": 85,
+"addedAt": "2026-06-12T19:54:15.966Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_080",
+"enrollSeq": 86,
+"addedAt": "2026-06-12T22:03:31.719Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_081",
+"enrollSeq": 87,
+"addedAt": "2026-06-13T00:22:33.111Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_082",
+"enrollSeq": 88,
+"addedAt": "2026-06-14T00:54:35.101Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_083",
+"enrollSeq": 89,
+"addedAt": "2026-06-14T09:58:49.709Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_084",
+"enrollSeq": 90,
+"addedAt": "2026-06-14T17:13:31.179Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_085",
+"enrollSeq": 91,
+"addedAt": "2026-06-14T19:57:47.391Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_086",
+"enrollSeq": 92,
+"addedAt": "2026-06-14T21:18:40.592Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_087",
+"enrollSeq": 93,
+"addedAt": "2026-06-14T22:49:59.699Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_088",
+"enrollSeq": 94,
+"addedAt": "2026-06-14T22:52:01.782Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_089",
+"enrollSeq": 95,
+"addedAt": "2026-06-14T22:54:05.250Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_090",
+"enrollSeq": 96,
+"addedAt": "2026-06-15T00:00:52.851Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_091",
+"enrollSeq": 97,
+"addedAt": "2026-07-15T10:26:56.557Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_092",
+"enrollSeq": 98,
+"addedAt": "2026-06-15T00:30:08.891Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_093",
+"enrollSeq": 99,
+"addedAt": "2026-06-15T00:52:37.062Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_094",
+"enrollSeq": 101,
+"addedAt": "2026-06-15T17:28:05.061Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_095",
+"enrollSeq": 102,
+"addedAt": "2026-06-15T19:03:24.533Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_096",
+"enrollSeq": 103,
+"addedAt": "2026-06-16T00:56:38.137Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_097",
+"enrollSeq": 104,
+"addedAt": "2026-06-22T20:09:14.554Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_098",
+"enrollSeq": 105,
+"addedAt": "2026-07-18T23:10:40.058Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_099",
+"enrollSeq": 106,
+"addedAt": "2026-07-28T19:19:21.883Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_100",
+"enrollSeq": 107,
+"addedAt": "2026-07-28T20:55:14.715Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_101",
+"enrollSeq": 108,
+"addedAt": "2026-07-28T22:47:32.765Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_102",
+"enrollSeq": 109,
+"addedAt": "2026-07-29T16:14:05.991Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_103",
+"enrollSeq": 110,
+"addedAt": "2026-07-30T00:54:22.317Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_104",
+"enrollSeq": 111,
+"addedAt": "2026-07-30T21:26:05.611Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_105",
+"enrollSeq": 112,
+"addedAt": "2026-08-02T14:09:22.480Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_106",
+"enrollSeq": 113,
+"addedAt": "2026-08-02T14:28:50.953Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_107",
+"enrollSeq": 114,
+"addedAt": "2026-08-02T15:06:16.111Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_108",
+"enrollSeq": 115,
+"addedAt": "2026-08-02T15:42:51.577Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_109",
+"enrollSeq": 117,
+"addedAt": "2026-08-02T17:36:28.364Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_110",
+"enrollSeq": 118,
+"addedAt": "2026-08-02T19:42:25.669Z",
+"selfEnrolled": true,
+"ligaActive": true
+},
+{
+"uid": "uid_sandra",
+"enrollSeq": 119,
+"addedAt": "2026-08-02T22:00:57.712Z",
+"selfEnrolled": true,
+"ligaActive": true
+}
+],
+"memberUids": [
+"uid_001",
+"uid_002",
+"uid_003",
+"uid_004",
+"uid_005",
+"uid_006",
+"uid_007",
+"uid_008",
+"uid_009",
+"uid_010",
+"uid_011",
+"uid_012",
+"uid_013",
+"uid_014",
+"uid_015",
+"uid_016",
+"uid_017",
+"uid_018",
+"uid_019",
+"uid_020",
+"uid_021",
+"uid_022",
+"uid_023",
+"uid_024",
+"uid_025",
+"uid_026",
+"uid_027",
+"uid_028",
+"uid_029",
+"uid_030",
+"uid_031",
+"uid_032",
+"uid_033",
+"uid_034",
+"uid_035",
+"uid_036",
+"uid_037",
+"uid_038",
+"uid_039",
+"uid_040",
+"uid_041",
+"uid_042",
+"uid_043",
+"uid_044",
+"uid_045",
+"uid_046",
+"uid_047",
+"uid_048",
+"uid_049",
+"uid_050",
+"uid_051",
+"uid_052",
+"uid_053",
+"uid_054",
+"uid_055",
+"uid_056",
+"uid_057",
+"uid_058",
+"uid_059",
+"uid_inativo_1",
+"uid_061",
+"uid_062",
+"uid_063",
+"uid_064",
+"uid_inativo_2",
+"uid_066",
+"uid_067",
+"uid_068",
+"uid_069",
+"uid_070",
+"uid_071",
+"uid_072",
+"uid_073",
+"uid_074",
+"uid_075",
+"uid_076",
+"uid_077",
+"uid_078",
+"uid_079",
+"uid_080",
+"uid_081",
+"uid_082",
+"uid_083",
+"uid_084",
+"uid_085",
+"uid_086",
+"uid_087",
+"uid_088",
+"uid_089",
+"uid_090",
+"uid_091",
+"uid_092",
+"uid_093",
+"uid_094",
+"uid_095",
+"uid_096",
+"uid_097",
+"uid_098",
+"uid_099",
+"uid_100",
+"uid_101",
+"uid_102",
+"uid_103",
+"uid_104",
+"uid_105",
+"uid_106",
+"uid_107",
+"uid_108",
+"uid_109",
+"uid_110",
+"uid_sandra",
+"uid_organizador"
+],
+"matches": [],
+"groups": [],
+"rounds": [
+{
+"round": 1,
+"status": "active",
+"format": "rei_rainha",
+"monarchGroups": [
+{
+"name": "R1 Grupo A",
+"playersUids": [
+"uid_104",
+"uid_049",
+"uid_073",
+"uid_108"
+],
+"players": [
+"Jogador 111",
+"Jogador 052",
+"Jogador 078",
+"Jogador 115"
+],
+"matchIds": [
+"match-rr-r1-g0-0-1785708005103",
+"match-rr-r1-g0-1-1785708005103",
+"match-rr-r1-g0-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo B",
+"playersUids": [
+"uid_034",
+"uid_047",
+"uid_076",
+"uid_042"
+],
+"players": [
+"Jogador 036",
+"Jogador 050",
+"Jogador 082",
+"Jogador 044"
+],
+"matchIds": [
+"match-rr-r1-g1-0-1785708005103",
+"match-rr-r1-g1-1-1785708005103",
+"match-rr-r1-g1-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo C",
+"playersUids": [
+"uid_018",
+"uid_050",
+"uid_064",
+"uid_038"
+],
+"players": [
+"Jogador 018",
+"Jogador 053",
+"Jogador 069",
+"Jogador 040"
+],
+"matchIds": [
+"match-rr-r1-g2-0-1785708005103",
+"match-rr-r1-g2-1-1785708005103",
+"match-rr-r1-g2-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo D",
+"playersUids": [
+"uid_081",
+"uid_102",
+"uid_058",
+"uid_074"
+],
+"players": [
+"Jogador 087",
+"Jogador 109",
+"Jogador 062",
+"Jogador 080"
+],
+"matchIds": [
+"match-rr-r1-g3-0-1785708005103",
+"match-rr-r1-g3-1-1785708005103",
+"match-rr-r1-g3-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo E",
+"playersUids": [
+"uid_026",
+"uid_109",
+"uid_023",
+"uid_085"
+],
+"players": [
+"Jogador 027",
+"Jogador 117",
+"Jogador 024",
+"Jogador 091"
+],
+"matchIds": [
+"match-rr-r1-g4-0-1785708005103",
+"match-rr-r1-g4-1-1785708005103",
+"match-rr-r1-g4-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo F",
+"playersUids": [
+"uid_027",
+"uid_009",
+"uid_041",
+"uid_079"
+],
+"players": [
+"Jogador 029",
+"Jogador 009",
+"Jogador 043",
+"Jogador 085"
+],
+"matchIds": [
+"match-rr-r1-g5-0-1785708005103",
+"match-rr-r1-g5-1-1785708005103",
+"match-rr-r1-g5-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo G",
+"playersUids": [
+"uid_091",
+"uid_096",
+"uid_043",
+"uid_103"
+],
+"players": [
+"Jogador 097",
+"Jogador 103",
+"Jogador 045",
+"Jogador 110"
+],
+"matchIds": [
+"match-rr-r1-g6-0-1785708005103",
+"match-rr-r1-g6-1-1785708005103",
+"match-rr-r1-g6-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo H",
+"playersUids": [
+"uid_110",
+"uid_035",
+"uid_031",
+"uid_005"
+],
+"players": [
+"Jogador 118",
+"Jogador 037",
+"Jogador 033",
+"Jogador 005"
+],
+"matchIds": [
+"match-rr-r1-g7-0-1785708005103",
+"match-rr-r1-g7-1-1785708005103",
+"match-rr-r1-g7-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo I",
+"playersUids": [
+"uid_075",
+"uid_008",
+"uid_007",
+"uid_010"
+],
+"players": [
+"Jogador 081",
+"Jogador 008",
+"Jogador 007",
+"Jogador 010"
+],
+"matchIds": [
+"match-rr-r1-g8-0-1785708005103",
+"match-rr-r1-g8-1-1785708005103",
+"match-rr-r1-g8-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo J",
+"playersUids": [
+"uid_057",
+"uid_061",
+"uid_105",
+"uid_013"
+],
+"players": [
+"Jogador 060",
+"Jogador 065",
+"Jogador 112",
+"Jogador 013"
+],
+"matchIds": [
+"match-rr-r1-g9-0-1785708005103",
+"match-rr-r1-g9-1-1785708005103",
+"match-rr-r1-g9-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo K",
+"playersUids": [
+"uid_093",
+"uid_046",
+"uid_106",
+"uid_086"
+],
+"players": [
+"Jogador 099",
+"Jogador 049",
+"Jogador 113",
+"Jogador 092"
+],
+"matchIds": [
+"match-rr-r1-g10-0-1785708005103",
+"match-rr-r1-g10-1-1785708005103",
+"match-rr-r1-g10-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo L",
+"playersUids": [
+"uid_039",
+"uid_054",
+"uid_084",
+"uid_095"
+],
+"players": [
+"Jogador 041",
+"Jogador 057",
+"Jogador 090",
+"Jogador 102"
+],
+"matchIds": [
+"match-rr-r1-g11-0-1785708005103",
+"match-rr-r1-g11-1-1785708005103",
+"match-rr-r1-g11-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo M",
+"playersUids": [
+"uid_044",
+"uid_063",
+"uid_012",
+"uid_021"
+],
+"players": [
+"Jogador 047",
+"Jogador 067",
+"Jogador 012",
+"Jogador 022"
+],
+"matchIds": [
+"match-rr-r1-g12-0-1785708005103",
+"match-rr-r1-g12-1-1785708005103",
+"match-rr-r1-g12-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo N",
+"playersUids": [
+"uid_068",
+"uid_088",
+"uid_045",
+"uid_030"
+],
+"players": [
+"Jogador 073",
+"Jogador 094",
+"Jogador 048",
+"Jogador 032"
+],
+"matchIds": [
+"match-rr-r1-g13-0-1785708005103",
+"match-rr-r1-g13-1-1785708005103",
+"match-rr-r1-g13-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo O",
+"playersUids": [
+"uid_019",
+"uid_032",
+"uid_090",
+"uid_036"
+],
+"players": [
+"Jogador 019",
+"Jogador 034",
+"Jogador 096",
+"Jogador 038"
+],
+"matchIds": [
+"match-rr-r1-g14-0-1785708005103",
+"match-rr-r1-g14-1-1785708005103",
+"match-rr-r1-g14-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo P",
+"playersUids": [
+"uid_053",
+"uid_016",
+"uid_051",
+"uid_094"
+],
+"players": [
+"Jogador 056",
+"Jogador 016",
+"Jogador 054",
+"Jogador 101"
+],
+"matchIds": [
+"match-rr-r1-g15-0-1785708005103",
+"match-rr-r1-g15-1-1785708005103",
+"match-rr-r1-g15-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo Q",
+"playersUids": [
+"uid_077",
+"uid_037",
+"uid_092",
+"uid_001"
+],
+"players": [
+"Jogador 083",
+"Jogador 039",
+"Jogador 098",
+"Jogador 001"
+],
+"matchIds": [
+"match-rr-r1-g16-0-1785708005103",
+"match-rr-r1-g16-1-1785708005103",
+"match-rr-r1-g16-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo R",
+"playersUids": [
+"uid_022",
+"uid_078",
+"uid_089",
+"uid_066"
+],
+"players": [
+"Jogador 023",
+"Jogador 084",
+"Jogador 095",
+"Jogador 071"
+],
+"matchIds": [
+"match-rr-r1-g17-0-1785708005103",
+"match-rr-r1-g17-1-1785708005103",
+"match-rr-r1-g17-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo S",
+"playersUids": [
+"uid_048",
+"uid_098",
+"uid_107",
+"uid_099"
+],
+"players": [
+"Jogador 051",
+"Jogador 105",
+"Jogador 114",
+"Jogador 106"
+],
+"matchIds": [
+"match-rr-r1-g18-0-1785708005103",
+"match-rr-r1-g18-1-1785708005103",
+"match-rr-r1-g18-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo T",
+"playersUids": [
+"uid_029",
+"uid_082",
+"uid_072",
+"uid_062"
+],
+"players": [
+"Jogador 031",
+"Jogador 088",
+"Jogador 077",
+"Jogador 066"
+],
+"matchIds": [
+"match-rr-r1-g19-0-1785708005103",
+"match-rr-r1-g19-1-1785708005103",
+"match-rr-r1-g19-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo U",
+"playersUids": [
+"uid_097",
+"uid_100",
+"uid_067",
+"uid_004"
+],
+"players": [
+"Jogador 104",
+"Jogador 107",
+"Jogador 072",
+"Jogador 004"
+],
+"matchIds": [
+"match-rr-r1-g20-0-1785708005103",
+"match-rr-r1-g20-1-1785708005103",
+"match-rr-r1-g20-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo V",
+"playersUids": [
+"uid_025",
+"uid_059",
+"uid_028",
+"uid_011"
+],
+"players": [
+"Jogador 026",
+"Jogador 063",
+"Jogador 030",
+"Jogador 011"
+],
+"matchIds": [
+"match-rr-r1-g21-0-1785708005103",
+"match-rr-r1-g21-1-1785708005103",
+"match-rr-r1-g21-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo W",
+"playersUids": [
+"uid_014",
+"uid_002",
+"uid_083",
+"uid_055"
+],
+"players": [
+"Jogador 014",
+"Jogador 002",
+"Jogador 089",
+"Jogador 058"
+],
+"matchIds": [
+"match-rr-r1-g22-0-1785708005103",
+"match-rr-r1-g22-1-1785708005103",
+"match-rr-r1-g22-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo X",
+"playersUids": [
+"uid_017",
+"uid_087",
+"uid_020",
+"uid_101"
+],
+"players": [
+"Jogador 017",
+"Jogador 093",
+"Jogador 020",
+"Jogador 108"
+],
+"matchIds": [
+"match-rr-r1-g23-0-1785708005103",
+"match-rr-r1-g23-1-1785708005103",
+"match-rr-r1-g23-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo Y",
+"playersUids": [
+"uid_069",
+"uid_056",
+"uid_080",
+"uid_024"
+],
+"players": [
+"Jogador 074",
+"Jogador 059",
+"Jogador 086",
+"Jogador 025"
+],
+"matchIds": [
+"match-rr-r1-g24-0-1785708005103",
+"match-rr-r1-g24-1-1785708005103",
+"match-rr-r1-g24-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo Z",
+"playersUids": [
+"uid_071",
+"uid_040",
+"uid_003",
+"uid_033"
+],
+"players": [
+"Jogador 076",
+"Jogador 042",
+"Jogador 003",
+"Jogador 035"
+],
+"matchIds": [
+"match-rr-r1-g25-0-1785708005103",
+"match-rr-r1-g25-1-1785708005103",
+"match-rr-r1-g25-2-1785708005103"
+]
+},
+{
+"name": "R1 Grupo A2",
+"playersUids": [
+"uid_006",
+"uid_015",
+"uid_070",
+"uid_052"
+],
+"players": [
+"Jogador 006",
+"Jogador 015",
+"Jogador 075",
+"Jogador 055"
+],
+"matchIds": [
+"match-rr-r1-g26-0-1785708005103",
+"match-rr-r1-g26-1-1785708005103",
+"match-rr-r1-g26-2-1785708005103"
+]
+}
+],
+"matches": [
+{
+"id": "match-rr-r1-g0-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 0,
+"_gameNum": 1,
+"team1Uids": [
+"uid_104",
+"uid_049"
+],
+"team2Uids": [
+"uid_073",
+"uid_108"
+],
+"p1": "Jogador 111 / Jogador 052",
+"p2": "Jogador 078 / Jogador 115"
+},
+{
+"id": "match-rr-r1-g0-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 0,
+"_gameNum": 2,
+"team1Uids": [
+"uid_104",
+"uid_073"
+],
+"team2Uids": [
+"uid_049",
+"uid_108"
+],
+"p1": "Jogador 111 / Jogador 078",
+"p2": "Jogador 052 / Jogador 115"
+},
+{
+"id": "match-rr-r1-g0-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 0,
+"_gameNum": 3,
+"team1Uids": [
+"uid_104",
+"uid_108"
+],
+"team2Uids": [
+"uid_049",
+"uid_073"
+],
+"p1": "Jogador 111 / Jogador 115",
+"p2": "Jogador 052 / Jogador 078"
+},
+{
+"id": "match-rr-r1-g1-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 1,
+"_gameNum": 4,
+"team1Uids": [
+"uid_034",
+"uid_047"
+],
+"team2Uids": [
+"uid_076",
+"uid_042"
+],
+"p1": "Jogador 036 / Jogador 050",
+"p2": "Jogador 082 / Jogador 044"
+},
+{
+"id": "match-rr-r1-g1-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 1,
+"_gameNum": 5,
+"team1Uids": [
+"uid_034",
+"uid_076"
+],
+"team2Uids": [
+"uid_047",
+"uid_042"
+],
+"p1": "Jogador 036 / Jogador 082",
+"p2": "Jogador 050 / Jogador 044"
+},
+{
+"id": "match-rr-r1-g1-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 1,
+"_gameNum": 6,
+"team1Uids": [
+"uid_034",
+"uid_042"
+],
+"team2Uids": [
+"uid_047",
+"uid_076"
+],
+"p1": "Jogador 036 / Jogador 044",
+"p2": "Jogador 050 / Jogador 082"
+},
+{
+"id": "match-rr-r1-g2-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 2,
+"_gameNum": 7,
+"team1Uids": [
+"uid_018",
+"uid_050"
+],
+"team2Uids": [
+"uid_064",
+"uid_038"
+],
+"p1": "Jogador 018 / Jogador 053",
+"p2": "Jogador 069 / Jogador 040"
+},
+{
+"id": "match-rr-r1-g2-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 2,
+"_gameNum": 8,
+"team1Uids": [
+"uid_018",
+"uid_064"
+],
+"team2Uids": [
+"uid_050",
+"uid_038"
+],
+"p1": "Jogador 018 / Jogador 069",
+"p2": "Jogador 053 / Jogador 040"
+},
+{
+"id": "match-rr-r1-g2-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 2,
+"_gameNum": 9,
+"team1Uids": [
+"uid_018",
+"uid_038"
+],
+"team2Uids": [
+"uid_050",
+"uid_064"
+],
+"p1": "Jogador 018 / Jogador 040",
+"p2": "Jogador 053 / Jogador 069"
+},
+{
+"id": "match-rr-r1-g3-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 3,
+"_gameNum": 10,
+"team1Uids": [
+"uid_081",
+"uid_102"
+],
+"team2Uids": [
+"uid_058",
+"uid_074"
+],
+"p1": "Jogador 087 / Jogador 109",
+"p2": "Jogador 062 / Jogador 080"
+},
+{
+"id": "match-rr-r1-g3-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 3,
+"_gameNum": 11,
+"team1Uids": [
+"uid_081",
+"uid_058"
+],
+"team2Uids": [
+"uid_102",
+"uid_074"
+],
+"p1": "Jogador 087 / Jogador 062",
+"p2": "Jogador 109 / Jogador 080"
+},
+{
+"id": "match-rr-r1-g3-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 3,
+"_gameNum": 12,
+"team1Uids": [
+"uid_081",
+"uid_074"
+],
+"team2Uids": [
+"uid_102",
+"uid_058"
+],
+"p1": "Jogador 087 / Jogador 080",
+"p2": "Jogador 109 / Jogador 062"
+},
+{
+"id": "match-rr-r1-g4-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 4,
+"_gameNum": 13,
+"team1Uids": [
+"uid_026",
+"uid_109"
+],
+"team2Uids": [
+"uid_023",
+"uid_085"
+],
+"p1": "Jogador 027 / Jogador 117",
+"p2": "Jogador 024 / Jogador 091"
+},
+{
+"id": "match-rr-r1-g4-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 4,
+"_gameNum": 14,
+"team1Uids": [
+"uid_026",
+"uid_023"
+],
+"team2Uids": [
+"uid_109",
+"uid_085"
+],
+"p1": "Jogador 027 / Jogador 024",
+"p2": "Jogador 117 / Jogador 091"
+},
+{
+"id": "match-rr-r1-g4-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 4,
+"_gameNum": 15,
+"team1Uids": [
+"uid_026",
+"uid_085"
+],
+"team2Uids": [
+"uid_109",
+"uid_023"
+],
+"p1": "Jogador 027 / Jogador 091",
+"p2": "Jogador 117 / Jogador 024"
+},
+{
+"id": "match-rr-r1-g5-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 5,
+"_gameNum": 16,
+"team1Uids": [
+"uid_027",
+"uid_009"
+],
+"team2Uids": [
+"uid_041",
+"uid_079"
+],
+"p1": "Jogador 029 / Jogador 009",
+"p2": "Jogador 043 / Jogador 085"
+},
+{
+"id": "match-rr-r1-g5-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 5,
+"_gameNum": 17,
+"team1Uids": [
+"uid_027",
+"uid_041"
+],
+"team2Uids": [
+"uid_009",
+"uid_079"
+],
+"p1": "Jogador 029 / Jogador 043",
+"p2": "Jogador 009 / Jogador 085"
+},
+{
+"id": "match-rr-r1-g5-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 5,
+"_gameNum": 18,
+"team1Uids": [
+"uid_027",
+"uid_079"
+],
+"team2Uids": [
+"uid_009",
+"uid_041"
+],
+"p1": "Jogador 029 / Jogador 085",
+"p2": "Jogador 009 / Jogador 043"
+},
+{
+"id": "match-rr-r1-g6-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 6,
+"_gameNum": 19,
+"team1Uids": [
+"uid_091",
+"uid_096"
+],
+"team2Uids": [
+"uid_043",
+"uid_103"
+],
+"p1": "Jogador 097 / Jogador 103",
+"p2": "Jogador 045 / Jogador 110"
+},
+{
+"id": "match-rr-r1-g6-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 6,
+"_gameNum": 20,
+"team1Uids": [
+"uid_091",
+"uid_043"
+],
+"team2Uids": [
+"uid_096",
+"uid_103"
+],
+"p1": "Jogador 097 / Jogador 045",
+"p2": "Jogador 103 / Jogador 110"
+},
+{
+"id": "match-rr-r1-g6-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 6,
+"_gameNum": 21,
+"team1Uids": [
+"uid_091",
+"uid_103"
+],
+"team2Uids": [
+"uid_096",
+"uid_043"
+],
+"p1": "Jogador 097 / Jogador 110",
+"p2": "Jogador 103 / Jogador 045"
+},
+{
+"id": "match-rr-r1-g7-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 7,
+"_gameNum": 22,
+"team1Uids": [
+"uid_110",
+"uid_035"
+],
+"team2Uids": [
+"uid_031",
+"uid_005"
+],
+"p1": "Jogador 118 / Jogador 037",
+"p2": "Jogador 033 / Jogador 005"
+},
+{
+"id": "match-rr-r1-g7-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 7,
+"_gameNum": 23,
+"team1Uids": [
+"uid_110",
+"uid_031"
+],
+"team2Uids": [
+"uid_035",
+"uid_005"
+],
+"p1": "Jogador 118 / Jogador 033",
+"p2": "Jogador 037 / Jogador 005"
+},
+{
+"id": "match-rr-r1-g7-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 7,
+"_gameNum": 24,
+"team1Uids": [
+"uid_110",
+"uid_005"
+],
+"team2Uids": [
+"uid_035",
+"uid_031"
+],
+"p1": "Jogador 118 / Jogador 005",
+"p2": "Jogador 037 / Jogador 033"
+},
+{
+"id": "match-rr-r1-g8-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 8,
+"_gameNum": 25,
+"team1Uids": [
+"uid_075",
+"uid_008"
+],
+"team2Uids": [
+"uid_007",
+"uid_010"
+],
+"p1": "Jogador 081 / Jogador 008",
+"p2": "Jogador 007 / Jogador 010"
+},
+{
+"id": "match-rr-r1-g8-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 8,
+"_gameNum": 26,
+"team1Uids": [
+"uid_075",
+"uid_007"
+],
+"team2Uids": [
+"uid_008",
+"uid_010"
+],
+"p1": "Jogador 081 / Jogador 007",
+"p2": "Jogador 008 / Jogador 010"
+},
+{
+"id": "match-rr-r1-g8-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 8,
+"_gameNum": 27,
+"team1Uids": [
+"uid_075",
+"uid_010"
+],
+"team2Uids": [
+"uid_008",
+"uid_007"
+],
+"p1": "Jogador 081 / Jogador 010",
+"p2": "Jogador 008 / Jogador 007"
+},
+{
+"id": "match-rr-r1-g9-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 9,
+"_gameNum": 28,
+"team1Uids": [
+"uid_057",
+"uid_061"
+],
+"team2Uids": [
+"uid_105",
+"uid_013"
+],
+"p1": "Jogador 060 / Jogador 065",
+"p2": "Jogador 112 / Jogador 013"
+},
+{
+"id": "match-rr-r1-g9-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 9,
+"_gameNum": 29,
+"team1Uids": [
+"uid_057",
+"uid_105"
+],
+"team2Uids": [
+"uid_061",
+"uid_013"
+],
+"p1": "Jogador 060 / Jogador 112",
+"p2": "Jogador 065 / Jogador 013"
+},
+{
+"id": "match-rr-r1-g9-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 9,
+"_gameNum": 30,
+"team1Uids": [
+"uid_057",
+"uid_013"
+],
+"team2Uids": [
+"uid_061",
+"uid_105"
+],
+"p1": "Jogador 060 / Jogador 013",
+"p2": "Jogador 065 / Jogador 112"
+},
+{
+"id": "match-rr-r1-g10-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 10,
+"_gameNum": 31,
+"team1Uids": [
+"uid_093",
+"uid_046"
+],
+"team2Uids": [
+"uid_106",
+"uid_086"
+],
+"p1": "Jogador 099 / Jogador 049",
+"p2": "Jogador 113 / Jogador 092"
+},
+{
+"id": "match-rr-r1-g10-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 10,
+"_gameNum": 32,
+"team1Uids": [
+"uid_093",
+"uid_106"
+],
+"team2Uids": [
+"uid_046",
+"uid_086"
+],
+"p1": "Jogador 099 / Jogador 113",
+"p2": "Jogador 049 / Jogador 092"
+},
+{
+"id": "match-rr-r1-g10-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 10,
+"_gameNum": 33,
+"team1Uids": [
+"uid_093",
+"uid_086"
+],
+"team2Uids": [
+"uid_046",
+"uid_106"
+],
+"p1": "Jogador 099 / Jogador 092",
+"p2": "Jogador 049 / Jogador 113"
+},
+{
+"id": "match-rr-r1-g11-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 11,
+"_gameNum": 34,
+"team1Uids": [
+"uid_039",
+"uid_054"
+],
+"team2Uids": [
+"uid_084",
+"uid_095"
+],
+"p1": "Jogador 041 / Jogador 057",
+"p2": "Jogador 090 / Jogador 102"
+},
+{
+"id": "match-rr-r1-g11-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 11,
+"_gameNum": 35,
+"team1Uids": [
+"uid_039",
+"uid_084"
+],
+"team2Uids": [
+"uid_054",
+"uid_095"
+],
+"p1": "Jogador 041 / Jogador 090",
+"p2": "Jogador 057 / Jogador 102"
+},
+{
+"id": "match-rr-r1-g11-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 11,
+"_gameNum": 36,
+"team1Uids": [
+"uid_039",
+"uid_095"
+],
+"team2Uids": [
+"uid_054",
+"uid_084"
+],
+"p1": "Jogador 041 / Jogador 102",
+"p2": "Jogador 057 / Jogador 090"
+},
+{
+"id": "match-rr-r1-g12-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 12,
+"_gameNum": 37,
+"team1Uids": [
+"uid_044",
+"uid_063"
+],
+"team2Uids": [
+"uid_012",
+"uid_021"
+],
+"p1": "Jogador 047 / Jogador 067",
+"p2": "Jogador 012 / Jogador 022"
+},
+{
+"id": "match-rr-r1-g12-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 12,
+"_gameNum": 38,
+"team1Uids": [
+"uid_044",
+"uid_012"
+],
+"team2Uids": [
+"uid_063",
+"uid_021"
+],
+"p1": "Jogador 047 / Jogador 012",
+"p2": "Jogador 067 / Jogador 022"
+},
+{
+"id": "match-rr-r1-g12-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 12,
+"_gameNum": 39,
+"team1Uids": [
+"uid_044",
+"uid_021"
+],
+"team2Uids": [
+"uid_063",
+"uid_012"
+],
+"p1": "Jogador 047 / Jogador 022",
+"p2": "Jogador 067 / Jogador 012"
+},
+{
+"id": "match-rr-r1-g13-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 13,
+"_gameNum": 40,
+"team1Uids": [
+"uid_068",
+"uid_088"
+],
+"team2Uids": [
+"uid_045",
+"uid_030"
+],
+"p1": "Jogador 073 / Jogador 094",
+"p2": "Jogador 048 / Jogador 032"
+},
+{
+"id": "match-rr-r1-g13-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 13,
+"_gameNum": 41,
+"team1Uids": [
+"uid_068",
+"uid_045"
+],
+"team2Uids": [
+"uid_088",
+"uid_030"
+],
+"p1": "Jogador 073 / Jogador 048",
+"p2": "Jogador 094 / Jogador 032"
+},
+{
+"id": "match-rr-r1-g13-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 13,
+"_gameNum": 42,
+"team1Uids": [
+"uid_068",
+"uid_030"
+],
+"team2Uids": [
+"uid_088",
+"uid_045"
+],
+"p1": "Jogador 073 / Jogador 032",
+"p2": "Jogador 094 / Jogador 048"
+},
+{
+"id": "match-rr-r1-g14-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 14,
+"_gameNum": 43,
+"team1Uids": [
+"uid_019",
+"uid_032"
+],
+"team2Uids": [
+"uid_090",
+"uid_036"
+],
+"p1": "Jogador 019 / Jogador 034",
+"p2": "Jogador 096 / Jogador 038"
+},
+{
+"id": "match-rr-r1-g14-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 14,
+"_gameNum": 44,
+"team1Uids": [
+"uid_019",
+"uid_090"
+],
+"team2Uids": [
+"uid_032",
+"uid_036"
+],
+"p1": "Jogador 019 / Jogador 096",
+"p2": "Jogador 034 / Jogador 038"
+},
+{
+"id": "match-rr-r1-g14-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 14,
+"_gameNum": 45,
+"team1Uids": [
+"uid_019",
+"uid_036"
+],
+"team2Uids": [
+"uid_032",
+"uid_090"
+],
+"p1": "Jogador 019 / Jogador 038",
+"p2": "Jogador 034 / Jogador 096"
+},
+{
+"id": "match-rr-r1-g15-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 15,
+"_gameNum": 46,
+"team1Uids": [
+"uid_053",
+"uid_016"
+],
+"team2Uids": [
+"uid_051",
+"uid_094"
+],
+"p1": "Jogador 056 / Jogador 016",
+"p2": "Jogador 054 / Jogador 101"
+},
+{
+"id": "match-rr-r1-g15-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 15,
+"_gameNum": 47,
+"team1Uids": [
+"uid_053",
+"uid_051"
+],
+"team2Uids": [
+"uid_016",
+"uid_094"
+],
+"p1": "Jogador 056 / Jogador 054",
+"p2": "Jogador 016 / Jogador 101"
+},
+{
+"id": "match-rr-r1-g15-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 15,
+"_gameNum": 48,
+"team1Uids": [
+"uid_053",
+"uid_094"
+],
+"team2Uids": [
+"uid_016",
+"uid_051"
+],
+"p1": "Jogador 056 / Jogador 101",
+"p2": "Jogador 016 / Jogador 054"
+},
+{
+"id": "match-rr-r1-g16-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 16,
+"_gameNum": 49,
+"team1Uids": [
+"uid_077",
+"uid_037"
+],
+"team2Uids": [
+"uid_092",
+"uid_001"
+],
+"p1": "Jogador 083 / Jogador 039",
+"p2": "Jogador 098 / Jogador 001"
+},
+{
+"id": "match-rr-r1-g16-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 16,
+"_gameNum": 50,
+"team1Uids": [
+"uid_077",
+"uid_092"
+],
+"team2Uids": [
+"uid_037",
+"uid_001"
+],
+"p1": "Jogador 083 / Jogador 098",
+"p2": "Jogador 039 / Jogador 001"
+},
+{
+"id": "match-rr-r1-g16-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 16,
+"_gameNum": 51,
+"team1Uids": [
+"uid_077",
+"uid_001"
+],
+"team2Uids": [
+"uid_037",
+"uid_092"
+],
+"p1": "Jogador 083 / Jogador 001",
+"p2": "Jogador 039 / Jogador 098"
+},
+{
+"id": "match-rr-r1-g17-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 17,
+"_gameNum": 52,
+"team1Uids": [
+"uid_022",
+"uid_078"
+],
+"team2Uids": [
+"uid_089",
+"uid_066"
+],
+"p1": "Jogador 023 / Jogador 084",
+"p2": "Jogador 095 / Jogador 071"
+},
+{
+"id": "match-rr-r1-g17-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 17,
+"_gameNum": 53,
+"team1Uids": [
+"uid_022",
+"uid_089"
+],
+"team2Uids": [
+"uid_078",
+"uid_066"
+],
+"p1": "Jogador 023 / Jogador 095",
+"p2": "Jogador 084 / Jogador 071"
+},
+{
+"id": "match-rr-r1-g17-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 17,
+"_gameNum": 54,
+"team1Uids": [
+"uid_022",
+"uid_066"
+],
+"team2Uids": [
+"uid_078",
+"uid_089"
+],
+"p1": "Jogador 023 / Jogador 071",
+"p2": "Jogador 084 / Jogador 095"
+},
+{
+"id": "match-rr-r1-g18-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 18,
+"_gameNum": 55,
+"team1Uids": [
+"uid_048",
+"uid_098"
+],
+"team2Uids": [
+"uid_107",
+"uid_099"
+],
+"p1": "Jogador 051 / Jogador 105",
+"p2": "Jogador 114 / Jogador 106"
+},
+{
+"id": "match-rr-r1-g18-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 18,
+"_gameNum": 56,
+"team1Uids": [
+"uid_048",
+"uid_107"
+],
+"team2Uids": [
+"uid_098",
+"uid_099"
+],
+"p1": "Jogador 051 / Jogador 114",
+"p2": "Jogador 105 / Jogador 106"
+},
+{
+"id": "match-rr-r1-g18-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 18,
+"_gameNum": 57,
+"team1Uids": [
+"uid_048",
+"uid_099"
+],
+"team2Uids": [
+"uid_098",
+"uid_107"
+],
+"p1": "Jogador 051 / Jogador 106",
+"p2": "Jogador 105 / Jogador 114"
+},
+{
+"id": "match-rr-r1-g19-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 19,
+"_gameNum": 58,
+"team1Uids": [
+"uid_029",
+"uid_082"
+],
+"team2Uids": [
+"uid_072",
+"uid_062"
+],
+"p1": "Jogador 031 / Jogador 088",
+"p2": "Jogador 077 / Jogador 066"
+},
+{
+"id": "match-rr-r1-g19-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 19,
+"_gameNum": 59,
+"team1Uids": [
+"uid_029",
+"uid_072"
+],
+"team2Uids": [
+"uid_082",
+"uid_062"
+],
+"p1": "Jogador 031 / Jogador 077",
+"p2": "Jogador 088 / Jogador 066"
+},
+{
+"id": "match-rr-r1-g19-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 19,
+"_gameNum": 60,
+"team1Uids": [
+"uid_029",
+"uid_062"
+],
+"team2Uids": [
+"uid_082",
+"uid_072"
+],
+"p1": "Jogador 031 / Jogador 066",
+"p2": "Jogador 088 / Jogador 077"
+},
+{
+"id": "match-rr-r1-g20-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 20,
+"_gameNum": 61,
+"team1Uids": [
+"uid_097",
+"uid_100"
+],
+"team2Uids": [
+"uid_067",
+"uid_004"
+],
+"p1": "Jogador 104 / Jogador 107",
+"p2": "Jogador 072 / Jogador 004"
+},
+{
+"id": "match-rr-r1-g20-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 20,
+"_gameNum": 62,
+"team1Uids": [
+"uid_097",
+"uid_067"
+],
+"team2Uids": [
+"uid_100",
+"uid_004"
+],
+"p1": "Jogador 104 / Jogador 072",
+"p2": "Jogador 107 / Jogador 004"
+},
+{
+"id": "match-rr-r1-g20-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 20,
+"_gameNum": 63,
+"team1Uids": [
+"uid_097",
+"uid_004"
+],
+"team2Uids": [
+"uid_100",
+"uid_067"
+],
+"p1": "Jogador 104 / Jogador 004",
+"p2": "Jogador 107 / Jogador 072"
+},
+{
+"id": "match-rr-r1-g21-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 21,
+"_gameNum": 64,
+"team1Uids": [
+"uid_025",
+"uid_059"
+],
+"team2Uids": [
+"uid_028",
+"uid_011"
+],
+"p1": "Jogador 026 / Jogador 063",
+"p2": "Jogador 030 / Jogador 011"
+},
+{
+"id": "match-rr-r1-g21-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 21,
+"_gameNum": 65,
+"team1Uids": [
+"uid_025",
+"uid_028"
+],
+"team2Uids": [
+"uid_059",
+"uid_011"
+],
+"p1": "Jogador 026 / Jogador 030",
+"p2": "Jogador 063 / Jogador 011"
+},
+{
+"id": "match-rr-r1-g21-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 21,
+"_gameNum": 66,
+"team1Uids": [
+"uid_025",
+"uid_011"
+],
+"team2Uids": [
+"uid_059",
+"uid_028"
+],
+"p1": "Jogador 026 / Jogador 011",
+"p2": "Jogador 063 / Jogador 030"
+},
+{
+"id": "match-rr-r1-g22-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 22,
+"_gameNum": 67,
+"team1Uids": [
+"uid_014",
+"uid_002"
+],
+"team2Uids": [
+"uid_083",
+"uid_055"
+],
+"p1": "Jogador 014 / Jogador 002",
+"p2": "Jogador 089 / Jogador 058"
+},
+{
+"id": "match-rr-r1-g22-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 22,
+"_gameNum": 68,
+"team1Uids": [
+"uid_014",
+"uid_083"
+],
+"team2Uids": [
+"uid_002",
+"uid_055"
+],
+"p1": "Jogador 014 / Jogador 089",
+"p2": "Jogador 002 / Jogador 058"
+},
+{
+"id": "match-rr-r1-g22-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 22,
+"_gameNum": 69,
+"team1Uids": [
+"uid_014",
+"uid_055"
+],
+"team2Uids": [
+"uid_002",
+"uid_083"
+],
+"p1": "Jogador 014 / Jogador 058",
+"p2": "Jogador 002 / Jogador 089"
+},
+{
+"id": "match-rr-r1-g23-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 23,
+"_gameNum": 70,
+"team1Uids": [
+"uid_017",
+"uid_087"
+],
+"team2Uids": [
+"uid_020",
+"uid_101"
+],
+"p1": "Jogador 017 / Jogador 093",
+"p2": "Jogador 020 / Jogador 108"
+},
+{
+"id": "match-rr-r1-g23-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 23,
+"_gameNum": 71,
+"team1Uids": [
+"uid_017",
+"uid_020"
+],
+"team2Uids": [
+"uid_087",
+"uid_101"
+],
+"p1": "Jogador 017 / Jogador 020",
+"p2": "Jogador 093 / Jogador 108"
+},
+{
+"id": "match-rr-r1-g23-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 23,
+"_gameNum": 72,
+"team1Uids": [
+"uid_017",
+"uid_101"
+],
+"team2Uids": [
+"uid_087",
+"uid_020"
+],
+"p1": "Jogador 017 / Jogador 108",
+"p2": "Jogador 093 / Jogador 020"
+},
+{
+"id": "match-rr-r1-g24-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 24,
+"_gameNum": 73,
+"team1Uids": [
+"uid_069",
+"uid_056"
+],
+"team2Uids": [
+"uid_080",
+"uid_024"
+],
+"p1": "Jogador 074 / Jogador 059",
+"p2": "Jogador 086 / Jogador 025"
+},
+{
+"id": "match-rr-r1-g24-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 24,
+"_gameNum": 74,
+"team1Uids": [
+"uid_069",
+"uid_080"
+],
+"team2Uids": [
+"uid_056",
+"uid_024"
+],
+"p1": "Jogador 074 / Jogador 086",
+"p2": "Jogador 059 / Jogador 025"
+},
+{
+"id": "match-rr-r1-g24-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 24,
+"_gameNum": 75,
+"team1Uids": [
+"uid_069",
+"uid_024"
+],
+"team2Uids": [
+"uid_056",
+"uid_080"
+],
+"p1": "Jogador 074 / Jogador 025",
+"p2": "Jogador 059 / Jogador 086"
+},
+{
+"id": "match-rr-r1-g25-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 25,
+"_gameNum": 76,
+"team1Uids": [
+"uid_071",
+"uid_040"
+],
+"team2Uids": [
+"uid_003",
+"uid_033"
+],
+"p1": "Jogador 076 / Jogador 042",
+"p2": "Jogador 003 / Jogador 035"
+},
+{
+"id": "match-rr-r1-g25-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 25,
+"_gameNum": 77,
+"team1Uids": [
+"uid_071",
+"uid_003"
+],
+"team2Uids": [
+"uid_040",
+"uid_033"
+],
+"p1": "Jogador 076 / Jogador 003",
+"p2": "Jogador 042 / Jogador 035"
+},
+{
+"id": "match-rr-r1-g25-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 25,
+"_gameNum": 78,
+"team1Uids": [
+"uid_071",
+"uid_033"
+],
+"team2Uids": [
+"uid_040",
+"uid_003"
+],
+"p1": "Jogador 076 / Jogador 035",
+"p2": "Jogador 042 / Jogador 003"
+},
+{
+"id": "match-rr-r1-g26-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 26,
+"_gameNum": 79,
+"team1Uids": [
+"uid_006",
+"uid_015"
+],
+"team2Uids": [
+"uid_070",
+"uid_052"
+],
+"p1": "Jogador 006 / Jogador 015",
+"p2": "Jogador 075 / Jogador 055"
+},
+{
+"id": "match-rr-r1-g26-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 26,
+"_gameNum": 80,
+"team1Uids": [
+"uid_006",
+"uid_070"
+],
+"team2Uids": [
+"uid_015",
+"uid_052"
+],
+"p1": "Jogador 006 / Jogador 075",
+"p2": "Jogador 015 / Jogador 055"
+},
+{
+"id": "match-rr-r1-g26-2-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isMonarch": true,
+"monarchGroup": 26,
+"_gameNum": 81,
+"team1Uids": [
+"uid_006",
+"uid_052"
+],
+"team2Uids": [
+"uid_015",
+"uid_070"
+],
+"p1": "Jogador 006 / Jogador 055",
+"p2": "Jogador 015 / Jogador 075"
+},
+{
+"id": "sitout-rr-r1-0-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isSitOut": true,
+"sitOutReason": "inactive",
+"label": "R1 • Folga (inativo)",
+"sitOutPoints": 0,
+"p1": "Jogador 070",
+"p2": "FOLGA",
+"p1Uid": "uid_inativo_2",
+"team1Uids": [
+"uid_inativo_2"
+]
+},
+{
+"id": "sitout-rr-r1-1-1785708005103",
+"round": 1,
+"roundIndex": 0,
+"scoreP1": null,
+"scoreP2": null,
+"winner": null,
+"isSitOut": true,
+"sitOutReason": "inactive",
+"label": "R1 • Folga (inativo)",
+"sitOutPoints": 0,
+"p1": "Jogador 064",
+"p2": "FOLGA",
+"p1Uid": "uid_inativo_1",
+"team1Uids": [
+"uid_inativo_1"
+]
+}
+]
+}
+]
+}

@@ -4745,7 +4745,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         if (!_inactiveHtml && !_woHtml && !_remainderHtml && !_waitBoxHtml) return '';
         return '<details open style="margin-bottom:1rem;background:rgba(255,255,255,0.02);border:1px solid var(--border-color);border-radius:10px;padding:10px 14px;">' +
           '<summary style="cursor:pointer;user-select:none;font-size:0.82rem;font-weight:700;color:var(--text-bright);margin-bottom:8px;">📋 Ficaram de fora desta rodada</summary>' +
-          '<div style="margin-top:8px;">' + _waitBoxHtml + _inactiveHtml + _woHtml + _remainderHtml + '</div>' +
+          // v1.6.86 — ORDEM (regressão apontada pelo dono, ago/2026): a Lista de espera vem
+          // LOGO ABAIXO dos Desativados, não acima. A ordem lê do mais definitivo pro mais
+          // móvel: quem optou por sair (Desativados) → quem está na FILA esperando vaga →
+          // W.O. → sem grupo. Trocar isso põe a fila antes de quem nem quer jogar.
+          '<div style="margin-top:8px;">' + _inactiveHtml + _waitBoxHtml + _woHtml + _remainderHtml + '</div>' +
         '</details>';
       })()}
       ${''/* v4.x: "Lista de espera" movida pra DENTRO do box "Ficaram de fora desta rodada"

@@ -44,11 +44,21 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
   eq('sorteio feito → closed', r.outcome, 'closed');
 })();
 
-// ── Liga com inscrição aberta permite entrar mesmo com sorteio ───────────────
+// ── Liga com inscrição aberta ACEITA mesmo com sorteio — mas o destino é a ESPERA ──
+// ASSERÇÃO REVISADA em v1.6.86 (de 'enrolled' pra 'waitlisted'), de propósito.
+// O invariante que ela defendia CONTINUA travado: Liga com temporada aberta não recusa
+// quem chega depois do sorteio (segue não sendo 'closed'). O que estava errado era o
+// DESTINO — 'enrolled' empurrava a pessoa pra t.participants com os grupos já formados,
+// criando um inscrito que não estava em jogo nenhum NEM na lista de espera. Foi assim que
+// a inscrição de 02/ago/2026 no Confra caiu 57s depois do sorteio e desapareceu.
+// Ver tests/inscricao-pos-sorteio-vai-pra-espera.test.js.
 (() => {
   const data = { format: 'Liga', status: 'active', ligaOpenEnrollment: true, participants: [], rounds: [{ id: 1 }] };
   const r = C.computeEnroll(data, { uid: 'y-uid', displayName: 'Y' }, null, NOW);
-  eq('liga aberta com sorteio → enrolled', r.outcome, 'enrolled');
+  eq('liga aberta com sorteio → waitlisted (aceita, mas na espera)', r.outcome, 'waitlisted');
+  eq('não entra no roster', r.updateData.participants, undefined);
+  eq('entra na espera', r.updateData.standbyParticipants.length, 1);
+  eq('e continua vendo o torneio (memberUids)', r.updateData.memberUids.indexOf('y-uid') !== -1, true);
 })();
 
 // ── Capacidade cheia (modo cap) rejeita ──────────────────────────────────────

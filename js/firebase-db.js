@@ -557,6 +557,30 @@ window.FirestoreDB = {
       });
       if (already) return { alreadyEnrolled: true, participants: participants };
 
+      // v1.6.86 — FASE SORTEADA → LISTA DE ESPERA. Espelha functions/enroll-core.computeEnroll
+      // e window._phaseDrawDone. Esta transação é o FALLBACK de quando a CF falha; sem o mesmo
+      // ramo, o fallback recriaria exatamente o inscrito fantasma que a CF passou a evitar.
+      // Vem antes do teto de vagas: a espera é o lugar de quem não tem vaga.
+      if (_sorteioRealizado) {
+        var _sbArr = Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [];
+        var _jaNaEspera = _sbArr.some(function(p) {
+          if (typeof p === 'string') return _memberMatches(p);
+          if (_memberMatches(p)) return true;
+          return !!(pUid && ((p.p1Uid && p.p1Uid === pUid) || (p.p2Uid && p.p2Uid === pUid)));
+        });
+        if (_jaNaEspera) return { alreadyEnrolled: false, waitlisted: true, alreadyWaitlisted: true, participants: participants };
+        var _sbNew = _sbArr.concat([self._cleanUndefined(participantObj)]);
+        var _wlData = Object.assign({}, data, { standbyParticipants: _sbNew });
+        var _sbPersist = (typeof window !== 'undefined' && typeof window._stripStoredNamesForUidEntries === 'function')
+          ? window._stripStoredNamesForUidEntries(_sbNew) : _sbNew;
+        var _wlUpdate = { standbyParticipants: _sbPersist, memberUids: self._computeMemberUids(_wlData) };
+        if (extraUpdates) {
+          Object.keys(extraUpdates).forEach(function(k) { _wlUpdate[k] = self._cleanUndefined(extraUpdates[k]); });
+        }
+        transaction.update(docRef, _wlUpdate);
+        return { alreadyEnrolled: false, waitlisted: true, participants: participants, standbyParticipants: _sbNew };
+      }
+
       // v2.6.87: Limite com corrida — capacidade ATÔMICA. No modo 'cap' (não-sorteio)
       // com maxParticipants definido, REJEITA se já lotou ANTES de inserir. Como roda
       // dentro da transação, dois cliques simultâneos pra última vaga não passam ambos:

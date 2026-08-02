@@ -1981,6 +1981,17 @@ exports.enrollParticipant = onCall(
     if (out.outcome === "capacityFull") return { capacityFull: true, participants: out.participants };
     if (out.outcome === "already") return { alreadyEnrolled: true, participants: out.participants };
     if (out.outcome === "closed") return { alreadyEnrolled: false, enrollmentClosed: true, participants: out.participants };
+    // v1.6.86: fase já sorteada → a pessoa entrou na LISTA DE ESPERA (não no roster).
+    // No caminho normal o cliente já detecta e chama a espera direto; este ramo cobre a
+    // CORRIDA (o sorteio disparou entre a checagem do cliente e a escrita do servidor),
+    // que é exatamente como o caso do Confra nasceu — 57s de diferença.
+    if (out.outcome === "waitlisted" || out.outcome === "alreadyWaitlisted") {
+      return {
+        alreadyEnrolled: false, waitlisted: true,
+        alreadyWaitlisted: out.outcome === "alreadyWaitlisted",
+        participants: out.participants, standbyParticipants: out.standbyParticipants || null
+      };
+    }
     return {
       alreadyEnrolled: false,
       participants: out.participants,

@@ -60,6 +60,14 @@ const SUITES = [
   // Cânone da LISTA DE ESPERA no AMBIENTE DO SERVIDOR (CF). Falha se alguém devolver
   // as funções pro store.js (não vendorado) — o tardio voltaria a ficar preso na espera.
   'tests/waitlist-core-server.test.js',
+  // PORTA DE ENTRADA da espera: fase SORTEADA → lista de espera, nunca o roster. Roda o doc
+  // REAL do Confra (111 inscritos, 27 grupos, 83 jogos) pelo computeEnroll da CF e pelo
+  // _toggleLigaActive real. Falha se alguém deixar Liga com temporada aberta voltar a
+  // empurrar inscrito tardio pra participants — o inscrito fantasma de 02/ago/2026.
+  'tests/inscricao-pos-sorteio-vai-pra-espera.test.js',
+  // ORDEM do box "📋 Ficaram de fora desta rodada": Lista de espera LOGO ABAIXO dos
+  // Desativados, no seu box âmbar, DENTRO do <details>. Roda a IIFE real do bracket.js.
+  'tests/ficaram-de-fora-ordem.test.js',
   // Toast de push em foreground: campos vêm de payload.data (contrato DATA-ONLY da CF).
   // Falha se alguém voltar a ler só payload.notification → toast 'scoreplace.app' vazio.
   'tests/fcm-foreground-toast.test.js',

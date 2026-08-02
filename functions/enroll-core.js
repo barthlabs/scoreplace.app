@@ -49,13 +49,30 @@ function computeMemberUids(data) {
   var push = function (u) { if (u && typeof u === 'string' && u.length >= 4) set[u] = true; };
   push(data.creatorUid);
   if (Array.isArray(data.coHosts)) data.coHosts.forEach(function (ch) { if (ch && ch.status === 'active') push(ch.uid); });
-  var parts = Array.isArray(data.participants) ? data.participants : [];
-  parts.forEach(function (p) {
-    if (!p || typeof p === 'string') return;
-    push(p.uid); push(p.p1Uid); push(p.p2Uid);
-    if (Array.isArray(p.participants)) p.participants.forEach(function (sub) { if (sub) push(sub.uid); });
+  // v1.6.86: A LISTA DE ESPERA TAMBÉM É MEMBRO — espelha js/views/persist-core.js.
+  // Quem está na espera está INSCRITO (só não foi sorteado): sem entrar em memberUids,
+  // o listener (`memberUids array-contains`) não entrega o torneio pra própria pessoa.
+  [
+    Array.isArray(data.participants) ? data.participants : [],
+    Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [],
+    Array.isArray(data.waitlist) ? data.waitlist : []
+  ].forEach(function (parts) {
+    parts.forEach(function (p) {
+      if (!p || typeof p === 'string') return;
+      push(p.uid); push(p.p1Uid); push(p.p2Uid);
+      if (Array.isArray(p.participants)) p.participants.forEach(function (sub) { if (sub) push(sub.uid); });
+    });
   });
   return Object.keys(set);
+}
+
+// Espelha window._phaseDrawDone (js/views/waitlist-core.js): fase SORTEADA → a inscrição
+// vai pra LISTA DE ESPERA, nunca pro roster da rodada que já existe.
+function phaseDrawDone(data) {
+  if (!data) return false;
+  return (Array.isArray(data.matches) && data.matches.length > 0) ||
+    (Array.isArray(data.rounds) && data.rounds.length > 0) ||
+    (Array.isArray(data.groups) && data.groups.length > 0);
 }
 
 // Espelha window._cleanUndefined (js/views/persist-core.js).
@@ -139,6 +156,28 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   }
   if (isAlreadyEnrolled(participants, participantObj)) {
     return { outcome: 'already', participants: participants, updateData: null };
+  }
+  // v1.6.86 — FASE SORTEADA → LISTA DE ESPERA. Vem ANTES do teto de vagas de propósito:
+  // a espera é justamente onde fica quem não tem vaga na rodada, então recusar por
+  // "lotado" quem já está indo pra fila não faz sentido. Em Liga com temporada aberta
+  // (ligaOpenEnrollment) este era o ramo que NÃO existia: `enrollmentOpen` devolvia
+  // open=true e a pessoa era empurrada pra participants depois do sorteio — inscrita,
+  // fora dos grupos, fora da espera (Confra ago/2026). Ver waitlist-core._phaseDrawDone.
+  if (phaseDrawDone(data)) {
+    var standby = Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [];
+    if (isAlreadyEnrolled(standby, participantObj)) {
+      return { outcome: 'alreadyWaitlisted', participants: participants, updateData: null };
+    }
+    var newStandby = standby.concat([cleanUndefined(participantObj)]);
+    var wlData = Object.assign({}, data, { standbyParticipants: newStandby });
+    var wlUpdate = { standbyParticipants: newStandby, memberUids: computeMemberUids(wlData) };
+    if (extraUpdates) {
+      Object.keys(extraUpdates).forEach(function (k) { wlUpdate[k] = cleanUndefined(extraUpdates[k]); });
+    }
+    return {
+      outcome: 'waitlisted', participants: participants,
+      standbyParticipants: newStandby, updateData: wlUpdate
+    };
   }
   var capMax = parseInt(data.maxParticipants, 10);
   var isDrawMode = data.enrollmentLimitMode === 'draw';
@@ -227,6 +266,6 @@ function computeDeenroll(data, userUid) {
 }
 
 module.exports = {
-  participantUids, computeMemberUids, cleanUndefined,
+  participantUids, computeMemberUids, cleanUndefined, phaseDrawDone,
   enrollmentOpen, isAlreadyEnrolled, computeEnroll, computeDeenroll
 };
