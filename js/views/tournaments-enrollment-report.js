@@ -3768,8 +3768,15 @@
       });
       out[k] = seq.map(function (kk) { return por[kk]; });
     });
-    out.indexTotal = Math.max(antigo.indexTotal || 0, novo.indexTotal || 0) || undefined;
-    out.declaredGames = Math.max(antigo.declaredGames || 0, novo.declaredGames || 0) || undefined;
+    // ⚠️ NUNCA `|| undefined`: o Firestore RECUSA o documento inteiro quando encontra um
+    // campo com valor undefined ("Unsupported field value: undefined"). Foi o que aconteceu
+    // em 02/ago/2026 — a Kelly jogou um torneio novo, a leitura trouxe, e NADA gravava:
+    // toda escrita morria com invalid-argument por causa destas duas linhas. Chave que não
+    // tem valor é chave que não existe; a gente APAGA, não atribui vazio.
+    var _it = Math.max(antigo.indexTotal || 0, novo.indexTotal || 0);
+    var _dg = Math.max(antigo.declaredGames || 0, novo.declaredGames || 0);
+    if (_it > 0) out.indexTotal = _it; else delete out.indexTotal;
+    if (_dg > 0) out.declaredGames = _dg; else delete out.declaredGames;
     if (antigo.totais || novo.totais) {
       var ta = antigo.totais || {}, tn = novo.totais || {};
       var idxN = tn.fonte === 'indice', idxA = ta.fonte === 'indice';
@@ -3802,6 +3809,21 @@
     var a = (typeof antigo._fullGames === 'number') ? antigo._fullGames : -1;
     var b = (typeof novo._fullGames === 'number') ? novo._fullGames : -1;
     return a > b;                      // resumo que descreve leitura MENOR não substitui
+  }
+  // DEFESA DE BORDA. O Firestore recusa o DOCUMENTO INTEIRO por um único `undefined` em
+  // qualquer profundidade, e o erro só diz o nome do campo. Como tudo que gravamos passa
+  // por aqui, é aqui que se limpa — assim um `undefined` novo, vindo de onde for, não
+  // derruba a gravação de novo.
+  function _lzSemUndefined(v) {
+    if (v === undefined) return undefined;
+    if (v === null || typeof v !== 'object') return v;
+    if (Array.isArray(v)) return v.map(function (x) { return (x === undefined) ? null : _lzSemUndefined(x); });
+    var o = {};
+    Object.keys(v).forEach(function (k) {
+      var x = _lzSemUndefined(v[k]);
+      if (x !== undefined) o[k] = x;
+    });
+    return o;
   }
   function _lzBarrarRegressao(uid, doc, db) {
     var agora = doc.fullImport ? _lzTot(doc.fullImport) : 0;
@@ -3904,7 +3926,7 @@
       // leitura ainda está preenchendo. Histórico não vai; estrutura vai.
       if (s.fullImport && s.fullImport.totais) doc.totaisLetzplay = s.fullImport.totais;
       var w = _lzBarrarRegressao(s.uid, doc, db)
-        .then(function (d2) { return db.collection('letzplayScans').doc(s.uid).set(d2, { merge: true }); })
+        .then(function (d2) { return db.collection('letzplayScans').doc(s.uid).set(_lzSemUndefined(d2), { merge: true }); })
         .catch(function (err) {
           // NUNCA falhar MUDO (caso Camila: 472 jogos → doc >1MiB → todos os writes
           // morriam em silêncio e "não gravava porra nenhuma"). Mostra o ERRO REAL e
@@ -3990,7 +4012,7 @@
       // MESMA TRAVA DO CAMINHO DOS PARCIAIS. Os dois escrevem no MESMO documento e a ordem
       // de chegada não é garantida — pôr a guarda só num deles é não ter guarda.
       return _lzBarrarRegressao(s.uid, doc, db)
-        .then(function (d2) { return db.collection('letzplayScans').doc(s.uid).set(d2, { merge: true }); })
+        .then(function (d2) { return db.collection('letzplayScans').doc(s.uid).set(_lzSemUndefined(d2), { merge: true }); })
         .catch(function (err) {
           // Erro REAL na tela + regrava sem o fullImport (o resumo sempre cabe) — ver
           // _lzPersistScans; mesmo fallback aqui (caso Camila: doc >1MiB falhava mudo).

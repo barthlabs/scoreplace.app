@@ -196,5 +196,35 @@ ok(/será substituído por/.test(grava), 'e avisa quando substitui um documento 
      'logo depois de unir — os dois não têm COMO discordar');
 }
 
+// ── UM ÚNICO `undefined` DERRUBA O DOCUMENTO INTEIRO ───────────────────────────────────
+// 02/ago/2026: a Kelly jogou um torneio novo, a leitura trouxe, e NADA gravava. O erro na
+// tela: "invalid-argument: Unsupported field value: undefined (found in field fullImport.i…)".
+// Era `out.indexTotal = Math.max(...) || undefined` na minha própria união: quando os dois
+// lados são 0, a chave vira undefined e o Firestore recusa o DOCUMENTO TODO.
+{
+  const app = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  const fn = app.slice(app.indexOf('function _lzUnirImports'), app.indexOf('  // O RESUMO É FUNÇÃO DO HISTÓRICO'));
+  const codigo = fn.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
+  ok(!/\|\| undefined/.test(codigo), 'a união não produz mais nenhum `|| undefined`');
+  ok(/if \(_it > 0\) out\.indexTotal = _it; else delete out\.indexTotal;/.test(fn),
+     'chave sem valor é APAGADA, não atribuída vazia');
+
+  // e a defesa de borda
+  const ctx = { window: {}, console, Object, Array, JSON };
+  require('vm').createContext(ctx);
+  const i2 = app.indexOf('function _lzSemUndefined'), j2 = app.indexOf('function _lzBarrarRegressao');
+  require('vm').runInContext(app.slice(i2, j2) + '\nwindow._limpa = _lzSemUndefined;', ctx);
+  const limpa = ctx.window._limpa;
+  const sujo = { a: 1, b: undefined, c: { d: undefined, e: 2 }, f: [1, undefined, { g: undefined, h: 3 }] };
+  const bom = limpa(sujo);
+  ok(!('b' in bom) && !('d' in bom.c), 'undefined some em qualquer profundidade');
+  ok(bom.c.e === 2 && bom.a === 1 && bom.f[2].h === 3, 'e o resto fica intacto');
+  ok(bom.f[1] === null, 'dentro de array vira null (array não pode ter buraco)');
+  ok(JSON.stringify(bom).indexOf('undefined') === -1, 'nada de undefined sobra');
+  ok((app.match(/set\(_lzSemUndefined\(d2\), \{ merge: true \}\)/g) || []).length === 2,
+     'os DOIS caminhos de escrita passam pela limpeza');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-nunca-regride: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
