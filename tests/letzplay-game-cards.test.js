@@ -137,5 +137,32 @@ ok(typeof window._spScoreplaceItems === 'function', 'match-history expõe os jog
   ok(/_montarAbas\(\)/.test(semLz), 'e as abas de jogos são montadas mesmo sem letzplay nenhum');
 }
 
+// ── OS NÚMEROS DO SCOREPLACE SE SOMAM AOS DO LETZPLAY ──────────────────────────────────
+// Regra do dono (02/ago/2026): "os números do scoreplace se somam a isso, mas sempre que
+// falar no letzplay as pessoas precisam ver os mesmos números."
+// A aba contava a LISTA renderizada — que tem os cards DISTINTOS (391 no Fabio) — enquanto
+// a barra passou a mostrar o número do perfil (397). Divergência dentro do mesmo diálogo,
+// que é exatamente o que a regra veio eliminar.
+{
+  const rep = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/window\._lzNumLz = \{ tour: tX, rank: rX, jogo: gX \};/.test(rep),
+     'o diálogo publica os números do letzplay pra costura somar em cima');
+  const fn = rep.slice(rep.indexOf('var _base = window._lzNumLz'), rep.indexOf('// repinta a aba aberta'));
+  ok(/it\.source === 'scoreplace'/.test(fn), 'conta só os jogos NOSSOS pra somar (não os do letzplay de novo)');
+  ok(/_lzAbaNum\('jogo', \(_base\.jogo \|\| 0\) \+ _spJogos\)/.test(fn),
+     'aba Jogos = número do letzplay + jogos do scoreplace');
+  ok(/_lzAbaNum\('tour', \(_base\.tour \|\| 0\) \+ linhasT\.length\)/.test(fn) &&
+     /_lzAbaNum\('rank', \(_base\.rank \|\| 0\) \+ linhasR\.length\)/.test(fn),
+     'idem torneios e rankings');
+  ok(!/_lzAbaNum\('jogo', \(window\._lzGameItens \|\| \[\]\)\.length\)/.test(rep),
+     'e a aba NÃO conta mais o tamanho da lista renderizada');
+
+  // a soma em si, com os números reais medidos no Fabio
+  const soma = (base, sp) => (base || 0) + sp;
+  ok(soma(397, 3) === 400, 'Fabio: 397 do letzplay + 3 do app = 400');
+  ok(soma(397, 0) === 397, 'e sem jogo nosso, continua exatamente o número deles');
+}
+
 console.log((fail ? '✗' : '✓') + ' letzplay-game-cards: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

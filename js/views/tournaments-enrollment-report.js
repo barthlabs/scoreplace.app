@@ -1686,13 +1686,19 @@
       }
       juntar('tour', linhasT);
       juntar('rank', linhasR);
-      // O NÚMERO DA ABA TAMBÉM É DAS DUAS FONTES. Ele era carimbado no HTML com o total do
-      // letzplay e nunca mais mexido — então os jogos do app entravam na lista e a aba
-      // continuava dizendo o número antigo. Pior: quando não havia nenhum jogo do app, não
-      // dava pra saber se era "não tem" ou "não procurou". Agora o número se mexe.
-      window._lzAbaNum('jogo', (window._lzGameItens || []).length);
-      window._lzAbaNum('tour', linhasT.length, true);
-      window._lzAbaNum('rank', linhasR.length, true);
+      // ── OS NÚMEROS DO SCOREPLACE SE SOMAM AOS DO LETZPLAY ────────────────────────
+      // Regra do dono (02/ago/2026): "os números do scoreplace se somam a isso, mas sempre
+      // que falar no letzplay as pessoas precisam ver os mesmos números."
+      // Então a aba é LETZPLAY (o número que a pessoa lê lá) + o que é NOSSO — nunca o
+      // tamanho da lista renderizada, que conta os cards distintos e por isso divergia do
+      // contador deles dentro do mesmo diálogo.
+      var _base = window._lzNumLz || { tour: 0, rank: 0, jogo: 0 };
+      var _spJogos = (window._lzGameItens || []).filter(function (it) {
+        return it && it.source === 'scoreplace';
+      }).length;
+      window._lzAbaNum('jogo', (_base.jogo || 0) + _spJogos);
+      window._lzAbaNum('tour', (_base.tour || 0) + linhasT.length);
+      window._lzAbaNum('rank', (_base.rank || 0) + linhasR.length);
 
       // repinta a aba aberta, se o diálogo ainda está na tela
       var abas = document.getElementById('lz-abas');
@@ -2698,6 +2704,11 @@
         jogo: (window._lzGameCards(_i, _me) || _lzGameRows(_i, tg.handle))
       };
       _lzJuntarScoreplace(uid, _me);
+      // OS NÚMEROS DO LETZPLAY FICAM PUBLICADOS pra costura do scoreplace somar EM CIMA
+      // deles. Sem isso a aba contava a LISTA (391 cards do Fabio + os do app) enquanto a
+      // barra mostrava 397 — divergência dentro do MESMO diálogo, que é justamente o que
+      // a regra "o número deles, sempre" veio eliminar.
+      window._lzNumLz = { tour: tX, rank: rX, jogo: gX };
       var _n = { tour: tX, rank: rX, jogo: gX };
       body += '<div id="lz-abas" style="display:flex;gap:6px;margin:9px 0 0;">' +
         [['tour', '🏆', 'Torneios'], ['rank', '📊', 'Rankings'], ['jogo', '🎾', 'Jogos']].map(function (A) {

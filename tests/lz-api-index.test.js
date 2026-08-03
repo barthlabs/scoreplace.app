@@ -156,9 +156,13 @@ function servidor(total, opts) {
 {
   const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
   ok(/window\._lzAbaNum = function \(qual, n, somar\)/.test(app), 'existe quem reescreva o número da aba');
-  ok(/window\._lzAbaNum\('jogo', \(window\._lzGameItens \|\| \[\]\)\.length\)/.test(app),
-     'depois de costurar o scoreplace, a aba Jogos passa a contar a lista inteira');
-  ok(/window\._lzAbaNum\('tour', linhasT\.length, true\)/.test(app) && /window\._lzAbaNum\('rank', linhasR\.length, true\)/.test(app),
+  // REVISADO em 02/ago/2026: a aba contava a LISTA renderizada (cards distintos) enquanto a
+  // barra passou a mostrar o número do PERFIL — divergência dentro do mesmo diálogo. Agora
+  // a aba é "número do letzplay + o que é nosso" (regra: os números do scoreplace SOMAM).
+  ok(/window\._lzAbaNum\('jogo', \(_base\.jogo \|\| 0\) \+ _spJogos\)/.test(app),
+     'depois de costurar o scoreplace, a aba Jogos soma os nossos AO número do letzplay');
+  ok(/window\._lzAbaNum\('tour', \(_base\.tour \|\| 0\) \+ linhasT\.length\)/.test(app) &&
+     /window\._lzAbaNum\('rank', \(_base\.rank \|\| 0\) \+ linhasR\.length\)/.test(app),
      'e as abas Torneios/Rankings somam as competições do app');
 }
 
