@@ -297,7 +297,8 @@ function servidor(total, opts) {
   ok(/C\.toursDone\[tk\] = 2;/.test(cnt), 'torneio que não abre é marcado como TENTADO (2)');
   ok(/C\.ranksDone\[rk\] = 2;/.test(cnt), 'e o ranking também');
   ok((cnt.match(/não abriu — segue sem ele/g) || []).length === 2, 'e a tela fica sabendo dos dois');
-  ok(/if \(C\.toursDone\[tk\]\)/.test(cnt), 'e o marcado não é rebuscado na rodada seguinte');
+  ok(/if \(C\.toursDone\[tk\] === 2\) return false;/.test(cnt) && /if \(C\.ranksDone\[rk\] === 2\) return false;/.test(cnt),
+     'e o marcado como TENTADO não é rebuscado na rodada seguinte — mesmo sem detalhe nenhum');
 }
 
 // ── CARD REPETIDO ≠ LINHA PERDIDA — decidido por ARITMÉTICA, não por opinião ────────────

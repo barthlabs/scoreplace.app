@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.94';
+  var EXT_VERSION = '1.95';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -809,6 +809,8 @@
     // uma retomada não começar com as barras zeradas.
     var nomeExibicao = (prior && prior.profile && prior.profile.name) || null;
     var totJogos = (prior && prior.declaredGames != null) ? prior.declaredGames : null;
+    // o contador do PERFIL, preservado à parte de `totJogos` (que o índice sobrescreve)
+    var _perfilJogos = (prior && prior.perfilJogos != null) ? prior.perfilJogos : null;
     var totTorneios = (prior && prior.declaredTournaments != null) ? prior.declaredTournaments : null;
     var totRankings = (prior && prior.declaredRankings != null) ? prior.declaredRankings : null;
 
@@ -974,7 +976,10 @@
       }
       if (_cardsRepetidos > 0) t.cardsRepetidos = _cardsRepetidos;
       if (t.jogos || t.torneios || t.rankings) imp.totais = t;
-      imp.declaredGames = totJogos;
+      // declaredGames = O QUE O LETZPLAY DIZ, sempre. A contagem de partidas distintas
+      // vive em `indexTotal` e continua sendo o que a leitura persegue por dentro.
+      if (_perfilJogos != null) imp.perfilJogos = _perfilJogos;
+      imp.declaredGames = (_perfilJogos != null) ? _perfilJogos : totJogos;
       imp.declaredTournaments = totTorneios;
       imp.declaredRankings = totRankings;
       if (toursList.length) imp.tournamentsList = toursList.map(function (P) { return { club: P.club, tid: P.tid, title: P.title || null, data: P.data || null, dataNum: P.dataNum || null }; });
@@ -1177,7 +1182,13 @@
         try {
           var dp = await bgFetchDoc('https://letzplay.me/' + encodeURIComponent(handle));
           var txt = ((dp.body && dp.body.textContent) || '').replace(/\s+/g, ' ');
-          var mJ = txt.match(/(\d+)\s*Jogos/); if (mJ) totJogos = +mJ[1];
+          // ── O NÚMERO DO PERFIL É SAGRADO ──────────────────────────────────────
+          // É ele que a pessoa lê no letzplay (397 do Fabio, 162 da Kelly) e é ele que o
+          // app tem que exibir. Ele ficava PERDIDO: mais abaixo, `totJogos = _idx.total`
+          // sobrescrevia esta variável com a contagem de partidas distintas, e era esse
+          // valor que ia pra `declaredGames` — por isso o app mostrava 391/160 e o dono
+          // via divergência com a fonte, três vezes seguidas.
+          var mJ = txt.match(/(\d+)\s*Jogos/); if (mJ) { totJogos = +mJ[1]; _perfilJogos = +mJ[1]; }
           var mR = txt.match(/(\d+)\s*Rankings/); if (mR) totRankings = +mR[1];
           var mT = txt.match(/(\d+)\s*Torneios/); if (mT) totTorneios = +mT[1];
           // NOME DE EXIBIÇÃO DO LETZPLAY. Vem do h1/h2 do perfil ("Camila Calia") ou do
@@ -1222,8 +1233,16 @@
         // pelo servidor, não pelo nosso laço.
         var _pendT = toursList.filter(function (P) {
           var tk = 't/' + P.club + '/' + P.tid;
-          // pular é pular, sem anunciar e sem gastar requisição
-          if (C.toursDone[tk]) { var d0 = detDe(tk); if (d0) det[tk] = d0; return false; }
+          // ── "JÁ LI" SÓ VALE SE O DETALHE SOBREVIVEU ────────────────────────────
+          // O cursor prova que a página foi ABERTA; ele não prova que o nome e a
+          // classificação estão no documento. A Kelly ficou com `tournaments: []` e
+          // `rankings: []` — e como o cursor dizia "já li os 8", toda releitura PULAVA os
+          // 8 e o array continuava vazio. Sem torneio com título não há evidência; sem
+          // evidência não há veredito; e o nome dela ficava VIOLETA pra sempre, mesmo
+          // depois de puxar tudo. Detalhe perdido = não lido.
+          if (C.toursDone[tk] === 2) return false;   // tentei e não abriu: não insiste
+          var d0 = C.toursDone[tk] ? detDe(tk) : null;
+          if (d0 && (d0.name || d0.standings)) { det[tk] = d0; return false; }
           return true;
         });
         var _totT = totTorneios || toursList.length;
@@ -1273,7 +1292,9 @@
           note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, (totRankings || ranksList.length) || 1) + ' de ' + ((totRankings || ranksList.length) || '?') + ' — nome e classificação' });
         var _pendR = ranksList.filter(function (R) {
           var rk = 'r/' + R.club + '/' + R.rid;
-          if (C.ranksDone[rk]) { var d0 = detDe(rk); if (d0) det[rk] = d0; return false; }
+          if (C.ranksDone[rk] === 2) return false;   // idem torneios: tentado e sem página
+          var d0 = C.ranksDone[rk] ? detDe(rk) : null;
+          if (d0 && (d0.name || d0.standings)) { det[rk] = d0; return false; }
           return true;
         });
         var _totR = totRankings || ranksList.length;

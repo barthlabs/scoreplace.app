@@ -60,9 +60,13 @@ ok(!/pulT\+\+|pulR\+\+/.test(src), 'e nem o contador que existia só pra isso');
 {
   // agora o filtro acontece ANTES de montar os lotes (ext 1.71): quem já foi lido nem
   // entra na lista de trabalho — mais forte que "pular dentro do laço".
-  const filtro = src.slice(src.indexOf('var _pendT = toursList.filter'), src.indexOf('var _pendT = toursList.filter') + 320);
+  const filtro = src.slice(src.indexOf('var _pendT = toursList.filter'), src.indexOf('var _pendT = toursList.filter') + 1400);
   ok(/return false;/.test(filtro), 'quem já foi lido é retirado antes do lote, sem emitir nada');
-  ok(/if \(d0\) det\[tk\] = d0;/.test(filtro), 'mas o que já sabíamos dele é reaproveitado');
+  // REVISADO em 03/ago/2026: "já lido" passou a exigir que o DETALHE tenha sobrevivido —
+  // o cursor prova que a página abriu, não que o nome/classificação ficaram no documento.
+  // A Kelly tinha tournaments:[] com os 8 marcados como lidos, e o violeta não saía nunca.
+  ok(/if \(d0 && \(d0\.name \|\| d0\.standings\)\) \{ det\[tk\] = d0; return false; \}/.test(filtro),
+     'e o que já sabíamos dele é reaproveitado — mas só quando existe de verdade');
 }
 
 console.log((fail ? '✗' : '✓') + ' lz-list-date: ' + pass + ' passaram, ' + fail + ' falharam');

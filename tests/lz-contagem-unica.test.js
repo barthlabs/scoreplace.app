@@ -155,5 +155,54 @@ console.log('\n── e a leitura não pula o que é novo ──');
   ok(/partida\(s\) nova\(s\) — lendo /.test(cnt), 'e a tela diz quantas novidades achou e quantas páginas vai ler');
 }
 
+console.log('\n── o número do perfil é RECUPERÁVEL nos docs já gravados ──');
+// A leitura antiga sobrescrevia o contador do perfil com a contagem de distintas, e por
+// isso o app mostrava 160 (Kelly) e 391 (Fabio) onde o letzplay mostra 162 e 397. Sem
+// releitura, o número volta somando os cards que o letzplay repete — medido e gravado.
+{
+  const kelly = { games: jogos(160, 'r1'), declaredGames: 160, indexTotal: 160,
+    totais: { fonte: 'indice', jogos: 160, cardsRepetidos: 2 },
+    lzCursor: { complete: true, pageDone: 9, pagesTotal: 9, toursDone: {}, ranksDone: {} } };
+  const ck = conta(kelly);
+  ok(ck.g.y === 162 && ck.g.x === 162, 'Kelly: 162 de 162, como no letzplay (veio ' + ck.g.x + ' de ' + ck.g.y + ')');
+
+  const fabio = { games: jogos(391, 'r1'), declaredGames: 391, indexTotal: 391,
+    totais: { fonte: 'indice', jogos: 391, cardsRepetidos: 6 },
+    lzCursor: { complete: true, pageDone: 20, pagesTotal: 20, toursDone: {}, ranksDone: {} } };
+  const cf = conta(fabio);
+  ok(cf.g.y === 397 && cf.g.x === 397, 'Fabio: 397 de 397 (veio ' + cf.g.x + ' de ' + cf.g.y + ')');
+
+  // e quando a extensão nova gravar o número do perfil, ele manda direto
+  const novo = { games: jogos(391, 'r1'), perfilJogos: 397, declaredGames: 397, indexTotal: 391,
+    totais: { fonte: 'indice', jogos: 391 },
+    lzCursor: { complete: true, pageDone: 20, pagesTotal: 20, toursDone: {}, ranksDone: {} } };
+  ok(conta(novo).g.y === 397, 'com perfilJogos gravado, é ele que vale');
+}
+
+console.log('\n── "já li" só vale se o DETALHE sobreviveu ──');
+// A Kelly ficou com tournaments:[] e rankings:[] no documento. Como o cursor dizia "já li
+// os 8", toda releitura PULAVA os 8 e o array continuava vazio — sem torneio com título não
+// há evidência, sem evidência não há veredito, e o nome dela ficava VIOLETA mesmo depois de
+// puxar tudo. O cursor prova que a página foi ABERTA; não prova que o dado ficou.
+{
+  const cnt = fs.readFileSync(path.join(__dirname, '..', 'extension', 'content.js'), 'utf8');
+  const t = cnt.slice(cnt.indexOf('var _pendT = toursList.filter'), cnt.indexOf('var _pendT = toursList.filter') + 1200);
+  ok(/if \(d0 && \(d0\.name \|\| d0\.standings\)\) \{ det\[tk\] = d0; return false; \}/.test(t),
+     'torneio só é pulado quando o NOME ou a classificação estão guardados');
+  const r = cnt.slice(cnt.indexOf('var _pendR = ranksList.filter'), cnt.indexOf('var _pendR = ranksList.filter') + 1200);
+  ok(/if \(d0 && \(d0\.name \|\| d0\.standings\)\) \{ det\[rk\] = d0; return false; \}/.test(r),
+     'e ranking idem');
+  ok(/Detalhe perdido = não lido/.test(cnt), 'com a razão escrita no código');
+}
+
+console.log('\n── e o número do perfil vira o número do app na extensão nova ──');
+{
+  const cnt = fs.readFileSync(path.join(__dirname, '..', 'extension', 'content.js'), 'utf8');
+  ok(/_perfilJogos = \+mJ\[1\]/.test(cnt), 'o contador do perfil é guardado à parte');
+  ok(/imp\.declaredGames = \(_perfilJogos != null\) \? _perfilJogos : totJogos;/.test(cnt),
+     'e é ELE que vai pra declaredGames — o índice não o sobrescreve mais');
+  ok(/if \(_perfilJogos != null\) imp\.perfilJogos = _perfilJogos;/.test(cnt), 'gravado também em campo próprio');
+}
+
 console.log((fail ? '✗' : '✓') + ' lz-contagem-unica: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

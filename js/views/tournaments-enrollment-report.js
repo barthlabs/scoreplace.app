@@ -2605,7 +2605,18 @@
     //
     // E quando a varredura fechou, X = Y: nós lemos tudo o que a fonte enumera, então a
     // barra bate 100% em vez de parar em 98% por causa de card repetido DELES.
-    var _decl = { g: (imp && imp.declaredGames > 0) ? imp.declaredGames : 0,
+    // OS DOCUMENTOS JÁ GRAVADOS não têm `perfilJogos` — neles o índice já tinha
+    // sobrescrito o contador do perfil. Mas o número deles é RECUPERÁVEL sem releitura:
+    // partidas distintas + cards que o letzplay repete (medido e gravado na leitura).
+    // Kelly: 160 + 2 = 162. Fabio: 391 + 6 = 397. Exatamente o que o perfil mostra.
+    var _repet = (imp && imp.totais && imp.totais.cardsRepetidos) || 0;
+    var _declG = (imp && imp.declaredGames > 0) ? imp.declaredGames : 0;
+    var _recup = (imp && imp.indexTotal > 0) ? imp.indexTotal + _repet : 0;
+    // o MAIOR entre os dois: quando `declaredGames` ainda guarda o contador do perfil ele
+    // já é o número certo; quando foi sobrescrito pela contagem de distintas, a soma com os
+    // repetidos o recupera. Nunca menor que o que o letzplay mostra.
+    var _perfilG = (imp && imp.perfilJogos > 0) ? imp.perfilJogos : Math.max(_declG, _recup);
+    var _decl = { g: _perfilG || ((imp && imp.declaredGames > 0) ? imp.declaredGames : 0),
                   t: (imp && imp.declaredTournaments > 0) ? imp.declaredTournaments : 0,
                   r: (imp && imp.declaredRankings > 0) ? imp.declaredRankings : 0 };
     // "fechou" = a varredura enumerou tudo (índice completo) E o acervo tem tudo que ela
