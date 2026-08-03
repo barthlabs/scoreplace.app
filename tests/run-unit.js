@@ -167,6 +167,11 @@ const SUITES = [
   // no footprint) e a completude exigia contagem de PÁGINAS mesmo com o índice provando
   // cobertura id por id. Falha se alguém voltar a ler competição fora do footprint.
   'tests/kelly-verde.test.js',
+  // PLACAR AO VIVO EM RETRATO: uma paleta só (medida — 4,10:1 no gelo E no escuro), a
+  // placa dimensionada A PARTIR do número (o número não muda de tamanho quando ela
+  // encolhe) e a folga abaixo dela pra o conjunto subir. Falha se alguém reintroduzir
+  // cor de número solta ou fizer o retrato limitar o número pela altura.
+  'tests/live-score-retrato.test.js',
   'tests/meu-card-no-topo.test.js',
   'tests/jogo-so-com-placar.test.js',
   'tests/apagar-torneio-nao-deixa-orfao.test.js',

@@ -6332,7 +6332,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
           if (isServing) _ballShown = true;
         }
         var fullName = window._safeHtml(pn);
-        var avatar = '<span class="live-av-wrap">' + _liveAvatarHtml(pn, 30) + '</span>';
+        // FOTO PROPORCIONAL AO NOME (dono): a foto acompanha a fonte, senão o nome cresce
+        // e o ícone fica um botão perdido do lado. 38px casa com a fonte nova no 390px.
+        var avatar = '<span class="live-av-wrap">' + _liveAvatarHtml(pn, 38) + '</span>';
 
         // Serve ball: shown for the current server. Draggable when serve can still be changed.
         var servBall = '';
@@ -6364,7 +6366,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         cards += '<div' + dropAttr + ballCardAttr + ' onclick="window._liveEditName(' + team + ',' + ni + ')" style="cursor:pointer;display:flex;' + _mirrorCard + 'align-items:center;gap:5px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);transition:transform 0.15s,background 0.15s;min-width:0;">' +
           servBall +
           avatar +
-          '<span style="flex:1;min-width:0;' + _mirrorText + 'font-size:calc(clamp(0.72rem,2.2vw,0.88rem) * var(--live-name-scale,1));font-weight:' + (isServing ? '800' : '600') + ';color:' + (isServing ? '#fbbf24' : 'rgba(255,255,255,0.92)') + ';white-space:normal;overflow-wrap:break-word;word-break:normal;hyphens:none;line-height:1.15;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">' + fullName + '</span>' +
+          '<span style="flex:1;min-width:0;' + _mirrorText + 'font-size:calc(clamp(0.86rem,3.5vw,1.12rem) * var(--live-name-scale,1));font-weight:' + (isServing ? '800' : '600') + ';color:' + (isServing ? '#fbbf24' : 'rgba(255,255,255,0.92)') + ';white-space:normal;overflow-wrap:break-word;word-break:normal;hyphens:none;line-height:1.15;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">' + fullName + '</span>' +
         '</div>';
       }
       // Team box wrapping all players
@@ -6421,8 +6423,24 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Games center column — colors follow court sides (left team color left, right team color right)
     var _gamesLeftStr = leftTeam === 1 ? gamesP1Str : gamesP2Str;
     var _gamesRightStr = rightTeam === 1 ? gamesP1Str : gamesP2Str;
-    var _gamesLeftClr = leftTeam === 1 ? '#60a5fa' : '#f87171';
-    var _gamesRightClr = rightTeam === 1 ? '#60a5fa' : '#f87171';
+    // ── AS CORES DO PLACAR SÃO AS CORES DE TUDO (dono, 03/ago/2026): "as cores dos
+    // games e sets deveriam ser as mesmas do placar, tanto em pé como em deitado."
+    // Antes eram DUAS paletas: a placa usava azul/vermelho ESCUROS (porque o fundo dela
+    // é gelo) e GAMES/SETS usavam pastéis (porque o fundo deles era escuro). Lado a lado
+    // liam como cores diferentes.
+    // A pergunta do dono era exata: "tem algum tom de azul e vermelho que dê a mesma
+    // leitura no fundo gelo e no fundo escuro?" — e ela tem resposta CALCULÁVEL. Varri o
+    // espaço de cor procurando quem passasse dos dois lados; o ponto ótimo é onde o
+    // contraste EMPATA:
+    //   #2667FF  gelo 4,10:1  ·  escuro 4,10:1
+    //   #DB3027  gelo 4,10:1  ·  escuro 4,09:1
+    // Acima do mínimo de 3:1 que a WCAG pede pra texto grande — e estes números são
+    // enormes (18vw). Não existe par que chegue a 4,5:1 nos dois: o limite matemático é
+    // 4,10, porque as duas exigências puxam a luminância pra lados opostos.
+    // Por isso o gelo NÃO invade o fundo escuro: ele é o que dá impacto às placas.
+    var LIVE_NUM_1 = '#2667FF', LIVE_NUM_2 = '#DB3027';
+    var _gamesLeftClr = leftTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2;
+    var _gamesRightClr = rightTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2;
     var gamesCenter = '';
     if (showGamesBox) {
       gamesCenter =
@@ -6668,8 +6686,29 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // preencher). Em PAISAGEM a metade é larga e baixa → scaleY=1 deixa o
       // número MUITO maior (limitado só pela altura real, não por altura*1.35).
       var SY = (window.innerWidth > window.innerHeight) ? 1 : 1.35;
-      // a altura VISUAL é fs*SY; garante que não passe da altura da metade.
-      if (minH !== Infinity && fs * SY > minH * 0.96) fs = minH * 0.96 / SY;
+      var _retrato = !(window.innerWidth > window.innerHeight);
+      if (_retrato) {
+        // ── A PLACA ABRAÇA O NÚMERO ────────────────────────────────────────────
+        // Em pé, quem manda no tamanho é a LARGURA (dois dígitos lado a lado). A
+        // altura, antes, era o que sobrava — e sobrava muito: no iPhone 390×844 o
+        // número usava ~55% da placa e o resto era branco.
+        // Agora a placa é dimensionada A PARTIR do número: altura = tinta + folga.
+        // O número NÃO muda (continua saindo da largura); o que sai é o vazio.
+        // Teto de 42% da altura da tela pra placa nunca engolir nomes e GAMES.
+        // A FOLGA É O AJUSTE FINO DA PLACA. 1.16 deixava a placa colada no número e a
+        // tela ficava vazia em cima e apertada embaixo (dono: "pode aumentar um pouco as
+        // placas para não ficar tão vazio e apertado"). 1.38 devolve respiro DENTRO da
+        // placa sem voltar ao desperdício de antes — o número continua do mesmo tamanho,
+        // só deixa de encostar nas bordas. Teto de 46% da tela pra ela nunca engolir os
+        // nomes e o GAMES.
+        var _alvo = Math.min(fs * SY * 1.38, window.innerHeight * 0.46);
+        var _row = document.getElementById('ls-plates-row');
+        if (_row) _row.style.height = Math.round(_alvo) + 'px';
+        halves.forEach(function (h) { h.style.height = '100%'; });
+      } else if (minH !== Infinity && fs * SY > minH * 0.96) {
+        // a altura VISUAL é fs*SY; em paisagem ela ainda é o limite.
+        fs = minH * 0.96 / SY;
+      }
       fs = Math.floor(fs);
       if (fs < 12) return;
       halves.forEach(function(h) {
@@ -6738,22 +6777,29 @@ window._openLiveScoring = function(tId, matchId, opts) {
     try { _setsLeftN = _setsWon(leftTeam, false); _setsRightN = _setsWon(rightTeam, false); } catch (e) {}
     var _showSets = useSets;
     var _setsLine = _showSets
-      ? '<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:4px;">' +
-          '<span style="font-size:0.6rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
-          '<div style="display:flex;align-items:center;gap:9px;margin-top:1px;">' +
-            '<span style="font-size:1.3rem;font-weight:800;color:' + (leftTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
-            '<span style="font-size:0.95rem;color:rgba(255,255,255,0.25);">–</span>' +
-            '<span style="font-size:1.3rem;font-weight:800;color:' + (rightTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>' +
+      ? '<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:3px;">' +
+          '<span style="font-size:0.72rem;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
+          '<div style="display:flex;align-items:center;gap:11px;margin-top:1px;">' +
+            '<span style="font-size:calc(clamp(2rem,9vw,3.4rem) * var(--live-score-scale,1));font-weight:800;color:' + (leftTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
+            '<span style="font-size:1.05rem;color:rgba(255,255,255,0.25);">–</span>' +
+            '<span style="font-size:calc(clamp(2rem,9vw,3.4rem) * var(--live-score-scale,1));font-weight:800;color:' + (rightTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>' +
           '</div>' +
         '</div>'
       : '';
     // GAMES menor em paisagem (altura curta → usa vh); retrato usa vw.
-    var _gBig  = isLandscape ? 'clamp(2rem,7vh,3.4rem)' : 'clamp(3.15rem,14.4vw,5.85rem)';
-    var _gDash = isLandscape ? 'clamp(1.2rem,4vh,2rem)' : 'clamp(1.8rem,5.4vw,2.7rem)';
+    // O espaço que sobrava de branco nas placas vira TAMANHO aqui (dono: "se os números
+    // não podem ser maiores, vamos diminuir as placas para dar mais espaço para aumentar
+    // os games e sets proporcionalmente"). GAMES sobe de 14.4vw pra 18vw no retrato.
+    var _gBig  = isLandscape ? 'clamp(2rem,7vh,3.4rem)' : 'clamp(4.6rem,24vw,9rem)';
+    var _gDash = isLandscape ? 'clamp(1.2rem,4vh,2rem)' : 'clamp(2.2rem,7.2vw,3.6rem)';
+    // O espaço que a placa devolveu sobe pra cá: este bloco ESTICA (flex:1) e centraliza,
+    // então SETS/GAMES ficam no meio do respiro em vez de deixar um vazio preto embaixo.
+    // Em paisagem ele continua com altura de conteúdo (lá o layout é outro).
     var _topBlock = showGamesBox
-      ? '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:clamp(6px,1.4vh,14px) 0 clamp(3px,0.8vh,7px);">' +
+      ? '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+          'padding:clamp(6px,1.4vh,14px) 0 clamp(4px,1vh,9px);">' +
           _setsLine +
-          '<span style="font-size:0.66rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
+          '<span style="font-size:0.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px;">Games</span>' +
           '<div style="display:flex;align-items:center;gap:clamp(12px,3.6vw,22px);margin-top:1px;">' +
             '<span style="font-size:calc(' + _gBig + ' * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
             '<span style="font-size:calc(' + _gDash + ' * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
@@ -6770,8 +6816,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // 8,6:1 e #9B1414 dá 7,3:1 sobre #EAF0F6 — segue azul e vermelho, e legível
     // em quadra sob sol. A cor do time continua nos nomes e na borda da placa.
     var _scoreHalf = function(team) {
-      var clr = team === 1 ? '#123A9E' : '#9B1414';
-      var edge = team === 1 ? 'rgba(18,58,158,0.35)' : 'rgba(155,20,20,0.30)';
+      var clr = team === 1 ? LIVE_NUM_1 : LIVE_NUM_2;
+      var edge = team === 1 ? 'rgba(38,103,255,0.38)' : 'rgba(219,48,39,0.34)';
       var display = team === 1 ? p1Display : p2Display;
       var tag = state.isFinished ? 'div' : 'button';
       var act = state.isFinished ? '' : 'onclick="window._liveScorePoint(' + team + ')" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'"';
@@ -6788,7 +6834,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // barra em pé. O piso de ~24px é seguro porque o alvo de toque é a LARGURA
     // INTEIRA da tela; aqui a altura é questão de leitura, não de acerto do dedo.
     var _undoBar = (!state.isFinished)
-      ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:none;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;padding:clamp(4px,0.9vh,8px) 0 calc(clamp(4px,0.9vh,8px) + env(safe-area-inset-bottom,0px));font-size:clamp(0.78rem,1.9vh,0.92rem);line-height:1;min-height:0;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
+      ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:none;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;padding:clamp(10px,2.2vh,18px) 0 calc(clamp(10px,2.2vh,18px) + env(safe-area-inset-bottom,0px));font-size:clamp(0.78rem,1.9vh,0.92rem);line-height:1;min-height:0;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
         '<svg viewBox="0 0 24 24" style="width:clamp(15px,2.2vh,18px);height:clamp(15px,2.2vh,18px);flex:0 0 auto;" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>Desfazer</button>'
       : '';
     var _gameLabelRow = gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '';
@@ -6851,10 +6897,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       if (_hdrSets) {
         if (_showSets) {
           _hdrSets.innerHTML =
-            '<span style="font-size:0.62rem;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
-            '<span style="font-size:1.15rem;font-weight:800;color:' + (leftTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
+            '<span style="font-size:0.72rem;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
+            '<span style="font-size:1.15rem;font-weight:800;color:' + (leftTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
             '<span style="font-size:0.85rem;color:rgba(255,255,255,0.25);">–</span>' +
-            '<span style="font-size:1.15rem;font-weight:800;color:' + (rightTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>';
+            '<span style="font-size:1.15rem;font-weight:800;color:' + (rightTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>';
           _hdrSets.style.display = 'flex';
         } else {
           _hdrSets.innerHTML = ''; _hdrSets.style.display = 'none';
@@ -6922,9 +6968,25 @@ window._openLiveScoring = function(tId, matchId, opts) {
           // Placar — v4.5.34: metades tocáveis por time (Apple Watch style).
           // flex:4 (divide o espaço com GAMES flex:2 e nomes flex:1.5 → a tinta
           // não desperdiça, sobra vai pros outros infos). A metade é o botão +1.
-          '<div style="flex:4;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
+          // v1.6.97 — dono, com print do iPhone em pé: "vejo um grande desperdício de
+          // espaço branco nas placas. se os números não podem ser maiores, vamos diminuir
+          // as placas para dar mais espaço para aumentar os games e sets".
+          // flex 4 → 3: a placa encolhe o VAZIO (o número dentro dela não muda de regra),
+          // e a altura devolvida vai pro bloco SETS/GAMES, que subiu de 14.4vw pra 18vw.
+          // v1.6.97 — dono: "a placa em pé pode ser menor MANTENDO o tamanho dos
+          // números". A placa esticava pra preencher o que sobrasse (flex:3), e como o
+          // número é dimensionado pela LARGURA (2 dígitos têm que caber lado a lado), a
+          // altura excedente virava branco. Agora a linha NÃO estica: a altura das placas
+          // é calculada a partir do próprio número, em _doFitLivePlateText. O número não
+          // muda de tamanho — o que sai é o vazio, e ele vira espaço pro resto da tela.
+          '<div id="ls-plates-row" style="flex:0 0 auto;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
             _scoreHalf(leftTeam) + _scoreHalf(rightTeam) +
           '</div>' +
+          // TUDO SOBE, A PLACA FICA NO MEIO (dono). O bloco de cima volta a ter a altura
+          // do conteúdo e a folga inteira vai pra BAIXO das placas — assim SETS/GAMES,
+          // nomes e placa formam um conjunto contínuo a partir do topo, e a placa cai
+          // perto do centro da tela em vez de ficar espremida contra o Desfazer.
+          '<div style="flex:1;min-height:0;"></div>' +
           // Dica de troca de lado (só com fixSides ativo)
           swapHint +
           // Desfazer — ÚNICO botão, full-width, abaixo de tudo (compartilhado)
