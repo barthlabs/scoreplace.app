@@ -241,12 +241,6 @@ window._ligaWoDestination = function (tId, roundIndex, groupName, absentName) {
   if (window.showAlertDialog) window.showAlertDialog('W.O. — pra onde vai o ausente?', html, function () {}, { type: 'warning', confirmText: 'Cancelar' });
 };
 
-// Nome exibível de uma entrada da espera.
-function _wlDisplay(e) {
-  if (typeof e === 'string') return e;
-  return String((window._pName ? window._pName(e, '') : '') || (e && (e.displayName || e.name)) || '').trim();
-}
-
 // O SUPLENTE = primeiro da fila que atende a CATEGORIA do grupo. A ordem manda; a
 // categoria só peneira (torneio sem categoria → o primeiro, ponto).
 // [[project_wo_individual_substitution_rule]]: nunca colocar alguém que quebre a
@@ -348,6 +342,131 @@ window._ligaApplyWoWithDest = function (tId, roundIndex, groupName, absentName, 
   _rerender(tId);
 };
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DESTINO DO AUSENTE (v1.6.90) — a escolha 1 × 2 do organizador, dentro do diálogo REAL.
+// Regra do dono: quem leva W.O. vai pros DESATIVADOS ou pro FIM da lista de espera; o
+// suplente assume e fica até o fim do torneio; e quem foi pros desativados entra na
+// ÚLTIMA posição da fila ao reativar.
+//
+// A 1.6.88 pôs isso em _ligaAbsentFlow, que NÃO é o caminho do botão — o real é
+// wo-claim.js → _woResolveApply → _ligaPickFill. Agora mora onde o organizador já
+// decide quem entra: uma tela, as duas decisões.
+function _ligaApplyDest(ft, absentName, dest) {
+  var _parts = Array.isArray(ft.participants) ? ft.participants : (ft.participants ? Object.values(ft.participants) : []);
+  var _i = -1;
+  for (var k = 0; k < _parts.length; k++) {
+    if (_parts[k] && typeof _parts[k] === 'object' && _wlDisplay(_parts[k]) === absentName) { _i = k; break; }
+  }
+  if (dest === 'inactive') {
+    // FICA no elenco, inativo. Ao reativar, _toggleLigaActive o manda pro FIM da fila.
+    if (_i !== -1) { _parts[_i].ligaActive = false; _parts[_i].woDeactivatedAt = new Date().toISOString(); }
+    ft.participants = _parts;
+    return;
+  }
+  // 'waitlist': sai do elenco e entra no FIM da fila. memberUids cobre a espera (v1.6.86),
+  // então ele NÃO perde o torneio no app.
+  var _e = (_i !== -1) ? _parts[_i] : { name: absentName, displayName: absentName };
+  if (_i !== -1) _parts.splice(_i, 1);
+  ft.participants = _parts;
+  if (_e && typeof _e === 'object') { _e.ligaActive = true; _e.woSentToWaitlistAt = new Date().toISOString(); }
+  if (typeof window._waitlistPushBack === 'function') window._waitlistPushBack(ft, _e);
+}
+
+function _wlDisplay(e) {
+  if (typeof e === 'string') return e;
+  return String((window._pName ? window._pName(e, '') : '') || (e && (e.displayName || e.name)) || '').trim();
+}
+
+// Lê a escolha marcada no diálogo. Default 'waitlist' — o menos punitivo: manda pra fila,
+// não pros desativados. Quem sai do torneio tem que ser decisão EXPLÍCITA.
+function _ligaReadDest() {
+  try {
+    var b = document.querySelector('#liga-wo-dest [data-dest][data-on="1"]');
+    var v = b && b.getAttribute('data-dest');
+    return (v === 'inactive') ? 'inactive' : 'waitlist';
+  } catch (e) { return 'waitlist'; }
+}
+window._ligaSetWoDest = function (btn) {
+  try {
+    var box = document.getElementById('liga-wo-dest'); if (!box) return;
+    box.querySelectorAll('[data-dest]').forEach(function (b) {
+      var on = (b === btn);
+      b.setAttribute('data-on', on ? '1' : '0');
+      var amber = b.getAttribute('data-dest') === 'waitlist';
+      b.style.borderColor = on ? (amber ? 'rgba(251,191,36,0.9)' : 'rgba(239,68,68,0.9)') : 'rgba(255,255,255,0.18)';
+      b.style.background = on ? (amber ? 'rgba(251,191,36,0.12)' : 'rgba(239,68,68,0.12)') : 'transparent';
+      b.style.opacity = on ? '1' : '0.6';
+    });
+  } catch (e) {}
+};
+
+// HTML da escolha 1 × 2. Sempre visível no diálogo do W.O. — o organizador não fecha o
+// ciclo sem dizer pra onde a pessoa vai.
+function _ligaDestHtml(absentName) {
+  var base = 'width:100%;text-align:left;margin-bottom:8px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.18);background:transparent;cursor:pointer;font-family:inherit;';
+  return '<div style="font-size:0.74rem;font-weight:700;color:var(--text-bright);margin:14px 0 6px;">' + _safe(absentName) + ' — pra onde vai?</div>' +
+    '<div id="liga-wo-dest">' +
+      '<button type="button" data-dest="inactive" data-on="0" onclick="window._ligaSetWoDest(this)" style="' + base + 'opacity:0.6;">' +
+        '<span style="font-size:0.85rem;font-weight:800;color:#f87171;">1 · 🔴 Desativados</span>' +
+        '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">Fica de fora dos próximos sorteios. Se reativar, entra no <b>fim</b> da lista de espera.</div></button>' +
+      '<button type="button" data-dest="waitlist" data-on="1" onclick="window._ligaSetWoDest(this)" style="' + base + 'border-color:rgba(251,191,36,0.9);background:rgba(251,191,36,0.12);">' +
+        '<span style="font-size:0.85rem;font-weight:800;color:#fbbf24;">2 · 📋 Fim da lista de espera</span>' +
+        '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">Continua no torneio, atrás de quem já está na fila — volta a jogar quando chegar a vez.</div></button>' +
+    '</div>';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIM DO CICLO (v1.6.90) — quando a vaga é PREENCHIDA (suplente aceitou ou Jogador X
+// entrou), todo mundo envolvido é avisado do que aconteceu, e quem levou o W.O. recebe
+// a INSTRUÇÃO do que fazer pra voltar. Regra do dono: o ciclo não pode fechar em
+// silêncio — quem ficou de fora precisa saber o caminho de volta.
+function _ligaNotifyWoCycle(t, group, absentName, subName, dest, isGuest) {
+  if (typeof window._sendUserNotification !== 'function') return;
+  var nome = t.name || 'torneio';
+  var gName = (group && group.name) || '';
+  var uidDe = function (n) {
+    try { var m = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(t) || {}) : {}; return m[n] || null; } catch (e) { return null; }
+  };
+  var base = { type: 'liga-sub-result', tournamentId: String(t.id), tournamentName: nome };
+  var comoEntrou = isGuest ? (subName + ' entrou como Jogador X (não pontua)') : (subName + ' assumiu a vaga');
+
+  // (a) o AUSENTE — o que aconteceu + O QUE FAZER pra voltar.
+  var uAbs = uidDe(absentName);
+  if (uAbs) {
+    var instr = (dest === 'inactive')
+      ? 'Você ficou como DESATIVADO e não entra nos próximos sorteios. Para voltar: abra o torneio e ligue o botão "Ativado" — você entra no FIM da lista de espera e joga quando chegar a sua vez.'
+      : 'Você foi para o FIM da lista de espera e continua no torneio. Não precisa fazer nada: quando chegar a sua vez (uma vaga abrir ou um novo grupo se formar), você é chamado.';
+    window._sendUserNotification(uAbs, Object.assign({}, base, {
+      level: 'fundamental',
+      message: 'Você levou W.O. no ' + gName + ' de "' + nome + '" — 0 pontos nesta rodada, e ' + comoEntrou + ' no seu lugar. ' + instr,
+    }));
+  }
+
+  // (b) o SUBSTITUTO (só quem tem conta — Jogador X não tem).
+  if (!isGuest) {
+    var uSub = uidDe(subName);
+    if (uSub) {
+      window._sendUserNotification(uSub, Object.assign({}, base, {
+        level: 'fundamental',
+        message: 'Você entrou no ' + gName + ' de "' + nome + '" no lugar de ' + absentName + ' (W.O.). A vaga é sua até o fim do torneio — você pontua normalmente.',
+      }));
+    }
+  }
+
+  // (c) os DEMAIS do grupo — precisam saber com quem vão jogar.
+  ((group && group.players) || []).forEach(function (n) {
+    if (!n || n === subName || n === absentName) return;
+    var u = uidDe(n);
+    if (!u) return;
+    window._sendUserNotification(u, Object.assign({}, base, {
+      level: 'important',
+      message: 'Mudança no ' + gName + ' de "' + nome + '": ' + absentName + ' levou W.O. e ' + comoEntrou + '. Seus jogos da rodada seguem valendo.',
+    }));
+  });
+}
+window._ligaNotifyWoCycle = _ligaNotifyWoCycle;
+
 // ── Passo 2 (legado): convidar folga OU Jogador X — segue disponível pra vaga aberta ──
 window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
   var t = _findT(tId); if (!t) return;
@@ -433,6 +552,7 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
     // dita quando a espera está REALMENTE vazia.
     html += '<div style="font-size:0.74rem;color:var(--text-muted);margin:8px 0;">A lista de espera está vazia e ninguém ficou de fora nesta rodada — não há quem convidar.</div>';
   }
+  html += _ligaDestHtml(absentName);
   html += '<div style="font-size:0.74rem;font-weight:700;color:#fbbf24;margin:12px 0 6px;">Jogador X — qualquer pessoa presente (não pontua)</div>';
   html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:#fbbf24;" onclick="window._ligaFillGuestPrompt(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🎾 Completar com Jogador X</button>';
 
@@ -463,12 +583,25 @@ window._ligaInviteSelected = function (tId, roundIndex, groupName, absentName) {
     sel.push({ uid: b.getAttribute('data-uid'), name: b.getAttribute('data-name') });
   });
   if (!sel.length) { if (window.showNotification) window.showNotification('Convite', 'Marque ao menos um jogador pra convidar.', 'info'); return; }
+  // v1.6.90: o DESTINO tem que ser lido ANTES de _closeDialogs — depois o DOM já sumiu
+  // e a leitura cairia no default calada.
+  var _dest = _ligaReadDest();
   _closeDialogs(); // convite disparado → o diálogo "Substituto" some
+  // O W.O. já vale: aplica o destino agora e guarda no grupo, pra a notificação do fim
+  // do ciclo (quando alguém aceitar) saber o que dizer a quem levou o W.O.
+  _commitLiga(tId, function (ft) {
+    var g = _getGroup(ft, roundIndex, groupName);
+    if (g) { g.woDest = _dest; g.woAbsent = absentName; }
+    _ligaApplyDest(ft, absentName, _dest);
+  });
   window._ligaInviteSubMulti(tId, roundIndex, groupName, absentName, sel);
 };
 
 // ── Jogador X (guest, não pontua) ───────────────────────────────────────────
 window._ligaFillGuestPrompt = function (tId, roundIndex, groupName, absentName) {
+  // v1.6.90: lê o destino AGORA — o prompt do Jogador X substitui o diálogo, e depois
+  // dele o #liga-wo-dest não existe mais.
+  var _destGuest = _ligaReadDest();
   // Confirmar/Cancelar EXPLÍCITOS antes de aplicar (pedido do dono): o Jogador X
   // entra nos jogos no lugar do W.O. mas NÃO pontua — merece um passo de confirmação.
   var _confirm = function (name) {
@@ -476,10 +609,10 @@ window._ligaFillGuestPrompt = function (tId, roundIndex, groupName, absentName) 
     if (window.showConfirmDialog) {
       window.showConfirmDialog('Confirmar Jogador X?',
         '<b>' + _safe(nm) + '</b> entra nos jogos no lugar de <b>' + _safe(absentName) + '</b> só pra completar a rodada — <b>não pontua</b> na classificação (nem do grupo, nem geral).',
-        function () { window._ligaFillGuest(tId, roundIndex, groupName, absentName, nm); },
+        function () { window._ligaFillGuest(tId, roundIndex, groupName, absentName, nm, _destGuest); },
         function () {}, { type: 'warning', confirmText: 'Confirmar', cancelText: 'Cancelar' });
     } else {
-      window._ligaFillGuest(tId, roundIndex, groupName, absentName, nm);
+      window._ligaFillGuest(tId, roundIndex, groupName, absentName, nm, _destGuest);
     }
   };
   if (window.showInputDialog) {
@@ -489,7 +622,7 @@ window._ligaFillGuestPrompt = function (tId, roundIndex, groupName, absentName) 
     _confirm('');
   }
 };
-window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestName) {
+window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestName, dest) {
   var t = _findT(tId); if (!t) return;
   var group = _getGroup(t, roundIndex, groupName); if (!group) return;
   if (!_canManageGroup(t, group)) return;
@@ -510,13 +643,21 @@ window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestN
     _rewriteSlot(g, absentName, gname, true, t);
     _addGhost(ft, gname);
     g.woAbsent = absentName; g.subStatus = 'filled'; g.subName = gname; g.subIsGuest = true;
+    g.woDest = (dest === 'inactive') ? 'inactive' : 'waitlist';
     delete g.pendingInviteId;
+    _ligaApplyDest(ft, absentName, g.woDest);   // v1.6.90: o destino escolhido pelo organizador
     // Completar com Jogador X supera qualquer convite pendente do grupo — cancela
     // pra não deixar convite órfão (que um jogador real poderia aceitar depois).
     if (Array.isArray(ft.ligaSubInvites)) {
       ft.ligaSubInvites.forEach(function (iv) { if (iv.groupName === groupName && iv.roundIndex === roundIndex && iv.status === 'pending') iv.status = 'cancelled'; });
     }
   });
+  // FIM DO CICLO: Jogador X entrou → todo mundo é avisado agora.
+  try {
+    var _tAfter = _findT(tId);
+    _ligaNotifyWoCycle(_tAfter, _getGroup(_tAfter, roundIndex, groupName), absentName, gname,
+      (dest === 'inactive') ? 'inactive' : 'waitlist', true);
+  } catch (e) {}
   if (window.showNotification) window.showNotification('Rodada liberada', absentName + ' levou W.O. · ' + gname + ' completa o grupo (sem pontuar).', 'success');
   _rerender(tId);
 };
@@ -612,14 +753,32 @@ window._ligaAcceptSub = function (tId, inviteId) {
     var g = _getGroup(ft, _ri, _gn); var r = ft.rounds && ft.rounds[_ri];
     if (!g || !r) { fiv.status = 'expired'; return; }
     _removeSitOut(r, _invName);     // não é mais folga — vai jogar
-    // sai da LISTA DE ESPERA monarch (entra como se tivesse sido sorteado; a espera
-    // não pode continuar contando com ele pra formar grupo novo).
+    // v1.6.90 — O SUPLENTE ASSUME A POSIÇÃO ATÉ O FIM DO TORNEIO (regra do dono).
+    // Entrar em t.participants é o que sustenta isso: em Liga cada rodada é sorteada de
+    // novo a partir do elenco, então quem fica só no grupo desta rodada SUMIRIA no
+    // próximo sorteio. Vem ANTES do _rewriteSlot de propósito — ele resolve o uid do
+    // substituto por _buildNameToUid(ft), e fora do elenco (e já fora da espera) o mapa
+    // não o acha: o slot ficaria com uid null, apontando pra ninguém.
+    var _subEntry = null;
     try {
-      var _wlK = (fiv.category || '_default_').replace(/\s+/g, '_');
-      if (ft.monarchWaitlist && Array.isArray(ft.monarchWaitlist[_wlK])) {
-        ft.monarchWaitlist[_wlK] = ft.monarchWaitlist[_wlK].filter(function (n) { return n !== _invName; });
-      }
+      (window._getWaitlist ? window._getWaitlist(ft) : []).forEach(function (e) {
+        if (!_subEntry && _wlDisplay(e) === _invName) { _subEntry = JSON.parse(JSON.stringify(e)); }
+      });
     } catch (e) {}
+    if (!_subEntry) _subEntry = { uid: fiv.inviteeUid || undefined, displayName: _invName, name: _invName };
+    _subEntry.ligaActive = true;
+    _subEntry.woSubstituteFor = _absName;
+    _subEntry.woSubstituteAt = new Date().toISOString();
+    if (!Array.isArray(ft.participants)) ft.participants = ft.participants ? Object.values(ft.participants) : [];
+    var _ja = ft.participants.some(function (p) {
+      if (!p || typeof p !== 'object') return false;
+      if (_subEntry.uid && p.uid) return p.uid === _subEntry.uid;
+      return _wlDisplay(p) === _invName;
+    });
+    if (!_ja) ft.participants.push(_subEntry);
+    // sai da LISTA DE ESPERA — dos TRÊS storages, não só do monarchWaitlist (ele assumiu;
+    // a espera não pode continuar contando com ele pra formar grupo novo).
+    if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(ft, _invName);
     _rewriteSlot(g, _absName, _invName, true, t);
     g.subStatus = 'filled'; g.subName = _invName; g.subIsGuest = false; delete g.pendingInviteId;
     fiv.status = 'accepted'; fiv.resolvedAt = new Date().toISOString();
@@ -640,6 +799,14 @@ window._ligaAcceptSub = function (tId, inviteId) {
   if (iv.byUid && typeof window._sendUserNotification === 'function') {
     try { window._sendUserNotification(iv.byUid, { type: 'liga-sub-result', level: 'all', tournamentId: String(t.id), tournamentName: t.name || 'torneio', message: iv.inviteeName + ' aceitou e entrou no lugar de ' + iv.absentName + ' no ' + iv.groupName + '.' }); } catch (e) {}
   }
+  // FIM DO CICLO (v1.6.90): a vaga foi preenchida por um jogador real → avisa todo mundo
+  // e diz ao que levou o W.O. o que fazer pra voltar. O destino já foi aplicado quando o
+  // organizador convidou; aqui só lemos o que ele escolheu (group.woDest).
+  try {
+    var _tAf = _findT(tId);
+    var _gAf = _getGroup(_tAf, _ri, _gn);
+    _ligaNotifyWoCycle(_tAf, _gAf, _absName, _invName, (_gAf && _gAf.woDest) || 'waitlist', false);
+  } catch (e) {}
   if (window.showNotification) window.showNotification('Você está jogando!', 'Entrou no lugar de ' + iv.absentName + ' no ' + iv.groupName + '. Boa partida!', 'success');
   _rerender(tId);
 };

@@ -77,6 +77,10 @@ const SUITES = [
   // dizia "ninguém ficou de fora" com 2 pessoas na fila — lia 1 dos 3 storages e casava
   // por NOME (que vem strippado). Falha se alguém voltar a ler a espera fora do _getWaitlist.
   'tests/wo-fila-aparece-no-substituto.test.js',
+  // ESCOLHA 1×2 do destino do ausente + NOTIFICAÇÃO no fim do ciclo, disparadas pelo
+  // caminho REAL (wo-claim → _ligaPickFill). Falha se alguém mover a decisão de volta pra
+  // _ligaAbsentFlow (que nada chama) ou deixar o ciclo fechar em silêncio.
+  'tests/wo-destino-ciclo-notifica.test.js',
   // Toast de push em foreground: campos vêm de payload.data (contrato DATA-ONLY da CF).
   // Falha se alguém voltar a ler só payload.notification → toast 'scoreplace.app' vazio.
   'tests/fcm-foreground-toast.test.js',
