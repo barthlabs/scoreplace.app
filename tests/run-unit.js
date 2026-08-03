@@ -73,6 +73,10 @@ const SUITES = [
   // liga-substitution.js contra o grupo real do Confra. Falha se o substituto voltar a
   // entrar só no grupo (sumiria no sorteio da rodada seguinte).
   'tests/wo-destino-e-suplente.test.js',
+  // O diálogo "Substituto" TEM que listar a lista de espera. Bug ao vivo (Confra, 02/ago):
+  // dizia "ninguém ficou de fora" com 2 pessoas na fila — lia 1 dos 3 storages e casava
+  // por NOME (que vem strippado). Falha se alguém voltar a ler a espera fora do _getWaitlist.
+  'tests/wo-fila-aparece-no-substituto.test.js',
   // Toast de push em foreground: campos vêm de payload.data (contrato DATA-ONLY da CF).
   // Falha se alguém voltar a ler só payload.notification → toast 'scoreplace.app' vazio.
   'tests/fcm-foreground-toast.test.js',

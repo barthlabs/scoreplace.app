@@ -363,18 +363,50 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
   var folgas = (round && round.matches || []).filter(function (m) {
     return m && m.isSitOut && m.sitOutReason === 'remainder' && (!cat || m.category === cat) && uidMap[m.p1];
   }).map(function (m) { return { name: m.p1, uid: uidMap[m.p1] }; });
-  if (typeof window._getMonarchWaitlist === 'function') {
-    window._getMonarchWaitlist(t, cat).forEach(function (nm) {
-      if (nm && uidMap[nm]) folgas.push({ name: nm, uid: uidMap[nm] });
-    });
-  }
-  // fora: quem já está no grupo, o próprio ausente; dedup por uid
+  // v1.6.89 — A LISTA DE ESPERA VEM DE _getWaitlist, POR UID. Bug ao vivo (Confra,
+  // 02/ago): o diálogo dizia "ninguém ficou de fora nesta rodada para convidar" com DUAS
+  // pessoas na fila. Duas causas, as duas aqui:
+  //  (a) lia SÓ t.monarchWaitlist (via _getMonarchWaitlist). A espera vive em TRÊS
+  //      storages e as duas estavam em standbyParticipants — _getWaitlist é a ÚNICA
+  //      leitura correta (é literalmente o que o cânone da espera diz).
+  //  (b) resolvia identidade por NOME (uidMap[nm]). Quem tem perfil tem o nome STRIPPADO
+  //      no doc (v1.3.52) — displayName vem null e o lookup por nome não acha ninguém.
+  //      O uid está NA ENTRADA; o nome se resolve a partir dele (_pName → perfil).
+  // Categoria NÃO some mais com ninguém: quem não atende vem marcado (`offCat`) pro
+  // organizador decidir — esconder era o que fazia a fila "não existir" na tela.
+  // [[project_uid_identity_canon_locked]] [[project_wo_individual_substitution_rule]]
+  (typeof window._getWaitlist === 'function' ? window._getWaitlist(t) : []).forEach(function (e) {
+    var _u = (typeof window._participantUids === 'function') ? (window._participantUids(e) || [])[0] : (e && e.uid);
+    var _nm = String((window._pName ? window._pName(e, '') : '') || (e && (e.displayName || e.name)) || '').trim();
+    if (!_u && !_nm) return;
+    if (_nm.indexOf(' / ') !== -1) return;                 // dupla formada não assume vaga individual
+    var _ok = true;
+    if (cat && typeof window._participantInCategory === 'function') {
+      try { _ok = !!window._participantInCategory(e, cat, t); } catch (_ec) { _ok = true; }
+    }
+    folgas.push({ name: _nm || _u, uid: _u || '', offCat: !_ok, fromWaitlist: true });
+  });
+  // (a leitura antiga por _getMonarchWaitlist saiu: era 1 dos 3 storages e casava por nome)
+  // fora: quem já está no grupo, o próprio ausente. Dedup por UID; sem uid, por nome —
+  // antes `if (!f.uid) return false` DESCARTAVA silenciosamente quem não tem conta.
   var inGroup = {}; (group.players || []).forEach(function (n) { inGroup[n] = 1; });
   var seen = {};
   folgas = folgas.filter(function (f) {
-    if (!f.uid || seen[f.uid] || inGroup[f.name] || f.name === absentName) return false;
-    seen[f.uid] = 1; return true;
+    var k = f.uid ? ('u:' + f.uid) : ('n:' + String(f.name || '').toLowerCase());
+    if (k === 'n:' || seen[k] || inGroup[f.name] || f.name === absentName) return false;
+    seen[k] = 1; return true;
   });
+  // A FILA PRIMEIRO, na ordem dela: quem espera tem precedência sobre folga da rodada, e
+  // quem atende a categoria vem antes de quem não atende. Ordenação ESTÁVEL — dentro de
+  // cada balde a ordem de chegada é preservada (é ela que define "o primeiro da fila").
+  folgas = folgas
+    .map(function (f, i) { return { f: f, i: i }; })
+    .sort(function (a, b) {
+      var ra = (a.f.offCat ? 2 : 0) + (a.f.fromWaitlist ? 0 : 1);
+      var rb = (b.f.offCat ? 2 : 0) + (b.f.fromWaitlist ? 0 : 1);
+      return ra !== rb ? ra - rb : a.i - b.i;
+    })
+    .map(function (x) { return x.f; });
 
   var catLbl = cat ? (window._displayCategoryName ? window._displayCategoryName(cat) : cat) : '';
   // Texto DINÂMICO conforme a regra do torneio: só menciona Pontos Avançados quando o
@@ -382,14 +414,24 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
   var _woPenVal = (typeof window._woAdvPenalty === 'function') ? window._woAdvPenalty(t) : 0;
   var html = '<div style="font-size:0.85rem;opacity:0.85;margin-bottom:10px;"><b>' + _safe(absentName) + '</b> leva W.O. (0 pts na rodada' + (_woPenVal ? ', ' + _woPenVal + ' nos Pontos Avançados' : '') + '). Quem entra no lugar?</div>';
   if (folgas.length > 0) {
-    html += '<div style="font-size:0.74rem;font-weight:700;color:#4ade80;margin:10px 0 6px;">Convidar quem ficou de fora' + (catLbl ? ' (' + _safe(catLbl) + ')' : '') + ' — o PRIMEIRO que aceitar entra e pontua de verdade</div>';
+    html += '<div style="font-size:0.74rem;font-weight:700;color:#4ade80;margin:10px 0 6px;">Convidar da lista de espera / folgas' + (catLbl ? ' · categoria ' + _safe(catLbl) : '') + ' — o PRIMEIRO que aceitar entra e pontua de verdade</div>';
     html += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:8px;">Toque pra marcar/desmarcar quem recebe o convite (todos marcados = convida todos).</div>';
     html += '<div id="liga-fill-cands">' + folgas.map(function (f) {
-      return '<button type="button" class="btn btn-outline" data-cand="1" data-on="1" data-uid="' + _safe(f.uid) + '" data-name="' + _safe(f.name) + '" onclick="window._ligaToggleCand(this)" style="width:100%;margin-bottom:6px;text-align:left;border-color:rgba(16,185,129,0.55);color:#4ade80;">✅ ' + _safe(f.name) + '</button>';
+      // offCat NÃO some com a pessoa: mostra marcado, e o organizador decide se aceita a
+      // quebra de categoria. Sumir era o que fazia a fila "não existir" na tela.
+      var _tag = f.offCat
+        ? '<span style="font-size:0.62rem;font-weight:800;background:rgba(251,191,36,0.2);color:#fbbf24;padding:1px 6px;border-radius:5px;margin-left:6px;">fora da categoria</span>'
+        : (f.fromWaitlist ? '<span style="font-size:0.62rem;font-weight:700;background:rgba(255,255,255,0.08);color:var(--text-muted);padding:1px 6px;border-radius:5px;margin-left:6px;">lista de espera</span>' : '');
+      var _bd = f.offCat ? 'rgba(251,191,36,0.5)' : 'rgba(16,185,129,0.55)';
+      var _co = f.offCat ? '#fbbf24' : '#4ade80';
+      return '<button type="button" class="btn btn-outline" data-cand="1" data-on="1" data-uid="' + _safe(f.uid) + '" data-name="' + _safe(f.name) + '" onclick="window._ligaToggleCand(this)" style="width:100%;margin-bottom:6px;text-align:left;border-color:' + _bd + ';color:' + _co + ';">✅ ' + _safe(f.name) + _tag + '</button>';
     }).join('') + '</div>';
     html += '<button class="btn btn-success" style="width:100%;margin-top:4px;font-weight:800;" onclick="window._ligaInviteSelected(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">📨 Convidar selecionados</button>';
   } else {
-    html += '<div style="font-size:0.74rem;color:var(--text-muted);margin:8px 0;">Ninguém da mesma categoria ficou de fora nesta rodada para convidar.</div>';
+    // O texto antigo dizia "ninguém DA MESMA CATEGORIA" mesmo quando a lista de espera
+    // tinha gente — a frase culpava a categoria por um defeito de leitura. Agora só é
+    // dita quando a espera está REALMENTE vazia.
+    html += '<div style="font-size:0.74rem;color:var(--text-muted);margin:8px 0;">A lista de espera está vazia e ninguém ficou de fora nesta rodada — não há quem convidar.</div>';
   }
   html += '<div style="font-size:0.74rem;font-weight:700;color:#fbbf24;margin:12px 0 6px;">Jogador X — qualquer pessoa presente (não pontua)</div>';
   html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:#fbbf24;" onclick="window._ligaFillGuestPrompt(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🎾 Completar com Jogador X</button>';
