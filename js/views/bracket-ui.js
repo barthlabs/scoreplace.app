@@ -14375,3 +14375,49 @@ window._renderCasualJoin = function(container, roomCode) {
 };
 
 // _closeRound is in bracket-logic.js
+
+// ─── Toggle "Equilibrado" da LISTA DE ESPERA (v1.7.4) ────────────────────────────────
+// Regra do dono: LIGADO (default) o grupo novo formado da espera não fecha com mais de 1
+// homem — pra atrasados não montarem um grupo mais forte e levarem vantagem em cima do
+// atraso. DESLIGADO ("livre") volta ao sorteio sem restrição de gênero.
+//
+// O motor (_tryFormMonarchWaitlistGroups, bracket-logic.js) relê `t.wlGroupBalance` a cada
+// tentativa de formar grupo — então o efeito vale na PRÓXIMA formação, sem re-sortear nada
+// do que já existe. Grupo já fechado não é desfeito por virar a chave.
+window._toggleWlBalance = function (tId) {
+  var store = window.AppStore;
+  var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+  if (!t) return;
+  // APENAS O ORGANIZADOR (ordem do dono, ago/2026) — NÃO co-organizador. Cuidado: tanto
+  // AppStore.isOrganizer quanto _isUserOrgOrCoHost dão true pra co-host ativo, então a
+  // checagem tem que ser o creatorUid direto. O gate mora AQUI também, não só no render:
+  // esconder o botão não é permissão.
+  var _cu = store && store.currentUser;
+  var _isDono = !!(_cu && _cu.uid && t.creatorUid && String(t.creatorUid) === String(_cu.uid));
+  if (!_isDono) return;
+
+  var _eraEquil = (t.wlGroupBalance !== 'livre');
+  t.wlGroupBalance = _eraEquil ? 'livre' : 'equilibrado';
+  var _agoraEquil = !_eraEquil;
+
+  var savePromise = null;
+  if (store && typeof store.isOrganizer === 'function' && store.isOrganizer(t) &&
+      typeof store.syncImmediate === 'function') {
+    savePromise = store.syncImmediate(t.id);
+  } else if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+    savePromise = window.FirestoreDB.saveTournament(t);
+  }
+  var done = function () {
+    if (typeof showNotification === 'function') {
+      showNotification(
+        _agoraEquil ? '⚖️ Formação equilibrada' : '🎲 Formação livre',
+        _agoraEquil
+          ? 'Grupo novo da lista de espera não fecha com mais de 1 homem.'
+          : 'Grupo novo da lista de espera passa a ser sorteado sem restrição de gênero.',
+        'success');
+    }
+    if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+  };
+  if (savePromise && typeof savePromise.then === 'function') savePromise.then(done).catch(done);
+  else done();
+};

@@ -122,6 +122,41 @@ console.log('\n──── a entrada da espera NÃO carrega gender (como em pro
      entradas.every(e => !e || typeof e !== 'object' || !e.gender));
 }
 
+console.log('\n──── TOGGLE do organizador: livre volta a sortear sem restrição ────');
+{
+  // Desligado ('livre'): os 4 homens fecham grupo — comportamento anterior à 1.7.3.
+  const t = mkT(['uH1', 'uH2', 'uH3', 'uH4']);
+  t.wlGroupBalance = 'livre';
+  const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
+  t2('livre → 4 homens FORMAM grupo', n === 1, 'formados=' + n);
+  const gs = gruposFormados(t);
+  t2('e o grupo é mesmo 100% masculino', gs.length === 1 && homensNo(gs[0]) === 4,
+     gs.length ? String(homensNo(gs[0])) : 'sem grupo');
+}
+{
+  // Ligado explicitamente e AUSENTE (default) têm que se comportar igual.
+  const a = mkT(['uH1', 'uH2', 'uH3', 'uH4']); a.wlGroupBalance = 'equilibrado';
+  const b = mkT(['uH1', 'uH2', 'uH3', 'uH4']);           // sem o campo = default
+  t2('equilibrado explícito bloqueia', win._tryFormMonarchWaitlistGroups(a, null, 1) === 0);
+  t2('DEFAULT (campo ausente) é equilibrado', win._tryFormMonarchWaitlistGroups(b, null, 1) === 0);
+}
+
+console.log('\n──── o toggle existe na UI e é do organizador ────');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const ui = fs2.readFileSync(path2.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
+  const hnd = fs2.readFileSync(path2.join(__dirname, '..', 'js', 'views', 'bracket-ui.js'), 'utf8');
+  t2('box da espera tem o toggle', /_toggleWlBalance\(/.test(ui) && /wlGroupBalance/.test(ui));
+  // APENAS o organizador: co-host NÃO controla. isOrganizer e _isUserOrgOrCoHost incluem
+  // co-host, então o gate TEM que ser creatorUid — se alguém trocar por um deles, vermelho.
+  t2('render gateia por creatorUid (não por co-host)',
+     /_wlOrg\s*=\s*!!\(_wlCu[\s\S]{0,120}creatorUid/.test(ui) &&
+     !/_wlOrg[\s\S]{0,80}_isUserOrgOrCoHost/.test(ui));
+  t2('handler checa a permissão TAMBÉM na função, por creatorUid',
+     /window\._toggleWlBalance = function[\s\S]{0,900}creatorUid[\s\S]{0,120}if\s*\(!_isDono\)\s*return;/.test(hnd));
+  t2('handler persiste', /syncImmediate|saveTournament/.test(hnd.split('window._toggleWlBalance')[1] || ''));
+}
+
 function t2(l, c, e) { t(l, c, e); }
 
 console.log('\n' + ok + ' asserts OK, ' + fail + ' falha(s)');

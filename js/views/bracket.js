@@ -4755,9 +4755,29 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             if (_sameDayRR) { var _ciRR = t.checkedIn || {}, _abRR = t.absent || {}; _eligRR = _wlNames.filter(function(n){ return window._idMapHas(t, _ciRR, n) && !window._idMapHas(t, _abRR, n); }).length; }
             var _need = (4 - (_eligRR % 4)) % 4; if (_need === 0 && _eligRR === 0) _need = 4;
             var _hint = (_need === 0) ? 'completou 4 — formando grupo…' : ('faltam ' + _need + (_sameDayRR ? ' presente(s)' : '') + ' para formar o próximo grupo');
+            // v1.7.4: TOGGLE "Equilibrado" — ligado (default) o grupo novo formado da espera
+            // não fecha com mais de 1 homem; desligado ("livre") volta ao sorteio sem teto.
+            // Só o organizador/co-org vê e mexe; o motor relê `t.wlGroupBalance` a cada
+            // formação, então o efeito é imediato na próxima tentativa de fechar grupo.
+            // APENAS O ORGANIZADOR (ordem do dono, ago/2026). Note que tanto
+            // AppStore.isOrganizer quanto _isUserOrgOrCoHost incluem CO-organizadores —
+            // por isso a checagem é o creatorUid direto: este toggle não é delegável.
+            var _wlCu = window.AppStore && window.AppStore.currentUser;
+            var _wlOrg = !!(_wlCu && _wlCu.uid && t.creatorUid && String(t.creatorUid) === String(_wlCu.uid));
+            var _wlEquil = (t.wlGroupBalance !== 'livre');
+            var _wlTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            var _wlToggle = !_wlOrg ? '' :
+              ('<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0;">' +
+                '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;" title="' +
+                (_wlEquil ? 'Equilibrado: no máximo 1 homem por grupo novo' : 'Livre: sem restrição de gênero ao formar grupo') + '">' +
+                '<input type="checkbox" ' + (_wlEquil ? 'checked' : '') +
+                ' onclick="event.stopPropagation();window._toggleWlBalance(\'' + _wlTid + '\')"><span class="toggle-slider"></span></label>' +
+                '<span style="font-size:0.62rem;font-weight:700;color:' + (_wlEquil ? '#fbbf24' : '#64748b') + ';">' +
+                (_wlEquil ? 'Equilibrado' : 'Livre') + '</span></span>');
             _waitBoxHtml = '<div style="margin-bottom:8px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:8px 10px;">' +
               '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:#fbbf24;margin-bottom:6px;flex-wrap:wrap;">🕒 <span>Lista de espera (' + _wlNames.length + ')</span>' +
-              '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— pode entrar no lugar de um W.O. · ao juntar 4, forma um novo grupo · ' + _hint + '</span></div>' +
+              '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— pode entrar no lugar de um W.O. · ao juntar 4, forma um novo grupo · ' + _hint +
+              (_wlOrg ? (_wlEquil ? ' · máx. 1 homem por grupo' : ' · sem restrição de gênero') : '') + '</span>' + _wlToggle + '</div>' +
               '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + _wPills + '</div>' +
             '</div>';
           }

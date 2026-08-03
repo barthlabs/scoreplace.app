@@ -3840,7 +3840,12 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   //
   // NÃO DEU PRA FECHAR RESPEITANDO A REGRA ⇒ NÃO FECHA. A fila continua esperando, que é
   // literalmente o pedido — nunca montar o grupo "errado" só pra não deixar gente parada.
-  var MAX_HOMENS_POR_GRUPO = 1;
+  // v1.7.4: a regra virou TOGGLE do organizador (`t.wlGroupBalance`), no box da Lista de
+  // espera. 'equilibrado' (DEFAULT) = teto de 1 homem; 'livre' = sem teto, comportamento
+  // anterior à 1.7.3. Default equilibrado porque foi o pedido do dono ("pelo menos por
+  // enquanto") — desligar é escolha explícita, não estado inicial.
+  var _wlLivre = (t.wlGroupBalance === 'livre');
+  var MAX_HOMENS_POR_GRUPO = _wlLivre ? Infinity : 1;
   var _isHomem = function (nm) {
     var u = _n2uMapWl && _n2uMapWl[nm];
     return !!(u && typeof window._genderForUid === 'function' && window._genderForUid(u) === 'masculino');
