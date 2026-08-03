@@ -1366,6 +1366,40 @@ window._toggleLigaActive = function(tId, isActive) {
     if (p.email && user.email && p.email === user.email) return true;
     return false;
   });
+  // v1.6.93 — quem está NA FILA também aparece aqui (o toggle passou a mostrá-lo).
+  // Ligar = VOLTAR AOS SORTEIOS: a entrada sai da espera e volta pro elenco ativo, que é
+  // a fonte do sorteio das próximas rodadas. Sem isto, quem foi pro fim da fila por um
+  // W.O. não tinha caminho de volta nenhum.
+  var _vindoDaFila = null;
+  if (!found && typeof window._getWaitlist === 'function') {
+    var _naEspera = window._getWaitlist(t).find(function(p) {
+      if (typeof p !== 'object' || !p) return false;
+      if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(user, p);
+      return !!(p.uid && user.uid && p.uid === user.uid);
+    });
+    if (_naEspera) {
+      if (isActive) {
+        // volta pro elenco ATIVO — entra no próximo sorteio
+        var _volta = _naEspera;
+        if (typeof window._removeFromWaitlist === 'function') {
+          window._removeFromWaitlist(t, (window._pName ? window._pName(_volta, '') : '') || _volta.displayName || _volta.name || '');
+        }
+        _volta.ligaActive = true;
+        delete _volta.woSentToWaitlistAt;
+        arr.push(_volta); t.participants = arr;
+        _vindoDaFila = _volta;
+        found = _volta;
+      } else {
+        // desligar estando na fila: sai da fila e vira DESATIVADO no elenco
+        if (typeof window._removeFromWaitlist === 'function') {
+          window._removeFromWaitlist(t, (window._pName ? window._pName(_naEspera, '') : '') || _naEspera.displayName || _naEspera.name || '');
+        }
+        _naEspera.ligaActive = false;
+        arr.push(_naEspera); t.participants = arr;
+        found = _naEspera;
+      }
+    }
+  }
   if (!found) return;
   found.ligaActive = !!isActive;
   // v1.6.86 — REATIVAR COM A FASE JÁ SORTEADA MANDA PRA LISTA DE ESPERA (regra do dono):
@@ -1377,7 +1411,7 @@ window._toggleLigaActive = function(tId, isActive) {
   // entra na fila. Só quando: fase sorteada E a pessoa NÃO está jogando a fase corrente
   // (quem desativou DEPOIS do sorteio e já tem jogo volta a jogar direto, sem fila).
   var _movedToWait = null;
-  if (isActive && typeof window._phaseDrawDone === 'function' && window._phaseDrawDone(t) &&
+  if (!_vindoDaFila && isActive && typeof window._phaseDrawDone === 'function' && window._phaseDrawDone(t) &&
       typeof window._isPlayingCurrentPhase === 'function' && !window._isPlayingCurrentPhase(t, found)) {
     var _idx = arr.indexOf(found);
     if (_idx !== -1) {
@@ -1433,7 +1467,10 @@ window._toggleLigaActive = function(tId, isActive) {
   _syncTogglesInDom();
   Promise.resolve(savePromise).then(function() {
     if (typeof window.showNotification === 'function') {
-      if (_movedToWait) {
+      if (_vindoDaFila) {
+        window.showNotification('✅ Você voltou aos sorteios',
+          'Saiu da lista de espera e entra no sorteio da próxima rodada.', 'success');
+      } else if (_movedToWait) {
         // Reativou com a fase já sorteada: o destino é a fila, e o aviso tem que dizer isso —
         // "Ativado" sozinho prometeria um jogo que a rodada sorteada não tem.
         window.showNotification('📋 Você entrou na lista de espera',
@@ -1449,7 +1486,7 @@ window._toggleLigaActive = function(tId, isActive) {
     // Re-render só quando a pessoa MUDOU DE LISTA (participants → espera): o card
     // dela muda de seção e o toggle some. No caminho normal segue sem re-render
     // (preserva scroll — [[project_dashboard_no_rerender]]).
-    if (_movedToWait) {
+    if (_movedToWait || _vindoDaFila) {
       var _vcT = document.getElementById('view-container');
       if (_vcT && typeof renderTournaments === 'function') renderTournaments(_vcT, tId);
     }
@@ -1496,17 +1533,33 @@ window._buildLigaActiveToggleHtml = function(t) {
   if (t.status === 'finished') return '';
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu || !cu.uid && !cu.email) return '';
+  var _acha = function (lista) {
+    return (lista || []).find(function(p) {
+      if (typeof p !== 'object' || !p) return false;
+      // v3.0.76: uid-first + slot-aware — o toggle aparece pro p2 da dupla também.
+      if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(cu, p);
+      if (p.uid && cu.uid && p.uid === cu.uid) return true;
+      if (p.email && cu.email && p.email === cu.email) return true;
+      return false;
+    });
+  };
   var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  var found = arr.find(function(p) {
-    if (typeof p !== 'object' || !p) return false;
-    // v3.0.76: uid-first + slot-aware — o toggle aparece pro p2 da dupla também.
-    if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(cu, p);
-    if (p.uid && cu.uid && p.uid === cu.uid) return true;
-    if (p.email && cu.email && p.email === cu.email) return true;
-    return false;
-  });
+  var found = _acha(arr);
+  // v1.6.93 — QUEM ESTÁ NA FILA TAMBÉM PRECISA DO CONTROLE (regra do dono: "para onde
+  // quer que o W.O. vá, ele precisa ter o poder de se reativar em rodadas futuras").
+  // Quem foi mandado pro fim da lista de espera SAI de t.participants — e o toggle,
+  // que só olhava participants, SUMIA: a pessoa ficava sem nenhum caminho de volta,
+  // dependendo do organizador lembrar dela. Agora o controle aparece pra quem está na
+  // espera também, e ligá-lo devolve a pessoa aos SORTEIOS das próximas rodadas.
+  var _naFila = false;
+  if (!found && typeof window._getWaitlist === 'function') {
+    found = _acha(window._getWaitlist(t));
+    if (found) _naFila = true;
+  }
   if (!found) return ''; // só mostra pra quem está inscrito
-  var isActive = found.ligaActive !== false; // default true
+  // Na fila = fora dos sorteios (não é "desativado", mas também não é sorteado): o
+  // controle mostra DESATIVADO pra que ligá-lo seja o gesto de voltar.
+  var isActive = !_naFila && found.ligaActive !== false; // default true
   var safeTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var stateLabel = isActive ? 'Ativado' : 'Desativado';
   // v2.6.21: pílula SÓLIDA — verde (Ativado) / vermelha (Desativado) com texto
@@ -1515,7 +1568,8 @@ window._buildLigaActiveToggleHtml = function(t) {
   var pillBg = isActive ? '#10b981' : '#ef4444';
   var titleAttr = isActive
     ? 'Clique para ficar de fora do próximo sorteio'
-    : 'Clique para voltar ao próximo sorteio';
+    : (_naFila ? 'Você está na lista de espera. Clique para voltar aos próximos sorteios.'
+               : 'Clique para voltar ao próximo sorteio');
   // v0.16.92: stopPropagation EM TODOS os elementos do toggle.
   // v0.16.93: data-liga-toggle-tid no outer wrapper + class
   // liga-toggle-state-label no text span permite update in-place pelo

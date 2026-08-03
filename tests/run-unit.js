@@ -81,6 +81,9 @@ const SUITES = [
   // caminho REAL (wo-claim → _ligaPickFill). Falha se alguém mover a decisão de volta pra
   // _ligaAbsentFlow (que nada chama) ou deixar o ciclo fechar em silêncio.
   'tests/wo-destino-ciclo-notifica.test.js',
+  // Quem levou W.O. tem CAMINHO DE VOLTA (o toggle aparece pra quem está na fila) e a
+  // busca da chave acha quem está em Desativados / Lista de espera / W.O.
+  'tests/wo-volta-e-busca.test.js',
   // Toast de push em foreground: campos vêm de payload.data (contrato DATA-ONLY da CF).
   // Falha se alguém voltar a ler só payload.notification → toast 'scoreplace.app' vazio.
   'tests/fcm-foreground-toast.test.js',

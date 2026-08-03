@@ -4693,7 +4693,15 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             var _borderPill = _isMe ? 'rgba(34,211,238,0.55)' : border;
             var _colorPill = _isMe ? '#22d3ee' : color;
             var _meBadge = _isMe ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.5px;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
-            return '<span style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;" onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/\'/g, "\\'")) + '\',\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)))) + _ptsLbl + _meBadge + '</span>';
+            // v1.6.93 — A BUSCA TEM QUE ACHAR QUEM ESTÁ AQUI (regra do dono: "a barra de
+            // busca/filtro deve encontrar quem estiver em desativados/lista de espera/W.O.
+            // SEMPRE"). O filtro varre `[data-players]`; sem o atributo, estes chips eram
+            // INVISÍVEIS pra ele — e pior: procurar por alguém que só existe neste box
+            // escondia o box inteiro e não sobrava nada na tela.
+            // `data-my-match="1"` de propósito: o toggle "Só meus jogos" filtra JOGOS; quem
+            // está de fora não tem jogo e não pode sumir por causa dele.
+            var _nmPill = window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)));
+            return '<span data-players="' + window._safeHtml(_nmPill) + '" data-my-match="1" style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;" onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/\'/g, "\\'")) + '\',\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')">' + window._safeHtml(_nmPill) + _ptsLbl + _meBadge + '</span>';
           }).join('');
           // v4.x: cabeçalho DENTRO do box colorido (igual à Lista de espera) — o título
           // "Desativados (N) — …" fica no mesmo box vermelho dos chips, não solto acima.
@@ -4726,7 +4734,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               var _bd = _isMe ? 'rgba(34,211,238,0.55)' : 'rgba(251,191,36,0.3)';
               var _co = _isMe ? '#22d3ee' : '#fbbf24';
               var _me = _isMe ? '<span style="font-size:0.6rem;font-weight:800;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
-              return '<span style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + window._safeHtml(n) + _me + '</span>';
+              // v1.6.93: idem — a busca tem que achar quem está na lista de espera.
+              return '<span data-players="' + window._safeHtml(n) + '" data-my-match="1" style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + window._safeHtml(n) + _me + '</span>';
             }).join('');
             var _sameDayRR = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
             var _eligRR = _wlNames.length;
