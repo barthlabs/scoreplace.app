@@ -1028,11 +1028,19 @@ window._hydrateContactOrgButtons = async function(root) {
 // Resolve o canal de contato do organizador a partir do torneio + perfil (já
 // carregado). SÍNCRONO — não faz I/O. Fonte única usada pelo caminho direto e
 // pelo diálogo de fallback. Ver v4.0.37 sobre a montagem internacional do número.
-window._resolveOrgContact = function(t, profile) {
-  var orgName = t.organizerName || (profile && profile.displayName) ||
-                (t.organizerEmail ? String(t.organizerEmail).split('@')[0] : '') || 'o organizador';
+// ── REGRA ÚNICA DE CANAL DE CONTATO (qualquer pessoa) ────────────────────────
+// v1.6.98: extraída de _resolveOrgContact, que agora DELEGA. Nasceu pro organizador,
+// mas o contato na classificação precisa da MESMA decisão — duas cópias divergiriam
+// (uma respeitando o toggle de WhatsApp e a outra não, por exemplo).
+// SÍNCRONA, sem I/O: recebe o perfil JÁ carregado.
+//
+// `emails` traz TODOS os endereços da pessoa (principal + vinculados), porque o
+// destino do mailto é "todos os e-mails" (regra do dono). `email` (singular) fica
+// pro caller legado que só sabe lidar com um.
+window._resolvePersonContact = function(profile, fallbackName, fallbackEmail) {
+  var name = (profile && profile.displayName) || fallbackName ||
+             (fallbackEmail ? String(fallbackEmail).split('@')[0] : '') || '';
   var phoneDigits = (profile && profile.phone) ? String(profile.phone).replace(/\D/g, '') : '';
-  var email = (profile && profile.email) || t.organizerEmail || '';
   // v1.2.9: respeita o toggle "WhatsApp" do perfil do ALVO (default ON quando há
   // telefone). Desligado → useWhatsApp=false → o contato cai pro e-mail.
   var useWhatsApp = phoneDigits.length >= 10 && (!profile || profile.notifyWhatsApp !== false);
@@ -1043,7 +1051,143 @@ window._resolveOrgContact = function(t, profile) {
       ? window._normalizePhoneE164(profile.phone, cc) : '';
     phoneFull = _e164 ? _e164.replace(/\D/g, '') : (phoneDigits.length >= (cc.length + 10) ? phoneDigits : (cc + phoneDigits));
   }
-  return { orgName: orgName, phoneDigits: phoneDigits, email: email, useWhatsApp: useWhatsApp, phoneFull: phoneFull };
+  // Todos os endereços, deduplicados e normalizados (o mailto aceita lista por vírgula).
+  var _seen = {}, emails = [];
+  [].concat((profile && profile.email) || [], (profile && profile.linkedEmails) || [], fallbackEmail || [])
+    .forEach(function (e) {
+      var s = String(e || '').trim().toLowerCase();
+      if (!s || s.indexOf('@') === -1 || _seen[s]) return;
+      _seen[s] = 1; emails.push(s);
+    });
+  return {
+    name: name, phoneDigits: phoneDigits, useWhatsApp: useWhatsApp, phoneFull: phoneFull,
+    emails: emails, email: emails[0] || ''
+  };
+};
+
+// Resolve o canal de contato do organizador a partir do torneio + perfil (já
+// carregado). SÍNCRONO — não faz I/O. Fonte única usada pelo caminho direto e
+// pelo diálogo de fallback. Ver v4.0.37 sobre a montagem internacional do número.
+// v1.6.98: a decisão de canal mora em _resolvePersonContact; aqui fica só o que é
+// DO ORGANIZADOR (nome/e-mail vindos do torneio quando o perfil não tem).
+window._resolveOrgContact = function(t, profile) {
+  var c = window._resolvePersonContact(profile, t.organizerName, t.organizerEmail);
+  return {
+    orgName: (t.organizerName || (profile && profile.displayName) ||
+              (t.organizerEmail ? String(t.organizerEmail).split('@')[0] : '') || 'o organizador'),
+    phoneDigits: c.phoneDigits,
+    email: c.email || t.organizerEmail || '',
+    useWhatsApp: c.useWhatsApp,
+    phoneFull: c.phoneFull
+  };
+};
+
+// ═══ CONTATO DIRETO COM UMA PESSOA DA CLASSIFICAÇÃO (v1.6.98) ════════════════
+// Regra do dono: no SEU grupo, qualquer participante fala com qualquer um do grupo;
+// o organizador fala com qualquer um, em qualquer classificação. Sem telefone que
+// permita WhatsApp → e-mail pra TODOS os endereços da pessoa.
+//
+// A permissão é de ETIQUETA, não de segurança: `users/{uid}` é legível por qualquer
+// autenticado (firestore.rules:346), então telefone/e-mail de qualquer perfil já
+// estão ao alcance de quem quiser ler a API. O gate existe pra a UI não convidar ao
+// contato fora de contexto — não finja que ele esconde dado.
+window._spPersonProfileCache = window._spPersonProfileCache || {};
+
+// Saudação pré-preenchida entre PARTICIPANTES (a do organizador é _buildOrgGreeting).
+window._buildPersonGreeting = function (t, personName) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var sender = (cu && (cu.displayName || cu.name)) || '';
+  var first = String(personName || '').split(/[\s@]/)[0] || '';
+  return 'Olá' + (first ? ' ' + first : '') + '! ' +
+    (sender ? 'Aqui é ' + sender + '. ' : '') +
+    'Somos do torneio "' + ((t && t.name) || '') + '" no scoreplace.app. ';
+};
+
+// Pré-carrega os perfis dos uids visíveis na classificação. EXISTE POR UM MOTIVO
+// ESPECÍFICO: o clique precisa abrir wa.me/mailto DENTRO do gesto do usuário — um
+// await no meio do handler faz o Safari (iOS) tratar a abertura como pop-up e
+// bloquear em silêncio. Mesmo padrão do _hydrateContactOrgButtons.
+window._hydrateContactPersonButtons = function (rootEl) {
+  var root = rootEl || document;
+  var uids = [];
+  Array.prototype.forEach.call(root.querySelectorAll('[data-contact-uid]'), function (el) {
+    var u = el.getAttribute('data-contact-uid');
+    if (u && !Object.prototype.hasOwnProperty.call(window._spPersonProfileCache, u) &&
+        uids.indexOf(u) === -1) uids.push(u);
+  });
+  if (!uids.length) return Promise.resolve();
+  return Promise.all(uids.map(function (u) {
+    var p = (window.FirestoreDB && typeof window.FirestoreDB.loadUserProfile === 'function')
+      ? window.FirestoreDB.loadUserProfile(u) : Promise.resolve(null);
+    return Promise.resolve(p)
+      .then(function (prof) { window._spPersonProfileCache[u] = prof || null; })
+      .catch(function () { window._spPersonProfileCache[u] = null; });
+  })).then(function () {});
+};
+
+// Abre o canal de contato da pessoa. Identidade por UID SEMPRE — nome aqui é só o
+// rótulo da saudação e da mensagem de erro ([[project_uid_identity_canon_locked]]).
+window._contactPersonByUid = function (uid, personName, tId) {
+  var _nm = personName || 'A pessoa';
+  if (!uid) {
+    if (typeof showNotification === 'function') showNotification('Sem contato',
+      _nm + ' não tem conta no scoreplace.app — só o organizador pode ter o contato dela.', 'info');
+    return;
+  }
+  var t = (tId && typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+  var _open = function (profile) {
+    var c = window._resolvePersonContact(profile, personName, '');
+    var msg = window._buildPersonGreeting(t, c.name || personName);
+    try {
+      if (c.useWhatsApp && c.phoneFull) {
+        window._openExternalUrl('https://wa.me/' + c.phoneFull + '?text=' + encodeURIComponent(msg));
+        return;
+      }
+      if (c.emails.length) {
+        // TODOS os endereços da pessoa (principal + vinculados) — regra do dono.
+        var subject = encodeURIComponent('Torneio: ' + ((t && t.name) || ''));
+        window._openExternalUrl('mailto:' + c.emails.join(',') +
+          '?subject=' + subject + '&body=' + encodeURIComponent(msg));
+        return;
+      }
+    } catch (e) { /* abertura bloqueada → cai no aviso abaixo */ }
+    if (typeof showNotification === 'function') showNotification('Sem contato cadastrado',
+      _nm + ' não cadastrou telefone com WhatsApp nem e-mail.', 'info');
+  };
+  if (Object.prototype.hasOwnProperty.call(window._spPersonProfileCache, uid)) {
+    return _open(window._spPersonProfileCache[uid]); // caminho normal: síncrono, gesto preservado
+  }
+  // Não hidratado (render recém-pintado ou carga falhou): busca e abre. Pode ser
+  // bloqueado no iOS por perder o gesto — daí o aviso explícito em vez de silêncio.
+  var _p = (window.FirestoreDB && typeof window.FirestoreDB.loadUserProfile === 'function')
+    ? window.FirestoreDB.loadUserProfile(uid) : Promise.resolve(null);
+  Promise.resolve(_p)
+    .then(function (prof) { window._spPersonProfileCache[uid] = prof || null; _open(prof || null); })
+    .catch(function () {
+      if (typeof showNotification === 'function') showNotification('Não deu pra abrir',
+        'Falha ao carregar o contato de ' + _nm + '. Tente de novo.', 'warning');
+    });
+};
+
+// O ícone 💬 da classificação. Devolve '' quando não deve aparecer — quem decide é o
+// CALLER (que sabe se a tabela é do meu grupo), com o gate de organizador aqui dentro.
+// Nunca aparece pra mim mesmo nem pra entrada sem uid (fictício não tem WhatsApp).
+window._contactPersonIconHtml = function (t, entryUid, entryName, opts) {
+  var o = opts || {};
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !entryUid) return '';
+  if (String(entryUid) === String(cu.uid || '')) return '';
+  var isAdmin = !!(typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, cu));
+  if (!isAdmin && !o.sameGroup) return '';
+  var _u = String(entryUid).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var _n = String(entryName || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var _tid = String((t && t.id) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return '<span data-contact-uid="' + window._safeHtml(String(entryUid)) + '"' +
+    ' onclick="event.stopPropagation();window._contactPersonByUid(\'' + _u + '\',\'' + _n + '\',\'' + _tid + '\')"' +
+    ' title="Falar com ' + window._safeHtml(entryName || '') + '"' +
+    ' style="cursor:pointer;font-size:0.78rem;margin-left:6px;color:#25D366;opacity:0.85;' +
+    'transition:opacity 0.2s;vertical-align:middle;user-select:none;"' +
+    ' onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.85\'">💬</span>';
 };
 
 // Mensagem pré-preenchida (saudação + nome do remetente + torneio). Sem I/O.

@@ -331,6 +331,15 @@ function renderBracket(container, tournamentId, isInline) {
     });
   }).catch(function() {});
 
+  // v1.6.98: pré-carrega os perfis dos 💬 da classificação. TEM que ser antes do
+  // clique: abrir wa.me/mailto depois de um await perde o gesto e o Safari (iOS)
+  // bloqueia a abertura em silêncio. Roda depois do paint (o markup já existe).
+  setTimeout(function () {
+    if (typeof window._hydrateContactPersonButtons === 'function') {
+      window._hydrateContactPersonButtons(container);
+    }
+  }, 0);
+
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
 
   // v2.3.10: heal IMEDIATO ao abrir o bracket (organizador) — não espera o
@@ -3245,7 +3254,11 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     }
     html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;">` +
       `<img src="${photoSrc}" ${onerror} data-player-name="${window._safeHtml(name)}" style="width:${size};height:${size};border-radius:50%;flex-shrink:0;object-fit:cover;">` +
-      `<span style="font-weight:600;font-size:${fontSize};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',{tournamentId:window._currentBracketTournamentId||''});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${window._safeHtml(name)}">${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name)}</span>` +
+      // v1.6.98 (decisão do dono): o nome no CARD DA CHAVE não abre mais ficha —
+      // "faça funcionar na classificação e não na chave". Na quadra o card é área de
+      // toque pra placar/confirmar; abrir perfil ali atrapalhava. A ficha vive no nome
+      // da CLASSIFICAÇÃO (grupo e geral), que agora abre _openPlayerProfile.
+      `<span style="font-weight:600;font-size:${fontSize};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;">${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name)}</span>` +
     `</div>`;
   });
   if (members.length > 1) html += '</div>';
@@ -4478,7 +4491,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       return '<tr style="border-bottom:1px solid var(--border-color);' + (_bg ? 'background:' + _bg + ';' : '') + '">';
     })()}
       <td style="padding:11px 14px;font-weight:800;color:${posColor(i)};">${medal(i)}</td>
-      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver confrontos">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span></td>
+      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_safeName}',{uid:'${String(s.uid||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',tournamentId:'${_safeTid}'});else window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver ficha de ${window._safeHtml(s.name)}">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span>${typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: false }) : ''}</td>
       ${_scoreCell}
       ${_pctCell}
       <td style="padding:11px 14px;text-align:center;color:#4ade80;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','wins')" title="Clique para ver as vitórias">${s.wins}</td>
@@ -4901,6 +4914,25 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // Quantos classificam POR GRUPO pra próxima fase (0 = fase única → sem tarja verde).
             var _classifN = (_nextPhT && _nextScopeT !== 'overall' && typeof window._phaseClassifiedCount === 'function') ? window._phaseClassifiedCount(t, _gst.length) : 0;
             if (_gst.length) {
+              // v1.6.98: contato direto (💬) na classificação DO GRUPO. Quem está no
+              // grupo fala com quem está no grupo; organizador/co-org falam com todos
+              // (o gate de admin mora dentro de _contactPersonIconHtml).
+              var _gHasMe = (typeof _groupHasMe === 'function') ? !!_groupHasMe(g) : false;
+              // v1.6.98: o NOME na classificação abre a FICHA do jogador (a mesma
+              // _openPlayerProfile da Análise de Inscritos — avatar, histórico, troféus),
+              // não o modal antigo de estatísticas. Aqui os nomes não tinham clique
+              // NENHUM: era esse o "clicar no nome não funciona" na classificação.
+              // Identidade por uid quando existe; o nome vai junto só como rótulo.
+              var _gstEsc = function (x) { return String(x == null ? '' : x).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+              var _gstNameHtml = function (s) {
+                var _txt = window._safeHtml(s.name);
+                if (typeof window._openPlayerProfile !== 'function') return _txt;
+                return '<span onclick="event.stopPropagation();window._openPlayerProfile(\'' + _gstEsc(s.name) +
+                  '\',{uid:\'' + _gstEsc(s.uid || '') + '\',tournamentId:\'' + _gstEsc(t.id) + '\'})"' +
+                  ' title="Ver ficha de ' + window._safeHtml(s.name) + '"' +
+                  ' style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">' +
+                  _txt + '</span>';
+              };
               var _gstRows = _gst.map(function(s, idx) {
                 var _pos = idx + 1, _md = _pos === 1 ? '🥇' : _pos === 2 ? '🥈' : _pos === 3 ? '🥉' : '';
                 var _sld = (s.pointsFor || 0) - (s.pointsAgainst || 0);
@@ -4913,7 +4945,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 var _clsGreen = (idx < _classifN && !_isRed && !_isAmb) ? 'background:rgba(34,197,94,0.10);' : '';
                 return '<tr style="border-top:1px solid rgba(255,255,255,0.06);' + _clsGreen + '">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
-                  '<td style="padding:3px 6px;color:' + _nmColor + ';">' + (_md ? _md + ' ' : '') + window._safeHtml(s.name) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + '</td>' +
+                  '<td style="padding:3px 6px;color:' + _nmColor + ';">' + (_md ? _md + ' ' : '') + _gstNameHtml(s) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + (typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: _gHasMe }) : '') + '</td>' +
                   (_advPtsOn ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, g.category || '') : '') + ' style="padding:3px 6px;text-align:center;color:#fbbf24;font-weight:700;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + (typeof s.points === 'number' ? s.points : 0) + '</td>' : '') +
                   '<td style="padding:3px 6px;text-align:center;color:#4ade80;font-weight:700;">' + (s.wins || 0) + '</td>' +
                   '<td style="padding:3px 6px;text-align:center;color:var(--text-muted);">' + (_sld >= 0 ? '+' : '') + _sld + '</td>' +

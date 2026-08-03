@@ -2856,11 +2856,11 @@ function renderTournaments(container, tournamentId = null) {
                     // Critério estrutural: fase de RODADAS guarda os jogos em
                     // `t.rounds[].matches`; fase de CHAVE guarda em `t.matches` com
                     // `bracket`. Se a fase atual tem jogo em t.matches, é eliminatória.
-                    var _cpIdx = (t.currentPhaseIndex || 0);
-                    var _faseEhElim = (Array.isArray(t.matches) ? t.matches : []).some(function (m) {
-                        if (!m || !m.bracket) return false;
-                        return ((m.phaseIndex == null) ? 0 : m.phaseIndex) === _cpIdx;
-                    });
+                    // v1.6.98: a conta saiu daqui pra window._currentPhaseIsElimination
+                    // (tournaments-utils.js) porque a TRAVA de re-sorteio precisa da MESMA
+                    // leitura — divergir faria o gate recusar numa fase que este botão trata
+                    // como de rodadas. Comportamento idêntico ao inline que estava aqui.
+                    var _faseEhElim = window._currentPhaseIsElimination(t);
                     var _adManualLbl = hasDraw ? '🎲 Rodada Extra (manual)' : '🎲 Sortear agora (manual)';
                     var _manualBtn = _faseEhElim ? '' : `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._confirmManualAutoDraw('${t.id}')">${_adManualLbl}</button>`;
                     var _phaseCanAdvance = window._isMultiPhase && window._isMultiPhase(t) &&
