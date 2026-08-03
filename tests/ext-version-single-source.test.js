@@ -69,5 +69,27 @@ ok(/check-ext-version/.test(pkg.scripts.test), 'e a conferência roda no npm tes
   ok(/'-x' \+ ver/.test(sync), 'carimbando a versão da extensão nele');
 }
 
+// ── O MÍNIMO TEM QUE ESTAR VIVO, NÃO CONGELADO NO CACHE ────────────────────────────────
+// 03/ago/2026: o site servia 1.95, a aba do dono tinha o store.js antigo em cache e exigia
+// 1.94 — e aceitava a extensão 1.94 numa boa. "não pode aceitar nada abaixo de 1.95."
+// Um gate que mora só numa constante do bundle é refém do cache do próprio bundle.
+{
+  ok(fs.existsSync(path.join(root, 'ext-version.txt')), 'existe o arquivo consultado ao vivo');
+  ok(R('ext-version.txt').trim() === manifestVer,
+     'e ele carrega a versão do manifest (' + manifestVer + ') — veio "' + R('ext-version.txt').trim() + '"');
+  const sync = R('scripts/sync-ext-version.js');
+  ok(/ext-version\.txt/.test(sync), 'quem o mantém é o sincronizador, não a memória de quem edita');
+
+  const rep = R('js/views/tournaments-enrollment-report.js');
+  ok(/function _lzMinimoVivo\(\)/.test(rep), 'o app confere o mínimo no servidor');
+  const fn = rep.slice(rep.indexOf('function _lzMinimoVivo'), rep.indexOf('function _lzMinimoVivo') + 1200);
+  ok(/cache: 'no-store'/.test(fn), 'com cache desligado — senão herda o mesmo problema');
+  ok(/_verGE\(v, _LZ_MIN_EXT\)\) _LZ_MIN_EXT = v;/.test(fn),
+     'e só ACEITA um mínimo MAIOR: rede fora nunca afrouxa o portão');
+  ok(/setTimeout\(fim, 2500\)/.test(fn), 'com teto de espera, pra rede lenta não travar a leitura');
+  ok((rep.match(/_lzMinimoVivo\(\)\.then/g) || []).length === 2,
+     'e os DOIS portões (leitura de um atleta e busca do organizador) esperam por ele');
+}
+
 console.log((fail ? '✗' : '✓') + ' ext-version-single-source: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

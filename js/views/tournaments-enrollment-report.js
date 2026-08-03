@@ -3337,9 +3337,12 @@
       if (done || started) return;
       if (!versions.length) { cleanup(); _lzExtDialog(null); return; }
       var best = versions.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
-      if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
-      started = true;
-      proximaRodada();
+      _lzMinimoVivo().then(function () {
+        if (done) return;
+        if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
+        started = true;
+        proximaRodada();
+      });
     }, 900);
   };
 
@@ -3499,6 +3502,34 @@
   // gravar ZERO jogos (a 1.35 desiste na 4ª tentativa de rajada; a 1.36 tem fila global +
   // 8 tentativas + respeita retry-after). Sem número solto aqui, nunca mais diverge.
   var _LZ_MIN_EXT = window.SP_EXT_VERSION;
+  // ── O MÍNIMO TEM QUE ESTAR VIVO, NÃO CONGELADO NO CACHE ────────────────────────
+  // O gate morava só numa constante DENTRO do store.js. Um navegador com o store.js
+  // antigo em cache guardava um mínimo antigo — e aceitava, de boa, uma extensão que já
+  // não serve. Medido na aba do dono em 03/ago/2026: o site servia 1.95 e a página dele
+  // exigia 1.94, com a extensão 1.94 rodando. "não pode aceitar nada abaixo de 1.95."
+  // Agora o mínimo é conferido no servidor a cada leitura, com cache desligado: mesmo um
+  // app em cache passa a exigir a versão atual. Se a rede falhar, fica valendo o valor
+  // embutido — nunca MENOS que ele.
+  var _lzMinPromise = null;
+  function _lzMinimoVivo() {
+    if (_lzMinPromise) return _lzMinPromise;
+    _lzMinPromise = new Promise(function (res) {
+      var pronto = false;
+      var fim = function () { if (!pronto) { pronto = true; res(_LZ_MIN_EXT); } };
+      setTimeout(fim, 2500);                 // não trava a leitura por causa da rede
+      try {
+        fetch('/ext-version.txt?t=' + Date.now(), { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.text() : null; })
+          .then(function (t) {
+            var v = String(t || '').trim();
+            if (/^[0-9]+(\.[0-9]+)*$/.test(v) && _verGE(v, _LZ_MIN_EXT)) _LZ_MIN_EXT = v;
+            fim();
+          })
+          .catch(fim);
+      } catch (e) { fim(); }
+    });
+    return _lzMinPromise;
+  }
 
   // Fração de progresso DENTRO de uma pessoa (o modo completo lê perfil → jogos →
   // torneios). Sem isto a barra fica parada em "0% · Fulano" por minutos no 1º
@@ -3785,10 +3816,13 @@
       // congelado em '1.25' enquanto a extensão ia na 1.36: a 1.35 passou no gate e gravou
       // ZERO jogos para 4 inscritos, reportando "busca concluída". Uma extensão defasada
       // não é um detalhe cosmético — ela silenciosamente não traz o dado.
-      if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
-      started = true;
-      setProg({ sub: 'preparando ' + total + (total === 1 ? ' inscrito' : ' inscritos'), pct: 3 });
-      window.postMessage({ __sp_lp: 'run-org-scan', targets: targets, tournamentId: ctx.tId, mode: mode }, window.location.origin);
+      _lzMinimoVivo().then(function () {
+        if (done) return;
+        if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
+        started = true;
+        setProg({ sub: 'preparando ' + total + (total === 1 ? ' inscrito' : ' inscritos'), pct: 3 });
+        window.postMessage({ __sp_lp: 'run-org-scan', targets: targets, tournamentId: ctx.tId, mode: mode }, window.location.origin);
+      });
     }, 900);
   };
   // GRAVA um punhado de scans em letzplayScans/{uid}. Extraído de _saveScansAndReload

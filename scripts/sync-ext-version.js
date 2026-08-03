@@ -61,6 +61,14 @@ if (fs.existsSync(iPath)) {
   }
 }
 
+// ── E O ARQUIVO QUE O APP CONSULTA AO VIVO ────────────────────────────────────────
+// O gate embutido no store.js vira refém do cache do navegador: em 03/ago/2026 o site
+// servia 1.95 e a aba do dono, com o store.js antigo, exigia 1.94 — e aceitava a 1.94.
+// Este arquivo é lido a cada leitura com cache desligado, então mesmo um app em cache
+// passa a exigir a versão atual.
+fs.writeFileSync(p('ext-version.txt'), ver + '\n');
+mudou.push('ext-version.txt');
+
 // zip servido pelo site — tem que existir NA versão exigida, e as antigas saem
 const zipNome = 'scoreplace-letzplay-ext-' + ver + '.zip';
 fs.readdirSync(root)
