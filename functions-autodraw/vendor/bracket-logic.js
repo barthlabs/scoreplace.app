@@ -3824,8 +3824,43 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   var used = [];
   var formed = 0;
   var _n2uMapWl = _buildNameToUid(t); // v4.4.115: identidade por uid nos jogos formados da espera
+  // ── v1.7.3 — GRUPO NOVO DA ESPERA NÃO FECHA COM MAIS DE 1 HOMEM ────────────────
+  // Regra do dono (ago/2026): "precisamos manter a situação de não fechar um novo grupo,
+  // pelo menos por enquanto, com mais de 1 homem no mesmo grupo" — o motivo é evitar que
+  // 4 homens atrasados formem um grupo mais forte e levem vantagem EM CIMA DO ATRASO.
+  // O sorteio inicial já garantiu isso pelo modo EQUILIBRADO; esta função era o único
+  // caminho que ainda montava grupo às cegas (`_plainShuffle` + `splice(0,4)`).
+  //
+  // GÊNERO VEM DO PERFIL, POR UID: a entrada da espera é strippada (`gender` está em
+  // _PROFILE_FIELDS desde a v1.3.52), então ler da entrada devolveria vazio sempre.
+  //
+  // DESCONHECIDO NÃO CONTA como homem — de propósito. Contá-lo travaria a formação em
+  // todo torneio sem gênero preenchido (regressão pra quem não usa o campo). Quem precisa
+  // corrigir isso tem a Análise de Inscritos, que desde a v1.7.2 mostra a espera.
+  //
+  // NÃO DEU PRA FECHAR RESPEITANDO A REGRA ⇒ NÃO FECHA. A fila continua esperando, que é
+  // literalmente o pedido — nunca montar o grupo "errado" só pra não deixar gente parada.
+  var MAX_HOMENS_POR_GRUPO = 1;
+  var _isHomem = function (nm) {
+    var u = _n2uMapWl && _n2uMapWl[nm];
+    return !!(u && typeof window._genderForUid === 'function' && window._genderForUid(u) === 'masculino');
+  };
+  // Tira do pool os 4 primeiros que respeitam o teto (a ordem do embaralho é preservada:
+  // só PULA quem estouraria a cota). Devolve null quando não há combinação possível.
+  var _pickGrupo = function (pool) {
+    var idx = [], homens = 0;
+    for (var i = 0; i < pool.length && idx.length < 4; i++) {
+      if (_isHomem(pool[i])) { if (homens >= MAX_HOMENS_POR_GRUPO) continue; homens++; }
+      idx.push(i);
+    }
+    if (idx.length < 4) return null;
+    var out = idx.map(function (i) { return pool[i]; });
+    for (var k = idx.length - 1; k >= 0; k--) pool.splice(idx[k], 1);
+    return out;
+  };
   while (eligible.length >= 4) {
-    var grp = eligible.splice(0, 4);
+    var grp = _pickGrupo(eligible);
+    if (!grp) break; // só sobrou combinação que violaria a regra → fila espera mais gente
     var gi = (col.monarchGroups || []).length;
     var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed, nameToUid: _n2uMapWl });
     col.monarchGroups.push(g);
