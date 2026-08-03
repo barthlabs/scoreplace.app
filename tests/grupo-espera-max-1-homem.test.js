@@ -147,13 +147,13 @@ console.log('\n──── o toggle existe na UI e é do organizador ───�
   const ui = fs2.readFileSync(path2.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
   const hnd = fs2.readFileSync(path2.join(__dirname, '..', 'js', 'views', 'bracket-ui.js'), 'utf8');
   t2('box da espera tem o toggle', /_toggleWlBalance\(/.test(ui) && /wlGroupBalance/.test(ui));
-  // APENAS o organizador: co-host NÃO controla. isOrganizer e _isUserOrgOrCoHost incluem
-  // co-host, então o gate TEM que ser creatorUid — se alguém trocar por um deles, vermelho.
-  t2('render gateia por creatorUid (não por co-host)',
-     /_wlOrg\s*=\s*!!\(_wlCu[\s\S]{0,120}creatorUid/.test(ui) &&
-     !/_wlOrg[\s\S]{0,80}_isUserOrgOrCoHost/.test(ui));
-  t2('handler checa a permissão TAMBÉM na função, por creatorUid',
-     /window\._toggleWlBalance = function[\s\S]{0,900}creatorUid[\s\S]{0,120}if\s*\(!_isDono\)\s*return;/.test(hnd));
+  // CO-ORGANIZADOR TEM O MESMO PODER DO ORGANIZADOR (regra do dono). Gatear por
+  // creatorUid excluiria o co-host EM SILÊNCIO — é exatamente o que estas duas travam.
+  t2('render usa _isUserOrgOrCoHost (co-host incluído)',
+     /_wlOrg\s*=\s*!!\(typeof window\._isUserOrgOrCoHost/.test(ui));
+  t2('render NÃO gateia por creatorUid', !/_wlOrg[\s\S]{0,140}creatorUid/.test(ui));
+  t2('handler checa a permissão TAMBÉM na função, incluindo co-host',
+     /window\._toggleWlBalance = function[\s\S]{0,900}_isUserOrgOrCoHost[\s\S]{0,140}if\s*\(!_isAdmin\)\s*return;/.test(hnd));
   t2('handler persiste', /syncImmediate|saveTournament/.test(hnd.split('window._toggleWlBalance')[1] || ''));
 }
 

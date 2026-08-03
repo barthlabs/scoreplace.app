@@ -4759,11 +4759,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // não fecha com mais de 1 homem; desligado ("livre") volta ao sorteio sem teto.
             // Só o organizador/co-org vê e mexe; o motor relê `t.wlGroupBalance` a cada
             // formação, então o efeito é imediato na próxima tentativa de fechar grupo.
-            // APENAS O ORGANIZADOR (ordem do dono, ago/2026). Note que tanto
-            // AppStore.isOrganizer quanto _isUserOrgOrCoHost incluem CO-organizadores —
-            // por isso a checagem é o creatorUid direto: este toggle não é delegável.
-            var _wlCu = window.AppStore && window.AppStore.currentUser;
-            var _wlOrg = !!(_wlCu && _wlCu.uid && t.creatorUid && String(t.creatorUid) === String(_wlCu.uid));
+            // CO-ORGANIZADOR TEM O MESMO PODER DO ORGANIZADOR (regra do dono, ago/2026) —
+            // vale pro app inteiro, não só aqui. Por isso _isUserOrgOrCoHost, e NUNCA um
+            // teste de creatorUid: creator-only exclui o co-host em silêncio.
+            var _wlOrg = !!(typeof window._isUserOrgOrCoHost === 'function' &&
+              window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser));
             var _wlEquil = (t.wlGroupBalance !== 'livre');
             var _wlTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             var _wlToggle = !_wlOrg ? '' :

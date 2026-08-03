@@ -14388,13 +14388,12 @@ window._toggleWlBalance = function (tId) {
   var store = window.AppStore;
   var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
   if (!t) return;
-  // APENAS O ORGANIZADOR (ordem do dono, ago/2026) — NÃO co-organizador. Cuidado: tanto
-  // AppStore.isOrganizer quanto _isUserOrgOrCoHost dão true pra co-host ativo, então a
-  // checagem tem que ser o creatorUid direto. O gate mora AQUI também, não só no render:
-  // esconder o botão não é permissão.
-  var _cu = store && store.currentUser;
-  var _isDono = !!(_cu && _cu.uid && t.creatorUid && String(t.creatorUid) === String(_cu.uid));
-  if (!_isDono) return;
+  // CO-ORGANIZADOR TEM O MESMO PODER DO ORGANIZADOR (regra do dono, ago/2026) — vale pro
+  // app inteiro. Nunca gatear por creatorUid: isso exclui o co-host em silêncio. O gate
+  // mora AQUI também, não só no render — esconder o botão não é permissão.
+  var _isAdmin = !!(typeof window._isUserOrgOrCoHost === 'function' &&
+    window._isUserOrgOrCoHost(t, store && store.currentUser));
+  if (!_isAdmin) return;
 
   var _eraEquil = (t.wlGroupBalance !== 'livre');
   t.wlGroupBalance = _eraEquil ? 'livre' : 'equilibrado';
