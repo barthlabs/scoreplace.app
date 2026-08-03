@@ -82,8 +82,11 @@ function parseDom(html) {
     dests.push({ d, on, getAttribute: (k) => (k === 'data-dest' ? d : (k === 'data-on' ? on : '')), setAttribute: () => {}, style: {} });
     return tag;
   });
+  const acao = { _label: '', _style: {}, style: {}, textContent: '',
+    getAttribute: (k) => { const m = html.match(new RegExp('id="liga-fill-action"[^>]*' + k + '="([^"]*)"')); return m ? m[1] : ''; } };
   return {
-    byId: { 'liga-wo-dest': { querySelectorAll: () => dests } },
+    acao,
+    byId: { 'liga-wo-dest': { querySelectorAll: () => dests }, 'liga-fill-action': acao },
     query: (sel) => {
       if (sel.indexOf('liga-fill-cands') !== -1) return cands.filter((c) => c._on === '1');
       if (sel.indexOf('liga-wo-dest') !== -1) return dests.filter((x) => x.on === '1');
@@ -224,15 +227,18 @@ sec(function () {
   // (a) o ORGANIZADOR vê o botão de colocar direto
   const t = novoT(); boot(t, 'org');
   win._ligaPickFill(t.id, 0, 'R1 Grupo W', 'Thereza');
-  ok(CAP.html.indexOf('_ligaSubstituteNow') !== -1, 'organizador tem que ver "Colocar" (substituição direta)');
-  ok(CAP.html.indexOf('Convidar selecionados') !== -1, 'e o convite CONTINUA disponível pra ele');
+  ok(CAP.html.indexOf('id="liga-fill-action"') !== -1, 'tem que existir UM botão de ação');
+  ok(CAP.html.indexOf('data-org="1"') !== -1, 'o botão sabe que quem está olhando é o organizador');
+  ok((CAP.html.match(/_ligaSubstituteNow/g) || []).length === 0, 'não pode mais existir botão "Colocar" por linha — comia a largura e picotava o nome');
+  ok(CAP.html.indexOf('white-space:nowrap') !== -1 && CAP.html.indexOf('text-overflow:ellipsis') !== -1,
+    'o nome ocupa a linha inteira e corta com reticências em vez de quebrar');
 
   // (b) o PARTICIPANTE do grupo NÃO vê — ele só convida
   const t2 = novoT(); boot(t2, 'uid_fabiana');
   win._canManagePresence = () => false;         // participante, não autoridade
   win._ligaPickFill(t2.id, 0, 'R1 Grupo W', 'Thereza');
-  ok(CAP.html.indexOf('_ligaSubstituteNow') === -1, 'participante NÃO pode substituir direto — só convidar');
-  ok(CAP.html.indexOf('Convidar selecionados') !== -1, 'mas convida normalmente');
+  ok(CAP.html.indexOf('data-org="0"') !== -1, 'pro participante o botão nasce sem poder de colocar');
+  ok(CAP.html.indexOf('id="liga-fill-action"') !== -1, 'mas ele tem o botão de convidar');
 });
 
 // ── 10. A substituição direta fecha o ciclo inteiro na hora ─────────────────
@@ -303,6 +309,42 @@ sec(function () {
     if (re.test(txt)) maus.push(path.basename(f));
   });
   ok(maus.length === 0, 'aspa dupla dentro de comentário CSS no atributo style (quebra o atributo): ' + maus.join(', '));
+});
+
+// ── 14. UM BOTÃO SÓ: "Colocar" com 1 marcado, "Convidar" com 2+ ─────────────
+// Regra do dono: "pode ser 1 botão colocar se apenas 1 estiver selecionado ou convidar se
+// mais de um estiver selecionado."
+sec(function () {
+  const t = novoT(); boot(t, 'org');
+  win._ligaPickFill(t.id, 0, 'R1 Grupo W', 'Thereza');
+  // simula a leitura do DOM: 2 marcados (default) → CONVIDAR
+  let marcados = [{ uid: 'uid_sandra', name: 'Sandra' }, { uid: 'uid_paulo', name: 'Paulo Oriente' }];
+  const acao = DOM.acao;
+  globalThis.document.querySelectorAll = (sel) => (sel.indexOf('liga-fill-cands') !== -1
+    ? marcados.map((m) => ({ getAttribute: (k) => (k === 'data-uid' ? m.uid : (k === 'data-name' ? m.name : '1')) })) : []);
+  win._ligaSyncFillAction();
+  ok(acao.textContent.indexOf('Convidar 2') !== -1, 'com 2 marcados o botão CONVIDA — veio: ' + acao.textContent);
+
+  marcados = [{ uid: 'uid_sandra', name: 'Sandra' }];
+  win._ligaSyncFillAction();
+  ok(acao.textContent.indexOf('Colocar Sandra') !== -1, 'com 1 marcado o ORGANIZADOR COLOCA — veio: ' + acao.textContent);
+
+  marcados = [];
+  win._ligaSyncFillAction();
+  ok(/Marque quem/.test(acao.textContent), 'com 0 marcados o botão pede pra marcar — veio: ' + acao.textContent);
+  ok(acao.style.opacity === '0.5', 'e fica apagado');
+});
+
+// ── 15. Participante com 1 marcado CONVIDA (nunca coloca) ──────────────────
+sec(function () {
+  const t = novoT(); boot(t, 'uid_fabiana');
+  win._canManagePresence = () => false;
+  win._ligaPickFill(t.id, 0, 'R1 Grupo W', 'Thereza');
+  const acao = DOM.acao;
+  globalThis.document.querySelectorAll = () => [{ getAttribute: (k) => (k === 'data-uid' ? 'uid_sandra' : (k === 'data-name' ? 'Sandra' : '1')) }];
+  win._ligaSyncFillAction();
+  ok(acao.textContent.indexOf('Convidar Sandra') !== -1, 'participante com 1 marcado CONVIDA — veio: ' + acao.textContent);
+  ok(acao.textContent.indexOf('Colocar') === -1, 'e nunca vê "Colocar"');
 });
 
 console.log((fail === 0 ? '✅' : '❌') + ' wo-destino-ciclo-notifica: ' + pass + ' asserções, ' + fail + ' falha(s)');

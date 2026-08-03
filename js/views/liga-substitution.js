@@ -537,8 +537,8 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
       ? !!window._canManagePresence(t, window.AppStore && window.AppStore.currentUser) : false;
     html += '<div style="font-size:0.74rem;font-weight:700;color:#4ade80;margin:10px 0 6px;">' + (_souOrgHint ? 'Substituir ou convidar' : 'Convidar') + ' da lista de espera / folgas' + (catLbl ? ' · categoria ' + _safe(catLbl) : '') + ' — o PRIMEIRO que aceitar entra e pontua de verdade</div>';
     html += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:8px;">' +
-      (_souOrgHint ? '<b>▶️ Colocar</b> entra na hora, sem esperar aceite. Ou marque quem recebe o convite e use “Convidar selecionados” — aí o primeiro que aceitar entra.'
-                   : 'Toque pra marcar/desmarcar quem recebe o convite (todos marcados = convida todos).') + '</div>';
+      (_souOrgHint ? 'Marque <b>um</b> pra colocar na hora, ou <b>vários</b> pra convidar — aí o primeiro que aceitar entra.'
+                   : 'Marque quem recebe o convite — o primeiro que aceitar entra.') + '</div>';
     // AUTORIDADE decide a tela: organizador vê "Colocar agora" em cada candidato; o
     // participante do grupo vê só o convite. [[project_wo_outcome_negotiation_canon]]
     var _souOrg = (typeof window._canManagePresence === 'function')
@@ -547,17 +547,25 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
       // offCat NÃO some com a pessoa: mostra marcado, e o organizador decide se aceita a
       // quebra de categoria. Sumir era o que fazia a fila "não existir" na tela.
       var _tag = f.offCat
-        ? '<span style="font-size:0.62rem;font-weight:800;background:rgba(251,191,36,0.2);color:#fbbf24;padding:1px 6px;border-radius:5px;margin-left:6px;">fora da categoria</span>'
-        : (f.fromWaitlist ? '<span style="font-size:0.62rem;font-weight:700;background:rgba(255,255,255,0.08);color:var(--text-muted);padding:1px 6px;border-radius:5px;margin-left:6px;">lista de espera</span>' : '');
+        ? '<span style="font-size:0.62rem;font-weight:800;background:rgba(251,191,36,0.2);color:#fbbf24;padding:1px 6px;border-radius:5px;flex:0 0 auto;">fora da categoria</span>'
+        : (f.fromWaitlist ? '<span style="font-size:0.62rem;font-weight:700;background:rgba(255,255,255,0.08);color:var(--text-muted);padding:1px 6px;border-radius:5px;flex:0 0 auto;">espera</span>' : '');
       var _bd = f.offCat ? 'rgba(251,191,36,0.5)' : 'rgba(16,185,129,0.55)';
       var _co = f.offCat ? '#fbbf24' : '#4ade80';
-      var _pill = '<button type="button" class="btn btn-outline" data-cand="1" data-on="1" data-uid="' + _safe(f.uid) + '" data-name="' + _safe(f.name) + '" onclick="window._ligaToggleCand(this)" style="flex:1;min-width:0;text-align:left;border-color:' + _bd + ';color:' + _co + ';">✅ ' + _safe(f.name) + _tag + '</button>';
-      if (!_souOrg) return '<div style="margin-bottom:6px;display:flex;">' + _pill + '</div>';
-      // "Colocar agora" resolve na hora, sem esperar aceite — é o poder do organizador.
-      var _now = '<button type="button" class="btn btn-success" onclick="window._ligaSubstituteNow(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\',\'' + _esc(f.uid) + '\',\'' + _esc(f.name) + '\')" style="flex:0 0 auto;font-weight:800;white-space:nowrap;">▶️ Colocar</button>';
-      return '<div style="margin-bottom:6px;display:flex;gap:6px;align-items:stretch;">' + _pill + _now + '</div>';
+      // v1.6.92: a linha é do NOME — largura inteira. O botão por linha (v1.6.91) comeu a
+      // largura e picotou os nomes em duas linhas com a tag cortada. A AÇÃO virou UMA só,
+      // no rodapé, e o que ela faz depende de quantos estão marcados (regra do dono).
+      return '<button type="button" class="btn btn-outline" data-cand="1" data-on="1" data-uid="' + _safe(f.uid) + '" data-name="' + _safe(f.name) + '" onclick="window._ligaToggleCand(this)" style="width:100%;margin-bottom:6px;text-align:left;display:flex;align-items:center;gap:8px;border-color:' + _bd + ';color:' + _co + ';">' +
+        '<span data-mark="1" style="flex:0 0 auto;">✅</span>' +
+        '<span style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _safe(f.name) + '</span>' +
+        _tag +
+      '</button>';
     }).join('') + '</div>';
-    html += '<button class="btn btn-success" style="width:100%;margin-top:4px;font-weight:800;" onclick="window._ligaInviteSelected(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">📨 Convidar selecionados</button>';
+    // AÇÃO ÚNICA (v1.6.92, regra do dono): "pode ser 1 botão colocar se apenas 1 estiver
+    // selecionado ou convidar se mais de um estiver selecionado". O rótulo e o que ele faz
+    // são recalculados a cada toque (_ligaSyncFillAction). Participante nunca vê "Colocar".
+    html += '<button id="liga-fill-action" class="btn btn-success" style="width:100%;margin-top:4px;font-weight:800;" ' +
+      'data-tid="' + _safe(tId) + '" data-ri="' + roundIndex + '" data-gn="' + _safe(groupName) + '" data-abs="' + _safe(absentName) + '" data-org="' + (_souOrg ? '1' : '0') + '" ' +
+      'onclick="window._ligaFillAction(this)">📨 Convidar selecionados</button>';
   } else {
     // O texto antigo dizia "ninguém DA MESMA CATEGORIA" mesmo quando a lista de espera
     // tinha gente — a frase culpava a categoria por um defeito de leitura. Agora só é
@@ -669,7 +677,61 @@ window._ligaToggleCand = function (btn) {
   btn.style.opacity = on ? '0.45' : '';
   btn.style.borderColor = on ? 'rgba(255,255,255,0.2)' : 'rgba(16,185,129,0.55)';
   btn.style.color = on ? 'var(--text-muted)' : '#4ade80';
-  btn.innerHTML = (on ? '⬜ ' : '✅ ') + btn.innerHTML.replace(/^(✅|⬜)\s*/, '');
+  // marca num <span> próprio — antes era regex no innerHTML inteiro, que agora carrega o
+  // nome e a tag e seria reescrito junto.
+  try { var mk = btn.querySelector('[data-mark]'); if (mk) mk.textContent = on ? '⬜' : '✅'; } catch (e) {}
+  window._ligaSyncFillAction();
+};
+
+// Lê quantos estão marcados e reescreve o botão único: 1 → COLOCAR (organizador),
+// 2+ → CONVIDAR, 0 → desabilitado. É a fonte única do rótulo e do comportamento.
+window._ligaSyncFillAction = function () {
+  var act;
+  try { act = document.getElementById('liga-fill-action'); } catch (e) { act = null; }
+  if (!act) return;
+  var sel = [];
+  try {
+    document.querySelectorAll('#liga-fill-cands [data-cand][data-on="1"]').forEach(function (b) {
+      sel.push({ uid: b.getAttribute('data-uid'), name: b.getAttribute('data-name') });
+    });
+  } catch (e) {}
+  var org = act.getAttribute('data-org') === '1';
+  if (!sel.length) {
+    act.textContent = 'Marque quem entra ou recebe o convite';
+    act.style.opacity = '0.5';
+    return;
+  }
+  act.style.opacity = '';
+  if (sel.length === 1 && org) {
+    // 1 marcado + organizador → entra AGORA, sem aceite.
+    act.textContent = '▶️ Colocar ' + sel[0].name;
+  } else if (sel.length === 1) {
+    act.textContent = '📨 Convidar ' + sel[0].name;
+  } else {
+    act.textContent = '📨 Convidar ' + sel.length + ' selecionados';
+  }
+};
+
+// Despacha a ação única conforme a seleção do momento.
+window._ligaFillAction = function (btn) {
+  var tId = btn.getAttribute('data-tid'), ri = parseInt(btn.getAttribute('data-ri'), 10) || 0;
+  var gn = btn.getAttribute('data-gn'), abs = btn.getAttribute('data-abs');
+  var org = btn.getAttribute('data-org') === '1';
+  var sel = [];
+  try {
+    document.querySelectorAll('#liga-fill-cands [data-cand][data-on="1"]').forEach(function (b) {
+      sel.push({ uid: b.getAttribute('data-uid'), name: b.getAttribute('data-name') });
+    });
+  } catch (e) {}
+  if (!sel.length) {
+    if (window.showNotification) window.showNotification('Substituto', 'Marque quem entra no lugar.', 'info');
+    return;
+  }
+  if (sel.length === 1 && org) {
+    window._ligaSubstituteNow(tId, ri, gn, abs, sel[0].uid, sel[0].name);
+    return;
+  }
+  window._ligaInviteSelected(tId, ri, gn, abs);
 };
 
 // Lê os candidatos marcados no diálogo e dispara o convite múltiplo.
