@@ -180,17 +180,175 @@ window._ligaAbsentFlow = function (tId, roundIndex, groupName) {
   // Se já tem um ausente definido (convite recusado / aguardando preencher), pula direto pro fill.
   if (group.woAbsent && group.subStatus !== 'filled') { window._ligaPickFill(tId, roundIndex, groupName, group.woAbsent); return; }
   var players = (group.players || []).slice();
+  // v1.6.88: o passo seguinte é o DESTINO do ausente (_ligaWoDestination), não mais a
+  // escolha de substituto — quem assume é o primeiro da fila, automaticamente.
   var rows = players.map(function (p) {
-    return '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;" onclick="window._ligaPickFill(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(p) + '\')">' + _safe(p) + '</button>';
+    return '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;" onclick="window._ligaWoDestination(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(p) + '\')">' + _safe(p) + '</button>';
   }).join('');
   if (window.showAlertDialog) {
     window.showAlertDialog('Quem não pôde jogar?',
-      '<div style="font-size:0.85rem;opacity:0.85;margin-bottom:10px;">O jogador escolhido leva <b>W.O.</b> (0 pontos nesta rodada). Em seguida você escolhe quem entra no lugar dele.</div>' + rows,
+      '<div style="font-size:0.85rem;opacity:0.85;margin-bottom:10px;">O jogador escolhido leva <b>W.O.</b> (0 pontos nesta rodada). Em seguida você escolhe se ele vai pros <b>desativados</b> ou pro <b>fim da lista de espera</b> — e o primeiro da fila assume a vaga.</div>' + rows,
       function () {}, { type: 'warning', confirmText: 'Fechar' });
   }
 };
 
-// ── Passo 2: escolher o preenchimento (convidar folga OU Jogador X) ──────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PASSO 2 (v1.6.88) — PRA ONDE VAI QUEM LEVOU O W.O.?
+// Regra do dono (ago/2026): _"o organizador pode escolher entre mandar o W.O. para a
+// lista de desativados ou para a lista de espera (no fim da lista). Assume a posição o
+// primeiro da lista de espera (suplente) e ocupa a posição até o final do torneio (caso
+// não haja W.O. dessa pessoa). Se o W.O. for para desativados, passa para última posição
+// da lista de espera ao se reativar."_
+//
+// Até aqui o W.O. só marcava 0 pts na rodada e a pessoa CONTINUAVA no elenco ativo — era
+// re-sorteada na rodada seguinte como se nada tivesse acontecido, e o substituto entrava
+// só naquele grupo. As duas metades ficavam soltas. Agora o W.O. é uma TROCA declarada:
+// quem faltou SAI do elenco da rodada (pro destino escolhido) e o primeiro da fila ENTRA
+// no elenco — de verdade, até o fim do torneio.
+//
+// Vale só pro W.O. do ORGANIZADOR. O W.O. reivindicado por participante (wo-claim.js)
+// segue inalterado — ordem explícita do dono.
+window._ligaWoDestination = function (tId, roundIndex, groupName, absentName) {
+  var t = _findT(tId); if (!t) return;
+  var group = _getGroup(t, roundIndex, groupName); if (!group) return;
+  if (!_canManageGroup(t, group)) return;
+  var sub = _ligaNextSuplente(t, group, absentName);
+  var _woPenVal = (typeof window._woAdvPenalty === 'function') ? window._woAdvPenalty(t) : 0;
+
+  var html = '<div style="font-size:0.85rem;opacity:0.9;margin-bottom:12px;"><b>' + _safe(absentName) + '</b> leva W.O. — 0 pts nesta rodada' + (_woPenVal ? ' e ' + _woPenVal + ' nos Pontos Avançados' : '') + '.</div>';
+
+  // Quem assume — mostrado ANTES da escolha: o organizador tem que saber quem entra
+  // antes de decidir pra onde o ausente vai.
+  if (sub) {
+    html += '<div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:10px;margin-bottom:14px;">' +
+      '<div style="font-size:0.72rem;font-weight:700;color:#4ade80;margin-bottom:4px;">✅ QUEM ASSUME A VAGA</div>' +
+      '<div style="font-size:0.95rem;font-weight:700;">' + _safe(_wlDisplay(sub)) + '</div>' +
+      '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Primeiro da lista de espera. Assume a vaga agora e <b>fica até o fim do torneio</b> — sai só se levar W.O.</div>' +
+    '</div>';
+  } else {
+    html += '<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:10px;margin-bottom:14px;font-size:0.78rem;color:#fbbf24;">' +
+      '⚠️ <b>A lista de espera está vazia</b> — ninguém assume a vaga automaticamente. O grupo fica com a vaga aberta; você ainda pode convidar quem ficou de fora ou completar com Jogador X.' +
+    '</div>';
+  }
+
+  // Sem artigo antes do nome: o app não sabe (nem presume) o gênero de ninguém.
+  html += '<div style="font-size:0.74rem;font-weight:700;color:var(--text-bright);margin:4px 0 8px;">' + _safe(absentName) + ' — pra onde vai?</div>';
+  html += '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;border-color:rgba(239,68,68,0.45);color:#f87171;" onclick="window._ligaApplyWoWithDest(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\',\'inactive\')">' +
+    '🔴 <b>Desativados</b><div style="font-size:0.68rem;font-weight:400;color:var(--text-muted);margin-top:2px;">Fica de fora dos próximos sorteios. Se reativar, entra no <b>fim</b> da lista de espera.</div></button>';
+  html += '<button class="btn btn-outline" style="width:100%;text-align:left;border-color:rgba(251,191,36,0.45);color:#fbbf24;" onclick="window._ligaApplyWoWithDest(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\',\'waitlist\')">' +
+    '📋 <b>Fim da lista de espera</b><div style="font-size:0.68rem;font-weight:400;color:var(--text-muted);margin-top:2px;">Continua no torneio, atrás de quem já está na fila — volta a jogar quando chegar a vez.</div></button>';
+
+  if (window.showAlertDialog) window.showAlertDialog('W.O. — pra onde vai o ausente?', html, function () {}, { type: 'warning', confirmText: 'Cancelar' });
+};
+
+// Nome exibível de uma entrada da espera.
+function _wlDisplay(e) {
+  if (typeof e === 'string') return e;
+  return String((window._pName ? window._pName(e, '') : '') || (e && (e.displayName || e.name)) || '').trim();
+}
+
+// O SUPLENTE = primeiro da fila que atende a CATEGORIA do grupo. A ordem manda; a
+// categoria só peneira (torneio sem categoria → o primeiro, ponto).
+// [[project_wo_individual_substitution_rule]]: nunca colocar alguém que quebre a
+// categoria — mas também nunca reordenar a fila por "melhor encaixe".
+function _ligaNextSuplente(t, group, absentName) {
+  var cat = _groupCategory(group);
+  var inGroup = {}; (group.players || []).forEach(function (n) { inGroup[String(n)] = 1; });
+  return window._waitlistFirst(t, function (e) {
+    var nm = _wlDisplay(e);
+    if (!nm || nm === absentName || inGroup[nm]) return false;
+    if (nm.indexOf(' / ') !== -1) return false;      // dupla já formada não assume vaga individual
+    if (!cat) return true;
+    if (typeof window._participantInCategory === 'function') {
+      try { return !!window._participantInCategory(e, cat, t); } catch (err) { return true; }
+    }
+    return true;
+  });
+}
+window._ligaNextSuplente = _ligaNextSuplente;
+
+// Aplica o W.O. inteiro numa mutação só: marca o ausente, manda pro destino escolhido e
+// põe o primeiro da fila no lugar dele — no grupo E no elenco.
+window._ligaApplyWoWithDest = function (tId, roundIndex, groupName, absentName, dest) {
+  var t = _findT(tId); if (!t) return;
+  var group = _getGroup(t, roundIndex, groupName); if (!group) return;
+  if (!_canManageGroup(t, group)) { if (window.showNotification) window.showNotification('W.O.', 'Só o organizador ou um jogador do grupo pode fazer isso.', 'info'); return; }
+  var _sub = _ligaNextSuplente(t, group, absentName);
+  var _subName = _sub ? _wlDisplay(_sub) : '';
+  var _cat = _groupCategory(group);
+  _closeDialogs();
+
+  _commitLiga(tId, function (ft) {
+    var g = _getGroup(ft, roundIndex, groupName); var r = ft.rounds && ft.rounds[roundIndex];
+    if (!g || !r) return;
+
+    // (1) marca o W.O. da rodada (0 pts) — igual ao fluxo antigo
+    _addWoMarker(ft, r, roundIndex, absentName, _cat);
+    g.woAbsent = absentName;
+
+    // (2) o suplente ASSUME — no grupo e no ELENCO. Entrar em participants é o que faz
+    // "ocupa a posição até o final do torneio": em Liga cada rodada é sorteada de novo a
+    // partir de participants, então quem fica só no grupo desta rodada sumiria na próxima.
+    if (_subName) {
+      var _subEntry = null;
+      try { _subEntry = JSON.parse(JSON.stringify(_sub)); } catch (e) { _subEntry = _sub; }
+      // ORDEM IMPORTA: entrar no ELENCO vem ANTES de reescrever o slot. _rewriteSlot
+      // resolve o uid do substituto por _buildNameToUid(ft) — se ele ainda não está em
+      // participants (e já saiu da espera), o mapa não o acha e o slot fica com uid null:
+      // o jogo passaria a apontar pra ninguém. Bug pego pelo teste.
+      if (_subEntry && typeof _subEntry === 'object') {
+        _subEntry.ligaActive = true;
+        _subEntry.woSubstituteFor = absentName;          // rastro: entrou por W.O., não por sorteio
+        _subEntry.woSubstituteAt = new Date().toISOString();
+        if (!Array.isArray(ft.participants)) ft.participants = ft.participants ? Object.values(ft.participants) : [];
+        var _jaNoElenco = ft.participants.some(function (p) {
+          if (!p || typeof p !== 'object') return false;
+          if (_subEntry.uid && p.uid) return p.uid === _subEntry.uid;
+          return _wlDisplay(p) === _subName;
+        });
+        if (!_jaNoElenco) ft.participants.push(_subEntry);
+      }
+      window._removeFromWaitlist(ft, _subName);          // sai da fila (assumiu)
+      _removeSitOut(r, _subName);                        // não é mais folga — vai jogar
+      _rewriteSlot(g, absentName, _subName, true, ft);
+      g.subStatus = 'filled'; g.subName = _subName; g.subIsGuest = false; delete g.pendingInviteId;
+    } else {
+      g.subStatus = 'open';                              // fila vazia: vaga aberta (convite/Jogador X)
+    }
+
+    // (3) DESTINO DO AUSENTE — a decisão do organizador.
+    var _parts = Array.isArray(ft.participants) ? ft.participants : (ft.participants ? Object.values(ft.participants) : []);
+    var _absIdx = -1;
+    for (var i = 0; i < _parts.length; i++) {
+      if (_parts[i] && typeof _parts[i] === 'object' && _wlDisplay(_parts[i]) === absentName) { _absIdx = i; break; }
+    }
+    if (dest === 'waitlist') {
+      // Sai do elenco e vai pro FIM da fila. memberUids continua cobrindo a espera
+      // (v1.6.86), então ele NÃO perde o torneio no app.
+      var _absEntry = (_absIdx !== -1) ? _parts[_absIdx] : { name: absentName, displayName: absentName };
+      if (_absIdx !== -1) _parts.splice(_absIdx, 1);
+      ft.participants = _parts;
+      if (_absEntry && typeof _absEntry === 'object') { _absEntry.ligaActive = true; _absEntry.woSentToWaitlistAt = new Date().toISOString(); }
+      window._waitlistPushBack(ft, _absEntry);
+    } else {
+      // Desativados: FICA no elenco, inativo. Ao reativar, _toggleLigaActive o manda pro
+      // FIM da fila (v1.6.86 + push no fim) — que é a segunda metade da regra do dono.
+      if (_absIdx !== -1) { _parts[_absIdx].ligaActive = false; _parts[_absIdx].woDeactivatedAt = new Date().toISOString(); }
+      ft.participants = _parts;
+    }
+  });
+
+  var _destLbl = (dest === 'waitlist') ? 'foi pro fim da lista de espera' : 'foi pros desativados';
+  if (window.showNotification) {
+    window.showNotification('W.O. aplicado',
+      _subName ? (absentName + ' ' + _destLbl + '. ' + _subName + ' assumiu a vaga e fica até o fim do torneio.')
+               : (absentName + ' ' + _destLbl + '. A lista de espera está vazia — a vaga ficou aberta.'),
+      'success');
+  }
+  _rerender(tId);
+};
+
+// ── Passo 2 (legado): convidar folga OU Jogador X — segue disponível pra vaga aberta ──
 window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
   var t = _findT(tId); if (!t) return;
   var group = _getGroup(t, roundIndex, groupName); if (!group) return;

@@ -1381,10 +1381,12 @@ window._toggleLigaActive = function(tId, isActive) {
       typeof window._isPlayingCurrentPhase === 'function' && !window._isPlayingCurrentPhase(t, found)) {
     var _idx = arr.indexOf(found);
     if (_idx !== -1) {
-      if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
       arr.splice(_idx, 1);
       t.participants = arr;
-      t.standbyParticipants.push(found);
+      // v1.6.88: entra no FIM da fila — regra do dono pro reativado que veio de um W.O.
+      // ("se o W.O. for para desativados, passa para última posição da lista de espera ao
+      // se reativar"). _waitlistPushBack é o ponto único disso e é idempotente.
+      window._waitlistPushBack(t, found);
       _movedToWait = { entry: found, idx: _idx };
     }
   }

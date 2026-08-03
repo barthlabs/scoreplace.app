@@ -68,6 +68,11 @@ const SUITES = [
   // ORDEM do box "📋 Ficaram de fora desta rodada": Lista de espera LOGO ABAIXO dos
   // Desativados, no seu box âmbar, DENTRO do <details>. Roda a IIFE real do bracket.js.
   'tests/ficaram-de-fora-ordem.test.js',
+  // W.O. DO ORGANIZADOR: destino do ausente (desativados × fim da fila) + o PRIMEIRO da
+  // fila assume a vaga e entra no ELENCO (fica até o fim do torneio). Roda a IIFE real do
+  // liga-substitution.js contra o grupo real do Confra. Falha se o substituto voltar a
+  // entrar só no grupo (sumiria no sorteio da rodada seguinte).
+  'tests/wo-destino-e-suplente.test.js',
   // Toast de push em foreground: campos vêm de payload.data (contrato DATA-ONLY da CF).
   // Falha se alguém voltar a ler só payload.notification → toast 'scoreplace.app' vazio.
   'tests/fcm-foreground-toast.test.js',

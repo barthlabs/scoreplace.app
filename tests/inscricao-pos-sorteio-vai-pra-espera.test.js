@@ -190,6 +190,11 @@ sec(function () {
       _phaseDrawDone: win._phaseDrawDone,
       _isPlayingCurrentPhase: win._isPlayingCurrentPhase,
       _participantUids: win._participantUids,
+      // v1.6.88: a reativação passou a entrar no FIM da fila via _waitlistPushBack
+      // (a espera virou fila com ordem declarada). Sem ele no sandbox, a função real
+      // estoura — que é o teste avisando que a dependência é de verdade.
+      _waitlistPushBack: win._waitlistPushBack,
+      _getWaitlist: win._getWaitlist,
       _userMatchesParticipant: (u, p) => !!(p && p.uid && u && u.uid && p.uid === u.uid),
       _warn: () => {},
       FirestoreDB: { saveTournament: () => Promise.resolve() },
