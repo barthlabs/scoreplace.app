@@ -3821,6 +3821,22 @@ window._openLiveScoring = function(tId, matchId, opts) {
     return window._sportIcon ? window._sportIcon(sn) : '🎾';
   })();
 
+  // ── Placa de gelo (v1.6.88) ────────────────────────────────────────────────
+  // Gelo, nunca branco absoluto: o branco puro estoura sob sol e cria halo.
+  var LIVE_ICE = '#EAF0F6';
+  // REFERÊNCIA DE TAMANHO DO NÚMERO — canon do dono, reforçado em ago/2026:
+  // "0-15-30-40-AD não pode ter diferença no tamanho (altura/largura), em pé ou
+  // deitado". O corpo NUNCA sai do valor atual: sai do PIOR CASO desta lista,
+  // medido na fonte real — trocar 0→15→40 não mexe um pixel. (O bug clássico que
+  // isso mata: dimensionar por nº de caracteres, que fazia "0" sair maior que "15".)
+  //
+  // "AD" ficou FORA da lista de propósito. Ele é o único valor de LETRAS e é ~40%
+  // mais largo que "40" na fonte do sistema: pô-lo na referência encolhia o número
+  // em 28% em TODA partida por causa de um estado que dura dois pontos. Em vez
+  // disso ele é comprimido na horizontal (_liveSqueeze) até a mesma caixa dos
+  // dígitos — mesma altura, mesma largura, sem nada saltando ao entrar a vantagem.
+  var LIVE_NUM_REF = ['0', '15', '30', '40'];
+
   // v2.2.24-beta: toggles da tela de estatísticas (Sortear Duplas / Duplas
   // Mistas / Rei-Rainha) referenciados pelo finished-render do _render. Estes
   // identificadores existiam SÓ no escopo do _openCasualMatch (setup/lobby);
@@ -6444,17 +6460,189 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // (a referência é sempre "40", não o valor atual → sem glitch por conteúdo),
     // e o slider "Placar" cresce até ~99% e trava (não clipa). Mede clientWidth em
     // DUPLO RAF (layout assentado). Também limita pela altura da metade.
+    // ── Ajuste do vão em PAISAGEM (v1.6.88) ────────────────────────────────────
+    // Ordem de prioridade, na ordem em que o dono pediu:
+    //  1. o GAMES ocupa as duas linhas do vão (quase encosta em cima e nas placas);
+    //  2. o centro é RESERVADO — o conjunto fica no eixo exato da tela;
+    //  3. o nome CEDE FONTE antes de truncar (encolhe até 72%, foto junto).
+    // Sem (3) o nome longo era coberto pelo GAMES; com corte duro, "Kelly Barth"
+    // virava "Kelly B…" numa dupla comum. Esta ordem é a única que passou nos
+    // quatro cenários medidos (duplas, simples, nome extenso, desktop).
+    var _lsFitVao = function(root) {
+      var vao = root.querySelector('#ls-vao');
+      if (!vao) return;
+      var games = root.querySelector('#ls-games');
+      var stacks = root.querySelectorAll('.court-side');
+      var col = vao.parentNode;
+      var H = col.clientHeight || 0, W = vao.clientWidth || 0;
+      if (H <= 0 || W <= 0 || !stacks.length) return;
+
+      // (a) nomes ocupam uma fatia FIXA da altura da tela — nunca "o vão
+      // disponível", que é justamente o que eles ocupam (limite circular: no
+      // desktop os nomes ficavam presos em 20px mesmo com a tela inteira sobrando).
+      var alvo = H * 0.26;
+      var fit = 1;
+      for (var p = 0; p < 6; p++) {
+        var alta = 0;
+        for (var s = 0; s < stacks.length; s++) alta = Math.max(alta, stacks[s].offsetHeight);
+        if (alta <= 0) break;
+        var k = alvo / alta;
+        if (Math.abs(k - 1) < 0.02) break;
+        fit = Math.max(0.72, Math.min(2.2, fit * k));
+        vao.style.setProperty('--live-name-fit', fit);
+        for (var z = 0; z < stacks.length; z++) {
+          var avs = stacks[z].querySelectorAll('.live-av-wrap');
+          for (var a = 0; a < avs.length; a++) avs[a].style.zoom = fit;
+        }
+      }
+
+      if (!games) return;
+      // (b) o GAMES enche a altura do vão
+      var gnums = games.querySelectorAll('.ls-g-num');
+      var _fitGames = function() {
+        var vh = vao.clientHeight - 12;
+        for (var g = 0; g < 6 && vh > 20; g++) {
+          var gh = games.offsetHeight;
+          if (gh <= 0) break;
+          var kg = vh / gh;
+          if (Math.abs(kg - 1) < 0.02) break;
+          for (var gi = 0; gi < gnums.length; gi++) {
+            var fg = parseFloat(getComputedStyle(gnums[gi]).fontSize) * kg;
+            gnums[gi].style.fontSize = fg + 'px';
+          }
+          vh = vao.clientHeight - 12;
+        }
+      };
+      _fitGames();
+
+      // (c) folga lateral: quem passou do limite recua a fonte (nunca trunca antes)
+      var FOLGA = 20;
+      for (var t = 0; t < 5; t++) {
+        var gr = games.getBoundingClientRect(), ok = true;
+        for (var i = 0; i < stacks.length; i++) {
+          var rr = stacks[i].getBoundingClientRect();
+          var sobra = (rr.left < gr.left) ? (gr.left - rr.right) : (rr.left - gr.right);
+          if (sobra < FOLGA && fit > 0.72) {
+            ok = false;
+            fit = Math.max(0.72, fit * 0.94);
+          }
+        }
+        if (ok) break;
+        vao.style.setProperty('--live-name-fit', fit);
+        for (var z2 = 0; z2 < stacks.length; z2++) {
+          var avs2 = stacks[z2].querySelectorAll('.live-av-wrap');
+          for (var a2 = 0; a2 < avs2.length; a2++) avs2[a2].style.zoom = fit;
+        }
+        // o nome encolheu → o vão encolheu → o GAMES precisa ser refeito, senão
+        // ele sobra pra baixo e INVADE a placa (medido: -3px com nome extenso).
+        _fitGames();
+      }
+    };
+
+    // ── Peso do número (v1.6.88) ───────────────────────────────────────────────
+    // O peso do tipo já era 900 (o máximo do sistema). O que faz o número parecer
+    // FINO na placa clara é ótica: escuro sobre claro lê mais magro que claro sobre
+    // escuro. Um contorno de 1,2% do corpo devolve a presença sem borrar o desenho.
+    var _liveInkWeight = function(n, fs) {
+      var s = (fs * 0.012) + 'px';
+      n.style.webkitTextStroke = s + ' currentColor';
+      n.style.setProperty('-webkit-text-stroke', s + ' currentColor');
+      n.style.paintOrder = 'stroke fill';
+    };
+
+    // Comprime na horizontal só o valor que não cabe na caixa dos dígitos — na
+    // prática, "AD". Devolve 1 quando cabe (todos os números caem aqui).
+    var _liveSqueeze = function(n, half) {
+      var prev = n.style.transform;
+      n.style.transform = 'none';
+      var w = n.scrollWidth || n.getBoundingClientRect().width;
+      n.style.transform = prev;
+      var maxW = (half.clientWidth || 0) * 0.94;
+      if (!(w > 0) || !(maxW > 0) || w <= maxW) return 1;
+      return maxW / w;
+    };
+
+    // Métricas de TINTA (retângulo do desenho) via canvas. Devolve null quando o
+    // browser não expõe actualBoundingBox — aí o chamador cai no fit por caixa.
+    var _liveInkCtx = null;
+    var _liveInk = function(fontSpec, txt) {
+      if (!_liveInkCtx) {
+        var c = document.createElement('canvas');
+        _liveInkCtx = c.getContext ? c.getContext('2d') : null;
+      }
+      if (!_liveInkCtx) return null;
+      _liveInkCtx.font = fontSpec;
+      var m = _liveInkCtx.measureText(txt);
+      if (m.actualBoundingBoxAscent == null || m.fontBoundingBoxAscent == null) return null;
+      var h = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+      var w = m.actualBoundingBoxRight + m.actualBoundingBoxLeft;
+      if (!(h > 0) || !(w > 0)) return null;
+      return {
+        w: w, h: h, asc: m.actualBoundingBoxAscent, desc: m.actualBoundingBoxDescent,
+        esq: m.actualBoundingBoxLeft, dir: m.actualBoundingBoxRight, avanco: m.width,
+        fAsc: m.fontBoundingBoxAscent, fDesc: m.fontBoundingBoxDescent
+      };
+    };
+
+    // Fit por tinta (paisagem). Devolve true quando aplicou; false = sem suporte.
+    var _liveInkFit = function(halves, minW, minH, ps) {
+      var n0 = halves[0].querySelector('.ls-plate-num');
+      if (!n0 || minH === Infinity) return false;
+      var cs0 = getComputedStyle(n0);
+      var spec100 = (cs0.fontWeight || '900') + ' 100px ' + cs0.fontFamily;
+      // pior caso da lista: o corpo serve a 0/15/30/40/AD sem exceção
+      var refW = 0, refH = 0;
+      for (var i = 0; i < LIVE_NUM_REF.length; i++) {
+        var r = _liveInk(spec100, LIVE_NUM_REF[i]);
+        if (!r) return false;
+        if (r.w > refW) refW = r.w;
+        if (r.h > refH) refH = r.h;
+      }
+      // tinta a 90% da altura e no máximo 92% da largura; o slider do usuário (ps)
+      // multiplica, e o teto de 96% garante que nunca clipa.
+      var fs = Math.min(minH * 0.90 * 100 / refH, minW * 0.92 * 100 / refW) * ps;
+      fs = Math.min(fs, minH * 0.96 * 100 / refH, minW * 0.96 * 100 / refW);
+      fs = Math.floor(fs);
+      if (fs < 12) return false;
+      var specFs = (cs0.fontWeight || '900') + ' ' + fs + 'px ' + cs0.fontFamily;
+      halves.forEach(function(h) {
+        var n = h.querySelector('.ls-plate-num');
+        if (!n) return;
+        n.style.fontSize = fs + 'px';
+        n.style.lineHeight = '1';
+        var sx = _liveSqueeze(n, h); // 1 pros dígitos; < 1 só no "AD"
+        var t = _liveInk(specFs, (n.textContent || '').trim() || '0');
+        if (t) {
+          // centra a TINTA (não a caixa): o "1" tem folga lateral grande e o
+          // desenho saía visivelmente fora do eixo da placa.
+          var dx = (t.avanco / 2) - ((t.dir - t.esq) / 2);
+          var baseY = (fs - (t.fAsc + t.fDesc)) / 2 + t.fAsc;
+          var dy = (fs / 2) - (baseY - (t.asc - t.desc) / 2);
+          n.style.transform = 'translate(' + dx + 'px,' + dy + 'px)' + (sx < 1 ? ' scaleX(' + sx + ')' : '');
+        } else {
+          n.style.transform = (sx < 1 ? 'scaleX(' + sx + ')' : 'none');
+        }
+        _liveInkWeight(n, fs);
+      });
+      return true;
+    };
+
     var _doFitLivePlateText = function(ov) {
       var halves = ov.querySelectorAll('.ls-score-half');
       if (!halves.length) return;
       var ps = parseFloat(getComputedStyle(ov).getPropertyValue('--live-plate-scale')) || 1;
       if (!(ps > 0)) ps = 1;
-      // largura de "40" (pior caso) a 100px, medindo a fonte real da 1ª metade.
+      // largura do PIOR CASO da lista (0/15/30/40/AD) a 100px, medindo a fonte
+      // real da 1ª metade. v1.6.88: era só "40" — "AD" pode ser mais largo em
+      // algumas fontes e estouraria a placa.
       var probe = document.createElement('span');
       probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;font-weight:900;font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;font-size:100px;';
-      probe.textContent = '40';
       halves[0].appendChild(probe);
-      var w2 = probe.scrollWidth;
+      var w2 = 0;
+      for (var _ri = 0; _ri < LIVE_NUM_REF.length; _ri++) {
+        probe.textContent = LIVE_NUM_REF[_ri];
+        if (probe.scrollWidth > w2) w2 = probe.scrollWidth;
+      }
       if (probe.parentNode) probe.parentNode.removeChild(probe);
       if (w2 <= 0) return;
       var minW = Infinity, minH = Infinity;
@@ -6463,6 +6651,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
         if (h.clientHeight > 10 && h.clientHeight < minH) minH = h.clientHeight;
       });
       if (minW === Infinity) return;
+      // ── PAISAGEM (v1.6.88): dimensiona pela TINTA, não pela caixa da fonte ──
+      // A caixa carrega ascendente/descendente que algarismo nenhum usa: medindo
+      // por ela a caixa ocupava 90% da placa e a TINTA só 64%. Com measureText
+      // (actualBoundingBox) o desenho passa a ocupar 90% da altura de fato.
+      // O corpo continua saindo do PIOR CASO da lista → 0/15/30/40/AD idênticos.
+      if (window.innerWidth > window.innerHeight && _liveInkFit(halves, minW, minH, ps)) return;
       // "40" ocupa 96% da largura no padrão (ps=1) — o máximo que cabe em 2
       // dígitos lado a lado sem clipar; teto = 99% (nunca estoura). Em retrato a
       // LARGURA é o limite físico (não dá pra fazer o número muito mais alto sem
@@ -6480,7 +6674,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
       if (fs < 12) return;
       halves.forEach(function(h) {
         var n = h.querySelector('.ls-plate-num');
-        if (n) { n.style.fontSize = fs + 'px'; n.style.transform = 'scaleY(' + SY + ')'; }
+        if (n) {
+          n.style.fontSize = fs + 'px';
+          var sx = _liveSqueeze(n, h); // 1 pros dígitos; < 1 só no "AD"
+          n.style.transform = 'scaleY(' + SY + ')' + (sx < 1 ? ' scaleX(' + sx + ')' : '');
+          _liveInkWeight(n, fs);
+        }
       });
     };
     var _fitLivePlateText = function() {
@@ -6564,20 +6763,33 @@ window._openLiveScoring = function(tId, matchId, opts) {
       : '';
     // Metade tocável por time (cor do time, tinta de fundo, número colorido).
     // A metade INTEIRA é o botão +1. Sem placa branca, sem ▲/▼.
+    // v1.6.88 — PLACA DE GELO (dono: "quero a placa branca no 15-0 de volta… fundo
+    // gelo, não branco absoluto, para tentar mais contraste"). A metade inteira é a
+    // placa; a tinta escurece porque azul/vermelho CLAROS sobre gelo cairiam pra
+    // ~2,4:1 de contraste (sobre o fundo escuro davam 5,9:1). Medido: #123A9E dá
+    // 8,6:1 e #9B1414 dá 7,3:1 sobre #EAF0F6 — segue azul e vermelho, e legível
+    // em quadra sob sol. A cor do time continua nos nomes e na borda da placa.
     var _scoreHalf = function(team) {
-      var clr = team === 1 ? '#60A5FA' : '#F87171';
-      var tint = team === 1 ? 'rgba(96,165,250,0.16)' : 'rgba(248,113,113,0.15)';
+      var clr = team === 1 ? '#123A9E' : '#9B1414';
+      var edge = team === 1 ? 'rgba(18,58,158,0.35)' : 'rgba(155,20,20,0.30)';
       var display = team === 1 ? p1Display : p2Display;
       var tag = state.isFinished ? 'div' : 'button';
       var act = state.isFinished ? '' : 'onclick="window._liveScorePoint(' + team + ')" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'"';
-      return '<' + tag + ' class="ls-score-half" ' + act + ' style="flex:1;min-width:0;height:100%;border:none;cursor:' + (state.isFinished ? 'default' : 'pointer') + ';background:' + tint + ';border-radius:16px;display:flex;align-items:center;justify-content:center;padding:0;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform 0.08s;">' +
+      return '<' + tag + ' class="ls-score-half" ' + act + ' style="flex:1;min-width:0;height:100%;border:1px solid ' + edge + ';cursor:' + (state.isFinished ? 'default' : 'pointer') + ';background:' + LIVE_ICE + ';border-radius:16px;display:flex;align-items:center;justify-content:center;padding:0;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform 0.08s;">' +
         '<span class="ls-plate-num" style="font-size:clamp(2.5rem,16vw,7rem);font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;transform:scaleY(1.35);transform-origin:center;">' + display + '</span>' +
       '</' + tag + '>';
     };
     // Desfazer — ÚNICO botão, full-width, abaixo de tudo (safe-area).
+    // v1.6.88: altura PROPORCIONAL (vh) em vez de 13px fixos. O fixo pesava 11,7%
+    // da tela no celular DEITADO (onde falta altura) e 5,4% em pé — agora encolhe
+    // onde aperta e cresce onde sobra, com piso e teto. `min-height:0` é obrigatório:
+    // `@media (max-width:767px){button{min-height:44px}}` (responsive.css) trava
+    // qualquer botão em 44px no retrato — era ELA, não o padding, que segurava a
+    // barra em pé. O piso de ~24px é seguro porque o alvo de toque é a LARGURA
+    // INTEIRA da tela; aqui a altura é questão de leitura, não de acerto do dedo.
     var _undoBar = (!state.isFinished)
-      ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:none;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;padding:13px 0 calc(13px + env(safe-area-inset-bottom,0px));font-size:0.95rem;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
-        '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>Desfazer</button>'
+      ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:none;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;padding:clamp(4px,0.9vh,8px) 0 calc(clamp(4px,0.9vh,8px) + env(safe-area-inset-bottom,0px));font-size:clamp(0.78rem,1.9vh,0.92rem);line-height:1;min-height:0;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
+        '<svg viewBox="0 0 24 24" style="width:clamp(15px,2.2vh,18px);height:clamp(15px,2.2vh,18px);flex:0 0 auto;" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>Desfazer</button>'
       : '';
     var _gameLabelRow = gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '';
     var _portFinishRow = finishBtn; finishBtn = '';
@@ -6588,29 +6800,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // PLACAR colorido GRANDE embaixo. Sem scaleY (o fit deixa o número encher a
       // altura da metade larga → muito maior que no 3-colunas). Time DIREITO
       // espelhado (nome à esquerda, foto à DIREITA, alinhado à direita).
-      var _lsTopBar = showGamesBox
-        ? '<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:clamp(16px,4vw,40px);padding:clamp(4px,1vh,8px) 0;">' +
-            (_showSets ? '<div style="display:flex;align-items:center;gap:6px;">' +
-              '<span style="font-size:0.62rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
-              '<span style="font-size:1.3rem;font-weight:800;color:' + (leftTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;">' + _setsLeftN + '</span>' +
-              '<span style="font-size:0.9rem;color:rgba(255,255,255,0.25);">–</span>' +
-              '<span style="font-size:1.3rem;font-weight:800;color:' + (rightTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;">' + _setsRightN + '</span>' +
-            '</div>' : '') +
-            '<div style="display:flex;align-items:center;gap:6px;">' +
-              '<span style="font-size:0.62rem;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Games</span>' +
-              '<span style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-              '<span style="font-size:calc(1.1rem * var(--live-score-scale,1));color:rgba(255,255,255,0.25);">–</span>' +
-              '<span style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
-            '</div>' +
-          '</div>'
-        : '';
-      // Nome em UMA linha: [🎾?] [av]Nome1 / [av]Nome2 (mirror = nome[av], à direita).
-      var _lsNameLine = function(team, mirror) {
+      // Nomes EMPILHADOS, um sobre o outro, cada time do seu lado (v1.6.88).
+      // Com o SETS fora do corpo, a linha que sobrou é usada em altura pelos
+      // nomes (mais legíveis de longe) em vez de esticar numa linha só.
+      var _lsNameStack = function(team, mirror) {
         var players = team === 1 ? p1Players : p2Players;
         var nameClr = team === 1 ? '#DBEAFE' : '#FECACA';
         var bgClr = team === 1 ? 'rgba(59,130,246,0.12)' : 'rgba(239,68,68,0.12)';
         var bdrClr = team === 1 ? 'rgba(59,130,246,0.30)' : 'rgba(239,68,68,0.30)';
-        var _ballShown = false, ballHtml = '', chunks = [];
+        var _ballShown = false, rows = [];
         for (var ni = 0; ni < players.length; ni++) {
           var pn = players[ni], isServing = false;
           if (serverInfo && !state.isFinished && serverInfo.team === team) {
@@ -6619,43 +6817,79 @@ window._openLiveScoring = function(tId, matchId, opts) {
             if (isServing) _ballShown = true;
           }
           var fullName = window._safeHtml(pn);
-          var avatar = '<span class="live-av-wrap">' + _liveAvatarHtml(pn, 24) + '</span>';
-          var nameSpan = '<span onclick="window._liveEditName(' + team + ',' + ni + ')" style="cursor:pointer;font-size:calc(clamp(0.85rem,2.4vw,1.15rem) * var(--live-name-scale,1));font-weight:' + (isServing ? '800' : '700') + ';color:' + (isServing ? '#fbbf24' : nameClr) + ';white-space:nowrap;">' + fullName + '</span>';
+          var avatar = '<span class="live-av-wrap" style="display:inline-flex;flex:0 0 auto;">' + _liveAvatarHtml(pn, 24) + '</span>';
+          // --live-name-fit é o fator que o ajuste de layout escreve; --live-name-scale
+          // continua sendo o slider do usuário. Multiplicam-se — o slider nunca morre.
+          var nameSpan = '<span onclick="window._liveEditName(' + team + ',' + ni + ')" style="cursor:pointer;font-size:calc(clamp(0.85rem,2.4vw,1.15rem) * var(--live-name-scale,1) * var(--live-name-fit,1));font-weight:' + (isServing ? '800' : '700') + ';color:' + (isServing ? '#fbbf24' : nameClr) + ';white-space:nowrap;line-height:1.15;">' + fullName + '</span>';
+          var ballHtml = '';
           if (isServing) {
             var dragAttr = _canDragServe ? ' draggable="true" data-serve-ball="true"' : '';
             var dragStyle = _canDragServe ? 'cursor:grab;' : 'cursor:default;';
             var ballGlow = _canDragServe ? 'filter:drop-shadow(0 0 4px rgba(255,200,0,0.6));' : 'filter:drop-shadow(0 0 2px rgba(255,200,0,0.3));opacity:0.85;';
-            ballHtml = '<span' + dragAttr + ' data-serve-drop="' + team + '-' + ni + '" style="font-size:0.9rem;line-height:1;flex-shrink:0;' + dragStyle + ballGlow + '">' + _sportBall + '</span>';
+            ballHtml = '<span' + dragAttr + ' data-serve-drop="' + team + '-' + ni + '" style="font-size:calc(0.9rem * var(--live-name-fit,1));line-height:1;flex:0 0 auto;' + dragStyle + ballGlow + '">' + _sportBall + '</span>';
           }
-          chunks.push('<span data-serve-drop="' + team + '-' + ni + '" style="display:inline-flex;align-items:center;gap:5px;min-width:0;">' + (mirror ? nameSpan + avatar : avatar + nameSpan) + '</span>');
+          // a bolinha fica NA LINHA de quem saca (empilhado, ela sozinha numa
+          // linha própria ficava órfã no topo do bloco).
+          var inner = mirror ? (nameSpan + avatar + ballHtml) : (ballHtml + avatar + nameSpan);
+          rows.push('<span data-serve-drop="' + team + '-' + ni + '" style="display:flex;align-items:center;gap:5px;min-width:0;justify-content:' + (mirror ? 'flex-end' : 'flex-start') + ';">' + inner + '</span>');
         }
-        var body = chunks.join('<span style="color:rgba(255,255,255,0.25);font-weight:700;flex-shrink:0;">/</span>');
-        var inner = mirror ? body + ballHtml : ballHtml + body;
-        return '<div class="court-side" data-court-side="' + (mirror ? 'right' : 'left') + '" style="flex:0 0 auto;max-width:100%;display:flex;align-items:center;gap:6px;justify-content:' + (mirror ? 'flex-end' : 'flex-start') + ';padding:6px 10px;background:' + bgClr + ';border:1px solid ' + bdrClr + ';border-radius:12px;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' + inner + '</div>';
+        return '<div class="court-side" data-court-side="' + (mirror ? 'right' : 'left') + '" style="flex:0 0 auto;max-width:40%;display:flex;flex-direction:column;gap:4px;align-items:' + (mirror ? 'flex-end' : 'flex-start') + ';padding:6px 10px;background:' + bgClr + ';border:1px solid ' + bdrClr + ';border-radius:12px;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' + rows.join('') + '</div>';
       };
-      var _lsTeamCol = function(team, mirror) {
-        return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;padding:2px;' + (mirror ? 'align-items:flex-end;' : 'align-items:flex-start;') + '">' +
-            _lsNameLine(team, mirror) +
-            '<div style="flex:1;min-height:0;width:100%;display:flex;">' + _scoreHalf(team) + '</div>' +
-          '</div>';
-      };
+      // GAMES no MIOLO do vão: rótulo pequeno ENTRE os números (no lugar do
+      // traço), conjunto no eixo exato da tela, ocupando as duas linhas — quase
+      // encostando na barra de cima e nas placas. pointer-events:none pra não
+      // roubar o toque das metades.
+      var _lsGames = showGamesBox
+        ? '<div id="ls-games" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:clamp(8px,1.4vw,16px);z-index:2;pointer-events:none;">' +
+            '<span class="ls-g-num" style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
+            '<span style="font-size:0.6rem;font-weight:700;letter-spacing:0.14em;color:var(--text-muted);text-transform:uppercase;line-height:1;flex:0 0 auto;">Games</span>' +
+            '<span class="ls-g-num" style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
+          '</div>'
+        : '';
+      // SETS sobe pra barra superior (fora do corpo) — libera a linha inteira.
+      var _hdrSets = document.getElementById('live-hdr-sets');
+      if (_hdrSets) {
+        if (_showSets) {
+          _hdrSets.innerHTML =
+            '<span style="font-size:0.62rem;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
+            '<span style="font-size:1.15rem;font-weight:800;color:' + (leftTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
+            '<span style="font-size:0.85rem;color:rgba(255,255,255,0.25);">–</span>' +
+            '<span style="font-size:1.15rem;font-weight:800;color:' + (rightTeam === 1 ? '#60A5FA' : '#F87171') + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>';
+          _hdrSets.style.display = 'flex';
+        } else {
+          _hdrSets.innerHTML = ''; _hdrSets.style.display = 'none';
+        }
+      }
+      // Duas linhas: (1) vão com nomes nas pontas + GAMES no meio; (2) placas.
+      // Separá-las é o que garante PLACAS SEMPRE IGUAIS: elas dividem a mesma
+      // linha flex, então nome mais alto de um lado não encolhe a placa dele.
       container.innerHTML =
         '<div style="display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;gap:0;">' +
           _gameLabelRow +
-          _lsTopBar +
-          '<div style="flex:1;min-height:0;display:flex;align-items:stretch;width:100%;gap:8px;padding:2px clamp(6px,1.5vw,12px) 4px;">' +
-            _lsTeamCol(leftTeam, false) +
-            _lsTeamCol(rightTeam, true) +
+          '<div id="ls-vao" style="position:relative;flex:0 0 auto;display:flex;align-items:stretch;justify-content:space-between;width:100%;gap:8px;padding:clamp(4px,1vh,8px) clamp(6px,1.5vw,12px) clamp(3px,0.8vh,6px);">' +
+            _lsNameStack(leftTeam, false) +
+            _lsNameStack(rightTeam, true) +
+            _lsGames +
+          '</div>' +
+          '<div style="flex:1;min-height:0;display:flex;align-items:stretch;width:100%;gap:8px;padding:0 clamp(6px,1.5vw,12px) 4px;">' +
+            _scoreHalf(leftTeam) +
+            _scoreHalf(rightTeam) +
           '</div>' +
           swapHint +
           _undoBar +
           _portFinishRow +
         '</div>';
+      _lsFitVao(container);
       _fitLivePlateText();
       setTimeout(function() { _setupCourtSwapDrag(); }, 30);
     } else {
       // ── PORTRAIT: 5 linhas proporcionais preenchendo a tela inteira ──
       // Ordem: Games+Desfazer → Times → Placares → Botões ↑ → Botões ↓
+      // v1.6.88: em pé o SETS continua no corpo (bloco _topBlock) — o slot do
+      // cabeçalho é só de paisagem. Sem este reset, girar paisagem→retrato
+      // deixaria o SETS duplicado (um no topo, outro no corpo).
+      var _hdrSetsP = document.getElementById('live-hdr-sets');
+      if (_hdrSetsP) { _hdrSetsP.innerHTML = ''; _hdrSetsP.style.display = 'none'; }
       container.style.overflow = 'hidden';
       container.style.padding = '0';
 
@@ -7786,6 +8020,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // saque do set (só o time que não abriu) · -1 = travado. O relógio usa a
       // MUDANÇA de fase pra pedir confirmação entre o 1º e o 2º game.
       servePickPhase: _elig.length > 0 ? state.totalGamesPlayed : -1,
+      // v1.6.88: o CELULAR diz quando a escolha está aberta; o relógio não deduz.
+      // Antes o relógio abria o seletor só na fase 1 (2º sacador) e a fase 0 (1º
+      // sacador) era coberta pela tela "Iniciar" — que NÃO aparece na 2ª partida,
+      // porque ela já nasce ativa. Resultado: a segunda partida começava sem
+      // ninguém escolher quem saca. Este campo é o mesmo `_needsServePick()` que
+      // desenha a Tela 1/2 no celular, então os dois lados abrem juntos.
+      servePickOpen: _needsServePick(),
       // Quem OCUPA o slot em disputa agora (o motor sempre tem um padrão —
       // no 2º saque é opponents[0], escolhido sem ninguém confirmar). O relógio
       // abre o seletor já com este nome aceso, então "Confirmar" sem mexer em
@@ -8994,6 +9235,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // bar never crops the pinned bottom action buttons.
   var overlay = document.createElement('div');
   overlay.id = 'live-scoring-overlay';
+  // v1.6.88 (dono): dica NUNCA aparece durante o placar ao vivo. hints.js já se
+  // recusa a criar dica com este overlay no DOM; aqui matamos o balão que já
+  // estivesse aberto no instante do clique que abriu o placar.
+  try { if (window._hintSystem && window._hintSystem.dismiss) window._hintSystem.dismiss(); } catch (e) {}
   // v0.17.52: bg respeita tema (var(--bg-darker)) em vez de hardcoded.
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;height:100%;background:var(--bg-darker);z-index:100002;display:flex;flex-direction:column;overflow:hidden;touch-action:manipulation;';
 
@@ -9009,24 +9254,37 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // puxa 12px pra cima — o máximo antes de encavalar no relógio. Antes aqui era
   // `10px + inset` (22px a MAIS que a topbar), desperdiçando faixa no cabeçalho.
   // max() protege quem não tem notch (inset=0).
-  var headerPadTop = 'max(8px, calc(env(safe-area-inset-top, 0px) - 12px))';
+  // v1.6.88: altura da barra também virou proporcional (vh), como a do Desfazer,
+  // mas com MAIS folga que ela — esta carrega botões, a de baixo é só texto.
+  // Medido: 52px fixos pesavam 13,3% da tela no celular deitado.
+  var headerPadY = 'clamp(5px,1.2vh,10px)';
+  var headerPadTop = 'max(' + headerPadY + ', calc(env(safe-area-inset-top, 0px) - 12px))';
   // padding lateral respeita o safe-area (paisagem/notch): sem isso o "✕ Fechar" cai
   // debaixo do corte da tela. max() mantém 12px em quem não tem inset.
   var headerPadX = 'max(12px, env(safe-area-inset-right, 0px))';
-  var headerHtml = '<div style="background:' + headerBg + ';padding:' + headerPadTop + ' ' + headerPadX + ' 8px max(12px, env(safe-area-inset-left, 0px));display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:4px;">' +
+  // v1.6.88: contexto na MESMA linha do "AO VIVO", separado por filete. Em casual
+  // o contexto é a modalidade/título; em torneio é o nome + a rodada. Trunca com
+  // reticências e nunca empurra os botões pra fora.
+  var _hdrCtx = isCasual
+    ? casualTitle
+    : ((t && t.name) ? (t.name + (matchLabel ? ' · ' + matchLabel : '')) : matchLabel);
+  var headerHtml = '<div style="position:relative;background:' + headerBg + ';padding:' + headerPadTop + ' ' + headerPadX + ' ' + headerPadY + ' max(12px, env(safe-area-inset-left, 0px));display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:4px;">' +
     // Left: AO VIVO + match info.
     // flex:1 1 auto + min-width:0 = ENCOLHE. Era `flex:0 0 auto` (não encolhe): com nome
     // de torneio/partida comprido este bloco empurrava o grupo de botões pra fora da tela
     // e o "✕ Fechar" estourava à direita (relato do dono, 25/jul/2026). O min-width:0 que
     // já estava aqui não fazia nada sem permissão de encolher; o ellipsis do nome também
     // nunca disparava. Agora o nome trunca e os botões ficam sempre alcançáveis.
-    '<div style="display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;">' +
-      '<span style="font-size:1rem;">📡</span>' +
-      '<div style="min-width:0;">' +
-        '<div style="font-size:0.78rem;font-weight:800;color:#f87171;">AO VIVO</div>' +
-        '<div style="font-size:0.6rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(isCasual ? casualTitle : (t && t.name || matchLabel)) + '</div>' +
-      '</div>' +
+    '<div style="display:flex;align-items:center;gap:7px;flex:1 1 auto;min-width:0;">' +
+      '<span style="font-size:1rem;flex:0 0 auto;">📡</span>' +
+      '<span style="font-size:0.78rem;font-weight:800;color:#f87171;line-height:1;flex:0 0 auto;letter-spacing:0.02em;">AO VIVO</span>' +
+      '<span style="color:rgba(255,255,255,0.28);line-height:1;flex:0 0 auto;font-size:0.7rem;">|</span>' +
+      '<span style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1;">' + window._safeHtml(_hdrCtx) + '</span>' +
     '</div>' +
+    // SETS mora AQUI em paisagem (v1.6.88) — sai do corpo da tela e libera a linha
+    // pros nomes empilhados. Preenchido/escondido pelo _render() conforme a
+    // orientação; pointer-events:none pra não roubar clique dos botões.
+    '<div id="live-hdr-sets" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:none;align-items:center;gap:7px;pointer-events:none;"></div>' +
     // (o spacer saiu: `justify-content:space-between` já separa, e com o bloco da
     //  esquerda podendo encolher um spacer `flex:1` só roubava espaço dos botões)
     // Right: Reset + Close — NUNCA encolhem nem quebram (flex:0 0 auto + nowrap).
@@ -9034,8 +9292,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // v1.9.69: botão "⚙️ Configurar" no header, no lugar do antigo "Desfazer"
       // (que era redundante — o undo real é a setinha ↺ ao lado do placar de
       // games, que desfaz ponto a ponto). Engrenagem + texto = visível em quadra.
-      '<button class="live-vol-sm" onclick="window._liveScoreReset()" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">↺ Resetar</button>' +
-      '<button class="live-vol-sm" onclick="window._closeLiveScoring()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">✕ Fechar</button>' +
+      // v1.6.88: `min-height:0` + `line-height:1` — sem isso a regra global
+      // `@media(max-width:767px){button{min-height:44px}}` inflava a barra pra 61px
+      // no retrato, independente do padding.
+      '<button class="live-vol-sm" onclick="window._liveScoreReset()" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:8px;padding:5px 10px;font-size:0.7rem;line-height:1;min-height:0;font-weight:600;cursor:pointer;">↺ Resetar</button>' +
+      '<button class="live-vol-sm" onclick="window._closeLiveScoring()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:5px 10px;font-size:0.7rem;line-height:1;min-height:0;font-weight:600;cursor:pointer;">✕ Fechar</button>' +
     '</div>' +
   '</div>';
 

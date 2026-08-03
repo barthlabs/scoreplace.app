@@ -85,6 +85,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private String startServerName = "";
     private int startCurTeam = 0, startCurIdx = -1;
     private int lastServePhase = -99;   // detecta a virada 0→1 pra abrir o seletor
+    private boolean lastPickOpen = false; // detecta o celular ABRINDO a escolha do sacador
     private org.json.JSONArray serveEligible = null;
     private boolean serveOpen = false;
 
@@ -614,6 +615,16 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             if (servePhase == 1) serveOpen = true;
             if (servePhase == -1) serveOpen = false;
             lastServePhase = servePhase;
+        }
+        // v1.6.88: o celular manda. `servePickOpen` é o mesmo _needsServePick() que
+        // desenha a Tela 1/2 lá — inclui a fase 0 (1º sacador), que a virada de fase
+        // acima não cobria na SEGUNDA partida (ela já nasce ativa, então a tela
+        // "Iniciar", que era quem perguntava, não aparece). Sem isto o 2º jogo
+        // começava sem ninguém escolher o saque.
+        boolean pickOpen = s.optBoolean("servePickOpen", false);
+        if (pickOpen != lastPickOpen) {
+            if (pickOpen) { serveOpen = true; pendingPickName = null; }
+            lastPickOpen = pickOpen;
         }
         // Barra do sacador no rodapé: só durante os 2 primeiros jogos.
         // A pílula "Sacador" saiu (dono, 25/jul/2026): "não tem 1 linha para sacador — a

@@ -45,6 +45,11 @@ struct ScoreState: Decodable {
     // Quem OCUPA o slot em disputa agora. O seletor abre com este nome já aceso,
     // então "Confirmar" sem tocar em nada = manter o que o motor já assumiu.
     var servePickCurrent: String = ""
+    // v1.6.88: o celular diz quando a escolha do sacador está ABERTA (mesmo
+    // _needsServePick que desenha a Tela 1/2 lá). O relógio não deduz pela fase:
+    // a fase 0 (1º sacador) era coberta só pela tela "Iniciar", que não aparece
+    // na SEGUNDA partida — e ela começava sem ninguém escolher o saque.
+    var servePickOpen: Bool = false
     // ── Rei/Rainha: 3 jogos, 4 pessoas, duplas trocam a cada jogo ──
     var reiRainha: Bool = false
     // 0=1º jogo · 1=2º · 2=3º · 3=série encerrada.
@@ -75,7 +80,7 @@ struct ScoreState: Decodable {
     // `winner` podem vir null e chaves opcionais (sets/matchId) podem faltar.
     enum CodingKeys: String, CodingKey {
         case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isCasual, isDoubles, isFinished, winner, tieRulePending, tiedAt
-        case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent
+        case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent, servePickOpen
         case reiRainha, rrRound, rrStandings, rrSuggest, hrMax
     }
     init() {}
@@ -106,6 +111,7 @@ struct ScoreState: Decodable {
         serveEligible = (try? c.decodeIfPresent([ServeSlot].self, forKey: .serveEligible)) ?? []
         servePickPhase = (try? c.decodeIfPresent(Int.self, forKey: .servePickPhase)) ?? -1
         servePickCurrent = (try? c.decodeIfPresent(String.self, forKey: .servePickCurrent)) ?? ""
+        servePickOpen = (try? c.decodeIfPresent(Bool.self, forKey: .servePickOpen)) ?? false
         reiRainha  = (try? c.decodeIfPresent(Bool.self, forKey: .reiRainha)) ?? false
         rrRound    = (try? c.decodeIfPresent(Int.self, forKey: .rrRound)) ?? 0
         rrStandings = (try? c.decodeIfPresent([RRStanding].self, forKey: .rrStandings)) ?? []

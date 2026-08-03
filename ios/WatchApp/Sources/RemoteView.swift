@@ -124,6 +124,14 @@ struct RemoteView: View {
             if phase == 1 { pickingServer = true }
             if phase == -1 { pickingServer = false }
         }
+        // v1.6.88: quem manda é o celular. `servePickOpen` é o mesmo
+        // _needsServePick() que desenha a Tela 1/2 lá — cobre a fase 0 (1º
+        // sacador), que o onChange acima não pegava na SEGUNDA partida: ela já
+        // nasce ativa, então a tela "Iniciar" (que era quem perguntava) não
+        // aparece, e o jogo começava sem ninguém escolher o saque.
+        .onChange(of: state.servePickOpen) { open in
+            if open { pendingPick = nil; pickingServer = true }
+        }
         // Variante de UMA closure de propósito: `onChange(of:initial:_:)` (duas
         // closures) é API de watchOS 10+ e barraria o Series 3 (watchOS 8) da Kelly.
         // Esta forma vale de watchOS 7 pra cima; está "deprecated" no 10+, mas é só
@@ -134,7 +142,7 @@ struct RemoteView: View {
         }
         // Abrir no meio da fase 1 (ex.: relógio conecta/abre já no 2º saque): o
         // onChange não dispara no estado inicial, então garante o seletor aqui.
-        .onAppear { if state.servePickPhase == 1 { pickingServer = true } }
+        .onAppear { if state.servePickPhase == 1 || state.servePickOpen { pickingServer = true } }
     }
 
     // Placar ao vivo pelo modelo de 3 SETORES (igual ao Iniciar): SETS na FAIXA DO
