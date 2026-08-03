@@ -494,6 +494,10 @@ const SUITES = [
   // de participants) e grava no storage dela por UID — o fallback posicional gravaria a
   // categoria em outra pessoa, em silêncio.
   'tests/analise-inclui-lista-de-espera.test.js',
+  // v1.7.3: grupo NOVO formado da lista de espera não fecha com mais de 1 HOMEM (regra do
+  // dono: evitar que atrasados formem um grupo mais forte). Vale no cliente E na CF — o
+  // _generateNextRound do servidor chama a mesma _tryFormMonarchWaitlistGroups.
+  'tests/grupo-espera-max-1-homem.test.js',
   // Botões CANCELAR do fluxo de sorteio são VERMELHOS (#dc2626), nunca transparentes. v1.3.103.
   'tests/draw-cancel-red-canon.test.js',
   // FANTASMA DE ARRASTE (bug ao vivo 26/jul): card de inscrito flutuando preso sobre a
