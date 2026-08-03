@@ -6502,7 +6502,50 @@ window.AppStore = {
   // do chamador é só pro estado imediato; a persistência do histórico é aqui (senão
   // a entrada some, já que o save é re-aplicado no fresco, não no doc local inteiro).
   async commitResultTx(tournamentId, matchId, payload, logMessage) {
-    var r = await this.commitTournamentTx(tournamentId, function (freshT) {
+    // v1.7: PRIMEIRO tenta a CF `applyMatchResult`, que valida no SERVIDOR quem pode
+    // lançar (resultEntry por fase, lado do jogador por uid, fase da negociação) e aplica
+    // com a MESMA _applyResultToTournament sobre o doc fresco.
+    //
+    // QUEDA AUTOMÁTICA, e é deliberada: QUALQUER falha — CF indisponível, rede, ou até
+    // recusa — cai no caminho local de sempre. O pior caso vira exatamente o comportamento
+    // de hoje, então o ciclo de lançamento por participante não pode regredir por causa
+    // desta estreia. A CF ainda NÃO é autoridade (as rules seguem deixando o participante
+    // escrever `matches` direto, pro app de loja antigo continuar lançando placar na
+    // quadra) — então cair no local não perde segurança que exista hoje.
+    // Ver [[project_result_launch_cf_evaluation]] §5.
+    var _viaCF = false;
+    if (typeof window._callApplyMatchResult === 'function') {
+      try {
+        var _res = await window._callApplyMatchResult({
+          tournamentId: String(tournamentId), matchId: String(matchId),
+          payload: payload, logMessage: logMessage || ''
+        });
+        var _d = (_res && _res.data) || {};
+        if (_d.ok) {
+          _viaCF = true;
+          // Sincroniza o local com o que o servidor gravou (mesmo padrão do drawRound):
+          // o listener também traria, mas esperar por ele deixaria a tela atrás do save.
+          if (_d.tournament) {
+            var _lt = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
+            if (_lt) {
+              Object.keys(_d.tournament).forEach(function (k) { _lt[k] = _d.tournament[k]; });
+              try { this._saveToCache(); } catch (_eC) {}
+            }
+          }
+        } else {
+          // Recusa do servidor: registra pra diagnóstico e deixa o caminho local decidir.
+          window._lastSaveError = { tournamentId: tournamentId, matchId: matchId,
+            area: 'applyMatchResult', reason: _d.reason || 'unknown', at: new Date().toISOString() };
+          if (window._warn) window._warn('[applyMatchResult] recusou: ' + (_d.reason || '?') + ' — caindo no caminho local');
+        }
+      } catch (e) {
+        window._lastSaveError = { tournamentId: tournamentId, matchId: matchId,
+          area: 'applyMatchResult', code: (e && e.code) || '', message: (e && e.message) || String(e),
+          at: new Date().toISOString() };
+        if (window._warn) window._warn('[applyMatchResult] falhou (' + ((e && e.code) || '?') + ') — caindo no caminho local');
+      }
+    }
+    var r = _viaCF ? true : await this.commitTournamentTx(tournamentId, function (freshT) {
       window._applyResultToTournament(freshT, matchId, payload);
       if (logMessage) {
         if (!Array.isArray(freshT.history)) freshT.history = [];

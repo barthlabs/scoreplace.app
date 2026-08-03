@@ -2137,6 +2137,47 @@ window._callCloseRound = function (payload) {
     });
 };
 
+// ── Chamador GENÉRICO de CF callable (v1.7) ──────────────────────────────────────────
+// Mesmo transporte dos _callDrawRound/_callCloseRound acima (fetch direto no endpoint
+// callable), com o nome da função como parâmetro. Nasceu porque a v1.7 precisava do
+// TERCEIRO clone do mesmo bloco — o quarto seria indefensável.
+// Os dois de cima NÃO foram migrados de propósito nesta leva: são o caminho quente do
+// sorteio e do fecho de rodada, já batidos em produção, e trocar o transporte deles
+// junto com a estreia do resultado misturaria dois riscos. Migração é faxina posterior.
+window._callCF = function (fnName, payload, unauthMsg) {
+    var fb = window.firebase;
+    var user = fb && fb.auth && fb.auth().currentUser;
+    if (!user) return Promise.reject(Object.assign(new Error(unauthMsg || 'Entre na sua conta.'), { code: 'functions/unauthenticated' }));
+    var pid = '';
+    try { pid = fb.app().options.projectId; } catch (e) {}
+    if (!pid) return Promise.reject(Object.assign(new Error('App não inicializado.'), { code: 'functions/internal' }));
+    var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + fnName;
+    return user.getIdToken().then(function (tok) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+            body: JSON.stringify({ data: payload })
+        });
+    }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+            if (j && j.error) {
+                var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
+                throw Object.assign(new Error(j.error.message || ('Falha em ' + fnName)),
+                    { code: 'functions/' + (st || 'internal') });
+            }
+            if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { code: 'functions/internal' });
+            return { data: (j && j.result) || {} };
+        });
+    });
+};
+
+// v1.7: lançamento de placar pela CF `applyMatchResult` (authz server-side: resultEntry
+// por fase, lado do jogador por uid, fase da negociação). NÃO é caminho exclusivo — o
+// commitResultTx cai no caminho local se isto falhar por qualquer motivo.
+window._callApplyMatchResult = function (payload) {
+    return window._callCF('applyMatchResult', payload, 'Entre na sua conta pra lançar o placar.');
+};
+
 // v1.3.75: CF-only da INTEGRAÇÃO TARDIA — o cliente só DISPARA; a CF `integrateLateEntries`
 // roda o motor (createExtraGames/rebuild/repFill/monarch) na transação e persiste. Espelha
 // _callDrawRound/_callCloseRound (mesmo transporte callable via fetch). Retorna {changed,...}.
