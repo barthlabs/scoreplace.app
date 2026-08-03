@@ -533,8 +533,16 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
   var _woPenVal = (typeof window._woAdvPenalty === 'function') ? window._woAdvPenalty(t) : 0;
   var html = '<div style="font-size:0.85rem;opacity:0.85;margin-bottom:10px;"><b>' + _safe(absentName) + '</b> leva W.O. (0 pts na rodada' + (_woPenVal ? ', ' + _woPenVal + ' nos Pontos Avançados' : '') + '). Quem entra no lugar?</div>';
   if (folgas.length > 0) {
-    html += '<div style="font-size:0.74rem;font-weight:700;color:#4ade80;margin:10px 0 6px;">Convidar da lista de espera / folgas' + (catLbl ? ' · categoria ' + _safe(catLbl) : '') + ' — o PRIMEIRO que aceitar entra e pontua de verdade</div>';
-    html += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:8px;">Toque pra marcar/desmarcar quem recebe o convite (todos marcados = convida todos).</div>';
+    var _souOrgHint = (typeof window._canManagePresence === 'function')
+      ? !!window._canManagePresence(t, window.AppStore && window.AppStore.currentUser) : false;
+    html += '<div style="font-size:0.74rem;font-weight:700;color:#4ade80;margin:10px 0 6px;">' + (_souOrgHint ? 'Substituir ou convidar' : 'Convidar') + ' da lista de espera / folgas' + (catLbl ? ' · categoria ' + _safe(catLbl) : '') + ' — o PRIMEIRO que aceitar entra e pontua de verdade</div>';
+    html += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:8px;">' +
+      (_souOrgHint ? '<b>▶️ Colocar</b> entra na hora, sem esperar aceite. Ou marque quem recebe o convite e use “Convidar selecionados” — aí o primeiro que aceitar entra.'
+                   : 'Toque pra marcar/desmarcar quem recebe o convite (todos marcados = convida todos).') + '</div>';
+    // AUTORIDADE decide a tela: organizador vê "Colocar agora" em cada candidato; o
+    // participante do grupo vê só o convite. [[project_wo_outcome_negotiation_canon]]
+    var _souOrg = (typeof window._canManagePresence === 'function')
+      ? !!window._canManagePresence(t, window.AppStore && window.AppStore.currentUser) : false;
     html += '<div id="liga-fill-cands">' + folgas.map(function (f) {
       // offCat NÃO some com a pessoa: mostra marcado, e o organizador decide se aceita a
       // quebra de categoria. Sumir era o que fazia a fila "não existir" na tela.
@@ -543,7 +551,11 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
         : (f.fromWaitlist ? '<span style="font-size:0.62rem;font-weight:700;background:rgba(255,255,255,0.08);color:var(--text-muted);padding:1px 6px;border-radius:5px;margin-left:6px;">lista de espera</span>' : '');
       var _bd = f.offCat ? 'rgba(251,191,36,0.5)' : 'rgba(16,185,129,0.55)';
       var _co = f.offCat ? '#fbbf24' : '#4ade80';
-      return '<button type="button" class="btn btn-outline" data-cand="1" data-on="1" data-uid="' + _safe(f.uid) + '" data-name="' + _safe(f.name) + '" onclick="window._ligaToggleCand(this)" style="width:100%;margin-bottom:6px;text-align:left;border-color:' + _bd + ';color:' + _co + ';">✅ ' + _safe(f.name) + _tag + '</button>';
+      var _pill = '<button type="button" class="btn btn-outline" data-cand="1" data-on="1" data-uid="' + _safe(f.uid) + '" data-name="' + _safe(f.name) + '" onclick="window._ligaToggleCand(this)" style="flex:1;min-width:0;text-align:left;border-color:' + _bd + ';color:' + _co + ';">✅ ' + _safe(f.name) + _tag + '</button>';
+      if (!_souOrg) return '<div style="margin-bottom:6px;display:flex;">' + _pill + '</div>';
+      // "Colocar agora" resolve na hora, sem esperar aceite — é o poder do organizador.
+      var _now = '<button type="button" class="btn btn-success" onclick="window._ligaSubstituteNow(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\',\'' + _esc(f.uid) + '\',\'' + _esc(f.name) + '\')" style="flex:0 0 auto;font-weight:800;white-space:nowrap;">▶️ Colocar</button>';
+      return '<div style="margin-bottom:6px;display:flex;gap:6px;align-items:stretch;">' + _pill + _now + '</div>';
     }).join('') + '</div>';
     html += '<button class="btn btn-success" style="width:100%;margin-top:4px;font-weight:800;" onclick="window._ligaInviteSelected(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">📨 Convidar selecionados</button>';
   } else {
@@ -557,6 +569,90 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
   html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:#fbbf24;" onclick="window._ligaFillGuestPrompt(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🎾 Completar com Jogador X</button>';
 
   if (window.showAlertDialog) window.showAlertDialog('Substituto', html, function () {}, { type: 'info', confirmText: 'Fechar' });
+};
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUBSTITUIÇÃO DIRETA (v1.6.91) — regra do dono, ago/2026:
+// _"no fluxo dos participantes eles CONVIDAM os da lista de espera. No fluxo do
+// organizador ele SUBSTITUI DIRETAMENTE se quiser. Pode convidar, mas pode substituir
+// diretamente."_
+//
+// Os dois fluxos moram no MESMO diálogo, e quem separa é a AUTORIDADE, não a tela:
+//   • participante do grupo  → só CONVIDA (o convidado precisa aceitar).
+//   • organizador/co-org/árbitro → vê também "▶️ Colocar agora", que resolve na hora.
+// O convite continua disponível pro organizador — ele escolhe. O que não existia era o
+// caminho direto: ele tinha que convidar e FICAR ESPERANDO alguém aceitar pra destravar
+// a rodada, mesmo sendo ele a autoridade que decide.
+//
+// Fecha o ciclo inteiro numa mutação: suplente entra no grupo E no elenco, sai da fila,
+// o ausente vai pro destino escolhido, e todo mundo é notificado.
+window._ligaSubstituteNow = function (tId, roundIndex, groupName, absentName, subUid, subName) {
+  var t = _findT(tId); if (!t) return;
+  var group = _getGroup(t, roundIndex, groupName); if (!group) return;
+  // AUTORIDADE, não "pode gerir o grupo": substituição direta é do organizador.
+  if (typeof window._canManagePresence === 'function' &&
+      !window._canManagePresence(t, window.AppStore && window.AppStore.currentUser)) {
+    if (window.showNotification) window.showNotification('Substituir', 'Só o organizador pode colocar alguém direto. Você pode convidar.', 'info');
+    return;
+  }
+  var dest = _ligaReadDest();     // ANTES do _closeDialogs — depois o DOM já sumiu
+  var cat = _groupCategory(group);
+  _closeDialogs();
+
+  _commitLiga(tId, function (ft) {
+    var g = _getGroup(ft, roundIndex, groupName); var r = ft.rounds && ft.rounds[roundIndex];
+    if (!g || !r) return;
+    _addWoMarker(ft, r, roundIndex, absentName, cat);
+    g.woAbsent = absentName; g.woDest = (dest === 'inactive') ? 'inactive' : 'waitlist';
+
+    // O suplente entra no ELENCO antes do _rewriteSlot — o slot resolve o uid dele por
+    // _buildNameToUid(ft), e fora do elenco (e já fora da espera) o mapa não o acha:
+    // o jogo ficaria apontando pra ninguém.
+    var _entry = null;
+    try {
+      (window._getWaitlist ? window._getWaitlist(ft) : []).forEach(function (e) {
+        if (_entry) return;
+        var eu = (typeof window._participantUids === 'function') ? (window._participantUids(e) || []) : (e && e.uid ? [e.uid] : []);
+        if ((subUid && eu.indexOf(subUid) !== -1) || _wlDisplay(e) === subName) { _entry = JSON.parse(JSON.stringify(e)); }
+      });
+    } catch (e) {}
+    if (!_entry) _entry = { uid: subUid || undefined, displayName: subName, name: subName };
+    _entry.ligaActive = true;
+    _entry.woSubstituteFor = absentName;
+    _entry.woSubstituteAt = new Date().toISOString();
+    if (!Array.isArray(ft.participants)) ft.participants = ft.participants ? Object.values(ft.participants) : [];
+    var _ja = ft.participants.some(function (p) {
+      if (!p || typeof p !== 'object') return false;
+      if (_entry.uid && p.uid) return p.uid === _entry.uid;
+      return _wlDisplay(p) === subName;
+    });
+    if (!_ja) ft.participants.push(_entry);
+    if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(ft, subName);
+    _removeSitOut(r, subName);
+    _rewriteSlot(g, absentName, subName, true, ft);
+    g.subStatus = 'filled'; g.subName = subName; g.subIsGuest = false; delete g.pendingInviteId;
+    // convites pendentes do grupo perdem o sentido — a vaga foi resolvida na mão.
+    if (Array.isArray(ft.ligaSubInvites)) {
+      ft.ligaSubInvites.forEach(function (iv) {
+        if (iv.groupName === groupName && iv.roundIndex === roundIndex && iv.status === 'pending') iv.status = 'cancelled';
+      });
+    }
+    _ligaApplyDest(ft, absentName, g.woDest);
+    if (!Array.isArray(ft.history)) ft.history = [];
+    ft.history.push({ date: new Date().toISOString(), message: 'W.O. (' + groupName + '): ' + absentName + ' → ' + subName + ' (substituição direta do organizador)' });
+  });
+
+  // FIM DO CICLO: resolveu na hora → todo mundo é avisado agora.
+  try {
+    var _tAf = _findT(tId);
+    _ligaNotifyWoCycle(_tAf, _getGroup(_tAf, roundIndex, groupName), absentName, subName,
+      (dest === 'inactive') ? 'inactive' : 'waitlist', false);
+  } catch (e) {}
+  if (window.showNotification) {
+    window.showNotification('Substituição feita', subName + ' entrou no lugar de ' + absentName + ' e fica até o fim do torneio.', 'success');
+  }
+  _rerender(tId);
 };
 
 // Fecha os diálogos padrão do app (#custom-alert/confirm/input-dialog — notifications.js).

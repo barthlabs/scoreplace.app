@@ -445,6 +445,17 @@ function showAlertDialog(title, message, onOk, options = {}) {
   };
   const c = colors[type] || colors.info;
 
+  // v1.6.91 — O CARD NAO PODE PASSAR DA TELA. Mesmo conserto que o showConfirmDialog ja
+  // tinha: sem altura maxima o card cresce com o conteudo e o rodape com o OK sai do
+  // viewport SEM SCROLL NENHUM — foi o que prendeu o dono no dialogo Substituto do W.O.,
+  // que ficou longo (fila + destino 1x2 + Jogador X). Com max-height + coluna flex, o
+  // CORPO e quem rola; cabecalho e botao ficam sempre visiveis.
+  // Percentual, nao vh: sob zoom no body o vh estoura (canone de escala por area).
+  //
+  // ATENCAO: comentario CSS NAO PODE ir dentro do atributo `style="..."`. Uma aspa dupla
+  // no texto FECHA o atributo e o navegador DESCARTA tudo o que vem depois — foi assim que
+  // a primeira tentativa deste fix nasceu morta (max-height/display:flex/overflow sumiram;
+  // medido: computed max-height 'none', display 'block'). Explicacao fica AQUI, no JS.
   dialog.innerHTML = `
     <div style="
       background: var(--surface-color);
@@ -452,19 +463,22 @@ function showAlertDialog(title, message, onOk, options = {}) {
       border-radius: 16px;
       max-width: 380px;
       width: 90%;
+      max-height: 92%;
+      display: flex;
+      flex-direction: column;
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     ">
-      <div style="background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); padding: 1.25rem; display: flex; align-items: center; gap: 12px;">
+      <div style="background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); padding: 1.25rem; display: flex; align-items: center; gap: 12px; flex: 0 0 auto;">
         <span style="font-size: 2rem;">${c.icon}</span>
         <div>
           <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-color);">${title}</div>
         </div>
       </div>
-      <div style="padding: 1.25rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.6;">
+      <div style="padding: 1.25rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;">
         ${message}
       </div>
-      <div style="padding: 1rem 1.25rem 1.25rem; display: flex; justify-content: center;">
+      <div style="padding: 1rem 1.25rem 1.25rem; display: flex; justify-content: center; flex: 0 0 auto;">
         <button id="alert-ok-btn" style="
           background: linear-gradient(135deg, ${c.border}, ${c.border}dd);
           color: white;

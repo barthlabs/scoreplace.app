@@ -216,5 +216,94 @@ sec(function () {
   ok(claim.indexOf('_ligaPickFill') !== -1, 'wo-claim continua delegando pro _ligaPickFill (é o caminho real)');
 });
 
+// ── 9. ORGANIZADOR SUBSTITUI DIRETO; PARTICIPANTE só CONVIDA ────────────────
+// Regra do dono: "no fluxo dos participantes eles convidam os da lista de espera. No
+// fluxo do organizador ele substitui diretamente se quiser. Pode convidar, mas pode
+// substituir diretamente."
+sec(function () {
+  // (a) o ORGANIZADOR vê o botão de colocar direto
+  const t = novoT(); boot(t, 'org');
+  win._ligaPickFill(t.id, 0, 'R1 Grupo W', 'Thereza');
+  ok(CAP.html.indexOf('_ligaSubstituteNow') !== -1, 'organizador tem que ver "Colocar" (substituição direta)');
+  ok(CAP.html.indexOf('Convidar selecionados') !== -1, 'e o convite CONTINUA disponível pra ele');
+
+  // (b) o PARTICIPANTE do grupo NÃO vê — ele só convida
+  const t2 = novoT(); boot(t2, 'uid_fabiana');
+  win._canManagePresence = () => false;         // participante, não autoridade
+  win._ligaPickFill(t2.id, 0, 'R1 Grupo W', 'Thereza');
+  ok(CAP.html.indexOf('_ligaSubstituteNow') === -1, 'participante NÃO pode substituir direto — só convidar');
+  ok(CAP.html.indexOf('Convidar selecionados') !== -1, 'mas convida normalmente');
+});
+
+// ── 10. A substituição direta fecha o ciclo inteiro na hora ─────────────────
+sec(function () {
+  const t = novoT(); boot(t, 'org'); NOTIFS = [];
+  win._ligaPickFill(t.id, 0, 'R1 Grupo W', 'Thereza');
+  win._ligaSubstituteNow(t.id, 0, 'R1 Grupo W', 'Thereza', 'uid_sandra', 'Sandra');
+
+  const g = t.rounds[0].monarchGroups[0];
+  ok(g.players.includes('Sandra') && !g.players.includes('Thereza'), 'a troca acontece no grupo NA HORA, sem aceite');
+  ok(g.playersUids[g.players.indexOf('Sandra')] === 'uid_sandra', 'com o uid certo no slot');
+  ok(g.subStatus === 'filled' && g.subName === 'Sandra', 'o grupo fica preenchido');
+  ok(nomes(t.participants).includes('Sandra'), 'a suplente entra no ELENCO (fica até o fim do torneio)');
+  ok(!nomes(win._getWaitlist(t)).includes('Sandra'), 'e sai da fila');
+  ok(!nomes(t.participants).includes('Thereza'), 'a ausente vai pro destino escolhido (default = fila)');
+  const fila = nomes(win._getWaitlist(t));
+  ok(fila[fila.length - 1] === 'Thereza', 'no FIM da fila, fila=' + fila.join('|'));
+  ok((t.rounds[0].matches || []).some((m) => m.isSitOut && m.sitOutReason === 'wo' && m.p1 === 'Thereza'), 'o marcador de W.O. existe');
+  ok((t.ligaSubInvites || []).every((iv) => iv.status !== 'pending'), 'convite pendente do grupo é cancelado (vaga resolvida na mão)');
+  // e o ciclo AVISA todo mundo, igual ao caminho do aceite
+  ok(NOTIFS.some((n) => n.uid === 'uid_thereza'), 'a ausente é notificada');
+  ok(NOTIFS.some((n) => n.uid === 'uid_sandra'), 'a suplente é notificada');
+  ['uid_fabiana', 'uid_flavia', 'uid_suely'].forEach((u) => {
+    ok(NOTIFS.some((n) => n.uid === u), 'o grupo é notificado (' + u + ')');
+  });
+});
+
+// ── 11. Substituição direta respeita o destino 1 ────────────────────────────
+sec(function () {
+  const t = novoT(); boot(t, 'org');
+  win._ligaPickFill(t.id, 0, 'R1 Grupo W', 'Thereza');
+  DOM._dests.forEach((d) => { d.on = (d.d === 'inactive') ? '1' : '0'; });
+  win._ligaSubstituteNow(t.id, 0, 'R1 Grupo W', 'Thereza', 'uid_sandra', 'Sandra');
+  const th = t.participants.filter((p) => p.uid === 'uid_thereza')[0];
+  ok(!!th && th.ligaActive === false, 'destino 1 na substituição direta: fica inativa no elenco');
+  ok(!nomes(win._getWaitlist(t)).includes('Thereza'), 'e não entra na fila agora');
+});
+
+// ── 12. Quem NÃO é autoridade não consegue chamar a função direto ───────────
+sec(function () {
+  const t = novoT(); boot(t, 'uid_fabiana');
+  win._canManagePresence = () => false;
+  win._ligaSubstituteNow(t.id, 0, 'R1 Grupo W', 'Thereza', 'uid_sandra', 'Sandra');
+  ok(t.rounds[0].monarchGroups[0].players.includes('Thereza'), 'sem autoridade, a substituição direta é RECUSADA (não basta esconder o botão)');
+});
+
+// ── 13. O diálogo tem que CABER na tela (scroll no corpo) ───────────────────
+sec(function () {
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'notifications.js'), 'utf8');
+  const i = src.indexOf('function showAlertDialog');
+  const corpo = src.slice(i, i + 4000);
+  ok(/max-height:\s*92%/.test(corpo), 'o card do alert precisa de max-height — senão o rodapé sai do viewport');
+  ok(/overflow-y:\s*auto/.test(corpo), 'o CORPO do alert precisa rolar');
+  ok(corpo.indexOf('flex-direction: column') !== -1, 'coluna flex: cabeçalho e botão fixos, corpo rolando');
+  ok(!/max-height:\s*\d+vh/.test(corpo), 'percentual, não vh (sob zoom no body o vh estoura)');
+
+  // GUARDA DO FOOTGUN: uma ASPA DUPLA dentro de um comentário CSS que mora no atributo
+  // style="..." FECHA o atributo — o navegador descarta silenciosamente tudo o que vem
+  // depois. Foi assim que a 1ª tentativa deste fix nasceu morta (medido no navegador:
+  // computed max-height 'none', display 'block', overflow 'visible', card estourando o
+  // viewport). Varre o app inteiro, não só este arquivo.
+  const glob = require('fs').readdirSync(path.join(ROOT, 'js', 'views')).filter((f) => f.endsWith('.js'))
+    .map((f) => path.join(ROOT, 'js', 'views', f)).concat([path.join(ROOT, 'js', 'notifications.js')]);
+  let maus = [];
+  glob.forEach((f) => {
+    const txt = require('fs').readFileSync(f, 'utf8');
+    const re = /style="(?:[^"]|\n)*?\/\*(?:[^*]|\*(?!\/))*?"/g;
+    if (re.test(txt)) maus.push(path.basename(f));
+  });
+  ok(maus.length === 0, 'aspa dupla dentro de comentário CSS no atributo style (quebra o atributo): ' + maus.join(', '));
+});
+
 console.log((fail === 0 ? '✅' : '❌') + ' wo-destino-ciclo-notifica: ' + pass + ' asserções, ' + fail + ' falha(s)');
 process.exit(fail === 0 ? 0 : 1);
