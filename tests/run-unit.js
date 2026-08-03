@@ -430,6 +430,12 @@ const SUITES = [
   // protegia contra race mas tornava impossível apagar qualquer coisa — o
   // baseline do formulário dá a diferença: apagado pela pessoa × não hidratado.
   'tests/profile-erase-field.test.js',
+  // Ocultar e-mail/telefone é privacidade perante os OUTROS — mas quem oculta
+  // tem que ter nome de exibição, senão vira "Usuário" pra todo mundo (o guard
+  // v2.4.4 só pegava o nome que ERA o contato). Trava junto a fiação do
+  // "Vincular Google/Apple no mesmo uid", que é o que evita a conta duplicada
+  // do e-mail oculto da Apple (caso Fernando Cerri, 03/ago/2026).
+  'tests/omit-exige-display-name.test.js',
   'tests/delete-account-canon.test.js',
   'tests/dupla-detection-uid.test.js',
   'tests/draw-name-by-uid.test.js',
