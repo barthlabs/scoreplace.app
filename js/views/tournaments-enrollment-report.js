@@ -1113,9 +1113,31 @@
       if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
       if (typeof showNotification === 'function') showNotification('✅ Alterações salvas', nEdits + ' inscrito(s) atualizado(s).' + (extra ? ' ' + extra : ''), 'success');
     };
+    // v1.7.1 — POR QUE O CACHE DE PERFIL PRECISA SER ATUALIZADO AQUI (bug do dono:
+    // "realoco a pessoa, salvo, e ela volta pra sem gênero; tem que repetir pra fixar"):
+    // `gender` está em _PROFILE_FIELDS (identity-core), então o save do TORNEIO o remove
+    // da entrada de propósito — gênero mora no PERFIL e é resolvido por uid (v1.3.52).
+    // Quem persiste de verdade é esta CF, no doc do usuário. Só que o cliente re-renderiza
+    // logo em seguida e resolve o gênero por `_userProfileCache[uid]`, que ainda tem o
+    // valor VELHO: o onSnapshot do torneio ecoa o doc já sem `gender`, a entrada local
+    // perde o valor, e a tela mostra "sem gênero". Na segunda tentativa funcionava porque
+    // aí o perfil já tinha chegado. Escrever no cache o que a CF acabou de confirmar fecha
+    // a janela. NÃO mexe no strip — ele é cânone ([[project_uid_identity_canon_locked]]).
+    var _primeProfileCache = function () {
+      var cache = window._userProfileCache; if (!cache) return;
+      profileAssignments.forEach(function (a) {
+        if (!a || !a.uid) return;
+        var prof = cache[a.uid] = cache[a.uid] || {};
+        if (a.gender) prof.gender = a.gender;
+        if (a.category && sport) {
+          prof.skillBySport = prof.skillBySport || {};
+          prof.skillBySport[String(sport)] = a.category; // o perfil guarda a HABILIDADE
+        }
+      });
+    };
     if (profileAssignments.length > 0 && window.firebase && firebase.functions) {
       firebase.functions().httpsCallable('setParticipantsProfile')({ tournamentId: String(tId), sport: String(sport || ''), assignments: profileAssignments })
-        .then(function (res) { var r = (res && res.data) || {}; finish('Perfis: ' + (r.written || 0) + ' atualizado(s).'); })
+        .then(function (res) { var r = (res && res.data) || {}; _primeProfileCache(); finish('Perfis: ' + (r.written || 0) + ' atualizado(s).'); })
         .catch(function (err) { finish('(perfis não gravados: ' + ((err && err.message) || 'falha') + ')'); });
     } else {
       finish('');
