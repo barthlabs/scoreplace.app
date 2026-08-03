@@ -2284,3 +2284,26 @@ window._buildTournamentConfigBox = function (t, opts) {
         '<div style="margin-top:6px;display:flex;flex-direction:column;gap:2px;">' + rows.join('') + '</div>' +
         '</details>';
 };
+
+// ─── A FASE ATUAL É ELIMINATÓRIA? (fonte ÚNICA) ──────────────────────────────
+// Critério ESTRUTURAL, não por nome de formato nem por lista de brackets: uma fase de
+// RODADAS SUCESSIVAS (Pontos Corridos / Suíço / Rei-Rainha) guarda os jogos em
+// `t.rounds[].matches`; uma fase de CHAVE guarda em `t.matches` com `bracket`. Se a fase
+// ATUAL tem jogo em t.matches, é eliminatória.
+//
+// POR QUE NÃO LISTAR NOMES DE BRACKET: as linhas de uma fase usam o nome que o organizador
+// deu ('gold'/'silver' na Confra), não só main/upper/lower/grand — foi por assumir a lista
+// fixa que o guard do botão não pegou nada e "Rodada Extra" continuou aparecendo nas Oitavas.
+//
+// EXTRAÍDO (v1.6.98) de tournaments.js, que já fazia exatamente esta conta inline pra decidir
+// se mostra "Rodada Extra". Agora a trava de re-sorteio (generateDrawFunction) usa A MESMA
+// leitura — se as duas divergissem, o gate recusaria numa fase que o botão trata como de
+// rodadas (ou o contrário). Ver [[feedback_unify_dual_entry_points]].
+window._currentPhaseIsElimination = function (t) {
+    if (!t) return false;
+    var cur = t.currentPhaseIndex || 0;
+    return (Array.isArray(t.matches) ? t.matches : []).some(function (m) {
+        if (!m || !m.bracket) return false;
+        return ((m.phaseIndex == null) ? 0 : m.phaseIndex) === cur;
+    });
+};

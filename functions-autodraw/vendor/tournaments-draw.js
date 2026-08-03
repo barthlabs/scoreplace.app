@@ -2137,6 +2137,47 @@ window._callCloseRound = function (payload) {
     });
 };
 
+// ── Chamador GENÉRICO de CF callable (v1.7) ──────────────────────────────────────────
+// Mesmo transporte dos _callDrawRound/_callCloseRound acima (fetch direto no endpoint
+// callable), com o nome da função como parâmetro. Nasceu porque a v1.7 precisava do
+// TERCEIRO clone do mesmo bloco — o quarto seria indefensável.
+// Os dois de cima NÃO foram migrados de propósito nesta leva: são o caminho quente do
+// sorteio e do fecho de rodada, já batidos em produção, e trocar o transporte deles
+// junto com a estreia do resultado misturaria dois riscos. Migração é faxina posterior.
+window._callCF = function (fnName, payload, unauthMsg) {
+    var fb = window.firebase;
+    var user = fb && fb.auth && fb.auth().currentUser;
+    if (!user) return Promise.reject(Object.assign(new Error(unauthMsg || 'Entre na sua conta.'), { code: 'functions/unauthenticated' }));
+    var pid = '';
+    try { pid = fb.app().options.projectId; } catch (e) {}
+    if (!pid) return Promise.reject(Object.assign(new Error('App não inicializado.'), { code: 'functions/internal' }));
+    var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + fnName;
+    return user.getIdToken().then(function (tok) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+            body: JSON.stringify({ data: payload })
+        });
+    }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+            if (j && j.error) {
+                var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
+                throw Object.assign(new Error(j.error.message || ('Falha em ' + fnName)),
+                    { code: 'functions/' + (st || 'internal') });
+            }
+            if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { code: 'functions/internal' });
+            return { data: (j && j.result) || {} };
+        });
+    });
+};
+
+// v1.7: lançamento de placar pela CF `applyMatchResult` (authz server-side: resultEntry
+// por fase, lado do jogador por uid, fase da negociação). NÃO é caminho exclusivo — o
+// commitResultTx cai no caminho local se isto falhar por qualquer motivo.
+window._callApplyMatchResult = function (payload) {
+    return window._callCF('applyMatchResult', payload, 'Entre na sua conta pra lançar o placar.');
+};
+
 // v1.3.75: CF-only da INTEGRAÇÃO TARDIA — o cliente só DISPARA; a CF `integrateLateEntries`
 // roda o motor (createExtraGames/rebuild/repFill/monarch) na transação e persiste. Espelha
 // _callDrawRound/_callCloseRound (mesmo transporte callable via fetch). Retorna {changed,...}.
@@ -2437,58 +2478,51 @@ window.generateDrawFunction = function (tId) {
         }
     }
 
-    // ── Proteção contra re-sorteio acidental ────────────────────────
+    // ── SORTEIO REALIZADO NÃO SE APAGA ──────────────────────────────
+    // REGRA DO DONO (01/ago/2026), literal: "se já houve sorteio, não deve apagar o sorteio
+    // havido para criar outro. especialmente no caso de fase eliminatória." A única situação
+    // que ele abriu: "rodada extra em fase de rodadas sucessivas, caso o organizador queira
+    // criar rodada extra além das programadas".
+    //
+    // O QUE MUDOU (v1.6.98): até aqui este gate era só um DIÁLOGO — confirmando, ele chamava
+    // _clearTournamentDraw e re-sorteava do zero, MESMO com resultados lançados. Ou seja: o
+    // organizador podia apagar uma chave com jogos já decididos. Agora ele RECUSA.
+    //
+    // E ISSO CONSERTA UM BUG LATENTE, não só fecha um buraco: em Liga MANUAL com sorteio
+    // feito, o botão "🎲 Próxima Rodada" (tournaments.js) chama ESTA função — não havia
+    // desvio antes deste ponto, então "próxima rodada" caía no diálogo de re-sorteio e,
+    // confirmado, APAGAVA a temporada pra gerar a rodada 1 de novo. O caminho certo pra
+    // "mais uma rodada" sempre foi _generateExtraRound, que ACRESCENTA sem destruir — é pra
+    // lá que a fase de rodadas é roteada agora.
+    //
+    // Escape hatch de teste NÃO foi tocado: _resetTournamentToEnrollment segue disponível,
+    // e só no SANDBOX (gate _isSandboxTournament + _isTestIdentity).
     var _hasExistingDraw = (Array.isArray(t.matches) && t.matches.length > 0) ||
         (Array.isArray(t.rounds) && t.rounds.length > 0) ||
         (Array.isArray(t.groups) && t.groups.length > 0);
     if (_hasExistingDraw) {
-        // Check if any match has a result recorded — use canonical collector
-        // so results hiding in t.groups[].matches, t.thirdPlaceMatch, or
-        // t.rodadas can't be silently overwritten by a redraw.
-        var _hasResults = false;
-        if (typeof window._collectAllMatches === 'function') {
-            _hasResults = window._collectAllMatches(t).some(function(m) {
-                return m && (m.winner || m.score1 || m.score2);
-            });
-        } else {
-            // Defensive fallback: bracket-model.js not loaded.
-            if (Array.isArray(t.matches)) {
-                _hasResults = t.matches.some(function(m) { return m.winner || m.score1 || m.score2; });
-            }
-            if (!_hasResults && Array.isArray(t.rounds)) {
-                _hasResults = t.rounds.some(function(r) {
-                    return (r.matches || []).some(function(m) { return m.winner || m.score1 || m.score2; });
-                });
-            }
-        }
-        if (_hasResults) {
-            showAlertDialog(_t('draw.alreadyDoneTitle'),
-                _t('draw.alreadyDoneMsg'),
-                function() {
-                    // User confirmed — allow redraw by clearing existing data
-                    // v2.6.98: limpa TAMBÉM estado de fase/encerramento (re-sortear um
-                    // torneio multi-fase precisa voltar à Fase 0, senão fica resíduo).
-                    // v1.2.25: marca ANTES do clear. O clear é SÓ local — o doc no Firestore
-                    // segue com a chave, então o sorteio no servidor recusaria ('already-drawn')
-                    // sem este flag. Ele é a única memória de que o organizador confirmou.
-                    t._redrawConfirmed = true;
-                    window._clearTournamentDraw(t);
-                    window.generateDrawFunction(tId);
-                },
-                { type: 'danger', confirmText: _t('draw.alreadyDoneConfirm'), cancelText: _t('btn.cancel') }
-            );
+        if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+        // Fase de CHAVE (eliminatória): não há "rodada extra" possível — a próxima rodada sai
+        // dos vencedores, não de sorteio novo. Recusa seca. Leitura ÚNICA, compartilhada com o
+        // botão "Rodada Extra" (tournaments-utils.js) pra os dois nunca divergirem.
+        if (window._currentPhaseIsElimination(t)) {
+            if (typeof showAlertDialog === 'function') showAlertDialog(
+                'Esta chave não pode ser re-sorteada',
+                'O sorteio desta fase <b>já foi realizado</b> e a chave eliminatória é uma árvore fechada — a próxima rodada sai dos vencedores, não de um sorteio novo.<br><br>' +
+                'Apagar a chave descartaria os confrontos (e os resultados já lançados) de todo mundo. Se faltou alguém, use <b>entrada tardia</b>; se um jogo precisa de ajuste, corrija o <b>resultado</b> do jogo.',
+                null, { type: 'warning' });
             return;
         }
-        // Draw exists but no results yet — warn but lighter
-        showAlertDialog(_t('draw.redrawTitle'),
-            _t('draw.redrawMsg'),
-            function() {
-                t._redrawConfirmed = true; // ver acima: o clear é só local; o doc ainda tem a chave
-                window._clearTournamentDraw(t);
-                window.generateDrawFunction(tId);
-            },
-            { type: 'warning', confirmText: _t('draw.redrawConfirm'), cancelText: _t('draw.redrawCancel') }
-        );
+        // Fase de RODADAS SUCESSIVAS: a necessidade legítima é ACRESCENTAR uma rodada.
+        if (typeof showConfirmDialog === 'function') {
+            showConfirmDialog('➕ Gerar rodada extra?',
+                'O sorteio desta fase já foi realizado, então ele <b>não é refeito</b>. O que dá pra fazer é gerar <b>mais uma rodada</b> além das programadas — as rodadas e os resultados que já existem ficam intactos.',
+                function () { window._generateExtraRound(tId); },
+                null,
+                { type: 'warning', confirmText: 'Gerar rodada extra', cancelText: 'Cancelar' });
+        } else {
+            window._generateExtraRound(tId);
+        }
         return;
     }
 

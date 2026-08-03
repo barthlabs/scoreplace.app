@@ -477,6 +477,13 @@ const SUITES = [
   // Cenário do dono (SB Casais): dupla ausente na espera → marca presente → CF forma o
   // confronto (o bug era o CLIENTE nunca disparar a CF; o toggle in-place suprimia o gatilho).
   'functions-autodraw/test-late-present-fills-adefinir.js',
+  // v1.7: QUEM pode lançar placar passa a ser decidido no SERVIDOR (resultEntry por fase,
+  // lado do jogador por uid, fase da negociação). Antes existia só no navegador, com as
+  // rules liberando `matches` pro participante — regra sem autoridade nenhuma.
+  'functions-autodraw/test-result-core.js',
+  // Joga o torneio INTEIRO lançando só pelo servidor: 8 jogos (escada + 3º lugar), campeão,
+  // zero slot TBD. É o "jogar até o campeão" antes de mexer no caminho mais quente do app.
+  'functions-autodraw/test-result-playthrough.js',
   // Gate do DETALHE (#tournaments/:id) não pula ao marcar presença: _tournamentDetailSig é
   // determinística (sem updatedAt) → o eco do próprio write vê "igual". v1.3.96.
   'tests/tournament-detail-sig.test.js',

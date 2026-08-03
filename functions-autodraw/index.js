@@ -34,9 +34,19 @@ try {
   console.error('[autoDraw] draw-core indisponível — autoDraw vai pular:', e && e.message);
 }
 
+// v1.7: AUTORIZAÇÃO + aplicação do RESULTADO no servidor (result-core.js). Require
+// separado e defensivo pelo mesmo motivo do draw-core: se falhar, a applyMatchResult
+// recusa com erro claro e o cliente cai no caminho antigo — nunca improvisa a regra.
+let applyResultFn = null;
+try {
+  applyResultFn = require('./result-core.js').applyResult;
+} catch (e) {
+  console.error('[applyMatchResult] result-core indisponível:', e && e.message);
+}
+
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '1.4';
+const CF_VERSION = '1.5';
 
 initializeApp();
 const db = getFirestore();
@@ -666,6 +676,85 @@ exports.splitLatePair = onCall(async (request) => {
 // (outro fechou primeiro / echo). AUTHZ = PARTICIPANTE (o fecho é disparado por quem salva o
 // placar, num resultEntry='players' pode ser participante) — difere do drawRound (admin-only).
 // Ver project_draw_canonization_cf_phase23_deferred / project_concurrency_safe_saves.
+
+// ─── applyMatchResult (v1.7): QUEM pode lançar o placar, decidido no SERVIDOR ───────
+// O cliente segue INTERPRETANDO o placar (GSM/tie-break/sets pela config do torneio) e
+// manda o `payload` pronto — o que muda é que a AUTORIZAÇÃO deixa de morar só no
+// navegador: resultEntry POR FASE, o lado do jogador por uid e a fase da negociação
+// (proposta → contraproposta → disputa) passam a ser checados aqui, sobre o doc FRESCO.
+//
+// AUTHZ = PARTICIPANTE ou ADMIN (igual closeRound, diferente do drawRound que é admin-only):
+// num resultEntry='players' quem lança é jogador. Quem decide de fato é o result-core.
+//
+// ⚠️ ISTO AINDA NÃO É AUTORIDADE ABSOLUTA: as firestore.rules continuam deixando o
+// participante escrever `matches` direto (é o que mantém o app de loja antigo funcionando
+// — ele não chama esta CF e não tem auto-update). Fechar essa porta é passo SEPARADO, só
+// quando o piso das lojas alcançar. Ver [[project_result_launch_cf_evaluation]] §5.
+exports.applyMatchResult = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const email = request.auth && request.auth.token && request.auth.token.email;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta pra lançar o placar.');
+
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!tId) throw new HttpsError('invalid-argument', 'tournamentId é obrigatório.');
+  const matchId = String((request.data && request.data.matchId) || '').trim();
+  if (!matchId) throw new HttpsError('invalid-argument', 'matchId é obrigatório.');
+  const payload = (request.data && request.data.payload) || null;
+  if (!payload) throw new HttpsError('invalid-argument', 'payload é obrigatório.');
+  const logMessage = (request.data && request.data.logMessage) || '';
+
+  // Motor indisponível → NUNCA improvisar a regra aqui. Erro claro; o cliente cai no
+  // caminho antigo (que ainda é permitido pelas rules) em vez de ficar sem lançar placar.
+  if (typeof applyResultFn !== 'function' || !drawWindow) {
+    throw _drawFail('internal', 'Motor de resultado indisponível no servidor.', { tId, matchId });
+  }
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentParticipant(pre.data(), uid, email) && !_isTournamentAdmin(pre.data(), uid, email)) {
+    throw _drawFail('permission-denied', 'Só quem está no torneio pode lançar placar.',
+      { tId, matchId, uid, email: email || '(sem email)' });
+  }
+  await _preloadDrawNames(pre.data()); // nome vivo por uid (o motor pode gerar/avançar)
+
+  let out;
+  try {
+    out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const t = snap.data(); t.id = tId;
+      _enrichParticipantsFromProfiles(t);
+      // Re-checa sobre o doc FRESCO (acesso pode ter mudado entre o read e a txn).
+      if (!_isTournamentParticipant(t, uid, email) && !_isTournamentAdmin(t, uid, email)) {
+        throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, matchId, uid });
+      }
+      try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+
+      const res = applyResultFn(t, {
+        matchId: matchId, payload: payload, actor: { uid: uid, email: email || '' },
+        logMessage: logMessage
+      });
+      // RECUSA é resposta legítima (não é falha de infra): devolve o motivo pro cliente
+      // mostrar o diálogo certo ("o outro time já lançou", "só o organizador nesta fase").
+      if (!res || !res.ok) {
+        return { ok: false, reason: (res && res.reason) || 'apply-failed' };
+      }
+      const b = _applyWriteBoundary(t);
+      tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+      return { ok: true, outcome: res.outcome, tournament: b.clean };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error(`applyMatchResult EXPLODIU em ${tId}/${matchId} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha ao lançar placar: ' + String((e && e.message) || e).slice(0, 300));
+  }
+
+  console.log(`applyMatchResult v${CF_VERSION}: ${tId}/${matchId} por ${uid} — ` +
+    (out.ok ? out.outcome : 'recusado(' + out.reason + ')'));
+  return out;
+});
+
 exports.closeRound = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const email = request.auth && request.auth.token && request.auth.token.email;
