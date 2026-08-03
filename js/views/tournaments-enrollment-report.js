@@ -482,6 +482,10 @@
         // v2.8.62: identidade da dupla (quando esta linha é um membro de dupla expandido)
         _duplaSide: (p && p._duplaSide) || null,
         _duplaIdx: (p && typeof p._duplaIdx === 'number') ? p._duplaIdx : null,
+        // v1.7.2: esta linha veio da LISTA DE ESPERA (não de t.participants). O save tem
+        // que gravar no storage da espera, NUNCA no roster — e nunca cair no fallback
+        // posicional (`parts[order-1]`), que gravaria a categoria em OUTRA pessoa.
+        _wl: !!(p && p._wl),
       };
     });
   }
@@ -1063,7 +1067,25 @@
       // não achava o membro em t.participants (ele é p1/p2 dentro da dupla) e o gênero
       // "não gravava". Categoria continua no doc da dupla (o time tem 1 categoria).
       var isDuplaMember = !!(row && row._duplaSide && typeof row._duplaIdx === 'number' && parts[row._duplaIdx] && typeof parts[row._duplaIdx] === 'object');
-      var p = isDuplaMember ? parts[row._duplaIdx] : _erFindParticipant(parts, row, order);
+      // v1.7.2: linha da LISTA DE ESPERA → o alvo é a entrada no storage da espera, NUNCA
+      // t.participants (ela não está lá). _getWaitlist devolve a REFERÊNCIA do objeto, então
+      // mutá-la grava no storage certo (waitlist / standbyParticipants / monarchWaitlist).
+      // Resolução SÓ por uid: cair no fallback posicional de _erFindParticipant
+      // (`parts[order-1]`) gravaria a categoria em OUTRA PESSOA. Sem uid (fictício na
+      // espera) não há como casar com segurança → não grava.
+      var p;
+      if (row && row._wl) {
+        if (!row.uid) return;
+        var _wlArr = (typeof window._getWaitlist === 'function') ? (window._getWaitlist(t) || []) : [];
+        p = null;
+        for (var _wi = 0; _wi < _wlArr.length; _wi++) {
+          var _we = _wlArr[_wi];
+          if (_we && typeof _we === 'object' && _we.uid && String(_we.uid) === String(row.uid)) { p = _we; break; }
+        }
+        if (!p) return;
+      } else {
+        p = isDuplaMember ? parts[row._duplaIdx] : _erFindParticipant(parts, row, order);
+      }
       if (!p) return;
       var asg = {};
       if ('gender' in pe) {
@@ -4365,6 +4387,22 @@
     }
     // v2.8.56: expande duplas em pessoas individuais (conta todos os inscritos).
     var parts = _expandDuplas(Array.isArray(t.participants) ? t.participants : []);
+    // v1.7.2 — A LISTA DE ESPERA TAMBÉM É INSCRITO. Desde a 1.6.86 quem se inscreve
+    // DEPOIS do sorteio vai pra espera e SAI de t.participants; como a Análise lia só
+    // `participants`, essa gente sumia da tela e o organizador não tinha onde atribuir
+    // gênero/categoria (relato do dono no Confra, com 2 pessoas na espera).
+    // Entram como CÓPIA marcada com _wl: o render nunca mexe no storage da espera, e o
+    // save resolve a entrada REAL por uid via _getWaitlist (que devolve a referência).
+    // A ordem canônica da fila é a do _getWaitlist — não reordenar aqui.
+    try {
+      var _wl = (typeof window._getWaitlist === 'function') ? (window._getWaitlist(t) || []) : [];
+      _wl.forEach(function (w) {
+        if (!w || typeof w !== 'object') return;
+        var c = {}; for (var k in w) { if (Object.prototype.hasOwnProperty.call(w, k)) c[k] = w[k]; }
+        c._wl = true;
+        parts.push(c);
+      });
+    } catch (e) { if (window._warn) window._warn('[analise] espera não carregou', e); }
 
     // Verifica se user é organizador — relatório é restrito.
     if (!window.AppStore || !window.AppStore.isOrganizer || !window.AppStore.isOrganizer(t)) {
