@@ -162,6 +162,11 @@ const SUITES = [
   'tests/lz-agent-path.test.js',
   'tests/lz-api-index.test.js',
   'tests/lz-contagem-unica.test.js',
+  // O caso REAL da Kelly: leitura COMPLETA (160 de 160 ids) que ficava violeta. Duas causas:
+  // o veredito lia `li.tournaments` (campo que o normalize nunca devolve — a evidência mora
+  // no footprint) e a completude exigia contagem de PÁGINAS mesmo com o índice provando
+  // cobertura id por id. Falha se alguém voltar a ler competição fora do footprint.
+  'tests/kelly-verde.test.js',
   'tests/meu-card-no-topo.test.js',
   'tests/jogo-so-com-placar.test.js',
   'tests/apagar-torneio-nao-deixa-orfao.test.js',

@@ -186,15 +186,19 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
 {
   // import LEGADO (sem declaredGames): mantém o comportamento antigo — não regride
   const impLegado = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
-    importedAt: AGORA, rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81) };
+    importedAt: AGORA, rating: { band: 'D+/C-' }, footprint: [], games: new Array(81) };
   const r = run({ uid: 'r4', effectiveSkills: [] }, { r4: Object.assign({ letzplayImport: impLegado }, profAuthorized) }, {});
   ok(r._lzColor === COL.green, 'import legado sem declaredGames → segue VERDE (não regride quem já tinha)');
 }
 {
   // acusação NÃO depende de completude: achar título é prova mesmo com 60 de 81
+  // FORMATO REAL: a evidência mora no FOOTPRINT (o `normalize` nunca devolveu
+  // `tournaments`/`rankings`). Esta fixture usava o campo fantasma — e por isso o teste
+  // passava enquanto a produção ficava violeta. Corrigido em 03/ago/2026 com o doc da
+  // Kelly na mão: `tournaments: 0`, `footprint` com as 8 competições.
   const impGato = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
-    importedAt: AGORA, rating: { band: 'D+/C-' }, rankings: [], games: new Array(60), declaredGames: 81,
-    tournaments: [{ categoryRaw: 'Masculina C', title: true }] };
+    importedAt: AGORA, rating: { band: 'D+/C-' }, games: new Array(60), declaredGames: 81,
+    footprint: [{ official: true, categoryRaw: 'Masculina C', title: true }] };
   const r = run({ uid: 'r5', effectiveSkills: ['D'] }, { r5: Object.assign({ letzplayImport: impGato }, profAuthorized) }, {});
   ok(r._lzColor === COL.red, 'campeão achado em import PARCIAL → VERMELHO (achar é prova; não achar não é)');
 }

@@ -55,9 +55,17 @@ ok(!/\.set\(doc, \{ merge: true \}\)/.test(app.replace(/_lzBarrarRegressao[\s\S]
   'nenhuma escrita de fullImport escapa da trava');
 
 // ── 3. APP: "completo" tem que ser verificável ──
-const compl = app.slice(app.indexOf('function _lzImportComplete'), app.indexOf('function _lzImportComplete') + 1600);
-ok(/_c\.pagesTotal > 0 && _c\.pagesRead/.test(compl), 'quando o cursor diz quantas páginas existem…');
-ok(/_lidas < _c\.pagesTotal\) return false/.test(compl), '…exige que TODAS tenham sido lidas');
+const compl = app.slice(app.indexOf('function _lzImportComplete'), app.indexOf('function _lzImportComplete') + 2600);
+// REVISADO em 03/ago/2026: a prova de cobertura passou a ser o ID, não a página.
+// Com índice, ele ENUMERA o que existe e o acervo tem todos — exigir a contagem de páginas
+// AINDA reprovava leitura completa (Kelly: 160 de 160 ids, `pagesTotal: 9` com 8 marcadas,
+// porque a 9ª tinha 2 jogos que já haviam vindo por outro caminho). Sem índice, a página
+// continua sendo a única prova e a exigência continua de pé.
+ok(/if \(!\(li\.indexTotal > 0\) && _c\.pagesTotal > 0 && _c\.pagesRead/.test(compl),
+  'sem índice, o cursor de páginas ainda decide…');
+ok(/_lidas < _c\.pagesTotal\) return false/.test(compl), '…e exige que TODAS tenham sido lidas');
+ok(/_alvo > 0 && n < _alvo\) return false/.test(compl),
+  'com índice, quem decide é a cobertura por ID — que é prova mais forte que paginação');
 
 // ── O GUARD NÃO PODE PROTEGER LIXO ──────────────────────────────────────────
 // 478 viraram 1038 por um bug meu; o guard então passou a proteger o 1038 e BARRAVA a

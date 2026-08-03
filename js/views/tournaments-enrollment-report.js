@@ -2006,7 +2006,17 @@
       var _alvo = (li.indexTotal > 0) ? li.indexTotal
                 : (li.declaredGames > 0 ? Math.floor(li.declaredGames * 0.95) : 0);
       if (_alvo > 0 && n < _alvo) return false;
-      if (_c.pagesTotal > 0 && _c.pagesRead && typeof _c.pagesRead === 'object') {
+      // ── PÁGINA É MEIO, NÃO FIM ────────────────────────────────────────────────
+      // A checagem por páginas nasceu quando a única prova de "li tudo" era ter paginado.
+      // Com o ÍNDICE, existe prova melhor e direta: ele ENUMERA os ids que existem, e o
+      // acervo tem todos (é o que `n >= indexTotal` acabou de verificar). Exigir também a
+      // contagem de páginas passou a reprovar leitura completa: medido na Kelly em
+      // 03/ago/2026 — 160 de 160 partidas no acervo, `pagesTotal: 9` e 8 páginas marcadas,
+      // porque a 9ª tem 2 jogos que já vieram por outro caminho e nunca precisou ser
+      // aberta. Resultado: "diz que fechou, mas não fechou", verde virava violeta, e nada
+      // que ela fizesse resolvia — o problema não estava no dado dela.
+      // Com índice, a página não decide. Sem índice, ela continua sendo a única prova.
+      if (!(li.indexTotal > 0) && _c.pagesTotal > 0 && _c.pagesRead && typeof _c.pagesRead === 'object') {
         var _lidas = 0;
         for (var _k = 1; _k <= _c.pagesTotal; _k++) if (_c.pagesRead[_k]) _lidas++;
         if (_lidas < _c.pagesTotal) return false;      // diz que fechou, mas não fechou
@@ -2064,8 +2074,20 @@
       var sc = (r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
       if (li) {
         var oc = li.officialCategory, band = li.rating && li.rating.band;
-        var champCats = (li.tournaments || []).filter(function (x) { return x.title; }).map(function (x) { return x.categoryRaw; });
-        var ev = _lzEvidence(champCats, li.rankings || [], [oc ? oc.categoryRaw : '', band || '']);
+        // ── A EVIDÊNCIA MORA NO FOOTPRINT, NÃO EM `tournaments` ────────────────────
+        // `li.tournaments` e `li.rankings` NUNCA existiram no documento: o `normalize`
+        // devolve `games`, `footprint`, `categories`, `rating`, `pairs` — e mais nada.
+        // Eu lia dois campos inexistentes, então `champCats` era sempre [] e a evidência
+        // saía vazia: sem título e sem classificação, nenhum veredito, e o nome ficava
+        // VIOLETA pra sempre. Medido no doc da Kelly em 03/ago/2026: `tournaments: 0`,
+        // `rankings: 0` e `footprint` com os 8 torneios, todos COM NOME e classificação.
+        // O dado sempre esteve gravado — no lugar certo, que é o footprint (é ele que
+        // `footprintEntry` preenche, com `title`, `standings`, `winPct` e `categoryRaw`).
+        var _fp = Array.isArray(li.footprint) ? li.footprint : [];
+        var _fpT = _fp.filter(function (x) { return x && x.official; });
+        var _fpR = _fp.filter(function (x) { return x && !x.official; });
+        var champCats = _fpT.filter(function (x) { return x.title; }).map(function (x) { return x.categoryRaw; });
+        var ev = _lzEvidence(champCats, _fpR, [oc ? oc.categoryRaw : '', band || '']);
         // apurado = o MESMO nível que exibimos em _lzSkill; serve de veredito quando a
         // pessoa não declarou nada (veio do letzplay → coerente por definição).
         var apuLi = (oc && oc.skill) ? _declRankFrom([oc.skill]) : null;
