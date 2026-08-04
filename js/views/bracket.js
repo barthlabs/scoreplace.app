@@ -4699,7 +4699,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // Miolo do chip: nome (com ficha pra autoridade) + o 💬 do contato direto.
         var _outPersonHtml = function (nm, uid) {
           var _nmH = window._safeHtml(nm);
-          var _nameHtml = (_outIsAdmin && uid && typeof window._openPlayerProfile === 'function')
+          // v1.7.20 (regra do dono): a FICHA é de TODOS pra TODOS — organizador e
+          // participante, em todos os grupos e também aqui (lista de espera, desativados,
+          // W.O.). Só o 💬 é restrito (participante ⇒ apenas o próprio grupo; organizador
+          // ⇒ todos), e esse gate mora dentro de `_contactPersonIconHtml`. Antes o nome só
+          // era clicável pra admin — o participante não conseguia abrir a ficha de quem
+          // ficou de fora. `uid` segue obrigatório: sem uid é fictício, que não tem ficha.
+          var _nameHtml = (uid && typeof window._openPlayerProfile === 'function')
             ? ('<span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;"' +
                ' onclick="event.stopPropagation();window._openPlayerProfile(\'' + _outEsc(nm) + '\',{uid:\'' + _outEsc(uid) +
                '\',tournamentId:\'' + _outTidJs + '\'})" title="Ver ficha de ' + _nmH + '">' + _nmH + '</span>')
@@ -4955,9 +4961,38 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // listado (vermelho, último) e quem entrou no lugar (folga/espera ou
             // Jogador X, já em g.players via _rewriteSlot) é ACRESCENTADO. Ao
             // reverter, g.woAbsent some e os slots voltam → tabela volta aos 4.
-            var _stPlayers = (g.players || []).slice();
-            if (g.woAbsent && _stPlayers.indexOf(g.woAbsent) === -1) _stPlayers.push(g.woAbsent);
-            var _gst = window._computeMonarchStandings({ players: _stPlayers, matches: g.matches }, t, g.category || null) || [];
+            // v1.7.20: o elenco da tabela viaja como PARES (nome, uid) e os dois arrays são
+            // derivados DELE — nunca montados soltos. `_computeMonarchStandings` casa
+            // `players[i]` ↔ `playersUids[i]` POR ÍNDICE, então dois arrays construídos em
+            // separado (um com o push do `woAbsent`, o outro não) dariam a linha de uma
+            // pessoa com o uid de outra. Com os pares isso é estruturalmente impossível.
+            //
+            // O QUE ISSO CONSERTA: o objeto sintético passado aqui omitia `playersUids`, e
+            // sem ele a função devolve `uid: null` em TODA linha (medido no Confra: com o
+            // grupo real vêm os 4 uids; sem o campo, 4 nulls). Aí `_contactPersonIconHtml`
+            // sai no primeiro `if (!entryUid)` e o 💬 sumia da classificação do grupo pra
+            // TODO mundo — organizador inclusive (os únicos balões que restavam vinham da
+            // caixa "ficaram de fora"). Foi esse o "os balõezinhos não aparecem" da Cynthia,
+            // que está no MESMO grupo do Arnaldo.
+            //
+            // ⚠️ O AUSENTE É A ÚNICA ENTRADA SEM UID AQUI, e não por escolha: o schema
+            // guarda `g.woAbsent` como NOME PURO — não existe `woAbsentUid`. Ele entra com
+            // uid nulo e quem resolve é a própria `_computeMonarchStandings`, pelos SLOTS
+            // dos jogos (`_matchN2u` ← team1Uids/team2Uids), que é a fonte canônica; montar
+            // um segundo resolvedor aqui seria copiar a mesma decisão. Por isso o dedup
+            // abaixo compara NOME: é o único dado que o schema dá pra esse caso — a mesma
+            // exceção do fictício, que só tem nome. Fechar de vez é gravar `woAbsentUid`.
+            // Ver [[project_uid_identity_canon_locked]] e [[project_match_slot_uid_identity]].
+            var _stRoster = (g.players || []).map(function (nm, i) {
+              return { name: nm, uid: (g.playersUids || [])[i] || null };
+            });
+            if (g.woAbsent && !_stRoster.some(function (r) { return r.name === g.woAbsent; })) {
+              _stRoster.push({ name: g.woAbsent, uid: null });
+            }
+            var _stPlayers = _stRoster.map(function (r) { return r.name; });
+            var _gst = window._computeMonarchStandings(
+              { players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), matches: g.matches },
+              t, g.category || null) || [];
             // Estado de W.O. na CLASSIFICAÇÃO DO GRUPO (pedido do dono):
             //  • falta APONTADA (claim pending/disputed, ainda não confirmada) → nome ÂMBAR + tag W.O.;
             //  • W.O. CONFIRMADO (g.woAbsent / marcador sit-out 'wo' da rodada) → nome VERMELHO + tag W.O.
