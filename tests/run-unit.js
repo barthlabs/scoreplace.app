@@ -436,6 +436,10 @@ const SUITES = [
   // login federado não passava por checagem server-side, e homônimos continuaram nascendo
   // (11/jul, 14/jul, 17/jul, 30/jul) depois de a lei existir (24/jun).
   'functions/test-name-variant-core.js',
+  // HOMÔNIMO AVISA, POSSE AUTORIZA: o botão de unir contas não funde nada — pede uma prova
+  // (link no e-mail da OUTRA conta). Trava que o cliente não recebe uid/contato cheio, que o
+  // alvo é resolvido no servidor (senão vira porta de spam) e que há rate limit.
+  'tests/name-conflict-merge-proof.test.js',
   'tests/login-redirect.test.js',
   // Item 9: a FUSÃO agora POPULA loginRedirects (antes só a resolveLoginRedirect lia → redirect
   // nunca disparava). Chave = e-mail minúsculo / telefone E.164, igual ao que o reader lê.

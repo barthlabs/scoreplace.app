@@ -4396,26 +4396,108 @@ exports.requestEmailMerge = onCall(
     if (!targetUid) return { ok: false, reason: "no-account" };   // não existe → caller só vincula o e-mail (verifyBeforeUpdateEmail no cliente)
     if (targetUid === callerUid) return { ok: false, reason: "same-account" };
 
-    const crypto = require("crypto");
-    const token = crypto.randomBytes(24).toString("base64url");
-    await db.collection("mergeTokens").doc(token).set({
-      requesterUid: callerUid, targetUid: targetUid, email: email,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-      used: false,
-    });
-    const link = "https://scoreplace.app/?mh=" + encodeURIComponent(token);
-    const html =
-      '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;">' +
-      '<h2 style="color:#0f172a;">Unir suas contas</h2>' +
-      '<p style="color:#1f2937;font-size:15px;line-height:1.5;">Você pediu pra unir esta conta de e-mail à sua outra conta no scoreplace.app. Clique pra confirmar — seus torneios, partidas e histórico ficam todos numa conta só. Você poderá entrar pelo e-mail OU pelo celular.</p>' +
-      '<p style="text-align:center;margin:28px 0;"><a href="' + link + '" style="background:#10b981;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:700;font-size:16px;display:inline-block;">Unir minhas contas</a></p>' +
-      '<p style="color:#64748b;font-size:13px;">O link expira em 1 hora. Se não foi você, ignore este e-mail.</p>' +
-      '</div>';
-    const text = "Una suas contas no scoreplace.app: " + link + " (expira em 1h; se não foi você, ignore).";
-    await _enqueueMail(db, { to: [email], message: { subject: "Una suas contas no scoreplace.app", html, text } });
+    await _sendMergeProofEmail(db, callerUid, targetUid, email);
     console.log("[requestEmailMerge] token p/", email, "req=", callerUid, "target=", targetUid);
     return { ok: true, sent: true };
+  }
+);
+
+// PROVA DE POSSE por e-mail: gera o token de fusão e manda o link pra caixa da OUTRA conta.
+// Extraído de requestEmailMerge pra ser reusado pelo fluxo de homônimo (requestNameMergeProof)
+// — ponto único, senão as duas portas divergiriam no que gravam em mergeTokens.
+// Quem recebe o link é quem tem posse da caixa; é ISSO que autoriza a fusão. Nome nunca autoriza.
+async function _sendMergeProofEmail(db, requesterUid, targetUid, email) {
+  const crypto = require("crypto");
+  const token = crypto.randomBytes(24).toString("base64url");
+  await db.collection("mergeTokens").doc(token).set({
+    requesterUid: requesterUid, targetUid: targetUid, email: email,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    used: false,
+  });
+  const link = "https://scoreplace.app/?mh=" + encodeURIComponent(token);
+  const html =
+    '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;">' +
+    '<h2 style="color:#0f172a;">Unir suas contas</h2>' +
+    '<p style="color:#1f2937;font-size:15px;line-height:1.5;">Você pediu pra unir esta conta de e-mail à sua outra conta no scoreplace.app. Clique pra confirmar — seus torneios, partidas e histórico ficam todos numa conta só. Você poderá entrar pelo e-mail OU pelo celular.</p>' +
+    '<p style="text-align:center;margin:28px 0;"><a href="' + link + '" style="background:#10b981;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:700;font-size:16px;display:inline-block;">Unir minhas contas</a></p>' +
+    '<p style="color:#64748b;font-size:13px;">O link expira em 1 hora. Se não foi você, ignore este e-mail.</p>' +
+    '</div>';
+  const text = "Una suas contas no scoreplace.app: " + link + " (expira em 1h; se não foi você, ignore).";
+  await _enqueueMail(db, { to: [email], message: { subject: "Una suas contas no scoreplace.app", html, text } });
+  return token;
+}
+
+// ─── Homônimo: avisar e oferecer a união COM PROVA DE POSSE ───────────────────
+// Regra do dono: dois uids de pessoas diferentes não podem ter o mesmo nome. Mas homônimo
+// NÃO É AUTORIZAÇÃO — na base os 3 casos eram duplicata da mesma pessoa, e ainda assim
+// fundir por coincidência de nome fundiria dois "João Silva" de verdade, apagando um do
+// Auth. Erro assimétrico: conta duplicada é incômodo, pessoa fundida é irreversível.
+// Por isso: o nome só DETECTA; quem AUTORIZA é a posse do e-mail/celular da outra conta.
+//
+// O alvo é resolvido pelo SERVIDOR (o cliente não passa uid nem e-mail) e só existe quando
+// há colisão real — assim ninguém usa a porta pra disparar mensagem a quem quiser.
+exports.checkNameConflict = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const db = admin.firestore();
+    const me = await db.collection("users").doc(callerUid).get();
+    if (!me.exists) return { hasConflict: false };
+    const nome = String((me.data() || {}).displayName || "").trim();
+    if (!nome) return { hasConflict: false };
+
+    const c = await _nameUnique.findDisplayNameConflict(db, nome, callerUid);
+    if (!c) return { hasConflict: false };
+
+    // Só o MASCARADO sai daqui — o valor cheio e o uid nunca chegam ao cliente.
+    return {
+      hasConflict: true,
+      name: nome,
+      maskedEmail: _nameUnique.maskEmail(c.email) || null,
+      maskedPhone: _nameUnique.maskPhone(c.phone) || null,
+    };
+  }
+);
+
+// Dispara a PROVA para a outra conta. `channel`: 'email' (pronto) — 'phone' ainda não.
+// Rate limit por caller: a mensagem vai pra caixa de outra pessoa quando o homônimo é
+// coincidência, então o botão não pode virar gerador de spam.
+exports.requestNameMergeProof = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const channel = String((request.data && request.data.channel) || "email").trim();
+    const db = admin.firestore();
+
+    const me = await db.collection("users").doc(callerUid).get();
+    if (!me.exists) throw new HttpsError("failed-precondition", "perfil não encontrado");
+    const nome = String((me.data() || {}).displayName || "").trim();
+    const c = nome ? await _nameUnique.findDisplayNameConflict(db, nome, callerUid) : null;
+    if (!c) return { ok: false, reason: "no-conflict" };
+
+    // Rate limit: 3 envios por hora por caller.
+    const rlRef = db.collection("mergeProofLimits").doc(callerUid);
+    const rl = await rlRef.get();
+    const agora = Date.now();
+    const janela = (rl.exists && rl.data().windowStart && rl.data().windowStart.toMillis)
+      ? rl.data().windowStart.toMillis() : 0;
+    const n = (rl.exists && janela && (agora - janela) < 3600000) ? (rl.data().count || 0) : 0;
+    if (n >= 3) throw new HttpsError("resource-exhausted", "Muitas tentativas. Tente de novo daqui a pouco.");
+
+    if (channel !== "email") throw new HttpsError("invalid-argument", "canal não suportado ainda");
+    if (!c.email) return { ok: false, reason: "no-email" };
+
+    await _sendMergeProofEmail(db, callerUid, c.uid, c.email);
+    await rlRef.set({
+      count: n + 1,
+      windowStart: (n === 0) ? admin.firestore.FieldValue.serverTimestamp() : (rl.data() || {}).windowStart,
+    }, { merge: true });
+
+    console.log(`[requestNameMergeProof] prova por ${channel} enviada: req=${callerUid} target=${c.uid}`);
+    return { ok: true, sent: true, masked: _nameUnique.maskEmail(c.email) };
   }
 );
 

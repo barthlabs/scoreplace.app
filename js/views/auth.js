@@ -4636,6 +4636,8 @@ async function simulateLoginSuccess(user) {
     if (typeof window._profileRenderAuthProviders === 'function') window._profileRenderAuthProviders();
     if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
     if (typeof window._profileRenderLinkedPhones === 'function') window._profileRenderLinkedPhones();
+    // Colisão de nome com outra conta (o servidor decide; aqui só se pinta o aviso).
+    if (typeof window._profileHydrateNameConflict === 'function') window._profileHydrateNameConflict();
 
     // ── BASELINE DE HIDRATAÇÃO ──────────────────────────────────────────
     // Registro do que o formulário REALMENTE MOSTROU pra pessoa. É esse
@@ -6279,6 +6281,13 @@ function setupProfileModal() {
             '<div id="profile-link-provider-msg" style="display:none;margin-top:6px;font-size:0.78rem;"></div>' +
             '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">Vincule Google e Apple na mesma conta pra entrar por qualquer um dos dois. Sem isso, entrar pelo outro cria uma conta separada — principalmente com o "Ocultar meu e-mail" da Apple, que dá um endereço novo que não temos como reconhecer.</span>' +
           '</div>' +
+          // ── Outra conta com o MESMO NOME: avisa e oferece unir COM PROVA ──
+          // O nome só DETECTA. Quem AUTORIZA é a posse do e-mail/celular da outra conta:
+          // a pessoa recebe um link lá e é isso que funde. Sem essa prova, dois homônimos
+          // de verdade poderiam se fundir num clique — e fundir gente é irreversível,
+          // enquanto conta duplicada é só incômodo. Contato aparece MASCARADO.
+          // Slot vazio por padrão: só aparece quando o servidor confirma a colisão.
+          '<div id="profile-name-conflict" style="display:none;margin:0 0 10px 0;"></div>' +
           // ── Emails vinculados ──
           '<div style="margin:0 0 6px 0;">' +
             '<label class="form-label" style="font-size:0.75rem;">🔗 E-mails vinculados</label>' +
@@ -7605,6 +7614,84 @@ function setupProfileModal() {
         return window._profilePhoneMergeFromSecondary(result.user, otpEl);
       }).catch(function() {
         if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>';
+      });
+    };
+
+    // ── Outra conta com o mesmo NOME: avisar e oferecer unir COM PROVA ────
+    // Quem decide se existe colisão é o SERVIDOR (checkNameConflict) — o cliente não
+    // recebe o uid nem o contato cheio da outra conta, só o MASCARADO. E o botão não
+    // funde nada: ele pede uma PROVA DE POSSE (link no e-mail da outra conta), porque
+    // nome igual não é evidência de que a conta é da mesma pessoa. Fundir dois
+    // homônimos de verdade apagaria alguém do Auth — erro que não tem volta, enquanto
+    // conta duplicada é só incômodo.
+    window._profileHydrateNameConflict = function () {
+      var box = document.getElementById('profile-name-conflict');
+      if (!box) return;
+      var fns = (window.firebase && firebase.functions) ? firebase.functions() : null;
+      if (!fns) return;
+      fns.httpsCallable('checkNameConflict')({}).then(function (res) {
+        var d = (res && res.data) || {};
+        if (!d.hasConflict) { box.style.display = 'none'; box.innerHTML = ''; return; }
+        var contato = d.maskedEmail || d.maskedPhone || '';
+        var podeEmail = !!d.maskedEmail;
+        box.style.display = '';
+        box.innerHTML =
+          '<div style="background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.35);border-radius:10px;padding:10px 12px;">' +
+            '<div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:4px;">👤 Existe outra conta com o seu nome</div>' +
+            '<div style="font-size:0.75rem;color:var(--text-muted);line-height:1.45;">' +
+              (contato
+                ? 'Ela está cadastrada com ' + window._safeHtml(contato) + '. '
+                : '') +
+              'Se essa conta é <strong>sua</strong>, dá pra unir as duas: seus torneios, partidas e histórico ficam num lugar só. ' +
+              'Se for outra pessoa com o mesmo nome, é só ignorar — nada acontece sem você confirmar.' +
+            '</div>' +
+            (podeEmail
+              ? '<button type="button" id="profile-name-merge-btn" class="btn btn-warning btn-sm" style="margin-top:8px;" ' +
+                  'onclick="window._profileRequestNameMerge()">Unir contas — receber confirmação por e-mail</button>'
+              : '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.85;margin-top:8px;">' +
+                  'Pra unir, a outra conta precisa ter um e-mail cadastrado. Entre nela e adicione um e-mail no perfil.</div>') +
+            '<div id="profile-name-merge-msg" style="display:none;margin-top:8px;font-size:0.78rem;"></div>' +
+          '</div>';
+      }).catch(function (e) {
+        // Fail-open: aviso é conveniência, não pode quebrar o perfil.
+        if (window._warn) window._warn('[nameConflict] fail-open:', e);
+      });
+    };
+
+    // Dispara a PROVA. Não funde nada aqui — quem funde é o clique no link que chega
+    // na caixa da OUTRA conta (confirmEmailMerge). O e-mail de destino é resolvido no
+    // servidor; o cliente nunca o conhece.
+    window._profileRequestNameMerge = function () {
+      var btn = document.getElementById('profile-name-merge-btn');
+      var msg = document.getElementById('profile-name-merge-msg');
+      var fns = (window.firebase && firebase.functions) ? firebase.functions() : null;
+      if (!fns) return;
+      function diz(tipo, txt) {
+        if (!msg) return;
+        msg.style.display = '';
+        msg.style.color = (tipo === 'err') ? '#fca5a5' : (tipo === 'ok' ? '#6ee7b7' : 'var(--text-muted)');
+        msg.textContent = txt;
+      }
+      if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+      diz('info', 'Enviando…');
+      fns.httpsCallable('requestNameMergeProof')({ channel: 'email' }).then(function (res) {
+        var d = (res && res.data) || {};
+        if (d.ok) {
+          diz('ok', '✅ Enviamos um link para ' + (d.masked || 'o e-mail da outra conta') +
+            '. Abra lá e confirme — é assim que provamos que a conta é sua. O link vale 1 hora.');
+          if (btn) btn.style.display = 'none';
+          return;
+        }
+        if (d.reason === 'no-conflict') { diz('info', 'Não há mais outra conta com esse nome.'); return; }
+        if (d.reason === 'no-email') { diz('err', 'A outra conta não tem e-mail cadastrado — não dá pra enviar a confirmação.'); return; }
+        diz('err', 'Não foi possível enviar agora.');
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+      }).catch(function (e) {
+        var code = (e && e.code) || '';
+        diz('err', /resource-exhausted/.test(code)
+          ? 'Muitas tentativas. Tente de novo daqui a pouco.'
+          : 'Não foi possível enviar agora. Tente de novo.');
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
       });
     };
 
