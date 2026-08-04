@@ -213,16 +213,43 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
  */
 async function _determineMergeWinner(docA, docB) {
   const fetchAuth = (uid) => admin.auth().getUser(uid).catch(() => null);
-  const [authA, authB] = await Promise.all([fetchAuth(docA.id), fetchAuth(docB.id)]);
-  const pick = _mergeRules.pickSurvivorProfiles(
-    { data: docA.data(), authUser: authA },
-    { data: docB.data(), authUser: authB }
+  const db = admin.firestore();
+  const [authA, authB, tcA, tcB] = await Promise.all([
+    fetchAuth(docA.id), fetchAuth(docB.id),
+    _tournamentCountFor(db, docA.id), _tournamentCountFor(db, docB.id),
+  ]);
+  const pick = _mergeRules.pickSurvivorByActivity(
+    { data: docA.data(), authUser: authA, tournamentCount: tcA },
+    { data: docB.data(), authUser: authB, tournamentCount: tcB },
+    docA.id, docB.id
   );
   const keepDoc = pick.keep === "a" ? docA : docB;
   const dropDoc = pick.keep === "a" ? docB : docA;
-  console.log(`[_determineMergeWinner] keep=${keepDoc.id} ← drop=${dropDoc.id} (critério: ${pick.reason}` +
-    `${authA ? "" : `; Auth ausente p/ ${docA.id}`}${authB ? "" : `; Auth ausente p/ ${docB.id}`})`);
+  console.log(`[_determineMergeWinner] keep=${keepDoc.id} ← drop=${dropDoc.id} ` +
+    `(critério: ${pick.reason}${pick.detail ? " — " + pick.detail : ""})`);
   return { keepDoc, dropDoc };
+}
+
+/**
+ * Quantos torneios este uid integra — o sinal MAIS FORTE de atividade (é o que o dono citou
+ * primeiro). Query indexada por `memberUids`, com `count()` quando disponível pra não ler os
+ * docs. Devolve null quando a consulta falha: aí o degrau é PULADO na decisão, em vez de
+ * virar zero — um erro de query não pode decidir qual conta morre.
+ */
+async function _tournamentCountFor(db, uid) {
+  try {
+    const q = db.collection("tournaments").where("memberUids", "array-contains", uid);
+    if (typeof q.count === "function") {
+      const agg = await q.count().get();
+      const n = agg.data() && agg.data().count;
+      if (typeof n === "number") return n;
+    }
+    const s = await q.get();
+    return s.size;
+  } catch (e) {
+    console.warn("[_tournamentCountFor] falhou p/", uid, (e && (e.code || e.message)) || e);
+    return null;
+  }
 }
 
 /** Normalise a field value to a dedup key (strips spaces/dashes from phones). */
@@ -279,6 +306,45 @@ async function _executeMerge(db, keepDoc, dropDoc) {
   if (Object.keys(profileUpd).length > 0) {
     console.log(`[_executeMerge] perfil absorvido: ${Object.keys(profileUpd).join(", ")}`);
     await db.collection("users").doc(keepUid).update(profileUpd);
+  }
+
+  // v1.7.13 — IMPORTAÇÃO DO LETZPLAY. Vive em `letzplayScans/{uid}` (handle, scan,
+  // fullImport, totaisLetzplay, cursor) — coleção PRÓPRIA, indexada por uid, que o merge não
+  // tocava: a leitura inteira do letzplay da pessoa sumia junto com a conta. `scannedBy`
+  // (quem rodou a leitura) também é uid e precisa ser repontado, senão a autoria vira órfã.
+  // O acervo `letzplayTournaments/*` NÃO entra: é indexado por competição, compartilhado
+  // entre todo mundo, e não guarda uid — não há o que remapear ali.
+  try {
+    const lzCol = db.collection("letzplayScans");
+    const [lzKeep, lzDrop] = await Promise.all([
+      lzCol.doc(keepUid).get(), lzCol.doc(dropUid).get(),
+    ]);
+    if (lzDrop.exists) {
+      const lzDropData = lzDrop.data() || {};
+      if (!lzKeep.exists) {
+        await lzCol.doc(keepUid).set(lzDropData);
+      } else {
+        // Mesma regra da união de perfil: o vivo do sobrevivente vence, o drop preenche
+        // buraco, arrays unem. Fonte única — não há segunda noção de "fundir dois docs".
+        const upd = _profileMerge.computeProfileMerge(lzKeep.data(), lzDropData, keepUid);
+        if (Object.keys(upd).length) await lzCol.doc(keepUid).set(upd, { merge: true });
+      }
+      // Apaga o doc do drop: deixado pra trás ele vira ÓRFÃO respondendo por uid — foi
+      // exatamente assim que placares de torneios apagados reapareceram na ficha das pessoas.
+      await lzCol.doc(dropUid).delete();
+      console.log(`[_executeMerge] letzplay: scan de ${dropUid} absorvido por ${keepUid}`);
+    }
+    // Autoria das leituras que o drop rodou em OUTRAS pessoas.
+    const lzBy = await lzCol.where("scannedBy", "==", dropUid).get();
+    if (!lzBy.empty) {
+      const b = db.batch();
+      lzBy.docs.forEach((doc) => { if (doc.id !== dropUid) b.update(doc.ref, { scannedBy: keepUid }); });
+      await b.commit();
+      console.log(`[_executeMerge] letzplay: ${lzBy.size} leitura(s) repontada(s) pra ${keepUid}`);
+    }
+  } catch (e) {
+    // Não derruba a fusão (os dados principais já viajaram), mas precisa ser barulhento.
+    console.error("[_executeMerge] letzplay falhou:", (e && (e.code || e.message)) || e);
   }
 
   // Transfer casualMatches ownership
@@ -390,10 +456,21 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   // Confra; Google criado 11/jun, com os únicos logins recentes. Pela regra antiga ela
   // ganharia a Confra e perderia a entrada. Mantendo a federada: o phone é movido pra ela,
   // e a pessoa entra por Google OU telefone. Ver [[project_account_merge_email]].
-  const _pick = _mergeRules.pickSurvivor(ua, ub);
-  const keepU = _pick.keep, dropU = _pick.drop;
+  // v1.7.13 — A MAIS ATIVA VENCE (decisão do dono). Os DOIS pontos de decisão usam a MESMA
+  // regra: se divergirem, auto-merge e merge explícito escolhem sobreviventes diferentes pra
+  // mesma dupla. A atividade mora no Firestore, então este ponto (que só tinha UserRecords)
+  // passou a carregar os docs + a contagem de torneios.
+  const [_tcA, _tcB] = await Promise.all([
+    _tournamentCountFor(db, uidA), _tournamentCountFor(db, uidB),
+  ]);
+  const _byUid = (u) => (u === uidA)
+    ? { data: da.exists ? da.data() : {}, authUser: ua, tournamentCount: _tcA }
+    : { data: dbb.exists ? dbb.data() : {}, authUser: ub, tournamentCount: _tcB };
+  const _pickAct = _mergeRules.pickSurvivorByActivity(_byUid(uidA), _byUid(uidB), uidA, uidB);
+  const keepU = (_pickAct.keep === "a") ? ua : ub;
+  const dropU = (_pickAct.keep === "a") ? ub : ua;
   console.log(`[merge] keep=${keepU.uid} [${(keepU.providerData || []).map((p) => p.providerId).join(",")}] ` +
-    `← drop=${dropU.uid} (critério: ${_pick.reason === "federated" ? "conta federada vence" : "mais antiga vence"})`);
+    `← drop=${dropU.uid} (critério: ${_pickAct.reason}${_pickAct.detail ? " — " + _pickAct.detail : ""})`);
   const keepDoc = (keepU.uid === uidA) ? da : dbb;
   const dropDoc = (dropU.uid === uidA) ? da : dbb;
 

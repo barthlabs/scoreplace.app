@@ -68,8 +68,18 @@ ok(escolhe(misto, p1).uid === 'misto', 'conta google+phone é federada (perderia
 // ── o index.js USA o módulo? (não pode ter a regra duplicada divergindo) ─────
 const src = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
 ok(/require\(["']\.\/merge-rules["']\)/.test(src), 'index.js importa functions/merge-rules');
-ok(src.includes('_mergeRules.pickSurvivor(ua, ub)'), '_mergeAccountsKeepOlder usa pickSurvivor do módulo');
-ok(src.includes('_mergeRules.pickSurvivorProfiles('), '_determineMergeWinner usa o módulo (os 2 pontos concordam)');
+// ⚠️ REVISADAS de propósito em 04/ago/2026 (decisão do dono: "a mais ativa vence").
+// O que estas 2 asserções defendem NÃO mudou — "a regra mora no módulo e os DOIS pontos de
+// decisão usam a MESMA" — só mudou QUAL regra é a vigente. A anterior (federada vence) era
+// contorno de um limite técnico que caiu: o merge agora TRANSFERE o provedor federado e
+// ABSORVE o perfil, então o critério parou de decidir quem perde dados. As funções antigas
+// seguem exercitadas acima, como registro do porquê.
+ok(/_mergeRules\.pickSurvivorByActivity\(_byUid\(uidA\)/.test(src),
+  '_mergeAccountsKeepOlder usa a regra VIGENTE do módulo (mais ativa vence)');
+ok((src.match(/_mergeRules\.pickSurvivorByActivity\(/g) || []).length === 2,
+  'os DOIS pontos de decisão usam a MESMA regra (senão escolhem contas diferentes pra mesma dupla)');
+ok(!/_mergeRules\.pickSurvivor\(ua, ub\)/.test(src),
+  'a regra superada (federada vence) não é mais chamada pelo index.js');
 ok(/async function _determineMergeWinner[\s\S]{0,400}admin\.auth\(\)\.getUser\(/.test(src),
   '_determineMergeWinner consulta o AUTH (idade/federação reais, não só os campos do doc)');
 ok(/creationTime \|\| 0\)\.getTime\(\);\s*\n\s*const keepU/.test(src) === false,

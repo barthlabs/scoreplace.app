@@ -23,7 +23,13 @@ function isFederatedProfile(profileData) {
 }
 
 /**
- * REGRA DO DONO (jul/2026): a conta FEDERADA (Google/Apple) sempre vence.
+ * ⚠️ SUPERADA em 04/ago/2026 por pickSurvivorByActivity ("a mais ATIVA vence") — NÃO usar em
+ * código novo. Continua aqui, testada, porque documenta POR QUE a federada vencia: era
+ * contorno de um limite (provedor morria com a conta) que caiu quando o merge passou a
+ * TRANSFERIR o provedor (planProviderTransfer) e a ABSORVER o perfil. Se um dia o
+ * providerToLink deixar de funcionar, é esta a regra pra qual voltar.
+ *
+ * REGRA ANTIGA (jul/2026): a conta FEDERADA (Google/Apple) sempre vence.
  * Entre duas federadas — ou duas não-federadas — vence a MAIS ANTIGA (regra v3.0.57).
  *
  * Não é preferência, é limite do Firebase: manter a "mais antiga" quando ela é phone e a
@@ -107,6 +113,8 @@ function isFederatedAccount(profileData, authUser) {
 }
 
 /**
+ * ⚠️ SUPERADA por pickSurvivorByActivity (04/ago/2026) — mantida testada pelo mesmo motivo.
+ *
  * Decisão do AUTO-MERGE (espelho do pickSurvivor, mas partindo dos DOCS de perfil):
  * federada vence → mais antiga vence → idade conhecida vence ausente → perfil mais
  * completo. Cada lado é { data, authUser } — `data` é o users/{uid} e `authUser` o
@@ -163,8 +171,75 @@ function planProviderTransfer(keepProviders, dropProviders) {
   return out;
 }
 
+// ─── v1.7.13 — A CONTA MAIS ATIVA VENCE ──────────────────────────────────────
+// Decisão do dono (04/ago/2026): "poderia ser sempre a mais ativa vence (com mais interação,
+// torneios, jogos e dados de perfil) recebendo os dados da outra. nada se perde."
+//
+// POR QUE ISSO PÔDE MUDAR: "a federada sempre vence" (v1.2.6) não era preferência — era
+// contorno de um limite técnico. Provedor federado morria com a conta, então manter a
+// não-federada apagava o "Entrar com Google" da pessoa. Esse limite CAIU: o merge agora
+// transfere o provedor (providerToLink, v1.7.11) e absorve o perfil (v1.7.11), então o
+// critério de sobrevivência parou de decidir quem PERDE dados — decide só qual uid e qual
+// nome ficam. O que sobra do limite antigo é 2 contas do MESMO provedor (não cabem no mesmo
+// uid): ali um login morre de qualquer jeito, e quem cobre é loginRedirects — o que torna a
+// escolha entre elas indiferente por esse critério.
+//
+// BÔNUS TÉCNICO: manter a mais ativa é também manter quem tem MAIS dados espalhados, então o
+// uid-sweep reescreve MENOS — menos superfície de erro no merge.
+//
+// HIERARQUIA, não soma ponderada: torneios → jogos → perfil → idade. Pesos inventados
+// ("torneio vale 10, jogo vale 3") seriam número tirado do nada e impossível de explicar
+// quando alguém perguntar por que uma conta venceu. Comparação em ordem é determinística e
+// o log diz qual degrau decidiu.
+const ACTIVITY_STEPS = ['tournaments', 'games', 'profile'];
+
+/**
+ * Sinais de atividade de uma conta. `tournamentCount` vem de fora (é I/O) e pode ser null
+ * quando a consulta falhou — nesse caso o degrau é PULADO em vez de contar como zero, senão
+ * um erro de query decidiria quem morre.
+ */
+function activitySignals(profileData, tournamentCount) {
+  const d = profileData || {};
+  return {
+    tournaments: (tournamentCount == null) ? null : Number(tournamentCount),
+    games: Array.isArray(d.matchHistory) ? d.matchHistory.length : 0,
+    profile: profileScore(d),
+  };
+}
+
+/**
+ * A mais ATIVA vence; empate total desempata pela mais ANTIGA (regra anterior preservada
+ * como último critério) e, sem idade confiável, pelo uid — arbitrário mas estável, pra que
+ * os dois pontos de decisão do merge nunca escolham contas diferentes pra mesma dupla.
+ *
+ * Cada lado: { data, authUser, tournamentCount }.
+ * @returns { keep: 'a'|'b', reason, detail }
+ */
+function pickSurvivorByActivity(a, b, aUid, bUid) {
+  const sa = activitySignals(a && a.data, a && a.tournamentCount);
+  const sb = activitySignals(b && b.data, b && b.tournamentCount);
+  for (const step of ACTIVITY_STEPS) {
+    const va = sa[step], vb = sb[step];
+    if (va == null || vb == null) continue;   // sinal desconhecido não decide
+    if (va !== vb) {
+      return { keep: (va > vb) ? 'a' : 'b', reason: 'activity:' + step,
+               detail: step + ' ' + va + ' x ' + vb };
+    }
+  }
+  const ta = accountAgeMs(a && a.data, a && a.authUser);
+  const tb = accountAgeMs(b && b.data, b && b.authUser);
+  if (ta != null && tb != null && ta !== tb) {
+    return { keep: (ta < tb) ? 'a' : 'b', reason: 'older', detail: 'atividade empatada' };
+  }
+  if (ta != null && tb == null) return { keep: 'a', reason: 'only-known-age', detail: 'atividade empatada' };
+  if (tb != null && ta == null) return { keep: 'b', reason: 'only-known-age', detail: 'atividade empatada' };
+  return { keep: (String(aUid || '') > String(bUid || '')) ? 'a' : 'b',
+           reason: 'uid-tiebreak', detail: 'atividade e idade empatadas' };
+}
+
 module.exports = {
   FEDERATED, isFederated, isFederatedProfile, pickSurvivor,
   profileScore, accountAgeMs, isFederatedAccount, pickSurvivorProfiles,
   planProviderTransfer,
+  ACTIVITY_STEPS, activitySignals, pickSurvivorByActivity,
 };

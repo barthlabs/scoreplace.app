@@ -127,8 +127,10 @@ const path = require('path');
 const src = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
 ok('index.js: _determineMergeWinner é async e busca o Auth (getUser) antes de decidir',
   /async function _determineMergeWinner[\s\S]{0,400}admin\.auth\(\)\.getUser\(/.test(src));
-ok('index.js: _determineMergeWinner delega pra pickSurvivorProfiles (regra num lugar só)',
-  src.includes('_mergeRules.pickSurvivorProfiles('));
+// REVISADA junto com a decisão "a mais ativa vence": o invariante é "regra num lugar só",
+// e ele segue travado — mudou a função vigente, não o princípio.
+ok('index.js: _determineMergeWinner delega pro módulo (regra num lugar só)',
+  src.includes('_mergeRules.pickSurvivorByActivity('));
 ok('index.js: _scanAndMergeByField AGUARDA a decisão (await) — senão keepDoc vira Promise',
   src.includes('(await _determineMergeWinner(keepDoc, docs[i])).keepDoc'));
 ok('index.js: autoMergeOnProfileUpdate AGUARDA a decisão (await)',
@@ -186,6 +188,81 @@ ok('index.js: a réplica local da regra saiu (sem _profileScore duplicado)',
     /for \(const _p of _fedToLink\)/.test(bloco));
   ok('index.js: falha ao linkar NÃO desfaz a fusão (best-effort com catch)',
     /providerToLink\(\$\{_p\.providerId\}\) falhou/.test(bloco));
+})();
+
+// ── A MAIS ATIVA VENCE (decisão do dono, 04/ago/2026) ───────────────────────
+// Substituiu "a federada vence", que era contorno de um limite (o provedor morria com a
+// conta) hoje resolvido: o merge TRANSFERE o provedor e ABSORVE o perfil, então o critério
+// parou de decidir quem PERDE dados. Hierarquia explícita, não soma ponderada — pesos
+// inventados seriam impossíveis de explicar quando alguém perguntar por que uma conta venceu.
+(() => {
+  const A = M.pickSurvivorByActivity;
+  const conta = (t, jogos, extra) => ({
+    data: Object.assign({ matchHistory: new Array(jogos || 0).fill({}) }, extra || {}),
+    authUser: null, tournamentCount: t,
+  });
+
+  // 1º degrau: torneios
+  let r = A(conta(5, 0), conta(1, 99), 'uA', 'uB');
+  ok('torneios decidem antes de tudo', r.keep === 'a' && r.reason === 'activity:tournaments');
+
+  // 2º: jogos, quando torneios empatam
+  r = A(conta(3, 2), conta(3, 40), 'uA', 'uB');
+  ok('empate de torneios → decide por JOGOS', r.keep === 'b' && r.reason === 'activity:games');
+
+  // 3º: completude do perfil
+  r = A(conta(1, 5, { displayName: 'Fulana de Tal', email: 'f@x.com', city: 'SP' }),
+        conta(1, 5, { displayName: '+5511988887777' }), 'uA', 'uB');
+  ok('empate de torneios e jogos → decide pelo PERFIL mais completo', r.keep === 'a' && r.reason === 'activity:profile');
+
+  // 4º: idade (a regra anterior vira o último desempate, não some)
+  r = A(conta(2, 3, { createdAt: '2026-01-01T00:00:00Z' }),
+        conta(2, 3, { createdAt: '2026-06-01T00:00:00Z' }), 'uA', 'uB');
+  ok('atividade toda empatada → vence a MAIS ANTIGA', r.keep === 'a' && r.reason === 'older');
+
+  // Direção-agnóstica: a ordem dos argumentos não muda o vencedor
+  ok('direção-agnóstica', A(conta(1, 0), conta(9, 0), 'uA', 'uB').keep === 'b' &&
+                          A(conta(9, 0), conta(1, 0), 'uB', 'uA').keep === 'a');
+
+  // Contagem desconhecida NÃO vira zero — senão um erro de query decidiria quem morre
+  r = A(conta(null, 50), conta(3, 1), 'uA', 'uB');
+  ok('torneios desconhecidos (null) PULAM o degrau em vez de contar zero',
+    r.keep === 'a' && r.reason === 'activity:games');
+
+  // Empate absoluto → desempate estável, e só um lado vence
+  const x = A(conta(1, 1), conta(1, 1), 'uA', 'uB');
+  const y = A(conta(1, 1), conta(1, 1), 'uB', 'uA');
+  ok('empate absoluto → desempate estável por uid', x.reason === 'uid-tiebreak' && x.keep !== y.keep);
+
+  // A federação NÃO decide mais nada por si só (o provedor viaja)
+  const fed = { data: { authProvider: 'google.com', matchHistory: [] }, authUser: null, tournamentCount: 0 };
+  const ativa = { data: { authProvider: 'phone', matchHistory: new Array(10).fill({}) }, authUser: null, tournamentCount: 7 };
+  ok('conta FEDERADA parada perde pra conta ativa (o provedor dela viaja no merge)',
+    A(fed, ativa, 'uF', 'uAt').keep === 'b');
+})();
+
+// ── Fiação da regra nova + LETZPLAY ─────────────────────────────────────────
+(() => {
+  const fs = require('fs'), path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
+  ok('index.js: conta torneios pra decidir (sinal mais forte de atividade)',
+    /_tournamentCountFor\(db, /.test(src));
+  ok('index.js: contagem usa query indexada por memberUids',
+    /where\("memberUids", "array-contains", uid\)/.test(src));
+  ok('index.js: falha na contagem devolve null (não deixa erro de query decidir)',
+    /\[_tournamentCountFor\] falhou/.test(src));
+
+  const bx = src.slice(src.indexOf('async function _executeMerge'), src.indexOf('async function _mergeAccountsKeepOlder'));
+  ok('LETZPLAY: a importação do drop é absorvida (letzplayScans é por uid e sumia no merge)',
+    /letzplayScans/.test(bx));
+  ok('LETZPLAY: funde com a MESMA regra da união de perfil (sem 2ª noção de fundir docs)',
+    /computeProfileMerge\(lzKeep\.data\(\)/.test(bx));
+  ok('LETZPLAY: o doc do drop é APAGADO (órfão por uid reapareceria na ficha da pessoa)',
+    /lzCol\.doc\(dropUid\)\.delete\(\)/.test(bx));
+  ok('LETZPLAY: a autoria das leituras (scannedBy) é repontada',
+    /where\("scannedBy", "==", dropUid\)/.test(bx));
+  ok('LETZPLAY: falhar não derruba a fusão, mas é barulhento',
+    /\[_executeMerge\] letzplay falhou/.test(bx));
 })();
 
 console.log(fail === 0
