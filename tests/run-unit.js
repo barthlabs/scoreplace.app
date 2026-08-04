@@ -498,6 +498,9 @@ const SUITES = [
   // dono: evitar que atrasados formem um grupo mais forte). Vale no cliente E na CF — o
   // _generateNextRound do servidor chama a mesma _tryFormMonarchWaitlistGroups.
   'tests/grupo-espera-max-1-homem.test.js',
+  // Tema mostrava "🌙🌙 Noturno" / "☀️☀️ Claro": o botão prefixava o emoji e a string de
+  // i18n já trazia o dela. A i18n é a DONA do emoji; o botão não repete. v1.7.7.
+  'tests/tema-um-emoji.test.js',
   // Botões CANCELAR do fluxo de sorteio são VERMELHOS (#dc2626), nunca transparentes. v1.3.103.
   'tests/draw-cancel-red-canon.test.js',
   // FANTASMA DE ARRASTE (bug ao vivo 26/jul): card de inscrito flutuando preso sobre a
