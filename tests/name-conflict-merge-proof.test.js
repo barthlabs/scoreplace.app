@@ -91,6 +91,42 @@ ok(/fail-open/i.test(bHid), 'falha na consulta não quebra o perfil');
 ok(/display:none/.test(cli.slice(cli.indexOf('profile-name-conflict') - 200, cli.indexOf('profile-name-conflict') + 200)),
   'o slot nasce escondido — sem colisão, ninguém vê nada');
 
+// ── 7. Canal por CELULAR: reusa a máquina que já funciona ───────────────────
+// Não há CF que envie SMS (quem envia é o Firebase, pelo cliente) — então o caminho é o
+// MESMO do "celular vinculado": app secundário + reCAPTCHA off-screen + a sessão do
+// telefone virando prova (proofIdToken) no mergePhoneAccount, que a valida com
+// verifyIdToken e exige uid === oldUid. Reusar é o ponto: um 2º fluxo de SMS seria outra
+// superfície pra quebrar (o reCAPTCHA do iOS já custou caro uma vez).
+const bPhone = bloco(cli, 'window._profileNameMergeByPhone = function', 'window._profileRequestNameMerge = function');
+ok(/profile-nc-phone-wrap/.test(bPhone), 'o botão por celular só REVELA os campos');
+ok(!/signInWithPhoneNumber|RecaptchaVerifier|mergePhoneAccount/.test(bPhone),
+  'o handler NÃO reimplementa envio de SMS nem chama merge — quem faz é _profileVerifyPhone');
+ok(/_profileVerifyPhone\(\{conflict:true\}\)/.test(cli),
+  'os campos disparam _profileVerifyPhone no contexto conflict');
+
+const bVerify = bloco(cli, 'window._profileVerifyPhone = function', 'window._profilePhoneMergeFromSecondary');
+ok(/var conflict = !!opts\.conflict/.test(bVerify), '_profileVerifyPhone entende o 3º contexto');
+ok(/profile-nc-phone/.test(bVerify), 'o contexto conflict aponta pros IDs do aviso');
+ok(/conflict && cu\.phone && cu\.phone === e164/.test(bVerify),
+  'digitar o PRÓPRIO número é barrado (não prova posse da outra conta)');
+// As lições que não podem se perder ao reusar:
+ok(/persistence|Persistence\.NONE/i.test(bVerify),
+  'sessão secundária não derruba o login atual (persistence NONE)');
+ok(/position:fixed[^']*width:1px/.test(bVerify),
+  'reCAPTCHA fica off-screen mas EM LAYOUT — display:none invalida o token no iOS');
+
+// A prova chega ao servidor e é VERIFICADA lá.
+ok(/proofIdToken/.test(cli), 'o cliente envia o proofIdToken da sessão do telefone');
+const bMerge = bloco(cf, 'exports.mergePhoneAccount', 'exports.fixMergedParticipants');
+ok(/verifyIdToken\(String\(_proofToken\)\)/.test(bMerge) && /_dec\.uid === oldUid/.test(bMerge),
+  'mergePhoneAccount VALIDA a prova (verifyIdToken + uid === oldUid)');
+ok(/sem prova de posse da conta a mesclar/.test(bMerge),
+  'sem prova, o servidor recusa');
+
+// DDI vem da MESMA lista do perfil (sem segunda cópia divergindo)
+ok(/window\._phoneCountryOptionsHtml = function/.test(cli), 'helper único de opções de DDI');
+ok(/_phoneCountryOptionsHtml\(/.test(bHid), 'o campo do aviso usa o helper, não uma lista própria');
+
 console.log(fail === 0
   ? '✅ name-conflict-merge-proof: ' + pass + ' ok, 0 falharam'
   : '❌ name-conflict-merge-proof: ' + fail + ' falharam, ' + pass + ' ok');
