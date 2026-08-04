@@ -961,6 +961,38 @@ window._buildDurationForecast = function(t) {
       : null;
     if (!d || !(d.minutes > 0)) return '';
     var min = d.minutes;
+    // ENCERRADO mostra a duração REAL (não estimativa): do 1º jogo iniciado ao último
+    // jogo com resultado. W.O. conta como jogo concluído (tem resultAt ao ser declarado).
+    // Pedido do dono: "em torneios encerrados não deve ter estimativa de duração; deve ter
+    // o tempo que o torneio efetivamente durou".
+    function _actualDurationMinutes(tt) {
+      try {
+        var ms = (typeof window._collectAllMatches === 'function')
+          ? (window._collectAllMatches(tt) || []) : (tt.matches || []);
+        var _ms = function(v){ if (v == null || v === '') return null; var n = (typeof v === 'number') ? v : new Date(v).getTime(); return isNaN(n) ? null : n; };
+        var lo = null, hi = null;
+        ms.forEach(function(m){
+          if (!m) return;
+          [_ms(m.startedAt), _ms(m.resultAt)].forEach(function(x){
+            if (x != null) { if (lo == null || x < lo) lo = x; if (hi == null || x > hi) hi = x; }
+          });
+        });
+        // Fim = ÚLTIMO JOGO (maior resultAt), não o carimbo de status 'finished' —
+        // mesmo cânone da barra rica em tournaments-utils. finishedAt/startDate só
+        // entram como fallback quando não há timestamp de jogo nenhum.
+        if (hi == null) { var fin = _ms(tt.finishedAt); if (fin != null) hi = fin; }
+        var start = (lo != null) ? lo : _ms(tt.startedAt || tt.startDate);
+        if (start == null || hi == null || hi < start) return null;
+        return Math.round((hi - start) / 60000);
+      } catch (e) { return null; }
+    }
+    var _isFin = !!(t && t.status === 'finished');
+    var _titleLbl = 'Estimativa de duração';
+    if (_isFin) {
+      _titleLbl = 'Duração';
+      var _actMin = _actualDurationMinutes(t);
+      if (_actMin != null && _actMin >= 0) min = _actMin;
+    }
     // Duração em DD:HH:MM (dias:horas:minutos), zero-padded.
     function _p2(x) { return (x < 10 ? '0' : '') + x; }
     var dd = Math.floor(min / 1440);
@@ -991,7 +1023,7 @@ window._buildDurationForecast = function(t) {
         '<div style="display:flex;flex-direction:column;min-width:0;">' +
           '<div style="display:flex;align-items:center;gap:8px;">' +
             '<span style="font-size:1.1rem;flex-shrink:0;">⏱️</span>' +
-            '<span style="font-size:0.95rem;font-weight:800;color:' + rb.fg + ' !important;">Estimativa de duração</span>' +
+            '<span style="font-size:0.95rem;font-weight:800;color:' + rb.fg + ' !important;">' + _titleLbl + '</span>' +
           '</div>' +
           '<span style="font-size:0.72rem;font-weight:600;opacity:0.82;color:' + rb.fg + ' !important;">(' + partsLbl + ' / ' + jogosLbl + ')</span>' +
         '</div>' +

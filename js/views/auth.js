@@ -1867,23 +1867,26 @@ window._handleEntrar = function() {
           }
         });
       }
-      // uid-first: login por celular resolve a conta pelo NÚMERO no servidor e
-      // autentica contra a credencial real da conta — conserta quem cadastrou por
-      // celular e depois vinculou e-mail real (o e-mail primário trocou do
-      // sintético→real, então o signIn local contra o sintético falhava). Só
-      // celular; e-mail já entra direto pela própria credencial.
-      if (mode === 'phone') {
-        var _e164try = window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55');
-        if (_e164try) {
-          window._entrarSetInFlight(true);
-          window._entrarStatus('Entrando…', 'info');
-          window._entrarPhonePasswordLogin(_e164try, pw).then(function(done) {
-            if (done) return; // logou via custom token; onAuthStateChanged cuida do resto
-            window._entrarSetInFlight(false);
-            _entrarDisambiguate();
-          });
-          return;
-        }
+      // uid-first: resolve a conta pelo IDENTIFICADOR (celular OU e-mail) no servidor
+      // e autentica contra a credencial real. Conserta (a) quem cadastrou por celular
+      // e vinculou e-mail real (login primário trocou de sintético→real), e (b) quem
+      // entra pelo E-MAIL vinculado de uma conta phone+password (ex.: Adriano —
+      // adcoletta@hotmail é linkedEmail, credencial primária é sintética). Antes o
+      // e-mail pulava esse caminho e caía direto em "recuperar senha". phonePasswordLogin
+      // resolve via linkedEmails e verifica a senha server-side; se não autenticar
+      // (senha errada / sem conta) cai no fluxo de desambiguação como antes.
+      var _idTry = (mode === 'phone')
+        ? window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55')
+        : raw.toLowerCase();
+      if (_idTry) {
+        window._entrarSetInFlight(true);
+        window._entrarStatus('Entrando…', 'info');
+        window._entrarPhonePasswordLogin(_idTry, pw).then(function(done) {
+          if (done) return; // logou via custom token; onAuthStateChanged cuida do resto
+          window._entrarSetInFlight(false);
+          _entrarDisambiguate();
+        });
+        return;
       }
       _entrarDisambiguate();
     });
@@ -1898,10 +1901,14 @@ window._handleEntrar = function() {
 // número e autentica server-side; entra com o custom token. Resolve com `true`
 // se logou, `false` se não autenticou (senha errada / sem conta) — aí o caller
 // segue pro fluxo de desambiguação/recuperação.
-window._entrarPhonePasswordLogin = function(e164, pw) {
+window._entrarPhonePasswordLogin = function(identifier, pw) {
   try { if (!firebase.functions) return Promise.resolve(false); }
   catch (e) { return Promise.resolve(false); }
-  return firebase.functions().httpsCallable('phonePasswordLogin')({ phone: e164, password: pw })
+  // `identifier` = celular E.164 OU e-mail. A CF resolve a conta pelo identificador
+  // (_resolveAccount → linkedEmails/linkedPhones) e verifica a senha contra a
+  // credencial REAL — conserta quem entra pelo e-mail vinculado de uma conta
+  // phone+password (cujo login primário é sintético). Ver Adriano.
+  return firebase.functions().httpsCallable('phonePasswordLogin')({ identifier: identifier, password: pw })
     .then(function(res) {
       var d = (res && res.data) || {};
       if (d.ok && d.token) {
