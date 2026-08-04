@@ -107,6 +107,30 @@ console.log('\n──── 2 homens + 6 mulheres: forma 2 grupos, 1 homem em ca
   t2('nenhum grupo passou de 1 homem', maxH <= 1, 'maxHomens=' + maxH);
 }
 
+// ── REGRESSÃO (ago/2026): o guloso PERDIA um grupo, dependendo do embaralho ───────────
+// O cenário acima só pegava o defeito por SORTE — medido: ~21% das ordens. Era essa a
+// intermitência que fazia o gate do pre-push falhar sem ninguém ter mexido no sorteio.
+// A causa não era o teste: `_pickGrupo` pegava "os 4 primeiros que cabem", gastava os
+// não-homens no primeiro grupo e sobrava um pool só de homens que não fechava — com 4
+// pessoas esperando à toa, existindo divisão válida. Aqui o embaralho vira DETERMINÍSTICO
+// (Math.random semeado), então a falha reaparece sempre que alguém reintroduzir o guloso.
+console.log('\n──── 2 homens + 6 mulheres NUNCA perde grupo (qualquer embaralho) ────');
+{
+  const _random = Math.random;
+  let perdidos = 0, pior = null;
+  for (let seed = 1; seed <= 120; seed++) {
+    let s = seed;
+    Math.random = () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
+    const t = mkT(['uH1', 'uH2', 'uM1', 'uM2', 'uM3', 'uM4', 'uX1', 'uX2']);
+    const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
+    const maxH = gruposFormados(t).reduce((a, g) => Math.max(a, homensNo(g)), 0);
+    if (n !== 2 || maxH > 1) { perdidos++; if (!pior) pior = 'seed=' + seed + ' grupos=' + n + ' maxHomens=' + maxH; }
+  }
+  Math.random = _random;
+  t2('as 120 ordens formam 2 grupos, sempre com no máximo 1 homem', perdidos === 0,
+    perdidos + ' ordem(ns) falharam; 1ª: ' + pior);
+}
+
 console.log('\n──── gênero DESCONHECIDO não conta como homem (não trava quem não usa o campo) ────');
 {
   const t = mkT(['uX1', 'uX2', 'uX3', 'uX4']);

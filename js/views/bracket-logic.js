@@ -3850,29 +3850,43 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
     var u = _n2uMapWl && _n2uMapWl[nm];
     return !!(u && typeof window._genderForUid === 'function' && window._genderForUid(u) === 'masculino');
   };
-  // Tira do pool os 4 primeiros que respeitam o teto (a ordem do embaralho é preservada:
-  // só PULA quem estouraria a cota). Devolve null quando não há combinação possível.
-  var _pickGrupo = function (pool) {
-    var idx = [], homens = 0;
-    for (var i = 0; i < pool.length && idx.length < 4; i++) {
-      if (_isHomem(pool[i])) { if (homens >= MAX_HOMENS_POR_GRUPO) continue; homens++; }
-      idx.push(i);
-    }
-    if (idx.length < 4) return null;
-    var out = idx.map(function (i) { return pool[i]; });
-    for (var k = idx.length - 1; k >= 0; k--) pool.splice(idx[k], 1);
-    return out;
+  // PLANEJA TODOS OS GRUPOS DE UMA VEZ — nunca um de cada vez.
+  //
+  // O guloso anterior ("pega os 4 primeiros que cabem, pula quem estoura a cota") PERDIA
+  // grupo: ele gastava os não-homens no primeiro grupo e sobrava um pool só de homens que
+  // não fechava. Medido: com 2 homens + 6 não-homens na fila, 21% das ordens de embaralho
+  // formavam UM grupo em vez de dois — 4 pessoas ficavam esperando à toa, existindo divisão
+  // válida. Era essa a intermitência de `tests/grupo-espera-max-1-homem.test.js` (~20% de
+  // falha no cenário "2 homens + 6 mulheres"), que denunciava o defeito e não um teste ruim.
+  //
+  // Agora: descobre quantos grupos G são viáveis e RESERVA os homens antes de preencher.
+  // Com h homens usados e G grupos, precisa de h <= min(H, G*MAX) (teto por grupo) e de
+  // 4G-h <= N não-homens pra completar — logo G é viável quando max(0, 4G-N) <= min(H, G*MAX).
+  // A ordem do embaralho é preservada dentro de cada balde, então o sorteio segue sorteio.
+  var _planGrupos = function (pool) {
+    var homens = [], outros = [];
+    pool.forEach(function (n) { (_isHomem(n) ? homens : outros).push(n); });
+    var H = homens.length, N = outros.length;
+    var G = Math.floor((H + N) / 4);
+    while (G > 0 && Math.max(0, 4 * G - N) > Math.min(H, G * MAX_HOMENS_POR_GRUPO)) G--;
+    if (G === 0) return []; // nenhuma divisão respeita a regra → a fila espera mais gente
+    var h = Math.min(H, G * MAX_HOMENS_POR_GRUPO, 4 * G);
+    var grupos = [], g;
+    for (g = 0; g < G; g++) grupos.push([]);
+    // Espalha os homens (round-robin) — é o que impede a concentração que a regra proíbe.
+    for (var i = 0; i < h; i++) grupos[i % G].push(homens[i]);
+    var oi = 0;
+    for (g = 0; g < G; g++) while (grupos[g].length < 4) grupos[g].push(outros[oi++]);
+    return grupos;
   };
-  while (eligible.length >= 4) {
-    var grp = _pickGrupo(eligible);
-    if (!grp) break; // só sobrou combinação que violaria a regra → fila espera mais gente
+  _planGrupos(eligible).forEach(function (grp) {
     var gi = (col.monarchGroups || []).length;
     var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed, nameToUid: _n2uMapWl });
     col.monarchGroups.push(g);
     col.matches = (col.matches || []).concat(g.matches);
     grp.forEach(function (n) { used.push(n); });
     formed++;
-  }
+  });
   // remove os usados de TODAS as fontes da espera (monarch + standby + waitlist);
   // não-presentes e a sobra permanecem na fila monarch desta categoria.
   if (used.length) {
