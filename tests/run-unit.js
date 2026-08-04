@@ -428,6 +428,10 @@ const SUITES = [
   // createdAt no doc PERDIA pra perfil de julho com createdAt — o Auth sempre soube a idade).
   // Reproduz o caso real e trava o await nos dois call sites do index.js.
   'functions/test-merge-winner.js',
+  // NADA SE PERDE: o merge passou a absorver o PERFIL do drop (antes copiava ZERO campos —
+  // a Silvia perderia 44 campos pra uma conta de 17). Varredura genérica com lista de
+  // exclusão: campo novo no perfil é preservado sem ninguém lembrar de atualizar lista.
+  'functions/test-profile-merge-core.js',
   'tests/login-redirect.test.js',
   // Item 9: a FUSÃO agora POPULA loginRedirects (antes só a resolveLoginRedirect lia → redirect
   // nunca disparava). Chave = e-mail minúsculo / telefone E.164, igual ao que o reader lê.

@@ -30,6 +30,7 @@ const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const _mergeRules = require("./merge-rules");
+const _profileMerge = require("./profile-merge-core");
 const _uidSweep = require("./uid-sweep");
 const _enrollCore = require("./enroll-core");
 const _nameUnique = require("./name-unique-core");
@@ -256,14 +257,27 @@ async function _executeMerge(db, keepDoc, dropDoc) {
     db, dropUid, dropEmail, dropName, keepUid, keepEmail, keepName
   );
 
-  // Merge matchHistory (no duplicate matchIds)
+  // v1.7.11 — NADA SE PERDE: o perfil do drop é absorvido pelo sobrevivente.
+  // Até aqui o merge movia torneios/matchHistory/casuais e ZERO campos de perfil, então
+  // quando a conta que sobrevivia tinha perfil pobre os dados da outra evaporavam (caso
+  // medido: Silvia Moura Ferreira, 44 campos × 17). A regra é varredura genérica com lista
+  // de exclusão — campo novo no perfil é preservado por padrão, sem ninguém lembrar de
+  // atualizar lista. Conflito: o valor VIVO do sobrevivente sempre vence.
+  const profileUpd = _profileMerge.computeProfileMerge(keepData, dropData, keepUid);
+
+  // matchHistory tem regra própria (dedup por matchId) — por isso fica fora da varredura.
   if (Array.isArray(dropData.matchHistory) && dropData.matchHistory.length > 0) {
     const existing = Array.isArray(keepData.matchHistory) ? keepData.matchHistory : [];
     const merged   = [...existing];
     dropData.matchHistory.forEach(entry => {
       if (!merged.some(e => e.matchId === entry.matchId)) merged.push(entry);
     });
-    await db.collection("users").doc(keepUid).update({ matchHistory: merged });
+    profileUpd.matchHistory = merged;
+  }
+
+  if (Object.keys(profileUpd).length > 0) {
+    console.log(`[_executeMerge] perfil absorvido: ${Object.keys(profileUpd).join(", ")}`);
+    await db.collection("users").doc(keepUid).update(profileUpd);
   }
 
   // Transfer casualMatches ownership
