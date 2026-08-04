@@ -355,6 +355,48 @@ const M = (id, a, b, w) => ({ id, p1: 'A', p2: 'B', scoreP1: a, scoreP2: b, winn
      'ordem trocada não confunde: cada placar volta pro jogo certo');
 }
 
+// ── (23) ACEITE de co-organização não volta a "pendente" ────────────────────
+// MEDIDO no Confra: um save atrasado devolvia status 'active' → 'pending' e apagava o
+// acceptedAt. A pessoa aceita e horas depois o convite está pendente de novo. Já houve
+// um caso desse sintoma ao vivo (Raquel, jul/2026), atribuído na época a outra causa.
+{
+  const banco = { id: 'T1', participants: [P('u-a')],
+                  coHosts: [{ uid: 'u-co', type: 'cohost', status: 'active', acceptedAt: '2026-07-30T12:06:00Z' }] };
+  const db = mkDb(banco); DB.db = db;
+  // save atrasado: cópia de ANTES do aceite
+  await DB.saveTournament({ id: 'T1', name: 'editado', participants: [P('u-a')],
+                            coHosts: [{ uid: 'u-co', type: 'cohost', status: 'pending' }] });
+  const co = db._gravado().coHosts[0];
+  ok(co.status === 'active', 'aceite de co-organização NÃO volta pra pendente');
+  ok(co.acceptedAt === '2026-07-30T12:06:00Z', 'e o acceptedAt não é perdido');
+  ok(db._gravado().name === 'editado', 'a edição que o organizador queria PASSA');
+}
+
+// ── (24) ACEITAR continua funcionando (é o caminho normal) ──────────────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')],
+                  coHosts: [{ uid: 'u-co', type: 'cohost', status: 'pending' }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')],
+                            coHosts: [{ uid: 'u-co', type: 'cohost', status: 'active', acceptedAt: 'AGORA' }] });
+  const co = db._gravado().coHosts[0];
+  ok(co.status === 'active' && co.acceptedAt === 'AGORA', 'aceitar o convite passa normalmente');
+}
+
+// ── (25) CANCELAR o convite continua livre — a regra é só anti-REGRESSÃO ────
+// Cancelar REMOVE a entrada. Se o guard exigisse a presença dela, o organizador
+// perderia o botão de cancelar; por isso a regra trava só aceito→pendente.
+{
+  const banco = { id: 'T1', participants: [P('u-a')],
+                  coHosts: [{ uid: 'u-co', type: 'cohost', status: 'active', acceptedAt: 'X' },
+                            { uid: 'u-c2', type: 'cohost', status: 'pending' }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')],
+                            coHosts: [{ uid: 'u-co', type: 'cohost', status: 'active', acceptedAt: 'X' }] });
+  const chs = db._gravado().coHosts;
+  ok(chs.length === 1 && chs[0].uid === 'u-co', 'cancelar convite pendente continua funcionando');
+}
+
 console.log(pass + ' asserts OK, ' + fail + ' falhas');
   if (fail) process.exit(1);
 })();

@@ -409,6 +409,43 @@ window.FirestoreDB = {
       } catch (_spErr) { /* o guard nunca derruba o save */ }
     }
 
+    // ── v1.7.31 · ACEITE DE CO-ORGANIZAÇÃO NÃO VOLTA A "PENDENTE" ─────────────
+    // MEDIDO: um save atrasado devolve `coHosts[i].status` de 'active' pra 'pending' e
+    // apaga o `acceptedAt` — a pessoa aceita e, horas depois, o convite aparece pendente
+    // outra vez. Já houve um caso ao vivo desse sintoma (Raquel, jul/2026); na época foi
+    // atribuído a um `permission-denied`, e o fix da v1.6.9 tratou aquela causa. Agora sei
+    // que existe uma SEGUNDA porta pro mesmo sintoma, e ela continuava aberta.
+    // (Varri as notificações antes de mexer: o único `pending` de hoje no Confra é da
+    // Fabiana, que nunca aceitou — não há vítima em produção. Isto é preventivo.)
+    //
+    // A regra é MONOTÔNICA e por isso não quebra nada: aceitar é avanço de estado e não
+    // retrocede. CANCELAR o convite (que REMOVE a entrada) segue livre — só a volta
+    // aceito→pendente é barrada. Assim o organizador continua podendo cancelar.
+    if (Array.isArray(cleanData.coHosts)) {
+      try {
+        var _snapC = await this.db.collection('tournaments').doc(docId).get();
+        var _chBanco = _snapC.exists ? ((_snapC.data() || {}).coHosts) : null;
+        if (Array.isArray(_chBanco) && _chBanco.length) {
+          var _aceito = function (c) { return c && (c.status === 'active' || c.status === 'accepted'); };
+          var _porUid = {};
+          _chBanco.forEach(function (c) { if (c && c.uid) _porUid[c.uid] = c; });
+          var _regrediram = [];
+          cleanData.coHosts.forEach(function (c, i) {
+            if (!c || !c.uid) return;
+            var b = _porUid[c.uid];
+            if (!b || !_aceito(b) || _aceito(c)) return;      // não regrediu
+            cleanData.coHosts[i] = b;                          // devolve o estado do banco
+            _regrediram.push(c.uid);
+          });
+          if (_regrediram.length) {
+            if (window._warn) window._warn('[saveTournament] CO-ORGANIZACAO PROTEGIDA em ' + docId +
+              ': o save tentava devolver ' + _regrediram.length + ' aceite(s) para pendente — restaurado(s) (' + _regrediram.join(', ') + ').');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('cohost accept revert blocked: ' + docId)); } catch (_se) {}
+          }
+        }
+      } catch (_chErr) { /* o guard nunca derruba o save */ }
+    }
+
     var _allowReset = (options && options._allowConfigReset) || cleanData._allowConfigReset === true;
     delete cleanData._allowConfigReset; // flag transiente — nunca persistir no doc
     try {
