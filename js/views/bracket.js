@@ -4987,7 +4987,27 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               return { name: nm, uid: (g.playersUids || [])[i] || null };
             });
             if (g.woAbsent && !_stRoster.some(function (r) { return r.name === g.woAbsent; })) {
-              _stRoster.push({ name: g.woAbsent, uid: null });
+              // SEMPRE POR UID QUANDO HOUVER (regra do dono). Duas fontes, nesta ordem:
+              //  1. `g.woAbsentUid`, gravado na aplicação do W.O. (liga-substitution) —
+              //     o caminho estrutural, que não depende de nada ser reencontrado;
+              //  2. o SLOT do marcador de W.O. da rodada (`isSitOut && sitOutReason==='wo'`),
+              //     via `_slotUidsPositional` — a MESMA fonte que a caixa "ficaram de fora"
+              //     usa, então as duas telas mostram a mesma pessoa. Cobre o W.O. já
+              //     aplicado antes de (1) existir: no Confra a Thereza só tinha o uid aqui
+              //     (`p1Uid` do marcador), e sem esta leitura o nome dela abria a ficha com
+              //     uid vazio — ou seja, por NOME, que é o que a regra proíbe.
+              // Sem uid nas duas = nome digitado (fictício): aí sim fica só o nome.
+              var _absUid = g.woAbsentUid || '';
+              if (!_absUid) {
+                (currentRoundData.matches || []).some(function (wm) {
+                  if (!wm || !wm.isSitOut || wm.sitOutReason !== 'wo' || wm.p1 !== g.woAbsent) return false;
+                  var _su = (typeof window._slotUidsPositional === 'function')
+                    ? window._slotUidsPositional(wm, 'p1') : (wm.p1Uid || wm.team1Uids);
+                  _absUid = (Array.isArray(_su) ? _su[0] : _su) || wm.p1Uid || '';
+                  return !!_absUid;
+                });
+              }
+              _stRoster.push({ name: g.woAbsent, uid: _absUid || null });
             }
             var _stPlayers = _stRoster.map(function (r) { return r.name; });
             var _gst = window._computeMonarchStandings(
@@ -5030,6 +5050,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               var _gstNameHtml = function (s) {
                 var _txt = window._safeHtml(s.name);
                 if (typeof window._openPlayerProfile !== 'function') return _txt;
+                // SEM UID NÃO ABRE FICHA (regra do dono: "sempre por uid, a menos que seja
+                // nome digitado"). Antes o nome saía clicável com `uid:''` e a ficha caía em
+                // resolução por NOME — que nem funciona aqui, porque o save stripa o nome de
+                // toda entrada com uid. Sem uid = fictício/nome digitado: só texto.
+                if (!s.uid) return _txt;
                 return '<span onclick="event.stopPropagation();window._openPlayerProfile(\'' + _gstEsc(s.name) +
                   '\',{uid:\'' + _gstEsc(s.uid || '') + '\',tournamentId:\'' + _gstEsc(t.id) + '\'})"' +
                   ' title="Ver ficha de ' + window._safeHtml(s.name) + '"' +

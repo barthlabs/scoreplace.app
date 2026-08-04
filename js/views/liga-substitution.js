@@ -79,6 +79,22 @@ function _getGroup(t, roundIndex, groupName) {
   if (!round || !Array.isArray(round.monarchGroups)) return null;
   return round.monarchGroups.filter(function (g) { return g && g.name === groupName; })[0] || null;
 }
+// v1.7.21 — O AUSENTE DO W.O. GUARDA O UID, NÃO SÓ O NOME (regra do dono: "sempre por
+// uid quando houver; só nome quando for nome digitado").
+// `g.woAbsent` sempre foi NOME PURO, e isso vazava pra tela: na classificação do grupo o
+// ausente ficava sem uid, o 💬 não aparecia e a ficha abria por nome — que nem resolve,
+// porque o save stripa o nome de toda entrada com uid ([[project_uid_identity_canon_locked]]).
+// Medido no Confra: a Thereza (R1 Grupo W) só tinha uid no marcador de W.O. da rodada.
+// ⚠️ CHAMAR ANTES DE QUALQUER MUTAÇÃO. O `_rewriteSlot` troca o ausente pelo substituto
+// no elenco do grupo; depois disso `players.indexOf(nome)` não acha mais nada e o uid se
+// perde em silêncio. Foi essa ordem que já mordeu na v1.6.88 (slot com uid null).
+// Devolve '' pra quem não tem conta (fictício/nome digitado) — aí o nome é tudo que há.
+function _woAbsentUidOf(group, name) {
+  if (!group || !name) return '';
+  var i = (group.players || []).indexOf(name);
+  var u = (i >= 0) ? (group.playersUids || [])[i] : null;
+  return u ? String(u) : '';
+}
 function _groupCategory(group) {
   var m = (group && group.matches || []).filter(function (x) { return x && x.category; })[0];
   return m ? m.category : null;
@@ -277,8 +293,10 @@ window._ligaApplyWoWithDest = function (tId, roundIndex, groupName, absentName, 
     if (!g || !r) return;
 
     // (1) marca o W.O. da rodada (0 pts) — igual ao fluxo antigo
+    var _absU = _woAbsentUidOf(g, absentName); // antes de qualquer mutação do elenco
     _addWoMarker(ft, r, roundIndex, absentName, _cat);
     g.woAbsent = absentName;
+    if (_absU) g.woAbsentUid = _absU; else delete g.woAbsentUid;
 
     // (2) o suplente ASSUME — no grupo e no ELENCO. Entrar em participants é o que faz
     // "ocupa a posição até o final do torneio": em Liga cada rodada é sorteada de novo a
@@ -611,8 +629,10 @@ window._ligaSubstituteNow = function (tId, roundIndex, groupName, absentName, su
   _commitLiga(tId, function (ft) {
     var g = _getGroup(ft, roundIndex, groupName); var r = ft.rounds && ft.rounds[roundIndex];
     if (!g || !r) return;
+    var _absU2 = _woAbsentUidOf(g, absentName); // antes de qualquer mutação do elenco
     _addWoMarker(ft, r, roundIndex, absentName, cat);
     g.woAbsent = absentName; g.woDest = (dest === 'inactive') ? 'inactive' : 'waitlist';
+    if (_absU2) g.woAbsentUid = _absU2; else delete g.woAbsentUid;
 
     // O suplente entra no ELENCO antes do _rewriteSlot — o slot resolve o uid dele por
     // _buildNameToUid(ft), e fora do elenco (e já fora da espera) o mapa não o acha:
@@ -749,7 +769,11 @@ window._ligaInviteSelected = function (tId, roundIndex, groupName, absentName) {
   // do ciclo (quando alguém aceitar) saber o que dizer a quem levou o W.O.
   _commitLiga(tId, function (ft) {
     var g = _getGroup(ft, roundIndex, groupName);
-    if (g) { g.woDest = _dest; g.woAbsent = absentName; }
+    if (g) {
+      var _absU3 = _woAbsentUidOf(g, absentName);
+      g.woDest = _dest; g.woAbsent = absentName;
+      if (_absU3) g.woAbsentUid = _absU3; else delete g.woAbsentUid;
+    }
     _ligaApplyDest(ft, absentName, _dest);
   });
   window._ligaInviteSubMulti(tId, roundIndex, groupName, absentName, sel);
@@ -797,10 +821,14 @@ window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestN
   _commitLiga(tId, function (ft) {
     var g = _getGroup(ft, roundIndex, groupName); var r = ft.rounds && ft.rounds[roundIndex];
     if (!g || !r) return;
+    // ⚠️ ANTES do _rewriteSlot: ele troca o ausente pelo Jogador X no elenco, e depois
+    // disso o uid dele não é mais encontrável pelo nome.
+    var _absU4 = _woAbsentUidOf(g, absentName);
     _addWoMarker(ft, r, roundIndex, absentName, cat);
     _rewriteSlot(g, absentName, gname, true, t);
     _addGhost(ft, gname);
     g.woAbsent = absentName; g.subStatus = 'filled'; g.subName = gname; g.subIsGuest = true;
+    if (_absU4) g.woAbsentUid = _absU4; else delete g.woAbsentUid;
     g.woDest = (dest === 'inactive') ? 'inactive' : 'waitlist';
     delete g.pendingInviteId;
     _ligaApplyDest(ft, absentName, g.woDest);   // v1.6.90: o destino escolhido pelo organizador
@@ -851,7 +879,9 @@ window._ligaInviteSubMulti = function (tId, roundIndex, groupName, absentName, i
       });
     });
     _addWoMarker(ft, r, roundIndex, absentName, cat); // W.O. já vale (ausente = 0)
+    var _absU5 = _woAbsentUidOf(g, absentName);
     g.woAbsent = absentName; g.subStatus = 'pending'; g.pendingInviteId = list[0].id; delete g.subName; delete g.subIsGuest;
+    if (_absU5) g.woAbsentUid = _absU5; else delete g.woAbsentUid;
   });
   if (typeof window._sendUserNotification === 'function') {
     list.forEach(function (li) {
