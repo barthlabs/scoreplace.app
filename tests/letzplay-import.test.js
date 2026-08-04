@@ -5,8 +5,8 @@
  * e valida a estrutura canônica que vai pro Firestore.
  */
 global.window = {};
-require('../js/views/letzplay-rating.js');   // _spRating (bandForRating)
-require('../js/views/letzplay-import.js');    // _spImport
+require('../extension/lib/letzplay-rating.js');   // _spRating (bandForRating)
+require('../extension/lib/letzplay-import.js');    // _spImport
 var I = window._spImport;
 
 var passed = 0, failed = 0;

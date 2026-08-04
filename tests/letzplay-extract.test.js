@@ -5,9 +5,9 @@
  * lógica de parsing + a ponte extract → normalize (letzplay-import.js).
  */
 global.window = {};
-require('../js/views/letzplay-rating.js');
-require('../js/views/letzplay-import.js');
-require('../js/views/letzplay-extract.js');
+require('../extension/lib/letzplay-rating.js');
+require('../extension/lib/letzplay-import.js');
+require('../extension/lib/letzplay-extract.js');
 var X = window._spExtract;
 var I = window._spImport;
 

@@ -470,6 +470,11 @@ const SUITES = [
   'tests/letzplay-rating.test.js',
   'tests/letzplay-import.test.js',
   'tests/letzplay-extract.test.js',
+  // FONTE ÚNICA: as libs do letzplay têm UMA cópia (extension/lib) e os testes executam ELA.
+  // Havia uma 2ª cópia morta em js/views/ que o index.html nunca carregou; ela drifou e a
+  // distância CRESCEU (no import, 10 linhas na 1.6.5 → 16 na 1.7.12: ficou sem lzId e sem
+  // dateISO), enquanto os 3 testes acima executavam a cópia morta e seguiam verdes.
+  'tests/letzplay-single-source.test.js',
   'js/views/phases-engine.test.js',
   'js/views/phase-generators.test.js',
   'js/views/team-formation.test.js',
