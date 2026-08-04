@@ -3866,7 +3866,7 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   //   sorteio LIVRE     → sem proporção e sem regra de gênero (forma na ordem);
   //   sorteio EQUILIBRADO → proporção (50/50 · 25/75 · 75/25) + toggle "Travar proporção".
   var _sorteioLivre = (typeof window._drawModeIsLivre === 'function') ? window._drawModeIsLivre(t) : false;
-  var _ratioAtual = (typeof window._ratioForPhase === 'function') ? window._ratioForPhase(t) : '';
+  var _ratioAtual = (typeof window._ratioForPhase === 'function') ? window._ratioForPhase(t, null, category) : '';
   var _ratioTravada = (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true;
   // uid de quem está NA FILA, pelo nome. O mapa do elenco (_n2uMapWl) é montado a partir do
   // nome GRAVADO em t.participants — que a entrada strippada não tem. A ENTRADA DA ESPERA
@@ -4352,11 +4352,11 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   var _plano = null;
   if (typeof window._planGroupsByRatio === 'function' &&
       typeof window._drawModeIsLivre === 'function' && !window._drawModeIsLivre(t) &&
-      typeof window._ratioConfigured === 'function' && window._ratioConfigured(t)) {
+      typeof window._ratioConfigured === 'function' && window._ratioConfigured(t, null, category)) {
     // SEM DEFAULT aqui de propósito (ver _ratioConfigured): o sorteio inicial nunca teve
     // regra dura de gênero, e ligá-la sozinha faria todo torneio sem gênero preenchido
     // sortear ZERO grupos. Escolhida a proporção na fase, ela passa a valer aqui também.
-    var _rt = (typeof window._ratioConfigured === 'function') ? window._ratioConfigured(t) : '';
+    var _rt = (typeof window._ratioConfigured === 'function') ? window._ratioConfigured(t, null, category) : '';
     var _lk = window._ratioIsLocked(t);
     var _gOf = function (nm) {
       var u = _n2uMap[nm];

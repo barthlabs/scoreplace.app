@@ -5081,6 +5081,14 @@ window._ctSetRatio = function (r) {
   window._ctPaintRatio();
 };
 window._ctPaintRatio = function () {
+  // v1.7.19: proporção SÓ existe em torneio todo misturado. Com categoria de gênero
+  // (Fem/Masc, ou mesmo Misto separado) o sorteio já roda por categoria e o pool é
+  // homogêneo — a caixa inteira sai de cena.
+  var _gcEl = document.getElementById('tourn-gender-categories');
+  var _temCatGenero = !!(_gcEl && String(_gcEl.value || '').trim());
+  var _box = document.getElementById('gender-ratio-box');
+  if (_box) _box.style.display = _temCatGenero ? 'none' : '';
+  if (_temCatGenero) { var _hz = document.getElementById('gender-ratio'); if (_hz) _hz.value = ''; return; }
   var h = document.getElementById('gender-ratio');
   var cur = h ? String(h.value || '') : '';
   var btns = document.querySelectorAll('#gender-ratio-buttons [data-ratio]');

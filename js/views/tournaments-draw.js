@@ -1661,6 +1661,9 @@ window._showDrawBalanceOverlay = function (opts) {
   window._gdCtx = { rows: rows, mode: (opts.mode === 'equilibrado' ? 'equilibrado' : 'livre'),
     ratio: (opts.ratio || (window._GENDER_RATIO_DEFAULT || '25/75')),
     locked: (opts.locked !== false),
+    // v1.7.19: com categorias por gênero (Fem/Masc/Misto separados) NÃO há proporção — o
+    // sorteio já roda por categoria e o pool é homogêneo. A caixa nem aparece.
+    ratioApplies: (opts.ratioApplies !== false),
                     onConfirm: opts.onConfirm, onCancel: opts.onCancel };
 
   var old = document.getElementById('gender-draw-overlay'); if (old) old.remove();
@@ -1748,7 +1751,8 @@ window._applyDrawBalanceChoice = function (t, mode, assigned, opts) {
     // (é o que o dono pediu: "dentro da fase a que se refere o sorteio"); sem fases,
     // fica no topo. No sorteio LIVRE não se grava proporção nenhuma — lá ela não existe,
     // e deixar um valor gravado faria a tela mostrar regra que o motor não aplica.
-    if (mode === 'equilibrado' && opts.ratio && window._GENDER_RATIOS && window._GENDER_RATIOS[opts.ratio]) {
+    if (mode === 'equilibrado' && opts.ratio && window._GENDER_RATIOS && window._GENDER_RATIOS[opts.ratio] &&
+        (typeof window._ratioAppliesTo !== 'function' || window._ratioAppliesTo(t))) {
       var _pi = t.currentPhaseIndex || 0;
       if (Array.isArray(t.phases) && t.phases[_pi]) t.phases[_pi].genderRatio = opts.ratio;
       else t.genderRatio = opts.ratio;
@@ -1815,6 +1819,7 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
       ratio: (typeof window._ratioConfigured === 'function' && window._ratioConfigured(t)) ||
              (window._GENDER_RATIO_DEFAULT || '25/75'),
       locked: (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true,
+      ratioApplies: (typeof window._ratioAppliesTo === 'function') ? window._ratioAppliesTo(t) : true,
       onConfirm: function (mode, assigned, ratioOpts) {
         window._applyDrawBalanceChoice(t, mode, assigned,
           { persist: true, ratio: (ratioOpts && ratioOpts.ratio), locked: (ratioOpts && ratioOpts.locked) });
@@ -1840,7 +1845,7 @@ window._gdSetMode = function(mode){
   if (e) { e.style.borderColor = mode === 'equilibrado' ? '#22c55e' : 'rgba(255,255,255,0.12)'; e.style.background = mode === 'equilibrado' ? 'rgba(34,197,94,0.15)' : 'var(--bg-dark,#0f172a)'; }
   // v1.7.16: proporção e trava existem SÓ no equilibrado — no livre não há regra pra afinar.
   var box = document.getElementById('gd-ratio-box');
-  if (box) box.style.display = (mode === 'equilibrado') ? 'block' : 'none';
+  if (box) box.style.display = (mode === 'equilibrado' && window._gdCtx.ratioApplies) ? 'block' : 'none';
   window._gdPaintRatio();
 };
 

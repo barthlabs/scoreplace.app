@@ -48,12 +48,41 @@
   // Proporção VIGENTE do torneio/fase. A fase manda; sem ela, o topo; sem nada, o default.
   // Devolve '' quando o sorteio é LIVRE — ali proporção não existe, e devolver um valor
   // faria a UI mostrar uma regra que o motor não aplica.
+  // ── ONDE A PROPORÇÃO EXISTE (v1.7.19) ───────────────────────────────────────────────
+  // Regra do dono (ago/2026): "essas proporções são sugeridas apenas em torneios em que
+  // seja tudo misturado, sem categoria por gênero. Se tiver categoria fem e masc ou mesmo
+  // misto (50/50) separadas, não temos essas proporções e flexibilizações."
+  //
+  // POR QUÊ, na prática: com o torneio separado por gênero o sorteio já roda POR CATEGORIA,
+  // e cada pool já é homogêneo — uma categoria Feminina tem 4 mulheres e ZERO homens, então
+  // exigir 25/75 ali recusaria TODOS os grupos. A regra anterior ("no máximo 1 homem")
+  // tolerava isso por ser um TETO; a proporção é EXATA e não tolera. E no MISTO a proporção
+  // já é 50/50 por construção (sorteia duplas), com flexibilização própria no
+  // `_formDoublesTeams` — duplicar aqui criaria duas regras para o mesmo fato.
+  //
+  // O gatilho é `genderCategories`: categoria de HABILIDADE (A/B/C) ou de IDADE não separa
+  // gênero, então esses torneios continuam misturados e COM proporção.
+  function _labelSeparaGenero(x) {
+    var v = String(x == null ? '' : x).trim().toLowerCase();
+    if (!v) return false;
+    if (v.indexOf('mist') === 0) return true;   // "Misto" separado também é categoria de gênero
+    return v.indexOf('fem') === 0 || v.indexOf('masc') === 0;
+  }
+  window._ratioAppliesTo = function (t, category) {
+    if (!t) return false;
+    if (_labelSeparaGenero(category)) return false;
+    var gc = Array.isArray(t.genderCategories) ? t.genderCategories : [];
+    for (var i = 0; i < gc.length; i++) if (_labelSeparaGenero(gc[i])) return false;
+    return true;
+  };
+
   // Sem nada configurado o equilibrado cai no DEFAULT (25/75). Isso é deliberado: a regra
   // que já vigorava antes desta versão era "no máximo 1 homem em 4", que É o 25/75 — cair
   // em "sem proporção" afrouxaria, calado, todos os torneios em andamento.
-  window._ratioForPhase = function (t, phaseIdx) {
+  window._ratioForPhase = function (t, phaseIdx, category) {
     if (!t) return '';
     if (window._drawModeIsLivre && window._drawModeIsLivre(t)) return '';
+    if (!window._ratioAppliesTo(t, category)) return '';   // separado por gênero → sem proporção
     var r = window._ratioConfigured(t, phaseIdx);
     return r || window._GENDER_RATIO_DEFAULT;
   };
@@ -68,8 +97,9 @@
   //     regra dura por default deixaria QUALQUER torneio cujos inscritos não preencheram
   //     gênero sortear ZERO grupos — o organizador clica Sortear e não sai nada.
   // Escolhida a proporção na fase, ela vale nos DOIS (é o "trava tudo" pedido pelo dono).
-  window._ratioConfigured = function (t, phaseIdx) {
+  window._ratioConfigured = function (t, phaseIdx, category) {
     if (!t) return '';
+    if (!window._ratioAppliesTo(t, category)) return '';
     var i = (phaseIdx == null) ? (t.currentPhaseIndex || 0) : phaseIdx;
     var ph = (Array.isArray(t.phases) && t.phases[i]) ? t.phases[i] : null;
     var r = String((ph && ph.genderRatio) || t.genderRatio || '');

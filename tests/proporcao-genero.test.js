@@ -216,6 +216,60 @@ console.log('\n──── VAGA (placeholder) é coringa: completa sem presumir
   t('e ele continua no leftover', r.leftover.indexOf('X1') !== -1);
 }
 
+// ── ONDE A PROPORÇÃO EXISTE ──────────────────────────────────────────────────────────
+// Regra do dono (ago/2026): "essas proporções são sugeridas apenas em torneios em que seja
+// tudo misturado, sem categoria por gênero. Se tiver categoria fem e masc ou mesmo misto
+// (50/50) separadas, não temos essas proporções e flexibilizações."
+// Sem isto a proporção EXATA recusaria TODOS os grupos de uma categoria Feminina (4
+// mulheres, 0 homens) — a regra antiga era um TETO e tolerava; a proporção não tolera.
+console.log('\n──── proporção só em torneio TODO MISTURADO ────');
+{
+  const misturado = { genderCategories: [], _drawBalanceMode: 'equilibrado' };
+  t('sem categoria de gênero → aplica', win._ratioAppliesTo(misturado) === true);
+  t('e a proporção sai normalmente', win._ratioForPhase(misturado) === '25/75');
+
+  const fem = { genderCategories: ['Feminino', 'Masculino'], _drawBalanceMode: 'equilibrado' };
+  t('Fem/Masc separados → NÃO aplica', win._ratioAppliesTo(fem) === false);
+  t('e a proporção some (não é o default)', win._ratioForPhase(fem) === '');
+  t('nem a escolhida sobrevive', win._ratioConfigured({ ...fem, genderRatio: '50/50' }) === '');
+
+  const misto = { genderCategories: ['misto_obrigatorio'], _drawBalanceMode: 'equilibrado' };
+  t('Misto separado também NÃO aplica (já é 50/50 por duplas)', win._ratioAppliesTo(misto) === false);
+  t('e some da leitura', win._ratioForPhase(misto) === '');
+
+  // habilidade/idade NÃO separam gênero — segue misturado, segue com proporção
+  const skill = { genderCategories: [], combinedCategories: ['A', 'B', 'C'], _drawBalanceMode: 'equilibrado' };
+  t('categoria de HABILIDADE não desliga a proporção', win._ratioAppliesTo(skill) === true);
+  t('e a proporção continua valendo', win._ratioForPhase(skill) === '25/75');
+
+  // a categoria SENDO SORTEADA também desliga, mesmo sem config no topo
+  t('categoria "Fem B" sendo sorteada desliga', win._ratioAppliesTo(misturado, 'Fem B') === false);
+  t('categoria "Masc A" idem', win._ratioAppliesTo(misturado, 'Masc A') === false);
+  t('categoria "Misto C" idem', win._ratioAppliesTo(misturado, 'Misto C') === false);
+  t('categoria só de habilidade NÃO desliga', win._ratioAppliesTo(misturado, 'C') === true);
+  t('e sem categoria nenhuma segue ligada', win._ratioAppliesTo(misturado, null) === true);
+}
+
+console.log('\n──── o CONFRA continua com proporção (é todo misturado) ────');
+{
+  const confra = { genderCategories: [], combinedCategories: [], _drawBalanceMode: 'equilibrado' };
+  t('aplica', win._ratioAppliesTo(confra) === true);
+  t('25/75 travada', win._ratioForPhase(confra) === '25/75' && win._ratioIsLocked(confra) === true);
+}
+
+console.log('\n──── a UI some quando não se aplica ────');
+{
+  const fs6 = require('fs'), path6 = require('path');
+  const R6 = (f) => fs6.readFileSync(path6.join(__dirname, '..', 'js', 'views', f), 'utf8');
+  const draw6 = R6('tournaments-draw.js'), form6 = R6('create-tournament.js'), brk6 = R6('bracket.js');
+  t('diálogo do sorteio esconde a caixa', /ratioApplies/.test(draw6) &&
+     /mode === 'equilibrado' && window\._gdCtx\.ratioApplies/.test(draw6));
+  t('e não grava proporção quando não se aplica', /_ratioAppliesTo\(t\)\)\) \{/.test(draw6));
+  t('formulário esconde a caixa com categoria de gênero',
+     /tourn-gender-categories/.test(form6) && /_box\.style\.display = _temCatGenero \? 'none'/.test(form6));
+  t('caixa da espera esconde o toggle sem proporção', /\(!_wlOrg \|\| !_wlRatio\) \? ''/.test(brk6));
+}
+
 // ── A PORTA: grupo torto NÃO NASCE ───────────────────────────────────────────────────
 // Regra do dono (ago/2026): "só não quero que coloque 4 num grupo para depois perceber que
 // quebrou a regra." O planejador já devolve grupos válidos; esta conferência existe pra que
@@ -325,7 +379,13 @@ console.log('\n──── a proporção está nas duas telas, com o mesmo togg
   t('tela do sorteio tem a caixa da proporção', /id="gd-ratio-box"/.test(draw));
   t('e as 3 pills saem das proporções canônicas', /window\._GENDER_RATIOS/.test(draw));
   t('e o toggle "Travar proporção"', /id="gd-ratio-lock"/.test(draw) && /_gdToggleLock/.test(draw));
-  t('a caixa só aparece no EQUILIBRADO', /mode === 'equilibrado'\) \? 'block' : 'none'/.test(draw));
+  // v1.7.19: a condição ganhou o gate de categoria — a caixa aparece no EQUILIBRADO **e**
+  // quando a proporção se aplica (torneio todo misturado). O invariante "no LIVRE não
+  // aparece" segue travado.
+  t('a caixa só aparece no EQUILIBRADO', /mode === 'equilibrado' && window\._gdCtx\.ratioApplies\) \? 'block' : 'none'/.test(draw));
+  t('e a tela do sorteio continua sendo a MESMA (livre/equilibrado intactos)',
+     /id="gd-mode-livre"/.test(draw) && /id="gd-mode-equilibrado"/.test(draw) &&
+     /Sorteio puro, sem olhar gênero/.test(draw));
   t('a escolha da tela é persistida na FASE', /t\.phases\[_pi\]\.genderRatio = opts\.ratio/.test(draw));
   t('e no LIVRE não grava proporção', /mode === 'equilibrado' && opts\.ratio/.test(draw));
 

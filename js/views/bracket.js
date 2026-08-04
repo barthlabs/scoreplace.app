@@ -4811,7 +4811,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             var _wlRatio = (typeof window._ratioForPhase === 'function') ? window._ratioForPhase(t) : '';
             var _wlRatioTxt = (_wlRatio && typeof window._ratioLabel === 'function') ? window._ratioLabel(_wlRatio) : _wlRatio;
             var _wlTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            var _wlToggle = !_wlOrg ? '' :
+            var _wlToggle = (!_wlOrg || !_wlRatio) ? '' :
               ('<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0;">' +
                 '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;" title="' +
                 (window._safeHtml || String)(_wlEquil
@@ -4824,7 +4824,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             _waitBoxHtml = '<div style="margin-bottom:8px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:8px 10px;">' +
               '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:#fbbf24;margin-bottom:6px;flex-wrap:wrap;">🕒 <span>Lista de espera (' + _wlNames.length + ')</span>' +
               '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— pode entrar no lugar de um W.O. · ao juntar 4, forma um novo grupo · ' + _hint +
-              (_wlOrg ? (window._safeHtml || String)(_wlEquil ? (' · ' + _wlRatioTxt + ', exata')
+              ((_wlOrg && _wlRatio) ? (window._safeHtml || String)(_wlEquil ? (' · ' + _wlRatioTxt + ', exata')
                                            : (' · busca ' + _wlRatioTxt + ' e flexibiliza')) : '') + '</span>' + _wlToggle + '</div>' +
               '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + _wPills + '</div>' +
             '</div>';
