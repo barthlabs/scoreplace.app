@@ -263,6 +263,53 @@ function mkTx(doc) {
   ok(!(ler().participants || []).some(p => p.uid === 'u-gersom'), 'allowRosterRemoval remove de verdade também na transação');
 }
 
+// ══ ESCRITA DUPLA (subcoleção participants/{uid}) — passo 1 da migração ══
+function mkDbEspelho(banco) {
+  const subdocs = {};
+  let gravado = null;
+  DB._rosterMirrorCache = {};
+  DB.db = {
+    collection: () => ({
+      doc: () => ({
+        get: async () => ({ exists: true, data: () => banco }),
+        set: async (d) => { gravado = d; },
+        collection: () => ({ doc: (u) => ({ set: (d) => { subdocs[u] = Object.assign(subdocs[u] || {}, d); } }) })
+      })
+    })
+  };
+  return { subdocs, gravado: () => gravado };
+}
+
+// ── (16) primeiro save da sessão NÃO escreve 111 docs ────────────────────────
+// Sem isto, cada clique num torneio grande viraria 111 escritas e derrubaria a quota.
+{
+  const banco = { id: 'T1', participants: [P('u-ana'), P('u-bia')] };
+  const e = mkDbEspelho(banco);
+  await DB.saveTournament({ id: 'T1', participants: [P('u-ana'), P('u-bia')] });
+  ok(Object.keys(e.subdocs).length === 0, 'primeiro save só memoriza — não dispara escrita em massa');
+}
+
+// ── (17) quem ENTRA ganha doc próprio ────────────────────────────────────────
+{
+  const banco = { id: 'T1', participants: [P('u-ana')] };
+  const e = mkDbEspelho(banco);
+  await DB.saveTournament({ id: 'T1', participants: [P('u-ana')] });          // memoriza
+  await DB.saveTournament({ id: 'T1', participants: [P('u-ana'), P('u-nova')] });
+  ok(e.subdocs['u-nova'] && e.subdocs['u-nova'].status === 'enrolled', 'quem entra ganha doc próprio');
+  ok(!e.subdocs['u-ana'], 'quem já estava não é reescrito (só o delta)');
+}
+
+// ── (18) quem SAI é MARCADO, não apagado ─────────────────────────────────────
+// O histórico de quem saiu é exatamente o que faltou pra reconstruir o incidente.
+{
+  const banco = { id: 'T1', participants: [P('u-ana'), P('u-vai')] };
+  const e = mkDbEspelho(banco);
+  await DB.saveTournament({ id: 'T1', participants: [P('u-ana'), P('u-vai')] });
+  await DB.saveTournament({ id: 'T1', participants: [P('u-ana')] }, { allowRosterRemoval: true });
+  ok(e.subdocs['u-vai'] && e.subdocs['u-vai'].status === 'left', 'quem sai é MARCADO como left (não apagado)');
+  ok(!!e.subdocs['u-vai'].leftAt, 'com a hora da saída');
+}
+
 console.log(pass + ' asserts OK, ' + fail + ' falhas');
   if (fail) process.exit(1);
 })();

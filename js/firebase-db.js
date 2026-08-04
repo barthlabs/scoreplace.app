@@ -366,6 +366,50 @@ window.FirestoreDB = {
       }
     } catch (_cfgErr) { /* blindagem best-effort; nunca derruba o save */ }
     await this.db.collection('tournaments').doc(docId).set(cleanData, { merge: true });
+    // v1.7.29 — ESCRITA DUPLA na subcoleção `tournaments/{id}/participants/{uid}`.
+    // PASSO 1 de expandir→migrar→contrair. O array segue sendo a FONTE DA VERDADE e
+    // NENHUMA tela lê isto ainda — por isso é seguro no meio de um torneio sorteado.
+    // O que ganha desde já: cada pessoa passa a ter um documento PRÓPRIO, sem contenção
+    // com o resto do torneio, servindo de PROVA e de fonte de recuperação. Reconstruir o
+    // sumiço do Gersom custou uma tarde porque essa prova não existia.
+    // Best-effort e fora do caminho crítico: falhar aqui não pode derrubar o save do
+    // torneio, que é o que a pessoa está esperando na tela.
+    try { this._mirrorRoster(docId, cleanData); } catch (_mrErr) {}
+  },
+
+  // Espelha o elenco na subcoleção — só o DELTA. Escrever os 111 a cada save seria
+  // 111 escritas por clique e derrubaria a quota; e o delta é o que interessa mesmo:
+  // quem entrou e quem saiu. `_rosterMirrorCache` guarda o último estado espelhado por
+  // torneio, então saves que não mexem no elenco (a maioria) não geram escrita nenhuma.
+  _rosterMirrorCache: {},
+  _mirrorRoster(docId, data) {
+    if (!this.db || !Array.isArray(data.participants)) return;
+    var uidsOf = (typeof window !== 'undefined' && typeof window._participantUids === 'function')
+      ? window._participantUids : function (p) { return (p && p.uid) ? [p.uid] : []; };
+    var agora = {};
+    data.participants.forEach(function (p) {
+      if (!p || typeof p !== 'object') return;
+      uidsOf(p).forEach(function (u) { if (u) agora[u] = p; });
+    });
+    var antes = this._rosterMirrorCache[docId] || null;
+    this._rosterMirrorCache[docId] = Object.keys(agora).reduce(function (o, u) { o[u] = 1; return o; }, {});
+    // 1ª vez nesta sessão: não há base de comparação; não sai escrevendo tudo (o backfill
+    // é feito por script, uma vez). A partir daqui o delta é confiável.
+    if (!antes) return;
+    var col = this.db.collection('tournaments').doc(docId).collection('participants');
+    var self = this;
+    Object.keys(agora).forEach(function (u) {
+      if (antes[u]) return;                                  // já estava: nada a escrever
+      try {
+        col.doc(u).set({ uid: u, status: 'enrolled', at: new Date().toISOString(),
+                         entry: agora[u] }, { merge: true });
+      } catch (_e) {}
+    });
+    Object.keys(antes).forEach(function (u) {
+      if (agora[u]) return;
+      // NÃO apaga: marca. O histórico de quem saiu é justamente o que faltou no incidente.
+      try { col.doc(u).set({ status: 'left', leftAt: new Date().toISOString() }, { merge: true }); } catch (_e) {}
+    });
   },
 
   // ── BLINDAGEM DE CONCORRÊNCIA (project_concurrency_safe_saves) ──────────────
@@ -419,7 +463,7 @@ window.FirestoreDB = {
     if (!this.ensureDb()) throw new Error('Firestore not initialized');
     var ref = this.db.collection('tournaments').doc(String(tournamentId));
     var self = this;
-    return this.db.runTransaction(async function (transaction) {
+    var _txOut = await this.db.runTransaction(async function (transaction) {
       var doc = await transaction.get(ref);
       if (!doc.exists) throw new Error('Tournament not found: ' + tournamentId);
       var data = doc.data();
@@ -527,6 +571,13 @@ window.FirestoreDB = {
       try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(clean); } catch (_hmErr2) {}
       return { aborted: false, data: clean };
     });
+    // v1.7.29: escrita dupla também aqui — a INSCRIÇÃO passa por esta transação, então
+    // sem isto a subcoleção nasceria cega justamente pro evento que mais importa.
+    // FORA da transação de propósito: escrever numa subcoleção dentro dela ampliaria o
+    // conjunto de docs disputados e faria a transação abortar mais — o oposto do que
+    // queremos num pico de lançamento. O espelho é best-effort; a verdade é o array.
+    try { if (_txOut && !_txOut.aborted && _txOut.data) this._mirrorRoster(tournamentId, _txOut.data); } catch (_mrErr) {}
+    return _txOut;
   },
 
   // ── PLACAR POR JOGO EM DOC PRÓPRIO (project_match_result_docs, linha 4.1) ──────
