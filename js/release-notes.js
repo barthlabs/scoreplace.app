@@ -20,6 +20,17 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #22d3ee;border-radius:12px;padding:14px 16px;background:rgba(34,211,238,0.08);">' +
+      '<div style="font-weight:800; color:#67e8f9; font-size:1rem; margin-bottom:8px;">🛡️ v1.7 — Sorteio que não se apaga, contato direto com quem joga com você, e placar validado no servidor <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Agosto, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔒 Sorteio realizado não se apaga:</b> depois de sorteado, o chaveamento <b>não é mais destruído</b> para fazer outro — nem por engano, nem com resultados já lançados. Na fase eliminatória a chave é uma árvore fechada e o app recusa; em fase de rodadas, o que existe é <b>gerar uma rodada extra</b>, que acrescenta sem apagar nada do que já foi jogado.</li>' +
+        '<li><b>💬 Falar com quem joga com você:</b> na classificação, um botão verde ao lado do nome abre o <b>WhatsApp direto</b> com a pessoa — ou o e-mail, quando ela não tem telefone cadastrado. Todo mundo do seu grupo pode falar com o grupo; o organizador fala com qualquer inscrito, em qualquer classificação.</li>' +
+        '<li><b>👤 Ficha do jogador na classificação:</b> tocar no nome na tabela abre a <b>ficha completa</b> — foto, histórico e troféus —, a mesma da Análise de Inscritos. Nos cards da chave o nome deixou de abrir ficha: na quadra, o card é área de toque para lançar placar.</li>' +
+        '<li><b>🛡️ Placar validado no servidor:</b> quem pode lançar o resultado de cada jogo passou a ser decidido <b>no servidor</b>, e não só no aparelho — quem está naquele jogo, o que a fase permite, e em que ponto está a negociação entre os times. Na prática você não vê diferença; o que muda é que a regra passa a valer igual para todo mundo.</li>' +
+        '<li><b>⏳ Quem se inscreveu depois do sorteio aparece:</b> a Análise de Inscritos agora mostra também a <b>lista de espera</b>, marcada como tal, para o organizador atribuir gênero e categoria antes de a pessoa entrar. E atribuir gênero <b>fixa de primeira</b> — antes era preciso repetir o processo.</li>' +
+        '<li><b>⚖️ Formação equilibrada de grupo novo:</b> um novo grupo montado a partir da lista de espera <b>não fecha com mais de um homem</b>, para que quem chega atrasado não forme um grupo mais forte. O organizador liga e desliga essa regra num toggle na própria lista de espera.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color);border-radius:12px;padding:14px 16px;">' +
       '<div style="font-weight:800; color:#67e8f9; font-size:1rem; margin-bottom:8px;">🌳 v1.6 — Chave enxuta, repescagem justa, histórico grande do letzplay e o treino do relógio contando <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🌳 Chave mínima, sem folga de graça:</b> a chave agora nasce do <b>tamanho real</b> do torneio, em vez de inflar até a próxima potência de 2. Com 12 duplas são 6 jogos, depois 3, 2 e a final — e o <b>último inscrito nunca folga</b>. Da 2ª rodada em diante a chave fecha redonda, sem BYE no meio do caminho.</li>' +
