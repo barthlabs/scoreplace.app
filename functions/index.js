@@ -193,60 +193,34 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
 }
 
 /**
- * Score how "complete" a user profile is. Higher = more complete = keep this one.
- * Rules: real name > phone-as-name, real email, city, birthdate, gender, sports.
- */
-function _profileScore(data) {
-  let s = 0;
-  const name = data.displayName || data.name || "";
-  if (name && !/^\+?[0-9\s\-()]{7,}$/.test(name)) s += 10; // real name, not a phone number
-  if (data.email && !data.email.includes("privaterelay"))   s += 5;
-  if (data.city)                                             s += 2;
-  if (data.birthDate)                                        s += 2;
-  if (data.gender)                                           s += 1;
-  if (Array.isArray(data.preferredSports) && data.preferredSports.length) s += 1;
-  if (data.photoURL && data.photoURL.startsWith("https://firebasestorage")) s += 1;
-  return s;
-}
-
-/**
  * Choose which of two Firestore DocumentSnapshot objects to keep.
  *
  * v1.2.6 — REGRA DO DONO: a conta FEDERADA (Google/Apple) prevalece. Provedor federado não
  * se transfere entre uids: apagar a conta Google apaga o login da pessoa (celular e senha se
  * movem, ele não). Espelha _mergeAccountsKeepOlder — os dois pontos de decisão do merge
  * precisam concordar, senão o auto-merge e o merge explícito escolhem sobreviventes
- * diferentes pra mesma dupla. Decide pelo `authProvider` do próprio doc (gravado em 166/166
- * dos perfis) pra não precisar bater no Auth aqui.
+ * diferentes pra mesma dupla.
  *
- * v3.0.57 (desempate, ainda vale): entre duas federadas — ou duas não-federadas — sobrevive a
- * MAIS ANTIGA, com o displayName dela. createdAt é o critério; ausente perde pra quem tem
- * idade conhecida; empate/ambos sem createdAt → perfil mais completo (legado).
- * Ver [[project_account_merge_email]]. Returns { keepDoc, dropDoc }.
+ * v1.6.86 — a decisão CONSULTA O AUTH (incidente 02/ago/2026, conta de junho perdeu pra de
+ * julho): perfil sem `createdAt` perdia pra perfil com createdAt, sendo que o Firebase Auth
+ * SEMPRE sabe a idade da conta (metadata.creationTime — o MESMO critério do pickSurvivor).
+ * Federação também sai do providerData real quando o UserRecord está disponível; os campos
+ * do doc (authProvider/createdAt) viram fallback pra quando o Auth já foi apagado.
+ * A regra inteira mora em functions/merge-rules.js (pickSurvivorProfiles), testável.
+ * Ver [[project_account_merge_email]]. Returns Promise<{ keepDoc, dropDoc }>.
  */
-function _determineMergeWinner(docA, docB) {
-  const fa = _mergeRules.isFederatedProfile(docA.data());
-  const fb = _mergeRules.isFederatedProfile(docB.data());
-  if (fa !== fb) {
-    return fa ? { keepDoc: docA, dropDoc: docB } : { keepDoc: docB, dropDoc: docA };
-  }
-  const ts = doc => {
-    const c = doc.data().createdAt;
-    if (c == null) return null;
-    return c.toMillis ? c.toMillis() : Number(c);
-  };
-  const a = ts(docA), b = ts(docB);
-  if (a != null && b != null && a !== b) {
-    return a < b ? { keepDoc: docA, dropDoc: docB } : { keepDoc: docB, dropDoc: docA };
-  }
-  if (a != null && b == null) return { keepDoc: docA, dropDoc: docB };
-  if (b != null && a == null) return { keepDoc: docB, dropDoc: docA };
-  // Sem createdAt confiável (ou exatamente igual) → desempata pelo perfil mais completo.
-  const aScore = _profileScore(docA.data());
-  const bScore = _profileScore(docB.data());
-  return aScore >= bScore
-    ? { keepDoc: docA, dropDoc: docB }
-    : { keepDoc: docB, dropDoc: docA };
+async function _determineMergeWinner(docA, docB) {
+  const fetchAuth = (uid) => admin.auth().getUser(uid).catch(() => null);
+  const [authA, authB] = await Promise.all([fetchAuth(docA.id), fetchAuth(docB.id)]);
+  const pick = _mergeRules.pickSurvivorProfiles(
+    { data: docA.data(), authUser: authA },
+    { data: docB.data(), authUser: authB }
+  );
+  const keepDoc = pick.keep === "a" ? docA : docB;
+  const dropDoc = pick.keep === "a" ? docB : docA;
+  console.log(`[_determineMergeWinner] keep=${keepDoc.id} ← drop=${dropDoc.id} (critério: ${pick.reason}` +
+    `${authA ? "" : `; Auth ausente p/ ${docA.id}`}${authB ? "" : `; Auth ausente p/ ${docB.id}`})`);
+  return { keepDoc, dropDoc };
 }
 
 /** Normalise a field value to a dedup key (strips spaces/dashes from phones). */
@@ -475,7 +449,7 @@ async function _scanAndMergeByField(db, field) {
     // Find the best keeper across all docs in this group
     let keepDoc = docs[0];
     for (let i = 1; i < docs.length; i++) {
-      keepDoc = _determineMergeWinner(keepDoc, docs[i]).keepDoc;
+      keepDoc = (await _determineMergeWinner(keepDoc, docs[i])).keepDoc;
     }
 
     // Merge all non-keepers sequentially (re-fetch each time for freshness)
@@ -5144,7 +5118,7 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
         const freshOther = await db.collection("users").doc(other.id).get();
         if (!freshOther.exists || freshOther.data().mergedInto) continue;
 
-        const { keepDoc, dropDoc } = _determineMergeWinner(currentDoc, freshOther);
+        const { keepDoc, dropDoc } = await _determineMergeWinner(currentDoc, freshOther);
         try {
           const r = await _executeMerge(db, keepDoc, dropDoc);
           console.log(`[autoMergeOnProfileUpdate] Merged by ${field}: drop=${dropDoc.id} → keep=${keepDoc.id}`, r);

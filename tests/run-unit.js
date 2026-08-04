@@ -424,6 +424,10 @@ const SUITES = [
   'tests/fairness-uid-identity.test.js',
   'tests/delete-account-dupla-orphan.test.js',
   'tests/merge-federated-wins.test.js',
+  // A decisão do AUTO-MERGE consulta o AUTH (incidente 02/ago/2026: perfil de junho sem
+  // createdAt no doc PERDIA pra perfil de julho com createdAt — o Auth sempre soube a idade).
+  // Reproduz o caso real e trava o await nos dois call sites do index.js.
+  'functions/test-merge-winner.js',
   'tests/login-redirect.test.js',
   // Item 9: a FUSÃO agora POPULA loginRedirects (antes só a resolveLoginRedirect lia → redirect
   // nunca disparava). Chave = e-mail minúsculo / telefone E.164, igual ao que o reader lê.

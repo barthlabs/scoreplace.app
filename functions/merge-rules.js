@@ -53,4 +53,84 @@ function pickSurvivor(ua, ub) {
     : { keep: ub, drop: ua, reason: "older" };
 }
 
-module.exports = { FEDERATED, isFederated, isFederatedProfile, pickSurvivor };
+/**
+ * Completude do perfil — SÓ o desempate final, quando federação e idade empatam.
+ * Nome real > telefone-como-nome, e-mail real, cidade, nascimento, gênero, esportes.
+ */
+function profileScore(data) {
+  let s = 0;
+  const name = (data && (data.displayName || data.name)) || "";
+  if (name && !/^\+?[0-9\s\-()]{7,}$/.test(name)) s += 10; // nome de gente, não telefone
+  if (data.email && !data.email.includes("privaterelay"))   s += 5;
+  if (data.city)                                             s += 2;
+  if (data.birthDate)                                        s += 2;
+  if (data.gender)                                           s += 1;
+  if (Array.isArray(data.preferredSports) && data.preferredSports.length) s += 1;
+  if (data.photoURL && data.photoURL.startsWith("https://firebasestorage")) s += 1;
+  return s;
+}
+
+/**
+ * Idade da conta em ms. O Auth é a fonte da verdade: `metadata.creationTime` existe
+ * SEMPRE que a conta existe, e é o MESMO critério do pickSurvivor — os dois pontos de
+ * decisão do merge têm que concordar. O `createdAt` do perfil é só fallback (Auth já
+ * apagado, emulador): ele pode faltar OU mentir — o doc pode ter sido criado/backfillado
+ * meses depois da conta, e foi um perfil sem createdAt que fez a conta de junho perder
+ * pra de julho no incidente de 02/ago/2026 ([[project-automerge-trigger-footgun]]).
+ * Retorna null quando não há idade confiável em lado nenhum.
+ */
+function accountAgeMs(profileData, authUser) {
+  const ct = authUser && authUser.metadata && authUser.metadata.creationTime;
+  if (ct) {
+    const t = new Date(ct).getTime();
+    if (!isNaN(t)) return t;
+  }
+  const c = profileData && profileData.createdAt;
+  if (c == null) return null;
+  const t = c.toMillis ? c.toMillis()
+    : (typeof c === "string" ? new Date(c).getTime() : Number(c));
+  return isNaN(t) ? null : t;
+}
+
+/**
+ * Federação com o Auth como verdade: `providerData` real quando o UserRecord está
+ * disponível; o `authProvider` gravado no doc é só fallback (pode estar stale).
+ * Nota deliberada: conta criada com e-mail+senha usando endereço @gmail.com tem
+ * provider `password` e NÃO é federada — e isso é o comportamento CERTO pela regra
+ * do dono (v1.2.6): "federada vence" existe porque provedor federado não se transfere
+ * entre uids; e-mail/senha se move via admin.auth().updateUser(), então não há login
+ * a proteger.
+ */
+function isFederatedAccount(profileData, authUser) {
+  if (authUser) return isFederated(authUser);
+  return isFederatedProfile(profileData);
+}
+
+/**
+ * Decisão do AUTO-MERGE (espelho do pickSurvivor, mas partindo dos DOCS de perfil):
+ * federada vence → mais antiga vence → idade conhecida vence ausente → perfil mais
+ * completo. Cada lado é { data, authUser } — `data` é o users/{uid} e `authUser` o
+ * UserRecord do Admin SDK (ou null se o lookup falhou).
+ * Retorna { keep: "a"|"b", reason }.
+ */
+function pickSurvivorProfiles(a, b) {
+  const fa = isFederatedAccount(a.data, a.authUser);
+  const fb = isFederatedAccount(b.data, b.authUser);
+  if (fa !== fb) return { keep: fa ? "a" : "b", reason: "federated" };
+  const ta = accountAgeMs(a.data, a.authUser);
+  const tb = accountAgeMs(b.data, b.authUser);
+  if (ta != null && tb != null && ta !== tb) {
+    return { keep: ta < tb ? "a" : "b", reason: "older" };
+  }
+  if (ta != null && tb == null) return { keep: "a", reason: "only-known-age" };
+  if (tb != null && ta == null) return { keep: "b", reason: "only-known-age" };
+  return {
+    keep: profileScore(a.data) >= profileScore(b.data) ? "a" : "b",
+    reason: "score",
+  };
+}
+
+module.exports = {
+  FEDERATED, isFederated, isFederatedProfile, pickSurvivor,
+  profileScore, accountAgeMs, isFederatedAccount, pickSurvivorProfiles,
+};

@@ -69,7 +69,9 @@ ok(escolhe(misto, p1).uid === 'misto', 'conta google+phone é federada (perderia
 const src = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
 ok(/require\(["']\.\/merge-rules["']\)/.test(src), 'index.js importa functions/merge-rules');
 ok(src.includes('_mergeRules.pickSurvivor(ua, ub)'), '_mergeAccountsKeepOlder usa pickSurvivor do módulo');
-ok(src.includes('_mergeRules.isFederatedProfile('), '_determineMergeWinner usa o módulo (os 2 pontos concordam)');
+ok(src.includes('_mergeRules.pickSurvivorProfiles('), '_determineMergeWinner usa o módulo (os 2 pontos concordam)');
+ok(/async function _determineMergeWinner[\s\S]{0,400}admin\.auth\(\)\.getUser\(/.test(src),
+  '_determineMergeWinner consulta o AUTH (idade/federação reais, não só os campos do doc)');
 ok(/creationTime \|\| 0\)\.getTime\(\);\s*\n\s*const keepU/.test(src) === false,
   'index.js NÃO decide sobrevivente por idade direto (a regra é do módulo)');
 
@@ -87,7 +89,7 @@ ok(isFederated({ providerData: [{ providerId: 'phone' }] }) === false, 'isFedera
 // _repairTournaments listava campo a campo e a lista sempre ficava incompleta (não via
 // membro de dupla, nem mapa por uid, nem organizerId — que existe em 6/8 torneios de prod).
 // Trocada pela varredura canônica: functions/uid-sweep.js (testado em tests/uid-sweep.test.js).
-const repBloco = src.slice(src.indexOf('async function _repairTournaments'), src.indexOf('function _profileScore'));
+const repBloco = src.slice(src.indexOf('async function _repairTournaments'), src.indexOf('function _determineMergeWinner'));
 ok(/_uidSweep\.remapUid\(/.test(repBloco), '_repairTournaments usa a varredura canônica (uid-sweep)');
 ok(/require\(["']\.\/uid-sweep["']\)/.test(src), 'index.js importa functions/uid-sweep');
 // "não lista campo a campo" = não LÊ os mapas por nome (t.checkedIn / t["checkedIn"]).
@@ -98,7 +100,7 @@ ok(/\bt\.checkedIn\b|\["checkedIn"\]|'checkedIn'/.test(repBloco) === false,
 
 // ── enrollSeq: a ORDEM DE INSCRIÇÃO não pode mudar no remap ──────────────────
 // _repairTournaments copia a entrada e troca só o uid — enrollSeq vai junto.
-const blocoRep = src.slice(src.indexOf('async function _repairTournaments'), src.indexOf('function _profileScore'));
+const blocoRep = src.slice(src.indexOf('async function _repairTournaments'), src.indexOf('function _determineMergeWinner'));
 ok(/Object\.assign\(\{\}, p\)/.test(blocoRep), '_repairTournaments: copia a entrada (enrollSeq preservado)');
 ok(/enrollSeq\s*=/.test(blocoRep) === false, '_repairTournaments: NUNCA reescreve enrollSeq');
 
