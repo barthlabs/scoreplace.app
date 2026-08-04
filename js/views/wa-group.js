@@ -217,7 +217,9 @@
         _editBtn(open, 'Trocar o link do seu grupo ' + _mine) + '</span>';
     }
     if (!window._schIsCurrentRoundMatch(t, m)) return '';
-    return _btn('Criar seu grupo<br>' + _mine, open);
+    // v1.7.25 (dono): ANTES de existir link, os dois botões começam com "Criar grupo" —
+    // é a ação, e o complemento diz DE QUEM: "geral oficial do torneio" × "dos seus jogos".
+    return _btn('Criar grupo<br>dos seus jogos', open);
   }
 
   window._waGrpCardChip = function (t, m) {
@@ -629,8 +631,10 @@
       // self-guard do _sendUserNotification. Assim ele recebe o link no app/e-mail/notificação.
       window._notifyTournamentParticipants(ctx.t, {
         type: 'wa_group', tournamentId: String(ctx.t.id), tournamentName: ctx.t.name || '',
-        title: 'Grupo oficial do torneio no WhatsApp',
-        message: who + ' convidou você pro grupo oficial de comunicações do torneio "' + (ctx.t.name || '') + '". Toque em "Entrar no grupo".',
+        // v1.7.25: título e frase repetem o RÓTULO DO BOTÃO. "Toque em Entrar no grupo"
+        // apontava pra um texto que não existe mais em botão nenhum.
+        title: 'Grupo geral oficial do torneio no WhatsApp',
+        message: who + ' convidou você pro grupo geral oficial de comunicações do torneio "' + (ctx.t.name || '') + '". Toque em "Entrar no grupo geral oficial do torneio".',
         waGroupLink: _wlink, _allowSelf: true,
         level: 'fundamental', timestamp: Date.now()
       });
@@ -641,8 +645,8 @@
     var m = ctx.m;
     var data = {
       type: 'wa_group', tournamentId: String(ctx.t.id), tournamentName: ctx.t.name || '', matchId: m.id,
-      title: 'Grupo do jogo no WhatsApp',
-      message: who + ' criou o grupo do WhatsApp de "' + (m.p1 || '') + ' vs ' + (m.p2 || '') + '". Toque em "Entrar no grupo".',
+      title: 'Seu grupo de whats de jogo',
+      message: who + ' criou o grupo de whats do jogo "' + (m.p1 || '') + ' vs ' + (m.p2 || '') + '". Toque em "Seu grupo de whats de jogo".',
       waGroupLink: _wlink,
       level: 'fundamental', timestamp: Date.now()
     };

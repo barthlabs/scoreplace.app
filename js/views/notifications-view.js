@@ -144,12 +144,21 @@ function renderNotifications(container) {
           '<button class="btn btn-sm" style="background:#10b981; color:#fff; border:none; padding:6px 16px; font-size:0.78rem; font-weight:700;" onclick="event.stopPropagation(); if(window._acceptPairRequest)window._acceptPairRequest(\'' + safeTournamentId + '\',\'' + safePairReq + '\'); _markNotifRead(\'' + safeNotifId + '\'); window.location.hash=\'#tournaments/' + safeTournamentId + '\';">✅ Aceitar</button>' +
         '</div>';
       } else if (n.type === 'wa_group' && n.waGroupLink) {
-        // v1.3.17: convite pro grupo oficial de WhatsApp — botão VERDE abre o link direto
+        // v1.3.17: convite pro grupo de WhatsApp — o botão abre o link direto
         // (window.open), + "Ver torneio" secundário. Link do organizador (confiável); escapa
         // aspas/barras/aspas-duplas pro contexto onclick.
+        // v1.7.25 — A TERCEIRA SUPERFÍCIE. O tipo `wa_group` serve aos DOIS grupos, e aqui
+        // o botão era verde e dizia só "Entrar no grupo" — mesmo apontando pro GERAL do
+        // torneio. É a confusão que a 1.7.24 desfez nos chips, viva na notificação.
+        // Quem distingue é o payload: `matchId` só existe no grupo do JOGO
+        // (ver `_notifyOthers` em wa-group.js). Verde = do jogo, azul = geral, e o rótulo
+        // é o mesmo do chip — a pessoa lê a mesma frase nos dois lugares.
         var safeWaLink = String(n.waGroupLink).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, '');
+        var _waIsMatch = !!n.matchId;
+        var _waBg = _waIsMatch ? '#25D366' : '#3b82f6';
+        var _waLbl = _waIsMatch ? '💬 Seu grupo de whats de jogo' : '💬 Entrar no grupo geral oficial do torneio';
         actionHtml = '<div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap:wrap;">' +
-          '<button class="btn btn-sm" style="background:#25D366; color:#fff; border:none; padding:6px 16px; font-size:0.78rem; font-weight:700;" onclick="event.stopPropagation(); window.open(\'' + safeWaLink + '\',\'_blank\'); _markNotifRead(\'' + safeNotifId + '\')">💬 Entrar no grupo</button>' +
+          '<button class="btn btn-sm" style="background:' + _waBg + '; color:#fff; border:none; padding:6px 16px; font-size:0.78rem; font-weight:700;" onclick="event.stopPropagation(); window.open(\'' + safeWaLink + '\',\'_blank\'); _markNotifRead(\'' + safeNotifId + '\')">' + _waLbl + '</button>' +
           (n.tournamentId ? '<button class="btn btn-sm" style="background: var(--primary-color); color: #fff; border: none; padding: 6px 14px; font-size: 0.78rem; font-weight: 600;" onclick="event.stopPropagation(); window.location.hash=\'#tournaments/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">' + (_t('notif.viewTournament') || 'Ver torneio') + '</button>' : '') +
         '</div>';
       } else if (n.tournamentId && n.type !== 'tournament_deleted') {
