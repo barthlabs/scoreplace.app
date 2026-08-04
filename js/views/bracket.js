@@ -3933,9 +3933,24 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var _woMk = (sg.matches || []).filter(function(m) { return m && m.isSitOut && m.sitOutReason === 'wo'; })[0] || null;
     // Classificação: quem joga MENOS os ghosts (Jogador X não pontua), MAIS o
     // ausente do W.O. (aparece com 0 pts). Os demais jogam com o substituto.
-    var _stPlayers = (sg.players || []).filter(function(n) { return _ghostsM.indexOf(n) === -1; });
-    if (_woMk && _woMk.p1 && _stPlayers.indexOf(_woMk.p1) === -1) _stPlayers.push(_woMk.p1);
-    var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({ players: _stPlayers, matches: sg.matches }, t, sg.category || null) : [];
+    // v1.7.22: PARES (nome, uid), como na classificação do grupo Rei/Rainha. Aqui o
+    // desalinhamento seria DUPLO — o elenco é FILTRADO (tira os ghosts) e ainda recebe o
+    // push do ausente —, e `_computeMonarchStandings` casa `players[i]` ↔ `playersUids[i]`
+    // POR ÍNDICE: qualquer um dos dois já daria a linha de uma pessoa com o uid de outra.
+    // Sem `playersUids` a função devolvia `uid: null` em toda linha; hoje esta tabela não
+    // desenha ficha nem 💬, então não doía — mas ficava armada pro dia em que desenhar.
+    // O uid do ausente vem do SLOT do próprio marcador de W.O. (fonte canônica, a mesma
+    // do box "ficaram de fora"). Sem uid = nome digitado (fictício): fica só o nome.
+    var _stRoster = (sg.players || [])
+      .map(function (nm, i) { return { name: nm, uid: (sg.playersUids || [])[i] || null }; })
+      .filter(function (r) { return _ghostsM.indexOf(r.name) === -1; });
+    if (_woMk && _woMk.p1 && !_stRoster.some(function (r) { return r.name === _woMk.p1; })) {
+      var _wU = (typeof window._slotUidsPositional === 'function')
+        ? window._slotUidsPositional(_woMk, 'p1') : (_woMk.p1Uid || _woMk.team1Uids);
+      _stRoster.push({ name: _woMk.p1, uid: (Array.isArray(_wU) ? _wU[0] : _wU) || _woMk.p1Uid || null });
+    }
+    var _stPlayers = _stRoster.map(function (r) { return r.name; });
+    var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({ players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), matches: sg.matches }, t, sg.category || null) : [];
     // Cards: só os jogos de verdade (o marcador W.O. vira pílula no cabeçalho).
     var matches = (sg.matches || []).filter(function(m) { return !(m.isSitOut && m.sitOutReason === 'wo'); });
     var groupDone = matches.length > 0 && matches.every(function(m) { return !!m.winner || m.isBye || m.isSitOut; });
