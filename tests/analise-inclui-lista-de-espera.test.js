@@ -82,6 +82,16 @@ t('save trata linha da espera antes do lookup normal', /row\._wl/.test(src));
 t('save exige uid na linha da espera (sem uid não grava)',
   /if\s*\(\s*row\s*&&\s*row\._wl\s*\)\s*\{[\s\S]{0,120}if\s*\(\s*!row\.uid\s*\)\s*return;/.test(src));
 
+console.log('\n──── a espera é VISÍVEL como espera (não se mistura aos inscritos) ────');
+t('linha da espera leva etiqueta', /\(r\._wl \?[\s\S]{0,900}>espera<\/span>/.test(src));
+t('etiqueta explica que ainda não entrou',
+  /title="Está na lista de espera — ainda não entrou no torneio"/.test(src));
+// "N inscritos" NÃO pode contar quem está na fila — quem espera não está no torneio.
+t('contagem de inscritos exclui a espera',
+  /totalWaitlist = rows\.filter\([\s\S]{0,80}_wl/.test(src) &&
+  /totalEnrolled = rows\.length - totalWaitlist/.test(src));
+t('a espera é mostrada à parte, não somada', /\+ ' \+ totalWaitlist \+ ' na lista de espera/.test(src));
+
 console.log('\n' + ok + ' asserts OK, ' + fail + ' falha(s)');
 if (fail) { console.log('❌ analise-lista-de-espera: FALHOU'); process.exit(1); }
 console.log('✅ analise-lista-de-espera: OK');

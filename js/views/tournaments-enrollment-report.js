@@ -507,7 +507,11 @@
   function _renderOverview(rows, t) {
     // v1.4.5-beta: habilidade e idade agora quebradas POR GÊNERO — facilita
     // decidir se faremos torneio misto por habilidade ou por faixa etária.
-    var totalEnrolled = rows.length;
+    // v1.7.6: a LISTA DE ESPERA entra na Análise desde a 1.7.2 (pra dar onde atribuir
+    // gênero/categoria a quem chegou pós-sorteio), mas NÃO pode inflar "N inscritos" —
+    // quem está na fila não está no torneio. Conta separado e é dito na tela.
+    var totalWaitlist = rows.filter(function (r) { return r && r._wl; }).length;
+    var totalEnrolled = rows.length - totalWaitlist;
     var byGender = { Fem: 0, Masc: 0, Misto: 0, sem: 0 };
     var DEFAULT_AGE_CATS = ['40+', '50+', '60+', '70+'];
     var ageCats = (t.ageCategories && t.ageCategories.length > 0) ? t.ageCategories : DEFAULT_AGE_CATS;
@@ -583,7 +587,8 @@
 
     var html = '<div style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.18); border-radius:12px; padding:14px 16px; margin-bottom:14px;">';
     html += '<p style="margin:0 0 10px;font-size:0.74rem;color:#a855f7;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📊 Visão Geral</p>';
-    html += '<div style="font-size:0.95rem;color:var(--text-bright);font-weight:700;margin-bottom:8px;">' + totalEnrolled + ' inscrito' + (totalEnrolled === 1 ? '' : 's') + '</div>';
+    html += '<div style="font-size:0.95rem;color:var(--text-bright);font-weight:700;margin-bottom:8px;">' + totalEnrolled + ' inscrito' + (totalEnrolled === 1 ? '' : 's') +
+      (totalWaitlist > 0 ? '<span style="font-size:0.72rem;font-weight:600;color:#fbbf24;margin-left:8px;">+ ' + totalWaitlist + ' na lista de espera</span>' : '') + '</div>';
 
     // Gender row (totals)
     html += '<div style="margin-bottom:10px;"><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Por gênero</div>';
@@ -972,7 +977,12 @@
     return '<div style="padding:8px 10px;border:' + _cBorder + ';border-radius:10px;background:' + _cBg + ';">' +
       '<div style="display:flex;align-items:center;gap:8px;">' +
         '<span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);min-width:24px;flex-shrink:0;">#' + r.order + '</span>' +
-        '<span style="flex:1;min-width:0;font-size:0.84rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc(r.name) + '</span>' + _modDot +
+        '<span style="flex:1;min-width:0;font-size:0.84rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc(r.name) + '</span>' +
+        // v1.7.6: quem veio da LISTA DE ESPERA aparece marcado. Sem isto a pessoa se
+        // mistura aos inscritos e o organizador atribui categoria achando que ela já
+        // está no torneio — ela está na FILA, e só entra quando fechar grupo ou assumir
+        // um W.O. A etiqueta é o que separa "editável" de "já jogando".
+        (r._wl ? '<span title="Está na lista de espera — ainda não entrou no torneio" style="flex-shrink:0;font-size:0.58rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.4);border-radius:5px;padding:1px 5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;">espera</span>' : '') + _modDot +
       '</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;padding-left:32px;">' + gBadge + skills + ageBadge + '</div>' +
     '</div>';
