@@ -27,8 +27,8 @@ android {
         applicationId "app.scoreplace"
         minSdkVersion 30
         targetSdkVersion 35
-        versionCode 27
-        versionName "1.6.3"
+        versionCode 28
+        versionName "1.7.6"
     }
 
     buildTypes {
