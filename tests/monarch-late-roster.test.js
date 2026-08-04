@@ -98,9 +98,15 @@ console.log('── menos de 4 na espera: não forma, e ninguém é movido ─�
 console.log('── entrada COM uid entra pelo uid, não pelo nome ──');
 (function () {
   const t = mkT(0);
+  // v1.7.16: gênero DECLARADO nas 4 entradas. Esta cena mede MECÂNICA DE ROSTER (entrada
+  // com uid vira inscrito) e o gênero é incidental — mas desde que "sem gênero determinado
+  // não entra em grupo" (regra do dono, ago/2026), 4 pessoas reais sem o campo preenchido
+  // legitimamente não formam grupo, e sem grupo não há roster pra medir. 1 homem + 3
+  // mulheres respeita o teto e mantém a asserção medindo o que ela se propõe.
+  const GEN = ['masculino', 'feminino', 'feminino', 'feminino'];
   for (let i = 1; i <= 4; i++) {
     const n = 'Novo ' + i;
-    t.standbyParticipants.push({ uid: 'n' + i, displayName: n });
+    t.standbyParticipants.push({ uid: 'n' + i, displayName: n, gender: GEN[i - 1] });
     t.checkedIn['n' + i] = Date.now();
   }
   W._expandMonarchFromWaitlist(t);

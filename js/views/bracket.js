@@ -4802,20 +4802,30 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // teste de creatorUid: creator-only exclui o co-host em silêncio.
             var _wlOrg = !!(typeof window._isUserOrgOrCoHost === 'function' &&
               window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser));
-            var _wlEquil = (t.wlGroupBalance !== 'livre');
+            // v1.7.16: o toggle virou "TRAVAR PROPORÇÃO" (era "Equilibrado/Livre"). O valor
+            // gravado segue 'equilibrado'/'livre' de propósito — já existe em produção e
+            // trocá-lo quebraria os torneios em andamento; a mudança é de RÓTULO.
+            // Travado = grupo novo só fecha na proporção EXATA. Destravado = persegue a
+            // proporção e, quando não der mais, flexibiliza pra incluir o máximo de gente.
+            var _wlEquil = (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : (t.wlGroupBalance !== 'livre');
+            var _wlRatio = (typeof window._ratioForPhase === 'function') ? window._ratioForPhase(t) : '';
+            var _wlRatioTxt = (_wlRatio && typeof window._ratioLabel === 'function') ? window._ratioLabel(_wlRatio) : _wlRatio;
             var _wlTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             var _wlToggle = !_wlOrg ? '' :
               ('<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0;">' +
                 '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;" title="' +
-                (_wlEquil ? 'Equilibrado: no máximo 1 homem por grupo novo' : 'Livre: sem restrição de gênero ao formar grupo') + '">' +
+                (window._safeHtml || String)(_wlEquil
+                  ? ('Proporção travada: grupo novo só fecha em ' + _wlRatioTxt)
+                  : ('Proporção destravada: busca ' + _wlRatioTxt + ' e depois flexibiliza para incluir mais gente')) + '">' +
                 '<input type="checkbox" ' + (_wlEquil ? 'checked' : '') +
                 ' onclick="event.stopPropagation();window._toggleWlBalance(\'' + _wlTid + '\')"><span class="toggle-slider"></span></label>' +
                 '<span style="font-size:0.62rem;font-weight:700;color:' + (_wlEquil ? '#fbbf24' : '#64748b') + ';">' +
-                (_wlEquil ? 'Equilibrado' : 'Livre') + '</span></span>');
+                'Travar proporção</span></span>');
             _waitBoxHtml = '<div style="margin-bottom:8px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:8px 10px;">' +
               '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:#fbbf24;margin-bottom:6px;flex-wrap:wrap;">🕒 <span>Lista de espera (' + _wlNames.length + ')</span>' +
               '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— pode entrar no lugar de um W.O. · ao juntar 4, forma um novo grupo · ' + _hint +
-              (_wlOrg ? (_wlEquil ? ' · máx. 1 homem por grupo' : ' · sem restrição de gênero') : '') + '</span>' + _wlToggle + '</div>' +
+              (_wlOrg ? (window._safeHtml || String)(_wlEquil ? (' · ' + _wlRatioTxt + ', exata')
+                                           : (' · busca ' + _wlRatioTxt + ' e flexibiliza')) : '') + '</span>' + _wlToggle + '</div>' +
               '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + _wPills + '</div>' +
             '</div>';
           }

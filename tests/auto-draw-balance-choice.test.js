@@ -26,8 +26,13 @@ const dlg = src.slice(src.indexOf('function _perguntarEquilibrio'), src.indexOf(
 ok(/window\._showDrawBalanceOverlay\(\{/.test(dlg), 'o salvar abre a tela canônica (_showDrawBalanceOverlay)');
 ok(!/showConfirmDialog/.test(dlg), 'e NÃO inventa diálogo próprio pra essa escolha');
 ok(/_drawBalanceChoice = !!equil/.test(dlg), 'guarda a escolha do jeito que o salvar lê');
-ok(/window\._applyDrawBalanceChoice\(t, mode, assigned, \{ persist: false \}\)/.test(dlg),
+// v1.7.16: a chamada passou a carregar também a proporção escolhida na tela
+// ({ persist:false, ratio, locked }). O invariante defendido aqui é o `persist: false` —
+// quem grava é o salvar, não a tela — e ele segue travado.
+ok(/window\._applyDrawBalanceChoice\(t, mode, assigned,\s*\{\s*persist: false\b/.test(dlg),
   'o efeito também é o canônico (e quem grava é o salvar, não a tela)');
+ok(/ratio: \(ratioOpts && ratioOpts\.ratio\)/.test(dlg) && /locked: \(ratioOpts && ratioOpts\.locked\)/.test(dlg),
+  'e a proporção/trava escolhida na tela chega ao efeito');
 ok(/_hydrateParticipantGenders/.test(dlg), 'e hidrata o gênero do perfil antes de perguntar quem falta');
 
 // A tela canônica existe uma vez só, e as duas portas chamam ela

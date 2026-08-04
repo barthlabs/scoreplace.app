@@ -14375,3 +14375,52 @@ window._renderCasualJoin = function(container, roomCode) {
 };
 
 // _closeRound is in bracket-logic.js
+
+// ─── Toggle "Equilibrado" da LISTA DE ESPERA (v1.7.4) ────────────────────────────────
+// Regra do dono: LIGADO (default) o grupo novo formado da espera não fecha com mais de 1
+// homem — pra atrasados não montarem um grupo mais forte e levarem vantagem em cima do
+// atraso. DESLIGADO ("livre") volta ao sorteio sem restrição de gênero.
+//
+// O motor (_tryFormMonarchWaitlistGroups, bracket-logic.js) relê `t.wlGroupBalance` a cada
+// tentativa de formar grupo — então o efeito vale na PRÓXIMA formação, sem re-sortear nada
+// do que já existe. Grupo já fechado não é desfeito por virar a chave.
+window._toggleWlBalance = function (tId) {
+  var store = window.AppStore;
+  var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+  if (!t) return;
+  // CO-ORGANIZADOR TEM O MESMO PODER DO ORGANIZADOR (regra do dono, ago/2026) — vale pro
+  // app inteiro. Nunca gatear por creatorUid: isso exclui o co-host em silêncio. O gate
+  // mora AQUI também, não só no render — esconder o botão não é permissão.
+  var _isAdmin = !!(typeof window._isUserOrgOrCoHost === 'function' &&
+    window._isUserOrgOrCoHost(t, store && store.currentUser));
+  if (!_isAdmin) return;
+
+  var _eraEquil = (t.wlGroupBalance !== 'livre');
+  t.wlGroupBalance = _eraEquil ? 'livre' : 'equilibrado';
+  var _agoraEquil = !_eraEquil;
+
+  var savePromise = null;
+  if (store && typeof store.isOrganizer === 'function' && store.isOrganizer(t) &&
+      typeof store.syncImmediate === 'function') {
+    savePromise = store.syncImmediate(t.id);
+  } else if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+    savePromise = window.FirestoreDB.saveTournament(t);
+  }
+  var done = function () {
+    if (typeof showNotification === 'function') {
+      // v1.7.16: o toggle virou "Travar proporção" e a mensagem tem que dizer QUAL é a
+      // proporção — "equilibrado" não informava nada sobre o que o motor ia exigir.
+      var _rr = (typeof window._ratioForPhase === 'function') ? window._ratioForPhase(t) : '';
+      var _rl = (_rr && typeof window._ratioLabel === 'function') ? window._ratioLabel(_rr) : _rr;
+      showNotification(
+        _agoraEquil ? '🔒 Proporção travada' : '🔓 Proporção destravada',
+        _agoraEquil
+          ? ('Grupo novo só fecha na proporção ' + _rl + '. Quem não couber continua na lista de espera.')
+          : ('Busca a proporção ' + _rl + ' e, quando não houver mais como mantê-la, flexibiliza para incluir o máximo de gente.'),
+        'success');
+    }
+    if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+  };
+  if (savePromise && typeof savePromise.then === 'function') savePromise.then(done).catch(done);
+  else done();
+};

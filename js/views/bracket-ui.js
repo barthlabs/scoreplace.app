@@ -14408,11 +14408,15 @@ window._toggleWlBalance = function (tId) {
   }
   var done = function () {
     if (typeof showNotification === 'function') {
+      // v1.7.16: o toggle virou "Travar proporção" e a mensagem tem que dizer QUAL é a
+      // proporção — "equilibrado" não informava nada sobre o que o motor ia exigir.
+      var _rr = (typeof window._ratioForPhase === 'function') ? window._ratioForPhase(t) : '';
+      var _rl = (_rr && typeof window._ratioLabel === 'function') ? window._ratioLabel(_rr) : _rr;
       showNotification(
-        _agoraEquil ? '⚖️ Formação equilibrada' : '🎲 Formação livre',
+        _agoraEquil ? '🔒 Proporção travada' : '🔓 Proporção destravada',
         _agoraEquil
-          ? 'Grupo novo da lista de espera não fecha com mais de 1 homem.'
-          : 'Grupo novo da lista de espera passa a ser sorteado sem restrição de gênero.',
+          ? ('Grupo novo só fecha na proporção ' + _rl + '. Quem não couber continua na lista de espera.')
+          : ('Busca a proporção ' + _rl + ' e, quando não houver mais como mantê-la, flexibiliza para incluir o máximo de gente.'),
         'success');
     }
     if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
