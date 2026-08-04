@@ -129,8 +129,15 @@ struct RemoteView: View {
         // sacador), que o onChange acima não pegava na SEGUNDA partida: ela já
         // nasce ativa, então a tela "Iniciar" (que era quem perguntava) não
         // aparece, e o jogo começava sem ninguém escolher o saque.
+        // v1.7.9 — NÃO zera `pendingPick` aqui. Este era o bug do relógio: quem
+        // escolhia o sacador na tela "Iniciar" e tocava Iniciar via o seletor abrir
+        // logo em seguida (o celular liga `servePickOpen` ao abrir o placar) COM A
+        // ESCOLHA APAGADA — e, sem escolha, `resolvedServePick` é nil e o Confirmar
+        // nasce DESABILITADO. A pessoa já tinha respondido a pergunta e ficava presa,
+        // tendo que começar pelo celular. Quem zera é o onChange de `servePickPhase`
+        // acima, que é onde a PERGUNTA de fato muda (1º → 2º sacador).
         .onChange(of: state.servePickOpen) { open in
-            if open { pendingPick = nil; pickingServer = true }
+            if open { pickingServer = true }
         }
         // Variante de UMA closure de propósito: `onChange(of:initial:_:)` (duas
         // closures) é API de watchOS 10+ e barraria o Series 3 (watchOS 8) da Kelly.
@@ -451,6 +458,19 @@ struct RemoteView: View {
     // Seletor de sacador com a MESMA cara do Iniciar (modelo de 3 setores). Dispara
     // sozinho ao fim do 1º game (fase 1 → escolher o 2º sacador); fase 0 = quem abre.
     // A lista vem PRONTA do celular (serveEligible; fase 1 = só o time que não abriu).
+    // v1.7.9 — espaçamento do seletor por QUANTIDADE de nomes. Era fixo em 24, e o
+    // seletor tinha sido desenhado para o 2º sacador, que lista 2 (só o time que
+    // recebeu). No 1º sacador de uma DUPLA a lista tem 4: prompt + 4 linhas + 3
+    // vãos de 24 não cabem no mostrador, e aí o minimumScaleFactor encolhia TUDO —
+    // era a "tela com fontes muito pequenas dos 4 sacadores" do relato.
+    private var serveRowSpacing: CGFloat {
+        switch state.serveEligible.count {
+        case 0, 1, 2: return sz(24)
+        case 3:       return sz(14)
+        default:      return sz(8)
+        }
+    }
+
     private var serverPicker: some View {
         let isSecond = state.servePickPhase == 1
         return GeometryReader { root in
@@ -479,7 +499,7 @@ struct RemoteView: View {
                 // "Confirmar" na base.
                 VStack(spacing: 0) {
                     Color.clear.frame(height: bandH * 0.68)        // sobe pro espaço abaixo do relógio VISÍVEL (não da faixa toda)
-                    VStack(spacing: sz(24)) {                      // espaçamento fixo entre prompt e nomes
+                    VStack(spacing: serveRowSpacing) {             // aperta conforme o nº de nomes (4 = 1º sacador de dupla)
                         Text(isSecond ? "2º sacador" : "1º sacador")
                             .font(.system(size: sz(18), weight: .bold))
                             .foregroundColor(.spNameBlue)
@@ -597,8 +617,13 @@ struct RemoteView: View {
                     // do WCSession. Sem isto, tocar num nome no lobby não chegava a lugar
                     // nenhum visível e a partida abria com o sacador que o motor chutou.
                     Button(action: {
-                        if let p = startResolvedPick { onSetServer(p.team, p.playerIdx) }
-                        pendingPick = nil
+                        // v1.7.9: a escolha SOBREVIVE ao Iniciar. Ao abrir o placar o
+                        // celular liga `servePickOpen` e o seletor aparece; zerando aqui,
+                        // ele nascia sem nada aceso e com o Confirmar morto — a pessoa
+                        // respondia duas vezes a mesma pergunta e, na prática, tinha que
+                        // começar pelo celular. Mantendo, o seletor já abre com o nome
+                        // escolhido aceso e o botão vivo.
+                        if let p = startResolvedPick { onSetServer(p.team, p.playerIdx); pendingPick = p }
                         onStart()
                     }) {
                         Text("Iniciar").font(.system(size: sz(15), weight: .bold))
