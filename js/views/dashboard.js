@@ -724,10 +724,13 @@ function renderDashboard(container) {
     if (_isInStandby && !isFinished) {
       enrollBtnHtml = `<div style="font-size: 0.6rem; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.4px; background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 6px;">⏳ ${_t('enroll.onWaitlist')}</div><button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._leaveStandby('${t.id}')">🛑 ${_t('enroll.leaveWaitlist')}</button>`;
     } else if (isParticipating && canEnroll) {
-      // "Entrar no grupo" do WhatsApp fica à ESQUERDA de "Desinscrever-se" — bem
-      // na cara do participante. O chip auto-oculta (sem link / WhatsApp off).
-      const _waJoin = (typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : '';
-      enrollBtnHtml = `<div style="display:flex;align-items:stretch;justify-content:flex-end;gap:6px;flex-wrap:wrap;">${_waJoin}<button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button></div>`;
+      // v1.7.24 — O GRUPO GERAL DO TORNEIO SAIU DAQUI (ordem do dono). Ele ficava
+      // colado no "Desinscrever-se", verde, e era o ÚNICO botão de WhatsApp que o
+      // participante encontrava sem abrir a chave — então virava o botão que ele
+      // clicava querendo montar o grupo do próprio jogo, e caía no mural do evento.
+      // O geral continua na PÁGINA do torneio (onde a pessoa está olhando o evento);
+      // o do jogo mora na chave, que é onde ela está olhando o jogo dela.
+      enrollBtnHtml = `<button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button>`;
     } else if (!isParticipating && canEnroll) {
       enrollBtnHtml = `<button class="btn btn-sm btn-success hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._dashEnroll('${t.id}')">✅ ${_t('enroll.enrollBtn')}</button>`;
     } else if (isParticipating && !canEnroll && !isFinished) {

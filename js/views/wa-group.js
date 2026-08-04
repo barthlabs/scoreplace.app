@@ -43,6 +43,13 @@
 
   var OVERLAY_ID = 'wa-group-overlay';
   var WA_GREEN = 'linear-gradient(135deg,#25D366,#128C7E)';
+  // v1.7.24 — DOIS GRUPOS, DUAS CORES, DOIS NOMES. Relato de campo: participantes
+  // confundiam o grupo do PRÓPRIO JOGO com o grupo GERAL do torneio, clicavam no verde
+  // do torneio esperando montar o do jogo e caíam no grupo do Confra. Os dois eram verdes
+  // e os dois diziam só "grupo". Ordem do dono: VERDE só pro grupo do jogo/seu grupo,
+  // AZUL pro geral do torneio, e o geral SAI da dashboard (lá o participante não está
+  // procurando o mural do evento — está olhando o próprio torneio).
+  var WA_BLUE = 'linear-gradient(135deg,#3b82f6,#1d4ed8)';
 
   function _esc(s) { return (window._safeHtml ? window._safeHtml(s) : String(s == null ? '' : s)); }
   function _attr(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
@@ -175,9 +182,10 @@
   // arredondado que os vizinhos ("fora do padrão", dono 22/jul). O chip de ENTRAR já corrigia isso
   // inline, o que só provava a intenção. Agora é o default dos dois. Ver o cânone de botões no
   // CLAUDE.md (border-radius 10px).
-  function _btn(label, onclick, extra) {
+  // `bg` opcional: sem ele o botão é VERDE (grupo do jogo). O do torneio passa WA_BLUE.
+  function _btn(label, onclick, extra, bg) {
     return '<button type="button" class="btn btn-micro btn-shine hover-lift" onclick="' + onclick + '" ' +
-      'style="background:' + WA_GREEN + ';color:#fff;font-size:0.72rem;font-weight:800;' +
+      'style="background:' + (bg || WA_GREEN) + ';color:#fff;font-size:0.72rem;font-weight:800;' +
       'padding:4px 9px;line-height:1.05;text-align:center;border-radius:10px;' + (extra || '') + '">' +
       _icon() + label + '</button>';
   }
@@ -195,15 +203,21 @@
     if (!window._schUserIsPlayer(t, m, cu)) return '';
     var args = '\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\',' + (groupMode ? '1' : '0');
     var open = 'event.stopPropagation(); window._waGrpOpen(' + args + ')';
+    // v1.7.24: o rótulo diz DE QUEM é o grupo. "grupo" sozinho era o que fazia a pessoa
+    // confundir com o mural do torneio e clicar no botão errado.
+    // v1.7.24: NOME DADO PELO DONO, literal — "seu grupo de whats de jogo".
+    // É o contraste com "grupo geral oficial do torneio"; qualquer sinônimo meu
+    // aqui recria a ambiguidade que estamos desfazendo.
+    var _mine = 'de whats de jogo';
     if (m.waGroup && m.waGroup.link) {
       // "Abrir grupo" é VERBO — clicar faz o que diz (abre o WhatsApp), sem tela
       // intermediária. O ✎ ao lado é a saída pra trocar o link (grupo refeito).
       return '<span style="display:inline-flex;align-items:stretch;align-self:stretch;gap:2px;min-width:0;">' +
-        _btn('Abrir<br>grupo', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')') +
-        _editBtn(open, 'Trocar o link do grupo') + '</span>';
+        _btn('Seu grupo<br>' + _mine, 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')') +
+        _editBtn(open, 'Trocar o link do seu grupo ' + _mine) + '</span>';
     }
     if (!window._schIsCurrentRoundMatch(t, m)) return '';
-    return _btn('Criar<br>grupo', open);
+    return _btn('Criar seu grupo<br>' + _mine, open);
   }
 
   window._waGrpCardChip = function (t, m) {
@@ -235,7 +249,7 @@
       if (!_waAllowed(cu)) return '';
       if (!_isOrg(t, cu)) return '';
       var open = 'event.stopPropagation(); window._waGrpOpenTournament(\'' + _attr(t.id) + '\')';
-      return _btn((t.waGroup && t.waGroup.link) ? 'Grupo do<br>torneio' : 'Criar grupo<br>do torneio', open);
+      return _btn((t.waGroup && t.waGroup.link) ? 'Grupo geral oficial<br>do torneio' : 'Criar grupo geral<br>oficial do torneio', open, '', WA_BLUE);
     } catch (e) { return ''; }
   };
 
@@ -249,7 +263,8 @@
       if (!_isEnrolled(t, cu) && !_isOrg(t, cu)) return '';
       // v1.3.100 (dono): texto COMPLETO "grupo oficial do torneio"; border-radius no PADRÃO do app
       // (.btn = 10px; o btn-micro herdado era 6px = "quadrado") e um pouco mais largo.
-      return _btn('Entrar no grupo<br>oficial do torneio', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'\')', 'min-width:118px;padding:6px 14px;');
+      // v1.7.24: AZUL + "GERAL" — este é o mural do evento, não o grupo do jogo da pessoa.
+      return _btn('Entrar no grupo geral<br>oficial do torneio', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'\')', 'min-width:118px;padding:6px 14px;', WA_BLUE);
     } catch (e) { return ''; }
   };
 
@@ -323,13 +338,18 @@
     var t = ctx.t, isT = ctx.scope === 'tournament';
     var wg = ctx.target.waGroup;
     var gname = _groupName(ctx);
-    var title = isT ? 'Grupo do torneio' : (ctx.groupMode ? 'Grupo do seu grupo' : 'Grupo do jogo');
+    var title = isT ? 'Grupo geral oficial do torneio' : 'Seu grupo de whats de jogo';
+    // v1.7.24: a cor do overlay acompanha a do chip que o abriu — verde = do jogo,
+    // azul = geral do torneio. Sem isso a pessoa clica no azul e cai numa tela verde,
+    // que é exatamente a confusão que estamos desfazendo.
+    var _accent = isT ? WA_BLUE : WA_GREEN;
+    var _hdrBg = isT ? 'linear-gradient(135deg,#1d4ed8,#1e3a8a)' : 'linear-gradient(135deg,#128C7E,#075E54)';
     var sub = isT ? _esc(t.name || '')
       : ((ctx.groupMode ? 'Os 3 jogos do grupo' : (_esc(ctx.m.p1 || '') + ' vs ' + _esc(ctx.m.p2 || ''))) + ' · ' + _esc(t.name || ''));
     var idArgs = '\'' + _attr(t.id) + '\',\'' + (isT ? '' : _attr(ctx.m.id)) + '\'';
 
     var header =
-      '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#128C7E,#075E54);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
+      '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border-color);background:' + _hdrBg + ';border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
         '<div style="min-width:0;">' +
           '<div style="font-size:0.95rem;font-weight:800;color:#fff;display:flex;align-items:center;gap:6px;">' + _icon() + title + '</div>' +
           '<div style="font-size:0.68rem;color:rgba(255,255,255,0.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + sub + '</div>' +
@@ -344,7 +364,7 @@
         '<div style="font-size:0.8rem;font-weight:700;color:#25D366;margin-bottom:4px;">✅ O grupo já existe</div>' +
         '<div style="font-size:0.68rem;color:var(--text-muted);">Criado por <b style="color:var(--text-bright);">' + _esc(wg.byName || 'um jogador') + '</b>. ' +
           (isT ? 'Todos os inscritos entram pelo mesmo link.' : 'Todos deste jogo entram pelo mesmo link.') + '</div>' +
-        '<button type="button" class="btn hover-lift btn-shine" onclick="window._waGrpOpenLink(' + idArgs + ')" style="background:' + WA_GREEN + ';color:#fff;width:100%;justify-content:center;margin-top:10px;">' + _icon() + 'Abrir grupo no WhatsApp ↗</button>' +
+        '<button type="button" class="btn hover-lift btn-shine" onclick="window._waGrpOpenLink(' + idArgs + ')" style="background:' + _accent + ';color:#fff;width:100%;justify-content:center;margin-top:10px;">' + _icon() + 'Abrir grupo no WhatsApp ↗</button>' +
         // v1.3.17: organizador reenvia o link do grupo pra TODOS os inscritos (app + e-mail +
         // notificação nativa). Já dispara sozinho ao SALVAR o link; este botão é o reenvio
         // manual (ex.: inscritos que entraram depois). Só no torneio (o modal já é org-only).
@@ -362,7 +382,7 @@
         '<input type="text" id="wa-grp-name" readonly value="' + _esc(gname).replace(/"/g, '&quot;') + '" ' +
         'style="width:100%;box-sizing:border-box;min-width:0;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);' +
         'border-radius:8px;padding:9px 10px;font-size:0.8rem;font-weight:600;color:var(--text-bright);">' +
-        '<button type="button" class="btn hover-lift btn-shine" onclick="window._waGrpCopyName(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ')" style="background:' + WA_GREEN + ';color:#fff;width:100%;justify-content:center;margin-top:8px;">' + _icon() + 'Copiar nome e abrir WhatsApp\u2197</button>',
+        '<button type="button" class="btn hover-lift btn-shine" onclick="window._waGrpCopyName(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ')" style="background:' + _accent + ';color:#fff;width:100%;justify-content:center;margin-top:8px;">' + _icon() + 'Copiar nome e abrir WhatsApp\u2197</button>',
         'Agora abra o WhatsApp: <b style="color:var(--text-bright);">Novo grupo → pule a escolha de participantes</b> → cole o nome. Não precisa salvar contato de ninguém.');
       if (isT) body += _permsHtml();
     }
