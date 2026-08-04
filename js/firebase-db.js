@@ -221,6 +221,70 @@ window.FirestoreDB = {
     // do banco (fonte da verdade). EXCEÇÃO: quando o organizador remove/reduz fases DE
     // PROPÓSITO no construtor, o save chega com _allowConfigReset=true (ou options) e a
     // redução é permitida — o guard só barra o que NÃO pretendia tocar (stale/bug).
+    // ── v1.7.26 · O ELENCO NUNCA ENCOLHE POR ACIDENTE ──────────────────────────
+    // INCIDENTE QUE ORIGINOU (Confra, 02/ago/2026): o Gersom se inscreveu em 01/08 18:34,
+    // recebeu o lembrete das 09:00 do dia seguinte (a CF do lembrete itera `t.participants`
+    // no SERVIDOR — prova de que ele estava no elenco), e às 19:00 não estava no sorteio.
+    // Não se desinscreveu: essa ação notifica o organizador, e não há notificação nenhuma.
+    // Ele simplesmente sumiu, e ficou 2 dias fora do torneio sem ninguém saber por quê.
+    //
+    // CAUSA ESTRUTURAL: `saveTournament` grava o doc INTEIRO com merge, e existem ~65
+    // pontos no app chamando `saveTournament(t)` com um `t` que veio da memória. Qualquer
+    // um deles, com uma cópia atrasada do elenco, apaga quem entrou depois — sem erro, sem
+    // log, sem rastro. `skipParticipants` existe pra isso desde sempre, mas SÓ o `sync()`
+    // passa a flag; o comentário lá em cima promete que "organizer edits" também não tocam
+    // em participants, e nenhuma edição passa. Promessa que o código não cumpria.
+    //
+    // A DOUTRINA (a mesma do memberUids logo acima, que já é "NUNCA ENCOLHE"): remover
+    // alguém do elenco é ATO DECLARADO. Quem quer remover passa `allowRosterRemoval` e
+    // assume; todos os outros saves podem mexer nos CAMPOS de um inscrito à vontade, mas
+    // não conseguem fazer ninguém desaparecer. Um save atrasado passa a ser inofensivo:
+    // o ausente é restaurado do doc fresco em vez de sumir.
+    //
+    // Compara por UID, nunca por posição nem por objeto — dupla carrega dois uids
+    // (p1Uid/p2Uid) e `_participantUids` os enxerga ([[project_uid_identity_canon_locked]]).
+    // Entrada SEM uid (fictício) não é protegida: não há identidade estável pra casar, e
+    // inventar uma casaria homônimos. Fica registrado como limitação conhecida.
+    //
+    // ⚠️ MODO DE FALHA ESCOLHIDO: se um caminho legítimo de remoção esquecer a flag, a
+    // pessoa CONTINUA inscrita (e o console grita). O contrário — sumir em silêncio — é o
+    // que acabou de custar dois dias de torneio a alguém. Errar para o lado de manter.
+    var _allowRosterRemoval = !!(options && options.allowRosterRemoval) || cleanData._allowRosterRemoval === true;
+    delete cleanData._allowRosterRemoval; // flag transiente — nunca persistir no doc
+    if (Array.isArray(cleanData.participants) && !_allowRosterRemoval) {
+      try {
+        var _uidsOf = (typeof window !== 'undefined' && typeof window._participantUids === 'function')
+          ? window._participantUids
+          : function (p) { return (p && p.uid) ? [p.uid] : []; };
+        var _rSnap = await this.db.collection('tournaments').doc(docId).get();
+        var _prevParts = _rSnap.exists ? (_rSnap.data() || {}).participants : null;
+        if (Array.isArray(_prevParts) && _prevParts.length) {
+          var _incoming = {};
+          cleanData.participants.forEach(function (p) {
+            if (p && typeof p === 'object') _uidsOf(p).forEach(function (u) { if (u) _incoming[u] = 1; });
+          });
+          var _restored = [];
+          _prevParts.forEach(function (p) {
+            if (!p || typeof p !== 'object') return;
+            var us = _uidsOf(p).filter(Boolean);
+            if (!us.length) return;                               // fictício: sem uid, sem proteção
+            if (us.some(function (u) { return _incoming[u]; })) return;
+            cleanData.participants.push(p);                        // volta EXATAMENTE como está no banco
+            us.forEach(function (u) { _incoming[u] = 1; });
+            _restored.push(us[0]);
+          });
+          if (_restored.length) {
+            // Barulhento de propósito: é o sinal de que existe um caminho gravando elenco
+            // atrasado. Silenciar isto seria repetir o bug numa camada acima.
+            if (window._warn) window._warn('[saveTournament] ELENCO PROTEGIDO em ' + docId +
+              ': o save chegou sem ' + _restored.length + ' inscrito(s) e eles foram RESTAURADOS do banco — ' +
+              _restored.join(', ') + '. Se a remoção era intencional, o caminho precisa passar allowRosterRemoval.');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('roster shrink blocked: ' + docId + ' (' + _restored.length + ')')); } catch (_se) {}
+          }
+        }
+      } catch (_rgErr) { /* o guard nunca derruba o save */ }
+    }
+
     var _allowReset = (options && options._allowConfigReset) || cleanData._allowConfigReset === true;
     delete cleanData._allowConfigReset; // flag transiente — nunca persistir no doc
     try {
