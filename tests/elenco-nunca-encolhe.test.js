@@ -310,6 +310,51 @@ function mkDbEspelho(banco) {
   ok(!!e.subdocs['u-vai'].leftAt, 'com a hora da saída');
 }
 
+// ══ PLACAR não é apagado por save que não é de placar (v1.7.30) ══════════════
+const M = (id, a, b, w) => ({ id, p1: 'A', p2: 'B', scoreP1: a, scoreP2: b, winner: w || null });
+
+// ── (19) o caso medido: organizador salva edição com cópia anterior ao placar ─
+{
+  const banco = { id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [M('m1', 6, 3, 'A'), M('m2', null, null)] }] };
+  const db = mkDb(banco); DB.db = db;
+  const stale = { id: 'T1', name: 'editado', participants: [P('u-a')],
+                  rounds: [{ round: 1, matches: [M('m1', null, null), M('m2', null, null)] }] };
+  await DB.saveTournament(stale);
+  const m1 = db._gravado().rounds[0].matches.find(m => m.id === 'm1');
+  ok(m1.scoreP1 === 6 && m1.scoreP2 === 3, 'placar já lançado NÃO é apagado por save de outra coisa');
+  ok(m1.winner === 'A', 'e o vencedor volta junto');
+  ok(db._gravado().name === 'editado', 'a edição que o organizador queria PASSA (só o placar é blindado)');
+}
+
+// ── (20) CORRIGIR placar continua livre — é o que não pode quebrar ───────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [M('m1', 6, 3, 'A')] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [M('m1', 6, 4, 'A')] }] });
+  const m1 = db._gravado().rounds[0].matches[0];
+  ok(m1.scoreP2 === 4, 'corrigir placar (chega COM valor) vence o que está no banco');
+}
+
+// ── (21) apagar de propósito exige declaração ────────────────────────────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [M('m1', 6, 3, 'A')] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [M('m1', null, null)] }] },
+                          { allowScoreClear: true });
+  ok(db._gravado().rounds[0].matches[0].scoreP1 === null, 'allowScoreClear apaga de verdade');
+}
+
+// ── (22) casa por ID, não por posição — sorteio e rodada extra reordenam ─────
+{
+  const banco = { id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [M('m1', 6, 3, 'A'), M('m2', 6, 1, 'A')] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')],
+                            rounds: [{ round: 1, matches: [M('m2', null, null), M('m1', null, null)] }] });  // ordem trocada
+  const g = db._gravado().rounds[0].matches;
+  ok(g.find(m => m.id === 'm1').scoreP1 === 6 && g.find(m => m.id === 'm2').scoreP2 === 1,
+     'ordem trocada não confunde: cada placar volta pro jogo certo');
+}
+
 console.log(pass + ' asserts OK, ' + fail + ' falhas');
   if (fail) process.exit(1);
 })();

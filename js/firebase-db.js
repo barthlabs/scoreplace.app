@@ -346,6 +346,69 @@ window.FirestoreDB = {
     }
 
 
+    // ── v1.7.30 · PLACAR LANÇADO NUNCA É APAGADO POR UM SAVE QUE NÃO É DE PLACAR ──
+    // MEDIDO contra o doc real do Confra: um save do organizador (editar o torneio) com
+    // cópia lida ANTES de alguém lançar um resultado gravava `rounds` da memória e o
+    // placar voltava a `null x null`. Mesma família do sumiço do Gersom (v1.7.26) — lista
+    // compartilhada gravada inteira a partir de estado velho —, só que atinge o dado que
+    // as pessoas acabaram de produzir na quadra, que é o pior de todos pra perder.
+    // O guard do elenco não pegava isso: ele protege listas de PESSOAS, e o placar mora
+    // em `rounds[].matches[]` / `matches[]` / `groups[].matches[]`.
+    //
+    // REGRA: quem tem placar no banco e chega SEM placar no save é REGRESSÃO — o jogo
+    // volta como está no banco. Corrigir placar segue livre (chega COM valor, vence o
+    // que chegou). Apagar de propósito passa a exigir `allowScoreClear`.
+    // Casa por `id` do jogo, nunca por posição: sorteio e rodada extra reordenam.
+    var _allowScoreClear = !!(options && options.allowScoreClear) || cleanData._allowScoreClear === true;
+    delete cleanData._allowScoreClear;
+    if (!_allowScoreClear) {
+      try {
+        var _snapP = await this.db.collection('tournaments').doc(docId).get();
+        if (_snapP.exists) {
+          var _bancoP = _snapP.data() || {};
+          var _temPlacar = function (m) {
+            return !!(m && (m.winner || m.scoreP1 != null || m.scoreP2 != null ||
+                            (Array.isArray(m.sets) && m.sets.length)));
+          };
+          // índice id→jogo do BANCO, varrendo as três formas onde jogo mora
+          var _idx = {};
+          var _varre = function (t, fn) {
+            (Array.isArray(t.matches) ? t.matches : []).forEach(fn);
+            (Array.isArray(t.rounds) ? t.rounds : []).forEach(function (r) {
+              (r && Array.isArray(r.matches) ? r.matches : []).forEach(fn);
+            });
+            (Array.isArray(t.groups) ? t.groups : []).forEach(function (g) {
+              (g && Array.isArray(g.matches) ? g.matches : []).forEach(fn);
+            });
+          };
+          _varre(_bancoP, function (m) { if (m && m.id != null && _temPlacar(m)) _idx[String(m.id)] = m; });
+          var _revertidos = [];
+          if (Object.keys(_idx).length) {
+            _varre(cleanData, function (m) {
+              if (!m || m.id == null) return;
+              var b = _idx[String(m.id)];
+              if (!b || _temPlacar(m)) return;              // sem placar no banco, ou veio COM: nada a fazer
+              // devolve os campos de RESULTADO; o resto do jogo (slots, rótulos) fica como veio
+              ['scoreP1', 'scoreP2', 'winner', 'sets', 'setsWonP1', 'setsWonP2',
+               'totalGamesP1', 'totalGamesP2', 'pendingResult', 'resultAt'].forEach(function (k) {
+                if (b[k] !== undefined) m[k] = b[k];
+              });
+              _revertidos.push(String(m.id));
+            });
+          }
+          if (_revertidos.length) {
+            if (window._warn) window._warn('[saveTournament] PLACAR PROTEGIDO em ' + docId + ': o save chegou sem o resultado de ' +
+              _revertidos.length + ' jogo(s) que JÁ TÊM placar no banco — restaurados (' + _revertidos.join(', ') + ').');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('score wipe blocked: ' + docId + ' (' + _revertidos.length + ')')); } catch (_se) {}
+            if (!Array.isArray(cleanData.history)) cleanData.history = Array.isArray(_bancoP.history) ? _bancoP.history.slice() : [];
+            cleanData.history.push({ date: new Date().toISOString(),
+              message: 'Protecao automatica: um save chegou sem o placar de ' + _revertidos.length +
+                ' jogo(s) ja lancado(s) e eles foram restaurados.' });
+          }
+        }
+      } catch (_spErr) { /* o guard nunca derruba o save */ }
+    }
+
     var _allowReset = (options && options._allowConfigReset) || cleanData._allowConfigReset === true;
     delete cleanData._allowConfigReset; // flag transiente — nunca persistir no doc
     try {
