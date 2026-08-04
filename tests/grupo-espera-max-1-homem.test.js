@@ -283,6 +283,33 @@ console.log('\n──── TOGGLE do organizador: livre volta a sortear sem res
      win._tryFormMonarchWaitlistGroups(t, null, 1) === 1);
 }
 
+// ── A PORTA RECUSA DE VERDADE (v1.7.17) ──────────────────────────────────────────────
+// Regra do dono: "não quero que coloque 4 num grupo para depois perceber que quebrou a
+// regra." Os testes acima provam que o PLANEJADOR não emite grupo torto — mas a garantia
+// que o dono pediu é que, mesmo se ele emitisse, o grupo NÃO NASCERIA. Aqui o planejador é
+// sabotado de propósito pra devolver 4 homens; o motor tem de recusar na porta.
+console.log('\n──── grupo torto NÃO NASCE, mesmo se o planejador falhar ────');
+{
+  const real = win._planGroupsByRatio;
+  const t0 = mkT(['uH1', 'uH2', 'uH3', 'uH4']);
+  // planejador sabotado: entrega um grupo 100% masculino como se fosse válido
+  win._planGroupsByRatio = function (poolArr) {
+    return { groups: [poolArr.slice(0, 4).map(p => p.key)], leftover: [], flexed: 0 };
+  };
+  let n;
+  try { n = win._tryFormMonarchWaitlistGroups(t0, null, 1); }
+  finally { win._planGroupsByRatio = real; }
+  t2('a porta recusou o grupo de 4 homens', n === 0, 'formados=' + n);
+  t2('e nenhum grupo foi anexado à rodada', gruposFormados(t0).length === 0);
+  t2('os 4 continuam na fila', (win._getWaitlist(t0) || []).length === 4);
+}
+{
+  // e o caminho bom continua passando pela porta sem ser barrado
+  const t1 = mkT(['uH1', 'uM1', 'uM2', 'uM3']);
+  t2('grupo válido (1H+3M) NÃO é barrado pela porta',
+     win._tryFormMonarchWaitlistGroups(t1, null, 1) === 1);
+}
+
 console.log('\n──── o toggle existe na UI e é do organizador ────');
 {
   const fs2 = require('fs'), path2 = require('path');

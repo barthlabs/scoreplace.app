@@ -216,6 +216,66 @@ console.log('\n──── VAGA (placeholder) é coringa: completa sem presumir
   t('e ele continua no leftover', r.leftover.indexOf('X1') !== -1);
 }
 
+// ── A PORTA: grupo torto NÃO NASCE ───────────────────────────────────────────────────
+// Regra do dono (ago/2026): "só não quero que coloque 4 num grupo para depois perceber que
+// quebrou a regra." O planejador já devolve grupos válidos; esta conferência existe pra que
+// nenhum OUTRO caminho — nem uma falha de resolução de gênero como a que produziu o
+// "R1 Grupo B2" — consiga criar grupo fora da proporção. Na dúvida, não cria.
+console.log('\n──── verificação na PORTA (_groupMeetsRatio) ────');
+{
+  const G = (a, r) => win._groupMeetsRatio(a, r);
+  t('25/75 aceita exatamente 1 homem + 3 mulheres',
+    G(['masculino', 'feminino', 'feminino', 'feminino'], '25/75') === true);
+  t('25/75 RECUSA 3 homens (o grupo B2)',
+    G(['masculino', 'masculino', 'masculino', 'feminino'], '25/75') === false);
+  t('25/75 RECUSA 2 homens', G(['masculino', 'masculino', 'feminino', 'feminino'], '25/75') === false);
+  t('25/75 RECUSA 4 mulheres (exata é exata)',
+    G(['feminino', 'feminino', 'feminino', 'feminino'], '25/75') === false);
+  t('50/50 aceita 2 e 2', G(['masculino', 'masculino', 'feminino', 'feminino'], '50/50') === true);
+  t('75/25 aceita 3 homens + 1 mulher',
+    G(['masculino', 'masculino', 'masculino', 'feminino'], '75/25') === true);
+  t('QUALQUER desconhecido reprova o grupo travado',
+    G(['masculino', 'feminino', 'feminino', ''], '25/75') === false);
+  t('sem proporção não há o que violar', G(['', '', '', ''], '') === true);
+  // a VAGA tapa buraco de qualquer lado (não é pessoa)
+  t('vaga completa o lugar da 3ª mulher',
+    G([{ gender: 'masculino' }, { gender: 'feminino' }, { gender: 'feminino' },
+       { gender: '', wildcard: true }], '25/75') === true);
+  t('mas vaga NÃO salva grupo que já estourou a cota de homens',
+    G([{ gender: 'masculino' }, { gender: 'masculino' }, { gender: 'feminino' },
+       { gender: '', wildcard: true }], '25/75') === false);
+  t('e 4 vagas atendem qualquer proporção',
+    G([1, 2, 3, 4].map(() => ({ gender: '', wildcard: true })), '25/75') === true);
+}
+
+console.log('\n──── todo grupo que o planejador emite PASSA na porta ────');
+{
+  // varredura: nenhuma combinação travada pode produzir grupo que a porta reprovaria —
+  // se um dia divergirem, é aqui que aparece.
+  let checados = 0, ruins = 0;
+  ['50/50', '25/75', '75/25'].forEach(r => {
+    for (let h = 0; h <= 9; h++) for (let f = 0; f <= 9; f++) {
+      const res = win._planGroupsByRatio(pool(h, f, 2), { ratio: r, locked: true, size: 4 });
+      res.groups.forEach(g => {
+        checados++;
+        const gen = g.map(k => k[0] === 'H' ? 'masculino' : (k[0] === 'M' ? 'feminino' : ''));
+        if (!win._groupMeetsRatio(gen, r)) ruins++;
+      });
+    }
+  });
+  t('os ' + checados + ' grupos planejados passam na porta', ruins === 0, ruins + ' reprovado(s)');
+}
+
+console.log('\n──── a porta está ligada nos DOIS pontos de criação ────');
+{
+  const fs5 = require('fs'), path5 = require('path');
+  const bl = fs5.readFileSync(path5.join(__dirname, '..', 'js', 'views', 'bracket-logic.js'), 'utf8');
+  const ocorr = (bl.match(/_groupMeetsRatio/g) || []).length;
+  t('_groupMeetsRatio é consultado 2x (espera + sorteio inicial)', ocorr >= 2, 'ocorrências=' + ocorr);
+  t('e o grupo recusado NÃO é criado (return antes do _buildMonarchGroup)',
+    /!window\._groupMeetsRatio[\s\S]{0,320}?return;[\s\S]{0,120}?_buildMonarchGroup/.test(bl));
+}
+
 // ── PARIDADE CLIENTE × SERVIDOR ──────────────────────────────────────────────────────
 // O motor roda nos DOIS lados (o servidor forma grupo da espera na integração tardia), e o
 // vendor é uma CÓPIA sincronizada no predeploy. Cópia que envelhece é o bug de versão que a

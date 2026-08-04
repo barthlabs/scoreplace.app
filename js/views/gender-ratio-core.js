@@ -94,6 +94,39 @@
     return !(t && t.wlGroupBalance === 'livre');
   };
 
+  /* VERIFICAÇÃO NA PORTA — o grupo só nasce se a composição REAL atender a proporção.
+   *
+   * Regra do dono (ago/2026): "só não quero que coloque 4 num grupo para depois perceber
+   * que quebrou a regra." Não é redundância com _planGroupsByRatio: aquele é o PLANEJADOR,
+   * e confiar nele é confiar que nenhum caminho futuro monte grupo por outra via e que a
+   * resolução de gênero nunca falhe. Foi precisamente uma falha de resolução que deixou o
+   * "R1 Grupo B2" fechar com 3 homens — o planejador da época "achou" que estava tudo certo.
+   * Aqui a composição é conferida DEPOIS de resolvida e ANTES de o grupo existir.
+   *
+   * entradas: array de gêneros ('masculino'/'feminino'/'') ou de {gender, wildcard}.
+   * Devolve true quando não há proporção (nada a violar).
+   */
+  window._groupMeetsRatio = function (entradas, ratio) {
+    var cfg = RATIOS[String(ratio || '')];
+    if (!cfg) return true;
+    var arr = Array.isArray(entradas) ? entradas : [];
+    var m = 0, f = 0, w = 0, x = 0;
+    arr.forEach(function (e) {
+      var g, wild = false;
+      if (e && typeof e === 'object') { g = String(e.gender || ''); wild = !!e.wildcard; }
+      else g = String(e || '');
+      g = g.trim().toLowerCase();
+      if (g.indexOf('masc') === 0) m++;
+      else if (g.indexOf('fem') === 0) f++;
+      else if (wild) w++;      // VAGA: preenche qualquer lado (não é pessoa)
+      else x++;                // pessoa real sem gênero: nunca compõe grupo travado
+    });
+    if (x) return false;
+    if (m > cfg.m || f > cfg.f) return false;
+    // as vagas têm de tapar exatamente os buracos que sobraram
+    return (cfg.m - m) + (cfg.f - f) === w;
+  };
+
   /* DIVIDE O POOL EM GRUPOS respeitando a proporção.
    *
    * pool : [{ key, gender }]  — gender: 'masculino' | 'feminino' | '' (desconhecido)

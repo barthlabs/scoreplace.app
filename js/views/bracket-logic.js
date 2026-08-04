@@ -3947,6 +3947,22 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
     return res.groups || [];
   };
   _planGrupos(eligible).forEach(function (grp) {
+    // PORTA (v1.7.17): com a proporção TRAVADA o grupo só nasce se a composição REAL
+    // atender a regra. Regra do dono: "não quero que coloque 4 num grupo para depois
+    // perceber que quebrou a regra". O planejador já devolve grupos válidos — isto existe
+    // pra que NENHUM caminho (nem uma falha de resolução de gênero como a que produziu o
+    // "R1 Grupo B2") consiga criar um grupo torto. Na dúvida, NÃO cria.
+    if (_ratioTravada && !_sorteioLivre && _ratioAtual &&
+        typeof window._groupMeetsRatio === 'function') {
+      var _comp = grp.map(function (n) {
+        var e = _wlEntryPorNome[n];
+        return { gender: _generoDe(n), wildcard: !!(e && e.isPlaceholder) };
+      });
+      if (!window._groupMeetsRatio(_comp, _ratioAtual)) {
+        try { (window._warn || function(){})('[proporção] grupo recusado na porta (não atende ' + _ratioAtual + '):', grp); } catch (e) {}
+        return;
+      }
+    }
     var gi = (col.monarchGroups || []).length;
     var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed, nameToUid: _n2uFinal });
     col.monarchGroups.push(g);
@@ -4364,6 +4380,12 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
 
   if (_plano) {
     _plano.groups.forEach(function (gPlayers, gi) {
+      // PORTA (v1.7.17): mesma conferência do lado da espera — travado, grupo torto não nasce.
+      if (_lk && _rt && typeof window._groupMeetsRatio === 'function' &&
+          !window._groupMeetsRatio(gPlayers.map(function (nm) { return _gOf(nm); }), _rt)) {
+        try { (window._warn || function(){})('[proporção] grupo recusado na porta (sorteio inicial):', gPlayers); } catch (e) {}
+        return;
+      }
       groups.push(_buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: gPlayers, category: category, ts: ts, nameToUid: _n2uMap }));
     });
     // sobra da proporção entra na fila JUNTO com a sobra da divisão por 4 (que já foi
