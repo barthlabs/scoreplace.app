@@ -181,6 +181,27 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
     }
     if (!Object.keys(payload).length) continue;
 
+    // ── v1.7.27 · O SERVIDOR TAMBÉM NÃO PODE ENCOLHER LISTA ───────────────────
+    // Servidor não é sinônimo de seguro: este método faz `.get()` de TODOS os torneios
+    // e só depois `batch.commit()`, gravando CAMPOS INTEIROS. Entre a leitura e o commit
+    // cabe qualquer inscrição — e ela seria apagada, exatamente como no cliente (o sumiço
+    // do Gersom, v1.7.26). O que protege é a forma de gravar, não o lugar onde roda.
+    // O sweep de uid TROCA valores; ele nunca deveria REMOVER ninguém. Então: se a lista
+    // reescrita ficou menor que a lida, a gravação daquele campo é DESCARTADA e o caso é
+    // logado. Preferimos um uid velho sobrevivendo (que a próxima varredura corrige) a
+    // uma pessoa desaparecendo do torneio.
+    for (const campo of ["participants", "standbyParticipants", "waitlist"]) {
+      if (!Array.isArray(payload[campo])) continue;
+      const antes = Array.isArray(t[campo]) ? t[campo].length : 0;
+      if (payload[campo].length < antes) {
+        console.error(`[_repairTournaments] DESCARTADO ${campo} de ${tourDoc.id}: ` +
+          `sweep reduziu ${antes} → ${payload[campo].length}. Uma varredura de uid NUNCA ` +
+          `remove pessoa; gravar isso apagaria inscrito. Campo preservado como está no banco.`);
+        delete payload[campo];
+      }
+    }
+    if (!Object.keys(payload).length) continue;
+
     batch.update(tourDoc.ref, payload);
     tourFixed++;
     batchCount++;

@@ -139,6 +139,67 @@ const P = (uid, extra) => Object.assign({ uid: uid, addedAt: '2026-08-01T21:34:3
   ok(w.length === 1, 'entrada SEM uid não é protegida (não há identidade estável pra casar)');
 }
 
+// ── (7) A FILA também não some ────────────────────────────────────────────────
+// Depois do sorteio é onde as pessoas esperam (v1.6.86) — e some sem ninguém notar,
+// porque quem está na fila não tem jogo pra sentir falta. É onde o Gersom está.
+{
+  const banco = { id: 'T1', participants: [P('u-ana')],
+                  standbyParticipants: [P('u-gersom'), P('u-bia')] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-ana')], standbyParticipants: [P('u-bia')] });
+  const f = (db._gravado().standbyParticipants || []).map(p => p.uid);
+  ok(f.includes('u-gersom'), 'quem está na FILA é restaurado quando some de um save atrasado');
+  ok(f.length === 2, 'fila com 2, sem duplicar');
+}
+
+// ── (8) PROMOÇÃO esvazia a fila legitimamente — não pode restaurar ────────────
+// É o caso que mais poderia quebrar: W.O./formação de grupo tiram da fila e põem no
+// elenco. Se o guard não reconhecesse isso, a pessoa voltaria pra fila estando em jogo.
+{
+  const banco = { id: 'T1', participants: [P('u-ana')], standbyParticipants: [P('u-gersom')] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-ana'), P('u-gersom')], standbyParticipants: [] });
+  const w = db._gravado();
+  ok((w.standbyParticipants || []).length === 0, 'promovido SAI da fila (não é restaurado)');
+  ok((w.participants || []).map(p => p.uid).includes('u-gersom'), 'e está no elenco');
+}
+
+// ── (9) save que NÃO traz elenco ainda protege a fila ─────────────────────────
+// O guard antigo aninhava a fila dentro do bloco de participants: um save só de fila
+// passava direto. Este caso trava essa regressão.
+{
+  const banco = { id: 'T1', participants: [P('u-ana')], standbyParticipants: [P('u-gersom')] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', standbyParticipants: [] });
+  ok((db._gravado().standbyParticipants || []).map(p => p.uid).includes('u-gersom'),
+     'save SEM participants continua protegendo a fila');
+}
+
+// ── (10) o incidente deixa RASTRO, e o histórico não some ────────────────────
+// Reconstruir o caso do Gersom levou uma tarde porque não havia registro nenhum.
+// O histórico vive no mesmo doc e sofre do mesmo save atrasado — se ele encolher,
+// o rastro do incidente é apagado pelo próprio incidente.
+{
+  const banco = { id: 'T1', participants: [P('u-ana'), P('u-gersom')],
+                  history: [{ date: '2026-06-01T00:00:00Z', message: 'linha antiga' }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-ana')], history: [] });
+  const h = db._gravado().history || [];
+  ok(h.some(e => e.message === 'linha antiga'), 'linha de histórico do banco NÃO some num save atrasado');
+  ok(h.some(e => /Protecao automatica/.test(e.message || '')), 'a restauração deixa RASTRO no histórico');
+  ok((db._gravado().participants || []).map(p => p.uid).includes('u-gersom'), 'e a pessoa voltou');
+}
+
+// ── (11) reescrever a mesma linha de histórico não duplica ───────────────────
+{
+  const linha = { date: '2026-06-01T00:00:00Z', message: 'linha antiga' };
+  const banco = { id: 'T1', participants: [P('u-ana')], history: [linha] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-ana')], history: [linha] });
+  const h = db._gravado().history || [];
+  ok(h.filter(e => e.message === 'linha antiga').length === 1, 'histórico unido por (date+message): sem duplicata');
+}
+
 console.log(pass + ' asserts OK, ' + fail + ' falhas');
   if (fail) process.exit(1);
 })();

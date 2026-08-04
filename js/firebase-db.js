@@ -221,69 +221,130 @@ window.FirestoreDB = {
     // do banco (fonte da verdade). EXCEÇÃO: quando o organizador remove/reduz fases DE
     // PROPÓSITO no construtor, o save chega com _allowConfigReset=true (ou options) e a
     // redução é permitida — o guard só barra o que NÃO pretendia tocar (stale/bug).
-    // ── v1.7.26 · O ELENCO NUNCA ENCOLHE POR ACIDENTE ──────────────────────────
-    // INCIDENTE QUE ORIGINOU (Confra, 02/ago/2026): o Gersom se inscreveu em 01/08 18:34,
-    // recebeu o lembrete das 09:00 do dia seguinte (a CF do lembrete itera `t.participants`
-    // no SERVIDOR — prova de que ele estava no elenco), e às 19:00 não estava no sorteio.
-    // Não se desinscreveu: essa ação notifica o organizador, e não há notificação nenhuma.
-    // Ele simplesmente sumiu, e ficou 2 dias fora do torneio sem ninguém saber por quê.
+    // ── v1.7.26 · O ELENCO E A FILA NUNCA ENCOLHEM POR ACIDENTE ────────────────
+    // INCIDENTE (Confra, 02/ago/2026): o Gersom se inscreveu em 01/08 18:34, recebeu o
+    // lembrete das 09:00 do dia seguinte — e a CF do lembrete itera `t.participants` NO
+    // SERVIDOR, então ele estava no elenco — e às 19:00 não estava no sorteio. Não se
+    // desinscreveu (essa ação notifica o organizador; não há notificação nenhuma). Sumiu
+    // em silêncio e ficou dois dias fora do torneio.
     //
-    // CAUSA ESTRUTURAL: `saveTournament` grava o doc INTEIRO com merge, e existem ~65
-    // pontos no app chamando `saveTournament(t)` com um `t` que veio da memória. Qualquer
-    // um deles, com uma cópia atrasada do elenco, apaga quem entrou depois — sem erro, sem
-    // log, sem rastro. `skipParticipants` existe pra isso desde sempre, mas SÓ o `sync()`
-    // passa a flag; o comentário lá em cima promete que "organizer edits" também não tocam
-    // em participants, e nenhuma edição passa. Promessa que o código não cumpria.
+    // CAUSA ESTRUTURAL: este método grava o doc INTEIRO com merge, e há ~65 pontos no app
+    // chamando `saveTournament(t)` com um `t` vindo da memória. Qualquer um com cópia
+    // atrasada apaga quem entrou depois — sem erro, sem log, sem rastro. `skipParticipants`
+    // existe pra isso e o comentário lá em cima promete que "organizer edits" não tocam em
+    // participants; SÓ o `sync()` passa a flag. Promessa que o código não cumpria.
     //
-    // A DOUTRINA (a mesma do memberUids logo acima, que já é "NUNCA ENCOLHE"): remover
-    // alguém do elenco é ATO DECLARADO. Quem quer remover passa `allowRosterRemoval` e
-    // assume; todos os outros saves podem mexer nos CAMPOS de um inscrito à vontade, mas
-    // não conseguem fazer ninguém desaparecer. Um save atrasado passa a ser inofensivo:
-    // o ausente é restaurado do doc fresco em vez de sumir.
+    // A DOUTRINA (a mesma do memberUids acima, que já é "NUNCA ENCOLHE"): tirar alguém é
+    // ATO DECLARADO. Todo save pode mexer nos CAMPOS de um inscrito à vontade, mas nenhum
+    // faz alguém desaparecer — o ausente volta do doc fresco.
     //
-    // Compara por UID, nunca por posição nem por objeto — dupla carrega dois uids
-    // (p1Uid/p2Uid) e `_participantUids` os enxerga ([[project_uid_identity_canon_locked]]).
+    // Compara por UID, nunca por posição: dupla carrega dois uids (p1Uid/p2Uid) e
+    // `_participantUids` os enxerga. É isso que faz o SORTEIO — que funde dois solos numa
+    // dupla — não disparar restauração e duplicar o elenco a cada rodada.
     // Entrada SEM uid (fictício) não é protegida: não há identidade estável pra casar, e
-    // inventar uma casaria homônimos. Fica registrado como limitação conhecida.
+    // inventar uma casaria homônimos. Limitação declarada e coberta por teste.
     //
     // ⚠️ MODO DE FALHA ESCOLHIDO: se um caminho legítimo de remoção esquecer a flag, a
-    // pessoa CONTINUA inscrita (e o console grita). O contrário — sumir em silêncio — é o
-    // que acabou de custar dois dias de torneio a alguém. Errar para o lado de manter.
+    // pessoa CONTINUA inscrita e o console grita (+ Sentry). O contrário — sumir calado —
+    // é o que custou dois dias de torneio a alguém.
     var _allowRosterRemoval = !!(options && options.allowRosterRemoval) || cleanData._allowRosterRemoval === true;
     delete cleanData._allowRosterRemoval; // flag transiente — nunca persistir no doc
-    if (Array.isArray(cleanData.participants) && !_allowRosterRemoval) {
+    var _tocaElenco = Array.isArray(cleanData.participants);
+    var _tocaFila   = Array.isArray(cleanData.standbyParticipants) || Array.isArray(cleanData.waitlist);
+    if ((_tocaElenco || _tocaFila) && !_allowRosterRemoval) {
       try {
         var _uidsOf = (typeof window !== 'undefined' && typeof window._participantUids === 'function')
           ? window._participantUids
           : function (p) { return (p && p.uid) ? [p.uid] : []; };
         var _rSnap = await this.db.collection('tournaments').doc(docId).get();
-        var _prevParts = _rSnap.exists ? (_rSnap.data() || {}).participants : null;
-        if (Array.isArray(_prevParts) && _prevParts.length) {
-          var _incoming = {};
-          cleanData.participants.forEach(function (p) {
-            if (p && typeof p === 'object') _uidsOf(p).forEach(function (u) { if (u) _incoming[u] = 1; });
-          });
+        var _banco = _rSnap.exists ? (_rSnap.data() || {}) : null;
+        if (_banco) {
           var _restored = [];
-          _prevParts.forEach(function (p) {
-            if (!p || typeof p !== 'object') return;
-            var us = _uidsOf(p).filter(Boolean);
-            if (!us.length) return;                               // fictício: sem uid, sem proteção
-            if (us.some(function (u) { return _incoming[u]; })) return;
-            cleanData.participants.push(p);                        // volta EXATAMENTE como está no banco
-            us.forEach(function (u) { _incoming[u] = 1; });
-            _restored.push(us[0]);
+          // Quem está no elenco DEPOIS deste save (o incoming quando ele traz elenco; o do
+          // banco quando não traz). É a régua que reconhece PROMOÇÃO logo abaixo.
+          var _noElenco = {};
+          (Array.isArray(cleanData.participants) ? cleanData.participants
+            : (Array.isArray(_banco.participants) ? _banco.participants : [])
+          ).forEach(function (p) {
+            if (p && typeof p === 'object') _uidsOf(p).forEach(function (u) { if (u) _noElenco[u] = 1; });
           });
+
+          // ELENCO: ninguém sai sem `allowRosterRemoval`.
+          if (_tocaElenco && Array.isArray(_banco.participants)) {
+            _banco.participants.forEach(function (p) {
+              if (!p || typeof p !== 'object') return;
+              var us = _uidsOf(p).filter(Boolean);
+              if (!us.length) return;                              // fictício: sem proteção
+              if (us.some(function (u) { return _noElenco[u]; })) return;
+              cleanData.participants.push(p);                       // volta como está no banco
+              us.forEach(function (u) { _noElenco[u] = 1; });
+              _restored.push(us[0] + ' (participants)');
+            });
+          }
+
+          // FILA: depois do sorteio é ONDE AS PESSOAS ESPERAM (v1.6.86) — e some sem
+          // ninguém notar, porque quem espera não tem jogo pra sentir falta.
+          // NÃO exige flag: a saída legítima da fila é PROMOÇÃO, e promoção tem marca
+          // própria — a pessoa passa a estar no elenco. Quem sumiu da fila SEM aparecer no
+          // elenco não foi promovido, foi perdido. Assim as dezenas de caminhos de promoção
+          // (W.O., formação de grupo, substituição) seguem funcionando sem marcar nenhum.
+          ['standbyParticipants', 'waitlist'].forEach(function (campo) {
+            if (!Array.isArray(cleanData[campo]) || !Array.isArray(_banco[campo]) || !_banco[campo].length) return;
+            var _naFila = {};
+            cleanData[campo].forEach(function (p) {
+              if (p && typeof p === 'object') _uidsOf(p).forEach(function (u) { if (u) _naFila[u] = 1; });
+            });
+            _banco[campo].forEach(function (p) {
+              if (!p || typeof p !== 'object') return;
+              var us = _uidsOf(p).filter(Boolean);
+              if (!us.length) return;
+              if (us.some(function (u) { return _naFila[u]; })) return;
+              if (us.some(function (u) { return _noElenco[u]; })) return;   // PROMOVIDO
+              cleanData[campo].push(p);
+              us.forEach(function (u) { _naFila[u] = 1; });
+              _restored.push(us[0] + ' (' + campo + ')');
+            });
+          });
+
+          // ── HISTÓRICO É APPEND-ONLY, e por isso não pode encolher tampouco ────
+          // Reconstruir o sumiço do Gersom custou uma tarde porque NÃO HÁ RASTRO de quem
+          // mexe no elenco — tive que inferir por notificações. O histórico é o rastro, e
+          // ele vive no MESMO doc, sujeito ao MESMO save atrasado: registrar o incidente
+          // numa lista que o próximo save apaga não registra nada. Une pelo par
+          // (date+message) — nunca some linha, e reescrever a mesma não duplica.
+          if (Array.isArray(_banco.history) && _banco.history.length) {
+            var _hIn = Array.isArray(cleanData.history) ? cleanData.history : [];
+            var _hKey = function (e) { return String((e && e.date) || '') + '|' + String((e && e.message) || ''); };
+            var _vistos = {};
+            _hIn.forEach(function (e) { _vistos[_hKey(e)] = 1; });
+            var _perdidas = _banco.history.filter(function (e) { return !_vistos[_hKey(e)]; });
+            if (_perdidas.length) {
+              cleanData.history = _perdidas.concat(_hIn);
+            }
+          }
+
           if (_restored.length) {
-            // Barulhento de propósito: é o sinal de que existe um caminho gravando elenco
-            // atrasado. Silenciar isto seria repetir o bug numa camada acima.
-            if (window._warn) window._warn('[saveTournament] ELENCO PROTEGIDO em ' + docId +
-              ': o save chegou sem ' + _restored.length + ' inscrito(s) e eles foram RESTAURADOS do banco — ' +
-              _restored.join(', ') + '. Se a remoção era intencional, o caminho precisa passar allowRosterRemoval.');
-            try { if (typeof window._captureException === 'function') window._captureException(new Error('roster shrink blocked: ' + docId + ' (' + _restored.length + ')')); } catch (_se) {}
+            // O incidente vira LINHA NO HISTÓRICO, não só log de console: console some
+            // quando a aba fecha, e foi justamente a falta de rastro que fez este caso
+            // levar uma tarde pra ser reconstruído. Anexa ao histórico do BANCO (já unido
+            // acima), nunca ao da cópia que chegou — ela é a atrasada.
+            if (!Array.isArray(cleanData.history)) cleanData.history = Array.isArray(_banco.history) ? _banco.history.slice() : [];
+            cleanData.history.push({
+              date: new Date().toISOString(),
+              message: 'Protecao automatica: um save chegou sem ' + _restored.length +
+                ' pessoa(s) e elas foram restauradas (' + _restored.join(', ') + ').'
+            });
+            // Barulhento de propósito: é o sinal de que existe caminho gravando lista
+            // atrasada. Silenciar seria repetir o bug numa camada acima.
+            if (window._warn) window._warn('[saveTournament] LISTA PROTEGIDA em ' + docId + ': o save chegou sem ' +
+              _restored.length + ' pessoa(s) e elas foram RESTAURADAS do banco — ' + _restored.join(', ') +
+              '. Se a remoção era intencional, o caminho precisa passar allowRosterRemoval.');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('roster shrink blocked: ' + docId + ' (' + _restored.join(', ') + ')')); } catch (_se) {}
           }
         }
       } catch (_rgErr) { /* o guard nunca derruba o save */ }
     }
+
 
     var _allowReset = (options && options._allowConfigReset) || cleanData._allowConfigReset === true;
     delete cleanData._allowConfigReset; // flag transiente — nunca persistir no doc
