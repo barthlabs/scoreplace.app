@@ -5241,7 +5241,52 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             </tr>
           </thead>`;
 
-  const standingsTablesHtml = standingsSections.map(function(sec) {
+  // v1.7.15: CLASSIFICAÇÃO GERAL NÃO EXISTE QUANDO A CLASSIFICAÇÃO É POR GRUPO.
+  // Regra do dono: _"quando é por grupos a classificação, nunca apresente classificação
+  // geral (não faz sentido)"_. No Rei/Rainha as duplas da próxima fase saem de DENTRO do
+  // grupo (1º+2º → Ouro, 3º+4º → Prata, todos classificam) — a tabela geral não decide
+  // nada e ainda sugere um ranking entre grupos que o motor não usa.
+  //
+  // ⚠️ O `source.scope` GRAVADO NO DOC NÃO SERVE DE GATE — ele MENTE. O gerador real
+  // (`buildPhaseBrackets` → `buildEntrantsByDest`) NÃO repassa `flatOverall`, então o
+  // `_useOverall` do phases-engine degenera pra POR GRUPO sempre que houver 2+ linhas e
+  // 2+ grupos, mesmo com `scope:'overall'` no doc — é o caso do Confra (medido: 27 duplas
+  // de Ouro e 27 de Prata, TODAS intra-grupo, zero cruzadas). Ler o campo aqui faria a
+  // tela discordar do sorteio. Por isso o espelho abaixo é da regra EFETIVA, não do campo.
+  // (O mesmo campo é lido em `_txPerGroup` mais abaixo, só pra POSIÇÃO da tabela — ali
+  // errar não muda o que a pessoa lê.)
+  //
+  // Três condições, todas necessárias:
+  //   (a) a rodada é por grupos (Rei/Rainha ou Fase de Grupos);
+  //   (b) existe próxima fase E a qualificação efetiva é POR GRUPO;
+  //   (c) a fase classificatória tem 1 rodada planejada — com várias rodadas a geral é a
+  //       tabela da TEMPORADA, leitura legítima (critério do dono: geral só faz sentido
+  //       "se fossem várias rodadas, se classificasse um corte qualquer e não todos").
+  const _hideGeneralStandings = (function () {
+    try {
+      var _grpRound = _isReiRainhaRound ||
+        (Array.isArray(currentRoundData.groups) && currentRoundData.groups.length > 1) ||
+        (Array.isArray(t.groups) && t.groups.length > 1);
+      if (!_grpRound) return false;
+      var _np = (window._isMultiPhase && window._isMultiPhase(t))
+        ? (t.phases[(t.currentPhaseIndex || 0) + 1] || null) : null;
+      if (!_np) return false;                     // sem transição, a geral é a única leitura
+      var _src = _np.source || {};
+      var _scope = _src.scope || _np.scope || 'per_group';
+      var _nLines = (Array.isArray(_src.mapping) && _src.mapping.length) ? _src.mapping.length : 1;
+      var _nGroups = _isReiRainhaRound
+        ? (currentRoundData.monarchGroups || []).length
+        : ((t.groups || []).length || (currentRoundData.groups || []).length);
+      // espelho de phases-engine `_useOverall` (flatOverall nunca chega pelo gerador).
+      var _useOverall = (_scope === 'overall') && !(_nLines >= 2 && _nGroups >= 2);
+      if (_useOverall) return false;
+      var _curCfg = ((t.phases || [])[t.currentPhaseIndex || 0]) || {};
+      var _plannedRounds = parseInt(_curCfg.rounds, 10) || 1;
+      return _plannedRounds <= 1;
+    } catch (e) { return false; }
+  })();
+
+  const standingsTablesHtml = _hideGeneralStandings ? '' : standingsSections.map(function(sec) {
     var displayLabel = sec.label && window._displayCategoryName ? window._displayCategoryName(sec.label) : sec.label;
     var _roundLabel = currentRound + (isSuico ? ' / ' + maxRounds : '');
     var title = displayLabel
