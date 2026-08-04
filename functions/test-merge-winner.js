@@ -255,8 +255,10 @@ ok('index.js: a réplica local da regra saiu (sem _profileScore duplicado)',
   const bx = src.slice(src.indexOf('async function _executeMerge'), src.indexOf('async function _mergeAccountsKeepOlder'));
   ok('LETZPLAY: a importação do drop é absorvida (letzplayScans é por uid e sumia no merge)',
     /letzplayScans/.test(bx));
-  ok('LETZPLAY: funde com a MESMA regra da união de perfil (sem 2ª noção de fundir docs)',
-    /computeProfileMerge\(lzKeep\.data\(\)/.test(bx));
+  ok('LETZPLAY: é ATÔMICO — escolhe um doc inteiro, nunca funde campo a campo',
+    /pickLetzplayScan\(lzKeep\.data\(\)/.test(bx) && !/computeProfileMerge\(lzKeep/.test(bx));
+  ok('LETZPLAY: quando o drop vence, SUBSTITUI inteiro (set sem merge)',
+    /lzCol\.doc\(keepUid\)\.set\(lzDropData\);\s*\/\/ substitui INTEIRO/.test(bx));
   ok('LETZPLAY: o doc do drop é APAGADO (órfão por uid reapareceria na ficha da pessoa)',
     /lzCol\.doc\(dropUid\)\.delete\(\)/.test(bx));
   ok('LETZPLAY: a autoria das leituras (scannedBy) é repontada',

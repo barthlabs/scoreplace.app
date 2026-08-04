@@ -102,4 +102,44 @@ function computeProfileMerge(keepData, dropData, keepUid) {
   return upd;
 }
 
-module.exports = { NUNCA_COPIAR, computeProfileMerge, isEmpty, isPlainObject, sameItem };
+/**
+ * LETZPLAY é ATÔMICO — escolhe um doc INTEIRO, nunca funde.
+ *
+ * Achado num ensaio contra 2 docs REAIS de `letzplayScans` (04/ago/2026): reusar a regra de
+ * perfil aqui alteraria `scan`, `fullImport` e `totaisLetzplay` do sobrevivente, porque são
+ * OBJETOS e a regra de perfil funde objeto por chave. Pra `skillBySport` isso é certo (juntar
+ * modalidades); pra uma LEITURA do letzplay é errado: o doc é o retrato coerente de uma
+ * importação — cursor, totais e jogos combinam entre si. Misturar duas leituras produz totais
+ * que não batem com os jogos, e o app trata esses números como verdade.
+ *
+ * Então: fica a leitura mais RECENTE (é a que reflete o letzplay de hoje); sem data
+ * confiável, a que tem mais jogos; e nada é fundido campo a campo.
+ * @returns 'keep' | 'drop' — qual doc INTEIRO deve permanecer
+ */
+function pickLetzplayScan(keepData, dropData) {
+  if (!dropData) return 'keep';
+  if (!keepData) return 'drop';
+  const ts = (d) => {
+    const v = d && (d.scannedAt || d.updatedAt);
+    if (v == null) return null;
+    const t = v.toMillis ? v.toMillis() : (typeof v === 'string' ? Date.parse(v) : Number(v));
+    return isNaN(t) ? null : t;
+  };
+  const tk = ts(keepData), td = ts(dropData);
+  if (tk != null && td != null && tk !== td) return (td > tk) ? 'drop' : 'keep';
+  const jogos = (d) => {
+    const t = d && d.totaisLetzplay;
+    if (t && typeof t === 'object') {
+      for (const k of ['jogos', 'games', 'partidas', 'total']) {
+        if (typeof t[k] === 'number') return t[k];
+      }
+    }
+    return Array.isArray(d && d.scan) ? d.scan.length : 0;
+  };
+  return (jogos(dropData) > jogos(keepData)) ? 'drop' : 'keep';
+}
+
+module.exports = {
+  NUNCA_COPIAR, computeProfileMerge, isEmpty, isPlainObject, sameItem,
+  pickLetzplayScan,
+};

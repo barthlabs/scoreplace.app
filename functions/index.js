@@ -324,10 +324,16 @@ async function _executeMerge(db, keepDoc, dropDoc) {
       if (!lzKeep.exists) {
         await lzCol.doc(keepUid).set(lzDropData);
       } else {
-        // Mesma regra da união de perfil: o vivo do sobrevivente vence, o drop preenche
-        // buraco, arrays unem. Fonte única — não há segunda noção de "fundir dois docs".
-        const upd = _profileMerge.computeProfileMerge(lzKeep.data(), lzDropData, keepUid);
-        if (Object.keys(upd).length) await lzCol.doc(keepUid).set(upd, { merge: true });
+        // ATÔMICO: escolhe um doc INTEIRO, nunca funde campo a campo. A regra da união de
+        // PERFIL não serve aqui — ela funde objeto por chave, e num ensaio com 2 docs reais
+        // isso alterava `scan`, `fullImport` e `totaisLetzplay` do sobrevivente. Uma leitura
+        // do letzplay é um retrato coerente (cursor, totais e jogos combinam entre si);
+        // misturar duas produz totais que não batem com os jogos, e o app lê esses números
+        // como verdade. Fica a mais recente — ou a com mais jogos, sem data confiável.
+        if (_profileMerge.pickLetzplayScan(lzKeep.data(), lzDropData) === "drop") {
+          await lzCol.doc(keepUid).set(lzDropData);   // substitui INTEIRO, sem merge
+          console.log(`[_executeMerge] letzplay: leitura do drop era mais nova — substituiu a do keep`);
+        }
       }
       // Apaga o doc do drop: deixado pra trás ele vira ÓRFÃO respondendo por uid — foi
       // exatamente assim que placares de torneios apagados reapareceram na ficha das pessoas.

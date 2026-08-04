@@ -112,6 +112,32 @@ const merge = P.computeProfileMerge;
   ok('array desconhecido também', JSON.stringify(upd.outroNovo) === JSON.stringify(['a']));
 })();
 
+
+// ── LETZPLAY é ATÔMICO: escolhe um doc inteiro ──────────────────────────────
+// Achado num ensaio com 2 docs REAIS de letzplayScans: aplicar a regra de PERFIL aqui
+// alterava `scan`/`fullImport`/`totaisLetzplay` do sobrevivente, porque ela funde objeto por
+// chave. Pra skillBySport isso é certo; pra uma LEITURA do letzplay é errado — o doc é um
+// retrato coerente (cursor, totais e jogos combinam), e misturar dois gera totais que não
+// batem com os jogos. O app trata esses números como verdade.
+(() => {
+  const p = P.pickLetzplayScan;
+  ok('sem doc no drop → fica o do keep', p({ handle: '@a' }, null) === 'keep');
+  ok('sem doc no keep → entra o do drop', p(null, { handle: '@b' }) === 'drop');
+  ok('a leitura MAIS RECENTE vence',
+    p({ scannedAt: '2026-07-01T00:00:00Z' }, { scannedAt: '2026-08-01T00:00:00Z' }) === 'drop');
+  ok('a mais antiga não derruba a nova',
+    p({ scannedAt: '2026-08-01T00:00:00Z' }, { scannedAt: '2026-07-01T00:00:00Z' }) === 'keep');
+  ok('Timestamp-like (toMillis) é lido',
+    p({ scannedAt: { toMillis: () => 1000 } }, { scannedAt: { toMillis: () => 2000 } }) === 'drop');
+  ok('sem data → decide por nº de JOGOS',
+    p({ totaisLetzplay: { jogos: 10 } }, { totaisLetzplay: { jogos: 400 } }) === 'drop');
+  ok('empate de jogos → preserva o do sobrevivente',
+    p({ totaisLetzplay: { jogos: 5 } }, { totaisLetzplay: { jogos: 5 } }) === 'keep');
+  // A garantia central: NUNCA devolve um híbrido — só 'keep' ou 'drop'
+  const r = p({ scan: { a: 1 }, handle: '@x' }, { scan: { b: 2 }, handle: '@y' });
+  ok('devolve sempre um doc INTEIRO (nunca híbrido)', r === 'keep' || r === 'drop');
+})();
+
 // ── Fiação: o index.js usa o módulo de verdade ───────────────────────────────
 (() => {
   const fs = require('fs'), path = require('path');
