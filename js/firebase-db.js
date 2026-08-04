@@ -405,6 +405,128 @@ window.FirestoreDB = {
               message: 'Protecao automatica: um save chegou sem o placar de ' + _revertidos.length +
                 ' jogo(s) ja lancado(s) e eles foram restaurados.' });
           }
+
+          // ── v1.7.32 · O QUE O JOGO JÁ GANHOU NÃO SOME, E A CHAVE NÃO ENCOLHE ──
+          // O guard acima devolve o PLACAR de um jogo que veio sem ele. Não cobria o
+          // jogo que NÃO VEIO, nem o que o jogo ganhou fora do placar. MEDIDO contra o
+          // doc real do Confra, o save atrasado do organizador destruía CINCO coisas:
+          // a rodada 2 recém-criada, um jogo de entrada tardia, o link do grupo de
+          // WhatsApp, o horário combinado e a substituição por W.O.
+          //
+          // DUAS regras, desenhadas pra não atrapalhar quem apaga de propósito:
+          //
+          // (a) CAMPOS ADITIVOS de um jogo (link do grupo, horário combinado) só nascem
+          //     pelo fluxo deles e nunca são "desmarcados" num save de outra coisa —
+          //     então um save que chega sem eles está desatualizado, não decidindo.
+          //
+          // (b) SUMIÇO. Aqui está a distinção que evita 6 bandeiras espalhadas pelos
+          //     pontos de reset: um RESET zera (`rounds: []`), um save atrasado traz
+          //     MENOS rodadas — nunca zero. Então N→0 passa livre (é o re-sorteio, o
+          //     reset do sandbox, o construtor de formato) e só 0<M<N é recusado.
+          //     Dentro de uma rodada que sobreviveu, o jogo que sumiu volta — com DUAS
+          //     exceções, tiradas de quem realmente apaga jogo no app (varri os 10
+          //     pontos): (i) `isSitOut` — `_removeSitOut` (liga-substitution) e `_isRem`
+          //     (bracket-logic) só apagam MARCADOR de folga, e ressuscitá-lo quebraria o
+          //     W.O.; (ii) save que ACRESCENTA jogo novo — os outros 8 pontos são o motor
+          //     reescrevendo a chave (re-sorteio, repescagem, chaves-adapter), e ele
+          //     sempre gera jogo junto. Save atrasado só PERDE, nunca traz id novo.
+          //     Na dúvida (o motor está reescrevendo), o guard sai de cena.
+          //
+          // ⚠️ NÃO cobre o slot reescrito (a substituição por W.O. desfeita, caso 3 da
+          // medição): os dois lados escrevem o MESMO campo com dado igualmente válido e
+          // não há como saber qual é o mais novo sem versionar o jogo. Fica anotado.
+          var _ADITIVOS = ['waGroup', 'schedule', 'scheduledAt', 'scheduledBy'];
+          // índice COMPLETO do banco (o de cima só tem quem tem placar) + onde cada um mora
+          var _ondeMora = {};
+          var _idxAll = {};
+          (Array.isArray(_bancoP.matches) ? _bancoP.matches : []).forEach(function (m) {
+            if (m && m.id != null) { _idxAll[String(m.id)] = m; _ondeMora[String(m.id)] = { tipo: 'matches' }; }
+          });
+          (Array.isArray(_bancoP.rounds) ? _bancoP.rounds : []).forEach(function (r, ri) {
+            (r && Array.isArray(r.matches) ? r.matches : []).forEach(function (m) {
+              if (m && m.id != null) { _idxAll[String(m.id)] = m; _ondeMora[String(m.id)] = { tipo: 'rounds', i: ri, round: (r.round != null ? r.round : ri) }; }
+            });
+          });
+          (Array.isArray(_bancoP.groups) ? _bancoP.groups : []).forEach(function (g, gi) {
+            (g && Array.isArray(g.matches) ? g.matches : []).forEach(function (m) {
+              if (m && m.id != null) { _idxAll[String(m.id)] = m; _ondeMora[String(m.id)] = { tipo: 'groups', i: gi }; }
+            });
+          });
+
+          // (a) devolve os campos aditivos nos jogos que VIERAM
+          var _aditRest = [];
+          _varre(cleanData, function (m) {
+            if (!m || m.id == null) return;
+            var b = _idxAll[String(m.id)];
+            if (!b) return;
+            _ADITIVOS.forEach(function (k) {
+              if (b[k] != null && m[k] == null) { m[k] = b[k]; _aditRest.push(String(m.id) + '·' + k); }
+            });
+          });
+
+          // (b1) rodada que sumiu — só quando o save NÃO zerou (zerar é reset declarado pela forma)
+          var _rodVolt = [];
+          if (Array.isArray(cleanData.rounds) && Array.isArray(_bancoP.rounds) &&
+              cleanData.rounds.length > 0 && cleanData.rounds.length < _bancoP.rounds.length) {
+            var _temR = {};
+            cleanData.rounds.forEach(function (r, i) { _temR[String(r && r.round != null ? r.round : i)] = 1; });
+            _bancoP.rounds.forEach(function (r, i) {
+              var k = String(r && r.round != null ? r.round : i);
+              if (_temR[k]) return;
+              cleanData.rounds.push(r); _rodVolt.push(k);
+            });
+            if (_rodVolt.length) {
+              cleanData.rounds.sort(function (a, b) {
+                return (a && a.round != null ? a.round : 0) - (b && b.round != null ? b.round : 0);
+              });
+            }
+          }
+
+          // (b2) jogo que sumiu de uma rodada/grupo que sobreviveu
+          var _vistos = {};
+          _varre(cleanData, function (m) { if (m && m.id != null) _vistos[String(m.id)] = 1; });
+          // o save TROUXE jogo que o banco não tem ⇒ é o motor reescrevendo a chave: sai de cena
+          var _motorReescrevendo = Object.keys(_vistos).some(function (id) { return !_idxAll[id]; });
+          var _jogoVolt = [];
+          if (!_motorReescrevendo) Object.keys(_idxAll).forEach(function (id) {
+            if (_vistos[id]) return;
+            var b = _idxAll[id];
+            if (b && b.isSitOut) return;                     // marcador de folga/W.O.: pode sumir
+            var onde = _ondeMora[id] || {};
+            var alvo = null;
+            if (onde.tipo === 'matches') {
+              if (!Array.isArray(cleanData.matches)) cleanData.matches = [];
+              alvo = cleanData.matches;
+            } else if (onde.tipo === 'rounds' && Array.isArray(cleanData.rounds)) {
+              var r = null;
+              for (var _ri = 0; _ri < cleanData.rounds.length; _ri++) {
+                var _c = cleanData.rounds[_ri];
+                if (_c && _c.round != null ? _c.round === onde.round : _ri === onde.i) { r = _c; break; }
+              }
+              if (r) { if (!Array.isArray(r.matches)) r.matches = []; alvo = r.matches; }
+            } else if (onde.tipo === 'groups' && Array.isArray(cleanData.groups) && cleanData.groups[onde.i]) {
+              var g = cleanData.groups[onde.i];
+              if (!Array.isArray(g.matches)) g.matches = [];
+              alvo = g.matches;
+            }
+            if (!alvo) return;                                // sem onde pousar: não inventa lugar
+            alvo.push(b); _jogoVolt.push(id);
+          });
+
+          if (_rodVolt.length || _jogoVolt.length || _aditRest.length) {
+            if (window._warn) window._warn('[saveTournament] CHAVE PROTEGIDA em ' + docId + ': ' +
+              (_rodVolt.length ? _rodVolt.length + ' rodada(s) ' : '') +
+              (_jogoVolt.length ? _jogoVolt.length + ' jogo(s) com valor ' : '') +
+              (_aditRest.length ? _aditRest.length + ' campo(s) (grupo/horário) ' : '') +
+              'sumiram do save e foram restaurados do banco.');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('bracket shrink blocked: ' + docId + ' (r=' + _rodVolt.length + ' m=' + _jogoVolt.length + ' f=' + _aditRest.length + ')')); } catch (_se) {}
+          }
+          if (_rodVolt.length || _jogoVolt.length) {
+            if (!Array.isArray(cleanData.history)) cleanData.history = Array.isArray(_bancoP.history) ? _bancoP.history.slice() : [];
+            cleanData.history.push({ date: new Date().toISOString(),
+              message: 'Protecao automatica: um save chegou sem ' + _rodVolt.length + ' rodada(s) e ' +
+                _jogoVolt.length + ' jogo(s) que existem no banco e eles foram restaurados.' });
+          }
         }
       } catch (_spErr) { /* o guard nunca derruba o save */ }
     }

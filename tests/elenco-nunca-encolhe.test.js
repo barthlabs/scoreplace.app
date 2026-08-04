@@ -397,6 +397,98 @@ const M = (id, a, b, w) => ({ id, p1: 'A', p2: 'B', scoreP1: a, scoreP2: b, winn
   ok(chs.length === 1 && chs[0].uid === 'u-co', 'cancelar convite pendente continua funcionando');
 }
 
+// ════════ v1.7.32 · a CHAVE não encolhe ═══════════════════════════════════
+// MEDIDO no doc real do Confra: o save atrasado do organizador destruía CINCO coisas —
+// a rodada recém-criada, o jogo de entrada tardia, o link do grupo de WhatsApp, o
+// horário combinado e a substituição por W.O. As 4 primeiras estão travadas aqui.
+
+// ── (26) RODADA criada por outro cliente não some ────────────────────────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')], rounds: [
+    { round: 1, matches: [M('m1', 6, 3, 'A')] },
+    { round: 2, matches: [M('n1', null, null), M('n2', null, null)] } ] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', name: 'editado', participants: [P('u-a')],
+                            rounds: [{ round: 1, matches: [M('m1', 6, 3, 'A')] }] });  // cópia de ANTES
+  const g = db._gravado();
+  // null-safe de propósito: sem isso, a regressão ABORTA a suíte em vez de relatar
+  ok(g.rounds.length === 2, 'rodada criada por outro cliente NÃO some num save atrasado');
+  ok(((g.rounds[1] || {}).matches || []).length === 2, 'e os jogos dela vêm junto');
+  ok((g.rounds[0] || {}).round === 1 && (g.rounds[1] || {}).round === 2, 'as rodadas voltam NA ORDEM');
+}
+
+// ── (27) RE-SORTEIO (zerar) continua livre — é a forma que distingue ─────────
+// Reset manda `rounds: []` (ZERO); save atrasado manda MENOS, nunca zero. Sem isso eu
+// teria que plugar bandeira em 6 pontos de reset espalhados pelo motor.
+{
+  const banco = { id: 'T1', participants: [P('u-a')], rounds: [
+    { round: 1, matches: [M('m1', null, null)] }, { round: 2, matches: [M('n1', null, null)] } ] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')], rounds: [] });
+  ok((db._gravado().rounds || []).length === 0, 're-sorteio/reset (rounds: []) continua zerando');
+}
+
+// ── (28) W.O. apaga o marcador de FOLGA — não pode ser ressuscitado ─────────
+// `_removeSitOut` (liga-substitution) e `_isRem` (bracket-logic) apagam só isSitOut.
+{
+  const banco = { id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [
+    M('m1', null, null),
+    { id: 'folga-1', p1: 'Fulana', p2: null, isSitOut: true, sitOutReason: 'folga' } ] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')],
+                            rounds: [{ round: 1, matches: [M('m1', null, null)] }] });
+  const ms = db._gravado().rounds[0].matches;
+  ok(ms.length === 1 && !ms.some(m => m.id === 'folga-1'), 'W.O. segue apagando o marcador de folga');
+}
+
+// ── (29) JOGO de entrada tardia (sem placar) não some ───────────────────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [
+    M('m1', null, null), { id: 'tardio-1', p1: 'X', p2: 'Y', scoreP1: null, scoreP2: null } ] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')],
+                            rounds: [{ round: 1, matches: [M('m1', null, null)] }] });
+  const ms = db._gravado().rounds[0].matches;
+  ok(ms.some(m => m.id === 'tardio-1'), 'jogo de entrada tardia volta mesmo SEM placar');
+}
+
+// ── (30) MOTOR reescrevendo a chave: o guard sai de cena ────────────────────
+// Re-sorteio/repescagem/chaves-adapter apagam jogo E geram outro. Save atrasado só
+// PERDE, nunca traz id novo — é esse o sinal.
+{
+  const banco = { id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [
+    M('velho-1', null, null), M('velho-2', null, null) ] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')],
+                            rounds: [{ round: 1, matches: [M('novo-1', null, null)] }] });
+  const ms = db._gravado().rounds[0].matches;
+  ok(ms.length === 1 && ms[0].id === 'novo-1', 'motor que ACRESCENTA jogo reescreve livre — guard não interfere');
+}
+
+// ── (31) link do grupo e horário combinado não somem ────────────────────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [
+    Object.assign(M('m1', null, null), { waGroup: { link: 'https://chat.whatsapp.com/X' },
+                                         scheduledAt: '2026-08-13T19:00', scheduledBy: 'u-a' }) ] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', name: 'editado', participants: [P('u-a')],
+                            rounds: [{ round: 1, matches: [M('m1', null, null)] }] });
+  const m = db._gravado().rounds[0].matches[0];
+  ok(m.waGroup && m.waGroup.link === 'https://chat.whatsapp.com/X', 'link do grupo de WhatsApp sobrevive');
+  ok(m.scheduledAt === '2026-08-13T19:00', 'horário combinado sobrevive');
+  ok(m.scheduledBy === 'u-a', 'e quem combinou também');
+}
+
+// ── (32) trocar o link/horário continua livre (chega COM valor) ─────────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [
+    Object.assign(M('m1', null, null), { scheduledAt: '2026-08-13T19:00' }) ] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [
+    Object.assign(M('m1', null, null), { scheduledAt: '2026-08-14T20:00' }) ] }] });
+  ok(db._gravado().rounds[0].matches[0].scheduledAt === '2026-08-14T20:00', 'remarcar o horário vence o banco');
+}
+
 console.log(pass + ' asserts OK, ' + fail + ' falhas');
   if (fail) process.exit(1);
 })();
