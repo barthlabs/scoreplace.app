@@ -560,6 +560,59 @@ window.FirestoreDB = {
             try { if (typeof window._captureException === 'function') window._captureException(new Error('roster revert blocked: ' + docId + ' (' + _slotRev.length + ')')); } catch (_se) {}
           }
 
+          // ── v1.7.34 · O 3º STORAGE DA ESPERA, O W.O. REIVINDICADO E A ENQUETE ────
+          // A espera vive em TRÊS storages (cânone). O guard de 1.7.26 pegou os dois que
+          // são ARRAY de entrada com uid (`standbyParticipants`, `waitlist`) e deixou de
+          // fora o terceiro: `monarchWaitlist`, que é MAPA categoria→NOMES. MEDIDO no doc
+          // real: quem entra na fila por ali some num save atrasado — **é o bug do Gersom
+          // ainda aberto**. E hoje há gente exposta: o **Renato Oshima** existe SÓ nesse
+          // mapa (não está no elenco nem em `standbyParticipants`), então zerá-lo o apaga
+          // do torneio inteiro.
+          //
+          // Sair da fila é legítimo — mas SÓ o motor faz isso, e sempre sorteando (varri:
+          // todos os `_setMonarchWaitlist` que encolhem estão em bracket-logic.js, tirando
+          // da fila quem acabou de entrar num grupo). Reuso então o mesmo sinal da 1.7.32:
+          // trouxe jogo com id novo ⇒ o motor sorteou ⇒ o guard sai de cena.
+          //
+          // `woClaims` e `polls`: varri o app e NADA os remove (o W.O. reivindicado é
+          // append-only, a enquete idem) — some só por save atrasado. Guard direto por id.
+          var _espVolt = [], _apVolt = [];
+          if (!_motorReescrevendo && !_allowRosterRemoval) {
+            var _mwlB = _bancoP.monarchWaitlist;
+            if (_mwlB && typeof _mwlB === 'object' && !Array.isArray(_mwlB)) {
+              if (!cleanData.monarchWaitlist || typeof cleanData.monarchWaitlist !== 'object' ||
+                  Array.isArray(cleanData.monarchWaitlist)) cleanData.monarchWaitlist = {};
+              Object.keys(_mwlB).forEach(function (cat) {
+                var _b = _mwlB[cat];
+                if (!Array.isArray(_b) || !_b.length) return;
+                if (!Array.isArray(cleanData.monarchWaitlist[cat])) cleanData.monarchWaitlist[cat] = [];
+                var _p = cleanData.monarchWaitlist[cat];
+                _b.forEach(function (nome) {
+                  if (nome == null || _p.indexOf(nome) >= 0) return;
+                  _p.push(nome); _espVolt.push(String(cat) + '/' + String(nome));
+                });
+              });
+            }
+            ['woClaims', 'polls'].forEach(function (campo) {
+              var _b = _bancoP[campo];
+              if (!Array.isArray(_b) || !_b.length) return;
+              if (!Array.isArray(cleanData[campo])) cleanData[campo] = [];
+              var _tem = {};
+              cleanData[campo].forEach(function (o) { if (o && o.id != null) _tem[String(o.id)] = 1; });
+              _b.forEach(function (o) {
+                if (!o || o.id == null || _tem[String(o.id)]) return;
+                cleanData[campo].push(o); _apVolt.push(campo + '/' + String(o.id));
+              });
+            });
+          }
+          if (_espVolt.length || _apVolt.length) {
+            if (window._warn) window._warn('[saveTournament] ESPERA/REGISTRO PROTEGIDO em ' + docId + ': ' +
+              (_espVolt.length ? _espVolt.length + ' nome(s) da lista de espera ' : '') +
+              (_apVolt.length ? _apVolt.length + ' registro(s) (W.O./enquete) ' : '') +
+              'sumiram do save e voltaram do banco.');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('waitlist/claims shrink blocked: ' + docId + ' (e=' + _espVolt.length + ' r=' + _apVolt.length + ')')); } catch (_se) {}
+          }
+
           if (_rodVolt.length || _jogoVolt.length || _aditRest.length) {
             if (window._warn) window._warn('[saveTournament] CHAVE PROTEGIDA em ' + docId + ': ' +
               (_rodVolt.length ? _rodVolt.length + ' rodada(s) ' : '') +

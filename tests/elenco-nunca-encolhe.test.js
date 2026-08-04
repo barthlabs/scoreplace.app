@@ -566,6 +566,67 @@ const R = (id, t1, t1u) => ({ id, p1: t1.join(' / '), p2: 'C / D',
   ok(db._gravado().rounds[0].matches[0].team1Uids[0] === 'u-z', 'banco sem carimbo: a troca passa (e vira o carimbo)');
 }
 
+// ════════ v1.7.34 · o 3º storage da espera, W.O. reivindicado e enquete ═══
+// A espera vive em TRÊS storages. O guard de 1.7.26 pegou os dois que são ARRAY com uid
+// e deixou o `monarchWaitlist` (MAPA categoria→NOMES) de fora — ou seja, o bug do Gersom
+// seguia aberto por ali. MEDIDO no doc real: o Renato Oshima existe SÓ nesse mapa.
+
+// ── (38) nome que entrou na fila pelo 3º storage não some ───────────────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')],
+                  monarchWaitlist: { _default_: [], Masc_C: ['Renato Oshima', 'Outro'] } };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', name: 'editado', participants: [P('u-a')],
+                            monarchWaitlist: { _default_: [], Masc_C: ['Outro'] } });  // cópia de ANTES
+  const q = db._gravado().monarchWaitlist.Masc_C;
+  ok(q.indexOf('Renato Oshima') >= 0, 'nome do 3º storage da espera NÃO some num save atrasado');
+  ok(q.length === 2 && q.indexOf('Outro') >= 0, 'e quem já estava continua');
+}
+
+// ── (39) categoria inteira que sumiu do save volta ──────────────────────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')], monarchWaitlist: { Fem_D: ['Fulana'] } };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')], monarchWaitlist: {} });
+  ok(((db._gravado().monarchWaitlist || {}).Fem_D || []).indexOf('Fulana') >= 0,
+     'categoria inteira ausente do save é reconstruída');
+}
+
+// ── (40) o MOTOR tira da fila ao sortear — não pode ser desfeito ────────────
+// Todos os `_setMonarchWaitlist` que ENCOLHEM estão em bracket-logic (o sorteio tirando
+// da fila quem entrou num grupo), e o sorteio sempre gera jogo com id novo.
+{
+  const banco = { id: 'T1', participants: [P('u-a')], monarchWaitlist: { Masc_C: ['Renato Oshima'] },
+                  rounds: [{ round: 1, matches: [M('m1', null, null)] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')], monarchWaitlist: { Masc_C: [] },
+                            rounds: [{ round: 1, matches: [M('m1', null, null), M('grupo-novo', null, null)] }] });
+  ok((db._gravado().monarchWaitlist.Masc_C || []).length === 0,
+     'sorteio que forma grupo tira da fila livre — guard não interfere');
+}
+
+// ── (41) tirar da fila DECLARADO continua livre ─────────────────────────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')], monarchWaitlist: { Masc_C: ['Renato Oshima'] } };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')], monarchWaitlist: { Masc_C: [] } },
+                          { allowRosterRemoval: true });
+  ok((db._gravado().monarchWaitlist.Masc_C || []).length === 0, 'allowRosterRemoval tira da fila de verdade');
+}
+
+// ── (42) W.O. reivindicado e enquete não somem (nada no app os remove) ──────
+{
+  const banco = { id: 'T1', participants: [P('u-a')],
+                  woClaims: [{ id: 'wo_1', absentName: 'Thereza' }, { id: 'wo_2', absentName: 'Thereza' }],
+                  polls: [{ id: 'p1', votes: { 'u-1': 'a', 'u-2': 'b' } }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', name: 'editado', participants: [P('u-a')],
+                            woClaims: [{ id: 'wo_1', absentName: 'Thereza' }], polls: [] });
+  const g = db._gravado();
+  ok((g.woClaims || []).length === 2, 'W.O. reivindicado no meio tempo não some');
+  ok((g.polls || []).length === 1 && Object.keys(g.polls[0].votes).length === 2, 'enquete e seus votos não somem');
+}
+
 console.log(pass + ' asserts OK, ' + fail + ' falhas');
   if (fail) process.exit(1);
 })();
