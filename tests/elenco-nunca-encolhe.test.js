@@ -489,6 +489,83 @@ const M = (id, a, b, w) => ({ id, p1: 'A', p2: 'B', scoreP1: a, scoreP2: b, winn
   ok(db._gravado().rounds[0].matches[0].scheduledAt === '2026-08-14T20:00', 'remarcar o horário vence o banco');
 }
 
+// ════════ v1.7.33 · TROCA DE JOGADOR: o mais NOVO vence ═══════════════════
+// Caso 5 da medição — o suplente entra pelo W.O. e um save atrasado desfaz. Resolvido
+// por carimbo (`rosterAt`) que nasce no próprio ponto de gravação: nenhum dos 10 call
+// sites que mexem em slot precisa saber que ele existe.
+const R = (id, t1, t1u) => ({ id, p1: t1.join(' / '), p2: 'C / D',
+                              team1: t1, team1Uids: t1u, team2: ['C','D'], team2Uids: ['u-c','u-d'],
+                              scoreP1: null, scoreP2: null, winner: null });
+
+// ── (33) substituição por W.O. NÃO é desfeita por save atrasado ─────────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')],
+                  rounds: [{ round: 1, matches: [R('m1', ['AUSENTE','B'], ['u-aus','u-b'])] }] };
+  const db = mkDb(banco); DB.db = db;
+  // passo 1 — o app aplica a troca e SALVA (o carimbo nasce aqui)
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')],
+                            rounds: [{ round: 1, matches: [R('m1', ['SUPLENTE','B'], ['u-sup','u-b'])] }] });
+  const pos = db._gravado();
+  ok(typeof pos.rounds[0].matches[0].rosterAt === 'number', 'a troca legítima é CARIMBADA no save');
+  // passo 2 — organizador salva a cópia lida ANTES da troca
+  const db2 = mkDb(pos); DB.db = db2;
+  await DB.saveTournament({ id: 'T1', name: 'editado', participants: [P('u-a')],
+                            rounds: [{ round: 1, matches: [R('m1', ['AUSENTE','B'], ['u-aus','u-b'])] }] });
+  const m = db2._gravado().rounds[0].matches[0];
+  ok(m.team1Uids[0] === 'u-sup', 'save atrasado NÃO desfaz a substituição por W.O.');
+  ok(m.team1[0] === 'SUPLENTE', 'e o nome no card acompanha');
+  ok(db2._gravado().name === 'editado', 'a edição que o organizador queria PASSA');
+}
+
+// ── (34) DUAS trocas legítimas em sequência passam as duas ─────────────────
+// Quem leu DEPOIS da primeira carrega o carimbo dela — não é confundido com atrasado.
+{
+  const banco = { id: 'T1', participants: [P('u-a')],
+                  rounds: [{ round: 1, matches: [R('m1', ['A','B'], ['u-a2','u-b'])] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')],
+                            rounds: [{ round: 1, matches: [R('m1', ['SUP1','B'], ['u-s1','u-b'])] }] });
+  const pos1 = db._gravado();
+  const db2 = mkDb(pos1); DB.db = db2;
+  const segunda = { id: 'T1', participants: [P('u-a')],
+                    rounds: [{ round: 1, matches: [Object.assign(R('m1', ['SUP2','B'], ['u-s2','u-b']),
+                                                   { rosterAt: pos1.rounds[0].matches[0].rosterAt })] }] };
+  await DB.saveTournament(segunda);
+  ok(db2._gravado().rounds[0].matches[0].team1Uids[0] === 'u-s2', 'segunda troca legítima também passa');
+}
+
+// ── (35) escalação IGUAL não perde o carimbo ───────────────────────────────
+// Sem isso, um save que não mexe em slot apagaria o carimbo e o guard ficaria cego.
+{
+  const banco = { id: 'T1', participants: [P('u-a')],
+                  rounds: [{ round: 1, matches: [Object.assign(R('m1', ['A','B'], ['u-a2','u-b']), { rosterAt: 111 })] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', name: 'x', participants: [P('u-a')],
+                            rounds: [{ round: 1, matches: [R('m1', ['A','B'], ['u-a2','u-b'])] }] });
+  ok(db._gravado().rounds[0].matches[0].rosterAt === 111, 'save que não mexe em slot preserva o carimbo');
+}
+
+// ── (36) MOTOR reescrevendo (traz id novo): carimbo não atrapalha ──────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')],
+                  rounds: [{ round: 1, matches: [Object.assign(R('m1', ['A','B'], ['u-a2','u-b']), { rosterAt: 999 })] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')], rounds: [{ round: 1, matches: [
+    R('m1', ['NOVO','B'], ['u-novo','u-b']), R('m2', ['E','F'], ['u-e','u-f']) ] }] });
+  const ms = db._gravado().rounds[0].matches;
+  ok(ms.find(m => m.id === 'm1').team1Uids[0] === 'u-novo', 'motor que gera jogo novo reescreve slot livre');
+}
+
+// ── (37) PRIMEIRA troca da vida (banco sem carimbo) é aceita ───────────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')],
+                  rounds: [{ round: 1, matches: [R('m1', ['A','B'], ['u-a2','u-b'])] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')],
+                            rounds: [{ round: 1, matches: [R('m1', ['Z','B'], ['u-z','u-b'])] }] });
+  ok(db._gravado().rounds[0].matches[0].team1Uids[0] === 'u-z', 'banco sem carimbo: a troca passa (e vira o carimbo)');
+}
+
 console.log(pass + ' asserts OK, ' + fail + ' falhas');
   if (fail) process.exit(1);
 })();

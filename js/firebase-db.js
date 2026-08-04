@@ -513,6 +513,53 @@ window.FirestoreDB = {
             alvo.push(b); _jogoVolt.push(id);
           });
 
+          // ── v1.7.33 · TROCA DE JOGADOR NO JOGO: o mais NOVO vence ────────────────
+          // Este era o caso 5 da medição e o único que eu tinha dado como insolúvel: o
+          // suplente entra pelo W.O., o organizador salva uma cópia velha, e a
+          // substituição é DESFEITA. Os dois lados escrevem o MESMO campo com dado
+          // igualmente válido — sem saber QUANDO cada um escreveu, não há como decidir.
+          //
+          // A informação que faltava é um carimbo, e ele nasce AQUI em vez de nos 10
+          // pontos que mexem em slot (draw, phases, bracket-logic, liga-substitution):
+          // comparo a escalação que chegou com a do banco e, se mudou, carimbo
+          // `rosterAt`. Assim toda troca se carimba sozinha e nenhum call site precisa
+          // saber que o carimbo existe — a lição do `_repairTournaments`, onde manter
+          // lista à mão sempre esquece o campo novo.
+          //
+          // Decisão: mudou E o banco tem carimbo MAIS NOVO que o do save ⇒ o save é
+          // atrasado, a escalação do banco volta. Primeira troca da vida (banco sem
+          // carimbo) é aceita e carimbada. Duas trocas legítimas em sequência também
+          // passam: quem leu DEPOIS da primeira carrega o carimbo dela.
+          var _ROSTER = ['p1', 'p2', 'team1', 'team2', 'team1Uids', 'team2Uids', 'p1Uid', 'p2Uid'];
+          var _sigRoster = function (m) {
+            return JSON.stringify(_ROSTER.map(function (k) { return m ? m[k] : null; }));
+          };
+          var _slotRev = [], _slotNovo = 0, _agora = Date.now();
+          if (!_motorReescrevendo) _varre(cleanData, function (m) {
+            if (!m || m.id == null) return;
+            var b = _idxAll[String(m.id)];
+            if (!b) return;
+            if (_sigRoster(m) === _sigRoster(b)) {
+              if (b.rosterAt != null && m.rosterAt == null) m.rosterAt = b.rosterAt; // não perde o carimbo
+              return;
+            }
+            var _cB = (typeof b.rosterAt === 'number') ? b.rosterAt : null;
+            var _cS = (typeof m.rosterAt === 'number') ? m.rosterAt : null;
+            if (_cB != null && (_cS == null || _cS < _cB)) {
+              _ROSTER.forEach(function (k) { if (b[k] !== undefined) m[k] = b[k]; else delete m[k]; });
+              m.rosterAt = _cB;
+              _slotRev.push(String(m.id));
+            } else {
+              m.rosterAt = _agora;                            // troca legítima: carimba
+              _slotNovo++;
+            }
+          });
+          if (_slotRev.length) {
+            if (window._warn) window._warn('[saveTournament] ESCALACAO PROTEGIDA em ' + docId + ': o save trazia escalação ANTIGA de ' +
+              _slotRev.length + ' jogo(s) (ex.: substituição por W.O. já aplicada) — restaurada do banco (' + _slotRev.join(', ') + ').');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('roster revert blocked: ' + docId + ' (' + _slotRev.length + ')')); } catch (_se) {}
+          }
+
           if (_rodVolt.length || _jogoVolt.length || _aditRest.length) {
             if (window._warn) window._warn('[saveTournament] CHAVE PROTEGIDA em ' + docId + ': ' +
               (_rodVolt.length ? _rodVolt.length + ' rodada(s) ' : '') +
