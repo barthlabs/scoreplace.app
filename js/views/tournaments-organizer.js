@@ -173,11 +173,11 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     // nenhum depende do doc estar carregado. Ver [[project_sandbox_tournament]].
     if (notifData) {
         var _tid = String(notifData.tournamentId || '');
-        // (1) id do SB — convenção do clone (_openOrCreateSandbox): 'tour_<ts>_sb'
-        if (/_sb$/.test(_tid)) return;
-        // (2) nome do SB — o clone prefixa '(SB) '
-        if (/^\(SB\)/.test(String(notifData.tournamentName || ''))) return;
-        // (3) doc carregado com killswitch/isSandbox
+        // Os 3 sinais (id `_sb`, nome '(SB) ', doc com isSandbox) moram em UMA função só
+        // (store.js `_isSandboxRef`), compartilhada com as STATS — o SB tinha que ser mudo
+        // nos dois lugares e a regra estava escrita só aqui.
+        if (window._isSandboxRef && window._isSandboxRef(_tid, notifData.tournamentName)) return;
+        // killswitch explícito por torneio (t.notificationsMuted), que é só de notificação
         if (_tid && typeof window._findTournamentById === 'function' && window._tournamentNotificationsMuted) {
             var _tMute = window._findTournamentById(_tid);
             if (_tMute && window._tournamentNotificationsMuted(_tMute)) return;
@@ -1028,11 +1028,19 @@ window._hydrateContactOrgButtons = async function(root) {
 // Resolve o canal de contato do organizador a partir do torneio + perfil (já
 // carregado). SÍNCRONO — não faz I/O. Fonte única usada pelo caminho direto e
 // pelo diálogo de fallback. Ver v4.0.37 sobre a montagem internacional do número.
-window._resolveOrgContact = function(t, profile) {
-  var orgName = t.organizerName || (profile && profile.displayName) ||
-                (t.organizerEmail ? String(t.organizerEmail).split('@')[0] : '') || 'o organizador';
+// ── REGRA ÚNICA DE CANAL DE CONTATO (qualquer pessoa) ────────────────────────
+// v1.6.98: extraída de _resolveOrgContact, que agora DELEGA. Nasceu pro organizador,
+// mas o contato na classificação precisa da MESMA decisão — duas cópias divergiriam
+// (uma respeitando o toggle de WhatsApp e a outra não, por exemplo).
+// SÍNCRONA, sem I/O: recebe o perfil JÁ carregado.
+//
+// `emails` traz TODOS os endereços da pessoa (principal + vinculados), porque o
+// destino do mailto é "todos os e-mails" (regra do dono). `email` (singular) fica
+// pro caller legado que só sabe lidar com um.
+window._resolvePersonContact = function(profile, fallbackName, fallbackEmail) {
+  var name = (profile && profile.displayName) || fallbackName ||
+             (fallbackEmail ? String(fallbackEmail).split('@')[0] : '') || '';
   var phoneDigits = (profile && profile.phone) ? String(profile.phone).replace(/\D/g, '') : '';
-  var email = (profile && profile.email) || t.organizerEmail || '';
   // v1.2.9: respeita o toggle "WhatsApp" do perfil do ALVO (default ON quando há
   // telefone). Desligado → useWhatsApp=false → o contato cai pro e-mail.
   var useWhatsApp = phoneDigits.length >= 10 && (!profile || profile.notifyWhatsApp !== false);
@@ -1043,7 +1051,143 @@ window._resolveOrgContact = function(t, profile) {
       ? window._normalizePhoneE164(profile.phone, cc) : '';
     phoneFull = _e164 ? _e164.replace(/\D/g, '') : (phoneDigits.length >= (cc.length + 10) ? phoneDigits : (cc + phoneDigits));
   }
-  return { orgName: orgName, phoneDigits: phoneDigits, email: email, useWhatsApp: useWhatsApp, phoneFull: phoneFull };
+  // Todos os endereços, deduplicados e normalizados (o mailto aceita lista por vírgula).
+  var _seen = {}, emails = [];
+  [].concat((profile && profile.email) || [], (profile && profile.linkedEmails) || [], fallbackEmail || [])
+    .forEach(function (e) {
+      var s = String(e || '').trim().toLowerCase();
+      if (!s || s.indexOf('@') === -1 || _seen[s]) return;
+      _seen[s] = 1; emails.push(s);
+    });
+  return {
+    name: name, phoneDigits: phoneDigits, useWhatsApp: useWhatsApp, phoneFull: phoneFull,
+    emails: emails, email: emails[0] || ''
+  };
+};
+
+// Resolve o canal de contato do organizador a partir do torneio + perfil (já
+// carregado). SÍNCRONO — não faz I/O. Fonte única usada pelo caminho direto e
+// pelo diálogo de fallback. Ver v4.0.37 sobre a montagem internacional do número.
+// v1.6.98: a decisão de canal mora em _resolvePersonContact; aqui fica só o que é
+// DO ORGANIZADOR (nome/e-mail vindos do torneio quando o perfil não tem).
+window._resolveOrgContact = function(t, profile) {
+  var c = window._resolvePersonContact(profile, t.organizerName, t.organizerEmail);
+  return {
+    orgName: (t.organizerName || (profile && profile.displayName) ||
+              (t.organizerEmail ? String(t.organizerEmail).split('@')[0] : '') || 'o organizador'),
+    phoneDigits: c.phoneDigits,
+    email: c.email || t.organizerEmail || '',
+    useWhatsApp: c.useWhatsApp,
+    phoneFull: c.phoneFull
+  };
+};
+
+// ═══ CONTATO DIRETO COM UMA PESSOA DA CLASSIFICAÇÃO (v1.6.98) ════════════════
+// Regra do dono: no SEU grupo, qualquer participante fala com qualquer um do grupo;
+// o organizador fala com qualquer um, em qualquer classificação. Sem telefone que
+// permita WhatsApp → e-mail pra TODOS os endereços da pessoa.
+//
+// A permissão é de ETIQUETA, não de segurança: `users/{uid}` é legível por qualquer
+// autenticado (firestore.rules:346), então telefone/e-mail de qualquer perfil já
+// estão ao alcance de quem quiser ler a API. O gate existe pra a UI não convidar ao
+// contato fora de contexto — não finja que ele esconde dado.
+window._spPersonProfileCache = window._spPersonProfileCache || {};
+
+// Saudação pré-preenchida entre PARTICIPANTES (a do organizador é _buildOrgGreeting).
+window._buildPersonGreeting = function (t, personName) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var sender = (cu && (cu.displayName || cu.name)) || '';
+  var first = String(personName || '').split(/[\s@]/)[0] || '';
+  return 'Olá' + (first ? ' ' + first : '') + '! ' +
+    (sender ? 'Aqui é ' + sender + '. ' : '') +
+    'Somos do torneio "' + ((t && t.name) || '') + '" no scoreplace.app. ';
+};
+
+// Pré-carrega os perfis dos uids visíveis na classificação. EXISTE POR UM MOTIVO
+// ESPECÍFICO: o clique precisa abrir wa.me/mailto DENTRO do gesto do usuário — um
+// await no meio do handler faz o Safari (iOS) tratar a abertura como pop-up e
+// bloquear em silêncio. Mesmo padrão do _hydrateContactOrgButtons.
+window._hydrateContactPersonButtons = function (rootEl) {
+  var root = rootEl || document;
+  var uids = [];
+  Array.prototype.forEach.call(root.querySelectorAll('[data-contact-uid]'), function (el) {
+    var u = el.getAttribute('data-contact-uid');
+    if (u && !Object.prototype.hasOwnProperty.call(window._spPersonProfileCache, u) &&
+        uids.indexOf(u) === -1) uids.push(u);
+  });
+  if (!uids.length) return Promise.resolve();
+  return Promise.all(uids.map(function (u) {
+    var p = (window.FirestoreDB && typeof window.FirestoreDB.loadUserProfile === 'function')
+      ? window.FirestoreDB.loadUserProfile(u) : Promise.resolve(null);
+    return Promise.resolve(p)
+      .then(function (prof) { window._spPersonProfileCache[u] = prof || null; })
+      .catch(function () { window._spPersonProfileCache[u] = null; });
+  })).then(function () {});
+};
+
+// Abre o canal de contato da pessoa. Identidade por UID SEMPRE — nome aqui é só o
+// rótulo da saudação e da mensagem de erro ([[project_uid_identity_canon_locked]]).
+window._contactPersonByUid = function (uid, personName, tId) {
+  var _nm = personName || 'A pessoa';
+  if (!uid) {
+    if (typeof showNotification === 'function') showNotification('Sem contato',
+      _nm + ' não tem conta no scoreplace.app — só o organizador pode ter o contato dela.', 'info');
+    return;
+  }
+  var t = (tId && typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+  var _open = function (profile) {
+    var c = window._resolvePersonContact(profile, personName, '');
+    var msg = window._buildPersonGreeting(t, c.name || personName);
+    try {
+      if (c.useWhatsApp && c.phoneFull) {
+        window._openExternalUrl('https://wa.me/' + c.phoneFull + '?text=' + encodeURIComponent(msg));
+        return;
+      }
+      if (c.emails.length) {
+        // TODOS os endereços da pessoa (principal + vinculados) — regra do dono.
+        var subject = encodeURIComponent('Torneio: ' + ((t && t.name) || ''));
+        window._openExternalUrl('mailto:' + c.emails.join(',') +
+          '?subject=' + subject + '&body=' + encodeURIComponent(msg));
+        return;
+      }
+    } catch (e) { /* abertura bloqueada → cai no aviso abaixo */ }
+    if (typeof showNotification === 'function') showNotification('Sem contato cadastrado',
+      _nm + ' não cadastrou telefone com WhatsApp nem e-mail.', 'info');
+  };
+  if (Object.prototype.hasOwnProperty.call(window._spPersonProfileCache, uid)) {
+    return _open(window._spPersonProfileCache[uid]); // caminho normal: síncrono, gesto preservado
+  }
+  // Não hidratado (render recém-pintado ou carga falhou): busca e abre. Pode ser
+  // bloqueado no iOS por perder o gesto — daí o aviso explícito em vez de silêncio.
+  var _p = (window.FirestoreDB && typeof window.FirestoreDB.loadUserProfile === 'function')
+    ? window.FirestoreDB.loadUserProfile(uid) : Promise.resolve(null);
+  Promise.resolve(_p)
+    .then(function (prof) { window._spPersonProfileCache[uid] = prof || null; _open(prof || null); })
+    .catch(function () {
+      if (typeof showNotification === 'function') showNotification('Não deu pra abrir',
+        'Falha ao carregar o contato de ' + _nm + '. Tente de novo.', 'warning');
+    });
+};
+
+// O ícone 💬 da classificação. Devolve '' quando não deve aparecer — quem decide é o
+// CALLER (que sabe se a tabela é do meu grupo), com o gate de organizador aqui dentro.
+// Nunca aparece pra mim mesmo nem pra entrada sem uid (fictício não tem WhatsApp).
+window._contactPersonIconHtml = function (t, entryUid, entryName, opts) {
+  var o = opts || {};
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !entryUid) return '';
+  if (String(entryUid) === String(cu.uid || '')) return '';
+  var isAdmin = !!(typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, cu));
+  if (!isAdmin && !o.sameGroup) return '';
+  var _u = String(entryUid).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var _n = String(entryName || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var _tid = String((t && t.id) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return '<span data-contact-uid="' + window._safeHtml(String(entryUid)) + '"' +
+    ' onclick="event.stopPropagation();window._contactPersonByUid(\'' + _u + '\',\'' + _n + '\',\'' + _tid + '\')"' +
+    ' title="Falar com ' + window._safeHtml(entryName || '') + '"' +
+    ' style="cursor:pointer;font-size:0.78rem;margin-left:6px;color:#25D366;opacity:0.85;' +
+    'transition:opacity 0.2s;vertical-align:middle;user-select:none;"' +
+    ' onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.85\'">💬</span>';
 };
 
 // Mensagem pré-preenchida (saudação + nome do remetente + torneio). Sem I/O.
@@ -1056,11 +1200,25 @@ window._buildOrgGreeting = function(t, orgName) {
     ' do torneio "' + (t.name || '') + '" no scoreplace.app. ';
 };
 
+// A mensagem é SÓ a saudação pré-preenchida (o participante não escreveu nada)?
+// Existe porque avisar o organizador de uma saudação-modelo é falso positivo: ele
+// recebe "Fabio quer falar com você" (nível fundamental → e-mail + push) sem que
+// exista mensagem alguma, e nada chega no WhatsApp dele. Ver v1.6.4.
+window._orgMsgIsBareGreeting = function(msg) {
+  var s = String(msg || '').trim();
+  if (!s) return true;
+  return /^Ol[áa][^!]*!\s*Sou\s+(?:[^,]*,\s*)?participante\s+do\s+torneio\s+"[^"]*"\s+no\s+scoreplace\.app\.?$/i.test(s);
+};
+
 // Avisa o organizador na plataforma (in-app) → criador + co-organizadores ativos.
 // Assíncrono — SEMPRE chamado DEPOIS de abrir o canal externo (os awaits aqui
 // não podem mais bloquear a navegação). skipWhatsApp no caminho wa.me evita
 // duplicar (o wa.me já entrega).
 window._dispatchOrgPlatformNotification = async function(t, fullMsg, useWhatsApp) {
+  // GUARDA (v1.6.4): sem texto do participante, NÃO notifica. Defense-in-depth —
+  // qualquer caller futuro que passe só a saudação pré-preenchida cai aqui em vez
+  // de gerar aviso "fundamental" vazio pro organizador.
+  if (window._orgMsgIsBareGreeting(fullMsg)) return false;
   var cu = window.AppStore.currentUser;
   var senderName = (cu && (cu.displayName || cu.name)) || 'Um participante';
   var skipOpt = useWhatsApp ? { skipWhatsApp: true } : true;
@@ -1085,6 +1243,7 @@ window._dispatchOrgPlatformNotification = async function(t, fullMsg, useWhatsApp
       } catch (e) {}
     }
   }
+  return true;
 };
 
 // v4.0.41 — Entry point do botão "Falar com o organizador". Abre o WhatsApp
@@ -1117,8 +1276,13 @@ window._contactOrganizerDirect = function(tId) {
       window._openExternalUrl('mailto:' + info.email + '?subject=' + subject + '&body=' + encodeURIComponent(msg));
     }
   } catch (e) {}
-  // Avisa o org na plataforma (assíncrono, depois de abrir o canal externo).
-  try { window._dispatchOrgPlatformNotification(t, msg, info.useWhatsApp); } catch (e) {}
+  // v1.6.4 — NÃO avisa o org na plataforma aqui. Este caminho é só "abriu o
+  // WhatsApp/e-mail com a saudação pré-preenchida": o app não tem como saber se a
+  // pessoa apertou Enviar do outro lado, e a saudação-modelo não contém mensagem
+  // nenhuma. Notificar aqui gerava aviso FUNDAMENTAL (in-app + e-mail) de "Fabio
+  // quer falar com você" a cada toque curioso no botão, sem nada chegar no
+  // WhatsApp do organizador. Quem quiser registro na plataforma escreve no
+  // diálogo (_contactOrganizer → _submitContactOrg), que aí sim notifica.
 };
 
 // Entry point assíncrono (FALLBACK) — resolve o contato do organizador e abre o
@@ -1237,16 +1401,22 @@ window._submitContactOrg = async function(tId) {
   var modalEl = document.getElementById('modal-msg-org-' + tId);
   if (modalEl) modalEl.remove();
 
+  // v1.6.4: o aviso na plataforma só sai quando o participante ESCREVEU algo —
+  // saudação-modelo pura não gera notificação (ver _orgMsgIsBareGreeting). O toast
+  // passa a refletir o que de fato aconteceu, em vez de prometer "avisamos o
+  // organizador na plataforma" sempre.
+  var _willNotify = !window._orgMsgIsBareGreeting(fullMsg);
   if (typeof showNotification !== 'undefined') {
-    showNotification('Mensagem enviada',
-      pend.useWhatsApp ? 'Abrimos o WhatsApp e avisamos o organizador na plataforma.' :
-      (pend.email && pend.email.indexOf('@') !== -1) ? 'Abrimos seu e-mail e avisamos o organizador na plataforma.' :
+    var _tail = _willNotify ? ' e avisamos o organizador na plataforma.' : '.';
+    showNotification(_willNotify ? 'Mensagem enviada' : 'WhatsApp aberto',
+      pend.useWhatsApp ? ('Abrimos o WhatsApp' + _tail) :
+      (pend.email && pend.email.indexOf('@') !== -1) ? ('Abrimos seu e-mail' + (_willNotify ? _tail : '. Escreva sua mensagem por lá.')) :
       'O organizador foi avisado na plataforma.',
       'success');
   }
 
-  // Plataforma (in-app) SEMPRE → criador + co-organizadores ativos. Roda DEPOIS
-  // de abrir o canal externo — os awaits aqui não bloqueiam mais a navegação.
+  // Plataforma (in-app) → criador + co-organizadores ativos. Roda DEPOIS de abrir
+  // o canal externo — os awaits aqui não bloqueiam mais a navegação.
   await window._dispatchOrgPlatformNotification(t, fullMsg, pend.useWhatsApp);
 };
 
@@ -1287,4 +1457,83 @@ window._saveAsTemplate = function(tId) {
       })
     });
   }
+};
+
+// ─── REABRIR TORNEIO ENCERRADO POR INATIVIDADE ───────────────────────────────
+// Ordem do dono (02/ago/2026): _"o organizador pode reabrir depois de encerrado para
+// conclusão colocando as datas"_ — e, enquanto encerrado, _"a única ferramenta ativa seria
+// o reabrir torneio"_.
+//
+// As DATAS não são burocracia: o torneio foi encerrado exatamente porque ninguém sabia até
+// quando ele ia. Reabrir sem prazo devolveria o torneio ao mesmo limbo em duas semanas.
+//
+// ⚠️ O VALOR É LIDO ENQUANTO SE DIGITA, não no confirmar: `showConfirmDialog` faz
+// `dialog.remove()` ANTES de chamar o onConfirm — lá dentro os inputs já não existem e
+// `getElementById` devolveria null. Por isso o estado mora aqui fora (mesmo padrão do
+// `_pendingPlanState` de venues.js).
+//
+// A regra de QUANDO encerrar vive só no servidor (functions/abandon-core.js). Aqui o cliente
+// só limpa as marcas — nada é recalculado, então não há espelho pra derivar.
+var _reopenState = { ini: '', fim: '' };
+window._reopenSetDate = function (qual, valor) { _reopenState[qual] = String(valor || ''); };
+
+window._reopenAbandonedTournament = function (tId, _valores) {
+  var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+  if (!t) { showNotification('Torneio não encontrado', '', 'error'); return; }
+  if (!(window._isAutoClosed && window._isAutoClosed(t))) {
+    showNotification('Este torneio não está encerrado por inatividade', '', 'warning');
+    return;
+  }
+  var hoje = new Date();
+  var iso = function (d) { return d.toISOString().slice(0, 10); };
+  _reopenState.ini = (_valores && _valores.ini) || String(t.startDate || '').slice(0, 10) || iso(hoje);
+  _reopenState.fim = (_valores && _valores.fim) || iso(new Date(hoje.getTime() + 7 * 86400000));
+
+  function campo(id, rot, val) {
+    return '<label style="font-size:0.78rem;font-weight:700;box-sizing:border-box;min-width:0;">' + rot +
+      '<input type="date" id="' + id + '" value="' + val + '" oninput="window._reopenSetDate(\'' +
+      (id === 'reopen-start' ? 'ini' : 'fim') + '\', this.value)" ' +
+      'style="width:100%;box-sizing:border-box;min-width:0;margin-top:6px;padding:10px 12px;font-size:1rem;' +
+      'border-radius:8px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-bright);">' +
+      '</label>';
+  }
+  var corpo =
+    '<div style="text-align:left;font-size:0.86rem;line-height:1.5;">' +
+      '<p style="margin:0 0 12px;">Informe quando o torneio começa e quando termina. Com as datas ' +
+      'preenchidas ele volta a ficar ativo e não é encerrado de novo por inatividade.</p>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+        campo('reopen-start', 'Início', _reopenState.ini) +
+        campo('reopen-end', 'Término', _reopenState.fim) +
+      '</div>' +
+    '</div>';
+
+  showConfirmDialog('🔓 Reabrir torneio', corpo, function () {
+    var ini = _reopenState.ini, fim = _reopenState.fim;
+    var erro = '';
+    if (!ini || !fim) erro = 'Preencha as duas datas — é o que mantém o torneio ativo.';
+    else if (fim < ini) erro = 'O término não pode ser antes do início.';
+    if (erro) {
+      // Data errada é digitação, não desistência: avisa e devolve a tela com o que ele pôs.
+      showNotification('Datas inválidas', erro, 'warning');
+      setTimeout(function () { window._reopenAbandonedTournament(tId, { ini: ini, fim: fim }); }, 60);
+      return;
+    }
+    var temChave = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
+    window.AppStore.mutate(tId, function (fresh) {
+      fresh.startDate = ini;
+      fresh.endDate = fim;
+      fresh.status = temChave ? 'in_progress' : 'open';
+      // Limpar as marcas é o que faz o torneio deixar de ser "abandonado" — o `set` da
+      // transação é sem merge, então apagar a chave aqui apaga o campo no doc.
+      delete fresh.autoClosed;
+      delete fresh.autoClosedAt;
+      delete fresh.autoCloseReason;
+      delete fresh.autoCloseWarnedAt;   // volta a poder ser avisado numa próxima ociosidade
+      delete fresh.autoCloseDueAt;
+    }, 'Torneio reaberto pelo organizador (datas: ' + ini + ' a ' + fim + ')').then(function (ok) {
+      if (ok === false) { showNotification('Não foi possível reabrir', 'Tente de novo.', 'error'); return; }
+      showNotification('Torneio reaberto', 'De ' + ini + ' até ' + fim + '.', 'success');
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    });
+  }, null, { confirmText: '🔓 Reabrir', cancelText: 'Cancelar', type: 'info', maxWidth: '460px' });
 };

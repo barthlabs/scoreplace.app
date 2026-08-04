@@ -498,6 +498,107 @@ window._getTournamentCategories = function(t) {
 // as local functions inside the IIFE below (lines ~1043, ~1110, ~1352).
 // They are only called internally by the category manager drag-and-drop system.
 
+// ── A tag "Misto" no card só existe quando ela DIZ A VERDADE (v1.6.81) ───────
+// Relato do dono (02/ago/2026): o card do "Confra BT Alta da Clínica 2026" mostrava
+// "Misto 7" sem o torneio ser misto OBRIGATÓRIO. MEDIDO na produção antes do fix
+// (tour_1780009816637): as pessoas com categoria 'Misto' ali são TODAS mulheres
+// (7 com gênero declarado no perfil + 1 sem) — zero homens. "Misto" não descrevia nada.
+//
+// REGRA (dono): misto OBRIGATÓRIO → a tag é da CONFIGURAÇÃO do torneio (times 50/50),
+// então aparece sempre. Misto NÃO obrigatório → a tag é uma AFIRMAÇÃO sobre os inscritos,
+// e só vale com proporção 1:1 EXATA de gênero entre eles. Sem 1:1 → nenhuma tag de gênero
+// misto no card (as demais categorias seguem intactas).
+//
+// "Obrigatório" pode vir de dois lugares, porque duas telas gravam formatos diferentes:
+// o construtor de torneio grava a chave crua em t.genderCategories ('misto_obrigatorio')
+// e o rótulo em combinedCategories ('Misto Obrig. C'); o toggle da Análise de Inscritos
+// grava só 'Misto'. Os dois são checados.
+window._isMistoObrigatorio = function(cat, t) {
+    if (/obrig/i.test(String(cat || ''))) return true;   // 'Misto Obrig. C' / 'misto_obrigatorio'
+    // Nome puro ('Misto') → a natureza vem da configuração do torneio.
+    var gc = (t && Array.isArray(t.genderCategories)) ? t.genderCategories : [];
+    for (var i = 0; i < gc.length; i++) { if (/obrig/i.test(String(gc[i] || ''))) return true; }
+    return false;
+};
+
+// Gênero de CADA PESSOA de uma inscrição (dupla conta os dois membros, um a um).
+// Identidade é uid → o gênero vem do PERFIL VIVO (project_uid_identity_canon_locked);
+// o campo gravado na inscrição só entra como fallback de doc legado / guest sem conta.
+// Retorna 'Fem' | 'Masc' | 'none' por pessoa.
+window._entryGenderList = function(p) {
+    if (!p || typeof p !== 'object') return [];
+    var canon = (typeof window._canonGender === 'function') ? window._canonGender : function(g) {
+        var s = String(g || '').trim().toLowerCase();
+        if (s.indexOf('fem') === 0 || s === 'f') return 'Fem';
+        if (s.indexOf('masc') === 0 || s === 'm') return 'Masc';
+        return 'none';
+    };
+    var uids = [];
+    var push = function(u) { if (u && typeof u === 'string' && uids.indexOf(u) === -1) uids.push(u); };
+    push(p.p1Uid); push(p.p2Uid);
+    if (Array.isArray(p.participants)) p.participants.forEach(function(s) { if (s) push(s.uid); });
+    if (uids.length === 0) push(p.uid);
+    // Guest (sem conta, sem uid): só o gênero gravado na inscrição.
+    if (uids.length === 0) return [canon(p.gender)];
+    return uids.map(function(u) {
+        var g = (typeof window._genderForUid === 'function') ? window._genderForUid(u) : '';
+        if (!g && u === p.uid) g = p.gender || '';   // fallback do doc legado
+        return canon(g);
+    });
+};
+
+// Conta Fem/Masc/desconhecido entre as PESSOAS de uma categoria.
+window._categoryGenderTally = function(cat, parts) {
+    var tally = { fem: 0, masc: 0, unknown: 0 };
+    (parts || []).forEach(function(p) {
+        if (!p || typeof p !== 'object') return;
+        if (!window._participantInCategory(p, cat)) return;
+        window._entryGenderList(p).forEach(function(g) {
+            if (g === 'Fem') tally.fem++;
+            else if (g === 'Masc') tally.masc++;
+            else tally.unknown++;
+        });
+    });
+    return tally;
+};
+
+// A pílula desta categoria deve aparecer no card? Só a de gênero MISTO tem condição —
+// todas as outras (Fem, Masc, habilidade, idade) passam sempre.
+// Gênero desconhecido BLOQUEIA: "1:1 exata" é uma afirmação que precisa de prova, e
+// pessoa sem gênero declarado (ou perfil ainda não carregado) não prova nada. Errar
+// escondendo é o pedido do dono — tag que mente é pior que tag que não existe.
+window._categoryTagVisible = function(t, cat, parts) {
+    var skillRef = (t && Array.isArray(t.skillCategories) && t.skillCategories.length > 0) ? t.skillCategories : null;
+    var tk = window._categoryAxisTokens(cat, skillRef);
+    if (tk.gender !== 'misto') return true;
+    if (window._isMistoObrigatorio(cat, t)) return true;
+    var tally = window._categoryGenderTally(cat, parts);
+    return tally.unknown === 0 && tally.fem > 0 && tally.fem === tally.masc;
+};
+
+// Perfis são PRÉ-REQUISITO desta decisão: sem eles, todo mundo é "gênero desconhecido"
+// e a tag some mesmo num misto legitimamente 1:1. O detalhe do torneio já carrega os
+// perfis dos inscritos; a dashboard não. Então carrega SÓ os uids da(s) categoria(s)
+// mista(s) não obrigatória(s) — uma vez por torneio, cache global — e re-renderiza
+// quando chegam. Sem Firestore (ou sem nada novo pra carregar) não re-renderiza: seria
+// laço infinito numa tela que já é sensível a re-render (project_dashboard_no_rerender).
+function _ensureMistoGenderProfiles(t, uidsNeeded) {
+    if (!uidsNeeded || uidsNeeded.length === 0) return;
+    if (typeof window._preloadUserProfiles !== 'function') return;
+    if (!(window.FirestoreDB && window.FirestoreDB.db)) return;
+    var key = '_mistoGenderProf_' + (t.id || t.tournamentId || 'x');
+    if (window[key]) return;
+    window[key] = true;
+    window._preloadUserProfiles(uidsNeeded).then(function() {
+        window[key] = false;
+        var got = uidsNeeded.filter(function(u) { return !!(window._userProfileCache && window._userProfileCache[u]); }).length;
+        if (!got) return;   // nada entrou no cache → re-render não mudaria nada
+        var h = (window.location && window.location.hash) || '';
+        if ((h === '' || h.indexOf('#dashboard') === 0) && typeof window._dashRerender === 'function') { try { window._dashRerender(); } catch (e) {} }
+        else if (typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} }
+    }).catch(function() { window[key] = false; });
+}
+
 // Build HTML showing category participant counts
 window._buildCategoryCountHtml = function(t) {
     var cats = t.combinedCategories;
@@ -515,6 +616,25 @@ window._buildCategoryCountHtml = function(t) {
             if (counts.hasOwnProperty(pc)) counts[pc]++;
         });
     });
+
+    // v1.6.81: tag de gênero MISTO só sobrevive se disser a verdade (ver regra acima).
+    // Antes de decidir, garante os perfis (gênero mora no perfil, resolvido por uid).
+    var _mistoUids = [];
+    sorted.forEach(function(c) {
+        var _tk = window._categoryAxisTokens(c, (Array.isArray(t.skillCategories) && t.skillCategories.length) ? t.skillCategories : null);
+        if (_tk.gender !== 'misto' || window._isMistoObrigatorio(c, t)) return;
+        parts.forEach(function(p) {
+            if (!p || typeof p !== 'object' || !window._participantInCategory(p, c)) return;
+            var us = (typeof window._participantUids === 'function') ? window._participantUids(p) : (p.uid ? [p.uid] : []);
+            us.forEach(function(u) {
+                if (u && typeof u === 'string' && u.indexOf(' ') === -1 && !(window._userProfileCache && window._userProfileCache[u]) && _mistoUids.indexOf(u) === -1) _mistoUids.push(u);
+            });
+        });
+    });
+    if (_mistoUids.length) _ensureMistoGenderProfiles(t, _mistoUids);
+
+    sorted = sorted.filter(function(c) { return window._categoryTagVisible(t, c, parts); });
+    if (sorted.length === 0) return '';
 
     // Group by gender prefix for row layout
     var genderPrefixes = ['Fem', 'Masc', 'Misto Aleat.', 'Misto Obrig.'];
@@ -3183,59 +3303,19 @@ window._categoryRequestsBannerHtml = function(t) {
         rows + '</div>';
 };
 
-// Check and show category notifications for current user
-window._checkCategoryNotifications = function(t) {
-    if (!t || !t.categoryNotifications || t.categoryNotifications.length === 0) return;
-    var user = window.AppStore.currentUser;
-    if (!user || (!user.uid && !user.email)) return;
-
-    // uid-first (varredura uid, Parte 6): notif com targetUid casa ESTRITO por uid;
-    // docs legados sem targetUid caem no match por e-mail.
-    var userNotifs = t.categoryNotifications.filter(function(n) {
-        if (n.read) return false;
-        if (n.targetUid) return !!user.uid && n.targetUid === user.uid;
-        return !!n.targetEmail && n.targetEmail === user.email;
-    });
-
-    if (userNotifs.length === 0) return;
-
-    userNotifs.forEach(function(n) {
-        n.read = true; // Mark as read
-
-        var sourceLabel = n.source === 'perfil' ? _t('cat.sourceProfile') : _t('cat.sourceOrganizer');
-        var orgEmail = t.organizerEmail || '';
-        var orgName = t.organizerName || t.organizerEmail || 'organizador';
-
-        var questionBtnId = 'cat-question-btn-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
-
-        showAlertDialog(
-            _t('cat.assigned'),
-            _t('cat.assignedDialogMsg', {cat: window._displayCategoryName(n.category), source: sourceLabel, tournament: (t.name || '')}) +
-            '<br><br><button id="' + questionBtnId + '" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;padding:8px 16px;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('cat.questionOrg') + '</button>',
-            function() {
-                // Dialog dismissed
-            },
-            { type: 'info', confirmText: 'OK' }
-        );
-
-        // Attach question button handler after dialog renders
-        setTimeout(function() {
-            var btn = document.getElementById(questionBtnId);
-            if (btn) {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    var subject = encodeURIComponent('Questionamento sobre categoria - ' + (t.name || ''));
-                    var body = encodeURIComponent('Olá ' + orgName + ',\n\nFui atribuído à categoria "' + n.category + '" no torneio "' + (t.name || '') + '" e gostaria de questionar essa atribuição.\n\nMotivo: \n\nAtenciosamente,\n' + (user.displayName || ''));
-                    window.open('mailto:' + orgEmail + '?subject=' + subject + '&body=' + body, '_blank');
-                });
-            }
-        }, 300);
-    });
-
-    // Persist the read status
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        window.FirestoreDB.saveTournament(t);
-    }
-};
+// DESLIGADA em 31/jul/2026 a pedido do dono: "tira a tela de questionar o organizador
+// quando ele atribui categoria ao usuário. voltaremos a isso depois, mas por ora isso
+// não funciona e não ajuda."
+//
+// Era um alertDialog "categoria atribuída" com um botão "💬 Questionar Organizador" que
+// só abria um mailto — o participante mandava e-mail e nada acontecia dentro do app.
+// A função vira NO-OP SILENCIOSO: não abre tela e não grava nada. O registro em
+// `t.categoryNotifications` continua sendo criado normalmente (é o histórico da
+// atribuição) e fica INTACTO — ninguém é marcado como lido — pra quando o fluxo voltar
+// de verdade (contestação dentro do app, não e-mail).
+//
+// ⚠️ Ao religar: as notificações antigas ainda estão não-lidas e apareceriam todas de
+// uma vez. Filtrar por data (ou marcar as anteriores a esta versão como lidas) antes.
+window._checkCategoryNotifications = function() { /* desligada — ver comentário acima */ };
 
 })();

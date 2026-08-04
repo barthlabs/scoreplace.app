@@ -502,10 +502,10 @@ window._pairPartnerSolo = function (entry, n) {
     var o = { uid: uid, ligaActive: true };
     if (nome) { o.displayName = nome; o.name = nome; }
     if (g('Seq') != null) o.enrollSeq = g('Seq');
-    if (g('Email')) o.email = g('Email');
-    if (g('Photo')) o.photoURL = g('Photo');
-    if (g('Gender')) o.gender = g('Gender');
-    if (g('BirthDate')) o.birthDate = g('BirthDate');
+    // Campo de perfil NÃO acompanha quem tem uid (email/photoURL/gender/birthDate).
+    // O strip do save (identity-core._stripUidEntryNames) já limpava isso, mas só
+    // quando o uid resolve no cache — e não faz sentido escrever pra depois apagar.
+    // Espelha functions/enroll-core.pairPartnerSolo e pair-core.solo().
     if (entry.category) o.category = entry.category;
     if (Array.isArray(entry.categories)) o.categories = entry.categories.slice();
     if (entry.categorySource) o.categorySource = entry.categorySource;
@@ -1454,7 +1454,9 @@ window._autoPresenceFromVenue = function (t) {
         !window._isUserEnrolledInTournament(cu, t)) return;
     var tStart = Date.parse(t.startDate);
     if (isNaN(tStart)) return;
-    var tEnd = Date.parse(t.endDate);
+    // v1.6.83: a janela de auto-presença vai até o fim da ÚLTIMA fase — com t.endDate cru o app
+    // parava de oferecer presença assim que a classificatória acabava, com a elim ainda rolando.
+    var tEnd = window._tournamentEndMs ? window._tournamentEndMs(t) : Date.parse(t.endDate);
     if (isNaN(tEnd)) tEnd = tStart + 12 * 3600 * 1000;
     var now = Date.now();
     if (now < tStart - 2 * 3600 * 1000 || now > tEnd) return;
@@ -1961,12 +1963,22 @@ function renderTournaments(container, tournamentId = null) {
             // O listener onSnapshot substitui store.tournaments inteiro quando chega
             // dados do servidor — sem salvar primeiro, os participantes originais
             // (com ausentes) voltam do Firestore e o sorteio os inclui mesmo assim.
-            if (absentMovedCount > 0 && window.AppStore && typeof window.AppStore.mutate === 'function') {
-                var _doGenderThenDraw = function() {
+            // v1.6.40: o gênero de quem joga vem do PERFIL e o motor lê `p.gender` do
+            // INSCRITO — no servidor (CF autoDraw) não existe perfil pra consultar. Sem
+            // hidratar antes, o "equilibrado" não equilibra NADA (medido no Confra: 105
+            // inscritos, gênero conhecido de 4). Vale pra QUALQUER formato, inclusive Liga
+            // (onde a tela de duplas não aparece, mas o espalhamento nos grupos existe).
+            var _doGenderThenDraw = function() {
+                var _abrirTela = function () {
                     if (typeof window._maybeShowGenderDrawDialog === 'function' &&
                         window._maybeShowGenderDrawDialog(tId, _continueDraw)) return;
                     _continueDraw();
                 };
+                if (typeof window._hydrateParticipantGenders !== 'function') { _abrirTela(); return; }
+                Promise.resolve(window._hydrateParticipantGenders(window._findTournamentById(tId)))
+                    .then(_abrirTela).catch(_abrirTela);
+            };
+            if (absentMovedCount > 0 && window.AppStore && typeof window.AppStore.mutate === 'function') {
                 // BLINDAGEM (project_concurrency_safe_saves): re-aplica o move de ausentes
                 // no doc FRESCO, em vez de syncImmediate (doc inteiro → clobbera check-in/
                 // W.O. concorrente). _autoMoveAbsentToStandby é pura + idempotente.
@@ -1975,11 +1987,8 @@ function renderTournaments(container, tournamentId = null) {
             }
             // v2.1.20: em duplas mistas com sorteio livre (sem categoria masc/fem),
             // mostra o diálogo de gênero + modo (livre/equilibrado) antes do sorteio.
-            if (typeof window._maybeShowGenderDrawDialog === 'function' &&
-                window._maybeShowGenderDrawDialog(tId, _continueDraw)) {
-                return;
-            }
-            _continueDraw();
+            // (a hidratação de gênero acontece dentro de _doGenderThenDraw)
+            _doGenderThenDraw();
         };
         // v2.1.2: se "Fechadas" está OFF (lateEnrollment 'standby'/'expand'), o
         // SORTEIO não encerra as inscrições — elas seguem abertas. Não mostra o
@@ -2847,11 +2856,11 @@ function renderTournaments(container, tournamentId = null) {
                     // Critério estrutural: fase de RODADAS guarda os jogos em
                     // `t.rounds[].matches`; fase de CHAVE guarda em `t.matches` com
                     // `bracket`. Se a fase atual tem jogo em t.matches, é eliminatória.
-                    var _cpIdx = (t.currentPhaseIndex || 0);
-                    var _faseEhElim = (Array.isArray(t.matches) ? t.matches : []).some(function (m) {
-                        if (!m || !m.bracket) return false;
-                        return ((m.phaseIndex == null) ? 0 : m.phaseIndex) === _cpIdx;
-                    });
+                    // v1.6.98: a conta saiu daqui pra window._currentPhaseIsElimination
+                    // (tournaments-utils.js) porque a TRAVA de re-sorteio precisa da MESMA
+                    // leitura — divergir faria o gate recusar numa fase que este botão trata
+                    // como de rodadas. Comportamento idêntico ao inline que estava aqui.
+                    var _faseEhElim = window._currentPhaseIsElimination(t);
                     var _adManualLbl = hasDraw ? '🎲 Rodada Extra (manual)' : '🎲 Sortear agora (manual)';
                     var _manualBtn = _faseEhElim ? '' : `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._confirmManualAutoDraw('${t.id}')">${_adManualLbl}</button>`;
                     var _phaseCanAdvance = window._isMultiPhase && window._isMultiPhase(t) &&
@@ -3168,7 +3177,9 @@ function renderTournaments(container, tournamentId = null) {
             ${/* v2.3.96: rede de segurança — sorteio em revisão (só organizador) */ ''}
             ${(typeof window._renderPendingDrawBanner === 'function') ? window._renderPendingDrawBanner(t) : ''}
             ${/* v2.1.16: pódio do torneio encerrado logo abaixo do nome/logo */ ''}
-            ${(tournamentId && isFinished) ? podiumHtml : ''}
+            ${/* Encerrado por INATIVIDADE não fecha classificação → não tem pódio (ordem do
+                  dono). Pódio de torneio que parou no meio seria uma mentira campeã. */ ''}
+            ${(tournamentId && isFinished && !(window._isAutoClosed && window._isAutoClosed(t))) ? podiumHtml : ''}
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._shareTournament('${t.id}');">📋 Compartilhar</button>
@@ -3215,50 +3226,16 @@ function renderTournaments(container, tournamentId = null) {
               var _now = Date.now();
               var _isLiga = window._isLigaFormat && window._isLigaFormat(t);
 
-              // Liga: um único countdown excludente (início → próximo sorteio → fim da temporada)
+              // Liga: um único countdown excludente (início → próximo sorteio → prazo da
+              // rodada → fim da temporada)
               if (_isLiga) {
-                // v4.x: FONTE ÚNICA da decisão dos estados — window._ligaCountdownEvent
-                // (tournaments-utils.js). Antes a lógica vivia duplicada aqui e no dashboard.js,
-                // sem teste → vivia regredindo. Aqui só se RENDERIZA o que o helper decidiu.
-                var _ce = (typeof window._ligaCountdownEvent === 'function') ? window._ligaCountdownEvent(t) : null;
-                // Rodada em andamento (sem regressiva) → box próprio.
-                if (_ce && _ce.kind === 'round-in-progress') {
-                  var _rbEl = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
-                  var _ripStandalone = (typeof window._ligaRoundInProgressRow === 'function') ? window._ligaRoundInProgressRow(t, _rbEl.fg) : '';
-                  if (_ripStandalone) {
-                    return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbEl.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _ripStandalone + '</div>';
-                  }
-                  return '';
-                }
-                if (!_ce) return '';
-                var _ligaEvent = { ts: _ce.ts, label: _t(_ce.labelKey), icon: _ce.icon, color: _ce.color };
-                var _countdownText = window._formatCountdown ? window._formatCountdown(_ligaEvent.ts - _now) : '';
-                var _colorMap = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
-                var _rgb = _colorMap[_ligaEvent.color] || '139,92,246';
-                // v0.16.90: toggle Liga removido daqui — agora vive na linha
-                // "Atualizado em..." acima (compartilhada entre lista e detalhe).
-                // v2.6.21: em tarja escura (_pReadBg) o texto é CLARO (contraste);
-                // sem tarja, usa a cor semântica sobre o tint claro.
-                var _rbCt = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
-                var _ctColor = _rbCt.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
-                // v4.4.x: 2ª linha "Rodada em andamento" com o tempo DECORRIDO da rodada atual —
-                // sempre que o box for o de "Próximo sorteio". Tick automático via data-elapsed-since.
-                var _roundLine = '';
-                if (_ce.kind === 'next-draw' && typeof window._ligaRoundInProgressRow === 'function') {
-                  var _ripRow = window._ligaRoundInProgressRow(t, _ctColor, { iconSize: '1.2rem', labelSize: '0.9rem', valueSize: '1.25rem' });
-                  if (_ripRow) {
-                    _roundLine = '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(' + _rgb + ',0.3);">' + _ripRow + '</div>';
-                  }
-                }
-                // v4.x: MAIS DESTAQUE pro cronômetro do sorteio — box maior, número grande.
-                return '<div style="margin-top:10px;padding:14px 18px;background:' + _rbCt.bg + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);">' +
-                  '<div style="display:flex;align-items:center;gap:12px;">' +
-                    '<span style="font-size:1.5rem;flex-shrink:0;">' + _ligaEvent.icon + '</span>' +
-                    '<span style="font-size:0.95rem;font-weight:700;color:' + _ctColor + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _ligaEvent.label + '</span>' +
-                    '<span data-countdown-target="' + _ligaEvent.ts + '" style="margin-left:auto;font-size:1.35rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1;white-space:nowrap;flex-shrink:0;">' + _countdownText + '</span>' +
-                  '</div>' +
-                  _roundLine +
-                '</div>';
+                // v1.6.85: FONTE ÚNICA do BOX INTEIRO — window._ligaCountdownBoxHtml
+                // (tournaments-utils.js), o MESMO render do card do dashboard. Antes cada
+                // tela desenhava a sua cópia do markup a partir do _ligaCountdownEvent, e as
+                // cópias divergiram no tratamento do evento vazio ('round-in-progress' sem
+                // linha de decorrido pra mostrar): aqui sumia o box, no card saía "null null 0s".
+                // O toggle Liga NÃO vive aqui (v0.16.90) — está na linha "Atualizado em…".
+                return (typeof window._ligaCountdownBoxHtml === 'function') ? window._ligaCountdownBoxHtml(t, 'lg') : '';
               }
 
               // Não-Liga: múltiplos countdowns (inscrições, início, fim)
@@ -3271,8 +3248,10 @@ function renderTournaments(container, tournamentId = null) {
                 var _sd2 = new Date(t.startDate).getTime();
                 if (!isNaN(_sd2) && _sd2 > _now && !sorteioRealizado) _events.push({ ts: _sd2, label: _t('event.tournamentStart'), icon: '🏁', color: '#10b981' });
               }
-              if (t.endDate) {
-                var _ed = new Date(t.endDate).getTime();
+              // v1.6.83: fim da ÚLTIMA fase (ver dashboard.js — mesma contagem regressiva).
+              var _edRaw = window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate;
+              if (_edRaw) {
+                var _ed = new Date(_edRaw).getTime();
                 if (!isNaN(_ed) && _ed > _now) _events.push({ ts: _ed, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' });
               }
               if (_events.length === 0) return '';
@@ -3378,6 +3357,28 @@ function renderTournaments(container, tournamentId = null) {
                 ? 'color:#f1f5f9 !important; text-shadow:0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95);'
                 : 'color:var(--text-muted);';
               var _toolsBorder = venuePhotoBg ? 'rgba(255,255,255,0.28)' : 'var(--border-color, rgba(255,255,255,0.12))';
+              // ── ENCERRADO POR INATIVIDADE: a ÚNICA ferramenta é Reabrir ──────────────
+              // Ordem do dono (02/ago/2026): _"depois de encerrado, a única ferramenta ativa
+              // seria o reabrir torneio"_. Não é decoração: enquanto o torneio está parado,
+              // sortear/editar/comunicar/apagar só produziriam estado inconsistente. Reabrir
+              // exige as datas — é exatamente o que faltava pra ele não ser abandonado.
+              if (window._isAutoClosed && window._isAutoClosed(t)) {
+                return `
+            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid ${_toolsBorder};">
+              <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
+              <div style="background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.35);border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+                <div style="font-weight:800;font-size:0.82rem;color:#fbbf24;margin-bottom:4px;">⏸️ Encerrado por inatividade</div>
+                <div style="font-size:0.76rem;${_toolsCss}line-height:1.45;">
+                  Este torneio ficou sem placar novo e foi encerrado automaticamente.
+                  <b>A classificação não foi fechada</b> — nada de pódio, título ou troféu.
+                  Se ainda há jogos a fazer, reabra informando as datas e conclua normalmente.
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-success hover-lift btn-shine" onclick="event.stopPropagation(); window._reopenAbandonedTournament('${t.id}')">🔓 Reabrir Torneio</button>
+              </div>
+            </div>`;
+              }
               return `
             <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid ${_toolsBorder};">
               <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
@@ -3629,6 +3630,15 @@ function renderTournaments(container, tournamentId = null) {
         var _resolveOrgGender = function(email, uid) {
           var e = (email || '').toLowerCase();
           if (_cu2 && ((e && _cu2.email && String(_cu2.email).toLowerCase() === e) || (uid && _cu2.uid === uid)) && _cu2.gender) return _cu2.gender;
+          // O PERFIL DA PESSOA VEM PRIMEIRO. Co-organizadora quase nunca está em
+          // `participants` com gênero (o doc deixou de guardar dados de quem tem perfil),
+          // então a busca caía na forma neutra e a tela mostrava "Co-organizador(a)" pra
+          // Kelly e pra Raquel, que têm gênero declarado. O cache de perfis por uid é a
+          // fonte de verdade — é o mesmo que já resolve nome, e-mail e telefone.
+          if (uid && typeof window._genderForUid === 'function') {
+            var _pg = window._genderForUid(uid);
+            if (_pg) return _pg;
+          }
           var _pa = Array.isArray(_t.participants) ? _t.participants : (_t.participants ? Object.values(_t.participants) : []);
           for (var _gi = 0; _gi < _pa.length; _gi++) {
             var _pp = _pa[_gi];
@@ -4095,6 +4105,7 @@ function renderTournaments(container, tournamentId = null) {
       ${gridHtml}
     </div>
 
+    ${tournamentId && typeof window._meuCardNoTopo === 'function' ? window._meuCardNoTopo(visible[0]) : ''}
     ${tournamentId ? _organizersHtml : ''}
 
     ${hasDrawn ? '' : participantsHtml}

@@ -3824,8 +3824,43 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   var used = [];
   var formed = 0;
   var _n2uMapWl = _buildNameToUid(t); // v4.4.115: identidade por uid nos jogos formados da espera
+  // ── v1.7.3 — GRUPO NOVO DA ESPERA NÃO FECHA COM MAIS DE 1 HOMEM ────────────────
+  // Regra do dono (ago/2026): "precisamos manter a situação de não fechar um novo grupo,
+  // pelo menos por enquanto, com mais de 1 homem no mesmo grupo" — o motivo é evitar que
+  // 4 homens atrasados formem um grupo mais forte e levem vantagem EM CIMA DO ATRASO.
+  // O sorteio inicial já garantiu isso pelo modo EQUILIBRADO; esta função era o único
+  // caminho que ainda montava grupo às cegas (`_plainShuffle` + `splice(0,4)`).
+  //
+  // GÊNERO VEM DO PERFIL, POR UID: a entrada da espera é strippada (`gender` está em
+  // _PROFILE_FIELDS desde a v1.3.52), então ler da entrada devolveria vazio sempre.
+  //
+  // DESCONHECIDO NÃO CONTA como homem — de propósito. Contá-lo travaria a formação em
+  // todo torneio sem gênero preenchido (regressão pra quem não usa o campo). Quem precisa
+  // corrigir isso tem a Análise de Inscritos, que desde a v1.7.2 mostra a espera.
+  //
+  // NÃO DEU PRA FECHAR RESPEITANDO A REGRA ⇒ NÃO FECHA. A fila continua esperando, que é
+  // literalmente o pedido — nunca montar o grupo "errado" só pra não deixar gente parada.
+  var MAX_HOMENS_POR_GRUPO = 1;
+  var _isHomem = function (nm) {
+    var u = _n2uMapWl && _n2uMapWl[nm];
+    return !!(u && typeof window._genderForUid === 'function' && window._genderForUid(u) === 'masculino');
+  };
+  // Tira do pool os 4 primeiros que respeitam o teto (a ordem do embaralho é preservada:
+  // só PULA quem estouraria a cota). Devolve null quando não há combinação possível.
+  var _pickGrupo = function (pool) {
+    var idx = [], homens = 0;
+    for (var i = 0; i < pool.length && idx.length < 4; i++) {
+      if (_isHomem(pool[i])) { if (homens >= MAX_HOMENS_POR_GRUPO) continue; homens++; }
+      idx.push(i);
+    }
+    if (idx.length < 4) return null;
+    var out = idx.map(function (i) { return pool[i]; });
+    for (var k = idx.length - 1; k >= 0; k--) pool.splice(idx[k], 1);
+    return out;
+  };
   while (eligible.length >= 4) {
-    var grp = eligible.splice(0, 4);
+    var grp = _pickGrupo(eligible);
+    if (!grp) break; // só sobrou combinação que violaria a regra → fila espera mais gente
     var gi = (col.monarchGroups || []).length;
     var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed, nameToUid: _n2uMapWl });
     col.monarchGroups.push(g);
@@ -4050,6 +4085,72 @@ function _monarchIndividuals(t, names) {
   return out;
 }
 
+// Gênero de um jogador pelo NOME, na ordem em que a verdade é mais confiável:
+// o uid (perfil vivo) → o que está gravado na inscrição → nada.
+function _monarchGenderOf(t, nome) {
+  var alvo = String(nome || '').trim().toLowerCase();
+  if (!alvo) return '';
+  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i]; if (!p) continue;
+    var cands = [
+      { n: p.displayName || p.name, uid: p.uid, g: p.gender },
+      { n: p.p1Name, uid: p.p1Uid, g: p.p1Gender || p.gender },
+      { n: p.p2Name, uid: p.p2Uid, g: p.p2Gender || p.gender }
+    ];
+    for (var k = 0; k < cands.length; k++) {
+      var c = cands[k];
+      var nm = (c.n && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(c.uid, c.n) : c.n;
+      if (!nm || String(nm).trim().toLowerCase() !== alvo) continue;
+      var g = (c.uid && typeof window._genderForUid === 'function' && window._genderForUid(c.uid)) || c.g || '';
+      g = String(g).toLowerCase().trim();
+      // "misto" é CATEGORIA, não gênero de pessoa — não serve pra equilibrar nada.
+      if (g.indexOf('misto') === 0) return '';
+      if (g.indexOf('f') === 0) return 'f';
+      if (g.indexOf('m') === 0) return 'm';
+      return '';
+    }
+  }
+  return '';
+}
+
+// Espalha a MINORIA de gênero pelos grupos de 4, por troca. Devolve a lista reordenada.
+// Melhor esforço e determinístico: percorre os grupos com excesso e troca com os que
+// ainda não têm ninguém da minoria. Não conhece "homem" nem "mulher" — só quem é minoria.
+function _spreadMinorityGender(t, lista, numGroups) {
+  var gen = {}, cF = 0, cM = 0;
+  lista.forEach(function (n) { var g = _monarchGenderOf(t, n); gen[n] = g; if (g === 'f') cF++; else if (g === 'm') cM++; });
+  if (!cF || !cM) return lista;                       // um gênero só (ou nenhum sabido) → nada a fazer
+  var min = (cM <= cF) ? 'm' : 'f';
+  var G = [];
+  for (var i = 0; i < numGroups; i++) G.push(lista.slice(i * 4, i * 4 + 4));
+  var sobra = lista.slice(numGroups * 4);             // não entra em grupo nenhum
+  function qtd(g) { return g.filter(function (n) { return gen[n] === min; }).length; }
+  // NIVELA: enquanto o grupo mais cheio tiver 2 a mais que o mais vazio, move um.
+  // Uma regra só, que cobre os dois casos que o dono descreveu: com MENOS minoria que
+  // grupos, ninguém fica com 2 enquanto houver grupo com 0; com MAIS minoria que grupos,
+  // todo grupo recebe 1 antes de qualquer um receber 2 (e assim por diante). Para quando
+  // a diferença é no máximo 1 — daí não existe troca que melhore.
+  // Antes daqui a busca era "primeiro grupo com 2+" × "primeiro com 0", o que dava certo
+  // no papel mas parava cedo quando a distribuição já vinha quase boa. Agora é sempre o
+  // MAIOR contra o MENOR: não há como sobrar um grupo com 2 e outro com 0.
+  for (var passo = 0; passo < numGroups * 8; passo++) {
+    var hi = 0, lo = 0;
+    for (var a = 1; a < G.length; a++) {
+      if (qtd(G[a]) > qtd(G[hi])) hi = a;
+      if (qtd(G[a]) < qtd(G[lo])) lo = a;
+    }
+    if (qtd(G[hi]) - qtd(G[lo]) < 2) break;           // já está o mais parelho possível
+    var iM = G[hi].findIndex(function (n) { return gen[n] === min; });
+    var iO = G[lo].findIndex(function (n) { return gen[n] !== min; });
+    if (iM < 0 || iO < 0) break;
+    var tmp = G[hi][iM]; G[hi][iM] = G[lo][iO]; G[lo][iO] = tmp;
+  }
+  return G.reduce(function (acc, g) { return acc.concat(g); }, []).concat(sobra);
+}
+window._spreadMinorityGender = _spreadMinorityGender;
+window._monarchGenderOf = _monarchGenderOf;
+
 window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPlayers(t, category, _rn) {
   var standings = _computeStandings(t, category);
   var allPlayers = standings.map(function(s) { return s.name; });
@@ -4127,8 +4228,17 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     playingPlayers = _plainShuffle(playingPlayers);
   }
 
-  // Divide playing players into groups of 4
+  // EQUILÍBRIO DE GÊNERO NOS GRUPOS (t.equilibrado !== false). Pedido do dono
+  // (31/jul/2026) num torneio com 91 mulheres e 14 homens: "no sorteio não coloque 2
+  // homens num mesmo time / não devem cair num mesmo grupo 2 homens — o mais possível".
+  // É reparo por TROCA depois da ordenação, não uma ordenação nova: o `_bestShuffle`
+  // acabou de evitar reencontros e jogar isso fora sairia caro. Trocamos só o necessário
+  // pra espalhar a minoria, e paramos quando não dá mais — "o mais possível" é literal,
+  // nunca uma falha.
   var numGroups = Math.floor(playingPlayers.length / 4);
+  if (t.equilibrado !== false && numGroups > 1) {
+    playingPlayers = _spreadMinorityGender(t, playingPlayers, numGroups);
+  }
   var groups = [];
   var _n2uMap = _buildNameToUid(t); // v4.4.115: nome→uid pra gravar identidade nos jogos
 

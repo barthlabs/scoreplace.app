@@ -216,8 +216,12 @@ window._computeTournamentPlanWindow = function(t) {
   // largada. Em multi-dia cada rodada é combinada à parte (ex.: Rei/Rainha gera grupos
   // no WhatsApp pra cada grupo marcar dia/hora), e o lançamento costuma ser pelos
   // próprios competidores — um plano único de presença no início engana o inscrito.
-  if (t.endDate) {
-    var _endTs = new Date(t.endDate).getTime();
+  // v1.6.83: "mais de 1 dia" mede o TORNEIO inteiro (última fase). Classificatória num dia +
+  // eliminatória em outro é exatamente o multi-dia que esta regra quer barrar — com t.endDate
+  // cru ele passava como se fosse de um dia só.
+  var _endRaw = window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate;
+  if (_endRaw) {
+    var _endTs = new Date(_endRaw).getTime();
     if (!isNaN(_endTs) && (_endTs - startsAt) > 24 * 3600000) return null;
   }
   var venueName = t.venue || t.venueName || '';
@@ -228,6 +232,8 @@ window._computeTournamentPlanWindow = function(t) {
     var mins = window._estimateTournamentMinutes(t);
     if (mins > 0) endsAt = startsAt + mins * 60000;
   }
+  // t.endDate CRU de propósito: aqui é o fim da SESSÃO de presença (com cap de 12h logo abaixo),
+  // e só chegamos aqui em torneio de ≤1 dia — onde cru e canônico coincidem.
   if (!endsAt && t.endDate) { var e = new Date(t.endDate).getTime(); if (!isNaN(e) && e > startsAt) endsAt = e; }
   if (!endsAt) endsAt = startsAt + 3 * 3600000;
   var MAX = 12 * 3600000;
@@ -476,20 +482,22 @@ window.enrollCurrentUser = function (tId) {
             showAlertDialog(_t('enroll.tournamentFinished'), _t('enroll.tournamentFinishedMsg'), null, { type: 'warning' });
             return;
         }
-        const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
+        // v1.6.86: ACEITAR e DECIDIR O DESTINO viraram duas perguntas separadas.
+        // ACEITA (quem pode entrar) segue exatamente a regra anterior — inscrições abertas,
+        // OU Liga com temporada aberta, OU janela de inscrição tardia. Nada que era aceito
+        // passa a ser recusado aqui.
+        // DESTINO (roster × lista de espera) é decidido UMA vez só, em _doEnrollCurrentUser,
+        // por window._phaseDrawDone: fase SORTEADA → ESPERA. Antes, o `ligaAberta` (Liga com
+        // ligaOpenEnrollment) fazia `inscricoesAbertas` virar true mesmo com o sorteio feito,
+        // curto-circuitando este bloco — o único que mandava alguém pra espera. A pessoa caía
+        // direto em t.participants DEPOIS do sorteio: inscrita, fora dos grupos e fora dos 3
+        // storages de espera (Confra ago/2026, 57s depois do sorteio).
+        // Ver waitlist-core._phaseDrawDone.
+        const sorteioRealizado = window._phaseDrawDone(t);
         const ligaAberta = window._isLigaFormat(t) && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
         const inscricoesAbertas = (t.status !== 'closed' && !sorteioRealizado) || ligaAberta;
-        if (!inscricoesAbertas) {
-            if (_allowsLateEnrollment(t) && t.status !== 'finished') {
-                // Late enrollment — send to standby
-                var _nmStandby = window._enrollDisplayName(user); // sem nome → e-mail/telefone
-                var participantObj = { name: _nmStandby, email: user.email, displayName: _nmStandby, uid: user.uid, ligaActive: true };
-                _enrollToStandby(t, tId, participantObj, function() {
-                    const container = document.getElementById('view-container');
-                    if (container && typeof renderTournaments === 'function') renderTournaments(container, tId);
-                });
-                return;
-            }
+        const aceitaTardia = _allowsLateEnrollment(t) && t.status !== 'finished';
+        if (!inscricoesAbertas && !aceitaTardia) {
             showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
             return;
         }
@@ -633,6 +641,21 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
         return;
     }
 
+    // v1.6.86 — PONTO ÚNICO DE DESTINO: fase já SORTEADA → LISTA DE ESPERA, nunca o roster.
+    // Fica DEPOIS do participantObj estar pronto de propósito: assim quem chega tarde entra
+    // na espera com CATEGORIA, gênero e data de nascimento resolvidos (o ramo antigo de
+    // inscrição tardia montava um objeto pelado, sem categoria, e o organizador tinha que
+    // classificar na mão). Todos os caminhos de auto-inscrição passam por aqui — inscrição
+    // direta, com categoria, e duplas de teamSize 2 —, então a porta é uma só.
+    if (window._phaseDrawDone(t)) {
+        _enrollToStandby(t, tId, participantObj, function() {
+            const _vcW = document.getElementById('view-container');
+            if (_vcW && typeof renderTournaments === 'function') renderTournaments(_vcW, tId);
+            if (typeof _onSuccess === 'function') { setTimeout(_onSuccess, 400); }
+        });
+        return;
+    }
+
     // Add to local state immediately
     if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
     t.participants.push(participantObj);
@@ -665,6 +688,21 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
             if (result.alreadyEnrolled) {
                 // Already enrolled on server — local state is fine, just sync participants
                 t.participants = result.participants;
+                return;
+            }
+            // v1.6.86 — CORRIDA COM O SORTEIO: o cliente checou antes, o sorteio disparou no
+            // meio e o servidor mandou pra ESPERA. O push otimista em t.participants está
+            // ERRADO agora — a verdade é a do servidor. Sem isto o app mostraria a pessoa
+            // sorteada até o próximo snapshot, e o toast anterior mentiria sobre o destino.
+            if (result.waitlisted) {
+                t.participants = result.participants;
+                if (result.standbyParticipants) t.standbyParticipants = result.standbyParticipants;
+                if (typeof showNotification !== 'undefined') {
+                    showNotification('📋 Você entrou na lista de espera',
+                        'O sorteio da rodada saiu enquanto você se inscrevia. Sua inscrição está garantida e você é chamado no próximo confronto.', 'info');
+                }
+                var _vcWl = document.getElementById('view-container');
+                if (_vcWl && typeof renderTournaments === 'function') renderTournaments(_vcWl, tId);
                 return;
             }
             // Sync authoritative server state
@@ -1328,8 +1366,64 @@ window._toggleLigaActive = function(tId, isActive) {
     if (p.email && user.email && p.email === user.email) return true;
     return false;
   });
+  // v1.6.93 — quem está NA FILA também aparece aqui (o toggle passou a mostrá-lo).
+  // Ligar = VOLTAR AOS SORTEIOS: a entrada sai da espera e volta pro elenco ativo, que é
+  // a fonte do sorteio das próximas rodadas. Sem isto, quem foi pro fim da fila por um
+  // W.O. não tinha caminho de volta nenhum.
+  var _vindoDaFila = null;
+  if (!found && typeof window._getWaitlist === 'function') {
+    var _naEspera = window._getWaitlist(t).find(function(p) {
+      if (typeof p !== 'object' || !p) return false;
+      if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(user, p);
+      return !!(p.uid && user.uid && p.uid === user.uid);
+    });
+    if (_naEspera) {
+      if (isActive) {
+        // volta pro elenco ATIVO — entra no próximo sorteio
+        var _volta = _naEspera;
+        if (typeof window._removeFromWaitlist === 'function') {
+          window._removeFromWaitlist(t, (window._pName ? window._pName(_volta, '') : '') || _volta.displayName || _volta.name || '');
+        }
+        _volta.ligaActive = true;
+        delete _volta.woSentToWaitlistAt;
+        arr.push(_volta); t.participants = arr;
+        _vindoDaFila = _volta;
+        found = _volta;
+      } else {
+        // desligar estando na fila: sai da fila e vira DESATIVADO no elenco
+        if (typeof window._removeFromWaitlist === 'function') {
+          window._removeFromWaitlist(t, (window._pName ? window._pName(_naEspera, '') : '') || _naEspera.displayName || _naEspera.name || '');
+        }
+        _naEspera.ligaActive = false;
+        arr.push(_naEspera); t.participants = arr;
+        found = _naEspera;
+      }
+    }
+  }
   if (!found) return;
   found.ligaActive = !!isActive;
+  // v1.6.86 — REATIVAR COM A FASE JÁ SORTEADA MANDA PRA LISTA DE ESPERA (regra do dono):
+  // "se os inativos ativarem aí sim vão pra lista de espera, saindo dos inativos".
+  // Quem estava inativo não foi sorteado; voltar a ficar `ligaActive:true` em
+  // t.participants não o coloca em grupo nenhum — ele viraria o mesmo INSCRITO FANTASMA
+  // do inscrito tardio. Então a reativação MOVE a entrada de participants pra espera,
+  // de onde "Novos Confrontos" (ou o organizador) o chama pra jogar. Sai dos inativos,
+  // entra na fila. Só quando: fase sorteada E a pessoa NÃO está jogando a fase corrente
+  // (quem desativou DEPOIS do sorteio e já tem jogo volta a jogar direto, sem fila).
+  var _movedToWait = null;
+  if (!_vindoDaFila && isActive && typeof window._phaseDrawDone === 'function' && window._phaseDrawDone(t) &&
+      typeof window._isPlayingCurrentPhase === 'function' && !window._isPlayingCurrentPhase(t, found)) {
+    var _idx = arr.indexOf(found);
+    if (_idx !== -1) {
+      arr.splice(_idx, 1);
+      t.participants = arr;
+      // v1.6.88: entra no FIM da fila — regra do dono pro reativado que veio de um W.O.
+      // ("se o W.O. for para desativados, passa para última posição da lista de espera ao
+      // se reativar"). _waitlistPushBack é o ponto único disso e é idempotente.
+      window._waitlistPushBack(t, found);
+      _movedToWait = { entry: found, idx: _idx };
+    }
+  }
   // Save to Firestore. Use syncImmediate when we're the organizer (goes through
   // AppStore cache); otherwise hit Firestore directly (participants can't
   // always round-trip through syncImmediate).
@@ -1373,19 +1467,44 @@ window._toggleLigaActive = function(tId, isActive) {
   _syncTogglesInDom();
   Promise.resolve(savePromise).then(function() {
     if (typeof window.showNotification === 'function') {
-      window.showNotification(
-        isActive ? _t('enroll.ligaActive') : _t('enroll.ligaInactive'),
-        isActive ? _t('enroll.ligaActiveMsg') : _t('enroll.ligaInactiveMsg'),
-        isActive ? 'success' : 'warning'
-      );
+      if (_vindoDaFila) {
+        window.showNotification('✅ Você voltou aos sorteios',
+          'Saiu da lista de espera e entra no sorteio da próxima rodada.', 'success');
+      } else if (_movedToWait) {
+        // Reativou com a fase já sorteada: o destino é a fila, e o aviso tem que dizer isso —
+        // "Ativado" sozinho prometeria um jogo que a rodada sorteada não tem.
+        window.showNotification('📋 Você entrou na lista de espera',
+          'A rodada já foi sorteada. Você sai dos inativos e entra na fila — assim que houver vaga ou um novo confronto, você joga.', 'success');
+      } else {
+        window.showNotification(
+          isActive ? _t('enroll.ligaActive') : _t('enroll.ligaInactive'),
+          isActive ? _t('enroll.ligaActiveMsg') : _t('enroll.ligaInactiveMsg'),
+          isActive ? 'success' : 'warning'
+        );
+      }
     }
-    // Não re-renderiza. DOM já foi atualizado in-place. Firestore listener
-    // sincroniza next soft-refresh (preservando scroll).
+    // Re-render só quando a pessoa MUDOU DE LISTA (participants → espera): o card
+    // dela muda de seção e o toggle some. No caminho normal segue sem re-render
+    // (preserva scroll — [[project_dashboard_no_rerender]]).
+    if (_movedToWait || _vindoDaFila) {
+      var _vcT = document.getElementById('view-container');
+      if (_vcT && typeof renderTournaments === 'function') renderTournaments(_vcT, tId);
+    }
   }).catch(function(e) {
     window._warn('[toggle-liga] save failed', e);
     // Reverte o update otimista no DOM se save falhou.
     isActive = !isActive;
     found.ligaActive = !!isActive;
+    // ...e desfaz a mudança de lista, devolvendo a entrada à posição original.
+    if (_movedToWait) {
+      var _sb = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
+      var _si = _sb.indexOf(_movedToWait.entry);
+      if (_si !== -1) _sb.splice(_si, 1);
+      var _pa = Array.isArray(t.participants) ? t.participants : [];
+      _pa.splice(Math.min(_movedToWait.idx, _pa.length), 0, _movedToWait.entry);
+      t.participants = _pa;
+      _movedToWait = null;
+    }
     _syncTogglesInDom();
     if (typeof window.showNotification === 'function') {
       window.showNotification('Erro', 'Não foi possível salvar a alteração.', 'error');
@@ -1414,17 +1533,33 @@ window._buildLigaActiveToggleHtml = function(t) {
   if (t.status === 'finished') return '';
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu || !cu.uid && !cu.email) return '';
+  var _acha = function (lista) {
+    return (lista || []).find(function(p) {
+      if (typeof p !== 'object' || !p) return false;
+      // v3.0.76: uid-first + slot-aware — o toggle aparece pro p2 da dupla também.
+      if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(cu, p);
+      if (p.uid && cu.uid && p.uid === cu.uid) return true;
+      if (p.email && cu.email && p.email === cu.email) return true;
+      return false;
+    });
+  };
   var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  var found = arr.find(function(p) {
-    if (typeof p !== 'object' || !p) return false;
-    // v3.0.76: uid-first + slot-aware — o toggle aparece pro p2 da dupla também.
-    if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(cu, p);
-    if (p.uid && cu.uid && p.uid === cu.uid) return true;
-    if (p.email && cu.email && p.email === cu.email) return true;
-    return false;
-  });
+  var found = _acha(arr);
+  // v1.6.93 — QUEM ESTÁ NA FILA TAMBÉM PRECISA DO CONTROLE (regra do dono: "para onde
+  // quer que o W.O. vá, ele precisa ter o poder de se reativar em rodadas futuras").
+  // Quem foi mandado pro fim da lista de espera SAI de t.participants — e o toggle,
+  // que só olhava participants, SUMIA: a pessoa ficava sem nenhum caminho de volta,
+  // dependendo do organizador lembrar dela. Agora o controle aparece pra quem está na
+  // espera também, e ligá-lo devolve a pessoa aos SORTEIOS das próximas rodadas.
+  var _naFila = false;
+  if (!found && typeof window._getWaitlist === 'function') {
+    found = _acha(window._getWaitlist(t));
+    if (found) _naFila = true;
+  }
   if (!found) return ''; // só mostra pra quem está inscrito
-  var isActive = found.ligaActive !== false; // default true
+  // Na fila = fora dos sorteios (não é "desativado", mas também não é sorteado): o
+  // controle mostra DESATIVADO pra que ligá-lo seja o gesto de voltar.
+  var isActive = !_naFila && found.ligaActive !== false; // default true
   var safeTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var stateLabel = isActive ? 'Ativado' : 'Desativado';
   // v2.6.21: pílula SÓLIDA — verde (Ativado) / vermelha (Desativado) com texto
@@ -1433,7 +1568,8 @@ window._buildLigaActiveToggleHtml = function(t) {
   var pillBg = isActive ? '#10b981' : '#ef4444';
   var titleAttr = isActive
     ? 'Clique para ficar de fora do próximo sorteio'
-    : 'Clique para voltar ao próximo sorteio';
+    : (_naFila ? 'Você está na lista de espera. Clique para voltar aos próximos sorteios.'
+               : 'Clique para voltar ao próximo sorteio');
   // v0.16.92: stopPropagation EM TODOS os elementos do toggle.
   // v0.16.93: data-liga-toggle-tid no outer wrapper + class
   // liga-toggle-state-label no text span permite update in-place pelo

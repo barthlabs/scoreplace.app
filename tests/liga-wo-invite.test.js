@@ -62,7 +62,14 @@ function mkT() {
   W._ligaPickFill('T', 0, 'R1 Grupo A', 'B');
   ok(_lastAlertHtml.indexOf('data-name="E"') !== -1 && _lastAlertHtml.indexOf('data-name="F"') !== -1,
     'diálogo lista os 2 da espera como convidáveis (E, F)');
-  ok(_lastAlertHtml.indexOf('_ligaInviteSelected') !== -1, 'diálogo tem o botão "Convidar selecionados"');
+  // ASSERÇÃO REVISADA em v1.6.92, de propósito. O invariante que ela defende continua o
+  // mesmo — o diálogo oferece o caminho do CONVITE —, mas o botão deixou de chamar
+  // _ligaInviteSelected direto: agora é UM botão só (_ligaFillAction), que despacha pro
+  // convite quando há 2+ marcados (ou 1, se quem olha não é o organizador) e pra
+  // substituição direta quando há 1 e é o organizador. Ver
+  // tests/wo-destino-ciclo-notifica.test.js seções 14/15.
+  ok(_lastAlertHtml.indexOf('id="liga-fill-action"') !== -1, 'diálogo tem o botão único de ação');
+  ok(_lastAlertHtml.indexOf('_ligaFillAction') !== -1, 'e ele despacha por _ligaFillAction (convite × colocar)');
   ok(_lastAlertHtml.indexOf('Ninguém da mesma categoria') === -1, 'não diz mais "ninguém ficou de fora"');
   ok(_lastAlertHtml.indexOf('Jogador X') !== -1, 'Jogador X continua como opção');
   // texto DINÂMICO: sem Pontos Avançados no torneio → NÃO menciona penalidade

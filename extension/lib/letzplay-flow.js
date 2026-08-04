@@ -40,16 +40,37 @@
   }
 
   // Agrupa os jogos em competições (footprint): oficial (torneio) vs recreativo (ranking).
+  //
+  // A CHAVE É O ID DA COMPETIÇÃO, NUNCA O TEXTO. Enquanto `categoryRaw` entrava na chave, um
+  // texto que variasse entre jogos do MESMO torneio o partia em várias competições. Foi o
+  // que aconteceu em produção (30/jul/2026, @camilacalia): o extrator pegava o link "Ver
+  // trilha de X/Y" em vez do da categoria, e como a trilha muda de dupla pra dupla, 35
+  // torneios viraram 55 entradas no footprint — a barra dizia "35 de 35 (100%)" com 14
+  // torneios ainda por ler. O texto é ATRIBUTO da competição; a identidade é o id do
+  // letzplay. Só cai no texto quando não há id nenhum (dado antigo).
   function buildRaw(me, matches) {
     var rankings = {}, tournaments = {};
     matches.forEach(function (m) {
       var bucket = m.official ? tournaments : rankings;
-      var key = (m.club || '') + '|' + (m.categoryRaw || '') + '|' + (m.rankingId || '') + '|' + (m.tourneyId || '');
+      var id = m.official ? m.tourneyId : m.rankingId;
+      var key = (id != null && String(id))
+        ? ((m.club || '') + '|#' + id)
+        : ((m.club || '') + '|' + (m.categoryRaw || ''));
       if (!bucket[key]) bucket[key] = {
         name: m.categoryRaw, club: m.club, sport: 'Beach Tennis', categoryRaw: m.categoryRaw,
         year: m.year, status: 'done', wins: 0, losses: 0,
         tourneyId: m.tourneyId || null, rankingId: m.rankingId || null
       };
+      // Categoria: o MELHOR texto entre os jogos da competição vence. Se o primeiro jogo
+      // trouxe uma trilha ("Ver trilha de X/Y") e um seguinte trouxe a categoria de
+      // verdade, é a categoria que fica — agrupar por id juntou os dois no mesmo balde,
+      // e agora o balde não herda o pior texto só por ordem de chegada.
+      var X = root._spExtract;
+      if (X && X.isTrailText && X.isTrailText(bucket[key].categoryRaw) && m.categoryRaw && !X.isTrailText(m.categoryRaw)) {
+        bucket[key].categoryRaw = m.categoryRaw;
+        if (X.isTrailText(bucket[key].name) || !bucket[key].name) bucket[key].name = m.categoryRaw;
+      }
+      if (bucket[key].year == null && m.year != null) bucket[key].year = m.year;
       if (m.won) bucket[key].wins++; else if (m.won === false) bucket[key].losses++;
     });
     var rk = Object.keys(rankings).map(function (k) {

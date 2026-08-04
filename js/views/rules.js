@@ -152,8 +152,9 @@ function renderRules(container, tournamentId) {
             [_t('rules.enrollMode'), enrollmentLabel],
             [_t('rules.maxParticipants'), t.maxParticipants ? t.maxParticipants + ' ' + _t('rules.participants') : _t('rules.noLimit')],
             [_t('rules.enrollUntil'), formatDate(t.registrationLimit)],
+            // v1.6.83: fim do TORNEIO (última fase), não t.endDate cru (= fim da fase inicial).
             [_t('rules.start'), formatDate(t.startDate)],
-            [_t('rules.end'), formatDate(t.endDate)],
+            [_t('rules.end'), formatDate(window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate)],
             [_t('rules.visibility'), t.isPublic ? _t('rules.public') : _t('rules.private')],
             [_t('rules.resultEntry'), resultEntryLabel],
           ].map(([label, value]) => `

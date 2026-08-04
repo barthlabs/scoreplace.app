@@ -32,6 +32,39 @@
    * spExtra (opcional) mistura o scoreplace: { tournaments:[{name,sport,year}],
    * wins, losses } — torneios do scoreplace entram na coluna OFICIAL e as V/D
    * somam no Total. */
+  // MEDIDOR DE NÍVEL — categoria oficial · forma · barra FUN→A com a bolinha.
+  // Vive aqui sozinho porque aparece em DOIS lugares: nas estatísticas do jogador e no
+  // diálogo do histórico do letzplay (pedido do dono, 30/jul/2026). Duplicar o markup
+  // seria garantir que um dia os dois divergem.
+  root._lzLevelBar = function (imp) {
+    if (!imp || typeof imp !== 'object') return '';
+    var off = imp.officialCategory || null, r = imp.rating || {};
+    var pct = ratingPct(r.value);
+    var gStops = 'linear-gradient(90deg,#dc2626 0%,#ef7a2b ' + Math.max(6, pct - 22) + '%,#eab308 ' +
+      Math.max(10, pct - 12) + '%,#16a34a ' + Math.max(14, pct - 5) + '%,#16a34a ' +
+      Math.min(88, pct + 5) + '%,#eab308 ' + Math.min(92, pct + 14) + '%,#ef7a2b ' +
+      Math.min(97, pct + 26) + '%,#dc2626 100%)';
+    var offHtml = off
+      ? '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(off.categoryRaw) + '</span>'
+      : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
+    return '' +
+      '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;margin-bottom:4px;">' +
+        '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria oficial</span><br>' + offHtml + '</div>' +
+        '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">forma</span><br>' +
+          '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;">' + esc(r.band || '—') + '</span>' +
+          (r.value ? '<span style="font-size:11px;color:var(--text-muted,#8b93a3);"> · ' + r.value + '</span>' : '') + '</div>' +
+      '</div>' +
+      '<div style="margin-top:10px;">' +
+        '<div style="display:flex;">' + ['FUN', 'D', 'C', 'B', 'A'].map(function (t) {
+          return '<span style="flex:1;text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:700;color:var(--text-muted,#8b93a3);">' + t + '</span>';
+        }).join('') + '</div>' +
+        '<div style="position:relative;height:20px;border-radius:11px;margin-top:5px;background:' + gStops + ';box-shadow:inset 0 1px 4px rgba(0,0,0,.3);">' +
+          '<span style="position:absolute;top:50%;left:' + pct.toFixed(1) + '%;transform:translate(-50%,-50%);width:15px;height:15px;border-radius:50%;background:#fff;border:3px solid #0f9d6b;box-shadow:0 0 0 4px rgba(16,157,107,.22);"></span>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted,#8b93a3);margin-top:7px;"><span>↓ abaixo</span><span style="color:#2dd4a0;font-weight:700;">no seu nível</span><span>acima ↑</span></div>' +
+      '</div>';
+  };
+
   root._renderLetzplayCard = function (imp, spExtra) {
     if (!imp || typeof imp !== 'object') return '';
     spExtra = spExtra || {};
@@ -59,12 +92,8 @@
     var _MON = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
     function _ts(raw) {
       if (typeof raw === 'number') return raw;                        // já é timestamp
-      var s = String(raw || '').trim(); if (!s) return 0;
-      // dd/mm/aa (Brasil) tem PRIORIDADE — Date.parse assume mm/dd (US) e inverte.
-      var m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
-      if (m) { var y = +m[3]; if (y < 100) y += 2000; var t = new Date(y, (+m[2]) - 1, +m[1]).getTime(); if (!isNaN(t)) return t; }
-      var n = Date.parse(s); if (!isNaN(n)) return n;                 // ISO (scoreplace) / nativo
-      return 0;
+      // canônico em store.js — dd/mm nunca é lido como mm/dd
+      return (typeof window._spTsData === 'function') ? window._spTsData(raw, { fallback: 0 }) : 0;
     }
     function monYr(raw) { var t = _ts(raw); if (!t) return null; var d = new Date(t); return _MON[d.getMonth()] + '/' + d.getFullYear(); }
     function prettyClub(slug) {
@@ -196,24 +225,7 @@
         '<div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text-muted,#8b93a3);margin-bottom:3px;">🎾 Seu nível (geral)</div>' +
         '<div style="font-size:10.5px;color:var(--text-muted,#8b93a3);margin-bottom:11px;">letzplay @' + esc(imp.handle) + ' + scoreplace</div>' +
 
-        // Oficial vs forma
-        '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;margin-bottom:4px;">' +
-          '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria oficial</span><br>' + offHtml + '</div>' +
-          '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">forma</span><br>' +
-            '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;">' + esc(r.band || '—') + '</span>' +
-            (r.value ? '<span style="font-size:11px;color:var(--text-muted,#8b93a3);"> · ' + r.value + '</span>' : '') + '</div>' +
-        '</div>' +
-
-        // medidor
-        '<div style="margin-top:10px;">' +
-          '<div style="display:flex;">' + ['FUN', 'D', 'C', 'B', 'A'].map(function (t) {
-            return '<span style="flex:1;text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:700;color:var(--text-muted,#8b93a3);">' + t + '</span>';
-          }).join('') + '</div>' +
-          '<div style="position:relative;height:20px;border-radius:11px;margin-top:5px;background:' + gStops + ';box-shadow:inset 0 1px 4px rgba(0,0,0,.3);">' +
-            '<span style="position:absolute;top:50%;left:' + pct.toFixed(1) + '%;transform:translate(-50%,-50%);width:15px;height:15px;border-radius:50%;background:#fff;border:3px solid #0f9d6b;box-shadow:0 0 0 4px rgba(16,157,107,.22);"></span>' +
-          '</div>' +
-          '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted,#8b93a3);margin-top:7px;"><span>↓ abaixo</span><span style="color:#2dd4a0;font-weight:700;">no seu nível</span><span>acima ↑</span></div>' +
-        '</div>' +
+        root._lzLevelBar(imp) +
 
         // tiles
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:14px;">' +
@@ -247,9 +259,7 @@
   function lpTs(raw) {
     if (typeof raw === 'number') return raw;
     var s = String(raw || '').trim(); if (!s) return 0;
-    var m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
-    if (m) { var y = +m[3]; if (y < 100) y += 2000; var t = new Date(y, (+m[2]) - 1, +m[1]).getTime(); if (!isNaN(t)) return t; }
-    var n = Date.parse(s); return isNaN(n) ? 0 : n;
+    return (typeof window._spTsData === 'function') ? window._spTsData(s, { fallback: 0 }) : 0;
   }
   // Sparkline do saldo acumulado (V=+1, D=−1) nos jogos DAQUELE torneio, cronológico.
   function saldoSvg(games) {

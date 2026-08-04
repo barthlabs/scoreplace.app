@@ -49,13 +49,30 @@ function computeMemberUids(data) {
   var push = function (u) { if (u && typeof u === 'string' && u.length >= 4) set[u] = true; };
   push(data.creatorUid);
   if (Array.isArray(data.coHosts)) data.coHosts.forEach(function (ch) { if (ch && ch.status === 'active') push(ch.uid); });
-  var parts = Array.isArray(data.participants) ? data.participants : [];
-  parts.forEach(function (p) {
-    if (!p || typeof p === 'string') return;
-    push(p.uid); push(p.p1Uid); push(p.p2Uid);
-    if (Array.isArray(p.participants)) p.participants.forEach(function (sub) { if (sub) push(sub.uid); });
+  // v1.6.86: A LISTA DE ESPERA TAMBÉM É MEMBRO — espelha js/views/persist-core.js.
+  // Quem está na espera está INSCRITO (só não foi sorteado): sem entrar em memberUids,
+  // o listener (`memberUids array-contains`) não entrega o torneio pra própria pessoa.
+  [
+    Array.isArray(data.participants) ? data.participants : [],
+    Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [],
+    Array.isArray(data.waitlist) ? data.waitlist : []
+  ].forEach(function (parts) {
+    parts.forEach(function (p) {
+      if (!p || typeof p === 'string') return;
+      push(p.uid); push(p.p1Uid); push(p.p2Uid);
+      if (Array.isArray(p.participants)) p.participants.forEach(function (sub) { if (sub) push(sub.uid); });
+    });
   });
   return Object.keys(set);
+}
+
+// Espelha window._phaseDrawDone (js/views/waitlist-core.js): fase SORTEADA → a inscrição
+// vai pra LISTA DE ESPERA, nunca pro roster da rodada que já existe.
+function phaseDrawDone(data) {
+  if (!data) return false;
+  return (Array.isArray(data.matches) && data.matches.length > 0) ||
+    (Array.isArray(data.rounds) && data.rounds.length > 0) ||
+    (Array.isArray(data.groups) && data.groups.length > 0);
 }
 
 // Espelha window._cleanUndefined (js/views/persist-core.js).
@@ -140,6 +157,28 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   if (isAlreadyEnrolled(participants, participantObj)) {
     return { outcome: 'already', participants: participants, updateData: null };
   }
+  // v1.6.86 — FASE SORTEADA → LISTA DE ESPERA. Vem ANTES do teto de vagas de propósito:
+  // a espera é justamente onde fica quem não tem vaga na rodada, então recusar por
+  // "lotado" quem já está indo pra fila não faz sentido. Em Liga com temporada aberta
+  // (ligaOpenEnrollment) este era o ramo que NÃO existia: `enrollmentOpen` devolvia
+  // open=true e a pessoa era empurrada pra participants depois do sorteio — inscrita,
+  // fora dos grupos, fora da espera (Confra ago/2026). Ver waitlist-core._phaseDrawDone.
+  if (phaseDrawDone(data)) {
+    var standby = Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [];
+    if (isAlreadyEnrolled(standby, participantObj)) {
+      return { outcome: 'alreadyWaitlisted', participants: participants, updateData: null };
+    }
+    var newStandby = standby.concat([cleanUndefined(participantObj)]);
+    var wlData = Object.assign({}, data, { standbyParticipants: newStandby });
+    var wlUpdate = { standbyParticipants: newStandby, memberUids: computeMemberUids(wlData) };
+    if (extraUpdates) {
+      Object.keys(extraUpdates).forEach(function (k) { wlUpdate[k] = cleanUndefined(extraUpdates[k]); });
+    }
+    return {
+      outcome: 'waitlisted', participants: participants,
+      standbyParticipants: newStandby, updateData: wlUpdate
+    };
+  }
   var capMax = parseInt(data.maxParticipants, 10);
   var isDrawMode = data.enrollmentLimitMode === 'draw';
   if (!isDrawMode && !isNaN(capMax) && capMax > 0 && participants.length >= capMax) {
@@ -174,10 +213,16 @@ function pairPartnerSolo(entry, n) {
   var o = { uid: uid, ligaActive: true };
   if (nome) { o.displayName = nome; o.name = nome; }
   if (g('Seq') != null) o.enrollSeq = g('Seq');
-  if (g('Email')) o.email = g('Email');
-  if (g('Photo')) o.photoURL = g('Photo');
-  if (g('Gender')) o.gender = g('Gender');
-  if (g('BirthDate')) o.birthDate = g('BirthDate');
+  // CAMPO DE PERFIL NÃO É GRAVADO EM QUEM TEM UID (email/photoURL/gender/birthDate).
+  // Antes eram copiados aqui, e o servidor não passa pelo strip do cliente
+  // (identity-core._stripUidEntryNames) — então a CF era a ÚNICA porta por onde
+  // cópia de perfil ainda entrava no torneio (medido em produção: 2 entradas com
+  // email/gender/skillBySport, ambas de uid com perfil VIVO). O argumento que
+  // justifica preservar o NOME — sem perfil, o nome é a última âncora de identidade
+  // do uid órfão — NÃO vale pra esses campos: eles nunca identificam ninguém, e o
+  // app já os resolve pelo uid (_pGender/_pBirth/_userProfileCache, e a própria CF
+  // via _enrichParticipantsFromProfiles). Guardar cópia só cria um segundo lugar
+  // onde o dado da pessoa vive — e que o "apagar do perfil" não alcança.
   if (entry.category) o.category = entry.category;
   if (Array.isArray(entry.categories)) o.categories = entry.categories.slice();
   if (entry.categorySource) o.categorySource = entry.categorySource;
@@ -221,6 +266,6 @@ function computeDeenroll(data, userUid) {
 }
 
 module.exports = {
-  participantUids, computeMemberUids, cleanUndefined,
+  participantUids, computeMemberUids, cleanUndefined, phaseDrawDone,
   enrollmentOpen, isAlreadyEnrolled, computeEnroll, computeDeenroll
 };

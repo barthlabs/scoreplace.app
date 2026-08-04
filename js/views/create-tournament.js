@@ -4978,6 +4978,66 @@ function setupCreateTournamentModal() {
   // v1.4.20-beta: expose handler on window so _renderCreateTournamentHeader can
   // re-attach it after each host.innerHTML call (innerHTML destroys the old element
   // and its listener — the new btn-save-tournament needs a fresh attachment).
+  // Sorteio automático COM data/hora futura marcada no formulário?
+  function _autoDrawAgendadoNoForm() {
+    function val(id) { var e = document.getElementById(id); return e ? (e.value || '') : ''; }
+    function chk(id) { var e = document.getElementById(id); return !!(e && e.checked); }
+    // JÁ SORTEADO não pergunta nada (pedido do dono, 31/jul): a tela existe pro sorteio
+    // que ainda VAI acontecer sozinho. Com chave na mesa, a escolha vira ajuste — e o
+    // lugar dela é o toggle "Sorteio equilibrado" do próprio formulário.
+    var _eid = (document.getElementById('edit-tournament-id') || {}).value || '';
+    if (_eid && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
+      var _tj = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(_eid); });
+      if (_tj && typeof window._tournamentHasDraw === 'function' && window._tournamentHasDraw(_tj)) return false;
+    }
+    var manual = chk('liga-draw-manual') || chk('suico-draw-manual') || chk('suico-manual-draw');
+    if (manual) return false;
+    var data = val('suico-first-draw-date') || val('liga-first-draw-date');
+    if (!data) return false;
+    var hora = val('suico-first-draw-time') || val('liga-first-draw-time') || '00:00';
+    var partes = String(data).split('-'), hm = String(hora).split(':');
+    if (partes.length < 3) return false;
+    var quando = new Date(+partes[0], (+partes[1]) - 1, +partes[2], +(hm[0] || 0), +(hm[1] || 0));
+    return quando.getTime() > Date.now();      // só quando o sorteio ainda vai acontecer
+  }
+
+  // A TELA É A APROVADA: "⚖️ Sorteio de duplas" (window._showDrawBalanceOverlay, em
+  // tournaments-draw.js) — a MESMA do sorteio manual. Aqui ela abre no SALVAR só porque
+  // o sorteio automático acontece sozinho na data marcada e não há outra hora de
+  // perguntar. Uma decisão, uma tela: nunca criar outra pra isso.
+  function _perguntarEquilibrio(depois) {
+    var _seguir = function (equil) { window._drawBalanceChoice = !!equil; window._drawBalanceConfirmed = true; depois(); };
+    if (typeof window._showDrawBalanceOverlay !== 'function') { _seguir(true); return; }
+    var editId = (document.getElementById('edit-tournament-id') || {}).value || '';
+    var t = (editId && window.AppStore && Array.isArray(window.AppStore.tournaments))
+      ? window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); }) : null;
+    // abre no que já está marcado (toggle "Sorteio equilibrado" do formulário, ou o torneio)
+    var _tgl = document.getElementById('liga-balanced-toggle');
+    var _modo = (_tgl ? _tgl.checked : (!t || t.equilibrado !== false)) ? 'equilibrado' : 'livre';
+    var _abrir = function (rows) {
+      window._showDrawBalanceOverlay({
+        rows: rows, mode: _modo,
+        subtitle: 'O sorteio vai acontecer sozinho na data marcada — a escolha é agora. Dá pra mudar depois, editando o torneio.',
+        emptyText: t ? 'Todos os inscritos já têm gênero definido. ✓'
+                     : 'Ainda não há inscritos — a escolha já fica valendo pro sorteio.',
+        onConfirm: function (mode, assigned) {
+          // persist:false — quem grava é o próprio salvar, logo em seguida
+          if (t) window._applyDrawBalanceChoice(t, mode, assigned, { persist: false });
+          _seguir(mode === 'equilibrado');
+        }
+        // Cancelar = fecha e não salva; o formulário fica como estava.
+      });
+    };
+    // o gênero vem do PERFIL — hidrata antes pra tela só pedir quem realmente falta
+    var _rows = function () {
+      if (t && typeof window._drawBalanceRows === 'function') window._drawBalanceRows(t, _abrir);
+      else _abrir([]);
+    };
+    if (t && typeof window._hydrateParticipantGenders === 'function') {
+      Promise.resolve(window._hydrateParticipantGenders(t)).then(_rows).catch(_rows);
+    } else { _rows(); }
+  }
+
   window._saveTournamentClickHandler = function() {
       try {
         const editId = document.getElementById('edit-tournament-id').value;
@@ -4990,6 +5050,16 @@ function setupCreateTournamentModal() {
           return t.name && t.name.trim().toLowerCase() === name.toLowerCase();
         });
         if (nomeDuplicado) { showAlertDialog(window._t('create.nameDupe'), window._t('create.nameDupeMsg'), null, { type: 'warning' }); return; }
+
+        // SORTEIO EQUILIBRADO OU LIVRE — PERGUNTADO NO SALVAR (pedido do dono, 31/jul/2026).
+        // No sorteio MANUAL essa tela já aparece na hora de sortear. No AUTOMÁTICO não havia
+        // hora nenhuma: o sorteio acontece sozinho na data marcada, e ninguém nunca escolheu.
+        // Então a escolha passa a ser feita aqui, ao salvar, e fica gravada em `equilibrado`
+        // — que é o que o motor lê (o mesmo motor que a CF autoDraw roda).
+        if (!window._drawBalanceConfirmed && _autoDrawAgendadoNoForm()) {
+          _perguntarEquilibrio(function () { window._saveTournamentClickHandler(); });
+          return;
+        }
 
         // v2.4.11: reconciliação de pontuação. Se o organizador trocou o sistema
         // de pontuação num torneio que JÁ tem resultados, mostra "vai ficar assim"
@@ -5418,6 +5488,14 @@ function setupCreateTournamentModal() {
         tourData.ageCategories = catData.ageCategories || []; // v1.2.0
         tourData.customCategories = catData.customCategories || []; // v2.1.80
         tourData.combinedCategories = catData.combinedCategories || [];
+
+        // A ESCOLHA DA TELA VENCE, e vale pra QUALQUER formato — não só Liga. É ela que o
+        // motor lê no sorteio, inclusive o automático (a CF autoDraw roda o mesmo motor).
+        // Fica ANTES de gravar: payload sai pronto, sem depender de mutação pós-save.
+        if (window._drawBalanceConfirmed && typeof window._drawBalanceChoice === 'boolean') {
+          tourData.equilibrado = window._drawBalanceChoice;
+        }
+        window._drawBalanceConfirmed = false; window._drawBalanceChoice = undefined;
 
         if (editId) {
           const idx = window.AppStore.tournaments.findIndex(tour => tour.id.toString() === editId.toString());

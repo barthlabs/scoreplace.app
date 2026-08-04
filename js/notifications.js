@@ -326,7 +326,12 @@ function showNotification(title, message, type = 'info') {
       display: flex;
       flex-direction: column;
       gap: 10px;
-      z-index: 100011;
+      /* ACIMA DOS DIÁLOGOS (que ficam em 100100). O aviso de "falha ao gravar" nascia
+         ATRÁS do diálogo de progresso e cortado na quina — o erro existia e não era
+         legível, que na prática é o mesmo que não existir. */
+      z-index: 100200;
+      max-width: min(92vw, 430px);
+      pointer-events: none;
     `;
     document.body.appendChild(container);
   }
@@ -377,7 +382,8 @@ function showNotification(title, message, type = 'info') {
     box-shadow: 0 8px 32px rgba(0,0,0,0.45);
     backdrop-filter: blur(12px);
     min-width: 240px;
-    max-width: 320px;
+    max-width: 100%;
+    pointer-events: auto;
     transform: translateX(100%);
     opacity: 0;
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -419,7 +425,13 @@ function showNotification(title, message, type = 'info') {
 // Modal de Confirmação Customizado
 function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
   title = _safeText(title);
-  const { confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning' } = options;
+  // `maxWidth`: telas com LISTA (histórico do letzplay) precisam da largura do usuário —
+  // 400px espremia 35 torneios em linhas de 3 alturas e a tela ficava imprestável.
+  // `hideFooter`: a tela traz os PRÓPRIOS botões (caso do histórico do letzplay, que tem
+  // uma barra fixa no topo). Sem isso o diálogo mostrava dois pares — o de cima, útil, e o
+  // de baixo, duplicado, que o dono chamou de fantasma. Quem esconde o rodapé assume a
+  // responsabilidade de fechar/confirmar pelos próprios controles.
+  const { confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning', maxWidth = '400px', hideFooter = false, headerHtml = '' } = options;
   
   let dialog = document.getElementById('custom-confirm-dialog');
   if (dialog) dialog.remove();
@@ -452,21 +464,30 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
       background: var(--surface-color);
       border: 1px solid var(--border-color);
       border-radius: 16px;
-      max-width: 400px;
-      width: 90%;
+      max-width: ${maxWidth};
+      width: 94%;
+      /* O CARD NAO PODE PASSAR DA TELA. Sem altura maxima ele cresce com o conteudo e o
+         rodape com os botoes sai do viewport - o dono via um fantasma dos botoes pendurado
+         embaixo, inalcancavel. Com max-height + coluna flex, o CORPO e quem rola e
+         cabecalho e botoes ficam sempre visiveis. Percentual, nao vh: sob zoom no body o
+         vh estoura (canone de escala por area). */
+      max-height: 92%;
+      display: flex;
+      flex-direction: column;
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     ">
-      <div style="background: ${c.bg}; border-bottom: 1px solid var(--border-color); padding: 1.25rem; display: flex; align-items: center; gap: 12px;">
-        <span style="font-size: 2rem;">${c.icon}</span>
-        <div>
-          <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-color);">${title}</div>
+      <div style="background: ${c.bg}; border-bottom: 1px solid var(--border-color); padding: 1rem 1.25rem; display: flex; align-items: center; gap: 12px; flex: 0 0 auto; flex-wrap: wrap;">
+        <span style="font-size: 2rem; flex: 0 0 auto;">${c.icon}</span>
+        <div style="flex: 1 1 auto; min-width: 0;">
+          <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-color); overflow-wrap: anywhere;">${title}</div>
         </div>
+        ${headerHtml ? `<div style="display: flex; gap: 8px; align-items: center; flex: 0 0 auto;">${headerHtml}</div>` : ''}
       </div>
-      <div style="padding: 1.25rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.6;">
+      <div style="padding: 1.25rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; overflow-y: auto; flex: 1 1 auto; min-height: 0;">
         ${message}
       </div>
-      <div style="padding: 1rem 1.25rem 1.25rem; display: flex; gap: 10px; justify-content: flex-end;">
+      <div style="padding: 1rem 1.25rem 1.25rem; display: ${hideFooter ? 'none' : 'flex'}; gap: 10px; justify-content: flex-end; flex: 0 0 auto; border-top: 1px solid var(--border-color);">
         <button id="confirm-cancel-btn" style="
           background: rgba(255, 255, 255, 0.08);
           color: var(--text-main);
@@ -505,6 +526,8 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
     }, 200);
   };
 
+  // Os botões continuam existindo no DOM (escondidos) quando `hideFooter` — assim quem
+  // tem barra própria pode dispará-los por `.click()` e o fluxo de callbacks é UM só.
   dialog.querySelector('#confirm-cancel-btn').addEventListener('click', () => closeDialog(false));
   dialog.querySelector('#confirm-ok-btn').addEventListener('click', () => closeDialog(true));
   dialog.addEventListener('click', (e) => { if (e.target === dialog) closeDialog(false); });
@@ -542,6 +565,17 @@ function showAlertDialog(title, message, onOk, options = {}) {
   };
   const c = colors[type] || colors.info;
 
+  // v1.6.91 — O CARD NAO PODE PASSAR DA TELA. Mesmo conserto que o showConfirmDialog ja
+  // tinha: sem altura maxima o card cresce com o conteudo e o rodape com o OK sai do
+  // viewport SEM SCROLL NENHUM — foi o que prendeu o dono no dialogo Substituto do W.O.,
+  // que ficou longo (fila + destino 1x2 + Jogador X). Com max-height + coluna flex, o
+  // CORPO e quem rola; cabecalho e botao ficam sempre visiveis.
+  // Percentual, nao vh: sob zoom no body o vh estoura (canone de escala por area).
+  //
+  // ATENCAO: comentario CSS NAO PODE ir dentro do atributo `style="..."`. Uma aspa dupla
+  // no texto FECHA o atributo e o navegador DESCARTA tudo o que vem depois — foi assim que
+  // a primeira tentativa deste fix nasceu morta (max-height/display:flex/overflow sumiram;
+  // medido: computed max-height 'none', display 'block'). Explicacao fica AQUI, no JS.
   dialog.innerHTML = `
     <div style="
       background: var(--surface-color);
@@ -549,19 +583,22 @@ function showAlertDialog(title, message, onOk, options = {}) {
       border-radius: 16px;
       max-width: 380px;
       width: 90%;
+      max-height: 92%;
+      display: flex;
+      flex-direction: column;
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     ">
-      <div style="background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); padding: 1.25rem; display: flex; align-items: center; gap: 12px;">
+      <div style="background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); padding: 1.25rem; display: flex; align-items: center; gap: 12px; flex: 0 0 auto;">
         <span style="font-size: 2rem;">${c.icon}</span>
         <div>
           <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-color);">${title}</div>
         </div>
       </div>
-      <div style="padding: 1.25rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.6;">
+      <div style="padding: 1.25rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;">
         ${message}
       </div>
-      <div style="padding: 1rem 1.25rem 1.25rem; display: flex; justify-content: center;">
+      <div style="padding: 1rem 1.25rem 1.25rem; display: flex; justify-content: center; flex: 0 0 auto;">
         <button id="alert-ok-btn" style="
           background: linear-gradient(135deg, ${c.border}, ${c.border}dd);
           color: white;

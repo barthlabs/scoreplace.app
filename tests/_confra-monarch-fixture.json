@@ -1,0 +1,462 @@
+{
+ "matches": [
+  {
+   "id": "match-rr-r1-g0-0-1785708005103",
+   "round": 1,
+   "roundIndex": 0,
+   "isMonarch": true,
+   "monarchGroup": 0,
+   "p1": "Eduardo Mange / Claudia Kohl Pessoal",
+   "p2": "Fe Biojone / Denise Mamesso",
+   "team1": [
+    "Eduardo Mange",
+    "Claudia Kohl Pessoal"
+   ],
+   "team2": [
+    "Fe Biojone",
+    "Denise Mamesso"
+   ],
+   "team1Uids": [
+    "yVt3y6LK0pVIIjak9L4LO8LZqkl1",
+    "6wg8V1INV5dqzqrEqg0fIAlUpeB2"
+   ],
+   "team2Uids": [
+    "eRULAyk38QMEVaencbs60ycUkfv2",
+    "LeeS4rKmEZh1yoB9Xjkp2vQ5IwB2"
+   ],
+   "winner": null,
+   "scoreP1": null,
+   "scoreP2": null,
+   "label": "R1 Grupo A • Jogo 1",
+   "_gameNum": 1
+  },
+  {
+   "id": "match-rr-r1-g0-1-1785708005103",
+   "round": 1,
+   "roundIndex": 0,
+   "isMonarch": true,
+   "monarchGroup": 0,
+   "p1": "Eduardo Mange / Fe Biojone",
+   "p2": "Claudia Kohl Pessoal / Denise Mamesso",
+   "team1": [
+    "Eduardo Mange",
+    "Fe Biojone"
+   ],
+   "team2": [
+    "Claudia Kohl Pessoal",
+    "Denise Mamesso"
+   ],
+   "team1Uids": [
+    "yVt3y6LK0pVIIjak9L4LO8LZqkl1",
+    "eRULAyk38QMEVaencbs60ycUkfv2"
+   ],
+   "team2Uids": [
+    "6wg8V1INV5dqzqrEqg0fIAlUpeB2",
+    "LeeS4rKmEZh1yoB9Xjkp2vQ5IwB2"
+   ],
+   "winner": null,
+   "scoreP1": null,
+   "scoreP2": null,
+   "label": "R1 Grupo A • Jogo 2",
+   "_gameNum": 2
+  },
+  {
+   "id": "match-rr-r1-g0-2-1785708005103",
+   "round": 1,
+   "roundIndex": 0,
+   "isMonarch": true,
+   "monarchGroup": 0,
+   "p1": "Eduardo Mange / Denise Mamesso",
+   "p2": "Claudia Kohl Pessoal / Fe Biojone",
+   "team1": [
+    "Eduardo Mange",
+    "Denise Mamesso"
+   ],
+   "team2": [
+    "Claudia Kohl Pessoal",
+    "Fe Biojone"
+   ],
+   "team1Uids": [
+    "yVt3y6LK0pVIIjak9L4LO8LZqkl1",
+    "LeeS4rKmEZh1yoB9Xjkp2vQ5IwB2"
+   ],
+   "team2Uids": [
+    "6wg8V1INV5dqzqrEqg0fIAlUpeB2",
+    "eRULAyk38QMEVaencbs60ycUkfv2"
+   ],
+   "winner": null,
+   "scoreP1": null,
+   "scoreP2": null,
+   "label": "R1 Grupo A • Jogo 3",
+   "_gameNum": 3
+  },
+  {
+   "id": "match-rr-r1-g13-0-1785708005103",
+   "round": 1,
+   "roundIndex": 0,
+   "isMonarch": true,
+   "monarchGroup": 13,
+   "p1": "Roberta Lima / Lician Tomimatsu",
+   "p2": "Catia Cavedon / angelica reck",
+   "team1": [
+    "Roberta Lima",
+    "Lician Tomimatsu"
+   ],
+   "team2": [
+    "Catia Cavedon",
+    "angelica reck"
+   ],
+   "team1Uids": [
+    "aByf1sETT0NCUCzKzT5o8iG5iPG3",
+    "wihsAMFnxTSf915MD7tDL7EQw6t2"
+   ],
+   "team2Uids": [
+    "wyzumHJXI4Q6V3r8C9XCELCBkB32",
+    "0Jmnsh6oTrO2zgWPzv0SzHIfjnH2"
+   ],
+   "winner": null,
+   "scoreP1": null,
+   "scoreP2": null,
+   "label": "R1 Grupo N • Jogo 1",
+   "_gameNum": 40
+  },
+  {
+   "id": "match-rr-r1-g13-1-1785708005103",
+   "round": 1,
+   "roundIndex": 0,
+   "isMonarch": true,
+   "monarchGroup": 13,
+   "p1": "Roberta Lima / Catia Cavedon",
+   "p2": "Lician Tomimatsu / angelica reck",
+   "team1": [
+    "Roberta Lima",
+    "Catia Cavedon"
+   ],
+   "team2": [
+    "Lician Tomimatsu",
+    "angelica reck"
+   ],
+   "team1Uids": [
+    "aByf1sETT0NCUCzKzT5o8iG5iPG3",
+    "wyzumHJXI4Q6V3r8C9XCELCBkB32"
+   ],
+   "team2Uids": [
+    "wihsAMFnxTSf915MD7tDL7EQw6t2",
+    "0Jmnsh6oTrO2zgWPzv0SzHIfjnH2"
+   ],
+   "winner": null,
+   "scoreP1": null,
+   "scoreP2": null,
+   "label": "R1 Grupo N • Jogo 2",
+   "_gameNum": 41
+  },
+  {
+   "id": "match-rr-r1-g13-2-1785708005103",
+   "round": 1,
+   "roundIndex": 0,
+   "isMonarch": true,
+   "monarchGroup": 13,
+   "p1": "Roberta Lima / angelica reck",
+   "p2": "Lician Tomimatsu / Catia Cavedon",
+   "team1": [
+    "Roberta Lima",
+    "angelica reck"
+   ],
+   "team2": [
+    "Lician Tomimatsu",
+    "Catia Cavedon"
+   ],
+   "team1Uids": [
+    "aByf1sETT0NCUCzKzT5o8iG5iPG3",
+    "0Jmnsh6oTrO2zgWPzv0SzHIfjnH2"
+   ],
+   "team2Uids": [
+    "wihsAMFnxTSf915MD7tDL7EQw6t2",
+    "wyzumHJXI4Q6V3r8C9XCELCBkB32"
+   ],
+   "winner": null,
+   "scoreP1": null,
+   "scoreP2": null,
+   "label": "R1 Grupo N • Jogo 3",
+   "_gameNum": 42
+  },
+  {
+   "id": "match-rr-r1-g26-0-1785708005103",
+   "round": 1,
+   "roundIndex": 0,
+   "isMonarch": true,
+   "monarchGroup": 26,
+   "p1": "Raquel Unger / Monica Rossi",
+   "p2": "MDelia Fernandez / Nei Almeida",
+   "team1": [
+    "Raquel Unger",
+    "Monica Rossi"
+   ],
+   "team2": [
+    "MDelia Fernandez",
+    "Nei Almeida"
+   ],
+   "team1Uids": [
+    "X3B8VQ6D2sQAnA7gWYWuHgZgWbl2",
+    "ob2edzJ6frNO2aTBVTU07Na2xRT2"
+   ],
+   "team2Uids": [
+    "vfnXkEcUfGUH5MyhQRuOkuab9W02",
+    "ZFKs7TCWUHabKiU60aDIjd6WQgC3"
+   ],
+   "winner": null,
+   "scoreP1": null,
+   "scoreP2": null,
+   "label": "R1 Grupo A2 • Jogo 1",
+   "_gameNum": 79
+  },
+  {
+   "id": "match-rr-r1-g26-1-1785708005103",
+   "round": 1,
+   "roundIndex": 0,
+   "isMonarch": true,
+   "monarchGroup": 26,
+   "p1": "Raquel Unger / MDelia Fernandez",
+   "p2": "Monica Rossi / Nei Almeida",
+   "team1": [
+    "Raquel Unger",
+    "MDelia Fernandez"
+   ],
+   "team2": [
+    "Monica Rossi",
+    "Nei Almeida"
+   ],
+   "team1Uids": [
+    "X3B8VQ6D2sQAnA7gWYWuHgZgWbl2",
+    "vfnXkEcUfGUH5MyhQRuOkuab9W02"
+   ],
+   "team2Uids": [
+    "ob2edzJ6frNO2aTBVTU07Na2xRT2",
+    "ZFKs7TCWUHabKiU60aDIjd6WQgC3"
+   ],
+   "winner": null,
+   "scoreP1": null,
+   "scoreP2": null,
+   "label": "R1 Grupo A2 • Jogo 2",
+   "_gameNum": 80
+  },
+  {
+   "id": "match-rr-r1-g26-2-1785708005103",
+   "round": 1,
+   "roundIndex": 0,
+   "isMonarch": true,
+   "monarchGroup": 26,
+   "p1": "Raquel Unger / Nei Almeida",
+   "p2": "Monica Rossi / MDelia Fernandez",
+   "team1": [
+    "Raquel Unger",
+    "Nei Almeida"
+   ],
+   "team2": [
+    "Monica Rossi",
+    "MDelia Fernandez"
+   ],
+   "team1Uids": [
+    "X3B8VQ6D2sQAnA7gWYWuHgZgWbl2",
+    "ZFKs7TCWUHabKiU60aDIjd6WQgC3"
+   ],
+   "team2Uids": [
+    "ob2edzJ6frNO2aTBVTU07Na2xRT2",
+    "vfnXkEcUfGUH5MyhQRuOkuab9W02"
+   ],
+   "winner": null,
+   "scoreP1": null,
+   "scoreP2": null,
+   "label": "R1 Grupo A2 • Jogo 3",
+   "_gameNum": 81
+  }
+ ],
+ "participants": [
+  {
+   "wasUncategorized": true,
+   "enrollSeq": 6,
+   "category": "C",
+   "ligaActive": true,
+   "categoryCommFields": [
+    "habilidade"
+   ],
+   "selfEnrolled": true,
+   "categorySource": "organizador",
+   "categories": [
+    "C"
+   ],
+   "uid": "X3B8VQ6D2sQAnA7gWYWuHgZgWbl2",
+   "categoryCommPending": "habilidade",
+   "categoryCommAt": "2026-06-11T22:08:23.136Z"
+  },
+  {
+   "wasUncategorized": true,
+   "uid": "ob2edzJ6frNO2aTBVTU07Na2xRT2",
+   "categories": [
+    "C"
+   ],
+   "categorySource": "perfil",
+   "selfEnrolled": true,
+   "enrollSeq": 15,
+   "category": "C",
+   "addedAt": "2026-05-31T16:41:21.980Z",
+   "ligaActive": true
+  },
+  {
+   "genderSource": "organizador",
+   "categories": [
+    "Fem C"
+   ],
+   "categorySource": "organizador",
+   "selfEnrolled": true,
+   "categoryCommAt": "2026-06-11T22:08:31.645Z",
+   "categoryCommPending": "habilidade",
+   "uid": "0Jmnsh6oTrO2zgWPzv0SzHIfjnH2",
+   "ligaActive": true,
+   "category": "Fem C",
+   "enrollSeq": 32,
+   "categoryCommFields": [
+    "habilidade"
+   ]
+  },
+  {
+   "categories": [
+    "C"
+   ],
+   "selfEnrolled": true,
+   "categorySource": "organizador",
+   "uid": "wyzumHJXI4Q6V3r8C9XCELCBkB32",
+   "categoryCommPending": "habilidade",
+   "categoryCommAt": "2026-06-11T22:08:40.490Z",
+   "category": "C",
+   "enrollSeq": 48,
+   "ligaActive": true,
+   "addedAt": "2026-06-06T14:40:24.015Z",
+   "categoryCommFields": [
+    "habilidade"
+   ]
+  },
+  {
+   "enrollSeq": 52,
+   "category": "D",
+   "ligaActive": true,
+   "addedAt": "2026-06-06T15:42:23.894Z",
+   "categoryCommFields": [
+    "habilidade"
+   ],
+   "selfEnrolled": true,
+   "categorySource": "organizador",
+   "categories": [
+    "D"
+   ],
+   "categoryCommPending": "habilidade",
+   "uid": "6wg8V1INV5dqzqrEqg0fIAlUpeB2",
+   "categoryCommAt": "2026-06-11T22:08:43.228Z"
+  },
+  {
+   "ligaActive": true,
+   "addedAt": "2026-06-06T15:50:31.826Z",
+   "enrollSeq": 55,
+   "category": "C",
+   "categoryCommFields": [
+    "habilidade"
+   ],
+   "selfEnrolled": true,
+   "categorySource": "organizador",
+   "categories": [
+    "C"
+   ],
+   "categoryCommAt": "2026-06-11T22:08:44.673Z",
+   "uid": "ZFKs7TCWUHabKiU60aDIjd6WQgC3",
+   "categoryCommPending": "habilidade",
+   "genderSource": "organizador"
+  },
+  {
+   "genderSource": "organizador",
+   "categorySource": "organizador",
+   "categories": [
+    "D"
+   ],
+   "selfEnrolled": true,
+   "uid": "aByf1sETT0NCUCzKzT5o8iG5iPG3",
+   "categoryCommPending": "habilidade",
+   "categoryCommAt": "2026-06-11T22:08:53.409Z",
+   "category": "D",
+   "enrollSeq": 73,
+   "ligaActive": true,
+   "addedAt": "2026-06-11T16:18:50.156Z",
+   "categoryCommFields": [
+    "habilidade"
+   ]
+  },
+  {
+   "category": "D",
+   "enrollSeq": 75,
+   "addedAt": "2026-06-11T21:08:22.036Z",
+   "ligaActive": true,
+   "categoryCommFields": [
+    "habilidade"
+   ],
+   "selfEnrolled": true,
+   "categorySource": "organizador",
+   "categories": [
+    "D"
+   ],
+   "categoryCommPending": "habilidade",
+   "uid": "vfnXkEcUfGUH5MyhQRuOkuab9W02",
+   "categoryCommAt": "2026-06-11T22:08:54.521Z",
+   "genderSource": "organizador"
+  },
+  {
+   "uid": "eRULAyk38QMEVaencbs60ycUkfv2",
+   "selfEnrolled": true,
+   "categorySource": "inscricao",
+   "categories": [
+    "C"
+   ],
+   "enrollSeq": 78,
+   "category": "C",
+   "addedAt": "2026-06-12T11:07:03.401Z",
+   "ligaActive": true
+  },
+  {
+   "genderSource": "organizador",
+   "categorySource": "organizador",
+   "categories": [
+    "Fem D"
+   ],
+   "selfEnrolled": true,
+   "uid": "wihsAMFnxTSf915MD7tDL7EQw6t2",
+   "addedAt": "2026-06-14T22:52:01.782Z",
+   "ligaActive": true,
+   "category": "Fem D",
+   "enrollSeq": 94
+  },
+  {
+   "genderSource": "organizador",
+   "categories": [
+    "Masc C"
+   ],
+   "selfEnrolled": true,
+   "categorySource": "organizador",
+   "uid": "yVt3y6LK0pVIIjak9L4LO8LZqkl1",
+   "category": "Masc C",
+   "enrollSeq": 111,
+   "ligaActive": true,
+   "addedAt": "2026-07-30T21:26:05.611Z"
+  },
+  {
+   "ligaActive": true,
+   "addedAt": "2026-08-02T15:42:51.577Z",
+   "category": "Fem D",
+   "enrollSeq": 115,
+   "selfEnrolled": true,
+   "categories": [
+    "Fem D"
+   ],
+   "categorySource": "organizador",
+   "uid": "LeeS4rKmEZh1yoB9Xjkp2vQ5IwB2",
+   "genderSource": "organizador"
+  }
+ ]
+}

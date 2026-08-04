@@ -44,18 +44,48 @@ function loadBg(stored) {
   return { sandbox, store };
 }
 
-// ── 1. A espera NUNCA é constante (robô) e respeita o piso humano ──
+// ── 1. RÁPIDO POR PADRÃO, e nunca com intervalo cravado ──
+// REGRA TROCADA EM 31/jul/2026, a pedido do dono e por medição. A calibragem antiga imitava
+// alguém lendo página por página (piso 1,8s, uma por vez): o histórico da Kelly são ~20
+// páginas e isso deu 7 MINUTOS pra 5 torneios, enquanto ele abriria as mesmas páginas no
+// navegador em segundos. "Demora mais mas não falha" virou "demora tanto que parece
+// quebrado" — e aí a leitura sadia é cancelada, que é o pior desfecho possível.
+// A proteção real nunca foi o passo largo preventivo: é o FREIO ao apanhar (bloco 2, que
+// segue intacto) e obedecer o retry-after. Começamos rápido; desaceleramos com motivo.
 {
   const { sandbox } = loadBg();
   const waits = [];
   for (let i = 0; i < 400; i++) waits.push(sandbox._qWait());
   const uniq = new Set(waits);
-  ok(uniq.size > 300, 'espera tem que variar a cada operação (únicos: ' + uniq.size + '/400) — intervalo cravado é assinatura de robô');
-  ok(Math.min(...waits) >= 1500, 'nenhuma espera abaixo do plausível humano (min: ' + Math.min(...waits) + 'ms)');
+  ok(uniq.size > 150, 'a espera continua VARIANDO (únicos: ' + uniq.size + '/400) — intervalo cravado é assinatura de robô');
   const avg = waits.reduce((a, b) => a + b, 0) / waits.length;
-  ok(avg > 2000 && avg < 6000, 'ritmo médio de leitura humana entre páginas (avg: ' + Math.round(avg) + 'ms)');
-  // Uma pessoa às vezes para mais tempo: a cauda longa tem que existir.
-  ok(waits.some((w) => w > 6000), 'tem que haver pausas longas ocasionais (olhar pro lado)');
+  // AJUSTADO EM 31/jul por MEDIÇÃO, não por gosto: 350ms com 3 em paralelo derrubou o
+  // acesso ("não encontrou nenhum jogo" = bloqueio antes de ler qualquer coisa); 2600ms
+  // fazia o dono cancelar leitura sadia. O meio-termo fica aqui, e cada bloqueio agora
+  // aparece na tela — o próximo ajuste sai de número.
+  ok(avg < 1600, 'passo de fábrica continua bem abaixo do antigo (avg: ' + Math.round(avg) + 'ms, era > 2000ms)');
+  ok(Math.min(...waits) >= 150, 'ainda existe um mínimo — nada de rajada sem espaçamento (min: ' + Math.min(...waits) + 'ms)');
+  ok(!waits.some((w) => w > 6000), 'sem pausas longas enquanto o servidor não reclamou (elas custavam 2–6s à toa)');
+}
+
+// ── 1b. As pausas longas VOLTAM quando estamos de castigo ──
+{
+  const { sandbox } = loadBg();
+  sandbox._qNoteStatus(429);                       // apanhou → passo largo
+  sandbox._qNoteStatus(429);
+  const waits = [];
+  for (let i = 0; i < 600; i++) waits.push(sandbox._qWait());
+  ok(sandbox._q.gap > 1500, 'depois de apanhar o passo está largo (' + sandbox._q.gap + 'ms)');
+  ok(waits.some((w) => w > sandbox._q.gap * 1.8), 'e a cauda longa reaparece — ir devagar tem que parecer gente');
+}
+
+// ── 1c. PARALELISMO: várias páginas ao mesmo tempo ──
+{
+  const { sandbox } = loadBg();
+  ok(sandbox._Q_SLOTS >= 2, 'a fila tem mais de uma corrente (slots: ' + sandbox._Q_SLOTS + ')');
+  const cs = sandbox._qChains();
+  ok(cs.length === sandbox._Q_SLOTS, 'e as correntes existem de fato');
+  ok(/_q\.gap/.test(sandbox._qWait.toString()), 'todas compartilham o MESMO passo — o freio vale pra todas');
 }
 
 // ── 2. Bloqueio alarga o passo E sobe o piso ──
@@ -93,7 +123,20 @@ function loadBg(stored) {
   ok(sandbox._q.gap === gapApos, 'um sucesso isolado NÃO pode acelerar (era o bug: ×0.85 a cada sucesso → rajava de novo)');
   for (let i = 0; i < 200; i++) sandbox._qNoteStatus(200);
   ok(sandbox._q.gap < gapApos, 'depois de MUITO sucesso seguido, afrouxa aos poucos');
-  ok(sandbox._q.gap >= piso, 'nunca volta abaixo do piso aprendido (gap ' + sandbox._q.gap + ' >= piso ' + piso + ')');
+  // REGRA MUDADA EM 30/jul/2026, por medição. Antes o piso aprendido era PERMANENTE — e
+  // isso deixava a leitura lenta pra sempre: medido em produção, o letzplay respondendo em
+  // 0,3–2,2 s sem limitar nada e a nossa fila ainda esperando 10–25 s por operação por
+  // causa de um bloqueio de outro dia. O piso agora DECAI com sucesso sustentado, mas
+  // nunca abaixo do piso de fábrica, e a recuperação continua lenta e assimétrica.
+  ok(sandbox._q.gap < piso, 'com sucesso sustentado, o piso aprendido DECAI (gap ' + sandbox._q.gap + ' < piso antigo ' + piso + ')');
+  ok(sandbox._q.floor >= 250, 'mas nunca abaixo do piso de fábrica (piso ' + sandbox._q.floor + ')');
+  ok(sandbox._q.gap >= 200, 'e o passo idem — decair não é virar rajada');
+  {
+    // e apanhar de novo volta a frear na hora
+    const antes = sandbox._q.gap;
+    sandbox._qNoteStatus(429);
+    ok(sandbox._q.gap > antes, 'depois de decair, um bloqueio novo freia outra vez');
+  }
 }
 
 // ── 5. O passo aprendido SOBREVIVE à reciclagem do service worker (MV3) ──

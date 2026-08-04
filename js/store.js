@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.6.3';
+window.SCOREPLACE_VERSION = '1.7.6';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -108,7 +108,7 @@ try {
 // Auto-atualização: quando a extensão estiver publicada na Chrome Web Store, o
 // Chrome atualiza sozinho e este gate para de disparar. Enquanto não está, o gate
 // BLOQUEIA e pede a atualização manual pelo zip — de propósito.
-window.SP_EXT_VERSION = '1.48';
+window.SP_EXT_VERSION = '1.95';
 // O zip da versão exigida, servido pelo próprio site (fica na raiz do repo → GitHub Pages
 // entrega). Derivado de SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não
 // aceita, e a trava de deploy (scripts/check-ext-version.js) garante que o arquivo existe.
@@ -386,6 +386,21 @@ window._spCompByRef = function (imp, g) {
 window._spCompByRefStr = function (imp, ref) {
   if (!imp || !ref) return null;
   return _spBuildCompIdx(imp)[ref] || null;
+};
+
+// Quantos jogos um letzplayImport REPRESENTA — não quantos couberam no array dele.
+//
+// O doc do perfil/scan carrega só os jogos mais RECENTES (o acervo completo vive em
+// letzplayTournaments/{comp}/matches/{gid}, que não tem teto de 1MiB), então `games.length`
+// mede o TAMANHO DO DOC, não o histórico. Quem confunde os dois lê um perfil grande como
+// eternamente incompleto: a barra travava em "600 de 2000" e o botão nunca saía de
+// "▶️ Continuar de onde parou" mesmo com tudo já lido. Use isto em qualquer lugar que
+// signifique "quanto desta pessoa nós temos": completude, comparação entre imports, barras,
+// contagens na tela. `games.length` só onde a pergunta é literalmente sobre o array.
+window._lzGamesTotal = function (imp) {
+  if (!imp) return 0;
+  if (imp.gamesTotal != null) return imp.gamesTotal;
+  return Array.isArray(imp.games) ? imp.games.length : 0;
 };
 
 window._spGameComp = function (imp, g) {
@@ -959,6 +974,62 @@ window._isTestIdentity = function () {
 // (3) invisível pra não-dev. `sandboxOf` aponta pro original; no original, `sandboxId`
 // aponta de volta. Ver memória project_sandbox_tournament.
 window._isSandboxTournament = function (t) { return !!(t && t.isSandbox === true); };
+// É SANDBOX, sabendo só a REFERÊNCIA (id/nome) — sem depender do doc estar carregado.
+// Existe porque o doc do SB pode não estar na lista local (só o dev recebe) e, pior, pode
+// ter sido APAGADO: apagar o doc do torneio NÃO apaga a subcoleção `results`, então os
+// placares do SB continuam vivos como ÓRFÃOS e respondem à consulta collectionGroup por
+// uid. Medido em 01/ago/2026 no perfil da Lucia Helena: 10 "jogos", 6 deles de 4 sandboxes
+// já apagados (`tour_..._sb`). Os 3 sinais (id, nome, doc) são os mesmos que
+// _sendUserNotification já usava — agora numa fonte única, usada também pelas STATS.
+// Ver [[project_sandbox_tournament]] e [[project_game_counts_only_with_score_partner_opponent]].
+window._isSandboxRef = function (tournamentId, tournamentName) {
+  var id = String(tournamentId || '');
+  if (/_sb$/.test(id)) return true;                              // convenção do clone: tour_<ts>_sb
+  if (/^\(SB\)/.test(String(tournamentName || ''))) return true; // o clone prefixa "(SB) "
+  if (id && typeof window._findTournamentById === 'function') {
+    var t = window._findTournamentById(id);
+    if (t && t.isSandbox === true) return true;
+  }
+  return false;
+};
+// ── TORNEIO ENCERRADO AUTOMATICAMENTE POR INATIVIDADE ────────────────────────
+// Pedido do dono (02/ago/2026): torneio de 1 dia que nunca chegou à final e que ninguém
+// encerrou fica na vitrine de todo usuário novo. A CF `sweepAbandonedTournaments` avisa o
+// organizador 48h antes e depois encerra — a REGRA vive só no servidor (functions/
+// abandon-core.js); aqui o cliente só LÊ a marca e obedece.
+//
+// `autoClosed` não é "o torneio acabou": é "o torneio parou". Por isso, e por ordem
+// explícita do dono (_"encerrar não deve fechar a classificação"_), ele NÃO produz pódio,
+// classificação final, troféu nem título — e a única ferramenta do organizador vira Reabrir.
+window._isAutoClosed = function (t) {
+  return !!(t && t.autoClosed === true && t.status === 'finished');
+};
+// Torneio que ainda não teve NENHUM placar e já envelheceu na vitrine. Decisão de LEITURA
+// (nada é escrito): sumir da descoberta é reversível e não inventa um "encerrado" de pódio
+// vazio pra quem nunca jogou. Espelha SEM_JOGO_SUMICO do abandon-core (30 dias).
+window._SEM_JOGO_SUMICO_DIAS = 30;
+window._isTorneioParadoSemJogo = function (t) {
+  if (!t || t.status === 'finished') return false;
+  if (window._isLigaFormat && window._isLigaFormat(t)) return false;   // temporada contínua
+  var jogou = (typeof window._tournamentHasAnyScore === 'function') ? window._tournamentHasAnyScore(t) : null;
+  if (jogou === null) return false;
+  if (jogou) return false;
+  var nasceu = Date.parse(String(t.createdAt || t.updatedAt || ''));
+  if (!isFinite(nasceu)) return false;
+  return (Date.now() - nasceu) >= window._SEM_JOGO_SUMICO_DIAS * 86400000;
+};
+// Algum jogo deste torneio já teve placar? (estrutura local — o cliente não lê `results`
+// de todo torneio da vitrine). Mesma definição do servidor: placar dos DOIS lados.
+window._tournamentHasAnyScore = function (t) {
+  var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : null;
+  if (!all) return null;
+  for (var i = 0; i < all.length; i++) {
+    var m = all[i];
+    if (m && m.scoreP1 != null && m.scoreP2 != null) return true;
+    if (m && m.winner) return true;
+  }
+  return false;
+};
 // A ROTA atual está sobre um torneio SANDBOX? (detalhe/bracket/chamada/etc.). Fonte ÚNICA
 // usada pelo banner 🧪 SANDBOX e pelo selo de diagnóstico do sorteio (_dtrace) — os dois só
 // aparecem em SB. O SB roda em produção, então o sinal é pela ROTA, nunca por hostname.
@@ -3901,6 +3972,51 @@ window._avatarHtml = function(pp, size) {
   return visibleCircle;
 };
 
+// ── DATA: UMA LEITURA SÓ, SEM AMBIGUIDADE (canônico) ─────────────────────────────
+// `Date.parse("10/03/26")` devolve 3 de OUTUBRO: o motor assume mês/dia (americano).
+// No Brasil — e no letzplay, que é a fonte que o app lê — 10/03 é 10 de MARÇO. O erro é
+// INVISÍVEL quando o dia passa de 12 (20/06 não pode ser mês, então acerta por acaso),
+// então ele sobrevive a qualquer teste feito com uma data "qualquer".
+// Medido em 31/jul/2026 no perfil do dono: jogos de março e maio apareciam em outubro e
+// agosto — no FUTURO — e, como a lista é ordenada por data, subiam pro topo.
+//
+// A ordem certa, e a razão de existir uma função só:
+//   1) ISO (aaaa-mm-dd) — é o que o JSON do letzplay entrega, e não tem convenção de país;
+//   2) dd/mm/aa(aa) pelos COMPONENTES (nunca por string: string carrega fuso);
+//   3) "12 de jul. de 2026" (mês por extenso em pt);
+//   4) só então Date.parse, e SÓ se não houver barra — com barra é sempre ambíguo.
+// `opts.futuroProibido` derruba data à frente de hoje: jogo jogado não acontece amanhã.
+window._SP_MES_PT = { jan: 0, fev: 1, mar: 2, abr: 3, mai: 4, jun: 5, jul: 6, ago: 7, set: 8, out: 9, nov: 10, dez: 11 };
+window._spTsData = function (raw, opts) {
+  opts = opts || {};
+  var fallback = (opts.fallback != null) ? opts.fallback : 0;
+  if (raw == null || raw === '') return fallback;
+  if (typeof raw === 'number') return _spClampFuturo(raw, opts, fallback);
+  if (raw instanceof Date) return _spClampFuturo(raw.getTime(), opts, fallback);
+  var s = String(raw).trim();
+  var t;
+  var iso = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) { t = new Date(+iso[1], (+iso[2]) - 1, +iso[3]).getTime(); if (!isNaN(t)) return _spClampFuturo(t, opts, fallback); }
+  var br = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (br) {
+    var y = +br[3]; if (y < 100) y += 2000;
+    t = new Date(y, (+br[2]) - 1, +br[1]).getTime();
+    if (!isNaN(t)) return _spClampFuturo(t, opts, fallback);
+  }
+  var ext = s.toLowerCase().match(/(\d{1,2})[^\d]{1,12}(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[^\d]{0,12}(\d{2,4})/);
+  if (ext && window._SP_MES_PT[ext[2]] != null) {
+    var y2 = +ext[3]; if (y2 < 100) y2 += 2000;
+    t = new Date(y2, window._SP_MES_PT[ext[2]], +ext[1]).getTime();
+    if (!isNaN(t)) return _spClampFuturo(t, opts, fallback);
+  }
+  if (s.indexOf('/') === -1) { t = Date.parse(s); if (!isNaN(t)) return _spClampFuturo(t, opts, fallback); }
+  return fallback;
+};
+function _spClampFuturo(ts, opts, fallback) {
+  if (!opts.futuroProibido) return ts;
+  return (ts > Date.now() + 86400000) ? fallback : ts;
+}
+
 // v1.8.8-beta: canonical HH:MM formatter — accepts Date, timestamp (number)
 // or ISO string. Eliminates the repeated padStart(2,'0') pattern spread
 // across venues.js, presence.js, dashboard.js and bracket-ui.js.
@@ -5086,6 +5202,89 @@ window._haversineKm = function(lat1, lon1, lat2, lon2) {
 };
 
 // ─── v2.3.52: badges de perfil do participante (gênero · nível · faixa etária) ──
+// ── "EU ESTOU INSCRITO?" — A PERGUNTA QUE O ORGANIZADOR MAIS RECEBE ──────────────
+// Pedido do dono (02/ago/2026): _"nessa lista, vamos colocar o card do usuário no topo
+// absoluto, acima até dos organizadores. assim eles param de perguntar ao organizador se
+// estão inscritos"_ — e, logo depois: _"fazer isso em todas as listas de participantes"_.
+//
+// Numa lista de 105 nomes, achar o próprio é trabalho; e quem não acha pergunta. O card
+// fixo no topo responde antes de a pessoa procurar — inclusive quando a resposta é NÃO,
+// que é justamente o caso em que ela ia perguntar.
+//
+// Identidade por UID, sempre (nome não identifica ninguém). Cobre a dupla: `_participantUids`
+// devolve os uids de todos os membros de uma inscrição.
+window._meuCardNoTopo = function (t, opts) {
+  opts = opts || {};
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var uid = cu && cu.uid;
+  if (!t || !uid) return '';
+  var parts = (typeof window._getCompetitors === 'function') ? window._getCompetitors(t)
+            : (Array.isArray(t.participants) ? t.participants : []);
+  var uidsDe = (typeof window._participantUids === 'function') ? window._participantUids
+             : function (p) { return (p && p.uid) ? [p.uid] : []; };
+  var eu = null;
+  (parts || []).forEach(function (p) {
+    if (eu || !p) return;
+    if ((uidsDe(p) || []).indexOf(uid) >= 0) eu = p;
+  });
+
+  var nome = window._safeHtml((cu.displayName || 'Você'));
+  var foto = (typeof window._profileAvatarUrl === 'function')
+    ? window._profileAvatarUrl(cu.displayName, cu.photoURL, 40) : (cu.photoURL || '');
+  var avatar = foto
+    ? '<img src="' + window._safeHtml(foto) + '" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">'
+    : '<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.1);flex-shrink:0;"></div>';
+
+  if (!eu) {
+    // NÃO INSCRITO também é resposta — e é a que faz a pessoa procurar o organizador.
+    return '<div id="sp-meu-card" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;' +
+      'background:rgba(148,163,184,0.10);border:1px solid rgba(148,163,184,0.28);">' + avatar +
+      '<div style="min-width:0;"><div style="font-weight:800;font-size:0.9rem;color:var(--text-bright,#e8ecf3);">' + nome + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);">Você <b>não está inscrito</b> neste torneio.</div></div></div>';
+  }
+
+  // categoria e número de inscrição, quando existirem — é o que ela confere depois de
+  // saber que está inscrita
+  var cats = [];
+  if (Array.isArray(eu.categories) && eu.categories.length) cats = eu.categories.slice();
+  else if (eu.category) cats = [eu.category];
+  var chips = cats.map(function (c) {
+    return '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;' +
+      'background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.35);color:#a5b4fc;">' +
+      window._safeHtml(String(c)) + '</span>';
+  }).join(' ');
+  var seq = (eu.enrollSeq != null) ? eu.enrollSeq : null;
+  var numero = (seq != null)
+    ? '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(255,255,255,0.06);' +
+      'border:1px solid var(--border-color,rgba(255,255,255,0.12));color:var(--text-muted);">nº ' + window._safeHtml(String(seq)) + '</span>'
+    : '';
+  // presença, quando a chamada está aberta
+  var pres = '';
+  var _nomeEu = eu.displayName || eu.name || cu.displayName || '';
+  if (Array.isArray(t.checkedIn) && _nomeEu && t.checkedIn.indexOf(_nomeEu) >= 0) {
+    pres = '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(16,185,129,0.18);' +
+      'border:1px solid rgba(16,185,129,0.38);color:#6ee7b7;">✓ presente</span>';
+  } else if (Array.isArray(t.absent) && _nomeEu && t.absent.indexOf(_nomeEu) >= 0) {
+    pres = '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(239,68,68,0.16);' +
+      'border:1px solid rgba(239,68,68,0.35);color:#fca5a5;">ausente</span>';
+  }
+  var dupla = '';
+  if (eu.p1Name && eu.p2Name) {
+    var parceiro = (eu.p1Uid === uid) ? eu.p2Name : eu.p1Name;
+    if (parceiro) dupla = '<div style="font-size:0.76rem;color:var(--text-muted);margin-top:1px;">com <b>' +
+      window._safeHtml(parceiro) + '</b></div>';
+  }
+  return '<div id="sp-meu-card" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;' +
+    'background:linear-gradient(135deg,rgba(16,185,129,0.16),rgba(5,150,105,0.10));border:1px solid rgba(16,185,129,0.40);">' + avatar +
+    '<div style="min-width:0;flex:1;">' +
+      '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+        '<span style="font-weight:800;font-size:0.9rem;color:var(--text-bright,#e8ecf3);">' + nome + '</span>' +
+        '<span style="font-size:0.7rem;font-weight:800;color:#6ee7b7;">✅ você está inscrito</span>' +
+      '</div>' + dupla +
+      ((chips || numero || pres) ? '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">' + chips + ' ' + numero + ' ' + pres + '</div>' : '') +
+    '</div></div>';
+};
+
 // Usados no card de inscritos — tanto na seção "Inscritos Confirmados" do detalhe
 // do torneio (tournaments.js) quanto na página #participants (participants.js).
 // Single source of truth pra não divergir entre as duas telas. Visível só pro
@@ -6330,7 +6529,50 @@ window.AppStore = {
   // do chamador é só pro estado imediato; a persistência do histórico é aqui (senão
   // a entrada some, já que o save é re-aplicado no fresco, não no doc local inteiro).
   async commitResultTx(tournamentId, matchId, payload, logMessage) {
-    var r = await this.commitTournamentTx(tournamentId, function (freshT) {
+    // v1.7: PRIMEIRO tenta a CF `applyMatchResult`, que valida no SERVIDOR quem pode
+    // lançar (resultEntry por fase, lado do jogador por uid, fase da negociação) e aplica
+    // com a MESMA _applyResultToTournament sobre o doc fresco.
+    //
+    // QUEDA AUTOMÁTICA, e é deliberada: QUALQUER falha — CF indisponível, rede, ou até
+    // recusa — cai no caminho local de sempre. O pior caso vira exatamente o comportamento
+    // de hoje, então o ciclo de lançamento por participante não pode regredir por causa
+    // desta estreia. A CF ainda NÃO é autoridade (as rules seguem deixando o participante
+    // escrever `matches` direto, pro app de loja antigo continuar lançando placar na
+    // quadra) — então cair no local não perde segurança que exista hoje.
+    // Ver [[project_result_launch_cf_evaluation]] §5.
+    var _viaCF = false;
+    if (typeof window._callApplyMatchResult === 'function') {
+      try {
+        var _res = await window._callApplyMatchResult({
+          tournamentId: String(tournamentId), matchId: String(matchId),
+          payload: payload, logMessage: logMessage || ''
+        });
+        var _d = (_res && _res.data) || {};
+        if (_d.ok) {
+          _viaCF = true;
+          // Sincroniza o local com o que o servidor gravou (mesmo padrão do drawRound):
+          // o listener também traria, mas esperar por ele deixaria a tela atrás do save.
+          if (_d.tournament) {
+            var _lt = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
+            if (_lt) {
+              Object.keys(_d.tournament).forEach(function (k) { _lt[k] = _d.tournament[k]; });
+              try { this._saveToCache(); } catch (_eC) {}
+            }
+          }
+        } else {
+          // Recusa do servidor: registra pra diagnóstico e deixa o caminho local decidir.
+          window._lastSaveError = { tournamentId: tournamentId, matchId: matchId,
+            area: 'applyMatchResult', reason: _d.reason || 'unknown', at: new Date().toISOString() };
+          if (window._warn) window._warn('[applyMatchResult] recusou: ' + (_d.reason || '?') + ' — caindo no caminho local');
+        }
+      } catch (e) {
+        window._lastSaveError = { tournamentId: tournamentId, matchId: matchId,
+          area: 'applyMatchResult', code: (e && e.code) || '', message: (e && e.message) || String(e),
+          at: new Date().toISOString() };
+        if (window._warn) window._warn('[applyMatchResult] falhou (' + ((e && e.code) || '?') + ') — caindo no caminho local');
+      }
+    }
+    var r = _viaCF ? true : await this.commitTournamentTx(tournamentId, function (freshT) {
       window._applyResultToTournament(freshT, matchId, payload);
       if (logMessage) {
         if (!Array.isArray(freshT.history)) freshT.history = [];
@@ -7342,9 +7584,9 @@ window.AppStore = {
       // "Só atualiza se desatualizado": aplica o scan só quando ele traz MAIS jogos que o
       // perfil atual (ou quando não há perfil). Um re-scan que não trouxe jogo novo não
       // mexe no perfil (nem troca a procedência à toa).
-      var fiGames = Array.isArray(fi.games) ? fi.games.length : 0;
+      var fiGames = window._lzGamesTotal(fi);
       var curImp = cu.letzplayImport;
-      var curGames = (curImp && Array.isArray(curImp.games)) ? curImp.games.length : 0;
+      var curGames = window._lzGamesTotal(curImp);
       if (!curImp || fiGames > curGames) {
         fi.importedVia = 'organizer';
         fi.importedByName = data.scannedByName || null;
@@ -8563,11 +8805,23 @@ window._tournamentDateRange = function (t) {
     var m = new Date(s).getTime();
     return isNaN(m) ? null : m;
   }
-  // v3.1.38: lê DIRETO das fases (toda fase tem datas pós-migração) — início mais cedo,
-  // fim mais tardio. Null-guard pro top-level só quando não há phases / fase sem data.
+  // ── A REGRA (dono, ago/2026), válida pra QUALQUER número de fases ────────────────────────
+  //   início = MIN(todas as datas de início)   ·   fim = MAX(todas as datas de fim)
+  // "Todas" = o top-level MAIS as N fases. Não é "a fase 0 e a última do array": a fase que
+  // começa mais cedo pode não ser a primeira, e a que termina por último pode ser a do meio —
+  // por isso min/max, e não índice. Fase sem data simplesmente não entra no conjunto.
+  //
+  // Por que o TOP-LEVEL é um candidato como outro qualquer (v1.6.80): o box "📅 Datas da fase"
+  // do formulário pertence à fase INICIAL e grava em t.startDate/t.endDate. Se ele ficasse de
+  // fora quando existem `phases`, um término de fase mais CEDO encolheria a janela do torneio.
+  // A janela nunca encolhe — ela é o envelope de tudo.
+  //
+  // Data sem hora: início vale 00:00 e fim vale 23:59 (prazo acaba no FIM DO DIA). Esta é a
+  // ÚNICA implementação da regra — _tournamentScheduledWindow (tournaments-utils) converte
+  // daqui pra ms, e tests/convite-data-multifase.test.js exige que os dois concordem.
   if (!Array.isArray(t.phases) || !t.phases.length) return { start: t.startDate || '', end: t.endDate || '' };
   var startStr = '', endStr = '', startM = null, endM = null;
-  t.phases.forEach(function (ph) {
+  [{ startDate: t.startDate, endDate: t.endDate }].concat(t.phases).forEach(function (ph) {
     if (!ph) return;
     if (ph.endDate) {
       var eStr = ph.endDate + (ph.endTime ? ('T' + ph.endTime) : '');
@@ -8583,6 +8837,25 @@ window._tournamentDateRange = function (t) {
   if (!startStr) startStr = t.startDate || '';
   if (!endStr) endStr = t.endDate || '';
   return { start: startStr, end: endStr };
+};
+
+// v1.6.83: FIM DO TORNEIO — a leitura canônica, em UMA chamada. Existe pra que trocar
+// `t.endDate` por "o fim de verdade" seja uma substituição de uma linha em qualquer render,
+// e pra que um grep por `t.endDate` em código de exibição acuse o que ainda está errado.
+// t.endDate CRU é o fim da fase INICIAL (o box "📅 Datas da fase" do formulário mora dentro
+// dela) — num torneio de 2 fases ele mente sobre quando o torneio acaba.
+// Use SEMPRE que for MOSTRAR/ANUNCIAR o encerramento (card, convite, folheto, CSV, agenda,
+// contagem regressiva, ficha de regras). Para a janela de UM DIA de ocupação de quadra
+// (presença virtual) continue com a data crua — lá o assunto é a sessão, não o torneio.
+window._tournamentEndDate = function (t) {
+  var r = (typeof window._tournamentDateRange === 'function') ? window._tournamentDateRange(t) : null;
+  return (r && r.end) || (t && t.endDate) || '';
+};
+// Idem em milissegundos (NaN quando não há data), pra comparações de prazo/contagem regressiva.
+window._tournamentEndMs = function (t) {
+  var s = window._tournamentEndDate(t);
+  if (!s) return NaN;
+  return new Date(String(s).indexOf('T') > -1 ? s : (s + 'T23:59')).getTime();
 };
 
 // ─── INSCRITOS = participants[]. Ponto. ───────────────────────────────────────

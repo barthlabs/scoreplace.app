@@ -4843,8 +4843,31 @@ async function simulateLoginSuccess(user) {
     var curTheme = document.documentElement.getAttribute('data-theme') || 'dark';
     if (typeof window._applyProfileThemeUI === 'function') window._applyProfileThemeUI(curTheme);
     // Renderizar emails + celulares vinculados
+    if (typeof window._profileRenderAuthProviders === 'function') window._profileRenderAuthProviders();
     if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
     if (typeof window._profileRenderLinkedPhones === 'function') window._profileRenderLinkedPhones();
+
+    // ── BASELINE DE HIDRATAÇÃO ──────────────────────────────────────────
+    // Registro do que o formulário REALMENTE MOSTROU pra pessoa. É esse
+    // registro que dá ao save a diferença que faltava entre:
+    //   (a) campo vazio porque ela APAGOU   → tem que sumir do Firestore;
+    //   (b) campo vazio porque o perfil ainda não carregou (race) → preservar.
+    // Sem ele, o save só sabia "está vazio" e escolhia sempre preservar —
+    // por isso a data de nascimento voltava depois de apagada.
+    var _baseVal = function (id) {
+      var el = document.getElementById(id);
+      return el ? String(el.value == null ? '' : el.value).trim() : '';
+    };
+    window._profileFormBaseline = {
+      at: Date.now(),
+      birthDate: _baseVal('profile-edit-birthdate'),
+      gender: _baseVal('profile-edit-gender'),
+      city: _baseVal('profile-edit-city'),
+      letzplayHandle: _baseVal('profile-edit-letzplay'),
+      preferredCeps: _baseVal('profile-edit-ceps'),
+      preferredSports: Array.isArray(window._profileSelectedSports) ? window._profileSelectedSports.slice() : [],
+      preferredLocations: Array.isArray(window._profileLocations) ? window._profileLocations.slice() : []
+    };
   };
 
   // v1.3.5-beta: perfil agora é uma rota (#profile), não modal-overlay.
@@ -5863,6 +5886,74 @@ function _setupPhoneMask(inputEl, countryCode) {
 // Limita a 10 chars. Conversões pra/de ISO (YYYY-MM-DD) são feitas no load
 // e save — Firestore armazena sempre em ISO pra que a ordenação/queries
 // funcionem independente de locale.
+// ─── Apagar campo do perfil ──────────────────────────────────────────────
+// Campos que a pessoa pode APAGAR (voltar a "não informado"). Nome, e-mail e
+// celular ficam de fora de propósito: são identidade e credencial de login,
+// não informação opcional.
+window._PROFILE_ERASABLE = ['gender', 'birthDate', 'city', 'letzplayHandle',
+                            'preferredCeps', 'preferredSports', 'preferredLocations'];
+
+// Decide quais campos a pessoa APAGOU — a regra inteira, num lugar só.
+//   baseline = o que o formulário MOSTROU quando foi preenchido na tela
+//   values   = o que o formulário tem AGORA, na hora de salvar
+// Campo que estava preenchido e agora está vazio foi apagado por ela.
+// Campo vazio nos DOIS lados não é apagamento: ou nunca teve valor, ou o
+// formulário não chegou a hidratar (race) — nesse caso o valor no Firestore
+// tem que ser preservado, que é a proteção que existe desde a v0.16.6.
+// `age` é derivada da data de nascimento: some junto com ela.
+// OCULTAR CONTATO EXIGE NOME DE EXIBIÇÃO (v1.6.88, regra do dono).
+// Ocultar e-mail/telefone é privacidade PERANTE OS OUTROS USUÁRIOS — o sistema
+// segue usando os dois normalmente (notificação, inscrição, login). O que não
+// pode é a pessoa ficar SEM NOME nenhum: aí ela vira "Usuário" pra todo mundo,
+// inclusive pro organizador na chamada de presença.
+//
+// A decisão é uma função PURA (testável) e SIMULA o resultado com o mesmo
+// _friendlyDisplayName que desenha o nome no app — em vez de repetir a regra
+// dele aqui, que é como as duas versões divergem com o tempo.
+//
+// Três motivos de bloqueio, todos = "não sobra identidade":
+//   nome-é-email  + ocultar e-mail    → escondeu justamente o que era o nome
+//   nome-é-fone   + ocultar telefone  → idem
+//   nome genérico/vazio               → o fallback cai em "Usuário"
+// Retorna { blocked, reason, resolved }.
+window._omitRequiresDisplayName = function (o) {
+  o = o || {};
+  var omitEmail = !!o.omitEmail, omitPhone = !!o.omitPhone;
+  if (!omitEmail && !omitPhone) return { blocked: false, reason: null, resolved: null };
+
+  var nome = String(o.displayName || '').trim();
+  var nomeEhEmail = /@/.test(nome);
+  var nomeEhFone = !nomeEhEmail && /^\+?[\d\s().\-]{6,}$/.test(nome);
+
+  if (omitEmail && nomeEhEmail) return { blocked: true, reason: 'name-is-email', resolved: nome };
+  if (omitPhone && nomeEhFone) return { blocked: true, reason: 'name-is-phone', resolved: nome };
+
+  var resolved = (typeof window._friendlyDisplayName === 'function')
+    ? window._friendlyDisplayName({
+        displayName: nome, email: o.email, phone: o.phone, phoneNumber: o.phoneNumber,
+        phoneCountry: o.phoneCountry, omitEmail: omitEmail, omitPhone: omitPhone
+      })
+    : nome;
+  var vazio = !String(resolved || '').trim() ||
+    (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(resolved));
+  if (vazio && !nomeEhEmail && !nomeEhFone) return { blocked: true, reason: 'no-name', resolved: resolved };
+  return { blocked: false, reason: null, resolved: resolved };
+};
+
+window._profileFieldsToErase = function (baseline, values) {
+  if (!baseline || !values) return [];
+  var _has = function (v) {
+    return Array.isArray(v) ? v.length > 0 : !!String(v == null ? '' : v).trim();
+  };
+  var out = [];
+  window._PROFILE_ERASABLE.forEach(function (k) {
+    if (!(k in values)) return;
+    if (_has(baseline[k]) && !_has(values[k])) out.push(k);
+  });
+  if (out.indexOf('birthDate') !== -1) out.push('age');
+  return out;
+};
+
 window._maskBirthdate = function(el) {
   if (!el) return;
   var digits = (el.value || '').replace(/\D/g, '').slice(0, 8);
@@ -6381,6 +6472,22 @@ function setupProfileModal() {
               '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Enviamos um link de confirmação pro novo e-mail. Ele vira seu login quando você clicar.</span>' +
               '<div id="profile-email-otp" style="display:none;margin-top:8px;font-size:0.78rem;"></div>' +
             '</div>' +
+          '</div>' +
+          // ── Formas de entrar: provedores federados no MESMO uid ──
+          // Firebase aceita N provedores federados por conta (providerData é array).
+          // Vincular Google+Apple no mesmo uid é o que EVITA a conta duplicada —
+          // e é MECANISMO DIFERENTE de linkedEmails/linkedPhones logo abaixo:
+          // aqueles são anotação NOSSA no Firestore e só resolvem login que
+          // termina em SENHA (_uidByProfileEmail/_uidByProfilePhone → o servidor
+          // acha a conta e a pessoa entra com a senha dela). Quem é só-Google ou
+          // só-Apple não tem senha, então ali não vira login nenhum. Aqui o
+          // vínculo mora dentro do próprio Auth: entrar pela Apple devolve o
+          // MESMO uid — sem CF, sem loginRedirects, sem merge, sem apagar conta.
+          '<div style="margin:0 0 10px 0;">' +
+            '<label class="form-label" style="font-size:0.75rem;">🔑 Formas de entrar</label>' +
+            '<div id="profile-auth-providers" style="display:flex;flex-direction:column;gap:6px;"></div>' +
+            '<div id="profile-link-provider-msg" style="display:none;margin-top:6px;font-size:0.78rem;"></div>' +
+            '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">Vincule Google e Apple na mesma conta pra entrar por qualquer um dos dois. Sem isso, entrar pelo outro cria uma conta separada — principalmente com o "Ocultar meu e-mail" da Apple, que dá um endereço novo que não temos como reconhecer.</span>' +
           '</div>' +
           // ── Emails vinculados ──
           '<div style="margin:0 0 6px 0;">' +
@@ -7766,6 +7873,199 @@ function setupProfileModal() {
       });
     };
 
+    // ── Formas de entrar (provedores federados no MESMO uid) ──────────────
+    // Ver o comentário do bloco de UI: isto NÃO é linkedEmails/linkedPhones.
+    // Aqui o vínculo é gravado no Firebase Auth (providerData), então entrar
+    // pelo provedor vinculado devolve o mesmo uid direto.
+    var _PROV_META = {
+      'google.com': { label: 'Google',  bg: 'rgba(66,133,244,0.12)',  bd: 'rgba(66,133,244,0.35)',  fg: '#93b8fb' },
+      'apple.com':  { label: 'Apple',   bg: 'rgba(255,255,255,0.08)', bd: 'rgba(255,255,255,0.25)', fg: 'var(--text-bright)' },
+      'password':   { label: 'Senha',   bg: 'rgba(99,102,241,0.12)',  bd: 'rgba(99,102,241,0.3)',   fg: '#a5b4fc' },
+      'phone':      { label: 'Celular', bg: 'rgba(37,211,102,0.12)',  bd: 'rgba(37,211,102,0.3)',   fg: '#6ee7b7' }
+    };
+
+    window._profileRenderAuthProviders = function () {
+      var box = document.getElementById('profile-auth-providers');
+      if (!box) return;
+      var fbU = (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
+      if (!fbU) { box.innerHTML = ''; return; }
+      var have = {};
+      (fbU.providerData || []).forEach(function (p) { if (p && p.providerId) have[p.providerId] = p; });
+
+      // Chips do que JÁ é login desta conta.
+      var html = Object.keys(have).map(function (pid) {
+        var m = _PROV_META[pid] || { label: pid, bg: 'rgba(255,255,255,0.06)', bd: 'rgba(255,255,255,0.15)', fg: 'var(--text-bright)' };
+        var sub = have[pid].email || have[pid].phoneNumber || '';
+        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;background:' + m.bg + ';border:1px solid ' + m.bd + ';">' +
+          '<span style="color:#34d399;font-weight:800;flex-shrink:0;">✅</span>' +
+          '<span style="font-weight:700;font-size:0.82rem;color:' + m.fg + ';flex-shrink:0;">' + window._safeHtml(m.label) + '</span>' +
+          (sub ? '<span style="font-size:0.72rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">' + window._safeHtml(sub) + '</span>' : '') +
+        '</div>';
+      }).join('');
+
+      // Botão pra cada federado que AINDA NÃO é login desta conta.
+      ['google.com', 'apple.com'].forEach(function (pid) {
+        if (have[pid]) return;
+        var m = _PROV_META[pid];
+        html += '<button type="button" id="profile-link-' + pid.split('.')[0] + '" onclick="window._profileLinkProvider(\'' + pid + '\')" ' +
+          'style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:transparent;border:1px dashed ' + m.bd + ';color:' + m.fg + ';font-weight:700;font-size:0.82rem;cursor:pointer;text-align:left;width:100%;">' +
+          '<span style="flex-shrink:0;">➕</span><span>Vincular ' + window._safeHtml(m.label) + '</span>' +
+        '</button>';
+      });
+      box.innerHTML = html;
+    };
+
+    function _linkMsg(kind, text) {
+      var el = document.getElementById('profile-link-provider-msg');
+      if (!el) return;
+      var c = kind === 'ok' ? '#6ee7b7' : (kind === 'err' ? '#fca5a5' : 'var(--text-muted)');
+      el.style.display = 'block';
+      el.innerHTML = '<span style="color:' + c + ';">' + window._safeHtml(text) + '</span>';
+    }
+
+    // Constrói a credencial do provedor SEM trocar a sessão atual.
+    // No iOS nativo o popup do Firebase não roda dentro do WebView (mesma razão
+    // do login), então usa o plugin nativo e devolve uma credential pra linkar.
+    function _nativeCredentialFor(pid) {
+      var cap = window.Capacitor;
+      var isNative = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+      var platform = (cap && cap.getPlatform) ? cap.getPlatform() : 'web';
+      if (!isNative || platform !== 'ios') return Promise.resolve(null);
+      var plugins = (cap && cap.Plugins) || {};
+      if (pid === 'apple.com' && plugins.SignInWithApple) {
+        var rawNonce = _appleRandomNonce(32);
+        return _appleSha256Hex(rawNonce).then(function (hashed) {
+          return plugins.SignInWithApple.authorize({ scopes: 'email name', nonce: hashed });
+        }).then(function (res) {
+          var r = (res && res.response) ? res.response : res;
+          if (!r || !r.identityToken) throw new Error('Apple: identityToken ausente');
+          return new firebase.auth.OAuthProvider('apple.com').credential({ idToken: r.identityToken, rawNonce: rawNonce });
+        });
+      }
+      if (pid === 'google.com' && plugins.SocialLogin) {
+        return plugins.SocialLogin.login({ provider: 'google', options: {} }).then(function (res) {
+          var idt = res && res.result && (res.result.idToken || (res.result.profile && res.result.profile.idToken));
+          if (!idt) throw new Error('Google: idToken ausente');
+          return firebase.auth.GoogleAuthProvider.credential(idt);
+        });
+      }
+      return Promise.resolve(null);
+    }
+
+    window._profileLinkProvider = function (pid) {
+      var m = _PROV_META[pid] || { label: pid };
+      var fbU = (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
+      if (!fbU) { _linkMsg('err', 'Sessão expirada — entre de novo pra vincular.'); return; }
+      _linkMsg('info', 'Abrindo o ' + m.label + '…');
+
+      function done() {
+        _linkMsg('ok', '✅ ' + m.label + ' vinculado! Agora você entra por qualquer um dos dois.');
+        // authProvider do perfil é só rótulo de origem; o vínculo real está no Auth.
+        try { window._profileRenderAuthProviders(); } catch (e) {}
+        if (window.showNotification) window.showNotification('Conta vinculada', 'Entrar com ' + m.label + ' agora cai nesta mesma conta.', 'success');
+      }
+
+      _nativeCredentialFor(pid).then(function (cred) {
+        if (cred) return fbU.linkWithCredential(cred);
+        var provider = (pid === 'google.com')
+          ? new firebase.auth.GoogleAuthProvider()
+          : new firebase.auth.OAuthProvider('apple.com');
+        if (pid === 'google.com' && provider.setCustomParameters) provider.setCustomParameters({ prompt: 'select_account' });
+        if (pid === 'apple.com') { provider.addScope('email'); provider.addScope('name'); }
+        return fbU.linkWithPopup(provider).catch(function (err) {
+          var c = err && err.code;
+          if (c === 'auth/popup-blocked' || c === 'auth/popup-closed-by-user' ||
+              c === 'auth/cancelled-popup-request' || c === 'auth/operation-not-supported-in-this-environment') {
+            if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') throw err;
+            return fbU.linkWithRedirect(provider);
+          }
+          throw err;
+        });
+      }).then(function () {
+        done();
+      }).catch(function (err) {
+        var c = (err && err.code) || '';
+        if (c === 'auth/provider-already-linked') { done(); return; }
+        if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') { _linkMsg('info', 'Vinculação cancelada.'); return; }
+        if (c === 'auth/requires-recent-login') {
+          _linkMsg('err', 'Por segurança, entre de novo nesta conta e repita a vinculação.');
+          return;
+        }
+        // A identidade JÁ é de outra conta do scoreplace — o caso do e-mail
+        // oculto da Apple que virou conta separada. Não dá pra vincular por
+        // cima: as duas contas têm que virar uma antes.
+        if (c === 'auth/credential-already-in-use' || c === 'auth/email-already-in-use') {
+          window._profileOfferMergeForCredential(err, m.label);
+          return;
+        }
+        window._warn && window._warn('[linkProvider]', err);
+        _linkMsg('err', 'Não foi possível vincular: ' + ((err && err.message) || c || 'erro'));
+      });
+    };
+
+    // Emenda do caso "essa conta já existe": prova a posse da OUTRA conta num
+    // app secundário (sem derrubar a sessão atual), mostra o que seria movido
+    // (dryRun) e só então une. Mesmo motor do merge de celular.
+    window._profileOfferMergeForCredential = function (err, label) {
+      var cred = err && (err.credential || (err.customData && err.customData.credential));
+      if (!cred) { _linkMsg('err', 'Essa conta ' + label + ' já pertence a outro cadastro no scoreplace. Fale com o suporte pra unir.'); return; }
+      var cfg = firebase.app().options;
+      var sapp = firebase.apps.find(function (a) { return a.name === 'providerlink'; }) || firebase.initializeApp(cfg, 'providerlink');
+      _linkMsg('info', 'Essa conta ' + label + ' já existe no scoreplace. Conferindo o que seria unido…');
+
+      var otherUser = null;
+      sapp.auth().signInWithCredential(cred).then(function (res) {
+        otherUser = res.user;
+        var mine = firebase.auth().currentUser;
+        if (!mine || !otherUser || otherUser.uid === mine.uid) throw new Error('nada a unir');
+        return _callMergeCF(otherUser, true);
+      }).then(function (dry) {
+        if (!dry || dry._error) throw new Error((dry && dry._error && (dry._error.message || dry._error.status)) || 'erro no diagnóstico');
+        var resumo = [];
+        if (dry.tournaments) resumo.push(dry.tournaments + ' torneio(s)');
+        if (dry.casualMatches) resumo.push(dry.casualMatches + ' partida(s) casual(is)');
+        if (dry.presences) resumo.push(dry.presences + ' presença(s)');
+        var txt = 'Já existe uma conta no scoreplace criada com esse login ' + label + '.\n\n' +
+          (resumo.length ? 'Ela tem ' + resumo.join(', ') + '. Tudo isso passa pra esta conta.\n\n'
+                         : 'Ela não tem nada registrado.\n\n') +
+          'Depois de unir, você entra por qualquer um dos dois logins. Unir agora?';
+        return new Promise(function (resolve) {
+          if (typeof showConfirmDialog === 'function') {
+            showConfirmDialog('Unir com a conta ' + label, txt, function () { resolve(true); }, function () { resolve(false); });
+          } else { resolve(window.confirm(txt)); }
+        });
+      }).then(function (go) {
+        if (!go) { try { sapp.auth().signOut(); } catch (e) {} _linkMsg('info', 'Nada foi alterado.'); return; }
+        _linkMsg('info', 'Unindo as contas…');
+        return _callMergeCF(otherUser, false).then(function (r) {
+          if (!r || r._error) throw new Error((r && r._error && (r._error.message || r._error.status)) || 'erro ao unir');
+          try { sapp.auth().signOut(); } catch (e) {}
+          _linkMsg('ok', '✅ Contas unidas! Toque em "Vincular ' + label + '" mais uma vez pra deixar esse login ativo nesta conta.');
+          try { window._profileRenderAuthProviders(); } catch (e) {}
+        });
+      }).catch(function (e) {
+        try { sapp.auth().signOut(); } catch (_e) {}
+        window._warn && window._warn('[linkProvider/merge]', e);
+        _linkMsg('err', 'Não foi possível unir: ' + ((e && e.message) || 'erro'));
+      });
+    };
+
+    function _callMergeCF(otherUser, dryRun) {
+      return otherUser.getIdToken().then(function (proofToken) {
+        return firebase.auth().currentUser.getIdToken().then(function (mainTok) {
+          return fetch('https://us-central1-scoreplace-app.cloudfunctions.net/mergePhoneAccount', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mainTok },
+            body: JSON.stringify({ data: { oldUid: otherUser.uid, proofIdToken: proofToken, dryRun: !!dryRun } })
+          });
+        });
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j && j.result) return j.result;
+        if (j && j.error) return { _error: j.error };
+        return null;
+      });
+    }
+
     // ── Emails vinculados ─────────────────────────────────────────────────
     window._profileRenderLinkedEmails = function() {
       var cu = window.AppStore && window.AppStore.currentUser;
@@ -8216,27 +8516,30 @@ function setupProfileModal() {
       // um nome — senão ele apareceria como "Usuário" pros outros. Escolha
       // dele: ou dá um nome de exibição, ou desliga a ocultação (e o contato
       // continua sendo mostrado). Ninguém fica sem identificação.
-      var _fnTrim = String(finalName || '').trim();
-      var _nameIsEmail = /@/.test(_fnTrim);
-      var _nameIsPhone = !_nameIsEmail && /^\+?[\d\s().\-]{6,}$/.test(_fnTrim);
-      if (omitEmail && _nameIsEmail) {
+      // A REGRA mora em window._omitRequiresDisplayName (função pura, topo do
+      // arquivo, coberta por tests/omit-exige-display-name.test.js). Aqui só a
+      // fiação: pergunta e, se bloqueou, explica e devolve o foco pro campo.
+      var _cuNow = (window.AppStore && window.AppStore.currentUser) || {};
+      var _omitGate = (typeof window._omitRequiresDisplayName === 'function')
+        ? window._omitRequiresDisplayName({
+            displayName: finalName, email: _cuNow.email, phone: _cuNow.phone,
+            phoneNumber: _cuNow.phoneNumber, phoneCountry: _cuNow.phoneCountry,
+            omitEmail: omitEmail, omitPhone: omitPhone
+          })
+        : { blocked: false };
+      if (_omitGate.blocked) {
+        var _oQue = (omitEmail && omitPhone) ? 'seu e-mail e seu telefone' : (omitEmail ? 'seu e-mail' : 'seu telefone');
+        var _porque = _omitGate.reason === 'name-is-email'
+          ? 'seu nome de exibição é o próprio e-mail'
+          : (_omitGate.reason === 'name-is-phone'
+              ? 'seu nome de exibição é o próprio telefone'
+              : 'você ainda não tem um nome de exibição');
         if (typeof showAlertDialog === 'function') {
           showAlertDialog(
             'Escolha um nome de exibição',
-            'Você ativou "ocultar meu e-mail", mas seu nome de exibição é o próprio e-mail. ' +
-            'Digite um nome pra aparecer pros outros usuários — ou desligue a ocultação pra continuar mostrando o e-mail.',
-            function () { var _el = document.getElementById('profile-edit-name'); if (_el) { try { _el.focus(); } catch (e) {} } },
-            { type: 'warning' }
-          );
-        }
-        return;
-      }
-      if (omitPhone && _nameIsPhone) {
-        if (typeof showAlertDialog === 'function') {
-          showAlertDialog(
-            'Escolha um nome de exibição',
-            'Você ativou "ocultar meu telefone", mas seu nome de exibição é o próprio telefone. ' +
-            'Digite um nome pra aparecer pros outros usuários — ou desligue a ocultação pra continuar mostrando o telefone.',
+            'Pra ocultar ' + _oQue + ', você precisa de um nome de exibição — e ' + _porque + '. ' +
+            'Sem nome você apareceria como "Usuário" pros outros, inclusive pro organizador na chamada de presença. ' +
+            'Digite um nome, ou desligue a ocultação (o contato continua visível).',
             function () { var _el = document.getElementById('profile-edit-name'); if (_el) { try { _el.focus(); } catch (e) {} } },
             { type: 'warning' }
           );
@@ -8267,7 +8570,7 @@ function setupProfileModal() {
 
       // Strings: só envia se preenchido
       if (finalName) payload.displayName = finalName;
-      if (genderIn) payload.gender = genderIn;          // "" = "Não informar" = preserva
+      if (genderIn) payload.gender = genderIn;          // "" = "Não informar"
       if (birthDate) payload.birthDate = birthDate;
       if (age != null) payload.age = age;
       if (cityIn) payload.city = cityIn;
@@ -8341,6 +8644,42 @@ function setupProfileModal() {
       payload.omitPhone = omitPhone;
       payload.letzplayConsent = letzplayConsentIn;
 
+      // ── 3b. APAGAR TAMBÉM É UM ATO ──────────────────────────────────────
+      // "Campo vazio = campo omitido = valor preservado" fechou o buraco em
+      // que uma race apagava o perfil (v0.16.6/v0.16.9), mas cobrou um preço
+      // que ninguém pediu: virou impossível APAGAR qualquer coisa. Relato da
+      // Ana Paula Schmidt — ela esvaziava a data de nascimento, salvava, e a
+      // data voltava.
+      // O que faltava era saber POR QUE o campo está vazio. O baseline
+      // (_profileFormBaseline, gravado quando o formulário é preenchido na
+      // tela) responde isso: preenchido na tela e vazio agora = ela apagou →
+      // FieldValue.delete(). Vazio sem baseline (formulário não hidratou)
+      // continua sendo omitido, então a proteção contra race segue de pé.
+      var _erased = [];
+      try {
+        var _base = window._profileFormBaseline || null;
+        var _delSentinel = (window.firebase && firebase.firestore && firebase.firestore.FieldValue)
+          ? firebase.firestore.FieldValue.delete()
+          : null;
+        if (_base && _delSentinel && typeof window._profileFieldsToErase === 'function') {
+          _erased = window._profileFieldsToErase(_base, {
+            gender: genderIn,
+            // birthRaw (não birthDate): data digitada errado NÃO é apagamento —
+            // o parse acima já devolve a data antiga nesse caso.
+            birthDate: birthRaw,
+            city: cityIn,
+            letzplayHandle: letzplayHandleIn,
+            preferredCeps: preferredCeps,
+            preferredSports: sportsArr,
+            preferredLocations: preferredLocations
+          });
+          _erased.forEach(function (k) { payload[k] = _delSentinel; });
+        }
+      } catch (_eraseErr) {
+        _erased = [];
+        window._warn && window._warn('[Profile] apagamento de campo falhou (segue sem apagar):', _eraseErr);
+      }
+
       // Denormalizados para lookups case-insensitive
       if (payload.displayName) payload.displayName_lower = String(payload.displayName).toLowerCase();
       // v1.7.9-beta: email_lower — usa payload.email se email está sendo alterado,
@@ -8353,12 +8692,23 @@ function setupProfileModal() {
         name: nameIn, gender: genderIn, birthRaw: birthRaw, city: cityIn,
         phone: phoneDigits, sports: sportsArr
       });
-      window._log('[Profile v0.16.9] payload:', JSON.parse(JSON.stringify(payload)));
+      // Campos apagados viram sentinelas do Firestore (FieldValue.delete()) —
+      // que não são serializáveis. O log copia só o que dá, com "(apagado)"
+      // no lugar da sentinela, e nunca pode derrubar o save.
+      try {
+        var _logPayload = {};
+        Object.keys(payload).forEach(function (k) {
+          _logPayload[k] = (_erased.indexOf(k) !== -1) ? '(apagado)' : payload[k];
+        });
+        window._log('[Profile v0.16.9] payload:', JSON.parse(JSON.stringify(_logPayload)));
+      } catch (_e) {}
+      if (_erased.length > 0) window._log('[Profile] campos APAGADOS pela pessoa:', _erased.join(', '));
       window._lastProfileSave = {
         uid: uid,
         version: window.SCOREPLACE_VERSION,
         at: new Date().toISOString(),
         payload: payload,
+        erased: _erased.slice(),
         fields: Object.keys(payload).sort()
       };
 
@@ -8413,6 +8763,14 @@ function setupProfileModal() {
           }
           Object.keys(payload).forEach(function(k) {
             if (k === 'updatedAt' || k === 'displayName_lower' || k === 'email_lower') return;
+            // Campo apagado: o certo é ele NÃO existir mais no doc. Comparar a
+            // sentinela com o valor lido daria divergência sempre.
+            if (_erased.indexOf(k) !== -1) {
+              if (got[k] !== undefined && got[k] !== null && got[k] !== '') {
+                mismatch.push({ field: k, sent: '(apagado)', got: got[k] });
+              }
+              return;
+            }
             var sent = _stableStringify(payload[k]);
             var gotVal = _stableStringify(got[k]);
             if (sent !== gotVal) {
@@ -8425,6 +8783,25 @@ function setupProfileModal() {
           // Atualiza currentUser com o que REALMENTE está no Firestore —
           // single source of truth. Próximo load não vai divergir.
           Object.keys(got).forEach(function(k) { cu[k] = got[k]; });
+          // Campo apagado não vem no readback — então o currentUser precisa
+          // ESQUECÊ-LO na mão. Sem isso o valor continuaria na memória da
+          // sessão e reapareceria na tela ao reabrir o perfil (era metade do
+          // "a data volta"). Vale também pro cache de perfis por uid, que
+          // alimenta idade/gênero em inscrições e sorteio.
+          _erased.forEach(function(k) {
+            try { delete cu[k]; } catch (_e) { cu[k] = undefined; }
+          });
+          if (_erased.length > 0 && window._userProfileCache) {
+            try { delete window._userProfileCache[uid]; } catch (_e) {}
+          }
+          // O baseline passa a refletir o que ficou gravado: campo apagado
+          // agora está vazio na tela E no doc, então não há mais o que apagar.
+          if (_erased.length > 0 && window._profileFormBaseline) {
+            _erased.forEach(function (k) {
+              if (Array.isArray(window._profileFormBaseline[k])) window._profileFormBaseline[k] = [];
+              else if (k in window._profileFormBaseline) window._profileFormBaseline[k] = '';
+            });
+          }
           cu.name = cu.displayName; // compat com código que ainda lê .name
         } catch (e) {
           window._lastProfileSave.readbackError = (e && e.message) || String(e);

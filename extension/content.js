@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.48';
+  var EXT_VERSION = '1.95';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -48,12 +48,28 @@
     if (st >= 500) return true;   // erro do servidor → tentar de novo faz sentido
     return /Failed to fetch|NetworkError|network|load failed|ERR_|no-resp|port closed|message channel|Extension context|inject-timeout|exec-failed/i.test((r && r.error) || '');
   }
-  // ORÇAMENTO DE PACIÊNCIA (v1.42) — setado pelo fluxo individual. O caso Camila
-  // (14/jul): no 11º de 20, o letzplay pediu pra esperar e a busca ficou em "a busca
-  // continua…" indefinidamente. Regra do dono: NESSA situação tem que PARAR, GRAVAR o
-  // que tem e retomar depois. Estourou o orçamento → 'rate-budget' sobe e o pipeline
-  // finaliza como PAUSADO (parcial salvo) em vez de esperar sem fim.
+  // ORÇAMENTO DE PACIÊNCIA — quanto de espera de rate-limit a rodada aceita antes de
+  // CHECKPOINTAR e devolver o cursor pro app continuar numa rodada nova.
+  //
+  // v1.49: o orçamento passou a ser PROPORCIONAL AO TRABALHO. Era fixo em 2 esperas /
+  // 120s, calibrado num perfil de 37 requisições; num de 140 (Camila) tomar 2 pausas é
+  // quase certo, então o orçamento estourava no meio e a leitura parava com quase nada.
+  // Agora ele escala com o tamanho do perfil e — o que importa de verdade — estourar
+  // NÃO é mais fim de linha: o cursor está gravado, o app dispara a rodada seguinte
+  // sozinho e ela retoma no ponto exato. "Demorar é aceitável; falhar não."
   var _rateBudget = null;
+  function _newRateBudget(reqEstimate) {
+    var n = Math.max(8, reqEstimate || 40);
+    return { waits: 0, totalMs: 0, maxWaits: Math.max(6, Math.ceil(n / 6)), maxMs: Math.max(180000, n * 3000) };
+  }
+  // JSON pela MESMA via do HTML (aba logada + fila). O letzplay é Rails: toda rota responde
+  // JSON com `.json`, e é de lá que sai o ÍNDICE do histórico — id de cada partida, data,
+  // competição e fim de lista explícito.
+  async function bgFetchJson(url) {
+    var r = await bgFetchRaw(url);
+    if (!r || !r.ok) { var e = new Error((r && r.error) || ('HTTP ' + (r && r.status))); e.url = url; throw e; }
+    try { return JSON.parse(r.html); } catch (e2) { var e3 = new Error('json-invalido'); e3.url = url; throw e3; }
+  }
   async function bgFetchDoc(url, opts) {
     var last = null;
     for (var i = 0; i < 8; i++) {
@@ -61,7 +77,7 @@
       if (r && r.ok) return new DOMParser().parseFromString(r.html, 'text/html');
       last = r;
       if (_isRate(r)) {
-        if (_rateBudget && (_rateBudget.waits >= 2 || _rateBudget.totalMs >= 120000)) {
+        if (_rateBudget && (_rateBudget.waits >= _rateBudget.maxWaits || _rateBudget.totalMs >= _rateBudget.maxMs)) {
           var eb = new Error('rate-budget'); eb.code = 'rate-budget'; eb.httpStatus = r && r.status;
           throw eb;
         }
@@ -96,6 +112,22 @@
   //      (nome exato, SEM o nome do clube grudado);
   //   2) fallback og:title "Informações do Torneio {nome} - {clube}" (tira prefixo/sufixo;
   //      ainda traz o clube no fim, por isso o h2 é preferido).
+  // Nome de exibição do atleta na página de perfil do letzplay.
+  function _nomeDoPerfilDoc(doc) {
+    try {
+      var h = doc.querySelector('h1, h2.title, .profile-name, .athlete-name');
+      var n = h ? (h.textContent || '').replace(/\s+/g, ' ').trim() : '';
+      if (!n) {
+        var og = doc.querySelector('meta[property="og:title"]');
+        n = og ? (og.getAttribute('content') || '') : '';
+        n = n.replace(/\s*[-–|]\s*Letzplay\s*$/i, '').replace(/^\s*Jogos de\s+/i, '').trim();
+      }
+      if (!n || n.length > 60) return null;
+      if (/letzplay/i.test(n)) return null;
+      return n;
+    } catch (e) { return null; }
+  }
+
   function tourneyNameFromDoc(doc) {
     try {
       var h2 = doc.querySelector('h2.title.with-avatar, .title.with-avatar');
@@ -219,7 +251,13 @@
   // por competição (nome + classificação + logo saem do MESMO fetch — zero requisição extra).
   // Torneio: /{club}/tournaments/{id} (.table-group). Ranking: /{club}/rankings/{id}
   // (.table-ranking). Best-effort: se falhar/404, mantém a categoria. Retorna {total, resolved}.
-  async function fillTourneyNames(raw, onProg) {
+  // `limite` = resolve no máximo N competições nesta chamada, e `guarda` = onde gravar o
+  // resultado pra não se perder entre chamadas. Servem pro INTERCALAMENTO: o dono viu
+  // "Jogos 478 de 478 (100%)" com "Rankings 20 de 29" e reclamou com razão — os jogos
+  // terminavam primeiro e as competições ficavam se resolvendo depois. Mas é a leitura dos
+  // jogos que REVELA os rankings, então não dá pra resolvê-los antes; o que dá é resolver
+  // um punhado a cada página lida, e aí tudo termina junto — com os jogos por último.
+  async function fillTourneyNames(raw, onProg, limite, guarda) {
     var seen = {}, uniq = [];
     // Competições que JÁ têm nome real + classificação (etapa por-torneio desta rodada
     // ou herdadas de rodada anterior) são PULADAS — zero re-fetch do que já está pronto.
@@ -235,12 +273,14 @@
       if (!seen[id]) { seen[id] = 1; uniq.push({ id: id, type: 'r', club: r.club, cid: r.rankingId, categoryRaw: r.categoryRaw || '' }); }
     });
     var cache = {}, standCache = {}, logoCache = {}, resolved = 0, failed = [];
-    for (var i = 0; i < uniq.length; i++) {
-      // Progresso: 'names' pro import do próprio usuário; onProg quando é a busca do
-      // organizador (Análise de Inscritos), que tem barra própria.
-      if (onProg) onProg({ phase: 'torneios', note: (i + 1) + ' de ' + uniq.length });
-      else post({ __sp_lp: 'import-progress', phase: 'names', done: i, total: uniq.length });
+    var teto = (typeof limite === 'number' && limite > 0) ? Math.min(limite, uniq.length) : uniq.length;
+    for (var i = 0; i < teto; i++) {
       var u = uniq[i];
+      // O TEXTO TEM QUE DIZER O QUE ESTÁ SENDO FEITO. Antes saía só "2 de 41" — número solto,
+      // sem sujeito, que não informa nada a quem está olhando.
+      var oQue = (u.type === 't' ? 'torneio' : 'ranking') + (u.categoryRaw ? (' · ' + u.categoryRaw) : '');
+      if (onProg) onProg({ phase: 'torneios', note: 'nome e classificação — ' + oQue + ' (' + (i + 1) + ' de ' + teto + ')' });
+      else post({ __sp_lp: 'import-progress', phase: 'names', done: i, total: teto });
       // (o espaçamento entre requisições é da FILA do background.js — ver enqueue())
       try {
         var url = 'https://letzplay.me/' + u.club + '/' + (u.type === 't' ? 'tournaments' : 'rankings') + '/' + u.cid;
@@ -251,10 +291,14 @@
         // (100+ duplas × N rankings) estourava o limite de 1MiB do doc no Firestore.
         standCache[u.id] = (u.type === 't') ? tourneyStandingsFromDoc(d) : slimRankingStandings(rankingStandingsFromDoc(d), raw.handle);
         logoCache[u.id] = tourneyLogoFromDoc(d);
-        if (nm) { resolved++; } else { failed.push(u.categoryRaw || u.id); }
+        if (guarda) guarda[u.id] = { name: cache[u.id], standings: standCache[u.id], logo: logoCache[u.id] };
+        if (nm) {
+          resolved++;
+          if (onProg) onProg({ phase: 'torneios', feed: (u.type === 't' ? '🏆 ' : '📊 ') + nm });
+        } else { failed.push(u.categoryRaw || u.id); }
       } catch (e) { cache[u.id] = null; failed.push(u.categoryRaw || u.id); }
     }
-    if (!onProg) post({ __sp_lp: 'import-progress', phase: 'names', done: uniq.length, total: uniq.length });
+    if (!onProg) post({ __sp_lp: 'import-progress', phase: 'names', done: teto, total: teto });
     // Aplica UMA VEZ por competição (nome + classificação + logo). Jogos só guardam a referência.
     (raw.tournaments || []).forEach(function (t) {
       if (!t.tourneyId || !t.club) return;
@@ -270,7 +314,7 @@
       if (standCache[k]) r.standings = standCache[k];
       if (logoCache[k]) r.logo = logoCache[k];
     });
-    return { total: uniq.length, resolved: resolved, failed: failed };
+    return { total: uniq.length, resolved: resolved, failed: failed, pendentes: Math.max(0, uniq.length - teto) };
   }
 
   // Import COMPLETO de um participante a partir do perfil PÚBLICO /{handle}/matches
@@ -358,8 +402,12 @@
       var v = I.validate(imp);
       if (!v.valid) { post({ __sp_lp: 'import-result', ok: false, error: 'invalido' }); return; }
       post({ __sp_lp: 'import-progress', done: all.length, total: total, saving: true });
-      // entrega pro bridge gravar; ele devolve o {import-result} final (ok/erro do Firestore).
-      post({ __sp_lp: 'import', letzplayImport: imp });
+      // O histórico COMPLETO vai pro acervo canônico (1 doc por partida, sem teto); o doc
+      // do perfil leva o resumo com os jogos recentes. Sem esse limite, um perfil grande
+      // estoura 1MiB e o Firestore recusa a gravação INTEIRA — o import "dava certo" e
+      // nada aparecia.
+      var todosOsJogos = (imp.games || []).slice();   // ANTES do corte — boundImportDoc trunca no lugar
+      post({ __sp_lp: 'import', letzplayImport: boundImportDoc(imp), allGames: todosOsJogos });
     } catch (err) {
       // Diagnóstico honesto: separa erro de REDE ('Failed to fetch') dos demais e leva a
       // mensagem crua + a URL que falhou pro app mostrar (fim do "erro sem nenhuma dica").
@@ -477,14 +525,41 @@
   }
   // Chave ESTÁVEL de um jogo — dedupe entre etapas e entre RODADAS (o que já foi
   // gravado numa rodada anterior entra como semente e nunca duplica).
+  // A CATEGORIA NÃO ENTRA NA CHAVE — nem o id da competição. Uma partida é QUEM jogou +
+  // QUANDO + o PLACAR; o resto é atributo, e atributo cuja CAPTURA varia entre caminhos não
+  // pode decidir identidade. Medido em produção (@camilacalia): 24 partidas contadas DUAS
+  // vezes porque a mesma partida vinha com categoryRaw "Ver trilha de X/Y" pela página do
+  // torneio e com o nome real pela lista pessoal — mesma data, mesmo placar, mesmos
+  // adversários, dois registros. Isso inflou "478 jogos" pra 569 na tela.
+  // É a MESMA regra que js/letzplay-model.js já aplica no gid canônico (e por isso o acervo
+  // canônico nunca duplicou) — aqui a chave de dedup em voo tinha ficado pra trás.
+  // Chave de CONTEÚDO, sempre — vale para jogo com id e para jogo sem. É ela que responde
+  // "esta partida já está aqui, ainda que sob outra identidade?". Sem isso, repor um jogo
+  // velho (chave de conteúdo) em cima do mesmo jogo já lido com id (chave 'lz…') criava
+  // DUAS entradas da mesma partida: foi assim que os 469 da Camila voltaram a 569.
+  function _contentKey(m) {
+    return [m.date || '', m.club || '', m.myScore, m.oppScore,
+      (m.partnerHandle || ''), (m.oppHandles || []).slice().sort().join('+')].join('|').toLowerCase();
+  }
   function _gameKey(m) {
-    return [m.date || '', m.club || '', (m.tourneyId || m.rankingId || ''), (m.categoryRaw || m.competition || ''),
-      m.myScore, m.oppScore, (m.partnerHandle || ''), (m.oppHandles || []).slice().sort().join('+')].join('|').toLowerCase();
+    // O LETZPLAY DÁ ID POR PARTIDA (class="match-10004859-schedule") — medido: 20 cards,
+    // 20 ids distintos, 100% presentes. Identidade dada pela fonte vence qualquer chave
+    // que a gente derive. A de conteúdo fica só pra dado antigo, gravado antes de a
+    // extensão capturar o id.
+    if (m && m.lzId) return 'lz' + m.lzId;
+    return _contentKey(m);
   }
   // games GRAVADOS (schema salvo) → shape de "match cru" que o buildRaw espera.
+  // ⚠️ O `lzId` TEM QUE ATRAVESSAR. Esta função reconstrói os jogos GRAVADOS pra dentro da
+  // rodada nova, e ela não copiava o id da partida: tudo que veio de uma rodada anterior
+  // voltava sem id, era regravado sem id, e a prova de "lido pelo motor novo" evaporava
+  // sozinha. Medido em 31/jul no doc da Kelly: 157 jogos, 157 SEM lzId no scan do
+  // organizador, enquanto o import dela mesma (uma rodada só) tinha os 157 COM id.
+  // Consequência visível: o nome ficava violeta depois de uma leitura correta.
   function _gamesToMatches(games) {
     return (games || []).map(function (g) {
       return {
+        lzId: g.lzId || null,
         date: g.date || null, categoryRaw: g.competition || '', round: (g.round != null) ? g.round : null,
         year: (g.year != null) ? g.year : null, official: g.official === true,
         kind: g.kind || (g.official === true ? 'tournament' : 'ranking'),
@@ -523,355 +598,1151 @@
     imp.slimmed = 'all-standings';
     return imp;
   }
-  var _athleteImportRunning = null, _athleteImportUid = null;
-  function runAthleteImport(handle, uid, tournamentId, prior) {
-    if (_athleteImportRunning) {
-      // Ocupado com OUTRO atleta → responde na hora (antes: silêncio total e o
-      // organizador achava que "não puxa mais ninguém").
-      if (_athleteImportUid !== uid) {
-        post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: 'ocupado — outra leitura em andamento; aguarde ela terminar' });
-      }
-      return _athleteImportRunning;
+  // Data do jogo → número de calendário (YYYYMMDD), pra ordenar/limitar os jogos que vão
+  // no doc resumo. Mesma regra do js/letzplay-model.js (que não roda na extensão).
+  function _dnum(raw) {
+    var m = String(raw == null ? '' : raw).match(/(\d{2})\/(\d{2})\/(\d{2,4})/);
+    if (!m) return 0;
+    return +((m[3].length === 2 ? ('20' + m[3]) : m[3]) + m[2] + m[1]);
+  }
+  // Teto de jogos no doc RESUMO (letzplayScans/{uid}.fullImport). O histórico completo
+  // vive no canônico (1 doc por partida), que não tem teto; aqui ficam só os mais
+  // recentes, o suficiente pro card de nível e pro gráfico de forma. Sem esse teto o doc
+  // cresce com o atleta e bate no limite de 1MiB do Firestore por volta de 1.200 jogos —
+  // ou seja, o mesmo "grava em silêncio e some" só um pouco mais pra frente.
+  var MAX_DOC_GAMES = 600;
+  function boundImportDoc(imp) {
+    // observations era 41% do doc (1.416 entradas, 257KB no perfil da Camila) e NUNCA é
+    // lida por nenhuma tela — os handles dos 4 jogadores já vão em `players` no doc
+    // canônico de cada partida, que é onde essa informação serve pra algo.
+    imp.observationsCount = (imp.observations || []).length;
+    imp.observations = [];
+    var g = imp.games || [];
+    if (g.length > MAX_DOC_GAMES) {
+      imp.gamesTotal = g.length;
+      imp.gamesTruncated = true;
+      imp.games = g.slice().sort(function (a, b) { return _dnum(b.date) - _dnum(a.date); }).slice(0, MAX_DOC_GAMES);
+    } else {
+      imp.gamesTotal = g.length;
     }
+    return shrinkImport(imp);
+  }
+
+  // ACUMULADOR entre RODADAS da mesma página: as rodadas são encadeadas pelo app no
+  // mesmo documento, então o content script continua vivo e os jogos já lidos ficam aqui
+  // — a rodada seguinte não relê nada nem precisa que o app devolva o histórico inteiro.
+  var _acc = null;
+  function _accFor(handle, prior) {
+    var h = String(handle || '').toLowerCase();
+    if (_acc && _acc.handle === h) return _acc;
+    _acc = { handle: h, all: _gamesToMatches(prior && prior.games), seen: {}, flushed: {}, tourDet: {} };
+    _acc.all.forEach(function (m) { var k = _gameKey(m); _acc.seen[k] = 1; _acc.flushed[k] = 1; });
+    return _acc;
+  }
+
+  var _athleteImportRunning = null, _athleteImportUid = null, _athleteAbort = 0;
+  // QUEM PEDIU AGORA TEM PRIORIDADE. Recusar com "ocupado — aguarde ela terminar" era
+  // preguiça nossa: o organizador clicou na Kelly, ele quer a Kelly. A leitura anterior é
+  // ABANDONADA (o número da geração muda, e a rodada velha para de emitir e de gravar ao
+  // perceber que não é mais a atual) e a nova começa na hora. Pedir a MESMA pessoa que já
+  // está sendo lida continua sendo no-op — aí sim não há o que fazer.
+  function runAthleteImport(handle, uid, tournamentId, prior, cursor) {
+    if (_athleteImportRunning && _athleteImportUid === uid) return _athleteImportRunning;
+    if (_athleteImportRunning) _athleteAbort++;      // abandona a anterior
+    var geracao = _athleteAbort;
     _athleteImportUid = uid;
-    _athleteImportRunning = _runAthleteImport(handle, uid, tournamentId, prior)
+    _athleteImportRunning = _runAthleteImport(handle, uid, tournamentId, prior, cursor, function () { return geracao !== _athleteAbort; })
       .catch(function () {})
-      .then(function () { _athleteImportRunning = null; _athleteImportUid = null; });
+      .then(function () {
+        if (geracao !== _athleteAbort) return;       // outra leitura assumiu; não limpa o estado dela
+        _athleteImportRunning = null; _athleteImportUid = null;
+      });
     return _athleteImportRunning;
   }
-  // v1.41 — pipeline EM ETAPAS, gravando a cada passo (sistemática do dono, 14/jul):
-  //   1) lista de TORNEIOS da pessoa (/{handle}/tournaments — HTML cru, confiável);
-  //   2) POR TORNEIO (mais recente primeiro): nome+categoria+CLASSIFICAÇÃO (página do
-  //      torneio) e os JOGOS do torneio (/{...}/matches) → PARCIAL gravado a cada um;
-  //   3) jogos gerais (/{handle}/matches paginado, recente→antigo) → parcial a cada
-  //      3 páginas. O que já veio NUNCA se perde; a próxima rodada continua de onde parou.
-  // `prior` = fullImport de rodada anterior: semeia o acumulado (pula o que já tem).
-  async function _runAthleteImport(handle, uid, tournamentId, prior) {
+  // ══════════════════════════════════════════════════════════════════════════════
+  // LEITURA DO HISTÓRICO DE UM ATLETA — reescrita (30/jul/2026) na especificação do dono:
+  //
+  //   "tem que ver de cara quantos torneios, rankings e jogos,
+  //    e não tem que duplicar porra nenhuma.
+  //    puxa torneios, rankings e depois a porra dos jogos"
+  //
+  // As três coisas que ela determina, e como cada uma é garantida aqui:
+  //
+  // 1. TOTAIS DE CARA. A ETAPA 0 lê o perfil UMA vez e tira dali "N Jogos · N Rankings ·
+  //    N Torneios". Esses três números são o denominador das barras e NÃO MUDAM mais
+  //    durante a leitura. A versão anterior deixava o total crescer (nascia em 478 e
+  //    virava 569 no meio), o que é indistinguível de erro pra quem olha.
+  //
+  // 2. ZERO DUPLICATA. Jogo entra por UM caminho só: o histórico pessoal (ETAPA 3). Antes
+  //    também se lia a página de jogos de CADA torneio, e a mesma partida voltava pelos
+  //    dois caminhos com categorias diferentes — medido no perfil da Camila: 24 partidas
+  //    contadas duas vezes. A chave de dedup (`_gameKey`) é a MESMA identidade do gid
+  //    canônico: quem jogou + quando + placar. Texto de categoria não entra em chave.
+  //
+  // 3. ORDEM TORNEIOS → RANKINGS → JOGOS. Cada etapa termina antes da seguinte começar,
+  //    então as barras enchem em sequência e a de jogos é a última a fechar. Antes o
+  //    ranking só era DESCOBERTO ao ler os jogos, e por isso "Jogos 100% / Rankings 0".
+  //
+  // E o que já estava certo e continua: a rodada NÃO tem prazo de trabalho (o prazo de 4
+  // min era menor que o trabalho de um perfil grande — ~9 min — e matava a leitura em 43%
+  // dela, sempre); a proteção contra travar é OCIOSIDADE, do lado do app; tudo o que é
+  // lido vira CURSOR gravado, então retomar custa zero releitura; e os parciais mandam só
+  // o DELTA (regravar o histórico inteiro a cada parcial dava ~25 mil escritas por leitura).
+  //
+  // `prior`  = fullImport da rodada anterior (nomes/classificações já resolvidos)
+  // `cursor` = o que já foi concluído (torneios, rankings, página do histórico)
+  async function _runAthleteImport(handle, uid, tournamentId, prior, cursor, abandonada) {
     var X = window._spExtract, I = window._spImport, F = window._spFlow;
-    // prog agora carrega pct (0–100, barra REAL), feed (linha do que acabou de ser lido)
-    // e counts (x/y ao vivo das 3 barras Torneios/Rankings/Jogos que o app exibe).
-    function prog(extra) {
-      extra = extra || {};
-      var cur = { uid: uid || null, handle: handle, phase: extra.phase || null, note: extra.note || null };
-      post({ __sp_lp: 'athlete-import-progress', tournamentId: tournamentId, uid: uid || null, handle: handle,
-        current: cur, pct: (extra.pct != null ? extra.pct : null), feed: extra.feed || null, counts: liveCounts() });
+    // `abandonada()` = outra leitura foi pedida e esta não é mais a atual. Checar isso
+    // custa nada e evita que a rodada velha continue gastando requisições e gravando por
+    // cima da nova.
+    if (typeof abandonada !== 'function') abandonada = function () { return false; };
+
+    // ── estado da rodada ────────────────────────────────────────────────────────
+    var C = (cursor && typeof cursor === 'object') ? cursor : {};
+    // ⚠️ LER A VERSÃO ANTES DE ESCREVER NELA. `C` é o MESMO objeto que `prior.lzCursor`
+    // (o app passa a referência), então marcar `C.v = 4` aqui e só depois perguntar
+    // "que versão era?" comparava a versão com ela mesma — a migração NUNCA rodava e a
+    // retomada continuava usando a página do cursor velho. Sintoma exato: a leitura
+    // começava na página 13 em vez da 1 e o total nunca fechava.
+    var versaoAnterior = (C.v || (prior && prior.lzCursor && prior.lzCursor.v) || 0);
+    C.v = 4;
+    if (!C.toursDone || typeof C.toursDone !== 'object') C.toursDone = {};
+    if (!C.ranksDone || typeof C.ranksDone !== 'object') C.ranksDone = {};
+    C.pageDone = (typeof C.pageDone === 'number' && C.pageDone > 0) ? C.pageDone : 0;
+    // QUAIS PÁGINAS JÁ FORAM LIDAS, não só "até onde fui". Guardar um número só obriga a
+    // recomeçar em ordem: com 157 de 158 jogos o app relia as 8 páginas atrás de um jogo
+    // que, se existisse, estaria numa ponta. O conjunto deixa a retomada ler EXATAMENTE o
+    // que falta, na ordem que fizer sentido — e torna "guardar onde parou" literal.
+    if (!C.pagesRead || typeof C.pagesRead !== 'object') C.pagesRead = {};
+    // legado: cursor antigo só tinha pageDone → as 1..pageDone estão lidas
+    for (var _lp = 1; _lp <= C.pageDone; _lp++) if (!C.pagesRead[_lp]) C.pagesRead[_lp] = 1;
+    // A VARREDURA ANTERIOR CHEGOU AO FIM? Só isso autoriza a leitura incremental (parar na
+    // primeira página sem novidade). Se ela parou no meio, as páginas do FIM nunca foram
+    // lidas — e parar cedo perderia esses jogos pra sempre. Tem que ser lido ANTES de
+    // zerar a flag, senão eu comparo com o valor que eu mesmo acabei de escrever (o mesmo
+    // erro que já tinha matado a migração por carimbo).
+    var _varreduraAnteriorFechou = (C.complete === true);
+    C.complete = false;
+
+    // ── MIGRAÇÃO: o que o pipeline VELHO gravou não serve de semente ────────────
+    // Import feito antes desta reescrita (cursor < v4) tem jogos vindos das páginas de
+    // torneio além do histórico pessoal — inclusive a MESMA partida duas vezes, porque a
+    // chave de dedup antiga incluía a categoria. Medido no perfil da Camila: 569 jogos
+    // gravados para 478 reais, 24 deles duplicatas puras. Semear a leitura nova com isso
+    // carregaria o erro pra sempre: o total nunca fecharia e as duplicatas nunca sairiam.
+    // Então os JOGOS antigos são descartados e o histórico é relido do começo — são ~36
+    // requisições, baratas. O que NÃO é descartado é o caro: nome e classificação de cada
+    // torneio/ranking já lido, que continuam valendo e seguem sendo pulados.
+    // A PROVA DE QUE OS JOGOS SÃO BONS ESTÁ NELES, NÃO NUM CARIMBO. O carimbo `v` é posto
+    // no INÍCIO da rodada e salvo no primeiro parcial — então uma rodada que começou, gravou
+    // um parcial e foi suspensa deixava carimbo NOVO com dado VELHO, e a migração virava
+    // impossível pra sempre. Foi exatamente o que aconteceu no perfil da Camila: cursor v4
+    // convivendo com os 569 jogos sujos (478 reais + 24 duplicatas + resto), e a barra
+    // fechando "569 de 569 (100%)" em cima de um total errado.
+    // O pipeline novo carrega o ID DA PARTIDA do próprio letzplay (`lzId`). Jogo sem `lzId`
+    // só pode ter vindo do pipeline velho. Isso é verificável a qualquer momento, em qualquer
+    // rodada, e não depende de nada ter dado certo antes.
+    var jogosSujos = ((prior && prior.games) || []).some(function (g) { return g && !g.lzId; });
+    // ⚠️ UMA LEITURA NUNCA PODE DEIXAR O DADO PIOR DO QUE ESTAVA.
+    // A migração jogava os jogos velhos fora ANTES de ler os novos. Se a rodada terminasse
+    // no meio — e ela termina, por rate-limit, aba fechada, o que for — o documento era
+    // regravado com o pouco que tinha dado tempo de ler. Foi o que aconteceu com a Kelly:
+    // 158 jogos viraram 20, o conteúdo de UMA página. Perda de dado real, causada pela
+    // limpeza.
+    // Agora os velhos FICAM no acumulado (o doc nunca encolhe) e a limpeza acontece só no
+    // FECHAMENTO, quando a varredura completou. Enquanto ela não completa, o pior caso é
+    // conviver com os dois formatos por um tempo — que é infinitamente melhor que perder.
+    // ⚠️ HISTÓRICO GRAVADO ACIMA DO DECLARADO É PROVADAMENTE LIXO. O letzplay diz quantos
+    // jogos a pessoa tem, e esse número conta CARDS — o total de partidas distintas nunca
+    // passa disso. Um doc com 1038 (ou 791) pra 478 declarados está errado, ponto.
+    // Sem esta checagem o lixo se perpetuava: ele entrava como SEMENTE de cada leitura nova
+    // e, por ser MAIOR que o resultado limpo, a regra do "não encolher" ainda impedia a
+    // limpeza. Cada tentativa de consertar aumentava o número. É o mesmo teto que o app
+    // aplica na gravação — faltava aqui, na origem.
+    var _decl = (prior && prior.declaredGames) || 0;
+    var _priorGames = (prior && prior.games) || [];
+    var priorCorrompido = _decl > 0 && _priorGames.length > _decl;
+    var migrando = !!(prior && (versaoAnterior < 4 || jogosSujos || priorCorrompido));
+    var limparNoFim = migrando;
+    if (priorCorrompido) {
+      // não serve nem de semente nem de piso: descarta e relê do zero
+      prior = Object.assign({}, prior, { games: [] });
+      _acc = null;
+    } else if (_priorGames.length) {
+      // TODA LEITURA SANITIZA O QUE ESTAVA GRAVADO (regra do dono, 31/jul). Mesmo abaixo do
+      // teto, o histórico gravado pode trazer sujeira de versões anteriores: a MESMA partida
+      // repetida (uma entrada com o id do letzplay e outra sem, ou duas de conteúdo idêntico)
+      // e registros sem conteúdo nenhum. Não adianta só evitar criar duplicata nova — o que
+      // já está no banco tem que ser corrigido na passagem, senão ele se arrasta pra sempre.
+      // Vence a entrada COM id: ela é a identidade dada pela fonte.
+      var _porCk = {}, _limpo = [];
+      _priorGames.forEach(function (g) {
+        if (!g) return;
+        var ck = _contentKey(g);
+        var ja = _porCk[ck];
+        if (ja === undefined) { _porCk[ck] = _limpo.length; _limpo.push(g); return; }
+        if (!_limpo[ja].lzId && g.lzId) _limpo[ja] = g;      // a com id vence a sem id
+      });
+      if (_limpo.length !== _priorGames.length) {
+        _priorGames = _limpo;
+        prior = Object.assign({}, prior, { games: _limpo });
+        _acc = null;                                        // semeia do conjunto já limpo
+      }
     }
-    // Contagens AO VIVO pras barras do app: x = competições/jogos distintos já no
-    // acumulado (`all` + páginas de torneio já lidas), y = totais declarados pelo perfil.
-    function liveCounts() {
-      var tS = {}, rS = {}, nG = 0;
-      try {
-        (all || []).forEach(function (m) {
-          nG++;
-          if (m.official) { if (m.tourneyId != null) tS['t/' + (m.club || '') + '/' + m.tourneyId] = 1; }
-          else if (m.rankingId != null) rS['r/' + (m.club || '') + '/' + m.rankingId] = 1;
-        });
-        Object.keys(tourneyDetails || {}).forEach(function (k) { if (tourneyDetails[k]) tS[k] = 1; });
-      } catch (e) { return null; }
+    if (migrando) {
+      _acc = null;                    // não reaproveita o acumulado desta página
+      // O CONJUNTO DE PÁGINAS ZERA (tudo tem que ser relido), mas os JOGOS ficam.
+      C.pageDone = 0; C.pagesTotal = 0; C.pagesRead = {};
+    }
+    var A = _accFor(handle, prior);
+    // GUARDA-CHUVA CONTRA ENCOLHIMENTO. Não basta "não descartar" — qualquer caminho que
+    // reconstrua o acumulado (cache de módulo trocado, rodada encadeada, migração) pode
+    // deixar o doc menor do que estava. Este é o número que o documento JÁ tinha; nada do
+    // que a gente escrever pode ficar abaixo dele enquanto a varredura não fechar.
+    // piso do "não encolher" — vazio quando o gravado era lixo (senão o lixo vira o piso)
+    var _jogosAntes = priorCorrompido ? [] : _gamesToMatches((prior && prior.games) || []);
+    var all = A.all, seen = A.seen, det = A.tourDet;   // det = nome/classificação por competição
+    var realHandle = C.handle || handle;
+
+    // TOTAIS DO PERFIL — fixos a partir da ETAPA 0. Semeados do que já foi lido antes pra
+    // uma retomada não começar com as barras zeradas.
+    var nomeExibicao = (prior && prior.profile && prior.profile.name) || null;
+    var totJogos = (prior && prior.declaredGames != null) ? prior.declaredGames : null;
+    // o contador do PERFIL, preservado à parte de `totJogos` (que o índice sobrescreve)
+    var _perfilJogos = (prior && prior.perfilJogos != null) ? prior.perfilJogos : null;
+    var totTorneios = (prior && prior.declaredTournaments != null) ? prior.declaredTournaments : null;
+    var totRankings = (prior && prior.declaredRankings != null) ? prior.declaredRankings : null;
+
+    var toursList = (prior && Array.isArray(prior.tournamentsList)) ? prior.tournamentsList.slice() : [];
+    var ranksList = (prior && Array.isArray(prior.rankingsList)) ? prior.rankingsList.slice() : [];
+    var maxPage = (typeof C.pagesTotal === 'number' && C.pagesTotal > 0) ? C.pagesTotal : 1;
+    var lastPageRead = C.pageDone;
+    var parcial = null, pausado = false;
+
+    // nomes/classificações que já vieram de rodadas anteriores (melhor-conhecido-vence:
+    // com footprint fragmentado, a última entrada não pode apagar o que a anterior trouxe)
+    var priorNames = {};
+    ((prior && prior.footprint) || []).forEach(function (f) {
+      // A PROVA DE QUE FOI LIDO É A CLASSIFICAÇÃO. Exigir `name !== categoryRaw` sozinho
+      // era frágil e virou bug na reescrita: eu passei a gravar `categoryRaw` = título da
+      // lista, que É o próprio nome do torneio — então todo torneio recém-lido voltava a
+      // contar como NÃO lido e a rodada seguinte re-buscava os 35, um a um. Era isto que o
+      // dono via como "repassando todos os torneios de novo".
+      if (!f || !(f.standings || (f.name && f.name !== f.categoryRaw))) return;
+      var id = (f.official ? 't/' : 'r/') + (f.club || '') + '/' + (f.tourneyId || f.rankingId || '');
+      var ja = priorNames[id];
+      priorNames[id] = {
+        name: f.name || (ja && ja.name) || null,
+        standings: f.standings || (ja && ja.standings) || null,
+        logo: f.logo || (ja && ja.logo) || null
+      };
+    });
+    // TER NOME + CLASSIFICAÇÃO **É** ESTAR LIDO — a prova está no dado, não num contador.
+    // O cursor sozinho registrava menos do que o footprint já provava, e a diferença era
+    // rebuscada a cada rodada ("se já puxou 21 de 35, não deveria começar do 1 de novo").
+    Object.keys(priorNames).forEach(function (id) {
+      if (!priorNames[id].standings) return;
+      (id.charAt(0) === 't' ? C.toursDone : C.ranksDone)[id] = 1;
+    });
+
+    // ── comunicação com o app ───────────────────────────────────────────────────
+    function contagens() {
+      var jogos = all.length, tOk = 0, rOk = 0;
+      Object.keys(C.toursDone).forEach(function () { tOk++; });
+      Object.keys(C.ranksDone).forEach(function () { rOk++; });
+      function cap(x, y) { return (y != null && y > 0) ? Math.min(x, y) : x; }
+      // HISTÓRICO LIDO ATÉ O FIM → O TOTAL É O QUE A LISTA ENUMERA, não o contador do perfil.
+      // MEDIDO no letzplay em 30/jul (24 páginas de @camilacalia): 478 CARDS mas só 469 ids
+      // de partida distintos — 9 partidas aparecem duas vezes na lista deles. O "478 Jogos"
+      // do perfil conta card, não partida. Enquanto o total vinha dele, a barra fechava em
+      // "469 de 478" e o perfil ficava eternamente INCOMPLETO por 9 fantasmas.
+      // Mesma regra que já vale pros torneios: lista que se pode contar vale mais que
+      // contador cujo critério a gente não conhece.
+      var gTot = (C.complete === true) ? jogos : totJogos;
       return {
-        g: nG, t: Object.keys(tS).length, r: Object.keys(rS).length,
-        gY: (declaredGamesTotal != null) ? declaredGamesTotal : ((prior && prior.declaredGames != null) ? prior.declaredGames : null),
-        tY: (declaredTournTotal != null) ? declaredTournTotal : ((prior && prior.declaredTournaments != null) ? prior.declaredTournaments : null),
-        rY: (declaredRankingsTotal != null) ? declaredRankingsTotal : ((prior && prior.declaredRankings != null) ? prior.declaredRankings : null)
+        g: cap(jogos, gTot), t: cap(tOk, totTorneios), r: cap(rOk, totRankings),
+        gY: gTot, tY: totTorneios, rY: totRankings
       };
     }
-    function fail(code) { post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: code }); }
+    function prog(e) {
+      if (abandonada()) return;      // não pinta a tela de uma leitura que já foi substituída
+      e = e || {};
+      // O CURSOR VIAJA JUNTO DO PROGRESSO. Ele é minúsculo (o que já foi lido, por id, e a
+      // página do histórico) e assim o app pode gravá-lo A CADA PÁGINA. Antes só ia dentro
+      // do PARCIAL, que sai de 3 em 3 páginas — uma interrupção perdia até duas páginas de
+      // trabalho e a retomada refazia. Guardar onde parou é o que torna barato retomar
+      // jogos, torneios e rankings exatamente do ponto em que ficaram.
+      post({ __sp_lp: 'athlete-import-progress', tournamentId: tournamentId, uid: uid || null, handle: handle,
+        current: { uid: uid || null, handle: handle, phase: e.phase || null, note: e.note || null },
+        pct: (e.pct != null ? e.pct : null), feed: e.feed || null, counts: contagens(),
+        cursor: { v: 4, handle: realHandle, toursDone: C.toursDone, ranksDone: C.ranksDone,
+                  pageDone: lastPageRead, pagesRead: C.pagesRead, pagesTotal: maxPage || null,
+                  complete: C.complete === true } });
+    }
+    function fail(code) {
+      post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle, ok: false, error: code });
+    }
     if (!X || !I || !F) { fail('libs'); return; }
-    // Orçamento de paciência: até 2 esperas de rate-limit (ou 2min somados). Estourou →
-    // 'rate-budget' sobe, a rodada PAUSA, grava o que tem e o organizador retoma depois.
-    _rateBudget = { waits: 0, totalMs: 0 };
-    try {
-      // SEMENTE: rodadas anteriores entram no acumulado (dedupe por chave) e os
-      // nomes/classificações já resolvidos não são re-buscados.
-      var all = _gamesToMatches(prior && prior.games);
-      var seen = {}; all.forEach(function (m) { seen[_gameKey(m)] = 1; });
-      var priorNames = {};
-      ((prior && prior.footprint) || []).forEach(function (f) {
-        var id = (f.official ? 't/' : 'r/') + (f.club || '') + '/' + (f.tourneyId || f.rankingId || '');
-        if (f.name && f.name !== f.categoryRaw) priorNames[id] = { name: f.name, standings: f.standings || null, logo: f.logo || null };
-      });
-      function addMatches(list) {
-        var n = 0;
-        (list || []).forEach(function (m) { if (!m) return; var k = _gameKey(m); if (seen[k]) return; seen[k] = 1; all.push(m); n++; });
-        return n;
-      }
-      var realHandle = handle;
-      var tourneyDetails = {};
-      function buildRawWithDetails() {
-        var raw = F.buildRaw(realHandle, all);
-        (raw.tournaments || []).forEach(function (t) {
-          if (!t.tourneyId || !t.club) return;
-          var d = tourneyDetails['t/' + t.club + '/' + t.tourneyId] || priorNames['t/' + t.club + '/' + t.tourneyId];
-          if (d) { if (d.name) t.name = d.name; if (d.standings) t.standings = d.standings; if (d.logo) t.logo = d.logo; }
-        });
-        (raw.rankings || []).forEach(function (r) {
-          if (!r.rankingId || !r.club) return;
-          var d = priorNames['r/' + r.club + '/' + r.rankingId];
-          // standings herdados de gravação ANTIGA podem estar completos → slim de novo
-          if (d) { if (d.name) r.name = d.name; if (d.standings) r.standings = slimRankingStandings(d.standings, realHandle); if (d.logo) r.logo = d.logo; }
-        });
-        return raw;
-      }
-      var parts = [];                     // participações em torneios (lista pública)
-      var declaredGamesTotal = null;      // quantos jogos o letzplay DIZ que existem
-      var declaredRankingsTotal = null, declaredTournTotal = null;
-      var maxPage = 1, parcial = null, pausado = false, lastPageRead = 0;
-      // PRAZO DURO da rodada: 4 min. Rodada nunca fica pendurada — estourou, PAUSA
-      // (grava o que veio) e o organizador retoma com outro clique.
-      var deadline = Date.now() + 240000;
-      function checkDeadline() { if (Date.now() > deadline) { var e = new Error('tempo da rodada esgotado'); e.code = 'rate-budget'; throw e; } }
-      function stampDeclared(imp) {
-        imp.declaredTournaments = (declaredTournTotal != null) ? declaredTournTotal : (parts.length || ((prior && prior.declaredTournaments) || null));
-        imp.declaredRankings = (declaredRankingsTotal != null) ? declaredRankingsTotal : ((prior && prior.declaredRankings) || null);
-        if (declaredGamesTotal != null) imp.declaredGames = declaredGamesTotal;
-        else if (prior && prior.declaredGames != null) imp.declaredGames = prior.declaredGames;
-        // v1.48: a LISTA de torneios (título já traz a categoria) é PERSISTIDA — o app
-        // mostra todos no dialog (lidos e pendentes) e a rodada seguinte pula a releitura
-        // da lista quando ela já está completa. Pedido do dono: "se leu 2 de 2, já
-        // deveria ter todos os torneios dela com a categoria".
-        if (parts.length) imp.tournamentsList = parts.map(function (Pp) { return { club: Pp.club, tid: Pp.tid, title: Pp.title || null }; });
-        else if (prior && Array.isArray(prior.tournamentsList) && prior.tournamentsList.length) imp.tournamentsList = prior.tournamentsList;
-        return shrinkImport(imp);
-      }
-      function postPartial(stage, done, total) {
-        try {
-          if (!all.length) return;
-          var imp = I.normalize(buildRawWithDetails(), { importedAt: new Date().toISOString() });
-          imp.partialReason = 'parcial: ' + stage + ' ' + done + '/' + total;   // rodada em curso — nunca marca completo
-          imp = stampDeclared(imp);
-          post({ __sp_lp: 'athlete-import-partial', tournamentId: tournamentId, uid: uid || null, handle: handle,
-            stage: stage, done: done, total: total, scan: scanFromImport(realHandle, imp), fullImport: imp });
-        } catch (e) {}
-      }
-      // Barra REAL 0–100: torneios ocupam 2→30%, páginas de jogos 30→95%, final 97%.
-      function pctTour(i) { return Math.min(30, 2 + Math.round((i / Math.max(1, parts.length)) * 28)); }
-      function pctPage(p, mx) { return Math.min(95, 30 + Math.round((p / Math.max(1, mx)) * 65)); }
-      // Posição do atleta na classificação do torneio (pros feeds e pro dialog do app).
-      function myPos(standings, h) {
-        var low = String(h || '').toLowerCase(), out = null;
-        (standings || []).forEach(function (g) {
-          (g.rows || []).forEach(function (r) {
-            if (out == null && r.pos != null && (r.handles || []).some(function (x) { return String(x).toLowerCase() === low; })) out = r.pos;
-          });
-        });
-        return out;
-      }
-      function isPause(e) { return !!(e && e.code === 'rate-budget'); }
-      // Jogos da atleta JÁ acumulados num torneio + mínimo ESPERADO (V+D da linha dela
-      // na classificação). Base do skip honesto e da paginação com parada (v1.45).
-      function countTid(tid) {
-        var n = 0; all.forEach(function (m) { if (m.official && String(m.tourneyId) === String(tid)) n++; });
-        return n;
-      }
-      function expGames(standings, h) {
-        var low = String(h || '').toLowerCase(), out = null;
-        (standings || []).forEach(function (g) {
-          (g.rows || []).forEach(function (r) {
-            if (out == null && (r.handles || []).some(function (x) { return String(x).toLowerCase() === low; }) &&
-              (r.wins != null || r.losses != null)) out = (r.wins || 0) + (r.losses || 0);
-          });
-        });
-        return out;
-      }
 
-      try {   // ── etapas 1–3: um 'rate-budget' aqui dentro PAUSA (grava e sai), não falha ──
-      // ── ABRE o perfil do jogador NA ABA do letzplay (v1.46 — automático, como o scan
-      // antigo). A navegação real resolve o desafio do Cloudflare no contexto da página;
-      // sem ela, com o CF desconfiado, os fetches voltavam bloqueados e "não achava nada".
-      prog({ phase: 'perfil', note: 'abrindo o perfil de @' + handle + ' no letzplay', pct: 1 });
-      await new Promise(function (rNav) {
-        try {
-          chrome.runtime.sendMessage({ type: 'lp-nav', url: 'https://letzplay.me/' + encodeURIComponent(handle) },
-            function () { void chrome.runtime.lastError; rNav(); });
-        } catch (eNav) { rNav(); }
+    // ── montagem do import ──────────────────────────────────────────────────────
+    function addJogos(lista) {
+      var n = 0;
+      (lista || []).forEach(function (m) {
+        if (!m) return;
+        var k = _gameKey(m);
+        if (seen[k]) return;
+        seen[k] = 1; all.push(m); n++;
       });
-      // ── ETAPA 0: TOTAIS do perfil público ("472 Jogos · 29 Rankings · 35 Torneios") —
-      // vêm no HTML cru e viram os "de y" das barras (jogos/rankings/torneios).
-      prog({ phase: 'perfil', note: 'lendo os totais do perfil', pct: 1 });
-      try {
-        var dprof = await bgFetchDoc('https://letzplay.me/' + encodeURIComponent(handle));
-        var btxt = ((dprof.body && dprof.body.textContent) || '').replace(/\s+/g, ' ');
-        var mJ = btxt.match(/(\d+)\s*Jogos/); if (mJ) declaredGamesTotal = +mJ[1];
-        var mR = btxt.match(/(\d+)\s*Rankings/); if (mR) declaredRankingsTotal = +mR[1];
-        var mT = btxt.match(/(\d+)\s*Torneios/); if (mT) declaredTournTotal = +mT[1];
-        prog({ pct: 2, feed: '👤 perfil: ' + (declaredGamesTotal != null ? declaredGamesTotal : '?') + ' jogos · ' + (declaredRankingsTotal != null ? declaredRankingsTotal : '?') + ' rankings · ' + (declaredTournTotal != null ? declaredTournTotal : '?') + ' torneios' });
-      } catch (e0) { if (isPause(e0)) throw e0; }
-      // ── ETAPA 1: lista de torneios da pessoa (PAGINADA — 35 não cabem numa página).
-      // v1.48: lista COMPLETA de rodada anterior é reusada SEM fetch (só relê quando o
-      // total declarado do perfil cresceu — torneio novo).
-      var priorList = (prior && Array.isArray(prior.tournamentsList)) ? prior.tournamentsList : null;
-      function seedFromPriorList() {
-        (priorList || []).forEach(function (Pp) {
-          if (Pp && Pp.club && Pp.tid) parts.push({ club: Pp.club, tid: Pp.tid, title: Pp.title || '' });
-        });
-      }
-      if (priorList && priorList.length && (declaredTournTotal == null || priorList.length >= declaredTournTotal)) {
-        seedFromPriorList();
-        prog({ phase: 'torneios', note: 'lista de torneios já gravada (' + parts.length + ') — pulando releitura', pct: 2 });
-        if (declaredTournTotal == null) declaredTournTotal = parts.length;
-      } else {
-      prog({ phase: 'torneios', note: 'lendo a lista de torneios', pct: 2 });
-      try {
-        var tBase = 'https://letzplay.me/' + encodeURIComponent(handle) + '/tournaments';
-        var seenT = {};
-        function collectParts(docL) {
-          [].slice.call(docL.querySelectorAll('a[href]')).forEach(function (a) {
-            var h = a.getAttribute('href') || '';
-            var mm = h.match(/^\/([^\/]+)\/tournaments\/(\d+)$/);
-            if (!mm || seenT[h]) return; seenT[h] = 1;
-            parts.push({ club: mm[1], tid: mm[2], title: (a.textContent || '').replace(/\s+/g, ' ').trim() });
-          });
-        }
-        var dl = await bgFetchDoc(tBase);
-        collectParts(dl);
-        var tMax = F.detectMaxPage(dl);
-        for (var tp = 2; tp <= tMax; tp++) {
-          checkDeadline();
-          prog({ phase: 'torneios', note: 'lista de torneios — página ' + tp + ' de ' + tMax, pct: 2 });
-          collectParts(await bgFetchDoc(tBase + '?page=' + tp));
-        }
-        if (declaredTournTotal == null && parts.length) declaredTournTotal = parts.length;
-      } catch (eT) { if (isPause(eT)) throw eT; }   // sem lista pública → segue pros jogos gerais
-      // fetch da lista falhou/veio vazio mas a rodada anterior tinha → usa a gravada
-      if (!parts.length && priorList && priorList.length) seedFromPriorList();
-      }
-
-      // ── ETAPA 2: por torneio (a lista já vem do mais recente pro mais antigo) ──
-      for (var ti = 0; ti < parts.length; ti++) {
-        checkDeadline();
-        var P = parts[ti], key = 't/' + P.club + '/' + P.tid;
-        var labelT = 'torneio ' + (ti + 1) + ' de ' + parts.length;
-        // SKIP HONESTO (v1.45): só pula se os jogos gravados ≥ V+D da linha dela na
-        // classificação. Antes bastava 1 jogo pra "já gravado, pulando" — a página de
-        // jogos do torneio é PAGINADA e só a 1ª era lida, então torneio ficava
-        // eternamente com 1-2 jogos (caso Camila: 13 torneios · 15 jogos).
-        var priorDet = priorNames[key] || null;
-        var expPrior = priorDet ? expGames(priorDet.standings, realHandle) : null;
-        if (priorDet && priorDet.standings && countTid(P.tid) > 0 &&
-            expPrior != null && countTid(P.tid) >= expPrior) {
-          tourneyDetails[key] = priorDet;
-          prog({ phase: 'torneios', note: labelT + ' — já gravado, pulando', pct: pctTour(ti + 1) });
-          continue;
-        }
-        // RETOMADA SEM RELER (v1.47, pedido do dono: "não parece estar pulando o já
-        // obtido"): nome+classificação de rodada anterior são REUSADOS (zero fetch) —
-        // só busca a página do torneio quando ainda não temos a classificação dele.
-        if (priorDet && priorDet.standings) {
-          tourneyDetails[key] = priorDet;
+      return n;
+    }
+    function detDe(id) { return det[id] || priorNames[id] || null; }
+    // Monta o `raw` com os jogos lidos + o que sabemos de cada competição. Competição
+    // conhecida SEM jogo (ranking em que ela não jogou nada ainda) entra assim mesmo — é o
+    // que faz a barra de rankings poder fechar no total do perfil.
+    function montarRaw() {
+      var raw = F.buildRaw(realHandle, all);
+      (raw.tournaments || []).forEach(function (t) {
+        var d = t.tourneyId && t.club ? detDe('t/' + t.club + '/' + t.tourneyId) : null;
+        if (d) { if (d.name) t.name = d.name; if (d.standings) t.standings = d.standings; if (d.logo) t.logo = d.logo; }
+      });
+      (raw.rankings || []).forEach(function (r) {
+        var d = r.rankingId && r.club ? detDe('r/' + r.club + '/' + r.rankingId) : null;
+        if (d) { if (d.name) r.name = d.name; if (d.standings) r.standings = slimRankingStandings(d.standings, realHandle); if (d.logo) r.logo = d.logo; }
+      });
+      var temT = {}, temR = {};
+      (raw.tournaments || []).forEach(function (t) { if (t.tourneyId) temT['t/' + (t.club || '') + '/' + t.tourneyId] = 1; });
+      (raw.rankings || []).forEach(function (r) { if (r.rankingId) temR['r/' + (r.club || '') + '/' + r.rankingId] = 1; });
+      toursList.forEach(function (P) {
+        var id = 't/' + P.club + '/' + P.tid;
+        if (temT[id]) return;
+        var d = detDe(id); if (!d) return;
+        var _pt = _partirNome(d.name || P.title || '');
+        raw.tournaments.push({ name: d.name || P.title || '', club: P.club, sport: 'Beach Tennis',
+          categoryRaw: _pt.cat || '', year: null, status: 'done', wins: 0, losses: 0,
+          tourneyId: P.tid, rankingId: null, standings: d.standings || null, logo: d.logo || null });
+      });
+      ranksList.forEach(function (R) {
+        var id = 'r/' + R.club + '/' + R.rid;
+        if (temR[id]) return;
+        var d = detDe(id); if (!d) return;
+        var _pr = _partirNome(d.name || R.title || '');
+        raw.rankings.push({ name: d.name || R.title || '', club: R.club, sport: 'Beach Tennis',
+          categoryRaw: _pr.cat || '', year: null, status: 'done', wins: 0, losses: 0,
+          tourneyId: null, rankingId: R.rid, standings: d.standings || null, logo: d.logo || null });
+      });
+      return raw;
+    }
+    var _datasISO = null;                 // lzId → 'aaaa-mm-dd', quando o índice rodou
+    var _cardsRepetidos = (prior && prior.totais && prior.totais.cardsRepetidos) || 0;
+    var _indexTotal = (prior && prior.indexTotal) || 0;
+    var _totaisAntes = (prior && prior.totais) || null;
+    function carimbar(imp) {
+      if (nomeExibicao) { imp.profile = imp.profile || {}; imp.profile.name = nomeExibicao; }
+      if (_indexTotal > 0) imp.indexTotal = _indexTotal;   // total de PARTIDAS, do índice
+      // ── OS TOTAIS SÃO FATO, SEPARADO DO DETALHE ───────────────────────────────
+      // A estrutura (quantos torneios, quantos rankings, quantas partidas) vem do perfil e
+      // do índice JSON, e é conhecida ANTES de ler qualquer HTML. O detalhe — placar,
+      // jogadores, nome, classificação — vem depois e vai PREENCHENDO essa estrutura.
+      // Guardar os dois juntos foi o que permitiu um total virar refém do quanto deu tempo
+      // de ler: "20 de 20 (100%)" para quem tem 158. Aqui o total nunca é derivado do que
+      // conseguimos ler, e nunca diminui — só é substituído por um total NOVO e maior ou
+      // igual, vindo da fonte.
+      // O ÍNDICE CONTA PARTIDAS; O CONTADOR DO PERFIL CONTA LINHAS — e a própria lista do
+      // letzplay REPETE linha. Medido no perfil da Kelly em 31/jul/2026: 8 páginas devolvem
+      // 158 entradas e apenas 157 ids distintos (a partida 9299283 vem na página 2 E na 3).
+      // O perfil dela mostra "158 Jogos". Não existe 158º jogo: existe uma linha repetida.
+      // Por isso o total tem PROCEDÊNCIA. Um total só disputa Math.max com outro da MESMA
+      // qualidade; quando chega um de qualidade melhor (o índice, que deduplica por id), ele
+      // SUBSTITUI — inclusive pra baixo. Sem isso, "157 de 158" nunca fecharia: o piso velho
+      // ficaria travado pra sempre por um número que a fonte contou errado.
+      var _idxOk = _indexTotal > 0;
+      var t = { jogos: _indexTotal || totJogos || 0, torneios: totTorneios || 0, rankings: totRankings || 0,
+                fonte: _idxOk ? 'indice' : 'declarado' };
+      if (_totaisAntes) {
+        var _antesIdx = _totaisAntes.fonte === 'indice';
+        if (_idxOk) {
+          // índice novo manda, inclusive pra baixo (só disputa com outro índice)
+          if (_antesIdx) t.jogos = Math.max(t.jogos, _totaisAntes.jogos || 0);
+        } else if (_antesIdx) {
+          // rodada sem índice não rebaixa um total que veio do índice — o contador do
+          // perfil, que é o que sobra aqui, é justamente o que conta linha repetida
+          t.jogos = _totaisAntes.jogos || t.jogos; t.fonte = 'indice';
         } else {
-          prog({ phase: 'torneios', note: labelT + ' — nome, categoria e classificação', pct: pctTour(ti) });
-          try {
-            var dp = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
-            tourneyDetails[key] = { name: tourneyNameFromDoc(dp), standings: tourneyStandingsFromDoc(dp), logo: tourneyLogoFromDoc(dp) };
-          } catch (e1) { if (isPause(e1)) throw e1; tourneyDetails[key] = priorDet || null; }
+          t.jogos = Math.max(t.jogos, _totaisAntes.jogos || 0);
         }
-        // Jogos do torneio: página é de TODOS os participantes → PAGINA até o fim
-        // (cap 15 págs) e para cedo quando alcança o V+D esperado da classificação.
-        // Se o acumulado JÁ alcança o esperado, nem a página 1 é buscada (retomada).
-        // Jogos de playoff além do V+D chegam pela ETAPA 3 (histórico pessoal) e dedupe.
+        t.torneios = Math.max(t.torneios, _totaisAntes.torneios || 0);
+        t.rankings = Math.max(t.rankings, _totaisAntes.rankings || 0);
+      }
+      if (_cardsRepetidos > 0) t.cardsRepetidos = _cardsRepetidos;
+      if (t.jogos || t.torneios || t.rankings) imp.totais = t;
+      // declaredGames = O QUE O LETZPLAY DIZ, sempre. A contagem de partidas distintas
+      // vive em `indexTotal` e continua sendo o que a leitura persegue por dentro.
+      if (_perfilJogos != null) imp.perfilJogos = _perfilJogos;
+      imp.declaredGames = (_perfilJogos != null) ? _perfilJogos : totJogos;
+      imp.declaredTournaments = totTorneios;
+      imp.declaredRankings = totRankings;
+      if (toursList.length) imp.tournamentsList = toursList.map(function (P) { return { club: P.club, tid: P.tid, title: P.title || null, data: P.data || null, dataNum: P.dataNum || null }; });
+      if (ranksList.length) imp.rankingsList = ranksList.map(function (R) { return { club: R.club, rid: R.rid, title: R.title || null, data: R.data || null, dataNum: R.dataNum || null }; });
+      imp.lzCursor = { v: 4, handle: realHandle, toursDone: C.toursDone, ranksDone: C.ranksDone,
+        pageDone: lastPageRead, pagesRead: C.pagesRead, pagesTotal: maxPage || null,
+        complete: C.complete === true };
+      return boundImportDoc(imp);
+    }
+    // Só o que ENTROU desde o último flush: regravar tudo a cada parcial custava ~25 mil
+    // escritas de documento por leitura e engasgava a aba sozinho.
+    function delta(imp) {
+      var out = [];
+      (imp.games || []).forEach(function (g) {
+        var k = _gameKey(g);
+        if (A.flushed[k]) return;
+        A.flushed[k] = 1; out.push(g);
+      });
+      return out;
+    }
+    function parcialAgora(etapa, feito, total) {
+      if (abandonada()) return;      // nem grava por cima da leitura nova
+      try {
+        var imp = I.normalize(montarRaw(), { importedAt: new Date().toISOString() });
+        imp.partialReason = 'parcial: ' + etapa + ' ' + feito + '/' + total;
+        var d = delta(imp);
+        imp = carimbar(imp);
+        post({ __sp_lp: 'athlete-import-partial', tournamentId: tournamentId, uid: uid || null, handle: handle,
+          stage: etapa, done: feito, total: total, scan: scanFromImport(realHandle, imp),
+          fullImport: imp, gamesDelta: d, cursor: imp.lzCursor });
+      } catch (e) {}
+    }
+
+    function ehPausa(e) { return !!(e && e.code === 'rate-budget'); }
+    function _medalha(p) { return p === 1 ? '🥇' : (p === 2 ? '🥈' : (p === 3 ? '🥉' : '🏅')); }
+    // Separa a CATEGORIA do fim do nome, igual à lista do dialog — o nome do letzplay quase
+    // sempre termina nela ("… Praia Brava Panamby - DUPLA FEMININA C"). Sem separar, ela vai
+    // pro feed grudada no nome e sem cor nenhuma, que é o que o dono está vendo.
+    function _pareceCat(x) {
+      var t = String(x || '').trim();
+      if (!t || t.length > 40 || /ver\s+trilha|trilha\s+de/i.test(t)) return false;
+      if (/(masculin|feminin|mist[ao]|\bmasc\b|\bfem\b)/i.test(t)) return true;
+      return t.length <= 20 && /(^|[\s\/])(FUN|[A-D])\s*[+\-]?\s*($|[\s\/])/i.test(t);
+    }
+    function _partirNome(nome) {
+      var n = String(nome || '').trim();
+      var partes = n.split(/\s+[-–—]\s+/);
+      if (partes.length < 2) return { nome: n, cat: null };
+      var ult = partes[partes.length - 1].trim();
+      if (!_pareceCat(ult)) return { nome: n, cat: null };
+      var corte = n.slice(0, n.length - ult.length).replace(/[\s\-–—·.,:]+$/, '').trim();
+      return corte ? { nome: corte, cat: ult } : { nome: n, cat: null };
+    }
+    function minhaPos(st) {
+      var low = String(realHandle || '').toLowerCase(), out = null;
+      (st || []).forEach(function (g) {
+        (g.rows || []).forEach(function (r) {
+          if (out == null && r.pos != null && (r.handles || []).some(function (x) { return String(x).toLowerCase() === low; })) out = r.pos;
+        });
+      });
+      return out;
+    }
+    // Teto de SEGURANÇA (não é prazo de trabalho): só existe pra uma rodada nunca ficar
+    // pendurada pra sempre. Ao estourar, checkpointa e o app encadeia a seguinte.
+    var limite = Date.now() + 1800000;
+    function conferirTeto() {
+      if (abandonada()) { var a = new Error('abandonada'); a.code = 'abandonada'; throw a; }
+      if (Date.now() > limite) { var e = new Error('teto da rodada'); e.code = 'rate-budget'; throw e; }
+    }
+
+    // Lê uma lista paginada de competições (/{handle}/tournaments ou /rankings).
+    // `esperado` = quantos o perfil declara. Se a paginação da página não for detectável
+    // pelo padrão `?page=`, continua pedindo página por página ATÉ SECAR (uma página que
+    // não acrescenta nada encerra). Foi o que travou os rankings em "7 de 29": a lista
+    // entrega 7 por página e a detecção de paginação não pegava — a leitura parava na
+    // primeira página e a barra nunca passava disso. Não depender do markup deles é o que
+    // faz isso funcionar mesmo quando a página muda.
+    // Junta à lista pública tudo o que já sabemos existir (footprint de rodadas anteriores
+    // e o próprio cursor). `pre` é 't' ou 'r'; `campo` é 'tid' ou 'rid'.
+    function unirConhecidos(lista, pre, campo) {
+      var tem = {};
+      (lista || []).forEach(function (x) { tem[pre + '/' + x.club + '/' + x[campo]] = 1; });
+      var extras = {};
+      Object.keys(priorNames).forEach(function (k) { if (k.charAt(0) === pre && !tem[k]) extras[k] = 1; });
+      Object.keys(pre === 't' ? C.toursDone : C.ranksDone).forEach(function (k) { if (!tem[k]) extras[k] = 1; });
+      // ── COMPETIÇÃO CITADA POR UM JOGO TAMBÉM ENTRA NA LISTA ──────────────────────
+      // A lista pública do perfil é INCOMPLETA: medido em 01/ago/2026, o perfil do dono
+      // enumera 2 torneios e os jogos dele citam 4 (um é o BTG); o do Fabio enumera 33 e
+      // os jogos citam 35. Quem não está na lista nunca era visitado — então nome e
+      // classificação daquele torneio NUNCA chegavam, e a barra ficava em "33 de 35" pra
+      // sempre, sem nada que o usuário pudesse fazer.
+      // O jogo é a prova mais forte de que a competição existe: ele tem id e tem placar.
+      (prior && Array.isArray(prior.games) ? prior.games : []).concat(all || []).forEach(function (g) {
+        if (!g || !g.club) return;
+        var ehT = (g.official === true) || g.kind === 'tournament';
+        if ((pre === 't') !== ehT) return;
+        var id = ehT ? g.tourneyId : g.rankingId;
+        if (id == null) return;
+        var k = pre + '/' + g.club + '/' + id;
+        if (!tem[k]) extras[k] = 1;
+      });
+      Object.keys(extras).forEach(function (k) {
+        var partes = k.split('/');                       // 't/clube/123'
+        if (partes.length < 3 || !partes[1] || !partes[2]) return;
+        var item = { club: partes[1], title: (priorNames[k] && priorNames[k].name) || null };
+        item[campo] = partes[2];
+        lista.push(item);
+      });
+      return lista;
+    }
+
+    // DATA DA COMPETIÇÃO, TIRADA DO PRÓPRIO CARD DA LISTA — sem requisição extra.
+    // MEDIDO na página real (letzplay.me/KellyBarth1/tournaments, 31/jul/2026): o texto do
+    // card traz "Terminou em 28/jun/2026" (concluído), "Jogos em 01/ago" (em andamento) ou
+    // "Próximo Jogo: 01/ago as 11:00hs". O ano some quando é do ano corrente.
+    var _MESES = { jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12 };
+    function _dataDoCard(txt) {
+      var t = String(txt || '');
+      var m = t.match(/Terminou em\s+(\d{1,2})\/([a-zç]{3})\/?(\d{4})?/i)
+           || t.match(/Jogos em\s+(\d{1,2})\/([a-zç]{3})\/?(\d{4})?/i)
+           || t.match(/Pr[óo]ximo Jogo:\s*(\d{1,2})\/([a-zç]{3})\/?(\d{4})?/i);
+      if (!m) return null;
+      var mes = _MESES[String(m[2]).toLowerCase().slice(0, 3)];
+      if (!mes) return null;
+      var ano = m[3] ? +m[3] : new Date().getFullYear();
+      var dia = +m[1];
+      return { num: ano * 10000 + mes * 100 + dia,
+               label: (dia < 10 ? '0' : '') + dia + ' ' + String(m[2]).toLowerCase().slice(0, 3) + ' ' + String(ano).slice(2) };
+    }
+    function _cardDe(a) {
+      var c = a;
+      for (var i = 0; i < 5 && c.parentElement; i++) { c = c.parentElement; if (/\brow\b|card|item/i.test(c.className || '')) break; }
+      return c;
+    }
+
+    async function lerLista(url, re, campo, esperado) {
+      var achados = [], visto = {};
+      function colher(doc) {
+        [].slice.call(doc.querySelectorAll('a[href]')).forEach(function (a) {
+          var h = a.getAttribute('href') || '', m = h.match(re);
+          if (!m) return;
+          // DEDUP PELO ID DA COMPETIÇÃO, NUNCA PELO HREF. Verificado na página real
+          // (letzplay.me/camilacalia/tournaments, 30/jul): são 59 links pra ~20 torneios —
+          // cada torneio aparece 3 vezes, em /{id}, /{id}/players e /{id}/matches. Dedup
+          // por href tratava os três como torneios diferentes, e a leitura percorria a
+          // lista inteira de novo. O id é a identidade; a URL é só um caminho até ele.
+          var chave = m[1] + '/' + m[2];
+          if (visto[chave]) {
+            // guarda o melhor título: o link base costuma ter o nome, /players e /matches não
+            var t0 = (a.textContent || '').replace(/\s+/g, ' ').trim();
+            var ja = visto[chave];
+            if (t0 && (!ja.title || t0.length > ja.title.length)) ja.title = t0;
+            if (!ja.data) { var _d2 = _dataDoCard((_cardDe(a).textContent || '')); if (_d2) { ja.data = _d2.label; ja.dataNum = _d2.num; } }
+            return;
+          }
+          var item = { club: m[1], title: (a.textContent || '').replace(/\s+/g, ' ').trim() };
+          var _dt = _dataDoCard((_cardDe(a).textContent || ''));
+          if (_dt) { item.data = _dt.label; item.dataNum = _dt.num; }
+          item[campo] = m[2];
+          visto[chave] = item;
+          achados.push(item);
+        });
+      }
+      var d1 = await bgFetchDoc(url);
+      colher(d1);
+      var mx = F.detectMaxPage(d1);
+      var p = 2;
+      for (; p <= mx; p++) {
+        conferirTeto();
+        colher(await bgFetchDoc(url + '?page=' + p));
+      }
+      // ainda falta pro que o perfil declara? insiste até uma página não trazer nada novo
+      var teto = 30;
+      while ((esperado == null || achados.length < esperado) && p <= teto) {
+        conferirTeto();
+        var antes = achados.length;
+        colher(await bgFetchDoc(url + '?page=' + p));
+        if (achados.length === antes) break;      // secou
+        p++;
+      }
+      return achados;
+    }
+
+    // Requisições simultâneas por lote. Casa com os slots da fila do background — mandar
+    // mais que isso só faz a fila segurar do outro lado.
+    var LOTE = 2;
+
+    _rateBudget = _newRateBudget(((totJogos || 400) / 13) + 2 * (totTorneios || 30) + (totRankings || 25) + 8);
+
+    try {
+      try {
+        // ── ETAPA 0: os três totais, de cara ───────────────────────────────────
+        prog({ phase: 'perfil', note: 'abrindo o perfil de @' + handle, pct: 1 });
+        // A navegação NÃO passa mais pela fila de trabalho: o app já mandou abrir a página
+        // no instante do clique (`lz-open-profile` → `lp-nav-now`). Enfileirar aqui custava
+        // um passo inteiro da fila — dezenas de segundos — antes de a leitura começar.
+        try { chrome.runtime.sendMessage({ type: 'lp-nav-now', url: 'https://letzplay.me/' + encodeURIComponent(handle) }, function () { void chrome.runtime.lastError; }); }
+        catch (e) {}
+        prog({ phase: 'perfil', note: 'lendo quantos torneios, rankings e jogos existem', pct: 2 });
         try {
-          var expT = expGames((tourneyDetails[key] || {}).standings, realHandle);
-          if (!(expT != null && countTid(P.tid) >= expT)) {
-            prog({ phase: 'torneios', note: labelT + ' — lendo os jogos', pct: pctTour(ti) });
-            var tmBase = 'https://letzplay.me/' + P.club + '/tournaments/' + P.tid + '/matches';
-            var dm = await bgFetchDoc(tmBase);
-            addMatches(X.extractMatchesFromDoc(dm, handle));
-            var tmMax = Math.min(15, F.detectMaxPage(dm));
-            for (var tgp = 2; tgp <= tmMax; tgp++) {
-              if (expT != null && countTid(P.tid) >= expT) break;
-              checkDeadline();
-              prog({ phase: 'torneios', note: labelT + ' — jogos, página ' + tgp + ' de ' + tmMax, pct: pctTour(ti) });
-              addMatches(X.extractMatchesFromDoc(await bgFetchDoc(tmBase + '?page=' + tgp), handle));
+          var dp = await bgFetchDoc('https://letzplay.me/' + encodeURIComponent(handle));
+          var txt = ((dp.body && dp.body.textContent) || '').replace(/\s+/g, ' ');
+          // ── O NÚMERO DO PERFIL É SAGRADO ──────────────────────────────────────
+          // É ele que a pessoa lê no letzplay (397 do Fabio, 162 da Kelly) e é ele que o
+          // app tem que exibir. Ele ficava PERDIDO: mais abaixo, `totJogos = _idx.total`
+          // sobrescrevia esta variável com a contagem de partidas distintas, e era esse
+          // valor que ia pra `declaredGames` — por isso o app mostrava 391/160 e o dono
+          // via divergência com a fonte, três vezes seguidas.
+          var mJ = txt.match(/(\d+)\s*Jogos/); if (mJ) { totJogos = +mJ[1]; _perfilJogos = +mJ[1]; }
+          var mR = txt.match(/(\d+)\s*Rankings/); if (mR) totRankings = +mR[1];
+          var mT = txt.match(/(\d+)\s*Torneios/); if (mT) totTorneios = +mT[1];
+          // NOME DE EXIBIÇÃO DO LETZPLAY. Vem do h1/h2 do perfil ("Camila Calia") ou do
+          // og:title. O app usa isso pra dar nome a quem entrou só com telefone/e-mail e
+          // aparece como "Usuário" — ver _lzAplicarNomeDoLetzplay.
+          nomeExibicao = _nomeDoPerfilDoc(dp) || nomeExibicao;
+          prog({ pct: 3, feed: '👤 ' + (totTorneios != null ? totTorneios : '?') + ' torneios · ' +
+            (totRankings != null ? totRankings : '?') + ' rankings · ' + (totJogos != null ? totJogos : '?') + ' jogos' });
+        } catch (e0) { if (ehPausa(e0)) throw e0; }
+        _rateBudget = _newRateBudget(Math.ceil((totJogos || 0) / 13) + (totTorneios || 0) + (totRankings || 0) + 8);
+
+        // ── ETAPA 1: TORNEIOS ──────────────────────────────────────────────────
+        if (!toursList.length || (totTorneios != null && toursList.length < totTorneios)) {
+          prog({ phase: 'torneios', note: 'lendo a lista de torneios', pct: 4 });
+          try { toursList = await lerLista('https://letzplay.me/' + encodeURIComponent(handle) + '/tournaments', /^\/([^\/]+)\/tournaments\/(\d+)(?:\/|$)/, 'tid', totTorneios); }
+          catch (e1) { if (ehPausa(e1)) throw e1; }
+        }
+        // UNIÃO COM O QUE JÁ CONHECEMOS. A lista pública nem sempre traz tudo: competição
+        // descoberta pelos JOGOS (etapa 3) existe de verdade mas não aparece em
+        // /{handle}/tournaments — e como o laço só percorre a lista, ela nunca era lida e a
+        // barra ficava eternamente "29 de 30". Conhecido e não lido tem que virar trabalho.
+        toursList = unirConhecidos(toursList, 't', 'tid');
+        if (totTorneios == null && toursList.length) totTorneios = toursList.length;
+        // A CAIXA ENCHE JÁ COM A LISTA. Ler a página de cada torneio leva tempo (uma
+        // requisição por torneio), e até a primeira voltar a caixa ficava só com a linha
+        // dos totais — parecia parada. A lista pública já traz o TÍTULO de cada um: mostra
+        // agora, em cinza-claro, e cada linha é substituída pela versão completa (com
+        // categoria e colocação) quando aquele torneio for lido de fato.
+        toursList.slice().sort(function (a, b) { return (b.dataNum || 0) - (a.dataNum || 0); })
+          .slice(0, 12).forEach(function (P) {
+            if (!P || !P.title) return;
+            prog({ phase: 'torneios', feed: { icon: '🏆', data: P.data || null, nome: P.title } });
+          });
+        if (toursList.length > 12) prog({ phase: 'torneios', feed: '… e mais ' + (toursList.length - 12) + ' torneio(s) na lista' });
+        // A FILA JÁ FAZ VÁRIAS AO MESMO TEMPO — mas o laço `await` por item as
+        // serializava mesmo assim. Disparamos em blocos: o tempo total passa a ser
+        // limitado pelo servidor, não pelo nosso laço.
+        // EM BLOCOS, NÃO UMA POR VEZ. A fila do background aceita várias ao mesmo tempo,
+        // mas este laço fazia `await` por item — nunca havia mais de UMA requisição em voo,
+        // e o paralelismo da fila não servia pra nada. Medido pelo dono: 3 minutos pra ~16
+        // páginas de competição. Agora vai de lote em lote; o tempo passa a ser limitado
+        // pelo servidor, não pelo nosso laço.
+        var _pendT = toursList.filter(function (P) {
+          var tk = 't/' + P.club + '/' + P.tid;
+          // ── "JÁ LI" SÓ VALE SE O DETALHE SOBREVIVEU ────────────────────────────
+          // O cursor prova que a página foi ABERTA; ele não prova que o nome e a
+          // classificação estão no documento. A Kelly ficou com `tournaments: []` e
+          // `rankings: []` — e como o cursor dizia "já li os 8", toda releitura PULAVA os
+          // 8 e o array continuava vazio. Sem torneio com título não há evidência; sem
+          // evidência não há veredito; e o nome dela ficava VIOLETA pra sempre, mesmo
+          // depois de puxar tudo. Detalhe perdido = não lido.
+          if (C.toursDone[tk] === 2) return false;   // tentei e não abriu: não insiste
+          var d0 = C.toursDone[tk] ? detDe(tk) : null;
+          if (d0 && (d0.name || d0.standings)) { det[tk] = d0; return false; }
+          return true;
+        });
+        var _totT = totTorneios || toursList.length;
+        for (var _bt = 0; _bt < _pendT.length; _bt += LOTE) {
+          conferirTeto();
+          // O RÓTULO CONTA O MESMO QUE A BARRA: o que já foi LIDO.
+          prog({ phase: 'torneios',
+            note: 'torneio ' + Math.min(Object.keys(C.toursDone).length, _totT) + ' de ' + _totT + ' — nome, categoria e classificação',
+            pct: 4 + Math.round((_bt / Math.max(1, _pendT.length)) * 26) });
+          await Promise.all(_pendT.slice(_bt, _bt + LOTE).map(async function (P) {
+            var tk = 't/' + P.club + '/' + P.tid;
+            try {
+              var dT = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
+              det[tk] = { name: tourneyNameFromDoc(dT), standings: tourneyStandingsFromDoc(dT), logo: tourneyLogoFromDoc(dT) };
+              C.toursDone[tk] = 1;
+              var pT = minhaPos(det[tk].standings);
+              prog({ phase: 'torneios',
+                note: 'torneio ' + Math.min(Object.keys(C.toursDone).length, _totT) + ' de ' + _totT + ' — nome, categoria e classificação',
+                feed: Object.assign({ icon: '🏆', data: P.data || null },
+                  _partirNome(det[tk].name || P.title || ('torneio ' + P.tid)),
+                  { pos: (pT != null ? (_medalha(pT) + ' ' + pT + 'º') : null) }) });
+            } catch (eT) {
+              if (ehPausa(eT)) throw eT;
+              // TENTEI E NÃO ABRIU — isso é um RESULTADO, não um pendente eterno.
+              // Medido no Fabio: 2 dos 35 torneios (vindos dos jogos, fora da lista do
+              // perfil) devolvem erro. Como só entravam na conta ao abrir, a barra ficava
+              // em "33 de 35" pra sempre e cada releitura tentava os mesmos 2 de novo —
+              // "nunca completa e demora uma vida pra fechar".
+              // Marcar como tentado fecha a conta e para de rebuscar. O `2` distingue de
+              // um torneio lido de verdade (`1`), então a lista pode dizer que não abriu.
+              C.toursDone[tk] = 2;
+              prog({ phase: 'torneios', feed: '⚠️ torneio ' + P.tid + ' não abriu — segue sem ele' });
+            }
+          }));
+          parcialAgora('torneios', Math.min(_bt + LOTE, _pendT.length), _pendT.length);
+        }
+
+        // ── ETAPA 2: RANKINGS ──────────────────────────────────────────────────
+        if (!ranksList.length || (totRankings != null && ranksList.length < totRankings)) {
+          prog({ phase: 'rankings', note: 'lendo a lista de rankings', pct: 31 });
+          try { ranksList = await lerLista('https://letzplay.me/' + encodeURIComponent(handle) + '/rankings', /^\/([^\/]+)\/rankings\/(\d+)(?:\/|$)/, 'rid', totRankings); }
+          catch (e2) { if (ehPausa(e2)) throw e2; }
+        }
+        ranksList = unirConhecidos(ranksList, 'r', 'rid');
+        if (totRankings == null && ranksList.length) totRankings = ranksList.length;
+        prog({ phase: 'rankings', pct: 31,
+          note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, (totRankings || ranksList.length) || 1) + ' de ' + ((totRankings || ranksList.length) || '?') + ' — nome e classificação' });
+        var _pendR = ranksList.filter(function (R) {
+          var rk = 'r/' + R.club + '/' + R.rid;
+          if (C.ranksDone[rk] === 2) return false;   // idem torneios: tentado e sem página
+          var d0 = C.ranksDone[rk] ? detDe(rk) : null;
+          if (d0 && (d0.name || d0.standings)) { det[rk] = d0; return false; }
+          return true;
+        });
+        var _totR = totRankings || ranksList.length;
+        for (var _br = 0; _br < _pendR.length; _br += LOTE) {
+          conferirTeto();
+          prog({ phase: 'rankings',
+            note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, _totR) + ' de ' + _totR + ' — nome e classificação',
+            pct: 31 + Math.round((_br / Math.max(1, _pendR.length)) * 14) });
+          await Promise.all(_pendR.slice(_br, _br + LOTE).map(async function (R) {
+            var rk = 'r/' + R.club + '/' + R.rid;
+            try {
+              var dR = await bgFetchDoc('https://letzplay.me/' + R.club + '/rankings/' + R.rid);
+              det[rk] = { name: tourneyNameFromDoc(dR), standings: slimRankingStandings(rankingStandingsFromDoc(dR), realHandle), logo: tourneyLogoFromDoc(dR) };
+              C.ranksDone[rk] = 1;
+              var pR = minhaPos(det[rk].standings);
+              prog({ phase: 'rankings',
+                note: 'ranking ' + Math.min(Object.keys(C.ranksDone).length, _totR) + ' de ' + _totR + ' — nome e classificação',
+                feed: Object.assign({ icon: '📊', data: R.data || null },
+                  _partirNome(det[rk].name || R.title || ('ranking ' + R.rid)),
+                  { pos: (pR != null ? (pR + 'º') : null) }) });
+            } catch (eR) {
+              if (ehPausa(eR)) throw eR;
+              C.ranksDone[rk] = 2;      // tentado e não abriu — mesma lei dos torneios
+              prog({ phase: 'rankings', feed: '⚠️ ranking ' + R.rid + ' não abriu — segue sem ele' });
+            }
+          }));
+          parcialAgora('rankings', Math.min(_br + LOTE, _pendR.length), _pendR.length);
+        }
+
+        // ── ETAPA 3: JOGOS ─────────────────────────────────────────────────────
+        // PRIMEIRO O ÍNDICE (JSON), DEPOIS O PLACAR (HTML).
+        // O índice diz QUAIS partidas existem — id, data e competição — e termina com uma
+        // página vazia. Com ele, duas coisas deixam de ser inferência:
+        //   • o TOTAL: o contador do perfil conta CARDS (478 pra 469 partidas reais na
+        //     Camila, 158 pra 157 na Kelly), e era por isso que a barra nunca fechava;
+        //   • a COMPLETUDE: "li tudo" passa a ser "tenho todos os ids do índice", em vez de
+        //     heurística de página lendo markup.
+        // O placar e os jogadores continuam vindo do HTML, que é onde eles estão.
+        var base = 'https://letzplay.me/' + encodeURIComponent(handle) + '/matches';
+        var _idx = null;
+        if (window._spLzApi) {
+          try {
+            prog({ phase: 'jogos', note: 'lendo o índice do histórico', pct: 46 });
+            // já temos jogos? então o índice para na primeira página sem novidade — o
+            // que é novo entra no começo da lista e é contíguo.
+            // A PARADA ANTECIPADA SÓ VALE QUANDO NÃO HÁ BURACO CONHECIDO.
+            // Ela existe porque, em geral, o que é novo está no topo e é contíguo — então
+            // a primeira página sem novidade encerra o assunto. Mas se o PERFIL declara
+            // mais jogos do que temos, existe buraco conhecido, e ele pode estar em
+            // qualquer página: parar cedo é perder exatamente o que fomos buscar. O teste
+            // com a extensão real pegou isto — com 157 no acervo e 162 no perfil, a
+            // releitura voltava 157 de novo.
+            // O CONTADOR DO PERFIL É SEMPRE MAIOR (ele conta os cards repetidos), então
+            // comparar cru fazia a leitura achar que faltava jogo TODA vez — e varrer o
+            // índice inteiro em toda releitura, mesmo com o acervo completo. É desconto,
+            // não fé: os cardsRepetidos foram medidos na leitura anterior (id por id).
+            var _faltaDeclarado = ((totJogos || 0) - _cardsRepetidos) > all.length;
+            var _conhecidos = null;
+            if (all.length && !_faltaDeclarado) {
+              _conhecidos = {};
+              all.forEach(function (m) { if (m && m.lzId) _conhecidos[String(m.lzId)] = 1; });
+            }
+            if (_faltaDeclarado && all.length) {
+              prog({ phase: 'jogos', note: 'o perfil declara ' + totJogos + ' e temos ' +
+                all.length + ' — varrendo o índice inteiro' });
+            }
+            _idx = await window._spLzApi.indice(handle, bgFetchJson, {
+              conhecidos: _conhecidos,
+              // o contador do perfil é o ALVO: se a varredura vier abaixo dele, houve
+              // deslocamento de paginação e a lib varre de novo pra recuperar o que caiu
+              esperado: totJogos || 0,
+              onProgresso: function (p, n) {
+                prog({ phase: 'jogos', note: 'índice: ' + n + ' partidas em ' + p + ' página(s)' });
+              }
+            });
+            // ⛔ AQUI MORAVA O BUG QUE TRAVOU TUDO. Eu fazia `if (_idx.parcial) _idx = null`.
+            // Numa RELEITURA o índice para na primeira página sem novidade (é a otimização
+            // que a torna barata) e volta `parcial: true` — então eu jogava fora o índice
+            // INTEIRO, junto com os ids novos que ele tinha acabado de achar. Sem índice,
+            // `_faltamIds` dava 0, `jaLeuTudo` continuava verdadeiro e a leitura NÃO LIA
+            // NADA. Medido pelo dono: a Kelly jogou ontem e ficou parada em 157 enquanto o
+            // perfil dela já mostrava 162; o Fabio igual.
+            // O `parcial` só diz UMA coisa: que o TOTAL dele não é o total do perfil. Ele
+            // continua sendo a lista mais confiável do que EXISTE de novo — que é
+            // justamente para o que ele serve numa releitura.
+            var _idxParcial = !!(_idx && _idx.parcial);
+            if (_idx && _idx.porId) {
+              // as datas ISO valem sempre — inclusive das partidas novas de um índice parcial
+              _datasISO = _datasISO || {};
+              Object.keys(_idx.porId).forEach(function (id) {
+                var d = _idx.porId[id] && _idx.porId[id].date;
+                if (d) _datasISO[String(id)] = String(d).slice(0, 10);
+              });
+            }
+            if (_idx && _idxParcial) {
+              prog({ phase: 'jogos', feed: '📇 índice: parou cedo (só o que é novo) — ' +
+                Object.keys(_idx.porId).length + ' partida(s) conferida(s)' });
+            }
+            if (_idx && !_idxParcial && _idx.total > 0) {
+              // ── A DATA VEM DO ÍNDICE, EM ISO ────────────────────────────────────────
+              // O card do HTML traz "Terça, 10/03/26" — dia/mês na convenção brasileira,
+              // que qualquer parser genérico lê como mês/dia. O JSON traz "2026-03-10".
+              // Casando por lzId, cada jogo passa a carregar a data da FONTE, sem
+              // interpretação. Vale pros que já estão no acumulado também.
+              // CARDS REPETIDOS DO LETZPLAY: o contador do perfil conta linhas, e o
+              // letzplay serve o mesmo jogo 2× (medido: Kelly 162→160, Fabio 397→391,
+              // idêntico no HTML). A diferença NÃO é jogo faltando — e vai gravada para a
+              // tela EXPLICAR em vez de parecer que a leitura ficou devendo.
+              if (_idx.linhas != null && totJogos != null && _idx.linhas >= totJogos && totJogos > _idx.total) {
+                _cardsRepetidos = totJogos - _idx.total;
+                prog({ phase: 'jogos', feed: 'ℹ️ o letzplay mostra ' + totJogos + ' jogos, mas ' +
+                  _cardsRepetidos + ' são cards repetidos lá — partidas reais: ' + _idx.total });
+              }
+              totJogos = _idx.total;               // FATO, não estimativa
+              _indexTotal = _idx.total;            // vai gravado, pra tela não depender de cursor
+              maxPage = Math.max(maxPage, _idx.paginas);
+              prog({ phase: 'jogos', feed: '📇 índice: ' + _idx.total + ' partidas · ' +
+                Object.keys(_idx.comps).length + ' competições' });
+            }
+          } catch (eIdx) {
+            if (ehPausa(eIdx)) throw eIdx;
+            // sem índice a leitura continua do jeito antigo — ele acelera e dá certeza,
+            // mas não pode ser ponto único de falha.
+            prog({ phase: 'jogos', feed: '⚠️ índice indisponível — lendo pelo caminho longo' });
+          }
+        }
+        // ── "JÁ LI TUDO" VALE PRA ONTEM, NÃO PRA HOJE ─────────────────────────────
+        // O cursor dizia "as 20 páginas foram lidas" e a leitura PULAVA a etapa inteira.
+        // Só que ontem a Kelly e o Fabio jogaram um torneio novo: há partidas que o cursor
+        // não conhece, e elas entram por CIMA (a lista é do mais recente pro mais antigo),
+        // não numa página 21. Enquanto o cursor mandasse sozinho, jogo novo nunca entrava —
+        // "o sistema não atualiza".
+        // O ÍNDICE é quem sabe: ele acabou de listar os ids que existem. Se algum deles não
+        // está no acervo, não está tudo lido, ponto — não importa o que o cursor ache.
+        var _temId = {};
+        all.forEach(function (m) { if (m && m.lzId) _temId[String(m.lzId)] = 1; });
+        // ── JOGO QUE SUMIU DA FONTE SAI DO ACERVO ────────────────────────────────
+        // Regra do dono: "se existe um jogo que não existe, exclua ele sempre, de
+        // qualquer atleta". Medido na Kelly (02/ago/2026): o letzplay APAGOU os ids
+        // 7770343 e 8894371 (recriou a série com outros ids) e o nosso acervo ficou com
+        // 162 quando a fonte enumera 160. O índice COMPLETO é a enumeração oficial do que
+        // existe: id gravado que não está nele é jogo que a fonte removeu.
+        // Só com índice completo (parcial não enumera tudo) e não-vazio.
+        if (_idx && !_idxParcial && _idx.total > 0) {
+          var _antesRm = all.length;
+          for (var _ri = all.length - 1; _ri >= 0; _ri--) {
+            var _g = all[_ri];
+            if (_g && _g.lzId && !_idx.porId[String(_g.lzId)]) all.splice(_ri, 1);
+          }
+          if (all.length < _antesRm) {
+            _temId = {}; all.forEach(function (m) { if (m && m.lzId) _temId[String(m.lzId)] = 1; });
+            prog({ phase: 'jogos', feed: '🧹 ' + (_antesRm - all.length) +
+              ' jogo(s) removidos: o letzplay apagou esses ids' });
+          }
+        }
+        var _idsConhecidos = Object.keys(_temId).length;
+        // Só dá pra dizer "falta o id X" quando o acervo é identificado por id. Num
+        // documento do motor antigo (zero lzId) TODO id pareceria faltando e a leitura
+        // reliria o histórico inteiro — a migração já cuida desse caso por outro caminho.
+        var _faltamIds = (_idx && _idsConhecidos > 0)
+          ? Object.keys(_idx.porId).filter(function (id) { return !_temId[id]; }).length : 0;
+        if (_faltamIds > 0) {
+          // MIRA NAS PÁGINAS QUE TÊM O QUE FALTA — não rebobina tudo. O índice devolve as
+          // partidas NA ORDEM em que o letzplay as serve (20 por página), então a posição
+          // de um id dá a página dele. Rebobinar do zero relia dezenas de páginas já lidas
+          // (o harness pegou); mirar lê só o necessário.
+          var _pgFalta = {};
+          (_idx.matches || []).forEach(function (m, i) {
+            if (m && !_temId[String(m.id)]) _pgFalta[Math.floor(i / 20) + 1] = 1;
+          });
+          Object.keys(_pgFalta).forEach(function (pg) {
+            if (C.pagesRead) delete C.pagesRead[pg];
+            if (C.pageDone >= +pg) C.pageDone = +pg - 1;
+          });
+          C.complete = false;
+          var _pgs = Object.keys(_pgFalta).map(Number).sort(function (a, b) { return a - b; });
+          prog({ phase: 'jogos', feed: '🆕 ' + _faltamIds + ' partida(s) nova(s) — lendo ' +
+            _pgs.length + ' página(s): ' + _pgs.join(', ') });
+          // LÊ EXATAMENTE ESSAS PÁGINAS, AGORA. Deixar isso pro laço incremental não
+          // funciona: ele começa na página 1 e PARA na primeira que não traz novidade —
+          // a mesma suposição de que "o novo está no topo" que já tinha falhado no índice.
+          // Quando o novo está na página 8, ele nunca chega lá. Aqui a página é conhecida
+          // pelo id: vai direto, e são só as que faltam.
+          for (var _ip = 0; _ip < _pgs.length; _ip++) {
+            conferirTeto();
+            var _pgN = _pgs[_ip];
+            try {
+              var _dN = await bgFetchDoc(_pgN > 1 ? (base + '?page=' + _pgN) : base);
+              var _addN = addJogos(X.extractMatchesFromDoc(_dN, realHandle));
+              C.pagesRead[_pgN] = 1; lastPageRead = Math.max(lastPageRead || 0, _pgN);
+              maxPage = Math.max(maxPage, F.detectMaxPage(_dN), _pgN);
+              prog({ phase: 'jogos', feed: '🎾 página ' + _pgN + ': +' + _addN + ' jogo(s) novo(s)' });
+            } catch (ePg) { if (ehPausa(ePg)) throw ePg; }
+          }
+          // recomputa: o que faltava pode ter acabado de entrar
+          _temId = {}; all.forEach(function (m) { if (m && m.lzId) _temId[String(m.lzId)] = 1; });
+          _faltamIds = Object.keys(_idx.porId).filter(function (id) { return !_temId[id]; }).length;
+          if (_faltamIds === 0) {
+            C.complete = true;
+            for (var _q2 = 1; _q2 <= (C.pagesTotal || maxPage || 1); _q2++) C.pagesRead[_q2] = 1;
+            C.pageDone = Math.max(C.pageDone || 0, C.pagesTotal || maxPage || 0);
+            prog({ phase: 'jogos', feed: '✅ tudo do índice está no acervo' });
+          }
+        }
+        var jaLeuTudo = (C.pagesTotal > 0 && C.pageDone >= C.pagesTotal) && _faltamIds === 0;
+        if (jaLeuTudo) {
+          C.complete = true;
+          prog({ phase: 'jogos', note: 'histórico já lido por inteiro (' + C.pageDone + ' páginas)', pct: 97 });
+        } else {
+          // JÁ TEMOS ACERVO? Então a leitura é INCREMENTAL e começa na página 1 (o novo
+          // entra por cima), não na página seguinte à do cursor.
+          // MIGRANDO nunca é incremental: os jogos velhos continuam no acumulado (pra o doc
+          // não encolher), mas eles NÃO são prova de que a página foi lida — precisamos
+          // varrer tudo de novo. Sem esta linha a leitura pararia na primeira página "sem
+          // novidade" e a limpeza nunca aconteceria.
+          var jaConhecidos = (!migrando && _varreduraAnteriorFechou) ? all.length : 0;
+          // A PÁGINA 1 é onde entra jogo novo, então ela vem primeiro — MAS só quando faz
+          // sentido: numa varredura ainda incompleta ela já foi lida e reler é desperdício
+          // (o harness pegou: "não releu nenhuma página anterior à do cursor"). Regra: lê a
+          // 1 quando ainda não foi lida, ou quando a varredura anterior FECHOU (aí ela é
+          // justamente o lugar onde o novo apareceu).
+          var _leAUm = !C.pagesRead[1] || _varreduraAnteriorFechou;
+          var pIni = _leAUm ? 1 : (function () {
+            for (var q = 1; q <= (C.pagesTotal || 1); q++) if (!C.pagesRead[q]) return q;
+            return C.pageDone + 1;
+          })();
+          prog({ phase: 'jogos', note: (jaConhecidos > 0
+              ? 'procurando jogos novos a partir do começo do histórico'
+              : (pIni > 1 ? ('retomando o histórico na página ' + pIni) : 'abrindo o histórico de jogos')),
+            pct: 46 });
+          var d1 = await bgFetchDoc(pIni > 1 ? (base + '?page=' + pIni) : base);
+          var cards = d1.querySelectorAll('.row.match').length;
+          var pg1 = X.extractMatchesFromDoc(d1, realHandle);
+          if (!pg1.length && cards > 0) {
+            var det0 = F.detectMe(d1);
+            if (det0 && det0.toLowerCase() !== String(realHandle).toLowerCase()) {
+              realHandle = det0;
+              pg1 = X.extractMatchesFromDoc(d1, det0);
+              prog({ phase: 'jogos', note: '@ real detectado: ' + det0 });
             }
           }
-        } catch (e2) { if (isPause(e2)) throw e2; }
-        // FEED: o que acabou de ser lido — nome (com categoria), classificação e nº de jogos.
-        var det2 = tourneyDetails[key] || {};
-        var nG = 0; all.forEach(function (m) { if (m.official && String(m.tourneyId) === String(P.tid)) nG++; });
-        var posMe = myPos(det2.standings, realHandle);
-        prog({ phase: 'torneios', pct: pctTour(ti + 1),
-          feed: '🏆 ' + (det2.name || P.title || ('torneio ' + P.tid)) + (posMe != null ? (' · ' + posMe + 'º lugar') : '') + ' · ' + nG + ' jogo(s)' });
-        postPartial('torneios', ti + 1, parts.length);   // grava a cada torneio
+          if (!cards && !all.length && !pg1.length) { fail('pagina-sem-cards'); return; }
+          maxPage = Math.max(F.detectMaxPage(d1), pIni);
+          var tg = F.parseTotalGames(d1);
+          if (tg != null && totJogos == null) totJogos = tg;
+          var add1 = addJogos(pg1);
+          lastPageRead = pIni; C.pagesRead[pIni] = 1;
+          var _lidas1 = 0; for (var _z = 1; _z <= maxPage; _z++) if (C.pagesRead[_z]) _lidas1++;
+          prog({ phase: 'jogos', pct: 46 + Math.round((_lidas1 / Math.max(1, maxPage)) * 51),
+            note: 'lendo página ' + Math.min(_lidas1, maxPage) + ' de ' + maxPage,
+            feed: '🎾 página ' + pIni + ': +' + add1 + ' jogo(s) · ' + _lidas1 + ' de ' + maxPage });
+          // nada novo já na primeira: o acervo está em dia, uma requisição resolveu
+          if (jaConhecidos > 0 && add1 === 0) {
+            C.complete = true;
+            prog({ phase: 'jogos', pct: 97, feed: '✅ nada novo — o histórico já estava em dia' });
+          }
+          // O HISTÓRICO É MAIS-RECENTE-PRIMEIRO: jogo novo entra na PÁGINA 1 e empurra o
+          // resto pra baixo. Então, numa releitura de quem já tem acervo, o que falta está
+          // no COMEÇO — e varrer as 8 páginas até o fim pra achar 6 jogos novos é trabalho
+          // jogado fora (pergunta do dono: "faltam 6 jogos e passa por 8 páginas?").
+          // Regra: se já conhecíamos jogos antes desta leitura, paramos assim que uma
+          // página inteira não trouxer NADA novo — dali pra trás é tudo o que já temos.
+          // Numa leitura do zero (acervo vazio) segue varrendo até o fim, como antes.
+          // Isso também conserta um defeito do cursor por PÁGINA: o número da página não é
+          // estável num feed que cresce por cima — "página 8" hoje não é a de ontem.
+          var _incremental = (jaConhecidos > 0);
+          var _secas = 0;
+          // VARREDURA COMPLETA vai em LOTE (não há como uma página cancelar a outra);
+          // a INCREMENTAL segue página a página, porque ela precisa parar na primeira que
+          // não trouxer novidade — e disparar 3 de uma vez leria páginas à toa.
+          if (!_incremental) {
+            // SÓ AS PÁGINAS QUE FALTAM, e das PONTAS PRO MEIO. O que é novo está no começo
+            // e o que ficou pra trás numa leitura interrompida está no fim — o meio é o
+            // menos provável. Com 157 de 158 jogos, o app relia as 8 páginas em ordem
+            // atrás de um jogo que, se existisse, estaria numa ponta.
+            var _faltam = [];
+            for (var _q = 1; _q <= maxPage; _q++) if (!C.pagesRead[_q]) _faltam.push(_q);
+            _faltam.sort(function (a, b) {
+              // distância até a ponta mais próxima: 1ª página e última primeiro
+              return Math.min(a - 1, maxPage - a) - Math.min(b - 1, maxPage - b);
+            });
+            for (var _bp = 0; _bp < _faltam.length; _bp += LOTE) {
+              conferirTeto();
+              var _grupo = _faltam.slice(_bp, _bp + LOTE);
+              // RÓTULO INEQUÍVOCO. Lemos as páginas das PONTAS pro meio, então um lote é
+              // "24 e 2" — e "página 24, 2 de 24" lia como "página 24, 2 de 24", que não
+              // quer dizer nada. Agora diz quais páginas estão sendo lidas E quantas já
+              // foram, que é o número que bate com o resto da tela.
+              function _lidasAgora() {
+                var n = 0; for (var z = 1; z <= maxPage; z++) if (C.pagesRead[z]) n++;
+                return n;
+              }
+              // UM NÚMERO SÓ, correndo: "lendo página N de M", onde N é quantas páginas já
+              // foram lidas contando a atual. Se 23 já foram e falta uma, é "24 de 24".
+              // Nada de "faltam": o próprio N de M já diz tudo, e o resto é ruído.
+              function _placar(lidas) { return 'lendo página ' + Math.min(lidas, maxPage) + ' de ' + maxPage; }
+              var _rot = (_grupo.length > 1 ? 'páginas ' : 'página ') + _grupo.join(' e ');
+              // O NÚMERO É QUANTAS PÁGINAS JÁ FORAM LIDAS, contando a que está sendo lida
+              // agora — não quantas cabem no lote. Se 23 já foram e falta uma, é "24 de 24",
+              // não "1 de 24": o trabalho que já existe não deixa de existir porque esta
+              // rodada só precisa de uma página.
+              var _pos = Math.min(_lidasAgora() + _grupo.length, maxPage);
+              prog({ phase: 'jogos', note: _placar(_pos),
+                pct: 46 + Math.round((_pos / Math.max(1, maxPage)) * 51) });
+              var _docs = await Promise.all(_grupo.map(function (q) {
+                return bgFetchDoc(q > 1 ? (base + '?page=' + q) : base);
+              }));
+              var _addLote = 0, _vazias = 0;
+              _docs.forEach(function (d, _i) {
+                // PÁGINA SEM CARD NÃO É PÁGINA LIDA. Um fetch que falha vira um documento
+                // vazio aqui — e marcar isso como "lida" fazia a varredura se dar por
+                // completa e a limpeza apagar o que estava bom. Foi assim que os 158 jogos
+                // da Kelly viraram 20: as páginas 2..24 "falharam com sucesso".
+                var _cards = 0;
+                try { _cards = d.querySelectorAll('.row.match').length; } catch (e) {}
+                _addLote += addJogos(X.extractMatchesFromDoc(d, realHandle));
+                if (_cards > 0) {
+                  C.pagesRead[_grupo[_i]] = 1;
+                  if (_grupo[_i] > lastPageRead) lastPageRead = _grupo[_i];
+                } else _vazias++;
+              });
+              if (_vazias) prog({ phase: 'jogos', feed: '⚠️ ' + _vazias + ' página(s) voltaram vazias — não contam como lidas' });
+              prog({ phase: 'jogos', pct: 46 + Math.round((_lidasAgora() / Math.max(1, maxPage)) * 51),
+                note: _placar(_lidasAgora()),
+                feed: '🎾 ' + _rot + ': +' + _addLote + ' jogo(s) · ' + _lidasAgora() + ' de ' + maxPage });
+              if (_bp + LOTE < _faltam.length) parcialAgora('jogos', _bp + _grupo.length, _faltam.length);
+            }
+            // COMPLETO = TENHO TODOS OS IDS DO ÍNDICE. Isso é verificação, não heurística:
+            // o índice já disse quais partidas existem. Sem índice, cai na regra antiga
+            // (todas as páginas no conjunto).
+            if (_idx && _idx.total > 0) {
+              var _faltando = 0;
+              for (var _k in _idx.porId) if (!seen['lz' + _k]) _faltando++;
+              if (_faltando === 0) C.complete = true;
+              else prog({ phase: 'jogos', feed: '🔎 faltam ' + _faltando + ' partida(s) do índice' });
+            } else {
+              var _todas = true;
+              for (var _c = 1; _c <= maxPage; _c++) if (!C.pagesRead[_c]) { _todas = false; break; }
+              if (_todas) C.complete = true;
+            }
+          }
+          // ⚠️ SÓ NO MODO INCREMENTAL. Este laço é o que para na primeira página sem
+          // novidade; no modo completo quem lê é o bloco de lotes acima. Sem esta guarda os
+          // dois rodavam em sequência: o segundo repassava as páginas (vazias, porque já
+          // tinham falhado), marcava todas como lidas e declarava a varredura completa —
+          // e aí a limpeza da migração apagava o histórico bom. Foi assim que os 158 jogos
+          // da Kelly viraram 20.
+          for (var p = pIni + 1; _incremental && p <= maxPage && !C.complete; p++) {
+            conferirTeto();
+            var _lidasP = 0; for (var _y = 1; _y <= maxPage; _y++) if (C.pagesRead[_y]) _lidasP++;
+            prog({ phase: 'jogos',
+              note: 'lendo página ' + Math.min(_lidasP + 1, maxPage) + ' de ' + maxPage,
+              pct: 46 + Math.round((_lidasP / Math.max(1, maxPage)) * 51) });
+            var add = addJogos(X.extractMatchesFromDoc(await bgFetchDoc(base + '?page=' + p), realHandle));
+            // página vazia não é página lida (ver o mesmo cuidado no bloco de lotes)
+            lastPageRead = p; if (add > 0) C.pagesRead[p] = 1;
+            if (_incremental) {
+              if (add === 0) _secas++; else _secas = 0;
+              if (_secas >= 1) {
+                // uma página inteira sem novidade = alcançamos o que já tínhamos
+                C.complete = true;
+                prog({ phase: 'jogos', pct: 97,
+                  feed: '✅ alcancei o que já estava gravado na página ' + p + ' — parei aqui' });
+                break;
+              }
+            }
+            prog({ phase: 'jogos', pct: 46 + Math.round((p / Math.max(1, maxPage)) * 51),
+              feed: '🎾 página ' + p + ' de ' + maxPage + ': +' + add + ' jogo(s)' });
+            // NUNCA na última página: o fechamento vem logo atrás e as duas escritas
+            // correm pro MESMO doc. Medido em produção: o doc final da Camila ficou com
+            // `partialReason: "parcial: jogos 24/24"` (o parcial chegou depois), e por
+            // causa disso a tela dizia "Perfil INCOMPLETO" numa leitura que fechou.
+            if (p % 3 === 0 && p < maxPage) parcialAgora('jogos', p, maxPage);
+          }
+          if (lastPageRead >= maxPage) C.complete = true;
+        }
+      } catch (eEtapa) {
+        if (eEtapa && eEtapa.code === 'abandonada') throw eEtapa;   // sai calado
+        if (ehPausa(eEtapa)) pausado = true;
+        else if (!all.length) throw eEtapa;
+        else parcial = String((eEtapa && eEtapa.message) || eEtapa).slice(0, 100);
       }
 
-      // ── ETAPA 3: jogos gerais (rankings + torneios fora da lista), recente→antigo ──
-      prog({ phase: 'jogos', note: 'abrindo o histórico geral', pct: pctPage(0, 1) });
-      var base = 'https://letzplay.me/' + encodeURIComponent(handle) + '/matches';
-      var d1 = await bgFetchDoc(base);
-      var cards1 = d1.querySelectorAll('.row.match').length;
-      var page1 = X.extractMatchesFromDoc(d1, handle);
-      if (!page1.length && cards1 > 0) {
-        // O @ digitado não casa com os cards → detecta o @ REAL predominante da página
-        // (na página de jogos do atleta, é ele). Cobre variação/typo de handle.
-        var det = F.detectMe(d1);
-        if (det && det.toLowerCase() !== String(handle).toLowerCase()) {
-          realHandle = det;
-          page1 = X.extractMatchesFromDoc(d1, det);
-          prog({ phase: 'jogos', note: '@ real detectado: ' + det });
-        }
-      }
-      if (!cards1 && !all.length && !page1.length) { fail('pagina-sem-cards'); return; }
-      maxPage = F.detectMaxPage(d1);
-      declaredGamesTotal = F.parseTotalGames(d1);
-      var add1 = addMatches(page1);
-      lastPageRead = 1;
-      prog({ phase: 'jogos', pct: pctPage(1, maxPage), feed: '🎾 página 1 de ' + maxPage + ': +' + add1 + ' jogo(s) · total ' + all.length });
-      // Rodada anterior COMPLETA → pode PARAR quando uma página inteira já é conhecida
-      // (dali pra trás está tudo gravado). Rodada anterior parcial → lê até o fim.
-      var priorComplete = !!(prior && !prior.partialReason && prior.declaredGames != null &&
-        Array.isArray(prior.games) && prior.games.length >= prior.declaredGames);
-      for (var p = 2; p <= maxPage; p++) {
-        checkDeadline();
-        prog({ phase: 'jogos', note: 'página ' + p + ' de ' + maxPage, pct: pctPage(p - 1, maxPage) });
-        var d = await bgFetchDoc(base + '?page=' + p);
-        var list = X.extractMatchesFromDoc(d, realHandle);
-        var added = addMatches(list);
-        lastPageRead = p;
-        prog({ phase: 'jogos', pct: pctPage(p, maxPage), feed: '🎾 página ' + p + ' de ' + maxPage + ': +' + added + ' jogo(s) · total ' + all.length });
-        if (p % 3 === 0) postPartial('jogos', p, maxPage);   // grava a cada 3 páginas
-        if (priorComplete && added === 0 && list.length > 0) {
-          prog({ phase: 'jogos', note: 'daqui pra trás já está gravado — parando' });
-          break;
-        }
-      }
-      } catch (eStg) {   // fim das etapas 1–3
-        // PAUSA (regra do dono, caso Camila 11/20): rate-limit demais → NÃO espera sem
-        // fim, NÃO joga fora — grava o que veio e sai avisando pra retomar depois.
-        if (isPause(eStg)) { pausado = true; }
-        else if (!all.length) { throw eStg; }
-        else { parcial = String((eStg && eStg.message) || eStg).slice(0, 100); }
-      }
-      if (!all.length) { fail('sem-jogos'); return; }
+      if (abandonada()) return;      // outra pessoa foi pedida: some em silêncio
+      if (!all.length && !Object.keys(det).length) { fail('sem-jogos'); return; }
 
-      // ── FINAL: nomes/classificações que ainda faltam (1 fetch por competição SEM nome).
-      // Pausado → NÃO busca mais nada; só consolida e entrega o parcial.
-      var rawF = buildRawWithDetails();
-      if (!pausado) { try { await fillTourneyNames(rawF, prog); } catch (e) {} }
-      var impF = I.normalize(rawF, { importedAt: new Date().toISOString() });
-      impF = stampDeclared(impF);
-      if (pausado) impF.partialReason = 'pausado: limite do letzplay — retome mais tarde';
-      else if (parcial) impF.partialReason = String(parcial).slice(0, 120);
-      var v = I.validate(impF);
+      // ── fechamento ─────────────────────────────────────────────────────────────
+      // ── FECHAMENTO ────────────────────────────────────────────────────────────
+      // O acumulado JÁ entra semeado com tudo o que estava gravado (_accFor(prior)) e nada
+      // aqui remove jogo — então não existe nada a "repor". A reposição que existia aqui
+      // nasceu na versão em que a migração APAGAVA os jogos velhos; depois que ela parou de
+      // apagar, a reposição virou acréscimo do que já estava presente — e foi ela que
+      // inflou o histórico da Camila (478 → 1038). Duplicar e depois desduplicar são dois
+      // erros pra fazer um acerto: o certo é não duplicar.
+      //
+      // A ÚNICA operação do fechamento é a LIMPEZA da migração, e só quando as duas
+      // condições valem: a varredura fechou E o conjunto limpo é pelo menos tão grande
+      // quanto o que já existia. Se não valem, o acumulado segue como está — que já é, por
+      // construção, tudo o que havia mais o que foi lido agora.
+      if (limparNoFim && C.complete === true) {
+        var _limpos = all.filter(function (m) { return m && m.lzId; });
+        if (_limpos.length >= _jogosAntes.length) {
+          all.length = 0; Array.prototype.push.apply(all, _limpos);
+        } else {
+          // "completou" mas com menos do que já tínhamos → isso não é limpeza, é perda.
+          C.complete = false;
+          prog({ phase: 'jogos', feed: '🛟 leitura incompleta (' + _limpos.length + ' de ' +
+            _jogosAntes.length + ') — o histórico gravado foi preservado' });
+        }
+      }
+      var imp = I.normalize(montarRaw(), { importedAt: new Date().toISOString() });
+      if (_datasISO) (imp.games || []).forEach(function (g) {
+        var d = g && g.lzId ? _datasISO[String(g.lzId)] : null;
+        if (d) g.dateISO = d;
+      });
+      var deltaFinal = delta(imp);
+      imp = carimbar(imp);
+      if (pausado) imp.partialReason = 'pausado: retomando';
+      else if (parcial) imp.partialReason = String(parcial).slice(0, 120);
+      // NULL EXPLÍCITO, não `delete`. O app grava com `set(..., {merge:true})`, e merge
+      // preserva o que já está no documento quando a chave NÃO vem — então apagar a chave
+      // do objeto deixava o `partialReason` de um parcial anterior gravado pra sempre.
+      // Medido em 31/jul no doc da Kelly: leitura completa, 157 jogos com id, e o doc ainda
+      // com "parcial: jogos 6/8" — e por causa dele `_lzImportComplete` dizia incompleto e
+      // o nome ficava violeta.
+      else imp.partialReason = null;
+      var v = I.validate(imp);
       if (!v || !v.valid) { fail('invalido'); return; }
-      // RELATÓRIO da rodada (pedido do dono): o que PUXOU e o que NÃO puxou — por
-      // torneio (nome, classificação, nº de jogos) e nos jogos gerais (páginas/total).
-      var report = {
-        tournaments: parts.map(function (Pp) {
-          var kk = 't/' + Pp.club + '/' + Pp.tid;
-          var dd = tourneyDetails[kk] || priorNames[kk] || null;
-          var ng = 0; all.forEach(function (m) { if (m.official && String(m.tourneyId) === String(Pp.tid)) ng++; });
-          return { title: (dd && dd.name) || Pp.title || ('torneio ' + Pp.tid), got: !!(dd || ng),
-            games: ng, pos: dd ? myPos(dd.standings, realHandle) : null };
+
+      var relatorio = {
+        tournaments: toursList.map(function (P) {
+          var d = detDe('t/' + P.club + '/' + P.tid);
+          return { title: (d && d.name) || P.title || ('torneio ' + P.tid), got: !!d, games: 0, pos: d ? minhaPos(d.standings) : null };
         }),
         pagesRead: lastPageRead, maxPage: maxPage,
-        games: all.length, declared: (impF.declaredGames != null) ? impF.declaredGames : null
+        games: all.length, declared: totJogos
       };
-      try { chrome.runtime.sendMessage({ type: 'lp-close-scan-tab' }); } catch (e) {}
+      var terminou = !pausado && C.complete === true;
+      if (terminou) { try { chrome.runtime.sendMessage({ type: 'lp-close-scan-tab' }); } catch (e) {} }
       post({ __sp_lp: 'athlete-import-result', tournamentId: tournamentId, uid: uid || null, handle: handle,
-        ok: true, paused: !!pausado, report: report, scan: scanFromImport(realHandle, impF), fullImport: impF });
+        ok: true, done: terminou, paused: !!pausado, report: relatorio, cursor: imp.lzCursor,
+        gamesDelta: deltaFinal, scan: scanFromImport(realHandle, imp), fullImport: imp });
     } catch (e) {
-      var em = String((e && e.message) || e);
-      fail(em.slice(0, 140));
+      // Leitura abandonada porque o organizador pediu outra pessoa não é erro dele —
+      // não pode virar toast vermelho na tela.
+      if (!(e && e.code === 'abandonada') && !abandonada()) {
+        fail(String((e && e.message) || e).slice(0, 140));
+      }
     } finally {
       _rateBudget = null;
     }
@@ -924,8 +1795,23 @@
     if (d.__sp_lp === 'run-import') { runDirectImport(); return; }
     if (d.__sp_lp === 'check-letzplay') { checkLetzplay(); return; }
     if (d.__sp_lp === 'run-org-scan') { runOrgScan(d.targets, d.tournamentId, d.mode === 'full' ? 'full' : 'essential'); return; }
-    if (d.__sp_lp === 'run-athlete-import') { runAthleteImport(d.handle, d.uid, d.tournamentId, d.prior || null); return; }
+    if (d.__sp_lp === 'run-athlete-import') { runAthleteImport(d.handle, d.uid, d.tournamentId, d.prior || null, d.cursor || null); return; }
     if (d.__sp_lp === 'lz-profile-counts') { profileCounts(d.handle); return; }
+    if (d.__sp_lp === 'lz-keep-tab') {
+      // O app avisa quando a leitura COMEÇA e quando ela realmente TERMINA. Sem isso o
+      // background só enxerga a fila, que esvazia ENTRE as rodadas encadeadas — e a aba
+      // do letzplay ficava abrindo e fechando na cara do usuário a cada rodada.
+      try { chrome.runtime.sendMessage({ type: 'lp-keep-tab', on: !!d.on }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      return;
+    }
+    // Abrir o perfil da pessoa NA HORA do clique (fora da fila de trabalho).
+    if (d.__sp_lp === 'lz-open-profile' && d.handle) {
+      try {
+        chrome.runtime.sendMessage({ type: 'lp-nav-now',
+          url: 'https://letzplay.me/' + encodeURIComponent(d.handle) }, function () { void chrome.runtime.lastError; });
+      } catch (e) {}
+      return;
+    }
   };
   window.addEventListener('message', window.__spLzpMsgHandler);
 

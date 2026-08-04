@@ -476,6 +476,20 @@
     'category-manager-overlay'
   ];
 
+  // ── Zona sem dica ───────────────────────────────────────────────────────────
+  // v1.6.88 (dono, ago/2026): "aparecer as dicas durante o uso do placar não pode
+  // ocorrer de forma alguma. nunca!". Enquanto o placar ao vivo estiver aberto
+  // NENHUMA dica nasce — nem as que apontam pra dentro do próprio overlay, que
+  // passavam pelo check de occlusão. Quem está marcando ponto em quadra não pode
+  // levar um balão por cima do placar. Vale pro placar de torneio e pro casual.
+  var _hintFreeZoneIds = ['live-scoring-overlay', 'casual-match-overlay'];
+  function _inHintFreeZone() {
+    for (var i = 0; i < _hintFreeZoneIds.length; i++) {
+      if (document.getElementById(_hintFreeZoneIds[i])) return true;
+    }
+    return false;
+  }
+
   // Returns the topmost blocking overlay element, or null if none is open.
   function _getBlockingOverlay() {
     for (var i = 0; i < _blockingOverlayIds.length; i++) {
@@ -645,6 +659,9 @@
 
   // ── Show hint ──────────────────────────────────────────────────────────────
   function _showHint(hint) {
+    // Trava final: nenhuma dica nasce com o placar ao vivo aberto, venha ela do
+    // ciclo ocioso ou de uma chamada direta (_hintSystem.showNow).
+    if (_inHintFreeZone()) return;
     var el = _findVisibleEl(hint.selector);
     if (!el) return;
 
@@ -926,6 +943,8 @@
       return;
     }
     if (_isDisabled() || _onCooldown) return;
+    // Placar ao vivo aberto → não reagenda; nenhuma dica pode nascer ali.
+    if (_inHintFreeZone()) return;
     // Respeita a suspensão por interação real: nunca antes de _suspendedUntil.
     var _delay = IDLE_TIMEOUT;
     var _rem = _suspendedUntil - Date.now();
@@ -935,6 +954,8 @@
 
   function _onIdle() {
     if (_isDisabled() || _activeHint || _onCooldown) return;
+    // Placar ao vivo aberto → nem tenta escolher dica.
+    if (_inHintFreeZone()) return;
     // Suspensão ativa (scroll/clique/digitar nos últimos 3 min): reagenda e sai.
     if (Date.now() < _suspendedUntil) {
       clearTimeout(_idleTimer);

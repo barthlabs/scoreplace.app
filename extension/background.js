@@ -39,13 +39,29 @@
 //  3. Teto de 10s era baixo demais pra bloqueio sustentado do Cloudflare. Vai a 60s.
 // Preferimos SEMPRE demorar a falhar: o organizador aceita esperar, não aceita "busca
 // concluída" com zero jogos (que foi o que aconteceu em 14/jul/2026).
-// CADÊNCIA HUMANA (o plano original): a captura tem que PARECER navegação de gente.
-// `gap` é o tempo BASE entre operações — nunca a espera literal. A espera real é sorteada
-// numa faixa em torno dele (_qWait), porque intervalo cravado e idêntico é assinatura de
-// robô: o Cloudflare barra por PADRÃO, não só por volume. Piso de ~1,8s = o tempo mínimo
-// plausível pra alguém ler uma página e clicar na próxima; abaixo disso nenhum humano vai.
-var _Q_DEFAULTS = { gap: 2600, floor: 2000, min: 1800, max: 60000 };
-var _q = { chain: Promise.resolve(), busy: 0, last: 0, okStreak: 0, blocks: 0,
+// RITMO: RÁPIDO ENQUANTO O SERVIDOR DEIXA, LENTO SÓ QUANDO ELE RECLAMA.
+// A calibragem antiga (31/jul/2026) era o extremo oposto: UMA requisição por vez com ~2,6s
+// de espera ENTRE cada uma, imitando alguém lendo página por página. O custo disso é o que
+// o dono mediu na prática: o histórico da Kelly são ~20 páginas, e em série a 2,6s (mais o
+// ruído e qualquer tropeço, que DOBRA o passo) levou 7 minutos pra 5 torneios — enquanto
+// ele mesmo abriria as mesmas páginas em segundos. "Demora mais mas não falha" virou
+// "demora tanto que parece quebrado", e nessas horas ele cancela a leitura sadia.
+// A proteção de verdade nunca foi o passo largo preventivo: é o FREIO ao apanhar
+// (_qSlower, que dobra na hora e persiste) e o respeito ao retry-after. Isso continua
+// inteiro. O que muda é o ponto de partida — começamos rápido e só desaceleramos com
+// motivo medido, em vez de pagar o pior caso o tempo todo.
+// AJUSTE MEDIDO EM 31/jul: 350ms com 3 em paralelo derrubou o acesso — a leitura voltou
+// "não encontrou nenhum jogo", que é o que acontece quando o Cloudflare fecha a porta LOGO
+// no começo (esse erro só existe quando NADA foi lido). 350ms era rápido demais; 2600ms era
+// lento a ponto de o dono cancelar leitura sadia. Fica no meio, com o freio de sempre por
+// cima — e agora cada bloqueio APARECE na tela, então o próximo ajuste sai de número, não
+// de suposição minha.
+var _Q_DEFAULTS = { gap: 900, floor: 700, min: 600, max: 60000 };
+// PARALELISMO: até 3 páginas ao mesmo tempo. Um navegador comum abre várias requisições
+// em paralelo numa única visita — 3 é menos do que carregar uma página com imagens. As 20
+// páginas da Kelly saem em ~3s em vez de ~60s.
+var _Q_SLOTS = 2;   // 3 em paralelo + passo curto = bloqueio imediato (medido)
+var _q = { chain: Promise.resolve(), chains: null, busy: 0, last: 0, okStreak: 0, blocks: 0,
   gap: _Q_DEFAULTS.gap, floor: _Q_DEFAULTS.floor, min: _Q_DEFAULTS.min, max: _Q_DEFAULTS.max };
 // Espera REAL de uma operação: base sorteada 0,7×–1,8× (nunca duas iguais) + uma pausa
 // longa ocasional (~8%), que é o equivalente a olhar pro lado / ler com calma. Sem esse
@@ -53,7 +69,9 @@ var _q = { chain: Promise.resolve(), busy: 0, last: 0, okStreak: 0, blocks: 0,
 function _qWait() {
   var lo = _q.gap * 0.7, hi = _q.gap * 1.8;
   var w = lo + Math.random() * (hi - lo);
-  if (Math.random() < 0.08) w += 2000 + Math.random() * 4000;
+  // A pausa longa ocasional só faz sentido quando já estamos indo devagar por castigo.
+  // Com o passo de fábrica ela era 8% das requisições parando 2–6s à toa.
+  if (_q.gap > 1500 && Math.random() < 0.08) w += 2000 + Math.random() * 4000;
   return Math.round(w);
 }
 var _Q_KEY = 'sp_lz_pace';
@@ -63,8 +81,17 @@ try {
   chrome.storage && chrome.storage.local && chrome.storage.local.get([_Q_KEY], function (o) {
     var s = o && o[_Q_KEY];
     if (!s) return;
+    // O CASTIGO APRENDIDO EXPIRA. Ele é memória de um bloqueio que ACONTECEU — e um
+    // bloqueio de anteontem não diz nada sobre hoje. Sem prazo, uma tarde ruim deixava a
+    // leitura lenta pra sempre: medido em 30/jul, o letzplay respondendo em 0,3–2,2 s sem
+    // limitar nada e a nossa fila ainda esperando 10–25 s por operação. O usuário via
+    // "abrindo o perfil…" por um minuto numa página que já estava aberta.
+    // Sem bloqueio nas últimas 6 h, o passo volta ao de fábrica.
+    var desde = (typeof s.blockAt === 'number') ? (Date.now() - s.blockAt) : Infinity;
+    if (desde > 6 * 3600000) return;                 // castigo vencido → fábrica
     if (typeof s.gap === 'number') _q.gap = Math.min(_q.max, Math.max(_q.min, s.gap));
     if (typeof s.floor === 'number') _q.floor = Math.min(_q.max, Math.max(_q.min, s.floor));
+    if (typeof s.blockAt === 'number') _q.blockAt = s.blockAt;
   });
 } catch (e) {}
 var _qSaveT = null;
@@ -79,16 +106,16 @@ function _qSave(now) {
   if (_qSaveT) return;   // agrupa gravações (a fila muda o gap várias vezes por busca)
   _qSaveT = setTimeout(function () { _qSaveT = null; write(); }, 500);
 }
-function _qDump() { var o = {}; o[_Q_KEY] = { gap: _q.gap, floor: _q.floor, at: Date.now() }; return o; }
+function _qDump() { var o = {}; o[_Q_KEY] = { gap: _q.gap, floor: _q.floor, at: Date.now(), blockAt: _q.blockAt || 0 }; return o; }
 // Estado medido, pro app MOSTRAR (nunca mais "travado" sem explicação).
-function _qStats() { return { gap: _q.gap, floor: _q.floor, blocks: _q.blocks, busy: _q.busy }; }
+function _qStats() { return { gap: _q.gap, floor: _q.floor, blocks: _q.blocks, busy: _q.busy, slots: _Q_SLOTS }; }
 function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 // BLOQUEIO → alarga o passo E sobe o PISO: este ritmo comprovadamente não é seguro, então
 // não voltamos a ele nem depois de mil sucessos. É o "aumentando até não travar mais".
 function _qSlower() {
   _q.gap = Math.min(_q.max, Math.round(_q.gap * 2) + 400);
   _q.floor = Math.min(_q.max, Math.max(_q.floor, Math.round(_q.gap * 0.75)));
-  _q.okStreak = 0; _q.blocks++;
+  _q.okStreak = 0; _q.blocks++; _q.blockAt = Date.now();   // quando o castigo começou a contar
   _qSave(true);   // freio grava na hora — o SW pode morrer antes de um debounce
 }
 // Só afrouxa depois de 12 sucessos SEGUIDOS, e só 10% de cada vez — e jamais abaixo do
@@ -97,8 +124,14 @@ function _qFaster() {
   _q.okStreak++;
   if (_q.okStreak < 12) return;
   _q.okStreak = 0;
-  var next = Math.max(_q.floor, Math.round(_q.gap * 0.9));
-  if (next !== _q.gap) { _q.gap = next; _qSave(); }
+  // O PISO TAMBÉM DECAI. Antes ele só subia: um bloqueio numa tarde deixava o passo alto
+  // PARA SEMPRE, mesmo com mil sucessos seguidos depois. Medido em 30/jul: o letzplay
+  // respondendo em 0,3–2,2 s sem limitar nada, e a fila ainda esperando 10–25 s por
+  // operação por causa de um piso aprendido meses antes — a leitura ficava lenta sem
+  // motivo. Cada 12 sucessos seguidos derruba o piso 10%, nunca abaixo do piso de fábrica.
+  var floorNovo = Math.max(_Q_DEFAULTS.floor, Math.round(_q.floor * 0.9));
+  var next = Math.max(floorNovo, Math.round(_q.gap * 0.9));
+  if (floorNovo !== _q.floor || next !== _q.gap) { _q.floor = floorNovo; _q.gap = next; _qSave(); }
 }
 // Marca o resultado vindo de QUALQUER caminho — fetch, navegação, ou página de desafio
 // devolvida com status 200 (`blocked`). Um desafio do Cloudflare É um bloqueio: contar
@@ -107,22 +140,38 @@ function _qNoteStatus(st, blocked) {
   if (blocked || st === 403 || st === 429 || st === 503) _qSlower();
   else if (st >= 200 && st < 300) _qFaster();
 }
+// N CORRENTES em vez de uma. Cada corrente respeita o passo entre as SUAS operações, e a
+// nova entra sempre na corrente com menos gente. Serializar tudo numa fila só era o que
+// transformava 20 páginas em minutos; o freio ao apanhar continua valendo pra todas,
+// porque `_q.gap` é compartilhado.
+function _qChains() {
+  if (!_q.chains) {
+    _q.chains = [];
+    for (var i = 0; i < _Q_SLOTS; i++) _q.chains.push({ p: Promise.resolve(), last: 0, n: 0 });
+  }
+  return _q.chains;
+}
 function enqueue(fn) {
   _q.busy++;
-  var run = _q.chain.then(function () {
-    // Espera SORTEADA a cada operação (nunca o mesmo intervalo duas vezes) e medida a
-    // partir do fim da anterior — é o ritmo de quem lê a página antes de ir pra próxima.
-    var wait = _qWait() - (Date.now() - _q.last);
+  var cs = _qChains();
+  var c = cs[0];
+  for (var i = 1; i < cs.length; i++) if (cs[i].n < c.n) c = cs[i];
+  c.n++;
+  var run = c.p.then(function () {
+    // Espera SORTEADA (nunca o mesmo intervalo duas vezes), medida a partir do fim da
+    // operação anterior DESTA corrente.
+    var wait = _qWait() - (Date.now() - c.last);
     return (wait > 0 ? _sleep(wait) : Promise.resolve()).then(fn);
   });
-  // a CORRENTE nunca quebra: um erro numa operação não pode travar a fila inteira.
-  _q.chain = run.then(function () { _q.last = Date.now(); }, function () { _q.last = Date.now(); });
+  // a corrente nunca quebra: um erro numa operação não pode travar a fila inteira.
+  c.p = run.then(function () { c.last = Date.now(); c.n--; _q.last = Date.now(); },
+                 function () { c.last = Date.now(); c.n--; _q.last = Date.now(); });
   function dec(v) { _q.busy = Math.max(0, _q.busy - 1); return v; }
   return run.then(dec, function (e) { dec(); throw e; });
 }
 
 var CS_MATCHES = ['https://scoreplace.app/*', 'https://scoreplace-staging.web.app/*', 'http://localhost/*'];
-var CS_FILES = ['lib/letzplay-rating.js', 'lib/letzplay-import.js', 'lib/letzplay-extract.js', 'lib/letzplay-flow.js', 'content.js'];
+var CS_FILES = ['lib/letzplay-api.js', 'lib/letzplay-rating.js', 'lib/letzplay-import.js', 'lib/letzplay-extract.js', 'lib/letzplay-flow.js', 'content.js'];
 function injectIntoOpenScoreplaceTabs() {
   if (!chrome.scripting || !chrome.tabs) return;
   chrome.tabs.query({ url: CS_MATCHES }, function (tabs) {
@@ -162,7 +211,13 @@ function ensureLetzplayTab(cb, noCreate) {
 }
 // Só fecha a aba quando a fila esvaziou. Antes, o fim de UMA busca fechava a aba de
 // OUTRA ainda rodando (organizador clicou de novo) → "no-letzplay-tab" no meio.
+// A LEITURA DE UM ATLETA SÃO VÁRIAS RODADAS. Entre uma e outra a fila esvazia por um
+// instante — e era aí que a aba do letzplay fechava e a rodada seguinte abria outra.
+// Pra quem está olhando, é uma aba piscando na cara sem parar ("por que fica abrindo o
+// letzplay?"). Enquanto o app diz que a sessão de leitura está aberta, a aba fica.
+var _sessaoLeitura = false;
 function closeAutoScanTab() {
+  if (_sessaoLeitura) return;
   if (_q.busy > 0) return;   // ainda tem operação na fila usando a aba
   if (_autoScanTabId != null) { var id = _autoScanTabId; _autoScanTabId = null; try { chrome.tabs.remove(id, function () { void chrome.runtime.lastError; }); } catch (e) {} }
 }
@@ -173,6 +228,30 @@ function fetchViaLetzplayTab(url, cb, noCreate) {
   var injUrl = chrome.runtime.getURL('inject.js');
   ensureLetzplayTab(function (tabId) {
     if (!tabId) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
+    // CAMINHO PREFERIDO: o AGENTE (lz-agent.js), content script declarado que vive COM a
+    // aba. Uma mensagem, uma resposta — nada é injetado por requisição e nada volta por
+    // postMessage no mundo da página. Medido em 31/jul: a mesma requisição levava 0,4s às
+    // 16h e estourava 40s às 18h, com a aba do letzplay aberta e navegável o tempo todo.
+    // O que variava era o intermediário: o service worker do MV3, reciclado pelo Chrome,
+    // deixava a resposta da injeção no vazio e só sobrava o prazo estourar.
+    // O caminho antigo (inject.js) fica como reserva: aba aberta ANTES de instalar/atualizar
+    // a extensão ainda não tem o agente, e recarregar a aba do usuário não é opção nossa.
+    var respondido = false;
+    function entregar(r) { if (respondido) return; respondido = true; cb(r); }
+    try {
+      chrome.tabs.sendMessage(tabId, { type: 'lz-agent-fetch', url: url }, function (r) {
+        var semAgente = !!chrome.runtime.lastError || !r;
+        if (!semAgente) { entregar(r); return; }
+        void chrome.runtime.lastError;
+        _fetchViaInject(url, tabId, injUrl, entregar);      // reserva
+      });
+    } catch (e) { _fetchViaInject(url, tabId, injUrl, entregar); }
+  }, noCreate);
+}
+
+// Caminho de RESERVA — injeta o inject.js na aba a cada requisição (era o único até 1.82).
+function _fetchViaInject(url, tabId, injUrl, cb) {
+  (function () {
     chrome.scripting.executeScript({
       target: { tabId: tabId },
       // ISOLATED (default) — carrega o inject.js (web-accessible) como <script src> na
@@ -201,7 +280,7 @@ function fetchViaLetzplayTab(url, cb, noCreate) {
     }).then(function (res) {
       cb((res && res[0] && res[0].result) || { ok: false, error: 'exec-failed' });
     }).catch(function (e) { cb({ ok: false, error: String(e && e.message || e) }); });
-  }, noCreate);
+  })();
 }
 
 // NAVEGA a aba do letzplay pra uma URL (v1.46 — pedido do dono: o puxar individual tem
@@ -214,6 +293,21 @@ function navLetzplayTab(url, cb) {
   ensureLetzplayTab(function (tabId) {
     if (!tabId) { cb({ ok: false, error: 'no-letzplay-tab' }); return; }
     var navDone = false;
+    // JÁ ESTÁ NA PÁGINA? Então não há nada a fazer — e principalmente não há nada a
+    // ESPERAR. Era isto que o dono via: "porque fica 1min abrindo o perfil que já está
+    // aberto?". Navegar pra mesma URL recarrega a página e ainda cobra a espera de
+    // renderização derivada do passo aprendido.
+    try {
+      chrome.tabs.get(tabId, function (t) {
+        void chrome.runtime.lastError;
+        if (t && t.url && t.url.split('#')[0] === String(url).split('#')[0] && t.status === 'complete') {
+          if (!navDone) { navDone = true; cb({ ok: true, jaEstava: true }); }
+          return;
+        }
+        seguir();
+      });
+      return;
+    } catch (e) { /* sem chrome.tabs.get → segue o caminho normal */ }
     function settle() {
       var n = 0;
       (function check() {
@@ -229,11 +323,13 @@ function navLetzplayTab(url, cb) {
       })();
     }
     function onUpd(tid, info) { if (tid === tabId && info.status === 'complete' && !navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} settle(); } }
+    function seguir() {
     chrome.tabs.onUpdated.addListener(onUpd);
     chrome.tabs.update(tabId, { url: url }, function () {
       if (chrome.runtime.lastError && !navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} cb({ ok: false, error: chrome.runtime.lastError.message }); }
     });
     setTimeout(function () { if (!navDone) { navDone = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} settle(); } }, 12000);
+    }
   });
 }
 
@@ -441,6 +537,22 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // Passo medido, sob demanda — o app usa pra explicar a espera ("letzplay limitando,
   // indo de 1,2s pra 9,6s por página") em vez de parecer travado.
   if (msg && msg.type === 'lp-pace') { sendResponse(_qStats()); return true; }
+  // NAVEGAÇÃO IMEDIATA — FORA DA FILA. Abrir a página de quem o organizador acabou de
+  // clicar é resposta ao TOQUE dele, não trabalho de raspagem: não pode esperar o passo
+  // aprendido (medido em 30/jul: 10 a 25 s por operação, enquanto o letzplay respondia em
+  // menos de 2 s). Uma navegação de tela não gera carga de leitura — o custo é uma página,
+  // a mesma que o usuário abriria clicando no link.
+  if (msg && msg.type === 'lp-keep-tab') {
+    _sessaoLeitura = !!msg.on;
+    if (!_sessaoLeitura) closeAutoScanTab();
+    sendResponse({ ok: true });
+    return true;
+  }
+  if (msg && msg.type === 'lp-nav-now' && typeof msg.url === 'string' &&
+      msg.url.indexOf('https://letzplay.me/') === 0) {
+    navLetzplayTab(msg.url, function () { sendResponse({ ok: true }); });
+    return true;
+  }
   // Navegação da aba compartilhada (v1.46) — serializada na MESMA fila dos fetches:
   // navegar no meio de uma leitura de outra operação seria pisar no pé dela.
   if (msg && msg.type === 'lp-nav' && typeof msg.url === 'string' &&

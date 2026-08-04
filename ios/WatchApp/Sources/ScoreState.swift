@@ -45,6 +45,11 @@ struct ScoreState: Decodable {
     // Quem OCUPA o slot em disputa agora. O seletor abre com este nome já aceso,
     // então "Confirmar" sem tocar em nada = manter o que o motor já assumiu.
     var servePickCurrent: String = ""
+    // v1.6.88: o celular diz quando a escolha do sacador está ABERTA (mesmo
+    // _needsServePick que desenha a Tela 1/2 lá). O relógio não deduz pela fase:
+    // a fase 0 (1º sacador) era coberta só pela tela "Iniciar", que não aparece
+    // na SEGUNDA partida — e ela começava sem ninguém escolher o saque.
+    var servePickOpen: Bool = false
     // ── Rei/Rainha: 3 jogos, 4 pessoas, duplas trocam a cada jogo ──
     var reiRainha: Bool = false
     // 0=1º jogo · 1=2º · 2=3º · 3=série encerrada.
@@ -52,6 +57,10 @@ struct ScoreState: Decodable {
     // Vitórias por PESSOA, já ordenado pelo celular (a dupla muda todo jogo, o
     // mérito é individual). O relógio só desenha.
     var rrStandings: [RRStanding] = []
+    // FC máxima da pessoa (220 − idade), calculada no celular a partir do perfil.
+    // O relógio usa só pra saber em qual FAIXA DE QUEIMA (5 zonas) o BPM está e
+    // pintar o box. 0 = perfil sem data de nascimento → não pinta faixa nenhuma.
+    var hrMax: Int = 0
 
     struct RRStanding: Decodable, Hashable {
         let name: String
@@ -71,8 +80,8 @@ struct ScoreState: Decodable {
     // `winner` podem vir null e chaves opcionais (sets/matchId) podem faltar.
     enum CodingKeys: String, CodingKey {
         case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isCasual, isDoubles, isFinished, winner, tieRulePending, tiedAt
-        case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent
-        case reiRainha, rrRound, rrStandings, rrSuggest
+        case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent, servePickOpen
+        case reiRainha, rrRound, rrStandings, rrSuggest, hrMax
     }
     init() {}
     init(from decoder: Decoder) throws {
@@ -102,10 +111,26 @@ struct ScoreState: Decodable {
         serveEligible = (try? c.decodeIfPresent([ServeSlot].self, forKey: .serveEligible)) ?? []
         servePickPhase = (try? c.decodeIfPresent(Int.self, forKey: .servePickPhase)) ?? -1
         servePickCurrent = (try? c.decodeIfPresent(String.self, forKey: .servePickCurrent)) ?? ""
+        servePickOpen = (try? c.decodeIfPresent(Bool.self, forKey: .servePickOpen)) ?? false
         reiRainha  = (try? c.decodeIfPresent(Bool.self, forKey: .reiRainha)) ?? false
         rrRound    = (try? c.decodeIfPresent(Int.self, forKey: .rrRound)) ?? 0
         rrStandings = (try? c.decodeIfPresent([RRStanding].self, forKey: .rrStandings)) ?? []
         rrSuggest  = (try? c.decodeIfPresent(Bool.self, forKey: .rrSuggest)) ?? false
+        hrMax      = (try? c.decodeIfPresent(Int.self, forKey: .hrMax)) ?? 0
+    }
+
+    // ── FAIXAS DE QUEIMA (5 zonas por % da FCmáx) ─────────────────────────────
+    // 1 muito leve (<60%) · 2 leve/queima de gordura (60-70%) · 3 aeróbico
+    // (70-80%) · 4 anaeróbico (80-90%) · 5 máximo (≥90%). nil quando não dá pra
+    // saber (perfil sem data de nascimento) — o relógio não inventa zona.
+    func hrZone(_ bpm: Int) -> Int? {
+        guard hrMax > 0, bpm > 0 else { return nil }
+        let pct = Double(bpm) / Double(hrMax)
+        if pct < 0.60 { return 1 }
+        if pct < 0.70 { return 2 }
+        if pct < 0.80 { return 3 }
+        if pct < 0.90 { return 4 }
+        return 5
     }
 
     // ── Acessores por TIME (1/2) ──
@@ -246,6 +271,10 @@ struct ScoreState: Decodable {
         s.setsToWin = 3
         s.isDoubles = true
         s.courtLeft = 1
+        s.hrMax = 185                // ≈ 220 − 35 anos, só pro preview ter faixa
+        // Sacador tem que ser alguém que ESTÁ nos times do mock (Ana/Bruno × Carla/Diego),
+        // senão o preview desenha a bolinha num nome que não aparece na tela. "Rodrigo"
+        // era resíduo de antes de os nomes virarem genéricos — ver o comentário do mockStore.
         s.server = Server(team: 1, name: "Ana")
         s.teams = [
             "1": Team(players: ["Ana", "Bruno"]),

@@ -63,7 +63,13 @@
         lateEnrollment: 'inherit', // inscrições durante a ELIMINATÓRIA: inherit (segue a fase inicial) | closed | standby | expand
         // "Novos Confrontos" da ELIMINATÓRIA — INDEPENDENTE de "Abertas", igual à fase inicial
         // (cânone project_new_matchups_independent). 'inherit' = segue a fase inicial | true | false.
-        newMatchups: 'inherit'
+        newMatchups: 'inherit',
+        // TÉRMINO da fase eliminatória (v1.6.80). O box "📅 Datas da fase" do form é da fase
+        // INICIAL (grava t.startDate/t.endDate) — quando há classificatória, a eliminatória é
+        // 2ª fase e NÃO tinha janela nenhuma, então o fim do TORNEIO era o fim da classificatória.
+        // Compila pra phases[última].endDate/endTime, o schema que _tournamentDateRange e
+        // _tournamentScheduledWindow já leem. Vazio = sem término próprio (herda o do torneio).
+        endDate: '', endTime: ''
       }
     }, sport);
   }
@@ -174,6 +180,12 @@
     // eliminatória obrigatória (eliminação direta do enrollment).
     out.classifAtiva = out.classifAtiva !== false;
     if (!out.classifAtiva) e.ativa = true;
+    // v1.6.80: término PRÓPRIO da eliminatória — só faz sentido quando ela é 2ª fase. Na
+    // eliminação DIRETA ela É a fase inicial e já usa as datas do form (t.startDate/t.endDate),
+    // então aqui fica vazio pra não haver duas fontes pro mesmo fim. Só aceita 'AAAA-MM-DD';
+    // hora sem data não vale nada.
+    e.endDate = (out.classifAtiva && /^\d{4}-\d{2}-\d{2}$/.test(String(e.endDate || ''))) ? String(e.endDate) : '';
+    e.endTime = (e.endDate && /^\d{2}:\d{2}$/.test(String(e.endTime || ''))) ? String(e.endTime) : '';
     out.eliminatoria = e;
 
     return out;
@@ -290,7 +302,8 @@
           },
           fixedPairs: true, pairingStrategy: pairRR, bracketSeeding: seedRR,
           mapping: mapRR, grandFinal: elimDuplaRR || (e0.linhas > 1 && e0.grandFinal !== false),
-          thirdPlace: e0.terceiro, lateEnrollment: _elimLE(e0.lateEnrollment), newMatchups: _elimNM(e0.newMatchups), drawManual: false
+          thirdPlace: e0.terceiro, lateEnrollment: _elimLE(e0.lateEnrollment), newMatchups: _elimNM(e0.newMatchups), drawManual: false,
+          endDate: e0.endDate || '', endTime: e0.endTime || ''   // v1.6.80: término da ÚLTIMA fase
         });
         if (opts.lateEnrollment) pRR.lateEnrollment = opts.lateEnrollment; // fase inicial = painel
         return { topLevel: top, phases: [pRR, pElimRR], cfg: cfg };
@@ -437,7 +450,8 @@
         mapping: mapping, grandFinal: elimDupla || (nLines > 1 && e.grandFinal !== false), thirdPlace: e.terceiro,
         lateEnrollment: _elimLE(e.lateEnrollment), // inscrições durante a elim: herda a fase inicial por padrão
         newMatchups: _elimNM(e.newMatchups),       // ⊥ de "Abertas" — a elim tem a SUA regra
-        drawManual: false
+        drawManual: false,
+        endDate: e.endDate || '', endTime: e.endTime || ''   // v1.6.80: término da ÚLTIMA fase
       });
       phases.push(p1);
     }

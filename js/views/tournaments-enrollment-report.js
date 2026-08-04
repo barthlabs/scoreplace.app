@@ -49,6 +49,16 @@
   // t.genderCategories quanto strings completas (feminino/masculino/outro)
   // que o perfil salva via <select id="profile-edit-gender">. Antes só
   // conhecia as curtas — masculino caía em null e gerava "Sem gênero 1".
+  // GÊNERO DE PESSOA é só Fem ou Masc. "Misto" é CATEGORIA (fem e masc jogando juntos) e
+  // NUNCA gênero de ninguém — quando aparece no campo `gender` de um inscrito, é resíduo de
+  // atribuição de categoria escrita no lugar errado. Contar isso na linha "por gênero" dava
+  // a pílula sem sentido que o dono viu: "Misto 3" no meio de Fem 91 e Masc 14.
+  // `_genderLabel` continua entendendo os rótulos de CATEGORIA (usado no casamento
+  // categoria×inscrito); quem fala de PESSOA usa `_personGender`.
+  function _personGender(g) {
+    var L = _genderLabel(g);
+    return (L === 'Fem' || L === 'Masc') ? L : null;
+  }
   function _genderLabel(g) {
     if (!g) return null;
     var key = String(g).toLowerCase().trim();
@@ -472,6 +482,10 @@
         // v2.8.62: identidade da dupla (quando esta linha é um membro de dupla expandido)
         _duplaSide: (p && p._duplaSide) || null,
         _duplaIdx: (p && typeof p._duplaIdx === 'number') ? p._duplaIdx : null,
+        // v1.7.2: esta linha veio da LISTA DE ESPERA (não de t.participants). O save tem
+        // que gravar no storage da espera, NUNCA no roster — e nunca cair no fallback
+        // posicional (`parts[order-1]`), que gravaria a categoria em OUTRA pessoa.
+        _wl: !!(p && p._wl),
       };
     });
   }
@@ -493,7 +507,11 @@
   function _renderOverview(rows, t) {
     // v1.4.5-beta: habilidade e idade agora quebradas POR GÊNERO — facilita
     // decidir se faremos torneio misto por habilidade ou por faixa etária.
-    var totalEnrolled = rows.length;
+    // v1.7.6: a LISTA DE ESPERA entra na Análise desde a 1.7.2 (pra dar onde atribuir
+    // gênero/categoria a quem chegou pós-sorteio), mas NÃO pode inflar "N inscritos" —
+    // quem está na fila não está no torneio. Conta separado e é dito na tela.
+    var totalWaitlist = rows.filter(function (r) { return r && r._wl; }).length;
+    var totalEnrolled = rows.length - totalWaitlist;
     var byGender = { Fem: 0, Masc: 0, Misto: 0, sem: 0 };
     var DEFAULT_AGE_CATS = ['40+', '50+', '60+', '70+'];
     var ageCats = (t.ageCategories && t.ageCategories.length > 0) ? t.ageCategories : DEFAULT_AGE_CATS;
@@ -505,7 +523,7 @@
     var byAgeG   = { Fem: {}, Masc: {}, Misto: {}, sem: {} };
 
     rows.forEach(function (r) {
-      var gLabel = _genderLabel(r.gender) || 'sem';
+      var gLabel = _personGender(r.gender) || 'sem';
       if (byGender[gLabel] != null) byGender[gLabel]++; else byGender.sem++;
 
       // Skill by gender
@@ -569,14 +587,16 @@
 
     var html = '<div style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.18); border-radius:12px; padding:14px 16px; margin-bottom:14px;">';
     html += '<p style="margin:0 0 10px;font-size:0.74rem;color:#a855f7;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📊 Visão Geral</p>';
-    html += '<div style="font-size:0.95rem;color:var(--text-bright);font-weight:700;margin-bottom:8px;">' + totalEnrolled + ' inscrito' + (totalEnrolled === 1 ? '' : 's') + '</div>';
+    html += '<div style="font-size:0.95rem;color:var(--text-bright);font-weight:700;margin-bottom:8px;">' + totalEnrolled + ' inscrito' + (totalEnrolled === 1 ? '' : 's') +
+      (totalWaitlist > 0 ? '<span style="font-size:0.72rem;font-weight:600;color:#fbbf24;margin-left:8px;">+ ' + totalWaitlist + ' na lista de espera</span>' : '') + '</div>';
 
     // Gender row (totals)
     html += '<div style="margin-bottom:10px;"><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Por gênero</div>';
     html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
     if (byGender.Fem > 0)  html += _statPill('♀ Fem',     byGender.Fem,  '236,72,153');
     if (byGender.Masc > 0) html += _statPill('♂ Masc',    byGender.Masc, '59,130,246');
-    if (byGender.Misto > 0) html += _statPill('⚥ Misto',  byGender.Misto,'168,85,247');
+    // sem pílula de "Misto" aqui: ninguém TEM gênero misto. Quem estiver com esse resíduo
+    // no perfil cai em "sem gênero", que é a verdade — e é acionável (dá pra corrigir).
     if (byGender.sem > 0)  html += _statPill('? Sem gênero', byGender.sem, '148,163,184');
     html += '</div></div>';
 
@@ -630,7 +650,7 @@
       var seenAges = {};
       var DEFAULT_AGE_BUCKETS = ['40+', '50+', '60+', '70+'];
       rows.forEach(function (r) {
-        var gLabel = _genderLabel(r.gender);
+        var gLabel = _personGender(r.gender);
         if (gLabel) seenGenders[gLabel] = 1;
         (r.effectiveSkills || []).forEach(function (s) { seenSkills[s] = 1; });
         if (r.age != null) {
@@ -898,18 +918,20 @@
     // _pendingEdits); nada é gravado/re-renderizado até o organizador clicar em
     // "Salvar alterações". Por isso o <select> mostra o valor STAGED se houver.
     var pe = _pendingEdits[r.order] || null;
-    var gMap = { Fem: { l: '♀ Fem', c: '236,72,153' }, Masc: { l: '♂ Masc', c: '59,130,246' }, Misto: { l: '⚥ Misto', c: '168,85,247' } };
-    var gl = _genderLabel(r.gender);
-    var rowGVal = gl === 'Fem' ? 'feminino' : (gl === 'Masc' ? 'masculino' : (gl === 'Misto' ? 'misto' : ''));
+    var gMap = { Fem: { l: '♀ Fem', c: '236,72,153' }, Masc: { l: '♂ Masc', c: '59,130,246' } };
+    var gl = _personGender(r.gender);
+    var rowGVal = gl === 'Fem' ? 'feminino' : (gl === 'Masc' ? 'masculino' : '');
     var curG = (pe && 'gender' in pe) ? pe.gender : rowGVal;
     var gBadge;
     if (isOrg) {
-      var glCur = curG === 'feminino' ? 'Fem' : (curG === 'masculino' ? 'Masc' : (curG === 'misto' ? 'Misto' : null));
+      var glCur = curG === 'feminino' ? 'Fem' : (curG === 'masculino' ? 'Masc' : null);
       var gc = (glCur && gMap[glCur]) ? gMap[glCur].c : '148,163,184';
       var gOpt = function (v, lbl) { return '<option value="' + v + '"' + (curG === v ? ' selected' : '') + '>' + lbl + '</option>'; };
       gBadge = '<select title="Editar gênero do inscrito" onchange="window._erStageGender(' + r.order + ',this.value)" ' +
         'style="font-size:0.68rem;font-weight:700;color:rgb(' + gc + ');background:rgba(' + gc + ',0.14);border:1px solid rgba(' + gc + ',0.35);border-radius:6px;padding:2px 6px;cursor:pointer;-webkit-appearance:none;appearance:none;">' +
-        gOpt('', '? Sem gên. ✎') + gOpt('feminino', '♀ Fem') + gOpt('masculino', '♂ Masc') + gOpt('misto', '⚥ Misto') +
+        // sem opção "Misto": o organizador não pode gravar uma CATEGORIA no campo de
+        // gênero de uma pessoa — foi assim que 3 inscritos ficaram com gender='misto'.
+        gOpt('', '? Sem gên. ✎') + gOpt('feminino', '♀ Fem') + gOpt('masculino', '♂ Masc') +
         '</select>';
     } else {
       gBadge = (gl && gMap[gl])
@@ -955,7 +977,12 @@
     return '<div style="padding:8px 10px;border:' + _cBorder + ';border-radius:10px;background:' + _cBg + ';">' +
       '<div style="display:flex;align-items:center;gap:8px;">' +
         '<span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);min-width:24px;flex-shrink:0;">#' + r.order + '</span>' +
-        '<span style="flex:1;min-width:0;font-size:0.84rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc(r.name) + '</span>' + _modDot +
+        '<span style="flex:1;min-width:0;font-size:0.84rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc(r.name) + '</span>' +
+        // v1.7.6: quem veio da LISTA DE ESPERA aparece marcado. Sem isto a pessoa se
+        // mistura aos inscritos e o organizador atribui categoria achando que ela já
+        // está no torneio — ela está na FILA, e só entra quando fechar grupo ou assumir
+        // um W.O. A etiqueta é o que separa "editável" de "já jogando".
+        (r._wl ? '<span title="Está na lista de espera — ainda não entrou no torneio" style="flex-shrink:0;font-size:0.58rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.4);border-radius:5px;padding:1px 5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;">espera</span>' : '') + _modDot +
       '</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;padding-left:32px;">' + gBadge + skills + ageBadge + '</div>' +
     '</div>';
@@ -1050,7 +1077,25 @@
       // não achava o membro em t.participants (ele é p1/p2 dentro da dupla) e o gênero
       // "não gravava". Categoria continua no doc da dupla (o time tem 1 categoria).
       var isDuplaMember = !!(row && row._duplaSide && typeof row._duplaIdx === 'number' && parts[row._duplaIdx] && typeof parts[row._duplaIdx] === 'object');
-      var p = isDuplaMember ? parts[row._duplaIdx] : _erFindParticipant(parts, row, order);
+      // v1.7.2: linha da LISTA DE ESPERA → o alvo é a entrada no storage da espera, NUNCA
+      // t.participants (ela não está lá). _getWaitlist devolve a REFERÊNCIA do objeto, então
+      // mutá-la grava no storage certo (waitlist / standbyParticipants / monarchWaitlist).
+      // Resolução SÓ por uid: cair no fallback posicional de _erFindParticipant
+      // (`parts[order-1]`) gravaria a categoria em OUTRA PESSOA. Sem uid (fictício na
+      // espera) não há como casar com segurança → não grava.
+      var p;
+      if (row && row._wl) {
+        if (!row.uid) return;
+        var _wlArr = (typeof window._getWaitlist === 'function') ? (window._getWaitlist(t) || []) : [];
+        p = null;
+        for (var _wi = 0; _wi < _wlArr.length; _wi++) {
+          var _we = _wlArr[_wi];
+          if (_we && typeof _we === 'object' && _we.uid && String(_we.uid) === String(row.uid)) { p = _we; break; }
+        }
+        if (!p) return;
+      } else {
+        p = isDuplaMember ? parts[row._duplaIdx] : _erFindParticipant(parts, row, order);
+      }
       if (!p) return;
       var asg = {};
       if ('gender' in pe) {
@@ -1100,9 +1145,31 @@
       if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
       if (typeof showNotification === 'function') showNotification('✅ Alterações salvas', nEdits + ' inscrito(s) atualizado(s).' + (extra ? ' ' + extra : ''), 'success');
     };
+    // v1.7.1 — POR QUE O CACHE DE PERFIL PRECISA SER ATUALIZADO AQUI (bug do dono:
+    // "realoco a pessoa, salvo, e ela volta pra sem gênero; tem que repetir pra fixar"):
+    // `gender` está em _PROFILE_FIELDS (identity-core), então o save do TORNEIO o remove
+    // da entrada de propósito — gênero mora no PERFIL e é resolvido por uid (v1.3.52).
+    // Quem persiste de verdade é esta CF, no doc do usuário. Só que o cliente re-renderiza
+    // logo em seguida e resolve o gênero por `_userProfileCache[uid]`, que ainda tem o
+    // valor VELHO: o onSnapshot do torneio ecoa o doc já sem `gender`, a entrada local
+    // perde o valor, e a tela mostra "sem gênero". Na segunda tentativa funcionava porque
+    // aí o perfil já tinha chegado. Escrever no cache o que a CF acabou de confirmar fecha
+    // a janela. NÃO mexe no strip — ele é cânone ([[project_uid_identity_canon_locked]]).
+    var _primeProfileCache = function () {
+      var cache = window._userProfileCache; if (!cache) return;
+      profileAssignments.forEach(function (a) {
+        if (!a || !a.uid) return;
+        var prof = cache[a.uid] = cache[a.uid] || {};
+        if (a.gender) prof.gender = a.gender;
+        if (a.category && sport) {
+          prof.skillBySport = prof.skillBySport || {};
+          prof.skillBySport[String(sport)] = a.category; // o perfil guarda a HABILIDADE
+        }
+      });
+    };
     if (profileAssignments.length > 0 && window.firebase && firebase.functions) {
       firebase.functions().httpsCallable('setParticipantsProfile')({ tournamentId: String(tId), sport: String(sport || ''), assignments: profileAssignments })
-        .then(function (res) { var r = (res && res.data) || {}; finish('Perfis: ' + (r.written || 0) + ' atualizado(s).'); })
+        .then(function (res) { var r = (res && res.data) || {}; _primeProfileCache(); finish('Perfis: ' + (r.written || 0) + ' atualizado(s).'); })
         .catch(function (err) { finish('(perfis não gravados: ' + ((err && err.message) || 'falha') + ')'); });
     } else {
       finish('');
@@ -1179,12 +1246,857 @@
   // 81 declarados e 81 guardados = completo. Sem o campo (import anterior à v1.39) caímos
   // no antigo "se salvou, paginou tudo" — que era verdade só porque falhar não salvava;
   // agora que salvamos parcial, presumir seria absolver dado pela metade.
+  // Quantos jogos o import REPRESENTA (≠ quantos couberam no doc) — ver
+  // window._lzGamesTotal em store.js. Atalho local com fallback pra ordem de carga.
+  function _lzTot(imp) {
+    if (typeof window._lzGamesTotal === 'function') return window._lzGamesTotal(imp);
+    if (!imp) return 0;
+    return (imp.gamesTotal != null) ? imp.gamesTotal : ((imp.games || []).length);
+  }
+  // TORNEIO LIDO ≠ torneio conhecido — e é UMA regra, num lugar só, porque a tela mostra
+  // esse número em dois pontos (as 3 barras do dialog e as 3 barras do overlay ao vivo) e
+  // eles divergiram: o overlay contava "conhecido" e nascia em "35 de 35 (100%)" com a
+  // leitura ainda no torneio 16. Um id de torneio entra no footprint só porque algum jogo o
+  // citou; LIDO é ter aberto a página dele, o que se prova pela CLASSIFICAÇÃO ou pelo NOME
+  // real resolvido (a categoria crua não conta como nome).
+  // ── LISTA DE TORNEIOS DO ATLETA (dialog "Puxar histórico") ────────────────────
+  // Uma linha por torneio: DATA · nome · CATEGORIA · CLASSIFICAÇÃO, em cores distintas,
+  // ordenada do mais recente pro mais antigo. Pedido do dono (30/jul): _"precisa colocar
+  // as datas aqui. e ordenar em ordem cronológica inversa. Tem que ter a categoria e a
+  // classificação… dando destaque com cores"_.
+  var _LZ_C_DATA = '#7dd3fc';   // data       — azul-céu
+  var _LZ_C_CAT = '#a78bfa';    // categoria  — violeta (a cor do letzplay no app)
+  var _LZ_C_POS = '#fbbf24';    // colocação  — âmbar (pódio)
+  var _LZ_C_TRILHA = '#f3f4f6'; // trilha     — BRANCO (é contexto, não classificação)
+
+  function _lzPad2(n) { return (n < 10 ? '0' : '') + n; }
+  var _LZ_MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  // Data de CALENDÁRIO montada dos componentes (nunca parse de string, nunca UTC) — ver
+  // js/letzplay-model.js dateParts. A data que o atleta vê é a data em que jogou.
+  function _lzFmtDataNum(n) {
+    var M = window._spLzModel;
+    var p = (M && M.dateParts) ? M.dateParts(n) : null;
+    if (!p) return null;
+    return _lzPad2(p.d) + ' ' + (_LZ_MES[p.m - 1] || '') + ' ' + String(p.y).slice(2);
+  }
+  // Data do torneio = a do jogo MAIS RECENTE dela ali. O footprint só guarda o ano; a data
+  // real vive nos jogos. Quando o jogo daquele torneio está fora do recorte do doc (o doc
+  // carrega os mais recentes), sobra o ano — que é melhor que nada e nunca mente.
+  // Data do jogo → número comparável (aaaammdd). Usa o modelo canônico quando ele está
+  // carregado e, se não estiver, lê o dd/mm/aa em QUALQUER posição da string — o letzplay
+  // manda "Quarta, 29/07/26 às 08:00hs", com o dia da semana na frente.
+  function _lzDataNumDe(d) {
+    var M = window._spLzModel;
+    var n = (M && typeof M.dateNum === 'function') ? (M.dateNum(d) || 0) : 0;
+    if (n) return n;
+    var m = String(d || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (!m) return 0;
+    var ano = +m[3]; if (ano < 100) ano += 2000;
+    return ano * 10000 + (+m[2]) * 100 + (+m[1]);
+  }
+  // Data de cada competição = a do jogo MAIS RECENTE dela. Indexa torneio E ranking: a aba
+  // de rankings precisa ordenar igual à de torneios.
+  function _lzTourneyDateIdx(imp) {
+    var out = {};
+    ((imp && imp.games) || []).forEach(function (g) {
+      if (!g) return;
+      var id = (g.tourneyId != null) ? ('t/' + (g.club || '') + '/' + g.tourneyId)
+             : ((g.rankingId != null) ? ('r/' + (g.club || '') + '/' + g.rankingId) : null);
+      if (!id) return;
+      var n = _lzDataNumDe(g.date);
+      if (!n) return;
+      if (!out[id] || n > out[id]) out[id] = n;
+    });
+    return out;
+  }
+  function _lzMedalha(pos) {
+    return pos === 1 ? '🥇' : (pos === 2 ? '🥈' : (pos === 3 ? '🥉' : '🏅'));
+  }
+  // O nome real do letzplay quase sempre TERMINA na categoria ("… Ortobom - DUPLA FEMININA
+  // D"). Se a gente só evitasse repetir, a categoria ficava dentro do nome e portanto SEM
+  // cor — o pedido do dono era exatamente destacá-la. Então tiramos o sufixo do nome e a
+  // categoria vira sempre um campo próprio, colorido. Bônus: encurta nomes que ocupavam 3
+  // linhas na caixa.
+  // "Ver trilha de X/Y" é o caminho da DUPLA na chave, não a categoria — e por um erro de
+  // parse foi gravado no campo da categoria. Aqui ele é reconhecido, tirado de lá e
+  // mostrado no fim da linha, em BRANCO (pedido do dono: "dá pra deixar isso branco e o
+  // feminina C nesse roxo?").
+  function _lzEhTrilha(s) { return /ver\s+trilha|trilha\s+de/i.test(String(s || '')); }
+  // Isto se parece com uma categoria? ("Feminina C", "DUPLA FEMININA D", "CAT. FUN
+  // FEMININO", "Mista FUN"). Serve pra rejeitar o que caiu no campo por engano.
+  function _lzPareceCategoria(s) {
+    var t = String(s || '').trim();
+    if (!t || t.length > 40 || _lzEhTrilha(t)) return false;
+    if (/(masculin|feminin|mist[ao]|\bmasc\b|\bfem\b)/i.test(t)) return true;
+    return t.length <= 20 && /(^|[\s\/])(FUN|[A-D])\s*[+\-]?\s*($|[\s\/])/i.test(t);
+  }
+  // Categoria a partir do NOME real: o letzplay escreve "<evento> - <categoria>", então o
+  // último trecho depois de " - " costuma ser ela. É o que salva os imports cujo
+  // `categoryRaw` está contaminado — a categoria estava lá, só não no campo dela.
+  function _lzCatDoNome(nome) {
+    var partes = String(nome || '').split(/\s+[-–—]\s+/);
+    if (partes.length < 2) return null;
+    var ult = partes[partes.length - 1].trim();
+    return _lzPareceCategoria(ult) ? ult : null;
+  }
+  function _lzSplitCat(nome, cat) {
+    var n = String(nome || '').trim();
+    if (!cat) return { nome: n, cat: null };
+    var c = String(cat).trim();
+    var low = n.toLowerCase(), lowc = c.toLowerCase();
+    if (low.length > lowc.length && low.slice(-lowc.length) === lowc) {
+      var corte = n.slice(0, n.length - c.length).replace(/[\s\-–—·.,:]+$/, '').trim();
+      if (corte) return { nome: corte, cat: c };
+    }
+    // categoria aparece no meio do nome → não mexe (cortar ali mutilaria o nome)
+    if (low.indexOf(lowc) >= 0) return { nome: n, cat: null };
+    return { nome: n, cat: c };
+  }
+  window._lzTourneyRows = function (imp, handle, kind) {
+    if (!imp) return '';
+    var _rank = (kind === 'rank');
+    var _pre = _rank ? 'r/' : 't/';
+    var datas = _lzTourneyDateIdx(imp);
+    var linhas = [], vistos = {}, porId = {};
+    ((imp.footprint) || []).forEach(function (f) {
+      if (!f || (!!f.official === _rank)) return;
+      var k = _pre + (f.club || '') + '/' + (_rank ? (f.rankingId || '') : (f.tourneyId || ''));
+      vistos[k] = 1;
+      // UMA LINHA POR TORNEIO. Imports antigos têm o footprint fragmentado (o mesmo torneio
+      // em várias entradas, uma por trilha de dupla) — sem isto a lista repetia o mesmo
+      // torneio 3, 4 vezes, que é como o dono viu "2º Final's Ranking 7BTW" duplicado.
+      var nomeBruto = f.name || f.categoryRaw || 'torneio';
+      var cat = _lzPareceCategoria(f.categoryRaw) ? String(f.categoryRaw).trim() : _lzCatDoNome(nomeBruto);
+      var part = _lzSplitCat(nomeBruto, cat);
+      var trilha = _lzEhTrilha(f.categoryRaw) ? String(f.categoryRaw).trim() : null;
+      var pos = _lzMyPosIn(f.standings, handle);
+      var ja = porId[k];
+      if (ja) {
+        // funde: a melhor colocação e a primeira categoria/trilha conhecidas vencem
+        if (ja.pos == null || (pos != null && pos < ja.pos)) ja.pos = pos;
+        if (!ja.cat && part.cat) ja.cat = part.cat;
+        if (!ja.trilha && trilha) ja.trilha = trilha;
+        if (!ja.data && datas[k]) ja.data = _lzFmtDataNum(datas[k]);
+        return;
+      }
+      porId[k] = {
+        lido: true, ord: datas[k] || 0, nome: part.nome, cat: part.cat, trilha: trilha,
+        data: datas[k] ? _lzFmtDataNum(datas[k]) : (f.year ? String(f.year) : null),
+        pos: pos
+      };
+      linhas.push(porId[k]);
+    });
+    // AINDA NÃO LIDOS: a lista pública vem do mais recente pro mais antigo, então a posição
+    // nela é a única noção de tempo que temos deles — vão no fim, nessa mesma ordem.
+    var pend = 0;
+    ((_rank ? imp.rankingsList : imp.tournamentsList) || []).forEach(function (p) {
+      var _pid = _rank ? p && p.rid : p && p.tid;
+      if (!p || !_pid) return;
+      if (vistos[_pre + (p.club || '') + '/' + _pid]) return;
+      pend++;
+      var pn = p.title || ((_rank ? 'ranking ' : 'torneio ') + _pid);
+      var pc = _lzCatDoNome(pn);                       // o título da lista já traz a categoria
+      var pp = _lzSplitCat(pn, pc);
+      linhas.push({ lido: false, ord: -pend, nome: pp.nome, cat: pp.cat, trilha: null, data: null, pos: null });
+    });
+    if (!linhas.length) return '';
+    // cronológica INVERSA; sem data (não lido) desce, preservando a ordem da lista pública
+    linhas.sort(function (a, b) { return b.ord - a.ord; });
+    // ORDEM DOS CAMPOS (pedido do dono): data · nome · CATEGORIA · CLASSIFICAÇÃO · trilha.
+    // A trilha vem por último e em BRANCO — ela é contexto (com quem ela jogou), não
+    // classificação nem categoria, e disputava a atenção quando estava colorida.
+    return linhas.map(function (L) {
+      var h = '<div style="padding:2px 0;">' + (L.lido ? (_rank ? '📊 ' : '🏆 ') : '⏳ ');
+      if (L.lido && L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
+      h += '<span' + (L.lido ? '' : ' style="opacity:0.6;"') + '>' + _esc(L.nome) + '</span>';
+      if (L.cat) h += ' · <span style="color:' + _LZ_C_CAT + ';font-weight:700;">' + _esc(L.cat) + '</span>';
+      if (L.pos != null) h += ' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos) + ' ' + L.pos + 'º</span>';
+      if (L.trilha) h += ' · <span style="color:' + _LZ_C_TRILHA + ';">' + _esc(L.trilha) + '</span>';
+      if (!L.lido) h += ' · <span style="opacity:0.5;">ainda não lido</span>';
+      return h + '</div>';
+    }).join('');
+  };
+
+  // JUNTA O QUE É DO SCOREPLACE às abas do diálogo. Assíncrono de propósito: o histórico
+  // do letzplay já está em memória e abre na hora; o do scoreplace é uma leitura do
+  // Firestore e entra quando chega. Competição do app vai pra RANKINGS quando é Pontos
+  // Corridos (temporada contínua, o equivalente ao ranking do letzplay) e pra TORNEIOS no
+  // resto — é a mesma distinção que o letzplay faz.
+  // JOGOS DO SCOREPLACE DE OUTRA PESSOA: NÃO vêm de users/{uid}/matchHistory. A regra do
+  // Firestore só libera esse caminho pro PRÓPRIO dono (firestore.rules: `request.auth.uid
+  // == userId`), então a leitura do organizador voltava permission-denied, o catch devolvia
+  // [] e a aba de jogos ficava só com o letzplay — sem dizer nada. Afrouxar a regra seria
+  // expor o histórico de qualquer um; a fonte certa é a que o organizador JÁ pode ver: os
+  // TORNEIOS dele. Se a pessoa jogou num torneio que ele organiza ou disputa, aquelas
+  // partidas são visíveis por definição.
+  // ── OS JOGOS DO SCOREPLACE DE QUALQUER PESSOA ─────────────────────────────────
+  // Regra do dono (01/ago/2026): _"os jogos do scoreplace entre os jogos do letzplay devem
+  // aparecer para TODOS os usuários... tem que estar no perfil de qualquer um que tenha
+  // jogo no scoreplace, MESMO SEM AUTORIZAÇÃO DO LETZPLAY"_. Faz sentido: jogo feito aqui
+  // é nosso registro, não depende de o atleta ter autorizado a leitura de outro site.
+  //
+  // POR QUE NÃO APARECIA NADA: eu lia o placar de `m.p1Score` no objeto da partida. O
+  // placar não mora mais ali desde que virou documento próprio —
+  // `tournaments/{id}/results/{matchId}`, com `playerUids[]`. Medido em 01/ago no banco
+  // real: dos torneios carregados, ZERO partidas tinham p1Score; e os `results` tinham
+  // tudo (placar, sets, vencedor, quando). Então a lista do scoreplace vinha vazia pra
+  // todo mundo — inclusive pra quem tem jogo comigo semana passada.
+  //
+  // A busca é UMA query, por uid, sem carregar torneio: collectionGroup('results') com
+  // array-contains em playerUids. É o mesmo caminho que o dashboard já usa.
+  // ── AS TRÊS LEIS DE UM JOGO (regra do dono, 01/ago/2026) ──────────────────────
+  // Ele olhou a ficha da Lucia Helena e apontou três coisas na MESMA tela:
+  //   1. _"apenas os jogos com placar foram efetivamente jogados. os que não tiverem
+  //      placar devem ser desconsiderados. para todos os atletas. sempre."_
+  //   2. _"tem jogos dela sem parceiros ou sem adversários. isso não pode ocorrer…
+  //      é da NOSSA base de dados."_
+  //   3. _"SB não pode gerar estatística. para ninguém."_
+  //
+  // MEDIDO no banco (collectionGroup `results` por uid dela): **10 docs, 2 jogos reais**.
+  //   • 4 docs eram SÓ ESTRUTURA — `seedMatchResultDocs` cria um doc por jogo LOGO APÓS O
+  //     SORTEIO, com `playerUids` e sem placar nenhum. Jogo sorteado não é jogo jogado.
+  //   • 6 docs vinham de 4 sandboxes (`tour_..._sb`) cujos torneios já foram APAGADOS —
+  //     apagar o doc do torneio não apaga a subcoleção `results`, então o placar do SB
+  //     sobrevive órfão e responde à consulta por uid. Daí o "(SB) Torneio de Férias".
+  //   • 2 docs não tinham `p1`/`p2` (o "—" no adversário).
+  // E o LADO estava sendo chutado: `p1Uids`/`p2Uids` NUNCA existiram no doc (o subdoc
+  // guarda só o resultado; a estrutura mora no torneio), então caía sempre em `meu = 0` —
+  // por isso ela aparecia como adversária DELA MESMA e uma vitória de 6×1 era pintada de
+  // derrota. Agora o lado sai do uid do slot (identidade canônica) e só depois do nome.
+  function _lzNorm(s) {
+    return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  }
+  function _lzMembros(lado) {
+    return String(lado || '').split('/').map(function (n) { return n.trim(); }).filter(Boolean);
+  }
+  // O nome está NESTE lado? Igualdade primeiro; depois "o nome gravado contém o nome do
+  // perfil" (o slot às vezes guarda o nome completo e o perfil o curto, e vice-versa).
+  function _lzLadoTem(lado, nome) {
+    var alvo = _lzNorm(nome);
+    if (!alvo || !lado) return false;
+    return _lzMembros(lado).some(function (n) {
+      var x = _lzNorm(n);
+      if (!x) return false;
+      if (x === alvo || x.indexOf(alvo) >= 0) return true;
+      return alvo.indexOf(x) >= 0 && x.split(/\s+/).length >= 2;   // curto demais vira falso-positivo
+    });
+  }
+  // O jogo na ESTRUTURA (doc do torneio), quando ele está carregado — é de lá que vêm os
+  // nomes dos dois lados e os uids do slot quando o subdoc de placar não os trouxe.
+  function _lzMatchDaEstrutura(r) {
+    if (!r || !r.tournamentId || r.matchId == null) return null;
+    var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(r.tournamentId) : null;
+    if (!t || typeof window._collectAllMatches !== 'function') return null;
+    var all = window._collectAllMatches(t) || [];
+    for (var i = 0; i < all.length; i++) {
+      if (all[i] && String(all[i].id) === String(r.matchId)) return { t: t, m: all[i] };
+    }
+    return { t: t, m: null };
+  }
+  function _lzNum(v) {
+    if (v == null || v === '') return null;
+    var n = Number(v);
+    return isFinite(n) ? n : null;
+  }
+  function _lzItemDeResult(r, uid, meNome) {
+    if (!r) return null;
+    // LEI 3 — SANDBOX NUNCA. Antes de qualquer outra coisa: id `_sb`, nome "(SB) " ou doc
+    // com isSandbox. Pega inclusive o órfão, que é o caso que vazou.
+    if (window._isSandboxRef && window._isSandboxRef(r.tournamentId, r.tournamentName)) return null;
+
+    // LEI 1 — SEM PLACAR, NÃO ACONTECEU. Os dois lados precisam de número.
+    var s1 = _lzNum(r.scoreP1), s2 = _lzNum(r.scoreP2);
+    if (s1 == null || s2 == null) return null;
+
+    var est = _lzMatchDaEstrutura(r);
+    var mE = est && est.m;
+    // LEI 2 — OS DOIS LADOS SEMPRE. Do subdoc; se faltar, da estrutura do torneio.
+    var lado1 = r.p1 || (mE && mE.p1) || '';
+    var lado2 = r.p2 || (mE && mE.p2) || '';
+    if (!lado1 || !lado2) return null;   // sem os dois lados não é jogo, é registro pela metade
+
+    // LADO: uid do slot (identidade canônica) → nome → desiste.
+    var meu = -1;
+    if (mE && typeof window._slotUids === 'function') {
+      var u1 = window._slotUids(mE, 'p1') || [], u2 = window._slotUids(mE, 'p2') || [];
+      if (u1.indexOf(uid) >= 0) meu = 0;
+      else if (u2.indexOf(uid) >= 0) meu = 1;
+    }
+    if (meu < 0) {
+      var nome = meNome || _lzNomeDoUid(uid);
+      if (_lzLadoTem(lado1, nome)) meu = 0;
+      else if (_lzLadoTem(lado2, nome)) meu = 1;
+    }
+    if (meu < 0) return null;            // sem saber de que lado jogou, o card mente
+
+    var meuLado = meu === 0 ? lado1 : lado2, outroLado = meu === 0 ? lado2 : lado1;
+    var meuSc = meu === 0 ? s1 : s2, outroSc = meu === 0 ? s2 : s1;
+
+    // PARCEIRO = o resto do MEU lado (vazio em simples, e tudo bem). ADVERSÁRIO = o outro
+    // lado inteiro. Nunca mais "—" nem ela mesma do outro lado.
+    var euNome = meNome || _lzNomeDoUid(uid);
+    var parceiros = _lzMembros(meuLado).filter(function (n) { return !_lzLadoTem(n, euNome); });
+    // se o filtro comeu tudo (nome não bate com nenhum membro), mostra o lado sem mim
+    if (!parceiros.length && _lzMembros(meuLado).length > 1) {
+      parceiros = _lzMembros(meuLado).slice(1);
+    }
+
+    var venceu = null;
+    if (r.draw !== true) {
+      var w = _lzNorm(r.winner);
+      if (w && w === _lzNorm(meuLado)) venceu = true;
+      else if (w && w === _lzNorm(outroLado)) venceu = false;
+      else if (meuSc !== outroSc) venceu = meuSc > outroSc;   // o placar decide quando o nome não bate
+    }
+
+    var tt = est && est.t;
+    return {
+      ts: (typeof window._spTsData === 'function')
+            ? window._spTsData(r.resultAt || r.updatedAt || r.startedAt || 0, { fallback: 0 })
+            : (r.resultAt || 0),
+      source: 'scoreplace', sport: r.sport || (tt && tt.sport) || '', official: true,
+      venue: r.venue || (tt && tt.venue) || '',
+      competition: r.tournamentName || (tt && tt.name) || 'Torneio',
+      competitionLabel: 'Torneio' + ((r.tournamentName || (tt && tt.name)) ? ' · ' + (r.tournamentName || tt.name) : '') +
+                        (r.roundLabel ? ' · ' + r.roundLabel : ''),
+      tournamentId: r.tournamentId || null, tournamentFormat: r.format || (tt && tt.format) || '',
+      opponent: outroLado, partner: parceiros.length ? parceiros.join(' / ') : null,
+      result: (venceu === true) ? 'V' : (venceu === false ? 'D' : (r.draw ? 'E' : '?')),
+      scoreA: String(meuSc), scoreB: String(outroSc),
+      _k: (r.tournamentId || '') + '/' + (r.matchId || '')
+    };
+  }
+  // DOIS CAMINHOS, PORQUE UM SÓ JÁ FALHOU DUAS VEZES.
+  //   (a) por TORNEIO — `tournaments/{id}/results` de cada torneio já carregado. Não usa
+  //       índice nenhum e cobre exatamente o caso da tela: gente que jogou COMIGO. Foi o
+  //       que salvou quando o collection group estava indisponível.
+  //   (b) por COLLECTION GROUP — pega o resto (torneios que não estão carregados aqui).
+  //       Precisa de regra `match /{path=**}/results/{matchId}` (regra aninhada NÃO vale
+  //       pra collection group) E de índice COLLECTION_GROUP_CONTAINS em playerUids.
+  //       Faltavam os dois: a consulta voltava permission-denied e, depois, failed-
+  //       precondition — e a ficha dizia "Jogos 0" pra quem tinha jogo gravado aqui.
+  // O que falhar não derruba o outro; o que vier dos dois é unido por torneio/partida.
+  function _lzJogosDoScoreplace(uid, meNome) {
+    var db = window.FirestoreDB && window.FirestoreDB.db;
+    if (!db || !uid) return Promise.resolve([]);
+    var ts = (window.AppStore && window.AppStore.tournaments) || [];
+    var locais = ts.slice(0, 40)
+      // SB nem é consultado (o dev tem o doc na lista) — a consulta economizada é de graça
+      // e o cinto de verdade continua sendo o `_isSandboxRef` de dentro do item.
+      .filter(function (t) { return !(window._isSandboxRef && window._isSandboxRef(t.id, t.name)); })
+      .map(function (t) {
+        return db.collection('tournaments').doc(t.id).collection('results')
+          .where('playerUids', 'array-contains', uid).limit(120).get()
+          .then(function (qs) {
+            var o = [];
+            qs.forEach(function (d) {
+              var raw = d.data() || {};
+              if (!raw.tournamentId) raw.tournamentId = t.id;   // doc antigo sem o campo
+              var it = _lzItemDeResult(raw, uid, meNome);
+              if (it) o.push(it);
+            });
+            return o;
+          })
+          .catch(function () { return []; });
+      });
+    var amplo = db.collectionGroup('results').where('playerUids', 'array-contains', uid).limit(400).get()
+      .then(function (qs) {
+        var o = [];
+        qs.forEach(function (d) { var it = _lzItemDeResult(d.data() || {}, uid, meNome); if (it) o.push(it); });
+        return o;
+      })
+      .catch(function (e) {
+        window._warn && window._warn('[letzplay] collection group de placares indisponível:', (e && e.code) || e);
+        return [];
+      });
+    return Promise.all(locais.concat([amplo])).then(function (rs) {
+      var vistos = {}, out = [];
+      rs.forEach(function (lista) {
+        (lista || []).forEach(function (it) {
+          if (!it) return;
+          var k = it._k || (it.competition + '|' + it.opponent + '|' + it.ts);
+          if (vistos[k]) return; vistos[k] = 1; out.push(it);
+        });
+      });
+      return out;
+    });
+  }
+
+  // Exportado pra que o teste exercite as TRÊS LEIS no código REAL (tests/jogo-so-com-
+  // placar.test.js roda os docs de produção que quebraram a ficha da Lucia Helena).
+  window._lzItemDeResult = _lzItemDeResult;
+
+  // ── PARTIDAS CASUAIS ──────────────────────────────────────────────────────────
+  // "torneios ou casuais. diferenciados." (dono). O card já distingue pelo selo e pela
+  // linha de contexto: torneio mostra o nome do torneio e a fase; casual diz "Partida
+  // casual". `casualMatches` tem `playerUids` e é leitura pública, então vale pra
+  // qualquer pessoa — sem depender de autorização nenhuma.
+  function _lzCasuaisDoScoreplace(uid) {
+    var db = window.FirestoreDB && window.FirestoreDB.db;
+    if (!db || !uid) return Promise.resolve([]);
+    return db.collection('casualMatches').where('playerUids', 'array-contains', uid).limit(200).get()
+      .then(function (qs) {
+        var out = [];
+        qs.forEach(function (d) {
+          var c = d.data() || {};
+          if (c.status !== 'finished' || !c.result) return;
+          var jog = Array.isArray(c.players) ? c.players : [];
+          var eu = null;
+          for (var i = 0; i < jog.length; i++) if (jog[i] && jog[i].uid === uid) { eu = jog[i]; break; }
+          if (!eu) return;
+          var meuTime = eu.team || 1, outroTime = meuTime === 1 ? 2 : 1;
+          function lado(t) {
+            return jog.filter(function (j) { return j && (j.team || 1) === t; })
+                      .map(function (j) { return j.name || 'Jogador'; }).join(' / ');
+          }
+          var par = jog.filter(function (j) { return j && (j.team || 1) === meuTime && j.uid !== uid; })
+                       .map(function (j) { return j.name; })[0] || null;
+          // o placar do casual vem no resumo ("6-0"); os campos p1/p2Score podem vir nulos
+          var sm = String((c.result && c.result.summary) || '');
+          var mm = sm.match(/(\d+)\s*[-x–]\s*(\d+)/);
+          var a = (c.result.p1Score != null) ? c.result.p1Score : (mm ? +mm[1] : null);
+          var b = (c.result.p2Score != null) ? c.result.p2Score : (mm ? +mm[2] : null);
+          if (meuTime === 2) { var t = a; a = b; b = t; }
+          var venceu = (c.result.winner != null) ? (Number(c.result.winner) === meuTime) : null;
+          // AS MESMAS TRÊS LEIS: sem placar dos dois lados não houve jogo, e sem adversário
+          // o card mente. (Casual não tem torneio, então a lei do SB não se aplica aqui.)
+          if (a == null || b == null) return;
+          var advNomes = lado(outroTime);
+          if (!advNomes) return;
+          out.push({
+            ts: (typeof window._spTsData === 'function')
+                  ? window._spTsData(c.finishedAt || c.lastActivityAt || 0, { fallback: 0 })
+                  : 0,
+            source: 'scoreplace', sport: c.sport || '', official: false,
+            venue: c.venueName || '',
+            competition: 'Partida casual',
+            competitionLabel: 'Partida casual',
+            tournamentId: null, tournamentFormat: '',
+            opponent: advNomes, partner: par,
+            result: (venceu === true) ? 'V' : (venceu === false ? 'D' : '?'),
+            scoreA: (a != null) ? String(a) : '', scoreB: (b != null) ? String(b) : ''
+          });
+        });
+        return out;
+      })
+      .catch(function (e) {
+        window._warn && window._warn('[letzplay] casuais não vieram:', (e && e.message) || e);
+        return [];
+      });
+  }
+  function _lzNomeDoUid(uid) {
+    var r = window._lzRenderCtx || {};
+    var p = (r.profiles && r.profiles[uid]) || null;
+    return (p && (p.displayName || p.name)) || null;
+  }
+
+  function _lzJuntarScoreplace(uid, meNome) {
+    if (!uid) return;
+    var proprio = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) === uid;
+    // pro PRÓPRIO usuário o matchHistory é legível e é mais completo (inclui casuais);
+    // pros outros, o que dá pra ver são os torneios em comum.
+    // O PRÓPRIO usuário tem matchHistory legível (inclui casuais); pra QUALQUER pessoa,
+    // os jogos de torneio vêm dos documentos de placar, que são legíveis por qualquer
+    // autenticado. Ninguém mais fica sem os próprios jogos por não ter autorizado nada.
+    var fonte = (proprio && typeof window._spScoreplaceItems === 'function')
+      ? Promise.resolve(window._spScoreplaceItems(uid))
+      : Promise.all([_lzJogosDoScoreplace(uid, meNome), _lzCasuaisDoScoreplace(uid)])
+          .then(function (r) { return r[0].concat(r[1]); });
+    fonte.then(function (itens) {
+      itens = (itens || []).filter(Boolean);
+      if (!itens.length) return;
+      var A = window._lzAbas || (window._lzAbas = {});
+
+      // ── jogos: entram na MESMA lista, que é reordenada por data ──
+      if (typeof window._spGameCard === 'function' && typeof window._lzRenderJogos === 'function') {
+        window._lzGameItens = (window._lzGameItens || []).concat(itens);
+        A.jogo = window._lzRenderJogos(meNome);
+      }
+
+      // ── competições: uma linha por torneio/ranking do app ──
+      var porComp = {};
+      itens.forEach(function (it) {
+        if (!it.official) return;                       // casual não é competição
+        var k = it.tournamentId || ('nome:' + (it.competition || ''));
+        var b = porComp[k] || (porComp[k] = { nome: it.competition || 'Torneio', ts: 0, fmt: it.tournamentFormat || '' });
+        if ((it.ts || 0) > b.ts) b.ts = it.ts || 0;
+      });
+      var linhasT = [], linhasR = [];
+      Object.keys(porComp).forEach(function (k) {
+        var c = porComp[k];
+        var liga = (typeof window._isLigaFormat === 'function') ? window._isLigaFormat(c.fmt) : /liga|ranking|pontos corridos/i.test(c.fmt || '');
+        var d = c.ts ? new Date(c.ts) : null;
+        var data = d ? (_lzPad2(d.getDate()) + ' ' + (_LZ_MES[d.getMonth()] || '') + ' ' + String(d.getFullYear()).slice(2)) : null;
+        var h = '<div style="padding:2px 0;">🏆 ' +
+          (data ? '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(data) + '</span> · ' : '') +
+          '<span>' + _esc(c.nome) + '</span> · ' +
+          '<span style="color:#818cf8;font-weight:700;">scoreplace</span></div>';
+        (liga ? linhasR : linhasT).push({ ts: c.ts, h: h });
+      });
+      function juntar(alvo, lista) {
+        if (!lista.length) return;
+        lista.sort(function (a, b) { return b.ts - a.ts; });
+        A[alvo] = (A[alvo] || '') + lista.map(function (x) { return x.h; }).join('');
+      }
+      juntar('tour', linhasT);
+      juntar('rank', linhasR);
+      // ── OS NÚMEROS DO SCOREPLACE SE SOMAM AOS DO LETZPLAY ────────────────────────
+      // Regra do dono (02/ago/2026): "os números do scoreplace se somam a isso, mas sempre
+      // que falar no letzplay as pessoas precisam ver os mesmos números."
+      // Então a aba é LETZPLAY (o número que a pessoa lê lá) + o que é NOSSO — nunca o
+      // tamanho da lista renderizada, que conta os cards distintos e por isso divergia do
+      // contador deles dentro do mesmo diálogo.
+      var _base = window._lzNumLz || { tour: 0, rank: 0, jogo: 0 };
+      var _spJogos = (window._lzGameItens || []).filter(function (it) {
+        return it && it.source === 'scoreplace';
+      }).length;
+      window._lzAbaNum('jogo', (_base.jogo || 0) + _spJogos);
+      window._lzAbaNum('tour', (_base.tour || 0) + linhasT.length);
+      window._lzAbaNum('rank', (_base.rank || 0) + linhasR.length);
+
+      // repinta a aba aberta, se o diálogo ainda está na tela
+      var abas = document.getElementById('lz-abas');
+      if (!abas) return;
+      var ativo = [].slice.call(abas.querySelectorAll('[data-lz-aba]')).filter(function (b) {
+        return b.style.color === 'rgb(255, 255, 255)' || b.getAttribute('data-lz-ativo') === '1';
+      })[0];
+      window._lzAba((ativo && ativo.getAttribute('data-lz-aba')) || 'tour');
+    }).catch(function () {});
+  }
+
+  // ── A LEITURA SÓ AVANÇOU SE A ESCRITA FOI CONFIRMADA ──────────────────────────
+  // 31/jul/2026: as regras do Firestore rejeitaram todo write em letzplayScans (campo novo
+  // fora da whitelist) e a tela seguiu subindo as barras — "33 de 33 (100%)" com ZERO
+  // gravado. O progresso vinha da extensão, que de fato leu; mas ler não é gravar, e a
+  // tela mostrava leitura como se fosse registro.
+  // É a MESMA regra que já vale pro convite de co-organização desde a 1.6.9: só existe
+  // "aconteceu" depois da escrita CONFIRMADA. Aqui ela passa a valer pro histórico.
+  window._lzGravouOk = true;
+  function _lzFalhouGravar(em) {
+    window._lzGravouOk = false;
+    window._lzUltimoErroGravacao = String(em || '').slice(0, 160);
+    if (typeof window._lzAvisarFalhaGravacao === 'function') {
+      try { window._lzAvisarFalhaGravacao(window._lzUltimoErroGravacao); } catch (e) {}
+    }
+  }
+
+  // ── CONFERE A EXTENSÃO AO ABRIR A FICHA ───────────────────────────────────────
+  // Pergunta a versão e responde em ~800ms: sem extensão, ou com uma abaixo do mínimo, o
+  // aviso aparece no topo da ficha e o botão de puxar fica cinza. Ninguém mais descobre
+  // que a extensão está velha DEPOIS de clicar.
+  function _lzConferirExtensao() {
+    var caixa = document.getElementById('lz-ext-aviso');
+    if (!caixa) return;
+    var achadas = [];
+    function ouvir(e) {
+      if (e.source !== window) return;
+      var d = e.data;
+      if (d && d.__sp_lp === 'extension-present' && d.version) { achadas.push(d.version); window._lzExtVer = d.version; }
+    }
+    window.addEventListener('message', ouvir);
+    try { window.postMessage({ __sp_lp: 'ext-ping' }, window.location.origin); } catch (e) {}
+    setTimeout(function () {
+      window.removeEventListener('message', ouvir);
+      var melhor = achadas.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
+      var temAlguma = achadas.length > 0;
+      var serve = temAlguma && _verGE(melhor, _LZ_MIN_EXT);
+      if (serve) { caixa.innerHTML = ''; return; }
+      // no celular a mensagem é outra (lá não existe extensão nenhuma pra instalar)
+      var movel = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+      if (movel) { caixa.innerHTML = ''; return; }
+      caixa.innerHTML = '<div style="font-size:0.82rem;color:#fbbf24;line-height:1.45;margin:0 0 9px;' +
+        'background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.32);border-radius:9px;padding:9px 11px;">' +
+        (temAlguma
+          ? ('⚠️ <b>Extensão desatualizada</b> — você está com a <b>v' + _esc(melhor) + '</b> e a busca precisa da <b>v' +
+             _esc(_LZ_MIN_EXT) + '</b>. Até atualizar, o histórico mostrado é o que já estava gravado.')
+          : ('⚠️ <b>Extensão não encontrada</b> — a leitura do letzplay precisa da extensão do Chrome (v' +
+             _esc(_LZ_MIN_EXT) + ').')) +
+        ' <a href="' + _esc((typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : ('/scoreplace-letzplay-ext-' + _LZ_MIN_EXT + '.zip')) +
+        '" download style="color:#fbbf24;font-weight:800;">baixar a v' + _esc(_LZ_MIN_EXT) + ' ↓</a></div>';
+      // e o botão do topo deixa de prometer o que não pode cumprir
+      var d = document.getElementById('custom-confirm-dialog');
+      var b = d && d.querySelector('button[onclick*="_lzPuxarDoTopo"]');
+      if (b) {
+        b.setAttribute('disabled', 'disabled');
+        b.style.cursor = 'not-allowed'; b.style.opacity = '0.6';
+        b.style.background = 'var(--bg-darker,rgba(255,255,255,0.06))';
+        b.style.borderColor = 'var(--border-color,rgba(255,255,255,0.12))';
+        b.style.color = 'var(--text-muted,#8b93a1)';
+        b.title = temAlguma ? ('Atualize a extensão para a v' + _LZ_MIN_EXT) : 'Instale a extensão do Chrome';
+      }
+    }, 800);
+  }
+
+  // Ações da barra do topo — fazem exatamente o que os botões do rodapé fazem.
+  // A barra do topo DISPARA OS BOTÕES NATIVOS (que ficam escondidos). Assim o caminho de
+  // fechar e o de confirmar continuam sendo um só — sem duplicar callback nem correr o
+  // risco de a barra fechar o diálogo por fora e o `onConfirm` nunca rodar.
+  function _lzBotaoNativo(id) {
+    var d = document.getElementById('custom-confirm-dialog');
+    return d ? d.querySelector('#' + id) : null;
+  }
+  window._lzFecharDialogo = function () {
+    var b = _lzBotaoNativo('confirm-cancel-btn');
+    if (b) { b.click(); return; }
+    var d = document.getElementById('custom-confirm-dialog');
+    if (d && d.parentNode) d.parentNode.removeChild(d);
+  };
+  window._lzPuxarDoTopo = function () {
+    var b = _lzBotaoNativo('confirm-ok-btn');
+    if (b) { b.click(); return; }
+    // sem diálogo na tela (chamada solta): faz o que o botão faria
+    var uid = window._lzDialogUid;
+    if (!uid) return;
+    try { window._lzAthleteImport(uid); }
+    catch (e) {
+      var m = (e && (e.stack || e.message)) || String(e);
+      if (window._warn) window._warn('[letzplay] falha ao iniciar leitura:', m);
+      if (typeof showNotification === 'function') showNotification('Não deu pra iniciar a leitura', String(m).slice(0, 120), 'error');
+    }
+  };
+
+  // Troca a aba visível. Só mexe no innerHTML da caixa — nada de re-renderizar o diálogo
+  // (que apagaria a barra de progresso de uma leitura em curso).
+  // Soma (ou fixa) o número exibido na aba. `somar` = acrescenta ao que já está lá.
+  window._lzAbaNum = function (qual, n, somar) {
+    var abas = document.getElementById('lz-abas'); if (!abas) return;
+    var b = abas.querySelector('[data-lz-aba="' + qual + '"]'); if (!b) return;
+    var sp = b.querySelector('span'); if (!sp) return;
+    var atual = parseInt(sp.textContent, 10) || 0;
+    sp.textContent = String(somar ? (atual + (n || 0)) : (n || 0));
+  };
+  window._lzAba = function (qual) {
+    var box = document.getElementById('lz-aba-box');
+    if (!box) return;
+    var A = window._lzAbas || {};
+    var vazio = { tour: 'Nenhum torneio lido ainda.', rank: 'Nenhum ranking lido ainda.', jogo: 'Nenhum jogo gravado ainda.' };
+    box.innerHTML = A[qual] || ('<div style="opacity:0.6;padding:6px 0;">' + (vazio[qual] || '—') + '</div>');
+    box.scrollTop = 0;
+    var abas = document.getElementById('lz-abas');
+    if (!abas) return;
+    [].slice.call(abas.querySelectorAll('[data-lz-aba]')).forEach(function (b) {
+      var on = b.getAttribute('data-lz-aba') === qual;
+      b.style.background = on ? 'linear-gradient(135deg,#6366f1,#4f46e5)' : 'var(--bg-darker,rgba(0,0,0,0.25))';
+      b.style.color = on ? '#fff' : 'var(--text-secondary,#c8cdd6)';
+      b.style.borderColor = on ? 'rgba(99,102,241,0.55)' : 'var(--border-color,rgba(255,255,255,0.12))';
+      b.setAttribute('data-lz-ativo', on ? '1' : '0');
+    });
+  };
+
+  // HISTÓRICO DE JOGOS — os MESMOS CARDS da tela #histórico (dois times empilhados, placar
+  // à direita na cor do time, selo LetzPlay/Scoreplace, data e a linha de contexto). Eu
+  // tinha escrito uma lista de uma linha aqui, e o dono comparou lado a lado: as duas
+  // telas mostram a mesma coisa e têm que ler igual. `_spLzGameItems`/`_spGameCard` vêm de
+  // match-history.js — nada é recriado aqui.
+  // UMA LISTA SÓ, das duas fontes, do mais recente pro mais antigo (pedido do dono,
+  // 31/jul/2026). Antes eu ANEXAVA a grade do scoreplace depois da do letzplay: dois
+  // blocos, cada um ordenado por dentro, e o jogo de ontem do app aparecia embaixo de um
+  // jogo de 2023 do letzplay. Ordem cronológica só existe se a lista for uma.
+  // O selo de cada card já diz de onde veio (🎾 LetzPlay / 🏆 Scoreplace).
+  window._lzGameItens = [];
+  window._lzRenderJogos = function (meNome) {
+    var itens = (window._lzGameItens || []).slice();
+    if (!itens.length) return '';
+    itens.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+    var LIM = 300, corte = itens.length > LIM;
+    return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;">' +
+      itens.slice(0, LIM).map(function (it) { return window._spGameCard(it, meNome || 'Ela/Ele'); }).join('') +
+      '</div>' + (corte ? '<div style="opacity:0.6;padding:8px 0;">… e mais ' + (itens.length - LIM) + ' jogo(s) — o acervo completo está gravado.</div>' : '');
+  };
+  window._lzGameCards = function (imp, meNome) {
+    if (typeof window._spLzGameItems !== 'function' || typeof window._spGameCard !== 'function') return null;
+    window._lzGameItens = (window._spLzGameItems(imp) || []).filter(Boolean);
+    if (!window._lzGameItens.length) return '';
+    return window._lzRenderJogos(meNome);
+  };
+
+  // Formato de UMA LINHA — usado só quando o módulo do histórico não está carregado.
+  window._lzGameRows = function (imp, handle) {
+    var gs = (imp && imp.games) || [];
+    if (!gs.length) return '';
+    var lin = gs.map(function (g, i) {
+      var d = _lzDataNumDe(g && g.date);
+      return { ord: d || (1 - i / 1e6), g: g, data: d ? _lzFmtDataNum(d) : null };
+    });
+    lin.sort(function (a, b) { return b.ord - a.ord; });
+    var LIM = 400;                                   // não despeja 2 mil linhas de uma vez
+    var corte = lin.length > LIM;
+    return lin.slice(0, LIM).map(function (L) {
+      var g = L.g;
+      var venceu = (g.won === true), perdeu = (g.won === false);
+      var placar = (g.myScore != null && g.oppScore != null) ? (g.myScore + '–' + g.oppScore) : null;
+      var advs = (g.oppNames && g.oppNames.length ? g.oppNames : g.oppHandles || []).filter(Boolean).join(' / ');
+      var h = '<div style="padding:2px 0;">' + (venceu ? '✅ ' : (perdeu ? '❌ ' : '• '));
+      if (L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
+      if (placar) h += '<span style="color:' + (venceu ? '#2dd4a0' : (perdeu ? '#f87171' : _LZ_C_POS)) + ';font-weight:800;font-variant-numeric:tabular-nums;">' + _esc(placar) + '</span> · ';
+      if (advs) h += '<span>vs ' + _esc(advs) + '</span>';
+      if (g.competition) h += ' · <span style="color:' + _LZ_C_CAT + ';">' + _esc(g.competition) + '</span>';
+      return h + '</div>';
+    }).join('') + (corte ? '<div style="opacity:0.6;padding:6px 0;">… e mais ' + (lin.length - LIM) + ' jogo(s) — o acervo completo está gravado.</div>' : '');
+  };
+
+  // Conta TORNEIOS DISTINTOS (por club/tourneyId), não entradas de footprint. Imports
+  // gravados antes de 30/jul/2026 têm o footprint FRAGMENTADO: o extrator pegava o link
+  // "Ver trilha de X/Y" no lugar do da categoria, e como o agrupamento usava esse texto, o
+  // mesmo torneio virava várias entradas (medido: 35 torneios → 55 entradas). Contar
+  // entradas dava 55, o teto cortava em 35 e a tela dizia "35 de 35 (100%)" com 14 torneios
+  // ainda por ler. Contar por ID acerta nos dois: no dado novo e no já gravado.
+  window._lzTournamentsRead = function (imp) {
+    // O CURSOR MANDA quando existe: `toursDone` só recebe uma competição depois que a
+    // página dela foi aberta com sucesso. O footprint é prova mais fraca — competição sem
+    // classificação publicada não entra nele, e por isso 3 dos 35 torneios da Camila
+    // ficavam eternamente "não lidos" enquanto eram rebuscados em toda rodada.
+    var c = imp && imp.lzCursor;
+    // `1` = abriu; `2` = tentei e não abriu. Os dois FECHAM a conta (não há mais o que
+    // fazer com eles), mas só o `1` é leitura de verdade — a lista mostra a diferença.
+    if (c && c.toursDone) return Object.keys(c.toursDone).length;
+    var ids = {};
+    ((imp && imp.footprint) || []).forEach(function (f) {
+      if (!f || !f.official) return;
+      if (!(f.standings || (f.name && f.name !== f.categoryRaw))) return;
+      ids[(f.club || '') + '/' + (f.tourneyId != null ? f.tourneyId : ('?' + (f.categoryRaw || '')))] = 1;
+    });
+    return Object.keys(ids).length;
+  };
+  // ── QUANTAS COMPETIÇÕES EXISTEM DE VERDADE ────────────────────────────────────
+  // REGRA DO DONO (31/jul/2026): **só conta competição que tem jogo**. A página inicial
+  // do atleta não é fonte confiável — e se acharmos jogos de um torneio que não aparece
+  // na lista dele, esse torneio conta e é registrado.
+  //
+  // As duas metades da regra saíram de medição no perfil dele:
+  //   • `tournaments.json` lista 2 torneios, mas os jogos citam 4 — os outros dois
+  //     (01/12/2024, um deles o BTG) ele DISPUTOU e a lista não enumera. Confiar na lista
+  //     apagaria torneio de verdade. Ele viu na tela: "cadê meu BTG?".
+  //   • `rankings.json` lista 4, mas um deles (2023) não tem UM jogo sequer. Contar a
+  //     inscrição como participação inflava o total e a barra nunca fechava.
+  // Sobrou o critério mais simples e o mais verificável: JOGO. Ele é o registro que a
+  // fonte mais leva a sério, e é o que a pessoa lembra de ter feito.
+  //
+  // O footprint só entra quando o acervo de jogos foi truncado (perfil grande), porque aí
+  // os jogos antigos não estão mais no documento — mas a pegada deles ficou.
+  function _lzCompsReais(imp, oficial) {
+    var set = {};
+    // A LISTA DO PERFIL CONTA — ela é enumerável e verificável, e é o número que a pessoa
+    // vê no letzplay. MEDIDO no Fabio (02/ago/2026, listas paginadas 20 por página):
+    // 33 torneios e 27 rankings na lista. Eu tinha tirado a lista da conta pra excluir um
+    // ranking sem jogo, e derrubei os rankings de 27 pra 17 — divergindo do que ele vê.
+    var lista = oficial ? (imp && imp.tournamentsList) : (imp && imp.rankingsList);
+    if (Array.isArray(lista)) lista.forEach(function (c) {
+      if (!c) return;
+      var id = oficial ? c.tid : (c.rid != null ? c.rid : c.tid);
+      if (id != null) set[(c.club || '') + '/' + id] = 1;
+    });
+    // E COMPETIÇÃO COM JOGO TAMBÉM CONTA, mesmo fora da lista — medido no mesmo perfil:
+    // 2 torneios (40597, 194830) e 1 ranking (39908) que ele JOGOU e a lista não enumera.
+    // É o caso do BTG do dono. União: 35 torneios e 28 rankings.
+    ((imp && imp.games) || []).forEach(function (g) {
+      if (!g) return;
+      var ehOficial = (g.official === true) || g.kind === 'tournament';
+      if (ehOficial !== !!oficial) return;
+      var id = oficial ? g.tourneyId : g.rankingId;
+      if (id != null) set[(g.club || '') + '/' + id] = 1;
+    });
+    if (imp && imp.gamesTruncated) ((imp && imp.footprint) || []).forEach(function (f) {
+      if (!f || !!f.official !== !!oficial) return;
+      var id = oficial ? f.tourneyId : f.rankingId;
+      if (id != null) set[(f.club || '') + '/' + id] = 1;
+    });
+    return set;
+  }
+  window._lzCompsReaisN = function (imp, oficial) { return Object.keys(_lzCompsReais(imp, oficial)).length; };
+
+  // Conta COMPETIÇÕES DISTINTAS num footprint (por club/id), não entradas — o footprint
+  // fragmenta: a mesma competição entra uma vez por categoria/trilha.
+  function _lzContarDistintos(fp, oficial) {
+    var ids = {};
+    (fp || []).forEach(function (f) {
+      if (!f || !!f.official !== !!oficial) return;
+      ids[(f.club || '') + '/' + (oficial ? (f.tourneyId || '') : (f.rankingId || ''))] = 1;
+    });
+    return Object.keys(ids).length;
+  }
+  // QUAL DOS DOIS IMPORTS VALE. O histórico mora em dois lugares (users/{uid}.letzplayImport,
+  // feito pela própria pessoa, e letzplayScans/{uid}.fullImport, feito pelo organizador).
+  // A regra antiga — "vence quem tem MAIS jogos" — inverteu de sentido no dia em que a
+  // limpeza chegou: medido em 30/jul, o doc do organizador tinha os 469 jogos LIMPOS (todos
+  // com o id do letzplay) e o da pessoa tinha os 569 SUJOS do pipeline velho, de 15 minutos
+  // antes. Mais jogos venceu, e a tela voltou a mostrar 569.
+  // Quantidade não é qualidade: quem carrega o id da partida veio do pipeline novo e vence.
+  // Empatado nisso, vence o mais RECENTE; só então o maior.
+  function _lzTemIds(x) {
+    var g = (x && x.games) || [];
+    return g.length > 0 && g.every(function (y) { return y && y.lzId; });
+  }
+  function _lzQuando(x) {
+    var ms = Date.parse((x && (x.importedAt || x.at)) || '');
+    return isNaN(ms) ? 0 : ms;
+  }
+  function _lzMelhorImport(a, b) {
+    if (!a) return b || null;
+    if (!b) return a;
+    var ia = _lzTemIds(a), ib = _lzTemIds(b);
+    if (ia !== ib) return ia ? a : b;
+    var qa = _lzQuando(a), qb = _lzQuando(b);
+    if (qa !== qb) return qa > qb ? a : b;
+    return (_lzTot(a) >= _lzTot(b)) ? a : b;
+  }
+  window._lzMelhorImport = _lzMelhorImport;
+
   function _lzImportComplete(li) {
     if (!li) return false;
-    var n = (li.games || []).length;
+    var n = _lzTot(li);
+    // O CURSOR COMPLETO É A PROVA MAIS FORTE: a última página do histórico foi lida.
+    // Comparar com `declaredGames` não fecha nunca quando o contador do letzplay conta
+    // card e não partida (medido: 478 cards × 469 partidas em @camilacalia).
+    // MAS "completo" tem que ser VERIFICÁVEL: quando o cursor diz quantas páginas existem e
+    // quais foram lidas, exigimos que o conjunto cubra o total. Sem isso, um cursor que se
+    // declarou completo por engano (aconteceu hoje) fazia um histórico de 20 jogos aparecer
+    // como VERDE — absolvição baseada em quase nada.
+    if (li.lzCursor && li.lzCursor.complete === true && !li.partialReason) {
+      var _c = li.lzCursor;
+      // COMPLETO TEM QUE BATER COM O TAMANHO. O cursor pode se declarar completo por engano
+      // (aconteceu) e um histórico truncado passava por verificado. Com índice, a conta é
+      // exata; sem ele, o declarado (que conta cards) serve de piso com folga de 5%.
+      var _alvo = (li.indexTotal > 0) ? li.indexTotal
+                : (li.declaredGames > 0 ? Math.floor(li.declaredGames * 0.95) : 0);
+      if (_alvo > 0 && n < _alvo) return false;
+      // ── PÁGINA É MEIO, NÃO FIM ────────────────────────────────────────────────
+      // A checagem por páginas nasceu quando a única prova de "li tudo" era ter paginado.
+      // Com o ÍNDICE, existe prova melhor e direta: ele ENUMERA os ids que existem, e o
+      // acervo tem todos (é o que `n >= indexTotal` acabou de verificar). Exigir também a
+      // contagem de páginas passou a reprovar leitura completa: medido na Kelly em
+      // 03/ago/2026 — 160 de 160 partidas no acervo, `pagesTotal: 9` e 8 páginas marcadas,
+      // porque a 9ª tem 2 jogos que já vieram por outro caminho e nunca precisou ser
+      // aberta. Resultado: "diz que fechou, mas não fechou", verde virava violeta, e nada
+      // que ela fizesse resolvia — o problema não estava no dado dela.
+      // Com índice, a página não decide. Sem índice, ela continua sendo a única prova.
+      if (!(li.indexTotal > 0) && _c.pagesTotal > 0 && _c.pagesRead && typeof _c.pagesRead === 'object') {
+        var _lidas = 0;
+        for (var _k = 1; _k <= _c.pagesTotal; _k++) if (_c.pagesRead[_k]) _lidas++;
+        if (_lidas < _c.pagesTotal) return false;      // diz que fechou, mas não fechou
+      }
+      return true;
+    }
     if (li.declaredGames == null) return n > 0;          // legado: sem o número, confia no all-or-nothing
     if (li.partialReason) return false;                   // ele mesmo diz que parou no meio
     return n >= li.declaredGames;
+  }
+  // VERDE SÓ COM LEITURA RECENTE. Verde é ABSOLVIÇÃO — dizer que a pessoa está na categoria
+  // certa —, e isso depende de dado fresco: um título tirado depois da leitura muda o
+  // veredito e a leitura velha não o conhece.
+  // JANELA = 3 MESES (regra do dono, 31/jul/2026; era 1 mês na véspera): "se estiver
+  // atualizado até 3 meses ele considera verde; se for a mais tempo, volta pro roxo".
+  // Vermelho e amarelo NÃO envelhecem: evidência positiva encontrada continua sendo prova.
+  // A cor sai PRONTA DO BANCO no render — a página busca os perfis e os letzplayScans por
+  // uid antes de pintar (ver renderEnrollmentReportPage), sem depender de clique nenhum.
+  var _LZ_FRESCO_DIAS = 90;
+  function _lzFresco(x) {
+    if (!x) return false;
+    var t = x.importedAt || x.at || x.scannedAt || x.updatedAt || null;
+    if (t && typeof t.toDate === 'function') { try { t = t.toDate(); } catch (e) {} }
+    var ms = (t instanceof Date) ? t.getTime() : Date.parse(t || '');
+    if (!ms || isNaN(ms)) return false;                   // sem data conhecida → não absolve
+    return (Date.now() - ms) <= _LZ_FRESCO_DIAS * 86400000;
   }
   function _lzScanComplete(sc) {
     if (!sc) return false;
@@ -1212,13 +2124,24 @@
       // organizador depender do inscrito. Vence o que tem MAIS jogos (mesma regra da CF).
       var _fi = (r.uid && scanMap[r.uid] && scanMap[r.uid].fullImport) || null;
       var _own = prof && prof.letzplayImport;
-      var _nGames = function (x) { return (x && Array.isArray(x.games)) ? x.games.length : -1; };
-      var li = (_nGames(_fi) > _nGames(_own)) ? _fi : _own;
+      var li = _lzMelhorImport(_fi, _own);
       var sc = (r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
       if (li) {
         var oc = li.officialCategory, band = li.rating && li.rating.band;
-        var champCats = (li.tournaments || []).filter(function (x) { return x.title; }).map(function (x) { return x.categoryRaw; });
-        var ev = _lzEvidence(champCats, li.rankings || [], [oc ? oc.categoryRaw : '', band || '']);
+        // ── A EVIDÊNCIA MORA NO FOOTPRINT, NÃO EM `tournaments` ────────────────────
+        // `li.tournaments` e `li.rankings` NUNCA existiram no documento: o `normalize`
+        // devolve `games`, `footprint`, `categories`, `rating`, `pairs` — e mais nada.
+        // Eu lia dois campos inexistentes, então `champCats` era sempre [] e a evidência
+        // saía vazia: sem título e sem classificação, nenhum veredito, e o nome ficava
+        // VIOLETA pra sempre. Medido no doc da Kelly em 03/ago/2026: `tournaments: 0`,
+        // `rankings: 0` e `footprint` com os 8 torneios, todos COM NOME e classificação.
+        // O dado sempre esteve gravado — no lugar certo, que é o footprint (é ele que
+        // `footprintEntry` preenche, com `title`, `standings`, `winPct` e `categoryRaw`).
+        var _fp = Array.isArray(li.footprint) ? li.footprint : [];
+        var _fpT = _fp.filter(function (x) { return x && x.official; });
+        var _fpR = _fp.filter(function (x) { return x && !x.official; });
+        var champCats = _fpT.filter(function (x) { return x.title; }).map(function (x) { return x.categoryRaw; });
+        var ev = _lzEvidence(champCats, _fpR, [oc ? oc.categoryRaw : '', band || '']);
         // apurado = o MESMO nível que exibimos em _lzSkill; serve de veredito quando a
         // pessoa não declarou nada (veio do letzplay → coerente por definição).
         var apuLi = (oc && oc.skill) ? _declRankFrom([oc.skill]) : null;
@@ -1231,6 +2154,12 @@
         // pela metade, "não achei título contra" é ausência de dado, não absolvição —
         // e título é o que manda subir. Vermelho/amarelo seguem valendo: achar é prova.
         if (v.key === 'green' && !_lzImportComplete(li)) v = { key: 'white', apurada: null };
+        if (v.key === 'green' && !_lzFresco(li)) v = { key: 'white', apurada: null };
+        // VERDE EXIGE O MOTOR NOVO. Data recente não basta: um import de 16 dias atrás é
+        // "fresco" e mesmo assim foi lido pelo pipeline velho, que duplicava partida e
+        // perdia competição. A prova de motor novo está no dado — o id da partida vindo do
+        // letzplay (`lzId`). Sem ele, violeta: autorizou, mas ainda não foi lido direito.
+        if (v.key === 'green' && !_lzTemIds(li)) v = { key: 'white', apurada: null };
         if (v.key !== 'white') { r._lzColor = _LZ_COL[v.key]; r._lzVerified = true; }
       } else if (sc) {
         var ev2 = _lzEvidence(sc.champions || [], sc.rankings || [], [sc.rankingCategory].concat(sc.allCategories || []));
@@ -1248,6 +2177,7 @@
         // Vermelho/amarelo NÃO dependem disso: evidência positiva encontrada é prova,
         // mesmo com captura incompleta. O que a falta de dado impede é a ABSOLVIÇÃO.
         if (v2.key === 'green' && !_lzScanComplete(sc)) v2 = { key: 'white', apurada: null };
+        if (v2.key === 'green' && !_lzFresco(sc) && !_lzFresco(scanMap[r.uid])) v2 = { key: 'white', apurada: null };
         r._lzSrc = '🔎';
         r._lzSkill = sc.profileSkill || sc.skill || (v2.apurada != null ? _LTR[v2.apurada] : null);
         if (v2.key !== 'white') { r._lzColor = _LZ_COL[v2.key]; r._lzVerified = true; }
@@ -1378,15 +2308,20 @@
       var border = edited ? 'rgba(245,158,11,0.55)' : (r._lzColor ? (r._lzColor + '55') : 'var(--border-color)');
       var ctx = window._lzScanCtx || {};
       var canPull = _mxIsOrg && r.uid && ctx.byUid && ctx.byUid[r.uid];
+      // CLICÁVEL = TEM uid. A ficha mostra os jogos do scoreplace (torneio e casual) e,
+      // quando existir, o histórico do letzplay. Antes só quem AUTORIZOU o letzplay abria
+      // — e quem só joga aqui não tinha ficha nenhuma, mesmo com jogo nosso registrado.
+      var canOpen = !!r.uid;
       var lu = r.uid ? _lzLastUpdateOf(r.uid) : null;
       var fresh = lu && (Date.now() - lu.ts) < 30 * 86400000;   // < 1 mês
       var tip = _esc(r.name || '(sem nome)') +
         (fresh ? (' — Última atualização: ' + lu.label) : '') +
-        (canPull ? ' — clique pra puxar o histórico do letzplay' : '') +
+        (canPull ? ' — clique pra puxar o histórico do letzplay'
+                 : (canOpen ? ' — clique pra ver os jogos' : '')) +
         ' — arraste pra atribuir gênero/categoria';
-      var click = canPull ? ' onclick="window._lzAthleteDialog(\'' + String(r.uid).replace(/['\\]/g, '') + '\')"' : '';
+      var click = canOpen ? ' onclick="window._lzAthleteDialog(\'' + String(r.uid).replace(/['\\]/g, '') + '\')"' : '';
       return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')"' + click + ' ' +
-        'style="cursor:' + (canPull ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
+        'style="cursor:' + (canOpen ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
     }
     function cardGrid(arr) {
       // minmax(0,...) e o que impede o estouro: com min-width:auto o nome longo
@@ -1433,11 +2368,19 @@
     // que a categoria do torneio é MISTA (uma categoria só, fem e masc juntos) e dá o
     // ➕ Criar categoria / ↩ Reverter próprio. Quem é fem segue na coluna fem, masc na
     // masc — igual ao box "Sem gênero" abaixo, mas de indicação/formalização.
-    var mistoStrip = '<div style="margin-bottom:10px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid rgba(168,85,247,0.55);border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
-      '<span style="min-width:0;"><span style="font-size:17px;font-weight:800;color:#a855f7;">⚥ Misto' + (mistoOn ? ' <span style="opacity:0.8;font-size:15px;">(' + total + ')</span>' : '') + '</span> ' +
-      '<span style="font-size:13px;color:var(--text-muted);">categoria única — fem e masc jogam juntos, não são duas categorias</span></span>' +
-      createToggle('window._erToggleGenderMisto(\'' + tIdEsc + '\',this)', mistoOn,
-        (mistoOn ? 'Desativar' : 'Ativar') + ' a categoria Misto') + '</div>';
+    // LAYOUT (pedido do dono, 30/jul): TÍTULO e TOGGLE na mesma linha, o toggle à direita;
+    // a DESCRIÇÃO abaixo do título. Antes título e descrição eram um parágrafo só e o
+    // `flex-wrap` jogava o toggle pra linha de baixo quando o texto crescia — o controle
+    // aparecia solto no canto inferior, longe do que ele controla.
+    var mistoStrip = '<div style="margin-bottom:10px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid rgba(168,85,247,0.55);border-radius:12px;padding:10px 12px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
+        '<span style="font-size:17px;font-weight:800;color:#a855f7;min-width:0;">⚥ Misto' +
+          (mistoOn ? ' <span style="opacity:0.8;font-size:15px;">(' + total + ')</span>' : '') + '</span>' +
+        createToggle('window._erToggleGenderMisto(\'' + tIdEsc + '\',this)', mistoOn,
+          (mistoOn ? 'Desativar' : 'Ativar') + ' a categoria Misto') +
+      '</div>' +
+      '<div style="font-size:13px;color:var(--text-muted);margin-top:3px;">categoria única — fem e masc jogam juntos, não são duas categorias</div>' +
+    '</div>';
     // "Categorias no torneio" — resultado das formalizações + contagem (acima do total).
     var formalCats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
     var catsBoxInner = formalCats.length
@@ -1604,14 +2547,20 @@
 
   // Última atualização do dado letzplay de UMA pessoa — o mais novo entre o import
   // próprio dela (perfil) e o que o organizador puxou (scan). → {ts, label} ou null.
+  window._lzLastUpdateOf = _lzLastUpdateOf;   // exposto pro teste travar a data mostrada
   function _lzLastUpdateOf(uid) {
     var ctx = window._lzRenderCtx || {};
     var prof = ctx.profileMap && ctx.profileMap[uid];
     var sc = ctx.scanMap && ctx.scanMap[uid];
-    var ts = 0;
-    if (prof && prof.letzplayImport && prof.letzplayImport.importedAt) ts = Math.max(ts, Date.parse(prof.letzplayImport.importedAt) || 0);
-    if (sc && sc.fullImport && sc.fullImport.importedAt) ts = Math.max(ts, Date.parse(sc.fullImport.importedAt) || 0);
-    if (sc && sc.scannedAt) ts = Math.max(ts, Date.parse(sc.scannedAt) || 0);
+    // A DATA É A DO HISTÓRICO QUE ESTÁ EM USO — não o carimbo mais novo que existir no
+    // documento. Pegar o Math.max de tudo fazia a tela dizer "Última atualização: 30/07
+    // 18:49" enquanto o histórico exibido era o de 14/jul: o 30/07 era um `scannedAt` de
+    // outra coisa. Data que não é do dado mostrado é mentira — e foi o que levou o dono a
+    // perguntar "se eu estou com 100% por que continua roxo?".
+    var _li = _lzMelhorImport(sc && sc.fullImport, prof && prof.letzplayImport);
+    var ts = _lzQuando(_li);
+    // Só cai no scannedAt quando não há histórico nenhum (aí ele é a única notícia que temos)
+    if (!ts && sc && sc.scannedAt) ts = Date.parse(sc.scannedAt) || 0;
     if (!ts) return null;
     var d = new Date(ts);
     return { ts: ts, label: d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) };
@@ -1628,79 +2577,361 @@
     });
     return out;
   }
+  // ══ AS TRÊS CONTAGENS, UM LUGAR SÓ ═══════════════════════════════════════════
+  // Regra do dono (01/ago/2026): "pare de consertar 1 coisa e quebrar 2 — faça direito
+  // de uma vez". Ele está certo, e a causa nunca foi cada bug: eram QUATRO lugares
+  // calculando os MESMOS três números (o diálogo, o overlay ao vivo, o atualizador dos
+  // contadores do perfil e o rótulo da extensão), cada um com uma regra própria.
+  // Corrigir um fazia os outros divergirem — e o usuário via a barra oscilar a cada
+  // releitura. A partir daqui existe UMA função; ninguém mais recalcula.
+  window._lzContagens = function (imp) {
+    var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
+    var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];
+    var _T = (imp && imp.totais) || null;
+    var gX = _lzTot(imp);
+    var gY = (imp && imp.declaredGames != null) ? imp.declaredGames : null;
+    // o declarado pode ficar pequeno — barra travada em "478 de 478" enquanto ainda
+    // entram jogos é mentira
+    if (gX > (gY || 0)) gY = gX;
+    // TOTAL DE JOGOS — na ordem de confiança:
+    //   1) o ÍNDICE (ext ≥1.83): o letzplay serve /{h}/matches.json e ali cada linha é uma
+    //      PARTIDA. É o único número que é fato.
+    //   2) o declarado no perfil, que conta CARDS (478 pra 469 reais) — serve de piso.
+    // O QUE NÃO PODE, e era o que estava acontecendo: deixar o total virar o próprio número
+    // lido quando o cursor diz "completo". Um documento truncado em 20 jogos aparecia como
+    // "20 de 20 (100%)" — leitura pela metade exibida como perfeita. Um cursor errado não
+    // pode redefinir a verdade; ele é justamente o que costuma estar errado.
+    // TOTAIS vêm do bloco de ESTRUTURA (ext ≥1.84), que é conhecido antes de ler HTML e
+    // nunca deriva do quanto deu tempo de ler. Índice e declarado são os degraus abaixo.
+    // (o `totais` do documento de scan é costurado no `imp` por quem chama — aqui dentro
+    // não existe contexto de tela, só o dado)
+    _T = (imp && imp.totais) || _T;
+    // ORDEM DE AUTORIDADE: índice (partidas DISTINTAS, contadas por id) > total gravado de
+    // outra procedência > contador do perfil, que conta LINHAS e por isso só serve de PISO.
+    // O contador do perfil pode ser MAIOR que a verdade: a lista do letzplay repete linha
+    // (Kelly: 158 linhas, 157 partidas). Deixar o piso vencer o índice fazia a barra parar
+    // em 99% pra sempre, esperando um jogo que não existe.
+    var _idxT = (imp && imp.indexTotal > 0) ? imp.indexTotal
+              : ((_T && _T.fonte === 'indice' && _T.jogos > 0) ? _T.jogos : 0);
+    // ── VARREDURA FECHADA MATA O JOGO FANTASMA ────────────────────────────────
+    // "se existe um jogo que não existe, exclua ele sempre, de qualquer atleta" (dono).
+    // Quando a leitura passou por TODAS as páginas, o que ela encontrou É o histórico —
+    // o contador do perfil, que conta LINHAS e repete linha, não pode inventar um jogo
+    // que a varredura completa não achou.
+    // O QUE IMPEDE ISSO DE VIRAR O ANTIGO "20 de 20 (100%)": não basta o cursor DIZER que
+    // terminou — cursor errado é justamente o sintoma. A prova é ARITMÉTICA: a fonte serve
+    // 20 por página, então uma varredura de N páginas tem que devolver entre 20(N-1)+1 e
+    // 20N partidas. Kelly: 8 páginas, 157 → cabe em (140,160] → 157 de 157, fecha.
+    // Um doc truncado em 20 com 8 páginas não cabe em (140,160] → o declarado segue de pé
+    // e a tela mostra 20 de 158, que é a verdade feia.
+    var _cur = (imp && imp.lzCursor) || null;
+    var _POR_PG = 20;
+    if (!(_idxT > 0) && _cur && _cur.complete === true && _cur.pagesTotal > 0 &&
+        _cur.pageDone >= _cur.pagesTotal &&
+        gX > (_cur.pagesTotal - 2) * _POR_PG && gX <= _cur.pagesTotal * _POR_PG) {
+      _idxT = gX;
+    }
+    if (_idxT > 0) gY = _idxT;
+    else if (_T && _T.jogos > 0) gY = _T.jogos;
+    else if (imp && imp.declaredGames > 0) gY = Math.max(imp.declaredGames, gX);
+    var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
+    var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];
+    var tX = window._lzTournamentsRead(imp);   // mesma regra do overlay ao vivo
+    // TOTAL = o MAIOR entre o que o perfil declara e o que a lista pública realmente
+    // ENUMERA. O contador do perfil da Camila diz 35, mas a lista tem mais entradas — e
+    // aí "35 de 35 (100%)" aparecia junto de itens "ainda não lido" na mesma tela. Uma
+    // lista que se pode contar vale mais que um contador que a gente não sabe o que conta.
+    // O CONTADOR DO PERFIL NÃO É PISO: ele conta inscrição, não participação (e erra
+    // pros dois lados). Quem manda é a competição com jogo. Enquanto nenhum jogo foi
+    // lido, o total é desconhecido — e a barra diz "de …", que é honesto.
+    var tY = window._lzCompsReaisN(imp, true) || null;
+    // SEM TOTAL DECLARADO, CONTA O QUE SE CONHECE. A Kelly não tinha `declaredTournaments`
+    // (import antigo) nem `tournamentsList`, e a barra ficava em "5 de …" pra sempre — um
+    // total desconhecido é indistinguível de barra quebrada. Competição distinta no
+    // footprint é um total honesto: é o que sabemos existir.
+    if (tY == null) {
+      var tFp = _lzContarDistintos(offFp, true);
+      tY = Math.max(tFp, tX) || null;
+    }
+    if (tY != null && tX > tY) tX = tY;
+    var _cur = imp && imp.lzCursor;
+    var rX = (_cur && _cur.ranksDone) ? Object.keys(_cur.ranksDone).length
+      : rkFp.filter(function (f) { return f.standings || (f.name && f.name !== f.categoryRaw); }).length;
+    // MESMA REGRA DOS TORNEIOS: o total é o que o perfil DECLARA ou o que a LISTA enumera,
+    // o que for maior — nunca a contagem de ENTRADAS do footprint. O footprint fragmenta:
+    // 30 entradas pros 29 rankings da Camila e 21 pros 8 da Kelly. Contar entradas prendia
+    // a barra em "29 de 30" e inventava "21 rankings" pra quem tem 8.
+    var rY = window._lzCompsReaisN(imp, false) || null;
+    if (rY == null) rY = _lzContarDistintos(rkFp, false) || null;
+    if (rY != null && rX > rY) rX = rY;      // x jamais passa de y
+    // ══ O NÚMERO DO LETZPLAY É O NÚMERO DO APP ═══════════════════════════════════
+    // REGRA DO DONO (02/ago/2026), depois de dois dias de divergência explicada:
+    //   "nossos números têm que bater com esses para dar tranquilidade aos organizadores,
+    //    que têm que ler esses mesmos números no nosso sistema. lemos 397 deles e
+    //    concluímos que o número é outro — escreve o número deles, SEMPRE."
+    //
+    // Ele está certo pelo lado que importa: o organizador abre o letzplay, lê 397 jogos /
+    // 27 rankings / 33 torneios, abre o nosso app e precisa ler a MESMA coisa. Uma
+    // divergência — mesmo correta, mesmo explicada — obriga cada pessoa a conferir de novo,
+    // e é exatamente a insegurança que a Análise existe pra eliminar.
+    //
+    // Continuamos MEDINDO certo por dentro: o acervo tem as partidas distintas (a lista de
+    // jogos mostra 391 cards no Fabio, não 397), a leitura ainda persegue id por id, e a
+    // limpeza de jogo apagado segue valendo. O que muda é só o que o CONTADOR exibe.
+    //
+    // E quando a varredura fechou, X = Y: nós lemos tudo o que a fonte enumera, então a
+    // barra bate 100% em vez de parar em 98% por causa de card repetido DELES.
+    // OS DOCUMENTOS JÁ GRAVADOS não têm `perfilJogos` — neles o índice já tinha
+    // sobrescrito o contador do perfil. Mas o número deles é RECUPERÁVEL sem releitura:
+    // partidas distintas + cards que o letzplay repete (medido e gravado na leitura).
+    // Kelly: 160 + 2 = 162. Fabio: 391 + 6 = 397. Exatamente o que o perfil mostra.
+    var _repet = (imp && imp.totais && imp.totais.cardsRepetidos) || 0;
+    var _declG = (imp && imp.declaredGames > 0) ? imp.declaredGames : 0;
+    var _recup = (imp && imp.indexTotal > 0) ? imp.indexTotal + _repet : 0;
+    // o MAIOR entre os dois: quando `declaredGames` ainda guarda o contador do perfil ele
+    // já é o número certo; quando foi sobrescrito pela contagem de distintas, a soma com os
+    // repetidos o recupera. Nunca menor que o que o letzplay mostra.
+    var _perfilG = (imp && imp.perfilJogos > 0) ? imp.perfilJogos : Math.max(_declG, _recup);
+    var _decl = { g: _perfilG || ((imp && imp.declaredGames > 0) ? imp.declaredGames : 0),
+                  t: (imp && imp.declaredTournaments > 0) ? imp.declaredTournaments : 0,
+                  r: (imp && imp.declaredRankings > 0) ? imp.declaredRankings : 0 };
+    // "fechou" = a varredura enumerou tudo (índice completo) E o acervo tem tudo que ela
+    // enumerou. Sem isso, uma leitura pela metade viraria 100% — o erro de 20 de 20.
+    var _fechou = !!(imp && imp.lzCursor && imp.lzCursor.complete === true &&
+                     (imp.indexTotal || 0) > 0 && gX >= imp.indexTotal);
+    if (_decl.g > 0) { gY = _decl.g; if (_fechou) gX = gY; }
+    if (_decl.t > 0) { tY = _decl.t; if (_fechou) tX = gY && tX > 0 ? tY : tX; }
+    if (_decl.r > 0) { rY = _decl.r; if (_fechou) rX = rX > 0 ? rY : rX; }
+    // O TETO MORA AQUI, não em quem desenha. Enquanto ele vivia no `barLine`, quem lesse a
+    // função direto (o overlay ao vivo) recebia x > y e pintava "4 de 2 (100%)".
+    if (gY != null && gX > gY) gX = gY;
+    if (tY != null && tX > tY) tX = tY;
+    if (rY != null && rX > rY) rX = rY;
+    return { g: { x: gX, y: gY }, t: { x: tX, y: tY }, r: { x: rX, y: rY } };
+  };
+
   window._lzAthleteDialog = function (uid) {
     var ctx = window._lzScanCtx || {};
     var tg = ctx.byUid && ctx.byUid[uid];
-    if (!tg) return;
+    // ── A FICHA É DE QUEM TEM JOGO, NÃO DE QUEM AUTORIZOU ─────────────────────────
+    // Regra do dono (01/ago/2026): _"todos os nomes na página de análise que tenham jogos
+    // (scoreplace/letzplay) devem ser clicáveis e verificáveis em página de estatísticas,
+    // não só os que autorizaram letzplay"_. Faz sentido: os jogos do scoreplace são
+    // registro NOSSO — negar a ficha a quem jogou aqui porque ele não autorizou a leitura
+    // de outro site é esconder o dado da própria casa.
+    // Sem alvo letzplay o diálogo abre igual, só sem a parte que depende do letzplay
+    // (o @, as barras do perfil público e o botão de puxar).
+    if (!tg) {
+      var _pf = (window._lzRenderCtx && window._lzRenderCtx.profileMap && window._lzRenderCtx.profileMap[uid]) || {};
+      tg = { name: _pf.displayName || _pf.name || _lzNomeDoUid(uid) || 'Atleta', handle: null, semLetzplay: true };
+    }
+    var _temLz = !tg.semLetzplay;
+    window._lzDialogUid = uid;      // a barra do topo age sobre este atleta
     var lu = _lzLastUpdateOf(uid);
     // Melhor import disponível (scan do organizador OU import próprio — o de mais jogos).
     var rctx = window._lzRenderCtx || {};
     var _p1 = rctx.profileMap && rctx.profileMap[uid] && rctx.profileMap[uid].letzplayImport;
     var _p2 = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].fullImport;
-    var imp = _p2 || _p1 || null;
-    if (_p1 && _p2) imp = ((_p1.games || []).length > (_p2.games || []).length) ? _p1 : _p2;
-    var body = 'Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> (@' + _esc(tg.handle) + ') no letzplay.<br>';
+    var imp = _lzMelhorImport(_p1, _p2);
+    // cursor de uma leitura que não fechou fica FORA do fullImport (o histórico oficial só
+    // é substituído por leitura completa) — mas ele é o que permite retomar de onde parou.
+    var _curParcial = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].lzCursorParcial;
+    if (imp && _curParcial && !(imp.lzCursor && imp.lzCursor.complete)) {
+      imp = Object.assign({}, imp, { lzCursor: _curParcial });
+    }
+    // TOTAIS gravados pelo parcial ficam FORA do fullImport (o histórico só é substituído
+    // por leitura completa). Quem costura é aqui, porque `_lzContagens` não conhece tela —
+    // ela recebe o dado pronto. Sem isto, um histórico antigo perdia o total mais recente.
+    var _totSalvos = rctx.scanMap && rctx.scanMap[uid] && rctx.scanMap[uid].totaisLetzplay;
+    if (imp && _totSalvos && !imp.totais) imp = Object.assign({}, imp, { totais: _totSalvos });
+    // MEDIDOR DE NÍVEL no topo — a MESMA barra das estatísticas (`_lzLevelBar`).
+    // O card INTEIRO estava aqui e virou um rolo sem fim dentro do diálogo: as três listas
+    // empilhadas, sem como chegar no fim de nenhuma ("essa tela está imprestável"). As
+    // listas passaram a ser ABAS, com UMA área de rolagem — ver `_lzAba`.
+    var _nivel = (imp && typeof window._lzLevelBar === 'function') ? window._lzLevelBar(imp) : '';
+    var body = (_nivel ? '<div style="background:var(--bg-card,#141a24);border:1px solid var(--border-color,#28313f);border-radius:12px;padding:11px 12px;margin-bottom:9px;text-align:left;">' + _nivel + '</div>' : '') +
+      (_temLz
+        ? ('<div style="font-size:0.8rem;">Histórico público de <b>' + _esc(tg.name || tg.handle) + '</b> ' +
+           // O @ ABRE O PERFIL DELA no letzplay. Antes só a leitura navegava a aba
+           // compartilhada, então quem só queria conferir a fonte não tinha caminho nenhum.
+           '(<a href="https://letzplay.me/' + encodeURIComponent(tg.handle) + '" target="_blank" rel="noopener" ' +
+           'style="color:#7dd3fc;text-decoration:none;font-weight:700;">@' + _esc(tg.handle) + ' ↗</a>) no letzplay.</div>')
+        : ('<div style="font-size:0.8rem;">Jogos de <b>' + _esc(tg.name) + '</b> no scoreplace. ' +
+           '<span style="color:var(--text-muted);">Sem histórico do letzplay — a pessoa não autorizou a leitura.</span></div>'));
     var btnLabel = '📚 Puxar histórico completo';
     // 3 BARRAS (x = gravado · y = total do perfil letzplay). Os "de y" que faltarem são
     // completados ao vivo pela extensão (lz-profile-counts lê "472 Jogos · 29 Rankings ·
     // 35 Torneios" do perfil público) — direto na tela, como o dono pediu.
-    function barLine(id, icon, label, x, y) {
+    function barLine(id, icon, label, x, y, _authY) {
+      // x jamais passa do declarado: 35 de 35 é 100%, "38 de 35" não existe.
+      if (y != null && y > 0) x = Math.min(x, y);
       var pct = (y && y > 0) ? Math.min(100, Math.round(x / y * 100)) : null;
-      return '<div id="' + id + '" data-x="' + x + '" style="margin:5px 0;">' +
+      return '<div id="' + id + '" data-x="' + x + '" data-y="' + (y || 0) + '" data-auth="' + (_authY ? 1 : 0) + '" style="margin:5px 0;">' +
         '<div style="display:flex;justify-content:space-between;gap:8px;font-size:0.8rem;"><span>' + icon + ' ' + label + '</span><span class="lz-bar-txt"><b>' + x + '</b>' + (y ? (' de ' + y + ' (' + pct + '%)') : ' de …') + '</span></div>' +
         '<div style="height:7px;border-radius:99px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.08));"><div class="lz-bar-fill" style="height:100%;width:' + (pct != null ? Math.max(2, pct) : 2) + '%;background:linear-gradient(90deg,#10b981,#059669);"></div></div>' +
       '</div>';
     }
-    var gX = imp ? (imp.games || []).length : 0;
-    var gY = (imp && imp.declaredGames != null) ? imp.declaredGames : null;
-    var offFp = imp ? (imp.footprint || []).filter(function (f) { return f.official; }) : [];
-    var rkFp = imp ? (imp.footprint || []).filter(function (f) { return !f.official; }) : [];
-    var tX = offFp.filter(function (f) { return f.standings || (f.name && f.name !== f.categoryRaw); }).length;
-    var tY = (imp && imp.declaredTournaments != null) ? imp.declaredTournaments : null;
-    var rX = rkFp.length;
-    var rY = (imp && imp.declaredRankings != null) ? imp.declaredRankings : null;
-    body += '<div style="margin:8px 0 6px;">' +
+    var _CT = window._lzContagens(imp);
+    var gX = _CT.g.x, gY = _CT.g.y, tX = _CT.t.x, tY = _CT.t.y, rX = _CT.r.x, rY = _CT.r.y;
+    var _idxT = (imp && imp.indexTotal > 0) ? imp.indexTotal
+              : ((imp && imp.totais && imp.totais.fonte === 'indice') ? (imp.totais.jogos || 0) : 0);
+    // As barras medem a leitura do PERFIL LETZPLAY. Sem letzplay não há o que medir —
+    // mostrar "0 de …" pra quem só joga aqui é ruído que parece defeito.
+    if (_temLz || imp) body += '<div style="margin:8px 0 6px;">' +
       barLine('lz-ath-t', '🏆', 'Torneios', tX, tY) +
       barLine('lz-ath-r', '📊', 'Rankings', rX, rY) +
-      barLine('lz-ath-g', '🎾', 'Jogos', gX, gY) +
+      barLine('lz-ath-g', '🎾', 'Jogos', gX, gY, _idxT > 0) +
       '</div>';
+    function _montarAbas() {
+      var _i = imp || {};                       // sem letzplay as abas nascem vazias e o
+      var _me = tg.name || (tg.handle ? '@' + tg.handle : 'Atleta');   // scoreplace preenche
+      window._lzAbas = {
+        tour: _lzTourneyRows(_i, tg.handle, 'tour'),
+        rank: _lzTourneyRows(_i, tg.handle, 'rank'),
+        jogo: (window._lzGameCards(_i, _me) || _lzGameRows(_i, tg.handle))
+      };
+      _lzJuntarScoreplace(uid, _me);
+      // OS NÚMEROS DO LETZPLAY FICAM PUBLICADOS pra costura do scoreplace somar EM CIMA
+      // deles. Sem isso a aba contava a LISTA (391 cards do Fabio + os do app) enquanto a
+      // barra mostrava 397 — divergência dentro do MESMO diálogo, que é justamente o que
+      // a regra "o número deles, sempre" veio eliminar.
+      window._lzNumLz = { tour: tX, rank: rX, jogo: gX };
+      var _n = { tour: tX, rank: rX, jogo: gX };
+      body += '<div id="lz-abas" style="display:flex;gap:6px;margin:9px 0 0;">' +
+        [['tour', '🏆', 'Torneios'], ['rank', '📊', 'Rankings'], ['jogo', '🎾', 'Jogos']].map(function (A) {
+          return '<button type="button" data-lz-aba="' + A[0] + '" onclick="window._lzAba(\'' + A[0] + '\')" ' +
+            'style="flex:1;min-width:0;padding:7px 4px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:700;' +
+            'border:1px solid var(--border-color,rgba(255,255,255,0.12));background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-secondary,#c8cdd6);">' +
+            A[1] + ' ' + A[2] + ' <span style="opacity:0.65;font-weight:500;">' + (_n[A[0]] || 0) + '</span></button>';
+        }).join('') + '</div>' +
+        '<div id="lz-aba-box" style="max-height:340px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;' +
+        'font-size:0.78rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);background:var(--bg-darker,rgba(0,0,0,0.2));' +
+        'border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:7px 10px;margin:6px 0;text-align:left;">' +
+        // A PRIMEIRA ABA JÁ VEM RENDERIZADA NO HTML. Eu tinha deixado a caixa vazia pra um
+        // setTimeout preencher — e o patch que adicionava esse setTimeout falhou sem eu ver:
+        // resultado, a caixa aparecia VAZIA na tela do dono. Conteúdo que existe na hora de
+        // montar vai montado; nada de depender de o diálogo já estar no DOM.
+        (window._lzAbas.tour || '<div style="opacity:0.6;padding:6px 0;">Nenhum torneio lido ainda.</div>') +
+        '</div>';
+    }
     if (imp) {
-      // Torneios já puxados: nome · categoria · ano · classificação do atleta.
-      // v1.4.32: + os AINDA NÃO LIDOS da lista persistida (tournamentsList — o título já
-      // traz a categoria). O dono vê os 35 de cara, não só os que já têm jogos.
-      var pendLis = '';
-      if (Array.isArray(imp.tournamentsList) && imp.tournamentsList.length) {
-        var lidosKey = {};
-        offFp.forEach(function (f) { lidosKey['t/' + (f.club || '') + '/' + (f.tourneyId || '')] = 1; });
-        pendLis = imp.tournamentsList.filter(function (p) {
-          return p && p.tid && !lidosKey['t/' + (p.club || '') + '/' + p.tid];
-        }).map(function (p) {
-          return '<div style="padding:2px 0;opacity:0.7;">⏳ ' + _esc(p.title || ('torneio ' + p.tid)) + ' · ainda não lido</div>';
-        }).join('');
-      }
-      if (offFp.length || pendLis) {
-        var lis = offFp.map(function (f) {
-          var nm = f.name || f.categoryRaw || 'torneio';
-          var cat = (f.name && f.categoryRaw && f.name.indexOf(f.categoryRaw) < 0) ? (' · ' + _esc(f.categoryRaw)) : '';
-          var yr = f.year ? (' · ' + f.year) : '';
-          var pos = _lzMyPosIn(f.standings, tg.handle);
-          return '<div style="padding:2px 0;">🏆 ' + _esc(nm) + cat + yr + (pos != null ? (' · <b>' + pos + 'º lugar</b>') : '') + '</div>';
-        }).join('');
-        body += '<div style="max-height:12em;overflow-y:auto;font-size:0.78rem;color:var(--text-secondary,#c8cdd6);background:var(--bg-darker,rgba(0,0,0,0.2));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;margin-bottom:6px;text-align:left;">' + lis + pendLis + '</div>';
-      }
+      // TRÊS ABAS, UMA ROLAGEM (pedido do dono, 30/jul/2026: "tem que ter um botão com
+      // torneios, outro com rankings e outro com histórico de jogos, de forma que possamos
+      // abrir, ler e scrollar"). Empilhar as três listas travava o diálogo.
+      // O conteúdo é montado UMA vez e guardado em `window._lzAbas`; trocar de aba só
+      // troca o innerHTML — não re-renderiza o diálogo (e não perde a barra de progresso
+      // se uma leitura estiver rodando).
+      // AS DUAS FONTES NAS TRÊS ABAS (pedido do dono, 31/jul/2026): "na lista de jogos tem
+      // que aparecer os jogos do letzplay e do scoreplace. torneios de ambos e rankings de
+      // ambos." Os do scoreplace chegam depois (uma leitura do Firestore) e são costurados
+      // nas abas já montadas — a tela não espera por eles pra abrir.
+      _montarAbas();
       var incompleto = (gY && gX < gY) || (imp.partialReason != null);
       if (incompleto) {
         body += '<div style="font-size:0.8rem;color:#fbbf24;">Perfil INCOMPLETO — puxe de novo pra continuar de onde parou (o que já veio está gravado).</div>';
         btnLabel = '▶️ Continuar de onde parou';
       }
-      body += (lu ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Última atualização: <b>' + lu.label + '</b></div>' : '');
+      // POR QUE ESTÁ ROXO. 100% capturado não é o mesmo que lido pelo motor atual — e sem
+      // dizer isso a tela parece contraditória ("estou com 100%, por que continua roxo?").
+      var _velho = !_lzTemIds(imp), _antigo = !_lzFresco(imp);
+      if (_velho || _antigo) {
+        body += '<div style="font-size:0.8rem;color:#a78bfa;margin-top:6px;line-height:1.45;">' +
+          (_velho
+            ? 'Este histórico foi lido pelo <b>motor antigo</b> — por isso o nome fica violeta mesmo em 100%. Puxe de novo pra ele contar como verificado.'
+            : 'Leitura com mais de 3 meses — o nome fica violeta até ser puxada de novo.') +
+          '</div>';
+      }
+      body += (lu ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Última atualização: <b>' + lu.label + '</b>' +
+        (_velho ? ' <span style="color:#a78bfa;">(motor antigo)</span>' : '') + '</div>' : '');
     } else {
-      body += '<div style="font-size:0.8rem;color:var(--text-muted);">Nada gravado ainda — leio torneios (nome, categoria, classificação) e depois os jogos, gravando a cada passo.</div>';
+      // SEM HISTÓRICO DO LETZPLAY as abas continuam existindo — elas é que trazem os jogos
+      // do scoreplace (torneio e casual), que são registro nosso e não dependem de
+      // autorização nenhuma. Antes o diálogo terminava aqui e a pessoa que jogou aqui
+      // semana passada aparecia como se não tivesse jogo nenhum.
+      body += '<div style="font-size:0.8rem;color:var(--text-muted);">' +
+        (_temLz ? 'Nada gravado ainda do letzplay — leio torneios (nome, categoria, classificação) e depois os jogos, gravando a cada passo.'
+                : 'Abaixo, os jogos desta pessoa aqui no scoreplace.') + '</div>';
+      _montarAbas();
+    }
+    // ── SÓ DÁ PRA PUXAR ONDE A EXTENSÃO RODA ──────────────────────────────────
+    // No celular (e em qualquer navegador sem a extensão) a leitura é impossível: quem lê
+    // o letzplay é a extensão, na sessão do próprio usuário. O botão ficava azul e clicável
+    // do mesmo jeito — o dono tocou nele no iPhone e não aconteceu nada, sem uma palavra de
+    // explicação. Botão que não pode agir tem que PARECER que não pode, e dizer por quê.
+    function _podePuxar() {
+      if (window._lzExtVer) return true;                 // a extensão se anunciou nesta aba
+      var ua = navigator.userAgent || '';
+      var movel = /iPhone|iPad|iPod|Android/i.test(ua);
+      return !movel;   // no desktop sem anúncio ainda deixa tentar (ela pode responder tarde)
+    }
+    function _botaoPuxar() {
+      if (_podePuxar()) {
+        return '<button type="button" onclick="window._lzPuxarDoTopo()" ' +
+          'style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:800;' +
+          'border:1px solid rgba(59,130,246,0.5);background:linear-gradient(135deg,#3b82f6,#2563eb);' +
+          'color:#fff;white-space:nowrap;">' + _esc(btnLabel) + '</button>';
+      }
+      return '<button type="button" disabled ' +
+        'title="A leitura do letzplay é feita pela extensão do Chrome, que só roda no computador." ' +
+        'style="padding:8px 14px;border-radius:9px;cursor:not-allowed;font-size:0.78rem;font-weight:800;' +
+        'border:1px solid var(--border-color,rgba(255,255,255,0.12));background:var(--bg-darker,rgba(255,255,255,0.06));' +
+        'color:var(--text-muted,#8b93a1);white-space:nowrap;opacity:0.75;">🖥️ ' + _esc(btnLabel) + '</button>';
+    }
+    // O AVISO DE EXTENSÃO VELHA VEM AO ABRIR, NÃO DEPOIS DO CLIQUE (pedido do dono,
+    // 02/ago/2026: "o certo seria já trazer a desatualização assim que abre a página do
+    // jogador, antes de clicar em qualquer coisa, sempre"). Antes, a checagem só existia
+    // DENTRO do "Puxar": a pessoa lia a ficha inteira, clicava, e só então descobria que a
+    // extensão não servia. O slot é preenchido pelo ping logo abaixo.
+    body = '<div id="lz-ext-aviso"></div>' + body;
+    // (a explicação sobre "cards repetidos" saiu daqui em 02/ago: com o contador do app
+    // mostrando o MESMO número do letzplay, não há mais divergência pra justificar — e
+    // texto que explica uma diferença que não existe mais só semeia dúvida.)
+    if (!_podePuxar() && _temLz) {
+      body += '<div style="font-size:0.8rem;color:#fbbf24;margin-top:8px;line-height:1.45;' +
+        'background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.30);border-radius:9px;padding:8px 10px;">' +
+        '🖥️ <b>Aqui não dá pra puxar.</b> Quem lê o letzplay é a extensão do Chrome, na sua sessão — ' +
+        'e ela só roda no computador. Abra esta mesma tela no desktop com a extensão instalada ' +
+        'pra continuar de onde parou. O que já foi lido está gravado e aparece aqui normalmente.</div>';
     }
     if (typeof window.showConfirmDialog === 'function') {
-      window.showConfirmDialog('🎾 ' + (tg.name || '@' + tg.handle), body,
-        function () { window._lzAthleteImport(uid); }, null,
-        { confirmText: btnLabel, cancelText: 'Fechar', type: 'info' });
+      window.showConfirmDialog('🎾 ' + (tg.name || (tg.handle ? '@' + tg.handle : 'Atleta')), body,
+        // ERRO DENTRO DO CALLBACK DO DIALOG É ENGOLIDO. Se qualquer coisa estourar aqui, o
+        // dialog fecha e a tela volta — exatamente o "clica em continuar e não faz nada",
+        // sem toast, sem console, sem pista. Nunca deixar este callback nu.
+        function () {
+          try { window._lzAthleteImport(uid); }
+          catch (e) {
+            var m = (e && (e.stack || e.message)) || String(e);
+            if (window._warn) window._warn('[letzplay] falha ao iniciar leitura:', m);
+            if (typeof window.showAlertDialog === 'function') {
+              window.showAlertDialog('Não deu pra iniciar a leitura',
+                '<div style="text-align:left;font-size:0.82rem;">Aconteceu um erro antes de a leitura começar. Recarregue a página e tente de novo.<br><br>' +
+                '<details><summary style="cursor:pointer;">detalhe técnico</summary><pre style="white-space:pre-wrap;font-size:0.7rem;margin-top:6px;">' +
+                _esc(String(m).slice(0, 400)) + '</pre></details></div>');
+            } else if (typeof showNotification === 'function') {
+              showNotification('Não deu pra iniciar a leitura', String(m).slice(0, 120), 'error');
+            }
+          }
+        }, null,
+        // SEM RODAPÉ: esta tela tem a barra fixa no topo. Dois pares de botões era o
+        // "fantasma" que o dono via embaixo. Os botões nativos seguem no DOM, escondidos,
+        // e a barra de cima dispara ELES — um caminho só de confirmação/cancelamento.
+        // AS AÇÕES FICAM NA LINHA DO NOME. Antes eram uma barra `sticky` dentro do corpo:
+        // ela vazava por cima do conteúdo ao rolar e roubava uma faixa inteira de altura.
+        // No cabeçalho elas já estão sempre visíveis por construção (o cabeçalho é fixo,
+        // `flex: 0 0 auto`) e não ocupam linha nenhuma a mais.
+        { confirmText: btnLabel, cancelText: '← Voltar', type: 'info', maxWidth: '760px', hideFooter: true,
+          headerHtml:
+            '<button type="button" onclick="window._lzFecharDialogo()" ' +
+            'style="padding:8px 12px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:700;' +
+            'border:1px solid var(--border-color,rgba(255,255,255,0.15));background:rgba(255,255,255,0.08);' +
+            'color:var(--text-main,#e8ecf3);white-space:nowrap;">← Voltar</button>' +
+            // Sem letzplay não há o que puxar — o botão sumiria de qualquer jeito no
+            // primeiro clique (a leitura precisa do @). Melhor não oferecer.
+            (_temLz ? _botaoPuxar() : '') });
+      // a aba de torneios já está montada; isto só pinta o botão ativo
+      setTimeout(function () { if (typeof window._lzAba === 'function') window._lzAba('tour'); }, 0);
+      if (_temLz) _lzConferirExtensao();
       // Completa os "de y" das barras AO VIVO com os totais do perfil público
       // (a extensão lê "472 Jogos · 29 Rankings · 35 Torneios" e devolve).
       setTimeout(function () { _lzAskProfileCounts(tg.handle); }, 60);
@@ -1715,14 +2946,32 @@
       if (!d || d.__sp_lp !== 'lz-profile-counts-result' || d.handle !== handle) return;
       window.removeEventListener('message', onMsg);
       if (d.error) return;
+      // ESTE É O SEGUNDO ESCRITOR DA BARRA — e era o que escapava do teto. Ele pega os
+      // contadores AO VIVO do perfil e reescrevia o texto usando o `x` já pintado, sem
+      // capar: 4 torneios lidos com um total novo de 2 virava "4 de 2 (100%)" na tela do
+      // dono. Duas mãos escrevendo o mesmo número e só uma conhecia a regra.
+      //   • x NUNCA passa de y (a mesma lei do barLine e do _updBars);
+      //   • um total que é FATO (índice varrido / varredura fechada) não é rebaixado pelo
+      //     contador do perfil, que conta LINHAS — é ele que diz 81 onde a lista enumera 80.
       function upd(id, y) {
         var el = document.getElementById(id); if (!el || y == null) return;
+        if (el.getAttribute('data-auth') === '1') return;
+        // NUNCA ENCOLHER: o contador do perfil pode enumerar MENOS do que existe (ele diz
+        // 2 torneios pro dono, que jogou 4). Aceitar um total menor apagaria da tela um
+        // torneio que ele disputou — foi assim que o BTG sumiu.
+        var yAtual = parseInt(el.getAttribute('data-y'), 10) || 0;
+        if (yAtual > 0 && y < yAtual) return;
+        el.setAttribute('data-y', String(y));
         var x = parseInt(el.getAttribute('data-x'), 10) || 0;
+        if (y > 0 && x > y) { x = y; el.setAttribute('data-x', String(x)); }
         var pct = y > 0 ? Math.min(100, Math.round(x / y * 100)) : 0;
         var t = el.querySelector('.lz-bar-txt'); if (t) t.innerHTML = '<b>' + x + '</b> de ' + y + ' (' + pct + '%)';
         var f = el.querySelector('.lz-bar-fill'); if (f) f.style.width = Math.max(2, pct) + '%';
       }
-      upd('lz-ath-t', d.tournaments); upd('lz-ath-r', d.rankings); upd('lz-ath-g', d.games);
+      // Torneios e rankings NÃO vêm mais daqui: o contador do perfil conta inscrição
+      // (um ranking de 2023 sem nenhum jogo) e esquece participação (dois torneios de
+      // 2024 que ele jogou). Só competição com jogo conta, e isso o app já sabe.
+      upd('lz-ath-g', d.games);
     }
     window.addEventListener('message', onMsg);
     setTimeout(function () { window.removeEventListener('message', onMsg); }, 15000);
@@ -1730,15 +2979,59 @@
   }
   // Puxa a COMPLETA de UM atleta pelo @ público — o caminho do autoimport (fetch das
   // páginas /{handle}/matches), sem navegar o perfil SPA (a causa do lote travar).
+  // Segura a aba do letzplay aberta durante TODA a leitura (que são várias rodadas).
+  function _lzSegurarAba(on) {
+    try { window.postMessage({ __sp_lp: 'lz-keep-tab', on: !!on }, window.location.origin); } catch (e) {}
+  }
   window._lzAthleteImport = function (uid) {
-    if (window._lzScanRunning) return;
+    window._lzGravouOk = true; window._lzUltimoErroGravacao = null;
+    _lzSegurarAba(true);
+    if (window._log) window._log('[letzplay] iniciar leitura de', uid, '· travaAtiva=', !!window._lzScanRunning,
+      '· overlay=', !!document.getElementById('sp-import-overlay'), '· ctx=', !!(window._lzScanCtx && window._lzScanCtx.byUid));
+    // NENHUM CLIQUE PODE MORRER CALADO. Estes três `return` mudos faziam o botão
+    // "Continuar de onde parou" não fazer NADA — sem toast, sem log, sem pista. O caso real:
+    // uma leitura que terminou de forma anormal (aba fechada, página trocada, extensão
+    // recarregada no meio) deixa `_lzScanRunning = true` pra sempre, e a partir daí TODO
+    // clique seguinte retorna aqui em silêncio. A trava só vale enquanto existe leitura de
+    // verdade na tela; sem overlay, ela é lixo de uma sessão morta e é limpa na hora.
+    // CLICAR SEMPRE PUXA QUEM FOI PEDIDO. Antes, se houvesse qualquer leitura na tela, o
+    // clique era RECUSADO ("já tem uma leitura rodando") — inclusive quando a leitura em
+    // curso era de outra pessoa ou era resto de uma sessão morta. Recusar é preguiça
+    // nossa: quem pediu a Camila quer a Camila. A leitura anterior é ENCERRADA (overlay
+    // fora, trava limpa) e a nova começa na hora.
+    if (window._lzScanRunning || document.getElementById('sp-import-overlay')) {
+      try { if (typeof window._spCloseImportOverlay === 'function') window._spCloseImportOverlay(); } catch (e) {}
+      var _ov = document.getElementById('sp-import-overlay');
+      if (_ov && _ov.parentNode) _ov.parentNode.removeChild(_ov);
+      window._lzScanRunning = false;
+    }
     var ctx = window._lzScanCtx || {};
     var tg = ctx.byUid && ctx.byUid[uid];
-    if (!tg || !tg.handle) return;
+    // A PÁGINA DA PESSOA ABRE NO INSTANTE DO CLIQUE. Isto é resposta ao toque, não
+    // trabalho de raspagem: vai por um canal próprio (`lz-open-profile` → `lp-nav-now`)
+    // que NÃO passa pela fila de trabalho da extensão. Antes a navegação era enfileirada
+    // junto com as buscas e esperava o passo aprendido — dezenas de segundos até a aba
+    // sequer mudar de página, com o organizador olhando pra uma tela parada.
+    if (tg && tg.handle) {
+      try { window.postMessage({ __sp_lp: 'lz-open-profile', handle: tg.handle }, '*'); } catch (e) {}
+    }
+    if (!tg || !tg.handle) {
+      if (typeof showNotification === 'function') showNotification('Não deu pra puxar', !tg ? 'Não achei este inscrito na tela — recarregue a página.' : 'Este inscrito não tem @ do letzplay no perfil.', 'error');
+      return;
+    }
     window._lzScanRunning = true;
     window._lzPendingMode = 'full';
     var done = false, started = false, versions = [], idleTimer = null;
     var who = tg.name || ('@' + tg.handle);
+    // RODADAS ENCADEADAS: uma leitura grande não cabe numa rodada só (o perfil da Camila
+    // são ~140 requisições com espaçamento humano ≈ 9 min, e uma pausa do letzplay pode
+    // interromper antes disso). Quando a rodada devolve `done:false`, o app dispara a
+    // seguinte SOZINHO com o cursor — ninguém tem que clicar de novo pra continuar.
+    // Regra do dono: "o processo deve demorar mais, mas não falhar nunca."
+    var rodada = 0, MAX_RODADAS = 40, _progAnterior = null;
+    var cursorAtual = null, ultimoImp = null;
+    var ultimaNota = '';   // último passo REAL anunciado — sobrevive às esperas
+    var _unidadeDesde = 0, _unidadePasso = '';   // há quanto tempo preso no MESMO passo
     // BARRAS AO VIVO (v1.4.22): as 3 barras do dialog (Torneios/Rankings/Jogos, x de y %)
     // ficam VISÍVEIS no overlay durante a busca e crescem conforme as coisas chegam.
     // Semente = melhor import já gravado (mesma escolha do prior lá embaixo); depois a
@@ -1747,24 +3040,60 @@
     function _seedBarsFrom(imp) {
       if (!imp) return;
       _updBars({
-        g: (imp.games || []).length,
-        t: (imp.footprint || []).filter(function (f) { return f.official; }).length,
-        r: (imp.footprint || []).filter(function (f) { return !f.official; }).length,
-        gY: (imp.declaredGames != null) ? imp.declaredGames : null,
+        g: _lzTot(imp),
+        t: window._lzTournamentsRead(imp),   // LIDOS, não conhecidos — regra única
+        // rankings RESOLVIDOS (nome/classificação lidos), não só descobertos
+        r: (imp.footprint || []).filter(function (f) {
+          return !f.official && (f.standings || (f.name && f.name !== f.categoryRaw));
+        }).length,
+        // total de jogos = o MAIOR entre o declarado e o que já temos. Numa RETOMADA isso
+        // faz a barra começar já no número real, em vez de nascer em "478" e pular pro
+        // verdadeiro no meio da leitura — que foi o que o dono viu e reclamou com razão.
+        gY: Math.max((imp.declaredGames != null) ? imp.declaredGames : 0, _lzTot(imp)) || null,
         tY: (imp.declaredTournaments != null) ? imp.declaredTournaments : null,
-        rY: (imp.declaredRankings != null) ? imp.declaredRankings : null
+        // total = rankings DESCOBERTOS. O do perfil não é alcançável (medido: 29 declarados,
+        // 20 com jogo no histórico) e barra que nunca fecha é barra quebrada.
+        rY: ((imp.footprint || []).filter(function (f) { return !f.official; }).length)
+          || ((imp.declaredRankings != null) ? imp.declaredRankings : null)
       });
     }
-    // x nunca anda pra trás (critérios de contagem variam entre fontes); y atualiza
-    // quando o total declarado do perfil chega.
+    // x nunca anda pra trás (critérios de contagem variam entre fontes) e NUNCA passa de y:
+    // o total declarado pelo perfil é a verdade, então 35 de 35 é 100% — "38 de 35" não é
+    // um número, é um bug na cara do organizador (regra explícita do dono, 30/jul).
+    function _cap(x, y) { return (y != null && y > 0) ? Math.min(x, y) : x; }
     function _updBars(c) {
       if (!c) return;
+      // ── OS TOTAIS SAEM DE UM LUGAR SÓ ────────────────────────────────────────────
+      // Enquanto há um import conhecido, os três totais vêm de `_lzContagens` — a MESMA
+      // função que o diálogo usa. Era a divergência entre os dois que fazia "391 de 391"
+      // virar "391 de 397" no meio da leitura (o 397 é o contador de linhas do perfil).
+      // Os contadores que a extensão manda só valem enquanto não há import nenhum.
+      var _impC = ultimoImp;
+      if (_impC && !_impC.totais && c && c.totais) _impC = Object.assign({}, _impC, { totais: c.totais });
+      var _C = (_impC && typeof window._lzContagens === 'function') ? window._lzContagens(_impC) : null;
+      if (_C) {
+        if (_C.t.y != null) _bs.t.y = _C.t.y;
+        if (_C.r.y != null) _bs.r.y = _C.r.y;
+        if (_C.g.y != null) _bs.g.y = _C.g.y;
+      } else {
+        if (c.tY != null) _bs.t.y = c.tY;
+        if (c.rY != null) _bs.r.y = c.rY;
+        if (c.gY != null) _bs.g.y = c.gY;
+      }
+      // x sobe com o que a leitura reporta e com o que o import já prova — o maior dos dois
       if (c.t != null) _bs.t.x = Math.max(_bs.t.x, c.t);
       if (c.r != null) _bs.r.x = Math.max(_bs.r.x, c.r);
       if (c.g != null) _bs.g.x = Math.max(_bs.g.x, c.g);
-      if (c.tY != null) _bs.t.y = c.tY;
-      if (c.rY != null) _bs.r.y = c.rY;
-      if (c.gY != null) _bs.g.y = c.gY;
+      if (_C) {
+        _bs.t.x = Math.max(_bs.t.x, _C.t.x || 0);
+        _bs.r.x = Math.max(_bs.r.x, _C.r.x || 0);
+        _bs.g.x = Math.max(_bs.g.x, _C.g.x || 0);
+      }
+      // capa DEPOIS do max e DEPOIS de y ter chegado — senão um x semeado grande fica
+      // preso acima do total quando o declarado só aparece na requisição seguinte.
+      _bs.t.x = _cap(_bs.t.x, _bs.t.y);
+      _bs.r.x = _cap(_bs.r.x, _bs.r.y);
+      _bs.g.x = _cap(_bs.g.x, _bs.g.y);
     }
     function _barsArr() {
       return [
@@ -1773,21 +3102,104 @@
         { id: 'g', icon: '🎾', label: 'Jogos', x: _bs.g.x, y: _bs.g.y }
       ];
     }
+    // ── DECORRIDO e FALTAM ───────────────────────────────────────────────────────
+    // O ritmo é MEDIDO nesta leitura, não estimado por tabela: divide o tempo já gasto
+    // pelo trabalho já feito e projeta no que falta. Se o letzplay ficar lento, a conta
+    // sobe sozinha — é honesto por construção e não precisa de calibração.
+    //
+    // Unidade de trabalho = requisição: cada torneio custa ~2 (a página dele + a de jogos),
+    // cada página do histórico custa 1. É a mesma conta que mostrou que o perfil da Camila
+    // são ~172 requisições — a razão de tudo isto existir.
+    var _t0 = Date.now();
+    // SEMPRE com segundos. Sem eles o decorrido ficava um minuto inteiro no mesmo texto —
+    // e um número parado é justamente o que faz uma leitura sadia parecer travada. Os
+    // segundos vão com 2 dígitos pra largura não mudar (a linha usa dígitos tabulares).
+    // Acima de 1h continua em minutos ("78min 04s") em vez de "1h 18min": é mais compacto
+    // numa linha que já divide espaço com o restante, e continua andando a cada segundo.
+    function _fmtDur(ms) {
+      var s = Math.max(0, Math.round(ms / 1000));
+      if (s < 60) return s + 's';
+      var m = Math.floor(s / 60), r = s % 60;
+      return m + 'min ' + (r < 10 ? '0' : '') + r + 's';
+    }
+    // UMA FONTE SÓ: a barra geral e o tempo saem das MESMAS três barras que estão na tela.
+    // Antes cada um tinha sua conta: o `pct` era uma faixa fixa por fase (torneios 4–30,
+    // rankings 31–45, jogos 46–97), então com os jogos já completos pelo cursor a barra
+    // geral ficava presa em 45% "quase terminando"; e o tempo somava torneios + páginas mas
+    // ESQUECIA os rankings — na fase deles o decorrido crescia e o feito não, então o
+    // "restam" SUBIA em vez de descer. Derivar das barras é consistente por construção.
+    function _trabalho() {
+      var feito = (_bs.t.x || 0) + (_bs.r.x || 0) + (_bs.g.x || 0);
+      var total = (_bs.t.y || 0) + (_bs.r.y || 0) + (_bs.g.y || 0);
+      return { feito: feito, total: Math.max(total, feito) };
+    }
+    // pct geral = o quanto do trabalho declarado já está em casa
+    function _pctGeral() {
+      var w = _trabalho();
+      if (!w.total) return null;
+      return Math.max(2, Math.min(100, Math.round(w.feito / w.total * 100)));
+    }
+    // Linha de base do trabalho JÁ FEITO quando esta leitura começou (o acumulado vem
+    // semeado das rodadas anteriores). Sem descontar, o ritmo sai fantasioso.
+    // ⚠️ Esta declaração foi apagada por engano na 1.6.23 quando reescrevi `_trabalho()` —
+    // `_tempos()` continuou usando `_w0`, e como o relógio de 1s chama `setProg` (que chama
+    // `_tempos`), virava ReferenceError A CADA SEGUNDO: a leitura não andava e o clique em
+    // "Continuar" morria. O Sentry pegou (8 ocorrências) antes de eu adivinhar mais uma vez.
+    var _w0 = null;
+    // Mediana dos intervalos entre itens concluídos — o ritmo real, em segundos por item.
+    var _ritmos = [], _ultimoItem = 0, _bloqueios = 0;
+    function _ritmoTexto() {
+      if (_ritmos.length < 2) return '';
+      var o = _ritmos.slice().sort(function (a, b) { return a - b; });
+      var med = o[Math.floor(o.length / 2)];
+      return ' · ' + (med >= 1000 ? (med / 1000).toFixed(1) + 's' : med + 'ms') + '/item';
+    }
+    function _tempos() {
+      var dec = Date.now() - _t0;
+      var w = _trabalho();
+      if (_w0 == null) _w0 = w.feito;
+      var feitoAgora = w.feito - _w0, falta = w.total - w.feito;
+      // O "restam" ficava eternamente em "—" numa releitura: quase tudo já estava no banco,
+      // então `feito` mal se mexia e nunca chegava nas 3 unidades exigidas. Amostra de 1 já
+      // dá uma estimativa útil (e ela se corrige a cada segundo) — melhor um número que se
+      // ajusta do que um traço que não diz nada. Continua "—" só enquanto NADA foi feito
+      // nesta leitura, que é o único caso em que não há o que medir.
+      // SEM "RESTAM" (pedido do dono, 31/jul). A projeção dependia de um total que o
+      // letzplay conta em CARDS (478 pra 469 partidas, 158 pra 157) — ela prometia um fim
+      // que nunca chegava e virava mais uma coisa errada na tela. O que fica é o que é
+      // medido de verdade: o tempo decorrido e o ritmo por item.
+      return { decorrido: _fmtDur(dec) + _ritmoTexto(), restante: '' };
+    }
+    // Relógio de 1s: é ele que faz a tela se MEXER durante as esperas longas. O passo
+    // (`sub`) e as barras ficam parados porque nada novo chegou — o que não pode é a tela
+    // inteira parecer morta enquanto a leitura está viva.
+    var _relogio = setInterval(function () { if (!done) setProg({}); }, 1000);
     function setProg(o) {
       o = o || {};
-      window._spProgressOverlay({ label: '📚 ' + who, sub: o.sub || '', pct: o.pct, feedAdd: o.feedAdd || null, bars: _barsArr(), onCancel: cancel });
+      if (o.sub == null) o.sub = ultimaNota;   // sem passo novo, mantém o que está em curso
+      var _pg = _pctGeral();
+      window._spProgressOverlay({ label: '📚 ' + who, sub: o.sub || '', pct: (_pg != null ? _pg : o.pct),
+        feedAdd: o.feedAdd || null, bars: _barsArr(), tempos: _tempos(), onCancel: cancel });
     }
     function cleanup() {
       done = true;
+      // acabou de verdade (terminou, falhou ou suspendeu): a aba do letzplay pode fechar
+      _lzSegurarAba(false);
       window._lzScanRunning = false;
       window.removeEventListener('message', onMsg);
       if (idleTimer) clearTimeout(idleTimer);
+      if (_relogio) { clearInterval(_relogio); _relogio = null; }   // sem relógio órfão
       if (typeof window._spCloseImportOverlay === 'function') window._spCloseImportOverlay();
     }
     function cancel() {
       if (done) return;
       cleanup();
-      if (typeof showNotification === 'function') showNotification('Busca cancelada', 'Nada foi alterado.', 'info');
+      // SUSPENDER, não cancelar: os parciais já foram gravados e o cursor está salvo —
+      // clicar no nome de novo continua daqui, sem reler nada.
+      if (typeof showNotification === 'function') {
+        showNotification('⏸️ Leitura suspensa', 'O que já veio está gravado. Clique no nome de novo pra continuar de onde parou.', 'info');
+      }
+      try { if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix(); } catch (e) {}
     }
     function fail(msg) {
       if (done) return;
@@ -1800,23 +3212,66 @@
     }
     function onMsg(e) {
       if (e.source !== window) return; var d = e.data; if (!d) return;
-      if (d.__sp_lp === 'extension-present') { if (d.version) versions.push(d.version); return; }
+      if (d.__sp_lp === 'extension-present') { if (d.version) { versions.push(d.version); window._lzExtVer = d.version; } return; }
       // Rate-limit NUNCA aparece pro usuário (regra do dono, 14/jul: "demorar mais, mas
       // não falhar — nunca resolver rate-limit com aviso"). Esperar e ler são a mesma
       // coisa pra ele: texto neutro, watchdog rearmado, barra intacta. A pausa-e-grava
       // automática (rate-budget) continua existindo — só que MUDA, sem ameaça na tela.
       if (d.__sp_lp === 'lz-throttle') {
         ping();
-        setProg({ sub: 'lendo o letzplay — pode deixar rodando', pct: null });
+        // TETO POR UNIDADE DE TRABALHO. O `ping()` é rearmado a cada espera, então uma
+        // SEQUÊNCIA de esperas no MESMO passo nunca disparava o corte por ociosidade — a
+        // leitura ficava indefinidamente no mesmo item, calada, e de fora isso é idêntico a
+        // travado ("parece que travou faltando 2"). Passados 4 min preso no mesmo passo, a
+        // rodada é encerrada COMO PAUSA e a seguinte retoma pelo cursor: o que veio já está
+        // gravado. Não é desistir — é parar de fingir que anda.
+        if (!_unidadeDesde || _unidadePasso !== ultimaNota) { _unidadePasso = ultimaNota; _unidadeDesde = Date.now(); }
+        else if (Date.now() - _unidadeDesde > 240000 && rodada < MAX_RODADAS) {
+          _unidadeDesde = 0;
+          setProg({ sub: 'retomando…' });
+          proximaRodada();
+        }
+        // MANTÉM O PASSO NA TELA. Antes isto trocava o texto por uma frase genérica, e o
+        // "página 10 de 24" — a única informação real ali — DESAPARECIA justo no momento em
+        // que a leitura demora mais. Ficava minutos sem dizer nada, e sem dizer nada é
+        // indistinguível de travado. O passo continua; quem se mexe é a linha de baixo.
+        // O BLOQUEIO TEM QUE APARECER. Eu vinha ajustando velocidade no escuro e o dono
+        // olhando barra parada, sem nunca saber se era lentidão nossa ou o letzplay
+        // fechando a porta. Cada espera vira uma linha no feed, com o tempo e o motivo —
+        // um número que ele lê na hora, em vez de eu supor.
+        _bloqueios++;
+        setProg({ sub: ultimaNota || 'lendo o letzplay', pct: null,
+          feedAdd: '🚧 letzplay limitou o acesso (' + _bloqueios + 'ª vez) — esperando ' +
+            Math.round((d.waitMs || 0) / 1000) + 's' +
+            (d.gap ? ' · passo agora ' + (d.gap >= 1000 ? (d.gap / 1000).toFixed(1) + 's' : d.gap + 'ms') : '') });
         return;
       }
       if (d.__sp_lp === 'athlete-import-progress' && d.uid === uid) {
         ping();
         var cur = d.current || {};
+        // passo NOVO = progresso de verdade → zera o relógio da unidade
+        if (cur.note && cur.note !== ultimaNota) { _unidadeDesde = Date.now(); _unidadePasso = cur.note; }
+        if (cur.note) ultimaNota = cur.note;   // o passo em curso, preservado durante as esperas
         // counts (ext ≥1.44): x/y ao vivo das 3 barras — cresce a cada torneio/página lida.
         _updBars(d.counts || null);
         // pct REAL (0–100, calculado pela extensão por etapa) + feed do que foi lido
         // (nome do torneio · classificação · nº de jogos) num box de 2 linhas com scroll.
+        // RITMO MEDIDO, NA TELA. Eu vinha ajustando a velocidade por raciocínio e o dono
+        // continuava esperando minutos — sem nunca ver um número. Cada item concluído
+        // (torneio, ranking, lote de páginas) chega aqui com `feed`; a distância entre dois
+        // desses é o custo REAL de uma unidade de trabalho, do clique dele até o dado.
+        // Mediana, não média: uma espera de rate-limit não pode mascarar o ritmo normal.
+        if (d.feed) {
+          var _ag = Date.now();
+          if (_ultimoItem) _ritmos.push(_ag - _ultimoItem);
+          _ultimoItem = _ag;
+          if (_ritmos.length > 40) _ritmos.shift();
+        }
+        // O CURSOR VEM JUNTO DO PROGRESSO (ext 1.69) — guardamos A CADA página/competição.
+        // Antes ele só chegava no PARCIAL, de 3 em 3 páginas: uma interrupção perdia até
+        // duas páginas e a retomada refazia trabalho. Aqui é só memória; quem grava é o
+        // parcial (o cursor viaja dentro do fullImport).
+        if (d.cursor) cursorAtual = d.cursor;
         setProg({ sub: cur.note || '', pct: (d.pct != null ? Math.max(3, d.pct) : null), feedAdd: d.feed || null });
         return;
       }
@@ -1825,14 +3280,21 @@
       // aba fechada), o que veio ficou; a próxima rodada continua de onde parou (prior).
       if (d.__sp_lp === 'athlete-import-partial' && d.uid === uid) {
         ping();
+        if (d.cursor) cursorAtual = d.cursor;
+        if (d.fullImport) ultimoImp = d.fullImport;
         if (d.scan && d.fullImport && typeof _lzPersistScans === 'function') {
-          _lzPersistScans(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }])
+          _lzPersistScans(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }], d.gamesDelta)
             .catch(function (e) { window._log && window._log('[athlete parcial] não gravou (segue):', (e && e.message) || e); });
         }
         // O parcial traz o fullImport consolidado — atualiza as barras por ele (também
         // cobre extensão antiga sem `counts` no progresso).
         _seedBarsFrom(d.fullImport || null);
-        setProg({ sub: (d.stage === 'torneios' ? ('torneio ' + d.done + ' de ' + d.total + ' gravado') : ('página ' + d.done + ' de ' + d.total + ' gravada')), pct: null });
+        // "gravado" só se GRAVOU. O texto dizia gravado enquanto o servidor recusava tudo.
+        var _ok = window._lzGravouOk !== false;
+        setProg({ sub: _ok
+          ? (d.stage === 'torneios' ? ('torneio ' + d.done + ' de ' + d.total + ' gravado') : ('página ' + d.done + ' de ' + d.total + ' gravada'))
+          : ('⚠️ nada foi gravado — ' + (window._lzUltimoErroGravacao || 'escrita recusada')), pct: null });
+        if (!_ok) { fail('Nada foi gravado — ' + (window._lzUltimoErroGravacao || 'o servidor recusou a escrita') + '.'); return; }
         return;
       }
       if (d.__sp_lp === 'athlete-import-result' && d.uid === uid) {
@@ -1841,15 +3303,52 @@
           fail(d.error === 'sem-jogos' ? 'O perfil público de @' + tg.handle + ' não mostrou nenhum jogo.' : ('Falhou: ' + (d.error || 'erro')));
           return;
         }
+        if (d.cursor) cursorAtual = d.cursor;
+        if (d.fullImport) ultimoImp = d.fullImport;
+        // AINDA FALTA LER → grava o que veio e CONTINUA na hora, na mesma sessão, com o
+        // cursor. Nada de pedir clique: pra quem está olhando é uma leitura só, que anda.
+        // RODADA QUE NÃO ANDA NÃO SE REPETE. Encadear era pra continuar de onde parou —
+        // mas quando uma rodada termina com exatamente o mesmo tanto de jogos, torneios e
+        // rankings da anterior, ela não continuou nada: vai repetir o mesmo trabalho (perfil
+        // + listas + página 1) e chegar no mesmo lugar. Foi isto que transformou "faltam 2
+        // jogos" em dois minutos: dezenas de rodadas idênticas, cada uma com meia dúzia de
+        // requisições. Uma requisição pelo nosso caminho leva 400ms (medido em 31/jul), então
+        // minutos só se explicam por centenas delas.
+        var _prog = (function (imp) {
+          if (!imp) return '0/0/0';
+          var c = imp.lzCursor || {};
+          return _lzTot(imp) + '/' + Object.keys(c.toursDone || {}).length + '/' +
+                 Object.keys(c.ranksDone || {}).length;
+        })(d.fullImport);
+        var _andou = (_prog !== _progAnterior);
+        _progAnterior = _prog;
+        // ESCRITA REJEITADA = A LEITURA NÃO AVANÇOU. Encadear mais rodadas em cima de um
+        // banco que está recusando tudo só faz a barra subir mentindo. Para aqui e diz.
+        if (window._lzGravouOk === false) {
+          fail('Nada foi gravado — ' + (window._lzUltimoErroGravacao || 'o servidor recusou a escrita') +
+               '. A leitura parou pra não mostrar avanço que não existe.');
+          return;
+        }
+        if (d.done !== true && rodada < MAX_RODADAS && _andou) {
+          ping();
+          if (d.scan && d.fullImport && typeof _lzPersistScans === 'function') {
+            _lzPersistScans(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }], d.gamesDelta)
+              .catch(function (e) { window._log && window._log('[athlete rodada] não gravou (segue):', (e && e.message) || e); });
+          }
+          _seedBarsFrom(d.fullImport || null);
+          setProg({ sub: 'continuando de onde parou…', pct: null });
+          proximaRodada();
+          return;
+        }
         cleanup();
         if (typeof window._showLoading === 'function') window._showLoading('Salvando ' + who + '…');
-        var n = (d.fullImport && Array.isArray(d.fullImport.games)) ? d.fullImport.games.length : 0;
+        var n = _lzTot(d.fullImport);
         var nDecl = d.fullImport && d.fullImport.declaredGames;
         _saveScansAndReload(ctx.tId, [{ uid: uid, handle: tg.handle, name: tg.name || null, scan: d.scan, fullImport: d.fullImport }],
           function (m) { if (typeof showNotification === 'function') showNotification('Não deu pra salvar', m, 'error'); });
         // PAUSADO/PARCIAL: RELATÓRIO NA TELA (pedido do dono) — o que puxou e o que
         // não puxou, torneio a torneio + jogos gerais — e como retomar.
-        var _isParcial = d.paused || (d.fullImport && d.fullImport.partialReason);
+        var _isParcial = (d.done !== true) || (d.fullImport && d.fullImport.partialReason);
         var rep = d.report || null;
         if (_isParcial && rep && typeof window.showAlertDialog === 'function') {
           var html = '<div style="text-align:left;font-size:0.85rem;line-height:1.55;">';
@@ -1892,7 +3391,18 @@
     var _sImp = (_sc && _sc.fullImport) || null;
     var prior = _sImp || _pImp || null;
     if (_sImp && _pImp) {
-      prior = ((_pImp.games || []).length > (_sImp.games || []).length) ? _pImp : _sImp;
+      prior = (_lzTot(_pImp) > _lzTot(_sImp)) ? _pImp : _sImp;
+    }
+    // CURSOR gravado: onde a última leitura parou. Sem ele a retomada recomeça do zero.
+    cursorAtual = (prior && prior.lzCursor) || null;
+    ultimoImp = prior;
+    // Dispara UMA rodada. A extensão devolve `done:false` enquanto sobrar trabalho e o
+    // handler do resultado chama isto de novo — sempre com o cursor mais recente.
+    function proximaRodada() {
+      if (done) return;
+      rodada++;
+      window.postMessage({ __sp_lp: 'run-athlete-import', handle: tg.handle, uid: uid,
+        tournamentId: ctx.tId, prior: ultimoImp || prior, cursor: cursorAtual }, window.location.origin);
     }
     _seedBarsFrom(prior);
     setProg({ sub: 'conectando à extensão…', pct: 2 });
@@ -1903,9 +3413,12 @@
       if (done || started) return;
       if (!versions.length) { cleanup(); _lzExtDialog(null); return; }
       var best = versions.reduce(function (m, v) { return _verGE(v, m) ? v : m; }, '0');
-      if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
-      started = true;
-      window.postMessage({ __sp_lp: 'run-athlete-import', handle: tg.handle, uid: uid, tournamentId: ctx.tId, prior: prior }, window.location.origin);
+      _lzMinimoVivo().then(function () {
+        if (done) return;
+        if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
+        started = true;
+        proximaRodada();
+      });
     }, 900);
   };
 
@@ -1968,7 +3481,7 @@
     var filtered = rows.filter(function (r) {
       if (q && _norm(r.name).indexOf(q) === -1 && _norm(r.email).indexOf(q) === -1) return false;
       if (gf !== 'all') {
-        var gl = _genderLabel(r.gender);
+        var gl = _personGender(r.gender);   // filtro de PESSOA: só Fem/Masc/sem
         if (gf === 'none') { if (gl) return false; }
         else if (gl !== gf) return false;
       }
@@ -2065,6 +3578,34 @@
   // gravar ZERO jogos (a 1.35 desiste na 4ª tentativa de rajada; a 1.36 tem fila global +
   // 8 tentativas + respeita retry-after). Sem número solto aqui, nunca mais diverge.
   var _LZ_MIN_EXT = window.SP_EXT_VERSION;
+  // ── O MÍNIMO TEM QUE ESTAR VIVO, NÃO CONGELADO NO CACHE ────────────────────────
+  // O gate morava só numa constante DENTRO do store.js. Um navegador com o store.js
+  // antigo em cache guardava um mínimo antigo — e aceitava, de boa, uma extensão que já
+  // não serve. Medido na aba do dono em 03/ago/2026: o site servia 1.95 e a página dele
+  // exigia 1.94, com a extensão 1.94 rodando. "não pode aceitar nada abaixo de 1.95."
+  // Agora o mínimo é conferido no servidor a cada leitura, com cache desligado: mesmo um
+  // app em cache passa a exigir a versão atual. Se a rede falhar, fica valendo o valor
+  // embutido — nunca MENOS que ele.
+  var _lzMinPromise = null;
+  function _lzMinimoVivo() {
+    if (_lzMinPromise) return _lzMinPromise;
+    _lzMinPromise = new Promise(function (res) {
+      var pronto = false;
+      var fim = function () { if (!pronto) { pronto = true; res(_LZ_MIN_EXT); } };
+      setTimeout(fim, 2500);                 // não trava a leitura por causa da rede
+      try {
+        fetch('/ext-version.txt?t=' + Date.now(), { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.text() : null; })
+          .then(function (t) {
+            var v = String(t || '').trim();
+            if (/^[0-9]+(\.[0-9]+)*$/.test(v) && _verGE(v, _LZ_MIN_EXT)) _LZ_MIN_EXT = v;
+            fim();
+          })
+          .catch(fim);
+      } catch (e) { fim(); }
+    });
+    return _lzMinPromise;
+  }
 
   // Fração de progresso DENTRO de uma pessoa (o modo completo lê perfil → jogos →
   // torneios). Sem isto a barra fica parada em "0% · Fulano" por minutos no 1º
@@ -2274,7 +3815,7 @@
     function onMsg(e) {
       if (e.source !== window) return; var d = e.data; if (!d) return;
       // Junta as versões anunciadas (pode haver content scripts órfãos) — usa a MAIOR.
-      if (d.__sp_lp === 'extension-present') { if (d.version) versions.push(d.version); return; }
+      if (d.__sp_lp === 'extension-present') { if (d.version) { versions.push(d.version); window._lzExtVer = d.version; } return; }
       // O letzplay pediu pra esperar. Isso é PROGRESSO (o sistema está se adaptando ao
       // ritmo dele), não travamento: rearma o watchdog e explica a espera. Sem isto, uma
       // pausa legítima de 60s ficava muda e, somada, podia estourar os 3 min de ociosidade
@@ -2351,10 +3892,13 @@
       // congelado em '1.25' enquanto a extensão ia na 1.36: a 1.35 passou no gate e gravou
       // ZERO jogos para 4 inscritos, reportando "busca concluída". Uma extensão defasada
       // não é um detalhe cosmético — ela silenciosamente não traz o dado.
-      if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
-      started = true;
-      setProg({ sub: 'preparando ' + total + (total === 1 ? ' inscrito' : ' inscritos'), pct: 3 });
-      window.postMessage({ __sp_lp: 'run-org-scan', targets: targets, tournamentId: ctx.tId, mode: mode }, window.location.origin);
+      _lzMinimoVivo().then(function () {
+        if (done) return;
+        if (!_verGE(best, _LZ_MIN_EXT)) { cleanup(); _lzExtDialog(best); return; }
+        started = true;
+        setProg({ sub: 'preparando ' + total + (total === 1 ? ' inscrito' : ' inscritos'), pct: 3 });
+        window.postMessage({ __sp_lp: 'run-org-scan', targets: targets, tournamentId: ctx.tId, mode: mode }, window.location.origin);
+      });
     }, 900);
   };
   // GRAVA um punhado de scans em letzplayScans/{uid}. Extraído de _saveScansAndReload
@@ -2365,7 +3909,231 @@
   // no fim. Numa busca completa de 100 inscritos (~3h), fechar a aba, dormir o notebook ou
   // um refresh perdia TUDO, apesar de o comentário na extensão prometer que "o que já foi
   // lido está salvo". Agora cada pessoa é gravada assim que fica pronta.
-  function _lzPersistScans(tId, scans) {
+  // ⚠️ TRAVA ÚNICA CONTRA REGRESSÃO — usada por TODOS os caminhos de escrita.
+  // O histórico da pessoa não pode diminuir. Aconteceu três vezes hoje (158→20, 469→20,
+  // 469→569) e cada vez que esse número piora o app perde credibilidade inteira.
+  // Duas defesas, porque uma só não basta:
+  //   • MARCA D'ÁGUA EM MEMÓRIA (`_lzMaxJogos`): um parcial atrasado não pode vencer o
+  //     fechamento. Os dois escrevem no MESMO doc e a ordem de chegada não é garantida —
+  //     foi exatamente assim que o `partialReason` ficou grudado antes.
+  //   • CONFERÊNCIA NO BANCO: cobre sessão nova, outra aba, outro organizador.
+  // Devolve o `doc` já ajustado (sem `fullImport` quando seria regressão).
+  var _lzMaxJogos = {};
+  // O RESUMO SEGUE A MESMA LEI DO HISTÓRICO. Eu parei de gravar histórico em leitura
+  // parcial (1.6.64) e deixei o RESUMO (`scan`) passar direto. Resultado medido no doc do
+  // Fabio em 01/ago/2026: `fullImport` com 391 jogos (leitura completa das 03:54) e
+  // `scan._fullGames` com 390 (releitura das 10:30, que a regra barrou como parcial).
+  // Os dois documentos discordando é pior que qualquer um dos dois sozinho: a BARRA lê o
+  // histórico e a COR lê o resumo — o nome voltava a violeta depois de já ter ficado verde,
+  // e o diálogo mostrava "390 de 391". Verdade não pode morar em dois lugares.
+  // ── UNIR, NÃO ESCOLHER ────────────────────────────────────────────────────────
+  // O guard media UMA dimensão (quantidade de jogos) e decidia pelo documento INTEIRO.
+  // Medido no Fabio em 01/ago/2026: a leitura das 03:54 tinha 391 jogos e 33 torneios
+  // abertos; a das 10:30 tinha 390 jogos e **35** torneios. Ele viu a barra oscilar entre
+  // "35 de 35" e "33 de 35" a cada releitura — porque cada leitura era melhor numa coisa e
+  // pior noutra, e eu jogava fora a leitura inteira por causa de um jogo.
+  //
+  // Duas leituras da MESMA pessoa não competem: elas se somam. Jogo é identificado por id
+  // (ou pelo conteúdo, quando o id falta), então a união não duplica nada; e o cursor é
+  // progresso puro — página aberta continua aberta.
+  function _lzUnirImports(antigo, novo) {
+    if (!antigo) return novo;
+    if (!novo) return antigo;
+    var out = Object.assign({}, antigo, novo);
+    // jogos: união por identidade, com o que tem lzId vencendo
+    var mapa = {}, ordem = [];
+    function por(g) {
+      if (!g) return null;
+      if (g.lzId) return 'lz' + g.lzId;
+      return [g.club, g.kind, g.date, (g.oppNames || []).join('|'), g.myScore, g.oppScore].join('~');
+    }
+    // LEITURA COMPLETA É AUTORIDADE SOBRE EXISTÊNCIA. Quando a nova varreu o índice
+    // inteiro, jogo do acervo antigo que NÃO está nela é jogo que a fonte APAGOU (caso
+    // Kelly: ids 7770343/8894371 removidos pelo letzplay) — re-somá-lo aqui desfaria a
+    // limpeza que a extensão acabou de fazer, para sempre.
+    // e só quando ela ENTREGOU tudo que o índice dela enumera: uma leitura "completa" com
+    // MENOS jogos que o próprio indexTotal está devendo pra si mesma (caso Fabio 390/391)
+    // — essa não pode apagar nada de ninguém.
+    var _nGamesNovo = (novo.games || []).filter(function (g) { return g && g.lzId; }).length;
+    var _novaCompleta = !!(novo.lzCursor && novo.lzCursor.complete === true &&
+                           (novo.indexTotal || 0) > 0 && _nGamesNovo >= novo.indexTotal);
+    var _naNova = {};
+    if (_novaCompleta) (novo.games || []).forEach(function (g) { if (g && g.lzId) _naNova['lz' + g.lzId] = 1; });
+    [antigo.games || [], novo.games || []].forEach(function (lista, li2) {
+      lista.forEach(function (g) {
+        var k = por(g); if (!k) return;
+        if (li2 === 0 && _novaCompleta && g && g.lzId && !_naNova[k]) return;   // apagado na fonte
+        if (!mapa[k]) { mapa[k] = g; ordem.push(k); return; }
+        if (!mapa[k].lzId && g.lzId) mapa[k] = g;       // o com id vence o sem id
+      });
+    });
+    out.games = ordem.map(function (k) { return mapa[k]; });
+    // cursor: união dos conjuntos — o que já foi aberto não desabre
+    var ca = antigo.lzCursor || {}, cn = novo.lzCursor || {};
+    out.lzCursor = Object.assign({}, ca, cn, {
+      toursDone: Object.assign({}, ca.toursDone || {}, cn.toursDone || {}),
+      ranksDone: Object.assign({}, ca.ranksDone || {}, cn.ranksDone || {}),
+      pagesRead: Object.assign({}, ca.pagesRead || {}, cn.pagesRead || {}),
+      pagesTotal: Math.max(ca.pagesTotal || 0, cn.pagesTotal || 0) || null,
+      pageDone: Math.max(ca.pageDone || 0, cn.pageDone || 0),
+      complete: (cn.complete === true) || (ca.complete === true)
+    });
+    // listas e totais: fica o maior/mais informativo
+    ['tournamentsList', 'rankingsList', 'footprint'].forEach(function (k) {
+      var a = Array.isArray(antigo[k]) ? antigo[k] : [], b = Array.isArray(novo[k]) ? novo[k] : [];
+      out[k] = (b.length >= a.length) ? b : a;
+    });
+    // ── O DETALHE DAS COMPETIÇÕES TAMBÉM SE SOMA ────────────────────────────────
+    // `tournaments` e `rankings` guardam nome, categoria e CLASSIFICAÇÃO — é deles que sai
+    // a evidência do veredito (a comparação entre a categoria declarada e a que a pessoa
+    // joga). O `Object.assign` deixava a rodada nova sobrescrever os dois, e uma rodada que
+    // não reabriu nenhuma competição (porque o cursor já as tinha) traz esses arrays
+    // VAZIOS. Medido no Fabio em 02/ago/2026: 391 jogos, todos com id, leitura de hoje — e
+    // `tournaments` com título: ZERO. Sem título não há evidência, sem evidência não há
+    // veredito, e o nome que estava verde voltou a violeta.
+    // Mesma lei dos jogos: união por identidade, e vence a entrada mais informativa.
+    ['tournaments', 'rankings'].forEach(function (k) {
+      var a = Array.isArray(antigo[k]) ? antigo[k] : [], b = Array.isArray(novo[k]) ? novo[k] : [];
+      if (!a.length && !b.length) return;
+      var por = {}, seq = [];
+      function riqueza(x) {
+        return (x && x.title ? 4 : 0) + (x && x.standings ? 2 : 0) + (x && x.name ? 1 : 0);
+      }
+      a.concat(b).forEach(function (x) {
+        if (!x) return;
+        var id = (x.tourneyId != null ? x.tourneyId : (x.rankingId != null ? x.rankingId : (x.name || '')));
+        var kk = (x.club || '') + '/' + id;
+        if (!por[kk]) { por[kk] = x; seq.push(kk); return; }
+        if (riqueza(x) > riqueza(por[kk])) por[kk] = x;
+      });
+      out[k] = seq.map(function (kk) { return por[kk]; });
+    });
+    // ⚠️ NUNCA `|| undefined`: o Firestore RECUSA o documento inteiro quando encontra um
+    // campo com valor undefined ("Unsupported field value: undefined"). Foi o que aconteceu
+    // em 02/ago/2026 — a Kelly jogou um torneio novo, a leitura trouxe, e NADA gravava:
+    // toda escrita morria com invalid-argument por causa destas duas linhas. Chave que não
+    // tem valor é chave que não existe; a gente APAGA, não atribui vazio.
+    var _it = Math.max(antigo.indexTotal || 0, novo.indexTotal || 0);
+    var _dg = Math.max(antigo.declaredGames || 0, novo.declaredGames || 0);
+    if (_it > 0) out.indexTotal = _it; else delete out.indexTotal;
+    if (_dg > 0) out.declaredGames = _dg; else delete out.declaredGames;
+    if (antigo.totais || novo.totais) {
+      var ta = antigo.totais || {}, tn = novo.totais || {};
+      var idxN = tn.fonte === 'indice', idxA = ta.fonte === 'indice';
+      out.totais = {
+        fonte: (idxN || idxA) ? 'indice' : 'declarado',
+        jogos: (idxN && !idxA) ? (tn.jogos || 0) : Math.max(ta.jogos || 0, tn.jogos || 0),
+        torneios: Math.max(ta.torneios || 0, tn.torneios || 0),
+        rankings: Math.max(ta.rankings || 0, tn.rankings || 0)
+      };
+      var _cr = Math.max(ta.cardsRepetidos || 0, tn.cardsRepetidos || 0);
+      if (_cr > 0) out.totais.cardsRepetidos = _cr;
+    }
+    // um "parcial" não contamina um histórico que já estava completo
+    if (!novo.partialReason || out.lzCursor.complete) out.partialReason = null;
+    return out;
+  }
+
+  // O RESUMO É FUNÇÃO DO HISTÓRICO, não um número que vem por fora.
+  // A extensão manda o resumo com o que AQUELA RODADA leu (390); o histórico é o acumulado
+  // unido (391). Dois números medindo coisas diferentes, e a tela usando os dois: a barra
+  // lia um e a cor lia o outro. Depois de unir, o resumo é recalculado do resultado — assim
+  // eles não têm COMO discordar.
+  function _lzResumoDoHistorico(doc) {
+    if (!doc || !doc.scan || !doc.fullImport) return;
+    var n = _lzTot(doc.fullImport);
+    if (typeof doc.scan._fullGames === 'number' && doc.scan._fullGames !== n) {
+      doc.scan = Object.assign({}, doc.scan, { _fullGames: n });
+    }
+  }
+  function _lzResumoRegrediu(novo, antigo) {
+    if (!novo || !antigo) return false;
+    var a = (typeof antigo._fullGames === 'number') ? antigo._fullGames : -1;
+    var b = (typeof novo._fullGames === 'number') ? novo._fullGames : -1;
+    return a > b;                      // resumo que descreve leitura MENOR não substitui
+  }
+  // DEFESA DE BORDA. O Firestore recusa o DOCUMENTO INTEIRO por um único `undefined` em
+  // qualquer profundidade, e o erro só diz o nome do campo. Como tudo que gravamos passa
+  // por aqui, é aqui que se limpa — assim um `undefined` novo, vindo de onde for, não
+  // derruba a gravação de novo.
+  function _lzSemUndefined(v) {
+    if (v === undefined) return undefined;
+    if (v === null || typeof v !== 'object') return v;
+    if (Array.isArray(v)) return v.map(function (x) { return (x === undefined) ? null : _lzSemUndefined(x); });
+    var o = {};
+    Object.keys(v).forEach(function (k) {
+      var x = _lzSemUndefined(v[k]);
+      if (x !== undefined) o[k] = x;
+    });
+    return o;
+  }
+  function _lzBarrarRegressao(uid, doc, db) {
+    var agora = doc.fullImport ? _lzTot(doc.fullImport) : 0;
+    if (!doc.fullImport) {
+      // sem histórico novo, ainda há o resumo pra proteger
+      if (!doc.scan) return Promise.resolve(doc);
+      return db.collection('letzplayScans').doc(uid).get()
+        .then(function (d) {
+          var ant = (d.exists ? (d.data() || {}) : {}).scan;
+          if (_lzResumoRegrediu(doc.scan, ant)) {
+            window._warn && window._warn('[letzplay] resumo menor descartado: chegou ' +
+              doc.scan._fullGames + ', já havia ' + ant._fullGames + '.');
+            delete doc.scan;
+          }
+          return doc;
+        })
+        .catch(function () { return doc; });
+    }
+    var pico = _lzMaxJogos[uid] || 0;
+    // `guardado` = o fullImport que já está no banco (quando conhecido). Com ele a gente
+    // UNE em vez de descartar — ver _lzUnirImports.
+    function barrar(antes, origem, guardado) {
+      if (guardado) {
+        doc.fullImport = _lzUnirImports(guardado, doc.fullImport);
+        _lzResumoDoHistorico(doc);
+        window._warn && window._warn('[letzplay] leituras unidas (' + origem + '): ' + agora +
+          ' + ' + antes + ' → ' + _lzTot(doc.fullImport) + ' jogos.');
+        return doc;
+      }
+      delete doc.fullImport;
+      window._warn && window._warn('[letzplay] regressão barrada (' + origem + '): chegaram ' +
+        agora + ' jogos, já havia ' + antes + ' — histórico mantido.');
+      if (typeof showNotification === 'function') {
+        showNotification('Histórico preservado',
+          'A leitura trouxe ' + agora + ' jogo(s) e já havia ' + antes + ' — mantive os ' + antes + '.', 'info');
+      }
+      return doc;
+    }
+    // ⚠️ TETO: o guard não pode proteger um documento CORROMPIDO. O letzplay declara
+    // quantos jogos a pessoa tem (`declaredGames`) e esse é o número de CARDS — o total de
+    // partidas distintas nunca passa disso. Um documento com mais que o declarado é
+    // provadamente errado (aconteceu: 478 viraram 1038 por um bug meu), e proteger esse
+    // número impediria a própria correção de entrar. Acima do teto, a escrita menor passa.
+    var teto = (doc.fullImport && doc.fullImport.declaredGames) || 0;
+    function corrompido(n) { return teto > 0 && n > teto; }
+    // (o atalho de memória saiu: sem o documento guardado não dá pra unir, e unir é melhor
+    // que barrar — uma leitura pior em jogos pode ser melhor em torneios, e era assim que
+    // 2 torneios sumiam a cada releitura)
+    return db.collection('letzplayScans').doc(uid).get()
+      .then(function (d) {
+        var _guardado = d.exists ? (d.data() || {}).fullImport : null;
+        var antes = _lzTot(_guardado);
+        // UNE SEMPRE que já existe histórico — mesmo quando a leitura nova é maior, porque
+        // ela pode ter deixado pra trás um torneio que a antiga tinha aberto.
+        if (_guardado && !corrompido(antes)) return barrar(antes, 'banco', _guardado);
+        if (corrompido(antes)) {
+          window._warn && window._warn('[letzplay] o gravado tinha ' + antes + ' jogos com ' +
+            teto + ' declarados — corrompido, será substituído por ' + agora + '.');
+        }
+        var _ant = (d.exists ? (d.data() || {}) : {}).scan;
+        if (_lzResumoRegrediu(doc.scan, _ant)) delete doc.scan;   // mesma lei pro resumo
+        _lzMaxJogos[uid] = Math.max(corrompido(pico) ? 0 : pico, agora);
+        return doc;
+      })
+      .catch(function () { _lzMaxJogos[uid] = Math.max(pico, agora); return doc; });
+  }
+
+  function _lzPersistScans(tId, scans, gamesDelta) {
     var ok = (scans || []).filter(function (s) { return s.uid && s.scan; });
     if (!ok.length) return Promise.resolve(0);
     var db = firebase.firestore();
@@ -2380,17 +4148,33 @@
       var gotFull = !!(s.fullImport && Array.isArray(s.fullImport.games) && s.fullImport.games.length);
       if (s.scan && typeof s.scan === 'object') {
         s.scan._mode = (scanMode === 'full' && gotFull) ? 'full' : 'essential';
-        s.scan._fullGames = gotFull ? s.fullImport.games.length : 0;
+        s.scan._fullGames = gotFull ? _lzTot(s.fullImport) : 0;
         s.scan._fullError = (scanMode === 'full' && !gotFull) ? (s.fullError || 'sem-jogos') : null;
       }
       var doc = { handle: s.handle, scan: s.scan, scannedAt: nowIso, scannedBy: meUid, scannedByName: meName, tournamentId: String(tId), tournamentName: tName };
-      if (gotFull) doc.fullImport = s.fullImport;
-      var w = db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true })
+      // ⚠️ PARCIAL NUNCA VIRA DOCUMENTO OFICIAL.
+      // Esta é a causa-raiz de TODOS os episódios de hoje: os parciais gravavam o
+      // `fullImport`, então uma leitura interrompida no meio deixava 20 jogos como se
+      // fossem o histórico da pessoa — e a tela, corretamente, mostrava o que estava
+      // gravado. Não existe display que conserte um banco com dado errado.
+      // Agora o parcial grava só o PROGRESSO: o cursor (pra retomar de onde parou) e o
+      // resumo. O histórico em si só é substituído pelo fechamento de uma leitura
+      // COMPLETA — ver _saveScansAndReload. As partidas já lidas não se perdem: elas vão,
+      // uma a uma, pro acervo canônico (letzplayTournaments/{comp}/matches/{id}), que é
+      // append-only e não depende deste documento.
+      if (gotFull && s.fullImport && s.fullImport.lzCursor) doc.lzCursorParcial = s.fullImport.lzCursor;
+      // OS TOTAIS PODEM (e devem) IR NO PARCIAL: eles são fato conhecido antes de ler o
+      // detalhe, e é justamente isso que impede a tela de mostrar "20 de 20" enquanto a
+      // leitura ainda está preenchendo. Histórico não vai; estrutura vai.
+      if (s.fullImport && s.fullImport.totais) doc.totaisLetzplay = s.fullImport.totais;
+      var w = _lzBarrarRegressao(s.uid, doc, db)
+        .then(function (d2) { return db.collection('letzplayScans').doc(s.uid).set(_lzSemUndefined(d2), { merge: true }); })
         .catch(function (err) {
           // NUNCA falhar MUDO (caso Camila: 472 jogos → doc >1MiB → todos os writes
           // morriam em silêncio e "não gravava porra nenhuma"). Mostra o ERRO REAL e
           // regrava SEM o fullImport — o resumo (scan) sempre cabe e sempre fica.
           var em = ((err && err.code) ? err.code + ': ' : '') + ((err && err.message) || err);
+          _lzFalhouGravar(em);
           if (typeof showNotification === 'function') showNotification('⚠️ Falha ao gravar histórico', String(em).slice(0, 140), 'error');
           if (doc.fullImport) {
             var lean = { handle: doc.handle, scan: doc.scan, scannedAt: doc.scannedAt, scannedBy: doc.scannedBy, scannedByName: doc.scannedByName, tournamentId: doc.tournamentId, tournamentName: doc.tournamentName };
@@ -2403,12 +4187,18 @@
       // competição, 1 por partida, compartilhado. É aqui que o ganho aparece: a mesma
       // partida trazida por 4 pessoas vira UM doc, e varrer alguém já preenche o pedaço
       // dos parceiros/adversários dela. Best-effort: falhar aqui não pode derrubar o scan.
+      // Só o DELTA quando ele vem (parciais da leitura individual): o acervo canônico é
+      // cumulativo por gid, então regravar o histórico inteiro a cada parcial não adiciona
+      // nada e é o que fazia uma leitura de 472 jogos emitir ~25 mil escritas.
       if (gotFull && typeof window._lzHistoryWrite === 'function') {
-        w = w.then(function () {
-          return window._lzHistoryWrite(s.fullImport, s.handle)
-            .then(function (r) { window._log && window._log('[lz história] scan', s.handle + ':', JSON.stringify(r)); })
-            .catch(function (e) { window._log && window._log('[lz história] scan falhou (não bloqueia):', (e && e.message) || e); });
-        });
+        var _lote = Array.isArray(gamesDelta) ? gamesDelta : null;
+        if (!_lote || _lote.length) {
+          w = w.then(function () {
+            return window._lzHistoryWrite(s.fullImport, s.handle, _lote)
+              .then(function (r) { window._log && window._log('[lz história] scan', s.handle + ':', JSON.stringify(r)); })
+              .catch(function (e) { window._log && window._log('[lz história] scan falhou (não bloqueia):', (e && e.message) || e); });
+          });
+        }
       }
       return w;
     })).then(function () { return ok.length; });
@@ -2442,7 +4232,7 @@
         // sub-campos do scan: a regra do Firestore valida as chaves do TOPO do doc, então
         // diagnóstico novo entra aqui sem precisar mexer/deployar firestore.rules.
         s.scan._mode = (scanMode === 'full' && gotFull) ? 'full' : 'essential';
-        s.scan._fullGames = gotFull ? s.fullImport.games.length : 0;
+        s.scan._fullGames = gotFull ? _lzTot(s.fullImport) : 0;
         // POR QUE não veio o histórico — o `catch {}` da extensão engolia isto e a busca
         // reportava sucesso sem nenhum jogo. Sem motivo gravado, não há como diagnosticar.
         s.scan._fullError = (scanMode === 'full' && !gotFull) ? (s.fullError || 'sem-jogos') : null;
@@ -2451,12 +4241,25 @@
       // Só o scan COMPLETO leva o histórico inteiro (letzplayImport) pro perfil do participante.
       // Não gravar `fullImport: null` quando falhou: o set é merge, e apagar um histórico
       // BOM de uma varredura anterior por causa de um 403 de hoje seria perda de dado real.
-      if (gotFull) doc.fullImport = s.fullImport;
-      return db.collection('letzplayScans').doc(s.uid).set(doc, { merge: true })
+      // SÓ LEITURA COMPLETA SUBSTITUI O HISTÓRICO. Um fechamento por pausa/erro traz o que
+      // deu tempo de ler — e isso é progresso, não é o histórico da pessoa. Gravar como se
+      // fosse é o que produziu "20 jogos" para quem tem 158. Incompleta grava só o cursor.
+      var _completa = !!(s.fullImport && s.fullImport.lzCursor && s.fullImport.lzCursor.complete === true
+                         && !s.fullImport.partialReason);
+      if (gotFull && _completa) doc.fullImport = s.fullImport;
+      else if (gotFull && s.fullImport.lzCursor) {
+        doc.lzCursorParcial = s.fullImport.lzCursor;
+        window._warn && window._warn('[letzplay] leitura incompleta — gravei só o progresso, o histórico ficou como estava.');
+      }
+      // MESMA TRAVA DO CAMINHO DOS PARCIAIS. Os dois escrevem no MESMO documento e a ordem
+      // de chegada não é garantida — pôr a guarda só num deles é não ter guarda.
+      return _lzBarrarRegressao(s.uid, doc, db)
+        .then(function (d2) { return db.collection('letzplayScans').doc(s.uid).set(_lzSemUndefined(d2), { merge: true }); })
         .catch(function (err) {
           // Erro REAL na tela + regrava sem o fullImport (o resumo sempre cabe) — ver
           // _lzPersistScans; mesmo fallback aqui (caso Camila: doc >1MiB falhava mudo).
           var em = ((err && err.code) ? err.code + ': ' : '') + ((err && err.message) || err);
+          _lzFalhouGravar(em);
           if (typeof showNotification === 'function') showNotification('⚠️ Falha ao gravar histórico', String(em).slice(0, 140), 'error');
           if (doc.fullImport) {
             var lean = { handle: doc.handle, scan: doc.scan, scannedAt: doc.scannedAt, scannedBy: doc.scannedBy, scannedByName: doc.scannedByName, tournamentId: doc.tournamentId, tournamentName: doc.tournamentName };
@@ -2580,9 +4383,13 @@
   // ─── Public renderer ─ chamado pelo router ──────────────────────────
   // Padrão centralizado: igual a renderProfilePage / renderSupportPage etc.
   window.renderEnrollmentReportPage = function (container, tId) {
-    var t = window.AppStore && window.AppStore.tournaments
-      ? window.AppStore.tournaments.find(function (x) { return x.id === tId; })
-      : null;
+    // FONTE ÚNICA de lookup (String-safe, também olha publicDiscovery). O `find` com
+    // `x.id === tId` cru dependia do tipo do id bater exatamente.
+    var t = (typeof window._findTournamentById === 'function')
+      ? window._findTournamentById(tId)
+      : ((window.AppStore && window.AppStore.tournaments)
+          ? window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); })
+          : null);
     if (!t) {
       if (typeof showNotification === 'function') showNotification('Erro', 'Torneio não encontrado.', 'error');
       window.location.replace('#dashboard');
@@ -2590,6 +4397,22 @@
     }
     // v2.8.56: expande duplas em pessoas individuais (conta todos os inscritos).
     var parts = _expandDuplas(Array.isArray(t.participants) ? t.participants : []);
+    // v1.7.2 — A LISTA DE ESPERA TAMBÉM É INSCRITO. Desde a 1.6.86 quem se inscreve
+    // DEPOIS do sorteio vai pra espera e SAI de t.participants; como a Análise lia só
+    // `participants`, essa gente sumia da tela e o organizador não tinha onde atribuir
+    // gênero/categoria (relato do dono no Confra, com 2 pessoas na espera).
+    // Entram como CÓPIA marcada com _wl: o render nunca mexe no storage da espera, e o
+    // save resolve a entrada REAL por uid via _getWaitlist (que devolve a referência).
+    // A ordem canônica da fila é a do _getWaitlist — não reordenar aqui.
+    try {
+      var _wl = (typeof window._getWaitlist === 'function') ? (window._getWaitlist(t) || []) : [];
+      _wl.forEach(function (w) {
+        if (!w || typeof w !== 'object') return;
+        var c = {}; for (var k in w) { if (Object.prototype.hasOwnProperty.call(w, k)) c[k] = w[k]; }
+        c._wl = true;
+        parts.push(c);
+      });
+    } catch (e) { if (window._warn) window._warn('[analise] espera não carregou', e); }
 
     // Verifica se user é organizador — relatório é restrito.
     if (!window.AppStore || !window.AppStore.isOrganizer || !window.AppStore.isOrganizer(t)) {
@@ -2602,8 +4425,14 @@
     var _firstLoad = !(container && container.querySelector && container.querySelector('#er-categories-section'));
     function _doneLoading() { if (typeof window._hideLoading === 'function') window._hideLoading(); }
     if (_firstLoad) {
+      // O view-container TEM que ser pintado (cabeçalho + bola) junto com o loader
+      // global. O loader global é um overlay em `body`: enquanto ele girava, o
+      // view-container ficava VAZIO — e a rede de segurança "tela em branco" do
+      // router (5s) chutava a Análise pra dashboard na PRIMEIRA abertura, quando os
+      // perfis dos inscritos ainda vêm da rede. Na segunda o cache do Firestore
+      // respondia antes dos 5s e "funcionava". Tela pintada = nunca mais é branca.
+      _renderLoading(container, t);
       if (typeof window._showLoading === 'function') window._showLoading('Carregando análise dos inscritos…');
-      else _renderLoading(container, t);
     }
 
     // v1.3.24-beta: _fetchProfiles tenta rescue por email/displayName sem uid.

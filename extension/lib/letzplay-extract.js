@@ -175,43 +175,119 @@
     return map;
   }
 
-  /** Extrai os jogos da página de histórico. Cada jogo é um `.row.match`.
-   * VERIFICADO AO VIVO: jogos reais de @RodrigoBarth extraídos corretamente
-   * (parceiro / adversários / NOME de apresentação / placar / vitória). */
+  /** Texto de link que NÃO é categoria: "Ver trilha de X/Y" é o caminho da dupla na chave. */
+  function isTrailText(t) { return /ver\s+trilha|trilha\s+de/i.test(String(t || '')); }
+
+  /** Primeiro link de competição do card que NÃO seja a trilha. Fallback: o primeiro que
+   * existir (melhor um categoryRaw sujo que nenhuma referência de competição). */
+  function _pickCatLink(card, tipo) {
+    var links = Array.prototype.slice.call(card.querySelectorAll('a[href*="/' + tipo + '/"]'));
+    if (!links.length) return null;
+    for (var i = 0; i < links.length; i++) {
+      if (!isTrailText(links[i].textContent)) return links[i];
+    }
+    return links[0];
+  }
+
+  // Extrai os jogos de /{handle}/matches. ESTRUTURA MEDIDA no browser (30/jul/2026,
+  // @camilacalia) — nada aqui é suposição:
+  //
+  //   .row.match
+  //   ├── .match-title > a[href="/{club}/(tournaments|rankings)/{id}"]   ← 1 SÓ por card
+  //   ├── .row.match-player  ×2                                          ← sempre 2 times
+  //   │   ├── .match-player-info > a[href="/{handle}"]                    ← 1..2 jogadores
+  //   │   └── .match-results-points                                       ← O PLACAR
+  //   └── span.match-{ID}-schedule  "Quarta, 29/07/26"                    ← DATA + ID DA PARTIDA
+  //
+  // Medido: 20 cards → 20 ids de partida distintos, 100% presentes; 0 card sem competição;
+  // 0 card com mais de uma competição; todos com 2 times e placar.
+  //
+  // O QUE ISSO APAGA: o placar era achado procurando "nó folha com 1-3 dígitos e sem link",
+  // os times por varredura, e a identidade da partida por data+placar+adversários — foi essa
+  // heurística que produziu 24 partidas duplicadas no import da Camila. Agora o letzplay dá
+  // o id; e o TEXTO do card não vira mais categoria (nome e categoria vêm da página da
+  // competição), que é o que enfiava "Ver trilha de X/Y" no campo da categoria.
   function extractMatchesFromDoc(doc, meHandle) {
     doc = doc || (typeof document !== 'undefined' ? document : null);
     if (!doc) return [];
+    var meLow = String(meHandle || '').toLowerCase();
     var out = [];
-    var cards = Array.prototype.slice.call(doc.querySelectorAll('.row.match'));
-    cards.forEach(function (card) {
-      // Puxa TUDO: torneio (OFICIAL, /tournaments/) e ranking (recreativo, /rankings/).
-      var tournLink = card.querySelector('a[href*="/tournaments/"]');
-      var catLink = tournLink || card.querySelector('a[href*="/rankings/"]');
-      var body = card.querySelector('.col-xs-12');
-      if (!catLink || !body) return;
-      var dateText = Array.prototype.slice.call(card.children)
-        .map(function (c) { return (c.textContent || '').trim(); })
-        .filter(function (t) { return /\d{2}\/\d{2}\/\d{2}/.test(t); })[0] || null;
-      var m = matchFromCard({
-        catHref: catLink.getAttribute('href'),
-        catText: catLink.textContent,
-        dateText: dateText,
-        official: !!tournLink,
-        teams: extractTeamsFromBody(body)
-      }, meHandle);
-      if (m) {
-        // Resolve NOME de apresentação real (o card só traz avatar+handle no link).
-        var nameByHandle = namesByHandleFromCard(card);
-        if (m.partnerHandle && nameByHandle[m.partnerHandle]) m.partnerName = nameByHandle[m.partnerHandle];
-        m.oppNames = (m.oppHandles || []).map(function (h, i) {
-          return nameByHandle[h] || (m.oppNames && m.oppNames[i]) || '';
-        });
-        out.push(m);
+    Array.prototype.slice.call(doc.querySelectorAll('.row.match')).forEach(function (card) {
+      // competição: o id é a identidade; o texto é só dica de nome
+      var comp = null, official = false;
+      Array.prototype.slice.call(card.querySelectorAll('a[href]')).some(function (a) {
+        var h = a.getAttribute('href') || '';
+        var mt = h.match(/^\/([^\/]+)\/tournaments\/(\d+)/);
+        if (mt) { comp = { club: mt[1], id: mt[2], text: (a.textContent || '').replace(/\s+/g, ' ').trim() }; official = true; return true; }
+        var mr = h.match(/^\/([^\/]+)\/rankings\/(\d+)/);
+        if (mr) { comp = { club: mr[1], id: mr[2], text: (a.textContent || '').replace(/\s+/g, ' ').trim() }; return true; }
+        return false;
+      });
+      if (!comp) return;
+
+      // ID DA PARTIDA dado pelo letzplay (class="match-10004859-schedule")
+      var lzId = null;
+      var sch = card.querySelector('[class*="-schedule"]');
+      if (sch) { var mi = (sch.className || '').toString().match(/match-(\d+)-schedule/); if (mi) lzId = mi[1]; }
+      if (!lzId) { var mi2 = (card.innerHTML || '').match(/match-(\d+)-schedule/); if (mi2) lzId = mi2[1]; }
+
+      var dateText = sch ? (sch.textContent || '').replace(/\s+/g, ' ').trim() : null;
+      if (!dateText || !/\d{2}\/\d{2}\/\d{2}/.test(dateText)) {
+        dateText = Array.prototype.slice.call(card.children)
+          .map(function (c) { return (c.textContent || '').replace(/\s+/g, ' ').trim(); })
+          .filter(function (t) { return /\d{2}\/\d{2}\/\d{2}/.test(t); })[0] || dateText;
       }
+
+      // TIMES: .row.match-player (exatamente 2). Placar pela classe própria.
+      var nameByHandle = namesByHandleFromCard(card);
+      var teams = Array.prototype.slice.call(card.querySelectorAll('.row.match-player')).map(function (tp) {
+        var hs = Array.prototype.slice.call(tp.querySelectorAll('.match-player-info a[href^="/"]'))
+          .map(function (a) { return handleFromHref(a.getAttribute('href')); }).filter(Boolean);
+        var uniq = [];
+        hs.forEach(function (h) { if (uniq.indexOf(h) < 0) uniq.push(h); });
+        var pe = tp.querySelector('.match-results-points');
+        var ptxt = pe ? (pe.textContent || '').replace(/\s+/g, ' ').trim() : '';
+        var pm = ptxt.match(/(\d{1,3})/);
+        return { handles: uniq, names: uniq.map(function (h) { return nameByHandle[h] || ''; }),
+          score: pm ? +pm[1] : null };
+      }).filter(function (t) { return t.handles.length; });
+      if (teams.length < 2) {
+        // sem os dois times não há jogo — cai no caminho antigo (dado/página fora do padrão)
+        var body = card.querySelector('.col-xs-12');
+        if (!body) return;
+        teams = extractTeamsFromBody(body);
+        if (teams.length < 2) return;
+      }
+
+      var myIdx = -1;
+      for (var i = 0; i < teams.length; i++) {
+        if ((teams[i].handles || []).some(function (h) { return String(h).toLowerCase() === meLow; })) { myIdx = i; break; }
+      }
+      if (myIdx < 0) return;                       // não é jogo desta pessoa
+      var mine = teams[myIdx], opp = teams[1 - myIdx] || { handles: [], names: [] };
+      var partnerHandle = null, partnerName = null;
+      (mine.handles || []).forEach(function (h, ix) {
+        if (String(h).toLowerCase() !== meLow) { partnerHandle = h; partnerName = (mine.names || [])[ix] || null; }
+      });
+      var cat = parseCategory(comp.text);
+      out.push({
+        lzId: lzId,                                // ← identidade dada pelo letzplay
+        date: dateText || null,
+        categoryRaw: cat.categoryRaw, round: cat.round, year: cat.year,
+        official: official, kind: official ? 'tournament' : 'ranking',
+        club: comp.club,
+        tourneyId: official ? comp.id : null,
+        rankingId: official ? null : comp.id,
+        partnerHandle: partnerHandle, partnerName: partnerName,
+        oppHandles: (opp.handles || []).slice(),
+        oppNames: (opp.handles || []).map(function (h, i) { return nameByHandle[h] || (opp.names || [])[i] || ''; }),
+        myScore: (typeof mine.score === 'number') ? mine.score : null,
+        oppScore: (typeof opp.score === 'number') ? opp.score : null,
+        won: (typeof mine.score === 'number' && typeof opp.score === 'number') ? (mine.score > opp.score) : null
+      });
     });
     return out;
   }
-
   /** BUSCA ATIVA DO ORGANIZADOR (anti-gato): parseia o PERFIL PÚBLICO letzplay.me/{handle}
    * — categoria (nível), totais e última atividade. Não precisa do histórico completo:
    * a categoria do ranking é o indicador de nível pro flag de rebaixamento.
@@ -247,6 +323,7 @@
   }
 
   root._spExtract = {
+    isTrailText: isTrailText,
     handleFromHref: handleFromHref,
     parsePublicProfile: parsePublicProfile,
     parseCategory: parseCategory,

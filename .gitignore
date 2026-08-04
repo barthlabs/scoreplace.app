@@ -56,3 +56,12 @@ android-signing/
 *.jks
 *.keystore
 torneio_bye_repescagem.xlsx
+
+# Symlinks de node_modules (sem barra): `node_modules/` NÃO casa com um SYMLINK de mesmo
+# nome — foi assim que dois symlinks apontando pra máquina local entraram no repo em
+# 02/ago/2026 e CONGELARAM o GitHub Pages: o upload-pages-artifact roda
+# `tar --dereference`, o link aponta pra nada no runner, o tar sai 1 e nada publica.
+node_modules
+functions/node_modules
+functions-autodraw/node_modules
+functions-stripe/node_modules

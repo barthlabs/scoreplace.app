@@ -122,6 +122,8 @@
   window._spCloseImportOverlay = function () {
     var o = document.getElementById('sp-import-overlay');
     if (o && o.parentNode) o.parentNode.removeChild(o);
+    if (typeof _vivoParar === 'function') _vivoParar();   // sem timer órfão depois de fechar
+    _temposOwn = false;                                   // a linha volta a ser do regressivo
   };
 
   // CARD CANÔNICO de progresso do letzplay (v1.1.18): BOLINHA QUE SEMPRE GIRA (spinner
@@ -134,14 +136,61 @@
   // Ticker do regressivo: 1s, só enquanto há overlay E contagem ativa. Se a barra sumiu
   // ou a contagem acabou, ele se desliga sozinho (nada de timer órfão rodando pra sempre).
   var _etaTimer = null;
+  // A linha #sp-imp-eta tem DOIS donos possíveis: o regressivo do org-scan (_spEtaText) e
+  // os tempos explícitos do fluxo do atleta (opts.tempos). Quando os tempos assumem, este
+  // ticker TEM QUE SAIR — ele fazia `textContent = ''` a cada chamada e apagava os tempos
+  // no mesmo tick em que eram escritos, então a linha nunca aparecia. Bug real (30/jul):
+  // passou pelos meus testes porque eu exercitei uma CÓPIA da função na página em vez de
+  // chamar a função deployada. Verificação vale pelo que ela EXECUTA, não pelo que imita.
+  var _temposOwn = false;
   function _etaTick() {
     var el = document.getElementById('sp-imp-eta');
     if (!el) { if (_etaTimer) { clearInterval(_etaTimer); _etaTimer = null; } return; }
+    if (_temposOwn) return;                     // linha ocupada pelos tempos explícitos
     var txt = (typeof window._spEtaText === 'function') ? window._spEtaText() : '';
     el.textContent = txt ? ('⏳ ' + txt) : '';
     if (txt && !_etaTimer) _etaTimer = setInterval(_etaTick, 1000);
     if (!txt && _etaTimer) { clearInterval(_etaTimer); _etaTimer = null; }
   }
+  // ── PROVA DE VIDA ────────────────────────────────────────────────────────────
+  // Uma leitura grande passa MINUTOS sem notícia nova (o letzplay pede cadência, e a fila
+  // espera). A tela ficava congelada no mesmo texto, e parado é indistinguível de travado:
+  // o dono cancelou leituras sadias por isso, e reportou "travou na página 9 de 24" quando
+  // a leitura estava viva, só esperando. Aqui o overlay passa a se mexer sozinho — frase
+  // rotativa + tempo decorrido desde a última novidade.
+  //
+  // ⛔ NADA de rate-limit no texto (regra do dono): o problema é NOSSO, não do usuário.
+  // As frases são neutras e o relógio é só tempo, nunca "aguardando N segundos".
+  var _vivoTimer = null, _vivoDesde = 0, _vivoBase = '', _vivoIdx = 0;
+  var _VIVO_FRASES = [
+    'lendo o letzplay — pode deixar rodando',
+    'processando as informações…',
+    'organizando o que já veio…',
+    'trazendo os dados do atleta…',
+    'conferindo o que falta…'
+  ];
+  function _vivoTexto() {
+    var seg = Math.round((Date.now() - _vivoDesde) / 1000);
+    var t = (seg < 60) ? (seg + 's') : (Math.floor(seg / 60) + 'min' + (seg % 60 ? ' ' + (seg % 60) + 's' : ''));
+    return _VIVO_FRASES[_vivoIdx % _VIVO_FRASES.length] + ' · ' + t;
+  }
+  // Escreve numa LINHA PRÓPRIA (#sp-imp-eta), nunca por cima do `sub`. O `sub` carrega O
+  // QUE ESTÁ SENDO LIDO ("página 10 de 24") e não pode ser trocado por frase genérica — foi
+  // exatamente essa troca que deixava a tela sem informação nenhuma durante a espera.
+  function _vivoTick() {
+    var e = document.getElementById('sp-imp-eta');
+    if (!e) { _vivoParar(); return; }                       // overlay sumiu → timer morre
+    // A linha tem UM dono. Quando os tempos explícitos assumem, este ticker SAI — ele
+    // escrevia por cima 1s depois e os tempos nunca duravam na tela. Foi o segundo
+    // apagador da mesma linha (o primeiro era _etaTick); parar só um não resolvia nada.
+    if (_temposOwn) { _vivoParar(); return; }
+    // cede a linha pro regressivo do org-scan quando ele está ativo (não brigam pelo mesmo lugar)
+    if (typeof window._spEtaText === 'function' && window._spEtaText()) return;
+    if (Date.now() - _vivoDesde < 8000) { e.textContent = ''; return; }
+    if (Date.now() - _vivoDesde >= 8000 * (_vivoIdx + 1)) _vivoIdx++;
+    e.textContent = _vivoTexto();
+  }
+  function _vivoParar() { if (_vivoTimer) { clearInterval(_vivoTimer); _vivoTimer = null; } }
   window._spProgressOverlay = function (opts) {
     opts = opts || {};
     if (!document.getElementById('sp-imp-spin-style')) {
@@ -154,8 +203,14 @@
         '<div style="font-size:2.4rem;margin:0 auto 10px;display:inline-block;animation:spImpSpin 0.85s linear infinite;">🎾</div>' +
         '<div id="sp-imp-label" style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;"></div>' +
         '<div style="height:12px;border-radius:999px;background:var(--bg-darker,#171a2b);overflow:hidden;border:1px solid var(--border-color,rgba(255,255,255,0.1));"><div id="sp-imp-bar" style="height:100%;width:8%;background:linear-gradient(90deg,#84cc16,#65a30d);transition:width .3s;"></div></div>' +
-        '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;"></div>' +
-        '<div id="sp-imp-eta" style="font-size:0.78rem;color:var(--text-bright,#e2e8f0);margin-top:6px;font-weight:700;font-variant-numeric:tabular-nums;"></div>' +
+        // ALTURA FIXA nas duas linhas: o passo ora cabe em 1 linha ("página 10 de 24"), ora
+        // em 2 ("torneio 17 de 35 — nome, categoria e classificação"). Sem reservar o
+        // espaço, tudo abaixo PULA a cada troca de texto. Posição fixa é o que deixa a
+        // leitura confortável de acompanhar por minutos.
+        '<div id="sp-imp-sub" style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:8px;min-height:2.5em;display:flex;align-items:center;justify-content:center;text-align:center;"></div>' +
+        // DECORRIDO à esquerda, RESTAM à direita — cada um sempre no mesmo lugar, com
+        // dígitos tabulares (não dançam quando 9s vira 10s).
+        '<div id="sp-imp-eta" style="font-size:0.78rem;color:var(--text-bright,#e2e8f0);margin-top:6px;font-weight:700;font-variant-numeric:tabular-nums;min-height:1.3em;display:flex;align-items:center;justify-content:space-between;gap:12px;"></div>' +
         // BARRAS x de y (v1.4.22): Torneios/Rankings/Jogos crescem AO VIVO durante a
         // busca — mesmas barras do dialog do atleta, agora dentro do overlay (pedido
         // do dono: "que elas vão crescendo conforme as coisas cheguem").
@@ -163,13 +218,48 @@
         // FEED (v1.42): o que está sendo lido aparece aqui (torneio · categoria ·
         // classificação · nº de jogos). v1.4.31: 3 linhas visíveis (2 cortava no meio —
         // pedido do dono), scroll pro resto.
-        '<div id="sp-imp-feed" style="display:none;margin-top:10px;max-height:4.65em;overflow-y:auto;font-size:0.74rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);text-align:left;background:var(--bg-darker,rgba(0,0,0,0.25));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;"></div>' +
+        '<div id="sp-imp-feed" style="display:none;margin-top:10px;max-height:9em;overflow-y:auto;font-size:0.74rem;line-height:1.5;color:var(--text-secondary,#c8cdd6);text-align:left;background:var(--bg-darker,rgba(0,0,0,0.25));border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:8px;padding:6px 9px;"></div>' +
         '<div id="sp-imp-actions" style="margin-top:14px;display:none;"></div>'
       );
     }
     var l = document.getElementById('sp-imp-label'); if (l) l.textContent = opts.label || '';
     var b = document.getElementById('sp-imp-bar'); if (b && opts.pct != null) b.style.width = opts.pct + '%';
-    var s = document.getElementById('sp-imp-sub'); if (s) s.textContent = opts.sub || '';
+    // `eta` explícito (o fluxo do atleta calcula decorrido/faltam com ritmo MEDIDO) vence
+    // tudo: assume a linha e desliga a prova de vida genérica, que existe só pra quem não
+    // tem como estimar.
+    // tempos EXPLÍCITOS: {decorrido, restante}. O "restam" só aparece se vier preenchido —
+    // ele foi removido do fluxo do atleta em 31/jul/2026 porque a projeção dependia de um
+    // total que o letzplay conta em CARDS, não em partidas (158 pra 157 reais): prometia um
+    // fim que nunca chegava. O que fica é medido de verdade — decorrido e ritmo por item.
+    if (opts.tempos) {
+      _temposOwn = true;                        // trava o _etaTick (ver comentário lá em cima)
+      var eF = document.getElementById('sp-imp-eta');
+      if (eF) {
+        eF.innerHTML =
+          '<span>⏱️ decorrido <b style="color:var(--text-bright,#fff);">' + _esc(opts.tempos.decorrido || '—') + '</b></span>' +
+          (opts.tempos.restante
+            ? '<span>⏳ restam <b style="color:var(--text-bright,#fff);">' + _esc(opts.tempos.restante) + '</b></span>'
+            : '');
+      }
+      _vivoParar();
+    } else if (opts.eta != null) {
+      var eG = document.getElementById('sp-imp-eta');
+      if (eG) eG.textContent = opts.eta;
+      _vivoParar();
+    }
+    var s = document.getElementById('sp-imp-sub');
+    if (s) {
+      // Texto novo = novidade de verdade: rearma o relógio e limpa a linha de vida.
+      if ((opts.sub || '') !== _vivoBase) {
+        _vivoBase = opts.sub || ''; _vivoDesde = Date.now(); _vivoIdx = 0;
+        var e0 = document.getElementById('sp-imp-eta');
+        if (e0 && !(typeof window._spEtaText === 'function' && window._spEtaText())) e0.textContent = '';
+      }
+      s.textContent = opts.sub || '';
+      // só liga a prova-de-vida genérica quando NÃO há tempos explícitos — senão ela
+      // renasce aqui logo depois de o bloco dos tempos tê-la desligado.
+      if (!_vivoTimer && !_temposOwn) { _vivoDesde = _vivoDesde || Date.now(); _vivoTimer = setInterval(_vivoTick, 1000); }
+    }
     // bars: [{id,icon,label,x,y}] — cria a linha 1x e depois só atualiza texto/preenchimento
     // in-place (transition no width faz o crescimento ser visível, não um pulo).
     if (opts.bars && opts.bars.length) {
@@ -202,7 +292,21 @@
       if (f) {
         f.style.display = 'block';
         var ln = document.createElement('div');
-        ln.textContent = String(opts.feedAdd);
+        // FEED COLORIDO, com a MESMA paleta da lista de torneios do dialog: data azul-céu,
+        // categoria violeta, colocação âmbar. Vem ESTRUTURADO ({icon,nome,cat,pos,data}) e
+        // é montado aqui com escape — o texto é nome de torneio vindo do letzplay, então
+        // não pode ir pra innerHTML cru vindo de fora.
+        var fa = opts.feedAdd;
+        if (fa && typeof fa === 'object') {
+          var h = (fa.icon ? _esc(fa.icon) + ' ' : '');
+          if (fa.data) h += '<span style="color:#7dd3fc;">' + _esc(fa.data) + '</span> · ';
+          h += _esc(fa.nome || '');
+          if (fa.cat) h += ' · <span style="color:#a78bfa;font-weight:700;">' + _esc(fa.cat) + '</span>';
+          if (fa.pos != null) h += ' · <span style="color:#fbbf24;font-weight:800;">' + _esc(fa.pos) + '</span>';
+          ln.innerHTML = h;
+        } else {
+          ln.textContent = String(fa);
+        }
         f.appendChild(ln);
         while (f.children.length > 40) f.removeChild(f.firstChild);
         f.scrollTop = f.scrollHeight;
@@ -217,7 +321,10 @@
       if (opts.onCancel && !a.firstChild) {
         a.style.display = 'block';
         var btn = document.createElement('button');
-        btn.type = 'button'; btn.className = 'btn btn-outline btn-sm'; btn.textContent = 'Cancelar';
+        // "Suspender", não "Cancelar" (pedido do dono): tudo o que já foi lido está gravado
+        // e a próxima leitura continua de onde esta parou. "Cancelar" prometia perda.
+        btn.type = 'button'; btn.className = 'btn btn-outline btn-sm';
+        btn.textContent = opts.cancelLabel || 'Suspender';
         btn.onclick = function () { try { opts.onCancel(); } catch (e) {} };
         a.appendChild(btn);
       } else if (!opts.onCancel) { a.style.display = 'none'; a.innerHTML = ''; }

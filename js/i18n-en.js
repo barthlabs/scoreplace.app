@@ -1104,6 +1104,7 @@ window._translations['en'] = {
   'tourn.inviteCoHostDesc': 'You have been invited to co-organize this tournament.',
   'tourn.ligaStart': 'League Start',
   'tourn.nextDraw': 'Next Draw',
+  'tourn.roundEnd': 'Round Ends',
   'tourn.seasonEnd': 'Season End',
   'tourn.teamEnrolled': 'Registered Team',
   'tourn.teamDrawn': 'Drawn Team',

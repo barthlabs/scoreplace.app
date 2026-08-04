@@ -447,6 +447,8 @@
     if (isNaN(start.getTime())) return out;
     if (window.PresenceDB.dayKey(start) !== dayKeyStr) return out;
     var endMs = start.getTime() + (3 * 60 * 60 * 1000); // default 3h block
+    // v1.6.83 — DELIBERADO: t.endDate CRU (mesma razão de venues.js). Ocupação DO DIA, não do
+    // torneio: o fim da última fase faria a quadra parecer ocupada por semanas.
     if (t.endDate) {
       var end = new Date(t.endDate);
       if (!isNaN(end.getTime()) && end.getTime() > start.getTime()) endMs = end.getTime();

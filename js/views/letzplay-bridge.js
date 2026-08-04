@@ -36,9 +36,16 @@
   // Merge que NUNCA regride: escolhe a base mais completa (mais jogos) e preenche os
   // nomes reais de torneio a partir das DUAS versões (um 403 que voltou "0 nomes" não
   // apaga os nomes já resolvidos antes). importedAt sempre vira a hora nova.
+  // Quantos jogos o import REPRESENTA — não quantos couberam no doc. O doc do perfil
+  // carrega só os mais recentes (o acervo completo vive no canônico), então comparar
+  // `games.length` faria um import novo e maior perder pra um antigo e menor.
+  function _gamesTotal(imp) {
+    if (!imp) return 0;
+    return (imp.gamesTotal != null) ? imp.gamesTotal : (imp.games || []).length;
+  }
   function _mergeImport(prev, next) {
     if (!prev) return next;
-    var pn = (prev.games || []).length, nn = (next.games || []).length;
+    var pn = _gamesTotal(prev), nn = _gamesTotal(next);
     var base = (nn >= pn) ? next : prev;          // mais completo vence (não perde jogos)
     var nameMap = {};
     function harvest(imp) {
@@ -90,7 +97,7 @@
     imp = _mergeImport(prev, imp);
     var unchanged = !!prev && (_contentSig(imp) === prevSig);   // nada novo → só a data muda
 
-    var gamesCount = Array.isArray(imp.games) ? imp.games.length : 0;
+    var gamesCount = _gamesTotal(imp);
     // Procedência: self-import. Limpa atribuição de organizador (se havia) — o dono mandou.
     imp.importedVia = 'self';
     imp.importedByName = null;
@@ -108,7 +115,10 @@
         // permite trocar schema debaixo de dado existente. Best-effort de propósito: se a
         // escrita canônica falhar, o import do usuário NÃO pode falhar junto.
         if (typeof window._lzHistoryWrite === 'function') {
-          window._lzHistoryWrite(imp, imp.handle).then(function (r) {
+          // `allGames` = o histórico INTEIRO que a extensão leu (o doc do perfil pode ter
+          // ficado só com os recentes). O acervo canônico tem que receber tudo.
+          var _todos = Array.isArray(d.allGames) && d.allGames.length ? d.allGames : null;
+          window._lzHistoryWrite(imp, imp.handle, _todos).then(function (r) {
             window._log && window._log('[lz história] autoimport:', JSON.stringify(r));
           }).catch(function (e) {
             window._log && window._log('[lz história] autoimport falhou (não bloqueia):', (e && e.message) || e);

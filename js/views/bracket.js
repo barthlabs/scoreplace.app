@@ -143,13 +143,11 @@ function _applyMyMatchesFilter() {
   if (typeof window._wireLateJoinPairDnD === 'function') { try { window._wireLateJoinPairDnD(); } catch (e) {} }
   var cards = document.querySelectorAll('[data-my-match]');
   if (!cards.length) return;
-  cards.forEach(function(card) {
-    if (window._showOnlyMyMatches && card.getAttribute('data-my-match') === '0') {
-      card.style.display = 'none';
-    } else {
-      card.style.display = '';
-    }
-  });
+  // v1.6.86: quem decide o `display` dos cards é UMA função só — `_bracketApplyFilter`,
+  // que avalia "Só meus jogos" E a busca juntas e esconde também os containers que ficam
+  // vazios (box de grupo, coluna de rodada). Antes este loop escrevia `display=''` em todo
+  // card do usuário e DESFAZIA a busca ativa (e deixava o box do grupo de pé sem jogos).
+  window._bracketApplyFilter();
   // Ao ENTRAR no bracket (navegação, não re-render), rola pro TOPO do PRÓXIMO jogo do
   // usuário (1º card PENDENTE dele na ordem do DOM = cronológica; fallback: 1º jogo dele).
   // Se o jogo mora num GRUPO (Rei/Rainha / Fase de Grupos), rola pro TOPO DO GRUPO
@@ -332,6 +330,15 @@ function renderBracket(container, tournamentId, isInline) {
       }
     });
   }).catch(function() {});
+
+  // v1.6.98: pré-carrega os perfis dos 💬 da classificação. TEM que ser antes do
+  // clique: abrir wa.me/mailto depois de um await perde o gesto e o Safari (iOS)
+  // bloqueia a abertura em silêncio. Roda depois do paint (o markup já existe).
+  setTimeout(function () {
+    if (typeof window._hydrateContactPersonButtons === 'function') {
+      window._hydrateContactPersonButtons(container);
+    }
+  }, 0);
 
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
 
@@ -3247,7 +3254,11 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     }
     html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;">` +
       `<img src="${photoSrc}" ${onerror} data-player-name="${window._safeHtml(name)}" style="width:${size};height:${size};border-radius:50%;flex-shrink:0;object-fit:cover;">` +
-      `<span style="font-weight:600;font-size:${fontSize};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',{tournamentId:window._currentBracketTournamentId||''});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${window._safeHtml(name)}">${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name)}</span>` +
+      // v1.6.98 (decisão do dono): o nome no CARD DA CHAVE não abre mais ficha —
+      // "faça funcionar na classificação e não na chave". Na quadra o card é área de
+      // toque pra placar/confirmar; abrir perfil ali atrapalhava. A ficha vive no nome
+      // da CLASSIFICAÇÃO (grupo e geral), que agora abre _openPlayerProfile.
+      `<span style="font-weight:600;font-size:${fontSize};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;">${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name)}</span>` +
     `</div>`;
   });
   if (members.length > 1) html += '</div>';
@@ -4480,7 +4491,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       return '<tr style="border-bottom:1px solid var(--border-color);' + (_bg ? 'background:' + _bg + ';' : '') + '">';
     })()}
       <td style="padding:11px 14px;font-weight:800;color:${posColor(i)};">${medal(i)}</td>
-      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver confrontos">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span></td>
+      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_safeName}',{uid:'${String(s.uid||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',tournamentId:'${_safeTid}'});else window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver ficha de ${window._safeHtml(s.name)}">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span>${typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: false }) : ''}</td>
       ${_scoreCell}
       ${_pctCell}
       <td style="padding:11px 14px;text-align:center;color:#4ade80;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','wins')" title="Clique para ver as vitórias">${s.wins}</td>
@@ -4695,7 +4706,15 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             var _borderPill = _isMe ? 'rgba(34,211,238,0.55)' : border;
             var _colorPill = _isMe ? '#22d3ee' : color;
             var _meBadge = _isMe ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.5px;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
-            return '<span style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;" onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/\'/g, "\\'")) + '\',\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)))) + _ptsLbl + _meBadge + '</span>';
+            // v1.6.93 — A BUSCA TEM QUE ACHAR QUEM ESTÁ AQUI (regra do dono: "a barra de
+            // busca/filtro deve encontrar quem estiver em desativados/lista de espera/W.O.
+            // SEMPRE"). O filtro varre `[data-players]`; sem o atributo, estes chips eram
+            // INVISÍVEIS pra ele — e pior: procurar por alguém que só existe neste box
+            // escondia o box inteiro e não sobrava nada na tela.
+            // `data-my-match="1"` de propósito: o toggle "Só meus jogos" filtra JOGOS; quem
+            // está de fora não tem jogo e não pode sumir por causa dele.
+            var _nmPill = window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)));
+            return '<span data-players="' + window._safeHtml(_nmPill) + '" data-my-match="1" style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;" onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/\'/g, "\\'")) + '\',\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')">' + window._safeHtml(_nmPill) + _ptsLbl + _meBadge + '</span>';
           }).join('');
           // v4.x: cabeçalho DENTRO do box colorido (igual à Lista de espera) — o título
           // "Desativados (N) — …" fica no mesmo box vermelho dos chips, não solto acima.
@@ -4728,16 +4747,37 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               var _bd = _isMe ? 'rgba(34,211,238,0.55)' : 'rgba(251,191,36,0.3)';
               var _co = _isMe ? '#22d3ee' : '#fbbf24';
               var _me = _isMe ? '<span style="font-size:0.6rem;font-weight:800;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
-              return '<span style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + window._safeHtml(n) + _me + '</span>';
+              // v1.6.93: idem — a busca tem que achar quem está na lista de espera.
+              return '<span data-players="' + window._safeHtml(n) + '" data-my-match="1" style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + window._safeHtml(n) + _me + '</span>';
             }).join('');
             var _sameDayRR = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
             var _eligRR = _wlNames.length;
             if (_sameDayRR) { var _ciRR = t.checkedIn || {}, _abRR = t.absent || {}; _eligRR = _wlNames.filter(function(n){ return window._idMapHas(t, _ciRR, n) && !window._idMapHas(t, _abRR, n); }).length; }
             var _need = (4 - (_eligRR % 4)) % 4; if (_need === 0 && _eligRR === 0) _need = 4;
             var _hint = (_need === 0) ? 'completou 4 — formando grupo…' : ('faltam ' + _need + (_sameDayRR ? ' presente(s)' : '') + ' para formar o próximo grupo');
+            // v1.7.4: TOGGLE "Equilibrado" — ligado (default) o grupo novo formado da espera
+            // não fecha com mais de 1 homem; desligado ("livre") volta ao sorteio sem teto.
+            // Só o organizador/co-org vê e mexe; o motor relê `t.wlGroupBalance` a cada
+            // formação, então o efeito é imediato na próxima tentativa de fechar grupo.
+            // CO-ORGANIZADOR TEM O MESMO PODER DO ORGANIZADOR (regra do dono, ago/2026) —
+            // vale pro app inteiro, não só aqui. Por isso _isUserOrgOrCoHost, e NUNCA um
+            // teste de creatorUid: creator-only exclui o co-host em silêncio.
+            var _wlOrg = !!(typeof window._isUserOrgOrCoHost === 'function' &&
+              window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser));
+            var _wlEquil = (t.wlGroupBalance !== 'livre');
+            var _wlTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            var _wlToggle = !_wlOrg ? '' :
+              ('<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0;">' +
+                '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;" title="' +
+                (_wlEquil ? 'Equilibrado: no máximo 1 homem por grupo novo' : 'Livre: sem restrição de gênero ao formar grupo') + '">' +
+                '<input type="checkbox" ' + (_wlEquil ? 'checked' : '') +
+                ' onclick="event.stopPropagation();window._toggleWlBalance(\'' + _wlTid + '\')"><span class="toggle-slider"></span></label>' +
+                '<span style="font-size:0.62rem;font-weight:700;color:' + (_wlEquil ? '#fbbf24' : '#64748b') + ';">' +
+                (_wlEquil ? 'Equilibrado' : 'Livre') + '</span></span>');
             _waitBoxHtml = '<div style="margin-bottom:8px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:8px 10px;">' +
               '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:#fbbf24;margin-bottom:6px;flex-wrap:wrap;">🕒 <span>Lista de espera (' + _wlNames.length + ')</span>' +
-              '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— pode entrar no lugar de um W.O. · ao juntar 4, forma um novo grupo · ' + _hint + '</span></div>' +
+              '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— pode entrar no lugar de um W.O. · ao juntar 4, forma um novo grupo · ' + _hint +
+              (_wlOrg ? (_wlEquil ? ' · máx. 1 homem por grupo' : ' · sem restrição de gênero') : '') + '</span>' + _wlToggle + '</div>' +
               '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + _wPills + '</div>' +
             '</div>';
           }
@@ -4745,7 +4785,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         if (!_inactiveHtml && !_woHtml && !_remainderHtml && !_waitBoxHtml) return '';
         return '<details open style="margin-bottom:1rem;background:rgba(255,255,255,0.02);border:1px solid var(--border-color);border-radius:10px;padding:10px 14px;">' +
           '<summary style="cursor:pointer;user-select:none;font-size:0.82rem;font-weight:700;color:var(--text-bright);margin-bottom:8px;">📋 Ficaram de fora desta rodada</summary>' +
-          '<div style="margin-top:8px;">' + _waitBoxHtml + _inactiveHtml + _woHtml + _remainderHtml + '</div>' +
+          // v1.6.86 — ORDEM (regressão apontada pelo dono, ago/2026): a Lista de espera vem
+          // LOGO ABAIXO dos Desativados, não acima. A ordem lê do mais definitivo pro mais
+          // móvel: quem optou por sair (Desativados) → quem está na FILA esperando vaga →
+          // W.O. → sem grupo. Trocar isso põe a fila antes de quem nem quer jogar.
+          '<div style="margin-top:8px;">' + _inactiveHtml + _waitBoxHtml + _woHtml + _remainderHtml + '</div>' +
         '</details>';
       })()}
       ${''/* v4.x: "Lista de espera" movida pra DENTRO do box "Ficaram de fora desta rodada"
@@ -4890,6 +4934,25 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // Quantos classificam POR GRUPO pra próxima fase (0 = fase única → sem tarja verde).
             var _classifN = (_nextPhT && _nextScopeT !== 'overall' && typeof window._phaseClassifiedCount === 'function') ? window._phaseClassifiedCount(t, _gst.length) : 0;
             if (_gst.length) {
+              // v1.6.98: contato direto (💬) na classificação DO GRUPO. Quem está no
+              // grupo fala com quem está no grupo; organizador/co-org falam com todos
+              // (o gate de admin mora dentro de _contactPersonIconHtml).
+              var _gHasMe = (typeof _groupHasMe === 'function') ? !!_groupHasMe(g) : false;
+              // v1.6.98: o NOME na classificação abre a FICHA do jogador (a mesma
+              // _openPlayerProfile da Análise de Inscritos — avatar, histórico, troféus),
+              // não o modal antigo de estatísticas. Aqui os nomes não tinham clique
+              // NENHUM: era esse o "clicar no nome não funciona" na classificação.
+              // Identidade por uid quando existe; o nome vai junto só como rótulo.
+              var _gstEsc = function (x) { return String(x == null ? '' : x).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+              var _gstNameHtml = function (s) {
+                var _txt = window._safeHtml(s.name);
+                if (typeof window._openPlayerProfile !== 'function') return _txt;
+                return '<span onclick="event.stopPropagation();window._openPlayerProfile(\'' + _gstEsc(s.name) +
+                  '\',{uid:\'' + _gstEsc(s.uid || '') + '\',tournamentId:\'' + _gstEsc(t.id) + '\'})"' +
+                  ' title="Ver ficha de ' + window._safeHtml(s.name) + '"' +
+                  ' style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">' +
+                  _txt + '</span>';
+              };
               var _gstRows = _gst.map(function(s, idx) {
                 var _pos = idx + 1, _md = _pos === 1 ? '🥇' : _pos === 2 ? '🥈' : _pos === 3 ? '🥉' : '';
                 var _sld = (s.pointsFor || 0) - (s.pointsAgainst || 0);
@@ -4902,7 +4965,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 var _clsGreen = (idx < _classifN && !_isRed && !_isAmb) ? 'background:rgba(34,197,94,0.10);' : '';
                 return '<tr style="border-top:1px solid rgba(255,255,255,0.06);' + _clsGreen + '">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
-                  '<td style="padding:3px 6px;color:' + _nmColor + ';">' + (_md ? _md + ' ' : '') + window._safeHtml(s.name) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + '</td>' +
+                  '<td style="padding:3px 6px;color:' + _nmColor + ';">' + (_md ? _md + ' ' : '') + _gstNameHtml(s) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + (typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: _gHasMe }) : '') + '</td>' +
                   (_advPtsOn ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, g.category || '') : '') + ' style="padding:3px 6px;text-align:center;color:#fbbf24;font-weight:700;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + (typeof s.points === 'number' ? s.points : 0) + '</td>' : '') +
                   '<td style="padding:3px 6px;text-align:center;color:#4ade80;font-weight:700;">' + (s.wins || 0) + '</td>' +
                   '<td style="padding:3px 6px;text-align:center;color:var(--text-muted);">' + (_sld >= 0 ? '+' : '') + _sld + '</td>' +
@@ -5710,7 +5773,21 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
 // DOM PURO, sem re-render: esconder/mostrar card preserva scroll, <details> aberto e
 // placar em edição (project_dashboard_no_rerender / feedback_rerender_keep_scroll).
 // Casa acento-insensitive ("jose" acha "José") e por trecho em qualquer posição.
-// Container que fica sem NENHUM card visível some junto — senão sobra coluna/box vazio.
+//
+// v1.6.86 — O QUE SOME É O CONTAINER INTEIRO, ATÉ O TOPO. Relato do dono (print do Confra
+// em Rei/Rainha): digitou "Kelly" e "não filtrou nada". Filtrava — mas só o CARD e o PAI
+// IMEDIATO dele. No Rei/Rainha (e na Fase de Grupos) o card mora num grid que mora dentro
+// do BOX DO GRUPO: o grid sumia e o box ficava de pé com cabeçalho, botões (W.O./Cheguei/
+// Combinar) e a CLASSIFICAÇÃO DO GRUPO — nenhum deles a pessoa buscada. Sumia justamente
+// a única coisa que se quer ver. Agora o filtro sobe pelos ANCESTRAIS: qualquer container
+// que só existe por causa de cards de jogo e ficou sem nenhum casando some junto (grid,
+// coluna de rodada, box de grupo, <details> "Demais jogos da rodada").
+//
+// UMA decisão de visibilidade só (feedback_unify_dual_entry_points): busca E "Só meus
+// jogos" escrevem no MESMO `display` dos MESMOS cards ([data-players] e [data-my-match]
+// são o mesmo elemento). Eram duas funções decidindo em separado — a segunda a rodar
+// desfazia a primeira. Aqui as duas condições são avaliadas juntas; `_applyMyMatchesFilter`
+// só chama esta.
 // ═══════════════════════════════════════════════════════════════════════════════
 window._bracketNorm = function (s) {
   return String(s == null ? '' : s).toLowerCase()
@@ -5719,28 +5796,60 @@ window._bracketNorm = function (s) {
 window._bracketApplyFilter = function () {
   var inp = document.getElementById('bracket-search');
   var q = window._bracketNorm(inp ? inp.value : '').trim();
+  var onlyMine = !!window._showOnlyMyMatches;
   var cards = document.querySelectorAll('[data-players]');
   if (!cards.length) return;
+  // Limite de subida: nunca passar do container da view (senão, numa busca sem resultado,
+  // TUDO seria escondido — inclusive a própria barra de busca, e o dono ficaria preso).
+  var root = document.getElementById('view-container') || document.body;
+  var searchEls = [inp, document.getElementById('bracket-search-empty'),
+                   document.getElementById('fbwrap-chaves')].filter(Boolean);
+  // Container que ABRIGA a barra de busca nunca some (caso inline, em que a chave e a barra
+  // podem dividir o mesmo cartão da página do torneio).
+  var holdsSearch = function (el) {
+    if (typeof el.contains !== 'function') return false;
+    for (var s = 0; s < searchEls.length; s++) { if (el.contains(searchEls[s])) return true; }
+    return false;
+  };
+  var setDisp = function (el, visible) {
+    if (el.dataset.fbDisp === undefined) el.dataset.fbDisp = el.style.display || '';
+    el.style.display = visible ? el.dataset.fbDisp : 'none';
+  };
   var shown = 0;
-  var parents = [];
+  var conts = [];            // ancestrais candidatos, na ordem em que aparecem
+  var contHasHit = [];       // paralelo a conts: algum card casando lá dentro?
   for (var i = 0; i < cards.length; i++) {
     var c = cards[i];
-    var hit = !q || window._bracketNorm(c.getAttribute('data-players') || '').indexOf(q) !== -1;
+    var hit = (!q || window._bracketNorm(c.getAttribute('data-players') || '').indexOf(q) !== -1)
+      && (!onlyMine || c.getAttribute('data-my-match') !== '0');
     // Guarda o display original UMA vez — o card pode ter display próprio (flex/grid).
-    if (c.dataset.fbDisp === undefined) c.dataset.fbDisp = c.style.display || '';
-    c.style.display = hit ? c.dataset.fbDisp : 'none';
+    setDisp(c, hit);
     if (hit) shown++;
-    if (c.parentElement && parents.indexOf(c.parentElement) === -1) parents.push(c.parentElement);
+    for (var p = c.parentElement; p && p !== root && p !== document.body; p = p.parentElement) {
+      if (holdsSearch(p)) break;
+      var ix = conts.indexOf(p);
+      if (ix === -1) { conts.push(p); contHasHit.push(hit); }
+      else if (hit) contHasHit[ix] = true;
+    }
   }
-  // Container sem nenhum card visível some (coluna de rodada, box de grupo…).
-  parents.forEach(function (p) {
-    var kids = p.querySelectorAll(':scope > [data-players]');
-    if (!kids.length) return;
-    var any = false;
-    for (var k = 0; k < kids.length; k++) { if (kids[k].style.display !== 'none') { any = true; break; } }
-    if (p.dataset.fbDisp === undefined) p.dataset.fbDisp = p.style.display || '';
-    p.style.display = any ? p.dataset.fbDisp : 'none';
-  });
+  // Container sem NENHUM card casando some inteiro (grid, coluna de rodada, box de grupo,
+  // <details> de "Demais jogos da rodada"…). Com filtro limpo, todos voltam.
+  for (var k = 0; k < conts.length; k++) setDisp(conts[k], contHasHit[k]);
+  // O contador do <details> ("Demais jogos da rodada (N)") acompanha o filtro — senão
+  // anuncia 3 mostrando 1. O texto original fica guardado pra voltar ao limpar a busca.
+  var dets = document.querySelectorAll('details');
+  for (var d = 0; d < dets.length; d++) {
+    var inside = dets[d].querySelectorAll('[data-players]');
+    if (!inside.length || typeof dets[d].querySelector !== 'function') continue;
+    var sm = dets[d].querySelector('summary');
+    if (!sm) continue;
+    var lbl = sm.querySelector('span') || sm;
+    if (lbl.dataset.fbTxt === undefined) lbl.dataset.fbTxt = lbl.textContent;
+    if (!q && !onlyMine) { lbl.textContent = lbl.dataset.fbTxt; continue; }
+    var nvis = 0;
+    for (var z = 0; z < inside.length; z++) { if (inside[z].style.display !== 'none') nvis++; }
+    lbl.textContent = lbl.dataset.fbTxt.replace(/\((\d+)\)\s*$/, '(' + nvis + ')');
+  }
   var empty = document.getElementById('bracket-search-empty');
-  if (empty) empty.style.display = (q && shown === 0) ? 'block' : 'none';
+  if (empty) empty.style.display = ((q || onlyMine) && shown === 0) ? 'block' : 'none';
 };

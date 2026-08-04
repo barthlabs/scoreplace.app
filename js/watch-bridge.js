@@ -58,11 +58,35 @@
     return inactiveState();
   }
 
+  // FC MÁXIMA pra o relógio saber em qual FAIXA DE QUEIMA (5 zonas) o batimento
+  // está e pintar o box na cor da faixa. Fórmula clássica 220 − idade; a idade sai
+  // do PERFIL (birthDate), que só existe aqui — o relógio é burro e nunca deriva
+  // isso sozinho. Sem data de nascimento devolve 0, e o relógio simplesmente não
+  // pinta faixa nenhuma (melhor não mostrar do que mostrar zona inventada).
+  function hrMaxFromProfile() {
+    try {
+      var cu = window.AppStore && window.AppStore.currentUser;
+      var bd = cu && cu.birthDate;                 // ISO yyyy-mm-dd
+      if (!bd) return 0;
+      var p = String(bd).split('-');
+      if (p.length < 3) return 0;
+      var y = +p[0], m = +p[1], d = +p[2];
+      if (!y || !m || !d) return 0;
+      var now = new Date();
+      var age = now.getFullYear() - y;
+      if (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)) age--;
+      if (age < 5 || age > 100) return 0;          // data absurda → não inventa zona
+      return 220 - age;
+    } catch (e) { return 0; }
+  }
+
   // Empurra um snapshot pro relógio (via plugin) + assinantes locais.
   // Dedup pelo corpo (sem seq) pra não spammar snapshots idênticos; `force`
   // ignora o dedup (usado na resposta a "hello").
   function push(snapshot, force) {
     if (!snapshot) snapshot = currentState();
+    // Carimbado ANTES do dedup pra fazer parte do corpo comparado.
+    if (!snapshot.hrMax) snapshot.hrMax = hrMaxFromProfile();
     var body = JSON.stringify(snapshot);
     if (!force && body === lastBody) return;
     lastBody = body;

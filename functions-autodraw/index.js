@@ -34,9 +34,19 @@ try {
   console.error('[autoDraw] draw-core indisponível — autoDraw vai pular:', e && e.message);
 }
 
+// v1.7: AUTORIZAÇÃO + aplicação do RESULTADO no servidor (result-core.js). Require
+// separado e defensivo pelo mesmo motivo do draw-core: se falhar, a applyMatchResult
+// recusa com erro claro e o cliente cai no caminho antigo — nunca improvisa a regra.
+let applyResultFn = null;
+try {
+  applyResultFn = require('./result-core.js').applyResult;
+} catch (e) {
+  console.error('[applyMatchResult] result-core indisponível:', e && e.message);
+}
+
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '1.3';
+const CF_VERSION = '1.5';
 
 initializeApp();
 const db = getFirestore();
@@ -71,6 +81,97 @@ async function _loadLiveNames(uidSet) {
     if (dn) nameByUid[u] = dn;
   });
   return { profByUid, nameByUid };
+}
+
+// ─── E-MAIL DO SORTEIO (v1.6.88) ────────────────────────────────────────────
+// Sorteio automático de 02/ago/2026 (Confra, 110 inscritos): as notificações
+// IN-APP saíram (11+ docs em users/{uid}/notifications às 22:00Z) e NENHUM
+// e-mail — `mail` não teve doc nenhum depois das 13:36Z e `notif_email_queue`
+// estava VAZIA. Causa medida: esta CF só escrevia o canal in-app. No cliente,
+// `_sendUserNotification` despacha DOIS canais (in-app + e-mail via digest);
+// o servidor nunca espelhou o segundo. Quem sorteia é a CF → ninguém recebia
+// e-mail de sorteio automático. [[feedback_functions_must_mirror_app]]
+//
+// O e-mail NÃO é enviado daqui: entra na MESMA fila do cliente
+// (`notif_email_queue`), que a CF `flushNotifEmailDigest` consolida num e-mail
+// por pessoa. Assim o comportamento (janela por importância, agrupamento,
+// tema do destinatário, assunto) é UM só, não dois parecidos.
+const _NOTIF_EMAIL_WINDOW_MIN = { fundamental: 5, important: 15, all: 30 };
+
+// Filtro de nível: usa o helper VENDORADO (mesma função do app, sem cópia).
+// Sem vendor carregado, o padrão é DEIXAR PASSAR — sorteio é 'fundamental',
+// que todos os níveis de preferência recebem.
+function _notifLevelOk(userLevel, notifLevel) {
+  if (drawWindow && typeof drawWindow._notifLevelAllowed === 'function') {
+    return drawWindow._notifLevelAllowed(userLevel, notifLevel);
+  }
+  return true;
+}
+
+// E-mails de um perfil: o principal + os vinculados por união de contas
+// (`linkedEmails[]`), respeitando o opt-out `notifyEmail` — espelha o bloco de
+// e-mail de `_sendUserNotification` (tournaments-organizer.js).
+function _profileEmails(profile) {
+  if (!profile || profile.notifyEmail === false) return [];
+  const out = [], seen = {};
+  const push = (e) => {
+    const k = String(e == null ? '' : e).trim().toLowerCase();
+    if (k && !seen[k]) { seen[k] = true; out.push(k); }
+  };
+  push(profile.email);
+  if (Array.isArray(profile.linkedEmails)) profile.linkedEmails.forEach(push);
+  return out;
+}
+
+// Enfileira o e-mail de notificação de UMA pessoa. `sentTo` é o dedup da
+// RODADA inteira (a mesma pessoa pode aparecer por 2 uids — dupla —, e dois
+// itens idênticos apareceriam duplicados no digest).
+async function _queueDrawEmail(profile, opts, sentTo) {
+  const level = opts.level || 'fundamental';
+  if (!_notifLevelOk(profile && profile.notifyLevel, level)) return 0;
+  // Backstop de SANDBOX na ÚLTIMA porta antes do e-mail (espelha queueNotifEmail):
+  // o killswitch principal é o _sbMuteAuto, este é a rede embaixo dele. E-mail de SB
+  // chega em gente que nem sabe que o SB existe. [[project_sandbox_tournament]]
+  if (/^\(SB\)/.test(String(opts.tournamentName || '')) || /_sb(\b|$)/.test(String(opts.tournamentUrl || ''))) return 0;
+  const emails = _profileEmails(profile);
+  if (!emails.length) return 0;
+  const now = Date.now();
+  const mins = (_NOTIF_EMAIL_WINDOW_MIN[level] != null) ? _NOTIF_EMAIL_WINDOW_MIN[level] : 30;
+  let n = 0;
+  for (const email of emails) {
+    if (sentTo.has(email)) continue;
+    sentTo.add(email);
+    try {
+      await db.collection('notif_email_queue').add({
+        email: email,
+        level: level,
+        message: opts.message || '',
+        tournamentName: opts.tournamentName || '',
+        tournamentUrl: opts.tournamentUrl || '',
+        ctaLabel: opts.ctaLabel || '',
+        ctaUrl: opts.ctaUrl || '',
+        createdAt: now,
+        flushAtMs: now + mins * 60 * 1000
+      });
+      n++;
+    } catch (e) {
+      console.warn('[autoDraw] falha ao enfileirar e-mail pra', email, e && e.message);
+    }
+  }
+  return n;
+}
+
+// CTA do e-mail de sorteio = "Ver chave" (mesmo destino do _notifCta do app).
+function _drawEmailOpts(t, tId, message) {
+  const base = 'https://scoreplace.app';
+  return {
+    level: 'fundamental',                 // NOTIF_CATALOG.draw.level
+    message: message,
+    tournamentName: t.name || '',
+    tournamentUrl: base + '/#tournaments/' + tId,
+    ctaLabel: 'Ver chave',
+    ctaUrl: base + '/#bracket/' + tId
+  };
 }
 
 // v4.5.85 (ITEM 3 · Fase 4): injeta os nomes VIVOS por uid no draw-core ANTES do sorteio.
@@ -575,6 +676,85 @@ exports.splitLatePair = onCall(async (request) => {
 // (outro fechou primeiro / echo). AUTHZ = PARTICIPANTE (o fecho é disparado por quem salva o
 // placar, num resultEntry='players' pode ser participante) — difere do drawRound (admin-only).
 // Ver project_draw_canonization_cf_phase23_deferred / project_concurrency_safe_saves.
+
+// ─── applyMatchResult (v1.7): QUEM pode lançar o placar, decidido no SERVIDOR ───────
+// O cliente segue INTERPRETANDO o placar (GSM/tie-break/sets pela config do torneio) e
+// manda o `payload` pronto — o que muda é que a AUTORIZAÇÃO deixa de morar só no
+// navegador: resultEntry POR FASE, o lado do jogador por uid e a fase da negociação
+// (proposta → contraproposta → disputa) passam a ser checados aqui, sobre o doc FRESCO.
+//
+// AUTHZ = PARTICIPANTE ou ADMIN (igual closeRound, diferente do drawRound que é admin-only):
+// num resultEntry='players' quem lança é jogador. Quem decide de fato é o result-core.
+//
+// ⚠️ ISTO AINDA NÃO É AUTORIDADE ABSOLUTA: as firestore.rules continuam deixando o
+// participante escrever `matches` direto (é o que mantém o app de loja antigo funcionando
+// — ele não chama esta CF e não tem auto-update). Fechar essa porta é passo SEPARADO, só
+// quando o piso das lojas alcançar. Ver [[project_result_launch_cf_evaluation]] §5.
+exports.applyMatchResult = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const email = request.auth && request.auth.token && request.auth.token.email;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta pra lançar o placar.');
+
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!tId) throw new HttpsError('invalid-argument', 'tournamentId é obrigatório.');
+  const matchId = String((request.data && request.data.matchId) || '').trim();
+  if (!matchId) throw new HttpsError('invalid-argument', 'matchId é obrigatório.');
+  const payload = (request.data && request.data.payload) || null;
+  if (!payload) throw new HttpsError('invalid-argument', 'payload é obrigatório.');
+  const logMessage = (request.data && request.data.logMessage) || '';
+
+  // Motor indisponível → NUNCA improvisar a regra aqui. Erro claro; o cliente cai no
+  // caminho antigo (que ainda é permitido pelas rules) em vez de ficar sem lançar placar.
+  if (typeof applyResultFn !== 'function' || !drawWindow) {
+    throw _drawFail('internal', 'Motor de resultado indisponível no servidor.', { tId, matchId });
+  }
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentParticipant(pre.data(), uid, email) && !_isTournamentAdmin(pre.data(), uid, email)) {
+    throw _drawFail('permission-denied', 'Só quem está no torneio pode lançar placar.',
+      { tId, matchId, uid, email: email || '(sem email)' });
+  }
+  await _preloadDrawNames(pre.data()); // nome vivo por uid (o motor pode gerar/avançar)
+
+  let out;
+  try {
+    out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const t = snap.data(); t.id = tId;
+      _enrichParticipantsFromProfiles(t);
+      // Re-checa sobre o doc FRESCO (acesso pode ter mudado entre o read e a txn).
+      if (!_isTournamentParticipant(t, uid, email) && !_isTournamentAdmin(t, uid, email)) {
+        throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, matchId, uid });
+      }
+      try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+
+      const res = applyResultFn(t, {
+        matchId: matchId, payload: payload, actor: { uid: uid, email: email || '' },
+        logMessage: logMessage
+      });
+      // RECUSA é resposta legítima (não é falha de infra): devolve o motivo pro cliente
+      // mostrar o diálogo certo ("o outro time já lançou", "só o organizador nesta fase").
+      if (!res || !res.ok) {
+        return { ok: false, reason: (res && res.reason) || 'apply-failed' };
+      }
+      const b = _applyWriteBoundary(t);
+      tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+      return { ok: true, outcome: res.outcome, tournament: b.clean };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error(`applyMatchResult EXPLODIU em ${tId}/${matchId} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha ao lançar placar: ' + String((e && e.message) || e).slice(0, 300));
+  }
+
+  console.log(`applyMatchResult v${CF_VERSION}: ${tId}/${matchId} por ${uid} — ` +
+    (out.ok ? out.outcome : 'recusado(' + out.reason + ')'));
+  return out;
+});
+
 exports.closeRound = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const email = request.auth && request.auth.token && request.auth.token.email;
@@ -910,6 +1090,8 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
         const _sbMuteAuto = (t.isSandbox === true || t.notificationsMuted === true);
         if (_sbMuteAuto) console.log(`Auto-draw: ${tId} é sandbox/mudo — sorteio feito, notificações suprimidas`);
         const notifiedUids = new Set();
+        const _mailedTo = new Set();   // dedup de E-MAIL da rodada (a mesma pessoa por 2 uids)
+        let _mailed = 0;
         for (const p of activePlayers) {
           if (_sbMuteAuto) break;
           const uids = [];
@@ -924,24 +1106,30 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
             notifiedUids.add(uid);
             const profile = _profByUid[uid]; // já carregado no batch acima
             if (!profile) continue;           // perfil inexistente → pula (igual !userDoc.exists)
-            if (profile.notifyPlatform === false) continue;
-            try {
-              await db.collection('users').doc(uid).collection('notifications').add({
-                type: 'draw',
-                fromUid: 'system',
-                fromName: 'scoreplace.app',
-                fromPhoto: '',
-                tournamentId: tId,
-                tournamentName: t.name || '',
-                message: message,
-                createdAt: now.toISOString(),
-                read: false
-              });
-            } catch (e) {
-              console.warn(`Notification error for uid ${uid}:`, e.message);
+            // notifyPlatform (in-app) e notifyEmail (e-mail) são opt-outs INDEPENDENTES —
+            // como no cliente. Quem desliga o in-app continua recebendo o e-mail, e o
+            // contrário também. Por isso o e-mail sai FORA do gate de notifyPlatform.
+            if (profile.notifyPlatform !== false) {
+              try {
+                await db.collection('users').doc(uid).collection('notifications').add({
+                  type: 'draw',
+                  fromUid: 'system',
+                  fromName: 'scoreplace.app',
+                  fromPhoto: '',
+                  tournamentId: tId,
+                  tournamentName: t.name || '',
+                  message: message,
+                  createdAt: now.toISOString(),
+                  read: false
+                });
+              } catch (e) {
+                console.warn(`Notification error for uid ${uid}:`, e.message);
+              }
             }
+            _mailed += await _queueDrawEmail(profile, _drawEmailOpts(t, tId, message), _mailedTo);
           }
         }
+        if (!_sbMuteAuto) console.log(`Auto-draw: ${tId} — notificações in-app: ${notifiedUids.size} uid(s) | e-mails enfileirados: ${_mailed}`);
 
         // v1.2.9: o enfileiramento de grupos de WhatsApp da rodada saiu. Os grupos
         // automáticos dependiam do Evolution/Groups API — número banido, apelação
@@ -1028,6 +1216,8 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
   // Sandbox/killswitch: SB sorteia na mesma CF, mas não notifica.
   const _sbMuteAuto = (t.isSandbox === true || t.notificationsMuted === true);
   const notified = new Set();
+  const _mailedToPh = new Set();   // dedup de e-mail desta rodada de fase
+  let _mailedPh = 0;
   for (const p of pool) {
     if (_sbMuteAuto) break;
     const uids = [];
@@ -1036,17 +1226,21 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
     for (const uid of uids) {
       if (notified.has(uid)) continue;
       notified.add(uid);
-      try {
-        const profile = _profByUid[uid]; // já carregado no batch acima
-        if (!profile) continue;
-        if (profile.notifyPlatform === false) continue;
-        await db.collection('users').doc(uid).collection('notifications').add({
-          type: 'draw', fromUid: 'system', fromName: 'scoreplace.app', fromPhoto: '',
-          tournamentId: tId, tournamentName: t.name || '', message, createdAt: now.toISOString(), read: false
-        });
-      } catch (e) { console.warn(`Notif phase error uid ${uid}:`, e.message); }
+      const profile = _profByUid[uid]; // já carregado no batch acima
+      if (!profile) continue;
+      // in-app e e-mail são opt-outs independentes (mesma regra do cliente).
+      if (profile.notifyPlatform !== false) {
+        try {
+          await db.collection('users').doc(uid).collection('notifications').add({
+            type: 'draw', fromUid: 'system', fromName: 'scoreplace.app', fromPhoto: '',
+            tournamentId: tId, tournamentName: t.name || '', message, createdAt: now.toISOString(), read: false
+          });
+        } catch (e) { console.warn(`Notif phase error uid ${uid}:`, e.message); }
+      }
+      _mailedPh += await _queueDrawEmail(profile, _drawEmailOpts(t, tId, message), _mailedToPh);
     }
   }
+  if (!_sbMuteAuto) console.log(`Auto-draw phase: ${tId} — in-app: ${notified.size} uid(s) | e-mails enfileirados: ${_mailedPh}`);
 }
 
 // ─── Reconciliador de nextDrawAt (v2.6.74) ──────────────────────────────────

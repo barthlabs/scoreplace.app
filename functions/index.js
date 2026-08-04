@@ -32,6 +32,7 @@ const admin = require("firebase-admin");
 const _mergeRules = require("./merge-rules");
 const _uidSweep = require("./uid-sweep");
 const _enrollCore = require("./enroll-core");
+const _nameUnique = require("./name-unique-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -1085,6 +1086,26 @@ exports.sendTournamentReminders = onSchedule(
   async () => { await _runTournamentReminders(admin.firestore(), Date.now()); }
 );
 
+// ─── Torneios ABANDONADOS: avisa 48h antes e encerra por inatividade ─────────
+// Pedido do dono (02/ago/2026): torneio de 1 dia que nunca chegou à final e que o
+// organizador nunca encerrou fica aparecendo pra todo usuário novo. Medido: de 8 torneios
+// vivos, 4 abandonados.
+//
+// A REGRA MORA SÓ AQUI (abandon-core). O cliente não recalcula nada — ele lê `autoClosed` e
+// obedece. Sem espelho, sem drift.
+//
+// Encerrar NÃO fecha a classificação (sem pódio/troféu/título) e deixa o torneio reabrível
+// pelo organizador informando as datas. Liga/Pontos Corridos nunca entra: é temporada
+// contínua. Quem nunca teve placar não é encerrado — só sai da vitrine, e isso é decisão de
+// leitura no cliente, sem escrita nenhuma.
+// Deploy:  firebase deploy --only functions:sweepAbandonedTournaments
+const { runAbandonSweep: _runAbandonSweep } = require("./abandon-run");
+exports.sweepAbandonedTournaments = onSchedule(
+  { schedule: "every day 04:00", timeZone: "America/Sao_Paulo", region: "us-central1",
+    timeoutSeconds: 540, memory: "256MiB" },
+  async () => { await _runAbandonSweep(admin.firestore(), Date.now()); }
+);
+
 // ─── Magic Link via Custom Email (firestore-send-email extension) ────────────
 // v1.0.20-beta: substituí firebase.auth().sendSignInLinkToEmail() (que envia
 // email feio do firebaseapp.com sem botão estilizado, parando no spam) por
@@ -1960,6 +1981,17 @@ exports.enrollParticipant = onCall(
     if (out.outcome === "capacityFull") return { capacityFull: true, participants: out.participants };
     if (out.outcome === "already") return { alreadyEnrolled: true, participants: out.participants };
     if (out.outcome === "closed") return { alreadyEnrolled: false, enrollmentClosed: true, participants: out.participants };
+    // v1.6.86: fase já sorteada → a pessoa entrou na LISTA DE ESPERA (não no roster).
+    // No caminho normal o cliente já detecta e chama a espera direto; este ramo cobre a
+    // CORRIDA (o sorteio disparou entre a checagem do cliente e a escrita do servidor),
+    // que é exatamente como o caso do Confra nasceu — 57s de diferença.
+    if (out.outcome === "waitlisted" || out.outcome === "alreadyWaitlisted") {
+      return {
+        alreadyEnrolled: false, waitlisted: true,
+        alreadyWaitlisted: out.outcome === "alreadyWaitlisted",
+        participants: out.participants, standbyParticipants: out.standbyParticipants || null
+      };
+    }
     return {
       alreadyEnrolled: false,
       participants: out.participants,
@@ -3171,6 +3203,19 @@ exports.registerPhonePassword = onCall(
       if (e instanceof HttpsError) throw e; // user-not-found = ok
     }
 
+    // v1.6.x: NOME ÚNICO ENTRE UIDS, agora no SERVIDOR (name-unique-core.js).
+    // A regra só existia no cliente (isDisplayNameTaken) e esta CF gravava direto —
+    // foi assim que nasceu a segunda "Gabriela Ferreira" (02/ago/2026), inscrita 2x
+    // no mesmo torneio. Homônimo em cadastro por celular é quase sempre a MESMA
+    // pessoa: REJEITA apontando a conta existente (mascarada) — nunca auto-sufixa.
+    if (displayName) {
+      const conflict = await _nameUnique.findDisplayNameConflict(admin.firestore(), displayName, uid);
+      if (conflict) {
+        console.log("[registerPhonePassword] displayName em conflito com uid:", conflict.uid);
+        throw new HttpsError("already-exists", _nameUnique.buildConflictMessage(conflict));
+      }
+    }
+
     const upd = { email: synthetic, emailVerified: true, password: password, phoneNumber: phoneE164 };
     if (displayName) upd.displayName = displayName;
     try {
@@ -3180,7 +3225,9 @@ exports.registerPhonePassword = onCall(
       throw new HttpsError("internal", "não foi possível salvar: " + (err.code || err.message));
     }
     const prof = { phone: phoneE164, phoneCountry: "55", authProvider: "phone+password", updatedAt: new Date().toISOString() };
-    if (displayName) prof.displayName = displayName;
+    // displayName_lower JUNTO do displayName (contrato do saveUserProfile do cliente) —
+    // sem ele a conta fica invisível pra própria checagem de unicidade.
+    if (displayName) _nameUnique.denormalizeDisplayName(prof, displayName);
     await admin.firestore().collection("users").doc(uid).set(prof, { merge: true }).catch(() => {});
     console.log("[registerPhonePassword] set for uid:", uid);
     return { ok: true };

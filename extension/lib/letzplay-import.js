@@ -193,7 +193,13 @@
     var games = matches.map(function (m, i) {
       return {
         idx: i,
+        lzId: m.lzId || null,           // id da partida dado pelo letzplay — a identidade
         date: m.date || null,
+        // A DATA SEM AMBIGUIDADE. O HTML do card diz "Terça, 10/03/26"; o JSON da própria
+        // fonte diz "2026-03-10". Só o segundo é interpretável sem convenção de país —
+        // e foi por não ter isso que 10 de março virou 3 de outubro na tela (medido no
+        // perfil do dono em 31/jul/2026). Quando o índice rodou, esta é a data que vale.
+        dateISO: m.dateISO || null,
         sport: lpSport,
         official: m.official === true,
         kind: m.kind || (m.official === true ? 'tournament' : 'ranking'),

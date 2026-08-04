@@ -53,7 +53,8 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private View winnerOverlay, replayControls, reshuffleRow, tieOverlay;
     private TextView winnerLabel, winnerNames, winnerScoreL, winnerScoreR;
     private androidx.wear.widget.CurvedTextView setsArcL, setsArcR, setsWordArc, winnerArcSport;
-    private androidx.wear.widget.CurvedTextView hrArc;   // ♥ BPM no bezel direito
+    private TextView hrPill;      // ♥ BPM em cápsula no topo-centro (cor da faixa de queima)
+    private int hrMax = 0;        // FCmáx vinda do celular (220 − idade do perfil); 0 = sem faixa
     private TextView btnReplayCancel, btnReplayConfirm, reshuffleLabel;
     private boolean rrSuggestNow = false;   // fim de jogo com sugestão de Rei/Rainha
     private TextView tieScoreL, tieScoreR, btnTieExtend, btnTieTiebreak;
@@ -79,7 +80,14 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private String pendingPickName = null;
     private int pendingPickTeam = 0, pendingPickIdx = -1;
     private String servePickCurrent = "";
+    // Tela INICIAR: o que precisa pra redesenhar a lista sem esperar snapshot novo,
+    // e o slot que o "Iniciar" aplica quando ninguém tocou em nome nenhum.
+    private JSONObject startTeams = null;
+    private int startLeftTeam = 1, startRightTeam = 2;
+    private String startServerName = "";
+    private int startCurTeam = 0, startCurIdx = -1;
     private int lastServePhase = -99;   // detecta a virada 0→1 pra abrir o seletor
+    private boolean lastPickOpen = false; // detecta o celular ABRINDO a escolha do sacador
     private org.json.JSONArray serveEligible = null;
     private boolean serveOpen = false;
 
@@ -102,14 +110,15 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         ballR1 = findViewById(R.id.ball_r1); ballR2 = findViewById(R.id.ball_r2);
         setsArcL = findViewById(R.id.sets_arc_left);
         setsArcR = findViewById(R.id.sets_arc_right);
-        // SETS na borda curva: esquerdo às 11h (330°), direito à 1h (30°).
+        // SETS na borda curva: esquerdo às 11h (330°), direito à 1h (30°). Tentei
+        // agrupá-los à esquerda (318°/334°) pra imitar a faixa reta do Apple e ficou
+        // RUIM: no bezel, dois números a 16° um do outro saem tortos e quase
+        // ilegíveis. Num mostrador redondo o cromo mora na CURVA; o que o Apple
+        // resolve com uma linha reta, aqui se resolve deixando os sets nas pontas e
+        // pondo o ♥ no meio, logo abaixo do 12h (cápsula reta, ver hr_pill).
         setsArcL.setAnchorType(1); setsArcL.setAnchorAngleDegrees(330f); setsArcL.setClockwise(true);
         setsArcR.setAnchorType(1); setsArcR.setAnchorAngleDegrees(30f);  setsArcR.setClockwise(true);
-        // ♥ BPM às 2h (60°): logo abaixo do relógio do sistema, na curva da DIREITA.
-        // No Apple (mostrador reto) o mesmo dado vive numa linha abaixo do relógio —
-        // cânone compartilhado (escala + setores), cromo no idioma de cada plataforma.
-        hrArc = findViewById(R.id.hr_arc);
-        hrArc.setAnchorType(1); hrArc.setAnchorAngleDegrees(60f); hrArc.setClockwise(true);
+        hrPill = findViewById(R.id.hr_pill);   // cápsula no topo-centro (layout_gravity)
         setsWordArc = findViewById(R.id.sets_word_arc);
         setsWordArc.setAnchorType(1); setsWordArc.setAnchorAngleDegrees(316f); setsWordArc.setClockwise(true); // perto do "1" (11h)
         winnerOverlay = findViewById(R.id.winner_overlay);
@@ -161,8 +170,19 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         rrStandings = findViewById(R.id.rr_standings);
         winnerWaiting = findViewById(R.id.winner_waiting);
 
-        // Iniciar → dispara a MESMA _casualStart() do celular.
-        btnStart.setOnClickListener(v -> sendIntent("start", 0));
+        // "Iniciar" = o CONFIRMAR da tela de montagem: APLICA o 1º sacador escolhido
+        // e só então dispara a MESMA _casualStart() do celular. Antes, tocar num nome
+        // mandava o setServer na hora — mas no lobby o placar ainda não existe, o
+        // celular só guarda a escolha (_pendingServerPick) e o snapshot NÃO muda:
+        // resultado, tocar num nome não acendia nada na tela. Agora o toque só
+        // ACENDE (local) e o envio acontece aqui, na ordem certa.
+        btnStart.setOnClickListener(v -> {
+            int team = pendingPickTeam, idx = pendingPickIdx;
+            if (pendingPickName == null) { team = startCurTeam; idx = startCurIdx; }
+            if ((team == 1 || team == 2) && idx >= 0) sendSetServer(team, idx);
+            pendingPickName = null;
+            sendIntent("start", 0);
+        });
         // Barra do sacador abre o seletor (fase 0, antes de qualquer jogo).
         serveBar.setOnClickListener(v -> { serveOpen = true; renderServeOverlay(); });
         // Confirmar aplica a escolha (ou mantém a atual) e fecha.
@@ -200,6 +220,28 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         btnTieTiebreak.setOnClickListener(v -> sendResolveTie("tiebreak"));
 
         applyScale();
+        applyPreviewExtras();
+    }
+
+    /**
+     * FERRAMENTA DE VERIFICAÇÃO — só em build DEBUGGABLE. Renderiza um snapshot
+     * vindo por extra do Intent, pra conferir as telas no emulador sem precisar
+     * parear um celular de verdade. É o equivalente Wear do SP_MOCK do preview
+     * Apple (ios/WatchApp). Em RELEASE o extra é ignorado por completo — o relógio
+     * só desenha o que o celular manda, e ninguém injeta placar de fora.
+     *   adb shell am start -n app.scoreplace/app.scoreplace.wear.MainActivity \
+     *     --es sp_mock '{"active":true,...}' --ei sp_bpm 152
+     */
+    private void applyPreviewExtras() {
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) == 0) return;
+        android.content.Intent it = getIntent();
+        if (it == null) return;
+        String mock = it.getStringExtra("sp_mock");
+        if (mock != null) {
+            try { render(new JSONObject(mock)); } catch (Exception e) { /* json ruim: ignora */ }
+        }
+        int bpm = it.getIntExtra("sp_bpm", 0);
+        if (bpm > 0) { lastBpm = bpm; renderHeartRate(); }
     }
 
     // ── CÂNONE DE ESCALA POR ÁREA (equivalente Wear do GeometryReader do iOS —
@@ -452,12 +494,52 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         }
     }
 
-    /** Desenha o ♥ no bezel e o faz pulsar NO RITMO do próprio batimento. */
+    /**
+     * Cor da FAIXA DE QUEIMA (5 zonas por % da FCmáx), do azul ao vermelho — mesma
+     * régua e mesmas cores do Apple (ScoreState.hrZone + Color.spZone1..5).
+     * Devolve 0 quando não dá pra saber (perfil sem data de nascimento): aí não se
+     * pinta faixa nenhuma, porque zona chutada é pior que zona nenhuma.
+     */
+    private int hrZoneColor(int bpm) {
+        if (hrMax <= 0 || bpm <= 0) return 0;
+        float pct = (float) bpm / (float) hrMax;
+        if (pct < 0.60f) return getColor(R.color.hr_zone1);
+        if (pct < 0.70f) return getColor(R.color.hr_zone2);
+        if (pct < 0.80f) return getColor(R.color.hr_zone3);
+        if (pct < 0.90f) return getColor(R.color.hr_zone4);
+        return getColor(R.color.hr_zone5);
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (alpha << 24) | (color & 0x00FFFFFF);
+    }
+
+    /** Desenha o ♥ na cápsula do topo-centro e o faz pulsar NO RITMO do batimento. */
     private void renderHeartRate() {
-        if (hrArc == null) return;
-        if (lastBpm == null) { hrArc.setVisibility(View.GONE); hrArc.clearAnimation(); return; }
-        hrArc.setText("♥ " + lastBpm);
-        hrArc.setVisibility(View.VISIBLE);
+        if (hrPill == null) return;
+        if (lastBpm == null) { hrPill.setVisibility(View.GONE); hrPill.clearAnimation(); return; }
+        // ♥ 20% menor que o número (dono, 30/jul/2026: "coração ficou grande").
+        // No Apple são dois Text com tamanhos próprios; aqui é UM TextView, então a
+        // diferença vem de um span relativo só no glifo.
+        android.text.SpannableString hrTxt = new android.text.SpannableString("♥ " + lastBpm);
+        hrTxt.setSpan(new android.text.style.RelativeSizeSpan(0.8f), 0, 1,
+                      android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        hrPill.setText(hrTxt);
+        // Cápsula pintada com a cor da faixa; sem FCmáx, cápsula neutra + rosa.
+        int zc = hrZoneColor(lastBpm);
+        float d = getResources().getDisplayMetrics().density;
+        if (zc != 0) {
+            android.graphics.drawable.GradientDrawable pill = new android.graphics.drawable.GradientDrawable();
+            pill.setCornerRadius(999 * d);
+            pill.setColor(withAlpha(zc, 46));                                  // ~18% de fill
+            pill.setStroke(Math.max(1, (int) (1.2f * d * mScale)), withAlpha(zc, 217));
+            hrPill.setBackground(pill);
+            hrPill.setTextColor(zc);
+        } else {
+            hrPill.setBackground(null);
+            hrPill.setTextColor(getColor(R.color.hr_pink));
+        }
+        hrPill.setVisibility(View.VISIBLE);
         long half = Math.max(280, Math.min(900, Math.round(30000.0 / Math.max(lastBpm, 40))));
         android.view.animation.ScaleAnimation pulse = new android.view.animation.ScaleAnimation(
             1f, 1.18f, 1f, 1.18f,
@@ -467,7 +549,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         pulse.setRepeatMode(android.view.animation.Animation.REVERSE);
         pulse.setRepeatCount(android.view.animation.Animation.INFINITE);
         pulse.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
-        hrArc.startAnimation(pulse);
+        hrPill.startAnimation(pulse);
     }
 
     @Override
@@ -540,6 +622,9 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
 
     private void render(JSONObject s) {
         boolean active = s.optBoolean("active", false);
+        // FCmáx vem PRONTA do celular (220 − idade do perfil) — o relógio não tem
+        // acesso ao perfil e nunca deriva isso sozinho. 0 = sem faixa de queima.
+        hrMax = s.optInt("hrMax", 0);
         // ♥ só enquanto há partida AO VIVO — sensor ligado com o placar parado é
         // bateria queimada à toa. Espelha o start/stop do lado Apple.
         // Partida deixou de estar AO VIVO = fim do treino: fecha e manda pro celular.
@@ -619,6 +704,16 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             if (servePhase == 1) serveOpen = true;
             if (servePhase == -1) serveOpen = false;
             lastServePhase = servePhase;
+        }
+        // v1.6.88: o celular manda. `servePickOpen` é o mesmo _needsServePick() que
+        // desenha a Tela 1/2 lá — inclui a fase 0 (1º sacador), que a virada de fase
+        // acima não cobria na SEGUNDA partida (ela já nasce ativa, então a tela
+        // "Iniciar", que era quem perguntava, não aparece). Sem isto o 2º jogo
+        // começava sem ninguém escolher o saque.
+        boolean pickOpen = s.optBoolean("servePickOpen", false);
+        if (pickOpen != lastPickOpen) {
+            if (pickOpen) { serveOpen = true; pendingPickName = null; }
+            lastPickOpen = pickOpen;
         }
         // Barra do sacador no rodapé: só durante os 2 primeiros jogos.
         // A pílula "Sacador" saiu (dono, 25/jul/2026): "não tem 1 linha para sacador — a
@@ -780,11 +875,16 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     }
 
     // Nomes na tela Iniciar = ESCOLHA DO 1º SACADOR (espelha o startNameRow do
-    // Apple). Cada nome é tappável → sendSetServer(team,idx); o aceso (== serverName
-    // do snapshot) ganha box laranja + bola à esquerda, na cor FORTE do time (= nº
-    // 30-40 do placar). O motor decide se a escolha vale; o relógio só dispara.
+    // Apple). Tocar num nome só ACENDE (box na COR DO TIME + bolinha da MODALIDADE
+    // à esquerda); quem APLICA é o botão "Iniciar". A escolha aceso = pendingPick
+    // (local) ou, sem toque, o sacador que o celular já indica.
     private void buildStartPlayers(JSONObject teams, int leftTeam, int rightTeam, String serverName) {
         startPlayers.removeAllViews();
+        // Guarda o contexto pra redesenhar no toque, sem depender de snapshot novo.
+        startTeams = teams; startLeftTeam = leftTeam; startRightTeam = rightTeam;
+        startServerName = serverName == null ? "" : serverName;
+        startCurTeam = 0; startCurIdx = -1;
+        String selName = pendingPickName != null ? pendingPickName : startServerName;
         float d = getResources().getDisplayMetrics().density;
         int[] order = { leftTeam, rightTeam };
         for (int team : order) {
@@ -798,7 +898,10 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
                 final String n = pl.optString(i, "");
                 if (n.isEmpty()) continue;
                 final int fteam = team, fidx = i;
-                boolean isSel = !serverName.isEmpty() && n.equals(serverName);
+                boolean isSel = !selName.isEmpty() && n.equals(selName);
+                if (!startServerName.isEmpty() && n.equals(startServerName)) {
+                    startCurTeam = team; startCurIdx = i;   // slot que o Iniciar usa sem toque
+                }
 
                 LinearLayout row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
@@ -808,11 +911,12 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                 lp.topMargin = (int)(2*d);   // espaço menor entre nomes (ainda tappável)
                 row.setLayoutParams(lp);
-                // Box laranja só no aceso (fill transparente, borda laranja).
+                // Box só no aceso, na COR DO TIME (dono, 30/jul/2026) — o laranja é a
+                // bola da modalidade, não a moldura. Fill transparente.
                 if (isSel) {
                     android.graphics.drawable.GradientDrawable box = new android.graphics.drawable.GradientDrawable();
                     box.setCornerRadius(8*d);
-                    box.setStroke(Math.max(1, (int)(1.5f*d)), getColor(R.color.serve_sel_stroke));
+                    box.setStroke(Math.max(1, (int)(1.5f*d)), cName);
                     box.setColor(android.graphics.Color.TRANSPARENT);
                     row.setBackground(box);
                 }
@@ -835,7 +939,11 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
 
                 row.setClickable(true);
                 row.setFocusable(true);
-                row.setOnClickListener(v -> sendSetServer(fteam, fidx));
+                // Só ACENDE; o envio é no "Iniciar" (ver btnStart no onCreate).
+                row.setOnClickListener(v -> {
+                    pendingPickName = n; pendingPickTeam = fteam; pendingPickIdx = fidx;
+                    buildStartPlayers(startTeams, startLeftTeam, startRightTeam, startServerName);
+                });
                 startPlayers.addView(row);
                 if (mScale != 1f) scaleTree(row, mScale); // views dinâmicas nascem após o applyScale do onCreate
             }
@@ -873,9 +981,11 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             row.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             if (isSel) {
+                // Box na COR DO TIME (o laranja é a bola da modalidade, não a moldura).
                 android.graphics.drawable.GradientDrawable box = new android.graphics.drawable.GradientDrawable();
                 box.setCornerRadius(8*d);
-                box.setStroke(Math.max(1, (int)(1.5f*d)), getColor(R.color.serve_sel_stroke));
+                box.setStroke(Math.max(1, (int)(1.5f*d)),
+                              getColor(team == 1 ? R.color.team_blue : R.color.team_red));
                 box.setColor(android.graphics.Color.TRANSPARENT);
                 row.setBackground(box);
             }

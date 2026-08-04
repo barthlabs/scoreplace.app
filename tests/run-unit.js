@@ -60,6 +60,30 @@ const SUITES = [
   // Cânone da LISTA DE ESPERA no AMBIENTE DO SERVIDOR (CF). Falha se alguém devolver
   // as funções pro store.js (não vendorado) — o tardio voltaria a ficar preso na espera.
   'tests/waitlist-core-server.test.js',
+  // PORTA DE ENTRADA da espera: fase SORTEADA → lista de espera, nunca o roster. Roda o doc
+  // REAL do Confra (111 inscritos, 27 grupos, 83 jogos) pelo computeEnroll da CF e pelo
+  // _toggleLigaActive real. Falha se alguém deixar Liga com temporada aberta voltar a
+  // empurrar inscrito tardio pra participants — o inscrito fantasma de 02/ago/2026.
+  'tests/inscricao-pos-sorteio-vai-pra-espera.test.js',
+  // ORDEM do box "📋 Ficaram de fora desta rodada": Lista de espera LOGO ABAIXO dos
+  // Desativados, no seu box âmbar, DENTRO do <details>. Roda a IIFE real do bracket.js.
+  'tests/ficaram-de-fora-ordem.test.js',
+  // W.O. DO ORGANIZADOR: destino do ausente (desativados × fim da fila) + o PRIMEIRO da
+  // fila assume a vaga e entra no ELENCO (fica até o fim do torneio). Roda a IIFE real do
+  // liga-substitution.js contra o grupo real do Confra. Falha se o substituto voltar a
+  // entrar só no grupo (sumiria no sorteio da rodada seguinte).
+  'tests/wo-destino-e-suplente.test.js',
+  // O diálogo "Substituto" TEM que listar a lista de espera. Bug ao vivo (Confra, 02/ago):
+  // dizia "ninguém ficou de fora" com 2 pessoas na fila — lia 1 dos 3 storages e casava
+  // por NOME (que vem strippado). Falha se alguém voltar a ler a espera fora do _getWaitlist.
+  'tests/wo-fila-aparece-no-substituto.test.js',
+  // ESCOLHA 1×2 do destino do ausente + NOTIFICAÇÃO no fim do ciclo, disparadas pelo
+  // caminho REAL (wo-claim → _ligaPickFill). Falha se alguém mover a decisão de volta pra
+  // _ligaAbsentFlow (que nada chama) ou deixar o ciclo fechar em silêncio.
+  'tests/wo-destino-ciclo-notifica.test.js',
+  // Quem levou W.O. tem CAMINHO DE VOLTA (o toggle aparece pra quem está na fila) e a
+  // busca da chave acha quem está em Desativados / Lista de espera / W.O.
+  'tests/wo-volta-e-busca.test.js',
   // Toast de push em foreground: campos vêm de payload.data (contrato DATA-ONLY da CF).
   // Falha se alguém voltar a ler só payload.notification → toast 'scoreplace.app' vazio.
   'tests/fcm-foreground-toast.test.js',
@@ -107,14 +131,69 @@ const SUITES = [
   'tests/result-approval-gate.test.js',
   'tests/draw-schedule.test.js',
   'tests/wa-group-link.test.js',
+  // O grupo de WhatsApp é DO GRUPO. Reproduz o incidente do Confra (03/ago/2026):
+  // identidade lida por NOME (que o strip do save apaga) → chave de irmãos vazia →
+  // o link de UM grupo espelhado nos 81 jogos dos 27 grupos.
+  'tests/wa-group-por-grupo.test.js',
   'tests/elim-seed.test.js',
   'tests/elim-reirainha-opening.test.js',
   'tests/chave-label-default.test.js',
   'tests/letzplay-verdict-color.test.js',
+  'tests/letzplay-level-bar.test.js',
+  'tests/org-gender-label.test.js',
+  'tests/letzplay-game-cards.test.js',
+  'tests/letzplay-open-profile.test.js',
+  'tests/person-gender-not-misto.test.js',
+  'tests/rr-gender-balance.test.js',
+  'tests/auto-draw-balance-choice.test.js',
+  // O "equilibrado" só equilibra se o app SOUBER o gênero: 105 inscritos, gênero
+  // conhecido de 4 (o resto estava no PERFIL). Reproduz a falha do Confra e trava
+  // a hidratação perfil→inscrito — inclusive com o cache vazio, que é o servidor.
+  'tests/draw-gender-hydration.test.js',
+  'tests/lz-label-equals-bar.test.js',
+  'tests/ext-version-single-source.test.js',
+  'tests/lz-list-date.test.js',
+  'tests/lz-incremental-history.test.js',
+  'tests/lz-id-survives-rounds.test.js',
+  'tests/lz-batched-requests.test.js',
+  'tests/dialog-fits-screen.test.js',
+  'tests/lz-round-chaining.test.js',
+  'tests/lz-nunca-regride.test.js',
+  'tests/lz-agent-path.test.js',
+  'tests/lz-api-index.test.js',
+  'tests/lz-contagem-unica.test.js',
+  // O caso REAL da Kelly: leitura COMPLETA (160 de 160 ids) que ficava violeta. Duas causas:
+  // o veredito lia `li.tournaments` (campo que o normalize nunca devolve — a evidência mora
+  // no footprint) e a completude exigia contagem de PÁGINAS mesmo com o índice provando
+  // cobertura id por id. Falha se alguém voltar a ler competição fora do footprint.
+  'tests/kelly-verde.test.js',
+  // PLACAR AO VIVO EM RETRATO: uma paleta só (medida — 4,10:1 no gelo E no escuro), a
+  // placa dimensionada A PARTIR do número (o número não muda de tamanho quando ela
+  // encolhe) e a folga abaixo dela pra o conjunto subir. Falha se alguém reintroduzir
+  // cor de número solta ou fizer o retrato limitar o número pela altura.
+  'tests/live-score-retrato.test.js',
+  'tests/meu-card-no-topo.test.js',
+  'tests/jogo-so-com-placar.test.js',
+  'tests/apagar-torneio-nao-deixa-orfao.test.js',
+  'tests/torneio-abandonado.test.js',
+  // Tag "Misto" no card do torneio: obrigatório sempre; senão, só com 1:1 EXATA de
+  // gênero entre os inscritos. Trava o caso real do "Confra BT Alta da Clínica 2026"
+  // (8 inscritas, zero homens, e o card dizia "Misto").
+  'tests/misto-tag-so-com-1-1.test.js',
+  'tests/convite-data-multifase.test.js',
+  'tests/data-sem-ambiguidade.test.js',
+  'tests/rules-letzplayscans-whitelist.test.js',
+  'tests/lz-parcial-nao-e-oficial.test.js',
   'tests/letzplay-pace.test.js',
   'tests/letzplay-model.test.js',
   'tests/letzplay-eta.test.js',
   'tests/letzplay-scan-order.test.js',
+  // Leitura de perfil GRANDE do letzplay, ponta a ponta com o content.js REAL da extensão
+  // num Chromium contra um letzplay sintético. Trava o que quebrava no perfil da Camila
+  // (472 jogos): rodada time-boxed em 240s pra um trabalho de ~9 min, etapa dos jogos
+  // nunca alcançada, parciais regravando o histórico inteiro (24.656 escritas) e doc
+  // estourando 1MiB. Roda 5 cenários, inclusive "letzplay pediu pausa no meio".
+  'tests/letzplay-big-profile.test.js',
   'tests/phase0-elim.test.js',
   // Item 10: TODO slot do sorteio carrega uid EXPLÍCITO (team*Uids/p*Uid) — R1 inclusive.
   // Antes a R1 saía só com team1Obj (undefined uid). Roda o motor REAL (draw-core → storePhase).
@@ -350,7 +429,23 @@ const SUITES = [
   // nunca disparava). Chave = e-mail minúsculo / telefone E.164, igual ao que o reader lê.
   'tests/login-redirect-write.test.js',
   'tests/uid-sweep.test.js',
+  // "Não deveria gravar nada além do uid em torneios." O cliente já stripava no save,
+  // mas a CF não passa por lá e três construtores copiavam o perfil na mão — 2 entradas
+  // sujas medidas em produção, de uid com perfil VIVO. Cópia de perfil é um segundo
+  // lugar onde o dado da pessoa vive, fora do alcance do "apagar do perfil".
+  'tests/uid-entry-no-profile-copy.test.js',
   'tests/reset-phone-reachable.test.js',
+  // Apagar campo do perfil TEM que valer (relato da Ana Paula: a data de
+  // nascimento voltava). O payload "só com campos não-vazios" da v0.16.9
+  // protegia contra race mas tornava impossível apagar qualquer coisa — o
+  // baseline do formulário dá a diferença: apagado pela pessoa × não hidratado.
+  'tests/profile-erase-field.test.js',
+  // Ocultar e-mail/telefone é privacidade perante os OUTROS — mas quem oculta
+  // tem que ter nome de exibição, senão vira "Usuário" pra todo mundo (o guard
+  // v2.4.4 só pegava o nome que ERA o contato). Trava junto a fiação do
+  // "Vincular Google/Apple no mesmo uid", que é o que evita a conta duplicada
+  // do e-mail oculto da Apple (caso Fernando Cerri, 03/ago/2026).
+  'tests/omit-exige-display-name.test.js',
   'tests/delete-account-canon.test.js',
   'tests/dupla-detection-uid.test.js',
   'tests/draw-name-by-uid.test.js',
@@ -365,6 +460,10 @@ const SUITES = [
   'js/views/phase-brick4.test.js',
   'functions-autodraw/test-draw.js',
   'functions-autodraw/test-groupsby.js',
+  // SORTEIO AUTOMÁTICO MANDA E-MAIL (bug ao vivo 02/ago: sorteio do Confra criou as
+  // notificações in-app e ZERO e-mail — a CF só escrevia um dos dois canais que o
+  // cliente escreve). Trava a fila canônica, os opt-outs e a fiação dos 2 pontos.
+  'functions-autodraw/test-draw-email.js',
   // CF aplica o pacote de decisões do organizador ao elenco (sem-dupla, resto). v1.2.29.
   'functions-autodraw/test-draw-decisions.js',
   // PORTÃO da migração sorteio client→CF (item #2): pacote ≡ core puro para odd/incomplete/
@@ -378,12 +477,27 @@ const SUITES = [
   // Cenário do dono (SB Casais): dupla ausente na espera → marca presente → CF forma o
   // confronto (o bug era o CLIENTE nunca disparar a CF; o toggle in-place suprimia o gatilho).
   'functions-autodraw/test-late-present-fills-adefinir.js',
+  // v1.7: QUEM pode lançar placar passa a ser decidido no SERVIDOR (resultEntry por fase,
+  // lado do jogador por uid, fase da negociação). Antes existia só no navegador, com as
+  // rules liberando `matches` pro participante — regra sem autoridade nenhuma.
+  'functions-autodraw/test-result-core.js',
+  // Joga o torneio INTEIRO lançando só pelo servidor: 8 jogos (escada + 3º lugar), campeão,
+  // zero slot TBD. É o "jogar até o campeão" antes de mexer no caminho mais quente do app.
+  'functions-autodraw/test-result-playthrough.js',
   // Gate do DETALHE (#tournaments/:id) não pula ao marcar presença: _tournamentDetailSig é
   // determinística (sem updatedAt) → o eco do próprio write vê "igual". v1.3.96.
   'tests/tournament-detail-sig.test.js',
   // Inscritos (individual E duplas) usam GRID responsivo — várias colunas em tela larga, nunca
   // coluna única. Trava contra regressão (dono: "não pode regredir"). v1.3.101.
   'tests/inscritos-grid-canon.test.js',
+  // v1.7.2: a Análise enxerga a LISTA DE ESPERA (desde a 1.6.86 quem entra pós-sorteio sai
+  // de participants) e grava no storage dela por UID — o fallback posicional gravaria a
+  // categoria em outra pessoa, em silêncio.
+  'tests/analise-inclui-lista-de-espera.test.js',
+  // v1.7.3: grupo NOVO formado da lista de espera não fecha com mais de 1 HOMEM (regra do
+  // dono: evitar que atrasados formem um grupo mais forte). Vale no cliente E na CF — o
+  // _generateNextRound do servidor chama a mesma _tryFormMonarchWaitlistGroups.
+  'tests/grupo-espera-max-1-homem.test.js',
   // Botões CANCELAR do fluxo de sorteio são VERMELHOS (#dc2626), nunca transparentes. v1.3.103.
   'tests/draw-cancel-red-canon.test.js',
   // FANTASMA DE ARRASTE (bug ao vivo 26/jul): card de inscrito flutuando preso sobre a
@@ -400,11 +514,17 @@ const SUITES = [
   // Item 7: janelas do lembrete de torneio (7d/2d/0d) ESPELHAM o cliente; data-only BRT.
   // Se o servidor contar em UTC ou disparar em dia errado, sai fora. (Entrega = emulador.)
   'functions/test-reminder-core.js',
+  'functions/test-abandon-core.js',
   // Convite de co-organização/transferência → CF. TRAVA a regressão real (Sentry
   // SCOREPLACE-WEB-6R): o aceite MUDA adminUids, o que estourava a regra antiga e dava
   // permission-denied em TODO convidado com conta. Também trava a identidade SÓ-UID e a
   // escalada da transferência (terceiro assumindo organização alheia).
   'functions/test-cohost-core.js',
+  // Nome de exibição ÚNICO entre uids checado no SERVIDOR (registerPhonePassword).
+  // Trava o incidente de 02/ago/2026: segunda "Gabriela Ferreira" criada por
+  // celular+senha porque a regra só existia no cliente. Conflito = already-exists
+  // com e-mail mascarado — NUNCA auto-sufixo silencioso.
+  'functions/test-name-unique-core.js',
 ];
 
 let failed = [];

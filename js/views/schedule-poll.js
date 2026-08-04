@@ -165,11 +165,34 @@
   window._schIsCurrentRoundMatch = _schIsCurrentRoundMatch;
 
   // ─── uids dos jogadores do match (singles + duplas + monarch) ──────────────────
+  // IDENTIDADE = uid DO SLOT, nunca o nome. Isto já foi "procurar em t.participants
+  // quem se chama assim" e era um BUG SILENCIOSO E TOTAL: o save do torneio passa
+  // por `identity-core._stripUidEntryNames`, que REMOVE o nome de toda entrada cujo
+  // uid resolve — então em torneio real NENHUM nome resolve e a função devolvia []
+  // pra todo jogo. Medido no Confra (03/ago/2026): 111 entradas, 111 com uid, ZERO
+  // com nome → 81 jogos com uids=[] . Consequências que isso causou de verdade:
+  //   · _schGroupMatches viu os 27 grupos com a MESMA chave (vazia) e tratou os 81
+  //     jogos como irmãos → o link do grupo de WhatsApp da Raquel foi espelhado no
+  //     torneio inteiro (a Catia clicava em "Abrir grupo" e caía no grupo dela);
+  //   · _schTrySchedule exige uids.length >= 2 → o consenso da enquete NUNCA fechava;
+  //   · _notifyOthers/_schNotifyScheduled não avisavam ninguém.
+  // O dado certo sempre esteve gravado: team1Uids/team2Uids (81 de 81 no Confra).
+  // Ver [[project_uid_identity_canon_locked]] e [[project_match_slot_uid_identity]].
   function _schMatchUids(t, m) {
     if (!t || !m) return [];
+    var out = {};
+    var slot = (typeof window._slotUids === 'function') ? window._slotUids : null;
+    if (slot) {
+      slot(m, 'p1').forEach(function (u) { if (u) out[u] = 1; });
+      slot(m, 'p2').forEach(function (u) { if (u) out[u] = 1; });
+    }
+    if (Object.keys(out).length) return Object.keys(out);
+    // Fallback por NOME — só pra doc legado que ainda guarda nome na entrada (o
+    // strip é do save; docs anteriores a ele existem). Jogador fictício não tem uid
+    // e continua fora, que é o certo: quem não tem conta não é notificado nem vira
+    // chave de grupo.
     var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
     var allUids = (typeof window._participantUids === 'function') ? window._participantUids : function (p) { return p && p.uid ? [p.uid] : []; };
-    var out = {};
     function addByName(nm) {
       if (!nm || nm === 'TBD' || nm === 'BYE') return;
       var pp = parts.find(function (p) { return typeof p === 'object' && (p.displayName || p.name || '') === nm; });
@@ -366,15 +389,61 @@
   // espelha scheduledAt nos 3 jogos (consumidores downstream leem por match).
   var _schGroupMode = null; // = id do m0 quando o overlay está em modo grupo
 
+  // Índice do grupo — MESMA leitura do phases-engine (groupIdx, com monarchGroup
+  // como o nome histórico do bracket-logic). É o que o motor GRAVA no jogo.
+  function _schGroupIdx(m) {
+    if (!m) return null;
+    if (m.groupIdx != null) return m.groupIdx;
+    if (m.monarchGroup != null) return m.monarchGroup;
+    return null;
+  }
+
+  // Quem são os IRMÃOS de grupo do m0 (os outros jogos das mesmas 4 pessoas).
+  //
+  // A resposta vem da ÂNCORA ESTRUTURAL que o motor grava — fase + rodada + índice
+  // do grupo — e NÃO de uma chave derivada dos jogadores. Derivar era o desenho
+  // anterior e ele falhou catastroficamente: com o nome removido das entradas pelo
+  // strip do save, a chave saía VAZIA pra todo mundo, os 27 grupos do Confra viraram
+  // "um grupo só" e o link de WhatsApp de um grupo foi espelhado nos 81 jogos.
+  // Chave derivada de dado que pode faltar não é identidade — o índice do grupo é.
   function _schGroupMatches(t, m0) {
     if (!m0) return [];
-    var key = _schMatchUids(t, m0).slice().sort().join(',');
-    var round = m0.round;
     var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
-    var sibs = (all || []).filter(function (m) {
+    all = all || [];
+    var round = m0.round;
+    var gi = _schGroupIdx(m0);
+    var ph = (m0.phaseIndex != null) ? m0.phaseIndex : null;
+    if (gi != null) {
+      var sibs = all.filter(function (m) {
+        if (!m || !m.isMonarch || m.round !== round) return false;
+        if (_schGroupIdx(m) !== gi) return false;
+        return ((m.phaseIndex != null) ? m.phaseIndex : null) === ph;
+      });
+      if (sibs.length) return _sane(sibs, m0);
+    }
+    // Legado sem índice de grupo no jogo: cai na chave de uids. Aqui a regra dura —
+    // CHAVE VAZIA NUNCA AGRUPA. Sem saber quem joga, o grupo é só o próprio jogo;
+    // é melhor perder o espelho (o outro card mostra "Criar grupo") do que espalhar
+    // o link/horário de um grupo pelo torneio inteiro.
+    var key = _schMatchUids(t, m0).slice().sort().join(',');
+    if (!key) return [m0];
+    var byKey = all.filter(function (m) {
       return m && m.isMonarch && m.round === round && _schMatchUids(t, m).slice().sort().join(',') === key;
     });
-    return sibs.length ? sibs : [m0];
+    return byKey.length ? _sane(byKey, m0) : [m0];
+  }
+
+  // TRAVA DE SANIDADE — última linha de defesa dos dois espelhos (link do WhatsApp
+  // e horário combinado). `_buildMonarchGroup` é a FONTE ÚNICA que cria grupo
+  // Rei/Rainha e ela sempre produz 4 jogadores → 3 jogos (AB×CD, AC×BD, AD×BC).
+  // Um "grupo" com mais que isso é bug de agrupamento, não um grupo grande — e o
+  // preço do bug é escrever o dado de um grupo em cima dos outros (foi o que
+  // aconteceu no Confra: 81 jogos com o mesmo link). Na dúvida, não espalha.
+  var MONARCH_GROUP_MAX = 3;
+  function _sane(sibs, m0) {
+    if (sibs.length <= MONARCH_GROUP_MAX) return sibs;
+    try { console.error('[schedule-poll] agrupamento suspeito:', sibs.length, 'jogos pro grupo de', m0 && m0.id, '— espelho cancelado'); } catch (e) {}
+    return [m0];
   }
   // Exposto pro wa-group.js — no Rei/Rainha o grupo do WhatsApp é ÚNICO por
   // grupo (3 jogos, mesmas 4 pessoas), então ele espelha pelos irmãos igual ao

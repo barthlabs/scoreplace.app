@@ -1117,6 +1117,7 @@ window._translations['pt'] = {
   'tourn.inviteCoHostDesc': 'Você foi convidado(a) para co-organizar este torneio.',
   'tourn.ligaStart': 'Início da Temporada',
   'tourn.nextDraw': 'Próximo sorteio',
+  'tourn.roundEnd': 'Fim da rodada',
   'tourn.seasonEnd': 'Fim da temporada',
   'tourn.teamEnrolled': 'Equipe Inscrita',
   'tourn.teamDrawn': 'Equipe Sorteada',

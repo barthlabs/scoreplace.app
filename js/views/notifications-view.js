@@ -44,6 +44,43 @@ function renderNotifications(container) {
       important:   { emoji: '🟠', color: '#f59e0b', label: 'Importante' },
       all:         { emoji: '🟢', color: '#10b981', label: 'Geral' }
     };
+    // v1.6.9: o convite de co-organização/transferência é ACIONÁVEL enquanto o convite
+    // ESTIVER PENDENTE no torneio — não enquanto a notificação estiver "não lida".
+    // Antes os botões Aceitar/Recusar eram gateados só por `isUnread` E o clique marcava
+    // a notificação como lida NA HORA, antes de saber se o aceite tinha gravado. Um
+    // aceite que falhava (era o caso de TODO convidado com conta antes da 1.6.1 —
+    // permission-denied) queimava o convite: a notificação virava "lida", os botões
+    // desapareciam e a pessoa não tinha mais como responder. Caso real: Raquel Unger
+    // (Confra BT) clicou Aceitar 2× (30/mai e 29/jul), o organizador recebeu
+    // "aceitou ser co-organizador" nas duas, e o card seguiu "Pendente de aceite".
+    // Agora a verdade é o doc do torneio: se ainda há convite pendente pra MIM, os
+    // botões estão lá — independente de leitura. Quem marca lida é o SUCESSO
+    // (_markInviteNotifsRead no aceite/recusa aplicados). Ver [[project_cohost_invite_cf_uid_only]].
+    function _findTourn(tId) {
+      if (!tId || !window.AppStore || !Array.isArray(window.AppStore.tournaments)) return null;
+      return window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); }) || null;
+    }
+    // Convite AINDA pendente PRA MIM (identidade = uid, sempre). Torneio não carregado
+    // localmente → devolve null ("não sei"), e aí vale o comportamento antigo (isUnread).
+    function _invitePendingForMe(tId, invType) {
+      var t = _findTourn(tId);
+      if (!t) return null;
+      var myUid = cu && cu.uid;
+      if (!myUid) return false;
+      if (invType === 'transfer') {
+        return !!(t.pendingTransfer && t.pendingTransfer.targetUid === myUid);
+      }
+      return !!(Array.isArray(t.coHosts) && t.coHosts.some(function (ch) {
+        return ch && ch.status === 'pending' && ch.uid && ch.uid === myUid;
+      }));
+    }
+    // Convite que EU enviei e ainda está pendente (botão Cancelar do organizador).
+    function _sentInviteStillPending(tId, invType) {
+      var t = _findTourn(tId);
+      if (!t) return null;
+      if (invType === 'transfer') return !!t.pendingTransfer;
+      return !!(Array.isArray(t.coHosts) && t.coHosts.some(function (ch) { return ch && ch.status === 'pending'; }));
+    }
     function _renderNotifCard(n) {
       var isUnread = !n.read;
       // Use centralized notification catalog for icon + IMPORTANCE (level) color.
@@ -60,13 +97,19 @@ function renderNotifications(container) {
       var safeFromUid = (n.fromUid || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
       var safeNotifId = (n._id || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
       var safeTournamentId = (n.tournamentId || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
-      if ((n.type === 'host_transfer_invite' || n.type === 'cohost_invite') && isUnread) {
+      var _isInvite = (n.type === 'host_transfer_invite' || n.type === 'cohost_invite');
+      var _isSent = (n.type === 'host_transfer_sent' || n.type === 'cohost_invite_sent');
+      var _pend = _isInvite ? _invitePendingForMe(n.tournamentId, n.type === 'host_transfer_invite' ? 'transfer' : 'cohost') : null;
+      var _sentPend = _isSent ? _sentInviteStillPending(n.tournamentId, n.inviteType || 'cohost') : null;
+      if (_isInvite && (_pend === true || (_pend === null && isUnread))) {
         var _invType = n.type === 'host_transfer_invite' ? 'transfer' : 'cohost';
+        // Sem _markNotifRead no clique: quem marca lida é o aceite/recusa APLICADO
+        // (_markInviteNotifsRead). Se a gravação falhar, o convite continua respondível.
         actionHtml = '<div style="display: flex; gap: 6px; margin-top: 8px;">' +
-          '<button class="btn btn-sm" style="background: transparent; color: var(--danger-color); border: 1px solid var(--danger-color); padding: 4px 14px; font-size: 0.75rem;" onclick="event.stopPropagation(); window._rejectHostInvite(\'' + safeTournamentId + '\',\'' + _invType + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.reject') + '</button>' +
-          '<button class="btn btn-sm" style="background: var(--success-color); color: #fff; border: none; padding: 4px 14px; font-size: 0.75rem; font-weight: 600;" onclick="event.stopPropagation(); window._acceptHostInvite(\'' + safeTournamentId + '\',\'' + _invType + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.accept') + '</button>' +
+          '<button class="btn btn-sm" style="background: transparent; color: var(--danger-color); border: 1px solid var(--danger-color); padding: 4px 14px; font-size: 0.75rem;" onclick="event.stopPropagation(); window._rejectHostInvite(\'' + safeTournamentId + '\',\'' + _invType + '\')">' + _t('notif.reject') + '</button>' +
+          '<button class="btn btn-sm" style="background: var(--success-color); color: #fff; border: none; padding: 4px 14px; font-size: 0.75rem; font-weight: 600;" onclick="event.stopPropagation(); window._acceptHostInvite(\'' + safeTournamentId + '\',\'' + _invType + '\')">' + _t('notif.accept') + '</button>' +
         '</div>';
-      } else if ((n.type === 'host_transfer_sent' || n.type === 'cohost_invite_sent') && isUnread) {
+      } else if (_isSent && (_sentPend === true || (_sentPend === null && isUnread))) {
         var _cancelType = n.inviteType || 'cohost';
         actionHtml = '<div style="display: flex; gap: 6px; margin-top: 8px;">' +
           '<button class="btn btn-sm" style="background: transparent; color: var(--danger-color); border: 1px solid var(--danger-color); padding: 4px 14px; font-size: 0.75rem;" onclick="event.stopPropagation(); window._cancelHostInvite(\'' + safeTournamentId + '\',\'' + _cancelType + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.cancelInvite') + '</button>' +
