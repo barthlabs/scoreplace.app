@@ -7649,7 +7649,9 @@ function setupProfileModal() {
               ? '<button type="button" id="profile-name-merge-btn" class="btn btn-warning btn-sm" style="margin-top:8px;" ' +
                   'onclick="window._profileRequestNameMerge()">Unir contas — receber confirmação por e-mail</button>'
               : '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.85;margin-top:8px;">' +
-                  'Pra unir, a outra conta precisa ter um e-mail cadastrado. Entre nela e adicione um e-mail no perfil.</div>') +
+                  'A confirmação é enviada por e-mail, e a outra conta ainda não tem um cadastrado. ' +
+                  'Entre nela' + (d.maskedPhone ? ' pelo celular ' + window._safeHtml(d.maskedPhone) : '') +
+                  ', adicione um e-mail no perfil e volte aqui — aí o botão aparece.</div>') +
             '<div id="profile-name-merge-msg" style="display:none;margin-top:8px;font-size:0.78rem;"></div>' +
           '</div>';
       }).catch(function (e) {
