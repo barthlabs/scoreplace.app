@@ -136,6 +136,58 @@ ok('index.js: autoMergeOnProfileUpdate AGUARDA a decisão (await)',
 ok('index.js: a réplica local da regra saiu (sem _profileScore duplicado)',
   !/function _profileScore/.test(src));
 
+// ── TRANSFERÊNCIA DO PROVEDOR FEDERADO (o outro lado do "nada se perde") ─────
+// A regra "federada sempre vence" nasceu da ideia de que o provedor morre com a conta.
+// Não morre: updateUser aceita `providerToLink` com o "sub" do provedor (providerData[].uid),
+// lido antes do deleteUser. O que sobra do limite antigo é 1 instância por providerId.
+(() => {
+  const P = M.planProviderTransfer;
+  // Caso Silvia (medido): keep é password+e-mail, drop tem apple.com → Apple viaja.
+  const r1 = P([{ providerId: 'password', uid: 'x' }], [{ providerId: 'apple.com', uid: 'sub-apple' }]);
+  ok('Apple do drop é transferido pro sobrevivente que não tem federado',
+    r1.length === 1 && r1[0].providerId === 'apple.com' && r1[0].uid === 'sub-apple');
+  ok('leva SÓ providerId+uid (passar email pode colidir e derrubar o link)',
+    Object.keys(r1[0]).sort().join(',') === 'providerId,uid');
+
+  // Caso Nelson/Eduardo (medido): os DOIS lados são google.com → não dá pra linkar.
+  const r2 = P([{ providerId: 'google.com', uid: 'g1' }], [{ providerId: 'google.com', uid: 'g2' }]);
+  ok('2 contas do MESMO provedor: nada a transferir (1 instância por providerId)', r2.length === 0);
+
+  // Google + Apple no mesmo uid é suportado (existe em produção: Patrícia, Gersom).
+  const r3 = P([{ providerId: 'google.com', uid: 'g1' }], [{ providerId: 'apple.com', uid: 'a1' }]);
+  ok('google.com + apple.com convivem no mesmo uid → Apple viaja', r3.length === 1);
+
+  // phone/password NÃO entram: quem move essas credenciais é o updateUser (email/phoneNumber).
+  const r4 = P([], [{ providerId: 'phone', uid: 'p1' }, { providerId: 'password', uid: 'pw' }]);
+  ok('phone/password ficam de fora (o Auth já os move por outro caminho)', r4.length === 0);
+
+  // Conta mista: leva só o que falta.
+  const r5 = P([{ providerId: 'google.com', uid: 'g' }],
+               [{ providerId: 'google.com', uid: 'g2' }, { providerId: 'apple.com', uid: 'a' }, { providerId: 'phone', uid: 'p' }]);
+  ok('conta mista: transfere só o federado que o keep ainda não tem',
+    r5.length === 1 && r5[0].providerId === 'apple.com');
+
+  // Entrada suja não derruba.
+  ok('providerData ausente não quebra', P(null, null).length === 0);
+  ok('entrada sem uid do provedor é ignorada (sem sub não dá pra linkar)',
+    P([], [{ providerId: 'google.com' }]).length === 0);
+  ok('não duplica o mesmo providerId vindo repetido do drop',
+    P([], [{ providerId: 'google.com', uid: 'a' }, { providerId: 'google.com', uid: 'b' }]).length === 1);
+})();
+
+// ── Fiação da transferência no index.js ─────────────────────────────────────
+(() => {
+  const bloco = src.slice(src.indexOf('async function _mergeAccountsKeepOlder'), src.indexOf('async function _scanAndMergeByField'));
+  ok('index.js: planeja a transferência ANTES do deleteUser (o sub some depois)',
+    bloco.indexOf('planProviderTransfer') < bloco.indexOf('deleteUser(dropU.uid)'));
+  ok('index.js: LINKA depois do deleteUser (o provedor precisa estar livre)',
+    bloco.indexOf('providerToLink') > bloco.indexOf('deleteUser(dropU.uid)'));
+  ok('index.js: um updateUser por provedor (a API aceita um providerToLink por chamada)',
+    /for \(const _p of _fedToLink\)/.test(bloco));
+  ok('index.js: falha ao linkar NÃO desfaz a fusão (best-effort com catch)',
+    /providerToLink\(\$\{_p\.providerId\}\) falhou/.test(bloco));
+})();
+
 console.log(fail === 0
   ? '✅ test-merge-winner: ' + pass + ' ok, 0 falharam'
   : '❌ test-merge-winner: ' + fail + ' falharam, ' + pass + ' ok');

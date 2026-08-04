@@ -401,6 +401,11 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   // Credenciais do drop a mover pro keep (antes de apagar o drop).
   const dropEmail = (dropU.email && !_isSyntheticAuthEmail(dropU.email)) ? dropU.email : null;
   const dropPhone = dropU.phoneNumber || null;
+  // v1.7.11 — o provedor FEDERADO também viaja. Tem que ser lido AQUI: o "sub" do provedor
+  // (providerData[i].uid) só existe enquanto a conta existe, e depois do deleteUser não há
+  // de onde tirá-lo. Ver planProviderTransfer: o que o keep já tem não entra (1 instância
+  // por providerId) — nesse caso aquele login morre e quem cobre é loginRedirects.
+  const _fedToLink = _mergeRules.planProviderTransfer(keepU.providerData, dropU.providerData);
 
   // 1) Move TODOS os dados (torneios, matchHistory, casuais) + tombstone do dropDoc.
   if (keepDoc.exists && dropDoc.exists) {
@@ -422,6 +427,19 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   if (Object.keys(upd).length) {
     try { await admin.auth().updateUser(keepU.uid, upd); }
     catch (e) { console.error("[mergeKeepOlder] updateUser(keep) falhou:", e.code || e.message); }
+  }
+  // 3b) Leva o provedor FEDERADO do drop pro keep — "Entrar com Google/Apple" continua
+  // funcionando depois da fusão. Só agora: o provedor tem que estar LIVRE (a conta dona
+  // foi apagada no passo 2), senão o Auth recusa. Um updateUser por provedor (a API aceita
+  // um providerToLink por chamada). Best-effort: falhar aqui não desfaz a fusão — o
+  // loginRedirects, gravado no _executeMerge, continua sendo a rede.
+  for (const _p of _fedToLink) {
+    try {
+      await admin.auth().updateUser(keepU.uid, { providerToLink: _p });
+      console.log(`[mergeKeepOlder] provedor ${_p.providerId} transferido pro keep=${keepU.uid}`);
+    } catch (e) {
+      console.error(`[mergeKeepOlder] providerToLink(${_p.providerId}) falhou:`, e.code || e.message);
+    }
   }
   // 4) Reflete os identificadores ganhos no perfil Firestore do keep.
   const profUpd = { updatedAt: new Date().toISOString() };

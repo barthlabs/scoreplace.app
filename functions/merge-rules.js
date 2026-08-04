@@ -130,7 +130,41 @@ function pickSurvivorProfiles(a, b) {
   };
 }
 
+/**
+ * Quais provedores FEDERADOS do drop dá pra levar pro sobrevivente antes de apagá-lo.
+ *
+ * O Admin SDK move e-mail e telefone (updateUser), mas por muito tempo o provedor federado
+ * era tratado como intransferível — é daí que vem a regra "a federada sempre vence": apagar
+ * a conta Google apagava o login que a pessoa usa. Só que `updateUser` aceita
+ * `providerToLink`, então o federado PODE ser transferido: basta o `uid` do provedor (o
+ * "sub", que vem em providerData[i].uid) lido ANTES do deleteUser.
+ *
+ * LIMITE REAL, e é o que sobra da regra antiga: uma conta tem no máximo UMA instância por
+ * providerId. Se o sobrevivente já tem google.com, o google.com do drop não entra — nesse
+ * caso aquele login morre mesmo, e quem cobre é `loginRedirects` (entrar por ele cai no
+ * sobrevivente). Foi o caso medido na base: as duplicatas de homônimo eram 2 contas Google.
+ *
+ * @param keepProviders/dropProviders — providerData (Admin SDK) de cada conta
+ * @returns [{ providerId, uid }] — só o que o Auth aceita linkar, sem duplicar providerId
+ */
+function planProviderTransfer(keepProviders, dropProviders) {
+  const jaTem = new Set(
+    (keepProviders || []).map((p) => p && p.providerId).filter(Boolean)
+  );
+  const out = [];
+  (dropProviders || []).forEach((p) => {
+    if (!p || !p.providerId || !p.uid) return;
+    if (!FEDERATED.test(p.providerId)) return; // phone/password o updateUser já move
+    if (jaTem.has(p.providerId)) return;       // 1 instância por provedor — este login morre
+    if (out.some((x) => x.providerId === p.providerId)) return;
+    // Só providerId + uid: passar email aqui pode colidir com outra conta e derrubar o link.
+    out.push({ providerId: p.providerId, uid: p.uid });
+  });
+  return out;
+}
+
 module.exports = {
   FEDERATED, isFederated, isFederatedProfile, pickSurvivor,
   profileScore, accountAgeMs, isFederatedAccount, pickSurvivorProfiles,
+  planProviderTransfer,
 };
