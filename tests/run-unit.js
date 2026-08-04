@@ -286,6 +286,7 @@ const SUITES = [
   // ao vivo (_tbLoserGames) — antes só dizia "tiebreak 7pts". v1.4.7.
   'tests/config-summary-tiebreak-at.test.js',
   'tests/wo-slot-uid-identity.test.js',
+  'tests/wo-claim-uid-por-estrutura.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
   'tests/swiss-to-elim-transition.test.js',
