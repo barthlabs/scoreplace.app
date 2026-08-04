@@ -459,11 +459,13 @@ function renderBracket(container, tournamentId, isInline) {
   // não de cada um dos 7 render sites (Liga/Grupos/Elim/Dupla Elim/Suíço/fase/inline),
   // porque headerHtml é o único ponto por onde TODOS passam — um lugar só, sem drift
   // (feedback_sweep_all_render_sites). Só com chave sorteada: sem jogo não há o que buscar.
-  // ⚠️ NÃO gatear por isInline (v1.4.18): a tela onde mais se procura alguém é justamente a
-  // INLINE (#tournaments/<id>, o chaveamento dentro da página do torneio) — foi lá que o dono
-  // foi olhar e não achou. O `isInline` existe pra não DUPLICAR os botões de ação que a página
-  // já tem; a busca não é duplicada por ninguém.
-  if (hasContent && typeof window._bracketBar === 'function') {
+  // ⚠️ A busca TEM que existir também na tela INLINE (#tournaments/<id>) — é onde mais se
+  // procura alguém (v1.4.18). Ela existe: quem a emite lá é o `renderTournaments`, logo acima
+  // do #inline-bracket-container (mesma posição visual de sempre, mesma barra canônica). Ela
+  // NÃO pode nascer aqui no modo inline porque este HTML aterrissa DENTRO do container do
+  // chaveamento, e `position:sticky` morre junto com o pai: a barra descolava do cabeçalho
+  // antes do fim da página (v1.7.10). Emitir nos dois lugares duplicaria o input.
+  if (!isInline && hasContent && typeof window._bracketBar === 'function') {
     headerHtml += window._bracketBar(true);
   }
 
@@ -4683,6 +4685,28 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           }
           _remainder = [];
         }
+        // v1.7.10 — NOME CLICÁVEL + 💬 nos chips de quem ficou de fora (Desativados,
+        // Lista de espera, W.O., Sem grupo), exatamente como na classificação do grupo.
+        // Regra do dono: só o ORGANIZADOR/co-org abre a ficha; o balão de contato tem o
+        // gate na própria fonte única (`_contactPersonIconHtml` já recusa quem não é
+        // autoridade nem está no mesmo grupo) — nada de segunda cópia da decisão aqui.
+        // Identidade é o UID SEMPRE; o nome é só rótulo ([[project_uid_identity_canon_locked]]).
+        // Quem não é autoridade mantém o clique que já existia (estatísticas globais).
+        var _outIsAdmin = !!(typeof window._isUserOrgOrCoHost === 'function' &&
+          window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser));
+        var _outEsc = function (s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+        var _outTidJs = _outEsc(t.id);
+        // Miolo do chip: nome (com ficha pra autoridade) + o 💬 do contato direto.
+        var _outPersonHtml = function (nm, uid) {
+          var _nmH = window._safeHtml(nm);
+          var _nameHtml = (_outIsAdmin && uid && typeof window._openPlayerProfile === 'function')
+            ? ('<span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;"' +
+               ' onclick="event.stopPropagation();window._openPlayerProfile(\'' + _outEsc(nm) + '\',{uid:\'' + _outEsc(uid) +
+               '\',tournamentId:\'' + _outTidJs + '\'})" title="Ver ficha de ' + _nmH + '">' + _nmH + '</span>')
+            : _nmH;
+          return _nameHtml + (typeof window._contactPersonIconHtml === 'function'
+            ? window._contactPersonIconHtml(t, uid, nm, { sameGroup: false }) : '');
+        };
         // v0.16.97: cada pill mostra os pontos atribuídos. Inativos sempre
         // 0 pts (regra explícita do usuário: "deve fazer zero pontos na
         // rodada que estiver desativado"). Remainder recebe sua média até
@@ -4713,8 +4737,15 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // escondia o box inteiro e não sobrava nada na tela.
             // `data-my-match="1"` de propósito: o toggle "Só meus jogos" filtra JOGOS; quem
             // está de fora não tem jogo e não pode sumir por causa dele.
-            var _nmPill = window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)));
-            return '<span data-players="' + window._safeHtml(_nmPill) + '" data-my-match="1" style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;" onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/\'/g, "\\'")) + '\',\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')">' + window._safeHtml(_nmPill) + _ptsLbl + _meBadge + '</span>';
+            var _slotU = (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids));
+            var _nmPill = window._resolveSideLive(t, m.p1, _slotU);
+            // v1.7.10: o UID do slot é a identidade do chip (ficha e 💬 saem daqui).
+            var _uidPill = (Array.isArray(_slotU) ? _slotU[0] : _slotU) || m.p1Uid || '';
+            // Autoridade clica no NOME (ficha); os demais mantêm o clique antigo no chip
+            // inteiro (estatísticas globais) — nada regride pra quem não é organizador.
+            var _pillClick = _outIsAdmin ? '' :
+              (' onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + _outEsc(m.p1) + '\',\'' + _outTidJs + '\')"');
+            return '<span data-players="' + window._safeHtml(_nmPill) + '" data-my-match="1" style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;"' + _pillClick + '>' + _outPersonHtml(_nmPill, _uidPill) + _ptsLbl + _meBadge + '</span>';
           }).join('');
           // v4.x: cabeçalho DENTRO do box colorido (igual à Lista de espera) — o título
           // "Desativados (N) — …" fica no mesmo box vermelho dos chips, não solto acima.
@@ -4736,9 +4767,15 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var _waitBoxHtml = '';
         if (_isReiRainhaRound) {
           var _wlNames = [];
+          // v1.7.10: guarda o UID de cada pessoa da fila junto do nome — é ele que abre a
+          // ficha e o 💬 (o nome aqui é só rótulo; nome não é identidade).
+          var _wlUidByName = {};
           (typeof window._getWaitlist === 'function' ? window._getWaitlist(t) : []).forEach(function(e){
             var n = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim();
-            if (n && n.indexOf(' / ') === -1 && _wlNames.indexOf(n) === -1) _wlNames.push(n);
+            if (n && n.indexOf(' / ') === -1 && _wlNames.indexOf(n) === -1) {
+              _wlNames.push(n);
+              _wlUidByName[n] = (e && (e.uid || e.p1Uid)) || '';
+            }
           });
           if (_wlNames.length) {
             var _wPills = _wlNames.map(function(n){
@@ -4748,7 +4785,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               var _co = _isMe ? '#22d3ee' : '#fbbf24';
               var _me = _isMe ? '<span style="font-size:0.6rem;font-weight:800;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
               // v1.6.93: idem — a busca tem que achar quem está na lista de espera.
-              return '<span data-players="' + window._safeHtml(n) + '" data-my-match="1" style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + window._safeHtml(n) + _me + '</span>';
+              // v1.7.10: mesmo miolo dos demais chips — ficha (autoridade) + 💬 de contato.
+              return '<span data-players="' + window._safeHtml(n) + '" data-my-match="1" style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + _outPersonHtml(n, _wlUidByName[n] || '') + _me + '</span>';
             }).join('');
             var _sameDayRR = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
             var _eligRR = _wlNames.length;

@@ -4115,8 +4115,18 @@ function renderTournaments(container, tournamentId = null) {
          <h3 style="margin-bottom: 1.5rem; font-size: 1.3rem; color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; display: flex; align-items: center; gap: 8px;">
             🎲 Chaveamento do Torneio
          </h3>
-         <div id="inline-bracket-container"></div>
       </div>
+      ${/* v1.7.10 — A BUSCA FICA ONDE SEMPRE ESTEVE (topo do chaveamento), mas passa a ser
+            IRMÃ DIRETA do #view-container em vez de 1º filho do #inline-bracket-container.
+            Motivo medido (390px, print do dono): `position:sticky` só gruda ENQUANTO O PAI
+            está na viewport — com o pai terminando antes do fim da página, a barra DESCOLAVA
+            do cabeçalho e subia junto com o conteúdo (medido: topo em -187px, ~358px antes
+            do fim). Com o #view-container como pai, ela trava embaixo do cabeçalho enquanto
+            houver página, e volta ao lugar quando o scroll volta — o mesmo comportamento das
+            outras telas. Mesma barra canônica (window._bracketBar), mesma posição visual.
+            Quem emite aqui é esta tela; o renderBracket inline não emite (senão duplicaria). */''}
+      ${typeof window._bracketBar === 'function' ? window._bracketBar(true) : ''}
+      <div id="inline-bracket-container"></div>
     ` : ''}
 
     ${tournamentId ? `<div id="activity-log-section"></div>` : ''}
