@@ -200,6 +200,69 @@ const P = (uid, extra) => Object.assign({ uid: uid, addedAt: '2026-08-01T21:34:3
   ok(h.filter(e => e.message === 'linha antiga').length === 1, 'histórico unido por (date+message): sem duplicata');
 }
 
+// ══ TRANSAÇÃO (commitTournamentTx) — o caminho por onde passam W.O. e substituição ══
+function mkTx(doc) {
+  let gravado = null;
+  DB.db = {
+    runTransaction: async (fn) => fn({
+      get: async () => ({ exists: true, data: () => JSON.parse(JSON.stringify(doc)) }),
+      set: (_ref, d) => { gravado = d; }
+    }),
+    collection: () => ({ doc: () => ({}) })
+  };
+  return () => gravado;
+}
+
+// ── (12) W.O.: tira do ELENCO e põe na FILA — NÃO pode ser desfeito ───────────
+// A primeira versão do guard exigia permanência no elenco e teria quebrado o W.O.
+// com o torneio já sorteado. O invariante certo é "não sumir das DUAS listas".
+{
+  const doc = { id: 'T1', participants: [P('u-ana'), P('u-gersom')], standbyParticipants: [] };
+  const ler = mkTx(doc);
+  await DB.mutateTournament('T1', (d) => {
+    d.participants = d.participants.filter(p => p.uid !== 'u-gersom');
+    d.standbyParticipants.push(P('u-gersom'));           // W.O. → fim da fila
+  });
+  const w = ler();
+  ok(!(w.participants || []).some(p => p.uid === 'u-gersom'), 'W.O. TIRA do elenco (guard não desfaz)');
+  ok((w.standbyParticipants || []).some(p => p.uid === 'u-gersom'), 'e a pessoa está na fila');
+}
+
+// ── (13) PROMOÇÃO: da fila pro elenco — também não pode ser desfeita ──────────
+{
+  const doc = { id: 'T1', participants: [P('u-ana')], standbyParticipants: [P('u-gersom')] };
+  const ler = mkTx(doc);
+  await DB.mutateTournament('T1', (d) => {
+    d.standbyParticipants = [];
+    d.participants.push(P('u-gersom'));
+  });
+  const w = ler();
+  ok((w.participants || []).some(p => p.uid === 'u-gersom'), 'promoção põe no elenco');
+  ok((w.standbyParticipants || []).length === 0, 'e esvazia a fila (guard não desfaz)');
+}
+
+// ── (14) MUTATOR COM BUG: some das DUAS listas → restaurado ──────────────────
+{
+  const doc = { id: 'T1', participants: [P('u-ana'), P('u-gersom')], standbyParticipants: [] };
+  const ler = mkTx(doc);
+  await DB.mutateTournament('T1', (d) => {
+    d.participants = d.participants.filter(p => p.uid !== 'u-gersom');   // some e não vai pra lugar nenhum
+  });
+  const w = ler();
+  ok((w.participants || []).some(p => p.uid === 'u-gersom'), 'quem some de TODAS as listas é restaurado');
+  ok((w.history || []).some(e => /Protecao automatica \(transacao\)/.test(e.message || '')), 'com rastro no histórico');
+}
+
+// ── (15) remoção declarada na transação continua removendo ───────────────────
+{
+  const doc = { id: 'T1', participants: [P('u-ana'), P('u-gersom')], standbyParticipants: [] };
+  const ler = mkTx(doc);
+  await DB.mutateTournament('T1', (d) => {
+    d.participants = d.participants.filter(p => p.uid !== 'u-gersom');
+  }, { allowRosterRemoval: true });
+  ok(!(ler().participants || []).some(p => p.uid === 'u-gersom'), 'allowRosterRemoval remove de verdade também na transação');
+}
+
 console.log(pass + ' asserts OK, ' + fail + ' falhas');
   if (fail) process.exit(1);
 })();

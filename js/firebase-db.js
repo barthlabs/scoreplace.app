@@ -426,8 +426,71 @@ window.FirestoreDB = {
       // Rei/Rainha: o doc fresco traz grupos só com matchIds. Hidrata group.matches
       // como refs de round.matches ANTES do mutator (W.O./substituição leem g.matches).
       try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(data); } catch (_hmErr) {}
+      // v1.7.28 — MESMA DOUTRINA DENTRO DA TRANSAÇÃO. Ela é à prova de CONCORRÊNCIA
+      // (lê fresco, re-executa se alguém commitou no meio), mas nada olha o que o próprio
+      // MUTATOR faz. É por aqui que passam W.O., substituição e formação de grupo — tudo
+      // o que roda com o torneio já sorteado. Um mutator que derrube alguém por engano
+      // sumiria com a pessoa exatamente como no save solto (v1.7.26).
+      // Aqui a comparação é EXATA e sem corrida: `_antes` e o resultado saem da MESMA
+      // leitura transacional. Quem remove de propósito declara `allowRosterRemoval` no
+      // options — os mesmos termos do saveTournament, pra não haver duas regras.
+      var _uidsTx = (typeof window !== 'undefined' && typeof window._participantUids === 'function')
+        ? window._participantUids : function (p) { return (p && p.uid) ? [p.uid] : []; };
+      var _setDe = function (arr) {
+        var o = {};
+        (Array.isArray(arr) ? arr : []).forEach(function (p) {
+          if (p && typeof p === 'object') _uidsTx(p).forEach(function (u) { if (u) o[u] = 1; });
+        });
+        return o;
+      };
+      var _antesArr = { participants: Array.isArray(data.participants) ? data.participants.slice() : [],
+                        standbyParticipants: Array.isArray(data.standbyParticipants) ? data.standbyParticipants.slice() : [],
+                        waitlist: Array.isArray(data.waitlist) ? data.waitlist.slice() : [] };
+
       var out = mutatorFn(data);
       if (out === false) return { aborted: true, data: data };
+      // ── RESTAURAÇÃO PÓS-MUTATOR — a regra é NÃO SUMIR, não "não sair" ─────────
+      // ⚠️ A primeira versão disto exigia que a pessoa continuasse no ELENCO, e teria
+      // QUEBRADO O W.O. no meio do torneio: o W.O. tira do elenco e põe na FILA (v1.6.88).
+      // O movimento elenco↔fila é legítimo nos dois sentidos — promoção sobe, W.O. desce.
+      // O invariante certo é mais simples e não pode quebrar movimento nenhum:
+      // ninguém pode sumir DOS DOIS ao mesmo tempo. Quem estava em alguma das listas
+      // antes da mutação tem que continuar em ALGUMA delas depois; onde exatamente é
+      // assunto do mutator, não meu.
+      if (!(options && options.allowRosterRemoval)) {
+        try {
+          var _emAlgumLugar = function (d) {
+            var o = {};
+            ['participants', 'standbyParticipants', 'waitlist'].forEach(function (c) {
+              (Array.isArray(d[c]) ? d[c] : []).forEach(function (p) {
+                if (p && typeof p === 'object') _uidsTx(p).forEach(function (u) { if (u) o[u] = 1; });
+              });
+            });
+            return o;
+          };
+          var _depois = _emAlgumLugar(data);
+          var _voltaram = [];
+          ['participants', 'standbyParticipants', 'waitlist'].forEach(function (campo) {
+            _antesArr[campo].forEach(function (p) {
+              var us = _uidsTx(p).filter(Boolean);
+              if (!us.length) return;                        // fictício: sem identidade estável
+              if (us.some(function (u) { return _depois[u]; })) return;   // está em ALGUMA lista
+              if (!Array.isArray(data[campo])) data[campo] = [];
+              data[campo].push(p);                           // volta pra lista de onde saiu
+              us.forEach(function (u) { _depois[u] = 1; });
+              _voltaram.push(us[0] + ' (' + campo + ')');
+            });
+          });
+          if (_voltaram.length) {
+            if (!Array.isArray(data.history)) data.history = [];
+            data.history.push({ date: new Date().toISOString(),
+              message: 'Protecao automatica (transacao): ' + _voltaram.length +
+                ' pessoa(s) sumiram de TODAS as listas na mutacao e foram restauradas (' + _voltaram.join(', ') + ').' });
+            if (window._warn) window._warn('[mutateTournament] LISTA PROTEGIDA: ' + _voltaram.join(', '));
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('tx roster vanish blocked: ' + _voltaram.join(', '))); } catch (_se) {}
+          }
+        } catch (_txgErr) { /* o guard nunca derruba a transação */ }
+      }
       // Recomputa denormalizados a partir do estado FINAL (mesmos helpers do save).
       // NUNCA ENCOLHE (union com o valor já no doc fresco) — mesma blindagem do
       // saveTournament: um uid/email que só existe no denormalizado (co-host por
@@ -494,6 +557,42 @@ window.FirestoreDB = {
       var data = doc.exists ? doc.data() : { matchId: String(matchId), tournamentId: String(tournamentId) };
       var out = mutatorFn(data);
       if (out === false) return { aborted: true, data: data };
+      // Restauração pós-mutator (ver bloco acima). Sai de graça quando nada sumiu.
+      if (!(options && options.allowRosterRemoval)) {
+        try {
+          var _depoisElenco = _setDe(data.participants);
+          var _voltaram = [];
+          if (Array.isArray(data.participants)) {
+            _antesArr.participants.forEach(function (p) {
+              var us = _uidsTx(p).filter(Boolean);
+              if (!us.length) return;                                   // fictício: sem proteção
+              if (us.some(function (u) { return _depoisElenco[u]; })) return;
+              data.participants.push(p); us.forEach(function (u) { _depoisElenco[u] = 1; });
+              _voltaram.push(us[0] + ' (participants)');
+            });
+          }
+          ['standbyParticipants', 'waitlist'].forEach(function (campo) {
+            if (!Array.isArray(data[campo]) || !_antesArr[campo].length) return;
+            var _dep = _setDe(data[campo]);
+            _antesArr[campo].forEach(function (p) {
+              var us = _uidsTx(p).filter(Boolean);
+              if (!us.length) return;
+              if (us.some(function (u) { return _dep[u]; })) return;
+              if (us.some(function (u) { return _depoisElenco[u]; })) return;  // PROMOVIDO
+              data[campo].push(p); us.forEach(function (u) { _dep[u] = 1; });
+              _voltaram.push(us[0] + ' (' + campo + ')');
+            });
+          });
+          if (_voltaram.length) {
+            if (!Array.isArray(data.history)) data.history = [];
+            data.history.push({ date: new Date().toISOString(),
+              message: 'Protecao automatica (transacao): ' + _voltaram.length +
+                ' pessoa(s) sumiram na mutacao e foram restauradas (' + _voltaram.join(', ') + ').' });
+            if (window._warn) window._warn('[mutateTournament] LISTA PROTEGIDA: ' + _voltaram.join(', '));
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('tx roster shrink blocked: ' + _voltaram.join(', '))); } catch (_se) {}
+          }
+        } catch (_txgErr) { /* o guard nunca derruba a transação */ }
+      }
       data.matchId = String(matchId);
       data.updatedAt = new Date().toISOString();
       var clean = self._cleanUndefined(data);
