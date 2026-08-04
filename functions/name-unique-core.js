@@ -75,6 +75,9 @@ function pickConflict(docs, myUid) {
       uid: d.id,
       email: (rawEmail && !isSyntheticEmail(rawEmail)) ? rawEmail : '',
       phone: data.phone || '',
+      // createdAt entra pro desempate de QUEM renomeia numa colisão simultânea
+      // (ver shouldIRename). Aditivo: quem só lê uid/email/phone não é afetado.
+      createdAt: data.createdAt || null,
     };
   }
   return null;
@@ -134,6 +137,13 @@ function denormalizeDisplayName(profilePayload, displayName) {
   profilePayload.displayName_lower = nm.toLowerCase();
   return profilePayload;
 }
+
+// ⚠️ AUTO-SUFIXO NÃO MORA AQUI, DE PROPÓSITO — e há teste travando o export.
+// No CADASTRO por celular (o consumidor deste módulo) homônimo é quase sempre a MESMA
+// pessoa: sufixar criaria a duplicata de novo, só que com nome maquiado. A variante
+// automática é política do LOGIN FEDERADO e vive em name-variant-core.js, que importa a
+// detecção daqui. Manter separado é o que impede a registerPhonePassword de ter a
+// ferramenta errada ao alcance.
 
 module.exports = {
   isUnfriendlyName,

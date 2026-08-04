@@ -34,6 +34,7 @@ const _profileMerge = require("./profile-merge-core");
 const _uidSweep = require("./uid-sweep");
 const _enrollCore = require("./enroll-core");
 const _nameUnique = require("./name-unique-core");
+const _nameVariant = require("./name-variant-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -5168,6 +5169,61 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
 // torneios virou trabalho morto (espelha a remoção de _autoFixStaleNames/_propagateNameChange
 // no cliente, v4.5.72). O texto das notificações de sorteio passou a resolver o nome pelo
 // uid do slot no momento do envio (functions-autodraw).
+
+// ─── enforceUniqueDisplayName (Firestore trigger) ─────────────────────────
+// NOME ÚNICO ENTRE UIDS, garantido no SERVIDOR.
+//
+// A regra já existia em 4 pontos — mas 3 deles são do CLIENTE (auto-variante no primeiro
+// login, gate do perfil, isDisplayNameTaken) e são fail-open de propósito. O único ponto
+// server-side era a registerPhonePassword, que cobre só cadastro por celular+senha:
+// **login com Google/Apple não passava por checagem nenhuma no servidor**.
+//
+// MEDIDO em 04/ago/2026 (184 contas): o auto-variante entrou em 24/jun e mesmo assim
+// nasceram contas homônimas em 11/jul, 14/jul, 17/jul e 30/jul. Não era falta de
+// displayName_lower (todas têm), nem permissão (as rules liberam a consulta), nem nome
+// vazio do provedor — era a lei morar num lugar que pode simplesmente não rodar.
+// Cânone roda no servidor ([[project_canon_runs_on_server]]).
+//
+// POLÍTICA: aqui NÃO se bloqueia — adota-se variante. Bloquear é o comportamento do
+// cadastro por celular (onde homônimo é quase sempre a mesma pessoa) e do gate do perfil
+// (ação explícita). Na ENTRADA vale "deixa entrar e edita depois" (v1.1.3).
+//
+// ANTI-LOOP: só age quando o displayName MUDOU nesta escrita. Depois de renomear, a
+// própria escrita reacorda o trigger — mas aí o nome novo não colide e ele volta na hora.
+exports.enforceUniqueDisplayName = onDocumentWritten(
+  { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
+  async (event) => {
+    const after = event.data.after;
+    if (!after.exists) return;
+    const a = after.data() || {};
+    const b = event.data.before.exists ? (event.data.before.data() || {}) : {};
+
+    if (a.mergedInto) return;                       // tombstone de fusão — fora da disputa
+    const nome = String(a.displayName || "").trim();
+    if (!nome) return;
+    if (nome === String(b.displayName || "").trim()) return; // nome não mudou → nada a fazer
+    if (_nameUnique.isUnfriendlyName(nome)) return; // placeholder não disputa unicidade
+
+    const db = admin.firestore();
+    const uid = event.params.uid;
+    const conflito = await _nameUnique.findDisplayNameConflict(db, nome, uid);
+    if (!conflito) return;
+
+    // Quem já estava com o nome não é renomeado pelas costas.
+    if (!_nameVariant.shouldIRename(a, conflito, uid)) {
+      console.log(`[enforceUniqueDisplayName] "${nome}" colide com ${conflito.uid}, mas quem renomeia é o outro lado (uid=${uid} é o estabelecido)`);
+      return;
+    }
+
+    const novo = await _nameVariant.resolveUniqueName(db, nome, uid);
+    if (!novo || novo === nome) return; // nada livre encontrado — não piora
+
+    const payload = _nameUnique.denormalizeDisplayName({}, novo);
+    payload.updatedAt = new Date().toISOString();
+    await db.collection("users").doc(uid).set(payload, { merge: true });
+    console.log(`[enforceUniqueDisplayName] uid=${uid}: "${nome}" colidia com ${conflito.uid} → renomeado para "${novo}"`);
+  }
+);
 
 // ─── scheduledAutoMergeCleanup (diário 04:45 BRT) ─────────────────────────
 // Varre toda a coleção users em busca de phones E emails duplicados e mescla
