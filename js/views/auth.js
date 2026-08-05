@@ -7700,7 +7700,11 @@ window._askNameConflict = function () {
       }
       window.location.hash = '#profile';
     }, function () {
-      window._pickFreeDisplayName(nc.nome);
+      // ⚠️ MEDIDO no navegador (05/ago): chamar direto aqui NÃO abria a escolha de nome.
+      // O "Não sou eu" fecha este diálogo, e o fechamento varre overlays — o novo diálogo
+      // nascia no meio dessa varredura e morria junto. Isolado, a mesma função abre normal.
+      // Adiar um tick deixa o fechamento terminar antes de o próximo abrir.
+      setTimeout(function () { window._pickFreeDisplayName(nc.nome); }, 350);
     }, { confirmText: 'Sim, é minha outra conta', cancelText: 'Não sou eu' });
   } catch (e) { if (window._warn) window._warn('[nameConflict] pergunta falhou:', e); }
 };
