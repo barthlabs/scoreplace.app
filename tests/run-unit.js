@@ -553,6 +553,7 @@ const SUITES = [
   // celular+senha porque a regra só existia no cliente. Conflito = already-exists
   // com e-mail mascarado — NUNCA auto-sufixo silencioso.
   'functions/test-name-unique-core.js',
+  'functions/test-roster-watch.js',
 ];
 
 let failed = [];

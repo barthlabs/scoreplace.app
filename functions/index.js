@@ -35,6 +35,9 @@ const _uidSweep = require("./uid-sweep");
 const _enrollCore = require("./enroll-core");
 const _nameUnique = require("./name-unique-core");
 const _nameVariant = require("./name-variant-core");
+// v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
+// autoridade pra isso. Pendurado no syncMatchRosters (mesmo gatilho, custo zero).
+const _rosterWatch = require("./roster-watch-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -5532,6 +5535,26 @@ exports.syncMatchRosters = onDocumentWritten(
     const after  = event.data.after.exists  ? (event.data.after.data()  || {}) : null;
     const before = event.data.before.exists ? (event.data.before.data() || {}) : null;
     if (!after) return; // torneio deletado — nada a sincronizar
+
+    // ── v1.7.36 · VIGIA ESTRUTURAL (modo OBSERVAÇÃO) ───────────────────────
+    // Os guards de perda por save atrasado moram no CLIENTE QUE GRAVA e só valem pra
+    // quem os carrega. O app NATIVO não tem auto-update, então existe uma janela com
+    // gente em 1.6.3/1.7.9 gravando no mesmo torneio. Aqui o servidor vê TODO MUNDO.
+    // O gatilho do Firestore não carrega a identidade de quem escreveu — quem separa
+    // autoridade de acidente é o `rosterRev`, contador de documento FORA da allowlist
+    // do participante (firestore.rules usa `hasOnly([...])`, lista fechada).
+    // NÃO REVERTE NADA nesta fase: primeiro medir quantos casos reais aparecem e de
+    // que clientes. Reverter escalação errado no meio de um torneio ao vivo é pior do
+    // que o defeito. Roda antes do early-return de baixo pra observar toda escrita.
+    try {
+      const _rw = _rosterWatch.detectarTrocaDeEscalacao(before, after);
+      if (_rw.suspeitos.length) {
+        console.error("[vigia-escalacao] " + tid + " · " + _rw.suspeitos.length +
+          " jogo(s) tiveram os JOGADORES trocados sem o contador subir (" +
+          "rosterRev " + _rw.revAntes + "→" + _rw.revDepois + "; " + _rw.motivo + "): " +
+          JSON.stringify(_rw.suspeitos.slice(0, 5)));
+      }
+    } catch (_rwErr) { /* o vigia NUNCA derruba o gatilho */ }
 
     // Assinatura (roster+resultado) de cada jogo ANTES → só processa os que mudaram.
     const beforeSig = {};
