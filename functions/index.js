@@ -2375,6 +2375,31 @@ exports.enrollParticipant = onCall(
       return _enrollCore.computeEnroll(sbData, participantObj, extraUpdates, nowMs);
     });
 
+    // ── ESPELHO DO ROSTER (v1.7.40) ─────────────────────────────────────────
+    // O dual-write da 1.7.29 (`tournaments/{id}/participants/{uid}`) existe pra ser a rede
+    // contra perda de inscrito. Só que ele vivia SÓ no cliente (`_mirrorRoster`), e:
+    //   (a) ele grava DELTA e a 1ª gravação de cada sessão apenas semeia a base
+    //       (`if (!antes) return`) — a inscrição da própria pessoa costuma ser essa 1ª; e
+    //   (b) a inscrição REAL passa por esta CF, que nunca o chamava.
+    // MEDIDO em 05/ago: 116 docs no espelho para 119 pessoas — faltavam exatamente as três
+    // que se inscreveram naquele dia. Um espelho que não recebe quem acabou de entrar não
+    // protege justamente quem está mais exposto.
+    // Espelhar aqui é escrever onde a escrita de verdade acontece ([[feedback_functions_must_mirror_app]]).
+    // Best-effort: falhar aqui não desfaz a inscrição, que já está gravada.
+    if (out.outcome === "enrolled" || out.outcome === "waitlisted") {
+      try {
+        const _alvo = String((participantObj && participantObj.uid) || "");
+        if (_alvo) {
+          await docRef.collection("participants").doc(_alvo).set({
+            uid: _alvo,
+            status: (out.outcome === "waitlisted") ? "waitlisted" : "enrolled",
+            at: new Date().toISOString(),
+            entry: _enrollCore.cleanUndefined(participantObj),
+          }, { merge: true });
+        }
+      } catch (e) { console.error("[enrollParticipant] espelho do roster falhou:", e && e.message); }
+    }
+
     // ── Esta pessoa já não está aqui com OUTRA conta? ────────────────────────
     // Roda DEPOIS de gravar: inscrição é fail-open e não se bloqueia ninguém por suspeita.
     // A resposta é uma PERGUNTA pra própria pessoa — quem autoriza qualquer fusão é a prova

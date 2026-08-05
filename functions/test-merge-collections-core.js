@@ -164,6 +164,14 @@ const KEEP = 'I061h3pJ7ifGgrjjo7dMVQOswOM2';   // eduardo@mange.adv.br (a sobrev
   // 1.7.29). MEDIDO em 05/ago: depois de fundir, o espelho do Eduardo continuou sob o uid
   // MORTO — 200 no apagado, 404 no sobrevivente. Um espelho apontando pra uid morto não
   // protege ninguém, e ele existe justamente pra ser a rede contra perda de inscrito.
+  // O espelho do roster (dual-write da 1.7.29) vivia SÓ no cliente, que grava DELTA e pula
+  // a 1ª gravação da sessão — e a inscrição REAL passa pela CF, que nunca o escrevia.
+  // MEDIDO: 116 docs pra 119 pessoas, faltando exatamente quem entrou naquele dia.
+  ok('enrollParticipant escreve o ESPELHO do roster (subcoleção participants/{uid})',
+    /docRef\.collection\("participants"\)\.doc\(_alvo\)\.set\(/.test(idx));
+  ok('  → e distingue quem entrou na FILA de quem entrou no elenco',
+    /status: \(out\.outcome === "waitlisted"\) \? "waitlisted" : "enrolled"/.test(idx));
+
   ok('_repairTournaments varre as SUBCOLEÇÕES do torneio',
     /_sweepTournamentSubcollections\(db, tourDoc\.ref/.test(idx));
   ok('  → troca o uid quando ele é o ID DO DOC (espelho participants/{uid})',
