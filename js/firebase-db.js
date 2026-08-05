@@ -593,6 +593,27 @@ window.FirestoreDB = {
                 });
               });
             }
+            // ── v1.7.35 · PRESENÇA ("Cheguei") não é apagada por save de outra coisa ──
+            // Eu tinha deixado isto de fora achando que DESMARCAR passava por aqui e o
+            // guard prenderia a pessoa. Fui ler o toggle (`_toggleCheckIn`) e **não passa**:
+            // desmarcar vai por `setPresenceFields` (escrita campo a campo, `checkedIn.<uid>`)
+            // ou pelo `AppStore.mutate`, que é TRANSAÇÃO e lê o doc fresco. Nenhum dos dois
+            // é este caminho. Então proteger aqui não pode prender ninguém na quadra.
+            // Quem legitimamente zera a presença por aqui é o SORTEIO ("acabou de sortear,
+            // ninguém está presente" — regra do dono, tournaments-draw.js) — e ele traz jogo
+            // com id novo, que é o mesmo sinal já usado nos guards de cima.
+            ['checkedIn', 'absent', 'vips', 'checkedInConfirmed'].forEach(function (mapa) {
+              var _b = _bancoP[mapa];
+              if (!_b || typeof _b !== 'object' || Array.isArray(_b)) return;
+              var _chaves = Object.keys(_b);
+              if (!_chaves.length) return;
+              if (!cleanData[mapa] || typeof cleanData[mapa] !== 'object' || Array.isArray(cleanData[mapa])) cleanData[mapa] = {};
+              _chaves.forEach(function (k) {
+                if (cleanData[mapa][k] !== undefined) return;
+                cleanData[mapa][k] = _b[k]; _apVolt.push(mapa + '/' + k);
+              });
+            });
+
             ['woClaims', 'polls'].forEach(function (campo) {
               var _b = _bancoP[campo];
               if (!Array.isArray(_b) || !_b.length) return;

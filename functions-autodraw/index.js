@@ -4,6 +4,9 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
+// v1.7.35: rebase do sorteio (o servidor não sobrescreve o que aconteceu na quadra
+// enquanto pensava). Módulo PURO e testável — o index não é require-ável em teste.
+const { rebaseRounds } = require('./rebase-core.js');
 
 // v2.3.91: lógica de sorteio REAL do cliente (Rei/Rainha, duplas, equilíbrio,
 // categorias, folgas, desempate) carregada via shim Node. Substitui o stub 1×1
@@ -933,6 +936,10 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
         t.id = tId;
         await _preloadDrawNames(t); // v4.5.85: nomes vivos por uid antes do motor
         _enrichParticipantsFromProfiles(t); // v1.3.52: gênero/skill/email por uid
+        // v1.7.35: quantas rodadas existiam ANTES do motor rodar. É o que permite
+        // saber, depois, quais rodadas são CONTRIBUIÇÃO deste sorteio — e só elas
+        // viajam pro banco (ver o rebase transacional na gravação, abaixo).
+        const _roundsAntes = Array.isArray(t.rounds) ? t.rounds.length : 0;
         const res = generateLigaRound(t, mostRecentScheduled);
         if (!res.ok) {
           console.log(`Auto-draw: skip ${tId} (${res.reason})`);
@@ -1012,7 +1019,32 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
           payload.rounds = JSON.parse(JSON.stringify(payload.rounds));
           drawWindow._foldMonarchGroups(payload);
         }
-        await db.collection('tournaments').doc(tId).update(payload);
+        // ── v1.7.35 · REBASE TRANSACIONAL — o servidor não sobrescreve o que
+        // aconteceu na quadra enquanto ele pensava ────────────────────────────────
+        // O `t` vem da QUERY lá em cima (uma leitura só, para todos os torneios) e
+        // entre ela e este ponto há `_preloadDrawNames` (perfis pela rede) mais os
+        // torneios processados em SEQUÊNCIA — a janela é de segundos, não de
+        // milissegundos. Gravar `rounds: t.rounds` cru significa devolver ao banco a
+        // chave como ela estava na leitura: um placar lançado no meio tempo seria
+        // apagado PELO SERVIDOR. É a mesma classe que fechei no cliente (1.7.26–34),
+        // e aqui não adianta o guard do `saveTournament` — este caminho não passa por
+        // ele (Admin SDK, e o cliente nem está envolvido).
+        //
+        // Conserto: dentro de UMA transação, releio o doc e REBASEIO — a contribuição
+        // deste sorteio são as rodadas que o motor ACRESCENTOU (as de índice >=
+        // `_roundsAntes`); todo o resto vem da leitura FRESCA, com os placares que
+        // chegaram. Dedup por número de rodada torna o retry idempotente (a transação
+        // pode re-executar; sem isso, uma re-execução duplicaria a rodada).
+        await db.runTransaction(async (tx) => {
+          const _ref = db.collection('tournaments').doc(tId);
+          const _snap = await tx.get(_ref);
+          const _fresh = _snap.exists ? (_snap.data() || {}) : {};
+          const _rb = rebaseRounds(_fresh.rounds, t.rounds, _roundsAntes);
+          if (_rb.descartadas) {
+            console.log(`Auto-draw: rebase descartou ${_rb.descartadas} rodada(s) que já estavam no doc (retry idempotente) — ${tId}`);
+          }
+          tx.update(_ref, Object.assign({}, payload, { rounds: _rb.rounds }));
+        });
 
         console.log(`Auto-draw: round ${res.roundNumber} created with ${res.matchCount} match(es)` +
           ` [${res.firstDraw ? 'first draw' : 'next round'}] for ${tId}`);

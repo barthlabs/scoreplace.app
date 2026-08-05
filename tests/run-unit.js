@@ -482,6 +482,7 @@ const SUITES = [
   'js/views/team-formation.test.js',
   'js/views/phase-brick4.test.js',
   'functions-autodraw/test-draw.js',
+  'functions-autodraw/test-rebase.js',
   'functions-autodraw/test-groupsby.js',
   // SORTEIO AUTOMÁTICO MANDA E-MAIL (bug ao vivo 02/ago: sorteio do Confra criou as
   // notificações in-app e ZERO e-mail — a CF só escrevia um dos dois canais que o

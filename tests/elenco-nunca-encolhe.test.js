@@ -627,6 +627,37 @@ const R = (id, t1, t1u) => ({ id, p1: t1.join(' / '), p2: 'C / D',
   ok((g.polls || []).length === 1 && Object.keys(g.polls[0].votes).length === 2, 'enquete e seus votos não somem');
 }
 
+// ════════ v1.7.35 · PRESENÇA ("Cheguei") não some ════════════════════════
+// Eu tinha deixado de fora achando que DESMARCAR passaria por aqui. Fui ler o
+// `_toggleCheckIn`: desmarcar vai por `setPresenceFields` (campo a campo) ou pela
+// TRANSAÇÃO — nunca por `saveTournament`. Então proteger aqui não prende ninguém.
+
+// ── (43) check-in feito na quadra não some num save do organizador ──────────
+{
+  const banco = { id: 'T1', participants: [P('u-a')],
+                  checkedIn: { 'u-a': 111, 'u-b': 222 }, checkedInConfirmed: { 'u-c': 333 },
+                  absent: { 'u-d': 444 }, vips: { 'u-e': 1 } };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', name: 'editado', participants: [P('u-a')],
+                            checkedIn: {}, checkedInConfirmed: {}, absent: {}, vips: {} });
+  const g = db._gravado();
+  ok(Object.keys(g.checkedIn).length === 2, 'quem deu "Cheguei" continua presente');
+  ok(g.checkedInConfirmed['u-c'] === 333, 'presença confirmada remotamente sobrevive');
+  ok(g.absent['u-d'] === 444, 'ausente marcado sobrevive');
+  ok(g.vips['u-e'] === 1, 'VIP sobrevive');
+}
+
+// ── (44) o SORTEIO limpa a presença de propósito — não pode ser desfeito ────
+// Regra do dono: "acabou de sortear, ninguém está presente". O sorteio traz jogo novo.
+{
+  const banco = { id: 'T1', participants: [P('u-a')], checkedIn: { 'u-a': 111, 'u-b': 222 },
+                  rounds: [{ round: 1, matches: [M('m1', null, null)] }] };
+  const db = mkDb(banco); DB.db = db;
+  await DB.saveTournament({ id: 'T1', participants: [P('u-a')], checkedIn: {},
+                            rounds: [{ round: 1, matches: [M('m1', null, null), M('sorteio-novo', null, null)] }] });
+  ok(Object.keys(db._gravado().checkedIn || {}).length === 0, 'sorteio limpa a presença livre');
+}
+
 console.log(pass + ' asserts OK, ' + fail + ' falhas');
   if (fail) process.exit(1);
 })();
