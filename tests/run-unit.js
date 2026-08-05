@@ -438,6 +438,9 @@ const SUITES = [
   // OUTRA pessoa (medido: Vivi Hirata e Vivian gravadas no mesmo segundo com valores
   // trocados). Resolução SÓ por uid; sem casar, PULA.
   'tests/analise-nunca-grava-na-pessoa-errada.test.js',
+  // O NOME EXIBIDO sai do PERFIL (uid), nunca do rótulo gravado no sorteio. Print do dono:
+  // a mesma pessoa como "Fabi2401@" na classificação e "Dani Bataglia" nos jogos.
+  'tests/nome-vem-do-perfil-nao-do-sorteio.test.js',
   'functions/test-merge-collections-core.js',
   // "Esta pessoa já não está inscrita com OUTRA conta?" — os sinais que o dono aprovou
   // (celular INTEIRO, nome idêntico, letzplay só corroborando) e, metade das asserções,

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.45';
+window.SCOREPLACE_VERSION = '1.7.46';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -6077,6 +6077,25 @@ window._displayNameForUid = function (uid, storedName) {
   }
   if (storedName) return storedName;
   return uid ? (window._ORPHAN_UID_LABEL + ' (' + String(uid).slice(0, 4) + ')') : '';
+};
+// v1.7.46 — NOME DE LINHA DE CLASSIFICAÇÃO, SEMPRE PELO UID.
+// As tabelas de classificação desenhavam `s.name`, que é o rótulo GRAVADO no sorteio
+// (`monarchGroups[i].players[]`) e ENVELHECE: quem troca o displayName seguia aparecendo com
+// o nome velho ali, enquanto os cards do jogo — que resolvem por uid — já mostravam o novo.
+// Print do dono (05/ago): "Fabi2401@" na classificação e "Dani Bataglia" nos jogos, a MESMA
+// pessoa. Quatro renders tinham o uid à mão e não o usavam pro TEXTO.
+// Sem uid (dupla "A / B", fictício, nome digitado) devolve o rótulo guardado — que ali é a
+// única identidade que existe.
+// ⚠️ Isto é só EXIBIÇÃO: o rótulo guardado continua sendo a CHAVE de casamento com os jogos
+// (_computeStandings/_computeMonarchStandings) e o argumento do _openPlayerProfile. Trocar a
+// chave quebraria a contagem. Ver [[project_uid_identity_canon_locked]].
+window._liveRowName = function (s) {
+  if (!s) return '';
+  var stored = s.name || s.displayName || '';
+  var uid = s.uid || '';
+  if (!uid) return stored;
+  return (typeof window._displayNameForUid === 'function')
+    ? window._displayNameForUid(uid, stored) : stored;
 };
 // true quando a entrada/uid não tem perfil resolvível — a inscrição aponta pra uma conta que
 // não existe mais. Usado pelo relatório de inscritos pra o organizador ver e resolver.
