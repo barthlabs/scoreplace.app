@@ -4309,6 +4309,9 @@ async function simulateLoginSuccess(user) {
   if (window.AppStore.startProfileListener) {
     window.AppStore.startProfileListener();
   }
+  // v1.7.41: o trigger sinaliza o conflito de nome em `nameConflict`; aqui é quem PERGUNTA.
+  // Atrasado: o perfil chega pelo listener e `nameConflict` só existe depois dele.
+  setTimeout(function () { if (typeof window._askNameConflict === 'function') window._askNameConflict(); }, 4000);
 
   // Quando perfil carregar: remover dot de carregamento da topbar e re-renderizar botão
   // Ouvinte único — remove-se após disparar pra não acumular listeners entre logins.
@@ -7654,7 +7657,92 @@ function setupProfileModal() {
     // nome igual não é evidência de que a conta é da mesma pessoa. Fundir dois
     // homônimos de verdade apagaria alguém do Auth — erro que não tem volta, enquanto
     // conta duplicada é só incômodo.
-    window._profileHydrateNameConflict = function () {
+    
+// ─── "Já existe uma conta com o seu nome. É você?" (v1.7.41) ─────────────────
+//
+// REGRA DO DONO (05/ago/2026): _"o certo, invés de criar 'Gabriela Ferreira 2', é indicar o
+// nome que já existe, indicando com ****email/celular e perguntar se é a mesma pessoa.
+// Autentica se for e mescla. Se não for, que a pessoa indique um nome válido e livre para
+// display name (mostra o nome que já existe e quais variações pode sugerir)."_
+//
+// Quem DETECTA é o trigger `enforceUniqueDisplayName`, que parou de renomear em silêncio e
+// passou a gravar `nameConflict` no perfil — só com o contato MASCARADO (uid e valor cheio
+// da outra conta nunca chegam ao cliente). Esta função é quem finalmente PERGUNTA: sem ela o
+// sinal era gravado e ninguém lia.
+//
+// Nada é fundido aqui. "Sim" leva pro perfil, onde vivem os dois canais de PROVA DE POSSE
+// (link no e-mail / SMS no celular da outra conta) — nome igual detecta, nome igual não
+// autoriza ([[project_unique_display_name]]). "Não" só troca o próprio nome por um livre.
+window._askNameConflict = function () {
+  try {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid) return;
+    var nc = cu.nameConflict;
+    if (!nc || !nc.nome) return;
+    if (window._nameConflictAsked) return;      // uma vez por sessão
+    window._nameConflictAsked = true;
+
+    var contato = nc.maskedEmail || nc.maskedPhone || '';
+    var corpo =
+      '<div style="font-size:0.86rem;line-height:1.5;">' +
+        'Já existe uma conta cadastrada com o nome <strong>' + window._safeHtml(nc.nome) + '</strong>' +
+        (contato ? (', com o contato <strong>' + window._safeHtml(contato) + '</strong>') : '') + '.' +
+      '</div>' +
+      '<div style="margin-top:10px;font-size:0.8rem;color:var(--text-muted);line-height:1.45;">' +
+        'Se essa conta é <strong>sua</strong>, dá pra unir as duas — seus torneios, jogos e histórico ficam num lugar só. ' +
+        'A união só acontece depois que você confirmar a posse daquela conta (link no e-mail ou código no celular dela). ' +
+        'Se for outra pessoa com o mesmo nome, escolha um nome livre pra vocês não serem confundidos.' +
+      '</div>';
+
+    showConfirmDialog('👤 Esse nome já está em uso', corpo, function () {
+      if (typeof showNotification === 'function') {
+        showNotification('Confirme a posse', 'Abrimos seu perfil: confirme pelo e-mail ou pelo celular da outra conta pra unir as duas.', 'info');
+      }
+      window.location.hash = '#profile';
+    }, function () {
+      window._pickFreeDisplayName(nc.nome);
+    }, { confirmText: 'Sim, é minha outra conta', cancelText: 'Não sou eu' });
+  } catch (e) { if (window._warn) window._warn('[nameConflict] pergunta falhou:', e); }
+};
+
+// "Não sou eu" → escolher um nome LIVRE, com o ocupado à vista e sugestões do servidor.
+// A disponibilidade é decidida pela CF (checkDisplayNameAvailability): o cliente é fail-open
+// e não pode ser a autoridade sobre unicidade — foi por isso que homônimos continuaram
+// nascendo mesmo com a regra existindo ([[project_unique_display_name]]).
+window._pickFreeDisplayName = function (nomeOcupado) {
+  var fns = (window.firebase && firebase.functions) ? firebase.functions() : null;
+  if (!fns) return;
+  fns.httpsCallable('checkDisplayNameAvailability')({}).then(function (res) {
+    var sug = ((res && res.data && res.data.sugestoes) || []).slice(0, 3);
+    var msg =
+      '<div style="font-size:0.84rem;line-height:1.5;">O nome <strong>' + window._safeHtml(nomeOcupado) +
+      '</strong> já é de outra pessoa. Escolha como você quer aparecer:</div>' +
+      (sug.length ? ('<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);">Livres agora: ' +
+        sug.map(function (s) { return '<strong>' + window._safeHtml(s) + '</strong>'; }).join(' · ') + '</div>') : '');
+    showInputDialog('✏️ Escolha seu nome', msg, function (novo) {
+      novo = String(novo || '').trim();
+      if (!novo) return;
+      fns.httpsCallable('checkDisplayNameAvailability')({ nome: novo }).then(function (r2) {
+        if (!(r2 && r2.data && r2.data.livre)) {
+          if (typeof showNotification === 'function') {
+            showNotification('Nome em uso', 'Esse nome também já está ocupado. Tente outro.', 'warning');
+          }
+          window._nameConflictAsked = false;
+          return window._pickFreeDisplayName(nomeOcupado);
+        }
+        var uid = window.AppStore.currentUser.uid;
+        window.FirestoreDB.saveUserProfile(uid, { displayName: novo, displayName_lower: novo.toLowerCase() })
+          .then(function () {
+            window.AppStore.currentUser.displayName = novo;
+            if (typeof showNotification === 'function') showNotification('✅ Nome atualizado', 'Agora você aparece como "' + novo + '".', 'success');
+            if (typeof window._refreshTopbarUser === 'function') window._refreshTopbarUser();
+          });
+      });
+    }, { placeholder: sug[0] || 'Seu nome', okText: 'Usar este nome', defaultValue: sug[0] || '' });
+  }).catch(function (e) { if (window._warn) window._warn('[nameConflict] sugestões falharam:', e); });
+};
+
+window._profileHydrateNameConflict = function () {
       var box = document.getElementById('profile-name-conflict');
       if (!box) return;
       var fns = (window.firebase && firebase.functions) ? firebase.functions() : null;

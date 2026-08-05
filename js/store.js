@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.39';
+window.SCOREPLACE_VERSION = '1.7.41';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -7354,6 +7354,11 @@ window.AppStore = {
           window._applyUiScale(this.currentUser.uiScale);
         }
         if (profile.gender) this.currentUser.gender = profile.gender;
+        // v1.7.41: sinal de NOME EM CONFLITO, gravado pelo trigger enforceUniqueDisplayName
+        // (que parou de renomear em silêncio). Sem trazê-lo pra cá o sinal existiria no doc
+        // e NINGUÉM o leria — a lista abaixo é campo a campo e não faz merge genérico.
+        // `null` limpa (o trigger apaga o campo quando o conflito acaba).
+        this.currentUser.nameConflict = profile.nameConflict || null;
         if (profile.preferredSports) this.currentUser.preferredSports = profile.preferredSports;
         // v1.2.11: favoritos e ocultados VÊM DA CONTA (users/{uid}), não do device.
         // Arrays: usar !== undefined (lista VAZIA é um valor legítimo — "desfavoritei

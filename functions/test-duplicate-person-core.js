@@ -163,6 +163,21 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   const auth = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'auth.js'), 'utf8');
   ok('o primeiro login NÃO chama mais resolveUniqueDisplayName',
     !/await window\.FirestoreDB\.resolveUniqueDisplayName\(/.test(auth));
+  // A PERGUNTA do conflito de nome tem que EXISTIR e ser CHAMADA — o trigger sinaliza em
+  // `nameConflict`, e sem consumidor o sinal fica gravado e ninguém lê (foi assim que o
+  // canal de e-mail do sorteio automático não existiu).
+  ok('existe a tela que PERGUNTA sobre o nome em conflito', /window\._askNameConflict = function/.test(auth));
+  ok('  → e ela é DISPARADA depois do login', /_askNameConflict\(\);/.test(auth));
+  ok('  → "não sou eu" leva a escolher um nome LIVRE, com sugestões',
+    /_pickFreeDisplayName/.test(auth) && /checkDisplayNameAvailability/.test(auth));
+  ok('  → "sim, é minha" NÃO funde sozinho: manda pra prova de posse no perfil',
+    /_askNameConflict[\s\S]{0,1800}hash = '#profile'/.test(auth));
+  // O campo precisa CHEGAR em currentUser — a cópia do perfil é campo a campo, sem merge
+  // genérico: sem esta linha a tela nunca dispararia.
+  const store = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8');
+  ok('`nameConflict` é copiado do perfil pra currentUser',
+    /currentUser\.nameConflict = profile\.nameConflict/.test(store));
+
   const enr = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment.js'), 'utf8');
   ok('a inscrição pergunta quando o servidor acusa duplicata',
     /result\.dupSuspect\) window\._askDuplicatePerson\(/.test(enr));
