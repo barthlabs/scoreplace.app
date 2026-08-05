@@ -116,10 +116,26 @@ ok('trima o base', V.buildVariant('  Nelson Barth  ', 3) === 'Nelson Barth 3');
   ok('ignora tombstone de fusão', /a\.mergedInto/.test(bloco));
   ok('ignora nome não-amigável', /isUnfriendlyName/.test(bloco));
   ok('não renomeia o estabelecido (consulta shouldIRename)', /shouldIRename\(/.test(bloco));
-  ok('grava displayName_lower junto (senão a conta some das checagens futuras)',
-    /denormalizeDisplayName\(/.test(bloco));
-  ok('usa o módulo de VARIANTE, não o de cadastro',
-    bloco.indexOf('_nameVariant.resolveUniqueName(') !== -1);
+  // ⚠️ DUAS ASSERÇÕES REVOGADAS DE PROPÓSITO em 05/ago/2026 (v1.7.37).
+  // Elas exigiam que o trigger ADOTASSE a variante ("Nome 2") — gravando displayName_lower
+  // pelo denormalizeDisplayName e chamando _nameVariant.resolveUniqueName.
+  //
+  // O dono trocou a política: _"o certo, invés de criar 'Gabriela Ferreira 2', é indicar o
+  // nome que já existe, indicando com ****email/celular e perguntar se é a mesma pessoa.
+  // Autentica se for e mescla. Se não for, que a pessoa indique um nome válido e livre."_
+  //
+  // Além de esconder a pergunta, a variante CEGAVA a detecção de inscrição duplicada, que
+  // compara nome idêntico: com o "2" gravado, a segunda conta da mesma pessoa nunca mais
+  // casaria com a primeira. O trigger agora SINALIZA (`nameConflict`, mascarado) e quem
+  // decide é a pessoa — ver functions/test-duplicate-person-core.js, que trava o novo
+  // comportamento (não renomeia, sinaliza, e limpa o sinal quando o conflito acaba).
+  //
+  // O que essas asserções protegiam de verdade continua travado logo abaixo: a separação
+  // entre o módulo de CADASTRO e o de VARIANTE.
+  ok('NÃO renomeia mais em silêncio (a variante automática saiu do trigger)',
+    bloco.indexOf('_nameVariant.resolveUniqueName(') === -1);
+  ok('sinaliza o conflito com contato MASCARADO em vez de renomear',
+    /nameConflict/.test(bloco) && /maskedEmail/.test(bloco));
 
   // A separação das políticas é o que protege o cadastro — trava aqui também.
   const unique = require('./name-unique-core');

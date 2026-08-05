@@ -4266,17 +4266,18 @@ async function simulateLoginSuccess(user) {
     // PRIMEIRA atribuição de nome (conta sem displayName ainda) — jamais renomeia
     // um usuário estabelecido em re-login (ex.: backfill de displayName_lower).
     // Email/telefone como nome passam direto (são únicos por natureza).
-    var _firstNameAssign = !(existingProfile && existingProfile.displayName);
-    if (needsSave && _firstNameAssign && basicData.displayName
-        && typeof window.FirestoreDB.resolveUniqueDisplayName === 'function') {
-      try {
-        var _uniqueDN = await window.FirestoreDB.resolveUniqueDisplayName(basicData.displayName, uid);
-        if (_uniqueDN && _uniqueDN !== basicData.displayName) {
-          basicData.displayName = _uniqueDN;
-          if (window.AppStore.currentUser) window.AppStore.currentUser.displayName = _uniqueDN;
-        }
-      } catch (e) { window._warn('[firstLogin] resolveUniqueDisplayName falhou (fail-open):', e); }
-    }
+    // ⚠️ v1.7.37 — O RENOME AUTOMÁTICO SAIU DAQUI. Regra do dono (05/ago/2026): em vez de
+    // criar "Gabriela Ferreira 2" pelas costas, o app mostra o nome que JÁ existe (com o
+    // contato mascarado) e PERGUNTA se é a mesma pessoa — se for, autentica e mescla; se não
+    // for, a pessoa escolhe um nome livre, com sugestões.
+    //
+    // A variante silenciosa resolvia a unicidade e escondia a pergunta. Pior: ela CEGAVA a
+    // detecção de inscrição duplicada, que compara nome idêntico — com o "2" no banco, a
+    // segunda conta da mesma pessoa nunca mais casaria com a primeira.
+    //
+    // Quem sinaliza agora é o trigger `enforceUniqueDisplayName` (grava `nameConflict` com
+    // e-mail/celular MASCARADOS), e quem pergunta é `_hydrateNameConflictPrompt`.
+    // O nome entra como veio do provedor — entrar nunca é bloqueado (v1.1.3).
     if (needsSave) {
       basicData.updatedAt = new Date().toISOString();
       window.FirestoreDB.saveUserProfile(uid, basicData).catch(function(err) {

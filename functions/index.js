@@ -33,6 +33,7 @@ const _mergeRules = require("./merge-rules");
 const _profileMerge = require("./profile-merge-core");
 const _uidSweep = require("./uid-sweep");
 const _mergeCols = require("./merge-collections-core");
+const _dupPerson = require("./duplicate-person-core");
 const _enrollCore = require("./enroll-core");
 const _nameUnique = require("./name-unique-core");
 const _nameVariant = require("./name-variant-core");
@@ -2200,6 +2201,83 @@ exports.setParticipantsProfile = onCall(
 const { replicateRosterToSandbox: _replicateRosterToSandbox } = require("./sandbox-replicate");
 
 // Deploy:  firebase deploy --only functions:enrollParticipant,functions:deenrollParticipant
+
+/**
+ * "Esta pessoa já não está inscrita neste torneio com OUTRA conta?"
+ *
+ * Não lê o roster inteiro (o Confra tem 111 inscritos — seriam 111 leituras por inscrição).
+ * Faz o caminho inverso: 2 consultas INDEXADAS em `users` (nome e celular) devolvem os
+ * poucos candidatos, e o cruzamento com `memberUids` do torneio — que já está na memória —
+ * diz se algum deles está aqui dentro.
+ *
+ * Devolve o uid do suspeito pro CHAMADOR interno (o dismiss precisa dele), mas o que vai pro
+ * cliente é só o MASCARADO — ver o retorno montado em enrollParticipant.
+ * Fail-open: erro de consulta não pode atrapalhar inscrição ([[feedback_enrollment_fail_open]]).
+ */
+async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
+  try {
+    const meuDoc = await db.collection("users").doc(callerUid).get();
+    if (!meuDoc.exists) return null;
+    const meu = meuDoc.data() || {};
+    if (meu.mergedInto) return null;
+
+    const membros = {};
+    (Array.isArray(tData && tData.memberUids) ? tData.memberUids : []).forEach((u) => { membros[u] = true; });
+    if (!Object.keys(membros).length) return null;
+
+    // Candidatos: mesmo nome OU mesmo celular. Duas consultas indexadas, limite curto.
+    const nomeLower = String(meu.displayName || "").trim().toLowerCase();
+    const telCanon = _dupPerson.normalizarTelefone(meu.phone);
+    const consultas = [];
+    if (nomeLower && !_nameUnique.isUnfriendlyName(nomeLower)) {
+      consultas.push(db.collection("users").where("displayName_lower", "==", nomeLower).limit(8).get());
+    }
+    if (telCanon) {
+      consultas.push(db.collection("users").where("phone", "==", meu.phone).limit(8).get());
+    }
+    if (!consultas.length) return null;
+
+    const snaps = await Promise.all(consultas.map((p) => p.catch(() => null)));
+    const vistos = {};
+    const pessoas = [];
+    for (const snap of snaps) {
+      if (!snap) continue;
+      snap.forEach((d) => {
+        if (d.id === callerUid || vistos[d.id] || !membros[d.id]) return;   // só quem está NESTE torneio
+        const x = d.data() || {};
+        if (x.mergedInto) return;
+        vistos[d.id] = true;
+        pessoas.push({
+          uid: d.id, nome: x.displayName || "", telefone: x.phone || "",
+          letzplayHandle: x.letzplayHandle || "", email: x.email || "",
+        });
+      });
+    }
+    if (!pessoas.length) return null;
+
+    const r = _dupPerson.detectarMesmaPessoa({
+      uid: callerUid, nome: meu.displayName || "", telefone: meu.phone || "",
+      letzplayHandle: meu.letzplayHandle || "",
+      dispensados: Array.isArray(meu.dupDismissed) ? meu.dupDismissed : [],
+    }, pessoas);
+    if (!r.suspeito) return null;
+
+    const alvo = pessoas.filter((p) => p.uid === r.suspeito.uid)[0] || {};
+    const emailReal = (alvo.email && !_nameUnique.isSyntheticEmail(alvo.email)) ? alvo.email : "";
+    return {
+      uid: r.suspeito.uid,                       // ⚠️ interno — NUNCA vai pro cliente
+      motivo: r.suspeito.motivo,
+      corroboracoes: r.suspeito.corroboracoes,
+      nome: alvo.nome || "",
+      maskedEmail: _nameUnique.maskEmail(emailReal) || null,
+      maskedPhone: _nameUnique.maskPhone(alvo.telefone) || null,
+    };
+  } catch (e) {
+    console.error("[_detectarDuplicataNoTorneio] fail-open:", e && e.message);
+    return null;
+  }
+}
+
 exports.enrollParticipant = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
@@ -2233,6 +2311,30 @@ exports.enrollParticipant = onCall(
       return _enrollCore.computeEnroll(sbData, participantObj, extraUpdates, nowMs);
     });
 
+    // ── Esta pessoa já não está aqui com OUTRA conta? ────────────────────────
+    // Roda DEPOIS de gravar: inscrição é fail-open e não se bloqueia ninguém por suspeita.
+    // A resposta é uma PERGUNTA pra própria pessoa — quem autoriza qualquer fusão é a prova
+    // de posse, nunca esta detecção. Vale também quando o organizador inscreve alguém: o
+    // alvo é o uid INSCRITO, não o de quem clicou.
+    let _dupSuspect = null;
+    if (out.outcome === "enrolled" || out.outcome === "waitlisted") {
+      try {
+        const _alvoUid = String((participantObj && participantObj.uid) || callerUid);
+        const _fresh = await docRef.get();
+        const _d = await _detectarDuplicataNoTorneio(db, _alvoUid, _fresh.exists ? _fresh.data() : null);
+        if (_d) {
+          _dupSuspect = {   // ⚠️ SEM uid e SEM contato cheio
+            motivo: _d.motivo,
+            nome: _d.nome,
+            maskedEmail: _d.maskedEmail,
+            maskedPhone: _d.maskedPhone,
+            texto: _dupPerson.textoDaPergunta(_d.nome, _d.maskedEmail || _d.maskedPhone, _d.motivo),
+          };
+          console.log(`[enrollParticipant] duplicata suspeita: ${_alvoUid} ~ ${_d.uid} (${_d.motivo}) em ${tournamentId}`);
+        }
+      } catch (e) { console.error("[enrollParticipant] deteccao de duplicata falhou (fail-open):", e && e.message); }
+    }
+
     if (out.outcome === "capacityFull") return { capacityFull: true, participants: out.participants };
     if (out.outcome === "already") return { alreadyEnrolled: true, participants: out.participants };
     if (out.outcome === "closed") return { alreadyEnrolled: false, enrollmentClosed: true, participants: out.participants };
@@ -2244,15 +2346,91 @@ exports.enrollParticipant = onCall(
       return {
         alreadyEnrolled: false, waitlisted: true,
         alreadyWaitlisted: out.outcome === "alreadyWaitlisted",
-        participants: out.participants, standbyParticipants: out.standbyParticipants || null
+        participants: out.participants, standbyParticipants: out.standbyParticipants || null,
+        dupSuspect: _dupSuspect
       };
     }
     return {
       alreadyEnrolled: false,
       participants: out.participants,
       autoCloseTriggered: !!out.autoClose,
-      reachedCapacityDraw: !!out.reachedDraw
+      reachedCapacityDraw: !!out.reachedDraw,
+      dupSuspect: _dupSuspect
     };
+  }
+);
+
+
+// "NÃO SOU EU" — a memória que impede a mesma pergunta em todo torneio novo.
+//
+// Nasceu do caso Nelson Barth: duas contas com nome IDÊNTICO que NÃO são a mesma pessoa (uma
+// é a conta de teste do dono). Homônimo segue sendo sinal forte e a pergunta continua certa —
+// o que não pode é ela voltar pra sempre depois de respondida.
+//
+// O cliente NÃO passa uid: ele não tem (a resposta da inscrição só traz o MASCARADO). O
+// servidor redescobre o suspeito com a mesma função da detecção e grava dos DOIS lados —
+// senão a outra conta faria a pergunta espelhada na próxima inscrição dela.
+// Seguro escrever no perfil alheio aqui: o autoMergeOnProfileUpdate só age quando `phone` ou
+// `email` mudam, e o enforceUniqueDisplayName só quando `displayName` muda.
+
+// "NÃO SOU EU" no conflito de NOME: a pessoa escolhe um nome livre, e o app precisa (a) dizer
+// se o que ela digitou está livre e (b) sugerir alternativas. Antes o servidor escolhia
+// sozinho ("Nome 2") e a pessoa nem ficava sabendo — ver enforceUniqueDisplayName.
+// Só devolve disponibilidade e sugestões: nenhum dado da outra conta sai daqui.
+exports.checkDisplayNameAvailability = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const db = admin.firestore();
+
+    const pedido = String((request.data && request.data.nome) || "").trim();
+    const me = await db.collection("users").doc(callerUid).get();
+    const meuNome = String(((me.exists && me.data()) || {}).displayName || "").trim();
+    const minhaCidade = String(((me.exists && me.data()) || {}).city || "").trim();
+    const base = pedido || meuNome;
+    if (!base) return { livre: false, sugestoes: [] };
+
+    const livre = async (n) => !(await _nameUnique.findDisplayNameConflict(db, n, callerUid));
+
+    // Sugestões: primeiro a cidade (identifica de verdade), depois numéricas.
+    const candidatos = [];
+    if (minhaCidade) candidatos.push(base + " (" + minhaCidade + ")");
+    for (let k = 2; k <= 6; k++) candidatos.push(_nameVariant.buildVariant(base, k));
+
+    const sugestoes = [];
+    for (const c of candidatos) {
+      if (sugestoes.length >= 3) break;
+      try { if (await livre(c)) sugestoes.push(c); } catch (e) { /* fail-open */ }
+    }
+    let ok = false;
+    try { ok = pedido ? await livre(pedido) : false; } catch (e) { ok = false; }
+    return { livre: ok, sugestoes };
+  }
+);
+
+exports.dismissDuplicateSuspicion = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+
+    const db = admin.firestore();
+    const snap = await db.collection("tournaments").doc(tournamentId).get();
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+
+    const d = await _detectarDuplicataNoTorneio(db, callerUid, snap.data());
+    if (!d) return { ok: true, nada: true };
+
+    const FV = admin.firestore.FieldValue;
+    await Promise.all([
+      db.collection("users").doc(callerUid).set({ dupDismissed: FV.arrayUnion(d.uid) }, { merge: true }),
+      db.collection("users").doc(d.uid).set({ dupDismissed: FV.arrayUnion(callerUid) }, { merge: true }),
+    ]);
+    console.log(`[dismissDuplicateSuspicion] ${callerUid} <-> ${d.uid} (${d.motivo}) — não são a mesma pessoa`);
+    return { ok: true, dispensado: true };
   }
 );
 
@@ -5537,21 +5715,45 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
     const db = admin.firestore();
     const uid = event.params.uid;
     const conflito = await _nameUnique.findDisplayNameConflict(db, nome, uid);
-    if (!conflito) return;
 
-    // Quem já estava com o nome não é renomeado pelas costas.
-    if (!_nameVariant.shouldIRename(a, conflito, uid)) {
-      console.log(`[enforceUniqueDisplayName] "${nome}" colide com ${conflito.uid}, mas quem renomeia é o outro lado (uid=${uid} é o estabelecido)`);
+    if (!conflito) {
+      // Conflito resolvido (a pessoa trocou de nome, ou a outra conta sumiu/fundiu):
+      // limpa o sinal, senão a pergunta ficaria pendurada pra sempre.
+      if (a.nameConflict) {
+        await db.collection("users").doc(uid).set(
+          { nameConflict: admin.firestore.FieldValue.delete() }, { merge: true });
+        console.log(`[enforceUniqueDisplayName] uid=${uid}: conflito de "${nome}" resolvido — sinal limpo`);
+      }
       return;
     }
 
-    const novo = await _nameVariant.resolveUniqueName(db, nome, uid);
-    if (!novo || novo === nome) return; // nada livre encontrado — não piora
+    // Quem já estava com o nome não é incomodado pelas costas.
+    if (!_nameVariant.shouldIRename(a, conflito, uid)) {
+      console.log(`[enforceUniqueDisplayName] "${nome}" colide com ${conflito.uid}, mas quem responde é o outro lado (uid=${uid} é o estabelecido)`);
+      return;
+    }
 
-    const payload = _nameUnique.denormalizeDisplayName({}, novo);
-    payload.updatedAt = new Date().toISOString();
-    await db.collection("users").doc(uid).set(payload, { merge: true });
-    console.log(`[enforceUniqueDisplayName] uid=${uid}: "${nome}" colidia com ${conflito.uid} → renomeado para "${novo}"`);
+    // ⚠️ v1.7.37 — NÃO RENOMEIA MAIS EM SILÊNCIO. Regra do dono (05/ago/2026):
+    // _"o certo, invés de criar 'Gabriela Ferreira 2', é indicar o nome que já existe,
+    // indicando com ****email/celular e perguntar se é a mesma pessoa. Autentica se for e
+    // mescla. Se não for, que a pessoa indique um nome válido e livre."_
+    //
+    // A variante automática resolvia a UNICIDADE e escondia a PERGUNTA — e, pior, cegava a
+    // própria detecção de duplicata: com "Gabriela Ferreira 2" no banco, a comparação por
+    // nome idêntico nunca mais casaria. Aqui só se SINALIZA; quem decide é a pessoa.
+    // Só o MASCARADO é gravado: `nameConflict` é lido pelo cliente, e uid/contato cheio da
+    // outra conta nunca podem chegar lá ([[project_privileged_fields_never_client_writable]]).
+    const emailReal = (conflito.email && !_nameUnique.isSyntheticEmail(conflito.email)) ? conflito.email : "";
+    await db.collection("users").doc(uid).set({
+      nameConflict: {
+        nome: nome,
+        maskedEmail: _nameUnique.maskEmail(emailReal) || null,
+        maskedPhone: _nameUnique.maskPhone(conflito.phone) || null,
+        at: new Date().toISOString(),
+      },
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    console.log(`[enforceUniqueDisplayName] uid=${uid}: "${nome}" colide com ${conflito.uid} → SINALIZADO (sem renomear)`);
   }
 );
 
