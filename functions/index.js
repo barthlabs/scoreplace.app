@@ -32,6 +32,7 @@ const admin = require("firebase-admin");
 const _mergeRules = require("./merge-rules");
 const _profileMerge = require("./profile-merge-core");
 const _uidSweep = require("./uid-sweep");
+const _mergeCols = require("./merge-collections-core");
 const _enrollCore = require("./enroll-core");
 const _nameUnique = require("./name-unique-core");
 const _nameVariant = require("./name-variant-core");
@@ -377,16 +378,18 @@ async function _executeMerge(db, keepDoc, dropDoc) {
     console.error("[_executeMerge] letzplay falhou:", (e && (e.code || e.message)) || e);
   }
 
-  // Transfer casualMatches ownership
-  const casualSnap = await db.collection("casualMatches")
-    .where("creatorUid", "==", dropUid).get();
-  let casualFixed = 0;
-  if (!casualSnap.empty) {
-    let b = db.batch(); let bc = 0;
-    casualSnap.docs.forEach(doc => { b.update(doc.ref, { creatorUid: keepUid }); bc++; });
-    await b.commit();
-    casualFixed = casualSnap.size;
-  }
+  // ── TODAS as coleções, sempre ("se mescla tudo é tudo sempre", regra do dono) ──────
+  // Antes só `casualMatches` era tratado aqui, e por um campo que NEM EXISTE nos docs
+  // (`creatorUid`; o real é `createdBy`) — no-op desde sempre. `presences` ficava de fora
+  // (3 check-ins apontariam pra uid morto). A varredura agora DESCOBRE as coleções em tempo
+  // de execução e varre todas, menos as que têm tratamento próprio (lista de EXCLUSÃO no
+  // core). Coleção nova nasce coberta, sem ninguém lembrar de cadastrá-la.
+  const sweptFixed = await _sweepAllCollectionsByUid(db, dropUid, keepUid);
+  const casualFixed = sweptFixed.casualMatches || 0;
+  const colFixed = sweptFixed;
+
+  // ── Notificações: a caixa da conta absorvida vai pra do sobrevivente, SEM duplicar ──
+  const notifFixed = await _migrateNotifications(db, dropUid, keepUid);
 
   // Mark old doc as merged
   await db.collection("users").doc(dropUid).set(
@@ -403,8 +406,146 @@ async function _executeMerge(db, keepDoc, dropDoc) {
   catch (e) { _drEmail = dropData.email || null; _drPhone = dropData.phone || null; }
   await _recordLoginRedirects(db, keepUid, _drEmail, _drPhone);
 
-  console.log(`[_executeMerge] Done: tourFixed=${tourFixed} casualFixed=${casualFixed}`);
-  return { tourFixed, casualFixed };
+  console.log(`[_executeMerge] Done: tourFixed=${tourFixed} casualFixed=${casualFixed} ` +
+    `presences=${sweptFixed.presences || 0} venues=${sweptFixed.venues || 0} ` +
+    `notifMovidas=${notifFixed.moved} notifDuplicadas=${notifFixed.duplicates} notifDeTerceiros=${notifFixed.fromUid}`);
+  return { tourFixed, casualFixed, colFixed, notifFixed };
+}
+
+/**
+ * VARREDURA GENÉRICA DE UID EM TODAS AS COLEÇÕES.
+ *
+ * Não recebe lista: pergunta ao Firestore quais coleções existem (`listCollections`) e varre
+ * cada uma que não esteja na exclusão do core, aplicando o mesmo motor dos torneios
+ * (`uid-sweep.remapUid` — acha o uid em qualquer profundidade, inclusive como chave de mapa,
+ * preserva Timestamp por referência e dedupa array). Grava só os campos que mudaram.
+ *
+ * Best-effort POR COLEÇÃO: uma falhar não aborta a fusão nem as outras — o essencial
+ * (torneios, perfil, Auth) já rodou antes daqui.
+ *
+ * ⚠️ Nunca ENCOLHE lista: o sweep TROCA valores, jamais remove. Se algum array reescrito vier
+ * menor que o lido, aquele campo é descartado e o caso é logado — mesma trava do
+ * _repairTournaments (o sumiço do Gersom, v1.7.26).
+ * @returns {Object} contagem de docs alterados por coleção
+ */
+async function _sweepAllCollectionsByUid(db, dropUid, keepUid) {
+  const out = {};
+  if (!dropUid || !keepUid) return out;
+  let cols = [];
+  try { cols = await db.listCollections(); }
+  catch (e) { console.error("[_sweepAllCollectionsByUid] listCollections falhou:", e && e.message); return out; }
+
+  for (const ref of cols) {
+    const nome = ref.id;
+    if (!_mergeCols.shouldSweepCollection(nome)) continue;
+    out[nome] = 0;
+    try {
+      const snap = await ref.get();
+      let b = db.batch();
+      let n = 0;
+      for (const doc of snap.docs) {
+        // Os DOIS docs de perfil envolvidos têm regra própria (computeProfileMerge +
+        // tombstone) — varrê-los aqui sobrescreveria essa decisão. Os de TERCEIROS entram:
+        // é onde vivem `friends[]` e `friendRequestsSent[]` com o uid morto.
+        if (nome === "users" && (doc.id === dropUid || doc.id === keepUid)) continue;
+        const atual = doc.data();
+        const swept = _uidSweep.remapUid(atual, dropUid, keepUid);
+        if (!swept.changed) continue;
+        const payload = {};
+        for (const k of Object.keys(swept.value)) {
+          if (JSON.stringify(swept.value[k]) !== JSON.stringify(atual[k])) payload[k] = swept.value[k];
+        }
+        // ── trava anti-encolhimento ────────────────────────────────────────────
+        // A varredura TROCA uid; ela nunca deve fazer PESSOA sumir de uma lista. Mas há um
+        // encolhimento LEGÍTIMO: quando alguém tinha as DUAS contas na lista (é amigo do
+        // Eduardo pelo Google E pelo Apple), a troca colapsa as duas numa — e aí o array
+        // encolhe justamente porque a fusão funcionou. Comparar só o TAMANHO confunde os dois
+        // casos e descartava o `friends[]` do dono (medido em 05/ago/2026).
+        // Regra certa: o resultado tem que bater com o esperado — a lista original com
+        // drop→keep aplicado e duplicata removida. Qualquer perda ALÉM disso é descartada.
+        for (const k of Object.keys(payload)) {
+          const antes = atual[k], depois = payload[k];
+          if (!Array.isArray(depois) || !Array.isArray(antes)) continue;
+          if (depois.length >= antes.length) continue;
+          const soStrings = antes.every((x) => typeof x === "string");
+          const esperado = soStrings
+            ? Array.from(new Set(antes.map((x) => (x === dropUid ? keepUid : x))))
+            : null;
+          if (esperado && esperado.length === depois.length &&
+              esperado.every((x) => depois.indexOf(x) !== -1)) continue;   // dedup legítimo
+          console.error(`[_sweepAllCollectionsByUid] DESCARTADO ${nome}/${doc.id}.${k}: ` +
+            `${antes.length} → ${depois.length}. Sweep de uid não remove item além do dedup.`);
+          delete payload[k];
+        }
+        if (!Object.keys(payload).length) continue;
+        b.update(doc.ref, payload);
+        n++;
+        out[nome]++;
+        if (n % 400 === 0) { await b.commit(); b = db.batch(); }
+      }
+      if (n % 400 !== 0 || n === 0) await b.commit();
+      if (out[nome]) console.log(`[_sweepAllCollectionsByUid] ${nome}: ${out[nome]} doc(s)`);
+    } catch (e) {
+      console.error(`[_sweepAllCollectionsByUid] ${nome} falhou:`, e && e.message);
+    }
+  }
+  return out;
+}
+
+/**
+ * users/{drop}/notifications/* → users/{keep}/notifications/*, sem duplicar, e reaponta o
+ * `fromUid` das notificações de TERCEIROS que citam o uid morto (senão o nome e a foto do
+ * remetente deixam de resolver na caixa de outra pessoa).
+ *
+ * Copia-e-apaga em vez de mover (o Firestore não tem move): a cópia vai PRIMEIRO e só depois
+ * o original é apagado — se algo falhar no meio, o pior caso é a notificação existir nos dois
+ * lados por um instante, nunca sumir. Duplicata detectada pela assinatura é apagada na
+ * origem sem ser copiada: a conta vai deixar de existir e o aviso já está na caixa certa.
+ */
+async function _migrateNotifications(db, dropUid, keepUid) {
+  const res = { moved: 0, duplicates: 0, fromUid: 0 };
+  try {
+    const [dropSnap, keepSnap] = await Promise.all([
+      db.collection("users").doc(dropUid).collection("notifications").get(),
+      db.collection("users").doc(keepUid).collection("notifications").get(),
+    ]);
+    const plano = _mergeCols.planNotifMigration(
+      dropSnap.docs.map((d) => ({ id: d.id, data: d.data() })),
+      keepSnap.docs.map((d) => ({ id: d.id, data: d.data() })),
+      dropUid, keepUid
+    );
+    const keepCol = db.collection("users").doc(keepUid).collection("notifications");
+    const dropCol = db.collection("users").doc(dropUid).collection("notifications");
+    for (const m of plano.moves) {
+      await keepCol.doc(m.toId).set(m.data);
+      await dropCol.doc(m.fromId).delete();
+      res.moved++;
+    }
+    for (const d of plano.duplicates) {
+      await dropCol.doc(d.id).delete();
+      res.duplicates++;
+    }
+  } catch (e) {
+    console.error("[_migrateNotifications] caixa do drop falhou:", e && e.message);
+  }
+  // Remetente: percorre TODAS as caixas (collectionGroup) atrás do uid morto.
+  try {
+    const from = await db.collectionGroup("notifications").where("fromUid", "==", dropUid).get();
+    if (!from.empty) {
+      let b = db.batch();
+      let n = 0;
+      for (const doc of from.docs) {
+        b.update(doc.ref, { fromUid: keepUid });
+        n++;
+        if (n % 400 === 0) { await b.commit(); b = db.batch(); }
+      }
+      await b.commit();
+      res.fromUid = from.size;
+    }
+  } catch (e) {
+    console.error("[_migrateNotifications] fromUid falhou:", e && e.message);
+  }
+  return res;
 }
 
 // E-mail sintético de conta phone-only — nunca é credencial "de verdade" a preservar.

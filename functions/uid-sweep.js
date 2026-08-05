@@ -59,6 +59,13 @@ function remapUid(node, from, to) {
   function walk(v) {
     if (typeof v === "string") {
       if (v === from) { changed = true; return to; }
+      // ⚠️ uid EMBUTIDO em string maior (chave/valor COMPOSTO). Achado em produção 05/ago/2026:
+      // `opponentHistory` do Confra guarda o par de adversários numa chave
+      // `uid:<A>|||uid:<B>` — e a troca por igualdade exata não a enxergava. Resultado: depois
+      // da fusão o motor "esquecia" que a pessoa já tinha enfrentado aquelas 3, e podia
+      // repetir o confronto. Substituir é seguro porque um uid é token de 28 caracteres de
+      // alta entropia: ele não aparece por acaso dentro de outro texto.
+      if (v.indexOf(from) !== -1) { changed = true; return v.split(from).join(to); }
       return v;
     }
     if (!isPlainContainer(v)) return v;          // Timestamp/GeoPoint/Ref: intactos
@@ -81,11 +88,13 @@ function remapUid(node, from, to) {
 
     const out = {};
     for (const k of Object.keys(v)) {
-      const nk = (k === from) ? (changed = true, to) : k;
+      // chave exata OU composta (`uid:<A>|||uid:<B>` do opponentHistory)
+      const nk = (k === from) ? to : (k.indexOf(from) !== -1 ? k.split(from).join(to) : k);
+      if (nk !== k) changed = true;
       const nv = walk(v[k]);
-      // chave-uid colidindo: o valor do sobrevivente (`to`) prevalece
-      if (nk in out && k === from) continue;
-      if (nk === to && k === from && (to in v)) continue;
+      // chave remapeada colidindo com uma que JÁ existe: o valor do sobrevivente prevalece
+      // (estado atual > estado da conta absorvida)
+      if (nk !== k && (nk in out || Object.prototype.hasOwnProperty.call(v, nk))) continue;
       out[nk] = nv;
     }
     return out;

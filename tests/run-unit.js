@@ -434,6 +434,7 @@ const SUITES = [
   // a Silvia perderia 44 campos pra uma conta de 17). Varredura genérica com lista de
   // exclusão: campo novo no perfil é preservado sem ninguém lembrar de atualizar lista.
   'functions/test-profile-merge-core.js',
+  'functions/test-merge-collections-core.js',
   // NOME ÚNICO no SERVIDOR: a regra existia em 4 pontos, 3 deles no cliente e fail-open —
   // login federado não passava por checagem server-side, e homônimos continuaram nascendo
   // (11/jul, 14/jul, 17/jul, 30/jul) depois de a lei existir (24/jun).
