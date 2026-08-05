@@ -3834,40 +3834,142 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   // GÊNERO VEM DO PERFIL, POR UID: a entrada da espera é strippada (`gender` está em
   // _PROFILE_FIELDS desde a v1.3.52), então ler da entrada devolveria vazio sempre.
   //
-  // DESCONHECIDO NÃO CONTA como homem — de propósito. Contá-lo travaria a formação em
-  // todo torneio sem gênero preenchido (regressão pra quem não usa o campo). Quem precisa
-  // corrigir isso tem a Análise de Inscritos, que desde a v1.7.2 mostra a espera.
+  // v1.7.16 — SEM GÊNERO DETERMINADO, NÃO ENTRA EM GRUPO. Regra do dono (ago/2026, depois
+  // do incidente do "R1 Grupo B2" no Confra): "sem gênero determinado tem que travar. não
+  // pode assumir nem ser homem, nem ser mulher."
+  //
+  // Isto REVOGA a regra anterior ("desconhecido não conta como homem", v1.7.3) — ela era
+  // literalmente a porta pela qual o grupo errado fechou. INCIDENTE MEDIDO: o B2 saiu com
+  // `playersUids: [null,null,null,null]` e 3 homens. A causa não foi o cálculo do teto: era
+  // `_isHomem` resolvendo o gênero por um mapa nome→uid (`_buildNameToUid`) que NÃO cobre
+  // entrada strippada (só-uid, sem nome gravado) nem cache de perfil frio — dois dos quatro
+  // tinham se inscrito minutos antes. O mapa saiu vazio, `_isHomem` devolveu false pra TODO
+  // MUNDO (inclusive pra quem tem gender:'masculino' no perfil), H=0, e o teto de 1 homem
+  // nunca chegou a ser testado. Com o mapa funcionando o grupo JÁ não teria fechado
+  // (max(0,4-2)=2 > min(2,1)=1) — faltava enxergar, não calcular.
+  //
+  // Por isso o gênero agora é DECLARADO OU NADA, e "nada" sai do pool: uid que não resolve,
+  // perfil ausente, cache frio e campo em branco caem todos no mesmo balde e ESPERAM. A
+  // pessoa não perde o lugar na fila (não entra em `used`, então nada a remove da espera);
+  // quem corrige o gênero é o organizador pela Análise de Inscritos, que desde a v1.7.2
+  // enxerga a lista de espera. Falso-bloqueio é incômodo; grupo desequilibrado fechado em
+  // cima de um palpite é irreversível depois que a rodada começa.
   //
   // NÃO DEU PRA FECHAR RESPEITANDO A REGRA ⇒ NÃO FECHA. A fila continua esperando, que é
   // literalmente o pedido — nunca montar o grupo "errado" só pra não deixar gente parada.
-  var MAX_HOMENS_POR_GRUPO = 1;
-  var _isHomem = function (nm) {
-    var u = _n2uMapWl && _n2uMapWl[nm];
-    return !!(u && typeof window._genderForUid === 'function' && window._genderForUid(u) === 'masculino');
+  // v1.7.4: a regra virou TOGGLE do organizador (`t.wlGroupBalance`), no box da Lista de
+  // espera. 'equilibrado' (DEFAULT) = teto de 1 homem; 'livre' = sem teto, comportamento
+  // anterior à 1.7.3. Default equilibrado porque foi o pedido do dono ("pelo menos por
+  // enquanto") — desligar é escolha explícita, não estado inicial.
+  // v1.7.16: a regra virou PROPORÇÃO configurável (gender-ratio-core.js), consumida também
+  // pelo sorteio inicial equilibrado — uma versão só pros dois caminhos.
+  //   sorteio LIVRE     → sem proporção e sem regra de gênero (forma na ordem);
+  //   sorteio EQUILIBRADO → proporção (50/50 · 25/75 · 75/25) + toggle "Travar proporção".
+  var _sorteioLivre = (typeof window._drawModeIsLivre === 'function') ? window._drawModeIsLivre(t) : false;
+  var _ratioAtual = (typeof window._ratioForPhase === 'function') ? window._ratioForPhase(t, null, category) : '';
+  var _ratioTravada = (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true;
+  // uid de quem está NA FILA, pelo nome. O mapa do elenco (_n2uMapWl) é montado a partir do
+  // nome GRAVADO em t.participants — que a entrada strippada não tem. A ENTRADA DA ESPERA
+  // tem uid, então ela é a fonte primária aqui; o mapa do elenco fica como fallback.
+  var _wlUidPorNome = {}, _wlEntryPorNome = {};
+  (function () {
+    var q = (typeof window._getWaitlist === 'function') ? (window._getWaitlist(t) || []) : [];
+    q.forEach(function (e) {
+      if (!e || typeof e !== 'object') return;
+      [(typeof window._pName === 'function') ? window._pName(e, '') : '', e.displayName, e.name]
+        .forEach(function (n) {
+          n = String(n || '').trim();
+          if (!n) return;
+          if (!_wlEntryPorNome[n]) _wlEntryPorNome[n] = e;
+          if (e.uid && !_wlUidPorNome[n]) _wlUidPorNome[n] = e.uid;
+        });
+    });
+  })();
+  var _uidDaFila = function (nm) { return _wlUidPorNome[nm] || (_n2uMapWl && _n2uMapWl[nm]) || null; };
+  // DECLARADO OU NADA: '' significa "não sei" e NUNCA é tratado como um gênero.
+  //
+  // Lê pela ENTRADA (`_pGender`), não por `_genderForUid` direto, porque os dois lados
+  // guardam o gênero em lugares diferentes e a regra tem que valer nos dois
+  // ([[feedback_functions_must_mirror_app]]): no CLIENTE `_pGender` resolve uid→perfil
+  // e cai em `p.gender`; no SERVIDOR `_genderForUid` é um STUB que devolve '' sempre
+  // (functions-autodraw/draw-core.js) e quem resolve é `_enrichParticipantsFromProfiles`,
+  // que escreve `p.gender` nas entradas de standbyParticipants/waitlist ANTES do motor.
+  // Ler só por uid deixaria a regra desligada no servidor (era o caso antes da v1.7.16)
+  // ou, agora que desconhecido trava, bloquearia TODA formação lá.
+  // ⚠️ NÃO usar window._canonGender aqui: o MESMO nome tem contratos DIFERENTES nos dois
+  // lados — no cliente (store.js) devolve prefixo de CATEGORIA ('Masc'/'Fem'/'Misto'/'none')
+  // e no servidor (draw-core.js) devolve o gênero ('masculino'/'feminino'). Normalizar por
+  // ela fazia 'masculino' virar 'Masc', falhar a comparação e BLOQUEAR TODA formação.
+  // A normalização aqui é por prefixo, que vale igual nos dois.
+  var _generoDe = function (nm) {
+    var e = _wlEntryPorNome[nm], u = _uidDaFila(nm);
+    var g = '';
+    if (e && typeof window._pGender === 'function') g = String(window._pGender(e) || '');
+    if (!g && e && e.gender) g = String(e.gender);
+    if (!g && u && typeof window._genderForUid === 'function') g = String(window._genderForUid(u) || '');
+    g = g.trim().toLowerCase();
+    if (g.indexOf('masc') === 0 || g === 'm' || g === 'male' || g === '♂') return 'masculino';
+    if (g.indexOf('fem') === 0 || g === 'f' || g === 'female' || g === '♀') return 'feminino';
+    return '';
   };
-  // Tira do pool os 4 primeiros que respeitam o teto (a ordem do embaralho é preservada:
-  // só PULA quem estouraria a cota). Devolve null quando não há combinação possível.
-  var _pickGrupo = function (pool) {
-    var idx = [], homens = 0;
-    for (var i = 0; i < pool.length && idx.length < 4; i++) {
-      if (_isHomem(pool[i])) { if (homens >= MAX_HOMENS_POR_GRUPO) continue; homens++; }
-      idx.push(i);
+  // uid nos slots dos jogos formados: mapa do elenco + o da fila (é o que faltava no B2,
+  // que saiu com playersUids todos nulos e virou jogo apontando pra ninguém).
+  var _n2uFinal = {};
+  Object.keys(_n2uMapWl || {}).forEach(function (k) { _n2uFinal[k] = _n2uMapWl[k]; });
+  Object.keys(_wlUidPorNome).forEach(function (k) { if (!_n2uFinal[k]) _n2uFinal[k] = _wlUidPorNome[k]; });
+  // PLANEJA TODOS OS GRUPOS DE UMA VEZ — nunca um de cada vez.
+  //
+  // O guloso anterior ("pega os 4 primeiros que cabem, pula quem estoura a cota") PERDIA
+  // grupo: ele gastava os não-homens no primeiro grupo e sobrava um pool só de homens que
+  // não fechava. Medido: com 2 homens + 6 não-homens na fila, 21% das ordens de embaralho
+  // formavam UM grupo em vez de dois — 4 pessoas ficavam esperando à toa, existindo divisão
+  // válida. Era essa a intermitência de `tests/grupo-espera-max-1-homem.test.js` (~20% de
+  // falha no cenário "2 homens + 6 mulheres"), que denunciava o defeito e não um teste ruim.
+  //
+  // Agora: descobre quantos grupos G são viáveis e RESERVA os homens antes de preencher.
+  // Com h homens usados e G grupos, precisa de h <= min(H, G*MAX) (teto por grupo) e de
+  // 4G-h <= N não-homens pra completar — logo G é viável quando max(0, 4G-N) <= min(H, G*MAX).
+  // A ordem do embaralho é preservada dentro de cada balde, então o sorteio segue sorteio.
+  // A DIVISÃO mora no núcleo puro (gender-ratio-core.js). Aqui só se traduz o pool de
+  // NOMES da fila para {key, gênero, vaga} e se devolve os grupos. O núcleo é o mesmo que
+  // o sorteio inicial equilibrado usa — mudou lá, mudou nos dois.
+  var _planGrupos = function (pool) {
+    // Sorteio LIVRE: nem proporção nem gênero entram na conta — forma na ordem sorteada.
+    if (_sorteioLivre || typeof window._planGroupsByRatio !== 'function') {
+      var gs = [];
+      for (var i = 0; i + 4 <= pool.length; i += 4) gs.push(pool.slice(i, i + 4));
+      return gs;
     }
-    if (idx.length < 4) return null;
-    var out = idx.map(function (i) { return pool[i]; });
-    for (var k = idx.length - 1; k >= 0; k--) pool.splice(idx[k], 1);
-    return out;
+    var res = window._planGroupsByRatio(pool.map(function (n) {
+      var e = _wlEntryPorNome[n];
+      return { key: n, gender: _generoDe(n), wildcard: !!(e && e.isPlaceholder) };
+    }), { ratio: _ratioAtual, locked: _ratioTravada, size: 4 });
+    return res.groups || [];
   };
-  while (eligible.length >= 4) {
-    var grp = _pickGrupo(eligible);
-    if (!grp) break; // só sobrou combinação que violaria a regra → fila espera mais gente
+  _planGrupos(eligible).forEach(function (grp) {
+    // PORTA (v1.7.17): com a proporção TRAVADA o grupo só nasce se a composição REAL
+    // atender a regra. Regra do dono: "não quero que coloque 4 num grupo para depois
+    // perceber que quebrou a regra". O planejador já devolve grupos válidos — isto existe
+    // pra que NENHUM caminho (nem uma falha de resolução de gênero como a que produziu o
+    // "R1 Grupo B2") consiga criar um grupo torto. Na dúvida, NÃO cria.
+    if (_ratioTravada && !_sorteioLivre && _ratioAtual &&
+        typeof window._groupMeetsRatio === 'function') {
+      var _comp = grp.map(function (n) {
+        var e = _wlEntryPorNome[n];
+        return { gender: _generoDe(n), wildcard: !!(e && e.isPlaceholder) };
+      });
+      if (!window._groupMeetsRatio(_comp, _ratioAtual)) {
+        try { (window._warn || function(){})('[proporção] grupo recusado na porta (não atende ' + _ratioAtual + '):', grp); } catch (e) {}
+        return;
+      }
+    }
     var gi = (col.monarchGroups || []).length;
-    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed, nameToUid: _n2uMapWl });
+    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed, nameToUid: _n2uFinal });
     col.monarchGroups.push(g);
     col.matches = (col.matches || []).concat(g.matches);
     grp.forEach(function (n) { used.push(n); });
     formed++;
-  }
+  });
   // remove os usados de TODAS as fontes da espera (monarch + standby + waitlist);
   // não-presentes e a sobra permanecem na fila monarch desta categoria.
   if (used.length) {
@@ -4242,9 +4344,63 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   var groups = [];
   var _n2uMap = _buildNameToUid(t); // v4.4.115: nome→uid pra gravar identidade nos jogos
 
-  for (var gi = 0; gi < numGroups; gi++) {
-    var gPlayers = playingPlayers.slice(gi * 4, gi * 4 + 4);
-    groups.push(_buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: gPlayers, category: category, ts: ts, nameToUid: _n2uMap }));
+  // ── PROPORÇÃO DE GÊNERO (v1.7.16) ──────────────────────────────────────────────────
+  // O MESMO núcleo que a formação por lista de espera usa (gender-ratio-core.js). Só entra
+  // no sorteio EQUILIBRADO; no livre a divisão continua sendo a ordem sorteada.
+  // Quem não couber respeitando a proporção NÃO é excluído do torneio: vai pra LISTA DE
+  // ESPERA, exatamente como a sobra da divisão por 4 já ia ("a sobra vira espera").
+  var _plano = null;
+  if (typeof window._planGroupsByRatio === 'function' &&
+      typeof window._drawModeIsLivre === 'function' && !window._drawModeIsLivre(t) &&
+      typeof window._ratioConfigured === 'function' && window._ratioConfigured(t, null, category)) {
+    // SEM DEFAULT aqui de propósito (ver _ratioConfigured): o sorteio inicial nunca teve
+    // regra dura de gênero, e ligá-la sozinha faria todo torneio sem gênero preenchido
+    // sortear ZERO grupos. Escolhida a proporção na fase, ela passa a valer aqui também.
+    var _rt = (typeof window._ratioConfigured === 'function') ? window._ratioConfigured(t, null, category) : '';
+    var _lk = window._ratioIsLocked(t);
+    var _gOf = function (nm) {
+      var u = _n2uMap[nm];
+      var gg = (u && typeof window._genderForUid === 'function') ? String(window._genderForUid(u) || '') : '';
+      if (!gg) {
+        // servidor: o gênero vem enriquecido na ENTRADA, não pelo uid (draw-core.js)
+        var pe = (t.participants || []).filter(function (p) { return p && p.uid && p.uid === u; })[0];
+        if (pe && typeof window._pGender === 'function') gg = String(window._pGender(pe) || '');
+      }
+      gg = gg.trim().toLowerCase();
+      if (gg.indexOf('masc') === 0 || gg === 'm') return 'masculino';
+      if (gg.indexOf('fem') === 0 || gg === 'f') return 'feminino';
+      return '';
+    };
+    _plano = window._planGroupsByRatio(playingPlayers.map(function (nm) {
+      return { key: nm, gender: _gOf(nm) };
+    // flexIncludesUnknown: SÓ no sorteio inicial (regra do dono). Quem está no sorteio joga,
+    // mesmo sem gênero no perfil — entra por último e nunca conta pra cota de um gênero.
+    }), { ratio: _rt, locked: _lk, size: 4, flexIncludesUnknown: true });
+  }
+
+  if (_plano) {
+    _plano.groups.forEach(function (gPlayers, gi) {
+      // PORTA (v1.7.17): mesma conferência do lado da espera — travado, grupo torto não nasce.
+      if (_lk && _rt && typeof window._groupMeetsRatio === 'function' &&
+          !window._groupMeetsRatio(gPlayers.map(function (nm) { return _gOf(nm); }), _rt)) {
+        try { (window._warn || function(){})('[proporção] grupo recusado na porta (sorteio inicial):', gPlayers); } catch (e) {}
+        return;
+      }
+      groups.push(_buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: gPlayers, category: category, ts: ts, nameToUid: _n2uMap }));
+    });
+    // sobra da proporção entra na fila JUNTO com a sobra da divisão por 4 (que já foi
+    // gravada acima) — nunca some, e é chamada quando aparecer gente do gênero que falta.
+    if (_plano.leftover.length) {
+      var _wlAtual = window._getMonarchWaitlist(t, category);
+      _setMonarchWaitlist(t, category, _wlAtual.concat(_plano.leftover.filter(function (n) {
+        return _wlAtual.indexOf(n) === -1;
+      })));
+    }
+  } else {
+    for (var gi = 0; gi < numGroups; gi++) {
+      var gPlayers = playingPlayers.slice(gi * 4, gi * 4 + 4);
+      groups.push(_buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: gPlayers, category: category, ts: ts, nameToUid: _n2uMap }));
+    }
   }
 
   // Record opponent pairings for anti-repeat logic in future rounds

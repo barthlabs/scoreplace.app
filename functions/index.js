@@ -30,9 +30,11 @@ const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const _mergeRules = require("./merge-rules");
+const _profileMerge = require("./profile-merge-core");
 const _uidSweep = require("./uid-sweep");
 const _enrollCore = require("./enroll-core");
 const _nameUnique = require("./name-unique-core");
+const _nameVariant = require("./name-variant-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -179,6 +181,27 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
     }
     if (!Object.keys(payload).length) continue;
 
+    // ── v1.7.27 · O SERVIDOR TAMBÉM NÃO PODE ENCOLHER LISTA ───────────────────
+    // Servidor não é sinônimo de seguro: este método faz `.get()` de TODOS os torneios
+    // e só depois `batch.commit()`, gravando CAMPOS INTEIROS. Entre a leitura e o commit
+    // cabe qualquer inscrição — e ela seria apagada, exatamente como no cliente (o sumiço
+    // do Gersom, v1.7.26). O que protege é a forma de gravar, não o lugar onde roda.
+    // O sweep de uid TROCA valores; ele nunca deveria REMOVER ninguém. Então: se a lista
+    // reescrita ficou menor que a lida, a gravação daquele campo é DESCARTADA e o caso é
+    // logado. Preferimos um uid velho sobrevivendo (que a próxima varredura corrige) a
+    // uma pessoa desaparecendo do torneio.
+    for (const campo of ["participants", "standbyParticipants", "waitlist"]) {
+      if (!Array.isArray(payload[campo])) continue;
+      const antes = Array.isArray(t[campo]) ? t[campo].length : 0;
+      if (payload[campo].length < antes) {
+        console.error(`[_repairTournaments] DESCARTADO ${campo} de ${tourDoc.id}: ` +
+          `sweep reduziu ${antes} → ${payload[campo].length}. Uma varredura de uid NUNCA ` +
+          `remove pessoa; gravar isso apagaria inscrito. Campo preservado como está no banco.`);
+        delete payload[campo];
+      }
+    }
+    if (!Object.keys(payload).length) continue;
+
     batch.update(tourDoc.ref, payload);
     tourFixed++;
     batchCount++;
@@ -193,60 +216,61 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
 }
 
 /**
- * Score how "complete" a user profile is. Higher = more complete = keep this one.
- * Rules: real name > phone-as-name, real email, city, birthdate, gender, sports.
- */
-function _profileScore(data) {
-  let s = 0;
-  const name = data.displayName || data.name || "";
-  if (name && !/^\+?[0-9\s\-()]{7,}$/.test(name)) s += 10; // real name, not a phone number
-  if (data.email && !data.email.includes("privaterelay"))   s += 5;
-  if (data.city)                                             s += 2;
-  if (data.birthDate)                                        s += 2;
-  if (data.gender)                                           s += 1;
-  if (Array.isArray(data.preferredSports) && data.preferredSports.length) s += 1;
-  if (data.photoURL && data.photoURL.startsWith("https://firebasestorage")) s += 1;
-  return s;
-}
-
-/**
  * Choose which of two Firestore DocumentSnapshot objects to keep.
  *
  * v1.2.6 — REGRA DO DONO: a conta FEDERADA (Google/Apple) prevalece. Provedor federado não
  * se transfere entre uids: apagar a conta Google apaga o login da pessoa (celular e senha se
  * movem, ele não). Espelha _mergeAccountsKeepOlder — os dois pontos de decisão do merge
  * precisam concordar, senão o auto-merge e o merge explícito escolhem sobreviventes
- * diferentes pra mesma dupla. Decide pelo `authProvider` do próprio doc (gravado em 166/166
- * dos perfis) pra não precisar bater no Auth aqui.
+ * diferentes pra mesma dupla.
  *
- * v3.0.57 (desempate, ainda vale): entre duas federadas — ou duas não-federadas — sobrevive a
- * MAIS ANTIGA, com o displayName dela. createdAt é o critério; ausente perde pra quem tem
- * idade conhecida; empate/ambos sem createdAt → perfil mais completo (legado).
- * Ver [[project_account_merge_email]]. Returns { keepDoc, dropDoc }.
+ * v1.6.86 — a decisão CONSULTA O AUTH (incidente 02/ago/2026, conta de junho perdeu pra de
+ * julho): perfil sem `createdAt` perdia pra perfil com createdAt, sendo que o Firebase Auth
+ * SEMPRE sabe a idade da conta (metadata.creationTime — o MESMO critério do pickSurvivor).
+ * Federação também sai do providerData real quando o UserRecord está disponível; os campos
+ * do doc (authProvider/createdAt) viram fallback pra quando o Auth já foi apagado.
+ * A regra inteira mora em functions/merge-rules.js (pickSurvivorProfiles), testável.
+ * Ver [[project_account_merge_email]]. Returns Promise<{ keepDoc, dropDoc }>.
  */
-function _determineMergeWinner(docA, docB) {
-  const fa = _mergeRules.isFederatedProfile(docA.data());
-  const fb = _mergeRules.isFederatedProfile(docB.data());
-  if (fa !== fb) {
-    return fa ? { keepDoc: docA, dropDoc: docB } : { keepDoc: docB, dropDoc: docA };
+async function _determineMergeWinner(docA, docB) {
+  const fetchAuth = (uid) => admin.auth().getUser(uid).catch(() => null);
+  const db = admin.firestore();
+  const [authA, authB, tcA, tcB] = await Promise.all([
+    fetchAuth(docA.id), fetchAuth(docB.id),
+    _tournamentCountFor(db, docA.id), _tournamentCountFor(db, docB.id),
+  ]);
+  const pick = _mergeRules.pickSurvivorByActivity(
+    { data: docA.data(), authUser: authA, tournamentCount: tcA },
+    { data: docB.data(), authUser: authB, tournamentCount: tcB },
+    docA.id, docB.id
+  );
+  const keepDoc = pick.keep === "a" ? docA : docB;
+  const dropDoc = pick.keep === "a" ? docB : docA;
+  console.log(`[_determineMergeWinner] keep=${keepDoc.id} ← drop=${dropDoc.id} ` +
+    `(critério: ${pick.reason}${pick.detail ? " — " + pick.detail : ""})`);
+  return { keepDoc, dropDoc };
+}
+
+/**
+ * Quantos torneios este uid integra — o sinal MAIS FORTE de atividade (é o que o dono citou
+ * primeiro). Query indexada por `memberUids`, com `count()` quando disponível pra não ler os
+ * docs. Devolve null quando a consulta falha: aí o degrau é PULADO na decisão, em vez de
+ * virar zero — um erro de query não pode decidir qual conta morre.
+ */
+async function _tournamentCountFor(db, uid) {
+  try {
+    const q = db.collection("tournaments").where("memberUids", "array-contains", uid);
+    if (typeof q.count === "function") {
+      const agg = await q.count().get();
+      const n = agg.data() && agg.data().count;
+      if (typeof n === "number") return n;
+    }
+    const s = await q.get();
+    return s.size;
+  } catch (e) {
+    console.warn("[_tournamentCountFor] falhou p/", uid, (e && (e.code || e.message)) || e);
+    return null;
   }
-  const ts = doc => {
-    const c = doc.data().createdAt;
-    if (c == null) return null;
-    return c.toMillis ? c.toMillis() : Number(c);
-  };
-  const a = ts(docA), b = ts(docB);
-  if (a != null && b != null && a !== b) {
-    return a < b ? { keepDoc: docA, dropDoc: docB } : { keepDoc: docB, dropDoc: docA };
-  }
-  if (a != null && b == null) return { keepDoc: docA, dropDoc: docB };
-  if (b != null && a == null) return { keepDoc: docB, dropDoc: docA };
-  // Sem createdAt confiável (ou exatamente igual) → desempata pelo perfil mais completo.
-  const aScore = _profileScore(docA.data());
-  const bScore = _profileScore(docB.data());
-  return aScore >= bScore
-    ? { keepDoc: docA, dropDoc: docB }
-    : { keepDoc: docB, dropDoc: docA };
 }
 
 /** Normalise a field value to a dedup key (strips spaces/dashes from phones). */
@@ -282,14 +306,72 @@ async function _executeMerge(db, keepDoc, dropDoc) {
     db, dropUid, dropEmail, dropName, keepUid, keepEmail, keepName
   );
 
-  // Merge matchHistory (no duplicate matchIds)
+  // v1.7.11 — NADA SE PERDE: o perfil do drop é absorvido pelo sobrevivente.
+  // Até aqui o merge movia torneios/matchHistory/casuais e ZERO campos de perfil, então
+  // quando a conta que sobrevivia tinha perfil pobre os dados da outra evaporavam (caso
+  // medido: Silvia Moura Ferreira, 44 campos × 17). A regra é varredura genérica com lista
+  // de exclusão — campo novo no perfil é preservado por padrão, sem ninguém lembrar de
+  // atualizar lista. Conflito: o valor VIVO do sobrevivente sempre vence.
+  const profileUpd = _profileMerge.computeProfileMerge(keepData, dropData, keepUid);
+
+  // matchHistory tem regra própria (dedup por matchId) — por isso fica fora da varredura.
   if (Array.isArray(dropData.matchHistory) && dropData.matchHistory.length > 0) {
     const existing = Array.isArray(keepData.matchHistory) ? keepData.matchHistory : [];
     const merged   = [...existing];
     dropData.matchHistory.forEach(entry => {
       if (!merged.some(e => e.matchId === entry.matchId)) merged.push(entry);
     });
-    await db.collection("users").doc(keepUid).update({ matchHistory: merged });
+    profileUpd.matchHistory = merged;
+  }
+
+  if (Object.keys(profileUpd).length > 0) {
+    console.log(`[_executeMerge] perfil absorvido: ${Object.keys(profileUpd).join(", ")}`);
+    await db.collection("users").doc(keepUid).update(profileUpd);
+  }
+
+  // v1.7.13 — IMPORTAÇÃO DO LETZPLAY. Vive em `letzplayScans/{uid}` (handle, scan,
+  // fullImport, totaisLetzplay, cursor) — coleção PRÓPRIA, indexada por uid, que o merge não
+  // tocava: a leitura inteira do letzplay da pessoa sumia junto com a conta. `scannedBy`
+  // (quem rodou a leitura) também é uid e precisa ser repontado, senão a autoria vira órfã.
+  // O acervo `letzplayTournaments/*` NÃO entra: é indexado por competição, compartilhado
+  // entre todo mundo, e não guarda uid — não há o que remapear ali.
+  try {
+    const lzCol = db.collection("letzplayScans");
+    const [lzKeep, lzDrop] = await Promise.all([
+      lzCol.doc(keepUid).get(), lzCol.doc(dropUid).get(),
+    ]);
+    if (lzDrop.exists) {
+      const lzDropData = lzDrop.data() || {};
+      if (!lzKeep.exists) {
+        await lzCol.doc(keepUid).set(lzDropData);
+      } else {
+        // ATÔMICO: escolhe um doc INTEIRO, nunca funde campo a campo. A regra da união de
+        // PERFIL não serve aqui — ela funde objeto por chave, e num ensaio com 2 docs reais
+        // isso alterava `scan`, `fullImport` e `totaisLetzplay` do sobrevivente. Uma leitura
+        // do letzplay é um retrato coerente (cursor, totais e jogos combinam entre si);
+        // misturar duas produz totais que não batem com os jogos, e o app lê esses números
+        // como verdade. Fica a mais recente — ou a com mais jogos, sem data confiável.
+        if (_profileMerge.pickLetzplayScan(lzKeep.data(), lzDropData) === "drop") {
+          await lzCol.doc(keepUid).set(lzDropData);   // substitui INTEIRO, sem merge
+          console.log(`[_executeMerge] letzplay: leitura do drop era mais nova — substituiu a do keep`);
+        }
+      }
+      // Apaga o doc do drop: deixado pra trás ele vira ÓRFÃO respondendo por uid — foi
+      // exatamente assim que placares de torneios apagados reapareceram na ficha das pessoas.
+      await lzCol.doc(dropUid).delete();
+      console.log(`[_executeMerge] letzplay: scan de ${dropUid} absorvido por ${keepUid}`);
+    }
+    // Autoria das leituras que o drop rodou em OUTRAS pessoas.
+    const lzBy = await lzCol.where("scannedBy", "==", dropUid).get();
+    if (!lzBy.empty) {
+      const b = db.batch();
+      lzBy.docs.forEach((doc) => { if (doc.id !== dropUid) b.update(doc.ref, { scannedBy: keepUid }); });
+      await b.commit();
+      console.log(`[_executeMerge] letzplay: ${lzBy.size} leitura(s) repontada(s) pra ${keepUid}`);
+    }
+  } catch (e) {
+    // Não derruba a fusão (os dados principais já viajaram), mas precisa ser barulhento.
+    console.error("[_executeMerge] letzplay falhou:", (e && (e.code || e.message)) || e);
   }
 
   // Transfer casualMatches ownership
@@ -401,10 +483,21 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   // Confra; Google criado 11/jun, com os únicos logins recentes. Pela regra antiga ela
   // ganharia a Confra e perderia a entrada. Mantendo a federada: o phone é movido pra ela,
   // e a pessoa entra por Google OU telefone. Ver [[project_account_merge_email]].
-  const _pick = _mergeRules.pickSurvivor(ua, ub);
-  const keepU = _pick.keep, dropU = _pick.drop;
+  // v1.7.13 — A MAIS ATIVA VENCE (decisão do dono). Os DOIS pontos de decisão usam a MESMA
+  // regra: se divergirem, auto-merge e merge explícito escolhem sobreviventes diferentes pra
+  // mesma dupla. A atividade mora no Firestore, então este ponto (que só tinha UserRecords)
+  // passou a carregar os docs + a contagem de torneios.
+  const [_tcA, _tcB] = await Promise.all([
+    _tournamentCountFor(db, uidA), _tournamentCountFor(db, uidB),
+  ]);
+  const _byUid = (u) => (u === uidA)
+    ? { data: da.exists ? da.data() : {}, authUser: ua, tournamentCount: _tcA }
+    : { data: dbb.exists ? dbb.data() : {}, authUser: ub, tournamentCount: _tcB };
+  const _pickAct = _mergeRules.pickSurvivorByActivity(_byUid(uidA), _byUid(uidB), uidA, uidB);
+  const keepU = (_pickAct.keep === "a") ? ua : ub;
+  const dropU = (_pickAct.keep === "a") ? ub : ua;
   console.log(`[merge] keep=${keepU.uid} [${(keepU.providerData || []).map((p) => p.providerId).join(",")}] ` +
-    `← drop=${dropU.uid} (critério: ${_pick.reason === "federated" ? "conta federada vence" : "mais antiga vence"})`);
+    `← drop=${dropU.uid} (critério: ${_pickAct.reason}${_pickAct.detail ? " — " + _pickAct.detail : ""})`);
   const keepDoc = (keepU.uid === uidA) ? da : dbb;
   const dropDoc = (dropU.uid === uidA) ? da : dbb;
 
@@ -413,6 +506,11 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   // Credenciais do drop a mover pro keep (antes de apagar o drop).
   const dropEmail = (dropU.email && !_isSyntheticAuthEmail(dropU.email)) ? dropU.email : null;
   const dropPhone = dropU.phoneNumber || null;
+  // v1.7.11 — o provedor FEDERADO também viaja. Tem que ser lido AQUI: o "sub" do provedor
+  // (providerData[i].uid) só existe enquanto a conta existe, e depois do deleteUser não há
+  // de onde tirá-lo. Ver planProviderTransfer: o que o keep já tem não entra (1 instância
+  // por providerId) — nesse caso aquele login morre e quem cobre é loginRedirects.
+  const _fedToLink = _mergeRules.planProviderTransfer(keepU.providerData, dropU.providerData);
 
   // 1) Move TODOS os dados (torneios, matchHistory, casuais) + tombstone do dropDoc.
   if (keepDoc.exists && dropDoc.exists) {
@@ -434,6 +532,19 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   if (Object.keys(upd).length) {
     try { await admin.auth().updateUser(keepU.uid, upd); }
     catch (e) { console.error("[mergeKeepOlder] updateUser(keep) falhou:", e.code || e.message); }
+  }
+  // 3b) Leva o provedor FEDERADO do drop pro keep — "Entrar com Google/Apple" continua
+  // funcionando depois da fusão. Só agora: o provedor tem que estar LIVRE (a conta dona
+  // foi apagada no passo 2), senão o Auth recusa. Um updateUser por provedor (a API aceita
+  // um providerToLink por chamada). Best-effort: falhar aqui não desfaz a fusão — o
+  // loginRedirects, gravado no _executeMerge, continua sendo a rede.
+  for (const _p of _fedToLink) {
+    try {
+      await admin.auth().updateUser(keepU.uid, { providerToLink: _p });
+      console.log(`[mergeKeepOlder] provedor ${_p.providerId} transferido pro keep=${keepU.uid}`);
+    } catch (e) {
+      console.error(`[mergeKeepOlder] providerToLink(${_p.providerId}) falhou:`, e.code || e.message);
+    }
   }
   // 4) Reflete os identificadores ganhos no perfil Firestore do keep.
   const profUpd = { updatedAt: new Date().toISOString() };
@@ -475,7 +586,7 @@ async function _scanAndMergeByField(db, field) {
     // Find the best keeper across all docs in this group
     let keepDoc = docs[0];
     for (let i = 1; i < docs.length; i++) {
-      keepDoc = _determineMergeWinner(keepDoc, docs[i]).keepDoc;
+      keepDoc = (await _determineMergeWinner(keepDoc, docs[i])).keepDoc;
     }
 
     // Merge all non-keepers sequentially (re-fetch each time for freshness)
@@ -4389,26 +4500,108 @@ exports.requestEmailMerge = onCall(
     if (!targetUid) return { ok: false, reason: "no-account" };   // não existe → caller só vincula o e-mail (verifyBeforeUpdateEmail no cliente)
     if (targetUid === callerUid) return { ok: false, reason: "same-account" };
 
-    const crypto = require("crypto");
-    const token = crypto.randomBytes(24).toString("base64url");
-    await db.collection("mergeTokens").doc(token).set({
-      requesterUid: callerUid, targetUid: targetUid, email: email,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-      used: false,
-    });
-    const link = "https://scoreplace.app/?mh=" + encodeURIComponent(token);
-    const html =
-      '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;">' +
-      '<h2 style="color:#0f172a;">Unir suas contas</h2>' +
-      '<p style="color:#1f2937;font-size:15px;line-height:1.5;">Você pediu pra unir esta conta de e-mail à sua outra conta no scoreplace.app. Clique pra confirmar — seus torneios, partidas e histórico ficam todos numa conta só. Você poderá entrar pelo e-mail OU pelo celular.</p>' +
-      '<p style="text-align:center;margin:28px 0;"><a href="' + link + '" style="background:#10b981;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:700;font-size:16px;display:inline-block;">Unir minhas contas</a></p>' +
-      '<p style="color:#64748b;font-size:13px;">O link expira em 1 hora. Se não foi você, ignore este e-mail.</p>' +
-      '</div>';
-    const text = "Una suas contas no scoreplace.app: " + link + " (expira em 1h; se não foi você, ignore).";
-    await _enqueueMail(db, { to: [email], message: { subject: "Una suas contas no scoreplace.app", html, text } });
+    await _sendMergeProofEmail(db, callerUid, targetUid, email);
     console.log("[requestEmailMerge] token p/", email, "req=", callerUid, "target=", targetUid);
     return { ok: true, sent: true };
+  }
+);
+
+// PROVA DE POSSE por e-mail: gera o token de fusão e manda o link pra caixa da OUTRA conta.
+// Extraído de requestEmailMerge pra ser reusado pelo fluxo de homônimo (requestNameMergeProof)
+// — ponto único, senão as duas portas divergiriam no que gravam em mergeTokens.
+// Quem recebe o link é quem tem posse da caixa; é ISSO que autoriza a fusão. Nome nunca autoriza.
+async function _sendMergeProofEmail(db, requesterUid, targetUid, email) {
+  const crypto = require("crypto");
+  const token = crypto.randomBytes(24).toString("base64url");
+  await db.collection("mergeTokens").doc(token).set({
+    requesterUid: requesterUid, targetUid: targetUid, email: email,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    used: false,
+  });
+  const link = "https://scoreplace.app/?mh=" + encodeURIComponent(token);
+  const html =
+    '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;">' +
+    '<h2 style="color:#0f172a;">Unir suas contas</h2>' +
+    '<p style="color:#1f2937;font-size:15px;line-height:1.5;">Você pediu pra unir esta conta de e-mail à sua outra conta no scoreplace.app. Clique pra confirmar — seus torneios, partidas e histórico ficam todos numa conta só. Você poderá entrar pelo e-mail OU pelo celular.</p>' +
+    '<p style="text-align:center;margin:28px 0;"><a href="' + link + '" style="background:#10b981;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:700;font-size:16px;display:inline-block;">Unir minhas contas</a></p>' +
+    '<p style="color:#64748b;font-size:13px;">O link expira em 1 hora. Se não foi você, ignore este e-mail.</p>' +
+    '</div>';
+  const text = "Una suas contas no scoreplace.app: " + link + " (expira em 1h; se não foi você, ignore).";
+  await _enqueueMail(db, { to: [email], message: { subject: "Una suas contas no scoreplace.app", html, text } });
+  return token;
+}
+
+// ─── Homônimo: avisar e oferecer a união COM PROVA DE POSSE ───────────────────
+// Regra do dono: dois uids de pessoas diferentes não podem ter o mesmo nome. Mas homônimo
+// NÃO É AUTORIZAÇÃO — na base os 3 casos eram duplicata da mesma pessoa, e ainda assim
+// fundir por coincidência de nome fundiria dois "João Silva" de verdade, apagando um do
+// Auth. Erro assimétrico: conta duplicada é incômodo, pessoa fundida é irreversível.
+// Por isso: o nome só DETECTA; quem AUTORIZA é a posse do e-mail/celular da outra conta.
+//
+// O alvo é resolvido pelo SERVIDOR (o cliente não passa uid nem e-mail) e só existe quando
+// há colisão real — assim ninguém usa a porta pra disparar mensagem a quem quiser.
+exports.checkNameConflict = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const db = admin.firestore();
+    const me = await db.collection("users").doc(callerUid).get();
+    if (!me.exists) return { hasConflict: false };
+    const nome = String((me.data() || {}).displayName || "").trim();
+    if (!nome) return { hasConflict: false };
+
+    const c = await _nameUnique.findDisplayNameConflict(db, nome, callerUid);
+    if (!c) return { hasConflict: false };
+
+    // Só o MASCARADO sai daqui — o valor cheio e o uid nunca chegam ao cliente.
+    return {
+      hasConflict: true,
+      name: nome,
+      maskedEmail: _nameUnique.maskEmail(c.email) || null,
+      maskedPhone: _nameUnique.maskPhone(c.phone) || null,
+    };
+  }
+);
+
+// Dispara a PROVA para a outra conta. `channel`: 'email' (pronto) — 'phone' ainda não.
+// Rate limit por caller: a mensagem vai pra caixa de outra pessoa quando o homônimo é
+// coincidência, então o botão não pode virar gerador de spam.
+exports.requestNameMergeProof = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const channel = String((request.data && request.data.channel) || "email").trim();
+    const db = admin.firestore();
+
+    const me = await db.collection("users").doc(callerUid).get();
+    if (!me.exists) throw new HttpsError("failed-precondition", "perfil não encontrado");
+    const nome = String((me.data() || {}).displayName || "").trim();
+    const c = nome ? await _nameUnique.findDisplayNameConflict(db, nome, callerUid) : null;
+    if (!c) return { ok: false, reason: "no-conflict" };
+
+    // Rate limit: 3 envios por hora por caller.
+    const rlRef = db.collection("mergeProofLimits").doc(callerUid);
+    const rl = await rlRef.get();
+    const agora = Date.now();
+    const janela = (rl.exists && rl.data().windowStart && rl.data().windowStart.toMillis)
+      ? rl.data().windowStart.toMillis() : 0;
+    const n = (rl.exists && janela && (agora - janela) < 3600000) ? (rl.data().count || 0) : 0;
+    if (n >= 3) throw new HttpsError("resource-exhausted", "Muitas tentativas. Tente de novo daqui a pouco.");
+
+    if (channel !== "email") throw new HttpsError("invalid-argument", "canal não suportado ainda");
+    if (!c.email) return { ok: false, reason: "no-email" };
+
+    await _sendMergeProofEmail(db, callerUid, c.uid, c.email);
+    await rlRef.set({
+      count: n + 1,
+      windowStart: (n === 0) ? admin.firestore.FieldValue.serverTimestamp() : (rl.data() || {}).windowStart,
+    }, { merge: true });
+
+    console.log(`[requestNameMergeProof] prova por ${channel} enviada: req=${callerUid} target=${c.uid}`);
+    return { ok: true, sent: true, masked: _nameUnique.maskEmail(c.email) };
   }
 );
 
@@ -5144,7 +5337,7 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
         const freshOther = await db.collection("users").doc(other.id).get();
         if (!freshOther.exists || freshOther.data().mergedInto) continue;
 
-        const { keepDoc, dropDoc } = _determineMergeWinner(currentDoc, freshOther);
+        const { keepDoc, dropDoc } = await _determineMergeWinner(currentDoc, freshOther);
         try {
           const r = await _executeMerge(db, keepDoc, dropDoc);
           console.log(`[autoMergeOnProfileUpdate] Merged by ${field}: drop=${dropDoc.id} → keep=${keepDoc.id}`, r);
@@ -5162,6 +5355,61 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
 // torneios virou trabalho morto (espelha a remoção de _autoFixStaleNames/_propagateNameChange
 // no cliente, v4.5.72). O texto das notificações de sorteio passou a resolver o nome pelo
 // uid do slot no momento do envio (functions-autodraw).
+
+// ─── enforceUniqueDisplayName (Firestore trigger) ─────────────────────────
+// NOME ÚNICO ENTRE UIDS, garantido no SERVIDOR.
+//
+// A regra já existia em 4 pontos — mas 3 deles são do CLIENTE (auto-variante no primeiro
+// login, gate do perfil, isDisplayNameTaken) e são fail-open de propósito. O único ponto
+// server-side era a registerPhonePassword, que cobre só cadastro por celular+senha:
+// **login com Google/Apple não passava por checagem nenhuma no servidor**.
+//
+// MEDIDO em 04/ago/2026 (184 contas): o auto-variante entrou em 24/jun e mesmo assim
+// nasceram contas homônimas em 11/jul, 14/jul, 17/jul e 30/jul. Não era falta de
+// displayName_lower (todas têm), nem permissão (as rules liberam a consulta), nem nome
+// vazio do provedor — era a lei morar num lugar que pode simplesmente não rodar.
+// Cânone roda no servidor ([[project_canon_runs_on_server]]).
+//
+// POLÍTICA: aqui NÃO se bloqueia — adota-se variante. Bloquear é o comportamento do
+// cadastro por celular (onde homônimo é quase sempre a mesma pessoa) e do gate do perfil
+// (ação explícita). Na ENTRADA vale "deixa entrar e edita depois" (v1.1.3).
+//
+// ANTI-LOOP: só age quando o displayName MUDOU nesta escrita. Depois de renomear, a
+// própria escrita reacorda o trigger — mas aí o nome novo não colide e ele volta na hora.
+exports.enforceUniqueDisplayName = onDocumentWritten(
+  { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
+  async (event) => {
+    const after = event.data.after;
+    if (!after.exists) return;
+    const a = after.data() || {};
+    const b = event.data.before.exists ? (event.data.before.data() || {}) : {};
+
+    if (a.mergedInto) return;                       // tombstone de fusão — fora da disputa
+    const nome = String(a.displayName || "").trim();
+    if (!nome) return;
+    if (nome === String(b.displayName || "").trim()) return; // nome não mudou → nada a fazer
+    if (_nameUnique.isUnfriendlyName(nome)) return; // placeholder não disputa unicidade
+
+    const db = admin.firestore();
+    const uid = event.params.uid;
+    const conflito = await _nameUnique.findDisplayNameConflict(db, nome, uid);
+    if (!conflito) return;
+
+    // Quem já estava com o nome não é renomeado pelas costas.
+    if (!_nameVariant.shouldIRename(a, conflito, uid)) {
+      console.log(`[enforceUniqueDisplayName] "${nome}" colide com ${conflito.uid}, mas quem renomeia é o outro lado (uid=${uid} é o estabelecido)`);
+      return;
+    }
+
+    const novo = await _nameVariant.resolveUniqueName(db, nome, uid);
+    if (!novo || novo === nome) return; // nada livre encontrado — não piora
+
+    const payload = _nameUnique.denormalizeDisplayName({}, novo);
+    payload.updatedAt = new Date().toISOString();
+    await db.collection("users").doc(uid).set(payload, { merge: true });
+    console.log(`[enforceUniqueDisplayName] uid=${uid}: "${nome}" colidia com ${conflito.uid} → renomeado para "${novo}"`);
+  }
+);
 
 // ─── scheduledAutoMergeCleanup (diário 04:45 BRT) ─────────────────────────
 // Varre toda a coleção users em busca de phones E emails duplicados e mescla

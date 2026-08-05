@@ -349,6 +349,21 @@ function renderDashboard(container) {
     return _time(a) - _time(b);
   };
 
+  // Ordenação MAIS RECENTE PRIMEIRO (descendente) pras seções categorizadas — Encerrados,
+  // Ocultados, Favoritos, Em andamento (pedido do dono: "o mais recente fica na frente").
+  // Recência = a data que representa QUANDO o torneio aconteceu: encerrado → finishedAt
+  // (fallback endDate/startDate); demais → startDate (fallback registrationLimit/endDate).
+  const _recencyMs = t => {
+    if (!t) return 0;
+    var val = (t.status === 'finished')
+      ? (t.finishedAt || t.endDate || t.startDate)
+      : (t.startDate || t.registrationLimit || t.endDate);
+    if (val == null || val === '') return 0;
+    var ms = (typeof val === 'number') ? val : new Date(val).getTime();
+    return isNaN(ms) ? 0 : ms;
+  };
+  const sortByRecency = (a, b) => _recencyMs(b) - _recencyMs(a);
+
   // v1.9.79: ordenação por PRÓXIMO EVENTO (encerramento de inscrição, início ou
   // término) — o mais URGENTE (mais próximo no futuro) primeiro. Torneios sem
   // data futura vão depois (ordenados pelo evento mais recente). Usado no feed
@@ -434,6 +449,7 @@ function renderDashboard(container) {
     _allVisibleRaw.concat(_discoveryRaw).forEach(function(t){
       if (t && _hidSet[String(t.id)] && !_seenHid[String(t.id)]) { _seenHid[String(t.id)] = 1; hiddenTournaments.push(t); }
     });
+    hiddenTournaments.sort(sortByRecency); // Ocultados: mais recente primeiro
   }
 
   // v0.16.57: helper que classifica um torneio em uma das 4 categorias do
@@ -708,10 +724,13 @@ function renderDashboard(container) {
     if (_isInStandby && !isFinished) {
       enrollBtnHtml = `<div style="font-size: 0.6rem; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.4px; background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 6px;">⏳ ${_t('enroll.onWaitlist')}</div><button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._leaveStandby('${t.id}')">🛑 ${_t('enroll.leaveWaitlist')}</button>`;
     } else if (isParticipating && canEnroll) {
-      // "Entrar no grupo" do WhatsApp fica à ESQUERDA de "Desinscrever-se" — bem
-      // na cara do participante. O chip auto-oculta (sem link / WhatsApp off).
-      const _waJoin = (typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : '';
-      enrollBtnHtml = `<div style="display:flex;align-items:stretch;justify-content:flex-end;gap:6px;flex-wrap:wrap;">${_waJoin}<button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button></div>`;
+      // v1.7.24 — O GRUPO GERAL DO TORNEIO SAIU DAQUI (ordem do dono). Ele ficava
+      // colado no "Desinscrever-se", verde, e era o ÚNICO botão de WhatsApp que o
+      // participante encontrava sem abrir a chave — então virava o botão que ele
+      // clicava querendo montar o grupo do próprio jogo, e caía no mural do evento.
+      // O geral continua na PÁGINA do torneio (onde a pessoa está olhando o evento);
+      // o do jogo mora na chave, que é onde ela está olhando o jogo dela.
+      enrollBtnHtml = `<button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button>`;
     } else if (!isParticipating && canEnroll) {
       enrollBtnHtml = `<button class="btn btn-sm btn-success hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._dashEnroll('${t.id}')">✅ ${_t('enroll.enrollBtn')}</button>`;
     } else if (isParticipating && !canEnroll && !isFinished) {
@@ -2161,13 +2180,13 @@ function renderDashboard(container) {
     [...organizadosSorted, ...participacoesSorted, ...abertosParaVoce].forEach(t => {
       if (!seen.has(t.id) && favIds.indexOf(String(t.id)) !== -1) { seen.add(t.id); filtered.push(t); }
     });
-    filtered.sort(sortByDate);
+    filtered.sort(sortByRecency); // Favoritos: mais recente primeiro
   } else if (curFilter === 'encerrados') {
     const seen = new Set();
     [...organizadosSorted, ...participacoesSorted, ...abertosParaVoce, ...encerradosVisiveis].forEach(t => {
       if (!seen.has(t.id) && t.status === 'finished') { seen.add(t.id); filtered.push(t); }
     });
-    filtered.sort(sortByDate);
+    filtered.sort(sortByRecency); // Encerrados: mais recente primeiro
   } else {
     const seen = new Set();
     [...organizadosSorted, ...participacoesSorted, ...abertosParaVoce, ...encerradosVisiveis].forEach(t => {
@@ -2236,8 +2255,8 @@ function renderDashboard(container) {
       // remove TODOS os em andamento da lista principal e zera a seção de descoberta
       filtered = filtered.filter(function(t) { return !(_isRunning(t) && _bandSeen.has(String(t.id))); });
       discoveryByCategory.inProgress = [];
-      const _top = _allRunning.filter(_runsThisWeek).sort(sortByDate);
-      const _bottom = _allRunning.filter(function(t) { return !_runsThisWeek(t); }).sort(sortByDate);
+      const _top = _allRunning.filter(_runsThisWeek).sort(sortByRecency);       // Em andamento: mais recente primeiro
+      const _bottom = _allRunning.filter(function(t) { return !_runsThisWeek(t); }).sort(sortByRecency);
       const _sectionHtml = function(title, items, marginTop) {
         return '<div style="' + (marginTop ? 'margin-top:1.25rem;' : 'margin-bottom:1.25rem;') + '">' +
             '<div style="font-weight:800;font-size:0.95rem;color:#10b981;margin-bottom:0.6rem;border-left:3px solid #10b981;padding-left:10px;">' + title + ' <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + items.length + ')</span></div>' +
@@ -2288,7 +2307,7 @@ function renderDashboard(container) {
       const _favSet = new Set(_favIds.map(String));
       const _favList = filtered.filter(function(t) { return _favSet.has(String(t.id)) && t.status !== 'finished'; });
       if (_favList.length) {
-        _favList.sort(sortByDate);
+        _favList.sort(sortByRecency); // faixa Favoritos: mais recente primeiro
         filtered = filtered.filter(function(t) { return !(_favSet.has(String(t.id)) && t.status !== 'finished'); });
         favoritesBandHtml =
           '<div style="margin-bottom:1.25rem;">' +
@@ -2324,6 +2343,7 @@ function renderDashboard(container) {
     };
     const activeList = filtered.filter(t => t.status !== 'finished' || _isRecentlyFinished(t));
     const finishedList = filtered.filter(t => t.status === 'finished' && !_isRecentlyFinished(t));
+    finishedList.sort(sortByRecency); // mais recente primeiro (myFinished/otherFinished herdam)
     const visibleActive = activeList.slice(0, pageNum * PAGE_SIZE);
     filteredHtml = visibleActive.length > 0
       ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
@@ -2377,7 +2397,7 @@ function renderDashboard(container) {
     var _finishedSubSection = '';
     if ((curFilter === 'organizados' || curFilter === 'participando') && !curSport && !curLocation && !curFormat) {
       var _activeItems = _sortedFiltered.filter(function(t) { return t.status !== 'finished'; });
-      var _finishedItems = _sortedFiltered.filter(function(t) { return t.status === 'finished'; });
+      var _finishedItems = _sortedFiltered.filter(function(t) { return t.status === 'finished'; }).sort(sortByRecency);
       if (_finishedItems.length > 0) {
         _sortedFiltered = _activeItems;
         _finishedSubSection = '<div style="grid-column:1/-1;margin-top:0.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: _finishedItems.length}) + '</summary><div style="margin-top:0.75rem;">' + _renderTGroup(_finishedItems) + '</div></details></div>';

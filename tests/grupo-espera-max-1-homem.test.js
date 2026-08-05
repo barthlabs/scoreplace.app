@@ -30,6 +30,9 @@ const PERFIS = {
   uM2: { displayName: 'Mulher 2', gender: 'feminino' },
   uM3: { displayName: 'Mulher 3', gender: 'feminino' },
   uM4: { displayName: 'Mulher 4', gender: 'feminino' },
+  uM5: { displayName: 'Mulher 5', gender: 'feminino' },
+  uM6: { displayName: 'Mulher 6', gender: 'feminino' },
+  // perfil EXISTE mas o campo gênero está em branco
   uX1: { displayName: 'Sem Genero 1' },
   uX2: { displayName: 'Sem Genero 2' },
   uX3: { displayName: 'Sem Genero 3' },
@@ -56,8 +59,17 @@ function mkT(uidsNaEspera) {
   // 4 pessoas já jogando (o grupo existente da rodada), pra a coluna existir de verdade.
   ['uJ1', 'uJ2', 'uJ3', 'uJ4'].forEach(u => t.participants.push({ uid: u }));
   t.rounds[0].monarchGroups.push({ players: ['uJ1', 'uJ2', 'uJ3', 'uJ4'].map(NOME), matches: [] });
+  // QUEM ESTÁ NA ESPERA NÃO ESTÁ NO ELENCO (v1.7.16). O fixture antigo empurrava a fila
+  // pra dentro de t.participants — e era só por isso que `_buildNameToUid` (que varre
+  // EXATAMENTE t.participants) conseguia resolver os nomes e o gênero era enxergado.
+  // Em produção o inscrito tardio fica em standbyParticipants + monarchWaitlist e NUNCA
+  // em participants, então o mapa nascia vazio e a regra de equilíbrio ficava cega — foi
+  // assim que o "R1 Grupo B2" do Confra fechou com 3 homens e `playersUids` todos nulos.
+  // Modelar isso errado era o que deixava o gate verde com o bug vivo.
   t.monarchWaitlist['_default_'] = uidsNaEspera.map(NOME);
-  uidsNaEspera.forEach(u => t.participants.push({ uid: u }));
+  uidsNaEspera.forEach(u => t.standbyParticipants.push({
+    uid: u, addedAt: '2026-08-04T10:00:00.000Z', selfEnrolled: true, ligaActive: true
+  }));
   // Torneio sem datas → _tournamentIsSameDay devolve TRUE, e aí a função só forma grupo
   // com quem tem PRESENÇA confirmada (regra que já existia). Sem isto o fixture dava 0 em
   // todo cenário e o teste mediria a pré-condição, não a regra de gênero.
@@ -89,7 +101,7 @@ console.log('\n──── 4 HOMENS na fila: o grupo NÃO fecha ────');
 
 console.log('\n──── 1 homem + 3 mulheres: fecha normalmente ────');
 {
-  const t = mkT(['uH1', 'uM1', 'uM2', 'uX1']);
+  const t = mkT(['uH1', 'uM1', 'uM2', 'uM3']);
   const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
   t2('formou 1 grupo', n === 1, 'formados=' + n);
   const gs = gruposFormados(t);
@@ -99,7 +111,7 @@ console.log('\n──── 1 homem + 3 mulheres: fecha normalmente ────
 
 console.log('\n──── 2 homens + 6 mulheres: forma 2 grupos, 1 homem em cada ────');
 {
-  const t = mkT(['uH1', 'uH2', 'uM1', 'uM2', 'uM3', 'uM4', 'uX1', 'uX2']);
+  const t = mkT(['uH1', 'uH2', 'uM1', 'uM2', 'uM3', 'uM4', 'uM5', 'uM6']);
   const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
   t2('formou 2 grupos', n === 2, 'formados=' + n);
   const gs = gruposFormados(t);
@@ -107,11 +119,112 @@ console.log('\n──── 2 homens + 6 mulheres: forma 2 grupos, 1 homem em ca
   t2('nenhum grupo passou de 1 homem', maxH <= 1, 'maxHomens=' + maxH);
 }
 
-console.log('\n──── gênero DESCONHECIDO não conta como homem (não trava quem não usa o campo) ────');
+// ── REGRESSÃO (ago/2026): o guloso PERDIA um grupo, dependendo do embaralho ───────────
+// O cenário acima só pegava o defeito por SORTE — medido: ~21% das ordens. Era essa a
+// intermitência que fazia o gate do pre-push falhar sem ninguém ter mexido no sorteio.
+// A causa não era o teste: `_pickGrupo` pegava "os 4 primeiros que cabem", gastava os
+// não-homens no primeiro grupo e sobrava um pool só de homens que não fechava — com 4
+// pessoas esperando à toa, existindo divisão válida. Aqui o embaralho vira DETERMINÍSTICO
+// (Math.random semeado), então a falha reaparece sempre que alguém reintroduzir o guloso.
+console.log('\n──── 2 homens + 6 mulheres NUNCA perde grupo (qualquer embaralho) ────');
+{
+  const _random = Math.random;
+  let perdidos = 0, pior = null;
+  for (let seed = 1; seed <= 120; seed++) {
+    let s = seed;
+    Math.random = () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
+    const t = mkT(['uH1', 'uH2', 'uM1', 'uM2', 'uM3', 'uM4', 'uM5', 'uM6']);
+    const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
+    const maxH = gruposFormados(t).reduce((a, g) => Math.max(a, homensNo(g)), 0);
+    if (n !== 2 || maxH > 1) { perdidos++; if (!pior) pior = 'seed=' + seed + ' grupos=' + n + ' maxHomens=' + maxH; }
+  }
+  Math.random = _random;
+  t2('as 120 ordens formam 2 grupos, sempre com no máximo 1 homem', perdidos === 0,
+    perdidos + ' ordem(ns) falharam; 1ª: ' + pior);
+}
+
+// ── v1.7.16: ASSERÇÃO REVOGADA DE PROPÓSITO ──────────────────────────────────────────
+// Até aqui este bloco exigia o CONTRÁRIO — "4 sem gênero formam grupo normalmente" (n===1),
+// sob o argumento de não travar quem não preenche o campo. O dono revogou depois do
+// incidente do "R1 Grupo B2" no Confra (ago/2026), onde um grupo fechou com 3 homens:
+//   "sem genero determinado tem que travar. nao pode assumir nem ser homem, nem ser mulher."
+// O invariante que a asserção antiga defendia (não bloquear gratuitamente) NÃO sumiu: ele
+// virou o toggle 'livre' e o cenário "conhecidos formam, desconhecido espera", ambos abaixo.
+console.log('\n──── sem gênero determinado NÃO entra em grupo (revoga a regra da v1.7.3) ────');
 {
   const t = mkT(['uX1', 'uX2', 'uX3', 'uX4']);
   const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
-  t2('4 sem gênero formam grupo normalmente', n === 1, 'formados=' + n);
+  t2('4 sem gênero NÃO formam grupo', n === 0, 'formados=' + n);
+  t2('e continuam na fila (não perdem o lugar)', (win._getWaitlist(t) || []).length === 4);
+}
+
+console.log('\n──── conhecidos fecham; o desconhecido espera (não bloqueia os outros) ────');
+{
+  const t = mkT(['uH1', 'uM1', 'uM2', 'uM3', 'uX1']);
+  const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
+  t2('formou 1 grupo com os 4 de gênero declarado', n === 1, 'formados=' + n);
+  const gs = gruposFormados(t);
+  t2('o desconhecido NÃO foi para o grupo',
+     gs.length === 1 && gs[0].players.indexOf(NOME('uX1')) === -1,
+     gs.length ? JSON.stringify(gs[0].players) : 'sem grupo');
+  t2('e segue na fila', (win._getWaitlist(t) || []).some(e => win._pName(e, '') === NOME('uX1')));
+}
+
+// ── REPRODUÇÃO DO INCIDENTE (Confra, 04/ago/2026) ────────────────────────────────────
+// O B2 fechou com 3 homens e saiu com `playersUids: [null,null,null,null]`. A causa não foi
+// o cálculo do teto: `_isHomem` resolvia o gênero por um mapa nome→uid montado a partir do
+// nome GRAVADO em t.participants — que a entrada strippada não tem — e dois dos quatro
+// tinham se inscrito minutos antes, com o perfil ainda fora do cache. O mapa saiu vazio,
+// todo mundo virou "não-homem", H=0 e o teto nunca foi testado.
+// Aqui o perfil de quem chegou por último NÃO é registrado no cache, exatamente como em
+// produção. Contra o código anterior este bloco fecha um grupo e fica VERMELHO.
+console.log('\n──── perfil FORA do cache não vira "não-homem" (o bug do B2) ────');
+{
+  const FANTASMA = 'Recem Inscrito';           // sem entrada em _userProfileCache
+  const t = mkT(['uH1', 'uH2', 'uH3']);
+  t.monarchWaitlist['_default_'].push(FANTASMA);
+  t.standbyParticipants.push({ uid: 'uFantasma', displayName: FANTASMA, addedAt: '2026-08-04T16:17:00.000Z' });
+  if (typeof win._idMapSet === 'function') win._idMapSet(t, t.checkedIn, FANTASMA, Date.now());
+  const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
+  t2('3 homens + 1 perfil não resolvido NÃO formam grupo', n === 0, 'formados=' + n);
+}
+
+console.log('\n──── a fila do Confra (4 homens + 1 mulher, 2 sem gênero) não fecha grupo ────');
+{
+  // Paulo, Renato, Gersom (masculino no perfil) + Vini e Ana Lúcia (gênero em branco).
+  const t = mkT(['uH1', 'uH2', 'uH3', 'uX1', 'uX2']);
+  const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
+  t2('nenhum grupo formado', n === 0, 'formados=' + n);
+  t2('os 5 continuam na fila', (win._getWaitlist(t) || []).length === 5);
+}
+
+console.log('\n──── o grupo formado carrega uid REAL nos slots (nunca null) ────');
+{
+  const t = mkT(['uH1', 'uM1', 'uM2', 'uM3']);
+  win._tryFormMonarchWaitlistGroups(t, null, 1);
+  const gs = gruposFormados(t);
+  t2('playersUids sem nenhum null', gs.length === 1 && (gs[0].playersUids || []).length === 4
+     && gs[0].playersUids.every(u => !!u), gs.length ? JSON.stringify(gs[0].playersUids) : 'sem grupo');
+  const ms = (t.rounds[0].matches || []).filter(m => m.isMonarch);
+  t2('os 3 jogos têm team1Uids/team2Uids preenchidos', ms.length === 3
+     && ms.every(m => (m.team1Uids || []).every(u => !!u) && (m.team2Uids || []).every(u => !!u)),
+     JSON.stringify(ms.map(m => [m.team1Uids, m.team2Uids])));
+}
+
+console.log('\n──── uid vem da ENTRADA da espera quando o nome não está no elenco ────');
+{
+  // Produção: standbyParticipants guarda a entrada com uid e SEM nome (strippada).
+  const t = mkT([]);
+  t.monarchWaitlist['_default_'] = ['uH1', 'uM1', 'uM2', 'uM3'].map(NOME);
+  ['uH1', 'uM1', 'uM2', 'uM3'].forEach(u => {
+    t.standbyParticipants.push({ uid: u, addedAt: '2026-08-04T10:00:00.000Z' });
+    if (typeof win._idMapSet === 'function') win._idMapSet(t, t.checkedIn, NOME(u), Date.now());
+  });
+  const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
+  t2('formou 1 grupo resolvendo o gênero pela entrada da fila', n === 1, 'formados=' + n);
+  const gs = gruposFormados(t);
+  t2('com no máximo 1 homem', gs.length === 1 && homensNo(gs[0]) <= 1,
+     gs.length ? JSON.stringify(gs[0].players) : 'sem grupo');
 }
 
 console.log('\n──── a entrada da espera NÃO carrega gender (como em produção) ────');
@@ -139,6 +252,62 @@ console.log('\n──── TOGGLE do organizador: livre volta a sortear sem res
   const b = mkT(['uH1', 'uH2', 'uH3', 'uH4']);           // sem o campo = default
   t2('equilibrado explícito bloqueia', win._tryFormMonarchWaitlistGroups(a, null, 1) === 0);
   t2('DEFAULT (campo ausente) é equilibrado', win._tryFormMonarchWaitlistGroups(b, null, 1) === 0);
+}
+// ── OS DOIS EIXOS NÃO SE CONFUNDEM (v1.7.16) ─────────────────────────────────────────
+// `wlGroupBalance` = a PROPORÇÃO está travada?   `_drawBalanceMode` = o SORTEIO é livre?
+// Destravar a proporção NÃO libera quem está sem gênero (decisão do dono: "nunca, nem
+// flexibilizando"). Quem não tem regra de gênero nenhuma é o SORTEIO LIVRE.
+{
+  const t = mkT(['uX1', 'uX2', 'uX3', 'uX4']);
+  t.wlGroupBalance = 'livre';                 // proporção DESTRAVADA
+  t2('proporção destravada NÃO libera quem está sem gênero',
+     win._tryFormMonarchWaitlistGroups(t, null, 1) === 0);
+}
+{
+  const t = mkT(['uX1', 'uX2', 'uX3', 'uX4']);
+  t._drawBalanceMode = 'livre';               // SORTEIO livre: sem proporção e sem gênero
+  t2('sorteio LIVRE forma normalmente, sem olhar gênero',
+     win._tryFormMonarchWaitlistGroups(t, null, 1) === 1);
+}
+{
+  // 4 homens: no sorteio livre não há proporção pra proteger, então fecham.
+  const t = mkT(['uH1', 'uH2', 'uH3', 'uH4']);
+  t._drawBalanceMode = 'livre';
+  t2('sorteio LIVRE deixa 4 homens fecharem', win._tryFormMonarchWaitlistGroups(t, null, 1) === 1);
+}
+{
+  // 25/75 destravado com 4 homens: 0 exatos → flexibiliza e inclui os 4.
+  const t = mkT(['uH1', 'uH2', 'uH3', 'uH4']);
+  t.wlGroupBalance = 'livre';
+  t2('proporção destravada flexibiliza e inclui os 4 homens',
+     win._tryFormMonarchWaitlistGroups(t, null, 1) === 1);
+}
+
+// ── A PORTA RECUSA DE VERDADE (v1.7.17) ──────────────────────────────────────────────
+// Regra do dono: "não quero que coloque 4 num grupo para depois perceber que quebrou a
+// regra." Os testes acima provam que o PLANEJADOR não emite grupo torto — mas a garantia
+// que o dono pediu é que, mesmo se ele emitisse, o grupo NÃO NASCERIA. Aqui o planejador é
+// sabotado de propósito pra devolver 4 homens; o motor tem de recusar na porta.
+console.log('\n──── grupo torto NÃO NASCE, mesmo se o planejador falhar ────');
+{
+  const real = win._planGroupsByRatio;
+  const t0 = mkT(['uH1', 'uH2', 'uH3', 'uH4']);
+  // planejador sabotado: entrega um grupo 100% masculino como se fosse válido
+  win._planGroupsByRatio = function (poolArr) {
+    return { groups: [poolArr.slice(0, 4).map(p => p.key)], leftover: [], flexed: 0 };
+  };
+  let n;
+  try { n = win._tryFormMonarchWaitlistGroups(t0, null, 1); }
+  finally { win._planGroupsByRatio = real; }
+  t2('a porta recusou o grupo de 4 homens', n === 0, 'formados=' + n);
+  t2('e nenhum grupo foi anexado à rodada', gruposFormados(t0).length === 0);
+  t2('os 4 continuam na fila', (win._getWaitlist(t0) || []).length === 4);
+}
+{
+  // e o caminho bom continua passando pela porta sem ser barrado
+  const t1 = mkT(['uH1', 'uM1', 'uM2', 'uM3']);
+  t2('grupo válido (1H+3M) NÃO é barrado pela porta',
+     win._tryFormMonarchWaitlistGroups(t1, null, 1) === 1);
 }
 
 console.log('\n──── o toggle existe na UI e é do organizador ────');

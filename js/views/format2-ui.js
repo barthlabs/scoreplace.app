@@ -37,7 +37,7 @@
   // (#late-enroll-box) são DO FORM — relocadas pra dentro do box da Fase Classificatória
   // (slot #f2-classif-extra). Como o mount reescreve innerHTML a cada mudança, movo pra
   // fora (pro pai do mount) ANTES de reescrever e de volta DEPOIS — preserva valores/listeners.
-  var _EXT_IDS = ['phase-dates-box', 'late-enroll-box'];
+  var _EXT_IDS = ['phase-dates-box', 'late-enroll-box', 'gender-ratio-box'];
   function _stashExt() {
     var mount = document.getElementById('f2-config-mount');
     var holder = mount && mount.parentNode;

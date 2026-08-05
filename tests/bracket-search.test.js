@@ -87,18 +87,42 @@ input.value=''; F();
 ok(vis().every(Boolean),'limpar tudo devolve todos os cards');
 
 
-// ── A barra tem que ser injetada TAMBÉM no bracket INLINE ────────────────────
-// Bug real (v1.4.14→18): eu gateei a injeção com `!isInline`, copiando o gate que existe
-// pros BOTÕES DE AÇÃO (esses sim seriam duplicados na página do torneio). Resultado: a barra
-// não aparecia em #tournaments/<id> — exatamente a tela onde o dono foi procurar alguém.
-// Checagem no FONTE porque o bug é do call site (o _bracketBar em si sempre funcionou).
+// ── A barra tem que existir TAMBÉM no bracket INLINE — e FORA do container dele ──
+// Bug 1 (v1.4.14→18): gateei a injeção com `!isInline`, copiando o gate que existe pros
+// BOTÕES DE AÇÃO (esses sim seriam duplicados na página do torneio). Resultado: a barra não
+// aparecia em #tournaments/<id> — exatamente a tela onde o dono foi procurar alguém.
+// Bug 2 (v1.7.10): a barra existia no inline, mas nascia DENTRO do #inline-bracket-container.
+// `position:sticky` só gruda enquanto O PAI está na viewport, então ela DESCOLAVA do cabeçalho
+// antes do fim da página (medido a 390px: topo em -187px, ~358px antes do fim).
+// ASSERÇÃO REVISADA (o invariante NÃO mudou — "a busca existe na tela inline" continua
+// travado): o que mudou foi QUEM emite. Agora quem emite no inline é o renderTournaments,
+// logo acima do #inline-bracket-container — mesma posição visual, pai que dura a página toda.
+// Por isso o gate `isInline` em bracket.js voltou a ser CORRETO ali: sem ele, DUAS barras.
 (function () {
   const fs2 = require('fs'), path2 = require('path');
-  const src2 = fs2.readFileSync(path2.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
-  const m = src2.match(/if \(([^)]*)typeof window\._bracketBar === 'function'\) \{/);
+  const brSrc = fs2.readFileSync(path2.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
+  const tSrc  = fs2.readFileSync(path2.join(__dirname, '..', 'js', 'views', 'tournaments.js'), 'utf8');
+
+  const m = brSrc.match(/if \(([^)]*)typeof window\._bracketBar === 'function'\) \{/);
   ok(!!m, 'injeção do _bracketBar não encontrada em bracket.js');
-  ok(m && m[1].indexOf('isInline') === -1,
-    'REGRESSÃO: a barra de busca voltou a ser gateada por isInline — some do chaveamento inline (#tournaments/<id>)');
+  const brGateiaInline = !!(m && m[1].indexOf('isInline') !== -1);
+
+  // O invariante REAL: a tela inline (#tournaments/<id>) emite a barra em ALGUM lugar.
+  const tEmite = /window\._bracketBar\s*===\s*'function'\s*\?\s*window\._bracketBar\(true\)/.test(tSrc)
+              || /window\._bracketBar\(true\)/.test(tSrc);
+  ok(brGateiaInline ? tEmite : true,
+    'REGRESSÃO: bracket.js gateia por isInline e o renderTournaments NÃO emite a barra — a busca some do chaveamento inline');
+  ok(!brGateiaInline ? !tEmite : true,
+    'REGRESSÃO: barra DUPLICADA no inline (bracket.js não gateia e tournaments.js também emite)');
+  ok(tEmite || !brGateiaInline, 'a busca precisa existir na tela inline por um dos dois caminhos');
+
+  // Sticky não pode nascer dentro do container do chaveamento (senão descola antes do fim).
+  if (tEmite) {
+    const bloco = tSrc.slice(tSrc.indexOf('window._bracketBar(true)'),
+                             tSrc.indexOf('window._bracketBar(true)') + 260);
+    ok(/id="inline-bracket-container"/.test(bloco),
+      'a barra do inline deve ficar IMEDIATAMENTE acima do #inline-bracket-container (mesma posição visual, pai = #view-container)');
+  }
 })();
 
 console.log((fail===0?'✅':'❌')+` bracket-search: ${pass} ok, ${fail} falharam`);

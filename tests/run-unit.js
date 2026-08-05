@@ -286,6 +286,8 @@ const SUITES = [
   // ao vivo (_tbLoserGames) — antes só dizia "tiebreak 7pts". v1.4.7.
   'tests/config-summary-tiebreak-at.test.js',
   'tests/wo-slot-uid-identity.test.js',
+  'tests/wo-claim-uid-por-estrutura.test.js',
+  'tests/elenco-nunca-encolhe.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
   'tests/swiss-to-elim-transition.test.js',
@@ -424,6 +426,22 @@ const SUITES = [
   'tests/fairness-uid-identity.test.js',
   'tests/delete-account-dupla-orphan.test.js',
   'tests/merge-federated-wins.test.js',
+  // A decisão do AUTO-MERGE consulta o AUTH (incidente 02/ago/2026: perfil de junho sem
+  // createdAt no doc PERDIA pra perfil de julho com createdAt — o Auth sempre soube a idade).
+  // Reproduz o caso real e trava o await nos dois call sites do index.js.
+  'functions/test-merge-winner.js',
+  // NADA SE PERDE: o merge passou a absorver o PERFIL do drop (antes copiava ZERO campos —
+  // a Silvia perderia 44 campos pra uma conta de 17). Varredura genérica com lista de
+  // exclusão: campo novo no perfil é preservado sem ninguém lembrar de atualizar lista.
+  'functions/test-profile-merge-core.js',
+  // NOME ÚNICO no SERVIDOR: a regra existia em 4 pontos, 3 deles no cliente e fail-open —
+  // login federado não passava por checagem server-side, e homônimos continuaram nascendo
+  // (11/jul, 14/jul, 17/jul, 30/jul) depois de a lei existir (24/jun).
+  'functions/test-name-variant-core.js',
+  // HOMÔNIMO AVISA, POSSE AUTORIZA: o botão de unir contas não funde nada — pede uma prova
+  // (link no e-mail da OUTRA conta). Trava que o cliente não recebe uid/contato cheio, que o
+  // alvo é resolvido no servidor (senão vira porta de spam) e que há rate limit.
+  'tests/name-conflict-merge-proof.test.js',
   'tests/login-redirect.test.js',
   // Item 9: a FUSÃO agora POPULA loginRedirects (antes só a resolveLoginRedirect lia → redirect
   // nunca disparava). Chave = e-mail minúsculo / telefone E.164, igual ao que o reader lê.
@@ -454,11 +472,17 @@ const SUITES = [
   'tests/letzplay-rating.test.js',
   'tests/letzplay-import.test.js',
   'tests/letzplay-extract.test.js',
+  // FONTE ÚNICA: as libs do letzplay têm UMA cópia (extension/lib) e os testes executam ELA.
+  // Havia uma 2ª cópia morta em js/views/ que o index.html nunca carregou; ela drifou e a
+  // distância CRESCEU (no import, 10 linhas na 1.6.5 → 16 na 1.7.12: ficou sem lzId e sem
+  // dateISO), enquanto os 3 testes acima executavam a cópia morta e seguiam verdes.
+  'tests/letzplay-single-source.test.js',
   'js/views/phases-engine.test.js',
   'js/views/phase-generators.test.js',
   'js/views/team-formation.test.js',
   'js/views/phase-brick4.test.js',
   'functions-autodraw/test-draw.js',
+  'functions-autodraw/test-rebase.js',
   'functions-autodraw/test-groupsby.js',
   // SORTEIO AUTOMÁTICO MANDA E-MAIL (bug ao vivo 02/ago: sorteio do Confra criou as
   // notificações in-app e ZERO e-mail — a CF só escrevia um dos dois canais que o
@@ -498,6 +522,7 @@ const SUITES = [
   // dono: evitar que atrasados formem um grupo mais forte). Vale no cliente E na CF — o
   // _generateNextRound do servidor chama a mesma _tryFormMonarchWaitlistGroups.
   'tests/grupo-espera-max-1-homem.test.js',
+  'tests/proporcao-genero.test.js',
   // Tema mostrava "🌙🌙 Noturno" / "☀️☀️ Claro": o botão prefixava o emoji e a string de
   // i18n já trazia o dela. A i18n é a DONA do emoji; o botão não repete. v1.7.7.
   'tests/tema-um-emoji.test.js',

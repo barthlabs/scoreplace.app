@@ -1095,7 +1095,11 @@ window.deenrollCurrentUser = function (tId) {
                 } else {
                     // Fallback: non-transactional save (already removed locally above)
                     if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-                        window.FirestoreDB.saveTournament(t).catch(function(err) { window._warn('Deenroll save error:', err); });
+                        // v1.7.26: DESINSCRIÇÃO É REMOÇÃO DECLARADA — único caminho que pode
+                        // encolher o elenco por `saveTournament`. Sem a flag, o guard do
+                        // saveTournament restaura a pessoa (o elenco nunca encolhe por acidente)
+                        // e a desinscrição não teria efeito. Ver o comentário do guard.
+                        window.FirestoreDB.saveTournament(t, { allowRosterRemoval: true }).catch(function(err) { window._warn('Deenroll save error:', err); });
                     }
                 }
             },

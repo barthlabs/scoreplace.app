@@ -68,8 +68,20 @@ ok(escolhe(misto, p1).uid === 'misto', 'conta google+phone é federada (perderia
 // ── o index.js USA o módulo? (não pode ter a regra duplicada divergindo) ─────
 const src = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
 ok(/require\(["']\.\/merge-rules["']\)/.test(src), 'index.js importa functions/merge-rules');
-ok(src.includes('_mergeRules.pickSurvivor(ua, ub)'), '_mergeAccountsKeepOlder usa pickSurvivor do módulo');
-ok(src.includes('_mergeRules.isFederatedProfile('), '_determineMergeWinner usa o módulo (os 2 pontos concordam)');
+// ⚠️ REVISADAS de propósito em 04/ago/2026 (decisão do dono: "a mais ativa vence").
+// O que estas 2 asserções defendem NÃO mudou — "a regra mora no módulo e os DOIS pontos de
+// decisão usam a MESMA" — só mudou QUAL regra é a vigente. A anterior (federada vence) era
+// contorno de um limite técnico que caiu: o merge agora TRANSFERE o provedor federado e
+// ABSORVE o perfil, então o critério parou de decidir quem perde dados. As funções antigas
+// seguem exercitadas acima, como registro do porquê.
+ok(/_mergeRules\.pickSurvivorByActivity\(_byUid\(uidA\)/.test(src),
+  '_mergeAccountsKeepOlder usa a regra VIGENTE do módulo (mais ativa vence)');
+ok((src.match(/_mergeRules\.pickSurvivorByActivity\(/g) || []).length === 2,
+  'os DOIS pontos de decisão usam a MESMA regra (senão escolhem contas diferentes pra mesma dupla)');
+ok(!/_mergeRules\.pickSurvivor\(ua, ub\)/.test(src),
+  'a regra superada (federada vence) não é mais chamada pelo index.js');
+ok(/async function _determineMergeWinner[\s\S]{0,400}admin\.auth\(\)\.getUser\(/.test(src),
+  '_determineMergeWinner consulta o AUTH (idade/federação reais, não só os campos do doc)');
 ok(/creationTime \|\| 0\)\.getTime\(\);\s*\n\s*const keepU/.test(src) === false,
   'index.js NÃO decide sobrevivente por idade direto (a regra é do módulo)');
 
@@ -87,7 +99,7 @@ ok(isFederated({ providerData: [{ providerId: 'phone' }] }) === false, 'isFedera
 // _repairTournaments listava campo a campo e a lista sempre ficava incompleta (não via
 // membro de dupla, nem mapa por uid, nem organizerId — que existe em 6/8 torneios de prod).
 // Trocada pela varredura canônica: functions/uid-sweep.js (testado em tests/uid-sweep.test.js).
-const repBloco = src.slice(src.indexOf('async function _repairTournaments'), src.indexOf('function _profileScore'));
+const repBloco = src.slice(src.indexOf('async function _repairTournaments'), src.indexOf('function _determineMergeWinner'));
 ok(/_uidSweep\.remapUid\(/.test(repBloco), '_repairTournaments usa a varredura canônica (uid-sweep)');
 ok(/require\(["']\.\/uid-sweep["']\)/.test(src), 'index.js importa functions/uid-sweep');
 // "não lista campo a campo" = não LÊ os mapas por nome (t.checkedIn / t["checkedIn"]).
@@ -98,7 +110,7 @@ ok(/\bt\.checkedIn\b|\["checkedIn"\]|'checkedIn'/.test(repBloco) === false,
 
 // ── enrollSeq: a ORDEM DE INSCRIÇÃO não pode mudar no remap ──────────────────
 // _repairTournaments copia a entrada e troca só o uid — enrollSeq vai junto.
-const blocoRep = src.slice(src.indexOf('async function _repairTournaments'), src.indexOf('function _profileScore'));
+const blocoRep = src.slice(src.indexOf('async function _repairTournaments'), src.indexOf('function _determineMergeWinner'));
 ok(/Object\.assign\(\{\}, p\)/.test(blocoRep), '_repairTournaments: copia a entrada (enrollSeq preservado)');
 ok(/enrollSeq\s*=/.test(blocoRep) === false, '_repairTournaments: NUNCA reescreve enrollSeq');
 

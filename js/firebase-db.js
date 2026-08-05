@@ -221,6 +221,474 @@ window.FirestoreDB = {
     // do banco (fonte da verdade). EXCEÇÃO: quando o organizador remove/reduz fases DE
     // PROPÓSITO no construtor, o save chega com _allowConfigReset=true (ou options) e a
     // redução é permitida — o guard só barra o que NÃO pretendia tocar (stale/bug).
+    // ── v1.7.26 · O ELENCO E A FILA NUNCA ENCOLHEM POR ACIDENTE ────────────────
+    // INCIDENTE (Confra, 02/ago/2026): o Gersom se inscreveu em 01/08 18:34, recebeu o
+    // lembrete das 09:00 do dia seguinte — e a CF do lembrete itera `t.participants` NO
+    // SERVIDOR, então ele estava no elenco — e às 19:00 não estava no sorteio. Não se
+    // desinscreveu (essa ação notifica o organizador; não há notificação nenhuma). Sumiu
+    // em silêncio e ficou dois dias fora do torneio.
+    //
+    // CAUSA ESTRUTURAL: este método grava o doc INTEIRO com merge, e há ~65 pontos no app
+    // chamando `saveTournament(t)` com um `t` vindo da memória. Qualquer um com cópia
+    // atrasada apaga quem entrou depois — sem erro, sem log, sem rastro. `skipParticipants`
+    // existe pra isso e o comentário lá em cima promete que "organizer edits" não tocam em
+    // participants; SÓ o `sync()` passa a flag. Promessa que o código não cumpria.
+    //
+    // A DOUTRINA (a mesma do memberUids acima, que já é "NUNCA ENCOLHE"): tirar alguém é
+    // ATO DECLARADO. Todo save pode mexer nos CAMPOS de um inscrito à vontade, mas nenhum
+    // faz alguém desaparecer — o ausente volta do doc fresco.
+    //
+    // Compara por UID, nunca por posição: dupla carrega dois uids (p1Uid/p2Uid) e
+    // `_participantUids` os enxerga. É isso que faz o SORTEIO — que funde dois solos numa
+    // dupla — não disparar restauração e duplicar o elenco a cada rodada.
+    // Entrada SEM uid (fictício) não é protegida: não há identidade estável pra casar, e
+    // inventar uma casaria homônimos. Limitação declarada e coberta por teste.
+    //
+    // ⚠️ MODO DE FALHA ESCOLHIDO: se um caminho legítimo de remoção esquecer a flag, a
+    // pessoa CONTINUA inscrita e o console grita (+ Sentry). O contrário — sumir calado —
+    // é o que custou dois dias de torneio a alguém.
+    var _allowRosterRemoval = !!(options && options.allowRosterRemoval) || cleanData._allowRosterRemoval === true;
+    delete cleanData._allowRosterRemoval; // flag transiente — nunca persistir no doc
+    var _tocaElenco = Array.isArray(cleanData.participants);
+    var _tocaFila   = Array.isArray(cleanData.standbyParticipants) || Array.isArray(cleanData.waitlist);
+    if ((_tocaElenco || _tocaFila) && !_allowRosterRemoval) {
+      try {
+        var _uidsOf = (typeof window !== 'undefined' && typeof window._participantUids === 'function')
+          ? window._participantUids
+          : function (p) { return (p && p.uid) ? [p.uid] : []; };
+        var _rSnap = await this.db.collection('tournaments').doc(docId).get();
+        var _banco = _rSnap.exists ? (_rSnap.data() || {}) : null;
+        if (_banco) {
+          var _restored = [];
+          // Quem está no elenco DEPOIS deste save (o incoming quando ele traz elenco; o do
+          // banco quando não traz). É a régua que reconhece PROMOÇÃO logo abaixo.
+          var _noElenco = {};
+          (Array.isArray(cleanData.participants) ? cleanData.participants
+            : (Array.isArray(_banco.participants) ? _banco.participants : [])
+          ).forEach(function (p) {
+            if (p && typeof p === 'object') _uidsOf(p).forEach(function (u) { if (u) _noElenco[u] = 1; });
+          });
+
+          // ELENCO: ninguém sai sem `allowRosterRemoval`.
+          if (_tocaElenco && Array.isArray(_banco.participants)) {
+            _banco.participants.forEach(function (p) {
+              if (!p || typeof p !== 'object') return;
+              var us = _uidsOf(p).filter(Boolean);
+              if (!us.length) return;                              // fictício: sem proteção
+              if (us.some(function (u) { return _noElenco[u]; })) return;
+              cleanData.participants.push(p);                       // volta como está no banco
+              us.forEach(function (u) { _noElenco[u] = 1; });
+              _restored.push(us[0] + ' (participants)');
+            });
+          }
+
+          // FILA: depois do sorteio é ONDE AS PESSOAS ESPERAM (v1.6.86) — e some sem
+          // ninguém notar, porque quem espera não tem jogo pra sentir falta.
+          // NÃO exige flag: a saída legítima da fila é PROMOÇÃO, e promoção tem marca
+          // própria — a pessoa passa a estar no elenco. Quem sumiu da fila SEM aparecer no
+          // elenco não foi promovido, foi perdido. Assim as dezenas de caminhos de promoção
+          // (W.O., formação de grupo, substituição) seguem funcionando sem marcar nenhum.
+          ['standbyParticipants', 'waitlist'].forEach(function (campo) {
+            if (!Array.isArray(cleanData[campo]) || !Array.isArray(_banco[campo]) || !_banco[campo].length) return;
+            var _naFila = {};
+            cleanData[campo].forEach(function (p) {
+              if (p && typeof p === 'object') _uidsOf(p).forEach(function (u) { if (u) _naFila[u] = 1; });
+            });
+            _banco[campo].forEach(function (p) {
+              if (!p || typeof p !== 'object') return;
+              var us = _uidsOf(p).filter(Boolean);
+              if (!us.length) return;
+              if (us.some(function (u) { return _naFila[u]; })) return;
+              if (us.some(function (u) { return _noElenco[u]; })) return;   // PROMOVIDO
+              cleanData[campo].push(p);
+              us.forEach(function (u) { _naFila[u] = 1; });
+              _restored.push(us[0] + ' (' + campo + ')');
+            });
+          });
+
+          // ── HISTÓRICO É APPEND-ONLY, e por isso não pode encolher tampouco ────
+          // Reconstruir o sumiço do Gersom custou uma tarde porque NÃO HÁ RASTRO de quem
+          // mexe no elenco — tive que inferir por notificações. O histórico é o rastro, e
+          // ele vive no MESMO doc, sujeito ao MESMO save atrasado: registrar o incidente
+          // numa lista que o próximo save apaga não registra nada. Une pelo par
+          // (date+message) — nunca some linha, e reescrever a mesma não duplica.
+          if (Array.isArray(_banco.history) && _banco.history.length) {
+            var _hIn = Array.isArray(cleanData.history) ? cleanData.history : [];
+            var _hKey = function (e) { return String((e && e.date) || '') + '|' + String((e && e.message) || ''); };
+            var _vistos = {};
+            _hIn.forEach(function (e) { _vistos[_hKey(e)] = 1; });
+            var _perdidas = _banco.history.filter(function (e) { return !_vistos[_hKey(e)]; });
+            if (_perdidas.length) {
+              cleanData.history = _perdidas.concat(_hIn);
+            }
+          }
+
+          if (_restored.length) {
+            // O incidente vira LINHA NO HISTÓRICO, não só log de console: console some
+            // quando a aba fecha, e foi justamente a falta de rastro que fez este caso
+            // levar uma tarde pra ser reconstruído. Anexa ao histórico do BANCO (já unido
+            // acima), nunca ao da cópia que chegou — ela é a atrasada.
+            if (!Array.isArray(cleanData.history)) cleanData.history = Array.isArray(_banco.history) ? _banco.history.slice() : [];
+            cleanData.history.push({
+              date: new Date().toISOString(),
+              message: 'Protecao automatica: um save chegou sem ' + _restored.length +
+                ' pessoa(s) e elas foram restauradas (' + _restored.join(', ') + ').'
+            });
+            // Barulhento de propósito: é o sinal de que existe caminho gravando lista
+            // atrasada. Silenciar seria repetir o bug numa camada acima.
+            if (window._warn) window._warn('[saveTournament] LISTA PROTEGIDA em ' + docId + ': o save chegou sem ' +
+              _restored.length + ' pessoa(s) e elas foram RESTAURADAS do banco — ' + _restored.join(', ') +
+              '. Se a remoção era intencional, o caminho precisa passar allowRosterRemoval.');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('roster shrink blocked: ' + docId + ' (' + _restored.join(', ') + ')')); } catch (_se) {}
+          }
+        }
+      } catch (_rgErr) { /* o guard nunca derruba o save */ }
+    }
+
+
+    // ── v1.7.30 · PLACAR LANÇADO NUNCA É APAGADO POR UM SAVE QUE NÃO É DE PLACAR ──
+    // MEDIDO contra o doc real do Confra: um save do organizador (editar o torneio) com
+    // cópia lida ANTES de alguém lançar um resultado gravava `rounds` da memória e o
+    // placar voltava a `null x null`. Mesma família do sumiço do Gersom (v1.7.26) — lista
+    // compartilhada gravada inteira a partir de estado velho —, só que atinge o dado que
+    // as pessoas acabaram de produzir na quadra, que é o pior de todos pra perder.
+    // O guard do elenco não pegava isso: ele protege listas de PESSOAS, e o placar mora
+    // em `rounds[].matches[]` / `matches[]` / `groups[].matches[]`.
+    //
+    // REGRA: quem tem placar no banco e chega SEM placar no save é REGRESSÃO — o jogo
+    // volta como está no banco. Corrigir placar segue livre (chega COM valor, vence o
+    // que chegou). Apagar de propósito passa a exigir `allowScoreClear`.
+    // Casa por `id` do jogo, nunca por posição: sorteio e rodada extra reordenam.
+    var _allowScoreClear = !!(options && options.allowScoreClear) || cleanData._allowScoreClear === true;
+    delete cleanData._allowScoreClear;
+    if (!_allowScoreClear) {
+      try {
+        var _snapP = await this.db.collection('tournaments').doc(docId).get();
+        if (_snapP.exists) {
+          var _bancoP = _snapP.data() || {};
+          var _temPlacar = function (m) {
+            return !!(m && (m.winner || m.scoreP1 != null || m.scoreP2 != null ||
+                            (Array.isArray(m.sets) && m.sets.length)));
+          };
+          // índice id→jogo do BANCO, varrendo as três formas onde jogo mora
+          var _idx = {};
+          var _varre = function (t, fn) {
+            (Array.isArray(t.matches) ? t.matches : []).forEach(fn);
+            (Array.isArray(t.rounds) ? t.rounds : []).forEach(function (r) {
+              (r && Array.isArray(r.matches) ? r.matches : []).forEach(fn);
+            });
+            (Array.isArray(t.groups) ? t.groups : []).forEach(function (g) {
+              (g && Array.isArray(g.matches) ? g.matches : []).forEach(fn);
+            });
+          };
+          _varre(_bancoP, function (m) { if (m && m.id != null && _temPlacar(m)) _idx[String(m.id)] = m; });
+          var _revertidos = [];
+          if (Object.keys(_idx).length) {
+            _varre(cleanData, function (m) {
+              if (!m || m.id == null) return;
+              var b = _idx[String(m.id)];
+              if (!b || _temPlacar(m)) return;              // sem placar no banco, ou veio COM: nada a fazer
+              // devolve os campos de RESULTADO; o resto do jogo (slots, rótulos) fica como veio
+              ['scoreP1', 'scoreP2', 'winner', 'sets', 'setsWonP1', 'setsWonP2',
+               'totalGamesP1', 'totalGamesP2', 'pendingResult', 'resultAt'].forEach(function (k) {
+                if (b[k] !== undefined) m[k] = b[k];
+              });
+              _revertidos.push(String(m.id));
+            });
+          }
+          if (_revertidos.length) {
+            if (window._warn) window._warn('[saveTournament] PLACAR PROTEGIDO em ' + docId + ': o save chegou sem o resultado de ' +
+              _revertidos.length + ' jogo(s) que JÁ TÊM placar no banco — restaurados (' + _revertidos.join(', ') + ').');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('score wipe blocked: ' + docId + ' (' + _revertidos.length + ')')); } catch (_se) {}
+            if (!Array.isArray(cleanData.history)) cleanData.history = Array.isArray(_bancoP.history) ? _bancoP.history.slice() : [];
+            cleanData.history.push({ date: new Date().toISOString(),
+              message: 'Protecao automatica: um save chegou sem o placar de ' + _revertidos.length +
+                ' jogo(s) ja lancado(s) e eles foram restaurados.' });
+          }
+
+          // ── v1.7.32 · O QUE O JOGO JÁ GANHOU NÃO SOME, E A CHAVE NÃO ENCOLHE ──
+          // O guard acima devolve o PLACAR de um jogo que veio sem ele. Não cobria o
+          // jogo que NÃO VEIO, nem o que o jogo ganhou fora do placar. MEDIDO contra o
+          // doc real do Confra, o save atrasado do organizador destruía CINCO coisas:
+          // a rodada 2 recém-criada, um jogo de entrada tardia, o link do grupo de
+          // WhatsApp, o horário combinado e a substituição por W.O.
+          //
+          // DUAS regras, desenhadas pra não atrapalhar quem apaga de propósito:
+          //
+          // (a) CAMPOS ADITIVOS de um jogo (link do grupo, horário combinado) só nascem
+          //     pelo fluxo deles e nunca são "desmarcados" num save de outra coisa —
+          //     então um save que chega sem eles está desatualizado, não decidindo.
+          //
+          // (b) SUMIÇO. Aqui está a distinção que evita 6 bandeiras espalhadas pelos
+          //     pontos de reset: um RESET zera (`rounds: []`), um save atrasado traz
+          //     MENOS rodadas — nunca zero. Então N→0 passa livre (é o re-sorteio, o
+          //     reset do sandbox, o construtor de formato) e só 0<M<N é recusado.
+          //     Dentro de uma rodada que sobreviveu, o jogo que sumiu volta — com DUAS
+          //     exceções, tiradas de quem realmente apaga jogo no app (varri os 10
+          //     pontos): (i) `isSitOut` — `_removeSitOut` (liga-substitution) e `_isRem`
+          //     (bracket-logic) só apagam MARCADOR de folga, e ressuscitá-lo quebraria o
+          //     W.O.; (ii) save que ACRESCENTA jogo novo — os outros 8 pontos são o motor
+          //     reescrevendo a chave (re-sorteio, repescagem, chaves-adapter), e ele
+          //     sempre gera jogo junto. Save atrasado só PERDE, nunca traz id novo.
+          //     Na dúvida (o motor está reescrevendo), o guard sai de cena.
+          //
+          // ⚠️ NÃO cobre o slot reescrito (a substituição por W.O. desfeita, caso 3 da
+          // medição): os dois lados escrevem o MESMO campo com dado igualmente válido e
+          // não há como saber qual é o mais novo sem versionar o jogo. Fica anotado.
+          var _ADITIVOS = ['waGroup', 'schedule', 'scheduledAt', 'scheduledBy'];
+          // índice COMPLETO do banco (o de cima só tem quem tem placar) + onde cada um mora
+          var _ondeMora = {};
+          var _idxAll = {};
+          (Array.isArray(_bancoP.matches) ? _bancoP.matches : []).forEach(function (m) {
+            if (m && m.id != null) { _idxAll[String(m.id)] = m; _ondeMora[String(m.id)] = { tipo: 'matches' }; }
+          });
+          (Array.isArray(_bancoP.rounds) ? _bancoP.rounds : []).forEach(function (r, ri) {
+            (r && Array.isArray(r.matches) ? r.matches : []).forEach(function (m) {
+              if (m && m.id != null) { _idxAll[String(m.id)] = m; _ondeMora[String(m.id)] = { tipo: 'rounds', i: ri, round: (r.round != null ? r.round : ri) }; }
+            });
+          });
+          (Array.isArray(_bancoP.groups) ? _bancoP.groups : []).forEach(function (g, gi) {
+            (g && Array.isArray(g.matches) ? g.matches : []).forEach(function (m) {
+              if (m && m.id != null) { _idxAll[String(m.id)] = m; _ondeMora[String(m.id)] = { tipo: 'groups', i: gi }; }
+            });
+          });
+
+          // (a) devolve os campos aditivos nos jogos que VIERAM
+          var _aditRest = [];
+          _varre(cleanData, function (m) {
+            if (!m || m.id == null) return;
+            var b = _idxAll[String(m.id)];
+            if (!b) return;
+            _ADITIVOS.forEach(function (k) {
+              if (b[k] != null && m[k] == null) { m[k] = b[k]; _aditRest.push(String(m.id) + '·' + k); }
+            });
+          });
+
+          // (b1) rodada que sumiu — só quando o save NÃO zerou (zerar é reset declarado pela forma)
+          var _rodVolt = [];
+          if (Array.isArray(cleanData.rounds) && Array.isArray(_bancoP.rounds) &&
+              cleanData.rounds.length > 0 && cleanData.rounds.length < _bancoP.rounds.length) {
+            var _temR = {};
+            cleanData.rounds.forEach(function (r, i) { _temR[String(r && r.round != null ? r.round : i)] = 1; });
+            _bancoP.rounds.forEach(function (r, i) {
+              var k = String(r && r.round != null ? r.round : i);
+              if (_temR[k]) return;
+              cleanData.rounds.push(r); _rodVolt.push(k);
+            });
+            if (_rodVolt.length) {
+              cleanData.rounds.sort(function (a, b) {
+                return (a && a.round != null ? a.round : 0) - (b && b.round != null ? b.round : 0);
+              });
+            }
+          }
+
+          // (b2) jogo que sumiu de uma rodada/grupo que sobreviveu
+          var _vistos = {};
+          _varre(cleanData, function (m) { if (m && m.id != null) _vistos[String(m.id)] = 1; });
+          // o save TROUXE jogo que o banco não tem ⇒ é o motor reescrevendo a chave: sai de cena
+          var _motorReescrevendo = Object.keys(_vistos).some(function (id) { return !_idxAll[id]; });
+          var _jogoVolt = [];
+          if (!_motorReescrevendo) Object.keys(_idxAll).forEach(function (id) {
+            if (_vistos[id]) return;
+            var b = _idxAll[id];
+            if (b && b.isSitOut) return;                     // marcador de folga/W.O.: pode sumir
+            var onde = _ondeMora[id] || {};
+            var alvo = null;
+            if (onde.tipo === 'matches') {
+              if (!Array.isArray(cleanData.matches)) cleanData.matches = [];
+              alvo = cleanData.matches;
+            } else if (onde.tipo === 'rounds' && Array.isArray(cleanData.rounds)) {
+              var r = null;
+              for (var _ri = 0; _ri < cleanData.rounds.length; _ri++) {
+                var _c = cleanData.rounds[_ri];
+                if (_c && _c.round != null ? _c.round === onde.round : _ri === onde.i) { r = _c; break; }
+              }
+              if (r) { if (!Array.isArray(r.matches)) r.matches = []; alvo = r.matches; }
+            } else if (onde.tipo === 'groups' && Array.isArray(cleanData.groups) && cleanData.groups[onde.i]) {
+              var g = cleanData.groups[onde.i];
+              if (!Array.isArray(g.matches)) g.matches = [];
+              alvo = g.matches;
+            }
+            if (!alvo) return;                                // sem onde pousar: não inventa lugar
+            alvo.push(b); _jogoVolt.push(id);
+          });
+
+          // ── v1.7.33 · TROCA DE JOGADOR NO JOGO: o mais NOVO vence ────────────────
+          // Este era o caso 5 da medição e o único que eu tinha dado como insolúvel: o
+          // suplente entra pelo W.O., o organizador salva uma cópia velha, e a
+          // substituição é DESFEITA. Os dois lados escrevem o MESMO campo com dado
+          // igualmente válido — sem saber QUANDO cada um escreveu, não há como decidir.
+          //
+          // A informação que faltava é um carimbo, e ele nasce AQUI em vez de nos 10
+          // pontos que mexem em slot (draw, phases, bracket-logic, liga-substitution):
+          // comparo a escalação que chegou com a do banco e, se mudou, carimbo
+          // `rosterAt`. Assim toda troca se carimba sozinha e nenhum call site precisa
+          // saber que o carimbo existe — a lição do `_repairTournaments`, onde manter
+          // lista à mão sempre esquece o campo novo.
+          //
+          // Decisão: mudou E o banco tem carimbo MAIS NOVO que o do save ⇒ o save é
+          // atrasado, a escalação do banco volta. Primeira troca da vida (banco sem
+          // carimbo) é aceita e carimbada. Duas trocas legítimas em sequência também
+          // passam: quem leu DEPOIS da primeira carrega o carimbo dela.
+          var _ROSTER = ['p1', 'p2', 'team1', 'team2', 'team1Uids', 'team2Uids', 'p1Uid', 'p2Uid'];
+          var _sigRoster = function (m) {
+            return JSON.stringify(_ROSTER.map(function (k) { return m ? m[k] : null; }));
+          };
+          var _slotRev = [], _slotNovo = 0, _agora = Date.now();
+          if (!_motorReescrevendo) _varre(cleanData, function (m) {
+            if (!m || m.id == null) return;
+            var b = _idxAll[String(m.id)];
+            if (!b) return;
+            if (_sigRoster(m) === _sigRoster(b)) {
+              if (b.rosterAt != null && m.rosterAt == null) m.rosterAt = b.rosterAt; // não perde o carimbo
+              return;
+            }
+            var _cB = (typeof b.rosterAt === 'number') ? b.rosterAt : null;
+            var _cS = (typeof m.rosterAt === 'number') ? m.rosterAt : null;
+            if (_cB != null && (_cS == null || _cS < _cB)) {
+              _ROSTER.forEach(function (k) { if (b[k] !== undefined) m[k] = b[k]; else delete m[k]; });
+              m.rosterAt = _cB;
+              _slotRev.push(String(m.id));
+            } else {
+              m.rosterAt = _agora;                            // troca legítima: carimba
+              _slotNovo++;
+            }
+          });
+          if (_slotRev.length) {
+            if (window._warn) window._warn('[saveTournament] ESCALACAO PROTEGIDA em ' + docId + ': o save trazia escalação ANTIGA de ' +
+              _slotRev.length + ' jogo(s) (ex.: substituição por W.O. já aplicada) — restaurada do banco (' + _slotRev.join(', ') + ').');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('roster revert blocked: ' + docId + ' (' + _slotRev.length + ')')); } catch (_se) {}
+          }
+
+          // ── v1.7.34 · O 3º STORAGE DA ESPERA, O W.O. REIVINDICADO E A ENQUETE ────
+          // A espera vive em TRÊS storages (cânone). O guard de 1.7.26 pegou os dois que
+          // são ARRAY de entrada com uid (`standbyParticipants`, `waitlist`) e deixou de
+          // fora o terceiro: `monarchWaitlist`, que é MAPA categoria→NOMES. MEDIDO no doc
+          // real: quem entra na fila por ali some num save atrasado — **é o bug do Gersom
+          // ainda aberto**. E hoje há gente exposta: o **Renato Oshima** existe SÓ nesse
+          // mapa (não está no elenco nem em `standbyParticipants`), então zerá-lo o apaga
+          // do torneio inteiro.
+          //
+          // Sair da fila é legítimo — mas SÓ o motor faz isso, e sempre sorteando (varri:
+          // todos os `_setMonarchWaitlist` que encolhem estão em bracket-logic.js, tirando
+          // da fila quem acabou de entrar num grupo). Reuso então o mesmo sinal da 1.7.32:
+          // trouxe jogo com id novo ⇒ o motor sorteou ⇒ o guard sai de cena.
+          //
+          // `woClaims` e `polls`: varri o app e NADA os remove (o W.O. reivindicado é
+          // append-only, a enquete idem) — some só por save atrasado. Guard direto por id.
+          var _espVolt = [], _apVolt = [];
+          if (!_motorReescrevendo && !_allowRosterRemoval) {
+            var _mwlB = _bancoP.monarchWaitlist;
+            if (_mwlB && typeof _mwlB === 'object' && !Array.isArray(_mwlB)) {
+              if (!cleanData.monarchWaitlist || typeof cleanData.monarchWaitlist !== 'object' ||
+                  Array.isArray(cleanData.monarchWaitlist)) cleanData.monarchWaitlist = {};
+              Object.keys(_mwlB).forEach(function (cat) {
+                var _b = _mwlB[cat];
+                if (!Array.isArray(_b) || !_b.length) return;
+                if (!Array.isArray(cleanData.monarchWaitlist[cat])) cleanData.monarchWaitlist[cat] = [];
+                var _p = cleanData.monarchWaitlist[cat];
+                _b.forEach(function (nome) {
+                  if (nome == null || _p.indexOf(nome) >= 0) return;
+                  _p.push(nome); _espVolt.push(String(cat) + '/' + String(nome));
+                });
+              });
+            }
+            // ── v1.7.35 · PRESENÇA ("Cheguei") não é apagada por save de outra coisa ──
+            // Eu tinha deixado isto de fora achando que DESMARCAR passava por aqui e o
+            // guard prenderia a pessoa. Fui ler o toggle (`_toggleCheckIn`) e **não passa**:
+            // desmarcar vai por `setPresenceFields` (escrita campo a campo, `checkedIn.<uid>`)
+            // ou pelo `AppStore.mutate`, que é TRANSAÇÃO e lê o doc fresco. Nenhum dos dois
+            // é este caminho. Então proteger aqui não pode prender ninguém na quadra.
+            // Quem legitimamente zera a presença por aqui é o SORTEIO ("acabou de sortear,
+            // ninguém está presente" — regra do dono, tournaments-draw.js) — e ele traz jogo
+            // com id novo, que é o mesmo sinal já usado nos guards de cima.
+            ['checkedIn', 'absent', 'vips', 'checkedInConfirmed'].forEach(function (mapa) {
+              var _b = _bancoP[mapa];
+              if (!_b || typeof _b !== 'object' || Array.isArray(_b)) return;
+              var _chaves = Object.keys(_b);
+              if (!_chaves.length) return;
+              if (!cleanData[mapa] || typeof cleanData[mapa] !== 'object' || Array.isArray(cleanData[mapa])) cleanData[mapa] = {};
+              _chaves.forEach(function (k) {
+                if (cleanData[mapa][k] !== undefined) return;
+                cleanData[mapa][k] = _b[k]; _apVolt.push(mapa + '/' + k);
+              });
+            });
+
+            ['woClaims', 'polls'].forEach(function (campo) {
+              var _b = _bancoP[campo];
+              if (!Array.isArray(_b) || !_b.length) return;
+              if (!Array.isArray(cleanData[campo])) cleanData[campo] = [];
+              var _tem = {};
+              cleanData[campo].forEach(function (o) { if (o && o.id != null) _tem[String(o.id)] = 1; });
+              _b.forEach(function (o) {
+                if (!o || o.id == null || _tem[String(o.id)]) return;
+                cleanData[campo].push(o); _apVolt.push(campo + '/' + String(o.id));
+              });
+            });
+          }
+          if (_espVolt.length || _apVolt.length) {
+            if (window._warn) window._warn('[saveTournament] ESPERA/REGISTRO PROTEGIDO em ' + docId + ': ' +
+              (_espVolt.length ? _espVolt.length + ' nome(s) da lista de espera ' : '') +
+              (_apVolt.length ? _apVolt.length + ' registro(s) (W.O./enquete) ' : '') +
+              'sumiram do save e voltaram do banco.');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('waitlist/claims shrink blocked: ' + docId + ' (e=' + _espVolt.length + ' r=' + _apVolt.length + ')')); } catch (_se) {}
+          }
+
+          if (_rodVolt.length || _jogoVolt.length || _aditRest.length) {
+            if (window._warn) window._warn('[saveTournament] CHAVE PROTEGIDA em ' + docId + ': ' +
+              (_rodVolt.length ? _rodVolt.length + ' rodada(s) ' : '') +
+              (_jogoVolt.length ? _jogoVolt.length + ' jogo(s) com valor ' : '') +
+              (_aditRest.length ? _aditRest.length + ' campo(s) (grupo/horário) ' : '') +
+              'sumiram do save e foram restaurados do banco.');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('bracket shrink blocked: ' + docId + ' (r=' + _rodVolt.length + ' m=' + _jogoVolt.length + ' f=' + _aditRest.length + ')')); } catch (_se) {}
+          }
+          if (_rodVolt.length || _jogoVolt.length) {
+            if (!Array.isArray(cleanData.history)) cleanData.history = Array.isArray(_bancoP.history) ? _bancoP.history.slice() : [];
+            cleanData.history.push({ date: new Date().toISOString(),
+              message: 'Protecao automatica: um save chegou sem ' + _rodVolt.length + ' rodada(s) e ' +
+                _jogoVolt.length + ' jogo(s) que existem no banco e eles foram restaurados.' });
+          }
+        }
+      } catch (_spErr) { /* o guard nunca derruba o save */ }
+    }
+
+    // ── v1.7.31 · ACEITE DE CO-ORGANIZAÇÃO NÃO VOLTA A "PENDENTE" ─────────────
+    // MEDIDO: um save atrasado devolve `coHosts[i].status` de 'active' pra 'pending' e
+    // apaga o `acceptedAt` — a pessoa aceita e, horas depois, o convite aparece pendente
+    // outra vez. Já houve um caso ao vivo desse sintoma (Raquel, jul/2026); na época foi
+    // atribuído a um `permission-denied`, e o fix da v1.6.9 tratou aquela causa. Agora sei
+    // que existe uma SEGUNDA porta pro mesmo sintoma, e ela continuava aberta.
+    // (Varri as notificações antes de mexer: o único `pending` de hoje no Confra é da
+    // Fabiana, que nunca aceitou — não há vítima em produção. Isto é preventivo.)
+    //
+    // A regra é MONOTÔNICA e por isso não quebra nada: aceitar é avanço de estado e não
+    // retrocede. CANCELAR o convite (que REMOVE a entrada) segue livre — só a volta
+    // aceito→pendente é barrada. Assim o organizador continua podendo cancelar.
+    if (Array.isArray(cleanData.coHosts)) {
+      try {
+        var _snapC = await this.db.collection('tournaments').doc(docId).get();
+        var _chBanco = _snapC.exists ? ((_snapC.data() || {}).coHosts) : null;
+        if (Array.isArray(_chBanco) && _chBanco.length) {
+          var _aceito = function (c) { return c && (c.status === 'active' || c.status === 'accepted'); };
+          var _porUid = {};
+          _chBanco.forEach(function (c) { if (c && c.uid) _porUid[c.uid] = c; });
+          var _regrediram = [];
+          cleanData.coHosts.forEach(function (c, i) {
+            if (!c || !c.uid) return;
+            var b = _porUid[c.uid];
+            if (!b || !_aceito(b) || _aceito(c)) return;      // não regrediu
+            cleanData.coHosts[i] = b;                          // devolve o estado do banco
+            _regrediram.push(c.uid);
+          });
+          if (_regrediram.length) {
+            if (window._warn) window._warn('[saveTournament] CO-ORGANIZACAO PROTEGIDA em ' + docId +
+              ': o save tentava devolver ' + _regrediram.length + ' aceite(s) para pendente — restaurado(s) (' + _regrediram.join(', ') + ').');
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('cohost accept revert blocked: ' + docId)); } catch (_se) {}
+          }
+        }
+      } catch (_chErr) { /* o guard nunca derruba o save */ }
+    }
+
     var _allowReset = (options && options._allowConfigReset) || cleanData._allowConfigReset === true;
     delete cleanData._allowConfigReset; // flag transiente — nunca persistir no doc
     try {
@@ -241,6 +709,50 @@ window.FirestoreDB = {
       }
     } catch (_cfgErr) { /* blindagem best-effort; nunca derruba o save */ }
     await this.db.collection('tournaments').doc(docId).set(cleanData, { merge: true });
+    // v1.7.29 — ESCRITA DUPLA na subcoleção `tournaments/{id}/participants/{uid}`.
+    // PASSO 1 de expandir→migrar→contrair. O array segue sendo a FONTE DA VERDADE e
+    // NENHUMA tela lê isto ainda — por isso é seguro no meio de um torneio sorteado.
+    // O que ganha desde já: cada pessoa passa a ter um documento PRÓPRIO, sem contenção
+    // com o resto do torneio, servindo de PROVA e de fonte de recuperação. Reconstruir o
+    // sumiço do Gersom custou uma tarde porque essa prova não existia.
+    // Best-effort e fora do caminho crítico: falhar aqui não pode derrubar o save do
+    // torneio, que é o que a pessoa está esperando na tela.
+    try { this._mirrorRoster(docId, cleanData); } catch (_mrErr) {}
+  },
+
+  // Espelha o elenco na subcoleção — só o DELTA. Escrever os 111 a cada save seria
+  // 111 escritas por clique e derrubaria a quota; e o delta é o que interessa mesmo:
+  // quem entrou e quem saiu. `_rosterMirrorCache` guarda o último estado espelhado por
+  // torneio, então saves que não mexem no elenco (a maioria) não geram escrita nenhuma.
+  _rosterMirrorCache: {},
+  _mirrorRoster(docId, data) {
+    if (!this.db || !Array.isArray(data.participants)) return;
+    var uidsOf = (typeof window !== 'undefined' && typeof window._participantUids === 'function')
+      ? window._participantUids : function (p) { return (p && p.uid) ? [p.uid] : []; };
+    var agora = {};
+    data.participants.forEach(function (p) {
+      if (!p || typeof p !== 'object') return;
+      uidsOf(p).forEach(function (u) { if (u) agora[u] = p; });
+    });
+    var antes = this._rosterMirrorCache[docId] || null;
+    this._rosterMirrorCache[docId] = Object.keys(agora).reduce(function (o, u) { o[u] = 1; return o; }, {});
+    // 1ª vez nesta sessão: não há base de comparação; não sai escrevendo tudo (o backfill
+    // é feito por script, uma vez). A partir daqui o delta é confiável.
+    if (!antes) return;
+    var col = this.db.collection('tournaments').doc(docId).collection('participants');
+    var self = this;
+    Object.keys(agora).forEach(function (u) {
+      if (antes[u]) return;                                  // já estava: nada a escrever
+      try {
+        col.doc(u).set({ uid: u, status: 'enrolled', at: new Date().toISOString(),
+                         entry: agora[u] }, { merge: true });
+      } catch (_e) {}
+    });
+    Object.keys(antes).forEach(function (u) {
+      if (agora[u]) return;
+      // NÃO apaga: marca. O histórico de quem saiu é justamente o que faltou no incidente.
+      try { col.doc(u).set({ status: 'left', leftAt: new Date().toISOString() }, { merge: true }); } catch (_e) {}
+    });
   },
 
   // ── BLINDAGEM DE CONCORRÊNCIA (project_concurrency_safe_saves) ──────────────
@@ -294,15 +806,78 @@ window.FirestoreDB = {
     if (!this.ensureDb()) throw new Error('Firestore not initialized');
     var ref = this.db.collection('tournaments').doc(String(tournamentId));
     var self = this;
-    return this.db.runTransaction(async function (transaction) {
+    var _txOut = await this.db.runTransaction(async function (transaction) {
       var doc = await transaction.get(ref);
       if (!doc.exists) throw new Error('Tournament not found: ' + tournamentId);
       var data = doc.data();
       // Rei/Rainha: o doc fresco traz grupos só com matchIds. Hidrata group.matches
       // como refs de round.matches ANTES do mutator (W.O./substituição leem g.matches).
       try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(data); } catch (_hmErr) {}
+      // v1.7.28 — MESMA DOUTRINA DENTRO DA TRANSAÇÃO. Ela é à prova de CONCORRÊNCIA
+      // (lê fresco, re-executa se alguém commitou no meio), mas nada olha o que o próprio
+      // MUTATOR faz. É por aqui que passam W.O., substituição e formação de grupo — tudo
+      // o que roda com o torneio já sorteado. Um mutator que derrube alguém por engano
+      // sumiria com a pessoa exatamente como no save solto (v1.7.26).
+      // Aqui a comparação é EXATA e sem corrida: `_antes` e o resultado saem da MESMA
+      // leitura transacional. Quem remove de propósito declara `allowRosterRemoval` no
+      // options — os mesmos termos do saveTournament, pra não haver duas regras.
+      var _uidsTx = (typeof window !== 'undefined' && typeof window._participantUids === 'function')
+        ? window._participantUids : function (p) { return (p && p.uid) ? [p.uid] : []; };
+      var _setDe = function (arr) {
+        var o = {};
+        (Array.isArray(arr) ? arr : []).forEach(function (p) {
+          if (p && typeof p === 'object') _uidsTx(p).forEach(function (u) { if (u) o[u] = 1; });
+        });
+        return o;
+      };
+      var _antesArr = { participants: Array.isArray(data.participants) ? data.participants.slice() : [],
+                        standbyParticipants: Array.isArray(data.standbyParticipants) ? data.standbyParticipants.slice() : [],
+                        waitlist: Array.isArray(data.waitlist) ? data.waitlist.slice() : [] };
+
       var out = mutatorFn(data);
       if (out === false) return { aborted: true, data: data };
+      // ── RESTAURAÇÃO PÓS-MUTATOR — a regra é NÃO SUMIR, não "não sair" ─────────
+      // ⚠️ A primeira versão disto exigia que a pessoa continuasse no ELENCO, e teria
+      // QUEBRADO O W.O. no meio do torneio: o W.O. tira do elenco e põe na FILA (v1.6.88).
+      // O movimento elenco↔fila é legítimo nos dois sentidos — promoção sobe, W.O. desce.
+      // O invariante certo é mais simples e não pode quebrar movimento nenhum:
+      // ninguém pode sumir DOS DOIS ao mesmo tempo. Quem estava em alguma das listas
+      // antes da mutação tem que continuar em ALGUMA delas depois; onde exatamente é
+      // assunto do mutator, não meu.
+      if (!(options && options.allowRosterRemoval)) {
+        try {
+          var _emAlgumLugar = function (d) {
+            var o = {};
+            ['participants', 'standbyParticipants', 'waitlist'].forEach(function (c) {
+              (Array.isArray(d[c]) ? d[c] : []).forEach(function (p) {
+                if (p && typeof p === 'object') _uidsTx(p).forEach(function (u) { if (u) o[u] = 1; });
+              });
+            });
+            return o;
+          };
+          var _depois = _emAlgumLugar(data);
+          var _voltaram = [];
+          ['participants', 'standbyParticipants', 'waitlist'].forEach(function (campo) {
+            _antesArr[campo].forEach(function (p) {
+              var us = _uidsTx(p).filter(Boolean);
+              if (!us.length) return;                        // fictício: sem identidade estável
+              if (us.some(function (u) { return _depois[u]; })) return;   // está em ALGUMA lista
+              if (!Array.isArray(data[campo])) data[campo] = [];
+              data[campo].push(p);                           // volta pra lista de onde saiu
+              us.forEach(function (u) { _depois[u] = 1; });
+              _voltaram.push(us[0] + ' (' + campo + ')');
+            });
+          });
+          if (_voltaram.length) {
+            if (!Array.isArray(data.history)) data.history = [];
+            data.history.push({ date: new Date().toISOString(),
+              message: 'Protecao automatica (transacao): ' + _voltaram.length +
+                ' pessoa(s) sumiram de TODAS as listas na mutacao e foram restauradas (' + _voltaram.join(', ') + ').' });
+            if (window._warn) window._warn('[mutateTournament] LISTA PROTEGIDA: ' + _voltaram.join(', '));
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('tx roster vanish blocked: ' + _voltaram.join(', '))); } catch (_se) {}
+          }
+        } catch (_txgErr) { /* o guard nunca derruba a transação */ }
+      }
       // Recomputa denormalizados a partir do estado FINAL (mesmos helpers do save).
       // NUNCA ENCOLHE (union com o valor já no doc fresco) — mesma blindagem do
       // saveTournament: um uid/email que só existe no denormalizado (co-host por
@@ -339,6 +914,13 @@ window.FirestoreDB = {
       try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(clean); } catch (_hmErr2) {}
       return { aborted: false, data: clean };
     });
+    // v1.7.29: escrita dupla também aqui — a INSCRIÇÃO passa por esta transação, então
+    // sem isto a subcoleção nasceria cega justamente pro evento que mais importa.
+    // FORA da transação de propósito: escrever numa subcoleção dentro dela ampliaria o
+    // conjunto de docs disputados e faria a transação abortar mais — o oposto do que
+    // queremos num pico de lançamento. O espelho é best-effort; a verdade é o array.
+    try { if (_txOut && !_txOut.aborted && _txOut.data) this._mirrorRoster(tournamentId, _txOut.data); } catch (_mrErr) {}
+    return _txOut;
   },
 
   // ── PLACAR POR JOGO EM DOC PRÓPRIO (project_match_result_docs, linha 4.1) ──────
@@ -369,6 +951,42 @@ window.FirestoreDB = {
       var data = doc.exists ? doc.data() : { matchId: String(matchId), tournamentId: String(tournamentId) };
       var out = mutatorFn(data);
       if (out === false) return { aborted: true, data: data };
+      // Restauração pós-mutator (ver bloco acima). Sai de graça quando nada sumiu.
+      if (!(options && options.allowRosterRemoval)) {
+        try {
+          var _depoisElenco = _setDe(data.participants);
+          var _voltaram = [];
+          if (Array.isArray(data.participants)) {
+            _antesArr.participants.forEach(function (p) {
+              var us = _uidsTx(p).filter(Boolean);
+              if (!us.length) return;                                   // fictício: sem proteção
+              if (us.some(function (u) { return _depoisElenco[u]; })) return;
+              data.participants.push(p); us.forEach(function (u) { _depoisElenco[u] = 1; });
+              _voltaram.push(us[0] + ' (participants)');
+            });
+          }
+          ['standbyParticipants', 'waitlist'].forEach(function (campo) {
+            if (!Array.isArray(data[campo]) || !_antesArr[campo].length) return;
+            var _dep = _setDe(data[campo]);
+            _antesArr[campo].forEach(function (p) {
+              var us = _uidsTx(p).filter(Boolean);
+              if (!us.length) return;
+              if (us.some(function (u) { return _dep[u]; })) return;
+              if (us.some(function (u) { return _depoisElenco[u]; })) return;  // PROMOVIDO
+              data[campo].push(p); us.forEach(function (u) { _dep[u] = 1; });
+              _voltaram.push(us[0] + ' (' + campo + ')');
+            });
+          });
+          if (_voltaram.length) {
+            if (!Array.isArray(data.history)) data.history = [];
+            data.history.push({ date: new Date().toISOString(),
+              message: 'Protecao automatica (transacao): ' + _voltaram.length +
+                ' pessoa(s) sumiram na mutacao e foram restauradas (' + _voltaram.join(', ') + ').' });
+            if (window._warn) window._warn('[mutateTournament] LISTA PROTEGIDA: ' + _voltaram.join(', '));
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('tx roster shrink blocked: ' + _voltaram.join(', '))); } catch (_se) {}
+          }
+        } catch (_txgErr) { /* o guard nunca derruba a transação */ }
+      }
       data.matchId = String(matchId);
       data.updatedAt = new Date().toISOString();
       var clean = self._cleanUndefined(data);

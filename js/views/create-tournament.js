@@ -391,6 +391,25 @@ function setupCreateTournamentModal() {
               </div>
 
               <!-- Inscrições durante a fase — logo abaixo do Agendamento de Sorteios (v2.6.51) -->
+              <!-- v1.7.16: PROPORÇÃO DE GÊNERO da fase. Vive aqui no formulário e é
+                   REALOCADA pra dentro da fase pelo format2-ui (_EXT_IDS → #f2-classif-extra),
+                   igual às Datas da fase — foi o pedido do dono: "dentro da fase a que se
+                   refere o sorteio". Só vale no sorteio EQUILIBRADO; no livre não há regra. -->
+              <div id="gender-ratio-box" style="background: rgba(34,197,94,0.05); border: 1px solid rgba(34,197,94,0.20); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin: 0 0 0.35rem; font-size: 0.8rem; color: #22c55e; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⚖️ Proporção do sorteio</p>
+                <p style="margin:0 0 0.7rem; font-size:0.74rem; color:var(--text-muted,#94a3b8); line-height:1.4;">Homens / mulheres em cada 4 pessoas sorteadas (grupo Rei/Rainha ou jogo). Vale no sorteio equilibrado.</p>
+                <input type="hidden" id="gender-ratio" value="">
+                <div style="display:flex;gap:6px;margin-bottom:10px;" id="gender-ratio-buttons">
+                  <button type="button" data-ratio="" onclick="window._ctSetRatio('')" style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-color);cursor:pointer;font-weight:700;font-size:0.78rem;">Sem regra</button>
+                  <button type="button" data-ratio="50/50" onclick="window._ctSetRatio('50/50')" style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-color);cursor:pointer;font-weight:800;font-size:0.8rem;">50/50</button>
+                  <button type="button" data-ratio="25/75" onclick="window._ctSetRatio('25/75')" style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-color);cursor:pointer;font-weight:800;font-size:0.8rem;">25/75</button>
+                  <button type="button" data-ratio="75/25" onclick="window._ctSetRatio('75/25')" style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-color);cursor:pointer;font-weight:800;font-size:0.8rem;">75/25</button>
+                </div>
+                <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(34,197,94,0.25);background:rgba(34,197,94,0.07);">
+                  <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🔒</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Travar proporção</span><div class="toggle-desc" id="gender-ratio-lock-desc" style="font-size:0.72rem;margin-top:2px;">Travada, só forma grupo na proporção exata. Destravada, busca a proporção e depois flexibiliza para incluir mais gente.</div></div></div>
+                  <label class="toggle-switch"><input type="checkbox" id="gender-ratio-lock" checked onchange="window._ctPaintRatio()"><span class="toggle-slider"></span></label>
+                </div>
+              </div>
               <div id="late-enroll-box" style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ${_t('create.lateEnrollSection')}</p>
                 <input type="hidden" id="late-enrollment" value="closed">
@@ -4684,6 +4703,16 @@ function setupCreateTournamentModal() {
       var _clusterLoad = document.getElementById('liga-cluster-size');
       if (_clusterLoad) _clusterLoad.value = t.clusterSize;
     }
+    // v1.7.16: proporção da FASE (fallback no topo). Sem nada gravado = "Sem regra".
+    (function () {
+      var _rEl = document.getElementById('gender-ratio');
+      if (!_rEl) return;
+      var _cur = (typeof window._ratioConfigured === 'function') ? window._ratioConfigured(t, 0) : '';
+      _rEl.value = _cur || '';
+      var _lk = document.getElementById('gender-ratio-lock');
+      if (_lk) _lk.checked = (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true;
+      if (typeof window._ctPaintRatio === 'function') window._ctPaintRatio();
+    })();
     if (t.balanceBy) {
       var _balBtn = document.querySelector('#liga-balance-buttons .liga-balance-btn[data-value="' + t.balanceBy + '"]');
       if (_balBtn) window._selectLigaBalance(_balBtn);
@@ -5017,12 +5046,16 @@ function setupCreateTournamentModal() {
     var _abrir = function (rows) {
       window._showDrawBalanceOverlay({
         rows: rows, mode: _modo,
+        ratio: (t && typeof window._ratioConfigured === 'function' && window._ratioConfigured(t)) ||
+               (window._GENDER_RATIO_DEFAULT || '25/75'),
+        locked: (t && typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true,
         subtitle: 'O sorteio vai acontecer sozinho na data marcada — a escolha é agora. Dá pra mudar depois, editando o torneio.',
         emptyText: t ? 'Todos os inscritos já têm gênero definido. ✓'
                      : 'Ainda não há inscritos — a escolha já fica valendo pro sorteio.',
-        onConfirm: function (mode, assigned) {
+        onConfirm: function (mode, assigned, ratioOpts) {
           // persist:false — quem grava é o próprio salvar, logo em seguida
-          if (t) window._applyDrawBalanceChoice(t, mode, assigned, { persist: false });
+          if (t) window._applyDrawBalanceChoice(t, mode, assigned,
+            { persist: false, ratio: (ratioOpts && ratioOpts.ratio), locked: (ratioOpts && ratioOpts.locked) });
           _seguir(mode === 'equilibrado');
         }
         // Cancelar = fecha e não salva; o formulário fica como estava.
@@ -5038,7 +5071,45 @@ function setupCreateTournamentModal() {
     } else { _rows(); }
   }
 
-  window._saveTournamentClickHandler = function() {
+  // v1.7.16: PROPORÇÃO DE GÊNERO no formulário (caixa realocada pra dentro da fase).
+// "Sem regra" = nada gravado: o sorteio inicial segue como sempre (espalha a minoria o
+// mais possível) e só a formação de grupo NOVO da espera usa o default. Escolhida uma
+// proporção, ela passa a valer nos dois — é o "trava tudo" pedido pelo dono.
+window._ctSetRatio = function (r) {
+  var h = document.getElementById('gender-ratio');
+  if (h) h.value = r || '';
+  window._ctPaintRatio();
+};
+window._ctPaintRatio = function () {
+  // v1.7.19: proporção SÓ existe em torneio todo misturado. Com categoria de gênero
+  // (Fem/Masc, ou mesmo Misto separado) o sorteio já roda por categoria e o pool é
+  // homogêneo — a caixa inteira sai de cena.
+  var _gcEl = document.getElementById('tourn-gender-categories');
+  var _temCatGenero = !!(_gcEl && String(_gcEl.value || '').trim());
+  var _box = document.getElementById('gender-ratio-box');
+  if (_box) _box.style.display = _temCatGenero ? 'none' : '';
+  if (_temCatGenero) { var _hz = document.getElementById('gender-ratio'); if (_hz) _hz.value = ''; return; }
+  var h = document.getElementById('gender-ratio');
+  var cur = h ? String(h.value || '') : '';
+  var btns = document.querySelectorAll('#gender-ratio-buttons [data-ratio]');
+  Array.prototype.forEach.call(btns, function (b) {
+    var on = (b.getAttribute('data-ratio') === cur);
+    b.style.borderColor = on ? '#22c55e' : 'rgba(255,255,255,0.12)';
+    b.style.background = on ? 'rgba(34,197,94,0.18)' : 'var(--bg-dark,#0f172a)';
+  });
+  // Sem proporção escolhida, travar não tem o que travar.
+  var lockWrap = document.getElementById('gender-ratio-lock');
+  var desc = document.getElementById('gender-ratio-lock-desc');
+  if (lockWrap) {
+    lockWrap.disabled = !cur;
+    var row = lockWrap.closest ? lockWrap.closest('.toggle-row') : null;
+    if (row) { row.style.opacity = cur ? '1' : '0.45'; }
+  }
+  if (desc && !cur) desc.textContent = 'Escolha uma proporção acima para poder travá-la.';
+  else if (desc) desc.textContent = 'Travada, só forma grupo na proporção exata. Destravada, busca a proporção e depois flexibiliza para incluir mais gente.';
+};
+
+window._saveTournamentClickHandler = function() {
       try {
         const editId = document.getElementById('edit-tournament-id').value;
         const name = document.getElementById('tourn-name').value.trim();
@@ -5281,6 +5352,13 @@ function setupCreateTournamentModal() {
           tourData.clusterSize = _clusterEl ? (parseInt(_clusterEl.value) || 8) : 8;
           var _balByEl = document.getElementById('liga-balance-by');
           tourData.balanceBy = (_balByEl && _balByEl.value) ? _balByEl.value : 'individual';
+          // v1.7.16: PROPORÇÃO — grava só quando escolhida. Vazio APAGA a regra (o
+          // organizador voltou pra "Sem regra"), então é escrita explícita dos dois lados.
+          var _rEl2 = document.getElementById('gender-ratio');
+          var _rVal = _rEl2 ? String(_rEl2.value || '') : '';
+          tourData.genderRatio = (window._GENDER_RATIOS && window._GENDER_RATIOS[_rVal]) ? _rVal : null;
+          var _lkEl2 = document.getElementById('gender-ratio-lock');
+          if (_rVal) tourData.wlGroupBalance = (_lkEl2 && !_lkEl2.checked) ? 'livre' : 'equilibrado';
           // Configurações
           tourData.ligaNewPlayerScore = document.getElementById('liga-new-player-score').value;
           tourData.ligaInactivity = document.getElementById('liga-inactivity').value;

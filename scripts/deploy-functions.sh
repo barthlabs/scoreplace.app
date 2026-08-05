@@ -37,8 +37,8 @@ targets_esm() {
   grep -o '^export const [A-Za-z0-9_]*' "$1" | sed "s/export const /$2/" | sort -u | paste -sd, -
 }
 
-deploy_dir() { # $1=dir $2=targets $3=descrição
-  local dir="$1" targets="$2" desc="$3"
+deploy_dir() { # $1=dir(de onde rodar o firebase) $2=targets $3=descrição $4=pkgdir(deps; default=$1)
+  local dir="$1" targets="$2" desc="$3" pkgdir="${4:-$1}"
   [ -n "$targets" ] || die "$desc: nenhum export encontrado — lista de alvos vazia (abortando por segurança)"
   local n; n=$(echo "$targets" | tr ',' '\n' | wc -l | tr -d ' ')
   echo "── $desc: $n função(ões) alvejada(s)"
@@ -46,12 +46,18 @@ deploy_dir() { # $1=dir $2=targets $3=descrição
     echo "   (dry-run) cd $dir && firebase deploy --project $PROJECT --non-interactive --only $targets"
     return 0
   fi
-  [ -d "$dir/node_modules" ] || (cd "$dir" && npm ci)
+  # As deps do CODEBASE, não as de onde o firebase roda — no principal os dois diretórios
+  # são diferentes ($ROOT × $ROOT/functions) e a raiz TEM node_modules (dos testes), então
+  # checar o do dir dava "instalado" e o deploy morria em "Couldn't find firebase-functions
+  # package in your source code" (aconteceu num worktree limpo, 04/ago/2026). Checar o pacote
+  # em vez da pasta também cobre node_modules pela metade.
+  [ -d "$pkgdir/node_modules/firebase-functions" ] || (cd "$pkgdir" && npm ci)
   (cd "$dir" && firebase deploy --project "$PROJECT" --non-interactive --only "$targets")
 }
 
 do_main() {
-  deploy_dir "$ROOT" "$(targets_cjs "$ROOT/functions/index.js" 'functions:')" "principal (functions/)"
+  deploy_dir "$ROOT" "$(targets_cjs "$ROOT/functions/index.js" 'functions:')" \
+    "principal (functions/)" "$ROOT/functions"
 }
 do_autodraw() {
   if [ "$DRY" != 1 ]; then

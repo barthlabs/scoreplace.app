@@ -157,6 +157,11 @@ require('./vendor/waitlist-core.js');            // cânone da LISTA DE ESPERA (
                                                 // _removeFromWaitlist é chamada pelo motor ao formar
                                                 // grupo Rei/Rainha a partir da espera. Sem isto ela não
                                                 // existia no servidor e o tardio ficava na espera pra sempre.
+require('./vendor/gender-ratio-core.js');       // PROPORÇÃO de gênero do sorteio equilibrado —
+                                                // o mesmo módulo do cliente decide a divisão dos
+                                                // grupos aqui. Sem ele o motor cairia no caminho
+                                                // sem proporção e o servidor sortearia por regra
+                                                // DIFERENTE da do app ([[feedback_functions_must_mirror_app]]).
 require('./vendor/persist-core.js');            // _cleanUndefined + _computeAdminEmails/Uids/MemberUids
                                                 // — o boundary de escrita (o que a drawRound grava
                                                 // tem de sair pela MESMA regra do cliente)

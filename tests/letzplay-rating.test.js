@@ -6,7 +6,7 @@
  *  - veredito rule-aware (caso Kelly), dupla com rating próprio.
  */
 global.window = {};
-require('../js/views/letzplay-rating.js');
+require('../extension/lib/letzplay-rating.js');
 var R = window._spRating;
 
 var passed = 0, failed = 0;

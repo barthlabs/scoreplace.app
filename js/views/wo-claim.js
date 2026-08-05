@@ -112,6 +112,44 @@
     if (!pp) return [];
     return (typeof window._participantUids === 'function') ? window._participantUids(pp).filter(Boolean) : (pp.uid ? [pp.uid] : []);
   }
+  // v1.7.23 — NOME → UID POR FONTE ESTRUTURAL, nunca por `t.participants`.
+  // `_nameUids` (acima) procura o nome em `t.participants`, e em torneio real isso
+  // devolve [] pra TODO mundo: o save stripa o nome de toda entrada cujo uid resolve
+  // (medido no Confra: 111 inscritos, 111 com uid, ZERO com nome). Era dele que saíam os
+  // `members` do contexto de GRUPO — e daí o `_allCtxUids` e o `absentUids` do claim, que
+  // em produção ficou VAZIO nos dois W.O. do Confra (`"absentUids": []`), deixando quem
+  // levou o W.O. sem identidade.
+  // Ordem das fontes: elenco do grupo (players[i] ↔ playersUids[i], o par que o sorteio
+  // grava) → slot dos jogos (team*Uids / p*Uid) → `_nameUids` como última rede, que só
+  // acerta pro FICTÍCIO ou doc legado — quem não tem conta só tem nome mesmo.
+  // O escopo de JOGO já era uid-safe (`_matchMembers` usa `_slotUids`); o buraco era o
+  // de grupo. Ver [[project_uid_identity_canon_locked]] e [[project_match_slot_uid_identity]].
+  function _ctxUidsFor(t, ctx, matches, name) {
+    if (!t || !name || name === 'TBD' || name === 'BYE') return [];
+    var r = (t.rounds || [])[(ctx && ctx.roundIndex) || 0];
+    var g = (r && Array.isArray(r.monarchGroups) && ctx && ctx.groupName)
+      ? r.monarchGroups.filter(function (x) { return x && x.name === ctx.groupName; })[0] : null;
+    if (g && Array.isArray(g.players)) {
+      var i = g.players.indexOf(name);
+      var u = (i >= 0 && Array.isArray(g.playersUids)) ? g.playersUids[i] : null;
+      if (u) return [String(u)];
+      if (g.woAbsent === name && g.woAbsentUid) return [String(g.woAbsentUid)];
+    }
+    var found = null;
+    (matches || []).forEach(function (m) {
+      if (!m || found) return;
+      ['team1', 'team2'].forEach(function (side) {
+        if (found) return;
+        var arr = m[side], uarr = m[side + 'Uids'];
+        if (!Array.isArray(arr) || !Array.isArray(uarr)) return;
+        var k = arr.indexOf(name);
+        if (k >= 0 && uarr[k]) found = String(uarr[k]);
+      });
+      if (!found && m.p1 === name && m.p1Uid) found = String(m.p1Uid);
+      if (!found && m.p2 === name && m.p2Uid) found = String(m.p2Uid);
+    });
+    return found ? [found] : _nameUids(t, name);
+  }
   function _voterName(t, u) { return (typeof window._opVoterName === 'function') ? window._opVoterName(t, u) : ''; }
 
   function _findMatchById(t, id) {
@@ -177,7 +215,7 @@
     var players = Array.isArray(ctx.players) ? ctx.players.slice() : [];
     var done = matches.length > 0 && matches.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
     // Grupo/Liga: o pool já é de PESSOAS (players são nomes individuais) — só anexa o uid.
-    var members = players.map(function (nm) { return { name: nm, uids: _nameUids(t, nm) }; });
+    var members = players.map(function (nm) { return { name: nm, uids: _ctxUidsFor(t, ctx, matches, nm) }; });
     return { scope: 'group', roundIndex: ctx.roundIndex, groupName: ctx.groupName, members: members, players: players, matches: matches, done: done };
   }
   // Uids de TODA a gente do contexto (quem pode apontar / quem confirma). Lê o uid que o
@@ -489,7 +527,7 @@
       id: 'wo_' + Date.now() + '_' + _rand(),
       scope: rc.scope,
       byUid: cu.uid, byName: cu.displayName || _voterName(t, cu.uid) || '',
-      absentName: absentName, absentUids: absentUid ? [String(absentUid)] : _nameUids(t, absentName),
+      absentName: absentName, absentUids: absentUid ? [String(absentUid)] : _ctxUidsFor(t, ctx, rc.matches, absentName),
       status: 'pending', confirms: {}, createdAt: new Date().toISOString()
     };
     if (rc.scope === 'match') { c.matchId = rc.matchId; }

@@ -1656,7 +1656,14 @@ window._showDrawBalanceOverlay = function (opts) {
   opts = opts || {};
   var _sh = window._safeHtml || function (s) { return String(s == null ? '' : s); };
   var rows = Array.isArray(opts.rows) ? opts.rows : [];
+  // v1.7.16: a tela do sorteio equilibrado passa a mostrar a PROPORÇÃO e o toggle
+  // "Travar proporção" (no livre não existe nem um nem outro).
   window._gdCtx = { rows: rows, mode: (opts.mode === 'equilibrado' ? 'equilibrado' : 'livre'),
+    ratio: (opts.ratio || (window._GENDER_RATIO_DEFAULT || '25/75')),
+    locked: (opts.locked !== false),
+    // v1.7.19: com categorias por gênero (Fem/Masc/Misto separados) NÃO há proporção — o
+    // sorteio já roda por categoria e o pool é homogêneo. A caixa nem aparece.
+    ratioApplies: (opts.ratioApplies !== false),
                     onConfirm: opts.onConfirm, onCancel: opts.onCancel };
 
   var old = document.getElementById('gender-draw-overlay'); if (old) old.remove();
@@ -1670,6 +1677,14 @@ window._showDrawBalanceOverlay = function (opts) {
       '<button id="gd-f-' + i + '" onclick="window._gdSetGender(' + i + ',\'feminino\')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(236,72,153,0.4);background:rgba(236,72,153,0.08);color:#f9a8d4;font-size:0.78rem;font-weight:700;cursor:pointer;">♀ Fem</button>' +
       '<button id="gd-m-' + i + '" onclick="window._gdSetGender(' + i + ',\'masculino\')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(59,130,246,0.4);background:rgba(59,130,246,0.08);color:#93c5fd;font-size:0.78rem;font-weight:700;cursor:pointer;">♂ Masc</button>' +
     '</div>';
+  }).join('');
+
+  var _RS = window._GENDER_RATIOS || { '50/50': 0, '25/75': 0, '75/25': 0 };
+  var _ratioPills = Object.keys(_RS).map(function (r) {
+    return '<button id="gd-ratio-' + r.replace('/', '-') + '" onclick="window._gdSetRatio(\'' + r + '\')" ' +
+      'style="flex:1;padding:9px 6px;border-radius:10px;border:2px solid rgba(255,255,255,0.12);' +
+      'background:var(--bg-dark,#0f172a);color:var(--text-bright,#f1f5f9);cursor:pointer;font-weight:800;font-size:0.82rem;">' +
+      r + '</button>';
   }).join('');
 
   ov.innerHTML =
@@ -1690,7 +1705,17 @@ window._showDrawBalanceOverlay = function (opts) {
           '<button id="gd-mode-livre" onclick="window._gdSetMode(\'livre\')" style="text-align:left;padding:11px 14px;border-radius:12px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-bright,#f1f5f9);cursor:pointer;">' +
             '<div style="font-weight:700;font-size:0.9rem;">🎲 Livre</div><div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);margin-top:2px;">Sorteio puro, sem olhar gênero.</div></button>' +
           '<button id="gd-mode-equilibrado" onclick="window._gdSetMode(\'equilibrado\')" style="text-align:left;padding:11px 14px;border-radius:12px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-bright,#f1f5f9);cursor:pointer;">' +
-            '<div style="font-weight:700;font-size:0.9rem;">⚖️ Equilibrado</div><div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);margin-top:2px;">Espalha a minoria: evita 2 do mesmo gênero no mesmo time ou grupo. Se não der pra todos, faz o melhor possível.</div></button>' +
+            '<div style="font-weight:700;font-size:0.9rem;">⚖️ Equilibrado</div><div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);margin-top:2px;">Espalha a minoria conforme a proporção escolhida abaixo. Se não der pra todos, faz o melhor possível.</div></button>' +
+        '</div>' +
+        // PROPORÇÃO + TRAVA — só aparecem no equilibrado (_gdSetMode mostra/esconde).
+        '<div id="gd-ratio-box" style="display:none;margin:-10px 0 18px;padding:12px 14px;border-radius:12px;border:1px solid rgba(34,197,94,0.28);background:rgba(34,197,94,0.06);">' +
+          '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Proporção (homens / mulheres) em cada 4</div>' +
+          '<div style="display:flex;gap:6px;margin-bottom:11px;">' + _ratioPills + '</div>' +
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">' +
+            '<input type="checkbox" id="gd-ratio-lock" onchange="window._gdToggleLock()" style="width:17px;height:17px;cursor:pointer;flex-shrink:0;">' +
+            '<span style="font-size:0.8rem;font-weight:700;color:var(--text-bright,#f1f5f9);">Travar proporção</span>' +
+          '</label>' +
+          '<div id="gd-ratio-hint" style="font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-top:7px;line-height:1.35;"></div>' +
         '</div>' +
         (rows.length > 0
           ? '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Inscritos sem gênero (' + rows.length + ')</div>' +
@@ -1722,6 +1747,19 @@ window._applyDrawBalanceChoice = function (t, mode, assigned, opts) {
     //    (Rei/Rainha). Gravar só um deixava metade do sorteio sem equilíbrio.
     t._drawBalanceMode = mode;
     t.equilibrado = (mode === 'equilibrado');
+    // v1.7.16: PROPORÇÃO + TRAVA. A proporção pertence à FASE que está sendo sorteada
+    // (é o que o dono pediu: "dentro da fase a que se refere o sorteio"); sem fases,
+    // fica no topo. No sorteio LIVRE não se grava proporção nenhuma — lá ela não existe,
+    // e deixar um valor gravado faria a tela mostrar regra que o motor não aplica.
+    if (mode === 'equilibrado' && opts.ratio && window._GENDER_RATIOS && window._GENDER_RATIOS[opts.ratio] &&
+        (typeof window._ratioAppliesTo !== 'function' || window._ratioAppliesTo(t))) {
+      var _pi = t.currentPhaseIndex || 0;
+      if (Array.isArray(t.phases) && t.phases[_pi]) t.phases[_pi].genderRatio = opts.ratio;
+      else t.genderRatio = opts.ratio;
+      // MESMO toggle da caixa da lista de espera (decisão do dono: "com o mesmo toggle").
+      // Valor interno preservado ('equilibrado'/'livre') — trocá-lo quebraria torneios vivos.
+      t.wlGroupBalance = (opts.locked === false) ? 'livre' : 'equilibrado';
+    }
   }
   // 3) grava no PERFIL global (via função) — só os que têm uid; fire-and-forget
   var comUid = assigned.filter(function (r) { return r.uid; }).map(function (r) { return { uid: r.uid, gender: r.gender }; });
@@ -1777,8 +1815,14 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
       title: '⚖️ Sorteio de duplas',   // aqui SÃO duplas (teamSize 2, formadas por sorteio)
       // abre no que ESTÁ configurado — a tela mostra a verdade, não um default próprio
       mode: (t.equilibrado === false) ? 'livre' : 'equilibrado',
-      onConfirm: function (mode, assigned) {
-        window._applyDrawBalanceChoice(t, mode, assigned, { persist: true });
+      // abre já com a proporção/trava do torneio (a tela mostra a verdade, não um default)
+      ratio: (typeof window._ratioConfigured === 'function' && window._ratioConfigured(t)) ||
+             (window._GENDER_RATIO_DEFAULT || '25/75'),
+      locked: (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true,
+      ratioApplies: (typeof window._ratioAppliesTo === 'function') ? window._ratioAppliesTo(t) : true,
+      onConfirm: function (mode, assigned, ratioOpts) {
+        window._applyDrawBalanceChoice(t, mode, assigned,
+          { persist: true, ratio: (ratioOpts && ratioOpts.ratio), locked: (ratioOpts && ratioOpts.locked) });
         if (typeof onProceed === 'function') onProceed();
       }
     });
@@ -1799,6 +1843,43 @@ window._gdSetMode = function(mode){
   var l = document.getElementById('gd-mode-livre'), e = document.getElementById('gd-mode-equilibrado');
   if (l) { l.style.borderColor = mode === 'livre' ? '#6366f1' : 'rgba(255,255,255,0.12)'; l.style.background = mode === 'livre' ? 'rgba(99,102,241,0.15)' : 'var(--bg-dark,#0f172a)'; }
   if (e) { e.style.borderColor = mode === 'equilibrado' ? '#22c55e' : 'rgba(255,255,255,0.12)'; e.style.background = mode === 'equilibrado' ? 'rgba(34,197,94,0.15)' : 'var(--bg-dark,#0f172a)'; }
+  // v1.7.16: proporção e trava existem SÓ no equilibrado — no livre não há regra pra afinar.
+  var box = document.getElementById('gd-ratio-box');
+  if (box) box.style.display = (mode === 'equilibrado' && window._gdCtx.ratioApplies) ? 'block' : 'none';
+  window._gdPaintRatio();
+};
+
+// Pinta a pill escolhida, o checkbox e a frase que explica o efeito da combinação.
+window._gdPaintRatio = function(){
+  var ctx = window._gdCtx; if (!ctx) return;
+  Object.keys(window._GENDER_RATIOS || {}).forEach(function (r) {
+    var b = document.getElementById('gd-ratio-' + r.replace('/', '-'));
+    if (!b) return;
+    var on = (r === ctx.ratio);
+    b.style.borderColor = on ? '#22c55e' : 'rgba(255,255,255,0.12)';
+    b.style.background = on ? 'rgba(34,197,94,0.18)' : 'var(--bg-dark,#0f172a)';
+  });
+  var cb = document.getElementById('gd-ratio-lock');
+  if (cb) cb.checked = !!ctx.locked;
+  var hint = document.getElementById('gd-ratio-hint');
+  if (hint) {
+    var lbl = (typeof window._ratioLabel === 'function') ? window._ratioLabel(ctx.ratio) : ctx.ratio;
+    hint.textContent = ctx.locked
+      ? ('Travada: só forma grupo em ' + lbl + '. Quem não couber vai para a lista de espera.')
+      : ('Destravada: busca ' + lbl + ' enquanto der e depois flexibiliza para incluir o máximo de gente. '
+         + 'Quem está sem gênero declarado entra por último.');
+  }
+};
+window._gdSetRatio = function(r){
+  if (!window._gdCtx || !window._GENDER_RATIOS || !window._GENDER_RATIOS[r]) return;
+  window._gdCtx.ratio = r;
+  window._gdPaintRatio();
+};
+window._gdToggleLock = function(){
+  if (!window._gdCtx) return;
+  var cb = document.getElementById('gd-ratio-lock');
+  window._gdCtx.locked = cb ? !!cb.checked : !window._gdCtx.locked;
+  window._gdPaintRatio();
 };
 window._gdCancel = function(){
   var ctx = window._gdCtx; window._gdCtx = null;
@@ -1811,7 +1892,8 @@ window._gdConfirm = function(){
   var o = document.getElementById('gender-draw-overlay'); if (o) o.remove();
   window._gdCtx = null;
   if (window._dtrace) window._dtrace('genderConfirm', { mode: ctx.mode });
-  if (typeof ctx.onConfirm === 'function') ctx.onConfirm(ctx.mode, assigned);
+  // 3º argumento novo (aditivo): a proporção escolhida e se ela está travada.
+  if (typeof ctx.onConfirm === 'function') ctx.onConfirm(ctx.mode, assigned, { ratio: ctx.ratio, locked: ctx.locked });
 };
 
 window.showFinalReviewPanel = function (tId) {

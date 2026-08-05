@@ -2068,23 +2068,26 @@ window._handleEntrar = function() {
           }
         });
       }
-      // uid-first: login por celular resolve a conta pelo NÚMERO no servidor e
-      // autentica contra a credencial real da conta — conserta quem cadastrou por
-      // celular e depois vinculou e-mail real (o e-mail primário trocou do
-      // sintético→real, então o signIn local contra o sintético falhava). Só
-      // celular; e-mail já entra direto pela própria credencial.
-      if (mode === 'phone') {
-        var _e164try = window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55');
-        if (_e164try) {
-          window._entrarSetInFlight(true);
-          window._entrarStatus('Entrando…', 'info');
-          window._entrarPhonePasswordLogin(_e164try, pw).then(function(done) {
-            if (done) return; // logou via custom token; onAuthStateChanged cuida do resto
-            window._entrarSetInFlight(false);
-            _entrarDisambiguate();
-          });
-          return;
-        }
+      // uid-first: resolve a conta pelo IDENTIFICADOR (celular OU e-mail) no servidor
+      // e autentica contra a credencial real. Conserta (a) quem cadastrou por celular
+      // e vinculou e-mail real (login primário trocou de sintético→real), e (b) quem
+      // entra pelo E-MAIL vinculado de uma conta phone+password (ex.: Adriano —
+      // adcoletta@hotmail é linkedEmail, credencial primária é sintética). Antes o
+      // e-mail pulava esse caminho e caía direto em "recuperar senha". phonePasswordLogin
+      // resolve via linkedEmails e verifica a senha server-side; se não autenticar
+      // (senha errada / sem conta) cai no fluxo de desambiguação como antes.
+      var _idTry = (mode === 'phone')
+        ? window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55')
+        : raw.toLowerCase();
+      if (_idTry) {
+        window._entrarSetInFlight(true);
+        window._entrarStatus('Entrando…', 'info');
+        window._entrarPhonePasswordLogin(_idTry, pw).then(function(done) {
+          if (done) return; // logou via custom token; onAuthStateChanged cuida do resto
+          window._entrarSetInFlight(false);
+          _entrarDisambiguate();
+        });
+        return;
       }
       _entrarDisambiguate();
     });
@@ -2099,10 +2102,14 @@ window._handleEntrar = function() {
 // número e autentica server-side; entra com o custom token. Resolve com `true`
 // se logou, `false` se não autenticou (senha errada / sem conta) — aí o caller
 // segue pro fluxo de desambiguação/recuperação.
-window._entrarPhonePasswordLogin = function(e164, pw) {
+window._entrarPhonePasswordLogin = function(identifier, pw) {
   try { if (!firebase.functions) return Promise.resolve(false); }
   catch (e) { return Promise.resolve(false); }
-  return firebase.functions().httpsCallable('phonePasswordLogin')({ phone: e164, password: pw })
+  // `identifier` = celular E.164 OU e-mail. A CF resolve a conta pelo identificador
+  // (_resolveAccount → linkedEmails/linkedPhones) e verifica a senha contra a
+  // credencial REAL — conserta quem entra pelo e-mail vinculado de uma conta
+  // phone+password (cujo login primário é sintético). Ver Adriano.
+  return firebase.functions().httpsCallable('phonePasswordLogin')({ identifier: identifier, password: pw })
     .then(function(res) {
       var d = (res && res.data) || {};
       if (d.ok && d.token) {
@@ -4846,6 +4853,8 @@ async function simulateLoginSuccess(user) {
     if (typeof window._profileRenderAuthProviders === 'function') window._profileRenderAuthProviders();
     if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
     if (typeof window._profileRenderLinkedPhones === 'function') window._profileRenderLinkedPhones();
+    // Colisão de nome com outra conta (o servidor decide; aqui só se pinta o aviso).
+    if (typeof window._profileHydrateNameConflict === 'function') window._profileHydrateNameConflict();
 
     // ── BASELINE DE HIDRATAÇÃO ──────────────────────────────────────────
     // Registro do que o formulário REALMENTE MOSTROU pra pessoa. É esse
@@ -5836,6 +5845,16 @@ var _phoneCountries = [
   { code: '44', flag: '\uD83C\uDDEC\uD83C\uDDE7', name: 'UK', mask: '#### ### ####' }
 ];
 
+// Opções de DDI a partir da MESMA lista do perfil — evita segunda cópia divergindo
+// (o aviso de homônimo monta o campo de celular dinamicamente, fora do markup fixo).
+window._phoneCountryOptionsHtml = function (sel) {
+  var s = String(sel == null ? '55' : sel);
+  return _phoneCountries.map(function (c) {
+    return '<option value="' + c.code + '"' + (String(c.code) === s ? ' selected' : '') +
+      '>' + c.flag + ' +' + c.code + '</option>';
+  }).join('');
+};
+
 function _formatPhoneDisplay(digits, countryCode) {
   var country = _phoneCountries.find(function(c) { return c.code === countryCode; });
   if (!country || !digits) return digits || '';
@@ -6489,6 +6508,13 @@ function setupProfileModal() {
             '<div id="profile-link-provider-msg" style="display:none;margin-top:6px;font-size:0.78rem;"></div>' +
             '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">Vincule Google e Apple na mesma conta pra entrar por qualquer um dos dois. Sem isso, entrar pelo outro cria uma conta separada — principalmente com o "Ocultar meu e-mail" da Apple, que dá um endereço novo que não temos como reconhecer.</span>' +
           '</div>' +
+          // ── Outra conta com o MESMO NOME: avisa e oferece unir COM PROVA ──
+          // O nome só DETECTA. Quem AUTORIZA é a posse do e-mail/celular da outra conta:
+          // a pessoa recebe um link lá e é isso que funde. Sem essa prova, dois homônimos
+          // de verdade poderiam se fundir num clique — e fundir gente é irreversível,
+          // enquanto conta duplicada é só incômodo. Contato aparece MASCARADO.
+          // Slot vazio por padrão: só aparece quando o servidor confirma a colisão.
+          '<div id="profile-name-conflict" style="display:none;margin:0 0 10px 0;"></div>' +
           // ── Emails vinculados ──
           '<div style="margin:0 0 6px 0;">' +
             '<label class="form-label" style="font-size:0.75rem;">🔗 E-mails vinculados</label>' +
@@ -7649,13 +7675,20 @@ function setupProfileModal() {
       var linked = !!opts.linked;
       // Contexto do fluxo (primário OU celular vinculado secundário). _profileConfirmPhoneCode
       // e o merge leem isto pra usar os IDs certos e saber se grava em linkedPhones[].
+      // v1.7.12: 3º contexto — o aviso de HOMÔNIMO ("outra conta com o seu nome"). Mesma
+      // máquina do celular vinculado; muda só ONDE estão os campos. Aqui a pessoa digita o
+      // número da OUTRA conta: o SMS chega nele, a sessão secundária devolve o uid daquela
+      // conta e ISSO é a prova — nenhum uid precisa ser exposto ao cliente pra isso rodar.
+      var conflict = !!opts.conflict;
+      var pref = conflict ? 'profile-nc-phone' : (linked ? 'profile-link-phone' : null);
       var ctx = window._profilePhoneCtx = {
         linked: linked,
-        inputId: linked ? 'profile-link-phone-input' : 'profile-edit-phone',
-        countryId: linked ? 'profile-link-phone-country' : 'profile-phone-country',
-        otpId: linked ? 'profile-link-phone-otp' : 'profile-phone-otp',
-        recaptchaId: linked ? 'profile-link-phone-recaptcha' : 'profile-phone-recaptcha',
-        codeId: linked ? 'profile-link-phone-code' : 'profile-phone-code'
+        conflict: conflict,
+        inputId: pref ? (pref + '-input') : 'profile-edit-phone',
+        countryId: pref ? (pref + '-country') : 'profile-phone-country',
+        otpId: pref ? (pref + '-otp') : 'profile-phone-otp',
+        recaptchaId: pref ? (pref + '-recaptcha') : 'profile-phone-recaptcha',
+        codeId: pref ? (pref + '-code') : 'profile-phone-code'
       };
       var cu = window.AppStore && window.AppStore.currentUser;
       if (!cu || !cu.uid) { showNotification('Sessão', 'Entre novamente.', 'warning'); return; }
@@ -7668,6 +7701,11 @@ function setupProfileModal() {
         if (cu.phone && cu.phone === e164) { showNotification('Mesmo celular', 'Esse já é o seu celular principal.', 'warning'); return; }
         var _lp = Array.isArray(cu.linkedPhones) ? cu.linkedPhones : [];
         if (_lp.indexOf(e164) !== -1) { showNotification('Já vinculado', 'Esse celular já está na sua lista.', 'info'); return; }
+      }
+      if (conflict && cu.phone && cu.phone === e164) {
+        // O número desta conta não prova posse da OUTRA — seria um SMS pra si mesmo.
+        showNotification('Esse é o seu número', 'Digite o celular da OUTRA conta, a que você quer unir a esta.', 'warning');
+        return;
       }
       window._profilePhoneCtx.e164 = e164;
       var otpEl = document.getElementById(ctx.otpId);
@@ -7870,6 +7908,131 @@ function setupProfileModal() {
         return window._profilePhoneMergeFromSecondary(result.user, otpEl);
       }).catch(function() {
         if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>';
+      });
+    };
+
+    // ── Outra conta com o mesmo NOME: avisar e oferecer unir COM PROVA ────
+    // Quem decide se existe colisão é o SERVIDOR (checkNameConflict) — o cliente não
+    // recebe o uid nem o contato cheio da outra conta, só o MASCARADO. E o botão não
+    // funde nada: ele pede uma PROVA DE POSSE (link no e-mail da outra conta), porque
+    // nome igual não é evidência de que a conta é da mesma pessoa. Fundir dois
+    // homônimos de verdade apagaria alguém do Auth — erro que não tem volta, enquanto
+    // conta duplicada é só incômodo.
+    window._profileHydrateNameConflict = function () {
+      var box = document.getElementById('profile-name-conflict');
+      if (!box) return;
+      var fns = (window.firebase && firebase.functions) ? firebase.functions() : null;
+      if (!fns) return;
+      fns.httpsCallable('checkNameConflict')({}).then(function (res) {
+        var d = (res && res.data) || {};
+        if (!d.hasConflict) { box.style.display = 'none'; box.innerHTML = ''; return; }
+        var contato = d.maskedEmail || d.maskedPhone || '';
+        var podeEmail = !!d.maskedEmail;
+        box.style.display = '';
+        box.innerHTML =
+          '<div style="background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.35);border-radius:10px;padding:10px 12px;">' +
+            '<div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:4px;">👤 Existe outra conta com o seu nome</div>' +
+            '<div style="font-size:0.75rem;color:var(--text-muted);line-height:1.45;">' +
+              (contato
+                ? 'Ela está cadastrada com ' + window._safeHtml(contato) + '. '
+                : '') +
+              'Se essa conta é <strong>sua</strong>, dá pra unir as duas: seus torneios, partidas e histórico ficam num lugar só. ' +
+              'Se for outra pessoa com o mesmo nome, é só ignorar — nada acontece sem você confirmar.' +
+            '</div>' +
+            // Dois caminhos de PROVA, os dois já existentes no app. E-mail: o servidor manda
+            // o link pra caixa da outra conta (a pessoa não precisa saber o endereço).
+            // Celular: a pessoa digita o número da outra conta e o SMS chega lá — a sessão
+            // secundária devolve o uid daquela conta, e é isso que o servidor exige como
+            // prova (mergePhoneAccount → verifyIdToken). Quem não sabe o número não passa.
+            '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">' +
+              (podeEmail
+                ? '<button type="button" id="profile-name-merge-btn" class="btn btn-warning btn-sm" ' +
+                    'onclick="window._profileRequestNameMerge()">✉️ Confirmar por e-mail</button>'
+                : '') +
+              (d.maskedPhone
+                ? '<button type="button" id="profile-nc-phone-btn" class="btn btn-success btn-sm" ' +
+                    'onclick="window._profileNameMergeByPhone()">📲 Confirmar por celular</button>'
+                : '') +
+            '</div>' +
+            (!podeEmail && !d.maskedPhone
+              ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.85;margin-top:8px;">' +
+                  'A outra conta não tem e-mail nem celular cadastrados, então não há como confirmar ' +
+                  'que ela é sua. Entre nela e cadastre um dos dois no perfil.</div>'
+              : '') +
+            '<div id="profile-name-merge-msg" style="display:none;margin-top:8px;font-size:0.78rem;"></div>' +
+            // Campos do caminho por celular — escondidos até o clique.
+            '<div id="profile-nc-phone-wrap" style="display:none;margin-top:10px;">' +
+              '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">' +
+                'Digite o celular da outra conta' + (d.maskedPhone ? ' — termina em ' + window._safeHtml(d.maskedPhone) : '') +
+                '. Mandamos um código por SMS pra ele.</div>' +
+              '<div style="display:flex;gap:6px;align-items:center;">' +
+                '<select id="profile-nc-phone-country" aria-label="DDI" class="form-control" style="width:124px;flex-shrink:0;box-sizing:border-box;font-size:0.85rem;padding:0.75rem 0.45rem;">' +
+                  (window._phoneCountryOptionsHtml ? window._phoneCountryOptionsHtml('55') : '<option value="55">🇧🇷 +55</option>') +
+                '</select>' +
+                '<input type="tel" id="profile-nc-phone-input" class="form-control" placeholder="(11) 99999-8888" data-digits="" style="flex:1;min-width:0;box-sizing:border-box;" ' +
+                  'oninput="this.setAttribute(\'data-digits\', this.value.replace(/\\D/g,\'\'));">' +
+              '</div>' +
+              '<button type="button" class="btn btn-success btn-sm" style="margin-top:6px;" ' +
+                'onclick="window._profileVerifyPhone && window._profileVerifyPhone({conflict:true})">Enviar código por SMS</button>' +
+              '<div id="profile-nc-phone-otp" style="display:none;margin-top:8px;"></div>' +
+              '<div id="profile-nc-phone-recaptcha" style="display:none;"></div>' +
+            '</div>' +
+          '</div>';
+      }).catch(function (e) {
+        // Fail-open: aviso é conveniência, não pode quebrar o perfil.
+        if (window._warn) window._warn('[nameConflict] fail-open:', e);
+      });
+    };
+
+    // Revela os campos do caminho por CELULAR. O envio em si é do _profileVerifyPhone
+    // ({conflict:true}) — a mesma máquina já usada no celular vinculado: app secundário
+    // 'profilephone' (persistence NONE, não derruba a sessão), reCAPTCHA invisível recriado
+    // FRESCO e off-screen mas EM LAYOUT (display:none faz o token sair inválido no iOS),
+    // e no fim mergePhoneAccount com o proofIdToken da sessão do telefone.
+    window._profileNameMergeByPhone = function () {
+      var w = document.getElementById('profile-nc-phone-wrap');
+      if (!w) return;
+      w.style.display = '';
+      var btn = document.getElementById('profile-nc-phone-btn');
+      if (btn) btn.style.display = 'none';
+      var inp = document.getElementById('profile-nc-phone-input');
+      if (inp) { try { inp.focus(); } catch (e) {} }
+    };
+
+    // Dispara a PROVA. Não funde nada aqui — quem funde é o clique no link que chega
+    // na caixa da OUTRA conta (confirmEmailMerge). O e-mail de destino é resolvido no
+    // servidor; o cliente nunca o conhece.
+    window._profileRequestNameMerge = function () {
+      var btn = document.getElementById('profile-name-merge-btn');
+      var msg = document.getElementById('profile-name-merge-msg');
+      var fns = (window.firebase && firebase.functions) ? firebase.functions() : null;
+      if (!fns) return;
+      function diz(tipo, txt) {
+        if (!msg) return;
+        msg.style.display = '';
+        msg.style.color = (tipo === 'err') ? '#fca5a5' : (tipo === 'ok' ? '#6ee7b7' : 'var(--text-muted)');
+        msg.textContent = txt;
+      }
+      if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+      diz('info', 'Enviando…');
+      fns.httpsCallable('requestNameMergeProof')({ channel: 'email' }).then(function (res) {
+        var d = (res && res.data) || {};
+        if (d.ok) {
+          diz('ok', '✅ Enviamos um link para ' + (d.masked || 'o e-mail da outra conta') +
+            '. Abra lá e confirme — é assim que provamos que a conta é sua. O link vale 1 hora.');
+          if (btn) btn.style.display = 'none';
+          return;
+        }
+        if (d.reason === 'no-conflict') { diz('info', 'Não há mais outra conta com esse nome.'); return; }
+        if (d.reason === 'no-email') { diz('err', 'A outra conta não tem e-mail cadastrado — não dá pra enviar a confirmação.'); return; }
+        diz('err', 'Não foi possível enviar agora.');
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+      }).catch(function (e) {
+        var code = (e && e.code) || '';
+        diz('err', /resource-exhausted/.test(code)
+          ? 'Muitas tentativas. Tente de novo daqui a pouco.'
+          : 'Não foi possível enviar agora. Tente de novo.');
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
       });
     };
 

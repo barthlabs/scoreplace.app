@@ -459,11 +459,13 @@ function renderBracket(container, tournamentId, isInline) {
   // não de cada um dos 7 render sites (Liga/Grupos/Elim/Dupla Elim/Suíço/fase/inline),
   // porque headerHtml é o único ponto por onde TODOS passam — um lugar só, sem drift
   // (feedback_sweep_all_render_sites). Só com chave sorteada: sem jogo não há o que buscar.
-  // ⚠️ NÃO gatear por isInline (v1.4.18): a tela onde mais se procura alguém é justamente a
-  // INLINE (#tournaments/<id>, o chaveamento dentro da página do torneio) — foi lá que o dono
-  // foi olhar e não achou. O `isInline` existe pra não DUPLICAR os botões de ação que a página
-  // já tem; a busca não é duplicada por ninguém.
-  if (hasContent && typeof window._bracketBar === 'function') {
+  // ⚠️ A busca TEM que existir também na tela INLINE (#tournaments/<id>) — é onde mais se
+  // procura alguém (v1.4.18). Ela existe: quem a emite lá é o `renderTournaments`, logo acima
+  // do #inline-bracket-container (mesma posição visual de sempre, mesma barra canônica). Ela
+  // NÃO pode nascer aqui no modo inline porque este HTML aterrissa DENTRO do container do
+  // chaveamento, e `position:sticky` morre junto com o pai: a barra descolava do cabeçalho
+  // antes do fim da página (v1.7.10). Emitir nos dois lugares duplicaria o input.
+  if (!isInline && hasContent && typeof window._bracketBar === 'function') {
     headerHtml += window._bracketBar(true);
   }
 
@@ -3931,9 +3933,24 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var _woMk = (sg.matches || []).filter(function(m) { return m && m.isSitOut && m.sitOutReason === 'wo'; })[0] || null;
     // Classificação: quem joga MENOS os ghosts (Jogador X não pontua), MAIS o
     // ausente do W.O. (aparece com 0 pts). Os demais jogam com o substituto.
-    var _stPlayers = (sg.players || []).filter(function(n) { return _ghostsM.indexOf(n) === -1; });
-    if (_woMk && _woMk.p1 && _stPlayers.indexOf(_woMk.p1) === -1) _stPlayers.push(_woMk.p1);
-    var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({ players: _stPlayers, matches: sg.matches }, t, sg.category || null) : [];
+    // v1.7.22: PARES (nome, uid), como na classificação do grupo Rei/Rainha. Aqui o
+    // desalinhamento seria DUPLO — o elenco é FILTRADO (tira os ghosts) e ainda recebe o
+    // push do ausente —, e `_computeMonarchStandings` casa `players[i]` ↔ `playersUids[i]`
+    // POR ÍNDICE: qualquer um dos dois já daria a linha de uma pessoa com o uid de outra.
+    // Sem `playersUids` a função devolvia `uid: null` em toda linha; hoje esta tabela não
+    // desenha ficha nem 💬, então não doía — mas ficava armada pro dia em que desenhar.
+    // O uid do ausente vem do SLOT do próprio marcador de W.O. (fonte canônica, a mesma
+    // do box "ficaram de fora"). Sem uid = nome digitado (fictício): fica só o nome.
+    var _stRoster = (sg.players || [])
+      .map(function (nm, i) { return { name: nm, uid: (sg.playersUids || [])[i] || null }; })
+      .filter(function (r) { return _ghostsM.indexOf(r.name) === -1; });
+    if (_woMk && _woMk.p1 && !_stRoster.some(function (r) { return r.name === _woMk.p1; })) {
+      var _wU = (typeof window._slotUidsPositional === 'function')
+        ? window._slotUidsPositional(_woMk, 'p1') : (_woMk.p1Uid || _woMk.team1Uids);
+      _stRoster.push({ name: _woMk.p1, uid: (Array.isArray(_wU) ? _wU[0] : _wU) || _woMk.p1Uid || null });
+    }
+    var _stPlayers = _stRoster.map(function (r) { return r.name; });
+    var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({ players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), matches: sg.matches }, t, sg.category || null) : [];
     // Cards: só os jogos de verdade (o marcador W.O. vira pílula no cabeçalho).
     var matches = (sg.matches || []).filter(function(m) { return !(m.isSitOut && m.sitOutReason === 'wo'); });
     var groupDone = matches.length > 0 && matches.every(function(m) { return !!m.winner || m.isBye || m.isSitOut; });
@@ -4683,6 +4700,34 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           }
           _remainder = [];
         }
+        // v1.7.10 — NOME CLICÁVEL + 💬 nos chips de quem ficou de fora (Desativados,
+        // Lista de espera, W.O., Sem grupo), exatamente como na classificação do grupo.
+        // Regra do dono: só o ORGANIZADOR/co-org abre a ficha; o balão de contato tem o
+        // gate na própria fonte única (`_contactPersonIconHtml` já recusa quem não é
+        // autoridade nem está no mesmo grupo) — nada de segunda cópia da decisão aqui.
+        // Identidade é o UID SEMPRE; o nome é só rótulo ([[project_uid_identity_canon_locked]]).
+        // Quem não é autoridade mantém o clique que já existia (estatísticas globais).
+        var _outIsAdmin = !!(typeof window._isUserOrgOrCoHost === 'function' &&
+          window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser));
+        var _outEsc = function (s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+        var _outTidJs = _outEsc(t.id);
+        // Miolo do chip: nome (com ficha pra autoridade) + o 💬 do contato direto.
+        var _outPersonHtml = function (nm, uid) {
+          var _nmH = window._safeHtml(nm);
+          // v1.7.20 (regra do dono): a FICHA é de TODOS pra TODOS — organizador e
+          // participante, em todos os grupos e também aqui (lista de espera, desativados,
+          // W.O.). Só o 💬 é restrito (participante ⇒ apenas o próprio grupo; organizador
+          // ⇒ todos), e esse gate mora dentro de `_contactPersonIconHtml`. Antes o nome só
+          // era clicável pra admin — o participante não conseguia abrir a ficha de quem
+          // ficou de fora. `uid` segue obrigatório: sem uid é fictício, que não tem ficha.
+          var _nameHtml = (uid && typeof window._openPlayerProfile === 'function')
+            ? ('<span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;"' +
+               ' onclick="event.stopPropagation();window._openPlayerProfile(\'' + _outEsc(nm) + '\',{uid:\'' + _outEsc(uid) +
+               '\',tournamentId:\'' + _outTidJs + '\'})" title="Ver ficha de ' + _nmH + '">' + _nmH + '</span>')
+            : _nmH;
+          return _nameHtml + (typeof window._contactPersonIconHtml === 'function'
+            ? window._contactPersonIconHtml(t, uid, nm, { sameGroup: false }) : '');
+        };
         // v0.16.97: cada pill mostra os pontos atribuídos. Inativos sempre
         // 0 pts (regra explícita do usuário: "deve fazer zero pontos na
         // rodada que estiver desativado"). Remainder recebe sua média até
@@ -4713,8 +4758,15 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // escondia o box inteiro e não sobrava nada na tela.
             // `data-my-match="1"` de propósito: o toggle "Só meus jogos" filtra JOGOS; quem
             // está de fora não tem jogo e não pode sumir por causa dele.
-            var _nmPill = window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)));
-            return '<span data-players="' + window._safeHtml(_nmPill) + '" data-my-match="1" style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;" onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/\'/g, "\\'")) + '\',\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')">' + window._safeHtml(_nmPill) + _ptsLbl + _meBadge + '</span>';
+            var _slotU = (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids));
+            var _nmPill = window._resolveSideLive(t, m.p1, _slotU);
+            // v1.7.10: o UID do slot é a identidade do chip (ficha e 💬 saem daqui).
+            var _uidPill = (Array.isArray(_slotU) ? _slotU[0] : _slotU) || m.p1Uid || '';
+            // Autoridade clica no NOME (ficha); os demais mantêm o clique antigo no chip
+            // inteiro (estatísticas globais) — nada regride pra quem não é organizador.
+            var _pillClick = _outIsAdmin ? '' :
+              (' onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + _outEsc(m.p1) + '\',\'' + _outTidJs + '\')"');
+            return '<span data-players="' + window._safeHtml(_nmPill) + '" data-my-match="1" style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;"' + _pillClick + '>' + _outPersonHtml(_nmPill, _uidPill) + _ptsLbl + _meBadge + '</span>';
           }).join('');
           // v4.x: cabeçalho DENTRO do box colorido (igual à Lista de espera) — o título
           // "Desativados (N) — …" fica no mesmo box vermelho dos chips, não solto acima.
@@ -4736,9 +4788,15 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var _waitBoxHtml = '';
         if (_isReiRainhaRound) {
           var _wlNames = [];
+          // v1.7.10: guarda o UID de cada pessoa da fila junto do nome — é ele que abre a
+          // ficha e o 💬 (o nome aqui é só rótulo; nome não é identidade).
+          var _wlUidByName = {};
           (typeof window._getWaitlist === 'function' ? window._getWaitlist(t) : []).forEach(function(e){
             var n = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim();
-            if (n && n.indexOf(' / ') === -1 && _wlNames.indexOf(n) === -1) _wlNames.push(n);
+            if (n && n.indexOf(' / ') === -1 && _wlNames.indexOf(n) === -1) {
+              _wlNames.push(n);
+              _wlUidByName[n] = (e && (e.uid || e.p1Uid)) || '';
+            }
           });
           if (_wlNames.length) {
             var _wPills = _wlNames.map(function(n){
@@ -4748,7 +4806,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               var _co = _isMe ? '#22d3ee' : '#fbbf24';
               var _me = _isMe ? '<span style="font-size:0.6rem;font-weight:800;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
               // v1.6.93: idem — a busca tem que achar quem está na lista de espera.
-              return '<span data-players="' + window._safeHtml(n) + '" data-my-match="1" style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + window._safeHtml(n) + _me + '</span>';
+              // v1.7.10: mesmo miolo dos demais chips — ficha (autoridade) + 💬 de contato.
+              return '<span data-players="' + window._safeHtml(n) + '" data-my-match="1" style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + _outPersonHtml(n, _wlUidByName[n] || '') + _me + '</span>';
             }).join('');
             var _sameDayRR = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
             var _eligRR = _wlNames.length;
@@ -4764,20 +4823,30 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // teste de creatorUid: creator-only exclui o co-host em silêncio.
             var _wlOrg = !!(typeof window._isUserOrgOrCoHost === 'function' &&
               window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser));
-            var _wlEquil = (t.wlGroupBalance !== 'livre');
+            // v1.7.16: o toggle virou "TRAVAR PROPORÇÃO" (era "Equilibrado/Livre"). O valor
+            // gravado segue 'equilibrado'/'livre' de propósito — já existe em produção e
+            // trocá-lo quebraria os torneios em andamento; a mudança é de RÓTULO.
+            // Travado = grupo novo só fecha na proporção EXATA. Destravado = persegue a
+            // proporção e, quando não der mais, flexibiliza pra incluir o máximo de gente.
+            var _wlEquil = (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : (t.wlGroupBalance !== 'livre');
+            var _wlRatio = (typeof window._ratioForPhase === 'function') ? window._ratioForPhase(t) : '';
+            var _wlRatioTxt = (_wlRatio && typeof window._ratioLabel === 'function') ? window._ratioLabel(_wlRatio) : _wlRatio;
             var _wlTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            var _wlToggle = !_wlOrg ? '' :
+            var _wlToggle = (!_wlOrg || !_wlRatio) ? '' :
               ('<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0;">' +
                 '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;" title="' +
-                (_wlEquil ? 'Equilibrado: no máximo 1 homem por grupo novo' : 'Livre: sem restrição de gênero ao formar grupo') + '">' +
+                (window._safeHtml || String)(_wlEquil
+                  ? ('Proporção travada: grupo novo só fecha em ' + _wlRatioTxt)
+                  : ('Proporção destravada: busca ' + _wlRatioTxt + ' e depois flexibiliza para incluir mais gente')) + '">' +
                 '<input type="checkbox" ' + (_wlEquil ? 'checked' : '') +
                 ' onclick="event.stopPropagation();window._toggleWlBalance(\'' + _wlTid + '\')"><span class="toggle-slider"></span></label>' +
                 '<span style="font-size:0.62rem;font-weight:700;color:' + (_wlEquil ? '#fbbf24' : '#64748b') + ';">' +
-                (_wlEquil ? 'Equilibrado' : 'Livre') + '</span></span>');
+                'Travar proporção</span></span>');
             _waitBoxHtml = '<div style="margin-bottom:8px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:8px 10px;">' +
               '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:#fbbf24;margin-bottom:6px;flex-wrap:wrap;">🕒 <span>Lista de espera (' + _wlNames.length + ')</span>' +
               '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— pode entrar no lugar de um W.O. · ao juntar 4, forma um novo grupo · ' + _hint +
-              (_wlOrg ? (_wlEquil ? ' · máx. 1 homem por grupo' : ' · sem restrição de gênero') : '') + '</span>' + _wlToggle + '</div>' +
+              ((_wlOrg && _wlRatio) ? (window._safeHtml || String)(_wlEquil ? (' · ' + _wlRatioTxt + ', exata')
+                                           : (' · busca ' + _wlRatioTxt + ' e flexibiliza')) : '') + '</span>' + _wlToggle + '</div>' +
               '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + _wPills + '</div>' +
             '</div>';
           }
@@ -4907,9 +4976,58 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // listado (vermelho, último) e quem entrou no lugar (folga/espera ou
             // Jogador X, já em g.players via _rewriteSlot) é ACRESCENTADO. Ao
             // reverter, g.woAbsent some e os slots voltam → tabela volta aos 4.
-            var _stPlayers = (g.players || []).slice();
-            if (g.woAbsent && _stPlayers.indexOf(g.woAbsent) === -1) _stPlayers.push(g.woAbsent);
-            var _gst = window._computeMonarchStandings({ players: _stPlayers, matches: g.matches }, t, g.category || null) || [];
+            // v1.7.20: o elenco da tabela viaja como PARES (nome, uid) e os dois arrays são
+            // derivados DELE — nunca montados soltos. `_computeMonarchStandings` casa
+            // `players[i]` ↔ `playersUids[i]` POR ÍNDICE, então dois arrays construídos em
+            // separado (um com o push do `woAbsent`, o outro não) dariam a linha de uma
+            // pessoa com o uid de outra. Com os pares isso é estruturalmente impossível.
+            //
+            // O QUE ISSO CONSERTA: o objeto sintético passado aqui omitia `playersUids`, e
+            // sem ele a função devolve `uid: null` em TODA linha (medido no Confra: com o
+            // grupo real vêm os 4 uids; sem o campo, 4 nulls). Aí `_contactPersonIconHtml`
+            // sai no primeiro `if (!entryUid)` e o 💬 sumia da classificação do grupo pra
+            // TODO mundo — organizador inclusive (os únicos balões que restavam vinham da
+            // caixa "ficaram de fora"). Foi esse o "os balõezinhos não aparecem" da Cynthia,
+            // que está no MESMO grupo do Arnaldo.
+            //
+            // ⚠️ O AUSENTE É A ÚNICA ENTRADA SEM UID AQUI, e não por escolha: o schema
+            // guarda `g.woAbsent` como NOME PURO — não existe `woAbsentUid`. Ele entra com
+            // uid nulo e quem resolve é a própria `_computeMonarchStandings`, pelos SLOTS
+            // dos jogos (`_matchN2u` ← team1Uids/team2Uids), que é a fonte canônica; montar
+            // um segundo resolvedor aqui seria copiar a mesma decisão. Por isso o dedup
+            // abaixo compara NOME: é o único dado que o schema dá pra esse caso — a mesma
+            // exceção do fictício, que só tem nome. Fechar de vez é gravar `woAbsentUid`.
+            // Ver [[project_uid_identity_canon_locked]] e [[project_match_slot_uid_identity]].
+            var _stRoster = (g.players || []).map(function (nm, i) {
+              return { name: nm, uid: (g.playersUids || [])[i] || null };
+            });
+            if (g.woAbsent && !_stRoster.some(function (r) { return r.name === g.woAbsent; })) {
+              // SEMPRE POR UID QUANDO HOUVER (regra do dono). Duas fontes, nesta ordem:
+              //  1. `g.woAbsentUid`, gravado na aplicação do W.O. (liga-substitution) —
+              //     o caminho estrutural, que não depende de nada ser reencontrado;
+              //  2. o SLOT do marcador de W.O. da rodada (`isSitOut && sitOutReason==='wo'`),
+              //     via `_slotUidsPositional` — a MESMA fonte que a caixa "ficaram de fora"
+              //     usa, então as duas telas mostram a mesma pessoa. Cobre o W.O. já
+              //     aplicado antes de (1) existir: no Confra a Thereza só tinha o uid aqui
+              //     (`p1Uid` do marcador), e sem esta leitura o nome dela abria a ficha com
+              //     uid vazio — ou seja, por NOME, que é o que a regra proíbe.
+              // Sem uid nas duas = nome digitado (fictício): aí sim fica só o nome.
+              var _absUid = g.woAbsentUid || '';
+              if (!_absUid) {
+                (currentRoundData.matches || []).some(function (wm) {
+                  if (!wm || !wm.isSitOut || wm.sitOutReason !== 'wo' || wm.p1 !== g.woAbsent) return false;
+                  var _su = (typeof window._slotUidsPositional === 'function')
+                    ? window._slotUidsPositional(wm, 'p1') : (wm.p1Uid || wm.team1Uids);
+                  _absUid = (Array.isArray(_su) ? _su[0] : _su) || wm.p1Uid || '';
+                  return !!_absUid;
+                });
+              }
+              _stRoster.push({ name: g.woAbsent, uid: _absUid || null });
+            }
+            var _stPlayers = _stRoster.map(function (r) { return r.name; });
+            var _gst = window._computeMonarchStandings(
+              { players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), matches: g.matches },
+              t, g.category || null) || [];
             // Estado de W.O. na CLASSIFICAÇÃO DO GRUPO (pedido do dono):
             //  • falta APONTADA (claim pending/disputed, ainda não confirmada) → nome ÂMBAR + tag W.O.;
             //  • W.O. CONFIRMADO (g.woAbsent / marcador sit-out 'wo' da rodada) → nome VERMELHO + tag W.O.
@@ -4947,6 +5065,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               var _gstNameHtml = function (s) {
                 var _txt = window._safeHtml(s.name);
                 if (typeof window._openPlayerProfile !== 'function') return _txt;
+                // SEM UID NÃO ABRE FICHA (regra do dono: "sempre por uid, a menos que seja
+                // nome digitado"). Antes o nome saía clicável com `uid:''` e a ficha caía em
+                // resolução por NOME — que nem funciona aqui, porque o save stripa o nome de
+                // toda entrada com uid. Sem uid = fictício/nome digitado: só texto.
+                if (!s.uid) return _txt;
                 return '<span onclick="event.stopPropagation();window._openPlayerProfile(\'' + _gstEsc(s.name) +
                   '\',{uid:\'' + _gstEsc(s.uid || '') + '\',tournamentId:\'' + _gstEsc(t.id) + '\'})"' +
                   ' title="Ver ficha de ' + window._safeHtml(s.name) + '"' +
@@ -5203,7 +5326,52 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             </tr>
           </thead>`;
 
-  const standingsTablesHtml = standingsSections.map(function(sec) {
+  // v1.7.15: CLASSIFICAÇÃO GERAL NÃO EXISTE QUANDO A CLASSIFICAÇÃO É POR GRUPO.
+  // Regra do dono: _"quando é por grupos a classificação, nunca apresente classificação
+  // geral (não faz sentido)"_. No Rei/Rainha as duplas da próxima fase saem de DENTRO do
+  // grupo (1º+2º → Ouro, 3º+4º → Prata, todos classificam) — a tabela geral não decide
+  // nada e ainda sugere um ranking entre grupos que o motor não usa.
+  //
+  // ⚠️ O `source.scope` GRAVADO NO DOC NÃO SERVE DE GATE — ele MENTE. O gerador real
+  // (`buildPhaseBrackets` → `buildEntrantsByDest`) NÃO repassa `flatOverall`, então o
+  // `_useOverall` do phases-engine degenera pra POR GRUPO sempre que houver 2+ linhas e
+  // 2+ grupos, mesmo com `scope:'overall'` no doc — é o caso do Confra (medido: 27 duplas
+  // de Ouro e 27 de Prata, TODAS intra-grupo, zero cruzadas). Ler o campo aqui faria a
+  // tela discordar do sorteio. Por isso o espelho abaixo é da regra EFETIVA, não do campo.
+  // (O mesmo campo é lido em `_txPerGroup` mais abaixo, só pra POSIÇÃO da tabela — ali
+  // errar não muda o que a pessoa lê.)
+  //
+  // Três condições, todas necessárias:
+  //   (a) a rodada é por grupos (Rei/Rainha ou Fase de Grupos);
+  //   (b) existe próxima fase E a qualificação efetiva é POR GRUPO;
+  //   (c) a fase classificatória tem 1 rodada planejada — com várias rodadas a geral é a
+  //       tabela da TEMPORADA, leitura legítima (critério do dono: geral só faz sentido
+  //       "se fossem várias rodadas, se classificasse um corte qualquer e não todos").
+  const _hideGeneralStandings = (function () {
+    try {
+      var _grpRound = _isReiRainhaRound ||
+        (Array.isArray(currentRoundData.groups) && currentRoundData.groups.length > 1) ||
+        (Array.isArray(t.groups) && t.groups.length > 1);
+      if (!_grpRound) return false;
+      var _np = (window._isMultiPhase && window._isMultiPhase(t))
+        ? (t.phases[(t.currentPhaseIndex || 0) + 1] || null) : null;
+      if (!_np) return false;                     // sem transição, a geral é a única leitura
+      var _src = _np.source || {};
+      var _scope = _src.scope || _np.scope || 'per_group';
+      var _nLines = (Array.isArray(_src.mapping) && _src.mapping.length) ? _src.mapping.length : 1;
+      var _nGroups = _isReiRainhaRound
+        ? (currentRoundData.monarchGroups || []).length
+        : ((t.groups || []).length || (currentRoundData.groups || []).length);
+      // espelho de phases-engine `_useOverall` (flatOverall nunca chega pelo gerador).
+      var _useOverall = (_scope === 'overall') && !(_nLines >= 2 && _nGroups >= 2);
+      if (_useOverall) return false;
+      var _curCfg = ((t.phases || [])[t.currentPhaseIndex || 0]) || {};
+      var _plannedRounds = parseInt(_curCfg.rounds, 10) || 1;
+      return _plannedRounds <= 1;
+    } catch (e) { return false; }
+  })();
+
+  const standingsTablesHtml = _hideGeneralStandings ? '' : standingsSections.map(function(sec) {
     var displayLabel = sec.label && window._displayCategoryName ? window._displayCategoryName(sec.label) : sec.label;
     var _roundLabel = currentRound + (isSuico ? ' / ' + maxRounds : '');
     var title = displayLabel
