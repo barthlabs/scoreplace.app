@@ -116,12 +116,25 @@ ok(vis().every(Boolean),'limpar tudo devolve todos os cards');
     'REGRESSÃO: barra DUPLICADA no inline (bracket.js não gateia e tournaments.js também emite)');
   ok(tEmite || !brGateiaInline, 'a busca precisa existir na tela inline por um dos dois caminhos');
 
-  // Sticky não pode nascer dentro do container do chaveamento (senão descola antes do fim).
+  // ⚠️ ASSERÇÃO REVISADA em 05/ago/2026 (v1.7.43). Ela exigia que a barra ficasse
+  // IMEDIATAMENTE acima do #inline-bracket-container — a posição que a 1.7.14 escolheu.
+  // MEDIDO no navegador do dono: ali a barra cai em y=2826, porque há 2.320px de detalhe do
+  // torneio ANTES dela — e `sticky` NÃO puxa nada pra cima, só prende depois que a rolagem
+  // leva a posição natural acima do `top`. Era preciso rolar ~2.700px pra ela grudar, e o
+  // "trava quando entra e depois quebra" era o conteúdo acima terminando de montar.
+  // Ordem do dono: "travado no topo sempre visível e ativo" → 1ª irmã depois do CABEÇALHO.
+  //
+  // O que a asserção protegia de verdade — a barra NÃO pode nascer dentro do container do
+  // chaveamento, senão o `sticky` morre junto com o pai (o defeito que a 1.7.14 consertou) —
+  // continua travado abaixo, e agora com o pai correto sendo o #view-container.
   if (tEmite) {
     const bloco = tSrc.slice(tSrc.indexOf('window._bracketBar(true)'),
                              tSrc.indexOf('window._bracketBar(true)') + 260);
-    ok(/id="inline-bracket-container"/.test(bloco),
-      'a barra do inline deve ficar IMEDIATAMENTE acima do #inline-bracket-container (mesma posição visual, pai = #view-container)');
+    ok(/\$\{filterBarHtml\}/.test(bloco) || /id="inline-bracket-container"/.test(bloco),
+      'a barra do inline fica no TOPO do fluxo (logo após o cabeçalho), não no meio da página');
+    const antesDaBarra = tSrc.slice(0, tSrc.indexOf('window._bracketBar(true)'));
+    ok(!/id="inline-bracket-container"[\s\S]*$/.test(antesDaBarra.slice(-400)),
+      'a barra NUNCA nasce DENTRO/depois do #inline-bracket-container (sticky morre com o pai)');
   }
 })();
 
