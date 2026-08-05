@@ -434,6 +434,10 @@ const SUITES = [
   // a Silvia perderia 44 campos pra uma conta de 17). Varredura genérica com lista de
   // exclusão: campo novo no perfil é preservado sem ninguém lembrar de atualizar lista.
   'functions/test-profile-merge-core.js',
+  // A ANÁLISE NUNCA grava na pessoa errada. O `parts[order-1]` fazia a edição pousar em
+  // OUTRA pessoa (medido: Vivi Hirata e Vivian gravadas no mesmo segundo com valores
+  // trocados). Resolução SÓ por uid; sem casar, PULA.
+  'tests/analise-nunca-grava-na-pessoa-errada.test.js',
   'functions/test-merge-collections-core.js',
   // "Esta pessoa já não está inscrita com OUTRA conta?" — os sinais que o dono aprovou
   // (celular INTEIRO, nome idêntico, letzplay só corroborando) e, metade das asserções,

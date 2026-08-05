@@ -992,18 +992,43 @@
   // em _pendingEdits — nada grava nem re-renderiza. O organizador corrige vários
   // e clica "Salvar alterações": aí sim grava na ficha do inscrito (sorteio usa)
   // E manda gênero+habilidade pro PERFIL dos jogadores com conta (Cloud Function).
+  // ⚠️ v1.7.45 — NUNCA MAIS RESOLVE POR POSIÇÃO. Este `if (!p) p = parts[order - 1]` era o
+  // defeito que o dono viu como "grava uma parte e o resto não": a edição caía em OUTRA
+  // PESSOA. MEDIDO na base (05/ago): "Vivi Hirata" e "Vivian" gravadas no MESMO SEGUNDO
+  // (18:31:23) com valores DIFERENTES — ele havia movido 3 mulheres de D pra FUN e a Vivi
+  // terminou em C, "sem qualquer justificativa". Era o valor de outra linha pousando nela.
+  //
+  // POR QUE O FALLBACK DISPARAVA TANTO: `order` vem da lista de LINHAS (que inclui espera,
+  // membros de dupla e ordenação própria), NÃO de `t.participants` — os índices não se
+  // correspondem. E o casamento por nome lia `cp.displayName`, que é APAGADO de toda entrada
+  // com uid desde a v1.3.52 (identity-core._stripUidEntryNames). Bastava o uid não bater
+  // pra cair no índice e escrever em quem estivesse ali.
+  //
+  // A regra correta já estava escrita neste arquivo, mas só aplicada às linhas da ESPERA:
+  // "Resolução SÓ por uid: cair no fallback posicional gravaria a categoria em OUTRA PESSOA".
+  // Agora vale pra todas. Quem tem uid casa SÓ por uid; fictício (sem uid) casa por nome/
+  // e-mail, que é a única identidade que ele tem. Sem casar, devolve null e o caller PULA —
+  // não gravar é sempre melhor que gravar na pessoa errada.
+  // Ver [[project_uid_identity_canon_locked]], [[feedback_uid_controls_everything_name_only_ficticio]].
   function _erFindParticipant(parts, row, order) {
-    var p = null;
-    if (row) {
-      for (var i = 0; i < parts.length; i++) {
-        var cp = parts[i]; if (!cp || typeof cp !== 'object') continue;
-        if ((row.uid && cp.uid === row.uid) ||
-            (row.email && (cp.email || '').toLowerCase() === String(row.email).toLowerCase()) ||
-            (row.name && (cp.displayName || cp.name) === row.name)) { p = cp; break; }
+    if (!row) return null;
+    var i, cp;
+    if (row.uid) {
+      for (i = 0; i < parts.length; i++) {
+        cp = parts[i]; if (!cp || typeof cp !== 'object') continue;
+        if (cp.uid === row.uid || cp.p1Uid === row.uid || cp.p2Uid === row.uid) return cp;
+        if (Array.isArray(cp.participants) && cp.participants.some(function (s) { return s && s.uid === row.uid; })) return cp;
       }
+      return null;   // tem uid e não achou → NÃO chuta
     }
-    if (!p) p = parts[order - 1];
-    return (p && typeof p === 'object') ? p : null;
+    // Sem uid = fictício: nome/e-mail são a identidade que resta (e o nome NÃO é strippado).
+    for (i = 0; i < parts.length; i++) {
+      cp = parts[i]; if (!cp || typeof cp !== 'object') continue;
+      if (cp.uid) continue;                                  // entrada com uid não casa por nome
+      if (row.email && (cp.email || '').toLowerCase() === String(row.email).toLowerCase()) return cp;
+      if (row.name && (cp.displayName || cp.name) === row.name) return cp;
+    }
+    return null;
   }
 
   window._erStageGender = function (order, val) {
