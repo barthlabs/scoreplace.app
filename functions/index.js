@@ -127,6 +127,60 @@ function _replaceNameInMatches(matches, oldUid, newName, newUid) {
  * Repair all tournaments: replace every reference to the dropped account
  * (by uid, email, or display name) with the keeper's identity. Batched.
  */
+
+/**
+ * Varre as SUBCOLEÇÕES de um torneio trocando o uid — nas duas formas em que ele aparece:
+ *   • ID DO DOCUMENTO — o espelho do roster é `participants/{uid}`. Aqui não dá pra
+ *     renomear: copia pro id novo e apaga o velho, COPIANDO PRIMEIRO (falha no meio deixa
+ *     o doc nos dois lados por um instante, nunca o faz sumir). Se o destino JÁ existe, o
+ *     do sobrevivente prevalece e o do drop é só removido — mesma regra de colisão do
+ *     uid-sweep (estado atual > estado da conta absorvida).
+ *   • CONTEÚDO — `results/*.playerUids` e afins, pelo mesmo remapUid do documento.
+ *
+ * Best-effort: falhar aqui não desfaz a fusão, que já gravou o essencial.
+ */
+async function _sweepTournamentSubcollections(db, tourRef, dropUid, keepUid) {
+  if (!dropUid || !keepUid) return 0;
+  let n = 0;
+  let cols = [];
+  try { cols = await tourRef.listCollections(); } catch (e) { return 0; }
+  for (const col of cols) {
+    try {
+      // (a) doc cujo ID é o uid morto
+      const velho = await col.doc(dropUid).get();
+      if (velho.exists) {
+        const novoRef = col.doc(keepUid);
+        const novo = await novoRef.get();
+        if (!novo.exists) await novoRef.set(velho.data());   // cópia PRIMEIRO
+        await velho.ref.delete();
+        n++;
+      }
+      // (b) uid dentro do conteúdo
+      const snap = await col.get();
+      let b = db.batch();
+      let k = 0;
+      for (const doc of snap.docs) {
+        const atual = doc.data();
+        const swept = _uidSweep.remapUid(atual, dropUid, keepUid);
+        if (!swept.changed) continue;
+        const payload = {};
+        for (const campo of Object.keys(swept.value)) {
+          if (JSON.stringify(swept.value[campo]) !== JSON.stringify(atual[campo])) payload[campo] = swept.value[campo];
+        }
+        if (!Object.keys(payload).length) continue;
+        b.update(doc.ref, payload);
+        k++; n++;
+        if (k % 400 === 0) { await b.commit(); b = db.batch(); }
+      }
+      if (k) await b.commit();
+    } catch (e) {
+      console.error(`[_sweepTournamentSubcollections] ${tourRef.id}/${col.id} falhou:`, e && e.message);
+    }
+  }
+  if (n) console.log(`[_sweepTournamentSubcollections] ${tourRef.id}: ${n} doc(s)`);
+  return n;
+}
+
 async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, keepEmail, keepName) {
   const tourSnaps = await db.collection("tournaments").get();
   let tourFixed = 0;
@@ -205,6 +259,16 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
         delete payload[campo];
       }
     }
+    // ── SUBCOLEÇÕES do torneio (v1.7.40) ────────────────────────────────────
+    // A varredura acima cobre o DOCUMENTO. As subcoleções ficavam de fora, e nelas o uid
+    // aparece de DUAS formas: como ID DO DOC (o espelho do roster é `participants/{uid}`,
+    // o dual-write da 1.7.29) e DENTRO do conteúdo (`results/*.playerUids`).
+    // MEDIDO em 05/ago/2026, depois de fundir: o espelho do Eduardo continuou sob o uid
+    // MORTO — o doc respondia 200 no uid apagado e 404 no sobrevivente. O espelho existe
+    // justamente pra ser a rede contra perda de inscrito; apontando pra uid morto, ele não
+    // protege ninguém. Roda pra todo torneio, não só os que o sweep do doc alterou.
+    await _sweepTournamentSubcollections(db, tourDoc.ref, dropUid, keepUid);
+
     if (!Object.keys(payload).length) continue;
 
     batch.update(tourDoc.ref, payload);

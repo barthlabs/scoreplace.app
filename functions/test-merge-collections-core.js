@@ -160,6 +160,19 @@ const KEEP = 'I061h3pJ7ifGgrjjo7dMVQOswOM2';   // eduardo@mange.adv.br (a sobrev
     !/collection\(["\']casualMatches["\']\)[\s\S]{0,60}\.where\(["\']creatorUid["\']/.test(idx));
   ok('a cópia vem ANTES do delete (falha no meio nunca some com o aviso)',
     /keepCol\.doc\(m\.toId\)\.set\(m\.data\);[\s\S]{0,120}dropCol\.doc\(m\.fromId\)\.delete\(\)/.test(idx));
+  // SUBCOLEÇÕES do torneio: o espelho do roster é `participants/{uid}` (dual-write da
+  // 1.7.29). MEDIDO em 05/ago: depois de fundir, o espelho do Eduardo continuou sob o uid
+  // MORTO — 200 no apagado, 404 no sobrevivente. Um espelho apontando pra uid morto não
+  // protege ninguém, e ele existe justamente pra ser a rede contra perda de inscrito.
+  ok('_repairTournaments varre as SUBCOLEÇÕES do torneio',
+    /_sweepTournamentSubcollections\(db, tourDoc\.ref/.test(idx));
+  ok('  → troca o uid quando ele é o ID DO DOC (espelho participants/{uid})',
+    /_sweepTournamentSubcollections[\s\S]{0,900}col\.doc\(dropUid\)\.get\(\)/.test(idx));
+  ok('  → copia ANTES de apagar (falha no meio nunca some com o doc)',
+    /novoRef\.set\(velho\.data\(\)\);[\s\S]{0,120}velho\.ref\.delete\(\)/.test(idx));
+  ok('  → e também troca o uid DENTRO do conteúdo (results.playerUids)',
+    /_sweepTournamentSubcollections[\s\S]{0,1600}_uidSweep\.remapUid\(atual, dropUid, keepUid\)/.test(idx));
+
   ok('a varredura PULA os 2 docs de perfil envolvidos (regra própria) e varre os de terceiros',
     /nome === "users" && \(doc\.id === dropUid \|\| doc\.id === keepUid\)/.test(idx));
   ok('_migrateNotifications reaponta fromUid de terceiros',
