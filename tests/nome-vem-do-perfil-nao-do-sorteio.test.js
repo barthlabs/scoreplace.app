@@ -70,6 +70,25 @@ eval(STORE.slice(STORE.indexOf('window._liveRowName = function'),
     'a ficha continua sendo aberta pela CHAVE guardada (não pelo texto exibido)');
 })();
 
+
+// ── A BUSCA também não pode casar com o nome ANTIGO ─────────────────────────
+// Regra do dono: _"fica estranho colocarmos fabi e aparecer a dani bataglia… não deve
+// aparecer a busca de um nome antigo"_. O filtro da chave varre `data-players`, que era
+// montado com o rótulo GRAVADO — o card mostrava o nome novo e o atributo guardava o velho.
+(() => {
+  const BR = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket.js'), 'utf8');
+  ok(!/\(m\.team1 \|\| \[\]\)\.forEach\(add\)/.test(BR),
+    'os times do Rei/Rainha NÃO entram na busca com o nome cru');
+  ok(/_addLive\(m\.team1, m\.team1Uids\)/.test(BR) && /_addLive\(m\.team2, m\.team2Uids\)/.test(BR),
+    '  → entram resolvidos pelo uid do slot');
+  ok(!/data-players="' \+ window\._safeHtml\(_nmPill\)/.test(BR),
+    'o chip de quem ficou de fora não indexa o nome guardado');
+  ok(!/data-players="' \+ window\._safeHtml\(n\)/.test(BR),
+    'o chip da lista de espera não indexa o nome guardado');
+  // p1/p2 já resolviam ao vivo desde antes — não pode regredir.
+  ok(/_resolveSideLive\(t, m\.p1/.test(BR), 'p1/p2 seguem resolvidos ao vivo na busca');
+})();
+
 console.log(fail === 0
   ? `✅ nome-vem-do-perfil-nao-do-sorteio: ${pass} ok, 0 falharam`
   : `❌ nome-vem-do-perfil-nao-do-sorteio: ${fail} falharam, ${pass} ok`);

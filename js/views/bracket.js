@@ -3814,9 +3814,21 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       };
       add(t && window._resolveSideLive ? window._resolveSideLive(t, m.p1, _uidsFor('p1')) : m.p1);
       add(t && window._resolveSideLive ? window._resolveSideLive(t, m.p2, _uidsFor('p2')) : m.p2);
-      // Rei/Rainha: os times são arrays de PESSOAS.
-      (m.team1 || []).forEach(add);
-      (m.team2 || []).forEach(add);
+      // Rei/Rainha: os times são arrays de PESSOAS — e os NOMES ali são os GRAVADOS no
+      // sorteio. Sem resolver por uid, a busca continua casando com o nome ANTIGO de quem
+      // trocou o displayName: o dono digitava "Fabi" e aparecia a "Dani Bataglia" (a mesma
+      // pessoa), porque o card mostrava o nome novo e o `data-players` guardava o velho.
+      // Regra dele: "não deve aparecer a busca de um nome antigo".
+      // Ver [[project_uid_identity_canon_locked]].
+      var _addLive = function (arr, uids) {
+        (arr || []).forEach(function (nm, i) {
+          var u = (uids || [])[i] || '';
+          add(u && typeof window._displayNameForUid === 'function'
+            ? window._displayNameForUid(u, nm) : nm);
+        });
+      };
+      _addLive(m.team1, m.team1Uids);
+      _addLive(m.team2, m.team2Uids);
     } catch (e) {}
     return window._safeHtml(out.join(' | '));
   })();
@@ -4766,7 +4778,10 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // inteiro (estatísticas globais) — nada regride pra quem não é organizador.
             var _pillClick = _outIsAdmin ? '' :
               (' onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + _outEsc(m.p1) + '\',\'' + _outTidJs + '\')"');
-            return '<span data-players="' + window._safeHtml(_nmPill) + '" data-my-match="1" style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;"' + _pillClick + '>' + _outPersonHtml(_nmPill, _uidPill) + _ptsLbl + _meBadge + '</span>';
+            // data-players pelo nome VIVO (uid) — senão a busca acha pelo nome antigo.
+            var _nmBusca = (_uidPill && typeof window._displayNameForUid === 'function')
+              ? window._displayNameForUid(_uidPill, _nmPill) : _nmPill;
+            return '<span data-players="' + window._safeHtml(_nmBusca) + '" data-my-match="1" style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;"' + _pillClick + '>' + _outPersonHtml(_nmPill, _uidPill) + _ptsLbl + _meBadge + '</span>';
           }).join('');
           // v4.x: cabeçalho DENTRO do box colorido (igual à Lista de espera) — o título
           // "Desativados (N) — …" fica no mesmo box vermelho dos chips, não solto acima.
@@ -4807,7 +4822,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               var _me = _isMe ? '<span style="font-size:0.6rem;font-weight:800;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
               // v1.6.93: idem — a busca tem que achar quem está na lista de espera.
               // v1.7.10: mesmo miolo dos demais chips — ficha (autoridade) + 💬 de contato.
-              return '<span data-players="' + window._safeHtml(n) + '" data-my-match="1" style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + _outPersonHtml(n, _wlUidByName[n] || '') + _me + '</span>';
+              var _nBusca = (_wlUidByName[n] && typeof window._displayNameForUid === 'function')
+                ? window._displayNameForUid(_wlUidByName[n], n) : n;
+              return '<span data-players="' + window._safeHtml(_nBusca) + '" data-my-match="1" style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + _outPersonHtml(n, _wlUidByName[n] || '') + _me + '</span>';
             }).join('');
             var _sameDayRR = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
             var _eligRR = _wlNames.length;
