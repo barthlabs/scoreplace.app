@@ -1134,6 +1134,20 @@
       if (_asgUid && (asg.gender || asg.category)) { asg.uid = _asgUid; profileAssignments.push(asg); }
     });
     var nEdits = _erPendingCount();
+    // ⚠️ v1.7.39 — MAIS DE UMA MUDANÇA DE UMA VEZ SÓ GRAVAVA A PRIMEIRA (relato do dono).
+    //
+    // Este caminho aplicava TODAS as edições em memória (o forEach acima está correto) e
+    // gravava — mas depois re-renderizava lendo de `_liveState.t`, que o onSnapshot do
+    // Firestore acabara de TROCAR por um objeto novo. A tela voltava ao estado do servidor
+    // anterior ao save, o organizador via só a 1ª mudança valer, refazia, e na 2ª vez
+    // "funcionava" — porque aí a referência já tinha alcançado.
+    //
+    // O irmão `_erCommitCats` já documenta e conserta exatamente isso desde 23/jul
+    // ("_liveState.t pode estar apontando pro objeto VELHO"), com as duas linhas abaixo.
+    // O conserto nunca foi aplicado AQUI, que é o caminho de mover pessoa entre blocos.
+    // Mesma classe do [[feedback_unify_dual_entry_points]]: dois caminhos, um só curado.
+    if (_liveState) _liveState.t = t;
+    window._suppressSoftRefresh = true;
     // grava a ficha do torneio (sorteio + inscritos sem conta)
     try { if (window.FirestoreDB && window.FirestoreDB.saveTournament) { if (!Array.isArray(t.participants)) t.participants = parts; window.FirestoreDB.saveTournament(t); } } catch (e) {}
     _pendingEdits = {};
@@ -1144,6 +1158,9 @@
       if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
       if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
       if (typeof showNotification === 'function') showNotification('✅ Alterações salvas', nEdits + ' inscrito(s) atualizado(s).' + (extra ? ' ' + extra : ''), 'success');
+      // Solta a supressão — a mesma janela de 1200ms do _erCommitCats. Deixá-la ligada
+      // congelaria o soft-refresh do app INTEIRO, não só desta tela.
+      setTimeout(function () { window._suppressSoftRefresh = false; }, 1200);
     };
     // v1.7.1 — POR QUE O CACHE DE PERFIL PRECISA SER ATUALIZADO AQUI (bug do dono:
     // "realoco a pessoa, salvo, e ela volta pra sem gênero; tem que repetir pra fixar"):
