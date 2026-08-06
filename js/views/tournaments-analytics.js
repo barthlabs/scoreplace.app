@@ -1002,6 +1002,23 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         }
         window.FirestoreDB.loadUserMatchHistory(resolvedUid).then(function(records) {
             if (!slot) return;
+            // v1.7.51 — `null` = a pessoa fechou as estatísticas (`statsVisibility`).
+            // NÃO cair no render de sempre: ele desenha a grade inteira ZERADA de
+            // propósito ("zeros if no data"), o que aqui seria mentira — diria "nunca
+            // jogou" sobre quem só não quis mostrar. Dizer que está fechado é honesto,
+            // e o resto da ficha (jogos, troféus, torneios) continua na tela.
+            if (records === null) {
+                slot.innerHTML =
+                    '<div style="padding:18px 14px;text-align:center;border:1px dashed var(--border-color);border-radius:12px;">' +
+                      '<div style="font-size:1.4rem;line-height:1;margin-bottom:6px;">🔒</div>' +
+                      '<div style="font-size:0.84rem;font-weight:700;color:var(--text-bright,#fff);">Estatísticas privadas</div>' +
+                      '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px;line-height:1.45;">' +
+                        'Esta pessoa escolheu não mostrar o desempenho dela. Você define o seu em ' +
+                        '<strong>Perfil → Minhas estatísticas</strong>.' +
+                      '</div>' +
+                    '</div>';
+                return;
+            }
             var merged = _mergeLocalCasualV2(records || []);
             _lastMerged = merged;   // pro re-render quando o letzplay de terceiro chega
             // Always render the full metric grid (zeros if no data) so players

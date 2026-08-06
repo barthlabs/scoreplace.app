@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.50';
+window.SCOREPLACE_VERSION = '1.7.51';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -7431,6 +7431,10 @@ window.AppStore = {
         // Pickleball mesmo eu só jogando Beach Tennis". Ver bracket-ui.js:_persistLastCasualChoice.
         if (profile.casualLast && typeof profile.casualLast === 'object') this.currentUser.casualLast = profile.casualLast;
         if (profile.presenceVisibility) this.currentUser.presenceVisibility = profile.presenceVisibility;
+        // v1.7.51: sem esta linha o perfil salvaria a escolha e a TELA abriria sempre em
+        // 'Todos' — `loadUserProfile` copia campo a campo, não faz merge genérico (foi
+        // exatamente assim que o `nameConflict` da 1.7.41 ficou gravado e invisível).
+        if (profile.statsVisibility) this.currentUser.statsVisibility = profile.statsVisibility;
         if (profile.presenceMuteDays !== undefined) this.currentUser.presenceMuteDays = profile.presenceMuteDays;
         if (profile.presenceMuteUntil !== undefined) this.currentUser.presenceMuteUntil = profile.presenceMuteUntil;
         if (profile.presenceAutoCheckin !== undefined) this.currentUser.presenceAutoCheckin = profile.presenceAutoCheckin;
@@ -7757,6 +7761,7 @@ window.AppStore = {
       preferredCeps: user.preferredCeps,
       preferredLocations: user.preferredLocations,
       presenceVisibility: user.presenceVisibility,
+      statsVisibility: user.statsVisibility,
       presenceMuteDays: user.presenceMuteDays,
       presenceMuteUntil: user.presenceMuteUntil,
       presenceAutoCheckin: user.presenceAutoCheckin,

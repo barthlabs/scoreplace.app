@@ -4641,6 +4641,9 @@ async function simulateLoginSuccess(user) {
     var _active = _until > Date.now();
     var _daysLeft = _active ? Math.max(1, Math.ceil((_until - Date.now()) / (24 * 3600 * 1000))) : (Number(cu.presenceMuteDays) || 7);
     if (typeof window._applyPresenceVisibilityUI === 'function') window._applyPresenceVisibilityUI(_pv);
+    // v1.7.51: ausente = 'public' — o MESMO default da regra do Firestore. Se os dois
+    // discordassem, a tela mostraria uma escolha que o servidor não está aplicando.
+    if (typeof window._applyStatsVisibilityUI === 'function') window._applyStatsVisibilityUI(cu.statsVisibility || 'public');
     if (typeof window._applyPresenceMuteUI === 'function') window._applyPresenceMuteUI({ active: _active, days: _daysLeft });
     if (typeof window._applyNotifyFilterUI === 'function') window._applyNotifyFilterUI(cu.notifyLevel || 'todas');
     // v2.1.91: inicializa o slider de tamanho da interface com o valor salvo
@@ -6557,6 +6560,23 @@ function setupProfileModal() {
               '<p style="font-size:0.68rem;color:var(--text-muted);margin:4px 0 0 0;">Enquanto silenciado, suas presenças não são criadas e você não aparece para amigos. Volta automático ao fim do prazo.</p>' +
               '<input type="hidden" id="profile-presence-visibility" value="friends">' +
             '</div>' +
+            // ─── v1.7.51: quem vê MINHAS estatísticas ─────────────────────────────
+            // Mesmo padrão de pills da presença acima (é a mesma pergunta: "quem me vê?").
+            // Default 'public' — decisão do dono: não expõe nada novo (os jogos já são
+            // legíveis em results/casualMatches) e mantém a ficha funcionando pra quem
+            // nunca abrir esta tela. Quem fecha, aparece "Estatísticas privadas" na ficha.
+            '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
+            '<div style="margin-bottom: 1rem;">' +
+              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">📊 Minhas estatísticas</label>' +
+              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Quem pode ver seu desempenho (vitórias, sets, games) na sua ficha de jogador.</p>' +
+              '<div id="stats-visibility-group" style="display:flex;gap:6px;flex-wrap:nowrap;">' +
+                '<button type="button" data-sv="public" onclick="window._setStatsVisibility(\'public\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌐 Todos</button>' +
+                '<button type="button" data-sv="friends" onclick="window._setStatsVisibility(\'friends\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">👥 Amigos</button>' +
+                '<button type="button" data-sv="private" onclick="window._setStatsVisibility(\'private\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🚫 Ninguém</button>' +
+              '</div>' +
+              '<p style="font-size:0.68rem;color:var(--text-muted);margin:6px 0 0 0;">Os placares dos seus jogos continuam aparecendo na chave e na classificação do torneio — isso é do torneio, não seu. O que esta escolha fecha é a grade de desempenho da sua ficha.</p>' +
+              '<input type="hidden" id="profile-stats-visibility" value="public">' +
+            '</div>' +
             '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
             // Social toggle + notification filters
             '<div style="margin-bottom: 1rem;">' +
@@ -6782,6 +6802,32 @@ function setupProfileModal() {
       if (hidden) hidden.value = val;
       window._applyPresenceVisibilityUI(val);
     };
+    // v1.7.51 — quem vê MINHAS estatísticas. Mesma mecânica das pills de presença
+    // (hidden input é a fonte pro save; a UI só pinta), com a paleta invertida de
+    // propósito: aqui o ABERTO é o default, então 'public' é o verde.
+    var _statsVisColors = { public: '#22c55e', friends: '#3b82f6', private: '#ef4444' };
+    window._setStatsVisibility = function(val) {
+      var hidden = document.getElementById('profile-stats-visibility');
+      if (hidden) hidden.value = val;
+      window._applyStatsVisibilityUI(val);
+    };
+    window._applyStatsVisibilityUI = function(val) {
+      var hidden = document.getElementById('profile-stats-visibility');
+      if (hidden) hidden.value = val;
+      var group = document.getElementById('stats-visibility-group');
+      if (!group) return;
+      group.querySelectorAll('button[data-sv]').forEach(function(btn) {
+        var v = btn.getAttribute('data-sv');
+        var isActive = (v === val);
+        var color = _statsVisColors[v] || '#6366f1';
+        btn.style.background = isActive ? color : 'transparent';
+        btn.style.color = isActive ? '#fff' : 'var(--text-muted)';
+        btn.style.border = isActive ? ('2px solid ' + color) : '1.5px solid var(--border-color)';
+        btn.style.boxShadow = isActive ? ('0 0 10px ' + color + '40') : 'none';
+        btn.style.fontWeight = isActive ? '700' : '500';
+      });
+    };
+
     window._applyPresenceVisibilityUI = function(val) {
       var hidden = document.getElementById('profile-presence-visibility');
       if (hidden) hidden.value = val;
@@ -8417,6 +8463,9 @@ window._profileHydrateNameConflict = function () {
           : (_chk('profile-filter-fundamentais', false) ? 'fundamentais' : 'none'));
 
       var presenceVisibility = _v('profile-presence-visibility') || 'friends';
+      // v1.7.51 — quem vê minhas estatísticas. Default 'public': o MESMO da regra do
+      // Firestore e o MESMO que a tela pinta; três lugares, um valor só.
+      var statsVisibility = _v('profile-stats-visibility') || 'public';
       var muteActive = _chk('profile-presence-mute-toggle', false);
       var muteDays = parseInt(_v('profile-presence-mute-days'), 10);
       if (!muteDays || muteDays < 1) muteDays = 7;
@@ -8658,6 +8707,7 @@ window._profileHydrateNameConflict = function () {
       payload.notifyWhatsApp = notifyWhatsApp;
       payload.notifyLevel = notifyLevel;
       payload.presenceVisibility = presenceVisibility;
+      payload.statsVisibility = statsVisibility;
       payload.presenceMuteDays = muteDays;
       payload.presenceMuteUntil = muteUntil;
       payload.presenceAutoCheckin = presenceAutoCheckin;

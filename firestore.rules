@@ -339,6 +339,20 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly(['friends', 'friendRequestsSent', 'friendRequestsReceived']);
     }
+
+    // v1.7.51 — o DONO das estatísticas decide quem as vê (`statsVisibility` no perfil).
+    // Um `get()` só, guardado em `u`: o dialeto (rules_version 2) cacheia chamadas
+    // repetidas ao mesmo caminho dentro da mesma avaliação, mas ler uma vez deixa a
+    // intenção óbvia e não flerta com o teto de acessos por requisição.
+    // `.get(campo, default)` é o mesmo padrão já usado no isSandbox dos torneios.
+    // AUSENTE = 'public' — o default das contas que existiam antes desta regra.
+    function statsVisibleToCaller(userId) {
+      let u = get(/databases/$(database)/documents/users/$(userId)).data;
+      let vis = u.get('statsVisibility', 'public');
+      return vis == 'public'
+        || (vis == 'friends' && request.auth.uid in u.get('friends', []));
+    }
+
     match /users/{userId} {
       // Authenticated only — strips PII (email, phone, preferredCeps,
       // fcmToken, etc.) from anonymous visitors. Needed for friend search
@@ -403,10 +417,26 @@ service cloud.firestore {
         allow update, delete: if request.auth != null && request.auth.uid == userId;
       }
 
-      // Match history (stats across tournaments + casual matches) — only
-      // the user themselves, same as profile.
+      // Match history (stats across tournaments + casual matches).
+      //
+      // v1.7.51 — QUEM LÊ passou a ser ESCOLHA DA PESSOA (`statsVisibility` no perfil:
+      // 'public' | 'friends' | 'private'). Antes era só o dono, e isso tinha um efeito
+      // que ninguém via: a ficha de OUTRO jogador (classificação e Análise de Inscritos)
+      // lê exatamente esta subcoleção, levava permission-denied, o cliente engolia o erro
+      // e desenhava a grade de estatísticas ZERADA — recusa e "nunca jogou" ficavam
+      // visualmente idênticas. Ver [[project_stats_visibility_user_choice]].
+      //
+      // AUSENTE = 'public' (decisão do dono, 06/ago/2026): as 185 contas que já existem
+      // continuam com a ficha funcionando. Não abre nada novo — `matchHistory` é cópia
+      // desnormalizada do que JÁ é legível: `{path=**}/results` (qualquer autenticado) e
+      // `casualMatches` (leitura livre). Quem quiser fechar, fecha no perfil.
+      //
+      // ESCRITA continua SÓ do dono — visibilidade muda quem LÊ, nunca quem grava.
       match /matchHistory/{matchId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read: if request.auth != null && (
+          request.auth.uid == userId || statsVisibleToCaller(userId)
+        );
+        allow write: if request.auth != null && request.auth.uid == userId;
       }
 
       // Templates — only owner.

@@ -2582,6 +2582,16 @@ window.FirestoreDB = {
       });
       return out;
     } catch (e) {
+      // v1.7.51 — RECUSA NÃO É LISTA VAZIA. `users/{uid}/matchHistory` agora é lido
+      // conforme o `statsVisibility` da própria pessoa, então "não posso ver" virou um
+      // desfecho legítimo — e devolver `[]` aqui fazia a ficha desenhar a grade ZERADA,
+      // idêntica a "nunca jogou". Card que mente é pior que card que não existe.
+      // `null` = sem permissão (quem chama mostra "estatísticas privadas");
+      // `[]`   = permitido e realmente sem jogos.
+      if (e && e.code === 'permission-denied') {
+        window._warn('[matchHistory] sem permissão para ' + uid + ' (statsVisibility)');
+        return null;
+      }
       window._error('Erro ao carregar histórico de partidas:', e);
       return [];
     }

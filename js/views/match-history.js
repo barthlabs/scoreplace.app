@@ -271,7 +271,14 @@
     var records = [];
     // matchHistory persistente (torneios + casuais gravados no Firestore)
     if (window.FirestoreDB && typeof window.FirestoreDB.loadUserMatchHistory === 'function') {
-      try { records = await window.FirestoreDB.loadUserMatchHistory(uid) || []; } catch (e) { records = []; }
+      // v1.7.51: `null` = estatísticas fechadas por quem é dono delas (`statsVisibility`).
+      // Aqui a lista só deixa de crescer — o letzplay e os jogos públicos seguem entrando,
+      // e quem AVISA que está fechado é a ficha (tournaments-analytics). O `|| []` de antes
+      // apagava a distinção logo na origem.
+      try {
+        var _mh = await window.FirestoreDB.loadUserMatchHistory(uid);
+        records = (_mh === null) ? [] : (_mh || []);
+      } catch (e) { records = []; }
     }
     // casuais locais (podem não ter subido ao Firestore) — dedup por matchId.
     // Só pro DONO da máquina: o localStorage é dele, não da pessoa que está sendo olhada.
