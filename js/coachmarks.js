@@ -65,6 +65,30 @@
   var _suspendedUntil = 0;   // timestamp até quando as dicas ficam suspensas por interação real
   var _shownAt = 0;          // quando a dica atual apareceu (ignora o scroll programático do scrollIntoView)
 
+  // ── ZONA SEM DICA: o placar em quadra ─────────────────────────────────────
+  // Ordem do dono, repetida (1.6.88 e de novo em ago/2026): "aparecer as dicas
+  // durante o uso do placar não pode ocorrer de forma alguma. nunca!".
+  //
+  // A trava foi escrita no hints.js (_hintFreeZoneIds) — mas quem ESCURECE a
+  // tela é ESTE arquivo: as .coach-mask são 4 retângulos rgba(2,6,23,0.70) em
+  // volta do alvo. O coachmarks nasceu depois e nunca soube que o placar existe.
+  //
+  // Por que dispara justamente aqui: o placar ao vivo e a partida casual são
+  // overlays FULL-SCREEN sem hash próprio (bracket-ui.js: 'live-scoring-overlay'
+  // e 'casual-match-overlay'), então o `hashchange` que para o tour NUNCA
+  // dispara — o tour da tela de trás (dashboard/place/...) segue armado e cai
+  // por ociosidade em cima de quem está marcando ponto em quadra.
+  //
+  // Regra: enquanto qualquer um desses overlays estiver no DOM, NENHUMA dica
+  // nasce, e a que já estiver na tela morre no instante em que o placar abre.
+  var COURT_OVERLAY_IDS = ['live-scoring-overlay', 'casual-match-overlay'];
+  function _inCourt() {
+    for (var i = 0; i < COURT_OVERLAY_IDS.length; i++) {
+      if (document.getElementById(COURT_OVERLAY_IDS[i])) return true;
+    }
+    return false;
+  }
+
   // ── helpers DOM ──────────────────────────────────────────────────────────
   function _user() { return (window.AppStore && window.AppStore.currentUser) || null; }
   function _isVisible(el) {
@@ -197,6 +221,9 @@
   function _idleFire() {
     try {
       if (isDisabled() || !_provider || _overlay || !_user()) return;
+      // Placar em quadra: NÃO mostra e re-arma o relógio — quando o placar
+      // fechar, o tour volta sozinho, sem depender de o usuário tocar em nada.
+      if (_inCourt()) { _armIdle(); return; }
       if (Date.now() < _suspendedUntil) { _armIdle(); return; } // suspensão por interação real
       var pending = _pending();
       if (!pending.length) return; // nada a mostrar
@@ -232,11 +259,15 @@
     // v2.3.33: NÃO abrimos o hamburger automaticamente. As dicas dos itens do
     // menu têm waitFor=_menuReady e só aparecem depois que o USUÁRIO abre o
     // hamburger. Aqui é só renderizar.
+    if (_inCourt()) { _hide(); _armIdle(); return; }
     _shownAt = Date.now(); // marca o momento (ignora o scroll programático do scrollIntoView)
     _render(step);
   }
 
   function _render(step) {
+    // Trava final: _render é o ÚNICO lugar que cria o overlay escuro. Qualquer
+    // caminho novo que chegue aqui com o placar aberto morre nesta linha.
+    if (_inCourt()) { _hide(); _armIdle(); return; }
     var el = _resolve(step);
     // alvo indisponível (ex.: usuário fechou o hamburger no meio) → adia SEM
     // marcar visto; volta quando reabrir + ficar parado.
@@ -367,6 +398,7 @@
     _nextTimer = setTimeout(function () {
       _nextTimer = null;
       if (isDisabled() || !_provider || _overlay || !_user()) return;
+      if (_inCourt()) { _armIdle(); return; } // placar abriu durante os 3s do encadeamento
       if (Date.now() < _suspendedUntil) { _armIdle(); return; } // interação durante os 3s do encadeamento
       var next = _pending()[0];
       if (next) _showStep(next);
@@ -601,6 +633,20 @@
   // (snapshot, sem mudança de hash) não dispara hashchange, então não reseta.
   window.addEventListener('hashchange', function () { _stop(); });
 
+  // ── vigia do placar ───────────────────────────────────────────────────────
+  // Os guards acima impedem uma dica de NASCER com o placar aberto. Falta o
+  // outro sentido: a dica já estar na tela quando o usuário abre o placar. Só o
+  // toque no botão não basta como garantia — ele suspende por 3 min, e um jogo
+  // dura muito mais que isso. Aqui a dica morre pela PRESENÇA do overlay, que é
+  // o fato que interessa, não pelo gesto que o criou.
+  try {
+    if (typeof MutationObserver === 'function') {
+      new MutationObserver(function () {
+        if (_overlay && _inCourt()) { _hide(); _armIdle(); }
+      }).observe(document.body, { childList: true });
+    }
+  } catch (e) {}
+
   // ── shim de compat: o toggle do perfil chama window._hintSystem.* ───────────
   window._hintSystem = {
     init: function () {},
@@ -623,6 +669,9 @@
     setEnabled: setEnabled,
     reset: function () { _saveSeen({}); },
     _stop: _stop,
-    _teardown: _hide
+    _teardown: _hide,
+    // expostos pro teste travar a zona sem dica (tests/dica-nunca-no-placar.test.js)
+    _inCourt: _inCourt,
+    _courtOverlayIds: COURT_OVERLAY_IDS
   };
 })();

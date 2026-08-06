@@ -567,6 +567,12 @@ const SUITES = [
   // com e-mail mascarado — NUNCA auto-sufixo silencioso.
   'functions/test-name-unique-core.js',
   'functions/test-roster-watch.js',
+  // A DICA NUNCA aparece com o placar em quadra aberto. A trava vivia só no
+  // hints.js; quem ESCURECE a tela é o coachmarks.js, que nasceu depois e não
+  // sabia que o placar existe (e ainda é ele quem religa o hints.js). Roda o
+  // coachmarks REAL com relógio controlado; contra o código anterior a dica
+  // nasce em cima de quem está marcando ponto.
+  'tests/dica-nunca-no-placar.test.js',
 ];
 
 let failed = [];
