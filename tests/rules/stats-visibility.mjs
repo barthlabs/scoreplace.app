@@ -6,8 +6,8 @@
 //   JAVA_HOME=/opt/homebrew/opt/openjdk@21 PATH="$JAVA_HOME/bin:$PATH" \
 //     firebase emulators:exec --only firestore "node tests/rules/stats-visibility.mjs"
 //
-// Rodar SEMPRE que mexer em `statsVisibility` ou no bloco matchHistory das regras.
-// Resultado em 06/ago/2026 (v1.7.51): 13 ok · 0 falhas.
+// Rodar SEMPRE que mexer em `statsVisibility` ou nos blocos matchHistory / trophies /
+// milestones das regras. Resultado em 06/ago/2026 (v1.7.52): 21 ok · 0 falhas.
 //
 // Prova de comportamento da regra `statsVisibility` (v1.7.51) contra o EMULADOR,
 // usando o firestore.rules REAL do projeto.
@@ -34,6 +34,8 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await db.doc('users/fechado').set({ statsVisibility: 'private', friends: ['amigo'] });
   for (const u of ['legado', 'aberto', 'soAmigos', 'fechado']) {
     await db.doc(`users/${u}/matchHistory/m1`).set({ matchType: 'tournament', finishedAt: 1 });
+    await db.doc(`users/${u}/trophies/t1`).set({ tier: 'ouro' });
+    await db.doc(`users/${u}/milestones/ms1`).set({ level: 1 });
   }
 });
 
@@ -42,7 +44,9 @@ const estranho = env.authenticatedContext('estranho').firestore();
 const anon     = env.unauthenticatedContext().firestore();
 const dono     = (uid) => env.authenticatedContext(uid).firestore();
 
-const hist = (db, uid) => db.collection(`users/${uid}/matchHistory`).get();
+const hist  = (db, uid) => db.collection(`users/${uid}/matchHistory`).get();
+const trof  = (db, uid) => db.collection(`users/${uid}/trophies`).get();
+const marco = (db, uid) => db.collection(`users/${uid}/milestones`).get();
 
 let ok = 0, fail = 0;
 async function t(nome, p) {
@@ -69,9 +73,21 @@ await t('o dono lê o próprio',             assertSucceeds(hist(dono('fechado')
 await t('AMIGO é barrado',                 assertFails(hist(amigo, 'fechado')));
 await t('ESTRANHO é barrado',              assertFails(hist(estranho, 'fechado')));
 
+// v1.7.51 — troféus e marcos seguem o MESMO campo. Tinham o mesmo defeito escondido:
+// a comparação de troféus com amigo levava recusa e desenhava "zero troféus".
+console.log('\nTROFÉUS e MARCOS seguem a mesma escolha');
+await t('legado: estranho lê troféus',     assertSucceeds(trof(estranho, 'legado')));
+await t('legado: estranho lê marcos',      assertSucceeds(marco(estranho, 'legado')));
+await t("'friends': amigo lê troféus",     assertSucceeds(trof(amigo, 'soAmigos')));
+await t("'friends': estranho BARRADO",     assertFails(trof(estranho, 'soAmigos')));
+await t("'private': amigo BARRADO",        assertFails(trof(amigo, 'fechado')));
+await t("'private': o dono lê os seus",    assertSucceeds(trof(dono('fechado'), 'fechado')));
+await t("'private': amigo barrado nos marcos", assertFails(marco(amigo, 'fechado')));
+
 console.log('\nESCRITA não muda: visibilidade decide quem LÊ');
 await t('o dono escreve no próprio',       assertSucceeds(dono('aberto').doc('users/aberto/matchHistory/m2').set({ x: 1 })));
 await t('terceiro NÃO escreve (nem público)', assertFails(estranho.doc('users/aberto/matchHistory/m3').set({ x: 1 })));
+await t('terceiro NÃO escreve troféu alheio', assertFails(estranho.doc('users/aberto/trophies/t9').set({ tier: 'ouro' })));
 
 await env.cleanup();
 console.log(`\n${ok} ok · ${fail} falha(s)`);

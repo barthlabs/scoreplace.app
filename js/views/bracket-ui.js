@@ -7953,9 +7953,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
             _render();
             _isRemoteUpdate = false;
           }
+        }, function(err) {
+          // v1.7.52 — o `try/catch` abaixo só cobre o SETUP do listener; erro que chega
+          // DEPOIS (rede caiu, sessão expirou, doc ficou inacessível) nasce assíncrono e
+          // vira "unhandled rejection" — some do app e aparece como ruído no Sentry, sem
+          // frame nosso pra dizer de onde veio. Os irmãos do store.js (discovery,
+          // notificações, perfil) já tratavam; este era o único de fora.
+          // Não derruba a partida: o placar segue local e o próximo write reconecta.
+          window._warn('[LiveScore] listener do Firestore caiu:', err);
         });
     } catch(e) {
-      window._warn('[LiveScore] Firestore listener error:', e);
+      window._warn('[LiveScore] Firestore listener setup error:', e);
     }
   }
   var _lastSyncTs = 0;

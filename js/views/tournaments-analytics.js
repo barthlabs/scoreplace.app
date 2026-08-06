@@ -196,6 +196,22 @@ window._openPlayerProfile = function(playerName, opts) {
         _loadFn(cu.uid),
         _loadFn(playerUid)
       ]).then(function(results) {
+          // v1.7.51 — a pessoa fechou o desempenho (`statsVisibility`). Sem este desvio a
+          // comparação seguiria com `{}` e desenharia o amigo com ZERO troféus e "nenhum
+          // em comum" — recusa virando ausência, o mesmo defeito da grade zerada.
+          if (results[1] && results[1].denied) {
+            var slotD = document.getElementById('ppo-trophies-inner');
+            if (slotD) {
+              slotD.innerHTML =
+                '<div style="padding:14px;text-align:center;border:1px dashed var(--border-color);border-radius:12px;">' +
+                  '<div style="font-size:1.2rem;line-height:1;margin-bottom:4px;">🔒</div>' +
+                  '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;">' +
+                    'Esta pessoa escolheu não mostrar as conquistas dela.' +
+                  '</div>' +
+                '</div>';
+            }
+            return;
+          }
           var cuTrophies    = (results[0] && results[0].trophies) || {};
           var theirTrophies = (results[1] && results[1].trophies) || {};
           var catalog = window.TROPHY_CATALOG || [];

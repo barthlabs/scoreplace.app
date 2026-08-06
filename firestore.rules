@@ -444,12 +444,28 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
-      // Trophies + milestones — owner only (backfill uses Admin SDK, bypasses rules).
+      // Trophies + milestones — MESMA regra do matchHistory (v1.7.51): quem lê é a
+      // escolha da pessoa (`statsVisibility`). Um campo só governa os dois porque é a
+      // mesma pergunta — "quem vê meu desempenho" — e dois interruptores para a mesma
+      // coisa viram dois estados pra explicar.
+      //
+      // Tinha o MESMO defeito do matchHistory, e escondido do mesmo jeito: a ficha
+      // compara troféus com o amigo (`_loadUserTrophies(playerUid)`), a regra negava,
+      // o cliente engolia com `.catch` e devolvia `{}` — então **o amigo aparecia
+      // sempre com ZERO troféus**. Recusa desenhada como ausência.
+      //
+      // ESCRITA segue só do dono (o backfill usa Admin SDK e passa por fora das regras).
       match /trophies/{trophyId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read: if request.auth != null && (
+          request.auth.uid == userId || statsVisibleToCaller(userId)
+        );
+        allow write: if request.auth != null && request.auth.uid == userId;
       }
       match /milestones/{milestoneId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read: if request.auth != null && (
+          request.auth.uid == userId || statsVisibleToCaller(userId)
+        );
+        allow write: if request.auth != null && request.auth.uid == userId;
       }
     }
 

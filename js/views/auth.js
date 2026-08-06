@@ -6568,7 +6568,7 @@ function setupProfileModal() {
             '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
             '<div style="margin-bottom: 1rem;">' +
               '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">📊 Minhas estatísticas</label>' +
-              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Quem pode ver seu desempenho (vitórias, sets, games) na sua ficha de jogador.</p>' +
+              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Quem pode ver seu desempenho (vitórias, sets, games) e suas conquistas na sua ficha de jogador.</p>' +
               '<div id="stats-visibility-group" style="display:flex;gap:6px;flex-wrap:nowrap;">' +
                 '<button type="button" data-sv="public" onclick="window._setStatsVisibility(\'public\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌐 Todos</button>' +
                 '<button type="button" data-sv="friends" onclick="window._setStatsVisibility(\'friends\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">👥 Amigos</button>' +
