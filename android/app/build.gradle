@@ -49,6 +49,23 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             if (keystorePropsFile.exists()) signingConfig signingConfigs.release
+
+            // ⚠️ NÃO adicionar `ndk { debugSymbolLevel ... }` aqui — TENTADO E MEDIDO (06/ago/2026).
+            //
+            // O Play avisa em todo upload: "contém código nativo e você não fez upload dos
+            // símbolos de depuração". Parece um flag esquecido; não é.
+            //
+            // O único código nativo do pacote são 4 cópias (uma por ABI) de
+            // `libdatastore_shared_counter.so`, 7 KB cada, que vêm do Firebase/DataStore —
+            // NADA nosso. Extraí o .so do .aab e li as seções: existe só `.dynsym`, sem
+            // `.symtab` e sem `.debug_*`. Ou seja, o Firebase publica a lib JÁ STRIPPADA.
+            // Com `debugSymbolLevel 'SYMBOL_TABLE'` a task roda, não acha símbolo nenhum e o
+            // .aab sai com o MESMO tamanho byte a byte e ZERO entradas em BUNDLE-METADATA.
+            //
+            // Conclusão: o aviso não tem conserto do nosso lado, e a config que "deveria"
+            // resolvê-lo é config morta. O mesmo vale pro aviso irmão, de desofuscação: com
+            // `minifyEnabled false` não existe mapping porque não existe ofuscação — as
+            // stack traces já chegam legíveis, que é justamente o que aquele aviso pede.
         }
     }
 }
