@@ -173,6 +173,9 @@ const SUITES = [
   // cor de número solta ou fizer o retrato limitar o número pela altura.
   'tests/live-score-retrato.test.js',
   'tests/meu-card-no-topo.test.js',
+  // o espelho do roster (a rede contra perda de inscrito) não cobria a lista de espera,
+  // não escrevia na 1ª gravação da sessão e nem era chamado pelo caminho de inscrição.
+  'tests/espelho-do-roster-cobre-a-espera.test.js',
   // o card do topo NUNCA pode contradizer o torneio: quem está na lista de espera,
   // desativado ou com W.O. lia "você não está inscrito" (dado REAL do Confra).
   'tests/meu-card-nunca-contradiz.test.js',
