@@ -3828,29 +3828,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // nos dois fundos) e deixou o fundo de GAMES/SETS escuro — e eu ainda escrevi no
   // código que "o gelo NÃO invade o fundo escuro". Isso era opinião minha; a ordem
   // do dono é placa nas quatro superfícies. O comentário velho foi corrigido lá.
-  //
-  // Fundo claro obriga o CROMO a virar junto: rótulo e traço eram brancos
-  // translúcidos (`var(--text-muted)` / `rgba(255,255,255,0.25)`) e sumiriam no
-  // gelo. Os tons abaixo são medidos CONTRA #EAF0F6, não escolhidos no olho:
-  //   #5A6B80 sobre gelo = 4,75:1  (acima dos 4,5:1 que a WCAG pede pra texto
-  //   pequeno — e o rótulo GAMES/SETS é justamente o menor texto da tela).
   var LIVE_ICE_EDGE  = 'rgba(15,23,42,0.14)';
-  var LIVE_ICE_LABEL = '#5A6B80';
-  var LIVE_ICE_DASH  = 'rgba(15,23,42,0.28)';
-  // UMA função pras QUATRO superfícies (retrato SETS, retrato GAMES, paisagem
-  // GAMES, paisagem SETS). O que ela fixa é a PELE — fundo, borda e raio —, que é
-  // exatamente o que divergiria em quatro cópias na primeira vez que alguém
-  // ajustasse uma delas. A GEOMETRIA entra por `extra` porque é honestamente
-  // diferente: em pé são dois blocos empilhados; deitado o GAMES é uma pílula
-  // deitada no vão entre as placas e o SETS mora na barra de cima. Declaração
-  // repetida no mesmo atributo vence a anterior, então `extra` sobrescreve à
-  // vontade (flex-direction, padding, border-radius).
-  function _liveIcePlate(inner, extra, id) {
-    return '<div' + (id ? ' id="' + id + '"' : '') +
-      ' style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;' +
-      'background:' + LIVE_ICE + ';border:1px solid ' + LIVE_ICE_EDGE + ';border-radius:14px;' +
-      'padding:3px clamp(12px,3.4vw,22px) 5px;' + (extra || '') + '">' + inner + '</div>';
-  }
+  // v1.7.59 — AQUI MORAVAM `LIVE_ICE_LABEL`, `LIVE_ICE_DASH` e `_liveIcePlate()`.
+  // A `_liveIcePlate` era a fonte única da PELE (fundo/borda/raio) das QUATRO
+  // pílulas de GAMES/SETS que existiam antes do redesenho. O redesenho de
+  // 06/ago/2026 (v1.7.58) dissolveu essas pílulas: GAMES e SETS passaram a viver
+  // DENTRO da caixa do time (`.ls-games-plate`, em `_lsTeamBox`), que aplica
+  // LIVE_ICE/LIVE_ICE_EDGE direto e dimensiona tudo por `_lsSizes`. Com isso a
+  // função ficou sem nenhum chamador vivo, e o rótulo/traço que ela pintava
+  // deixaram de existir na tela. Removidos — a pele continua sendo UMA só, agora
+  // no `_lsTeamBox`, que é o único lugar que desenha gelo.
   // REFERÊNCIA DE TAMANHO DO NÚMERO — canon do dono, reforçado em ago/2026:
   // "0-15-30-40-AD não pode ter diferença no tamanho (altura/largura), em pé ou
   // deitado". O corpo NUNCA sai do valor atual: sai do PIOR CASO desta lista,
@@ -6307,12 +6294,6 @@ window._openLiveScoring = function(tId, matchId, opts) {
       p2Display = _formatGamePoint(state.currentGameP2, state.currentGameP1, false);
     }
 
-    // v1.3.66-beta: killing point (40-40 / deuce) detection — plates turn
-    // orange with white text. Only in GSM tennis mode when both players have
-    // 3+ raw points AND are equal (pure deuce, not advantage state).
-    var _isDeuce = useSets && !state.isFixedSet && !state.isTiebreak && !_isDecidingSet() &&
-      state.currentGameP1 >= 3 && state.currentGameP2 >= 3 &&
-      state.currentGameP1 === state.currentGameP2 && !state.isFinished;
 
     // Games in current set
     var gamesP1Str = '', gamesP2Str = '';
@@ -6329,89 +6310,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Serving info
     var serverInfo = _getCurrentServer();
 
-    // Build stacked player names in team box (bracket-style)
-    // Serve ball inside team box, left of the serving player's row, draggable to change server
+    // A bola de saque pode ser arrastada pra trocar o sacador enquanto a ordem
+    // ainda não travou (2 jogos). Quem desenha a bola é _lsNameRow.
     var _canDragServe = !state.isFinished && !state.serveSkipped && isDoubles && state.totalGamesPlayed < 2;
-    var _buildNameStack = function(team, mirror) {
-      // mirror=true (usado no time DIREITO em paisagem): nome à esquerda, foto/
-      // ícone à DIREITA, texto alinhado à direita (espelha o lado esquerdo).
-      var _mirrorCard = mirror ? 'flex-direction:row-reverse;' : '';
-      var _mirrorText = mirror ? 'text-align:right;' : '';
-      var players = team === 1 ? p1Players : p2Players;
-      var clr = team === 1 ? '#3b82f6' : '#ef4444';
-      var bgClr = team === 1 ? 'rgba(59,130,246,0.12)' : 'rgba(239,68,68,0.12)';
-      var bdrClr = team === 1 ? 'rgba(59,130,246,0.30)' : 'rgba(239,68,68,0.30)';
-      var cards = '';
-      // v4.0.4: a bola de saque deve aparecer em UM jogador só. Quando os 2
-      // jogadores do time têm o mesmo nome (ex.: "Parceiro"/"Parceiro"), casar
-      // por nome acendia a bola nos DOIS. Casa por pIdx (posição) quando existe;
-      // senão, mostra no 1º que bate o nome (guarda _ballShown).
-      var _ballShown = false;
-      for (var ni = 0; ni < players.length; ni++) {
-        var pn = players[ni];
-        var isServing = false;
-        if (serverInfo && !state.isFinished && serverInfo.team === team) {
-          if (serverInfo.pIdx != null) {
-            isServing = (serverInfo.pIdx === ni);
-          } else if (serverInfo.name === pn && !_ballShown) {
-            isServing = true;
-          }
-          if (isServing) _ballShown = true;
-        }
-        var fullName = window._safeHtml(pn);
-        // FOTO PROPORCIONAL AO NOME (dono): a foto acompanha a fonte, senão o nome cresce
-        // e o ícone fica um botão perdido do lado. 38px casa com a fonte nova no 390px.
-        var avatar = '<span class="live-av-wrap">' + _liveAvatarHtml(pn, 38) + '</span>';
-
-        // Serve ball: shown for the current server. Draggable when serve can still be changed.
-        var servBall = '';
-        if (isServing) {
-          var dragAttr = _canDragServe ? ' draggable="true" data-serve-ball="true"' : '';
-          var dragStyle = _canDragServe ? 'cursor:grab;' : 'cursor:default;';
-          var ballTitle = _canDragServe ? 'Arraste para trocar sacador' : 'Ordem de saque travada (após 2 jogos)';
-          // Dimmer glow + subtle 🔒 badge when locked
-          var ballGlow = _canDragServe ? 'filter:drop-shadow(0 0 4px rgba(255,200,0,0.6));' : 'filter:drop-shadow(0 0 2px rgba(255,200,0,0.3));opacity:0.85;';
-          // v1.9.70: cadeado ABAIXO da bola (em coluna), não ao lado — economiza
-          // largura pra foto/ícone e nome dos jogadores.
-          var lockBadge = _canDragServe ? '' : '<span style="font-size:0.5rem;line-height:1;opacity:0.85;margin-top:3px;" aria-hidden="true">🔒</span>';
-          servBall = '<span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;line-height:1;gap:0;">' +
-            '<span' + dragAttr + ' title="' + ballTitle + '" style="font-size:0.85rem;line-height:1;' + dragStyle + ballGlow + '">' + _sportBall + '</span>' +
-            lockBadge +
-          '</span>';
-        }
-
-        // Drop target: each player row is a drop target for the serve ball
-        var dropAttr = _canDragServe ? ' data-serve-drop="' + team + '-' + ni + '"' : '';
-        // v1.3.14-beta: card inteiro do jogador-sacador vira zona de drag da
-        // bola — antes só o span do ícone reagia, e o card vazava o touchstart
-        // pro court-side, fazendo "trocar bola" virar "trocar lado da quadra".
-        // User: "se o usuário clicar na bolinha (ou perto dela), arrasta a
-        // bolinha e não o lado da quadra".
-        var ballCardAttr = (isServing && _canDragServe) ? ' data-serve-ball-card="true"' : '';
-
-        // Individual player box
-        cards += '<div' + dropAttr + ballCardAttr + ' onclick="window._liveEditName(' + team + ',' + ni + ')" style="cursor:pointer;display:flex;' + _mirrorCard + 'align-items:center;gap:5px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);transition:transform 0.15s,background 0.15s;min-width:0;">' +
-          servBall +
-          avatar +
-          '<span style="flex:1;min-width:0;' + _mirrorText + 'font-size:calc(clamp(0.86rem,3.5vw,1.12rem) * var(--live-name-scale,1));font-weight:' + (isServing ? '800' : '600') + ';color:' + (isServing ? '#fbbf24' : 'rgba(255,255,255,0.92)') + ';white-space:normal;overflow-wrap:break-word;word-break:normal;hyphens:none;line-height:1.15;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">' + fullName + '</span>' +
-        '</div>';
-      }
-      // Team box wrapping all players
-      // v1.9.68: classe live-namestack → equalização de altura pós-render
-      // pra os dois lados (esquerdo/direito) ficarem na mesma altura,
-      // alinhando placares e botões mesmo com nomes de tamanhos diferentes.
-      return '<div class="live-namestack" style="display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:4px;padding:8px 10px;border-radius:12px;background:' + bgClr + ';border:1px solid ' + bdrClr + ';">' + cards + '</div>';
-    };
-
-    // Arrow button builder — extra large for courtside tapping (passo 1 do
-    // caminho mobile-first: tap target gordo, tipografia XL, cores atuais).
-    var _upBtn = function(player) {
-      var clr = player === 1 ? '#3b82f6' : '#ef4444';
-      return '<button class="live-vol" onclick="window._liveScorePoint(' + player + ')" style="width:100%;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:calc(clamp(3.8rem,9vw,5rem) * var(--live-btn-scale,1));font-weight:900;border-radius:18px 18px 0 0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;min-height:calc(clamp(120px,22vh,180px) * var(--live-btn-scale,1));box-shadow:0 4px 14px rgba(0,0,0,0.4);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.96)\'" ontouchend="this.style.transform=\'\'">▲</button>';
-    };
-    var _downBtn = function(player) {
-      return '<button class="live-vol-sm" onclick="window._liveScoreMinus(' + player + ')" style="width:100%;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.08);color:var(--text-muted);font-size:1.2rem;font-weight:700;border-radius:0 0 16px 16px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;min-height:clamp(52px,8vh,72px);border-top:1px solid rgba(255,255,255,0.06);" ontouchstart="this.style.background=\'rgba(255,255,255,0.15)\'" ontouchend="this.style.background=\'\'">▼</button>';
-    };
 
     // Finish button (isFinished handled above with early return)
     var finishBtn = '';
@@ -6447,9 +6348,6 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var leftTeam = _courtLeft; // 1 or 2
     var rightTeam = leftTeam === 1 ? 2 : 1;
 
-    // Games center column — colors follow court sides (left team color left, right team color right)
-    var _gamesLeftStr = leftTeam === 1 ? gamesP1Str : gamesP2Str;
-    var _gamesRightStr = rightTeam === 1 ? gamesP1Str : gamesP2Str;
     // ── AS CORES DO PLACAR SÃO AS CORES DE TUDO (dono, 03/ago/2026): "as cores dos
     // games e sets deveriam ser as mesmas do placar, tanto em pé como em deitado."
     // Antes eram DUAS paletas: a placa usava azul/vermelho ESCUROS (porque o fundo dela
@@ -6468,35 +6366,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // fundo escuro: ele é o que dá impacto às placas". Era OPINIÃO MINHA gravada
     // como se fosse a decisão do dono, e ela custou caro: ele pediu placa de gelo
     // no GAMES/SETS, eu entreguei só a TINTA e dei o assunto por encerrado no
-    // comentário. GAMES e SETS agora têm placa de gelo também (_liveIcePlate).
+    // comentário. GAMES e SETS ganharam placa de gelo também — hoje ela é a
+    // `.ls-games-plate` dentro de `_lsTeamBox` (o redesenho da v1.7.58 dissolveu as
+    // pílulas soltas que a antiga `_liveIcePlate` desenhava).
     // O par de tons abaixo continua valendo e é o que torna isso barato: ele foi
     // escolhido pra ler NOS DOIS fundos, então mudar o fundo não mexeu na tinta.
+    // Quem resolve a cor por time é `_lsNumClr`, fonte ÚNICA nas duas orientações.
     var LIVE_NUM_1 = '#2667FF', LIVE_NUM_2 = '#DB3027';
-    var _gamesLeftClr = leftTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2;
-    var _gamesRightClr = rightTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2;
-    // v1.7.54: aqui morava `gamesCenter` (`.live-games-box`) — montado e NUNCA
-    // consumido por ninguém (conferido por varredura: só a declaração e a
-    // atribuição existiam). Era uma SEGUNDA definição da caixa de GAMES, com o
-    // fundo escuro velho, ao lado da definição viva. Removido: um decoy desses é
-    // exatamente o que faz o próximo leitor "consertar" o lugar errado.
-    // Quem desenha GAMES de verdade: `_topBlock` (em pé) e `_lsGames` (deitado).
-
-    // Score plate builder — extra large for visibility from afar.
-    // v1.3.66-beta: orange background + white text at deuce (40-40).
-    var _buildPlate = function(player) {
-      var clr = player === 1 ? 'rgba(59,130,246,0.25)' : 'rgba(239,68,68,0.25)';
-      var display = player === 1 ? p1Display : p2Display;
-      var plateBg = _isDeuce ? '#f97316' : '#fff';
-      var plateClr = _isDeuce ? '#fff' : '#111';
-      // v4.5.31: a placa BRANCA abraça o número (height:auto). Raio e padding
-      // FIXOS (não escalam com o slider — senão só cresceria vazio/arredondamento).
-      // O número preenche a MAIOR parte da placa; _fitLivePlateText dimensiona por
-      // referência FIXA de 2 dígitos → 0/15/30/40/AD TODOS no MESMO tamanho e peso.
-      // overflow:hidden é rede de segurança contra estouro em escalas extremas.
-      return '<div class="ls-plate-box" style="width:100%;height:auto;background:' + plateBg + ';border-radius:16px;padding:3px 8px;box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
-        '<span class="ls-plate-num" style="font-size:calc(clamp(3rem,30vw,9rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
-      '</div>';
-    };
 
     // v4.5.33: dimensiona o número das metades (.ls-score-half) medindo a FONTE
     // REAL — cria um "40" invisível a 100px, mede a largura de 2 dígitos e calcula
@@ -6505,84 +6381,6 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // (a referência é sempre "40", não o valor atual → sem glitch por conteúdo),
     // e o slider "Placar" cresce até ~99% e trava (não clipa). Mede clientWidth em
     // DUPLO RAF (layout assentado). Também limita pela altura da metade.
-    // ── Ajuste do vão em PAISAGEM (v1.6.88) ────────────────────────────────────
-    // Ordem de prioridade, na ordem em que o dono pediu:
-    //  1. o GAMES ocupa as duas linhas do vão (quase encosta em cima e nas placas);
-    //  2. o centro é RESERVADO — o conjunto fica no eixo exato da tela;
-    //  3. o nome CEDE FONTE antes de truncar (encolhe até 72%, foto junto).
-    // Sem (3) o nome longo era coberto pelo GAMES; com corte duro, "Kelly Barth"
-    // virava "Kelly B…" numa dupla comum. Esta ordem é a única que passou nos
-    // quatro cenários medidos (duplas, simples, nome extenso, desktop).
-    var _lsFitVao = function(root) {
-      var vao = root.querySelector('#ls-vao');
-      if (!vao) return;
-      var games = root.querySelector('#ls-games');
-      var stacks = root.querySelectorAll('.court-side');
-      var col = vao.parentNode;
-      var H = col.clientHeight || 0, W = vao.clientWidth || 0;
-      if (H <= 0 || W <= 0 || !stacks.length) return;
-
-      // (a) nomes ocupam uma fatia FIXA da altura da tela — nunca "o vão
-      // disponível", que é justamente o que eles ocupam (limite circular: no
-      // desktop os nomes ficavam presos em 20px mesmo com a tela inteira sobrando).
-      var alvo = H * 0.26;
-      var fit = 1;
-      for (var p = 0; p < 6; p++) {
-        var alta = 0;
-        for (var s = 0; s < stacks.length; s++) alta = Math.max(alta, stacks[s].offsetHeight);
-        if (alta <= 0) break;
-        var k = alvo / alta;
-        if (Math.abs(k - 1) < 0.02) break;
-        fit = Math.max(0.72, Math.min(2.2, fit * k));
-        vao.style.setProperty('--live-name-fit', fit);
-        for (var z = 0; z < stacks.length; z++) {
-          var avs = stacks[z].querySelectorAll('.live-av-wrap');
-          for (var a = 0; a < avs.length; a++) avs[a].style.zoom = fit;
-        }
-      }
-
-      if (!games) return;
-      // (b) o GAMES enche a altura do vão
-      var gnums = games.querySelectorAll('.ls-g-num');
-      var _fitGames = function() {
-        var vh = vao.clientHeight - 12;
-        for (var g = 0; g < 6 && vh > 20; g++) {
-          var gh = games.offsetHeight;
-          if (gh <= 0) break;
-          var kg = vh / gh;
-          if (Math.abs(kg - 1) < 0.02) break;
-          for (var gi = 0; gi < gnums.length; gi++) {
-            var fg = parseFloat(getComputedStyle(gnums[gi]).fontSize) * kg;
-            gnums[gi].style.fontSize = fg + 'px';
-          }
-          vh = vao.clientHeight - 12;
-        }
-      };
-      _fitGames();
-
-      // (c) folga lateral: quem passou do limite recua a fonte (nunca trunca antes)
-      var FOLGA = 20;
-      for (var t = 0; t < 5; t++) {
-        var gr = games.getBoundingClientRect(), ok = true;
-        for (var i = 0; i < stacks.length; i++) {
-          var rr = stacks[i].getBoundingClientRect();
-          var sobra = (rr.left < gr.left) ? (gr.left - rr.right) : (rr.left - gr.right);
-          if (sobra < FOLGA && fit > 0.72) {
-            ok = false;
-            fit = Math.max(0.72, fit * 0.94);
-          }
-        }
-        if (ok) break;
-        vao.style.setProperty('--live-name-fit', fit);
-        for (var z2 = 0; z2 < stacks.length; z2++) {
-          var avs2 = stacks[z2].querySelectorAll('.live-av-wrap');
-          for (var a2 = 0; a2 < avs2.length; a2++) avs2[a2].style.zoom = fit;
-        }
-        // o nome encolheu → o vão encolheu → o GAMES precisa ser refeito, senão
-        // ele sobra pra baixo e INVADE a placa (medido: -3px com nome extenso).
-        _fitGames();
-      }
-    };
 
     // ── Peso do número (v1.6.88) ───────────────────────────────────────────────
     // O peso do tipo já era 900 (o máximo do sistema). O que faz o número parecer
@@ -6778,81 +6576,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       window.addEventListener('orientationchange', _lsRefit);
     }
 
-    // Buttons column builder
-    var _buildBtns = function(player) {
-      if (state.isFinished) return '';
-      return '<div style="width:100%;display:flex;flex-direction:column;">' + _upBtn(player) + _downBtn(player) + '</div>';
-    };
-
-    // Column backgrounds with team color at 50% opacity
-    var leftBg = leftTeam === 1 ? 'rgba(59,130,246,0.12)' : 'rgba(239,68,68,0.12)';
-    var rightBg = rightTeam === 1 ? 'rgba(59,130,246,0.12)' : 'rgba(239,68,68,0.12)';
-    var leftBdr = leftTeam === 1 ? 'rgba(59,130,246,0.20)' : 'rgba(239,68,68,0.20)';
-    var rightBdr = rightTeam === 1 ? 'rgba(59,130,246,0.20)' : 'rgba(239,68,68,0.20)';
-
     // Swap hint — só quando lados FIXOS (com fixSides OFF os lados seguem o
     // sacador automaticamente, então arrastar não faz sentido).
     var swapHint = (!state.isFinished && _liveScorePrefs.fixSides) ? '<div style="text-align:center;font-size:0.55rem;color:var(--text-muted);opacity:0.5;margin-top:4px;">← arraste para trocar lado →</div>' : '';
 
-    // ─────────────────────────────────────────────────────────────────────
-    // v4.5.39: MODELO ÚNICO (Apple Watch) — os MESMOS construtores em RETRATO
-    // e PAISAGEM. Só o ARRANJO muda (retrato empilha; paisagem põe nomes nas
-    // laterais e as metades grandes no meio). Antes a paisagem usava layout
-    // velho (placas brancas + ▲/▼) → inconsistente. Agora tudo consistente.
-    // SETS COMPLETOS apenas (false) → respeita a config de games/set.
-    var _setsLeftN = 0, _setsRightN = 0;
-    try { _setsLeftN = _setsWon(leftTeam, false); _setsRightN = _setsWon(rightTeam, false); } catch (e) {}
-    var _showSets = useSets;
-    var _setsLine = _showSets
-      ? _liveIcePlate(
-          '<span style="font-size:0.72rem;font-weight:700;letter-spacing:1px;color:' + LIVE_ICE_LABEL + ';text-transform:uppercase;">Sets</span>' +
-          '<div style="display:flex;align-items:center;gap:11px;margin-top:1px;">' +
-            '<span style="font-size:calc(clamp(2rem,9vw,3.4rem) * var(--live-score-scale,1));font-weight:800;color:' + (leftTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
-            '<span style="font-size:1.05rem;color:' + LIVE_ICE_DASH + ';">–</span>' +
-            '<span style="font-size:calc(clamp(2rem,9vw,3.4rem) * var(--live-score-scale,1));font-weight:800;color:' + (rightTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>' +
-          '</div>',
-          'margin-bottom:5px;')
-      : '';
-    // GAMES menor em paisagem (altura curta → usa vh); retrato usa vw.
-    // O espaço que sobrava de branco nas placas vira TAMANHO aqui (dono: "se os números
-    // não podem ser maiores, vamos diminuir as placas para dar mais espaço para aumentar
-    // os games e sets proporcionalmente"). GAMES sobe de 14.4vw pra 18vw no retrato.
-    var _gBig  = isLandscape ? 'clamp(2rem,7vh,3.4rem)' : 'clamp(4.6rem,24vw,9rem)';
-    var _gDash = isLandscape ? 'clamp(1.2rem,4vh,2rem)' : 'clamp(2.2rem,7.2vw,3.6rem)';
-    // O espaço que a placa devolveu sobe pra cá: este bloco ESTICA (flex:1) e centraliza,
-    // então SETS/GAMES ficam no meio do respiro em vez de deixar um vazio preto embaixo.
-    // Em paisagem ele continua com altura de conteúdo (lá o layout é outro).
-    var _topBlock = showGamesBox
-      ? '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;' +
-          'padding:clamp(6px,1.4vh,14px) 0 clamp(4px,1vh,9px);">' +
-          _setsLine +
-          _liveIcePlate(
-            '<span style="font-size:0.78rem;font-weight:700;color:' + LIVE_ICE_LABEL + ';text-transform:uppercase;letter-spacing:1px;">Games</span>' +
-            '<div style="display:flex;align-items:center;gap:clamp(12px,3.6vw,22px);margin-top:1px;">' +
-              '<span style="font-size:calc(' + _gBig + ' * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-              '<span style="font-size:calc(' + _gDash + ' * var(--live-score-scale,1));font-weight:300;color:' + LIVE_ICE_DASH + ';">–</span>' +
-              '<span style="font-size:calc(' + _gBig + ' * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
-            '</div>') +
-        '</div>'
-      : '';
-    // Metade tocável por time (cor do time, tinta de fundo, número colorido).
-    // A metade INTEIRA é o botão +1. Sem placa branca, sem ▲/▼.
-    // v1.6.88 — PLACA DE GELO (dono: "quero a placa branca no 15-0 de volta… fundo
-    // gelo, não branco absoluto, para tentar mais contraste"). A metade inteira é a
-    // placa; a tinta escurece porque azul/vermelho CLAROS sobre gelo cairiam pra
-    // ~2,4:1 de contraste (sobre o fundo escuro davam 5,9:1). Medido: #123A9E dá
-    // 8,6:1 e #9B1414 dá 7,3:1 sobre #EAF0F6 — segue azul e vermelho, e legível
-    // em quadra sob sol. A cor do time continua nos nomes e na borda da placa.
-    var _scoreHalf = function(team) {
-      var clr = team === 1 ? LIVE_NUM_1 : LIVE_NUM_2;
-      var edge = team === 1 ? 'rgba(38,103,255,0.38)' : 'rgba(219,48,39,0.34)';
-      var display = team === 1 ? p1Display : p2Display;
-      var tag = state.isFinished ? 'div' : 'button';
-      var act = state.isFinished ? '' : 'onclick="window._liveScorePoint(' + team + ')" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'"';
-      return '<' + tag + ' class="ls-score-half" ' + act + ' style="flex:1;min-width:0;height:100%;border:1px solid ' + edge + ';cursor:' + (state.isFinished ? 'default' : 'pointer') + ';background:' + LIVE_ICE + ';border-radius:16px;display:flex;align-items:center;justify-content:center;padding:0;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform 0.08s;">' +
-        '<span class="ls-plate-num" style="font-size:clamp(2.5rem,16vw,7rem);font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;transform:scaleY(1.35);transform-origin:center;">' + display + '</span>' +
-      '</' + tag + '>';
-    };
     // Desfazer — ÚNICO botão, full-width, abaixo de tudo (safe-area).
     // v1.6.88: altura PROPORCIONAL (vh) em vez de 13px fixos. O fixo pesava 11,7%
     // da tela no celular DEITADO (onde falta altura) e 5,4% em pé — agora encolhe
@@ -7021,83 +6748,6 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
 
     if (isLandscape) {
-      // ── PAISAGEM (v4.5.41): SETS/GAMES compactos NO TOPO (liberam o centro);
-      // cada time = NOME em UMA LINHA ("P1 / P2", avatar por jogador) em cima +
-      // PLACAR colorido GRANDE embaixo. Sem scaleY (o fit deixa o número encher a
-      // altura da metade larga → muito maior que no 3-colunas). Time DIREITO
-      // espelhado (nome à esquerda, foto à DIREITA, alinhado à direita).
-      // Nomes EMPILHADOS, um sobre o outro, cada time do seu lado (v1.6.88).
-      // Com o SETS fora do corpo, a linha que sobrou é usada em altura pelos
-      // nomes (mais legíveis de longe) em vez de esticar numa linha só.
-      var _lsNameStack = function(team, mirror) {
-        var players = team === 1 ? p1Players : p2Players;
-        var nameClr = team === 1 ? '#DBEAFE' : '#FECACA';
-        var bgClr = team === 1 ? 'rgba(59,130,246,0.12)' : 'rgba(239,68,68,0.12)';
-        var bdrClr = team === 1 ? 'rgba(59,130,246,0.30)' : 'rgba(239,68,68,0.30)';
-        var _ballShown = false, rows = [];
-        for (var ni = 0; ni < players.length; ni++) {
-          var pn = players[ni], isServing = false;
-          if (serverInfo && !state.isFinished && serverInfo.team === team) {
-            if (serverInfo.pIdx != null) isServing = (serverInfo.pIdx === ni);
-            else if (serverInfo.name === pn && !_ballShown) isServing = true;
-            if (isServing) _ballShown = true;
-          }
-          var fullName = window._safeHtml(pn);
-          var avatar = '<span class="live-av-wrap" style="display:inline-flex;flex:0 0 auto;">' + _liveAvatarHtml(pn, 24) + '</span>';
-          // --live-name-fit é o fator que o ajuste de layout escreve; --live-name-scale
-          // continua sendo o slider do usuário. Multiplicam-se — o slider nunca morre.
-          var nameSpan = '<span onclick="window._liveEditName(' + team + ',' + ni + ')" style="cursor:pointer;font-size:calc(clamp(0.85rem,2.4vw,1.15rem) * var(--live-name-scale,1) * var(--live-name-fit,1));font-weight:' + (isServing ? '800' : '700') + ';color:' + (isServing ? '#fbbf24' : nameClr) + ';white-space:nowrap;line-height:1.15;">' + fullName + '</span>';
-          var ballHtml = '';
-          if (isServing) {
-            var dragAttr = _canDragServe ? ' draggable="true" data-serve-ball="true"' : '';
-            var dragStyle = _canDragServe ? 'cursor:grab;' : 'cursor:default;';
-            var ballGlow = _canDragServe ? 'filter:drop-shadow(0 0 4px rgba(255,200,0,0.6));' : 'filter:drop-shadow(0 0 2px rgba(255,200,0,0.3));opacity:0.85;';
-            ballHtml = '<span' + dragAttr + ' data-serve-drop="' + team + '-' + ni + '" style="font-size:calc(0.9rem * var(--live-name-fit,1));line-height:1;flex:0 0 auto;' + dragStyle + ballGlow + '">' + _sportBall + '</span>';
-          }
-          // a bolinha fica NA LINHA de quem saca (empilhado, ela sozinha numa
-          // linha própria ficava órfã no topo do bloco).
-          var inner = mirror ? (nameSpan + avatar + ballHtml) : (ballHtml + avatar + nameSpan);
-          rows.push('<span data-serve-drop="' + team + '-' + ni + '" style="display:flex;align-items:center;gap:5px;min-width:0;justify-content:' + (mirror ? 'flex-end' : 'flex-start') + ';">' + inner + '</span>');
-        }
-        return '<div class="court-side" data-court-side="' + (mirror ? 'right' : 'left') + '" style="flex:0 0 auto;max-width:40%;display:flex;flex-direction:column;gap:4px;align-items:' + (mirror ? 'flex-end' : 'flex-start') + ';padding:6px 10px;background:' + bgClr + ';border:1px solid ' + bdrClr + ';border-radius:12px;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' + rows.join('') + '</div>';
-      };
-      // GAMES no MIOLO do vão: rótulo pequeno ENTRE os números (no lugar do
-      // traço), conjunto no eixo exato da tela, ocupando as duas linhas — quase
-      // encostando na barra de cima e nas placas. pointer-events:none pra não
-      // roubar o toque das metades.
-      // v1.7.54: vira placa de gelo. O `_fitGames` mede `offsetHeight` e escala a
-      // fonte por RAZÃO, em laço — o respiro da placa entra na medida e ele
-      // reconverge sozinho (os números cedem os poucos px do padding). Por isso o
-      // padding vertical aqui é curto: no vão deitado cada pixel é disputado.
-      var _lsGames = showGamesBox
-        ? _liveIcePlate(
-            '<span class="ls-g-num" style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-            '<span style="font-size:0.6rem;font-weight:700;letter-spacing:0.14em;color:' + LIVE_ICE_LABEL + ';text-transform:uppercase;line-height:1;flex:0 0 auto;">Games</span>' +
-            '<span class="ls-g-num" style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>',
-            'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);flex-direction:row;' +
-            'gap:clamp(8px,1.4vw,16px);z-index:2;pointer-events:none;' +
-            'padding:4px clamp(10px,1.8vw,18px);border-radius:12px;',
-            'ls-games')
-        : '';
-      // SETS sobe pra barra superior (fora do corpo) — libera a linha inteira.
-      var _hdrSets = document.getElementById('live-hdr-sets');
-      if (_hdrSets) {
-        if (_showSets) {
-          // v1.7.54: pílula de gelo na barra de cima — mesma pele das outras três.
-          _hdrSets.innerHTML = _liveIcePlate(
-            '<span style="font-size:0.72rem;font-weight:700;letter-spacing:1px;color:' + LIVE_ICE_LABEL + ';text-transform:uppercase;">Sets</span>' +
-            '<span style="font-size:1.15rem;font-weight:800;color:' + (leftTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
-            '<span style="font-size:0.85rem;color:' + LIVE_ICE_DASH + ';">–</span>' +
-            '<span style="font-size:1.15rem;font-weight:800;color:' + (rightTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>',
-            'flex-direction:row;gap:7px;padding:2px 11px 3px;border-radius:10px;');
-          _hdrSets.style.display = 'flex';
-        } else {
-          _hdrSets.innerHTML = ''; _hdrSets.style.display = 'none';
-        }
-      }
-      // Duas linhas: (1) vão com nomes nas pontas + GAMES no meio; (2) placas.
-      // Separá-las é o que garante PLACAS SEMPRE IGUAIS: elas dividem a mesma
-      // linha flex, então nome mais alto de um lado não encolhe a placa dele.
       // ── DEITADO (redesenho 06/ago/2026) ────────────────────────────────────
       // Espelho do em pé: aqui sobra largura e falta altura, então as caixas ficam
       // LADO A LADO. Dentro de cada uma: 40% em cima (nomes + fotos + games/sets) e
@@ -7131,18 +6781,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
         '</div>';
       setTimeout(function() { _setupCourtSwapDrag(); }, 30);
     } else {
-      // ── PORTRAIT: 5 linhas proporcionais preenchendo a tela inteira ──
-      // Ordem: Games+Desfazer → Times → Placares → Botões ↑ → Botões ↓
-      // v1.6.88: em pé o SETS continua no corpo (bloco _topBlock) — o slot do
-      // cabeçalho é só de paisagem. Sem este reset, girar paisagem→retrato
-      // deixaria o SETS duplicado (um no topo, outro no corpo).
+      // Em pé o SETS vive DENTRO da placa de games da caixa do time; o slot
+      // #live-hdr-sets do cabeçalho não é usado por nenhuma das duas orientações
+      // desde a v1.7.58, mas o reset continua porque ele é o que impede um SETS
+      // órfão de sobrar no topo ao girar (o elemento segue no DOM do overlay).
       var _hdrSetsP = document.getElementById('live-hdr-sets');
       if (_hdrSetsP) { _hdrSetsP.innerHTML = ''; _hdrSetsP.style.display = 'none'; }
       container.style.overflow = 'hidden';
       container.style.padding = '0';
 
-      // v4.5.39: construtores agora são COMPARTILHADOS (definidos antes do split
-      // isLandscape) — _topBlock, _scoreHalf, _undoBar, _gameLabelRow, _portFinishRow.
+      // Construtores COMPARTILHADOS com a paisagem (definidos antes do split
+      // isLandscape): _lsTeamBox, _undoBar, _gameLabelRow, _portFinishRow.
       // ── EM PÉ (redesenho 06/ago/2026) ──────────────────────────────────────
       // Cada dupla vira uma CAIXA COLORIDA de METADE DA TELA, com nomes, games/sets
       // e o ponto dentro. O SACADOR fica em cima. A sobra da caixa vai pra placa do

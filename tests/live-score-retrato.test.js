@@ -40,8 +40,22 @@ console.log('\n── uma paleta só, e ela LÊ nos dois fundos ──');
   const semNumeros = src.slice(src.indexOf('var LIVE_NUM_1'), src.indexOf('window._fitLivePlateText'));
   ok(!/#60A5FA|#F87171|#123A9E|#9B1414/i.test(semNumeros),
      'nenhuma cor de número solta sobrou no bloco do placar — todas saem do par');
-  ok((src.match(/leftTeam === 1 \? LIVE_NUM_1 : LIVE_NUM_2/g) || []).length >= 2,
-     'SETS usa o par em pé E deitado (o pedido era "tanto em pé como deitado")');
+  // ⚠️ ASSERÇÃO REVISADA DE PROPÓSITO (v1.7.59, limpeza dos órfãos do redesenho)
+  // Ela contava 2+ ocorrências de `leftTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2` — uma no
+  // SETS do retrato (`_setsLine`) e outra no SETS do cabeçalho da paisagem. As duas
+  // eram CÓPIAS da mesma decisão, e as duas morreram no redesenho da v1.7.58: o SETS
+  // deixou de ser pílula solta e passou a viver dentro da placa de games da caixa do
+  // time. Contar cópias virou impossível porque não sobrou cópia nenhuma.
+  // O que a asserção protegia — a cor do número sai do par canônico NAS DUAS
+  // ORIENTAÇÕES — segue travado, e mais forte: existe UM resolvedor (`_lsNumClr`) e UM
+  // construtor (`_lsTeamBox`), chamado nos dois ramos. Duas cópias não divergem quando
+  // não há duas cópias.
+  ok(/_lsNumClr = function\([^)]*\) \{ return \w+ === 1 \? LIVE_NUM_1 : LIVE_NUM_2/.test(src),
+     'a cor do número tem UM resolvedor, e ele sai do par canônico');
+  ok(/var c = _lsNumClr\(team\)/.test(src),
+     'e é ele que pinta games, sets e ponto dentro da caixa do time');
+  ok((src.match(/_lsTeamBox\(/g) || []).length >= 5,
+     'o MESMO construtor serve em pé E deitado (1 declaração + 2 chamadas em cada ramo)');
 }
 
 console.log('\n── a placa abraça o número; o número NÃO muda de tamanho ──');
@@ -85,20 +99,53 @@ console.log('\n── redesenho: caixas de metade da tela, sem espaçador ──
      'o bloco SETS/GAMES voltou a ter altura de conteúdo (não estica mais)');
 }
 
-console.log('\n── GAMES e SETS cresceram, e a paisagem não foi mexida ──');
+// ⚠️ BLOCO REVISADO DE PROPÓSITO (v1.7.59, limpeza dos órfãos do redesenho)
+// As quatro asserções liam `_gBig`/`_gDash` — dois clamps CSS cravados à mão, um por
+// orientação — e o clamp do SETS. Os três viviam em `_topBlock`/`_setsLine`/`_lsGames`,
+// construtores que o redesenho da v1.7.58 aposentou e que ficaram órfãos no arquivo.
+// O redesenho trocou tamanho CRAVADO por tamanho DERIVADO DA ÁREA (cânone de escala por
+// área): `_lsSizes(innerW, innerH, k, orient)` calcula tudo a partir do espaço real da
+// caixa. Cada asserção antiga foi remapeada pro invariante que ela defendia:
+//   (a) "GAMES tem tamanho por orientação"      → o parâmetro `orient`
+//   (b) "retrato subiu de 14.4vw"               → o corpo cresce até o teto de largura
+//   (c) "paisagem intacta, lógica é outra"      → banda fixa de 40% só no 'land'
+//   (d) "e o SETS acompanhou"                   → setPx sai de gamePx, não de um 2º clamp
+console.log('\n── GAMES/SETS: tamanho derivado da ÁREA, por orientação ──');
 {
-  const g = src.match(/var _gBig\s*=\s*isLandscape \? '([^']+)' : '([^']+)'/);
-  ok(!!g, 'GAMES tem tamanho por orientação');
-  ok(g && g[1] === 'clamp(2rem,7vh,3.4rem)', 'paisagem intacta — lá a altura é escassa e a lógica é outra');
-  const vw = g && g[2].match(/(\d+(?:\.\d+)?)vw/);
-  ok(vw && parseFloat(vw[1]) > 14.4, 'retrato subiu de 14.4vw para ' + (vw && vw[1]) + 'vw');
-  ok(/clamp\(2rem,9vw,3\.4rem\)/.test(src), 'e o SETS acompanhou');
+  const sz = src.slice(src.indexOf('function _lsSizes('), src.indexOf('var _lsTint'));
+  ok(sz.length > 200, 'existe UM cálculo de tamanhos do placar');
+  ok(/function _lsSizes\(innerW, innerH, k, orient\)/.test(sz),
+     '(a) o tamanho é função da ÁREA disponível + orientação — nada de px cravado');
+  ok(/orient === 'land' \? Math\.round\(innerH \* 0\.40\) : 0/.test(sz),
+     '(c) só o deitado reserva banda fixa — lá a altura é escassa e a lógica é outra');
+  ok(/while \(gamePx < 2000 && cabe\(gamePx \+ 1\)\) gamePx\+\+/.test(sz),
+     '(b) o GAMES cresce até o maior corpo que ainda cabe');
+  ok(/var gamesH = Math\.round\(_lsInk\('0', gamePx\) \/ 0\.90\)/.test(sz),
+     'e a placa ABRAÇA o número (90% de tinta) — era esse o desperdício que o dono cobrou');
+  ok(/var setPx = Math\.round\(gamePx \* 0\.33\)/.test(sz),
+     '(d) o SETS acompanha o GAMES por construção, não por um segundo clamp');
 }
 
-console.log('\n── nomes maiores, foto proporcional ──');
+// ⚠️ BLOCO REVISADO DE PROPÓSITO (v1.7.59, limpeza dos órfãos do redesenho)
+// As duas asserções liam `_liveAvatarHtml(pn, 38)` e o clamp `0.86rem/3.5vw/1.12rem`,
+// os dois dentro de `_buildNameStack` — construtor aposentado pela v1.7.58 e órfão no
+// arquivo desde então. Eram dois números mágicos calibrados pra casar no 390px; o que o
+// dono pediu era a RELAÇÃO ("a foto acompanha a fonte, senão o nome cresce e o ícone
+// fica um botão perdido do lado"). Agora a relação é estrutural — o avatar é uma fração
+// do corpo do nome, calculada no mesmo ponto —, então não há dois números pra sair de
+// sincronia. Também trava a regra que a v1.6.88 pagou caro pra descobrir: o nome CEDE
+// FONTE antes de truncar.
+console.log('\n── nome e foto: uma medida só, proporcional ──');
 {
-  ok(/_liveAvatarHtml\(pn, 38\)/.test(src), 'a foto cresce junto com o nome (30 → 38px)');
-  ok(/clamp\(0\.86rem,3\.5vw,1\.12rem\)/.test(src), 'e o nome vai a 3.5vw');
+  const sz = src.slice(src.indexOf('function _lsSizes('), src.indexOf('var _lsTint'));
+  ok(/av = Math\.round\(fs \* 0\.85\)/.test(sz),
+     'a foto é uma FRAÇÃO do corpo do nome — proporcional por construção');
+  ok(/_liveAvatarHtml\(pn, av\)/.test(src),
+     'e é esse valor calculado que chega no avatar');
+  ok(!/_liveAvatarHtml\(pn, \d/.test(src),
+     'nenhum tamanho de foto cravado sobrou no placar ao vivo');
+  ok(/var f = sz\.fs; while \(f > 10 && _lsW\(pn, f, 700\) > util\) f--;/.test(src),
+     'e o nome CEDE FONTE até caber em vez de truncar (a regra que salva "Kelly Barth")');
 }
 
 console.log((fail ? '✗' : '✓') + ' live-score-retrato: ' + pass + ' passaram, ' + fail + ' falharam');
