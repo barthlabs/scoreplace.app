@@ -176,6 +176,10 @@ const SUITES = [
   // o espelho do roster (a rede contra perda de inscrito) não cobria a lista de espera,
   // não escrevia na 1ª gravação da sessão e nem era chamado pelo caminho de inscrição.
   'tests/espelho-do-roster-cobre-a-espera.test.js',
+  // O CICLO INTEIRO da espera de ponta a ponta (inscrever → desativar → reativar → W.O.
+  // → reverter → formar), pelo código real. Cada transição já tinha dono; ninguém rodava
+  // a cadeia — e é ENTRE uma e a seguinte que some gente.
+  'tests/ciclo-espera-desativado-wo.test.js',
   // o card do topo NUNCA pode contradizer o torneio: quem está na lista de espera,
   // desativado ou com W.O. lia "você não está inscrito" (dado REAL do Confra).
   'tests/meu-card-nunca-contradiz.test.js',
