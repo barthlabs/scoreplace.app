@@ -6868,6 +6868,158 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var _gameLabelRow = gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '';
     var _portFinishRow = finishBtn; finishBtn = '';
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // REDESENHO DO PLACAR (homologado tela a tela com o dono em 06/ago/2026)
+    // Cada dupla é uma CAIXA COLORIDA que envolve nomes, games/sets e o ponto.
+    // As regras abaixo foram todas MEDIDAS no desenho antes de virar código —
+    // e cada uma nasceu de um defeito real, anotado no ponto onde ela mora.
+    // ═══════════════════════════════════════════════════════════════════════
+    var _lsMeasure = document.createElement('canvas').getContext('2d');
+    var _LS_FAM = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    var _LS_REFS = ['0', '15', '30', '40'];   // pior caso: trocar 0→15→40 não mexe um pixel
+    function _lsW(txt, px, wt) { _lsMeasure.font = (wt || 900) + ' ' + px + 'px ' + _LS_FAM; return _lsMeasure.measureText(txt).width; }
+    function _lsWidest(px) { var m = 0; for (var i = 0; i < _LS_REFS.length; i++) m = Math.max(m, _lsW(_LS_REFS[i], px)); return m; }
+    // ⚠️ ALTURA DE TINTA (o glifo), não a caixa do texto. Um dígito ocupa ~73% do
+    // corpo da fonte: dimensionar pela caixa dava "90%" no papel e ~64% no olho —
+    // foi exatamente o que o dono viu e cobrou ("nem fodendo esse ponto está com 90%").
+    function _lsInk(txt, px) {
+      _lsMeasure.font = '900 ' + px + 'px ' + _LS_FAM;
+      var m = _lsMeasure.measureText(txt);
+      return (m.actualBoundingBoxAscent || 0) + (m.actualBoundingBoxDescent || 0);
+    }
+    function _lsBodyForInk(txt, alvo) { var r = _lsInk(txt, 100) / 100; return r > 0 ? Math.round(alvo / r) : Math.round(alvo); }
+    // Os QUATRO nomes entram no ajuste: a fonte é única, senão a dupla de nome mais
+    // curto sai maior e lê como "mais importante" (medido: 21px × 57px).
+    var _lsAllNames = (p1Players || []).concat(p2Players || []).map(function(n) { return String(n || ''); });
+    // Escala por ÁREA (cânone): definida na montagem, a partir do tamanho real do
+    // container. Tudo o mais é derivado dela — nada é cravado em px.
+    var _lsK = 1;
+    // Sets PASSADOS desse time, empilhados na placa de games. O set corrente é o
+    // último de state.sets, então ele fica de fora — quem o mostra é o número grande.
+    function _lsSetsFor(team) {
+      var out = [], arr = state.sets || [];
+      for (var i = 0; i < arr.length - 1; i++) out.push(String(team === 1 ? arr[i].gamesP1 : arr[i].gamesP2));
+      return out;
+    }
+    function _lsGamesFor(team) { return team === 1 ? (gamesP1Str || '0') : (gamesP2Str || '0'); }
+
+    // Calcula TODAS as medidas de uma caixa de time a partir da área que ela tem.
+    // Devolve um objeto; nenhum tamanho é cravado — tudo sai da área disponível.
+    function _lsSizes(innerW, innerH, k, orient) {
+      var GAP = Math.round(6 * k), RESP = Math.round(10 * k);
+      // Barreira 60/40 em LARGURA: é TETO, não divisão. Nem o bloco de nomes nem a
+      // placa de games passam do seu limite.
+      var tetoNome = Math.floor((innerW - GAP) * 0.60);
+      var tetoGames = Math.floor((innerW - GAP) * 0.40);
+      var nomeW = Math.min(tetoNome, innerW - tetoGames - GAP);
+
+      // Franjas: em pé a sobra vai pra placa do ponto (escolha do dono);
+      // deitado é 40% em cima / 60% embaixo, fixo.
+      var banda = orient === 'land' ? Math.round(innerH * 0.40) : 0;
+
+      // GAMES primeiro — ele define os LIMITES verticais dos nomes ("os nomes devem
+      // ficar dentro dos limites das placas de games/sets").
+      var gamePx = 8;
+      var cabe = function(g) {
+        var st = Math.round(g * 0.33);
+        return _lsW('0', g) + _lsW('0', st) + Math.round(g * 0.10) + RESP * 2 <= tetoGames;
+      };
+      while (gamePx < 2000 && cabe(gamePx + 1)) gamePx++;
+      var gamesH = Math.round(_lsInk('0', gamePx) / 0.90);   // a placa ABRAÇA o número
+      var tetoBanda = orient === 'land' ? banda : Math.round(innerH * 0.42);
+      if (gamesH > tetoBanda) { gamesH = tetoBanda; gamePx = _lsBodyForInk('0', gamesH * 0.90); }
+      var setPx = Math.round(gamePx * 0.33);                 // sets EMPILHADOS: 1 dígito de largura
+      if (orient !== 'land') banda = gamesH;
+
+      // NOME: ponto fixo entre fonte e avatar. ⚠️ Calcular o avatar a partir do TETO
+      // (antes do ajuste de largura) inflava o círculo e espremia o nome até ficar
+      // ilegível — foi o defeito que o dono pegou no deitado.
+      var linhaH = (gamesH - Math.round(8 * k)) / 2;
+      var fs = Math.min(Math.round(linhaH * 0.62), Math.round((orient === 'land' ? 34 : 44) * k));
+      var av, g2, bola, i, maior, util;
+      for (i = 0; i < 8; i++) {
+        av = Math.round(fs * 0.85); g2 = Math.round(av * 0.30); bola = Math.round(av * 0.30);
+        util = nomeW - Math.round(14 * k) - av - g2 * 2 - bola;
+        maior = 0;
+        for (var j = 0; j < _lsAllNames.length; j++) maior = Math.max(maior, _lsW(_lsAllNames[j], fs, 700));
+        if (maior <= util) break;
+        fs = Math.max(11, Math.floor(fs * (util / maior)));
+      }
+      av = Math.round(fs * 0.85); g2 = Math.round(av * 0.30); bola = Math.round(av * 0.30);
+      if (av > linhaH * 0.90) { av = Math.round(linhaH * 0.90); g2 = Math.round(av * 0.30); bola = Math.round(av * 0.30); }
+
+      // PONTO: em pé fica com toda a sobra da caixa; deitado com os 60%.
+      var pontoH = innerH - banda - GAP;
+      // ⚠️ E o corpo é RE-LIMITADO depois de a placa crescer: com o corpo definido só
+      // pela largura, a tinta chegava a 96% da altura (1px de folga, encostando).
+      var corpoP = _lsBodyForInk('40', pontoH * 0.90);
+      while (corpoP > 8 && _lsWidest(corpoP) > innerW - RESP * 2) corpoP--;
+
+      return { GAP: GAP, RESP: RESP, nomeW: nomeW, banda: banda, gamesH: gamesH,
+               gamePx: gamePx, setPx: setPx, linhaH: Math.round(linhaH),
+               fs: fs, av: av, g2: g2, bola: bola, pontoH: pontoH, corpoP: corpoP };
+    }
+
+    var _lsTint = function(t) { return t === 1 ? 'rgba(38,103,255,0.13)' : 'rgba(219,48,39,0.13)'; };
+    var _lsEdge = function(t) { return t === 1 ? 'rgba(38,103,255,0.42)' : 'rgba(219,48,39,0.42)'; };
+    var _lsNameClr = function(t) { return t === 1 ? '#DBEAFE' : '#FECACA'; };
+    var _lsNumClr = function(t) { return t === 1 ? LIVE_NUM_1 : LIVE_NUM_2; };
+    // contorno ótico: número escuro sobre gelo lê mais magro (regra da v1.6.88)
+    var _lsStroke = function(px, c) { return '-webkit-text-stroke:' + (px * 0.012).toFixed(2) + 'px ' + c + ';'; };
+
+    // Uma linha de jogador: [bola do saque] [avatar] [nome]. Quem NÃO saca não tem
+    // bola e herda essa largura; o avatar do sacador é 75% pra o nome dele não ficar
+    // menor que o dos outros. A bola é a da MODALIDADE e mede 30% do avatar.
+    function _lsNameRow(team, idx, sz, mirror) {
+      var players = team === 1 ? p1Players : p2Players;
+      var pn = players[idx];
+      var serving = !!(serverInfo && !state.isFinished && serverInfo.team === team &&
+                       (serverInfo.pIdx != null ? serverInfo.pIdx === idx : serverInfo.name === pn));
+      var av = serving ? Math.round(sz.av * 0.75) : sz.av;
+      var bolaPx = Math.round(av * 0.30);
+      var util = sz.nomeW - Math.round(14 * _lsK) - av - sz.g2 * (serving ? 2 : 1) - (serving ? bolaPx : 0);
+      var f = sz.fs; while (f > 10 && _lsW(pn, f, 700) > util) f--;
+      var avatar = '<span class="live-av-wrap" style="display:inline-flex;flex:0 0 auto;">' + _liveAvatarHtml(pn, av) + '</span>';
+      var nome = '<span onclick="window._liveEditName(' + team + ',' + idx + ')" class="ls-name" style="cursor:pointer;font-size:' + f + 'px;font-weight:' + (serving ? 800 : 700) + ';color:' + (serving ? '#fbbf24' : _lsNameClr(team)) + ';white-space:nowrap;line-height:1.1;">' + window._safeHtml(pn) + '</span>';
+      var bola = '';
+      if (serving) {
+        var drag = _canDragServe ? ' draggable="true" data-serve-ball="true"' : '';
+        bola = '<span' + drag + ' data-serve-drop="' + team + '-' + idx + '" style="font-size:' + bolaPx + 'px;line-height:1;flex:0 0 auto;' +
+               (_canDragServe ? 'cursor:grab;' : '') + 'filter:drop-shadow(0 0 4px rgba(255,200,0,0.6));">' + _sportBall + '</span>';
+      }
+      var inner = mirror ? (nome + avatar + bola) : (bola + avatar + nome);
+      return '<span data-serve-drop="' + team + '-' + idx + '" style="display:flex;align-items:center;height:' + sz.linhaH + 'px;gap:' + sz.g2 + 'px;min-width:0;justify-content:' + (mirror ? 'flex-end' : 'flex-start') + ';">' + inner + '</span>';
+    }
+
+    // A CAIXA DO TIME: envolve nomes, games/sets e o ponto. É também o alvo de
+    // arraste que troca os lados da quadra (.court-side), como antes.
+    function _lsTeamBox(team, mirror, sz, boxStyle) {
+      var players = team === 1 ? p1Players : p2Players;
+      var c = _lsNumClr(team);
+      var setsArr = _lsSetsFor(team);
+      var rows = ''; for (var i = 0; i < players.length; i++) rows += _lsNameRow(team, i, sz, mirror);
+      var blocoNomes =
+        '<div style="width:' + sz.nomeW + 'px;flex:0 0 ' + sz.nomeW + 'px;min-width:0;overflow:hidden;align-self:center;height:' + sz.gamesH + 'px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:' + (mirror ? 'flex-end' : 'flex-start') + ';">' + rows + '</div>';
+      var placaGames =
+        '<div class="ls-games-plate" style="flex:1 1 0;min-width:0;align-self:center;height:' + sz.gamesH + 'px;padding:0 ' + sz.RESP + 'px;background:' + LIVE_ICE + ';border:1px solid ' + LIVE_ICE_EDGE + ';border-radius:' + Math.round(14 * _lsK) + 'px;box-sizing:border-box;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:' + Math.round(sz.gamePx * 0.10) + 'px;">' +
+          (setsArr.length ? '<span style="display:flex;flex-direction:column;line-height:1.02;font-weight:900;opacity:0.5;font-size:' + sz.setPx + 'px;color:' + c + ';' + _lsStroke(sz.setPx, c) + '">' +
+            setsArr.map(function(v) { return '<span>' + v + '</span>'; }).join('') + '</span>' : '') +
+          '<span class="ls-g-num" style="font-size:' + sz.gamePx + 'px;font-weight:900;color:' + c + ';' + _lsStroke(sz.gamePx, c) + 'font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + _lsGamesFor(team) + '</span>' +
+        '</div>';
+      var tag = state.isFinished ? 'div' : 'button';
+      var act = state.isFinished ? '' : 'onclick="window._liveScorePoint(' + team + ')" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'"';
+      var placaPonto =
+        '<' + tag + ' class="ls-score-half" ' + act + ' style="width:100%;height:' + sz.pontoH + 'px;border:1px solid ' + LIVE_ICE_EDGE + ';cursor:' + (state.isFinished ? 'default' : 'pointer') + ';background:' + LIVE_ICE + ';border-radius:' + Math.round(16 * _lsK) + 'px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:' + sz.RESP + 'px;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform 0.08s;">' +
+          '<span class="ls-plate-num" style="font-size:' + sz.corpoP + 'px;font-weight:900;color:' + c + ';' + _lsStroke(sz.corpoP, c) + 'font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + (team === 1 ? p1Display : p2Display) + '</span>' +
+        '</' + tag + '>';
+      return '<div class="court-side" data-court-side="' + (mirror ? 'right' : 'left') + '" style="' + boxStyle +
+        'box-sizing:border-box;display:flex;flex-direction:column;gap:' + sz.GAP + 'px;background:' + _lsTint(team) + ';border:1px solid ' + _lsEdge(team) + ';border-radius:' + Math.round(18 * _lsK) + 'px;padding:' + Math.round(10 * _lsK) + 'px;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
+        '<div style="display:flex;gap:' + sz.GAP + 'px;height:' + sz.banda + 'px;">' +
+          (mirror ? placaGames + blocoNomes : blocoNomes + placaGames) +
+        '</div>' + placaPonto +
+      '</div>';
+    }
+
     if (isLandscape) {
       // ── PAISAGEM (v4.5.41): SETS/GAMES compactos NO TOPO (liberam o centro);
       // cada time = NOME em UMA LINHA ("P1 / P2", avatar por jogador) em cima +
@@ -6946,24 +7098,37 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Duas linhas: (1) vão com nomes nas pontas + GAMES no meio; (2) placas.
       // Separá-las é o que garante PLACAS SEMPRE IGUAIS: elas dividem a mesma
       // linha flex, então nome mais alto de um lado não encolhe a placa dele.
+      // ── DEITADO (redesenho 06/ago/2026) ────────────────────────────────────
+      // Espelho do em pé: aqui sobra largura e falta altura, então as caixas ficam
+      // LADO A LADO. Dentro de cada uma: 40% em cima (nomes + fotos + games/sets) e
+      // 60% embaixo (a placa do ponto). Os GAMES ficam voltados pro CENTRO da tela e
+      // os nomes nos cantos externos — o time da direita é espelhado.
+      // O SETS do cabeçalho sai de cena: ele agora vive dentro da placa de games.
+      var _hdrOff = document.getElementById('live-hdr-sets');
+      if (_hdrOff) { _hdrOff.innerHTML = ''; _hdrOff.style.display = 'none'; }
+      var _lw = container.clientWidth || window.innerWidth;
+      var _lh = container.clientHeight || window.innerHeight;
+      _lsK = Math.min(_lw / 844, _lh / 390);
+      var _lPad = Math.round(10 * _lsK), _lGap = Math.round(6 * _lsK);
+      var _lChrome = gameLabel ? Math.round(20 * _lsK) : 0;
+      var _lUndo = Math.round(56 * _lsK);
+      var _lBoxH = Math.max(120, _lh - _lChrome - _lUndo);
+      var _lBP = Math.round(10 * _lsK);
+      var _lBoxW = Math.floor((_lw - _lPad * 2 - _lGap) / 2);
+      var _lSz = _lsSizes(_lBoxW - _lBP * 2, _lBoxH - _lBP * 2, _lsK, 'land');
+      var _lBoxStyle = 'width:' + _lBoxW + 'px;height:' + _lBoxH + 'px;flex:0 0 auto;';
+
       container.innerHTML =
         '<div style="display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;gap:0;">' +
           _gameLabelRow +
-          '<div id="ls-vao" style="position:relative;flex:0 0 auto;display:flex;align-items:stretch;justify-content:space-between;width:100%;gap:8px;padding:clamp(4px,1vh,8px) clamp(6px,1.5vw,12px) clamp(3px,0.8vh,6px);">' +
-            _lsNameStack(leftTeam, false) +
-            _lsNameStack(rightTeam, true) +
-            _lsGames +
-          '</div>' +
-          '<div style="flex:1;min-height:0;display:flex;align-items:stretch;width:100%;gap:8px;padding:0 clamp(6px,1.5vw,12px) 4px;">' +
-            _scoreHalf(leftTeam) +
-            _scoreHalf(rightTeam) +
+          '<div style="flex:1 1 auto;display:flex;gap:' + _lGap + 'px;padding:0 ' + _lPad + 'px;min-height:0;">' +
+            _lsTeamBox(leftTeam, false, _lSz, _lBoxStyle) +
+            _lsTeamBox(rightTeam, true, _lSz, _lBoxStyle) +
           '</div>' +
           swapHint +
           _undoBar +
           _portFinishRow +
         '</div>';
-      _lsFitVao(container);
-      _fitLivePlateText();
       setTimeout(function() { _setupCourtSwapDrag(); }, 30);
     } else {
       // ── PORTRAIT: 5 linhas proporcionais preenchendo a tela inteira ──
@@ -6978,63 +7143,37 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
       // v4.5.39: construtores agora são COMPARTILHADOS (definidos antes do split
       // isLandscape) — _topBlock, _scoreHalf, _undoBar, _gameLabelRow, _portFinishRow.
+      // ── EM PÉ (redesenho 06/ago/2026) ──────────────────────────────────────
+      // Cada dupla vira uma CAIXA COLORIDA de METADE DA TELA, com nomes, games/sets
+      // e o ponto dentro. O SACADOR fica em cima. A sobra da caixa vai pra placa do
+      // ponto (escolha do dono entre as três opções desenhadas).
+      var _pw = container.clientWidth || window.innerWidth;
+      var _ph = container.clientHeight || window.innerHeight;
+      _lsK = Math.min(_pw / 390, _ph / 844);
+      var _pPad = Math.round(8 * _lsK), _pGap = Math.round(6 * _lsK);
+      var _pChrome = (setsRow ? Math.round(26 * _lsK) : 0) + (gameLabel ? Math.round(20 * _lsK) : 0);
+      var _pUndo = Math.round(56 * _lsK);
+      var _pAvail = Math.max(120, _ph - _pChrome - _pUndo);
+      var _pBoxH = Math.floor((_pAvail - _pGap) / 2);
+      var _pBP = Math.round(10 * _lsK);
+      var _pInnerW = _pw - _pPad * 2 - _pBP * 2;
+      var _pInnerH = _pBoxH - _pBP * 2;
+      var _pSz = _lsSizes(_pInnerW, _pInnerH, _lsK, 'port');
+      // sacador SEMPRE em cima
+      var _pTop = (serverInfo && serverInfo.team === rightTeam) ? rightTeam : leftTeam;
+      var _pBot = _pTop === leftTeam ? rightTeam : leftTeam;
+      var _pBoxStyle = 'width:100%;height:' + _pBoxH + 'px;';
+
       container.innerHTML =
         '<div style="display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;gap:0;">' +
-          // Sets row (compacto, topo)
           setsRow +
-          // Rótulo especial (TIE-BREAK, vencedor)
           _gameLabelRow +
-          // SETS + GAMES (topo)
-          _topBlock +
-          // Times (fotos/ícones + nomes) — v4.0.9: a linha tem a ALTURA DO
-          // CONTEÚDO (flex:0 0 auto) e NÃO encolhe (flex-shrink:0). Antes era
-          // flex:2 (proporcional): quando o GAMES box ficava grande, a linha era
-          // espremida abaixo do conteúdo e o overflow:hidden CORTAVA nome/foto.
-          // Agora a linha sempre cabe o conteúdo inteiro (verificado: nunca corta,
-          // nem com GAMES grande, Nomes 185% ou tela curta) e os placares/botões
-          // (flex, encolhem) absorvem o resto — aumentar Nomes/Foto cresce este
-          // box e reduz os outros proporcionalmente.
-          '<div style="flex:0 0 auto;flex-shrink:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:4px clamp(4px,1.5vw,10px) 2px;">' +
-            '<div class="court-side" data-court-side="left" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:stretch;justify-content:center;background:transparent;border:none;padding:0;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
-              _buildNameStack(leftTeam) +
-            '</div>' +
-            '<div class="court-side" data-court-side="right" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:stretch;justify-content:center;background:transparent;border:none;padding:0;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
-              _buildNameStack(rightTeam) +
-            '</div>' +
+          '<div style="flex:1 1 auto;display:flex;flex-direction:column;gap:' + _pGap + 'px;padding:0 ' + _pPad + 'px;min-height:0;">' +
+            _lsTeamBox(_pTop, false, _pSz, _pBoxStyle) +
+            _lsTeamBox(_pBot, false, _pSz, _pBoxStyle) +
           '</div>' +
-          // Placar — v4.5.34: metades tocáveis por time (Apple Watch style).
-          // flex:4 (divide o espaço com GAMES flex:2 e nomes flex:1.5 → a tinta
-          // não desperdiça, sobra vai pros outros infos). A metade é o botão +1.
-          // v1.6.97 — dono, com print do iPhone em pé: "vejo um grande desperdício de
-          // espaço branco nas placas. se os números não podem ser maiores, vamos diminuir
-          // as placas para dar mais espaço para aumentar os games e sets".
-          // flex 4 → 3: a placa encolhe o VAZIO (o número dentro dela não muda de regra),
-          // e a altura devolvida vai pro bloco SETS/GAMES, que subiu de 14.4vw pra 18vw.
-          // v1.6.97 — dono: "a placa em pé pode ser menor MANTENDO o tamanho dos
-          // números". A placa esticava pra preencher o que sobrasse (flex:3), e como o
-          // número é dimensionado pela LARGURA (2 dígitos têm que caber lado a lado), a
-          // altura excedente virava branco. Agora a linha NÃO estica: a altura das placas
-          // é calculada a partir do próprio número, em _doFitLivePlateText. O número não
-          // muda de tamanho — o que sai é o vazio, e ele vira espaço pro resto da tela.
-          '<div id="ls-plates-row" style="flex:0 0 auto;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
-            _scoreHalf(leftTeam) + _scoreHalf(rightTeam) +
-          '</div>' +
-          // TUDO SOBE, A PLACA FICA NO MEIO (dono). O bloco de cima volta a ter a altura
-          // do conteúdo e a folga inteira vai pra BAIXO das placas — assim SETS/GAMES,
-          // nomes e placa formam um conjunto contínuo a partir do topo, e a placa cai
-          // perto do centro da tela em vez de ficar espremida contra o Desfazer.
-          '<div style="flex:1;min-height:0;"></div>' +
-          // Dica de troca de lado (só com fixSides ativo)
-          swapHint +
-          // Desfazer — ÚNICO botão, full-width, abaixo de tudo (compartilhado)
-          _undoBar +
-          // Botão Encerrar Partida (apenas partidas casuais sem sets)
-          _portFinishRow +
+          swapHint + _undoBar + _portFinishRow +
         '</div>';
-
-      // v2.2.16-beta: fit text to fill plate boxes and buttons
-      _fitLivePlateText();
-      // Attach court-side drag-and-drop (swap sides)
       setTimeout(function() { _setupCourtSwapDrag(); }, 30);
     }
 

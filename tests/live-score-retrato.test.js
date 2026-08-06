@@ -64,12 +64,23 @@ console.log('\n── a placa abraça o número; o número NÃO muda de tamanho 
   ok(alvo && parseFloat(alvo[2]) <= 0.5, 'e o teto impede a placa de engolir nomes/GAMES: ' + (alvo && alvo[2]) + ' da tela');
 }
 
-console.log('\n── tudo sobe: a folga vai pra BAIXO das placas ──');
+// ⚠️ ASSERÇÕES REVISADAS DE PROPÓSITO (06/ago/2026, redesenho homologado)
+// Duas asserções daqui defendiam o arranjo antigo do retrato: `#ls-plates-row`
+// com `flex:0 0 auto` e um ESPAÇADOR depois das placas, que era como a folga ia
+// pra baixo ("tudo sobe, a placa fica no meio"). Esse arranjo deixou de existir:
+// agora cada dupla é uma CAIXA de METADE DA TELA e as duas somam a altura útil,
+// então NÃO HÁ folga sobrando pra posicionar — o espaçador seria zona morta, que
+// é justamente o que o dono mandou eliminar.
+// O que aquelas asserções protegiam de verdade — a placa não estica e o conjunto
+// não fica espremido contra o Desfazer — continua travado, agora pelo invariante
+// novo: as caixas dividem a tela e não existe espaçador nenhum no retrato.
+console.log('\n── redesenho: caixas de metade da tela, sem espaçador ──');
 {
-  const port = src.slice(src.indexOf('// ── PORTRAIT: 5 linhas proporcionais'), src.indexOf('_fitLivePlateText();', src.indexOf('// ── PORTRAIT')));
-  ok(/id="ls-plates-row" style="flex:0 0 auto/.test(port), 'a linha das placas não estica mais');
-  const iRow = port.indexOf('ls-plates-row'), iSpacer = port.indexOf("'<div style=\"flex:1;min-height:0;\"></div>'");
-  ok(iSpacer > iRow, 'o vão fica DEPOIS das placas — por isso o conjunto sobe');
+  const port = src.slice(src.indexOf('// ── EM PÉ (redesenho'), src.indexOf('_setupCourtSwapDrag', src.indexOf('// ── EM PÉ (redesenho')));
+  ok(/_pBoxH\s*=\s*Math\.floor\(\(_pAvail - _pGap\) \/ 2\)/.test(port), 'cada caixa é METADE da altura útil');
+  ok(/_lsTeamBox\(_pTop[\s\S]*_lsTeamBox\(_pBot/.test(port), 'as duas caixas são construídas pelo MESMO builder');
+  ok(!/flex:1;min-height:0;"><\/div>/.test(port), 'não existe espaçador: a folga não vira zona morta');
+  ok(/serverInfo && serverInfo\.team === rightTeam/.test(port), 'o SACADOR fica em cima');
   ok(!/flex:1;min-height:0;'\s*\)\s*\+\s*\n\s*'display:flex;flex-direction:column;align-items:center;justify-content:center;'/.test(src),
      'o bloco SETS/GAMES voltou a ter altura de conteúdo (não estica mais)');
 }
