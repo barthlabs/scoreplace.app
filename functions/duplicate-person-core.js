@@ -118,13 +118,19 @@ function detectarMesmaPessoa(candidato, pessoas) {
 
 /** Frase da pergunta. O contato vem MASCARADO — o cliente nunca recebe uid nem valor cheio. */
 function textoDaPergunta(nome, contatoMascarado, motivo) {
+  // ⚠️ NUNCA AFIRMA. Ordem do dono (06/ago): _"não é 'você já está inscrito'. É 'você PARECE
+  // já estar inscrito nesse torneio com a conta tal'"_. A diferença não é estilo: afirmar
+  // "você já está inscrito" MENTE quando são duas pessoas homônimas de verdade (o caso das
+  // duas contas "Nelson Barth"), e ainda por cima não diz COM QUAL conta — que é a única
+  // informação que deixa a pessoa agir. O texto sempre nomeia a conta, mascarada.
   const quem = contatoMascarado ? ('a conta ' + contatoMascarado) : 'outra conta';
   if (motivo === 'celular') {
-    return 'Você já está inscrito neste torneio por ' + quem +
-      ', que tem o mesmo celular que o seu. É você?';
+    return 'Você PARECE já estar inscrito neste torneio com ' + quem +
+      ' — ela tem o mesmo celular que o seu. É você?';
   }
-  return 'Já existe alguém inscrito neste torneio como "' + String(nome || '') + '" (' + quem + '). ' +
-    'Se for você com outra conta, dá pra unir as duas — seus jogos e seu histórico ficam num lugar só. ' +
+  return 'Você PARECE já estar inscrito neste torneio com ' + quem +
+    ', que usa o mesmo nome ("' + String(nome || '') + '"). ' +
+    'Se for você, dá pra unir as duas contas — seus jogos e seu histórico ficam num lugar só. ' +
     'Se for outra pessoa com o mesmo nome, é só dizer que não é você.';
 }
 

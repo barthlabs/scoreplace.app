@@ -115,6 +115,12 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
 (() => {
   const t = D.textoDaPergunta('Gabriela Ferreira', 'ga***@gmail.com', 'nome');
   ok('a pergunta cita o contato MASCARADO', t.indexOf('ga***@gmail.com') !== -1);
+  // Ordem do dono: "não é 'você já está inscrito'. É 'você PARECE já estar inscrito com a
+  // conta tal'". Afirmar MENTE quando são dois homônimos de verdade (caso Nelson Barth).
+  ok('  → NUNCA afirma: diz PARECE', /PARECE/.test(t));
+  ok('  → e nomeia a conta', /com a conta/.test(t));
+  ok('  → o mesmo vale pro motivo celular',
+    /PARECE/.test(D.textoDaPergunta('X', '(••) •••••-••53', 'celular')));
   ok('a pergunta oferece a saída "não sou eu"', /não é você|outra pessoa/i.test(t));
   ok('sem contato, a frase ainda funciona',
     D.textoDaPergunta('X', null, 'nome').indexOf('outra conta') !== -1);
@@ -137,10 +143,21 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   const fs = require('fs'); const path = require('path');
   const idx = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
   ok('enrollParticipant roda a detecção', /_detectarDuplicataNoTorneio\(/.test(idx));
-  ok('  → e devolve dupSuspect ao cliente', /dupSuspect: _dupSuspect/.test(idx));
+  // A PORTA: recusa ANTES de gravar, com o desfecho que TODO cliente já sabe exibir
+  // ("Já Inscrito"). Regra do dono: "as pessoas não leem as notificações… nem os emails" —
+  // avisar informa quem lê; recusar intercepta todo mundo, na hora, sem depender da loja.
+  ok('  → e RECUSA antes de gravar (alreadyEnrolled), não só avisa',
+    /RECUSADO por duplicata[\s\S]{0,400}alreadyEnrolled: true/.test(idx));
+  ok('  → a detecção roda ANTES da transação (senão já teria gravado)',
+    idx.indexOf('_detectarDuplicataNoTorneio(db, _alvoUid0') < idx.indexOf('await db.runTransaction'));
+  ok('  → o ORGANIZADOR inscrevendo TERCEIRO passa pela porta (saída sempre existe)',
+    /_euMesmo = _alvoUid0 === callerUid/.test(idx) && /if \(_euMesmo\)/.test(idx));
+  ok('  → devolve dupSuspect ao cliente novo (o velho já mostra "Já Inscrito")',
+    /dupSuspect: \{\s*\/\/[\s\S]{0,200}motivo: _d0\.motivo/.test(idx));
+  // O cliente NUNCA recebe o uid da outra conta — só o contato mascarado.
   ok('  → SEM o uid da outra conta (só mascarado)',
-    /_dupSuspect = \{[\s\S]{0,400}maskedEmail[\s\S]{0,200}\};/.test(idx) &&
-    !/_dupSuspect = \{[\s\S]{0,400}uid: _d\.uid/.test(idx));
+    /dupSuspect: \{[\s\S]{0,400}maskedEmail/.test(idx) &&
+    !/dupSuspect: \{[\s\S]{0,400}uid: _d0\.uid/.test(idx));
   ok('a detecção NÃO lê o roster inteiro (usa consulta indexada em users)',
     /_detectarDuplicataNoTorneio[\s\S]{0,1500}displayName_lower", "==", nomeLower/.test(idx));
   ok('existe a CF do "não sou eu"', /exports\.dismissDuplicateSuspicion = onCall/.test(idx));
@@ -148,6 +165,23 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
     /dismissDuplicateSuspicion[\s\S]{0,900}_detectarDuplicataNoTorneio\(db, callerUid/.test(idx));
   ok('  → grava nos DOIS perfis (senão a outra conta pergunta o espelho)',
     /dupDismissed: FV\.arrayUnion\(d\.uid\)[\s\S]{0,300}dupDismissed: FV\.arrayUnion\(callerUid\)/.test(idx));
+
+
+  // ── O SERVIDOR AVISA, porque o cliente NÃO alcança todo mundo ──────────────
+  // Regra do dono (06/ago): "esse é o tipo de coisa que deveria rodar em CF e não no
+  // cliente". O app NATIVO embarca o JS e não tem auto-update — a pergunta da 1.7.41 só
+  // chega numa submissão nova, dias depois. Notificação é DADO: alcança toda versão.
+  ok('a CF AVISA a pessoa (não depende da tela nova)', /_avisarDuplicataSuspeita\(db, _alvoUid/.test(idx));
+  ok('  → e o aviso sai no MESMO ponto da porta',
+    /_avisarDuplicataSuspeita\(db, _alvoUid0[\s\S]{0,400}RECUSADO por duplicata/.test(idx));
+  ok('  → usa a MESMA fila de e-mail do app (nunca escrita direta em `mail`)',
+    /_avisarDuplicataSuspeita[\s\S]{0,3000}collection\("notif_email_queue"\)/.test(idx));
+  ok('  → id determinístico: reinscrever não vira spam',
+    /\["dup_suspect", tournamentId, dup\.uid, alvoUid\]/.test(idx));
+  ok('  → o aviso leva o contato MASCARADO, nunca o uid da outra conta',
+    /_avisarDuplicataSuspeita[\s\S]{0,2200}dup\.maskedEmail \|\| dup\.maskedPhone/.test(idx));
+  ok('  → e-mail é opt-out INDEPENDENTE do in-app (quem desligou o sininho quer o e-mail)',
+    /_avisarDuplicataSuspeita[\s\S]{0,3000}notifyEmail !== false/.test(idx));
 
   // O trigger PAROU de renomear em silêncio.
   const bloco = idx.slice(idx.indexOf('exports.enforceUniqueDisplayName'));

@@ -2278,6 +2278,86 @@ const { replicateRosterToSandbox: _replicateRosterToSandbox } = require("./sandb
  * cliente é só o MASCARADO — ver o retorno montado em enrollParticipant.
  * Fail-open: erro de consulta não pode atrapalhar inscrição ([[feedback_enrollment_fail_open]]).
  */
+
+/**
+ * AVISA A PESSOA de que ela já parece estar inscrita com OUTRA conta — pelo SERVIDOR.
+ *
+ * POR QUE AQUI E NÃO NA TELA (regra do dono, 06/ago/2026): _"esse é o tipo de coisa que
+ * deveria rodar em CF e não no cliente"_. A pergunta que a 1.7.41 construiu mora no JS do
+ * app — e o app NATIVO embarca o JS e **não tem auto-update**: só chega numa submissão nova,
+ * dias depois, contando revisão da loja. Ou seja, quem se inscreve pelo celular não seria
+ * interpelado, que é justamente onde a inscrição às pressas pela vaga na fila acontece.
+ * Notificação é DADO, não código de tela: alcança toda versão, inclusive a nativa velha que
+ * nunca vai chamar o diálogo novo. Mesmo raciocínio do vigia estrutural da 1.7.36.
+ *
+ * Usa a MESMA fila de e-mail do app (`notif_email_queue` → flushNotifEmailDigest). Escrever
+ * direto em `mail` faria um segundo caminho, com outro digest e outro agrupamento — foi
+ * exatamente o buraco do sorteio automático, que existia só no cliente.
+ *
+ * IDEMPOTENTE por (pessoa, torneio, outra conta): o id do doc é determinístico, então
+ * reinscrever não vira spam. Nível `important` — a pessoa pode perder a vaga, mas não é
+ * emergência; quem desligou "só fundamentais" não é incomodado.
+ * Best-effort: falhar aqui não desfaz a inscrição, que já está gravada.
+ */
+async function _avisarDuplicataSuspeita(db, alvoUid, tournamentId, tournamentName, dup) {
+  try {
+    if (!alvoUid || !dup) return false;
+    const prof = await db.collection("users").doc(alvoUid).get();
+    if (!prof.exists) return false;
+    const p = prof.data() || {};
+    const nivelUsuario = p.notifyLevel || "todas";
+    const NIVEL = "important";
+    const permitido = (nivelUsuario === "todas" || !nivelUsuario) ? true
+      : (nivelUsuario === "none" ? false
+        : (nivelUsuario === "importantes" ? true : false));   // "fundamentais" fica de fora
+    if (!permitido) return false;
+
+    const contato = dup.maskedEmail || dup.maskedPhone || "";
+    const msg = "Você já parece estar inscrito em \"" + (tournamentName || "este torneio") +
+      "\" com outra conta" + (contato ? (" (" + contato + ")") : "") + ". " +
+      (dup.motivo === "celular"
+        ? "As duas contas têm o mesmo celular. "
+        : "As duas usam o mesmo nome. ") +
+      "Se for você, abra seu perfil e una as duas — seus jogos e seu histórico ficam num " +
+      "lugar só, e você deixa de ocupar duas vagas. A união só acontece depois que você " +
+      "confirmar a posse da outra conta. Se for outra pessoa com o mesmo nome, é só ignorar.";
+
+    // id determinístico → reinscrever não duplica o aviso
+    const notifId = ["dup_suspect", tournamentId, dup.uid, alvoUid].join("|")
+      .replace(/[^a-zA-Z0-9_|-]/g, "_").replace(/\|/g, "__").slice(0, 200);
+
+    if (p.notifyPlatform !== false) {
+      await db.collection("users").doc(alvoUid).collection("notifications").doc(notifId).set({
+        type: "duplicate_account_suspected",
+        tournamentId: tournamentId,
+        tournamentName: tournamentName || "",
+        title: "👥 Duas contas suas neste torneio?",
+        message: msg,
+        createdAt: new Date().toISOString(),
+        read: false,
+      }, { merge: true });
+    }
+    // E-mail: opt-out INDEPENDENTE do in-app (quem desligou o sininho segue querendo e-mail).
+    if (p.notifyEmail !== false && p.email && !_isSyntheticAuthEmail(p.email)) {
+      const nowMs = Date.now();
+      await db.collection("notif_email_queue").add({
+        email: String(p.email).toLowerCase(),
+        level: NIVEL,
+        message: msg,
+        tournamentName: tournamentName || "",
+        tournamentUrl: "https://scoreplace.app/#tournaments/" + tournamentId,
+        createdAt: nowMs,
+        flushAtMs: nowMs + 15 * 60 * 1000,
+      });
+    }
+    console.log("[dup-suspect] avisado " + alvoUid + " sobre " + dup.uid + " em " + tournamentId);
+    return true;
+  } catch (e) {
+    console.error("[_avisarDuplicataSuspeita] falhou (best-effort):", e && e.message);
+    return false;
+  }
+}
+
 async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
   try {
     const meuDoc = await db.collection("users").doc(callerUid).get();
@@ -2362,6 +2442,50 @@ exports.enrollParticipant = onCall(
     const db = admin.firestore();
     const docRef = db.collection("tournaments").doc(tournamentId);
     const nowMs = Date.now();
+
+    // ── PORTA: esta pessoa já não está aqui com OUTRA conta? ─────────────────
+    // Roda ANTES de gravar e RECUSA, devolvendo o desfecho `alreadyEnrolled` — que TODO
+    // cliente já sabe exibir ("Já Inscrito — Você já está inscrito neste torneio"),
+    // inclusive o nativo velho, que embarca o JS e não tem auto-update.
+    //
+    // POR QUE NÃO BASTA AVISAR (regra do dono, 06/ago): _"as pessoas não leem as
+    // notificações… nem os emails"_. Notificação informa quem lê; a recusa intercepta
+    // todo mundo, na hora, na tela em que a pessoa está. E é literalmente o que ele pediu
+    // na primeira conversa: "indicar que a pessoa já está inscrita".
+    //
+    // ⚠️ ISTO É EXCEÇÃO AO FAIL-OPEN da inscrição ([[feedback_enrollment_fail_open]]), e só
+    // se justifica porque os sinais que disparam são os FORTES (celular integral, nome
+    // idêntico) e porque o erro tem saída: o "não sou eu" (dismissDuplicateSuspicion) apaga
+    // a suspeita pros dois lados, e o ORGANIZADOR pode inscrever a pessoa direto — o gate
+    // não vale pra quem inscreve OUTRA pessoa. Erro de detecção nunca deixa alguém de fora
+    // sem caminho.
+    let _dupSuspect = null;
+    try {
+      const _alvoUid0 = String((participantObj && participantObj.uid) || callerUid);
+      const _euMesmo = _alvoUid0 === callerUid;   // organizador inscrevendo TERCEIRO passa
+      if (_euMesmo) {
+        const _pre = await docRef.get();
+        if (_pre.exists) {
+          const _d0 = await _detectarDuplicataNoTorneio(db, _alvoUid0, _pre.data());
+          if (_d0) {
+            const _tNome0 = (_pre.data() || {}).name || "";
+            await _avisarDuplicataSuspeita(db, _alvoUid0, tournamentId, _tNome0, _d0);
+            console.log(`[enrollParticipant] RECUSADO por duplicata: ${_alvoUid0} ~ ${_d0.uid} (${_d0.motivo}) em ${tournamentId}`);
+            const _parts0 = Array.isArray((_pre.data() || {}).participants) ? _pre.data().participants : [];
+            return {
+              alreadyEnrolled: true,
+              participants: _parts0,
+              dupSuspect: {   // ⚠️ SEM uid e SEM contato cheio
+                motivo: _d0.motivo, nome: _d0.nome,
+                maskedEmail: _d0.maskedEmail, maskedPhone: _d0.maskedPhone,
+                texto: _dupPerson.textoDaPergunta(_d0.nome, _d0.maskedEmail || _d0.maskedPhone, _d0.motivo),
+              },
+            };
+          }
+        }
+      }
+    } catch (e) { console.error("[enrollParticipant] porta de duplicata falhou (fail-open):", e && e.message); }
+
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
@@ -2400,30 +2524,6 @@ exports.enrollParticipant = onCall(
       } catch (e) { console.error("[enrollParticipant] espelho do roster falhou:", e && e.message); }
     }
 
-    // ── Esta pessoa já não está aqui com OUTRA conta? ────────────────────────
-    // Roda DEPOIS de gravar: inscrição é fail-open e não se bloqueia ninguém por suspeita.
-    // A resposta é uma PERGUNTA pra própria pessoa — quem autoriza qualquer fusão é a prova
-    // de posse, nunca esta detecção. Vale também quando o organizador inscreve alguém: o
-    // alvo é o uid INSCRITO, não o de quem clicou.
-    let _dupSuspect = null;
-    if (out.outcome === "enrolled" || out.outcome === "waitlisted") {
-      try {
-        const _alvoUid = String((participantObj && participantObj.uid) || callerUid);
-        const _fresh = await docRef.get();
-        const _d = await _detectarDuplicataNoTorneio(db, _alvoUid, _fresh.exists ? _fresh.data() : null);
-        if (_d) {
-          _dupSuspect = {   // ⚠️ SEM uid e SEM contato cheio
-            motivo: _d.motivo,
-            nome: _d.nome,
-            maskedEmail: _d.maskedEmail,
-            maskedPhone: _d.maskedPhone,
-            texto: _dupPerson.textoDaPergunta(_d.nome, _d.maskedEmail || _d.maskedPhone, _d.motivo),
-          };
-          console.log(`[enrollParticipant] duplicata suspeita: ${_alvoUid} ~ ${_d.uid} (${_d.motivo}) em ${tournamentId}`);
-        }
-      } catch (e) { console.error("[enrollParticipant] deteccao de duplicata falhou (fail-open):", e && e.message); }
-    }
-
     if (out.outcome === "capacityFull") return { capacityFull: true, participants: out.participants };
     if (out.outcome === "already") return { alreadyEnrolled: true, participants: out.participants };
     if (out.outcome === "closed") return { alreadyEnrolled: false, enrollmentClosed: true, participants: out.participants };
@@ -2435,16 +2535,14 @@ exports.enrollParticipant = onCall(
       return {
         alreadyEnrolled: false, waitlisted: true,
         alreadyWaitlisted: out.outcome === "alreadyWaitlisted",
-        participants: out.participants, standbyParticipants: out.standbyParticipants || null,
-        dupSuspect: _dupSuspect
+        participants: out.participants, standbyParticipants: out.standbyParticipants || null
       };
     }
     return {
       alreadyEnrolled: false,
       participants: out.participants,
       autoCloseTriggered: !!out.autoClose,
-      reachedCapacityDraw: !!out.reachedDraw,
-      dupSuspect: _dupSuspect
+      reachedCapacityDraw: !!out.reachedDraw
     };
   }
 );
