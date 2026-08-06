@@ -118,15 +118,68 @@ sec(function () {
   ok(saiu && saiu.leftAt, 'com a data da saída');
 });
 
-// ── 5. O CAMINHO DE INSCRIÇÃO DO CLIENTE CHAMA O ESPELHO ────────────────────────
+// ── 5. ESPELHA TUDO: participante · espera · DESATIVADO · W.O. ──────────────────
+// Ordem do dono: "tem que espelhar tudo. participante, lista de espera, desativado, wo.
+// tudo." Espelhar metade dos estados é ter uma rede que responde "não sei" justamente
+// nos casos de borda — e é sempre de um estado de borda que a pessoa some.
+sec(function () {
+  const { alvo, db } = novoEspelho(EU);
+  const doc = (extra) => Object.assign({
+    participants: [{ uid: OUTRO }, { uid: TERCEIRO, ligaActive: false }],
+    standbyParticipants: [{ uid: EU }], rounds: [],
+  }, extra || {});
+  alvo._mirrorRoster('T', { participants: [{ uid: OUTRO }], standbyParticipants: [], rounds: [] });
+  db.escritas.length = 0;
+  alvo._mirrorRoster('T', doc());
+  const de = (u) => db.escritas.filter((e) => e._id === u).slice(-1)[0];
+  ok(de(TERCEIRO) && de(TERCEIRO).status === 'inactive',
+     'DESATIVADO (ligaActive:false) é status próprio, veio "' + (de(TERCEIRO) || {}).status + '"');
+  ok(de(EU) && de(EU).status === 'waitlisted', 'quem está na fila continua "waitlisted"');
+  ok(de(TERCEIRO) && de(TERCEIRO).wo === false, 'sem W.O. na rodada, a marca vai como false — não fica ausente');
+
+  // W.O. decretado na rodada corrente
+  db.escritas.length = 0;
+  alvo._mirrorRoster('T', doc({ rounds: [{ round: 1, matches: [
+    { isSitOut: true, sitOutReason: 'wo', p1: 'quem for', p1Uid: TERCEIRO, team1Uids: [TERCEIRO] },
+    { isSitOut: true, sitOutReason: 'inactive', p1Uid: OUTRO },
+  ] }] }));
+  ok(de(TERCEIRO) && de(TERCEIRO).wo === true, 'W.O. decretado marca wo:true');
+  ok(de(TERCEIRO) && de(TERCEIRO).status === 'inactive',
+     'e NÃO apaga o estado real — ele terminou nos desativados (o destino é a informação acionável)');
+  ok(!de(OUTRO), 'folga por inatividade (sitOutReason "inactive") NÃO é W.O.');
+
+  // decretar W.O. em quem não mudou de lugar tem que gerar escrita
+  db.escritas.length = 0;
+  alvo._mirrorRoster('T', doc({ rounds: [] }));
+  ok(de(TERCEIRO) && de(TERCEIRO).wo === false,
+     'tirar o W.O. também é registrado — o cache guarda status+wo, não só o status');
+});
+
+// ── 6. IDENTIDADE É O UID, SEMPRE — nada de casar por nome ──────────────────────
+sec(function () {
+  const corpo = extraiMetodo('_mirrorRoster(docId, data)')
+    .split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n');   // fora os comentários
+  ok(!/_memberUidByName|_pName|displayName/.test(corpo),
+     'o espelho NÃO resolve ninguém por nome — doc id é uid e ponto');
+  ok(!/monarchWaitlist/.test(corpo),
+     'e não lê o monarchWaitlist (mapa categoria→NOMES): quem está lá já vem por uid de standbyParticipants');
+  const { alvo, db } = novoEspelho(EU);
+  alvo._mirrorRoster('T', { participants: [{ uid: OUTRO }], standbyParticipants: [], rounds: [] });
+  db.escritas.length = 0;
+  // entrada fictícia (só nome, sem uid) não vira doc — não existe conta pra espelhar
+  alvo._mirrorRoster('T', { participants: [{ uid: OUTRO }], standbyParticipants: [{ name: 'Jogador X' }], rounds: [] });
+  ok(db.escritas.length === 0, 'entrada sem uid (fictício) não gera doc de espelho, gerou ' + db.escritas.length);
+});
+
+// ── 7. O CAMINHO DE INSCRIÇÃO DO CLIENTE CHAMA O ESPELHO ────────────────────────
 sec(function () {
   const ini = SRC.indexOf('async _enrollParticipantTx(');
   const fim = SRC.indexOf('\n  async deenrollParticipant(', ini);
   const corpo = SRC.slice(ini, fim > 0 ? fim : ini + 12000);
   ok(/_mirrorRoster\(String\(tournamentId\), out\._mirror\)/.test(corpo),
      'o fallback de inscrição do cliente espelha DEPOIS do commit da transação');
-  ok((corpo.match(/_mirror: \{/g) || []).length >= 2,
-     'os DOIS desfechos que gravam (elenco e lista de espera) carregam o estado pro espelho');
+  ok((corpo.match(/_mirror: Object\.assign\(\{\}, data,/g) || []).length >= 2,
+     'os DOIS desfechos que gravam (elenco e lista de espera) mandam o DOC INTEIRO — o espelho precisa de rounds (W.O.) e do resto, não só das listas');
   ok(corpo.indexOf('_mirrorRoster') > corpo.indexOf('transaction.update(docRef, updateData)'),
      'e o espelho roda depois da gravação, nunca dentro da transação');
 });

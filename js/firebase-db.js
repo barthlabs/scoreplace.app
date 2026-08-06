@@ -769,35 +769,79 @@ window.FirestoreDB = {
   // O cache guarda o STATUS, não só a presença: mover-se de `waitlisted` pra `enrolled`
   // (ou o contrário, no W.O.) é mudança que tem que ser registrada. Com um booleano, quem
   // saiu da fila e entrou no elenco não gerava escrita nenhuma.
+  // ── ESPELHA TUDO (v1.7.57) ──────────────────────────────────────────────────────────
+  // Ordem do dono: _"tem que espelhar tudo. participante, lista de espera, desativado,
+  // wo. tudo."_ Espelhar só metade dos estados é ter uma rede que responde "não sei"
+  // justamente nos casos em que alguém some — e é sempre de um estado de BORDA que a
+  // pessoa desaparece, nunca do elenco ativo.
+  //
+  // `status` = enrolled | waitlisted | inactive | left  ·  `wo` = true/false
+  //
+  // W.O. é MARCA SEPARADA, não um 5º status, pelo mesmo motivo do card do usuário
+  // (v1.7.55): quem leva W.O. termina desativado OU na fila — a escolha do organizador
+  // (v1.6.90). Enfiar "wo" no status apagaria em qual dos dois a pessoa está, que é a
+  // única informação acionável. Com os dois campos, `wo:true + status:'waitlisted'` e
+  // `wo:true + status:'inactive'` são estados distintos e legíveis.
   _rosterMirrorCache: {},
   _mirrorRoster(docId, data) {
-    if (!this.db) return;
+    if (!this.db || !data) return;
     var uidsOf = (typeof window !== 'undefined' && typeof window._participantUids === 'function')
       ? window._participantUids : function (p) { return (p && p.uid) ? [p.uid] : []; };
-    var agora = {}, entradaDe = {};
+    var agora = {}, entradaDe = {}, woDe = {};
+    // Precedência: elenco > fila. Quem aparece nos dois (resíduo) conta como inscrito.
+    var PESO = { enrolled: 3, inactive: 3, waitlisted: 1 };
+    function marca(u, status, p) {
+      if (!u) return;
+      if (agora[u] && PESO[agora[u]] >= PESO[status]) return;
+      agora[u] = status; if (p) entradaDe[u] = p;
+    }
     function coleta(lista, status) {
       (Array.isArray(lista) ? lista : []).forEach(function (p) {
         if (!p || typeof p !== 'object') return;
-        uidsOf(p).forEach(function (u) {
-          if (!u) return;
-          // elenco vence fila: quem está nos dois (resíduo) conta como inscrito
-          if (agora[u] === 'enrolled') return;
-          agora[u] = status; entradaDe[u] = p;
-        });
+        // DESATIVADO é estado próprio: a pessoa está inscrita mas fora dos sorteios.
+        // Sem isto, "sumiu" e "está desativada" ficavam indistinguíveis no espelho.
+        var st = (status === 'enrolled' && p.ligaActive === false) ? 'inactive' : status;
+        uidsOf(p).forEach(function (u) { marca(u, st, p); });
       });
     }
     coleta(data.participants, 'enrolled');
     coleta(data.standbyParticipants, 'waitlisted');
     coleta(data.waitlist, 'waitlisted');
+    // ⚠️ `monarchWaitlist` (3º storage da espera) NÃO é lido aqui de propósito: é MAPA
+    // categoria→NOMES, e IDENTIDADE É O UID, SEMPRE. Resolver nome→uid pra espelhar
+    // colocaria o nome de volta no meio da identidade — é o hack que o uid veio matar
+    // (homônimo, nome trocado, entrada strippada). E não se perde ninguém: esse mapa é
+    // espelho POR NOME de quem já está em standbyParticipants/waitlist com uid, e é de
+    // lá que essas pessoas são coletadas acima. Quem só existe no mapa e não tem uid é
+    // fictício — não tem conta, logo não tem doc de espelho pra ter.
+    // Ver [[project_uid_identity_canon_locked]] / [[feedback_uid_controls_everything_name_only_ficticio]].
+    //
+    // W.O. DECRETADO na rodada corrente — o marcador é a partida `isSitOut` com
+    // `sitOutReason:'wo'` (_addWoMarker), e o uid vem DO SLOT. Sem uid no slot não há
+    // W.O. a espelhar: ou é fictício, ou é doc velho — e em nenhum dos dois o nome
+    // decide quem é a pessoa.
+    var _rs = Array.isArray(data.rounds) ? data.rounds : [];
+    var _ult = _rs.length ? _rs[_rs.length - 1] : null;
+    ((_ult && _ult.matches) || []).forEach(function (m) {
+      if (!m || !m.isSitOut || m.sitOutReason !== 'wo') return;
+      [].concat(m.team1Uids || [], m.p1Uid || []).forEach(function (u) { if (u) woDe[u] = true; });
+    });
     if (!Object.keys(agora).length) return;
 
+    // A chave do cache carrega status + W.O.: sem isso, decretar W.O. em quem continua
+    // no mesmo lugar não geraria escrita nenhuma e o espelho ficaria desatualizado.
+    var chave = function (u) { return agora[u] + (woDe[u] ? '|wo' : ''); };
     var antes = this._rosterMirrorCache[docId] || null;
-    this._rosterMirrorCache[docId] = Object.keys(agora).reduce(function (o, u) { o[u] = agora[u]; return o; }, {});
+    var cacheNovo = {};
+    Object.keys(agora).forEach(function (u) { cacheNovo[u] = chave(u); });
+    this._rosterMirrorCache[docId] = cacheNovo;
+
     var col = this.db.collection('tournaments').doc(docId).collection('participants');
-    var escreve = function (u, status) {
+    var escreve = function (u) {
       try {
-        col.doc(u).set({ uid: u, status: status, at: new Date().toISOString(),
-                         entry: entradaDe[u] }, { merge: true });
+        var doc = { uid: u, status: agora[u], wo: !!woDe[u], at: new Date().toISOString() };
+        if (entradaDe[u]) doc.entry = entradaDe[u];
+        col.doc(u).set(doc, { merge: true });
       } catch (_e) {}
     };
 
@@ -806,12 +850,12 @@ window.FirestoreDB = {
       // inscrição dele que estaria acontecendo agora, e é ela que o espelho precisa provar.
       var meu = (typeof window !== 'undefined' && window.AppStore && window.AppStore.currentUser
                  && window.AppStore.currentUser.uid) || '';
-      if (meu && agora[meu]) escreve(meu, agora[meu]);
+      if (meu && agora[meu]) escreve(meu);
       return;
     }
     Object.keys(agora).forEach(function (u) {
-      if (antes[u] === agora[u]) return;                     // mesmo lugar: nada a escrever
-      escreve(u, agora[u]);                                  // novo OU mudou de status
+      if (antes[u] === chave(u)) return;                     // mesmo estado: nada a escrever
+      escreve(u);                                            // novo, mudou de lugar, ou levou W.O.
     });
     Object.keys(antes).forEach(function (u) {
       if (agora[u]) return;
@@ -1264,7 +1308,7 @@ window.FirestoreDB = {
         // v1.7.56: a ESPERA é o caso que mais precisa do espelho — é dela que some gente
         // (Gersom, Dėbora Castello). Vai com `_mirror` pro `.then()` espelhar após o commit.
         return { alreadyEnrolled: false, waitlisted: true, participants: participants, standbyParticipants: _sbNew,
-                 _mirror: { participants: participants, standbyParticipants: _sbNew, waitlist: data.waitlist } };
+                 _mirror: Object.assign({}, data, { standbyParticipants: _sbNew }) };
       }
 
       // v2.6.87: Limite com corrida — capacidade ATÔMICA. No modo 'cap' (não-sorteio)
@@ -1318,7 +1362,7 @@ window.FirestoreDB = {
 
       transaction.update(docRef, updateData);
       return { alreadyEnrolled: false, participants: participants, autoCloseTriggered: !!updateData.status, reachedCapacityDraw: _reachedDraw,
-               _mirror: { participants: participants, standbyParticipants: data.standbyParticipants, waitlist: data.waitlist } };
+               _mirror: Object.assign({}, data, { participants: participants }) };
     }).then(function (out) {
       // ESPELHO (v1.7.56): este caminho gravava por `transaction.update` e NUNCA chamava
       // `_mirrorRoster` — só `saveTournament` e `mutateTournament` chamavam. Ou seja: a
