@@ -2971,11 +2971,13 @@ window._suggestCreatePassword = function(email) {
       // Form real para o browser detectar e oferecer "Salvar senha"
       '<form id="create-password-form" autocomplete="on" onsubmit="event.preventDefault();window._doCreatePassword()">' +
         '<input type="email" name="email" autocomplete="username" value="' + email.replace(/"/g,'') + '" readonly style="display:none;">' +
-        '<div style="margin-bottom:10px;">' +
-          '<input type="password" id="cp-password" name="password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" class="form-control" style="font-size:0.9rem;" minlength="6" required>' +
+        '<div style="position:relative;margin-bottom:10px;">' +
+          '<input type="password" id="cp-password" name="password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" class="form-control" style="font-size:0.9rem;padding-right:44px;" minlength="6" required>' +
+          window._pwdEyeBtn('cp-password') +
         '</div>' +
-        '<div style="margin-bottom:16px;">' +
-          '<input type="password" id="cp-confirm" name="password-confirm" autocomplete="new-password" placeholder="Confirmar senha" class="form-control" style="font-size:0.9rem;" minlength="6" required>' +
+        '<div style="position:relative;margin-bottom:16px;">' +
+          '<input type="password" id="cp-confirm" name="password-confirm" autocomplete="new-password" placeholder="Confirmar senha" class="form-control" style="font-size:0.9rem;padding-right:44px;" minlength="6" required>' +
+          window._pwdEyeBtn('cp-confirm') +
         '</div>' +
         '<div id="cp-error" style="font-size:0.78rem;color:#f87171;margin-bottom:10px;display:none;"></div>' +
         '<button type="submit" id="cp-submit" class="btn btn-primary" style="width:100%;font-size:0.9rem;padding:10px;">Criar senha</button>' +
@@ -3430,8 +3432,14 @@ window._resetShowNewPassword = function(email) {
       '<div style="font-size:0.82rem;color:var(--text-muted);text-align:center;margin-bottom:16px;word-break:break-all;">' + (window._safeHtml ? window._safeHtml(email || '') : (email || '')) + '</div>' +
       '<form id="reset-newpwd-form" autocomplete="on" onsubmit="event.preventDefault();window._resetSaveNewPassword()">' +
         '<input type="email" name="email" autocomplete="username" value="' + safeEmail + '" readonly style="display:none;">' +
-        '<input type="password" id="reset-newpwd" name="password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" minlength="6" required style="width:100%;box-sizing:border-box;padding:12px;margin-bottom:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:0.95rem;">' +
-        '<input type="password" id="reset-newpwd-confirm" name="password-confirm" autocomplete="new-password" placeholder="Confirmar nova senha" minlength="6" required style="width:100%;box-sizing:border-box;padding:12px;margin-bottom:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:0.95rem;">' +
+        '<div style="position:relative;margin-bottom:10px;">' +
+          '<input type="password" id="reset-newpwd" name="password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" minlength="6" required style="width:100%;box-sizing:border-box;padding:12px;padding-right:44px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:0.95rem;">' +
+          window._pwdEyeBtn('reset-newpwd') +
+        '</div>' +
+        '<div style="position:relative;margin-bottom:12px;">' +
+          '<input type="password" id="reset-newpwd-confirm" name="password-confirm" autocomplete="new-password" placeholder="Confirmar nova senha" minlength="6" required style="width:100%;box-sizing:border-box;padding:12px;padding-right:44px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:0.95rem;">' +
+          window._pwdEyeBtn('reset-newpwd-confirm') +
+        '</div>' +
         '<div id="reset-newpwd-error" style="font-size:0.78rem;color:#f87171;margin-bottom:10px;display:none;"></div>' +
         '<button type="submit" id="reset-newpwd-btn" class="btn btn-success btn-block" style="font-size:0.95rem;font-weight:800;padding:13px;">Salvar e entrar</button>' +
       '</form>' +
@@ -4843,6 +4851,9 @@ async function simulateLoginSuccess(user) {
     var _active = _until > Date.now();
     var _daysLeft = _active ? Math.max(1, Math.ceil((_until - Date.now()) / (24 * 3600 * 1000))) : (Number(cu.presenceMuteDays) || 7);
     if (typeof window._applyPresenceVisibilityUI === 'function') window._applyPresenceVisibilityUI(_pv);
+    // v1.7.51: ausente = 'public' — o MESMO default da regra do Firestore. Se os dois
+    // discordassem, a tela mostraria uma escolha que o servidor não está aplicando.
+    if (typeof window._applyStatsVisibilityUI === 'function') window._applyStatsVisibilityUI(cu.statsVisibility || 'public');
     if (typeof window._applyPresenceMuteUI === 'function') window._applyPresenceMuteUI({ active: _active, days: _daysLeft });
     if (typeof window._applyNotifyFilterUI === 'function') window._applyNotifyFilterUI(cu.notifyLevel || 'todas');
     // v2.1.91: inicializa o slider de tamanho da interface com o valor salvo
@@ -5472,6 +5483,23 @@ window._quickReturnLogin = function() {
   } catch(e) {}
 };
 
+// v1.7.50 — O OLHINHO PASSA A EXISTIR EM TODA TELA DE SENHA, não só na de entrar.
+// Sugestão de usuária: _"queria sugerir para colocar o olhinho para a troca de senha.
+// Eu vejo para entrar mas pra trocar a senha não tinha"_. Ela viu UM ponto; eram TRÊS
+// telas e SEIS campos (criar senha depois do link mágico, redefinir senha pelo link, e
+// trocar senha no perfil) — e é justamente onde o olhinho vale MAIS: senha nova se
+// digita às cegas, DUAS vezes, e o erro de digitação só aparece depois de confirmar.
+//
+// O botão é FONTE ÚNICA. Repetir esse markup em seis lugares é o jeito garantido de um
+// deles divergir depois (tamanho, rótulo, comportamento do Tab). Quem usa só precisa
+// envolver o input num container `position:relative` e reservar `padding-right:44px`.
+window._pwdEyeBtn = function (inputId) {
+  return '<button type="button" tabindex="-1" aria-label="Mostrar senha" ' +
+    'onclick="window._togglePwd(this,\'' + inputId + '\')" ' +
+    'style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;' +
+    'border:none;cursor:pointer;padding:4px;font-size:1.15rem;line-height:1;opacity:0.7;">👁️</button>';
+};
+
 // v1.9.74: toggle de visibilidade da senha (olhinho). Alterna o input entre
 // type=password e type=text e troca o ícone. tabindex=-1 pra não capturar Tab.
 window._togglePwd = function(btn, inputId) {
@@ -5538,7 +5566,7 @@ function setupLoginModal() {
               '<div id="login-senha-label" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">Senha <span style="font-style:italic;font-size:0.72rem;">(mín. 6 caracteres)</span></div>' +
               '<div style="position:relative;margin-bottom:6px;">' +
                 '<input type="password" id="login-password" class="form-control" placeholder="sua senha" minlength="6" autocomplete="current-password" style="font-size:0.92rem;padding-right:44px;">' +
-                '<button type="button" tabindex="-1" aria-label="Mostrar senha" onclick="window._togglePwd(this,\'login-password\')" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:1.15rem;line-height:1;opacity:0.7;">👁️</button>' +
+                window._pwdEyeBtn('login-password') +
               '</div>' +
               // Expansão de cadastro inline (aparece quando a conta não existe)
               '<div id="register-expand" style="display:none;">' +
@@ -5548,7 +5576,7 @@ function setupLoginModal() {
                 '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Confirmar senha</div>' +
                 '<div style="position:relative;margin-bottom:12px;">' +
                   '<input type="password" id="reg-password-confirm" class="form-control" placeholder="repita a senha" minlength="6" style="font-size:0.92rem;padding-right:44px;">' +
-                  '<button type="button" tabindex="-1" aria-label="Mostrar senha" onclick="window._togglePwd(this,\'reg-password-confirm\')" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:1.15rem;line-height:1;opacity:0.7;">👁️</button>' +
+                  window._pwdEyeBtn('reg-password-confirm') +
                 '</div>' +
                 '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Nome de exibição <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(como vão te ver)</span></div>' +
                 '<input type="text" id="reg-displayname" class="form-control" placeholder="Seu nome" style="font-size:0.92rem;margin-bottom:6px;">' +
@@ -6590,9 +6618,15 @@ function setupProfileModal() {
               '<button type="button" id="profile-change-pw-link" class="btn btn-ghost btn-micro" onclick="window._toggleChangePassword && window._toggleChangePassword()" style="text-decoration:underline;">🔒 Trocar senha</button>' +
               '<div id="profile-change-pw-box" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:12px;">' +
                 '<label class="form-label" style="font-size:0.74rem;display:block;margin-bottom:4px;">Nova senha</label>' +
-                '<input type="password" id="profile-new-password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" minlength="6" class="form-control" style="width:100%;box-sizing:border-box;margin-bottom:10px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._profileSetPassword&&window._profileSetPassword();}">' +
+                '<div style="position:relative;margin-bottom:10px;">' +
+                  '<input type="password" id="profile-new-password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" minlength="6" class="form-control" style="width:100%;box-sizing:border-box;padding-right:44px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._profileSetPassword&&window._profileSetPassword();}">' +
+                  window._pwdEyeBtn('profile-new-password') +
+                '</div>' +
                 '<label class="form-label" style="font-size:0.74rem;display:block;margin-bottom:4px;">Confirme a nova senha</label>' +
-                '<input type="password" id="profile-new-password2" autocomplete="new-password" placeholder="Repita a nova senha" minlength="6" class="form-control" style="width:100%;box-sizing:border-box;margin-bottom:10px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._profileSetPassword&&window._profileSetPassword();}">' +
+                '<div style="position:relative;margin-bottom:10px;">' +
+                  '<input type="password" id="profile-new-password2" autocomplete="new-password" placeholder="Repita a nova senha" minlength="6" class="form-control" style="width:100%;box-sizing:border-box;padding-right:44px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._profileSetPassword&&window._profileSetPassword();}">' +
+                  window._pwdEyeBtn('profile-new-password2') +
+                '</div>' +
                 '<div style="display:flex;gap:8px;">' +
                   '<button type="button" onclick="window._toggleChangePassword && window._toggleChangePassword(false)" class="btn btn-outline btn-sm" style="flex:1;">Cancelar</button>' +
                   '<button type="button" onclick="window._profileSetPassword && window._profileSetPassword()" class="btn btn-primary btn-sm" style="flex:1;">Confirmar</button>' +
@@ -6735,6 +6769,23 @@ function setupProfileModal() {
               '</div>' +
               '<p style="font-size:0.68rem;color:var(--text-muted);margin:4px 0 0 0;">Enquanto silenciado, suas presenças não são criadas e você não aparece para amigos. Volta automático ao fim do prazo.</p>' +
               '<input type="hidden" id="profile-presence-visibility" value="friends">' +
+            '</div>' +
+            // ─── v1.7.51: quem vê MINHAS estatísticas ─────────────────────────────
+            // Mesmo padrão de pills da presença acima (é a mesma pergunta: "quem me vê?").
+            // Default 'public' — decisão do dono: não expõe nada novo (os jogos já são
+            // legíveis em results/casualMatches) e mantém a ficha funcionando pra quem
+            // nunca abrir esta tela. Quem fecha, aparece "Estatísticas privadas" na ficha.
+            '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
+            '<div style="margin-bottom: 1rem;">' +
+              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">📊 Minhas estatísticas</label>' +
+              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Quem pode ver seu desempenho (vitórias, sets, games) e suas conquistas na sua ficha de jogador.</p>' +
+              '<div id="stats-visibility-group" style="display:flex;gap:6px;flex-wrap:nowrap;">' +
+                '<button type="button" data-sv="public" onclick="window._setStatsVisibility(\'public\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌐 Todos</button>' +
+                '<button type="button" data-sv="friends" onclick="window._setStatsVisibility(\'friends\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">👥 Amigos</button>' +
+                '<button type="button" data-sv="private" onclick="window._setStatsVisibility(\'private\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🚫 Ninguém</button>' +
+              '</div>' +
+              '<p style="font-size:0.68rem;color:var(--text-muted);margin:6px 0 0 0;">Os placares dos seus jogos continuam aparecendo na chave e na classificação do torneio — isso é do torneio, não seu. O que esta escolha fecha é a grade de desempenho da sua ficha.</p>' +
+              '<input type="hidden" id="profile-stats-visibility" value="public">' +
             '</div>' +
             '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
             // Social toggle + notification filters
@@ -6961,6 +7012,32 @@ function setupProfileModal() {
       if (hidden) hidden.value = val;
       window._applyPresenceVisibilityUI(val);
     };
+    // v1.7.51 — quem vê MINHAS estatísticas. Mesma mecânica das pills de presença
+    // (hidden input é a fonte pro save; a UI só pinta), com a paleta invertida de
+    // propósito: aqui o ABERTO é o default, então 'public' é o verde.
+    var _statsVisColors = { public: '#22c55e', friends: '#3b82f6', private: '#ef4444' };
+    window._setStatsVisibility = function(val) {
+      var hidden = document.getElementById('profile-stats-visibility');
+      if (hidden) hidden.value = val;
+      window._applyStatsVisibilityUI(val);
+    };
+    window._applyStatsVisibilityUI = function(val) {
+      var hidden = document.getElementById('profile-stats-visibility');
+      if (hidden) hidden.value = val;
+      var group = document.getElementById('stats-visibility-group');
+      if (!group) return;
+      group.querySelectorAll('button[data-sv]').forEach(function(btn) {
+        var v = btn.getAttribute('data-sv');
+        var isActive = (v === val);
+        var color = _statsVisColors[v] || '#6366f1';
+        btn.style.background = isActive ? color : 'transparent';
+        btn.style.color = isActive ? '#fff' : 'var(--text-muted)';
+        btn.style.border = isActive ? ('2px solid ' + color) : '1.5px solid var(--border-color)';
+        btn.style.boxShadow = isActive ? ('0 0 10px ' + color + '40') : 'none';
+        btn.style.fontWeight = isActive ? '700' : '500';
+      });
+    };
+
     window._applyPresenceVisibilityUI = function(val) {
       var hidden = document.getElementById('profile-presence-visibility');
       if (hidden) hidden.value = val;
@@ -8651,6 +8728,9 @@ window._profileHydrateNameConflict = function () {
           : (_chk('profile-filter-fundamentais', false) ? 'fundamentais' : 'none'));
 
       var presenceVisibility = _v('profile-presence-visibility') || 'friends';
+      // v1.7.51 — quem vê minhas estatísticas. Default 'public': o MESMO da regra do
+      // Firestore e o MESMO que a tela pinta; três lugares, um valor só.
+      var statsVisibility = _v('profile-stats-visibility') || 'public';
       var muteActive = _chk('profile-presence-mute-toggle', false);
       var muteDays = parseInt(_v('profile-presence-mute-days'), 10);
       if (!muteDays || muteDays < 1) muteDays = 7;
@@ -8892,6 +8972,7 @@ window._profileHydrateNameConflict = function () {
       payload.notifyWhatsApp = notifyWhatsApp;
       payload.notifyLevel = notifyLevel;
       payload.presenceVisibility = presenceVisibility;
+      payload.statsVisibility = statsVisibility;
       payload.presenceMuteDays = muteDays;
       payload.presenceMuteUntil = muteUntil;
       payload.presenceAutoCheckin = presenceAutoCheckin;

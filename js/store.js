@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.49';
+window.SCOREPLACE_VERSION = '1.7.59';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -424,39 +424,55 @@ window._formatLabel = function (t) {
   return window._formatDisplayName(t.format) || t.format || '';
 };
 
-// ─── Foto do local (Google Places) — re-busca FRESCA por placeId (v4.0.14) ───
-// A URL de foto do Places (novo) tem token de VALIDADE CURTA: salvar a URL
-// inteira na criação do torneio e reusar meses depois → 400 INVALID_ARGUMENT
-// ("photo resource invalid"). Por isso o fundo do card ficava sem foto mesmo
-// com o local pinado. Solução: re-buscar a foto pelo `venuePlaceId` na hora de
-// exibir (o billing/Places está ativo). Cache em memória (dedupe por sessão) +
-// localStorage com TTL (evita re-busca a cada navegação). onerror invalida o
-// cache e re-busca na próxima. Render sites marcam o elemento de fundo com
-// data-vphoto-pid (+ data-vphoto-overlay/w/h); o hidratador pinta o background.
+// ─── Foto do local — vem do NOSSO servidor, o Google nunca é chamado aqui (v1.7.53) ───
+// INCIDENTE DE CUSTO (06/ago/2026): o orçamento de R$100/mês bateu 90% em 5 dias e o
+// relatório por SKU mostrou R$91,00 de R$92,09 num item só — "Places API Place Details
+// Photos" — para **2 placeIds na base inteira**. Ou seja: o app re-comprava as MESMAS
+// DUAS fotos. Três causas somadas, todas de EXIBIÇÃO (busca de verdade foi 296 chamadas
+// no mês inteiro):
+//   1. os render sites pintavam `url(t.venuePhotoUrl)` CRU — e essa URL é
+//      places.googleapis.com/.../media?key=…, então **cada card desenhado = 1 chamada
+//      COBRADA**. Card na dashboard, no detalhe e no Modo TV, a cada re-render.
+//   2. dois laços "pré-carregavam" essa URL com `new Image()` para TODO torneio visível,
+//      a cada render — multiplicando o item 1 pelo número de torneios na tela.
+//   3. aqui, o cache de 6h era invalidado pelo `onerror`, e o token da URI do Places
+//      expira MUITO antes de 6h → toda expiração virava re-busca paga.
+// Agora: a CF `cacheVenuePhoto` baixa do Google (1× por semana por local) e guarda o JPEG
+// em `venuePhotos/{placeId}`; o cliente lê SÓ esse doc. A escrita desse doc é negada a
+// todo cliente nas firestore.rules, então nenhum bug de render pode repetir isto — nem
+// no app NATIVO publicado, que embarca o JS e não tem auto-update.
+// Efeito colateral bom: conserta a foto no iOS nativo, que nunca carregou porque a origem
+// capacitor:// jamais casa com a restrição de referrer da chave (project_venue_photo_referrer).
+// É a 2ª vez que a Places drena o orçamento (a 1ª foi a busca, v4.5.65 — project_places_api_cost).
 (function _setupVenuePhotos() {
-  var _mem = {};                       // placeId -> Promise<url|null>
-  var TTL = 6 * 3600 * 1000;           // 6h
-  function _lsGet(pid) { try { var r = JSON.parse(localStorage.getItem('sp_vphoto_' + pid) || 'null'); if (r && r.u && (Date.now() - r.t) < TTL) return r.u; } catch (e) {} return null; }
-  function _lsSet(pid, u) { try { localStorage.setItem('sp_vphoto_' + pid, JSON.stringify({ u: u, t: Date.now() })); } catch (e) {} }
-  function _lsDel(pid) { try { localStorage.removeItem('sp_vphoto_' + pid); } catch (e) {} }
+  var _mem = {};        // placeId -> Promise<dataUrl|null>  (1 leitura por sessão)
+  var _pedido = {};     // placeId -> true: já pedimos à CF nesta sessão (nunca 2×)
 
-  window._venueFreshPhoto = function (pid, w, h) {
+  function _lerDoc(pid) {
+    var db = window.FirestoreDB && window.FirestoreDB.db;
+    if (!db) return Promise.resolve(null);
+    return db.collection('venuePhotos').doc(pid).get()
+      .then(function (s) { return s.exists ? s.data() : null; })
+      .catch(function () { return null; });
+  }
+
+  window._venueFreshPhoto = function (pid) {
     if (!pid) return Promise.resolve(null);
     if (_mem[pid]) return _mem[pid];
-    var cached = _lsGet(pid);
-    if (cached) { _mem[pid] = Promise.resolve(cached); return _mem[pid]; }
     _mem[pid] = (async function () {
+      var d = await _lerDoc(pid);
+      if (d && d.dataUrl) return d.dataUrl;
+      if (d && d.semFoto) return null;          // local sem foto no Google — não insistir
+      // Ainda não cacheada: pede UMA vez à CF (ela fala com o Google; o cliente, nunca).
+      // Sem login a CF recusa — aí fica sem foto, que é melhor que voltar a pagar por render.
+      if (_pedido[pid]) return null;
+      _pedido[pid] = true;
       try {
-        if (!(window.google && window.google.maps && window.google.maps.importLibrary)) return null;
-        await window.google.maps.importLibrary('places');
-        var place = new window.google.maps.places.Place({ id: pid });
-        await place.fetchFields({ fields: ['photos'] });
-        if (place.photos && place.photos.length) {
-          var url = place.photos[0].getURI({ maxWidth: w || 800, maxHeight: h || 400 });
-          if (url) { _lsSet(pid, url); return url; }
-        }
-      } catch (e) {}
-      return null;
+        if (typeof window._callCF !== 'function') return null;
+        await window._callCF('cacheVenuePhoto', { placeId: pid });
+        var d2 = await _lerDoc(pid);
+        return (d2 && d2.dataUrl) || null;
+      } catch (e) { return null; }
     })();
     return _mem[pid];
   };
@@ -470,18 +486,14 @@ window._formatLabel = function (t) {
       var pid = el.getAttribute('data-vphoto-pid');
       if (!pid) return;
       var overlay = el.getAttribute('data-vphoto-overlay') || '';
-      var w = parseInt(el.getAttribute('data-vphoto-w'), 10) || 800;
-      var h = parseInt(el.getAttribute('data-vphoto-h'), 10) || 400;
-      window._venueFreshPhoto(pid, w, h).then(function (url) {
+      window._venueFreshPhoto(pid).then(function (url) {
         if (!url) return;
-        var img = new Image();
-        img.onload = function () {
-          el.style.backgroundImage = (overlay ? overlay + ', ' : '') + 'url(' + url + ')';
-          el.style.backgroundSize = 'cover';
-          el.style.backgroundPosition = 'center';
-        };
-        img.onerror = function () { _lsDel(pid); delete _mem[pid]; el.removeAttribute('data-vphoto-done'); };
-        img.src = url;
+        // dataUrl não expira e não vai à rede — pinta direto, sem Image() de teste.
+        // ⚠️ NÃO reintroduzir `onerror` que apaga cache e re-hidrata: era esse laço que
+        // transformava token expirado em chamada paga a cada render.
+        el.style.backgroundImage = (overlay ? overlay + ', ' : '') + 'url(' + url + ')';
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
       });
     });
   };
@@ -5213,20 +5225,82 @@ window._haversineKm = function(lat1, lon1, lat2, lon2) {
 //
 // Identidade por UID, sempre (nome não identifica ninguém). Cobre a dupla: `_participantUids`
 // devolve os uids de todos os membros de uma inscrição.
+//
+// ── O CARD NUNCA PODE CONTRADIZER O TORNEIO (v1.7.55) ────────────────────────────
+// Bug real (dono, 06/ago/2026, com print): a danielacsimao viu **"Você não está inscrito
+// neste torneio"** estando na LISTA DE ESPERA. O card só procurava em `t.participants` —
+// e quem está na espera NÃO está lá (é justamente o que a v1.6.86 canonizou: inscrição
+// pós-sorteio vai pra fila, e quem leva W.O. com destino 'waitlist' SAI do elenco). Ou
+// seja: o card respondia "não" pra quem o próprio app trata como inscrito, e a pessoa ia
+// perguntar ao organizador — exatamente o que ele existe pra evitar.
+//
+// Regra do dono: _"se está inscrita, na lista de espera, inativado, ou com W.O. decretado.
+// isso tem que estar nesse card aí."_ Então o card passa a ter QUATRO respostas, nunca
+// mais duas. `_meuStatusNoTorneio` é a fonte ÚNICA da leitura (uma versão só, pra que o
+// card do detalhe e o do #participants não possam divergir).
+//
+// A ESPERA É INSCRIÇÃO. Ela vive nos 3 storages (`_getWaitlist`), e `memberUids` a cobre
+// desde a v1.6.86 — a pessoa vê o torneio no app porque ESTÁ nele.
+// W.O. é ANOTAÇÃO, não estado-base: quem leva W.O. termina desativado OU na fila (a
+// escolha do organizador, v1.6.90), então o W.O. entra como selo em cima do estado real —
+// juntar os dois num estado só apagaria justamente a informação acionável ("e agora, como
+// eu volto?"). Ver [[project_wo_outcome_negotiation_canon]], [[project_sitout_vs_waitlist_canon]].
+window._meuStatusNoTorneio = function (t) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var uid = cu && cu.uid;
+  if (!t || !uid) return null;
+  var uidsDe = (typeof window._participantUids === 'function') ? window._participantUids
+             : function (p) { return (p && p.uid) ? [p.uid] : []; };
+  var _souEu = function (p) { return !!p && (uidsDe(p) || []).indexOf(uid) >= 0; };
+
+  var parts = (typeof window._getCompetitors === 'function') ? window._getCompetitors(t)
+            : (Array.isArray(t.participants) ? t.participants : []);
+  var eu = null;
+  (parts || []).forEach(function (p) { if (!eu && _souEu(p)) eu = p; });
+
+  // Fila: posição e total saem da MESMA ordem que o motor usa pra chamar o próximo
+  // (`_getWaitlist` — waitlist → standbyParticipants → monarchWaitlist). Dizer "3º de 8"
+  // só vale se for a ordem de verdade.
+  var fila = (typeof window._getWaitlist === 'function') ? (window._getWaitlist(t) || []) : [];
+  var wlIdx = -1;
+  for (var i = 0; i < fila.length; i++) { if (_souEu(fila[i])) { wlIdx = i; break; } }
+  if (!eu && wlIdx === -1) return { code: 'none', entry: null, wo: false };
+
+  var entry = eu || fila[wlIdx];
+
+  // W.O. DECRETADO: o marcador é uma partida `isSitOut` com `sitOutReason:'wo'`
+  // (`_addWoMarker`, liga-substitution.js) na rodada CORRENTE — W.O. é por rodada, e
+  // carimbar o card com um W.O. de três rodadas atrás seria mentira. Casa por uid do slot
+  // (`p1Uid`/`team1Uids`); o nome é só reserva pro doc legado sem uid.
+  var wo = false, woDest = '';
+  var _rounds = Array.isArray(t.rounds) ? t.rounds : [];
+  var _ultima = _rounds.length ? _rounds[_rounds.length - 1] : null;
+  var _nomeEntry = String((entry && (entry.displayName || entry.name)) || '').trim().toLowerCase();
+  ((_ultima && _ultima.matches) || []).forEach(function (m) {
+    if (wo || !m || !m.isSitOut || m.sitOutReason !== 'wo') return;
+    var us = [].concat(m.team1Uids || [], m.p1Uid || []);
+    if (us.indexOf(uid) >= 0) { wo = true; return; }
+    if (!us.length && _nomeEntry && String(m.p1 || '').trim().toLowerCase() === _nomeEntry) wo = true;
+  });
+  // Rastro do destino escolhido pelo organizador (v1.6.90) — vale mesmo quando a rodada
+  // já virou, porque é ele que responde "como eu volto".
+  if (entry && entry.woSentToWaitlistAt) woDest = 'waitlist';
+  else if (entry && entry.woDeactivatedAt) woDest = 'inactive';
+  if (woDest) wo = true;
+
+  if (!eu) return { code: 'waitlist', entry: entry, wo: wo, woDest: woDest, pos: wlIdx + 1, total: fila.length };
+  if (eu.ligaActive === false) return { code: 'inactive', entry: eu, wo: wo, woDest: woDest };
+  return { code: 'enrolled', entry: eu, wo: wo, woDest: woDest };
+};
+
 window._meuCardNoTopo = function (t, opts) {
   opts = opts || {};
   var cu = window.AppStore && window.AppStore.currentUser;
   var uid = cu && cu.uid;
   if (!t || !uid) return '';
-  var parts = (typeof window._getCompetitors === 'function') ? window._getCompetitors(t)
-            : (Array.isArray(t.participants) ? t.participants : []);
-  var uidsDe = (typeof window._participantUids === 'function') ? window._participantUids
-             : function (p) { return (p && p.uid) ? [p.uid] : []; };
-  var eu = null;
-  (parts || []).forEach(function (p) {
-    if (eu || !p) return;
-    if ((uidsDe(p) || []).indexOf(uid) >= 0) eu = p;
-  });
+  var st = window._meuStatusNoTorneio(t);
+  if (!st) return '';
+  var eu = st.entry;
 
   var nome = window._safeHtml((cu.displayName || 'Você'));
   var foto = (typeof window._profileAvatarUrl === 'function')
@@ -5235,12 +5309,46 @@ window._meuCardNoTopo = function (t, opts) {
     ? '<img src="' + window._safeHtml(foto) + '" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">'
     : '<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.1);flex-shrink:0;"></div>';
 
-  if (!eu) {
+  if (st.code === 'none') {
     // NÃO INSCRITO também é resposta — e é a que faz a pessoa procurar o organizador.
-    return '<div id="sp-meu-card" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;' +
+    return '<div id="sp-meu-card" data-meu-status="none" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;' +
       'background:rgba(148,163,184,0.10);border:1px solid rgba(148,163,184,0.28);">' + avatar +
       '<div style="min-width:0;"><div style="font-weight:800;font-size:0.9rem;color:var(--text-bright,#e8ecf3);">' + nome + '</div>' +
       '<div style="font-size:0.78rem;color:var(--text-muted);">Você <b>não está inscrito</b> neste torneio.</div></div></div>';
+  }
+
+  // PELE POR ESTADO. O texto de acento tem DUAS cores: as claras (#6ee7b7/#fbbf24/#fca5a5)
+  // foram calibradas pro tema ESCURO e somem sobre o card claro — no tema claro entra a
+  // variante forte da MESMA cor, nunca um cinza (a cor É o significado).
+  // Ver [[feedback_dark_tarja_light_text]].
+  var _claro = (typeof window._profileMetaIsLight === 'function') ? window._profileMetaIsLight() : false;
+  var _peles = {
+    enrolled: { bg: 'linear-gradient(135deg,rgba(16,185,129,0.16),rgba(5,150,105,0.10))', bd: 'rgba(16,185,129,0.40)',
+                cor: _claro ? '#047857' : '#6ee7b7', txt: '✅ você está inscrito', sub: '' },
+    waitlist: { bg: 'linear-gradient(135deg,rgba(251,191,36,0.16),rgba(245,158,11,0.10))', bd: 'rgba(251,191,36,0.45)',
+                cor: _claro ? '#92400e' : '#fbbf24', txt: '🕒 você está na lista de espera',
+                sub: 'Você está inscrito e entra quando abrir vaga — não precisa fazer nada.' },
+    inactive: { bg: 'linear-gradient(135deg,rgba(239,68,68,0.14),rgba(185,28,28,0.09))', bd: 'rgba(239,68,68,0.42)',
+                cor: _claro ? '#b91c1c' : '#fca5a5', txt: '🔴 inscrito, mas desativado',
+                sub: 'Você está fora dos próximos sorteios. Ligue o botão <b>Ativado</b> para voltar.' }
+  };
+  var pele = _peles[st.code] || _peles.enrolled;
+
+  // Posição na fila — é a informação que a pessoa na espera realmente quer.
+  var sub = pele.sub;
+  if (st.code === 'waitlist' && st.pos) {
+    sub = '<b>' + st.pos + 'º</b> de ' + st.total + ' na fila — você entra quando abrir vaga.';
+  }
+  // W.O. é SELO em cima do estado, com a instrução de volta que MUDA conforme o destino
+  // (v1.6.90): desativado → religar o toggle; fila → esperar a vez.
+  var selo = '';
+  if (st.wo) {
+    selo = '<span style="font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:999px;' +
+      'background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.42);color:' +
+      (_claro ? '#b91c1c' : '#fca5a5') + ';">⚠️ W.O. decretado</span>';
+    if (st.code === 'waitlist') sub = 'Você levou W.O. e foi para o fim da fila' +
+      (st.pos ? ' (<b>' + st.pos + 'º</b> de ' + st.total + ')' : '') + ' — não precisa fazer nada, você é chamado quando chegar a vez.';
+    else if (st.code === 'inactive') sub = 'Você levou W.O. e foi para os desativados. Ligue o botão <b>Ativado</b> e você entra no fim da lista de espera.';
   }
 
   // categoria e número de inscrição, quando existirem — é o que ela confere depois de
@@ -5258,15 +5366,24 @@ window._meuCardNoTopo = function (t, opts) {
     ? '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(255,255,255,0.06);' +
       'border:1px solid var(--border-color,rgba(255,255,255,0.12));color:var(--text-muted);">nº ' + window._safeHtml(String(seq)) + '</span>'
     : '';
-  // presença, quando a chamada está aberta
+  // presença, quando a chamada está aberta. `checkedIn`/`absent` são MAPAS chaveados por
+  // uid desde a canonização de identidade — o `Array.isArray` de antes só enxergava o
+  // formato legado, então a pill nunca aparecia nos torneios de hoje. `_idMapHas` lê por
+  // uid e cai no nome só no legado. Ver [[project_id_maps_uid_keyed]].
   var pres = '';
   var _nomeEu = eu.displayName || eu.name || cu.displayName || '';
-  if (Array.isArray(t.checkedIn) && _nomeEu && t.checkedIn.indexOf(_nomeEu) >= 0) {
+  var _quemEu = { uid: uid, displayName: _nomeEu, name: _nomeEu };
+  var _mapHas = function (map) {
+    if (!map) return false;
+    if (typeof window._idMapHas === 'function') return window._idMapHas(t, map, _quemEu);
+    return Array.isArray(map) && _nomeEu && map.indexOf(_nomeEu) >= 0;
+  };
+  if (_mapHas(t.checkedIn)) {
     pres = '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(16,185,129,0.18);' +
-      'border:1px solid rgba(16,185,129,0.38);color:#6ee7b7;">✓ presente</span>';
-  } else if (Array.isArray(t.absent) && _nomeEu && t.absent.indexOf(_nomeEu) >= 0) {
+      'border:1px solid rgba(16,185,129,0.38);color:' + (_claro ? '#047857' : '#6ee7b7') + ';">✓ presente</span>';
+  } else if (_mapHas(t.absent)) {
     pres = '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(239,68,68,0.16);' +
-      'border:1px solid rgba(239,68,68,0.35);color:#fca5a5;">ausente</span>';
+      'border:1px solid rgba(239,68,68,0.35);color:' + (_claro ? '#b91c1c' : '#fca5a5') + ';">ausente</span>';
   }
   var dupla = '';
   if (eu.p1Name && eu.p2Name) {
@@ -5274,13 +5391,15 @@ window._meuCardNoTopo = function (t, opts) {
     if (parceiro) dupla = '<div style="font-size:0.76rem;color:var(--text-muted);margin-top:1px;">com <b>' +
       window._safeHtml(parceiro) + '</b></div>';
   }
-  return '<div id="sp-meu-card" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;' +
-    'background:linear-gradient(135deg,rgba(16,185,129,0.16),rgba(5,150,105,0.10));border:1px solid rgba(16,185,129,0.40);">' + avatar +
+  return '<div id="sp-meu-card" data-meu-status="' + st.code + '"' + (st.wo ? ' data-meu-wo="1"' : '') +
+    ' style="margin:0 0 10px;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;' +
+    'background:' + pele.bg + ';border:1px solid ' + pele.bd + ';">' + avatar +
     '<div style="min-width:0;flex:1;">' +
       '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
         '<span style="font-weight:800;font-size:0.9rem;color:var(--text-bright,#e8ecf3);">' + nome + '</span>' +
-        '<span style="font-size:0.7rem;font-weight:800;color:#6ee7b7;">✅ você está inscrito</span>' +
+        '<span style="font-size:0.7rem;font-weight:800;color:' + pele.cor + ';">' + pele.txt + '</span>' + selo +
       '</div>' + dupla +
+      (sub ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">' + sub + '</div>' : '') +
       ((chips || numero || pres) ? '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">' + chips + ' ' + numero + ' ' + pres + '</div>' : '') +
     '</div></div>';
 };
@@ -7458,6 +7577,10 @@ window.AppStore = {
         // Pickleball mesmo eu só jogando Beach Tennis". Ver bracket-ui.js:_persistLastCasualChoice.
         if (profile.casualLast && typeof profile.casualLast === 'object') this.currentUser.casualLast = profile.casualLast;
         if (profile.presenceVisibility) this.currentUser.presenceVisibility = profile.presenceVisibility;
+        // v1.7.51: sem esta linha o perfil salvaria a escolha e a TELA abriria sempre em
+        // 'Todos' — `loadUserProfile` copia campo a campo, não faz merge genérico (foi
+        // exatamente assim que o `nameConflict` da 1.7.41 ficou gravado e invisível).
+        if (profile.statsVisibility) this.currentUser.statsVisibility = profile.statsVisibility;
         if (profile.presenceMuteDays !== undefined) this.currentUser.presenceMuteDays = profile.presenceMuteDays;
         if (profile.presenceMuteUntil !== undefined) this.currentUser.presenceMuteUntil = profile.presenceMuteUntil;
         if (profile.presenceAutoCheckin !== undefined) this.currentUser.presenceAutoCheckin = profile.presenceAutoCheckin;
@@ -7784,6 +7907,7 @@ window.AppStore = {
       preferredCeps: user.preferredCeps,
       preferredLocations: user.preferredLocations,
       presenceVisibility: user.presenceVisibility,
+      statsVisibility: user.statsVisibility,
       presenceMuteDays: user.presenceMuteDays,
       presenceMuteUntil: user.presenceMuteUntil,
       presenceAutoCheckin: user.presenceAutoCheckin,

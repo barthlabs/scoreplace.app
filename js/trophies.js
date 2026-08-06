@@ -469,22 +469,27 @@
     var db = _db();
     if (!db) return Promise.resolve({ trophies: {}, milestones: {} });
 
-    return Promise.all([
-      db.collection('users').doc(uid).collection('trophies').get()
+    // v1.7.51 — RECUSA NÃO É "NÃO TEM TROFÉU". Desde que `statsVisibility` decide quem lê,
+    // "não posso ver" virou desfecho legítimo, e o `.catch(() => ({}))` de antes o fazia
+    // parecer alguém sem nenhuma conquista — exatamente o que acontecia na comparação com
+    // amigo. `null` = sem permissão; `{}` = permitido e realmente vazio.
+    var _semPermissao = false;
+    var _pegar = function (sub) {
+      return db.collection('users').doc(uid).collection(sub).get()
         .then(function(snap) {
           var map = {};
           snap.forEach(function(doc) { map[doc.id] = doc.data(); });
           return map;
         })
-        .catch(function() { return {}; }),
-      db.collection('users').doc(uid).collection('milestones').get()
-        .then(function(snap) {
-          var map = {};
-          snap.forEach(function(doc) { map[doc.id] = doc.data(); });
-          return map;
-        })
-        .catch(function() { return {}; })
-    ]).then(function(results) {
+        .catch(function(e) {
+          if (e && e.code === 'permission-denied') { _semPermissao = true; return null; }
+          return {};
+        });
+    };
+    return Promise.all([_pegar('trophies'), _pegar('milestones')]).then(function(results) {
+      // Negado: NÃO cacheia e devolve `denied` — cachear `{}` faria a próxima leitura
+      // responder "sem troféus" sem nem tentar, congelando a mentira.
+      if (_semPermissao) return { trophies: null, milestones: null, denied: true };
       _cache.trophies[uid] = results[0];
       _cache.milestones[uid] = results[1];
       return { trophies: results[0], milestones: results[1] };

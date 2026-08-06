@@ -1,0 +1,183 @@
+{
+ "id": "tour_1780009816637",
+ "format": "Liga",
+ "drawMode": "rei_rainha",
+ "participants": [
+  {
+   "categorySource": "organizador",
+   "categories": [
+    "C"
+   ],
+   "enrollSeq": 1,
+   "selfEnrolled": true,
+   "category": "C",
+   "ligaActive": true,
+   "uid": "B17n7JCXYOfqahlcLZ0fKxGGyUu1"
+  },
+  {
+   "categorySource": "organizador",
+   "ligaActive": false,
+   "woDeactivatedAt": "2026-08-03T01:33:15.088Z",
+   "categoryCommPending": "habilidade",
+   "categoryCommFields": [
+    "habilidade"
+   ],
+   "category": "D",
+   "uid": "lvTw5AiGnTYSOnljux78XlJ7f1v2",
+   "categoryCommAt": "2026-06-11T22:08:24.914Z",
+   "categories": [
+    "D"
+   ],
+   "enrollSeq": 14,
+   "selfEnrolled": true
+  },
+  {
+   "categories": [
+    "D"
+   ],
+   "selfEnrolled": true,
+   "wasUncategorized": true,
+   "enrollSeq": 64,
+   "category": "D",
+   "uid": "Y38ZNYLFF1XlkvO1GJO96NNJr5G2",
+   "addedAt": "2026-06-08T01:54:33.711Z",
+   "categorySource": "perfil",
+   "ligaActive": false
+  }
+ ],
+ "waitlist": [],
+ "standbyParticipants": [
+  {
+   "categorySource": "organizador",
+   "genderSource": "organizador",
+   "selfEnrolled": true,
+   "categories": [
+    "Masc C"
+   ],
+   "uid": "ah0binVRzBeI07LUEm6YaoUVJNU2",
+   "addedAt": "2026-08-02T22:45:23.950Z",
+   "category": "Masc C",
+   "ligaActive": true
+  },
+  {
+   "categories": [
+    "Masc C"
+   ],
+   "selfEnrolled": true,
+   "genderSource": "organizador",
+   "category": "Masc C",
+   "ligaActive": true,
+   "addedAt": "2026-08-03T20:02:17.939Z",
+   "uid": "8H5oIda6MwRUsV9DN6GEb98euu33",
+   "categorySource": "organizador"
+  },
+  {
+   "categorySource": "organizador",
+   "categories": [
+    "Masc C"
+   ],
+   "genderSource": "organizador",
+   "selfEnrolled": true,
+   "ligaActive": true,
+   "category": "Masc C",
+   "uid": "jSNA85jlsdfmG0rqvcmK7RicO1u2",
+   "addedAt": "2026-08-04T14:25:17.360Z"
+  },
+  {
+   "categorySource": "organizador",
+   "selfEnrolled": true,
+   "genderSource": "organizador",
+   "categories": [
+    "Fem D"
+   ],
+   "uid": "NUhmEsQAHyQXdz7gcpQv67jvCjp2",
+   "addedAt": "2026-08-05T16:27:12.086Z",
+   "ligaActive": true,
+   "category": "Fem D"
+  },
+  {
+   "selfEnrolled": true,
+   "addedAt": "2026-08-06T14:02:14.718Z",
+   "uid": "u9IUqeajHGPVFj1cSkzYj7F1nQG2",
+   "ligaActive": true
+  },
+  {
+   "name": "Nádia Santiago Lazarin",
+   "ligaActive": true,
+   "uid": "YijDdvhFwBYRPPJw1VjRZugky1R2",
+   "addedAt": "2026-08-06T14:17:35.678Z",
+   "gender": "feminino",
+   "selfEnrolled": true,
+   "displayName": "Nádia Santiago Lazarin",
+   "skillBySport": {
+    "Beach Tennis": "C"
+   },
+   "email": "nalazarin@gmail.com"
+  }
+ ],
+ "monarchWaitlist": {
+  "Masc_C": [
+   "Renato Oshima"
+  ],
+  "_default_": []
+ },
+ "checkedIn": {},
+ "absent": {
+  "tXnXDUn0sWZxTWzgDZSp3lLtZSS2": 1785684377580
+ },
+ "rounds": [
+  {
+   "round": 1,
+   "matches": [
+    {
+     "team1Uids": [
+      "qiZBRNedGufQJr2EvoPgcm9o0Qj1"
+     ],
+     "p1Uid": "qiZBRNedGufQJr2EvoPgcm9o0Qj1",
+     "id": "sitout-rr-r1-0-1785708005103",
+     "sitOutReason": "inactive",
+     "isSitOut": true,
+     "label": "R1 • Folga (inativo)",
+     "sitOutPoints": 0,
+     "p1": "Ana Ribeiro",
+     "_gameNum": null,
+     "roundIndex": 0,
+     "round": 1,
+     "p2": "FOLGA"
+    },
+    {
+     "sitOutPoints": 0,
+     "p1Uid": "Y38ZNYLFF1XlkvO1GJO96NNJr5G2",
+     "team1Uids": [
+      "Y38ZNYLFF1XlkvO1GJO96NNJr5G2"
+     ],
+     "label": "R1 • Folga (inativo)",
+     "isSitOut": true,
+     "id": "sitout-rr-r1-1-1785708005103",
+     "sitOutReason": "inactive",
+     "roundIndex": 0,
+     "round": 1,
+     "p1": "Fernanda Martins",
+     "_gameNum": null,
+     "p2": "FOLGA"
+    },
+    {
+     "round": 1,
+     "roundIndex": 0,
+     "_gameNum": null,
+     "p1": "Thereza",
+     "p2": "W.O.",
+     "sitOutPoints": 0,
+     "p1Uid": "lvTw5AiGnTYSOnljux78XlJ7f1v2",
+     "team1Uids": [
+      "lvTw5AiGnTYSOnljux78XlJ7f1v2"
+     ],
+     "label": "R1 • W.O.",
+     "isSitOut": true,
+     "id": "wo-r1-1785720795088-7209",
+     "sitOutReason": "wo"
+    }
+   ]
+  }
+ ]
+}
