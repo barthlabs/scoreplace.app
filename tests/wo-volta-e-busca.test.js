@@ -64,15 +64,39 @@ sec(function () {
   ok(html.indexOf('lista de espera') !== -1, 'e o título explica que ele está na fila');
 });
 
-// ── 2. LIGAR estando na fila devolve aos SORTEIOS ───────────────────────────
+// ── 2. LIGAR estando na fila: o destino depende de a fase JÁ ter sido sorteada ──
+//
+// ⚠️ ASSERÇÕES REVISADAS em 05/ago/2026 (v1.7.38). Antes esta seção exigia que ligar SEMPRE
+// devolvesse ao elenco — inclusive com a fase já sorteada. Era exatamente o que produzia o
+// INSCRITO FANTASMA: duas regras se contradiziam e a errada vencia.
+//   • v1.6.93: quem levou W.O. precisa de caminho de volta → ligar devolve ao elenco.
+//   • v1.6.86: reativar com a fase sorteada manda pra fila, senão a pessoa fica no elenco
+//     sem grupo — inscrita, fora dos jogos e fora da espera.
+// A primeira vencia porque marcava `_vindoDaFila`, e o guard da segunda começa com
+// `if (!_vindoDaFila ...)`. MEDIDO no Confra: Mari Telles, Ana Carolina Cilone e
+// danielacsimao caíram no limbo, cada uma minutos depois de se inscrever — na fila a pessoa
+// aparece como "Desativado", então ela liga o toggle pra jogar e sai do único lugar onde
+// alguém a chamaria.
+// O que as asserções protegiam (ter caminho de volta) continua travado no caso SEM sorteio.
+
+// (a) SEM sorteio → volta pro elenco e entra no sorteio (regra da v1.6.93, intacta)
 sec(function () {
-  const t = novoT(); carrega(t, 'uid_th');
+  const t = novoT(); t.rounds = []; carrega(t, 'uid_th');
   win._toggleLigaActive('T', true);
-  ok(nomes(t.participants).includes('Thereza'), 'volta pro elenco — é o que a põe no sorteio da próxima rodada');
-  ok(t.participants.find((p) => p.uid === 'uid_th').ligaActive === true, 'e volta ATIVA');
-  ok(!nomes(win._getWaitlist(t)).includes('Thereza'), 'sai da fila');
-  // e NÃO pode ser re-empurrada pra fila pelo ramo de reativação
-  ok(nomes(t.participants).includes('Thereza'), 'não pode voltar pra fila no mesmo clique');
+  ok(nomes(t.participants).includes('Thereza'), 'sem sorteio: volta pro elenco — entra no sorteio');
+  ok(t.participants.find((p) => p.uid === 'uid_th').ligaActive === true, '  → e volta ATIVA');
+  ok(!nomes(win._getWaitlist(t)).includes('Thereza'), '  → sai da fila');
+});
+
+// (b) COM a fase sorteada → FICA na fila, ativa. É de lá que ela é chamada.
+sec(function () {
+  const t = novoT(); carrega(t, 'uid_th');   // fixture já tem rounds = fase sorteada
+  win._toggleLigaActive('T', true);
+  ok(nomes(win._getWaitlist(t)).includes('Thereza'), 'fase sorteada: PERMANECE na fila');
+  ok(!nomes(t.participants).includes('Thereza'),
+    '  → NÃO vai pro elenco (seria o inscrito fantasma: sem grupo e fora da espera)');
+  const naFila = win._getWaitlist(t).find((p) => p.uid === 'uid_th');
+  ok(naFila && naFila.ligaActive === true, '  → mas fica marcada como ATIVA (quer jogar)');
 });
 
 // ── 3. DESLIGAR estando na fila vira desativado (não some) ──────────────────

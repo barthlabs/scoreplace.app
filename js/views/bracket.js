@@ -3814,9 +3814,21 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       };
       add(t && window._resolveSideLive ? window._resolveSideLive(t, m.p1, _uidsFor('p1')) : m.p1);
       add(t && window._resolveSideLive ? window._resolveSideLive(t, m.p2, _uidsFor('p2')) : m.p2);
-      // Rei/Rainha: os times são arrays de PESSOAS.
-      (m.team1 || []).forEach(add);
-      (m.team2 || []).forEach(add);
+      // Rei/Rainha: os times são arrays de PESSOAS — e os NOMES ali são os GRAVADOS no
+      // sorteio. Sem resolver por uid, a busca continua casando com o nome ANTIGO de quem
+      // trocou o displayName: o dono digitava "Fabi" e aparecia a "Dani Bataglia" (a mesma
+      // pessoa), porque o card mostrava o nome novo e o `data-players` guardava o velho.
+      // Regra dele: "não deve aparecer a busca de um nome antigo".
+      // Ver [[project_uid_identity_canon_locked]].
+      var _addLive = function (arr, uids) {
+        (arr || []).forEach(function (nm, i) {
+          var u = (uids || [])[i] || '';
+          add(u && typeof window._displayNameForUid === 'function'
+            ? window._displayNameForUid(u, nm) : nm);
+        });
+      };
+      _addLive(m.team1, m.team1Uids);
+      _addLive(m.team2, m.team2Uids);
     } catch (e) {}
     return window._safeHtml(out.join(' | '));
   })();
@@ -3966,7 +3978,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       var clr = i < classified ? '#4ade80' : 'var(--text-muted)';
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + bg + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + clr + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td style="padding:6px 10px;font-weight:600;color:var(--text-bright);">' + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(s.name, window._currentBracketTournament) : window._safeHtml(s.name))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
+        '<td style="padding:6px 10px;font-weight:600;color:var(--text-bright);">' + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s)))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#4ade80;font-weight:700;">' + s.wins + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#f87171;">' + s.losses + '</td>' +
         (s.points != null
@@ -4196,7 +4208,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     const rows = sorted.map((s, i) => `
       <tr style="border-bottom:1px solid var(--border-color);${i < classified ? 'background:rgba(34,197,94,0.08);' : ''}">
         <td style="padding:8px 12px;font-weight:700;color:${i < classified ? '#4ade80' : 'var(--text-muted)'};">${medal(i)}</td>
-        <td style="padding:8px 12px;font-weight:600;color:var(--text-bright);">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))}</td>
+        <td style="padding:8px 12px;font-weight:600;color:var(--text-bright);">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(window._liveRowName(s)))}</td>
         <td style="padding:8px 12px;font-weight:800;color:var(--primary-color);text-align:center;">${s.points}</td>
         <td style="padding:8px 12px;text-align:center;color:#4ade80;">${s.wins}</td>
         ${_drawsAllowedGS ? `<td style="padding:8px 12px;text-align:center;color:#94a3b8;">${s.draws || 0}</td>` : ''}
@@ -4508,7 +4520,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       return '<tr style="border-bottom:1px solid var(--border-color);' + (_bg ? 'background:' + _bg + ';' : '') + '">';
     })()}
       <td style="padding:11px 14px;font-weight:800;color:${posColor(i)};">${medal(i)}</td>
-      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_safeName}',{uid:'${String(s.uid||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',tournamentId:'${_safeTid}'});else window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver ficha de ${window._safeHtml(s.name)}">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span>${typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: false }) : ''}</td>
+      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_safeName}',{uid:'${String(s.uid||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',tournamentId:'${_safeTid}'});else window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver ficha de ${window._safeHtml(s.name)}">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(s.name))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span>${typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: false }) : ''}</td>
       ${_scoreCell}
       ${_pctCell}
       <td style="padding:11px 14px;text-align:center;color:#4ade80;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','wins')" title="Clique para ver as vitórias">${s.wins}</td>
@@ -4766,7 +4778,10 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // inteiro (estatísticas globais) — nada regride pra quem não é organizador.
             var _pillClick = _outIsAdmin ? '' :
               (' onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + _outEsc(m.p1) + '\',\'' + _outTidJs + '\')"');
-            return '<span data-players="' + window._safeHtml(_nmPill) + '" data-my-match="1" style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;"' + _pillClick + '>' + _outPersonHtml(_nmPill, _uidPill) + _ptsLbl + _meBadge + '</span>';
+            // data-players pelo nome VIVO (uid) — senão a busca acha pelo nome antigo.
+            var _nmBusca = (_uidPill && typeof window._displayNameForUid === 'function')
+              ? window._displayNameForUid(_uidPill, _nmPill) : _nmPill;
+            return '<span data-players="' + window._safeHtml(_nmBusca) + '" data-my-match="1" style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;"' + _pillClick + '>' + _outPersonHtml(_nmPill, _uidPill) + _ptsLbl + _meBadge + '</span>';
           }).join('');
           // v4.x: cabeçalho DENTRO do box colorido (igual à Lista de espera) — o título
           // "Desativados (N) — …" fica no mesmo box vermelho dos chips, não solto acima.
@@ -4807,7 +4822,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               var _me = _isMe ? '<span style="font-size:0.6rem;font-weight:800;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
               // v1.6.93: idem — a busca tem que achar quem está na lista de espera.
               // v1.7.10: mesmo miolo dos demais chips — ficha (autoridade) + 💬 de contato.
-              return '<span data-players="' + window._safeHtml(n) + '" data-my-match="1" style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + _outPersonHtml(n, _wlUidByName[n] || '') + _me + '</span>';
+              var _nBusca = (_wlUidByName[n] && typeof window._displayNameForUid === 'function')
+                ? window._displayNameForUid(_wlUidByName[n], n) : n;
+              return '<span data-players="' + window._safeHtml(_nBusca) + '" data-my-match="1" style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + _outPersonHtml(n, _wlUidByName[n] || '') + _me + '</span>';
             }).join('');
             var _sameDayRR = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
             var _eligRR = _wlNames.length;
@@ -5063,7 +5080,20 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               // Identidade por uid quando existe; o nome vai junto só como rótulo.
               var _gstEsc = function (x) { return String(x == null ? '' : x).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
               var _gstNameHtml = function (s) {
-                var _txt = window._safeHtml(s.name);
+                // ⚠️ v1.7.46 — O NOME EXIBIDO SAI DO PERFIL, PELO UID. `s.name` é o rótulo
+                // GRAVADO no sorteio (`monarchGroups[i].players[]`) e ENVELHECE: quem troca o
+                // displayName continua aparecendo com o nome velho aqui, enquanto os cards do
+                // jogo — que resolvem por uid — já mostram o novo. Foi o print do dono:
+                // "Fabi2401@" na classificação e "Dani Bataglia" nos jogos, a MESMA pessoa.
+                // `_displayNameForUid` é o resolvedor canônico: perfil vivo primeiro, rótulo
+                // guardado só como reserva (fictício/uid órfão).
+                // ⚠️ O rótulo guardado segue indo pro `_computeMonarchStandings` e pro
+                // `_openPlayerProfile` de propósito — lá ele é CHAVE de casamento com os
+                // jogos, não texto de tela. Trocar a chave quebraria a contagem.
+                // Ver [[project_uid_identity_canon_locked]], [[project_uid_primary_identity]].
+                var _nomeVivo = (typeof window._liveRowName === 'function')
+                  ? window._liveRowName(s) : s.name;
+                var _txt = window._safeHtml(_nomeVivo);
                 if (typeof window._openPlayerProfile !== 'function') return _txt;
                 // SEM UID NÃO ABRE FICHA (regra do dono: "sempre por uid, a menos que seja
                 // nome digitado"). Antes o nome saía clicável com `uid:''` e a ficha caía em

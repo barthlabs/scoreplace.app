@@ -1,3 +1,46 @@
+
+// ─── "Você já está inscrito com outra conta?" ────────────────────────────────
+// A detecção roda no SERVIDOR (enrollParticipant devolve `dupSuspect`) e chega aqui já
+// MASCARADA — o cliente nunca recebe o uid nem o contato cheio da outra conta.
+//
+// Nada é bloqueado e nada é fundido por esta tela: a inscrição já foi gravada (fail-open) e
+// quem autoriza qualquer fusão é a PROVA DE POSSE (link no e-mail ou SMS no celular da outra
+// conta), que vive no perfil. Nome igual detecta; nome igual não autoriza.
+//
+// O "não sou eu" é gravado pelo servidor nos DOIS perfis (dismissDuplicateSuspicion) — sem
+// isso a mesma pergunta voltaria em todo torneio novo, pra sempre. Foi o caso das duas contas
+// "Nelson Barth", que são pessoas diferentes.
+window._askDuplicatePerson = function (tId, dup) {
+  if (!dup || typeof showConfirmDialog !== 'function') return;
+  var contato = dup.maskedEmail || dup.maskedPhone || '';
+  var corpo = window._safeHtml(dup.texto || '') +
+    (contato ? ('<div style="margin-top:10px;font-size:0.8rem;color:var(--text-muted);">Conta encontrada: <strong>' +
+      window._safeHtml(contato) + '</strong></div>') : '') +
+    '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);line-height:1.45;">' +
+      'Unir só acontece depois que você confirmar a posse daquela conta — por link no e-mail ou código no celular. ' +
+      'Nada é unido só porque os nomes são iguais.' +
+    '</div>';
+
+  showConfirmDialog('👥 Essa conta é sua?', corpo, function () {
+    // SIM — a prova de posse mora no perfil, onde os dois canais já existem.
+    if (typeof showNotification !== 'undefined') {
+      showNotification('Confirme a posse', 'Abrimos seu perfil: confirme pelo e-mail ou pelo celular da outra conta pra unir as duas.', 'info');
+    }
+    window.location.hash = '#profile';
+  }, function () {
+    // NÃO — registra pros dois lados e nunca mais pergunta sobre esta pessoa.
+    try {
+      var fns = (window.firebase && firebase.functions) ? firebase.functions() : null;
+      if (!fns) return;
+      fns.httpsCallable('dismissDuplicateSuspicion')({ tournamentId: tId }).then(function () {
+        if (typeof showNotification !== 'undefined') {
+          showNotification('Entendido', 'Não perguntamos mais sobre essa conta.', 'success');
+        }
+      }).catch(function (e) { if (window._warn) window._warn('[dupSuspect] dismiss falhou:', e); });
+    } catch (e) { if (window._warn) window._warn('[dupSuspect] dismiss falhou:', e); }
+  }, { confirmText: 'Sim, é minha outra conta', cancelText: 'Não sou eu' });
+};
+
 // tournaments-enrollment.js — Enrollment/deenrollment system (extracted from tournaments.js)
 
 (function() {
@@ -703,10 +746,12 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
                 }
                 var _vcWl = document.getElementById('view-container');
                 if (_vcWl && typeof renderTournaments === 'function') renderTournaments(_vcWl, tId);
+                if (result.dupSuspect) window._askDuplicatePerson(tId, result.dupSuspect);
                 return;
             }
             // Sync authoritative server state
             t.participants = result.participants;
+            if (result.dupSuspect) window._askDuplicatePerson(tId, result.dupSuspect);
             // v2.6.88: Vagas com sorteio — atingiu o máx. → avisa todos os inscritos da lista de espera.
             if (result.reachedCapacityDraw && typeof window._notifyTournamentParticipants === 'function') {
                 window._notifyTournamentParticipants(t, { type: 'tournament_update', message: 'As vagas de "' + (t.name || 'Torneio') + '" foram preenchidas. Novas inscrições entram na lista de espera — um sorteio definirá quem joga.', level: 'important' });
@@ -1383,14 +1428,35 @@ window._toggleLigaActive = function(tId, isActive) {
     });
     if (_naEspera) {
       if (isActive) {
-        // volta pro elenco ATIVO — entra no próximo sorteio
+        // ⚠️ v1.7.38 — LIGAR ESTANDO NA FILA **NÃO TIRA DA FILA** QUANDO A FASE JÁ FOI
+        // SORTEADA. Duas regras se contradiziam aqui, e o resultado era o INSCRITO FANTASMA:
+        //
+        //   • v1.6.93: quem levou W.O. e foi pro fim da fila precisa de caminho de volta →
+        //     ligar devolve ao elenco ativo (que é a fonte do sorteio).
+        //   • v1.6.86: reativar com a fase JÁ sorteada manda pra fila, senão a pessoa fica
+        //     no elenco sem grupo — inscrita, fora dos jogos, fora da espera.
+        //
+        // A primeira vencia porque marcava `_vindoDaFila`, e o guard da segunda começa com
+        // `if (!_vindoDaFila ...)`. MEDIDO no Confra (05/ago/2026): Mari Telles, Ana Carolina
+        // Cilone e danielacsimao caíram nesse limbo, cada uma minutos depois de se inscrever
+        // — na fila a pessoa aparece como "Desativado", então ela liga o toggle pra jogar e
+        // o app a tirava do único lugar onde alguém a chamaria.
+        //
+        // Com a fase sorteada, estar na fila JÁ É o estado certo de quem quer jogar: é de lá
+        // que "Novos Confrontos" e o organizador chamam. Então ligar só marca disponibilidade
+        // (`ligaActive`) e a pessoa PERMANECE na fila, na posição dela. Sem sorteio ainda, o
+        // comportamento da v1.6.93 continua igual: volta pro elenco e entra no sorteio.
         var _volta = _naEspera;
-        if (typeof window._removeFromWaitlist === 'function') {
-          window._removeFromWaitlist(t, (window._pName ? window._pName(_volta, '') : '') || _volta.displayName || _volta.name || '');
-        }
+        var _faseSorteada = (typeof window._phaseDrawDone === 'function') && window._phaseDrawDone(t);
         _volta.ligaActive = true;
         delete _volta.woSentToWaitlistAt;
-        arr.push(_volta); t.participants = arr;
+        if (!_faseSorteada) {
+          if (typeof window._removeFromWaitlist === 'function') {
+            window._removeFromWaitlist(t, (window._pName ? window._pName(_volta, '') : '') || _volta.displayName || _volta.name || '');
+          }
+          arr.push(_volta); t.participants = arr;
+        }
+        // fase sorteada → fica na fila (não mexe em participants nem na espera)
         _vindoDaFila = _volta;
         found = _volta;
       } else {

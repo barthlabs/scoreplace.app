@@ -554,6 +554,31 @@ window.FirestoreDB = {
               _slotNovo++;
             }
           });
+          // ── v1.7.36 · VIGIA ESTRUTURAL (metade do cliente) ───────────────────
+          // Os guards acima moram no CLIENTE QUE GRAVA — só protegem quem os carrega.
+          // O app NATIVO não tem auto-update: mesmo com a 1.7.35 aprovada, vai existir
+          // uma janela com gente rodando 1.6.3/1.7.9 e gravando no mesmo torneio.
+          //
+          // `rosterRev` é um contador de nível de DOCUMENTO que sobe quando uma troca
+          // de escalação é ACEITA. Ele não está na allowlist do participante em
+          // `firestore.rules` (que é `hasOnly([...])`, lista FECHADA), então campo novo
+          // já nasce inescrevível por ele — nenhuma mudança de regra foi necessária.
+          //
+          // O que isso compra: no servidor dá pra separar "escalação mudou junto com o
+          // contador" (veio de quem tem autoridade) de "escalação mudou e o contador
+          // ficou parado" (cliente velho devolvendo estado antigo). Quem lê isso é o
+          // gatilho `guardBracketRosters`, hoje em modo OBSERVAÇÃO.
+          //
+          // Só sobe quando uma troca foi de fato aceita (`_slotNovo`) — nunca num save
+          // comum, senão a escrita do participante passaria a carregar um campo fora da
+          // allowlist e seria RECUSADA INTEIRA (ele perderia o lançamento de placar).
+          if (_slotNovo > 0) {
+            var _revB = (typeof _bancoP.rosterRev === 'number') ? _bancoP.rosterRev : 0;
+            cleanData.rosterRev = _revB + 1;
+          } else if (_bancoP.rosterRev != null && cleanData.rosterRev == null) {
+            cleanData.rosterRev = _bancoP.rosterRev;   // não perde o contador
+          }
+
           if (_slotRev.length) {
             if (window._warn) window._warn('[saveTournament] ESCALACAO PROTEGIDA em ' + docId + ': o save trazia escalação ANTIGA de ' +
               _slotRev.length + ' jogo(s) (ex.: substituição por W.O. já aplicada) — restaurada do banco (' + _slotRev.join(', ') + ').');

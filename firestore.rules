@@ -359,8 +359,20 @@ service cloud.firestore {
       // no js/ — só leituras), e o Admin SDK ignora rules por definição.
       //   mergedInto/mergedAt → prova de merge (resolveMergedLogin dá custom token)
       //   plan/planExpiresAt  → assinatura Pro (só o webhook do Stripe pode conceder)
+      //   dupDismissed        → v1.7.44. Memória do "não sou eu": suprime a pergunta de
+      //     conta duplicada. Escrito só por dismissDuplicateSuspicion, que grava nos DOIS
+      //     perfis DEPOIS de redescobrir o par no servidor. Forjá-lo não dá acesso a nada
+      //     (só cala um aviso sobre si mesmo), mas é decisão do SERVIDOR sobre identidade —
+      //     e o histórico aqui é claro: campo que o servidor consulta pra decidir não se
+      //     deixa na mão de quem ele avalia.
+      //   nameConflict        → v1.7.44. Sinal gravado pelo trigger enforceUniqueDisplayName
+      //     quando o nome colide. É o que faz a pergunta aparecer; escrevível pelo cliente,
+      //     vira um jeito de nunca ser perguntado — e de plantar um aviso falso com
+      //     contato inventado na tela de outra pessoa se um dia virar leitura cruzada.
+      // Bloquear os dois é grátis: ZERO caminho do cliente os escreve (conferido em js/ —
+      // 12 menções, todas de leitura), e o Admin SDK ignora rules por definição.
       function privilegedUserFields() {
-        return ['mergedInto', 'mergedAt', 'plan', 'planExpiresAt'];
+        return ['mergedInto', 'mergedAt', 'plan', 'planExpiresAt', 'dupDismissed', 'nameConflict'];
       }
       function touchesPrivileged() {
         return request.resource.data.diff(resource.data).affectedKeys()

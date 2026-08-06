@@ -137,6 +137,41 @@ ok(findUidPaths({ a: 1 }, OLD).length === 0, 'findUidPaths: doc sem o uid → va
 ok(torneio.participants[0].uid === OLD, 'a entrada NÃO é mutada (só a cópia muda)');
 ok(torneio.checkedIn[OLD] === 1784100000000, 'mapa da entrada intacto');
 
+// ── CHAVE COMPOSTA: o uid EMBUTIDO numa string maior ─────────────────────────
+// Defeito REAL, medido em produção em 05/ago/2026, DEPOIS de fundir a conta Apple do Eduardo
+// Mange: o `opponentHistory` do Confra guarda o par de adversários numa chave
+// `uid:<A>|||uid:<B>`. A troca por igualdade exata não enxergava isso, e 3 chaves ficaram com
+// o uid morto — o motor "esquecia" que ele já tinha enfrentado aquelas 3 pessoas e podia
+// repetir o confronto. Invisível na tela, visível no sorteio seguinte.
+(() => {
+  const A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const doc = {
+    opponentHistory: { _default_: {
+      ['uid:' + A + '|||uid:' + OLD]: 3,
+      ['uid:' + OLD + '|||uid:' + A]: 2,   // a mesma dupla na ordem inversa
+    } },
+    log: 'sorteio pareou ' + OLD + ' contra ' + A,
+  };
+  const r = remapUid(doc, OLD, NEW);
+  const chaves = Object.keys(r.value.opponentHistory._default_);
+  ok(r.changed, 'chave composta: o sweep percebe a mudança');
+  ok(chaves.every((k) => k.indexOf(OLD) === -1), '  → nenhuma chave composta guarda o uid morto');
+  ok(chaves.some((k) => k === 'uid:' + A + '|||uid:' + NEW), '  → a chave foi reescrita com o uid vivo');
+  ok(r.value.log.indexOf(OLD) === -1 && r.value.log.indexOf(NEW) !== -1,
+    '  → uid embutido em texto livre também é trocado');
+  ok(doc.opponentHistory._default_['uid:' + A + '|||uid:' + OLD] === 3,
+    '  → a entrada NÃO é mutada');
+})();
+
+// Colisão de chave composta: o valor do SOBREVIVENTE prevalece (estado atual > estado velho).
+(() => {
+  const A = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  const doc = { h: { ['uid:' + A + '|||uid:' + OLD]: 9, ['uid:' + A + '|||uid:' + NEW]: 1 } };
+  const r = remapUid(doc, OLD, NEW);
+  ok(Object.keys(r.value.h).length === 1, 'colisão de chave composta → uma chave só');
+  ok(r.value.h['uid:' + A + '|||uid:' + NEW] === 1, '  → prevalece o valor do sobrevivente');
+})();
+
 console.log(fail === 0
   ? '✅ uid-sweep: ' + pass + ' ok, 0 falharam'
   : '❌ uid-sweep: ' + fail + ' falharam, ' + pass + ' ok');

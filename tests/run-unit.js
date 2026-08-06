@@ -434,6 +434,19 @@ const SUITES = [
   // a Silvia perderia 44 campos pra uma conta de 17). Varredura genérica com lista de
   // exclusão: campo novo no perfil é preservado sem ninguém lembrar de atualizar lista.
   'functions/test-profile-merge-core.js',
+  // A ANÁLISE NUNCA grava na pessoa errada. O `parts[order-1]` fazia a edição pousar em
+  // OUTRA pessoa (medido: Vivi Hirata e Vivian gravadas no mesmo segundo com valores
+  // trocados). Resolução SÓ por uid; sem casar, PULA.
+  'tests/analise-nunca-grava-na-pessoa-errada.test.js',
+  // O NOME EXIBIDO sai do PERFIL (uid), nunca do rótulo gravado no sorteio. Print do dono:
+  // a mesma pessoa como "Fabi2401@" na classificação e "Dani Bataglia" nos jogos.
+  'tests/nome-vem-do-perfil-nao-do-sorteio.test.js',
+  'functions/test-merge-collections-core.js',
+  // "Esta pessoa já não está inscrita com OUTRA conta?" — os sinais que o dono aprovou
+  // (celular INTEIRO, nome idêntico, letzplay só corroborando) e, metade das asserções,
+  // os que ele PROIBIU: subconjunto de nome (30% de acerto) e nascimento+1º nome.
+  // Trava também o "não sou eu" lembrado — o caso das duas contas "Nelson Barth".
+  'functions/test-duplicate-person-core.js',
   // NOME ÚNICO no SERVIDOR: a regra existia em 4 pontos, 3 deles no cliente e fail-open —
   // login federado não passava por checagem server-side, e homônimos continuaram nascendo
   // (11/jul, 14/jul, 17/jul, 30/jul) depois de a lei existir (24/jun).
@@ -553,6 +566,13 @@ const SUITES = [
   // celular+senha porque a regra só existia no cliente. Conflito = already-exists
   // com e-mail mascarado — NUNCA auto-sufixo silencioso.
   'functions/test-name-unique-core.js',
+  'functions/test-roster-watch.js',
+  // A DICA NUNCA aparece com o placar em quadra aberto. A trava vivia só no
+  // hints.js; quem ESCURECE a tela é o coachmarks.js, que nasceu depois e não
+  // sabia que o placar existe (e ainda é ele quem religa o hints.js). Roda o
+  // coachmarks REAL com relógio controlado; contra o código anterior a dica
+  // nasce em cima de quem está marcando ponto.
+  'tests/dica-nunca-no-placar.test.js',
 ];
 
 let failed = [];

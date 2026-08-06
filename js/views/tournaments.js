@@ -4098,6 +4098,18 @@ function renderTournaments(container, tournamentId = null) {
 
     const html = `
     ${headerHtml}
+    ${/* v1.7.43 — A BUSCA DA CHAVE VAI PRO TOPO DO FLUXO, logo abaixo do cabeçalho.
+          MEDIDO no navegador do dono (05/ago): emitida acima do #inline-bracket-container,
+          ela caía em y=2826 — havia 2.320px de detalhe do torneio ANTES dela. E `sticky`
+          NÃO PUXA nada pra cima: só prende depois que a rolagem leva a posição natural
+          acima do `top`. Ou seja, era preciso rolar ~2.700px antes de ela grudar.
+          O "funciona quando entra e depois quebra" era o conteúdo acima terminando de
+          montar e empurrando-a pra baixo — daí a intermitência.
+          Ordem do dono: "travado no topo sempre visível e ativo". Como 1ª irmã depois do
+          cabeçalho ela já nasce em 124 (o fundo do header) e fica lá o tempo todo, sem
+          precisar de `fixed` nem de compensação de espaço. A 1.7.14 continua valendo: o
+          pai segue sendo o #view-container, não o container do chaveamento. */''}
+    ${hasDrawn && typeof window._bracketBar === 'function' ? window._bracketBar(true) : ''}
     ${filterBarHtml}
     ${pollBannerHtml}
 
@@ -4125,7 +4137,6 @@ function renderTournaments(container, tournamentId = null) {
             houver página, e volta ao lugar quando o scroll volta — o mesmo comportamento das
             outras telas. Mesma barra canônica (window._bracketBar), mesma posição visual.
             Quem emite aqui é esta tela; o renderBracket inline não emite (senão duplicaria). */''}
-      ${typeof window._bracketBar === 'function' ? window._bracketBar(true) : ''}
       <div id="inline-bracket-container"></div>
     ` : ''}
 

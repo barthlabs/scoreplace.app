@@ -32,9 +32,14 @@ const admin = require("firebase-admin");
 const _mergeRules = require("./merge-rules");
 const _profileMerge = require("./profile-merge-core");
 const _uidSweep = require("./uid-sweep");
+const _mergeCols = require("./merge-collections-core");
+const _dupPerson = require("./duplicate-person-core");
 const _enrollCore = require("./enroll-core");
 const _nameUnique = require("./name-unique-core");
 const _nameVariant = require("./name-variant-core");
+// v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
+// autoridade pra isso. Pendurado no syncMatchRosters (mesmo gatilho, custo zero).
+const _rosterWatch = require("./roster-watch-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -122,6 +127,60 @@ function _replaceNameInMatches(matches, oldUid, newName, newUid) {
  * Repair all tournaments: replace every reference to the dropped account
  * (by uid, email, or display name) with the keeper's identity. Batched.
  */
+
+/**
+ * Varre as SUBCOLEÇÕES de um torneio trocando o uid — nas duas formas em que ele aparece:
+ *   • ID DO DOCUMENTO — o espelho do roster é `participants/{uid}`. Aqui não dá pra
+ *     renomear: copia pro id novo e apaga o velho, COPIANDO PRIMEIRO (falha no meio deixa
+ *     o doc nos dois lados por um instante, nunca o faz sumir). Se o destino JÁ existe, o
+ *     do sobrevivente prevalece e o do drop é só removido — mesma regra de colisão do
+ *     uid-sweep (estado atual > estado da conta absorvida).
+ *   • CONTEÚDO — `results/*.playerUids` e afins, pelo mesmo remapUid do documento.
+ *
+ * Best-effort: falhar aqui não desfaz a fusão, que já gravou o essencial.
+ */
+async function _sweepTournamentSubcollections(db, tourRef, dropUid, keepUid) {
+  if (!dropUid || !keepUid) return 0;
+  let n = 0;
+  let cols = [];
+  try { cols = await tourRef.listCollections(); } catch (e) { return 0; }
+  for (const col of cols) {
+    try {
+      // (a) doc cujo ID é o uid morto
+      const velho = await col.doc(dropUid).get();
+      if (velho.exists) {
+        const novoRef = col.doc(keepUid);
+        const novo = await novoRef.get();
+        if (!novo.exists) await novoRef.set(velho.data());   // cópia PRIMEIRO
+        await velho.ref.delete();
+        n++;
+      }
+      // (b) uid dentro do conteúdo
+      const snap = await col.get();
+      let b = db.batch();
+      let k = 0;
+      for (const doc of snap.docs) {
+        const atual = doc.data();
+        const swept = _uidSweep.remapUid(atual, dropUid, keepUid);
+        if (!swept.changed) continue;
+        const payload = {};
+        for (const campo of Object.keys(swept.value)) {
+          if (JSON.stringify(swept.value[campo]) !== JSON.stringify(atual[campo])) payload[campo] = swept.value[campo];
+        }
+        if (!Object.keys(payload).length) continue;
+        b.update(doc.ref, payload);
+        k++; n++;
+        if (k % 400 === 0) { await b.commit(); b = db.batch(); }
+      }
+      if (k) await b.commit();
+    } catch (e) {
+      console.error(`[_sweepTournamentSubcollections] ${tourRef.id}/${col.id} falhou:`, e && e.message);
+    }
+  }
+  if (n) console.log(`[_sweepTournamentSubcollections] ${tourRef.id}: ${n} doc(s)`);
+  return n;
+}
+
 async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, keepEmail, keepName) {
   const tourSnaps = await db.collection("tournaments").get();
   let tourFixed = 0;
@@ -200,6 +259,16 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
         delete payload[campo];
       }
     }
+    // ── SUBCOLEÇÕES do torneio (v1.7.40) ────────────────────────────────────
+    // A varredura acima cobre o DOCUMENTO. As subcoleções ficavam de fora, e nelas o uid
+    // aparece de DUAS formas: como ID DO DOC (o espelho do roster é `participants/{uid}`,
+    // o dual-write da 1.7.29) e DENTRO do conteúdo (`results/*.playerUids`).
+    // MEDIDO em 05/ago/2026, depois de fundir: o espelho do Eduardo continuou sob o uid
+    // MORTO — o doc respondia 200 no uid apagado e 404 no sobrevivente. O espelho existe
+    // justamente pra ser a rede contra perda de inscrito; apontando pra uid morto, ele não
+    // protege ninguém. Roda pra todo torneio, não só os que o sweep do doc alterou.
+    await _sweepTournamentSubcollections(db, tourDoc.ref, dropUid, keepUid);
+
     if (!Object.keys(payload).length) continue;
 
     batch.update(tourDoc.ref, payload);
@@ -374,16 +443,18 @@ async function _executeMerge(db, keepDoc, dropDoc) {
     console.error("[_executeMerge] letzplay falhou:", (e && (e.code || e.message)) || e);
   }
 
-  // Transfer casualMatches ownership
-  const casualSnap = await db.collection("casualMatches")
-    .where("creatorUid", "==", dropUid).get();
-  let casualFixed = 0;
-  if (!casualSnap.empty) {
-    let b = db.batch(); let bc = 0;
-    casualSnap.docs.forEach(doc => { b.update(doc.ref, { creatorUid: keepUid }); bc++; });
-    await b.commit();
-    casualFixed = casualSnap.size;
-  }
+  // ── TODAS as coleções, sempre ("se mescla tudo é tudo sempre", regra do dono) ──────
+  // Antes só `casualMatches` era tratado aqui, e por um campo que NEM EXISTE nos docs
+  // (`creatorUid`; o real é `createdBy`) — no-op desde sempre. `presences` ficava de fora
+  // (3 check-ins apontariam pra uid morto). A varredura agora DESCOBRE as coleções em tempo
+  // de execução e varre todas, menos as que têm tratamento próprio (lista de EXCLUSÃO no
+  // core). Coleção nova nasce coberta, sem ninguém lembrar de cadastrá-la.
+  const sweptFixed = await _sweepAllCollectionsByUid(db, dropUid, keepUid);
+  const casualFixed = sweptFixed.casualMatches || 0;
+  const colFixed = sweptFixed;
+
+  // ── Notificações: a caixa da conta absorvida vai pra do sobrevivente, SEM duplicar ──
+  const notifFixed = await _migrateNotifications(db, dropUid, keepUid);
 
   // Mark old doc as merged
   await db.collection("users").doc(dropUid).set(
@@ -400,8 +471,146 @@ async function _executeMerge(db, keepDoc, dropDoc) {
   catch (e) { _drEmail = dropData.email || null; _drPhone = dropData.phone || null; }
   await _recordLoginRedirects(db, keepUid, _drEmail, _drPhone);
 
-  console.log(`[_executeMerge] Done: tourFixed=${tourFixed} casualFixed=${casualFixed}`);
-  return { tourFixed, casualFixed };
+  console.log(`[_executeMerge] Done: tourFixed=${tourFixed} casualFixed=${casualFixed} ` +
+    `presences=${sweptFixed.presences || 0} venues=${sweptFixed.venues || 0} ` +
+    `notifMovidas=${notifFixed.moved} notifDuplicadas=${notifFixed.duplicates} notifDeTerceiros=${notifFixed.fromUid}`);
+  return { tourFixed, casualFixed, colFixed, notifFixed };
+}
+
+/**
+ * VARREDURA GENÉRICA DE UID EM TODAS AS COLEÇÕES.
+ *
+ * Não recebe lista: pergunta ao Firestore quais coleções existem (`listCollections`) e varre
+ * cada uma que não esteja na exclusão do core, aplicando o mesmo motor dos torneios
+ * (`uid-sweep.remapUid` — acha o uid em qualquer profundidade, inclusive como chave de mapa,
+ * preserva Timestamp por referência e dedupa array). Grava só os campos que mudaram.
+ *
+ * Best-effort POR COLEÇÃO: uma falhar não aborta a fusão nem as outras — o essencial
+ * (torneios, perfil, Auth) já rodou antes daqui.
+ *
+ * ⚠️ Nunca ENCOLHE lista: o sweep TROCA valores, jamais remove. Se algum array reescrito vier
+ * menor que o lido, aquele campo é descartado e o caso é logado — mesma trava do
+ * _repairTournaments (o sumiço do Gersom, v1.7.26).
+ * @returns {Object} contagem de docs alterados por coleção
+ */
+async function _sweepAllCollectionsByUid(db, dropUid, keepUid) {
+  const out = {};
+  if (!dropUid || !keepUid) return out;
+  let cols = [];
+  try { cols = await db.listCollections(); }
+  catch (e) { console.error("[_sweepAllCollectionsByUid] listCollections falhou:", e && e.message); return out; }
+
+  for (const ref of cols) {
+    const nome = ref.id;
+    if (!_mergeCols.shouldSweepCollection(nome)) continue;
+    out[nome] = 0;
+    try {
+      const snap = await ref.get();
+      let b = db.batch();
+      let n = 0;
+      for (const doc of snap.docs) {
+        // Os DOIS docs de perfil envolvidos têm regra própria (computeProfileMerge +
+        // tombstone) — varrê-los aqui sobrescreveria essa decisão. Os de TERCEIROS entram:
+        // é onde vivem `friends[]` e `friendRequestsSent[]` com o uid morto.
+        if (nome === "users" && (doc.id === dropUid || doc.id === keepUid)) continue;
+        const atual = doc.data();
+        const swept = _uidSweep.remapUid(atual, dropUid, keepUid);
+        if (!swept.changed) continue;
+        const payload = {};
+        for (const k of Object.keys(swept.value)) {
+          if (JSON.stringify(swept.value[k]) !== JSON.stringify(atual[k])) payload[k] = swept.value[k];
+        }
+        // ── trava anti-encolhimento ────────────────────────────────────────────
+        // A varredura TROCA uid; ela nunca deve fazer PESSOA sumir de uma lista. Mas há um
+        // encolhimento LEGÍTIMO: quando alguém tinha as DUAS contas na lista (é amigo do
+        // Eduardo pelo Google E pelo Apple), a troca colapsa as duas numa — e aí o array
+        // encolhe justamente porque a fusão funcionou. Comparar só o TAMANHO confunde os dois
+        // casos e descartava o `friends[]` do dono (medido em 05/ago/2026).
+        // Regra certa: o resultado tem que bater com o esperado — a lista original com
+        // drop→keep aplicado e duplicata removida. Qualquer perda ALÉM disso é descartada.
+        for (const k of Object.keys(payload)) {
+          const antes = atual[k], depois = payload[k];
+          if (!Array.isArray(depois) || !Array.isArray(antes)) continue;
+          if (depois.length >= antes.length) continue;
+          const soStrings = antes.every((x) => typeof x === "string");
+          const esperado = soStrings
+            ? Array.from(new Set(antes.map((x) => (x === dropUid ? keepUid : x))))
+            : null;
+          if (esperado && esperado.length === depois.length &&
+              esperado.every((x) => depois.indexOf(x) !== -1)) continue;   // dedup legítimo
+          console.error(`[_sweepAllCollectionsByUid] DESCARTADO ${nome}/${doc.id}.${k}: ` +
+            `${antes.length} → ${depois.length}. Sweep de uid não remove item além do dedup.`);
+          delete payload[k];
+        }
+        if (!Object.keys(payload).length) continue;
+        b.update(doc.ref, payload);
+        n++;
+        out[nome]++;
+        if (n % 400 === 0) { await b.commit(); b = db.batch(); }
+      }
+      if (n % 400 !== 0 || n === 0) await b.commit();
+      if (out[nome]) console.log(`[_sweepAllCollectionsByUid] ${nome}: ${out[nome]} doc(s)`);
+    } catch (e) {
+      console.error(`[_sweepAllCollectionsByUid] ${nome} falhou:`, e && e.message);
+    }
+  }
+  return out;
+}
+
+/**
+ * users/{drop}/notifications/* → users/{keep}/notifications/*, sem duplicar, e reaponta o
+ * `fromUid` das notificações de TERCEIROS que citam o uid morto (senão o nome e a foto do
+ * remetente deixam de resolver na caixa de outra pessoa).
+ *
+ * Copia-e-apaga em vez de mover (o Firestore não tem move): a cópia vai PRIMEIRO e só depois
+ * o original é apagado — se algo falhar no meio, o pior caso é a notificação existir nos dois
+ * lados por um instante, nunca sumir. Duplicata detectada pela assinatura é apagada na
+ * origem sem ser copiada: a conta vai deixar de existir e o aviso já está na caixa certa.
+ */
+async function _migrateNotifications(db, dropUid, keepUid) {
+  const res = { moved: 0, duplicates: 0, fromUid: 0 };
+  try {
+    const [dropSnap, keepSnap] = await Promise.all([
+      db.collection("users").doc(dropUid).collection("notifications").get(),
+      db.collection("users").doc(keepUid).collection("notifications").get(),
+    ]);
+    const plano = _mergeCols.planNotifMigration(
+      dropSnap.docs.map((d) => ({ id: d.id, data: d.data() })),
+      keepSnap.docs.map((d) => ({ id: d.id, data: d.data() })),
+      dropUid, keepUid
+    );
+    const keepCol = db.collection("users").doc(keepUid).collection("notifications");
+    const dropCol = db.collection("users").doc(dropUid).collection("notifications");
+    for (const m of plano.moves) {
+      await keepCol.doc(m.toId).set(m.data);
+      await dropCol.doc(m.fromId).delete();
+      res.moved++;
+    }
+    for (const d of plano.duplicates) {
+      await dropCol.doc(d.id).delete();
+      res.duplicates++;
+    }
+  } catch (e) {
+    console.error("[_migrateNotifications] caixa do drop falhou:", e && e.message);
+  }
+  // Remetente: percorre TODAS as caixas (collectionGroup) atrás do uid morto.
+  try {
+    const from = await db.collectionGroup("notifications").where("fromUid", "==", dropUid).get();
+    if (!from.empty) {
+      let b = db.batch();
+      let n = 0;
+      for (const doc of from.docs) {
+        b.update(doc.ref, { fromUid: keepUid });
+        n++;
+        if (n % 400 === 0) { await b.commit(); b = db.batch(); }
+      }
+      await b.commit();
+      res.fromUid = from.size;
+    }
+  } catch (e) {
+    console.error("[_migrateNotifications] fromUid falhou:", e && e.message);
+  }
+  return res;
 }
 
 // E-mail sintético de conta phone-only — nunca é credencial "de verdade" a preservar.
@@ -2056,6 +2265,163 @@ exports.setParticipantsProfile = onCall(
 const { replicateRosterToSandbox: _replicateRosterToSandbox } = require("./sandbox-replicate");
 
 // Deploy:  firebase deploy --only functions:enrollParticipant,functions:deenrollParticipant
+
+/**
+ * "Esta pessoa já não está inscrita neste torneio com OUTRA conta?"
+ *
+ * Não lê o roster inteiro (o Confra tem 111 inscritos — seriam 111 leituras por inscrição).
+ * Faz o caminho inverso: 2 consultas INDEXADAS em `users` (nome e celular) devolvem os
+ * poucos candidatos, e o cruzamento com `memberUids` do torneio — que já está na memória —
+ * diz se algum deles está aqui dentro.
+ *
+ * Devolve o uid do suspeito pro CHAMADOR interno (o dismiss precisa dele), mas o que vai pro
+ * cliente é só o MASCARADO — ver o retorno montado em enrollParticipant.
+ * Fail-open: erro de consulta não pode atrapalhar inscrição ([[feedback_enrollment_fail_open]]).
+ */
+
+/**
+ * AVISA A PESSOA de que ela já parece estar inscrita com OUTRA conta — pelo SERVIDOR.
+ *
+ * POR QUE AQUI E NÃO NA TELA (regra do dono, 06/ago/2026): _"esse é o tipo de coisa que
+ * deveria rodar em CF e não no cliente"_. A pergunta que a 1.7.41 construiu mora no JS do
+ * app — e o app NATIVO embarca o JS e **não tem auto-update**: só chega numa submissão nova,
+ * dias depois, contando revisão da loja. Ou seja, quem se inscreve pelo celular não seria
+ * interpelado, que é justamente onde a inscrição às pressas pela vaga na fila acontece.
+ * Notificação é DADO, não código de tela: alcança toda versão, inclusive a nativa velha que
+ * nunca vai chamar o diálogo novo. Mesmo raciocínio do vigia estrutural da 1.7.36.
+ *
+ * Usa a MESMA fila de e-mail do app (`notif_email_queue` → flushNotifEmailDigest). Escrever
+ * direto em `mail` faria um segundo caminho, com outro digest e outro agrupamento — foi
+ * exatamente o buraco do sorteio automático, que existia só no cliente.
+ *
+ * IDEMPOTENTE por (pessoa, torneio, outra conta): o id do doc é determinístico, então
+ * reinscrever não vira spam. Nível `important` — a pessoa pode perder a vaga, mas não é
+ * emergência; quem desligou "só fundamentais" não é incomodado.
+ * Best-effort: falhar aqui não desfaz a inscrição, que já está gravada.
+ */
+async function _avisarDuplicataSuspeita(db, alvoUid, tournamentId, tournamentName, dup) {
+  try {
+    if (!alvoUid || !dup) return false;
+    const prof = await db.collection("users").doc(alvoUid).get();
+    if (!prof.exists) return false;
+    const p = prof.data() || {};
+    const nivelUsuario = p.notifyLevel || "todas";
+    const NIVEL = "important";
+    const permitido = (nivelUsuario === "todas" || !nivelUsuario) ? true
+      : (nivelUsuario === "none" ? false
+        : (nivelUsuario === "importantes" ? true : false));   // "fundamentais" fica de fora
+    if (!permitido) return false;
+
+    const contato = dup.maskedEmail || dup.maskedPhone || "";
+    const msg = "Você já parece estar inscrito em \"" + (tournamentName || "este torneio") +
+      "\" com outra conta" + (contato ? (" (" + contato + ")") : "") + ". " +
+      (dup.motivo === "celular"
+        ? "As duas contas têm o mesmo celular. "
+        : "As duas usam o mesmo nome. ") +
+      "Se for você, abra seu perfil e una as duas — seus jogos e seu histórico ficam num " +
+      "lugar só, e você deixa de ocupar duas vagas. A união só acontece depois que você " +
+      "confirmar a posse da outra conta. Se for outra pessoa com o mesmo nome, é só ignorar.";
+
+    // id determinístico → reinscrever não duplica o aviso
+    const notifId = ["dup_suspect", tournamentId, dup.uid, alvoUid].join("|")
+      .replace(/[^a-zA-Z0-9_|-]/g, "_").replace(/\|/g, "__").slice(0, 200);
+
+    if (p.notifyPlatform !== false) {
+      await db.collection("users").doc(alvoUid).collection("notifications").doc(notifId).set({
+        type: "duplicate_account_suspected",
+        tournamentId: tournamentId,
+        tournamentName: tournamentName || "",
+        title: "👥 Duas contas suas neste torneio?",
+        message: msg,
+        createdAt: new Date().toISOString(),
+        read: false,
+      }, { merge: true });
+    }
+    // E-mail: opt-out INDEPENDENTE do in-app (quem desligou o sininho segue querendo e-mail).
+    if (p.notifyEmail !== false && p.email && !_isSyntheticAuthEmail(p.email)) {
+      const nowMs = Date.now();
+      await db.collection("notif_email_queue").add({
+        email: String(p.email).toLowerCase(),
+        level: NIVEL,
+        message: msg,
+        tournamentName: tournamentName || "",
+        tournamentUrl: "https://scoreplace.app/#tournaments/" + tournamentId,
+        createdAt: nowMs,
+        flushAtMs: nowMs + 15 * 60 * 1000,
+      });
+    }
+    console.log("[dup-suspect] avisado " + alvoUid + " sobre " + dup.uid + " em " + tournamentId);
+    return true;
+  } catch (e) {
+    console.error("[_avisarDuplicataSuspeita] falhou (best-effort):", e && e.message);
+    return false;
+  }
+}
+
+async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
+  try {
+    const meuDoc = await db.collection("users").doc(callerUid).get();
+    if (!meuDoc.exists) return null;
+    const meu = meuDoc.data() || {};
+    if (meu.mergedInto) return null;
+
+    const membros = {};
+    (Array.isArray(tData && tData.memberUids) ? tData.memberUids : []).forEach((u) => { membros[u] = true; });
+    if (!Object.keys(membros).length) return null;
+
+    // Candidatos: mesmo nome OU mesmo celular. Duas consultas indexadas, limite curto.
+    const nomeLower = String(meu.displayName || "").trim().toLowerCase();
+    const telCanon = _dupPerson.normalizarTelefone(meu.phone);
+    const consultas = [];
+    if (nomeLower && !_nameUnique.isUnfriendlyName(nomeLower)) {
+      consultas.push(db.collection("users").where("displayName_lower", "==", nomeLower).limit(8).get());
+    }
+    if (telCanon) {
+      consultas.push(db.collection("users").where("phone", "==", meu.phone).limit(8).get());
+    }
+    if (!consultas.length) return null;
+
+    const snaps = await Promise.all(consultas.map((p) => p.catch(() => null)));
+    const vistos = {};
+    const pessoas = [];
+    for (const snap of snaps) {
+      if (!snap) continue;
+      snap.forEach((d) => {
+        if (d.id === callerUid || vistos[d.id] || !membros[d.id]) return;   // só quem está NESTE torneio
+        const x = d.data() || {};
+        if (x.mergedInto) return;
+        vistos[d.id] = true;
+        pessoas.push({
+          uid: d.id, nome: x.displayName || "", telefone: x.phone || "",
+          letzplayHandle: x.letzplayHandle || "", email: x.email || "",
+        });
+      });
+    }
+    if (!pessoas.length) return null;
+
+    const r = _dupPerson.detectarMesmaPessoa({
+      uid: callerUid, nome: meu.displayName || "", telefone: meu.phone || "",
+      letzplayHandle: meu.letzplayHandle || "",
+      dispensados: Array.isArray(meu.dupDismissed) ? meu.dupDismissed : [],
+    }, pessoas);
+    if (!r.suspeito) return null;
+
+    const alvo = pessoas.filter((p) => p.uid === r.suspeito.uid)[0] || {};
+    const emailReal = (alvo.email && !_nameUnique.isSyntheticEmail(alvo.email)) ? alvo.email : "";
+    return {
+      uid: r.suspeito.uid,                       // ⚠️ interno — NUNCA vai pro cliente
+      motivo: r.suspeito.motivo,
+      corroboracoes: r.suspeito.corroboracoes,
+      nome: alvo.nome || "",
+      maskedEmail: _nameUnique.maskEmail(emailReal) || null,
+      maskedPhone: _nameUnique.maskPhone(alvo.telefone) || null,
+    };
+  } catch (e) {
+    console.error("[_detectarDuplicataNoTorneio] fail-open:", e && e.message);
+    return null;
+  }
+}
+
 exports.enrollParticipant = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
@@ -2076,6 +2442,50 @@ exports.enrollParticipant = onCall(
     const db = admin.firestore();
     const docRef = db.collection("tournaments").doc(tournamentId);
     const nowMs = Date.now();
+
+    // ── PORTA: esta pessoa já não está aqui com OUTRA conta? ─────────────────
+    // Roda ANTES de gravar e RECUSA, devolvendo o desfecho `alreadyEnrolled` — que TODO
+    // cliente já sabe exibir ("Já Inscrito — Você já está inscrito neste torneio"),
+    // inclusive o nativo velho, que embarca o JS e não tem auto-update.
+    //
+    // POR QUE NÃO BASTA AVISAR (regra do dono, 06/ago): _"as pessoas não leem as
+    // notificações… nem os emails"_. Notificação informa quem lê; a recusa intercepta
+    // todo mundo, na hora, na tela em que a pessoa está. E é literalmente o que ele pediu
+    // na primeira conversa: "indicar que a pessoa já está inscrita".
+    //
+    // ⚠️ ISTO É EXCEÇÃO AO FAIL-OPEN da inscrição ([[feedback_enrollment_fail_open]]), e só
+    // se justifica porque os sinais que disparam são os FORTES (celular integral, nome
+    // idêntico) e porque o erro tem saída: o "não sou eu" (dismissDuplicateSuspicion) apaga
+    // a suspeita pros dois lados, e o ORGANIZADOR pode inscrever a pessoa direto — o gate
+    // não vale pra quem inscreve OUTRA pessoa. Erro de detecção nunca deixa alguém de fora
+    // sem caminho.
+    let _dupSuspect = null;
+    try {
+      const _alvoUid0 = String((participantObj && participantObj.uid) || callerUid);
+      const _euMesmo = _alvoUid0 === callerUid;   // organizador inscrevendo TERCEIRO passa
+      if (_euMesmo) {
+        const _pre = await docRef.get();
+        if (_pre.exists) {
+          const _d0 = await _detectarDuplicataNoTorneio(db, _alvoUid0, _pre.data());
+          if (_d0) {
+            const _tNome0 = (_pre.data() || {}).name || "";
+            await _avisarDuplicataSuspeita(db, _alvoUid0, tournamentId, _tNome0, _d0);
+            console.log(`[enrollParticipant] RECUSADO por duplicata: ${_alvoUid0} ~ ${_d0.uid} (${_d0.motivo}) em ${tournamentId}`);
+            const _parts0 = Array.isArray((_pre.data() || {}).participants) ? _pre.data().participants : [];
+            return {
+              alreadyEnrolled: true,
+              participants: _parts0,
+              dupSuspect: {   // ⚠️ SEM uid e SEM contato cheio
+                motivo: _d0.motivo, nome: _d0.nome,
+                maskedEmail: _d0.maskedEmail, maskedPhone: _d0.maskedPhone,
+                texto: _dupPerson.textoDaPergunta(_d0.nome, _d0.maskedEmail || _d0.maskedPhone, _d0.motivo),
+              },
+            };
+          }
+        }
+      }
+    } catch (e) { console.error("[enrollParticipant] porta de duplicata falhou (fail-open):", e && e.message); }
+
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
@@ -2088,6 +2498,31 @@ exports.enrollParticipant = onCall(
     await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
       return _enrollCore.computeEnroll(sbData, participantObj, extraUpdates, nowMs);
     });
+
+    // ── ESPELHO DO ROSTER (v1.7.40) ─────────────────────────────────────────
+    // O dual-write da 1.7.29 (`tournaments/{id}/participants/{uid}`) existe pra ser a rede
+    // contra perda de inscrito. Só que ele vivia SÓ no cliente (`_mirrorRoster`), e:
+    //   (a) ele grava DELTA e a 1ª gravação de cada sessão apenas semeia a base
+    //       (`if (!antes) return`) — a inscrição da própria pessoa costuma ser essa 1ª; e
+    //   (b) a inscrição REAL passa por esta CF, que nunca o chamava.
+    // MEDIDO em 05/ago: 116 docs no espelho para 119 pessoas — faltavam exatamente as três
+    // que se inscreveram naquele dia. Um espelho que não recebe quem acabou de entrar não
+    // protege justamente quem está mais exposto.
+    // Espelhar aqui é escrever onde a escrita de verdade acontece ([[feedback_functions_must_mirror_app]]).
+    // Best-effort: falhar aqui não desfaz a inscrição, que já está gravada.
+    if (out.outcome === "enrolled" || out.outcome === "waitlisted") {
+      try {
+        const _alvo = String((participantObj && participantObj.uid) || "");
+        if (_alvo) {
+          await docRef.collection("participants").doc(_alvo).set({
+            uid: _alvo,
+            status: (out.outcome === "waitlisted") ? "waitlisted" : "enrolled",
+            at: new Date().toISOString(),
+            entry: _enrollCore.cleanUndefined(participantObj),
+          }, { merge: true });
+        }
+      } catch (e) { console.error("[enrollParticipant] espelho do roster falhou:", e && e.message); }
+    }
 
     if (out.outcome === "capacityFull") return { capacityFull: true, participants: out.participants };
     if (out.outcome === "already") return { alreadyEnrolled: true, participants: out.participants };
@@ -2109,6 +2544,80 @@ exports.enrollParticipant = onCall(
       autoCloseTriggered: !!out.autoClose,
       reachedCapacityDraw: !!out.reachedDraw
     };
+  }
+);
+
+
+// "NÃO SOU EU" — a memória que impede a mesma pergunta em todo torneio novo.
+//
+// Nasceu do caso Nelson Barth: duas contas com nome IDÊNTICO que NÃO são a mesma pessoa (uma
+// é a conta de teste do dono). Homônimo segue sendo sinal forte e a pergunta continua certa —
+// o que não pode é ela voltar pra sempre depois de respondida.
+//
+// O cliente NÃO passa uid: ele não tem (a resposta da inscrição só traz o MASCARADO). O
+// servidor redescobre o suspeito com a mesma função da detecção e grava dos DOIS lados —
+// senão a outra conta faria a pergunta espelhada na próxima inscrição dela.
+// Seguro escrever no perfil alheio aqui: o autoMergeOnProfileUpdate só age quando `phone` ou
+// `email` mudam, e o enforceUniqueDisplayName só quando `displayName` muda.
+
+// "NÃO SOU EU" no conflito de NOME: a pessoa escolhe um nome livre, e o app precisa (a) dizer
+// se o que ela digitou está livre e (b) sugerir alternativas. Antes o servidor escolhia
+// sozinho ("Nome 2") e a pessoa nem ficava sabendo — ver enforceUniqueDisplayName.
+// Só devolve disponibilidade e sugestões: nenhum dado da outra conta sai daqui.
+exports.checkDisplayNameAvailability = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const db = admin.firestore();
+
+    const pedido = String((request.data && request.data.nome) || "").trim();
+    const me = await db.collection("users").doc(callerUid).get();
+    const meuNome = String(((me.exists && me.data()) || {}).displayName || "").trim();
+    const minhaCidade = String(((me.exists && me.data()) || {}).city || "").trim();
+    const base = pedido || meuNome;
+    if (!base) return { livre: false, sugestoes: [] };
+
+    const livre = async (n) => !(await _nameUnique.findDisplayNameConflict(db, n, callerUid));
+
+    // Sugestões: primeiro a cidade (identifica de verdade), depois numéricas.
+    const candidatos = [];
+    if (minhaCidade) candidatos.push(base + " (" + minhaCidade + ")");
+    for (let k = 2; k <= 6; k++) candidatos.push(_nameVariant.buildVariant(base, k));
+
+    const sugestoes = [];
+    for (const c of candidatos) {
+      if (sugestoes.length >= 3) break;
+      try { if (await livre(c)) sugestoes.push(c); } catch (e) { /* fail-open */ }
+    }
+    let ok = false;
+    try { ok = pedido ? await livre(pedido) : false; } catch (e) { ok = false; }
+    return { livre: ok, sugestoes };
+  }
+);
+
+exports.dismissDuplicateSuspicion = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+
+    const db = admin.firestore();
+    const snap = await db.collection("tournaments").doc(tournamentId).get();
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+
+    const d = await _detectarDuplicataNoTorneio(db, callerUid, snap.data());
+    if (!d) return { ok: true, nada: true };
+
+    const FV = admin.firestore.FieldValue;
+    await Promise.all([
+      db.collection("users").doc(callerUid).set({ dupDismissed: FV.arrayUnion(d.uid) }, { merge: true }),
+      db.collection("users").doc(d.uid).set({ dupDismissed: FV.arrayUnion(callerUid) }, { merge: true }),
+    ]);
+    console.log(`[dismissDuplicateSuspicion] ${callerUid} <-> ${d.uid} (${d.motivo}) — não são a mesma pessoa`);
+    return { ok: true, dispensado: true };
   }
 );
 
@@ -5393,21 +5902,45 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
     const db = admin.firestore();
     const uid = event.params.uid;
     const conflito = await _nameUnique.findDisplayNameConflict(db, nome, uid);
-    if (!conflito) return;
 
-    // Quem já estava com o nome não é renomeado pelas costas.
-    if (!_nameVariant.shouldIRename(a, conflito, uid)) {
-      console.log(`[enforceUniqueDisplayName] "${nome}" colide com ${conflito.uid}, mas quem renomeia é o outro lado (uid=${uid} é o estabelecido)`);
+    if (!conflito) {
+      // Conflito resolvido (a pessoa trocou de nome, ou a outra conta sumiu/fundiu):
+      // limpa o sinal, senão a pergunta ficaria pendurada pra sempre.
+      if (a.nameConflict) {
+        await db.collection("users").doc(uid).set(
+          { nameConflict: admin.firestore.FieldValue.delete() }, { merge: true });
+        console.log(`[enforceUniqueDisplayName] uid=${uid}: conflito de "${nome}" resolvido — sinal limpo`);
+      }
       return;
     }
 
-    const novo = await _nameVariant.resolveUniqueName(db, nome, uid);
-    if (!novo || novo === nome) return; // nada livre encontrado — não piora
+    // Quem já estava com o nome não é incomodado pelas costas.
+    if (!_nameVariant.shouldIRename(a, conflito, uid)) {
+      console.log(`[enforceUniqueDisplayName] "${nome}" colide com ${conflito.uid}, mas quem responde é o outro lado (uid=${uid} é o estabelecido)`);
+      return;
+    }
 
-    const payload = _nameUnique.denormalizeDisplayName({}, novo);
-    payload.updatedAt = new Date().toISOString();
-    await db.collection("users").doc(uid).set(payload, { merge: true });
-    console.log(`[enforceUniqueDisplayName] uid=${uid}: "${nome}" colidia com ${conflito.uid} → renomeado para "${novo}"`);
+    // ⚠️ v1.7.37 — NÃO RENOMEIA MAIS EM SILÊNCIO. Regra do dono (05/ago/2026):
+    // _"o certo, invés de criar 'Gabriela Ferreira 2', é indicar o nome que já existe,
+    // indicando com ****email/celular e perguntar se é a mesma pessoa. Autentica se for e
+    // mescla. Se não for, que a pessoa indique um nome válido e livre."_
+    //
+    // A variante automática resolvia a UNICIDADE e escondia a PERGUNTA — e, pior, cegava a
+    // própria detecção de duplicata: com "Gabriela Ferreira 2" no banco, a comparação por
+    // nome idêntico nunca mais casaria. Aqui só se SINALIZA; quem decide é a pessoa.
+    // Só o MASCARADO é gravado: `nameConflict` é lido pelo cliente, e uid/contato cheio da
+    // outra conta nunca podem chegar lá ([[project_privileged_fields_never_client_writable]]).
+    const emailReal = (conflito.email && !_nameUnique.isSyntheticEmail(conflito.email)) ? conflito.email : "";
+    await db.collection("users").doc(uid).set({
+      nameConflict: {
+        nome: nome,
+        maskedEmail: _nameUnique.maskEmail(emailReal) || null,
+        maskedPhone: _nameUnique.maskPhone(conflito.phone) || null,
+        at: new Date().toISOString(),
+      },
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    console.log(`[enforceUniqueDisplayName] uid=${uid}: "${nome}" colide com ${conflito.uid} → SINALIZADO (sem renomear)`);
   }
 );
 
@@ -5532,6 +6065,26 @@ exports.syncMatchRosters = onDocumentWritten(
     const after  = event.data.after.exists  ? (event.data.after.data()  || {}) : null;
     const before = event.data.before.exists ? (event.data.before.data() || {}) : null;
     if (!after) return; // torneio deletado — nada a sincronizar
+
+    // ── v1.7.36 · VIGIA ESTRUTURAL (modo OBSERVAÇÃO) ───────────────────────
+    // Os guards de perda por save atrasado moram no CLIENTE QUE GRAVA e só valem pra
+    // quem os carrega. O app NATIVO não tem auto-update, então existe uma janela com
+    // gente em 1.6.3/1.7.9 gravando no mesmo torneio. Aqui o servidor vê TODO MUNDO.
+    // O gatilho do Firestore não carrega a identidade de quem escreveu — quem separa
+    // autoridade de acidente é o `rosterRev`, contador de documento FORA da allowlist
+    // do participante (firestore.rules usa `hasOnly([...])`, lista fechada).
+    // NÃO REVERTE NADA nesta fase: primeiro medir quantos casos reais aparecem e de
+    // que clientes. Reverter escalação errado no meio de um torneio ao vivo é pior do
+    // que o defeito. Roda antes do early-return de baixo pra observar toda escrita.
+    try {
+      const _rw = _rosterWatch.detectarTrocaDeEscalacao(before, after);
+      if (_rw.suspeitos.length) {
+        console.error("[vigia-escalacao] " + tid + " · " + _rw.suspeitos.length +
+          " jogo(s) tiveram os JOGADORES trocados sem o contador subir (" +
+          "rosterRev " + _rw.revAntes + "→" + _rw.revDepois + "; " + _rw.motivo + "): " +
+          JSON.stringify(_rw.suspeitos.slice(0, 5)));
+      }
+    } catch (_rwErr) { /* o vigia NUNCA derruba o gatilho */ }
 
     // Assinatura (roster+resultado) de cada jogo ANTES → só processa os que mudaram.
     const beforeSig = {};
