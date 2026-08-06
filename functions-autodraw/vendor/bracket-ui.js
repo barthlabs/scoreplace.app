@@ -2915,15 +2915,14 @@ window._tvMode = function(tId) {
 
   // Hero section with venue photo background
   // v4.0.21: foto de fundo custom do organizador tem prioridade sobre a do Google.
+  // v1.7.53: o hero do Modo TV não pinta mais `url(t.venuePhotoUrl)` — essa URL é do
+  // places.googleapis.com e o Modo TV RE-RENDERIZA sozinho a cada 30s, ou seja era uma
+  // chamada COBRADA a cada meio minuto com a TV ligada no clube o dia inteiro.
   var heroBg = t.coverPhotoData
     ? 'background-image:linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95)),url(' + t.coverPhotoData + ');background-size:cover;background-position:center;'
-    : t.venuePhotoUrl
-      ? 'background-image:linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95)),url(' + t.venuePhotoUrl + ');background-size:cover;background-position:center;'
-      : 'background:linear-gradient(135deg,#1e293b 0%,#0f172a 50%,#1e1b4b 100%);';
-  // v4.0.14: re-busca a foto fresca pelo placeId (token salvo expira → 400).
-  // v4.0.21: desligado quando há foto custom.
-  var _heroVphoto = (!t.coverPhotoData && t.venuePhotoUrl && t.venuePlaceId)
-    ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95))" data-vphoto-w="1200" data-vphoto-h="600"'
+    : 'background:linear-gradient(135deg,#1e293b 0%,#0f172a 50%,#1e1b4b 100%);';
+  var _heroVphoto = (!t.coverPhotoData && t.venuePlaceId)
+    ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95))"'
     : '';
   var hero = '<div' + _heroVphoto + ' style="' + heroBg + 'padding:30px 40px;flex-shrink:0;position:relative;">';
   // Exit button (top right)
@@ -3824,6 +3823,34 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // ── Placa de gelo (v1.6.88) ────────────────────────────────────────────────
   // Gelo, nunca branco absoluto: o branco puro estoura sob sol e cria halo.
   var LIVE_ICE = '#EAF0F6';
+  // v1.7.54 — O GELO PASSA A VALER TAMBÉM NO GAMES E NO SETS. A 1.6.96/1.6.97
+  // unificou só a TINTA (os números ganharam #2667FF/#DB3027, calculados pra ler
+  // nos dois fundos) e deixou o fundo de GAMES/SETS escuro — e eu ainda escrevi no
+  // código que "o gelo NÃO invade o fundo escuro". Isso era opinião minha; a ordem
+  // do dono é placa nas quatro superfícies. O comentário velho foi corrigido lá.
+  //
+  // Fundo claro obriga o CROMO a virar junto: rótulo e traço eram brancos
+  // translúcidos (`var(--text-muted)` / `rgba(255,255,255,0.25)`) e sumiriam no
+  // gelo. Os tons abaixo são medidos CONTRA #EAF0F6, não escolhidos no olho:
+  //   #5A6B80 sobre gelo = 4,75:1  (acima dos 4,5:1 que a WCAG pede pra texto
+  //   pequeno — e o rótulo GAMES/SETS é justamente o menor texto da tela).
+  var LIVE_ICE_EDGE  = 'rgba(15,23,42,0.14)';
+  var LIVE_ICE_LABEL = '#5A6B80';
+  var LIVE_ICE_DASH  = 'rgba(15,23,42,0.28)';
+  // UMA função pras QUATRO superfícies (retrato SETS, retrato GAMES, paisagem
+  // GAMES, paisagem SETS). O que ela fixa é a PELE — fundo, borda e raio —, que é
+  // exatamente o que divergiria em quatro cópias na primeira vez que alguém
+  // ajustasse uma delas. A GEOMETRIA entra por `extra` porque é honestamente
+  // diferente: em pé são dois blocos empilhados; deitado o GAMES é uma pílula
+  // deitada no vão entre as placas e o SETS mora na barra de cima. Declaração
+  // repetida no mesmo atributo vence a anterior, então `extra` sobrescreve à
+  // vontade (flex-direction, padding, border-radius).
+  function _liveIcePlate(inner, extra, id) {
+    return '<div' + (id ? ' id="' + id + '"' : '') +
+      ' style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;' +
+      'background:' + LIVE_ICE + ';border:1px solid ' + LIVE_ICE_EDGE + ';border-radius:14px;' +
+      'padding:3px clamp(12px,3.4vw,22px) 5px;' + (extra || '') + '">' + inner + '</div>';
+  }
   // REFERÊNCIA DE TAMANHO DO NÚMERO — canon do dono, reforçado em ago/2026:
   // "0-15-30-40-AD não pode ter diferença no tamanho (altura/largura), em pé ou
   // deitado". O corpo NUNCA sai do valor atual: sai do PIOR CASO desta lista,
@@ -6437,22 +6464,22 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Acima do mínimo de 3:1 que a WCAG pede pra texto grande — e estes números são
     // enormes (18vw). Não existe par que chegue a 4,5:1 nos dois: o limite matemático é
     // 4,10, porque as duas exigências puxam a luminância pra lados opostos.
-    // Por isso o gelo NÃO invade o fundo escuro: ele é o que dá impacto às placas.
+    // ⚠️ CORRIGIDO EM v1.7.54 — aqui estava escrito "por isso o gelo NÃO invade o
+    // fundo escuro: ele é o que dá impacto às placas". Era OPINIÃO MINHA gravada
+    // como se fosse a decisão do dono, e ela custou caro: ele pediu placa de gelo
+    // no GAMES/SETS, eu entreguei só a TINTA e dei o assunto por encerrado no
+    // comentário. GAMES e SETS agora têm placa de gelo também (_liveIcePlate).
+    // O par de tons abaixo continua valendo e é o que torna isso barato: ele foi
+    // escolhido pra ler NOS DOIS fundos, então mudar o fundo não mexeu na tinta.
     var LIVE_NUM_1 = '#2667FF', LIVE_NUM_2 = '#DB3027';
     var _gamesLeftClr = leftTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2;
     var _gamesRightClr = rightTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2;
-    var gamesCenter = '';
-    if (showGamesBox) {
-      gamesCenter =
-        '<div class="live-games-box" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:4px clamp(14px,3.5vw,22px);">' +
-          '<span style="font-size:0.62rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
-          '<div style="display:flex;align-items:center;gap:clamp(10px,3vw,18px);">' +
-            '<span style="font-size:calc(clamp(3rem,11vw,5rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-            '<span style="font-size:calc(clamp(1.6rem,5vw,2.6rem) * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
-            '<span style="font-size:calc(clamp(3rem,11vw,5rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
-          '</div>' +
-        '</div>';
-    }
+    // v1.7.54: aqui morava `gamesCenter` (`.live-games-box`) — montado e NUNCA
+    // consumido por ninguém (conferido por varredura: só a declaração e a
+    // atribuição existiam). Era uma SEGUNDA definição da caixa de GAMES, com o
+    // fundo escuro velho, ao lado da definição viva. Removido: um decoy desses é
+    // exatamente o que faz o próximo leitor "consertar" o lugar errado.
+    // Quem desenha GAMES de verdade: `_topBlock` (em pé) e `_lsGames` (deitado).
 
     // Score plate builder — extra large for visibility from afar.
     // v1.3.66-beta: orange background + white text at deuce (40-40).
@@ -6777,14 +6804,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
     try { _setsLeftN = _setsWon(leftTeam, false); _setsRightN = _setsWon(rightTeam, false); } catch (e) {}
     var _showSets = useSets;
     var _setsLine = _showSets
-      ? '<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:3px;">' +
-          '<span style="font-size:0.72rem;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
+      ? _liveIcePlate(
+          '<span style="font-size:0.72rem;font-weight:700;letter-spacing:1px;color:' + LIVE_ICE_LABEL + ';text-transform:uppercase;">Sets</span>' +
           '<div style="display:flex;align-items:center;gap:11px;margin-top:1px;">' +
             '<span style="font-size:calc(clamp(2rem,9vw,3.4rem) * var(--live-score-scale,1));font-weight:800;color:' + (leftTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
-            '<span style="font-size:1.05rem;color:rgba(255,255,255,0.25);">–</span>' +
+            '<span style="font-size:1.05rem;color:' + LIVE_ICE_DASH + ';">–</span>' +
             '<span style="font-size:calc(clamp(2rem,9vw,3.4rem) * var(--live-score-scale,1));font-weight:800;color:' + (rightTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>' +
-          '</div>' +
-        '</div>'
+          '</div>',
+          'margin-bottom:5px;')
       : '';
     // GAMES menor em paisagem (altura curta → usa vh); retrato usa vw.
     // O espaço que sobrava de branco nas placas vira TAMANHO aqui (dono: "se os números
@@ -6799,12 +6826,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
       ? '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;' +
           'padding:clamp(6px,1.4vh,14px) 0 clamp(4px,1vh,9px);">' +
           _setsLine +
-          '<span style="font-size:0.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px;">Games</span>' +
-          '<div style="display:flex;align-items:center;gap:clamp(12px,3.6vw,22px);margin-top:1px;">' +
-            '<span style="font-size:calc(' + _gBig + ' * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-            '<span style="font-size:calc(' + _gDash + ' * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
-            '<span style="font-size:calc(' + _gBig + ' * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
-          '</div>' +
+          _liveIcePlate(
+            '<span style="font-size:0.78rem;font-weight:700;color:' + LIVE_ICE_LABEL + ';text-transform:uppercase;letter-spacing:1px;">Games</span>' +
+            '<div style="display:flex;align-items:center;gap:clamp(12px,3.6vw,22px);margin-top:1px;">' +
+              '<span style="font-size:calc(' + _gBig + ' * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
+              '<span style="font-size:calc(' + _gDash + ' * var(--live-score-scale,1));font-weight:300;color:' + LIVE_ICE_DASH + ';">–</span>' +
+              '<span style="font-size:calc(' + _gBig + ' * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
+            '</div>') +
         '</div>'
       : '';
     // Metade tocável por time (cor do time, tinta de fundo, número colorido).
@@ -6885,22 +6913,31 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // traço), conjunto no eixo exato da tela, ocupando as duas linhas — quase
       // encostando na barra de cima e nas placas. pointer-events:none pra não
       // roubar o toque das metades.
+      // v1.7.54: vira placa de gelo. O `_fitGames` mede `offsetHeight` e escala a
+      // fonte por RAZÃO, em laço — o respiro da placa entra na medida e ele
+      // reconverge sozinho (os números cedem os poucos px do padding). Por isso o
+      // padding vertical aqui é curto: no vão deitado cada pixel é disputado.
       var _lsGames = showGamesBox
-        ? '<div id="ls-games" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:clamp(8px,1.4vw,16px);z-index:2;pointer-events:none;">' +
+        ? _liveIcePlate(
             '<span class="ls-g-num" style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-            '<span style="font-size:0.6rem;font-weight:700;letter-spacing:0.14em;color:var(--text-muted);text-transform:uppercase;line-height:1;flex:0 0 auto;">Games</span>' +
-            '<span class="ls-g-num" style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
-          '</div>'
+            '<span style="font-size:0.6rem;font-weight:700;letter-spacing:0.14em;color:' + LIVE_ICE_LABEL + ';text-transform:uppercase;line-height:1;flex:0 0 auto;">Games</span>' +
+            '<span class="ls-g-num" style="font-size:calc(1.7rem * var(--live-score-scale,1));font-weight:800;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>',
+            'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);flex-direction:row;' +
+            'gap:clamp(8px,1.4vw,16px);z-index:2;pointer-events:none;' +
+            'padding:4px clamp(10px,1.8vw,18px);border-radius:12px;',
+            'ls-games')
         : '';
       // SETS sobe pra barra superior (fora do corpo) — libera a linha inteira.
       var _hdrSets = document.getElementById('live-hdr-sets');
       if (_hdrSets) {
         if (_showSets) {
-          _hdrSets.innerHTML =
-            '<span style="font-size:0.72rem;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;">Sets</span>' +
+          // v1.7.54: pílula de gelo na barra de cima — mesma pele das outras três.
+          _hdrSets.innerHTML = _liveIcePlate(
+            '<span style="font-size:0.72rem;font-weight:700;letter-spacing:1px;color:' + LIVE_ICE_LABEL + ';text-transform:uppercase;">Sets</span>' +
             '<span style="font-size:1.15rem;font-weight:800;color:' + (leftTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsLeftN + '</span>' +
-            '<span style="font-size:0.85rem;color:rgba(255,255,255,0.25);">–</span>' +
-            '<span style="font-size:1.15rem;font-weight:800;color:' + (rightTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>';
+            '<span style="font-size:0.85rem;color:' + LIVE_ICE_DASH + ';">–</span>' +
+            '<span style="font-size:1.15rem;font-weight:800;color:' + (rightTeam === 1 ? LIVE_NUM_1 : LIVE_NUM_2) + ';font-variant-numeric:tabular-nums;line-height:1;">' + _setsRightN + '</span>',
+            'flex-direction:row;gap:7px;padding:2px 11px 3px;border-radius:10px;');
           _hdrSets.style.display = 'flex';
         } else {
           _hdrSets.innerHTML = ''; _hdrSets.style.display = 'none';
@@ -7953,9 +7990,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
             _render();
             _isRemoteUpdate = false;
           }
+        }, function(err) {
+          // v1.7.52 — o `try/catch` abaixo só cobre o SETUP do listener; erro que chega
+          // DEPOIS (rede caiu, sessão expirou, doc ficou inacessível) nasce assíncrono e
+          // vira "unhandled rejection" — some do app e aparece como ruído no Sentry, sem
+          // frame nosso pra dizer de onde veio. Os irmãos do store.js (discovery,
+          // notificações, perfil) já tratavam; este era o único de fora.
+          // Não derruba a partida: o placar segue local e o próximo write reconecta.
+          window._warn('[LiveScore] listener do Firestore caiu:', err);
         });
     } catch(e) {
-      window._warn('[LiveScore] Firestore listener error:', e);
+      window._warn('[LiveScore] Firestore listener setup error:', e);
     }
   }
   var _lastSyncTs = 0;

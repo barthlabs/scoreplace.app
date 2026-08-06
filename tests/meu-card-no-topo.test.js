@@ -12,7 +12,10 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.log('  ✗ ' + m); } }
 
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8');
-const i = src.indexOf('window._meuCardNoTopo = function');
+// v1.7.55: o recorte começa no `_meuStatusNoTorneio` — a leitura do estado (inscrito /
+// lista de espera / desativado / W.O.) virou fonte ÚNICA e mora logo ACIMA do render.
+// Começar no `_meuCardNoTopo` deixaria a dependência de fora e o card estouraria aqui.
+const i = src.indexOf('window._meuStatusNoTorneio = function');
 const j = src.indexOf('// Usados no card de inscritos');
 const ctx = { window: {}, console, Object, Array, String, JSON };
 vm.createContext(ctx);

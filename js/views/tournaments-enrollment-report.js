@@ -2362,7 +2362,10 @@
                  : (canOpen ? ' — clique pra ver os jogos' : '')) +
         ' — arraste pra atribuir gênero/categoria';
       var click = canOpen ? ' onclick="window._lzAthleteDialog(\'' + String(r.uid).replace(/['\\]/g, '') + '\')"' : '';
-      return '<div draggable="true" ondragstart="window._erMxDragStart(event,' + r.order + ')"' + click + ' ' +
+      // v1.7.55: `data-er-person` é o que a barra de busca varre. Nome VIVO (o mesmo que o
+      // card mostra) — indexar rótulo velho faz a busca achar quem a tela não mostra, que
+      // foi exatamente o defeito da busca da chave na 1.7.47.
+      return '<div draggable="true" data-er-person="' + _esc(r.name || '') + '" ondragstart="window._erMxDragStart(event,' + r.order + ')"' + click + ' ' +
         'style="cursor:' + (canOpen ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
     }
     function cardGrid(arr) {
@@ -2382,9 +2385,14 @@
         ? createToggle('window._erToggleSkill(\'' + tIdEsc + '\',\'' + sk + '\',this)', createdSkills.indexOf(sk) !== -1,
             (createdSkills.indexOf(sk) !== -1 ? 'Desativar' : 'Ativar') + ' a categoria ' + sk)
         : '';
-      return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
+      // `data-er-box` marca a caixa como "só existe por causa dos cards que estão nela":
+      // filtrada e sem ninguém, ela some inteira. Sem isso, buscar um nome deixaria a tela
+      // com dezenas de caixas vazias e o achado perdido no meio — o defeito que a busca da
+      // chave levou a 1.6.87 pra corrigir. `data-er-total` guarda o número REAL pra que a
+      // contagem do título vire "(x de N)" enquanto o filtro está ligado e não minta.
+      return '<div data-er-box="1" data-er-total="' + arr.length + '" ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
         'style="border:1.5px solid ' + tint + ';border-radius:10px;padding:8px 10px;background:var(--bg-darker,rgba(0,0,0,0.15));">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px;min-width:0;"><span style="font-size:14px;font-weight:800;color:' + color + ';min-width:0;">' + label + ' <span style="opacity:0.7;font-weight:700;">(' + arr.length + ')</span></span>' + btn + '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px;min-width:0;"><span style="font-size:14px;font-weight:800;color:' + color + ';min-width:0;">' + label + ' <span data-er-count style="opacity:0.7;font-weight:700;">(' + arr.length + ')</span></span>' + btn + '</div>' +
         cardGrid(arr) + '</div>';
     }
     // Cabeçalho do gênero (drop = só gênero) + botão criar categoria por gênero.
@@ -2446,6 +2454,54 @@
   window._erRenderMatrix = function () {
     var el = document.getElementById('er-cat-matrix');
     if (el && _liveState) el.innerHTML = _matrixInner(_liveState.rows, _liveState.t);
+    // O texto digitado sobrevive ao re-render (é estado da barra), mas os cards voltam sem
+    // filtro — reaplica aqui, num lugar só, e não em cada caller do re-render.
+    if (typeof window._erApplyMatrixFilter === 'function') window._erApplyMatrixFilter();
+  };
+
+  // ── BUSCA DA ANÁLISE (v1.7.55) ───────────────────────────────────────────────────
+  // Pedido do dono: _"vamos colocar a barra de busca/filtro na pagina da analise"_ +
+  // _"a barra de busca/filtro, como sempre, deve travar abaixo do cabecalho e nao sumir
+  // com o scroll"_. É a barra CANÔNICA (`_inscritosFilterBar`, modo searchOnly + sticky) —
+  // a mesma da chave e do #participants —, então o sticky, o campo e o toque nascem certos.
+  // Ver [[project_canonical_filter_bar_sticky]].
+  //
+  // Existia uma `_renderInscritosList` com essa barra dentro, mas ela está DEFINIDA E
+  // NUNCA CHAMADA desde que a página foi consolidada na matriz (v1.15.44) — ou seja, a
+  // busca da Análise nunca chegou à tela. Aqui a barra passa a viver na PÁGINA, filtrando
+  // a matriz, que é o que a Análise realmente mostra.
+  //
+  // Filtro DOM puro: não re-renderiza a matriz. Isso preserva o drag-and-drop em curso, as
+  // edições pendentes (âmbar) e o scroll — o cânone dos cards estáticos.
+  window._erApplyMatrixFilter = function () {
+    try {
+      var inp = document.getElementById('er-mx-search');
+      var q = _norm(inp ? (inp.value || '') : '');
+      var raiz = document.getElementById('er-cat-matrix');
+      if (!raiz) return;
+      var achou = 0;
+      var chips = raiz.querySelectorAll('[data-er-person]');
+      for (var i = 0; i < chips.length; i++) {
+        var casa = !q || _norm(chips[i].getAttribute('data-er-person') || '').indexOf(q) !== -1;
+        chips[i].style.display = casa ? '' : 'none';
+        if (casa && q) achou++;
+      }
+      // Caixa sem ninguém visível some junto — e a contagem do título passa a dizer
+      // "(x de N)" pra não afirmar um número que a tela não está mostrando.
+      var caixas = raiz.querySelectorAll('[data-er-box]');
+      for (var j = 0; j < caixas.length; j++) {
+        var vis = caixas[j].querySelectorAll('[data-er-person]');
+        var n = 0;
+        for (var k = 0; k < vis.length; k++) if (vis[k].style.display !== 'none') n++;
+        caixas[j].style.display = (q && n === 0) ? 'none' : '';
+        var cnt = caixas[j].querySelector('[data-er-count]');
+        var tot = caixas[j].getAttribute('data-er-total') || '0';
+        if (cnt) cnt.textContent = q ? ('(' + n + ' de ' + tot + ')') : ('(' + tot + ')');
+      }
+      var vazio = document.getElementById('er-mx-search-empty');
+      if (vazio) vazio.style.display = (q && achou === 0) ? '' : 'none';
+      if (typeof window._syncStickyBarOffset === 'function') window._syncStickyBarOffset();
+    } catch (e) {}
   };
   // ─ Formalizar categorias (botões "Criar categoria") — mexe em genderCategories /
   //   skillCategories / combinedCategories do torneio e PERSISTE. NÃO atribui p.category
@@ -4388,7 +4444,18 @@
     _liveState = { rows: rows, t: t, isOrg: _isOrg };
     _pendingEdits = {}; // v2.4.34: cada carga da página começa sem edições pendentes
 
-    container.innerHTML = hdr +
+    // A barra é a 1ª IRMÃ DEPOIS DO CABEÇALHO, fora do container com padding. `sticky` só
+    // gruda depois que a rolagem leva a posição natural até o `top` — enterrada no meio da
+    // página ela some antes de grudar, que foi o bug medido na chave (1.7.43). Colada no
+    // cabeçalho, ela está no topo desde o primeiro pixel de rolagem.
+    var _mxBar = (typeof window._inscritosFilterBar === 'function')
+      ? window._inscritosFilterBar({
+          stateKey: 'analise', sticky: true, searchOnly: true,
+          searchId: 'er-mx-search', onChange: 'window._erApplyMatrixFilter()',
+        }) + '<div id="er-mx-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Ninguém encontrado com esse nome.</div>'
+      : '';
+
+    container.innerHTML = hdr + _mxBar +
       '<div style="max-width:100%;margin:0 auto;padding:1rem 1.25rem;">' +
       subtitle +
       // Seção ÚNICA: Categorias com apuração pelo letzplay (busca + legenda + matriz
@@ -4402,6 +4469,12 @@
     if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
 
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
+    // Reaplica a busca depois que este HTML aterrissa no DOM (aqui ainda é string) e
+    // publica a altura da barra pra quem empilha sticky abaixo dela.
+    setTimeout(function () {
+      if (typeof window._erApplyMatrixFilter === 'function') window._erApplyMatrixFilter();
+      if (typeof window._syncStickyBarOffset === 'function') window._syncStickyBarOffset();
+    }, 0);
   }
 
   function _renderLoading(container, t) {

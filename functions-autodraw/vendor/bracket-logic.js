@@ -3819,8 +3819,20 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   if (colIdx === -1) return 0;
   var col = rounds[colIdx];
   var ts = Date.now();
-  // (3) sorteia a ordem do pareamento dos entrantes elegíveis.
-  eligible = _plainShuffle(eligible);
+  // (3) A ORDEM É A DA FILA — quem espera há mais tempo entra primeiro (v1.7.55).
+  //
+  // Aqui havia `_plainShuffle(eligible)`. Isso contradiz o cânone de que a espera é uma
+  // FILA com ordem declarada (v1.6.88: "quem leva W.O. vai pro FIM; quem assume a vaga é o
+  // PRIMEIRO dela") — e aparece na prática: no Confra, com 3 homens na fila e 1 vaga
+  // masculina pela proporção 25/75, o embaralho deu a vaga ao SEGUNDO da fila e deixou o
+  // primeiro esperando. O dono, olhando a mesma fila: _"deveria ter formado novo grupo com
+  // Paulo Oriente, danielacsimao, Carol Capucho e Nádia"_ — Paulo é justamente o primeiro.
+  //
+  // Não se perde sorteio nenhum: em Rei/Rainha os 4 do grupo jogam TODOS contra todos em
+  // duplas rotativas (AB×CD, AC×BD, AD×BC), então a ordem dentro do grupo não altera um
+  // jogo sequer — ela só decidia QUEM ENTRAVA, e isso numa fila é antiguidade, não sorte.
+  // O planejador da proporção preserva a ordem dentro de cada balde de gênero, então
+  // manter a ordem aqui basta.
   var used = [];
   var formed = 0;
   var _n2uMapWl = _buildNameToUid(t); // v4.4.115: identidade por uid nos jogos formados da espera
@@ -4003,7 +4015,41 @@ window._expandMonarchFromWaitlist = function (t) {
   // nomes já em algum grupo desta rodada (não re-enfileira)
   var inGroup = {};
   (target.monarchGroups || []).forEach(function (g) { (g.players || []).forEach(function (n) { inGroup[String(n).toLowerCase()] = 1; }); });
-  // ponte: indivíduos em standbyParticipants/waitlist → fila monarch da sua categoria.
+  // ── A FILA É DA CATEGORIA DA RODADA, NUNCA DA CATEGORIA DA INSCRIÇÃO (v1.7.55) ────
+  // BUG MEDIDO (dono, 06/ago/2026, Confra): 6 pessoas na espera — 3 homens e 3 mulheres,
+  // TODAS com gênero no perfil — e nenhum grupo se formava, com a proporção 25/75 travada
+  // (1 homem + 3 mulheres) tendo exatamente UMA divisão possível. Rodando o motor REAL
+  // contra o doc REAL: **0 grupos**, e a fila saía partida em `Masc_C:3`, `_default_:2`,
+  // `Fem_D:1` — NENHUMA chegando aos 4 do `if (fullWl.length < 4) return 0`.
+  //
+  // A ponte enfileirava cada pessoa na fila da categoria gravada NA INSCRIÇÃO DELA. Só que
+  // essa categoria é rótulo de HABILIDADE/gênero do inscrito ("Masc C", "Fem D") — não uma
+  // divisão do torneio. Os 28 grupos e os 87 jogos da rodada estão TODOS **sem categoria**:
+  // o Confra é categoria única, sorteio misto. Ou seja, a fila se partia em três por um
+  // critério que a rodada não usa, e cada pedaço esperava para sempre.
+  //
+  // Havia um SEGUNDO bloqueio somado, que sozinho já impediria: `_tryFormMonarchWaitlistGroups`
+  // procura a coluna da rodada cuja categoria bate (`(category||null) !== (rcat||null)`).
+  // Com a rodada em `null`, formar para "Masc C" nunca acharia coluna (`colIdx === -1`) —
+  // então mesmo 4 homens Masc C na fila NÃO formariam grupo. Chavear pela rodada mata os dois.
+  //
+  // REGRA: a fila é chaveada pela categoria em que a pessoa REALMENTE entraria, que é a da
+  // rodada-alvo. Quando a rodada não segmenta (uma categoria só — inclusive "nenhuma"),
+  // todo mundo vai para essa fila. Só num torneio segmentado DE VERDADE (rodada com mais de
+  // uma categoria) a categoria da pessoa volta a valer — ali ela é divisão real, e misturar
+  // seria pior que esperar.
+  var _catsDaRodada = {};
+  (target.monarchGroups || []).forEach(function (g) {
+    _catsDaRodada[_monarchWaitKey(g && g.category)] = (g && g.category) || null;
+  });
+  (target.matches || []).forEach(function (m) {
+    if (m && !m.isSitOut) _catsDaRodada[_monarchWaitKey(m.category)] = m.category || null;
+  });
+  var _chavesRodada = Object.keys(_catsDaRodada);
+  var _rodadaSegmentada = _chavesRodada.length > 1;
+  var _catUnicaDaRodada = _chavesRodada.length ? _catsDaRodada[_chavesRodada[0]] : null;
+
+  // ponte: indivíduos em standbyParticipants/waitlist → fila monarch da categoria da RODADA.
   var cats = {};
   // Guarda a ENTRADA original de quem veio da espera, por nome. É ela que vira INSCRITO
   // quando o grupo se forma — ver o bloco "vira INSCRITO" no fim desta função.
@@ -4014,15 +4060,30 @@ window._expandMonarchFromWaitlist = function (t) {
     if (inGroup[nm.toLowerCase()]) return;             // já joga nesta rodada
     _daEspera[nm.toLowerCase()] = e;
     var cat = (e && (e.category || (Array.isArray(e.categories) && e.categories[0]))) || null;
+    // A categoria da inscrição só governa a fila quando a RODADA de fato separa por
+    // categoria E aquela categoria existe nela. Fora disso, a fila é a da rodada.
+    if (!_rodadaSegmentada || _chavesRodada.indexOf(_monarchWaitKey(cat)) === -1) {
+      cat = _rodadaSegmentada ? cat : _catUnicaDaRodada;
+    }
     var wl = window._getMonarchWaitlist(t, cat);
     if (wl.indexOf(nm) === -1) { wl.push(nm); _setMonarchWaitlist(t, cat, wl); }
-    cats[cat || '_default_'] = cat || null;
+    // Resíduo: quem já tinha sido enfileirado sob a chave ERRADA (por uma versão anterior
+    // desta ponte) sai de lá. Nome duplicado em duas chaves faz a mesma pessoa ser contada
+    // e sorteada duas vezes — é o "fantasma" que o cânone da espera manda evitar.
+    var _chaveCerta = _monarchWaitKey(cat);
+    Object.keys(t.monarchWaitlist || {}).forEach(function (k) {
+      if (k === _chaveCerta || !Array.isArray(t.monarchWaitlist[k])) return;
+      t.monarchWaitlist[k] = t.monarchWaitlist[k].filter(function (x) { return String(x) !== nm; });
+    });
+    cats[_monarchWaitKey(cat)] = cat || null;
   };
   (Array.isArray(t.standbyParticipants) ? t.standbyParticipants : []).forEach(bridge);
   (Array.isArray(t.waitlist) ? t.waitlist : []).forEach(bridge);
-  // a categoria da própria rodada também entra (fila monarch pode já ter gente)
-  var sample = (target.matches || [])[0];
-  cats[((sample && sample.category) || '_default_')] = (sample && sample.category) || null;
+  // as categorias da própria rodada também entram (a fila monarch pode já ter gente).
+  // Pela MESMA chave normalizada do `_getMonarchWaitlist` — usar a categoria crua aqui
+  // criava uma segunda entrada pra mesma fila quando o nome tem espaço ("Masc C" ×
+  // "Masc_C") e a formação rodava duas vezes sobre listas diferentes.
+  _chavesRodada.forEach(function (k) { cats[k] = _catsDaRodada[k]; });
   var formed = 0;
   Object.keys(cats).forEach(function (k) {
     try { formed += (window._tryFormMonarchWaitlistGroups(t, cats[k], roundNum) || 0); } catch (e) {}

@@ -173,6 +173,14 @@ const SUITES = [
   // cor de número solta ou fizer o retrato limitar o número pela altura.
   'tests/live-score-retrato.test.js',
   'tests/meu-card-no-topo.test.js',
+  // o card do topo NUNCA pode contradizer o torneio: quem está na lista de espera,
+  // desativado ou com W.O. lia "você não está inscrito" (dado REAL do Confra).
+  'tests/meu-card-nunca-contradiz.test.js',
+  // a espera formava ZERO grupo com 3 homens + 3 mulheres e a proporção 25/75 travada,
+  // porque a fila se partia pela categoria da INSCRIÇÃO e não pela da rodada.
+  'tests/espera-forma-grupo-por-ordem.test.js',
+  // a busca da Análise existia no código e nunca chegava à tela (função órfã).
+  'tests/analise-barra-de-busca.test.js',
   'tests/jogo-so-com-placar.test.js',
   'tests/apagar-torneio-nao-deixa-orfao.test.js',
   'tests/torneio-abandonado.test.js',
