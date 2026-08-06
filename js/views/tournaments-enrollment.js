@@ -1465,6 +1465,13 @@ window._toggleLigaActive = function(tId, isActive) {
           window._removeFromWaitlist(t, (window._pName ? window._pName(_naEspera, '') : '') || _naEspera.displayName || _naEspera.name || '');
         }
         _naEspera.ligaActive = false;
+        // v1.7.59: a marca acompanha a LISTA (simétrico ao religar). Quem estava na fila
+        // por causa de um W.O. e se desliga volta a ser "W.O. + desativado" — deixar
+        // `woSentToWaitlistAt` faria o card dizer "está na fila" com a pessoa nos inativos.
+        if (_naEspera.woSentToWaitlistAt) {
+          delete _naEspera.woSentToWaitlistAt;
+          _naEspera.woDeactivatedAt = new Date().toISOString();
+        }
         arr.push(_naEspera); t.participants = arr;
         found = _naEspera;
       }
@@ -1480,13 +1487,33 @@ window._toggleLigaActive = function(tId, isActive) {
   // de onde "Novos Confrontos" (ou o organizador) o chama pra jogar. Sai dos inativos,
   // entra na fila. Só quando: fase sorteada E a pessoa NÃO está jogando a fase corrente
   // (quem desativou DEPOIS do sorteio e já tem jogo volta a jogar direto, sem fila).
+  //
+  // v1.7.59 — QUEM LEVOU W.O. VAI PRA FILA AO RELIGAR, SEM EXCEÇÃO. O W.O. passou a
+  // desativar SEMPRE (liga-substitution.js), e a segunda metade da regra do dono mora
+  // aqui: "se o participante se reativar manualmente, vai para a lista de espera".
+  // `woDeactivatedAt` FURA o teste `_isPlayingCurrentPhase` de propósito — quando a fila
+  // estava vazia no momento do W.O. ninguém assumiu a vaga, então o nome dele CONTINUA
+  // nos players do grupo e o teste diria "está jogando", devolvendo ao elenco ativo
+  // alguém que tem um W.O. lançado na rodada. A marca é o fato; a presença no grupo é
+  // resíduo de uma vaga que não foi preenchida.
+  var _levouWo = !!(found && found.woDeactivatedAt);
+  var _marcasWo = null;
   var _movedToWait = null;
   if (!_vindoDaFila && isActive && typeof window._phaseDrawDone === 'function' && window._phaseDrawDone(t) &&
-      typeof window._isPlayingCurrentPhase === 'function' && !window._isPlayingCurrentPhase(t, found)) {
+      (_levouWo || (typeof window._isPlayingCurrentPhase === 'function' && !window._isPlayingCurrentPhase(t, found)))) {
     var _idx = arr.indexOf(found);
     if (_idx !== -1) {
       arr.splice(_idx, 1);
       t.participants = arr;
+      if (_levouWo) {
+        // Troca a marca junto com a lista: o card lê `woSentToWaitlistAt` ANTES de
+        // `woDeactivatedAt` (store.js), e deixar a antiga faria a instrução dizer
+        // "religue o toggle" pra quem já está na fila. O selo de W.O. permanece — é
+        // verdade que ela está na fila POR CAUSA do W.O.
+        _marcasWo = { deactivatedAt: found.woDeactivatedAt };
+        delete found.woDeactivatedAt;
+        found.woSentToWaitlistAt = new Date().toISOString();
+      }
       // v1.6.88: entra no FIM da fila — regra do dono pro reativado que veio de um W.O.
       // ("se o W.O. for para desativados, passa para última posição da lista de espera ao
       // se reativar"). _waitlistPushBack é o ponto único disso e é idempotente.
@@ -1544,7 +1571,9 @@ window._toggleLigaActive = function(tId, isActive) {
         // Reativou com a fase já sorteada: o destino é a fila, e o aviso tem que dizer isso —
         // "Ativado" sozinho prometeria um jogo que a rodada sorteada não tem.
         window.showNotification('📋 Você entrou na lista de espera',
-          'A rodada já foi sorteada. Você sai dos inativos e entra na fila — assim que houver vaga ou um novo confronto, você joga.', 'success');
+          _levouWo
+            ? 'Você tinha levado W.O. e estava nos Desativados. Ao reativar, você entra no FIM da lista de espera — joga assim que chegar a sua vez.'
+            : 'A rodada já foi sorteada. Você sai dos inativos e entra na fila — assim que houver vaga ou um novo confronto, você joga.', 'success');
       } else {
         window.showNotification(
           isActive ? _t('enroll.ligaActive') : _t('enroll.ligaInactive'),
@@ -1573,6 +1602,13 @@ window._toggleLigaActive = function(tId, isActive) {
       var _pa = Array.isArray(t.participants) ? t.participants : [];
       _pa.splice(Math.min(_movedToWait.idx, _pa.length), 0, _movedToWait.entry);
       t.participants = _pa;
+      // Desfaz também a TROCA DE MARCA — sem isto o save falho deixaria a pessoa de volta
+      // no elenco carregando `woSentToWaitlistAt`, e o card diria "está na fila".
+      if (_marcasWo) {
+        delete _movedToWait.entry.woSentToWaitlistAt;
+        _movedToWait.entry.woDeactivatedAt = _marcasWo.deactivatedAt;
+        _marcasWo = null;
+      }
       _movedToWait = null;
     }
     _syncTogglesInDom();

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.59';
+window.SCOREPLACE_VERSION = '1.7.60';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -5214,10 +5214,15 @@ window._haversineKm = function(lat1, lon1, lat2, lon2) {
 //
 // A ESPERA É INSCRIÇÃO. Ela vive nos 3 storages (`_getWaitlist`), e `memberUids` a cobre
 // desde a v1.6.86 — a pessoa vê o torneio no app porque ESTÁ nele.
-// W.O. é ANOTAÇÃO, não estado-base: quem leva W.O. termina desativado OU na fila (a
-// escolha do organizador, v1.6.90), então o W.O. entra como selo em cima do estado real —
-// juntar os dois num estado só apagaria justamente a informação acionável ("e agora, como
-// eu volto?"). Ver [[project_wo_outcome_negotiation_canon]], [[project_sitout_vs_waitlist_canon]].
+// W.O. é ANOTAÇÃO, não estado-base — e o selo em cima do estado real continua sendo o
+// certo mesmo depois da v1.7.59, que tornou o desfecho ÚNICO (W.O. sempre desativa):
+// quem levou W.O. pode estar DESATIVADO (acabou de levar) ou NA FILA (religou o toggle
+// depois), e é justamente essa diferença que responde "e agora, como eu volto?" — no
+// primeiro caso ligar o botão Ativado, no segundo esperar a vez. Fundir num estado só
+// apagaria a informação acionável.
+// ⚠️ `woSentToWaitlistAt` NÃO significa mais "o organizador mandou pra fila" (a escolha
+// 1×2 da v1.6.90 foi revogada): hoje é a marca de quem RELIGOU o toggle depois do W.O.
+// Ver [[project_wo_outcome_negotiation_canon]], [[project_sitout_vs_waitlist_canon]].
 window._meuStatusNoTorneio = function (t) {
   var cu = window.AppStore && window.AppStore.currentUser;
   var uid = cu && cu.uid;
