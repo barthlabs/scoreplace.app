@@ -600,6 +600,17 @@ service cloud.firestore {
       return request.resource.data.ownerUid == null
         || request.resource.data.ownerUid == request.auth.uid;
     }
+    // Foto do local, baixada do Google UMA VEZ e servida daqui (v1.7.53). Leitura pública
+    // porque é o fundo dos cards, que aparecem antes do login. ESCRITA NEGADA A TODO
+    // CLIENTE de propósito: só a CF cacheVenuePhoto (Admin SDK) grava. Foi um bug de
+    // render que gerou 89.927 chamadas pagas ao Places em 30 dias para 2 fotos — com a
+    // escrita fechada, nenhuma versão do cliente (inclusive a nativa publicada, que não
+    // tem auto-update) consegue repetir isso.
+    match /venuePhotos/{placeId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /venues/{venueId} {
       allow read: if true;
       allow create: if request.auth != null

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.52';
+window.SCOREPLACE_VERSION = '1.7.53';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -424,39 +424,55 @@ window._formatLabel = function (t) {
   return window._formatDisplayName(t.format) || t.format || '';
 };
 
-// ─── Foto do local (Google Places) — re-busca FRESCA por placeId (v4.0.14) ───
-// A URL de foto do Places (novo) tem token de VALIDADE CURTA: salvar a URL
-// inteira na criação do torneio e reusar meses depois → 400 INVALID_ARGUMENT
-// ("photo resource invalid"). Por isso o fundo do card ficava sem foto mesmo
-// com o local pinado. Solução: re-buscar a foto pelo `venuePlaceId` na hora de
-// exibir (o billing/Places está ativo). Cache em memória (dedupe por sessão) +
-// localStorage com TTL (evita re-busca a cada navegação). onerror invalida o
-// cache e re-busca na próxima. Render sites marcam o elemento de fundo com
-// data-vphoto-pid (+ data-vphoto-overlay/w/h); o hidratador pinta o background.
+// ─── Foto do local — vem do NOSSO servidor, o Google nunca é chamado aqui (v1.7.53) ───
+// INCIDENTE DE CUSTO (06/ago/2026): o orçamento de R$100/mês bateu 90% em 5 dias e o
+// relatório por SKU mostrou R$91,00 de R$92,09 num item só — "Places API Place Details
+// Photos" — para **2 placeIds na base inteira**. Ou seja: o app re-comprava as MESMAS
+// DUAS fotos. Três causas somadas, todas de EXIBIÇÃO (busca de verdade foi 296 chamadas
+// no mês inteiro):
+//   1. os render sites pintavam `url(t.venuePhotoUrl)` CRU — e essa URL é
+//      places.googleapis.com/.../media?key=…, então **cada card desenhado = 1 chamada
+//      COBRADA**. Card na dashboard, no detalhe e no Modo TV, a cada re-render.
+//   2. dois laços "pré-carregavam" essa URL com `new Image()` para TODO torneio visível,
+//      a cada render — multiplicando o item 1 pelo número de torneios na tela.
+//   3. aqui, o cache de 6h era invalidado pelo `onerror`, e o token da URI do Places
+//      expira MUITO antes de 6h → toda expiração virava re-busca paga.
+// Agora: a CF `cacheVenuePhoto` baixa do Google (1× por semana por local) e guarda o JPEG
+// em `venuePhotos/{placeId}`; o cliente lê SÓ esse doc. A escrita desse doc é negada a
+// todo cliente nas firestore.rules, então nenhum bug de render pode repetir isto — nem
+// no app NATIVO publicado, que embarca o JS e não tem auto-update.
+// Efeito colateral bom: conserta a foto no iOS nativo, que nunca carregou porque a origem
+// capacitor:// jamais casa com a restrição de referrer da chave (project_venue_photo_referrer).
+// É a 2ª vez que a Places drena o orçamento (a 1ª foi a busca, v4.5.65 — project_places_api_cost).
 (function _setupVenuePhotos() {
-  var _mem = {};                       // placeId -> Promise<url|null>
-  var TTL = 6 * 3600 * 1000;           // 6h
-  function _lsGet(pid) { try { var r = JSON.parse(localStorage.getItem('sp_vphoto_' + pid) || 'null'); if (r && r.u && (Date.now() - r.t) < TTL) return r.u; } catch (e) {} return null; }
-  function _lsSet(pid, u) { try { localStorage.setItem('sp_vphoto_' + pid, JSON.stringify({ u: u, t: Date.now() })); } catch (e) {} }
-  function _lsDel(pid) { try { localStorage.removeItem('sp_vphoto_' + pid); } catch (e) {} }
+  var _mem = {};        // placeId -> Promise<dataUrl|null>  (1 leitura por sessão)
+  var _pedido = {};     // placeId -> true: já pedimos à CF nesta sessão (nunca 2×)
 
-  window._venueFreshPhoto = function (pid, w, h) {
+  function _lerDoc(pid) {
+    var db = window.FirestoreDB && window.FirestoreDB.db;
+    if (!db) return Promise.resolve(null);
+    return db.collection('venuePhotos').doc(pid).get()
+      .then(function (s) { return s.exists ? s.data() : null; })
+      .catch(function () { return null; });
+  }
+
+  window._venueFreshPhoto = function (pid) {
     if (!pid) return Promise.resolve(null);
     if (_mem[pid]) return _mem[pid];
-    var cached = _lsGet(pid);
-    if (cached) { _mem[pid] = Promise.resolve(cached); return _mem[pid]; }
     _mem[pid] = (async function () {
+      var d = await _lerDoc(pid);
+      if (d && d.dataUrl) return d.dataUrl;
+      if (d && d.semFoto) return null;          // local sem foto no Google — não insistir
+      // Ainda não cacheada: pede UMA vez à CF (ela fala com o Google; o cliente, nunca).
+      // Sem login a CF recusa — aí fica sem foto, que é melhor que voltar a pagar por render.
+      if (_pedido[pid]) return null;
+      _pedido[pid] = true;
       try {
-        if (!(window.google && window.google.maps && window.google.maps.importLibrary)) return null;
-        await window.google.maps.importLibrary('places');
-        var place = new window.google.maps.places.Place({ id: pid });
-        await place.fetchFields({ fields: ['photos'] });
-        if (place.photos && place.photos.length) {
-          var url = place.photos[0].getURI({ maxWidth: w || 800, maxHeight: h || 400 });
-          if (url) { _lsSet(pid, url); return url; }
-        }
-      } catch (e) {}
-      return null;
+        if (typeof window._callCF !== 'function') return null;
+        await window._callCF('cacheVenuePhoto', { placeId: pid });
+        var d2 = await _lerDoc(pid);
+        return (d2 && d2.dataUrl) || null;
+      } catch (e) { return null; }
     })();
     return _mem[pid];
   };
@@ -470,18 +486,14 @@ window._formatLabel = function (t) {
       var pid = el.getAttribute('data-vphoto-pid');
       if (!pid) return;
       var overlay = el.getAttribute('data-vphoto-overlay') || '';
-      var w = parseInt(el.getAttribute('data-vphoto-w'), 10) || 800;
-      var h = parseInt(el.getAttribute('data-vphoto-h'), 10) || 400;
-      window._venueFreshPhoto(pid, w, h).then(function (url) {
+      window._venueFreshPhoto(pid).then(function (url) {
         if (!url) return;
-        var img = new Image();
-        img.onload = function () {
-          el.style.backgroundImage = (overlay ? overlay + ', ' : '') + 'url(' + url + ')';
-          el.style.backgroundSize = 'cover';
-          el.style.backgroundPosition = 'center';
-        };
-        img.onerror = function () { _lsDel(pid); delete _mem[pid]; el.removeAttribute('data-vphoto-done'); };
-        img.src = url;
+        // dataUrl não expira e não vai à rede — pinta direto, sem Image() de teste.
+        // ⚠️ NÃO reintroduzir `onerror` que apaga cache e re-hidrata: era esse laço que
+        // transformava token expirado em chamada paga a cada render.
+        el.style.backgroundImage = (overlay ? overlay + ', ' : '') + 'url(' + url + ')';
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
       });
     });
   };

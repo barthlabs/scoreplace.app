@@ -2542,23 +2542,14 @@ function renderTournaments(container, tournamentId = null) {
             // v4.0.21: foto de fundo custom do organizador — substitui a do Google.
             // Já vem enquadrada (cropper), então só cover+center, sem hidratar Google.
             venuePhotoBg = 'background-image: ' + overlayGradient + ', url(' + t.coverPhotoData + '); background-size: cover; background-position: center;';
-        } else if (t.venuePhotoUrl) {
-            // v3.1.40: PRÉ-CARREGA e MANTÉM a referência (mesma técnica/cache da dashboard)
-            // pra que os vários re-renders do boot sirvam a foto do cache do browser em vez
-            // de re-baixar — acaba com o "pisca várias vezes" do background no detalhe.
-            try {
-                window._dashPhotoCache = window._dashPhotoCache || {};
-                if (!window._dashPhotoCache[t.venuePhotoUrl]) {
-                    var _vphIm = new Image(); _vphIm.src = t.venuePhotoUrl;
-                    window._dashPhotoCache[t.venuePhotoUrl] = _vphIm;
-                }
-            } catch (e) {}
-            venuePhotoBg = 'background-image: ' + overlayGradient + ', url(' + t.venuePhotoUrl + '); background-size: cover; background-position: center;';
         }
-        // v4.0.14: re-busca a foto fresca pelo placeId (token salvo expira → 400).
-        // v4.0.21: desligado quando há foto custom (não sobrescrever com a do Google).
-        var vphotoAttrs = (!t.coverPhotoData && t.venuePhotoUrl && t.venuePlaceId)
-            ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGradient + '" data-vphoto-w="1000" data-vphoto-h="500"'
+        // v1.7.53: saíram daqui o `url(t.venuePhotoUrl)` e o preload com `new Image()` —
+        // aquela URL é do places.googleapis.com, então PINTAR já era pagar, e o preload
+        // pagava de novo a cada re-render do boot. O "pisca" que o preload combatia não
+        // volta: a foto agora é dataURL de `venuePhotos/{placeId}` (nosso Firestore),
+        // guardado em memória por sessão — re-render não vai à rede.
+        var vphotoAttrs = (!t.coverPhotoData && t.venuePlaceId)
+            ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGradient + '"'
             : '';
 
         // v3.0.x: contagem canônica (deduplicada, equipe-aware) — estável antes E

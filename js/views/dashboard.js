@@ -253,18 +253,14 @@ function renderDashboard(container) {
   const _allVisibleRaw = window.AppStore.getVisibleTournaments();
   const visible = _hidIds.length ? _allVisibleRaw.filter(function(t){ return !_hidSet[String(t.id)]; }) : _allVisibleRaw;
 
-  // v3.0.55: PRÉ-CARREGA as fotos de venue (Google Maps) e MANTÉM a referência —
-  // assim, nos vários re-renders do boot (router + auth + listener), o
-  // background-image do card é servido do cache em vez de re-baixar, acabando com
-  // o "pisca várias vezes" do card com foto. Idempotente (só carrega URLs novas).
-  try {
-    window._dashPhotoCache = window._dashPhotoCache || {};
-    var _photoSrcs = _allVisibleRaw.concat((window.AppStore && window.AppStore.publicDiscovery) || []);
-    for (var _pi = 0; _pi < _photoSrcs.length; _pi++) {
-      var _pu = _photoSrcs[_pi] && _photoSrcs[_pi].venuePhotoUrl;
-      if (_pu && !window._dashPhotoCache[_pu]) { var _im = new Image(); _im.src = _pu; window._dashPhotoCache[_pu] = _im; }
-    }
-  } catch (e) {}
+  // v1.7.53: o PRÉ-CARREGAMENTO de fotos foi REMOVIDO. Ele existia (v3.0.55) pra matar o
+  // "pisca" do card entre os re-renders do boot, mas `t.venuePhotoUrl` é a URL crua do
+  // places.googleapis.com/.../media?key=… — cada `new Image()` aqui era **uma chamada
+  // COBRADA ao Google**, para TODO torneio visível, a cada render. Foi um dos três
+  // caminhos que levaram o orçamento a 90% em 5 dias (R$91 de R$92 num SKU só).
+  // O pisca não volta: a foto agora é um dataURL vindo de `venuePhotos/{placeId}`
+  // (nosso Firestore), guardado em memória por sessão em `_venueFreshPhoto` — não há
+  // rede no re-render. ⚠️ NÃO reintroduzir laço de preload sobre venuePhotoUrl.
   // v3.0.55: registra a assinatura dos dados RENDERIZADOS — o _softRefreshView
   // compara com isto e NÃO re-renderiza (nem re-pisca a foto) quando o snapshot
   // (cache→servidor no boot) traz os mesmos torneios.
@@ -693,15 +689,17 @@ function renderDashboard(container) {
       // v4.0.21: foto de fundo custom do organizador — substitui a do Google.
       venuePhotoBg = 'background-image: ' + overlayGrad + ', url(' + t.coverPhotoData + '); background-size: cover; background-position: center;';
       _cardTextColor = 'white';
-    } else if (t.venuePhotoUrl) {
-      venuePhotoBg = 'background-image: ' + overlayGrad + ', url(' + t.venuePhotoUrl + '); background-size: cover; background-position: center;';
+    } else if (t.venuePlaceId) {
+      // v1.7.53: NÃO pinta mais `url(t.venuePhotoUrl)` — aquela URL é do
+      // places.googleapis.com e cada render dela era 1 chamada COBRADA. Aqui fica só o
+      // gradiente; quem pinta a foto é o hidratador, com o dataURL do nosso Firestore.
       _cardTextColor = 'white'; // Overlay sempre escuro, texto branco
     }
-    // v4.0.14: re-busca a foto fresca pelo placeId (o token salvo na criação
-    // expira → 400). O hidratador pinta o fundo com a URL nova.
-    // v4.0.21: desligado quando há foto custom.
-    var vphotoAttrs = (!t.coverPhotoData && t.venuePhotoUrl && t.venuePlaceId)
-      ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGrad + '" data-vphoto-w="800" data-vphoto-h="400"'
+    // v1.7.53: gate passou a ser o placeId (era `venuePhotoUrl && venuePlaceId`) — o
+    // placeId é a identidade do local; a URL velha do Google não é mais pré-requisito
+    // pra ter foto, e torneio salvo sem ela também passa a mostrar.
+    var vphotoAttrs = (!t.coverPhotoData && t.venuePlaceId)
+      ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGrad + '"'
       : '';
 
     // v3.0.x: usa a contagem CANÔNICA (mesma do detalhe) — antes a dashboard tinha

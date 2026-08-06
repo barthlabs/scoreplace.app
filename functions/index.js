@@ -6207,3 +6207,122 @@ exports.backfillMatchResultDocs = onRequest(
     res.json({ ok: true, dryRun, force, tournaments, withBracket, created, refreshed, skipped, errors: errors.slice(0, 20) });
   }
 );
+
+// ─── FOTO DO LOCAL: o Google é chamado UMA VEZ, o app lê do NOSSO servidor (v1.7.53) ───
+// INCIDENTE (06/ago/2026): o orçamento de R$100/mês bateu 90% em 5 dias e o relatório de
+// faturamento mostrou que R$91,00 dos R$92,09 eram UM SKU só — "Places API Place Details
+// Photos". Medido no Monitoring: 89.927 GetPhotoMedia + 65.733 GetPlace em 30 dias, para
+// **2 placeIds distintos na base inteira**. Ou seja: o app re-comprava as MESMAS DUAS fotos
+// dezenas de milhares de vezes, porque o cache do cliente (_venueFreshPhoto, TTL 6h) era
+// invalidado pelo onerror sempre que o token da URI do Places expirava — e a URI expira
+// bem antes das 6h. É a SEGUNDA vez que a Places drena o orçamento (a 1ª foi a busca, na
+// v4.5.65); a memória daquele incidente já registrava a saída: "o caminho é proxy/snapshot
+// da foto (que também cortaria custo)".
+//
+// Agora: esta CF baixa a foto pelo placeId e guarda o JPEG em base64 em venuePhotos/{placeId}.
+// O cliente lê SÓ esse doc — nunca mais fala com o Google para desenhar foto. Efeito colateral
+// bom: conserta a foto no iOS NATIVO, que nunca carregou porque a origem capacitor:// jamais
+// casa com a restrição de referrer da chave de browser (project_venue_photo_referrer).
+//
+// ⚠️ A escrita é EXCLUSIVA do Admin SDK (firestore.rules nega escrita do cliente): se o
+// cliente pudesse escrever, um bug de render voltaria a virar tempestade de chamadas pagas.
+// ⚠️ TTL de 7 dias (decisão do dono, 06/ago): renova a foto 1×/semana por local. Com os 2
+// locais da base isso dá ~8 chamadas/MÊS contra as 65 mil de antes — o custo é ruído e a
+// foto nunca fica velha. O TTL também evita tratar o conteúdo do Places como cópia
+// permanente nossa. Quem paga a renovação é o 1º acesso depois de vencida, nunca o render.
+const PLACES_SERVER_KEY = defineSecret("PLACES_SERVER_KEY");
+const _VP_TTL_MS = 7 * 24 * 3600 * 1000;
+// Tamanhos tentados em ordem: o maior render é o hero do Modo TV (1200×600). O doc do
+// Firestore tem teto de 1 MiB e base64 infla ~33%, então caímos de largura até caber com
+// folga — foto menor é melhor que doc rejeitado.
+const _VP_WIDTHS = [1200, 900, 700];
+const _VP_MAX_BYTES = 650 * 1024;
+
+async function _fetchPlacePhotoDataUrl(placeId, key) {
+  const det = await fetch(
+    `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?fields=photos&key=${key}`
+  );
+  if (!det.ok) throw new Error(`places details HTTP ${det.status}`);
+  const dj = await det.json();
+  const photo = (dj.photos || [])[0];
+  if (!photo || !photo.name) return null;           // local sem foto — não é erro
+  for (const w of _VP_WIDTHS) {
+    const med = await fetch(
+      `https://places.googleapis.com/v1/${photo.name}/media` +
+      `?maxWidthPx=${w}&maxHeightPx=${Math.round(w / 2)}&skipHttpRedirect=true&key=${key}`
+    );
+    if (!med.ok) throw new Error(`places media HTTP ${med.status}`);
+    const mj = await med.json();
+    if (!mj.photoUri) throw new Error("sem photoUri");
+    // O download do photoUri é servido pelo googleusercontent e NÃO é cobrado de novo.
+    const img = await fetch(mj.photoUri);
+    if (!img.ok) throw new Error(`download HTTP ${img.status}`);
+    const buf = Buffer.from(await img.arrayBuffer());
+    if (buf.length <= _VP_MAX_BYTES) {
+      return {
+        dataUrl: "data:image/jpeg;base64," + buf.toString("base64"),
+        bytes: buf.length,
+        width: w,
+        photoName: photo.name,
+        // Atribuição do Places — quem tirou a foto. Guardada junto pra a tela poder creditar.
+        attributions: Array.isArray(photo.authorAttributions)
+          ? photo.authorAttributions.map((a) => String(a.displayName || "")).filter(Boolean)
+          : [],
+      };
+    }
+  }
+  return null;                                       // não coube em nenhuma largura
+}
+
+exports.cacheVenuePhoto = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 60, cors: APP_ORIGINS, secrets: [PLACES_SERVER_KEY] },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const placeId = String((request.data && request.data.placeId) || "").trim();
+    // placeId do Google é opaco mas tem alfabeto conhecido — barra lixo antes de gastar chamada.
+    if (!placeId || !/^[A-Za-z0-9_-]{6,255}$/.test(placeId)) {
+      throw new HttpsError("invalid-argument", "placeId inválido");
+    }
+
+    const db = admin.firestore();
+    const ref = db.collection("venuePhotos").doc(placeId);
+    const snap = await ref.get();
+    const cur = snap.exists ? snap.data() : null;
+    const at = cur && cur.at ? Number(cur.at) : 0;
+    if (cur && (cur.dataUrl || cur.semFoto) && (Date.now() - at) < _VP_TTL_MS) {
+      return { ok: true, cached: true, semFoto: !!cur.semFoto };
+    }
+
+    let foto = null;
+    try {
+      foto = await _fetchPlacePhotoDataUrl(placeId, PLACES_SERVER_KEY.value());
+    } catch (e) {
+      console.error(`[cacheVenuePhoto] ${placeId} falhou: ${e && e.message}`);
+      // Falha de rede/cota NÃO pode virar re-tentativa infinita do cliente: se já existe
+      // versão antiga, ela continua valendo (melhor foto velha que tempestade de chamadas).
+      if (cur && cur.dataUrl) return { ok: true, cached: true, stale: true };
+      throw new HttpsError("unavailable", "não foi possível obter a foto agora");
+    }
+
+    if (!foto) {
+      // Marca "este local não tem foto" para o cliente parar de pedir — o TTL faz reavaliar
+      // daqui a 30 dias, caso o local ganhe foto depois.
+      await ref.set({ semFoto: true, at: Date.now(), placeId }, { merge: true });
+      return { ok: true, semFoto: true };
+    }
+
+    await ref.set({
+      placeId,
+      dataUrl: foto.dataUrl,
+      bytes: foto.bytes,
+      width: foto.width,
+      photoName: foto.photoName,
+      attributions: foto.attributions,
+      semFoto: false,
+      at: Date.now(),
+    }, { merge: true });
+    console.log(`[cacheVenuePhoto] ${placeId} gravado: ${foto.bytes} bytes @${foto.width}px`);
+    return { ok: true, gravado: true, bytes: foto.bytes };
+  }
+);
