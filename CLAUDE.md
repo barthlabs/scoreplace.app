@@ -1291,7 +1291,38 @@ firebase deploy --only hosting --project scoreplace-app
 
 ⛔ **Nunca `firebase deploy` puro** (sem `--only`): ele entra nos codebases de functions e os três se apagam mutuamente — ver `project_autodraw_deploy_footgun`.
 
-**Como foi medido (06–07/ago/2026):** `scoreplace.app` e `scoreplace-app.web.app` devolvem **etag e last-modified idênticos**, batendo com o `Last Release Time` de `firebase hosting:channel:list`; o header `server: GitHub.com` sumiu; e o `firebase deploy --only hosting` levou o `version.txt` ao vivo de 1.7.59 → 1.7.60 na hora. De quebra, em 06/ago o GitHub Actions/Pages ficou em **major outage** e o site seguiu servindo normal. O `.github/workflows/pages.yml` ainda existe e ainda roda no push — **não é mais o caminho de produção**.
+**GATE DE PRODUÇÃO — agora ele mora onde a publicação acontece.** O `hosting.predeploy`
+do `firebase.json` é `["npm test", "npm run prerender"]`: a suíte roda **antes de qualquer
+upload** e, se reprovar, o deploy **aborta sem subir nada**. Antes o gate vivia no workflow
+do GitHub, onde já não bloqueava coisa alguma — o deploy do Firebase é manual e não passava
+por ele. **PROVADO, não presumido:** troquei o predeploy por um comando que falha, rodei o
+deploy e ele parou com `Error: hosting predeploy error: Command terminated with non-zero
+exit code 1`, com o `version.txt` ao vivo intacto. ⚠️ Nunca pôr `| tail` num predeploy — o
+pipe transforma o exit code em zero e o gate vira decoração (mesma armadilha do
+`deploy-functions.sh`).
+
+**O GITHUB PAGES FOI DESATIVADO (07/ago/2026).** Ele continuava `built`, com
+`cname: scoreplace.app`, disparando um build a cada push — um **segundo publicador
+dormente** que mentia nos dois sentidos: vermelho parecia deploy quebrado (não era: quem
+publica é o Firebase) e verde parecia deploy feito (também não era). E o build dele ficava
+atrasado — se o DNS voltasse pra lá, o ar viraria a versão velha. Removidos: o site do Pages
+(via API), o `CNAME`, o `.nojekyll` e o `pages.yml`. O que sobreviveu do workflow foi o que
+valia: virou `.github/workflows/ci.yml`, que **só roda a suíte** e não publica nada.
+
+**BACKUP:** o backup do código é o **GitHub**, e ele não foi tocado — desativar o Pages
+removeu só o papel de publicar. Como `hosting.public` é `"."`, o site é a raiz do repo
+servida como está: **qualquer commit pode ser republicado** com checkout + deploy. ⚠️ O
+histórico de versões do próprio Firebase Hosting (rollback pelo console) **não foi
+verificado daqui** — a API devolve `PERMISSION_DENIED` com as credenciais locais e o CLI
+não expõe listagem/rollback de versões (só canais, `hosting:clone` e `hosting:disable`).
+Não afirmar quantas versões ele retém sem medir.
+
+**Como foi medido (06–07/ago/2026):** `scoreplace.app` resolve para **199.36.158.100** (IP
+do Firebase; os 185.199.x do Pages não respondem mais pelo domínio); `scoreplace.app` e
+`scoreplace-app.web.app` devolvem a mesma versão, com `last-modified` batendo no segundo com
+o `Last Release Time` de `firebase hosting:channel:list`; e o `firebase deploy --only
+hosting` levou o `version.txt` ao vivo de 1.7.59 → 1.7.60 na hora. De quebra, em 06/ago o
+GitHub Actions/Pages ficou em **major outage** e o site seguiu servindo normal.
 
 ### DNS
 ⚠️ Os registros do GitHub Pages abaixo são **HISTÓRICO** — o domínio foi movido pro Firebase Hosting (ver acima).

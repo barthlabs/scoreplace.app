@@ -6,6 +6,7 @@
   "hosting": {
     "public": ".",
     "predeploy": [
+      "npm test",
       "npm run prerender"
     ],
     "ignore": [
@@ -22,7 +23,10 @@
       {
         "source": "**/*.@(js|css|html)",
         "headers": [
-          { "key": "Cache-Control", "value": "no-cache" }
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
         ]
       }
     ]
