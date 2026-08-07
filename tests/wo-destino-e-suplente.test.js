@@ -291,5 +291,26 @@ sec(function () {
      'e o renderer continua lendo o uid ANTES de qualquer nome');
 })();
 
+// ── woClaims guarda o UID de quem está no contexto, não só o nome (v1.7.66) ──────
+// Última ponta por nome do W.O.: `woClaims[].players` é um snapshot de NOMES, e toda a
+// resolução de identidade depois dependia de casar esse nome (`g.players.indexOf`,
+// `team1.indexOf`). Nome ENVELHECE — quem troca o displayName some das buscas e o
+// apontamento perde a pessoa. O doc já tinha `absentUids` e `byUid`; faltava o resto.
+(() => {
+  const WO = fs.readFileSync(path.join(ROOT, 'js', 'views', 'wo-claim.js'), 'utf8');
+  ok(/playerUids: playerUids/.test(WO), 'o contexto resolvido carrega playerUids');
+  ok(/c\.playerUids = rc\.playerUids/.test(WO), 'o claim GRAVADO leva os uids junto');
+  ok(/playerUids: c\.playerUids/.test(WO), 'e reconstruir o contexto a partir do claim traz os uids de volta');
+  // a ordem importa: o uid gravado tem que ser consultado ANTES de qualquer casamento por nome
+  const fn = WO.slice(WO.indexOf('function _ctxUidsFor'), WO.indexOf('function _allCtxUids'));
+  const iUid = fn.indexOf('ctx.playerUids');
+  const iNome = fn.indexOf('g.players.indexOf(name)');
+  ok(iUid !== -1 && iNome !== -1 && iUid < iNome,
+     'o uid gravado é consultado ANTES do casamento por nome (senão o nome trocado ganha)');
+  // quem não tem conta continua valendo pelo nome — a ressalva do dono
+  ok(/\? String\(mb\.uids\[0\]\) : ''/.test(WO),
+     'quem não tem conta fica com uid vazio na lista — o nome continua sendo a identidade dele');
+})();
+
 console.log((fail === 0 ? '✅' : '❌') + ' wo-destino-e-suplente: ' + pass + ' asserções, ' + fail + ' falha(s)');
 process.exit(fail === 0 ? 0 : 1);

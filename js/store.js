@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.65';
+window.SCOREPLACE_VERSION = '1.7.66';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -2756,6 +2756,30 @@ window._reflowChrome = function() {
     }
     return null;
   }
+  // v1.7.66 — A MARGEM SAI DE QUEM DEIXOU DE SER O PRIMEIRO VISÍVEL.
+  //
+  // O bloco abaixo GRAVA `margin-top` (com !important) no primeiro irmão visível do
+  // back-header, e nunca a tirava de quem ocupava esse posto antes. O posto TROCA sozinho
+  // durante o uso: `#part-search-empty` ("nenhum resultado") nasce `display:none`, aparece
+  // quando a busca não acha ninguém e some de novo quando se limpa no ✕ — ou seja, digitar
+  // e apagar é exatamente o gatilho que move a margem de um elemento pro outro.
+  //
+  // Resultado do vazamento: dois irmãos com a mesma margem de ~73px ao mesmo tempo, e o
+  // conteúdo empurrado pelo dobro. Como a margem é !important, nada mais a desfaz.
+  //
+  // Marcamos quem recebeu (`data-sp-chrome-mt`) pra poder devolver o elemento ao estado
+  // anterior — a margem é REMOVIDA, não zerada: zerar com !important quebraria qualquer
+  // margem legítima que o CSS do elemento tenha.
+  function _aplicarMargemDeConteudo(el, valor) {
+    document.querySelectorAll('[data-sp-chrome-mt]').forEach(function (antigo) {
+      if (antigo === el) return;
+      antigo.style.removeProperty('margin-top');
+      antigo.removeAttribute('data-sp-chrome-mt');
+    });
+    if (!el) return;
+    el.style.setProperty('margin-top', valor, 'important');
+    el.setAttribute('data-sp-chrome-mt', '1');
+  }
   var bhOffset = topbarH + ddH - 1;
   // v3.0.91: expõe a altura do back-header FIXO visível em `--backheader-h`.
   // Qualquer barra sticky que precise grudar ABAIXO do back-header (ex.: a barra
@@ -2782,13 +2806,13 @@ window._reflowChrome = function() {
         fixedBackHeaderH = Math.floor(_bhRectH);
         // Use !important because overlay CSS uses `margin-top: 0 !important`
         // to suppress the default 50px spacer — our dynamic value has to win.
-        next.style.setProperty('margin-top', (ddH + bhH + 8) + 'px', 'important');
+        _aplicarMargemDeConteudo(next, (ddH + bhH + 8) + 'px');
       }
     } else {
       var next = _firstVisibleSibling(bh);
       if (next) {
         var mt = ddH > 0 ? (ddH + 8) + 'px' : '0';
-        next.style.setProperty('margin-top', mt, 'important');
+        _aplicarMargemDeConteudo(next, mt);
       }
     }
   });
