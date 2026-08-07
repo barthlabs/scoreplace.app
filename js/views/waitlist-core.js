@@ -38,22 +38,63 @@ function _wlName(e) {
 
 // LISTA DE ESPERA CANÔNICA: une os 3 storages, deduplicado por nome (lowercase).
 // Entrada objeto volta como está; string vira {name, displayName}.
+// ⚠️ O DEDUP É POR IDENTIDADE, NUNCA POR NOME (v1.7.61). Desde que `monarchWaitlist`
+// passou a guardar UID, deduplicar por nome fazia a MESMA pessoa entrar duas vezes: uma
+// pela entrada de `standbyParticipants` (nome resolvido do perfil) e outra pelo uid do
+// mapa, que virava um "nome" que não é de ninguém. Foi exatamente isso que pintou os
+// chips crus `tqlM4F93…` na Lista de espera — 6 pessoas onde havia 3.
+//
+// Item em texto no mapa pode ser uid (novo) ou nome (legado). Os dois resolvem para a
+// ENTRADA real da espera; o que não resolve para ninguém é descartado, porque a fila é um
+// índice — quem está nela tem que estar em `waitlist`/`standbyParticipants`. Só sobrevive
+// como texto o nome de quem NÃO TEM CONTA, que é a ressalva do dono: ali o nome é a única
+// identidade que existe.
 window._getWaitlist = function (t) {
   if (!t) return [];
   var out = [], seen = {};
-  function add(e) {
-    var nm = _wlName(e);
-    if (!nm) return;
-    var k = nm.toLowerCase();
-    if (seen[k]) return; seen[k] = 1;
-    out.push((e && typeof e === 'object') ? e : { name: nm, displayName: nm });
+  function push(e, key) {
+    if (!key || seen[key]) return;
+    seen[key] = 1;
+    out.push(e);
   }
-  if (Array.isArray(t.waitlist)) t.waitlist.forEach(add);
-  if (Array.isArray(t.standbyParticipants)) t.standbyParticipants.forEach(add);
+  function addEntry(e) {
+    if (!e) return;
+    if (typeof e === 'string') return addText(e);
+    push(e, window._wlKey(e));
+  }
+  function addText(s) {
+    s = String(s == null ? '' : s).trim();
+    if (!s) return;
+    // uid OU nome legado → a entrada real da espera (que já foi adicionada acima)
+    var ent = window._wlEntryByKey(t, s);
+    if (ent) return push(ent, window._wlKey(ent));
+    // nome de alguém COM conta que não está mais na espera: é resíduo do índice
+    if (typeof window._memberUidByName === 'function' && window._memberUidByName(t, s)) return;
+    // uid que não corresponde a ninguém da espera: resíduo do índice
+    if (_pareceUid(t, s)) return;
+    // sobrou: nome de quem não tem conta — o informal digitado à mão
+    push({ name: s, displayName: s }, s);
+  }
+  // É uid de alguém do torneio? (evita tratar um uid órfão como se fosse nome de gente)
+  function _pareceUid(t2, s) {
+    var pools = [t2.participants, t2.standbyParticipants, t2.waitlist];
+    for (var i = 0; i < pools.length; i++) {
+      var arr = pools[i];
+      if (!Array.isArray(arr)) continue;
+      for (var j = 0; j < arr.length; j++) {
+        var p = arr[j];
+        if (p && typeof p === 'object' && (p.uid === s || p.p1Uid === s || p.p2Uid === s)) return true;
+      }
+    }
+    // formato de uid do Firebase (28 chars alfanuméricos) sem nenhum espaço
+    return /^[A-Za-z0-9_-]{20,}$/.test(s);
+  }
+  if (Array.isArray(t.waitlist)) t.waitlist.forEach(addEntry);
+  if (Array.isArray(t.standbyParticipants)) t.standbyParticipants.forEach(addEntry);
   if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object' && !Array.isArray(t.monarchWaitlist)) {
     Object.keys(t.monarchWaitlist).forEach(function (cat) {
       var arr = t.monarchWaitlist[cat];
-      if (Array.isArray(arr)) arr.forEach(add);
+      if (Array.isArray(arr)) arr.forEach(addEntry);
     });
   }
   return out;
