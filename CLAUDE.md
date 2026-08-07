@@ -2,7 +2,7 @@
 
 ## O que e o scoreplace.app
 
-Plataforma web de gestao de torneios esportivos e board games. App SPA (Single Page Application) em **vanilla JS puro** â sem frameworks. Hospedado no **GitHub Pages** com dominio customizado `scoreplace.app`.
+Plataforma web de gestao de torneios esportivos e board games. App SPA (Single Page Application) em **vanilla JS puro** â sem frameworks. Hospedado no **Firebase Hosting** (site `scoreplace-app`) com dominio customizado `scoreplace.app` — **desde ago/2026; NÃO é mais GitHub Pages**. Publicar exige `firebase deploy --only hosting`; `git push` versiona o repo e **não** muda o site. Detalhe na seção Deploy e em `project_prod_deploy_target`.
 
 > ⚠️ **CONVENÇÃO CRÍTICA — nomes de formato são SÓ EXIBIÇÃO (desde jun/2026, staging):** na tela, "Liga" virou **"Pontos Corridos"** e "Grupos + Eliminatórias" virou **"Fase de Grupos"**. MAS o valor interno `t.format` é INTOCADO de propósito: continua `'Liga'` (legado `'Ranking'`) e `'Fase de Grupos + Eliminatórias'`; os códigos seguem `'liga'`/`'grupos_mata'`; `_isLigaFormat` checa `=== 'Liga'`. **Regra dos dois lados:** falando com o usuário/UI = use os nomes novos; lendo/escrevendo LÓGICA = os valores são AINDA os antigos — NUNCA "consertar" `=== 'Liga'` achando que é resíduo (quebra motor de sorteio/autoDraw/dados). Exibição passa por `window._formatDisplayName(fmt)` (store.js) ou pelas chaves i18n `format.*`. Detalhe na memória `project_format_rename_display_only`.
 
