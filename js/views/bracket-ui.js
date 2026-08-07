@@ -5388,6 +5388,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
           _coluna(_colA) + _coluna(_colB) +
         '</div>' +
       '</div>';
+
+    // v1.7.67: avisa o relógio JÁ com a pré-seleção. O `_watchNotify` do `_render`
+    // acontece ANTES desta função rodar, então naquele instante `_pickerSel` ainda é
+    // nulo e o relógio abria o seletor sem ninguém aceso — os dois já começavam
+    // divergindo, que é a queixa do dono.
+    _watchNotify();
   }
 
   // O título e o botão emprestados ao cabeçalho saem quando o picker sai de cena —
@@ -5404,6 +5410,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
   window._liveServeSelect = function (team, idx) {
     _pickerSel = { team: team, idx: idx };
     _showServePickerOverlay();
+    // v1.7.67: o relógio acompanha a escolha do celular na hora. Sem isto os dois
+    // ficam com sacadores diferentes até alguém confirmar — ver `servePickCurrent`.
+    _watchNotify();
   };
 
   // Iniciar (tela 1) / Confirmar (tela 2) → aplica o sacador escolhido via _liveSetServer
@@ -7975,8 +7984,22 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // no seletor) continuar batendo: os dois lados abreviam igual.
     var _elig = _serveEligibleNow().map(function (e) { return { team: e.team, playerIdx: e.playerIdx, name: _wn(e.name) }; });
     var _rr = _rrStandingsNow().map(function (r) { return { name: _wn(r.name), wins: r.wins }; });
-    var _spCurRaw = (state.serveOrder && state.serveOrder[state.totalGamesPlayed])
-      ? (state.serveOrder[state.totalGamesPlayed].name || '') : '';
+    // ⚠️ COM A ESCOLHA ABERTA, QUEM MANDA É O QUE ESTÁ ACESO NO CELULAR (v1.7.67).
+    // Relato do dono: "quando selecionamos o 1o sacador no telefone, isso nao propaga
+    // para o relogio e isso pode causar problemas (no celular tem 1 escolhido e no
+    // relogio escolhe outro)". A causa: este campo saía SÓ de `serveOrder`, que na
+    // tela do 1º sacador ainda está VAZIA — é ela que vai preenchê-la. O relógio
+    // recebia '' e abria o seletor sem ninguém aceso. Agora, enquanto o picker está
+    // aberto, o snapshot leva a seleção VIVA (_pickerSel) — e `_liveServeSelect`
+    // avisa o relógio a cada toque, senão o campo certo só viajaria no próximo evento.
+    var _spCurRaw = '';
+    if (_needsServePick() && _pickerSel) {
+      var _pkArr = _pickerSel.team === 1 ? p1Players : p2Players;
+      _spCurRaw = _pkArr[_pickerSel.idx] || '';
+    }
+    if (!_spCurRaw && state.serveOrder && state.serveOrder[state.totalGamesPlayed]) {
+      _spCurRaw = state.serveOrder[state.totalGamesPlayed].name || '';
+    }
     return {
       v: 1,
       type: 'state',
@@ -9676,7 +9699,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   };
 
   // Close handler — always confirms before leaving
-  window._closeLiveScoring = function() {
+  window._closeLiveScoring = function(opts) {
     // v2.2.12-beta: consenso de encerramento para casual multiplayer.
     // Em vez do confirm dialog, escreve closePending no Firestore e mostra
     // o banner de "Aguardando confirmação" para o iniciador. Os outros jogadores
@@ -9740,10 +9763,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
       _title = 'Fechar placar?';
       _msg = _matchFinished ? 'O resultado será salvo como confirmado.' : 'Deseja fechar o placar ao vivo?';
     }
-    showConfirmDialog(
-      _title,
-      _msg,
-      function() {
+    // v1.7.67: a rotina virou NOMEADA porque passou a ter DOIS gatilhos — o
+    // ✕ Fechar do celular (com diálogo) e o Encerrar do RELÓGIO (sem diálogo).
+    // No relógio o toque JÁ É a confirmação; abrir um diálogo no celular e ficar
+    // esperando alguém tocar nele é exatamente o travamento que o dono relatou
+    // ("o relogio fica travado na tela de resultado da ultima partida").
+    // ⚠️ O que NÃO é pulado: o consenso de encerramento do casual multiplayer,
+    // que roda ANTES disto e devolve cedo — lá quem decide são os outros jogadores,
+    // não o dono do relógio.
+    var _confirmarFechamento = function() {
         // Persist the finished result as confirmed before closing/cleanup.
         if (state.isFinished && !_resultSaved) {
           try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
@@ -9811,8 +9839,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
             try { window.location.hash = '#dashboard'; } catch(e) {}
           }
         }
-      }
-    );
+    };
+    if (opts && opts.semDialogo) { _confirmarFechamento(); return; }
+    showConfirmDialog(_title, _msg, _confirmarFechamento);
+  };
+
+  // Encerrar tocado NO RELÓGIO. Fecha o placar sem diálogo e devolve o celular
+  // à tela de configuração — o mesmo caminho do ✕ Fechar, sem a pergunta. O
+  // `_watchTeardown()` que o fechamento já faz empurra o estado INATIVO, e é ele
+  // que tira o relógio da tela de resultado e o devolve à espera.
+  window._liveScoreCloseFromWatch = function () {
+    try { window._closeLiveScoring({ semDialogo: true }); } catch (e) {}
   };
 
   // expõe force-close para o botão "Fechar agora" no banner

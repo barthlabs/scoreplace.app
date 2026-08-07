@@ -613,6 +613,14 @@ const SUITES = [
   // o projeto está em targetSdk 36 e o edge-to-edge lá é obrigatório.
   // Junto: o picker do sacador que cabia numa barra só, em duas colunas.
   'tests/safe-area-medida-nao-estimada.test.js',
+
+  // O RELÓGIO ACOMPANHA O SACADOR E O ENCERRAR DELE ENCERRA. Dois relatos do dono,
+  // ambos valendo pros DOIS sistemas (mesmo contrato, mesmo snapshot, mesmo botão):
+  // a escolha do 1º sacador no celular não viajava (o campo saía de `serveOrder`,
+  // que na tela do 1º sacador está vazia), e o "Fechar" do relógio só mexia em
+  // estado LOCAL — a ponte não tinha intenção de encerrar, então a ordem não tinha
+  // por onde chegar ao celular e o relógio ficava preso na tela de resultado.
+  'tests/relogio-sacador-e-encerrar.test.js',
 ];
 
 let failed = [];

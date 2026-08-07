@@ -24,6 +24,7 @@ struct ScoreplaceWatchCompanionApp: App {
                 onReiRainhaNext: { session.sendReiRainhaNext() },
                 onReiRainhaFinal: { session.sendReiRainhaFinal() },
                 onReiRainhaStart: { session.sendReiRainhaStart() },
+                onClose: { session.sendClose() },
                 bpm: heart.bpm
             )
             .onAppear { session.hello() } // pede o estado atual ao aparecer

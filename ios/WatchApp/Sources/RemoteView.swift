@@ -68,6 +68,10 @@ struct RemoteView: View {
     var onReiRainhaNext: () -> Void = {}          // próximo jogo da série de 3
     var onReiRainhaFinal: () -> Void = {}         // encerra a série → classificação
     var onReiRainhaStart: () -> Void = {}         // aceita a sugestão de Rei/Rainha (ativa retroativa + 3º jogo)
+    // ENCERRAR: fecha o placar NO CELULAR e devolve este app à espera (v1.7.67).
+    // Antes o "Fechar" só escondia o painel aqui e o celular seguia com o placar
+    // aberto — o relógio ficava preso na tela de resultado da última partida.
+    var onClose: () -> Void = {}
     @State private var replayDismissed = false   // Cancelar esconde o prompt
     @State private var reshuffle = false         // toggle "Re-sortear duplas"
     @State private var pickingServer = false     // seletor de sacador aberto
@@ -885,7 +889,12 @@ struct RemoteView: View {
                     }
                 }
                 HStack(spacing: 0) {
-                    Button(action: { replayDismissed = true }) {
+                    // v1.7.67: manda ENCERRAR pro celular em vez de só esconder o
+                    // painel aqui. `replayDismissed` continua sendo setado porque a
+                    // resposta do celular leva um instante e sem isso o painel piscaria
+                    // de volta; quem realmente tira este app da tela de resultado é o
+                    // estado INATIVO que chega em seguida.
+                    Button(action: { replayDismissed = true; onClose() }) {
                         Text("Fechar").font(.system(size: sz(14), weight: .bold))
                             .frame(maxWidth: .infinity, alignment: .trailing)   // texto perto da divisa (centro)
                             .padding(.trailing, sz(16))
