@@ -1311,11 +1311,26 @@ valia: virou `.github/workflows/ci.yml`, que **só roda a suíte** e não public
 
 **BACKUP:** o backup do código é o **GitHub**, e ele não foi tocado — desativar o Pages
 removeu só o papel de publicar. Como `hosting.public` é `"."`, o site é a raiz do repo
-servida como está: **qualquer commit pode ser republicado** com checkout + deploy. ⚠️ O
-histórico de versões do próprio Firebase Hosting (rollback pelo console) **não foi
-verificado daqui** — a API devolve `PERMISSION_DENIED` com as credenciais locais e o CLI
-não expõe listagem/rollback de versões (só canais, `hosting:clone` e `hosting:disable`).
-Não afirmar quantas versões ele retém sem medir.
+servida como está: **qualquer commit pode ser republicado** com checkout + deploy. **E o Firebase guarda histórico próprio: MEDIDO em 07/ago/2026, 9 releases
+`FINALIZED`** (o mais antigo de 24/jun). Ou seja, dá pra voltar no ar uma versão anterior
+sem depender de rebuild. ⚠️ O CLI **não** expõe isso — `firebase --help` só tem canais,
+`hosting:clone` e `hosting:disable`. A leitura e o rollback são pela API REST, e o token
+tem que ser o de **Application Default** (`gcloud auth application-default
+print-access-token`) com `x-goog-user-project`; com o token de usuário comum dá
+`PERMISSION_DENIED` — foi o que me fez concluir errado que não havia histórico.
+
+```bash
+T=$(gcloud auth application-default print-access-token)
+# listar as versões guardadas
+curl -s -H "Authorization: Bearer $T" -H "x-goog-user-project: scoreplace-app" \
+  "https://firebasehosting.googleapis.com/v1beta1/projects/scoreplace-app/sites/scoreplace-app/releases?pageSize=10"
+# voltar o ar pra uma delas (ROLLBACK — publica versão ANTIGA; confirmar com o dono)
+curl -s -X POST -H "Authorization: Bearer $T" -H "x-goog-user-project: scoreplace-app" \
+  "https://firebasehosting.googleapis.com/v1beta1/sites/scoreplace-app/releases?versionName=<versions/ID>"
+```
+
+⚠️ **Rollback NÃO é rotina de deploy** — ele coloca no ar uma versão MAIS VELHA. Só se
+usa pra estancar uma leva que quebrou produção, e é ação outward-facing: confirmar antes.
 
 **Como foi medido (06–07/ago/2026):** `scoreplace.app` resolve para **199.36.158.100** (IP
 do Firebase; os 185.199.x do Pages não respondem mais pelo domínio); `scoreplace.app` e
