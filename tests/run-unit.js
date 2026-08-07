@@ -603,6 +603,16 @@ const SUITES = [
   // ser chamada nem uma vez; (2) o auto-reload não reconhecia 'Database deleted by request
   // of the user' (IndexedDB apagado), que mata a sessão e impede gravar o perfil no login.
   'tests/conta-nova-consegue-entrar-e-inscrever.test.js',
+
+  // A SAFE AREA É MEDIDA, NUNCA ESTIMADA. Dois defeitos que só existem NO APARELHO
+  // (no navegador env() é 0 e eles somem): faixa morta no cabeçalho — 37px no iPhone,
+  // porque o padding usava `inset - 12px`, um desconto no olho — e a placa do ponto
+  // por cima do Desfazer, porque a reserva de altura era o número fixo `56 * escala`
+  // enquanto o botão cresce com `env(safe-area-inset-bottom)`. A invasão é do tamanho
+  // do inset: 49px no Android com 3 botões, o pior caso. Vale pros dois sistemas —
+  // o projeto está em targetSdk 36 e o edge-to-edge lá é obrigatório.
+  // Junto: o picker do sacador que cabia numa barra só, em duas colunas.
+  'tests/safe-area-medida-nao-estimada.test.js',
 ];
 
 let failed = [];

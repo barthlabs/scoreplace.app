@@ -1,6 +1,47 @@
 // ── Bracket UI Handlers ──
 var _t = window._t || function(k) { return k; };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SAFE AREA: medida no aparelho, nunca estimada (v1.7.67)
+// Nasceu de dois relatos do dono com print do iPhone: "espaço morto no tom do
+// cabeçalho perdendo 1 linha" e "o desfazer encavalado na placa de baixo".
+// Vale para iOS E Android — o projeto está em targetSdk 36, e o edge-to-edge é
+// obrigatório desde o SDK 35 (no 36 o opt-out foi removido), então lá o WebView
+// também desenha sob as barras do sistema.
+// ═══════════════════════════════════════════════════════════════════════════
+window._spInsetPx = window._spInsetPx || function (lado) {
+  try {
+    var p = document.createElement('div');
+    p.style.cssText = 'position:fixed;left:0;bottom:0;width:0;visibility:hidden;pointer-events:none;' +
+      'height:env(safe-area-inset-' + lado + ',0px);';
+    document.body.appendChild(p);
+    var v = Math.round(p.getBoundingClientRect().height) || 0;
+    p.parentNode.removeChild(p);
+    return v;
+  } catch (e) { return 0; }
+};
+
+// ⚠️ QUANTO DO INSET DE CIMA PRECISA MESMO SER RESERVADO.
+// No iPhone do dono o WebView NÃO fica sob a status bar (o print mostra fundo
+// preto atrás do relógio — o gradiente do cabeçalho só começa depois dela), mas
+// `env(safe-area-inset-top)` continua reportando o inset da JANELA: 59px. A regra
+// antiga (`inset - 12px`, calibrada no aparelho quando o overlay ainda era
+// full-bleed) reservava 47px em cima contra 10 embaixo = 37px MORTOS, medidos.
+// No Android edge-to-edge é o contrário: o WebView fica mesmo sob a barra e o
+// inset é NECESSÁRIO — reservar 0 ali faria o "AO VIVO" encavalar no relógio do
+// sistema. Ou seja, nem simétrico cego nem inset cego: a diferença é MEDÍVEL —
+// quando o sistema já recuou a webview, sobra tela fora da viewport.
+// Fallback conservador: sem como medir a tela, mantém o inset (errar reservando
+// custa faixa; errar sem reservar esconde o cabeçalho debaixo do relógio).
+window._spTopInsetNecessario = function () {
+  var inset = window._spInsetPx('top');
+  if (!inset) return 0;
+  var tela = (window.screen && window.screen.height) || 0;
+  if (!tela) return inset;
+  var fora = Math.round(tela - (window.innerHeight || 0));
+  return (fora >= inset - 4) ? 0 : inset;
+};
+
 // v1.3.31-beta: helper compartilhado pra computar estatísticas de tempo
 // dos pontos a partir de um array de intervalos (ms entre pontos consecutivos,
 // onde o primeiro intervalo é matchStart→primeiroPonto).
@@ -5280,31 +5321,84 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var title = stage === 1 ? 'Quem saca primeiro?' : 'Quem saca no 2º game?';
     var confirmLabel = stage === 1 ? 'Iniciar' : 'Confirmar';
 
-    var cardsHtml = players.map(function (p) {
+    var cards = players.map(function (p) {
       var sel = (_pickerSel.team === p.team && _pickerSel.idx === p.idx);
       var clr = p.team === 1 ? '#3b82f6' : '#ef4444';
       var bg = sel ? (p.team === 1 ? 'rgba(59,130,246,0.16)' : 'rgba(239,68,68,0.16)') : 'rgba(255,255,255,0.03)';
       var bd = sel ? clr : 'rgba(255,255,255,0.10)';
       var ball = sel ? '<span style="font-size:1.15rem;line-height:1;flex-shrink:0;">' + _sportBall + '</span>' : '';
       return '<button type="button" onclick="window._liveServeSelect(' + p.team + ',' + p.idx + ')" ' +
-        'style="box-sizing:border-box;width:100%;max-width:360px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:12px;cursor:pointer;text-align:left;' +
+        // v1.7.67: sem `max-width:360px` — ele vinha da lista de UMA coluna e agora
+        // deixaria sobra dentro da própria coluna (que já é metade da tela).
+        'style="box-sizing:border-box;width:100%;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:12px;cursor:pointer;text-align:left;' +
         'border:2px solid ' + bd + ';background:' + bg + ';transition:background 0.12s,border-color 0.12s;">' +
           _liveAvatarHtml(p.name, 34) + ball +
           '<span style="flex:1;min-width:0;font-size:1rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(p.name) + '</span>' +
         '</button>';
-    }).join('');
+    });   // ⚠️ ARRAY, não string: as colunas abaixo consomem card a card.
 
-    // Layout scroll-safe: barra FIXA (Fechar esq · título · Iniciar/Confirmar dir) + lista ROLÁVEL.
+    // ── v1.7.67 (homologado com o dono, 07/ago) ────────────────────────────────
+    // Antes existia uma SEGUNDA barra aqui dentro (Fechar · título · Iniciar), logo
+    // abaixo do cabeçalho do overlay: dois cabeçalhos empilhados e DOIS botões
+    // "Fechar" na mesma tela, comendo 61px de altura. No celular deitado isso deixava
+    // o 4º jogador fora da tela (46px escondidos, medido).
+    // Agora o título vai pro slot central que o cabeçalho JÁ TEM (#live-hdr-sets) e o
+    // Iniciar/Confirmar entra ao lado do Fechar de cima. Uma barra só.
+    var _hdrMid = document.getElementById('live-hdr-sets');
+    if (_hdrMid) {
+      _hdrMid.style.display = '';
+      _hdrMid.innerHTML = '<div style="min-width:0;text-align:center;font-size:0.9rem;font-weight:800;' +
+        'color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>';
+    }
+    var _hdrActs = document.getElementById('live-score-header-actions');
+    if (_hdrActs) {
+      var _old = document.getElementById('live-serve-confirm');
+      if (_old) _old.parentNode.removeChild(_old);
+      var _btn = document.createElement('button');
+      _btn.id = 'live-serve-confirm';
+      _btn.setAttribute('onclick', 'window._liveServeConfirm()');
+      _btn.style.cssText = 'flex-shrink:0;padding:7px 16px;border-radius:10px;border:none;cursor:pointer;' +
+        'background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:0.85rem;font-weight:800;' +
+        'box-shadow:0 2px 12px rgba(16,185,129,0.3);-webkit-tap-highlight-color:transparent;';
+      _btn.textContent = confirmLabel;
+      _hdrActs.appendChild(_btn);
+    }
+
+    // ⚠️ DUAS COLUNAS, uma por time: azul à esquerda, vermelho à direita. Em UMA
+    // coluna o card ficava com 360px numa tela de 844 — 484px de tela morta — e
+    // ainda assim sobrava gente fora do alcance. No 2º sacador só existe um time;
+    // ali os dois jogadores dele dividem as colunas, pelo mesmo motivo.
+    var _times = [];
+    players.forEach(function (p) { if (_times.indexOf(p.team) < 0) _times.push(p.team); });
+    var _colA = [], _colB = [];
+    if (_times.length >= 2) {
+      players.forEach(function (p, i) { (p.team === _times[0] ? _colA : _colB).push(cards[i]); });
+    } else {
+      players.forEach(function (p, i) { (i % 2 === 0 ? _colA : _colB).push(cards[i]); });
+    }
+    function _coluna(itens) {
+      return '<div style="display:flex;flex-direction:column;gap:10px;min-width:0;">' + itens.join('') + '</div>';
+    }
+
     container.innerHTML =
       '<div style="height:100%;display:flex;flex-direction:column;align-items:stretch;">' +
-        '<div style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 12px;background:#0a0e1a;border-bottom:1px solid rgba(255,255,255,0.05);">' +
-          '<button onclick="window._liveSkipServe()" style="flex-shrink:0;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.82rem;font-weight:600;">Fechar</button>' +
-          '<div style="flex:1;min-width:0;text-align:center;font-size:0.9rem;font-weight:800;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>' +
-          '<button onclick="window._liveServeConfirm()" style="flex-shrink:0;padding:10px 20px;border-radius:10px;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:0.9rem;font-weight:800;box-shadow:0 2px 12px rgba(16,185,129,0.3);">' + confirmLabel + '</button>' +
+        '<div id="serve-order-list" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;' +
+          'display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;align-content:start;width:100%;box-sizing:border-box;' +
+          'padding:14px 1rem calc(14px + env(safe-area-inset-bottom, 0px));">' +
+          _coluna(_colA) + _coluna(_colB) +
         '</div>' +
-        '<div id="serve-order-list" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;padding:14px 1rem calc(14px + env(safe-area-inset-bottom, 0px));">' + cardsHtml + '</div>' +
       '</div>';
   }
+
+  // O título e o botão emprestados ao cabeçalho saem quando o picker sai de cena —
+  // senão o "Iniciar" sobreviveria por cima do placar.
+  function _serveHeaderClear() {
+    var m = document.getElementById('live-hdr-sets');
+    if (m) { m.innerHTML = ''; m.style.display = 'none'; }
+    var b = document.getElementById('live-serve-confirm');
+    if (b && b.parentNode) b.parentNode.removeChild(b);
+  }
+  window._serveHeaderClear = _serveHeaderClear;
 
   // clique num nome → seleciona (box + bolinha) e re-renderiza a tela.
   window._liveServeSelect = function (team, idx) {
@@ -5514,6 +5608,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
       _showServePickerOverlay();
       return;
     }
+    // v1.7.67: fora do picker, o cabeçalho devolve o que foi emprestado a ele (o
+    // título e o botão Iniciar/Confirmar). Sem isto o "Iniciar" sobreviveria por
+    // cima do placar. Fica AQUI, e não nas saídas do picker, porque são três
+    // (confirmar, pular e o retorno por sync) e uma delas seria esquecida.
+    _serveHeaderClear();
 
     // Show tie rule dialog if pending (must render AFTER the full UI, not via insertAdjacentHTML)
     if (state.tieRulePending) {
@@ -6603,6 +6702,20 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // ═══════════════════════════════════════════════════════════════════════
     var _lsMeasure = document.createElement('canvas').getContext('2d');
     var _LS_FAM = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    // ⚠️ O INSET DE BAIXO É MEDIDO, NUNCA ESTIMADO (v1.7.67 — relato do dono com print
+    // do iPhone: "o desfazer ficou pra cima e as placas acabaram ficando em cima dele").
+    // O botão Desfazer JÁ soma `env(safe-area-inset-bottom)` no próprio padding (busque
+    // por `_liveScoreUndoLastPoint` neste arquivo) — quem NÃO sabia disso era a reserva
+    // de altura das caixas, que usava o número fixo `56 * escala`. A conta ficava curta
+    // exatamente pelo tamanho do inset, e a placa crescia POR CIMA do botão.
+    // MEDIDO reproduzindo os aparelhos: iPhone retrato 34px, iPhone paisagem 21px,
+    // Android com barra de gestos 24px e Android com 3 BOTÕES 49px — o pior caso, e é
+    // por isso que isto não podia continuar sendo um chute. Android entra na conta
+    // porque o projeto está em targetSdk 36: o edge-to-edge é obrigatório desde o
+    // SDK 35 e no 36 o opt-out sumiu, então lá o WebView desenha sob a barra.
+    // A medição em si é `window._spInsetPx`, no topo do arquivo — UMA definição só,
+    // porque o cabeçalho do overlay também depende dela e é montado ANTES daqui.
+    var _spInsetPx = window._spInsetPx;
     var _LS_REFS = ['0', '15', '30', '40'];   // pior caso: trocar 0→15→40 não mexe um pixel
     function _lsW(txt, px, wt) { _lsMeasure.font = (wt || 900) + ' ' + px + 'px ' + _LS_FAM; return _lsMeasure.measureText(txt).width; }
     function _lsWidest(px) { var m = 0; for (var i = 0; i < _LS_REFS.length; i++) m = Math.max(m, _lsW(_LS_REFS[i], px)); return m; }
@@ -6761,12 +6874,18 @@ window._openLiveScoring = function(tId, matchId, opts) {
       _lsK = Math.min(_lw / 844, _lh / 390);
       var _lPad = Math.round(10 * _lsK), _lGap = Math.round(6 * _lsK);
       var _lChrome = gameLabel ? Math.round(20 * _lsK) : 0;
-      var _lUndo = Math.round(56 * _lsK);
+      // + o inset de baixo: o Desfazer cresce com ele, a reserva tem que crescer junto.
+      var _lUndo = Math.round(56 * _lsK) + _spInsetPx('bottom');
       var _lBoxH = Math.max(120, _lh - _lChrome - _lUndo);
       var _lBP = Math.round(10 * _lsK);
       var _lBoxW = Math.floor((_lw - _lPad * 2 - _lGap) / 2);
       var _lSz = _lsSizes(_lBoxW - _lBP * 2, _lBoxH - _lBP * 2, _lsK, 'land');
-      var _lBoxStyle = 'width:' + _lBoxW + 'px;height:' + _lBoxH + 'px;flex:0 0 auto;';
+      // ⚠️ A ALTURA NÃO É FIXA (v1.7.67). Era `height:_lBoxH px`, e _lBoxH sai de uma
+      // ESTIMATIVA do rodapé; qualquer diferença entre a estimativa e o rodapé real
+      // virava caixa mais alta que a linha que a contém — a placa passava por cima do
+      // Desfazer (8px medidos no iPhone deitado, 6px no Android). Agora ela preenche
+      // o espaço REAL da linha, e _lBoxH fica servindo só pra dimensionar as fontes.
+      var _lBoxStyle = 'width:' + _lBoxW + 'px;height:100%;flex:0 0 auto;';
 
       container.innerHTML =
         '<div style="display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;gap:0;">' +
@@ -6801,7 +6920,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       _lsK = Math.min(_pw / 390, _ph / 844);
       var _pPad = Math.round(8 * _lsK), _pGap = Math.round(6 * _lsK);
       var _pChrome = (setsRow ? Math.round(26 * _lsK) : 0) + (gameLabel ? Math.round(20 * _lsK) : 0);
-      var _pUndo = Math.round(56 * _lsK);
+      // + o inset de baixo (mesmo motivo do deitado: o Desfazer cresce com ele).
+      var _pUndo = Math.round(56 * _lsK) + _spInsetPx('bottom');
       var _pAvail = Math.max(120, _ph - _pChrome - _pUndo);
       var _pBoxH = Math.floor((_pAvail - _pGap) / 2);
       var _pBP = Math.round(10 * _lsK);
@@ -9152,8 +9272,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // v1.6.88: altura da barra também virou proporcional (vh), como a do Desfazer,
   // mas com MAIS folga que ela — esta carrega botões, a de baixo é só texto.
   // Medido: 52px fixos pesavam 13,3% da tela no celular deitado.
+  // v1.7.67: o `- 12px` acima era um desconto calibrado no olho e produzia 37px de
+  // faixa MORTA no iPhone (medido no aparelho do dono). Agora o inset é medido e só
+  // entra quando o WebView está mesmo sob a barra — ver _spTopInsetNecessario.
   var headerPadY = 'clamp(5px,1.2vh,10px)';
-  var headerPadTop = 'max(' + headerPadY + ', calc(env(safe-area-inset-top, 0px) - 12px))';
+  var _topInset = (typeof window._spTopInsetNecessario === 'function') ? window._spTopInsetNecessario() : 0;
+  var headerPadTop = _topInset ? ('max(' + headerPadY + ', ' + _topInset + 'px)') : headerPadY;
   // padding lateral respeita o safe-area (paisagem/notch): sem isso o "✕ Fechar" cai
   // debaixo do corte da tela. max() mantém 12px em quem não tem inset.
   var headerPadX = 'max(12px, env(safe-area-inset-right, 0px))';
@@ -10772,45 +10896,46 @@ window._openCasualMatch = function(restoreOpts) {
     // Sortear toggle (doubles only). Auto-drives from drag-and-drop team
     // formation: ON while no team is formed, OFF when a team is paired via
     // the chain, back to ON when the team is broken.
+    // ── v1.7.67 (homologado com o dono, 07/ago) ────────────────────────────────
+    // Os toggles ficavam EMPILHADOS, um por linha, cada um com título + subtítulo:
+    // 126px no celular deitado, com 242px de conteúdo escondido abaixo da dobra.
+    // Agora ficam LADO A LADO e sem o subtítulo: 44px, e a tela ganha 82px.
+    // ⚠️ O subtítulo saiu por decisão do dono, não por descuido — e o do "Sortear
+    // Duplas" era redundante: a mesma frase já aparece embaixo dos participantes
+    // ("As duplas serão sorteadas ao iniciar"). Ele sobrevive no `title` do card.
+    // ⚠️ O grid é auto-fit e NÃO duas colunas fixas: os toggles são 2 ou 3 (o de
+    // Duplas Mistas só aparece às vezes). Com minmax(160px) o retrato fecha em 2 e
+    // o deitado acomoda os 3 sem espremer — o título tem 122px de tinta e não cabe
+    // em coluna menor que isso somada ao toggle.
+    function _setupToggle(emoji, titulo, dica, bg, bd, cor, ligado, acao) {
+      return '<div title="' + window._safeHtml(dica) + '" style="display:flex;align-items:center;justify-content:space-between;' +
+          'gap:10px;padding:8px 12px;border-radius:12px;background:' + bg + ';border:1px solid ' + bd + ';min-width:0;">' +
+          '<div style="display:flex;align-items:center;gap:8px;flex:1 1 0;min-width:0;">' +
+            '<span style="font-size:1rem;flex-shrink:0;">' + emoji + '</span>' +
+            '<span style="display:block;min-width:0;font-size:0.85rem;font-weight:700;color:var(--text-bright);' +
+              'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + titulo + '</span>' +
+          '</div>' +
+          '<label class="toggle-switch" style="--toggle-on-bg:' + cor + ';flex-shrink:0;">' +
+            '<input type="checkbox" ' + (ligado ? 'checked' : '') + ' onchange="' + acao + '">' +
+            '<span class="toggle-slider"></span></label>' +
+        '</div>';
+    }
     var togglesHtml = '';
     if (isDoubles) {
       togglesHtml =
-        '<div style="margin-bottom:0.8rem;display:flex;flex-direction:column;gap:6px;">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:12px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.12);">' +
-            '<div style="display:flex;align-items:center;gap:8px;">' +
-              '<span style="font-size:1rem;">🔀</span>' +
-              '<div>' +
-                '<span style="font-size:0.85rem;font-weight:700;color:var(--text-bright);">' + _t('casual.shuffleTeams') + '</span>' +
-                '<div style="font-size:0.65rem;color:var(--text-muted);">' + _t('casual.shuffleSubtitle') + '</div>' +
-              '</div>' +
-            '</div>' +
-            '<label class="toggle-switch" style="--toggle-on-bg:#fbbf24;"><input type="checkbox" ' + (autoShuffle ? 'checked' : '') + ' onchange="window._casualSetShuffle(this.checked)"><span class="toggle-slider"></span></label>' +
-          '</div>';
+        '<div style="margin-bottom:0.8rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;">' +
+          _setupToggle('🔀', _t('casual.shuffleTeams'), _t('casual.shuffleSubtitle'),
+            'rgba(251,191,36,0.05)', 'rgba(251,191,36,0.12)', '#fbbf24',
+            autoShuffle, 'window._casualSetShuffle(this.checked)');
       if (_canShowMixedToggle()) {
-        togglesHtml +=
-          '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:12px;background:rgba(236,72,153,0.05);border:1px solid rgba(236,72,153,0.15);">' +
-            '<div style="display:flex;align-items:center;gap:8px;">' +
-              '<span style="font-size:1rem;">⚤</span>' +
-              '<div>' +
-                '<span style="font-size:0.85rem;font-weight:700;color:var(--text-bright);">' + _t('casual.mixedDoubles') + '</span>' +
-                '<div style="font-size:0.65rem;color:var(--text-muted);">' + _t('casual.mixedSubtitle') + '</div>' +
-              '</div>' +
-            '</div>' +
-            '<label class="toggle-switch" style="--toggle-on-bg:#ec4899;"><input type="checkbox" ' + (_mixedDoublesEnabled ? 'checked' : '') + ' onchange="window._casualSetMixedDoubles(this.checked)"><span class="toggle-slider"></span></label>' +
-          '</div>';
+        togglesHtml += _setupToggle('⚤', _t('casual.mixedDoubles'), _t('casual.mixedSubtitle'),
+          'rgba(236,72,153,0.05)', 'rgba(236,72,153,0.15)', '#ec4899',
+          _mixedDoublesEnabled, 'window._casualSetMixedDoubles(this.checked)');
       }
       // v1.6.11-beta: Rei/Rainha toggle — 3 jogos rotativos com 4 jogadores
-      togglesHtml +=
-        '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:12px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);">' +
-          '<div style="display:flex;align-items:center;gap:8px;">' +
-            '<span style="font-size:1rem;">👑</span>' +
-            '<div>' +
-              '<span style="font-size:0.85rem;font-weight:700;color:var(--text-bright);">Rei/Rainha</span>' +
-              '<div style="font-size:0.65rem;color:var(--text-muted);">3 jogos rotativos · duplas trocam a cada partida</div>' +
-            '</div>' +
-          '</div>' +
-          '<label class="toggle-switch" style="--toggle-on-bg:#f59e0b;"><input type="checkbox" ' + (_reiRainhaMode ? 'checked' : '') + ' onchange="window._casualSetReiRainha(this.checked)"><span class="toggle-slider"></span></label>' +
-        '</div>';
+      togglesHtml += _setupToggle('👑', 'Rei/Rainha', '3 jogos rotativos · duplas trocam a cada partida',
+        'rgba(245,158,11,0.05)', 'rgba(245,158,11,0.18)', '#f59e0b',
+        _reiRainhaMode, 'window._casualSetReiRainha(this.checked)');
       togglesHtml += '</div>';
     }
 
@@ -11099,11 +11224,17 @@ window._openCasualMatch = function(restoreOpts) {
 
     content.innerHTML =
       // Config summary: sport + mode + scoring in one compact row
-      '<div onclick="window._casualOpenConfig()" style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:12px;padding:8px 12px;margin-bottom:0.8rem;display:flex;align-items:center;gap:10px;cursor:pointer;">' +
-        '<div style="font-size:1.3rem;flex-shrink:0;">' + sportIcon + '</div>' +
-        '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:0.85rem;font-weight:700;color:var(--text-bright);">' + window._safeHtml(sportLabel) + ' · ' + (isDoubles ? _t('casual.doubles') : _t('casual.single')) + '</div>' +
-          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">' + window._safeHtml(_configSummary()) + '</div>' +
+      // v1.7.67: modalidade e detalhe na MESMA linha (eram duas), e o card mais
+      // baixo. ⚠️ A linha economizada NÃO vira altura na mesma proporção: quem
+      // mandava aqui era o emoji de 1.3rem mais o respiro — por isso ele desceu
+      // pra 1rem e o padding vertical de 8 pra 5. Medido: 60px → 40px.
+      // O detalhe encolhe com reticências antes de empurrar a engrenagem pra fora.
+      '<div onclick="window._casualOpenConfig()" style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:12px;padding:5px 12px;margin-bottom:0.5rem;display:flex;align-items:center;gap:10px;cursor:pointer;">' +
+        '<div style="font-size:1rem;flex-shrink:0;">' + sportIcon + '</div>' +
+        '<div style="flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;">' +
+          '<span style="font-size:0.85rem;font-weight:700;color:var(--text-bright);white-space:nowrap;flex-shrink:0;">' + window._safeHtml(sportLabel) + ' · ' + (isDoubles ? _t('casual.doubles') : _t('casual.single')) + '</span>' +
+          '<span style="font-size:0.72rem;color:var(--text-muted);flex-shrink:0;">·</span>' +
+          '<span style="font-size:0.72rem;color:var(--text-muted);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(_configSummary()) + '</span>' +
         '</div>' +
         '<div style="color:#818cf8;font-size:1.1rem;flex-shrink:0;">⚙️</div>' +
       '</div>' +
