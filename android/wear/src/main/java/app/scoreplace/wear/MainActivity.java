@@ -63,6 +63,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
 
     // Iniciar (start)
     private View startOverlay;
+    private View idleOverlay;
     private TextView btnStart;
     private androidx.wear.widget.CurvedTextView startArcSport, startArcPrompt;
     private LinearLayout startPlayers;
@@ -141,6 +142,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         btnTieTiebreak = findViewById(R.id.btn_tie_tiebreak);
         gamesLabel = findViewById(R.id.games_label);
         startOverlay = findViewById(R.id.start_overlay);
+        idleOverlay = findViewById(R.id.idle_overlay);
         startArcSport = findViewById(R.id.start_arc_sport);
         startArcPrompt = findViewById(R.id.start_arc_prompt);
         startPlayers = findViewById(R.id.start_players);
@@ -697,6 +699,9 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         } else {
             startOverlay.setVisibility(View.GONE);
         }
+        // ⚠️ Nada ativo E não dá pra iniciar daqui = o placar fechou no celular.
+        // Sem esta tela o relógio ficava preso no placar morto (relato do dono).
+        idleOverlay.setVisibility((!active && !finished && !canStart) ? View.VISIBLE : View.GONE);
 
         // ── Seletor de sacador ──
         boolean tiePending = s.optBoolean("tieRulePending", false);

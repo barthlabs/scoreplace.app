@@ -184,14 +184,38 @@ html.sp-ios #casual-match-overlay .sticky-back-header {
    (box-sizing:border-box mantém 100dvh). Cobre iOS NATIVO (sp-ios) E PWA instalado
    (display-mode:standalone, :not(.sp-native)). Android não entra: WebView já é inset
    abaixo da status bar. */
-html.sp-ios #live-scoring-overlay {
-  padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
-  box-sizing: border-box;
+/* v1.7.71 — O PISO DE 50px VALE SÓ EM RETRATO.
+   MEDIDO no simulador (iPhone 17, dentro do WebView do app): env(safe-area-inset-top)
+   é ZERO nas DUAS orientações, e inner === screen (402x874). Ou seja o WebView é
+   full-bleed e o env() não ajuda — por isso o piso fixo existe.
+   Só que em PAISAGEM o iPhone ESCONDE a status bar: ali os 50px não protegem de nada
+   e viram faixa 100% morta no topo do placar. Relato do dono com print, três vezes:
+   "continua a merda do espaco em cima morto".
+   Em paisagem sobra o inset (que é 0) + o padding do próprio cabeçalho. Medido deitado:
+   top=0 bottom=20 left=62 right=62 — quem precisa de reserva ali são as LATERAIS (notch),
+   e disso o headerPadX já cuida. */
+html.sp-ios #live-scoring-overlay { box-sizing: border-box; }
+@media (orientation: portrait) {
+  html.sp-ios #live-scoring-overlay {
+    padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
+  }
+}
+@media (orientation: landscape) {
+  html.sp-ios #live-scoring-overlay {
+    padding-top: env(safe-area-inset-top, 0px) !important;
+  }
 }
 @media (display-mode: standalone) {
-  html:not(.sp-native) #live-scoring-overlay {
-    padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
-    box-sizing: border-box;
+  html:not(.sp-native) #live-scoring-overlay { box-sizing: border-box; }
+  @media (orientation: portrait) {
+    html:not(.sp-native) #live-scoring-overlay {
+      padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
+    }
+  }
+  @media (orientation: landscape) {
+    html:not(.sp-native) #live-scoring-overlay {
+      padding-top: env(safe-area-inset-top, 0px) !important;
+    }
   }
 }
 /* Hide the page's own back-header while venue detail overlay is open — sem

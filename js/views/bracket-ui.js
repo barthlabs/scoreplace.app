@@ -9,6 +9,15 @@ var _t = window._t || function(k) { return k; };
 // obrigatório desde o SDK 35 (no 36 o opt-out foi removido), então lá o WebView
 // também desenha sob as barras do sistema.
 // ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ PAR CANÔNICO DO PLACAR — NO TOPO, fora de qualquer função, de propósito.
+// Ele nasceu dentro do render e era usado por telas que rodam em OUTRO escopo (o
+// diálogo de empate). Resultado: `ReferenceError: LIVE_NUM_1 is not defined` no
+// meio do render — a tela não pintava, `tieRulePending` ficava ligado e a PARTIDA
+// TRAVAVA, ignorando todo ponto dos dois times sem nada na tela pra destravar
+// (medido no Android, 07/ago/2026). Uma declaração só, visível de todo lugar.
+var LIVE_NUM_1 = '#2667FF', LIVE_NUM_2 = '#DB3027';
+window._LS_NUM_1 = LIVE_NUM_1; window._LS_NUM_2 = LIVE_NUM_2;
+
 window._spInsetPx = window._spInsetPx || function (lado) {
   try {
     var p = document.createElement('div');
@@ -21,26 +30,11 @@ window._spInsetPx = window._spInsetPx || function (lado) {
   } catch (e) { return 0; }
 };
 
-// ⚠️ QUANTO DO INSET DE CIMA PRECISA MESMO SER RESERVADO.
-// No iPhone do dono o WebView NÃO fica sob a status bar (o print mostra fundo
-// preto atrás do relógio — o gradiente do cabeçalho só começa depois dela), mas
-// `env(safe-area-inset-top)` continua reportando o inset da JANELA: 59px. A regra
-// antiga (`inset - 12px`, calibrada no aparelho quando o overlay ainda era
-// full-bleed) reservava 47px em cima contra 10 embaixo = 37px MORTOS, medidos.
-// No Android edge-to-edge é o contrário: o WebView fica mesmo sob a barra e o
-// inset é NECESSÁRIO — reservar 0 ali faria o "AO VIVO" encavalar no relógio do
-// sistema. Ou seja, nem simétrico cego nem inset cego: a diferença é MEDÍVEL —
-// quando o sistema já recuou a webview, sobra tela fora da viewport.
-// Fallback conservador: sem como medir a tela, mantém o inset (errar reservando
-// custa faixa; errar sem reservar esconde o cabeçalho debaixo do relógio).
-window._spTopInsetNecessario = function () {
-  var inset = window._spInsetPx('top');
-  if (!inset) return 0;
-  var tela = (window.screen && window.screen.height) || 0;
-  if (!tela) return inset;
-  var fora = Math.round(tela - (window.innerHeight || 0));
-  return (fora >= inset - 4) ? 0 : inset;
-};
+// ⚠️ AQUI MORAVA `_spTopInsetNecessario` (v1.7.67), que decidia quanto do inset de
+// cima reservar. Ela SAIU na v1.7.71: medindo no aparelho ficou claro que quem reserva
+// a status bar é o CSS do #live-scoring-overlay (piso por orientação, em components.css),
+// e o cabeçalho somava a MESMA reserva de novo — 62px mortos em retrato. Decidir isso em
+// dois lugares é o que produziu o espaço morto; agora é um só.
 
 // v1.3.31-beta: helper compartilhado pra computar estatísticas de tempo
 // dos pontos a partir de um array de intervalos (ms entre pontos consecutivos,
@@ -3766,6 +3760,43 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var p1Players = p1Name.indexOf('/') > 0 ? p1Name.split('/').map(function(s){return s.trim();}).filter(Boolean) : (p1Name.trim() ? [p1Name.trim()] : []);
   var p2Players = p2Name.indexOf('/') > 0 ? p2Name.split('/').map(function(s){return s.trim();}).filter(Boolean) : (p2Name.trim() ? [p2Name.trim()] : []);
   var isDoubles = p1Players.length > 1 || p2Players.length > 1 || !!(opts && opts.isDoubles);
+
+  // NOME NO PLACAR = SÓ O PRIMEIRO NOME — regra do dono. O sobrenome só entra
+  // quando dois jogadores da MESMA partida têm o primeiro nome igual, e aí entra
+  // a MENOR parte que já os distingue (1ª letra; se ainda empatar, mais letras).
+  // Isto é EXIBIÇÃO: `p1Players`/`p2Players` seguem com o nome inteiro, porque é
+  // por eles que o sacador é casado, o nome é editado e o resultado é gravado.
+  // "Jogador N" (placeholder posicional) passa intacto — encurtar viraria
+  // "Jogador 1." pra todo mundo, que é o oposto de distinguir.
+  function _lsShortNames(todos) {
+    var map = {}, grupos = {};
+    var norm = function(x) {
+      return String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    };
+    todos.forEach(function(n) {
+      if (/^Jogador \d+$/.test(n)) { map[n] = n; return; }
+      var parts = String(n).trim().split(/\s+/);
+      var pri = parts[0] || n;
+      (grupos[norm(pri)] = grupos[norm(pri)] || []).push({ full: n, pri: pri, resto: parts.slice(1).join(' ') });
+    });
+    Object.keys(grupos).forEach(function(k) {
+      var g = grupos[k];
+      if (g.length === 1) { map[g[0].full] = g[0].pri; return; }
+      // empatou no primeiro nome: cresce o sobrenome até TODOS ficarem distintos
+      for (var n = 1; n <= 12; n++) {
+        var vistos = {}, ok = true, tent = {};
+        for (var i = 0; i < g.length; i++) {
+          var suf = g[i].resto ? ' ' + g[i].resto.slice(0, n) + (g[i].resto.length > n ? '.' : '') : '';
+          var lab = g[i].pri + suf;
+          if (vistos[norm(lab)]) { ok = false; break; }
+          vistos[norm(lab)] = 1; tent[g[i].full] = lab;
+        }
+        if (ok) { Object.keys(tent).forEach(function(f) { map[f] = tent[f]; }); return; }
+      }
+      g.forEach(function(x) { map[x.full] = x.full; });   // nada distingue: nome inteiro
+    });
+    return map;
+  }
   // Default names when empty
   // v4.0.6: placeholders POSICIONAIS (Jogador 1-4), iguais pra todos — sem mais
   // "Parceiro"/"Adversário N" relativos ao espectador. Duplas: T1=1,2 T2=3,4.
@@ -3834,6 +3865,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Falls back to first-name and substring matches so display names like
   // "Maria" still find metadata stored under "Maria Silva".
   // v1.8.9-beta: delegates to window._avatarHtml for HTML generation.
+  // ── A BOLA DO SAQUE: UM NÚMERO, LIDO POR TODO MUNDO ───────────────────────
+  // A regra CSS (`.ls-serve-ball`) e a reserva de largura do nome (`_lsBolaPx`)
+  // leem DAQUI. Duas cópias do mesmo número foi o que deixou a bola gigante na
+  // tela do 1º sacador e miúda no placar.
+  window._LS_BOLA_VIS   = 0.60;  // o que se VÊ, como fração do avatar
+  window._LS_BOLA_GLIFO = 0.94;  // quanto do font-size o SVG pinta (círculo r=47 de 50)
+  window._LS_AV_BASE    = 30;    // px que o CSS !important crava no avatar
+
   function _liveAvatarHtml(name, size) {
     var meta = _playerMeta[name];
     if (!meta || !meta.photoURL) {
@@ -4005,7 +4044,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
     twoPointAdvantage: useSets ? (sc.twoPointAdvantage !== false) : false,
     isFixedSet: useSets && sc.fixedSet === true,
     fixedSetGames: useSets && sc.fixedSet ? (sc.fixedSetGames || sc.gamesPerSet || 6) : 0,
-    tieRule: sc.tieRule || null, // 'extend'|'tiebreak'|'ask'|null (null = standard 2-game lead)
+    // 'extend'|'tiebreak'|'ask'|null (null = 2 games de vantagem, padrão).
+    // ⚠️ PARTIDA CASUAL PERGUNTA SEMPRE (regra do dono): sem torneio não há regra
+    // escrita pra herdar, então em CADA empate a partir de (g-1)-(g-1) — 5-5, 6-6,
+    // 7-7, … — a tela deixa a quadra decidir entre prorrogar e ativar o tie-break.
+    // No TORNEIO nada muda: vale o que o organizador configurou em `sc.tieRule`.
+    tieRule: sc.tieRule || (isCasual ? 'ask' : null),
     tieRulePending: false, // true when waiting for user choice at tie
     // Serve tracking — progressive: defined at each player's first serve
     serveOrder: [],      // [{team:1|2, name:'Ana'}, ...] rotation cycle (2 for singles, 4 for doubles)
@@ -4270,6 +4314,21 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Dialog shown when tieRule is 'ask' and games are tied
   function _showTieRuleDialog(viewerCanDecide) {
+    // ⚠️ DEITADO MANDA NA ALTURA, NÃO NA LARGURA. Em pé tudo é dimensionado em `vw`
+    // (a tela é estreita e a altura sobra). Deitado a largura é o dobro e a altura é
+    // a metade: as MESMAS medidas em `vw` estouravam a tela e obrigavam a rolar —
+    // a decisão é tomada em segundos na quadra, rolar não é opção. Aqui tudo sai de
+    // `vh`, e os dois botões dividem UMA linha pra caber sem rolagem.
+    var _tbDeit = (window.innerWidth > window.innerHeight);
+    var _fPlacar = _tbDeit ? 'min(42vh,30vw)' : 'min(53vw,30vh)';
+    var _fTitulo = _tbDeit ? 'clamp(1.6rem,8.5vh,3rem)'  : 'clamp(2.4rem,12vw,4rem)';
+    var _fEmpate = _tbDeit ? 'clamp(1rem,4.6vh,1.5rem)'  : 'clamp(1.5rem,6.4vw,2.2rem)';
+    var _fBalanca= _tbDeit ? 'clamp(1.1rem,5vh,1.7rem)'  : 'clamp(1.6rem,7vw,2.4rem)';
+    var _fSub    = _tbDeit ? 'clamp(0.7rem,2.6vh,0.9rem)': 'clamp(0.85rem,3.4vw,1.05rem)';
+    var _fPerg   = _tbDeit ? 'clamp(0.75rem,2.8vh,1rem)' : 'clamp(0.95rem,3.8vw,1.2rem)';
+    var _padBtn  = _tbDeit ? 'clamp(8px,2vh,14px) 12px'  : 'clamp(16px,2.6vh,26px) 14px';
+    var _larguraBtn = _tbDeit ? '46vw' : '90vw';
+    var _dirBtns = _tbDeit ? 'row' : 'column';
     var cs = _currentSet();
     var tiedAt = cs.gamesP1; // Both are equal
     var contentEl = document.getElementById('live-score-content');
@@ -4285,24 +4344,46 @@ window._openLiveScoring = function(tId, matchId, opts) {
         '</div>';
     } else {
       bodyHtml =
-        '<div style="display:flex;flex-direction:column;gap:8px;">' +
-          '<button onclick="window._liveResolveTie(\'extend\')" style="padding:14px;border-radius:12px;border:2px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.08);cursor:pointer;text-align:left;">' +
-            '<div style="font-size:0.88rem;font-weight:700;color:#10b981;">Prorrogar</div>' +
-            '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">Continuar até vantagem de 2 games</div>' +
+        '<div style="display:flex;flex-direction:' + _dirBtns + ';align-items:' + (_tbDeit ? 'stretch' : 'center') + ';justify-content:center;width:100%;gap:clamp(10px,1.8vh,16px);">' +
+          // ⚠️ Botões GRANDES e de fundo CHEIO (ordem do dono). Esta decisão é tomada
+          // NA QUADRA, com o celular longe do olho — os antigos tinham fundo a 8% de
+          // opacidade e rótulo de 0.88rem, que na areia somem.
+          '<button onclick="window._liveResolveTie(\'extend\')" style="width:' + _larguraBtn + ';flex:0 0 auto;box-sizing:border-box;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:' + _padBtn + ';border-radius:16px;border:2px solid #10b981;background:linear-gradient(180deg,rgba(16,185,129,0.32),rgba(16,185,129,0.16));box-shadow:0 6px 22px rgba(16,185,129,0.28);cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent;">' +
+            '<div style="font-size:' + _fTitulo + ';font-weight:900;color:#34d399;line-height:1.1;">Prorrogar</div>' +
+            '<div style="font-size:' + _fSub + ';color:#a7f3d0;margin-top:5px;">Continuar até vantagem de 2 games</div>' +
           '</button>' +
-          '<button onclick="window._liveResolveTie(\'tiebreak\')" style="padding:14px;border-radius:12px;border:2px solid rgba(192,132,252,0.3);background:rgba(192,132,252,0.08);cursor:pointer;text-align:left;">' +
-            '<div style="font-size:0.88rem;font-weight:700;color:#c084fc;">Tie-break (7 pts)</div>' +
-            '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">Tie-break a 7 pontos com margem de 2</div>' +
+          '<button onclick="window._liveResolveTie(\'tiebreak\')" style="width:' + _larguraBtn + ';flex:0 0 auto;box-sizing:border-box;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:' + _padBtn + ';border-radius:16px;border:2px solid #c084fc;background:linear-gradient(180deg,rgba(192,132,252,0.32),rgba(192,132,252,0.16));box-shadow:0 6px 22px rgba(192,132,252,0.28);cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent;">' +
+            '<div style="font-size:' + _fTitulo + ';font-weight:900;color:#d8b4fe;line-height:1.1;">Tie-break</div>' +
+            // "(7 pts)" em linha própria, abaixo do rótulo (ordem do dono) — dentro do
+            // título ele competia com a palavra e obrigava o rótulo a ser menor.
+            '<div style="font-size:' + _fSub + ';font-weight:800;opacity:0.95;color:#d8b4fe;line-height:1.15;margin-top:3px;">(7 pts)</div>' +
+            '<div style="font-size:' + _fSub + ';color:#e9d5ff;margin-top:5px;">Tie-break a 7 pontos com margem de 2</div>' +
           '</button>' +
         '</div>';
     }
     contentEl.innerHTML =
-      '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:1rem;">' +
-        '<div style="background:var(--bg-card,#1e293b);border-radius:16px;border:1px solid rgba(192,132,252,0.3);padding:1.5rem;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
-          '<div style="text-align:center;margin-bottom:1rem;">' +
-            '<div style="font-size:1.5rem;margin-bottom:4px;">⚖️</div>' +
-            '<div style="font-size:1rem;font-weight:800;color:var(--text-bright);">Empate ' + tiedAt + ' × ' + tiedAt + '</div>' +
-            '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">Como desempatar?</div>' +
+      '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:0;overflow:hidden;">' +
+        // ⚠️ SEM CAIXA (ordem do dono: "tira o box") — a decisão é do tamanho da tela
+          // inteira; um card em volta só encolhia o placar e os botões.
+          // ⚠️ `100%`, NUNCA `100vw`: o app escala por área com `zoom` no body, e sob zoom
+          // o `vw` não acompanha — o overlay estoura a tela. Cânone travado por teste
+          // (tests/area-scaling-canon). As larguras internas em vw são pequenas e o
+          // placar roda em zoom=1, por isso ficam.
+          '<div style="display:flex;flex-direction:column;align-items:center;width:100%;box-sizing:border-box;padding:clamp(1.2rem,3vh,2rem) 0;">' +
+          // ⚠️ ORDEM DA TELA (dono): (1) o PLACAR sozinho numa linha, no topo, nas cores
+          // azul/vermelho do placar ao vivo — quem olha de longe lê o time pela cor antes
+          // do número; (2) abaixo, a balança e "Empate" na MESMA linha, em 70% da largura.
+          '<div style="text-align:center;margin-bottom:clamp(10px,2vh,18px);">' +
+            '<div style="display:flex;align-items:center;justify-content:center;gap:0;width:' + (_tbDeit ? '60vw' : '90vw') + ';margin:0 auto;line-height:0.95;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;font-size:' + _fPlacar + ';">' +
+              '<span style="color:' + (window._LS_NUM_1 || '#2667FF') + ';">' + tiedAt + '</span>' +
+              '<span style="color:var(--text-muted);opacity:0.5;font-size:0.62em;margin:0 -0.04em;">-</span>' +
+              '<span style="color:' + (window._LS_NUM_2 || '#DB3027') + ';">' + tiedAt + '</span>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;justify-content:center;gap:0.35em;width:70vw;margin:clamp(6px,1.4vh,12px) auto 0;">' +
+              '<span style="font-size:' + _fBalanca + ';line-height:1;">⚖️</span>' +
+              '<span style="font-size:' + _fEmpate + ';font-weight:900;color:var(--text-bright);line-height:1;">Empate</span>' +
+            '</div>' +
+            '<div style="font-size:' + _fPerg + ';color:var(--text-muted);margin-top:clamp(4px,1vh,10px);">Como desempatar?</div>' +
           '</div>' +
           bodyHtml +
         '</div>' +
@@ -4377,8 +4458,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Add point to player
   function _addPoint(player) {
     if (state.isFinished) return;
-    if (state.tieRulePending) return; // Waiting for tie resolution dialog
-    if (_needsServePick()) return; // Waiting for serve selection
+    // ⚠️ BLOQUEADO **E RENDERIZA** — sair calado aqui MATA a partida. Estes dois
+    // estados só se resolvem numa TELA (o diálogo de empate e o seletor de sacador);
+    // se o app entrou neles por um caminho que não renderizou, o toque no placar
+    // passava a não fazer NADA e não havia como sair — nem pelo outro time.
+    // MEDIDO no Android (07/ago/2026): 110 pontos seguidos ignorados, placar
+    // congelado em 4-5 / 40-0, sem diálogo e sem seletor na tela. Renderizar aqui
+    // faz o próprio toque trazer de volta a tela que destrava.
+    if (state.tieRulePending) { _render(); return; }   // aguardando a escolha do empate
+    if (_needsServePick())    { _render(); return; }   // aguardando a escolha do sacador
 
     // v1.0.36-beta: snapshot ANTES de qualquer mutação — primeira coisa após
     // os early returns. Garante que undo restaura exatamente pra antes do
@@ -5294,6 +5382,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
   //   Clique num nome → box em volta + bolinha da modalidade à esquerda do nome. 1º pré-selecionado.
   //   Fechar (esq) = pula o rastreio de saque. Layout scroll-safe (nada corta; ver mock).
   var _pickerSel = null; // { team, idx } — jogador selecionado
+  // ⚠️ A tela do 1º sacador põe o TÍTULO no #live-hdr-sets e o Iniciar no
+  // #live-score-header-actions. O render do PLACAR limpa esse slot (nas DUAS
+  // orientações) pra não deixar SETS órfão ao girar — e, rodando depois, apagava
+  // o título e o botão, deixando a tela do sacador sem cabeçalho e sem Iniciar.
+  // Enquanto esta bandeira estiver ligada, os dois resets ficam de fora.
+  // GLOBAL de propósito: cada _openLiveScoring cria um closure NOVO, e uma
+  // bandeira local nasceria `false` — foi isso que apagou o título e o Iniciar.
+  if (typeof window._spServePickerOn === 'undefined') window._spServePickerOn = false;
 
   function _serveStage() { return (state.totalGamesPlayed === 0) ? 1 : 2; }
 
@@ -5320,22 +5416,32 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var _valid = _pickerSel && players.some(function (p) { return p.team === _pickerSel.team && p.idx === _pickerSel.idx; });
     if (!_valid) _pickerSel = { team: players[0].team, idx: players[0].idx };
 
+    window._spServePickerOn = true;
     var title = stage === 1 ? 'Quem saca primeiro?' : 'Quem saca no 2º game?';
     var confirmLabel = stage === 1 ? 'Iniciar' : 'Confirmar';
 
+    // Primeiro nome só, IGUAL ao placar — mesma função, pra as duas telas nunca
+    // divergirem. O mapa sai dos QUATRO da partida (não só dos exibidos aqui),
+    // senão no 2º sacador dois homônimos de times diferentes não seriam vistos.
+    var _pkNome = _lsShortNames(p1Players.concat(p2Players));
     var cards = players.map(function (p) {
       var sel = (_pickerSel.team === p.team && _pickerSel.idx === p.idx);
       var clr = p.team === 1 ? '#3b82f6' : '#ef4444';
       var bg = sel ? (p.team === 1 ? 'rgba(59,130,246,0.16)' : 'rgba(239,68,68,0.16)') : 'rgba(255,255,255,0.03)';
       var bd = sel ? clr : 'rgba(255,255,255,0.10)';
-      var ball = sel ? '<span style="font-size:1.15rem;line-height:1;flex-shrink:0;">' + _sportBall + '</span>' : '';
+      // v1.7.72: MESMA bola do placar — esta tela tinha `1.15rem` FIXO e depois uma
+      // conta própria, e foi isso que a deixou gigante aqui e miúda lá. Agora é a
+      // classe única `.ls-serve-ball` (busque `_BOLA_VIS`): um número, duas telas.
+      var ball = sel ? '<span class="ls-serve-ball" style="flex-shrink:0;">' + _sportBall + '</span>' : '';
       return '<button type="button" onclick="window._liveServeSelect(' + p.team + ',' + p.idx + ')" ' +
         // v1.7.67: sem `max-width:360px` — ele vinha da lista de UMA coluna e agora
         // deixaria sobra dentro da própria coluna (que já é metade da tela).
-        'style="box-sizing:border-box;width:100%;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:12px;cursor:pointer;text-align:left;' +
+        'style="box-sizing:border-box;width:100%;flex-shrink:0;display:flex;align-items:center;gap:12px;padding:clamp(12px,2.2vh,20px) 16px;border-radius:12px;cursor:pointer;text-align:left;' +
         'border:2px solid ' + bd + ';background:' + bg + ';transition:background 0.12s,border-color 0.12s;">' +
-          _liveAvatarHtml(p.name, 34) + ball +
-          '<span style="flex:1;min-width:0;font-size:1rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(p.name) + '</span>' +
+          ball + _liveAvatarHtml(p.name, 34) +
+          // v1.7.72: fonte maior (ordem do dono, "para leitura melhor"). Cabe porque agora
+          // é UMA coluna em pé e só o primeiro nome — antes 1rem já cortava ("Nelson Ba…").
+          '<span style="flex:1;min-width:0;font-size:clamp(1.5rem,7.5vw,2.6rem);font-weight:800;line-height:1.05;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(_pkNome[p.name] || p.name) + '</span>' +
         '</button>';
     });   // ⚠️ ARRAY, não string: as colunas abaixo consomem card a card.
 
@@ -5346,30 +5452,39 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // o 4º jogador fora da tela (46px escondidos, medido).
     // Agora o título vai pro slot central que o cabeçalho JÁ TEM (#live-hdr-sets) e o
     // Iniciar/Confirmar entra ao lado do Fechar de cima. Uma barra só.
-    var _hdrMid = document.getElementById('live-hdr-sets');
-    if (_hdrMid) {
-      _hdrMid.style.display = '';
-      _hdrMid.innerHTML = '<div style="min-width:0;text-align:center;font-size:0.9rem;font-weight:800;' +
-        'color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>';
-    }
-    var _hdrActs = document.getElementById('live-score-header-actions');
-    if (_hdrActs) {
-      var _old = document.getElementById('live-serve-confirm');
-      if (_old) _old.parentNode.removeChild(_old);
-      var _btn = document.createElement('button');
-      _btn.id = 'live-serve-confirm';
-      _btn.setAttribute('onclick', 'window._liveServeConfirm()');
-      _btn.style.cssText = 'flex-shrink:0;padding:7px 16px;border-radius:10px;border:none;cursor:pointer;' +
-        'background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:0.85rem;font-weight:800;' +
-        'box-shadow:0 2px 12px rgba(16,185,129,0.3);-webkit-tap-highlight-color:transparent;';
-      _btn.textContent = confirmLabel;
-      _hdrActs.appendChild(_btn);
-    }
+    // ⚠️ SAFE-AREA LATERAL: deitado, a ilha da câmera do iPhone fica NA LATERAL, e
+    // esta tela só reservava a de BAIXO — o box do 1º jogador passava por baixo dela
+    // (visto no simulador, 07/ago/2026). `env(safe-area-inset-left/right)` vale 0 no
+    // Android e em pé, então não encolhe nada onde não precisa.
+    // ⚠️ v1.7.72 — O TÍTULO E O "INICIAR" SAÍRAM DO CABEÇALHO e viraram uma LINHA
+    // PRÓPRIA logo abaixo dele (ordem do dono: "temos espaço para isso").
+    // Na v1.7.67 eles tinham ido pro cabeçalho pra não haver duas barras empilhadas;
+    // o problema é que o cabeçalho é COMPARTILHADO — o id `live-score-header-actions`
+    // existe DUAS vezes no app (aqui e no overlay da partida casual) e, com os dois
+    // montados, `getElementById` entregava o do OUTRO overlay: o botão existia no DOM
+    // e não aparecia na tela (foi o que aconteceu no iPhone). Numa linha dentro do
+    // container DESTA tela não há id compartilhado nem ordem de render pra dar errado.
+    var _lsOv = document.getElementById('live-scoring-overlay');
+    var _velho = (_lsOv && _lsOv.querySelector('#live-serve-confirm')) || document.getElementById('live-serve-confirm');
+    if (_velho && _velho.parentNode) _velho.parentNode.removeChild(_velho);
 
-    // ⚠️ DUAS COLUNAS, uma por time: azul à esquerda, vermelho à direita. Em UMA
-    // coluna o card ficava com 360px numa tela de 844 — 484px de tela morta — e
-    // ainda assim sobrava gente fora do alcance. No 2º sacador só existe um time;
-    // ali os dois jogadores dele dividem as colunas, pelo mesmo motivo.
+    var _barraTopo =
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;' +
+        'padding:12px calc(1rem + env(safe-area-inset-right,0px)) 6px calc(1rem + env(safe-area-inset-left,0px));width:100%;box-sizing:border-box;flex:0 0 auto;">' +
+        '<span style="min-width:0;flex:1;font-size:clamp(1rem,4.2vw,1.25rem);font-weight:800;' +
+          'color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</span>' +
+        '<button id="live-serve-confirm" onclick="window._liveServeConfirm()" ' +
+          'style="flex:0 0 auto;padding:10px 22px;border-radius:12px;border:none;cursor:pointer;' +
+          'background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:clamp(0.95rem,3.8vw,1.1rem);' +
+          'font-weight:800;box-shadow:0 2px 12px rgba(16,185,129,0.3);-webkit-tap-highlight-color:transparent;">' +
+          confirmLabel + '</button>' +
+      '</div>';
+
+    // ⚠️ DUAS COLUNAS **SÓ DEITADO**, uma por time: azul à esquerda, vermelho à
+    // direita — deitado a tela é larga e uma coluna deixava 484px mortos ao lado.
+    // EM PÉ é um embaixo do outro (ordem do dono): em pé a tela é estreita, e 2×2
+    // espremia o nome a ponto de cortar ("Nelson Ba…").
+    var _pkDeitado = (window.innerWidth > window.innerHeight);
     var _times = [];
     players.forEach(function (p) { if (_times.indexOf(p.team) < 0) _times.push(p.team); });
     var _colA = [], _colB = [];
@@ -5381,13 +5496,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
     function _coluna(itens) {
       return '<div style="display:flex;flex-direction:column;gap:10px;min-width:0;">' + itens.join('') + '</div>';
     }
+    // em pé, todo mundo numa coluna só, na ordem natural (time 1 e depois time 2)
+    var _grade = _pkDeitado ? '1fr 1fr' : '1fr';
+    var _corpo = _pkDeitado ? (_coluna(_colA) + _coluna(_colB)) : _coluna(cards);
 
     container.innerHTML =
       '<div style="height:100%;display:flex;flex-direction:column;align-items:stretch;">' +
+        _barraTopo +
         '<div id="serve-order-list" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;' +
-          'display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;align-content:start;width:100%;box-sizing:border-box;' +
-          'padding:14px 1rem calc(14px + env(safe-area-inset-bottom, 0px));">' +
-          _coluna(_colA) + _coluna(_colB) +
+          'display:grid;grid-template-columns:' + _grade + ';gap:10px 14px;align-content:start;width:100%;box-sizing:border-box;' +
+          'padding:14px calc(1rem + env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) calc(1rem + env(safe-area-inset-left,0px));">' +
+          _corpo +
         '</div>' +
       '</div>';
 
@@ -5420,6 +5539,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Iniciar (tela 1) / Confirmar (tela 2) → aplica o sacador escolhido via _liveSetServer
   // (constrói/atualiza a serveOrder e re-renderiza; a tela some porque _needsServePick vira false).
   window._liveServeConfirm = function () {
+    window._spServePickerOn = false;   // a partir daqui o placar pode limpar o slot do cabeçalho
     if (!_pickerSel) return;
     var sel = _pickerSel;
     if (!isDoubles) {
@@ -5599,6 +5719,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   function _render() {
     var container = document.getElementById('live-score-content');
     if (!container) return;
+
 
     // Determine whether the current viewer is a registered player in this match.
     // Used to gate match-control actions (tie-rule choice, tie-break button, restart) —
@@ -5975,12 +6096,28 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Comparative stats section — v1.7.6-beta: TIME 1 (azul) sempre direita, TIME 2 (vermelho) sempre esquerda
       var _t1Label = p1Players.length ? p1Players[0] : 'Time 1';
       var _t2Label = p2Players.length ? p2Players[0] : 'Time 2';
+      // ⚠️ DEITADO: a página inteira usa a LARGURA da tela (ordem do dono:
+      // "aqui temos que aproveitar a largura da tela"). Em pé eles seguem empilhados —
+      // ali a tela é estreita: os nomes seguem empilhados e os cards em 380px.
+      // ⚠️ `_cardMax` vale pra TODOS os blocos da tela final (comparativo, momentum,
+      // sets, sugestões) — travar só o card do vencedor deixava o resto numa coluna
+      // de 380px com meia tela vazia dos dois lados.
+      var _fimDeitado = (window.innerWidth > window.innerHeight);
+      var _chipsDir = _fimDeitado ? 'row' : 'column';
+      var _chipsMax = _fimDeitado ? '100%' : '280px';
+      var _cardMax  = _fimDeitado ? '760px' : '380px';
+
+      // ⚠️ FONTE MAIOR NO DEITADO (ordem do dono: "use fontes maiores quando
+      // possível"). Deitado os cards passaram de 380px pra 760px de largura, e os
+      // rótulos calibrados pra coluna estreita ficaram minúsculos na tela larga.
+      // `_fs` é o ÚNICO lugar que escala: em pé devolve o valor original.
+      var _fs = function(v) { return (_fimDeitado ? (v * 1.35).toFixed(2) : v) + 'rem'; };
       var comparativeSection =
-        '<div style="width:100%;max-width:380px;padding:clamp(12px,2.2vh,18px);border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);display:flex;flex-direction:column;gap:clamp(8px,1.6vh,14px);">' +
+        '<div style="width:100%;max-width:' + _cardMax + ';padding:clamp(12px,2.2vh,18px);border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);display:flex;flex-direction:column;gap:clamp(8px,1.6vh,14px);">' +
           '<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.08);">' +
             '<span style="font-size:0.65rem;font-weight:800;color:' + p2Clr + ';text-transform:uppercase;letter-spacing:0.5px;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">← ' + window._safeHtml(_t2Label) + '</span>' +
             '<span style="font-size:0.55rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;">⚖</span>' +
-            '<span style="font-size:0.65rem;font-weight:800;color:' + p1Clr + ';text-transform:uppercase;letter-spacing:0.5px;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;">' + window._safeHtml(_t1Label) + ' →</span>' +
+            '<span style="font-size:' + _fs(0.65) + ';font-weight:800;color:' + p1Clr + ';text-transform:uppercase;letter-spacing:0.5px;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;">' + window._safeHtml(_t1Label) + ' →</span>' +
           '</div>' +
           (useSets && !state.isFixedSet ? _compareBar('Sets', '🏅', t1T.sets, t2T.sets) : '') +
           (state.totalGamesPlayed > 0 ? _compareBar('Games', '🎾', t1T.games, t2T.games) : '') +
@@ -5996,23 +6133,23 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
       // Winner section: crown + clickable chips + score
       var winnerSection =
-        '<div style="width:100%;max-width:380px;padding:clamp(10px,2vh,16px) clamp(10px,2vw,16px);border-radius:14px;background:linear-gradient(180deg,rgba(' + (winTeam === 1 ? '59,130,246' : '239,68,68') + ',0.16),rgba(' + (winTeam === 1 ? '59,130,246' : '239,68,68') + ',0.04));border:1px solid rgba(' + (winTeam === 1 ? '59,130,246' : '239,68,68') + ',0.4);display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.2vh,10px);">' +
+        '<div style="width:100%;max-width:' + _cardMax + ';padding:clamp(10px,2vh,16px) clamp(10px,2vw,16px);border-radius:14px;background:linear-gradient(180deg,rgba(' + (winTeam === 1 ? '59,130,246' : '239,68,68') + ',0.16),rgba(' + (winTeam === 1 ? '59,130,246' : '239,68,68') + ',0.04));border:1px solid rgba(' + (winTeam === 1 ? '59,130,246' : '239,68,68') + ',0.4);display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.2vh,10px);">' +
           '<div style="font-size:clamp(1.8rem,6vw,2.8rem);line-height:1;">🏆</div>' +
-          '<div style="font-size:0.6rem;font-weight:800;color:' + winClr + ';text-transform:uppercase;letter-spacing:2px;">Vencedor</div>' +
-          '<div style="display:flex;flex-direction:column;align-items:stretch;gap:6px;width:100%;max-width:280px;">' + winChipsHtml + '</div>' +
+          '<div style="font-size:' + _fs(0.6) + ';font-weight:800;color:' + winClr + ';text-transform:uppercase;letter-spacing:2px;">Vencedor</div>' +
+          '<div style="display:flex;flex-direction:' + _chipsDir + ';align-items:' + (_fimDeitado ? 'center' : 'stretch') + ';justify-content:center;gap:6px;width:100%;max-width:' + _chipsMax + ';">' + winChipsHtml + '</div>' +
           '<div style="display:flex;align-items:center;justify-content:center;gap:0;margin:4px 0 2px;">' + scoreSummary + '</div>' +
-          '<div style="font-size:0.55rem;color:var(--text-muted);text-align:center;">💡 toque nos jogadores para ver estatísticas</div>' +
+          '<div style="font-size:' + _fs(0.55) + ';color:var(--text-muted);text-align:center;">💡 toque nos jogadores para ver estatísticas</div>' +
         '</div>';
 
       // Loser section: names as clickable chips
       var loserSection =
-        '<div style="width:100%;max-width:380px;padding:clamp(8px,1.8vh,14px) clamp(10px,2vw,16px);border-radius:14px;background:linear-gradient(180deg,rgba(' + (winTeam === 1 ? '239,68,68' : '59,130,246') + ',0.08),rgba(' + (winTeam === 1 ? '239,68,68' : '59,130,246') + ',0.02));border:1px solid rgba(' + (winTeam === 1 ? '239,68,68' : '59,130,246') + ',0.25);display:flex;flex-direction:column;align-items:center;gap:clamp(4px,1vh,8px);opacity:0.94;">' +
-          '<div style="font-size:0.6rem;font-weight:700;color:' + loseClr + ';text-transform:uppercase;letter-spacing:2px;opacity:0.8;">Perdedor</div>' +
-          '<div style="display:flex;flex-direction:column;align-items:stretch;gap:4px;width:100%;max-width:260px;">' + loseChipsHtml + '</div>' +
+        '<div style="width:100%;max-width:' + _cardMax + ';padding:clamp(8px,1.8vh,14px) clamp(10px,2vw,16px);border-radius:14px;background:linear-gradient(180deg,rgba(' + (winTeam === 1 ? '239,68,68' : '59,130,246') + ',0.08),rgba(' + (winTeam === 1 ? '239,68,68' : '59,130,246') + ',0.02));border:1px solid rgba(' + (winTeam === 1 ? '239,68,68' : '59,130,246') + ',0.25);display:flex;flex-direction:column;align-items:center;gap:clamp(4px,1vh,8px);opacity:0.94;">' +
+          '<div style="font-size:' + _fs(0.6) + ';font-weight:700;color:' + loseClr + ';text-transform:uppercase;letter-spacing:2px;opacity:0.8;">Perdedor</div>' +
+          '<div style="display:flex;flex-direction:' + _chipsDir + ';align-items:' + (_fimDeitado ? 'center' : 'stretch') + ';justify-content:center;gap:4px;width:100%;max-width:' + _chipsMax + ';">' + loseChipsHtml + '</div>' +
         '</div>';
 
       var durationRow = elapsedStr
-        ? '<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:0.75rem;color:var(--text-muted);"><span>⏱</span><span style="font-weight:700;color:var(--text-bright);">' + elapsedStr + '</span><span>de jogo</span></div>'
+        ? '<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:' + _fs(0.75) + ';color:var(--text-muted);"><span>⏱</span><span style="font-weight:700;color:var(--text-bright);">' + elapsedStr + '</span><span>de jogo</span></div>'
         : '';
 
       // Time-per-point analytics from pointLog timestamps
@@ -6057,8 +6194,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       if (_timeStats) {
         var _tsBox = function(label, value, color) {
           return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">' +
-            '<span style="font-size:0.95rem;font-weight:800;color:' + (color || '#fff') + ';font-variant-numeric:tabular-nums;">' + value + '</span>' +
-            '<span style="font-size:0.55rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;text-align:center;">' + label + '</span>' +
+            '<span style="font-size:' + _fs(0.95) + ';font-weight:800;color:' + (color || '#fff') + ';font-variant-numeric:tabular-nums;">' + value + '</span>' +
+            '<span style="font-size:' + _fs(0.55) + ';font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;text-align:center;">' + label + '</span>' +
           '</div>';
         };
         // v1.3.32-beta: hint discreto quando o helper detectou aquecimento
@@ -6066,11 +6203,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
         // excluir). Tempo total continua íntegro.
         var warmupHint = '';
         if (_timeStats.warmupSkipped && _timeStats.warmupMs) {
-          warmupHint = '<div style="text-align:center;font-size:0.55rem;color:var(--text-muted);opacity:0.7;font-style:italic;">🏃 Aquecimento de ' + _fmtSec(_timeStats.warmupMs) + ' detectado — 1º ponto contado com tempo médio</div>';
+          warmupHint = '<div style="text-align:center;font-size:' + _fs(0.55) + ';color:var(--text-muted);opacity:0.7;font-style:italic;">🏃 Aquecimento de ' + _fmtSec(_timeStats.warmupMs) + ' detectado — 1º ponto contado com tempo médio</div>';
         }
         timeStatsSection =
-          '<div style="width:100%;max-width:380px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:8px;">' +
-            '<div style="text-align:center;font-size:0.6rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;">⏱ Tempo</div>' +
+          '<div style="width:100%;max-width:' + _cardMax + ';padding:10px 12px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:8px;">' +
+            '<div style="text-align:center;font-size:' + _fs(0.6) + ';font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;">⏱ Tempo</div>' +
             '<div style="display:flex;align-items:stretch;gap:6px;">' +
               _tsBox('Duração', _timeStats.totalMs ? _fmtSec(_timeStats.totalMs) : '—', '#fff') +
               _tsBox('Tempo/pt', _fmtSec(_timeStats.avgMs), '#60a5fa') +
@@ -6127,12 +6264,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var animId = 'mom-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
 
         momentumSection =
-          '<div style="width:100%;max-width:380px;padding:clamp(10px,2vh,14px) clamp(8px,1.5vw,12px);border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.10);display:flex;flex-direction:column;gap:8px;">' +
+          '<div style="width:100%;max-width:' + _cardMax + ';padding:clamp(10px,2vh,14px) clamp(8px,1.5vw,12px);border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.10);display:flex;flex-direction:column;gap:8px;">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px;">' +
-              '<div style="font-size:0.6rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:1.5px;">📈 Momentum da Partida</div>' +
+              '<div style="font-size:' + _fs(0.6) + ';font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:1.5px;">📈 Momentum da Partida</div>' +
               '<div style="display:flex;align-items:center;gap:8px;">' +
-                '<div style="font-size:0.58rem;color:var(--text-muted);font-weight:600;">' + pts.length + ' pts</div>' +
-                '<button id="mom-replay-btn" style="padding:3px 8px;border-radius:6px;font-size:0.6rem;font-weight:700;border:1px solid rgba(251,191,36,0.35);cursor:pointer;background:rgba(251,191,36,0.1);color:#fbbf24;">↻ Replay</button>' +
+                '<div style="font-size:' + _fs(0.58) + ';color:var(--text-muted);font-weight:600;">' + pts.length + ' pts</div>' +
+                '<button id="mom-replay-btn" style="padding:3px 8px;border-radius:6px;font-size:' + _fs(0.6) + ';font-weight:700;border:1px solid rgba(251,191,36,0.35);cursor:pointer;background:rgba(251,191,36,0.1);color:#fbbf24;">↻ Replay</button>' +
               '</div>' +
             '</div>' +
             '<style>' +
@@ -6157,7 +6294,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
               '<text class="' + animId + '-dot" x="' + (parseFloat(endX) + 8) + '" y="' + (parseFloat(p1EndY) + 3) + '" fill="#60a5fa" font-size="10" font-weight="700" font-family="monospace">' + p1 + '</text>' +
               '<text class="' + animId + '-dot" x="' + (parseFloat(endX) + 8) + '" y="' + (parseFloat(p2EndY) + 3) + '" fill="#f87171" font-size="10" font-weight="700" font-family="monospace">' + p2 + '</text>' +
             '</svg>' +
-            '<div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:0 4px;font-size:0.6rem;">' +
+            '<div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:0 4px;font-size:' + _fs(0.6) + ';">' +
               '<span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;border-radius:2px;background:#3b82f6;"></span><span style="color:#60a5fa;font-weight:700;">' + window._safeHtml(p1Label) + '</span></span>' +
               '<span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;border-radius:2px;background:#ef4444;"></span><span style="color:#f87171;font-weight:700;">' + window._safeHtml(p2Label) + '</span></span>' +
             '</div>' +
@@ -6175,20 +6312,20 @@ window._openLiveScoring = function(tId, matchId, opts) {
         // v2.1.39: resultado já foi salvo na chave no último ponto (auto). Aqui
         // não há "Confirmar" — só "Voltar" (topo-esquerda), que leva ao jogo na chave.
         restartSection =
-          '<div style="display:flex;"><button onclick="window._liveScoreBackToBracket()" class="live-vol" style="display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:14px;font-size:1.05rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;">← Voltar</button></div>';
+          '<div style="display:flex;"><button onclick="window._liveScoreBackToBracket()" class="live-vol" style="display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:14px;font-size:' + _fs(1.05) + ';font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;">← Voltar</button></div>';
       } else if (isDoubles) {
         // v1.6.11-beta: Rei/Rainha — botão contextual por rodada
         if (_reiRainhaMode) {
           if (_reiRainhaRound < 2) {
             var _rrNextNum = _reiRainhaRound + 2; // ex: rodada 0→mostra "Jogo 2"
             restartSection =
-              '<button onclick="window._reiRainhaNextRound()" style="width:100%;padding:13px 18px;border-radius:14px;font-size:1rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;box-shadow:0 4px 20px rgba(245,158,11,0.4);display:flex;align-items:center;justify-content:center;gap:8px;">' +
+              '<button onclick="window._reiRainhaNextRound()" style="width:100%;padding:13px 18px;border-radius:14px;font-size:' + _fs(1) + ';font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;box-shadow:0 4px 20px rgba(245,158,11,0.4);display:flex;align-items:center;justify-content:center;gap:8px;">' +
                 '<span>⚡ Jogo ' + _rrNextNum + ' de 3</span>' +
-                '<span style="font-size:1.1rem;">→</span>' +
+                '<span style="font-size:' + _fs(1.1) + ';">→</span>' +
               '</button>';
           } else {
             restartSection =
-              '<button onclick="window._reiRainhaShowFinal()" style="width:100%;padding:13px 18px;border-radius:14px;font-size:1rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#f59e0b,#b45309);color:white;box-shadow:0 4px 20px rgba(245,158,11,0.5);display:flex;align-items:center;justify-content:center;gap:8px;">' +
+              '<button onclick="window._reiRainhaShowFinal()" style="width:100%;padding:13px 18px;border-radius:14px;font-size:' + _fs(1) + ';font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#f59e0b,#b45309);color:white;box-shadow:0 4px 20px rgba(245,158,11,0.5);display:flex;align-items:center;justify-content:center;gap:8px;">' +
                 '<span>👑 Ver Resultado Final</span>' +
               '</button>';
           }
@@ -6197,8 +6334,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var _statsMixedRow = _canShowMixedToggle()
           ? '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(236,72,153,0.07);border:1px solid rgba(236,72,153,0.18);cursor:pointer;">' +
               '<div style="display:flex;align-items:center;gap:6px;">' +
-                '<span style="font-size:0.9rem;">⚤</span>' +
-                '<span style="font-size:0.72rem;font-weight:700;color:#f472b6;">Duplas Mistas</span>' +
+                '<span style="font-size:' + _fs(0.9) + ';">⚤</span>' +
+                '<span style="font-size:' + _fs(0.72) + ';font-weight:700;color:#f472b6;">Duplas Mistas</span>' +
               '</div>' +
               '<span class="toggle-switch toggle-sm" style="flex-shrink:0;">' +
                 '<input type="checkbox" id="chk-stats-mixed" ' + (_mixedDoublesEnabled ? 'checked' : '') + ' onchange="window._statsToggleMixed(this)" />' +
@@ -6206,46 +6343,69 @@ window._openLiveScoring = function(tId, matchId, opts) {
               '</span>' +
             '</label>'
           : '';
+        // ⚠️ v1.7.72 — ENCERRAR e INICIAR SUBIRAM PRO CABEÇALHO (ideia do dono: "o botão
+        // encerrar e iniciar caberiam no cabeçalho?"). O cabeçalho da tela FINAL está
+        // vazio à direita (Resetar/Fechar só existem com a partida em andamento), então
+        // eram duas linhas inteiras gastas pra repetir o que cabe num espaço já livre.
+        // Ordem: Encerrar à ESQUERDA em vermelho, Iniciar à DIREITA em verde.
+        // ⚠️ A injeção é ESCOPADA ao overlay — `live-score-header-actions` existe DUAS
+        // vezes no app e o `getElementById` seco entrega o do outro overlay (foi o que
+        // sumiu com o "Iniciar" da tela do 1º sacador no iPhone).
+        var _fimOv = document.getElementById('live-scoring-overlay');
+        var _fimActs = (_fimOv && _fimOv.querySelector('#live-score-header-actions')) ||
+                       document.getElementById('live-score-header-actions');
+        if (_fimActs) {
+          _fimActs.style.display = 'flex';
+          _fimActs.innerHTML =
+            '<button onclick="window._liveStatsClose()" style="flex:0 0 auto;padding:7px 14px;border-radius:10px;' +
+              'border:1px solid rgba(239,68,68,0.45);cursor:pointer;background:rgba(239,68,68,0.14);color:#f87171;' +
+              'font-size:' + _fs(0.82) + ';font-weight:800;-webkit-tap-highlight-color:transparent;">✕ Encerrar</button>' +
+            '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="flex:0 0 auto;padding:7px 16px;' +
+              'border-radius:10px;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);' +
+              'color:#fff;font-size:' + _fs(0.82) + ';font-weight:800;box-shadow:0 2px 10px rgba(16,185,129,0.3);' +
+              '-webkit-tap-highlight-color:transparent;">🔄 Iniciar</button>';
+        }
+        // Os dois toggles dividem UMA linha, em colunas simétricas (ordem do dono).
+        // Quando existe o de Duplas Mistas, ele entra numa 2ª linha própria — três
+        // numa linha só espremeria o rótulo a ponto de cortar.
+        var _tgl = function(icone, rotulo, cor, id, marcado) {
+          return '<label style="flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:space-between;' +
+              'gap:6px;padding:7px 10px;border-radius:10px;background:rgba(' + cor + ',0.07);' +
+              'border:1px solid rgba(' + cor + ',0.22);cursor:pointer;">' +
+              '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' +
+                '<span style="font-size:' + _fs(0.9) + ';flex:0 0 auto;">' + icone + '</span>' +
+                '<span style="font-size:' + _fs(0.72) + ';font-weight:700;color:rgb(' + cor + ');white-space:nowrap;' +
+                  'overflow:hidden;text-overflow:ellipsis;">' + rotulo + '</span>' +
+              '</div>' +
+              '<span class="toggle-switch toggle-sm" style="flex-shrink:0;">' +
+                '<input type="checkbox" id="' + id + '" ' + (marcado ? 'checked' : '') +
+                  ' onchange="window.' + (id === 'chk-stats-shuffle' ? '_statsToggleShuffle' : '_statsToggleReiRainha') + '(this)" />' +
+                '<span class="toggle-slider"></span>' +
+              '</span>' +
+            '</label>';
+        };
         restartSection =
           '<div style="display:flex;flex-direction:column;gap:6px;width:100%;">' +
-            '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="width:100%;padding:12px;border-radius:12px;font-size:0.92rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Iniciar</button>' +
-            '<button onclick="window._liveStatsClose()" style="width:100%;padding:9px;border-radius:10px;font-size:0.8rem;font-weight:700;border:1px solid rgba(255,255,255,0.12);cursor:pointer;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">✕ Encerrar</button>' +
-            '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.18);cursor:pointer;">' +
-              '<div style="display:flex;align-items:center;gap:6px;">' +
-                '<span style="font-size:0.9rem;">🔀</span>' +
-                '<span style="font-size:0.72rem;font-weight:700;color:#fbbf24;">Sortear Duplas</span>' +
-              '</div>' +
-              '<span class="toggle-switch toggle-sm" style="flex-shrink:0;">' +
-                '<input type="checkbox" id="chk-stats-shuffle" ' + (autoShuffle ? 'checked' : '') + ' onchange="window._statsToggleShuffle(this)" />' +
-                '<span class="toggle-slider"></span>' +
-              '</span>' +
-            '</label>' +
+            '<div style="display:flex;gap:6px;width:100%;">' +
+              _tgl('🔀', 'Sortear Duplas', '251,191,36', 'chk-stats-shuffle', autoShuffle) +
+              _tgl('👑', 'Rei/Rainha', '245,158,11', 'chk-stats-rr', false) +
+            '</div>' +
             _statsMixedRow +
-            '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.18);cursor:pointer;">' +
-              '<div style="display:flex;align-items:center;gap:6px;">' +
-                '<span style="font-size:0.9rem;">👑</span>' +
-                '<span style="font-size:0.72rem;font-weight:700;color:#f59e0b;">Rei/Rainha</span>' +
-              '</div>' +
-              '<span class="toggle-switch toggle-sm" style="flex-shrink:0;">' +
-                '<input type="checkbox" id="chk-stats-rr" onchange="window._statsToggleReiRainha(this)" />' +
-                '<span class="toggle-slider"></span>' +
-              '</span>' +
-            '</label>' +
           '</div>';
         }
       } else {
         restartSection =
           '<div style="display:flex;gap:8px;width:100%;">' +
-            '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="flex:1;padding:14px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Iniciar</button>' +
-            '<button onclick="window._liveScoreShareCasual()" title="Compartilhar resultado" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:#25d366;color:white;box-shadow:0 4px 20px rgba(37,211,102,0.3);">📤</button>' +
-            /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="window._liveStatsClose()" title="Encerrar" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);">✕</button>' +
+            '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="flex:1;padding:14px;border-radius:12px;font-size:' + _fs(0.95) + ';font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Iniciar</button>' +
+            '<button onclick="window._liveScoreShareCasual()" title="Compartilhar resultado" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:' + _fs(0.95) + ';font-weight:800;border:none;cursor:pointer;background:#25d366;color:white;box-shadow:0 4px 20px rgba(37,211,102,0.3);">📤</button>' +
+            /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="window._liveStatsClose()" title="Encerrar" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:' + _fs(0.95) + ';font-weight:800;border:none;cursor:pointer;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);">✕</button>' +
           '</div>';
       }
 
       // v1.3.33-beta: slot pra sugestões de vínculo guest→user real.
       // Hidratado async (precisa fetch de friend profiles). Empty quando
       // não há candidatos ou não é casual.
-      var linkSuggestionsSlot = isCasual ? '<div id="casual-link-suggestions-slot" style="width:100%;max-width:380px;"></div>' : '';
+      var linkSuggestionsSlot = isCasual ? '<div id="casual-link-suggestions-slot" style="max-width:' + _cardMax + ';width:100%;max-width:380px;"></div>' : '';
 
       // v1.7.4-beta: slot para as últimas partidas na modalidade —
       // populado async após render. Exibido tanto em casuais quanto em
@@ -6259,10 +6419,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // shuffle toggle for doubles) are always within thumb-reach. Clicking
       // "Jogar Novamente" or "✕ Fechar" both persist the result as confirmed.
       container.innerHTML =
-        '<div style="flex-shrink:0;padding:calc(8px + env(safe-area-inset-top, 0px)) 1rem 8px;display:flex;flex-direction:column;gap:8px;background:#0a0e1a;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+        // ⚠️ SEM `env(safe-area-inset-top)` AQUI. Quem reserva a ilha é o próprio
+        // #live-scoring-overlay (padding-top em components.css). MEDIDO no iPhone 17
+        // (07/ago/2026): overlay padTop=62px e esta barra somava outros 62px — 62px de
+        // vão morto entre o cabeçalho e o conteúdo, que o Android não tinha porque a
+        // regra é gated em `sp-ios`. Mesma armadilha da reserva do Desfazer: a
+        // safe-area tem UM dono, e aqui ele é o overlay.
+        '<div style="flex-shrink:0;padding:8px 1rem 8px;display:flex;flex-direction:column;gap:8px;background:#0a0e1a;border-bottom:1px solid rgba(255,255,255,0.06);">' +
           restartSection +
         '</div>' +
-        '<div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;width:100%;padding:clamp(8px,2vh,16px) clamp(12px,3vw,24px) calc(8px + env(safe-area-inset-bottom, 0px));gap:clamp(8px,1.5vh,14px);">' +
+        '<div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;width:100%;padding:clamp(8px,2vh,16px) clamp(12px,3vw,24px) clamp(6px,1.2vh,10px);gap:clamp(8px,1.5vh,14px);">' +
           winnerSection +
           unpairChainHtml +
           momentumSection +
@@ -6349,10 +6515,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // v2.2.18-beta: casual — stats aparecem automaticamente para todos os
       // UIDs reais; ✕ Fechar desnecessário (encerramento via botão no próprio
       // painel). Torneio: mantém ✕ (único caminho pra sair do overlay).
-      var hdrActions = document.getElementById('live-score-header-actions');
+      var hdrActions = (document.getElementById('live-scoring-overlay') &&
+                        document.getElementById('live-scoring-overlay').querySelector('#live-score-header-actions')) ||
+                       document.getElementById('live-score-header-actions');
       if (hdrActions) {
         if (isCasual) {
-          hdrActions.style.display = 'none';
+          // ⚠️ VISÍVEL, não escondido: desde a v1.7.72 o "✕ Encerrar" e o "🔄 Iniciar"
+          // MORAM neste cabeçalho (ideia do dono, pra não gastar duas linhas do corpo).
+          // Esconder aqui — como fazia a v2.2.18, quando o cabeçalho só tinha Resetar/
+          // Fechar e eles eram redundantes no casual — apagava os dois botões da tela.
+          hdrActions.style.display = 'flex';
         } else {
           hdrActions.style.display = '';
           var resetBtn = hdrActions.querySelector('button[onclick*="_liveScoreReset"]');
@@ -6451,7 +6623,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // lado quase a cada ponto — o usuário tocava pela POSIÇÃO e marcava no time
     // ERRADO, deixando o placar empatado pra sempre (nunca atingindo a margem
     // de 2 e não terminando). Durante o tie-break os lados ficam congelados.
-    if (!_liveScorePrefs.fixSides && !state.isTiebreak && !_isDecidingSet() &&
+    // ⚠️ O SACADOR MANDA NO LADO **TAMBÉM NO TIE-BREAK** (relato do dono: "a tela em
+    // tie-break não estava colocando o sacador sempre na esquerda (no deitado) ou em
+    // cima (no em pé)"). O `!state.isTiebreak && !_isDecidingSet()` que ficava aqui
+    // CONGELAVA o lado assim que o tie-break começava — e é justamente no tie-break
+    // que o saque troca mais (a cada 2 pontos), então era ali que mais confundia.
+    // `_getCurrentServer()` já sabe girar o saque no tie-break; faltava deixá-lo
+    // reger o lado. "Fixar lados" continua vencendo tudo — é escolha explícita.
+    if (!_liveScorePrefs.fixSides &&
         serverInfo && (serverInfo.team === 1 || serverInfo.team === 2)) {
       _courtLeft = serverInfo.team;
     }
@@ -6482,7 +6661,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // O par de tons abaixo continua valendo e é o que torna isso barato: ele foi
     // escolhido pra ler NOS DOIS fundos, então mudar o fundo não mexeu na tinta.
     // Quem resolve a cor por time é `_lsNumClr`, fonte ÚNICA nas duas orientações.
-    var LIVE_NUM_1 = '#2667FF', LIVE_NUM_2 = '#DB3027';
+    // ⚠️ PAR CANÔNICO DO PLACAR — publicado em window porque OUTRAS telas do fluxo
+    // precisam dele (o diálogo de empate mostra o placar nas mesmas cores). Estava só
+    // neste escopo, e usá-lo no diálogo deu `ReferenceError: LIVE_NUM_1 is not defined`:
+    // a exceção matava o render do diálogo, `tieRulePending` ficava ligado e a PARTIDA
+    // TRAVAVA — todo ponto ignorado, sem tela nenhuma pra destravar (medido no Android).
+    // Uma declaração só: duplicar o hex é como as duas telas divergem de cor.
+
 
     // v4.5.33: dimensiona o número das metades (.ls-score-half) medindo a FONTE
     // REAL — cria um "40" invisível a 100px, mede a largura de 2 dígitos e calcula
@@ -6698,9 +6883,30 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // qualquer botão em 44px no retrato — era ELA, não o padding, que segurava a
     // barra em pé. O piso de ~24px é seguro porque o alvo de toque é a LARGURA
     // INTEIRA da tela; aqui a altura é questão de leitura, não de acerto do dedo.
+    // ── O DESFAZER TEM UM NÚMERO SÓ ──────────────────────────────────────────
+    // Ordem do dono: "ele deve ter pouco mais do que a altura do texto".
+    // ⚠️ E o layout RESERVA exatamente esta altura (busque `_pUndo`/`_lUndo`).
+    // Antes a reserva era `56px × k + inset` CRAVADO À MÃO enquanto o botão media
+    // 26pt — 51pt reservados pra nada, que viravam um vão morto entre a caixa de
+    // baixo e o rodapé. MEDIDO no iPhone 17 em pé (07/ago/2026). NUNCA voltar a
+    // cravar: se mexer no botão, mexeu na reserva, porque é a MESMA variável.
+    var _UNDO_ICO = 16;                       // ícone e texto (o texto sai a 78% dele)
+    var _UNDO_PAD = 2;                        // respiro de cima
+    // ⚠️ `window.` OBRIGATÓRIO aqui: mais abaixo existe `var _spInsetPx = window._spInsetPx`,
+    // e o hoisting do `var` faz o nome local valer `undefined` NESTE ponto. Chamando
+    // sem o `window.` dá `TypeError: _spInsetPx is not a function` — o render do placar
+    // morre no meio e a tela do 1º sacador nunca dá lugar ao placar (medido no
+    // logcat do Android, 07/ago/2026). Não trocar por `_spInsetPx`.
+    var _UNDO_BOT = Math.max(2, Math.round(window._spInsetPx('bottom') * 0.5));  // metade da faixa do indicador
+    var _UNDO_H   = _UNDO_PAD + _UNDO_ICO + _UNDO_BOT;                    // altura REAL do botão
+    // ⚠️ RESPIRO: a reserva do layout é a altura do botão MAIS isto. Com a reserva
+    // exata (medido: folga 0pt) a placa de pontos do time de baixo ENCOSTA no
+    // "Desfazer" — foi a reclamação original ("as placas acabaram ficando em cima
+    // dele"). 8px é o menor valor que separa os dois sem devolver o vão morto.
+    var _UNDO_GAP = 8;
     var _undoBar = (!state.isFinished)
-      ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:none;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;padding:clamp(10px,2.2vh,18px) 0 calc(clamp(10px,2.2vh,18px) + env(safe-area-inset-bottom,0px));font-size:clamp(0.78rem,1.9vh,0.92rem);line-height:1;min-height:0;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
-        '<svg viewBox="0 0 24 24" style="width:clamp(15px,2.2vh,18px);height:clamp(15px,2.2vh,18px);flex:0 0 auto;" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>Desfazer</button>'
+      ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:none;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;box-sizing:border-box;padding:' + _UNDO_PAD + 'px 0 ' + _UNDO_BOT + 'px;font-size:' + Math.round(_UNDO_ICO * 0.78) + 'px;line-height:1;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
+        '<svg viewBox="0 0 24 24" style="width:' + _UNDO_ICO + 'px;height:' + _UNDO_ICO + 'px;flex:0 0 auto;" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>Desfazer</button>'
       : '';
     var _gameLabelRow = gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '';
     var _portFinishRow = finishBtn; finishBtn = '';
@@ -6715,6 +6921,18 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var _LS_FAM = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
     // ⚠️ O INSET DE BAIXO É MEDIDO, NUNCA ESTIMADO (v1.7.67 — relato do dono com print
     // do iPhone: "o desfazer ficou pra cima e as placas acabaram ficando em cima dele").
+    // ALTURA = TEXTO + 2px + METADE da faixa do indicador. Ordem do dono: "ele deve
+    // ter pouco mais do que a altura do texto". MEDIDO no iPhone 17 em pé: o texto
+    // são 15pt e `env(safe-area-inset-bottom)` são 21pt — reservar a faixa inteira
+    // dava 40pt de botão pra 15pt de leitura. Metade (10pt) mantém o rótulo acima da
+    // barrinha do indicador e devolve o resto às caixas. Abaixo disso o "Desfazer"
+    // passa a ficar POR BAIXO da barra do iPhone — este é o piso, não teimosia.
+    // ⚠️ A SAFE-AREA DE BAIXO É DESTE BOTÃO, E SÓ DELE. Ele é o último filho e o
+    // único que encosta na base da tela. MEDIDO no iPhone 17 em pé (07/ago/2026):
+    // o container de rolagem também somava `8px + env()` e a faixa de 34pt ficava
+    // reservada DUAS vezes — 76pt gastos pra proteger 34pt, e o resto virava um vão
+    // morto de 26pt entre a caixa vermelha e este botão. O container perdeu o env();
+    // NUNCA devolver, senão o vão volta.
     // O botão Desfazer JÁ soma `env(safe-area-inset-bottom)` no próprio padding (busque
     // por `_liveScoreUndoLastPoint` neste arquivo) — quem NÃO sabia disso era a reserva
     // de altura das caixas, que usava o número fixo `56 * escala`. A conta ficava curta
@@ -6758,10 +6976,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Devolve um objeto; nenhum tamanho é cravado — tudo sai da área disponível.
     function _lsSizes(innerW, innerH, k, orient) {
       var GAP = Math.round(6 * k), RESP = Math.round(10 * k);
-      // Barreira 60/40 em LARGURA: é TETO, não divisão. Nem o bloco de nomes nem a
+      // Barreira 55/45 em LARGURA: é TETO, não divisão. Nem o bloco de nomes nem a
       // placa de games passam do seu limite.
-      var tetoNome = Math.floor((innerW - GAP) * 0.60);
-      var tetoGames = Math.floor((innerW - GAP) * 0.40);
+      // ⚠️ Era 60/40. MEDIDO no aparelho (07/ago/2026): a placa de GAMES saía 148×121 e
+      // quem a travava era a LARGURA, não a altura — dar altura a ela não aumentaria o
+      // número em 1px. A folga pra ceder veio dos nomes, que desde a v1.7.72 mostram só
+      // o PRIMEIRO nome. Se um dia o nome inteiro voltar, esta conta tem que voltar junto.
+      var tetoNome = Math.floor((innerW - GAP) * 0.55);
+      var tetoGames = Math.floor((innerW - GAP) * 0.45);
       var nomeW = Math.min(tetoNome, innerW - tetoGames - GAP);
 
       // Franjas: em pé a sobra vai pra placa do ponto (escolha do dono);
@@ -6789,21 +7011,43 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var fs = Math.min(Math.round(linhaH * 0.62), Math.round((orient === 'land' ? 34 : 44) * k));
       var av, g2, bola, i, maior, util;
       for (i = 0; i < 8; i++) {
-        av = Math.round(fs * 0.85); g2 = Math.round(av * 0.30); bola = Math.round(av * 0.30);
-        util = nomeW - Math.round(14 * k) - av - g2 * 2 - bola;
+        av = Math.round(fs * 0.85); g2 = Math.round(av * 0.30); bola = _lsBolaPx(av);
+        // ⚠️ DESCONTA O AVATAR REAL, não `av`: o CSS `.live-av-wrap > *` trava a foto em
+        // 30px×escala com `!important` e IGNORA o `av` que passamos. Descontando `av`
+        // (~13px) o orçamento sobrava ~17px e o nome de quem saca era CORTADO pela placa
+        // (visto no Android, 07/ago/2026). Mesmo engano que já tinha acontecido com a bola.
+        util = nomeW - Math.round(14 * k) - window._LS_AV_BASE - g2 * 2 - bola;
         maior = 0;
         for (var j = 0; j < _lsAllNames.length; j++) maior = Math.max(maior, _lsW(_lsAllNames[j], fs, 700));
         if (maior <= util) break;
         fs = Math.max(11, Math.floor(fs * (util / maior)));
       }
-      av = Math.round(fs * 0.85); g2 = Math.round(av * 0.30); bola = Math.round(av * 0.30);
-      if (av > linhaH * 0.90) { av = Math.round(linhaH * 0.90); g2 = Math.round(av * 0.30); bola = Math.round(av * 0.30); }
+      av = Math.round(fs * 0.85); g2 = Math.round(av * 0.30); bola = _lsBolaPx(av);
+      if (av > linhaH * 0.90) { av = Math.round(linhaH * 0.90); g2 = Math.round(av * 0.30); bola = _lsBolaPx(av); }
 
       // PONTO: em pé fica com toda a sobra da caixa; deitado com os 60%.
       var pontoH = innerH - banda - GAP;
       // ⚠️ E o corpo é RE-LIMITADO depois de a placa crescer: com o corpo definido só
       // pela largura, a tinta chegava a 96% da altura (1px de folga, encostando).
+      // ⚠️ 0.90 É O PISO DA MARGEM — não subir. Cheguei a pôr 0.95 pra encolher a placa
+      // mantendo o número, e o dono cortou na hora: "os números do placar não podem
+      // encostar no topo e na base". Com 0.95 sobra 2,5% de cada lado, que no aparelho
+      // lê como encostado. Quem encolheu a placa foi o GAMES crescer (ele passou a 45%
+      // de largura e leva mais altura junto), não este número.
       var corpoP = _lsBodyForInk('40', pontoH * 0.90);
+      // ⚠️ TETO PELA PLACA — o cálculo por tinta acima NÃO é confiável sozinho.
+      // MEDIDO no Android deitado (07/ago/2026): placa 152px, corpo 201px, o número
+      // ultrapassando 24px em cima e 24 embaixo e sobrando ~3px de tinta até a borda
+      // ("os placares parecem bater no topo da placa"). O `_lsInk` mede num canvas
+      // com `_LS_FAM`; a fonte que o aparelho realmente desenha tem métrica um pouco
+      // diferente, e o erro aparece justamente no corpo grande. Como `line-height:1`,
+      // a caixa do número É o corpo: limitá-la a 1.20× a placa garante margem visível
+      // em qualquer fonte, sem depender da medição. Se um dia a fonte mudar, é ESTE
+      // número que se ajusta — não o 0.90 acima, que é a intenção de projeto.
+      // 1.10 e não 1.20: MEDIDO de novo depois do primeiro ajuste — `pontoH` é a altura
+      // que a conta reserva (163px no Android deitado), mas a placa DESENHADA sai 152px
+      // (borda e respiro dela comem ~11px). Com 1.20 o número ainda encostava.
+      corpoP = Math.min(corpoP, Math.round(pontoH * 1.10));
       while (corpoP > 8 && _lsWidest(corpoP) > innerW - RESP * 2) corpoP--;
 
       return { GAP: GAP, RESP: RESP, nomeW: nomeW, banda: banda, gamesH: gamesH,
@@ -6818,24 +7062,56 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // contorno ótico: número escuro sobre gelo lê mais magro (regra da v1.6.88)
     var _lsStroke = function(px, c) { return '-webkit-text-stroke:' + (px * 0.012).toFixed(2) + 'px ' + c + ';'; };
 
+    // ⚠️ Isto NÃO dimensiona a bola — quem dimensiona é a regra `.ls-serve-ball`
+    // (busque `_AV_REAL`), porque o avatar é travado por `!important` e o `av` daqui
+    // vale ~13px enquanto o avatar desenha 30px. Aqui só se RESERVA a largura que a
+    // bola vai ocupar na linha, pra o nome não passar por cima dela: 30px × escala ×
+    // 0.4255, com a escala em 1 (o caso normal) — se o dono aumentar a foto pelo
+    // slider, a linha reflui sozinha porque o nome tem `white-space:nowrap` e a caixa
+    // é flex. Aqui só se RESERVA — o desenho é do CSS —, mas a reserva usa o MESMO
+    // número, senão o nome cresce por cima da bola.
+    function _lsBolaPx(av) {
+      return Math.ceil(window._LS_AV_BASE * window._LS_BOLA_VIS / window._LS_BOLA_GLIFO);
+    }
+
     // Uma linha de jogador: [bola do saque] [avatar] [nome]. Quem NÃO saca não tem
     // bola e herda essa largura; o avatar do sacador é 75% pra o nome dele não ficar
-    // menor que o dos outros. A bola é a da MODALIDADE e mede 30% do avatar.
+    // menor que o dos outros. A bola é a da MODALIDADE e sai de _lsBolaPx (ver a
+    // medida do preenchimento do glifo lá em cima).
     function _lsNameRow(team, idx, sz, mirror) {
       var players = team === 1 ? p1Players : p2Players;
       var pn = players[idx];
+      // `pn` é a IDENTIDADE (casa o sacador, edita, grava). `pnCurto` é só o rótulo.
+      var _mapa = _lsShortNames(p1Players.concat(p2Players));
+      var pnCurto = _mapa[pn] || pn;
       var serving = !!(serverInfo && !state.isFinished && serverInfo.team === team &&
                        (serverInfo.pIdx != null ? serverInfo.pIdx === idx : serverInfo.name === pn));
       var av = serving ? Math.round(sz.av * 0.75) : sz.av;
-      var bolaPx = Math.round(av * 0.30);
-      var util = sz.nomeW - Math.round(14 * _lsK) - av - sz.g2 * (serving ? 2 : 1) - (serving ? bolaPx : 0);
-      var f = sz.fs; while (f > 10 && _lsW(pn, f, 700) > util) f--;
+      var bolaPx = _lsBolaPx(av);
+      // avatar REAL (30px, travado por CSS) — ver a nota em _lsSizes
+      var util = sz.nomeW - Math.round(14 * _lsK) - window._LS_AV_BASE - sz.g2 * (serving ? 2 : 1) - (serving ? bolaPx : 0);
+      // O nome CRESCE até encher a largura livre — antes ele só ENCOLHIA a partir de
+      // `sz.fs`, então com o primeiro nome (curto) sobrava espaço à toa. `util` já
+      // desconta bola + avatar + gaps e respeita a barreira de 60% da largura, então
+      // crescer aqui NUNCA encosta no GAMES/SETS. O teto de altura vem da própria
+      // linha, pra os dois nomes da dupla não se tocarem.
+      // ⚠️ O NOME DE QUEM SACA NASCE MENOR, SEMPRE (ordem do dono). A linha dele tem
+      // a bola do saque, então o mesmo corpo de fonte ocupa mais largura que a dos
+      // outros — e com a placa de GAMES a 45% (v1.7.72) a margem ficou apertada. Os
+      // 90% aqui são folga FIXA, além do encolhimento por medição logo abaixo: o
+      // ajuste por largura sozinho só reage quando o nome JÁ está encostando, e o
+      // pedido é que ele nunca chegue perto de invadir a placa.
+      var _fBase = serving ? Math.round(sz.fs * 0.90) : sz.fs;
+      var fTeto = Math.max(_fBase, Math.floor(sz.linhaH * (serving ? 0.65 : 0.72)));
+      var f = _fBase;
+      while (f < fTeto && _lsW(pnCurto, f + 1, 700) <= util) f++;
+      while (f > 10 && _lsW(pnCurto, f, 700) > util) f--;
       var avatar = '<span class="live-av-wrap" style="display:inline-flex;flex:0 0 auto;">' + _liveAvatarHtml(pn, av) + '</span>';
-      var nome = '<span onclick="window._liveEditName(' + team + ',' + idx + ')" class="ls-name" style="cursor:pointer;font-size:' + f + 'px;font-weight:' + (serving ? 800 : 700) + ';color:' + (serving ? '#fbbf24' : _lsNameClr(team)) + ';white-space:nowrap;line-height:1.1;">' + window._safeHtml(pn) + '</span>';
+      var nome = '<span onclick="window._liveEditName(' + team + ',' + idx + ')" class="ls-name" style="cursor:pointer;font-size:' + f + 'px;font-weight:' + (serving ? 800 : 700) + ';color:' + (serving ? '#fbbf24' : _lsNameClr(team)) + ';white-space:nowrap;line-height:1.1;">' + window._safeHtml(pnCurto) + '</span>';
       var bola = '';
       if (serving) {
         var drag = _canDragServe ? ' draggable="true" data-serve-ball="true"' : '';
-        bola = '<span' + drag + ' data-serve-drop="' + team + '-' + idx + '" style="font-size:' + bolaPx + 'px;line-height:1;flex:0 0 auto;' +
+        bola = '<span' + drag + ' class="ls-serve-ball" data-serve-drop="' + team + '-' + idx + '" style="line-height:1;flex:0 0 auto;' +
                (_canDragServe ? 'cursor:grab;' : '') + 'filter:drop-shadow(0 0 4px rgba(255,200,0,0.6));">' + _sportBall + '</span>';
       }
       var inner = mirror ? (nome + avatar + bola) : (bola + avatar + nome);
@@ -6879,29 +7155,43 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // os nomes nos cantos externos — o time da direita é espelhado.
       // O SETS do cabeçalho sai de cena: ele agora vive dentro da placa de games.
       var _hdrOff = document.getElementById('live-hdr-sets');
-      if (_hdrOff) { _hdrOff.innerHTML = ''; _hdrOff.style.display = 'none'; }
+      if (_hdrOff && !window._spServePickerOn) { _hdrOff.innerHTML = ''; _hdrOff.style.display = 'none'; }
       var _lw = container.clientWidth || window.innerWidth;
       var _lh = container.clientHeight || window.innerHeight;
       _lsK = Math.min(_lw / 844, _lh / 390);
       var _lPad = Math.round(10 * _lsK), _lGap = Math.round(6 * _lsK);
+      // ⚠️ SAFE-AREA LATERAL: deitado, a ilha da câmera do iPhone fica NA LATERAL e
+      // cobria o avatar do 2º jogador da caixa da esquerda (visto no simulador,
+      // 07/ago/2026). As caixas encolhem só o necessário pra sair de baixo dela — e
+      // como `env(safe-area-inset-left/right)` vale 0 no Android e em pé, lá nada muda.
+      var _lIL = Math.round(window._spInsetPx('left'));
+      var _lIR = Math.round(window._spInsetPx('right'));
       var _lChrome = gameLabel ? Math.round(20 * _lsK) : 0;
       // + o inset de baixo: o Desfazer cresce com ele, a reserva tem que crescer junto.
-      var _lUndo = Math.round(56 * _lsK) + _spInsetPx('bottom');
+      var _lUndo = _UNDO_H + _UNDO_GAP;   // altura REAL do botão + respiro (ver _UNDO_H) — nunca cravar
       var _lBoxH = Math.max(120, _lh - _lChrome - _lUndo);
       var _lBP = Math.round(10 * _lsK);
-      var _lBoxW = Math.floor((_lw - _lPad * 2 - _lGap) / 2);
+      var _lBoxW = Math.floor((_lw - _lPad * 2 - _lIL - _lIR - _lGap) / 2);
       var _lSz = _lsSizes(_lBoxW - _lBP * 2, _lBoxH - _lBP * 2, _lsK, 'land');
       // ⚠️ A ALTURA NÃO É FIXA (v1.7.67). Era `height:_lBoxH px`, e _lBoxH sai de uma
       // ESTIMATIVA do rodapé; qualquer diferença entre a estimativa e o rodapé real
       // virava caixa mais alta que a linha que a contém — a placa passava por cima do
       // Desfazer (8px medidos no iPhone deitado, 6px no Android). Agora ela preenche
       // o espaço REAL da linha, e _lBoxH fica servindo só pra dimensionar as fontes.
-      var _lBoxStyle = 'width:' + _lBoxW + 'px;height:100%;flex:0 0 auto;';
+      // ⚠️ `flex:1 1 0` em vez de largura cravada: com o padding do container saindo de
+      // `env()`, uma largura fixa em px ignoraria o inset e a caixa voltaria pra baixo da
+      // ilha. `_lBoxW` continua servindo só pra dimensionar FONTE em `_lsSizes` (por baixo,
+      // já descontando o inset medido) — desenhar é com o flex.
+      var _lBoxStyle = 'flex:1 1 0;min-width:0;height:100%;';
 
       container.innerHTML =
         '<div style="display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;gap:0;">' +
           _gameLabelRow +
-          '<div style="flex:1 1 auto;display:flex;gap:' + _lGap + 'px;padding:0 ' + _lPad + 'px;min-height:0;">' +
+          '<div style="flex:1 1 auto;display:flex;gap:' + _lGap + 'px;min-height:0;' +
+            // ⚠️ `env()` DIRETO no CSS, não o valor medido em JS: a medição por elemento
+            // fantasma devolvia 0 aqui e as caixas seguiam por baixo da ilha. O CSS
+            // resolve o inset no próprio motor, sem depender da leitura.
+            'padding:0 calc(' + _lPad + 'px + env(safe-area-inset-right,0px)) 0 calc(' + _lPad + 'px + env(safe-area-inset-left,0px));">' +
             _lsTeamBox(leftTeam, false, _lSz, _lBoxStyle) +
             _lsTeamBox(rightTeam, true, _lSz, _lBoxStyle) +
           '</div>' +
@@ -6916,7 +7206,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // desde a v1.7.58, mas o reset continua porque ele é o que impede um SETS
       // órfão de sobrar no topo ao girar (o elemento segue no DOM do overlay).
       var _hdrSetsP = document.getElementById('live-hdr-sets');
-      if (_hdrSetsP) { _hdrSetsP.innerHTML = ''; _hdrSetsP.style.display = 'none'; }
+      if (_hdrSetsP && !window._spServePickerOn) { _hdrSetsP.innerHTML = ''; _hdrSetsP.style.display = 'none'; }
       container.style.overflow = 'hidden';
       container.style.padding = '0';
 
@@ -6931,8 +7221,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       _lsK = Math.min(_pw / 390, _ph / 844);
       var _pPad = Math.round(8 * _lsK), _pGap = Math.round(6 * _lsK);
       var _pChrome = (setsRow ? Math.round(26 * _lsK) : 0) + (gameLabel ? Math.round(20 * _lsK) : 0);
-      // + o inset de baixo (mesmo motivo do deitado: o Desfazer cresce com ele).
-      var _pUndo = Math.round(56 * _lsK) + _spInsetPx('bottom');
+      // A reserva é a ALTURA REAL do botão (_UNDO_H), não um palpite: todo px a mais
+      // aqui vira vão morto, e todo px a menos devolvido cresce as caixas — e com elas
+      // o GAMES/SETS e o ponto, que `_lsSizes` deriva de innerH.
+      var _pUndo = _UNDO_H + _UNDO_GAP;
       var _pAvail = Math.max(120, _ph - _pChrome - _pUndo);
       var _pBoxH = Math.floor((_pAvail - _pGap) / 2);
       var _pBP = Math.round(10 * _lsK);
@@ -9301,10 +9593,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Medido: 52px fixos pesavam 13,3% da tela no celular deitado.
   // v1.7.67: o `- 12px` acima era um desconto calibrado no olho e produzia 37px de
   // faixa MORTA no iPhone (medido no aparelho do dono). Agora o inset é medido e só
-  // entra quando o WebView está mesmo sob a barra — ver _spTopInsetNecessario.
+  // entra quando o WebView está mesmo sob a barra — hoje quem reserva a status bar é o
+  // CSS do overlay (piso por orientação), e este cabeçalho só põe o respiro simétrico.
+  // ⚠️ O CABEÇALHO NÃO RESERVA A STATUS BAR — QUEM FAZ ISSO É O OVERLAY (v1.7.71).
+  // MEDIDO no simulador, retrato: o CSS do #live-scoring-overlay já empurra
+  // env(safe-area-inset-top) = 62px, e este padding somava OUTROS 62 — o cabeçalho
+  // ficava com 95px de altura para 33px de conteúdo. Era a "1 linha perdida" que o
+  // dono via em pé. Duas reservas para a mesma barra é uma a mais.
+  // Em paisagem o inset é 0 e o overlay não reserva nada (o iPhone esconde a status
+  // bar deitado), então aqui sobra só o respiro simétrico — que é o certo nos dois.
   var headerPadY = 'clamp(5px,1.2vh,10px)';
-  var _topInset = (typeof window._spTopInsetNecessario === 'function') ? window._spTopInsetNecessario() : 0;
-  var headerPadTop = _topInset ? ('max(' + headerPadY + ', ' + _topInset + 'px)') : headerPadY;
+  var headerPadTop = headerPadY;
   // padding lateral respeita o safe-area (paisagem/notch): sem isso o "✕ Fechar" cai
   // debaixo do corte da tela. max() mantém 12px em quem não tem inset.
   var headerPadX = 'max(12px, env(safe-area-inset-right, 0px))';
@@ -9410,8 +9709,27 @@ window._openLiveScoring = function(tId, matchId, opts) {
   if (!document.getElementById('live-photo-scale-style')) {
     var _ps = document.createElement('style');
     _ps.id = 'live-photo-scale-style';
+    // ⚠️ A BOLA DO SAQUE MORA AQUI, GRUDADA NO AVATAR — e é por isto:
+    // este `!important` TRAVA o avatar em 30px×escala e IGNORA o tamanho passado a
+    // `_liveAvatarHtml(nome, av)`. Durante três levas eu dimensionei a bola por esse
+    // `av` (30% → 45% → 62%) e nada mudou na tela ("não fez nada porra"): `av` valia
+    // ~13px enquanto o avatar desenhava 30px. MEDIDO no DOM do aparelho (07/ago/2026):
+    // avatar 30.0px, bola 11.0px. Agora as duas saem da MESMA expressão — mexeu numa,
+    // a outra acompanha. NUNCA voltar a dimensionar a bola por `av`.
+    // A conta: o SVG da bola é `width:1em`, e o círculo tem r=47 num viewBox 100 —
+    // então o que se VÊ é 94% do font-size. Pra a bola VISÍVEL ser 40% do avatar
+    // ser 60% do avatar (o dono, vendo no aparelho: "pode fazer 60% do avatar"):
+    // font-size = 0.60/0.94 × avatar.
+    // ⚠️ ESTA É A ÚNICA CONTA DA BOLA NO APP. A tela do 1º sacador usava uma fórmula
+    // PRÓPRIA e por isso a bola saiu gigante lá e pequena aqui — duas fórmulas pro
+    // mesmo objeto sempre divergem. As duas telas usam `.ls-serve-ball`.
+    var _AV_REAL  = 'calc(30px*var(--live-photo-scale,1))';
+    var _BOLA_VIS = window._LS_BOLA_VIS;     // fração VISÍVEL do avatar (60%, dado pelo dono na tela)
+    var _BOLA_GLIFO = window._LS_BOLA_GLIFO; // quanto do font-size o SVG pinta (r=47 de 50)
     _ps.textContent = '#live-scoring-overlay .live-av-wrap{display:inline-flex;flex-shrink:0;}'
-      + '#live-scoring-overlay .live-av-wrap > *{width:calc(30px*var(--live-photo-scale,1))!important;height:calc(30px*var(--live-photo-scale,1))!important;font-size:calc(13px*var(--live-photo-scale,1))!important;}';
+      + '#live-scoring-overlay .live-av-wrap > *{width:' + _AV_REAL + '!important;height:' + _AV_REAL + '!important;font-size:calc(13px*var(--live-photo-scale,1))!important;}'
+      + '.ls-serve-ball{font-size:calc(30px*var(--live-photo-scale,1)*' + (_BOLA_VIS/_BOLA_GLIFO).toFixed(4) + ')!important;line-height:1;}'
+      + '.ls-serve-ball>svg{width:1em!important;height:1em!important;}';
     document.head.appendChild(_ps);
   }
 
