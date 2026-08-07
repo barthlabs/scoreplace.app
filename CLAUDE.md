@@ -1279,9 +1279,22 @@ store.js). Números queimados (não usar): `+55 11 91693-6454` e `+55 11 96658-1
 
 ## Deploy
 
-Deploy automatico via `git push` para o repositorio `rstbarth/scoreplace.app` (branch `main`). GitHub Pages serve o site em `scoreplace.app` com CNAME configurado.
+⚠️ **PROD É FIREBASE HOSTING desde ago/2026 — NÃO é mais GitHub Pages.** Publicar é:
+
+```bash
+firebase deploy --only hosting --project scoreplace-app
+```
+
+**O `git push origin HEAD:main` continua obrigatório** (versiona o repo e é de onde o worktree de deploy sai), **mas ele não muda o site**. Fazer só o push e dizer "deployado" é anunciar entrega que não aconteceu.
+
+⚠️ **DEPLOYAR SEMPRE DE WORKTREE LIMPO** — `git worktree add --detach /tmp/<x> origin/main`. O `firebase.json` tem `hosting.public = "."`, então **todo arquivo não-commitado da árvore vai pro ar junto**; a árvore aqui é compartilhada com outras sessões (na 1.7.60 havia 6 `_desenho-*.html` de rascunho que teriam sido publicados). O `.gitignore` **não** protege: quem filtra é o `ignore` do `firebase.json`. Ligar `node_modules` por symlink no worktree (o predeploy roda `npm run prerender`, que precisa do playwright) — symlink em worktree temporário é seguro; o que congelou o Pages foi symlink **commitado**.
+
+⛔ **Nunca `firebase deploy` puro** (sem `--only`): ele entra nos codebases de functions e os três se apagam mutuamente — ver `project_autodraw_deploy_footgun`.
+
+**Como foi medido (06–07/ago/2026):** `scoreplace.app` e `scoreplace-app.web.app` devolvem **etag e last-modified idênticos**, batendo com o `Last Release Time` de `firebase hosting:channel:list`; o header `server: GitHub.com` sumiu; e o `firebase deploy --only hosting` levou o `version.txt` ao vivo de 1.7.59 → 1.7.60 na hora. De quebra, em 06/ago o GitHub Actions/Pages ficou em **major outage** e o site seguiu servindo normal. O `.github/workflows/pages.yml` ainda existe e ainda roda no push — **não é mais o caminho de produção**.
 
 ### DNS
+⚠️ Os registros do GitHub Pages abaixo são **HISTÓRICO** — o domínio foi movido pro Firebase Hosting (ver acima).
 - A records: 185.199.108.153, 185.199.109.153, 185.199.110.153, 185.199.111.153
 - CNAME www â rstbarth.github.io
 
@@ -1300,6 +1313,7 @@ Deploy automatico via `git push` para o repositorio `rstbarth/scoreplace.app` (b
 4. **OBRIGATÓRIO antes de declarar "fixed" e pedir validação ao usuário**: validar o fix via Chrome MCP no site deployado. Mínimo: navigate + fetch HTML + DOM inspection (botões existem, handlers attached, modais render OK). Se o fluxo exige login real / GPS / múltiplas contas e não consigo simular, **avisar explicitamente "não testei, pode quebrar"** antes de pedir teste manual. Pattern proibido: empilhar hotfix em cima de hotfix sem auditar relacionados — quando bug X aparece, listar TODOS os call paths do fluxo afetado, ler arquivos relevantes por completo, identificar bugs latentes do mesmo tipo, fazer UM fix consolidado. Bug reportado: 9 hotfixes em sequência (v0.17.83-91) onde cada fix expunha outro bug latente. Causa: declarar "fixed" sem validação prévia.
 5. `git add` dos arquivos alterados (evitar `git add .` — adicionar arquivos especificos)
 6. `git commit` com mensagem descritiva
-7. `git push origin main`
-8. Verificar no site ao vivo que as alteracoes estao deployadas
-9. **Indicar versão deployada na confirmação ao usuário** (terminar com "v0.X.Y-alpha deployada")
+7. `git push origin main` (versiona o repo — **NÃO publica**)
+8. **PUBLICAR**: `git worktree add --detach /tmp/dep origin/main`, ligar `node_modules` por symlink, e `firebase deploy --only hosting --project scoreplace-app` de dentro dele
+9. Verificar AO VIVO: `curl -s https://scoreplace.app/version.txt` tem que bater com o `version.txt` do commit, e o JS servido tem que conter o símbolo NOVO e zero ocorrências do antigo
+10. **Indicar versão deployada na confirmação ao usuário** (terminar com "v0.X.Y-alpha deployada")
