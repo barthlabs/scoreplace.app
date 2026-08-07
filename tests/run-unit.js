@@ -621,6 +621,14 @@ const SUITES = [
   // estado LOCAL — a ponte não tinha intenção de encerrar, então a ordem não tinha
   // por onde chegar ao celular e o relógio ficava preso na tela de resultado.
   'tests/relogio-sacador-e-encerrar.test.js',
+  // AMISTOSO É PARTIDA. O índice do letzplay enumera partidas avulsas
+  // (`matchable_type: "User"`, card sem link de competição) e o extrator as descartava —
+  // o acervo ficava devendo um id PARA SEMPRE, a barra parava em 98% e o verde virava
+  // violeta. Junto: "concluí" virou verificação contra o índice, não impressão de página.
+  'tests/lz-amistoso-fecha-a-conta.test.js',
+  // O Salvar da Análise fica cinza + "Salvando…" até o trabalho terminar, nos DOIS botões
+  // (o da matriz não recebia nada), e repintar no meio do save não apaga o feedback.
+  'tests/analise-botao-salvando.test.js',
 ];
 
 let failed = [];
