@@ -269,13 +269,42 @@ window.FirestoreDB = {
             if (p && typeof p === 'object') _uidsOf(p).forEach(function (u) { if (u) _noElenco[u] = 1; });
           });
 
-          // ELENCO: ninguém sai sem `allowRosterRemoval`.
+          // Quem está na FILA depois deste save — mesma régua do elenco acima: o incoming
+          // quando ele traz o campo, o banco quando não traz (um save que só mexe no elenco
+          // não afirma nada sobre a fila).
+          var _naFilaDepois = {};
+          ['standbyParticipants', 'waitlist'].forEach(function (campo) {
+            (Array.isArray(cleanData[campo]) ? cleanData[campo]
+              : (Array.isArray(_banco[campo]) ? _banco[campo] : [])
+            ).forEach(function (p) {
+              if (p && typeof p === 'object') _uidsOf(p).forEach(function (u) { if (u) _naFilaDepois[u] = 1; });
+            });
+          });
+
+          // ELENCO: ninguém SOME sem `allowRosterRemoval` — mas SAIR PRA FILA não é sumir.
+          //
+          // ⚠️ v1.7.72 — A REGRA AQUI ERA "TEM QUE CONTINUAR NO ELENCO", E ISSO DESFAZIA
+          // O TOGGLE DA PESSOA. Reproduzido a partir do vídeo da Ana Ribeiro (07/ago/2026):
+          // ela ligava "Ativado" e ele voltava sozinho pra "Desativado", quatro vezes. O
+          // rastro estava no próprio doc, nos segundos do vídeo — quatro linhas de
+          // "Protecao automatica: um save chegou sem 1 pessoa(s)... (participants)".
+          // O que acontecia: `_toggleLigaActive` faz o certo (v1.6.86) e move a pessoa de
+          // `participants` pra `standbyParticipants`; este guard lia o movimento como perda,
+          // restaurava a entrada COMO ESTÁ NO BANCO — ou seja, com `ligaActive:false` — e
+          // ainda a deixava nos DOIS lugares (por isso "Sair da lista de espera" convivia
+          // com "você está inscrito").
+          //
+          // A doutrina certa já existia no `mutateTournament` (v1.7.28), que corrigiu este
+          // mesmo engano porque a versão "tem que ficar no elenco" QUEBRAVA O W.O.:
+          // ninguém pode sumir de TODAS as listas; ONDE a pessoa está é assunto de quem
+          // move. Eram duas regras para o mesmo invariante — e a divergência era o bug.
           if (_tocaElenco && Array.isArray(_banco.participants)) {
             _banco.participants.forEach(function (p) {
               if (!p || typeof p !== 'object') return;
               var us = _uidsOf(p).filter(Boolean);
               if (!us.length) return;                              // fictício: sem proteção
               if (us.some(function (u) { return _noElenco[u]; })) return;
+              if (us.some(function (u) { return _naFilaDepois[u]; })) return;   // MOVIDO pra fila
               cleanData.participants.push(p);                       // volta como está no banco
               us.forEach(function (u) { _noElenco[u] = 1; });
               _restored.push(us[0] + ' (participants)');

@@ -1685,19 +1685,36 @@ window._buildLigaActiveToggleHtml = function(t) {
     if (found) _naFila = true;
   }
   if (!found) return ''; // só mostra pra quem está inscrito
-  // Na fila = fora dos sorteios (não é "desativado", mas também não é sorteado): o
-  // controle mostra DESATIVADO pra que ligá-lo seja o gesto de voltar.
-  var isActive = !_naFila && found.ligaActive !== false; // default true
+  // O RÓTULO SEGUE O DADO (`ligaActive`), NUNCA A LISTA EM QUE A PESSOA ESTÁ.
+  //
+  // ⚠️ v1.7.72 — aqui havia `!_naFila && …`, e era a segunda metade do "ativo mas ele
+  // desativa sozinho" (vídeo da Ana Ribeiro, 07/ago/2026). Quem está na fila COM
+  // `ligaActive:true` — ou seja, quem acabou de ligar o toggle — lia "Desativado".
+  // Na v1.6.93 isso fazia sentido: ligar na fila DEVOLVIA a pessoa ao elenco, então o
+  // rótulo convidava ao gesto. Mas a v1.7.38 mudou o destino: com a fase sorteada,
+  // ligar mantém a pessoa na fila de propósito (é de lá que ela é chamada). O gesto que
+  // o rótulo prometia deixou de existir, e o que sobrou foi a tela contradizendo o dado
+  // e o próprio toast ("Você entrou na lista de espera") na mesma sessão.
+  //
+  // Estar na fila continua sendo dito — no título do controle aqui embaixo, no card
+  // "você está na lista de espera (posição N)" (v1.7.55) e no botão "Sair da lista de
+  // espera". Nada se perde; o que sai é o rótulo que mentia.
+  var isActive = found.ligaActive !== false; // default true
   var safeTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var stateLabel = isActive ? 'Ativado' : 'Desativado';
   // v2.6.21: pílula SÓLIDA — verde (Ativado) / vermelha (Desativado) com texto
   // SEMPRE branco, nos dois temas. Antes era texto colorido sobre tarja escura
   // (contraste ruim no tema claro). A própria pílula carrega a cor do estado.
   var pillBg = isActive ? '#10b981' : '#ef4444';
-  var titleAttr = isActive
-    ? 'Clique para ficar de fora do próximo sorteio'
-    : (_naFila ? 'Você está na lista de espera. Clique para voltar aos próximos sorteios.'
-               : 'Clique para voltar ao próximo sorteio');
+  // Quatro estados, quatro frases: o rótulo diz a DISPONIBILIDADE, o título diz ONDE a
+  // pessoa está e o que o clique faz. Na fila, desligar é o que a tira dela (v1.7.59).
+  var titleAttr = _naFila
+    ? (isActive
+        ? 'Você está na lista de espera — assim que houver vaga ou um novo confronto, você joga. Clique para sair da fila.'
+        : 'Você está na lista de espera, marcado como indisponível. Clique para ficar disponível.')
+    : (isActive
+        ? 'Clique para ficar de fora do próximo sorteio'
+        : 'Clique para voltar ao próximo sorteio');
   // v0.16.92: stopPropagation EM TODOS os elementos do toggle.
   // v0.16.93: data-liga-toggle-tid no outer wrapper + class
   // liga-toggle-state-label no text span permite update in-place pelo
