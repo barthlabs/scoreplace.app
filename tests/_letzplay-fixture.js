@@ -12,11 +12,17 @@ function mkCard(g) {
   const href = g.tid ? ('/' + CLUB + '/tournaments/' + g.tid) : ('/' + CLUB + '/rankings/' + g.rid);
   const catText = g.tid ? ('Grupos • Finals ' + g.tid + ' - Feminina C')
                         : ('Competitivo Fem C | 2026 2a Etapa • Rodada: ' + ((g.i % 9) + 1));
+  // AMISTOSO: partida avulsa, fora de ranking e de torneio ('matchable_type: "User"' no
+  // índice). O card REAL não tem link de competição — o título é só a palavra "Amistoso".
+  // Copiado de letzplay.me/FabioSimaoB/matches?page=6 (07/ago/2026).
+  const titulo = g.amistoso
+    ? '<i class="fa fa-user-plus"></i>&nbsp; Amistoso'
+    : \`<a class="text-muted" href="\${href}">\${catText}</a>\`;
   const meWin = g.i % 3 !== 0;
   const s1 = meWin ? 6 : 4, s2 = meWin ? 3 : 6;
   const mid = 10000000 + g.i;
   return \`<div class="row match">
-    <div class="col-xs-10 match-title small"><a class="text-muted" href="\${href}">\${catText}</a></div>
+    <div class="col-xs-10 match-title small">\${titulo}</div>
     <div class="col-xs-12" style="padding:0px;">
       <div class="row match-player">
         <div class="col-xs-11">
@@ -54,6 +60,15 @@ function build(cfg) {
   }
   for (let r = 0; i < cfg.games; i++, r++) {
     games.push({ i, date: 'Sábado, ' + String(1 + (i % 28)).padStart(2,'0') + '/' + String(1 + (i % 12)).padStart(2,'0') + '/26 às 08:00hs', rid: 90000 + (r % cfg.ranks) });
+  }
+  // AMISTOSOS (opt-in, default 0 — os cenários existentes não mudam): os N MAIS ANTIGOS
+  // viram partidas avulsas, que é onde eles caem na vida real (o do Fábio é o último item
+  // do histórico). O TOTAL não muda: o índice segue enumerando o mesmo número de partidas,
+  // e é justamente por isso que perder um amistoso deixa a leitura devendo pra sempre.
+  for (let k = 0; k < (cfg.amistosos || 0); k++) {
+    const g = games[games.length - 1 - k];
+    if (!g) break;
+    delete g.rid; delete g.tid; g.amistoso = true;
   }
   return games;
 }
@@ -95,10 +110,11 @@ window.__LZ = {
       const ini = (page - 1) * PER_PAGE;
       const fatia = this.games.slice(ini, ini + PER_PAGE);
       return JSON.stringify(fatia.map(function (g) {
+        // 'User' = amistoso (medido no índice real: partida avulsa, sem competição)
         return { id: 10000000 + g.i, date: '2026-07-' + String((g.i % 28) + 1).padStart(2, '0'),
-          matchable_id: g.tid ? (300000 + (g.i % 40)) : (55000 + (g.i % 29)),
-          matchable_type: g.tid ? 'Tournament' : 'Ranking',
-          round: (g.i % 7) + 1, status: 3 };
+          matchable_id: g.amistoso ? (243000 + g.i) : (g.tid ? (300000 + (g.i % 40)) : (55000 + (g.i % 29))),
+          matchable_type: g.amistoso ? 'User' : (g.tid ? 'Tournament' : 'Ranking'),
+          round: g.amistoso ? null : ((g.i % 7) + 1), status: 3 };
       }));
     }
     // lista de torneios: /{handle}/tournaments[?page=]

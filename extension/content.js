@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.95';
+  var EXT_VERSION = '1.96';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -1499,6 +1499,35 @@
             prog({ phase: 'jogos', feed: '✅ tudo do índice está no acervo' });
           }
         }
+        // ── "CONCLUÍ" É UMA VERIFICAÇÃO, NUNCA UMA IMPRESSÃO ───────────────────────
+        // Três pontos abaixo declaravam a leitura completa por PÁGINA: "a página 1 não
+        // trouxe nada novo", "uma página inteira veio seca", "cheguei na última". Nenhum
+        // deles perguntava ao índice — que é quem sabe QUAIS partidas existem. O resultado
+        // é o relato do dono (07/ago/2026): "ele diz que concluiu, mas não empata os
+        // dados". Medido no Fábio: 117 no acervo, 118 no índice, cursor `complete: true`.
+        // Página é meio; o fim é ter todos os ids. Enquanto o índice enumerar um id que o
+        // acervo não tem, a leitura NÃO está completa — e dizer que está é o que faz a
+        // tela mentir e o nome ficar violeta sem explicação.
+        // Sem índice (indisponível/parcial vazio) nada muda: cai na regra antiga.
+        // ⚠️ MESMA PRECONDIÇÃO DO `_faltamIds`, e ela não é detalhe: só dá pra dizer "falta
+        // o id X" quando o acervo JÁ era identificado por id ANTES desta rodada. Com acervo
+        // vazio (ou do motor antigo, sem lzId) todo id do índice pareceria faltando, e aí a
+        // leitura nunca se daria por encerrada — o harness pegou isso na hora: a retomada
+        // do cursor pela metade passou a reler as 24 páginas em vez das 4 que faltavam.
+        // Nesse caso vale a regra antiga (por página), que é a que a migração já usa.
+        function _idsDevendo() {
+          if (!_idx || !_idx.porId || !(_idsConhecidos > 0)) return 0;
+          var n = 0;
+          for (var _kd in _idx.porId) if (!seen['lz' + _kd]) n++;
+          return n;
+        }
+        function _fecharSeIndiceFechou(motivo) {
+          var _dev = _idsDevendo();
+          if (_dev === 0) { C.complete = true; return true; }
+          prog({ phase: 'jogos', feed: '🔎 ' + motivo + ', mas o índice ainda tem ' + _dev +
+            ' partida(s) fora do acervo — a leitura NÃO está completa' });
+          return false;
+        }
         var jaLeuTudo = (C.pagesTotal > 0 && C.pageDone >= C.pagesTotal) && _faltamIds === 0;
         if (jaLeuTudo) {
           C.complete = true;
@@ -1547,9 +1576,11 @@
             note: 'lendo página ' + Math.min(_lidas1, maxPage) + ' de ' + maxPage,
             feed: '🎾 página ' + pIni + ': +' + add1 + ' jogo(s) · ' + _lidas1 + ' de ' + maxPage });
           // nada novo já na primeira: o acervo está em dia, uma requisição resolveu
+          // — desde que o índice concorde (ver _fecharSeIndiceFechou).
           if (jaConhecidos > 0 && add1 === 0) {
-            C.complete = true;
-            prog({ phase: 'jogos', pct: 97, feed: '✅ nada novo — o histórico já estava em dia' });
+            if (_fecharSeIndiceFechou('a primeira página não trouxe novidade')) {
+              prog({ phase: 'jogos', pct: 97, feed: '✅ nada novo — o histórico já estava em dia' });
+            }
           }
           // O HISTÓRICO É MAIS-RECENTE-PRIMEIRO: jogo novo entra na PÁGINA 1 e empurra o
           // resto pra baixo. Então, numa releitura de quem já tem acervo, o que falta está
@@ -1654,11 +1685,13 @@
             if (_incremental) {
               if (add === 0) _secas++; else _secas = 0;
               if (_secas >= 1) {
-                // uma página inteira sem novidade = alcançamos o que já tínhamos
-                C.complete = true;
-                prog({ phase: 'jogos', pct: 97,
-                  feed: '✅ alcancei o que já estava gravado na página ' + p + ' — parei aqui' });
-                break;
+                // uma página inteira sem novidade = alcançamos o que já tínhamos — mas só
+                // encerra se o índice não estiver devendo partida (ver _fecharSeIndiceFechou)
+                if (_fecharSeIndiceFechou('alcancei o que já estava gravado na página ' + p)) {
+                  prog({ phase: 'jogos', pct: 97,
+                    feed: '✅ alcancei o que já estava gravado na página ' + p + ' — parei aqui' });
+                  break;
+                }
               }
             }
             prog({ phase: 'jogos', pct: 46 + Math.round((p / Math.max(1, maxPage)) * 51),
@@ -1669,7 +1702,7 @@
             // causa disso a tela dizia "Perfil INCOMPLETO" numa leitura que fechou.
             if (p % 3 === 0 && p < maxPage) parcialAgora('jogos', p, maxPage);
           }
-          if (lastPageRead >= maxPage) C.complete = true;
+          if (lastPageRead >= maxPage) _fecharSeIndiceFechou('cheguei na última página');
         }
       } catch (eEtapa) {
         if (eEtapa && eEtapa.code === 'abandonada') throw eEtapa;   // sai calado

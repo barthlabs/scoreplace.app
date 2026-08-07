@@ -214,6 +214,9 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     tamanhoDoc: window.__APP.tamanhoDoc,
     jogosNoDoc: (window.__APP.imp && (window.__APP.imp.games || []).length) || 0,
     jogosTotal: (window.__APP.imp && window.__APP.imp.gamesTotal) || 0,
+    indexTotal: (window.__APP.imp && window.__APP.imp.indexTotal) || 0,
+    amistosos: (window.__APP.imp && (window.__APP.imp.games || [])
+      .filter(function (g) { return g && g.kind === 'amistoso'; }).length) || 0,
     declarados: (window.__APP.imp && window.__APP.imp.declaredGames) || 0,
     truncado: !!(window.__APP.imp && window.__APP.imp.gamesTruncated),
     pausas: window.__APP.pausas, throttles: window.__APP.throttles,
@@ -563,6 +566,29 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
   ok(r4.jogosTotal >= 81, 'trouxe os 81 jogos (veio ' + r4.jogosTotal + ')');
   ok(r4.rodadas === 1, 'perfil pequeno resolve em UMA rodada (nada de encadeamento à toa)', 'rodadas=' + r4.rodadas);
   ok(r4.truncado !== true, 'doc do perfil pequeno guarda o histórico inteiro (sem truncar)');
+
+  // ── CENÁRIO 4b: perfil COM AMISTOSO — a leitura tem que EMPATAR com o índice ──
+  // Relato do dono (07/ago/2026): "diz que concluiu, mas não empata os dados nem deixa
+  // verde o nome dele em análise" — e "fabio é só o exemplo. tem que funcionar com todos".
+  // MEDIDO no Fábio Simão: índice 118, acervo 117, e o id que faltava era um AMISTOSO
+  // (partida avulsa, `matchable_type: "User"`, card sem link de competição). O extrator
+  // descartava o card inteiro, então o acervo ficava devendo 1 pra sempre: barra em 98%,
+  // `_lzImportComplete` reprovando, nome violeta — para QUALQUER atleta com amistoso.
+  // Aqui 2 das 81 partidas são amistosos: no código antigo o doc fecha com 79.
+  console.log('\n🤝 CENÁRIO 4b — histórico com partidas AMISTOSAS (sem competição)');
+  await page.close();
+  page = await novaPagina(browser);
+  const comAmistoso = { games: 81, tours: 11, ranks: 6, gamesPerTour: 3, amistosos: 2 };
+  const r4b = await rodarCenario(page, comAmistoso, 'amistoso');
+  console.log('     jogos=' + r4b.jogosNoDoc + '/' + r4b.indexTotal +
+    ' amistosos=' + r4b.amistosos + ' completo=' + (r4b.cursor && r4b.cursor.complete));
+  ok(!r4b.erro, 'a leitura com amistosos não falhou', r4b.erro);
+  ok(r4b.amistosos === 2, 'os 2 amistosos entraram no acervo (antes: 0, o card era descartado)',
+    'vieram ' + r4b.amistosos);
+  ok(r4b.indexTotal > 0 && r4b.jogosNoDoc >= r4b.indexTotal,
+    'o acervo EMPATA com o índice (' + r4b.jogosNoDoc + ' ≥ ' + r4b.indexTotal + ')');
+  ok(r4b.cursor && r4b.cursor.complete === true,
+    'e só aí a leitura se declara completa');
 
   // ── CENÁRIO 5: letzplay pede pausa no meio → tem que CONTINUAR sozinho ──
   // Este é o caso REAL que quebrava (14/jul: "no 11º de 20 o letzplay pediu pra esperar e

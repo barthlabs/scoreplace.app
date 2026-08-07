@@ -223,13 +223,28 @@
         if (mr) { comp = { club: mr[1], id: mr[2], text: (a.textContent || '').replace(/\s+/g, ' ').trim() }; return true; }
         return false;
       });
-      if (!comp) return;
-
       // ID DA PARTIDA dado pelo letzplay (class="match-10004859-schedule")
       var lzId = null;
       var sch = card.querySelector('[class*="-schedule"]');
       if (sch) { var mi = (sch.className || '').toString().match(/match-(\d+)-schedule/); if (mi) lzId = mi[1]; }
       if (!lzId) { var mi2 = (card.innerHTML || '').match(/match-(\d+)-schedule/); if (mi2) lzId = mi2[1]; }
+
+      // ── AMISTOSO: PARTIDA SEM COMPETIÇÃO TAMBÉM É PARTIDA ──────────────────────
+      // Aqui morava um `if (!comp) return;` que descartava o card inteiro — e com ele
+      // TODO jogo avulso. No índice do letzplay essas partidas vêm com
+      // `matchable_type: "User"` (não Ranking, não Tournament) e o card não tem link de
+      // competição nenhum: o título é só "Amistoso".
+      // POR QUE ISSO ERA GRAVE, e não um detalhe: o índice ENUMERA essa partida, então o
+      // acervo ficava eternamente devendo uma. Medido no Fábio Simão em 07/ago/2026 —
+      // índice 118, acervo 117, e o id que faltava era exatamente o amistoso `3728225`
+      // (18/04/24, 4×6). Como a completude é "tenho todos os ids do índice?", a leitura
+      // NUNCA fechava: a barra parava em 98%, `_lzImportComplete` reprovava e o verde
+      // virava violeta pra sempre — para qualquer atleta que tenha um amistoso na conta.
+      // O card tem tudo o que interessa: id, data, os dois times e o placar. Falta só a
+      // competição, que ele legitimamente não tem.
+      // O ID É O CRITÉRIO DE ENTRADA. Sem competição E sem id não há identidade nem
+      // rastro no índice — aí é card fora do padrão, e continua de fora.
+      if (!comp && !lzId) return;
 
       var dateText = sch ? (sch.textContent || '').replace(/\s+/g, ' ').trim() : null;
       if (!dateText || !/\d{2}\/\d{2}\/\d{2}/.test(dateText)) {
@@ -269,15 +284,21 @@
       (mine.handles || []).forEach(function (h, ix) {
         if (String(h).toLowerCase() !== meLow) { partnerHandle = h; partnerName = (mine.names || [])[ix] || null; }
       });
-      var cat = parseCategory(comp.text);
+      var cat = comp ? parseCategory(comp.text) : { categoryRaw: null, round: null, year: null };
       out.push({
         lzId: lzId,                                // ← identidade dada pelo letzplay
         date: dateText || null,
         categoryRaw: cat.categoryRaw, round: cat.round, year: cat.year,
-        official: official, kind: official ? 'tournament' : 'ranking',
-        club: comp.club,
-        tourneyId: official ? comp.id : null,
-        rankingId: official ? null : comp.id,
+        // `kind` NÃO é decorativo: 'amistoso' é o que impede o jogo avulso de ser contado
+        // como ranking. Quem conta competição pergunta pelo id (club + rankingId/tourneyId),
+        // e o amistoso não tem nenhum dos dois — então ele soma em JOGOS e em mais nada.
+        // O modelo canônico (js/letzplay-model.js, `hasRealComp`) já o deixa de fora dos
+        // docs de competição pelo mesmo motivo, e isso é deliberado: partida sem
+        // competição não tem onde pendurar.
+        official: official, kind: comp ? (official ? 'tournament' : 'ranking') : 'amistoso',
+        club: comp ? comp.club : null,
+        tourneyId: (comp && official) ? comp.id : null,
+        rankingId: (comp && !official) ? comp.id : null,
         partnerHandle: partnerHandle, partnerName: partnerName,
         oppHandles: (opp.handles || []).slice(),
         oppNames: (opp.handles || []).map(function (h, i) { return nameByHandle[h] || (opp.names || [])[i] || ''; }),
