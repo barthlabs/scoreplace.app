@@ -89,6 +89,42 @@ const R1 = (t) => (t.matches || []).filter((m) => m && m.round === 1);
   ok('sem chave: ok=false reason=no-bracket', res && res.ok === false && res.reason === 'no-bracket', res && res.reason);
 })();
 
+// ── A VARREDURA FORMA GRUPO SOZINHA E AVISA OS ENVOLVIDOS (v1.7.61/62) ──────────
+// Ordem do dono: _"automatize… sem eu precisar ficar dando prompts"_ e _"toda vez que
+// criar grupo novo precisa disparar notificação para os envolvidos"_.
+//
+// MEDIDO — por que virou prompt: o único gatilho era do CLIENTE, rodava só quando o
+// ORGANIZADOR abria a chave, e no Confra a callable foi chamada pela última vez com 3 na
+// fila; ela chegou a 4 e nada mais rodou. Este bloco é VARREDURA DE FIAÇÃO: garante que o
+// disparo mora no agendador (não numa tela) e que o aviso usa os MESMOS canais do sorteio
+// automático — se alguém remover a chamada, fica vermelho.
+(() => {
+  const fs = require('fs'), path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
+  ok('a formação da espera existe no servidor', src.includes('async function _formarGruposDaEspera'));
+  ok('e é chamada pela varredura agendada (não por uma tela)',
+     /autoDrawReconcile[\s\S]{0,4000}_formarGruposDaEspera\(doc\)/.test(src));
+  const corpo = src.slice(src.indexOf('async function _formarGruposDaEspera'),
+                          src.indexOf('exports.autoDrawReconcile'));
+  ok('só toca Rei/Rainha (o formato que a fila serve)', corpo.includes("ligaRoundFormat !== 'rei_rainha'"));
+  ok('nem carrega perfil sem 4 na fila (custo zero no caso comum)', corpo.includes('_fila < 4'));
+  ok('resolve nome e gênero por uid ANTES do motor', corpo.includes('_preloadDrawNames(') && corpo.includes('_enrichParticipantsFromProfiles('));
+  ok('persiste dentro de transação com write-boundary', corpo.includes('runTransaction') && corpo.includes('_applyWriteBoundary'));
+  ok('best-effort por torneio (um doc ruim não derruba a varredura)', corpo.includes('catch'));
+  ok('avisa depois de formar', corpo.includes('_avisarGrupoFormado('));
+
+  const aviso = src.slice(src.indexOf('async function _avisarGrupoFormado'),
+                          src.indexOf('async function _formarGruposDaEspera'));
+  ok('o aviso é in-app na coleção canônica', aviso.includes("collection('notifications')"));
+  ok('e e-mail pela MESMA fila do resto do app', aviso.includes('_queueDrawEmail('));
+  ok('e-mail FORA do gate de notifyPlatform (opt-outs independentes)',
+     aviso.indexOf('_queueDrawEmail(') > aviso.indexOf('notifyPlatform !== false') &&
+     !/notifyPlatform !== false[\s\S]*?_queueDrawEmail\([\s\S]*?\n      \}/.test(aviso));
+  ok('avisa só quem NASCEU no grupo novo, não a rodada inteira', aviso.includes('novos'));
+  ok('a mensagem é personalizada (cada um lê "você")', aviso.includes('você está no'));
+  ok('identidade dos avisados é o UID', aviso.includes('g.uids') && aviso.includes("String(uids[i])"));
+})();
+
 console.log('\n════════════════════════════════════════');
 console.log((fail === 0 ? '✅' : '❌') + ` integrateLateEntries: ${pass} ok, ${fail} falharam`);
 process.exit(fail === 0 ? 0 : 1);

@@ -1302,6 +1302,65 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
 // carregado. Só toca torneio que precisa: Liga em Rei/Rainha, fase 0, com fila não-vazia.
 // A decisão de FORMAR continua inteira no motor vendorado — aqui só há o disparo e a
 // persistência, iguais às da callable `integrateLateEntries` (txn + write-boundary).
+// TODO GRUPO NOVO AVISA OS ENVOLVIDOS (ordem do dono, 07/ago/2026: _"toda vez que criar
+// grupo novo precisa disparar notificação para os envolvidos"_).
+//
+// Antes disto o único aviso de grupo formado era um TOAST do cliente — quem não estava com
+// a tela aberta não sabia de nada. E com a formação passando pro servidor não haveria nem
+// toast: a pessoa ganhava 3 jogos e ninguém contava.
+//
+// Usa os MESMOS canais do sorteio automático, não um paralelo: in-app em
+// `users/{uid}/notifications` + fila `notif_email_queue` (que o flushNotifEmailDigest
+// consolida). in-app e e-mail são opt-outs INDEPENDENTES — quem desligou o sininho
+// continua querendo o e-mail —, então o e-mail fica FORA do gate de notifyPlatform.
+// Nível `fundamental`: é o mesmo peso de um sorteio, chega até a quem só quer o essencial.
+// A mensagem é PERSONALIZADA: cada um lê "você" e os nomes dos outros três.
+async function _avisarGrupoFormado(tId, tName, novos) {
+  if (!Array.isArray(novos) || !novos.length) return 0;
+  const prof = (drawWindow && drawWindow._profByUid) || {};
+  const nomeDe = (uid, fallback) => {
+    const d = prof[uid];
+    return (d && (d.displayName || d.name)) || fallback || '';
+  };
+  const agora = new Date().toISOString();
+  const avisados = new Set(), mailedTo = new Set();
+  let inApp = 0, mails = 0;
+  for (const g of novos) {
+    const uids = (g.uids || []).filter(Boolean);
+    for (let i = 0; i < uids.length; i++) {
+      const uid = String(uids[i]);
+      if (avisados.has(uid)) continue;
+      avisados.add(uid);
+      const perfil = prof[uid];
+      if (!perfil) continue;
+      // os outros três, pelo UID e na ordem do grupo; o nome gravado só como reserva
+      const outros = [];
+      uids.forEach((u, j) => {
+        if (j === i) return;
+        const n = nomeDe(u, (g.players || [])[j]);
+        if (n) outros.push(n);
+      });
+      const comQuem = outros.length === 3
+        ? outros[0] + ', ' + outros[1] + ' e ' + outros[2]
+        : outros.join(', ');
+      const message = 'Saiu da lista de espera: você está no ' + (g.name || 'novo grupo') +
+        (comQuem ? ' com ' + comQuem : '') + '. São 3 jogos, em duplas rotativas.';
+      if (perfil.notifyPlatform !== false) {
+        try {
+          await db.collection('users').doc(uid).collection('notifications').add({
+            type: 'draw', fromUid: 'system', fromName: 'scoreplace.app', fromPhoto: '',
+            tournamentId: tId, tournamentName: tName || '', message, createdAt: agora, read: false
+          });
+          inApp++;
+        } catch (e) { console.warn(`[espera→grupo] notif in-app falhou uid ${uid}:`, e && e.message); }
+      }
+      mails += await _queueDrawEmail(perfil, _drawEmailOpts({ name: tName }, tId, message), mailedTo);
+    }
+  }
+  console.log(`[espera→grupo] avisos: ${inApp} in-app, ${mails} e-mail(s) enfileirado(s)`);
+  return inApp;
+}
+
 async function _formarGruposDaEspera(doc) {
   const t0 = doc.data();
   if (!drawWindow || typeof integrateLateFn !== 'function') return 0;
@@ -1323,14 +1382,24 @@ async function _formarGruposDaEspera(doc) {
       const t = snap.data(); t.id = doc.id;
       try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
       _enrichParticipantsFromProfiles(t);
+      // nomes dos grupos ANTES, pra saber depois quais nasceram agora (e avisar só eles)
+      const antes = new Set();
+      (t.rounds || []).forEach((r) => (r.monarchGroups || []).forEach((g) => { if (g && g.name) antes.add(g.name); }));
       const r = integrateLateFn(t, {});
       if (!r || !r.ok || !r.changed) return { changed: false };
+      const novos = [];
+      (t.rounds || []).forEach((rr) => (rr.monarchGroups || []).forEach((g) => {
+        if (g && g.name && !antes.has(g.name)) {
+          novos.push({ name: g.name, players: (g.players || []).slice(), uids: (g.playersUids || []).slice() });
+        }
+      }));
       const b = _applyWriteBoundary(t);
       tx.set(doc.ref, b.persist);
-      return { changed: true, monarch: r.monarch || 0, wlClean: r.wlClean || 0 };
+      return { changed: true, monarch: r.monarch || 0, wlClean: r.wlClean || 0, novos: novos, nome: t.name || '' };
     });
     if (res.changed) {
       console.log(`[espera→grupo] ${doc.id}: ${res.monarch} grupo(s) formado(s) da lista de espera`);
+      await _avisarGrupoFormado(doc.id, res.nome, res.novos || []);
       return res.monarch || 0;
     }
   } catch (e) {
