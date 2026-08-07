@@ -1287,7 +1287,22 @@ firebase deploy --only hosting --project scoreplace-app
 
 **O `git push origin HEAD:main` continua obrigatório** (versiona o repo e é de onde o worktree de deploy sai), **mas ele não muda o site**. Fazer só o push e dizer "deployado" é anunciar entrega que não aconteceu.
 
-⚠️ **DEPLOYAR SEMPRE DE WORKTREE LIMPO** — `git worktree add --detach /tmp/<x> origin/main`. O `firebase.json` tem `hosting.public = "."`, então **todo arquivo não-commitado da árvore vai pro ar junto**; a árvore aqui é compartilhada com outras sessões (na 1.7.60 havia 6 `_desenho-*.html` de rascunho que teriam sido publicados). O `.gitignore` **não** protege: quem filtra é o `ignore` do `firebase.json`. Ligar `node_modules` por symlink no worktree (o predeploy roda `npm run prerender`, que precisa do playwright) — symlink em worktree temporário é seguro; o que congelou o Pages foi symlink **commitado**.
+⚠️ **DEPLOYAR SEMPRE DE UMA CÓPIA LOCAL EXTRAÍDA — sem rede, sem GitHub** (regra do dono, 07/ago/2026: _"pode até manter um backup no github, mas nao podemos ficar dependendo dele no dia a dia"_):
+
+```bash
+rm -rf /tmp/sp-deploy && mkdir -p /tmp/sp-deploy
+git archive HEAD | tar -x -C /tmp/sp-deploy          # árvore COMMITADA, do repo LOCAL
+ln -s "$PWD/node_modules" /tmp/sp-deploy/node_modules # o predeploy roda prerender (playwright)
+cd /tmp/sp-deploy && firebase deploy --only hosting --project scoreplace-app
+```
+
+Por que assim, e não das outras duas formas que já foram usadas:
+
+- **`git archive` não usa rede.** O `git worktree add … origin/main` que se usava antes precisa que o commit esteja no GitHub, e **GitHub cai** — caiu em 06/ago, em major outage, no meio de uma leva. Publicar produção não pode depender de um terceiro. GitHub fica como **backup**, nunca como dependência do dia a dia.
+- **Sai do Google Drive.** O `hosting.public` é `"."`, então **todo arquivo não-commitado da pasta vai pro ar junto** (na 1.7.60 havia 6 `_desenho-*.html` de rascunho que teriam sido publicados) — e a pasta ainda é compartilhada com outras sessões. O `.gitignore` **não** protege: quem filtra é o `ignore` do `firebase.json`. `git archive` entrega só o que está commitado, e o `/tmp` fica fora do sync do Drive, que já renomeou objetos do `.git` e quebrou o repo ([[project_git_repo_lives_in_google_drive]]).
+- **Conferir antes de subir:** `find /tmp/sp-deploy \( -name '* 2' -o -name '* 3' -o -name '.DS_Store' \)` tem que voltar vazio.
+
+⚠️ O `git archive` lê o `.git` local — se ele estiver corrompido pelo Drive, reparar primeiro (o commit está salvo no GitHub, que é justamente pra isso que o backup serve).
 
 ⛔ **Nunca `firebase deploy` puro** (sem `--only`): ele entra nos codebases de functions e os três se apagam mutuamente — ver `project_autodraw_deploy_footgun`.
 
