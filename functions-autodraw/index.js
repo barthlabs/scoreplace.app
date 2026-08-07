@@ -1284,9 +1284,65 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
 // (via o MESMO _nextOwedDrawMs) onde está ausente/desatualizado — backfill + cura.
 // NÃO sorteia (isso é só do autoDraw) → zero risco de disparo duplo. Custo: 48
 // varreduras/dia (barato), escrevendo só quando o valor muda.
+// ─── A FILA DE ESPERA FORMA GRUPO SOZINHA (v1.7.61) ─────────────────────────
+// PEDIDO DO DONO (07/ago/2026): _"automatize esse motor de criar novo grupo respeitando a
+// proporção estipulada pelo organizador e garanta que na próxima vez que acumular o
+// necessário isso aconteça automaticamente pelo motor sem eu precisar ficar dando prompts"_.
+//
+// MEDIDO — por que virou prompt: o único gatilho da integração tardia é do CLIENTE
+// (`_triggerLateIntegration`, bracket.js), roda **só quando o ORGANIZADOR abre a chave**
+// (`if (isOrg && …)`) e ainda é filtrado por uma assinatura em memória. No Confra a CF
+// `integrateLateEntries` foi chamada pela última vez em 06/ago 15:05 UTC, quando a fila
+// tinha 3 pessoas; ela chegou a 4 às 18:19 UTC e NADA rodou depois — a formação ficou
+// esperando alguém abrir uma tela. Automação que depende de um humano abrir tela não é
+// automação.
+//
+// Aqui a varredura que JÁ existe (a cada 30 min, e que já lê todos os torneios pro
+// nextDrawAt) passa a fechar os grupos que a fila permitir. Custo ~zero: é o mesmo doc já
+// carregado. Só toca torneio que precisa: Liga em Rei/Rainha, fase 0, com fila não-vazia.
+// A decisão de FORMAR continua inteira no motor vendorado — aqui só há o disparo e a
+// persistência, iguais às da callable `integrateLateEntries` (txn + write-boundary).
+async function _formarGruposDaEspera(doc) {
+  const t0 = doc.data();
+  if (!drawWindow || typeof integrateLateFn !== 'function') return 0;
+  const _liga = drawWindow._isLigaFormat ? drawWindow._isLigaFormat(t0) : (t0.format === 'Liga' || t0.format === 'Ranking');
+  if (!_liga || t0.ligaRoundFormat !== 'rei_rainha') return 0;
+  if ((t0.currentPhaseIndex || 0) !== 0) return 0;
+  if (t0.status === 'finished' || t0.status === 'closed') return 0;
+  const _fila = (Array.isArray(t0.standbyParticipants) ? t0.standbyParticipants.length : 0) +
+                (Array.isArray(t0.waitlist) ? t0.waitlist.length : 0);
+  if (_fila < 4) return 0;   // sem 4 na fila não há grupo possível — nem carrega perfil
+
+  // nome VIVO e gênero por uid ANTES do motor: a entrada da espera é strippada (só uid),
+  // e sem isto o gênero não resolve e a proporção travada recusa todo mundo.
+  await _preloadDrawNames(t0);
+  try {
+    const res = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(doc.ref);
+      if (!snap.exists) return { changed: false };
+      const t = snap.data(); t.id = doc.id;
+      try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+      _enrichParticipantsFromProfiles(t);
+      const r = integrateLateFn(t, {});
+      if (!r || !r.ok || !r.changed) return { changed: false };
+      const b = _applyWriteBoundary(t);
+      tx.set(doc.ref, b.persist);
+      return { changed: true, monarch: r.monarch || 0, wlClean: r.wlClean || 0 };
+    });
+    if (res.changed) {
+      console.log(`[espera→grupo] ${doc.id}: ${res.monarch} grupo(s) formado(s) da lista de espera`);
+      return res.monarch || 0;
+    }
+  } catch (e) {
+    // Best-effort POR TORNEIO: um doc problemático não pode derrubar a varredura inteira.
+    console.error(`[espera→grupo] ${doc.id} falhou:`, (e && e.message) || e);
+  }
+  return 0;
+}
+
 exports.autoDrawReconcile = onSchedule('every 30 minutes', async (event) => {
   const now = Date.now();
-  let scanned = 0, fixed = 0;
+  let scanned = 0, fixed = 0, gruposDaEspera = 0;
   if (!drawWindow || typeof drawWindow._nextOwedDrawMs !== 'function') {
     console.error('[autoDrawReconcile] _nextOwedDrawMs indisponível — abortando');
     return;
@@ -1307,8 +1363,11 @@ exports.autoDrawReconcile = onSchedule('every 30 minutes', async (event) => {
         fixed++;
       } catch (e) { console.error(`[autoDrawReconcile] falha ao atualizar ${doc.id}:`, e && e.message); }
     }
+    // …e, no mesmo doc já carregado, fecha os grupos que a lista de espera permitir.
+    gruposDaEspera += await _formarGruposDaEspera(doc);
   }
-  console.log(`[autoDrawReconcile] ${scanned} torneios varridos, ${fixed} nextDrawAt atualizados`);
+  console.log(`[autoDrawReconcile] ${scanned} torneios varridos, ${fixed} nextDrawAt atualizados, ` +
+    `${gruposDaEspera} grupo(s) formado(s) da lista de espera`);
 });
 
 // ─── Push Notifications via FCM ─────────────────────────────────────────────
