@@ -52,7 +52,17 @@ const CARD_AMISTOSO = `
         <div class="match-player-info"><a href="/MarcelloGomiero"><img class="img-xs" src="x.webp"></a></div>
         <div class="match-player-result"><i class="fa fa-times-circle text-danger"></i></div>
         <div class="match-player-info">
-          <span class="match-players-double">Fábio Simão<br>Marcello Gomiero</span>
+          <!-- ⚠️ AS QUEBRAS DE LINHA IMPORTAM. O card real serve os nomes em linhas
+               separadas dentro do span; o textContent só vira "Fábio Simão Marcello
+               Gomiero" por causa desse espaço em branco. Escrito grudado
+               (Simão + br + Marcello, sem espaço) o mapeador de nome↔handle produz
+               "SimãoMarcello Gomiero" — foi o que aconteceu na 1ª versão desta fixture,
+               e como não havia asserção de NOME o teste ficou verde com nome errado. -->
+          <span class="match-players-double">
+            Fábio Simão
+            <br>
+            Marcello Gomiero
+          </span>
         </div>
       </div>
       <div class="match-results-points">
@@ -65,7 +75,11 @@ const CARD_AMISTOSO = `
         <div class="match-player-info"><a href="/LeandroAzevedo9"><img class="img-xs" src="x.webp"></a></div>
         <div class="match-player-result"><i class="fa fa-check-circle text-success"></i></div>
         <div class="match-player-info">
-          <span class="match-players-double">João Scassa<br>Leandro Azevedo</span>
+          <span class="match-players-double">
+            João Scassa
+            <br>
+            Leandro Azevedo
+          </span>
         </div>
       </div>
       <div class="match-results-points">
@@ -141,8 +155,13 @@ ok(A.kind === 'amistoso', 'kind = amistoso (não vira "ranking" por omissão)');
 ok(A.official === false, 'não é oficial');
 ok(A.club === null && A.rankingId === null && A.tourneyId === null,
   'sem competição: club/rankingId/tourneyId ficam nulos, não inventados');
-ok(A.partnerHandle === 'MarcelloGomiero', 'parceiro = Marcello Gomiero');
-ok((A.oppHandles || []).join(',') === 'JoaoScassa,LeandroAzevedo9', 'adversários = João e Leandro');
+ok(A.partnerHandle === 'MarcelloGomiero', 'parceiro = Marcello Gomiero (handle)');
+ok((A.oppHandles || []).join(',') === 'JoaoScassa,LeandroAzevedo9', 'adversários = João e Leandro (handles)');
+// NOME TAMBÉM É DADO — e é o que aparece na tela. Sem estas asserções, a 1ª versão desta
+// fixture passou verde produzindo "SimãoMarcello Gomiero" e "ScassaLeandro Azevedo".
+ok(A.partnerName === 'Marcello Gomiero', 'nome do parceiro sai inteiro e sozinho');
+ok((A.oppNames || []).join(' · ') === 'João Scassa · Leandro Azevedo',
+  'nomes dos adversários saem separados corretamente');
 ok(A.myScore === 4 && A.oppScore === 6 && A.won === false, 'placar 4×6, derrota');
 ok(/18\/04\/24/.test(A.date || ''), 'data do card (18/04/24)');
 
