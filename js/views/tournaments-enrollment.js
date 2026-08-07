@@ -444,7 +444,7 @@ window._enrollDisplayName = function (user) {
     return '';
 };
 
-window.enrollCurrentUser = function (tId) {
+window.enrollCurrentUser = function (tId, _reentrouAposCarregar) {
     // Busca no scoped list primeiro; se não achar, tenta no discovery feed
     // (torneios públicos que o usuário ainda não entrou). Torneios do
     // discovery vivem em AppStore.publicDiscovery até o usuário se inscrever;
@@ -456,6 +456,28 @@ window.enrollCurrentUser = function (tId) {
         window.AppStore.tournaments.push(fromDiscovery);
         t = fromDiscovery;
       }
+    }
+    // v1.7.65 — QUEM ACABOU DE CRIAR CONTA não tem NADA em memória: `tournaments` vem do
+    // listener por memberUids (ela não é membro de nada ainda) e `publicDiscovery` é carga
+    // ASSÍNCRONA que pode não ter chegado. Nessa janela a inscrição era recusada AQUI, no
+    // cliente — a CF `enrollParticipant` não era chamada uma única vez (conferido no log do
+    // Confra, 06/ago). Caso medido: Paula Vasconcelos, conta criada 23:33:53, torneio vivo,
+    // público, com 122 inscritos. Faltava só ir buscar o doc.
+    // Busca no Firestore e REENTRA uma vez só (a flag impede laço se o doc não existir).
+    if (!t) {
+      if (!_reentrouAposCarregar && typeof window._ensureTournamentLoaded === 'function') {
+        window._ensureTournamentLoaded(tId, function (carregado) {
+          if (carregado) { window.enrollCurrentUser(tId, true); return; }
+          if (typeof showAlertDialog === 'function') {
+            showAlertDialog(_t('bui.tournNotFoundTitle'), _t('bui.tournNotFoundAlertMsg'), null, { type: 'warning' });
+          }
+        });
+        return;
+      }
+      if (typeof showAlertDialog === 'function') {
+        showAlertDialog(_t('bui.tournNotFoundTitle'), _t('bui.tournNotFoundAlertMsg'), null, { type: 'warning' });
+      }
+      return;
     }
     // LGPD: identidade verificada contra Firebase Auth
     const user = (typeof window._verifiedCurrentUser === 'function') ? window._verifiedCurrentUser() : window.AppStore.currentUser;

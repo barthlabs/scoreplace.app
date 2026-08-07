@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.64';
+window.SCOREPLACE_VERSION = '1.7.65';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -6359,6 +6359,52 @@ window._findTournamentById = function (tId) {
     }
   }
   return null;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACHAR O TORNEIO NÃO PODE DEPENDER DO QUE JÁ ESTÁ EM MEMÓRIA (v1.7.65)
+//
+// `_findTournamentById` só olha DUAS listas locais: `AppStore.tournaments` (que vem do
+// listener `memberUids array-contains meuUid`) e `AppStore.publicDiscovery` (carga
+// assíncrona). Para quem ACABOU DE CRIAR CONTA as duas estão vazias — ele não é membro de
+// nada, e o discovery ainda está a caminho. Nessa janela o app conclui que o torneio "foi
+// removido ou não está acessível" e recusa a inscrição.
+//
+// Foi o que aconteceu no Confra (06/ago): a Paula Vasconcelos criou a conta às 23:33:53 e
+// tentou entrar em seguida; a CF `enrollParticipant` NÃO foi chamada UMA ÚNICA VEZ naquela
+// janela (conferido no log) — ou seja a recusa foi do CLIENTE, antes de o servidor saber
+// que existiu. O torneio estava vivo o tempo todo: `status:'active'`, público, 122
+// inscritos. Faltava só ir buscar o doc.
+//
+// Aqui a busca ganha o último degrau: não achou em memória, LÊ DO FIRESTORE pelo id. O doc
+// do torneio público é legível por qualquer um, então isso não abre nada — só para de
+// depender de o listener/discovery ter chegado primeiro. O resultado entra em
+// `publicDiscovery` pra que o resto da tela o encontre pelo caminho normal.
+//
+// Callback (não Promise) de propósito: os call sites são handlers de clique, e transformar
+// `enrollCurrentUser` em async mudaria o contrato de ~10 chamadores.
+window._ensureTournamentLoaded = function (tId, cb) {
+  var local = window._findTournamentById(tId);
+  if (local) { cb(local); return; }
+  var DB = window.FirestoreDB;
+  if (!DB || typeof DB.loadTournamentById !== 'function') { cb(null); return; }
+  DB.loadTournamentById(tId).then(function (t) {
+    if (!t) { cb(null); return; }
+    if (!t.id) t.id = String(tId);
+    // Uma segunda busca pode ter resolvido enquanto a leitura estava em voo — nunca
+    // duplicar: quem chegou primeiro é a referência viva que a tela já pode estar usando.
+    var jaTem = window._findTournamentById(tId);
+    if (jaTem) { cb(jaTem); return; }
+    var A = window.AppStore;
+    if (A) {
+      if (!Array.isArray(A.publicDiscovery)) A.publicDiscovery = [];
+      A.publicDiscovery.push(t);
+    }
+    cb(t);
+  }).catch(function (e) {
+    if (window._warn) window._warn('[_ensureTournamentLoaded] falhou:', e && e.message);
+    cb(null);
+  });
 };
 
 window.AppStore = {

@@ -71,7 +71,22 @@
   // state" entraram em 10.12+). Este auto-reload guardado + synchronizeTabs removido
   // (firebase-db.js) seguem como rede de segurança enquanto se confirma no Sentry.
   var _fsRecovering = false;
-  function _fsFatal(s) { return /INTERNAL ASSERTION FAILED|Unexpected state/i.test(String(s || '')); }
+  // v1.7.65 — "Database deleted by request of the user" entra na MESMA rede.
+  //
+  // MEDIDO no Sentry (06/ago 23:20:07 UTC, web, Mobile Safari iOS, 1.7.59) — 1min29s ANTES
+  // de a Cristina criar a primeira das duas contas que ela abriu tentando entrar, e que
+  // ficaram SEM perfil no Firestore. O erro é o IndexedDB da persistência sendo APAGADO com
+  // a conexão aberta (Safari despejando storage, "limpar dados", ou a própria aba perdendo
+  // a base). O efeito é idêntico ao do "Unexpected state": a AsyncQueue morre e TODA chamada
+  // seguinte falha em cascata — inclusive a gravação do perfil no login, que é o que deixa a
+  // pessoa presa na landing achando que o login não funcionou.
+  //
+  // O detector só reconhecia as duas frases do bug interno do SDK, então esta família ficava
+  // de fora do auto-reload e não havia NADA que recuperasse a sessão. Mesma classe, mesma
+  // cura: um reload guardado (só quando é seguro, no máximo 1x por sessão).
+  function _fsFatal(s) {
+    return /INTERNAL ASSERTION FAILED|Unexpected state|Database deleted by request of the user/i.test(String(s || ''));
+  }
   function _maybeRecoverFirestore(text) {
     if (_fsRecovering || !_fsFatal(text)) return;
     try { if (sessionStorage.getItem('sp_fsRecovered')) return; } catch (_) { }

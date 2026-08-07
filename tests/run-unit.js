@@ -596,6 +596,13 @@ const SUITES = [
   // (createdAt, notifyLevel, acceptFriendRequests). Roda a expressão REAL do auth.js
   // contra o perfil REAL da Paula recém-criada.
   'tests/gate-de-termos-nao-carimba-conta-nova.test.js',
+
+  // QUEM ACABOU DE CRIAR CONTA consegue entrar e se inscrever. Dois defeitos medidos no
+  // Confra: (1) a busca do torneio só olhava listas em MEMÓRIA — conta nova não é membro
+  // de nada e o discovery é assíncrono, então a inscrição era recusada no cliente sem a CF
+  // ser chamada nem uma vez; (2) o auto-reload não reconhecia 'Database deleted by request
+  // of the user' (IndexedDB apagado), que mata a sessão e impede gravar o perfil no login.
+  'tests/conta-nova-consegue-entrar-e-inscrever.test.js',
 ];
 
 let failed = [];
